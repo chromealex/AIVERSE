@@ -73,6 +73,18 @@ struct Lighting {
     float3 fogColor{0.62f, 0.70f, 0.80f};
     float fogDensity = 0.0025f;
     float shadowSoftness = 0.22f;          // penumbra radius in world units (same look at every quality tier)
+    // traced terrain shadows (trace tier): how far the sun ray is marched over the height field and
+    // how fast the penumbra widens with the distance to the occluder (tangent of the half angle)
+    float terrainShadowDistance = 96.0f;
+    float terrainShadowSoftness = 0.05f;
+};
+
+// Height field of the drawn terrain for traced shadows (Renderer3D::setHeightField): a 16-bit
+// height map (RGBA8: R high byte, G low byte) over the rectangle [origin, origin + extent] in world xz.
+struct HeightField {
+    gfx::TextureHandle tex;
+    float originX = 0, originZ = 0, extentX = 1, extentZ = 1;
+    float heightMin = 0, heightRange = 0;   // range <= 0: nothing bound
 };
 
 enum class ShadowQuality { Off, Low, Medium, High };
@@ -161,6 +173,19 @@ public:
     int sceneWidth() const { return sceneW_; }
     int sceneHeight() const { return sceneH_; }
 
+    // Traced lighting ("trace" tier, Renderer3DTrace.cpp): sun rays marched over the terrain height
+    // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
+    // reflections on water. On by default with High shadows; RTS_TRACE=off|on overrides.
+    void setTraceEnabled(bool on) { traceWanted_ = on; }
+    bool traceEnabled() const { return traceWanted_; }
+    bool traceActive() const;                              // this frame: wanted and High shadows
+    static bool defaultTraceFor(const gfx::Device& dev, bool mobile);
+    void setHeightField(const HeightField& hf) { heightField_ = hf; }   // the terrain renderer owns the texture
+    const HeightField& heightField() const { return heightField_; }
+    // Inside a custom lit draw (terrain): bind the height field for RTS_*_TRACE_AT(slot).
+    void bindTrace(int textureSlot);
+    bool ssrActive() const { return ssrThisFrame_; }       // the scene targets are bound this frame (water SSR)
+
     void setMaterialQuality(MaterialQuality q);
     MaterialQuality materialQuality() const { return matQuality_; }
     static MaterialQuality defaultMaterialQualityFor(const gfx::Device& dev, bool mobile);
@@ -194,6 +219,13 @@ private:
     void renderSpotShadow();        // depth of the casters seen from the main spot light (same file)
     void computeShadowMatrix(const RTSCamera& cam, float aspect);
     void uploadFrameUniforms(bool forShadow);
+    // trace tier (Renderer3DTrace.cpp)
+    bool initTrace();
+    void shutdownTrace();
+    bool beginSceneCapture(int w, int h);   // SSR: opens the opaque pass into the scene targets
+    void endSceneCapture(const gfx::PassDesc& mainPass, int w, int h);   // blits colour + depth into the main pass
+    void bindSceneTextures(int colorSlot, int depthSlot);   // after the capture: the scene targets, else placeholders
+    void bindTraceTextures();                                // lit pipeline: tex3 height, tex4/tex5 scene
 
     gfx::Device* dev_ = nullptr;
     gfx::ShaderHandle litShader_, shadowShader_, colorShader_;
@@ -214,6 +246,21 @@ private:
     int sceneW_ = 0, sceneH_ = 0;
     PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePostFx()
     gfx::PassDesc postOut_;
+
+    // trace tier
+    bool traceWanted_ = true;
+    bool ssrThisFrame_ = false;
+    HeightField heightField_;
+    struct SceneTarget { int w = 0, h = 0; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
+    std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)
+    gfx::TextureHandle sceneColor_, sceneDepth_;   // this frame's capture
+    gfx::TextureHandle dummyDepth_, dummyHeight_;
+    uint64_t traceFrame_ = 0;
+    gfx::ShaderHandle blitShader_;
+    gfx::PipelineHandle blitPipe_;
+    gfx::BufferHandle blitVB_;
+    mat4 invViewProj_;
+    float3 camFwd_;
 
     // models
     MaterialQuality matQuality_ = MaterialQuality::High;
