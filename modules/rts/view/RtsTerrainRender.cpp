@@ -738,7 +738,6 @@ int TerrainRenderer::tierFor0() const {
 }
 
 int TerrainRenderer::tierFor(const Renderer3D& r) const {
-    if (!look_.materials()) return 0;   // no materials: vertex colours on every tier
     if (const char* e = std::getenv("RTS_TERRAIN")) {
         std::string v = e;
         return v == "low" ? 0 : v == "medium" ? 1 : 2;

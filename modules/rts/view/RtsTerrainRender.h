@@ -14,7 +14,8 @@
 // tiling splat layers per cell kind, a cliff texture and the water look; see docs/game-format.md
 // ("Terrain materials"). Quality: Renderer3D::materialQuality() - Low = vertex colours, Medium =
 // splat, High = splat + normal maps + triplanar cliffs (RTS_TERRAIN=low|medium|high overrides).
-// Without the block every tier draws the classic vertex colours.
+// Without layers, Medium/High add filtered world-space grain; High also adds micro normals.
+// Low retains the classic vertex colours (docs/terrain-textures.md).
 #pragma once
 #include "RtsFog.h"
 #include <cstdint>
