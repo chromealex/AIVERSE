@@ -141,6 +141,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Crowds: flow-field arrival / pass-through, `movement.blockedGoals` | hooks in `RtsUnits` (sysFlowFields), `RtsAvoidance` (same-crowd ORCA, settled obstacles, no yield), `RtsMap` (findPath blocked goals), `RtsData` / `RtsModule` (keys); `docs/pathfinding.md` § Crowds | agent-crowds (MAIN merges) |
 | Lua coverage audit: capability matrix, gap list, Lua prototypes of missing mechanics, Lua perf bench | `docs/lua-coverage.md`, `templates/lua_lab` (+ `bench/`), test `lua_lab_prototypes`, `lua_lab` lines in `tests/checksums/baseline.txt` | lua-audit agent (MAIN merges) |
 | Traced lighting: water SSR and heightfield sun shadows at High quality | `engine/render/Renderer3DTrace.cpp`, trace hooks in `Renderer3D*`, `Shaders.h`, `ModelShaders.h`, `modules/rts/view/RtsTerrainRender*`, `RtsTerrainShaders.h`, `docs/traced-lighting.md` | agent-rt-fx (MAIN merges) |
+| Built-in terrain texture quality: filtered world-space grain and micro normals for untextured ground | `modules/rts/view/RtsTerrainShaders.h`, material tier selection in `RtsTerrainRender.*`, `docs/terrain-textures.md` | rt-fx continuation (user assigned) |
 | Other areas | as assigned by the user | the agent the user assigned |
 
 If your task is not in this table, the user's first message to you defines your area: write it
