@@ -41,6 +41,7 @@ struct ViewScripts::Impl {
     void logLine(bool error, const std::string& t) {
         if (self.log_.size() > 300) self.log_.erase(self.log_.begin());
         self.log_.push_back({error, vm.sim ? vm.sim->tick() : 0, t});
+        if (self.onLog) self.onLog(self.log_.back());
     }
     void call(int& ref, int nargs) {
         lua_rawgeti(vm.L, LUA_REGISTRYINDEX, ref);

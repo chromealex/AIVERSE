@@ -11813,6 +11813,27 @@ end)
     CHECK(sim.checksum() == before);
 }
 
+TEST(view_script_log_callback) {
+    // ViewScripts::onLog sees every new log line (game.log and errors) as it is written: hosts print view logs
+    // with it (client: RTS_SCRIPT_LOG), the stored log() is unchanged
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/logger.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/logger.lua", Json::string(R"LUA(
+view.on_frame(function() game.log('frame line'); error('boom') end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    game::ViewScripts view; std::vector<game::ScriptLogEntry> seen;
+    view.onLog = [&](const game::ScriptLogEntry& e) { seen.push_back(e); };
+    CHECK(view.load(sim, rules, map, 1));
+    view.update(sim, .016f);
+    CHECK(seen.size() == view.log().size() && seen.size() >= 2);
+    if (seen.size() >= 2) {
+        CHECK(!seen[0].error && seen[0].text == "frame line");
+        CHECK(seen[1].error && seen[1].text.find("boom") != std::string::npos);
+    }
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

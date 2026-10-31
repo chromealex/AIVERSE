@@ -584,6 +584,11 @@ number or more than 1048576 vertices a frame raises an error and adds nothing. T
 board drawn over the 3D map (OpenWar: Unity's `ArmyBoard` VertexHelper meshes, `scripts/view/openwar/board.lua`).
 Client only (the editor Game view does not draw it yet); presentation only. Test: `view_to_screen_and_draw_canvas`.
 
+View scripts' log (`game.log` lines and errors, which disable the failing handler) is kept by the host; with
+`RTS_SCRIPT_LOG=1` the client also prints each line on stdout as `[view] t=<tick> ...` / `[view error] ...`, next to the
+simulation scripts' `[script] ...` lines (screenshot and capture runs). Hook: `ViewScripts::onLog`; test
+`view_script_log_callback`.
+
 ### Categorical cell layers
 
 `view.paint_layer{bounds = {x, z, w, h}, cells = {width = W, height = H}, density = 1..4, smooth = .75..2,

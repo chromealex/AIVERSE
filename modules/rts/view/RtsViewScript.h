@@ -3,6 +3,7 @@
 // the host turns into UI notices, particle effects and sounds. Never writes into the simulation.
 // docs/scripting.md § View scripts.
 #pragma once
+#include <functional>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -82,6 +83,8 @@ public:
     void uiEvent(Simulation& sim, const std::string& name, const Json& args);
     bool send(Simulation& sim, const std::string& id, const Json& args);
     const std::vector<ScriptLogEntry>& log() const { return log_; }
+    // Called for every new log line (script errors, game.log) when set; testing hosts print them (RTS_SCRIPT_LOG).
+    std::function<void(const ScriptLogEntry&)> onLog;
     bool active() const;
     std::shared_ptr<render::PaintLayers> paintLayers() const;
 
