@@ -95,7 +95,9 @@ DISPLAY=:97 RTS_SHADOWS=medium RTS_SCREENSHOT=/tmp/shot.ppm RTS_EXIT_AFTER_FRAME
 
 Environment knobs: `RTS_CONTENT` (content root), `RTS_SHADOWS=off|low|medium|high`, `RTS_AUDIO=off|null`
 (null: real audio thread without hardware), `RTS_AUDIO_CAPTURE=mix.wav` (record what was played),
-`RTS_SCREENSHOT`, `RTS_EXIT_AFTER_FRAMES`, `RTS_SPLASH=off|full` (loading screen; default: full splash, only the loading time with `--map`).
+`RTS_SCREENSHOT`, `RTS_EXIT_AFTER_FRAMES`, `RTS_SPLASH=off|full` (loading screen; default: full splash, only the loading time with `--map`), `RTS_FAST_FORWARD=seconds`
+(bots play that long before the first frame), `RTS_SCRIPT_LOG=1` (client: script log lines `[script] t=<tick> ...` on stdout, as
+`rts_headless` prints them).
 
 A change is done when: it builds without warnings on gcc/clang (`-Wall -Wextra`), tests pass, the
 headless matches still finish, visual changes were checked on a screenshot, Metal code paths that
