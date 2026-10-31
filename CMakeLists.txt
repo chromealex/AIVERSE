@@ -119,7 +119,9 @@ add_library(rts_game STATIC
     modules/rts/RtsFidelityData.cpp
     modules/rts/RtsFidelity.cpp
     modules/rts/RtsAIOriginals.cpp
-    modules/rts/RtsAIFidelity.cpp)
+    modules/rts/RtsAIFidelity.cpp
+    modules/rts/RtsAITerrain.cpp
+    modules/rts/RtsAITactics.cpp)
 target_link_libraries(rts_game PUBLIC rts_engine)
 include(modules/rts/native/Build.cmake)
 # agent-mech: mechanics of the top-100 strategy games plan (stances, transports, ...)
@@ -393,16 +395,23 @@ add_library(rts_game_view STATIC modules/rts/view/RtsView.cpp modules/rts/view/R
     modules/rts/view/RtsShapes.cpp modules/rts/view/RtsLook.cpp modules/rts/view/RtsAnimate.cpp
     modules/rts/view/RtsViewDraw.cpp modules/rts/view/RtsPortrait.cpp
     modules/rts/view/RtsLights.cpp modules/rts/view/RtsLightsData.cpp modules/rts/view/RtsGroundFx.cpp modules/rts/view/RtsTerrainRender.cpp modules/rts/view/RtsTerrainDetailMesh.cpp
-    modules/rts/view/RtsFog.cpp
-    modules/rts/view/RtsPlanet.cpp modules/rts/view/RtsPlanetDetail.cpp modules/rts/view/RtsPlanetRender.cpp modules/rts/view/RtsPlanetView.cpp modules/rts/view/RtsPlanetGroundFx.cpp)
+    modules/rts/view/RtsFog.cpp modules/rts/view/RtsFieldView.cpp
+    modules/rts/view/RtsPlanetRender.cpp modules/rts/view/RtsPlanetView.cpp modules/rts/view/RtsPlanetGroundFx.cpp)
 # visual terrain detail surface (agent-terrain): shared by the view and the editor core (sculpt, validate)
-add_library(rts_terrain_detail STATIC modules/rts/view/RtsTerrainDetail.cpp)
+# + the planet surface maths (RtsPlanet*: float cube-sphere surface, detail grid synthesis; editor planet detail ops)
+add_library(rts_terrain_detail STATIC modules/rts/view/RtsTerrainDetail.cpp modules/rts/view/RtsPlanet.cpp modules/rts/view/RtsPlanetDetail.cpp)
 target_link_libraries(rts_terrain_detail PUBLIC rts_game)
 target_link_libraries(rts_game_view PUBLIC rts_game rts_models rts_imgui)
 target_link_libraries(rts_game_view PUBLIC rts_terrain_detail)
 
 # Helper: package content + platform metadata around an executable.
 function(rts_package_app target)
+    # the editor's project file (<Title>.rtsproj) is not game content: dropped from loose dev bundles
+    file(GLOB _rts_projfiles RELATIVE "${RTS_CONTENT_DIR}" "${RTS_CONTENT_DIR}/*.rtsproj")
+    set(_rts_rm_exe "")
+    foreach(f ${_rts_projfiles})
+        list(APPEND _rts_rm_exe "$<TARGET_FILE_DIR:${target}>/content/${f}")
+    endforeach()
     if(RTS_PLATFORM STREQUAL "macos" OR RTS_PLATFORM STREQUAL "ios")
         set_target_properties(${target} PROPERTIES
             MACOSX_BUNDLE TRUE
@@ -434,6 +443,10 @@ function(rts_package_app target)
                 MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
             set(res_dir "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources")
         endif()
+        set(_rts_rm_bundle "")
+        foreach(f ${_rts_projfiles})
+            list(APPEND _rts_rm_bundle "${res_dir}/content/${f}")
+        endforeach()
         if(RTS_CONTENT_PACK)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}/content"
@@ -443,7 +456,7 @@ function(rts_package_app target)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}"
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_CONTENT_DIR}" "${res_dir}/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs"   # project outputs
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_rts_rm_bundle}   # project outputs, .rtsproj
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_ENGINE_ASSETS}" "${res_dir}/content/engine"
                 COMMENT "Bundling content")
         endif()
@@ -470,7 +483,7 @@ function(rts_package_app target)
         else()
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_CONTENT_DIR}" "$<TARGET_FILE_DIR:${target}>/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs"   # project outputs
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_rts_rm_exe}   # project outputs, .rtsproj
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_ENGINE_ASSETS}" "$<TARGET_FILE_DIR:${target}>/content/engine"
                 COMMENT "Copying content next to the executable")
         endif()
@@ -550,10 +563,16 @@ if(RTS_BUILD_EDITOR)
     target_link_libraries(rts_editor PRIVATE rts_runtime rts_game_view rts_editor_core)
     target_link_libraries(rts_editor PRIVATE rts_game_fx)
     target_compile_definitions(rts_editor PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    if(WIN32)
+        target_sources(rts_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
+    endif()
     if(APPLE)
         set_target_properties(rts_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "RTSEditor"
             MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "com.rtsengine.editor"
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
+        # application icon (CFBundleIconFile AppIcon; art: tools/branding/logo/make_logo.py)
+        target_sources(rts_editor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns")
+        set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         # engine assets (UI font) inside the bundle, so the editor works when moved elsewhere
         add_custom_command(TARGET rts_editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_ENGINE_ASSETS}" "$<TARGET_BUNDLE_CONTENT_DIR:rts_editor>/Resources/content/engine"
@@ -674,7 +693,6 @@ if(RTS_BUILD_TESTS)
     target_link_libraries(rts_tests PRIVATE rts_game rts_game_audio rts_audiopack)
     target_link_libraries(rts_tests PRIVATE rts_game_fx)
     target_link_libraries(rts_tests PRIVATE rts_terrain_detail)   # terrain detail surface tests (agent-terrain)
-    target_sources(rts_tests PRIVATE modules/rts/view/RtsPlanet.cpp modules/rts/view/RtsPlanetDetail.cpp)   # planet view maths (float, no GPU)
     target_link_libraries(rts_tests PRIVATE rts_game_view)   # fog of war look parsing (view, no GPU)
     target_sources(rts_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(rts_tests PRIVATE rts_lua)
@@ -720,11 +738,11 @@ add_library(rts_ui STATIC engine/ui/UiLayer.cpp engine/ui/UiRender.cpp engine/ui
 target_include_directories(rts_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
 target_link_libraries(rts_ui PUBLIC rts_rmlui rts_rmlui_lua rts_lua rts_engine)
 if(TARGET rts_client)
-    target_sources(rts_client PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
+    target_sources(rts_client PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
     target_link_libraries(rts_client PRIVATE rts_ui rts_net rts_game_fx)
 endif()
 if(TARGET main)
-    target_sources(main PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
+    target_sources(main PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
     target_link_libraries(main PRIVATE rts_ui rts_net rts_game_fx)
 endif()
 
@@ -774,7 +792,7 @@ if(RTS_BUILD_TOOLS OR RTS_BUILD_TESTS)
 endif()
 if(TARGET rts_editor_core) # lighting agent: light_* / lighting_set operations
     target_sources(rts_editor_core PRIVATE apps/editor/core/LightOps.cpp)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/PlanetOps.cpp)   # planet-render agent: planet sculpt / paint
+    target_sources(rts_editor_core PRIVATE apps/editor/core/PlanetOps.cpp apps/editor/core/PlanetDetailOps.cpp)   # planet-render agent: planet sculpt / paint
 endif()
 if(TARGET rts_tests) # lighting agent: GPU-free lighting logic under test
     target_sources(rts_tests PRIVATE modules/rts/view/RtsLightsData.cpp engine/render/QualityGovernor.cpp)
@@ -793,6 +811,10 @@ target_link_libraries(rts_game_view PUBLIC rts_overlay_data)
 if(TARGET rts_editor_core)
     target_sources(rts_editor_core PRIVATE apps/editor/core/OverlayOps.cpp)
     target_link_libraries(rts_editor_core PUBLIC rts_overlay_data)
+endif()
+# grid fields in the editor (field_* MCP ops, Scene preview)
+if(TARGET rts_editor_core)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/FieldOps.cpp)
 endif()
 
 # VFX tools (vfx tools agent): Unity particle importer tests (Python, stdlib only) and the fx_* editor
@@ -897,8 +919,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 endif()
 target_sources(rts_game PRIVATE modules/rts/RtsScriptTerritory.cpp)
 target_sources(rts_game PRIVATE modules/rts/RtsScriptGrid.cpp)
-target_sources(rts_game PRIVATE modules/rts/RtsScript.cpp modules/rts/RtsScriptEngine.cpp modules/rts/RtsScriptApi.cpp
+target_sources(rts_game PRIVATE modules/rts/RtsScript.cpp modules/rts/RtsScriptEngine.cpp modules/rts/RtsScriptApi.cpp modules/rts/RtsScriptCommands.cpp
     modules/rts/RtsScriptStd.cpp)
+# grid fields (G5): data, kernels, Lua `field` table (docs/fields.md)
+target_sources(rts_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB RTS_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(RTS_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
@@ -937,6 +961,45 @@ if(RTS_BUILD_TESTS)
     add_executable(rts_ui_viewport_tests tests/ui_viewport.cpp tests/ui_font_effects.cpp)
     target_link_libraries(rts_ui_viewport_tests PRIVATE rts_ui)
     add_test(NAME rts_ui_viewport_tests COMMAND rts_ui_viewport_tests)
+endif()
+
+# ---------------------------------------------------------------------------
+# Project files `<Title>.rtsproj` and opening them from the OS (project-file agent): ProjectFile /
+# FileAssoc in the editor core (Linux mime + .desktop, Windows HKCU registry, macOS LaunchServices),
+# the editor's own Info.plist (document type com.rtsengine.project) and the document icon drawn by
+# rts_projicon (tools/branding/ProjectIcon.*).
+# ---------------------------------------------------------------------------
+if(TARGET rts_editor_core)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/ProjectFile.cpp apps/editor/core/FileAssoc.cpp)
+    set_property(SOURCE apps/editor/core/ProjectFile.cpp APPEND PROPERTY COMPILE_DEFINITIONS "RTS_ENGINE_VERSION=\"${PROJECT_VERSION}\"")
+    if(WIN32)
+        target_link_libraries(rts_editor_core PUBLIC advapi32 shell32)
+    elseif(APPLE)
+        target_link_libraries(rts_editor_core PUBLIC "-framework CoreServices")
+    endif()
+endif()
+if(TARGET rts_branding)
+    target_sources(rts_branding PRIVATE tools/branding/ProjectIcon.cpp)
+    if(NOT CMAKE_CROSSCOMPILING)
+        add_executable(rts_projicon tools/branding/projicon_main.cpp)
+        target_link_libraries(rts_projicon PRIVATE rts_branding)
+    endif()
+endif()
+if(TARGET rts_editor)
+    target_sources(rts_editor PRIVATE apps/editor/EditorOpenFile.cpp)
+    if(APPLE)
+        set_target_properties(rts_editor PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/EditorInfo.plist.in"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}" MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
+        if(TARGET rts_projicon)
+            add_dependencies(rts_editor rts_projicon)
+            # Resources/rtsproj.icns: the document icon in Finder, drawn from the editor logo
+            add_custom_command(TARGET rts_editor POST_BUILD
+                COMMAND $<TARGET_FILE:rts_projicon> "$<TARGET_BUNDLE_CONTENT_DIR:rts_editor>/Resources"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/icon_1024.png"
+                COMMENT ".rtsproj document icon")
+        endif()
+    endif()
 endif()
 
 # Project-local C++ module build selection (no graphics or game execution).

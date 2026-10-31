@@ -163,6 +163,20 @@ Rules loadRules(const Json& j) {
         r.heights.damagePerLevel = h.getFx("damagePerLevel");
     }
 
+    if (const Json& a = j["ai"]; a.isObject()) {   // computer player knobs (agent-ai-terrain)
+        auto num = [&](const char* k, int& out, int lo, int hi) {
+            if (!a.has(k)) return;
+            const int64_t v = a.getInt(k, -1);
+            if (v < lo || v > hi) throw std::runtime_error(std::string("ai.") + k + ": expected " + std::to_string(lo) + ".." + std::to_string(hi));
+            out = int(v);
+        };
+        num("workersPerBase", r.ai.workersPerBase, 0, 200); num("firstAttackArmy", r.ai.firstAttackArmy, 1, 500);
+        num("armyGrowth", r.ai.armyGrowth, 0, 100); num("maxAttackArmy", r.ai.maxAttackArmy, 1, 1000);
+        num("towers", r.ai.towers, 0, 16); num("scouts", r.ai.scouts, 0, 8); num("invasionSize", r.ai.invasionSize, 1, 200);
+        num("climbWeight", r.ai.climbWeight, 0, 1000); num("exposureWeight", r.ai.exposureWeight, 0, 1000);
+        num("escalateSeconds", r.ai.escalateSeconds, 30, 36000);
+        if (a.has("terrain")) r.ai.terrain = a.getBool("terrain", true) ? 1 : 0;
+    }
     if (const Json& tr = j["terrain"]; tr.isObject()) { // other keys of the block are visual (view)
         std::string model = tr.getStr("model", "levels");
         if (model == "levels") r.terrain.model = TerrainModel::Levels;
@@ -275,6 +289,7 @@ Rules loadRules(const Json& j) {
         for (auto& a : tj["abilities"].items()) for (auto& e : a["effects"].items()) damageIdx(e.getStr("damageType", "normal"));
     }
     for (auto& pa : j["playerAbilities"].items()) for (auto& e : pa["effects"].items()) damageIdx(e.getStr("damageType", "normal"));
+    for (auto& [fid, fj] : j["fields"].members()) for (auto& e : fj["effects"].items()) if (e.has("damageType")) damageIdx(e.getStr("damageType"));   // grid fields
     r.damageTable.assign(r.damageTypes.size(), std::vector<Fixed>(r.armorTypes.size(), Fixed::fromInt(1)));
     for (auto& [dt, row] : j["damageTable"].members())
         for (auto& [at, v] : row.members()) r.damageTable[size_t(indexOf(r.damageTypes, dt))][size_t(indexOf(r.armorTypes, at))] = v.fx();
@@ -773,6 +788,7 @@ Rules loadRules(const Json& j) {
                 r.possession.enabled || !r.playerAbilities.empty();
     loadMechRules(r, j);
     r.armor.plainFloor = !r.originals && !r.mech.any && !j.has("armor") && !j.has("armorModel");   // old games: damage - armor, at least raw / 5
+    loadGridFieldRules(r, j);   // RtsGridFieldData.cpp: rules "fields", type "field" emitters, "field" effects
     return r;
 }
 

@@ -101,6 +101,7 @@ struct WeaponDef {
 struct Amount { uint16_t res = 0; Fixed value{}; };
 } // namespace rts::game
 #include "RtsAbilityData.h"
+#include "RtsGridFieldData.h"
 namespace rts::game {
 // ------------------------------------------------------------------ economy blocks
 struct GatherDef { uint16_t res = 0; Fixed carry = Fixed::fromInt(10); Fixed time = Fixed::fromInt(2); };
@@ -321,6 +322,7 @@ struct UnitType {
     bool foundation = false;                   // concrete slab: once placed its cells become the owner's foundation, the slab goes away
     bool weathers = true;                      // "weathers": false - never damaged by a missing foundation (walls, turrets)
     int16_t trap = -1;                         // index into Rules::traps
+    std::vector<FieldEmitDef> fieldEmit;       // "field": grid field emitters (RtsGridFieldData.h)
     Json view;
 };
 
@@ -403,6 +405,14 @@ struct HeightRules {
     Fixed missUphill{};                       // chance (0..1) to miss a target standing higher
     Fixed rangePerLevel{};                    // attacker standing higher gets more range
     Fixed damagePerLevel{};                   // multiplier added per level of advantage
+};
+
+// Computer player knobs (rules "ai" block, agent-ai-terrain): -1 / unset = the bot's defaults (RtsAI.h AIConfig).
+struct AIRules {
+    int workersPerBase = -1, firstAttackArmy = -1, armyGrowth = -1, maxAttackArmy = -1;
+    int towers = -1, scouts = -1, invasionSize = -1, climbWeight = -1, exposureWeight = -1;
+    int escalateSeconds = -1;
+    int terrain = -1;                         // 0 / 1
 };
 
 // Terrain model (rules "terrain" block; visual keys there belong to the view and are ignored here).
@@ -543,6 +553,7 @@ struct Rules {
     Fixed autoBuildGrowth{};                  // cost grows by x per structure already auto-built
     VictoryRules victory;
     HeightRules heights;
+    AIRules ai;
     FogRules fog;
     TerrainRules terrain;
     RegionRules regions;
@@ -578,6 +589,7 @@ struct Rules {
     std::vector<TrapDef> traps;
     bool fidelity = false;                     // any of them present: their system runs, their state is hashed
     int16_t stTrapHidden = -1, stTrapSeen = -1; // built-in statuses of hidden / exposed traps
+    std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
 
     int findRoom(const std::string& id) const;
     int findDiggable(char c) const;
