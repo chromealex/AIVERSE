@@ -18,8 +18,9 @@ private:
         std::vector<uint8_t> bytes;
     };
     gfx::Device* dev_=nullptr;
-    gfx::ShaderHandle shader_;
-    gfx::PipelineHandle pipe_;
+    gfx::ShaderHandle shader_,cellShader_;
+    gfx::PipelineHandle pipe_,cellPipe_;
+    void drawCells(render::Renderer3D&,gfx::Device&,render::PaintLayer&,const MapGrid&,const RtsView&,int id);
     std::shared_ptr<render::PaintLayers> source_;
     std::map<int,Layer> layers_;
     std::vector<uint8_t> memory_;

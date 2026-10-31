@@ -11619,6 +11619,29 @@ end)
     CHECK(cr.x == 11 && cr.zoom == 71 && cr.yaw == 180 && std::isnan(cr.z) && std::isnan(cr.pitch));
     CHECK(!view.takeCameraRequest(cr));
     for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+    // categorical cell layer: cells / density / palette / border options, set_cells length check, view-only
+    Json rules2 = Json::parseFile(kSkirmish + "/rules.json");
+    rules2.set("viewScripts", Json::parse(R"(["scripts/view/cells.lua"])"));
+    Json src2 = Json::object(); src2.set("scripts/view/cells.lua", Json::string(R"LUA(
+local layer = view.paint_layer{bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, density = 3, borderWidth = .55, borderColor = {1, 1, 1}, outside = 255}
+layer:set_cells(string.char(1, 1, 2, 2, 9, 9, 255, 255))
+layer:set_palette{[1] = {1, 0, 0}, [255] = {0, .5, 1}}
+assert(not pcall(layer.set_cells, layer, "abc"))
+assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 0, height = 2}}))
+assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, density = 5}))
+)LUA")); rules2.set("$scriptSources", src2);
+    Simulation sim2(SimConfig{}, std::make_unique<game::RtsModule>()); sim2.setup(rules2, map);
+    const auto before = sim2.checksum();
+    game::ViewScripts v2; CHECK(v2.load(sim2, rules2, map, 1));
+    for (auto& e : v2.log()) std::printf("  cells log: %s\n", e.text.c_str());
+    CHECK(v2.log().empty());
+    auto& layers = v2.paintLayers()->layers; CHECK(layers.size() == 1);
+    if (!layers.empty()) {
+        const auto& l = layers.begin()->second;
+        CHECK(l.categorical && l.cellsW == 4 && l.cellsH == 2 && l.density == 3 && l.cells.size() == 8 && l.cells[4] == 9 && l.cells[7] == 255);
+        CHECK(l.palette[4] == 255 && l.palette[5] == 0 && l.palette[255 * 4 + 1] == 128 && std::abs(l.borderWidth - .55f) < 1e-5f && l.outside == 255);
+    }
+    CHECK(sim2.checksum() == before);
 }
 
 int main(int argc, char** argv) {

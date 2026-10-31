@@ -94,6 +94,29 @@ int vPaintStroke(lua_State* L,Vm& vm) {
     p->strokes.push_back({(ax-p->x)/p->w,(az-p->z)/p->h,(bx-p->x)/p->w,(bz-p->z)/p->h,radius/p->h,soft/p->h,{1,1,1,1}});
     return 0;
 }
+// layer:set_cells(bytes): a string of width * height id bytes (row-major) for a categorical layer
+int vPaintCells(lua_State* L,Vm& vm) {
+    auto* p=layerOf(L,vm);if(!p||!p->categorical)return fail(vm,"set_cells needs a categorical layer (paint_layer{cells=...})");
+    size_t n=0;const char* bytes=lua_tolstring(L,2,&n);
+    if(!bytes||n!=size_t(p->cellsW)*size_t(p->cellsH))return fail(vm,"set_cells expects a string of width * height bytes");
+    p->cells.assign(reinterpret_cast<const uint8_t*>(bytes),reinterpret_cast<const uint8_t*>(bytes)+n);p->cellsDirty=true;return 0;
+}
+// layer:set_palette{[id] = {r, g, b [, a]}} (0..1): replaces the given entries
+int vPaintPalette(lua_State* L,Vm& vm) {
+    auto* p=layerOf(L,vm);if(!p||!p->categorical||!lua_istable(L,2))return fail(vm,"set_palette needs a categorical layer and a table");
+    lua_pushnil(L);
+    while(lua_next(L,2)){
+        if(lua_isinteger(L,-2)&&lua_istable(L,-1)){
+            const lua_Integer id=lua_tointeger(L,-2);
+            if(id<0||id>255){lua_pop(L,2);return fail(vm,"palette ids are 0..255");}
+            for(int k=0;k<4;++k){lua_rawgeti(L,-1,k+1);float v=lua_isnil(L,-1)?1.f:float(toDouble(L,-1));lua_pop(L,1);
+                if(!std::isfinite(v)){lua_pop(L,2);return fail(vm,"invalid palette colour");}
+                p->palette[size_t(id)*4+size_t(k)]=uint8_t(std::clamp(v,0.f,1.f)*255.f+.5f);}
+        }
+        lua_pop(L,1);
+    }
+    p->paletteDirty=true;return 0;
+}
 int vPaintLayer(lua_State* L,Vm& vm) {
     auto& store=*viewOf(vm).paint;
     if(!lua_istable(L,1)||store.layers.size()>=16)return fail(vm,"paint_layer expects options; maximum 16 layers");
@@ -115,6 +138,24 @@ int vPaintLayer(lua_State* L,Vm& vm) {
     lua_getfield(L,1,"source");const std::string source=lua_isstring(L,-1)?lua_tostring(L,-1):"";lua_pop(L,1);
     if(!source.empty()&&source!="territory")return fail(vm,"unknown paint source");
     if(source=="territory") {float owner=numberField(L,1,"owner",0);if(!std::isfinite(owner)||owner<1||owner>255)return fail(vm,"territory layer needs owner 1..255");p.territoryOwner=int(owner);}
+    lua_getfield(L,1,"cells");
+    if(lua_istable(L,-1)){   // categorical raster: {width, height}
+        float cw=numberField(L,lua_gettop(L),"width",0),ch=numberField(L,lua_gettop(L),"height",0);
+        lua_pop(L,1);
+        if(p.territoryOwner||!std::isfinite(cw)||!std::isfinite(ch)||cw<1||ch<1||cw>2048||ch>2048||cw!=std::floor(cw)||ch!=std::floor(ch))
+            return fail(vm,"paint_layer cells must be {width=1..2048, height=1..2048} (not with a territory source)");
+        p.categorical=true;p.cellsW=int(cw);p.cellsH=int(ch);p.width=p.cellsW;p.height=p.cellsH;
+        p.cells.assign(size_t(p.cellsW)*size_t(p.cellsH),0);p.cellsDirty=true;p.paletteDirty=true;
+        p.borderWidth=numberField(L,1,"borderWidth",0.55f);p.smooth=numberField(L,1,"smooth",2.0f);
+        const float outside=numberField(L,1,"outside",255),density=numberField(L,1,"density",1);
+        if(!std::isfinite(density)||density<1||density>4||density!=std::floor(density)||p.cellsW*int(density)>4096||p.cellsH*int(density)>4096)return fail(vm,"paint_layer density must be 1..4 (texture side <= 4096)");
+        p.density=int(density);
+        if(!std::isfinite(p.borderWidth)||!std::isfinite(p.smooth)||!std::isfinite(outside))return fail(vm,"invalid cell style");
+        p.borderWidth=std::clamp(p.borderWidth,0.f,2.f);p.smooth=std::clamp(p.smooth,0.75f,2.f);p.outside=std::clamp(int(outside),0,255);
+        lua_getfield(L,1,"borderColor");
+        if(lua_istable(L,-1))for(int i=0;i<4;++i){lua_rawgeti(L,-1,i+1);float v=lua_isnil(L,-1)?1.f:float(toDouble(L,-1));lua_pop(L,1);if(!std::isfinite(v)){lua_pop(L,1);return fail(vm,"invalid border colour");}p.borderColor[size_t(i)]=std::clamp(v,0.f,1.f);}
+        lua_pop(L,1);
+    } else lua_pop(L,1);
     if(p.territoryOwner){
         const auto& grid=vm.module->state(*vm.sim).grid;
         if(p.x!=0||p.z!=0||p.w!=grid.w||p.h!=grid.h)return fail(vm,"territory bounds must cover the complete map");
@@ -127,6 +168,7 @@ int vPaintLayer(lua_State* L,Vm& vm) {
         if(!store.layers.count(p.textureId)){lua_pop(L,1);return fail(vm,"invalid paint texture");}
         if(store.layers.at(p.textureId).textureId){lua_pop(L,1);return fail(vm,"cannot chain paint texture references");}
     }lua_pop(L,1);
+    if(p.categorical&&p.textureId)return fail(vm,"a categorical layer has its own cells (no texture)");
     size_t pixels=p.textureId?0:size_t(p.width)*p.height;
     for(auto& [id,l]:store.layers)if(!l.textureId)pixels+=size_t(l.width)*l.height;
     if(pixels>8*1024*1024)return fail(vm,"paint layers exceed 8 million pixels");
@@ -136,7 +178,9 @@ int vPaintLayer(lua_State* L,Vm& vm) {
     lua_pushcfunction(L,bind<vPaintOpacity>);lua_setfield(L,-2,"set_opacity");
     lua_pushcfunction(L,bind<vPaintCopy>);lua_setfield(L,-2,"copy_from");
     lua_pushcfunction(L,bind<vPaintClear>);lua_setfield(L,-2,"clear");
-    lua_pushcfunction(L,bind<vPaintDestroy>);lua_setfield(L,-2,"destroy");return 1;
+    lua_pushcfunction(L,bind<vPaintDestroy>);lua_setfield(L,-2,"destroy");
+    lua_pushcfunction(L,bind<vPaintCells>);lua_setfield(L,-2,"set_cells");
+    lua_pushcfunction(L,bind<vPaintPalette>);lua_setfield(L,-2,"set_palette");return 1;
 }
 
 int vRenderTexture(lua_State* L,Vm& vm) {
