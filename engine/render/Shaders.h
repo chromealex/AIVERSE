@@ -157,7 +157,7 @@ void main() {
     col = mix(col, base, u_params.x) + base * (u_params.w * (1.0 + nightGlow()));
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0); // ACES fit
+    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0); // ACES fit
     o_color = vec4(waterReflect(sqrt(col), v_wpos, n, V, u_params.y), albedo.a);   // planar reflection (water, High)
 }
 )";
@@ -201,7 +201,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     col = mix(col, base, u.params.x) + base * (u.params.w * (1.0 + l.info.w));
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
+    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
     return float4(waterReflect(l, tex2, s2, in.pos.xy, sqrt(col), in.wpos, n, V, u.params.y), albedo.a);
 }
 )";

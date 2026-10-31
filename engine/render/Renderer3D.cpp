@@ -202,7 +202,7 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
     std::memcpy(f.lightViewProj, lightViewProj_.m, sizeof f.lightViewProj);
     put3(f.sunDir, normalize(lighting.sunDir), lighting.sunIntensity);
     put3(f.sunColor, lighting.sunColor, 1);
-    put3(f.skyColor, lighting.skyColor, 1);
+    put3(f.skyColor, lighting.skyColor, lighting.tonemap ? 1.0f : 0.0f);   // w: tonemap switch of the lit shaders
     put3(f.groundColor, lighting.groundColor, 1);
     put3(f.fog, lighting.fogColor, lighting.fogDensity);
     put3(f.camPos, camPos_, 1);

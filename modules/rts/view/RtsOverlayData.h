@@ -163,6 +163,9 @@ Json overlayTemplates();
 
 // Player slot colours (0 = neutral); RtsView::playerColor returns these.
 render::float4 overlayPlayerColor(int player);
+// game.json "playerColors": [neutral, slot 1, ... slot 8] (overlay colour syntax, null keeps a slot). Resets to the
+// defaults first (call it whenever a game is loaded). Returns the first error (bad entries keep their default).
+std::string configurePlayerColors(const Json& list);
 render::float4 parseOverlayColor(const Json& j, const std::string& where, bool* player = nullptr);
 uint16_t overlayEventKind(const std::string& name);   // 0 = unknown
 const char* overlayEventName(uint16_t kind);

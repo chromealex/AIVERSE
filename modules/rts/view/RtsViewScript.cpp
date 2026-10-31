@@ -30,6 +30,9 @@ struct ViewScripts::Impl {
     std::shared_ptr<Collector> collector;
     uint8_t player = 0;
     ViewTargeting targeting;
+    ViewCamera camera;
+    ViewCameraRequest cameraRequest{};
+    bool cameraRequested = false;
     std::shared_ptr<render::PaintLayers> paint = std::make_shared<render::PaintLayers>();
     explicit Impl(ViewScripts& s) : self(s) {}
 
@@ -192,6 +195,41 @@ int vTargeting(lua_State* L, Vm& vm) {
     lua_pushinteger(L,lua_Integer(t.caster));lua_setfield(L,-2,"caster");
     return 1;
 }
+int vCamera(lua_State* L, Vm& vm) {
+    const auto& c = viewOf(vm).camera;
+    lua_createtable(L, 0, 8);
+    lua_pushnumber(L, c.x); lua_setfield(L, -2, "x");
+    lua_pushnumber(L, c.z); lua_setfield(L, -2, "z");
+    lua_pushnumber(L, c.zoom); lua_setfield(L, -2, "zoom");
+    lua_pushnumber(L, c.pitch); lua_setfield(L, -2, "pitch");
+    lua_pushnumber(L, c.yaw); lua_setfield(L, -2, "yaw");
+    lua_pushinteger(L, c.width); lua_setfield(L, -2, "width");
+    lua_pushinteger(L, c.height); lua_setfield(L, -2, "height");
+    lua_pushboolean(L, c.ortho); lua_setfield(L, -2, "ortho");
+    return 1;
+}
+// view.set_camera{x =, z =, zoom =, pitch =, yaw =}: any subset; applied by the host after this frame's scripts.
+int vSetCamera(lua_State* L, Vm& vm) {
+    if (!lua_istable(L, 1)) return fail(vm, "view.set_camera{x =, z =, zoom =, pitch =, yaw =}");
+    auto& im = viewOf(vm);
+    const float keep = std::nanf("");
+    ViewCameraRequest r = im.cameraRequested ? im.cameraRequest : ViewCameraRequest{keep, keep, keep, keep, keep};
+    struct F { const char* k; float* v; } fields[] = {{"x", &r.x}, {"z", &r.z}, {"zoom", &r.zoom}, {"pitch", &r.pitch}, {"yaw", &r.yaw}};
+    for (auto& f : fields) {
+        lua_getfield(L, 1, f.k);
+        if (!lua_isnil(L, -1)) {
+            const float v = float(toDouble(L, -1));
+            if (!std::isfinite(v)) { lua_pop(L, 1); return fail(vm, std::string("view.set_camera: non-finite ") + f.k); }
+            *f.v = v;
+        }
+        lua_pop(L, 1);
+    }
+    if (std::isfinite(r.zoom) && r.zoom <= 0) return fail(vm, "view.set_camera: zoom must be positive");
+    if (std::isfinite(r.pitch)) r.pitch = std::clamp(r.pitch, 5.0f, 90.0f);
+    im.cameraRequest = r;
+    im.cameraRequested = true;
+    return 0;
+}
 int vPlayer(lua_State* L, Vm& vm) { lua_pushinteger(L, viewOf(vm).player); return 1; }
 
 // ---- Lua <-> Json for the UI (view values: numbers, fx, strings, booleans, tables)
@@ -317,6 +355,13 @@ ViewScripts::~ViewScripts() { detach(); }
 std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return impl_->paint; }
 
 void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=target; }
+void ViewScripts::setCamera(const ViewCamera& camera) { impl_->camera = camera; }
+bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
+    if (!impl_->cameraRequested) return false;
+    out = impl_->cameraRequest;
+    impl_->cameraRequested = false;
+    return true;
+}
 
 bool ViewScripts::active() const { return impl_->vm.L != nullptr; }
 
@@ -327,7 +372,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     im.handlers.clear(); im.frame.clear(); im.requests.clear(); im.commands.clear();
     im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
     log_.clear();
-    im.paint=std::make_shared<render::PaintLayers>();im.targeting={};
+    im.paint=std::make_shared<render::PaintLayers>();im.targeting={};im.cameraRequested=false;
     const auto files = scriptFiles(rules, map, true);
     if (files.empty() || sim.module().name() != "rts") return false;
     Vm& vm = im.vm;
@@ -343,7 +388,8 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>},
                                      {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>},
                                      {"send", bind<vSend>}, {"state", bind<vState>},
-                                     {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {nullptr, nullptr}};
+                                     {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
+                                     {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);
     lua_setglobal(vm.L, "view");
     static const luaL_Reg uiFuncs[] = {{"set", bind<uSet>}, {"open", bind<uOpen>}, {"close", bind<uClose>}, {"on", bind<uOn>}, {nullptr, nullptr}};

@@ -11577,6 +11577,50 @@ TEST(script_command_map_click) {
     CHECK(mod(*sim).state(*sim).trig.vars["tap_x"] == Fixed::fromInt(7));
 }
 
+// OpenWar presentation hooks (agent-openwar): game.json "playerColors", flat lighting, view camera API
+TEST(openwar_player_colors_flat_lighting_view_camera) {
+    // playerColors: hex / 0..1 / 0..255 entries, null keeps the default, errors are reported, reset on reload
+    const render::float4 def1 = game::overlayPlayerColor(1);
+    CHECK(game::configurePlayerColors(Json::parse(R"(["#787878", [239, 101, 88], null, [0.5, 0.25, 1]])")).empty());
+    CHECK(std::abs(game::overlayPlayerColor(0).x - 120.0f / 255) < 1e-4f && std::abs(game::overlayPlayerColor(1).y - 101.0f / 255) < 1e-4f);
+    CHECK(game::overlayPlayerColor(2).x == game::overlayPlayerColor(2).x && std::abs(game::overlayPlayerColor(3).z - 1) < 1e-4f);
+    CHECK(!game::configurePlayerColors(Json::parse(R"(["nope"])")).empty());
+    CHECK(game::configurePlayerColors(Json{}).empty() && game::overlayPlayerColor(1).x == def1.x);
+    // lighting: day palette override, fog density, tonemap switch (map wins over game)
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    const game::Rules r = game::loadRules(rules);
+    {
+        game::RtsLights L; L.init(r);
+        L.configure(Json::parse(R"({"day": {"sun": [1, 1, 1], "sky": [1, 1, 1], "ground": [1, 1, 1], "sunK": 0}, "fogDensity": 0, "tonemap": false})"), Json{}, Json{});
+        render::Lighting l; L.updateSky(l, 0);
+        CHECK(l.sunIntensity == 0 && l.skyColor.x == 1 && l.groundColor.z == 1 && l.fogDensity == 0 && !l.tonemap);
+        L.configure(Json::parse(R"({"tonemap": false})"), Json::parse(R"({"tonemap": true})"), Json{});
+        render::Lighting l2; L.updateSky(l2, 0); CHECK(l2.tonemap);
+    }
+    { game::RtsLights L; L.init(r); render::Lighting l; L.updateSky(l, 0); CHECK(l.tonemap && l.fogDensity == render::Lighting{}.fogDensity); }
+    // view.camera() / view.set_camera{}: read the host camera, request a partial change, reject bad values
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/cam.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/cam.lua", Json::string(R"LUA(
+view.on_frame(function()
+ local c = view.camera()
+ assert(c.width == 720 and c.height == 1280 and c.ortho and c.zoom == 40 and c.pitch == 34)
+ view.set_camera{x = c.x + 1, zoom = 71}
+ view.set_camera{yaw = 180}
+ assert(not pcall(view.set_camera, {zoom = -1}))
+end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    game::ViewCamera vc; vc.x = 10; vc.z = 20; vc.zoom = 40; vc.pitch = 34; vc.width = 720; vc.height = 1280; vc.ortho = true;
+    view.setCamera(vc); view.update(sim, .016f);
+    game::ViewCameraRequest cr{};
+    CHECK(view.takeCameraRequest(cr));
+    CHECK(cr.x == 11 && cr.zoom == 71 && cr.yaw == 180 && std::isnan(cr.z) && std::isnan(cr.pitch));
+    CHECK(!view.takeCameraRequest(cr));
+    for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

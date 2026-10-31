@@ -250,6 +250,21 @@ void RtsLights::configure(const Json& game, const Json& map, const Json& lights)
         sunDirSet_ = d.size() >= 3;
         if (sunDirSet_) sunDir_ = normalize(float3{float(d[0].fx().toDouble()), std::max(float(d[1].fx().toDouble()), 0.2f), float(d[2].fx().toDouble())});
     }
+    // "day": {"sun", "sky", "ground", "fog": [r, g, b], "sunK": k} replaces fields of the day palette (of the
+    // preset or of the renderer); the map block wins over the game block per field.
+    for (const Json* src : {&game["day"], &map["day"]}) {
+        if (!src->isObject()) continue;
+        if (day_.sunK < 0) { const render::Lighting d0 = haveBase_ ? base_ : render::Lighting{}; day_ = Palette{d0.sunColor, d0.skyColor, d0.groundColor, d0.fogColor, 1.0f}; }
+        auto col = [&](const char* k, float3& out) {
+            const Json& c = (*src)[k];
+            if (c.size() >= 3) out = float3{float(c[0].fx().toDouble()), float(c[1].fx().toDouble()), float(c[2].fx().toDouble())};
+        };
+        col("sun", day_.sun); col("sky", day_.sky); col("ground", day_.ground); col("fog", day_.fog);
+        if ((*src)["sunK"].isNumber()) day_.sunK = std::max(num(*src, "sunK", 1.0f), 0.0f);
+    }
+    fogDensity_ = pick("fogDensity", -1, -1.0f);
+    if (fogDensity_ >= 0) fogDensity_ = std::min(fogDensity_, 1.0f);
+    tonemap_ = map["tonemap"].boolean(game["tonemap"].boolean(true));
     shadowSoftness_ = pick("shadowSoftness", -1, -1.0f);
     if (shadowSoftness_ >= 0) shadowSoftness_ = std::clamp(shadowSoftness_, 0.02f, 1.0f);
     if (const char* c = std::getenv("RTS_CLOUDS")) { clouds_ = std::clamp(float(std::atof(c)), 0.0f, 1.0f); cycle_ = true; }
@@ -281,6 +296,8 @@ void RtsLights::updateSky(Lighting& l, double seconds, float cycle) {
     if (sunDirSet_) base_.sunDir = sunDir_;
     // penumbra radius: the game / map value, else the renderer default (nothing else sets it)
     base_.shadowSoftness = l.shadowSoftness = shadowSoftness_ >= 0 ? shadowSoftness_ : render::Lighting{}.shadowSoftness;
+    base_.fogDensity = l.fogDensity = fogDensity_ >= 0 ? fogDensity_ : render::Lighting{}.fogDensity;
+    base_.tonemap = l.tonemap = tonemap_;
     const bool active = cycle_ || preview_ || cycle >= 0;
     if (!active) {
         night_ = dusk_ = 0;

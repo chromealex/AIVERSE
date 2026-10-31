@@ -31,6 +31,7 @@
 #include "modules/rts/RtsLocalize.h"
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/view/RtsCamera.h"
+#include "modules/rts/view/RtsOverlayData.h"
 
 using namespace rts;
 using platform::Event;
@@ -233,6 +234,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         scriptUiReset();
         if (viewScripts_.load(*sim_, rules, map, uint8_t(spectator_ ? 0 : human_))) viewScripts_.attach(*sim_);
         view_.lights().configure(manifest_["lighting"], map["lighting"], map["lights"]); // day/night, map lights
+        if (auto pe = game::configurePlayerColors(manifest_["playerColors"]); !pe.empty()) std::fprintf(stderr, "%s\n", pe.c_str());
         configurePostFx(map);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
@@ -712,7 +714,27 @@ void GameClient::runViewScripts(float dt) {
         float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&!ui_.pointerOverUi();target.x=p.x;target.z=p.z;
     }
     viewScripts_.setTargeting(target);
+    {   // view.camera(): zoom in the units of game.json "camera" (ortho: visible view-plane height)
+        game::ViewCamera vc;
+        vc.x = cam_.target.x; vc.z = cam_.target.z;
+        vc.zoom = cam_.ortho ? 2.0f * cam_.orthoHalfHeight() : cam_.distance;
+        vc.pitch = cam_.pitch * 57.29578f; vc.yaw = cam_.yaw * 57.29578f;
+        vc.width = int(platform::framebufferWidth()); vc.height = int(platform::framebufferHeight());
+        vc.ortho = cam_.ortho;
+        viewScripts_.setCamera(vc);
+    }
     viewScripts_.update(*sim_, dt);
+    if (game::ViewCameraRequest cr; viewScripts_.takeCameraRequest(cr)) {   // view.set_camera: presentation only
+        if (std::isfinite(cr.x)) cam_.target.x = cr.x;
+        if (std::isfinite(cr.z)) cam_.target.z = cr.z;
+        if (std::isfinite(cr.pitch)) cam_.pitch = cr.pitch / 57.29578f;
+        if (std::isfinite(cr.yaw)) cam_.yaw = cr.yaw / 57.29578f;
+        if (std::isfinite(cr.zoom)) {
+            const float d = cam_.ortho ? cr.zoom * 0.5f / std::tan(cam_.fovY * 0.5f) : cr.zoom;
+            cam_.minDistance = std::min(cam_.minDistance, d); cam_.maxDistance = std::max(cam_.maxDistance, d);
+            cam_.distance = d;
+        }
+    }
     issueViewCommands();
     scriptUiFrame();
     for (auto& r : viewScripts_.takeRequests()) {
