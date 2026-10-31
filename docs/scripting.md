@@ -376,6 +376,7 @@ end
 | `args` | array `[{name, type, ...}]` (or an object `{name: {type, ...}}`): `int` (`min`, `max`, `default`), `enum` (`values`, `default`), `bool`, `point` (`{x, z}` in the handler), `unit` (a living unit; `own: true` = of the sender), `entity` |
 | `cost`, `cooldown` | resources taken and cooldown (seconds, per player) started when the handler accepts; while unaffordable / cooling down the command is dropped (the card shows the remaining seconds) |
 | `fn` | handler function (default `on_command`) |
+| `mapClick` | `true`: a plain left click / tap on the map (normal input mode, nothing armed) sends this command with the clicked ground point as its first `point` argument; for games whose input is tapping the map (OpenWar). Needs a `point` argument and no `targets`; the first such command (by id) wins. Client and editor Game view; test `script_command_map_click` |
 
 The first `point` / `unit` / `entity` argument is what a click picks: the button enters a targeting
 mode and the next left click fills it in; the other arguments take their defaults (view scripts and

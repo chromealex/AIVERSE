@@ -11548,6 +11548,35 @@ TEST(script_g12_events_and_hooks) {   // every GameEvent in Lua; before_damage /
     CHECK(mod(*plain).scripts()->hooks() == 0);
 }
 
+
+// ---- script commands: rules "mapClick" (a plain map click / tap sends the game's tap command; OpenWar port)
+TEST(script_command_map_click) {
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("commands", Json::parse(R"J({
+      "tap":  {"mapClick": true, "args": [{"name": "at", "type": "point"}]},
+      "bad":  {"mapClick": true, "args": [{"name": "n", "type": "int"}]},
+      "sel":  {"mapClick": true, "targets": ["footman"], "args": [{"name": "at", "type": "point"}]}})J"));
+    rules.set("scripts", Json::parse(R"(["scripts/c.lua"])"));
+    Json src = Json::object();
+    src.set("scripts/c.lua", Json::string("function on_command(p, id, a) if id == 'tap' then game.set_var('tap_x', a.at.x) end end"));
+    rules.set("$scriptSources", src);
+    auto sim = std::make_unique<Simulation>(SimConfig{}, std::make_unique<game::RtsModule>());
+    sim->setup(rules, Json::parseFile(kSkirmish + "/maps/valley.json"));
+    auto* se = mod(*sim).scripts();
+    CHECK(se != nullptr);
+    if (!se) return;
+    const auto& cs = se->commands();
+    const int tap = game::mapClickCommand(cs);
+    CHECK(tap >= 0 && cs[size_t(tap)].id == "tap");
+    for (const auto& d : cs) if (d.id != "tap") CHECK(!d.mapClick);   // no point / needs a selection: refused at load
+    // the host sends it like any script command: point as raw fx x, z
+    Command c; c.type = game::kCmdScript; c.player = 1; c.param = tap;
+    c.args = {Fixed::fromInt(7).raw, Fixed::fromInt(9).raw};
+    sim->submit(c);
+    for (int i = 0; i < 3; ++i) sim->step();
+    CHECK(mod(*sim).state(*sim).trig.vars["tap_x"] == Fixed::fromInt(7));
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

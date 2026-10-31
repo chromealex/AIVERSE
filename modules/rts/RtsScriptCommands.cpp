@@ -79,10 +79,20 @@ std::vector<ScriptCommandDef> parseScriptCommands(const Json& rules, const Rules
                 d.pick = int(d.args.size());
             d.args.push_back(std::move(ad));
         }
+        d.mapClick = j.getBool("mapClick");
+        if (d.mapClick && (d.pick < 0 || d.args[size_t(d.pick)].kind != ScriptArgDef::Point || d.needUnits)) {
+            err("commands." + id + ".mapClick: needs a point argument and no \"targets\"");
+            d.mapClick = false;
+        }
         out.push_back(std::move(d));
     }
     std::sort(out.begin(), out.end(), [](const ScriptCommandDef& a, const ScriptCommandDef& b) { return a.id < b.id; });
     return out;
+}
+
+int mapClickCommand(const std::vector<ScriptCommandDef>& commands) {
+    for (size_t i = 0; i < commands.size(); ++i) if (commands[i].mapClick) return int(i);
+    return -1;
 }
 
 namespace script {

@@ -426,6 +426,15 @@ private:
             used = true;
         }
         if (pending_ >= 0 && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape))) { pending_ = -1; used = true; }
+        // rules "mapClick": a plain left click on the map sends the game's tap command
+        if (const int tap = game::mapClickCommand(cs); !used && pending_ < 0 && tap >= 0 && vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            float x, z;
+            if (ed.groundAt(vp_, ed.gameCam, io.MousePos.x, io.MousePos.y, x, z)) {
+                if (se->commandCooldown(*sim, me, tap).raw <= 0)
+                    send(tap, kNullEntity, Vec3{Fixed::fromRatio(int64_t(x * 256), 256), Fixed{}, Fixed::fromRatio(int64_t(z * 256), 256)}, true);
+                used = true;
+            }
+        }
         std::vector<int> shown;
         for (size_t i = 0; i < cs.size(); ++i) if (fits(cs[i])) shown.push_back(int(i));
         if (ImGui::IsWindowFocused() && !io.WantTextInput)

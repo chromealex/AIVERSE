@@ -109,6 +109,16 @@ void GameClient::issueScriptCommand(int index, Entity target, Vec3 point, bool h
 }
 
 bool GameClient::scriptCommandClick(const Event& e) {
+    if (mode_ == Mode::Normal) {   // rules "mapClick": the game's tap command takes plain map clicks
+        const auto* cs = scriptCommands();
+        const int i = cs ? game::mapClickCommand(*cs) : -1;
+        if (i < 0 || spectator_) return false;
+        float3 g;
+        if (!groundAt(e.x, e.y, g)) return false;
+        const Vec3 p = planet() ? simPoint(g) : Vec3{Fixed::fromRatio(int64_t(g.x * 256), 256), Fixed{}, Fixed::fromRatio(int64_t(g.z * 256), 256)};
+        if (mod().scripts()->commandCooldown(*sim_, human_, i).raw <= 0) issueScriptCommand(i, kNullEntity, p, true);
+        return true;
+    }
     if (mode_ != Mode::ScriptCmd) return false;
     float3 g;
     Vec3 p{};
