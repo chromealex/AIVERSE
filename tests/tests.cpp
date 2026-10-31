@@ -10827,6 +10827,14 @@ TEST(script_ieee_bit_patterns) {
             assert(f32.lt(0x80000000,0)==false and f32.eq(0x80000000,0) and f32.le(one,one) and not f32.eq(0x7fc00000,0x7fc00000))
             assert(f32.lt(0xbf800000,one) and not f32.lt(0x7fc00000,one))
             assert(f32.tof64(0x3dcccccd)==0x3fb99999a0000000)
+            -- dot2: a*b+c*d rounded once. (1+2^-23)*1 + 2^-24*(1-2^-46): the binary64 sum is the midpoint
+            -- 1+2^-23+2^-24 (a tie that would go to the even 1+2^-22); the exact sum is below it.
+            assert(f32.dot2(0x3f800001,one,0x33800001,0x3f7ffffe)==0x3f800001)
+            assert(f32.dot2(0x3f800001,one,0x33800001,0x3f800001)==0x3f800002)   -- exact sum above the midpoint
+            assert(f32.dot2(0x3f800001,one,0x33800000,one)==0x3f800002)          -- exact tie: to even
+            assert(f32.dot2(one,one,0xbf800000,one)==0 and f32.dot2(0x80000000,one,0x80000000,one)==0x80000000)
+            assert(f32.dot2(0x7f7fffff,two,0,0)==0x7f800000 and f32.dot2(0x7f800000,one,0xff800000,one)==0x7fc00000)
+            assert(f32.dot2(0x40400000,0x40800000,0x40a00000,0x40c00000)==0x42280000)   -- 3*4+5*6
             assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
             assert(f64.fromint(9007199254740993)==0x4340000000000000)
             assert(f64.tof32(0x3ff0000010000000)==one and f64.tof32(0x3ff0000010000001)==0x3f800001)

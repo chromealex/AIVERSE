@@ -96,6 +96,29 @@ int f32Le(lua_State* L) { lua_pushboolean(L, f32Of(arg32(L, 1)) <= f32Of(arg32(L
 int f32Eq(lua_State* L) { lua_pushboolean(L, f32Of(arg32(L, 1)) == f32Of(arg32(L, 2))); return 1; }
 int f32ToF64(lua_State* L) { requireEnv(L); const double r = double(f32Of(arg32(L, 1))); return push64(L, r); }
 
+// a*b + c*d rounded once to binary32 (a fused two-term dot product). Both products are exact in binary64
+// (24-bit significands); TwoSum gives their binary64 sum s and its exact error e. Rounding s to binary32 is
+// the correctly rounded result unless s lies exactly on a binary32 midpoint (every binary32 midpoint,
+// subnormal or the overflow threshold included, is a binary64 number), where the sign of e decides.
+int f32Dot2(lua_State* L) {
+    requireEnv(L);
+    const double p1 = double(f32Of(arg32(L, 1))) * double(f32Of(arg32(L, 2)));
+    const double p2 = double(f32Of(arg32(L, 3))) * double(f32Of(arg32(L, 4)));
+    const double sum = p1 + p2;
+    float r = float(sum);
+    if (sum - sum == 0.0) {   // finite
+        const double back = sum - p1;
+        const double err = (p1 - (sum - back)) + (p2 - back);
+        const double rd = double(r);
+        if (err != 0.0 && rd != sum) {
+            const float other = __builtin_nextafterf(r, sum > rd ? __builtin_inff() : -__builtin_inff());
+            const double mid = (rd + double(other)) * 0.5;
+            if (sum == mid) r = (err > 0.0) == (other > r) ? other : r;
+        }
+    }
+    return push32(L, r);
+}
+
 int f64Add(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) + f64Of(arg64(L, 2)); return push64(L, r); }
 int f64Sub(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) - f64Of(arg64(L, 2)); return push64(L, r); }
 int f64Mul(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) * f64Of(arg64(L, 2)); return push64(L, r); }
@@ -111,7 +134,7 @@ int f64ToF32(lua_State* L) { requireEnv(L); const float r = float(f64Of(arg64(L,
 
 void openIeee(lua_State* L) {
     static const luaL_Reg f32[] = {{"add", f32Add}, {"sub", f32Sub}, {"mul", f32Mul}, {"div", f32Div}, {"sqrt", f32Sqrt},
-                                   {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
+                                   {"dot2", f32Dot2}, {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
                                    {nullptr, nullptr}};
     static const luaL_Reg f64[] = {{"add", f64Add}, {"sub", f64Sub}, {"mul", f64Mul}, {"div", f64Div}, {"sqrt", f64Sqrt},
                                    {"fromint", f64FromInt}, {"lt", f64Lt}, {"le", f64Le}, {"eq", f64Eq}, {"tof32", f64ToF32},
