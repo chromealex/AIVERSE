@@ -10764,6 +10764,26 @@ TEST(script_immutable_match_seed) {
     }
 }
 
+// third_party/lua/lvm.c local change: a count-only hook is counted down inline. The hook must still fire
+// exactly once per `count` instructions: with count 1 every instruction goes through luaG_traceexec (the
+// unpatched path), so N instructions give N calls and count k must give floor(N / k) calls.
+TEST(lua_count_hook_inline_countdown) {
+    static int calls = 0;
+    auto run = [](int count) {
+        lua_State* L = luaL_newstate();
+        calls = 0;
+        lua_sethook(L, [](lua_State*, lua_Debug*) { ++calls; }, LUA_MASKCOUNT, count);
+        const char* code = "local t, s = {}, 0 for i = 1, 3000 do t[i % 17] = i; s = s + (t[(i * 7) % 17] or 0) end "
+                           "local function f(n) if n < 2 then return n end return f(n - 1) + f(n - 2) end return s + f(15)";
+        if (luaL_loadstring(L, code) != LUA_OK || lua_pcall(L, 0, 1, 0) != LUA_OK) calls = -1;
+        lua_close(L);
+        return calls;
+    };
+    const int n = run(1);
+    CHECK(n > 20000);
+    for (int k : {2, 3, 7, 1000, 4096}) CHECK(run(k) == n / k);
+}
+
 // f32 / f64 bit-pattern arithmetic (RtsScriptIeee.cpp): known IEEE results, canonical NaN, argument checks,
 // a simulation script using them deterministically, and a differential run against the host's IEEE operations.
 TEST(script_ieee_bit_patterns) {

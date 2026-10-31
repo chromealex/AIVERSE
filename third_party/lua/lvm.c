@@ -1135,9 +1135,18 @@ void luaV_finishOp (lua_State *L) {
 
 
 /* fetch an instruction and prepare its execution */
+/*
+** RTS local change: with only a count hook (the scripting system's instruction budget) every
+** instruction runs with 'trap' set. Counting down without calling 'luaG_traceexec' when the count
+** does not reach zero is exactly what 'luaG_traceexec' would do (decrement, return 1), minus the call;
+** the instruction that reaches zero still goes through it, so the hook fires on the same instruction.
+*/
 #define vmfetch()	{ \
   if (l_unlikely(trap)) {  /* stack reallocation or hooks? */ \
-    trap = luaG_traceexec(L, pc);  /* handle hooks */ \
+    if (L->hookmask == LUA_MASKCOUNT && L->hookcount > 1) \
+      L->hookcount--;  /* RTS: count hook only, not due yet */ \
+    else \
+      trap = luaG_traceexec(L, pc);  /* handle hooks */ \
     updatebase(ci);  /* correct stack */ \
   } \
   i = *(pc++); \

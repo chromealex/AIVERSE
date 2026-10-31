@@ -14,3 +14,6 @@ Local changes (keep them when updating Lua):
   platforms), float-arithmetic guard macros.
 - `rts_lua.c` (new): the guard (`rts_lua_floatop`), raising an error in simulation states.
 - `lvm.c`: `floatforloop` takes `lua_State *L` (the guard macros need it).
+- `lvm.c`: `vmfetch` counts a count-only hook down inline and calls `luaG_traceexec` only on the
+  instruction that reaches zero (same instruction as before; the instruction budget's count hook made
+  every instruction a function call). Test `lua_count_hook_inline_countdown`.
