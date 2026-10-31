@@ -539,6 +539,27 @@ canvas. Two pairs of layers can retain the previous geometry while animating a n
 network, avoiding destructive clear/repaint flicker. The existing 16-layer budget
 still applies.
 
+### Camera (view scripts)
+
+`view.camera()` returns the host camera `{x, z, zoom, pitch, yaw, width, height, ortho}`: target on the ground, zoom in
+the units of game.json `"camera"` (orthographic: visible view-plane height in world units; perspective: distance),
+angles in degrees, viewport in framebuffer pixels. `view.set_camera{x =, z =, zoom =, pitch =, yaw =}` changes any
+subset after the frame's view scripts (pitch 5..90, zoom > 0, finite values). A game ports its own framing with it
+(OpenWar: `scripts/view/openwar/camera.lua`, Unity's ArmyMapView). Presentation only; the client applies it, the
+editor Game view does not yet. Test: `openwar_player_colors_flat_lighting_view_camera`.
+
+### Categorical cell layers
+
+`view.paint_layer{bounds = {x, z, w, h}, cells = {width = W, height = H}, density = 1..4, smooth = .75..2,
+borderWidth = 0..2, borderColor = {r, g, b [, a]}, outside = id, opacity, lift, landOnly}` creates a raster of one id
+byte per cell (row-major, z rows) drawn as smooth categorical regions: every pixel takes the id with the largest
+smoothstep-weighted coverage of its 5x5 texel neighbourhood (`smooth` = falloff in texels), and a border of
+`borderWidth` texels is drawn where the coverage of an id crosses one half (2x2 bilinear coverage on low material
+quality). `layer:set_cells(bytes)` takes a Lua string of W * H bytes, `layer:set_palette{[id] = {r, g, b [, a]}}` sets
+colours (0..1); `outside` is the id used beyond the raster edge. `density` repeats each cell as density x density
+texels (smoothing and border widths are in texels). One quad per layer, texelFetch on an RGBA8 texture (rgb colour,
+a id); presentation only. OpenWar draws its ownership raster with it (ArmyMapWorld look).
+
 ### Scripted air placement
 
 `game.set_position(unit, x, z)` keeps its flat-map, living mobile-unit and in-bounds validation. Air-layer units can be placed over water; other units still require a ground cell. Previous render position is preserved for interpolation, native movement/orders are cleared, and presentation applies the configured flight height. The API does not paint territory or find routes. Covered by `script_air_position_over_water`, including snapshot replay.

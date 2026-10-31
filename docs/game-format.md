@@ -30,6 +30,15 @@ splash" below (the old single `"icon"` still works as the master icon).
 Optional `"camera"` block (2D games, see "2D games" below):
 `{"projection": "ortho", "pitch": 90, "yaw": 0, "fov": 43, "zoom": 20, "zoomMin": 8, "zoomMax": 40, "pixelsPerCell": 32, "rotate": false}`.
 
+Optional `"playerColors"`: `[neutral, slot 1, ..., slot 8]` (overlay colour syntax: `"#rrggbb"`, `[r, g, b]` 0..1 or
+0..255; `null` keeps a slot) replaces the built-in player palette used for team colours, overlays and the territory
+overlay default (`RtsOverlayData::configurePlayerColors`, applied when a match starts in the client and the editor).
+
+Lighting block (game.json / map `"lighting"`), flat-art keys: `"day": {"sun", "sky", "ground", "fog": [r, g, b],
+"sunK": k}` replaces fields of the day palette (of the preset or the renderer), `"fogDensity"` (0 = no distance fog),
+`"tonemap": false` (lit shaders clamp instead of the ACES fit; with `sunK` 0 and white sky / ground an unlit material
+shows its colour unchanged). Map keys win over game keys.
+
 ## rules.json — top level
 
 | key | meaning |
