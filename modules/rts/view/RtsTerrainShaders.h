@@ -22,6 +22,7 @@
 //   tex2 cell colour (RGBA8, W x H, vertex stage)   tex3 dynamic (r field mix, g ore 0/0.5/1, b creep; vertex stage)
 //   tex4 splat weights (RGBA8 per cell, linear)     tex5..8 layer albedo   tex9..12 layer normals
 //   tex13 cliff albedo  tex14 cliff normal          tex15 vision (R8 per cell: 0 unexplored, .5 explored, 1 visible)
+//   tex18 height field of the drawn surface (16-bit, traced terrain shadows; Renderer3D::bindTrace)
 #pragma once
 #include "../../../engine/render/Shaders.h"
 
@@ -79,7 +80,7 @@ void main() {
 )";
 
 inline const char* kTerrainFS =
-    RTS_TERRAIN_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS
+    RTS_TERRAIN_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS RTS_GLSL_TRACE_AT("tex18")
     R"(
 uniform sampler2D tex4;
 uniform sampler2D tex5;
@@ -218,7 +219,7 @@ void main() {
     vec3 L = normalize(u_sunDir.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
-    float sh = ndl > 0.0 ? shadowAt(v_wpos, n) : 1.0;
+    float sh = ndl > 0.0 ? min(shadowAt(v_wpos, n), terrainShadow(v_wpos)) : 1.0;
     sh *= cloudShade(v_wpos);
     vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
     vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
@@ -254,7 +255,7 @@ void main() {
 inline const char* kTerrainMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "struct TU0 { float4 lod; float4 mode; float4 scale; float4 cliff; float4 fog; float4 tint[4]; float4 cliffTint; float4 fogColor; float4 fogGrid; float4 detail; float4 rock; float4 blend; };\n"
-    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS
+    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float3 nrm [[attribute(1)]]; float4 col [[attribute(2)]]; float2 morph [[attribute(3)]]; };
 struct VOut { float4 pos [[position]]; float3 nrm; float3 wpos; float3 col; float3 dyn; };
@@ -320,12 +321,14 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
 #if TERRAIN_DETAIL
                         , texture2d<float> tex16 [[texture(16)]], texture2d<float> tex17 [[texture(17)]]
 #endif
+                        , texture2d<float> tex18 [[texture(18)]]
                         ) {
 #if TERRAIN_DETAIL
     // Metal has sampler slots 0..15 per stage: the detail textures use constant samplers
     constexpr sampler s16(filter::linear, mip_filter::linear, address::clamp_to_edge);
     constexpr sampler s17(filter::linear, mip_filter::linear, address::clamp_to_edge);
 #endif
+    constexpr sampler s18(filter::linear, mip_filter::none, address::clamp_to_edge);   // height field (traced shadows)
     float3 n = normalize(in.nrm);
     float3 albedoS = in.col;
     float3 geoN = n;
@@ -421,7 +424,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
     float3 L = normalize(f.sunDir.xyz);
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
-    float sh = ndl > 0.0 ? shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0) : 1.0;
+    float sh = ndl > 0.0 ? min(shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0), terrainShadow(f, tex18, s18, in.wpos)) : 1.0;
     sh *= cloudShade(l, in.wpos);
     float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
     float3 amb = mix(f.groundColor.rgb * f.groundColor.rgb, f.skyColor.rgb * f.skyColor.rgb, n.y * 0.5 + 0.5);

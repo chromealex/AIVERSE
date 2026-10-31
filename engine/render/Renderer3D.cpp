@@ -15,7 +15,9 @@ struct DrawUniforms { float model[16]; float color[4]; float params[4]; };
 struct FrameUniforms {
     float viewProj[16];
     float lightViewProj[16];
+    float invViewProj[16];
     float sunDir[4], sunColor[4], skyColor[4], groundColor[4], fog[4], camPos[4], shadow[4], quality[4];
+    float trace0[4], trace1[4], trace2[4], trace3[4];   // Shaders.h: traced terrain shadows + SSR
 };
 void put3(float* d, float3 v, float w) { d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = w; }
 } // namespace
@@ -41,7 +43,7 @@ ShadowQuality Renderer3D::defaultQualityFor(const gfx::Device& dev, bool mobile)
 bool Renderer3D::init(gfx::Device& dev) {
     dev_ = &dev;
     gfx::ShaderDesc ls; ls.glslVertex = shaders::kLitVS; ls.glslFragment = shaders::kLitFS; ls.msl = shaders::kLitMSL;
-    ls.uniformSlots = 3; ls.textureSlots = 3; ls.label = "lit"; // U2/tex1/tex2: Lights (tex2 water reflection)
+    ls.uniformSlots = 3; ls.textureSlots = 6; ls.label = "lit"; // U2/tex1/tex2: Lights (tex2 water reflection); tex3 height field, tex4/tex5 scene (trace)
     litShader_ = dev.createShader(ls);
     gfx::ShaderDesc ss; ss.glslVertex = shaders::kShadowVS; ss.glslFragment = shaders::kShadowFS; ss.msl = shaders::kShadowMSL;
     ss.uniformSlots = 2; ss.label = "shadow";
@@ -92,6 +94,7 @@ bool Renderer3D::init(gfx::Device& dev) {
     setShadowQuality(quality_);
     initModels();
     if (!lights.init(dev)) return false;
+    if (!initTrace()) return false;
     return litPipe_.valid() && shadowPipe_.valid() && linePipe_.valid() && triPipe_.valid();
 }
 
@@ -115,6 +118,7 @@ void Renderer3D::shutdown() {
     if (!dev_) return;
     shutdownModels();
     lights.shutdown();
+    shutdownTrace();
     dev_->destroyTexture(shadowMap_);
     dev_->destroyBuffer(lineVB_); dev_->destroyBuffer(triVB_);
     for (auto p : {litPipe_, litBlendPipe_, shadowPipe_, linePipe_, triPipe_}) dev_->destroyPipeline(p);
@@ -126,8 +130,11 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     sceneW_ = fbW; sceneH_ = fbH; // viewport of the main pass (screen or an offscreen target of this size)
     float aspect = fbH > 0 ? float(fbW) / float(fbH) : 1.0f;
     viewProj_ = cam.proj(aspect, dev_->info().clipDepthZeroToOne) * cam.view();
+    invViewProj_ = viewProj_.inverse();
     camPos_ = cam.eye();
+    camFwd_ = normalize(cam.target - camPos_);
     cam_ = cam;
+    ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
     modelItems_.clear(); jointData_.clear(); morphData_.clear();
     computeShadowMatrix(cam, aspect);
@@ -200,7 +207,22 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
     FrameUniforms f{};
     std::memcpy(f.viewProj, viewProj_.m, sizeof f.viewProj);
     std::memcpy(f.lightViewProj, lightViewProj_.m, sizeof f.lightViewProj);
+    std::memcpy(f.invViewProj, invViewProj_.m, sizeof f.invViewProj);
     put3(f.sunDir, normalize(lighting.sunDir), lighting.sunIntensity);
+    // trace tier: terrain shadows march the height field; SSR when the scene targets are bound this frame
+    if (traceActive() && !forShadow) {
+        const HeightField& h = heightField_;
+        f.trace0[0] = h.originX; f.trace0[1] = h.originZ;
+        f.trace0[2] = 1.0f / std::max(h.extentX, 1e-3f); f.trace0[3] = 1.0f / std::max(h.extentZ, 1e-3f);
+        f.trace1[0] = h.heightMin; f.trace1[1] = h.heightRange;
+        f.trace1[2] = std::max(lighting.terrainShadowDistance, 2.0f);
+        f.trace1[3] = std::max(lighting.terrainShadowSoftness, 0.005f);
+    }
+    put3(f.trace2, camFwd_, ssrThisFrame_ && !forShadow ? 1.0f : 0.0f);
+    f.trace3[0] = 48.0f;    // SSR march distance (world)
+    f.trace3[1] = 0.6f;     // thickness: a ray passing further behind a surface is a miss (thin objects)
+    f.trace3[2] = 16.0f;    // steps (+4 refinement)
+    f.trace3[3] = 0.08f;    // terrain shadow ray bias above the receiver (avoids self-shadowing on slopes)
     put3(f.sunColor, lighting.sunColor, 1);
     put3(f.skyColor, lighting.skyColor, 1);
     put3(f.groundColor, lighting.groundColor, 1);
@@ -230,6 +252,11 @@ void Renderer3D::bindLitFrame() {
     uploadFrameUniforms(false);
     dev_->setTexture(0, shadowMap_);
     lights.bind();
+}
+
+void Renderer3D::bindTraceTextures() {
+    bindTrace(3);
+    bindSceneTextures(4, 5);
 }
 
 void Renderer3D::resolvePostFx() {
@@ -275,14 +302,24 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     // ---- main pass (left open for the caller's UI; with a post hook: the hook's scene target)
     post_ = post && post->active() ? post : nullptr;
     postOut_ = screenPass;
-    dev_->beginPass(post_ ? post_->scenePass(screenPass, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(),
-                                             sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight()) : screenPass);
-    dev_->setViewport({0, 0, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight()});
+    const int sw = sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sh = sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight();
+    const gfx::PassDesc mainPass = post_ ? post_->scenePass(screenPass, sw, sh) : screenPass;
+    // trace tier + water: the opaque scene goes into colour + depth textures first (SSR reads them),
+    // then it is blitted (with depth) into the main pass and the rest is drawn on top
+    bool capture = false;
+    if (traceActive()) {
+        for (const auto& it : items_)
+            if (it.color.w < 0.99f && it.specular >= 0.85f && !(it.flags & kDrawUnlit)) { capture = true; break; }
+        if (capture) capture = beginSceneCapture(sw, sh);
+    }
+    if (!capture) dev_->beginPass(mainPass);
+    dev_->setViewport({0, 0, sw, sh});
     for (auto& fn : customOpaque_) fn(*dev_);
     dev_->setPipeline(litPipe_);
     uploadFrameUniforms(false);
     dev_->setTexture(0, shadowMap_);
     lights.bind(2, 1, 2);
+    bindTraceTextures();
     auto drawItem = [&](const DrawItem& it) {
         DrawUniforms u{};
         std::memcpy(u.model, it.model.m, sizeof u.model);
@@ -300,11 +337,12 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     for (auto& it : items_) if (it.color.w >= 0.99f) drawItem(it);
     renderModels(1);
     renderModels(3);
+    if (capture) { endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh}); }
     // translucent meshes (water, ghosts) before overlays so that overlays (fog of war, markers) stay on top
     bool any = false;
     for (auto& it : items_) {
         if (it.color.w >= 0.99f) continue;
-        if (!any) { dev_->setPipeline(litBlendPipe_); uploadFrameUniforms(false); dev_->setTexture(0, shadowMap_); lights.bind(2, 1, 2); any = true; }
+        if (!any) { dev_->setPipeline(litBlendPipe_); uploadFrameUniforms(false); dev_->setTexture(0, shadowMap_); lights.bind(2, 1, 2); bindTraceTextures(); any = true; }
         drawItem(it);
     }
     renderModels(2);
