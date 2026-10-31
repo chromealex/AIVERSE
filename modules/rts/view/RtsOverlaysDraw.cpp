@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
 
 namespace rts::game {
 
@@ -690,4 +691,46 @@ void RtsOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in,
     }
 }
 
+} // namespace rts::game
+
+namespace rts::game {
+void RtsOverlays::drawCanvas(const std::vector<ViewDrawBatch>& batches, float ox, float oy, void* drawList) {
+    if (batches.empty() || !dev_) return;
+    ImDrawList* dl = drawList ? static_cast<ImDrawList*>(drawList) : ImGui::GetBackgroundDrawList();
+    std::vector<size_t> order(batches.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return batches[a].layer < batches[b].layer; });
+    for (size_t bi : order) {
+        const ViewDrawBatch& b = batches[bi];
+        const size_t n = b.verts.size() / 3 * 3;
+        if (n == 0) continue;
+        TextureRef t;
+        const bool textured = !b.image.empty();
+        if (textured) {
+            t = textures_.resolve(b.image, false, base_);
+            if (!t.valid()) {
+                if (std::find(canvasWarned_.begin(), canvasWarned_.end(), b.image) == canvasWarned_.end()) {
+                    canvasWarned_.push_back(b.image);
+                    std::fprintf(stderr, "view.draw: %s: %s\n", b.image.c_str(), textures_.lastError().c_str());
+                }
+                continue;
+            }
+            dl->PushTexture(ImTextureRef(ImTextureID(t.tex.id)));
+        }
+        const ImVec2 white = ImGui::GetFontTexUvWhitePixel();
+        const size_t chunk = 3 * 8000;   // 16-bit indices: the backend renders with vertex offsets per command
+        for (size_t s = 0; s < n; s += chunk) {
+            const size_t c = std::min(chunk, n - s);
+            dl->PrimReserve(int(c), int(c));
+            for (size_t k = 0; k < c; ++k) {
+                const ViewDrawVertex& v = b.verts[s + k];
+                const uint32_t rgba = v.rgba;
+                const ImU32 col = IM_COL32((rgba >> 24) & 255, (rgba >> 16) & 255, (rgba >> 8) & 255, rgba & 255);
+                dl->PrimWriteIdx(ImDrawIdx(dl->_VtxCurrentIdx));
+                dl->PrimWriteVtx(ImVec2(v.x + ox, v.y + oy), textured ? ImVec2(t.u(v.u), t.v(v.v)) : white, col);
+            }
+        }
+        if (textured) dl->PopTexture();
+    }
+}
 } // namespace rts::game

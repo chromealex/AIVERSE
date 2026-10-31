@@ -33,6 +33,8 @@ struct ViewScripts::Impl {
     ViewCamera camera;
     ViewCameraRequest cameraRequest{};
     bool cameraRequested = false;
+    std::vector<ViewDrawBatch> draws;
+    size_t drawVerts = 0;
     std::shared_ptr<render::PaintLayers> paint = std::make_shared<render::PaintLayers>();
     explicit Impl(ViewScripts& s) : self(s) {}
 
@@ -272,6 +274,66 @@ int vSetCamera(lua_State* L, Vm& vm) {
     if (std::isfinite(r.pitch)) r.pitch = std::clamp(r.pitch, 5.0f, 90.0f);
     im.cameraRequest = r;
     im.cameraRequested = true;
+    // the copy view.to_screen projects with follows at once (the host applies the same request after the scripts)
+    auto& v = im.camera.view;
+    if (std::isfinite(r.x)) v.target.x = r.x;
+    if (std::isfinite(r.z)) v.target.z = r.z;
+    if (std::isfinite(r.pitch)) v.pitch = r.pitch / 57.29578f;
+    if (std::isfinite(r.yaw)) v.yaw = r.yaw / 57.29578f;
+    if (std::isfinite(r.zoom)) v.distance = v.ortho ? r.zoom * 0.5f / std::tan(v.fovY * 0.5f) : r.zoom;
+    im.camera.zoom = std::isfinite(r.zoom) ? r.zoom : im.camera.zoom;
+    if (std::isfinite(r.x)) im.camera.x = r.x;
+    if (std::isfinite(r.z)) im.camera.z = r.z;
+    if (std::isfinite(r.pitch)) im.camera.pitch = r.pitch;
+    if (std::isfinite(r.yaw)) im.camera.yaw = r.yaw;
+    return 0;
+}
+// view.to_screen(x, z [, y]) -> sx, sy, onScreen: window points (top-left origin), the space of view.draw.
+int vToScreen(lua_State* L, Vm& vm) {
+    const auto& c = viewOf(vm).camera;
+    const float x = float(toDouble(L, 1)), z = float(toDouble(L, 2)), y = lua_isnoneornil(L, 3) ? 0.0f : float(toDouble(L, 3));
+    render::float2 sp{0, 0};
+    const bool front = c.screenW > 0 && c.screenH > 0 && std::isfinite(x) && std::isfinite(y) && std::isfinite(z) &&
+                       c.view.worldToScreen({x, y, z}, c.screenW, c.screenH, sp);
+    lua_pushnumber(L, sp.x); lua_pushnumber(L, sp.y);
+    lua_pushboolean(L, front && sp.x >= 0 && sp.y >= 0 && sp.x <= c.screenW && sp.y <= c.screenH);
+    return 3;
+}
+// view.draw(verts [, {image =, layer =}]): a triangle list in window points. Without image: x, y, rgba per vertex;
+// with image: x, y, u, v, rgba (uv 0..1 over the image, 0, 0 = top left). rgba = 0xRRGGBBAA. At most 1M vertices a frame.
+int vDraw(lua_State* L, Vm& vm) {
+    auto& im = viewOf(vm);
+    if (!lua_istable(L, 1)) return fail(vm, "view.draw(verts [, {image =, layer =}])");
+    std::string image; int layer = 0;
+    if (lua_istable(L, 2)) {
+        lua_getfield(L, 2, "image"); if (lua_isstring(L, -1)) image = lua_tostring(L, -1); lua_pop(L, 1);
+        lua_getfield(L, 2, "layer"); if (lua_isnumber(L, -1)) layer = int(lua_tointeger(L, -1)); lua_pop(L, 1);
+    }
+    const size_t stride = image.empty() ? 3 : 5, n = size_t(lua_rawlen(L, 1));
+    if (n % (stride * 3) != 0) return fail(vm, "view.draw: vertex data is not a whole number of triangles (" + std::to_string(stride) + " numbers a vertex)");
+    const size_t count = n / stride;
+    if (im.drawVerts + count > (size_t(1) << 20)) return fail(vm, "view.draw: more than 1048576 vertices this frame");
+    std::vector<ViewDrawVertex> out;   // validated first: a failed call adds nothing
+    out.reserve(count);
+    auto num = [&](size_t i) { lua_rawgeti(L, 1, lua_Integer(i)); double d = lua_tonumber(L, -1); lua_pop(L, 1); return d; };
+    for (size_t v = 0; v < count; ++v) {
+        const size_t b = v * stride + 1;
+        ViewDrawVertex w;
+        w.x = float(num(b)); w.y = float(num(b + 1));
+        if (stride == 5) { w.u = float(num(b + 2)); w.v = float(num(b + 3)); }
+        lua_rawgeti(L, 1, lua_Integer(b + stride - 1));
+        w.rgba = uint32_t(lua_Integer(lua_isinteger(L, -1) ? lua_tointeger(L, -1) : lua_Integer(lua_tonumber(L, -1))));
+        lua_pop(L, 1);
+        if (!std::isfinite(w.x) || !std::isfinite(w.y) || !std::isfinite(w.u) || !std::isfinite(w.v)) return fail(vm, "view.draw: non-finite vertex");
+        out.push_back(w);
+    }
+    if (im.draws.empty() || im.draws.back().image != image || im.draws.back().layer != layer) {
+        im.draws.push_back({});
+        im.draws.back().image = image; im.draws.back().layer = layer;
+    }
+    auto& dst = im.draws.back().verts;
+    dst.insert(dst.end(), out.begin(), out.end());
+    im.drawVerts += count;
     return 0;
 }
 int vPlayer(lua_State* L, Vm& vm) { lua_pushinteger(L, viewOf(vm).player); return 1; }
@@ -407,6 +469,8 @@ bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
     return true;
 }
 
+std::vector<ViewDrawBatch> ViewScripts::takeDraws() { impl_->drawVerts = 0; return std::move(impl_->draws); }
+
 bool ViewScripts::active() const { return impl_->vm.L != nullptr; }
 
 bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint8_t localPlayer) {
@@ -433,7 +497,8 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
                                      {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>},
                                      {"send", bind<vSend>}, {"state", bind<vState>},
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
-                                     {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>}, {nullptr, nullptr}};
+                                     {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
+                                     {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);
     lua_setglobal(vm.L, "view");
     static const luaL_Reg uiFuncs[] = {{"set", bind<uSet>}, {"open", bind<uOpen>}, {"close", bind<uClose>}, {"on", bind<uOn>}, {nullptr, nullptr}};
@@ -471,6 +536,7 @@ void ViewScripts::update(Simulation& sim, float dt) {
     im.vm.sim = &sim; im.vm.spatialOk = false;
     im.vm.used = 0;
     im.vm.exceeded = false;
+    im.draws.clear(); im.drawVerts = 0;   // view.draw: one frame
     if (im.collector) {
         std::vector<SimEvent> evs;
         evs.swap(im.collector->events);

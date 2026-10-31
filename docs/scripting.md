@@ -570,6 +570,20 @@ subset after the frame's view scripts (pitch 5..90, zoom > 0, finite values). A 
 (OpenWar: `scripts/view/openwar/camera.lua`, Unity's ArmyMapView). Presentation only; the client applies it, the
 editor Game view does not yet. Test: `openwar_player_colors_flat_lighting_view_camera`.
 
+### Screen canvas (view scripts)
+
+`view.to_screen(x, z [, y])` returns `sx, sy, onScreen`: the window point (logical points, top-left origin) of a world
+point (`y` = height, default 0) through the host camera; `onScreen` is false behind the camera or outside the window.
+A `view.set_camera` earlier in the same frame is already applied, so a script listed after the camera script projects
+with the frame's final camera. `view.draw(verts [, {image = "ui/x.png", layer = 0}])` adds a triangle list in those
+window points for this frame only: without `image` each vertex is `x, y, rgba`, with `image` it is `x, y, u, v, rgba`
+(uv 0..1 over the image, `0, 0` = its top left; atlases work). `rgba` is an integer `0xRRGGBBAA`. Consecutive calls
+with the same image and layer share one batch; batches are drawn in ascending `layer` (call order within a layer)
+after the world, the particles and the overlays, under the UI documents. A call with a partial triangle, a non-finite
+number or more than 1048576 vertices a frame raises an error and adds nothing. This is how a game ports a 2D vector
+board drawn over the 3D map (OpenWar: Unity's `ArmyBoard` VertexHelper meshes, `scripts/view/openwar/board.lua`).
+Client only (the editor Game view does not draw it yet); presentation only. Test: `view_to_screen_and_draw_canvas`.
+
 ### Categorical cell layers
 
 `view.paint_layer{bounds = {x, z, w, h}, cells = {width = W, height = H}, density = 1..4, smooth = .75..2,

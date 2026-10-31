@@ -21,6 +21,7 @@
 #include "../../../engine/sim/Simulation.h"
 #include "../RtsMap.h"
 #include "RtsOverlayData.h"
+#include "ViewCanvas.h"
 
 namespace rts::game {
 
@@ -68,6 +69,8 @@ public:
 
     void drawWorld(render::Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid, const RtsView& view);
     void drawScreen(const render::RTSCamera& cam, const RtsScene& s, float w, float h, float ox, float oy, void* drawList, const RtsView& view);
+    // view.draw batches of the view scripts (window points), in layer order; textures through this TextureCache.
+    void drawCanvas(const std::vector<ViewDrawBatch>& batches, float ox, float oy, void* drawList);
 
     // ---- evaluation (drawWorld calls prepare; tests call it directly)
     void prepare(const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid, float zoom);
@@ -172,6 +175,7 @@ private:
     std::vector<Inst> insts_;
     std::vector<render::float3> pathPts_, tmpPts_;
     std::string text_;
+    std::vector<std::string> canvasWarned_;
     std::vector<OverlayMinimapMark> marks_;
 
     // batched renderer

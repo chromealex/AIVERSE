@@ -724,9 +724,11 @@ void GameClient::runViewScripts(float dt) {
         vc.pitch = cam_.pitch * 57.29578f; vc.yaw = cam_.yaw * 57.29578f;
         vc.width = int(platform::framebufferWidth()); vc.height = int(platform::framebufferHeight());
         vc.ortho = cam_.ortho;
+        vc.view = cam_; vc.screenW = platform::windowWidth(); vc.screenH = platform::windowHeight();   // view.to_screen
         viewScripts_.setCamera(vc);
     }
     viewScripts_.update(*sim_, dt);
+    canvas_ = viewScripts_.takeDraws();   // view.draw: drawn after the overlays, under the UI
     if (game::ViewCameraRequest cr; viewScripts_.takeCameraRequest(cr)) {   // view.set_camera: presentation only
         if (std::isfinite(cr.x)) cam_.target.x = cr.x;
         if (std::isfinite(cr.z)) cam_.target.z = cr.z;
@@ -880,6 +882,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         fx_.render(r3d_.lighting);
         r3d_.resolvePostFx();   // post effects (if any) under the HUD
         view_.drawOverlays(cam_, scene_, platform::windowWidth(), platform::windowHeight());
+        view_.drawCanvas(canvas_);
     } else {
         pass.clearColor[0] = 0.10f; pass.clearColor[1] = 0.12f; pass.clearColor[2] = 0.14f;
         dev.beginPass(pass);

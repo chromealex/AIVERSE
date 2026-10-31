@@ -11767,6 +11767,52 @@ assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, h
     CHECK(sim2.checksum() == before);
 }
 
+TEST(view_to_screen_and_draw_canvas) {
+    // view.to_screen projects with the host camera (and follows view.set_camera at once); view.draw collects
+    // screen-space triangle batches per image / layer, validates its input and never touches the simulation
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/canvas.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/canvas.lua", Json::string(R"LUA(
+view.on_frame(function()
+ local x, y, on = view.to_screen(10, 20)
+ assert(on and math.abs(x - 360) < .01 and math.abs(y - 640) < .01, x .. ' ' .. y)
+ local _, y2 = view.to_screen(10, 21)                -- one cell to the south is lower on the screen
+ assert(y2 > y)
+ local _, _, off = view.to_screen(1000, 20)
+ assert(not off)
+ view.set_camera{x = 11}
+ local x3 = view.to_screen(10, 20)                   -- the request applies to later projections of this frame
+ assert(x3 < 360)
+ view.draw({0, 0, 0xff0000ff, 10, 0, 0xff0000ff, 0, 10, 0xff0000ff})
+ view.draw({0, 0, 0x00ff00ff, 10, 0, 0x00ff00ff, 0, 10, 0x00ff00ff})          -- merged into the batch above
+ view.draw({0, 0, 0, 0, -1, 1, 0, 1, 0, -1, 0, 1, 0, 1, -1}, {image = 'ui/x.png', layer = -2})
+ assert(not pcall(view.draw, {1, 2, 3, 4}))
+ assert(not pcall(view.draw, {0, 0, 1, 0 / 0, 0, 1, 0, 0, 1}))
+ view.notice('ran')
+end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    game::ViewCamera vc; vc.x = 10; vc.z = 20; vc.zoom = 40; vc.pitch = 34; vc.width = 720; vc.height = 1280; vc.ortho = true;
+    vc.view.target = {10, 0, 20}; vc.view.pitch = 34 / 57.29578f; vc.view.ortho = true; vc.view.distance = 40;
+    vc.screenW = 720; vc.screenH = 1280;
+    view.setCamera(vc); view.update(sim, .016f);
+    for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+    CHECK(view.log().empty());
+    auto draws = view.takeDraws();
+    CHECK(view.takeRequests().size() == 1);
+    CHECK(draws.size() == 2);
+    if (draws.size() == 2) {
+        CHECK(draws[0].image.empty() && draws[0].layer == 0 && draws[0].verts.size() == 6 && draws[0].verts[3].rgba == 0x00ff00ffu);
+        CHECK(draws[1].image == "ui/x.png" && draws[1].layer == -2 && draws[1].verts.size() == 3 && draws[1].verts[1].u == 1 && draws[1].verts[2].rgba == 0xffffffffu);
+    }
+    CHECK(view.takeDraws().empty());
+    view.setCamera(vc); view.update(sim, .016f); CHECK(view.takeDraws().size() == 2);   // one frame's batches, not accumulated
+    CHECK(sim.checksum() == before);
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

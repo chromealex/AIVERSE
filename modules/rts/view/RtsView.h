@@ -128,6 +128,8 @@ public:
     void draw(render::Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid);
     // ImGui: bars, counts. ox/oy: top-left of the view on screen; drawList: ImDrawList* (default: background list)
     void drawOverlays(const render::RTSCamera& cam, const RtsScene& s, float viewW, float viewH, float ox = 0, float oy = 0, void* drawList = nullptr);
+    // view.draw triangles of the view scripts (ViewCanvas.h), after drawOverlays
+    void drawCanvas(const std::vector<ViewDrawBatch>& batches, float ox = 0, float oy = 0, void* drawList = nullptr) { overlays_.drawCanvas(batches, ox, oy, drawList); }
     // Building placement preview: the type's model, green when `ok`, red otherwise.
     void drawGhost(render::Renderer3D& r, uint16_t type, render::float3 pos, bool ok, const MapGrid& grid, double time);
     // One object at the origin playing its idle clip (portraits, editor previews).

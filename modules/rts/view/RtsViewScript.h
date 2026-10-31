@@ -11,6 +11,8 @@
 #include "../RtsScript.h"
 #include "../../../engine/render/PaintLayer.h"
 #include "../../../engine/sim/Command.h"
+#include "../../../engine/render/Math3D.h"
+#include "ViewCanvas.h"
 
 namespace rts { class Simulation; }
 
@@ -31,6 +33,10 @@ struct ViewCamera {
     float x = 0, z = 0, zoom = 0, pitch = 0, yaw = 0;
     int width = 0, height = 0;   // viewport in framebuffer pixels (read-only)
     bool ortho = false;          // read-only
+    // view.to_screen: the host camera and the window size in points (the space of view.draw); view.set_camera
+    // updates this copy at once, so scripts after the camera script project with the frame's final camera.
+    render::RTSCamera view;
+    float screenW = 0, screenH = 0;
 };
 // A set_camera request: fields left out of the call stay NaN (= keep the host's value).
 struct ViewCameraRequest { float x, z, zoom, pitch, yaw; };
@@ -69,6 +75,8 @@ public:
     // view.send(id, args): script commands (kCmdScript) for the host to issue as the local player
     std::vector<Command> takeCommands();
     std::vector<UiRequest> takeUiRequests();
+    // view.draw(...) of the last update (cleared when the next update starts)
+    std::vector<ViewDrawBatch> takeDraws();
     // From the UI: data-event-click="event('name', ...)" -> ui.on("name", fn(args)) handlers;
     // send('id', {...}) -> a script command like view.send (false: unknown id / bad args, see log)
     void uiEvent(Simulation& sim, const std::string& name, const Json& args);
