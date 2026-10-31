@@ -10784,6 +10784,29 @@ TEST(lua_count_hook_inline_countdown) {
     for (int k : {2, 3, 7, 1000, 4096}) CHECK(run(k) == n / k);
 }
 
+// Sorted pairs (prelude): booleans, then numbers, then strings, each ascending; a table with only numbers or
+// only strings is sorted with the native comparison (same order).
+TEST(script_sorted_pairs_order) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"probe":{"hp":1}}})");
+    Json scripts=Json::array(),sources=Json::object();scripts.push(Json::string("pairs.lua"));
+    sources.set("pairs.lua",Json::string(R"(
+        local function keys(t) local out = {} for k in pairs(t) do out[#out + 1] = tostring(k) end return table.concat(out, ",") end
+        function on_start()
+            local ints = {} for i = 1, 200 do ints[(i * 7919) % 1009 - 500] = i end
+            local list, last = {}, nil
+            for k in pairs(ints) do assert(last == nil or last < k); last = k; list[#list + 1] = k end
+            assert(#list == 200)
+            assert(keys({b = 1, a = 2, ab = 3, [""] = 4, B = 5}) == ",B,a,ab,b")
+            assert(keys({[3] = 1, [-2] = 1, x = 1, [true] = 1, [false] = 1, [10] = 1, a = 1}) == "false,true,-2,3,10,a,x")
+            assert(keys({[2] = 1, [1] = 1, z = 1}) == "1,2,z")
+            assert(keys({}) == "")
+        end
+    )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
+    auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
+    Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    sim.step();CHECK(mod(sim).scripts()->errorCount()==0);
+}
+
 // f32 / f64 bit-pattern arithmetic (RtsScriptIeee.cpp): known IEEE results, canonical NaN, argument checks,
 // a simulation script using them deterministically, and a differential run against the host's IEEE operations.
 TEST(script_ieee_bit_patterns) {

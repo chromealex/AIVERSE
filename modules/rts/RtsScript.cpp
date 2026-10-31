@@ -421,14 +421,16 @@ local function keyless(a, b)
 end
 local function sorted_pairs(t)
   if rawtype(t) ~= "table" then error("pairs: table expected, got " .. rawtype(t), 2) end
-  local keys, n = {}, 0
+  local keys, n, kind, mixed = {}, 0, nil, false
   for k in rawnext, t do
     local tk = rawtype(k)
     if not order[tk] then error("pairs: " .. tk .. " keys have no deterministic order (use integer or string keys)", 2) end
+    if kind ~= tk then if kind == nil then kind = tk else mixed = true end end
     n = n + 1
     keys[n] = k
   end
-  sort(keys, keyless)
+  -- only numbers or only strings: keyless is plain `<`, so let table.sort compare natively (same order)
+  if mixed or kind == "boolean" then sort(keys, keyless) else sort(keys) end
   local i = 0
   return function()
     i = i + 1
