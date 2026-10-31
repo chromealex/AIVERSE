@@ -22,6 +22,7 @@ extern "C" {
 #include "modules/rts/RtsAI.h"
 #include "modules/rts/RtsCampaign.h"   // agent-mech
 #include "modules/rts/RtsModule.h"
+#include "modules/rts/RtsScriptIeee.h"
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/RtsSphere.h"
 #include <algorithm>
@@ -10761,6 +10762,77 @@ TEST(script_immutable_match_seed) {
         for(int i=0;i<5;++i)sim.step();auto hash=sim.checksum();
         sim.loadState(snap);for(int i=0;i<5;++i)sim.step();CHECK(sim.checksum()==hash);
     }
+}
+
+// f32 / f64 bit-pattern arithmetic (RtsScriptIeee.cpp): known IEEE results, canonical NaN, argument checks,
+// a simulation script using them deterministically, and a differential run against the host's IEEE operations.
+TEST(script_ieee_bit_patterns) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"probe":{"hp":1}}})");
+    Json scripts=Json::array(),sources=Json::object();scripts.push(Json::string("ieee.lua"));
+    sources.set("ieee.lua",Json::string(R"(
+        function on_start()
+            local one,two=0x3f800000,0x40000000
+            assert(f32.add(0x3dcccccd,0x3e4ccccd)==0x3e99999a)          -- 0.1f+0.2f
+            assert(f32.div(one,0x40400000)==0x3eaaaaab)                 -- 1/3
+            assert(f32.sqrt(two)==0x3fb504f3)
+            assert(f32.sub(one,one)==0 and f32.mul(0x80000000,one)==0x80000000)
+            assert(f32.mul(0x00800000,0x3f000000)==0x00400000)          -- subnormal result kept
+            assert(f32.add(one,0x33800000)==one and f32.add(one,0x33800001)==0x3f800001) -- ties to even
+            assert(f32.fromint(16777217)==0x4b800000 and f32.fromint(-3)==0xc0400000)
+            assert(f32.div(0,0)==0x7fc00000 and f32.sqrt(0xbf800000)==0x7fc00000 and f32.sub(0x7f800000,0x7f800000)==0x7fc00000)
+            assert(f32.div(one,0)==0x7f800000 and f32.sqrt(0x80000000)==0x80000000)
+            assert(f32.lt(0x80000000,0)==false and f32.eq(0x80000000,0) and f32.le(one,one) and not f32.eq(0x7fc00000,0x7fc00000))
+            assert(f32.lt(0xbf800000,one) and not f32.lt(0x7fc00000,one))
+            assert(f32.tof64(0x3dcccccd)==0x3fb99999a0000000)
+            assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
+            assert(f64.fromint(9007199254740993)==0x4340000000000000)
+            assert(f64.tof32(0x3ff0000010000000)==one and f64.tof32(0x3ff0000010000001)==0x3f800001)
+            assert(f64.sqrt(0x4000000000000000)==0x3ff6a09e667f3bcd)
+            assert(f64.div(0,0)==0x7ff8000000000000 and f64.mul(0x0010000000000000,0x3fe0000000000000)==0x0008000000000000)
+            assert(f64.lt(-0x4010000000000000,0x3ff0000000000000) and f64.eq(math.mininteger,0))
+            state.x=one
+        end
+        on('tick',function() state.x=f32.add(f32.mul(state.x,0x3f8ccccd),0x3dcccccd) end)
+    )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
+    auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
+    Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    for(int i=0;i<3;++i)sim.step();CHECK(mod(sim).scripts()->errorCount()==0);
+    SimSnapshot snap;sim.saveState(snap);
+    for(int i=0;i<5;++i)sim.step();const auto hash=sim.checksum();
+    sim.loadState(snap);for(int i=0;i<5;++i)sim.step();CHECK(sim.checksum()==hash);
+    for (const char* bad : {"f32.add(-1,0)", "f32.add(0x100000000,0)", "f32.mul(0,'1')", "f64.add(0,fx(1))", "f32.fromint(fx(1,2))", "f32.sqrt()"}) {
+        sources.set("ieee.lua",Json::string(std::string("function on_start() local x=")+bad+" end"));rules.set("$scriptSources",sources);
+        Simulation invalid({},std::make_unique<game::RtsModule>());invalid.setup(rules,map);invalid.step();
+        CHECK(mod(invalid).scripts()->errorCount()>0);
+    }
+    // differential: random bit patterns (biased to small exponents, subnormals and specials) vs host IEEE
+    lua_State* L=luaL_newstate();game::script::openIeee(L);
+    auto call=[&](const char* lib,const char* fn,int64_t a,int64_t b,bool two)->int64_t{
+        lua_getglobal(L,lib);lua_getfield(L,-1,fn);lua_pushinteger(L,a);if(two)lua_pushinteger(L,b);
+        lua_call(L,two?2:1,1);int64_t r=lua_isboolean(L,-1)?int64_t(lua_toboolean(L,-1)):int64_t(lua_tointeger(L,-1));lua_pop(L,2);return r;};
+    auto f=[](uint32_t b){float x;std::memcpy(&x,&b,4);return x;};auto fb=[](float x){uint32_t b;std::memcpy(&b,&x,4);return x!=x?0x7fc00000u:b;};
+    auto d=[](uint64_t b){double x;std::memcpy(&x,&b,8);return x;};auto db=[](double x){uint64_t b;std::memcpy(&b,&x,8);return x!=x?0x7ff8000000000000ull:b;};
+    Random rng(12345);int bad=0;
+    auto r32=[&]()->uint32_t{const uint32_t k=rng.below(8),v=uint32_t(rng.next());
+        if(k==0)return v&0x807fffffu;if(k==1){const uint32_t s[]={0,0x80000000u,0x7f800000u,0xff800000u,0x7fc00001u,1,0x3f800000u,0x00800000u};return s[rng.below(8)];}
+        return (v&0x807fffffu)|((112u+rng.below(32))<<23);};
+    auto r64=[&]()->uint64_t{const uint32_t k=rng.below(8);const uint64_t v=(uint64_t(rng.next())<<32)^rng.next();
+        if(k==0)return v&0x800fffffffffffffull;if(k==1)return 0x7ff0000000000000ull|(v&1);
+        return (v&0x800fffffffffffffull)|(uint64_t(1000+rng.below(48))<<52);};
+    for(int i=0;i<20000;++i){
+        const uint32_t a=r32(),b=r32();const float x=f(a),y=f(b);
+        bad+=call("f32","add",a,b,true)!=int64_t(fb(x+y));bad+=call("f32","sub",a,b,true)!=int64_t(fb(x-y));
+        bad+=call("f32","mul",a,b,true)!=int64_t(fb(x*y));bad+=call("f32","div",a,b,true)!=int64_t(fb(x/y));
+        bad+=call("f32","sqrt",a,0,false)!=int64_t(fb(std::sqrt(x)));bad+=call("f32","lt",a,b,true)!=int64_t(x<y);
+        bad+=call("f32","eq",a,b,true)!=int64_t(x==y);bad+=call("f32","tof64",a,0,false)!=int64_t(db(double(x)));
+        const uint64_t p=r64(),q=r64();const double u=d(p),v=d(q);
+        bad+=call("f64","add",int64_t(p),int64_t(q),true)!=int64_t(db(u+v));bad+=call("f64","mul",int64_t(p),int64_t(q),true)!=int64_t(db(u*v));
+        bad+=call("f64","div",int64_t(p),int64_t(q),true)!=int64_t(db(u/v));bad+=call("f64","sqrt",int64_t(p),0,false)!=int64_t(db(std::sqrt(u)));
+        bad+=call("f64","tof32",int64_t(p),0,false)!=int64_t(fb(float(u)));bad+=call("f64","le",int64_t(p),int64_t(q),true)!=int64_t(u<=v);
+        const int64_t n=int64_t((uint64_t(rng.next())<<32)^rng.next())>>rng.below(63);
+        bad+=call("f32","fromint",n,0,false)!=int64_t(fb(float(n)));bad+=call("f64","fromint",n,0,false)!=int64_t(db(double(n)));
+    }
+    lua_close(L);CHECK(bad==0);
 }
 
 TEST(script_grid_path) {

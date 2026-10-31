@@ -81,6 +81,7 @@ struct Args {
     uint32_t restoreAt = 0, restoreTicks = 100; // bounded forward interval, then both restoration paths
     int benchPaths = 0;   // >0: time that many path queries (HPA* vs plain A*) and exit
     int benchBody = -1;
+    std::string tickTimes;  // --tick-times FILE: wall time of every simulation step, "tick microseconds" per line
     bool profile = false;   // --profile: per-system wall time at the end of the match
     int benchGroup = 0;   // >0: spawn that many units of player 1, order them to one far goal, time movement (--bench-flow on|off)
     int benchFlow = -1;   // -1: rules default, 0: off, 1: on (minGroup 1)   // planets: body index for --bench-paths (default: first surface body)
@@ -424,6 +425,7 @@ static int play(const Args& a) {
     std::string restoreBytes;
     uint64_t restoreHash=0;
     bool restoreSaved=false,restoreVerified=false;
+    std::vector<std::pair<uint32_t, int64_t>> stepTimes;   // --tick-times
     auto t0 = std::chrono::steady_clock::now();
     if (!a.quiet) std::printf("Match: %s  seed=%llu\n", mapPath.c_str(), (unsigned long long)a.seed);
     while (sim.result() == 0 && sim.tick() < maxTicks) {
@@ -431,7 +433,11 @@ static int play(const Args& a) {
             sim.saveState(restoreSnapshot);restoreBytes=sim.serialize();restoreHash=sim.checksum();restoreBots=bots;restoreSaved=true;
         }
         for (auto& b : bots) b.update(sim);
-        sim.step();
+        if (!a.tickTimes.empty()) {
+            const auto s0 = std::chrono::steady_clock::now();
+            sim.step();
+            stepTimes.emplace_back(sim.tick(), std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - s0).count());
+        } else sim.step();
         for (auto& e : sim.events()) ev[e.type]++;
         if (restoreSaved && !restoreVerified) {
             restoreChecks.push_back(sim.checksum());
@@ -477,6 +483,10 @@ static int play(const Args& a) {
                 ev[game::kEvGathered], ev[game::kEvCaptured]);
     if (a.dump) dumpTypes(sim);
     if (a.profile) printProfile(sim);
+    if (!a.tickTimes.empty()) {
+        std::ofstream f(a.tickTimes);
+        for (auto& [t, us] : stepTimes) f << t << ' ' << us << '\n';
+    }
     std::printf("Checksum: %016llx\n", (unsigned long long)rep.finalChecksum);
     if (!a.record.empty()) {
         if (!rep.save(a.record)) return 2;
@@ -530,6 +540,7 @@ int main(int argc, char** argv) {
         else if (k == "--replay") a.replay = next();
         else if (k == "--quiet") a.quiet = true;
         else if (k == "--profile") a.profile = true;
+        else if (k == "--tick-times") a.tickTimes = next();
         else if (k == "--dump") a.dump = true;
         else if (k == "--bench-paths") a.benchPaths = std::stoi(next());
         else if (k == "--bench-body") a.benchBody = std::stoi(next());
@@ -541,7 +552,7 @@ int main(int argc, char** argv) {
         else if (k == "--symmetry") a.symmetry = next();
         else if (k == "--gen-params") a.genParams = next();
         else if (k == "--gen-out") a.genOut = next();
-        else { std::printf("usage: rts_headless --project DIR [--map FILE] [--seed N] [--record F] [--save F --save-at S] [--load F] [--verify-restore-at S --verify-restore-ticks N] [--generate PRESET [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]] | --replay F\n"); return 2; }
+        else { std::printf("usage: rts_headless --project DIR [--map FILE] [--seed N] [--record F] [--save F --save-at S] [--load F] [--tick-times F] [--verify-restore-at S --verify-restore-ticks N] [--generate PRESET [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]] | --replay F\n"); return 2; }
     }
     if (a.verifyRestore && (!a.replay.empty() || a.benchPaths>0 || a.benchGroup>0 || a.maxSeconds==0)) { std::fprintf(stderr,"restore verification requires a normal match\n");return 2; }
     try { return a.replay.empty() ? play(a) : replay(a); }

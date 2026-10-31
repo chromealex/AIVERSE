@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include "RtsInternal.h"
+#include "RtsScriptIeee.h"
 
 namespace rts::game {
 using namespace script;
@@ -479,6 +480,7 @@ bool Vm::open(Mode m, size_t limit) {
     lua_pushcfunction(L, bind<sbRequire>); lua_setglobal(L, "require");
     lua_newtable(L); lua_setfield(L, LUA_REGISTRYINDEX, "rts.loaded");
     openFx(*this);
+    openIeee(L);   // f32 / f64 bit-pattern arithmetic (pure; both modes)
     if (m == Mode::Sim) {
         lua_pushcfunction(L, bind<sbToNumber>); lua_setglobal(L, "tonumber");
         openSimMath(*this);

@@ -920,7 +920,11 @@ endif()
 target_sources(rts_game PRIVATE modules/rts/RtsScriptTerritory.cpp)
 target_sources(rts_game PRIVATE modules/rts/RtsScriptGrid.cpp)
 target_sources(rts_game PRIVATE modules/rts/RtsScript.cpp modules/rts/RtsScriptEngine.cpp modules/rts/RtsScriptApi.cpp modules/rts/RtsScriptCommands.cpp
-    modules/rts/RtsScriptStd.cpp)
+    modules/rts/RtsScriptStd.cpp modules/rts/RtsScriptIeee.cpp)
+if(NOT MSVC)
+    # one IEEE operation per binding: never contract into FMA (RtsScriptIeee.cpp)
+    set_source_files_properties(modules/rts/RtsScriptIeee.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+endif()
 # grid fields (G5): data, kernels, Lua `field` table (docs/fields.md)
 target_sources(rts_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
