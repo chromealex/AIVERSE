@@ -103,6 +103,26 @@ integers when they can't (ticks, counts, players, levels, handles). `math` keeps
 `math.random` (simulation RNG: `math.random(n)`, `math.random(a, b)` integers, `math.random()` an
 fx in [0, 1)). `tonumber("12")` works; `tonumber("1.5")` is an error (use `fx("1.5")`).
 
+### IEEE floats as bit patterns: `f32`, `f64`
+
+A script that must reproduce another program's floating-point results exactly (a port of a game that
+simulates in `float`) keeps each value as its IEEE bit pattern in an integer: binary32 as `0..0xffffffff`,
+binary64 as the signed 64-bit reinterpretation (`BitConverter.DoubleToInt64Bits`). The `f32` and `f64`
+tables do one correctly rounded IEEE operation per call (round to nearest even; NaN results are the
+canonical quiet NaN `0x7fc00000` / `0x7ff8000000000000`), so results are identical on every platform:
+
+| | |
+|---|---|
+| `f32.add/sub/mul/div(a, b)`, `f32.sqrt(a)` | binary32 arithmetic |
+| `f32.dot2(a, b, c, d)` | `a*b + c*d` rounded once (fused two-term dot product) |
+| `f32.fromint(i)`, `f32.tof64(a)` | integer → binary32 (rounded); binary32 → binary64 (exact) |
+| `f32.lt/le/eq(a, b)` | IEEE comparisons (NaN unordered, `-0 == +0`) |
+| `f64.add/sub/mul/div(a, b)`, `f64.sqrt(a)`, `f64.fromint(i)`, `f64.tof32(d)`, `f64.lt/le/eq(a, b)` | the same for binary64 |
+
+Arguments must be integers (`f32` ones in range), otherwise the call is an error. Both tables exist in
+simulation and view scripts. (Built on the host's IEEE operations with one operation per call, no FMA
+contraction and a check of the default floating-point environment: `modules/rts/RtsScriptIeee.cpp`.)
+
 ### State: `state`, `game.data(h)`, not upvalues
 
 Everything a script remembers between ticks must be in the global table **`state`**, in an
@@ -155,6 +175,8 @@ netcode rewinds or a save is loaded. A tick that only changes Lua tables costs n
   match (deterministically: the flag is simulation state). Functions called from data
   (`"fn"` of effects and trigger hooks) are disabled the same way.
 - Loading errors (syntax, float literals, a missing file) skip that file; the match still starts.
+- Script cost per tick: `rts_headless --tick-times FILE` writes the wall time of every simulation step
+  (`tick microseconds` per line).
 
 ## Events
 
