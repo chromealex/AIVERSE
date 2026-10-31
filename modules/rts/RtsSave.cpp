@@ -162,6 +162,7 @@ void ioState(Archive& a, GameState& s) {
     ioRle(a, s.vision);
     a(s.visibleCells, s.fogMode);
     ioRle(a, s.visionBase); ioRle(a, s.visionOcc);
+    if (!a.writing()) s.visionToken = 0;   // a loaded state never matches a vision cache (RtsVision.cpp)
     a(s.regionCount, s.regionOwner, s.regionAdj, s.regionNames, s.regionCenter, s.victory, s.tickets, s.wavePlayers, s.waves, s.fieldsDirty,
       s.nextWaveTick, s.score, s.autoBuilt, s.winnerTeam, s.trig, s.territoryCells, s.territoryTotal, s.territoryDirty, s.roomZones, s.roomCells,
       s.roomsDirty, s.hand, s.possessed, s.playerAbilities, s.nextGroupId);
@@ -210,6 +211,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (!a.writing() && pools != kPools::count) { a.fail(); return false; }
     kPools::run(a, w);
     ioState(a, gs);
+    if (!native_.serialize(sim, a)) return false;
     // Lua state of games with their own scripts (the standard library keeps its state in GameState)
     if (auto* ss = w.resource<ScriptStore>(); ss && ss->userScripts) {
         io(a, *ss);
