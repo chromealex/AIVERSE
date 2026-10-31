@@ -15,6 +15,7 @@
 #include <iterator>
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/view/RtsCamera.h"
+#include "modules/rts/view/RtsOverlayData.h"
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -662,6 +663,7 @@ void Editor::startPlay(int humanSlot) {
         sim_->setup(ws_.project.simRules(mapJson), mapJson);
         playIds_ = mapEntityIds(*sim_, *simModule(), mapJson);
         view_.lights().configure(ws_.project.manifest["lighting"], mapJson["lighting"], mapJson["lights"]); // day/night, map lights
+        if (auto pe = rts::game::configurePlayerColors(ws_.project.manifest["playerColors"]); !pe.empty()) status = pe;
     } catch (const std::exception& e) {
         status = std::string("Ошибка запуска: ") + e.what();
         sim_.reset();

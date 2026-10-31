@@ -25,6 +25,16 @@ struct ViewTargeting {
     uint64_t caster=0; // Packed entity ID; zero for player abilities.
 };
 
+// view.camera() / view.set_camera{...}: the host's camera in the units of game.json "camera" — zoom = visible
+// view-plane height in world units (ortho) or camera distance (perspective); pitch / yaw in degrees.
+struct ViewCamera {
+    float x = 0, z = 0, zoom = 0, pitch = 0, yaw = 0;
+    int width = 0, height = 0;   // viewport in framebuffer pixels (read-only)
+    bool ortho = false;          // read-only
+};
+// A set_camera request: fields left out of the call stay NaN (= keep the host's value).
+struct ViewCameraRequest { float x, z, zoom, pitch, yaw; };
+
 struct ViewRequest {
     enum Kind : uint8_t { Notice, Effect, Sound } kind = Notice;
     std::string text;          // notice text / effect or sound name
@@ -52,6 +62,9 @@ public:
     // Per frame: dispatches the collected events and on_frame(dt).
     void update(Simulation& sim, float dt);
     void setTargeting(const ViewTargeting& target);
+    void setCamera(const ViewCamera& camera);
+    // The last view.set_camera of this update (fields NaN = unchanged); false when there was none.
+    bool takeCameraRequest(ViewCameraRequest& out);
     std::vector<ViewRequest> takeRequests();
     // view.send(id, args): script commands (kCmdScript) for the host to issue as the local player
     std::vector<Command> takeCommands();

@@ -542,19 +542,37 @@ bool OvCondition::entityScoped() const {
     }
 }
 
-render::float4 overlayPlayerColor(int p) {
-    static const float4 colors[] = {
-        {0.70f, 0.70f, 0.68f, 1}, // neutral
-        {0.20f, 0.45f, 0.95f, 1}, // 1 blue
-        {0.92f, 0.22f, 0.20f, 1}, // 2 red
-        {0.25f, 0.80f, 0.30f, 1}, // 3 green
-        {0.97f, 0.80f, 0.15f, 1}, // 4 yellow
-        {0.68f, 0.35f, 0.90f, 1}, // 5 purple
-        {0.15f, 0.82f, 0.85f, 1}, // 6 teal
-        {0.98f, 0.55f, 0.15f, 1}, // 7 orange
-        {0.95f, 0.45f, 0.72f, 1}, // 8 pink
-    };
-    return colors[p >= 0 && p < 9 ? p : 0];
+namespace {
+constexpr float4 kDefaultPlayerColors[9] = {
+    {0.70f, 0.70f, 0.68f, 1}, // neutral
+    {0.20f, 0.45f, 0.95f, 1}, // 1 blue
+    {0.92f, 0.22f, 0.20f, 1}, // 2 red
+    {0.25f, 0.80f, 0.30f, 1}, // 3 green
+    {0.97f, 0.80f, 0.15f, 1}, // 4 yellow
+    {0.68f, 0.35f, 0.90f, 1}, // 5 purple
+    {0.15f, 0.82f, 0.85f, 1}, // 6 teal
+    {0.98f, 0.55f, 0.15f, 1}, // 7 orange
+    {0.95f, 0.45f, 0.72f, 1}, // 8 pink
+};
+float4 gPlayerColors[9] = {kDefaultPlayerColors[0], kDefaultPlayerColors[1], kDefaultPlayerColors[2], kDefaultPlayerColors[3],
+                           kDefaultPlayerColors[4], kDefaultPlayerColors[5], kDefaultPlayerColors[6], kDefaultPlayerColors[7],
+                           kDefaultPlayerColors[8]};
+} // namespace
+
+render::float4 overlayPlayerColor(int p) { return gPlayerColors[p >= 0 && p < 9 ? p : 0]; }
+
+std::string configurePlayerColors(const Json& list) {
+    for (int i = 0; i < 9; ++i) gPlayerColors[i] = kDefaultPlayerColors[i];
+    if (list.isNull()) return {};
+    if (!list.isArray()) return "game.json \"playerColors\": expected an array of colours (index 0 = neutral)";
+    std::string err;
+    for (size_t i = 0; i < list.size() && i < 9; ++i) {
+        if (list[i].isNull()) continue;
+        try { gPlayerColors[i] = parseOverlayColor(list[i], "playerColors[" + std::to_string(i) + "]"); gPlayerColors[i].w = 1; }
+        catch (const std::exception& e) { if (err.empty()) err = e.what(); }
+    }
+    if (list.size() > 9 && err.empty()) err = "playerColors: only slots 0..8 are used";
+    return err;
 }
 
 render::float4 parseOverlayColor(const Json& j, const std::string& where, bool* player) {

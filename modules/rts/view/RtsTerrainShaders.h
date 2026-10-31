@@ -230,7 +230,7 @@ void main() {
     col += base * dynamicLight(v_wpos, n, V, t_mode.x);
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0); // ACES fit
+    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0); // ACES fit
     vec3 outc = sqrt(col);
     if (t_mode.w > 0.5) { // fog of war of heightfield maps (the flat fog sheet would cut the relief)
         vec2 uv = v_wpos.xz / t_lod.zw;
@@ -432,7 +432,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
     col += base * dynamicLight(l, tex1, s1, in.wpos, n, V, u.mode.x);
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
+    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
     float3 outc = sqrt(col);
     if (u.mode.w > 0.5) {
         float2 uv = in.wpos.xz / u.lod.zw;

@@ -73,6 +73,7 @@ struct Lighting {
     float3 fogColor{0.62f, 0.70f, 0.80f};
     float fogDensity = 0.0025f;
     float shadowSoftness = 0.22f;          // penumbra radius in world units (same look at every quality tier)
+    bool tonemap = true;                   // false: lit shaders clamp instead of the ACES fit (flat / unlit art styles)
 };
 
 enum class ShadowQuality { Off, Low, Medium, High };

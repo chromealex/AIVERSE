@@ -34,10 +34,177 @@ fragment float4 fs_main(Out i [[stage_in]],constant U& u [[buffer(1)]],texture2d
  return float4(mix(u.color.rgb,float3(1),edge*0.55f),fill*u.style.x);
 }
 )";
+// Categorical cell raster: port of the ownership look of OpenWar's ArmyMapWorld.shader (desktop 5x5 smoothstep
+// coverage of each candidate id, border where the coverage crosses 1/2) with its mobile 2x2 bilinear variant on low
+// material quality. tex0: RGBA8, rgb = palette colour, a = id. U0: vp; bounds (x, z, w, h); size (cells w, h, smooth,
+// border width); border colour; style (opacity, desktop, -, -); outside colour (id `outside`, a = id / 255).
+const char* cellVs=R"(
+layout(location=0) in vec3 pos;
+layout(std140) uniform U0 { mat4 vp; vec4 bounds; vec4 size; vec4 borderColor; vec4 style; vec4 outside; };
+out vec2 uv;
+void main(){uv=(pos.xz-bounds.xy)/bounds.zw;gl_Position=vp*vec4(pos,1);}
+)";
+const char* cellFs=R"(
+layout(std140) uniform U0 { mat4 vp; vec4 bounds; vec4 size; vec4 borderColor; vec4 style; vec4 outside; };
+uniform highp sampler2D tex0;in vec2 uv;out vec4 outColor;
+vec4 cellAt(vec2 c){
+ if(any(lessThan(c,vec2(0.0)))||any(greaterThanEqual(c,size.xy)))return outside;
+ return texelFetch(tex0,ivec2(c),0);
+}
+float idOf(vec4 s){return floor(s.a*255.0+0.5);}
+bool same(vec4 a,vec4 b){return abs(idOf(a)-idOf(b))<0.5;}
+float fall(float x,float h){float t=clamp((x+h)/(2.0*h),0.0,1.0);return 6.0*t*(1.0-t)/(2.0*h);}
+void main(){
+ vec2 g=uv*size.xy;
+ float aa=max(max(length(vec2(dFdx(g.x),dFdy(g.x))),length(vec2(dFdx(g.y),dFdy(g.y)))),1e-4);
+ vec3 color;float edge=0.0;
+ if(style.y<0.5){
+  // 2x2 bilinear coverage (ArmyMapWorld MobileOwnership)
+  vec2 q=g-0.5;vec2 cell=floor(q),f=fract(q);
+  vec4 s[4];s[0]=cellAt(cell);s[1]=cellAt(cell+vec2(1,0));s[2]=cellAt(cell+vec2(0,1));s[3]=cellAt(cell+vec2(1,1));
+  vec4 w=vec4((1.0-f.x)*(1.0-f.y),f.x*(1.0-f.y),(1.0-f.x)*f.y,f.x*f.y);
+  vec4 dx=vec4(-(1.0-f.y),1.0-f.y,-f.y,f.y),dy=vec4(-(1.0-f.x),-f.x,1.0-f.x,f.x);
+  float coverage=-1.0;color=s[0].rgb;
+  for(int c=0;c<4;c++){
+   vec4 m=vec4(same(s[0],s[c])?1.0:0.0,same(s[1],s[c])?1.0:0.0,same(s[2],s[c])?1.0:0.0,same(s[3],s[c])?1.0:0.0);
+   float share=dot(w,m),grad=length(vec2(dot(dx,m),dot(dy,m)));
+   float dist=grad>1e-4?abs(share-0.5)/grad:4.0;
+   if(share>coverage){coverage=share;color=s[c].rgb;}
+   edge=max(edge,1.0-smoothstep(size.w-aa,size.w+aa,dist));
+  }
+ }else{
+  vec2 center=floor(g);float h=size.z;
+  float wx[5],wy[5],dwx[5],dwy[5];
+  for(int a=0;a<5;a++){
+   float left=(center.x+float(a-2))-g.x,bottom=(center.y+float(a-2))-g.y;
+   wx[a]=smoothstep(-h,h,left+1.0)-smoothstep(-h,h,left);wy[a]=smoothstep(-h,h,bottom+1.0)-smoothstep(-h,h,bottom);
+   dwx[a]=fall(left,h)-fall(left+1.0,h);dwy[a]=fall(bottom,h)-fall(bottom+1.0,h);
+  }
+  vec4 s[25];float wt[25],ddx[25],ddy[25];float sum=0.0,sdx=0.0,sdy=0.0;
+  for(int oy=0;oy<5;oy++)for(int ox=0;ox<5;ox++){
+   int i=oy*5+ox;s[i]=cellAt(center+vec2(float(ox-2),float(oy-2)));
+   wt[i]=wx[ox]*wy[oy];ddx[i]=dwx[ox]*wy[oy];ddy[i]=wx[ox]*dwy[oy];sum+=wt[i];sdx+=ddx[i];sdy+=ddy[i];
+  }
+  float inv=1.0/max(sum,1e-5);
+  vec2 base=floor(g-0.5);int ix=int(base.x-center.x),iy=int(base.y-center.y);int c0=(iy+2)*5+(ix+2);
+  int cand[4];cand[0]=c0;cand[1]=c0+1;cand[2]=c0+5;cand[3]=c0+6;
+  color=s[12].rgb;float coverage=-1.0;
+  for(int c=0;c<4;c++){
+   vec4 k=s[cand[c]];bool seen=false;
+   for(int e=0;e<4;e++)if(e<c&&same(s[cand[e]],k))seen=true;
+   if(seen)continue;
+   float share=0.0,gx=0.0,gy=0.0;
+   for(int i=0;i<25;i++){float m=same(s[i],k)?1.0:0.0;share+=wt[i]*m;gx+=ddx[i]*m;gy+=ddy[i]*m;}
+   share*=inv;float gdx=(gx-share*sdx)*inv,gdy=(gy-share*sdy)*inv;float grad=length(vec2(gdx,gdy));
+   float dist=grad>1e-4?abs(share-0.5)/grad:(share>0.5?4.0:0.0);
+   if(share>coverage){coverage=share;color=k.rgb;}
+   edge=max(edge,1.0-smoothstep(size.w-aa,size.w+aa,dist));
+  }
+ }
+ color=mix(color,borderColor.rgb,edge*borderColor.a);
+ outColor=vec4(color,style.x);
+}
+)";
+const char* cellMsl=R"(
+#include <metal_stdlib>
+using namespace metal;
+struct U {float4x4 vp;float4 bounds,size,borderColor,style,outside;};struct In {float3 pos [[attribute(0)]];};struct Out {float4 pos [[position]];float2 uv;};
+vertex Out vs_main(In i [[stage_in]],constant U& u [[buffer(1)]]){Out o;o.uv=(i.pos.xz-u.bounds.xy)/u.bounds.zw;o.pos=u.vp*float4(i.pos,1);return o;}
+static float4 cellAt(constant U& u,texture2d<float> t,float2 c){
+ if(any(c<float2(0))||any(c>=u.size.xy))return u.outside;
+ return t.read(uint2(c));
+}
+static float idOf(float4 s){return floor(s.a*255+0.5);}
+static bool same(float4 a,float4 b){return abs(idOf(a)-idOf(b))<0.5;}
+static float fall(float x,float h){float t=saturate((x+h)/(2*h));return 6*t*(1-t)/(2*h);}
+fragment float4 fs_main(Out i [[stage_in]],constant U& u [[buffer(1)]],texture2d<float> tex0 [[texture(0)]],sampler smp [[sampler(0)]]){
+ float2 g=i.uv*u.size.xy;
+ float aa=max(max(length(float2(dfdx(g.x),dfdy(g.x))),length(float2(dfdx(g.y),dfdy(g.y)))),1e-4f);
+ float3 color;float edge=0;
+ if(u.style.y<0.5){
+  float2 q=g-0.5;float2 cell=floor(q),f=fract(q);
+  float4 s[4]={cellAt(u,tex0,cell),cellAt(u,tex0,cell+float2(1,0)),cellAt(u,tex0,cell+float2(0,1)),cellAt(u,tex0,cell+float2(1,1))};
+  float4 w=float4((1-f.x)*(1-f.y),f.x*(1-f.y),(1-f.x)*f.y,f.x*f.y);
+  float4 dx=float4(-(1-f.y),1-f.y,-f.y,f.y),dy=float4(-(1-f.x),-f.x,1-f.x,f.x);
+  float coverage=-1;color=s[0].rgb;
+  for(int c=0;c<4;c++){
+   float4 m=float4(same(s[0],s[c])?1:0,same(s[1],s[c])?1:0,same(s[2],s[c])?1:0,same(s[3],s[c])?1:0);
+   float share=dot(w,m),grad=length(float2(dot(dx,m),dot(dy,m)));
+   float dist=grad>1e-4?abs(share-0.5)/grad:4.0;
+   if(share>coverage){coverage=share;color=s[c].rgb;}
+   edge=max(edge,1-smoothstep(u.size.w-aa,u.size.w+aa,dist));
+  }
+ }else{
+  float2 center=floor(g);float h=u.size.z;
+  float wx[5],wy[5],dwx[5],dwy[5];
+  for(int a=0;a<5;a++){
+   float left=(center.x+float(a-2))-g.x,bottom=(center.y+float(a-2))-g.y;
+   wx[a]=smoothstep(-h,h,left+1)-smoothstep(-h,h,left);wy[a]=smoothstep(-h,h,bottom+1)-smoothstep(-h,h,bottom);
+   dwx[a]=fall(left,h)-fall(left+1,h);dwy[a]=fall(bottom,h)-fall(bottom+1,h);
+  }
+  float4 s[25];float wt[25],ddx[25],ddy[25];float sum=0,sdx=0,sdy=0;
+  for(int oy=0;oy<5;oy++)for(int ox=0;ox<5;ox++){
+   int k=oy*5+ox;s[k]=cellAt(u,tex0,center+float2(float(ox-2),float(oy-2)));
+   wt[k]=wx[ox]*wy[oy];ddx[k]=dwx[ox]*wy[oy];ddy[k]=wx[ox]*dwy[oy];sum+=wt[k];sdx+=ddx[k];sdy+=ddy[k];
+  }
+  float inv=1/max(sum,1e-5f);
+  float2 base=floor(g-0.5);int ix=int(base.x-center.x),iy=int(base.y-center.y);int c0=(iy+2)*5+(ix+2);
+  int cand[4]={c0,c0+1,c0+5,c0+6};
+  color=s[12].rgb;float coverage=-1;
+  for(int c=0;c<4;c++){
+   float4 k=s[cand[c]];bool seen=false;
+   for(int e=0;e<4;e++)if(e<c&&same(s[cand[e]],k))seen=true;
+   if(seen)continue;
+   float share=0,gx=0,gy=0;
+   for(int n=0;n<25;n++){float m=same(s[n],k)?1:0;share+=wt[n]*m;gx+=ddx[n]*m;gy+=ddy[n]*m;}
+   share*=inv;float gdx=(gx-share*sdx)*inv,gdy=(gy-share*sdy)*inv;float grad=length(float2(gdx,gdy));
+   float dist=grad>1e-4?abs(share-0.5)/grad:(share>0.5?4.0:0.0);
+   if(share>coverage){coverage=share;color=k.rgb;}
+   edge=max(edge,1-smoothstep(u.size.w-aa,u.size.w+aa,dist));
+  }
+ }
+ color=mix(color,u.borderColor.rgb,edge*u.borderColor.a);
+ return float4(color,u.style.x);
+}
+)";
+}
+void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::PaintLayer& p,const MapGrid& g,const RtsView& view,int id){
+ auto& l=layers_[id];
+ if(!cellPipe_.valid()){
+  gfx::ShaderDesc sd;sd.glslVertex=cellVs;sd.glslFragment=cellFs;sd.msl=cellMsl;sd.textureSlots=1;sd.label="paint cells";cellShader_=dev.createShader(sd);
+  gfx::PipelineDesc pd;pd.shader=cellShader_;pd.attrs[0]={0,gfx::VertexFormat::Float3,0};pd.attrCount=1;pd.stride=sizeof(render::MeshVertex);
+  pd.indexType=gfx::IndexType::UInt32;pd.depthWrite=false;pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Alpha;
+  if(cellShader_.valid())cellPipe_=dev.createPipeline(pd);
+  if(!cellPipe_.valid()){std::fprintf(stderr,"[paint] cells: %s\n",dev.lastError().c_str());return;}
+ }
+ const int d=std::max(1,p.density),tw=p.cellsW*d,th=p.cellsH*d;
+ if(!l.canvas.handle().valid()){if(!l.canvas.init(dev,tw,th))return;p.cellsDirty=true;}
+ if(p.cellsDirty||p.paletteDirty){
+  l.bytes.resize(size_t(tw)*th*4);
+  for(int y=0;y<th;++y)for(int x=0;x<tw;++x){
+   const uint8_t c=p.cells[size_t(y/d)*p.cellsW+size_t(x/d)];const size_t i=size_t(y)*tw+x;
+   for(int k=0;k<3;++k)l.bytes[i*4+size_t(k)]=p.palette[size_t(c)*4+size_t(k)];l.bytes[i*4+3]=c;
+  }
+  l.canvas.upload(0,0,tw,th,l.bytes.data(),tw*4);
+  p.cellsDirty=p.paletteDirty=false;
+ }
+ l.canvas.flush();
+ if(!l.mesh.vb.valid()){   // one quad over the bounds, at the terrain height of its centre + lift
+  render::MeshBuilder mb;const float y=view.heightAt(g,p.x+p.w*.5f,p.z+p.h*.5f)+p.lift;
+  mb.quad(render::float3{p.x,y,p.z},render::float3{p.x,y,p.z+p.h},render::float3{p.x+p.w,y,p.z+p.h},render::float3{p.x+p.w,y,p.z});
+  l.mesh=mb.upload(dev);
+ }
+ struct U{render::mat4 vp;render::float4 bounds,size,border,style,outside;};
+ const size_t o=size_t(p.outside)*4;
+ U u{r.viewProj(),{p.x,p.z,p.w,p.h},{float(tw),float(th),p.smooth,p.borderWidth},{p.borderColor[0],p.borderColor[1],p.borderColor[2],p.borderColor[3]},
+     {p.opacity,r.materialQuality()==render::MaterialQuality::Low?0.f:1.f,0,0},
+     {p.palette[o]/255.f,p.palette[o+1]/255.f,p.palette[o+2]/255.f,float(p.outside)/255.f}};
+ auto mesh=l.mesh;auto texture=l.canvas.handle();auto pipe=cellPipe_;
+ r.drawCustom([u,mesh,texture,pipe](gfx::Device& d){d.setPipeline(pipe);d.setUniforms(0,&u,sizeof(u));d.setTexture(0,texture);d.setVertexBuffer(mesh.vb);d.setIndexBuffer(mesh.ib);d.drawIndexed(mesh.indexCount);});
 }
 void RtsPaintLayers::shutdown(){
- if(dev_){for(auto& [id,l]:layers_){l.canvas.shutdown();dev_->destroyBuffer(l.mesh.vb);dev_->destroyBuffer(l.mesh.ib);}dev_->destroyPipeline(pipe_);dev_->destroyShader(shader_);}
- layers_.clear();memory_.clear();source_.reset();dev_=nullptr;shader_={};pipe_={};w_=h_=0;lastTime_=-1;
+ if(dev_){for(auto& [id,l]:layers_){l.canvas.shutdown();dev_->destroyBuffer(l.mesh.vb);dev_->destroyBuffer(l.mesh.ib);}dev_->destroyPipeline(pipe_);dev_->destroyShader(shader_);dev_->destroyPipeline(cellPipe_);dev_->destroyShader(cellShader_);}
+ layers_.clear();memory_.clear();source_.reset();dev_=nullptr;shader_={};pipe_={};cellShader_={};cellPipe_={};w_=h_=0;lastTime_=-1;
 }
 void RtsPaintLayers::draw(render::Renderer3D& r,gfx::Device& dev,const std::shared_ptr<render::PaintLayers>& source,
  const MapGrid& g,const RtsView& view,const std::vector<uint8_t>* vision,double time,uint8_t viewer){
@@ -61,6 +228,7 @@ void RtsPaintLayers::draw(render::Renderer3D& r,gfx::Device& dev,const std::shar
  if(changed)++revision_;
  for(auto it=layers_.begin();it!=layers_.end();)if(!source->layers.count(it->first)){it->second.canvas.shutdown();dev.destroyBuffer(it->second.mesh.vb);dev.destroyBuffer(it->second.mesh.ib);it=layers_.erase(it);}else ++it;
  for(auto& [id,p]:source->layers){
+  if(p.categorical){drawCells(r,dev,p,g,view,id);continue;}
   auto& l=layers_[id];const bool field=p.territoryOwner>0;
   if(!p.textureId&&!l.canvas.handle().valid()){
    const int tw=field?w_:std::min(p.width,r.materialQuality()==render::MaterialQuality::Low?512:2048);

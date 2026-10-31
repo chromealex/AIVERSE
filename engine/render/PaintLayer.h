@@ -12,6 +12,16 @@ struct PaintLayer {
     bool landOnly=true,clear=true,surface=true;
     int textureId=0,copyFrom=0;
     std::vector<RenderTexture::Stroke> strokes;
+    // Categorical cell raster (view.paint_layer{cells=...}): one id byte per cell (row-major, z rows), drawn as
+    // smooth categorical regions with borders between different ids (a 5x5 smoothstep coverage filter; 2x2 on low
+    // material quality). palette = RGBA8 per id; id `outside` is also used beyond the raster edge.
+    bool categorical=false,cellsDirty=false,paletteDirty=false;
+    int cellsW=0,cellsH=0,density=1;   // density: texels per cell side (smoothing and border widths are in texels)
+    std::vector<uint8_t> cells;
+    std::array<uint8_t,256*4> palette{};
+    std::array<float,4> borderColor{1,1,1,1};
+    float borderWidth=0.55f,smooth=2.0f;
+    int outside=255;
 };
 struct PaintLayers { std::map<int,PaintLayer> layers; int nextId=1; };
 }

@@ -140,7 +140,7 @@ void main() {
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
     col = mix(col, p_atmo.rgb * p_atmo.rgb * day, (1.0 - exp(-dist * p_opts.w)) * 0.6);   // aerial haze
-    col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
+    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
     vec3 outc = sqrt(col);
     float alpha = ocean ? mix(p_water.a, 1.0, pow(1.0 - max(dot(n, V), 0.0), 4.0)) : 1.0;
     if (p_opts.z > 0.5) {
@@ -253,7 +253,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant PU0& u [[buffer(1)]], con
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
     col = mix(col, u.atmo.rgb * u.atmo.rgb * day, (1.0 - exp(-dist * u.opts.w)) * 0.6);
-    col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
+    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
     float3 outc = sqrt(col);
     float alpha = ocean ? mix(u.water.a, 1.0, pow(1.0 - max(dot(n, V), 0.0), 4.0)) : 1.0;
     if (u.opts.z > 0.5) {
