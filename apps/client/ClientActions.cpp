@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "GameClient.h"
+#include "modules/rts/view/ScriptHud.h"
 
 namespace rts::client {
 
@@ -80,6 +81,7 @@ void GameClient::buildTools(UiState& s) {
     if (human_ < gs.playerAbilities.size()) {
         const auto& mine = gs.playerAbilities[human_];
         for (size_t i = 0; i < rules_.playerAbilities.size() && i < mine.size(); ++i) {
+            if (game::scriptHudAbility(manifest_, rules_.playerAbilities[i].id)) continue;
             const PlayerAbilityState& st = mine[i];
             const PlayerAbilityDef& a = rules_.advancedEffects ? mod().playerAbilityFor(*sim_, human_, int(i)) : rules_.playerAbilities[i];
             if (!st.owned || a.passive || a.autoEvery.raw > 0) continue;

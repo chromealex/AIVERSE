@@ -1,6 +1,7 @@
 // Строки движка и клиента (меню, HUD, панель команд). Ключи — см. engine/i18n/README.md.
 // Игра может переопределить любую строку в своём lang/ru.json.
 {
+  "hud.ready": "ГОТОВО", "hud.cooldown_seconds": "{seconds} с",
   "@language": "Русский",
 
   "menu": {
@@ -271,5 +272,13 @@
   "price": {
     "gold": {"one": "{count} золотой", "few": "{count} золотых", "many": "{count} золотых", "other": "{count} золотых"},
     "gems": {"one": "{count} кристалл", "few": "{count} кристалла", "many": "{count} кристаллов", "other": "{count} кристалла"}
-  }
+  },
+  "controls": {"region_send": "К отправке", "region_hint": "Проведите от своих зон к цели.", "region_preview": "Отправится {count}", "region_invalid": "Нет маршрута / отмена"},
+  "controls.region_ratio": "Отправка: {ratio}% · ПКМ: двигать карту",
+  "hud.choose_target": "Выберите точку на карте · ПКМ или Esc — отмена",
+  "editor.build.fix_atlas_sizes": "Исправить размеры текстур",
+  "editor.build.resize_plan": "В сборке: длинная сторона до {size} px",
+  "editor.build.resize_help": "Уменьшить слишком большие текстуры для выбранной платформы и пересчитать. Детализация снизится; исходные файлы сохранятся.",
+  "entity_action.price": "Цена: {cost}",
+  "entity_action.unavailable": "Недоступно"
 }

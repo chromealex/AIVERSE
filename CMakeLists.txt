@@ -894,6 +894,8 @@ target_sources(rts_lua PRIVATE third_party/lua/loslib.c)
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     target_compile_definitions(rts_lua PRIVATE LUA_USE_IOS)   # no system() on iOS
 endif()
+target_sources(rts_game PRIVATE modules/rts/RtsScriptTerritory.cpp)
+target_sources(rts_game PRIVATE modules/rts/RtsScriptGrid.cpp)
 target_sources(rts_game PRIVATE modules/rts/RtsScript.cpp modules/rts/RtsScriptEngine.cpp modules/rts/RtsScriptApi.cpp
     modules/rts/RtsScriptStd.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
@@ -909,3 +911,29 @@ if(TARGET rts_editor_core)
     target_sources(rts_editor_core PRIVATE apps/editor/core/ScriptOps.cpp)
 endif()
 target_sources(rts_game_view PRIVATE modules/rts/view/RtsViewScript.cpp)
+
+# Generic GPU canvases and Lua world-space paint layers.
+target_sources(rts_game_view PRIVATE engine/render/RenderTexture.cpp modules/rts/view/RtsPaintLayers.cpp)
+
+# Shared region gesture input; gameplay remains in project Lua ability effects.
+foreach(t rts_client main)
+    if(TARGET ${t})
+        target_sources(${t} PRIVATE apps/client/ClientRegionInput.cpp)
+    endif()
+endforeach()
+
+if(TARGET rts_editor)
+    target_link_libraries(rts_editor PRIVATE rts_i18n)
+endif()
+
+# Game viewport uses the same RmlUi renderer and documents as the client.
+if(TARGET rts_editor)
+    target_link_libraries(rts_editor PRIVATE rts_ui)
+    target_sources(rts_editor PRIVATE apps/editor/GameHud.cpp)
+endif()
+
+if(RTS_BUILD_TESTS)
+    add_executable(rts_ui_viewport_tests tests/ui_viewport.cpp tests/ui_font_effects.cpp)
+    target_link_libraries(rts_ui_viewport_tests PRIVATE rts_ui)
+    add_test(NAME rts_ui_viewport_tests COMMAND rts_ui_viewport_tests)
+endif()

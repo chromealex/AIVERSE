@@ -35,6 +35,7 @@ Optional `"camera"` block (2D games, see "2D games" below):
 | key | meaning |
 |---|---|
 | `supplyCap` | max supply/population (default 200) |
+| `ai` | `{"controller":"builtin"}` (default) or `{"controller":"scripted"}`. Scripted control makes the generic RtsAI submit no commands in client, editor and headless. The game must provide its own controller; Lua handlers, human/network commands, combat, production and victory remain enabled. This is not the `waves` player flag and does not exempt players from defeat. |
 | `maxQueue` | production queue length (5) |
 | `costModel` | `"upfront"` (pay when ordering) or `"progressive"` (Total Annihilation: pay while building; stalls when short) |
 | `sellRefund` | fraction refunded when selling a structure (0.5) |
@@ -59,7 +60,7 @@ Optional `"camera"` block (2D games, see "2D games" below):
 | `playerAbilities` | see "Player abilities" |
 | `storage` | `"player"` (default: one stock per player) or `"buildings"`: goods live in building inventories, see "Settlers economy" |
 | `roadNetwork` | `{"cost": {"stone": 1}, "speed": 1.5, "required": true}` — player-built road cells (map char `+`), faster movement, deliveries only between buildings on one network |
-| `movement` | `{"avoidance": "rvo", "neighbors": 8, "timeHorizon": 1.5}` — local avoidance between moving units: `rvo` (default, ORCA velocity obstacles in fixed point, idle allies step aside) or `simple` (separation only); `neighbors` = agents considered per unit (quality/cost knob), `timeHorizon` in seconds. See "Movement and bodies" |
+| `movement` | `{"avoidance": "rvo", "neighbors": 8, "timeHorizon": 1.5}` — local avoidance between moving units: `rvo` (default, ORCA velocity obstacles in fixed point, idle allies step aside) `simple` (separation only), or `none` (no mobile avoidance/separation); `neighbors` = agents considered per unit (quality/cost knob), `timeHorizon` in seconds. See "Movement and bodies" |
 | `lanes` | `{"left": 4, "right": 2, "spacing": 0.35}` — Mushroom Wars 2 lanes between garrison buildings (replaces map `roads` for sends) |
 
 ## resources
@@ -97,6 +98,9 @@ any tag in `deficitDisables`).
   (nearest `neighbors`, deterministic order). Idle allies in the way are asked to yield: they step to a free side
   cell and walk back once the way is clear, so a unit can pass a gap of standing units; units blocked by anchored
   ones re-path around them.
+- `movement.avoidance: "none"` disables ORCA and mobile body separation, for games whose Lua
+  formation logic supplies positions. It does not disable terrain pathfinding or combat. Keep
+  real positive body radii; do not emulate this mode with near-zero radii.
 - Melee units (range < 2) attacking a target pick a free slot on a ring around it (slots by angle, claimed
   per target, ties by entity index) and path around allies already fighting instead of pushing into the front
   rank; ranged units stop and shoot. A group given an attack-move spreads into an arc whose flanks run ahead.
@@ -487,6 +491,19 @@ weapon / ability by id in `weapons` / `abilities`, then `events`.
 player-only cues.
 
 ## Dungeon management and territory
+
+For Lua-owned front lines, see [Territory brushes and scripted formations](scripting.md#territory-brushes-and-scripted-formations).
+The optional visual block `terrain.territory` also supports `smooth: true` (default false),
+`transition` (0..2 seconds, default 0.2) and `lift` (0..2 world units, default 0.045).
+On flat maps smooth mode filters ownership with a compact binomial kernel, reconstructs it bilinearly, applies a soft contour threshold,
+and interpolates changed cells over `transition` seconds. It uses the existing RHI mesh pipeline
+on both Metal and GL; material quality selects 4 subdivisions per cell (medium/high) or 2 (low).
+Fog memory is respected. Legacy square territory/room-floor rendering remains the default;
+smooth mode is for territory surfaces and does not draw room-floor tints. Planet visuals retain
+their existing renderer. Counts, capture tests and victory still use exact simulation ownership.
+The ground-overlay Metal shader uses the shared `LightU` lighting block (matching GLSL's U2
+layout); older builds referenced the obsolete `U2` MSL type and silently lost the entire layer.
+Shader/pipeline failures now report the backend error to stderr.
 
 ```json
 "diggable": {"D": {"hardness": 3}, "G": {"hardness": 6, "yields": {"gold": 250}}, "J": {"hardness": 8, "yields": {"gold": 40}, "infinite": true}},
@@ -1239,6 +1256,15 @@ player = triggering slot) — presentation/tools only, not hashed. `rules_lint` 
 `rules_schema` with `part: "keys"` lists every key the loader reads per block, taken from the loader itself.
 
 ## Texture atlases (game.json `atlas`, optional)
+
+The editor's Build window shows oversized atlas candidates under “Не в атласе”.
+“Исправить размеры текстур” applies the proposed maximum sizes as exact, first-priority
+`packaging.targets.<platform>.files` rules and refreshes the size estimate. This reduces
+image detail in the built pack; original assets are unchanged. Sprite sheets, tile atlases, and UI `@spritesheet` sources in RCSS
+with pixel-based coordinates are never offered this fix. Existing resize rules for these sources
+are ignored during packaging to preserve their frame coordinates. Other exclusions (repeat wrapping,
+noAtlas, decode failures, a lone image in a group) require manual decisions. Recalculate a stale
+report before applying fixes; the button is disabled while settings differ from the report.
 
 When a game is packaged (`rtsbuild`, `assetpipe pack --atlas <profile>`), small 2D images are
 packed into atlas pages: fewer texture switches/draw calls, trimmed transparent borders, identical
@@ -2186,3 +2212,7 @@ any overlay regardless of its `when`.
 `game.json` and maps can have a `"postfx"` block: a list of full-screen effects (bloom, colour
 grading, LUT, vignette, tilt-shift, sun shafts, FXAA, grain, ...) with quality tiers and a frame-cost
 model. Format, parameters, tiers and MCP tools: `docs/postfx.md`.
+
+### Initial script variables (local match setup)
+
+Optional map `initialVars` is an object of integer trigger variables loaded before user scripts. Example: `"initialVars": {"loadout_support_1": 2}`. At most 128 keys, ASCII letters/digits/underscore/dot/hyphen, length 1–128; integers −1000000..1000000. Values enter ordinary `trig.vars` hashing. Client UI can pass overrides with `game.start(..., {initialVars=...})`; see docs/ui-scripting.md. Saved map/replay setup retains the options, and omitted options preserve old behavior.

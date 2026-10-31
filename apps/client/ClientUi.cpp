@@ -8,6 +8,9 @@
 #include <cstdio>
 
 #include "GameClient.h"
+#include "RegionSettings.h"
+#include "modules/rts/view/ScriptHud.h"
+#include "modules/rts/view/WorldCounters.h"
 #include "engine/net/NetLocalize.h"
 #include "modules/rts/RtsLocalize.h"
 #include "engine/atlas/AtlasFormat.h"
@@ -74,45 +77,13 @@ void GameClient::initUi() {
         });
     Rml::DataModelConstructor c = ui_.context()->CreateDataModel("game");
     if (!c) return;
-    if (auto h = c.RegisterStruct<UiItem>()) {
-        h.RegisterMember("text", &UiItem::text); h.RegisterMember("sub", &UiItem::sub);
-        h.RegisterMember("style", &UiItem::style); h.RegisterMember("warn", &UiItem::warn);
-    }
-    if (auto h = c.RegisterStruct<UiAction>()) {
-        h.RegisterMember("label", &UiAction::label); h.RegisterMember("cost", &UiAction::cost);
-        h.RegisterMember("hotkey", &UiAction::hotkey); h.RegisterMember("tip", &UiAction::tip);
-        h.RegisterMember("enabled", &UiAction::enabled); h.RegisterMember("active", &UiAction::active);
-        h.RegisterMember("progress", &UiAction::progress); h.RegisterMember("id", &UiAction::id);
-        h.RegisterMember("kind", &UiAction::kind); h.RegisterMember("header", &UiAction::header);
-        h.RegisterMember("alt", &UiAction::alt); h.RegisterMember("altLabel", &UiAction::altLabel);
-    }
-    c.RegisterArray<std::vector<UiAction>>();
-    c.RegisterArray<std::vector<UiItem>>();
-    c.RegisterArray<std::vector<std::string>>();
-
-    UiState& b = bound_;
-    c.Bind("screen", &b.screen); c.Bind("gameName", &b.gameName); c.Bind("error", &b.error);
-    c.Bind("platformInfo", &b.platformInfo); c.Bind("maps", &b.maps);
-    c.Bind("top", &b.top); c.Bind("topActions", &b.topActions); c.Bind("clock", &b.clock); c.Bind("notices", &b.notices);
-    c.Bind("hasSelection", &b.hasSelection); c.Bind("ownSelection", &b.ownSelection);
-    c.Bind("selTitle", &b.selTitle); c.Bind("emptyHint", &b.emptyHint); c.Bind("selInfo", &b.selInfo);
-    c.Bind("card", &b.card); c.Bind("overTitle", &b.overTitle); c.Bind("overTime", &b.overTime);
-    c.Bind("modeHint", &b.modeHint); c.Bind("hintStyle", &b.hintStyle); c.Bind("boxStyle", &b.boxStyle);
-    c.Bind("minimapStyle", &b.minimapStyle); c.Bind("lines", &b.lines); c.Bind("touch", &b.touch); c.Bind("showCard", &b.showCard);
-    c.Bind("languages", &b.languages); c.Bind("lang", &b.lang);
-    c.Bind("tools", &b.tools); c.Bind("hasHowto", &b.hasHowto); c.Bind("howtoOpen", &b.howtoOpen);
-    c.Bind("howtoLike", &b.howtoLike); c.Bind("howtoGoal", &b.howtoGoal); c.Bind("howtoTip", &b.howtoTip); c.Bind("howtoSteps", &b.howtoSteps);
+    bindUiState(c, bound_);
     // Static text in documents:  {{ 'menu.map' | tr(lang) }}. The `lang` argument is unused by the
     // function but makes each expression depend on that variable, so all text follows a language
     // switch in place (no document reload: open screens keep their state).
     c.RegisterTransformFunc("tr", [this](const Rml::VariantList& a) -> Rml::Variant {
         return a.empty() ? Rml::Variant() : Rml::Variant(loc_.tr(a[0].Get<Rml::String>()));
     });
-    c.Bind("lobby", &b.lobby); c.Bind("netStatus", &b.netStatus); c.Bind("netError", &b.netError);
-    c.Bind("roomTitle", &b.roomTitle); c.Bind("roomInfo", &b.roomInfo); c.Bind("spectators", &b.spectators); c.Bind("waitHint", &b.waitHint);
-    c.Bind("queues", &b.queues); c.Bind("rooms", &b.rooms); c.Bind("createMaps", &b.createMaps); c.Bind("slots", &b.slots);
-    c.Bind("chat", &b.chat); c.Bind("isHost", &b.isHost); c.Bind("myReady", &b.myReady); c.Bind("canStart", &b.canStart);
-    c.Bind("netMatch", &b.netMatch); c.Bind("searching", &b.searching);
     // two-way bindings (menu controls write straight into the client)
     c.Bind("difficulty", &difficulty_);
     c.Bind("spectator", &spectator_);
@@ -132,6 +103,18 @@ void GameClient::initUi() {
         if (a.empty()) return;
         const int id = a[0].Get<int>(-1);
         if (id >= 0 && size_t(id) < actions_.size() && actions_[size_t(id)]) actions_[size_t(id)]();
+    });
+    c.BindEventCallback("skill_drag", [this](Rml::DataModelHandle, Rml::Event& event, VArgs a) {
+        if(a.size()<2 || a[1].Get<float>(-1)<0 || event.GetParameter<int>("button",0)!=0)return;
+        const int id=a[0].Get<int>(-1);
+        if(id<0||size_t(id)>=actions_.size()||!actions_[size_t(id)])return;
+        actions_[size_t(id)]();
+        if(mode_==Mode::Skill){skillDragging_=true;skillOverWorld_=false;regionSwipe_.cancel();}
+    });
+    c.BindEventCallback("support_click", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) {
+        if(a.size()<2 || a[1].Get<float>(-1)>=0)return;
+        const int id=a[0].Get<int>(-1);
+        if(id>=0&&size_t(id)<actions_.size()&&actions_[size_t(id)])actions_[size_t(id)]();
     });
     c.BindEventCallback("pause", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { if (screen_ == Screen::Playing) setScreen(Screen::Paused); });
     c.BindEventCallback("resume", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { if (screen_ == Screen::Paused) setScreen(Screen::Playing); });
@@ -279,20 +262,8 @@ void GameClient::updateUi() {
     }
     actions_.swap(nextActions_);
     // push only what changed: unchanged variables keep their elements (and hover/press state)
-#define RTS_SYNC(name)                                       \
-    if (!(s.name == bound_.name)) {                          \
-        bound_.name = std::move(s.name);                     \
-        model_.DirtyVariable(#name);                         \
-    }
     if (model_) {
-        RTS_SYNC(screen) RTS_SYNC(gameName) RTS_SYNC(error) RTS_SYNC(platformInfo) RTS_SYNC(maps)
-        RTS_SYNC(top) RTS_SYNC(topActions) RTS_SYNC(clock) RTS_SYNC(notices) RTS_SYNC(hasSelection) RTS_SYNC(ownSelection)
-        RTS_SYNC(selTitle) RTS_SYNC(emptyHint) RTS_SYNC(selInfo) RTS_SYNC(card) RTS_SYNC(overTitle) RTS_SYNC(overTime)
-        RTS_SYNC(modeHint) RTS_SYNC(hintStyle) RTS_SYNC(boxStyle) RTS_SYNC(minimapStyle) RTS_SYNC(lines) RTS_SYNC(touch) RTS_SYNC(showCard)
-        RTS_SYNC(languages) RTS_SYNC(lang) RTS_SYNC(tools) RTS_SYNC(hasHowto) RTS_SYNC(howtoOpen)
-        RTS_SYNC(howtoLike) RTS_SYNC(howtoGoal) RTS_SYNC(howtoTip) RTS_SYNC(howtoSteps) RTS_SYNC(lobby) RTS_SYNC(netStatus) RTS_SYNC(netError) RTS_SYNC(roomTitle) RTS_SYNC(roomInfo)
-        RTS_SYNC(spectators) RTS_SYNC(waitHint) RTS_SYNC(queues) RTS_SYNC(rooms) RTS_SYNC(createMaps) RTS_SYNC(slots) RTS_SYNC(chat)
-        RTS_SYNC(isHost) RTS_SYNC(myReady) RTS_SYNC(canStart) RTS_SYNC(netMatch) RTS_SYNC(searching)
+        syncUiState(model_, bound_, std::move(s));
         if (shadowQuality_ != boundShadowQuality_) { // changed from the pause menu
             r3d_.setShadowQuality(ShadowQuality(std::clamp(shadowQuality_, 0, 3)));
             boundShadowQuality_ = shadowQuality_;
@@ -307,7 +278,6 @@ void GameClient::updateUi() {
             boundFxQuality_ = fxQuality_;
         }
     }
-#undef RTS_SYNC
     ui_.update();
 }
 
@@ -372,6 +342,33 @@ void GameClient::buildTopBar(UiState& s) {
 }
 
 void GameClient::buildCommandCard(UiState& s) {
+    if (!spectator_) for (const auto& panel : game::scriptHud(manifest_, mod().state(*sim_), rules_, human_, loc_)) {
+        UiSection sec{panel.title, "list", {}};
+        for (const auto& item : panel.items) {
+            UiAction a; a.label = item.label; a.tip = item.description; a.enabled = item.enabled; a.image=item.image.rfind("ui/",0)==0?item.image.substr(3):item.image; a.frame=item.frameSprite.empty()?"none":"image("+item.frameSprite+" fill)"; a.hotkey=item.badge; a.cost=item.status; a.progress=item.progress;
+            a.active = item.pointTarget && mode_ == Mode::Skill && abilityIndex_ == item.ability;
+            if (item.ability >= 0) a.id = addAction([this, index=item.ability, pointTarget=item.pointTarget] {
+                if(pointTarget){mode_=Mode::Skill;abilityIndex_=index;pairFirst_=false;}
+                else {Command c; c.type=kCmdPlayerAbility; c.param=index; issue(c);}
+            }, a.enabled);
+            else { a.id=-1; a.enabled=false; }
+            sec.actions.push_back(a);
+        }
+        if(panel.layout=="cards") {s.scriptTitle=panel.title;for(auto a:sec.actions)s.scriptCards.push_back(a);}
+        else if(panel.layout=="status") {for(auto a:sec.actions)s.scriptStatus.push_back(a);}
+        else if(panel.layout=="top") {for(auto a:sec.actions)s.scriptTop.push_back(a);}
+        else if(panel.layout=="support") {for(auto a:sec.actions)s.scriptSupport.push_back(a);}
+        else pushSection(s, sec);
+    }
+    if (regionSwipe_.enabled) {
+        s.emptyHint=tr("controls.region_hint");
+        const auto info=regionSwipe_.infoKey();
+        if(!info.empty()){s.hasSelection=true;s.selTitle=tr(info+".title");s.selInfo.push_back(tr(info+".description"));}
+        UiSection sec{tr("controls.region_ratio",Args().num("ratio",regionSwipe_.ratio)), "list", {}};
+        for(int ratio:{35,50,100}) { UiAction a;a.label=std::to_string(ratio)+"%";a.active=regionSwipe_.ratio==ratio;
+            a.id=addAction([this,ratio]{regionSwipe_.ratio=ratio;saveRegionRatio(ratio);});sec.actions.push_back(a); }
+        pushSection(s,sec);buildToolCard(s);return;
+    }
     World& w = sim_->world();
     if (selection_.empty()) {
         s.emptyHint = tr(platform::isTouchDevice() ? "card.hint_touch" : "card.hint_mouse");
@@ -570,6 +567,56 @@ void GameClient::buildOverlays(UiState& s) {
         const float x0 = std::min(downX_, mouseX_), y0 = std::min(downY_, mouseY_);
         s.boxStyle = fmt("left: %.0fpx; top: %.0fpx; width: %.0fpx; height: %.0fpx;", x0 * k, y0 * k,
                          std::abs(mouseX_ - downX_) * k, std::abs(mouseY_ - downY_) * k);
+    }
+    for(const auto& counter:game::worldCounters(mod().state(*sim_).trig.vars,manifest_["worldCounters"])) {
+        render::float2 point;
+        const float w=float(platform::windowWidth()),h=float(platform::windowHeight());
+        if(!cam_.worldToScreen(counter.position,w,h,point)||point.x<0||point.y<0||point.x>=w||point.y>=h)continue;
+        UiItem row;row.text=std::to_string(counter.value);
+        row.style=fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx;",(point.x-32)*k,(point.y-14)*k,64*k);
+        s.worldCounters.push_back(std::move(row));
+    }
+    if(regionSwipe_.enabled) {
+        entityActions_.refresh(*sim_,mod(),spectator_?0:human_,manifest_["entityActionControls"]);
+        for(const auto& box:entityActions_.screen(cam_,float(platform::windowWidth()),float(platform::windowHeight()))){
+            const auto& item=entityActions_.items()[box.index];UiItem row;
+            row.text=tr(item.label);row.warn=!item.enabled;row.progress=item.progress();
+            row.sub=tr("entity_action.price",Args().num("cost",item.cost))+" / "+
+                tr(item.remaining>0?"hud.cooldown_seconds":item.enabled?"hud.ready":"entity_action.unavailable",Args().num("seconds",item.remaining));
+            row.style=fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx; height: %.1fpx;",box.x*k,box.y*k,box.w*k,box.h*k);
+            s.entityActions.push_back(std::move(row));
+        }
+        const auto color=RtsView::playerColor(human_);
+        for(auto q:regionSwipe_.controlFlags(cam_,float(platform::windowWidth()),float(platform::windowHeight()))){
+            s.lines.push_back(fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx; height: %.1fpx; background-color: #f5f5eb; border: 1px #142332;",(q.x-1)*k,(q.y-26)*k,2*k,26*k));
+            s.lines.push_back(fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx; height: %.1fpx; background-color: rgb(%d,%d,%d); border: 1px white; border-radius: 2px;",(q.x+1)*k,(q.y-25)*k,19*k,13*k,int(color.x*255),int(color.y*255),int(color.z*255)));
+        }
+        const auto strokes=regionSwipe_.strokes(cam_,float(platform::windowWidth()),float(platform::windowHeight()),time_,[&](float x,float z){return view_.heightAt(mod().state(*sim_).grid,x,z);});
+        for(int layer=0;layer<2;++layer)for(const auto& stroke:strokes){
+            if(stroke.shadow!=(layer==0))continue;
+            const bool pass=layer==1;
+            auto a=stroke.a,b=stroke.b;float dx=(b.x-a.x)*k,dy=(b.y-a.y)*k,width=stroke.width*k;
+            const float light=.35f+.65f*stroke.highlight,tint=1-light;
+            const int red=pass?int((light+tint*color.x)*255):18,green=pass?int((light+tint*color.y)*255):31,blue=pass?int((light+tint*color.z)*255):46;
+            s.lines.push_back(fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx; height: %.1fpx; margin-top: %.1fpx; border-radius: %.1fpx; background-color: rgb(%d,%d,%d); opacity: %.3f; transform: rotate(%.2fdeg);",a.x*k,a.y*k,std::max(.5f,std::hypot(dx,dy)),width,-width*.5f,stroke.shadow?0:width*.5f,red,green,blue,stroke.alpha,std::atan2(dy,dx)*57.29578f));
+        }
+        for(const auto& u:regionSwipe_.accepted()){
+            float2 q;if(cam_.worldToScreen({float(u.x.toDouble()),.12f,float(u.z.toDouble())},float(platform::windowWidth()),float(platform::windowHeight()),q))
+                s.lines.push_back(fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx; height: %.1fpx; margin-top: 0px; border: 2px #64ebffff; border-radius: %.1fpx; background-color: #46dcff40;",(q.x-7)*k,(q.y-7)*k,14*k,14*k,9*k));
+        }
+        for(const auto& u:regionSwipe_.preview()){
+            float2 q;if(cam_.worldToScreen({float(u.x.toDouble()),.12f,float(u.z.toDouble())},float(platform::windowWidth()),float(platform::windowHeight()),q))
+                s.lines.push_back(fmt("left: %.1fpx; top: %.1fpx; width: %.1fpx; height: %.1fpx; margin-top: 0px; border: 2px #fff5aaff; border-radius: %.1fpx; background-color: #ffe67840;",(q.x-7)*k,(q.y-7)*k,14*k,14*k,9*k));
+        }
+        if(regionSwipe_.dragging) {
+            const bool valid=regionSwipe_.valid();
+            s.dispatchCount=valid?std::to_string(regionSwipe_.count()):"—";
+            s.dispatchCaption=tr(valid?"controls.region_send":"controls.region_invalid");
+            s.dispatchRatio=std::to_string(regionSwipe_.previewRatio())+"%";
+            const float x=std::clamp(mouseX_+22,8.0f,std::max(8.0f,float(platform::windowWidth())-204));
+            const float y=std::clamp(mouseY_-102,8.0f,std::max(8.0f,float(platform::windowHeight())-94));
+            s.dispatchStyle=fmt("left: %.0fpx; top: %.0fpx; color: %s;",x*k,y*k,!valid?"#ff9a90":regionSwipe_.favorable()?"#83e5ee":"#ffd58a");
+        }
     }
     if (sendDrag_) {
         for (Entity e : selection_) {

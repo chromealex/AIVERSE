@@ -1,3 +1,4 @@
+#include "modules/rts/RtsInitialVars.h"
 // Generic RTS game client. Everything game-specific comes from the project's data (game.json,
 // rules.json, maps): the same executable plays a Warcraft-like, a Red-Alert-like or a
 // Mushroom-Wars-like game.
@@ -26,6 +27,7 @@
 #include "engine/render/TextureCache.h"
 #include "ClientSplash.h"
 #include "GameClient.h"
+#include "RegionSettings.h"
 #include "modules/rts/RtsLocalize.h"
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/view/RtsCamera.h"
@@ -211,13 +213,14 @@ void GameClient::configurePostFx(const Json& map) {
     postFx_.setQuality(postFxBase_);
 }
 
-void GameClient::startMatch(size_t idx) {
+void GameClient::startMatch(size_t idx, const Json& initialVars) {
     if (idx >= maps_.size() || netMatch_) return;
     std::string text;
     if (!platform::readContentFile(maps_[idx].file, text)) { error_ = "map not found: " + maps_[idx].file; return; }
     Json map;
     try {
         map = Json::parse(text);
+        game::mergeInitialVars(map, initialVars);
         std::string terr; // 2D tile maps: the tileset decides cell kinds / levels / fields
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         SimConfig cfg;
@@ -414,6 +417,7 @@ Vec3 GameClient::placeCentre(float sx, float sy, bool& ok) {
 
 void GameClient::event(const Event& e) {
     bool uiWants = ui_.handleEvent(e);
+    if(screen_!=Screen::Playing || e.type==EventType::FocusLost){entityActions_.cancel();entityPointer_=false;}
     if (e.type == EventType::KeyDown && e.key == Key::F8 && !e.repeat) ui_.toggleDebugger();
     // a press that started on the UI keeps the pointer until release (dragging out of a panel
     // must not start a selection box); a press that started in the world ignores the UI
@@ -423,6 +427,32 @@ void GameClient::event(const Event& e) {
     if (!uiWants) overlay_.handleEvent(e);
     if (e.type == EventType::KeyDown || e.type == EventType::KeyUp) keys_[int(e.key)] = e.type == EventType::KeyDown;
     if (e.type == EventType::MouseMove || e.type == EventType::MouseDown) { mouseX_ = e.x; mouseY_ = e.y; }
+    // Script HUD drags own their pointer from button press through release on the world.
+    if(skillDragging_) {
+        const bool begin=e.type==EventType::MouseDown||e.type==EventType::TouchBegin;
+        if(begin){
+            if(e.type==EventType::TouchBegin&&skillTouch_!=-1&&skillTouch_!=e.touchId){skillDragging_=false;mode_=Mode::Normal;return;}
+            skillStartX_=e.x;skillStartY_=e.y;skillTouch_=e.type==EventType::TouchBegin?e.touchId:-1;
+        }
+        if(e.type==EventType::FocusLost||e.type==EventType::TouchCancel||
+           (e.type==EventType::KeyDown&&e.key==Key::Escape)||
+           (e.type==EventType::MouseDown&&e.button==1)) {
+            skillDragging_=false;skillTouch_=-1;mode_=Mode::Normal;return;
+        }
+        if(begin||e.type==EventType::MouseMove||e.type==EventType::TouchMove||e.type==EventType::MouseUp||e.type==EventType::TouchEnd){
+            if((e.type==EventType::TouchMove||e.type==EventType::TouchEnd)&&e.touchId!=skillTouch_)return;
+            mouseX_=e.x;mouseY_=e.y;
+            auto move=e;move.type=EventType::MouseMove;
+            ui_.handleEvent(move);skillOverWorld_=!ui_.pointerOverUi();
+            if(e.type==EventType::MouseUp||e.type==EventType::TouchEnd){
+                if(screen_==Screen::Playing&&skillOverWorld_&&std::hypot(e.x-skillStartX_,e.y-skillStartY_)>=6){
+                    auto click=e;click.type=EventType::MouseDown;click.button=0;toolMouseDown(click);
+                }
+                skillDragging_=false;skillTouch_=-1;mode_=Mode::Normal;uiOwnsPointer_=false;
+            }
+            return;
+        }
+    }
     // mobile apps go quiet in the background; desktop keeps playing when the window loses focus
     if (e.type == EventType::FocusLost && platform::isTouchDevice()) audio_.setPaused(true);
     if (e.type == EventType::FocusGained) audio_.setPaused(false);
@@ -433,6 +463,7 @@ void GameClient::event(const Event& e) {
     if (screen_ == Screen::Paused && e.type == EventType::KeyDown && e.key == Key::Escape && !uiWants) { setScreen(Screen::Playing); return; }
     if (screen_ != Screen::Playing || !sim_) return;
     if (planet() && planetCameraEvent(e, uiWants)) return;   // orbit camera (ClientPlanet.cpp)
+    if (regionEvent(e, uiWants)) return;
     World& w = sim_->world();
     switch (e.type) {
     case EventType::MouseDown:
@@ -667,10 +698,21 @@ void GameClient::processEvents() {
 // View scripts: presentation requests -> notices, particle effects, sounds (never into the sim).
 void GameClient::runViewScripts(float dt) {
     if (!viewScripts_.active()) return;
+    game::ViewTargeting target;
+    if(screen_==Screen::Playing&&mode_==Mode::Skill&&abilityIndex_>=0&&size_t(abilityIndex_)<rules_.playerAbilities.size()){
+        target.active=true;target.ability=rules_.playerAbilities[size_t(abilityIndex_)].id;
+        float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&(!skillDragging_||skillOverWorld_);
+        target.x=p.x;target.z=p.z;
+    }
+    if(screen_==Screen::Playing&&entityPointer_)if(const auto* source=entityActions_.source()){
+        target.active=true;target.ability=source->abilityId;target.caster=source->entity.packed();
+        float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&!ui_.pointerOverUi();target.x=p.x;target.z=p.z;
+    }
+    viewScripts_.setTargeting(target);
     viewScripts_.update(*sim_, dt);
     for (auto& r : viewScripts_.takeRequests()) {
         if (r.kind == game::ViewRequest::Notice) notice(r.text);
-        else if (r.kind == game::ViewRequest::Effect) fx_.particles().play(r.text, {r.x, 0.5f, r.z});
+        else if (r.kind == game::ViewRequest::Effect) fx_.particles().play(r.text, {r.x, r.y, r.z});
         else {
             audio::PlayParams pp;
             pp.positional = r.positioned; pp.x = r.x; pp.z = r.z;
@@ -697,7 +739,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         auto key = [&](Key k) { return keys_[int(k)]; };
         float W = platform::windowWidth(), H = platform::windowHeight();
         // edge scrolling only while the cursor is inside the window (macOS reports moves outside it too)
-        bool edges = !platform::isTouchDevice() && std::string(platform::name()) != "web" && mouseX_ >= 0 && mouseY_ >= 0 && mouseX_ <= W && mouseY_ <= H;
+        bool edges = !regionSwipe_.enabled && !platform::isTouchDevice() && std::string(platform::name()) != "web" && mouseX_ >= 0 && mouseY_ >= 0 && mouseX_ <= W && mouseY_ <= H;
         bool noSel = selection_.empty();
         if (!ui_.textInputFocused() && !possessedUnit().valid()) {
             if (key(Key::Up) || (noSel && key(Key::W)) || (edges && mouseY_ < 3)) cam_.target += fwd * speed;
@@ -735,6 +777,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     }
     if (sim_) {
         sceneFromSim(*sim_, scene_, alpha, spectator_ ? 0 : human_);
+        scene_.paintLayers = viewScripts_.paintLayers();
         cleanSelection();
         for (auto& o : scene_.objects) {
             o.selected = std::find(selection_.begin(), selection_.end(), o.entity) != selection_.end();
@@ -748,6 +791,13 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     luaTick(dt);   // game.on("update", fn) in UI scripts
     updateAudio(dt);
     overlay_.newFrame(dt);
+    regionSwipe_.configure(manifest_);
+    if (sim_ && regionSwipe_.enabled) {
+        if(sim_->tick()<regionTick_){regionSwipe_.ratio=loadRegionRatio();regionSwipe_.cancel();regionSwipe_.arrows.clear();}
+        regionSwipe_.refresh(*sim_,mod(),human_);
+        regionSwipe_.fit(cam_,float(platform::windowWidth()),float(platform::windowHeight()),sim_->tick()<regionTick_);
+        regionTick_=sim_->tick();
+    }
     updateUi();
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.55f; pass.clearColor[1] = 0.66f; pass.clearColor[2] = 0.78f;

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "EditorTheme.h"
+#include "modules/rts/view/RtsViewScript.h"
 #include "EditorWindow.h"
 #include "core/Net.h"
 #include "core/Workspace.h"
@@ -64,7 +65,7 @@ public:
         std::string mcpTool;      // path to rtsmcp (one-click agent setup in the Agent window)
         std::string editorExe;    // this executable (rtsmcp launches it when the editor isn't running)
         std::string openMap;
-        int listenPort = net::kDefaultPort; // 0 = no agent link
+        int listenPort = -1; // -1 = automatic, 0 = no agent link, positive = exact port
     };
 
     explicit Editor(Options o) : opt_(std::move(o)) {}
@@ -82,8 +83,11 @@ public:
     render::PostFx& postFx() { return postFx_; }   // post effects of Scene / Game views (PostFxWindow configures it)
     bool postFxInScene = true;                     // false: only the Game view is post-processed
     game::RtsView& view() { return view_; }
+    std::shared_ptr<render::PaintLayers> paintLayers;
+    game::ViewTargeting scriptTargeting;
     const game::MapGrid& editGrid() const { return grid_; }
     const Options& options() const { return opt_; }
+    int mcpPort() const { return server_.port(); }
     double time() const { return time_; }
 
     Selection selection;

@@ -263,8 +263,10 @@ bool buildAtlas(const std::vector<SourceImage>& input, const AtlasConfig& cfg, A
         pr.fileBytes = s->bytes.size();
         pr.trimmed = trimImage(img, p.trim, pr.offX, pr.offY);
         int pad = p.padding >= 0 ? p.padding : cfg.pack.padding, ext = p.extrude >= 0 ? p.extrude : cfg.pack.extrude;
-        if (std::max(pr.trimmed.width, pr.trimmed.height) > std::min(maxTex, cfg.pack.maxPage - 2 * ext - (p.mips ? (1 << cfg.mipLevels) : 0)) || pad < 0) {
+        const int sizeLimit = std::min(maxTex, cfg.pack.maxPage - 2 * ext - (p.mips ? (1 << cfg.mipLevels) : 0));
+        if (std::max(pr.trimmed.width, pr.trimmed.height) > sizeLimit || pad < 0) {
             st.excluded.push_back({s->path, "too large (" + std::to_string(img.width) + "x" + std::to_string(img.height) + " > " + std::to_string(maxTex) + ")"});
+            if (pad >= 0 && sizeLimit > 0) st.resizeFixes[s->path] = sizeLimit;
             continue;
         }
         for (size_t i = 3; i < pr.trimmed.rgba.size(); i += 4) if (pr.trimmed.rgba[i] != 255) { pr.opaque = false; break; }
@@ -485,6 +487,8 @@ Json AtlasStats::toJson() const {
         Json o = Json::object();
         o.set("path", Json::string(p));
         o.set("reason", Json::string(r));
+        if (auto fix = resizeFixes.find(p); fix != resizeFixes.end())
+            o.set("fixMaxSize", Json::number(int64_t(fix->second)));
         ex.push(std::move(o));
     }
     j.set("excluded", std::move(ex));

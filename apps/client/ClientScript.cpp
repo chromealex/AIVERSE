@@ -23,6 +23,7 @@ extern "C" {
 #include <sstream>
 
 #include "GameClient.h"
+#include "modules/rts/RtsInitialVars.h"
 #include "engine/services/Ads.h"
 #include "engine/services/Store.h"
 #include "engine/ui/UiLua.h"
@@ -145,7 +146,25 @@ struct LuaApi {
         GameClient& c = client(L);
         const lua_Integer i = luaL_checkinteger(L, 1);
         if (i < 1 || size_t(i) > c.maps_.size()) return luaL_error(L, "game.start: map %d of %d", int(i), int(c.maps_.size()));
-        if (c.uiPreview_) return 0;   // previews never leave the screen
+        Json initialVars;
+        if (lua_istable(L, 2)) {
+            lua_getfield(L, 2, "initialVars");
+            if (!lua_isnil(L, -1)) {
+                if (!lua_istable(L, -1)) return luaL_error(L, "game.start: initialVars must be a table");
+                initialVars = Json::object();
+                lua_pushnil(L);
+                while (lua_next(L, -2)) {
+                    if (lua_type(L, -2) != LUA_TSTRING || !lua_isinteger(L, -1))
+                        return luaL_error(L, "game.start: initialVars requires string keys and integer values");
+                    initialVars.set(lua_tostring(L, -2), Json::number(int64_t(lua_tointeger(L, -1))));
+                    lua_pop(L, 1);
+                }
+                try { game::validateInitialVars(initialVars); }
+                catch (const std::exception& e) { return luaL_error(L, "%s", e.what()); }
+            }
+            lua_pop(L, 1);
+        }
+        if (c.uiPreview_) return 0;   // previews validate options but never start a match
         if (lua_istable(L, 2)) {
             lua_getfield(L, 2, "difficulty");
             if (lua_isinteger(L, -1)) c.difficulty_ = int(std::clamp<lua_Integer>(lua_tointeger(L, -1), 0, 2));
@@ -153,7 +172,7 @@ struct LuaApi {
             if (!lua_isnil(L, -1)) c.spectator_ = lua_toboolean(L, -1);
             lua_pop(L, 2);
         }
-        c.startMatch(size_t(i - 1));
+        c.startMatch(size_t(i - 1), initialVars);
         return 0;
     }
     static int difficulty(lua_State* L) {

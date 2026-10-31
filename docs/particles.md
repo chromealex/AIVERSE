@@ -96,6 +96,10 @@ particles), `discard`, per-pixel fog, highp in the fragment shader. One-shot eff
 off-screen or beyond the tier's distance are not spawned. Emitters with `"minQuality": "medium"` drop
 out on weak devices — use it for sparks, shockwaves and other secondary layers.
 
+Screen-size caps and spawn-culling margins use the camera's actual projection scale, including
+orthographic zoom. Orthographic games retain world-space particle sizes until the same tier
+screen-fraction cap is reached; the perspective field-of-view scale must not be used on its own.
+
 Fill rate is the real limit on old Mali/Adreno: keep an effect under ~1–1.5x screen fill (the editor
 shows it) by shrinking `size`/`sizeOverLife` or the burst before anything else.
 

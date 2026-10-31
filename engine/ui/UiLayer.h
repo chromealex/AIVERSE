@@ -30,12 +30,16 @@ public:
     UiLayer& operator=(const UiLayer&) = delete;
 
     // gameFont: TTF in the game's content (optional); the engine font (Latin + Cyrillic) is the fallback.
-    bool init(gfx::Device& dev, const char* gameFont = "fonts/ui.ttf");
+    using FileReader = std::function<bool(const std::string&, std::string&)>;
+    bool init(gfx::Device& dev, const char* gameFont = "fonts/ui.ttf", FileReader reader = {});
+    // Embedded targets: framebuffer pixels and pixels per dp; zero sizes restore the window.
+    void setViewport(int width, int height, float density);
     void shutdown();
 
     // Returns true when the UI consumed the event (the pointer is over an interactive element, or a
     // text field has focus); the game should then ignore it.
     bool handleEvent(const platform::Event& e);
+    bool pointerOverUi() const; // Current hover only; ignores a press captured by the UI.
     void update();   // layout + data bindings; call once per frame before render()
     void render();   // inside an active render pass, after the scene
 

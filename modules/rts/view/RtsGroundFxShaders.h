@@ -86,7 +86,7 @@ vertex VOut vs_main(VIn in [[stage_in]], constant GU0& u [[buffer(1)]], constant
 }
 fragment float4 fs_main(VOut in [[stage_in]], constant GU0& u [[buffer(1)]], constant U1& f [[buffer(2)]],
                         depth2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]],
-                        constant U2& l [[buffer(3)]], texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]],
+                        constant LightU& l [[buffer(3)]], texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]],
                         texture2d<float> tex2 [[texture(2)]], sampler s2 [[sampler(2)]]) {
     float4 albedo = u.color * in.col;
     float3 n = normalize(in.nrm);

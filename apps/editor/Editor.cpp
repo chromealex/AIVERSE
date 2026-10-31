@@ -131,9 +131,10 @@ void Editor::init(gfx::Device& dev) {
     syncGrid();
     fitScene();
     gameCam = sceneCam;
-    if (opt_.listenPort > 0) {
-        if (server_.listen(opt_.listenPort)) ws_.log("editor", "Канал для агентов (MCP) открыт на порту " + std::to_string(opt_.listenPort));
-        else ws_.log("editor", "Порт " + std::to_string(opt_.listenPort) + " занят: агенты подключатся к другому окну редактора", true);
+    if (opt_.listenPort != 0) {
+        const bool listening = opt_.listenPort == -1 ? server_.listenAvailable() : server_.listen(opt_.listenPort);
+        if (listening) ws_.log("editor", "MCP listening on port " + std::to_string(server_.port()));
+        else ws_.log("editor", "Could not open MCP listener (requested port " + std::to_string(opt_.listenPort) + ")", true);
     }
 }
 
@@ -538,6 +539,7 @@ void Editor::renderGame(Viewport& vp, const RTSCamera& cam) {
     }
     game::RtsScene sc;
     game::sceneFromSim(*sim_, sc, float(sim_->alpha()), uint8_t(human_));
+    sc.paintLayers = paintLayers;
     for (auto& o : sc.objects) o.selected = std::find(gameSelection.begin(), gameSelection.end(), o.entity) != gameSelection.end();
     r3d_.beginScene(cam, vp.w, vp.h);
     setOverlayContext(vp, cam, true);

@@ -10149,6 +10149,872 @@ TEST(ui_lua_meta_and_templates) {
     lua_close(L);
 }
 
+TEST(script_territory_brush_frontier_and_placement) {
+    const char* source = R"(
+      function on_start()
+        assert(game.territory_at(-1, 2) == nil)
+        assert(game.paint_territory(1, fx("2.5"), fx("2.5"), 1) == 5)
+        assert(game.territory_count(1) == 5)
+        local f = game.frontier(1)
+        assert(#f == 12)
+        assert(game.paint_territory(2, fx("2.5"), fx("2.5"), 0) == 1)
+        assert(game.territory_count(1) == 4 and game.territory_count(2) == 1)
+        assert(game.territory_at(fx("2.5"), fx("2.5")) == 2)
+        assert(game.paint_territory(1, fx("6.5"), fx("6.5"), 0, true) == 0)
+        local a = game.units{type="pawn"}
+        assert(game.set_position(a[1], fx("3.25"), fx("3.25")))
+        assert(game.set_position(a[2], fx("3.25"), fx("3.25")))
+        assert(not game.set_position(a[1], -1, 3))
+        assert(not game.set_position(-1, 2, 2))
+        state.a = a[1]
+      end
+      on("tick", function(tick)
+        if tick > 1 then
+          local x,z = game.pos(state.a)
+          assert(x == fx("3.25") and z == fx("3.25"))
+        end
+      end)
+    )";
+    Json rules = Json::parse(R"({"victory":{"mode":"survive","seconds":600},
+      "territory":{"startRadius":0,"startFromRegions":false},"movement":{"avoidance":"none"},
+      "types":{"pawn":{"move":{"speed":1,"radius":1}}}})");
+    Json scripts = Json::array(), sources = Json::object();
+    scripts.push(Json::string("scripts/test.lua")); sources.set("scripts/test.lua", Json::string(source));
+    rules.set("scripts",scripts); rules.set("$scriptSources",sources);
+    Json map = Json::parse(R"({"size":[8,8],"players":[{},{}],"entities":[
+      {"type":"pawn","owner":1,"pos":[1,1]},{"type":"pawn","owner":2,"pos":[6,6]}]})");
+    auto make = [&]() {
+        auto s=std::make_unique<Simulation>(SimConfig{},std::make_unique<game::RtsModule>());
+        s->setup(rules,map); return s;
+    };
+    auto a=make(), b=make();
+    for(int i=0;i<20;++i) { a->step(); b->step(); }
+    for(auto& e: mod(*a).scripts()->log()) if(e.error) std::printf("%s\n",e.text.c_str());
+    CHECK(mod(*a).scripts()->errorCount()==0);
+    CHECK(mod(*a).territoryOf(*a,1)==4);
+    CHECK(mod(*a).territoryOf(*a,2)==1);
+    CHECK(a->checksum()==b->checksum());
+    SimSnapshot snap; b->saveState(snap);
+    for(int i=0;i<20;++i) b->step();
+    auto checksum=b->checksum(); b->loadState(snap);
+    for(int i=0;i<20;++i) { a->step(); b->step(); }
+    CHECK(b->checksum()==checksum && a->checksum()==b->checksum());
+}
+
+TEST(script_paint_layers_are_bounded_and_view_only) {
+    Json rules=Json::parseFile(kSkirmish+"/rules.json");
+    rules.set("viewScripts",Json::parse(R"(["scripts/view/paint.lua"])"));
+    Json sources=Json::object();
+    sources.set("scripts/view/paint.lua",Json::string(R"LUA(
+local p=view.paint_layer{bounds={0,0,96,64},resolution=768,color={0.2,0.5,1}}
+p:stroke(10,10,14,12,{radius=0.8,softness=0.1})
+assert(not pcall(function() view.paint_layer{bounds={0,0,0,64}} end))
+assert(not pcall(function() view.paint_layer{bounds={0,0,96,64},resolution=0/0} end))
+assert(not pcall(function() p:stroke(0,0,1,1,{radius=-1}) end))
+local t=view.paint_layer{bounds={0,0,64,48},source="territory",owner=1}
+assert(not pcall(function() t:stroke(0,0,1,1,{}) end))
+local d=view.paint_layer{bounds={0,0,4,4}}
+d:destroy()
+local texture=view.render_texture{width=256,height=128}
+texture:stroke(2,3,50,60,{radius=8})
+local copy=view.render_texture{width=256,height=128}
+copy:copy_from(texture)
+assert(not pcall(function() texture:copy_from(copy) end))
+local display=view.paint_layer{bounds={0,0,96,64},texture=texture}
+assert(not pcall(function() display:stroke(0,0,1,1,{}) end))
+view.on_frame(function(dt) p:clear();p:stroke(20,20,21,21,{radius=1}) end)
+)LUA"));
+    rules.set("$scriptSources",sources);
+    Json map=Json::parseFile(kSkirmish+"/maps/valley.json");
+    Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    const auto hash=sim.checksum();game::ViewScripts view;
+    CHECK(view.load(sim,rules,map,1));
+    for(auto& e:view.log())if(e.error)std::printf("paint error: %s\n",e.text.c_str());
+    CHECK(view.log().empty());
+    auto layers=view.paintLayers();CHECK(layers->layers.size()==5);
+    auto& layer=layers->layers.begin()->second;
+    CHECK(layer.width==768&&layer.height==512);
+    CHECK(layer.strokes.size()==1);
+    CHECK(std::abs(layer.strokes[0].radius-0.8f/64)<0.00001f);
+    view.update(sim,0.016f);CHECK(layer.clear&&layer.strokes.size()==1);
+    CHECK(sim.checksum()==hash);
+    CHECK(view.load(sim,rules,map,1));CHECK(view.paintLayers()!=layers);
+}
+
+
+TEST(script_attack_event_is_visual_only) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"pawn":{"health":{"max":40},"move":{"speed":1}}}})");
+    Json files=Json::array(), sources=Json::object(); files.push(Json::string("scripts/test.lua"));
+    sources.set("scripts/test.lua",Json::string(R"(
+      on('tick',function(t)
+        local u=game.units{type='pawn'}
+        assert(not game.attack_event(-1,u[1]))
+        assert(not game.attack_event(u[1],-1))
+        local hp=game.hp(u[2])
+        assert(game.attack_event(u[1],u[2]))
+        assert(game.hp(u[2])==hp)
+      end)
+    )"));
+    rules.set("scripts",files);rules.set("$scriptSources",sources);
+    Json map=Json::parse(R"({"size":[8,8],"players":[{},{}],"entities":[{"type":"pawn","owner":1,"pos":[1,1]},{"type":"pawn","owner":2,"pos":[6,6]}]})");
+    Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);sim.step();
+    CHECK(mod(sim).scripts()->errorCount()==0);
+    int cues=0;for(const auto& e:sim.events())if(e.type==game::kEvAttack){++cues;CHECK(e.value==-1);}
+    CHECK(cues==1);
+}
+
+#include "modules/rts/view/RegionSwipe.h"
+TEST(region_swipe_commands_and_cancellation) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"tags":["zone"],"structure":true,"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]}}})");
+    Json map=Json::parse(R"({"size":[6,4],"regions":{"rows":["AABBCC","AABBCC","AABBCC","AABBCC"],"names":{"A":"a","B":"b","C":"c"}},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,1]},{"type":"base","owner":1,"pos":[3,1]},{"type":"base","owner":2,"pos":[5,1]}]})");
+    Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    game::RegionSwipe swipe;
+    swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","dispatchAbilities":["send","send","send"]}})"));
+    swipe.refresh(sim,mod(sim),1);const auto checksum=sim.checksum();
+    std::vector<Command> cmds;
+    swipe.begin({1,0,1});swipe.move({3,0,1});CHECK(swipe.sources.size()==2);
+    swipe.move({5,0,1});CHECK(swipe.valid());swipe.release(1,[&](Command c){cmds.push_back(c);});
+    CHECK(cmds.size()==2);CHECK(cmds[0].type==game::kCmdAbility);CHECK(cmds[0].point.x==Fixed::fromInt(5));
+    CHECK(sim.checksum()==checksum);CHECK(swipe.arrows.size()==2);
+    swipe.begin({1,0,1});swipe.release(2,[&](Command c){cmds.push_back(c);});CHECK(cmds.size()==2);
+    swipe.begin({1,0,1});swipe.cursor={-1,0,-1};CHECK(!swipe.valid());swipe.release(2,[&](Command c){cmds.push_back(c);});CHECK(cmds.size()==2);
+    swipe.begin({5,0,1});CHECK(!swipe.dragging);
+    swipe.begin({1,0,1});swipe.move({5,0,1});swipe.cancel();CHECK(swipe.sources.empty());
+}
+
+TEST(region_dispatch_preview_nearest_percentage) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]},"soldier":{"tags":["soldier"],"hp":40}}})",
+        R"({"size":[6,4],"regions":{"rows":["AAABBB","AAABBB","AAABBB","AAABBB"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,2]},{"type":"base","owner":2,"pos":[4,2]},{"type":"soldier","owner":1,"pos":[0.5,1.5]},{"type":"soldier","owner":1,"pos":[1.5,1.5]},{"type":"soldier","owner":1,"pos":[2.5,1.5]}]})",3);
+    auto& grid=mod(*sim).state(*sim).grid;grid.territory.resize(24);
+    for(int c=0;c<24;++c)grid.territory[size_t(c)]=c%6<3?1:2;
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","unitTag":"soldier","dispatchAbilities":["send","send","send"]}})"));
+    swipe.refresh(*sim,mod(*sim),1);auto hash=sim->checksum();swipe.begin({1,0,2});swipe.move({4,0,2});
+    CHECK(swipe.preview().size()==1);CHECK(swipe.preview()[0].x==Fixed::fromRatio(5,2));
+    swipe.ratio=100;CHECK(swipe.preview().size()==2);CHECK(swipe.count()==2);CHECK(sim->checksum()==hash);
+    swipe.cancel();CHECK(swipe.preview().empty());
+}
+
+TEST(region_dispatch_preview_excludes_accepted) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]},"soldier":{"tags":["soldier"],"hp":40}}})",
+        R"({"size":[6,4],"regions":{"rows":["AAABBB","AAABBB","AAABBB","AAABBB"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,2]},{"type":"base","owner":2,"pos":[4,2]},{"type":"soldier","owner":1,"pos":[0.5,1.5]},{"type":"soldier","owner":1,"pos":[1.5,1.5]},{"type":"soldier","owner":1,"pos":[2.5,1.5]}]})",3);
+    auto& grid=mod(*sim).state(*sim).grid;grid.territory.resize(24);
+    for(int c=0;c<24;++c)grid.territory[size_t(c)]=c%6<3?1:2;
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","unitTag":"soldier","orderTargetCellVariablePrefix":"dispatch_","dispatchAbilities":["send","send","send"]}})"));
+    swipe.refresh(*sim,mod(*sim),1);auto hash=sim->checksum();swipe.begin({1,0,2});swipe.move({4,0,2});
+    CHECK(swipe.preview().size()==1);CHECK(swipe.preview()[0].x==Fixed::fromRatio(5,2));
+    CHECK(sim->checksum()==hash);
+    const auto sent=swipe.preview()[0].entity;
+    mod(*sim).state(*sim).trig.vars["dispatch_"+std::to_string(sent.index)]=Fixed::fromInt(17);
+    sim->step();swipe.refresh(*sim,mod(*sim),1);
+    CHECK(swipe.accepted().size()==1);CHECK(swipe.accepted()[0].entity==sent);
+    CHECK(swipe.preview().size()==1);CHECK(swipe.preview()[0].x==Fixed::fromRatio(3,2));
+    CHECK(swipe.preview()[0].entity!=sent);CHECK(swipe.count()==1);
+    swipe.cancel();CHECK(swipe.accepted().empty());CHECK(swipe.preview().empty());
+}
+
+
+TEST(region_shared_anchor_selects_local_owner) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]}}})",
+        R"({"size":[6,4],"regions":{"rows":["AAABBB","AAABBB","AAABBB","AAABBB"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,2]},{"type":"base","owner":2,"pos":[2,2]},{"type":"base","owner":0,"pos":[4,2]}]})",3);
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","sharedRegionInfoKey":"shared","dispatchAbilities":["send","send","send"]}})"));
+    for(uint8_t player:{1,2}){
+        swipe.refresh(*sim,mod(*sim),player);swipe.begin({1,0,2});
+        CHECK(swipe.dragging);CHECK(swipe.anchors.at(swipe.sources[0]).owner==player);
+        CHECK(swipe.infoKey()=="shared");swipe.move({4,0,2});
+        int commands=0;swipe.release(0,[&](Command c){++commands;CHECK(sim->world().get<Owner>(c.units[0]).player==player);});
+        CHECK(commands==1);
+    }
+    auto& grid=mod(*sim).state(*sim).grid;grid.territory.assign(24,2);grid.territory[0]=1;
+    swipe.refresh(*sim,mod(*sim),1);
+    auto a=swipe.anchors.at(swipe.region(1,2));auto flag=swipe.controlFlagPoint(a);
+    CHECK(flag.x==.5f&&flag.z==.5f);CHECK(a.point.x==1&&a.point.z==2);
+}
+
+
+#include "modules/rts/view/ScriptHud.h"
+TEST(script_hud_player_binding_and_invalid_option) {
+    auto sim=makeSimJson(R"({"playerAbilities":[{"id":"choose","target":"none","effects":[]}],"types":{"unit":{"hp":10}}})",
+        R"({"size":[4,4],"players":[{},{}]})",3);
+    const auto manifest=Json::parse(R"({"scriptHudOptions":{"cards":[{"label":"card","description":"tip"}]},
+        "scriptHud":[{"title":"title","visibleVar":"open_{player}","items":[
+        {"optionVar":"choice_{player}","options":"cards","ability":"choose","enabledVar":"ready_{player}","args":{"gold":"gold_{player}"}}]}]})");
+    i18n::Localization loc;loc.addTable("en",Json::parse(R"({"title":"Draft","card":"Buy {gold}","tip":"A card"})"));loc.setLanguage("en");
+    auto& gs=mod(*sim).state(*sim);gs.trig.vars["open_1"]=1_fx;gs.trig.vars["choice_1"]=1_fx;gs.trig.vars["gold_1"]=110_fx;
+    const auto hash=sim->checksum();
+    auto panels=game::scriptHud(manifest,gs,mod(*sim).rules(),1,loc);
+    CHECK(panels.size()==1);CHECK(panels[0].items.size()==1);
+    CHECK(panels[0].items[0].label=="Buy 110");CHECK(!panels[0].items[0].enabled);CHECK(panels[0].items[0].ability==0);
+    CHECK(game::scriptHud(manifest,gs,mod(*sim).rules(),2,loc).empty());CHECK(sim->checksum()==hash);
+    gs.trig.vars["choice_1"]=99_fx;CHECK(game::scriptHud(manifest,gs,mod(*sim).rules(),1,loc).empty());
+    CHECK(game::scriptHudAbility(manifest,"choose"));CHECK(!game::scriptHudAbility(manifest,"other"));
+}
+
+TEST(script_hud_targeted_action_binding) {
+    auto sim=makeSimJson(R"({"playerAbilities":[{"id":"strike","target":"point","effects":[]}],"types":{"unit":{"hp":10}}})",
+        R"({"size":[4,4],"players":[{},{}]})",3);
+    const auto manifest=Json::parse(R"({"scriptHud":[{"title":"Support","items":[{"label":"Strike","ability":"strike"},{"label":"Status"}]}]})");
+    i18n::Localization loc;
+    const auto hash=sim->checksum();
+    const auto panels=game::scriptHud(manifest,mod(*sim).state(*sim),mod(*sim).rules(),1,loc);
+    CHECK(panels.size()==1);CHECK(panels[0].items[0].pointTarget);CHECK(panels[0].items[0].ability==0);
+    CHECK(!panels[0].items[1].pointTarget);CHECK(panels[0].items[1].ability==-1);CHECK(sim->checksum()==hash);
+}
+
+TEST(script_hud_card_layout_and_cooldown) {
+    auto sim=makeSimJson(R"({"types":{"unit":{"hp":10}}})",R"({"size":[4,4],"players":[{},{}]})",3);
+    const auto manifest=Json::parse(R"({"scriptHud":[{"layout":"cards","items":[{"label":"Choice","image":"ui/card.png"}]},{"layout":"support","items":[{"label":"Support","cooldownVar":"left_{player}","durationVar":"total_{player}"}]}]})");
+    auto& gs=mod(*sim).state(*sim);gs.trig.vars["left_1"]=15_fx;gs.trig.vars["total_1"]=30_fx;
+    i18n::Localization loc;loc.addTable("en",Json::parse(R"({"hud.ready":"Ready","hud.cooldown_seconds":"{seconds}s"})"));loc.setLanguage("en");
+    const auto hash=sim->checksum();auto panels=game::scriptHud(manifest,gs,mod(*sim).rules(),1,loc);
+    CHECK(panels[0].layout=="support");CHECK(panels[0].items[0].progress==.5f);CHECK(panels[0].items[0].status=="15s");
+    CHECK(panels[1].items[0].image=="ui/card.png");CHECK(sim->checksum()==hash);
+    gs.trig.vars["left_1"]=0_fx;gs.trig.vars["total_1"]=0_fx;
+    panels=game::scriptHud(manifest,gs,mod(*sim).rules(),1,loc);
+    CHECK(panels[0].items[0].progress==1.f);CHECK(panels[0].items[0].status=="Ready");
+}
+
+#if defined(RTS_TESTS_EDITOR_CORE)
+#include "apps/editor/core/Net.h"
+TEST(editor_mcp_ports_are_unique_and_route_to_the_right_listener) {
+    using namespace rts::editor::net;
+    LineServer first, second, third, exact;
+    CHECK(first.listen(0));
+    if (!first.listening()) return;
+    CHECK(first.port() > 0);
+    CHECK(!exact.listen(first.port()));
+    CHECK(second.listenAvailable(first.port()));
+    CHECK(third.listenAvailable(first.port()));
+    CHECK(second.port() > 0 && second.port() != first.port());
+    CHECK(third.port() > 0 && third.port() != first.port() && third.port() != second.port());
+    for (LineServer* server : {&first, &second, &third}) {
+        LineClient client;
+        CHECK(client.connect(server->port()));
+        CHECK(client.send("identify"));
+        std::vector<LineServer::Msg> messages;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (messages.empty() && std::chrono::steady_clock::now() < deadline) messages = server->poll();
+        CHECK(messages.size() == 1);
+        if (messages.size() != 1) continue;
+        CHECK(messages[0].line == "identify");
+        server->send(messages[0].client, std::to_string(server->port()));
+        std::string reply;
+        CHECK(client.recv(reply, 1000));
+        CHECK(reply == std::to_string(server->port()));
+    }
+    CHECK(!exact.listen(-1));
+    CHECK(!exact.listen(65536));
+}
+#endif
+
+TEST(script_manual_layers_from_fixed_variables) {
+    Json rules=Json::parseFile(kSkirmish+"/rules.json");
+    rules.set("viewScripts",Json::parse(R"(["scripts/view/route.lua"])"));
+    Json sources=Json::object();sources.set("scripts/view/route.lua",Json::string(R"LUA(
+for owner=1,8 do view.paint_layer{bounds={0,0,64,48},source='territory',owner=owner} end
+-- Cached ground decals; rebuild only after an authoritative route revision.
+local ties=view.paint_layer{bounds={0,0,96,64},resolution=1536,color={0.23,0.18,0.13},opacity=0.85,border=0,lift=0.12}
+local rails=view.paint_layer{bounds={0,0,96,64},resolution=1536,color={0.63,0.64,0.57},opacity=0.9,border=0,lift=0.14}
+local revision,index,count=-1,1,0
+view.on_frame(function()
+ local nextRevision=game.var('rail_revision'):int()
+ if nextRevision~=revision then revision=nextRevision;ties:clear();rails:clear();index=1;count=game.var('rail_count'):int() end
+ -- Bound uploads even when a large connected network changes at once.
+ for i=index,math.min(index+127,count) do
+  local a,b=game.var('rail_a_'..i):int(),game.var('rail_b_'..i):int()
+  local x,z=a%96+0.5,math.floor(a/96)+0.5
+  local xx,zz=b%96+0.5,math.floor(b/96)+0.5
+  local dx,dz=xx-x,zz-z;local nx,nz=-dz*0.13,dx*0.13
+  rails:stroke(x+nx,z+nz,xx+nx,zz+nz,{radius=0.045,softness=0.015})
+  rails:stroke(x-nx,z-nz,xx-nx,zz-nz,{radius=0.045,softness=0.015})
+  for _,t in ipairs({0.25,0.75}) do
+   local cx,cz=x+dx*t,z+dz*t
+   ties:stroke(cx-nx*1.6,cz-nz*1.6,cx+nx*1.6,cz+nz*1.6,{radius=0.055,softness=0.015})
+  end
+ end
+ index=math.min(count+1,index+128)
+end)
+
+)LUA"));rules.set("$scriptSources",sources);
+    Json map=Json::parseFile(kSkirmish+"/maps/valley.json");
+    Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    auto& vars=mod(sim).state(sim).trig.vars;
+    vars["rail_revision"]=1_fx;vars["rail_count"]=1_fx;vars["rail_a_1"]=970_fx;vars["rail_b_1"]=971_fx;
+    game::ViewScripts view;CHECK(view.load(sim,rules,map,1));view.update(sim,.016f);
+    for(auto& e:view.log())if(e.error)std::printf("route view error: %s\n",e.text.c_str());
+    CHECK(view.log().empty());CHECK(view.paintLayers()->layers.size()==10);
+    if(view.paintLayers()->layers.empty())return;
+    auto& last=view.paintLayers()->layers.rbegin()->second;CHECK(last.strokes.size()==2);
+    view.update(sim,.016f);CHECK(last.strokes.size()==2);
+    vars["rail_revision"]=2_fx;vars["rail_count"]=0_fx;view.update(sim,.016f);CHECK(last.strokes.empty());
+}
+
+#include "apps/editor/core/BuildFixes.h"
+TEST(atlas_build_resize_fixes_preserve_rules_and_fit) {
+    using namespace rts::atlas;
+    std::vector<SourceImage> images = {
+        atlasSrc("ui/big.png", atlasTestImage(80, 80, 0, 0, 80, 80, 1)),
+        atlasSrc("ui/other.png", atlasTestImage(80, 80, 0, 0, 80, 80, 2)),
+        {"ui/broken.png", "invalid image"}
+    };
+    auto cfg = atlasCfg(R"({"atlas":{"maxPage":256}})");
+    AtlasOutput before;
+    CHECK(buildAtlas(images, cfg, before));
+    CHECK(before.stats.resizeFixes.size() == 2);
+    CHECK(before.stats.resizeFixes.at("ui/big.png") == 64);
+    const Json excluded = before.stats.toJson()["excluded"];
+    const Json rules = Json::parse(R"([{"match":"ui/*","maxSize":1024},{"match":"ui/big.png","scale":0.8,"level":7},{"match":"sound/*","level":2},{"match":"sound/*","exclude":true}])");
+    const Json fixed = editor::atlasSizeFixRules(rules, excluded);
+    CHECK(fixed.size() == 5);
+    CHECK(fixed[0].getStr("match") == "ui/big.png");
+    CHECK(fixed[0]["maxSize"].integer() == 64);
+    CHECK(fixed[0]["level"].integer() == 7);
+    CHECK(!fixed[0].has("scale"));
+    CHECK(fixed[2].getStr("match") == "ui/*");
+    CHECK(fixed[4].getBool("exclude"));
+    CHECK(editor::atlasSizeFixRules(fixed, excluded).dump() == fixed.dump());
+    // Oversized images become eligible at the proposed size; corrupt inputs stay excluded.
+    images[0] = atlasSrc("ui/big.png", atlasTestImage(64, 64, 0, 0, 64, 64, 1));
+    images[1] = atlasSrc("ui/other.png", atlasTestImage(64, 64, 0, 0, 64, 64, 2));
+    AtlasOutput after;
+    CHECK(buildAtlas(images, cfg, after));
+    CHECK(after.stats.atlased == 2);
+    CHECK(after.stats.resizeFixes.empty());
+    CHECK(after.stats.excluded.size() == 1);
+}
+
+#include "tools/rtsbuild/UiSpriteSheets.h"
+TEST(ui_spritesheet_build_protection) {
+    const auto paths = build::uiSpriteSheetImages(R"css(
+        /* @spritesheet ignored { src: bad.png; } */
+        @spritesheet cards { src: art/cards.png; blue: 0px 0px 520px 756px; }
+        @spritesheet buttons { src: url('../shared/buttons.png'); normal: 0 0 10 20; }
+        @spritesheet quoted { src: "art/with space.png"; a: 0 0 1 1; }
+        body { background: url(unrelated.png); }
+    )css", "ui/custom.rcss");
+    CHECK(paths.size() == 3);
+    CHECK(paths[0] == "ui/art/cards.png");
+    CHECK(paths[1] == "shared/buttons.png");
+    CHECK(paths[2] == "ui/art/with space.png");
+}
+
+TEST(view_script_targeting_context_is_local) {
+    Json rules=Json::parseFile(kSkirmish+"/rules.json");
+    rules.set("viewScripts",Json::parse(R"(["scripts/view/target.lua"])"));
+    Json sources=Json::object();sources.set("scripts/view/target.lua",Json::string(R"LUA(
+local layer=view.paint_layer{bounds={0,0,4,4}}
+layer:set_opacity(0.4)
+view.on_frame(function()
+ local t=view.targeting()
+ if t.active then assert(t.ability=='probe' and t.x==12.5 and t.z==8 and t.overWorld);view.notice('active')
+ else view.notice('inactive') end
+end)
+)LUA"));rules.set("$scriptSources",sources);
+    Json map=Json::parseFile(kSkirmish+"/maps/valley.json");
+    Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    game::ViewScripts view;CHECK(view.load(sim,rules,map,1));
+    view.setTargeting({"probe",12.5f,8.f,true,true});view.update(sim,.016f);
+    auto messages=view.takeRequests();CHECK(messages.size()==1);if(!messages.empty())CHECK(messages[0].text=="active");
+    view.setTargeting({});view.update(sim,.016f);
+    messages=view.takeRequests();CHECK(messages.size()==1);if(!messages.empty())CHECK(messages[0].text=="inactive");
+    CHECK(view.log().empty());
+    CHECK(std::abs(view.paintLayers()->layers.begin()->second.opacity-.4f)<.0001f);
+}
+
+#include "modules/rts/RtsInitialVars.h"
+TEST(script_initial_vars_setup_validation_and_hash) {
+    const Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    map.set("initialVars", Json::parse(R"({"loadout.support":2,"keep":4})"));
+    game::mergeInitialVars(map, Json::parse(R"({"loadout.support":3,"card_1":7})"));
+    CHECK(map["initialVars"].getInt("keep") == 4);
+    auto run = [&](const Json& m) {
+        auto sim = std::make_unique<Simulation>(SimConfig{}, std::make_unique<game::RtsModule>());
+        sim->setup(rules, m);
+        CHECK(mod(*sim).state(*sim).trig.vars.at("loadout.support") == Fixed::fromInt(3));
+        for (int i = 0; i < 20; ++i) sim->step();
+        return sim->checksum();
+    };
+    const auto first = run(map); CHECK(first == run(map));
+    Json changed = map; game::mergeInitialVars(changed, Json::parse(R"({"card_1":8})"));
+    CHECK(first != run(changed));
+    for (const auto* bad : {R"([])", R"({"":1})", R"({"x":1.5})", R"({"x":true})", R"({"x":1000001})", R"({"bad key":1})"}) {
+        const Json before = map; bool rejected = false;
+        try { game::mergeInitialVars(map, Json::parse(bad)); } catch (const std::exception&) { rejected = true; }
+        CHECK(rejected); CHECK(map == before);
+    }
+}
+
+TEST(region_swipe_single_unit_command) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]},"elite":{"tags":["elite"],"hp":40,"abilities":[{"id":"solo","target":"point","range":100,"effects":[]}]}}})",
+        R"({"size":[6,4],"regions":{"rows":["AABBCC","AABBCC","AABBCC","AABBCC"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,2]},{"type":"base","owner":1,"pos":[3,2]},{"type":"base","owner":2,"pos":[5,2]},{"type":"elite","owner":1,"pos":[1,1]},{"type":"elite","owner":2,"pos":[5,1]}]})",3);
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","singleUnitTag":"elite","singleUnitAbility":"solo","singleUnitRadius":0.6,"orderTargetCellVariablePrefix":"dispatch_","dispatchAbilities":["send","send","send"]}})"));
+    swipe.refresh(*sim,mod(*sim),1);auto hash=sim->checksum();
+    swipe.begin({1,0,1});swipe.move({3,0,1});swipe.move({5,0,2});
+    CHECK(swipe.valid());CHECK(swipe.sources.size()==1);CHECK(swipe.preview().size()==1);
+    const auto caster=swipe.preview()[0].entity;
+    swipe.ratio=35;CHECK(swipe.count()==1);swipe.ratio=100;CHECK(swipe.count()==1);
+    std::vector<Command> cmds;swipe.release(1,[&](Command c){cmds.push_back(c);});
+    CHECK(cmds.size()==1);CHECK(cmds[0].units.size()==1);CHECK(cmds[0].units[0]==caster);CHECK(cmds[0].param==0);
+    CHECK(cmds[0].point.x==Fixed::fromInt(5));CHECK(swipe.arrows[0].from.z==1);CHECK(sim->checksum()==hash);
+    // A same-tick refresh must invalidate both preview selection and accepted orders.
+    mod(*sim).state(*sim).trig.vars["dispatch_"+std::to_string(caster.index)]=Fixed::fromInt(18);
+    swipe.refresh(*sim,mod(*sim),1);swipe.begin({1,0,1});swipe.move({5,0,2});
+    CHECK(!swipe.valid());CHECK(swipe.preview().empty());CHECK(swipe.accepted().size()==1);
+    swipe.release(2,[&](Command c){cmds.push_back(c);});CHECK(cmds.size()==1);
+    swipe.begin({5,0,1});CHECK(!swipe.dragging);
+    swipe.begin({1,0,1});swipe.move({-1,0,-1});swipe.release(2,[&](Command c){cmds.push_back(c);});CHECK(cmds.size()==1);
+    // Death during the gesture cancels instead of silently dispatching the region.
+    swipe.begin({1,0,1});sim->world().get<game::Unit>(caster).hp=Fixed{};swipe.refresh(*sim,mod(*sim),1);
+    CHECK(!swipe.dragging);swipe.move({5,0,2});swipe.release(2,[&](Command c){cmds.push_back(c);});CHECK(cmds.size()==1);
+    // Away from the unit, ordinary multi-source region dispatch still applies.
+    swipe.begin({1,0,3});swipe.move({3,0,3});swipe.move({5,0,3});
+    CHECK(swipe.sources.size()==2);swipe.release(3,[&](Command c){cmds.push_back(c);});CHECK(cmds.size()==3);
+}
+
+TEST(region_swipe_connected_ownership_domains) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]},"soldier":{"tags":["soldier"],"hp":40}}})",
+        R"({"size":[8,4],"regions":{"rows":["AABBCCDD","AABBCCDD","AABBCCDD","AABBCCDD"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[0.5,0.5]},{"type":"base","owner":1,"pos":[2.5,0.5]},{"type":"base","owner":2,"pos":[4.5,0.5]},{"type":"base","owner":2,"pos":[6.5,0.5]},{"type":"soldier","owner":1,"pos":[1.5,1.5]},{"type":"soldier","owner":1,"pos":[3.5,1.5]}]})",3);
+    auto& grid=mod(*sim).state(*sim).grid;grid.territory.resize(32);
+    for(int c=0;c<32;++c)grid.territory[size_t(c)]=c%8<4?1:2;
+    const auto original=grid.region;auto hash=sim->checksum();
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","mergeConnectedTerritory":true,"anchorTag":"zone","unitTag":"soldier","dispatchAbilities":["send","send","send"]}})"));
+    swipe.refresh(*sim,mod(*sim),1);
+    CHECK(swipe.region(.5f,.5f)==swipe.region(2.5f,.5f));CHECK(swipe.region(4.5f,.5f)==swipe.region(6.5f,.5f));
+    swipe.begin({.5f,0,.5f});swipe.move({2.5f,0,.5f});swipe.move({6.5f,0,.5f});CHECK(swipe.sources.size()==1);CHECK(swipe.valid());
+    CHECK(swipe.count()==1);CHECK(swipe.preview()[0].x==Fixed::fromRatio(7,2));
+    int commands=0;swipe.release(0,[&](Command){++commands;});CHECK(commands==1);CHECK(grid.region==original);CHECK(sim->checksum()==hash);
+    // A lost bridge splits command domains even when original region IDs do not change.
+    for(int z=0;z<4;++z)grid.territory[size_t(z*8+2)]=2;
+    swipe.refresh(*sim,mod(*sim),1);CHECK(swipe.region(.5f,.5f)!=swipe.region(3.5f,.5f));
+    // Unclaimed adjacent provinces are still separate targets.
+    for(int c=0;c<32;++c)grid.territory[size_t(c)]=0;
+    swipe.refresh(*sim,mod(*sim),1);CHECK(swipe.region(.5f,.5f)!=swipe.region(2.5f,.5f));
+}
+
+TEST(region_swipe_air_island_order) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]},"flyer":{"tags":["elite"],"move":{"speed":3,"layer":"air"},"hp":80,"abilities":[{"id":"solo","target":"point","range":100,"effects":[]}]},"tank":{"tags":["elite"],"hp":110,"abilities":[{"id":"solo","target":"point","range":100,"effects":[]}]}}})",
+        R"({"size":[6,4],"regions":{"rows":["AABBCC","AABBCC","AABBCC","AABBCC"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,2]},{"type":"base","owner":2,"pos":[5,2]},{"type":"flyer","owner":1,"pos":[1,1]},{"type":"tank","owner":1,"pos":[1,3]}]})",3);
+    auto& grid=mod(*sim).state(*sim).grid;
+    for(int z=0;z<4;++z)for(int x=2;x<4;++x)grid.region[size_t(z*6+x)]=-1;
+    auto config=Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","singleUnitTag":"elite","singleUnitAbility":"solo","singleUnitRadius":0.6,"singleUnitAirRoutes":true,"dispatchAbilities":["send","send","send"]}})");
+    game::RegionSwipe swipe;swipe.configure(config);swipe.refresh(*sim,mod(*sim),1);
+    auto hash=sim->checksum();swipe.begin({1,0,1});swipe.move({5,0,2});
+    CHECK(swipe.valid());CHECK(swipe.count()==1);auto flyer=swipe.preview()[0].entity;
+    int sent=0;swipe.release(0,[&](Command c){++sent;CHECK(c.units.size()==1&&c.units[0]==flyer);});CHECK(sent==1);
+    swipe.begin({1,0,3});swipe.move({5,0,2});CHECK(!swipe.valid());CHECK(swipe.preview().empty());
+    swipe.begin({1,0,1});swipe.move({3,0,2});CHECK(!swipe.valid());CHECK(sim->checksum()==hash);
+    // A flyer can be selected and redirected while over water.
+    sim->world().get<Transform>(flyer).pos.x=Fixed::fromInt(3);
+    swipe.refresh(*sim,mod(*sim),1);swipe.begin({3,0,1});swipe.move({1,0,2});CHECK(swipe.valid());
+    swipe.release(0,[&](Command c){++sent;CHECK(c.units[0]==flyer);});CHECK(sent==2);
+    // Existing games retain their ground-connectivity restriction by default.
+    auto controls=config["controls"];controls.set("singleUnitAirRoutes",Json::fromBool(false));config.set("controls",controls);swipe.configure(config);
+    sim->world().get<Transform>(flyer).pos.x=Fixed::fromInt(1);
+    swipe.refresh(*sim,mod(*sim),1);swipe.begin({1,0,1});swipe.move({5,0,2});CHECK(!swipe.valid());
+}
+
+TEST(script_air_position_over_water) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"movement":{"avoidance":"none"},"types":{"air":{"move":{"speed":3,"layer":"air"}},"ground":{"move":{"speed":3}}}})");
+    Json scripts=Json::array(),sources=Json::object();scripts.push(Json::string("probe.lua"));
+    sources.set("probe.lua",Json::string(R"(
+        function on_start()
+            local a=game.units{type='air'}[1];local g=game.units{type='ground'}[1]
+            assert(game.set_position(a,fx('3.5'),fx('1.5')))
+            assert(not game.set_position(g,fx('3.5'),fx('1.5')))
+            assert(not game.set_position(a,-1,1))
+            assert(not game.set_position(a,8,1))
+            local x,z=game.pos(a);assert(x==fx('3.5') and z==fx('1.5'))
+        end
+    )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
+    auto map=Json::parse(R"({"size":[8,4],"terrain":{"rows":["..~~~~..","..~~~~..","..~~~~..","..~~~~.."]},"players":[{},{}],"entities":[{"type":"air","owner":1,"pos":[1,1]},{"type":"ground","owner":1,"pos":[1,2]}]})");
+    auto make=[&](){auto s=std::make_unique<Simulation>(SimConfig{},std::make_unique<game::RtsModule>());s->setup(rules,map);return s;};
+    auto a=make(),b=make();for(int i=0;i<20;++i){a->step();b->step();}
+    CHECK(mod(*a).scripts()->errorCount()==0);CHECK(a->checksum()==b->checksum());
+    SimSnapshot snap;a->saveState(snap);for(int i=0;i<20;++i)a->step();auto hash=a->checksum();
+    a->loadState(snap);for(int i=0;i<20;++i)a->step();CHECK(a->checksum()==hash);
+}
+
+TEST(region_swipe_arrows_start_at_gesture) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"tags":["zone"],"structure":true,"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]}}})");
+    Json map=Json::parse(R"({"size":[6,4],"regions":{"rows":["AABBCC","AABBCC","AABBCC","AABBCC"],"names":{"A":"a","B":"b","C":"c"}},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,1]},{"type":"base","owner":1,"pos":[3,1]},{"type":"base","owner":2,"pos":[5,1]}]})");
+    Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    game::RegionSwipe swipe;
+    swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","dispatchAbilities":["send","send","send"]}})"));
+    swipe.refresh(sim,mod(sim),1);const auto checksum=sim.checksum();
+    std::vector<Command> cmds;
+    swipe.begin({0.5f,0,2.5f});swipe.move({2.5f,0,3.5f});CHECK(swipe.sources.size()==2);
+    swipe.move({5,0,1});CHECK(swipe.valid());swipe.release(1,[&](Command c){cmds.push_back(c);});
+    CHECK(cmds.size()==2);CHECK(cmds[0].type==game::kCmdAbility);CHECK(cmds[0].point.x==Fixed::fromInt(5));
+    CHECK(sim.checksum()==checksum);CHECK(swipe.arrows.size()==2);
+    CHECK(swipe.arrows[0].from.x==0.5f);CHECK(swipe.arrows[0].from.z==2.5f);
+    CHECK(swipe.arrows[1].from.x==2.5f);CHECK(swipe.arrows[1].from.z==3.5f);
+}
+
+TEST(script_immutable_match_seed) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"probe":{"hp":1}}})");
+    Json scripts=Json::array(),sources=Json::object();scripts.push(Json::string("seed.lua"));
+    sources.set("seed.lua",Json::string(R"(
+        function on_start()
+            state.seed=game.seed()
+            assert(math.type(state.seed)=='integer')
+            for i=1,100 do game.random(1000) end
+            assert(game.seed()==state.seed)
+        end
+        on('tick',function() assert(game.seed()==state.seed) end)
+    )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
+    auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
+    for (uint64_t seed : {uint64_t(3),uint64_t(1)<<63,UINT64_MAX}) {
+        auto checkedSources=sources;
+        std::string checked=sources["seed.lua"].str();
+        checked.insert(checked.find("state.seed=game.seed()"),
+            "assert(tostring(game.seed())=='"+std::to_string(static_cast<int64_t>(seed))+"')\n");
+        checkedSources.set("seed.lua",Json::string(checked));rules.set("$scriptSources",checkedSources);
+        SimConfig cfg;cfg.seed=seed;
+        Simulation sim(cfg,std::make_unique<game::RtsModule>());sim.setup(rules,map);
+        for(int i=0;i<3;++i)sim.step();
+        CHECK(mod(sim).scripts()->errorCount()==0);
+        SimSnapshot snap;sim.saveState(snap);
+        for(int i=0;i<5;++i)sim.step();auto hash=sim.checksum();
+        sim.loadState(snap);for(int i=0;i<5;++i)sim.step();CHECK(sim.checksum()==hash);
+    }
+}
+
+TEST(script_grid_path) {
+    Json rules=Json::parse(R"({"victory":{"mode":"survive","seconds":600},"types":{"probe":{"hp":1}}})");
+    Json scripts=Json::array(),sources=Json::object();scripts.push(Json::string("grid.lua"));
+    sources.set("grid.lua",Json::string(R"(
+        function on_start()
+            local w,h=12,12
+            for pattern=1,64 do
+                local cells,reverse={},{}
+                for c=0,w*h-1 do cells[c]=c==0 or c==143 or (c*19+pattern*17)%23>=6 end
+                for c=w*h-1,0,-1 do reverse[c]=cells[c] end
+                local queue,dist={0},{[0]=0}
+                for _,c in ipairs(queue) do
+                    local ns={}
+                    if c%w>0 then ns[#ns+1]=c-1 end
+                    if c%w+1<w then ns[#ns+1]=c+1 end
+                    if c>=w then ns[#ns+1]=c-w end
+                    if c+w<w*h then ns[#ns+1]=c+w end
+                    for _,n in ipairs(ns) do if cells[n] and dist[n]==nil then dist[n]=dist[c]+1;queue[#queue+1]=n end end
+                end
+                local path=game.grid_path(w,h,cells,0,143)
+                local again=game.grid_path(w,h,reverse,0,143)
+                assert((path~=nil)==(dist[143]~=nil))
+                if path then
+                    assert(#path==dist[143]);local last=0
+                    for i,c in ipairs(path) do
+                        assert(cells[c] and c==again[i])
+                        assert(math.abs(c%w-last%w)+math.abs(c//w-last//w)==1)
+                        last=c
+                    end
+                    assert(last==143)
+                end
+            end
+            assert(game.grid_path(2,2,{},-1,3)==nil)
+            assert(game.grid_path(2,2,{},0,4)==nil)
+            assert(game.grid_path(2,2,{},0,3)==nil)
+            assert(#game.grid_path(2,2,{},0,0)==0)
+            assert(game.grid_path(2,2,{[1]=true,[2]=true},1,2)==nil) -- no row wrap
+            local labels={[0]=7,[1]=0,[2]=0,[3]=0}
+            local path=game.grid_path(4,1,labels,0,3,0)
+            assert(#path==3 and path[1]==1 and path[3]==3) -- blocked start is escapable
+            assert(game.grid_path(4,1,labels,0,3)==nil) -- integers are not boolean masks
+            assert(game.grid_path(4,1,labels,0,3,7)==nil)
+            state.cells=labels
+        end
+        on('tick',function(t)
+            state.cells[2]=t%2
+            state.path=game.grid_path(4,1,state.cells,0,3,0)
+            assert((state.path~=nil)==(t%2==0)) -- no stale mask cache
+        end)
+    )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
+    auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
+    Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);
+    for(int i=0;i<3;++i)sim.step();CHECK(mod(sim).scripts()->errorCount()==0);
+    SimSnapshot snap;sim.saveState(snap);
+    for(int i=0;i<5;++i)sim.step();const auto hash=sim.checksum();
+    sim.loadState(snap);for(int i=0;i<5;++i)sim.step();
+    CHECK(sim.checksum()==hash);CHECK(mod(sim).scripts()->errorCount()==0);
+    for (const char* args : {"0,4,{},0,1", "4096,4096,{},0,1", "4,4,false,0,1", "4,4,{},0,1,'x'"}) {
+        sources.set("grid.lua",Json::string(std::string("function on_start() game.grid_path(")+args+") end"));
+        rules.set("$scriptSources",sources);
+        Simulation invalid({},std::make_unique<game::RtsModule>());invalid.setup(rules,map);invalid.step();
+        CHECK(mod(invalid).scripts()->errorCount()>0);
+    }
+}
+
+TEST(script_grid_sample_segment) {
+    auto rules=Json::parse(R"({"scriptBudget":6000000,"victory":{"mode":"survive","seconds":600},"types":{"probe":{"hp":1}}})");
+    Json scripts=Json::array(),sources=Json::object();scripts.push(Json::string("segment.lua"));
+    sources.set("segment.lua",Json::string(R"(
+        function on_start()
+            local w,h=16,12
+            local mask={};for c=0,w*h-1 do mask[c]=(c*19)%23>=4 end
+            local function reference(x,z,tx,tz,m,density)
+                local function own(a,b)
+                    if a<0 or b<0 or a>=w or b>=h then return false end
+                    return mask[fx.floor(b)*w+fx.floor(a)]==true
+                end
+                if x<0 or z<0 or x>=w or z>=h or tx<0 or tz<0 or tx>=w or tz>=h then return false end
+                local dx,dz=tx-x,tz-z
+                local steps=fx.floor(fx.sqrt(dx*dx+dz*dz)*density)+1
+                for i=1,steps do
+                    local a,b=x+dx*fx(i,steps),z+dz*fx(i,steps)
+                    if not (own(a,b) and own(a-m,b) and own(a+m,b) and own(a,b-m) and own(a,b+m)) then return false end
+                end
+                return true
+            end
+            for i=1,256 do
+                local x,z=fx((i*7)%155,10),fx((i*11)%115,10)
+                local tx,tz=fx((i*13+2)%155,10),fx((i*17+3)%115,10)
+                local margin=fx(i%4,10);local density=i%16+1
+                assert(game.grid_sample_segment(w,h,mask,x,z,tx,tz,nil,margin,density)==reference(x,z,tx,tz,margin,density))
+            end
+            local all={[0]=0,[1]=0,[2]=0,[3]=0}
+            assert(game.grid_sample_segment(2,2,all,fx(1,2),fx(1,2),fx(3,2),fx(3,2),0))
+            assert(not game.grid_sample_segment(2,2,all,0,0,1,1))
+            assert(not game.grid_sample_segment(2,2,all,0,0,1,1,0,fx(1,2)))
+            assert(not game.grid_sample_segment(2,2,all,-1,0,1,1,0))
+            assert(not game.grid_sample_segment(2,2,all,1,1,2,1,0))
+            all[3]=nil
+            assert(not game.grid_sample_segment(2,2,all,fx(1,2),fx(1,2),fx(3,2),fx(3,2),0))
+            state.checked=true
+        end
+    )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
+    auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
+    Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);sim.step();
+    CHECK(mod(sim).scripts()->errorCount()==0);
+    for (const char* args : {"0,4,{},0,0,1,1", "4,4,false,0,0,1,1", "4,4,{},0,0,1,1,'x'", "4,4,{},0,0,1,1,nil,-1", "4,4,{},0,0,1,1,nil,0,17"}) {
+        sources.set("segment.lua",Json::string(std::string("function on_start() game.grid_sample_segment(")+args+") end"));
+        rules.set("$scriptSources",sources);
+        Simulation invalid({},std::make_unique<game::RtsModule>());invalid.setup(rules,map);invalid.step();
+        CHECK(mod(invalid).scripts()->errorCount()>0);
+    }
+}
+
+
+#include "modules/rts/view/EntityActionControls.h"
+TEST(entity_action_controls_preserve_source_and_cancel_invalid_drags) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["launcher"],"abilities":[{"id":"launch","target":"point","range":100,"effects":[]}]}}})",
+        R"({"size":[8,4],"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,1]},{"type":"base","owner":1,"pos":[3,1]},{"type":"base","owner":2,"pos":[6,1]}]})",3);
+    const auto defs=Json::parse(R"([{"tag":"launcher","ability":"launch","label":"launch.title","readyPrefix":"ready_","costPrefix":"cost_","remainingPrefix":"left_","durationPrefix":"total_"}])");
+    game::EntityActionControls controls;controls.refresh(*sim,mod(*sim),1,defs);
+    CHECK(controls.items().size()==2);
+    auto a=controls.items()[0].entity,b=controls.items()[1].entity;
+    render::RTSCamera camera;camera.target={4,0,2};camera.distance=15;
+    auto boxes=controls.screen(camera,640,480);CHECK(boxes.size()==2);
+    CHECK(controls.press(camera,640,480,boxes[0].x+10,boxes[0].y+10));CHECK(!controls.active());
+    CHECK(!controls.press(camera,640,480,-10,-10));
+    CHECK(!controls.begin(a,"launch"));
+    auto& vars=mod(*sim).state(*sim).trig.vars;
+    for(auto e:{a,b}) {vars["ready_"+std::to_string(e.packed())]=Fixed::fromInt(1);vars["total_"+std::to_string(e.packed())]=Fixed::fromInt(20);}
+    vars["cost_"+std::to_string(b.packed())]=Fixed::fromInt(300);
+    vars["left_"+std::to_string(b.packed())]=Fixed::fromInt(5);
+    controls.refresh(*sim,mod(*sim),1,defs);const auto hash=sim->checksum();
+    CHECK(controls.items()[0].cost==0);CHECK(controls.items()[1].cost==300);CHECK(controls.items()[1].progress()==.75f);
+    CHECK(controls.begin(b,"launch"));controls.refresh(*sim,mod(*sim),1,defs);
+    auto cmd=controls.release({7,0,2},true,true);CHECK(cmd.has_value());
+    CHECK(cmd->type==game::kCmdAbility);CHECK(cmd->units.size()==1 && cmd->units[0]==b);CHECK(cmd->param==0);CHECK(cmd->point.x==Fixed::fromInt(7));
+    CHECK(!controls.active());CHECK(sim->checksum()==hash);
+    for(int reason=0;reason<4;++reason){
+        CHECK(controls.begin(a,"launch"));
+        auto invalid=controls.release({reason==2?-1.f:2.f,0,reason==3?5.f:2.f},reason!=0,reason!=1);
+        CHECK(!invalid);CHECK(!controls.active());
+    }
+    CHECK(controls.begin(a,"launch"));controls.cancel();CHECK(!controls.release({2,0,2},true,true));
+    CHECK(controls.begin(a,"launch"));vars["ready_"+std::to_string(a.packed())]=Fixed{};
+    controls.refresh(*sim,mod(*sim),1,defs);CHECK(!controls.active());CHECK(!controls.release({2,0,2},true,true));
+    CHECK(controls.begin(b,"launch"));sim->world().get<Owner>(b).player=2;
+    controls.refresh(*sim,mod(*sim),1,defs);CHECK(!controls.active());CHECK(controls.items().size()==1);
+    vars["ready_"+std::to_string(a.packed())]=Fixed::fromInt(1);controls.refresh(*sim,mod(*sim),1,defs);
+    CHECK(controls.begin(a,"launch"));sim->world().get<game::Unit>(a).hp=Fixed{};
+    controls.refresh(*sim,mod(*sim),1,defs);CHECK(!controls.active());CHECK(controls.items().empty());
+    controls.refresh(*sim,mod(*sim),0,defs);CHECK(controls.items().empty());
+}
+
+TEST(script_view_effect_height_and_queue) {
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/v.lua"])"));
+    Json sources = Json::object();
+    sources.set("scripts/view/v.lua", Json::string(R"(
+        view.on_frame(function(dt)
+            view.effect('ground', 2, 3)
+            view.effect('flight', 4, 5, 12.25)
+            view.effect('fixed', fx(6), fx(7), fx('2.5'))
+        end)
+    )"));
+    rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>());
+    sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts vs;
+    CHECK(vs.load(sim, rules, map, 1));
+    vs.update(sim, 0.016f);
+    const auto requests = vs.takeRequests();
+    CHECK(requests.size() == 3);
+    if (requests.size() == 3) {
+        CHECK(requests[0].kind == game::ViewRequest::Effect && requests[0].y == 0.5f);
+        CHECK(requests[1].x == 4 && requests[1].z == 5 && requests[1].y == 12.25f);
+        CHECK(requests[2].x == 6 && requests[2].z == 7 && requests[2].y == 2.5f);
+    }
+    CHECK(vs.takeRequests().empty());
+    CHECK(vs.log().empty());
+    CHECK(sim.checksum() == before);
+    for (const char* axis : {"1/0, 0, 0", "0, 0/0, 0", "0, 0, 1/0"}) {
+        sources.set("scripts/view/v.lua", Json::string(std::string("view.on_frame(function() view.effect('bad', ") + axis + ") end)"));
+        rules.set("$scriptSources", sources);
+        game::ViewScripts invalid;
+        CHECK(invalid.load(sim, rules, map, 1));
+        invalid.update(sim, 0.016f);
+        CHECK(invalid.takeRequests().empty());
+        CHECK(!invalid.log().empty());
+        CHECK(sim.checksum() == before);
+    }
+}
+
+TEST(fx_orthographic_culling_uses_projection_scale) {
+    fx::ParticleSystem ps;
+    ps.setQuality(fx::FxQuality::High);
+    CHECK(ps.init(nullptr));
+    const int id = ps.define("ortho", fxParse(R"({"emitters":[{"burst":1,"life":1,"speed":0,"size":8}]})"));
+    render::RTSCamera cam;
+    cam.ortho = true;
+    cam.target = {0, 0, 0};
+    cam.distance = 30;
+    ps.setView(cam, cam.proj(1, false) * cam.view(), 900, 900);
+    CHECK(ps.play(id, {0, 0, 0}).valid());
+    CHECK(!ps.play(id, {40, 0, 0}).valid());
+    cam.distance = 150;
+    ps.setView(cam, cam.proj(1, false) * cam.view(), 900, 900);
+    CHECK(ps.play(id, {40, 0, 0}).valid());
+}
+
+TEST(entity_action_fractional_progress_binding) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["launcher"],"abilities":[{"id":"launch","target":"point","range":100,"effects":[]}]}}})",
+        R"({"size":[8,4],"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[1,1]}]})",3);
+    const auto defs=Json::parse(R"([{"tag":"launcher","ability":"launch","remainingPrefix":"left_","durationPrefix":"total_","progressPrefix":"charge_"}])");
+    game::EntityActionControls controls;controls.refresh(*sim,mod(*sim),1,defs);
+    CHECK(controls.items().size()==1);
+    const auto suffix=std::to_string(controls.items()[0].entity.packed());
+    auto& vars=mod(*sim).state(*sim).trig.vars;
+    vars["left_"+suffix]=Fixed::fromInt(5);vars["total_"+suffix]=Fixed::fromInt(20);
+    controls.refresh(*sim,mod(*sim),1,defs);CHECK(controls.items()[0].progress()==.75f);
+    vars["charge_"+suffix]=Fixed::fromRatio(151,200);
+    const auto hash=sim->checksum();controls.refresh(*sim,mod(*sim),1,defs);
+    CHECK(std::abs(controls.items()[0].progress()-.755f)<.00002f);CHECK(sim->checksum()==hash);
+    vars["charge_"+suffix]=Fixed::fromInt(3);controls.refresh(*sim,mod(*sim),1,defs);CHECK(controls.items()[0].progress()==1.f);
+    vars["charge_"+suffix]=Fixed::fromInt(-2);controls.refresh(*sim,mod(*sim),1,defs);CHECK(controls.items()[0].progress()==0.f);
+}
+
+#include "modules/rts/view/WorldCounters.h"
+TEST(world_counter_script_bindings) {
+    std::map<std::string,Fixed> vars{{"on",Fixed::fromInt(1)},{"count_7",Fixed::fromInt(12)},
+        {"x_7",Fixed::fromRatio(3,2)},{"z_7",Fixed::fromInt(4)},{"visible_7",Fixed::fromInt(1)},
+        {"count_8",Fixed::fromInt(99)},{"x_8",Fixed::fromInt(9)},{"z_8",Fixed::fromInt(9)}};
+    auto defs=Json::parse(R"([{"enabledVar":"on","valuePrefix":"count_","xPrefix":"x_","zPrefix":"z_","visiblePrefix":"visible_","height":0.2}])");
+    const auto original=vars;auto labels=game::worldCounters(vars,defs);
+    CHECK(labels.size()==1);CHECK(labels[0].value==12);CHECK(labels[0].position.x==1.5f);CHECK(labels[0].position.z==4.f);CHECK(vars==original);
+    vars["count_7"]=Fixed{};labels=game::worldCounters(vars,defs);CHECK(labels.size()==1&&labels[0].value==0);
+    vars["visible_7"]=Fixed{};CHECK(game::worldCounters(vars,defs).empty());
+    vars["visible_7"]=Fixed::fromInt(1);vars.erase("x_7");CHECK(game::worldCounters(vars,defs).empty());
+    vars=original;vars["on"]=Fixed{};CHECK(game::worldCounters(vars,defs).empty());
+    CHECK(game::worldCounters(original,Json{}).empty());
+    CHECK(game::worldCounters(original,Json::parse(R"([{"valuePrefix":"count_"}])")).empty());
+}
+
+TEST(region_swipe_scripted_groups_and_source_anchor) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]}}})",
+        R"({"size":[8,4],"regions":{"rows":["AABBCCDD","AABBCCDD","AABBCCDD","AABBCCDD"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[0.5,0.5]},{"type":"base","owner":1,"pos":[2.5,0.5]},{"type":"base","owner":1,"pos":[4.5,0.5]},{"type":"base","owner":2,"pos":[6.5,0.5]}]})",3);
+    auto& gs=mod(*sim).state(*sim);gs.grid.territory.resize(32);
+    for(int c=0;c<32;++c)gs.grid.territory[size_t(c)]=c%8<6?1:2;
+    const auto original=gs.grid.region;
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","mergeConnectedTerritory":true,"anchorTag":"zone","dispatchAbilities":["send","send","send"],"regionGroups":{"enabledVar":"groups_on","groupPrefix":"group_"}}})"));
+    swipe.refresh(*sim,mod(*sim),1);CHECK(swipe.region(.5f,.5f)==swipe.region(4.5f,.5f));
+    gs.trig.vars["groups_on"]=Fixed::fromInt(1);gs.trig.vars["group_0"]=Fixed::fromInt(1);gs.trig.vars["group_2"]=Fixed::fromInt(1);
+    const auto checksum=sim->checksum();swipe.refresh(*sim,mod(*sim),1);
+    CHECK(swipe.region(.5f,.5f)==swipe.region(2.5f,.5f));CHECK(swipe.region(.5f,.5f)!=swipe.region(4.5f,.5f));
+    swipe.begin({2.5f,0,.5f});swipe.move({.5f,0,.5f});CHECK(swipe.sources.size()==1);
+    swipe.move({6.5f,0,.5f});CHECK(swipe.valid());int commands=0;
+    swipe.release(0,[&](Command command){++commands;const auto& t=sim->world().get<Transform>(command.units[0]);CHECK(t.pos.x==Fixed::fromRatio(5,2));});
+    CHECK(commands==1);CHECK(gs.grid.region==original);CHECK(sim->checksum()==checksum);
+    gs.trig.vars["group_2"]=Fixed::fromInt(9999);swipe.refresh(*sim,mod(*sim),1);CHECK(swipe.region(.5f,.5f)!=swipe.region(2.5f,.5f));
+    gs.trig.vars["group_2"]=Fixed::fromInt(7);swipe.refresh(*sim,mod(*sim),1);CHECK(swipe.region(2.5f,.5f)!=swipe.region(6.5f,.5f));
+    gs.trig.vars["groups_on"]=Fixed{};swipe.refresh(*sim,mod(*sim),1);CHECK(swipe.region(.5f,.5f)==swipe.region(4.5f,.5f));
+}
+
+TEST(region_preview_virtual_reserve_and_physical_ranking) {
+    auto sim=makeSimJson(R"({"victory":{"mode":"survive","seconds":600},"types":{"base":{"structure":true,"tags":["zone"],"abilities":[{"id":"send","target":"point","range":100,"effects":[]}]},"soldier":{"tags":["soldier","pool"],"hp":40},"elite":{"tags":["soldier"],"hp":80}}})",
+        R"({"size":[8,4],"regions":{"rows":["AABBCCDD","AABBCCDD","AABBCCDD","AABBCCDD"]},"players":[{},{}],"entities":[{"type":"base","owner":1,"pos":[0.5,0.5]},{"type":"base","owner":1,"pos":[2.5,0.5]},{"type":"base","owner":1,"pos":[4.5,0.5]},{"type":"base","owner":2,"pos":[6.5,0.5]},{"type":"soldier","owner":1,"pos":[3.5,0.5]},{"type":"soldier","owner":1,"pos":[3.5,1.5]},{"type":"soldier","owner":1,"pos":[3.5,2.5]},{"type":"soldier","owner":1,"pos":[3.5,3.5]},{"type":"elite","owner":1,"pos":[3.5,0.5]}]})",3);
+    auto& gs=mod(*sim).state(*sim);gs.grid.territory.resize(32);
+    for(int c=0;c<32;++c)gs.grid.territory[size_t(c)]=c%8<6?1:2;
+    gs.trig.vars["on"]=Fixed::fromInt(1);gs.trig.vars["group_0"]=Fixed::fromInt(1);gs.trig.vars["group_2"]=Fixed::fromInt(1);
+    gs.trig.vars["reserve_0"]=Fixed::fromInt(8);gs.trig.vars["origin_0_6"]=Fixed::fromInt(1);
+    game::RegionSwipe swipe;swipe.configure(Json::parse(R"({"controls":{"mode":"regionSwipe","anchorTag":"zone","unitTag":"soldier","orderTargetCellVariablePrefix":"order_","dispatchAbilities":["send","send","send"],"regionGroups":{"enabledVar":"on","groupPrefix":"group_","reservePrefix":"reserve_","originPrefix":"origin_","unitTag":"pool"}}})"));
+    swipe.refresh(*sim,mod(*sim),1);const auto hash=sim->checksum();swipe.begin({.5f,0,.5f});swipe.move({6.5f,0,.5f});
+    CHECK(swipe.valid());CHECK(swipe.count()==6);CHECK(swipe.preview().size()==4);CHECK(sim->checksum()==hash);
+    const auto first=swipe.preview();for(const auto& u:first)gs.trig.vars["order_"+std::to_string(u.entity.index)]=Fixed::fromInt(7);
+    gs.trig.vars["reserve_0"]=Fixed::fromInt(6);swipe.refresh(*sim,mod(*sim),1);
+    CHECK(swipe.count()==3);CHECK(swipe.preview().empty());CHECK(swipe.accepted().size()==4);
+    swipe.ratio=100;CHECK(swipe.count()==5);CHECK(swipe.preview().empty());
+    // Selecting the elite's own authored zone includes it; a different pool member does not.
+    gs.trig.vars["reserve_0"]=Fixed{};swipe.refresh(*sim,mod(*sim),1);swipe.begin({2.5f,0,.5f});swipe.move({6.5f,0,.5f});
+    CHECK(swipe.count()==1);CHECK(swipe.preview().size()==1);
+    gs.trig.vars["reserve_0"]=Fixed::fromInt(8);gs.trig.vars["origin_0_6"]=Fixed::fromInt(9999);swipe.refresh(*sim,mod(*sim),1);
+    CHECK(swipe.count()==0); // An unreachable pooled source cannot issue a physical-only substitute order.
+}
+
+TEST(rts_scripted_ai_controller) {
+    auto rules = Json::parseFile(kSkirmish + "/rules.json");
+    CHECK(!game::loadRules(rules).scriptedAI);
+    rules.set("ai", Json::parse(R"({"controller":"builtin"})"));
+    CHECK(!game::loadRules(rules).scriptedAI);
+    for (const char* bad : {R"({"controller":"typo"})", R"({"controller":1})", "false"}) {
+        auto invalid=rules; invalid.set("ai",Json::parse(bad)); bool rejected=false;
+        try { game::loadRules(invalid); } catch (const std::exception& e) { rejected=std::string(e.what()).find("ai")!=std::string::npos; }
+        CHECK(rejected);
+    }
+    rules.set("ai", Json::parse(R"({"controller":"scripted"})"));
+    CHECK(game::loadRules(rules).scriptedAI);
+    SimConfig cfg; cfg.seed=3;
+    Simulation scripted(cfg,std::make_unique<game::RtsModule>());
+    Simulation reference(cfg,std::make_unique<game::RtsModule>());
+    auto map=Json::parseFile(kSkirmish + "/maps/valley.json");
+    scripted.setup(rules,map); reference.setup(rules,map);
+    game::RtsAI ai(1,3);
+    for (int i=0;i<100;++i) { ai.update(scripted); scripted.step(); reference.step(); }
+    CHECK(scripted.executedCommands().empty());
+    CHECK(scripted.checksum()==reference.checksum());
+    CHECK(mod(scripted).state(scripted).wavePlayers.empty());
+    Command train; train.player=1;train.type=game::kCmdTrain;
+    train.units={findType(scripted,"townhall",1)};train.param=mod(scripted).rules().findType("peasant");
+    scripted.submit(train);
+    for(int i=0;i<800;++i){ai.update(scripted);scripted.step();}
+    CHECK(scripted.executedCommands().size()==1);
+    int workers=0;
+    scripted.world().each<game::Unit,Owner>([&](Entity,game::Unit& u,Owner& o){if(o.player==1&&u.type==train.param)++workers;});
+    CHECK(workers==6);
+    auto builtin=makeSim(kSkirmish,"maps/valley.json",3);game::RtsAI normal(1,3);
+    for(int i=0;i<100;++i){normal.update(*builtin);builtin->step();}
+    CHECK(!builtin->executedCommands().empty());
+}
+
+TEST(script_hud_resource_progress) {
+    auto sim=makeSimJson(R"({"types":{"unit":{"hp":10}}})",R"({"size":[4,4],"players":[{},{}]})",3);
+    const auto manifest=Json::parse(R"({"scriptHud":[{"items":[{"progressVar":"gold_{player}","progressMaxVar":"price_{player}"},{"progressVar":"fraction_{player}"}]}]})");
+    auto& gs=mod(*sim).state(*sim);i18n::Localization loc;
+    auto progress=[&](size_t i){return game::scriptHud(manifest,gs,mod(*sim).rules(),1,loc)[0].items[i].progress;};
+    gs.trig.vars["gold_1"]=Fixed::fromRatio(101,2);gs.trig.vars["price_1"]=100_fx;
+    gs.trig.vars["fraction_1"]=Fixed::fromRatio(1,4);
+    const auto hash=sim->checksum();CHECK(std::abs(progress(0)-.505f)<.00001f);CHECK(progress(1)==.25f);CHECK(sim->checksum()==hash);
+    gs.trig.vars["gold_1"]=200_fx;CHECK(progress(0)==1.f);
+    gs.trig.vars["gold_1"]=-1_fx;CHECK(progress(0)==0.f);
+    gs.trig.vars["price_1"]=0_fx;CHECK(progress(0)==0.f);
+    gs.trig.vars["price_1"]=-5_fx;CHECK(progress(0)==0.f);
+    CHECK(game::scriptHud(manifest,gs,mod(*sim).rules(),2,loc)[0].items[0].progress==0.f);
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

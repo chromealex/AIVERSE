@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 
 namespace rts::game {
 
@@ -149,6 +150,7 @@ void RtsGroundFx::init(gfx::Device& dev, const Rules& rules, const FileReader& r
         p.label = "groundfx";
         pipe_ = dev.createPipeline(p);
     }
+    if (!pipe_.valid()) std::fprintf(stderr, "groundfx: %s\n", dev.lastError().c_str());
     const uint32_t w = 0xffffffffu;
     gfx::TextureDesc td; td.width = 1; td.height = 1; td.data = &w; td.label = "groundfx white";
     white_ = dev.createTexture(td);
@@ -170,6 +172,9 @@ void RtsGroundFx::parseLook(const Json& t) {
             terr_.border = num(j, "border", terr_.border);
             terr_.glow = num(j, "glow", terr_.glow);
             terr_.pulse = j.getBool("pulse", terr_.pulse);
+            terr_.smooth = j.getBool("smooth", terr_.smooth);
+            terr_.transition = std::clamp(num(j, "transition", terr_.transition), 0.0f, 2.0f);
+            terr_.lift = std::clamp(num(j, "lift", terr_.lift), 0.0f, 2.0f);
             terr_.roomFill = num(j, "roomFill", terr_.roomFill);
             if (const Json& c = j["colors"]; c.isArray()) {
                 terr_.colors.clear();
@@ -297,6 +302,7 @@ void RtsGroundFx::resetGrid(const MapGrid& g) {
     const size_t n = size_t(g.w * g.h);
     // terrain (rock, roads) is known from the start like the map itself; territory and rooms are learned by seeing them
     memT_.assign(n, 0); memRoom_.assign(n, -1); memM_.assign(n, 0);
+    territoryBlend_.clear(); territoryTime_ = -1;
     memD_.assign(n, 0); memR_.assign(n, 0); memC_.assign(n, 0);
     bool anyRoad = false;
     for (size_t i = 0; i < n; ++i) {
@@ -345,7 +351,87 @@ void RtsGroundFx::scan(const MapGrid& g, const std::vector<uint8_t>* vision, uin
 
 // ------------------------------------------------------------------ territory
 
+void RtsGroundFx::animateTerritory(const MapGrid& g, double time) {
+    const bool initial = territoryTime_ < 0;
+    const float dt = initial ? 0.0f : float(std::clamp(time - territoryTime_, 0.0, 0.1));
+    territoryTime_ = time;
+    for (uint8_t owner : memT_)
+        if (owner && !territoryBlend_.count(owner)) territoryBlend_[owner].assign(memT_.size(), 0.0f);
+    const float step = terr_.transition <= 0 ? 1.0f : dt / terr_.transition;
+    for (auto& [owner, values] : territoryBlend_) {
+        for (size_t i = 0; i < values.size(); ++i) {
+            const float target = memT_[i] == owner && !memD_[i] ? 1.0f : 0.0f;
+            const float old = values[i];
+            values[i] = initial ? target : old + std::clamp(target - old, -step, step);
+            if (old != values[i]) {
+                const int x = int(i % g.w), y = int(i / g.w);
+                // Bilinear reconstruction affects diagonal neighbours across chunk corners too.
+                for (int dy = -2; dy <= 2; ++dy) for (int dx = -2; dx <= 2; ++dx)
+                    dirty(x + dx, y + dy, false, kDirtyT);
+            }
+        }
+    }
+}
+
+void RtsGroundFx::buildSmoothTerritory(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v) {
+    MeshBuilder fill, border;
+    const float3 up{0,1,0};
+    const int subdivisions = hi_ ? 4 : 2;
+    auto smooth = [](float a, float b, float x) {
+        const float t = std::clamp((x-a)/(b-a), 0.0f, 1.0f); return t*t*(3-2*t);
+    };
+    for (const auto& [owner, values] : territoryBlend_) {
+        auto sample = [&](float x, float z) {
+            x -= 0.5f; z -= 0.5f;
+            const int ix = int(std::floor(x)), iz = int(std::floor(z));
+            const float tx=x-ix, tz=z-iz;
+            auto raw = [&](int a, int b) { return g.inside(a,b) ? values[size_t(g.index(a,b))] : 0.0f; };
+            auto at = [&](int a, int b) {
+                // Compact binomial reconstruction rounds grid corners without hiding a lone cell.
+                float sum=0;
+                for(int dz=-1;dz<=1;++dz) for(int dx=-1;dx<=1;++dx)
+                    sum+=raw(a+dx,b+dz)*float((dx==0?2:1)*(dz==0?2:1));
+                return raw(a,b)*0.5f+sum*(0.5f/16.0f);
+            };
+            return (at(ix,iz)*(1-tx)+at(ix+1,iz)*tx)*(1-tz) + (at(ix,iz+1)*(1-tx)+at(ix+1,iz+1)*tx)*tz;
+        };
+        const float3 color = ownerColor(owner);
+        for (int y = cy*kChunk; y < std::min(g.h,(cy+1)*kChunk); ++y)
+            for (int x = cx*kChunk; x < std::min(g.w,(cx+1)*kChunk); ++x) {
+                bool near = false, solid = true;
+                for (int dz=-2; dz<=2; ++dz) for (int dx=-2; dx<=2; ++dx) {
+                    const float value = g.inside(x+dx,y+dz) ? values[size_t(g.index(x+dx,y+dz))] : 0.0f;
+                    near |= value > 0; solid &= value >= 1;
+                }
+                if (!near) continue;
+                if (solid) {
+                    auto p = [&](float a,float b) { return float3{a,v.heightAt(g,a,b)+terr_.lift,b}; };
+                    quad(fill,p(float(x),float(y)),p(float(x+1),float(y)),p(float(x+1),float(y+1)),p(float(x),float(y+1)),up,c4(color,terr_.fill));
+                    continue;
+                }
+                for (int j=0; j<subdivisions; ++j) for (int i=0; i<subdivisions; ++i) {
+                    const float x0=x+float(i)/subdivisions, z0=y+float(j)/subdivisions;
+                    const float x1=x+float(i+1)/subdivisions, z1=y+float(j+1)/subdivisions;
+                    const float2 points[]={{x0,z0},{x1,z0},{x1,z1},{x0,z1}};
+                    float3 p[4]; uint32_t fc[4], bc[4]; bool visible=false, edge=false;
+                    for (int k=0;k<4;++k) {
+                        const float f=sample(points[k].x,points[k].y);
+                        const float alpha=smooth(0.35f,0.65f,f);
+                        const float line=(1-smooth(0.025f,0.12f,std::abs(f-0.5f)))*0.8f;
+                        p[k]={points[k].x,v.heightAt(g,points[k].x,points[k].y)+terr_.lift,points[k].y};
+                        fc[k]=c4(color,alpha*terr_.fill); bc[k]=c4(color*0.5f+float3{0.5f,0.5f,0.5f},line);
+                        visible |= alpha>0; edge |= line>0;
+                    }
+                    if (visible) quad(fill,p[0],p[1],p[2],p[3],up,fc[0],fc[1],fc[2],fc[3]);
+                    if (edge && terr_.border>0) quad(border,p[0],p[1],p[2],p[3],up,bc[0],bc[1],bc[2],bc[3]);
+                }
+            }
+    }
+    setMesh(c.fill,fill); setMesh(c.border,border); c.dT=false;
+}
+
 void RtsGroundFx::buildTerritory(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v) {
+    if (terr_.smooth) { buildSmoothTerritory(c, cx, cy, g, v); return; }
     MeshBuilder fb, bb;
     const float3 up{0, 1, 0};
     const float e = 0.002f;
@@ -768,7 +854,8 @@ void RtsGroundFx::draw(Renderer3D& r, const RtsScene& s, double time, const std:
     }
     // the layers change only through the sim (GameState::territoryDirty is a sticky hint the view may
     // not reset), so they are compared a few times per second against the fog-of-war memory
-    if ((useT_ || useD_ || useR_ || useC_) && (time >= nextScan_ || nextScan_ < 0)) { scan(g, vision, viewer_); nextScan_ = time + 0.2; }
+    if ((useT_ || useD_ || useR_ || useC_) && (time >= nextScan_ || nextScan_ < 0)) { scan(g, vision, viewer_); nextScan_ = time + (terr_.smooth ? 0.05 : 0.2); }
+    if (useT_ && terr_.on && terr_.smooth) animateTerritory(g, time);
 
     // lanes: rebuilt when the lane set or the map roads change
     if (lane_.on) {

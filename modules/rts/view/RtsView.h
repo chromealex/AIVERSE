@@ -22,6 +22,7 @@
 #include "../RtsMap.h"
 #include "Rts2DView.h"
 #include "RtsGroundFx.h"
+#include "RtsPaintLayers.h"
 #include "RtsLights.h"
 #include "RtsFog.h"
 #include "RtsPlanetGroundFx.h"
@@ -37,6 +38,8 @@ struct SceneObject {
     Entity entity;               // invalid for editor placements
     uint16_t type = 0;
     uint8_t owner = 0;
+    int16_t teamOwner = -1;       // presentation-only override; -1 follows entity owner
+    uint8_t colorOwner() const { return teamOwner < 0 ? owner : uint8_t(teamOwner); }
     render::float3 pos, facing{1, 0, 0};
     float hp = 1;                // 0..1
     float build = 1;             // construction progress 0..1
@@ -61,6 +64,7 @@ struct SceneObject {
 };
 
 struct RtsScene {
+    std::shared_ptr<render::PaintLayers> paintLayers;
     std::vector<SceneObject> objects;
     std::vector<std::pair<render::float3, render::float3>> roads;
     std::vector<render::float3> moveMarkers;
@@ -259,6 +263,7 @@ private:
         render::float4 tint{1, 1, 1, 1};          // linear
         bool air = false, structure = false, shape = true;
         float sx = 1, sz = 1;                     // shapes: footprint scaling
+        bool tracer = false;                      // optional visual bullets for attack events
         float corpse = 2.5f;                      // seconds a dead object stays visible
         float turnSpeed = 10;                     // rad/s, 0 = instant
         float flyHeight = 2.4f;
@@ -277,6 +282,7 @@ private:
         render::mat4 drawn;                       // last world transform of the host model
         float yaw = 0, speed = 0, distance = 0, turnRate = 0, accel = 0, phase = 0;
         float eventAge[render::kProcEvCount] = {1e9f, 1e9f, 1e9f, 1e9f};
+        render::float3 attackDirection{};          // last shot in the animation tangent frame
         float castAge = 1e9f;
         render::float3 lastPos;
         bool initialized = false, dead = false;
@@ -293,6 +299,9 @@ private:
         double lastSeenTime = -1;                 // previews keep their own clock
     };
 
+    struct Tracer { SceneObject from, to; float age = 0; };
+    std::vector<Tracer> tracers_;
+    void drawTracers(render::Renderer3D& r, float dt, const MapGrid* grid = nullptr);
     void buildShapes(gfx::Device& dev);
     void buildLook(gfx::Device& dev, const UnitType& t, TypeLook& out);
     bool loadChoice(gfx::Device& dev, const UnitType& t, const Json& view, const std::string& path, ModelChoice& out);
@@ -349,6 +358,7 @@ private:
     uint32_t lastTick_ = ~0u;
     uint64_t frame_ = 0;
     RtsLights lights_;
+    RtsPaintLayers paintLayers_;
     RtsGroundFx groundFx_;   // territory, diggable rock, lanes, roads (RtsGroundFx.cpp)
     FogOfWar fog_;           // fog of war look + sheet (RtsFog.cpp)
     RtsOverlays overlays_;   // data-driven overlays (RtsOverlays.cpp)

@@ -43,6 +43,8 @@ public:
         float border = 0.26f;          // glow width (cells)
         float glow = 0.85f;            // emissive strength of the border
         bool pulse = true;             // animated border (high quality only)
+        bool smooth = false;           // interpolated ownership field instead of square floor tiles
+        float transition = 0.2f, lift = 0.045f;
         std::vector<render::float3> colors;            // per player slot (index 0 = slot 1); default playerColor
         std::map<std::string, render::float3> rooms;   // room id -> floor tint
         float roomFill = 0.5f;
@@ -107,6 +109,10 @@ private:
     void scan(const MapGrid& g, const std::vector<uint8_t>* vision, uint8_t viewer);
     void dirty(int x, int y, bool neighbours, int what);
     void buildTerritory(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v);
+    void buildSmoothTerritory(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v);
+    void animateTerritory(const MapGrid& g, double time);
+    std::map<int, std::vector<float>> territoryBlend_;
+    double territoryTime_ = -1;
     void buildDig(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v);
     void buildMarks(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v);
     void buildRoads(Chunk& c, int cx, int cy, const MapGrid& g, const RtsView& v);

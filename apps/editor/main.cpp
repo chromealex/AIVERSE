@@ -1,6 +1,7 @@
 // RTS editor entry point.
 //   rts_editor [--game <id> | --project <dir with game.json>] [--map <file.json>] [--engine <engine dir>]
 //              [--listen <port>|0] [--play]
+// Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
 #include <cstdlib>
 #include <filesystem>
 #include <memory>

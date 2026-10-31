@@ -149,6 +149,7 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     L.sz = t.structure ? float(t.footprintH) : 1.0f;
     L.corpse = num(v["corpse"], t.structure ? 3.0f : 2.5f);
     L.turnSpeed = num(v["turnSpeed"], t.structure ? 0.0f : 10.0f);
+    L.tracer = v.getBool("tracer", false);
     L.flyHeight = num(v["flyHeight"], 2.4f);
     L.unitSpeed = float(t.speed.toDouble());
     // "model": "a.glb" | ["a.glb", "b.vox"] (one picked per object) | entries {"file": "b.vox", ...}

@@ -59,6 +59,7 @@ public:
             viewSim_ = ed.sim();
             attached_ = nullptr;
             view_.detach();
+            ed.paintLayers.reset();ed.scriptTargeting={};
             if (viewSim_) {
                 const Json map = ed.doc().toJson();
                 if (view_.load(*viewSim_, ed.ws().project.simRules(map), map, uint8_t(std::max(0, ed.humanSlot())))) view_.attach(*viewSim_);
@@ -67,10 +68,13 @@ public:
         }
         if (viewSim_ && view_.active()) {
             const size_t before = view_.log().size();
+            view_.setTargeting(ed.scriptTargeting);
             view_.update(*viewSim_, float(dt));
+            ed.paintLayers = view_.paintLayers();
             for (size_t i = before; i < view_.log().size(); ++i) ed.ws().log("view-script", view_.log()[i].text, view_.log()[i].error);
             for (auto& r : view_.takeRequests())
                 if (r.kind == game::ViewRequest::Notice) ed.status = r.text;
+                else if (r.kind == game::ViewRequest::Effect) ed.gameFx().play(r.text, {r.x, r.y, r.z});
         }
         if (se != attached_) {
             attached_ = se;

@@ -139,6 +139,7 @@ std::vector<Entity> query(Vm& vm, const Filter& f) {
 }
 
 // ---------------------------------------------------------------- queries
+int gSeed(lua_State* L, Vm& vm) { lua_pushinteger(L, static_cast<lua_Integer>(vm.sim->config().seed)); return 1; }
 int gTick(lua_State* L, Vm& vm) { lua_pushinteger(L, vm.sim->tick()); return 1; }
 int gTime(lua_State* L, Vm& vm) { pushFx(L, Fixed::fromRatio(int64_t(vm.sim->tick()), int64_t(vm.sim->tickRate()))); return 1; }
 int gTickRate(lua_State* L, Vm& vm) { lua_pushinteger(L, vm.sim->tickRate()); return 1; }
@@ -426,6 +427,18 @@ int gSpawn(lua_State* L, Vm& vm) {
     }
     pushEntity(L, m.spawn(sim, uint16_t(t), uint8_t(owner), p));
     return 1;
+}
+int gAttackEvent(lua_State* L, Vm& vm) {
+    Entity actor, target;
+    auto& w = vm.sim->world();
+    if (!unitArg(L, vm, 1, actor) || !unitArg(L, vm, 2, target) ||
+        w.get<Unit>(actor).hp <= Fixed{} || w.get<Unit>(target).hp <= Fixed{}) {
+        lua_pushboolean(L, 0); return 1;
+    }
+    // Scripted combat owns damage; this is the standard animation/FX/audio cue only.
+    vm.sim->emit({kEvAttack, w.get<Owner>(actor).player, actor, target, -1,
+                  w.get<Transform>(actor).pos});
+    lua_pushboolean(L, 1); return 1;
 }
 int gKill(lua_State* L, Vm& vm) {
     Entity e;
@@ -731,7 +744,7 @@ int gEnableTrigger(lua_State* L, Vm& vm) {
 void openGameApi(Vm& vm) {
     lua_State* L = vm.L;
     static const luaL_Reg queries[] = {
-        {"tick", bind<gTick>}, {"time", bind<gTime>}, {"tick_rate", bind<gTickRate>}, {"players", bind<gPlayers>},
+        {"seed", bind<gSeed>}, {"tick", bind<gTick>}, {"time", bind<gTime>}, {"tick_rate", bind<gTickRate>}, {"players", bind<gPlayers>},
         {"player", bind<gPlayer>}, {"player_alive", bind<gAlivePlayer>}, {"team", bind<gTeam>}, {"hostile", bind<gHostile>},
         {"resource", bind<gResource>}, {"resources", bind<gResources>}, {"units", bind<gUnits>}, {"count", bind<gCount>},
         {"nearest", bind<gNearest>}, {"unit", bind<gUnit>}, {"alive", bind<gAlive>}, {"owner", bind<gOwner>},
@@ -741,6 +754,7 @@ void openGameApi(Vm& vm) {
         {"var", bind<gVar>}, {"log", bind<gLog>}, {nullptr, nullptr}};
     static const luaL_Reg actions[] = {
         {"give", bind<gGive>}, {"take", bind<gTake>}, {"spawn", bind<gSpawn>}, {"kill", bind<gKill>}, {"damage", bind<gDamage>},
+        {"attack_event", bind<gAttackEvent>},
         {"heal", bind<gHeal>}, {"set_owner", bind<gSetOwner>}, {"add_status", bind<gAddStatus>}, {"buff", bind<gBuff>},
         {"command", bind<gCommand>}, {"order", bind<gOrder>}, {"cast", bind<gCast>}, {"player_ability", bind<gPlayerAbility>},
         {"set_var", bind<gSetVar>}, {"add_var", bind<gAddVar>}, {"message", bind<gMessage>}, {"victory", bind<gVictory>},
@@ -754,6 +768,8 @@ void openGameApi(Vm& vm) {
         lua_setfield(L, -3, "random");
         lua_pop(L, 1);
     }
+    openTerritoryApi(vm);
+    openGridApi(vm);
     lua_setglobal(L, "game");
 }
 
@@ -789,6 +805,7 @@ Json scriptApiReference() {
         ev.push(Json::string(e));
     r.set("events", ev);
     Json q = Json::array();
+    q.push(fn("game.seed()", "immutable match seed as signed 64-bit bit pattern; does not advance simulation RNG"));
     q.push(fn("game.tick() / game.time() / game.tick_rate()", "tick number / seconds as fx / ticks per second"));
     q.push(fn("game.players() / game.player(p) / game.player_alive(p) / game.team(p) / game.hostile(a, b)", "player slots; player(p) = {slot, team, alive, name, faction, supply, supply_cap}"));
     q.push(fn("game.resource(p, res) / game.resources(p)", "stock as fx / {res = fx}"));
@@ -797,10 +814,18 @@ Json scriptApiReference() {
     q.push(fn("game.alive(h) / game.owner(h) / game.type_of(h) / game.pos(h) -> x, z / game.hp(h) -> hp, max / game.stat(h, stat) / game.has_status(h, id)", "unit fields (nil for dead handles)"));
     q.push(fn("game.type_info(id) / game.types()", "{id, name, structure, max_hp, speed, armor, cost, tags} / all type ids"));
     q.push(fn("game.map_size() -> w, h / game.passable(x, z [, \"ground\"|\"air\"|\"naval\"]) / game.level(x, z) / game.height(x, z) / game.area(name)", "map queries; area = {x, z, w, h}"));
+    q.push(fn("game.grid_path(width,height,cells,start,goal[,label])", "pure four-neighbour shortest grid path; zero-based cells, boolean true mask or exact integer labels; returns a one-based path excluding start, or nil; max 262144 cells"));
+    q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
     q.push(fn("game.var(name)", "trigger variable (fx)"));
+    q.push(fn("game.territory_at(x,z) / game.territory_count(player)", "owner at flat-map ground point (nil outside ground), or owned cell count"));
+    q.push(fn("game.frontier(player)", "flat-map land boundary segments sorted by cell/edge: {x,z,nx,nz,owner,cell}; normal points outwards, owner is the neighbour"));
+    q.push(fn("game.order_target(unit)", "first move/attack-move order destination x,z, or nil; lets a formation script consume normal player commands"));
     q.push(fn("game.log(...) / print(...)", "to the script log (editor Console)"));
     r.set("queries", q);
     Json a = Json::array();
+    a.push(fn("game.attack_event(actor,target)", "emit an attack animation/FX/audio cue only; no damage or orders; false for invalid/dead handles"));
+    a.push(fn("game.paint_territory(player,x,z,radius [, connected])", "flat map, radius 0..64: claim ground cell centres in a disk; optional adjacency to pre-brush owned cells; returns changed count, emits normal territory events"));
+    a.push(fn("game.set_position(unit,x,z)", "flat-map living mobile unit: place on ground (air units may cross water), preserve visual interpolation, clear orders/movement; false for invalid unit or destination; scripted formations, not pathfinding"));
     a.push(fn("game.give(p, res, amount) / game.take(p, res, amount) -> taken", "resources"));
     a.push(fn("game.spawn(type, owner, x, z) -> handle|nil", "create a unit / structure (owner 0 neutral, 255 hostile creeps)"));
     a.push(fn("game.kill(h [, silent]) / game.damage(h, amount [, source [, damageType]]) / game.heal(h, amount) / game.set_owner(h, p)", "unit changes"));
@@ -831,6 +856,8 @@ Json scriptApiReference() {
     v.push(fn("view.on(event, fn(e)) / view.on_frame(fn(dt))", "presentation events (same names as on()) / every frame"));
     v.push(fn("view.notice(text) / view.effect(name, x, z) / view.sound(name, x, z)", "requests to the host (UI notice, particle effect, sound)"));
     v.push(fn("view.player()", "the local player slot"));
+    v.push(fn("view.render_texture{width,height}", "view-only persistent mask canvas; stroke/clear/destroy; docs/render-texture.md"));
+    v.push(fn("view.paint_layer{bounds,texture?,resolution?,color?,opacity?,border?,source?,owner?}", "terrain mask surface; optional territory source; docs/render-texture.md"));
     r.set("view", v);
     return r;
 }

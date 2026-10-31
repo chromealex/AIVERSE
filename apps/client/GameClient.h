@@ -4,6 +4,8 @@
 //   Minimap.cpp   minimap image (CPU raster -> dynamic UI texture)
 //   Lobby.cpp     online play: NetClient, lobby / room screens, network matches
 #pragma once
+#include "UiModel.h"
+#include "modules/rts/view/EntityActionControls.h"
 #include <array>
 #include <functional>
 #include <map>
@@ -33,6 +35,7 @@
 #include "modules/rts/view/RtsView.h"
 #include "ClientFx.h"
 #include "modules/rts/view/RtsViewScript.h"
+#include "modules/rts/view/RegionSwipe.h"
 
 namespace Rml { class ElementDocument; class Element; }
 typedef struct lua_State lua_State;
@@ -44,59 +47,6 @@ using namespace rts::game;
 
 struct MapEntry { std::string file, title; };
 struct Notice { std::string text; double until; };
-
-// Values bound to the "game" data model (see engine/assets/ui/*.rml). Compared every frame so only
-// changed variables are marked dirty.
-struct UiItem {          // resource bar entry
-    std::string text, sub, style;  // style: inline css (player colour)
-    bool warn = false;
-    bool operator==(const UiItem&) const = default;
-};
-struct UiAction {        // command card button; `id` indexes GameClient::actions_
-    std::string label, cost, hotkey, tip;
-    std::string kind;         // layout of the section it belongs to: css class ("list", "row", "grid", "queue")
-    bool header = false;      // section start: shows `label` as a title (may be empty: just a separator)
-    bool enabled = true, active = false;
-    float progress = -1;  // >= 0: shows a progress bar (production queue)
-    int id = 0;
-    int alt = -1;             // optional second button of the row (e.g. "watch" next to "join")
-    std::string altLabel;
-    bool operator==(const UiAction&) const = default;
-};
-struct UiSection {             // built per section, flattened into UiState::card for the document
-    std::string title, kind;
-    std::vector<UiAction> actions;
-};
-struct UiState {
-    std::string screen = "menu";   // menu | lobby | playing | paused | over
-    std::string gameName, error, platformInfo;
-    std::vector<std::string> maps;
-    std::vector<UiAction> languages;
-    std::string lang;                  // active language: argument of the `tr` transform in documents
-    // lobby (Lobby.cpp)
-    std::string lobby;             // connect | connecting | browse | room
-    std::string netStatus, netError, roomTitle, roomInfo, spectators, waitHint;
-    std::vector<UiAction> queues, rooms, createMaps, slots;
-    std::vector<std::string> chat;
-    bool isHost = false, myReady = false, canStart = false, netMatch = false, searching = false;
-    std::vector<UiItem> top;
-    std::vector<UiAction> topActions;
-    std::string clock;
-    std::vector<std::string> notices;
-    bool hasSelection = false, ownSelection = false;
-    std::string selTitle, emptyHint;
-    std::vector<std::string> selInfo;
-    std::vector<UiAction> card;       // flat: one nesting level keeps RmlUi's data-for updates simple
-    std::string overTitle, overTime;
-    std::string modeHint, hintStyle, boxStyle, minimapStyle;
-    std::vector<std::string> lines;   // send-drag lines as inline styles of rotated bars
-    bool touch = false, showCard = true;
-    std::vector<UiAction> tools;      // skills bar: player abilities, dig / room / road tools, hand, possession
-    // "How to play" (game lang keys howto.like / goal / step1.. / tip)
-    bool hasHowto = false, howtoOpen = false;
-    std::string howtoLike, howtoGoal, howtoTip;
-    std::vector<std::string> howtoSteps;
-};
 
 class Minimap {
 public:
@@ -153,7 +103,7 @@ private:
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop };
 
-    void startMatch(size_t idx);
+    void startMatch(size_t idx, const Json& initialVars = Json());
     void fitCamera();
     // planet maps (ClientPlanet.cpp): orbit camera input, picking through RtsView; flat maps never get here
     bool planet() const { return view_.planetMode(); }
@@ -258,6 +208,9 @@ private:
     int matQuality_ = 2, boundMatQuality_ = 2; // pause menu: material tier (terrain splat / normal maps, models)
     int fxQuality_ = 0, boundFxQuality_ = 0;   // pause menu: particles off/low/medium/high
     bool uiOwnsPointer_ = false;
+    bool skillDragging_ = false, skillOverWorld_ = false;
+    float skillStartX_=0, skillStartY_=0;
+    int64_t skillTouch_=-1;
     Minimap minimap_;
 
     Renderer3D r3d_;
@@ -320,6 +273,13 @@ private:
     uint32_t lastSteerTick_ = 0;
     bool howtoOpen_ = false;
     int sendPercent_ = 50;
+    RegionSwipe regionSwipe_;
+    game::EntityActionControls entityActions_;
+    bool entityPointer_=false;
+    int64_t entityTouch_=-1;
+    float entityStartX_=0,entityStartY_=0;
+    bool regionEvent(const platform::Event&, bool);
+    uint32_t regionTick_ = UINT32_MAX;
     bool boxing_ = false, panning_ = false, sendDrag_ = false;
     float downX_ = 0, downY_ = 0, mouseX_ = -1, mouseY_ = -1;
     double lastClickTime_ = 0;

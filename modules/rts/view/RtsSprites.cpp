@@ -293,9 +293,9 @@ void Rts2DView::addObject(const SceneObject& o, float groundY) {
     if (!hasSprite(o.type)) return;
     const SpriteLook& L = looks_[o.type];
     const float3 ground{o.pos.x, groundY, o.pos.z};
-    if (o.entity.valid()) seen_[o.entity.packed()] = {o.type, o.owner, ground, o.facing, o.visible, frame_};
+    if (o.entity.valid()) seen_[o.entity.packed()] = {o.type, o.colorOwner(), ground, o.facing, o.visible, frame_};
     if (!o.visible) return;
-    float4 tc = RtsView::playerColor(o.owner);
+    float4 tc = RtsView::playerColor(o.colorOwner());
     uint32_t team = L.team ? rgbaf({tc.x, tc.y, tc.z, 1}) : 0;
     uint32_t tint = rgba(255, 255, 255);
     int act = o.action < kActCount ? int(o.action) : int(kActIdle);

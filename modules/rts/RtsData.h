@@ -487,7 +487,7 @@ struct FlowFieldRules {
     int budgetMB = 32;
     bool enabled() const { return minGroup > 0 || waves; }
 };
-struct MovementRules { bool rvo = true; int neighbors = 8; Fixed timeHorizon = Fixed::fromRatio(3, 2);
+struct MovementRules { bool rvo = true; bool separation = true; int neighbors = 8; Fixed timeHorizon = Fixed::fromRatio(3, 2);
                        FlowFieldRules flow;
                        bool blockedGoalNearest = false;   // movement.blockedGoals: "nearest" (vs "search")
                        int planetHpaCells = 256 * 256; };   // planets: HPA* on bodies with >= this many cells (0 = all)
@@ -521,6 +521,7 @@ struct TrapDef {
 };
 
 struct Rules {
+    bool scriptedAI = false;                  // external RtsAI must yield to the game's controller
     MechRules mech;                           // agent-mech rules (RtsMechData.h)
     std::vector<ResourceDef> resources;
     std::vector<std::string> tagNames;

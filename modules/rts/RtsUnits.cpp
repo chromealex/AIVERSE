@@ -747,6 +747,7 @@ void RtsModule::sysMovement(Simulation& sim) {
 
     if (rules_.dungeon) movePossessed(sim);
 
+    if (rules_.movement.separation) {
     // 2) separation between overlapping mobile units on the same layer. Bodies are move.radius; who yields
     //    depends on mass and activity: fighting / holding / working units are anchored (barely pushed),
     //    moving units push idle ones aside. A small dead zone and a per-tick cap prevent jitter.
@@ -812,6 +813,7 @@ void RtsModule::sysMovement(Simulation& sim) {
         bool ok = (t.layer & kLayerAir) || (gs.roadsOnly && t.entersGarrison) ||
                   ((cx == cx0 && cy == cy0) ? g.passable(cx, cy, t.pathLayer) || !g.passable(cx0, cy0, t.pathLayer) : g.canStep(cx0, cy0, cx, cy, t.pathLayer));
         if (ok) tr.pos = np;
+    }
     }
     // heightfield: everything stands on the surface (air units too: their flight height is presentation)
     if (g.hf)

@@ -58,6 +58,7 @@ private:
 // falls back, so overrides work for documents and everything they link to.
 class UiFiles final : public Rml::FileInterface {
 public:
+    UiLayer::FileReader reader = platform::readContentFile;
     Rml::FileHandle Open(const Rml::String& path) override {
         auto f = std::make_unique<File>();
         if (!read(path, f->data)) return 0;
@@ -85,11 +86,11 @@ public:
 
 private:
     struct File { std::string data; size_t pos = 0; };
-    static bool read(const std::string& path, std::string& out) {
+    bool read(const std::string& path, std::string& out) {
         static const std::string kEngine = "engine/ui/", kGame = "ui/";
-        if (path.rfind(kEngine, 0) == 0 && platform::readContentFile(kGame + path.substr(kEngine.size()), out)) return true;
-        if (platform::readContentFile(path, out)) return true;
-        if (path.rfind(kGame, 0) == 0) return platform::readContentFile(kEngine + path.substr(kGame.size()), out);
+        if (path.rfind(kEngine, 0) == 0 && reader(kGame + path.substr(kEngine.size()), out)) return true;
+        if (reader(path, out)) return true;
+        if (path.rfind(kGame, 0) == 0) return reader(kEngine + path.substr(kGame.size()), out);
         return false;
     }
 };
@@ -134,6 +135,8 @@ struct UiLayer::Impl {
     UiKeyboard keyboard;
     Rml::Context* context = nullptr;
     gfx::Device* dev = nullptr;
+    int width = 0, height = 0;
+    float density = 1;
     int64_t primaryTouch = -1;
     bool debugger = false;
     Rml::Element* textField = nullptr; // field the on-screen keyboard was opened for
@@ -142,10 +145,11 @@ struct UiLayer::Impl {
 UiLayer::UiLayer() = default;
 UiLayer::~UiLayer() { shutdown(); }
 
-bool UiLayer::init(gfx::Device& dev, const char* gameFont) {
+bool UiLayer::init(gfx::Device& dev, const char* gameFont, FileReader reader) {
     impl_ = std::make_unique<Impl>();
     Impl& m = *impl_;
     m.dev = &dev;
+    if (reader) m.files.reader = std::move(reader);
     if (!m.renderer.init(dev)) { impl_.reset(); return false; }
     Rml::SetSystemInterface(&m.system);
     Rml::SetFileInterface(&m.files);
@@ -154,12 +158,12 @@ bool UiLayer::init(gfx::Device& dev, const char* gameFont) {
     if (!Rml::Initialise()) { impl_.reset(); return false; }
     // Every family resolves to the first loaded font when unknown, so the game font goes first.
     std::string ttf;
-    if (gameFont && platform::readContentFile(gameFont, ttf) && !ttf.empty())
+    if (gameFont && m.files.reader(gameFont, ttf) && !ttf.empty())
         m.fonts.addFont(std::move(ttf), "ui", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto);
-    if (platform::readContentFile("engine/fonts/ui.ttf", ttf) && !ttf.empty())
+    if (m.files.reader("engine/fonts/ui.ttf", ttf) && !ttf.empty())
         m.fonts.addFont(std::move(ttf), "ui", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto);
     // headings: the game's display font as family "title" (falls back to "ui" when absent)
-    if (platform::readContentFile("fonts/title.ttf", ttf) && !ttf.empty())
+    if (m.files.reader("fonts/title.ttf", ttf) && !ttf.empty())
         m.fonts.addFont(std::move(ttf), "title", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto);
 
     m.context = Rml::CreateContext("main", {platform::framebufferWidth(), platform::framebufferHeight()});
@@ -263,6 +267,11 @@ void UiLayer::toggleDebugger() {
     Rml::Debugger::SetVisible(impl_->debugger);
 }
 
+bool UiLayer::pointerOverUi() const {
+    auto* hover=context()?context()->GetHoverElement():nullptr;
+    return hover&&hover->GetOwnerDocument();
+}
+
 bool UiLayer::handleEvent(const platform::Event& e) {
     if (e.type == platform::EventType::TextInputEnded && context()) {
         // the user closed the keyboard: leave the field so the next tap opens it again
@@ -330,12 +339,19 @@ bool UiLayer::processEvent(const platform::Event& e) {
     }
 }
 
+void UiLayer::setViewport(int width, int height, float density) {
+    if (!impl_) return;
+    impl_->width = width; impl_->height = height; impl_->density = std::max(.01f, density);
+}
+
 void UiLayer::update() {
     if (!context()) return;
     Rml::Context& c = *impl_->context;
-    const Rml::Vector2i dims{platform::framebufferWidth(), platform::framebufferHeight()};
+    const Rml::Vector2i dims{impl_->width > 0 ? impl_->width : platform::framebufferWidth(),
+                            impl_->height > 0 ? impl_->height : platform::framebufferHeight()};
+    const float density = impl_->width > 0 ? impl_->density : platform::dpiScale();
     if (c.GetDimensions() != dims) c.SetDimensions(dims);
-    if (c.GetDensityIndependentPixelRatio() != platform::dpiScale()) c.SetDensityIndependentPixelRatio(platform::dpiScale());
+    if (c.GetDensityIndependentPixelRatio() != density) c.SetDensityIndependentPixelRatio(density);
     impl_->keyboard.update();
     c.Update();
     syncTextInput(); // focus changed by a script or a closed document
@@ -343,7 +359,8 @@ void UiLayer::update() {
 
 void UiLayer::render() {
     if (!context()) return;
-    impl_->renderer.beginFrame(impl_->dev->framebufferWidth(), impl_->dev->framebufferHeight());
+    const auto dims = impl_->context->GetDimensions();
+    impl_->renderer.beginFrame(dims.x, dims.y);
     impl_->context->Render();
     impl_->dev->setScissor({});
 }

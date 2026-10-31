@@ -12,7 +12,8 @@ constexpr int kDefaultPort = 47321;
 class LineServer {
 public:
     ~LineServer();
-    bool listen(int port);                 // 127.0.0.1 only
+    bool listen(int port);                 // 127.0.0.1 only; 0 asks the OS for a free port
+    bool listenAvailable(int preferredPort = kDefaultPort);
     // Accepts connections and returns complete lines received since the last poll, tagged by client.
     struct Msg { int client; std::string line; };
     std::vector<Msg> poll();

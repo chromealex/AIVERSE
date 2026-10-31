@@ -30,6 +30,7 @@ void RtsView::setTerrainDetail(const Json& map) {
 }
 
 void RtsView::buildTerrain(gfx::Device& dev, const MapGrid& g) {
+    paintLayers_.shutdown();
     if (planets_.active()) { // planet maps: the grid holds the stacked faces of every body (RtsSurface.h)
         const PlanetWorld& W = planets_.world();
         if (W.sim && g.surf == W.sim) // cell flags changed (editor play / sim): recolour those bodies

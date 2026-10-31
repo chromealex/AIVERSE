@@ -77,6 +77,8 @@ struct Args {
     uint32_t maxSeconds = 1800;
     std::string saveFile, loadFile;   // save states (Simulation::serialize)
     uint32_t saveAt = 0;              // seconds
+    bool verifyRestore = false;
+    uint32_t restoreAt = 0, restoreTicks = 100; // bounded forward interval, then both restoration paths
     int benchPaths = 0;   // >0: time that many path queries (HPA* vs plain A*) and exit
     int benchBody = -1;
     bool profile = false;   // --profile: per-system wall time at the end of the match
@@ -294,6 +296,40 @@ static int benchGroup(Simulation& sim, const Args& a) {
     return 0;
 }
 
+// External input producers are not part of SimSnapshot. Copy them so both
+// continuations submit identical inputs rather than restarting bot decisions.
+static bool verifyRestore(Simulation& sim, std::vector<game::RtsAI>& bots,
+                          const SimSnapshot& snapshot, const std::string& bytes,
+                          const std::vector<game::RtsAI>& savedBots, uint64_t initialHash,
+                          const std::vector<uint64_t>& expected, const SimConfig& cfg,
+                          const Json& rules, const Json& map) {
+    for (int mode=0;mode<3;++mode) {
+        const char* name=mode==0 ? "snapshot" : mode==1 ? "serialized" : "fresh serialized";
+        std::unique_ptr<Simulation> fresh;
+        Simulation* target=&sim;
+        if (mode==2) {
+            fresh=std::make_unique<Simulation>(cfg,makeModule(sim.module().name()));
+            fresh->setup(rules,map);attachScriptLog(*fresh,true);target=fresh.get();
+        }
+        if (mode==0) target->loadState(snapshot);
+        else {
+            std::string error;
+            if (!target->deserialize(bytes,&error)) { std::printf("Restore FAILED (%s): %s\n",name,error.c_str());return false; }
+        }
+        bots=savedBots;
+        if (target->checksum()!=initialHash) { std::printf("Restore FAILED (%s): initial checksum\n",name);return false; }
+        for (uint64_t checksum:expected) {
+            for (auto& bot:bots) bot.update(*target);
+            target->step();
+            if (target->checksum()!=checksum) { std::printf("Restore DESYNC (%s) at tick %u\n",name,target->tick());return false; }
+        }
+        auto* rm=dynamic_cast<game::RtsModule*>(&target->module());
+        if (rm && rm->scripts() && rm->scripts()->errorCount()>0) { std::printf("Restore FAILED (%s): script errors\n",name);return false; }
+        std::printf("Restore OK (%s): %zu per-tick checks, from tick %u\n",name,expected.size(),snapshot.tick);
+    }
+    return true;
+}
+
 static int play(const Args& a) {
     Json manifest = Json::parseFile(a.project + "/game.json");
     std::string rulesPath = a.project + "/" + manifest.getStr("rules", "rules.json");
@@ -369,12 +405,31 @@ static int play(const Args& a) {
     }
     std::map<uint16_t, int> ev;
     const uint32_t maxTicks = a.maxSeconds * sim.tickRate();
+    if (a.verifyRestore && (a.restoreTicks==0 || a.restoreTicks>100000 || uint64_t(a.restoreAt)*sim.tickRate()+a.restoreTicks>maxTicks || uint64_t(a.restoreAt)*sim.tickRate()<sim.tick())) {
+        std::fprintf(stderr,"restore verification requires 1..100000 ticks within the match interval\n");return 2;
+    }
+    SimSnapshot restoreSnapshot;
+    std::vector<game::RtsAI> restoreBots;
+    std::vector<uint64_t> restoreChecks;
+    std::string restoreBytes;
+    uint64_t restoreHash=0;
+    bool restoreSaved=false,restoreVerified=false;
     auto t0 = std::chrono::steady_clock::now();
     if (!a.quiet) std::printf("Match: %s  seed=%llu\n", mapPath.c_str(), (unsigned long long)a.seed);
     while (sim.result() == 0 && sim.tick() < maxTicks) {
+        if (a.verifyRestore && !restoreSaved && sim.tick()==uint64_t(a.restoreAt)*sim.tickRate()) {
+            sim.saveState(restoreSnapshot);restoreBytes=sim.serialize();restoreHash=sim.checksum();restoreBots=bots;restoreSaved=true;
+        }
         for (auto& b : bots) b.update(sim);
         sim.step();
         for (auto& e : sim.events()) ev[e.type]++;
+        if (restoreSaved && !restoreVerified) {
+            restoreChecks.push_back(sim.checksum());
+            if (restoreChecks.size()>=a.restoreTicks || sim.result()!=0) {
+                if (!verifyRestore(sim,bots,restoreSnapshot,restoreBytes,restoreBots,restoreHash,restoreChecks,cfg,rulesJson,mapJson)) return 1;
+                restoreVerified=true;
+            }
+        }
         if (sim.tick() % rep.checksumInterval == 0) rep.checksums.emplace_back(sim.tick(), sim.checksum());
         if (!a.quiet && sim.tick() % (sim.tickRate() * 60) == 0) status(sim);
         if (a.saveAt && sim.tick() == a.saveAt * sim.tickRate() && !a.saveFile.empty()) {
@@ -382,6 +437,11 @@ static int play(const Args& a) {
             std::ofstream(a.saveFile, std::ios::binary) << bytes;
             std::printf("Saved %s: t=%us, %zu bytes, checksum %016llx\n", a.saveFile.c_str(), a.saveAt, bytes.size(), (unsigned long long)sim.checksum());
         }
+    }
+    if (a.verifyRestore) {
+        if (!restoreVerified) { std::fprintf(stderr,"restore verification interval was not reached\n");return 2; }
+        auto* rm=dynamic_cast<game::RtsModule*>(&sim.module());
+        if (rm && rm->scripts() && rm->scripts()->errorCount()>0) { std::fprintf(stderr,"restore verification encountered script errors\n");return 1; }
     }
     double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     rep.endTick = sim.tick();
@@ -446,6 +506,8 @@ int main(int argc, char** argv) {
         else if (k == "--save") a.saveFile = next();
         else if (k == "--save-at") a.saveAt = uint32_t(std::stoul(next()));
         else if (k == "--load") a.loadFile = next();
+        else if (k == "--verify-restore-at") { a.verifyRestore=true;a.restoreAt=uint32_t(std::stoul(next())); }
+        else if (k == "--verify-restore-ticks") { a.verifyRestore=true;a.restoreTicks=uint32_t(std::stoul(next())); }
         else if (k == "--replay") a.replay = next();
         else if (k == "--quiet") a.quiet = true;
         else if (k == "--profile") a.profile = true;
@@ -460,8 +522,9 @@ int main(int argc, char** argv) {
         else if (k == "--symmetry") a.symmetry = next();
         else if (k == "--gen-params") a.genParams = next();
         else if (k == "--gen-out") a.genOut = next();
-        else { std::printf("usage: rts_headless --project DIR [--map FILE] [--seed N] [--record F] [--save F --save-at S] [--load F] [--generate PRESET [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]] | --replay F\n"); return 2; }
+        else { std::printf("usage: rts_headless --project DIR [--map FILE] [--seed N] [--record F] [--save F --save-at S] [--load F] [--verify-restore-at S --verify-restore-ticks N] [--generate PRESET [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]] | --replay F\n"); return 2; }
     }
+    if (a.verifyRestore && (!a.replay.empty() || a.benchPaths>0 || a.benchGroup>0 || a.maxSeconds==0)) { std::fprintf(stderr,"restore verification requires a normal match\n");return 2; }
     try { return a.replay.empty() ? play(a) : replay(a); }
     catch (const std::exception& e) { std::fprintf(stderr, "error: %s\n", e.what()); return 2; }
 }

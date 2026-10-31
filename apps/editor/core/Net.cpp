@@ -62,17 +62,30 @@ LineServer::~LineServer() {
 }
 
 bool LineServer::listen(int port) {
+    if (fd_ >= 0 || port < 0 || port > 65535) return false;
     netInit();
     intptr_t fd = intptr_t(::socket(AF_INET, SOCK_STREAM, 0));
     if (fd < 0) return false;
     int yes = 1;
+#if defined(_WIN32)
+    setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&yes), sizeof yes);
+#else
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof yes);
+#endif
     sockaddr_in a = loopback(port);
     if (::bind(fd, reinterpret_cast<sockaddr*>(&a), sizeof a) != 0 || ::listen(fd, 4) != 0) { RTS_CLOSE(fd); return false; }
+    socklen_t size = sizeof a;
+    if (::getsockname(fd, reinterpret_cast<sockaddr*>(&a), &size) != 0) { RTS_CLOSE(fd); return false; }
     setNonBlocking(fd);
     fd_ = fd;
-    port_ = port;
+    port_ = ntohs(a.sin_port);
     return true;
+}
+
+// Keep the conventional endpoint for the first editor; bind atomically to an OS-assigned
+// port for additional editors, without a probe/close/rebind race.
+bool LineServer::listenAvailable(int preferredPort) {
+    return listen(preferredPort) || listen(0);
 }
 
 std::vector<LineServer::Msg> LineServer::poll() {

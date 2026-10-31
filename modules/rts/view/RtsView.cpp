@@ -49,6 +49,7 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
     }
     for (auto& w : overlays_.set().warnings) warnings_.push_back(w);
     anims_.clear();
+    tracers_.clear();
     for (auto& t : rules.types) {
         TypeLook l;
         buildLook(dev, t, l);
@@ -65,7 +66,7 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
 
 void RtsView::shutdown(gfx::Device& dev) {
     for (auto& [k, m] : models_) if (m) releaseModel(dev, *m);
-    models_.clear(); looks_.clear(); anims_.clear();
+    models_.clear(); looks_.clear(); anims_.clear(); tracers_.clear();
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
     terrain_.shutdown(dev);
     fog_.shutdown();
@@ -73,6 +74,7 @@ void RtsView::shutdown(gfx::Device& dev) {
     if (twoD_) twoD_->shutdown(dev);
     twoD_.reset();
     groundFx_.shutdown(dev);
+    paintLayers_.shutdown();
     planetGroundFx_.shutdown(dev);
     planets_.shutdown(dev);
     overlays_.shutdown(dev);
@@ -98,6 +100,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
     bars_.assign(s.objects.size(), {});
     if (hasTerrain_ && !tiles) terrain_.draw(r, grid, vision, groundFx_.drawsDig());
     if (!tiles) groundFx_.draw(r, s, time, vision, grid, *this);
+    paintLayers_.draw(r, *dev_, s.paintLayers, grid, *this, vision, time, s.viewer);
     if (tiles || !groundFx_.drawsLinks())
         for (auto& [a, b] : s.roads) r.quadXZ(a, b, 0.5f, rgba(196, 164, 112, 235), 0.04f);
 
@@ -136,6 +139,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
             r.circleXZ({o.pos.x, ground, o.pos.z}, 0.35f, rgba(0, 0, 0, 90), 16, ground + 0.03f);
         }
     }
+    drawTracers(r, dt, &grid);
     // corpses (entity already removed) play their death and fade; stale states are dropped
     for (auto it = anims_.begin(); it != anims_.end();) {
         EntityAnim& st = it->second;
@@ -217,6 +221,13 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
         so.pos = lerp(a, b, alpha);
         so.facing = toF(u.facing);
         const UnitType& ut = R.types[u.type];
+        if (ut.view.getBool("teamFromTerritory", false)) {
+            const int x = int(t.pos.x.floorInt()), z = int(t.pos.z.floorInt());
+            if (gs.grid.inside(x, z)) {
+                const size_t cell = size_t(gs.grid.index(x, z));
+                if (cell < gs.grid.territory.size()) so.teamOwner = gs.grid.territory[cell];
+            }
+        }
         so.hp = ut.maxHp.raw > 0 ? float((u.hp / ut.maxHp).toDouble()) : 1.0f;
         if (auto* c = w.tryGet<Construction>(e)) so.build = float(c->progress.toDouble());
         so.unpowered = (u.flags & kUnitDisabled) || (o.player < gs.players.size() && gs.players[o.player].productionMult < Fixed::fromInt(1));

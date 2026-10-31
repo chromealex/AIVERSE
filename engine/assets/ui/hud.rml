@@ -10,6 +10,7 @@
      card[] {header, kind, label, cost, hotkey, tip, enabled, active, progress, id} (header = section start),
      tools[] (skills bar: player abilities, dig / room / road tools, hand, possession; same fields as card),
      boxStyle, lines[], modeHint, hintStyle, screen, overTitle, overTime, shadows, materials (0..2: terrain / model material tier), particles (0..3), volume, music (0..100).
+     dispatchCount, dispatchCaption, dispatchRatio, dispatchStyle (floating region order preview).
      netMatch (online match: no restart, "leave match" instead of "main menu").
      Events: act(id), howto() (toggles the "How to play" panel, howto.rml), pause(), resume(), restart(), tomenu(). Static text: {{ 'key' | tr(lang) }}, keys in engine/assets/lang (engine/i18n/README.md). -->
 <body>
@@ -58,6 +59,12 @@
             <progress data-if="a.progress >= 0" data-attr-value="a.progress" max="1"></progress>
             <span class="tip" data-if="a.tip != ''">{{a.tip}}</span>
         </button>
+    </div>
+
+    <div id="dispatch-badge" data-if="dispatchCount != ''" data-attr-style="dispatchStyle">
+        <div class="dispatch-caption">{{dispatchCaption}}</div>
+        <div class="dispatch-count">{{dispatchCount}}</div>
+        <div class="dispatch-ratio">{{dispatchRatio}}</div>
     </div>
 
     <div id="modehint" data-if="modeHint != ''" data-attr-style="hintStyle">{{modeHint}}</div>

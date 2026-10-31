@@ -86,7 +86,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     }
 
     // ---- colours and effects
-    const float4 pc = playerColor(o.owner);
+    const float4 pc = playerColor(o.colorOwner());
     d.team = {pc.x * pc.x, pc.y * pc.y, pc.z * pc.z};
     d.tint = {L.tint.x, L.tint.y, L.tint.z, alpha};
     d.flash = st.eventAge[kProcEvHit] < 0.3f ? 0.3f * std::exp(-st.eventAge[kProcEvHit] * 12.0f) : 0.0f;
@@ -131,6 +131,31 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
                                     f.intensity * (f.hpBelow <= 1 ? std::clamp(1.0f - o.hp / std::max(f.hpBelow, 0.01f), 0.2f, 1.0f) : 1.0f)});
             }
     }
+}
+
+void RtsView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
+    for (auto& shot : tracers_) {
+        float3 a = objectViewPos(shot.from, .7f), b = objectViewPos(shot.to, .65f);
+        if (grid) {
+            a.y += heightAt(*grid, a.x, a.z);
+            b.y += heightAt(*grid, b.x, b.z);
+        }
+        const float distance = length(b - a);
+        if (distance < .01f) { shot.age = 1; continue; }
+        const float duration = std::clamp(distance / 30.0f, .09f, .24f);
+        const float head = std::clamp((shot.age + .025f) / duration, 0.0f, 1.0f);
+        const float tail = std::max(0.0f, head - std::min(.4f, .9f / distance));
+        const float3 tip = lerp(a, b, head), back = lerp(a, b, tail);
+        float3 side = cross(b - a, camPos_ - tip);
+        if (length(side) < 1e-5f) side = {0, 1, 0};
+        side = normalize(side) * .035f;
+        r.triangle(back - side, tip - side, tip + side, rgba(255, 180, 65, 180));
+        r.triangle(back - side, tip + side, back + side, rgba(255, 180, 65, 180));
+        r.line(back, tip, rgba(255, 249, 205, 255));
+        shot.age += dt;
+        if (shot.age >= duration) shot.age = 1;
+    }
+    tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(), [](const Tracer& s) { return s.age >= 1; }), tracers_.end());
 }
 
 void RtsView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt) {

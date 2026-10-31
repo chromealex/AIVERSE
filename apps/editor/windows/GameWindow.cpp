@@ -8,6 +8,11 @@
 #include "../Devices.h"
 #include "../Editor.h"
 #include "../EditorUtil.h"
+#include "../GameHud.h"
+#include "modules/rts/view/RegionSwipe.h"
+#include "modules/rts/view/ScriptHud.h"
+#include "apps/client/RegionSettings.h"
+#include "engine/i18n/Localization.h"
 
 namespace rts::editor {
 
@@ -22,6 +27,8 @@ public:
     bool zeroPadding() const override { return true; }
     ImGuiWindowFlags flags() const override { return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse; }
 
+    void update(Editor& ed, double) override { if (!ed.playing()) gameHud_.reset(); }
+
     void draw(Editor& ed) override {
         toolbar(ed);
         ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -29,6 +36,7 @@ public:
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddRectFilled(origin, ImVec2(origin.x + avail.x, origin.y + avail.y), ImGui::GetColorU32(ed.theme().palette().canvas)); // lighter than the device bezel
         if (!ed.playing()) {
+            gameHud_.reset();
             ui::emptyState(origin, ImVec2(origin.x + avail.x, origin.y + avail.y), ICON_GAME, "Тест не запущен",
                            "Нажмите " ICON_PLAY " на панели выше или F5: боты против ботов, или выберите, за кого играть.");
             ImGui::Dummy(avail);
@@ -51,6 +59,7 @@ public:
             float r = dev->corner * k;
             dl->AddRectFilled(ImVec2(sx - bezel, sy - bezel), ImVec2(sx + sw + bezel, sy + sh + bezel), IM_COL32(12, 12, 14, 255), r + bezel);
         }
+        if (sw <= 1 || sh <= 1) return;
         const float dpi = ImGui::GetIO().DisplayFramebufferScale.x;
         vp_.ensure(ed.device(), int(sw * dpi), int(sh * dpi));
         ImGui::SetCursorScreenPos(ImVec2(sx, sy));
@@ -63,10 +72,17 @@ public:
         dl->PopClipRect();
         ed.gameViewport = &vp_;
         if (dev && dev->w > 0) deviceChrome(dl, *dev, ed.gameLandscape, ed.gameSafeArea, sx, sy, sw, sh, k);
-        // the HUD keeps to the safe area like a game should
-        Insets4 safe = dev && dev->w > 0 ? deviceInsets(*dev, ed.gameLandscape) : Insets4{};
-        hud(ed, dl, sx + safe.left * k, sy + safe.top * k, sw - (safe.left + safe.right) * k);
+        region_.configure(ed.ws().project.manifest);
+        if (region_.enabled) region_.refresh(*ed.sim(), *ed.simModule(), uint8_t(ed.humanSlot()));
+        entityActions_.refresh(*ed.sim(),*ed.simModule(),uint8_t(ed.humanSlot()),ed.ws().project.manifest["entityActionControls"]);
+        gameHud_.prepare(ed, vp_, dpi * k, dev && dev->touch, region_, scriptPointAbility_,entityActions_);
+        if (int ability = gameHud_.takePointAbility(); ability >= 0) {
+            scriptPointAbility_ = ability; scriptDragStart_ = ImGui::GetIO().MousePos; region_.cancel();
+        }
         input(ed);
+        if (boxing_) dl->AddRect(boxA_, ImGui::GetIO().MousePos, IM_COL32(120, 255, 120, 220));
+        gameHud_.render(ed, vp_);
+        gameHud_.finish(ed);
         ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + avail.y));
         ImGui::Dummy(ImVec2(0, 0));
     }
@@ -191,32 +207,10 @@ private:
         dl->AddText(ImVec2(sx + l + 8, sy + sh - bb - ts.y - 6), edge, lbl);
     }
 
-    void hud(Editor& ed, ImDrawList* dl, float sx, float sy, float sw) {
-        Simulation* sim = ed.sim();
-        auto* m = ed.simModule();
-        if (!sim || !m) return;
-        auto& gs = m->state(*sim);
-        std::string line;
-        uint8_t p = uint8_t(std::max(1, ed.humanSlot()));
-        for (size_t r = 0; r < ed.rules().resources.size(); ++r)
-            line += ed.rules().resources[r].name + " " + std::to_string(gs.players[p].stock[r].toInt()) + "   ";
-        if (gs.players[p].supplyCap.raw > 0) line += "Лимит " + std::to_string(gs.players[p].supplyUsed.toInt()) + "/" + std::to_string(gs.players[p].supplyCap.toInt()) + "   ";
-        char t[32];
-        std::snprintf(t, sizeof t, "%u:%02u", sim->tick() / sim->tickRate() / 60, sim->tick() / sim->tickRate() % 60);
-        line += t;
-        ImVec2 ts = ImGui::CalcTextSize(line.c_str());
-        float x = sx + (sw - ts.x) * 0.5f, y = sy + 8;
-        dl->AddRectFilled(ImVec2(x - 8, y - 3), ImVec2(x + ts.x + 8, y + ts.y + 3), IM_COL32(0, 0, 0, 140), 5);
-        dl->AddText(ImVec2(x, y), IM_COL32(255, 255, 255, 240), line.c_str());
-        if (int res = sim->result(); res != 0) {
-            std::string w = res < 0 ? "Ничья" : "Победила команда " + std::to_string(res);
-            ImVec2 ws = ImGui::CalcTextSize(w.c_str());
-            dl->AddText(ImVec2(sx + (sw - ws.x) * 0.5f, y + 30), IM_COL32(255, 230, 120, 255), w.c_str());
-        }
-        if (boxing_) dl->AddRect(boxA_, ImGui::GetIO().MousePos, IM_COL32(120, 255, 120, 220));
-    }
-
     void input(Editor& ed) {
+        region_.configure(ed.ws().project.manifest);
+        if(region_.enabled){regionInput(ed);return;}
+        if (gameHud_.blocked()) { boxing_ = false; return; }
         ImGuiIO& io = ImGui::GetIO();
         RTSCamera& cam = ed.gameCam;
         if (vp_.hovered && io.MouseWheel != 0) cam.distance = std::clamp(cam.distance * std::pow(0.88f, io.MouseWheel), cam.minDistance, cam.maxDistance);
@@ -280,6 +274,105 @@ private:
             }
         }
         ed.gameSelection.erase(std::remove_if(ed.gameSelection.begin(), ed.gameSelection.end(), [&](Entity e) { return !w.alive(e); }), ed.gameSelection.end());
+    }
+
+    GameHud gameHud_;
+    game::RegionSwipe region_;
+    game::EntityActionControls entityActions_;
+    bool entityPointer_=false;
+    ImVec2 entityStart_{};
+    uint32_t regionTick_=UINT32_MAX;
+    double emptyClick_=-10;
+    bool regionPanning_=false;
+    int scriptPointAbility_=-1;
+    ImVec2 scriptDragStart_{};
+    ImVec2 regionPanPoint_{};
+    void regionInput(Editor& ed){
+        auto& io=ImGui::GetIO();auto& cam=ed.gameCam;
+        ed.scriptTargeting={};
+        region_.refresh(*ed.sim(),*ed.simModule(),uint8_t(ed.humanSlot()));
+        if(ed.sim()->tick()<regionTick_){region_.cancel();region_.arrows.clear();region_.ratio=client::loadRegionRatio();scriptPointAbility_=-1;entityActions_.cancel();entityPointer_=false;}
+        region_.fit(cam,vp_.pointsW,vp_.pointsH,ed.sim()->tick()<regionTick_);regionTick_=ed.sim()->tick();
+        auto point=[&]{float x=-1,z=-1;ed.groundAt(vp_,cam,io.MousePos.x,io.MousePos.y,x,z);return float3{x,.2f,z};};
+        if(vp_.hovered&&!region_.dragging)region_.cursor=point();
+        if(vp_.hovered&&!gameHud_.blocked()&&(ImGui::IsMouseClicked(ImGuiMouseButton_Right)||ImGui::IsMouseClicked(ImGuiMouseButton_Middle))){regionPanning_=true;regionPanPoint_=io.MousePos;region_.cancel();}
+        if(regionPanning_){
+            float3 a,b;
+            if(cam.screenToGround(regionPanPoint_.x-vp_.originX,regionPanPoint_.y-vp_.originY,vp_.pointsW,vp_.pointsH,a)&&cam.screenToGround(io.MousePos.x-vp_.originX,io.MousePos.y-vp_.originY,vp_.pointsW,vp_.pointsH,b))cam.target+=a-b;
+            regionPanPoint_=io.MousePos;
+            if(!ImGui::IsMouseDown(ImGuiMouseButton_Right)&&!ImGui::IsMouseDown(ImGuiMouseButton_Middle))regionPanning_=false;
+        }
+        bool buttons=gameHud_.blocked();
+        if(vp_.hovered&&!buttons&&io.MouseWheel!=0){auto before=point();cam.distance=std::clamp(cam.distance*std::exp(-.14f*io.MouseWheel),cam.minDistance,cam.maxDistance);auto after=point();if(before.x>=0&&after.x>=0)cam.target+=before-after;}
+        const bool targetWorld=!gameHud_.pointerOverUi()&&!ed.playPaused&&io.MousePos.x>=vp_.originX&&io.MousePos.y>=vp_.originY&&io.MousePos.x<vp_.originX+vp_.pointsW&&io.MousePos.y<vp_.originY+vp_.pointsH&&ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        if(entityPointer_ && (ed.playPaused || !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))){entityActions_.cancel();entityPointer_=false;buttons=true;}
+        if(entityPointer_){
+            buttons=true;
+            if(const auto* source=entityActions_.source()){auto p=point();ed.scriptTargeting={source->abilityId,p.x,p.z,true,targetWorld};ed.scriptTargeting.caster=source->entity.packed();}
+            if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)){
+                auto cmd=entityActions_.release(point(),targetWorld,std::hypot(io.MousePos.x-entityStart_.x,io.MousePos.y-entityStart_.y)>=6);
+                if(cmd)ed.issueCommand(*cmd);
+                entityPointer_=false;
+            }
+        } else if(targetWorld && !buttons && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+            entityActions_.press(cam,vp_.pointsW,vp_.pointsH,io.MousePos.x-vp_.originX,io.MousePos.y-vp_.originY)){
+            entityPointer_=true;entityStart_=io.MousePos;region_.cancel();buttons=true;
+        }
+        if(scriptPointAbility_>=0){
+            if(ImGui::IsMouseClicked(ImGuiMouseButton_Right)||ImGui::IsKeyPressed(ImGuiKey_Escape))scriptPointAbility_=-1;
+            else if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)){
+                auto p=point();
+                if(targetWorld&&std::hypot(io.MousePos.x-scriptDragStart_.x,io.MousePos.y-scriptDragStart_.y)>=6){
+                Command c;c.type=game::kCmdPlayerAbility;c.param=scriptPointAbility_;
+                c.point={Fixed::fromRatio(int64_t(p.x*256),256),Fixed{},Fixed::fromRatio(int64_t(p.z*256),256)};
+                ed.issueCommand(c);}
+                scriptPointAbility_=-1;buttons=true;
+            }
+            else {
+                auto p=point();ed.scriptTargeting={ed.simModule()->rules().playerAbilities[size_t(scriptPointAbility_)].id,p.x,p.z,true,targetWorld};
+                buttons=true;
+            }
+        }
+        if(ed.humanSlot()>0){
+            if(vp_.hovered&&!buttons&&ImGui::IsMouseClicked(ImGuiMouseButton_Left)){boxA_=io.MousePos;region_.begin(point());}
+            if(region_.dragging&&ImGui::IsMouseDown(ImGuiMouseButton_Left))region_.move(point());
+            if(ImGui::IsMouseReleased(ImGuiMouseButton_Left)){
+                auto p=point();if(vp_.hovered&&!buttons&&region_.region(p.x,p.z)<0&&std::hypot(io.MousePos.x-boxA_.x,io.MousePos.y-boxA_.y)<6){if(ed.time()-emptyClick_<.3)region_.fit(cam,vp_.pointsW,vp_.pointsH,true);emptyClick_=ed.time();}
+                if(!buttons&&std::hypot(io.MousePos.x-boxA_.x,io.MousePos.y-boxA_.y)<6)region_.cancelFlow(*ed.sim(),*ed.simModule(),p,[&](Command c){ed.issueCommand(c);});
+                if(buttons)region_.cancel();else{region_.cursor=p;region_.release(ed.time(),[&](Command c){ed.issueCommand(c);});}
+            }
+        }
+        if (gameHud_.blocked()) return;
+        auto* dl=ImGui::GetWindowDrawList();auto color=game::RtsView::playerColor(ed.humanSlot());
+        auto packed=ImGui::ColorConvertFloat4ToU32(ImVec4(color.x,color.y,color.z,1));
+        for(auto q:region_.controlFlags(cam,vp_.pointsW,vp_.pointsH)){
+            const float x=q.x+vp_.originX,y=q.y+vp_.originY;
+            dl->AddLine(ImVec2(x,y),ImVec2(x,y-26),IM_COL32(20,35,50,230),5);
+            dl->AddLine(ImVec2(x,y),ImVec2(x,y-26),IM_COL32(245,245,235,255),2);
+            dl->AddRectFilled(ImVec2(x+1,y-25),ImVec2(x+20,y-12),packed,2);
+            dl->AddRect(ImVec2(x+1,y-25),ImVec2(x+20,y-12),IM_COL32(255,255,255,240),2,0,1.5f);
+        }
+        const auto strokes=region_.strokes(cam,vp_.pointsW,vp_.pointsH,ed.time(),[&](float x,float z){return ed.view().heightAt(ed.simModule()->state(*ed.sim()).grid,x,z);});
+        for(int layer=0;layer<2;++layer)for(const auto& stroke:strokes){
+            if(stroke.shadow!=(layer==0))continue;
+            const bool pass=layer==1;
+            const float light=.35f+.65f*stroke.highlight,tint=1-light;
+            const auto c=pass?ImVec4(light+tint*color.x,light+tint*color.y,light+tint*color.z,stroke.alpha):ImVec4(.07f,.12f,.18f,stroke.alpha);
+            dl->AddLine(ImVec2(vp_.originX+stroke.a.x,vp_.originY+stroke.a.y),ImVec2(vp_.originX+stroke.b.x,vp_.originY+stroke.b.y),ImGui::ColorConvertFloat4ToU32(c),stroke.width);
+        }
+        for(const auto& u:region_.accepted()){
+            float2 q;if(cam.worldToScreen({float(u.x.toDouble()),.12f,float(u.z.toDouble())},vp_.pointsW,vp_.pointsH,q)){
+                ImVec2 c(q.x+vp_.originX,q.y+vp_.originY);dl->AddCircleFilled(c,7,IM_COL32(70,220,255,65),16);dl->AddCircle(c,7,IM_COL32(100,235,255,255),16,2);
+            }
+        }
+        for(const auto& u:region_.preview()){
+            float2 q;if(cam.worldToScreen({float(u.x.toDouble()),.12f,float(u.z.toDouble())},vp_.pointsW,vp_.pointsH,q)){
+                ImVec2 c(q.x+vp_.originX,q.y+vp_.originY);dl->AddCircleFilled(c,7,IM_COL32(255,230,120,65),16);dl->AddCircle(c,7,IM_COL32(255,245,170,255),16,2);
+            }
+        }
+        if(region_.dragging){
+            for(int r:region_.sources)if(region_.anchors.count(r)){float2 q;if(cam.worldToScreen(region_.anchors[r].point,vp_.pointsW,vp_.pointsH,q))dl->AddCircle(ImVec2(q.x+vp_.originX,q.y+vp_.originY),18,packed,24,3);}
+        }
     }
 
     Viewport vp_;

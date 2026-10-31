@@ -298,6 +298,7 @@ void RtsModule::moveSphere(Simulation& sim) {
         }
     });
     // 2) separation of overlapping units on the same layer (tangent plane)
+    if (rules_.movement.separation) {
     struct Push { Entity e; Vec3 d; };
     std::vector<Push> pushes;
     w.each<Mobile, Unit, Transform>([&](Entity e, Mobile& m, Unit& u, Transform& tr) {
@@ -340,6 +341,7 @@ void RtsModule::moveSphere(Simulation& sim) {
             if (c0 != c1 && !g.canMoveCells(c0, c1, t.pathLayer) && c0 >= 0 && g.passable(c0 % g.w, c0 / g.w, t.pathLayer)) continue;
         }
         tr.pos = np;
+    }
     }
 }
 

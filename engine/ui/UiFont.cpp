@@ -2,6 +2,8 @@
 
 #include <RmlUi/Core/CallbackTexture.h>
 #include <RmlUi/Core/FileInterface.h>
+#include <RmlUi/Core/FontEffect.h>
+#include <RmlUi/Core/FontGlyph.h>
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Log.h>
 #include <RmlUi/Core/Mesh.h>
@@ -25,6 +27,9 @@ struct UiFontEngine::File {
 
 struct UiFontEngine::Face {
     struct Glyph { float advance = 0; int x0 = 0, y0 = 0, w = 0, h = 0; int ax = 0, ay = 0; };
+    struct EffectLayer { Rml::SharedPtr<const Rml::FontEffect> effect; std::unique_ptr<Face> atlas; };
+    struct Effects { std::vector<EffectLayer> layers; };
+    std::vector<std::unique_ptr<Effects>> effects;
     File* file = nullptr;
     int size = 0;
     bool fakeBold = false;  // requested bold, file is regular: glyphs are dilated by one pixel
@@ -188,8 +193,30 @@ Rml::FontFaceHandle UiFontEngine::GetFontFaceHandle(const Rml::String& family, R
     return reinterpret_cast<Rml::FontFaceHandle>(faces_.back().get());
 }
 
-Rml::FontEffectsHandle UiFontEngine::PrepareFontEffects(Rml::FontFaceHandle, const Rml::FontEffectList&) {
-    return 0; // font effects (shadow/outline/glow) are not supported yet
+Rml::FontEffectsHandle UiFontEngine::PrepareFontEffects(Rml::FontFaceHandle handle, const Rml::FontEffectList& list) {
+    if (!handle || list.empty()) return 0;
+    auto& face=*reinterpret_cast<Face*>(handle);
+    for (const auto& set:face.effects) {
+        if (set->layers.size()!=list.size()) continue;
+        bool same=true;
+        for (size_t i=0;i<list.size();++i) {
+            const auto& a=set->layers[i].effect;const auto& b=list[i];
+            if (a->GetFingerprint()!=b->GetFingerprint() || a->GetColour()!=b->GetColour() || a->GetLayer()!=b->GetLayer()) { same=false;break; }
+        }
+        if (same) return reinterpret_cast<Rml::FontEffectsHandle>(set.get());
+    }
+    auto set=std::make_unique<Face::Effects>();
+    for (const auto& effect:list) {
+        Face::EffectLayer layer;layer.effect=effect;
+        if (effect->HasUniqueTexture()) {
+            layer.atlas=std::make_unique<Face>();
+            layer.atlas->aw=face.aw;layer.atlas->ah=face.ah;
+            layer.atlas->atlas.assign(size_t(face.aw)*size_t(face.ah),0);
+        }
+        set->layers.push_back(std::move(layer));
+    }
+    face.effects.push_back(std::move(set));
+    return reinterpret_cast<Rml::FontEffectsHandle>(face.effects.back().get());
 }
 
 const Rml::FontMetrics& UiFontEngine::GetFontMetrics(Rml::FontFaceHandle handle) {
@@ -208,40 +235,85 @@ int UiFontEngine::GetStringWidth(Rml::FontFaceHandle handle, Rml::StringView str
     return int(std::lround(w));
 }
 
-int UiFontEngine::GenerateString(Rml::RenderManager& rm, Rml::FontFaceHandle handle, Rml::FontEffectsHandle, Rml::StringView string,
-                                 Rml::Vector2f position, Rml::ColourbPremultiplied colour, float, const Rml::TextShapingContext& ctx,
+namespace {
+UiFontEngine::Face::Glyph effectGlyph(UiFontEngine::Face& face, UiFontEngine::Face::EffectLayer& layer, uint32_t cp) {
+    using Face=UiFontEngine::Face;
+    const auto base=face.glyph(cp);
+    if (layer.atlas) {
+        auto it=layer.atlas->glyphs.find(cp);
+        if (it!=layer.atlas->glyphs.end()) return it->second;
+    }
+    auto out=base;
+    Rml::FontGlyph glyph;glyph.bearing={base.x0,-base.y0};glyph.advance=int(std::lround(base.advance));
+    glyph.bitmap_dimensions={base.w,base.h};
+    Rml::Vector2i origin{0,0},dims{base.w,base.h};
+    if (base.w<=0 || base.h<=0 || !layer.effect->GetGlyphMetrics(origin,dims,glyph)) { out.w=out.h=0;return out; }
+    out.x0+=origin.x;out.y0+=origin.y;
+    if (!layer.atlas) return out;
+    Face& atlas=*layer.atlas;
+    out.w=out.h=0;
+    // Bound effect allocations just like the base atlas; oversized effects omit the layer.
+    if (dims.x>0 && dims.y>0 && dims.x<=atlas.aw-2 && dims.y<=kMaxAtlas-2) {
+        if (atlas.penX+dims.x+1>atlas.aw) { atlas.penX=1;atlas.penY+=atlas.rowH+1;atlas.rowH=0; }
+        while (atlas.penY+dims.y+1>atlas.ah && atlas.ah<kMaxAtlas) {
+            atlas.ah*=2;atlas.atlas.resize(size_t(atlas.aw)*size_t(atlas.ah),0);
+        }
+        if (atlas.penY+dims.y+1<=atlas.ah) {
+            std::vector<Rml::byte> source(size_t(base.w)*size_t(base.h));
+            for (int y=0;y<base.h;++y) std::memcpy(source.data()+size_t(y)*base.w,face.atlas.data()+size_t(base.ay+y)*face.aw+base.ax,size_t(base.w));
+            glyph.bitmap_data=source.data();
+            std::vector<Rml::byte> pixels(size_t(dims.x)*size_t(dims.y)*4,0);
+            layer.effect->GenerateGlyphTexture(pixels.data(),dims,dims.x*4,glyph);
+            for (int y=0;y<dims.y;++y) for (int x=0;x<dims.x;++x)
+                atlas.atlas[size_t(atlas.penY+y)*atlas.aw+atlas.penX+x]=pixels[(size_t(y)*dims.x+x)*4+3];
+            out.w=dims.x;out.h=dims.y;out.ax=atlas.penX;out.ay=atlas.penY;
+            atlas.penX+=dims.x+1;atlas.rowH=std::max(atlas.rowH,dims.y);atlas.atlasDirty=true;
+        }
+    }
+    atlas.glyphs.emplace(cp,out);
+    return out;
+}
+} // namespace
+
+int UiFontEngine::GenerateString(Rml::RenderManager& rm, Rml::FontFaceHandle handle, Rml::FontEffectsHandle effects, Rml::StringView string,
+                                 Rml::Vector2f position, Rml::ColourbPremultiplied colour, float opacity, const Rml::TextShapingContext& ctx,
                                  Rml::TexturedMeshList& meshList) {
     Face& f = *reinterpret_cast<Face*>(handle);
-    // Rasterize every glyph first: the atlas texture must be final before it is referenced.
     for (auto it = Rml::StringIteratorU8(string.begin(), string.begin(), string.end()); it; ++it) f.glyph(uint32_t(*it));
     f.syncTexture();
-
-    Rml::TexturedMesh tm;
-    tm.texture = f.texture->GetTexture(rm);
-    auto& verts = tm.mesh.vertices;
-    auto& idx = tm.mesh.indices;
-    const float iw = 1.0f / float(f.aw), ih = 1.0f / float(f.ah);
-    float pen = 0;
-    uint32_t prev = 0;
-    for (auto it = Rml::StringIteratorU8(string.begin(), string.begin(), string.end()); it; ++it) {
-        const uint32_t cp = uint32_t(*it);
-        pen += f.kern(prev, cp);
-        const Face::Glyph& g = f.glyph(cp);
-        if (g.w > 0) {
-            const float x = std::round(position.x + pen) + float(g.x0), y = std::round(position.y) + float(g.y0);
-            const int base = int(verts.size());
-            const float u0 = float(g.ax) * iw, v0 = float(g.ay) * ih, u1 = float(g.ax + g.w) * iw, v1 = float(g.ay + g.h) * ih;
-            verts.push_back({{x, y}, colour, {u0, v0}});
-            verts.push_back({{x + float(g.w), y}, colour, {u1, v0}});
-            verts.push_back({{x + float(g.w), y + float(g.h)}, colour, {u1, v1}});
-            verts.push_back({{x, y + float(g.h)}, colour, {u0, v1}});
-            for (int k : {0, 1, 2, 0, 2, 3}) idx.push_back(base + k);
+    auto* set=reinterpret_cast<Face::Effects*>(effects);
+    auto draw=[&](Face::EffectLayer* layer) {
+        Face& atlas=layer && layer->atlas?*layer->atlas:f;
+        if (layer && layer->atlas) {
+            for (auto it=Rml::StringIteratorU8(string.begin(),string.begin(),string.end());it;++it) effectGlyph(f,*layer,uint32_t(*it));
+            const int before=atlas.version;atlas.syncTexture();
+            if (before!=atlas.version) ++f.version;
         }
-        pen += g.advance + ctx.letter_spacing;
-        prev = cp;
-    }
-    if (!verts.empty()) meshList.push_back(std::move(tm));
-    return int(std::lround(pen));
+        Rml::TexturedMesh tm;tm.texture=atlas.texture->GetTexture(rm);
+        auto& verts=tm.mesh.vertices;auto& idx=tm.mesh.indices;
+        const auto tint=layer?layer->effect->GetColour().ToPremultiplied(opacity):colour;
+        const float iw=1.f/float(atlas.aw),ih=1.f/float(atlas.ah);
+        float pen=0;uint32_t prev=0;
+        for (auto it=Rml::StringIteratorU8(string.begin(),string.begin(),string.end());it;++it) {
+            const uint32_t cp=uint32_t(*it);pen+=f.kern(prev,cp);
+            const auto g=layer?effectGlyph(f,*layer,cp):f.glyph(cp);
+            if (g.w>0) {
+                const float x=std::round(position.x+pen)+float(g.x0),y=std::round(position.y)+float(g.y0);
+                const int base=int(verts.size());
+                const float u0=float(g.ax)*iw,v0=float(g.ay)*ih,u1=float(g.ax+g.w)*iw,v1=float(g.ay+g.h)*ih;
+                verts.push_back({{x,y},tint,{u0,v0}});verts.push_back({{x+float(g.w),y},tint,{u1,v0}});
+                verts.push_back({{x+float(g.w),y+float(g.h)},tint,{u1,v1}});verts.push_back({{x,y+float(g.h)},tint,{u0,v1}});
+                for (int k:{0,1,2,0,2,3}) idx.push_back(base+k);
+            }
+            pen+=f.glyph(cp).advance+ctx.letter_spacing;prev=cp;
+        }
+        if (!verts.empty()) meshList.push_back(std::move(tm));
+        return int(std::lround(pen));
+    };
+    if (set) for (auto& layer:set->layers) if (layer.effect->GetLayer()==Rml::FontEffect::Layer::Back) draw(&layer);
+    const int width=draw(nullptr);
+    if (set) for (auto& layer:set->layers) if (layer.effect->GetLayer()==Rml::FontEffect::Layer::Front) draw(&layer);
+    return width;
 }
 
 int UiFontEngine::GetVersion(Rml::FontFaceHandle handle) {

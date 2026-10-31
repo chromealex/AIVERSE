@@ -31,11 +31,11 @@ void RtsAI::send(Simulation& sim, Command c) {
 }
 
 void RtsAI::update(Simulation& sim) {
+    auto* m = dynamic_cast<RtsModule*>(&sim.module());
+    if (!m || m->rules().scriptedAI) return;
     auto* pi = sim.player(player_);
     if (!pi || !pi->alive || sim.result() != 0 || sim.tick() < next_) return;
     next_ = sim.tick() + cfg_.thinkTicks + rng_.below(cfg_.thinkTicks / 2 + 1);
-    auto* m = dynamic_cast<RtsModule*>(&sim.module());
-    if (!m) return;
     auto* gs = sim.world().resource<GameState>();
     if (m->rules().mech.turns && !mechTurnAI(sim, *m)) return;   // agent-mech TB: act only on its own turn
     if (std::find(gs->wavePlayers.begin(), gs->wavePlayers.end(), player_) != gs->wavePlayers.end()) return; // scripted side

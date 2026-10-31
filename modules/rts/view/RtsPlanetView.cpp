@@ -333,6 +333,7 @@ void RtsView::drawPlanets(Renderer3D& r, const RtsScene& s, double time, const s
         bars_[i] = place.transformPoint({0, top, 0});
         barOk_[i] = (body < 0 || !occluded(body, bars_[i])) && blend < 0.6f;
     }
+    drawTracers(r, dt);
     // corpses: last known placement, fading out
     for (auto it = anims_.begin(); it != anims_.end();) {
         EntityAnim& st = it->second;
@@ -405,6 +406,10 @@ void sceneFromSphere(Simulation& sim, RtsModule& m, const Surface& S, RtsScene& 
             return;
         }
         if ((u.flags & kUnitInHand) || !Surface::onSphere(t.pos)) return;
+        if (ut.view.getBool("teamFromTerritory", false)) {
+            const int cell = S.cellAt(t.pos);
+            if (cell >= 0 && size_t(cell) < gs.grid.territory.size()) so.teamOwner = gs.grid.territory[size_t(cell)];
+        }
         int body;
         so.pos = local(t.prevPos, t.pos, body);
         so.body = int16_t(body);

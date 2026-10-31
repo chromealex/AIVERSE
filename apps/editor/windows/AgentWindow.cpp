@@ -16,7 +16,9 @@ public:
 
     void draw(Editor& ed) override {
         auto& ws = ed.ws();
+        ImGui::BeginDisabled(ed.mcpPort() == 0);
         connectSection(ed);
+        ImGui::EndDisabled();
         ImGui::Checkbox("Камера Scene следует за правками агента", &ed.followAgent);
         ImGui::SeparatorText("Действия");
         ImGui::BeginChild("##feed", ImVec2(0, 0), ImGuiChildFlags_Borders);
@@ -35,7 +37,7 @@ private:
         McpServerSpec s;
         s.command = ed.options().mcpTool;
         if (s.command.empty()) s.command = (fs::path(ed.options().buildTool).parent_path() / "rtsmcp").string();
-        s.args = {"--engine", ed.options().engineDir};
+        s.args = {"--engine", ed.options().engineDir, "--port", std::to_string(ed.mcpPort())};
         if (!ed.options().editorExe.empty()) { s.args.push_back("--editor"); s.args.push_back(ed.options().editorExe); }
         return s;
     }

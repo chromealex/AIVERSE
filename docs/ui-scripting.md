@@ -51,7 +51,7 @@ Engine side: `engine/assets/ui/lib/meta.lua` (ui / profile / shop, runs before `
   per purchase token, then finishes it; late purchases arrive by themselves), `watch(id, fn(ok))` (rewarded ad,
   cooldown), `restore(fn)`, `cooldown(id)`.
 - `game` — `tr(key, args)`, `hasText(key)`, `language()`, `languages()`, `setLanguage(tag)`, `name()`, `maps()`,
-  `start(i, {difficulty, spectate})`, `difficulty(n?)`, `screen()`, `pause()`, `resume()`, `menu()`, `online()`,
+  `start(i, {difficulty, spectate, initialVars})`, `difficulty(n?)`, `screen()`, `pause()`, `resume()`, `menu()`, `online()`,
   `howto(open?)`, `engineMenu(on?)`, `notice(text)`, `lastResult()`, `safeArea()`, `touch()`, `platform()`,
   `preview()`, `time()`, `json('ui/x.json')`, `decode(text)`, `encode(v)`, `log(...)` (= `print`),
   `on(event, fn)`, `off(event, fn)`.
@@ -98,3 +98,30 @@ with `RTS_UI_SAVE_DIR` (scratch saves) and `RTS_UI_SAFE_AREA=l,t,r,b`.
 - `apps/client/ClientScript.cpp`: the state (to be replaced by the engine's shared one), `game` / `storage` /
   `store` / `ads`, events, then `meta.lua`, `ui/main.lua`, `ui/screens.json` start.
 - `apps/editor/core/UiOps.cpp`: the MCP tools.
+
+## Initial match variables
+
+For local matches, `game.start(1, {initialVars={loadout_support_1=2}})` merges validated integer options into the loaded map before simulation setup. Map authors can also provide `initialVars` directly in map JSON. Values are available through simulation `game.var` before scripts load and enter normal state hashes; the map payload retains them for replay/save setup. Each launch receives its own options; absent options never reuse a previous launch. This does not transmit local UI profiles into online matches.
+
+Allowed: at most 128 entries, names 1–128 ASCII letters/digits/underscore/dot/hyphen, integer values −1000000..1000000. Invalid options fail before starting a match; invalid map values produce readable loading errors. The game must still validate semantic choices (unlocks, card counts, player slots). UI previews validate the arguments without starting a match.
+
+Implementation: `RtsInitialVars.h`, setup in `RtsModule`, local launch in `ClientScript.cpp` / `main.cpp`. No game-specific keys or mechanics are hardcoded in the engine.
+
+## Font effects
+
+The stb TrueType backend honors RmlUi `font-effect`, for example
+`font-effect: outline(2dp #132a3a)` or `font-effect: shadow(2dp 3dp #00000080)`.
+Effects render in their declared back/front layers, preserve text advances and
+inherit element opacity. Outline/effect masks are rasterized lazily into cached
+per-face atlases; shadow layers reuse the base texture. Atlas growth invalidates
+text geometry, and font resource release destroys effect textures as well.
+No-effect text retains one mesh. Each enabled effect adds a mesh; only unique-mask
+effects allocate another atlas, bounded by the same 4096-pixel height limit as the
+base atlas. Oversized masks that cannot fit omit that effect glyph. This backend
+uses grayscale font masks; color-font/custom multicolor effects remain unsupported.
+
+`rts_ui_viewport_tests` includes checks for outline bounds, shadow offsets,
+back/base/front ordering, premultiplied opacity, handle/texture reuse, new-glyph
+invalidation, unchanged text width, and resource cleanup. macOS client screenshots
+verify ordinary and narrow-screen counters. Android, Windows and Web builds were
+not executed for this change; no shaders were changed.

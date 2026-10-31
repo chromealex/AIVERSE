@@ -15,6 +15,7 @@
 //               faction) are kept on the same page when possible.
 #pragma once
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -74,6 +75,7 @@ struct AtlasStats {
     uint64_t usedArea = 0, pageArea = 0;
     std::vector<GroupStats> groups;
     std::vector<std::pair<std::string, std::string>> excluded; // path, reason
+    std::map<std::string, int> resizeFixes; // path -> safe build-time maxSize for oversized inputs
     std::vector<std::string> warnings;
     double occupancy() const { return pageArea ? double(usedArea) / double(pageArea) : 0.0; }
     Json toJson() const;

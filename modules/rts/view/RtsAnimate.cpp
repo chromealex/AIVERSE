@@ -32,12 +32,30 @@ bool fresh(float age, float dt) { return age <= dt + 1e-4f; }
 void RtsView::handleEvents(const RtsScene& s) {
     if (s.tick == lastTick_) return;
     lastTick_ = s.tick;
+    std::map<uint64_t, const SceneObject*> objects;
+    for (const auto& o : s.objects) if (!o.isProjectile) objects.emplace(o.entity.packed(), &o);
     for (const auto& ev : s.events) {
         if (!ev.a.valid()) continue;
         const uint64_t key = ev.a.packed();
         auto it = anims_.find(key);
         switch (ev.type) {
-            case kEvAttack: if (it != anims_.end()) it->second.eventAge[kProcEvAttack] = 0; break;
+            case kEvAttack: {
+                auto source = objects.find(key), target = objects.find(ev.b.packed());
+                if (source == objects.end() || target == objects.end()) break;
+                const auto& a = *source->second; const auto& b = *target->second;
+                if (!a.visible || !b.visible || a.type >= looks_.size() || a.body != b.body) break;
+                EntityAnim& st = anims_[key];
+                st.eventAge[kProcEvAttack] = 0;
+                float3 dir = b.pos - a.pos;
+                if (a.body >= 0) {
+                    int body; float3 ground, up, east, south; float lift;
+                    if (placeObject(a, body, ground, up, east, south, lift))
+                        dir = {dot(dir, east), dot(dir, up), dot(dir, south)};
+                }
+                st.attackDirection = dir;
+                if (looks_[a.type].tracer && tracers_.size() < 512) tracers_.push_back({a, b});
+                break;
+            }
             case kEvHit: if (it != anims_.end()) it->second.eventAge[kProcEvHit] = 0; break;
             case kEvAbility: if (it != anims_.end()) it->second.castAge = 0; break;
             case kEvSpawned: case kEvTrainDone: {
@@ -133,8 +151,11 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         st.speed += (inst - st.speed) * std::min(1.0f, dt * 12.0f);
     }
     if (!st.dead) {
-        const float diff = wrap(yawOf(o.facing) - st.yaw);
-        const float step = L.turnSpeed > 0 ? L.turnSpeed * dt : 1e9f;
+        // Script attack cues have no Combat component: remember their shot direction.
+        const bool aiming = !L.structure && st.eventAge[kProcEvAttack] < 1.5f &&
+            st.attackDirection.x * st.attackDirection.x + st.attackDirection.z * st.attackDirection.z > 1e-6f;
+        const float diff = wrap(yawOf(aiming ? st.attackDirection : o.facing) - st.yaw);
+        const float step = aiming && fresh(st.eventAge[kProcEvAttack], dt) ? 1e9f : (L.turnSpeed > 0 ? L.turnSpeed * dt : 1e9f);
         const float turn = std::clamp(diff, -step, step);
         st.yaw = wrap(st.yaw + turn);
         st.turnRate += ((dt > 0 ? turn / dt : 0) - st.turnRate) * std::min(1.0f, dt * 8.0f);
@@ -152,8 +173,11 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         const float3 p = viewPos ? *viewPos : o.pos;
         const float4 c = viewProj_ * float4{p.x, p.y + 0.5f, p.z, 1};
         const bool onScreen = c.w > 0 && std::fabs(c.x) < c.w * 1.2f && std::fabs(c.y) < c.w * 1.2f;
-        const float camDist = length(camPos_ - p);
-        const float interval = !onScreen ? 1e9f : camDist > 70 ? 0.2f : camDist > 40 ? 0.1f : 0.0f;
+        // Projected size works for orthographic cameras too: camera distance is not
+        // a measure of how visible a walking character is in that projection.
+        const float4 top = viewProj_ * float4{p.x, p.y + 1.5f, p.z, 1};
+        const float extent = c.w > 0 && top.w > 0 ? std::fabs(top.y / top.w - c.y / c.w) : 0;
+        const float interval = !onScreen ? 1e9f : extent > 0.012f ? 0.0f : extent > 0.004f ? 1.0f / 30.0f : 0.1f;
         st.lodAccum += dt;
         if (st.lodAccum < interval) updatePose = false;
         else st.lodAccum = 0;
@@ -189,6 +213,8 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         // base layer: a running one-shot (attack / spawn / cast) finishes first, unless the unit moves
         const bool oneShot = st.baseKind == kAnimAttack || st.baseKind == kAnimSpawn || st.baseKind == kAnimCast;
         if (st.dead) {
+            for(int l=1;l<Animator::kLayers;++l) A.stop(l,0);
+            if(!ch.hasClip[kAnimDie] && st.baseKind!=-1){A.stop(0,.08f);st.baseKind=-1;}
             if (ch.hasClip[kAnimDie] && st.baseKind != kAnimDie) { play(kAnimDie, true); st.baseKind = kAnimDie; }
         } else if (!(oneShot && !A.finished(0) && !moving)) {
             int kind = kAnimIdle;

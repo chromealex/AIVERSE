@@ -74,9 +74,13 @@ public:
         GLint align = 256;
         glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
         uboAlign_ = align > 0 ? size_t(align) : 256;
+#if defined(__EMSCRIPTEN__)
+        glGenBuffers(kMaxUniformSlots, webUbos_);
+#else
         glGenBuffers(1, &ubo_);
         glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
         glBufferData(GL_UNIFORM_BUFFER, kUniformRingSize, nullptr, GL_STREAM_DRAW);
+#endif
         // compressed formats: ETC2 is core in ES 3.0 (not in desktop GL 3.3, not guaranteed on WebGL2)
         std::string ext;
         if (const char* e = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS))) ext = e;
@@ -101,7 +105,11 @@ public:
         }
     }
     ~GLDevice() override {
+#if defined(__EMSCRIPTEN__)
+        glDeleteBuffers(kMaxUniformSlots, webUbos_);
+#else
         glDeleteBuffers(1, &ubo_);
+#endif
         glDeleteVertexArrays(1, &vao_);
     }
 
@@ -284,8 +292,10 @@ public:
         fbW_ = w; fbH_ = h;
         uboOffset_ = 0;
         for (auto& d : slotData_) d.clear();
+#if !defined(__EMSCRIPTEN__)
         glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
         glBufferData(GL_UNIFORM_BUFFER, kUniformRingSize, nullptr, GL_STREAM_DRAW); // orphan the ring
+#endif
         glBindVertexArray(vao_);
     }
     void endFrame() override { // swap is done by the platform layer (EGL/WGL/browser)
@@ -392,7 +402,15 @@ public:
         glBindTexture(GL_TEXTURE_2D, t ? t->id : 0);
     }
     void setUniforms(int slot, const void* data, size_t size) override {
-        if (slot < 0 || slot >= kMaxUniformSlots) return;
+        if (slot < 0 || slot >= kMaxUniformSlots || size == 0) return;
+#if defined(__EMSCRIPTEN__)
+        // ANGLE/Metal copies a busy buffer on subData, even for disjoint ring ranges.
+        // Orphan only this slot's small block instead of cloning the 1 MB ring per draw.
+        glBindBuffer(GL_UNIFORM_BUFFER, webUbos_[slot]);
+        glBufferData(GL_UNIFORM_BUFFER, GLsizeiptr(size), data, GL_STREAM_DRAW);
+        glBindBufferRange(GL_UNIFORM_BUFFER, GLuint(slot), webUbos_[slot], 0, GLsizeiptr(size));
+        return;
+#endif
         size_t off = (uboOffset_ + uboAlign_ - 1) / uboAlign_ * uboAlign_;
         if (off + size > kUniformRingSize) { // ring exhausted: orphan and restart
             glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
@@ -462,6 +480,7 @@ private:
     DeviceInfo info_;
     std::string error_;
     GLuint vao_ = 0, ubo_ = 0, currentProgram_ = 0;
+    GLuint webUbos_[kMaxUniformSlots] = {};
     size_t uboAlign_ = 256, uboOffset_ = 0;
     bool etc2_ = false, s3tc_ = false, bptc_ = false, astc_ = false;
     std::vector<uint8_t> slotData_[kMaxUniformSlots]; // last data per slot, re-uploaded when the ring is orphaned

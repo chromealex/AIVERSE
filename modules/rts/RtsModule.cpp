@@ -1,5 +1,6 @@
 // Setup, commands, shared queries and state hashing for the generic RTS module.
 #include "RtsInternal.h"
+#include "RtsInitialVars.h"
 #include "gen/MapGen.h"
 #include <algorithm>
 #include <cstdlib>
@@ -27,6 +28,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     setupMap(sim, mapIn);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
+    validateInitialVars(mapIn["initialVars"]);
+    for (const auto& [key, value] : mapIn["initialVars"].members()) state(sim).trig.vars[key] = value.fx();
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);

@@ -9,6 +9,7 @@
 #include <vector>
 #include "../../../engine/data/Json.h"
 #include "../RtsScript.h"
+#include "../../../engine/render/PaintLayer.h"
 
 namespace rts { class Simulation; }
 
@@ -16,10 +17,17 @@ namespace rts::game {
 
 class RtsModule;
 
+struct ViewTargeting {
+    std::string ability;
+    float x=0, z=0;
+    bool active=false, overWorld=false;
+    uint64_t caster=0; // Packed entity ID; zero for player abilities.
+};
+
 struct ViewRequest {
     enum Kind : uint8_t { Notice, Effect, Sound } kind = Notice;
     std::string text;          // notice text / effect or sound name
-    float x = 0, z = 0;
+    float x = 0, z = 0, y = 0.5f;
     bool positioned = false;
 };
 
@@ -34,9 +42,11 @@ public:
     void detach();
     // Per frame: dispatches the collected events and on_frame(dt).
     void update(Simulation& sim, float dt);
+    void setTargeting(const ViewTargeting& target);
     std::vector<ViewRequest> takeRequests();
     const std::vector<ScriptLogEntry>& log() const { return log_; }
     bool active() const;
+    std::shared_ptr<render::PaintLayers> paintLayers() const;
 
     struct Impl;
 private:

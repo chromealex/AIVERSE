@@ -20,6 +20,8 @@
 #include <filesystem>
 #include "../Editor.h"
 #include "../EditorUtil.h"
+#include "../core/BuildFixes.h"
+#include "engine/i18n/Localization.h"
 #include "imgui_internal.h" // settings handler: editor prefs in editor_layout.ini
 
 namespace fs = std::filesystem;
@@ -106,6 +108,11 @@ public:
         auto& ws = ed.ws();
         if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_BUILD, "Игра не открыта", "Игра → Открыть"); return; }
         if (lastProject_ != ws.project.dir) { lastProject_ = ws.project.dir; reports_.clear(); }
+        if (!fixLocLoaded_) {
+            fixLoc_.load([](const std::string& name, std::string& out) { return platform::readContentFile(name, out); },
+                         "ru", {ws.engineDir + "/engine/assets/lang"});
+            fixLocLoaded_ = true;
+        }
         header(ed);
         toolchainPanel(ed);
         missingPopup(ed);
@@ -365,6 +372,8 @@ private:
         outDir_ = (fs::path(ws.project.dir) / "Builds" / "_estimate").string();
         ws.startBuild(kTargets[target_].id, "Release", "--estimate --out " + quote(outDir_) + buildFlags());
         estimating_ = true;
+        estimateManifest_ = manifest(ed).dump();
+        estimateTarget_ = kTargets[target_].id;
         dirtyIn_ = 0;
     }
 
@@ -375,6 +384,7 @@ private:
             if (!fs::exists(p, ec)) continue;
             try { reports_[t.id] = Json::parseFile(p.string()); } catch (const std::exception&) {}
         }
+        if (ed.ws().buildResult() == 0) reportManifests_[estimateTarget_] = estimateManifest_;
         if (ed.ws().buildResult() != 0) error_ = "оценка не удалась — подробности в Console"; else error_.clear();
     }
 
@@ -522,14 +532,38 @@ private:
         if (t.storeLimitMB > 0 && (shipped + engine) / 1048576 > t.storeLimitMB)
             ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "%s", t.storeNote);
         const Json& at = r["atlas"];
-        if (at.getBool("enabled", false) && at["pages"].integer() > 0) {
+        if (at.getBool("enabled", false) && (at["pages"].integer() > 0 || at["excluded"].size())) {
             ImGui::SeparatorText("Атласы");
             ImGui::Text("%lld текстур -> %lld стр., заполнение %.0f%%, экономия в паке %s", (long long)at["atlased"].integer(), (long long)at["pages"].integer(),
                         at["occupancyPercent"].toDouble(), mb(at["bytesSaved"].toDouble()).c_str());
             ImGui::Text("Видеопамять %s -> %s, переключений текстур %lld -> %lld", mb(at["gpuBytesBefore"].toDouble()).c_str(), mb(at["gpuBytesAfter"].toDouble()).c_str(),
                         (long long)at["textureBindsBefore"].integer(), (long long)at["textureBindsAfter"].integer());
-            if (at["excluded"].size() && ImGui::TreeNode("Не в атласе")) {
-                for (auto& e : at["excluded"].items()) ImGui::BulletText("%s — %s", e.getStr("path").c_str(), e.getStr("reason").c_str());
+            if (at["excluded"].size() && ImGui::TreeNodeEx("Не в атласе", ImGuiTreeNodeFlags_DefaultOpen)) {
+                bool fixable = false;
+                for (auto& e : at["excluded"].items()) {
+                    ImGui::BulletText("%s — %s", e.getStr("path").c_str(), e.getStr("reason").c_str());
+                    if (e["fixMaxSize"].integer() > 0) {
+                        fixable = true;
+                        ImGui::Indent();
+                        ImGui::TextUnformatted(fixLoc_.tr("editor.build.resize_plan", i18n::Args().num("size", e["fixMaxSize"].integer())).c_str());
+                        ImGui::Unindent();
+                    }
+                }
+                if (fixable) {
+                    ImGui::TextWrapped("%s", fixLoc_.tr("editor.build.resize_help").c_str());
+                    ImGui::BeginDisabled(ed.ws().building() || reportManifests_[t.id] != manifest(ed).dump());
+                    if (ImGui::Button(fixLoc_.tr("editor.build.fix_atlas_sizes").c_str())) {
+                        const std::string path = std::string("packaging.targets.") + t.id + ".files";
+                        const Json* existing = jsonPath(manifest(ed), path);
+                        Json params = Json::object();
+                        params.set("path", Json::string(path));
+                        params.set("value", atlasSizeFixRules(existing ? *existing : Json::array(), at["excluded"]));
+                        Json result = ed.ws().call("set_manifest", params);
+                        if (result.has("error")) error_ = result.getStr("error");
+                        else { error_.clear(); estimate(ed); }
+                    }
+                    ImGui::EndDisabled();
+                }
                 ImGui::TreePop();
             }
         }
@@ -621,12 +655,16 @@ private:
         ImGui::EndTable();
     }
 
+    i18n::Localization fixLoc_;
+    bool fixLocLoaded_ = false;
     int target_ = 3, release_ = 1, audio_ = 0;
     bool estimating_ = false, autoEstimate_ = true, perTarget_ = false;
     double dirtyIn_ = 0;
     int askedFor_ = -1;
     std::string outDir_, filter_, error_, lastProject_;
     std::map<std::string, Json> reports_;
+    std::map<std::string, std::string> reportManifests_;
+    std::string estimateManifest_, estimateTarget_;
     // toolchains
     bool autoInstall_ = false, recheck_ = false, showMissing_ = false, missingOpen_ = false;
     std::future<Check> checking_;

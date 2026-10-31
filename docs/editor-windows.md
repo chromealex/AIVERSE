@@ -103,3 +103,22 @@ ed.ws().registerOp({"balance_report", "Damage per cost of every unit type.", Jso
 Operations appear in MCP `tools/list` for agents connected through `rtsmcp` (the tool list is the
 `Workspace` registry; GUI-only operations have `guiOnly = true` and fail politely without the
 editor window).
+
+## Game HUD
+
+The Game play-test renders `ui/hud.rml` and `ui/howto.rml` through RmlUi into its
+viewport after the scene. Missing documents, styles and images fall back to
+`engine/assets/ui`; game fonts (`fonts/ui.ttf`, `fonts/title.ttf`) follow the client.
+The editor selects the game language with the same saved-choice/system-language rules.
+Restart the play-test after editing RML, RCSS or fonts to reload them.
+
+`apps/client/UiModel.h` owns the shared `game` model schema and change-only updates.
+`apps/editor/GameHud` adapts the editor simulation to that model: resource/status
+panels, script HUD cards, support actions and region ratios. Buttons issue Commands;
+pause/restart/stop operate on the editor play-test. Pointer coordinates are local to
+the viewport; RmlUi layout and projection use its framebuffer size and device density.
+World-space region markers remain editor overlays.
+
+This is an embedded play-test HUD, not a second GameClient: client lobby/menu flow,
+UI Lua `game` APIs, audio playback and the client's full standard RTS command card/minimap
+are not hosted by the editor adapter. Use a client run for those screens and systems.

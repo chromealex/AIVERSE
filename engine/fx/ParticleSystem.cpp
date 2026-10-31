@@ -909,7 +909,8 @@ void ParticleSystem::setView(const RTSCamera& cam, const mat4& viewProj, int fbW
     }
     I.right = render::normalize(render::cross(f, worldUp));
     I.up = render::cross(I.right, f);
-    I.p11 = 1.0f / std::tan(cam.fovY * 0.5f);
+    // Screen-size budgets and culling use clip-space scale, including ortho zoom.
+    I.p11 = std::abs(cam.proj(1.0f, false).m[5]);
     I.fbW = std::max(1, fbW);
     I.fbH = std::max(1, fbH);
     I.aspect = float(I.fbW) / float(I.fbH);

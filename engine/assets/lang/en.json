@@ -1,6 +1,7 @@
 // Engine and client strings (menu, HUD, command card). English is the base language: every other
 // table is checked against this one (rts_i18n check). A game can override any key in lang/<tag>.json.
 {
+  "hud.ready": "READY", "hud.cooldown_seconds": "{seconds}s",
   "@language": "English",
 
   "menu": {
@@ -271,5 +272,13 @@
   "price": {
     "gold": {"one": "{count} gold", "other": "{count} gold"},
     "gems": {"one": "{count} gem", "other": "{count} gems"}
-  }
+  },
+  "controls": {"region_send": "Ready to send", "region_hint": "Drag from your zones to a target.", "region_preview": "Send {count}", "region_invalid": "No route / cancel"},
+  "controls.region_ratio": "Send: {ratio}% · Right drag: pan map",
+  "hud.choose_target": "Choose a point on the map · Right click or Esc to cancel",
+  "editor.build.fix_atlas_sizes": "Fix texture sizes",
+  "editor.build.resize_plan": "Build size: longest side up to {size} px",
+  "editor.build.resize_help": "Reduce oversized textures for the selected platform and recalculate. Image detail will be reduced; source files stay unchanged.",
+  "entity_action.price": "Cost: {cost}",
+  "entity_action.unavailable": "Unavailable"
 }

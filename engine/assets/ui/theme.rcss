@@ -222,3 +222,9 @@ input.text selection { background-color: #e8c26a66; color: #ffffff; }
     .touch #tools { left: 6dp; right: 6dp; }
     #howto { top: 3%; max-height: 94%; padding: 14dp 14dp; }
 }
+
+/* Dispatch preview: a compact card above the pointer, clear of the destination. */
+#dispatch-badge { position: absolute; width: 166dp; height: 60dp; padding: 12dp 14dp; background-color: #101e2af5; border: 1dp #4b6477; border-bottom-width: 3dp; border-radius: 12dp; pointer-events: none; }
+#dispatch-badge .dispatch-caption { font-size: 12dp; line-height: 16dp; color: #c6d3df; }
+#dispatch-badge .dispatch-count { font-size: 32dp; font-weight: bold; line-height: 40dp; }
+#dispatch-badge .dispatch-ratio { position: absolute; right: 14dp; bottom: 15dp; padding: 4dp 8dp; font-size: 13dp; font-weight: bold; background-color: #ffffff14; border: 1dp #ffffff25; border-radius: 7dp; }

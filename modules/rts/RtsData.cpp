@@ -129,6 +129,15 @@ void loadFlowFieldRules(const Json& ff, FlowFieldRules& fr, const std::string& w
 Rules loadRules(const Json& j) {
     if (j.has("designs")) return loadRules(expandDesigns(j));   // agent-mech UD
     Rules r;
+    if (j.has("ai")) {
+        if (!j["ai"].isObject()) throw std::runtime_error("ai: expected object");
+        const auto controller = j["ai"].getStr("controller", "builtin");
+        if (j["ai"].has("controller") && !j["ai"]["controller"].isString())
+            throw std::runtime_error("ai.controller: expected string");
+        if (controller != "builtin" && controller != "scripted")
+            throw std::runtime_error("ai.controller: unknown '" + controller + "' (builtin, scripted)");
+        r.scriptedAI = controller == "scripted";
+    }
     r.supplyCap = j.getFx("supplyCap", r.supplyCap);
     r.maxQueue = int(j.getInt("maxQueue", r.maxQueue));
     r.costModel = j.getStr("costModel", "upfront") == "progressive" ? CostModel::Progressive : CostModel::Upfront;
@@ -689,8 +698,9 @@ Rules loadRules(const Json& j) {
     }
     if (const Json& mv = j["movement"]; mv.isObject()) {
         std::string av = mv.getStr("avoidance", "rvo");
-        if (av != "rvo" && av != "simple") fail("movement.avoidance", "expected 'rvo' or 'simple', got '" + av + "'");
+        if (av != "rvo" && av != "simple" && av != "none") fail("movement.avoidance", "expected 'rvo', 'simple' or 'none', got '" + av + "'");
         r.movement.rvo = av == "rvo";
+        r.movement.separation = av != "none";
         r.movement.neighbors = std::clamp<int>(int(mv.getInt("neighbors", 8)), 1, 32);
         r.movement.timeHorizon = mv.getFx("timeHorizon", r.movement.timeHorizon);
         r.movement.planetHpaCells = int(std::clamp<int64_t>(mv.getInt("planetHpaCells", r.movement.planetHpaCells), 0, int64_t(1) << 30));

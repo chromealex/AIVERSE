@@ -35,6 +35,7 @@
 // (the editor offers to install them); --install-missing installs them first.
 //   rtsbuild --check-toolchain <target> [--json]      what is there / missing
 //   rtsbuild --install-toolchain <target|id>          install into ~/.rtsengine/toolchains
+#include "UiSpriteSheets.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -453,11 +454,22 @@ fs::path contentPack(Options& o) {
         for (auto it = fs::directory_iterator(o.project / "tilesets", e3); !e3 && it != fs::directory_iterator(); it.increment(e3))
             if (std::string at = Json::parseFile(it->path().string()).getStr("atlas"); !at.empty()) fixedImages.push_back(at);
     } catch (const std::exception&) {}
+    for (const auto& path : w.paths()) {
+        if (fs::path(path).extension() != ".rcss") continue;
+        std::string css;
+        if (!w.readInput(path, css)) continue;
+        for (const auto& image : rts::build::uiSpriteSheetImages(css, path)) {
+            fixedImages.push_back(image);
+            // Engine styles can resolve a game override via the UI file interface.
+            if (image.rfind("engine/ui/", 0) == 0) fixedImages.push_back("ui/" + image.substr(10));
+        }
+    }
     if (!rts::build::applyFileRules(w, fileRules, levelRules, fr, &err, fixedImages)) die(err);
     for (auto& m : fr.warnings) info("предупреждение: " + m);
     for (auto& it : fr.items) info("файл " + it.path + ": " + it.what + (it.after ? " (" + rts::pack::formatBytes(it.before) + " → " + rts::pack::formatBytes(it.after) + ")" : ""));
     rts::atlas::AtlasStats as;
     if (!rts::atlas::applyAtlas(w, ac, as, &err)) die(err);
+    for (const auto& path : fixedImages) as.resizeFixes.erase(path);
     for (auto& m : as.warnings) info("предупреждение: " + m);
     rts::pack::WriteOptions wo;
     wo.level = o.packLevel ? o.packLevel : (o.config == "Debug" ? 3 : 19);
