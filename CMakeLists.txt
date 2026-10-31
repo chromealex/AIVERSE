@@ -121,6 +121,7 @@ add_library(rts_game STATIC
     modules/rts/RtsAIOriginals.cpp
     modules/rts/RtsAIFidelity.cpp)
 target_link_libraries(rts_game PUBLIC rts_engine)
+include(modules/rts/native/Build.cmake)
 # agent-mech: mechanics of the top-100 strategy games plan (stances, transports, ...)
 file(GLOB RTS_MECH_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/RtsMech*.cpp)
 target_sources(rts_game PRIVATE ${RTS_MECH_SOURCES} modules/rts/RtsSave.cpp modules/rts/RtsCampaign.cpp   # + save states, campaigns
@@ -936,4 +937,9 @@ if(RTS_BUILD_TESTS)
     add_executable(rts_ui_viewport_tests tests/ui_viewport.cpp tests/ui_font_effects.cpp)
     target_link_libraries(rts_ui_viewport_tests PRIVATE rts_ui)
     add_test(NAME rts_ui_viewport_tests COMMAND rts_ui_viewport_tests)
+endif()
+
+# Project-local C++ module build selection (no graphics or game execution).
+if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME native_project_build COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_project_build.py ${CMAKE_COMMAND})
 endif()
