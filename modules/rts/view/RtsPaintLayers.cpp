@@ -37,7 +37,7 @@ fragment float4 fs_main(Out i [[stage_in]],constant U& u [[buffer(1)]],texture2d
 // Categorical cell raster: port of the ownership look of OpenWar's ArmyMapWorld.shader (desktop 5x5 smoothstep
 // coverage of each candidate id, border where the coverage crosses 1/2) with its mobile 2x2 bilinear variant on low
 // material quality. tex0: RGBA8, rgb = palette colour, a = id. U0: vp; bounds (x, z, w, h); size (cells w, h, smooth,
-// border width); border colour; style (opacity, desktop, -, -); outside colour (id `outside`, a = id / 255).
+// border width); border colour; style (opacity, desktop, linear, transparent id or -1); outside colour (id `outside`, a = id / 255).
 const char* cellVs=R"(
 layout(location=0) in vec3 pos;
 layout(std140) uniform U0 { mat4 vp; vec4 bounds; vec4 size; vec4 borderColor; vec4 style; vec4 outside; vec4 groundA; vec4 groundB; vec4 coastA; vec4 beach; vec4 shallow; vec4 earthNear; vec4 earthFar; vec4 foam; };
@@ -151,7 +151,7 @@ void main(){
  }
  if(groundA.z>0.5||coastA.y>0.5)color=style.z>0.5?toSrgb(groundLinear(toLin(color),fid,aa)):groundLinear(color,fid,aa);
  color=mix(color,borderColor.rgb,edge*borderColor.a);
- outColor=vec4(color,style.x);
+ outColor=vec4(color,abs(fid-style.w)<0.5?0.0:style.x);   // style.w: the transparent id (-1: none)
 }
 )";
 const char* cellMsl=R"(
@@ -260,7 +260,7 @@ fragment float4 fs_main(Out i [[stage_in]],constant U& u [[buffer(1)]],texture2d
  }
  if(u.groundA.z>0.5||u.coastA.y>0.5)color=u.style.z>0.5?toSrgb(ground(u,tex1,smp,i.uv,toLin(color),fid,aa)):ground(u,tex1,smp,i.uv,color,fid,aa);
  color=mix(color,u.borderColor.rgb,edge*u.borderColor.a);
- return float4(color,u.style.x);
+ return float4(color,abs(fid-u.style.w)<0.5?0.0:u.style.x);
 }
 )";
 }
@@ -332,7 +332,7 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
  auto c3=[](const std::array<float,3>& c){return render::float4{c[0],c[1],c[2],1};};
  const bool coast=p.coast&&l.coast.valid();
  U u{r.viewProj(),{p.x,p.z,p.w,p.h},{float(tw),float(th),p.smooth,p.borderWidth},{p.borderColor[0],p.borderColor[1],p.borderColor[2],p.borderColor[3]},
-     {p.opacity,r.materialQuality()==render::MaterialQuality::Low?0.f:1.f,p.groundLinear?1.f:0.f,0},
+     {p.opacity,r.materialQuality()==render::MaterialQuality::Low?0.f:1.f,p.groundLinear?1.f:0.f,float(p.transparent)},
      {p.palette[o]/255.f,p.palette[o+1]/255.f,p.palette[o+2]/255.f,float(p.outside)/255.f},
      {p.groundScale,p.groundStrength,p.ground?1.f:0.f,p.flipHeight},{float(p.teamMin),float(p.teamMax),float(p.contextMin),float(p.contextMax)},
      {float(p.seaId),coast?1.f:0.f,float(std::fmod(time,3600.0)),p.coastDrop},c3(p.beach),c3(p.shallow),c3(p.earthNear),c3(p.earthFar),c3(p.foam)};

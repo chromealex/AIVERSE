@@ -597,7 +597,9 @@ byte per cell (row-major, z rows) drawn as smooth categorical regions: every pix
 smoothstep-weighted coverage of its 5x5 texel neighbourhood (`smooth` = falloff in texels), and a border of
 `borderWidth` texels is drawn where the coverage of an id crosses one half (2x2 bilinear coverage on low material
 quality). `layer:set_cells(bytes)` takes a Lua string of W * H bytes, `layer:set_palette{[id] = {r, g, b [, a]}}` sets
-colours (0..1); `outside` is the id used beyond the raster edge. `density` repeats each cell as density x density
+colours (0..1); `outside` is the id used beyond the raster edge. `transparent = id` draws that id fully transparent (an overlay raster over
+another layer, e.g. OpenWar's capture flashes: id 0 empty, the flashed cells white, `layer:set_opacity(v)` animated per
+frame); palette alpha is not used (the texel alpha holds the id). `density` repeats each cell as density x density
 texels (smoothing and border widths are in texels). One quad per layer, texelFetch on an RGBA8 texture (rgb colour,
 a id); presentation only. OpenWar draws its ownership raster with it (ArmyMapWorld look).
 

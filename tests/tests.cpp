@@ -11825,6 +11825,10 @@ layer:set_cells(string.char(1, 1, 2, 255, 9, 9, 255, 255))
 assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, ground = {scale = 0}}))
 assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, ground = {team = {9, 1}}}))
 assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, ground = {coast = {sea = 300}}}))
+-- an overlay raster: id 0 transparent, opacity animated (OpenWar capture flashes)
+local flash = view.paint_layer{bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, transparent = 0, borderWidth = 0, opacity = 1}
+flash:set_opacity(.25)
+assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, transparent = 256}))
 )LUA")); rules.set("$scriptSources", src);
     Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
     Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
@@ -11832,12 +11836,17 @@ assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, h
     game::ViewScripts v; CHECK(v.load(sim, rules, map, 1));
     for (auto& e : v.log()) std::printf("  ground log: %s\n", e.text.c_str());
     CHECK(v.log().empty());
-    auto& layers = v.paintLayers()->layers; CHECK(layers.size() == 1);
+    auto& layers = v.paintLayers()->layers; CHECK(layers.size() == 2);
+    if (layers.size() == 2) {
+        const auto& f = std::next(layers.begin())->second;
+        CHECK(f.categorical && f.transparent == 0 && std::abs(f.opacity - .25f) < 1e-6f && !f.ground);
+    }
     if (!layers.empty()) {
         const auto& l = layers.begin()->second;
         CHECK(l.ground && l.coast && l.groundLinear && l.groundScale == 8 && std::abs(l.groundStrength - .23f) < 1e-6f && l.flipHeight == 2);
         CHECK(l.teamMin == 1 && l.teamMax == 8 && l.contextMin == 200 && l.contextMax == 254 && l.seaId == 255 && l.coastDrop == -1);
         CHECK(std::abs(l.beach[2] - .73f) < 1e-6f && std::abs(l.foam[1] - .99f) < 1e-6f && std::abs(l.shallow[0] - .28f) < 1e-6f);   // shallow: default
+        CHECK(l.transparent == -1);
     }
     CHECK(sim.checksum() == before);
 }

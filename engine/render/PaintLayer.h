@@ -22,6 +22,7 @@ struct PaintLayer {
     std::array<float,4> borderColor{1,1,1,1};
     float borderWidth=0.55f,smooth=2.0f;
     int outside=255;
+    int transparent=-1;   // id drawn fully transparent (overlay layers over another raster), -1: none
     // Ground surface (paint_layer{ground=...}, categorical only): a port of OpenWar's ArmyMapWorld meadow and coast.
     // Ids in [teamMin, teamMax] are dyed meadow (relief of the id colour), [contextMin, contextMax] faint noise, other
     // land ids neutral meadow; `seaId` is water: a static signed shoreline distance (texels, from the cells) drives

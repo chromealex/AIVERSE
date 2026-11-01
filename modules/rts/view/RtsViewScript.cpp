@@ -151,6 +151,9 @@ int vPaintLayer(lua_State* L,Vm& vm) {
         p.cells.assign(size_t(p.cellsW)*size_t(p.cellsH),0);p.cellsDirty=true;p.paletteDirty=true;
         p.borderWidth=numberField(L,1,"borderWidth",0.55f);p.smooth=numberField(L,1,"smooth",2.0f);
         const float outside=numberField(L,1,"outside",255),density=numberField(L,1,"density",1);
+        const float transparent=numberField(L,1,"transparent",-1);
+        if(!std::isfinite(transparent)||transparent<-1||transparent>255||transparent!=std::floor(transparent))return fail(vm,"paint_layer transparent must be an id 0..255 (or -1)");
+        p.transparent=int(transparent);
         if(!std::isfinite(density)||density<1||density>4||density!=std::floor(density)||p.cellsW*int(density)>4096||p.cellsH*int(density)>4096)return fail(vm,"paint_layer density must be 1..4 (texture side <= 4096)");
         p.density=int(density);
         if(!std::isfinite(p.borderWidth)||!std::isfinite(p.smooth)||!std::isfinite(outside))return fail(vm,"invalid cell style");
