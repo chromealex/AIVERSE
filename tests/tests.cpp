@@ -11813,6 +11813,32 @@ end)
     CHECK(sim.checksum() == before);
 }
 
+TEST(view_screen_host_state) {
+    // view.screen() reports the host's screen over the match (setScreen): "playing" by default, "paused", "over";
+    // reading it never touches the simulation
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/screen.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/screen.lua", Json::string(R"LUA(
+view.on_frame(function() view.notice(view.screen()) end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    auto noticed = [&](const char* want) {
+        view.update(sim, .016f);
+        auto r = view.takeRequests();
+        CHECK(r.size() == 1 && r[0].text == want);
+    };
+    noticed("playing");
+    view.setScreen("paused"); noticed("paused");
+    view.setScreen("over"); noticed("over");
+    view.setScreen(""); noticed("playing");
+    for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+    CHECK(view.log().empty());
+    CHECK(sim.checksum() == before);
+}
+
 TEST(view_draw_ground_world_triangles) {
     // view.draw_ground collects world-space triangle batches (x, y, z, rgba; with an image x, y, z, u, v, rgba) per
     // image / layer for one frame, validates its input and never touches the simulation

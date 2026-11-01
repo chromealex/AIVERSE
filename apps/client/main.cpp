@@ -730,6 +730,7 @@ void GameClient::runViewScripts(float dt) {
         vc.view = cam_; vc.screenW = platform::windowWidth(); vc.screenH = platform::windowHeight();   // view.to_screen
         viewScripts_.setCamera(vc);
     }
+    viewScripts_.setScreen(screen_ == Screen::Paused ? "paused" : screen_ == Screen::Over ? "over" : "playing");   // view.screen()
     viewScripts_.update(*sim_, dt);
     canvas_ = viewScripts_.takeDraws();   // view.draw: drawn after the overlays, under the UI
     groundCanvas_ = viewScripts_.takeGroundDraws();   // view.draw_ground: in the 3D scene

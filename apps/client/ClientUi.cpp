@@ -189,6 +189,14 @@ void GameClient::setScreen(Screen s) {
         r.set("difficulty", Json::number(int64_t(difficulty_)));
         r.set("spectator", Json::fromBool(spectator_));
         r.set("online", Json::fromBool(netMatch_));
+        // the simulation's variables at the end (game.set_var): how a game's scripts hand details of the ending to its
+        // screens (e.g. "retry" chosen on an in-match result panel); integers stay integers
+        Json vars = Json::object();
+        for (const auto& [name, v] : mod().state(*sim_).trig.vars) {
+            const double d = v.toDouble();
+            if (d == double(int64_t(d))) vars.set(name, Json::number(int64_t(d))); else vars.set(name, Json::number(d, 6));
+        }
+        r.set("vars", vars);
         lastResult_ = r;
         luaEmit("matchEnd", r);
     }

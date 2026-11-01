@@ -420,7 +420,9 @@ end)
 view.on_frame(function(dt) end)            -- dt in seconds (float)
 ```
 
-View scripts are presentation: floats are fine, `game.*` queries work, actions don't exist. Their
+View scripts are presentation: floats are fine, `game.*` queries work, actions don't exist.
+`view.screen()` tells what the host shows over the match: `"playing"`, `"paused"` (the pause screen: the simulation
+does not tick, view scripts keep running, so a game can draw its own pause panel) or `"over"` (the match has ended). Their
 outputs are requests the host shows: `view.notice(text)`, `view.effect(name, x, z[, y])` (particle
 effect of `fx/`), `view.sound(name, x, z)`, and script commands as the local player
 (`view.send(id, args)`, above). They never change the simulation directly, so they don't need the

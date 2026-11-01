@@ -56,7 +56,7 @@ Engine side: `engine/assets/ui/lib/meta.lua` (ui / profile / shop, runs before `
   `preview()`, `time()`, `json('ui/x.json')`, `decode(text)`, `encode(v)`, `log(...)` (= `print`),
   `on(event, fn)`, `off(event, fn)`.
 - Events: `screen` (menu | lobby | playing | paused | over), `open` / `close` `{screen}`,
-  `matchEnd {won, seconds, map, mapTitle, difficulty, spectator, online}`, `language`, `purchase`, `profile`,
+  `matchEnd {won, result, seconds, map, mapTitle, difficulty, spectator, online, vars}` (`vars`: the simulation's variables at the end, `game.set_var` names -> numbers: how a game's scripts tell its screens how the match ended, e.g. a retry chosen on an in-match result panel), `language`, `purchase`, `profile`,
   `shop {id, ok, reason}`, `update (dt)`, `back`, `resize`.
 - `storage` — `load(name)`, `save(name, table)`, `erase(name)`: JSON files per game in the user folder.
 - `store` — `available()`, `provider()`, `products(fn(list, err))`, `buy(id, fn(p))`, `finish(token)`, `restore(fn)`;

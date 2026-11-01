@@ -31,6 +31,7 @@ struct ViewScripts::Impl {
     uint8_t player = 0;
     ViewTargeting targeting;
     ViewCamera camera;
+    std::string screen = "playing";   // host screen state (view.screen()): playing | paused | over
     ViewCameraRequest cameraRequest{};
     bool cameraRequested = false;
     std::vector<ViewDrawBatch> draws;
@@ -410,6 +411,9 @@ int vDrawGround(lua_State* L, Vm& vm) {
     return 0;
 }
 int vPlayer(lua_State* L, Vm& vm) { lua_pushinteger(L, viewOf(vm).player); return 1; }
+// view.screen(): what the host shows over the match ("playing", "paused" = the pause screen / modal, "over" = the match
+// has ended); presentation only (a paused match stops ticking, its view keeps running)
+int vScreen(lua_State* L, Vm& vm) { lua_pushstring(L, viewOf(vm).screen.c_str()); return 1; }
 
 // ---- Lua <-> Json for the UI (view values: numbers, fx, strings, booleans, tables)
 Json toUiJson(lua_State* L, int idx, int depth = 0) {
@@ -535,6 +539,7 @@ std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return i
 
 void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=target; }
 void ViewScripts::setCamera(const ViewCamera& camera) { impl_->camera = camera; }
+void ViewScripts::setScreen(const std::string& screen) { impl_->screen = screen.empty() ? "playing" : screen; }
 bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
     if (!impl_->cameraRequested) return false;
     out = impl_->cameraRequest;
@@ -568,7 +573,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     for (auto& [p, t] : rules["$scriptSources"].members()) vm.sources[p] = t.str();
     openGameApi(vm);
     static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>},
-                                     {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>},
+                                     {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>}, {"screen", bind<vScreen>},
                                      {"send", bind<vSend>}, {"state", bind<vState>},
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},

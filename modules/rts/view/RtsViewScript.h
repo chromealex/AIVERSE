@@ -70,6 +70,8 @@ public:
     void update(Simulation& sim, float dt);
     void setTargeting(const ViewTargeting& target);
     void setCamera(const ViewCamera& camera);
+    // Host screen state for view.screen(): "playing" (default), "paused", "over".
+    void setScreen(const std::string& screen);
     // The last view.set_camera of this update (fields NaN = unchanged); false when there was none.
     bool takeCameraRequest(ViewCameraRequest& out);
     std::vector<ViewRequest> takeRequests();
