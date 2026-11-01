@@ -79,6 +79,7 @@ void RtsView::shutdown(gfx::Device& dev) {
     twoD_.reset();
     groundFx_.shutdown(dev);
     paintLayers_.shutdown();
+    groundCanvas_.shutdown();
     planetGroundFx_.shutdown(dev);
     planets_.shutdown(dev);
     overlays_.shutdown(dev);
@@ -96,6 +97,37 @@ float RtsView::selectionRadius(uint16_t type) const {
 
 // heightAt / buildTerrain: RtsTerrain.cpp
 
+
+// "groundShadow": the image's quad in the drawn model's frame (its rotation without scale / centring), at the object.
+void RtsView::addGroundShadow(const TypeLook& L, const EntityAnim& st, float3 pos, float ground) {
+    const auto& S = L.shadow;
+    float3 ax = st.drawn.transformDir({1, 0, 0}), az = st.drawn.transformDir({0, 0, 1});
+    ax.y = 0; az.y = 0;
+    const float lx = length(ax), lz = length(az);
+    if (lx < 1e-6f || lz < 1e-6f) return;
+    ax = ax * (1.0f / lx); az = az * (1.0f / lz);
+    const float3 c = float3{pos.x, ground + S.lift, pos.z} + ax * S.ox + az * S.oz;
+    const float3 u = ax * (S.w * 0.5f), v = az * (S.d * 0.5f);   // image top (v = 0) towards -z of the model
+    ViewGroundBatch* b = nullptr;
+    for (auto& x : shadowDraws_) if (x.image == S.image) { b = &x; break; }
+    if (!b) { shadowDraws_.push_back({}); b = &shadowDraws_.back(); b->image = S.image; b->layer = -1; }
+    auto vert = [&](float su, float sv) {
+        const float3 p = c + u * su + v * sv;
+        const float tu = S.flipU ? (1 - su) * 0.5f : (su + 1) * 0.5f, tv = S.flipV ? (1 - sv) * 0.5f : (sv + 1) * 0.5f;
+        b->verts.push_back({p.x, p.y, p.z, tu, tv, S.rgba});
+    };
+    vert(-1, -1); vert(1, -1); vert(1, 1);
+    vert(-1, -1); vert(1, 1); vert(-1, 1);
+}
+
+void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batches) {
+    if (!dev_) return;
+    groundMerged_.clear();
+    for (auto& b : shadowDraws_) if (!b.verts.empty()) groundMerged_.push_back(b);
+    if (groundMerged_.empty()) { groundCanvas_.draw(r, *dev_, batches, contentBase_); return; }
+    groundMerged_.insert(groundMerged_.end(), batches.begin(), batches.end());
+    groundCanvas_.draw(r, *dev_, groundMerged_, contentBase_);
+}
 
 void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
     if (planets_.active()) { drawPlanets(r, s, time, vision, grid); return; }   // RtsPlanetView.cpp
@@ -116,6 +148,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
     events_.clear();
     effects_.clear();
     handleEvents(s);
+    for (auto& b : shadowDraws_) b.verts.clear();
     for (size_t i = 0; i < s.objects.size(); ++i) {
         const SceneObject& o = s.objects[i];
         if (o.isProjectile) {
@@ -139,7 +172,8 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
         const float ground = heightAt(grid, o.pos.x, o.pos.z);
         animate(st, o, dt, &grid);
         drawObject(r, st, o, ground, 1.0f);
-        if (L.air) { // ground shadow blob helps reading the height
+        if (!L.shadow.image.empty()) addGroundShadow(L, st, o.pos, ground);
+        if (L.air && L.shadow.image.empty()) { // ground shadow blob helps reading the height (unless the type has its own)
             r.circleXZ({o.pos.x, ground, o.pos.z}, 0.35f, rgba(0, 0, 0, 90), 16, ground + 0.03f);
         }
     }

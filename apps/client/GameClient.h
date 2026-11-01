@@ -237,6 +237,7 @@ private:
     RtsView view_;
     ClientFx fx_;                         // particle effects (ClientFx.cpp)
     game::ViewScripts viewScripts_;       // rules "viewScripts" (docs/scripting.md): notices / effects / sounds
+    std::vector<game::ViewGroundBatch> groundCanvas_;   // view.draw_ground triangles of the last view-script update
     std::vector<game::ViewDrawBatch> canvas_;   // view.draw triangles of the last view-script update
     void runViewScripts(float dt);
     audio::AudioEngine audio_;

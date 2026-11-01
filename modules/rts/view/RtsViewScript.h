@@ -78,6 +78,8 @@ public:
     std::vector<UiRequest> takeUiRequests();
     // view.draw(...) of the last update (cleared when the next update starts)
     std::vector<ViewDrawBatch> takeDraws();
+    // view.draw_ground(...) of the last update (world-space triangles, ViewCanvas.h)
+    std::vector<ViewGroundBatch> takeGroundDraws();
     // From the UI: data-event-click="event('name', ...)" -> ui.on("name", fn(args)) handlers;
     // send('id', {...}) -> a script command like view.send (false: unknown id / bad args, see log)
     void uiEvent(Simulation& sim, const std::string& name, const Json& args);

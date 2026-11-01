@@ -732,6 +732,7 @@ void GameClient::runViewScripts(float dt) {
     }
     viewScripts_.update(*sim_, dt);
     canvas_ = viewScripts_.takeDraws();   // view.draw: drawn after the overlays, under the UI
+    groundCanvas_ = viewScripts_.takeGroundDraws();   // view.draw_ground: in the 3D scene
     if (game::ViewCameraRequest cr; viewScripts_.takeCameraRequest(cr)) {   // view.set_camera: presentation only
         if (std::isfinite(cr.x)) cam_.target.x = cr.x;
         if (std::isfinite(cr.z)) cam_.target.z = cr.z;
@@ -872,6 +873,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                    screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);
         fx_.addLights(r3d_.lights);   // particle lights ("light" module)
         runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
+        view_.drawGround(r3d_, groundCanvas_);
         if (mode_ == Mode::Place && placeType_ >= 0) { // ghost of the building to place (its footprint is the "placement" overlay)
             bool ok;
             Vec3 c = placeCentre(mouseX_, mouseY_, ok);

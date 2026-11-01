@@ -35,6 +35,8 @@ struct ViewScripts::Impl {
     bool cameraRequested = false;
     std::vector<ViewDrawBatch> draws;
     size_t drawVerts = 0;
+    std::vector<ViewGroundBatch> groundDraws;
+    size_t groundVerts = 0;
     std::shared_ptr<render::PaintLayers> paint = std::make_shared<render::PaintLayers>();
     explicit Impl(ViewScripts& s) : self(s) {}
 
@@ -370,6 +372,43 @@ int vDraw(lua_State* L, Vm& vm) {
     im.drawVerts += count;
     return 0;
 }
+// view.draw_ground(verts [, {image =, layer =}]): world triangles, x, y, z, rgba (with image: x, y, z, u, v, rgba)
+int vDrawGround(lua_State* L, Vm& vm) {
+    auto& im = viewOf(vm);
+    if (!lua_istable(L, 1)) return fail(vm, "view.draw_ground(verts [, {image =, layer =}])");
+    std::string image; int layer = 0;
+    if (lua_istable(L, 2)) {
+        lua_getfield(L, 2, "image"); if (lua_isstring(L, -1)) image = lua_tostring(L, -1); lua_pop(L, 1);
+        lua_getfield(L, 2, "layer"); if (lua_isnumber(L, -1)) layer = int(lua_tointeger(L, -1)); lua_pop(L, 1);
+    }
+    const size_t stride = image.empty() ? 4 : 6, n = size_t(lua_rawlen(L, 1));
+    if (n % (stride * 3) != 0) return fail(vm, "view.draw_ground: vertex data is not a whole number of triangles (" + std::to_string(stride) + " numbers a vertex)");
+    const size_t count = n / stride;
+    if (im.groundVerts + count > (size_t(1) << 20)) return fail(vm, "view.draw_ground: more than 1048576 vertices this frame");
+    std::vector<ViewGroundVertex> out;
+    out.reserve(count);
+    auto num = [&](size_t i) { lua_rawgeti(L, 1, lua_Integer(i)); double d = lua_tonumber(L, -1); lua_pop(L, 1); return d; };
+    for (size_t v = 0; v < count; ++v) {
+        const size_t b = v * stride + 1;
+        ViewGroundVertex w;
+        w.x = float(num(b)); w.y = float(num(b + 1)); w.z = float(num(b + 2));
+        if (stride == 6) { w.u = float(num(b + 3)); w.v = float(num(b + 4)); }
+        lua_rawgeti(L, 1, lua_Integer(b + stride - 1));
+        w.rgba = uint32_t(lua_Integer(lua_isinteger(L, -1) ? lua_tointeger(L, -1) : lua_Integer(lua_tonumber(L, -1))));
+        lua_pop(L, 1);
+        if (!std::isfinite(w.x) || !std::isfinite(w.y) || !std::isfinite(w.z) || !std::isfinite(w.u) || !std::isfinite(w.v))
+            return fail(vm, "view.draw_ground: non-finite vertex");
+        out.push_back(w);
+    }
+    if (im.groundDraws.empty() || im.groundDraws.back().image != image || im.groundDraws.back().layer != layer) {
+        im.groundDraws.push_back({});
+        im.groundDraws.back().image = image; im.groundDraws.back().layer = layer;
+    }
+    auto& dst = im.groundDraws.back().verts;
+    dst.insert(dst.end(), out.begin(), out.end());
+    im.groundVerts += count;
+    return 0;
+}
 int vPlayer(lua_State* L, Vm& vm) { lua_pushinteger(L, viewOf(vm).player); return 1; }
 
 // ---- Lua <-> Json for the UI (view values: numbers, fx, strings, booleans, tables)
@@ -504,6 +543,7 @@ bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
 }
 
 std::vector<ViewDrawBatch> ViewScripts::takeDraws() { impl_->drawVerts = 0; return std::move(impl_->draws); }
+std::vector<ViewGroundBatch> ViewScripts::takeGroundDraws() { impl_->groundVerts = 0; return std::move(impl_->groundDraws); }
 
 bool ViewScripts::active() const { return impl_->vm.L != nullptr; }
 
@@ -532,7 +572,8 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
                                      {"send", bind<vSend>}, {"state", bind<vState>},
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
-                                     {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>}, {nullptr, nullptr}};
+                                     {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
+                                     {"draw_ground", bind<vDrawGround>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);
     lua_setglobal(vm.L, "view");
     static const luaL_Reg uiFuncs[] = {{"set", bind<uSet>}, {"open", bind<uOpen>}, {"close", bind<uClose>}, {"on", bind<uOn>}, {nullptr, nullptr}};
@@ -570,7 +611,7 @@ void ViewScripts::update(Simulation& sim, float dt) {
     im.vm.sim = &sim; im.vm.spatialOk = false;
     im.vm.used = 0;
     im.vm.exceeded = false;
-    im.draws.clear(); im.drawVerts = 0;   // view.draw: one frame
+    im.draws.clear(); im.drawVerts = 0; im.groundDraws.clear(); im.groundVerts = 0;   // view.draw / draw_ground: one frame
     if (im.collector) {
         std::vector<SimEvent> evs;
         evs.swap(im.collector->events);

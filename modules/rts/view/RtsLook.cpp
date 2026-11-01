@@ -138,6 +138,21 @@ const Model* RtsView::modelOf(uint16_t type) const {
     return type < looks_.size() && !looks_[type].models.empty() ? looks_[type].models[0].model : nullptr;
 }
 
+RtsView::TypeLook::GroundShadow RtsView::parseGroundShadow(const Json& gs) {
+    TypeLook::GroundShadow S;
+    if (!gs.isObject() || !gs["image"].isString()) return S;
+    S.image = gs["image"].str();
+    S.w = num(gs["size"][0], 1); S.d = num(gs["size"][1], S.w);
+    S.ox = num(gs["offset"][0], 0); S.oz = num(gs["offset"][1], 0);
+    S.lift = num(gs["lift"], 0.05f);
+    const Json& sc = gs["color"];
+    auto b = [&](int i, float def) { return uint32_t(std::lround(std::clamp(num(sc[i], def), 0.0f, 1.0f) * 255)); };
+    S.rgba = sc.size() >= 3 ? (b(0, 0) << 24) | (b(1, 0) << 16) | (b(2, 0) << 8) | b(3, 1) : 0x0000008cu;
+    S.flipU = gs["flip"][0].boolean(false); S.flipV = gs["flip"][1].boolean(false);
+    if (!(S.w > 0 && S.d > 0) || !std::isfinite(S.w) || !std::isfinite(S.d)) S.image.clear();
+    return S;
+}
+
 void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     const Json& v = t.view;
     L.structure = t.structure;
@@ -151,6 +166,10 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     L.turnSpeed = num(v["turnSpeed"], t.structure ? 0.0f : 10.0f);
     L.tracer = v.getBool("tracer", false);
     L.flyHeight = num(v["flyHeight"], 2.4f);
+    // "groundShadow": {"image", "size": [w, d] (world units), "offset": [x, z] (model frame, world units), "color": [r, g,
+    // b, a] (0..1, multiplies the image), "lift", "flip": [u, v]}: a flat image on the ground under the model, turning
+    // with it (image u along the model's +x, its top towards the model's -z unless flipped). docs/scripting.md
+    L.shadow = parseGroundShadow(v["groundShadow"]);
     L.unitSpeed = float(t.speed.toDouble());
     // "model": "a.glb" | ["a.glb", "b.vox"] (one picked per object) | entries {"file": "b.vox", ...}
     // whose other keys replace the view keys for that model (different nodes, materials, height)

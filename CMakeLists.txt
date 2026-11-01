@@ -942,7 +942,7 @@ endif()
 target_sources(rts_game_view PRIVATE modules/rts/view/RtsViewScript.cpp)
 
 # Generic GPU canvases and Lua world-space paint layers.
-target_sources(rts_game_view PRIVATE engine/render/RenderTexture.cpp modules/rts/view/RtsPaintLayers.cpp)
+target_sources(rts_game_view PRIVATE engine/render/RenderTexture.cpp modules/rts/view/RtsPaintLayers.cpp modules/rts/view/RtsGroundCanvas.cpp)
 
 # Shared region gesture input; gameplay remains in project Lua ability effects.
 foreach(t rts_client main)

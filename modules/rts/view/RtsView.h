@@ -23,6 +23,7 @@
 #include "Rts2DView.h"
 #include "RtsGroundFx.h"
 #include "RtsPaintLayers.h"
+#include "RtsGroundCanvas.h"
 #include "RtsLights.h"
 #include "RtsFog.h"
 #include "RtsFieldView.h"
@@ -130,6 +131,10 @@ public:
     void drawOverlays(const render::RTSCamera& cam, const RtsScene& s, float viewW, float viewH, float ox = 0, float oy = 0, void* drawList = nullptr);
     // view.draw triangles of the view scripts (ViewCanvas.h), after drawOverlays
     void drawCanvas(const std::vector<ViewDrawBatch>& batches, float ox = 0, float oy = 0, void* drawList = nullptr) { overlays_.drawCanvas(batches, ox, oy, drawList); }
+    // view.draw_ground triangles of the view scripts (RtsGroundCanvas.h): call between draw() and Renderer3D::render
+    // Also draws the types' "groundShadow" images collected by the last draw() (layer -1).
+    void drawGround(render::Renderer3D& r, const std::vector<ViewGroundBatch>& batches);
+    const std::vector<ViewGroundBatch>& groundShadows() const { return shadowDraws_; }
     // Building placement preview: the type's model, green when `ok`, red otherwise.
     void drawGhost(render::Renderer3D& r, uint16_t type, render::float3 pos, bool ok, const MapGrid& grid, double time);
     // One object at the origin playing its idle clip (portraits, editor previews).
@@ -277,6 +282,8 @@ private:
         float unitSpeed = 0;
         Construction construction = Construction::Grow;
         bool dissolveSpawn = false, dissolveDeath = false;
+        // "groundShadow": a flat image under the model (OpenWar's footprint sprites), turning with the drawn model
+        struct GroundShadow { std::string image; float w = 0, d = 0, ox = 0, oz = 0, lift = 0.05f; uint32_t rgba = 0x0000008cu; bool flipU = false, flipV = false; } shadow;
     };
     struct EntityAnim {
         uint16_t type = 0;
@@ -311,6 +318,10 @@ private:
     void drawTracers(render::Renderer3D& r, float dt, const MapGrid* grid = nullptr);
     void buildShapes(gfx::Device& dev);
     void buildLook(gfx::Device& dev, const UnitType& t, TypeLook& out);
+public:
+    // "groundShadow" of a type's view (empty image = none / invalid); public for tests
+    static TypeLook::GroundShadow parseGroundShadow(const Json& v);
+private:
     bool loadChoice(gfx::Device& dev, const UnitType& t, const Json& view, const std::string& path, ModelChoice& out);
     void configureChoice(gfx::Device& dev, const UnitType& t, const Json& view, ModelChoice& c, bool isShape);
     // Material library (materials.json): a reference ("steel", {"use": "steel", ...}) flattened into
@@ -366,6 +377,9 @@ private:
     uint64_t frame_ = 0;
     RtsLights lights_;
     RtsPaintLayers paintLayers_;
+    RtsGroundCanvas groundCanvas_;
+    std::vector<ViewGroundBatch> shadowDraws_, groundMerged_;   // "groundShadow" quads of this frame (one batch per image)
+    void addGroundShadow(const TypeLook& L, const EntityAnim& st, render::float3 pos, float ground);
     RtsGroundFx groundFx_;   // territory, diggable rock, lanes, roads (RtsGroundFx.cpp)
     FogOfWar fog_;           // fog of war look + sheet (RtsFog.cpp)
     RtsOverlays overlays_;   // data-driven overlays (RtsOverlays.cpp)

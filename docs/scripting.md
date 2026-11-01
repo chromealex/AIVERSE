@@ -584,6 +584,25 @@ number or more than 1048576 vertices a frame raises an error and adds nothing. T
 board drawn over the 3D map (OpenWar: Unity's `ArmyBoard` VertexHelper meshes, `scripts/view/openwar/board.lua`).
 Client only (the editor Game view does not draw it yet); presentation only. Test: `view_to_screen_and_draw_canvas`.
 
+`view.draw_ground(verts [, {image = "ui/x.png", layer = 0}])` is the world-space counterpart for marks lying on the
+map: each vertex is `x, y, z, rgba` (with `image`: `x, y, z, u, v, rgba`) in world units (`y` up, absolute height —
+put it a few hundredths above the ground). The triangles are drawn inside the 3D scene after the opaque and
+translucent meshes, depth tested without depth writes and with a small bias towards the camera, so units and buildings
+standing on a mark hide it (the screen canvas above draws over them). Batches are sorted by `layer`, then call order;
+same image and layer merge; one frame only; the texture alpha below .02 is cut (vertex alpha is free). Same limits and
+errors as `view.draw` (1048576 vertices a frame). Client only; presentation only (`modules/rts/view/RtsGroundCanvas.*`).
+OpenWar draws its ground ability areas, railways and nuclear target rings with it, as Unity's ground canvases under
+the units. Test: `view_draw_ground_world_triangles`.
+
+A unit type's view can carry a flat ground shadow image drawn through the same ground canvas (layer -1, before the
+view scripts' `draw_ground` batches of layer >= 0): `"groundShadow": {"image": "ui/shadows/Tank.png", "size": [w, d],
+"offset": [x, z], "color": [r, g, b, a], "lift": .05, "flip": [u, v]}` — `size` and `offset` in world units in the
+model's frame (the drawn model's rotation, without its scale), `color` multiplies the image (default black at alpha
+.55), the image's u runs along the model's +x and its top lies towards the model's -z unless flipped. It follows the
+interpolated position and facing and replaces the default blob of air units. OpenWar ports Unity's footprint
+sprites (`ArmyUnitModelLayer.AttachShadow`) with it. Client only (drawn by `RtsView::drawGround`). Test:
+`view_ground_shadow_option`.
+
 View scripts' log (`game.log` lines and errors, which disable the failing handler) is kept by the host; with
 `RTS_SCRIPT_LOG=1` the client also prints each line on stdout as `[view] t=<tick> ...` / `[view error] ...`, next to the
 simulation scripts' `[script] ...` lines (screenshot and capture runs). Hook: `ViewScripts::onLog`; test

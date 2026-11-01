@@ -11813,6 +11813,54 @@ end)
     CHECK(sim.checksum() == before);
 }
 
+TEST(view_draw_ground_world_triangles) {
+    // view.draw_ground collects world-space triangle batches (x, y, z, rgba; with an image x, y, z, u, v, rgba) per
+    // image / layer for one frame, validates its input and never touches the simulation
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/ground_marks.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/ground_marks.lua", Json::string(R"LUA(
+view.on_frame(function()
+ view.draw_ground({0, .05, 0, 0xff000080, 1, .05, 0, 0xff000080, 0, .05, 1, 0xff000080})
+ view.draw_ground({2, .05, 2, 0x00ff00ff, 3, .05, 2, 0x00ff00ff, 2, .05, 3, 0x00ff00ff})   -- same batch
+ view.draw_ground({0, 0, 0, 0, 0, -1, 1, 0, 0, 1, 0, -1, 0, 0, 1, 0, 1, -1}, {image = 'ui/x.png', layer = -3})
+ assert(not pcall(view.draw_ground, {1, 2, 3}))                             -- not whole triangles
+ assert(not pcall(view.draw_ground, {0, 0, 1 / 0, 1, 0, 0, 0, 1, 0, 0, 0, 1}))  -- non-finite
+ assert(not pcall(view.draw_ground, 5))
+end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    view.update(sim, .016f);
+    for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+    CHECK(view.log().empty());
+    auto g = view.takeGroundDraws();
+    CHECK(g.size() == 2);
+    if (g.size() == 2) {
+        CHECK(g[0].image.empty() && g[0].layer == 0 && g[0].verts.size() == 6 && g[0].verts[0].rgba == 0xff000080u && g[0].verts[2].z == 1);
+        CHECK(g[0].verts[3].x == 2 && g[0].verts[3].y == .05f && g[0].verts[3].rgba == 0x00ff00ffu);
+        CHECK(g[1].image == "ui/x.png" && g[1].layer == -3 && g[1].verts.size() == 3 && g[1].verts[1].u == 1 && g[1].verts[2].v == 1);
+    }
+    CHECK(view.takeDraws().empty());   // the screen canvas is separate
+    CHECK(view.takeGroundDraws().empty());
+    view.update(sim, .016f); CHECK(view.takeGroundDraws().size() == 2);   // one frame's batches, not accumulated
+    CHECK(sim.checksum() == before);
+}
+
+TEST(view_ground_shadow_option) {
+    // a type's "groundShadow" (OpenWar footprint sprites): image, size, offset, colour, lift, flips; invalid -> none
+    auto s = game::RtsView::parseGroundShadow(Json::parse(R"({"image": "ui/shadows/Tank.png", "size": [2, 3], "offset": [0, -0.5],
+        "color": [0, 0, 0, 0.55], "lift": 0.04, "flip": [true, false]})"));
+    CHECK(s.image == "ui/shadows/Tank.png" && s.w == 2 && s.d == 3 && s.ox == 0 && s.oz == -.5f && std::fabs(s.lift - .04f) < 1e-6f);
+    CHECK(s.rgba == 0x0000008cu && s.flipU && !s.flipV);
+    auto d = game::RtsView::parseGroundShadow(Json::parse(R"({"image": "a.png", "size": [1.5]})"));
+    CHECK(d.image == "a.png" && d.w == 1.5f && d.d == 1.5f && d.rgba == 0x0000008cu && std::fabs(d.lift - .05f) < 1e-6f);
+    CHECK(game::RtsView::parseGroundShadow(Json::parse(R"({"image": "a.png", "size": [0, 1]})")).image.empty());
+    CHECK(game::RtsView::parseGroundShadow(Json::parse(R"({"size": [1, 1]})")).image.empty());
+    CHECK(game::RtsView::parseGroundShadow(Json()).image.empty());
+}
+
 TEST(view_paint_layer_ground_options) {
     // categorical ground surface (OpenWar ArmyMapWorld meadow / coast): options land in the layer, bad ones fail, view-only
     Json rules = Json::parseFile(kSkirmish + "/rules.json");
