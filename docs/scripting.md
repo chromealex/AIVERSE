@@ -601,6 +601,17 @@ colours (0..1); `outside` is the id used beyond the raster edge. `density` repea
 texels (smoothing and border widths are in texels). One quad per layer, texelFetch on an RGBA8 texture (rgb colour,
 a id); presentation only. OpenWar draws its ownership raster with it (ArmyMapWorld look).
 
+`ground = {scale, strength, flipHeight, team = {min, max}, context = {min, max}, linear, coast = {sea, drop, beach,
+shallow, earthNear, earthFar, foam}}` adds a ground surface (a port of ArmyMapWorld's meadow and coast): land ids in
+`team` keep their colour under a world-anchored meadow relief (patches, blots, pale spots; `scale` = patch size in world
+units, `strength` = fine variation), other land ids get the neutral meadow (green / olive / pale), ids in `context` a faint
+noise; `flipHeight` > 0 anchors the noise at y = flipHeight - z (north-up source maps). With `coast`, the id `sea` is
+water: a static signed shoreline distance (texels, chamfer + 3x3 smoothing, rebuilt only when the sea mask changes) gives
+a beach rim on land and shallows, a shore shadow, a cliff on the shore facing `drop` (texture-row direction, -1 = towards
+-z) and an animated foam line on water (colours 0..1). `linear = true` runs the surface maths on linear colour (sRGB in
+and out), as a linear-space Unity project. The value noise uses the desktop sine hash, the mobile hash on low material
+quality (as the source's ARMY_MOBILE variant). Test: `view_paint_layer_ground_options`.
+
 ### Scripted air placement
 
 `game.set_position(unit, x, z)` keeps its flat-map, living mobile-unit and in-bounds validation. Air-layer units can be placed over water; other units still require a ground cell. Previous render position is preserved for interpolation, native movement/orders are cleared, and presentation applies the configured flight height. The API does not paint territory or find routes. Covered by `script_air_position_over_water`, including snapshot replay.

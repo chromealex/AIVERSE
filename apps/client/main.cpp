@@ -232,6 +232,9 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
         scriptUiReset();
+        if (std::getenv("RTS_SCRIPT_LOG"))   // view scripts' log lines too ("[view]" / "[view error]")
+            viewScripts_.onLog = [](const ScriptLogEntry& e) {
+                std::printf("[view%s] t=%u %s\n", e.error ? " error" : "", unsigned(e.tick), e.text.c_str()); std::fflush(stdout); };
         if (viewScripts_.load(*sim_, rules, map, uint8_t(spectator_ ? 0 : human_))) viewScripts_.attach(*sim_);
         view_.lights().configure(manifest_["lighting"], map["lighting"], map["lights"]); // day/night, map lights
         if (auto pe = game::configurePlayerColors(manifest_["playerColors"]); !pe.empty()) std::fprintf(stderr, "%s\n", pe.c_str());
@@ -264,9 +267,6 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
     if (std::getenv("RTS_SCRIPT_LOG") && mod().scripts())   // testing (screenshots, captures): script log lines on stdout
         mod().scripts()->onLog = [](const ScriptLogEntry& e) {
             std::printf("[script%s] t=%u %s\n", e.error ? " error" : "", unsigned(e.tick), e.text.c_str()); std::fflush(stdout); };
-    if (std::getenv("RTS_SCRIPT_LOG"))   // view scripts' log lines too ("[view]" / "[view error]")
-        viewScripts_.onLog = [](const ScriptLogEntry& e) {
-            std::printf("[view%s] t=%u %s\n", e.error ? " error" : "", unsigned(e.tick), e.text.c_str()); std::fflush(stdout); };
     if (const char* ff = std::getenv("RTS_FAST_FORWARD")) { // testing (screenshots): bots play N game seconds first
         const uint32_t ticks = uint32_t(std::max(0.0, std::atof(ff)) * sim_->tickRate());
         std::vector<RtsAI> ffBots = bots_;   // the human slot is played by a bot too while fast-forwarding

@@ -158,6 +158,36 @@ int vPaintLayer(lua_State* L,Vm& vm) {
         lua_getfield(L,1,"borderColor");
         if(lua_istable(L,-1))for(int i=0;i<4;++i){lua_rawgeti(L,-1,i+1);float v=lua_isnil(L,-1)?1.f:float(toDouble(L,-1));lua_pop(L,1);if(!std::isfinite(v)){lua_pop(L,1);return fail(vm,"invalid border colour");}p.borderColor[size_t(i)]=std::clamp(v,0.f,1.f);}
         lua_pop(L,1);
+        // ground = {scale, strength, flipHeight, team = {min, max}, context = {min, max}, coast = {sea, drop, beach,
+        // shallow, earthNear, earthFar, foam}}: meadow / coast surface (render::PaintLayer, docs § Categorical cell layers)
+        lua_getfield(L,1,"ground");
+        if(lua_istable(L,-1)){
+            const int gi=lua_gettop(L);p.ground=true;
+            lua_getfield(L,gi,"linear");p.groundLinear=lua_toboolean(L,-1);lua_pop(L,1);
+            p.groundScale=numberField(L,gi,"scale",8);p.groundStrength=numberField(L,gi,"strength",.12f);p.flipHeight=numberField(L,gi,"flipHeight",0);
+            if(!std::isfinite(p.groundScale)||p.groundScale<=0||!std::isfinite(p.groundStrength)||!std::isfinite(p.flipHeight)){lua_pop(L,1);return fail(vm,"invalid paint ground");}
+            p.groundStrength=std::clamp(p.groundStrength,0.f,1.f);
+            auto range=[&](const char* key,int& lo,int& hi)->bool{
+                lua_getfield(L,gi,key);bool ok=true;
+                if(lua_istable(L,-1)){lua_rawgeti(L,-1,1);lua_rawgeti(L,-2,2);const double a=toDouble(L,-2),b=toDouble(L,-1);lua_pop(L,2);
+                    ok=std::isfinite(a)&&std::isfinite(b)&&a>=0&&b<=255&&a<=b;if(ok){lo=int(a);hi=int(b);}}
+                lua_pop(L,1);return ok;};
+            if(!range("team",p.teamMin,p.teamMax)||!range("context",p.contextMin,p.contextMax)){lua_pop(L,1);return fail(vm,"paint ground ranges must be {min, max} ids 0..255");}
+            lua_getfield(L,gi,"coast");
+            if(lua_istable(L,-1)){
+                const int ci=lua_gettop(L);p.coast=true;
+                const float sea=numberField(L,ci,"sea",255),drop=numberField(L,ci,"drop",-1);
+                if(!std::isfinite(sea)||sea<0||sea>255||!std::isfinite(drop)){lua_pop(L,2);return fail(vm,"invalid paint coast");}
+                p.seaId=int(sea);p.coastDrop=std::clamp(drop,-1.f,1.f);
+                auto colour=[&](const char* key,std::array<float,3>& c)->bool{
+                    lua_getfield(L,ci,key);bool ok=true;
+                    if(lua_istable(L,-1))for(int i=0;i<3;++i){lua_rawgeti(L,-1,i+1);const double v=toDouble(L,-1);lua_pop(L,1);if(!std::isfinite(v))ok=false;else c[size_t(i)]=std::clamp(float(v),0.f,1.f);}
+                    lua_pop(L,1);return ok;};
+                if(!colour("beach",p.beach)||!colour("shallow",p.shallow)||!colour("earthNear",p.earthNear)||!colour("earthFar",p.earthFar)||!colour("foam",p.foam)){lua_pop(L,2);return fail(vm,"invalid paint coast colour");}
+            }
+            lua_pop(L,1);
+        }
+        lua_pop(L,1);
     } else lua_pop(L,1);
     if(p.territoryOwner){
         const auto& grid=vm.module->state(*vm.sim).grid;

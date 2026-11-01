@@ -22,6 +22,16 @@ struct PaintLayer {
     std::array<float,4> borderColor{1,1,1,1};
     float borderWidth=0.55f,smooth=2.0f;
     int outside=255;
+    // Ground surface (paint_layer{ground=...}, categorical only): a port of OpenWar's ArmyMapWorld meadow and coast.
+    // Ids in [teamMin, teamMax] are dyed meadow (relief of the id colour), [contextMin, contextMax] faint noise, other
+    // land ids neutral meadow; `seaId` is water: a static signed shoreline distance (texels, from the cells) drives
+    // a beach rim on land and shallows, shadow, a near-shore cliff and animated foam on water.
+    bool ground=false,coast=false,groundLinear=false;   // groundLinear: the surface maths runs on linear colour (sRGB in/out)
+    float groundScale=8,groundStrength=0.12f,flipHeight=0;   // flipHeight > 0: noise y = flipHeight - z (north-up maps)
+    int teamMin=1,teamMax=8,contextMin=200,contextMax=254,seaId=255;
+    float coastDrop=-1;                                      // texture-row direction of the shore "side" (-1: towards -z)
+    std::array<float,3> beach{.98f,.94f,.73f},shallow{.28f,.76f,.78f},earthNear{.79f,.72f,.51f},earthFar{.43f,.40f,.29f},foam{.9f,.99f,.97f};
+    bool coastDirty=true;
 };
 struct PaintLayers { std::map<int,PaintLayer> layers; int nextId=1; };
 }

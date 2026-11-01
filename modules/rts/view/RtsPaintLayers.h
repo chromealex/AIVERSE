@@ -16,11 +16,13 @@ private:
         std::vector<float> value,target;
         uint64_t revision=0;
         std::vector<uint8_t> bytes;
+        gfx::TextureHandle coast;   // categorical ground: signed shoreline distance (R = .5 + texels / 64)
+        uint64_t seaKey=0;
     };
     gfx::Device* dev_=nullptr;
     gfx::ShaderHandle shader_,cellShader_;
     gfx::PipelineHandle pipe_,cellPipe_;
-    void drawCells(render::Renderer3D&,gfx::Device&,render::PaintLayer&,const MapGrid&,const RtsView&,int id);
+    void drawCells(render::Renderer3D&,gfx::Device&,render::PaintLayer&,const MapGrid&,const RtsView&,int id,double time);
     std::shared_ptr<render::PaintLayers> source_;
     std::map<int,Layer> layers_;
     std::vector<uint8_t> memory_;

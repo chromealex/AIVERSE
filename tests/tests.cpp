@@ -11813,6 +11813,35 @@ end)
     CHECK(sim.checksum() == before);
 }
 
+TEST(view_paint_layer_ground_options) {
+    // categorical ground surface (OpenWar ArmyMapWorld meadow / coast): options land in the layer, bad ones fail, view-only
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/ground.lua"])"));
+    Json src = Json::object(); src.set("scripts/view/ground.lua", Json::string(R"LUA(
+local layer = view.paint_layer{bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, density = 3, outside = 255,
+ ground = {scale = 8, strength = .23, flipHeight = 2, team = {1, 8}, context = {200, 254}, linear = true,
+  coast = {sea = 255, drop = -1, beach = {.98, .94, .73}, foam = {.9, .99, .97}}}}
+layer:set_cells(string.char(1, 1, 2, 255, 9, 9, 255, 255))
+assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, ground = {scale = 0}}))
+assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, ground = {team = {9, 1}}}))
+assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, height = 2}, ground = {coast = {sea = 300}}}))
+)LUA")); rules.set("$scriptSources", src);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts v; CHECK(v.load(sim, rules, map, 1));
+    for (auto& e : v.log()) std::printf("  ground log: %s\n", e.text.c_str());
+    CHECK(v.log().empty());
+    auto& layers = v.paintLayers()->layers; CHECK(layers.size() == 1);
+    if (!layers.empty()) {
+        const auto& l = layers.begin()->second;
+        CHECK(l.ground && l.coast && l.groundLinear && l.groundScale == 8 && std::abs(l.groundStrength - .23f) < 1e-6f && l.flipHeight == 2);
+        CHECK(l.teamMin == 1 && l.teamMax == 8 && l.contextMin == 200 && l.contextMax == 254 && l.seaId == 255 && l.coastDrop == -1);
+        CHECK(std::abs(l.beach[2] - .73f) < 1e-6f && std::abs(l.foam[1] - .99f) < 1e-6f && std::abs(l.shallow[0] - .28f) < 1e-6f);   // shallow: default
+    }
+    CHECK(sim.checksum() == before);
+}
+
 TEST(view_script_log_callback) {
     // ViewScripts::onLog sees every new log line (game.log and errors) as it is written: hosts print view logs
     // with it (client: RTS_SCRIPT_LOG), the stored log() is unchanged
