@@ -181,6 +181,71 @@ int f64Le(lua_State* L) { lua_pushboolean(L, f64Of(arg64(L, 1)) <= f64Of(arg64(L
 int f64Eq(lua_State* L) { lua_pushboolean(L, f64Of(arg64(L, 1)) == f64Of(arg64(L, 2))); return 1; }
 int f64ToF32(lua_State* L) { requireEnv(L); const float r = float(f64Of(arg64(L, 1))); return push32(L, r); }
 
+// ---- grid segment walk: f32.segment(walkable, burning, owners, width, height, first, second, from, to)
+// The four-connected cell walk from point `from` to point `to` (tables {x=, y=} of binary32 bit patterns) of a
+// float32 grid port (OpenWar ArmySharedRoutes): true when every visited cell, both cells at a corner crossing
+// included, is allowed: inside the grid, walkable[c] == true, burning[c] absent (burning may be nil), and
+// owners[c] raw-equal to `first` or (when `second` is not nil) to `second`. The crossing parameters are the
+// binary32 operations of the script version in the same order; more than width + height steps is false.
+struct Walk {
+    lua_State* L; int walkable, burning, owners, first, second; lua_Integer size;
+    bool allowed(lua_Integer c) const {
+        if (c < 0 || c >= size) return false;
+        const bool w = lua_rawgeti(L, walkable, c) == LUA_TBOOLEAN && lua_toboolean(L, -1);
+        lua_pop(L, 1);
+        if (!w) return false;
+        if (burning) { const bool b = lua_rawgeti(L, burning, c) != LUA_TNIL && lua_toboolean(L, -1); lua_pop(L, 1); if (b) return false; }
+        lua_rawgeti(L, owners, c);
+        bool ok = lua_rawequal(L, -1, first) != 0;
+        if (!ok && second) ok = lua_rawequal(L, -1, second) != 0;
+        lua_pop(L, 1);
+        return ok;
+    }
+};
+int f32Segment(lua_State* L) {
+    requireEnv(L);
+    luaL_checktype(L, 1, LUA_TTABLE);
+    if (!lua_isnoneornil(L, 2)) luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checktype(L, 3, LUA_TTABLE);
+    const lua_Integer w = argInteger(L, 4, "f32.segment"), h = argInteger(L, 5, "f32.segment");
+    luaL_checktype(L, 8, LUA_TTABLE);
+    luaL_checktype(L, 9, LUA_TTABLE);
+    Walk k{L, 1, lua_isnoneornil(L, 2) ? 0 : 2, 3, 6, lua_isnoneornil(L, 7) ? 0 : 7, w * h};
+    const uint32_t fx = field32(L, 8, "x"), fy = field32(L, 8, "y"), tx0 = field32(L, 9, "x"), ty0 = field32(L, 9, "y");
+    auto cellOf = [&](uint32_t x, uint32_t y) -> lua_Integer {
+        const lua_Integer cx = floorInt(L, x), cy = floorInt(L, y);
+        return cx >= 0 && cy >= 0 && cx < w && cy < h ? cy * w + cx : -1;
+    };
+    lua_Integer cell = cellOf(fx, fy);
+    const lua_Integer last = cellOf(tx0, ty0);
+    if (!k.allowed(cell) || !k.allowed(last)) { lua_pushboolean(L, 0); return 1; }
+    const float inf = f32Of(0x7f800000u), one = 1.0f;
+    const float vx = f32Of(tx0) - f32Of(fx), vy = f32Of(ty0) - f32Of(fy);
+    const int sx = vx < 0.0f ? -1 : 1, sy = vy < 0.0f ? -1 : 1;
+    const float dx = vx == 0.0f ? inf : one / __builtin_fabsf(vx);
+    const float dy = vy == 0.0f ? inf : one / __builtin_fabsf(vy);
+    float tx, ty;
+    if (vx == 0.0f) tx = inf; else { const float edge = float(floorInt(L, fx) + (sx > 0 ? 1 : 0)); const float gap = edge - f32Of(fx); tx = gap / vx; }
+    if (vy == 0.0f) ty = inf; else { const float edge = float(floorInt(L, fy) + (sy > 0 ? 1 : 0)); const float gap = edge - f32Of(fy); ty = gap / vy; }
+    lua_Integer steps = 0;
+    while (cell != last) {
+        if (steps > w + h) { lua_pushboolean(L, 0); return 1; }
+        const bool crossX = tx < ty || tx == ty, crossY = ty < tx || ty == tx;
+        const lua_Integer x = cell % w, y = cell / w;   // cell >= 0 here
+        if (crossX && crossY) {
+            const lua_Integer nx = sx < 0 ? (x > 0 ? cell - 1 : -1) : (x < w - 1 ? cell + 1 : -1);
+            const lua_Integer ny = sy < 0 ? (y > 0 ? cell - w : -1) : (y < h - 1 ? cell + w : -1);
+            if (!k.allowed(nx) || !k.allowed(ny)) { lua_pushboolean(L, 0); return 1; }
+        }
+        if (crossX) { cell = sx < 0 ? (x > 0 ? cell - 1 : -1) : (x < w - 1 ? cell + 1 : -1); tx = tx + dx; }
+        if (crossY && cell >= 0) { const lua_Integer cy = cell / w; cell = sy < 0 ? (cy > 0 ? cell - w : -1) : (cy < h - 1 ? cell + w : -1); ty = ty + dy; }
+        if (!k.allowed(cell)) { lua_pushboolean(L, 0); return 1; }
+        ++steps;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 // ---- Q96 trigonometry (atan2, sincos): exact series on unsigned fixed point with 96 fractional bits in
 // base-2^24 limbs (little endian, no high zero limbs), every step truncating exactly as the integer-only
 // script implementation it replaces (OpenWar scripts/openwar/trig.lua), then one rounding to binary32
@@ -339,7 +404,7 @@ void openIeee(lua_State* L) {
     static const luaL_Reg f32[] = {{"add", f32Add}, {"sub", f32Sub}, {"mul", f32Mul}, {"div", f32Div}, {"sqrt", f32Sqrt},
                                    {"dot2", f32Dot2}, {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
                                    {"floorint", f32FloorInt}, {"cellat", f32CellAt}, {"fdot2", f32FiniteDot2}, {"sqdist", f32SqDist},
-                                   {"atan2", f32Atan2}, {"sincos", f32SinCos},
+                                   {"atan2", f32Atan2}, {"sincos", f32SinCos}, {"segment", f32Segment},
                                    {nullptr, nullptr}};
     static const luaL_Reg f64[] = {{"add", f64Add}, {"sub", f64Sub}, {"mul", f64Mul}, {"div", f64Div}, {"sqrt", f64Sqrt},
                                    {"fromint", f64FromInt}, {"lt", f64Lt}, {"le", f64Le}, {"eq", f64Eq}, {"tof32", f64ToF32},

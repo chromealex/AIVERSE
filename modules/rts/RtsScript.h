@@ -203,6 +203,7 @@ private:
 // Hosts bracket simulation steps with luaProfileTickBegin / luaProfileTickEnd; luaProfileWrite writes folded stacks
 // (<prefix>.all.folded: every tick; <prefix>.slow.folded: ticks over RTS_LUA_PROFILE_SLOW ms, default 50;
 // <prefix>.ticks.folded: the same per slow tick, first frame "tick N run R", R the write time in ms). Values are microseconds.
+// RTS_LUA_PROFILE_LINES=1 adds each frame's executing line ("fn@file:defined#line").
 bool luaProfileEnabled();
 void luaProfileTickBegin();
 void luaProfileTickEnd(uint64_t tick, int64_t us);

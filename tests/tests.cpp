@@ -10917,6 +10917,11 @@ TEST(script_sorted_pairs_order) {
             assert(keys({[3] = 1, [-2] = 1, x = 1, [true] = 1, [false] = 1, [10] = 1, a = 1}) == "false,true,-2,3,10,a,x")
             assert(keys({[2] = 1, [1] = 1, z = 1}) == "1,2,z")
             assert(keys({}) == "")
+            local ok, err = pcall(pairs, {[{}] = 1}); assert(not ok and err:find("pairs: table keys have no deterministic order", 1, true))
+            ok, err = pcall(pairs, 5); assert(not ok and err:find("pairs: table expected, got number", 1, true))
+            local t = setmetatable and {} or {}; t[1] = "a"; t[2] = "b"; local n = 0
+            for k, v in pairs(t) do n = n + 1; assert(t[k] == v) end; assert(n == 2)
+            assert(table.count({}) == 0 and table.count({1, 2, x = 3, [true] = 4}) == 4 and not pcall(table.count, 1))
         end
     )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
     auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
@@ -10967,6 +10972,16 @@ TEST(script_ieee_bit_patterns) {
             local s2,c2=f32.sincos(0x42c80000);assert(s2==0xbf01a12e and c2==0x3f5cc0ee)                -- 100 rad
             local s3,c3=f32.sincos(0x80000001);assert(s3==0x80000001 and c3==one)
             assert(not pcall(f32.sincos,0x50800000) and not pcall(f32.sincos,0x7fc00000))            -- beyond 2^33, NaN
+            -- segment: 4x3 grid owned by 1, cell 5 (x=1,y=1) owned by 2, cell 6 unwalkable
+            local wk,ow={},{};for c=0,11 do wk[c]=c~=6;ow[c]=c==5 and 2 or 1 end
+            local p=function(x,y)return {x=f32.div(f32.fromint(2*x+1),two),y=f32.div(f32.fromint(2*y+1),two)} end   -- cell centers
+            assert(f32.segment(wk,nil,ow,4,3,1,nil,p(0,0),p(3,0)))                  -- along the top row
+            assert(not f32.segment(wk,nil,ow,4,3,1,nil,p(0,1),p(3,1)))              -- through the enemy cell 5
+            assert(f32.segment(wk,nil,ow,4,3,1,2,p(0,1),p(1,1)))                    -- second owner allowed
+            assert(not f32.segment(wk,nil,ow,4,3,1,2,p(1,1),p(3,1)))                -- cell 6 not walkable
+            assert(not f32.segment(wk,{[4]=one},ow,4,3,1,nil,p(0,0),p(0,2)))        -- burning cell 4
+            assert(f32.segment(wk,{},ow,4,3,1,nil,p(0,0),p(0,2)))
+            assert(not f32.segment(wk,nil,ow,4,3,1,nil,p(0,0),p(2,2)))              -- corner through 5 / 6
             assert(f32.cellat({x=0x40200000,y=0x3fc00000},4,3)==6 and f32.cellat({x=0xbf000000,y=0},4,3)==-1 and f32.cellat({x=0,y=0x40400000},4,3)==-1)
             assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
             assert(f64.fromint(9007199254740993)==0x4340000000000000)

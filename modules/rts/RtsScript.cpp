@@ -45,6 +45,7 @@ struct LuaProfile {
     int state = -1;   // -1 unknown, 0 off, 1 on
     std::string prefix;
     int64_t periodUs = 100, slowUs = 50000;
+    bool lines = false;   // RTS_LUA_PROFILE_LINES=1: every frame also names its executing line (#line)
     bool inTick = false;
     std::chrono::steady_clock::time_point last;
     std::unordered_map<std::string, int64_t> tick, all, slow;
@@ -57,6 +58,7 @@ struct LuaProfile {
                 prefix = p;
                 if (const char* v = std::getenv("RTS_LUA_PROFILE_US")) periodUs = std::max<int64_t>(1, std::atoll(v));
                 if (const char* v = std::getenv("RTS_LUA_PROFILE_SLOW")) slowUs = int64_t(std::atof(v) * 1000);
+                if (const char* v = std::getenv("RTS_LUA_PROFILE_LINES")) lines = *v == '1';
             }
         }
         return state == 1;
@@ -74,7 +76,10 @@ struct LuaProfile {
             std::string f = ar.name ? ar.name : "?";
             f += '@';
             if (ar.what && std::strcmp(ar.what, "C") == 0) f += "[C]";
-            else { f += ar.short_src; f += ':'; f += std::to_string(ar.linedefined); }
+            else {
+                f += ar.short_src; f += ':'; f += std::to_string(ar.linedefined);
+                if (lines) { lua_getinfo(L, "l", &ar); f += '#'; f += std::to_string(ar.currentline); }   // the executing line
+            }
             frames[n++] = std::move(f);
         }
         std::string key;
@@ -461,6 +466,63 @@ int sbRequire(lua_State* L, Vm& vm) {
 }
 
 // Sorted pairs, address-free tostring / string.format, strict globals (installed after loading).
+// Native sorted pairs (see the prelude): upvalues 1 table.sort, 2 keyless. Same checks, error texts and
+// levels (luaL_error reports the caller's position, as error(msg, 2) in the Lua version), same traversal
+// for the first offending key, same sort call; the iterator returns k, t[k] (a non-raw read, as before).
+int sortedPairsIter(lua_State* L) {
+    const lua_Integer i = lua_tointeger(L, lua_upvalueindex(3)) + 1;
+    lua_pushinteger(L, i);
+    lua_replace(L, lua_upvalueindex(3));
+    if (lua_rawgeti(L, lua_upvalueindex(1), i) == LUA_TNIL) return 0;
+    lua_pushvalue(L, -1);
+    lua_gettable(L, lua_upvalueindex(2));
+    return 2;
+}
+int sortedPairs(lua_State* L) {
+    lua_settop(L, 1);
+    if (lua_type(L, 1) != LUA_TTABLE) return luaL_error(L, "pairs: table expected, got %s", luaL_typename(L, 1));
+    lua_newtable(L);   // 2: keys
+    lua_Integer n = 0;
+    int kind = LUA_TNONE;
+    bool mixed = false;
+    lua_pushnil(L);
+    while (lua_next(L, 1)) {
+        lua_pop(L, 1);
+        const int tk = lua_type(L, -1);
+        if (tk != LUA_TBOOLEAN && tk != LUA_TNUMBER && tk != LUA_TSTRING)
+            return luaL_error(L, "pairs: %s keys have no deterministic order (use integer or string keys)", lua_typename(L, tk));
+        if (kind != tk) { if (kind == LUA_TNONE) kind = tk; else mixed = true; }
+        lua_pushvalue(L, -1);
+        lua_rawseti(L, 2, ++n);
+    }
+    lua_pushvalue(L, lua_upvalueindex(1));   // table.sort
+    lua_pushvalue(L, 2);
+    if (mixed || kind == LUA_TBOOLEAN) { lua_pushvalue(L, lua_upvalueindex(2)); lua_call(L, 2, 0); }
+    else lua_call(L, 1, 0);
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, 1);
+    lua_pushinteger(L, 0);
+    lua_pushcclosure(L, sortedPairsIter, 3);
+    lua_pushvalue(L, 1);
+    lua_pushnil(L);
+    return 3;
+}
+// table.count(t): the number of entries of t (raw; any key type), without an ordered walk
+int tableCount(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_settop(L, 1);
+    lua_Integer n = 0;
+    lua_pushnil(L);
+    while (lua_next(L, 1)) { lua_pop(L, 1); ++n; }
+    lua_pushinteger(L, n);
+    return 1;
+}
+int makeSortedPairs(lua_State* L) {
+    lua_settop(L, 2);
+    lua_pushcclosure(L, sortedPairs, 2);
+    return 1;
+}
+
 const char* kPrelude = R"LUA(
 local rawnext, rawtype, sort, rawtostring, getmt, fmt, select, error = next, type, table.sort, tostring, getmetatable, string.format, select, error
 local order = { boolean = 1, number = 2, string = 3 }
@@ -470,7 +532,11 @@ local function keyless(a, b)
   if ta == "boolean" then return (not a) and b end
   return a < b
 end
-local function sorted_pairs(t)
+-- sorted_pairs(t): the keys collected (raw next) and checked, sorted with table.sort (plain `<` when all keys
+-- are numbers or all strings, keyless otherwise), then walked in that order returning k, t[k]. Built in C by
+-- the host (rts_sorted_pairs: the same steps, without a VM loop per key); this Lua version is the fallback.
+local sorted_pairs = rts_sorted_pairs and rts_sorted_pairs(sort, keyless)
+if not sorted_pairs then sorted_pairs = function(t)
   if rawtype(t) ~= "table" then error("pairs: table expected, got " .. rawtype(t), 2) end
   local keys, n, kind, mixed = {}, 0, nil, false
   for k in rawnext, t do
@@ -488,7 +554,8 @@ local function sorted_pairs(t)
     local k = keys[i]
     if k ~= nil then return k, t[k] end
   end, t, nil
-end
+end end
+rts_sorted_pairs = nil
 pairs = sorted_pairs
 _G.sorted_pairs = sorted_pairs
 local function safe_tostring(v)
@@ -541,6 +608,12 @@ bool Vm::open(Mode m, size_t limit) {
     // prelude (both modes: sorted pairs are also handy in view scripts); it keeps `next` as a local
     lua_pushcfunction(L, [](lua_State* S) -> int { lua_settop(S, 2); if (lua_next(S, 1)) return 2; lua_pushnil(S); return 1; });
     lua_setglobal(L, "next");
+    lua_pushcfunction(L, makeSortedPairs);
+    lua_setglobal(L, "rts_sorted_pairs");
+    lua_getglobal(L, LUA_TABLIBNAME);
+    lua_pushcfunction(L, tableCount);
+    lua_setfield(L, -2, "count");
+    lua_pop(L, 1);
     if (luaL_loadbufferx(L, kPrelude, std::strlen(kPrelude), "=prelude", "t") != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK) {
         if (log) log(true, std::string("prelude: ") + lua_tostring(L, -1));
         lua_pop(L, 1);
