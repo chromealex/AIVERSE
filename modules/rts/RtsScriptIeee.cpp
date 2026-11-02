@@ -21,6 +21,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
+#include <algorithm>
 #include <initializer_list>
 
 extern "C" {
@@ -317,6 +318,70 @@ int f32Flood(lua_State* L) {
     return 1;
 }
 
+// ---- bucketed spatial query: f32.query(buckets, byId, px, py, radius, size)
+// The query of a float32 port's spatial index (OpenWar ArmySpatialIndex): buckets[y][x] are arrays of unit
+// ids, byId maps an id to its unit table. Bucket range lo = floorint((p - radius) / size), hi =
+// floorint((p + radius) / size) per axis (binary32 operations; errors as floorint); every id of every existing
+// bucket, rows then columns, ascending, is inspected: its unit must exist in byId, and is kept when its Health
+// h is an integer with 0 < h <= 0x7f800000 and not radius*radius < sqdist(unit.Position, p). Returns the kept
+// ids in ascending order and the number inspected; when an id has no unit, returns nil and the number
+// inspected before it (the caller raises its own error).
+int f32Query(lua_State* L) {
+    requireEnv(L);
+    luaL_checktype(L, 1, LUA_TTABLE);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    const float px = f32Of(arg32(L, 3)), py = f32Of(arg32(L, 4)), radius = f32Of(arg32(L, 5)), size = f32Of(arg32(L, 6));
+    lua_settop(L, 6);
+    luaL_checkstack(L, 8, "f32.query");
+    const lua_Integer loX = floorInt(L, canon((px - radius) / size)), loY = floorInt(L, canon((py - radius) / size));
+    const lua_Integer hiX = floorInt(L, canon((px + radius) / size)), hiY = floorInt(L, canon((py + radius) / size));
+    const float squared = radius * radius;
+    lua_createtable(L, 8, 0);   // 7: result
+    lua_Integer n = 0, inspected = 0;
+    for (lua_Integer y = loY; y <= hiY; ++y) {
+        if (lua_rawgeti(L, 1, y) != LUA_TTABLE) { lua_pop(L, 1); continue; }   // 8: row
+        for (lua_Integer x = loX; x <= hiX; ++x) {
+            if (lua_rawgeti(L, 8, x) != LUA_TTABLE) { lua_pop(L, 1); continue; }   // 9: bucket
+            const lua_Integer count = lua_Integer(lua_rawlen(L, 9));
+            for (lua_Integer i = 1; i <= count; ++i) {
+                lua_rawgeti(L, 9, i);   // 10: id
+                lua_pushvalue(L, 10);
+                if (lua_gettable(L, 2) == LUA_TNIL) { lua_pushnil(L); lua_pushinteger(L, inspected); return 2; }   // 11: unit
+                ++inspected;
+                lua_getfield(L, 11, "Health");
+                int isInt = 0;
+                const lua_Integer h = lua_tointegerx(L, -1, &isInt);
+                if (!isInt) luaL_error(L, "f32.query: unit Health is not an integer");
+                lua_pop(L, 1);
+                if (h > 0 && h <= 2139095040) {
+                    if (lua_getfield(L, 11, "Position") != LUA_TTABLE) luaL_error(L, "f32.query: unit Position is not a table");
+                    const float dx = f32Of(field32(L, -1, "x")) - px, dy = f32Of(field32(L, -1, "y")) - py;
+                    lua_pop(L, 1);
+                    if (!finite32(canon(dx)) || !finite32(canon(dy))) luaL_error(L, "nonfinite dot operand");
+                    const float d = dot2(dx, dx, dy, dy);
+                    if (!(squared < d)) { lua_pushvalue(L, 10); lua_rawseti(L, 7, ++n); }
+                }
+                lua_pop(L, 2);
+            }
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
+    }
+    // ascending (the script's table.sort of integer ids): copied out, sorted, written back
+    if (n > 1) {
+        bool ints = true;
+        lua_Integer* ids = static_cast<lua_Integer*>(lua_newuserdatauv(L, size_t(n) * sizeof(lua_Integer), 0));
+        for (lua_Integer i = 1; i <= n; ++i) { lua_rawgeti(L, 7, i); int ok = 0; ids[i - 1] = lua_tointegerx(L, -1, &ok); ints = ints && ok; lua_pop(L, 1); }
+        if (!ints) luaL_error(L, "f32.query: unit ids must be integers");
+        std::sort(ids, ids + n);
+        for (lua_Integer i = 1; i <= n; ++i) { lua_pushinteger(L, ids[i - 1]); lua_rawseti(L, 7, i); }
+        lua_pop(L, 1);
+    }
+    lua_pushvalue(L, 7);
+    lua_pushinteger(L, inspected);
+    return 2;
+}
+
 // ---- Q96 trigonometry (atan2, sincos): exact series on unsigned fixed point with 96 fractional bits in
 // base-2^24 limbs (little endian, no high zero limbs), every step truncating exactly as the integer-only
 // script implementation it replaces (OpenWar scripts/openwar/trig.lua), then one rounding to binary32
@@ -475,7 +540,7 @@ void openIeee(lua_State* L) {
     static const luaL_Reg f32[] = {{"add", f32Add}, {"sub", f32Sub}, {"mul", f32Mul}, {"div", f32Div}, {"sqrt", f32Sqrt},
                                    {"dot2", f32Dot2}, {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
                                    {"floorint", f32FloorInt}, {"cellat", f32CellAt}, {"fdot2", f32FiniteDot2}, {"sqdist", f32SqDist},
-                                   {"atan2", f32Atan2}, {"sincos", f32SinCos}, {"segment", f32Segment}, {"flood", f32Flood},
+                                   {"atan2", f32Atan2}, {"sincos", f32SinCos}, {"segment", f32Segment}, {"flood", f32Flood}, {"query", f32Query},
                                    {nullptr, nullptr}};
     static const luaL_Reg f64[] = {{"add", f64Add}, {"sub", f64Sub}, {"mul", f64Mul}, {"div", f64Div}, {"sqrt", f64Sqrt},
                                    {"fromint", f64FromInt}, {"lt", f64Lt}, {"le", f64Le}, {"eq", f64Eq}, {"tof32", f64ToF32},

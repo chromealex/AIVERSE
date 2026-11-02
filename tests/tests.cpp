@@ -11014,6 +11014,33 @@ TEST(script_ieee_bit_patterns) {
                 assert(f32.flood(wk,nil,ow,1,3,2,d,q)==5 and d[5]==3 and d[4]==nil and q[2]==1 and q[3]==3)
                 assert(not pcall(f32.flood,wk,nil,ow,1,3,2,{[0]='x'},{0}))
             end
+            -- query: the script's bucketed spatial query on random indexes
+            for trial=1,40 do
+                local size=f32.fromint(math.random(1,6));local buckets,byId={},{};local id=0
+                for k=1,math.random(0,40) do
+                    id=id+math.random(1,3)
+                    local p={x=f32.div(f32.fromint(math.random(-40,400)),0x41200000),y=f32.div(f32.fromint(math.random(-40,400)),0x41200000)}
+                    local hp=({0,one,0x7f800000,0x7f800001,0x80000001,two})[math.random(6)]
+                    byId[id]={Health=hp,Position=p}
+                    local bx,by=f32.floorint(f32.div(p.x,size)),f32.floorint(f32.div(p.y,size))
+                    buckets[by]=buckets[by] or {};buckets[by][bx]=buckets[by][bx] or {};table.insert(buckets[by][bx],math.random(#buckets[by][bx]+1),id)
+                end
+                local pt={x=f32.div(f32.fromint(math.random(0,400)),0x41200000),y=f32.div(f32.fromint(math.random(0,400)),0x41200000)}
+                local radius=f32.div(f32.fromint(math.random(0,120)),0x41200000)
+                local loX,loY=f32.floorint(f32.div(f32.sub(pt.x,radius),size)),f32.floorint(f32.div(f32.sub(pt.y,radius),size))
+                local hiX,hiY=f32.floorint(f32.div(f32.add(pt.x,radius),size)),f32.floorint(f32.div(f32.add(pt.y,radius),size))
+                local sq=f32.mul(radius,radius);local want,ins={},0
+                for y=loY,hiY do local row=buckets[y];if row then for x=loX,hiX do local b=row[x];if b then for i=1,#b do
+                    local u=byId[b[i]];ins=ins+1
+                    if u.Health>0 and u.Health<=2139095040 and not f32.lt(sq,f32.sqdist(u.Position,pt)) then want[#want+1]=b[i] end
+                end end end end end
+                table.sort(want)
+                local got,n=f32.query(buckets,byId,pt.x,pt.y,radius,size)
+                assert(n==ins and #got==#want)
+                for i=1,#want do assert(got[i]==want[i]) end
+            end
+            do local r,n=f32.query({[0]={[0]={5,7}}},{[5]={Health=one,Position={x=0,y=0}}},0,0,one,one);assert(r==nil and n==1) end
+            assert(not pcall(f32.query,{},{},0x7f800000,0,one,one))
             assert(f32.cellat({x=0x40200000,y=0x3fc00000},4,3)==6 and f32.cellat({x=0xbf000000,y=0},4,3)==-1 and f32.cellat({x=0,y=0x40400000},4,3)==-1)
             assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
             assert(f64.fromint(9007199254740993)==0x4340000000000000)
