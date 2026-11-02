@@ -90,6 +90,7 @@ private:
     uint32_t allInTick_ = 0, spotRetryTick_ = 0, expandTick_ = 0, rebalanceTick_ = 0;
     bool raided_ = false, enemyDefenceless_ = false, hadStructure_ = false;            // enemies came to our base at least once
     std::shared_ptr<const AITerrain> terr_;   // immutable once built (copies of the bot share it)
+    std::vector<uint8_t> savedPass_;          // walkable mask from a loaded save state (rebuilds terr_ the same)
     Vec3 home_{}, enemyHome_{};
     bool hasHome_ = false, hasEnemy_ = false;
     int homeCell_ = -1, enemyCell_ = -1;

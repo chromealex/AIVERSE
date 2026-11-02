@@ -60,7 +60,8 @@ void RtsAI::applyRulesConfig(RtsModule& m) {
 void RtsAI::ensureTerrain(Simulation& sim, RtsModule& m) {
     if (terr_) return;
     auto t = std::make_shared<AITerrain>();
-    t->build(sim, m);
+    t->build(sim, m, savedPass_.empty() ? nullptr : &savedPass_);
+    savedPass_.clear();
     terr_ = t;
 }
 
@@ -813,9 +814,9 @@ bool RtsAI::loadState(const std::string& bytes) {
 }
 
 void RtsAI::stateIo(Archive& a) {
-    uint32_t version = 1;
+    uint32_t version = 2;
     io(a, version);
-    if (version != 1) { a.fail(); return; }
+    if (version != 1 && version != 2) { a.fail(); return; }
     uint64_t rs = rng_.state(), ri = rng_.inc();
     io(a, rs); io(a, ri);
     if (!a.writing()) rng_.restore(rs, ri);
@@ -834,6 +835,11 @@ void RtsAI::stateIo(Archive& a) {
     for (uint32_t i = 0; i < n && a.ok(); ++i) { io(a, buildWatch_[i].entity); io(a, buildWatch_[i].since); io(a, buildWatch_[i].point); io(a, buildWatch_[i].progress); }
     io(a, waveCentre_); io(a, waveMoveTick_);
     io(a, badSpots_); io(a, invaders_); io(a, invadeBody_); io(a, invasions_); io(a, invadeTick_); io(a, enemyOffBody_);
+    if (version >= 2) {   // the terrain analysis' walkable mask from match start (neutral blockers may be gone by now)
+        std::vector<uint8_t> pass = a.writing() && terr_ ? terr_->pass : std::vector<uint8_t>{};
+        io(a, pass);
+        if (!a.writing()) { savedPass_ = std::move(pass); terr_.reset(); }
+    }
 }
 
 } // namespace rts::game

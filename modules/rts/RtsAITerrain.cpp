@@ -5,7 +5,7 @@
 
 namespace rts::game {
 
-void AITerrain::build(Simulation& sim, RtsModule& m) {
+void AITerrain::build(Simulation& sim, RtsModule& m, const std::vector<uint8_t>* savedPass) {
     World& wd = sim.world();
     const MapGrid& g = m.state(sim).grid;
     const Rules& R = m.rules();
@@ -18,12 +18,23 @@ void AITerrain::build(Simulation& sim, RtsModule& m) {
     const uint16_t lim = g.slopeLimitFor(kLayerGround);
     // terrain only (no structures, trees or rocks): the analysis must come out the same whenever it is built
     // (match start, or the first think after loading a save state)
-    (void)wd;
+    // walkable = terrain minus neutral blockers (trees, mines, rocks); player structures don't count (they die).
+    // A loaded save state hands back the mask computed at match start, so the analysis comes out the same
+    // after loading as in the original run.
+    const bool fromSave = savedPass && savedPass->size() == size_t(cells);
+    std::vector<uint8_t> playerBlock(size_t(cells), 0);
+    if (!fromSave)
+        wd.each<Footprint, Owner>([&](Entity, Footprint& f, Owner& o) {
+            if (o.player == 0 || o.player == kHostileNeutral) return;
+            for (int y = f.y; y < f.y + f.h; ++y)
+                for (int x = f.x; x < f.x + f.w; ++x)
+                    if (x >= 0 && y >= 0 && x < g.w && y < g.h) playerBlock[size_t(y * g.w + x)] = 1;
+        });
     int32_t lo = 1 << 30, hi = -(1 << 30);
     for (int c = 0; c < cells; ++c) {
         const size_t i = size_t(c);
         const bool ground = (g.flags[i] & kCellGround) && (!g.hf || g.slope.empty() || g.slope[i] <= lim);
-        pass[i] = ground ? 1 : 0;
+        pass[i] = fromSave ? (*savedPass)[i] : ground && (!g.blocked[i] || playerBlock[i]) ? 1 : 0;
         Fixed h{};
         if (sphere) h = g.surf->cellHeight(c) / lh;
         else if (g.hf) h = g.cellHeight(c % g.w, c / g.w) / lh;
