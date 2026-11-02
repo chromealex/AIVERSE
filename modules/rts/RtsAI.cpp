@@ -492,24 +492,40 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             if (poor < 0 || eco.stock[r] < eco.stock[size_t(poor)]) poor = int(r);
         }
         if (rich >= 0 && poor >= 0 && rich != poor && eco.stock[size_t(rich)] > eco.stock[size_t(poor)] * 4 + Fixed::fromInt(300)) {
-            Entity mover, node;
-            w.each<Unit, Owner, Orders, Transform>([&](Entity e, Unit& u, Owner& o, Orders& ord, Transform& tr) {
-                if (mover.valid() || o.player != player_ || !R.types[u.type].worker || ord.queue.empty()) return;
+            // nobody gathers the poor resource at all (its near nodes ran out): two workers go, however far the
+            // next node is (a far node beats none: a bank of gold and no wood stalls every build)
+            int onPoor = 0;
+            w.each<Orders, Owner>([&](Entity, Orders& ord, Owner& o) {
+                if (o.player != player_ || ord.queue.empty()) return;
                 const Order& f = ord.queue.front();
-                if (f.type != OrderType::Gather || !f.target.valid() || !w.alive(f.target) || !w.has<ResourceStock>(f.target)) return;
-                if (w.get<ResourceStock>(f.target).res != rich) return;
-                bool can = false;
-                for (auto& gd : R.types[u.type].gathers) if (gd.res == poor) can = true;
-                if (!can) return;
-                Fixed bd{};
-                w.each<ResourceStock, Unit, Owner, Transform>([&](Entity n, ResourceStock& rs, Unit& nu, Owner& no, Transform& nt) {
-                    if (rs.res != poor || (!rs.infinite && rs.amount.raw <= 0) || (R.types[nu.type].ownerOnly && no.player != player_)) return;
-                    const Fixed d = dist(nt.pos, tr.pos);
-                    if (d < Fixed::fromInt(25) && (!node.valid() || d < bd)) { node = n; bd = d; }
-                });
-                if (node.valid()) mover = e;
+                if ((f.type == OrderType::Gather || f.type == OrderType::Return) && f.target.valid() && w.alive(f.target) &&
+                    w.has<ResourceStock>(f.target) && w.get<ResourceStock>(f.target).res == poor) ++onPoor;
             });
-            if (mover.valid()) { Command c; c.type = kCmdGather; c.units = {mover}; c.target = node; send(sim, c); }
+            const Fixed reach = Fixed::fromInt(onPoor == 0 ? 1000 : 25);
+            std::vector<Entity> moved;
+            for (int k = 0; k < (onPoor == 0 ? 2 : 1); ++k) {
+                Entity mover, node;
+                w.each<Unit, Owner, Orders, Transform>([&](Entity e, Unit& u, Owner& o, Orders& ord, Transform& tr) {
+                    if (mover.valid() || o.player != player_ || !R.types[u.type].worker || ord.queue.empty()) return;
+                    if (std::find(moved.begin(), moved.end(), e) != moved.end()) return;
+                    const Order& f = ord.queue.front();
+                    if (f.type != OrderType::Gather || !f.target.valid() || !w.alive(f.target) || !w.has<ResourceStock>(f.target)) return;
+                    if (w.get<ResourceStock>(f.target).res != rich) return;
+                    bool can = false;
+                    for (auto& gd : R.types[u.type].gathers) if (gd.res == poor) can = true;
+                    if (!can) return;
+                    Fixed bd{};
+                    w.each<ResourceStock, Unit, Owner, Transform>([&](Entity n, ResourceStock& rs, Unit& nu, Owner& no, Transform& nt) {
+                        if (rs.res != poor || (!rs.infinite && rs.amount.raw <= 0) || (R.types[nu.type].ownerOnly && no.player != player_)) return;
+                        const Fixed d = dist(nt.pos, tr.pos);
+                        if (d < reach && (!node.valid() || d < bd)) { node = n; bd = d; }
+                    });
+                    if (node.valid()) mover = e;
+                });
+                if (!mover.valid()) break;
+                moved.push_back(mover);
+                Command c; c.type = kCmdGather; c.units = {mover}; c.target = node; send(sim, c);
+            }
         }
     }
     const bool canBuildNow = sim.tick() > lastBuildTick_ + 60;
@@ -890,16 +906,21 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
     // Mushroom-Wars-style: send part of the strongest garrisons at the weakest reachable target.
     World& w = sim.world();
     const Rules& R = m.rules();
-    struct G { Entity e; int count; uint8_t owner; Vec3 pos; Fixed def; };
+    struct G { Entity e; int count; uint8_t owner; Vec3 pos; Fixed def; int max; };
     std::vector<G> all;
     w.each<Garrison, Unit, Owner, Transform>([&](Entity e, Garrison& g, Unit& u, Owner& o, Transform& t) {
-        all.push_back({e, g.count + g.pendingOut, o.player, t.pos, R.types[u.type].garrisonDefense});
+        all.push_back({e, g.count + g.pendingOut, o.player, t.pos, R.types[u.type].garrisonDefense, R.types[u.type].garrisonMax});
     });
+    // a garrison at its cap breeds nothing: it is the first to send (else rear garrisons fill up and sit there)
+    auto full = [&](const G& g) { return g.max > 0 && g.count * 10 >= g.max * 9; };
     std::vector<int> incoming(all.size(), 0);
     w.each<Orders, Owner>([&](Entity, Orders& ord, Owner& o) {
         if (o.player != player_ || ord.queue.empty() || ord.queue.front().type != OrderType::Enter) return;
         for (size_t i = 0; i < all.size(); ++i) if (all[i].e == ord.queue.front().target) incoming[i]++;
     });
+    // a long match (both sides trade garrisons back and forth): mass attacks - every garrison may join, with a
+    // margin, and enemy garrisons weigh more than neutral ones, so one side's push breaks through
+    const bool mass = sim.tick() > 600 * sim.tickRate();
     Fixed bestScore{};
     int bestT = -1;
     std::vector<std::pair<Entity, int64_t>> bestSrc;
@@ -909,15 +930,17 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
         std::vector<size_t> mine;
         for (size_t i = 0; i < all.size(); ++i) if (all[i].owner == player_ && all[i].count > 3) mine.push_back(i);
         std::sort(mine.begin(), mine.end(), [&](size_t a, size_t b) {
+            if (mass && full(all[a]) != full(all[b])) return full(all[a]);
             Fixed da = dist(all[a].pos, t.pos), db = dist(all[b].pos, t.pos);
             return da != db ? da < db : a < b;
         });
         int need = int((Fixed::fromInt(t.count) * t.def * Fixed::fromRatio(13, 10)).toInt()) + 3 - incoming[ti];
         if (t.owner != 0) need += int((dist(all[mine.empty() ? ti : mine[0]].pos, t.pos) / 2).toInt());
+        if (mass && t.owner != 0) need = need * 3 / 2;
         int sent = 0;
         std::vector<std::pair<Entity, int64_t>> src;
         for (size_t i : mine) {
-            if (sent >= need || src.size() >= 3) break;
+            if (sent >= need || (src.size() >= 3 && !mass)) break;
             int avail = all[i].count - 2;
             int take = std::min(avail, need - sent);
             if (take <= 0) continue;
@@ -927,11 +950,36 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
         }
         if (sent < need) continue;
         Fixed d = dist(all[mine.empty() ? ti : mine[0]].pos, t.pos);
-        Fixed value = Fixed::fromInt(R.types[w.get<Unit>(t.e).type].garrisonMax + 10) * (t.owner ? cfg_.aggression + Fixed::fromInt(1) : Fixed::fromInt(1));
+        Fixed value = Fixed::fromInt(R.types[w.get<Unit>(t.e).type].garrisonMax + 10) * (t.owner ? cfg_.aggression + Fixed::fromInt(mass ? 3 : 1) : Fixed::fromInt(1));
         Fixed score = value * 100 / (Fixed::fromInt(sent) + d * 2 + Fixed::fromInt(1));
         if (bestT < 0 || score > bestScore) { bestScore = score; bestT = int(ti); bestSrc = src; }
     }
-    if (bestT < 0) return;
+    if (bestT < 0) {
+        // nothing to attack yet: full garrisons pass half their units to our garrison nearest the enemy (the front)
+        auto toEnemy = [&](const G& g) {   // distance to the nearest enemy garrison (-1: none)
+            Fixed best = Fixed::fromInt(-1);
+            for (auto& o : all) {
+                if (o.owner == player_ || o.owner == 0 || o.owner == kHostileNeutral || sim.allied(o.owner, player_)) continue;
+                const Fixed d = dist(g.pos, o.pos);
+                if (best.raw < 0 || d < best) best = d;
+            }
+            return best;
+        };
+        int front = -1;
+        Fixed fd{};
+        for (size_t i = 0; i < all.size(); ++i) {
+            if (all[i].owner != player_ || full(all[i])) continue;
+            const Fixed d = toEnemy(all[i]);
+            if (d.raw >= 0 && (front < 0 || d < fd)) { front = int(i); fd = d; }
+        }
+        if (front < 0) return;
+        for (auto& g : all) {
+            if (g.owner != player_ || !full(g) || toEnemy(g) <= fd) continue;   // only from behind the front
+            Command c; c.type = kCmdSend; c.units = {g.e}; c.target = all[size_t(front)].e; c.param = 50;
+            send(sim, c);
+        }
+        return;
+    }
     for (auto& [e, pct] : bestSrc) {
         Command c; c.type = kCmdSend; c.units = {e}; c.target = all[size_t(bestT)].e; c.param = pct;
         send(sim, c);
