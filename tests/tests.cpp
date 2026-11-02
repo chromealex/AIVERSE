@@ -12784,7 +12784,7 @@ TEST(project_file_create_resolve_migrate) {
         CHECK(ws.project.file == (fs::weakly_canonical(old) / "Old Game.rtsproj").string());
         CHECK(fs::exists(old / "Old Game.rtsproj"));
         bool created = true;
-        CHECK(ensureProjectFile(old.string(), &created) == ws.project.file && !created);
+        CHECK(fs::weakly_canonical(ensureProjectFile(old.string(), &created)) == fs::weakly_canonical(ws.project.file) && !created);   // macOS: /var -> /private/var
         // and the .rtsproj path opens the project (double-click / argv / MCP open_game)
         CHECK(ws.openGame(file.string(), &err));
         CHECK(ws.project.dir == fs::weakly_canonical(dir).string() && ws.project.file == fs::weakly_canonical(file).string());
