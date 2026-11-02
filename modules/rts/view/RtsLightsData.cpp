@@ -265,6 +265,10 @@ void RtsLights::configure(const Json& game, const Json& map, const Json& lights)
     fogDensity_ = pick("fogDensity", -1, -1.0f);
     if (fogDensity_ >= 0) fogDensity_ = std::min(fogDensity_, 1.0f);
     tonemap_ = map["tonemap"].boolean(game["tonemap"].boolean(true));
+    {
+        const Json& mo = map["modelOutput"].isString() ? map["modelOutput"] : game["modelOutput"];
+        srgbModels_ = mo.isString() && mo.str() == "srgb";
+    }
     shadowSoftness_ = pick("shadowSoftness", -1, -1.0f);
     if (shadowSoftness_ >= 0) shadowSoftness_ = std::clamp(shadowSoftness_, 0.02f, 1.0f);
     if (const char* c = std::getenv("RTS_CLOUDS")) { clouds_ = std::clamp(float(std::atof(c)), 0.0f, 1.0f); cycle_ = true; }
@@ -298,6 +302,7 @@ void RtsLights::updateSky(Lighting& l, double seconds, float cycle) {
     base_.shadowSoftness = l.shadowSoftness = shadowSoftness_ >= 0 ? shadowSoftness_ : render::Lighting{}.shadowSoftness;
     base_.fogDensity = l.fogDensity = fogDensity_ >= 0 ? fogDensity_ : render::Lighting{}.fogDensity;
     base_.tonemap = l.tonemap = tonemap_;
+    base_.srgbModels = l.srgbModels = srgbModels_;
     const bool active = cycle_ || preview_ || cycle >= 0;
     if (!active) {
         night_ = dusk_ = 0;

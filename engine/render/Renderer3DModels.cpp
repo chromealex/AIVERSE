@@ -13,7 +13,7 @@
 namespace rts::render {
 
 namespace {
-struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float misc[4]; float uv0[4]; float uv1[4]; };
+struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float misc[4]; float uv0[4]; float uv1[4]; float light[4]; };
 constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec4 per joint
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
@@ -250,6 +250,8 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         mu.misc[1] = float(int(mt.team)); mu.misc[2] = mt.teamStrength; mu.misc[3] = mt.vertexColors ? 1.0f : 0.0f;
         mu.uv0[0] = mt.uvOffset.x; mu.uv0[1] = mt.uvOffset.y; mu.uv0[2] = mt.uvScale.x; mu.uv0[3] = mt.uvScale.y;
         mu.uv1[0] = mt.uvRotation; mu.uv1[1] = mt.shading == ShadingModel::Unlit ? 1.0f : 0.0f;
+        mu.uv1[2] = mt.fixedShade.x; mu.uv1[3] = mt.fixedShade.y;
+        mu.light[0] = mt.fixedLight.x; mu.light[1] = mt.fixedLight.y; mu.light[2] = mt.fixedLight.z; mu.light[3] = mt.fixedLight.w;
         dev_->setUniforms(2, &mu, sizeof mu);
         auto tex = [&](int idx, gfx::TextureHandle def) {
             return idx >= 0 && idx < int(it.model->images.size()) && it.model->images[size_t(idx)].tex.valid() ? it.model->images[size_t(idx)].tex : def;

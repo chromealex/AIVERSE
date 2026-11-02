@@ -103,6 +103,16 @@ void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Mater
     mt.alphaCutoff = num(o["cutoff"], mt.alphaCutoff);
     mt.doubleSided = o.getBool("doubleSided", mt.doubleSided);
     if (o.has("unlit")) mt.shading = o.getBool("unlit") ? ShadingModel::Unlit : ShadingModel::Pbr;
+    if (const Json& fl = o["fixedLight"]; fl.size() == 5) {   // [x, y, z, ambient, diffuse]: unlit, shaded by the world normal
+        float3 d{num(fl[0], 0), num(fl[1], 1), num(fl[2], 0)};
+        const float l = length(d);
+        if (l > 1e-6f) {
+            d = d * (1.0f / l);
+            mt.fixedLight = {d.x, d.y, d.z, 1};
+            mt.fixedShade = {num(fl[3], 1), num(fl[4], 0)};
+            mt.shading = ShadingModel::Unlit;
+        } else warn(t, "fixedLight direction is zero");
+    } else if (o.has("fixedLight")) warn(t, "fixedLight is [x, y, z, ambient, diffuse]");
     mt.castShadow = o.getBool("castShadow", mt.castShadow);
     mt.receiveShadow = o.getBool("receiveShadow", mt.receiveShadow);
     mt.vertexColors = o.getBool("vertexColors", mt.vertexColors);

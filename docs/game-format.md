@@ -37,7 +37,9 @@ overlay default (`RtsOverlayData::configurePlayerColors`, applied when a match s
 Lighting block (game.json / map `"lighting"`), flat-art keys: `"day": {"sun", "sky", "ground", "fog": [r, g, b],
 "sunK": k}` replaces fields of the day palette (of the preset or the renderer), `"fogDensity"` (0 = no distance fog),
 `"tonemap": false` (lit shaders clamp instead of the ACES fit; with `sunK` 0 and white sky / ground an unlit material
-shows its colour unchanged). Map keys win over game keys.
+shows its colour unchanged), `"modelOutput": "srgb"` (model shaders encode their linear result with the exact sRGB curve,
+as a Unity project in linear colour space does, instead of the engine's default sqrt, which renders midtones darker; GLSL
+and MSL). Map keys win over game keys.
 
 ## rules.json — top level
 

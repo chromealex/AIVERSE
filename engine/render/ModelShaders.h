@@ -19,7 +19,8 @@
 //   U2 material:  vec4 base; vec4 emissive (rgb, linear, premultiplied by strength);
 //                 vec4 pbr (metallic, roughness, normalScale, occlusionStrength);
 //                 vec4 misc (alphaCutoff, teamMode, teamStrength, useVertexColor);
-//                 vec4 uv0 (offset.xy, scale.xy); vec4 uv1 (rotation, unlit, -, -)
+//                 vec4 uv0 (offset.xy, scale.xy); vec4 uv1 (rotation, unlit, fixed shade ambient, diffuse);
+//                 vec4 light (fixed light direction xyz, w 1 = on: unlit * (ambient + diffuse * saturate(N.L)))
 //   U3 skin:      SKINNED vec4 joints[240] (3 rows of a 3x4 matrix per joint);
 //                 BAKED   vec4 palette[20] (palette slot -> skin joint, 4 per vec4)
 //   U4 morph:     vec4 w[2] (8 weights); vec4 info (first texel, first vertex, vertex count, targets);
@@ -38,7 +39,7 @@ namespace rts::render::shaders {
     "struct Inst { mat4 model; vec4 tint; vec4 team; vec4 draw; vec4 anim; };\n" \
     "layout(std140) uniform U0 { Inst u_inst[RTS_INST]; };\n" \
     RTS_GLSL_FRAME \
-    "layout(std140) uniform U2 { vec4 m_base; vec4 m_emissive; vec4 m_pbr; vec4 m_misc; vec4 m_uv0; vec4 m_uv1; };\n" \
+    "layout(std140) uniform U2 { vec4 m_base; vec4 m_emissive; vec4 m_pbr; vec4 m_misc; vec4 m_uv0; vec4 m_uv1; vec4 m_light; };\n" \
     "#if defined(SKINNED)\n" \
     "layout(std140) uniform U3 { vec4 u_joints[240]; };\n" \
     "#elif defined(BAKED)\n" \
@@ -168,6 +169,7 @@ flat in vec4 v_draw;
 out vec4 o_color;
 
 vec3 toLinear(vec3 c) { return c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
+vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float noise3(vec3 x) {
@@ -270,12 +272,12 @@ void main() {
     vec3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
     { vec3 dd, ds; dynLight(v_wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
-    if (m_uv1.y > 0.5) col = base.rgb;
+    if (m_uv1.y > 0.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
     col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    o_color = vec4(sqrt(col), base.a * v_tint.a);
+    o_color = vec4(u_groundColor.w > 1.5 ? toSrgb(col) : sqrt(col), base.a * v_tint.a);
 #endif
 }
 )";
@@ -314,7 +316,7 @@ void main() {
     "struct Inst { float4x4 model; float4 tint; float4 team; float4 draw; float4 anim; };\n" \
     "struct MU0 { Inst inst[RTS_INST]; };\n" \
     RTS_MSL_FRAME \
-    "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; };\n" \
+    "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; float4 light; };\n" \
     "struct MU3 { float4 v[240]; };\n" \
     "struct MU4 { float4 w[2]; float4 info; float4 info2; };\n"
 
@@ -419,6 +421,7 @@ vertex VOut vs_main(VERTEX_ARGS) {
 }
 
 static float3 toLinear(float3 c) { return c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
+static float3 toSrgb(float3 c) { return mix(c * 12.92, 1.055 * pow(c, float3(1.0 / 2.4)) - 0.055, step(float3(0.0031308), c)); }
 static float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 static float hash3(float3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 static float noise3(float3 x) {
@@ -530,12 +533,12 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
     { float3 dd, ds; dynLight(lu, tex9, s9, in.wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
-    if (m.uv1.y > 0.5) col = base.rgb;
+    if (m.uv1.y > 0.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
     col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    return float4(sqrt(col), base.a * in.tint.a);
+    return float4(f.groundColor.w > 1.5 ? toSrgb(col) : sqrt(col), base.a * in.tint.a);
 #endif
 }
 )";

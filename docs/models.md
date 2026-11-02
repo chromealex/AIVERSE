@@ -178,6 +178,7 @@ Imported materials keep their PBR values. Overrides per material name, `"*"` for
 | `emissive`, `emissiveStrength` | glow (linear colour × strength) |
 | `alpha` | `opaque`, `mask` (alpha test, `cutoff`), `blend` (sorted, no shadow) |
 | `doubleSided`, `unlit`, `castShadow`, `receiveShadow`, `vertexColors` | switches |
+| `fixedLight` | `[x, y, z, ambient, diffuse]`: unlit, shaded by a fixed world direction: colour * (ambient + diffuse * saturate(N . dir)) with the drawn instance's world normal (prop shaders that light every instance by its own rotation, e.g. Unity's OpenWar ArmyCompactProp); vertex colours still multiply |
 | `team` | where the player colour goes: `tint` (whole material × team colour), `mask` (red channel of `teamMask`), `alpha` (base texture alpha 0 = team colour, Warcraft III style), `vertex` (vertex colour alpha 0 = team colour), `none` |
 | `teamStrength` | 0..1 |
 | `teamMask`, `texture`, `normalMap`, `emissiveMap` | replace / add textures (paths relative to the game) |

@@ -50,6 +50,10 @@ struct Material {
     // KHR_texture_transform of the base colour texture, applied to every texture of the material
     float2 uvOffset{0, 0}, uvScale{1, 1};
     float uvRotation = 0;
+    // unlit with a fixed directional shade in world space: colour * (shade.x + shade.y * saturate(dot(N, dir)))
+    // (prop shaders of art pipelines that light every instance by its own world normals); w = 0: off
+    float4 fixedLight{0, 0, 0, 0};          // xyz direction towards the light (normalized), w 1 = on
+    float2 fixedShade{1, 0};                // ambient, diffuse
 };
 
 struct Image {

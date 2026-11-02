@@ -135,6 +135,7 @@ private:
     float shadowSoftness_ = -1;         // "shadowSoftness": sun shadow penumbra radius (world), < 0 = renderer default
     float fogDensity_ = -1;             // "fogDensity": distance fog, < 0 = renderer default
     bool tonemap_ = true;               // "tonemap": false = lit shaders clamp (flat art), map > game
+    bool srgbModels_ = false;           // "modelOutput": "srgb" = models encode with the sRGB curve, map > game
     float lightning_ = 0;
     std::string preset_;
     bool waterRefl_ = true, combatFlashes_ = true;

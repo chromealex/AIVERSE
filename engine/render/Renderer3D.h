@@ -74,6 +74,8 @@ struct Lighting {
     float fogDensity = 0.0025f;
     float shadowSoftness = 0.22f;          // penumbra radius in world units (same look at every quality tier)
     bool tonemap = true;                   // false: lit shaders clamp instead of the ACES fit (flat / unlit art styles)
+    bool srgbModels = false;               // true: model shaders encode their output with the exact sRGB curve (as a
+                                           // linear-colour-space Unity project) instead of the engine's sqrt (gamma 2)
 };
 
 enum class ShadowQuality { Off, Low, Medium, High };
