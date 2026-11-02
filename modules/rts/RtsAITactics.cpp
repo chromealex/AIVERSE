@@ -544,11 +544,45 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
         }
     }
 
+    // ---- finish: the enemy fields no armed unit any more -> the whole army (not only the units that happen to be
+    //      idle: trickling waves of three never finish a base) goes for their weakest structure that still counts
+    bool finishing = false;
+    if (!defend && hasEnemy_ && !enemyOffBody_ && enemyStructs > 0 && now > 180 * rate) {
+        bool armed = false;
+        Entity tgt;
+        Fixed tgtHp{};
+        w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& tr) {
+            if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || (u.flags & kUnitOffMap)) return;
+            if (S && S->bodyAt(tr.pos) != hb) return;
+            const UnitType& t = R.types[u.type];
+            if (!t.structure) { if (!t.weapons.empty() && !t.worker) armed = true; return; }
+            if (!t.countsForVictory || t.invulnerable) return;
+            if (!tgt.valid() || u.hp < tgtHp) { tgt = e; tgtHp = u.hp; }
+        });
+        if (!armed && tgt.valid()) {
+            finishing = true;
+            const Vec3 tp = w.get<Transform>(tgt).pos;
+            std::vector<Entity> near, far;
+            for (Entity e : army) {
+                if (inList(scouts_, e) || inList(invaders_, e) || !bodyOk(e, tp)) continue;
+                auto* ord = w.tryGet<Orders>(e);
+                if (!ord) continue;
+                const bool busy = !idleOrders(*ord) && ord->queue.front().type != OrderType::Move &&
+                                  !(ord->queue.front().type == OrderType::AttackMove && dist(ord->queue.front().point, tp) > Fixed::fromInt(4));
+                if (busy) continue;
+                (dist(w.get<Transform>(e).pos, tp) < Fixed::fromInt(12) ? near : far).push_back(e);
+            }
+            if (!near.empty()) { Command a; a.type = kCmdAttack; a.units = near; a.target = tgt; send(sim, a); }
+            attack(far, tp);
+            wave_units_.clear(); waypoints_.clear();
+        }
+    }
+
     // ---- waves
-    int needed = defend ? 1 : std::min(cfg_.firstAttackArmy + wave_ * cfg_.armyGrowth, cfg_.maxAttackArmy + escalation_ * 4);
+    int needed = finishing ? 1 << 20 : defend ? 1 : std::min(cfg_.firstAttackArmy + wave_ * cfg_.armyGrowth, cfg_.maxAttackArmy + escalation_ * 4);
     auto& eco = gs.players[player_];
     const bool maxed = eco.supplyCap.raw > 0 && eco.supplyUsed * 10 >= eco.supplyCap * 9 && eco.supplyCap * 10 >= R.supplyCap * 8;
-    if (maxed) needed = std::min(needed, std::max(4, int(home.size()) * 3 / 4));
+    if (maxed && !finishing) needed = std::min(needed, std::max(4, int(home.size()) * 3 / 4));
     // clearly stronger than everything the enemy fields: go now with what we have
     if (!defend && hasEnemy_ && int(homeIdle.size()) >= 3 && now > 180 * rate) {   // (not with the start kit)
         int64_t ours = 0, theirs = 0;
@@ -558,7 +592,7 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
             if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || t.weapons.empty() || t.worker) return;
             theirs += strengthOf(t, u);   // towers count too
         });
-        if (ours >= theirs * 2 + 1) needed = std::min(needed, int(homeIdle.size()));
+        if (ours >= theirs * 2 + 1 && !finishing) needed = std::min(needed, int(homeIdle.size()));
         enemyDefenceless_ = theirs == 0;
     }
     if (!wave_units_.empty()) {
