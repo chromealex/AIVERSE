@@ -117,6 +117,10 @@ canonical quiet NaN `0x7fc00000` / `0x7ff8000000000000`), so results are identic
 | `f32.dot2(a, b, c, d)` | `a*b + c*d` rounded once (fused two-term dot product) |
 | `f32.fromint(i)`, `f32.tof64(a)` | integer → binary32 (rounded); binary32 → binary64 (exact) |
 | `f32.lt/le/eq(a, b)` | IEEE comparisons (NaN unordered, `-0 == +0`) |
+| `f32.fdot2(a, b, c, d)` | `dot2` of finite operands (a non-finite operand is an error) |
+| `f32.sqdist(p, q)` | `fdot2(x, x, y, y)` of `x = p.x - q.x`, `y = p.y - q.y` (tables with `x`, `y`; each difference rounded) |
+| `f32.floorint(a)` | floor as an integer; `a` finite with `|a| < 2^31`, otherwise an error |
+| `f32.cellat(p, w, h)` | grid cell `y*w + x` of `x = floorint(p.x)`, `y = floorint(p.y)`, or `-1` outside `0..w-1 × 0..h-1` |
 | `f64.add/sub/mul/div(a, b)`, `f64.sqrt(a)`, `f64.fromint(i)`, `f64.tof32(d)`, `f64.lt/le/eq(a, b)` | the same for binary64 |
 
 Arguments must be integers (`f32` ones in range), otherwise the call is an error. Both tables exist in

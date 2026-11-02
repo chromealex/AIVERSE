@@ -10952,6 +10952,14 @@ TEST(script_ieee_bit_patterns) {
             assert(f32.dot2(one,one,0xbf800000,one)==0 and f32.dot2(0x80000000,one,0x80000000,one)==0x80000000)
             assert(f32.dot2(0x7f7fffff,two,0,0)==0x7f800000 and f32.dot2(0x7f800000,one,0xff800000,one)==0x7fc00000)
             assert(f32.dot2(0x40400000,0x40800000,0x40a00000,0x40c00000)==0x42280000)   -- 3*4+5*6
+            assert(f32.fdot2(0x40400000,0x40800000,0x40a00000,0x40c00000)==0x42280000)
+            assert(not pcall(f32.fdot2,0x7f800000,one,0,0) and not pcall(f32.fdot2,one,one,0x7fc00000,one))
+            assert(f32.sqdist({x=0x40400000,y=0},{x=0,y=0x40800000})==0x41c80000)            -- 3^2+4^2
+            assert(not pcall(f32.sqdist,{x=0x7f7fffff,y=0},{x=0xff7fffff,y=0}))              -- difference overflows
+            assert(f32.floorint(0x3fc00000)==1 and f32.floorint(0xbfc00000)==-2 and f32.floorint(0x80000000)==0)
+            assert(f32.floorint(1)==0 and f32.floorint(0x80000001)==-1 and f32.floorint(0x4effffff)==2147483520)
+            assert(not pcall(f32.floorint,0x4f000000) and not pcall(f32.floorint,0x7f800000) and not pcall(f32.floorint,0x7fc00000))
+            assert(f32.cellat({x=0x40200000,y=0x3fc00000},4,3)==6 and f32.cellat({x=0xbf000000,y=0},4,3)==-1 and f32.cellat({x=0,y=0x40400000},4,3)==-1)
             assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
             assert(f64.fromint(9007199254740993)==0x4340000000000000)
             assert(f64.tof32(0x3ff0000010000000)==one and f64.tof32(0x3ff0000010000001)==0x3f800001)
@@ -10999,6 +11007,13 @@ TEST(script_ieee_bit_patterns) {
         bad+=call("f64","tof32",int64_t(p),0,false)!=int64_t(fb(float(u)));bad+=call("f64","le",int64_t(p),int64_t(q),true)!=int64_t(u<=v);
         const int64_t n=int64_t((uint64_t(rng.next())<<32)^rng.next())>>rng.below(63);
         bad+=call("f32","fromint",n,0,false)!=int64_t(fb(float(n)));bad+=call("f64","fromint",n,0,false)!=int64_t(db(double(n)));
+        // floorint against an integer-only floor (the script implementation): sign, exponent, mantissa
+        if(((a>>23)&255u)<=157u){
+            const int64_t mant=(a>>23&255u)?int64_t((a&0x7fffffu)|0x800000u):int64_t(a&0x7fffffu);const int e=(a>>23&255u)?int((a>>23)&255u)-150:-149;
+            int64_t fl;if(e>=0)fl=mant<<e;else{const int k=-e;const int64_t q=k>=63?0:mant>>k;const bool rem=k>=63?mant!=0:(mant-(q<<k))!=0;fl=(a>>31)?-q-(rem?1:0):q;}
+            if(e>=0&&(a>>31))fl=-fl;
+            bad+=call("f32","floorint",a,0,false)!=fl;
+        }
     }
     lua_close(L);CHECK(bad==0);
 }

@@ -100,10 +100,9 @@ int f32ToF64(lua_State* L) { requireEnv(L); const double r = double(f32Of(arg32(
 // (24-bit significands); TwoSum gives their binary64 sum s and its exact error e. Rounding s to binary32 is
 // the correctly rounded result unless s lies exactly on a binary32 midpoint (every binary32 midpoint,
 // subnormal or the overflow threshold included, is a binary64 number), where the sign of e decides.
-int f32Dot2(lua_State* L) {
-    requireEnv(L);
-    const double p1 = double(f32Of(arg32(L, 1))) * double(f32Of(arg32(L, 2)));
-    const double p2 = double(f32Of(arg32(L, 3))) * double(f32Of(arg32(L, 4)));
+float dot2(float a, float b, float c, float d) {
+    const double p1 = double(a) * double(b);
+    const double p2 = double(c) * double(d);
     const double sum = p1 + p2;
     float r = float(sum);
     if (sum - sum == 0.0) {   // finite
@@ -116,7 +115,58 @@ int f32Dot2(lua_State* L) {
             if (sum == mid) r = (err > 0.0) == (other > r) ? other : r;
         }
     }
-    return push32(L, r);
+    return r;
+}
+int f32Dot2(lua_State* L) {
+    requireEnv(L);
+    return push32(L, dot2(f32Of(arg32(L, 1)), f32Of(arg32(L, 2)), f32Of(arg32(L, 3)), f32Of(arg32(L, 4))));
+}
+
+// Fused helpers of hot script primitives (a port's float32 grid code): each is the composition of the
+// operations above, with the error of the script code it replaces where that code rejects an operand.
+inline bool finite32(uint32_t b) { return (b & 0x7f800000u) != 0x7f800000u; }
+// floor of a finite binary32 whose floor fits a signed int32 (|a| < 2^31); other operands are errors
+inline lua_Integer floorInt(lua_State* L, uint32_t a) {
+    const uint32_t be = (a >> 23) & 255u;
+    if (be == 255u) luaL_error(L, "non-finite float-to-int conversion");
+    if (be > 157u) luaL_error(L, "float-to-int outside signed int32 range");
+    return lua_Integer(__builtin_floorf(f32Of(a)));
+}
+inline uint32_t field32(lua_State* L, int t, const char* k) {
+    lua_getfield(L, t, k);
+    const int ok = lua_isinteger(L, -1);
+    const lua_Integer v = lua_tointeger(L, -1);
+    lua_pop(L, 1);
+    if (!ok || v < 0 || v > lua_Integer(0xffffffffu)) luaL_error(L, "f32: field %s is not a binary32 bit pattern (integer 0..0xffffffff)", k);
+    return uint32_t(v);
+}
+// floorint(a): Mathf.FloorToInt of a finite value in the int32 range
+int f32FloorInt(lua_State* L) { return lua_pushinteger(L, floorInt(L, arg32(L, 1))), 1; }
+// cellat(p, width, height): the grid cell (y * width + x) holding point {x=, y=} (floors), -1 outside
+int f32CellAt(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    const uint32_t px = field32(L, 1, "x"), py = field32(L, 1, "y");
+    const lua_Integer w = argInteger(L, 2, "f32.cellat"), h = argInteger(L, 3, "f32.cellat");
+    const lua_Integer x = floorInt(L, px), y = floorInt(L, py);
+    lua_pushinteger(L, x >= 0 && y >= 0 && x < w && y < h ? y * w + x : -1);
+    return 1;
+}
+// fdot2(a, b, c, d): dot2 of finite operands; a non-finite operand is an error
+int f32FiniteDot2(lua_State* L) {
+    requireEnv(L);
+    const uint32_t a = arg32(L, 1), b = arg32(L, 2), c = arg32(L, 3), d = arg32(L, 4);
+    if (!finite32(a) || !finite32(b) || !finite32(c) || !finite32(d)) luaL_error(L, "nonfinite dot operand");
+    return push32(L, dot2(f32Of(a), f32Of(b), f32Of(c), f32Of(d)));
+}
+// sqdist(p, q): x = p.x - q.x, y = p.y - q.y (each rounded), then fdot2(x, x, y, y)
+int f32SqDist(lua_State* L) {
+    requireEnv(L);
+    luaL_checktype(L, 1, LUA_TTABLE);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    const float x = f32Of(field32(L, 1, "x")) - f32Of(field32(L, 2, "x"));
+    const float y = f32Of(field32(L, 1, "y")) - f32Of(field32(L, 2, "y"));
+    if (!finite32(canon(x)) || !finite32(canon(y))) luaL_error(L, "nonfinite dot operand");
+    return push32(L, dot2(x, x, y, y));
 }
 
 int f64Add(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) + f64Of(arg64(L, 2)); return push64(L, r); }
@@ -135,6 +185,7 @@ int f64ToF32(lua_State* L) { requireEnv(L); const float r = float(f64Of(arg64(L,
 void openIeee(lua_State* L) {
     static const luaL_Reg f32[] = {{"add", f32Add}, {"sub", f32Sub}, {"mul", f32Mul}, {"div", f32Div}, {"sqrt", f32Sqrt},
                                    {"dot2", f32Dot2}, {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
+                                   {"floorint", f32FloorInt}, {"cellat", f32CellAt}, {"fdot2", f32FiniteDot2}, {"sqdist", f32SqDist},
                                    {nullptr, nullptr}};
     static const luaL_Reg f64[] = {{"add", f64Add}, {"sub", f64Sub}, {"mul", f64Mul}, {"div", f64Div}, {"sqrt", f64Sqrt},
                                    {"fromint", f64FromInt}, {"lt", f64Lt}, {"le", f64Le}, {"eq", f64Eq}, {"tof32", f64ToF32},
