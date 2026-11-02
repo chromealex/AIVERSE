@@ -1117,7 +1117,7 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
             src.push_back({all[i].e, pct});
             sent += int(int64_t(all[i].count) * pct / 100);
         }
-        if (sent < need) continue;
+        if (sent < need || src.empty()) continue;   // (enough already on the way: not a target - it used to win the pick and freeze every other send)
         Fixed d = dist(all[mine.empty() ? ti : mine[0]].pos, t.pos);
         Fixed value = Fixed::fromInt(R.types[w.get<Unit>(t.e).type].garrisonMax + 10) * (t.owner ? cfg_.aggression + Fixed::fromInt(mass ? 3 : 1) : Fixed::fromInt(1));
         Fixed score = value * 100 / (Fixed::fromInt(sent) + d * 2 + Fixed::fromInt(1));
