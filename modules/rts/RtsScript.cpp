@@ -66,7 +66,9 @@ struct LuaProfile {
         }
         return state == 1;
     }
+    size_t peakMem = 0;   // largest Lua heap seen by a hook call this tick (split rows, 5th column)
     void sample(lua_State* L) {
+        if (!split.empty()) { const size_t mem = vmOf(L).mem; if (mem > peakMem) peakMem = mem; }
         const auto now = std::chrono::steady_clock::now();
         const int64_t dt = std::chrono::duration_cast<std::chrono::microseconds>(now - last).count();
         if (dt < periodUs) return;
@@ -1035,7 +1037,8 @@ void luaProfileTickEnd(uint64_t tick, int64_t us) {
     if (!p.split.empty()) {
         int64_t sampled = 0, matching = 0;
         for (auto& [k, v] : p.tick) { sampled += v; if (k.find(p.split) != std::string::npos) matching += v; }
-        p.splitRows.push_back(std::to_string(tick) + ' ' + std::to_string(us) + ' ' + std::to_string(sampled) + ' ' + std::to_string(matching));
+        p.splitRows.push_back(std::to_string(tick) + ' ' + std::to_string(us) + ' ' + std::to_string(sampled) + ' ' + std::to_string(matching) + ' ' + std::to_string(p.peakMem));
+        p.peakMem = 0;
     }
     if (us >= p.slowUs) {
         for (auto& [k, v] : p.tick) p.slow[k] += v;
