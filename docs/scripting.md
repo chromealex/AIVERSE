@@ -649,6 +649,7 @@ on the local machine only:
 | field | meaning (default) |
 |---|---|
 | `scale` | number or `{x, y, z}`: multiplies the model in its own axes about its ground point (1) |
+| `lift` | world units the model is raised along its up (negative: lowered); the ground shadow stays (0) |
 | `opacity` | 0..1: below .99 the model is drawn in the blended pass (sorted back to front, no depth writes, no shadow-map casting); 0 draws nothing (1) |
 | `tint` | `{r, g, b}` multiplies the surface colour (1, 1, 1) |
 | `team_mix` | `{r, g, b, amount}`: the team colour moves towards rgb by amount, in display space, before it is applied to the team-coloured surfaces (Unity's `Color.Lerp` of a `_BaseColor`) (amount 0) |

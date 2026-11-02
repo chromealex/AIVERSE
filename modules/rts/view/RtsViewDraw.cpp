@@ -38,8 +38,13 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
 
     // ---- placement
     const float k = L.scale;
+    // view.entity_fx: scale about the object's ground point in the model's axes (base ends in a diagonal scale, so
+    // the extra diagonal factor commutes with it), lift along the object's up, opacity / colour below
+    EntityFxValues fx;
+    const bool hasFx = !tintOverride && fxFor(o, fx);
+    const float lift = hasFx ? fx.v[EntityFxValues::kLift] : 0.0f;
     // planets: the object's frame (local up = +Y) replaces the flat translation
-    const float3 p = placement ? float3{0, L.air ? L.flyHeight : 0.0f, 0} : float3{o.pos.x, ground + (L.air ? L.flyHeight : 0.0f), o.pos.z};
+    const float3 p = placement ? float3{0, (L.air ? L.flyHeight : 0.0f) + lift, 0} : float3{o.pos.x, ground + (L.air ? L.flyHeight : 0.0f) + lift, o.pos.z};
     const float grow = L.construction == Construction::Grow ? std::clamp(o.build, 0.15f, 1.0f) : 1.0f;
     mat4 base;
     if (t.structure && L.shape && !stage) {
@@ -50,10 +55,6 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     } else {
         base = mat4::translate(p) * mat4::rotateY(st.yaw) * mat4::scale({k, k, k});
     }
-    // view.entity_fx: scale about the object's ground point in the model's axes (base ends in a diagonal scale, so
-    // the extra diagonal factor commutes with it), opacity / colour below
-    EntityFxValues fx;
-    const bool hasFx = !tintOverride && fxFor(o, fx);
     if (hasFx) base = base * mat4::scale({fx.scale(0), fx.scale(1), fx.scale(2)});
     if (placement) base = *placement * base;   // flat maps: untouched (bit-identical)
     ModelDraw d;

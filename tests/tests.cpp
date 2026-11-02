@@ -12177,8 +12177,8 @@ assert(v and v.scale[1] == .25 and v.scale[3] == .25 and v.opacity == .5 and v.t
 assert(math.abs(v.team_glow - .35) < 1e-6, 'glow '..v.team_glow); assert(v.shadow == .5, 'sh '..v.shadow); assert(v.shadow_scale[1] == .25, 'ss '..v.shadow_scale[1])    -- the shadow follows the scale
 view.entity_fx(a, {scale = 1, time = 1, ease = 'linear'})          -- eases from .25 over 1 s of frame time
 assert(view.entity_fx(a).scale[1] == .25 and view.entity_fx(a).opacity == .5)
-view.entity_fx(b, {scale = {1, 2, 3}, shadow_scale = 1})
-assert(view.entity_fx(b).scale[2] == 2 and view.entity_fx(b).shadow_scale[2] == 1)
+view.entity_fx(b, {scale = {1, 2, 3}, shadow_scale = 1, lift = -.25})
+assert(view.entity_fx(b).scale[2] == 2 and view.entity_fx(b).shadow_scale[2] == 1 and view.entity_fx(b).lift == -.25)
 assert(not pcall(view.entity_fx, b, {opacity = 0 / 0}))
 assert(not pcall(view.entity_fx, b, {scale = {1, 2}}))
 assert(not pcall(view.entity_fx, b, {ease = 'bounce'}))

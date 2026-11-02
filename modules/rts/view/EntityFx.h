@@ -13,8 +13,8 @@ namespace rts::game {
 
 // The drawn values. Defaults = no change.
 struct EntityFxValues {
-    enum : int { kScale = 0, kOpacity = 3, kTint = 4, kTeamMix = 7, kTeamGlow = 11, kShadow = 12, kShadowScale = 13, kCount = 16 };
-    float v[kCount] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1};
+    enum : int { kScale = 0, kOpacity = 3, kTint = 4, kTeamMix = 7, kTeamGlow = 11, kShadow = 12, kShadowScale = 13, kLift = 16, kCount = 17 };
+    float v[kCount] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0};
     float scale(int axis) const { return v[kScale + axis]; }
     float opacity() const { return v[kOpacity]; }
     bool identity() const { static const EntityFxValues d; for (int i = 0; i < kCount; ++i) if (v[i] != d.v[i]) return false; return true; }

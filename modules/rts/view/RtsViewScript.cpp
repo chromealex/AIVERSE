@@ -462,7 +462,7 @@ int vDrawGround(lua_State* L, Vm& vm) {
     im.groundVerts += count;
     return 0;
 }
-// view.entity_fx(h, {scale =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
+// view.entity_fx(h, {scale =, lift =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
 // sets an entity's presentation overrides (EntityFx.h); fields left out keep their target. view.entity_fx(h, nil)
 // removes them (drawn unchanged at once); view.entity_fx(h) returns the values drawn now, or nil.
 int vEntityFx(lua_State* L, Vm& vm) {
@@ -484,6 +484,7 @@ int vEntityFx(lua_State* L, Vm& vm) {
         lua_pushnumber(L, cur.v[V::kOpacity]); lua_setfield(L, -2, "opacity");
         lua_pushnumber(L, cur.v[V::kTeamGlow]); lua_setfield(L, -2, "team_glow");
         lua_pushnumber(L, cur.v[V::kShadow]); lua_setfield(L, -2, "shadow");
+        lua_pushnumber(L, cur.v[V::kLift]); lua_setfield(L, -2, "lift");
         return 1;
     }
     if (lua_isnil(L, 2)) { im.fx->entries.erase(key); return 0; }
@@ -521,6 +522,7 @@ int vEntityFx(lua_State* L, Vm& vm) {
     if (field("team_mix", V::kTeamMix, 4, false, 0.0f, 64.0f)) target.v[V::kTeamMix + 3] = std::clamp(target.v[V::kTeamMix + 3], 0.0f, 1.0f);
     field("team_glow", V::kTeamGlow, 1, true, 0.0f, 64.0f);
     field("shadow", V::kShadow, 1, true, 0.0f, 1.0f);
+    field("lift", V::kLift, 1, true, -1000.0f, 1000.0f);
     bool ownShadowScale = false;
     {
         lua_getfield(L, 2, "shadow_scale");
