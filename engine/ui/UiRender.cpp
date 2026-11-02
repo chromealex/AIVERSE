@@ -4,6 +4,8 @@
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Log.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "engine/render/Math3D.h"
@@ -116,6 +118,7 @@ void UiRenderer::beginFrame(int fbW, int fbH) {
     std::memcpy(proj_, p.m, sizeof proj_);
     hasTransform_ = false;
     scissorOn_ = false;
+    maskOn_ = false;
     dev_->setViewport({0, 0, fbW, fbH});
     dev_->setScissor({});
 }
@@ -136,6 +139,11 @@ Rml::CompiledGeometryHandle UiRenderer::CompileGeometry(Rml::Span<const Rml::Ver
     ib.size = indices.size() * sizeof(int); ib.data = indices.data(); ib.label = "ui-ib";
     g.ib = dev_->createBuffer(ib);
     g.count = uint32_t(indices.size());
+    g.lo[0] = g.hi[0] = vertices[0].position.x; g.lo[1] = g.hi[1] = vertices[0].position.y;
+    for (const Rml::Vertex& v : vertices) {
+        g.lo[0] = std::min(g.lo[0], v.position.x); g.hi[0] = std::max(g.hi[0], v.position.x);
+        g.lo[1] = std::min(g.lo[1], v.position.y); g.hi[1] = std::max(g.hi[1], v.position.y);
+    }
     return put(geos_, freeGeos_, g);
 }
 
@@ -222,15 +230,47 @@ void UiRenderer::ReleaseTexture(Rml::TextureHandle handle) {
 
 void UiRenderer::EnableScissorRegion(bool enable) {
     scissorOn_ = enable;
-    if (!enable) dev_->setScissor({});
-    else SetScissorRegion(scissor_);
+    applyScissor();
 }
 
 void UiRenderer::SetScissorRegion(Rml::Rectanglei r) {
     scissor_ = r;
-    if (!scissorOn_) return;
+    if (scissorOn_) applyScissor();
+}
+
+void UiRenderer::applyScissor() {
+    if (!scissorOn_ && !maskOn_) { dev_->setScissor({}); return; }
+    Rml::Rectanglei r = scissorOn_ ? scissor_ : mask_;
+    if (scissorOn_ && maskOn_) r = r.Intersect(mask_);
     // the RHI treats w == 0 as "disabled": keep empty regions clipping (at most one pixel shows)
     dev_->setScissor({r.Left(), r.Top(), std::max(r.Width(), 1), std::max(r.Height(), 1)});
+}
+
+void UiRenderer::EnableClipMask(bool enable) {
+    maskOn_ = enable;
+    mask_ = Rml::Rectanglei::FromPositionSize({0, 0}, {fbW_, fbH_});
+    applyScissor();
+}
+
+void UiRenderer::RenderToClipMask(Rml::ClipMaskOperation op, Rml::CompiledGeometryHandle handle, Rml::Vector2f translation) {
+    if (!handle || handle > geos_.size() || op == Rml::ClipMaskOperation::SetInverse) return; // inverse masks: not clipped
+    const Geometry& g = geos_[handle - 1];
+    float x0 = 1e30f, y0 = 1e30f, x1 = -1e30f, y1 = -1e30f;
+    for (int c = 0; c < 4; ++c) {
+        const float x = ((c & 1) ? g.hi[0] : g.lo[0]) + translation.x, y = ((c & 2) ? g.hi[1] : g.lo[1]) + translation.y;
+        float px = x, py = y;
+        if (hasTransform_) { // column-major: p = T * (x, y, 0, 1)
+            const float* t = transform_;
+            const float w = t[3] * x + t[7] * y + t[15];
+            px = (t[0] * x + t[4] * y + t[12]) / (w != 0 ? w : 1);
+            py = (t[1] * x + t[5] * y + t[13]) / (w != 0 ? w : 1);
+        }
+        x0 = std::min(x0, px); y0 = std::min(y0, py); x1 = std::max(x1, px); y1 = std::max(y1, py);
+    }
+    const Rml::Rectanglei r = Rml::Rectanglei::FromCorners({int(std::floor(x0 + 0.5f)), int(std::floor(y0 + 0.5f))},
+                                                           {int(std::floor(x1 + 0.5f)), int(std::floor(y1 + 0.5f))});
+    mask_ = op == Rml::ClipMaskOperation::Intersect ? mask_.Intersect(r) : r;
+    applyScissor();
 }
 
 void UiRenderer::SetTransform(const Rml::Matrix4f* t) {

@@ -32,9 +32,14 @@ public:
     void EnableScissorRegion(bool enable) override;
     void SetScissorRegion(Rml::Rectanglei region) override;
     void SetTransform(const Rml::Matrix4f* transform) override;
+    // Clip masks (overflow clipping inside transformed elements) as a scissor rectangle: the screen bounds of the mask
+    // geometry, exact for rectangles under translate / scale transforms (rotated or rounded masks clip to their bounds)
+    void EnableClipMask(bool enable) override;
+    void RenderToClipMask(Rml::ClipMaskOperation operation, Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation) override;
 
 private:
-    struct Geometry { gfx::BufferHandle vb, ib; uint32_t count = 0; };
+    struct Geometry { gfx::BufferHandle vb, ib; uint32_t count = 0; float lo[2] = {0, 0}, hi[2] = {0, 0}; };
+    void applyScissor();
     struct Texture { gfx::TextureHandle tex; bool owned = false; std::string dynamicName; };
     template <class T> static uintptr_t put(std::vector<T>& v, std::vector<uintptr_t>& freeList, T item);
 
@@ -54,6 +59,8 @@ private:
     bool hasTransform_ = false;
     bool scissorOn_ = false;
     Rml::Rectanglei scissor_;
+    bool maskOn_ = false;
+    Rml::Rectanglei mask_;
     int fbW_ = 0, fbH_ = 0;
 };
 

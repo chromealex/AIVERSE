@@ -2,6 +2,7 @@
 #include "engine/ui/UiLayer.h"
 #include "apps/client/UiModel.h"
 #include <cstdio>
+#include <RmlUi/Core.h>
 #include <map>
 class UiTestDevice final : public rts::gfx::Device {
 public:
@@ -27,7 +28,8 @@ public:
     void endPass() override {}
     rts::gfx::Rect viewport;
     void setViewport(const rts::gfx::Rect& r) override { viewport = r; }
-    void setScissor(const rts::gfx::Rect&) override {}
+    std::vector<rts::gfx::Rect> scissors;
+    void setScissor(const rts::gfx::Rect& r) override { scissors.push_back(r); }
     void setPipeline(rts::gfx::PipelineHandle) override {}
     void setVertexBuffer(rts::gfx::BufferHandle, size_t) override {}
     void setIndexBuffer(rts::gfx::BufferHandle, size_t) override {}
@@ -58,6 +60,9 @@ int main() {
         {"engine/ui/keyboard.rml", "<rml><body/></rml>"},
         {"engine/ui/hud.rml", "<rml><body id='fallback'/></rml>"},
         {"ui/hud.rml", R"rml(<rml><head><link type="text/rcss" href="skin.rcss"/></head><body><div data-model="game"><button id="action" data-event-click="act()"/></div></body></rml>)rml"},
+        {"ui/clip.rml", R"rml(<rml><head><style>body { margin: 0; } #frame { display: block; position: absolute; left: 10px; top: 20px; width: 200px; height: 200px; transform: scale(0.5); transform-origin: 0 0; }
+ #list { position: absolute; left: 40px; top: 60px; width: 100px; height: 80px; overflow: hidden; } #item { display: block; width: 100px; height: 300px; background-color: #00ff00; }</style></head>
+ <body><div id="frame"><div id="list"><div id="item"/></div></div></body></rml>)rml"},
         {"ui/skin.rcss", "body { margin: 0; } button { display: block; width: 100dp; height: 40dp; background-color: #ff0000; }"}
     };
     auto read=[&](const std::string& path,std::string& out) { auto i=files.find(path); if(i==files.end())return false; out=i->second; return true; };
@@ -89,6 +94,15 @@ int main() {
     ui.render(); check(dev.viewport.w==800 && dev.viewport.h==600,"render uses embedded target");
     ui.setViewport(360,640,1); ui.update(); ui.render();
     check(dev.viewport.w==360 && dev.viewport.h==640 && ui.dpRatio()==1,"orientation and density change");
+    // overflow clipping inside a transformed (scaled) element: the clip mask becomes the scissor of its screen bounds
+    if(auto* clip=ui.loadDocument("clip.rml")){
+        clip->Show(); ui.update(); dev.scissors.clear(); ui.render();
+        bool found=false;
+        for(auto& r:dev.scissors) if(r.x==30 && r.y==50 && r.w==50 && r.h==40) found=true;
+        if(!found) for(auto& r:dev.scissors) std::fprintf(stderr,"scissor %d %d %d %d\n",r.x,r.y,r.w,r.h);
+        check(found,"clip mask under a scale transform -> scissor 30,50 50x40");
+        clip->Close(); ui.update();
+    } else check(false,"clip document");
     ui.shutdown(); check(dev.alive==0,"UI texture cleanup");
     check(ui.init(dev,nullptr,read),"reinitialize for another play session");
     ui.shutdown(); check(dev.alive==0,"second session texture cleanup");
