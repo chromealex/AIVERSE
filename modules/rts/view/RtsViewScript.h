@@ -58,6 +58,20 @@ struct UiRequest {
     Json value;                // Set: the value; Open: params
 };
 
+// Cost of the view scripts in VM instructions (C functions they call are not counted). Every handler call has its own
+// budget (5,000,000); a call over it is aborted and skipped, a handler over it 10 calls in a row or failing is disabled.
+struct ViewScriptProfile {
+    struct Handler {
+        std::string name;                       // "file:line" of the function
+        int64_t calls = 0, total = 0, max = 0;  // instructions: all calls, the most expensive call
+        int64_t last = 0;                       // instructions in the last update (+ ui events after it)
+        int overruns = 0, streak = 0;           // calls over budget: in all, in a row now
+        bool disabled = false;
+    };
+    int64_t budget = 0;
+    int64_t frames = 0, frameTotal = 0, frameMax = 0, frameLast = 0;   // update(): all handlers of a frame
+    std::vector<Handler> handlers;              // in order of first call
+};
 class ViewScripts {
 public:
     ViewScripts();
@@ -89,6 +103,7 @@ public:
     // send('id', {...}) -> a script command like view.send (false: unknown id / bad args, see log)
     void uiEvent(Simulation& sim, const std::string& name, const Json& args);
     bool send(Simulation& sim, const std::string& id, const Json& args);
+    ViewScriptProfile profile() const;
     const std::vector<ScriptLogEntry>& log() const { return log_; }
     // Called for every new log line (script errors, game.log) when set; testing hosts print them (RTS_SCRIPT_LOG).
     std::function<void(const ScriptLogEntry&)> onLog;

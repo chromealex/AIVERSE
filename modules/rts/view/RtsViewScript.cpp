@@ -47,12 +47,43 @@ struct ViewScripts::Impl {
         self.log_.push_back({error, vm.sim ? vm.sim->tick() : 0, t});
         if (self.onLog) self.onLog(self.log_.back());
     }
+    // Per-handler cost (ViewScripts::profile) by registry ref; a disabled handler keeps its row.
+    std::vector<ViewScriptProfile::Handler> stats;
+    std::map<int, size_t> statOf;
+    int64_t frameCost = 0, frames = 0, frameTotal = 0, frameMax = 0;   // per update(): every handler call
+    ViewScriptProfile::Handler& statFor(int ref) {
+        auto it = statOf.find(ref);
+        if (it != statOf.end()) return stats[it->second];
+        ViewScriptProfile::Handler h;
+        lua_rawgeti(vm.L, LUA_REGISTRYINDEX, ref);
+        lua_Debug ar{};
+        if (lua_getinfo(vm.L, ">S", &ar)) h.name = std::string(ar.short_src) + ":" + std::to_string(ar.linedefined);
+        statOf[ref] = stats.size();
+        stats.push_back(std::move(h));
+        return stats.back();
+    }
+    // Every handler call gets the whole budget. A call over budget is aborted and skipped (logged); only a handler
+    // over budget kOverrunLimit calls in a row (an endless loop, not a spike) or failing with an error is disabled.
+    static constexpr int kOverrunLimit = 10;
     void call(int& ref, int nargs) {
+        ViewScriptProfile::Handler& st = statFor(ref);
         lua_rawgeti(vm.L, LUA_REGISTRYINDEX, ref);
         lua_insert(vm.L, -nargs - 1);
+        vm.used = 0; vm.exceeded = false;
         std::string err;
-        if (protectedCall(vm, nargs, 0, &err)) return;
-        logLine(true, err + " [view handler disabled]");
+        const bool ok = protectedCall(vm, nargs, 0, &err);
+        const int64_t cost = instructionsUsed(vm);
+        ++st.calls; st.total += cost; st.max = std::max(st.max, cost); st.last += cost; frameCost += cost;
+        if (ok) { st.streak = 0; return; }
+        if (vm.exceeded && ++st.streak < kOverrunLimit) {
+            if (++st.overruns <= 20) logLine(true, err + " [view handler skipped once]");
+            return;
+        }
+        if (vm.exceeded) ++st.overruns;
+        logLine(true, err + (vm.exceeded ? " [view handler disabled: over budget " + std::to_string(kOverrunLimit) + " calls in a row]"
+                                         : std::string(" [view handler disabled]")));
+        st.disabled = true;
+        statOf.erase(ref);
         luaL_unref(vm.L, LUA_REGISTRYINDEX, ref);
         ref = LUA_NOREF;
     }
@@ -341,11 +372,23 @@ int vToScreen(lua_State* L, Vm& vm) {
 // with image: x, y, u, v, rgba (uv 0..1 over the image, 0, 0 = top left). rgba = 0xRRGGBBAA. At most 1M vertices a frame.
 int vDraw(lua_State* L, Vm& vm) {
     auto& im = viewOf(vm);
-    if (!lua_istable(L, 1)) return fail(vm, "view.draw(verts [, {image =, layer =}])");
+    if (!lua_istable(L, 1)) return fail(vm, "view.draw(verts [, {image =, layer =, transform =}])");
     std::string image; int layer = 0;
+    double tf[6] = {1, 0, 0, 1, 0, 0};   // transform {xx, xy, yx, yy, ox, oy}: x' = ox + x*xx + y*yx, y' = oy + x*xy + y*yy
+    bool transformed = false;
     if (lua_istable(L, 2)) {
         lua_getfield(L, 2, "image"); if (lua_isstring(L, -1)) image = lua_tostring(L, -1); lua_pop(L, 1);
         lua_getfield(L, 2, "layer"); if (lua_isnumber(L, -1)) layer = int(lua_tointeger(L, -1)); lua_pop(L, 1);
+        lua_getfield(L, 2, "transform");
+        if (lua_istable(L, -1)) {
+            for (int i = 0; i < 6; ++i) {
+                lua_rawgeti(L, -1, i + 1);
+                const bool ok = lua_isnumber(L, -1); tf[i] = lua_tonumber(L, -1); lua_pop(L, 1);
+                if (!ok || !std::isfinite(tf[i])) { lua_pop(L, 1); return fail(vm, "view.draw: transform needs six numbers {xx, xy, yx, yy, ox, oy}"); }
+            }
+            transformed = true;
+        }
+        lua_pop(L, 1);
     }
     const size_t stride = image.empty() ? 3 : 5, n = size_t(lua_rawlen(L, 1));
     if (n % (stride * 3) != 0) return fail(vm, "view.draw: vertex data is not a whole number of triangles (" + std::to_string(stride) + " numbers a vertex)");
@@ -357,7 +400,13 @@ int vDraw(lua_State* L, Vm& vm) {
     for (size_t v = 0; v < count; ++v) {
         const size_t b = v * stride + 1;
         ViewDrawVertex w;
-        w.x = float(num(b)); w.y = float(num(b + 1));
+        if (transformed) {   // in binary64 and in this order, like the same sum written in Lua (no fused multiply-add)
+            const double x = num(b), y = num(b + 1);
+            volatile double ax = x * tf[0], ay = x * tf[1];
+            volatile double sx = tf[4] + ax, sy = tf[5] + ay;
+            volatile double bx = y * tf[2], by = y * tf[3];
+            w.x = float(sx + bx); w.y = float(sy + by);
+        } else { w.x = float(num(b)); w.y = float(num(b + 1)); }
         if (stride == 5) { w.u = float(num(b + 2)); w.v = float(num(b + 3)); }
         lua_rawgeti(L, 1, lua_Integer(b + stride - 1));
         w.rgba = uint32_t(lua_Integer(lua_isinteger(L, -1) ? lua_tointeger(L, -1) : lua_Integer(lua_tonumber(L, -1))));
@@ -558,7 +607,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     detach();
     im.vm.close();
     im.handlers.clear(); im.frame.clear(); im.requests.clear(); im.commands.clear();
-    im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
+    im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stats.clear(); im.statOf.clear(); im.frameCost = im.frames = im.frameTotal = im.frameMax = 0; im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
     log_.clear();
     im.paint=std::make_shared<render::PaintLayers>();im.targeting={};im.cameraRequested=false;
     const auto files = scriptFiles(rules, map, true);
@@ -620,6 +669,8 @@ void ViewScripts::update(Simulation& sim, float dt) {
     im.vm.sim = &sim; im.vm.spatialOk = false;
     im.vm.used = 0;
     im.vm.exceeded = false;
+    im.frameCost = 0;
+    for (auto& h : im.stats) h.last = 0;
     im.draws.clear(); im.drawVerts = 0; im.groundDraws.clear(); im.groundVerts = 0;   // view.draw / draw_ground: one frame
     if (im.collector) {
         std::vector<SimEvent> evs;
@@ -658,6 +709,16 @@ void ViewScripts::update(Simulation& sim, float dt) {
         lua_pushnumber(L, dt);
         im.call(ref, 1);
     }
+    ++im.frames; im.frameTotal += im.frameCost; im.frameMax = std::max(im.frameMax, im.frameCost);
+}
+
+ViewScriptProfile ViewScripts::profile() const {
+    const Impl& im = *impl_;
+    ViewScriptProfile p;
+    p.budget = im.vm.budget;
+    p.frames = im.frames; p.frameTotal = im.frameTotal; p.frameMax = im.frameMax; p.frameLast = im.frameCost;
+    p.handlers = im.stats;
+    return p;
 }
 
 std::vector<ViewRequest> ViewScripts::takeRequests() {

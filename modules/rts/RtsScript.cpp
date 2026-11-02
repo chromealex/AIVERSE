@@ -8,6 +8,9 @@
 #include <cstring>
 #include "RtsInternal.h"
 #include "RtsScriptIeee.h"
+extern "C" {
+#include "lstate.h"   // lua_State::hookcount: the count hook's residual (instructionsUsed)
+}
 
 namespace rts::game {
 using namespace script;
@@ -814,6 +817,11 @@ bool protectedCall(Vm& vm, int nargs, int nresults, std::string* error) {
     lua_pop(L, 1);
     if (error) *error = m;
     return false;
+}
+
+int64_t instructionsUsed(const Vm& vm) {
+    if (!vm.L || vm.exceeded || lua_gethookmask(vm.L) != LUA_MASKCOUNT) return vm.used;
+    return vm.used + (lua_gethookcount(vm.L) - vm.L->hookcount);
 }
 
 } // namespace script

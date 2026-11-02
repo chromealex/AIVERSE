@@ -746,6 +746,17 @@ void GameClient::runViewScripts(float dt) {
     }
     viewScripts_.setScreen(screen_ == Screen::Paused ? "paused" : screen_ == Screen::Over ? "over" : "playing");   // view.screen()
     viewScripts_.update(*sim_, dt);
+    if (static const char* pf = std::getenv("RTS_VIEW_PROFILE"); pf && *pf) {   // testing: view script cost per frame
+        static FILE* out = std::fopen(pf, "w");
+        static size_t named = 0;
+        if (out) {
+            const game::ViewScriptProfile p = viewScripts_.profile();
+            for (; named < p.handlers.size(); ++named) std::fprintf(out, "h %zu %s\n", named, p.handlers[named].name.c_str());
+            std::fprintf(out, "f %u %lld", unsigned(sim_->tick()), (long long)p.frameLast);
+            for (auto& h : p.handlers) std::fprintf(out, " %lld", h.disabled ? -1LL : (long long)h.last);
+            std::fputc('\n', out); std::fflush(out);
+        }
+    }
     canvas_ = viewScripts_.takeDraws();   // view.draw: drawn after the overlays, under the UI
     groundCanvas_ = viewScripts_.takeGroundDraws();   // view.draw_ground: in the 3D scene
     if (game::ViewCameraRequest cr; viewScripts_.takeCameraRequest(cr)) {   // view.set_camera: presentation only
@@ -816,7 +827,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         steerPossessed();
         if (!netMatch_) {
             for (auto& b : bots_) b.update(*sim_);
-            sim_->advance(dt);
+            static const double simSpeed = [] { const char* v = std::getenv("RTS_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
+            if (simSpeed == 1.0) sim_->advance(dt);
+            else sim_->advance(dt * simSpeed, int(8 * simSpeed + .5));   // testing: match time faster than real time
             alpha = float(sim_->alpha());
             processEvents();
             if (sim_->result() != 0) {

@@ -11930,6 +11930,78 @@ end)
     CHECK(sim.checksum() == before);
 }
 
+TEST(view_draw_transform) {
+    // view.draw{transform = {xx, xy, yx, yy, ox, oy}}: the batch's points mapped affinely on the host side, the same
+    // binary64 sum as written in Lua (a cached batch drawn under a moving camera gives the same vertices)
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/tf.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/tf.lua", Json::string(R"LUA(
+view.on_frame(function()
+ local t = {0.1, 0.37, 1.3, -0.29, 123.456, 77.7}
+ local pts = {0.3, 7.77, 1e-3, 5.5, 3.25, 9.123456789}
+ view.draw({pts[1], pts[2], 1, pts[3], pts[4], 2, pts[5], pts[6], 3}, {transform = t, layer = 1})
+ local v = {}
+ for i = 1, 5, 2 do local x, y = pts[i], pts[i + 1]; v[#v + 1] = t[5] + x * t[1] + y * t[3]; v[#v + 1] = t[6] + x * t[2] + y * t[4]; v[#v + 1] = 0 end
+ view.draw(v, {layer = 2})
+ assert(not pcall(view.draw, {0, 0, 1, 0, 0, 1, 0, 0, 1}, {transform = {1, 0, 0, 1}}))
+end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    view.update(sim, .016f);
+    for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+    CHECK(view.log().empty());
+    auto draws = view.takeDraws();
+    CHECK(draws.size() == 2);
+    if (draws.size() == 2 && draws[0].verts.size() == 3 && draws[1].verts.size() == 3)
+        for (int i = 0; i < 3; ++i) CHECK(draws[0].verts[size_t(i)].x == draws[1].verts[size_t(i)].x && draws[0].verts[size_t(i)].y == draws[1].verts[size_t(i)].y);
+}
+
+TEST(view_handler_budget_per_call) {
+    // every view handler call has its own instruction budget: a heavy handler no longer starves the ones after it; a call
+    // over budget is aborted and skipped (logged) without disabling the handler, which is disabled only after 10 calls
+    // in a row over budget (an endless loop) or on an error; ViewScripts::profile reports the cost per handler
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/budget.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/budget.lua", Json::string(R"LUA(
+local frame = 0
+local function burn(n) local x = 0; for i = 1, n do x = x + i end; return x end
+view.on_frame(function() frame = frame + 1; burn(2000000) end)                                  -- ~4M instructions
+view.on_frame(function() burn(2000000); view.notice('second') end)                             -- runs too
+view.on_frame(function() if frame == 2 then while true do end end; view.notice('spike') end)   -- one spike
+view.on_frame(function() while true do end end)                                                -- endless
+view.on_frame(function() if frame == 3 then error('bug') end; view.notice('fails') end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    auto count = [](const std::vector<game::ViewRequest>& r, const char* t) { int n = 0; for (auto& q : r) n += q.text == t; return n; };
+    for (int f = 1; f <= 12; ++f) {
+        view.update(sim, .016f);
+        auto r = view.takeRequests();
+        CHECK(count(r, "second") == 1);
+        CHECK(count(r, "spike") == (f == 2 ? 0 : 1));
+        CHECK(count(r, "fails") == (f < 3 ? 1 : 0));
+    }
+    int skipped = 0, disabled = 0;
+    for (auto& e : view.log()) { skipped += e.text.find("[view handler skipped once]") != std::string::npos; disabled += e.text.find("[view handler disabled") != std::string::npos; }
+    CHECK(skipped == 1 + 9);   // the spike once, the endless loop nine times before it is disabled
+    CHECK(disabled == 2);      // the endless loop (10 in a row) and the error
+    const game::ViewScriptProfile p = view.profile();
+    CHECK(p.frames == 12 && p.handlers.size() == 5 && p.budget == 5000000);
+    if (p.handlers.size() == 5) {
+        CHECK(p.handlers[0].calls == 12 && !p.handlers[0].disabled && p.handlers[0].max > 3900000 && p.handlers[0].max < 5000000);
+        CHECK(p.handlers[2].overruns == 1 && !p.handlers[2].disabled && p.handlers[2].calls == 12);
+        CHECK(p.handlers[3].disabled && p.handlers[3].calls == 10 && p.handlers[3].overruns == 10);
+        CHECK(p.handlers[4].disabled && p.handlers[4].calls == 3 && p.handlers[4].overruns == 0);
+        CHECK(p.handlers[0].name.find("budget.lua:4") != std::string::npos);
+    }
+    CHECK(p.frameMax > 7000000);
+    CHECK(sim.checksum() == before);
+}
+
 TEST(view_screen_host_state) {
     // view.screen() reports the host's screen over the match (setScreen): "playing" by default, "paused", "over";
     // reading it never touches the simulation

@@ -609,6 +609,11 @@ after the world, the particles and the overlays, under the UI documents. A call 
 number or more than 1048576 vertices a frame raises an error and adds nothing. This is how a game ports a 2D vector
 board drawn over the 3D map (OpenWar: Unity's `ArmyBoard` VertexHelper meshes, `scripts/view/openwar/board.lua`).
 Client only (the editor Game view does not draw it yet); presentation only. Test: `view_to_screen_and_draw_canvas`.
+`transform = {xx, xy, yx, yy, ox, oy}` maps the batch's points on the host side (`x' = ox + x*xx + y*yx`,
+`y' = oy + x*xy + y*yy`, binary64 in that order, then float like any vertex): a script keeps a batch in its own
+coordinates (e.g. ground coordinates under an orthographic camera, whose ground-to-screen map is affine: three
+`view.to_screen` calls give it) and redraws the same table every frame without rebuilding it when only the camera moves
+— the result equals the same sum written in Lua. OpenWar's nuclear scorch uses it. Test: `view_draw_transform`.
 
 `view.draw_ground(verts [, {image = "ui/x.png", layer = 0}])` is the world-space counterpart for marks lying on the
 map: each vertex is `x, y, z, rgba` (with `image`: `x, y, z, u, v, rgba`) in world units (`y` up, absolute height —
@@ -628,6 +633,17 @@ model's frame (the drawn model's rotation, without its scale), `color` multiplie
 interpolated position and facing and replaces the default blob of air units. OpenWar ports Unity's footprint
 sprites (`ArmyUnitModelLayer.AttachShadow`) with it. Client only (drawn by `RtsView::drawGround`). Test:
 `view_ground_shadow_option`.
+
+View script budget: every handler call (`view.on`, `view.on_frame`, `ui.on`) has its own budget of 5,000,000 VM
+instructions (the C functions it calls are not counted), so one heavy handler never starves the others in that frame.
+A call over the budget is aborted and skipped for that frame (logged `... [view handler skipped once]`, at most 20
+times a handler); the handler is disabled only after 10 calls in a row over the budget (an endless loop, not a spike)
+or on an error (`[view handler disabled ...]`). An aborted call may leave its own caches half built, so a script that
+builds incrementally should publish a cache only once it is whole. `ViewScripts::profile()` gives the instructions
+per handler (calls, total, most expensive call, last frame, overruns, disabled) and per frame; `RTS_VIEW_PROFILE=file`
+makes the client write it every frame (`h <index> <file:line>` once per handler, then `f <tick> <frame total>
+<per handler ...>`, -1 = disabled), and `RTS_SIM_SPEED=s` (testing) runs the match s times faster than real time
+(up to 8*s ticks a frame) so long battles fit a profiling run. Test: `view_handler_budget_per_call`.
 
 View scripts' log (`game.log` lines and errors, which disable the failing handler) is kept by the host; with
 `RTS_SCRIPT_LOG=1` the client also prints each line on stdout as `[view] t=<tick> ...` / `[view error] ...`, next to the
