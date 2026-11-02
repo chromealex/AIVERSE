@@ -308,6 +308,7 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
         drawItem(it);
     }
     renderModels(2);
+    renderModels(4);   // transparent objects (kDrawTransparent) write their depth now: later ground layers stay under them
     lights.drawHalos(viewProj_);   // additive glows, depth-tested against the scene
     // custom renderers (sprites) after translucent meshes: they don't write depth, so water drawn
     // later would tint them; overlays (fog of war, markers) still come on top

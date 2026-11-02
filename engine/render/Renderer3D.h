@@ -128,6 +128,11 @@ enum DrawFlags : uint32_t {
     // drawn blended because of its opacity (tint.w < 1) but still writing depth: a faded solid object (view.entity_fx)
     // stays in front of the ground layers drawn after the translucent pass (paint layers, ground canvas, sprites)
     kDrawFadeDepth = 8,
+    // transparent object (Unity's transparent queue, ZWrite Off): every primitive goes to the blended pass even when opaque,
+    // sorted back to front one by one (ortho cameras: depth along the view direction), without depth write, so a nearer
+    // part drawn earlier is painted over by a farther part drawn later; casts no shadow. Its depth is written afterwards
+    // (colour mask off), so ground layers drawn after the translucent pass stay under it. Also per material: "transparent"
+    kDrawTransparent = 16,
 };
 
 class Renderer3D {
@@ -196,7 +201,7 @@ private:
     void shutdownModels();
     gfx::PipelineHandle modelPipeline(const ModelItem& it, int phase, bool instanced);
     void drawModelBatch(const uint32_t* items, uint32_t count, int phase);
-    void renderModels(int phase);   // 0 shadow, 1 opaque, 2 blended, 3 outlines
+    void renderModels(int phase);   // 0 shadow, 1 opaque, 2 blended, 3 outlines, 4 depth of transparent objects
     void renderReflection();        // water planar reflection (Renderer3DReflect.cpp, lighting agent)
     void renderSpotShadow();        // depth of the casters seen from the main spot light (same file)
     void computeShadowMatrix(const RTSCamera& cam, float aspect);

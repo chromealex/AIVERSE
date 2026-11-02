@@ -114,6 +114,7 @@ void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Mater
         } else warn(t, "fixedLight direction is zero");
     } else if (o.has("fixedLight")) warn(t, "fixedLight is [x, y, z, ambient, diffuse]");
     mt.castShadow = o.getBool("castShadow", mt.castShadow);
+    mt.transparent = o.getBool("transparent", mt.transparent);   // render::kDrawTransparent for this material
     mt.receiveShadow = o.getBool("receiveShadow", mt.receiveShadow);
     mt.vertexColors = o.getBool("vertexColors", mt.vertexColors);
     if (o.has("team")) {
@@ -278,6 +279,7 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     const bool dis = v.getBool("dissolve", false);
     L.dissolveSpawn = v.getBool("dissolveSpawn", dis);
     L.dissolveDeath = v.getBool("dissolveDeath", dis);
+    L.transparent = v.getBool("transparent", false);   // whole model drawn as render::kDrawTransparent
 }
 
 static uint32_t parseWhen(const Json& when, const std::function<void(const std::string&)>& bad) {

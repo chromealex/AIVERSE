@@ -367,6 +367,8 @@ public:
         else { glEnable(GL_CULL_FACE); glCullFace(d.cull == CullMode::Back ? GL_BACK : GL_FRONT); glFrontFace(GL_CCW); }
         if (d.depthTest) { glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); } else glDisable(GL_DEPTH_TEST);
         glDepthMask(d.depthWrite ? GL_TRUE : GL_FALSE);
+        const GLboolean cw = d.colorWrite ? GL_TRUE : GL_FALSE;
+        glColorMask(cw, cw, cw, cw);
         if (d.depthBiasConstant != 0 || d.depthBiasSlope != 0) {
             glEnable(GL_POLYGON_OFFSET_FILL);
             glPolygonOffset(d.depthBiasSlope, d.depthBiasConstant);

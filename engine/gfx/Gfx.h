@@ -102,6 +102,7 @@ struct PipelineDesc {
     BlendMode blend = BlendMode::Opaque;
     bool depthTest = true;
     bool depthWrite = true;
+    bool colorWrite = true;          // false: depth only into a pass with a colour target (colour mask off)
     bool depthOnly = false;          // no color output (shadow maps); the pass must have no color target.
                                      // A fragment stage, when the shader has one, still runs (alpha-tested casters).
     float depthBiasConstant = 0;     // polygon offset, used by shadow casters

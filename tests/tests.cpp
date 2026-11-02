@@ -12306,7 +12306,7 @@ namespace entityfxtest {
 // Records what the renderer submits: per draw the pipeline's blend / depth write and the per-instance block.
 class RecordingDevice final : public rts::gfx::Device {
 public:
-    struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; };
+    struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; bool colorWrite = true; };
     std::vector<Draw> draws;
     std::vector<rts::gfx::PipelineDesc> pipes;
     const rts::gfx::DeviceInfo& info() const override { return info_; }
@@ -12338,8 +12338,9 @@ public:
     void drawIndexed(uint32_t, uint32_t, int32_t, uint32_t instances) override {
         if (pipe_ == 0 || pipe_ > pipes.size()) return;
         const auto& p = pipes[pipe_ - 1];
-        if (p.depthOnly || std::string(p.label ? p.label : "") != "model") return;   // model colour passes only
-        draws.push_back({p.blend != rts::gfx::BlendMode::Opaque, p.depthWrite, u0_, instances});
+        const std::string label = p.label ? p.label : "";
+        if (p.depthOnly || (label != "model" && label != "model depth")) return;   // model passes on the scene target only
+        draws.push_back({p.blend != rts::gfx::BlendMode::Opaque, p.depthWrite, u0_, instances, p.colorWrite});
     }
 private:
     rts::gfx::DeviceInfo info_;
@@ -12420,6 +12421,57 @@ TEST(view_entity_fx_renders_scaled_translucent) {
     fx->entries[unit.entity.packed()].to.v[V::kCorpseAge] = 99; fx->entries[unit.entity.packed()].from = fx->entries[unit.entity.packed()].to;
     CHECK(frame(1.516).empty());                                                     // past the type's "corpse": gone
     view.shutdown(dev); r3d.shutdown();
+}
+
+TEST(view_transparent_model_option) {
+    // "transparent" (view, or per material): Unity's transparent queue with ZWrite Off. Every primitive is drawn in the
+    // blended pass even at full opacity, without depth write (sorted back to front one by one), casts no shadow, and its
+    // depth is written afterwards with the colour mask off (ground layers drawn later stay under it); default unchanged
+    using namespace entityfxtest;
+    Json rules = Json::parseFile(kSkirmish + "/rules.json"), map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    game::SceneObject unit;
+    game::RtsScene scene; game::sceneFromSim(sim, scene, 1, 0);
+    const game::Rules& R0 = mod(sim).rules();
+    for (auto& o : scene.objects) if (!o.isProjectile && !R0.types[o.type].structure) { unit = o; break; }
+    CHECK(unit.entity.valid());
+    if (!unit.entity.valid()) return;
+    scene.objects = {unit};
+    auto run = [&](const char* key, const char* json) {
+        game::Rules R = R0;
+        if (key) R.types[unit.type].view.set(key, Json::parse(json));
+        RecordingDevice dev;
+        render::Renderer3D r3d; CHECK(r3d.init(dev));
+        r3d.setShadowQuality(render::ShadowQuality::Low);
+        game::RtsView view; CHECK(view.init(dev, R, [](const std::string&, std::string&) { return false; }));
+        render::RTSCamera cam; cam.target = unit.pos; cam.distance = 12; cam.pitch = 1.0f; cam.ortho = true;
+        r3d.beginScene(cam, 640, 480);
+        view.draw(r3d, scene, 0, nullptr, mod(sim).state(sim).grid);
+        r3d.render(rts::gfx::PassDesc{});
+        std::vector<RecordingDevice::Draw> out = dev.draws;
+        view.shutdown(dev); r3d.shutdown();
+        return out;
+    };
+    const auto plain = run(nullptr, "");
+    CHECK(!plain.empty());
+    for (auto& d : plain) CHECK(!d.blend && d.depthWrite && d.colorWrite);
+    for (auto [key, json] : {std::pair{"transparent", "true"}, std::pair{"materials", R"({"*": {"transparent": true}})"}}) {
+        const auto t = run(key, json);
+        uint32_t colour = 0, depth = 0, plainN = 0;
+        bool depthLast = true, seenDepth = false;
+        for (auto& d : plain) plainN += d.instances;
+        for (auto& d : t) {
+            if (d.colorWrite) {
+                CHECK(d.blend && !d.depthWrite && d.inst[19] == 1);   // opaque tint, blended pipeline, no depth write
+                colour += d.instances;
+                if (seenDepth) depthLast = false;
+            } else {
+                CHECK(!d.blend && d.depthWrite);
+                depth += d.instances; seenDepth = true;
+            }
+        }
+        CHECK(colour == plainN && depth == plainN && depthLast);
+    }
 }
 
 TEST(view_entity_fx_ground_shadow) {

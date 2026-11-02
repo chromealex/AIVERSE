@@ -118,6 +118,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
         d.teamGlow = g * g;   // emission = team colour * glow (display space) -> linear
         if (d.tint.w < 0.99f) d.flags |= kDrawFadeDepth;   // a faded solid: in front of the ground layers drawn later
     }
+    if (L.transparent) d.flags |= kDrawTransparent;
     if (tintOverride) { d.tint = *tintOverride; d.flags = kDrawNoCastShadow; d.flash = 0; d.dissolve = 0; }
     if (outline_ && !st.dead && !tintOverride && (o.selected || o.hovered)) {
         const float3 c = o.selected ? (o.owner == 0 ? float3{0.9f, 0.9f, 0.35f} : float3{0.25f, 0.95f, 0.3f}) : float3{0.8f, 0.8f, 0.8f};

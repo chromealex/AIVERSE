@@ -43,6 +43,7 @@ struct Material {
     bool doubleSided = false;
     bool vertexColors = true;              // multiply by COLOR_0
     bool castShadow = true, receiveShadow = true;
+    bool transparent = false;              // drawn like DrawFlags kDrawTransparent (sorted, no depth write, depth after)
     TeamMode team = TeamMode::None;
     float teamStrength = 1;
     // texture image indices into Model::images (-1 = none)

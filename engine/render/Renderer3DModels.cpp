@@ -21,6 +21,8 @@ constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeySh
                    kKeyInstanced = 256, kKeyOutline = 512;
 constexpr int kMaxInstances = 32; // 128-byte instance records in a 4 KB uniform block
 
+bool transparentItem(uint32_t flags) { return (flags & kDrawTransparent) != 0; }
+
 // AABB (in `xf` space) against a clip-space frustum: false only when all corners are outside one plane.
 bool boxVisible(const mat4& clip, float3 mn, float3 mx) {
     int out[6] = {0, 0, 0, 0, 0, 0};
@@ -77,17 +79,17 @@ void Renderer3D::setMaterialQuality(MaterialQuality q) {
 }
 
 gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bool instanced) {
-    const bool shadow = phase == 0, outline = phase == 3;
+    const bool shadow = phase == 0, outline = phase == 3, depthAfter = phase == 4;
     const bool skinned = it.joints >= 0, baked = it.baked, morph = it.morph >= 0;
     const bool mask = !outline && it.mat->alpha == AlphaMode::Mask;
     const bool normalMap = phase != 0 && !outline && it.mat->normalTex >= 0 && matQuality_ != MaterialQuality::Low;
-    const bool blend = outline || (!shadow && (it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f));
+    const bool blend = outline || (!shadow && !depthAfter && (it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags)));
     const bool twoSided = !outline && it.mat->doubleSided;
     const uint32_t shaderKey = (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u);
-    const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth);
-    const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u);
+    const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
+    const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
     for (auto& [k, p] : modelPipes_) if (k == pipeKey) return p;
 
     ShaderEntry* entry = nullptr;
@@ -139,8 +141,10 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         } else if (blend) {
             pd.blend = gfx::BlendMode::Alpha;
             pd.depthWrite = fadeDepth;
+        } else if (depthAfter) {
+            pd.colorWrite = false;
         }
-        pd.label = shadow ? "model shadow" : outline ? "model outline" : "model";
+        pd.label = shadow ? "model shadow" : outline ? "model outline" : depthAfter ? "model depth" : "model";
         ph = dev_->createPipeline(pd);
         if (!ph.valid()) modelError_ = "model pipeline: " + dev_->lastError();
     }
@@ -176,9 +180,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (d.nodeMaterial && size_t(n) < d.nodeMaterial->size() && (*d.nodeMaterial)[size_t(n)] >= 0 && &mats == d.materials) mi = (*d.nodeMaterial)[size_t(n)];
             ModelItem it;
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
-            it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags;
+            it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
-            it.inView = inView; it.inShadow = inShadow && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend;
+            it.inView = inView; it.inShadow = inShadow && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
             it.joints = -1; it.baked = false; it.anim = anim; it.morph = -1;
             const bool skinnedPrim = node.skin >= 0 && !p.jointPalette.empty();
             if (skinnedPrim && canBake && node.skin == m->baked.skin) {
@@ -207,7 +211,8 @@ void Renderer3D::drawModel(const ModelDraw& d) {
                 }
             }
             float3 wc = it.world.transformPoint((p.boundsMin + p.boundsMax) * 0.5f);
-            it.depth = length(wc - camPos_);
+            // sort distance: ortho cameras along the view direction (Unity's TransparencySortMode.Default), else from the eye
+            it.depth = cam_.ortho ? dot(wc - camPos_, normalize(cam_.target - camPos_)) : length(wc - camPos_);
             modelItems_.push_back(it);
         }
     }
@@ -294,8 +299,9 @@ void Renderer3D::renderModels(int phase) {
     order_.clear();
     for (uint32_t i = 0; i < modelItems_.size(); ++i) {
         const ModelItem& it = modelItems_[i];
-        const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f;
-        bool take = phase == 0 ? it.inShadow : phase == 3 ? it.inView && it.outline.w > 0 : it.inView && (phase == 2) == blended;
+        const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags);
+        bool take = phase == 0 ? it.inShadow : phase == 3 ? it.inView && it.outline.w > 0 : phase == 4 ? it.inView && transparentItem(it.flags) :
+                    it.inView && (phase == 2) == blended;
         if (take) order_.push_back(i);
     }
     if (order_.empty()) return;
@@ -316,7 +322,8 @@ void Renderer3D::renderModels(int phase) {
     auto batchable = [&](const ModelItem& x) { return x.joints < 0 && x.morph < 0; };
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
-        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && (x.flags & kDrawFadeDepth) == (y.flags & kDrawFadeDepth);
+        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by &&
+               (x.flags & (kDrawFadeDepth | kDrawTransparent)) == (y.flags & (kDrawFadeDepth | kDrawTransparent));
     };
     for (size_t i = 0; i < order_.size();) {
         size_t j = i + 1;

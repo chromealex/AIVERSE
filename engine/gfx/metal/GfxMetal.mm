@@ -229,6 +229,7 @@ public:
         pd.colorAttachments[0].pixelFormat = d.depthOnly ? MTLPixelFormatInvalid : layer_.pixelFormat;
         pd.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
         auto* ca = pd.colorAttachments[0];
+        if (!d.colorWrite) ca.writeMask = MTLColorWriteMaskNone;
         if (d.blend == BlendMode::Multiply) {          // dst * src colour, dst alpha kept
             ca.blendingEnabled = YES;
             ca.rgbBlendOperation = ca.alphaBlendOperation = MTLBlendOperationAdd;

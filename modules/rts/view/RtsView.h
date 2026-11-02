@@ -288,6 +288,7 @@ private:
         float unitSpeed = 0;
         Construction construction = Construction::Grow;
         bool dissolveSpawn = false, dissolveDeath = false;
+        bool transparent = false;                 // "transparent": Unity transparent queue (sorted, no depth write among its parts)
         // "groundShadow": a flat image under the model (OpenWar's footprint sprites), turning with the drawn model
         struct GroundShadow { std::string image; float w = 0, d = 0, ox = 0, oz = 0, lift = 0.05f; uint32_t rgba = 0x0000008cu; bool flipU = false, flipV = false; } shadow;
     };

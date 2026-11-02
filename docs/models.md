@@ -157,6 +157,7 @@ paths are relative to the game folder; glTF buffers and images are relative to t
 | `turnSpeed` | 10 (units), 0 (structures) | facing smoothing, rad/s; 0 = instant |
 | `corpse` | 2.5 (units), 3 (structures) | seconds a dead object stays (death clip, fall, sink, fade) |
 | `corpseFade` | 0.6 | its last seconds fade out; 0 = drawn whole until it is removed |
+| `transparent` | false | draw the whole model like Unity's transparent queue with ZWrite Off (see below) |
 
 ## Materials
 
@@ -178,11 +179,22 @@ Imported materials keep their PBR values. Overrides per material name, `"*"` for
 | `emissive`, `emissiveStrength` | glow (linear colour × strength) |
 | `alpha` | `opaque`, `mask` (alpha test, `cutoff`), `blend` (sorted, no shadow) |
 | `doubleSided`, `unlit`, `castShadow`, `receiveShadow`, `vertexColors` | switches |
+| `transparent` | this material's primitives are drawn like a `"transparent"` view (below) |
 | `fixedLight` | `[x, y, z, ambient, diffuse]`: unlit, shaded by a fixed world direction: colour * (ambient + diffuse * saturate(N . dir)) with the drawn instance's world normal (prop shaders that light every instance by its own rotation, e.g. Unity's OpenWar ArmyCompactProp); vertex colours still multiply |
 | `team` | where the player colour goes: `tint` (whole material × team colour), `mask` (red channel of `teamMask`), `alpha` (base texture alpha 0 = team colour, Warcraft III style), `vertex` (vertex colour alpha 0 = team colour), `none` |
 | `teamStrength` | 0..1 |
 | `teamMask`, `texture`, `normalMap`, `emissiveMap` | replace / add textures (paths relative to the game) |
 | `uvScale` | `[u, v]` tiling |
+
+**Transparent models** (`"transparent": true` on the view or on a material; `render::kDrawTransparent`): the port of
+a Unity transparent material (URP Lit, Surface Transparent: queue 3000, ZWrite Off) that is drawn fully opaque. Each
+primitive goes to the blended pass even at alpha 1, sorted back to front one by one (orthographic cameras: depth of
+the primitive's bounds centre along the view direction, as Unity's `TransparencySortMode.Default`; perspective: distance
+from the eye), and is drawn without writing depth, so a nearer part drawn before a farther one is painted over
+(Unity's look: a hull covering its own far track). It casts no shadow. After the translucent pass the same
+primitives write their depth with the colour mask off (`gfx::PipelineDesc::colorWrite = false`), so ground layers
+drawn later (paint layers, ground canvas, footprint shadows) stay under the model. Opacity (`view.entity_fx`) still
+fades it. Test `view_transparent_model_option`.
 
 `"team"` on the view (not on a material) picks the tinted materials: `"all"`, `"none"` or a list of
 names. Without it, materials whose name contains `team` are tinted (`TeamCloth`, `Banner_Team`), and
