@@ -46,6 +46,8 @@ struct LuaProfile {
     std::string prefix;
     int64_t periodUs = 100, slowUs = 50000;
     bool lines = false;   // RTS_LUA_PROFILE_LINES=1: every frame also names its executing line (#line)
+    std::string split;    // RTS_LUA_PROFILE_SPLIT=text: per tick "tick us sampled_us matching_us" (<prefix>.split)
+    std::vector<std::string> splitRows;
     bool inTick = false;
     std::chrono::steady_clock::time_point last;
     std::unordered_map<std::string, int64_t> tick, all, slow;
@@ -59,6 +61,7 @@ struct LuaProfile {
                 if (const char* v = std::getenv("RTS_LUA_PROFILE_US")) periodUs = std::max<int64_t>(1, std::atoll(v));
                 if (const char* v = std::getenv("RTS_LUA_PROFILE_SLOW")) slowUs = int64_t(std::atof(v) * 1000);
                 if (const char* v = std::getenv("RTS_LUA_PROFILE_LINES")) lines = *v == '1';
+                if (const char* v = std::getenv("RTS_LUA_PROFILE_SPLIT")) split = v;
             }
         }
         return state == 1;
@@ -1029,6 +1032,11 @@ void luaProfileTickEnd(uint64_t tick, int64_t us) {
     const int64_t tail = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - p.last).count();
     if (tail > 0) p.tick["[after last sample]"] += tail;
     for (auto& [k, v] : p.tick) p.all[k] += v;
+    if (!p.split.empty()) {
+        int64_t sampled = 0, matching = 0;
+        for (auto& [k, v] : p.tick) { sampled += v; if (k.find(p.split) != std::string::npos) matching += v; }
+        p.splitRows.push_back(std::to_string(tick) + ' ' + std::to_string(us) + ' ' + std::to_string(sampled) + ' ' + std::to_string(matching));
+    }
     if (us >= p.slowUs) {
         for (auto& [k, v] : p.tick) p.slow[k] += v;
         p.slowTicks.emplace_back(tick, p.tick);
@@ -1043,6 +1051,7 @@ void luaProfileWrite() {
     };
     dump(p.prefix + ".all.folded", p.all);
     dump(p.prefix + ".slow.folded", p.slow);
+    if (!p.split.empty()) { std::ofstream sf(p.prefix + ".split", std::ios::app); for (auto& r : p.splitRows) sf << r << '\n'; p.splitRows.clear(); }
     std::ofstream f(p.prefix + ".ticks.folded", std::ios::app);   // appended: segmented runs add up
     const long long run = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     for (auto& [t, m] : p.slowTicks) for (auto& [k, v] : m) f << "tick " << t << " run " << run << ';' << k << ' ' << v << '\n';
