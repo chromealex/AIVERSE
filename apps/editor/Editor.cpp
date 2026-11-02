@@ -566,6 +566,7 @@ void Editor::renderGame(Viewport& vp, const RTSCamera& cam) {
     game::RtsScene sc;
     game::sceneFromSim(*sim_, sc, float(sim_->alpha()), uint8_t(human_));
     sc.paintLayers = paintLayers;
+    sc.entityFx = entityFx;
     for (auto& o : sc.objects) o.selected = std::find(gameSelection.begin(), gameSelection.end(), o.entity) != gameSelection.end();
     r3d_.beginScene(cam, vp.w, vp.h);
     setOverlayContext(vp, cam, true);

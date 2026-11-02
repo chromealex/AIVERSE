@@ -15,6 +15,7 @@
 #include "../../../engine/render/Math3D.h"
 #include "ViewCanvas.h"
 #include "ScriptSound.h"
+#include "EntityFx.h"
 
 namespace rts { class Simulation; }
 
@@ -109,6 +110,8 @@ public:
     std::function<void(const ScriptLogEntry&)> onLog;
     bool active() const;
     std::shared_ptr<render::PaintLayers> paintLayers() const;
+    // view.entity_fx: per-entity scale / opacity / colour overrides (EntityFx.h), shared with RtsView via RtsScene
+    std::shared_ptr<EntityFxStore> entityFx() const;
 
     struct Impl;
 private:

@@ -20,6 +20,7 @@
 #include "../RtsMap.h"
 #include "../RtsTiles.h"
 #include "RtsSpriteShadow.h"
+#include "EntityFx.h"
 
 namespace rts::game {
 
@@ -58,7 +59,8 @@ public:
     // ---- per frame (RtsView::draw)
     // `grid`: ground for projected decals (blob shadows, ground-mode sprites); `r`: sun + shadow tier
     void beginFrame(const render::RTSCamera& cam, double time, const render::Renderer3D& r, const MapGrid* grid, float levelHeight);
-    void addObject(const SceneObject& o, float groundY);
+    // fx: view.entity_fx (sprite width / height scale, opacity); null = none
+    void addObject(const SceneObject& o, float groundY, const EntityFxValues* fx = nullptr);
     void endFrame(const MapGrid& grid);          // death animations of objects that disappeared
     // queues tiles + sprites into the renderer's main pass (`grid` must outlive the frame)
     void submit(render::Renderer3D& r, const MapGrid& grid, float levelHeight);

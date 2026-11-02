@@ -842,6 +842,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     if (sim_) {
         sceneFromSim(*sim_, scene_, alpha, spectator_ ? 0 : human_);
         scene_.paintLayers = viewScripts_.paintLayers();
+        scene_.entityFx = viewScripts_.entityFx();
         cleanSelection();
         for (auto& o : scene_.objects) {
             o.selected = std::find(selection_.begin(), selection_.end(), o.entity) != selection_.end();

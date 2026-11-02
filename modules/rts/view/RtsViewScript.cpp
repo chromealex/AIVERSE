@@ -39,6 +39,7 @@ struct ViewScripts::Impl {
     std::vector<ViewGroundBatch> groundDraws;
     size_t groundVerts = 0;
     std::shared_ptr<render::PaintLayers> paint = std::make_shared<render::PaintLayers>();
+    std::shared_ptr<EntityFxStore> fx = std::make_shared<EntityFxStore>();   // view.entity_fx (EntityFx.h)
     ScriptSound* sound = nullptr;   // the `sound` table's host
     explicit Impl(ViewScripts& s) : self(s) {}
 
@@ -461,6 +462,95 @@ int vDrawGround(lua_State* L, Vm& vm) {
     im.groundVerts += count;
     return 0;
 }
+// view.entity_fx(h, {scale =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
+// sets an entity's presentation overrides (EntityFx.h); fields left out keep their target. view.entity_fx(h, nil)
+// removes them (drawn unchanged at once); view.entity_fx(h) returns the values drawn now, or nil.
+int vEntityFx(lua_State* L, Vm& vm) {
+    auto& im = viewOf(vm);
+    Entity e;
+    if (!argEntity(L, 1, e) || !e.valid()) return fail(vm, "view.entity_fx(h [, fields | nil]): entity handle expected");
+    const uint64_t key = e.packed();
+    using V = EntityFxValues;
+    if (lua_gettop(L) < 2) {   // read
+        V cur;
+        if (!im.fx->lookup(key, cur)) { lua_pushnil(L); return 1; }
+        lua_createtable(L, 0, 8);
+        auto vec = [&](const char* k, int at, int n) {
+            lua_createtable(L, n, 0);
+            for (int i = 0; i < n; ++i) { lua_pushnumber(L, cur.v[at + i]); lua_rawseti(L, -2, i + 1); }
+            lua_setfield(L, -2, k);
+        };
+        vec("scale", V::kScale, 3); vec("tint", V::kTint, 3); vec("team_mix", V::kTeamMix, 4); vec("shadow_scale", V::kShadowScale, 3);
+        lua_pushnumber(L, cur.v[V::kOpacity]); lua_setfield(L, -2, "opacity");
+        lua_pushnumber(L, cur.v[V::kTeamGlow]); lua_setfield(L, -2, "team_glow");
+        lua_pushnumber(L, cur.v[V::kShadow]); lua_setfield(L, -2, "shadow");
+        return 1;
+    }
+    if (lua_isnil(L, 2)) { im.fx->entries.erase(key); return 0; }
+    if (!lua_istable(L, 2)) return fail(vm, "view.entity_fx(h, fields | nil): table expected");
+    auto it = im.fx->entries.find(key);
+    EntityFxEntry n;
+    if (it != im.fx->entries.end()) { n.to = it->second.to; n.from = it->second.current(); n.shadowScaleOwn = it->second.shadowScaleOwn; }
+    V target = n.to;
+    std::string err;
+    // a number or {x, y, z} (scale: one number = uniform); colours {r, g, b [, a]}
+    auto field = [&](const char* k, int at, int n3, bool numberFills, float lo, float hi) -> bool {
+        lua_getfield(L, 2, k);
+        bool set = false;
+        if (lua_isnumber(L, -1) && (numberFills || n3 == 1)) {
+            const float v = float(lua_tonumber(L, -1));
+            if (!std::isfinite(v)) err = std::string("view.entity_fx: non-finite ") + k;
+            for (int i = 0; i < n3; ++i) target.v[at + i] = std::clamp(v, lo, hi);
+            set = true;
+        } else if (lua_istable(L, -1) && n3 > 1) {
+            for (int i = 0; i < n3; ++i) {
+                lua_rawgeti(L, -1, i + 1);
+                if (!lua_isnumber(L, -1)) { if (!(n3 == 4 && i == 3)) err = std::string("view.entity_fx: ") + k + " needs " + std::to_string(n3) + " numbers"; lua_pop(L, 1); continue; }
+                const float v = float(lua_tonumber(L, -1)); lua_pop(L, 1);
+                if (!std::isfinite(v)) err = std::string("view.entity_fx: non-finite ") + k;
+                target.v[at + i] = std::clamp(v, lo, hi);
+            }
+            set = true;
+        } else if (!lua_isnil(L, -1)) err = std::string("view.entity_fx: bad ") + k;
+        lua_pop(L, 1);
+        return set;
+    };
+    field("scale", V::kScale, 3, true, 0.0f, 1000.0f);
+    field("opacity", V::kOpacity, 1, true, 0.0f, 1.0f);
+    field("tint", V::kTint, 3, false, 0.0f, 64.0f);
+    if (field("team_mix", V::kTeamMix, 4, false, 0.0f, 64.0f)) target.v[V::kTeamMix + 3] = std::clamp(target.v[V::kTeamMix + 3], 0.0f, 1.0f);
+    field("team_glow", V::kTeamGlow, 1, true, 0.0f, 64.0f);
+    field("shadow", V::kShadow, 1, true, 0.0f, 1.0f);
+    bool ownShadowScale = false;
+    {
+        lua_getfield(L, 2, "shadow_scale");
+        const bool follow = lua_type(L, -1) == LUA_TBOOLEAN && !lua_toboolean(L, -1);   // shadow_scale = false: follow scale again
+        lua_pop(L, 1);
+        if (follow) n.shadowScaleOwn = false;
+        else if (field("shadow_scale", V::kShadowScale, 3, true, 0.0f, 1000.0f)) ownShadowScale = true;
+    }
+    float time = 0;
+    lua_getfield(L, 2, "time"); if (lua_isnumber(L, -1)) time = float(lua_tonumber(L, -1)); lua_pop(L, 1);
+    if (!std::isfinite(time) || time < 0) err = "view.entity_fx: time must be >= 0";
+    uint8_t ease = 0;
+    lua_getfield(L, 2, "ease");
+    if (lua_isstring(L, -1)) { const std::string m = lua_tostring(L, -1); if (m == "smooth") ease = 1; else if (m != "linear") err = "view.entity_fx: ease is \"linear\" or \"smooth\""; }
+    lua_pop(L, 1);
+    if (!err.empty()) return fail(vm, err);   // nothing changes
+    if (ownShadowScale) {
+        // the eased-from shadow size continues from what was drawn (it followed the scale until now)
+        if (!n.shadowScaleOwn) for (int a = 0; a < 3; ++a) n.from.v[V::kShadowScale + a] = n.from.v[V::kScale + a];
+        n.shadowScaleOwn = true;
+    }
+    n.to = target;
+    n.time = time; n.age = 0; n.ease = ease;
+    if (time <= 0) n.from = target;
+    if (it == im.fx->entries.end()) {
+        if (im.fx->entries.size() >= 65536) return fail(vm, "view.entity_fx: more than 65536 entities");
+        im.fx->entries.emplace(key, n);
+    } else it->second = n;
+    return 0;
+}
 int vPlayer(lua_State* L, Vm& vm) { lua_pushinteger(L, viewOf(vm).player); return 1; }
 // view.screen(): what the host shows over the match ("playing", "paused" = the pause screen / modal, "over" = the match
 // has ended); presentation only (a paused match stops ticking, its view keeps running)
@@ -587,6 +677,7 @@ int vSend(lua_State* L, Vm& vm) {
 ViewScripts::ViewScripts() : impl_(std::make_unique<Impl>(*this)) {}
 ViewScripts::~ViewScripts() { detach(); }
 std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return impl_->paint; }
+std::shared_ptr<EntityFxStore> ViewScripts::entityFx() const { return impl_->fx; }
 
 void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=target; }
 void ViewScripts::setCamera(const ViewCamera& camera) { impl_->camera = camera; }
@@ -610,7 +701,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     im.handlers.clear(); im.frame.clear(); im.requests.clear(); im.commands.clear();
     im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stats.clear(); im.statOf.clear(); im.frameCost = im.frames = im.frameTotal = im.frameMax = 0; im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
     log_.clear();
-    im.paint=std::make_shared<render::PaintLayers>();im.targeting={};im.cameraRequested=false;
+    im.paint=std::make_shared<render::PaintLayers>();im.fx=std::make_shared<EntityFxStore>();im.targeting={};im.cameraRequested=false;
     const auto files = scriptFiles(rules, map, true);
     if (files.empty() || sim.module().name() != "rts") return false;
     Vm& vm = im.vm;
@@ -629,7 +720,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
-                                     {"draw_ground", bind<vDrawGround>}, {nullptr, nullptr}};
+                                     {"draw_ground", bind<vDrawGround>}, {"entity_fx", bind<vEntityFx>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);
     lua_setglobal(vm.L, "view");
     static const luaL_Reg uiFuncs[] = {{"set", bind<uSet>}, {"open", bind<uOpen>}, {"close", bind<uClose>}, {"on", bind<uOn>}, {nullptr, nullptr}};
@@ -673,6 +764,14 @@ void ViewScripts::update(Simulation& sim, float dt) {
     im.frameCost = 0;
     for (auto& h : im.stats) h.last = 0;
     im.draws.clear(); im.drawVerts = 0; im.groundDraws.clear(); im.groundVerts = 0;   // view.draw / draw_ground: one frame
+    // view.entity_fx: eases advance in frame time; entities gone from the simulation keep theirs for a corpse a while
+    im.fx->advance(dt);
+    for (auto it = im.fx->entries.begin(); it != im.fx->entries.end();) {
+        const Entity e = Entity::fromPacked(it->first);
+        if (sim.world().alive(e)) it->second.goneFor = -1;
+        else if ((it->second.goneFor = std::max(0.0f, it->second.goneFor) + dt) > EntityFxEntry::kKeepDead) { it = im.fx->entries.erase(it); continue; }
+        ++it;
+    }
     if (im.collector) {
         std::vector<SimEvent> evs;
         evs.swap(im.collector->events);

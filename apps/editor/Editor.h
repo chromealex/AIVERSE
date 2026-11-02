@@ -86,6 +86,7 @@ public:
     bool postFxInScene = true;                     // false: only the Game view is post-processed
     game::RtsView& view() { return view_; }
     std::shared_ptr<render::PaintLayers> paintLayers;
+    std::shared_ptr<game::EntityFxStore> entityFx;   // view.entity_fx of the play-test view scripts
     game::ViewTargeting scriptTargeting;
     const game::MapGrid& editGrid() const { return grid_; }
     const Options& options() const { return opt_; }

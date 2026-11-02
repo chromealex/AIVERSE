@@ -12,7 +12,8 @@
 // Uniforms (std140 / MSL layouts match):
 //   U0 per draw:  Inst inst[RTS_INST]: mat4 model; vec4 tint (rgb multiply, a opacity);
 //                 vec4 team (rgb team colour / outline colour, a hit flash);
-//                 vec4 draw (x receive shadow, y dissolve 0..1, z outline width);
+//                 vec4 draw (x receive shadow, y dissolve 0..1, z outline width, w team glow: emission = team * w
+//                 on team-coloured surfaces);
 //                 vec4 anim (x baked row A, y baked row B, z A->B mix)
 //   U1 per frame: as the lit shader (Shaders.h)
 //   U2 material:  vec4 base; vec4 emissive (rgb, linear, premultiplied by strength);
@@ -190,14 +191,17 @@ void main() {
     vec4 base = m_base * vec4(toLinear(tb.rgb), tb.a);
     if (m_misc.w > 0.5) base *= v_col;
     int teamMode = int(m_misc.y + 0.5);
+    float teamW = 0.0;   // how much of the team colour this point shows (team glow)
     if (teamMode == 1) {
         base.rgb = mix(base.rgb, base.rgb * v_team.rgb, m_misc.z);
+        teamW = m_misc.z;
     } else if (teamMode > 1) {
         float m = 0.0, k = 1.0;
         if (teamMode == 2) { m = texture(tex6, v_uv).r; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); }
         else if (teamMode == 3) { m = 1.0 - tb.a; base.a = m_base.a; }
         else { m = 1.0 - v_col.a; base.a = m_base.a * tb.a; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); } // vertex RGB shades the team colour (voxel remap ramps)
-        base.rgb = mix(base.rgb, v_team.rgb * k, clamp(m * m_misc.z, 0.0, 1.0));
+        teamW = clamp(m * m_misc.z, 0.0, 1.0);
+        base.rgb = mix(base.rgb, v_team.rgb * k, teamW);
     }
     base.rgb *= v_tint.rgb;
 #if defined(ALPHAMASK)
@@ -267,7 +271,7 @@ void main() {
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
     { vec3 dd, ds; dynLight(v_wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
     if (m_uv1.y > 0.5) col = base.rgb;
-    col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0;
+    col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
     col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
@@ -447,14 +451,17 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float4 base = m.base * float4(toLinear(tb.rgb), tb.a);
     if (m.misc.w > 0.5) base *= in.col;
     int teamMode = int(m.misc.y + 0.5);
+    float teamW = 0.0;
     if (teamMode == 1) {
         base.rgb = mix(base.rgb, base.rgb * in.team.rgb, m.misc.z);
+        teamW = m.misc.z;
     } else if (teamMode > 1) {
         float tm = 0.0, k = 1.0;
         if (teamMode == 2) { tm = tex6.sample(s6, in.uv).r; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); }
         else if (teamMode == 3) { tm = 1.0 - tb.a; base.a = m.base.a; }
         else { tm = 1.0 - in.col.a; base.a = m.base.a * tb.a; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); }
-        base.rgb = mix(base.rgb, in.team.rgb * k, clamp(tm * m.misc.z, 0.0, 1.0));
+        teamW = clamp(tm * m.misc.z, 0.0, 1.0);
+        base.rgb = mix(base.rgb, in.team.rgb * k, teamW);
     }
     base.rgb *= in.tint.rgb;
 #if defined(ALPHAMASK)
@@ -524,7 +531,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
     { float3 dd, ds; dynLight(lu, tex9, s9, in.wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
     if (m.uv1.y > 0.5) col = base.rgb;
-    col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0;
+    col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
     col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);

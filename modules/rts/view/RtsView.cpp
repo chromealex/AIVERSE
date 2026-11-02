@@ -99,22 +99,31 @@ float RtsView::selectionRadius(uint16_t type) const {
 
 
 // "groundShadow": the image's quad in the drawn model's frame (its rotation without scale / centring), at the object.
-void RtsView::addGroundShadow(const TypeLook& L, const EntityAnim& st, float3 pos, float ground) {
+void RtsView::addGroundShadow(const TypeLook& L, const EntityAnim& st, float3 pos, float ground, const EntityFxValues* fx) {
     const auto& S = L.shadow;
+    // view.entity_fx: the image scales with the model (shadow_scale) and fades with it (opacity * shadow)
+    float kx = 1, ky = 1, kz = 1, fade = 1;
+    if (fx) {
+        kx = fx->v[EntityFxValues::kShadowScale]; ky = fx->v[EntityFxValues::kShadowScale + 1]; kz = fx->v[EntityFxValues::kShadowScale + 2];
+        fade = fx->opacity() * fx->v[EntityFxValues::kShadow];
+        if (fade <= 0 || kx <= 0 || kz <= 0) return;
+    }
+    uint32_t rgba = S.rgba;
+    if (fade < 1) rgba = (rgba & 0xffffff00u) | uint32_t(std::lround(float(rgba & 0xffu) * fade));
     float3 ax = st.drawn.transformDir({1, 0, 0}), az = st.drawn.transformDir({0, 0, 1});
     ax.y = 0; az.y = 0;
     const float lx = length(ax), lz = length(az);
     if (lx < 1e-6f || lz < 1e-6f) return;
     ax = ax * (1.0f / lx); az = az * (1.0f / lz);
-    const float3 c = float3{pos.x, ground + S.lift, pos.z} + ax * S.ox + az * S.oz;
-    const float3 u = ax * (S.w * 0.5f), v = az * (S.d * 0.5f);   // image top (v = 0) towards -z of the model
+    const float3 c = float3{pos.x, ground + S.lift * ky, pos.z} + ax * (S.ox * kx) + az * (S.oz * kz);
+    const float3 u = ax * (S.w * 0.5f * kx), v = az * (S.d * 0.5f * kz);   // image top (v = 0) towards -z of the model
     ViewGroundBatch* b = nullptr;
     for (auto& x : shadowDraws_) if (x.image == S.image) { b = &x; break; }
     if (!b) { shadowDraws_.push_back({}); b = &shadowDraws_.back(); b->image = S.image; b->layer = -1; }
     auto vert = [&](float su, float sv) {
         const float3 p = c + u * su + v * sv;
         const float tu = S.flipU ? (1 - su) * 0.5f : (su + 1) * 0.5f, tv = S.flipV ? (1 - sv) * 0.5f : (sv + 1) * 0.5f;
-        b->verts.push_back({p.x, p.y, p.z, tu, tv, S.rgba});
+        b->verts.push_back({p.x, p.y, p.z, tu, tv, rgba});
     };
     vert(-1, -1); vert(1, -1); vert(1, 1);
     vert(-1, -1); vert(1, 1); vert(-1, 1);
@@ -130,6 +139,7 @@ void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batc
 }
 
 void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+    fx_ = s.entityFx && !s.entityFx->entries.empty() ? s.entityFx.get() : nullptr;   // view.entity_fx
     if (planets_.active()) { drawPlanets(r, s, time, vision, grid); return; }   // RtsPlanetView.cpp
     const bool tiles = twoD_ && twoD_->hasTiles();
     if (twoD_) twoD_->beginFrame(r.camera(), time, r, &grid, rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f);
@@ -158,7 +168,8 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
         }
         if (twoD_ && twoD_->hasSprite(o.type)) { // 2D games: sprites instead of models
             float g = heightAt(grid, o.pos.x, o.pos.z);
-            twoD_->addObject(o, g);
+            EntityFxValues sfx;
+            twoD_->addObject(o, g, fxFor(o, sfx) ? &sfx : nullptr);
             bars_[i] = twoD_->barPoint(o, g);
             continue;   // selection rings: overlays
         }
@@ -172,9 +183,12 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
         const float ground = heightAt(grid, o.pos.x, o.pos.z);
         animate(st, o, dt, &grid);
         drawObject(r, st, o, ground, 1.0f);
-        if (!L.shadow.image.empty()) addGroundShadow(L, st, o.pos, ground);
+        EntityFxValues fx;
+        const bool hasFx = fxFor(o, fx);
+        if (!L.shadow.image.empty()) addGroundShadow(L, st, o.pos, ground, hasFx ? &fx : nullptr);
         if (L.air && L.shadow.image.empty()) { // ground shadow blob helps reading the height (unless the type has its own)
-            r.circleXZ({o.pos.x, ground, o.pos.z}, 0.35f, rgba(0, 0, 0, 90), 16, ground + 0.03f);
+            const float k = hasFx ? fx.v[EntityFxValues::kShadowScale] : 1.0f, a = hasFx ? std::clamp(fx.opacity() * fx.v[EntityFxValues::kShadow], 0.0f, 1.0f) : 1.0f;
+            if (a > 0 && k > 0) r.circleXZ({o.pos.x, ground, o.pos.z}, 0.35f * k, rgba(0, 0, 0, uint8_t(std::lround(90 * a))), 16, ground + 0.03f);
         }
     }
     drawTracers(r, dt, &grid);
@@ -193,7 +207,14 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
             SceneObject o = st.last;
             o.selected = o.hovered = false;
             animate(st, o, dt, &grid);
-            drawObject(r, st, o, heightAt(grid, o.pos.x, o.pos.z), L.dissolveDeath ? 1.0f : std::clamp((L.corpse - st.deathAge) / 0.6f, 0.0f, 1.0f));
+            const float g = heightAt(grid, o.pos.x, o.pos.z), fade = L.dissolveDeath ? 1.0f : std::clamp((L.corpse - st.deathAge) / 0.6f, 0.0f, 1.0f);
+            drawObject(r, st, o, g, fade);
+            if (!L.shadow.image.empty()) {   // a corpse keeps its footprint image while it lies there (faded like the model)
+                EntityFxValues fx;
+                if (!fxFor(o, fx)) fx = {};
+                fx.v[EntityFxValues::kShadow] *= fade;
+                addGroundShadow(L, st, o.pos, g, &fx);
+            }
         }
         ++it;
     }

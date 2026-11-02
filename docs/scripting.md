@@ -641,6 +641,34 @@ interpolated position and facing and replaces the default blob of air units. Ope
 sprites (`ArmyUnitModelLayer.AttachShadow`) with it. Client only (drawn by `RtsView::drawGround`). Test:
 `view_ground_shadow_option`.
 
+### Entity scale and opacity (view scripts)
+
+`view.entity_fx(h, fields)` overrides how one entity (unit, structure, prop: any handle of `game.units`) is drawn,
+on the local machine only:
+
+| field | meaning (default) |
+|---|---|
+| `scale` | number or `{x, y, z}`: multiplies the model in its own axes about its ground point (1) |
+| `opacity` | 0..1: below .99 the model is drawn in the blended pass (sorted back to front, no depth writes, no shadow-map casting); 0 draws nothing (1) |
+| `tint` | `{r, g, b}` multiplies the surface colour (1, 1, 1) |
+| `team_mix` | `{r, g, b, amount}`: the team colour moves towards rgb by amount, in display space, before it is applied to the team-coloured surfaces (Unity's `Color.Lerp` of a `_BaseColor`) (amount 0) |
+| `team_glow` | emission of the team colour on team-coloured surfaces: `team * team_glow` in display space (0) |
+| `shadow` | 0..1: the type's `groundShadow` image (and the air blob) fades by `opacity * shadow` (1) |
+| `shadow_scale` | number or `{x, y, z}`: size of the `groundShadow` image; by default it follows `scale`; `false` makes it follow again |
+| `time`, `ease` | seconds to ease from the values drawn now to the new ones (frame time, also while paused; default 0 = at once) and `"linear"` / `"smooth"` (smoothstep) |
+
+Fields left out keep their current target. `view.entity_fx(h)` returns the values drawn now (`scale`, `tint`,
+`team_mix`, `shadow_scale` as arrays) or nil, `view.entity_fx(h, nil)` removes them (drawn unchanged at once). A call with
+a bad field raises an error and changes nothing. The values follow the entity's interpolated position and facing, its
+attachments, effect anchors, selection outline (faded with it) and, when it dies, its corpse (death clip / fall / fade)
+for up to 10 s after it left the simulation; then they are dropped. They apply on every backend (GL / GLSL and Metal
+share the model shaders: `ModelDraw::tint.w`, `teamGlow` = instance `draw.w`), on planets, and to 2D sprites (`scale`
+x = width, y = height, `opacity`). Scripts that run per frame can also set values every frame from their own clock
+(OpenWar computes Unity's per-tick curves from the match time it publishes in `state`). Presentation only: the
+simulation and its checksum never see them; the headless server has no view scripts. Store: `modules/rts/view/EntityFx.h`
+(`ViewScripts::entityFx()` -> `RtsScene::entityFx`, client and editor play-test). Tests: `view_entity_fx_script_api`,
+`view_entity_fx_renders_scaled_translucent`, `view_entity_fx_ground_shadow`.
+
 View script budget: every handler call (`view.on`, `view.on_frame`, `ui.on`) has its own budget of 5,000,000 VM
 instructions (the C functions it calls are not counted), so one heavy handler never starves the others in that frame.
 A call over the budget is aborted and skipped for that frame (logged `... [view handler skipped once]`, at most 20

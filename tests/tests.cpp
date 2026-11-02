@@ -12161,6 +12161,241 @@ TEST(view_ground_shadow_option) {
     CHECK(game::RtsView::parseGroundShadow(Json()).image.empty());
 }
 
+
+TEST(view_entity_fx_script_api) {
+    // view.entity_fx: per-entity scale / opacity / colour overrides of the view (EntityFx.h): set, read back, ease
+    // over frame time, clear, validate (a failed call changes nothing), dropped some seconds after the entity is gone;
+    // presentation only (the simulation's checksum never changes)
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/fx.lua"])"));
+    Json src = Json::object(); src.set("scripts/view/fx.lua", Json::string(R"LUA(
+local hs = game.units{player = 1}
+local a, b = hs[1], hs[2]
+view.entity_fx(a, {scale = .25, opacity = .5, tint = {1, .5, .5}, team_mix = {1, 1, 1, .6}, team_glow = .35, shadow = .5})
+local v = view.entity_fx(a)
+assert(v and v.scale[1] == .25 and v.scale[3] == .25 and v.opacity == .5 and v.tint[2] == .5 and math.abs(v.team_mix[4] - .6) < 1e-6)
+assert(math.abs(v.team_glow - .35) < 1e-6, 'glow '..v.team_glow); assert(v.shadow == .5, 'sh '..v.shadow); assert(v.shadow_scale[1] == .25, 'ss '..v.shadow_scale[1])    -- the shadow follows the scale
+view.entity_fx(a, {scale = 1, time = 1, ease = 'linear'})          -- eases from .25 over 1 s of frame time
+assert(view.entity_fx(a).scale[1] == .25 and view.entity_fx(a).opacity == .5)
+view.entity_fx(b, {scale = {1, 2, 3}, shadow_scale = 1})
+assert(view.entity_fx(b).scale[2] == 2 and view.entity_fx(b).shadow_scale[2] == 1)
+assert(not pcall(view.entity_fx, b, {opacity = 0 / 0}))
+assert(not pcall(view.entity_fx, b, {scale = {1, 2}}))
+assert(not pcall(view.entity_fx, b, {ease = 'bounce'}))
+assert(not pcall(view.entity_fx, b, {time = -1}))
+assert(not pcall(view.entity_fx, 'x', {}))
+assert(view.entity_fx(b).scale[2] == 2)                              -- failed calls changed nothing
+assert(view.entity_fx(hs[3]) == nil)
+view.entity_fx(hs[3], {opacity = 0}); view.entity_fx(hs[3], nil); assert(view.entity_fx(hs[3]) == nil)
+FX = {a = a, b = b}
+view.on_frame(function() last = view.entity_fx(a) end)
+)LUA")); rules.set("$scriptSources", src);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    for (auto& e : view.log()) std::printf("  fx log: %s\n", e.text.c_str());
+    CHECK(view.log().empty());
+    auto fx = view.entityFx();
+    CHECK(fx && fx->entries.size() == 2);
+    std::vector<Entity> mine;
+    sim.world().each<game::Unit, Owner>([&](Entity e, game::Unit&, Owner& o) { if (o.player == 1) mine.push_back(e); });
+    std::sort(mine.begin(), mine.end(), [](Entity x, Entity y) { return x.index < y.index; });
+    CHECK(mine.size() >= 3);
+    if (mine.size() < 3 || !fx) return;
+    game::EntityFxValues v;
+    using V = game::EntityFxValues;
+    CHECK(fx->lookup(mine[0].packed(), v) && v.scale(0) == .25f);
+    view.update(sim, .5f);                                               // half way
+    CHECK(fx->lookup(mine[0].packed(), v) && std::fabs(v.scale(0) - .625f) < 1e-5f && v.opacity() == .5f);
+    CHECK(std::fabs(v.v[V::kShadowScale + 2] - .625f) < 1e-5f);
+    view.update(sim, .75f);
+    CHECK(fx->lookup(mine[0].packed(), v) && v.scale(1) == 1);
+    Entity second;
+    for (auto& [k, en] : fx->entries) if (en.to.scale(2) == 3) second = Entity::fromPacked(k);
+    CHECK(second.valid() && fx->lookup(second.packed(), v) && v.scale(2) == 3 && v.v[V::kShadowScale + 1] == 1);
+    if (!second.valid()) return;
+    mine[1] = second;
+    // the entity leaves the simulation: its values stay for a corpse, then go
+    sim.world().get<game::Unit>(mine[1]).hp = Fixed{};
+    sim.world().get<game::Unit>(mine[1]).flags |= game::kUnitSilent;
+    for (int i = 0; i < 3; ++i) sim.step();
+    const auto afterKill = sim.checksum();
+    view.update(sim, 1.0f);
+    CHECK(!sim.world().alive(mine[1]) && fx->lookup(mine[1].packed(), v));
+    for (int i = 0; i < 12; ++i) view.update(sim, 1.0f);
+    CHECK(!fx->lookup(mine[1].packed(), v) && fx->lookup(mine[0].packed(), v));
+    CHECK(sim.checksum() == afterKill);
+    CHECK(view.log().empty());
+    // a reload starts a new store
+    CHECK(view.load(sim, rules, map, 1)); CHECK(view.entityFx() != fx);
+    (void)before;
+}
+
+#include "engine/platform/Platform.h"
+// rts_tests builds the 3D renderer without a platform layer (CMakeLists: view.entity_fx draw tests): no touch, no content files
+namespace rts::platform {
+bool isTouchDevice() { return false; }
+bool readContentFile(const std::string&, std::string&) { return false; }
+} // namespace rts::platform
+namespace entityfxtest {
+// Records what the renderer submits: per draw the pipeline's blend / depth write and the per-instance block.
+class RecordingDevice final : public rts::gfx::Device {
+public:
+    struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; };
+    std::vector<Draw> draws;
+    std::vector<rts::gfx::PipelineDesc> pipes;
+    const rts::gfx::DeviceInfo& info() const override { return info_; }
+    rts::gfx::BufferHandle createBuffer(const rts::gfx::BufferDesc&) override { return {++next_}; }
+    void updateBuffer(rts::gfx::BufferHandle, const void*, size_t, size_t) override {}
+    void destroyBuffer(rts::gfx::BufferHandle) override {}
+    rts::gfx::TextureHandle createTexture(const rts::gfx::TextureDesc&) override { return {++next_}; }
+    void updateTexture(rts::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
+    void destroyTexture(rts::gfx::TextureHandle) override {}
+    rts::gfx::ShaderHandle createShader(const rts::gfx::ShaderDesc&) override { return {++next_}; }
+    void destroyShader(rts::gfx::ShaderHandle) override {}
+    rts::gfx::PipelineHandle createPipeline(const rts::gfx::PipelineDesc& d) override { pipes.push_back(d); return {uint32_t(pipes.size())}; }
+    void destroyPipeline(rts::gfx::PipelineHandle) override {}
+    const std::string& lastError() const override { return err_; }
+    void beginFrame(int, int) override {}
+    void endFrame() override {}
+    void beginPass(const rts::gfx::PassDesc&) override {}
+    void endPass() override {}
+    void setViewport(const rts::gfx::Rect&) override {}
+    void setScissor(const rts::gfx::Rect&) override {}
+    void setPipeline(rts::gfx::PipelineHandle p) override { pipe_ = p.id; }
+    void setVertexBuffer(rts::gfx::BufferHandle, size_t) override {}
+    void setIndexBuffer(rts::gfx::BufferHandle, size_t) override {}
+    void setTexture(int, rts::gfx::TextureHandle) override {}
+    void setUniforms(int slot, const void* d, size_t n) override {
+        if (slot == 0) { const float* f = static_cast<const float*>(d); u0_.assign(f, f + n / sizeof(float)); }
+    }
+    void draw(uint32_t, uint32_t) override {}
+    void drawIndexed(uint32_t, uint32_t, int32_t, uint32_t instances) override {
+        if (pipe_ == 0 || pipe_ > pipes.size()) return;
+        const auto& p = pipes[pipe_ - 1];
+        if (p.depthOnly || std::string(p.label ? p.label : "") != "model") return;   // model colour passes only
+        draws.push_back({p.blend != rts::gfx::BlendMode::Opaque, p.depthWrite, u0_, instances});
+    }
+private:
+    rts::gfx::DeviceInfo info_;
+    std::string err_;
+    uint32_t next_ = 0, pipe_ = 0;
+    std::vector<float> u0_;
+};
+} // namespace entityfxtest
+
+TEST(view_entity_fx_renders_scaled_translucent) {
+    // RtsView applies view.entity_fx: the model matrix is scaled about the object's ground point, opacity < 1 moves
+    // the object to the blended pass (no depth writes, back to front) with tint.w = opacity, the team glow lands in
+    // the instance block (draw.w), opacity 0 draws nothing; objects without values are drawn exactly as before
+    using namespace entityfxtest;
+    Json rules = Json::parseFile(kSkirmish + "/rules.json"), map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const game::Rules& R = mod(sim).rules();
+    RecordingDevice dev;
+    render::Renderer3D r3d; CHECK(r3d.init(dev));
+    game::RtsView view; CHECK(view.init(dev, R, [](const std::string&, std::string&) { return false; }));
+    game::RtsScene scene; game::sceneFromSim(sim, scene, 1, 0);
+    // one unit alone in the scene, looked at from above
+    game::SceneObject unit;
+    for (auto& o : scene.objects) if (!o.isProjectile && !R.types[o.type].structure) { unit = o; break; }
+    CHECK(unit.entity.valid());
+    scene.objects = {unit};
+    render::RTSCamera cam; cam.target = unit.pos; cam.distance = 12; cam.pitch = 1.0f;
+    auto frame = [&](double t) {
+        dev.draws.clear();
+        r3d.beginScene(cam, 640, 480);
+        view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
+        r3d.render(rts::gfx::PassDesc{});
+        std::vector<RecordingDevice::Draw> out = dev.draws;
+        return out;
+    };
+    const auto plain = frame(0), plain2 = frame(0.016);
+    CHECK(!plain.empty());
+    if (plain.empty()) return;
+    for (auto& d : plain) CHECK(!d.blend && d.inst.size() >= 32 && d.inst[19] == 1 && d.inst[27] == 0);
+    auto fx = std::make_shared<game::EntityFxStore>();
+    game::EntityFxEntry e; using V = game::EntityFxValues;
+    for (int a = 0; a < 3; ++a) e.to.v[V::kScale + a] = .5f;
+    e.to.v[V::kOpacity] = .4f; e.to.v[V::kTeamGlow] = .5f;
+    e.from = e.to;
+    fx->entries[unit.entity.packed()] = e;
+    scene.entityFx = fx;
+    const auto faded = frame(0.016);   // same time: no animation step between the two frames
+    CHECK(faded.size() == plain2.size());
+    if (faded.size() != plain2.size()) return;
+    // column lengths of the model matrices halve, offsets from the pivot halve (the blended pass is ordered back to
+    // front, so totals over all draws are compared)
+    auto totals = [&](const std::vector<RecordingDevice::Draw>& ds, float& cols, float& off) {
+        cols = 0; off = 0;
+        for (auto& d : ds)
+            for (uint32_t k = 0; k < d.instances; ++k) {
+                const float* m = d.inst.data() + size_t(k) * 32;
+                for (int c = 0; c < 3; ++c) cols += std::sqrt(m[c * 4] * m[c * 4] + m[c * 4 + 1] * m[c * 4 + 1] + m[c * 4 + 2] * m[c * 4 + 2]);
+                off += std::fabs(m[12] - unit.pos.x) + std::fabs(m[14] - unit.pos.z);
+            }
+    };
+    for (auto& f : faded) CHECK(f.blend && !f.depthWrite && std::fabs(f.inst[19] - .4f) < 1e-6f && std::fabs(f.inst[27] - .25f) < 1e-6f);
+    float cf, of, cp, op;
+    totals(faded, cf, of); totals(plain2, cp, op);
+    CHECK(cp > 0 && std::fabs(cf - cp * .5f) < 1e-3f * cp);
+    CHECK(std::fabs(of - op * .5f) < 1e-3f * std::max(1.0f, op));
+    fx->entries[unit.entity.packed()].to.v[V::kOpacity] = 0; fx->entries[unit.entity.packed()].from.v[V::kOpacity] = 0;
+    CHECK(frame(0.048).empty());
+    scene.entityFx.reset();
+    const auto back = frame(0.064);
+    CHECK(back.size() == plain.size());
+    for (size_t i = 0; i < back.size() && i < plain2.size(); ++i) CHECK(!back[i].blend && back[i].inst[19] == 1);
+    view.shutdown(dev); r3d.shutdown();
+}
+
+TEST(view_entity_fx_ground_shadow) {
+    // the type's footprint image follows view.entity_fx: size by shadow_scale (default: the model's scale), alpha by
+    // opacity * shadow; a corpse keeps its image while it fades
+    using namespace entityfxtest;
+    Json rules = Json::parseFile(kSkirmish + "/rules.json"), map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    game::Rules R = mod(sim).rules();
+    game::SceneObject unit;
+    game::RtsScene scene; game::sceneFromSim(sim, scene, 1, 0);
+    for (auto& o : scene.objects) if (!o.isProjectile && !R.types[o.type].structure) { unit = o; break; }
+    CHECK(unit.entity.valid());
+    if (!unit.entity.valid()) return;
+    R.types[unit.type].view.set("groundShadow", Json::parse(R"({"image": "ui/shadows/x.png", "size": [2, 4], "color": [0, 0, 0, 0.5]})"));
+    RecordingDevice dev;
+    render::Renderer3D r3d; CHECK(r3d.init(dev));
+    game::RtsView view; CHECK(view.init(dev, R, [](const std::string&, std::string&) { return false; }));
+    scene.objects = {unit};
+    render::RTSCamera cam; cam.target = unit.pos; cam.distance = 12; cam.pitch = 1.0f;
+    auto quad = [&](double t) {
+        r3d.beginScene(cam, 640, 480);
+        view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
+        r3d.render(rts::gfx::PassDesc{});
+        const auto& b = view.groundShadows();
+        return b.empty() || b[0].verts.size() != 6 ? std::vector<game::ViewGroundVertex>{} : b[0].verts;
+    };
+    auto span = [](const std::vector<game::ViewGroundVertex>& q) {
+        float x0 = 1e9f, x1 = -1e9f, z0 = 1e9f, z1 = -1e9f;
+        for (auto& v : q) { x0 = std::min(x0, v.x); x1 = std::max(x1, v.x); z0 = std::min(z0, v.z); z1 = std::max(z1, v.z); }
+        return std::sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
+    };
+    const auto plain = quad(0);
+    CHECK(plain.size() == 6 && (plain[0].rgba & 0xff) == 0x80);
+    if (plain.size() != 6) return;
+    auto fx = std::make_shared<game::EntityFxStore>();
+    game::EntityFxEntry e; using V = game::EntityFxValues;
+    for (int a = 0; a < 3; ++a) e.to.v[V::kScale + a] = .25f;
+    e.to.v[V::kOpacity] = .5f; e.from = e.to;
+    fx->entries[unit.entity.packed()] = e;
+    scene.entityFx = fx;
+    const auto small = quad(.016);
+    CHECK(small.size() == 6 && std::fabs(span(small) - span(plain) * .25f) < 1e-3f && (small[0].rgba & 0xff) == 0x40);
+    fx->entries[unit.entity.packed()].shadowScaleOwn = true;   // shadow_scale = 1: full size while the model is small
+    const auto own = quad(.032);
+    CHECK(own.size() == 6 && std::fabs(span(own) - span(plain)) < 1e-3f);
+    view.shutdown(dev); r3d.shutdown();
+}
 TEST(view_paint_layer_ground_options) {
     // categorical ground surface (OpenWar ArmyMapWorld meadow / coast): options land in the layer, bad ones fail, view-only
     Json rules = Json::parseFile(kSkirmish + "/rules.json");

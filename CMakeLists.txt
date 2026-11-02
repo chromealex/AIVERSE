@@ -694,6 +694,9 @@ if(RTS_BUILD_TESTS)
     target_link_libraries(rts_tests PRIVATE rts_game_fx)
     target_link_libraries(rts_tests PRIVATE rts_terrain_detail)   # terrain detail surface tests (agent-terrain)
     target_link_libraries(rts_tests PRIVATE rts_game_view)   # fog of war look parsing (view, no GPU)
+    # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
+    target_sources(rts_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
+        engine/render/Renderer3DReflect.cpp engine/render/PostFx.cpp)
     target_sources(rts_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(rts_tests PRIVATE rts_lua)
     target_link_libraries(rts_tests PRIVATE rts_plugins)     # native plugins bridge, store/ads services

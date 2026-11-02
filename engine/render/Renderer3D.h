@@ -110,6 +110,7 @@ struct ModelDraw {
     float4 tint{1, 1, 1, 1};                       // rgb multiply (linear), a = opacity (< 1 draws blended)
     float3 team{1, 1, 1};                          // team colour, linear
     float flash = 0;                               // additive highlight (hit feedback)
+    float teamGlow = 0;                            // emission = team colour (linear) * teamGlow on team-coloured surfaces
     int variant = -1;                              // KHR_materials_variants index
     uint32_t flags = 0;                            // DrawFlags (no cast / no receive shadow)
     const std::vector<NodePose>* pose = nullptr;   // morph weights (node weights when null)
@@ -181,7 +182,7 @@ private:
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
         bool baked;         // skinned from the baked texture (rows in anim)
         float4 anim;        // baked row A, row B, mix
-        float dissolve;
+        float dissolve, teamGlow;
         float4 outline;
         int32_t morph;      // offset into morphData_ (8 weights), -1 = none
         bool inView, inShadow; float depth;

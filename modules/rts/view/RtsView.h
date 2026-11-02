@@ -31,6 +31,7 @@
 #include "RtsPlanetRender.h"
 #include "RtsOverlays.h"
 #include "RtsTerrainRender.h"
+#include "EntityFx.h"
 
 namespace rts::game {
 
@@ -67,6 +68,8 @@ struct SceneObject {
 
 struct RtsScene {
     std::shared_ptr<render::PaintLayers> paintLayers;
+    // view.entity_fx overrides (scale, opacity, colour) by entity; null = none (EntityFx.h)
+    std::shared_ptr<EntityFxStore> entityFx;
     std::vector<SceneObject> objects;
     std::vector<std::pair<render::float3, render::float3>> roads;
     std::vector<render::float3> moveMarkers;
@@ -379,7 +382,9 @@ private:
     RtsPaintLayers paintLayers_;
     RtsGroundCanvas groundCanvas_;
     std::vector<ViewGroundBatch> shadowDraws_, groundMerged_;   // "groundShadow" quads of this frame (one batch per image)
-    void addGroundShadow(const TypeLook& L, const EntityAnim& st, render::float3 pos, float ground);
+    void addGroundShadow(const TypeLook& L, const EntityAnim& st, render::float3 pos, float ground, const EntityFxValues* fx = nullptr);
+    const EntityFxStore* fx_ = nullptr;   // this frame's view.entity_fx store (RtsScene::entityFx)
+    bool fxFor(const SceneObject& o, EntityFxValues& out) const { return fx_ && o.entity.valid() && fx_->lookup(o.entity.packed(), out); }
     RtsGroundFx groundFx_;   // territory, diggable rock, lanes, roads (RtsGroundFx.cpp)
     FogOfWar fog_;           // fog of war look + sheet (RtsFog.cpp)
     RtsOverlays overlays_;   // data-driven overlays (RtsOverlays.cpp)

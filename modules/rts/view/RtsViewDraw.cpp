@@ -50,6 +50,11 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     } else {
         base = mat4::translate(p) * mat4::rotateY(st.yaw) * mat4::scale({k, k, k});
     }
+    // view.entity_fx: scale about the object's ground point in the model's axes (base ends in a diagonal scale, so
+    // the extra diagonal factor commutes with it), opacity / colour below
+    EntityFxValues fx;
+    const bool hasFx = !tintOverride && fxFor(o, fx);
+    if (hasFx) base = base * mat4::scale({fx.scale(0), fx.scale(1), fx.scale(2)});
     if (placement) base = *placement * base;   // flat maps: untouched (bit-identical)
     ModelDraw d;
     d.model = show->model;
@@ -100,11 +105,23 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
         d.dissolve = std::max(d.dissolve, std::clamp((st.deathAge - (L.corpse - 1.2f)) / 1.1f, 0.0f, 1.0f));
         d.tint.w = 1;
     }
+    if (hasFx) {
+        using V = EntityFxValues;
+        d.tint = {d.tint.x * fx.v[V::kTint], d.tint.y * fx.v[V::kTint + 1], d.tint.z * fx.v[V::kTint + 2], d.tint.w * fx.opacity()};
+        const float m = fx.v[V::kTeamMix + 3];
+        if (m > 0) {   // team colour towards rgb in display space (Unity's Color.Lerp of _BaseColor), then linear like pc
+            const float3 c{pc.x + (fx.v[V::kTeamMix] - pc.x) * m, pc.y + (fx.v[V::kTeamMix + 1] - pc.y) * m, pc.z + (fx.v[V::kTeamMix + 2] - pc.z) * m};
+            d.team = {c.x * c.x, c.y * c.y, c.z * c.z};
+        }
+        const float g = fx.v[V::kTeamGlow];
+        d.teamGlow = g * g;   // emission = team colour * glow (display space) -> linear
+    }
     if (tintOverride) { d.tint = *tintOverride; d.flags = kDrawNoCastShadow; d.flash = 0; d.dissolve = 0; }
     if (outline_ && !st.dead && !tintOverride && (o.selected || o.hovered)) {
         const float3 c = o.selected ? (o.owner == 0 ? float3{0.9f, 0.9f, 0.35f} : float3{0.25f, 0.95f, 0.3f}) : float3{0.8f, 0.8f, 0.8f};
         d.outline = {c.x, c.y, c.z, 0.03f * std::max(1.0f, k)};
     }
+    if (d.tint.w <= 0.0f) return;   // fully transparent (view.entity_fx opacity 0): nothing to draw, no anchors
     r.drawModel(d);
 
     // ---- attachments on sockets (weapons, cargo, banners)

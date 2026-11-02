@@ -176,7 +176,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             ModelItem it;
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags;
-            it.dissolve = d.dissolve; it.outline = d.outline;
+            it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
             it.inView = inView; it.inShadow = inShadow && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend;
             it.joints = -1; it.baked = false; it.anim = anim; it.morph = -1;
             const bool skinnedPrim = node.skin >= 0 && !p.jointPalette.empty();
@@ -234,6 +234,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         d[24] = (x.mat->receiveShadow && !(x.flags & kDrawNoReceiveShadow)) ? 1.0f : 0.0f;
         d[25] = x.dissolve;
         d[26] = x.outline.w;
+        d[27] = phase == 3 ? 0.0f : x.teamGlow;
         d[28] = x.anim.x; d[29] = x.anim.y; d[30] = x.anim.z;
     }
     dev_->setUniforms(0, instData_.data(), instData_.size() * sizeof(float));
