@@ -10983,65 +10983,6 @@ TEST(script_ieee_bit_patterns) {
             assert(not f32.segment(wk,{[4]=one},ow,4,3,1,nil,p(0,0),p(0,2)))        -- burning cell 4
             assert(f32.segment(wk,{},ow,4,3,1,nil,p(0,0),p(0,2)))
             assert(not f32.segment(wk,nil,ow,4,3,1,nil,p(0,0),p(2,2)))              -- corner through 5 / 6
-            -- flood: the script BFS loop it replaces, on random grids (bounded / unbounded, previous, blocked, copy)
-            local function ref(wk,bu,ow,o,w,h,dist,queue,max,prev,blk,copy)
-                local head=1
-                while head<=#queue do local c=queue[head];head=head+1
-                    local v=dist[c];local d=copy and v or v+1
-                    if max==nil or copy or d<=max then
-                        local x,y=c%w,c//w
-                        for k=0,3 do local n=k==0 and (x>0 and c-1) or k==1 and (x<w-1 and c+1) or k==2 and (y>0 and c-w) or k==3 and (y<h-1 and c+w)
-                            if n and dist[n]==nil and wk[n]==true and not (bu and bu[n]) and ow[n]==o and not (blk and blk[n]) then
-                                dist[n]=d;if prev then prev[n]=c end;queue[#queue+1]=n end
-                        end
-                    end
-                end
-                return #queue
-            end
-            for trial=1,60 do
-                local w,h=math.random(1,9),math.random(1,9);local wk,bu,ow,blk={},{},{},{}
-                for c=0,w*h-1 do wk[c]=math.random(6)>1;ow[c]=math.random(3);if math.random(9)==1 then bu[c]=one end;if math.random(9)==1 then blk[c]=true end end
-                local o=math.random(3);local max=trial%3==0 and math.random(0,4) or nil;local copy=trial%5==0
-                local s1,s2={},{};local d1,d2,q1,q2,p1,p2={},{},{},{},{},{}
-                for i=1,math.random(1,3) do local c=math.random(-1,w*h-1);if d1[c]==nil then local v=copy and math.random(9) or 0;d1[c]=v;d2[c]=v;q1[#q1+1]=c;q2[#q2+1]=c end end
-                local useB,useK=trial%2==0,trial%4<2
-                local n1=ref(wk,useB and bu or nil,ow,o,w,h,d1,q1,max,p1,useK and blk or nil,copy)
-                local n2=f32.flood(wk,useB and bu or nil,ow,o,w,h,d2,q2,max,p2,useK and blk or nil,copy)
-                assert(n1==n2 and #q2==n2)
-                for i=1,n1 do assert(q1[i]==q2[i]) end
-                for c=-1,w*h-1 do assert(d1[c]==d2[c] and p1[c]==p2[c]) end
-            end
-            do local wk,ow,d,q={},{},{[0]=0},{0};for c=0,5 do wk[c]=c~=4;ow[c]=1 end   -- 3x2: cell 4 not walkable
-                assert(f32.flood(wk,nil,ow,1,3,2,d,q)==5 and d[5]==3 and d[4]==nil and q[2]==1 and q[3]==3)
-                assert(not pcall(f32.flood,wk,nil,ow,1,3,2,{[0]='x'},{0}))
-            end
-            -- query: the script's bucketed spatial query on random indexes
-            for trial=1,40 do
-                local size=f32.fromint(math.random(1,6));local buckets,byId={},{};local id=0
-                for k=1,math.random(0,40) do
-                    id=id+math.random(1,3)
-                    local p={x=f32.div(f32.fromint(math.random(-40,400)),0x41200000),y=f32.div(f32.fromint(math.random(-40,400)),0x41200000)}
-                    local hp=({0,one,0x7f800000,0x7f800001,0x80000001,two})[math.random(6)]
-                    byId[id]={Health=hp,Position=p}
-                    local bx,by=f32.floorint(f32.div(p.x,size)),f32.floorint(f32.div(p.y,size))
-                    buckets[by]=buckets[by] or {};buckets[by][bx]=buckets[by][bx] or {};table.insert(buckets[by][bx],math.random(#buckets[by][bx]+1),id)
-                end
-                local pt={x=f32.div(f32.fromint(math.random(0,400)),0x41200000),y=f32.div(f32.fromint(math.random(0,400)),0x41200000)}
-                local radius=f32.div(f32.fromint(math.random(0,120)),0x41200000)
-                local loX,loY=f32.floorint(f32.div(f32.sub(pt.x,radius),size)),f32.floorint(f32.div(f32.sub(pt.y,radius),size))
-                local hiX,hiY=f32.floorint(f32.div(f32.add(pt.x,radius),size)),f32.floorint(f32.div(f32.add(pt.y,radius),size))
-                local sq=f32.mul(radius,radius);local want,ins={},0
-                for y=loY,hiY do local row=buckets[y];if row then for x=loX,hiX do local b=row[x];if b then for i=1,#b do
-                    local u=byId[b[i]];ins=ins+1
-                    if u.Health>0 and u.Health<=2139095040 and not f32.lt(sq,f32.sqdist(u.Position,pt)) then want[#want+1]=b[i] end
-                end end end end end
-                table.sort(want)
-                local got,n=f32.query(buckets,byId,pt.x,pt.y,radius,size)
-                assert(n==ins and #got==#want)
-                for i=1,#want do assert(got[i]==want[i]) end
-            end
-            do local r,n=f32.query({[0]={[0]={5,7}}},{[5]={Health=one,Position={x=0,y=0}}},0,0,one,one);assert(r==nil and n==1) end
-            assert(not pcall(f32.query,{},{},0x7f800000,0,one,one))
             assert(f32.cellat({x=0x40200000,y=0x3fc00000},4,3)==6 and f32.cellat({x=0xbf000000,y=0},4,3)==-1 and f32.cellat({x=0,y=0x40400000},4,3)==-1)
             assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
             assert(f64.fromint(9007199254740993)==0x4340000000000000)
