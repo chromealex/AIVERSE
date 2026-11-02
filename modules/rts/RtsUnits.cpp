@@ -610,9 +610,14 @@ bool RtsModule::runOrder(Simulation& sim, Entity e, Order& o) {
             o.state = 1;
         }
         const bool crewing = rules_.originals && rules_.types[w.get<Unit>(o.target).type].crewed && !w.has<Garrison>(o.target);
-        if (contactDistance(sim, e, o.target) > (crewing ? Fixed::fromRatio(6, 10) : Fixed::fromRatio(2, 10))) {
-            if (m && !m->moving) o.state = 0;
-            return false;
+        if (const Fixed cd = contactDistance(sim, e, o.target); cd > (crewing ? Fixed::fromRatio(6, 10) : Fixed::fromRatio(2, 10))) {
+            // stopped next to the door: a path ends on the centre of the cell beside the footprint, half a cell out,
+            // which a small unit (radius < 0.3) never closes -> it would walk to the same spot forever
+            if (m && !m->moving && o.state == 1 && cd < Fixed::fromRatio(1, 2)) { /* arrived */ }
+            else {
+                if (m && !m->moving) o.state = 0;
+                return false;
+            }
         }
         // arrived: man an empty vehicle (Z), reinforce, assault or capture
         if (rules_.originals && rules_.types[w.get<Unit>(o.target).type].crewed && !w.has<Garrison>(o.target)) { crewEnter(sim, e, o.target); return true; }
