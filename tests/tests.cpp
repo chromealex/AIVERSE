@@ -12179,6 +12179,8 @@ view.entity_fx(a, {scale = 1, time = 1, ease = 'linear'})          -- eases from
 assert(view.entity_fx(a).scale[1] == .25 and view.entity_fx(a).opacity == .5)
 view.entity_fx(b, {scale = {1, 2, 3}, shadow_scale = 1, lift = -.25})
 assert(view.entity_fx(b).scale[2] == 2 and view.entity_fx(b).shadow_scale[2] == 1 and view.entity_fx(b).lift == -.25)
+assert(view.entity_fx(b).corpse_age == nil); view.entity_fx(b, {corpse_age = .5}); assert(view.entity_fx(b).corpse_age == .5)
+view.entity_fx(b, {corpse_age = false}); assert(view.entity_fx(b).corpse_age == nil)
 assert(not pcall(view.entity_fx, b, {opacity = 0 / 0}))
 assert(not pcall(view.entity_fx, b, {scale = {1, 2}}))
 assert(not pcall(view.entity_fx, b, {ease = 'bounce'}))
@@ -12347,6 +12349,14 @@ TEST(view_entity_fx_renders_scaled_translucent) {
     const auto back = frame(0.064);
     CHECK(back.size() == plain.size());
     for (size_t i = 0; i < back.size() && i < plain2.size(); ++i) CHECK(!back[i].blend && back[i].inst[19] == 1);
+    // corpse_age: the object leaves the scene without a death event and stays as a corpse at the script's age
+    game::EntityFxEntry c; c.to.v[V::kCorpseAge] = .2f; c.from = c.to;
+    fx->entries.clear(); fx->entries[unit.entity.packed()] = c; scene.entityFx = fx;
+    CHECK(!frame(0.080).empty());
+    scene.objects.clear();
+    CHECK(!frame(0.096).empty() && !frame(0.112).empty() && !frame(1.5).empty());   // held at .2 s while the entry says so
+    fx->entries[unit.entity.packed()].to.v[V::kCorpseAge] = 99; fx->entries[unit.entity.packed()].from = fx->entries[unit.entity.packed()].to;
+    CHECK(frame(1.516).empty());                                                     // past the type's "corpse": gone
     view.shutdown(dev); r3d.shutdown();
 }
 

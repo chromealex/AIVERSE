@@ -650,6 +650,7 @@ on the local machine only:
 |---|---|
 | `scale` | number or `{x, y, z}`: multiplies the model in its own axes about its ground point (1) |
 | `lift` | world units the model is raised along its up (negative: lowered); the ground shadow stays (0) |
+| `corpse_age` | seconds since the death on the script's own clock: the corpse (death clip, fall, sink, `corpseFade`) shows that moment and stays while it is below the type's `corpse` (a paused match holds a dying model like Unity's frozen `Elapsed`); an entity removed without a death event (`game.kill(h, true)`, or a death in a frame that ran several ticks) becomes a corpse when its values carry `corpse_age`; `false`: the view's frame clock again (unset) |
 | `opacity` | 0..1: below .99 the model is drawn in the blended pass (sorted back to front, no shadow-map casting) and still writes depth, so the ground layers drawn after that pass (paint layers, `draw_ground`, sprites) stay behind it; 0 draws nothing (1) |
 | `tint` | `{r, g, b}` multiplies the surface colour (1, 1, 1) |
 | `team_mix` | `{r, g, b, amount}`: the team colour moves towards rgb by amount, in display space, before it is applied to the team-coloured surfaces (Unity's `Color.Lerp` of a `_BaseColor`) (amount 0) |

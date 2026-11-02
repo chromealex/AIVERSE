@@ -356,11 +356,12 @@ void RtsView::drawPlanets(Renderer3D& r, const RtsScene& s, double time, const s
     for (auto it = anims_.begin(); it != anims_.end();) {
         EntityAnim& st = it->second;
         if (st.seen == frame_ && !st.dead) { ++it; continue; }
-        if (!st.dead || !st.initialized) {
+        if ((!st.dead || !st.initialized) && !fxCorpse(it->first, st)) {
             if (st.seen + 2 < frame_) { planetLast_.erase(it->first); it = anims_.erase(it); } else ++it;
             continue;
         }
-        st.deathAge += dt;
+        float adt = dt;
+        st.deathAge = corpseAge(it->first, st.deathAge, dt, adt);
         if (st.type >= looks_.size() || st.deathAge > looks_[st.type].corpse) { planetLast_.erase(it->first); it = anims_.erase(it); continue; }
         const TypeLook& L = looks_[st.type];
         auto pl = planetLast_.find(it->first);
@@ -372,7 +373,7 @@ void RtsView::drawPlanets(Renderer3D& r, const RtsScene& s, double time, const s
             tangentFrame(pl->second.body, up, east, south);
             const mat4 place = frameAt(pl->second.body, pl->second.ground + up * pl->second.lift, up, east, south);
             const float3 pv = place.transformPoint({0, 0, 0});
-            animate(st, o, dt, nullptr, &pv);
+            animate(st, o, adt, nullptr, &pv);
             drawObject(r, st, o, 0, L.dissolveDeath ? 1.0f : L.corpseAlpha(st.deathAge), nullptr, &place);
         }
         ++it;

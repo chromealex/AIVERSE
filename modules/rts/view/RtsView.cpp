@@ -196,17 +196,18 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
     for (auto it = anims_.begin(); it != anims_.end();) {
         EntityAnim& st = it->second;
         if (st.seen == frame_ && !st.dead) { ++it; continue; }
-        if (!st.dead || !st.initialized) {
+        if ((!st.dead || !st.initialized) && !fxCorpse(it->first, st)) {
             it = st.seen + 2 < frame_ ? anims_.erase(it) : std::next(it);
             continue;
         }
-        st.deathAge += dt;
+        float adt = dt;
+        st.deathAge = corpseAge(it->first, st.deathAge, dt, adt);
         if (st.type >= looks_.size() || st.deathAge > looks_[st.type].corpse) { it = anims_.erase(it); continue; }
         const TypeLook& L = looks_[st.type];
         if (st.seen != frame_ && st.last.visible) {
             SceneObject o = st.last;
             o.selected = o.hovered = false;
-            animate(st, o, dt, &grid);
+            animate(st, o, adt, &grid);
             const float g = heightAt(grid, o.pos.x, o.pos.z), fade = L.dissolveDeath ? 1.0f : L.corpseAlpha(st.deathAge);
             drawObject(r, st, o, g, fade);
             if (!L.shadow.image.empty()) {   // a corpse keeps its footprint image while it lies there (faded like the model)

@@ -485,6 +485,7 @@ int vEntityFx(lua_State* L, Vm& vm) {
         lua_pushnumber(L, cur.v[V::kTeamGlow]); lua_setfield(L, -2, "team_glow");
         lua_pushnumber(L, cur.v[V::kShadow]); lua_setfield(L, -2, "shadow");
         lua_pushnumber(L, cur.v[V::kLift]); lua_setfield(L, -2, "lift");
+        if (cur.v[V::kCorpseAge] >= 0) { lua_pushnumber(L, cur.v[V::kCorpseAge]); lua_setfield(L, -2, "corpse_age"); }
         return 1;
     }
     if (lua_isnil(L, 2)) { im.fx->entries.erase(key); return 0; }
@@ -523,6 +524,13 @@ int vEntityFx(lua_State* L, Vm& vm) {
     field("team_glow", V::kTeamGlow, 1, true, 0.0f, 64.0f);
     field("shadow", V::kShadow, 1, true, 0.0f, 1.0f);
     field("lift", V::kLift, 1, true, -1000.0f, 1000.0f);
+    {   // corpse_age = seconds since the death on the script's clock (false: the view's own clock again)
+        lua_getfield(L, 2, "corpse_age");
+        const bool own = lua_type(L, -1) == LUA_TBOOLEAN && !lua_toboolean(L, -1);
+        lua_pop(L, 1);
+        if (own) target.v[V::kCorpseAge] = -1;
+        else field("corpse_age", V::kCorpseAge, 1, true, 0.0f, 1e6f);
+    }
     bool ownShadowScale = false;
     {
         lua_getfield(L, 2, "shadow_scale");

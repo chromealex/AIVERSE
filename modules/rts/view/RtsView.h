@@ -392,6 +392,21 @@ private:
     void addGroundShadow(const TypeLook& L, const EntityAnim& st, render::float3 pos, float ground, const EntityFxValues* fx = nullptr);
     const EntityFxStore* fx_ = nullptr;   // this frame's view.entity_fx store (RtsScene::entityFx)
     bool fxFor(const SceneObject& o, EntityFxValues& out) const { return fx_ && o.entity.valid() && fx_->lookup(o.entity.packed(), out); }
+    // an object that left the scene without a death event (silent removal, or a death inside a frame that ran several
+    // ticks) becomes a corpse when its view.entity_fx carries corpse_age
+    bool fxCorpse(uint64_t key, EntityAnim& st) const {
+        EntityFxValues v;
+        if (st.dead || !st.initialized || !fx_ || !fx_->lookup(key, v) || v.v[EntityFxValues::kCorpseAge] < 0) return false;
+        st.dead = true; st.deathAge = v.v[EntityFxValues::kCorpseAge];
+        return true;
+    }
+    // a corpse's age this frame: view.entity_fx corpse_age (the script's clock; the pose holds: animDt 0) or + dt
+    float corpseAge(uint64_t key, float age, float dt, float& animDt) const {
+        EntityFxValues v;
+        if (fx_ && fx_->lookup(key, v) && v.v[EntityFxValues::kCorpseAge] >= 0) { animDt = 0; return v.v[EntityFxValues::kCorpseAge]; }
+        animDt = dt;
+        return age + dt;
+    }
     RtsGroundFx groundFx_;   // territory, diggable rock, lanes, roads (RtsGroundFx.cpp)
     FogOfWar fog_;           // fog of war look + sheet (RtsFog.cpp)
     RtsOverlays overlays_;   // data-driven overlays (RtsOverlays.cpp)
