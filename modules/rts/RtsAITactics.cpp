@@ -45,6 +45,17 @@ void RtsAI::applyRulesConfig(RtsModule& m) {
     configured_ = true;
     const AIRules& a = m.rules().ai;
     if (a.workersPerBase >= 0) cfg_.workersPerBase = a.workersPerBase;
+    else {
+        // slow gatherers (AoE: 10 food in 32 s) need more of them to pay for an army: about 10 resources a second
+        // from the base, up to a quarter of the population cap
+        Fixed rate{};
+        for (auto& t : m.rules().types)
+            if (t.worker) for (auto& g : t.gathers) if (g.time.raw > 0) rate = fxMax(rate, g.carry / g.time);
+        if (rate.raw > 0 && rate < Fixed::fromRatio(7, 10)) {
+            const int want = (Fixed::fromInt(10) / rate).toInt();
+            cfg_.workersPerBase = std::clamp(want, cfg_.workersPerBase, std::max(cfg_.workersPerBase, int(m.rules().supplyCap.toInt()) / 4));
+        }
+    }
     if (a.firstAttackArmy >= 0) cfg_.firstAttackArmy = a.firstAttackArmy;
     if (a.armyGrowth >= 0) cfg_.armyGrowth = a.armyGrowth;
     if (a.maxAttackArmy >= 0) cfg_.maxAttackArmy = a.maxAttackArmy;
@@ -350,14 +361,24 @@ bool RtsAI::buildTowers(Simulation& sim, RtsModule& m) {
 // Weighted choice among trainable combat units: long range / siege when escalating, orbit units when the
 // enemy can only be reached through orbit.
 int RtsAI::pickUnit(Simulation& sim, RtsModule& m, const std::vector<uint16_t>& opts) {
-    (void)sim;
     const Rules& R = m.rules();
     std::vector<int64_t> wt(opts.size(), 4);
     bool anyOrbit = false;
     for (uint16_t o : opts) if (R.types[o].layer & kLayerOrbit) anyOrbit = true;
+    // stalemate: units that break buildings (vs the enemy's toughest one), a little more reach
+    int target = -1;
+    if (escalation_ > 0)
+        sim.world().each<Unit, Owner>([&](Entity, Unit& u, Owner& o) {
+            const UnitType& t = R.types[u.type];
+            if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || !t.structure || !t.countsForVictory || t.invulnerable) return;
+            if (target < 0 || t.maxHp > R.types[size_t(target)].maxHp) target = int(u.type);
+        });
+    Fixed topDps{};
+    if (target >= 0) for (uint16_t o : opts) topDps = fxMax(topDps, structureDps(R, R.types[o], R.types[size_t(target)]));
     for (size_t i = 0; i < opts.size(); ++i) {
         const UnitType& t = R.types[opts[i]];
-        if (escalation_ > 0 && !t.structure) wt[i] += bestRange(t).toInt() / 2;   // stalemate: a little more reach
+        if (escalation_ > 0 && !t.structure) wt[i] += bestRange(t).toInt() / 2;
+        if (topDps.raw > 0) wt[i] += (structureDps(R, t, R.types[size_t(target)]) * 8 / topDps).toInt();
         if (enemyOffBody_ && anyOrbit) wt[i] = (t.layer & kLayerOrbit) ? wt[i] * 12 : 1;
     }
     int64_t total = 0;
@@ -592,7 +613,10 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
             if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || t.weapons.empty() || t.worker) return;
             theirs += strengthOf(t, u);   // towers count too
         });
-        if (ours >= theirs * 2 + 1 && !finishing) needed = std::min(needed, int(homeIdle.size()));
+        // escalating (nothing broke for minutes): a smaller edge is enough - escalation also asks for bigger waves,
+        // which a starved economy never fields, and two equal armies waiting at home is the stalemate itself
+        const int64_t edge = escalation_ >= 2 ? 11 : escalation_ == 1 ? 15 : 20;   // tenths
+        if (ours * 10 >= theirs * edge + 1 && !finishing) needed = std::min(needed, int(homeIdle.size()));
         enemyDefenceless_ = theirs == 0;
     }
     if (!wave_units_.empty()) {
@@ -848,9 +872,9 @@ bool RtsAI::loadState(const std::string& bytes) {
 }
 
 void RtsAI::stateIo(Archive& a) {
-    uint32_t version = 2;
+    uint32_t version = 3;
     io(a, version);
-    if (version != 1 && version != 2) { a.fail(); return; }
+    if (version < 1 || version > 3) { a.fail(); return; }
     uint64_t rs = rng_.state(), ri = rng_.inc();
     io(a, rs); io(a, ri);
     if (!a.writing()) rng_.restore(rs, ri);
@@ -874,6 +898,7 @@ void RtsAI::stateIo(Archive& a) {
         io(a, pass);
         if (!a.writing()) { savedPass_ = std::move(pass); terr_.reset(); }
     }
+    if (version >= 3) io(a, noSpot_);
 }
 
 } // namespace rts::game

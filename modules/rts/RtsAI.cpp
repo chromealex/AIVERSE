@@ -83,6 +83,18 @@ bool RtsAI::train(Simulation& sim, RtsModule& m, uint16_t type) {
     return true;
 }
 
+// A structure type that found no spot is left out of the chain / siege planners for a minute (else they ask for the
+// same unplaceable mine every think and hold everything else up).
+void RtsAI::markNoSpot(Simulation& sim, uint16_t type) {
+    const uint32_t now = sim.tick();
+    noSpot_.erase(std::remove_if(noSpot_.begin(), noSpot_.end(), [&](auto& n) { return n.second <= now || n.first == int(type); }), noSpot_.end());
+    noSpot_.push_back({int(type), now + 60 * sim.tickRate()});
+}
+bool RtsAI::noSpot(Simulation& sim, uint16_t type) const {
+    for (auto& [t, until] : noSpot_) if (t == int(type) && until > sim.tick()) return true;
+    return false;
+}
+
 bool RtsAI::build(Simulation& sim, RtsModule& m, uint16_t type, int depth, const Vec3* at) {
     World& w = sim.world();
     const Rules& R = m.rules();
@@ -130,7 +142,27 @@ bool RtsAI::build(Simulation& sim, RtsModule& m, uint16_t type, int depth, const
             Fixed d = dist(tr.pos, bpos);
             if (!found || d < bestD) { bestD = d; spot = tr.pos; found = true; }
         });
-        if (!found) return false;
+        if (!found) { markNoSpot(sim, type); return false; }
+    } else if (bt.recipe.enabled && bt.recipe.fromRes >= 0) {
+        // a workplace that takes from nodes around it (woodcutter, quarry, hunter): next to the nearest such nodes
+        // (at home it would idle for the whole match)
+        if (!hasHome_) refreshBases(sim, m);
+        const Vec3 from = hasHome_ ? home_ : bpos;
+        std::vector<std::pair<Fixed, Vec3>> nodes;
+        w.each<ResourceStock, Unit, Owner, Transform>([&](Entity, ResourceStock& rs, Unit& nu, Owner& no, Transform& nt) {
+            if (rs.res != bt.recipe.fromRes || (!rs.infinite && rs.amount.raw <= 0) || (R.types[nu.type].ownerOnly && no.player != player_)) return;
+            nodes.push_back({dist(nt.pos, from), nt.pos});
+        });
+        if (R.resources[size_t(bt.recipe.fromRes)].field) {
+            Vec3 cell;
+            if (m.findNearestFieldCell(sim, from, bt.recipe.fromRes, cell, 40).valid()) nodes.push_back({dist(cell, from), cell});
+        }
+        std::sort(nodes.begin(), nodes.end(), [](auto& a, auto& b) { return a.first != b.first ? a.first < b.first : (a.second.x != b.second.x ? a.second.x < b.second.x : a.second.z < b.second.z); });
+        const int reach = std::max(2, std::min(6, int(bt.recipe.radius.toInt()) - 1));
+        bool ok = false;
+        for (size_t k = 0; k < nodes.size() && k < 6 && !ok; ++k)
+            ok = findSpot(sim, m, type, nodes[k].second, reach, spot, true) && dist(spot, nodes[k].second) <= bt.recipe.radius;
+        if (!ok) { markNoSpot(sim, type); return false; }
     } else {
         // own spot finder (lanes kept free, random tie-breaks); fidelity games keep the sim's scoring (concrete...)
         if (!hasHome_) refreshBases(sim, m);
@@ -149,7 +181,7 @@ bool RtsAI::build(Simulation& sim, RtsModule& m, uint16_t type, int depth, const
                 if (!ok && R.buildRadius <= 0) ok = findSpot(sim, m, type, home_, 32, spot, false);   // anywhere flat in reach
             }
         }
-        if (!ok && !m.findAutoSpot(sim, player_, type, spot)) { return false; }
+        if (!ok && !m.findAutoSpot(sim, player_, type, spot)) { markNoSpot(sim, type); return false; }
     }
     Command c;
     c.type = kCmdBuild; c.units = {builder}; c.param = type; c.point = spot;
@@ -212,6 +244,37 @@ void RtsAI::special(Simulation& sim, RtsModule& m) {
             if (!m.canClaim(sim, player_, ri)) continue;
             Command c; c.type = kCmdClaim; c.point = gs.regionCenter[size_t(ri)]; send(sim, c);
             break;
+        }
+        // regions that must be seen before they can be claimed: one unit at a time walks into the nearest unseen
+        // neighbouring region (else the bot stays boxed in its first region for the whole match)
+        if (R.regions.requireExplored && player_ < gs.vision.size() && !gs.vision[player_].empty() && hasHome_) {
+            const MapGrid& g = gs.grid;
+            int pick = -1;
+            Fixed pd{};
+            for (int ri = 0; ri < gs.regionCount; ++ri) {
+                if (gs.regionOwner[size_t(ri)] != 0) continue;
+                bool adj = false;
+                for (uint16_t n : gs.regionAdj[size_t(ri)]) if (gs.regionOwner[n] == player_) adj = true;
+                const Vec3 c = gs.regionCenter[size_t(ri)];
+                const int cell = g.cellOf(c);
+                if (!adj || cell < 0 || gs.vision[player_][size_t(cell)] != 0) continue;
+                const Fixed d = dist(c, home_);
+                if (pick < 0 || d < pd) { pick = ri; pd = d; }
+            }
+            if (pick >= 0) {
+                const Vec3 goal = gs.regionCenter[size_t(pick)];
+                bool going = false;
+                Entity scout;
+                int scoutRank = 9;
+                w.each<Unit, Owner, Orders>([&](Entity e, Unit& u, Owner& o, Orders& ord) {
+                    if (o.player != player_ || R.types[u.type].structure || !controllable(w, e, u)) return;
+                    if (!ord.queue.empty() && ord.queue.front().type == OrderType::Move && dist(ord.queue.front().point, goal) < Fixed::fromInt(2)) going = true;
+                    if (!idleOrders(ord) || R.types[u.type].speed.raw <= 0) return;
+                    const int rank = isCombat(R.types[u.type]) ? 0 : R.types[u.type].worker ? 1 : 2;   // a soldier, else a spare hand
+                    if (rank < scoutRank) { scoutRank = rank; scout = e; }
+                });
+                if (!going && scout.valid()) { Command c; c.type = kCmdMove; c.units = {scout}; c.point = goal; send(sim, c); }
+            }
         }
     }
     // player skills (effect engine): every primitive gets a target from smartTarget. Cheap skills are cast
@@ -326,12 +389,14 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
     std::vector<int> count(R.types.size(), 0);
     std::vector<Entity> idleWorkers;
     int workers = 0, building = 0;
+    Fixed pendingSupply{};
     std::vector<Entity> sitesHere;
     w.each<Unit, Owner>([&](Entity e, Unit& u, Owner& o) {
         if (o.player != player_) return;
         const UnitType& t = R.types[u.type];
         count[u.type]++;
         if (u.flags & kUnitUnderConstruction) {
+            pendingSupply += t.supplyProvided;
             // abandoned sites (nobody builds them) don't hold up the build order; they are resumed below
             auto* cs = w.tryGet<Construction>(e);
             if (!cs || cs->selfBuild) ++building;
@@ -528,7 +593,8 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             }
         }
     }
-    const bool canBuildNow = sim.tick() > lastBuildTick_ + 60;
+    // (settlers economies: no other site while a building material has no producer - see settlers())
+    const bool canBuildNow = sim.tick() > lastBuildTick_ + 60 && (!R.settlers || materialProducer(sim, m, count, true) < 0);
     // abandoned construction sites (builder killed or re-tasked): send a worker back
     if (sim.tick() >= lastSiteTick_ + 100) {   // (think ticks are jittered: a modulo test would rarely hit)
         lastSiteTick_ = sim.tick();
@@ -551,20 +617,60 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             Command c; c.type = kCmdSmart; c.units = {best}; c.target = s; send(sim, c);
         }
     }
+    // 3c) the first army producer comes early: an economy that never fields an army never wins. Until it stands
+    //     (and while it is not affordable) housing and economy buildings wait: they took every log in Clan Lands
+    bool holdForArmy = false;
+    if (canBuildNow && sim.tick() > 40 * sim.tickRate()) {
+        if (armyProducer(true)) return;
+        holdForArmy = waitForArmyProducer(sim, m, count, workers);
+    }
+    // 1c) upkeep: a stock resource the population eats (Northgard food) runs dry with a negative net income ->
+    //     no more housing (every new mouth makes it worse), a producer of it instead
+    bool starving = false;
+    for (size_t r = 0; r < R.resources.size() && canBuildNow; ++r) {
+        if (R.resources[r].kind != ResourceKind::Stock || R.resources[r].field || eco.income[r].raw >= 0) continue;
+        if (eco.stock[r] > -eco.income[r] * 60) continue;   // a minute of reserve left
+        bool eaten = false;
+        for (size_t ti = 0; ti < R.types.size(); ++ti)
+            if (count[ti] && !R.types[ti].structure) for (auto& a : R.types[ti].income) if (a.res == r && a.value.raw < 0) eaten = true;
+        if (!eaten) continue;
+        starving = true;
+        std::vector<std::pair<int, size_t>> cands;   // (own count, type): the kind we have fewest of first
+        for (size_t ti = 0; ti < R.types.size(); ++ti) {
+            const UnitType& t = R.types[ti];
+            if (!t.structure || noSpot(sim, uint16_t(ti))) continue;
+            bool makes = false;
+            for (auto& a : t.income) if (a.res == r && a.value.raw > 0) makes = true;
+            if (t.recipe.enabled && t.recipe.in.empty()) for (auto& a : t.recipe.out) if (a.res == r) makes = true;
+            if (makes && count[ti] < 8) cands.push_back({count[ti], ti});
+        }
+        std::sort(cands.begin(), cands.end());
+        for (auto& [n, ti] : cands) if (build(sim, m, uint16_t(ti))) return;
+    }
+    const bool buildOk = canBuildNow && !holdForArmy;
     // 2) supply (structures like farms/depots, or supply units like overlords)
-    Fixed freeSupply = eco.supplyCap - eco.supplyUsed;
-    if (eco.supplyCap < R.supplyCap && freeSupply < Fixed::fromInt(4) && canBuildNow) {
-        // plain supply first (farms, depots, overlords); producers that also give supply when there is nothing else
-        for (int pass = 0; pass < 2; ++pass)
+    // (sites under way count: in games where sites wait for deliveries a new one every few seconds buried the base)
+    Fixed freeSupply = eco.supplyCap - eco.supplyUsed + pendingSupply;
+    if (eco.supplyCap < R.supplyCap && freeSupply < Fixed::fromInt(4) && buildOk && !starving) {
+        // plain supply first (farms, depots, overlords); producers that also give supply when there is nothing else;
+        // the cheapest per point of supply first
+        for (int pass = 0; pass < 2; ++pass) {
+            std::vector<std::pair<int64_t, size_t>> cands;
             for (size_t ti = 0; ti < R.types.size(); ++ti) {
                 const UnitType& t = R.types[ti];
                 if (t.supplyProvided.raw <= 0 || (pass == 0 && !t.produces.empty()) || (pass == 1 && (t.produces.empty() || !t.structure)) || t.key) continue;
-                if (t.structure ? build(sim, m, uint16_t(ti)) : train(sim, m, uint16_t(ti))) return;
+                int64_t cost = 0;
+                for (auto& a : t.cost) cost += a.value.raw;
+                cands.push_back({cost * 64 / std::max<int64_t>(1, t.supplyProvided.raw), ti});
             }
+            std::sort(cands.begin(), cands.end());
+            for (auto& [c, ti] : cands)
+                if (R.types[ti].structure ? build(sim, m, uint16_t(ti)) : train(sim, m, uint16_t(ti))) return;
+        }
     }
     // 3) capacity (power): keep provided above consumed
     for (size_t r = 0; r < R.resources.size(); ++r) {
-        if (R.resources[r].kind != ResourceKind::Capacity || !canBuildNow) continue;
+        if (R.resources[r].kind != ResourceKind::Capacity || !buildOk) continue;
         if (eco.capProvided[r] - eco.capUsed[r] > Fixed::fromInt(15)) continue;
         for (size_t ti = 0; ti < R.types.size(); ++ti) {
             const UnitType& t = R.types[ti];
@@ -575,7 +681,7 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
     }
     // 3b) a flow resource running dry (TA energy stall): build something that produces it
     for (size_t r = 0; r < R.resources.size(); ++r) {
-        if (R.resources[r].kind != ResourceKind::Flow || !canBuildNow) continue;
+        if (R.resources[r].kind != ResourceKind::Flow || !buildOk) continue;
         Fixed cap = eco.cap[r].raw > 0 ? eco.cap[r] : R.resources[r].storage;
         if (eco.income[r].raw > 0 && eco.stock[r] > cap / 5) continue;
         for (size_t ti = 0; ti < R.types.size(); ++ti) {
@@ -586,12 +692,43 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             if (gives && !costsIt && t.structure && build(sim, m, uint16_t(ti))) return;
         }
     }
-    // 3c) the first army producer comes early: an economy that never fields an army never wins
-    if (canBuildNow && sim.tick() > 40 * sim.tickRate() && armyProducer(true)) return;
+    // 3d) stalemate and our army barely scratches their buildings (rifles vs a construction yard): a producer of
+    //     units that do, saving up for it (else every coin goes into more of the same units)
+    saveForSiege_ = false;
+    // saving pays only when the goal is within reach (half of each cost at hand) and the enemy still fights back
+    // (an unarmed enemy falls to whatever we have: no point in starving the army)
+    auto worthSaving = [&](const std::vector<Amount>& cost) {
+        for (auto& a : cost) if (a.res < eco.stock.size() && eco.stock[a.res] * 2 < a.value) return false;
+        bool armed = false;
+        w.each<Unit, Owner>([&](Entity, Unit& u, Owner& o) {
+            const UnitType& t = R.types[u.type];
+            if (!armed && o.player != kHostileNeutral && m.hostile(sim, player_, o.player) && u.hp.raw > 0 && !t.structure && !t.worker && !t.weapons.empty()) armed = true;
+        });
+        return armed;
+    };
+    if (escalation_ > 0 && buildOk && building == 0) {
+        const SiegeGoal sg = siegeGoal(sim, m, count);
+        if (sg.kind == 1) {
+            if (build(sim, m, uint16_t(sg.index))) return;
+            if (R.costModel == CostModel::Upfront && !m.canAfford(sim, player_, R.types[size_t(sg.index)].cost)) saveForSiege_ = worthSaving(R.types[size_t(sg.index)].cost);
+        } else if (sg.kind == 2) {
+            const uint16_t k = uint16_t(sg.index);
+            if (m.canAfford(sim, player_, m.techCost(sim, player_, k))) {
+                Entity at;
+                size_t bestQ = 99;
+                w.each<Production, Unit, Owner>([&](Entity e, Production& p, Unit& u, Owner& o) {
+                    if (o.player != player_ || (u.flags & kUnitUnderConstruction)) return;
+                    const auto& rs = R.types[u.type].researches;
+                    if (std::find(rs.begin(), rs.end(), k) != rs.end() && p.queue.size() < bestQ) { bestQ = p.queue.size(); at = e; }
+                });
+                if (at.valid()) { Command c; c.type = kCmdResearch; c.units = {at}; c.param = k; send(sim, c); lastTechTick_ = sim.tick(); return; }
+            } else saveForSiege_ = worthSaving(m.techCost(sim, player_, k));
+        }
+    }
     // 4) income structures (TA metal extractors / energy, refineries on geysers, farms)
     for (size_t ti = 0; ti < R.types.size(); ++ti) {
         const UnitType& t = R.types[ti];
-        if (!t.structure || !canBuildNow) continue;
+        if (!t.structure || !buildOk) continue;
         // converters (metal makers: energy -> metal) only with a clear surplus of what they consume
         bool converterStarved = false;
         for (auto& a : t.income)
@@ -606,7 +743,7 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
         if (build(sim, m, uint16_t(ti))) return;
     }
     // 4b) a dropoff for every resource our workers gather (refinery for harvesters, lumber camp...)
-    if (canBuildNow) {
+    if (buildOk) {
         uint32_t gathered = 0, dropped = 0;
         for (size_t ti = 0; ti < R.types.size(); ++ti) {
             if (!count[ti]) continue;
@@ -625,7 +762,7 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
     }
     // 4c) expansion: a gathered resource has no node left near any of our dropoffs -> a dropoff at the nearest
     //     node elsewhere (a town hall at the next mine, a lumber camp at the next forest)
-    if (canBuildNow && building == 0 && sim.tick() >= expandTick_ && workers >= 4) {
+    if (buildOk && building == 0 && sim.tick() >= expandTick_ && workers >= 4) {
         expandTick_ = sim.tick() + 20 * sim.tickRate();
         if (expand(sim, m, count)) return;
     }
@@ -633,7 +770,7 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
     for (size_t r = 0; r < R.resources.size(); ++r) {
         const ResourceDef& rd = R.resources[r];
         bool capped = rd.kind == ResourceKind::Flow || rd.capped;
-        if (!capped || eco.cap[r].raw <= 0 || eco.stock[r] < eco.cap[r] * Fixed::fromRatio(9, 10) || !canBuildNow) continue;
+        if (!capped || eco.cap[r].raw <= 0 || eco.stock[r] < eco.cap[r] * Fixed::fromRatio(9, 10) || !buildOk) continue;
         for (size_t ti = 0; ti < R.types.size(); ++ti) {
             const UnitType& t = R.types[ti];
             bool stores = false;
@@ -650,7 +787,7 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             for (size_t pi = 0; pi < R.types.size(); ++pi)
                 if (count[pi] && std::find(R.types[pi].produces.begin(), R.types[pi].produces.end(), uint16_t(ti)) != R.types[pi].produces.end()) saveForWorkers_ = true;
         }
-    if (workers < cfg_.workersPerBase) {
+    if (workers < cfg_.workersPerBase && (!saveForSiege_ || workers < 6)) {   // (saving for siege: workers wait too)
         // the worker type we have fewest of; builders that gather nothing are capped at 2
         int bestType = -1, bestCount = 1 << 30;
         for (size_t ti = 0; ti < R.types.size(); ++ti) {
@@ -682,9 +819,9 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             for (uint16_t rq : missing) if (build(sim, m, rq)) return;
     }
     // 7) military production buildings (and the tech they require)
-    if (sim.tick() > lastBuildTick_ + 100 && building == 0 && armyProducer(false)) return;
+    if (canBuildNow && sim.tick() > lastBuildTick_ + 100 && building == 0 && armyProducer(false)) return;
     // 8) towers at the chokepoint toward the enemy (agent-ai-terrain), once the army is under way
-    if (sim.tick() > lastBuildTick_ + 100 && building == 0 && sim.tick() > 240 * sim.tickRate() && wave_ > 0) buildTowers(sim, m);
+    if (canBuildNow && sim.tick() > lastBuildTick_ + 100 && building == 0 && sim.tick() > 240 * sim.tickRate() && wave_ > 0) buildTowers(sim, m);
 }
 
 void RtsAI::military(Simulation& sim, RtsModule& m) {
@@ -703,7 +840,7 @@ void RtsAI::military(Simulation& sim, RtsModule& m) {
             auto* ord = w.tryGet<Orders>(e);
             if (ord && idleOrders(*ord)) idleArmy.push_back(e);
         }
-        if (auto* prod = w.tryGet<Production>(e); prod && !saveForWorkers_ && prod->queue.size() < 2 && !(u.flags & kUnitUnderConstruction)) {
+        if (auto* prod = w.tryGet<Production>(e); prod && !saveForWorkers_ && !saveForSiege_ && prod->queue.size() < 2 && !(u.flags & kUnitUnderConstruction)) {
             std::vector<uint16_t> opts;
             for (uint16_t ut : t.produces) {
                 const UnitType& cand = R.types[ut];
@@ -874,9 +1011,18 @@ void RtsAI::settlers(Simulation& sim, RtsModule& m) {
     if (R.roadNetwork.enabled && store.valid()) {
         std::vector<Entity> off;
         for (Entity e : structures) if (e != store && !m.roadConnected(sim, e, store)) off.push_back(e);
-        if (!off.empty()) { Command c; c.type = kCmdConnectRoad; c.units = {off[0]}; send(sim, c); }
+        // (a random one: the first may be walled in for good, and asking for it alone left every other one off the road)
+        if (!off.empty()) { Command c; c.type = kCmdConnectRoad; c.units = {off[rng_.below(uint32_t(off.size()))]}; send(sim, c); }
     }
-    // 2) production chain: raw producers first, then workplaces whose inputs we produce
+    // (all of it waits while the first army producer is being saved for, see economy())
+    if (waitForArmyProducer(sim, m, count, 3)) return;
+    // 2) production chain: building materials first (woodcutter -> sawmill: every site waits for planks, so the
+    //    stock at hand must go into the chain that makes more of it), then raw producers, then workplaces whose
+    //    inputs we produce
+    if (sim.tick() > lastBuildTick_ + 60) {
+        const int mp = materialProducer(sim, m, count, false);
+        if (mp >= 0 && build(sim, m, uint16_t(mp))) return;
+    }
     if (sim.tick() > lastBuildTick_ + 60) {
         uint32_t produced = 0;
         for (size_t ti = 0; ti < R.types.size(); ++ti)
@@ -989,11 +1135,13 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
 bool RtsAI::expand(Simulation& sim, RtsModule& m, const std::vector<int>& count) {
     World& w = sim.world();
     const Rules& R = m.rules();
+    const Surface* S = m.surface(sim);
+    const MapGrid& grid = m.state(sim).grid;
     if (!hasHome_) return false;
     uint32_t gathered = 0;
     for (size_t ti = 0; ti < R.types.size(); ++ti)
         if (count[ti] && R.types[ti].worker)
-            for (auto& g : R.types[ti].gathers) if (R.resources[g.res].kind != ResourceKind::Flow && !R.resources[g.res].field) gathered |= 1u << g.res;
+            for (auto& g : R.types[ti].gathers) if (R.resources[g.res].kind != ResourceKind::Flow && (!R.resources[g.res].field || !S)) gathered |= 1u << g.res;
     if (!gathered) return false;
     std::vector<std::pair<Vec3, uint32_t>> drops;
     std::vector<Vec3> enemies;
@@ -1006,6 +1154,34 @@ bool RtsAI::expand(Simulation& sim, RtsModule& m, const std::vector<int>& count)
         if (!(gathered & (1u << r))) continue;
         bool nearAny = false;
         std::vector<std::pair<Fixed, Vec3>> far;   // candidate nodes by distance from home
+        if (R.resources[size_t(r)].field) {
+            // fields (spice, crystal): a dropoff whose surroundings hold little any more is exhausted (regrowth crumbs
+            // keep single cells alive); candidates are rich patches, sampled every 3 cells
+            auto amountAround = [&](int cx, int cy, int rad) {
+                Fixed sum{};
+                for (int y = cy - rad; y <= cy + rad; ++y)
+                    for (int x = cx - rad; x <= cx + rad; ++x) {
+                        if (!grid.inside(x, y)) continue;
+                        const size_t i = size_t(grid.index(x, y));
+                        if (grid.fieldRes[i] == r && !grid.blocked[i]) sum += grid.fieldAmt[i];
+                    }
+                return sum;
+            };
+            const Fixed enough = Fixed::fromInt(300);
+            for (auto& [dp, mask] : drops) {
+                int cx, cy; grid.cellXY(dp, cx, cy);
+                if ((mask & (1u << r)) && amountAround(cx, cy, 10) >= enough) nearAny = true;
+            }
+            if (!nearAny)
+                for (int y = 1; y < grid.h; y += 3)
+                    for (int x = 1; x < grid.w; x += 3) {
+                        if (amountAround(x, y, 3) < enough) continue;
+                        const Vec3 p = grid.cellCenter(x, y);
+                        bool hostile = false;
+                        for (Vec3 e : enemies) if (dist(e, p) < Fixed::fromInt(16)) hostile = true;
+                        if (!hostile) far.push_back({dist(p, home_), p});
+                    }
+        } else
         w.each<ResourceStock, Unit, Owner, Transform>([&](Entity, ResourceStock& rs, Unit& nu, Owner& no, Transform& nt) {
             if (rs.res != r || (!rs.infinite && rs.amount.raw <= 0) || (R.types[nu.type].ownerOnly && no.player != player_)) return;
             for (auto& [dp, mask] : drops) if ((mask & (1u << r)) && dist(dp, nt.pos) < Fixed::fromInt(12)) { nearAny = true; return; }
@@ -1034,6 +1210,165 @@ bool RtsAI::expand(Simulation& sim, RtsModule& m, const std::vector<int>& count)
             if (findSpot(sim, m, uint16_t(pick), far[k].second, 9, spot, true)) return build(sim, m, uint16_t(pick), 0, &spot);
     }
     return false;
+}
+
+// Damage per second of `u` against a structure of type `s` (damage table, tag bonuses, flat armor; rough: the AI
+// only compares unit kinds with it).
+Fixed RtsAI::structureDps(const Rules& R, const UnitType& u, const UnitType& s) {
+    Fixed best{};
+    for (auto& wd : u.weapons) {
+        if (!layerHit(wd.targets, s.layer)) continue;
+        Fixed raw = wd.damage * R.damageMult(wd.damageType, s.armorType);
+        for (auto& [tags, add] : wd.bonus) if (s.tags & tags) raw += add;
+        const Fixed fin = fxMax(raw - s.armor, raw / 10);
+        best = fxMax(best, fin / fxMax(wd.cooldown, Fixed::fromRatio(1, 10)));
+    }
+    return best;
+}
+
+// What unlocks units clearly better against the enemy's toughest building than anything we can train now: a
+// producer to build (kind 1) or a technology to research at one of our structures (kind 2); kind 0: nothing.
+RtsAI::SiegeGoal RtsAI::siegeGoal(Simulation& sim, RtsModule& m, const std::vector<int>& count) {
+    World& w = sim.world();
+    const Rules& R = m.rules();
+    auto& eco = m.state(sim).players[player_];
+    SiegeGoal goal;
+    int target = -1;
+    w.each<Unit, Owner>([&](Entity, Unit& u, Owner& o) {
+        const UnitType& t = R.types[u.type];
+        if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || !t.structure || !t.countsForVictory || t.invulnerable) return;
+        if (target < 0 || t.maxHp > R.types[size_t(target)].maxHp) target = int(u.type);
+    });
+    if (target < 0) return goal;
+    const UnitType& tt = R.types[size_t(target)];
+    std::vector<uint8_t> buildable(R.types.size(), 0), researchable(R.techs.size(), 0);
+    Fixed have{};
+    for (size_t pi = 0; pi < R.types.size(); ++pi) {
+        if (!count[pi]) continue;
+        for (uint16_t b : R.types[pi].builds) buildable[b] = 1;
+        for (uint16_t k : R.types[pi].researches) researchable[k] = 1;
+        if (!R.types[pi].structure) continue;
+        for (uint16_t k : R.types[pi].produces)
+            if (isCombat(R.types[k]) && m.canTrain(sim, player_, k)) have = fxMax(have, structureDps(R, R.types[k], tt));
+    }
+    // the one tech a unit still lacks, if we can research it now (-1: none / more than that is missing)
+    auto missingTech = [&](const std::vector<Requirement>& req) {
+        int tech = -1;
+        for (auto& rq : req) {
+            if (!rq.tech) { if (!count[rq.index]) return -2; continue; }
+            if (eco.researched[rq.index] > 0) continue;
+            if (tech >= 0) return -2;
+            tech = int(rq.index);
+        }
+        if (tech < 0) return -1;
+        const TechDef& td = R.techs[size_t(tech)];
+        if (!researchable[size_t(tech)] || eco.researching[size_t(tech)] || !m.requirementsMet(sim, player_, td.requires_)) return -2;
+        if (td.requiresAnyCount > 0) {
+            int n = 0;
+            for (uint16_t ty : td.requiresAny) if (eco.typeCount[ty] > 0) ++n;
+            if (n < td.requiresAnyCount) return -2;
+        }
+        return tech;
+    };
+    Fixed bestDps = have * 2 + Fixed::fromRatio(1, 10);
+    for (size_t pi = 0; pi < R.types.size(); ++pi) {
+        const UnitType& p = R.types[pi];
+        if (!p.structure) continue;
+        const bool own = count[pi] > 0;
+        if (!own && !buildable[pi]) continue;
+        for (uint16_t k : p.produces) {
+            if (!isCombat(R.types[k])) continue;
+            const Fixed d = structureDps(R, R.types[k], tt);
+            if (d <= bestDps) continue;
+            if (!own) { if (m.canTrain(sim, player_, uint16_t(pi)) && !noSpot(sim, uint16_t(pi))) { bestDps = d; goal = {1, int(pi)}; } continue; }
+            const int tech = missingTech(R.types[k].requires_);
+            if (tech >= 0) { bestDps = d; goal = {2, tech}; }
+        }
+    }
+    return goal;
+}
+
+// Settlers economies: the next structure a missing production chain needs, -1 when none is missing. Chains, in
+// order: building materials (resources in structure costs that recipes make: planks), then what the army costs
+// (coins for recruits, axes for militia); with materialsOnly just the first.
+int RtsAI::materialProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, bool materialsOnly) {
+    const Rules& R = m.rules();
+    uint32_t produced = 0, made = 0;
+    std::vector<uint8_t> buildable(R.types.size(), 0), trainable(R.types.size(), 0);
+    for (size_t ti = 0; ti < R.types.size(); ++ti) {
+        const UnitType& t = R.types[ti];
+        if (t.recipe.enabled) for (auto& a : t.recipe.out) { made |= 1u << a.res; if (count[ti]) produced |= 1u << a.res; }
+        if (count[ti]) { for (uint16_t b : t.builds) buildable[b] = 1; for (uint16_t k : t.produces) trainable[k] = 1; }
+    }
+    auto ok = [&](size_t ti) { return buildable[ti] && m.canTrain(sim, player_, uint16_t(ti)) && !noSpot(sim, uint16_t(ti)); };
+    auto costMask = [&](const UnitType& t) {
+        uint32_t mask = 0;
+        for (auto& a : t.cost) if (a.value.raw > 0 && a.res < 32) mask |= 1u << a.res;
+        return mask;
+    };
+    uint32_t materials = 0, army = 0;
+    int nBuildable = 0, uses[32] = {};
+    for (size_t ti = 0; ti < R.types.size(); ++ti) {
+        const UnitType& t = R.types[ti];
+        if (t.structure && buildable[ti]) {
+            const uint32_t cm = costMask(t);
+            materials |= cm;
+            ++nBuildable;
+            for (int r = 0; r < 32; ++r) if (cm & (1u << r)) ++uses[r];
+        }
+        if (!t.structure && isCombat(t)) {   // trained here or from a unit trained here (recruit -> militia)
+            bool reach = trainable[ti] || (t.trainFrom != kNoType && trainable[t.trainFrom]);
+            for (size_t pi = 0; pi < R.types.size() && !reach; ++pi)
+                if (R.types[pi].structure && buildable[pi] && std::find(R.types[pi].produces.begin(), R.types[pi].produces.end(), uint16_t(ti)) != R.types[pi].produces.end()) reach = true;
+            if (!reach) continue;
+            army |= costMask(t);
+            if (t.trainFrom != kNoType) army |= costMask(R.types[t.trainFrom]);
+        }
+    }
+    materials &= made;
+    army &= made;
+    // materialsOnly (the gate on every other build): only the main materials, which most structures cost (planks),
+    // not the stone a few late buildings want
+    if (materialsOnly)
+        for (int r = 0; r < 32; ++r) if (uses[r] * 2 < nBuildable) materials &= ~(1u << r);
+    for (int phase = 0; phase < (materialsOnly ? 1 : 2); ++phase) {
+        const uint32_t want = phase == 0 ? materials : army;
+        for (uint32_t r = 0; r < 32; ++r) {
+            if (!(want & (1u << r)) || (produced & (1u << r))) continue;
+            for (size_t pi = 0; pi < R.types.size(); ++pi) {
+                const UnitType& p = R.types[pi];
+                bool makes = false;
+                for (auto& a : p.recipe.out) if (a.res == r) makes = true;
+                if (!p.recipe.enabled || !makes || !ok(pi)) continue;
+                uint32_t missing = 0;
+                for (auto& a : p.recipe.in) if (!(produced & (1u << a.res))) missing |= 1u << a.res;
+                if (!missing) return int(pi);
+                for (size_t qi = 0; qi < R.types.size(); ++qi) {   // a raw producer of a missing input first
+                    const UnitType& q = R.types[qi];
+                    if (!q.recipe.enabled || !q.recipe.in.empty() || !ok(qi)) continue;
+                    for (auto& a : q.recipe.out) if (missing & (1u << a.res)) return int(qi);
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+// No army producer yet, one could be built but is not affordable: other buildings wait (90 s into the match).
+bool RtsAI::waitForArmyProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, int workers) {
+    const Rules& R = m.rules();
+    if (sim.tick() <= 90 * sim.tickRate() || workers < 3 || R.costModel != CostModel::Upfront) return false;
+    bool anyCandidate = false;
+    for (size_t ti = 0; ti < R.types.size(); ++ti) {
+        const UnitType& t = R.types[ti];
+        if (!t.structure) continue;
+        bool makesArmy = t.waveUnit != kNoType;
+        for (uint16_t u : t.produces) if (isCombat(R.types[u]) && !R.types[u].unique) makesArmy = true;
+        if (!makesArmy) continue;
+        if (count[ti]) return false;
+        if (m.canTrain(sim, player_, uint16_t(ti)) && !noSpot(sim, uint16_t(ti)) && !m.canAfford(sim, player_, t.cost)) anyCandidate = true;
+    }
+    return anyCandidate;
 }
 
 } // namespace rts::game

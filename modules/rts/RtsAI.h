@@ -59,6 +59,11 @@ private:
     void watchBuilders(Simulation& sim, RtsModule& m);
     bool buildTowers(Simulation& sim, RtsModule& m);
     int pickUnit(Simulation& sim, RtsModule& m, const std::vector<uint16_t>& opts);
+    static Fixed structureDps(const Rules& R, const UnitType& u, const UnitType& s);
+    int materialProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, bool materialsOnly);
+    bool waitForArmyProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, int workers);
+    struct SiegeGoal { int kind = 0, index = -1; };   // 1: build structure type, 2: research tech
+    SiegeGoal siegeGoal(Simulation& sim, RtsModule& m, const std::vector<int>& count);
     bool planetOps(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy);
     void refreshBases(Simulation& sim, RtsModule& m);
     bool expand(Simulation& sim, RtsModule& m, const std::vector<int>& count);   // a dropoff at the next resource when the near ones are gone
@@ -75,6 +80,7 @@ private:
     uint32_t lastBuildTick_ = 0;
     uint32_t lastTechTick_ = 0;
     bool saveForWorkers_ = false;
+    bool saveForSiege_ = false;   // recomputed by economy() every think before military() reads it (not saved)
     uint32_t lastDungeonTick_ = 0;
     uint32_t lastSkillTick_ = 0;
     int savingFor_ = -1;          // player skill the bot saves resources for
@@ -114,6 +120,9 @@ private:
     struct StuckBuild { uint64_t entity = 0; uint32_t since = 0; Vec3 point{}; Fixed progress{}; };
     std::vector<StuckBuild> buildWatch_;
     std::vector<std::pair<int, uint32_t>> badSpots_;   // (cell, until tick)
+    std::vector<std::pair<int, uint32_t>> noSpot_;     // (structure type, until tick): found no spot (save state v3)
+    void markNoSpot(Simulation& sim, uint16_t type);
+    bool noSpot(Simulation& sim, uint16_t type) const;
     // planets
     std::vector<Entity> invaders_;
     int invadeBody_ = -1, invasions_ = 0;
