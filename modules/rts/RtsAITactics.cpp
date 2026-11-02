@@ -604,6 +604,8 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
     auto& eco = gs.players[player_];
     const bool maxed = eco.supplyCap.raw > 0 && eco.supplyUsed * 10 >= eco.supplyCap * 9 && eco.supplyCap * 10 >= R.supplyCap * 8;
     if (maxed && !finishing) needed = std::min(needed, std::max(4, int(home.size()) * 3 / 4));
+    // long stalemate: an army that stopped growing (upkeep eats the income) never reaches a growing wave size
+    if (escalation_ >= 2 && !finishing && !defend) needed = std::min(needed, std::max(4, cfg_.firstAttackArmy * 3 / 4));
     // clearly stronger than everything the enemy fields: go now with what we have
     if (!defend && hasEnemy_ && int(homeIdle.size()) >= 3 && now > 180 * rate) {   // (not with the start kit)
         int64_t ours = 0, theirs = 0;

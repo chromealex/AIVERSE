@@ -519,6 +519,9 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
         bool any = false;
         for (auto& g : t.gathers) {
             Fixed have = eco.stock[g.res];
+            // short of workers: what workers cost comes first (AoE: food for villagers, not the gold we have least of)
+            if (workers < cfg_.workersPerBase)
+                for (auto& c : t.cost) if (c.res == g.res && c.value.raw > 0) have -= Fixed::fromInt(400);
             if (R.resources[g.res].field) {
                 Vec3 cell;
                 if (m.findNearestFieldCell(sim, p, g.res, cell, 40).valid()) {
@@ -594,7 +597,7 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
         }
     }
     // (settlers economies: no other site while a building material has no producer - see settlers())
-    const bool canBuildNow = sim.tick() > lastBuildTick_ + 60 && (!R.settlers || materialProducer(sim, m, count, true) < 0);
+    const bool canBuildNow = sim.tick() > lastBuildTick_ + 60 && (!R.settlers || materialProducer(sim, m, count, 0) < 0);
     // abandoned construction sites (builder killed or re-tasked): send a worker back
     if (sim.tick() >= lastSiteTick_ + 100) {   // (think ticks are jittered: a modulo test would rarely hit)
         lastSiteTick_ = sim.tick();
@@ -698,7 +701,11 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
     // saving pays only when the goal is within reach (half of each cost at hand) and the enemy still fights back
     // (an unarmed enemy falls to whatever we have: no point in starving the army)
     auto worthSaving = [&](const std::vector<Amount>& cost) {
-        for (auto& a : cost) if (a.res < eco.stock.size() && eco.stock[a.res] * 2 < a.value) return false;
+        // a third of it at hand, or every other two minutes (an army that spends every coin as it comes never gets
+        // that far)
+        bool near = true;
+        for (auto& a : cost) if (a.res < eco.stock.size() && eco.stock[a.res] * 3 < a.value) near = false;
+        if (!near && (sim.tick() / (120 * sim.tickRate())) % 2 != 0) return false;
         bool armed = false;
         w.each<Unit, Owner>([&](Entity, Unit& u, Owner& o) {
             const UnitType& t = R.types[u.type];
@@ -738,7 +745,9 @@ void RtsAI::economy(Simulation& sim, RtsModule& m) {
             }
         if (converterStarved) continue;
         bool incomeLike = positiveIncome(t) || (t.placeOn != kNoType && t.takesOverNode) || (t.resourceNode >= 0 && t.ownerOnly);
-        if (!incomeLike || count[ti] >= (t.placeOn != kNoType ? 8 : 6)) continue;
+        // (own worked nodes - farms - grow with the workforce: one worker each)
+        const int cap = t.placeOn != kNoType ? 8 : (t.resourceNode >= 0 && t.ownerOnly) ? std::max(6, workers / 2) : 6;
+        if (!incomeLike || count[ti] >= cap) continue;
         if (t.placeOn != kNoType && workers < 8 && R.types[t.placeOn].resourceNode >= 0) continue; // geysers later
         if (build(sim, m, uint16_t(ti))) return;
     }
@@ -1020,22 +1029,36 @@ void RtsAI::settlers(Simulation& sim, RtsModule& m) {
     //    stock at hand must go into the chain that makes more of it), then raw producers, then workplaces whose
     //    inputs we produce
     if (sim.tick() > lastBuildTick_ + 60) {
-        const int mp = materialProducer(sim, m, count, false);
+        const int mp = materialProducer(sim, m, count, 2);
         if (mp >= 0 && build(sim, m, uint16_t(mp))) return;
     }
     if (sim.tick() > lastBuildTick_ + 60) {
         uint32_t produced = 0;
         for (size_t ti = 0; ti < R.types.size(); ++ti)
             if (count[ti] && R.types[ti].recipe.enabled) for (auto& a : R.types[ti].recipe.out) produced |= 1u << a.res;
-        for (int pass = 0; pass < 2; ++pass)
+        // one of each kind before the second of any (the fewest first); a missing kind within reach (half its
+        // cost at hand) is saved for instead of a second of a cheaper one (a trading post never came otherwise)
+        auto& eco = m.state(sim).players[player_];
+        for (int pass = 0; pass < 2; ++pass) {
+            std::vector<std::pair<int, size_t>> order;
             for (size_t ti = 0; ti < R.types.size(); ++ti) {
                 const UnitType& t = R.types[ti];
-                if (!t.recipe.enabled || count[ti] >= (t.recipe.in.empty() ? 2 : 1)) continue;
+                if (!t.recipe.enabled || count[ti] >= (t.recipe.in.empty() ? 2 : 1) || noSpot(sim, uint16_t(ti))) continue;
                 bool ready = true;
                 for (auto& a : t.recipe.in) if (!(produced & (1u << a.res))) ready = false;
                 if ((pass == 0) != t.recipe.in.empty() || !ready) continue;
-                if (build(sim, m, uint16_t(ti))) return;
+                order.push_back({count[ti], ti});
             }
+            std::stable_sort(order.begin(), order.end(), [](auto& a, auto& b) { return a.first < b.first; });
+            for (auto& [n, ti] : order) {
+                if (build(sim, m, uint16_t(ti))) return;
+                if (n == 0 && R.costModel == CostModel::Upfront && m.canTrain(sim, player_, uint16_t(ti)) && !m.canAfford(sim, player_, R.types[ti].cost)) {
+                    bool reach = true;
+                    for (auto& a : R.types[ti].cost) if (a.res < eco.stock.size() && eco.stock[a.res] * 2 < a.value) reach = false;
+                    if (reach) return;
+                }
+            }
+        }
     }
     // 3) recruits for producers that need them
     for (size_t ti = 0; ti < R.types.size(); ++ti) {
@@ -1290,8 +1313,9 @@ RtsAI::SiegeGoal RtsAI::siegeGoal(Simulation& sim, RtsModule& m, const std::vect
 
 // Settlers economies: the next structure a missing production chain needs, -1 when none is missing. Chains, in
 // order: building materials (resources in structure costs that recipes make: planks), then what the army costs
-// (coins for recruits, axes for militia); with materialsOnly just the first.
-int RtsAI::materialProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, bool materialsOnly) {
+// (coins for recruits, axes for militia). mode 0: main materials only (most structures cost them: planks), 1: main
+// materials and the army, 2: every material and the army.
+int RtsAI::materialProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, int mode) {
     const Rules& R = m.rules();
     uint32_t produced = 0, made = 0;
     std::vector<uint8_t> buildable(R.types.size(), 0), trainable(R.types.size(), 0);
@@ -1327,11 +1351,10 @@ int RtsAI::materialProducer(Simulation& sim, RtsModule& m, const std::vector<int
     }
     materials &= made;
     army &= made;
-    // materialsOnly (the gate on every other build): only the main materials, which most structures cost (planks),
-    // not the stone a few late buildings want
-    if (materialsOnly)
+    // main materials: most structures cost them (planks), not the stone a few late buildings want
+    if (mode < 2)
         for (int r = 0; r < 32; ++r) if (uses[r] * 2 < nBuildable) materials &= ~(1u << r);
-    for (int phase = 0; phase < (materialsOnly ? 1 : 2); ++phase) {
+    for (int phase = 0; phase < (mode == 0 ? 1 : 2); ++phase) {
         const uint32_t want = phase == 0 ? materials : army;
         for (uint32_t r = 0; r < 32; ++r) {
             if (!(want & (1u << r)) || (produced & (1u << r))) continue;

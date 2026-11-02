@@ -60,7 +60,7 @@ private:
     bool buildTowers(Simulation& sim, RtsModule& m);
     int pickUnit(Simulation& sim, RtsModule& m, const std::vector<uint16_t>& opts);
     static Fixed structureDps(const Rules& R, const UnitType& u, const UnitType& s);
-    int materialProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, bool materialsOnly);
+    int materialProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, int mode);
     bool waitForArmyProducer(Simulation& sim, RtsModule& m, const std::vector<int>& count, int workers);
     struct SiegeGoal { int kind = 0, index = -1; };   // 1: build structure type, 2: research tech
     SiegeGoal siegeGoal(Simulation& sim, RtsModule& m, const std::vector<int>& count);
