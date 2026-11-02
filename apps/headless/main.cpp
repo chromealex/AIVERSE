@@ -433,10 +433,13 @@ static int play(const Args& a) {
             sim.saveState(restoreSnapshot);restoreBytes=sim.serialize();restoreHash=sim.checksum();restoreBots=bots;restoreSaved=true;
         }
         for (auto& b : bots) b.update(sim);
-        if (!a.tickTimes.empty()) {
+        if (!a.tickTimes.empty() || game::luaProfileEnabled()) {
+            game::luaProfileTickBegin();
             const auto s0 = std::chrono::steady_clock::now();
             sim.step();
-            stepTimes.emplace_back(sim.tick(), std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - s0).count());
+            const int64_t us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - s0).count();
+            game::luaProfileTickEnd(sim.tick(), us);
+            if (!a.tickTimes.empty()) stepTimes.emplace_back(sim.tick(), us);
         } else sim.step();
         for (auto& e : sim.events()) ev[e.type]++;
         if (restoreSaved && !restoreVerified) {
@@ -483,6 +486,7 @@ static int play(const Args& a) {
                 ev[game::kEvGathered], ev[game::kEvCaptured]);
     if (a.dump) dumpTypes(sim);
     if (a.profile) printProfile(sim);
+    game::luaProfileWrite();
     if (!a.tickTimes.empty()) {
         std::ofstream f(a.tickTimes);
         for (auto& [t, us] : stepTimes) f << t << ' ' << us << '\n';

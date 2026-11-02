@@ -196,4 +196,16 @@ private:
     friend struct Impl;
 };
 
+
+// Development profiler of Lua script time (env RTS_LUA_PROFILE=<prefix>; off otherwise, no cost but one branch per
+// count-hook call). The count hook (every 1000 instructions) samples the Lua stack when >= RTS_LUA_PROFILE_US
+// (default 100) microseconds of wall time passed since the last sample and charges that time to the stack.
+// Hosts bracket simulation steps with luaProfileTickBegin / luaProfileTickEnd; luaProfileWrite writes folded stacks
+// (<prefix>.all.folded: every tick; <prefix>.slow.folded: ticks over RTS_LUA_PROFILE_SLOW ms, default 50;
+// <prefix>.ticks.folded: the same per slow tick, first frame "tick N run R", R the write time in ms). Values are microseconds.
+bool luaProfileEnabled();
+void luaProfileTickBegin();
+void luaProfileTickEnd(uint64_t tick, int64_t us);
+void luaProfileWrite();
+
 } // namespace rts::game

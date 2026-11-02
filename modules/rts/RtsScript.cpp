@@ -6,6 +6,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
+#include <fstream>
+#include <unordered_map>
+#include <vector>
 #include "RtsInternal.h"
 #include "RtsScriptIeee.h"
 extern "C" {
@@ -37,7 +41,51 @@ void* luaAlloc(void* ud, void* ptr, size_t osize, size_t nsize) {
 
 constexpr int kHookStep = 1000;
 
+struct LuaProfile {
+    int state = -1;   // -1 unknown, 0 off, 1 on
+    std::string prefix;
+    int64_t periodUs = 100, slowUs = 50000;
+    bool inTick = false;
+    std::chrono::steady_clock::time_point last;
+    std::unordered_map<std::string, int64_t> tick, all, slow;
+    std::vector<std::pair<uint64_t, std::unordered_map<std::string, int64_t>>> slowTicks;
+    bool on() {
+        if (state < 0) {
+            const char* p = std::getenv("RTS_LUA_PROFILE");
+            state = p && *p ? 1 : 0;
+            if (state) {
+                prefix = p;
+                if (const char* v = std::getenv("RTS_LUA_PROFILE_US")) periodUs = std::max<int64_t>(1, std::atoll(v));
+                if (const char* v = std::getenv("RTS_LUA_PROFILE_SLOW")) slowUs = int64_t(std::atof(v) * 1000);
+            }
+        }
+        return state == 1;
+    }
+    void sample(lua_State* L) {
+        const auto now = std::chrono::steady_clock::now();
+        const int64_t dt = std::chrono::duration_cast<std::chrono::microseconds>(now - last).count();
+        if (dt < periodUs) return;
+        last = now;
+        std::string frames[64];
+        int n = 0;
+        lua_Debug ar;
+        for (int level = 0; n < 64 && lua_getstack(L, level, &ar); ++level) {
+            lua_getinfo(L, "Sn", &ar);
+            std::string f = ar.name ? ar.name : "?";
+            f += '@';
+            if (ar.what && std::strcmp(ar.what, "C") == 0) f += "[C]";
+            else { f += ar.short_src; f += ':'; f += std::to_string(ar.linedefined); }
+            frames[n++] = std::move(f);
+        }
+        std::string key;
+        for (int i = n - 1; i >= 0; --i) { key += frames[i]; if (i) key += ';'; }
+        tick[key] += dt;
+    }
+};
+LuaProfile& luaProfile() { static LuaProfile p; return p; }
+
 void countHook(lua_State* L, lua_Debug*) {
+    if (LuaProfile& p = luaProfile(); p.state != 0 && p.on() && p.inTick) p.sample(L);
     Vm& vm = vmOf(L);
     vm.used += lua_gethookcount(L);
     if (vm.used <= vm.budget) return;
@@ -892,4 +940,38 @@ std::string checkScriptSyntax(const std::string& name, const std::string& text, 
     return "";
 }
 
+} // namespace rts::game
+
+namespace rts::game {
+bool luaProfileEnabled() { return script::luaProfile().on(); }
+void luaProfileTickBegin() {
+    auto& p = script::luaProfile();
+    if (!p.on()) return;
+    p.inTick = true; p.tick.clear(); p.last = std::chrono::steady_clock::now();
+}
+void luaProfileTickEnd(uint64_t tick, int64_t us) {
+    auto& p = script::luaProfile();
+    if (!p.on() || !p.inTick) return;
+    p.inTick = false;
+    const int64_t tail = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - p.last).count();
+    if (tail > 0) p.tick["[after last sample]"] += tail;
+    for (auto& [k, v] : p.tick) p.all[k] += v;
+    if (us >= p.slowUs) {
+        for (auto& [k, v] : p.tick) p.slow[k] += v;
+        p.slowTicks.emplace_back(tick, p.tick);
+    }
+}
+void luaProfileWrite() {
+    auto& p = script::luaProfile();
+    if (!p.on()) return;
+    auto dump = [](const std::string& path, const std::unordered_map<std::string, int64_t>& m) {
+        std::ofstream f(path, std::ios::app);
+        for (auto& [k, v] : m) f << k << ' ' << v << '\n';
+    };
+    dump(p.prefix + ".all.folded", p.all);
+    dump(p.prefix + ".slow.folded", p.slow);
+    std::ofstream f(p.prefix + ".ticks.folded", std::ios::app);   // appended: segmented runs add up
+    const long long run = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    for (auto& [t, m] : p.slowTicks) for (auto& [k, v] : m) f << "tick " << t << " run " << run << ';' << k << ' ' << v << '\n';
+}
 } // namespace rts::game
