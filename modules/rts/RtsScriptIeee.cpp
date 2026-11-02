@@ -40,6 +40,7 @@ namespace {
 
 constexpr uint32_t kNan32 = 0x7fc00000u;
 constexpr uint64_t kNan64 = 0x7ff8000000000000ull;
+constexpr lua_Integer kNone = LUA_MININTEGER;   // no neighbour (f32.flood)
 
 inline float f32Of(uint32_t b) { float f; std::memcpy(&f, &b, 4); return f; }
 inline uint32_t bitsOf(float f) { uint32_t b; std::memcpy(&b, &f, 4); return b; }
@@ -246,6 +247,76 @@ int f32Segment(lua_State* L) {
     return 1;
 }
 
+// ---- grid flood: f32.flood(walkable, burning, owners, owner, width, height, dist, queue[, max[, previous[, blocked[, copy]]]])
+// Breadth-first continuation of a seeded walk (OpenWar's owned-cell BFS loops): the queue array is popped in
+// order from index 1 (entries appended while it runs are popped too). For a popped cell c with value
+// v = dist[c] the next value is v + 1 (v must be an integer), or v itself when `copy` is true (label
+// propagation). When `max` is not nil and the next value exceeds it, c is not expanded. The neighbours
+// x-1, x+1, y-1, y+1 of c (x = c mod width, y = c // width, floored as Lua's % and //; a neighbour outside
+// 0..width-1 x 0..height-1 is skipped) are taken, in that order, when dist[n] is nil, walkable[n] == true,
+// burning[n] is nil or false (burning may be nil), owners[n] is raw-equal to owner and blocked[n] is nil or
+// false (blocked may be nil): dist[n] = next value, previous[n] = c (previous may be nil), n appended to the
+// queue. Exactly the visiting order of the script loop, so the queue and previous maps equal its result.
+// Returns the queue length. Raw table access only; the work is outside Lua instruction counting.
+int f32Flood(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    if (!lua_isnoneornil(L, 2)) luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checktype(L, 3, LUA_TTABLE);
+    luaL_checkany(L, 4);
+    const lua_Integer w = argInteger(L, 5, "f32.flood"), h = argInteger(L, 6, "f32.flood");
+    if (w <= 0 || h <= 0) luaL_error(L, "f32.flood: width and height must be positive");
+    luaL_checktype(L, 7, LUA_TTABLE);
+    luaL_checktype(L, 8, LUA_TTABLE);
+    const bool bounded = !lua_isnoneornil(L, 9);
+    const lua_Integer max = bounded ? argInteger(L, 9, "f32.flood") : 0;
+    const int previous = lua_isnoneornil(L, 10) ? 0 : 10;
+    if (previous) luaL_checktype(L, 10, LUA_TTABLE);
+    const int blocked = lua_isnoneornil(L, 11) ? 0 : 11;
+    if (blocked) luaL_checktype(L, 11, LUA_TTABLE);
+    const bool copy = lua_toboolean(L, 12) != 0;
+    const int walkable = 1, burning = lua_isnoneornil(L, 2) ? 0 : 2, owners = 3, owner = 4, dist = 7, queue = 8;
+    lua_settop(L, 12);
+    luaL_checkstack(L, 8, "f32.flood");
+    lua_Integer n = lua_Integer(lua_rawlen(L, queue));
+    for (lua_Integer head = 1; head <= n; ++head) {
+        if (lua_rawgeti(L, queue, head) != LUA_TNUMBER || !lua_isinteger(L, -1)) luaL_error(L, "f32.flood: queue entry %d is not an integer", int(head));
+        const lua_Integer c = lua_tointeger(L, -1);
+        lua_pop(L, 1);
+        lua_rawgeti(L, dist, c);   // the value v (stays on the stack in copy mode)
+        lua_Integer next = 0;
+        if (!copy) {
+            if (!lua_isinteger(L, -1)) luaL_error(L, "f32.flood: dist of queued cell %d is not an integer", int(c));
+            next = lua_tointeger(L, -1) + 1;
+            lua_pop(L, 1);
+            if (bounded && next > max) continue;
+        }
+        const lua_Integer y = c >= 0 ? c / w : -((-c + w - 1) / w), x = c - y * w;   // floored, as Lua
+        const lua_Integer cand[4] = {x > 0 ? c - 1 : kNone, x < w - 1 ? c + 1 : kNone, y > 0 ? c - w : kNone, y < h - 1 ? c + w : kNone};
+        for (const lua_Integer nb : cand) {
+            if (nb == kNone) continue;
+            if (lua_rawgeti(L, dist, nb) != LUA_TNIL) { lua_pop(L, 1); continue; }
+            lua_pop(L, 1);
+            const bool walk = lua_rawgeti(L, walkable, nb) == LUA_TBOOLEAN && lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            if (!walk) continue;
+            if (burning) { const bool b = lua_rawgeti(L, burning, nb) != LUA_TNIL && lua_toboolean(L, -1); lua_pop(L, 1); if (b) continue; }
+            lua_rawgeti(L, owners, nb);
+            const bool mine = lua_rawequal(L, -1, owner) != 0;
+            lua_pop(L, 1);
+            if (!mine) continue;
+            if (blocked) { const bool b = lua_rawgeti(L, blocked, nb) != LUA_TNIL && lua_toboolean(L, -1); lua_pop(L, 1); if (b) continue; }
+            if (copy) lua_pushvalue(L, -1); else lua_pushinteger(L, next);
+            lua_rawseti(L, dist, nb);
+            if (previous) { lua_pushinteger(L, c); lua_rawseti(L, previous, nb); }
+            lua_pushinteger(L, nb);
+            lua_rawseti(L, queue, ++n);
+        }
+        if (copy) lua_pop(L, 1);
+    }
+    lua_pushinteger(L, n);
+    return 1;
+}
+
 // ---- Q96 trigonometry (atan2, sincos): exact series on unsigned fixed point with 96 fractional bits in
 // base-2^24 limbs (little endian, no high zero limbs), every step truncating exactly as the integer-only
 // script implementation it replaces (OpenWar scripts/openwar/trig.lua), then one rounding to binary32
@@ -404,7 +475,7 @@ void openIeee(lua_State* L) {
     static const luaL_Reg f32[] = {{"add", f32Add}, {"sub", f32Sub}, {"mul", f32Mul}, {"div", f32Div}, {"sqrt", f32Sqrt},
                                    {"dot2", f32Dot2}, {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
                                    {"floorint", f32FloorInt}, {"cellat", f32CellAt}, {"fdot2", f32FiniteDot2}, {"sqdist", f32SqDist},
-                                   {"atan2", f32Atan2}, {"sincos", f32SinCos}, {"segment", f32Segment},
+                                   {"atan2", f32Atan2}, {"sincos", f32SinCos}, {"segment", f32Segment}, {"flood", f32Flood},
                                    {nullptr, nullptr}};
     static const luaL_Reg f64[] = {{"add", f64Add}, {"sub", f64Sub}, {"mul", f64Mul}, {"div", f64Div}, {"sqrt", f64Sqrt},
                                    {"fromint", f64FromInt}, {"lt", f64Lt}, {"le", f64Le}, {"eq", f64Eq}, {"tof32", f64ToF32},
