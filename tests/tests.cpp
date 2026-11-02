@@ -11663,6 +11663,19 @@ public:
     }
 };
 std::unique_ptr<game::NativeModule> nativeProbe() { return std::make_unique<NativeProbe>(); }
+// openLua: a pure Lua library of the module, visible to the scripts from their first line
+class NativeLuaProbe final : public game::NativeModule {
+public:
+    void setup(game::RtsModule&, Simulation&, game::NativeState&, const Json&) const override {}
+    void openLua(lua_State* L) const override {
+        static const luaL_Reg fns[] = {{"twice", [](lua_State* S) -> int {
+            if (!lua_isinteger(S, 1)) return luaL_error(S, "twice: integer expected");
+            lua_pushinteger(S, lua_tointeger(S, 1) * 2); return 1; }}, {nullptr, nullptr}};
+        luaL_newlib(L, fns);
+        lua_setglobal(L, "probe_native");
+    }
+};
+std::unique_ptr<game::NativeModule> nativeLuaProbe() { return std::make_unique<NativeLuaProbe>(); }
 std::unique_ptr<Simulation> nativeSim(const std::string& list, uint32_t version = 1, bool lua = true) {
     Json rules = Json::parseFile(kSkirmish + "/rules.json");
     rules.set("nativeModules", Json::parse(list));
@@ -11707,6 +11720,23 @@ TEST(native_modules_rollback_save_lua_commands) {
     CHECK(!config->deserialize(saved, &err));
     auto plain = nativeSim("[]"); CHECK(!plain->deserialize(saved, &err));
     auto damaged = nativeSim(kNativeProbe); CHECK(!damaged->deserialize(saved.substr(0, saved.size() / 2), &err));
+}
+TEST(native_modules_lua_functions) {
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("scripts", Json::parse(R"(["test.lua"])"));
+    rules.set("$scriptSources", Json::parse(R"json({"test.lua":"local twice = probe_native.twice\nassert(twice(21) == 42 and not pcall(twice, 'x'))\nevery(1, function() state.n = twice(state.n or 1) end)"})json"));
+    auto make = [&](const char* list) {
+        rules.set("nativeModules", Json::parse(list));
+        std::vector<game::NativeDefinition> defs{{"luaprobe", 1, nativeLuaProbe}, {"probe", 1, nativeProbe}};
+        auto sim = std::make_unique<Simulation>(SimConfig{}, std::make_unique<game::RtsModule>(std::move(defs)));
+        sim->setup(rules, Json::parseFile(kSkirmish + "/maps/valley.json"));
+        return sim;
+    };
+    auto a = make(R"([{"id":"luaprobe"}])"), b = make(R"([{"id":"luaprobe"}])");
+    for (int i = 0; i < 5; ++i) { a->step(); b->step(); }
+    CHECK(mod(*a).scripts()->errorCount() == 0 && a->checksum() == b->checksum());
+    auto none = make(R"([{"id":"probe"}])");   // compiled but not listed: no library
+    CHECK(mod(*none).scripts()->errorCount() > 0);
 }
 TEST(native_modules_validation_and_isolation) {
     for (const auto* bad : {"{}", R"([{}])", R"([{"id":"missing"}])", R"([{"id":"probe"},{"id":"probe"}])",

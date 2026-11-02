@@ -482,6 +482,7 @@ class RtsModule final : public GameModule {
 public:
     RtsModule();
     explicit RtsModule(std::vector<NativeDefinition> nativeDefinitions);
+    const std::vector<NativeDefinition>& nativeDefinitions() const { return nativeDefinitions_; }
     ~RtsModule() override;
     std::string name() const override { return "rts"; }
     void setup(Simulation& sim, const Json& rules, const Json& map) override;

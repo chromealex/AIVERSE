@@ -563,6 +563,7 @@ void ScriptEngine::load(Simulation& sim, const Json& rules, const Json& map) {
     vm.dataHas = [&im](Entity e, const char* k) { return im.dataHas(*im.vm.sim, e, k); };
     openGameApi(vm);
     openStdApi(vm);
+    openNativeLua(L, rules, im.m.nativeDefinitions());   // Lua functions of the game's C++ modules (RtsNative.h)
     lua_newtable(L);
     lua_newtable(L);
     lua_setfield(L, -2, "period");

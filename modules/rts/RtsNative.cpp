@@ -15,6 +15,17 @@ void hashState(Hasher& h, const NativeState& s) {
     }
 }
 }
+void openNativeLua(lua_State* L, const Json& rules, const std::vector<NativeDefinition>& definitions) {
+    if (!rules.has("nativeModules") || !rules["nativeModules"].isArray()) return;
+    for (const auto& item : rules["nativeModules"].items()) {
+        if (!item.isObject()) continue;
+        const std::string id = item.getStr("id");
+        for (const auto& d : definitions) if (d.id == id && d.create) {
+            if (auto instance = d.create()) instance->openLua(L);
+            break;
+        }
+    }
+}
 void NativeModules::load(RtsModule& rts, Simulation& sim, const Json& rules,
                          const std::vector<NativeDefinition>& definitions) {
     entries_.clear();
