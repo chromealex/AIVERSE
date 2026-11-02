@@ -108,7 +108,14 @@ struct AudioEngine::Impl {
     float bankGain[size_t(Bus::Count)] = {1, 1, 1, 1, 1};
     float bankMaster = 1;
     float user[size_t(Bus::Count)] = {1, 1, 1, 1, 1};
+    bool busOn[size_t(Bus::Count)] = {true, true, true, true, true};
     float userMaster = 1;
+    bool scripted = false;
+    float musicGain = 1;
+    // voice handles: starts still queued for the mixer (id -> command sequence, start time)
+    struct PendingStart { uint64_t seq; float at; };
+    std::map<VoiceId, PendingStart> pendingStarts;
+    mutable std::vector<VoiceStatus> status;
     bool muted = false, paused = false;
     ListenerPose listener;
     Environment env;
@@ -128,7 +135,7 @@ struct AudioEngine::Impl {
         if (!mixing()) return;
         MixCmd c;
         c.kind = MixCmd::SetGains;
-        for (size_t i = 0; i < size_t(Bus::Count); ++i) c.gains[i] = bankGain[i] * user[i];
+        for (size_t i = 0; i < size_t(Bus::Count); ++i) c.gains[i] = busOn[i] ? bankGain[i] * user[i] : 0.0f;
         c.master = muted ? 0.0f : bankMaster * userMaster;
         mixer.push(std::move(c));
     }
@@ -235,6 +242,7 @@ void AudioEngine::shutdown() {
 }
 
 bool AudioEngine::deviceOpen() const { return impl_->devOk; }
+bool AudioEngine::running() const { return impl_->mixing(); }
 const std::string& AudioEngine::deviceError() const { return impl_->devError; }
 int AudioEngine::sampleRate() const { return impl_->mixer.sampleRate(); }
 
@@ -278,9 +286,10 @@ bool AudioEngine::loadBank(const Json& bank, const FileReader& read, std::string
     }
 
     // RtsAudio reads the gameplay mapping sections; anything else is most likely a typo
-    static const std::set<std::string> kTopKeys = {"volume", "spatial", "groups", "sounds", "music", "events", "types", "weapons", "abilities", "build"};
+    static const std::set<std::string> kTopKeys = {"volume", "spatial", "groups", "sounds", "music", "events", "types", "weapons", "abilities", "build", "scripted"};
     for (auto& [k, unused] : bank.members())
-        if (!kTopKeys.count(k)) warnings.push_back("unknown section '" + k + "' (volume, spatial, groups, sounds, music, events, types, weapons, abilities, build)");
+        if (!kTopKeys.count(k)) warnings.push_back("unknown section '" + k + "' (volume, spatial, groups, sounds, music, events, types, weapons, abilities, build, scripted)");
+    const bool scripted = bank.getBool("scripted");
 
     Environment env;
     if (const Json& sp = bank["spatial"]; !sp.isNull()) {
@@ -503,6 +512,7 @@ bool AudioEngine::loadBank(const Json& bank, const FileReader& read, std::string
     }
 
     Impl& m = *impl_;
+    m.scripted = scripted;
     m.sounds = std::move(sounds);
     m.byName = std::move(byName);
     m.music = std::move(music);
@@ -568,7 +578,8 @@ VoiceId AudioEngine::play(SoundId id, const PlayParams& p) {
         const SoundDef& s = *sound(sid);
         if (s.clips.empty()) return;
         int variant = 0;
-        if (s.clips.size() > 1) { // random, but never the same variation twice in a row
+        if (p.variant >= 0 && sid == id) variant = std::min(p.variant, int(s.clips.size()) - 1);
+        else if (s.clips.size() > 1) { // random, but never the same variation twice in a row
             int& prev = m.lastVariant[size_t(sid)];
             variant = int(m.frand() * float(s.clips.size())) % int(s.clips.size());
             if (variant == prev) variant = (variant + 1) % int(s.clips.size());
@@ -580,13 +591,16 @@ VoiceId AudioEngine::play(SoundId id, const PlayParams& p) {
         c.sound = sid;
         c.clip = s.clips[size_t(variant)];
         c.volume = s.volume * p.volume;
+        c.soundVolume = s.volume;
+        c.pan = p.pan;
+        c.startAt = std::max(0.0f, p.startAt);
         c.pitch = p.pitch * (s.pitchMin + (s.pitchMax - s.pitchMin) * m.frand());
         c.bus = s.bus;
         c.priority = role == MixCmd::Far ? d->priority : s.priority;
         c.maxInstances = s.maxInstances;
         c.steal = s.steal;
         for (size_t gi = 0; gi < s.groups.size() && gi < size_t(kMaxSoundGroups); ++gi) c.groups[gi] = int8_t(s.groups[gi]);
-        c.loop = s.loop;
+        c.loop = p.loop < 0 ? s.loop : p.loop != 0;
         c.spatial = spatial;
         c.x = p.x; c.y = p.y; c.z = p.z;
         c.distance = s.distance;
@@ -596,7 +610,8 @@ VoiceId AudioEngine::play(SoundId id, const PlayParams& p) {
         c.delayFrames = delay;
         c.duck = s.duckMusic;
         c.sync = Quantize(s.sync);
-        m.mixer.push(std::move(c));
+        const uint64_t seq = m.mixer.push(std::move(c));
+        if (role != MixCmd::Far) m.pendingStarts[vid] = {seq, std::max(0.0f, p.startAt)};
     };
     const bool pair = spatial && d->far != kNoSound;
     pushVoice(id, pair ? MixCmd::Near : MixCmd::Single);
@@ -613,13 +628,63 @@ void AudioEngine::stop(VoiceId v, float fade) {
     impl_->mixer.push(std::move(c));
 }
 
-void AudioEngine::stopAll(float fade) {
+void AudioEngine::stopAll(float fade, uint32_t busMask) {
     if (!impl_->mixing()) return;
     MixCmd c;
     c.kind = MixCmd::StopAll;
     c.fade = fade;
+    c.busMask = busMask;
     impl_->mixer.push(std::move(c));
 }
+
+void AudioEngine::setVoice(VoiceId v, const VoiceParams& p) {
+    if (v == kNoVoice || !impl_->mixing()) return;
+    MixCmd c;
+    c.kind = MixCmd::SetVoice;
+    c.id = v;
+    if (std::isfinite(p.volume)) { c.setMask |= 1; c.volume = p.volume; }
+    if (std::isfinite(p.pan)) { c.setMask |= 2; c.pan = p.pan; }
+    if (std::isfinite(p.pitch) && p.pitch > 0) { c.setMask |= 4; c.pitch = p.pitch; }
+    if (c.setMask) impl_->mixer.push(std::move(c));
+}
+
+void AudioEngine::pauseVoice(VoiceId v, bool paused) {
+    if (v == kNoVoice || !impl_->mixing()) return;
+    MixCmd c;
+    c.kind = MixCmd::PauseVoice;
+    c.id = v;
+    c.paused = paused;
+    impl_->mixer.push(std::move(c));
+}
+
+void AudioEngine::seekVoice(VoiceId v, float seconds) {
+    if (v == kNoVoice || !impl_->mixing() || !std::isfinite(seconds)) return;
+    MixCmd c;
+    c.kind = MixCmd::SeekVoice;
+    c.id = v;
+    c.startAt = std::max(0.0f, seconds);
+    impl_->mixer.push(std::move(c));
+}
+
+VoiceState AudioEngine::voiceState(VoiceId v) const {
+    const Impl& m = *impl_;
+    VoiceState st;
+    if (v == kNoVoice || !m.initialized) return st;
+    uint64_t applied = 0;
+    m.mixer.status(m.status, applied);
+    for (auto& s : m.status) if (s.id == v) { st.playing = true; st.paused = s.paused; st.time = s.time; return st; }
+    auto it = m.pendingStarts.find(v);
+    if (it != m.pendingStarts.end() && it->second.seq > applied) { st.playing = true; st.time = it->second.at; }
+    return st;
+}
+
+float AudioEngine::clipSeconds(SoundId id, int variant) const {
+    const SoundDef* d = sound(id);
+    if (!d || variant < 0 || size_t(variant) >= d->clips.size() || !d->clips[size_t(variant)]) return 0;
+    return d->clips[size_t(variant)]->seconds();
+}
+
+bool AudioEngine::scripted() const { return impl_->scripted; }
 
 void AudioEngine::setVoicePosition(VoiceId v, float x, float y, float z) {
     if (v == kNoVoice || !impl_->mixing()) return;
@@ -701,6 +766,19 @@ void AudioEngine::setMusicIntensity(float v) {
 
 float AudioEngine::musicIntensity() const { return impl_->intensity; }
 
+void AudioEngine::setMusicGain(float v) {
+    Impl& m = *impl_;
+    v = std::isfinite(v) ? std::clamp(v, 0.0f, 4.0f) : 1.0f;
+    if (v == m.musicGain) return;
+    m.musicGain = v;
+    if (!m.mixing()) return;
+    MixCmd c;
+    c.kind = MixCmd::MusicGain;
+    c.volume = v;
+    m.mixer.push(std::move(c));
+}
+float AudioEngine::musicGain() const { return impl_->musicGain; }
+
 // ------------------------------------------------------------------ volumes, pause
 
 void AudioEngine::setMasterVolume(float v) { impl_->userMaster = std::clamp(v, 0.0f, 1.0f); impl_->sendGains(); }
@@ -711,6 +789,12 @@ void AudioEngine::setVolume(Bus b, float v) {
     impl_->sendGains();
 }
 float AudioEngine::volume(Bus b) const { return size_t(b) < size_t(Bus::Count) ? impl_->user[size_t(b)] : 0.0f; }
+void AudioEngine::setBusEnabled(Bus b, bool on) {
+    if (size_t(b) >= size_t(Bus::Count)) return;
+    impl_->busOn[size_t(b)] = on;
+    impl_->sendGains();
+}
+bool AudioEngine::busEnabled(Bus b) const { return size_t(b) < size_t(Bus::Count) && impl_->busOn[size_t(b)]; }
 void AudioEngine::setMuted(bool on) { impl_->muted = on; impl_->sendGains(); }
 bool AudioEngine::muted() const { return impl_->muted; }
 bool AudioEngine::paused() const { return impl_->paused; }
@@ -732,6 +816,9 @@ void AudioEngine::setPaused(bool p) {
         m.sendGroups();
         if (!m.pendingMusic.empty()) { m.startMusic(m.pendingMusic, m.pendingFade); m.pendingMusic.clear(); }
         setMusicIntensity(m.intensity);
+        const float g = m.musicGain;
+        m.musicGain = -1;
+        setMusicGain(g);
     }
 }
 
@@ -741,6 +828,7 @@ std::string AudioEngine::saveSettings() const {
     s << "master " << m.userMaster << "\n";
     for (size_t i = 0; i < size_t(Bus::Count); ++i) s << kBusNames[i] << " " << m.user[i] << "\n";
     s << "muted " << (m.muted ? 1 : 0) << "\n";
+    for (size_t i = 0; i < size_t(Bus::Count); ++i) if (!m.busOn[i]) s << "off." << kBusNames[i] << " 1\n";
     return s.str();
 }
 
@@ -754,6 +842,7 @@ void AudioEngine::loadSettings(const std::string& text) {
         Bus b;
         if (key == "master") m.userMaster = std::clamp(v, 0.0f, 1.0f);
         else if (key == "muted") m.muted = v != 0;
+        else if (key.rfind("off.", 0) == 0 && busFromName(key.substr(4), b)) m.busOn[size_t(b)] = v == 0;
         else if (busFromName(key, b)) m.user[size_t(b)] = std::clamp(v, 0.0f, 1.0f);
     }
     m.sendGains();
@@ -763,6 +852,12 @@ void AudioEngine::update(double dt) {
     Impl& m = *impl_;
     m.time += std::max(0.0, dt);
     if (!m.pendingMusic.empty() && m.mixing()) { m.startMusic(m.pendingMusic, m.pendingFade); m.pendingMusic.clear(); }
+    if (!m.pendingStarts.empty()) { // starts the mixer has applied are reported by its status
+        uint64_t applied = 0;
+        m.mixer.status(m.status, applied);
+        for (auto it = m.pendingStarts.begin(); it != m.pendingStarts.end();)
+            it = it->second.seq <= applied || m.pendingStarts.size() > 4096 ? m.pendingStarts.erase(it) : std::next(it);
+    }
 }
 
 void AudioEngine::render(float* out, int frames) {

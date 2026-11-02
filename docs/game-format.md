@@ -307,7 +307,13 @@ stays silent.
 }
 ```
 
-`volume`: mix level per bus, 0..4 (default 1); the player's own volume settings multiply on top.
+`volume`: mix level per bus, 0..4 (default 1); the player's own volume settings multiply on top
+(client data model: `volume` master, `music`, `sfx` = every bus but music, percent; `musicOn` / `sfxOn` 1 / 0 switch
+a bus off without changing its volume; saved in the user folder's audio.cfg).
+
+`"scripted": true`: the game's scripts own the music and the UI sounds (the `sound` table, docs/scripting.md § Sound):
+the client never plays the `menu` / `match` / `battle` / `victory` / `defeat` playlists by itself, and starting or
+leaving a match stops only voices on the `sfx` bus.
 
 ### spatial — 3D sound and distance
 

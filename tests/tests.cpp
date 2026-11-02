@@ -915,6 +915,7 @@ TEST(pack_sample_games_match_folder) {
 #include "engine/audio/AudioMixer.h"   // spatialize / distanceGain (pure functions)
 #include "engine/audio/Synth.h"
 #include "modules/rts/audio/RtsAudio.h"
+#include "modules/rts/audio/AudioScriptSound.h"
 
 namespace {
 
@@ -1098,6 +1099,122 @@ TEST(audio_music_playlists) {
     CHECK(a->playMusic("broken"));                                  // no playable track: silent, no hang
     std::tie(l, r) = renderRms(*a, 0.2f);
     CHECK(l < 1e-4);
+}
+
+TEST(audio_voice_handles) {
+    // voice handles for scripts that run their own mixer: pan / gain / pitch while playing, pause, seek, the
+    // state the mixer reports, an explicit variation and a loop override
+    auto a = offlineAudio();
+    std::map<std::string, std::string> files = {{"s/a.wav", makeWav(48000, 1, 1.0f, 440)}, {"s/b.wav", makeWav(48000, 1, 0.5f, 660)}};
+    CHECK(loadBank(*a, R"({"sounds":{"tone":{"files":["s/a.wav","s/b.wav"],"bus":"ui","maxInstances":0}}})", nullptr, files));
+    CHECK(std::fabs(a->clipSeconds(a->find("tone"), 0) - 1.0f) < 1e-3f && std::fabs(a->clipSeconds(a->find("tone"), 1) - 0.5f) < 1e-3f);
+    CHECK(a->clipSeconds(a->find("tone"), 2) == 0 && a->clipSeconds(audio::kNoSound) == 0);
+    audio::PlayParams p;
+    p.variant = 0;
+    p.pan = -1;
+    const audio::VoiceId v = a->play("tone", p);
+    CHECK(v != audio::kNoVoice);
+    CHECK(a->voiceState(v).playing && a->voiceState(v).time == 0);     // queued: counts as playing at its start
+    auto [l, r] = renderRms(*a, 0.1f);
+    CHECK(l > 0.05 && r < 1e-4);                                        // hard left
+    audio::VoiceState st = a->voiceState(v);
+    CHECK(st.playing && !st.paused && std::fabs(st.time - 0.1f) < 0.01f);
+    audio::VoiceParams vp;
+    vp.pan = 1;
+    a->setVoice(v, vp);
+    renderRms(*a, 0.01f);
+    std::tie(l, r) = renderRms(*a, 0.05f);
+    CHECK(l < 1e-4 && r > 0.05);                                        // now hard right
+    vp = {};
+    vp.volume = 0;
+    a->setVoice(v, vp);
+    renderRms(*a, 0.01f);
+    std::tie(l, r) = renderRms(*a, 0.05f);
+    CHECK(r < 1e-4 && a->voiceState(v).playing);                       // silent, still playing
+    vp = {};
+    vp.volume = 1;
+    vp.pitch = 2;
+    a->setVoice(v, vp);
+    const float t0 = a->voiceState(v).time;
+    renderRms(*a, 0.1f);
+    CHECK(std::fabs(a->voiceState(v).time - t0 - 0.2f) < 0.01f);        // twice as fast
+    a->pauseVoice(v, true);
+    renderRms(*a, 0.01f);
+    const float t1 = a->voiceState(v).time;
+    std::tie(l, r) = renderRms(*a, 0.1f);
+    st = a->voiceState(v);
+    CHECK(st.playing && st.paused && st.time == t1 && r < 1e-4);        // paused: holds its place, silent
+    a->pauseVoice(v, false);
+    a->seekVoice(v, 0.9f);
+    renderRms(*a, 0.02f);
+    CHECK(a->voiceState(v).time > 0.9f);
+    renderRms(*a, 0.1f);
+    CHECK(!a->voiceState(v).playing);                                   // played out from 0.9 s at pitch 2
+    // variation 1 is half a second long; a loop override keeps it going
+    p = {};
+    p.variant = 1;
+    const audio::VoiceId once = a->play("tone", p);
+    p.loop = 1;
+    const audio::VoiceId looped = a->play("tone", p);
+    p = {};
+    p.variant = 1;
+    p.startAt = 0.4f;
+    const audio::VoiceId late = a->play("tone", p);
+    renderRms(*a, 0.2f);
+    CHECK(!a->voiceState(late).playing);                                 // started 0.1 s before its end
+    renderRms(*a, 0.5f);
+    CHECK(!a->voiceState(once).playing && a->voiceState(looped).playing);
+    a->stop(looped, 0.01f);
+    renderRms(*a, 0.05f);
+    CHECK(!a->voiceState(looped).playing && !a->voiceState(audio::kNoVoice).playing);
+}
+
+TEST(audio_scripted_music_and_bus_switches) {
+    // "scripted" banks; constant-rate crossfades; a playlist fading out comes back instead of restarting; the script
+    // music level; per-bus on / off kept apart from the volume and saved; stopAll limited to some buses
+    auto a = offlineAudio();
+    std::map<std::string, std::string> files = {{"m/a.wav", makeWav(48000, 2, 2.0f, 220)}, {"m/b.wav", makeWav(48000, 2, 2.0f, 330)},
+                                                {"s/ui.wav", makeWav(48000, 1, 1.0f, 880)}};
+    CHECK(loadBank(*a, R"({"scripted":true,"music":{"A":{"files":["m/a.wav"],"volume":0.5},"B":"m/b.wav"},
+        "sounds":{"click":{"file":"s/ui.wav","bus":"ui"},"shot":{"file":"s/ui.wav","spatial":false}}})", nullptr, files));
+    CHECK(a->scripted() && a->warnings().empty());
+    CHECK(loadBank(*a, R"({"music":{"A":"m/a.wav"}})", nullptr, files) && !a->scripted());
+    CHECK(loadBank(*a, R"({"scripted":true,"music":{"A":{"files":["m/a.wav"],"volume":0.5},"B":"m/b.wav"},
+        "sounds":{"click":{"file":"s/ui.wav","bus":"ui"},"shot":{"file":"s/ui.wav","spatial":false}}})", nullptr, files));
+    CHECK(a->playMusic("A", 0.5f));
+    auto [l, r] = renderRms(*a, 0.5f);
+    std::tie(l, r) = renderRms(*a, 0.2f);
+    const double full = l;
+    CHECK(full > 0.05);
+    a->setMusicGain(0);
+    renderRms(*a, 0.1f);                                                // the level follows in a few ms
+    std::tie(l, r) = renderRms(*a, 0.1f);
+    CHECK(l < 1e-4 && a->musicGain() == 0);
+    a->setMusicGain(1);
+    renderRms(*a, 0.02f);
+    CHECK(a->playMusic("B", 0.5f));
+    renderRms(*a, 0.25f);                                               // A half way out
+    CHECK(a->playMusic("A", 0.5f));                                     // back: from where it is
+    renderRms(*a, 0.3f);
+    std::tie(l, r) = renderRms(*a, 0.1f);
+    CHECK(std::fabs(l - full) < 0.2 * full);                            // A at its volume again, B gone
+    a->setBusEnabled(audio::Bus::Music, false);
+    renderRms(*a, 0.02f);
+    std::tie(l, r) = renderRms(*a, 0.1f);
+    CHECK(l < 1e-4 && a->volume(audio::Bus::Music) == 1);               // off keeps the volume
+    const std::string saved = a->saveSettings();
+    CHECK(saved.find("off.music 1") != std::string::npos);
+    auto b = offlineAudio();
+    b->loadSettings(saved);
+    CHECK(!b->busEnabled(audio::Bus::Music) && b->busEnabled(audio::Bus::Ui));
+    a->setBusEnabled(audio::Bus::Music, true);
+    a->stopMusic(0.01f);
+    renderRms(*a, 0.05f);
+    const audio::VoiceId click = a->play("click"), shot = a->play("shot");
+    renderRms(*a, 0.05f);
+    a->stopAll(0.01f, 1u << unsigned(audio::Bus::Sfx));
+    renderRms(*a, 0.05f);
+    CHECK(a->voiceState(click).playing && !a->voiceState(shot).playing);
 }
 
 TEST(audio_sample_games_banks_load_cleanly) {
@@ -11836,6 +11953,53 @@ view.on_frame(function() view.notice(view.screen()) end)
     view.setScreen(""); noticed("playing");
     for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
     CHECK(view.log().empty());
+    CHECK(sim.checksum() == before);
+}
+
+TEST(view_script_sound_table) {
+    // the `sound` table of view scripts: without a host every call is a harmless no-op (headless); with the client's
+    // AudioScriptSound it returns voice handles and their state; never touches the simulation
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/snd.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/snd.lua", Json::string(R"LUA(
+local h
+view.on_frame(function()
+ if not h then
+  h = sound.play('tone', {gain = .5, pan = -.3, pitch = 1.1, variant = 1})
+  if h then sound.set(h, {gain = .4}) end
+  view.notice(tostring(h ~= nil) .. ' ' .. sound.variants('tone') .. ' ' .. string.format('%.2f', sound.length('tone', 1)))
+ else
+  local playing, t, paused = sound.state(h)
+  view.notice(tostring(playing) .. ' ' .. tostring(paused) .. ' ' .. tostring(t >= 0))
+  sound.pause(h, true); sound.seek(h, .2); sound.stop(h, .01)
+ end
+ sound.music_gain(.5); sound.trace('x')
+ assert(type(sound.settings().music) == 'number' and sound.current_music() == nil)
+end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const auto before = sim.checksum();
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    view.update(sim, .016f);
+    auto r = view.takeRequests();
+    CHECK(r.size() == 1 && r[0].text == "false 0 0.00");                // no host
+    auto a = offlineAudio();
+    CHECK(loadBank(*a, R"({"sounds":{"tone":{"file":"s/a.wav","bus":"ui"}}})", nullptr, {{"s/a.wav", makeWav(48000, 1, 1.0f, 440)}}));
+    game::AudioScriptSound host(*a);
+    game::ViewScripts view2; CHECK(view2.load(sim, rules, map, 1));
+    view2.setSound(&host);
+    view2.update(sim, .016f);
+    r = view2.takeRequests();
+    CHECK(r.size() == 1 && r[0].text == "true 1 1.00");
+    renderRms(*a, 0.05f);
+    view2.update(sim, .016f);
+    r = view2.takeRequests();
+    CHECK(r.size() == 1 && r[0].text == "true false true");
+    CHECK(a->musicGain() == 0.5f);
+    for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
+    for (auto& e : view2.log()) std::printf("  view log: %s\n", e.text.c_str());
+    CHECK(view.log().empty() && view2.log().empty());
     CHECK(sim.checksum() == before);
 }
 

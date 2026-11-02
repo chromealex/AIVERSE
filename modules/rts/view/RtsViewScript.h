@@ -14,6 +14,7 @@
 #include "../../../engine/sim/Command.h"
 #include "../../../engine/render/Math3D.h"
 #include "ViewCanvas.h"
+#include "ScriptSound.h"
 
 namespace rts { class Simulation; }
 
@@ -69,6 +70,8 @@ public:
     // Per frame: dispatches the collected events and on_frame(dt).
     void update(Simulation& sim, float dt);
     void setTargeting(const ViewTargeting& target);
+    // The Lua `sound` table's host (voice handles, music; ScriptSound.h); null = silent no-ops.
+    void setSound(ScriptSound* sound);
     void setCamera(const ViewCamera& camera);
     // Host screen state for view.screen(): "playing" (default), "paused", "over".
     void setScreen(const std::string& screen);

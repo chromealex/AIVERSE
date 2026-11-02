@@ -428,6 +428,30 @@ effect of `fx/`), `view.sound(name, x, z)`, and script commands as the local pla
 (`view.send(id, args)`, above). They never change the simulation directly, so they don't need the
 determinism rules.
 
+### Sound: the `sound` table (view scripts and the UI Lua)
+
+`view.sound(name, x, z)` plays a sound of `audio.json` fire-and-forget. A game that runs its own mixer (voice pools,
+per-play gain / pan / pitch, fades, ducking — e.g. a port of Unity's AudioSources) uses the `sound` table instead;
+the same table exists in view scripts and in the client's UI Lua (`ui/*.lua`), so one Lua module serves the menus and
+the battle. Presentation only, never part of the simulation.
+
+| call | meaning |
+|---|---|
+| `sound.play(name, {gain, pan, pitch, variant, at, loop})` → handle \| nil | starts a sound of the bank: `gain` multiplies its `volume`; `pan` -1..1 stereo balance; `pitch` multiplies its random pitch; `variant` 1-based file of `files` (default random, never twice in a row); `at` seconds into the clip; `loop` true / false overrides the sound's. nil when nothing plays (no audio device, headless, unknown sound, the sound's own `cooldown` / `maxInstances`) |
+| `sound.set(h, {gain, pan, pitch})` | changes a playing voice (missing fields stay); `pitch` is the absolute rate. Call it every frame for fades / ducking: changes ramp over one mix block |
+| `sound.stop(h [, fade])`, `sound.pause(h, on)`, `sound.seek(h, seconds)` | stop (fade seconds, default 0.02); pause holds the voice silent at its place; seek jumps within the clip |
+| `sound.state(h)` → playing, time, paused | what the mixer reported last (one audio period behind; a start still queued counts as playing at its start time) |
+| `sound.variants(name)`, `sound.length(name [, variant])` | number of files; length of one in seconds (0 unknown) |
+| `sound.music(name \| nil [, fade])`, `sound.current_music()` | plays a playlist of `"music"` (crossfade `fade` seconds, default 1.5; a playlist that is still fading out comes back from where it is); nil stops |
+| `sound.music_gain(g)` | script level of the music 0..4 (ducking), on top of the bus and the player's setting |
+| `sound.settings()` → `{music, sfx, musicOn, sfxOn}` | the player's volumes 0..1 and on / off switches (client data model `music`, `sfx`, `musicOn`, `sfxOn`) |
+| `sound.available()`, `sound.trace(text)` | a mixer runs; `trace` prints `audio\| text` on stdout when `RTS_AUDIO_LOG=1` (tools compare a game's sound decisions) |
+
+With `"scripted": true` in audio.json the client never starts or stops music by itself (no `menu` / `match` /
+`battle` / `victory` playlists) and starting or leaving a match stops only the `sfx` bus, so a click on a result
+screen keeps ringing into the menu. OpenWar ports Unity's GameAudio this way (`scripts/openwar/audio/`). Tests:
+`audio_voice_handles`, `audio_scripted_music_and_bus_switches`, `view_script_sound_table`.
+
 ## Script UI (view scripts drive in-match panels)
 
 View scripts own a data model **`script`** in the client's RmlUi: they set values, open the game's

@@ -114,6 +114,11 @@ void GameClient::initAudio() {
     if (settings) audio_.loadSettings(std::string(std::istreambuf_iterator<char>(settings), {}));
     volume_ = boundVolume_ = int(std::lround(audio_.masterVolume() * 100));
     musicVolume_ = boundMusicVolume_ = int(std::lround(audio_.volume(audio::Bus::Music) * 100));
+    sfxVolume_ = boundSfxVolume_ = int(std::lround(audio_.volume(audio::Bus::Sfx) * 100));
+    musicOn_ = boundMusicOn_ = audio_.busEnabled(audio::Bus::Music) ? 1 : 0;
+    sfxOn_ = boundSfxOn_ = audio_.busEnabled(audio::Bus::Sfx) ? 1 : 0;
+    scriptSound_ = &scriptSoundImpl_;
+    viewScripts_.setSound(scriptSound_);
     std::string text;
     if (platform::readContentFile(manifest_.getStr("audio", "audio.json"), text)) { // a game without audio.json is silent
         try {
@@ -148,11 +153,20 @@ void GameClient::updateAudio(double dt) {
         const float target[3] = {cam_.target.x, cam_.target.y, cam_.target.z}, eyeP[3] = {eye.x, eye.y, eye.z};
         audio_.setListener(RtsAudio::cameraListener(target, eyeP));
     }
-    if (volume_ != boundVolume_ || musicVolume_ != boundMusicVolume_) { // changed from the pause menu
+    if (volume_ != boundVolume_ || musicVolume_ != boundMusicVolume_ || sfxVolume_ != boundSfxVolume_ ||
+        musicOn_ != boundMusicOn_ || sfxOn_ != boundSfxOn_) { // changed from the pause menu / settings screen
         audio_.setMasterVolume(float(std::clamp(volume_, 0, 100)) / 100);
         audio_.setVolume(audio::Bus::Music, float(std::clamp(musicVolume_, 0, 100)) / 100);
+        audio_.setBusEnabled(audio::Bus::Music, musicOn_ != 0);
+        for (audio::Bus b : {audio::Bus::Sfx, audio::Bus::Ui, audio::Bus::Voice, audio::Bus::Ambient}) { // "sfx": every effect bus
+            audio_.setVolume(b, float(std::clamp(sfxVolume_, 0, 100)) / 100);
+            audio_.setBusEnabled(b, sfxOn_ != 0);
+        }
         boundVolume_ = volume_;
         boundMusicVolume_ = musicVolume_;
+        boundSfxVolume_ = sfxVolume_;
+        boundMusicOn_ = musicOn_;
+        boundSfxOn_ = sfxOn_;
         saveAudioSettings();
     }
     audio_.update(dt);
@@ -161,7 +175,7 @@ void GameClient::updateAudio(double dt) {
 void GameClient::toMenu() {
     sound_.detach();
     fx_.stopMatch();
-    audio_.stopAll(0.2f);
+    audio_.stopAll(0.2f, combatBuses());
     sim_.reset();
     setScreen(Screen::Menu);
     menuMusic();
@@ -280,7 +294,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
     ui_.setDynamicTexture("minimap", minimap_.texture(), minimap_.width(), minimap_.height());
     mode_ = Mode::Normal;
     setScreen(Screen::Playing);
-    audio_.stopAll(0.1f);
+    audio_.stopAll(0.1f, combatBuses());
     sound_.attach(*sim_, spectator_ ? 0 : human_, maps_[idx].file);
     fx_.startMatch(*sim_, spectator_ ? 0 : human_, view_, mod().state(*sim_).grid);
     heardSelection_.clear();

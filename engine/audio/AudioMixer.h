@@ -68,7 +68,8 @@ float distanceGain(const DistanceDef& d, float distance, float hearing);
 float farWeight(float t, float from);   // 0 = all near variant, 1 = all far variant
 
 struct MixCmd {
-    enum Kind : uint8_t { Play, Stop, StopAll, SetPos, SetListener, SetEnv, SetGains, Music, StopMusic, SetIntensity, SetGroups };
+    enum Kind : uint8_t { Play, Stop, StopAll, SetPos, SetListener, SetEnv, SetGains, Music, StopMusic, SetIntensity, SetGroups,
+                        SetVoice, PauseVoice, SeekVoice, MusicGain };
     enum Role : uint8_t { Single, Near, Far };   // near/far: the two halves of a "far" pair
     Kind kind = Play;
     VoiceId id = kNoVoice;
@@ -90,16 +91,30 @@ struct MixCmd {
     float duck = 0;             // music is lowered by this fraction while the voice plays
     Quantize sync = Quantize::Now;  // stingers: start on the music's next beat / bar
     float intensity = 0;
+    float soundVolume = 1;        // Play: the sound's own volume (part of `volume`)
+    float pan = 0, startAt = 0;   // Play / SetVoice: stereo balance; Play / SeekVoice: seconds into the clip
+    uint8_t setMask = 0;          // SetVoice: 1 volume, 2 pan, 4 pitch
+    bool paused = false;          // PauseVoice
+    uint32_t busMask = ~0u;       // StopAll
+    uint64_t seq = 0;             // set by Mixer::push
     ListenerPose listener;
     Environment env;
     float gains[size_t(Bus::Count)] = {};
     float master = 1;
 };
 
+struct VoiceStatus {
+    VoiceId id = kNoVoice;
+    float time = 0;
+    bool paused = false;
+};
+
 class Mixer {
 public:
     void configure(int sampleRate, int maxVoices, bool reverb);
-    void push(MixCmd&& c);                    // main thread
+    uint64_t push(MixCmd&& c);                // main thread; returns the command's sequence number
+    // Main thread: the voices after the last render and the last command it applied.
+    void status(std::vector<VoiceStatus>& out, uint64_t& applied) const;
     void render(float* out, int frames);      // audio thread
     int activeVoices() const { return active_.load(std::memory_order_relaxed); }
     int sampleRate() const { return rate_; }
@@ -126,6 +141,9 @@ private:
         float f1l = 0, f2l = 0, f1r = 0, f2r = 0;  // two-pole low-pass state per channel
         float fade = 1, fadeStep = 0;  // per frame
         bool fresh = true;             // first block starts at its targets (no ramp from zero)
+        float pan = 0;                 // script stereo balance
+        float soundVolume = 1;         // the sound's own volume (SetVoice replaces only the play volume)
+        bool paused = false;
     };
     struct Layer {
         StreamDecoder dec;
@@ -164,6 +182,11 @@ private:
 
     std::mutex mutex_;
     std::vector<MixCmd> pending_, work_;
+    uint64_t pushed_ = 0, applied_ = 0;
+    mutable std::mutex statusMutex_;
+    std::vector<VoiceStatus> status_;
+    uint64_t statusApplied_ = 0;
+    float musicGain_ = 1, musicGainCur_ = 1;   // script mix level of the music
     int rate_ = 48000;
     std::vector<Voice> voices_;
     int maxVoices_ = 32;

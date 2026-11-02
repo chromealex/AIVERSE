@@ -39,6 +39,7 @@ struct ViewScripts::Impl {
     std::vector<ViewGroundBatch> groundDraws;
     size_t groundVerts = 0;
     std::shared_ptr<render::PaintLayers> paint = std::make_shared<render::PaintLayers>();
+    ScriptSound* sound = nullptr;   // the `sound` table's host
     explicit Impl(ViewScripts& s) : self(s) {}
 
     void logLine(bool error, const std::string& t) {
@@ -584,6 +585,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     static const luaL_Reg uiFuncs[] = {{"set", bind<uSet>}, {"open", bind<uOpen>}, {"close", bind<uClose>}, {"on", bind<uOn>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, uiFuncs);
     lua_setglobal(vm.L, "ui");
+    openScriptSound(vm.L, &im.sound);
     for (auto& f : files) {
         auto it = vm.sources.find(f);
         if (it == vm.sources.end()) { im.logLine(true, f + ": view script not loaded"); continue; }
@@ -593,6 +595,8 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     }
     return true;
 }
+
+void ViewScripts::setSound(ScriptSound* sound) { impl_->sound = sound; }
 
 void ViewScripts::attach(Simulation& sim) {
     detach();

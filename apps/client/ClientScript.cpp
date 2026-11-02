@@ -426,6 +426,7 @@ void GameClient::initLua() {
     lua_pushlightuserdata(lua_, this);
     lua_pushcclosure(lua_, LuaApi::log, 1);
     lua_setglobal(lua_, "print");   // print -> the client log
+    game::openScriptSound(lua_, &scriptSound_);   // `sound`: voice handles, music (modules/rts/view/ScriptSound.h)
     ui_.attachLua(lua_);
     // purchases that complete outside store.buy (pending -> purchased, after a restart)
     auto alive = luaAlive_;

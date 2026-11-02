@@ -92,6 +92,9 @@ void GameClient::initUi() {
     c.Bind("particles", &fxQuality_);
     c.Bind("volume", &volume_);
     c.Bind("music", &musicVolume_);
+    c.Bind("sfx", &sfxVolume_);          // sound effects (every bus but music), percent
+    c.Bind("musicOn", &musicOn_);        // music on / off (1 / 0), keeps the volume
+    c.Bind("sfxOn", &sfxOn_);
     c.Bind("netAddress", &netAddress_);
     c.Bind("netName", &netName_);
     c.Bind("chatInput", &chatInput_);

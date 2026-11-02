@@ -59,6 +59,9 @@ Engine side: `engine/assets/ui/lib/meta.lua` (ui / profile / shop, runs before `
   `matchEnd {won, result, seconds, map, mapTitle, difficulty, spectator, online, vars}` (`vars`: the simulation's variables at the end, `game.set_var` names -> numbers: how a game's scripts tell its screens how the match ended, e.g. a retry chosen on an in-match result panel), `language`, `purchase`, `profile`,
   `shop {id, ok, reason}`, `update (dt)`, `back`, `resize`.
 - `storage` — `load(name)`, `save(name, table)`, `erase(name)`: JSON files per game in the user folder.
+- `sound` — voice handles and music, the same table as in view scripts: `play(name, {gain, pan, pitch, variant, at, loop})`,
+  `set`, `stop`, `pause`, `seek`, `state`, `variants`, `length`, `music(name, fade)`, `music_gain`, `current_music`, `settings`,
+  `available`, `trace` (docs/scripting.md § Sound).
 - `store` — `available()`, `provider()`, `products(fn(list, err))`, `buy(id, fn(p))`, `finish(token)`, `restore(fn)`;
   `ads` — `available()`, `ready(fmt)`, `preload(fmt)`, `show('rewarded' | 'interstitial', fn({shown, rewarded, error}), placement)`,
   `banner(show, top)`, `enabled(on?)` (engine/services, docs/plugins.md).

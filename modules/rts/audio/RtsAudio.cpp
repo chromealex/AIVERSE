@@ -176,6 +176,7 @@ void RtsAudio::attach(Simulation& sim, uint8_t viewer, const std::string& map) {
     map_ = std::filesystem::path(map).stem().string();
     if (!engine_) return;
     engine_->setMusicIntensity(0);
+    if (engine_->scripted()) return;   // the game's scripts own the music
     if (!engine_->playMusic(musicName("match"))) engine_->stopMusic(1.0f);
 }
 
@@ -295,6 +296,7 @@ void RtsAudio::update(Simulation& sim, double dt) {
 
     // battle music: in when fighting is heavy near the camera, out after a calm period
     intensity_ *= float(std::exp(-dt / 4.0));
+    if (engine_->scripted()) return;
     if (intensity_ > 1.0f) calmSince_ = time_;
     const std::string match = musicName("match"), battle = musicName("battle");
     if (engine_->musicHasLayers(engine_->currentMusic())) {
@@ -333,7 +335,7 @@ void RtsAudio::onCommand(Simulation& sim, Entity firstUnit, uint16_t commandType
 
 void RtsAudio::onMatchEnd(bool won) {
     play(won ? Cue::Victory : Cue::Defeat);
-    if (!engine_) return;
+    if (!engine_ || engine_->scripted()) return;
     const std::string m = musicName(won ? "victory" : "defeat");
     if (engine_->hasMusic(m)) engine_->playMusic(m, 1.0f);
     else engine_->stopMusic(2.0f);

@@ -21,6 +21,7 @@
 // Threading: all public methods are called from the main thread. Mixing runs on the device's audio
 // thread (or the browser's audio callback); the two sides talk through a command queue.
 #pragma once
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -125,6 +126,24 @@ struct PlayParams {
     float pitch = 1.0f;     // multiplied with the sound's random pitch
     bool positional = false;
     float x = 0, y = 0, z = 0;  // world position (y = height)
+    float pan = 0;          // -1 left .. 1 right: stereo balance (added to the 3D pan of a positional sound)
+    int variant = -1;       // which of the sound's files (0-based); -1 = random, never the same twice in a row
+    float startAt = 0;      // seconds into the clip
+    int loop = -1;          // -1 = the sound's "loop", 0 / 1 override
+};
+
+// Live changes to a playing voice (AudioEngine::setVoice); NaN fields stay as they are.
+struct VoiceParams {
+    float volume = NAN;     // replaces PlayParams::volume (the sound's own volume stays a factor)
+    float pan = NAN;        // replaces PlayParams::pan
+    float pitch = NAN;      // absolute playback rate (replaces the random pitch)
+};
+
+// What the mixer last reported about a voice (AudioEngine::voiceState).
+struct VoiceState {
+    bool playing = false;   // started (or about to start) and not finished / stopped
+    bool paused = false;
+    float time = 0;         // seconds into the clip (the clip's own time, not scaled by pitch)
 };
 
 // The ear: position and orientation in the world. `hearing` scales every sound's distances (an
@@ -160,6 +179,7 @@ public:
     void init(const AudioConfig& cfg = {});
     void shutdown();
     bool deviceOpen() const;
+    bool running() const;    // commands reach a mixer (a device plays, or render() drives an offline engine)
     const std::string& deviceError() const;
     int sampleRate() const;
 
@@ -181,7 +201,20 @@ public:
     VoiceId play(SoundId id, const PlayParams& p = {});
     VoiceId play(std::string_view name, const PlayParams& p = {}) { return play(find(name), p); }
     void stop(VoiceId v, float fadeSeconds = 0.05f);
-    void stopAll(float fadeSeconds = 0.1f);
+    // busMask: bit (1 << Bus) of the buses whose voices stop (default every bus)
+    void stopAll(float fadeSeconds = 0.1f, uint32_t busMask = ~0u);
+    // Voice handles (scripts that run their own mixer: gain / pan / pitch every frame, pause, seek).
+    void setVoice(VoiceId v, const VoiceParams& p);
+    void pauseVoice(VoiceId v, bool paused);
+    void seekVoice(VoiceId v, float seconds);
+    // Last state reported by the mixer (one audio period behind); a voice whose start is still
+    // queued counts as playing at its start time. Without a running mixer: not playing.
+    VoiceState voiceState(VoiceId v) const;
+    // Length in seconds of a sound's file (variant 0-based), 0 if unknown.
+    float clipSeconds(SoundId id, int variant = 0) const;
+    // The bank's "scripted": true — the game's scripts own the music and the UI sounds: the client
+    // and RtsAudio never start or stop music by themselves and leaving a match keeps UI sounds.
+    bool scripted() const;
     void setVoicePosition(VoiceId v, float x, float z) { setVoicePosition(v, x, 0, z); }
     void setVoicePosition(VoiceId v, float x, float y, float z);
 
@@ -205,12 +238,18 @@ public:
     // Adaptive music: 0..1 (smoothed over ~1.5 s). Layers fade in as it passes their "intensity".
     void setMusicIntensity(float v);
     float musicIntensity() const;
+    // Script mix level of the music (ducking under other sounds): 0..4, multiplies the music bus.
+    void setMusicGain(float v);
+    float musicGain() const;
 
     // ---- volumes: user settings on top of the bank's mix (0..1)
     void setMasterVolume(float v);
     float masterVolume() const;
     void setVolume(Bus b, float v);
     float volume(Bus b) const;
+    // On / off per bus, independent of the volume (a game's "music: OFF" keeps the slider value).
+    void setBusEnabled(Bus b, bool on);
+    bool busEnabled(Bus b) const;
     void setMuted(bool m);
     bool muted() const;
     // Background / focus loss: mobile apps must go quiet (and release the device on iOS/Android).

@@ -32,6 +32,7 @@
 #include "modules/rts/RtsLocalize.h"
 #include "modules/rts/RtsModule.h"
 #include "modules/rts/audio/RtsAudio.h"
+#include "modules/rts/audio/AudioScriptSound.h"
 #include "modules/rts/view/RtsView.h"
 #include "ClientFx.h"
 #include "modules/rts/view/RtsViewScript.h"
@@ -136,7 +137,10 @@ private:
     // audio (main.cpp)
     void initAudio();
     void updateAudio(double dt);
-    void menuMusic() { if (!audio_.playMusic("menu")) audio_.stopMusic(); }
+    void menuMusic() { if (!audio_.scripted() && !audio_.playMusic("menu")) audio_.stopMusic(); }
+    // Voices stopped when a match starts or ends: all, or only the sfx bus when the game's scripts own
+    // music and UI sounds (audio.json "scripted": a click that leaves the match keeps ringing).
+    uint32_t combatBuses() const { return audio_.scripted() ? 1u << unsigned(audio::Bus::Sfx) : ~0u; }
     void saveAudioSettings();
 
     // ClientUi.cpp
@@ -222,6 +226,8 @@ private:
     int shadowQuality_ = 0, boundShadowQuality_ = 0;
     render::QualityGovernor quality_;   // adaptive shadow/light tiers by frame time (lighting agent)
     int volume_ = 100, boundVolume_ = 100, musicVolume_ = 100, boundMusicVolume_ = 100;  // percent, pause menu
+    // sound effects (every bus but music) in percent and the music / effects on-off switches (1 / 0)
+    int sfxVolume_ = 100, boundSfxVolume_ = 100, musicOn_ = 1, boundMusicOn_ = 1, sfxOn_ = 1, boundSfxOn_ = 1;
     int matQuality_ = 2, boundMatQuality_ = 2; // pause menu: material tier (terrain splat / normal maps, models)
     int fxQuality_ = 0, boundFxQuality_ = 0;   // pause menu: particles off/low/medium/high
     bool uiOwnsPointer_ = false;
@@ -242,6 +248,8 @@ private:
     void runViewScripts(float dt);
     audio::AudioEngine audio_;
     RtsAudio sound_;
+    game::AudioScriptSound scriptSoundImpl_{audio_};   // the Lua `sound` table of view scripts and the UI Lua
+    game::ScriptSound* scriptSound_ = nullptr;          // set once the audio engine is up
     std::vector<Entity> heardSelection_;  // selection when the last select sound played
     RTSCamera cam_;
     Json manifest_, rulesJson_;

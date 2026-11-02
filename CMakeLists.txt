@@ -259,7 +259,7 @@ elseif(RTS_PLATFORM STREQUAL "linux" OR RTS_PLATFORM STREQUAL "android")
     endif()
 endif()
 
-add_library(rts_game_audio STATIC modules/rts/audio/RtsAudio.cpp)
+add_library(rts_game_audio STATIC modules/rts/audio/RtsAudio.cpp modules/rts/audio/AudioScriptSound.cpp)
 target_link_libraries(rts_game_audio PUBLIC rts_game rts_audio)
 
 # Particles: CPU simulation + RHI rendering (presentation only), and the RTS event bridge.
@@ -939,7 +939,7 @@ target_link_libraries(rts_game PUBLIC rts_lua)
 if(TARGET rts_editor_core)
     target_sources(rts_editor_core PRIVATE apps/editor/core/ScriptOps.cpp)
 endif()
-target_sources(rts_game_view PRIVATE modules/rts/view/RtsViewScript.cpp)
+target_sources(rts_game_view PRIVATE modules/rts/view/RtsViewScript.cpp modules/rts/view/ScriptSound.cpp)
 
 # Generic GPU canvases and Lua world-space paint layers.
 target_sources(rts_game_view PRIVATE engine/render/RenderTexture.cpp modules/rts/view/RtsPaintLayers.cpp modules/rts/view/RtsGroundCanvas.cpp)

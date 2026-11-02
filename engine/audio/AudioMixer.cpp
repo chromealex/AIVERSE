@@ -92,6 +92,10 @@ void Mixer::configure(int sampleRate, int maxVoices, bool reverb) {
     voices_.assign(size_t(maxVoices_ + kExtraSlots), Voice{});
     pending_.reserve(256);
     work_.reserve(256);
+    {
+        std::lock_guard<std::mutex> s(statusMutex_);
+        status_.reserve(voices_.size());
+    }
     tmp_.assign(size_t(kBlock) * 2, 0.0f);
     send_.assign(size_t(kBlock), 0.0f);
     track_.assign(size_t(kBlock) * 2, 0.0f);
@@ -102,9 +106,17 @@ void Mixer::configure(int sampleRate, int maxVoices, bool reverb) {
     for (auto& m : music_) m = std::make_unique<Stream>();
 }
 
-void Mixer::push(MixCmd&& c) {
+uint64_t Mixer::push(MixCmd&& c) {
     std::lock_guard<std::mutex> lock(mutex_);
+    c.seq = ++pushed_;
     pending_.push_back(std::move(c));
+    return c.seq;
+}
+
+void Mixer::status(std::vector<VoiceStatus>& out, uint64_t& applied) const {
+    std::lock_guard<std::mutex> lock(statusMutex_);
+    out = status_;
+    applied = statusApplied_;
 }
 
 uint32_t Mixer::nextRandom() {
@@ -214,6 +226,9 @@ void Mixer::startVoice(MixCmd& c) {
     v.clip = std::move(c.clip);
     v.step = double(c.pitch) * double(v.clip->sampleRate) / double(rate_);
     v.volume = c.volume;
+    v.soundVolume = c.soundVolume;
+    v.pan = std::clamp(c.pan, -1.0f, 1.0f);
+    if (c.startAt > 0) v.pos = std::min(double(c.startAt) * double(v.clip->sampleRate), std::max(0.0, double(v.clip->frames()) - 1));
     v.loop = c.loop;
     v.spatial = c.spatial;
     v.x = c.x; v.y = c.y; v.z = c.z;
@@ -236,8 +251,25 @@ void Mixer::apply(MixCmd& c) {
         stopVoices(c.id, -1.0f / (std::max(c.fade, 0.002f) * float(rate_)));
         break;
     case MixCmd::StopAll:
-        for (auto& v : voices_) if (v.active) { v.stopping = true; v.fadeStep = -1.0f / (std::max(c.fade, 0.002f) * float(rate_)); }
+        for (auto& v : voices_) if (v.active && (c.busMask >> unsigned(v.bus) & 1u)) { v.stopping = true; v.fadeStep = -1.0f / (std::max(c.fade, 0.002f) * float(rate_)); }
         break;
+    case MixCmd::SetVoice:
+        for (auto& v : voices_) if (v.active && v.id == c.id) {
+            if (c.setMask & 1) v.volume = v.soundVolume * std::max(0.0f, c.volume);
+            if (c.setMask & 2) v.pan = std::clamp(c.pan, -1.0f, 1.0f);
+            if (c.setMask & 4) v.step = double(std::clamp(c.pitch, 0.01f, 8.0f)) * double(v.clip->sampleRate) / double(rate_);
+        }
+        break;
+    case MixCmd::PauseVoice:
+        for (auto& v : voices_) if (v.active && v.id == c.id) v.paused = c.paused;
+        break;
+    case MixCmd::SeekVoice:
+        for (auto& v : voices_) if (v.active && v.id == c.id) {
+            const double frames = double(v.clip->frames());
+            v.pos = std::clamp(double(c.startAt) * double(v.clip->sampleRate), 0.0, std::max(0.0, frames - 1));
+        }
+        break;
+    case MixCmd::MusicGain: musicGain_ = std::clamp(c.volume, 0.0f, 4.0f); break;
     case MixCmd::SetPos:
         for (auto& v : voices_) if (v.active && v.id == c.id) { v.x = c.x; v.y = c.y; v.z = c.z; } // both halves of a far pair
         break;
@@ -302,8 +334,10 @@ void Mixer::mixVoices(float* buf, float* send, int n) {
             // (master is applied to the reverb output instead, so mute also silences the tail)
             if (reverbOn) sendT = v.volume * gains_[size_t(v.bus)] * pair * std::sqrt(sp.gain) * sp.send;
         }
+        pan = std::clamp(pan + v.pan, -1.0f, 1.0f);
         const float tl = g * std::min(1.0f, 1.0f - pan), tr = g * std::min(1.0f, 1.0f + pan);
         if (v.fresh) { v.gl = tl; v.gr = tr; v.lp = lpT; v.send = sendT; v.fresh = false; }
+        if (v.paused && !v.stopping) { v.gl = tl; v.gr = tr; v.lp = lpT; v.send = sendT; continue; }   // holds its place, silent
         int k0 = 0;
         if (v.delay > 0) { // speed of sound: the voice waits before it starts
             const uint32_t skip = std::min<uint32_t>(v.delay, uint32_t(n));
@@ -358,11 +392,22 @@ void Mixer::mixVoices(float* buf, float* send, int n) {
 
 void Mixer::startMusic(MixCmd& c) {
     const float frames = std::max(1.0f, c.fade * float(rate_));
+    // fades run at a constant rate: the whole volume in `fade` seconds (a half-faded stream takes half the time)
+    auto fadeOut = [&](Stream& s) { s.target = 0; s.step = -std::max(s.list ? s.list->volume : s.gain, 0.0001f) / frames; };
+    Stream& back = *music_[1];
+    if (back.active && back.list && c.playlist && back.list->name == c.playlist->name) {
+        // the playlist that is fading out was asked for again: it comes back from where it is
+        std::swap(music_[0], music_[1]);
+        if (music_[1]->active) fadeOut(*music_[1]);
+        Stream& s = *music_[0];
+        s.target = s.list->volume;
+        s.step = s.gain < s.target ? s.target / frames : 0;
+        if (s.step == 0) s.gain = s.target;
+        return;
+    }
     if (music_[0]->active) {
         std::swap(music_[0], music_[1]);   // current starts fading out
-        Stream& old = *music_[1];
-        old.target = 0;
-        old.step = -std::max(old.gain, 0.0001f) / frames;
+        fadeOut(*music_[1]);
     }
     Stream& s = *music_[0];
     s.layers.clear();
@@ -468,7 +513,7 @@ int Mixer::readTrack(Stream& s, float* out, int n) {
 
 void Mixer::mixStream(Stream& s, float* buf, int n) {
     if (!s.active) return;
-    const float bus = gains_[size_t(Bus::Music)] * masterCur_ * (1.0f - duck_);
+    const float bus = gains_[size_t(Bus::Music)] * masterCur_ * (1.0f - duck_) * musicGainCur_;
     int done = 0, reopened = 0;
     while (done < n && s.active) {
         const int want = n - done;
@@ -518,13 +563,17 @@ void Mixer::render(float* out, int frames) {
         std::lock_guard<std::mutex> lock(mutex_);
         work_.swap(pending_);
     }
-    for (auto& c : work_) apply(c);
+    uint64_t applied = applied_;
+    for (auto& c : work_) { apply(c); applied = std::max(applied, c.seq); }
     work_.clear();
+    applied_ = applied;
 
     int written = 0;
     while (written < frames) {
         const int n = std::min(kBlock, frames - written);
         float* buf = out + size_t(written) * 2;
+        musicGainCur_ += (musicGain_ - musicGainCur_) * 0.5f;   // follows over ~one block (no clicks)
+        if (std::fabs(musicGain_ - musicGainCur_) < 1e-4f) musicGainCur_ = musicGain_;
         std::memset(buf, 0, sizeof(float) * size_t(n) * 2);
         std::fill(send_.begin(), send_.begin() + n, 0.0f);
         // master follows its target over ~one block (mute/unmute without clicks)
@@ -544,6 +593,16 @@ void Mixer::render(float* out, int frames) {
     int count = 0;
     for (auto& v : voices_) count += v.active ? 1 : 0;
     active_.store(count, std::memory_order_relaxed);
+    {   // what the main thread sees of the voices (voice handles); try_lock: never block the audio thread
+        std::unique_lock<std::mutex> lock(statusMutex_, std::try_to_lock);
+        if (lock.owns_lock()) {
+            status_.clear();
+            for (auto& v : voices_)
+                if (v.active && !v.stopping && v.role != MixCmd::Far)
+                    status_.push_back({v.id, float(v.pos / double(v.clip->sampleRate)), v.paused});
+            statusApplied_ = applied_;
+        }
+    }
 }
 
 } // namespace rts::audio
