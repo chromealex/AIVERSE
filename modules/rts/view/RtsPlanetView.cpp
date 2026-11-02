@@ -373,7 +373,7 @@ void RtsView::drawPlanets(Renderer3D& r, const RtsScene& s, double time, const s
             const mat4 place = frameAt(pl->second.body, pl->second.ground + up * pl->second.lift, up, east, south);
             const float3 pv = place.transformPoint({0, 0, 0});
             animate(st, o, dt, nullptr, &pv);
-            drawObject(r, st, o, 0, L.dissolveDeath ? 1.0f : std::clamp((L.corpse - st.deathAge) / 0.6f, 0.0f, 1.0f), nullptr, &place);
+            drawObject(r, st, o, 0, L.dissolveDeath ? 1.0f : L.corpseAlpha(st.deathAge), nullptr, &place);
         }
         ++it;
     }

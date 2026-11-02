@@ -156,6 +156,7 @@ paths are relative to the game folder; glTF buffers and images are relative to t
 | `flyHeight` | 2.4 | air units |
 | `turnSpeed` | 10 (units), 0 (structures) | facing smoothing, rad/s; 0 = instant |
 | `corpse` | 2.5 (units), 3 (structures) | seconds a dead object stays (death clip, fall, sink, fade) |
+| `corpseFade` | 0.6 | its last seconds fade out; 0 = drawn whole until it is removed |
 
 ## Materials
 

@@ -207,7 +207,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
             SceneObject o = st.last;
             o.selected = o.hovered = false;
             animate(st, o, dt, &grid);
-            const float g = heightAt(grid, o.pos.x, o.pos.z), fade = L.dissolveDeath ? 1.0f : std::clamp((L.corpse - st.deathAge) / 0.6f, 0.0f, 1.0f);
+            const float g = heightAt(grid, o.pos.x, o.pos.z), fade = L.dissolveDeath ? 1.0f : L.corpseAlpha(st.deathAge);
             drawObject(r, st, o, g, fade);
             if (!L.shadow.image.empty()) {   // a corpse keeps its footprint image while it lies there (faded like the model)
                 EntityFxValues fx;

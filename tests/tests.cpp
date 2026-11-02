@@ -12396,6 +12396,14 @@ TEST(view_entity_fx_ground_shadow) {
     CHECK(own.size() == 6 && std::fabs(span(own) - span(plain)) < 1e-3f);
     view.shutdown(dev); r3d.shutdown();
 }
+
+TEST(view_corpse_fade_option) {
+    // "corpseFade": seconds a corpse fades out at the end of "corpse" (default .6); 0 = drawn whole until removed
+    // (OpenWar riflemen: ArmyInfantryVisual keeps the dying model opaque for DeathDuration)
+    using game::RtsView;
+    CHECK(RtsView::corpseAlpha(.7f, .6f, 0) == 1 && std::fabs(RtsView::corpseAlpha(.7f, .6f, .4f) - .5f) < 1e-5f && RtsView::corpseAlpha(.7f, .6f, .7f) == 0);
+    CHECK(RtsView::corpseAlpha(.7f, 0, 0) == 1 && RtsView::corpseAlpha(.7f, 0, .69f) == 1);
+}
 TEST(view_paint_layer_ground_options) {
     // categorical ground surface (OpenWar ArmyMapWorld meadow / coast): options land in the layer, bad ones fail, view-only
     Json rules = Json::parseFile(kSkirmish + "/rules.json");

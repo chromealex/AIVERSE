@@ -163,6 +163,7 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     L.sx = t.structure ? float(t.footprintW) : 1.0f;
     L.sz = t.structure ? float(t.footprintH) : 1.0f;
     L.corpse = num(v["corpse"], t.structure ? 3.0f : 2.5f);
+    L.corpseFade = std::max(0.0f, num(v["corpseFade"], 0.6f));
     L.turnSpeed = num(v["turnSpeed"], t.structure ? 0.0f : 10.0f);
     L.tracer = v.getBool("tracer", false);
     L.flyHeight = num(v["flyHeight"], 2.4f);

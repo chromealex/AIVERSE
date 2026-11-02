@@ -10,6 +10,7 @@
 //   units:      worker, soldier, ranged, vehicle, tank, flyer, mushroom, generic
 //   structures: hall, house, barracks, workshop, factory, tower, mine, tree, rock, mushroomhouse, structure
 #pragma once
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
@@ -280,6 +281,8 @@ private:
         float sx = 1, sz = 1;                     // shapes: footprint scaling
         bool tracer = false;                      // optional visual bullets for attack events
         float corpse = 2.5f;                      // seconds a dead object stays visible
+        float corpseFade = 0.6f;                  // its last seconds fade out (0: drawn whole until removed)
+        float corpseAlpha(float age) const { return RtsView::corpseAlpha(corpse, corpseFade, age); }
         float turnSpeed = 10;                     // rad/s, 0 = instant
         float flyHeight = 2.4f;
         float unitSpeed = 0;
@@ -324,6 +327,10 @@ private:
 public:
     // "groundShadow" of a type's view (empty image = none / invalid); public for tests
     static TypeLook::GroundShadow parseGroundShadow(const Json& v);
+    // view "corpse" / "corpseFade": opacity of a corpse `age` seconds after the death
+    static float corpseAlpha(float corpse, float corpseFade, float age) {
+        return corpseFade > 0 ? std::clamp((corpse - age) / corpseFade, 0.0f, 1.0f) : 1.0f;
+    }
 private:
     bool loadChoice(gfx::Device& dev, const UnitType& t, const Json& view, const std::string& path, ModelChoice& out);
     void configureChoice(gfx::Device& dev, const UnitType& t, const Json& view, ModelChoice& c, bool isShape);
