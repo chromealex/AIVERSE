@@ -404,6 +404,32 @@ void RtsModule::sysSettlers(Simulation& sim) {
             }
             return best;
         };
+        // clear workshop outputs into the nearest storehouse with room; workshops whose output buffer is full (they
+        // stand still) go before the input deliveries, else a busy network never empties them (coins at the mint)
+        auto clearOutputs = [&](bool blockedOnly) {
+            for (auto& s : blds) {
+                if (idle.empty()) break;
+                if (!s.work) continue;
+                const RecipeDef& rc = rules_.types[w.get<Unit>(s.e).type].recipe;
+                for (auto& a : rc.out) {
+                    auto& inv = w.get<Inventory>(s.e);
+                    Fixed avail = inv.have[a.res] - inv.reserved[a.res];
+                    if (avail.raw <= 0 || idle.empty()) continue;
+                    if (blockedOnly && (!isGood(a.res) || inv.have[a.res] < a.value * rc.buffer)) continue;
+                    Entity best;
+                    Fixed bestD{};
+                    for (auto& st : blds) {
+                        if (!st.store) continue;
+                        auto& si = w.get<Inventory>(st.e);
+                        if (sum(si.have) + sum(si.incoming) >= st.cap || !roadConnected(sim, s.e, st.e)) continue;
+                        Fixed d = dist2D(st.pos, s.pos);
+                        if (!best.valid() || d < bestD) { best = st.e; bestD = d; }
+                    }
+                    if (best.valid()) assign(s.e, best, a.res, avail);
+                }
+            }
+        };
+        clearOutputs(true);
         for (auto& d : blds) {
             if (idle.empty()) break;
             if (!d.site && !d.work) continue;
@@ -423,26 +449,7 @@ void RtsModule::sysSettlers(Simulation& sim) {
                 }
             }
         }
-        // clear workshop outputs into the nearest storehouse with room
-        for (auto& s : blds) {
-            if (idle.empty()) break;
-            if (!s.work) continue;
-            for (auto& a : rules_.types[w.get<Unit>(s.e).type].recipe.out) {
-                auto& inv = w.get<Inventory>(s.e);
-                Fixed avail = inv.have[a.res] - inv.reserved[a.res];
-                if (avail.raw <= 0 || idle.empty()) continue;
-                Entity best;
-                Fixed bestD{};
-                for (auto& st : blds) {
-                    if (!st.store) continue;
-                    auto& si = w.get<Inventory>(st.e);
-                    if (sum(si.have) + sum(si.incoming) >= st.cap || !roadConnected(sim, s.e, st.e)) continue;
-                    Fixed d = dist2D(st.pos, s.pos);
-                    if (!best.valid() || d < bestD) { best = st.e; bestD = d; }
-                }
-                if (best.valid()) assign(s.e, best, a.res, avail);
-            }
-        }
+        clearOutputs(false);
     }
     (void)nr;
 }
