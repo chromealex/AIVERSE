@@ -2268,6 +2268,13 @@ knobs in rules `ai` (above). What it does with the terrain:
   random tie-breaks), stuck builders released and their spots avoided, the first army producer early, converters
   (metal makers) only with a surplus, one more producer when resources float, expansion (a dropoff at the next
   node) when the near nodes are gone, workers spread over crowded nodes and spawned on the side of their resource.
+- **Breaking stalemates**: an enemy without armed units is finished by the whole army (its weakest structure that
+  counts); at stalemate level 1+ a smaller strength edge launches a wave and at level 2+ waves are capped at 3/4 of
+  `firstAttackArmy`; the bot builds / researches what unlocks units clearly better against the enemy's toughest
+  building (damage table, bonuses, armor) and saves for it; garrison play sends from full garrisons first, funnels
+  them to the front and after 10 min lets every garrison join a push; settlers economies build the main building
+  material chain first, then what the army costs; a stock the population eats running dry stops housing; regions
+  that must be seen first get a scout; slow gatherers (no `workersPerBase` in the rules) get more workers.
 - **Planets**: an orbit fleet (`invasionSize` + 2 per invasion) transfers together to the body with enemy
   structures and fights there until the body is clear, then the next body; more orbital yards when the enemy can be
   reached only through orbit; towers that hit the orbit when attacks come from there.
