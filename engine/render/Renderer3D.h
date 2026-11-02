@@ -123,6 +123,9 @@ enum DrawFlags : uint32_t {
     kDrawUnlit = 1,
     kDrawNoCastShadow = 2,
     kDrawNoReceiveShadow = 4,
+    // drawn blended because of its opacity (tint.w < 1) but still writing depth: a faded solid object (view.entity_fx)
+    // stays in front of the ground layers drawn after the translucent pass (paint layers, ground canvas, sprites)
+    kDrawFadeDepth = 8,
 };
 
 class Renderer3D {

@@ -86,7 +86,8 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const uint32_t shaderKey = (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u);
-    const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u);
+    const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth);
+    const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u);
     for (auto& [k, p] : modelPipes_) if (k == pipeKey) return p;
 
     ShaderEntry* entry = nullptr;
@@ -137,7 +138,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
             pd.depthBiasConstant = 2.0f; pd.depthBiasSlope = 2.5f;
         } else if (blend) {
             pd.blend = gfx::BlendMode::Alpha;
-            pd.depthWrite = false;
+            pd.depthWrite = fadeDepth;
         }
         pd.label = shadow ? "model shadow" : outline ? "model outline" : "model";
         ph = dev_->createPipeline(pd);
@@ -313,7 +314,7 @@ void Renderer3D::renderModels(int phase) {
     auto batchable = [&](const ModelItem& x) { return x.joints < 0 && x.morph < 0; };
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
-        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by;
+        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && (x.flags & kDrawFadeDepth) == (y.flags & kDrawFadeDepth);
     };
     for (size_t i = 0; i < order_.size();) {
         size_t j = i + 1;

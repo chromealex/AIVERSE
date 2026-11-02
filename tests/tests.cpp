@@ -12287,7 +12287,7 @@ private:
 
 TEST(view_entity_fx_renders_scaled_translucent) {
     // RtsView applies view.entity_fx: the model matrix is scaled about the object's ground point, opacity < 1 moves
-    // the object to the blended pass (no depth writes, back to front) with tint.w = opacity, the team glow lands in
+    // the object to the blended pass (back to front, still writing depth: kDrawFadeDepth) with tint.w = opacity, the team glow lands in
     // the instance block (draw.w), opacity 0 draws nothing; objects without values are drawn exactly as before
     using namespace entityfxtest;
     Json rules = Json::parseFile(kSkirmish + "/rules.json"), map = Json::parseFile(kSkirmish + "/maps/valley.json");
@@ -12336,7 +12336,7 @@ TEST(view_entity_fx_renders_scaled_translucent) {
                 off += std::fabs(m[12] - unit.pos.x) + std::fabs(m[14] - unit.pos.z);
             }
     };
-    for (auto& f : faded) CHECK(f.blend && !f.depthWrite && std::fabs(f.inst[19] - .4f) < 1e-6f && std::fabs(f.inst[27] - .25f) < 1e-6f);
+    for (auto& f : faded) CHECK(f.blend && f.depthWrite && std::fabs(f.inst[19] - .4f) < 1e-6f && std::fabs(f.inst[27] - .25f) < 1e-6f);
     float cf, of, cp, op;
     totals(faded, cf, of); totals(plain2, cp, op);
     CHECK(cp > 0 && std::fabs(cf - cp * .5f) < 1e-3f * cp);
