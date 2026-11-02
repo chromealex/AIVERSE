@@ -110,6 +110,14 @@ Allowed: at most 128 entries, names 1–128 ASCII letters/digits/underscore/dot/
 
 Implementation: `RtsInitialVars.h`, setup in `RtsModule`, local launch in `ClientScript.cpp` / `main.cpp`. No game-specific keys or mechanics are hardcoded in the engine.
 
+## Clipping inside transformed elements
+
+`overflow: hidden | auto | scroll` also clips inside elements with a `transform` (for example a whole screen scaled to
+fit the window): RmlUi asks for a clip mask there, and the renderer turns each mask into the scissor rectangle of its
+screen bounds (exact for rectangles under translate / scale; rotated or rounded masks clip to their bounding box,
+inverse masks do not clip). Note that absolutely positioned children do not extend a scroll container's scroll area:
+put the scrolled content in flow (`position: relative`). Test: `rts_ui_viewport_tests`.
+
 ## Font effects
 
 The stb TrueType backend honors RmlUi `font-effect`, for example
