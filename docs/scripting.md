@@ -668,7 +668,9 @@ a id); presentation only. OpenWar draws its ownership raster with it (ArmyMapWor
 shallow, earthNear, earthFar, foam}}` adds a ground surface (a port of ArmyMapWorld's meadow and coast): land ids in
 `team` keep their colour under a world-anchored meadow relief (patches, blots, pale spots; `scale` = patch size in world
 units, `strength` = fine variation), other land ids get the neutral meadow (green / olive / pale), ids in `context` a faint
-noise; `flipHeight` > 0 anchors the noise at y = flipHeight - z (north-up source maps). With `coast`, the id `sea` is
+noise; `flipHeight` > 0 anchors the noise at y = flipHeight - z (north-up source maps); `relief` = 1 / 2 replaces the
+meadow of non-context land with the biome surface (the id colour under broad relief and snow / dune ripples of frequency
+8 / 12: ArmyMapWorld ApplyMeadow for ice / desert campaigns), 0 (default) keeps the meadow. With `coast`, the id `sea` is
 water: a static signed shoreline distance (texels, chamfer + 3x3 smoothing, rebuilt only when the sea mask changes) gives
 a beach rim on land and shallows, a shore shadow, a cliff on the shore facing `drop` (texture-row direction, -1 = towards
 -z) and an animated foam line on water (colours 0..1). `linear = true` runs the surface maths on linear colour (sRGB in

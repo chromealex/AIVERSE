@@ -29,6 +29,7 @@ struct PaintLayer {
     // a beach rim on land and shallows, shadow, a near-shore cliff and animated foam on water.
     bool ground=false,coast=false,groundLinear=false;   // groundLinear: the surface maths runs on linear colour (sRGB in/out)
     float groundScale=8,groundStrength=0.12f,flipHeight=0;   // flipHeight > 0: noise y = flipHeight - z (north-up maps)
+    int groundRelief=0;   // 1 / 2: OpenWar biome surface (snow / dune ripples of frequency 8 / 12) instead of the meadow, ids outside the context range
     int teamMin=1,teamMax=8,contextMin=200,contextMax=254,seaId=255;
     float coastDrop=-1;                                      // texture-row direction of the shore "side" (-1: towards -z)
     std::array<float,3> beach{.98f,.94f,.73f},shallow{.28f,.76f,.78f},earthNear{.79f,.72f,.51f},earthFar{.43f,.40f,.29f},foam{.9f,.99f,.97f};

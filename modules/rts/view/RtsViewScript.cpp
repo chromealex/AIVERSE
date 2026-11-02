@@ -196,7 +196,7 @@ int vPaintLayer(lua_State* L,Vm& vm) {
         lua_getfield(L,1,"borderColor");
         if(lua_istable(L,-1))for(int i=0;i<4;++i){lua_rawgeti(L,-1,i+1);float v=lua_isnil(L,-1)?1.f:float(toDouble(L,-1));lua_pop(L,1);if(!std::isfinite(v)){lua_pop(L,1);return fail(vm,"invalid border colour");}p.borderColor[size_t(i)]=std::clamp(v,0.f,1.f);}
         lua_pop(L,1);
-        // ground = {scale, strength, flipHeight, team = {min, max}, context = {min, max}, coast = {sea, drop, beach,
+        // ground = {scale, strength, flipHeight, relief (0 meadow, 1 / 2 snow / dune ripples), team = {min, max}, context = {min, max}, coast = {sea, drop, beach,
         // shallow, earthNear, earthFar, foam}}: meadow / coast surface (render::PaintLayer, docs § Categorical cell layers)
         lua_getfield(L,1,"ground");
         if(lua_istable(L,-1)){
@@ -205,6 +205,7 @@ int vPaintLayer(lua_State* L,Vm& vm) {
             p.groundScale=numberField(L,gi,"scale",8);p.groundStrength=numberField(L,gi,"strength",.12f);p.flipHeight=numberField(L,gi,"flipHeight",0);
             if(!std::isfinite(p.groundScale)||p.groundScale<=0||!std::isfinite(p.groundStrength)||!std::isfinite(p.flipHeight)){lua_pop(L,1);return fail(vm,"invalid paint ground");}
             p.groundStrength=std::clamp(p.groundStrength,0.f,1.f);
+            {const float relief=numberField(L,gi,"relief",0);if(!(relief==0||relief==1||relief==2)){lua_pop(L,1);return fail(vm,"paint ground relief must be 0, 1 or 2");}p.groundRelief=int(relief);}
             auto range=[&](const char* key,int& lo,int& hi)->bool{
                 lua_getfield(L,gi,key);bool ok=true;
                 if(lua_istable(L,-1)){lua_rawgeti(L,-1,1);lua_rawgeti(L,-2,2);const double a=toDouble(L,-2),b=toDouble(L,-1);lua_pop(L,2);

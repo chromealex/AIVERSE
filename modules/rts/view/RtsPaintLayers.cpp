@@ -66,6 +66,8 @@ vec3 meadow(vec3 color,vec2 world,float id){
  if(id>=groundB.z-0.5&&id<=groundB.w+0.5)return color*(.96+.08*meadowNoise(world/max(groundA.x*1.6,.1)));
  vec2 p=world/max(groundA.x,.1);
  float broad=meadowNoise(p+17.2),small=meadowNoise(p*2.3+vec2(7.1,31.6));
+ if(foam.w>0.5){float ripple=sin(p.x*(foam.w<1.5?8.0:12.0)+p.y*3.0+broad*6.0)*.5+.5;   // ApplyMeadow, ice / desert campaigns
+  return clamp(color*(.94+broad*.09+small*.035+(ripple-.5)*.035),0.0,1.0);}
  float patch=smoothstep(.35,.66,broad*.72+small*.28);
  float neutral=(id<groundB.x-0.5||id>groundB.y+0.5)?1.0:0.0;
  vec2 blotUV=p*3.6+vec2(small,broad)*.65;
@@ -176,6 +178,8 @@ static float3 meadow(constant U& u,float3 color,float2 world,float id){
  if(id>=u.groundB.z-0.5&&id<=u.groundB.w+0.5)return color*(.96+.08*meadowNoise(u,world/max(u.groundA.x*1.6,.1)));
  float2 p=world/max(u.groundA.x,.1);
  float broad=meadowNoise(u,p+17.2),small=meadowNoise(u,p*2.3+float2(7.1,31.6));
+ if(u.foam.w>0.5){float ripple=sin(p.x*(u.foam.w<1.5?8.0:12.0)+p.y*3.0+broad*6.0)*.5+.5;
+  return saturate(color*(.94+broad*.09+small*.035+(ripple-.5)*.035));}
  float patch=smoothstep(.35,.66,broad*.72+small*.28);
  float neutral=(id<u.groundB.x-0.5||id>u.groundB.y+0.5)?1.0:0.0;
  float2 blotUV=p*3.6+float2(small,broad)*.65;
@@ -335,7 +339,7 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
      {p.opacity,r.materialQuality()==render::MaterialQuality::Low?0.f:1.f,p.groundLinear?1.f:0.f,float(p.transparent)},
      {p.palette[o]/255.f,p.palette[o+1]/255.f,p.palette[o+2]/255.f,float(p.outside)/255.f},
      {p.groundScale,p.groundStrength,p.ground?1.f:0.f,p.flipHeight},{float(p.teamMin),float(p.teamMax),float(p.contextMin),float(p.contextMax)},
-     {float(p.seaId),coast?1.f:0.f,float(std::fmod(time,3600.0)),p.coastDrop},c3(p.beach),c3(p.shallow),c3(p.earthNear),c3(p.earthFar),c3(p.foam)};
+     {float(p.seaId),coast?1.f:0.f,float(std::fmod(time,3600.0)),p.coastDrop},c3(p.beach),c3(p.shallow),c3(p.earthNear),c3(p.earthFar),{p.foam[0],p.foam[1],p.foam[2],float(p.groundRelief)}};
  auto mesh=l.mesh;auto texture=l.canvas.handle();auto pipe=cellPipe_;auto coastTex=coast?l.coast:texture;
  r.drawCustom([u,mesh,texture,coastTex,pipe](gfx::Device& d){d.setPipeline(pipe);d.setUniforms(0,&u,sizeof(u));d.setTexture(0,texture);d.setTexture(1,coastTex);d.setVertexBuffer(mesh.vb);d.setIndexBuffer(mesh.ib);d.drawIndexed(mesh.indexCount);});
 }
