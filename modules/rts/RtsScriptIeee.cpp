@@ -21,6 +21,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 
 extern "C" {
 #include "lauxlib.h"
@@ -180,12 +181,165 @@ int f64Le(lua_State* L) { lua_pushboolean(L, f64Of(arg64(L, 1)) <= f64Of(arg64(L
 int f64Eq(lua_State* L) { lua_pushboolean(L, f64Of(arg64(L, 1)) == f64Of(arg64(L, 2))); return 1; }
 int f64ToF32(lua_State* L) { requireEnv(L); const float r = float(f64Of(arg64(L, 1))); return push32(L, r); }
 
+// ---- Q96 trigonometry (atan2, sincos): exact series on unsigned fixed point with 96 fractional bits in
+// base-2^24 limbs (little endian, no high zero limbs), every step truncating exactly as the integer-only
+// script implementation it replaces (OpenWar scripts/openwar/trig.lua), then one rounding to binary32
+// (the bit-exact value and a sticky bit through a correctly rounded int-to-float and an exact power-of-two
+// scale). Same operations in the same order, so the results equal the script's bit for bit.
+struct Q {
+    int n = 0;
+    int64_t d[16];
+};
+constexpr int64_t kB = 16777216;
+inline void qTrim(Q& a) { while (a.n > 0 && a.d[a.n - 1] == 0) --a.n; }
+inline int qCmp(const Q& a, const Q& b) {
+    if (a.n != b.n) return a.n < b.n ? -1 : 1;
+    for (int i = a.n - 1; i >= 0; --i) if (a.d[i] != b.d[i]) return a.d[i] < b.d[i] ? -1 : 1;
+    return 0;
+}
+void qCheck(lua_State* L, int n) { if (n > 15) luaL_error(L, "Q96 value too large"); }
+Q qAdd(lua_State* L, const Q& a, const Q& b) {
+    Q r; int64_t carry = 0; const int n = a.n > b.n ? a.n : b.n;
+    for (int i = 0; i < n; ++i) { const int64_t v = (i < a.n ? a.d[i] : 0) + (i < b.n ? b.d[i] : 0) + carry; r.d[i] = v % kB; carry = v / kB; }
+    r.n = n;
+    if (carry > 0) { qCheck(L, r.n); r.d[r.n++] = carry; }
+    return r;
+}
+Q qSub(lua_State* L, const Q& a, const Q& b) {
+    if (qCmp(a, b) < 0) luaL_error(L, "negative Q96 difference");
+    Q r; int64_t borrow = 0;
+    for (int i = 0; i < a.n; ++i) { const int64_t v = a.d[i] - (i < b.n ? b.d[i] : 0) - borrow; borrow = v < 0 ? 1 : 0; r.d[i] = v + borrow * kB; }
+    r.n = a.n; qTrim(r); return r;
+}
+Q qDivSmall(const Q& a, int64_t d) {
+    Q r; int64_t rem = 0;
+    for (int i = a.n - 1; i >= 0; --i) { const int64_t v = rem * kB + a.d[i]; r.d[i] = v / d; rem = v % d; }
+    r.n = a.n; qTrim(r); return r;
+}
+// product shifted right by 96 bits (four limbs), truncated
+Q qMul(lua_State* L, const Q& a, const Q& b) {
+    int64_t p[32] = {0};
+    if (a.n + b.n > 31) luaL_error(L, "Q96 value too large");
+    for (int i = 0; i < a.n; ++i) {
+        int64_t carry = 0;
+        for (int j = 0; j < b.n; ++j) { const int k = i + j; const int64_t v = p[k] + a.d[i] * b.d[j] + carry; p[k] = v % kB; carry = v / kB; }
+        p[i + b.n] = carry;
+    }
+    Q r; const int total = a.n + b.n;
+    for (int i = 4; i < total; ++i) { qCheck(L, r.n); r.d[r.n++] = p[i]; }
+    qTrim(r); return r;
+}
+inline void qParts(uint32_t a, int64_t& m, int& e) {
+    const int be = int((a >> 23) & 255u); m = a & 8388607u;
+    if (be == 0) e = -149; else { m |= 8388608; e = be - 150; }
+}
+Q qFixed(lua_State* L, uint32_t a) {
+    int64_t m; int e; qParts(a & 0x7fffffffu, m, e);
+    const int shift = e + 96;
+    if (shift < 0) luaL_error(L, "angle too small for Q96");
+    Q r; for (int i = 0; i < shift / 24; ++i) { qCheck(L, r.n); r.d[r.n++] = 0; }
+    int64_t v = m << (shift % 24);
+    while (v > 0) { qCheck(L, r.n); r.d[r.n++] = v % kB; v /= kB; }
+    qTrim(r); return r;
+}
+uint32_t qBits(const Q& a) {
+    if (a.n == 0) return 0;
+    const int drop = a.n - 2 > 0 ? a.n - 2 : 0;
+    int64_t v = 0; for (int i = a.n - 1; i >= drop; --i) v = v * kB + a.d[i];
+    int64_t sticky = 0; for (int i = 0; i < drop; ++i) if (a.d[i] != 0) { sticky = 1; break; }
+    const float f = float((v << 1) | sticky);                      // F.fromInteger: correctly rounded
+    return canon(f * f32Of(uint32_t(127 - 97 + drop * 24) << 23));  // F.mul by a power of two
+}
+Q qOf(std::initializer_list<int64_t> limbs) { Q r; for (int64_t x : limbs) r.d[r.n++] = x; qTrim(r); return r; }
+const Q& qPi() { static const Q v = qOf({1673774, 578323, 8947107, 2375530, 3}); return v; }
+const Q& qHalf() { static const Q v = qDivSmall(qPi(), 2); return v; }
+const Q& qQuarter() { static const Q v = qDivSmall(qPi(), 4); return v; }
+Q qSinFixed(lua_State* L, const Q& x) {
+    const Q square = qMul(L, x, x); Q term = x, sum = x;
+    for (int i = 1; i <= 40; ++i) {
+        term = qDivSmall(qMul(L, term, square), int64_t(2 * i) * (2 * i + 1));
+        if (term.n == 0) break;
+        sum = i % 2 == 1 ? qSub(L, sum, term) : qAdd(L, sum, term);
+    }
+    return sum;
+}
+Q qRatio(lua_State* L, int64_t a, int64_t b) {
+    if (!(a >= 0 && a <= b && b > 0)) luaL_error(L, "Q96 ratio domain");
+    if (a == b) return qOf({0, 0, 0, 0, 1});
+    Q r; r.n = 4; int64_t rem = a;
+    for (int i = 3; i >= 0; --i) {
+        int64_t digit = 0;
+        for (int k = 0; k < 24; ++k) { rem *= 2; digit *= 2; if (rem >= b) { rem -= b; digit += 1; } }
+        r.d[i] = digit;
+    }
+    qTrim(r); return r;
+}
+Q qAtanSmall(lua_State* L, const Q& x) {
+    const Q square = qMul(L, x, x); Q power = x, sum = x;
+    for (int i = 1; i <= 70; ++i) {
+        power = qMul(L, power, square);
+        const Q term = qDivSmall(power, 2 * i + 1);
+        if (term.n == 0) break;
+        sum = i % 2 == 1 ? qSub(L, sum, term) : qAdd(L, sum, term);
+    }
+    return sum;
+}
+inline uint32_t neg32(uint32_t a) { return a ^ 0x80000000u; }
+// atan2(y, x) of binary32 bit patterns (Mathf.Atan2 as the script reproduces it)
+int f32Atan2(lua_State* L) {
+    requireEnv(L);
+    const uint32_t y = arg32(L, 1), x = arg32(L, 2);
+    const uint32_t ax = x & 0x7fffffffu, ay = y & 0x7fffffffu; const uint32_t sx = x >> 31, sy = y >> 31;
+    if (!(ax < 0x7f800000u && ay < 0x7f800000u)) luaL_error(L, "nonfinite steering direction");
+    uint32_t r;
+    if (ay == 0) r = sx != 0 ? (sy != 0 ? neg32(qBits(qPi())) : qBits(qPi())) : y;
+    else if (ax == 0) r = sy != 0 ? neg32(qBits(qHalf())) : qBits(qHalf());
+    else {
+        const bool swap = ay > ax; const uint32_t low = swap ? ax : ay, high = swap ? ay : ax;
+        int64_t ml, mh; int el, eh; qParts(low, ml, el); qParts(high, mh, eh);
+        if (eh - el > 30) {
+            if (swap) r = sy != 0 ? neg32(qBits(qHalf())) : qBits(qHalf());
+            else if (sx != 0) r = sy != 0 ? neg32(qBits(qPi())) : qBits(qPi());
+            else r = canon(f32Of(y) / f32Of(x));
+        } else {
+            const int exponent = el < eh ? el : eh; const int64_t a = ml << (el - exponent), b = mh << (eh - exponent);
+            Q angle = a * 2 > b ? qSub(L, qQuarter(), qAtanSmall(L, qRatio(L, b - a, b + a))) : qAtanSmall(L, qRatio(L, a, b));
+            if (swap) angle = qSub(L, qHalf(), angle);
+            if (sx != 0) angle = qSub(L, qPi(), angle);
+            const uint32_t result = qBits(angle);
+            r = sy != 0 ? neg32(result) : result;
+        }
+    }
+    lua_pushinteger(L, lua_Integer(r));
+    return 1;
+}
+// sincos(angle) of a binary32 bit pattern, |angle| <= 2^33: sine, cosine
+int f32SinCos(lua_State* L) {
+    requireEnv(L);
+    const uint32_t angle = arg32(L, 1); const uint32_t a = angle & 0x7fffffffu;
+    if (!(a <= 1342177280u)) luaL_error(L, "angle must be finite and within +/-2^33 radians");
+    if (a < 729808896u) { lua_pushinteger(L, angle); lua_pushinteger(L, 0x3f800000); return 2; }   // |angle| < 2^-40
+    Q x = qFixed(L, a);
+    const Q two = qAdd(L, qPi(), qPi());
+    Q periods[48]; int np = 0; periods[np++] = two;
+    while (qCmp(periods[np - 1], x) < 0) { if (np >= 48) luaL_error(L, "Q96 value too large"); periods[np] = qAdd(L, periods[np - 1], periods[np - 1]); ++np; }
+    for (int i = np - 1; i >= 0; --i) if (qCmp(x, periods[i]) >= 0) x = qSub(L, x, periods[i]);
+    bool negativeSin = (angle >> 31) != 0, negativeCos = false;
+    if (qCmp(x, qPi()) > 0) { x = qSub(L, two, x); negativeSin = !negativeSin; }
+    if (qCmp(x, qHalf()) > 0) { x = qSub(L, qPi(), x); negativeCos = true; }
+    const uint32_t sine = qBits(qSinFixed(L, x)), cosine = qBits(qSinFixed(L, qSub(L, qHalf(), x)));
+    lua_pushinteger(L, lua_Integer(negativeSin ? neg32(sine) : sine));
+    lua_pushinteger(L, lua_Integer(negativeCos ? neg32(cosine) : cosine));
+    return 2;
+}
+
 } // namespace
 
 void openIeee(lua_State* L) {
     static const luaL_Reg f32[] = {{"add", f32Add}, {"sub", f32Sub}, {"mul", f32Mul}, {"div", f32Div}, {"sqrt", f32Sqrt},
                                    {"dot2", f32Dot2}, {"fromint", f32FromInt}, {"lt", f32Lt}, {"le", f32Le}, {"eq", f32Eq}, {"tof64", f32ToF64},
                                    {"floorint", f32FloorInt}, {"cellat", f32CellAt}, {"fdot2", f32FiniteDot2}, {"sqdist", f32SqDist},
+                                   {"atan2", f32Atan2}, {"sincos", f32SinCos},
                                    {nullptr, nullptr}};
     static const luaL_Reg f64[] = {{"add", f64Add}, {"sub", f64Sub}, {"mul", f64Mul}, {"div", f64Div}, {"sqrt", f64Sqrt},
                                    {"fromint", f64FromInt}, {"lt", f64Lt}, {"le", f64Le}, {"eq", f64Eq}, {"tof32", f64ToF32},

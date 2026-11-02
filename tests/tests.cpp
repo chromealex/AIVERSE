@@ -10959,6 +10959,14 @@ TEST(script_ieee_bit_patterns) {
             assert(f32.floorint(0x3fc00000)==1 and f32.floorint(0xbfc00000)==-2 and f32.floorint(0x80000000)==0)
             assert(f32.floorint(1)==0 and f32.floorint(0x80000001)==-1 and f32.floorint(0x4effffff)==2147483520)
             assert(not pcall(f32.floorint,0x4f000000) and not pcall(f32.floorint,0x7f800000) and not pcall(f32.floorint,0x7fc00000))
+            -- atan2 / sincos: exact Q96 series rounded once (here equal to the correctly rounded values)
+            assert(f32.atan2(one,one)==0x3f490fdb and f32.atan2(0x40400000,0x40800000)==0x3f24bc7d)
+            assert(f32.atan2(0,0xbf800000)==0x40490fdb and f32.atan2(0xbf800000,0)==0xbfc90fdb and f32.atan2(0x80000000,one)==0x80000000)
+            assert(not pcall(f32.atan2,0x7f800000,one))
+            local s1,c1=f32.sincos(one);assert(s1==0x3f576aa4 and c1==0x3f0a5140)
+            local s2,c2=f32.sincos(0x42c80000);assert(s2==0xbf01a12e and c2==0x3f5cc0ee)                -- 100 rad
+            local s3,c3=f32.sincos(0x80000001);assert(s3==0x80000001 and c3==one)
+            assert(not pcall(f32.sincos,0x50800000) and not pcall(f32.sincos,0x7fc00000))            -- beyond 2^33, NaN
             assert(f32.cellat({x=0x40200000,y=0x3fc00000},4,3)==6 and f32.cellat({x=0xbf000000,y=0},4,3)==-1 and f32.cellat({x=0,y=0x40400000},4,3)==-1)
             assert(f64.add(0x3fb999999999999a,0x3fc999999999999a)==0x3fd3333333333334) -- 0.1+0.2
             assert(f64.fromint(9007199254740993)==0x4340000000000000)
