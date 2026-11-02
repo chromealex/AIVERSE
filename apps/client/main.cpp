@@ -119,6 +119,7 @@ void GameClient::initAudio() {
     sfxOn_ = boundSfxOn_ = audio_.busEnabled(audio::Bus::Sfx) ? 1 : 0;
     scriptSound_ = &scriptSoundImpl_;
     viewScripts_.setSound(scriptSound_);
+    viewScripts_.setUiCall([this](lua_State* L) { return luaUiCall(L); });
     std::string text;
     if (platform::readContentFile(manifest_.getStr("audio", "audio.json"), text)) { // a game without audio.json is silent
         try {

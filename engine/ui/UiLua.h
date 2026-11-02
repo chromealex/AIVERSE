@@ -35,5 +35,12 @@ bool luaRunString(lua_State* L, const std::string& code, const std::string& name
 // an object (keys sorted, so saved files are stable); functions / userdata are skipped; depth <= 32.
 void luaPushJson(lua_State* L, const Json& j);
 Json luaToJson(lua_State* L, int index);
+// Copies the value at `index` of `from` onto `to`: nil, booleans, numbers (integers stay integers), strings and tables of
+// those (keys: numbers, strings, booleans; depth <= 16); functions, userdata and deeper tables become nil.
+void luaCopy(lua_State* from, int index, lua_State* to, int depth = 0);
+// Calls the global function of `ui` named by `from`'s stack slot 1 (dotted: "a.b.c") with slots 2.. copied (luaCopy);
+// pushes onto `from` true and the results, or false and a message (no state, no such function, an error); returns
+// how many it pushed. Two states of one thread (a view script calling the client's UI Lua: view.ui_call).
+int luaCallAcross(lua_State* from, lua_State* ui);
 
 } // namespace rts::ui

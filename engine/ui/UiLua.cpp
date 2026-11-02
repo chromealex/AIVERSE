@@ -1,3 +1,4 @@
+#include <string>
 #include "UiLua.h"
 
 extern "C" {
@@ -205,5 +206,64 @@ static Json toJson(lua_State* L, int idx, int depth) {
 }
 
 Json luaToJson(lua_State* L, int index) { return toJson(L, index, 0); }
+
+void luaCopy(lua_State* from, int idx, lua_State* to, int depth) {
+    idx = lua_absindex(from, idx);
+    luaL_checkstack(to, 3, "lua copy");
+    switch (lua_type(from, idx)) {
+    case LUA_TBOOLEAN: lua_pushboolean(to, lua_toboolean(from, idx)); break;
+    case LUA_TNUMBER:
+        if (lua_isinteger(from, idx)) lua_pushinteger(to, lua_tointeger(from, idx)); else lua_pushnumber(to, lua_tonumber(from, idx));
+        break;
+    case LUA_TSTRING: { size_t n; const char* c = lua_tolstring(from, idx, &n); lua_pushlstring(to, c, n); break; }
+    case LUA_TTABLE:
+        if (depth >= 16) { lua_pushnil(to); break; }
+        lua_newtable(to);
+        luaL_checkstack(from, 3, "lua copy");
+        lua_pushnil(from);
+        while (lua_next(from, idx)) {
+            const int kt = lua_type(from, -2);
+            if (kt == LUA_TNUMBER || kt == LUA_TSTRING || kt == LUA_TBOOLEAN) {
+                luaCopy(from, -2, to, depth + 1);
+                luaCopy(from, -1, to, depth + 1);
+                if (lua_isnil(to, -1)) lua_pop(to, 2); else lua_rawset(to, -3);
+            }
+            lua_pop(from, 1);
+        }
+        break;
+    default: lua_pushnil(to);
+    }
+}
+
+int luaCallAcross(lua_State* V, lua_State* U) {
+    if (!U) { lua_pushboolean(V, 0); lua_pushstring(V, "no UI Lua state"); return 2; }
+    const std::string name = luaL_checkstring(V, 1);
+    const int base = lua_gettop(U);
+    lua_pushglobaltable(U);
+    size_t at = 0;
+    while (true) {
+        const size_t dot = name.find('.', at);
+        const std::string part = name.substr(at, dot == std::string::npos ? std::string::npos : dot - at);
+        if (!lua_istable(U, -1)) { lua_settop(U, base); lua_pushboolean(V, 0); lua_pushstring(V, ("ui_call: no " + name).c_str()); return 2; }
+        lua_getfield(U, -1, part.c_str());
+        lua_remove(U, -2);
+        if (dot == std::string::npos) break;
+        at = dot + 1;
+    }
+    if (!lua_isfunction(U, -1)) { lua_settop(U, base); lua_pushboolean(V, 0); lua_pushstring(V, ("ui_call: no function " + name).c_str()); return 2; }
+    const int n = lua_gettop(V);
+    for (int i = 2; i <= n; ++i) luaCopy(V, i, U);
+    if (lua_pcall(U, n - 1, LUA_MULTRET, 0) != LUA_OK) {
+        std::string err = lua_tostring(U, -1) ? lua_tostring(U, -1) : "error";
+        lua_settop(U, base);
+        lua_pushboolean(V, 0); lua_pushstring(V, err.c_str()); return 2;
+    }
+    const int results = lua_gettop(U) - base;
+    luaL_checkstack(V, results + 1, "ui_call results");
+    lua_pushboolean(V, 1);
+    for (int i = 1; i <= results; ++i) luaCopy(U, base + i, V);
+    lua_settop(U, base);
+    return results + 1;
+}
 
 } // namespace rts::ui

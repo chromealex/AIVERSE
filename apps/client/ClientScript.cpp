@@ -465,6 +465,9 @@ void GameClient::luaTick(double dt) {
     lua_pop(lua_, 1);
 }
 
+// view.ui_call (modules/rts/view/RtsViewScript.h): a global of this state called from a view script
+int GameClient::luaUiCall(lua_State* V) { return ui::luaCallAcross(V, lua_); }
+
 void GameClient::runGameScript() {
     if (!lua_) return;
     std::string err;

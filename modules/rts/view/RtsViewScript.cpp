@@ -41,6 +41,7 @@ struct ViewScripts::Impl {
     std::shared_ptr<render::PaintLayers> paint = std::make_shared<render::PaintLayers>();
     std::shared_ptr<EntityFxStore> fx = std::make_shared<EntityFxStore>();   // view.entity_fx (EntityFx.h)
     ScriptSound* sound = nullptr;   // the `sound` table's host
+    std::function<int(lua_State*)> uiCall;   // view.ui_call's host (the client's UI Lua); empty = no UI state
     explicit Impl(ViewScripts& s) : self(s) {}
 
     void logLine(bool error, const std::string& t) {
@@ -565,6 +566,14 @@ int vPlayer(lua_State* L, Vm& vm) { lua_pushinteger(L, viewOf(vm).player); retur
 // view.screen(): what the host shows over the match ("playing", "paused" = the pause screen / modal, "over" = the match
 // has ended); presentation only (a paused match stops ticking, its view keeps running)
 int vScreen(lua_State* L, Vm& vm) { lua_pushstring(L, viewOf(vm).screen.c_str()); return 1; }
+// view.ui_call(name, ...) -> ok, results...: a synchronous call of the UI Lua's global function `name` (dotted) with the
+// arguments copied (nil, booleans, numbers, strings, tables); false, message when there is no UI state or the call fails
+int vUiCall(lua_State* L, Vm& vm) {
+    luaL_checkstring(L, 1);
+    auto& f = viewOf(vm).uiCall;
+    if (!f) { lua_pushboolean(L, 0); lua_pushstring(L, "no UI Lua state"); return 2; }
+    return f(L);
+}
 
 // ---- Lua <-> Json for the UI (view values: numbers, fx, strings, booleans, tables)
 Json toUiJson(lua_State* L, int idx, int depth = 0) {
@@ -726,7 +735,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     openGameApi(vm);
     static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>},
                                      {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>}, {"screen", bind<vScreen>},
-                                     {"send", bind<vSend>}, {"state", bind<vState>},
+                                     {"send", bind<vSend>}, {"state", bind<vState>}, {"ui_call", bind<vUiCall>},
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
@@ -748,6 +757,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
 }
 
 void ViewScripts::setSound(ScriptSound* sound) { impl_->sound = sound; }
+void ViewScripts::setUiCall(std::function<int(lua_State*)> call) { impl_->uiCall = std::move(call); }
 
 void ViewScripts::attach(Simulation& sim) {
     detach();

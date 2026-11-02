@@ -13,6 +13,8 @@
 #include "../../../engine/render/PaintLayer.h"
 #include "../../../engine/sim/Command.h"
 #include "../../../engine/render/Math3D.h"
+
+struct lua_State;
 #include "ViewCanvas.h"
 #include "ScriptSound.h"
 #include "EntityFx.h"
@@ -87,6 +89,9 @@ public:
     void setTargeting(const ViewTargeting& target);
     // The Lua `sound` table's host (voice handles, music; ScriptSound.h); null = silent no-ops.
     void setSound(ScriptSound* sound);
+    // view.ui_call's host: called with the view state's stack (1 = function name, 2.. = arguments), pushes ok and the
+    // results onto it and returns their count. The client copies them into and out of its UI Lua state.
+    void setUiCall(std::function<int(lua_State*)> call);
     void setCamera(const ViewCamera& camera);
     // Host screen state for view.screen(): "playing" (default), "paused", "over".
     void setScreen(const std::string& screen);

@@ -456,6 +456,13 @@ the battle. Presentation only, never part of the simulation.
 | `sound.settings()` → `{music, sfx, musicOn, sfxOn}` | the player's volumes 0..1 and on / off switches (client data model `music`, `sfx`, `musicOn`, `sfxOn`) |
 | `sound.available()`, `sound.trace(text)` | a mixer runs; `trace` prints `audio\| text` on stdout when `RTS_AUDIO_LOG=1` (tools compare a game's sound decisions) |
 
+**One mixer for menus and matches: `view.ui_call(name, ...)`** → `ok, results...` calls the client UI Lua's global function
+`name` (dotted, e.g. `"MyAudio.play"`) synchronously with the arguments copied (nil, booleans, numbers, strings, tables of
+those; functions / userdata become nil) and copies its results back; `false, message` without a UI Lua (headless) or when
+the function is missing or fails. A game keeps its mixer state (voice pools, cooldowns, ducking, the requested music) in
+the UI Lua, which lives across menu -> match -> menu, and its view scripts play through it (OpenWar:
+`ui/audio/ui_audio.lua`). Test: `view_script_ui_call`; engine side `ui::luaCallAcross` / `ui::luaCopy` (engine/ui/UiLua.h).
+
 With `"scripted": true` in audio.json the client never starts or stops music by itself (no `menu` / `match` /
 `battle` / `victory` playlists) and starting or leaving a match stops only the `sfx` bus, so a click on a result
 screen keeps ringing into the menu. OpenWar ports Unity's GameAudio this way (`scripts/openwar/audio/`). Tests:

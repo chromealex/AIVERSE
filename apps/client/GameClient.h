@@ -172,6 +172,7 @@ private:
     void shutdownLua();
     void luaEmit(const char* name, const Json& data);   // game.on(name, fn) handlers
     void luaTick(double dt);
+    int luaUiCall(lua_State* view);   // view.ui_call: a UI Lua global called from a view script (values copied)
     const char* screenName() const;
     std::string saveDir() const;                         // storage.*: per-game folder in the user data dir
     // ClientActions.cpp: player abilities, rect tools, hand, possession, "How to play"

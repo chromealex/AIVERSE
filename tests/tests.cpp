@@ -4,6 +4,7 @@
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
 }
 #include <filesystem>
 #include <cstdio>
@@ -12123,6 +12124,37 @@ view.on_frame(function() view.notice(view.screen()) end)
     for (auto& e : view.log()) std::printf("  view log: %s\n", e.text.c_str());
     CHECK(view.log().empty());
     CHECK(sim.checksum() == before);
+}
+
+TEST(view_script_ui_call) {
+    // view.ui_call(name, ...): a synchronous call into another Lua state (the client's UI Lua) with copied values; without
+    // a host (headless) or for a missing function it returns false and a message
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/uc.lua"])"));
+    Json sources = Json::object(); sources.set("scripts/view/uc.lua", Json::string(R"LUA(
+view.on_frame(function()
+ local ok, a, b, c = view.ui_call('mix.play', 'Click', {gain = .5, list = {1, 2, 3}, f = print}, 7)
+ local bad, msg = view.ui_call('mix.missing')
+ view.notice(tostring(ok) .. ' ' .. tostring(a) .. ' ' .. tostring(b) .. ' ' .. tostring(c) .. ' ' .. tostring(bad) .. ' ' .. tostring(msg))
+end)
+)LUA")); rules.set("$scriptSources", sources);
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    view.update(sim, .016f);
+    auto r = view.takeRequests();
+    CHECK(r.size() == 1 && r[0].text == "false no UI Lua state nil nil false no UI Lua state");
+    lua_State* U = luaL_newstate(); luaL_openlibs(U);
+    CHECK(luaL_dostring(U, R"(mix = {n = 0}
+function mix.play(id, o, k) mix.n = mix.n + 1; return id .. ':' .. o.gain .. ':' .. #o.list .. ':' .. tostring(o.f), k * 2, mix.n end)") == LUA_OK);
+    view.setUiCall([U](lua_State* L) { return ui::luaCallAcross(L, U); });
+    view.update(sim, .016f);
+    r = view.takeRequests();
+    CHECK(r.size() == 1 && r[0].text == "true Click:0.5:3:nil 14 1 false ui_call: no function mix.missing");
+    view.update(sim, .016f);
+    lua_getglobal(U, "mix"); lua_getfield(U, -1, "n"); CHECK(lua_tointeger(U, -1) == 2); lua_pop(U, 2);
+    CHECK(lua_gettop(U) == 0);
+    lua_close(U);
 }
 
 TEST(view_script_sound_table) {
