@@ -40,7 +40,7 @@ class PostFxWindow : public EditorWindow {
 public:
     const char* id() const override { return "postfx"; }
     const char* title() const override { return "Постэффекты"; }
-    const char* icon() const override { return ICON_PALETTE; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 7; }
     bool openByDefault() const override { return false; }

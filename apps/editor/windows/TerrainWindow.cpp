@@ -15,6 +15,7 @@ class TerrainWindow : public EditorWindow {
 public:
     const char* id() const override { return "terrain"; }
     const char* title() const override { return "Рельеф"; }
+    const char* group() const override { return "world"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 5; }
     bool openByDefault() const override { return false; }

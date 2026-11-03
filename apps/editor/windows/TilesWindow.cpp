@@ -12,6 +12,7 @@ class TilesWindow : public EditorWindow {
 public:
     const char* id() const override { return "tiles"; }
     const char* title() const override { return "Тайлы"; }
+    const char* group() const override { return "world"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 4; }
     bool openByDefault() const override { return false; }

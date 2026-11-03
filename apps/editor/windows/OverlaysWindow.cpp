@@ -14,6 +14,7 @@ class OverlaysWindow : public EditorWindow {
 public:
     const char* id() const override { return "overlays"; }
     const char* title() const override { return "Оверлеи"; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 7; }
     bool openByDefault() const override { return false; }

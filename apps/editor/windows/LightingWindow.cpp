@@ -19,7 +19,8 @@ Json& mapLights(Editor& ed) { return mapLightsMut(ed.doc()); }
 class LightingWindow : public EditorWindow {
 public:
     const char* id() const override { return "lighting"; }
-    const char* title() const override { return "Lighting"; }
+    const char* title() const override { return "Освещение"; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }

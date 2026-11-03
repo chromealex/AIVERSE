@@ -24,6 +24,7 @@ class BrandingWindow : public EditorWindow {
 public:
     const char* id() const override { return "branding"; }
     const char* title() const override { return "Иконки и заставка"; }
+    const char* group() const override { return "publish"; }
     const char* dockArea() const override { return "center"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }

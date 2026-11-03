@@ -13,6 +13,7 @@ class FogWindow : public EditorWindow {
 public:
     const char* id() const override { return "fog"; }
     const char* title() const override { return "Туман войны"; }
+    const char* group() const override { return "world"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }

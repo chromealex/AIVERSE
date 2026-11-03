@@ -112,6 +112,35 @@
 #define ICON_EXIT           "\xee\x84\x8e"   // log-out U+E10E
 #define ICON_MAP_PIN        "\xee\x84\x91"   // map-pin U+E111
 #define ICON_GAUGE          "\xee\x86\xbf"   // gauge U+E1BF
+// added for the editor UX pass
+#define ICON_FILTER          "\xee\x91\xa0"   // list-filter U+E460
+#define ICON_LOCK            "\xee\x84\x8b"   // lock U+E10B
+#define ICON_UNLOCK          "\xee\x84\x8c"   // unlock U+E10C
+#define ICON_MAGNET          "\xee\x8a\xb5"   // magnet U+E2B5
+#define ICON_LIST_TREE       "\xee\x90\x88"   // list-tree U+E408
+#define ICON_SLIDERS         "\xee\x8a\x9a"   // sliders-horizontal U+E29A
+#define ICON_FULLSCREEN      "\xee\x94\xb4"   // fullscreen U+E534
+#define ICON_APP_WINDOW      "\xee\x90\xa6"   // app-window U+E426
+#define ICON_SCROLL_TEXT     "\xee\x91\x9f"   // scroll-text U+E45F
+#define ICON_BRACES          "\xee\x8d\xaa"   // braces U+E36A
+#define ICON_SPARKLES        "\xee\x90\x92"   // sparkles U+E412
+#define ICON_MOUNTAIN_SNOW   "\xee\x88\xb2"   // mountain-snow U+E232
+#define ICON_DASHBOARD       "\xee\x87\x81"   // layout-dashboard U+E1C1
+#define ICON_CHART_LINE      "\xee\x8a\xa5"   // chart-line U+E2A5
+#define ICON_CIRCLE_CHECK    "\xee\x88\xa6"   // circle-check U+E226
+#define ICON_PACKAGE         "\xee\x84\xa9"   // package U+E129
+#define ICON_KEYBOARD        "\xee\x8a\x84"   // keyboard U+E284
+#define ICON_DICE            "\xee\x8a\x8b"   // dice-5 U+E28B
+#define ICON_WAND            "\xee\x8d\x97"   // wand-sparkles U+E357
+#define ICON_FLAME           "\xee\x83\x92"   // flame U+E0D2
+#define ICON_PIN             "\xee\x89\x99"   // pin U+E259
+#define ICON_SCALING         "\xee\x8b\xac"   // scaling U+E2EC
+#define ICON_MAXIMIZE        "\xee\x84\x93"   // maximize-2 U+E113
+#define ICON_RATIO           "\xee\x93\xa8"   // ratio U+E4E8
+#define ICON_LAYERS          "\xee\x94\xaa"   // layers-2 U+E52A
+#define ICON_GRID            "\xee\x83\xa9"   // grid-3x3 U+E0E9
+#define ICON_BOOK            "\xee\x81\x9f"   // book-open U+E05F
+#define ICON_X               "\xee\x86\xb2"   // x U+E1B2
 
 namespace rts::editor {
 
@@ -122,6 +151,8 @@ inline const char* windowIconFor(const char* id) {
         {"tools", ICON_TOOLS}, {"project", ICON_PROJECT}, {"rules", ICON_RULES}, {"stats", ICON_STATS},
         {"agent", ICON_AGENT}, {"console", ICON_CONSOLE}, {"build", ICON_BUILD}, {"effects", ICON_FX},
         {"tiles", ICON_TILES}, {"terrain", ICON_TERRAIN}, {"lighting", ICON_LIGHTING}, {"models", ICON_MODELS}, {"fog", ICON_FOG},
+        {"generate", ICON_DICE}, {"materials", ICON_PALETTE}, {"fields", ICON_FLAME}, {"overlays", ICON_LAYERS},
+        {"postfx", ICON_SPARKLES}, {"branding", ICON_IMAGE}, {"scripts", ICON_BRACES},
     };
     for (auto& m : kMap) if (std::strcmp(m.id, id) == 0) return m.icon;
     return ICON_WINDOW;

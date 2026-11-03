@@ -19,10 +19,10 @@ class ScriptsWindow : public EditorWindow {
 public:
     const char* id() const override { return "scripts"; }
     const char* title() const override { return "Скрипты"; }
+    const char* group() const override { return "logic"; }
     const char* dockArea() const override { return "bottom"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
-    const char* icon() const override { return ICON_CONSOLE; }
 
     void draw(Editor& ed) override {
         const auto& rules = ed.ws().project.rulesJson;

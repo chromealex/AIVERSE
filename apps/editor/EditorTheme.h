@@ -41,6 +41,8 @@ public:
     void applyPending();                   // call outside of any ImGui frame
     void apply();                          // writes the whole ImGui style
     const Palette& palette() const { return pal_; }
+    // Palette of the theme applied last (helpers in EditorUtil.h use it: status colours, badges).
+    static const Palette& current();
 
     void drawMenu();                       // contents of Окна -> Тема
 

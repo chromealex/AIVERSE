@@ -71,6 +71,7 @@ class BuildWindow : public EditorWindow {
 public:
     const char* id() const override { return "build"; }
     const char* title() const override { return "Сборка"; }
+    const char* group() const override { return "publish"; }
     const char* dockArea() const override { return "center"; }
     int order() const override { return 5; }
     bool openByDefault() const override { return false; }

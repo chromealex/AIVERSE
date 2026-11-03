@@ -28,6 +28,7 @@ class MaterialsWindow : public EditorWindow {
 public:
     const char* id() const override { return "materials"; }
     const char* title() const override { return "Материалы"; }
+    const char* group() const override { return "world"; }
     const char* icon() const override { return ICON_PALETTE; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 4; }

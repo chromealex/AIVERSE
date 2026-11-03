@@ -57,7 +57,8 @@ Json modelInfo(const render::Model& m) {
 class ModelWindow : public EditorWindow {
 public:
     const char* id() const override { return "models"; }
-    const char* title() const override { return "Models"; }
+    const char* title() const override { return "Модели"; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 3; }
     bool openByDefault() const override { return false; }
