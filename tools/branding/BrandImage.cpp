@@ -376,13 +376,45 @@ std::string encodeIco(const std::vector<Image>& images) {
     return out;
 }
 
+namespace {
+// Classic icns RGB payload: each channel PackBits-style RLE (is32 / il32), alpha as an 8-bit mask (s8mk / l8mk).
+std::string icnsRle(const Image& img) {
+    std::string out;
+    const int n = img.width * img.height;
+    for (int ch = 0; ch < 3; ++ch) {
+        std::vector<uint8_t> v(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i) v[size_t(i)] = img.rgba[size_t(i) * 4 + size_t(ch)];
+        for (int i = 0; i < n;) {
+            int run = 1;
+            while (i + run < n && run < 130 && v[size_t(i + run)] == v[size_t(i)]) ++run;
+            if (run >= 3) { out += char(0x80 + run - 3); out += char(v[size_t(i)]); i += run; continue; }
+            int lit = 0;   // literals up to the next run of 3
+            while (i + lit < n && lit < 128 && !(i + lit + 2 < n && v[size_t(i + lit)] == v[size_t(i + lit + 1)] && v[size_t(i + lit)] == v[size_t(i + lit + 2)])) ++lit;
+            out += char(lit - 1);
+            for (int k = 0; k < lit; ++k) out += char(v[size_t(i + k)]);
+            i += lit;
+        }
+    }
+    return out;
+}
+} // namespace
+
 std::string encodeIcns(const std::vector<std::pair<std::string, Image>>& entries) {
     std::string body;
-    for (auto& [type, img] : entries) {
-        std::string png = encodePng(img);
+    auto chunk = [&](const std::string& type, const std::string& data) {
         body += type.substr(0, 4);
-        put32be(body, uint32_t(png.size() + 8));
-        body += png;
+        put32be(body, uint32_t(data.size() + 8));
+        body += data;
+    };
+    for (auto& [type, img] : entries) {
+        if (type == "is32" || type == "il32") {   // 16 / 32 px at 1x: the classic RLE format Finder always reads
+            chunk(type, icnsRle(img));
+            std::string mask(size_t(img.width) * size_t(img.height), '\0');
+            for (size_t i = 0; i < mask.size(); ++i) mask[i] = char(img.rgba[i * 4 + 3]);
+            chunk(type == "is32" ? "s8mk" : "l8mk", mask);
+            continue;
+        }
+        chunk(type, encodePng(img));
     }
     std::string out = "icns";
     put32be(out, uint32_t(body.size() + 8));

@@ -313,9 +313,10 @@ void generateMac(const IconSpec& s, const std::string& dir, const std::string& g
         save((set / ("icon_" + n + ".png")).string(), bySize[base], g);
         save((set / ("icon_" + n + "@2x.png")).string(), bySize[base * 2], g);
     }
-    // OSType -> pixels; PNG payloads (macOS 10.7+)
+    // OSType -> pixels; PNG payloads (macOS 10.7+). 16 / 32 px at 1x as classic RLE
+    // is32 / il32 + masks (PNG in icp4 / icp5 comes out garbled in Finder)
     std::vector<std::pair<std::string, Image>> e = {
-        {"icp4", bySize[16]}, {"icp5", bySize[32]}, {"ic11", bySize[32]}, {"ic12", bySize[64]}, {"ic07", bySize[128]},
+        {"is32", bySize[16]}, {"il32", bySize[32]}, {"ic11", bySize[32]}, {"ic12", bySize[64]}, {"ic07", bySize[128]},
         {"ic13", bySize[256]}, {"ic08", bySize[256]}, {"ic14", bySize[512]}, {"ic09", bySize[512]}, {"ic10", bySize[1024]}};
     saveText((fs::path(genDir) / "AppIcon.icns").string(), encodeIcns(e), g);
 }

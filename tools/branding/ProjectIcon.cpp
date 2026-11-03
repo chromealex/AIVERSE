@@ -96,12 +96,13 @@ std::vector<std::string> writeEditorIcons(const std::string& dir, const std::str
     fs::create_directories(dir, ec);
     Image logo;
     const Image* lp = !logoPath.empty() && loadImageFile(logoPath, logo) ? &logo : nullptr;
-    auto doc = [&](int px) { return projectDocumentIcon(px, lp); };
+    // .rtsproj files carry the engine icon itself (the same tile as the editor)
+    auto doc = [&](int px) { return editorAppIcon(px, lp); };
     auto app = [&](int px) { return editorAppIcon(px, lp); };
     auto icns = [](auto&& draw) {
         std::vector<std::pair<std::string, Image>> e;
         for (auto [type, px] : std::initializer_list<std::pair<const char*, int>>{
-                 {"icp4", 16}, {"icp5", 32}, {"ic11", 32}, {"ic12", 64}, {"ic07", 128},
+                 {"is32", 16}, {"il32", 32}, {"ic11", 32}, {"ic12", 64}, {"ic07", 128},   // 1x 16/32: RLE, not PNG (icp4/icp5 come out garbled in Finder)
                  {"ic13", 256}, {"ic08", 256}, {"ic14", 512}, {"ic09", 512}, {"ic10", 1024}})
             e.push_back({type, draw(px)});
         return encodeIcns(e);
