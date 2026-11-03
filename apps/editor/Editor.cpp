@@ -111,6 +111,8 @@ void Editor::init(gfx::Device& dev) {
         if (!ws_.openGame(opt_.projectDir, &err)) { status = "Ошибка проекта: " + err; showPicker_ = true; }
     } else showPicker_ = true;
     initFileAssoc();
+    registerNativeBuildOps(ws_, opt_.editorExe);   // up-to-date check against this binary
+    checkNativeModules(false);
     view_.setContentBase(ws_.project.dir.empty() ? "" : ws_.project.dir + "/");
     view_.init(dev, rules(), projectReader(ws_.project.dir));
     for (auto& w : view_.warnings()) ws_.log("view", w, true);
@@ -179,6 +181,7 @@ void Editor::openGame(const std::string& idOrDir) {
     showPicker_ = false;
     fitScene();
     status = "Игра: " + ws_.project.manifest.getStr("name", idOrDir);
+    checkNativeModules(false);
 }
 
 void Editor::reloadFx() {
@@ -646,6 +649,7 @@ void Editor::applyChanges() {
 // ============================ play-test ============================
 
 void Editor::startPlay(int humanSlot) {
+    if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
     auto issues = doc().validate(rules(), ws_.project.rulesJson);
     // every problem goes to the console / editor.log (the status bar shows only the first error)
     std::string firstError;
@@ -850,6 +854,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
         if (focusFirst_ > 0) --focusFirst_;
     }
     drawOpenRequest();
+    drawNativeBuild();
     // the screen: only the UI (3D views were rendered offscreen by their windows)
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.10f; pass.clearColor[1] = 0.11f; pass.clearColor[2] = 0.13f;

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "EditorTheme.h"
+#include "EditorNativeBuild.h"
 #include "modules/rts/view/RtsViewScript.h"
 #include "EditorWindow.h"
 #include "core/FileAssoc.h"
@@ -68,6 +69,7 @@ public:
         std::string editorExe;    // this executable (rtsmcp launches it when the editor isn't running)
         std::string openMap;
         int listenPort = -1; // -1 = automatic, 0 = no agent link, positive = exact port
+        bool nativeChild = false;    // --native-editor / RTS_NATIVE_EDITOR=1: started by the switch to the project's build (EditorNativeBuild.cpp)
     };
 
     explicit Editor(Options o) : opt_(std::move(o)) {}
@@ -247,6 +249,15 @@ private:
     std::string pendingOpen_;
     bool openAsked_ = false;
     AssocStatus assoc_;
+    int drawUnsavedChanges(const std::string& question);   // body of an unsaved-changes modal: 0 / 1 go / 2 cancel
+    // EditorNativeBuild.cpp: the project's C++ modules missing from this binary -> build an editor with them
+    bool projectBuild() const;
+    bool checkNativeModules(bool fromPlay);   // true: modules are missing (banner shown)
+    void refreshNativeBuild(bool withTools);
+    void startNativeEditorBuild();
+    void restartIntoNativeBuild();
+    void drawNativeBuild();
+    NativeBuildUi native_;
 
     struct Flash { float x0, z0, x1, z1; double until, length; };
     std::vector<Flash> flashes_;
