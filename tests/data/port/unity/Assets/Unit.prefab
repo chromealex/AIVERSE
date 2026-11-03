@@ -1,0 +1,22 @@
+%YAML 1.1
+--- !u!1 &1
+GameObject:
+  m_Name: Unit
+--- !u!4 &2
+Transform:
+  m_GameObject: {fileID: 1}
+  m_Father: {fileID: 0}
+  m_LocalPosition: {x: -3, y: 0, z: 5}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+--- !u!114 &3
+MonoBehaviour:
+  m_GameObject: {fileID: 1}
+  m_Script: {fileID: 11500000, guid: 11111111111111111111111111111111, type: 3}
+  health: 100
+  speed: 3
+  damage: 10
+  fireRate: 2
+  team: 1
+  range: 3
+  owner: 1
