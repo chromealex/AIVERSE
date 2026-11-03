@@ -576,8 +576,11 @@ if(RTS_BUILD_EDITOR)
         target_sources(rts_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
     endif()
     if(APPLE)
+        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .rtsproj default
+        # handler (chosen by bundle id) stays the regular editor
+        set(RTS_EDITOR_BUNDLE_ID "com.rtsengine.editor" CACHE STRING "Bundle identifier of RTSEditor.app")
         set_target_properties(rts_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "RTSEditor"
-            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "com.rtsengine.editor"
+            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "${RTS_EDITOR_BUNDLE_ID}"
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
         # application icon (CFBundleIconFile AppIcon; art: tools/branding/logo/make_logo.py)
         target_sources(rts_editor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns")

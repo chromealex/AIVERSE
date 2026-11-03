@@ -12633,6 +12633,7 @@ TEST(native_editor_build_helpers) {
     NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
     CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/RTSEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor");
     CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
+    CHECK(has(mac.configureArgs, "-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project") && !has(p.configureArgs, "-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project"));
     CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/rts_editor.exe").string());
     CHECK(nativeRestartCommand("macos", "/g/B/RTSEditor.app", "/g/G.rtsproj", "/eng/build") ==
           "open -n '/g/B/RTSEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");

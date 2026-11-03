@@ -118,6 +118,8 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
         "-DRTS_CONTENT_DIR=" + projectDir,
         "-DRTS_NATIVE_DIR=",            // a stale override must not pick another project's modules
         "-DRTS_BUILD_TESTS=OFF", "-DRTS_BUILD_SERVER=OFF"});
+    // macOS picks the .rtsproj handler by bundle id: the project's RTSEditor.app must not share the regular one's
+    if (host == "macos") p.configureArgs.push_back("-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project");
     p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "rts_editor", "rts_headless"};
     if (jobs > 0) p.buildArgs.insert(p.buildArgs.end(), {"--parallel", std::to_string(jobs)});
     const fs::path bd(p.buildDir);
