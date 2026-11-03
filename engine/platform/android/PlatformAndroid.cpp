@@ -242,9 +242,15 @@ int32_t onMouse(AInputEvent* ev) {
     e.x = AMotionEvent_getX(ev, 0) / S.scale; e.y = AMotionEvent_getY(ev, 0) / S.scale;
     e.mods = modsOf(AMotionEvent_getMetaState(ev));
     auto buttonOf = [](int32_t b) { return b == AMOTION_EVENT_BUTTON_SECONDARY ? 1 : b == AMOTION_EVENT_BUTTON_TERTIARY ? 2 : 0; };
+    // The button of a press / release from the change of the button state (API 14): AMotionEvent_getActionButton
+    // only exists from Android 33 (API level), above the minimum SDK.
+    static int32_t lastButtons = 0;
+    const int32_t buttons = AMotionEvent_getButtonState(ev), changed = buttons ^ lastButtons;
+    lastButtons = buttons;
+    const int32_t actionButton = changed ? (changed & -changed) : AMOTION_EVENT_BUTTON_PRIMARY;
     switch (code) {
-    case AMOTION_EVENT_ACTION_BUTTON_PRESS: e.type = EventType::MouseDown; e.button = buttonOf(AMotionEvent_getActionButton(ev)); break;
-    case AMOTION_EVENT_ACTION_BUTTON_RELEASE: e.type = EventType::MouseUp; e.button = buttonOf(AMotionEvent_getActionButton(ev)); break;
+    case AMOTION_EVENT_ACTION_BUTTON_PRESS: e.type = EventType::MouseDown; e.button = buttonOf(actionButton); break;
+    case AMOTION_EVENT_ACTION_BUTTON_RELEASE: e.type = EventType::MouseUp; e.button = buttonOf(actionButton); break;
     case AMOTION_EVENT_ACTION_MOVE: case AMOTION_EVENT_ACTION_HOVER_MOVE: case AMOTION_EVENT_ACTION_HOVER_ENTER: e.type = EventType::MouseMove; break;
     case AMOTION_EVENT_ACTION_SCROLL:
         e.type = EventType::MouseWheel;
