@@ -109,7 +109,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         const std::string msl = defs + (shadow ? shaders::kModelShadowMSL : shaders::kModelMSL);
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = shadow ? 9 : 10; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights
+        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = shadow ? 9 : 11; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
         e.shader = dev_->createShader(sd);
         if (!e.shader.valid()) {
@@ -225,7 +225,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     if (!ph.valid()) return;
     if (!(ph == currentPipe_)) {
         dev_->setPipeline(ph); currentPipe_ = ph;
-        if (phase != 0) lights.bind(5, 9);   // U5 / tex9: dynamic lights
+        if (phase != 0) { lights.bind(5, 9); bindTrace(10); }   // U5 / tex9: dynamic lights; tex10: height field (traced terrain shadows)
     }
     // per-instance block (an instanced shader declares 32 entries: the block is always uploaded whole)
     const uint32_t slots = instanced ? uint32_t(kMaxInstances) : 1u;

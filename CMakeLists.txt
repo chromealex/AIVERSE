@@ -333,6 +333,7 @@ set(RTS_RUNTIME_SRC
     engine/render/Lights.cpp
     engine/render/QualityGovernor.cpp
     engine/render/Renderer3DReflect.cpp
+    engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, rtsmcp, tests)
 list(APPEND RTS_RUNTIME_SRC engine/render/PostFx.cpp)

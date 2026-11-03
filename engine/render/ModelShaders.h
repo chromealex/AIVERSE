@@ -28,7 +28,7 @@
 // Textures: tex0 shadow map, tex1 base colour (sRGB), tex2 metallic-roughness (G rough, B metal),
 //           tex3 normal, tex4 occlusion (R), tex5 emissive (sRGB), tex6 team mask (R),
 //           tex7 baked joints (RGBA32F), tex8 morph deltas (RGBA32F)
-// Dynamic lights (LightShaders.h): U5 light block, tex9 light map.
+// Dynamic lights (LightShaders.h): U5 light block, tex9 light map. Traced terrain shadows: tex10 height field.
 #pragma once
 #include "Shaders.h"
 
@@ -149,7 +149,7 @@ void main() {
 )";
 
 inline const char* kModelFS =
-    RTS_GLSL_MODEL_BLOCKS RTS_GLSL_SHADOW RTS_GLSL_LIGHTS_AT("U5", "tex9")
+    RTS_GLSL_MODEL_BLOCKS RTS_GLSL_SHADOW RTS_GLSL_LIGHTS_AT("U5", "tex9") RTS_GLSL_TRACE_AT("tex10")
     R"(
 uniform mediump sampler2D tex1;
 uniform mediump sampler2D tex2;
@@ -239,7 +239,7 @@ void main() {
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
-    float sh = (ndl > 0.0 && v_draw.x > 0.5) ? shadowAt(v_wpos, normalize(v_nrm)) : 1.0;
+    float sh = (ndl > 0.0 && v_draw.x > 0.5) ? min(shadowAt(v_wpos, normalize(v_nrm)), terrainShadow(v_wpos)) : 1.0;
     sh *= cloudShade(v_wpos);
     vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
     vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
@@ -390,7 +390,7 @@ void main() {
     "#if RTS_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n"
 
 inline const char* kModelMSL =
-    RTS_MSL_MODEL_BLOCKS RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_MODEL_VERTEX
+    RTS_MSL_MODEL_BLOCKS RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE RTS_MSL_MODEL_VERTEX
     R"(
 struct VOut {
     float4 pos [[position]];
@@ -440,7 +440,8 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         texture2d<float> tex4 [[texture(4)]], sampler s4 [[sampler(4)]],
                         texture2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]],
                         texture2d<float> tex6 [[texture(6)]], sampler s6 [[sampler(6)]],
-                        constant LightU& lu [[buffer(6)]], texture2d<float> tex9 [[texture(9)]], sampler s9 [[sampler(9)]]) {
+                        constant LightU& lu [[buffer(6)]], texture2d<float> tex9 [[texture(9)]], sampler s9 [[sampler(9)]],
+                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]]) {
 #if defined(OUTLINE)
     return float4(sqrt(in.team.rgb), in.tint.a);
 #else
@@ -500,7 +501,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
-    float sh = (ndl > 0.0 && in.draw.x > 0.5) ? shadowAt(f, in.wpos, normalize(in.nrm), in.pos.xy, tex0, s0) : 1.0;
+    float sh = (ndl > 0.0 && in.draw.x > 0.5) ? min(shadowAt(f, in.wpos, normalize(in.nrm), in.pos.xy, tex0, s0), terrainShadow(f, tex10, s10, in.wpos)) : 1.0;
     sh *= cloudShade(lu, in.wpos);
     float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
     float3 sky = f.skyColor.rgb * f.skyColor.rgb, ground = f.groundColor.rgb * f.groundColor.rgb;

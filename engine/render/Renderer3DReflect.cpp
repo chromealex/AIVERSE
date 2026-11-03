@@ -40,6 +40,7 @@ void Renderer3D::renderReflection() {
         uploadFrameUniforms(false);
         dev_->setTexture(0, shadowMap_);
         lights.bind(2, 1, 2);   // not ready yet: binds black for the reflection slot
+        bindTraceTextures();    // height field (terrain shadows in the mirror image), scene placeholders
         for (const auto& it : items_) {
             if (it.color.w < 0.99f) continue;
             DrawUniformsR u{};
