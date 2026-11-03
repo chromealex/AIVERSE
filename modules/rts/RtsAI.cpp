@@ -902,8 +902,41 @@ void RtsAI::dungeon(Simulation& sim, RtsModule& m) {
     // 1) digging: keep a few marks open, tunnelling toward the nearest portal we don't own, then the enemy
     if (diggers && !R.diggables.empty() && player_ >= 1 && player_ <= 8) {
         const uint8_t bit = uint8_t(1u << (player_ - 1));
+        // what a cell pays is worth nothing while those resources sit at their cap (gold full: dig toward the enemy)
+        const auto& ecoD = gs.players[player_];
+        auto pays = [&](size_t i) {
+            const auto& y = R.diggables[g.dig[i] - 1u].yields;
+            for (auto& a : y) {
+                const Fixed cap = ecoD.cap[a.res];
+                if (!(R.resources[a.res].capped && cap.raw > 0 && ecoD.stock[a.res] * 10 >= cap * 9)) return true;
+            }
+            return false;
+        };
+        // marks on endless seams don't count (they never clear: four of them stopped all other digging), and a seam
+        // that pays nothing any more is unmarked
+        // a mark with no floor of ours (or nobody's) next to it can only be dug from inside another keeper's dungeon:
+        // it is dropped (imps sent there die and the mark blocked the budget for the rest of the match)
+        auto fromOurSide = [&](int c) {
+            static const int ex[4] = {1, -1, 0, 0}, ey[4] = {0, 0, 1, -1};
+            for (int k = 0; k < 4; ++k) {
+                const int nc = g.surf ? g.surf->neighbor(c, k) : (g.inside(c % g.w + ex[k], c / g.w + ey[k]) ? g.index(c % g.w + ex[k], c / g.w + ey[k]) : -1);
+                if (nc < 0) continue;
+                const size_t n = size_t(nc);
+                if (g.dig[n] || !(g.flags[n] & kCellGround)) continue;
+                if (g.territory[n] == 0 || g.territory[n] == player_) return true;
+            }
+            return false;
+        };
         int marked = 0;
-        for (auto mk : g.digMark) if (mk & bit) ++marked;
+        for (size_t i = 0; i < g.digMark.size(); ++i) {
+            if (!(g.digMark[i] & bit) || !g.dig[i]) continue;
+            const bool endless = R.diggables[g.dig[i] - 1u].infinite;
+            if ((endless && !pays(i)) || !fromOurSide(int(i))) {
+                Command c; c.type = kCmdDig; c.point = g.centerOf(int(i)); c.param = rectParam(1, 1, 1); send(sim, c);
+                continue;
+            }
+            if (!endless) ++marked;
+        }
         if (marked < 4) {
             // tunnel to a portal nobody owns first; the enemy keep only once the dungeon can fight (a Dungeon Keeper
             // computer player digs for gold and rooms early, and breaks into the enemy later)
@@ -964,6 +997,10 @@ void RtsAI::dungeon(Simulation& sim, RtsModule& m) {
             }
             std::vector<std::pair<Fixed, int>> cands;
             for (int c : q) {
+                // dig only from our own or unclaimed floor: imps sent to rock inside another keeper's dungeon (or past
+                // the heroes) die on the way, and their marks never clear
+                const uint8_t tc = g.territory[size_t(c)];
+                if (tc != 0 && tc != player_) continue;
                 for (int k = 0; k < 4; ++k) {
                     const int nc = nb(c, k);
                     if (nc < 0) continue;
@@ -972,7 +1009,10 @@ void RtsAI::dungeon(Simulation& sim, RtsModule& m) {
                     if (g.wall[n] != 0 && g.wall[n] != player_) continue;   // another keeper's reinforced wall: can't be dug
                     if (nearEnemyFloor(nc)) continue;
                     Fixed score = dist(g.centerOf(nc), goal);
-                    if (!R.diggables[g.dig[n] - 1u].yields.empty()) score -= Fixed::fromInt(24); // veins first: gold pays for everything
+                    if (!R.diggables[g.dig[n] - 1u].yields.empty()) {
+                        if (pays(n)) score -= Fixed::fromInt(24);   // veins first: gold pays for everything
+                        else if (R.diggables[g.dig[n] - 1u].infinite) continue;   // a full seam: not now
+                    }
                     cands.push_back({score, int(n)});
                 }
             }
