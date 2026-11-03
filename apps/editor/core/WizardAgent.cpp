@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -33,11 +34,43 @@ std::string loginShell() {
     return s && *s ? s : "/bin/zsh";
 }
 
-bool haveCli(const std::string& name) {
+// The CLI's absolute path. A GUI app on macOS starts with a short PATH (no npm / brew / ~/.local), so look in PATH,
+// then where installers put claude / codex, then ask the user's shell (login + interactive: .zprofile and .zshrc).
+std::string findCli(const std::string& name) {
 #if defined(_WIN32)
-    return std::system(("where " + name + " >NUL 2>NUL").c_str()) == 0;
+    return std::system(("where " + name + " >NUL 2>NUL").c_str()) == 0 ? name : std::string();
 #else
-    return std::system((loginShell() + " -lc " + q("command -v " + name) + " >/dev/null 2>&1").c_str()) == 0;
+    std::error_code ec;
+    auto exe = [&](const fs::path& p) { return fs::is_regular_file(p, ec) && ::access(p.c_str(), X_OK) == 0; };
+    if (const char* path = std::getenv("PATH")) {
+        std::string ps = path;
+        size_t a = 0;
+        while (a <= ps.size()) {
+            const size_t b = ps.find(':', a);
+            const std::string d = ps.substr(a, b == std::string::npos ? std::string::npos : b - a);
+            if (!d.empty() && exe(fs::path(d) / name)) return (fs::path(d) / name).string();
+            if (b == std::string::npos) break;
+            a = b + 1;
+        }
+    }
+    const char* h = std::getenv("HOME");
+    const fs::path home = h ? h : "/";
+    std::vector<fs::path> dirs = {home / ".local/bin", home / ".claude/local", home / ".npm-global/bin", home / ".bun/bin",
+                                  home / ".volta/bin", home / ".yarn/bin", "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"};
+    for (auto it = fs::directory_iterator(home / ".nvm/versions/node", ec); !ec && it != fs::directory_iterator(); it.increment(ec))
+        dirs.push_back(it->path() / "bin");
+    for (auto& d : dirs) if (exe(d / name)) return (d / name).string();
+    FILE* p = popen((loginShell() + " -ilc " + q("command -v " + name) + " 2>/dev/null </dev/null").c_str(), "r");
+    std::string out;
+    if (p) { char buf[1024]; while (std::fgets(buf, sizeof buf, p)) out += buf; pclose(p); }
+    size_t nl = out.rfind('/');                                   // the last line that is a path
+    if (nl != std::string::npos) {
+        const size_t a = out.rfind('\n', nl) == std::string::npos ? 0 : out.rfind('\n', nl) + 1;
+        std::string path = out.substr(a);
+        while (!path.empty() && (path.back() == '\n' || path.back() == '\r' || path.back() == ' ')) path.pop_back();
+        if (exe(path)) return path;
+    }
+    return {};
 #endif
 }
 
@@ -49,11 +82,13 @@ std::string clip(const std::string& s, size_t n) {
 
 } // namespace
 
-bool agentClientCanRun(const std::string& id) {
-    if (id == "claude-code") return haveCli("claude");
-    if (id == "codex") return haveCli("codex");
-    return false;
+std::string agentCliPath(const std::string& id) {
+    if (id == "claude-code") return findCli("claude");
+    if (id == "codex") return findCli("codex");
+    return {};
 }
+
+bool agentClientCanRun(const std::string& id) { return !agentCliPath(id).empty(); }
 
 std::string wizardAgentTask(const WizardSpec& s, const std::string& dir, const std::string& templ, const std::string& idea) {
     std::string t;
@@ -103,11 +138,15 @@ bool AgentRun::start(const std::string& clientId, const std::string& dir, const 
 #else
     if (running_) { if (err) *err = "агент уже работает"; return false; }
     if (thread_.joinable()) thread_.join();
+    const std::string cli = agentCliPath(clientId);
+    if (cli.empty()) { if (err) *err = std::string(clientId == "codex" ? "codex" : "claude") + " не найден: установите CLI или скопируйте задание"; return false; }
+    // the CLI's own folder first in PATH: npm-installed CLIs start through `env node`, which lives next to them
+    const std::string pathPrefix = "PATH=" + q(fs::path(cli).parent_path().string()) + ":\"$PATH\" ";
     std::string inner;
     if (clientId == "claude-code")
-        inner = "claude -p --output-format stream-json --verbose --allowedTools mcp__rtsengine --max-turns 400 < " + q(taskFile);
+        inner = pathPrefix + q(cli) + " -p --output-format stream-json --verbose --allowedTools mcp__rtsengine --max-turns 400 < " + q(taskFile);
     else if (clientId == "codex")
-        inner = "codex exec --full-auto - < " + q(taskFile);
+        inner = pathPrefix + q(cli) + " exec --full-auto - < " + q(taskFile);
     else { if (err) *err = "этот клиент нельзя запустить из редактора: скопируйте задание"; return false; }
     client_ = clientId;
     pidFile_ = taskFile + ".pid";

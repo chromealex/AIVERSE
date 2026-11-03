@@ -279,13 +279,16 @@ void drawAgent(Editor& ed, WizardUi& W, WizardSpec& S) {
     const std::string who = agentClientFor(W, S);
     if (beginForm("##fag2")) {
         row("Кто доводит");
+        auto connected = [&](const char* id) { for (auto& c : W.mcp.clients) if (c.id == id && c.upToDate) return true; return false; };
         std::vector<std::pair<std::string, std::string>> items = {{"", "авто"}};
-        if (W.canClaude) items.push_back({"claude-code", "Claude Code"});
-        if (W.canCodex) items.push_back({"codex", "Codex CLI"});
+        if (connected("claude-code") || W.canClaude) items.push_back({"claude-code", std::string("Claude Code") + (W.canClaude ? "" : " (CLI не найден)")});
+        if (connected("codex") || W.canCodex) items.push_back({"codex", std::string("Codex CLI") + (W.canCodex ? "" : " (CLI не найден)")});
         combo("##agentc", S.agentClient, items);
         endForm();
     }
-    if (who.empty())
+    if (!S.agentClient.empty() && who.empty())
+        ImGui::TextColored(ImVec4(1, 0.7f, 0.4f, 1), ICON_WARNING " %s", S.agentClient == "codex" ? "Codex CLI не найден или не подключён" : "Claude Code не найден или не подключён");
+    else if (who.empty())
         hint("Запустить из редактора можно Claude Code или Codex CLI (подключите и установите один). С Cursor, Windsurf или "
              "Claude Desktop мастер в конце даст задание — вставьте его в клиент.");
     else

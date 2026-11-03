@@ -18,6 +18,7 @@ namespace rts::editor {
 std::string wizardAgentTask(const WizardSpec& spec, const std::string& projectDir, const std::string& templ, const std::string& idea);
 
 bool agentClientCanRun(const std::string& clientId);   // claude-code / codex with the CLI found
+std::string agentCliPath(const std::string& clientId); // its absolute path ("" = not found)
 
 class AgentRun {
 public:
