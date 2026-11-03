@@ -42,6 +42,7 @@
 #include <windows.h>   // SetFileAttributesW: hide Builds/.temp
 #endif
 #include "UiSpriteSheets.h"
+#include "engine/platform/EngineDir.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -1022,7 +1023,7 @@ bool ensureToolchain(const std::string& target, const Options& o) {
 
 int main(int argc, char** argv) {
     Options o;
-    o.engine = RTS_SOURCE_DIR;
+    o.engine = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argc > 0 ? argv[0] : nullptr);
     std::string checkTarget, installWhat;
     bool json = false;
     for (int i = 1; i < argc; ++i) {

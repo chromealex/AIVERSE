@@ -3,6 +3,7 @@
 //              [--listen <port>|0] [--play]
 //              [--native-editor] [--tools-from <dir>]   (set by the switch to a per-project build: EditorNativeBuild.cpp)
 // Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
+#include "engine/platform/EngineDir.h"
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -58,7 +59,7 @@ static std::string findBuildTool(const std::string& dir) {
 
 int rtsMain(int argc, char** argv) {
     editor::Editor::Options opt;
-    opt.engineDir = RTS_SOURCE_DIR;
+    opt.engineDir = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argv[0]);   // source tree, or a packaged engine
     for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--play") g_demoPlay = true;
     std::string game, toolsFrom;
     if (const char* e = std::getenv("RTS_NATIVE_EDITOR"); e && *e && std::string(e) != "0") opt.nativeChild = true;
