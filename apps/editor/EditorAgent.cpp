@@ -13,6 +13,7 @@
 #define STBIW_ASSERT(x) ((void)0)
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"   // stb_image_write uses sprintf (deprecated in Apple's SDK)
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif

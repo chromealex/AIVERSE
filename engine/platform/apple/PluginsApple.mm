@@ -14,7 +14,10 @@
 @end
 
 namespace {
-std::string toStd(NSString* s) { return s ? std::string(s.UTF8String ?: "") : std::string(); }
+std::string toStd(NSString* s) {
+    const char* u = s ? s.UTF8String : nullptr;
+    return u ? std::string(u) : std::string();
+}
 
 std::string toJson(id data) {
     if (!data || data == NSNull.null) return "null";

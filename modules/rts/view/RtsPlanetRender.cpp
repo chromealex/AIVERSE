@@ -142,12 +142,11 @@ void PlanetRenderer::computeBounds(Body& b, Chunk& c) {
     {
         const int x1 = std::min(c.x0 + c.size, s.gridSize()), y1 = std::min(c.y0 + c.size, s.gridSize());
         float3 sum{};
-        int cnt = 0;
         float minR = 1e9f, maxR = -1e9f;
         const int step = std::max(1, (x1 - c.x0) / 8);
         for (int j = c.y0; j <= y1; j += step)
             for (int i = c.x0; i <= x1; i += step) {
-                sum += s.gridDir(c.face, i, j); ++cnt;
+                sum += s.gridDir(c.face, i, j);
             }
         // radial range over every corner (heights decide horizon culling)
         for (int j = c.y0; j <= y1; ++j)
