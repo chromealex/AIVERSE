@@ -63,13 +63,19 @@ open build/mac/RTSGame.app                                # игра
 ## Сборка под платформы — rtsbuild
 
 ```bash
-./build/mac/rtsbuild --project templates/skirmish --target macos     # dist/macos/<Name>.app (подписан ad-hoc)
-./build/mac/rtsbuild --project templates/skirmish --target ios       # dist/ios/xcode/RTSEngine.xcodeproj + сборка для симулятора
-./build/mac/rtsbuild --project templates/skirmish --target android   # dist/android/<Name> (Gradle) + APK, если есть SDK/NDK и gradle
-./build/mac/rtsbuild --project templates/skirmish --target web       # dist/web (нужен emsdk)
+./build/mac/rtsbuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (подписан ad-hoc)
+./build/mac/rtsbuild --project templates/skirmish --target ios       # Builds/ios/xcode/RTSEngine.xcodeproj + сборка для симулятора
+./build/mac/rtsbuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk, если есть SDK/NDK и gradle
+./build/mac/rtsbuild --project templates/skirmish --target web       # Builds/web (нужен emsdk)
 ./build/mac/rtsbuild --project templates/skirmish --target windows   # .exe через mingw-w64 (brew install mingw-w64) или исходники + build.bat
 ./build/mac/rtsbuild --project templates/skirmish --target all
 ```
+
+Результат кладётся в `<проект>/Builds/<платформа>/` — там только готовые сборки и отчёт о размере.
+Всё промежуточное (деревья CMake, паки, перекодированный звук, Gradle-проект, данные xcodebuild, оценка
+размера из редактора) лежит в скрытой `Builds/.temp/`; её можно удалить в любой момент. С `--generate-only`
+Gradle-проект для Android Studio кладётся в `Builds/android/<Name>`. Старые видимые `_build`, `_pack`,
+`_audio`, `_estimate` сборщик убирает сам.
 
 То же самое доступно в редакторе: меню **Сборка**. Сгенерированные проекты iOS и Android самодостаточны
 (в них скопированы исходники движка и контент), их можно отдавать дальше. Для iOS на устройство:

@@ -155,7 +155,7 @@ void registerDataOps(Workspace& ws) {
         [&ws](const Json& p) {
             if (ws.project.dir.empty()) throw std::runtime_error("no game is open (open_game)");
             const std::string target = p.getStr("target");
-            const fs::path out = fs::path(ws.project.dir) / "Builds" / "_estimate";
+            const fs::path out = fs::path(ws.project.dir) / "Builds" / ".temp" / "estimate";   // hidden: not a finished build
             std::string cmd = "\"" + ws.buildTool + "\" --project \"" + ws.project.dir + "\" --engine \"" + ws.engineDir + "\" --target " + target +
                               " --estimate --out \"" + out.string() + "\" 2>&1";
 #if defined(_WIN32)
