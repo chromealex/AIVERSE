@@ -13423,7 +13423,6 @@ TEST(game_wizard_makes_a_playable_project) {
     CHECK(r["warnings"].size() == 1);                              // only: the ad units are Yandex demo ones
 }
 #endif
-}
 
 // ---- dungeon walls (territory.fortify) and rock-bound fliers (movement.airOverRock)
 TEST(mech_dungeon_fortified_walls) {
