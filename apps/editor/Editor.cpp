@@ -647,7 +647,13 @@ void Editor::applyChanges() {
 
 void Editor::startPlay(int humanSlot) {
     auto issues = doc().validate(rules(), ws_.project.rulesJson);
-    for (auto& i : issues) if (i.error) { status = "Нельзя запустить: " + i.text; return; }
+    // every problem goes to the console / editor.log (the status bar shows only the first error)
+    std::string firstError;
+    for (auto& i : issues) {
+        ws_.log("play", (i.error ? "Нельзя запустить: " : "Предупреждение: ") + i.text, i.error);
+        if (i.error && firstError.empty()) firstError = i.text;
+    }
+    if (!firstError.empty()) { status = "Нельзя запустить: " + firstError; return; }
     try {
         SimConfig cfg;
         cfg.seed = uint64_t(std::time(nullptr));
@@ -664,9 +670,10 @@ void Editor::startPlay(int humanSlot) {
         sim_->setup(ws_.project.simRules(mapJson), mapJson);
         playIds_ = mapEntityIds(*sim_, *simModule(), mapJson);
         view_.lights().configure(ws_.project.manifest["lighting"], mapJson["lighting"], mapJson["lights"]); // day/night, map lights
-        if (auto pe = rts::game::configurePlayerColors(ws_.project.manifest["playerColors"]); !pe.empty()) status = pe;
+        if (auto pe = rts::game::configurePlayerColors(ws_.project.manifest["playerColors"]); !pe.empty()) { status = pe; ws_.log("play", pe, true); }
     } catch (const std::exception& e) {
         status = std::string("Ошибка запуска: ") + e.what();
+        ws_.log("play", status, true);
         sim_.reset();
         return;
     }
