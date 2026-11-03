@@ -96,6 +96,11 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
         S.contentRoot = access((dir + "/content").c_str(), F_OK) == 0 ? dir + "/content" : "content";
     }
     if (const char* h = std::getenv("HOME")) S.userDir = std::string(h) + "/.local/share/rtsengine";
+    // RTS_TOUCH_EMULATE=1 (tests): the left button is a finger (TouchBegin / Move / End, no hover) on a touch device,
+    // so the mobile input paths can be driven by XTEST on a desktop / Xvfb
+    const char* touchEnv = std::getenv("RTS_TOUCH_EMULATE");
+    const bool touchEmu = touchEnv && touchEnv[0] == '1';
+    if (touchEmu) S.touch = true;
 
     g_dpy = XOpenDisplay(nullptr);
     if (!g_dpy) { std::fprintf(stderr, "cannot open X display\n"); return 1; }
@@ -158,6 +163,11 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
                 }
                 break;
             case MotionNotify:
+                if (touchEmu) {
+                    if (!(xe.xmotion.state & Button1Mask)) break;
+                    e.type = EventType::TouchMove; e.touchId = 1; e.x = float(xe.xmotion.x); e.y = float(xe.xmotion.y);
+                    detail::dispatch(e); break;
+                }
                 e.type = EventType::MouseMove; e.x = float(xe.xmotion.x); e.y = float(xe.xmotion.y); e.mods = mods(xe.xmotion.state);
                 detail::dispatch(e); break;
             case ButtonPress: case ButtonRelease: {
@@ -171,6 +181,10 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
                         detail::dispatch(e);
                     }
                     break;
+                }
+                if (touchEmu && b == 1) {
+                    e.type = xe.type == ButtonPress ? EventType::TouchBegin : EventType::TouchEnd; e.touchId = 1;
+                    detail::dispatch(e); break;
                 }
                 e.type = xe.type == ButtonPress ? EventType::MouseDown : EventType::MouseUp;
                 e.button = b == 1 ? 0 : b == 3 ? 1 : 2;

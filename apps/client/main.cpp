@@ -441,7 +441,7 @@ Vec3 GameClient::placeCentre(float sx, float sy, bool& ok) {
 
 void GameClient::event(const Event& e) {
     bool uiWants = ui_.handleEvent(e);
-    if(screen_!=Screen::Playing || e.type==EventType::FocusLost){entityActions_.cancel();entityPointer_=false;}
+    if(screen_!=Screen::Playing || e.type==EventType::FocusLost){entityActions_.cancel();entityPointer_=false;mapTapPending_=false;}
     if (e.type == EventType::KeyDown && e.key == Key::F8 && !e.repeat) ui_.toggleDebugger();
     // a press that started on the UI keeps the pointer until release (dragging out of a panel
     // must not start a selection box); a press that started in the world ignores the UI
@@ -561,6 +561,9 @@ void GameClient::event(const Event& e) {
         break;
     case EventType::MouseMove:
         hover_ = uiWants ? kNullEntity : pick(e.x, e.y);
+        if (mapTapPending_ && std::hypot(e.x - mapTapX_, e.y - mapTapY_) > 10) {   // the press became a drag: pan from here
+            mapTapPending_ = false; panning_ = true; downX_ = e.x; downY_ = e.y;
+        }
         if (panning_) {
             float3 a, b;
             if (groundAt(downX_, downY_, a) && groundAt(e.x, e.y, b)) cam_.target += a - b;
@@ -573,6 +576,10 @@ void GameClient::event(const Event& e) {
         }
         break;
     case EventType::MouseUp:
+        if (mapTapPending_) {
+            mapTapPending_ = false;
+            if (e.button == 0) { mapClickTap(e.x, e.y); panning_ = false; break; }
+        }
         if (toolMouseUp(e)) { panning_ = false; break; }
         if (e.button == 0) {
             if (sendDrag_) {
@@ -660,7 +667,8 @@ void GameClient::event(const Event& e) {
                 if (touchMoved_) command(kCmdSmart, e.x, e.y, false);
             } else if (!touchMoved_ && !uiWants) {
                 Entity t = pick(e.x, e.y);
-                if (mode_ == Mode::Place || mode_ == Mode::Ability || mode_ == Mode::Claim || mode_ == Mode::Skill || mode_ == Mode::Drop || mode_ == Mode::ScriptCmd) {
+                if (mapClickTap(e.x, e.y)) {   // rules "mapClick": a tap is the game's tap command, as a mouse click
+                } else if (mode_ == Mode::Place || mode_ == Mode::Ability || mode_ == Mode::Claim || mode_ == Mode::Skill || mode_ == Mode::Drop || mode_ == Mode::ScriptCmd) {
                     Event fake = e; fake.type = EventType::MouseDown; fake.button = 0; fake.mods = 0;
                     event(fake);
                 } else if (t.valid() && w.get<Owner>(t).player == human_ && !selectionHasGarrison()) {

@@ -156,6 +156,7 @@ private:
     void startScriptCommand(int index);
     void issueScriptCommand(int index, Entity target, Vec3 point, bool havePoint);
     bool scriptCommandClick(const platform::Event& e);
+    bool mapClickTap(float x, float y);   // rules "mapClick": send the tap command at a screen point (ClientScriptCmd.cpp)
     bool scriptCommandKey(platform::Key k);
     std::string scriptCommandHint();
     void issueViewCommands();
@@ -316,6 +317,8 @@ private:
     std::map<int64_t, std::pair<float, float>> touches_;
     float pinchDist_ = 0;
     bool touchMoved_ = false;
+    bool mapTapPending_ = false;   // "mapClick" games: a left press is a tap until it moves (then it pans)
+    float mapTapX_ = 0, mapTapY_ = 0;
     std::vector<std::pair<float3, double>> markers_;
 };
 
