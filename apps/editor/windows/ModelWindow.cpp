@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <filesystem>
 #include "../Editor.h"
+#include "../EditorUtil.h"
 #include "modules/rts/view/RtsPortrait.h"
 
 namespace fs = std::filesystem;
@@ -57,7 +58,8 @@ Json modelInfo(const render::Model& m) {
 class ModelWindow : public EditorWindow {
 public:
     const char* id() const override { return "models"; }
-    const char* title() const override { return "Models"; }
+    const char* title() const override { return "Модели"; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 3; }
     bool openByDefault() const override { return false; }
@@ -85,7 +87,7 @@ public:
         }
         const std::string& tid = types[size_t(type_)].id;
         for (const auto& w : ed.view().warnings())
-            if (w.find("type '" + tid + "'") == 0) ImGui::TextColored(ImVec4(1, 0.55f, 0.3f, 1), "%s", w.c_str());
+            if (w.find("type '" + tid + "'") == 0) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
         const render::Model* m = ed.view().modelOf(uint16_t(type_));
         if (!m) return;
         ImGui::Text("%s", m->path.c_str());

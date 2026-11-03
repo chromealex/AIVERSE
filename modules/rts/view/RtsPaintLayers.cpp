@@ -310,7 +310,8 @@ void RtsPaintLayers::drawCells(render::Renderer3D& r,gfx::Device& dev,render::Pa
   l.bytes.resize(size_t(tw)*th*4);
   for(int y=0;y<th;++y)for(int x=0;x<tw;++x){
    const uint8_t c=p.cells[size_t(y/d)*p.cellsW+size_t(x/d)];const size_t i=size_t(y)*tw+x;
-   for(int k=0;k<3;++k)l.bytes[i*4+size_t(k)]=p.palette[size_t(c)*4+size_t(k)];l.bytes[i*4+3]=c;
+   for(int k=0;k<3;++k)l.bytes[i*4+size_t(k)]=p.palette[size_t(c)*4+size_t(k)];
+   l.bytes[i*4+3]=c;
   }
   l.canvas.upload(0,0,tw,th,l.bytes.data(),tw*4);
   if(p.coast&&p.cellsDirty){   // the shoreline is static: rebuilt only when the sea mask changes

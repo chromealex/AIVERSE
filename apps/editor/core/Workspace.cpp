@@ -549,7 +549,7 @@ void Workspace::registerCoreOps() {
         if (!project.rulesError.empty()) r.set("rulesError", str(project.rulesError));
         return r;
     });
-    add("set_manifest", "Set a value in game.json (name, version, orientation, icon, maps, input, ...). Saved immediately.",
+    add("set_manifest", "Set a value in game.json (name, version, orientation, window, icon, maps, input, ...). Saved immediately. window = desktop window: {mode: windowed|fixed|maximized|fullscreen, width, height, minWidth, minHeight, keepAspect, allowFullscreen, macos|windows|linux: overrides}.",
         R"({"properties": {"path": {"type": "string"}, "value": {}}, "required": ["path", "value"]})", [this, needProject](const Json& p) {
             needProject();
             *jsonPath(project.manifest, ps(p, "path"), true) = p["value"];

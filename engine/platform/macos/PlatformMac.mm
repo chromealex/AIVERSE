@@ -157,10 +157,17 @@ static void updateSizes(NSView* view) {
 @implementation RTSAppDelegate
 - (void)applicationDidFinishLaunching:(NSNotification*)n {
     auto& S = state();
-    NSRect frame = NSMakeRect(0, 0, S.cfg.width, S.cfg.height);
-    g_window = [[NSWindow alloc] initWithContentRect:frame
-        styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
-        backing:NSBackingStoreBuffered defer:NO];
+    if (S.cb.configure) S.cb.configure(S.cfg);   // game data: window size and mode (content root is known: run() set it)
+    const AppConfig& cfg = S.cfg;
+    NSRect frame = NSMakeRect(0, 0, cfg.width, cfg.height);
+    NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
+    if (cfg.resizable || cfg.windowMode == AppConfig::WindowMode::Fullscreen) style |= NSWindowStyleMaskResizable;   // AppKit fullscreen needs a resizable window
+    g_window = [[NSWindow alloc] initWithContentRect:frame styleMask:style backing:NSBackingStoreBuffered defer:NO];
+    // game.json "window": minimum size, aspect lock, whether the green button / Ctrl+Cmd+F go fullscreen
+    if (cfg.minWidth > 0 || cfg.minHeight > 0) g_window.contentMinSize = NSMakeSize(MAX(cfg.minWidth, 1), MAX(cfg.minHeight, 1));
+    if (cfg.keepAspect && cfg.resizable) g_window.contentAspectRatio = NSMakeSize(cfg.width, cfg.height);
+    const bool fullscreenAllowed = cfg.allowFullscreen || cfg.windowMode == AppConfig::WindowMode::Fullscreen;
+    g_window.collectionBehavior = fullscreenAllowed ? NSWindowCollectionBehaviorFullScreenPrimary : NSWindowCollectionBehaviorFullScreenNone;
     g_window.title = [NSString stringWithUTF8String:S.cfg.title.c_str()];
     g_window.delegate = self;
     g_window.releasedWhenClosed = NO; // we keep using it until terminate (no ARC here)
@@ -173,9 +180,12 @@ static void updateSizes(NSView* view) {
     updateSizes(self.view);
     g_device = gfx::createMetalDevice((__bridge void*)self.view.layer);
     if (S.cb.init) S.cb.init(*g_device);   // before the window becomes key: no events reach an uninitialised app
+    if (cfg.windowMode == AppConfig::WindowMode::Maximized && cfg.resizable && g_window.screen)
+        [g_window setFrame:g_window.screen.visibleFrame display:NO];   // "maximized": the whole visible screen, still a window
     [g_window makeKeyAndOrderFront:nil];
     [g_window makeFirstResponder:self.view];
     [NSApp activateIgnoringOtherApps:YES];
+    if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) [g_window toggleFullScreen:nil];   // native fullscreen (own Space)
     updateSizes(self.view);
     g_last = std::chrono::steady_clock::now();
     self.timer = [NSTimer timerWithTimeInterval:1.0 / 120.0 target:self selector:@selector(tick) userInfo:nil repeats:YES];

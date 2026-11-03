@@ -22,7 +22,8 @@ using namespace render;
 class GameWindow : public EditorWindow {
 public:
     const char* id() const override { return "game"; }
-    const char* title() const override { return "Game"; }
+    const char* title() const override { return "Игра"; }
+    const char* group() const override { return "scene"; }
     int order() const override { return 1; }
     const char* dockArea() const override { return "center"; }
     bool zeroPadding() const override { return true; }
@@ -38,8 +39,23 @@ public:
         dl->AddRectFilled(origin, ImVec2(origin.x + avail.x, origin.y + avail.y), ImGui::GetColorU32(ed.theme().palette().canvas)); // lighter than the device bezel
         if (!ed.playing()) {
             gameHud_.reset();
-            ui::emptyState(origin, ImVec2(origin.x + avail.x, origin.y + avail.y), ICON_GAME, "Тест не запущен",
-                           "Нажмите " ICON_PLAY " на панели выше или F5: боты против ботов, или выберите, за кого играть.");
+            const float bh = ImGui::GetFrameHeight() + 8;
+            ui::emptyState(origin, ImVec2(origin.x + avail.x, origin.y + avail.y - bh * 2), ICON_GAME, "Тест не запущен",
+                           "F5 или кнопки ниже: боты против ботов или игра за одного из игроков.");
+            // start buttons under the message
+            std::vector<std::pair<std::string, int>> starts{{std::string(ICON_BOT "  Боты против ботов"), 0}};
+            for (size_t p = 0; p < ed.doc().data.players.size() && starts.size() < 4; ++p)
+                if (!ed.doc().data.players[p].waves) starts.push_back({std::string(ICON_USER "  Играть за ") + ed.doc().data.players[p].name, int(p + 1)});
+            float total = 0;
+            for (auto& st : starts) total += ImGui::CalcTextSize(st.first.c_str()).x + ImGui::GetStyle().FramePadding.x * 2 + 8;
+            ImGui::SetCursorScreenPos(ImVec2(origin.x + std::max(8.0f, (avail.x - total) * 0.5f), origin.y + (avail.y - bh * 2) * 0.5f + ImGui::GetFontSize() * 4.2f));
+            for (size_t i = 0; i < starts.size(); ++i) {
+                if (i) ImGui::SameLine();
+                ImGui::PushID(int(i));
+                if (ui::button("", starts[i].first.c_str() , i == 0)) ed.startPlay(starts[i].second);
+                ImGui::PopID();
+            }
+            ImGui::SetCursorScreenPos(origin);
             ImGui::Dummy(avail);
             ed.gameViewport = nullptr;
             return;
@@ -128,8 +144,7 @@ private:
         ImGui::SetNextItemWidth(220);
         if (ImGui::BeginCombo("##device", cur ? cur->name : "Свободный размер", ImGuiComboFlags_HeightLarge)) {
             if (ImGui::IsWindowAppearing()) { filter_.clear(); ImGui::SetKeyboardFocusHere(); }
-            ui::inputString("##devfilter", filter_);
-            if (filter_.empty()) { ImGui::SameLine(14); ImGui::TextDisabled(ICON_SEARCH "  поиск устройства"); }
+            ui::searchField("##devfilter", filter_, "Устройство");
             auto lower = [](std::string v) { for (auto& c : v) c = char(std::tolower((unsigned char)c)); return v; };
             const std::string f = lower(filter_);
             const char* group = nullptr;

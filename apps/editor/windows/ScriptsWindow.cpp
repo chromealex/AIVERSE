@@ -19,31 +19,41 @@ class ScriptsWindow : public EditorWindow {
 public:
     const char* id() const override { return "scripts"; }
     const char* title() const override { return "Скрипты"; }
+    const char* group() const override { return "logic"; }
     const char* dockArea() const override { return "bottom"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
-    const char* icon() const override { return ICON_CONSOLE; }
 
     void draw(Editor& ed) override {
         const auto& rules = ed.ws().project.rulesJson;
         const Json map = ed.doc().toJson();
         auto sims = game::scriptFiles(rules, map, false), views = game::scriptFiles(rules, map, true);
         if (sims.empty() && views.empty())
-            ui::help("У игры нет скриптов. Добавьте файл scripts/x.lua и строку \"scripts\": [\"scripts/x.lua\"] в rules.json "
-                     "(или MCP script_write {register: true}). Справка: docs/scripting.md, MCP script_api.");
-        for (auto& f : sims) ImGui::BulletText("%s  (симуляция)", f.c_str());
-        for (auto& f : views) ImGui::BulletText("%s  (вид)", f.c_str());
+            ui::callout(ui::Tone::Normal, "У игры нет скриптов. Добавьте файл scripts/x.lua и строку \"scripts\": [\"scripts/x.lua\"] в rules.json "
+                                          "(или MCP script_write {register: true}). Справка: docs/scripting.md, MCP script_api.");
+        if (!sims.empty() || !views.empty()) {
+            if (ImGui::BeginTable("##files", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                for (auto& f : sims) { ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TextUnformatted((std::string(ICON_BRACES "  ") + f).c_str()); ImGui::TableNextColumn(); ImGui::TextDisabled("симуляция"); }
+                for (auto& f : views) { ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TextUnformatted((std::string(ICON_EYE "  ") + f).c_str()); ImGui::TableNextColumn(); ImGui::TextDisabled("вид"); }
+                ImGui::EndTable();
+            }
+        }
         ImGui::Checkbox("Перезапускать тест при изменении файлов", &autoRestart_);
-        ImGui::Separator();
         auto* m = ed.simModule();
         auto* se = m ? m->scripts() : nullptr;
-        if (!se) { ImGui::TextDisabled(ed.playing() ? "В тесте нет скриптов симуляции" : "Журнал появится во время теста (F5)"); return; }
-        ImGui::Text("Ошибок: %d", se->errorCount());
+        ui::section(ICON_SCROLL_TEXT, "Журнал теста");
+        if (!se) { ui::hint(ed.playing() ? "В тесте нет скриптов симуляции" : "Журнал появится во время теста (F5)"); return; }
+        if (se->errorCount() > 0) { char t[48]; std::snprintf(t, sizeof t, "%s ошибок: %d", ICON_ALERT, se->errorCount()); ui::badge(t, ui::toneColor(ui::Tone::Error)); }
+        else ui::toneText(ui::Tone::Ok, "%s Ошибок нет", ICON_CIRCLE_CHECK);
+        ImGui::SameLine();
+        ImGui::Checkbox("Только ошибки", &errorsOnly_);
         ImGui::BeginChild("##scriptlog", ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
         for (auto& e : se->log()) {
-            const std::string line = "[" + std::to_string(e.tick) + "] " + e.text;
-            if (e.error) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1), "%s", line.c_str());
-            else ImGui::TextUnformatted(line.c_str());
+            if (errorsOnly_ && !e.error) continue;
+            ImGui::TextDisabled("%6u", e.tick);
+            ImGui::SameLine();
+            if (e.error) ui::toneText(ui::Tone::Error, "%s", e.text.c_str());
+            else ImGui::TextUnformatted(e.text.c_str());
         }
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 20) ImGui::SetScrollHereY(1.0f);
         ImGui::EndChild();
@@ -122,7 +132,7 @@ public:
     }
 
 private:
-    bool autoRestart_ = true;
+    bool autoRestart_ = true, errorsOnly_ = false;
     double since_ = 0;
     std::string dir_;
     game::ScriptEngine* attached_ = nullptr;

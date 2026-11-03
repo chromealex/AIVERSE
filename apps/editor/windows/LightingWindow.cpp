@@ -19,7 +19,8 @@ Json& mapLights(Editor& ed) { return mapLightsMut(ed.doc()); }
 class LightingWindow : public EditorWindow {
 public:
     const char* id() const override { return "lighting"; }
-    const char* title() const override { return "Lighting"; }
+    const char* title() const override { return "Освещение"; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
@@ -40,20 +41,26 @@ public:
     void draw(Editor& ed) override {
         render::LightSystem& ls = ed.renderer().lights;
         if (!ImGui::IsAnyItemActive()) editing_ = false;
-        ImGui::Checkbox("Маркеры источников в Scene", &gizmos_);
+        ImGui::Checkbox(ICON_MAP_PIN "  Маркеры источников в «Сцене»", &gizmos_);
         ui::help("Пока окно открыто: круг — радиус, у прожектора линии конуса до земли. Маркер можно перетащить мышью; Ctrl+Z отменяет.");
         if (gizmos_) drawGizmos(ed);
-        ImGui::SeparatorText("Предпросмотр");
+        ui::section(ICON_EYE, "Предпросмотр");
         ImGui::Checkbox("Время суток и погода вручную", &preview_);
         ui::help("Только для просмотра в редакторе: в игре время идёт по блоку \"lighting\" карты или game.json.");
         ImGui::BeginDisabled(!preview_);
-        ImGui::SliderFloat("Время суток", &time_, 0.0f, 1.0f, timeLabel(time_));
-        ImGui::SliderFloat("Облачность", &clouds_, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("Гроза", &storm_, 0.0f, 1.0f, "%.2f");
+        const bool pp = ui::beginProps("##preview");
+        if (pp) ui::prop("Время суток");
+        ImGui::SliderFloat("##Время суток", &time_, 0.0f, 1.0f, timeLabel(time_));
+        if (pp) ui::prop("Облачность");
+        ImGui::SliderFloat("##Облачность", &clouds_, 0.0f, 1.0f, "%.2f");
+        if (pp) ui::prop("Гроза");
+        ImGui::SliderFloat("##Гроза", &storm_, 0.0f, 1.0f, "%.2f");
         ImGui::EndDisabled();
         int q = int(ls.quality());
         const char* tiers[] = {"выкл", "низкое (старые Android)", "среднее", "высокое"};
-        if (ImGui::Combo("Качество света", &q, tiers, 4)) ls.setQuality(render::LightQuality(q));
+        if (pp) ui::prop("Качество света");
+        if (ImGui::Combo("##Качество света", &q, tiers, 4)) ls.setQuality(render::LightQuality(q));
+        if (pp) ui::endProps();
         ImGui::TextDisabled("Источников в кадре: %zu, ночь %.2f", ls.count(), ed.view().lights().night());
         if (ImGui::TreeNode("Стоимость кадра")) {
             const render::LightStats& st = ls.stats();
@@ -66,12 +73,12 @@ public:
             ImGui::TreePop();
         }
 
-        ImGui::SeparatorText("Блок \"lighting\" карты");
+        ui::section(ICON_SUN, "Освещение карты (блок \"lighting\")");
         Json& extra = ed.doc().data.extra;
         const Json& lb = extra["lighting"];
         if (!lb.isObject()) {
-            ImGui::TextDisabled("Нет: действует game.json или день по умолчанию.");
-            if (ImGui::Button("Создать из предпросмотра")) {
+            ui::hint("Нет: действует game.json или день по умолчанию.");
+            if (ui::wideButton(ICON_PLUS, "Создать из предпросмотра")) {
                 ed.doc().beginEdit();
                 Json b = Json::object();
                 b.set("time", n3(time_)); b.set("dayLength", n3(0)); b.set("clouds", n3(clouds_));
@@ -82,27 +89,29 @@ public:
         } else {
             Json b = lb;
             bool changed = false;
-            {
+            const bool lp = ui::beginProps("##lighting");
+            if (lp) {
                 const char* presets[] = {"(нет)", "desert", "snow", "volcanic", "overcast", "cave"};
                 int cur = 0;
                 for (int i = 1; i < 6; ++i) if (b.getStr("preset") == presets[i]) cur = i;
-                if (ImGui::Combo("Пресет", &cur, presets, 6)) {
+                ui::prop("Пресет", "desert, snow, volcanic, overcast — палитры дня и ночи; cave — подземелье: вечная ночь, свет только от источников.");
+                if (ImGui::Combo("##Пресет", &cur, presets, 6)) {
                     if (cur == 0) b.erase("preset"); else b.set("preset", Json::string(presets[cur]));
                     changed = true;
                 }
-                ui::help("desert, snow, volcanic, overcast — палитры дня и ночи; cave — подземелье: вечная ночь, свет только от источников.");
+                changed |= field(b, "time", "Время старта", 0, 1);
+                changed |= field(b, "dayLength", "Длина суток, с", 0, 3600);
+                changed |= field(b, "nightLevel", "Темнота ночи", 0, 1, 1);
+                changed |= field(b, "clouds", "Облачность", 0, 1);
+                changed |= field(b, "storm", "Гроза", 0, 1);
+                ui::endProps();
             }
-            changed |= field(b, "time", "Время старта", 0, 1);
-            changed |= field(b, "dayLength", "Длина суток, с", 0, 3600);
-            changed |= field(b, "nightLevel", "Темнота ночи", 0, 1, 1);
-            changed |= field(b, "clouds", "Облачность", 0, 1);
-            changed |= field(b, "storm", "Гроза", 0, 1);
             if (changed) commit(ed, [&] { ed.doc().data.extra.set("lighting", b); });
-            if (ImGui::Button("Удалить блок")) commit(ed, [&] { ed.doc().data.extra.erase("lighting"); });
+            if (ui::wideButton(ICON_TRASH, "Удалить блок")) commit(ed, [&] { ed.doc().data.extra.erase("lighting"); });
         }
 
-        ImGui::SeparatorText("Источники света на карте");
-        if (ImGui::Button("Добавить в центре камеры")) {
+        ui::section(ICON_LIGHTING, "Источники света на карте");
+        if (ui::wideButton(ICON_PLUS, "Добавить в центре камеры", 0, 1, true)) {
             commit(ed, [&] {
                 Json l = Json::object();
                 l.set("x", n3(std::round(ed.sceneCam.target.x * 2) / 2)); l.set("z", n3(std::round(ed.sceneCam.target.z * 2) / 2));
@@ -125,30 +134,46 @@ public:
                 float pos[2] = {m.x, m.z}, col[3] = {m.color.x, m.color.y, m.color.z};
                 float h = m.height, r = m.radius, in = m.intensity, fl = m.flicker, ha = std::max(m.halo, 0.0f);
                 bool ch = false;
-                ch |= ImGui::DragFloat2("x, z", pos, 0.1f);
-                ch |= ImGui::DragFloat("Высота", &h, 0.05f, 0.0f, 10.0f);
-                ch |= ImGui::ColorEdit3("Цвет", col);
-                ch |= ImGui::DragFloat("Радиус", &r, 0.05f, 0.2f, 30.0f);
-                ch |= ImGui::DragFloat("Яркость", &in, 0.02f, 0.0f, 4.0f);
-                ch |= ImGui::DragFloat("Мерцание", &fl, 0.01f, 0.0f, 1.0f);
-                ch |= ImGui::DragFloat("Ореол", &ha, 0.02f, 0.0f, 5.0f);
+                const bool ip = ui::beginProps("##light");
+                ui::prop("x, z");
+                ch |= ImGui::DragFloat2("##x, z", pos, 0.1f);
+                ui::prop("Высота");
+                ch |= ImGui::DragFloat("##Высота", &h, 0.05f, 0.0f, 10.0f);
+                ui::prop("Цвет");
+                ch |= ImGui::ColorEdit3("##Цвет", col);
+                ui::prop("Радиус");
+                ch |= ImGui::DragFloat("##Радиус", &r, 0.05f, 0.2f, 30.0f);
+                ui::prop("Яркость");
+                ch |= ImGui::DragFloat("##Яркость", &in, 0.02f, 0.0f, 4.0f);
+                ui::prop("Мерцание");
+                ch |= ImGui::DragFloat("##Мерцание", &fl, 0.01f, 0.0f, 1.0f);
+                ui::prop("Ореол");
+                ch |= ImGui::DragFloat("##Ореол", &ha, 0.02f, 0.0f, 5.0f);
                 const char* pats[] = {"ровно", "пульс", "строб", "маяк"};
                 int pat = int(m.pattern);
                 float rate = m.rate;
                 bool nightOnly = m.nightOnly;
-                ch |= ImGui::Combo("Режим", &pat, pats, 4);
-                if (pat != 0) ch |= ImGui::DragFloat("Частота", &rate, 0.01f, 0.05f, 10.0f, "%.2f Гц");
+                ui::prop("Режим");
+                ch |= ImGui::Combo("##Режим", &pat, pats, 4);
+                if (pat != 0) { ui::prop("Частота"); ch |= ImGui::DragFloat("##rate", &rate, 0.01f, 0.05f, 10.0f, "%.2f Гц"); }
+                ui::propWide();
                 ch |= ImGui::Checkbox("Только ночью", &nightOnly);
                 bool spot = m.spot;
                 float ang = m.angle, pit = m.pitch, yw = m.yaw, swp = m.sweep, sws = m.sweepSpeed;
+                ui::propWide();
                 ch |= ImGui::Checkbox("Прожектор", &spot);
                 if (spot) {
-                    ch |= ImGui::DragFloat("Угол конуса", &ang, 0.5f, 2.0f, 170.0f, "%.0f°");
-                    ch |= ImGui::DragFloat("Наклон вниз", &pit, 0.5f, -10.0f, 90.0f, "%.0f°");
-                    ch |= ImGui::DragFloat("Направление", &yw, 1.0f, -360.0f, 360.0f, "%.0f°");
-                    ch |= ImGui::DragFloat("Качание", &swp, 0.5f, 0.0f, 180.0f, "±%.0f°");
-                    if (swp > 0) ch |= ImGui::DragFloat("Скорость качания", &sws, 0.5f, 1.0f, 180.0f, "%.0f°/с");
+                    ui::prop("Угол конуса");
+                    ch |= ImGui::DragFloat("##Угол конуса", &ang, 0.5f, 2.0f, 170.0f, "%.0f°");
+                    ui::prop("Наклон вниз");
+                    ch |= ImGui::DragFloat("##Наклон вниз", &pit, 0.5f, -10.0f, 90.0f, "%.0f°");
+                    ui::prop("Направление");
+                    ch |= ImGui::DragFloat("##Направление", &yw, 1.0f, -360.0f, 360.0f, "%.0f°");
+                    ui::prop("Качание");
+                    ch |= ImGui::DragFloat("##Качание", &swp, 0.5f, 0.0f, 180.0f, "±%.0f°");
+                    if (swp > 0) { ui::prop("Скорость качания"); ch |= ImGui::DragFloat("##sws", &sws, 0.5f, 1.0f, 180.0f, "%.0f°/с"); }
                 }
+                if (ip) ui::endProps();
                 if (ch) {
                     Json p = Json::object();
                     p.set("type", Json::string(spot ? "spot" : "point"));
@@ -162,15 +187,14 @@ public:
                     Json c = Json::array(); for (float v : col) c.push(n3(v)); p.set("color", c);
                     commit(ed, [&] { applyLightParams(mapLights(ed).at(i), p); });
                 }
-                if (ImGui::SmallButton("Показать")) ed.focusScene(m.x, m.z, 14);
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Удалить")) removeAt = int(i);
+                if (ui::wideButton(ICON_CROSSHAIR, "Показать", 0, 2)) ed.focusScene(m.x, m.z, 14);
+                if (ui::wideButton(ICON_TRASH, "Удалить", 1, 2)) removeAt = int(i);
                 ImGui::TreePop();
             }
             ImGui::PopID();
         }
         if (removeAt >= 0) commit(ed, [&] { mapLights(ed).eraseAt(size_t(removeAt)); });
-        if (arr.size() == 0) ImGui::TextDisabled("Фонари, костры, лава: свет без юнита. Видны после разведки клетки.");
+        if (arr.size() == 0) ui::hint("Фонари, костры, лава: свет без юнита. Видны после разведки клетки.");
     }
 
 private:
@@ -267,7 +291,8 @@ private:
     }
     bool field(Json& b, const char* key, const char* label, float lo, float hi, float def = 0) {
         float v = jf(b, key, def);
-        if (!ImGui::DragFloat(label, &v, (hi - lo) / 300.0f, lo, hi, "%.2f")) return false;
+        ui::prop(label);   // a row of the props grid
+        if (!ImGui::DragFloat((std::string("##") + key).c_str(), &v, (hi - lo) / 300.0f, lo, hi, "%.2f")) return false;
         b.set(key, n3(v));
         return true;
     }

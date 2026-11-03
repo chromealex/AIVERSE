@@ -119,6 +119,19 @@ void EditorTheme::set(Mode m, int a) {
     ImGui::MarkIniSettingsDirty();
 }
 
+namespace { EditorTheme::Palette g_current{}; bool g_haveCurrent = false; }
+
+const EditorTheme::Palette& EditorTheme::current() {
+    if (!g_haveCurrent) {   // before the first apply(): readable defaults (dark theme)
+        g_current.text = ImVec4(0.89f, 0.89f, 0.91f, 1); g_current.textDim = ImVec4(0.54f, 0.56f, 0.6f, 1);
+        g_current.accent = ImVec4(0.36f, 0.55f, 0.98f, 1); g_current.success = ImVec4(0.2f, 0.83f, 0.6f, 1);
+        g_current.warning = ImVec4(0.98f, 0.75f, 0.14f, 1); g_current.danger = ImVec4(0.97f, 0.44f, 0.44f, 1);
+        g_current.frame = ImVec4(0.14f, 0.14f, 0.16f, 1); g_current.border = ImVec4(0.16f, 0.17f, 0.19f, 1);
+        g_current.panelRaised = ImVec4(0.13f, 0.13f, 0.15f, 1);
+    }
+    return g_current;
+}
+
 void EditorTheme::applyPending() {
     if (pending_) { pending_ = false; apply(); }
 }
@@ -252,6 +265,8 @@ void EditorTheme::apply() {
     c[ImGuiCol_NavWindowingDimBg] = ImVec4(0, 0, 0, 0.35f);
     c[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, dark ? 0.5f : 0.3f);
     ImGui::GetStyle() = s;
+    g_current = p;
+    g_haveCurrent = true;
 }
 
 } // namespace rts::editor

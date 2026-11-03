@@ -47,7 +47,7 @@ pink rings and listed in the corner, together with the first type's portrait. Ke
 Q quality, V variant, T team colour, P pause; drag/wheel for the camera. `--types a,b` limits the
 gallery, `--start T --fixed-dt 0.016` make screenshots reproducible.
 
-In the editor, **Окна → Models** shows the selected type rendered by the view (portrait), its
+In the editor, **Графика → Модели** shows the selected type rendered by the view (portrait), its
 clips, materials, variants and nodes (the names to use in `procedural`, `attach`, `fx`, `muzzle`)
 and the warnings of its view block. Model files of the open game are watched: saving any model file
 reloads the views (converted formats are re-converted first, see below). Agents get the same data through the MCP operation
@@ -241,7 +241,7 @@ plates), `metal` (brushed), `wood`, `camo`, `gradient`, `dots`, `hex`, `scales`,
 `scale`, `width`, `variation`, `seed`; `"output": "normal"` makes the matching normal map, `"mask"`
 a team mask (white where the second colour is). Same spec, same bytes.
 
-**Editor and agents.** **Окна → Материалы** lists the library, previews a material on a sphere or
+**Editor and agents.** **Мир → Материалы** lists the library, previews a material on a sphere or
 a box (live, with its textures), edits it, generates textures and applies a material to a type by
 material name or node. Agents use the same operations over MCP:
 

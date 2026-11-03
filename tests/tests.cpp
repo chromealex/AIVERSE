@@ -13280,6 +13280,30 @@ TEST(mapdoc_validate_scripted_players_without_start) {
 }
 #endif
 
+// ---------------------------------------------------------------- game.json "window" (desktop window settings)
+#include "engine/platform/WindowSettings.h"
+TEST(window_settings_from_game_json) {
+    using platform::AppConfig;
+    AppConfig c;
+    platform::applyWindowSettings(c, Json::parse(R"({"mode": "fixed", "width": 1024, "height": 768})"), "windows");
+    CHECK(c.windowMode == AppConfig::WindowMode::Windowed && !c.resizable && c.width == 1024 && c.height == 768);
+    AppConfig f;
+    platform::applyWindowSettings(f, Json::parse(R"({"mode": "fullscreen", "allowFullscreen": false, "macos": {"mode": "maximized"}})"), "linux");
+    CHECK(f.windowMode == AppConfig::WindowMode::Fullscreen && !f.allowFullscreen);
+    AppConfig m;
+    platform::applyWindowSettings(m, Json::parse(R"({"mode": "fullscreen", "macos": {"mode": "maximized", "minWidth": 800, "minHeight": 600}})"), "macos");
+    CHECK(m.windowMode == AppConfig::WindowMode::Maximized && m.resizable && m.minWidth == 800 && m.minHeight == 600);
+    AppConfig k;   // --size: the size from the command line wins, the rest still applies
+    k.width = 540; k.height = 960;
+    platform::applyWindowSettings(k, Json::parse(R"({"width": 1920, "height": 1080, "keepAspect": true, "minWidth": 4000})"), "linux", true);
+    CHECK(k.width == 540 && k.height == 960 && k.keepAspect && k.minWidth == 540);
+    AppConfig none;   // no block: defaults untouched
+    platform::applyWindowSettings(none, Json(), "linux");
+    CHECK(none.windowMode == AppConfig::WindowMode::Windowed && none.resizable && none.allowFullscreen && none.width == 1280);
+    CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "fixed", "width": 1280, "height": 720})")).empty());
+    CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "huge", "width": -5, "minHeight": 900, "height": 720, "windows": 3})")).size() == 4);
+}
+
 // ------------------------------------------------------------------ game wizard ("Сделать игру", docs/game-wizard.md)
 TEST(script_command_card_false_hides_the_button) {
     game::Rules rules = game::loadRules(Json::parseFile(kSkirmish + "/rules.json"));
@@ -13399,3 +13423,77 @@ TEST(game_wizard_makes_a_playable_project) {
     CHECK(r["warnings"].size() == 1);                              // only: the ad units are Yandex demo ones
 }
 #endif
+
+// ---- dungeon walls (territory.fortify) and rock-bound fliers (movement.airOverRock)
+TEST(mech_dungeon_fortified_walls) {
+    std::string rules = kDungeonRules;
+    const std::string terr = R"("territory": {"startRadius": 2, "buildOnlyOwned": true})";
+    rules.replace(rules.find(terr), terr.size(), R"("territory": {"startRadius": 2, "buildOnlyOwned": true, "fortify": {"time": 0.5}})");
+    auto sim = makeSimJson(rules, dungeonMap(R"(,{"type":"imp","owner":1,"pos":[7,6]},{"type":"imp","owner":2,"pos":[17,6]})"));
+    auto& m = mod(*sim);
+    auto& g = m.state(*sim).grid;
+    CHECK(m.rules().territory.fortifyTime == Fixed::fromRatio(1, 2));
+    CHECK(m.rules().diggables[0].fortifiable && !m.rules().diggables[1].fortifiable);   // plain rock yes, the vein no
+    run(*sim, 80);   // A's imp claims its pocket up to the rock and then reinforces the rock face
+    const size_t wall = size_t(g.index(10, 4));
+    { int walls = 0; for (auto wv : g.wall) walls += wv == 1; std::printf("    walls of A: %d, floor (9,4) owner %d, wall (10,4) %d\n", walls, g.territory[size_t(g.index(9, 4))], g.wall[wall]); }
+    CHECK(g.territory[size_t(g.index(9, 4))] == 1 && g.wall[wall] == 1 && g.dig[wall] != 0);
+    CHECK(g.wall[size_t(g.index(10, 6))] == 0);                        // the gold vein is never reinforced
+    CHECK(g.wall[size_t(g.index(13, 4))] == 2);                        // B does the same from its side
+    // B marks A's wall: the mark is refused; A can still dig its own wall
+    sim->submit(rectCmd(2, game::kCmdDig, 10, 4, 1, 1, 0));
+    sim->submit(rectCmd(1, game::kCmdDig, 10, 4, 1, 1, 0));
+    run(*sim, 0.5);
+    CHECK((g.digMark[wall] & 2) == 0 && (g.digMark[wall] & 1) != 0);
+    run(*sim, 20);
+    CHECK(g.dig[wall] == 0 && g.wall[wall] == 0);                      // dug out by its owner: no wall any more
+    // walls fall back to plain rock when the keeper loses the floor behind them
+    const size_t wall2 = size_t(g.index(10, 3));
+    CHECK(g.wall[wall2] == 1);
+    for (int y = 1; y <= 10; ++y) for (int x = 1; x <= 13; ++x) if (g.territory[size_t(g.index(x, y))] == 1) m.setTerritory(*sim, g.index(x, y), 2);
+    run(*sim, 1);
+    CHECK(g.wall[wall2] == 0 || g.wall[wall2] == 2);                   // reverted (B's imps may already reinforce it for B)
+    // save / load keeps the layer and the match stays deterministic
+    const std::string blob = sim->serialize();
+    auto sim2 = makeSimJson(rules, dungeonMap(R"(,{"type":"imp","owner":1,"pos":[7,6]},{"type":"imp","owner":2,"pos":[17,6]})"));
+    CHECK(sim2->deserialize(blob));
+    CHECK(mod(*sim2).state(*sim2).grid.wall == g.wall && sim2->checksum() == sim->checksum());
+}
+
+TEST(mech_dungeon_fliers_follow_tunnels) {
+    const std::string bat = R"(,"bat": {"move": {"speed": 4, "layer": "air"}, "health": {"max": 40}, "sight": 6})";
+    std::string rules = kDungeonRules;
+    rules.insert(rules.rfind("}}}") + 3, bat);   // one more type at the end of "types"
+    std::string bound = rules;
+    bound.insert(bound.find("\"victory\""), R"("movement": {"airOverRock": false}, )");
+    const std::string ents = R"(,{"type":"bat","owner":1,"pos":[7,6]})";
+    {   // default: fliers cross rock
+        auto sim = makeSimJson(rules, dungeonMap(ents));
+        auto& g = mod(*sim).state(*sim).grid;
+        CHECK(!g.airSolid && g.passable(11, 6, game::kLayerAir));
+        Entity b = findType(*sim, "bat", 1);
+        Command c; c.player = 1; c.type = game::kCmdMove; c.units = {b}; c.point = g.cellCenter(16, 6);
+        sim->submit(c);
+        run(*sim, 6);
+        CHECK((sim->world().get<Transform>(b).pos - g.cellCenter(16, 6)).xz().length() < Fixed::fromInt(1));
+    }
+    {   // rock-bound: the wall stops the bat until a tunnel is dug
+        auto sim = makeSimJson(bound, dungeonMap(ents + R"(,{"type":"imp","owner":1,"pos":[7,8]})"));
+        auto& g = mod(*sim).state(*sim).grid;
+        CHECK(g.airSolid && !g.passable(11, 6, game::kLayerAir) && g.passable(9, 6, game::kLayerAir));
+        std::vector<Vec3> path;
+        CHECK(!g.findPath(g.cellCenter(7, 6), g.cellCenter(16, 6), game::kLayerAir, path));
+        Entity b = findType(*sim, "bat", 1);
+        Command c; c.player = 1; c.type = game::kCmdMove; c.units = {b}; c.point = g.cellCenter(16, 6);
+        sim->submit(c);
+        run(*sim, 6);
+        const Vec3 p = sim->world().get<Transform>(b).pos;
+        CHECK(p.x < Fixed::fromInt(10));                                  // still on its side of the rock
+        sim->submit(rectCmd(1, game::kCmdDig, 10, 6, 4, 1, 0));
+        run(*sim, 40);
+        CHECK(g.dig[size_t(g.index(13, 6))] == 0);
+        sim->submit(c);
+        run(*sim, 8);
+        CHECK((sim->world().get<Transform>(b).pos - g.cellCenter(16, 6)).xz().length() < Fixed::fromInt(1));   // through the tunnel
+    }
+}
