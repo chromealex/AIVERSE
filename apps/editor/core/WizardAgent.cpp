@@ -1,6 +1,7 @@
 // The game wizard's agent step (WizardAgent.h).
 #include "WizardAgent.h"
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -60,6 +61,24 @@ std::string findCli(const std::string& name) {
     for (auto it = fs::directory_iterator(home / ".nvm/versions/node", ec); !ec && it != fs::directory_iterator(); it.increment(ec))
         dirs.push_back(it->path() / "bin");
     for (auto& d : dirs) if (exe(d / name)) return (d / name).string();
+    // CLIs that come inside the desktop apps: Claude Code in the Claude app's data folder (newest version), Codex in ChatGPT
+    std::vector<fs::path> bundled;
+    if (name == "claude") {
+        std::vector<fs::path> found;
+        for (auto v = fs::directory_iterator(home / "Library/Application Support/Claude/claude-code", ec); !ec && v != fs::directory_iterator(); v.increment(ec)) {
+            std::error_code e2;
+            for (auto h2 = fs::directory_iterator(v->path(), e2); !e2 && h2 != fs::directory_iterator(); h2.increment(e2))
+                found.push_back(h2->path() / "claude.app/Contents/MacOS/claude");
+        }
+        std::sort(found.begin(), found.end());   // version folders: the newest last
+        bundled.insert(bundled.end(), found.rbegin(), found.rend());
+    } else if (name == "codex") {
+        for (const fs::path& app : {fs::path("/Applications/ChatGPT.app"), home / "Applications/ChatGPT.app", fs::path("/Applications/Codex.app")}) {
+            bundled.push_back(app / "Contents/Resources/codex-cli/bin/codex");
+            bundled.push_back(app / "Contents/Resources/codex");
+        }
+    }
+    for (auto& b : bundled) if (exe(b)) return b.string();
     FILE* p = popen((loginShell() + " -ilc " + q("command -v " + name) + " 2>/dev/null </dev/null").c_str(), "r");
     std::string out;
     if (p) { char buf[1024]; while (std::fgets(buf, sizeof buf, p)) out += buf; pclose(p); }

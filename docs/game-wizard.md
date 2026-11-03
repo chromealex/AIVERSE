@@ -64,7 +64,8 @@ the editor): types, stats, factions, mechanics (rules or Lua), maps, victory, te
   `core/McpInstall.h`): one click writes rtsmcp into the client's config, and that one connection serves both.
 - Launched from the editor (`core/WizardAgent.*`, through the user's login shell so the CLI is found):
   Claude Code `claude -p --output-format stream-json --allowedTools mcp__rtsengine` and Codex CLI `codex exec --full-auto`,
-  the task on stdin, the project folder as the working directory. Progress goes to the activity feed (Agent window), the
+  the task on stdin, the project folder as the working directory. The CLI is found in PATH, the usual install folders, the user's shell, and inside the desktop apps
+  (Claude Code in `~/Library/Application Support/Claude/claude-code/<version>/…/claude.app`, Codex in `ChatGPT.app/Contents/Resources/codex-cli`). Progress goes to the activity feed (Agent window), the
   status bar and the wizard page (Stop button); the full log to `logs/wizard-agent-<time>.log`.
 - Cursor, Windsurf, Claude Desktop: «Скопировать задание агенту» puts the task on the clipboard to paste into the client.
 - No API key in the editor: the agent runs under the user's own client and account.
