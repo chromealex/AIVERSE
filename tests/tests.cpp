@@ -13303,7 +13303,6 @@ TEST(window_settings_from_game_json) {
     CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "fixed", "width": 1280, "height": 720})")).empty());
     CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "huge", "width": -5, "minHeight": 900, "height": 720, "windows": 3})")).size() == 4);
 }
-}
 
 // ------------------------------------------------------------------ game wizard ("Сделать игру", docs/game-wizard.md)
 TEST(script_command_card_false_hides_the_button) {
