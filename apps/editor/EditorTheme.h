@@ -44,7 +44,7 @@ public:
     // Palette of the theme applied last (helpers in EditorUtil.h use it: status colours, badges).
     static const Palette& current();
 
-    void drawMenu();                       // contents of Окна -> Тема
+    void drawMenu();                       // contents of Вид -> Тема
 
 private:
     Mode mode_ = Mode::Dark;

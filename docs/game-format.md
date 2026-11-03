@@ -3,7 +3,7 @@
 A game is a folder `<project>/`:
 
 ```
-game.json        manifest: name, id, version, rules file, maps list, orientation, icon, input
+game.json        manifest: name, id, version, rules file, maps list, orientation, desktop window, icon, input
 rules.json       resources, types (units/structures/objects), techs, factions, game rules, triggers
 maps/*.json      terrain, players, objects, waves, triggers, areas, victory overrides
 audio.json       sounds, music and which sound plays on which game event (optional: no file = silent)
@@ -26,6 +26,27 @@ is optional — the blocks present on a type decide what it can do.
 
 `"icons"` and `"splash"`: game icons for every platform and the loading screen — see "Icons and
 splash" below (the old single `"icon"` still works as the master icon).
+
+Optional `"window"` block: how the game window opens on desktops (macOS, Windows, Linux; phones and
+tablets are always fullscreen, the web build fills the page). Editor: **Сборка → Окно игры** (window «Сборка»).
+
+```json
+"window": { "mode": "windowed", "width": 1280, "height": 720, "minWidth": 960, "minHeight": 540,
+            "keepAspect": false, "allowFullscreen": true, "macos": { "mode": "fullscreen" } }
+```
+
+| key | meaning |
+|---|---|
+| `mode` | `windowed` (default: a normal resizable window), `fixed` (exactly `width` × `height`, no resizing or maximize), `maximized` (the whole desktop work area, still a window), `fullscreen` (macOS: native fullscreen in its own Space; Windows / Linux: a borderless window over the monitor) |
+| `width`, `height` | content size in points (1280 × 720); also the size after leaving fullscreen / maximized |
+| `resizable` | windowed only (true); `"mode": "fixed"` is the same as `false` |
+| `minWidth`, `minHeight` | smallest size when resizable (0 = no limit) |
+| `keepAspect` | resizing keeps `width : height` |
+| `allowFullscreen` | F11 (Windows, Linux), Alt+Enter (Windows) and the green button (macOS) switch fullscreen (true) |
+| `macos`, `windows`, `linux` | objects with any of the keys above that override them on that platform |
+
+Runs with `RTS_EXIT_AFTER_FRAMES` (screenshots, CI) and `--size WxH` stay windowed at the asked size.
+Code: `engine/platform/WindowSettings.h` (parser, checks), `AppConfig` window fields, `AppCallbacks::configure`.
 
 Optional `"camera"` block (2D games, see "2D games" below):
 `{"projection": "ortho", "pitch": 90, "yaw": 0, "fov": 43, "zoom": 20, "zoomMin": 8, "zoomMax": 40, "pixelsPerCell": 32, "rotate": false}`.

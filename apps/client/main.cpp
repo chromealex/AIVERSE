@@ -1,3 +1,4 @@
+#include "engine/platform/WindowSettings.h"
 #include "modules/rts/RtsInitialVars.h"
 // Generic RTS game client. Everything game-specific comes from the project's data (game.json,
 // rules.json, maps): the same executable plays a Warcraft-like, a Red-Alert-like or a
@@ -958,6 +959,7 @@ int rtsMain(int argc, char** argv) {
     cb.shutdown = [] { boot.shutdown(); };
     // --howto: open "How to play"; --map N [--spectate]: jump straight into a match (CI screenshots, quick testing); --lang tag; --size WxH
     std::string previewScreen, previewParams, previewProfile, previewLua;
+    static bool sizeFromArgs = false;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--spectate") g_client->spectate();
@@ -971,7 +973,7 @@ int rtsMain(int argc, char** argv) {
         // --size WxH: window size on desktops (e.g. 540x960 to look at a portrait game)
         if (a == "--size" && i + 1 < argc) {
             int w = 0, h = 0;
-            if (std::sscanf(argv[++i], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { cfg.width = w; cfg.height = h; }
+            if (std::sscanf(argv[++i], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { cfg.width = w; cfg.height = h; sizeFromArgs = true; }
         }
         if (a == "--map" && i + 1 < argc) autostartMap = size_t(std::stoul(argv[++i]));
     }
@@ -990,6 +992,18 @@ int rtsMain(int argc, char** argv) {
         else if (std::string(s) == "full") mode = ClientBoot::Mode::Full;
     }
     if (!previewScreen.empty()) mode = ClientBoot::Mode::Off;   // previews show the screen at once
+    // game.json "window": size and mode of the desktop window (WindowSettings.h). Screenshot / CI runs
+    // (RTS_EXIT_AFTER_FRAMES) and --size stay windowed at the asked size, so captures are the same on every machine.
+    cb.configure = [](platform::AppConfig& c) {
+        std::string text;
+        if (!platform::readContentFile("game.json", text)) return;
+        try {
+            const Json window = Json::parse(text)["window"];
+            const bool capture = std::getenv("RTS_EXIT_AFTER_FRAMES") != nullptr;
+            platform::applyWindowSettings(c, window, platform::name(), sizeFromArgs || capture);
+            if (capture || sizeFromArgs) c.windowMode = platform::AppConfig::WindowMode::Windowed;
+        } catch (const std::exception&) {}   // a broken game.json is reported by the game itself later
+    };
     cb.init = [mode](gfx::Device& d) {
         boot.init(d, *g_client, mode, [] { if (autostartMap != size_t(-1)) g_client->autostart(autostartMap); });
     };

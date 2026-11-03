@@ -19,53 +19,65 @@ public:
 
     void draw(Editor& ed) override {
         Workspace& ws = ed.ws();
-        if (ws.project.dir.empty()) { ImGui::TextDisabled("Откройте игру."); return; }
+        if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_DICE, "Игра не открыта", "Файл → Открыть проект"); return; }
         const Json presets = gen::presetList(ws.project.rulesJson);
         if (preset_ >= int(presets.size())) preset_ = 0;
         const Json& cur = presets[size_t(preset_)];
-        if (ImGui::BeginCombo("Пресет", cur.getStr("title").c_str())) {
-            for (size_t i = 0; i < presets.size(); ++i) {
-                const std::string label = presets[i].getStr("title") + "  (" + presets[i].getStr("id") + ")";
-                if (ImGui::Selectable(label.c_str(), int(i) == preset_)) { preset_ = int(i); params_.clear(); }
-            }
-            ImGui::EndCombo();
-        }
-        ImGui::TextDisabled("%s%s", cur.getStr("genre").c_str(), cur.getStr("source") == "game" ? " · из rules.json" : "");
         const bool planet = cur["params"].getStr("shape") == "planet";
-        if (planet) {
-            ImGui::TextWrapped("Пресет планеты: строит всю карту-мир (тела из блока world открытой карты или солнце + планета + луна).");
-            static const char* layouts[] = {"shared", "separate"};
-            ImGui::Combo("Расстановка", &layout_, layouts, 2);
-            ui::help("shared: все игроки на одной планете (поворотная симметрия вокруг полюсов); separate: у каждого своя одинаковая планета.");
-        }
-        ImGui::InputScalar("Seed", ImGuiDataType_U64, &seed_);
-        ImGui::SameLine();
-        if (ImGui::SmallButton("+1")) ++seed_;
-        ImGui::SliderInt("Игроки", &players_, 1, 8);
         static const char* syms[] = {"auto", "none", "point", "mirror", "mirror-y", "mirror4", "rot4", "rotational"};
-        ImGui::Combo("Симметрия", &sym_, syms, 8);
-        ui::help("auto: 2 игрока - центральная, 4 - поворот на 90° (квадрат) или две оси, иначе - вращение. Симметрия даёт честные старты.");
-        ImGui::Checkbox("Объекты по образцу карты", &useTemplate_);
-        ui::help("Стартовый набор игрока 1 и нейтральные объекты открытой карты задают, что и сколько ставить. Иначе - по типам из rules.json.");
-        ImGui::SameLine();
-        ImGui::Checkbox("Размер карты", &keepSize_);
-        ui::help("Оставить размер открытой карты (иначе размер пресета).");
-        ImGui::TextDisabled("Параметры пресета (JSON, переопределяют):");
-        if (params_.empty()) params_ = cur["params"].dump(-1);
-        ui::inputMultiline("##params", params_, ImVec2(-1, 90));
-
-        if (ImGui::Button("Сгенерировать")) run(ed, "bake");
-        ImGui::SameLine();
-        if (ImGui::Button("Ещё (seed+1)")) { ++seed_; run(ed, "bake"); }
-        ImGui::SameLine();
-        if (ImGui::Button("При старте матча")) run(ed, "match");
-        ui::help("Записывает в карту блок generate с seed \"match\": каждый матч (и мультиплеер, и повтор) генерирует свою карту детерминированно.");
-        if (ws.map.data.extra.has("generate")) {
-            ImGui::TextColored(ImVec4(0.5f, 0.85f, 1, 1), "Карта генерируется при старте: %s", ws.map.data.extra["generate"].dump(-1).c_str());
-            if (ImGui::SmallButton("Убрать генерацию при старте")) { ws.map.beginEdit(); ws.map.data.extra.erase("generate"); ws.map.touched(); }
+        static const char* symNames[] = {"Авто", "Нет", "Центральная", "Зеркало по X", "Зеркало по Y", "Две оси", "Поворот на 90°", "Вращение"};
+        if (ui::beginProps("##gen")) {
+            ui::prop("Пресет");
+            if (ImGui::BeginCombo("##preset", cur.getStr("title").c_str(), ImGuiComboFlags_HeightLarge)) {
+                for (size_t i = 0; i < presets.size(); ++i) {
+                    if (ImGui::Selectable((presets[i].getStr("title") + "##" + presets[i].getStr("id")).c_str(), int(i) == preset_)) { preset_ = int(i); params_.clear(); }
+                    ImGui::SameLine(ImGui::GetFontSize() * 11);
+                    ImGui::TextDisabled("%s%s", presets[i].getStr("genre").c_str(), presets[i].getStr("source") == "game" ? " · игра" : "");
+                }
+                ImGui::EndCombo();
+            }
+            if (planet) {
+                ui::prop("Расстановка", "shared: все игроки на одной планете (поворотная симметрия вокруг полюсов); separate: у каждого своя одинаковая планета.");
+                static const char* layouts[] = {"Одна планета", "Своя у каждого"};
+                ImGui::Combo("##layout", &layout_, layouts, 2);
+            }
+            ui::prop("Seed", "Одинаковый seed — одинаковая карта");
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 4);
+            ImGui::InputScalar("##seed", ImGuiDataType_U64, &seed_);
+            ImGui::SameLine(0, 4);
+            if (ui::toolButton(ICON_DICE, "Случайный seed")) seed_ = uint64_t(ImGui::GetTime() * 1000003.0) ^ (seed_ * 6364136223846793005ull);
+            ui::prop("Игроки");
+            ImGui::SliderInt("##players", &players_, 1, 8);
+            ui::prop("Симметрия", "Авто: 2 игрока — центральная, 4 — поворот на 90° (квадрат) или две оси, иначе — вращение. Симметрия даёт честные старты.");
+            ImGui::Combo("##sym", &sym_, symNames, 8);
+            ui::propWide();
+            ImGui::Checkbox("Объекты по образцу карты", &useTemplate_);
+            ImGui::SetItemTooltip("Стартовый набор игрока 1 и нейтральные объекты открытой карты задают, что и сколько ставить. Иначе — по типам из rules.json.");
+            ui::propWide();
+            ImGui::Checkbox("Оставить размер открытой карты", &keepSize_);
+            ui::endProps();
         }
-        if (!result_.empty()) { ImGui::Separator(); ImGui::TextWrapped("%s", result_.c_str()); }
-        if (!detail_.empty()) ImGui::TextDisabled("%s", detail_.c_str());
+        (void)syms;
+        if (planet) ui::hint("Пресет планеты строит всю карту-мир: тела из блока world открытой карты или солнце + планета + луна.");
+        else ui::hint((cur.getStr("genre") + (cur.getStr("source") == "game" ? " · пресет из rules.json" : "")).c_str());
+        if (ImGui::TreeNode("Параметры пресета (JSON)")) {
+            if (params_.empty()) params_ = cur["params"].dump(-1);
+            ui::inputMultiline("##params", params_, ImVec2(-1, 90));
+            ui::hint("Переопределяют параметры пресета.");
+            ImGui::TreePop();
+        }
+        if (params_.empty()) params_ = cur["params"].dump(-1);
+        ImGui::Spacing();
+        if (ui::wideButton(ICON_WAND, "Сгенерировать", 0, 2, true)) run(ed, "bake");
+        if (ui::wideButton(ICON_DICE, "Ещё вариант", 1, 2)) { ++seed_; run(ed, "bake"); }
+        if (ui::wideButton(ICON_PLAY, "Генерировать при старте матча")) run(ed, "match");
+        ImGui::SetItemTooltip("Записывает в карту блок generate с seed \"match\": каждый матч (и мультиплеер, и повтор) генерирует свою карту детерминированно.");
+        if (ws.map.data.extra.has("generate")) {
+            ui::callout(ui::Tone::Accent, "Карта генерируется при старте матча: " + ws.map.data.extra["generate"].dump(-1));
+            if (ui::button(ICON_X, "Убрать генерацию при старте")) { ws.map.beginEdit(); ws.map.data.extra.erase("generate"); ws.map.touched(); }
+        }
+        if (!result_.empty()) { ImGui::Spacing(); ui::resultMessage(result_); }
+        if (!detail_.empty()) ui::hint(detail_.c_str());
     }
 
 private:

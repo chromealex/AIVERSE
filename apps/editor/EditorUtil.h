@@ -264,6 +264,7 @@ inline bool beginProps(const char* id, float labelWidth = 0) {
     return true;
 }
 inline void prop(const char* label, const char* tip = nullptr) {
+    if (!ImGui::GetCurrentTable()) { ImGui::SetNextItemWidth(-FLT_MIN); return; }   // the grid was skipped (collapsed window)
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
     ImGui::AlignTextToFramePadding();
@@ -276,6 +277,7 @@ inline void prop(const char* label, const char* tip = nullptr) {
 }
 // A row spanning both columns (checkbox with its own label, buttons, notes).
 inline void propWide() {
+    if (!ImGui::GetCurrentTable()) return;
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
     ImGui::TableNextColumn();
@@ -330,6 +332,35 @@ inline bool segmented(const char* id, int& value, const char* const* labels, int
         if (on) ImGui::PopStyleColor(4);
     }
     ImGui::PopStyleVar();
+    ImGui::PopID();
+    return changed;
+}
+
+// Grid of choice tiles (wraps to the window width): like segmented, for 5+ options or long labels.
+inline bool choiceGrid(const char* id, int& value, const char* const* labels, int count, float minW = 92) {
+    ImGui::PushID(id);
+    const float avail = ImGui::GetContentRegionAvail().x, gap = 4;
+    const int cols = std::clamp(int((avail + gap) / (minW + gap)), 1, count);
+    const float w = (avail - gap * float(cols - 1)) / float(cols);
+    bool changed = false;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gap, gap));
+    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+    for (int i = 0; i < count; ++i) {
+        if (i % cols) ImGui::SameLine();
+        const bool on = value == i;
+        if (on) {
+            const ImVec4 a = accentColor();
+            ImGui::PushStyleColor(ImGuiCol_Button, a);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, a);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, a);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+        }
+        ImGui::PushID(i);
+        if (ImGui::Button(labels[i], ImVec2(w, 0))) { changed = value != i; value = i; }
+        ImGui::PopID();
+        if (on) ImGui::PopStyleColor(4);
+    }
+    ImGui::PopStyleVar(2);
     ImGui::PopID();
     return changed;
 }

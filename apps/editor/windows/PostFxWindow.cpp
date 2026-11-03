@@ -18,7 +18,7 @@ using namespace rts::render;
 
 namespace {
 ImVec4 costColor(PostFxCostClass c) {
-    return c == PostFxCostClass::Cheap ? ImVec4(0.45f, 0.8f, 0.45f, 1) : c == PostFxCostClass::Medium ? ImVec4(0.95f, 0.75f, 0.3f, 1) : ImVec4(1.0f, 0.4f, 0.35f, 1);
+    return ui::toneColor(c == PostFxCostClass::Cheap ? ui::Tone::Ok : c == PostFxCostClass::Medium ? ui::Tone::Warn : ui::Tone::Error);
 }
 // 1..3 dots in the cost colour (cheap / medium / heavy)
 void costDots(PostFxCostClass c) {
@@ -73,15 +73,15 @@ public:
     void draw(Editor& ed) override {
         PostFx& pf = ed.postFx();
         if (!ImGui::IsAnyItemActive() && dirty_) save(ed);
-        ImGui::SeparatorText("Предпросмотр");
+        ui::section(nullptr, "Предпросмотр");
         int t = int(tier_);
         if (ImGui::Combo("Качество", &t, kTiersRu, 4)) tier_ = PostFxQuality(t);
         ui::help("Только для просмотра: в игре уровень выбирается по видеокарте (слабые Android — низкое, телефоны — среднее, ПК — высокое), "
                  "игрок может снизить его, а при медленных кадрах он снижается сам.");
-        ImGui::Checkbox("Показывать в Scene", &inScene_);
+        ImGui::Checkbox("Показывать в «Сцене»", &inScene_);
         ImGui::TextDisabled("Последний кадр: проходов %d, эффектов %d", pf.stats().passes, pf.stats().effects);
 
-        ImGui::SeparatorText("Где");
+        ui::section(nullptr, "Где");
         ImGui::RadioButton("game.json (вся игра)", &scope_, 0);
         ImGui::SameLine();
         ImGui::RadioButton("Эта карта", &scope_, 1);
@@ -92,7 +92,7 @@ public:
         drawEffects(ed, scope);
         drawAdd(ed, scope);
         drawCost(ed);
-        if (!pf.lastError().empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.35f, 1), "%s", pf.lastError().c_str());
+        if (!pf.lastError().empty()) ui::toneText(ui::Tone::Error, "%s", pf.lastError().c_str());
     }
 
 private:
@@ -125,7 +125,7 @@ private:
     }
 
     void drawPresets(Editor& ed, const std::string& scope) {
-        ImGui::SeparatorText("Готовые наборы");
+        ui::section(nullptr, "Готовые наборы");
         const auto& ps = postFxPresets();
         preset_ = std::clamp(preset_, 0, int(ps.size()) - 1);
         if (ImGui::BeginCombo("##preset", ps[size_t(preset_)].label)) {
@@ -149,7 +149,7 @@ private:
     }
 
     void drawEffects(Editor& ed, const std::string& scope) {
-        ImGui::SeparatorText(scope == "map" ? "Эффекты карты" : "Эффекты игры");
+        ui::section(ICON_SPARKLES, scope == "map" ? "Эффекты карты" : "Эффекты игры");
         const Json effects = block(ed, scope).isArray() ? block(ed, scope) : block(ed, scope)["effects"];
         if (effects.size() == 0) { ImGui::TextDisabled("Нет эффектов: картинка идёт в экран без постобработки (ноль затрат)."); return; }
         int removeAt = -1;
@@ -157,7 +157,7 @@ private:
             const Json& ej = effects[i];
             const PostFxTypeDef* d = postFxType(ej.getStr("type"));
             ImGui::PushID(int(i));
-            if (!d) { ImGui::TextColored(ImVec4(1, 0.4f, 0.35f, 1), "неизвестный тип '%s'", ej.getStr("type").c_str()); ImGui::PopID(); continue; }
+            if (!d) { ui::toneText(ui::Tone::Error, "неизвестный тип '%s'", ej.getStr("type").c_str()); ImGui::PopID(); continue; }
             PostFxEffect e;
             try { e = parsePostFxEffect(ej, false); } catch (...) { ImGui::PopID(); continue; }
             bool en = e.enabled;
@@ -187,7 +187,7 @@ private:
         if (ImGui::Combo("Минимальное качество", &mq, mqs, 3))
             edit(ed, scope, [&](Json& arr) { arr.at(i).set("minQuality", Json::string(postFxQualityName(PostFxQuality(mq + 1)))); });
         ui::help("На более низких уровнях эффект пропускается: так тяжёлые эффекты не попадают на слабые телефоны.");
-        for (auto& w : warningsRu(e)) ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1), "%s", w.c_str());
+        for (auto& w : warningsRu(e)) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
         int off = 0;
         for (auto& p : d.params) {
             switch (p.kind) {
@@ -260,11 +260,11 @@ private:
             }
             ImGui::EndCombo();
         }
-        if (lastAnswer_.has("error")) ImGui::TextColored(ImVec4(1, 0.4f, 0.35f, 1), "%s", lastAnswer_.getStr("error").c_str());
+        if (lastAnswer_.has("error")) ui::toneText(ui::Tone::Error, "%s", lastAnswer_.getStr("error").c_str());
     }
 
     void drawCost(Editor& ed) {
-        ImGui::SeparatorText("Стоимость кадра (игра + карта)");
+        ui::section(nullptr, "Стоимость кадра (игра + карта)");
         const PostFxSettings s = parsePostFx(ed.ws().project.manifest["postfx"], ed.doc().data.extra["postfx"]);
         if (ImGui::BeginTable("cost", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Устройство", ImGuiTableColumnFlags_WidthStretch);
@@ -286,14 +286,14 @@ private:
                 ImGui::TableNextColumn(); ImGui::TextUnformatted(kDeviceRu[k]);
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", kDeviceTip[k]);
                 ImGui::TableNextColumn(); ImGui::Text("%zu", active.size());
-                ImGui::TableNextColumn(); ImGui::TextColored(ms > budget ? ImVec4(1, 0.4f, 0.35f, 1) : ImVec4(0.7f, 0.85f, 0.7f, 1), "%.2f", double(ms));
+                ImGui::TableNextColumn(); ui::toneText(ms > budget ? ui::Tone::Error : ui::Tone::Ok, "%.2f", double(ms));
                 ImGui::TableNextColumn(); ImGui::Text("%.0f fps", double(1000.0f / (1000.0f / 60.0f + ms)));
             }
             ImGui::EndTable();
         }
         ui::help("Оценка по модели заполнения (engine/render/PostFxData.cpp): один полноэкранный проход с одной выборкой ~0.8 мс на слабом "
                  "телефоне в 720p. Лёгкие эффекты собраны в один общий проход, тяжёлые добавляют свои.");
-        for (auto& is : issues_) ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1), "%s", is.c_str());
+        for (auto& is : issues_) ui::toneText(ui::Tone::Warn, "%s", is.c_str());
     }
 
     static std::vector<std::string> warningsRu(const PostFxEffect& e) {

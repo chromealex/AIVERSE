@@ -63,7 +63,7 @@ public:
         if (ed.ws().project.dir.empty()) { ImGui::TextDisabled("Нет открытой игры"); return; }
         Json lib;
         try { lib = loadMaterialLibrary(ed.ws()); }
-        catch (const std::exception& e) { ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "%s", e.what()); return; }
+        catch (const std::exception& e) { ui::toneText(ui::Tone::Error, "%s", e.what()); return; }
 
         // ---- library list
         ImGui::SetNextItemWidth(150);

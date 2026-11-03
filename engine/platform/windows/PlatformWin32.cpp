@@ -82,6 +82,19 @@ void updateSize() {
     S.winW = float(S.fbW) / S.scale; S.winH = float(S.fbH) / S.scale;
 }
 
+// Window style from the config: no resize border / maximize box for a fixed-size window.
+DWORD windowStyle() {
+    DWORD st = WS_OVERLAPPEDWINDOW;
+    if (!state().cfg.resizable) st &= ~DWORD(WS_THICKFRAME | WS_MAXIMIZEBOX);
+    return st;
+}
+// Frame size (window rect minus client rect) for the current style.
+SIZE frameExtra(HWND h) {
+    RECT r{0, 0, 100, 100};
+    AdjustWindowRectEx(&r, DWORD(GetWindowLongPtrW(h, GWL_STYLE)), FALSE, DWORD(GetWindowLongPtrW(h, GWL_EXSTYLE)));
+    return SIZE{(r.right - r.left) - 100, (r.bottom - r.top) - 100};
+}
+
 LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     auto& S = state();
     Event e;
@@ -94,6 +107,31 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CLOSE: e.type = EventType::QuitRequested; detail::dispatch(e); S.quit = true; return 0;
     case WM_SIZE: updateSize(); e.type = EventType::Resized; detail::dispatch(e); return 0;
+    case WM_GETMINMAXINFO: {   // game.json window.minWidth / minHeight (logical points -> pixels + frame)
+        const AppConfig& c = S.cfg;
+        if ((c.minWidth > 0 || c.minHeight > 0) && !S.fullscreen) {
+            auto* mm = reinterpret_cast<MINMAXINFO*>(lp);
+            const SIZE fr = frameExtra(h);
+            const float k = S.scale > 0 ? S.scale : 1.0f;
+            if (c.minWidth > 0) mm->ptMinTrackSize.x = LONG(float(c.minWidth) * k) + fr.cx;
+            if (c.minHeight > 0) mm->ptMinTrackSize.y = LONG(float(c.minHeight) * k) + fr.cy;
+            return 0;
+        }
+        break;
+    }
+    case WM_SIZING: {   // game.json window.keepAspect: the dragged edge decides, the other side follows
+        const AppConfig& c = S.cfg;
+        if (!c.keepAspect || c.width <= 0 || c.height <= 0) break;
+        auto* r = reinterpret_cast<RECT*>(lp);
+        const SIZE fr = frameExtra(h);
+        const float aspect = float(c.width) / float(c.height);
+        LONG cw = (r->right - r->left) - fr.cx, ch = (r->bottom - r->top) - fr.cy;
+        if (wp == WMSZ_TOP || wp == WMSZ_BOTTOM) cw = LONG(float(ch) * aspect);
+        else ch = LONG(float(cw) / aspect);
+        if (wp == WMSZ_TOP || wp == WMSZ_TOPLEFT || wp == WMSZ_TOPRIGHT) r->top = r->bottom - ch - fr.cy; else r->bottom = r->top + ch + fr.cy;
+        if (wp == WMSZ_LEFT || wp == WMSZ_TOPLEFT || wp == WMSZ_BOTTOMLEFT) r->left = r->right - cw - fr.cx; else r->right = r->left + cw + fr.cx;
+        return TRUE;
+    }
     case WM_DPICHANGED: {
         RECT* r = reinterpret_cast<RECT*>(lp);
         SetWindowPos(h, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -119,7 +157,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         e.key = mapVK(wp, lp); e.mods = currentMods(); e.repeat = (lp >> 30) & 1;
         detail::dispatch(e);
         // F11 and Alt+Enter: the usual fullscreen toggles on Windows
-        if (e.type == EventType::KeyDown && !e.repeat && (wp == VK_F11 || (msg == WM_SYSKEYDOWN && wp == VK_RETURN)))
+        if (e.type == EventType::KeyDown && !e.repeat && S.cfg.allowFullscreen && (wp == VK_F11 || (msg == WM_SYSKEYDOWN && wp == VK_RETURN)))
             detail::applyFullscreen(!state().fullscreen);
         if (msg == WM_SYSKEYDOWN && wp == VK_F4) break; // keep Alt+F4
         return 0;
@@ -169,16 +207,18 @@ namespace detail {
 // Borderless window over the whole monitor; the previous placement is restored on the way back.
 void applyFullscreen(bool on) {
     static WINDOWPLACEMENT saved = [] { WINDOWPLACEMENT w{}; w.length = sizeof(w); return w; }();
+    static LONG_PTR savedStyle = 0;
     if (!g_hwnd || on == state().fullscreen) return;
     LONG_PTR style = GetWindowLongPtrW(g_hwnd, GWL_STYLE);
     if (on) {
         MONITORINFO mi{}; mi.cbSize = sizeof(mi);
         if (!GetWindowPlacement(g_hwnd, &saved) || !GetMonitorInfoW(MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTOPRIMARY), &mi)) return;
+        savedStyle = style;
         SetWindowLongPtrW(g_hwnd, GWL_STYLE, style & ~LONG_PTR(WS_OVERLAPPEDWINDOW));
         SetWindowPos(g_hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
                      mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     } else {
-        SetWindowLongPtrW(g_hwnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+        SetWindowLongPtrW(g_hwnd, GWL_STYLE, savedStyle ? savedStyle : (style | LONG_PTR(windowStyle())));   // the style before fullscreen (fixed size stays fixed)
         SetWindowPlacement(g_hwnd, &saved);
         SetWindowPos(g_hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     }
@@ -212,9 +252,10 @@ void setClipboardText(const std::string& s) {
     CloseClipboard();
 }
 
-int run(const AppConfig& cfg, AppCallbacks cb) {
+int run(const AppConfig& cfgIn, AppCallbacks cb) {
     auto& S = state();
-    S.cfg = cfg; S.cb = std::move(cb);
+    S.cfg = cfgIn; S.cb = std::move(cb);
+    const AppConfig& cfg = S.cfg;   // configure (below) may change it
 
     wchar_t exe[MAX_PATH]; GetModuleFileNameW(nullptr, exe, MAX_PATH);
     std::string exeDir = narrow(exe);
@@ -228,6 +269,7 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
     else if (GetFileAttributesW(widen(exeDir + "\\content").c_str()) != INVALID_FILE_ATTRIBUTES) S.contentRoot = exeDir + "\\content";
     else S.contentRoot = "content";
     if (std::string ad = getenvW(L"APPDATA"); !ad.empty()) S.userDir = ad + "\\" + cfg.title;
+    if (S.cb.configure) S.cb.configure(S.cfg);   // game data: window size and mode
 
     if (auto fn = reinterpret_cast<BOOL(WINAPI*)(HANDLE)>(GetProcAddress(GetModuleHandleW(L"user32"), "SetProcessDpiAwarenessContext")))
         fn(reinterpret_cast<HANDLE>(-4)); // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
@@ -241,12 +283,14 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
     wc.hbrBackground = CreateSolidBrush(RGB(int(cfg.clearColor[0] * 255), int(cfg.clearColor[1] * 255), int(cfg.clearColor[2] * 255)));
     RegisterClassExW(&wc);
     RECT r{0, 0, cfg.width, cfg.height};
-    AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-    g_hwnd = CreateWindowExW(0, wc.lpszClassName, widen(cfg.title).c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+    const DWORD style = windowStyle();
+    AdjustWindowRect(&r, style, FALSE);
+    g_hwnd = CreateWindowExW(0, wc.lpszClassName, widen(cfg.title).c_str(), style, CW_USEDEFAULT, CW_USEDEFAULT,
                              r.right - r.left, r.bottom - r.top, nullptr, nullptr, inst, nullptr);
     g_hdc = GetDC(g_hwnd);
     if (!createGLContext()) { MessageBoxW(nullptr, L"OpenGL 3.3 is required", L"RTSEngine", MB_ICONERROR); return 1; }
-    ShowWindow(g_hwnd, SW_SHOW);
+    ShowWindow(g_hwnd, cfg.windowMode == AppConfig::WindowMode::Maximized && cfg.resizable ? SW_SHOWMAXIMIZED : SW_SHOW);
+    if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) detail::applyFullscreen(true);
     updateSize();
 
     auto device = gfx::createGLDevice(gfx::Backend::GL33);

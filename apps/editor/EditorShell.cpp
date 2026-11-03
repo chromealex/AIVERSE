@@ -275,7 +275,7 @@ void Editor::drawTopBarControls() {
         const float pulse = busy ? float(0.5 + 0.5 * std::sin(time_ * 6.0)) : 0.0f;
         pill(text, busy ? pal.accent : clients > 0 ? pal.success : pal.textDim, pulse, pal);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Канал MCP для агентов: порт %d\nПодключено серверов rtsmcp: %d\nОкно «Agent» — как подключить и журнал действий", server_.port(), clients);
+            ImGui::SetTooltip("Канал MCP для агентов: порт %d\nПодключено серверов rtsmcp: %d\nОкно «ИИ-агент» — как подключить и журнал действий", server_.port(), clients);
         if (ImGui::IsItemClicked()) focusWindow("agent");
         rightX -= 12;
     }

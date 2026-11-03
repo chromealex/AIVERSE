@@ -13187,3 +13187,27 @@ TEST(mapdoc_validate_scripted_players_without_start) {
     CHECK(startIssue(rulesJson, &error) && !error);
 }
 #endif
+
+// ---------------------------------------------------------------- game.json "window" (desktop window settings)
+#include "engine/platform/WindowSettings.h"
+TEST(window_settings_from_game_json) {
+    using platform::AppConfig;
+    AppConfig c;
+    platform::applyWindowSettings(c, Json::parse(R"({"mode": "fixed", "width": 1024, "height": 768})"), "windows");
+    CHECK(c.windowMode == AppConfig::WindowMode::Windowed && !c.resizable && c.width == 1024 && c.height == 768);
+    AppConfig f;
+    platform::applyWindowSettings(f, Json::parse(R"({"mode": "fullscreen", "allowFullscreen": false, "macos": {"mode": "maximized"}})"), "linux");
+    CHECK(f.windowMode == AppConfig::WindowMode::Fullscreen && !f.allowFullscreen);
+    AppConfig m;
+    platform::applyWindowSettings(m, Json::parse(R"({"mode": "fullscreen", "macos": {"mode": "maximized", "minWidth": 800, "minHeight": 600}})"), "macos");
+    CHECK(m.windowMode == AppConfig::WindowMode::Maximized && m.resizable && m.minWidth == 800 && m.minHeight == 600);
+    AppConfig k;   // --size: the size from the command line wins, the rest still applies
+    k.width = 540; k.height = 960;
+    platform::applyWindowSettings(k, Json::parse(R"({"width": 1920, "height": 1080, "keepAspect": true, "minWidth": 4000})"), "linux", true);
+    CHECK(k.width == 540 && k.height == 960 && k.keepAspect && k.minWidth == 540);
+    AppConfig none;   // no block: defaults untouched
+    platform::applyWindowSettings(none, Json(), "linux");
+    CHECK(none.windowMode == AppConfig::WindowMode::Windowed && none.resizable && none.allowFullscreen && none.width == 1280);
+    CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "fixed", "width": 1280, "height": 720})")).empty());
+    CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "huge", "width": -5, "minHeight": 900, "height": 720, "windows": 3})")).size() == 4);
+}

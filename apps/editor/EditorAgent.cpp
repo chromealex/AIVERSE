@@ -117,7 +117,7 @@ void Editor::deliverShots(gfx::Device& dev) {
                 r.set("png_base64", Json::string(base64(png)));
                 r.set("width", Json::number(int64_t(ow)));
                 r.set("height", Json::number(int64_t(oh)));
-                std::string where = pending[k].device == "game" ? "окно Game" : pending[k].device == "scene" ? "окно Scene" : "весь редактор";
+                std::string where = pending[k].device == "game" ? "окно «Игра»" : pending[k].device == "scene" ? "окно «Сцена»" : "весь редактор";
                 r.set("summary", Json::string("Скриншот: " + where));
             }
             server_.send(pending[k].client, reply(Json::number(pending[k].id), r).dump(-1));
@@ -233,20 +233,24 @@ void Editor::registerGuiOps() {
             if (auto* w = window("game")) w->open = true;
             return okSummary("Устройство: " + gameDevice + (gameSafeArea ? ", safe area видна" : ""));
         });
-    add("editor_windows", "List editor windows (id, title, open).", "{}", [this](const Json&) {
+    add("editor_windows", "List editor windows (id, title, group = top menu: scene | world | look | logic | publish | service, open).", "{}", [this](const Json&) {
         Json arr = Json::array();
         for (auto& w : windows_) {
             Json j = Json::object();
-            j.set("id", Json::string(w->id())); j.set("title", Json::string(w->title())); j.set("open", Json::fromBool(w->open));
+            j.set("id", Json::string(w->id())); j.set("title", Json::string(w->title())); j.set("group", Json::string(w->group()));
+            j.set("open", Json::fromBool(w->open));
             arr.push(j);
         }
         Json r = Json::object();
         r.set("windows", arr);
         return r;
     });
-    add("editor_window", "Open or close an editor window by id, or 'resetLayout': true for the default layout.",
-        R"({"properties": {"id": {"type": "string"}, "open": {"type": "boolean"}, "resetLayout": {"type": "boolean"}}})", [this, okSummary](const Json& p) {
+    add("editor_window", "Open or close an editor window by id, 'resetLayout': true for the default layout, or 'workspace': a group "
+        "(scene | world | look | logic | publish) — the default windows plus that group's windows in front.",
+        R"({"properties": {"id": {"type": "string"}, "open": {"type": "boolean"}, "resetLayout": {"type": "boolean"},
+            "workspace": {"type": "string", "enum": ["scene", "world", "look", "logic", "publish"]}}})", [this, okSummary](const Json& p) {
             if (p.getBool("resetLayout", false)) { for (auto& w : windows_) w->open = w->openByDefault(); resetLayout_ = true; return okSummary("Раскладка сброшена"); }
+            if (p.has("workspace")) { openWorkspace(p.getStr("workspace")); return okSummary(status); }
             EditorWindow* w = window(p.getStr("id"));
             if (!w) throw std::runtime_error("unknown window (see editor_windows)");
             w->open = p.getBool("open", true);

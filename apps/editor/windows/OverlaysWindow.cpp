@@ -55,13 +55,14 @@ public:
 
     void draw(Editor& ed) override {
         auto& ws = ed.ws();
-        if (ws.project.dir.empty()) { ImGui::TextDisabled("Откройте игру"); return; }
+        if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_LAYERS, "Игра не открыта", "Файл → Открыть проект"); return; }
         Json list = ws.call("overlay_list", Json::object());
-        if (list.has("error")) { ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "%s", list.getStr("error").c_str()); return; }
+        if (list.has("error")) { ui::callout(ui::Tone::Error, list.getStr("error")); return; }
 
         // ---- add from a template
         const Json tpl = game::overlayTemplates();
-        ImGui::SetNextItemWidth(-90);
+        const float addW = ImGui::CalcTextSize(ICON_PLUS "  Добавить").x + ImGui::GetStyle().FramePadding.x * 2;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - addW - ImGui::GetStyle().ItemSpacing.x);
         const std::string cur = tpl[size_t(tplIndex_)].getStr("name");
         if (ImGui::BeginCombo("##tpl", cur.c_str())) {
             for (size_t i = 0; i < tpl.size(); ++i)
@@ -70,7 +71,7 @@ public:
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tpl[size_t(tplIndex_)].getStr("description").c_str());
         ImGui::SameLine();
-        if (ImGui::Button("Добавить")) {
+        if (ui::button(ICON_PLUS, "Добавить", true)) {
             Json p = Json::object();
             p.set("template", Json::string(tpl[size_t(tplIndex_)].getStr("id")));
             Json r = ws.call("overlay_set", p);
@@ -79,12 +80,13 @@ public:
         }
 
         // ---- preview options
-        ImGui::SeparatorText("Предпросмотр");
-        ui::help("Отмеченные оверлеи рисуются в Scene и Game без условий «when». Для оверлеев размещения (сетка, зона) выберите здание: "
-                 "его призрак стоит под курсором. В Scene инструмент «Объект» тоже показывает оверлеи размещения.");
+        ui::section(ICON_EYE, "Предпросмотр");
+        ui::help("Оверлеи со значком глаза рисуются в «Сцене» и «Игре» без условий «when». Для оверлеев размещения (сетка, зона) выберите здание: "
+                 "его призрак стоит под курсором. В «Сцене» инструмент «Объекты» тоже показывает оверлеи размещения.");
         const auto& R = ed.rules();
         const char* ghost = ed.overlayPreviewType >= 0 && size_t(ed.overlayPreviewType) < R.types.size() ? R.types[size_t(ed.overlayPreviewType)].name.c_str() : "— нет —";
-        ImGui::SetNextItemWidth(-1);
+        const bool props = ui::beginProps("##pv");
+        if (props) ui::prop("Здание под курсором", "Призрак здания для оверлеев размещения");
         if (ImGui::BeginCombo("##ghost", ghost)) {
             if (ImGui::Selectable("— нет —", ed.overlayPreviewType < 0)) ed.overlayPreviewType = -1;
             for (size_t i = 0; i < R.types.size(); ++i)
@@ -92,20 +94,20 @@ public:
                     ed.overlayPreviewType = int(i);
             ImGui::EndCombo();
         }
+        if (props) ui::endProps();
 
         // ---- list
-        ImGui::SeparatorText("Оверлеи (порядок отрисовки)");
+        ui::section(ICON_LAYERS, "Оверлеи (порядок отрисовки)");
         const float listH = std::max(120.0f, ImGui::GetContentRegionAvail().y * 0.45f);
         ImGui::BeginChild("##list", ImVec2(0, listH), ImGuiChildFlags_Borders);
         for (auto& o : list["overlays"].items()) {
             const std::string id = o.getStr("id");
             ImGui::PushID(id.c_str());
             bool pv = std::find(ed.overlayPreview.begin(), ed.overlayPreview.end(), id) != ed.overlayPreview.end();
-            if (ImGui::Checkbox("##pv", &pv)) {
-                if (pv) ed.overlayPreview.push_back(id);
+            if (ui::toolButton(pv ? ICON_EYE : ICON_EYE_OFF, pv ? "Предпросмотр без условий: вкл" : "Предпросмотр без условий: выкл", pv)) {
+                if (!pv) ed.overlayPreview.push_back(id);
                 else ed.overlayPreview.erase(std::remove(ed.overlayPreview.begin(), ed.overlayPreview.end(), id), ed.overlayPreview.end());
             }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Предпросмотр без условий");
             ImGui::SameLine();
             bool en = o.getBool("enabled", true);
             if (ImGui::Checkbox("##en", &en)) {
@@ -118,11 +120,19 @@ public:
                 Json r = ws.call("overlay_set", p);
                 message_ = r.has("error") ? r.getStr("error") : r.getStr("summary");
             }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Включён");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Включён в игре");
             ImGui::SameLine();
-            std::string label = id + "  [" + o.getStr("shape") + "]  " + o.getStr("origin");
-            if (o.has("error")) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.45f, 0.35f, 1));
-            if (ImGui::Selectable(label.c_str(), id == selected_)) select(ed, id);
+            std::string label = (o.has("error") ? std::string(ICON_ALERT " ") : std::string()) + id;
+            if (o.has("error")) ImGui::PushStyleColor(ImGuiCol_Text, ui::toneColor(ui::Tone::Error));
+            ImGui::AlignTextToFramePadding();
+            if (ImGui::Selectable(label.c_str(), id == selected_, 0, ImVec2(0, ImGui::GetFrameHeight()))) select(ed, id);
+            {   // shape · origin, dim, at the right
+                const std::string meta = o.getStr("shape") + " · " + o.getStr("origin");
+                const ImVec2 mx = ImGui::GetItemRectMax(), mn = ImGui::GetItemRectMin();
+                const float w = ImGui::CalcTextSize(meta.c_str()).x;
+                if (mx.x - mn.x > ImGui::CalcTextSize(label.c_str()).x + w + 24)
+                    ImGui::GetWindowDrawList()->AddText(ImVec2(mx.x - w - 6, mn.y + (mx.y - mn.y - ImGui::GetTextLineHeight()) * 0.5f), ImGui::GetColorU32(ImGuiCol_TextDisabled), meta.c_str());
+            }
             if (o.has("error")) { ImGui::PopStyleColor(); if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", o.getStr("error").c_str()); }
             ImGui::PopID();
         }
@@ -130,13 +140,13 @@ public:
 
         // ---- editor of the selected entry
         if (!selected_.empty()) {
-            ImGui::SeparatorText(("Правка: " + selected_).c_str());
-            ImGui::RadioButton("rules.json", &target_, 0); ImGui::SameLine();
-            ImGui::RadioButton("game.json", &target_, 1);
+            ui::section(ICON_PENCIL, ("Правка: " + selected_).c_str());
+            static const char* targets[] = {"rules.json", "game.json"};
+            if (ui::segmented("##target", target_, targets, 2)) select(ed, selected_);
             ui::help("Куда записать. Для встроенных оверлеев (selection, health_bars, ...) запись — это переопределение: достаточно "
                      "изменённых ключей, остальное берётся из значения по умолчанию.");
-            ui::inputMultiline("##json", text_, ImVec2(-1, std::max(160.0f, ImGui::GetContentRegionAvail().y - 60)));
-            if (ImGui::Button("Применить")) {
+            ui::inputMultiline("##json", text_, ImVec2(-1, std::max(160.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() - (message_.empty() ? 6 : 40))));
+            if (ui::wideButton(ICON_CHECK, "Применить", 0, 3, true)) {
                 try {
                     Json p = Json::object();
                     p.set("overlay", Json::parse(text_));
@@ -145,8 +155,7 @@ public:
                     message_ = r.has("error") ? r.getStr("error") : r.getStr("summary");
                 } catch (const std::exception& e) { message_ = std::string("JSON: ") + e.what(); }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Удалить запись")) {
+            if (ui::wideButton(ICON_TRASH, "Удалить запись", 1, 3)) {
                 Json p = Json::object();
                 p.set("id", Json::string(selected_));
                 p.set("target", Json::string(target_ ? "game" : "rules"));
@@ -154,10 +163,9 @@ public:
                 message_ = r.has("error") ? r.getStr("error") : r.getStr("summary");
                 if (!r.has("error")) select(ed, selected_);
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Перечитать")) select(ed, selected_);
+            if (ui::wideButton(ICON_REFRESH, "Перечитать", 2, 3)) select(ed, selected_);
         }
-        if (!message_.empty()) ImGui::TextWrapped("%s", message_.c_str());
+        ui::resultMessage(message_);
     }
 
 private:
