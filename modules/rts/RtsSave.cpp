@@ -30,7 +30,7 @@ void io(Archive& a, Projectile& x) {
     a(x.target, x.source, x.aim, x.speed, x.damage, x.splash, x.damageType, x.owner, x.layers, x.effList, x.effIndex, x.onHit,
       x.onHitChance, x.sourceType, x.start, x.travel, x.total, x.scale);
 }
-void io(Archive& a, Hero& x) { a(x.level, x.xp); }
+void io(Archive& a, Hero& x) { a(x.level, x.xp, x.points); for (auto& k : x.skill) io(a, k); }   // skills: save version 4
 void io(Archive& a, Transit& x) { a(x.from, x.to, x.depart, x.arrive, x.fromWorld, x.toWorld, x.arrival); }
 void io(Archive& a, Squad& x) { a(x.reinforceTimer, x.reinforcing); }
 void io(Archive& a, Buff& x) { a(x.stat, x.add, x.mul, x.until, x.sourceType); }
@@ -97,9 +97,12 @@ void io(Archive& a, Turret& x) { a(x.dir, x.init); }
 void io(Archive& a, GrowState& x) { a(x.timer); }
 // state
 void io(Archive& a, TypeMods& x) { a(x.add, x.mul); }
+void io(Archive& a, PlayerEconomy::DeadHero& x) { a(x.type, x.level, x.xp); for (auto& k : x.skill) io(a, k); }
+void io(Archive& a, GameState::Resurface& x) { a(x.type, x.owner, x.at); }
 void io(Archive& a, PlayerEconomy& x) {
     a(x.stock, x.cap, x.income, x.capProvided, x.capUsed, x.disabledTags, x.productionMult, x.supplyUsed, x.supplyCap, x.typeCount, x.typeCountAll,
       x.researched, x.researching, x.mods, x.gatherMult, x.regions, x.faction, x.typeDisabled, x.statuses, x.statusFlags);
+    a(x.heroesMade, x.deadHeroes);   // originals heroes (save version 4: were hashed but not saved)
 }
 void io(Archive& a, WaveDef& x) { a(x.tick, x.player, x.spawn, x.at, x.spread, x.every, x.growth, x.repeats, x.done, x.route); }
 void io(Archive& a, RoomZone& x) { a(x.type, x.owner, x.cells, x.center); }
@@ -172,6 +175,7 @@ void ioState(Archive& a, GameState& s) {
       s.roomsDirty, s.hand, s.possessed, s.playerAbilities, s.nextGroupId);
     ioRle(a, s.roadComp);
     a(s.roadsDirty, s.lanes, s.lanesDirty, s.laneSignature, s.laneRoundRobin);
+    a(s.resurface);   // save version 4
 }
 
 template <class T> void ioPool(Archive& a, World& w) {
