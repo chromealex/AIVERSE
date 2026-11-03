@@ -179,6 +179,16 @@ public class RtsActivity extends NativeActivity {
         if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("text", s));
     }
 
+    // Called from the game thread (JNI): a link in the browser (PlatformAndroid.cpp openUrl).
+    public boolean openUrl(String url) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
     private void onKeyboardHeight(int px) {
         if (px == keyboardPx) return;
         boolean hidden = keyboardPx > 0 && px == 0;

@@ -216,6 +216,7 @@ struct LuaApi {
         return 1;
     }
     static int touch(lua_State* L) { lua_pushboolean(L, platform::isTouchDevice()); return 1; }
+    static int openUrl(lua_State* L) { lua_pushboolean(L, platform::openUrl(luaL_checkstring(L, 1))); return 1; }
     static int platformName(lua_State* L) { lua_pushstring(L, platform::name()); return 1; }
     static int preview(lua_State* L) { lua_pushboolean(L, client(L).uiPreview_); return 1; }
     static int time(lua_State* L) { lua_pushnumber(L, client(L).time_); return 1; }
@@ -415,7 +416,7 @@ void GameClient::initLua() {
         {"setLanguage", LuaApi::setLanguage}, {"name", LuaApi::name}, {"maps", LuaApi::maps}, {"start", LuaApi::start},
         {"difficulty", LuaApi::difficulty}, {"screen", LuaApi::screen}, {"pause", LuaApi::pause}, {"resume", LuaApi::resume},
         {"menu", LuaApi::menu}, {"online", LuaApi::online}, {"howto", LuaApi::howto}, {"engineMenu", LuaApi::engineMenu},
-        {"notice", LuaApi::notice}, {"safeArea", LuaApi::safeArea}, {"lastResult", LuaApi::lastResult}, {"touch", LuaApi::touch},
+        {"notice", LuaApi::notice}, {"safeArea", LuaApi::safeArea}, {"lastResult", LuaApi::lastResult}, {"touch", LuaApi::touch}, {"openUrl", LuaApi::openUrl},
         {"platform", LuaApi::platformName}, {"preview", LuaApi::preview}, {"time", LuaApi::time}, {"json", LuaApi::json}, {"decode", LuaApi::decode}, {"encode", LuaApi::encode},
         {"log", LuaApi::log}});
     table("storage", {{"load", LuaApi::load}, {"save", LuaApi::save}, {"erase", LuaApi::erase}});

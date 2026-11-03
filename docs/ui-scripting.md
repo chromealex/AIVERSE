@@ -52,7 +52,7 @@ Engine side: `engine/assets/ui/lib/meta.lua` (ui / profile / shop, runs before `
   cooldown), `restore(fn)`, `cooldown(id)`.
 - `game` — `tr(key, args)`, `hasText(key)`, `language()`, `languages()`, `setLanguage(tag)`, `name()`, `maps()`,
   `start(i, {difficulty, spectate, initialVars})`, `difficulty(n?)`, `screen()`, `pause()`, `resume()`, `menu()`, `online()`,
-  `howto(open?)`, `engineMenu(on?)`, `notice(text)`, `lastResult()`, `safeArea()`, `touch()`, `platform()`,
+  `howto(open?)`, `engineMenu(on?)`, `notice(text)`, `lastResult()`, `safeArea()`, `touch()`, `platform()`, `openUrl(url)` (http(s) / mailto in the system browser; false if refused),
   `preview()`, `time()`, `json('ui/x.json')`, `decode(text)`, `encode(v)`, `log(...)` (= `print`),
   `on(event, fn)`, `off(event, fn)`.
 - Events: `screen` (menu | lobby | playing | paused | over), `open` / `close` `{screen}`,

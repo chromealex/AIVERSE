@@ -151,6 +151,10 @@ void syncUserData();
 // pasted last (Ctrl/Cmd+V is delivered after the browser handed over the pasted text).
 std::string clipboardText();
 void setClipboardText(const std::string& s);
+// Opens an http(s) / mailto link in the system browser / mail app (terms of use, privacy policy, store pages).
+// Other schemes are refused (false). Web: a new tab (call it from a click handler or the popup blocker may stop it).
+bool openUrl(const std::string& url);
+namespace detail { bool urlAllowed(const std::string& url); }
 
 } // namespace rts::platform
 

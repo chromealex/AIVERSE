@@ -86,6 +86,7 @@ EM_JS(void, rts_web_clipboard_write, (const char* text), {
     Module.rtsClip = s;
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).catch(function () {});
 });
+EM_JS(void, rts_web_open_url, (const char* url), { window.open(UTF8ToString(url), '_blank', 'noopener'); });
 EM_JS(void, rts_web_clipboard_init, (), {
     document.addEventListener('paste', function (e) {
         if (Module.rtsText && document.activeElement === Module.rtsText.el) return; // hidden input types it
@@ -375,6 +376,11 @@ void startAfterStorage() {
 void syncUserData() { rts_web_storage_sync(); }
 
 std::string clipboardText() { return state().clipboard; }
+bool openUrl(const std::string& url) {
+    if (!detail::urlAllowed(url)) return false;
+    rts_web_open_url(url.c_str());
+    return true;
+}
 void setClipboardText(const std::string& s) {
     state().clipboard = s;
     rts_web_clipboard_write(s.c_str());

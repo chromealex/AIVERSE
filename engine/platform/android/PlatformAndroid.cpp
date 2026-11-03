@@ -386,6 +386,22 @@ void setClipboardText(const std::string& s) {
     if (env->ExceptionCheck()) env->ExceptionClear();
     env->DeleteLocalRef(cls);
 }
+bool openUrl(const std::string& url) {
+    if (!detail::urlAllowed(url)) return false;
+    JNIEnv* env = gameThreadEnv();
+    if (!env) return false;
+    jobject act = g_app->activity->clazz;
+    jclass cls = env->GetObjectClass(act);
+    bool ok = false;
+    if (jmethodID m = env->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)Z")) {
+        jstring js = toJString(env, url);
+        ok = env->CallBooleanMethod(act, m, js);
+        env->DeleteLocalRef(js);
+    }
+    if (env->ExceptionCheck()) { env->ExceptionClear(); ok = false; }
+    env->DeleteLocalRef(cls);
+    return ok;
+}
 void setTitle(const std::string&) {}
 
 namespace {

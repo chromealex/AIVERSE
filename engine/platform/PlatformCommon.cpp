@@ -11,6 +11,11 @@
 #include "engine/data/Json.h"
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#if !defined(__APPLE__) && !defined(_WIN32) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
@@ -371,6 +376,25 @@ uint64_t contentPacksHash() {
 #if !defined(__APPLE__) && !defined(_WIN32) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 std::string clipboardText() { return state().clipboard; }
 void setClipboardText(const std::string& s) { state().clipboard = s; }
+bool openUrl(const std::string& url) {   // desktop Linux: xdg-open, no shell (the URL is one argv entry)
+    if (!detail::urlAllowed(url)) return false;
+    const pid_t pid = fork();
+    if (pid == 0) {
+        if (fork() == 0) { execlp("xdg-open", "xdg-open", url.c_str(), static_cast<char*>(nullptr)); _exit(127); }
+        _exit(0);   // the grandchild is reparented: no zombie to wait for
+    }
+    if (pid > 0) waitpid(pid, nullptr, 0);
+    return pid > 0;
+}
 #endif
+
+namespace detail {
+bool urlAllowed(const std::string& url) {
+    auto starts = [&](const char* p) { return url.compare(0, std::strlen(p), p) == 0; };
+    if (!(starts("https://") || starts("http://") || starts("mailto:"))) return false;
+    for (unsigned char c : url) if (c < 0x20 || c == 0x7f) return false;
+    return true;
+}
+} // namespace detail
 
 } // namespace rts::platform

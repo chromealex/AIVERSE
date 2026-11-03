@@ -269,6 +269,11 @@ std::string clipboardText() {
     NSString* s = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
     return s ? std::string(s.UTF8String) : std::string();
 }
+bool openUrl(const std::string& url) {
+    if (!detail::urlAllowed(url)) return false;
+    NSURL* u = [NSURL URLWithString:[NSString stringWithUTF8String:url.c_str()]];
+    return u && [[NSWorkspace sharedWorkspace] openURL:u];
+}
 void setClipboardText(const std::string& s) {
     NSPasteboard* pb = [NSPasteboard generalPasteboard];
     [pb clearContents];

@@ -186,6 +186,10 @@ void applyFullscreen(bool on) {
 }
 } // namespace detail
 
+bool openUrl(const std::string& url) {
+    if (!detail::urlAllowed(url)) return false;
+    return reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", widen(url).c_str(), nullptr, nullptr, SW_SHOWNORMAL)) > 32;
+}
 std::string clipboardText() {
     std::string out;
     if (!OpenClipboard(g_hwnd)) return out;
