@@ -13179,8 +13179,8 @@ TEST(mapdoc_validate_scripted_players_without_start) {
             if (i.text.find("стартовых объектов") != std::string::npos) { found = true; *error = i.error; }
         return found;
     };
-    bool error = false;
-    CHECK(startIssue(rulesJson, &error) && error);
+    bool error = true;
+    CHECK(startIssue(rulesJson, &error) && !error);   // a warning: the map can still be launched
     Json scripts = Json::array();
     scripts.push(Json::string("scripts/game.lua"));
     rulesJson.set("scripts", scripts);
