@@ -4,6 +4,7 @@
 // <project>/Builds/.temp/editor-<host> (NativeBuild.h) through the Workspace runner (output in the Console),
 // then to restart in that editor on the same project (unsaved changes are asked about first). A build
 // started by an agent (MCP native_build) shows up here too.
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include "Editor.h"
@@ -38,7 +39,8 @@ bool Editor::checkNativeModules(bool fromPlay) {
     if (n.missing.empty()) { if (!building) n.stage = Stage::Hidden; return false; }
     std::string ids;
     for (auto& m : n.missing) ids += (ids.empty() ? "" : ", ") + m;
-    ws_.log("native", "В этом редакторе нет модулей C++ проекта: " + ids, true);
+    // an error only when it stops a Play; on open the switch / banner handles it
+    ws_.log("native", "В этом редакторе нет модулей C++ проекта: " + ids, fromPlay);
     if (fromPlay) status = "Нельзя запустить: в редакторе нет модулей C++ проекта (" + ids + ")";
     if (building) { n.stage = Stage::Building; return true; }
     n.projectDir = ws_.project.dir;
@@ -164,7 +166,8 @@ void Editor::drawNativeBuild() {
     if (n.stage == Stage::Hidden || showPicker_) return;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 36), ImGuiCond_Always, ImVec2(0.5f, 0));
-    ImGui::SetNextWindowSizeConstraints(ImVec2(520, 0), ImVec2(760, FLT_MAX));
+    const float bannerW = std::min(720.0f, vp->WorkSize.x - 32);   // fixed width: long paths wrap
+    ImGui::SetNextWindowSizeConstraints(ImVec2(bannerW, 0), ImVec2(bannerW, FLT_MAX));
     const auto& pal = theme_.palette();
     ImGui::PushStyleColor(ImGuiCol_WindowBg, pal.panelRaised);
     ImGui::PushStyleColor(ImGuiCol_Border, pal.warning);
@@ -178,7 +181,9 @@ void Editor::drawNativeBuild() {
     const ImVec4 red = pal.danger, yellow = pal.warning, green = pal.success;
     auto join = [](const std::vector<std::string>& v) { std::string s; for (auto& x : v) s += (s.empty() ? "" : ", ") + x; return s.empty() ? std::string("нет") : s; };
     auto folder = [&] {
-        ImGui::TextDisabled("Папка сборки: %s", n.plan.buildDir.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("Папка сборки: %s", (n.plan.buildDir.empty() ? nativeBuildDir(ws_.project.dir, nativeHost()) : n.plan.buildDir).c_str());
+        ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Builds/ не попадает в git, паки и копии проекта; основной редактор и движок не меняются");
     };
     if (n.stage == Stage::Offer) {
@@ -229,7 +234,9 @@ void Editor::drawNativeBuild() {
         if (ImGui::Button("Скрыть")) n.stage = Stage::Hidden;   // the result still shows when the build ends
     } else if (n.stage == Stage::Done) {
         ImGui::TextColored(green, ICON_CHECK "  Редактор с модулями проекта собран.");
-        ImGui::TextDisabled("%s", n.existing.launch.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", n.existing.launch.c_str());
+        ImGui::PopStyleColor();
         ImGui::TextWrapped("Перезапустить в нём этот проект? Этот редактор закроется; несохранённые изменения можно будет сохранить.");
         if (ui::button(ICON_REFRESH, "Перезапустить в собранном редакторе", true)) { n.restartPending = true; n.restartAsked = false; }
         ImGui::SameLine();
