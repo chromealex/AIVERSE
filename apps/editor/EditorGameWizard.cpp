@@ -249,6 +249,22 @@ std::string tutorialText(const std::string& mode) {
 // Dictation into a text field: one field at a time listens; the live text shows under the button, the final text is
 // appended to the field when the recognizer is done.
 std::string* g_dictTarget = nullptr;
+
+// Words the recognizer should expect in a game pitch: game names (often English inside Russian speech) and genre terms.
+const std::vector<std::string>& dictationVocabulary() {
+    static const std::vector<std::string> v = {
+        "StarCraft", "StarCraft 2", "Warcraft", "Warcraft 3", "Command & Conquer", "Red Alert", "Age of Empires", "Company of Heroes",
+        "Dune", "Total War", "They Are Billions", "Northgard", "Stronghold", "Settlers", "Anno", "Rise of Nations", "Supreme Commander",
+        "Clash Royale", "Clash of Clans", "Brawl Stars", "Rush Royale", "Kingdom Rush", "Bloons", "Plants vs Zombies", "Dota", "League of Legends",
+        "Mindustry", "Factorio", "RimWorld", "Frostpunk", "Northgard", "Bad North", "Mini Metro", "Auto Chess", "Hearthstone",
+        "RTS", "MOBA", "tower defense", "Tower Defense", "idle", "roguelike", "рогалик", "PvP", "PvE", "GDD", "ГДД", "мета", "метагейм",
+        "юниты", "юнит", "апгрейды", "апгрейд", "прокачка", "фракции", "фракция", "ресурсы", "лут", "боссы", "босс", "волны", "лейны",
+        "гарнизон", "башни", "казармы", "рабочие", "харвестер", "микро", "макро", "туман войны", "скирмиш", "кампания", "туториал",
+        "софт валюта", "хард валюта", "гемы", "кристаллы", "золото", "боевой пропуск", "батл пасс", "ежедневные награды", "сундуки",
+        "лутбоксы", "гача", "кланы", "лидерборд", "рейтинг", "ивенты", "оффлайн доход", "монетизация", "реклама за награду", "инапы",
+        "мобилка", "портрет", "сай-фай", "стимпанк", "фэнтези", "постапокалипсис", "зомби", "орки", "эльфы", "роботы", "мехи"};
+    return v;
+}
 void dictate(const char* id, std::string& target, const WizardSpec& S) {
     ImGui::PushID(id);
     std::string done;
@@ -289,7 +305,7 @@ void dictate(const char* id, std::string& target, const WizardSpec& S) {
                                      : lang == "it" ? "it-IT" : lang == "tr" ? "tr-TR" : lang == "zh" ? "zh-CN" : lang == "ja" ? "ja-JP"
                                      : lang == "ko" ? "ko-KR" : lang;
             g_dictTarget = &target;
-            speech::start(locale);
+            speech::start(locale, dictationVocabulary());
         }
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Наговорите в микрофон — текст добавится в поле (язык: первый язык игры)");
@@ -451,7 +467,7 @@ void Editor::drawGameWizard() {
     case 1: {
         hint("Опишите игру своими словами — по ним мастер выберет шаблон. Пусто — выберет сам.");
         ImGui::Spacing();
-        ui::inputMultiline("##idea", S.idea, ImVec2(-1, 110));
+        ui::inputMultiline("##idea", S.idea, ImVec2(-1, 130), ImGuiInputTextFlags_WordWrap);
         dictate("dict_idea", S.idea, S);
         ImGui::Spacing();
         drawAiBlock = true;
@@ -550,7 +566,7 @@ void Editor::drawGameWizard() {
         ImGui::TextUnformatted("Идеи для меты");
         hint("Что должно быть вокруг матчей: прогрессия, награды, магазин, события, кланы, боевой пропуск — своими словами. "
              "Агент сделает мету по этому списку; настройки ниже — основа мастера.");
-        ui::inputMultiline("##metaidea", S.metaIdea, ImVec2(-1, 90));
+        ui::inputMultiline("##metaidea", S.metaIdea, ImVec2(-1, 100), ImGuiInputTextFlags_WordWrap);
         dictate("dict_meta", S.metaIdea, S);
         ImGui::Spacing();
         if (beginForm("##f5")) {

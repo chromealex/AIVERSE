@@ -26,8 +26,8 @@ inline int stringResize(ImGuiInputTextCallbackData* d) {
 inline bool inputString(const char* label, std::string& s, ImGuiInputTextFlags f = 0) {
     return ImGui::InputText(label, s.data(), s.capacity() + 1, f | ImGuiInputTextFlags_CallbackResize, stringResize, &s);
 }
-inline bool inputMultiline(const char* label, std::string& s, ImVec2 size) {
-    return ImGui::InputTextMultiline(label, s.data(), s.capacity() + 1, size, ImGuiInputTextFlags_CallbackResize | ImGuiInputTextFlags_AllowTabInput, stringResize, &s);
+inline bool inputMultiline(const char* label, std::string& s, ImVec2 size, ImGuiInputTextFlags f = ImGuiInputTextFlags_AllowTabInput) {
+    return ImGui::InputTextMultiline(label, s.data(), s.capacity() + 1, size, f | ImGuiInputTextFlags_CallbackResize, stringResize, &s);
 }
 inline void help(const char* text) {
     ImGui::SameLine();

@@ -3,7 +3,7 @@
 
 namespace rts::editor::speech {
 bool supported() { return false; }
-void start(const std::string&) {}
+void start(const std::string&, const std::vector<std::string>&) {}
 void stop() {}
 bool busy() { return false; }
 bool listening() { return false; }
