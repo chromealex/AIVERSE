@@ -13152,3 +13152,26 @@ TEST(planet_detail_editor_sculpt_seams_save) {
     fs::remove_all(root);
 }
 #endif
+
+#ifdef RTS_TESTS_EDITOR_CORE
+// A map whose players have no objects: an error for plain rules, only a warning when simulation scripts build the match.
+TEST(mapdoc_validate_scripted_players_without_start) {
+    editor::MapDoc doc;
+    std::string err;
+    CHECK(doc.loadJson(Json::parse(R"({"name": "t", "size": [8, 8], "players": [{"team": 1}, {"team": 2}], "entities": []})"), &err));
+    Json rulesJson = Json::parseFile(kSkirmish + "/rules.json");
+    const game::Rules rules = game::loadRules(rulesJson);
+    auto startIssue = [&](const Json& rj, bool* error) {
+        bool found = false;
+        for (auto& i : doc.validate(rules, rj))
+            if (i.text.find("стартовых объектов") != std::string::npos) { found = true; *error = i.error; }
+        return found;
+    };
+    bool error = false;
+    CHECK(startIssue(rulesJson, &error) && error);
+    Json scripts = Json::array();
+    scripts.push(Json::string("scripts/game.lua"));
+    rulesJson.set("scripts", scripts);
+    CHECK(startIssue(rulesJson, &error) && !error);
+}
+#endif

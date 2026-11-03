@@ -661,11 +661,15 @@ std::vector<Issue> MapDoc::validate(const game::Rules& rules, const Json& rulesJ
         if (!air && !d.roadsOnly && ((naval && c != '~' && c != '=') || (!naval && (c == '~' || c == '#'))))
             out.push_back({true, nm + ": стоит на непроходимой клетке", int(i)});
     }
+    // Rules with simulation scripts may build the whole match in Lua (e.g. a port that spawns every army from its
+    // own data): a player without map objects is then only a warning, the scripts are expected to populate it.
+    const bool scripted = rulesJson["scripts"].isArray() && rulesJson["scripts"].size() > 0;
     for (size_t p = 1; p <= d.players.size(); ++p) {
         if (d.players[p - 1].waves) continue;
         bool has = d.players[p - 1].hasStart;
         for (auto& e : d.entities) if (e.owner == int(p)) has = true;
-        if (!has) out.push_back({true, "У игрока " + d.players[p - 1].name + " нет стартовых объектов или стартовой точки"});
+        if (!has) out.push_back({!scripted, "У игрока " + d.players[p - 1].name + " нет стартовых объектов или стартовой точки" +
+                                                (scripted ? std::string(" (их должны создать скрипты)") : std::string())});
         if (!d.players[p - 1].faction.empty() && rules.findFaction(d.players[p - 1].faction) < 0)
             out.push_back({true, "Игрок " + d.players[p - 1].name + ": неизвестная фракция " + d.players[p - 1].faction});
     }
