@@ -35,6 +35,12 @@
 // (the editor offers to install them); --install-missing installs them first.
 //   rtsbuild --check-toolchain <target> [--json]      what is there / missing
 //   rtsbuild --install-toolchain <target|id>          install into ~/.rtsengine/toolchains
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>   // SetFileAttributesW: hide Builds/.temp
+#endif
 #include "UiSpriteSheets.h"
 #include <algorithm>
 #include <array>
@@ -137,6 +143,15 @@ int run(const std::string& cmd) {
     return rc;
 }
 void mustRun(const std::string& cmd) { if (run(cmd) != 0) die("команда завершилась с ошибкой"); }
+
+// Intermediates (CMake build trees, packs, staged audio, Gradle project, xcodebuild data) live in the
+// hidden <out>/.temp so <out> (the project's Builds/) holds only finished builds. Inside an output that is
+// already hidden (the editor's estimate in Builds/.temp/estimate) they go straight under it.
+fs::path tempDir(const Options& o) {
+    const std::string leaf = o.out.filename().string();
+    if (o.out.parent_path().filename() == ".temp" || (!leaf.empty() && leaf[0] == '.')) return o.out / "work";
+    return o.out / ".temp";
+}
 
 fs::path findTool(const std::string& name) {
     const char* path = std::getenv("PATH");
@@ -379,18 +394,18 @@ fs::path gameContent(Options& o) {
     if (profile == "off") return o.project;
     if (auto it = o.staged.find(profile); it != o.staged.end()) return it->second;
     step("Звук: сжатие для профиля " + profile);
-    const fs::path dir = o.out / "_audio" / profile;
+    const fs::path dir = tempDir(o) / "audio" / profile;
     rts::audiopack::Report report;
     std::string err;
     if (!rts::audiopack::stageGame(o.project.string(), dir.string(), profile, report, &err)) die(err);
     std::stringstream ss(report.items.empty() ? std::string("без изменений\n") : report.text());
     for (std::string line; std::getline(ss, line);) info(line);
-    writeText(o.out / "_audio" / (profile + "-report.txt"), report.text());
+    writeText(tempDir(o) / "audio" / (profile + "-report.txt"), report.text());
     o.staged[profile] = dir;
     return dir;
 }
 
-// Builds <out>/_pack[/<atlas key>][/audio-<profile>][/<split key>]/content.rpak (+ chunks/) from the
+// Builds <out>/.temp/pack[/<atlas key>][/audio-<profile>][/<split key>]/content.rpak (+ chunks/) from the
 // game folder and engine assets, once per distinct atlas + audio + split setting (targets that agree
 // share one pack).
 // Per-file rules (packaging.files) of the current target, as a short key for the pack cache.
@@ -405,7 +420,7 @@ std::string fileRulesKey(const Options& o) {
 
 fs::path packDir(const Options& o) {
     std::string key = atlasConfig(o).key(), audio = audioProfile(o), split = splitConfig(o).key();
-    fs::path dir = key == "off" ? o.out / "_pack" : o.out / "_pack" / key;
+    fs::path dir = key == "off" ? tempDir(o) / "pack" : tempDir(o) / "pack" / key;
     if (std::string fk = fileRulesKey(o); !fk.empty()) dir /= fk;
     if (!(audio == "desktop" || audio == "off")) dir /= "audio-" + audio;
     return split.empty() ? dir : dir / split;
@@ -595,8 +610,8 @@ void reportSize(const Options& o, const std::string& target, const fs::path& art
     }
     std::string report = line + "\n";
     if (o.pack && fs::exists(packDir(o) / "size-report.txt", ec)) report += "\nконтент (content.rpak):\n" + readText(packDir(o) / "size-report.txt");
-    if (const std::string p = audioProfile(o); p != "off" && fs::exists(o.out / "_audio" / (p + "-report.txt"), ec))
-        report += "\nзвук (профиль " + p + "):\n" + readText(o.out / "_audio" / (p + "-report.txt"));
+    if (const std::string p = audioProfile(o); p != "off" && fs::exists(tempDir(o) / "audio" / (p + "-report.txt"), ec))
+        report += "\nзвук (профиль " + p + "):\n" + readText(tempDir(o) / "audio" / (p + "-report.txt"));
     writeText(o.out / target / "size-report.txt", report);
     Json j = Json::object();
     j.set("target", Json::string(target));
@@ -670,11 +685,11 @@ void copyPluginRuntime(const Options& o, const std::string& platform, const fs::
 void buildMac(const Game& g, Options& o) {
     if (std::string(kHost) != "macos") {
         step("macOS: иконка (приложение собирается только на Mac)");
-        rts::build::brandMac(branding(g, o), o.out / "macos" / "gen", info);
+        rts::build::brandMac(branding(g, o), tempDir(o) / "build" / "macos" / "gen", info);
         info("macOS-сборка возможна только на Mac — пропускаю");
         return;
     }
-    fs::path out = o.out / "macos", bdir = o.out / "_build" / "macos", gen = bdir / "gen";
+    fs::path out = o.out / "macos", bdir = tempDir(o) / "build" / "macos", gen = bdir / "gen";
     fs::create_directories(gen);
     step("macOS: иконка");
     rts::build::brandMac(branding(g, o), gen, info);
@@ -699,7 +714,7 @@ void buildMac(const Game& g, Options& o) {
 void buildIOS(const Game& g, Options& o) {
     if (std::string(kHost) != "macos") {
         step("iOS: иконки и экран запуска (Xcode-проект генерируется только на Mac)");
-        rts::build::brandIOS(branding(g, o), o.out / "ios" / "gen", info);
+        rts::build::brandIOS(branding(g, o), tempDir(o) / "build" / "ios" / "gen", info);
         info("Xcode-проект для iOS генерируется только на Mac — пропускаю");
         return;
     }
@@ -737,7 +752,7 @@ void buildIOS(const Game& g, Options& o) {
     if (o.generateOnly) return;
     step("iOS: проверочная сборка для симулятора (без подписи)");
     int rc = run("xcodebuild " + xcodeTarget + " -scheme rts_client -configuration " + o.config +
-                 " -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath " + quote(out / "derived") +
+                 " -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath " + quote(tempDir(o) / "build" / "ios-derived") +
                  " CODE_SIGNING_ALLOWED=NO -quiet build");
     if (rc != 0) die("сборка для симулятора не прошла");
     info("Симулятор: OK. Для устройства откройте проект в Xcode, выберите Team в Signing & Capabilities и запустите.");
@@ -767,7 +782,9 @@ std::string newestSubdir(const fs::path& dir) {
 }
 
 void buildAndroid(const Game& g, Options& o) {
-    fs::path out = o.out / "android", proj = out / g.exe;
+    // the Gradle project is the result with --generate-only (open it in Android Studio); otherwise an
+    // intermediate (hidden), and Builds/android gets only the APK
+    fs::path out = o.out / "android", proj = o.generateOnly ? out / g.exe : tempDir(o) / "build" / "android" / g.exe;
     step("Android: генерация Gradle-проекта");
     fs::remove_all(proj);
     fs::path tpl = o.engine / "platform" / "android" / "template";
@@ -850,7 +867,7 @@ fs::path findEmcmake() {
 
 void buildWeb(const Game& g, Options& o) {
     fs::path emcmake = findEmcmake();
-    fs::path out = o.out / "web", bdir = o.out / "_build" / "web";
+    fs::path out = o.out / "web", bdir = tempDir(o) / "build" / "web";
     step("Web: иконки, PWA manifest, заставка");
     rts::build::brandWeb(branding(g, o), out, info);
     if (emcmake.empty()) die("Emscripten (emcmake) не найден, хотя проверка инструментов прошла — выполните rtsbuild --check-toolchain web");
@@ -876,7 +893,7 @@ void buildWeb(const Game& g, Options& o) {
 void buildWindows(const Game& g, Options& o) {
     fs::path out = o.out / "windows";
     if (std::string(kHost) == "windows") {
-        fs::path bdir = o.out / "_build" / "windows";
+        fs::path bdir = tempDir(o) / "build" / "windows";
         step("Windows: иконка");
         rts::build::brandWindows(branding(g, o), bdir / "gen", info);
         step("Windows: конфигурация (Visual Studio)");
@@ -894,7 +911,7 @@ void buildWindows(const Game& g, Options& o) {
     std::string cxx;
     for (const char* c : {"x86_64-w64-mingw32-g++", "x86_64-w64-mingw32-clang++"}) if (!findTool(c).empty()) { cxx = c; break; }
     if (!cxx.empty()) {
-        fs::path bdir = o.out / "_build" / "windows-mingw";
+        fs::path bdir = tempDir(o) / "build" / "windows-mingw";
         std::string cc = replaceAll(replaceAll(cxx, "g++", "gcc"), "clang++", "clang");
         fs::path tc = bdir / "mingw-toolchain.cmake";
         writeText(tc, "set(CMAKE_SYSTEM_NAME Windows)\nset(CMAKE_SYSTEM_PROCESSOR x86_64)\nset(CMAKE_C_COMPILER " + cc + ")\nset(CMAKE_CXX_COMPILER " + cxx +
@@ -937,7 +954,7 @@ void buildWindows(const Game& g, Options& o) {
 
 void buildLinux(const Game& g, Options& o) {
     if (std::string(kHost) != "linux") { info("Linux-сборка выполняется на Linux — пропускаю"); return; }
-    fs::path out = o.out / "linux", bdir = o.out / "_build" / "linux";
+    fs::path out = o.out / "linux", bdir = tempDir(o) / "build" / "linux";
     step("Linux: сборка");
     std::string gen_ = findTool("ninja").empty() ? "" : " -G Ninja";
     mustRun("cmake -S " + quote(o.engine) + " -B " + quote(bdir) + gen_ + cmakeVars(g, o, gameContent(o), {}) + packVar(o) + pluginsVar(o, "linux", bdir / "gen"));
@@ -1060,6 +1077,15 @@ int main(int argc, char** argv) {
     if (o.out.empty()) o.out = o.project / "Builds";   // inside the project (like Unity); never packed
     o.out = fs::absolute(o.out);
     if (o.config != "Debug" && o.config != "Release") die("--config должен быть Debug или Release");
+    {   // intermediates moved to <out>/.temp: drop the old visible ones (caches written by earlier rtsbuild)
+        std::error_code ec;
+        for (const char* old : {"_build", "_pack", "_audio", "_estimate"})
+            if (fs::is_directory(o.out / old, ec)) { fs::remove_all(o.out / old, ec); std::cout << "  убран старый промежуточный каталог " << (o.out / old).string() << std::endl; }
+        fs::create_directories(tempDir(o), ec);
+#if defined(_WIN32)
+        SetFileAttributesW(tempDir(o).wstring().c_str(), GetFileAttributesW(tempDir(o).wstring().c_str()) | FILE_ATTRIBUTE_HIDDEN);   // dot folders aren't hidden by Explorer
+#endif
+    }
 
     Game g;
     try {
