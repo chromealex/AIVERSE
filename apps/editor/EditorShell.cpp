@@ -106,6 +106,8 @@ void Editor::drawMenuBar() {
         if (item(ICON_ZAP, "Сделать игру…")) showProjectHub(2);
         if (item(ICON_PLUS, "Новый проект…")) showProjectHub(1);
         if (item(ICON_FOLDER_OPEN, "Открыть проект…")) showProjectHub(0);
+        for (auto& window : windows_) if (std::string(window->id()) == "project_import")
+            if (item(ICON_FOLDER_OPEN, window->title())) focusWindow("project_import");
         if (menu(ICON_CLOCK, "Недавние проекты")) {
             int n = 0;
             for (auto& pr : recentProjects()) {

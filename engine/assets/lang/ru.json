@@ -280,5 +280,20 @@
   "editor.build.resize_plan": "В сборке: длинная сторона до {size} px",
   "editor.build.resize_help": "Уменьшить слишком большие текстуры для выбранной платформы и пересчитать. Детализация снизится; исходные файлы сохранятся.",
   "entity_action.price": "Цена: {cost}",
-  "entity_action.unavailable": "Недоступно"
+  "entity_action.unavailable": "Недоступно",
+  "editor.port.title": "Импорт проекта движка",
+  "editor.port.intro": "Импорт Unity, Godot или экспорта Unreal. Отчёт покажет, какие механики нужно доделать.",
+  "editor.port.source": "Исходный проект",
+  "editor.port.destination": "Папка результата",
+  "editor.port.scale": "Клеток на метр",
+  "editor.port.scan": "Сканировать",
+  "editor.port.import": "Импортировать",
+  "editor.port.open": "Открыть результат",
+  "editor.port.ai": "Скопировать задание ИИ",
+  "editor.port.prompt": "Доделай импортированный проект через port_report и port_item. Используй rules_schema, затем Lua, затем native-модуль. Проверь через scenario_run, матчи ботов и исходные скриншоты, если они есть. Отмечай проверенное через port_resolve, объясняй отброшенное. Проект:",
+  "editor.port.copied": "Задание скопировано; вставьте его подключённому агенту.",
+  "editor.port.busy": "Выполняется импорт…",
+  "editor.port.mode": "Режим сцены",
+  "editor.port.auto": "Авто",
+  "editor.port.truncated": "Предпросмотр сокращён. Полный отчёт: port-report.json или port_report."
 }

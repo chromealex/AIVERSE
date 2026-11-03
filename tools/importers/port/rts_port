@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Executable entry point for rts_port; Python modules remain next to this launcher."""
+import sys
+sys.dont_write_bytecode = True
+from rts_port import run
+sys.exit(run())
