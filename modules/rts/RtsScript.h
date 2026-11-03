@@ -107,6 +107,7 @@ struct ScriptCommandDef {
     std::string fn;                                      // handler: global function (default on_command)
     int pick = -1;                                       // first Point / Unit / Entity arg: what a click fills in
     bool mapClick = false;                               // "mapClick": a plain left click / tap on the map sends it (pick = a point)
+    bool card = true;                                    // "card": false = no button / hotkey (sent only by view scripts, HUD documents, MCP)
 };
 // The command a plain map click sends (rules "mapClick"), or -1. Commands are sorted by id; the first one wins.
 int mapClickCommand(const std::vector<ScriptCommandDef>& commands);

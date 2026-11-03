@@ -33,6 +33,7 @@ std::vector<ScriptCommandDef> parseScriptCommands(const Json& rules, const Rules
         d.hotkey = j.getStr("hotkey");
         d.tip = j.getStr("tip");
         d.fn = j.getStr("fn", "on_command");
+        d.card = j.getBool("card", true);
         d.cooldown = j.getFx("cooldown");
         for (auto& [res, v] : j["cost"].members()) {
             int r = R.findResource(res);

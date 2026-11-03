@@ -13187,3 +13187,120 @@ TEST(mapdoc_validate_scripted_players_without_start) {
     CHECK(startIssue(rulesJson, &error) && !error);
 }
 #endif
+
+// ------------------------------------------------------------------ game wizard ("Сделать игру", docs/game-wizard.md)
+TEST(script_command_card_false_hides_the_button) {
+    game::Rules rules = game::loadRules(Json::parseFile(kSkirmish + "/rules.json"));
+    const Json j = Json::parse(R"({"commands": {"a": {"label": "A"}, "b": {"label": "B", "card": false}}})");
+    std::vector<std::string> errors;
+    auto cs = game::parseScriptCommands(j, rules, &errors);
+    CHECK(errors.empty() && cs.size() == 2);
+    CHECK(cs[0].id == "a" && cs[0].card);
+    CHECK(cs[1].id == "b" && !cs[1].card);
+}
+
+#ifdef RTS_TESTS_EDITOR_CORE
+#include "apps/editor/core/GameWizard.h"
+#include "tools/branding/BrandImage.h"
+TEST(game_wizard_plan_picks_a_template_by_the_idea) {
+    using namespace rts::editor;
+    WizardSpec s;
+    s.title = "T";
+    auto pick = [&](const std::string& idea) { s.idea = idea; return planGame(RTS_SOURCE_DIR, s).getStr("template"); };
+    const std::string shroom = pick("Грибы захватывают деревни, отправка процента войск");
+    CHECK(shroom == "mushrooms" || shroom == "shroomwars" || shroom == "sporelanes" || shroom == "spellbunkers");
+    CHECK(pick("StarCraft: три расы в космосе") == "starfall");
+    CHECK(pick("Zombie hordes attack the colony, survive the waves") == "lastcolony");
+    CHECK(pick("") == pick(""));                                   // the same answers make the same game
+    s.idea.clear();
+    s.orientation = "portrait";
+    const std::string portrait = planGame(RTS_SOURCE_DIR, s).getStr("template");
+    CHECK(portrait == "borderrush" || portrait == "laneclash");
+    s.genre = "laneclash";
+    Json p = planGame(RTS_SOURCE_DIR, s);
+    CHECK(p.getStr("template") == "laneclash" && p.getStr("tutorialArchetype") == "autobuild");
+    s.genre = "mushrooms";
+    CHECK(planGame(RTS_SOURCE_DIR, s).getStr("tutorialArchetype") == "garrison");
+    s.genre = "nope";
+    bool threw = false;
+    try { planGame(RTS_SOURCE_DIR, s); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+    // the spec survives JSON (the .rtsproj keeps it)
+    s.genre = "skirmish"; s.levels = 5; s.features = {"economy", "base"}; s.ads = true;
+    WizardSpec back = WizardSpec::fromJson(s.toJson());
+    CHECK(back.genre == "skirmish" && back.levels == 5 && back.features.size() == 2 && back.ads && back.orientation == "portrait");
+    CHECK(WizardSpec::fromJson(Json::parse(R"({"levels": 999})")).levels == 40);
+    Json cat = wizardCatalog(RTS_SOURCE_DIR);
+    CHECK(cat["templates"].size() >= 10 && cat["features"].size() > 5 && cat["defaults"].getStr("tutorial") == "both");
+}
+
+TEST(game_wizard_makes_a_playable_project) {
+    namespace fs = std::filesystem;
+    using namespace rts::editor;
+    TempHome home("wizard");
+    // the user's content: key art, an icon, a GDD
+    const fs::path art = home.dir / "art";
+    fs::create_directories(art);
+    branding::Image key = branding::makeImage(320, 180, {0.1f, 0.2f, 0.6f, 1});
+    branding::fillRect(key, 120, 50, 80, 80, {0.95f, 0.6f, 0.1f, 1});
+    CHECK(branding::writePng((art / "key_art.png").string(), key));
+    CHECK(branding::writePng((art / "logo_icon.png").string(), branding::makeImage(300, 300, {0.9f, 0.7f, 0.1f, 1})));
+    { std::ofstream f(art / "gdd.md"); f << "Рыцари строят замок и добывают золото.\n"; }
+    Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    WizardSpec s;
+    s.title = "Wizard Test";
+    s.location = (home.dir / "Projects").string();
+    s.artDir = art.string();
+    s.genre = "skirmish";
+    s.levels = 2;
+    s.ads = true;
+    s.purchases = true;
+    GameMaker maker(ws, s);
+    int steps = 0;
+    while (maker.step()) ++steps;
+    const Json& r = maker.report();
+    CHECK(r.getBool("ok"));
+    CHECK(steps > 10 && maker.done() && !maker.failed());
+    const fs::path dir = maker.projectDir();
+    CHECK(ws.project.dir == dir.string());                         // opened in the workspace
+    // the project file remembers the answers
+    Json pf = Json::parseFile(maker.projectFile());
+    CHECK(pf["wizard"]["spec"].getStr("title") == "Wizard Test" && pf["wizard"].getStr("template") == "skirmish");
+    // maps: tutorial first, then the levels, then the template's own
+    Json m = Json::parseFile((dir / "game.json").string());
+    CHECK(m["maps"].size() == 4 && m["maps"][0].getStr("file") == "maps/wiz_tutorial.json" && m["maps"][1].getStr("file") == "maps/wiz_level_1.json");
+    CHECK(m.getStr("name") == "Wizard Test" && m["store"]["products"].size() == 3 && m["ads"].isObject() && m["plugins"].has("mock-ads"));
+    CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "art/key_art.png");
+    Json lv = Json::parseFile((dir / "maps/wiz_level_1.json").string());
+    CHECK(lv["generate"].getStr("preset") == "classic" && lv["generate"].getStr("template") == "maps/valley.json");
+    // the tutorial: steps from the rules, its scripts, hidden panel commands
+    const std::string steps_ = slurp(dir / "scripts/wizard/tutorial_steps.lua");
+    CHECK(steps_.find("id = \"gather\"") != std::string::npos && steps_.find("param = \"barracks\"") != std::string::npos);
+    Json tm = Json::parseFile((dir / "maps/wiz_tutorial.json").string());
+    CHECK(tm["scripts"][0].str() == "scripts/wizard/tutorial.lua" && tm["viewScripts"][0].str() == "scripts/view/wizard/tutorial_view.lua");
+    Json rules = Json::parseFile((dir / "rules.json").string());
+    CHECK(!rules["commands"]["wiz_tut_next"].getBool("card", true));
+    bool hints = false, bonus = false;
+    for (auto& v : rules["viewScripts"].items()) hints |= v.str() == "scripts/view/wizard/hints.lua";
+    for (auto& v : rules["scripts"].items()) bonus |= v.str() == "scripts/wizard/meta_bonus.lua";
+    CHECK(hints && bonus);
+    // meta
+    Json w = Json::parseFile((dir / "ui/wizard.json").string());
+    CHECK(w["tutorial"].getInt("map") == 1 && w["levels"].size() == 2 && w["levels"][0].getInt("map") == 2 && w["upgrades"].size() >= 3);
+    CHECK(w["ads"].getBool("rewardedDouble") && w["daily"]["rewards"].size() == 7);
+    Json sj = Json::parseFile((dir / "ui/screens.json").string());
+    CHECK(sj.getStr("start") == "home" && sj.getStr("afterMatch") == "result");
+    for (const char* f : {"ui/screens/home.rml", "ui/screens/levels.rml", "ui/screens/upgrades.rml", "ui/screens/result.rml", "ui/wizard_meta.lua",
+                          "ui/hud/wiz_tutorial.rml", "ui/hud/wiz_hint.rml", "ui/main.lua", "WIZARD.md", "art/key_art.png", "docs/gdd.md"})
+        CHECK(fs::exists(dir / f));
+    Json ru = Json::parseFile((dir / "lang/ru.json").string());
+    CHECK(ru.getStr("game.name") == "Wizard Test" && ru.has("wiz.tut.gather") && ru.has("wiz.hint.camera") && ru.has("wiz.levels"));
+    // the check played the tutorial by itself through the same gate as a player and won it; no script errors
+    const Json& checks = r["plan"]["checks"];
+    CHECK(checks.size() >= 3);
+    CHECK(checks[0].getStr("map") == "maps/wiz_tutorial.json" && checks[0].getInt("winner") == 1);
+    for (auto& c : checks.items()) CHECK(c.getBool("ok") && !c.has("scriptErrors"));
+    CHECK(r["warnings"].size() == 1);                              // only: the ad units are Yandex demo ones
+}
+#endif

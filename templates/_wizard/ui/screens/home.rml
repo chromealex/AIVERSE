@@ -1,0 +1,56 @@
+<rml>
+<head>
+    <title>home</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../screens.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <style>
+        .home-body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .home-menu { width: 320dp; max-width: 90%; }
+        .home-name { font-size: 36dp; margin-bottom: 8dp; text-align: center; }
+        .home-tag { margin-bottom: 22dp; text-align: center; }
+        .home-menu button { width: 100%; }
+        .xp { width: 140dp; }
+    </style>
+    <script>
+        require('wizard_meta')
+        ui.screen("home", {
+            open = function()
+                WizMeta.refresh()
+                if WizMeta.dailyRow().available and WizMeta.tutorialDone() then ui.popup("daily") end
+            end,
+        })
+    </script>
+</head>
+<!-- Game wizard kit: main menu. Buttons follow ui/wizard.json (what the game has); texts: lang/*.json wiz.* -->
+<body>
+<div class="root" data-model="meta">
+    <div id="menu-bg"></div>
+    <div class="screen" data-attr-style="safeStyle">
+        <div class="screen-header">
+            <div class="row">
+                <span class="badge"><span>@wiz.level</span> {{wiz.level}}</span>
+                <div class="progress-bar xp"><div class="progress-fill" data-attr-style="wiz.xpFill"></div></div>
+            </div>
+            <div class="spacer"></div>
+            <div class="currencies">
+                <span class="currency" data-for="c : wizCur">{{c.value}} <span class="muted">{{c.name}}</span></span>
+            </div>
+        </div>
+        <div class="screen-body home-body">
+            <h1 class="home-name">{{game.name}}</h1>
+            <p class="home-tag muted">@wiz.tagline</p>
+            <div class="home-menu">
+                <button class="big primary" onclick="WizMeta.play()">@meta.play</button>
+                <button class="big" data-if="wiz.levels" onclick="ui.open('levels')">@wiz.levels</button>
+                <button class="big" data-if="wiz.upgrades" onclick="ui.open('upgrades')">@wiz.upgrades</button>
+                <button class="big" data-if="wiz.shop" onclick="ui.open('shop')">@meta.shop</button>
+                <button class="big" data-if="wizDaily.available" onclick="ui.popup('daily')">@wiz.daily</button>
+                <button class="big" onclick="ui.open('profile')">@meta.profile</button>
+                <button class="big" onclick="ui.open('settings')">@meta.settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</rml>

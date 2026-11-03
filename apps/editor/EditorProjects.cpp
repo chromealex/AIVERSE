@@ -5,6 +5,7 @@
 #include <ctime>
 #include <filesystem>
 #include "Editor.h"
+#include "EditorHub.h"
 #include "EditorIcons.h"
 #include "EditorUtil.h"
 #include "core/ProjectFile.h"
@@ -17,7 +18,7 @@ namespace rts::editor {
 namespace {
 
 struct HubState {
-    int tab = 0;                       // 0 projects, 1 new project
+    int tab = 0;                       // 0 projects, 1 new project, 2 make a game (EditorGameWizard.cpp)
     char search[128] = "";
     char title[128] = "Моя стратегия";
     char location[1024] = "";
@@ -65,7 +66,7 @@ void Editor::showProjectHub(int tab) { showPicker_ = true; g_hub.tab = tab; g_hu
 
 // Folder browser as a modal: returns true when a folder was chosen (in `out`). Opening a project, it
 // also lists .rtsproj files (a click on one opens it, like a double-click in the OS file manager).
-static bool folderBrowser(bool& open, std::string& dir, char* newFolder, size_t newFolderSize, bool needProject, std::string& out) {
+bool hubFolderBrowser(bool& open, std::string& dir, char* newFolder, size_t newFolderSize, bool needProject, std::string& out) {
     bool chosen = false;
     if (open) ImGui::OpenPopup("Выбор папки");
     ImGui::SetNextWindowSize(ImVec2(640, 460), ImGuiCond_Appearing);
@@ -143,7 +144,8 @@ void Editor::drawGamePicker() {
     if (H.location[0] == 0) std::snprintf(H.location, sizeof H.location, "%s", defaultProjectsDir().c_str());
     if (H.templates.empty() || ImGui::GetTime() - H.templatesAt > 10) { H.templates = listTemplates(ws_.engineDir); H.templatesAt = ImGui::GetTime(); }
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(std::min(1000.f, io.DisplaySize.x - 40), std::min(660.f, io.DisplaySize.y - 40)));
+    const bool wide = H.tab == 2;   // the game wizard has many answers: a bigger hub
+    ImGui::SetNextWindowSize(ImVec2(std::min(wide ? 1240.f : 1000.f, io.DisplaySize.x - 40), std::min(wide ? 880.f : 660.f, io.DisplaySize.y - 40)));
     ImGui::Begin("Проекты", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar);
 
     // left: navigation
@@ -151,6 +153,7 @@ void Editor::drawGamePicker() {
     ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), ICON_CASTLE "  RTS Engine");
     ImGui::Spacing(); ImGui::Spacing();
     if (ImGui::Selectable(ICON_PROJECT "  Проекты", H.tab == 0, 0, ImVec2(0, 30))) H.tab = 0;
+    if (ImGui::Selectable(ICON_ZAP "  Сделать игру", H.tab == 2, 0, ImVec2(0, 30))) H.tab = 2;
     if (ImGui::Selectable(ICON_PLUS "  Новый проект", H.tab == 1, 0, ImVec2(0, 30))) H.tab = 1;
     {   // .rtsproj double-click: does the OS know this editor?
         const AssocStatus& fa = fileAssoc();
@@ -173,13 +176,15 @@ void Editor::drawGamePicker() {
         ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), ICON_WARNING " %s", status.c_str());
     if (H.tab == 0) {
         ui::heading("Проекты");
-        ImGui::SameLine(std::max(140.0f, ImGui::GetWindowContentRegionMax().x - 400));
+        ImGui::SameLine(std::max(140.0f, ImGui::GetWindowContentRegionMax().x - 540));
         ImGui::SetNextItemWidth(170);
         ImGui::InputTextWithHint("##search", ICON_SEARCH " поиск", H.search, sizeof H.search);
         ImGui::SameLine();
         if (ImGui::Button(ICON_FOLDER_OPEN " Открыть…")) { H.browsing = true; H.browseFor = 1; H.browseDir = defaultProjectsDir(); }
         ImGui::SameLine();
         if (ImGui::Button(ICON_PLUS " Новый")) H.tab = 1;
+        ImGui::SameLine();
+        if (ui::button(ICON_ZAP, "Сделать игру", true)) H.tab = 2;
         ImGui::Separator();
         auto projects = recentProjects();
         ImGui::BeginChild("##list");
@@ -225,8 +230,11 @@ void Editor::drawGamePicker() {
             ImGui::TextDisabled(projects.empty() ? "Проектов пока нет. Создайте новый из шаблона или откройте папку проекта."
                                                  : "Ничего не найдено.");
             if (projects.empty() && ImGui::Button(ICON_PLUS " Создать проект")) H.tab = 1;
+            if (projects.empty()) { ImGui::SameLine(); if (ui::button(ICON_ZAP, "Сделать игру", true)) H.tab = 2; }
         }
         ImGui::EndChild();
+    } else if (H.tab == 2) {
+        drawGameWizard();
     } else {
         ui::heading("Новый проект");
         ImGui::TextDisabled("Шаблоны из %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
@@ -276,7 +284,7 @@ void Editor::drawGamePicker() {
             else { H.error.clear(); requestOpenProject(dir); }
         }
     }
-    if (folderBrowser(H.browsing, H.browseDir, H.newFolder, sizeof H.newFolder, H.browseFor == 1, browsed)) {
+    if (hubFolderBrowser(H.browsing, H.browseDir, H.newFolder, sizeof H.newFolder, H.browseFor == 1, browsed)) {
         if (H.browseFor == 0) std::snprintf(H.location, sizeof H.location, "%s", browsed.c_str());
         else requestOpenProject(browsed);
     }

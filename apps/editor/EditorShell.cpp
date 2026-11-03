@@ -48,6 +48,7 @@ void Editor::drawMenuBar() {
     ImGui::TextColored(theme_.palette().accent, ICON_CASTLE);
     ImGui::PopStyleVar();
     if (ImGui::BeginMenu("Проект")) {
+        if (item(ICON_ZAP, "Сделать игру…")) showProjectHub(2);
         if (item(ICON_PLUS, "Новый проект…")) showProjectHub(1);
         if (item(ICON_FOLDER_OPEN, "Проекты…")) showProjectHub(0);
         if (menu(ICON_CLOCK, "Недавние")) {
