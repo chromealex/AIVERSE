@@ -60,7 +60,7 @@ Json runProjectPort(const std::string& engineDir, const std::string& operation, 
 }
 
 void registerPortOps(Workspace& ws) {
-    const char* schema = R"({"properties":{"path":{"type":"string"},"out":{"type":"string"},"scale":{"type":"number","exclusiveMinimum":0},"mapping":{"type":"string"},"mode":{"enum":["auto","2d","3d"]},"id":{"type":"string"},"how":{"enum":["rules","lua","native","dropped"]},"reason":{"type":"string"}}})";
+    const char* schema = R"({"properties":{"options":{"type":"object","properties":{"out":{"type":"string"},"scale":{"type":"number","exclusiveMinimum":0},"mode":{"enum":["auto","2d","3d"]},"mapping":{"type":"string"}}},"path":{"type":"string"},"out":{"type":"string"},"scale":{"type":"number","exclusiveMinimum":0},"mapping":{"type":"string"},"mode":{"enum":["auto","2d","3d"]},"id":{"type":"string"},"how":{"enum":["rules","lua","native","dropped"]},"reason":{"type":"string"}}})";
     const std::pair<const char*, const char*> ops[] = {
         {"scan", "Inspect a Unity/Godot/Unreal project without writing. path is required; returns engine/version/assets/scenes and errors."},
         {"import", "Import project path into out, optional scale (metres to cells), mapping (synonym JSON). Returns port report. Preserves edited files. Does not open the result automatically."},
@@ -72,6 +72,8 @@ void registerPortOps(Workspace& ws) {
         const std::string operation = op;
         ws.registerOp({"port_" + operation, description, Json::parse(schema), [&ws, operation](const Json& params) {
             Json p = params;
+            for (const char* key : {"out", "scale", "mode", "mapping"})
+                if (!p.has(key) && params["options"].has(key)) p.set(key, params["options"][key]);
             if (!p.has("path") && !ws.project.dir.empty()) p.set("path", Json::string(ws.project.dir));
             return runProjectPort(ws.engineDir, operation, p);
         }, false});

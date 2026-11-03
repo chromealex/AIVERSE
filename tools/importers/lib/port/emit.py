@@ -75,7 +75,9 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     if not math.isfinite(scale) or scale <= 0: raise ValueError('scale must be finite and > 0')
     model = copy.deepcopy(model)
     neutral = copy.deepcopy(model)
-    is2d = mode == '2d' or (mode == 'auto' and (any(e.get('sprite') for e in model['entities']) or any(s.get('tiles') for s in model['scenes'])))
+    has2d = any(e.get('sprite') or e.get('dimension') == '2d' for e in model['entities']) or any(s.get('tiles') for s in model['scenes'])
+    has3d = any(e.get('models') or e.get('dimension') == '3d' for e in model['entities'])
+    is2d = mode == '2d' or (mode == 'auto' and has2d and not has3d)
     if is2d and model['engine'] == 'unity':
         for scene in model['scenes']:
             for o in scene['objects']: o['position'] = [o['position'][0],0,-o['position'][1]]
@@ -184,6 +186,7 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
                     for p in sorted(Path(staging).rglob('*')):
                         if p.is_file(): writer.write(p.relative_to(staging).as_posix(),p.read_bytes())
                     item(model,source,'approx','Effects converted; event bindings require semantic review.',key='vfx',details=report)
+    writer.write('.rpakignore', b'# Import provenance and source code are editor-only.\nport.json\nport-report.json\nport-report.md\n.port-state.json\n*.rtsproj\n')
     writer.json('port.json',neutral)
     report = dict(format=1,engine=model['engine'],sourceRoot=str(root),items=model['items'],scripts=model['scripts'],summary={s:sum(x['status']==s for x in model['items']) for s in ('exact','approx','missing','resolved')})
     context = {e['source']: e for e in model['entities']}

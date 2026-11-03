@@ -33,7 +33,7 @@ def sprite(model,writer,entity,scale):
         x,y,w,h=(int(rect[k]) for k in ('x','y','width','height'))
         if x<0 or y<0 or w<=0 or h<=0 or x+w>image.w or y+h>image.h:
             item(model,entity['source'],'missing','Sprite rectangle outside texture.',key='sprite-decode'); return None
-        image=images.crop(image,x,image.h-y-h,w,h)
+        image=images.crop(image,x,y if spec.get('origin')=='topLeft' else image.h-y-h,w,h)
     dest='sprites/'+entity['id']+'.png'
     with tempfile.TemporaryDirectory() as tmp:
         p=Path(tmp)/'sprite.png';images.write_png(str(p),image);writer.write(dest,p.read_bytes())

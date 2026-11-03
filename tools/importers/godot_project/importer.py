@@ -11,7 +11,7 @@ def value(text):
     if text == 'null': return None
     try: return ast.literal_eval(text)
     except (ValueError,SyntaxError): pass
-    m = re.fullmatch(r'(Vector[23]|Transform3D|Transform|Transform2D)\(([^()]*)\)',text)
+    m = re.fullmatch(r'(Vector[23]|Rect2|Transform3D|Transform|Transform2D)\(([^()]*)\)',text)
     if m:
         try: return {'variant':m[1],'values':[float(x.strip()) for x in m[2].split(',')]}
         except ValueError: pass
@@ -78,7 +78,18 @@ def extract(root):
             entity=dict(id=ident(source),source=source,name=name,fields=fields,position=pos,models=[mesh] if mesh and Path(mesh).suffix.lower() in ('.glb','.gltf','.obj','.fbx') else [],
                         materials=[],scripts=[script] if script else [],components=[block])
             if script in scripts: scripts[script]['uses'].append(dict(entity=entity['id'],fields=fields))
-            entity['candidate'] = bool(entity['models'] or fields or script)
+            kind = a.get('type','')
+            if kind.endswith('2D') or (isinstance(pv,dict) and pv.get('variant')=='Vector2'): entity['dimension']='2d'
+            elif kind.endswith('3D') or kind=='Spatial': entity['dimension']='3d'
+            texture = ref(v.get('texture'))
+            if kind in ('Sprite','Sprite2D') and texture:
+                entity['sprite'] = dict(file=texture,pixelsPerUnit=1,origin='topLeft')
+                rect = v.get('region_rect',{})
+                if v.get('region_enabled') and isinstance(rect,dict) and rect.get('variant')=='Rect2' and len(rect['values'])==4:
+                    entity['sprite']['rect'] = dict(zip(('x','y','width','height'),rect['values']))
+                if v.get('hframes',1)!=1 or v.get('vframes',1)!=1:
+                    item(model,source,'missing','Sprite sheet animation frames require action mapping.',key='sprite-frames')
+            entity['candidate'] = bool(entity['models'] or fields or script or entity.get('sprite'))
             model['entities'].append(entity)
             scene['objects'].append(dict(entity=entity['id'],position=pos,rotation=0))
             if a.get('type') in ('TileMap','TileMapLayer','GridMap','AnimationPlayer') or a.get('instance') or any(k in v for k in ('rotation','scale','transform')):

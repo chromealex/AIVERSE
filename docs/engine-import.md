@@ -7,7 +7,8 @@ The coverage and outstanding work below are part of the handoff to MAIN.
 
 ## CLI and intermediate data
 
-Python 3.8+; no Python packages are required:
+Python 3.8+; no Python packages are required. The executable launcher is
+`tools/importers/port/rts_port` (or use the explicit Python form below):
 
 ```sh
 python3 tools/importers/port/rts_port.py scan /path/to/UnityProject
@@ -24,6 +25,7 @@ output directories must not overlap. Do not run concurrent imports into the same
 `extract` records source paths, complete serialized components, fields, script source and usage.
 `emit` writes a game manifest, rules, maps, `.rtsproj`, copied assets, optional sprites/tiles/audio/fx,
 `port.json`, and JSON/Markdown reports. `sourceRoot` must still exist when emitting copied assets.
+Generated `.rpakignore` excludes the intermediate script index and reports from runtime packs.
 The manifest marks imported content `external: true`, which rtsbuild propagates into resource packs.
 
 `--scale` means cells per metre; `--mode auto|2d|3d` selects the scene plane and camera. Unity 3D
@@ -57,7 +59,7 @@ Agent window; it does not claim that an agent has been launched.
 The current base branch has no “Make a game” wizard. Integration with the separate
 `agent-gamewizard` branch remains for MAIN; no unrelated branch was merged.
 
-Registered operations:
+Registered operations (import settings can also be nested in `options`):
 
 - `port_scan {path}`: source discovery, serialization checks, asset/scene/script lists.
 - `port_import {path,out,scale?,mode?,mapping?}`: run extraction and emission.
@@ -105,9 +107,9 @@ Synthetic fixtures under `tests/data/port` are original test data. The Unreal FB
 hand-written CC0 `tests/data/models/cube.fbx`. No downloaded game assets are committed.
 
 - 34 existing VFX importer tests pass after the shared-code move.
-- 14 project importer tests cover serialization rejection, prefab overrides, units, protected
+- 15 project importer tests cover serialization rejection, prefab overrides, units, protected
   edits, idempotence (including re-emitting `port.json`), source-change invalidation, path safety,
-  sprites/tiles and CLI resolution. With `RTS_PORT_HEADLESS`, all four fixtures load in the real
+  sprites/tiles and CLI resolution. With `RTS_PORT_HEADLESS`, all five fixtures load in the real
   engine and the Unity combat fixture ends with Player 1 winning.
 - C++ suite: 5857 checks, one sandbox-only localhost listener failure; that test passed separately
   outside the network sandbox (27 checks). An additional focused MCP bridge test passed (5 checks).
@@ -128,3 +130,18 @@ execution remain unverified.
 The standalone import form was inspected in the native macOS editor. Automated clipboard/rapid
 keyboard entry did not populate ImGui text reliably, so a full click-through import is not claimed;
 the same operations were verified through the C++ MCP bridge and CLI. macOS editor/Metal compiled.
+
+After merging current master (`82c47120`), two `std::filesystem::path` loops in
+`NativeBuild.cpp` were changed to `const auto&` to compile with AppleClang. This is a minimal
+shared-file compatibility fix. MAIN should republish editor packages after integrating and
+verifying this branch; this branch does not publish builds.
+
+Final verification after the master merge and compatibility fix:
+
+- macOS editor (Metal), rtsmcp, rts_headless and rts_tests rebuilt successfully.
+- Full C++ suite outside the socket-restricted sandbox: **5930 checks, 0 failures**.
+- CTest: existing VFX and project importer targets pass (34 + 15 Python tests).
+- Focused MCP bridge: 5 checks; native editor build helpers: 42 checks, all pass.
+- End-to-end `rtsmcp --no-editor` import accepts nested `options`, applies scale=2 and handles an
+  output path containing spaces and an apostrophe.
+- `skirmish --seed 3`: Blue wins at 470 game seconds; `mushrooms --seed 3`: Red wins at 92 seconds.

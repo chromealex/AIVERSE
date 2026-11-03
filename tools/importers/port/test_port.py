@@ -52,6 +52,7 @@ class PortTests(unittest.TestCase):
         emit(model,self.out)
         after={p.relative_to(self.out):p.read_bytes() for p in self.out.rglob('*') if p.is_file()}
         self.assertEqual(before,after)
+        self.assertIn('port.json', (self.out/'.rpakignore').read_text())
     def test_paths(self):
         with self.assertRaises(ValueError): safe(self.root,'../escape')
         with self.assertRaises(ValueError): safe(self.root,'/tmp/escape')
@@ -60,6 +61,11 @@ class PortTests(unittest.TestCase):
         model=godot.extract(DATA/'godot'); emit(model,self.out)
         e=next(e for e in model['entities'] if e['name']=='Unit')
         self.assertEqual(e['position'],[3,0,5]); self.assertEqual(e['fields']['health'],120)
+    def test_godot_2d(self):
+        emit(godot.extract(DATA/'godot2d'),self.out)
+        self.assertEqual(read_json(self.out/'game.json')['camera']['projection'],'ortho')
+        types=read_json(self.out/'rules.json')['types']
+        self.assertTrue(any(t.get('sprite',{}).get('frame')==[2,2] for t in types.values()))
     def test_unreal(self):
         model=unreal.extract(DATA/'unreal'); emit(model,self.out)
         self.assertEqual(read_json(self.out/'rules.json')['types']['unit']['health']['max'],100)
@@ -108,7 +114,7 @@ class PortTests(unittest.TestCase):
         self.assertEqual(first,second)
     @unittest.skipUnless(os.environ.get('RTS_PORT_HEADLESS'),'RTS_PORT_HEADLESS not set')
     def test_headless_load(self):
-        for name,module in [('unity',unity),('unity2d',unity),('godot',godot),('unreal',unreal)]:
+        for name,module in [('unity',unity),('unity2d',unity),('godot',godot),('godot2d',godot),('unreal',unreal)]:
             out=self.root/name; emit(module.extract(DATA/name),out)
             p=subprocess.run([os.environ['RTS_PORT_HEADLESS'],'--project',str(out),'--seed','3','--max-seconds','2'],capture_output=True,text=True)
             self.assertEqual(p.returncode,0,p.stdout+p.stderr)
