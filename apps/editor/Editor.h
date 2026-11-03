@@ -153,7 +153,7 @@ public:
     void registerFileAssoc();
     void reloadRules();                        // after rules change: views, palette
     void showGamePicker() { showProjectHub(0); }
-    void showProjectHub(int tab);   // 0: recent projects, 1: new project (EditorProjects.cpp)
+    void showProjectHub(int tab);   // 0: recent projects, 1: new project, 2: make a game (EditorProjects.cpp)
 
     // rendering a map view into a Viewport (used by Scene and Game windows)
     void renderScene(Viewport& vp, const render::RTSCamera& cam, bool editOverlays);
@@ -206,6 +206,8 @@ private:
     void drawPlayControls();
     void drawDockspace();
     void drawGamePicker();
+    void drawGameWizard();       // hub page "Сделать игру" (EditorGameWizard.cpp)
+    void pollGameWizard();       // every frame: the wizard's agent progress (EditorGameWizard.cpp)
     void drawStatusBar();
     float statusBarHeight() const { return ImGui::GetFontSize() + 12; }
     void drawActivityToasts();

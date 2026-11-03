@@ -103,6 +103,7 @@ void Editor::drawMenuBar() {
     // ---- Файл: project + map documents
     if (ImGui::BeginMenu("Файл")) {
         ImGui::SeparatorText("Проект");
+        if (item(ICON_ZAP, "Сделать игру…")) showProjectHub(2);
         if (item(ICON_PLUS, "Новый проект…")) showProjectHub(1);
         if (item(ICON_FOLDER_OPEN, "Открыть проект…")) showProjectHub(0);
         if (menu(ICON_CLOCK, "Недавние проекты")) {

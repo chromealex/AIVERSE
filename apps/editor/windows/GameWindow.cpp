@@ -423,6 +423,7 @@ private:
         const uint8_t me = uint8_t(ed.humanSlot());
         const auto& cs = se->commands();
         auto fits = [&](const game::ScriptCommandDef& d) {
+            if (!d.card) return false;
             if (!d.needUnits) return true;
             for (Entity e : ed.gameSelection) {
                 if (!w.alive(e) || !w.has<game::Unit>(e)) continue;

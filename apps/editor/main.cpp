@@ -113,7 +113,9 @@ int rtsMain(int argc, char** argv) {
     cb.frame = [](gfx::Device& d, double dt) {
         static int frames = 0;
         if (++frames == 5 && !g_demoWindow.empty()) {
-            if (g_demoWindow == "hub-new") g_editor->showProjectHub(1); else g_editor->focusWindow(g_demoWindow);
+            if (g_demoWindow == "hub-new") g_editor->showProjectHub(1);
+            else if (g_demoWindow == "hub-wizard") g_editor->showProjectHub(2);
+            else g_editor->focusWindow(g_demoWindow);
         }   // after the dock layout exists
         g_editor->frame(d, dt);
     };

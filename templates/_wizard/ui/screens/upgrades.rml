@@ -1,0 +1,36 @@
+<rml>
+<head>
+    <title>upgrades</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../screens.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <script>
+        require('wizard_meta')
+        ui.screen("upgrades", {open = function() WizMeta.refresh() end})
+    </script>
+</head>
+<body>
+<div class="root" data-model="meta">
+    <div id="menu-bg"></div>
+    <div class="screen" data-attr-style="safeStyle">
+        <div class="screen-header">
+            <button class="back" onclick="ui.back()">@meta.back</button>
+            <div class="screen-title">@wiz.upgrades</div>
+            <div class="spacer"></div>
+            <div class="currencies"><span class="currency" data-for="c : wizCur">{{c.value}} <span class="muted">{{c.name}}</span></span></div>
+        </div>
+        <div class="screen-body">
+            <div class="cards">
+                <div class="card" data-for="u : wizUpgrades">
+                    <div class="card-title">{{u.name}}</div>
+                    <div class="card-text">{{u.description}}</div>
+                    <div class="card-text"><span>@wiz.level</span> {{u.level}} / {{u.max}}</div>
+                    <button class="primary" data-if="!u.maxed" data-class-disabled="!u.affordable" data-event-click="call('WizMeta.buyUpgrade', u.id)">{{u.cost}}</button>
+                    <span class="badge" data-if="u.maxed">@wiz.max</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</rml>
