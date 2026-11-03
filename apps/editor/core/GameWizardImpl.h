@@ -85,6 +85,13 @@ struct GameMaker::Ctx {
     void warn(const std::string& w) { warnings.push(Json::string(w)); }
     void did(const std::string& d) { done.push(Json::string(d)); }
     void text(const std::string& key, const std::string& ru, const std::string& en) { texts[key]["ru"] = ru; texts[key]["en"] = en; }
+    // {lang: text} from the AI; false when it holds no text
+    bool textAi(const std::string& key, const Json& byLang) {
+        bool any = false;
+        if (byLang.isString() && !byLang.str().empty()) { texts[key][mainLang] = byLang.str(); return true; }
+        for (auto& [l, v] : byLang.members()) if (v.isString() && !v.str().empty()) { texts[key][l] = v.str(); any = true; }
+        return any;
+    }
     std::string tr(const std::string& ru, const std::string& en) const { return mainLang == "ru" ? ru : en; }
     std::string path(const std::string& rel) const { return dir + "/" + rel; }
     std::string typeName(const std::string& id, const std::string& lang) const;   // from the template's lang files
@@ -107,6 +114,8 @@ void makeLevels(GameMaker::Ctx& c);
 void makeMeta(GameMaker::Ctx& c);
 void makeMonetization(GameMaker::Ctx& c);
 void writeLanguages(GameMaker::Ctx& c);
+void applyAiNames(GameMaker::Ctx& c);   // unit / resource names (before the tutorial, which quotes them)
+void applyAiTexts(GameMaker::Ctx& c);   // tagline, welcome, currencies, upgrades, level names
 void verifyGame(Workspace& ws, GameMaker::Ctx& c);
 void writeReport(GameMaker::Ctx& c);
 void copyKit(GameMaker::Ctx& c);

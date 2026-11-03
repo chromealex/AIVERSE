@@ -35,6 +35,9 @@ Json costOf(const TypeInfo& t, int times) {
 }
 
 std::string resName(GameMaker::Ctx& c, const std::string& id, const std::string& lang) {
+    if (auto it = c.texts.find("resource." + id); it != c.texts.end()) {
+        if (auto l = it->second.find(lang); l != it->second.end()) return l->second;
+    }
     Json l = readJsonFile(c.dir + "/lang/" + lang + ".json");
     if (l["resource." + id].isString()) return l["resource." + id].str();
     const Json& r = c.rules["resources"][id];
@@ -389,7 +392,7 @@ void makeTutorial(GameMaker::Ctx& c) {
     if (!writeText(c.path("maps/wiz_tutorial.json"), m.dump() + "\n", &err)) throw std::runtime_error(err);
     // hidden commands of the panel
     Json& cmds = c.rules.member("commands");
-    for (const char* id : {"wiz_tut_next", "wiz_tut_skip"}) {
+    for (const char* id : {"wiz_tut_next", "wiz_tut_skip", "wiz_tut_off"}) {
         Json d = Json::object();
         d.set("label", Json::string(id));
         d.set("card", Json::fromBool(false));

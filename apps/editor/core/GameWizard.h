@@ -60,6 +60,12 @@ struct WizardSpec {
     // look
     bool paletteFromArt = true;              // UI accent colours from the key art
     bool brandingFromArt = true;             // icon + splash from the art
+    // the agent step (WizardAgent.h): a connected AI agent rebuilds the starting project into the described game, 1 to 1
+    bool agent = true;
+    std::string agentClient;                 // claude-code | codex | "" (the first one connected and runnable)
+    // the game's own texts per language (an agent may pass them to game_make), {tagline, intro, types, resources, currencies,
+    // upgrades: {id: {lang: text}}, levels: [{lang: text}], reason, template}; empty = the wizard's own texts
+    Json ai = Json::object();
 
     Json toJson() const;
     static WizardSpec fromJson(const Json& j);   // missing keys keep the defaults

@@ -52,6 +52,29 @@ Code: `apps/editor/core/GameWizard*.cpp` (no UI), `apps/editor/core/WizardOps.cp
   `scripts/wizard/meta_bonus.lua` turns them into buffs / start resources.
 - **Money**: `game.json` `plugins` / `store` / `ads` by platform (Yandex demo ad units and desktop mocks: replace the ids).
 
+## Agent step: the described game, 1 to 1
+
+The template is a starting point, not the game. With `agent` on (default) the wizard writes `WIZARD_TASK.md` into the
+project — the description / GDD verbatim plus how to keep the wizard's parts consistent (tutorial steps, hints, meta config,
+language files) — and hands it to a connected AI agent, which rebuilds the project through the editor's MCP tools (live in
+the editor): types, stats, factions, mechanics (rules or Lua), maps, victory, texts; then checks with `rules_lint`,
+`map_validate`, `match_run` and writes «## Агент: что сделано» into WIZARD.md.
+
+- Connection: the wizard shows the same "connect an AI agent" panel as the Agent window (`EditorMcpConnect.*`,
+  `core/McpInstall.h`): one click writes rtsmcp into the client's config, and that one connection serves both.
+- Launched from the editor (`core/WizardAgent.*`, through the user's login shell so the CLI is found):
+  Claude Code `claude -p --output-format stream-json --allowedTools mcp__rtsengine` and Codex CLI `codex exec --full-auto`,
+  the task on stdin, the project folder as the working directory. Progress goes to the activity feed (Agent window), the
+  status bar and the wizard page (Stop button); the full log to `logs/wizard-agent-<time>.log`.
+- Cursor, Windsurf, Claude Desktop: «Скопировать задание агенту» puts the task on the clipboard to paste into the client.
+- No API key in the editor: the agent runs under the user's own client and account.
+- `ai` in the spec (texts per language: tagline, intro, types, resources, currencies, upgrades, levels) lets an agent that
+  calls `game_make` itself pass the game's names and texts.
+
+The tutorial in the editor's Game view: the editor has no game UI to show the step panel, so the view script sends
+`wiz_tut_off` and the tutorial map plays as an ordinary match there. The panel, the arrow and the gate work in the game
+client (RTSGame, builds). The editor opens the first level, not the tutorial.
+
 ## Check
 
 With `verifyLevels` the wizard plays the tutorial by itself (`initialVars {wiz_tutorial_auto: 1}`: each step's `auto` order

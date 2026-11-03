@@ -3,6 +3,7 @@
 -- Reads the simulation's state.wiz_tut (scripts/wizard/tutorial.lua) and the steps (scripts/wizard/tutorial_steps.lua).
 local cfg = require("wizard.tutorial_steps")
 local shown, last_step, pulse = false, -1, 0
+local host_checked = false
 local texts = {}
 ui.set("tut", {text = "", title = "", step = 0, total = #cfg.steps, next = false, skip = false, need = 1, n = 0, hard = true})
 ui.set("tut_n", 0)   -- every key the document binds is set before its first ui.open
@@ -47,6 +48,10 @@ view.on_frame(function(dt)
   end
   local s = cfg.steps[t.i]
   if not s then return end
+  if not host_checked then   -- no game UI here (the editor's Game view): the panel can't be shown, so nothing gets locked
+    host_checked = true
+    if not view.ui_call("game.tr", "wiz.tut.title") then view.send("wiz_tut_off") return end
+  end
   if t.i ~= last_step then
     last_step = t.i
     ui.set("tut", {text = tr(s.text), title = tr(s.title or "wiz.tut.title"), step = t.i, total = #cfg.steps,

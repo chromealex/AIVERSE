@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 #include "ProjectFile.h"
+#include "WizardAgent.h"
 #include "Projects.h"
 
 namespace fs = std::filesystem;
@@ -250,6 +251,8 @@ Json WizardSpec::toJson() const {
     I("xpPerLevel", xpPerLevel);
     B("ads", ads); I("interstitialEvery", interstitialEvery); B("purchases", purchases); j.set("stores", strings(stores));
     B("paletteFromArt", paletteFromArt); B("brandingFromArt", brandingFromArt);
+    B("agent", agent); S("agentClient", agentClient);
+    if (ai.isObject() && ai.size()) j.set("ai", ai);
     return j;
 }
 
@@ -271,6 +274,8 @@ WizardSpec WizardSpec::fromJson(const Json& j) {
     I("xpPerLevel", s.xpPerLevel);
     B("ads", s.ads); I("interstitialEvery", s.interstitialEvery); B("purchases", s.purchases); s.stores = stringsOf(j["stores"], s.stores);
     B("paletteFromArt", s.paletteFromArt); B("brandingFromArt", s.brandingFromArt);
+    B("agent", s.agent); S("agentClient", s.agentClient);
+    if (j["ai"].isObject()) s.ai = j["ai"];
     s.levels = std::clamp(s.levels, 0, 40);
     s.bossEvery = std::clamp(s.bossEvery, 0, 40);
     s.startResourcesPercent = std::clamp(s.startResourcesPercent, 10, 1000);
@@ -518,6 +523,10 @@ std::string fetchWizardArt(const std::string& url, const std::string& dir, std::
 // ---------------------------------------------------------------------------------------------------- the maker
 
 std::string GameMaker::Ctx::typeName(const std::string& id, const std::string& lang) const {
+    if (auto it = texts.find("type." + id); it != texts.end()) {   // the AI's name for this game
+        if (auto l = it->second.find(lang); l != it->second.end()) return l->second;
+        if (auto l = it->second.find("en"); l != it->second.end()) return l->second;
+    }
     Json l = readJsonFile(dir + "/lang/" + lang + ".json");
     const std::string k = "type." + id;
     if (l[k].isString() && !l[k].str().empty()) return l[k].str();
@@ -598,11 +607,13 @@ GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(
         }
         c.saveRules();
     }});
+    steps_.push_back({"Имена из идеи (ИИ)", [this] { applyAiNames(*ctx_); }});
     steps_.push_back({"Копирую набор мастера (обучение, мета, подсказки)", [this] { copyKit(*ctx_); }});
     steps_.push_back({"Обучение: карта и шаги", [this] { makeTutorial(*ctx_); }});
     steps_.push_back({"Подсказки в бою", [this] { makeHints(*ctx_); }});
     steps_.push_back({"Уровни и сложность", [this] { makeLevels(*ctx_); }});
     steps_.push_back({"Мета: меню, профиль, улучшения, магазин", [this] { makeMeta(*ctx_); }});
+    steps_.push_back({"Тексты игры из идеи (ИИ)", [this] { applyAiTexts(*ctx_); }});
     steps_.push_back({"Монетизация", [this] { makeMonetization(*ctx_); }});
     steps_.push_back({"Тексты и языки", [this] { writeLanguages(*ctx_); }});
     steps_.push_back({"Открываю проект в редакторе", [this] {
@@ -615,6 +626,9 @@ GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(
     steps_.push_back({"Отчёт и файл проекта", [this] {
         Ctx& c = *ctx_;
         writeReport(c);
+        // the task for the agent step: the description verbatim + how to keep the wizard's parts consistent
+        writeText(c.path("WIZARD_TASK.md"), wizardAgentTask(c.spec, c.dir, c.templ, c.idea));
+        report_.set("task", Json::string(c.path("WIZARD_TASK.md")));
         // .rtsproj: what the wizard was asked (unknown keys are kept by the editor), so "make again" can start from it
         Json pf = readJsonFile(file_);
         if (!pf.isObject()) pf = Json::object();

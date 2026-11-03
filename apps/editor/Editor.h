@@ -199,6 +199,7 @@ private:
     void drawDockspace();
     void drawGamePicker();
     void drawGameWizard();       // hub page "Сделать игру" (EditorGameWizard.cpp)
+    void pollGameWizard();       // every frame: the wizard's agent progress (EditorGameWizard.cpp)
     void drawStatusBar();
     float statusBarHeight() const { return ImGui::GetFontSize() + 12; }
     void drawActivityToasts();

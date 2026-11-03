@@ -171,9 +171,15 @@ for _, s in ipairs(cfg.steps) do
   end
 end
 
--- the panel's "Next" button and "Skip" (rules commands wiz_tut_next / wiz_tut_skip, "card": false)
+-- the panel's "Next" button and "Skip" (rules commands wiz_tut_next / wiz_tut_skip, "card": false); wiz_tut_off from the
+-- view script when the host has no game UI to show the panel in
 function wiz_tutorial_command(player, id, args)
   if player ~= P or not T() or T().over then return false end
+  if id == "wiz_tut_off" then   -- the host can't show the panel (the editor's Game view): a plain match, nothing locked
+    local t = T()
+    t.free, t.over, t.off = true, true, true
+    return true
+  end
   if id == "wiz_tut_skip" then
     if cfg.skippable == false then return false end
     T().free = true

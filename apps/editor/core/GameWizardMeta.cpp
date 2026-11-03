@@ -63,8 +63,8 @@ void makeLevels(GameMaker::Ctx& c) {
         maps.push(e);
         return int(maps.size());
     };
-    if (c.tutorialMap) c.tutorialMap = addMap("maps/wiz_tutorial.json", c.tr("Обучение", "Tutorial"));
-    if (c.tutorialMap) c.text("map.wiz_tutorial.title", "Обучение", "Tutorial");
+    // order: the levels first (the editor opens the first map: Play there is an ordinary match with bots), then the
+    // tutorial (the menu starts it by its index), then the template's own maps
     std::string preset = c.plan.getStr("levelPreset");
     if (preset.find(' ') != std::string::npos) preset.clear();   // "copies of the base map"
     if (c.info.planets) preset.clear();
@@ -114,6 +114,8 @@ void makeLevels(GameMaker::Ctx& c) {
         lv.set("stars", st);
         c.levels.push_back(lv);
     }
+    if (c.tutorialMap) c.tutorialMap = addMap("maps/wiz_tutorial.json", c.tr("Обучение", "Tutorial"));
+    if (c.tutorialMap) c.text("map.wiz_tutorial.title", "Обучение", "Tutorial");
     if (c.spec.keepTemplateMaps || c.spec.levels == 0)
         for (auto& e : oldMaps.items()) maps.push(e);
     c.manifest.set("maps", maps);
@@ -474,6 +476,55 @@ void writeReport(GameMaker::Ctx& c) {
           "Идея игры: " + (c.spec.idea.empty() ? std::string("(не задана)") : c.spec.idea.substr(0, 400)) +
           ". Доведи механики и баланс до идеи, проверь обучение (match_run на maps/wiz_tutorial.json) и экраны (ui_preview).\n";
     writeText(c.path("WIZARD.md"), md);
+}
+
+// ---------------------------------------------------------------------------------------------------- AI texts
+
+void applyAiNames(GameMaker::Ctx& c) {
+    const Json& ai = c.spec.ai;
+    if (!ai.isObject() || ai.size() == 0) return;
+    if (!ai.getStr("template").empty() && ai.getStr("template") != c.templ)
+        c.warn("ИИ писал тексты для шаблона «" + ai.getStr("template") + "», а выбран «" + c.templ + "»: имена юнитов пропущены");
+    int n = 0;
+    if (ai.getStr("template").empty() || ai.getStr("template") == c.templ) {
+        for (auto& [id, by] : ai["types"].members()) if (c.info.find(id) && c.textAi("type." + id, by)) ++n;
+        for (auto& [id, by] : ai["resources"].members()) if (c.rules["resources"].has(id) && c.textAi("resource." + id, by)) ++n;
+    }
+    if (n) c.did("ИИ: " + std::to_string(n) + " имён юнитов, зданий и ресурсов под идею");
+}
+
+void applyAiTexts(GameMaker::Ctx& c) {
+    const Json& ai = c.spec.ai;
+    if (!ai.isObject() || ai.size() == 0) return;
+    int n = 0;
+    n += c.textAi("wiz.tagline", ai["tagline"]);
+    for (auto& [id, by] : ai["currencies"].members()) n += c.textAi("currency." + id, by);
+    for (auto& [id, by] : ai["upgrades"].members()) if (c.texts.count("wiz.up." + id)) n += c.textAi("wiz.up." + id, by);
+    if (ai["intro"].isObject() && c.texts.count("wiz.tut.intro")) {   // the welcome + the button hint
+        for (auto& [l, v] : ai["intro"].members()) {
+            if (!v.isString() || v.str().empty()) continue;
+            c.texts["wiz.tut.intro"][l] = v.str() + (l == "ru" ? " Нажмите «Далее»." : " Press Next.");
+            ++n;
+        }
+    }
+    // level names: lang keys + the main language's title in game.json
+    const Json& lv = ai["levels"];
+    Json& maps = c.manifest.member("maps");
+    for (size_t i = 0; i < lv.size() && int(i) < c.spec.levels; ++i) {
+        const std::string key = "map.wiz_level_" + std::to_string(i + 1) + ".title";
+        const bool boss = c.spec.bossEvery > 0 && int(i + 1) % c.spec.bossEvery == 0;
+        for (auto& [l, v] : lv[i].members()) {
+            if (!v.isString() || v.str().empty()) continue;
+            c.texts[key][l] = (boss ? (l == "ru" ? "Босс: " : "Boss: ") : std::string()) + v.str();
+            ++n;
+        }
+        const auto it = c.texts[key].find(c.mainLang);
+        if (it == c.texts[key].end()) continue;
+        for (auto& e : maps.itemsMut())
+            if (e.getStr("file") == "maps/wiz_level_" + std::to_string(i + 1) + ".json") e.set("title", Json::string(it->second));
+    }
+    c.saveManifest();
+    if (n) c.did("ИИ: " + std::to_string(n) + " текстов игры (слоган, приветствие, валюты, улучшения, уровни)");
 }
 
 } // namespace rts::editor::wiz

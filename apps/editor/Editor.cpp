@@ -825,6 +825,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     theme_.applyPending();
     ui_.newFrame(dt);
     handleShortcuts();
+    pollGameWizard();   // the game wizard's agent: progress into the activity feed / status bar
     if (showPicker_) {
         drawGamePicker();
     } else {

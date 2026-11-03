@@ -13263,13 +13263,13 @@ TEST(game_wizard_makes_a_playable_project) {
     CHECK(r.getBool("ok"));
     CHECK(steps > 10 && maker.done() && !maker.failed());
     const fs::path dir = maker.projectDir();
-    CHECK(ws.project.dir == dir.string());                         // opened in the workspace
+    CHECK(fs::equivalent(fs::path(ws.project.dir), dir));          // opened in the workspace (macOS: /var = /private/var)
     // the project file remembers the answers
     Json pf = Json::parseFile(maker.projectFile());
     CHECK(pf["wizard"]["spec"].getStr("title") == "Wizard Test" && pf["wizard"].getStr("template") == "skirmish");
-    // maps: tutorial first, then the levels, then the template's own
+    // maps: the levels first (the editor opens the first map), then the tutorial, then the template's own
     Json m = Json::parseFile((dir / "game.json").string());
-    CHECK(m["maps"].size() == 4 && m["maps"][0].getStr("file") == "maps/wiz_tutorial.json" && m["maps"][1].getStr("file") == "maps/wiz_level_1.json");
+    CHECK(m["maps"].size() == 4 && m["maps"][0].getStr("file") == "maps/wiz_level_1.json" && m["maps"][2].getStr("file") == "maps/wiz_tutorial.json");
     CHECK(m.getStr("name") == "Wizard Test" && m["store"]["products"].size() == 3 && m["ads"].isObject() && m["plugins"].has("mock-ads"));
     CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "art/key_art.png");
     Json lv = Json::parseFile((dir / "maps/wiz_level_1.json").string());
@@ -13287,7 +13287,7 @@ TEST(game_wizard_makes_a_playable_project) {
     CHECK(hints && bonus);
     // meta
     Json w = Json::parseFile((dir / "ui/wizard.json").string());
-    CHECK(w["tutorial"].getInt("map") == 1 && w["levels"].size() == 2 && w["levels"][0].getInt("map") == 2 && w["upgrades"].size() >= 3);
+    CHECK(w["tutorial"].getInt("map") == 3 && w["levels"].size() == 2 && w["levels"][0].getInt("map") == 1 && w["upgrades"].size() >= 3);
     CHECK(w["ads"].getBool("rewardedDouble") && w["daily"]["rewards"].size() == 7);
     Json sj = Json::parseFile((dir / "ui/screens.json").string());
     CHECK(sj.getStr("start") == "home" && sj.getStr("afterMatch") == "result");
@@ -13299,7 +13299,10 @@ TEST(game_wizard_makes_a_playable_project) {
     // the check played the tutorial by itself through the same gate as a player and won it; no script errors
     const Json& checks = r["plan"]["checks"];
     CHECK(checks.size() >= 3);
-    CHECK(checks[0].getStr("map") == "maps/wiz_tutorial.json" && checks[0].getInt("winner") == 1);
+    bool tutorialWon = false;
+    for (auto& c : checks.items()) tutorialWon |= c.getStr("map") == "maps/wiz_tutorial.json" && c.getInt("winner") == 1;
+    CHECK(tutorialWon);
+    CHECK(!rules["commands"]["wiz_tut_off"].getBool("card", true));
     for (auto& c : checks.items()) CHECK(c.getBool("ok") && !c.has("scriptErrors"));
     CHECK(r["warnings"].size() == 1);                              // only: the ad units are Yandex demo ones
 }

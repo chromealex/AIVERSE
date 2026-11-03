@@ -11,12 +11,17 @@
 #include <memory>
 #include <set>
 #include <thread>
+#include <ctime>
+#include <fstream>
+#include <iterator>
 #include "Editor.h"
 #include "EditorHub.h"
 #include "EditorIcons.h"
 #include "EditorUtil.h"
 #include "core/GameWizard.h"
 #include "core/Projects.h"
+#include "EditorMcpConnect.h"
+#include "core/WizardAgent.h"
 #include "core/WizardOps.h"
 
 namespace fs = std::filesystem;
@@ -47,9 +52,16 @@ struct WizardUi {
     std::string browseDir;
     char newFolder[128] = "";
     char soft[32] = "gold", hard[32] = "gems";
+    // the agent step (core/WizardAgent.h): connect once (shared with the Agent window), then the agent rebuilds the game
+    McpConnectState mcp;
+    double runnableAt = -100;
+    bool canClaude = false, canCodex = false;
+    std::string taskFile;                    // WIZARD_TASK.md of the last made game
+    bool agentOffered = false;               // made, agent asked for but nothing runnable: offer the task to copy
     ~WizardUi() { if (fetcher.joinable()) fetcher.join(); }
 };
 WizardUi g_wiz;
+AgentRun g_agent;                     // outlives the hub page: the agent keeps working while the editor shows the game
 
 struct Page { const char* icon; const char* title; const char* sub; };
 const Page kPages[] = {
@@ -233,6 +245,53 @@ std::string tutorialText(const std::string& mode) {
     return mode == "both" ? "хард + софт" : mode == "hard" ? "только хард" : mode == "soft" ? "только подсказки" : "нет";
 }
 
+// the agent's client: the one chosen, else the first connected one that can run headless
+std::string agentClientFor(WizardUi& W, const WizardSpec& S) {
+    auto connected = [&](const char* id) { for (auto& c : W.mcp.clients) if (c.id == id && c.upToDate) return true; return false; };
+    auto ok = [&](const std::string& id) { return (id == "claude-code" && W.canClaude && connected("claude-code")) || (id == "codex" && W.canCodex && connected("codex")); };
+    if (!S.agentClient.empty()) return ok(S.agentClient) ? S.agentClient : std::string();
+    for (const char* id : {"claude-code", "codex"}) if (ok(id)) return id;
+    return {};
+}
+
+// «ИИ-агент» on the idea page: the template is a starting point, the connected agent makes the described game
+void drawAgent(Editor& ed, WizardUi& W, WizardSpec& S) {
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, ui::accentColor());
+    ImGui::TextUnformatted(ICON_AGENT "  ИИ-агент: игра 1 в 1 по описанию");
+    ImGui::PopStyleColor();
+    hint("Мастер соберёт стартовый проект из шаблона, а подключённый агент переделает его в игру ровно как в описании или ГДД: "
+         "юниты, здания, механики, числа, карты, победа, тексты — и подгонит под неё обучение и мету. Работает через то же "
+         "подключение, что окно Agent: подключите один раз.");
+    ImGui::Spacing();
+    if (beginForm("##fag")) {
+        toggleRow("Доводка агентом", S.agent);
+        endForm();
+    }
+    if (!S.agent) return;
+    if (ImGui::GetTime() - W.runnableAt > 15) {   // which CLIs can run (a login shell each: not every frame)
+        W.runnableAt = ImGui::GetTime();
+        W.canClaude = agentClientCanRun("claude-code");
+        W.canCodex = agentClientCanRun("codex");
+    }
+    drawMcpConnect(ed, W.mcp);
+    ImGui::Spacing();
+    const std::string who = agentClientFor(W, S);
+    if (beginForm("##fag2")) {
+        row("Кто доводит");
+        std::vector<std::pair<std::string, std::string>> items = {{"", "авто"}};
+        if (W.canClaude) items.push_back({"claude-code", "Claude Code"});
+        if (W.canCodex) items.push_back({"codex", "Codex CLI"});
+        combo("##agentc", S.agentClient, items);
+        endForm();
+    }
+    if (who.empty())
+        hint("Запустить из редактора можно Claude Code или Codex CLI (подключите и установите один). С Cursor, Windsurf или "
+             "Claude Desktop мастер в конце даст задание — вставьте его в клиент.");
+    else
+        ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.5f, 1), ICON_CHECK " Доводить будет %s", who == "codex" ? "Codex CLI" : "Claude Code");
+}
+
 } // namespace
 
 void Editor::drawGameWizard() {
@@ -259,7 +318,7 @@ void Editor::drawGameWizard() {
     hint("Арт и идея → готовый проект .rtsproj: обучение, мета, уровни и сама игра. Любой шаг можно пропустить — мастер решит сам.");
     ImGui::Spacing();
 
-    const float avail = ImGui::GetContentRegionAvail().x, height = ImGui::GetContentRegionAvail().y;
+    const float avail = ImGui::GetContentRegionAvail().x, height = ImGui::GetContentRegionAvail().y - 10;   // no page scrollbar
     const float navW = 200, sumW = std::clamp(avail * 0.28f, 260.f, 340.f), gap = 14;
     const float mainW = avail - navW - sumW - gap * 2;
 
@@ -294,6 +353,7 @@ void Editor::drawGameWizard() {
     beginCard("##wizcard", ImVec2(mainW, height - footH));
     ImGui::BeginDisabled(busy);
     cardTitle(kPages[W.page], W.page);
+    bool drawAiBlock = false;
     switch (W.page) {
     case 0: {
         hint("Откуда взять картинки, модели, музыку и звуки. Модели и спрайты встанут на юнитов с похожими именами, музыка — в меню и бой, "
@@ -325,6 +385,7 @@ void Editor::drawGameWizard() {
         ImGui::Spacing();
         ui::inputMultiline("##idea", S.idea, ImVec2(-1, 110));
         ImGui::Spacing();
+        drawAiBlock = true;
         if (beginForm("##f1")) {
             row("Жанр / шаблон");
             W.genre = std::clamp(W.genre, 0, int(W.genreIds.size()) - 1);
@@ -350,6 +411,7 @@ void Editor::drawGameWizard() {
         pillsEnd();
         ImGui::EndDisabled();
         if (S.genre != "auto") hint("Шаблон выбран вручную — механики берутся из него.");
+        if (drawAiBlock) drawAgent(*this, W, S);
         break;
     }
     case 2: {
@@ -506,7 +568,20 @@ void Editor::drawGameWizard() {
         if (W.maker->done()) {
             W.phase = W.maker->failed() ? WizardUi::Failed : WizardUi::Done;
             ws_.log("wizard", W.report.getStr("summary"), W.maker->failed());
-            if (!W.maker->failed()) requestOpenProject(W.maker->projectFile());   // the editor's own open flow (views, layout)
+            if (!W.maker->failed()) {
+                W.taskFile = W.report.getStr("task");
+                W.agentOffered = false;
+                const std::string who = S.agent ? agentClientFor(W, S) : std::string();
+                requestOpenProject(W.maker->projectFile());   // the editor's own open flow (views, layout)
+                if (!who.empty() && !W.taskFile.empty()) {
+                    std::string err;
+                    const std::string log = (fs::path(ws_.logsDir()) / ("wizard-agent-" + std::to_string(std::time(nullptr)) + ".log")).string();
+                    if (g_agent.start(who, W.maker->projectDir(), W.taskFile, log, &err)) {
+                        ws_.log("wizard", std::string("Агент ") + (who == "codex" ? "Codex" : "Claude Code") + " доводит игру по описанию (лог: " + log + ")");
+                        status = "Агент доводит игру по описанию — ход работы в окне Agent и в «Сделать игру»";
+                    } else { ws_.log("wizard", "Агент не запустился: " + err, true); W.agentOffered = true; }
+                } else if (S.agent) W.agentOffered = true;
+            }
         }
     }
 
@@ -561,6 +636,9 @@ void Editor::drawGameWizard() {
         std::string langs;
         for (auto& l : S.languages) langs += (langs.empty() ? "" : " ") + l;
         fact(ICON_GLOBE, "Языки", langs.empty() ? "—" : langs);
+        const std::string who = S.agent ? agentClientFor(W, S) : std::string();
+        fact(ICON_AGENT, "Агент", !S.agent ? "без доводки (шаблон как есть)" : g_agent.running() ? "работает: " + std::to_string(g_agent.toolCalls()) + " действий"
+                                  : who.empty() ? "не подключён — задание для копирования" : (who == "codex" ? "Codex CLI" : "Claude Code") + std::string(" доведёт по описанию"));
     }
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
     const std::string target = (fs::path(S.location) / projectFolderName(S.title)).string();
@@ -584,6 +662,23 @@ void Editor::drawGameWizard() {
         if (W.phase == WizardUi::Failed) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), ICON_ERROR " %s", W.report.getStr("error").c_str());
         else ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.5f, 1), ICON_CHECK " Игра готова и открыта");
         ImGui::PopTextWrapPos();
+        if (g_agent.started() || W.agentOffered) {
+            if (g_agent.running()) {
+                ImGui::TextColored(ui::accentColor(), ICON_AGENT " Агент работает: %d действий", g_agent.toolCalls());
+                for (auto& l : g_agent.lastLines(4)) { ImGui::PushTextWrapPos(0); ImGui::TextDisabled("%s", l.c_str()); ImGui::PopTextWrapPos(); }
+                if (ImGui::SmallButton(ICON_STOP " Остановить агента")) g_agent.stop();
+            } else if (g_agent.finished()) {
+                ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.5f, 1), ICON_CHECK " Агент закончил (%d действий) — итог в WIZARD.md", g_agent.toolCalls());
+            }
+            if (W.agentOffered && !W.taskFile.empty()) {
+                if (ImGui::SmallButton(ICON_COPY " Скопировать задание агенту")) {
+                    std::ifstream f(W.taskFile, std::ios::binary);
+                    std::string t((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+                    ImGui::SetClipboardText(t.c_str());
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Вставьте в Claude Code, Cursor, Windsurf или Claude Desktop с подключённым rtsengine.\n%s", W.taskFile.c_str());
+            }
+        }
         const Json& warns = W.report["warnings"];
         if (warns.size()) {
             ImGui::TextColored(ImVec4(1, 0.75f, 0.4f, 1), ICON_WARNING " Проверить: %d (WIZARD.md)", int(warns.size()));
@@ -637,4 +732,15 @@ void Editor::drawGameWizard() {
     }
 }
 
+} // namespace rts::editor
+
+namespace rts::editor {
+// Every frame (Editor.cpp): the agent's progress into the activity feed and the status bar, also when the hub is closed.
+void Editor::pollGameWizard() {
+    for (auto& l : g_agent.takeLines()) ws_.log("agent", l);
+    static bool wasRunning = false;
+    if (g_agent.running()) status = "Агент доводит игру: " + std::to_string(g_agent.toolCalls()) + " действий";
+    else if (wasRunning) status = "Агент закончил: " + std::to_string(g_agent.toolCalls()) + " действий, итог — в WIZARD.md проекта";
+    wasRunning = g_agent.running();
+}
 } // namespace rts::editor

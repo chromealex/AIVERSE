@@ -39,7 +39,8 @@ const char* kSpecSchema = R"J({"properties": {
   "stores": {"type": "array", "items": {"type": "string"}},
   "paletteFromArt": {"type": "boolean"}, "brandingFromArt": {"type": "boolean"},
   "seed": {"type": "integer", "description": "0 = from the title and the idea"},
-  "studio": {"type": "string"}, "version": {"type": "string"}}})J";
+  "studio": {"type": "string"}, "version": {"type": "string"},
+  "ai": {"type": "object", "description": "the game's own texts per language (an agent writes it): {tagline, intro: {lang: text}, types / resources / currencies / upgrades: {id: {lang: text}}, levels: [{lang: text}]}"}}})J";
 
 std::string stagingDir() {
     const char* h = std::getenv("HOME");
