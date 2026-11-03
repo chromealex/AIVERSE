@@ -21,6 +21,7 @@
 #include "core/GameWizard.h"
 #include "core/Projects.h"
 #include "EditorMcpConnect.h"
+#include "EditorSpeech.h"
 #include "core/WizardAgent.h"
 #include "core/WizardOps.h"
 
@@ -245,6 +246,70 @@ std::string tutorialText(const std::string& mode) {
     return mode == "both" ? "хард + софт" : mode == "hard" ? "только хард" : mode == "soft" ? "только подсказки" : "нет";
 }
 
+// Dictation into a text field: one field at a time listens; the live text shows under the button, the final text is
+// appended to the field when the recognizer is done.
+std::string* g_dictTarget = nullptr;
+void dictate(const char* id, std::string& target, const WizardSpec& S) {
+    ImGui::PushID(id);
+    std::string done;
+    if (g_dictTarget == &target && !speech::busy() && speech::takeResult(done)) {
+        if (!done.empty()) target += (target.empty() || target.back() == '\n' ? "" : (target.back() == ' ' ? "" : " ")) + done;
+        g_dictTarget = nullptr;
+    }
+    const bool mine = g_dictTarget == &target;
+    const bool listening = mine && speech::listening();
+    if (!speech::supported()) {
+        ImGui::BeginDisabled();
+        ImGui::Button("●  Наговорить");
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", speech::error().c_str());
+        ImGui::PopID();
+        return;
+    }
+    ImGui::BeginDisabled(g_dictTarget && !mine);
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    if (listening) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.2f, 0.2f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+    }
+    const bool click = ImGui::Button(listening ? "■  Готово" : mine ? "…  Распознаю" : "      Наговорить");
+    if (listening) ImGui::PopStyleColor(3);
+    if (!listening && !mine) {   // the red dot of a record button
+        const float r = ImGui::GetFontSize() * 0.28f;
+        ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(p.x + ImGui::GetStyle().FramePadding.x + r + 2, p.y + ImGui::GetFrameHeight() * 0.5f), r, IM_COL32(230, 70, 70, 255));
+    }
+    ImGui::EndDisabled();
+    if (click) {
+        if (listening) speech::stop();
+        else if (!mine) {
+            const std::string lang = S.languages.empty() ? "ru" : S.languages[0];
+            const std::string locale = lang == "ru" ? "ru-RU" : lang == "en" ? "en-US" : lang == "uk" ? "uk-UA" : lang == "kk" ? "kk-KZ"
+                                     : lang == "de" ? "de-DE" : lang == "fr" ? "fr-FR" : lang == "es" ? "es-ES" : lang == "pt" ? "pt-BR"
+                                     : lang == "it" ? "it-IT" : lang == "tr" ? "tr-TR" : lang == "zh" ? "zh-CN" : lang == "ja" ? "ja-JP"
+                                     : lang == "ko" ? "ko-KR" : lang;
+            g_dictTarget = &target;
+            speech::start(locale);
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Наговорите в микрофон — текст добавится в поле (язык: первый язык игры)");
+    if (mine) {
+        const std::string live = speech::transcript();
+        ImGui::SameLine();
+        ImGui::PushTextWrapPos(0);
+        if (listening && live.empty()) ImGui::TextDisabled("Говорите…");
+        else ImGui::TextDisabled("%s", live.c_str());
+        ImGui::PopTextWrapPos();
+    }
+    if (!speech::error().empty() && (mine || !g_dictTarget)) {
+        if (mine && !speech::busy()) g_dictTarget = nullptr;
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextColored(ImVec4(1, 0.6f, 0.4f, 1), ICON_WARNING " %s", speech::error().c_str());
+        ImGui::PopTextWrapPos();
+    }
+    ImGui::PopID();
+}
+
 // the agent's client: the one chosen, else the first connected one that can run headless
 std::string agentClientFor(WizardUi& W, const WizardSpec& S) {
     auto connected = [&](const char* id) { for (auto& c : W.mcp.clients) if (c.id == id && c.upToDate) return true; return false; };
@@ -387,6 +452,7 @@ void Editor::drawGameWizard() {
         hint("Опишите игру своими словами — по ним мастер выберет шаблон. Пусто — выберет сам.");
         ImGui::Spacing();
         ui::inputMultiline("##idea", S.idea, ImVec2(-1, 110));
+        dictate("dict_idea", S.idea, S);
         ImGui::Spacing();
         drawAiBlock = true;
         if (beginForm("##f1")) {
@@ -481,6 +547,12 @@ void Editor::drawGameWizard() {
         break;
     }
     case 5: {
+        ImGui::TextUnformatted("Идеи для меты");
+        hint("Что должно быть вокруг матчей: прогрессия, награды, магазин, события, кланы, боевой пропуск — своими словами. "
+             "Агент сделает мету по этому списку; настройки ниже — основа мастера.");
+        ui::inputMultiline("##metaidea", S.metaIdea, ImVec2(-1, 90));
+        dictate("dict_meta", S.metaIdea, S);
+        ImGui::Spacing();
         if (beginForm("##f5")) {
             row("Мягкая валюта", "награды за уровни, улучшения");
             ImGui::InputText("##soft", W.soft, sizeof W.soft, ImGuiInputTextFlags_CharsNoBlank);

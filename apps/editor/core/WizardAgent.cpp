@@ -139,6 +139,10 @@ std::string wizardAgentTask(const WizardSpec& s, const std::string& dir, const s
          "7. Меняй только данные игры, никогда код движка.\n"
          "8. В конце допиши в WIZARD.md раздел «## Агент: что сделано» (game_file_write): что из описания реализовано, что "
          "реализовано приближённо и почему, чего нет. Ответь тем же кратким итогом по-русски.\n\n";
+    if (!s.metaIdea.empty())
+        t += "## Пожелания к мете (как дал пользователь)\n\nСделай мету такой: меню, прогрессия, награды, магазин, события — всё из этого "
+             "списка, на основе ui/wizard.json, ui/wizard_meta.lua, ui/screens/*.rml, ui/shop.json, ui/profile.json (экраны — RmlUi + Lua, "
+             "справка ui_api; проверка ui_validate и ui_preview). Чего нет в наборе мастера — добавь своими экранами и Lua.\n\n" + s.metaIdea + "\n\n";
     t += "## Описание игры (как дал пользователь)\n\n";
     t += idea.empty() ? std::string("(описания нет — сделай цельную игру на основе шаблона и названия «" + s.title + "»)\n") : idea + "\n";
     return t;

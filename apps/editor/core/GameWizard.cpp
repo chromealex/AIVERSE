@@ -239,7 +239,7 @@ Json WizardSpec::toJson() const {
     auto B = [&](const char* k, bool v) { j.set(k, Json::fromBool(v)); };
     auto I = [&](const char* k, int v) { j.set(k, Json::number(int64_t(v))); };
     S("title", title); S("location", location); S("studio", studio); S("version", version);
-    S("artDir", artDir); S("artUrl", artUrl); S("idea", idea);
+    S("artDir", artDir); S("artUrl", artUrl); S("idea", idea); S("metaIdea", metaIdea);
     S("genre", genre); j.set("features", strings(features)); S("orientation", orientation);
     j.set("languages", strings(languages)); j.set("platforms", strings(platforms)); I("seed", seed);
     S("tutorial", tutorial); B("tutorialForced", tutorialForced); B("tutorialSkippable", tutorialSkippable); B("tutorialDim", tutorialDim);
@@ -262,7 +262,7 @@ WizardSpec WizardSpec::fromJson(const Json& j) {
     auto B = [&](const char* k, bool& v) { if (j[k].type() == Json::Type::Bool) v = j[k].boolean(); };
     auto I = [&](const char* k, int& v) { if (j[k].isNumber()) v = int(j[k].integer()); };
     S("title", s.title); S("location", s.location); S("studio", s.studio); S("version", s.version);
-    S("artDir", s.artDir); S("artUrl", s.artUrl); S("idea", s.idea);
+    S("artDir", s.artDir); S("artUrl", s.artUrl); S("idea", s.idea); S("metaIdea", s.metaIdea);
     S("genre", s.genre); s.features = stringsOf(j["features"], s.features); S("orientation", s.orientation);
     s.languages = stringsOf(j["languages"], s.languages); s.platforms = stringsOf(j["platforms"], s.platforms); I("seed", s.seed);
     S("tutorial", s.tutorial); B("tutorialForced", s.tutorialForced); B("tutorialSkippable", s.tutorialSkippable); B("tutorialDim", s.tutorialDim);

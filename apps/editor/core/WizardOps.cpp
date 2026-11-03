@@ -20,6 +20,7 @@ const char* kSpecSchema = R"J({"properties": {
   "artDir": {"type": "string", "description": "folder with art, models, music, sounds, fonts and .md/.txt texts (a GDD is read as the idea)"},
   "artUrl": {"type": "string", "description": "link to an image / archive (.zip, .tar.gz) with the content; downloaded with curl"},
   "idea": {"type": "string", "description": "what the game is about, any language; empty = the wizard decides"},
+  "metaIdea": {"type": "string", "description": "wishes for the meta game (menus, progression, shop, events), passed to the agent step"},
   "genre": {"type": "string", "description": "template id (game_make_options) or 'auto'"},
   "features": {"type": "array", "items": {"type": "string"}, "description": "wanted mechanics: economy base army garrison lanes waves territory heroes spells survival planets 2d casual portrait"},
   "orientation": {"type": "string", "enum": ["auto", "landscape", "portrait"]},

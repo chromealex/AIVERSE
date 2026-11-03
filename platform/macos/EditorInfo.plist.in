@@ -21,6 +21,9 @@
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSSupportsAutomaticTermination</key><false/>
     <key>NSSupportsSuddenTermination</key><false/>
+    <!-- dictation in the game wizard (apps/editor/EditorSpeech_mac.mm) -->
+    <key>NSMicrophoneUsageDescription</key><string>RTS Editor слушает микрофон, когда вы наговариваете идею игры в мастере «Сделать игру».</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>RTS Editor превращает надиктованную идею игры в текст.</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

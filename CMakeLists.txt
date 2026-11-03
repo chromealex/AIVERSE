@@ -901,6 +901,15 @@ if(TARGET rts_editor_core)
     target_sources(rts_editor_core PRIVATE apps/editor/core/GameWizard.cpp apps/editor/core/GameWizardContent.cpp
         apps/editor/core/GameWizardTutorial.cpp apps/editor/core/GameWizardMeta.cpp apps/editor/core/WizardOps.cpp
         apps/editor/core/WizardAgent.cpp)
+    if(TARGET rts_editor)   # dictation for the wizard's text fields (EditorSpeech.h)
+        if(APPLE)
+            target_sources(rts_editor PRIVATE apps/editor/EditorSpeech_mac.mm)
+            set_source_files_properties(apps/editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+            target_link_libraries(rts_editor PRIVATE "-framework Speech" "-framework AVFoundation")
+        else()
+            target_sources(rts_editor PRIVATE apps/editor/EditorSpeech.cpp)
+        endif()
+    endif()
     target_link_libraries(rts_editor_core PUBLIC rts_lua)
 endif()
 

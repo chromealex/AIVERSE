@@ -25,6 +25,7 @@ struct WizardSpec {
     // and / or a link to a file or an archive (downloaded into a staging folder first, fetchWizardArt)
     std::string artDir, artUrl;
     std::string idea;                        // what the game is about, any language; "" = the wizard decides
+    std::string metaIdea;                    // wishes for the meta game (menus, progression, shop, events): for the agent
     // game
     std::string genre = "auto";              // template id or "auto" (chosen from the idea / features / art)
     std::vector<std::string> features;       // wanted: economy base army garrison lanes waves territory heroes spells

@@ -18,7 +18,7 @@ Code: `apps/editor/core/GameWizard*.cpp` (no UI), `apps/editor/core/WizardOps.cp
 | Project | `title`, `location`, `studio` (bundle id `com.<studio>.<slug>`), `version`, `orientation`, `languages`, `platforms`, `seed` |
 | Tutorial | `tutorial` (`both` / `hard` / `soft` / `none`), `tutorialForced`, `tutorialSkippable`, `tutorialDim`, `hints` |
 | Levels | `levels` (0..40), `mapPreset` (`auto`, `none` = copies of the base map, or a generator preset), `mapSize`, `bossEvery`, `difficultyCurve`, `startResourcesPercent`, `keepTemplateMaps`, `verifyLevels` |
-| Meta | `currencies` (soft, hard), `upgrades`, `shop`, `daily`, `profileScreen`, `xpPerLevel` |
+| Meta | `metaIdea` (free text: what the meta should have; goes to the agent's task), `currencies` (soft, hard), `upgrades`, `shop`, `daily`, `profileScreen`, `xpPerLevel` |
 | Money | `ads`, `interstitialEvery`, `purchases`, `stores` |
 | Look | `brandingFromArt`, `paletteFromArt` |
 
@@ -69,6 +69,9 @@ the editor): types, stats, factions, mechanics (rules or Lua), maps, victory, te
   status bar and the wizard page (Stop button); the full log to `logs/wizard-agent-<time>.log`.
 - Cursor, Windsurf, Claude Desktop: «Скопировать задание агенту» puts the task on the clipboard to paste into the client.
 - No API key in the editor: the agent runs under the user's own client and account.
+- Dictation: «Наговорить» under the idea field (page Идея) and the meta ideas field (page Мета) — macOS speech
+  recognition (`apps/editor/EditorSpeech_mac.mm`: Speech + AVFoundation, the first game language as the locale; the system
+  asks for microphone and speech access once). The text is appended to the field. Other platforms: the button is disabled.
 - `ai` in the spec (texts per language: tagline, intro, types, resources, currencies, upgrades, levels) lets an agent that
   calls `game_make` itself pass the game's names and texts.
 
