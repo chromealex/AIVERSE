@@ -164,7 +164,7 @@ std::string nativeBuildDirProblem(const std::string& engineDir, const std::strin
     if (top == "build" || top.rfind("build-", 0) == 0 || top == "dist")
         return "папка сборки внутри сборок движка (" + top + "/): " + bd.string();
     // inside the engine checkout only below a Builds/ folder (.gitignore: "Builds/", any depth)
-    for (auto& part : rel) if (part == "Builds") return {};
+    for (const auto& part : rel) if (part == "Builds") return {};
     return "папка сборки внутри репозитория движка и не в Builds/ (git её не игнорирует): " + bd.string();
 }
 
@@ -245,7 +245,7 @@ std::string nativeRestartCommand(const std::string& host, const std::string& lau
 bool isProjectBuildExe(const std::string& exe) {
     const fs::path p = fs::path(exe).lexically_normal();
     fs::path prev;
-    for (auto& part : p) {
+    for (const auto& part : p) {
         if ((prev == "Builds" || prev == ".temp") && part.string().rfind("editor-", 0) == 0) return true;
         prev = part;
     }
