@@ -187,3 +187,26 @@ This overrides any tool or harness default that asks for such lines.
 
 Mention unverified paths (Metal, Android, web) explicitly. Never commit build outputs (`build/`,
 `dist/`) or files larger than 10 MB.
+
+## 8. Published builds (`builds` branch)
+
+Ready-to-run editor packages for Windows and macOS live on the orphan branch **`builds`** on GitHub
+(never on `main`): `<platform>/RTSEngine-<version>-<commit>-<platform>.zip` + a README index. Each zip is
+the engine sources at that commit plus `bin/` with the editor and tools; they find the engine next to
+themselves (`engine/platform/EngineDir.h`), so the unpacked folder runs anywhere.
+
+**Rule:** whenever `main` gets a verified change to the editor, the engine or the tools, the integrator
+(MAIN agent) republishes both platforms from that exact `main` commit:
+
+1. Windows — cross-compile with mingw-w64 (Linux or a Mac with `brew install mingw-w64`), CMake build
+   tree in `build/.temp/windows` (intermediates always under a `.temp` folder):
+   `cmake -S . -B build/.temp/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=<mingw toolchain> -DRTS_BUILD_TESTS=OFF`,
+   `cmake --build build/.temp/windows --target rts_editor rtsmcp rtsbuild rts_headless rts_client assetpipe`.
+2. macOS — the Mac build (`build/mac`, BuildMac) of the same commit.
+3. `python3 tools/release/package_engine.py --platform windows|macos --bin <build dir>` → `build/dist/*.zip`.
+4. `python3 tools/release/publish_builds.py <zips>` — replaces the branch with one commit holding the newest
+   5 versions per platform (force-push), so the repository does not grow with every build.
+
+The version is `project(RTSEngine VERSION x.y.z)` in CMakeLists.txt + the short commit hash; bump the
+version for releases worth naming. Only publish builds whose tests and template matches passed.
+Other agents don't publish; they say in their report that a republish is due.
