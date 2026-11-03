@@ -12600,6 +12600,97 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
     }
 }
 
+
+#ifdef RTS_TESTS_EDITOR_CORE
+#include "apps/editor/core/NativeBuild.h"
+// Per-project editor build with the project's C++ modules (NativeBuild.h): missing modules, the cmake
+// line / build dir, the build dir never in the engine repo, up-to-date check, the switch decision.
+TEST(native_editor_build_helpers) {
+    namespace fs = std::filesystem;
+    using namespace rts::editor;
+    // missing modules against what the binary has
+    Json rules = Json::parse(R"({"nativeModules": [{"id": "income", "config": {}}, {"id": "openwar"}, {"id": "income"}]})");
+    CHECK((requiredNativeModules(rules) == std::vector<std::string>{"income", "openwar"}));
+    CHECK((missingNativeModules(rules, {"income"}) == std::vector<std::string>{"openwar"}));
+    CHECK(missingNativeModules(rules, {"openwar", "income"}).empty());
+    CHECK(missingNativeModules(Json::parse("{}"), {}).empty());
+    const auto compiled = compiledNativeIds();
+    CHECK(compiled.size() == game::compiledNativeModules().size());
+
+    // plan: build dir, configure + build arguments
+    NativeBuildPlan p = planNativeBuild("/eng", "/games/My Game", "linux", "/usr/bin/cmake", "/usr/bin/ninja", false, 3);
+    CHECK(p.buildDir == "/games/My Game/Builds/.temp/editor-linux");
+    CHECK(nativeBuildDir("/games/x", "macos") == "/games/x/Builds/.temp/editor-macos");
+    auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
+    CHECK(has(p.configureArgs, "-DRTS_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
+    CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DRTS_NATIVE_DIR="));
+    CHECK(has(p.buildArgs, "rts_editor") && has(p.buildArgs, "rts_headless") && has(p.buildArgs, "3"));
+    CHECK(p.editorBinary == "/games/My Game/Builds/.temp/editor-linux/rts_editor" && p.launchTarget == p.editorBinary);
+    const std::string cmd = nativeBuildCommand(p);
+    CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '/games/My Game/Builds/.temp/editor-linux'", 0) == 0);
+    CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
+    CHECK(!has(planNativeBuild("/eng", "/g", "linux", "cmake", "/usr/bin/ninja", true, 0).configureArgs, "-G"));   // keeps the cached generator
+    NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
+    CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/RTSEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor");
+    CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
+    CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/rts_editor.exe").string());
+    CHECK(nativeRestartCommand("macos", "/g/B/RTSEditor.app", "/g/G.rtsproj", "/eng/build") ==
+          "open -n '/g/B/RTSEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
+    CHECK(nativeRestartCommand("linux", "/g/rts_editor", "/g", "").find("RTS_NATIVE_EDITOR=1 '/g/rts_editor' '/g' --native-editor") != std::string::npos);
+    CHECK(isProjectBuildExe("/g/Builds/.temp/editor-linux/rts_editor") && isProjectBuildExe("/g/Builds/editor-linux/rts_editor") && isProjectBuildExe("/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor"));
+    CHECK(!isProjectBuildExe("/eng/build/lin/rts_editor") && !isProjectBuildExe("/Applications/RTSEditor.app/Contents/MacOS/RTSEditor"));
+
+    // the build dir never lands in the engine repository
+    const std::string eng = RTS_SOURCE_DIR;
+    CHECK(nativeBuildDirProblem(eng, "/somewhere/else/Builds/editor-linux").empty());
+    CHECK(nativeBuildDirProblem(eng, nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
+    CHECK(nativeBuildDirProblem(eng, nativeBuildDir(eng + "/games/sub/proj", "linux")).empty());
+    CHECK(!nativeBuildDirProblem(eng, eng + "/build/lin").empty());
+    CHECK(!nativeBuildDirProblem(eng, eng + "/templates/skirmish/out").empty());
+    CHECK(!nativeBuildDirProblem(eng, eng).empty());
+    // and git agrees (.gitignore "Builds/" at any depth); skipped without git
+    if (std::system(("git -C '" + eng + "' rev-parse --is-inside-work-tree >/dev/null 2>&1").c_str()) == 0) {
+        CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
+        CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/new_game/deeper", "macos")).empty());
+        CHECK(!nativeBuildGitProblem(eng + "/templates/skirmish/out").empty());
+    }
+
+    // up to date: newer than native/ sources and the engine binary; registry lists the modules
+    const fs::path root = fs::temp_directory_path() / "rts_native_editor_test";
+    fs::remove_all(root);
+    fs::create_directories(root / "proj" / "native");
+    fs::create_directories(root / "proj" / "Builds" / ".temp" / "editor-linux" / "gen");
+    auto touch = [](const fs::path& f, int ageSec) {
+        std::ofstream(f) << "x";
+        fs::last_write_time(f, fs::file_time_type::clock::now() - std::chrono::seconds(ageSec));
+    };
+    const fs::path bin = root / "proj" / "Builds" / ".temp" / "editor-linux" / "rts_editor", engine = root / "engine_exe";
+    const std::string proj = (root / "proj").string(), bd = nativeBuildDir(proj, "linux");
+    std::string why;
+    CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && !why.empty());   // no build
+    touch(root / "proj" / "native" / "Income.cpp", 300);
+    touch(engine, 200);
+    touch(bin, 100);
+    CHECK(nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && why.empty());
+    std::ofstream(fs::path(bd) / "gen" / "RtsNativeRegistry.cpp") << "#include \"x\"\n    result.push_back({\"income\", 1u, &::createIncomeModule});\n";
+    CHECK((nativeBuildModules(bd) == std::vector<std::string>{"income"}));
+    CHECK(nativeBuildHasModules(bd, {"income"}) && !nativeBuildHasModules(bd, {"income", "openwar"}, &why) && why.find("openwar") != std::string::npos);
+    touch(root / "proj" / "native" / "Income.cpp", 10);    // sources edited after the build
+    CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && why.find("Income.cpp") != std::string::npos);
+    touch(root / "proj" / "native" / "Income.cpp", 300);
+    touch(engine, 5);                                       // engine rebuilt after it
+    CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why));
+    fs::remove_all(root);
+
+    // switch decision: modules present / up-to-date build / stale or no build / started by a switch
+    CHECK(nativeOpenAction(false, true, false) == NativeOpenAction::None);
+    CHECK(nativeOpenAction(false, false, true) == NativeOpenAction::None);
+    CHECK(nativeOpenAction(true, true, false) == NativeOpenAction::Switch);
+    CHECK(nativeOpenAction(true, false, false) == NativeOpenAction::Offer);   // stale or not built
+    CHECK(nativeOpenAction(true, true, true) == NativeOpenAction::Offer);     // already the switched-to editor: no loop
+}
+#endif
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

@@ -556,6 +556,7 @@ if(RTS_BUILD_EDITOR OR RTS_BUILD_TOOLS)
     target_link_libraries(rts_editor_core PUBLIC rts_game)
     target_link_libraries(rts_editor_core PUBLIC rts_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(rts_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
     target_link_libraries(rts_editor_core PUBLIC rts_terrain_detail)
     target_include_directories(rts_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     if(WIN32)
