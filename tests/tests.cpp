@@ -12958,12 +12958,12 @@ TEST(project_document_icons) {
     CHECK(files.size() == 5);
     rts::branding::Image doc;
     CHECK(loadImageFile((home.dir / "icons" / "rtsproj.png").string(), doc, &err) && doc.width == 256 && doc.height == 256);
-    CHECK(doc.px(2, 2)[3] == 0 && doc.px(253, 2)[3] == 0);           // around the page: transparent (and the folded corner)
-    CHECK(doc.px(128, 128)[3] == 255 && doc.px(60, 30)[3] == 255);   // the page itself is opaque
-    CHECK(doc.px(210, 18)[3] == 0);                                  // cut-off corner of the fold
+    CHECK(doc.px(2, 2)[3] == 0 && doc.px(253, 2)[3] == 0);           // the engine tile: transparent corners
+    CHECK(doc.px(128, 128)[3] == 255 && doc.px(128, 70)[3] == 255);  // opaque tile
     const std::string ico = slurp(home.dir / "icons" / "rtsproj.ico"), icns = slurp(home.dir / "icons" / "rtsproj.icns");
     CHECK(ico.size() > 1000 && ico.compare(0, 4, std::string("\0\0\1\0", 4)) == 0 && uint8_t(ico[4]) == 7);
     CHECK(icns.size() > 1000 && icns.compare(0, 4, "icns") == 0);
+    CHECK(icns.find("is32") != std::string::npos && icns.find("s8mk") != std::string::npos && icns.find("icp4") == std::string::npos);
     CHECK(slurp(home.dir / "icons" / "editor.ico").compare(0, 4, std::string("\0\0\1\0", 4)) == 0);
     CHECK(writeEditorIcons((home.dir / "fallback").string(), "/no/such/logo.png", &err).size() == 5);   // built-in icon
     CHECK(projectDocumentIcon(16).width == 16 && editorAppIcon(48).width == 48);
