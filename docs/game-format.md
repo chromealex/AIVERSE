@@ -1273,6 +1273,14 @@ is also a simulation event `kEvTriggerFired` (value = trigger index: rules trigg
 player = triggering slot) — presentation/tools only, not hashed. `rules_lint` lists keys the loader never reads;
 `rules_schema` with `part: "keys"` lists every key the loader reads per block, taken from the loader itself.
 
+### C++ modules through MCP
+
+`native_status` compares rules.json `nativeModules` with what the running editor binary has compiled in
+(`required`, `compiled`, `missing`) and describes the per-project editor build in `<project>/Builds/.temp/editor-<host>`
+(`editor`, `headless`, `built`, `buildModules`, `upToDate`, `ready`, `why`). `native_build` configures and builds
+`rts_editor` + `rts_headless` there with `-DRTS_CONTENT_DIR=<project>` (Release), streaming into the build log
+(`build_status`); `wait: true` blocks until it ends and returns the binary paths. See docs/native-modules.md.
+
 ## Texture atlases (game.json `atlas`, optional)
 
 The editor's Build window shows oversized atlas candidates under “Не в атласе”.

@@ -244,6 +244,27 @@ private:
             });
             return best;
         };
+        // a structure chosen on the command card: the next ground click places it (as the client's Place mode)
+        if (const int place = gameHud_.placeType(); place >= 0) {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { gameHud_.clearPlace(); return; }
+            float x, z;
+            if (vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ed.groundAt(vp_, cam, io.MousePos.x, io.MousePos.y, x, z)) {
+                Command c;
+                c.type = game::kCmdBuild;
+                c.param = place;
+                if (io.KeyShift) c.flags = rts::kCmdQueue;
+                for (Entity e : ed.gameSelection)
+                    if (auto* u = w.tryGet<game::Unit>(e)) {
+                        const auto& b = ed.rules().types[u->type].builds;
+                        if (std::find(b.begin(), b.end(), uint16_t(place)) != b.end()) { c.units = {e}; break; }
+                    }
+                const float sx = ed.snapCoord(x, place), sz = ed.snapCoord(z, place);
+                c.point = {Fixed::fromRatio(int64_t(sx * 256), 256), Fixed{}, Fixed::fromRatio(int64_t(sz * 256), 256)};
+                if (!c.units.empty()) ed.issueCommand(c);
+                if (!io.KeyShift) gameHud_.clearPlace();
+            }
+            return;
+        }
         if (vp_.hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { boxing_ = true; boxA_ = io.MousePos; }
         if (boxing_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
             boxing_ = false;

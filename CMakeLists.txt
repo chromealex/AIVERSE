@@ -556,6 +556,7 @@ if(RTS_BUILD_EDITOR OR RTS_BUILD_TOOLS)
     target_link_libraries(rts_editor_core PUBLIC rts_game)
     target_link_libraries(rts_editor_core PUBLIC rts_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(rts_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
     target_link_libraries(rts_editor_core PUBLIC rts_terrain_detail)
     target_include_directories(rts_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     if(WIN32)
@@ -566,7 +567,7 @@ endif()
 if(RTS_BUILD_EDITOR)
     # windows register themselves (RTS_EDITOR_WINDOW): any .cpp in apps/editor/windows is part of the editor
     file(GLOB RTS_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
-    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp
+    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp
                    ${RTS_EDITOR_WINDOWS} $<TARGET_OBJECTS:rts_runtime>)
     target_link_libraries(rts_editor PRIVATE rts_runtime rts_game_view rts_editor_core)
     target_link_libraries(rts_editor PRIVATE rts_game_fx)
@@ -575,8 +576,11 @@ if(RTS_BUILD_EDITOR)
         target_sources(rts_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
     endif()
     if(APPLE)
+        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .rtsproj default
+        # handler (chosen by bundle id) stays the regular editor
+        set(RTS_EDITOR_BUNDLE_ID "com.rtsengine.editor" CACHE STRING "Bundle identifier of RTSEditor.app")
         set_target_properties(rts_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "RTSEditor"
-            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "com.rtsengine.editor"
+            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "${RTS_EDITOR_BUNDLE_ID}"
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
         # application icon (CFBundleIconFile AppIcon; art: tools/branding/logo/make_logo.py)
         target_sources(rts_editor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns")

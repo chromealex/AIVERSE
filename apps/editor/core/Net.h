@@ -19,6 +19,7 @@ public:
     std::vector<Msg> poll();
     void send(int client, const std::string& line);   // appends '\n'
     bool listening() const { return fd_ >= 0; }
+    void close();                          // stop listening, drop clients (frees the port for another editor)
     int port() const { return port_; }
     int clients() const { return int(conns_.size()); }   // connected MCP servers (status pill)
 
