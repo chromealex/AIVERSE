@@ -421,7 +421,7 @@ fs::path contentPack(Options& o) {
          (audio == "off" ? std::string() : " (звук: " + audio + ")"));
     rts::pack::PackWriter w;
     rts::pack::IgnoreRules rules;
-    rules.add("native/"); // compiled game modules are source code, not runtime data
+    rules.add("native/*"); // compiled game modules are source code, not runtime data (root only: "native/" would match any folder named native, e.g. models/native)
     rules.add("unpackers/"); // the game's own unpacker plugins are build tools, not content
     for (const char* d : {"Builds/", "Logs/", "logs/", "dist/", ".rtsengine/"}) rules.add(d);   // project outputs and editor state
     rules.add("*.rtsproj");   // the editor's project file (double-click target), not game content
