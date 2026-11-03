@@ -21,6 +21,7 @@
 //
 // Example (what rtsbuild does):
 //   assetpipe pack -o dist/content.rpak templates/skirmish engine/assets=engine
+#include "engine/platform/EngineDir.h"
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -50,7 +51,7 @@ namespace {
 
 struct Global {
     bool json = false;
-    std::string engine = RTS_SOURCE_DIR, project;
+    std::string engine = RTS_SOURCE_DIR, project;   // main() resolves a packaged engine next to the exe
     std::vector<std::string> unpackerDirs;
 };
 Global G;
@@ -508,6 +509,7 @@ int cmdUnpackers(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
+    G.engine = rts::platform::resolveEngineDir(G.engine, argc > 0 ? argv[0] : nullptr);
     // Pull global options out first so they may appear anywhere.
     std::vector<char*> args;
     for (int i = 1; i < argc; ++i) {

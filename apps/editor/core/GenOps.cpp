@@ -140,7 +140,8 @@ void registerGenOps(Workspace& ws) {
             std::string where = std::to_string(w->map.data.w) + "x" + std::to_string(w->map.data.h);
             if (w->map.data.planet()) {   // planet maps: bodies with their face sizes
                 where = g.getStr("layout");
-                for (auto& b : w->map.toJson()["world"]["bodies"].items())
+                const Json mapJson = w->map.toJson();   // keep the document alive while iterating its bodies
+                for (auto& b : mapJson["world"]["bodies"].items())
                     if (b.getInt("faceSize", 0) > 0) where += " " + b.getStr("id") + ":" + std::to_string(b.getInt("faceSize"));
                 r.set("layout", Json::string(where));
             } else r.set("size", Json::parse("[" + std::to_string(w->map.data.w) + ", " + std::to_string(w->map.data.h) + "]"));

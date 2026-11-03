@@ -148,6 +148,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Vision performance: cached / incremental fog-of-war passes bit-identical to the brute-force reference, `RTS_VISION=ref\|check`, headless `--profile` | `modules/rts/RtsVision.cpp` (sysVision, flat + sphere, reference), `GameState::visionToken`, `Simulation::setProfileClock`, docs/terrain.md § Vision | agent-vision |
 | TEST_TERRITORIES game and GDD completion | External `/Users/aleksandrfeer/RTSProjects/TEST_TERRITORIES`; minimal generic scripting API extensions in `modules/rts/RtsScript*`, explicit entity-action controls in `modules/rts/view/EntityActionControls.h`, restoration verification in `apps/headless`, and minimal generic view-effect/orthographic particle fixes with tests/docs | territory game task (`codex/territory-lua-front`) |
 | Native C++ game modules | `modules/rts/RtsNative.*`, `modules/rts/native`, `examples/native`, `docs/native-modules.md`; hooks: RtsModule, RtsSave, CMake, rtsbuild source export | cpp-modules agent |
+| Editor with the project's C++ modules: detect missing `nativeModules`, build `<project>/Builds/.temp/editor-<host>`, switch / restart into it, MCP `native_status` / `native_build` | `apps/editor/core/NativeBuild*.{h,cpp}`, `apps/editor/EditorNativeBuild.*`, `docs/native-modules.md` § Редактор с модулями проекта; hooks: `Workspace::startCommand` / `appendBuildLog`, `LineServer::close`, `Editor` (open / Play / frame / init, unsaved prompt `drawUnsavedChanges`, no file association in a project build), editor `main.cpp` (`--native-editor`, `--tools-from`) | native-editor agent (MAIN merges) |
 | OpenWar port (Superpowers at War 1:1 in Lua): generic engine support only — script commands `mapClick` (client + editor input), territory / script HUD / region bindings it uses; presentation hooks: game.json `playerColors`, flat lighting keys (`day`, `fogDensity`, `tonemap`), view `camera` / `set_camera`, categorical cell paint layers | `modules/rts/RtsScriptCommands.cpp` (`mapClick`), `apps/client/ClientScriptCmd.cpp`, `apps/editor/windows/GameWindow.cpp` (script card), `docs/scripting.md` § Script commands / Camera / Categorical cell layers; hooks: `RtsOverlayData` (palette), `RtsLightsData` + `Renderer3D` (`Lighting::tonemap`, U1 skyColor.w) + the ACES line of the lit shaders, `RtsViewScript`, `RtsPaintLayers` (cells pipeline), client `runViewScripts`; game data lives outside the engine (`OpenWar/`) | agent-openwar (MAIN merges) |
 | Engine project import | `tools/importers/{lib,port,unity_project,godot_project,unreal_export}`, `tests/data/port`, `docs/engine-import.md`; minimal editor/MCP/i18n hooks | agent-engine-import (MAIN merges) |
 | Other areas | as assigned by the user | the agent the user assigned |
@@ -187,3 +188,26 @@ This overrides any tool or harness default that asks for such lines.
 
 Mention unverified paths (Metal, Android, web) explicitly. Never commit build outputs (`build/`,
 `dist/`) or files larger than 10 MB.
+
+## 8. Published builds (`builds` branch)
+
+Ready-to-run editor packages for Windows and macOS live on the orphan branch **`builds`** on GitHub
+(never on `main`): `<platform>/RTSEngine-<version>-<commit>-<platform>.zip` + a README index. Each zip is
+the engine sources at that commit plus `bin/` with the editor and tools; they find the engine next to
+themselves (`engine/platform/EngineDir.h`), so the unpacked folder runs anywhere.
+
+**Rule:** whenever `main` gets a verified change to the editor, the engine or the tools, the integrator
+(MAIN agent) republishes both platforms from that exact `main` commit:
+
+1. Windows — cross-compile with mingw-w64 (Linux or a Mac with `brew install mingw-w64`), CMake build
+   tree in `build/.temp/windows` (intermediates always under a `.temp` folder):
+   `cmake -S . -B build/.temp/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=<mingw toolchain> -DRTS_BUILD_TESTS=OFF`,
+   `cmake --build build/.temp/windows --target rts_editor rtsmcp rtsbuild rts_headless rts_client assetpipe`.
+2. macOS — the Mac build (`build/mac`, BuildMac) of the same commit.
+3. `python3 tools/release/package_engine.py --platform windows|macos --bin <build dir>` → `build/dist/*.zip`.
+4. `python3 tools/release/publish_builds.py <zips>` — replaces the branch with one commit holding the newest
+   5 versions per platform (force-push), so the repository does not grow with every build.
+
+The version is `project(RTSEngine VERSION x.y.z)` in CMakeLists.txt + the short commit hash; bump the
+version for releases worth naming. Only publish builds whose tests and template matches passed.
+Other agents don't publish; they say in their report that a republish is due.

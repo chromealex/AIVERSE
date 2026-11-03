@@ -180,8 +180,9 @@ void GameHud::prepare(Editor& ed, const Viewport& vp, float density, bool touch,
         for(auto e:ed.gameSelection) if(ed.sim()->world().alive(e)) {
             if(auto* u=ed.sim()->world().tryGet<game::Unit>(e)) { s.hasSelection=true; if(!s.selTitle.empty())s.selTitle+=", "; s.selTitle+=rules.types[u->type].name; }
         }
+        commandCard(ed, s);
     }
-    if(pointAbility>=0)s.modeHint=loc_.tr("hud.choose_target");
+    if(pointAbility>=0||placeType_>=0)s.modeHint=loc_.tr("hud.choose_target");
     const int shadows = int(ed.renderer().shadowQuality()), materials = int(ed.renderer().materialQuality()), particles = int(ed.gameFx().quality());
     if (shadows_ != shadows) { shadows_ = shadows; model_.DirtyVariable("shadows"); }
     if (materials_ != materials) { materials_ = materials; model_.DirtyVariable("materials"); }
@@ -191,6 +192,87 @@ void GameHud::prepare(Editor& ed, const Viewport& vp, float density, bool touch,
     if (shadows_ != shadows) ed.renderer().setShadowQuality(render::ShadowQuality(std::clamp(shadows_,0,3)));
     if (materials_ != materials) ed.renderer().setMaterialQuality(render::MaterialQuality(std::clamp(materials_,0,2)));
     if (particles_ != particles) ed.gameFx().setQuality(fx::FxQuality(std::clamp(particles_,0,3)));
+}
+
+// The client's command card (ClientUi.cpp) for the human player of the play-test: production of the first
+// selected building (train, research, queue with cancel) and the structures the selected workers build.
+void GameHud::commandCard(Editor& ed, client::UiState& s) {
+    if (ed.gameSelection.empty()) { placeType_ = -1; return; }
+    World& w = ed.sim()->world();
+    auto& mod = *ed.simModule();
+    const auto& rules = mod.rules();
+    const uint8_t me = uint8_t(ed.humanSlot());
+    auto costText = [&](uint16_t type) {
+        std::string c;
+        for (auto& x : rules.types[type].cost) c += (c.empty() ? "" : "  ") + std::to_string(x.value.toInt()) + " " + rules.resources[x.res].name;
+        if (rules.types[type].supplyUsed.raw > 0) c += (c.empty() ? "" : "  ") + loc_.tr("card.supply_cost", Args().num("count", rules.types[type].supplyUsed.toInt()));
+        return c;
+    };
+    auto reqText = [&](const std::vector<game::Requirement>& req) {
+        std::string r;
+        for (auto& q : req) r += (r.empty() ? "" : ", ") + (q.tech ? rules.techs[q.index].name : rules.types[q.index].name);
+        return r.empty() ? r : loc_.tr("card.requires", Args().str("list", r));
+    };
+    auto section = [&](const std::string& title, const char* kind, std::vector<UiAction>& actions) {
+        if (actions.empty()) return;
+        UiAction h; h.header = true; h.label = title; h.kind = kind; h.id = -1;
+        s.card.push_back(h);
+        for (auto& a : actions) { a.kind = kind; s.card.push_back(std::move(a)); }
+    };
+    std::vector<Entity> own;
+    for (Entity e : ed.gameSelection)
+        if (w.alive(e) && w.has<game::Unit>(e) && w.has<Owner>(e) && w.get<Owner>(e).player == me) own.push_back(e);
+    if (own.empty()) { placeType_ = -1; return; }
+    s.ownSelection = true;
+    const Entity e0 = own.front();
+    const auto& t0 = rules.types[w.get<game::Unit>(e0).type];
+    auto issue = [&ed](Command c) { ed.issueCommand(std::move(c)); };
+    if (auto* prod = w.tryGet<game::Production>(e0); prod && !(w.get<game::Unit>(e0).flags & game::kUnitUnderConstruction)) {
+        std::vector<UiAction> acts;
+        for (uint16_t p : t0.produces) {
+            UiAction a; a.label = rules.types[p].name; a.cost = costText(p);
+            a.enabled = mod.canTrain(*ed.sim(), me, p);
+            if (!a.enabled) a.tip = reqText(rules.types[p].requires_);
+            a.id = action([issue, p, e0] { Command c; c.type = game::kCmdTrain; c.param = p; c.units = {e0}; issue(c); }, a.enabled);
+            acts.push_back(a);
+        }
+        const auto& eco = mod.state(*ed.sim()).players[me];
+        for (uint16_t k : t0.researches) {
+            if (eco.researched[k]) continue;
+            const auto& tech = rules.techs[k];
+            UiAction a; a.label = loc_.tr("card.research", Args().str("name", tech.name));
+            for (auto& c : tech.cost) a.cost += (a.cost.empty() ? "" : "  ") + std::to_string(c.value.toInt()) + " " + rules.resources[c.res].name;
+            a.enabled = !eco.researching[k] && mod.requirementsMet(*ed.sim(), me, tech.requires_);
+            if (!a.enabled && !eco.researching[k]) a.tip = reqText(tech.requires_);
+            a.id = action([issue, k, e0] { Command c; c.type = game::kCmdResearch; c.param = k; c.units = {e0}; issue(c); }, a.enabled);
+            acts.push_back(a);
+        }
+        section(loc_.tr("ui.production"), "grid", acts);
+        std::vector<UiAction> queue;
+        for (size_t i = 0; i < prod->queue.size(); ++i) {
+            const auto& it = prod->queue[i];
+            UiAction a; a.label = it.item >= 0 ? rules.types[size_t(it.item)].name : rules.techs[size_t(~it.item)].name;
+            if (i == 0 || t0.chargesMax > 0) a.progress = float(std::clamp(it.progress.toDouble(), 0.0, 1.0));
+            a.id = action([issue, i, e0] { Command c; c.type = game::kCmdCancelTrain; c.param = int64_t(i); c.units = {e0}; issue(c); });
+            queue.push_back(a);
+        }
+        section(loc_.tr("ui.queue"), "queue", queue);
+    }
+    std::vector<uint16_t> buildable;
+    for (Entity e : own)
+        for (uint16_t b : rules.types[w.get<game::Unit>(e).type].builds)
+            if (std::find(buildable.begin(), buildable.end(), b) == buildable.end()) buildable.push_back(b);
+    std::vector<UiAction> builds;
+    for (uint16_t b : buildable) {
+        UiAction a; a.label = rules.types[b].name; a.cost = costText(b);
+        a.enabled = mod.canTrain(*ed.sim(), me, b);
+        if (!a.enabled) a.tip = reqText(rules.types[b].requires_);
+        a.active = placeType_ == int(b);
+        a.id = action([this, b] { placeType_ = b; }, a.enabled);
+        builds.push_back(a);
+    }
+    if (buildable.empty()) placeType_ = -1;
+    section(loc_.tr("card.build"), "grid", builds);
 }
 
 void GameHud::render(Editor& ed, const Viewport& vp) {

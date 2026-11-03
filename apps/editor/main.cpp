@@ -1,7 +1,9 @@
 // RTS editor entry point.
 //   rts_editor [<project.rtsproj | project dir>] [--game <id> | --project <.rtsproj | dir with game.json>] [--map <file.json>] [--engine <engine dir>]
 //              [--listen <port>|0] [--play]
+//              [--native-editor] [--tools-from <dir>]   (set by the switch to a per-project build: EditorNativeBuild.cpp)
 // Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
+#include "engine/platform/EngineDir.h"
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -57,20 +59,23 @@ static std::string findBuildTool(const std::string& dir) {
 
 int rtsMain(int argc, char** argv) {
     editor::Editor::Options opt;
-    opt.engineDir = RTS_SOURCE_DIR;
+    opt.engineDir = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argv[0]);   // source tree, or a packaged engine
     for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--play") g_demoPlay = true;
-    std::string game;
+    std::string game, toolsFrom;
+    if (const char* e = std::getenv("RTS_NATIVE_EDITOR"); e && *e && std::string(e) != "0") opt.nativeChild = true;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         // a bare argument is a project to open: "<editor> path/My Game.rtsproj" (Windows / Linux
         // double-click, file managers' "Open with") or a project folder; -psn_* is macOS Finder noise
         if (!a.empty() && a[0] != '-') { opt.projectDir = a; continue; }
+        if (a == "--native-editor") { opt.nativeChild = true; continue; }
         if (i + 1 >= argc) break;
         if (a == "--project") opt.projectDir = argv[++i];   // folder, .rtsproj or game.json
         else if (a == "--game") game = argv[++i];
         else if (a == "--listen") opt.listenPort = std::atoi(argv[++i]);
         else if (a == "--map") opt.openMap = argv[++i];
         else if (a == "--engine") opt.engineDir = argv[++i];
+        else if (a == "--tools-from") toolsFrom = argv[++i];   // rtsbuild / rtsmcp / RTSGame of the regular build
         else if (a == "--window") g_demoWindow = argv[++i];   // open + focus a window (automated screenshots)
         else if (a == "--select") g_demoSelect = std::atoi(argv[++i]); // used by automated screenshots
     }
@@ -79,8 +84,10 @@ int rtsMain(int argc, char** argv) {
     if (!opt.projectDir.empty()) opt.projectDir = fs::absolute(opt.projectDir, ec).lexically_normal().string();
     if (!opt.projectDir.empty() && (opt.projectDir.back() == '/' || opt.projectDir.back() == '\\')) opt.projectDir.pop_back();
     if (!opt.openMap.empty()) opt.openMap = fs::absolute(opt.openMap, ec).string();
-    opt.buildTool = findBuildTool(exeDir(argv[0]));
-    opt.mcpTool = findNear(exeDir(argv[0]), {"rtsmcp", "rtsmcp.exe", "Release/rtsmcp.exe"});
+    // a per-project build has only the editor: the other tools come from the regular build (--tools-from)
+    const std::string toolDir = toolsFrom.empty() ? exeDir(argv[0]) : toolsFrom;
+    opt.buildTool = findBuildTool(toolDir);
+    opt.mcpTool = findNear(toolDir, {"rtsmcp", "rtsmcp.exe", "Release/rtsmcp.exe"});
     {
         std::error_code ec2;
 #if defined(__linux__)
@@ -91,7 +98,7 @@ int rtsMain(int argc, char** argv) {
 #endif
         opt.editorExe = self.lexically_normal().string();
     }
-    opt.gameExe = findNear(exeDir(argv[0]), {"RTSGame", "RTSGame.app/Contents/MacOS/RTSGame", "RTSGame.exe", "Release/RTSGame.exe"});
+    opt.gameExe = findNear(toolDir, {"RTSGame", "RTSGame.app/Contents/MacOS/RTSGame", "RTSGame.exe", "Release/RTSGame.exe"});
 
     g_editor = std::make_unique<editor::Editor>(opt);
     platform::AppConfig cfg;

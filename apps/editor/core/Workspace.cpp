@@ -21,6 +21,7 @@ namespace rts::editor { void registerUiOps(Workspace& ws); }         // UiOps.cp
 #include "MaterialOps.h"
 #include "BrandingOps.h"
 #include "ToolchainOps.h"
+#include "NativeBuildOps.h"
 #include "Projects.h"
 #include "ProjectFile.h"
 #include <algorithm>
@@ -183,7 +184,7 @@ bool Project::saveManifest(std::string* err) {
 
 // ================================================================= workspace
 
-Workspace::Workspace() { registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); }
+Workspace::Workspace() { registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); }
 Workspace::~Workspace() { if (buildThread_.joinable()) buildThread_.join(); }
 
 namespace {
@@ -220,9 +221,21 @@ std::string lastSegment(const std::string& line) {
 void Workspace::startTool(const std::string& args, const std::string& label, bool withProject) {
     if (building_) throw std::runtime_error("a build is already running");
     if (withProject && project.dir.empty()) throw std::runtime_error("no game is open");
+    startCommand(shellQuote(buildTool) + (withProject ? " --project " + shellQuote(project.dir) : std::string()) + " --engine " + shellQuote(engineDir) + " " + args,
+                 "$ rtsbuild " + args, label);
+}
+
+void Workspace::appendBuildLog(const std::string& line) {
+    if (building_) return;
+    std::lock_guard<std::mutex> lk(buildMutex_);
+    buildLog_ += line + "\n";
+}
+
+void Workspace::startCommand(const std::string& command, const std::string& shown, const std::string& label) {
+    if (building_) throw std::runtime_error("a build is already running");
     if (buildThread_.joinable()) buildThread_.join();
     building_ = true;
-    std::string cmd = shellQuote(buildTool) + (withProject ? " --project " + shellQuote(project.dir) : std::string()) + " --engine " + shellQuote(engineDir) + " " + args + " 2>&1";
+    std::string cmd = command + " 2>&1";
 #if defined(_WIN32)
     cmd = "\"" + cmd + "\"";   // cmd.exe strips the outer quotes of a command that starts with one
 #endif
@@ -230,7 +243,7 @@ void Workspace::startTool(const std::string& args, const std::string& label, boo
     const fs::path logFile = fs::path(logsDir()) / (keep ? label + "-" + stamp("%Y%m%d-%H%M%S") + ".log" : "build-estimate.log");
     {
         std::lock_guard<std::mutex> lk(buildMutex_);
-        buildLog_ = "$ rtsbuild " + args + "\n";
+        buildLog_ = shown + "\n";
         buildRc_ = 0;
         runLabel_ = label;
         logFile_ = logFile.string();
@@ -243,7 +256,7 @@ void Workspace::startTool(const std::string& args, const std::string& label, boo
 #else
         FILE* p = popen(cmd.c_str(), "r");
 #endif
-        if (!p) { std::lock_guard<std::mutex> lk(buildMutex_); buildLog_ += "cannot start rtsbuild\n"; buildRc_ = -1; }
+        if (!p) { std::lock_guard<std::mutex> lk(buildMutex_); buildLog_ += "cannot start: " + cmd + "\n"; buildRc_ = -1; }
         else {
             char buf[1024];
             std::string line;

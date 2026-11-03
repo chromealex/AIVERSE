@@ -37,6 +37,8 @@
   #define GL_RED 0x1903
   #define GL_RGBA8 0x8058
   #define GL_FUNC_ADD 0x8006
+  #define GL_FUNC_SUBTRACT 0x800A
+  #define GL_FUNC_REVERSE_SUBTRACT 0x800B
   #define GL_FRAMEBUFFER_SRGB 0x8DB9
   #define GL_DEPTH_COMPONENT24 0x81A6
   #define GL_RGBA32F 0x8814
@@ -86,6 +88,7 @@
     X(void, glDrawElementsInstanced, (GLenum m, GLsizei c, GLenum t, const void* i, GLsizei n)) \
     X(void, glBlendFuncSeparate, (GLenum a, GLenum b, GLenum c, GLenum d)) \
     X(void, glBlendEquation, (GLenum m)) \
+    X(void, glBlendEquationSeparate, (GLenum rgb, GLenum alpha)) \
     X(void, glGenFramebuffers, (GLsizei n, GLuint* f)) \
     X(void, glDeleteFramebuffers, (GLsizei n, const GLuint* f)) \
     X(void, glBindFramebuffer, (GLenum t, GLuint f)) \

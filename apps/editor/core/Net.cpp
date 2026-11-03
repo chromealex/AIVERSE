@@ -56,9 +56,14 @@ sockaddr_in loopback(int port) {
 }
 } // namespace
 
-LineServer::~LineServer() {
+LineServer::~LineServer() { close(); }
+
+void LineServer::close() {
     for (auto& c : conns_) RTS_CLOSE(c.fd);
+    conns_.clear();
     if (fd_ >= 0) RTS_CLOSE(fd_);
+    fd_ = -1;
+    port_ = 0;
 }
 
 bool LineServer::listen(int port) {
