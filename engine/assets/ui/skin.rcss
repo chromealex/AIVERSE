@@ -3,3 +3,7 @@
    Font families: "ui" (body: the game's fonts/ui.ttf or the engine font) and "title" (headings:
    the game's fonts/title.ttf, falling back to "ui"). Useful hooks: .panel, button, button.active,
    h1/h2, #topbar, #card, #minimap, #modal, #menu, #lobby, #kb .key, progress fill, .notice. */
+
+/* RmlUi rejects a style sheet without rules ("Failed to load style sheet"), which also pops the debugger badge:
+   keep one no-op rule here. */
+#rts-skin-placeholder { display: none; }
