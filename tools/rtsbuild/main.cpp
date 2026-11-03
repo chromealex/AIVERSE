@@ -833,9 +833,19 @@ void buildAndroid(const Game& g, Options& o) {
     if (o.generateOnly) return;
 
     fs::path gradle = findTool("gradle");
-    if (sdk.empty()) { info("APK не собран: нет Android SDK"); return; }
+    // no APK possible here: the Gradle project is then the result, so it moves into Builds/android
+    auto keepProject = [&] {
+        std::error_code ec;
+        fs::remove_all(out / g.exe, ec);
+        fs::create_directories(out, ec);
+        fs::rename(proj, out / g.exe, ec);
+        if (ec) { copyDir(proj, out / g.exe); fs::remove_all(proj, ec); }
+        info("Проект: " + (out / g.exe).string() + "  (можно открыть в Android Studio)");
+    };
+    if (sdk.empty()) { info("APK не собран: нет Android SDK"); keepProject(); return; }
     if (gradle.empty()) {
         info("APK не собран: нет gradle в PATH. Откройте проект в Android Studio или установите gradle (brew install gradle).");
+        keepProject();
         return;
     }
     step("Android: gradle wrapper");
