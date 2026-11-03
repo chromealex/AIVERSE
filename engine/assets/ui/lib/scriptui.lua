@@ -10,7 +10,14 @@ local ctx = rmlui.contexts["main"]
 
 scriptui = {}
 local docs, wanted = {}, {}
-local visible = false   -- documents show while the match is on screen (playing)
+local screen = ""   -- the host screen: documents show on "playing", or on the screens their <body screens="..."> lists
+                    -- (e.g. screens="playing paused": a HUD that stays under the game's own pause panel)
+local function shown(d)
+    local list = d:GetAttribute("screens")
+    if type(list) ~= "string" or list == "" then return screen == "playing" end
+    for s in list:gmatch("%S+") do if s == screen then return true end end
+    return false
+end
 
 local model = ctx:OpenDataModel("script", {
     params = {},
@@ -31,7 +38,7 @@ function scriptui._open(name, params)
         model.params = params
     end
     wanted[name] = true
-    if visible then d:Show() end
+    if shown(d) then d:Show() end
 end
 
 function scriptui._close(name)
@@ -46,8 +53,8 @@ function scriptui._reset()
 end
 
 game.on("screen", function(s)
-    visible = s == "playing"
+    screen = s
     for name, d in pairs(docs) do
-        if visible and wanted[name] then d:Show() else d:Hide() end
+        if wanted[name] and shown(d) then d:Show() else d:Hide() end
     end
 end)

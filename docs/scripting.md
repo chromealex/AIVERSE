@@ -496,7 +496,7 @@ end)
 | view Lua | |
 |---|---|
 | `ui.set(key, value)` | a top-level value of model `script` (numbers, strings, booleans, fx, tables / arrays); unchanged values are not resent. A document binds its `{{names}}` when it loads: set every key it uses before (or in the same frame as) its first `ui.open` |
-| `ui.open(name [, params])`, `ui.close(name)` | show / hide `ui/hud/<name>.rml` (only while the match is on screen); `params` -> `{{params.*}}` |
+| `ui.open(name [, params])`, `ui.close(name)` | show / hide `ui/hud/<name>.rml` (while the host screen is `playing`, or one of the screens its `<body screens="playing paused over">` lists: a game's own pause / result panels, a HUD under them); `params` -> `{{params.*}}` |
 | `ui.on(event, fn(args))` | `event('name', ...)` in a document; `args` = the extra values as an array |
 | `view.state()` | the simulation scripts' `state` as of this tick (a copy; writing to it changes nothing) |
 
