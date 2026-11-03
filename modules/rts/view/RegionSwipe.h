@@ -306,7 +306,8 @@ public:
                 }
                 auto end=point(shaft),tip=path[kSamples];
                 float tx=tip.x-end.x,ty=tip.y-end.y,tangent=std::hypot(tx,ty);
-                if(tangent<.001f)continue;tx/=tangent;ty/=tangent;
+                if(tangent<.001f)continue;
+                tx/=tangent;ty/=tangent;
                 for(int i=0;i<=16;++i){
                     float t=float(i)/16,r=head*.42f*(1-t);
                     render::float2 c{end.x+(tip.x-end.x)*t,end.y+(tip.y-end.y)*t};

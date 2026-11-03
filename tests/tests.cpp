@@ -10877,8 +10877,11 @@ TEST(script_immutable_match_seed) {
         for(int i=0;i<3;++i)sim.step();
         CHECK(mod(sim).scripts()->errorCount()==0);
         SimSnapshot snap;sim.saveState(snap);
-        for(int i=0;i<5;++i)sim.step();auto hash=sim.checksum();
-        sim.loadState(snap);for(int i=0;i<5;++i)sim.step();CHECK(sim.checksum()==hash);
+        for(int i=0;i<5;++i)sim.step();
+        auto hash=sim.checksum();
+        sim.loadState(snap);
+        for(int i=0;i<5;++i)sim.step();
+        CHECK(sim.checksum()==hash);
     }
 }
 
@@ -10927,7 +10930,8 @@ TEST(script_sorted_pairs_order) {
     )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
     auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
     Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);
-    sim.step();CHECK(mod(sim).scripts()->errorCount()==0);
+    sim.step();
+    CHECK(mod(sim).scripts()->errorCount()==0);
 }
 
 // f32 / f64 bit-pattern arithmetic (RtsScriptIeee.cpp): known IEEE results, canonical NaN, argument checks,
@@ -10996,10 +11000,14 @@ TEST(script_ieee_bit_patterns) {
     )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
     auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
     Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);
-    for(int i=0;i<3;++i)sim.step();CHECK(mod(sim).scripts()->errorCount()==0);
+    for(int i=0;i<3;++i)sim.step();
+    CHECK(mod(sim).scripts()->errorCount()==0);
     SimSnapshot snap;sim.saveState(snap);
-    for(int i=0;i<5;++i)sim.step();const auto hash=sim.checksum();
-    sim.loadState(snap);for(int i=0;i<5;++i)sim.step();CHECK(sim.checksum()==hash);
+    for(int i=0;i<5;++i)sim.step();
+    const auto hash=sim.checksum();
+    sim.loadState(snap);
+    for(int i=0;i<5;++i)sim.step();
+    CHECK(sim.checksum()==hash);
     for (const char* bad : {"f32.add(-1,0)", "f32.add(0x100000000,0)", "f32.mul(0,'1')", "f64.add(0,fx(1))", "f32.fromint(fx(1,2))", "f32.sqrt()"}) {
         sources.set("ieee.lua",Json::string(std::string("function on_start() local x=")+bad+" end"));rules.set("$scriptSources",sources);
         Simulation invalid({},std::make_unique<game::RtsModule>());invalid.setup(rules,map);invalid.step();
@@ -11014,10 +11022,12 @@ TEST(script_ieee_bit_patterns) {
     auto d=[](uint64_t b){double x;std::memcpy(&x,&b,8);return x;};auto db=[](double x){uint64_t b;std::memcpy(&b,&x,8);return x!=x?0x7ff8000000000000ull:b;};
     Random rng(12345);int bad=0;
     auto r32=[&]()->uint32_t{const uint32_t k=rng.below(8),v=uint32_t(rng.next());
-        if(k==0)return v&0x807fffffu;if(k==1){const uint32_t s[]={0,0x80000000u,0x7f800000u,0xff800000u,0x7fc00001u,1,0x3f800000u,0x00800000u};return s[rng.below(8)];}
+        if(k==0)return v&0x807fffffu;
+        if(k==1){const uint32_t s[]={0,0x80000000u,0x7f800000u,0xff800000u,0x7fc00001u,1,0x3f800000u,0x00800000u};return s[rng.below(8)];}
         return (v&0x807fffffu)|((112u+rng.below(32))<<23);};
     auto r64=[&]()->uint64_t{const uint32_t k=rng.below(8);const uint64_t v=(uint64_t(rng.next())<<32)^rng.next();
-        if(k==0)return v&0x800fffffffffffffull;if(k==1)return 0x7ff0000000000000ull|(v&1);
+        if(k==0)return v&0x800fffffffffffffull;
+        if(k==1)return 0x7ff0000000000000ull|(v&1);
         return (v&0x800fffffffffffffull)|(uint64_t(1000+rng.below(48))<<52);};
     for(int i=0;i<20000;++i){
         const uint32_t a=r32(),b=r32();const float x=f(a),y=f(b);
@@ -11094,9 +11104,11 @@ TEST(script_grid_path) {
     )"));rules.set("scripts",scripts);rules.set("$scriptSources",sources);
     auto map=Json::parse(R"({"size":[4,4],"players":[{},{}]})");
     Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);
-    for(int i=0;i<3;++i)sim.step();CHECK(mod(sim).scripts()->errorCount()==0);
+    for(int i=0;i<3;++i)sim.step();
+    CHECK(mod(sim).scripts()->errorCount()==0);
     SimSnapshot snap;sim.saveState(snap);
-    for(int i=0;i<5;++i)sim.step();const auto hash=sim.checksum();
+    for(int i=0;i<5;++i)sim.step();
+    const auto hash=sim.checksum();
     sim.loadState(snap);for(int i=0;i<5;++i)sim.step();
     CHECK(sim.checksum()==hash);CHECK(mod(sim).scripts()->errorCount()==0);
     for (const char* args : {"0,4,{},0,1", "4096,4096,{},0,1", "4,4,false,0,1", "4,4,{},0,1,'x'"}) {
