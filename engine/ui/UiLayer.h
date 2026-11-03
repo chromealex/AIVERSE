@@ -40,6 +40,7 @@ public:
     // text field has focus); the game should then ignore it.
     bool handleEvent(const platform::Event& e);
     bool pointerOverUi() const; // Current hover only; ignores a press captured by the UI.
+    bool pointerHasAttribute(const char* name) const;   // the hovered element or an ancestor carries the attribute
     void update();   // layout + data bindings; call once per frame before render()
     void render();   // inside an active render pass, after the scene
 

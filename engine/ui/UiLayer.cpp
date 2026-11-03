@@ -272,6 +272,12 @@ bool UiLayer::pointerOverUi() const {
     return hover&&hover->GetOwnerDocument();
 }
 
+bool UiLayer::pointerHasAttribute(const char* name) const {
+    for (Rml::Element* el = context() ? context()->GetHoverElement() : nullptr; el; el = el->GetParentNode())
+        if (el->HasAttribute(name)) return true;
+    return false;
+}
+
 bool UiLayer::handleEvent(const platform::Event& e) {
     if (e.type == platform::EventType::TextInputEnded && context()) {
         // the user closed the keyboard: leave the field so the next tap opens it again

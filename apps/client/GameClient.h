@@ -319,6 +319,9 @@ private:
     bool touchMoved_ = false;
     bool mapTapPending_ = false;   // "mapClick" games: a left press is a tap until it moves (then it pans)
     float mapTapX_ = 0, mapTapY_ = 0;
+    bool mapDrag_ = false, mapDragOverUi_ = true;   // a press on a HUD element with attribute map-drag (ability discs)
+    int64_t mapDragTouch_ = -1;
+    void mapDragEvent(const platform::Event& e, bool uiWants);   // ClientScriptCmd.cpp
     std::vector<std::pair<float3, double>> markers_;
 };
 
