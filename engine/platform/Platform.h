@@ -58,6 +58,14 @@ struct AppConfig {
     // "landscape" | "portrait" | "any". Locks the screen when the web build goes fullscreen; native
     // mobile apps get it from game.json through rtsbuild (Info.plist / AndroidManifest).
     std::string orientation = "landscape";
+    // Desktop window (macOS, Windows, Linux; mobile and web ignore these). Games set them from
+    // game.json "window" (engine/platform/WindowSettings.h) in AppCallbacks::configure.
+    enum class WindowMode { Windowed, Maximized, Fullscreen };
+    WindowMode windowMode = WindowMode::Windowed; // Fullscreen: macOS native (Spaces), Windows / Linux borderless over the monitor
+    bool resizable = true;          // false: fixed size (no resize border, no maximize / zoom)
+    int minWidth = 0, minHeight = 0; // logical points; 0 = no limit
+    bool keepAspect = false;        // resizing keeps width : height of the initial size
+    bool allowFullscreen = true;    // F11, Alt+Enter (Windows) and the green button (macOS) switch fullscreen
 };
 
 struct AppCallbacks {
@@ -65,6 +73,9 @@ struct AppCallbacks {
     std::function<void(gfx::Device&, double dt)> frame;  // called every display refresh; must call beginFrame/endFrame
     std::function<void(const Event&)> event;
     std::function<void()> shutdown;
+    // Optional: called by run() once the content root is known (readContentFile works) and before the
+    // window is created, to adjust the window from game data (size, mode). Desktop platforms only.
+    std::function<void(AppConfig&)> configure;
 };
 
 // Runs the main loop. Returns the exit code (on iOS/web it may never return).

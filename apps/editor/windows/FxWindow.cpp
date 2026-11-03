@@ -61,6 +61,7 @@ class FxWindow : public EditorWindow {
 public:
     const char* id() const override { return "effects"; }
     const char* title() const override { return "Эффекты"; }
+    const char* group() const override { return "look"; }
     const char* dockArea() const override { return "center"; }
     int order() const override { return 4; }
     bool openByDefault() const override { return false; }
@@ -266,7 +267,7 @@ private:
         }
         if (!ed.fxWarnings.empty()) {
             ImGui::Spacing();
-            ImGui::TextColored(ImVec4(1, 0.75f, 0.3f, 1), "Предупреждений: %d", int(ed.fxWarnings.size()));
+            ui::toneText(ui::Tone::Warn, "Предупреждений: %d", int(ed.fxWarnings.size()));
             if (ImGui::BeginItemTooltip()) { for (auto& w : ed.fxWarnings) ImGui::TextUnformatted(w.c_str()); ImGui::EndTooltip(); }
         }
     }
@@ -292,8 +293,8 @@ private:
         }
         ImGui::SameLine();
         if (ImGui::Button("Перечитать")) openBindings(ed);
-        if (!bindingsError_.empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.35f, 1), "%s", bindingsError_.c_str());
-        for (auto& w : ed.fxWarnings) ImGui::TextColored(ImVec4(1, 0.75f, 0.3f, 1), "%s", w.c_str());
+        if (!bindingsError_.empty()) ui::toneText(ui::Tone::Error, "%s", bindingsError_.c_str());
+        for (auto& w : ed.fxWarnings) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
         ui::inputMultiline("##bindings", bindingsText_, ImVec2(-1, -1));
     }
 
@@ -315,7 +316,7 @@ private:
         ImGui::EndDisabled();
 
         const auto& st = preview_.stats();
-        const ImVec4 fillCol = st.fill > 2.5f ? ImVec4(1, 0.4f, 0.35f, 1) : st.fill > 1.0f ? ImVec4(1, 0.8f, 0.3f, 1) : ImVec4(0.6f, 0.85f, 0.6f, 1);
+        const ImVec4 fillCol = ui::toneColor(st.fill > 2.5f ? ui::Tone::Error : st.fill > 1.0f ? ui::Tone::Warn : ui::Tone::Ok);
         ImGui::Text("Частиц: %d   вызовов отрисовки: %d   ", st.particles, st.drawCalls);
         ImGui::SameLine(0, 0);
         ImGui::TextColored(fillCol, "заполнение экрана: %.2fx", double(st.fill));
@@ -326,7 +327,7 @@ private:
         const float ph = std::max(160.0f, std::min(ImGui::GetContentRegionAvail().y * 0.45f, pw * 0.6f));
         runPreview(ed, pw, ph);
 
-        for (auto& e : errors_) ImGui::TextColored(ImVec4(1, 0.4f, 0.35f, 1), "%s", e.c_str());
+        for (auto& e : errors_) ui::toneText(ui::Tone::Error, "%s", e.c_str());
         if (ImGui::BeginTabBar("##fxtabs")) {
             if (ImGui::BeginTabItem("Параметры")) { ImGui::BeginChild("##params"); drawParams(); ImGui::EndChild(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("JSON")) { drawJson(); ImGui::EndTabItem(); }

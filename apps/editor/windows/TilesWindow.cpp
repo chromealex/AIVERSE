@@ -12,6 +12,7 @@ class TilesWindow : public EditorWindow {
 public:
     const char* id() const override { return "tiles"; }
     const char* title() const override { return "Тайлы"; }
+    const char* group() const override { return "world"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 4; }
     bool openByDefault() const override { return false; }
@@ -20,23 +21,25 @@ public:
 
     void draw(Editor& ed) override {
         Workspace& ws = ed.ws();
-        if (ws.project.dir.empty()) { ImGui::TextDisabled("Откройте игру."); return; }
+        if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_TILES, "Игра не открыта", "Файл → Открыть проект"); return; }
         std::string err;
         const game::Tileset* ts = mapTileset(ws, &err);
         if (!ts) { drawInit(ed, err); return; }
-        ImGui::Text("Набор: %s", ts->name.c_str());
-        ImGui::SameLine();
-        ImGui::TextDisabled("(%s)", ws.map.data.extra["tiles"].getStr("tileset").c_str());
-
+        ui::headerCard(ICON_TILES, ts->name, "Набор тайлов · " + ws.map.data.extra["tiles"].getStr("tileset"));
         bool active = ed.tool == Tool::Count;
-        if (ImGui::Checkbox("Рисовать в окне «Сцена»", &active)) ed.tool = active ? Tool::Count : Tool::Select;
-        ui::help("Левая кнопка мыши в окне «Сцена» рисует выбранной местностью. Края и углы подбираются автоматически по соседям (автотайлы).");
-        ImGui::SliderInt("Кисть", &ed.brush, 0, 12);
+        if (ImGui::Checkbox(ICON_BRUSH "  Рисовать в «Сцене»", &active)) ed.tool = active ? Tool::Count : Tool::Select;
+        ui::help("Левая кнопка мыши в «Сцене» рисует выбранной местностью. Края и углы подбираются автоматически по соседям (автотайлы).");
+        ImGui::SameLine();
         ImGui::Checkbox("Автотайлы", &autotile_);
         ui::help("Выключено: ставится ровно выбранный тайл атласа (ручная правка краёв, декор).");
+        if (ui::beginProps("##brush")) {
+            ui::prop("Кисть");
+            ImGui::SliderInt("##b", &ed.brush, 0, 12, "%d клет.");
+            ui::endProps();
+        }
         terrain_ = std::clamp(terrain_, 0, int(ts->terrains.size()) - 1);
 
-        ImGui::SeparatorText("Местность");
+        ui::section(ICON_PALETTE, "Местность");
         for (size_t i = 0; i < ts->terrains.size(); ++i) {
             const auto& t = ts->terrains[i];
             ImVec4 c(t.color[0] / 255.0f, t.color[1] / 255.0f, t.color[2] / 255.0f, 1);
@@ -72,29 +75,34 @@ public:
 private:
     void drawInit(Editor& ed, const std::string& err) {
         Workspace& ws = ed.ws();
-        if (ws.map.data.extra["tiles"].isObject()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", err.c_str());
-        else ImGui::TextWrapped("У карты нет слоя тайлов. Тайлы нужны 2D-играм с тайловой картой (Red Alert, Dune II, Warcraft II).");
+        if (ws.map.data.extra["tiles"].isObject()) ui::callout(ui::Tone::Error, err);
+        else ui::callout(ui::Tone::Normal, "У карты нет слоя тайлов. Тайлы нужны 2D-играм с тайловой картой (Red Alert, Dune II, Warcraft II).");
         auto sets = listTilesets(ws);
-        if (sets.empty()) { ImGui::TextDisabled("В игре нет наборов tilesets/*.json"); return; }
+        if (sets.empty()) { ui::hint("В игре нет наборов tilesets/*.json"); return; }
         pick_ = std::clamp(pick_, 0, int(sets.size()) - 1);
-        if (ImGui::BeginCombo("Набор", sets[size_t(pick_)].c_str())) {
-            for (size_t i = 0; i < sets.size(); ++i) if (ImGui::Selectable(sets[i].c_str(), pick_ == int(i))) pick_ = int(i);
-            ImGui::EndCombo();
+        if (ui::beginProps("##init")) {
+            ui::prop("Набор");
+            if (ImGui::BeginCombo("##set", sets[size_t(pick_)].c_str())) {
+                for (size_t i = 0; i < sets.size(); ++i) if (ImGui::Selectable(sets[i].c_str(), pick_ == int(i))) pick_ = int(i);
+                ImGui::EndCombo();
+            }
+            ui::propWide();
+            ImGui::Checkbox("По текущему рельефу", &fromTerrain_);
+            ImGui::SetItemTooltip("Подобрать местность каждой клетке по её типу (вода, скалы...), иначе залить первой местностью набора.");
+            ui::endProps();
         }
-        ImGui::Checkbox("По текущему рельефу", &fromTerrain_);
-        ui::help("Подобрать местность каждой клетке по её типу (вода, скалы...), иначе залить первой местностью набора.");
-        if (ImGui::Button("Создать слой тайлов")) {
+        if (ui::wideButton(ICON_PLUS, "Создать слой тайлов", 0, 1, true)) {
             Json p = Json::object();
             p.set("tileset", Json::string(sets[size_t(pick_)]));
             p.set("fromTerrain", Json::fromBool(fromTerrain_));
             Json r = ws.call("tiles_init", p);
-            if (r.has("error")) ed.status = r.getStr("error");
+            if (r.has("error")) ed.status = "Ошибка: " + r.getStr("error");
         }
     }
 
     void drawAtlas(Editor& ed, const game::Tileset& ts) {
-        ImGui::SeparatorText("Тайл атласа");
-        ImGui::InputInt("Номер", &tile_);
+        ui::section(ICON_GRID, "Тайл атласа");
+        if (ui::beginProps("##tile")) { ui::prop("Номер"); ImGui::InputInt("##n", &tile_); ui::endProps(); }
         tile_ = std::max(0, tile_);
         if (!texInit_) { textures_.init(ed.device()); texInit_ = true; }
         render::TextureRef a = textures_.resolve(ts.atlas, true, ed.ws().project.dir + "/");
@@ -111,7 +119,7 @@ private:
                 ImGui::PushID(n);
                 if (n % perLine) ImGui::SameLine(0, 4);
                 bool sel = n == tile_;
-                if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 0.8f, 0.2f, 1));
+                if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ui::accentColor());
                 if (ImGui::ImageButton("##t", ImTextureRef(ImTextureID(a.tex.id)), ImVec2(cell, cell), ImVec2(a.u(u0), a.v(v0)), ImVec2(a.u(u1), a.v(v1)))) { tile_ = n; ed.tool = Tool::Count; }
                 if (sel) ImGui::PopStyleColor();
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%d", n);

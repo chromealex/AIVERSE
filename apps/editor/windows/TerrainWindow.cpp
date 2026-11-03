@@ -15,70 +15,89 @@ class TerrainWindow : public EditorWindow {
 public:
     const char* id() const override { return "terrain"; }
     const char* title() const override { return "Рельеф"; }
+    const char* group() const override { return "world"; }
     const char* dockArea() const override { return "right"; }
     int order() const override { return 5; }
     bool openByDefault() const override { return false; }
 
     void draw(Editor& ed) override {
         Workspace& ws = ed.ws();
-        if (ws.project.dir.empty()) { ImGui::TextDisabled("Откройте игру."); return; }
+        if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_TERRAIN, "Игра не открыта", "Файл → Открыть проект"); return; }
         MapData& d = ws.map.data;
-        if (ed.planetMap()) ImGui::TextWrapped("Карта с планетами: кисти работают на теле под курсором в «Сцене» (3D-кисть, переходит через рёбра граней).");
         const bool hf = !d.corners.empty();
-        if (!hf) ImGui::TextWrapped("У карты нет карты высот углов. Первый мазок кисти создаст её из текущего рельефа (уровни, пандусы, высоты).");
-        else ImGui::TextDisabled("Карта высот: %d x %d углов%s", d.w + 1, d.h + 1, ws.project.rules.terrain.heightfield() ? " (геймплей)" : " (только вид)");
-        ui::help("Высоты влияют на игру, только если в rules.json terrain.model = \"heightfield\". Иначе рельеф только визуальный.");
-
-        if (!ed.planetMap()) {
-            if (d.detailScale > 0) ImGui::TextDisabled("Детальный рельеф: x%d (%d x %d точек)", d.detailScale, d.w * d.detailScale + 1, d.h * d.detailScale + 1);
-            ImGui::Checkbox("Детально (под-клеточно)", &detail_);
-            ui::help("Кисти работают по детальной карте высот (k точек на клетку, мягкий край), а не по углам клеток. "
-                     "Первый мазок создаёт её из того, что нарисовано сейчас. На картах heightfield углы клеток следуют за ней.");
+        // what the map has: one dim line + hints
+        {
+            std::string info;
+            if (hf) { char b[96]; std::snprintf(b, sizeof b, "Высоты %d×%d углов", d.w + 1, d.h + 1); info = b; info += ws.project.rules.terrain.heightfield() ? " · влияют на игру" : " · только вид"; }
+            else info = "Карты высот ещё нет — первый мазок создаст её из текущего рельефа";
+            if (!ed.planetMap() && d.detailScale > 0) { char b[64]; std::snprintf(b, sizeof b, " · детально ×%d", d.detailScale); info += b; }
+            ui::hint(info.c_str());
+            ui::help("Высоты влияют на игру, только если в rules.json terrain.model = \"heightfield\". Иначе рельеф только визуальный.");
         }
+        if (ed.planetMap()) ui::callout(ui::Tone::Accent, "Карта с планетами: кисти работают на теле под курсором в «Сцене» (переходят через рёбра граней).");
+
         bool active = ed.tool == Tool::Count && owner_;
-        if (ImGui::Checkbox("Кисть в окне «Сцена»", &active)) setActive(ed, active);
-        static const char* ops[] = {"Поднять", "Опустить", "Сгладить", "Выровнять", "Шум", "Задать высоту", "Материал", "Эрозия", "Штамп"};
+        ImGui::PushStyleColor(ImGuiCol_Text, active ? ui::toneColor(ui::Tone::Accent) : ImGui::GetStyle().Colors[ImGuiCol_Text]);
+        if (ImGui::Checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
+        ImGui::PopStyleColor();
+        if (!ed.planetMap()) {
+            ImGui::SameLine();
+            ImGui::Checkbox("Детально", &detail_);
+            ImGui::SetItemTooltip("Кисти работают по детальной карте высот (k точек на клетку, мягкий край), а не по углам клеток. "
+                                  "Первый мазок создаёт её из того, что нарисовано сейчас. На картах heightfield углы клеток следуют за ней.");
+        }
+        static const char* opsLabels[] = {"Поднять", "Опустить", "Сгладить", "Выровнять", "Шум", "Задать высоту", "Материал", "Эрозия", "Штамп"};
         const int nOps = detail_ && !ed.planetMap() ? 9 : 7;
         if (mode_ >= nOps) mode_ = 0;
-        for (int i = 0; i < nOps; ++i) {
-            if (i % 4) ImGui::SameLine();
-            if (ImGui::RadioButton(ops[i], mode_ == i)) { mode_ = i; setActive(ed, true); }
+        if (ui::choiceGrid("##ops", mode_, opsLabels, nOps, 96)) setActive(ed, true);
+        if (ui::beginProps("##brush")) {
+            if (mode_ == 8) {
+                static const char* stamps[] = {"Кратер", "Плато", "Дюны", "Скалы"};
+                ui::prop("Штамп");
+                ImGui::Combo("##stamp", &stamp_, stamps, 4);
+                ui::prop("Поворот");
+                ImGui::SliderFloat("##angle", &angle_, 0.0f, 360.0f, "%.0f°");
+            }
+            ui::prop("Радиус");
+            ImGui::SliderFloat("##radius", &radius_, detail_ ? 0.25f : 0.5f, 32.0f, "%.2f");
+            if (detail_) { ui::prop("Жёсткость", "0 — мягкий край, ближе к 1 — резкий"); ImGui::SliderFloat("##hard", &hardness_, 0.0f, 0.95f, "%.2f"); }
+            if (mode_ <= 1 || mode_ == 4) { ui::prop("Сила"); ImGui::SliderFloat("##str", &strength_, 0.02f, 2.0f, "%.2f"); }
+            else if (mode_ <= 3 || mode_ == 7) { ui::prop("Сила"); ImGui::SliderFloat("##blend", &blend_, 0.05f, 1.0f, "%.2f"); }
+            else if (mode_ == 8) { ui::prop("Высота штампа"); ImGui::SliderFloat("##sh", &strength_, -4.0f, 4.0f, "%.2f"); }
+            else if (mode_ == 5) {
+                ui::prop("Высота", "Пипетка: следующий щелчок в «Сцене» берёт высоту оттуда.");
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 4);
+                ImGui::InputFloat("##target", &target_, 0.25f, 1.0f, "%.2f");
+                ImGui::SameLine(0, 4);
+                if (ui::toolButton(ICON_PIPETTE, "Пипетка: взять высоту щелчком в «Сцене»", pick_)) pick_ = !pick_;
+            } else {
+                ui::prop("Слой", "Индекс слоя из terrain.layers (rules.json / game.json). -1 стирает: материал по типу клетки.");
+                ImGui::SliderInt("##layer", &layer_, -1, 3, layer_ < 0 ? "стереть" : "%d");
+            }
+            ui::endProps();
         }
-        if (mode_ == 8) {
-            static const char* stamps[] = {"crater", "mesa", "dunes", "rocks"};
-            ImGui::Combo("Штамп##s", &stamp_, stamps, 4);
-            ImGui::SliderFloat("Поворот", &angle_, 0.0f, 360.0f, "%.0f°");
-        }
-        ImGui::SliderFloat("Радиус", &radius_, detail_ ? 0.25f : 0.5f, 32.0f, "%.2f");
-        if (detail_) ImGui::SliderFloat("Жёсткость", &hardness_, 0.0f, 0.95f, "%.2f");
-        if (mode_ <= 1 || mode_ == 4) ImGui::SliderFloat("Сила", &strength_, 0.02f, 2.0f, "%.2f");
-        else if (mode_ <= 3 || mode_ == 7) ImGui::SliderFloat("Сила##b", &blend_, 0.05f, 1.0f, "%.2f");
-        else if (mode_ == 8) ImGui::SliderFloat("Высота штампа", &strength_, -4.0f, 4.0f, "%.2f");
-        else if (mode_ == 5) {
-            ImGui::InputFloat("Высота", &target_, 0.25f, 1.0f, "%.2f");
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Пипетка")) pick_ = true;
-            ui::help("Пипетка: следующий щелчок в «Сцене» берёт высоту оттуда.");
-        } else {
-            ImGui::SliderInt("Слой", &layer_, -1, 3);
-            ui::help("Индекс слоя из terrain.layers (rules.json / game.json). -1 стирает: материал по типу клетки.");
-        }
-        ImGui::TextDisabled("Shift: обратное действие (поднять <-> опустить, стереть материал)");
+        ui::hint("Shift — обратное действие (поднять ↔ опустить, стереть материал).");
 
-        ImGui::SeparatorText("Карта высот PNG (16 бит)");
-        if (!ed.planetMap()) ImGui::Checkbox("Детальная (k точек на клетку)", &pngDetail_);
-        ui::inputString("Файл", file_);
-        ImGui::InputFloat("Масштаб", &scale_, 0.5f, 2.0f, "%.2f");
-        ImGui::InputFloat("Смещение", &offset_, 0.25f, 1.0f, "%.2f");
-        ui::help("высота = смещение + значение / 65535 * масштаб (в клетках мира). Экспорт пишет масштаб и смещение в ответе и в PNG (tEXt).");
-        if (ImGui::Button("Импорт")) {
+        ui::section(ICON_IMAGE, "Карта высот PNG (16 бит)");
+        if (ui::beginProps("##png")) {
+            ui::prop("Файл");
+            ui::inputString("##file", file_);
+            ui::prop("Масштаб", "высота = смещение + значение / 65535 × масштаб (в клетках мира). Экспорт пишет масштаб и смещение в ответе и в PNG (tEXt).");
+            ImGui::InputFloat("##scale", &scale_, 0.5f, 2.0f, "%.2f");
+            ui::prop("Смещение");
+            ImGui::InputFloat("##offset", &offset_, 0.25f, 1.0f, "%.2f");
+            if (!ed.planetMap()) { ui::propWide(); ImGui::Checkbox("Детальная (k точек на клетку)", &pngDetail_); }
+            ui::endProps();
+        }
+        const int n = hf ? 3 : 2;
+        if (ui::wideButton(ICON_DOWNLOAD, "Импорт", 0, n)) {
             Json p = Json::object();
             p.set("file", Json::string(file_)); p.set("scale", Json::number(double(scale_), 3)); p.set("offset", Json::number(double(offset_), 3));
             p.set("detail", Json::fromBool(pngDetail_));
             report(ed, ws.call("heightmap_import", p));
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Экспорт") && (hf || (pngDetail_ && d.detailScale > 0))) {
+        ImGui::BeginDisabled(!(hf || (pngDetail_ && d.detailScale > 0)));
+        if (ui::wideButton(ICON_SAVE, "Экспорт", 1, n)) {
             Json p = Json::object();
             p.set("file", Json::string(file_));
             p.set("detail", Json::fromBool(pngDetail_));
@@ -86,13 +105,12 @@ public:
             if (!r.has("error")) { scale_ = float(r["scale"].toDouble(scale_)); offset_ = float(r["offset"].toDouble(offset_)); }
             report(ed, r);
         }
-        if (hf) {
-            ImGui::SameLine();
-            if (ImGui::Button("Удалить рельеф")) {
-                Json p = Json::object(); p.set("enabled", Json::fromBool(false));
-                report(ed, ws.call("map_heightfield", p));
-            }
+        ImGui::EndDisabled();
+        if (hf && ui::wideButton(ICON_TRASH, "Удалить рельеф", 2, n)) {
+            Json p = Json::object(); p.set("enabled", Json::fromBool(false));
+            report(ed, ws.call("map_heightfield", p));
         }
+        ui::resultMessage(message_);
     }
 
     void update(Editor& ed, double) override {
@@ -169,12 +187,12 @@ private:
         ed.tool = on ? Tool::Count : Tool::Select;
         if (on) ++seed_;
     }
-    static void report(Editor& ed, const Json& r) { ed.status = r.has("error") ? r.getStr("error") : r.getStr("summary"); }
+    void report(Editor& ed, const Json& r) { message_ = r.has("error") ? "Ошибка: " + r.getStr("error") : r.getStr("summary"); ed.status = message_; }
 
     int mode_ = 0, layer_ = 0, stamp_ = 0;
     float radius_ = 4, strength_ = 0.5f, blend_ = 0.5f, target_ = 0, scale_ = 8, offset_ = 0, hardness_ = 0.2f, angle_ = 0;
     bool detail_ = true, pngDetail_ = false, stamped_ = false;
-    std::string file_ = "maps/heightmap.png";
+    std::string file_ = "maps/heightmap.png", message_;
     bool owner_ = false, painting_ = false, pick_ = false;
     float lastX_ = -1e9f, lastZ_ = -1e9f;
     render::float3 lastDir_;

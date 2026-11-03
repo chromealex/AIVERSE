@@ -763,6 +763,7 @@ void Editor::handleShortcuts() {
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Z, false) && !playing()) { if (io.KeyShift) doc().redo(); else doc().undo(); selection = {}; }
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Y, false) && !playing()) { doc().redo(); selection = {}; }
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) { if (!playing()) startPlay(lastPlaySlot_); else stopPlay(); }
+    if (mod && ImGui::IsKeyPressed(ImGuiKey_B, false)) focusWindow("build");
 }
 
 void Editor::drawDockspace() {
@@ -849,6 +850,8 @@ void Editor::frame(gfx::Device& dev, double dt) {
             if (visible) w->draw(*this);
             ImGui::End();
         }
+        if (pendingFocusFrames_ > 0 && --pendingFocusFrames_ == 0)
+            for (auto& id : pendingFocus_) if (EditorWindow* w = window(id)) ImGui::SetWindowFocus(w->imguiName());
         drawStatusBar();
         drawActivityToasts();
         if (focusFirst_ > 0) --focusFirst_;

@@ -186,6 +186,10 @@ public:
     void resetLayout() { resetLayout_ = true; }
     void launchOnDevice(const std::string& device, bool landscape);
     void focusWindow(const std::string& id);   // open + bring to front (by stable id)
+    // Windows of a top-menu group (EditorWindow::group(); "other": unknown groups), default ones first.
+    std::vector<EditorWindow*> windowsOf(const std::string& group) const;
+    // Workspace: the default windows + all windows of the group, layout rebuilt, the group's windows in front.
+    void openWorkspace(const std::string& group);
     EditorTheme& theme() { return theme_; }
 
     // statistics
@@ -196,6 +200,8 @@ public:
 
 private:
     void drawMenuBar();
+    void drawWindowItems(const std::string& group);
+    bool isWindowInFront(EditorWindow* w) const;
     void drawTopBarControls();   // breadcrumb, play controls, MCP pill (inside the main menu bar)
     void drawPlayControls();
     void drawDockspace();
@@ -232,6 +238,8 @@ private:
     int lastPlaySlot_ = 0;       // what the top bar Play button starts (0 = bots)
     EditorTheme theme_;
     int focusFirst_ = 0;
+    std::vector<std::string> pendingFocus_;   // openWorkspace: tabs to bring to front once docked
+    int pendingFocusFrames_ = 0;
     std::vector<std::unique_ptr<EditorWindow>> windows_;
 
     game::MapGrid grid_;

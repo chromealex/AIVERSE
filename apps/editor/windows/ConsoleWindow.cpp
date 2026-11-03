@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string_view>
 #include "../Editor.h"
+#include "../EditorUtil.h"
 #include "imgui_internal.h" // the multiline field's child window: scroll + line tints
 
 namespace rts::editor {
@@ -35,30 +36,62 @@ void openFolder(const std::string& dir) {
 class ConsoleWindow : public EditorWindow {
 public:
     const char* id() const override { return "console"; }
-    const char* title() const override { return "Console"; }
+    const char* title() const override { return "Консоль"; }
+    const char* group() const override { return "service"; }
     int order() const override { return 3; }
     const char* dockArea() const override { return "bottom"; }
 
     void draw(Editor& ed) override {
         // Lua script errors of the running play-test (file:line); the full script log: window "Скрипты"
         if (auto* m = ed.simModule(); m && m->scripts() && m->scripts()->errorCount() > 0) {
+            std::string errs;
             for (auto& e : m->scripts()->log())
-                if (e.error) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1), "[script t=%u] %s", e.tick, e.text.c_str());
-            ImGui::Separator();
+                if (e.error) errs += (errs.empty() ? "" : "\n") + std::string("t=") + std::to_string(e.tick) + "  " + e.text;
+            ui::callout(ui::Tone::Error, "Ошибки скриптов теста:\n" + errs);
         }
         auto& ws = ed.ws();
-        log_ = ws.buildLog();
+        const std::string& full = ws.buildLog();
         const bool running = ws.building();
-        if (running) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "%s", ws.runLabel().rfind("toolchain-", 0) == 0 ? "Идёт установка…" : "Идёт сборка…");
-        else if (log_.empty()) ImGui::TextDisabled(ICON_CONSOLE "  Сборка ещё не запускалась (окно «Сборка»)");
-        ImGui::SameLine();
-        if (!log_.empty() && ImGui::SmallButton(ICON_COPY " Копировать журнал")) ImGui::SetClipboardText(log_.c_str());
-        ImGui::SameLine();
-        if (ImGui::SmallButton(ICON_FOLDER_OPEN " Открыть папку логов")) openFolder(ws.logsDir());
-        if (std::string f = ws.lastLogFile(); !f.empty()) {
+        // toolbar: state, filter, counts, actions
+        int errors = 0, warnings = 0;
+        for (const char *b = full.c_str(), *end = b + full.size(); b < end;) {
+            const char* e = static_cast<const char*>(std::memchr(b, '\n', size_t(end - b)));
+            if (!e) e = end;
+            Kind k = lineKind(b, e);
+            errors += k == Kind::Error; warnings += k == Kind::Warning;
+            b = e + 1;
+        }
+        if (running) ui::toneText(ui::Tone::Warn, "%s %s", ICON_REFRESH, ws.runLabel().rfind("toolchain-", 0) == 0 ? "Идёт установка…" : "Идёт сборка…");
+        else if (full.empty()) ImGui::TextDisabled(ICON_CONSOLE "  Сборка ещё не запускалась (меню «Сборка»)");
+        else if (ws.buildResult() != 0) ui::toneText(ui::Tone::Error, "%s Последний запуск завершился с ошибкой", ICON_ALERT);
+        else ui::toneText(ui::Tone::Ok, "%s Последний запуск успешен", ICON_CIRCLE_CHECK);
+        if (!full.empty()) {
+            ImGui::SameLine(0, 16);
+            static const char* filters[] = {"Всё", "Ошибки", "Предупреждения"};
+            ui::segmented("##flt", filter_, filters, 3, ImGui::GetFontSize() * 18);
             ImGui::SameLine();
-            ImGui::TextDisabled("%s", f.c_str());
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Файл журнала этой сборки (последняя — logs/build-last.log)");
+            if (errors) { ImGui::SameLine(); char t[32]; std::snprintf(t, sizeof t, "%s %d", ICON_ALERT, errors); ui::badge(t, ui::toneColor(ui::Tone::Error)); }
+            if (warnings) { ImGui::SameLine(); char t[32]; std::snprintf(t, sizeof t, "%s %d", ICON_WARNING, warnings); ui::badge(t, ui::toneColor(ui::Tone::Warn)); }
+        }
+        // actions on the right
+        const float bw = ImGui::GetFrameHeight();
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8, ImGui::GetWindowContentRegionMax().x - bw * 2 - 6));
+        ImGui::BeginDisabled(full.empty());
+        if (ui::toolButton(ICON_COPY, "Копировать журнал")) ImGui::SetClipboardText(full.c_str());
+        ImGui::EndDisabled();
+        ImGui::SameLine(0, 4);
+        if (ui::toolButton(ICON_FOLDER_OPEN, ("Открыть папку логов\n" + ws.lastLogFile()).c_str())) openFolder(ws.logsDir());
+        // the shown text: the whole log or only the matching lines
+        if (filter_ == 0) log_ = full;
+        else {
+            log_.clear();
+            for (const char *b = full.c_str(), *end = b + full.size(); b < end;) {
+                const char* e = static_cast<const char*>(std::memchr(b, '\n', size_t(end - b)));
+                if (!e) e = end;
+                Kind k = lineKind(b, e);
+                if ((filter_ == 1 && k == Kind::Error) || (filter_ == 2 && k == Kind::Warning)) log_.append(b, e).push_back('\n');
+                b = e + 1;
+            }
         }
         // Read-only multiline field over the log: selectable, Cmd/Ctrl+C, Cmd/Ctrl+A.
         const char* label = "##buildlog";
@@ -99,6 +132,7 @@ private:
     std::string log_;
     size_t lastSize_ = 0;
     bool follow_ = true;
+    int filter_ = 0;
 };
 
 RTS_EDITOR_WINDOW(ConsoleWindow);
