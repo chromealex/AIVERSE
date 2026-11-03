@@ -50,6 +50,8 @@ void Editor::drawMenuBar() {
     if (ImGui::BeginMenu("Проект")) {
         if (item(ICON_PLUS, "Новый проект…")) showProjectHub(1);
         if (item(ICON_FOLDER_OPEN, "Проекты…")) showProjectHub(0);
+        for (auto& window : windows_) if (std::string(window->id()) == "project_import")
+            if (item(ICON_FOLDER_OPEN, window->title())) focusWindow("project_import");
         if (menu(ICON_CLOCK, "Недавние")) {
             int n = 0;
             for (auto& pr : recentProjects()) {

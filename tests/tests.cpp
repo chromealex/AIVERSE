@@ -12600,6 +12600,21 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
     }
 }
 
+TEST(project_import_mcp_bridge) {
+    rts::editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    Json p = Json::object();
+    p.set("path", Json::string(std::string(RTS_SOURCE_DIR) + "/tests/data/port/unity"));
+    Json scan = ws.call("port_scan", p);
+    CHECK(scan.getBool("ok"));
+    CHECK(scan.getStr("engine") == "unity");
+    CHECK(scan["scenes"].size() == 1);
+    p.set("path", Json::string(std::string(RTS_SOURCE_DIR) + "/tests/data/port/missing"));
+    Json missing = ws.call("port_scan", p);
+    CHECK(!missing.getBool("ok", true));
+    CHECK(missing.has("error"));
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]
