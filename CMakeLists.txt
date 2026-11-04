@@ -1053,3 +1053,8 @@ if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
         set_tests_properties(project_importer PROPERTIES ENVIRONMENT "RTS_PORT_HEADLESS=$<TARGET_FILE:rts_headless>")
     endif()
 endif()
+
+# Editor: play the project in the game client (apps/editor/EditorClientPlay.cpp)
+if(TARGET rts_editor)
+    target_sources(rts_editor PRIVATE apps/editor/EditorClientPlay.cpp)
+endif()

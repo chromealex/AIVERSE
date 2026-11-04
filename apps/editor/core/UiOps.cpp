@@ -142,6 +142,8 @@ std::vector<std::string> gameLanguages(const Workspace& ws) {
     return out;
 }
 
+} // namespace
+
 // directory that holds the engine assets as "engine/..." next to the client (the client reads them
 // relative to its working directory when RTS_CONTENT points at a project folder)
 fs::path engineAssetsRoot(const Workspace& ws, const std::string& exe) {
@@ -159,6 +161,8 @@ fs::path engineAssetsRoot(const Workspace& ws, const std::string& exe) {
     fs::copy(src, root / "engine", fs::copy_options::recursive | fs::copy_options::update_existing, ec);
     return root;
 }
+
+namespace {
 
 bool readPpm(const fs::path& p, branding::Image& img) {
     std::ifstream f(p, std::ios::binary);

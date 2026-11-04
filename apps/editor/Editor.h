@@ -65,6 +65,7 @@ public:
         std::string engineDir;    // engine checkout (templates/, docs/, rtsbuild)
         std::string buildTool;    // path to rtsbuild
         std::string gameExe;      // path to the game client (device runs)
+        std::string ownGameExe;   // RTSGame built in the same tree as this editor (same C++ modules); may be empty
         std::string mcpTool;      // path to rtsmcp (one-click agent setup in the Agent window)
         std::string editorExe;    // this executable (rtsmcp launches it when the editor isn't running)
         std::string openMap;
@@ -185,6 +186,9 @@ public:
     const std::vector<std::unique_ptr<EditorWindow>>& windows() const { return windows_; }
     void resetLayout() { resetLayout_ = true; }
     void launchOnDevice(const std::string& device, bool landscape);
+    // The project in a separate game client window (RTSGame with RTS_CONTENT = project), as players get it:
+    // the game's own menus, scripts and input (EditorClientPlay.cpp).
+    void launchClient();
     void focusWindow(const std::string& id);   // open + bring to front (by stable id)
     // Windows of a top-menu group (EditorWindow::group(); "other": unknown groups), default ones first.
     std::vector<EditorWindow*> windowsOf(const std::string& group) const;

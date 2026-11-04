@@ -111,6 +111,8 @@ private:
         const float bottom = ui::beginToolbar();
         ui::beginSegment();
         if (!ed.playing()) {
+            if (ui::toolButton(ICON_EXTERNAL, "Играть в клиенте игры: отдельное окно RTSGame с меню, скриптами и вводом игры, как у игроков")) ed.launchClient();
+            ImGui::SameLine();
             if (ui::toolButton(ICON_BOT, "Боты против ботов")) ed.startPlay(0);
             for (size_t p = 0; p < ed.doc().data.players.size(); ++p) {
                 if (ed.doc().data.players[p].waves) continue;

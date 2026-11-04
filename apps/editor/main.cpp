@@ -99,6 +99,7 @@ int rtsMain(int argc, char** argv) {
         opt.editorExe = self.lexically_normal().string();
     }
     opt.gameExe = findNear(toolDir, {"RTSGame", "RTSGame.app/Contents/MacOS/RTSGame", "RTSGame.exe", "Release/RTSGame.exe"});
+    opt.ownGameExe = findNear(exeDir(argv[0]), {"RTSGame", "RTSGame.app/Contents/MacOS/RTSGame", "RTSGame.exe", "Release/RTSGame.exe"});
 
     g_editor = std::make_unique<editor::Editor>(opt);
     platform::AppConfig cfg;
