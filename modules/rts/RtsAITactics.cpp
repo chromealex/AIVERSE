@@ -526,7 +526,40 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
     for (Entity e : army) if (!inList(wave_units_, e) && !inList(scouts_, e) && !inList(invaders_, e)) home.push_back(e);
     for (Entity e : idleArmy) if (!inList(wave_units_, e) && !inList(scouts_, e) && !inList(invaders_, e)) homeIdle.push_back(e);
     const int hb = S ? S->bodyAt(home_) : 0;
+    // scripted wave sides (heroes from the surface) are everybody's enemy, not the opponent to beat: they don't stop
+    // finishing the opponent and are second choice as a target
+    auto waveSide = [&](uint8_t pl) { return std::find(gs.wavePlayers.begin(), gs.wavePlayers.end(), pl) != gs.wavePlayers.end(); };
     auto bodyOk = [&](Entity e, Vec3 p) { return !S || S->bodyAt(w.get<Transform>(e).pos) == S->bodyAt(p); };
+    // can our ground army get there at all? (a sealed cave of heroes in the middle of a dungeon map kept the army
+    // attack-moving at it forever: never idle, never a wave). Flat maps only, computed on first use this think.
+    std::vector<uint8_t> reach;
+    auto reachable = [&](Vec3 p, const UnitType& t) {
+        if (S || (t.layer & kLayerAir)) return true;
+        if (reach.empty()) {
+            reach.assign(g.flags.size(), 0);
+            int hx, hy; g.cellXY(home_, hx, hy);
+            g.nearestPassable(hx, hy, kLayerGround, 6);
+            if (!g.inside(hx, hy)) { reach.assign(g.flags.size(), 1); return true; }
+            std::vector<int> q{g.index(hx, hy)};
+            reach[size_t(q[0])] = 1;
+            static const int dx4[4] = {1, -1, 0, 0}, dy4[4] = {0, 0, 1, -1};
+            for (size_t qi = 0; qi < q.size(); ++qi) {
+                const int x = q[qi] % g.w, y = q[qi] / g.w;
+                for (int k = 0; k < 4; ++k) {
+                    const int nx = x + dx4[k], ny = y + dy4[k];
+                    if (!g.inside(nx, ny) || reach[size_t(g.index(nx, ny))] || !g.canStep(x, y, nx, ny, kLayerGround)) continue;
+                    reach[size_t(g.index(nx, ny))] = 1;
+                    q.push_back(g.index(nx, ny));
+                }
+            }
+        }
+        // a structure stands on blocked cells: any reachable cell next to it will do
+        int cx, cy; g.cellXY(p, cx, cy);
+        const int r = t.structure ? std::max(t.footprintW, t.footprintH) / 2 + 1 : 1;
+        for (int y = cy - r; y <= cy + r; ++y)
+            for (int x = cx - r; x <= cx + r; ++x) if (g.inside(x, y) && reach[size_t(g.index(x, y))]) return true;
+        return false;
+    };
 
     // ---- defence: hostile units close to our structures
     {
@@ -541,19 +574,31 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
             if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || (u.flags & kUnitOffMap)) return;
             const UnitType& t = R.types[u.type];
             if (t.structure || t.weapons.empty()) return;
+            if (!reachable(tr.pos, t)) return;
             for (Vec3 p : mine)
                 if (dist(p, tr.pos) < Fixed::fromInt(14)) { sum += tr.pos; ++n; threat += strengthOf(t, u); return; }
         });
         if (n > 0) {
             if (n >= 3) raided_ = true;
             const Vec3 at = sum / Fixed::fromInt(n);
-            std::vector<Entity> go;
-            int64_t ours = 0;
+            // enough defenders to beat it twice over, nearest first (the rest stay free for waves: a war of skirmishes
+            // at the border kept every unit of both keepers busy defending and no wave ever left)
+            std::vector<std::pair<Fixed, Entity>> cand;
+            int64_t ours = 0, engaged = 0;
             for (Entity e : home) {
                 if (!bodyOk(e, at)) continue;
-                ours += strengthOf(R.types[w.get<Unit>(e).type], w.get<Unit>(e));
+                const int64_t st = strengthOf(R.types[w.get<Unit>(e).type], w.get<Unit>(e));
+                ours += st;
                 auto* ord = w.tryGet<Orders>(e);
-                if (ord && (idleOrders(*ord) || ord->queue.front().type == OrderType::Move)) go.push_back(e);
+                if (ord && (idleOrders(*ord) || ord->queue.front().type == OrderType::Move)) cand.push_back({dist(w.get<Transform>(e).pos, at), e});
+                else if (ord && !ord->queue.empty() && (ord->queue.front().type == OrderType::AttackMove || ord->queue.front().type == OrderType::Attack)) engaged += st;
+            }
+            std::sort(cand.begin(), cand.end(), [](auto& a, auto& b) { return a.first != b.first ? a.first < b.first : a.second.index < b.second.index; });
+            std::vector<Entity> go;
+            for (auto& [d, e] : cand) {
+                if (engaged > threat * 2) break;
+                go.push_back(e);
+                engaged += strengthOf(R.types[w.get<Unit>(e).type], w.get<Unit>(e));
             }
             attack(go, at);
             for (Entity e : go) homeIdle.erase(std::remove(homeIdle.begin(), homeIdle.end(), e), homeIdle.end());
@@ -573,7 +618,7 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
         Entity tgt;
         Fixed tgtHp{};
         w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& tr) {
-            if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || (u.flags & kUnitOffMap)) return;
+            if (o.player == kHostileNeutral || waveSide(o.player) || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || (u.flags & kUnitOffMap)) return;
             if (S && S->bodyAt(tr.pos) != hb) return;
             const UnitType& t = R.types[u.type];
             if (!t.structure) { if (!t.weapons.empty() && !t.worker) armed = true; return; }
@@ -605,14 +650,14 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
     const bool maxed = eco.supplyCap.raw > 0 && eco.supplyUsed * 10 >= eco.supplyCap * 9 && eco.supplyCap * 10 >= R.supplyCap * 8;
     if (maxed && !finishing) needed = std::min(needed, std::max(4, int(home.size()) * 3 / 4));
     // long stalemate: an army that stopped growing (upkeep eats the income) never reaches a growing wave size
-    if (escalation_ >= 2 && !finishing && !defend) needed = std::min(needed, std::max(4, cfg_.firstAttackArmy * 3 / 4));
+    if (escalation_ >= 2 && !finishing && !defend) needed = std::min(needed, std::max({4, cfg_.firstAttackArmy * 3 / 4, int(home.size()) * 3 / 4}));
     // clearly stronger than everything the enemy fields: go now with what we have
     if (!defend && hasEnemy_ && int(homeIdle.size()) >= 3 && now > 180 * rate) {   // (not with the start kit)
         int64_t ours = 0, theirs = 0;
         for (Entity e : army) ours += strengthOf(R.types[w.get<Unit>(e).type], w.get<Unit>(e));
         w.each<Unit, Owner>([&](Entity, Unit& u, Owner& o) {
             const UnitType& t = R.types[u.type];
-            if (o.player == kHostileNeutral || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || t.weapons.empty() || t.worker) return;
+            if (o.player == kHostileNeutral || waveSide(o.player) || !m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || t.weapons.empty() || t.worker) return;
             theirs += strengthOf(t, u);   // towers count too
         });
         // escalating (nothing broke for minutes): a smaller edge is enough - escalation also asks for bigger waves,
@@ -696,7 +741,7 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
                     if (!m.hostile(sim, player_, o.player) || u.hp.raw <= 0 || (u.flags & kUnitOffMap)) return;
                     if (S && S->bodyAt(tr.pos) != S->bodyAt(c)) return;
                     Fixed d = dist(tr.pos, c) + (R.types[u.type].structure ? Fixed{} : Fixed::fromInt(8));
-                    if (o.player == kHostileNeutral) d += Fixed::fromInt(20);
+                    if (o.player == kHostileNeutral || waveSide(o.player)) d += Fixed::fromInt(20);
                     if (!best.valid() || d < bd) { best = t; bd = d; }
                 });
                 if (best.valid()) {
@@ -743,9 +788,10 @@ void RtsAI::tactics(Simulation& sim, RtsModule& m, std::vector<Entity>& idleArmy
             if (defend && dist(t.pos, home_) > Fixed::fromInt(25)) return;
             if (S && S->bodyAt(t.pos) != hb) return;   // other bodies: invasions (planetOps)
             const UnitType& ut = R.types[u.type];
+            if (!reachable(t.pos, ut)) return;
             // the nearest enemy, structures a little preferred: their army in the field is a fine target too
             Fixed d = dist(t.pos, c) - (ut.structure ? Fixed::fromInt(5) : Fixed{});
-            if (o.player == kHostileNeutral) d += Fixed::fromInt(10);
+            if (o.player == kHostileNeutral || waveSide(o.player)) d += Fixed::fromInt(10);
             if (escalation_ >= 2 && (ut.worker || ut.dropoffMask || !ut.income.empty())) d -= Fixed::fromInt(8);   // the economy
             d += Fixed::fromRatio(int64_t(rng_.below(64)), 32);   // up to 2 cells: no fixed preference
             if (!best.valid() || d < bestD) { best = e; bestD = d; }

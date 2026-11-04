@@ -1,0 +1,35 @@
+<rml>
+<head>
+    <title>wiz_tutorial</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <style>
+        body { width: 100%; height: 100%; pointer-events: none; }
+        #tut { position: absolute; left: 50%; top: 52dp; width: 440dp; max-width: 92%; margin-left: -220dp;
+               padding: 10dp 14dp; pointer-events: auto; }
+        #tut .head { display: flex; justify-content: space-between; margin-bottom: 4dp; }
+        #tut .title { font-weight: bold; }
+        #tut .count { opacity: 0.7; }
+        #tut .text { font-size: 17dp; line-height: 1.3; }
+        #tut .buttons { display: flex; justify-content: flex-end; margin-top: 8dp; }
+        #tut button { margin-left: 8dp; }
+        #tut .progress { opacity: 0.8; margin-top: 4dp; }
+        @media (orientation: portrait) { #tut { top: 64dp; } }
+    </style>
+</head>
+<!-- Game wizard kit: the tutorial panel. Values from scripts/view/wizard/tutorial_view.lua (ui.set "tut"), buttons send
+     the hidden script commands wiz_tut_next / wiz_tut_skip (rules "commands", "card": false). -->
+<body>
+<div class="root" data-model="script">
+    <div id="tut" class="panel">
+        <div class="head"><span class="title">{{tut.title}}</span><span class="count">{{tut.step}} / {{tut.total}}</span></div>
+        <div class="text">{{tut.text}}</div>
+        <div class="progress" data-if="tut.need > 1">{{tut_n}} / {{tut.need}}</div>
+        <div class="buttons">
+            <button class="secondary" data-if="tut.skip" data-event-click="send('wiz_tut_skip')">@wiz.tut.skip</button>
+            <button class="primary" data-if="tut.next" data-event-click="send('wiz_tut_next')">@wiz.tut.next</button>
+        </div>
+    </div>
+</div>
+</body>
+</rml>

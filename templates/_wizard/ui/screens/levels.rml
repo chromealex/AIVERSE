@@ -1,0 +1,39 @@
+<rml>
+<head>
+    <title>levels</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../screens.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <script>
+        require('wizard_meta')
+        ui.screen("levels", {open = function() WizMeta.refresh() end})
+    </script>
+</head>
+<body>
+<div class="root" data-model="meta">
+    <div id="menu-bg"></div>
+    <div class="screen" data-attr-style="safeStyle">
+        <div class="screen-header">
+            <button class="back" onclick="ui.back()">@meta.back</button>
+            <div class="screen-title">@wiz.levels</div>
+            <div class="spacer"></div>
+            <div class="currencies"><span class="currency" data-for="c : wizCur">{{c.value}} <span class="muted">{{c.name}}</span></span></div>
+        </div>
+        <div class="screen-body">
+            <div class="list">
+                <div class="list-row" data-if="wiz.tutorial">
+                    <div class="grow"><span>@wiz.tut.title</span> <span class="muted" data-if="wiz.tutorialDone">✓</span></div>
+                    <button data-event-click="call('WizMeta.startTutorial')">@meta.play</button>
+                </div>
+                <div class="list-row" data-for="lv : wizLevels" data-class-locked="lv.locked">
+                    <div class="grow">{{lv.index}}. {{lv.title}} <span class="muted">{{lv.reward}}</span></div>
+                    <span class="badge" data-if="lv.boss">@wiz.boss</span>
+                    <span class="badge" data-if="lv.stars > 0">{{lv.stars}} / 3</span>
+                    <button class="primary" data-if="!lv.locked" data-event-click="call('WizMeta.startLevel', lv.index)">@meta.play</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</rml>

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
@@ -111,6 +112,8 @@ void Editor::init(gfx::Device& dev) {
         if (!ws_.openGame(opt_.projectDir, &err)) { status = "Ошибка проекта: " + err; showPicker_ = true; }
     } else showPicker_ = true;
     initFileAssoc();
+    registerNativeBuildOps(ws_, opt_.editorExe);   // up-to-date check against this binary
+    checkNativeModules(false);
     view_.setContentBase(ws_.project.dir.empty() ? "" : ws_.project.dir + "/");
     view_.init(dev, rules(), projectReader(ws_.project.dir));
     for (auto& w : view_.warnings()) ws_.log("view", w, true);
@@ -142,6 +145,7 @@ void Editor::init(gfx::Device& dev) {
 
 void Editor::shutdown() {
     if (!dev_) return;
+    clientHost_.stop();
     gameFxBridge_.detach();
     sim_.reset();
     gameFx_.shutdown();
@@ -179,6 +183,7 @@ void Editor::openGame(const std::string& idOrDir) {
     showPicker_ = false;
     fitScene();
     status = "Игра: " + ws_.project.manifest.getStr("name", idOrDir);
+    checkNativeModules(false);
 }
 
 void Editor::reloadFx() {
@@ -383,6 +388,11 @@ void Editor::syncGrid() {
     grid_.corner = d.corners;
     for (int i = 0; i < d.w * d.h; ++i) {
         grid_.flags[size_t(i)] = game::cellFlagsFromChar(d.cells[size_t(i)]);
+        // diggable rock (rules "diggable"): solid cells drawn as rock blocks, like the client does
+        const int dk = rules().findDiggable(d.cells[size_t(i)]);
+        grid_.dig[size_t(i)] = dk >= 0 ? uint8_t(dk + 1) : 0;
+        grid_.digHp[size_t(i)] = dk >= 0 ? rules().diggables[size_t(dk)].hardness : Fixed{};
+        if (dk >= 0) grid_.flags[size_t(i)] = 0;
         grid_.height[size_t(i)] = d.heights[size_t(i)];
         grid_.level[size_t(i)] = d.levels[size_t(i)];
         grid_.region[size_t(i)] = d.regions[size_t(i)] == '.' ? int16_t(-1) : int16_t(d.regions[size_t(i)]);
@@ -390,6 +400,21 @@ void Editor::syncGrid() {
         grid_.fieldRes[size_t(i)] = fr >= 0 ? int16_t(std::max(0, rules().findResource(d.fieldResources[size_t(fr)]))) : int16_t(-1);
         grid_.fieldAmt[size_t(i)] = Fixed::fromInt(d.fieldAmt[size_t(i)]);
     }
+    // starting territory (rules territory.startRadius around owned structures), so the scene shows the claimed floor
+    std::fill(grid_.territory.begin(), grid_.territory.end(), uint8_t(0));
+    if (const int r = rules().territory.startRadius; rules().territory.enabled && r > 0 && !d.planet())
+        for (const auto& e : d.entities) {
+            const int ti = rules().findType(e.type);
+            if (e.owner <= 0 || e.owner > 8 || ti < 0 || !rules().types[size_t(ti)].structure) continue;
+            const game::UnitType& t = rules().types[size_t(ti)];
+            int x0, y0; game::RtsModule::footprintAt(t, {Fixed::fromRatio(int64_t(std::lround(e.x * 1000)), 1000), Fixed{}, Fixed::fromRatio(int64_t(std::lround(e.z * 1000)), 1000)}, x0, y0);   // editor only: float -> fixed
+            for (int y = y0 - r; y < y0 + t.footprintH + r; ++y)
+                for (int x = x0 - r; x < x0 + t.footprintW + r; ++x) {
+                    if (!grid_.inside(x, y)) continue;
+                    const size_t i = size_t(grid_.index(x, y));
+                    if ((grid_.flags[i] & game::kCellGround) && !grid_.territory[i]) grid_.territory[i] = uint8_t(e.owner);
+                }
+        }
     view_.setTiles(d.extra["tiles"]);
     {   // planets: the world block (MapDoc bodies); sculpt / paint rebuild only what changed
         const Json world = d.planet() ? doc().worldJson() : Json();
@@ -646,6 +671,8 @@ void Editor::applyChanges() {
 // ============================ play-test ============================
 
 void Editor::startPlay(int humanSlot) {
+    if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
+    stopClientPlay();
     auto issues = doc().validate(rules(), ws_.project.rulesJson);
     // every problem goes to the console / editor.log (the status bar shows only the first error)
     std::string firstError;
@@ -747,6 +774,7 @@ void Editor::samplePlayStats() {
 
 void Editor::event(const platform::Event& e) {
     ui_.handleEvent(e);
+    clientHost_.event(e);   // the hosted game client: pointer inside its screen, keys while the Game window has focus
     if (e.type == platform::EventType::QuitRequested) quit_ = true;
     if (e.type == platform::EventType::OpenFile) requestOpenProject(e.path);   // double-clicked .rtsproj (macOS)
 }
@@ -758,7 +786,13 @@ void Editor::handleShortcuts() {
     if (mod && ImGui::IsKeyPressed(ImGuiKey_S, false) && !doc().path.empty()) saveMap(doc().path);
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Z, false) && !playing()) { if (io.KeyShift) doc().redo(); else doc().undo(); selection = {}; }
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Y, false) && !playing()) { doc().redo(); selection = {}; }
-    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) { if (!playing()) startPlay(lastPlaySlot_); else stopPlay(); }
+    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+        if (clientPlaying()) stopClientPlay();
+        else if (playing()) stopPlay();
+        else if (prefersClientPlay()) startClientPlay();
+        else startPlay(lastPlaySlot_);
+    }
+    if (mod && ImGui::IsKeyPressed(ImGuiKey_B, false)) focusWindow("build");
 }
 
 void Editor::drawDockspace() {
@@ -825,6 +859,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     theme_.applyPending();
     ui_.newFrame(dt);
     handleShortcuts();
+    pollGameWizard();   // the game wizard's agent: progress into the activity feed / status bar
     if (showPicker_) {
         drawGamePicker();
     } else {
@@ -845,11 +880,14 @@ void Editor::frame(gfx::Device& dev, double dt) {
             if (visible) w->draw(*this);
             ImGui::End();
         }
+        if (pendingFocusFrames_ > 0 && --pendingFocusFrames_ == 0)
+            for (auto& id : pendingFocus_) if (EditorWindow* w = window(id)) ImGui::SetWindowFocus(w->imguiName());
         drawStatusBar();
         drawActivityToasts();
         if (focusFirst_ > 0) --focusFirst_;
     }
     drawOpenRequest();
+    drawNativeBuild();
     // the screen: only the UI (3D views were rendered offscreen by their windows)
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.10f; pass.clearColor[1] = 0.11f; pass.clearColor[2] = 0.13f;

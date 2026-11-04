@@ -1,0 +1,9 @@
+{
+  "hp": ["health.max", "number"], "health": ["health.max", "number"], "maxHealth": ["health.max", "number"],
+  "speed": ["move.speed", "distance"], "moveSpeed": ["move.speed", "distance"], "NavMeshAgent.speed": ["move.speed", "distance"],
+  "damage": ["weapons.0.damage", "number"], "attackDamage": ["weapons.0.damage", "number"],
+  "range": ["weapons.0.range", "distance"], "attackRange": ["weapons.0.range", "distance"],
+  "cooldown": ["weapons.0.cooldown", "seconds"], "fireRate": ["weapons.0.cooldown", "reciprocal"],
+  "cost": ["cost.gold", "number"], "price": ["cost.gold", "number"], "gold": ["cost.gold", "number"],
+  "buildTime": ["cost.time", "seconds"], "trainTime": ["cost.time", "seconds"]
+}

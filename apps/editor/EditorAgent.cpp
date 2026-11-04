@@ -117,7 +117,7 @@ void Editor::deliverShots(gfx::Device& dev) {
                 r.set("png_base64", Json::string(base64(png)));
                 r.set("width", Json::number(int64_t(ow)));
                 r.set("height", Json::number(int64_t(oh)));
-                std::string where = pending[k].device == "game" ? "окно Game" : pending[k].device == "scene" ? "окно Scene" : "весь редактор";
+                std::string where = pending[k].device == "game" ? "окно «Игра»" : pending[k].device == "scene" ? "окно «Сцена»" : "весь редактор";
                 r.set("summary", Json::string("Скриншот: " + where));
             }
             server_.send(pending[k].client, reply(Json::number(pending[k].id), r).dump(-1));
@@ -155,18 +155,35 @@ void Editor::registerGuiOps() {
             focusScene(float(p["x"].toDouble()), float(p["z"].toDouble()), float(p["distance"].toDouble(-1)));
             return okSummary("Камера: (" + std::to_string(int(p["x"].toDouble())) + ", " + std::to_string(int(p["z"].toDouble())) + ")");
         });
-    add("play_start", "Play-test the open map in the Game window: bots on every side, or the user plays slot 'human'. The user watches live.",
-        R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer"}, "device": {"type": "string"}}})", [this, okSummary](const Json& p) {
+    add("play_start", "Play-test the open map in the Game window: bots on every side, or the user plays slot 'human'. The user watches live. "
+        "With client=true the game runs as in the game client instead (its own menus / meta screens of ui/main.lua, view scripts, script UI, input): "
+        "the user plays it in the Game window.",
+        R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer"}, "device": {"type": "string"}, "client": {"type": "boolean"}}})", [this, okSummary](const Json& p) {
             if (p.has("device")) gameDevice = p.getStr("device");
+            if (p["client"].boolean(false)) {
+                startClientPlay();
+                if (!clientPlaying()) throw std::runtime_error(status);
+                return okSummary("Игра как в клиенте запущена в окне «Игра»");
+            }
             startPlay(int(p["human"].integer(0)));
             if (!playing()) throw std::runtime_error(status);
             playSpeed = float(p["speed"].toDouble(1));
             return okSummary("Тест запущен");
         });
-    add("play_stop", "Stop the play-test.", "{}", [this, okSummary](const Json&) { stopPlay(); return okSummary("Тест остановлен"); });
+    add("play_stop", "Stop the play-test (or the game running as in the client).", "{}", [this, okSummary](const Json&) { stopClientPlay(); stopPlay(); return okSummary("Тест остановлен"); });
     add("play_status", "State of the play-test: time, result, per-player units/structures/resources.", "{}", [this](const Json&) {
         Json r = Json::object();
         r.set("playing", Json::fromBool(playing()));
+        if (clientPlaying()) {   // as in the client: the game's own flow; a match only while one runs
+            r.set("client", Json::fromBool(true));
+            r.set("loading", Json::fromBool(clientHost_.loading()));
+            r.set("inMatch", Json::fromBool(clientHost_.inMatch()));
+            if (Simulation* cs = clientHost_.simulation()) {
+                r.set("seconds", Json::number(double(cs->tick()) / cs->tickRate(), 1));
+                r.set("result", Json::number(int64_t(cs->result())));
+            }
+            return r;
+        }
         if (!sim_) return r;
         auto& gs = simModule()->state(*sim_);
         r.set("seconds", Json::number(double(sim_->tick()) / sim_->tickRate(), 1));
@@ -233,20 +250,24 @@ void Editor::registerGuiOps() {
             if (auto* w = window("game")) w->open = true;
             return okSummary("Устройство: " + gameDevice + (gameSafeArea ? ", safe area видна" : ""));
         });
-    add("editor_windows", "List editor windows (id, title, open).", "{}", [this](const Json&) {
+    add("editor_windows", "List editor windows (id, title, group = top menu: scene | world | look | logic | publish | service, open).", "{}", [this](const Json&) {
         Json arr = Json::array();
         for (auto& w : windows_) {
             Json j = Json::object();
-            j.set("id", Json::string(w->id())); j.set("title", Json::string(w->title())); j.set("open", Json::fromBool(w->open));
+            j.set("id", Json::string(w->id())); j.set("title", Json::string(w->title())); j.set("group", Json::string(w->group()));
+            j.set("open", Json::fromBool(w->open));
             arr.push(j);
         }
         Json r = Json::object();
         r.set("windows", arr);
         return r;
     });
-    add("editor_window", "Open or close an editor window by id, or 'resetLayout': true for the default layout.",
-        R"({"properties": {"id": {"type": "string"}, "open": {"type": "boolean"}, "resetLayout": {"type": "boolean"}}})", [this, okSummary](const Json& p) {
+    add("editor_window", "Open or close an editor window by id, 'resetLayout': true for the default layout, or 'workspace': a group "
+        "(scene | world | look | logic | publish) — the default windows plus that group's windows in front.",
+        R"({"properties": {"id": {"type": "string"}, "open": {"type": "boolean"}, "resetLayout": {"type": "boolean"},
+            "workspace": {"type": "string", "enum": ["scene", "world", "look", "logic", "publish"]}}})", [this, okSummary](const Json& p) {
             if (p.getBool("resetLayout", false)) { for (auto& w : windows_) w->open = w->openByDefault(); resetLayout_ = true; return okSummary("Раскладка сброшена"); }
+            if (p.has("workspace")) { openWorkspace(p.getStr("workspace")); return okSummary(status); }
             EditorWindow* w = window(p.getStr("id"));
             if (!w) throw std::runtime_error("unknown window (see editor_windows)");
             w->open = p.getBool("open", true);

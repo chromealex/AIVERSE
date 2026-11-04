@@ -164,8 +164,10 @@ void TerrainRenderer::shutdown(gfx::Device& dev) {
     chunks_.clear();
     for (auto* l : {&apron_}) { dev.destroyBuffer(l->vb); dev.destroyBuffer(l->ib); *l = {}; }
     dev.destroyBuffer(water_.vb); dev.destroyBuffer(water_.ib); water_ = {};
-    for (auto t : {cellTex_, dynTex_, splatTex_, visionTex_, white_, flatN_, gray_}) if (t.valid()) dev.destroyTexture(t);
+    for (auto t : {cellTex_, dynTex_, splatTex_, visionTex_, white_, flatN_, gray_, heightField_.tex}) if (t.valid()) dev.destroyTexture(t);
     cellTex_ = dynTex_ = splatTex_ = visionTex_ = white_ = flatN_ = gray_ = {};
+    heightField_ = {};
+    heightDirty_ = true;
     for (int i = 0; i < 3; ++i) {
         if (pipes_[i].valid()) dev.destroyPipeline(pipes_[i]);
         if (shaders_[i].valid()) dev.destroyShader(shaders_[i]);
@@ -279,7 +281,7 @@ bool TerrainRenderer::build(gfx::Device& dev, const MapGrid& g, bool flatDig) {
         updateCellTextures(dev, g, flatDig);
         const bool changed = buildDetail(dev, g, flatDig, all);
         updateDynamic(dev, g, true);
-        if (changed) buildWater(dev, g, flatDig);
+        if (changed) { buildWater(dev, g, flatDig); heightDirty_ = true; }
         built_ = true;
         stats_.chunks = int(chunks_.size());
         stats_.lodMax = lodLevels_;
@@ -298,7 +300,7 @@ bool TerrainRenderer::build(gfx::Device& dev, const MapGrid& g, bool flatDig) {
     const bool changed = all || stats_.rebuilt > 0;
     updateCellTextures(dev, g, flatDig);
     updateDynamic(dev, g, true);
-    if (changed) buildWater(dev, g, flatDig);
+    if (changed) { buildWater(dev, g, flatDig); heightDirty_ = true; }
     built_ = true;
     stats_.chunks = int(chunks_.size());
     stats_.lodMax = lodLevels_;
@@ -736,7 +738,6 @@ int TerrainRenderer::tierFor0() const {
 }
 
 int TerrainRenderer::tierFor(const Renderer3D& r) const {
-    if (!look_.materials()) return 0;   // no materials: vertex colours on every tier
     if (const char* e = std::getenv("RTS_TERRAIN")) {
         std::string v = e;
         return v == "low" ? 0 : v == "medium" ? 1 : 2;
@@ -758,7 +759,7 @@ gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant) {
         const std::string vs = def + shaders::kTerrainVS, fs = def + shaders::kTerrainFS, msl = def + shaders::kTerrainMSL;
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = 3; sd.textureSlots = dbase ? 18 : 16; sd.label = "terrain";
+        sd.uniformSlots = 3; sd.textureSlots = 19; sd.label = "terrain";   // tex18: height field (traced shadows)
         shaders_[slot] = dev.createShader(sd);
         if (!shaders_[slot].valid()) {
             std::fprintf(stderr, "[terrain] tier %d%s shader: %s\n", tier, dbase ? " detail" : "", dev.lastError().c_str());
@@ -882,9 +883,15 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
         u.blend[0] = look_.blendSharpness; u.blend[1] = look_.macro; u.blend[2] = 1.0f;
     }
     const Lod* apron = apron_.indexCount ? &apron_ : nullptr;
+    // traced terrain shadows (Renderer3D trace tier): the height map of the drawn surface
+    if (r.traceActive()) {
+        if (heightDirty_) updateHeightField(dev, g);
+        r.setHeightField(heightField_);
+    } else r.setHeightField({});
     r.drawCustomOpaque([this, &r, items, u, pipe, apron](gfx::Device& d) {
         d.setPipeline(pipe);
         r.bindLitFrame();
+        r.bindTrace(18);
         d.setTexture(2, cellTex_); d.setTexture(3, dynTex_); d.setTexture(4, splatTex_);
         for (int i = 0; i < 4; ++i) {
             d.setTexture(5 + i, layerTex_[i].valid() ? layerTex_[i].tex : white_);
@@ -920,6 +927,43 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
             last = now; frames = 0;
         }
     }
+}
+
+void TerrainRenderer::updateHeightField(gfx::Device& dev, const MapGrid& g) {
+    using clock = std::chrono::steady_clock;
+    const double now = std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+    if (heightField_.tex.valid() && now - heightBuiltAt_ < 0.3) return;   // sculpting: at most ~3 rebuilds per second
+    heightBuiltAt_ = now;
+    heightDirty_ = false;
+    // two samples per cell, at most 1024 per side (2048-cell maps: one sample per two cells - the
+    // long shadows this map serves are a coarse feature anyway); 16-bit heights in R (high) and G (low)
+    const int tw = std::max(2, std::min(1024, g.w * 2)), th = std::max(2, std::min(1024, g.h * 2));
+    std::vector<float> h(size_t(tw) * size_t(th));
+    float mn = 1e9f, mx = -1e9f;
+    for (int j = 0; j < th; ++j) {
+        const float z = (float(j) + 0.5f) * float(g.h) / float(th);
+        for (int i = 0; i < tw; ++i) {
+            const float x = (float(i) + 0.5f) * float(g.w) / float(tw);
+            const float v = surfaceAt(g, x, z);
+            h[size_t(j) * size_t(tw) + size_t(i)] = v;
+            mn = std::min(mn, v); mx = std::max(mx, v);
+        }
+    }
+    const float range = std::max(mx - mn, 1e-3f);
+    std::vector<uint8_t> px(h.size() * 4);
+    for (size_t n = 0; n < h.size(); ++n) {
+        const int q = std::clamp(int((h[n] - mn) / range * 65535.0f + 0.5f), 0, 65535);
+        px[n * 4 + 0] = uint8_t(q >> 8); px[n * 4 + 1] = uint8_t(q & 255); px[n * 4 + 2] = 0; px[n * 4 + 3] = 255;
+    }
+    if (heightField_.tex.valid() && (heightW_ != tw || heightH_ != th)) { dev.destroyTexture(heightField_.tex); heightField_.tex = {}; }
+    if (!heightField_.tex.valid()) {
+        gfx::TextureDesc td; td.width = tw; td.height = th; td.filter = gfx::Filter::Linear; td.data = px.data(); td.label = "terrain height field";
+        heightField_.tex = dev.createTexture(td);
+        heightW_ = tw; heightH_ = th;
+    } else dev.updateTexture(heightField_.tex, 0, 0, tw, th, px.data(), tw * 4);
+    heightField_.originX = 0; heightField_.originZ = 0;
+    heightField_.extentX = float(g.w); heightField_.extentZ = float(g.h);
+    heightField_.heightMin = mn; heightField_.heightRange = mx - mn > 1e-3f ? mx - mn : 0.0f;   // flat map: nothing to shadow
 }
 
 } // namespace rts::game

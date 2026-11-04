@@ -550,7 +550,13 @@ int main(int argc, char** argv) {
         else if (k == "--bench-body") a.benchBody = std::stoi(next());
         else if (k == "--bench-group") a.benchGroup = std::stoi(next());
         else if (k == "--bench-flow") a.benchFlow = next() == "on" ? 1 : 0;
-        else if (k == "--planet-hpa") setenv("RTS_PLANET_HPA", next() == "off" ? "0" : "1", 1);   // force planet HPA* on / off
+        else if (k == "--planet-hpa") {
+#if defined(_WIN32)
+            _putenv_s("RTS_PLANET_HPA", next() == "off" ? "0" : "1");
+#else
+            setenv("RTS_PLANET_HPA", next() == "off" ? "0" : "1", 1);
+#endif
+        }   // force planet HPA* on / off
         else if (k == "--generate") a.generate = next();
         else if (k == "--players") a.players = std::stoi(next());
         else if (k == "--symmetry") a.symmetry = next();

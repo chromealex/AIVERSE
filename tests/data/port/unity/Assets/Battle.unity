@@ -1,0 +1,29 @@
+%YAML 1.1
+--- !u!1001 &100
+PrefabInstance:
+  m_SourcePrefab: {fileID: 100100000, guid: 22222222222222222222222222222222, type: 3}
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 3, guid: 22222222222222222222222222222222, type: 3}
+      propertyPath: health
+      value: 250
+      objectReference: {fileID: 0}
+--- !u!1001 &200
+PrefabInstance:
+  m_SourcePrefab: {fileID: 100100000, guid: 22222222222222222222222222222222, type: 3}
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 3, guid: 22222222222222222222222222222222, type: 3}
+      propertyPath: health
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3, guid: 22222222222222222222222222222222, type: 3}
+      propertyPath: owner
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 2, guid: 22222222222222222222222222222222, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -2
+      objectReference: {fileID: 0}

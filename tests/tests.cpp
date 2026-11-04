@@ -12600,6 +12600,114 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
     }
 }
 
+#ifdef RTS_TESTS_EDITOR_CORE
+TEST(project_import_mcp_bridge) {
+    rts::editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    Json p = Json::object();
+    p.set("path", Json::string(std::string(RTS_SOURCE_DIR) + "/tests/data/port/unity"));
+    Json scan = ws.call("port_scan", p);
+    CHECK(scan.getBool("ok"));
+    CHECK(scan.getStr("engine") == "unity");
+    CHECK(scan["scenes"].size() == 1);
+    p.set("path", Json::string(std::string(RTS_SOURCE_DIR) + "/tests/data/port/missing"));
+    Json missing = ws.call("port_scan", p);
+    CHECK(!missing.getBool("ok", true));
+    CHECK(missing.has("error"));
+}
+#endif
+
+#ifdef RTS_TESTS_EDITOR_CORE
+#include "apps/editor/core/NativeBuild.h"
+// Per-project editor build with the project's C++ modules (NativeBuild.h): missing modules, the cmake
+// line / build dir, the build dir never in the engine repo, up-to-date check, the switch decision.
+TEST(native_editor_build_helpers) {
+    namespace fs = std::filesystem;
+    using namespace rts::editor;
+    // missing modules against what the binary has
+    Json rules = Json::parse(R"({"nativeModules": [{"id": "income", "config": {}}, {"id": "openwar"}, {"id": "income"}]})");
+    CHECK((requiredNativeModules(rules) == std::vector<std::string>{"income", "openwar"}));
+    CHECK((missingNativeModules(rules, {"income"}) == std::vector<std::string>{"openwar"}));
+    CHECK(missingNativeModules(rules, {"openwar", "income"}).empty());
+    CHECK(missingNativeModules(Json::parse("{}"), {}).empty());
+    const auto compiled = compiledNativeIds();
+    CHECK(compiled.size() == game::compiledNativeModules().size());
+
+    // plan: build dir, configure + build arguments
+    NativeBuildPlan p = planNativeBuild("/eng", "/games/My Game", "linux", "/usr/bin/cmake", "/usr/bin/ninja", false, 3);
+    CHECK(p.buildDir == "/games/My Game/Builds/.temp/editor-linux");
+    CHECK(nativeBuildDir("/games/x", "macos") == "/games/x/Builds/.temp/editor-macos");
+    auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
+    CHECK(has(p.configureArgs, "-DRTS_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
+    CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DRTS_NATIVE_DIR="));
+    CHECK(has(p.buildArgs, "rts_editor") && has(p.buildArgs, "rts_headless") && has(p.buildArgs, "3"));
+    CHECK(p.editorBinary == "/games/My Game/Builds/.temp/editor-linux/rts_editor" && p.launchTarget == p.editorBinary);
+    const std::string cmd = nativeBuildCommand(p);
+    CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '/games/My Game/Builds/.temp/editor-linux'", 0) == 0);
+    CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
+    CHECK(!has(planNativeBuild("/eng", "/g", "linux", "cmake", "/usr/bin/ninja", true, 0).configureArgs, "-G"));   // keeps the cached generator
+    NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
+    CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/RTSEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor");
+    CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
+    CHECK(has(mac.configureArgs, "-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project") && !has(p.configureArgs, "-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project"));
+    CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/rts_editor.exe").string());
+    CHECK(nativeRestartCommand("macos", "/g/B/RTSEditor.app", "/g/G.rtsproj", "/eng/build") ==
+          "open -n '/g/B/RTSEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
+    CHECK(nativeRestartCommand("linux", "/g/rts_editor", "/g", "").find("RTS_NATIVE_EDITOR=1 '/g/rts_editor' '/g' --native-editor") != std::string::npos);
+    CHECK(isProjectBuildExe("/g/Builds/.temp/editor-linux/rts_editor") && isProjectBuildExe("/g/Builds/editor-linux/rts_editor") && isProjectBuildExe("/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor"));
+    CHECK(!isProjectBuildExe("/eng/build/lin/rts_editor") && !isProjectBuildExe("/Applications/RTSEditor.app/Contents/MacOS/RTSEditor"));
+
+    // the build dir never lands in the engine repository
+    const std::string eng = RTS_SOURCE_DIR;
+    CHECK(nativeBuildDirProblem(eng, "/somewhere/else/Builds/editor-linux").empty());
+    CHECK(nativeBuildDirProblem(eng, nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
+    CHECK(nativeBuildDirProblem(eng, nativeBuildDir(eng + "/games/sub/proj", "linux")).empty());
+    CHECK(!nativeBuildDirProblem(eng, eng + "/build/lin").empty());
+    CHECK(!nativeBuildDirProblem(eng, eng + "/templates/skirmish/out").empty());
+    CHECK(!nativeBuildDirProblem(eng, eng).empty());
+    // and git agrees (.gitignore "Builds/" at any depth); skipped without git
+    if (std::system(("git -C '" + eng + "' rev-parse --is-inside-work-tree >/dev/null 2>&1").c_str()) == 0) {
+        CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
+        CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/new_game/deeper", "macos")).empty());
+        CHECK(!nativeBuildGitProblem(eng + "/templates/skirmish/out").empty());
+    }
+
+    // up to date: newer than native/ sources and the engine binary; registry lists the modules
+    const fs::path root = fs::temp_directory_path() / "rts_native_editor_test";
+    fs::remove_all(root);
+    fs::create_directories(root / "proj" / "native");
+    fs::create_directories(root / "proj" / "Builds" / ".temp" / "editor-linux" / "gen");
+    auto touch = [](const fs::path& f, int ageSec) {
+        std::ofstream(f) << "x";
+        fs::last_write_time(f, fs::file_time_type::clock::now() - std::chrono::seconds(ageSec));
+    };
+    const fs::path bin = root / "proj" / "Builds" / ".temp" / "editor-linux" / "rts_editor", engine = root / "engine_exe";
+    const std::string proj = (root / "proj").string(), bd = nativeBuildDir(proj, "linux");
+    std::string why;
+    CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && !why.empty());   // no build
+    touch(root / "proj" / "native" / "Income.cpp", 300);
+    touch(engine, 200);
+    touch(bin, 100);
+    CHECK(nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && why.empty());
+    std::ofstream(fs::path(bd) / "gen" / "RtsNativeRegistry.cpp") << "#include \"x\"\n    result.push_back({\"income\", 1u, &::createIncomeModule});\n";
+    CHECK((nativeBuildModules(bd) == std::vector<std::string>{"income"}));
+    CHECK(nativeBuildHasModules(bd, {"income"}) && !nativeBuildHasModules(bd, {"income", "openwar"}, &why) && why.find("openwar") != std::string::npos);
+    touch(root / "proj" / "native" / "Income.cpp", 10);    // sources edited after the build
+    CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && why.find("Income.cpp") != std::string::npos);
+    touch(root / "proj" / "native" / "Income.cpp", 300);
+    touch(engine, 5);                                       // engine rebuilt after it
+    CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why));
+    fs::remove_all(root);
+
+    // switch decision: modules present / up-to-date build / stale or no build / started by a switch
+    CHECK(nativeOpenAction(false, true, false) == NativeOpenAction::None);
+    CHECK(nativeOpenAction(false, false, true) == NativeOpenAction::None);
+    CHECK(nativeOpenAction(true, true, false) == NativeOpenAction::Switch);
+    CHECK(nativeOpenAction(true, false, false) == NativeOpenAction::Offer);   // stale or not built
+    CHECK(nativeOpenAction(true, true, true) == NativeOpenAction::Offer);     // already the switched-to editor: no loop
+}
+#endif
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]
@@ -13187,3 +13295,221 @@ TEST(mapdoc_validate_scripted_players_without_start) {
     CHECK(startIssue(rulesJson, &error) && !error);
 }
 #endif
+
+// ---------------------------------------------------------------- game.json "window" (desktop window settings)
+#include "engine/platform/WindowSettings.h"
+TEST(window_settings_from_game_json) {
+    using platform::AppConfig;
+    AppConfig c;
+    platform::applyWindowSettings(c, Json::parse(R"({"mode": "fixed", "width": 1024, "height": 768})"), "windows");
+    CHECK(c.windowMode == AppConfig::WindowMode::Windowed && !c.resizable && c.width == 1024 && c.height == 768);
+    AppConfig f;
+    platform::applyWindowSettings(f, Json::parse(R"({"mode": "fullscreen", "allowFullscreen": false, "macos": {"mode": "maximized"}})"), "linux");
+    CHECK(f.windowMode == AppConfig::WindowMode::Fullscreen && !f.allowFullscreen);
+    AppConfig m;
+    platform::applyWindowSettings(m, Json::parse(R"({"mode": "fullscreen", "macos": {"mode": "maximized", "minWidth": 800, "minHeight": 600}})"), "macos");
+    CHECK(m.windowMode == AppConfig::WindowMode::Maximized && m.resizable && m.minWidth == 800 && m.minHeight == 600);
+    AppConfig k;   // --size: the size from the command line wins, the rest still applies
+    k.width = 540; k.height = 960;
+    platform::applyWindowSettings(k, Json::parse(R"({"width": 1920, "height": 1080, "keepAspect": true, "minWidth": 4000})"), "linux", true);
+    CHECK(k.width == 540 && k.height == 960 && k.keepAspect && k.minWidth == 540);
+    AppConfig none;   // no block: defaults untouched
+    platform::applyWindowSettings(none, Json(), "linux");
+    CHECK(none.windowMode == AppConfig::WindowMode::Windowed && none.resizable && none.allowFullscreen && none.width == 1280);
+    CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "fixed", "width": 1280, "height": 720})")).empty());
+    CHECK(platform::windowSettingsProblems(Json::parse(R"({"mode": "huge", "width": -5, "minHeight": 900, "height": 720, "windows": 3})")).size() == 4);
+}
+
+// ------------------------------------------------------------------ game wizard ("Сделать игру", docs/game-wizard.md)
+TEST(script_command_card_false_hides_the_button) {
+    game::Rules rules = game::loadRules(Json::parseFile(kSkirmish + "/rules.json"));
+    const Json j = Json::parse(R"({"commands": {"a": {"label": "A"}, "b": {"label": "B", "card": false}}})");
+    std::vector<std::string> errors;
+    auto cs = game::parseScriptCommands(j, rules, &errors);
+    CHECK(errors.empty() && cs.size() == 2);
+    CHECK(cs[0].id == "a" && cs[0].card);
+    CHECK(cs[1].id == "b" && !cs[1].card);
+}
+
+#ifdef RTS_TESTS_EDITOR_CORE
+#include "apps/editor/core/GameWizard.h"
+#include "tools/branding/BrandImage.h"
+TEST(game_wizard_plan_picks_a_template_by_the_idea) {
+    using namespace rts::editor;
+    WizardSpec s;
+    s.title = "T";
+    auto pick = [&](const std::string& idea) { s.idea = idea; return planGame(RTS_SOURCE_DIR, s).getStr("template"); };
+    const std::string shroom = pick("Грибы захватывают деревни, отправка процента войск");
+    CHECK(shroom == "mushrooms" || shroom == "shroomwars" || shroom == "sporelanes" || shroom == "spellbunkers");
+    CHECK(pick("StarCraft: три расы в космосе") == "starfall");
+    CHECK(pick("Zombie hordes attack the colony, survive the waves") == "lastcolony");
+    CHECK(pick("") == pick(""));                                   // the same answers make the same game
+    s.idea.clear();
+    s.orientation = "portrait";
+    const std::string portrait = planGame(RTS_SOURCE_DIR, s).getStr("template");
+    CHECK(portrait == "borderrush" || portrait == "laneclash");
+    s.genre = "laneclash";
+    Json p = planGame(RTS_SOURCE_DIR, s);
+    CHECK(p.getStr("template") == "laneclash" && p.getStr("tutorialArchetype") == "autobuild");
+    s.genre = "mushrooms";
+    CHECK(planGame(RTS_SOURCE_DIR, s).getStr("tutorialArchetype") == "garrison");
+    s.genre = "nope";
+    bool threw = false;
+    try { planGame(RTS_SOURCE_DIR, s); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+    // the spec survives JSON (the .rtsproj keeps it)
+    s.genre = "skirmish"; s.levels = 5; s.features = {"economy", "base"}; s.ads = true;
+    WizardSpec back = WizardSpec::fromJson(s.toJson());
+    CHECK(back.genre == "skirmish" && back.levels == 5 && back.features.size() == 2 && back.ads && back.orientation == "portrait");
+    CHECK(WizardSpec::fromJson(Json::parse(R"({"levels": 999})")).levels == 40);
+    Json cat = wizardCatalog(RTS_SOURCE_DIR);
+    CHECK(cat["templates"].size() >= 10 && cat["features"].size() > 5 && cat["defaults"].getStr("tutorial") == "both");
+}
+
+TEST(game_wizard_makes_a_playable_project) {
+    namespace fs = std::filesystem;
+    using namespace rts::editor;
+    TempHome home("wizard");
+    // the user's content: key art, an icon, a GDD
+    const fs::path art = home.dir / "art";
+    fs::create_directories(art);
+    branding::Image key = branding::makeImage(320, 180, {0.1f, 0.2f, 0.6f, 1});
+    branding::fillRect(key, 120, 50, 80, 80, {0.95f, 0.6f, 0.1f, 1});
+    CHECK(branding::writePng((art / "key_art.png").string(), key));
+    CHECK(branding::writePng((art / "logo_icon.png").string(), branding::makeImage(300, 300, {0.9f, 0.7f, 0.1f, 1})));
+    { std::ofstream f(art / "gdd.md"); f << "Рыцари строят замок и добывают золото.\n"; }
+    Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    WizardSpec s;
+    s.title = "Wizard Test";
+    s.location = (home.dir / "Projects").string();
+    s.artDir = art.string();
+    s.genre = "skirmish";
+    s.levels = 2;
+    s.ads = true;
+    s.purchases = true;
+    GameMaker maker(ws, s);
+    int steps = 0;
+    while (maker.step()) ++steps;
+    const Json& r = maker.report();
+    CHECK(r.getBool("ok"));
+    CHECK(steps > 10 && maker.done() && !maker.failed());
+    const fs::path dir = maker.projectDir();
+    CHECK(fs::equivalent(fs::path(ws.project.dir), dir));          // opened in the workspace (macOS: /var = /private/var)
+    // the project file remembers the answers
+    Json pf = Json::parseFile(maker.projectFile());
+    CHECK(pf["wizard"]["spec"].getStr("title") == "Wizard Test" && pf["wizard"].getStr("template") == "skirmish");
+    // maps: the levels first (the editor opens the first map), then the tutorial, then the template's own
+    Json m = Json::parseFile((dir / "game.json").string());
+    CHECK(m["maps"].size() == 4 && m["maps"][0].getStr("file") == "maps/wiz_level_1.json" && m["maps"][2].getStr("file") == "maps/wiz_tutorial.json");
+    CHECK(m.getStr("name") == "Wizard Test" && m["store"]["products"].size() == 3 && m["ads"].isObject() && m["plugins"].has("mock-ads"));
+    CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "art/key_art.png");
+    Json lv = Json::parseFile((dir / "maps/wiz_level_1.json").string());
+    CHECK(lv["generate"].getStr("preset") == "classic" && lv["generate"].getStr("template") == "maps/valley.json");
+    // the tutorial: steps from the rules, its scripts, hidden panel commands
+    const std::string steps_ = slurp(dir / "scripts/wizard/tutorial_steps.lua");
+    CHECK(steps_.find("id = \"gather\"") != std::string::npos && steps_.find("param = \"barracks\"") != std::string::npos);
+    Json tm = Json::parseFile((dir / "maps/wiz_tutorial.json").string());
+    CHECK(tm["scripts"][0].str() == "scripts/wizard/tutorial.lua" && tm["viewScripts"][0].str() == "scripts/view/wizard/tutorial_view.lua");
+    Json rules = Json::parseFile((dir / "rules.json").string());
+    CHECK(!rules["commands"]["wiz_tut_next"].getBool("card", true));
+    bool hints = false, bonus = false;
+    for (auto& v : rules["viewScripts"].items()) hints |= v.str() == "scripts/view/wizard/hints.lua";
+    for (auto& v : rules["scripts"].items()) bonus |= v.str() == "scripts/wizard/meta_bonus.lua";
+    CHECK(hints && bonus);
+    // meta
+    Json w = Json::parseFile((dir / "ui/wizard.json").string());
+    CHECK(w["tutorial"].getInt("map") == 3 && w["levels"].size() == 2 && w["levels"][0].getInt("map") == 1 && w["upgrades"].size() >= 3);
+    CHECK(w["ads"].getBool("rewardedDouble") && w["daily"]["rewards"].size() == 7);
+    Json sj = Json::parseFile((dir / "ui/screens.json").string());
+    CHECK(sj.getStr("start") == "home" && sj.getStr("afterMatch") == "result");
+    for (const char* f : {"ui/screens/home.rml", "ui/screens/levels.rml", "ui/screens/upgrades.rml", "ui/screens/result.rml", "ui/wizard_meta.lua",
+                          "ui/hud/wiz_tutorial.rml", "ui/hud/wiz_hint.rml", "ui/main.lua", "WIZARD.md", "art/key_art.png", "docs/gdd.md"})
+        CHECK(fs::exists(dir / f));
+    Json ru = Json::parseFile((dir / "lang/ru.json").string());
+    CHECK(ru.getStr("game.name") == "Wizard Test" && ru.has("wiz.tut.gather") && ru.has("wiz.hint.camera") && ru.has("wiz.levels"));
+    // the check played the tutorial by itself through the same gate as a player and won it; no script errors
+    const Json& checks = r["plan"]["checks"];
+    CHECK(checks.size() >= 3);
+    bool tutorialWon = false;
+    for (auto& c : checks.items()) tutorialWon |= c.getStr("map") == "maps/wiz_tutorial.json" && c.getInt("winner") == 1;
+    CHECK(tutorialWon);
+    CHECK(!rules["commands"]["wiz_tut_off"].getBool("card", true));
+    for (auto& c : checks.items()) CHECK(c.getBool("ok") && !c.has("scriptErrors"));
+    CHECK(r["warnings"].size() == 1);                              // only: the ad units are Yandex demo ones
+}
+#endif
+
+// ---- dungeon walls (territory.fortify) and rock-bound fliers (movement.airOverRock)
+TEST(mech_dungeon_fortified_walls) {
+    std::string rules = kDungeonRules;
+    const std::string terr = R"("territory": {"startRadius": 2, "buildOnlyOwned": true})";
+    rules.replace(rules.find(terr), terr.size(), R"("territory": {"startRadius": 2, "buildOnlyOwned": true, "fortify": {"time": 0.5}})");
+    auto sim = makeSimJson(rules, dungeonMap(R"(,{"type":"imp","owner":1,"pos":[7,6]},{"type":"imp","owner":2,"pos":[17,6]})"));
+    auto& m = mod(*sim);
+    auto& g = m.state(*sim).grid;
+    CHECK(m.rules().territory.fortifyTime == Fixed::fromRatio(1, 2));
+    CHECK(m.rules().diggables[0].fortifiable && !m.rules().diggables[1].fortifiable);   // plain rock yes, the vein no
+    run(*sim, 80);   // A's imp claims its pocket up to the rock and then reinforces the rock face
+    const size_t wall = size_t(g.index(10, 4));
+    { int walls = 0; for (auto wv : g.wall) walls += wv == 1; std::printf("    walls of A: %d, floor (9,4) owner %d, wall (10,4) %d\n", walls, g.territory[size_t(g.index(9, 4))], g.wall[wall]); }
+    CHECK(g.territory[size_t(g.index(9, 4))] == 1 && g.wall[wall] == 1 && g.dig[wall] != 0);
+    CHECK(g.wall[size_t(g.index(10, 6))] == 0);                        // the gold vein is never reinforced
+    CHECK(g.wall[size_t(g.index(13, 4))] == 2);                        // B does the same from its side
+    // B marks A's wall: the mark is refused; A can still dig its own wall
+    sim->submit(rectCmd(2, game::kCmdDig, 10, 4, 1, 1, 0));
+    sim->submit(rectCmd(1, game::kCmdDig, 10, 4, 1, 1, 0));
+    run(*sim, 0.5);
+    CHECK((g.digMark[wall] & 2) == 0 && (g.digMark[wall] & 1) != 0);
+    run(*sim, 20);
+    CHECK(g.dig[wall] == 0 && g.wall[wall] == 0);                      // dug out by its owner: no wall any more
+    // walls fall back to plain rock when the keeper loses the floor behind them
+    const size_t wall2 = size_t(g.index(10, 3));
+    CHECK(g.wall[wall2] == 1);
+    for (int y = 1; y <= 10; ++y) for (int x = 1; x <= 13; ++x) if (g.territory[size_t(g.index(x, y))] == 1) m.setTerritory(*sim, g.index(x, y), 2);
+    run(*sim, 1);
+    CHECK(g.wall[wall2] == 0 || g.wall[wall2] == 2);                   // reverted (B's imps may already reinforce it for B)
+    // save / load keeps the layer and the match stays deterministic
+    const std::string blob = sim->serialize();
+    auto sim2 = makeSimJson(rules, dungeonMap(R"(,{"type":"imp","owner":1,"pos":[7,6]},{"type":"imp","owner":2,"pos":[17,6]})"));
+    CHECK(sim2->deserialize(blob));
+    CHECK(mod(*sim2).state(*sim2).grid.wall == g.wall && sim2->checksum() == sim->checksum());
+}
+
+TEST(mech_dungeon_fliers_follow_tunnels) {
+    const std::string bat = R"(,"bat": {"move": {"speed": 4, "layer": "air"}, "health": {"max": 40}, "sight": 6})";
+    std::string rules = kDungeonRules;
+    rules.insert(rules.rfind("}}}") + 3, bat);   // one more type at the end of "types"
+    std::string bound = rules;
+    bound.insert(bound.find("\"victory\""), R"("movement": {"airOverRock": false}, )");
+    const std::string ents = R"(,{"type":"bat","owner":1,"pos":[7,6]})";
+    {   // default: fliers cross rock
+        auto sim = makeSimJson(rules, dungeonMap(ents));
+        auto& g = mod(*sim).state(*sim).grid;
+        CHECK(!g.airSolid && g.passable(11, 6, game::kLayerAir));
+        Entity b = findType(*sim, "bat", 1);
+        Command c; c.player = 1; c.type = game::kCmdMove; c.units = {b}; c.point = g.cellCenter(16, 6);
+        sim->submit(c);
+        run(*sim, 6);
+        CHECK((sim->world().get<Transform>(b).pos - g.cellCenter(16, 6)).xz().length() < Fixed::fromInt(1));
+    }
+    {   // rock-bound: the wall stops the bat until a tunnel is dug
+        auto sim = makeSimJson(bound, dungeonMap(ents + R"(,{"type":"imp","owner":1,"pos":[7,8]})"));
+        auto& g = mod(*sim).state(*sim).grid;
+        CHECK(g.airSolid && !g.passable(11, 6, game::kLayerAir) && g.passable(9, 6, game::kLayerAir));
+        std::vector<Vec3> path;
+        CHECK(!g.findPath(g.cellCenter(7, 6), g.cellCenter(16, 6), game::kLayerAir, path));
+        Entity b = findType(*sim, "bat", 1);
+        Command c; c.player = 1; c.type = game::kCmdMove; c.units = {b}; c.point = g.cellCenter(16, 6);
+        sim->submit(c);
+        run(*sim, 6);
+        const Vec3 p = sim->world().get<Transform>(b).pos;
+        CHECK(p.x < Fixed::fromInt(10));                                  // still on its side of the rock
+        sim->submit(rectCmd(1, game::kCmdDig, 10, 6, 4, 1, 0));
+        run(*sim, 40);
+        CHECK(g.dig[size_t(g.index(13, 6))] == 0);
+        sim->submit(c);
+        run(*sim, 8);
+        CHECK((sim->world().get<Transform>(b).pos - g.cellCenter(16, 6)).xz().length() < Fixed::fromInt(1));   // through the tunnel
+    }
+}

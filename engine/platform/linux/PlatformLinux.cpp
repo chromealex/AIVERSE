@@ -10,6 +10,7 @@
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -84,9 +85,47 @@ void applyFullscreen(bool on) {
 }
 } // namespace detail
 
-int run(const AppConfig& cfg, AppCallbacks cb) {
+// EWMH maximize (both axes) — after the window is mapped.
+static void sendMaximize() {
+    XEvent ev{};
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = g_win;
+    ev.xclient.message_type = XInternAtom(g_dpy, "_NET_WM_STATE", False);
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = 1;   // _NET_WM_STATE_ADD
+    ev.xclient.data.l[1] = long(XInternAtom(g_dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False));
+    ev.xclient.data.l[2] = long(XInternAtom(g_dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False));
+    ev.xclient.data.l[3] = 1;   // source: application
+    XSendEvent(g_dpy, DefaultRootWindow(g_dpy), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    XFlush(g_dpy);
+}
+
+// Size hints for the window manager: fixed size (min = max), minimum size, aspect lock.
+static void applySizeHints(const AppConfig& c) {
+    XSizeHints* h = XAllocSizeHints();
+    if (!h) return;
+    if (!c.resizable) {
+        h->flags |= PMinSize | PMaxSize;
+        h->min_width = h->max_width = c.width;
+        h->min_height = h->max_height = c.height;
+    } else if (c.minWidth > 0 || c.minHeight > 0) {
+        h->flags |= PMinSize;
+        h->min_width = std::max(1, c.minWidth);
+        h->min_height = std::max(1, c.minHeight);
+    }
+    if (c.keepAspect && c.resizable) {
+        h->flags |= PAspect;
+        h->min_aspect.x = h->max_aspect.x = c.width;
+        h->min_aspect.y = h->max_aspect.y = c.height;
+    }
+    if (h->flags) XSetWMNormalHints(g_dpy, g_win, h);
+    XFree(h);
+}
+
+int run(const AppConfig& cfgIn, AppCallbacks cb) {
     auto& S = state();
-    S.cfg = cfg; S.cb = std::move(cb);
+    S.cfg = cfgIn; S.cb = std::move(cb);
+    const AppConfig& cfg = S.cfg;   // configure (below) may change it
     if (const char* c = std::getenv("RTS_CONTENT")) S.contentRoot = c;
     else {
         char exe[4096] = {};
@@ -101,6 +140,7 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
     const char* touchEnv = std::getenv("RTS_TOUCH_EMULATE");
     const bool touchEmu = touchEnv && touchEnv[0] == '1';
     if (touchEmu) S.touch = true;
+    if (S.cb.configure) S.cb.configure(S.cfg);   // game data: window size and mode
 
     g_dpy = XOpenDisplay(nullptr);
     if (!g_dpy) { std::fprintf(stderr, "cannot open X display\n"); return 1; }
@@ -113,7 +153,10 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
     XStoreName(g_dpy, g_win, cfg.title.c_str());
     g_wmDelete = XInternAtom(g_dpy, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(g_dpy, g_win, &g_wmDelete, 1);
+    applySizeHints(cfg);
     XMapWindow(g_dpy, g_win);
+    if (cfg.windowMode == AppConfig::WindowMode::Maximized) sendMaximize();
+    else if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) detail::applyFullscreen(true);
     XIM xim = XOpenIM(g_dpy, nullptr, nullptr, nullptr);
     XIC xic = xim ? XCreateIC(xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, g_win, nullptr) : nullptr;
 
@@ -195,7 +238,7 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
                 e.type = xe.type == KeyPress ? EventType::KeyDown : EventType::KeyUp;
                 e.key = mapKey(ks); e.mods = mods(xe.xkey.state);
                 detail::dispatch(e);
-                if (xe.type == KeyPress && e.key == Key::F11) detail::applyFullscreen(!state().fullscreen);
+                if (xe.type == KeyPress && e.key == Key::F11 && state().cfg.allowFullscreen) detail::applyFullscreen(!state().fullscreen);
                 if (xe.type == KeyPress) {
                     char buf[16] = {}; KeySym sym; Status st;
                     int len = xic ? Xutf8LookupString(xic, &xe.xkey, buf, sizeof buf - 1, &sym, &st)

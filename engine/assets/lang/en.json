@@ -280,5 +280,20 @@
   "editor.build.resize_plan": "Build size: longest side up to {size} px",
   "editor.build.resize_help": "Reduce oversized textures for the selected platform and recalculate. Image detail will be reduced; source files stay unchanged.",
   "entity_action.price": "Cost: {cost}",
-  "entity_action.unavailable": "Unavailable"
+  "entity_action.unavailable": "Unavailable",
+  "editor.port.title": "Import engine project",
+  "editor.port.intro": "Import Unity, Godot or an Unreal export. Review the report to finish gameplay conversion.",
+  "editor.port.source": "Source project",
+  "editor.port.destination": "Destination folder",
+  "editor.port.scale": "Cells per metre",
+  "editor.port.scan": "Scan",
+  "editor.port.import": "Import",
+  "editor.port.open": "Open imported project",
+  "editor.port.ai": "Copy AI handoff",
+  "editor.port.prompt": "Finish this imported project using port_report and port_item. Use rules_schema first, then Lua, then native modules. Verify with scenario_run, bot matches and source screenshots if available. Mark verified items with port_resolve and explain dropped items. Project:",
+  "editor.port.copied": "AI handoff copied; paste it into your connected agent.",
+  "editor.port.busy": "Import is running…",
+  "editor.port.mode": "Scene mode",
+  "editor.port.auto": "Auto",
+  "editor.port.truncated": "Preview truncated. Full details are in port-report.json or port_report."
 }

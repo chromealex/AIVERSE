@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "version": "synthetic",
+  "assets": [
+    {
+      "path": "rock.fbx",
+      "kind": "model"
+    }
+  ],
+  "entities": [
+    {
+      "id": "unit",
+      "name": "Unit",
+      "source": "World.Unit",
+      "fields": {
+        "health": 100
+      },
+      "models": [
+        "rock.fbx"
+      ],
+      "components": []
+    }
+  ],
+  "scenes": [
+    {
+      "id": "battle",
+      "source": "World",
+      "name": "Battle",
+      "objects": [
+        {
+          "entity": "unit",
+          "position": [
+            1,
+            0,
+            2
+          ],
+          "rotation": 0
+        }
+      ]
+    }
+  ]
+}

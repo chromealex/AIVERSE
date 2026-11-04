@@ -13,7 +13,8 @@ using namespace render;
 class SceneWindow : public EditorWindow {
 public:
     const char* id() const override { return "scene"; }
-    const char* title() const override { return "Scene"; }
+    const char* title() const override { return "Сцена"; }
+    const char* group() const override { return "scene"; }
     int order() const override { return 0; }
     const char* dockArea() const override { return "center"; }
     bool zeroPadding() const override { return true; }
@@ -45,14 +46,35 @@ private:
         for (int i = 0; i < int(Tool::Count); ++i) {
             if (i == 1 || i == 10) { ui::endSegment(); ImGui::SameLine(0, 8); ui::beginSegment(); } // select | edit tools | eraser
             else if (i) ImGui::SameLine();
-            if (ui::toolButton(icons[i], names[i], ed.tool == Tool(i))) { ed.tool = Tool(i); ed.roadStart = -1; }
+            char tip[64];
+            if (i < 10) std::snprintf(tip, sizeof tip, "%s  (%d)", names[i], (i + 1) % 10); else std::snprintf(tip, sizeof tip, "%s", names[i]);
+            if (ui::toolButton(icons[i], tip, ed.tool == Tool(i))) { ed.tool = Tool(i); ed.roadStart = -1; }
         }
         ui::endSegment();
         ui::toolbarDivider();
         if (ui::toolButton(ICON_FIT, "Вся карта (F)")) ed.fitScene();
         ImGui::SameLine();
+        if (ui::toolButton(ICON_MAGNET, ed.snap ? "Привязка к сетке: вкл" : "Привязка к сетке: выкл", ed.snap)) ed.snap = !ed.snap;
+        ImGui::SameLine();
+        if (ui::toolButton(ICON_EYE, "Что показывать")) ImGui::OpenPopup("##show");
+        if (ImGui::BeginPopup("##show")) {
+            ImGui::MenuItem("Уровни и рампы", nullptr, &ed.showLevels);
+            ImGui::MenuItem("Регионы", nullptr, &ed.showRegions);
+            ImGui::MenuItem("Зоны триггеров", nullptr, &ed.showAreas);
+            ImGui::EndPopup();
+        }
+        const bool brushTool = ed.tool == Tool::Terrain || ed.tool == Tool::Level || ed.tool == Tool::Height || ed.tool == Tool::Field || ed.tool == Tool::Region;
+        if (brushTool) {
+            ui::toolbarDivider();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextDisabled(ICON_BRUSH);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(110);
+            ImGui::SliderInt("##brush", &ed.brush, 1, 16, "кисть %d");
+        }
+        ImGui::SameLine(0, 12);
         ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("%s", names[int(ed.tool)]);
+        if (int(ed.tool) < int(Tool::Count)) ImGui::TextDisabled("%s", names[int(ed.tool)]);
         ui::endToolbar(bottom);
     }
 
@@ -204,6 +226,10 @@ private:
             if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) ed.brush = std::max(1, ed.brush - 1);
             if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) ed.brush = std::min(16, ed.brush + 1);
             if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { ed.select({}); ed.roadStart = -1; }
+            // 1..9, 0: tools in toolbar order (the eraser is the 11th: Delete with nothing selected is not used for it)
+            if (!io.KeyCtrl && !io.KeySuper && !io.KeyAlt)
+                for (int k = 0; k < 10 && k < int(Tool::Count); ++k)
+                    if (ImGui::IsKeyPressed(ImGuiKey(ImGuiKey_1 + (k == 9 ? -1 : k)), false)) { ed.tool = Tool(k); ed.roadStart = -1; }
         }
         if (ed.playing()) return;
         // tools
@@ -344,9 +370,9 @@ private:
                 if (s) s->faceFromDir(normalize(local), f, a, b);
                 char buf[128];
                 std::snprintf(buf, sizeof buf, "%s  грань %d  x %.1f  y %.1f  высота %.2f", ed.planetBodyId(body).c_str(), f, a, b, s ? s->heightAt(normalize(local)) : 0.0f);
-                dl->AddText(ImVec2(vp_.originX + 8, vp_.originY + vp_.pointsH - 22), IM_COL32(255, 255, 255, 200), buf);
+                ui::viewportLabel(dl, ImVec2(vp_.originX + 12, vp_.originY + vp_.pointsH - 26), buf);
             }
-            dl->AddText(ImVec2(vp_.originX + 8, vp_.originY + 8), IM_COL32(220, 230, 255, 200), "Планеты: колесо — масштаб, ПКМ — поворот, СКМ / WASD — движение, Tab — следующее тело");
+            ui::viewportLabel(dl, ImVec2(vp_.originX + 12, vp_.originY + 10), "Планеты: колесо — масштаб, ПКМ — поворот, СКМ / WASD — движение, Tab — следующее тело", ImVec4(0.86f, 0.9f, 1, 0.9f));
             return;
         }
         if (!ed.playing() && vp_.hovered && ed.groundAt(vp_, ed.sceneCam, hoverX_, hoverY_, x, z)) {
@@ -387,10 +413,10 @@ private:
             }
             char buf[96];
             std::snprintf(buf, sizeof buf, "x %.1f  z %.1f  уровень %d", x, z, ed.doc().data.level(int(std::floor(x)), int(std::floor(z))));
-            dl->AddText(ImVec2(vp_.originX + 8, vp_.originY + vp_.pointsH - 22), IM_COL32(255, 255, 255, 200), buf);
+            ui::viewportLabel(dl, ImVec2(vp_.originX + 12, vp_.originY + vp_.pointsH - 26), buf);
         }
         if (ed.playing())
-            dl->AddText(ImVec2(vp_.originX + 8, vp_.originY + 8), IM_COL32(255, 230, 120, 230), "Идёт тест — правка отключена (F5 — стоп)");
+            ui::viewportLabel(dl, ImVec2(vp_.originX + 12, vp_.originY + 10), ICON_PLAY "  Идёт тест — правка отключена (F5 — стоп)", ImVec4(1, 0.9f, 0.47f, 1));
     }
 
     Viewport vp_;

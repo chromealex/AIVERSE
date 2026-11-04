@@ -1,5 +1,5 @@
 // Dockable editor windows. Each window is a small class registered with RTS_EDITOR_WINDOW; the
-// editor creates one instance of each, lists them in the "Окна" menu, docks them, saves the layout
+// editor creates one instance of each, lists them in the top menu of its group(), docks them, saves the layout
 // and lets agents open/close them over MCP. See docs/editor-windows.md.
 #pragma once
 #include <functional>
@@ -17,9 +17,12 @@ class EditorWindow {
 public:
     virtual ~EditorWindow() = default;
     virtual const char* id() const = 0;              // stable, latin: "scene", "inspector"
-    virtual const char* title() const = 0;           // shown in the tab: "Scene", "Инспектор"
+    virtual const char* title() const = 0;           // shown in the tab and the menus: "Сцена", "Инспектор" (Russian)
     virtual const char* icon() const { return nullptr; } // tab icon (EditorIcons.h); nullptr: by id()
-    virtual const char* dockArea() const { return "right"; } // default place: left, right, center, bottom
+    virtual const char* dockArea() const { return "right"; } // default place: left, left-bottom, right, center, bottom
+    // Top menu the window is listed in: "scene" (Сцена), "world" (Мир), "look" (Графика), "logic" (Логика),
+    // "publish" (Сборка), "service" (Вид: console, agent); anything else goes to Вид → Другие окна.
+    virtual const char* group() const { return "other"; }
     virtual bool openByDefault() const { return true; }
     virtual int order() const { return 100; }                // tab order inside a dock area (lower = first, the first is shown)
     virtual ImGuiWindowFlags flags() const { return 0; }

@@ -34,7 +34,60 @@ void pill(const char* text, ImVec4 dot, float pulse, const EditorTheme::Palette&
     dl->AddText(ImVec2(p.x + 22, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), ImGui::GetColorU32(pal.text), text);
     ImGui::Dummy(ImVec2(w, h));
 }
+
+// Top menu groups of windows (EditorWindow::group()): menu title, icon, workspace name.
+struct WindowGroup { const char* id; const char* menu; const char* icon; const char* workspace; };
+const WindowGroup kGroups[] = {
+    {"scene", "Сцена", ICON_SCENE, "Карта и объекты"},
+    {"world", "Мир", ICON_TERRAIN, "Ландшафт"},
+    {"look", "Графика", ICON_LIGHTING, "Графика и эффекты"},
+    {"logic", "Логика", ICON_RULES, "Правила и тест"},
+    {"publish", "Сборка", ICON_BUILD, "Выпуск"},
+};
+bool knownGroup(const std::string& g) {
+    for (auto& k : kGroups) if (g == k.id) return true;
+    return g == "service";
+}
 } // namespace
+
+std::vector<EditorWindow*> Editor::windowsOf(const std::string& group) const {
+    std::vector<EditorWindow*> out;
+    for (auto& w : windows_)
+        if (group == "other" ? !knownGroup(w->group()) : group == w->group()) out.push_back(w.get());
+    std::stable_sort(out.begin(), out.end(), [](EditorWindow* a, EditorWindow* b) {
+        if (a->openByDefault() != b->openByDefault()) return a->openByDefault();
+        return a->order() < b->order();
+    });
+    return out;
+}
+
+void Editor::openWorkspace(const std::string& group) {
+    // the default windows plus every window of the group, docked by their areas; the group's windows in front
+    pendingFocus_.clear();
+    for (auto& w : windows_) {
+        const bool mine = group == w->group();
+        w->open = w->openByDefault() || mine;
+        if (mine) pendingFocus_.push_back(w->id());
+    }
+    resetLayout_ = true;
+    pendingFocusFrames_ = 3;
+    for (auto& g : kGroups) if (group == g.id) status = std::string("Раскладка «") + g.workspace + "»";
+}
+
+void Editor::drawWindowItems(const std::string& group) {
+    for (EditorWindow* w : windowsOf(group)) {
+        const char* icon = w->icon() ? w->icon() : windowIconFor(w->id());
+        // click: open and bring to front; the check mark shows open windows, a second click on an open window hides it
+        if (item(icon, w->title(), nullptr, w->open)) { if (w->open && isWindowInFront(w)) w->open = false; else focusWindow(w->id()); }
+    }
+}
+
+bool Editor::isWindowInFront(EditorWindow* w) const {
+    ImGuiWindow* iw = ImGui::FindWindowByName(w->imguiName());
+    if (!iw) return false;
+    if (iw->DockNode && iw->DockNode->TabBar) return iw->DockNode->TabBar->SelectedTabId == iw->TabId;
+    return !iw->Hidden;
+}
 
 void Editor::drawMenuBar() {
     // a slim top bar: menus, breadcrumb, play controls in the centre, the agent link on the right
@@ -47,10 +100,15 @@ void Editor::drawMenuBar() {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 6));
     ImGui::TextColored(theme_.palette().accent, ICON_CASTLE);
     ImGui::PopStyleVar();
-    if (ImGui::BeginMenu("Проект")) {
+    // ---- Файл: project + map documents
+    if (ImGui::BeginMenu("Файл")) {
+        ImGui::SeparatorText("Проект");
+        if (item(ICON_ZAP, "Сделать игру…")) showProjectHub(2);
         if (item(ICON_PLUS, "Новый проект…")) showProjectHub(1);
-        if (item(ICON_FOLDER_OPEN, "Проекты…")) showProjectHub(0);
-        if (menu(ICON_CLOCK, "Недавние")) {
+        if (item(ICON_FOLDER_OPEN, "Открыть проект…")) showProjectHub(0);
+        for (auto& window : windows_) if (std::string(window->id()) == "project_import")
+            if (item(ICON_FOLDER_OPEN, window->title())) focusWindow("project_import");
+        if (menu(ICON_CLOCK, "Недавние проекты")) {
             int n = 0;
             for (auto& pr : recentProjects()) {
                 if (!pr.exists || ++n > 12) continue;
@@ -64,35 +122,37 @@ void Editor::drawMenuBar() {
             std::string err;
             if (ws_.project.load(ws_.project.dir, &err)) { reloadRules(); status = "Правила перечитаны"; } else status = "Ошибка: " + err;
         }
-        ImGui::Separator();
-        if (item(ICON_LINK, "Сделать редактор программой по умолчанию для .rtsproj", nullptr, fileAssoc().registered, fileAssoc().supported))
-            registerFileAssoc();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", fileAssoc().detail.c_str());
-        if (item(ICON_PLUG, "Подключить ИИ-агента (MCP)…")) focusWindow("agent");
-        ImGui::Separator();
-        if (item(ICON_EXIT, "Выход")) quit_ = true;
-        ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Карта")) {
+        ImGui::SeparatorText("Карта");
         if (menu(ICON_FILE_PLUS, "Новая карта")) {
             static int sz[2] = {64, 48};
-            ImGui::InputInt2("Размер", sz);
-            if (ImGui::Button("Создать")) { newMap(std::clamp(sz[0], 8, game::kMaxMapSize), std::clamp(sz[1], 8, game::kMaxMapSize)); ImGui::CloseCurrentPopup(); }
+            ImGui::TextDisabled("Размер в клетках (до %d)", game::kMaxMapSize);
+            ImGui::SetNextItemWidth(160);
+            ImGui::InputInt2("##newsize", sz);
+            static const int presets[][2] = {{32, 32}, {64, 48}, {96, 96}, {128, 128}, {256, 256}};
+            for (auto& pr : presets) {
+                char b[24]; std::snprintf(b, sizeof b, "%d×%d", pr[0], pr[1]);
+                if (&pr != &presets[0]) ImGui::SameLine();
+                if (ImGui::SmallButton(b)) { sz[0] = pr[0]; sz[1] = pr[1]; }
+            }
+            if (ui::button(ICON_PLUS, "Создать", true)) { newMap(std::clamp(sz[0], 8, game::kMaxMapSize), std::clamp(sz[1], 8, game::kMaxMapSize)); ImGui::CloseCurrentPopup(); }
             ImGui::EndMenu();
         }
-        if (menu(ICON_FOLDER_OPEN, "Открыть")) {
+        if (menu(ICON_FOLDER_OPEN, "Открыть карту")) {
             std::error_code ec;
             std::vector<std::string> files;
             for (auto& e : fs::directory_iterator(ws_.mapsDir(), ec)) if (e.path().extension() == ".json") files.push_back(e.path().filename().string());
             std::sort(files.begin(), files.end());
-            for (auto& f : files) if (item(ICON_MAP_PIN, f.c_str())) openMap(ws_.mapsDir() + "/" + f);
+            for (auto& f : files) if (item(ICON_MAP_PIN, f.c_str(), nullptr, fs::path(doc().path).filename() == f)) openMap(ws_.mapsDir() + "/" + f);
+            if (files.empty()) ImGui::TextDisabled("в maps/ нет карт");
             ImGui::EndMenu();
         }
-        if (item(ICON_SAVE, "Сохранить", "Ctrl+S", false, !doc().path.empty())) saveMap(doc().path);
-        if (menu(ICON_FILE, "Сохранить как")) {
+        if (item(ICON_SAVE, "Сохранить карту", "Ctrl+S", false, !doc().path.empty())) saveMap(doc().path);
+        if (menu(ICON_FILE, "Сохранить карту как")) {
             static std::string name = "new_map.json";
-            ui::inputString("Файл в maps/", name);
-            if (ImGui::Button("Сохранить")) {
+            ImGui::TextDisabled("Файл в maps/");
+            ImGui::SetNextItemWidth(220);
+            ui::inputString("##saveas", name);
+            if (ui::button(ICON_SAVE, "Сохранить", true)) {
                 std::string fn = name;
                 if (fs::path(fn).extension() != ".json") fn += ".json";
                 saveMap(ws_.mapsDir() + "/" + fn);
@@ -100,63 +160,103 @@ void Editor::drawMenuBar() {
             }
             ImGui::EndMenu();
         }
-        if (item(ICON_PLUS, "Добавить карту в game.json")) {
+        if (item(ICON_PLUS, "Добавить карту в список игры")) {
             Json p = Json::object(); p.set("addToGame", Json::fromBool(true));
             Json r = ws_.call("map_save", p);
             status = r.has("error") ? "Ошибка: " + r.getStr("error") : "Карта в списке игры";
         }
+        ImGui::Separator();
+        if (item(ICON_LINK, "Открывать .rtsproj этим редактором", nullptr, fileAssoc().registered, fileAssoc().supported))
+            registerFileAssoc();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", fileAssoc().detail.c_str());
+        ImGui::Separator();
+        if (item(ICON_EXIT, "Выход")) quit_ = true;
         ImGui::EndMenu();
     }
+    // ---- Правка
     if (ImGui::BeginMenu("Правка")) {
         if (item(ICON_UNDO, "Отменить", "Ctrl+Z", false, doc().canUndo() && !playing())) { doc().undo(); selection = {}; }
         if (item(ICON_REDO, "Повторить", "Ctrl+Y", false, doc().canRedo() && !playing())) { doc().redo(); selection = {}; }
         ImGui::Separator();
         if (item(ICON_TRASH, "Удалить выбранный объект", "Del", false, selectedEntity() >= 0)) { doc().removeEntity(selectedEntity()); selection = {}; }
+        if (item(ICON_FIT, "Показать всю карту", "F")) fitScene();
+        ImGui::SeparatorText("Симметрия");
         if (item(ICON_COPY, "Зеркально: левая половина → правая")) { doc().mirrorHorizontal(); status = "Отражено, игроки 1 и 2 поменяны в копии"; }
         if (item(ICON_ROTATE, "Центральная симметрия левой половины")) { doc().mirrorPoint(); status = "Отражено (поворот на 180°)"; }
+        ImGui::SeparatorText("Рельеф");
         if (item(ICON_LEVELS, "Достроить рампы через край плато")) { doc().beginEdit(); doc().autoRamps(); }
+        ImGui::Separator();
+        if (item(ICON_CIRCLE_CHECK, "Проверить карту…")) { select({Selection::MapProps, -1, {}}); focusWindow("inspector"); }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Окна")) {
-        for (auto& w : windows_)
-            if (item(w->icon() ? w->icon() : windowIconFor(w->id()), w->title(), nullptr, w->open)) w->open = !w->open;
+    // ---- Вид: general windows, workspaces, theme
+    if (ImGui::BeginMenu("Вид")) {
+        drawWindowItems("service");
+        if (!windowsOf("other").empty() && menu(ICON_WINDOW, "Другие окна")) { drawWindowItems("other"); ImGui::EndMenu(); }
+        ImGui::SeparatorText("Раскладки");
+        for (auto& g : kGroups) if (item(g.icon, g.workspace)) openWorkspace(g.id);
+        if (item(ICON_LAYOUT, "Сбросить раскладку")) { for (auto& w : windows_) w->open = w->openByDefault(); resetLayout_ = true; }
+        ImGui::SeparatorText("Сцена");
+        ImGui::MenuItem("Уровни и рампы", nullptr, &showLevels);
+        ImGui::MenuItem("Регионы", nullptr, &showRegions);
+        ImGui::MenuItem("Зоны триггеров", nullptr, &showAreas);
+        ImGui::MenuItem("Привязка к сетке", nullptr, &snap);
+        ImGui::MenuItem("Камера следует за правками агента", nullptr, &followAgent);
         ImGui::Separator();
         if (menu(ICON_PALETTE, "Тема")) { theme_.drawMenu(); ImGui::EndMenu(); }
-        if (item(ICON_LAYOUT, "Сбросить раскладку")) { for (auto& w : windows_) w->open = w->openByDefault(); resetLayout_ = true; }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Тест")) {
-        if (!playing()) {
-            if (item(ICON_BOT, "Боты против ботов", "F5")) startPlay(0);
-            for (size_t p = 0; p < doc().data.players.size(); ++p)
-                if (!doc().data.players[p].waves && item(ICON_USER, ("Играть за " + doc().data.players[p].name).c_str())) startPlay(int(p + 1));
-        } else if (item(ICON_STOP, "Остановить тест", "F5")) stopPlay();
+    // ---- window groups
+    for (auto& g : kGroups) {
+        if (std::string(g.id) == "publish") continue;   // in «Сборка» together with the build targets
+        if (!ImGui::BeginMenu(g.menu)) continue;
+        drawWindowItems(g.id);
         ImGui::Separator();
-        if (menu(ICON_SMARTPHONE, "Запустить игру на устройстве")) {
-            static const char* devices[][2] = {{"desktop-1080", "ПК 1920×1080"}, {"iphone-15", "iPhone 15"}, {"iphone-se", "iPhone SE"}, {"ipad", "iPad"},
-                                               {"pixel-8", "Pixel 8"}, {"android-low", "Слабый Android 720p"}};
-            for (auto& d : devices)
-                if (ImGui::BeginMenu(d[1])) {
-                    if (item(ICON_LANDSCAPE, "Альбомная")) launchOnDevice(d[0], true);
-                    if (item(ICON_PORTRAIT, "Портретная")) launchOnDevice(d[0], false);
-                    ImGui::EndMenu();
-                }
-            ImGui::EndMenu();
+        if (item(ICON_LAYOUT, (std::string("Раскладка «") + g.workspace + "»").c_str())) openWorkspace(g.id);
+        if (std::string(g.id) == "logic") {
+            ImGui::SeparatorText("Тест");
+            if (clientPlaying()) {
+                if (item(ICON_STOP, "Остановить игру", "F5")) stopClientPlay();
+            } else if (!playing()) {
+                if (item(ICON_GAME, "Как в клиенте (окно «Игра»)", prefersClientPlay() ? "F5" : nullptr)) startClientPlay();
+                if (item(ICON_EXTERNAL, "В отдельном окне клиента")) launchClient();
+                if (item(ICON_BOT, "Боты против ботов", prefersClientPlay() ? nullptr : "F5")) startPlay(0);
+                for (size_t p = 0; p < doc().data.players.size(); ++p)
+                    if (!doc().data.players[p].waves && item(ICON_USER, ("Играть за " + doc().data.players[p].name).c_str())) startPlay(int(p + 1));
+            } else if (item(ICON_STOP, "Остановить тест", "F5")) stopPlay();
+            if (menu(ICON_SMARTPHONE, "Запустить игру на устройстве")) {
+                static const char* devices[][2] = {{"desktop-1080", "ПК 1920×1080"}, {"iphone-15", "iPhone 15"}, {"iphone-se", "iPhone SE"}, {"ipad", "iPad"},
+                                                   {"pixel-8", "Pixel 8"}, {"android-low", "Слабый Android 720p"}};
+                for (auto& d : devices)
+                    if (ImGui::BeginMenu(d[1])) {
+                        if (item(ICON_LANDSCAPE, "Альбомная")) launchOnDevice(d[0], true);
+                        if (item(ICON_PORTRAIT, "Портретная")) launchOnDevice(d[0], false);
+                        ImGui::EndMenu();
+                    }
+                ImGui::EndMenu();
+            }
         }
         ImGui::EndMenu();
     }
+    // ---- Сборка: build windows and targets
     if (ImGui::BeginMenu("Сборка")) {
-        if (item(ICON_BUILD, "Окно сборки…", "Ctrl+B")) focusWindow("build");
-        ImGui::Separator();
+        drawWindowItems("publish");
+        if (item(ICON_LAYOUT, "Раскладка «Выпуск»")) openWorkspace("publish");
+        ImGui::SeparatorText("Собрать");
         ImGui::BeginDisabled(ws_.building());
-        static const char* targets[][2] = {{"macos", "macOS (.app)"}, {"ios", "iOS (проект Xcode)"}, {"android", "Android (Gradle + APK)"},
-                                           {"web", "Web (HTML5)"}, {"windows", "Windows (.exe)"}, {"linux", "Linux"}, {"all", "Все платформы"}};
-        for (auto& t : targets) if (item(std::string(t[0]) == "web" ? ICON_GLOBE : std::string(t[0]) == "all" ? ICON_LAYOUT : std::string(t[0]) == "ios" || std::string(t[0]) == "android" ? ICON_SMARTPHONE : ICON_MONITOR, t[1])) runBuild(t[0]);
+        static const char* targets[][2] = {{"macos", "macOS (.app)"}, {"windows", "Windows (.exe)"}, {"linux", "Linux"}, {"web", "Web (HTML5)"},
+                                           {"ios", "iOS (проект Xcode)"}, {"android", "Android (Gradle + APK)"}, {"all", "Все платформы"}};
+        for (auto& t : targets) {
+            const std::string id = t[0];
+            if (item(id == "web" ? ICON_GLOBE : id == "all" ? ICON_LAYOUT : id == "ios" || id == "android" ? ICON_SMARTPHONE : ICON_MONITOR, t[1])) runBuild(t[0]);
+        }
         ImGui::EndDisabled();
+        ImGui::SeparatorText("Конфигурация");
+        if (ImGui::MenuItem("Release", nullptr, buildConfig == 1)) buildConfig = 1;
+        if (ImGui::MenuItem("Debug", nullptr, buildConfig == 0)) buildConfig = 0;
         ImGui::Separator();
-        ImGui::RadioButton("Debug", &buildConfig, 0); ImGui::SameLine(); ImGui::RadioButton("Release", &buildConfig, 1);
-        ImGui::Separator();
-        if (item(ICON_SETTINGS, "Окно сборки: качество, размер, файлы…")) focusWindow("build");
+        if (item(ICON_APP_WINDOW, "Окно игры на ПК и Mac…")) focusWindow("build");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Размер, полный экран, изменение размера — окно «Сборка», раздел «Окно игры»");
         ImGui::EndMenu();
     }
     drawTopBarControls();
@@ -182,7 +282,7 @@ void Editor::drawTopBarControls() {
         const float pulse = busy ? float(0.5 + 0.5 * std::sin(time_ * 6.0)) : 0.0f;
         pill(text, busy ? pal.accent : clients > 0 ? pal.success : pal.textDim, pulse, pal);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Канал MCP для агентов: порт %d\nПодключено серверов rtsmcp: %d\nОкно «Agent» — как подключить и журнал действий", server_.port(), clients);
+            ImGui::SetTooltip("Канал MCP для агентов: порт %d\nПодключено серверов rtsmcp: %d\nОкно «ИИ-агент» — как подключить и журнал действий", server_.port(), clients);
         if (ImGui::IsItemClicked()) focusWindow("agent");
         rightX -= 12;
     }
@@ -217,21 +317,25 @@ void Editor::drawPlayControls() {
     int n = 0;
     auto at = [&] { ImGui::SetCursorScreenPos(ImVec2(origin.x + step * float(n++), origin.y)); };
     ui::beginSegment();
-    const bool on = playing();
-    std::string playTip = on ? "Остановить тест (F5)" : lastPlaySlot_ > 0 && size_t(lastPlaySlot_) <= doc().data.players.size()
+    const bool on = playing() || clientPlaying();
+    const bool asClient = prefersClientPlay();   // the game's own screens: F5 plays as in the client
+    auto stopAll = [&] { stopClientPlay(); stopPlay(); };
+    std::string playTip = on ? "Остановить тест (F5)" : asClient ? std::string("Играть как в клиенте (F5)") : lastPlaySlot_ > 0 && size_t(lastPlaySlot_) <= doc().data.players.size()
                                                         ? "Играть за " + doc().data.players[size_t(lastPlaySlot_ - 1)].name + " (F5)"
                                                         : std::string("Тест: боты против ботов (F5)");
     at();
-    if (ui::toolButton(ICON_PLAY, playTip.c_str(), on)) { if (on) stopPlay(); else startPlay(lastPlaySlot_); }
+    if (ui::toolButton(ICON_PLAY, playTip.c_str(), on)) { if (on) stopAll(); else if (asClient) startClientPlay(); else startPlay(lastPlaySlot_); }
     at();
-    if (ui::toolButton(ICON_PAUSE, playPaused ? "Продолжить" : "Пауза", on && playPaused, on)) playPaused = !playPaused;
+    if (ui::toolButton(ICON_PAUSE, playPaused ? "Продолжить" : "Пауза", playing() && playPaused, playing())) playPaused = !playPaused;   // the client has its own pause
     at();
-    if (ui::toolButton(ICON_STOP, "Стоп", false, on)) stopPlay();
+    if (ui::toolButton(ICON_STOP, "Стоп", false, on)) stopAll();
     at();
     if (ui::toolButton(ICON_CHEVRON_DOWN, "За кого играть")) ImGui::OpenPopup("##playas");
     ui::endSegment();
     ImGui::PopStyleVar();
     if (ImGui::BeginPopup("##playas")) {
+        if (item(ICON_GAME, "Как в клиенте (меню и скрипты игры)", nullptr, clientPlaying())) { if (!on) startClientPlay(); }
+        if (item(ICON_EXTERNAL, "В отдельном окне клиента")) launchClient();
         if (item(ICON_BOT, "Боты против ботов", nullptr, lastPlaySlot_ == 0)) { lastPlaySlot_ = 0; if (!on) startPlay(0); }
         for (size_t p = 0; p < doc().data.players.size(); ++p)
             if (!doc().data.players[p].waves && item(ICON_USER, ("Играть за " + doc().data.players[p].name).c_str(), nullptr, lastPlaySlot_ == int(p + 1))) {

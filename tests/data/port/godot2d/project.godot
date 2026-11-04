@@ -1,0 +1,4 @@
+config_version=5
+[application]
+config/name="2D fixture"
+run/main_scene="res://Main.tscn"

@@ -11,7 +11,9 @@
 #include <string>
 #include <vector>
 
+#include "ClientHost.h"
 #include "EditorTheme.h"
+#include "EditorNativeBuild.h"
 #include "modules/rts/view/RtsViewScript.h"
 #include "EditorWindow.h"
 #include "core/FileAssoc.h"
@@ -64,10 +66,12 @@ public:
         std::string engineDir;    // engine checkout (templates/, docs/, rtsbuild)
         std::string buildTool;    // path to rtsbuild
         std::string gameExe;      // path to the game client (device runs)
+        std::string ownGameExe;   // RTSGame built in the same tree as this editor (same C++ modules); may be empty
         std::string mcpTool;      // path to rtsmcp (one-click agent setup in the Agent window)
         std::string editorExe;    // this executable (rtsmcp launches it when the editor isn't running)
         std::string openMap;
         int listenPort = -1; // -1 = automatic, 0 = no agent link, positive = exact port
+        bool nativeChild = false;    // --native-editor / RTS_NATIVE_EDITOR=1: started by the switch to the project's build (EditorNativeBuild.cpp)
     };
 
     explicit Editor(Options o) : opt_(std::move(o)) {}
@@ -126,6 +130,13 @@ public:
     game::RtsModule* simModule() { return sim_ ? dynamic_cast<game::RtsModule*>(&sim_->module()) : nullptr; }
     void startPlay(int humanSlot = 0);
     void stopPlay();
+    // Play as in the game client, inside the Game window (EditorClientPlay.cpp, ClientHost.h): the game's
+    // menus / meta screens, view scripts, script UI and input. Scripted games (ui/main.lua) prefer it for F5.
+    void startClientPlay();
+    void stopClientPlay();
+    bool clientPlaying() const { return clientHost_.active(); }
+    bool prefersClientPlay() const;
+    ClientHost& clientHost() { return clientHost_; }
     int humanSlot() const { return human_; }
     float playSpeed = 1.0f;
     bool playPaused = false;
@@ -151,7 +162,7 @@ public:
     void registerFileAssoc();
     void reloadRules();                        // after rules change: views, palette
     void showGamePicker() { showProjectHub(0); }
-    void showProjectHub(int tab);   // 0: recent projects, 1: new project (EditorProjects.cpp)
+    void showProjectHub(int tab);   // 0: recent projects, 1: new project, 2: make a game (EditorProjects.cpp)
 
     // rendering a map view into a Viewport (used by Scene and Game windows)
     void renderScene(Viewport& vp, const render::RTSCamera& cam, bool editOverlays);
@@ -183,7 +194,14 @@ public:
     const std::vector<std::unique_ptr<EditorWindow>>& windows() const { return windows_; }
     void resetLayout() { resetLayout_ = true; }
     void launchOnDevice(const std::string& device, bool landscape);
+    // The project in a separate game client window (RTSGame with RTS_CONTENT = project), as players get it:
+    // the game's own menus, scripts and input (EditorClientPlay.cpp).
+    void launchClient();
     void focusWindow(const std::string& id);   // open + bring to front (by stable id)
+    // Windows of a top-menu group (EditorWindow::group(); "other": unknown groups), default ones first.
+    std::vector<EditorWindow*> windowsOf(const std::string& group) const;
+    // Workspace: the default windows + all windows of the group, layout rebuilt, the group's windows in front.
+    void openWorkspace(const std::string& group);
     EditorTheme& theme() { return theme_; }
 
     // statistics
@@ -194,10 +212,14 @@ public:
 
 private:
     void drawMenuBar();
+    void drawWindowItems(const std::string& group);
+    bool isWindowInFront(EditorWindow* w) const;
     void drawTopBarControls();   // breadcrumb, play controls, MCP pill (inside the main menu bar)
     void drawPlayControls();
     void drawDockspace();
     void drawGamePicker();
+    void drawGameWizard();       // hub page "Сделать игру" (EditorGameWizard.cpp)
+    void pollGameWizard();       // every frame: the wizard's agent progress (EditorGameWizard.cpp)
     void drawStatusBar();
     float statusBarHeight() const { return ImGui::GetFontSize() + 12; }
     void drawActivityToasts();
@@ -221,6 +243,7 @@ private:
     Workspace ws_;
     gfx::Device* dev_ = nullptr;
     render::ImGuiLayer ui_;
+    ClientHost clientHost_;   // after ui_: shut down first (its ImGui context, RmlUi)
     render::Renderer3D r3d_;
     render::PostFx postFx_;
     game::RtsView view_;
@@ -230,6 +253,8 @@ private:
     int lastPlaySlot_ = 0;       // what the top bar Play button starts (0 = bots)
     EditorTheme theme_;
     int focusFirst_ = 0;
+    std::vector<std::string> pendingFocus_;   // openWorkspace: tabs to bring to front once docked
+    int pendingFocusFrames_ = 0;
     std::vector<std::unique_ptr<EditorWindow>> windows_;
 
     game::MapGrid grid_;
@@ -247,6 +272,15 @@ private:
     std::string pendingOpen_;
     bool openAsked_ = false;
     AssocStatus assoc_;
+    int drawUnsavedChanges(const std::string& question);   // body of an unsaved-changes modal: 0 / 1 go / 2 cancel
+    // EditorNativeBuild.cpp: the project's C++ modules missing from this binary -> build an editor with them
+    bool projectBuild() const;
+    bool checkNativeModules(bool fromPlay);   // true: modules are missing (banner shown)
+    void refreshNativeBuild(bool withTools);
+    void startNativeEditorBuild();
+    void restartIntoNativeBuild();
+    void drawNativeBuild();
+    NativeBuildUi native_;
 
     struct Flash { float x0, z0, x1, z1; double until, length; };
     std::vector<Flash> flashes_;

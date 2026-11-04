@@ -58,6 +58,14 @@ struct AppConfig {
     // "landscape" | "portrait" | "any". Locks the screen when the web build goes fullscreen; native
     // mobile apps get it from game.json through rtsbuild (Info.plist / AndroidManifest).
     std::string orientation = "landscape";
+    // Desktop window (macOS, Windows, Linux; mobile and web ignore these). Games set them from
+    // game.json "window" (engine/platform/WindowSettings.h) in AppCallbacks::configure.
+    enum class WindowMode { Windowed, Maximized, Fullscreen };
+    WindowMode windowMode = WindowMode::Windowed; // Fullscreen: macOS native (Spaces), Windows / Linux borderless over the monitor
+    bool resizable = true;          // false: fixed size (no resize border, no maximize / zoom)
+    int minWidth = 0, minHeight = 0; // logical points; 0 = no limit
+    bool keepAspect = false;        // resizing keeps width : height of the initial size
+    bool allowFullscreen = true;    // F11, Alt+Enter (Windows) and the green button (macOS) switch fullscreen
 };
 
 struct AppCallbacks {
@@ -65,6 +73,9 @@ struct AppCallbacks {
     std::function<void(gfx::Device&, double dt)> frame;  // called every display refresh; must call beginFrame/endFrame
     std::function<void(const Event&)> event;
     std::function<void()> shutdown;
+    // Optional: called by run() once the content root is known (readContentFile works) and before the
+    // window is created, to adjust the window from game data (size, mode). Desktop platforms only.
+    std::function<void(AppConfig&)> configure;
 };
 
 // Runs the main loop. Returns the exit code (on iOS/web it may never return).
@@ -155,6 +166,24 @@ void setClipboardText(const std::string& s);
 // Other schemes are refused (false). Web: a new tab (call it from a click handler or the popup blocker may stop it).
 bool openUrl(const std::string& url);
 namespace detail { bool urlAllowed(const std::string& url); }
+
+// --- hosted view ---
+// A game view hosted inside another app's window (the editor's Game window runs the game client in
+// an offscreen target). While set, the window / framebuffer size, scale, touch, safe area and content
+// root queries answer for the hosted view; requestQuit / fullscreen are recorded instead of applied.
+// The host sets it around every call into the hosted code and clears it afterwards.
+struct HostedView {
+    float width = 0, height = 0;   // logical points
+    int fbWidth = 0, fbHeight = 0; // pixels of the target
+    float scale = 1;               // fbWidth / width
+    bool touch = false;
+    Insets safe;
+    std::string contentRoot;       // "" = the app's own
+    std::string engineAssets;      // "engine/x" content paths also resolve to <engineAssets>/x
+    bool quitRequested = false;    // set by requestQuit()
+};
+void setHostedView(HostedView* view);   // nullptr: back to the real window
+HostedView* hostedView();
 
 } // namespace rts::platform
 

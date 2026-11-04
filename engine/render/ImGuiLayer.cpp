@@ -2,6 +2,7 @@
 #include "Shaders.h"
 #include "Math3D.h"
 #include "imgui.h"
+#include "imgui_internal.h"   // GetIO(ctx): a layer reads its own context
 
 #include <cstddef>
 #include <cstring>
@@ -47,7 +48,8 @@ constexpr uintptr_t kAlpha8Flag = 1;
 bool ImGuiLayer::init(gfx::Device& dev, const char* fontPath, float fontSize) {
     dev_ = &dev;
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    ctx_ = ImGui::CreateContext();
+    ImGui::SetCurrentContext(ctx_);   // CreateContext keeps another layer's context current
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "rts_rhi";
     io.BackendPlatformName = "rts_platform";
@@ -98,8 +100,11 @@ bool ImGuiLayer::init(gfx::Device& dev, const char* fontPath, float fontSize) {
     return pipeline_.valid();
 }
 
+void ImGuiLayer::bind() const { if (ctx_) ImGui::SetCurrentContext(ctx_); }
+
 void ImGuiLayer::shutdown() {
     if (!dev_) return;
+    bind();
     for (ImTextureData* t : ImGui::GetPlatformIO().Textures) {
         if (t->TexID != ImTextureID_Invalid) dev_->destroyTexture({uint32_t(t->TexID)});
         t->SetTexID(ImTextureID_Invalid);
@@ -107,13 +112,15 @@ void ImGuiLayer::shutdown() {
     }
     dev_->destroyBuffer(vb_); dev_->destroyBuffer(ib_);
     dev_->destroyPipeline(pipeline_); dev_->destroyShader(shader_);
-    ImGui::DestroyContext();
+    ImGui::DestroyContext(ctx_);
+    ctx_ = nullptr;
     dev_ = nullptr;
 }
 
 bool ImGuiLayer::handleEvent(const platform::Event& e) {
     using platform::EventType;
-    if (!dev_ || !ImGui::GetCurrentContext()) return false; // platforms may send focus/resize before init
+    if (!dev_ || !ctx_) return false; // platforms may send focus/resize before init
+    bind();
     ImGuiIO& io = ImGui::GetIO();
     auto mods = [&](uint8_t m) {
         io.AddKeyEvent(ImGuiMod_Ctrl, m & platform::kModCtrl);
@@ -165,10 +172,11 @@ bool ImGuiLayer::handleEvent(const platform::Event& e) {
     }
 }
 
-bool ImGuiLayer::wantsMouse() const { return ImGui::GetIO().WantCaptureMouse; }
-bool ImGuiLayer::wantsKeyboard() const { return ImGui::GetIO().WantCaptureKeyboard; }
+bool ImGuiLayer::wantsMouse() const { return ctx_ && ImGui::GetIO(ctx_).WantCaptureMouse; }
+bool ImGuiLayer::wantsKeyboard() const { return ctx_ && ImGui::GetIO(ctx_).WantCaptureKeyboard; }
 
 void ImGuiLayer::newFrame(double dt) {
+    bind();
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2(platform::windowWidth(), platform::windowHeight());
     float s = platform::dpiScale();
@@ -204,6 +212,7 @@ void ImGuiLayer::updateTextures() {
 }
 
 void ImGuiLayer::render() {
+    bind();
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
     updateTextures();

@@ -1,0 +1,61 @@
+<rml>
+<head>
+    <title>result</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../screens.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <script>
+        require('wizard_meta')
+        -- opened after every match (ui/screens.json "afterMatch") with params.result; rewards are settled once
+        ui.screen("result", {
+            open = function(p)
+                if not p.settled and p.result then p.settled = WizMeta.settle(p.result) end
+                local s = p.settled or {}
+                ui.set("wizResult", {won = s.won and true or false, rewardText = s.rewardText or "", xp = s.xp or 0, stars = s.stars or 0,
+                                     tutorial = s.tutorial and true or false, first = s.first and true or false, doubled = false})
+                WizMeta.refresh()
+            end,
+        })
+        function WizResult_double()
+            WizMeta.doubleReward(function(ok)
+                if ok then local r = ui.get("wizResult"); r.doubled = true; ui.set("wizResult", r) end
+            end)
+        end
+        function WizResult_next()
+            local p = ui.params("result")
+            if p.result and p.result.won then
+                for i, lv in ipairs(WizMeta.cfg.levels or {}) do
+                    if lv.map == p.result.map and WizMeta.cfg.levels[i + 1] then ui.home(); return WizMeta.startLevel(i + 1) end
+                end
+            end
+            ui.home()
+        end
+    </script>
+</head>
+<body>
+<div class="root" data-model="meta">
+    <div id="menu-bg"></div>
+    <div class="screen" data-attr-style="safeStyle">
+        <div class="screen-body center">
+            <div class="spacer"></div>
+            <h1 data-if="wizResult.tutorial &amp;&amp; wizResult.won">@wiz.tut.done</h1>
+            <h1 data-if="!wizResult.tutorial &amp;&amp; wizResult.won">@meta.victory</h1>
+            <h1 data-if="!wizResult.won">@meta.defeat</h1>
+            <p class="muted">{{params.result.mapTitle}}</p>
+            <p data-if="wizResult.stars > 0">★ {{wizResult.stars}} / 3</p>
+            <div class="spacer"></div>
+            <div class="stats" style="justify-content: center;">
+                <div class="stat"><span class="stat-value">{{wizResult.rewardText}}</span><span class="stat-label">@wiz.reward</span></div>
+                <div class="stat"><span class="stat-value">+{{wizResult.xp}}</span><span class="stat-label">@meta.xp</span></div>
+            </div>
+            <button class="big" data-if="wiz.double &amp;&amp; !wizResult.doubled &amp;&amp; wizResult.rewardText != ''" onclick="WizResult_double()">@wiz.double</button>
+        </div>
+        <div class="screen-footer">
+            <button class="big" onclick="ui.home()">@meta.continue</button>
+            <button class="big primary" data-if="wizResult.won &amp;&amp; !wizResult.tutorial" onclick="WizResult_next()">@wiz.next</button>
+            <button class="big primary" data-if="wizResult.tutorial &amp;&amp; wizResult.won" onclick="ui.home(); WizMeta.play()">@meta.play</button>
+        </div>
+    </div>
+</div>
+</body>
+</rml>

@@ -39,6 +39,7 @@ const std::vector<game::ScriptCommandDef>* GameClient::scriptCommands() {
 
 // Shown when the command needs no units, or one of the own selected units is of its "targets".
 bool GameClient::scriptCommandFits(const game::ScriptCommandDef& d) {
+    if (!d.card) return false;   // "card": false: only view scripts / HUD documents send it
     if (!d.needUnits) return true;
     World& w = sim_->world();
     for (Entity e : selection_) {

@@ -22,6 +22,7 @@
 //   tex2 cell colour (RGBA8, W x H, vertex stage)   tex3 dynamic (r field mix, g ore 0/0.5/1, b creep; vertex stage)
 //   tex4 splat weights (RGBA8 per cell, linear)     tex5..8 layer albedo   tex9..12 layer normals
 //   tex13 cliff albedo  tex14 cliff normal          tex15 vision (R8 per cell: 0 unexplored, .5 explored, 1 visible)
+//   tex18 height field of the drawn surface (16-bit, traced terrain shadows; Renderer3D::bindTrace)
 #pragma once
 #include "../../../engine/render/Shaders.h"
 
@@ -79,7 +80,7 @@ void main() {
 )";
 
 inline const char* kTerrainFS =
-    RTS_TERRAIN_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS
+    RTS_TERRAIN_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS RTS_GLSL_TRACE_AT("tex18")
     R"(
 uniform sampler2D tex4;
 uniform sampler2D tex5;
@@ -97,6 +98,30 @@ uniform mediump sampler2D tex15;
 uniform sampler2D tex16;   // detail normals: rg = n.xz, b = cavity, a = macro variation
 uniform sampler2D tex17;   // detail splat weights
 #endif
+
+#if TERRAIN_TIER >= 1
+// World-space volume noise avoids stretched texels on cliffs and needs no asset downloads.
+float groundHash(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
+float groundNoise(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(groundHash(i), groundHash(i + vec3(1,0,0)), f.x),
+                   mix(groundHash(i + vec3(0,1,0)), groundHash(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(groundHash(i + vec3(0,0,1)), groundHash(i + vec3(1,0,1)), f.x),
+                   mix(groundHash(i + vec3(0,1,1)), groundHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+float groundBand(vec3 p, float scale) {
+    vec3 q = p * scale;
+    float footprint = max(length(dFdx(q)), length(dFdy(q)));
+    // Fade subpixel frequencies instead of sharpening them into sparkling noise at a distance.
+    return (groundNoise(q) - 0.5) * (1.0 - smoothstep(0.35, 1.0, footprint));
+}
+#endif
+
 in vec3 v_nrm;
 in vec3 v_wpos;
 in vec3 v_col;
@@ -213,12 +238,32 @@ void main() {
         albedoS = mix(albedoS, s, t_cliff.y);
     }
 #endif
+#if TERRAIN_TIER >= 1
+    if (t_mode.y < 0.5) {
+        // Retain the game's palette, adding soil grain only when no authored splat layers exist.
+        float broad = groundBand(v_wpos, 0.7);
+        float grain = groundBand(v_wpos + vec3(17.0, 3.0, 29.0), 4.0);
+        float detail = broad * 0.12 + grain * 0.18;
+#if TERRAIN_TIER >= 2
+        detail += groundBand(v_wpos + vec3(7.0, 19.0, 11.0), 12.0) * 0.10;
+        // Surface-gradient bump: follows arbitrary slopes without a projected tangent seam.
+        vec3 dpdx = dFdx(v_wpos), dpdy = dFdy(v_wpos);
+        vec3 rx = cross(dpdy, n), ry = cross(n, dpdx);
+        float det = dot(dpdx, rx);
+        vec3 grad = (dFdx(grain) * rx + dFdy(grain) * ry) * sign(det) / max(abs(det), 1e-6);
+        grad *= 0.016;
+        grad /= max(1.0, length(grad) / 0.10);
+        n = normalize(n - grad);
+#endif
+        albedoS *= 1.0 + detail;
+    }
+#endif
     vec3 alb = albedoS + v_dyn;
     vec3 base = alb * alb;                                // ~sRGB -> linear
     vec3 L = normalize(u_sunDir.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
-    float sh = ndl > 0.0 ? shadowAt(v_wpos, n) : 1.0;
+    float sh = ndl > 0.0 ? min(shadowAt(v_wpos, n), terrainShadow(v_wpos)) : 1.0;
     sh *= cloudShade(v_wpos);
     vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
     vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
@@ -254,8 +299,32 @@ void main() {
 inline const char* kTerrainMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "struct TU0 { float4 lod; float4 mode; float4 scale; float4 cliff; float4 fog; float4 tint[4]; float4 cliffTint; float4 fogColor; float4 fogGrid; float4 detail; float4 rock; float4 blend; };\n"
-    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS
+    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE
     R"(
+
+#if TERRAIN_TIER >= 1
+// World-space volume noise avoids stretched texels on cliffs and needs no asset downloads.
+float groundHash(float3 p) {
+    p = (p * 0.1031 - floor(p * 0.1031));
+    p += dot(p, p.yzx + 33.33);
+    return ((p.x + p.y) * p.z - floor((p.x + p.y) * p.z));
+}
+float groundNoise(float3 p) {
+    float3 i = floor(p), f = (p - floor(p));
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(groundHash(i), groundHash(i + float3(1,0,0)), f.x),
+                   mix(groundHash(i + float3(0,1,0)), groundHash(i + float3(1,1,0)), f.x), f.y),
+               mix(mix(groundHash(i + float3(0,0,1)), groundHash(i + float3(1,0,1)), f.x),
+                   mix(groundHash(i + float3(0,1,1)), groundHash(i + float3(1,1,1)), f.x), f.y), f.z);
+}
+float groundBand(float3 p, float scale) {
+    float3 q = p * scale;
+    float footprint = max(length(dfdx(q)), length(dfdy(q)));
+    // Fade subpixel frequencies instead of sharpening them into sparkling noise at a distance.
+    return (groundNoise(q) - 0.5) * (1.0 - smoothstep(0.35, 1.0, footprint));
+}
+#endif
+
 struct VIn { float3 pos [[attribute(0)]]; float3 nrm [[attribute(1)]]; float4 col [[attribute(2)]]; float2 morph [[attribute(3)]]; };
 struct VOut { float4 pos [[position]]; float3 nrm; float3 wpos; float3 col; float3 dyn; };
 vertex VOut vs_main(VIn in [[stage_in]], constant TU0& u [[buffer(1)]], constant U1& f [[buffer(2)]],
@@ -320,12 +389,14 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
 #if TERRAIN_DETAIL
                         , texture2d<float> tex16 [[texture(16)]], texture2d<float> tex17 [[texture(17)]]
 #endif
+                        , texture2d<float> tex18 [[texture(18)]]
                         ) {
 #if TERRAIN_DETAIL
     // Metal has sampler slots 0..15 per stage: the detail textures use constant samplers
     constexpr sampler s16(filter::linear, mip_filter::linear, address::clamp_to_edge);
     constexpr sampler s17(filter::linear, mip_filter::linear, address::clamp_to_edge);
 #endif
+    constexpr sampler s18(filter::linear, mip_filter::none, address::clamp_to_edge);   // height field (traced shadows)
     float3 n = normalize(in.nrm);
     float3 albedoS = in.col;
     float3 geoN = n;
@@ -416,12 +487,32 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
         albedoS = mix(albedoS, s, u.cliff.y);
     }
 #endif
+#if TERRAIN_TIER >= 1
+    if (u.mode.y < 0.5) {
+        // Retain the game's palette, adding soil grain only when no authored splat layers exist.
+        float broad = groundBand(in.wpos, 0.7);
+        float grain = groundBand(in.wpos + float3(17.0, 3.0, 29.0), 4.0);
+        float detail = broad * 0.12 + grain * 0.18;
+#if TERRAIN_TIER >= 2
+        detail += groundBand(in.wpos + float3(7.0, 19.0, 11.0), 12.0) * 0.10;
+        // Surface-gradient bump: follows arbitrary slopes without a projected tangent seam.
+        float3 dpdx = dfdx(in.wpos), dpdy = dfdy(in.wpos);
+        float3 rx = cross(dpdy, n), ry = cross(n, dpdx);
+        float det = dot(dpdx, rx);
+        float3 grad = (dfdx(grain) * rx + dfdy(grain) * ry) * sign(det) / max(abs(det), 1e-6);
+        grad *= 0.016;
+        grad /= max(1.0, length(grad) / 0.10);
+        n = normalize(n - grad);
+#endif
+        albedoS *= 1.0 + detail;
+    }
+#endif
     float3 alb = albedoS + in.dyn;
     float3 base = alb * alb;
     float3 L = normalize(f.sunDir.xyz);
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
-    float sh = ndl > 0.0 ? shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0) : 1.0;
+    float sh = ndl > 0.0 ? min(shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0), terrainShadow(f, tex18, s18, in.wpos)) : 1.0;
     sh *= cloudShade(l, in.wpos);
     float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
     float3 amb = mix(f.groundColor.rgb * f.groundColor.rgb, f.skyColor.rgb * f.skyColor.rgb, n.y * 0.5 + 0.5);

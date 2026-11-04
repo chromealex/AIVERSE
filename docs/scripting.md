@@ -405,6 +405,7 @@ end
 | `args` | array `[{name, type, ...}]` (or an object `{name: {type, ...}}`): `int` (`min`, `max`, `default`), `enum` (`values`, `default`), `bool`, `point` (`{x, z}` in the handler), `unit` (a living unit; `own: true` = of the sender), `entity` |
 | `cost`, `cooldown` | resources taken and cooldown (seconds, per player) started when the handler accepts; while unaffordable / cooling down the command is dropped (the card shows the remaining seconds) |
 | `fn` | handler function (default `on_command`) |
+| `card` | `false`: no button and no hotkey on the command card; view scripts (`view.send`), HUD documents (`send('id')`) and MCP still send it (a tutorial's "Next", a game's own panels). Default `true` |
 | `mapClick` | `true`: a plain left click / tap on the map (normal input mode, nothing armed) sends this command with the clicked ground point as its first `point` argument (on release; a press that moves more than 10 px pans the camera instead, a finger drag pans and two fingers zoom; a press on a script HUD element with the attribute `map-drag` released over the map also sends it there: drag-to-cast discs whose own `data-event-mousedown` arms the aim); for games whose input is tapping the map (OpenWar). Needs a `point` argument and no `targets`; the first such command (by id) wins. Client and editor Game view; test `script_command_map_click` |
 
 The first `point` / `unit` / `entity` argument is what a click picks: the button enters a targeting

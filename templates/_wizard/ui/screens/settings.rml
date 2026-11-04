@@ -1,0 +1,38 @@
+<rml>
+<head>
+    <title>settings</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../screens.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <script>
+        require('wizard_meta')
+        ui.screen("settings", {open = function() WizMeta.refresh() end})
+        function WizSettings_lang()
+            local list, cur = game.languages(), game.language()
+            for i, l in ipairs(list) do if l == cur then return game.setLanguage(list[i % #list + 1]) end end
+            if list[1] then game.setLanguage(list[1]) end
+        end
+    </script>
+</head>
+<body>
+<div class="root" data-model="meta">
+    <div id="menu-bg"></div>
+    <div class="screen" data-attr-style="safeStyle">
+        <div class="screen-header">
+            <button class="back" onclick="ui.back()">@meta.back</button>
+            <div class="screen-title">@meta.settings</div>
+        </div>
+        <div class="screen-body">
+            <div class="list">
+                <div class="list-row"><div class="grow">@wiz.set.language</div><button onclick="WizSettings_lang()">{{game.language}}</button></div>
+                <div class="list-row"><div class="grow">@wiz.set.hints</div>
+                    <button onclick="WizMeta.toggleHints()"><span data-if="wiz.hints">@wiz.on</span><span data-if="!wiz.hints">@wiz.off</span></button></div>
+                <div class="list-row" data-if="wiz.tutorial"><div class="grow">@wiz.set.retutorial</div>
+                    <button onclick="WizMeta.resetTutorial(); WizMeta.startTutorial()">@meta.play</button></div>
+                <div class="list-row"><div class="grow">@wiz.set.howto</div><button onclick="game.howto(true)">@wiz.open</button></div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</rml>

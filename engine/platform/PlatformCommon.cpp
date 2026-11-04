@@ -69,14 +69,21 @@ bool writePPM(const std::string& path, int w, int h, const unsigned char* rgba) 
 
 using detail::state;
 
-float windowWidth() { return state().winW; }
-float windowHeight() { return state().winH; }
-int framebufferWidth() { return state().fbW; }
-int framebufferHeight() { return state().fbH; }
-float dpiScale() { return state().scale; }
-bool isTouchDevice() { return state().touch; }
-void requestQuit() { state().quit = true; }
-std::string contentRoot() { return state().contentRoot; }
+namespace {
+HostedView* g_hosted = nullptr;
+const std::string& contentRootFor() { return g_hosted && !g_hosted->contentRoot.empty() ? g_hosted->contentRoot : state().contentRoot; }
+} // namespace
+void setHostedView(HostedView* view) { g_hosted = view; }
+HostedView* hostedView() { return g_hosted; }
+
+float windowWidth() { return g_hosted ? g_hosted->width : state().winW; }
+float windowHeight() { return g_hosted ? g_hosted->height : state().winH; }
+int framebufferWidth() { return g_hosted ? g_hosted->fbWidth : state().fbW; }
+int framebufferHeight() { return g_hosted ? g_hosted->fbHeight : state().fbH; }
+float dpiScale() { return g_hosted ? g_hosted->scale : state().scale; }
+bool isTouchDevice() { return g_hosted ? g_hosted->touch : state().touch; }
+void requestQuit() { if (g_hosted) g_hosted->quitRequested = true; else state().quit = true; }
+std::string contentRoot() { return contentRootFor(); }
 std::string userDataDir() { return state().userDir; }
 
 // ------------------------------------------------------------------ text input
@@ -94,13 +101,15 @@ void stopTextInput() {
 }
 bool textInputActive() { return state().textInput; }
 Insets safeAreaInsets() {
+    if (g_hosted) return g_hosted->safe;
     Insets in = state().safe; // + an ad banner, so the UI never ends up under it
     in.top += state().bannerTop;
     in.bottom += state().bannerBottom;
     return in;
 }
-void setFullscreen(bool on) { detail::applyFullscreen(on); }
+void setFullscreen(bool on) { if (!g_hosted) detail::applyFullscreen(on); }
 bool isFullscreen() {
+    if (g_hosted) return false;
 #if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
     return true;
 #else
@@ -325,7 +334,9 @@ bool readContentFile(const std::string& rel, std::string& out) {
         detail::requestChunkFor(rel);
         if (state().packs.read(rel, out)) return true;
     }
-    if (detail::readFileStd(state().contentRoot + "/" + rel, out)) return true;
+    if (detail::readFileStd(contentRootFor() + "/" + rel, out)) return true;
+    if (g_hosted && !g_hosted->engineAssets.empty() && rel.rfind("engine/", 0) == 0 &&
+        detail::readFileStd(g_hosted->engineAssets + "/" + rel.substr(7), out)) return true;
     return detail::readFileStd(rel, out); // absolute path or relative to CWD (tools, editor)
 }
 #endif
@@ -335,7 +346,7 @@ ContentState contentState(const std::string& rel) {
     if (st == pack::PackSet::State::Ready) return ContentState::Ready;
     if (st == pack::PackSet::State::NotDownloaded) return ContentState::NotDownloaded;
     std::string tmp;
-    return detail::readFileStd(state().contentRoot + "/" + rel, tmp) ? ContentState::Ready : ContentState::Missing;
+    return detail::readFileStd(contentRootFor() + "/" + rel, tmp) ? ContentState::Ready : ContentState::Missing;
 }
 
 void requestContent(const std::vector<std::string>& paths) {

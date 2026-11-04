@@ -87,6 +87,11 @@ public:
     // Any rtsbuild run streamed into the same log (Build window / MCP): args after the executable;
     // `label` names the log file (logs/<label>-<time>.log); withProject adds --project / --engine.
     void startTool(const std::string& args, const std::string& label, bool withProject);
+    // Any shell command streamed the same way (per-project editor build, NativeBuild.h): `shown` is
+    // the first log line.
+    void startCommand(const std::string& cmd, const std::string& shown, const std::string& label);
+    // A line in the Console's log outside a run (errors before a run could start); ignored while one runs.
+    void appendBuildLog(const std::string& line);
     std::string runLabel() { std::lock_guard<std::mutex> lk(buildMutex_); return runLabel_; }   // "build-web", "estimate", "toolchain-web"
     std::string lastLogFile() { std::lock_guard<std::mutex> lk(buildMutex_); return logFile_; }
     int runCount() const { return runCount_; }   // increments when a run finishes

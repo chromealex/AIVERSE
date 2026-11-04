@@ -1,0 +1,22 @@
+<rml>
+<head>
+    <title>daily</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../screens.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <script>require('wizard_meta')</script>
+</head>
+<body>
+<div class="root" data-model="meta">
+    <div class="popup-bg">
+        <div class="popup panel center">
+            <h1>@wiz.daily</h1>
+            <p><span>@wiz.daily.day</span> {{wizDaily.day}} / {{wizDaily.days}}</p>
+            <p class="big">{{wizDaily.reward}}</p>
+            <button class="big primary" data-if="wizDaily.available" onclick="WizMeta.claimDaily()">@wiz.claim</button>
+            <button class="big" onclick="ui.closePopup('daily')">@meta.back</button>
+        </div>
+    </div>
+</div>
+</body>
+</rml>

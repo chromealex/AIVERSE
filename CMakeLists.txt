@@ -333,6 +333,7 @@ set(RTS_RUNTIME_SRC
     engine/render/Lights.cpp
     engine/render/QualityGovernor.cpp
     engine/render/Renderer3DReflect.cpp
+    engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, rtsmcp, tests)
 list(APPEND RTS_RUNTIME_SRC engine/render/PostFx.cpp)
@@ -556,6 +557,7 @@ if(RTS_BUILD_EDITOR OR RTS_BUILD_TOOLS)
     target_link_libraries(rts_editor_core PUBLIC rts_game)
     target_link_libraries(rts_editor_core PUBLIC rts_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(rts_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
     target_link_libraries(rts_editor_core PUBLIC rts_terrain_detail)
     target_include_directories(rts_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     if(WIN32)
@@ -566,7 +568,7 @@ endif()
 if(RTS_BUILD_EDITOR)
     # windows register themselves (RTS_EDITOR_WINDOW): any .cpp in apps/editor/windows is part of the editor
     file(GLOB RTS_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
-    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp
+    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp
                    ${RTS_EDITOR_WINDOWS} $<TARGET_OBJECTS:rts_runtime>)
     target_link_libraries(rts_editor PRIVATE rts_runtime rts_game_view rts_editor_core)
     target_link_libraries(rts_editor PRIVATE rts_game_fx)
@@ -575,8 +577,11 @@ if(RTS_BUILD_EDITOR)
         target_sources(rts_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
     endif()
     if(APPLE)
+        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .rtsproj default
+        # handler (chosen by bundle id) stays the regular editor
+        set(RTS_EDITOR_BUNDLE_ID "com.rtsengine.editor" CACHE STRING "Bundle identifier of RTSEditor.app")
         set_target_properties(rts_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "RTSEditor"
-            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "com.rtsengine.editor"
+            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "${RTS_EDITOR_BUNDLE_ID}"
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
         # application icon (CFBundleIconFile AppIcon; art: tools/branding/logo/make_logo.py)
         target_sources(rts_editor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns")
@@ -704,7 +709,7 @@ if(RTS_BUILD_TESTS)
     target_link_libraries(rts_tests PRIVATE rts_game_view)   # fog of war look parsing (view, no GPU)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
     target_sources(rts_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
-        engine/render/Renderer3DReflect.cpp engine/render/PostFx.cpp)
+        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp)
     target_sources(rts_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(rts_tests PRIVATE rts_lua)
     target_link_libraries(rts_tests PRIVATE rts_plugins)     # native plugins bridge, store/ads services
@@ -892,6 +897,19 @@ if(TARGET rts_editor_core)
     target_sources(rts_editor_core PRIVATE apps/editor/core/BrandingOps.cpp)
     target_link_libraries(rts_editor_core PUBLIC rts_branding)
     target_sources(rts_editor_core PRIVATE apps/editor/core/UiOps.cpp)   # UI agent: game screens + ui_preview
+    # game wizard ("Сделать игру"): a whole project from art + idea (docs/game-wizard.md)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/GameWizard.cpp apps/editor/core/GameWizardContent.cpp
+        apps/editor/core/GameWizardTutorial.cpp apps/editor/core/GameWizardMeta.cpp apps/editor/core/WizardOps.cpp
+        apps/editor/core/WizardAgent.cpp)
+    if(TARGET rts_editor)   # dictation for the wizard's text fields (EditorSpeech.h)
+        if(APPLE)
+            target_sources(rts_editor PRIVATE apps/editor/EditorSpeech_mac.mm)
+            set_source_files_properties(apps/editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+            target_link_libraries(rts_editor PRIVATE "-framework Speech" "-framework AVFoundation")
+        else()
+            target_sources(rts_editor PRIVATE apps/editor/EditorSpeech.cpp)
+        endif()
+    endif()
     target_link_libraries(rts_editor_core PUBLIC rts_lua)
 endif()
 
@@ -1023,4 +1041,36 @@ endif()
 # Project-local C++ module build selection (no graphics or game execution).
 if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME native_project_build COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_project_build.py ${CMAKE_COMMAND})
+endif()
+
+# Project import (shared Python pipeline + editor/MCP bridge).
+if(TARGET rts_editor_core)
+    target_sources(rts_editor_core PRIVATE apps/editor/core/PortOps.cpp)
+endif()
+if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME project_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_port.py)
+    if(TARGET rts_headless)
+        set_tests_properties(project_importer PROPERTIES ENVIRONMENT "RTS_PORT_HEADLESS=$<TARGET_FILE:rts_headless>")
+    endif()
+endif()
+
+# The game client's core (GameClient: menus, script UI, view scripts, input, audio): RTSGame's
+# main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
+set(RTS_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
+    apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
+    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp)
+foreach(t rts_client main)
+    if(TARGET ${t})
+        target_sources(${t} PRIVATE apps/client/GameClient.cpp)
+    endif()
+endforeach()
+# Editor: play the project as in the game client, hosted in the Game window or in RTSGame (apps/editor/EditorClientPlay.cpp)
+if(TARGET rts_editor)
+    target_sources(rts_editor PRIVATE apps/editor/EditorClientPlay.cpp apps/editor/ClientHost.cpp ${RTS_CLIENT_CORE_SOURCES})
+    target_link_libraries(rts_editor PRIVATE rts_net rts_game_audio rts_atlas rts_ui rts_game_fx rts_i18n)
+endif()
+if(RTS_BUILD_TESTS AND (RTS_PLATFORM STREQUAL "linux" OR RTS_PLATFORM STREQUAL "macos"))
+    add_executable(rts_hosted_view_tests tests/hosted_view.cpp $<TARGET_OBJECTS:rts_runtime>)
+    target_link_libraries(rts_hosted_view_tests PRIVATE rts_runtime)
+    add_test(NAME rts_hosted_view_tests COMMAND rts_hosted_view_tests)
 endif()

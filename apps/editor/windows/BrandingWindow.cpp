@@ -24,6 +24,7 @@ class BrandingWindow : public EditorWindow {
 public:
     const char* id() const override { return "branding"; }
     const char* title() const override { return "Иконки и заставка"; }
+    const char* group() const override { return "publish"; }
     const char* dockArea() const override { return "center"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
@@ -40,12 +41,12 @@ public:
 
     void draw(Editor& ed) override {
         auto& ws = ed.ws();
-        if (ws.project.dir.empty()) { ImGui::TextDisabled("Откройте игру (Игра -> Открыть)"); return; }
+        if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_IMAGE, "Игра не открыта", "Файл → Открыть проект"); return; }
         if (ImGui::Button("Обновить")) reload(ed);
         ImGui::SameLine();
         ImGui::TextDisabled("game.json: icons, splash · сборка: rtsbuild генерирует все размеры для каждой платформы");
-        if (!error_.empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.3f, 1), "%s", error_.c_str());
-        for (auto& w : warnings_) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "%s", w.c_str());
+        if (!error_.empty()) ui::toneText(ui::Tone::Error, "%s", error_.c_str());
+        for (auto& w : warnings_) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
         if (ImGui::BeginTabBar("##brand")) {
             if (ImGui::BeginTabItem("Иконки")) { icons(ed); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Заставка")) { splashTab(ed); ImGui::EndTabItem(); }
@@ -137,7 +138,7 @@ private:
     void icons(Editor& ed) {
         const Json& m = ed.ws().project.manifest;
         const Json& ic = m["icons"];
-        ImGui::SeparatorText("Основная картинка");
+        ui::section(nullptr, "Основная картинка");
         std::string master = ic.isObject() ? ic.getStr("default", m.getStr("icon")) : m.getStr("icon");
         if (pickImage("Мастер (от 1024x1024)", master)) save(ed, "icons.default", Json::string(master));
         ui::help("Квадратная картинка не меньше 1024 px; из неё сборка делает все размеры. Можно задать отдельные картинки для платформ ниже.");
@@ -165,7 +166,7 @@ private:
                 std::string path = v.isString() ? v.str() : v.getStr("image");
                 if (pickImage(p, path)) save(ed, std::string("icons.") + p + (v.isObject() ? ".image" : ""), path.empty() ? Json() : Json::string(path));
             }
-            ImGui::SeparatorText("Android (адаптивная иконка)");
+            ui::section(nullptr, "Android (адаптивная иконка)");
             for (const char* k : {"foreground", "monochrome", "legacy"}) {
                 std::string path = ic["android"][k].isString() ? ic["android"][k].str() : ic["android"][k].getStr("image");
                 if (pickImage(k, path)) save(ed, std::string("icons.android.") + k, path.empty() ? Json() : Json::string(path));
@@ -179,7 +180,7 @@ private:
             if (!has) { ImGui::SameLine(); ImGui::TextDisabled("(не задан)"); }
         }
 
-        ImGui::SeparatorText("Как это будет выглядеть (реальный размер в пикселях)");
+        ui::section(nullptr, "Как это будет выглядеть (реальный размер в пикселях)");
         if (iconsDirty_) {
             iconsDirty_ = false;
             for (auto& t : iconTex_) if (t.second.h.valid()) ed.device().destroyTexture(t.second.h);
@@ -190,7 +191,7 @@ private:
         std::string platform;
         for (size_t i = 0; i < previews_.size(); ++i) {
             auto& p = previews_[i];
-            if (p.platform != platform) { platform = p.platform; ImGui::TextColored(ImVec4(1, 0.85f, 0.45f, 1), "%s", platform.c_str()); }
+            if (p.platform != platform) { platform = p.platform; ui::toneText(ui::Tone::Warn, "%s", platform.c_str()); }
             else ImGui::SameLine();
             ImGui::BeginGroup();
             ImGui::Image(ImTextureRef(ImTextureID(iconTex_[int(i)].h.id)), ImVec2(float(p.size), float(p.size)));
@@ -266,7 +267,7 @@ private:
             ImGui::ColorEdit3("##bar", pc, ImGuiColorEditFlags_NoInputs);
             if (ImGui::IsItemDeactivatedAfterEdit()) save(ed, "splash.progress.color", Json::string(splash::colorHex({pc[0], pc[1], pc[2], 1})));
         }
-        ImGui::SeparatorText("Весь блок (логотипы, анимация)");
+        ui::section(nullptr, "Весь блок (логотипы, анимация)");
         ui::inputMultiline("##json", splashJson_, ImVec2(-1, 260));
         if (ImGui::Button("Применить JSON")) {
             try { save(ed, "splash", Json::parse(splashJson_)); } catch (const std::exception& e) { error_ = std::string("splash JSON: ") + e.what(); }

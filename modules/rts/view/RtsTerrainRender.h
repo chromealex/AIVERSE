@@ -14,7 +14,8 @@
 // tiling splat layers per cell kind, a cliff texture and the water look; see docs/game-format.md
 // ("Terrain materials"). Quality: Renderer3D::materialQuality() - Low = vertex colours, Medium =
 // splat, High = splat + normal maps + triplanar cliffs (RTS_TERRAIN=low|medium|high overrides).
-// Without the block every tier draws the classic vertex colours.
+// Without layers, Medium/High add filtered world-space grain; High also adds micro normals.
+// Low retains the classic vertex colours (docs/terrain-textures.md).
 #pragma once
 #include "RtsFog.h"
 #include <cstdint>
@@ -85,6 +86,7 @@ public:
     // Fog of war look + processed field from RtsFog (fade, blur); null = raw vision, default look.
     void setFog(const std::vector<uint8_t>* field, const FogLook& look, bool changed) { fogField_ = field; fogLook_ = look; fogFieldChanged_ = fogFieldChanged_ || changed; }
     const TerrainLook& look() const { return look_; }
+    const render::HeightField& heightField() const { return heightField_; }   // valid after draw() on the trace tier
 
     struct Stats { int chunks = 0, drawn = 0, lodMax = 0, detailK = 0; uint64_t triangles = 0; double buildMs = 0; int rebuilt = 0; size_t geometryBytes = 0; };
     const Stats& stats() const { return stats_; }
@@ -120,6 +122,9 @@ private:
     void updateCellTextures(gfx::Device& dev, const MapGrid& g, bool flatDig);
     void updateDynamic(gfx::Device& dev, const MapGrid& g, bool all);
     void updateVision(gfx::Device& dev, const std::vector<uint8_t>& vision);
+    // 16-bit height map of the drawn surface for traced terrain shadows (Renderer3D::setHeightField);
+    // rebuilt (throttled) after geometry changes, only while the trace tier is active
+    void updateHeightField(gfx::Device& dev, const MapGrid& g);
     gfx::PipelineHandle pipeline(gfx::Device& dev, int variant);   // tier + 3 * detail
     int tierFor(const render::Renderer3D& r) const;
     int tierFor0() const;                       // device / env tier without a renderer (detail sample count)
@@ -154,6 +159,10 @@ private:
     render::Mesh water_;
     bool waterSheet_ = false, hasWater_ = false;
     uint64_t waterHash_ = 0;
+    render::HeightField heightField_;
+    bool heightDirty_ = true;
+    int heightW_ = 0, heightH_ = 0;
+    double heightBuiltAt_ = -1e9;               // seconds (steady clock), throttle while sculpting
     Stats stats_;
     // detail surface
     terrain::DetailSurface detail_, fileDetail_;
