@@ -167,6 +167,24 @@ void setClipboardText(const std::string& s);
 bool openUrl(const std::string& url);
 namespace detail { bool urlAllowed(const std::string& url); }
 
+// --- hosted view ---
+// A game view hosted inside another app's window (the editor's Game window runs the game client in
+// an offscreen target). While set, the window / framebuffer size, scale, touch, safe area and content
+// root queries answer for the hosted view; requestQuit / fullscreen are recorded instead of applied.
+// The host sets it around every call into the hosted code and clears it afterwards.
+struct HostedView {
+    float width = 0, height = 0;   // logical points
+    int fbWidth = 0, fbHeight = 0; // pixels of the target
+    float scale = 1;               // fbWidth / width
+    bool touch = false;
+    Insets safe;
+    std::string contentRoot;       // "" = the app's own
+    std::string engineAssets;      // "engine/x" content paths also resolve to <engineAssets>/x
+    bool quitRequested = false;    // set by requestQuit()
+};
+void setHostedView(HostedView* view);   // nullptr: back to the real window
+HostedView* hostedView();
+
 } // namespace rts::platform
 
 int rtsMain(int argc, char** argv);

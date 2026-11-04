@@ -155,18 +155,35 @@ void Editor::registerGuiOps() {
             focusScene(float(p["x"].toDouble()), float(p["z"].toDouble()), float(p["distance"].toDouble(-1)));
             return okSummary("Камера: (" + std::to_string(int(p["x"].toDouble())) + ", " + std::to_string(int(p["z"].toDouble())) + ")");
         });
-    add("play_start", "Play-test the open map in the Game window: bots on every side, or the user plays slot 'human'. The user watches live.",
-        R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer"}, "device": {"type": "string"}}})", [this, okSummary](const Json& p) {
+    add("play_start", "Play-test the open map in the Game window: bots on every side, or the user plays slot 'human'. The user watches live. "
+        "With client=true the game runs as in the game client instead (its own menus / meta screens of ui/main.lua, view scripts, script UI, input): "
+        "the user plays it in the Game window.",
+        R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer"}, "device": {"type": "string"}, "client": {"type": "boolean"}}})", [this, okSummary](const Json& p) {
             if (p.has("device")) gameDevice = p.getStr("device");
+            if (p["client"].boolean(false)) {
+                startClientPlay();
+                if (!clientPlaying()) throw std::runtime_error(status);
+                return okSummary("Игра как в клиенте запущена в окне «Игра»");
+            }
             startPlay(int(p["human"].integer(0)));
             if (!playing()) throw std::runtime_error(status);
             playSpeed = float(p["speed"].toDouble(1));
             return okSummary("Тест запущен");
         });
-    add("play_stop", "Stop the play-test.", "{}", [this, okSummary](const Json&) { stopPlay(); return okSummary("Тест остановлен"); });
+    add("play_stop", "Stop the play-test (or the game running as in the client).", "{}", [this, okSummary](const Json&) { stopClientPlay(); stopPlay(); return okSummary("Тест остановлен"); });
     add("play_status", "State of the play-test: time, result, per-player units/structures/resources.", "{}", [this](const Json&) {
         Json r = Json::object();
         r.set("playing", Json::fromBool(playing()));
+        if (clientPlaying()) {   // as in the client: the game's own flow; a match only while one runs
+            r.set("client", Json::fromBool(true));
+            r.set("loading", Json::fromBool(clientHost_.loading()));
+            r.set("inMatch", Json::fromBool(clientHost_.inMatch()));
+            if (Simulation* cs = clientHost_.simulation()) {
+                r.set("seconds", Json::number(double(cs->tick()) / cs->tickRate(), 1));
+                r.set("result", Json::number(int64_t(cs->result())));
+            }
+            return r;
+        }
         if (!sim_) return r;
         auto& gs = simModule()->state(*sim_);
         r.set("seconds", Json::number(double(sim_->tick()) / sim_->tickRate(), 1));

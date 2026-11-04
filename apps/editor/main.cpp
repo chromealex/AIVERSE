@@ -22,6 +22,8 @@ static std::unique_ptr<editor::Editor> g_editor;
 static int g_demoSelect = -1;
 static std::string g_demoWindow;
 static bool g_demoPlay = false;
+static bool g_demoClient = false;     // --play-client: the game as in the client, hosted in the Game window
+static std::string g_demoDevice;      // --device id[:portrait|:landscape]: Game window simulator preset
 
 static std::string exeDir(const char* argv0) {
     std::error_code ec;
@@ -61,6 +63,7 @@ int rtsMain(int argc, char** argv) {
     editor::Editor::Options opt;
     opt.engineDir = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argv[0]);   // source tree, or a packaged engine
     for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--play") g_demoPlay = true;
+    for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--play-client") g_demoClient = true;
     std::string game, toolsFrom;
     if (const char* e = std::getenv("RTS_NATIVE_EDITOR"); e && *e && std::string(e) != "0") opt.nativeChild = true;
     for (int i = 1; i < argc; ++i) {
@@ -76,6 +79,7 @@ int rtsMain(int argc, char** argv) {
         else if (a == "--map") opt.openMap = argv[++i];
         else if (a == "--engine") opt.engineDir = argv[++i];
         else if (a == "--tools-from") toolsFrom = argv[++i];   // rtsbuild / rtsmcp / RTSGame of the regular build
+        else if (a == "--device") g_demoDevice = argv[++i];
         else if (a == "--window") g_demoWindow = argv[++i];   // open + focus a window (automated screenshots)
         else if (a == "--select") g_demoSelect = std::atoi(argv[++i]); // used by automated screenshots
     }
@@ -109,7 +113,13 @@ int rtsMain(int argc, char** argv) {
     cb.init = [](gfx::Device& d) {
         g_editor->init(d);
         if (g_demoSelect >= 0) g_editor->selectEntity(g_demoSelect);
+        if (!g_demoDevice.empty()) {
+            const size_t c = g_demoDevice.find(':');
+            g_editor->gameDevice = g_demoDevice.substr(0, c);
+            if (c != std::string::npos) g_editor->gameLandscape = g_demoDevice.substr(c + 1) == "landscape";
+        }
         if (g_demoPlay) g_editor->startPlay(0);
+        if (g_demoClient) g_editor->startClientPlay();
     };
     cb.frame = [](gfx::Device& d, double dt) {
         static int frames = 0;

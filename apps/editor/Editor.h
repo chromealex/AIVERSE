@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "ClientHost.h"
 #include "EditorTheme.h"
 #include "EditorNativeBuild.h"
 #include "modules/rts/view/RtsViewScript.h"
@@ -129,6 +130,13 @@ public:
     game::RtsModule* simModule() { return sim_ ? dynamic_cast<game::RtsModule*>(&sim_->module()) : nullptr; }
     void startPlay(int humanSlot = 0);
     void stopPlay();
+    // Play as in the game client, inside the Game window (EditorClientPlay.cpp, ClientHost.h): the game's
+    // menus / meta screens, view scripts, script UI and input. Scripted games (ui/main.lua) prefer it for F5.
+    void startClientPlay();
+    void stopClientPlay();
+    bool clientPlaying() const { return clientHost_.active(); }
+    bool prefersClientPlay() const;
+    ClientHost& clientHost() { return clientHost_; }
     int humanSlot() const { return human_; }
     float playSpeed = 1.0f;
     bool playPaused = false;
@@ -235,6 +243,7 @@ private:
     Workspace ws_;
     gfx::Device* dev_ = nullptr;
     render::ImGuiLayer ui_;
+    ClientHost clientHost_;   // after ui_: shut down first (its ImGui context, RmlUi)
     render::Renderer3D r3d_;
     render::PostFx postFx_;
     game::RtsView view_;

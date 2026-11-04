@@ -1054,7 +1054,23 @@ if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
     endif()
 endif()
 
-# Editor: play the project in the game client (apps/editor/EditorClientPlay.cpp)
+# The game client's core (GameClient: menus, script UI, view scripts, input, audio): RTSGame's
+# main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
+set(RTS_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
+    apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
+    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp)
+foreach(t rts_client main)
+    if(TARGET ${t})
+        target_sources(${t} PRIVATE apps/client/GameClient.cpp)
+    endif()
+endforeach()
+# Editor: play the project as in the game client, hosted in the Game window or in RTSGame (apps/editor/EditorClientPlay.cpp)
 if(TARGET rts_editor)
-    target_sources(rts_editor PRIVATE apps/editor/EditorClientPlay.cpp)
+    target_sources(rts_editor PRIVATE apps/editor/EditorClientPlay.cpp apps/editor/ClientHost.cpp ${RTS_CLIENT_CORE_SOURCES})
+    target_link_libraries(rts_editor PRIVATE rts_net rts_game_audio rts_atlas rts_ui rts_game_fx rts_i18n)
+endif()
+if(RTS_BUILD_TESTS AND (RTS_PLATFORM STREQUAL "linux" OR RTS_PLATFORM STREQUAL "macos"))
+    add_executable(rts_hosted_view_tests tests/hosted_view.cpp $<TARGET_OBJECTS:rts_runtime>)
+    target_link_libraries(rts_hosted_view_tests PRIVATE rts_runtime)
+    add_test(NAME rts_hosted_view_tests COMMAND rts_hosted_view_tests)
 endif()

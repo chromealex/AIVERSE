@@ -29,7 +29,7 @@ public:
     bool zeroPadding() const override { return true; }
     ImGuiWindowFlags flags() const override { return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse; }
 
-    void update(Editor& ed, double) override { if (!ed.playing()) gameHud_.reset(); }
+    void update(Editor& ed, double dt) override { dt_ = dt; if (!ed.playing()) gameHud_.reset(); }
 
     void draw(Editor& ed) override {
         toolbar(ed);
@@ -37,13 +37,16 @@ public:
         ImVec2 origin = ImGui::GetCursorScreenPos();
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddRectFilled(origin, ImVec2(origin.x + avail.x, origin.y + avail.y), ImGui::GetColorU32(ed.theme().palette().canvas)); // lighter than the device bezel
-        if (!ed.playing()) {
+        if (!ed.playing() && !ed.clientPlaying()) {
             gameHud_.reset();
             const float bh = ImGui::GetFrameHeight() + 8;
             ui::emptyState(origin, ImVec2(origin.x + avail.x, origin.y + avail.y - bh * 2), ICON_GAME, "Тест не запущен",
-                           "F5 или кнопки ниже: боты против ботов или игра за одного из игроков.");
+                           ed.prefersClientPlay() ? "F5 — игра как в клиенте: меню, экраны и скрипты игры. Или тест карты: боты, игра за игрока."
+                                                  : "F5 или кнопки ниже: боты против ботов, игра за одного из игроков или как в клиенте игры.");
             // start buttons under the message
+            // -1: as in the game client (first for games with their own screens, ui/main.lua)
             std::vector<std::pair<std::string, int>> starts{{std::string(ICON_BOT "  Боты против ботов"), 0}};
+            starts.insert(ed.prefersClientPlay() ? starts.begin() : starts.end(), {std::string(ICON_GAME "  Как в клиенте"), -1});
             for (size_t p = 0; p < ed.doc().data.players.size() && starts.size() < 4; ++p)
                 if (!ed.doc().data.players[p].waves) starts.push_back({std::string(ICON_USER "  Играть за ") + ed.doc().data.players[p].name, int(p + 1)});
             float total = 0;
@@ -52,7 +55,10 @@ public:
             for (size_t i = 0; i < starts.size(); ++i) {
                 if (i) ImGui::SameLine();
                 ImGui::PushID(int(i));
-                if (ui::button("", starts[i].first.c_str() , i == 0)) ed.startPlay(starts[i].second);
+                if (ui::button("", starts[i].first.c_str() , i == 0)) {
+                    if (starts[i].second < 0) { gameHud_.reset(); ed.startClientPlay(); }
+                    else ed.startPlay(starts[i].second);
+                }
                 ImGui::PopID();
             }
             ImGui::SetCursorScreenPos(origin);
@@ -79,6 +85,7 @@ public:
         if (sw <= 1 || sh <= 1) return;
         const float dpi = ImGui::GetIO().DisplayFramebufferScale.x;
         vp_.ensure(ed.device(), int(sw * dpi), int(sh * dpi));
+        if (ed.clientPlaying()) { drawClient(ed, dev, dl, origin, avail, sx, sy, sw, sh, k, devW, devH); return; }
         ImGui::SetCursorScreenPos(ImVec2(sx, sy));
         vp_.originX = sx; vp_.originY = sy; vp_.pointsW = sw; vp_.pointsH = sh;
         // the image command goes first so the overlays drawn by renderGame (health bars, markers) end up on
@@ -107,10 +114,58 @@ public:
 
 private:
     std::string filter_;
+    double dt_ = 0;
+
+    // The hosted game client (ClientHost.h): its frame into vp_, the device frame around it, a loading bar.
+    void drawClient(Editor& ed, const DeviceProfile* dev, ImDrawList* dl, ImVec2 origin, ImVec2 avail, float sx, float sy, float sw, float sh,
+                    float k, float devW, float devH) {
+        auto& host = ed.clientHost();
+        const bool device = dev && dev->w > 0;
+        platform::Insets safe;
+        if (device) {
+            const bool rotated = (dev->w < dev->h) == ed.gameLandscape;
+            const Insets4& in = rotated ? dev->landscape : dev->portrait;
+            safe = {in.left, in.top, in.right, in.bottom};
+        }
+        vp_.originX = sx; vp_.originY = sy; vp_.pointsW = sw; vp_.pointsH = sh;
+        host.place(sx, sy, device ? k : 1, ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
+        const bool loading = host.loading();
+        host.frame(dt_, vp_.color, vp_.depth, vp_.w, vp_.h, device ? devW : sw, device ? devH : sh, device && dev->touch, safe);
+        ImGui::SetCursorScreenPos(ImVec2(sx, sy));
+        if (loading) {
+            dl->AddRectFilled(ImVec2(sx, sy), ImVec2(sx + sw, sy + sh), IM_COL32(16, 18, 22, 255));
+            const float bw = std::min(sw * 0.6f, 320.0f), by = sy + sh * 0.5f;
+            dl->AddRectFilled(ImVec2(sx + (sw - bw) * 0.5f, by), ImVec2(sx + (sw + bw) * 0.5f, by + 6), IM_COL32(60, 64, 72, 255), 3);
+            dl->AddRectFilled(ImVec2(sx + (sw - bw) * 0.5f, by), ImVec2(sx + (sw - bw) * 0.5f + bw * host.progress(), by + 6), IM_COL32(90, 160, 255, 255), 3);
+            const char* label = "Загрузка игры…";
+            const ImVec2 ts = ImGui::CalcTextSize(label);
+            dl->AddText(ImVec2(sx + (sw - ts.x) * 0.5f, by - ts.y - 8), IM_COL32(220, 224, 230, 255), label);
+            ImGui::Dummy(ImVec2(sw, sh));
+        } else {
+            vp_.image(ed.device(), sw, sh);
+            // the screen is the game's: presses focus this window and never drag it or reach other items
+            ImGui::SetCursorScreenPos(ImVec2(sx, sy));
+            ImGui::InvisibleButton("##clientscreen", ImVec2(sw, sh), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+        }
+        ed.gameViewport = &vp_;
+        if (device) deviceChrome(dl, *dev, ed.gameLandscape, ed.gameSafeArea, sx, sy, sw, sh, k);
+        if (host.quitRequested()) ed.stopClientPlay();   // the game's own "Quit"
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + avail.y));
+        ImGui::Dummy(ImVec2(0, 0));
+    }
+
     void toolbar(Editor& ed) {
         const float bottom = ui::beginToolbar();
         ui::beginSegment();
-        if (!ed.playing()) {
+        if (ed.clientPlaying()) {
+            if (ui::toolButton(ICON_GAME, "Идёт игра как в клиенте", true)) {}
+            ImGui::SameLine();
+            if (ui::toolButton(ICON_REFRESH, "Перезапустить игру (данные проекта перечитываются)")) { ed.stopClientPlay(); ed.startClientPlay(); }
+            ImGui::SameLine();
+            if (ui::toolButton(ICON_STOP, "Стоп")) ed.stopClientPlay();
+        } else if (!ed.playing()) {
+            if (ui::toolButton(ICON_GAME, "Играть как в клиенте игры, в этом окне: меню, экраны и скрипты игры, её ввод и звук")) { gameHud_.reset(); ed.startClientPlay(); }
+            ImGui::SameLine();
             if (ui::toolButton(ICON_EXTERNAL, "Играть в клиенте игры: отдельное окно RTSGame с меню, скриптами и вводом игры, как у игроков")) ed.launchClient();
             ImGui::SameLine();
             if (ui::toolButton(ICON_BOT, "Боты против ботов")) ed.startPlay(0);

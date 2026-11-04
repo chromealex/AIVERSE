@@ -215,8 +215,12 @@ void Editor::drawMenuBar() {
         if (item(ICON_LAYOUT, (std::string("Раскладка «") + g.workspace + "»").c_str())) openWorkspace(g.id);
         if (std::string(g.id) == "logic") {
             ImGui::SeparatorText("Тест");
-            if (!playing()) {
-                if (item(ICON_BOT, "Боты против ботов", "F5")) startPlay(0);
+            if (clientPlaying()) {
+                if (item(ICON_STOP, "Остановить игру", "F5")) stopClientPlay();
+            } else if (!playing()) {
+                if (item(ICON_GAME, "Как в клиенте (окно «Игра»)", prefersClientPlay() ? "F5" : nullptr)) startClientPlay();
+                if (item(ICON_EXTERNAL, "В отдельном окне клиента")) launchClient();
+                if (item(ICON_BOT, "Боты против ботов", prefersClientPlay() ? nullptr : "F5")) startPlay(0);
                 for (size_t p = 0; p < doc().data.players.size(); ++p)
                     if (!doc().data.players[p].waves && item(ICON_USER, ("Играть за " + doc().data.players[p].name).c_str())) startPlay(int(p + 1));
             } else if (item(ICON_STOP, "Остановить тест", "F5")) stopPlay();
@@ -313,21 +317,25 @@ void Editor::drawPlayControls() {
     int n = 0;
     auto at = [&] { ImGui::SetCursorScreenPos(ImVec2(origin.x + step * float(n++), origin.y)); };
     ui::beginSegment();
-    const bool on = playing();
-    std::string playTip = on ? "Остановить тест (F5)" : lastPlaySlot_ > 0 && size_t(lastPlaySlot_) <= doc().data.players.size()
+    const bool on = playing() || clientPlaying();
+    const bool asClient = prefersClientPlay();   // the game's own screens: F5 plays as in the client
+    auto stopAll = [&] { stopClientPlay(); stopPlay(); };
+    std::string playTip = on ? "Остановить тест (F5)" : asClient ? std::string("Играть как в клиенте (F5)") : lastPlaySlot_ > 0 && size_t(lastPlaySlot_) <= doc().data.players.size()
                                                         ? "Играть за " + doc().data.players[size_t(lastPlaySlot_ - 1)].name + " (F5)"
                                                         : std::string("Тест: боты против ботов (F5)");
     at();
-    if (ui::toolButton(ICON_PLAY, playTip.c_str(), on)) { if (on) stopPlay(); else startPlay(lastPlaySlot_); }
+    if (ui::toolButton(ICON_PLAY, playTip.c_str(), on)) { if (on) stopAll(); else if (asClient) startClientPlay(); else startPlay(lastPlaySlot_); }
     at();
-    if (ui::toolButton(ICON_PAUSE, playPaused ? "Продолжить" : "Пауза", on && playPaused, on)) playPaused = !playPaused;
+    if (ui::toolButton(ICON_PAUSE, playPaused ? "Продолжить" : "Пауза", playing() && playPaused, playing())) playPaused = !playPaused;   // the client has its own pause
     at();
-    if (ui::toolButton(ICON_STOP, "Стоп", false, on)) stopPlay();
+    if (ui::toolButton(ICON_STOP, "Стоп", false, on)) stopAll();
     at();
     if (ui::toolButton(ICON_CHEVRON_DOWN, "За кого играть")) ImGui::OpenPopup("##playas");
     ui::endSegment();
     ImGui::PopStyleVar();
     if (ImGui::BeginPopup("##playas")) {
+        if (item(ICON_GAME, "Как в клиенте (меню и скрипты игры)", nullptr, clientPlaying())) { if (!on) startClientPlay(); }
+        if (item(ICON_EXTERNAL, "В отдельном окне клиента")) launchClient();
         if (item(ICON_BOT, "Боты против ботов", nullptr, lastPlaySlot_ == 0)) { lastPlaySlot_ = 0; if (!on) startPlay(0); }
         for (size_t p = 0; p < doc().data.players.size(); ++p)
             if (!doc().data.players[p].waves && item(ICON_USER, ("Играть за " + doc().data.players[p].name).c_str(), nullptr, lastPlaySlot_ == int(p + 1))) {

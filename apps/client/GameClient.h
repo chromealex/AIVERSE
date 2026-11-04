@@ -102,6 +102,13 @@ public:
     // called from UI event listeners
     void minimapPointer(float u, float v);   // u, v in [0, 1] of the minimap image
 
+    // Hosting (the editor's Game window, apps/editor/ClientHost.cpp): frames render into these textures
+    // instead of the screen; the host also sets platform::setHostedView around every call.
+    void setHostTarget(gfx::TextureHandle color, gfx::TextureHandle depth, int w, int h) { hostColor_ = color; hostDepth_ = depth; hostW_ = w; hostH_ = h; }
+    Simulation* simulation() { return sim_.get(); }
+    bool inMatch() const { return sim_ != nullptr && (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over); }
+    const std::string& errorText() const { return error_; }
+
 private:
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd };
@@ -206,6 +213,10 @@ private:
     int addAction(std::function<void()> fn, bool enabled = true) { nextActions_.push_back(enabled ? std::move(fn) : nullptr); return int(nextActions_.size()) - 1; }
 
     gfx::Device* dev_ = nullptr;
+    gfx::TextureHandle hostColor_, hostDepth_;   // setHostTarget: invalid = the screen
+    int hostW_ = 0, hostH_ = 0;
+    int fbW() const { return hostColor_.valid() ? hostW_ : dev_->framebufferWidth(); }
+    int fbH() const { return hostColor_.valid() ? hostH_ : dev_->framebufferHeight(); }
     ImGuiLayer overlay_;      // world-space overlays of RtsView (health bars) still draw through ImGui
     ui::UiLayer ui_;
     Rml::DataModelHandle model_;

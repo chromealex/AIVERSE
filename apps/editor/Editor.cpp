@@ -145,6 +145,7 @@ void Editor::init(gfx::Device& dev) {
 
 void Editor::shutdown() {
     if (!dev_) return;
+    clientHost_.stop();
     gameFxBridge_.detach();
     sim_.reset();
     gameFx_.shutdown();
@@ -671,6 +672,7 @@ void Editor::applyChanges() {
 
 void Editor::startPlay(int humanSlot) {
     if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
+    stopClientPlay();
     auto issues = doc().validate(rules(), ws_.project.rulesJson);
     // every problem goes to the console / editor.log (the status bar shows only the first error)
     std::string firstError;
@@ -772,6 +774,7 @@ void Editor::samplePlayStats() {
 
 void Editor::event(const platform::Event& e) {
     ui_.handleEvent(e);
+    clientHost_.event(e);   // the hosted game client: pointer inside its screen, keys while the Game window has focus
     if (e.type == platform::EventType::QuitRequested) quit_ = true;
     if (e.type == platform::EventType::OpenFile) requestOpenProject(e.path);   // double-clicked .rtsproj (macOS)
 }
@@ -783,7 +786,12 @@ void Editor::handleShortcuts() {
     if (mod && ImGui::IsKeyPressed(ImGuiKey_S, false) && !doc().path.empty()) saveMap(doc().path);
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Z, false) && !playing()) { if (io.KeyShift) doc().redo(); else doc().undo(); selection = {}; }
     if (mod && ImGui::IsKeyPressed(ImGuiKey_Y, false) && !playing()) { doc().redo(); selection = {}; }
-    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) { if (!playing()) startPlay(lastPlaySlot_); else stopPlay(); }
+    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+        if (clientPlaying()) stopClientPlay();
+        else if (playing()) stopPlay();
+        else if (prefersClientPlay()) startClientPlay();
+        else startPlay(lastPlaySlot_);
+    }
     if (mod && ImGui::IsKeyPressed(ImGuiKey_B, false)) focusWindow("build");
 }
 

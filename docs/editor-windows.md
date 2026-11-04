@@ -154,4 +154,33 @@ World-space region markers remain editor overlays.
 
 This is an embedded play-test HUD, not a second GameClient: client lobby/menu flow,
 UI Lua `game` APIs, audio playback and the client's full standard RTS command card/minimap
-are not hosted by the editor adapter. Use a client run for those screens and systems.
+are not hosted by the editor adapter. For those use **Play as in the client** below.
+
+## Play as in the client
+
+The Game window can also run the game exactly as RTSGame does: the same `GameClient`
+(`apps/client/GameClient*.cpp`, `Client*.cpp`; RTSGame's `main.cpp` adds only the entry point)
+hosted by `apps/editor/ClientHost` and rendered into the window's offscreen target, inside the
+device simulator frame. Everything is the client's: the game's menus / meta screens
+(`ui/main.lua`, `ui.screen` / `ui.popup`), launch parameters, battle -> result -> meta flow,
+view scripts (draw, camera, HUD documents, `view.ui_call`), script UI, input (rules `mapClick`
+tap on release, left-drag pan, wheel zoom, `map-drag` HUD elements, RmlUi clicks, keys), the
+pause screen and audio. The editor's own play-test tools (bots vs bots, player pick, speed,
+pause, stats) stay for the map play-test; the two never run at once.
+
+- Start: the gamepad button of the Game toolbar, «Как в клиенте» under the empty Game window,
+  the play popup of the top bar, menu Логика → Тест, MCP `play_start {"client": true}`; F5 and
+  the top-bar Play button start it for games with their own screens (`ui/main.lua`). Stop /
+  restart in the Game toolbar, F5, `play_stop`; the game's own Quit stops it too.
+- «В отдельном окне клиента» (external-link button): the project in a separate RTSGame window
+  (RTS_CONTENT = project), the one built next to this editor first (same C++ modules).
+- The project's C++ modules (rules `nativeModules`) must be in the editor binary, as for the
+  play-test (the banner offers the per-project editor build).
+- Hosting: while the host calls into the client it sets `platform::setHostedView` (logical size of
+  the device screen, framebuffer size, scale, safe area of the device preset, touch, content root =
+  project, `engine/...` -> the engine assets; `requestQuit` / fullscreen are recorded, the window
+  title is left alone) and restores the editor's ImGui context afterwards (every `ImGuiLayer` owns
+  its context). Pointer events inside the device screen (or captured by a press inside) and keys
+  while the Game window has focus are mapped into screen points and forwarded.
+- Profiles / saves go to the editor's user data dir (`RTS_UI_SAVE_DIR` overrides, as in the client).
+- Command line (automated checks): `rts_editor --project <dir> --play-client --device iphone-se:portrait --window game`.
