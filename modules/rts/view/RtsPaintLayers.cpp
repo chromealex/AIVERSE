@@ -68,14 +68,14 @@ vec3 meadow(vec3 color,vec2 world,float id){
  float broad=meadowNoise(p+17.2),small=meadowNoise(p*2.3+vec2(7.1,31.6));
  if(foam.w>0.5){float ripple=sin(p.x*(foam.w<1.5?8.0:12.0)+p.y*3.0+broad*6.0)*.5+.5;   // ApplyMeadow, ice / desert campaigns
   return clamp(color*(.94+broad*.09+small*.035+(ripple-.5)*.035),0.0,1.0);}
- float patch=smoothstep(.35,.66,broad*.72+small*.28);
+ float patchMix=smoothstep(.35,.66,broad*.72+small*.28);
  float neutral=(id<groundB.x-0.5||id>groundB.y+0.5)?1.0:0.0;
  vec2 blotUV=p*3.6+vec2(small,broad)*.65;
  float blotNoise=meadowNoise(blotUV+vec2(43.7,9.2));float blotAA=max(.025,fwidth(blotNoise));
  float blot=smoothstep(.54-blotAA,.59+blotAA,blotNoise);
  float pale=smoothstep(.69-blotAA,.74+blotAA,meadowNoise(blotUV*.83+63.4));
- vec3 ng=mix(color,vec3(.46,.61,.19),patch*.62);ng=mix(ng,vec3(.68,.65,.33),blot*.22);ng=mix(ng,vec3(.94,.87,.55),pale*.26);
- float relief=1.08-patch*.22-blot*.15+pale*.12;
+ vec3 ng=mix(color,vec3(.46,.61,.19),patchMix*.62);ng=mix(ng,vec3(.68,.65,.33),blot*.22);ng=mix(ng,vec3(.94,.87,.55),pale*.26);
+ float relief=1.08-patchMix*.22-blot*.15+pale*.12;
  vec3 dyed=mix(color*relief,vec3(.72,.88,1.0),pale*.06);
  return clamp(mix(dyed,ng,neutral)*(1.0+(small-.5)*groundA.y*.2),0.0,1.0);
 }
@@ -180,14 +180,14 @@ static float3 meadow(constant U& u,float3 color,float2 world,float id){
  float broad=meadowNoise(u,p+17.2),small=meadowNoise(u,p*2.3+float2(7.1,31.6));
  if(u.foam.w>0.5){float ripple=sin(p.x*(u.foam.w<1.5?8.0:12.0)+p.y*3.0+broad*6.0)*.5+.5;
   return saturate(color*(.94+broad*.09+small*.035+(ripple-.5)*.035));}
- float patch=smoothstep(.35,.66,broad*.72+small*.28);
+ float patchMix=smoothstep(.35,.66,broad*.72+small*.28);
  float neutral=(id<u.groundB.x-0.5||id>u.groundB.y+0.5)?1.0:0.0;
  float2 blotUV=p*3.6+float2(small,broad)*.65;
  float blotNoise=meadowNoise(u,blotUV+float2(43.7,9.2));float blotAA=max(.025,fwidth(blotNoise));
  float blot=smoothstep(.54-blotAA,.59+blotAA,blotNoise);
  float pale=smoothstep(.69-blotAA,.74+blotAA,meadowNoise(u,blotUV*.83+63.4));
- float3 ng=mix(color,float3(.46,.61,.19),patch*.62);ng=mix(ng,float3(.68,.65,.33),blot*.22);ng=mix(ng,float3(.94,.87,.55),pale*.26);
- float relief=1.08-patch*.22-blot*.15+pale*.12;
+ float3 ng=mix(color,float3(.46,.61,.19),patchMix*.62);ng=mix(ng,float3(.68,.65,.33),blot*.22);ng=mix(ng,float3(.94,.87,.55),pale*.26);
+ float relief=1.08-patchMix*.22-blot*.15+pale*.12;
  float3 dyed=mix(color*relief,float3(.72,.88,1.0),pale*.06);
  return saturate(mix(dyed,ng,neutral)*(1.0+(small-.5)*u.groundA.y*.2));
 }
