@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "UiColor.h"
 #include "engine/render/Math3D.h"
 #include "stb_image.h"
 
@@ -49,6 +50,67 @@ vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
 fragment float4 fs_main(VOut in [[stage_in]], texture2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
     float4 c = in.col * tex0.sample(s0, in.uv);
     return c.a > 0.0 ? float4(c.rgb / c.a, c.a) : float4(0.0);
+}
+)";
+
+// Linear blending (UiLayer::setLinearBlending): output premultiplied LINEAR colour into an sRGB layer
+// (BlendMode::Premultiplied; the GPU blends in linear). Vertex colours are decoded per vertex (as Unity's
+// canvas converts them on the CPU), so gradients interpolate in linear. u_tr.z = 1: the texture holds
+// sRGB-encoded premultiplied colour (font atlases, generated / dynamic textures) and is decoded here;
+// 0: an RGBA8_sRGB image premultiplied in linear (the sampler already decoded it) or white.
+const char* kLinVS = R"(
+layout(location = 0) in vec2 a_pos;
+layout(location = 1) in vec4 a_col;
+layout(location = 2) in vec2 a_uv;
+layout(std140) uniform U0 { mat4 u_mvp; vec4 u_tr; };
+out vec2 v_uv;
+out vec4 v_col;
+vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
+void main() {
+    v_uv = a_uv;
+    vec3 s = a_col.a > 0.0 ? clamp(a_col.rgb / a_col.a, 0.0, 1.0) : vec3(0.0);
+    v_col = vec4(toLinear(s) * a_col.a, a_col.a);
+    gl_Position = u_mvp * vec4(a_pos + u_tr.xy, 0.0, 1.0);
+}
+)";
+const char* kLinFS = R"(
+uniform sampler2D tex0;
+layout(std140) uniform U0 { mat4 u_mvp; vec4 u_tr; };
+in vec2 v_uv;
+in vec4 v_col;
+out vec4 o_color;
+vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
+void main() {
+    vec4 t = texture(tex0, v_uv);
+    if (u_tr.z > 0.5) {
+        vec3 s = t.a > 0.0 ? clamp(t.rgb / t.a, 0.0, 1.0) : vec3(0.0);
+        t.rgb = toLinear(s) * t.a;
+    }
+    o_color = v_col * t;
+}
+)";
+const char* kLinMSL = R"(
+#include <metal_stdlib>
+using namespace metal;
+struct U0 { float4x4 mvp; float4 tr; };
+struct VIn { float2 pos [[attribute(0)]]; float4 col [[attribute(1)]]; float2 uv [[attribute(2)]]; };
+struct VOut { float4 pos [[position]]; float2 uv; float4 col; };
+static float3 toLinear(float3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, float3(2.4)), step(float3(0.04045), c)); }
+vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
+    VOut o;
+    o.pos = u.mvp * float4(in.pos + u.tr.xy, 0.0, 1.0);
+    o.uv = in.uv;
+    float3 s = in.col.a > 0.0 ? clamp(in.col.rgb / in.col.a, 0.0, 1.0) : float3(0.0);
+    o.col = float4(toLinear(s) * in.col.a, in.col.a);
+    return o;
+}
+fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], texture2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
+    float4 t = tex0.sample(s0, in.uv);
+    if (u.tr.z > 0.5) {
+        float3 s = t.a > 0.0 ? clamp(t.rgb / t.a, 0.0, 1.0) : float3(0.0);
+        t.rgb = toLinear(s) * t.a;
+    }
+    return in.col * t;
 }
 )";
 
@@ -101,6 +163,34 @@ bool UiRenderer::init(gfx::Device& dev) {
     return pipeline_.valid();
 }
 
+bool UiRenderer::setLinear(bool on) {
+    if (on && !linPipeline_.valid() && dev_ && dev_->supports(gfx::PixelFormat::RGBA8_sRGB)) {
+        gfx::ShaderDesc sd;
+        sd.glslVertex = kLinVS; sd.glslFragment = kLinFS; sd.msl = kLinMSL;
+        sd.textureSlots = 1; sd.label = "rmlui-linear";
+        linShader_ = dev_->createShader(sd);
+        if (!linShader_.valid()) Rml::Log::Message(Rml::Log::LT_ERROR, "ui linear shader: %s", dev_->lastError().c_str());
+        else {
+            gfx::PipelineDesc pd;
+            pd.shader = linShader_;
+            pd.attrs[0] = {0, gfx::VertexFormat::Float2, offsetof(Rml::Vertex, position)};
+            pd.attrs[1] = {1, gfx::VertexFormat::UByte4N, offsetof(Rml::Vertex, colour)};
+            pd.attrs[2] = {2, gfx::VertexFormat::Float2, offsetof(Rml::Vertex, tex_coord)};
+            pd.attrCount = 3;
+            pd.stride = sizeof(Rml::Vertex);
+            pd.indexType = gfx::IndexType::UInt32;
+            pd.cull = gfx::CullMode::None;
+            pd.blend = gfx::BlendMode::Premultiplied;
+            pd.depthTest = false; pd.depthWrite = false;
+            pd.colorFormat = gfx::PixelFormat::RGBA8_sRGB;
+            pd.label = "rmlui-linear";
+            linPipeline_ = dev_->createPipeline(pd);
+        }
+    }
+    linear_ = on && linPipeline_.valid();
+    return linear_ == on;
+}
+
 void UiRenderer::shutdown() {
     if (!dev_) return;
     for (auto& g : geos_) { if (g.vb.valid()) dev_->destroyBuffer(g.vb); if (g.ib.valid()) dev_->destroyBuffer(g.ib); }
@@ -109,6 +199,9 @@ void UiRenderer::shutdown() {
     dev_->destroyTexture(white_);
     dev_->destroyPipeline(pipeline_);
     dev_->destroyShader(shader_);
+    if (linPipeline_.valid()) dev_->destroyPipeline(linPipeline_);
+    if (linShader_.valid()) dev_->destroyShader(linShader_);
+    linPipeline_ = {}; linShader_ = {}; linear_ = false;
     dev_ = nullptr;
 }
 
@@ -117,6 +210,7 @@ void UiRenderer::beginFrame(int fbW, int fbH) {
     render::mat4 p = render::mat4::ortho(0, float(fbW), float(fbH), 0, -1, 1, dev_->info().clipDepthZeroToOne);
     std::memcpy(proj_, p.m, sizeof proj_);
     hasTransform_ = false;
+    draws_ = 0;
     scissorOn_ = false;
     maskOn_ = false;
     dev_->setViewport({0, 0, fbW, fbH});
@@ -151,12 +245,15 @@ void UiRenderer::RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector2
     if (!handle || handle > geos_.size()) return;
     const Geometry& g = geos_[handle - 1];
     gfx::TextureHandle tex = white_;
-    if (texture && texture <= texs_.size() && texs_[texture - 1].tex.valid()) tex = texs_[texture - 1].tex;
+    bool decode = false;
+    if (texture && texture <= texs_.size() && texs_[texture - 1].tex.valid()) { tex = texs_[texture - 1].tex; decode = !texs_[texture - 1].linear; }
     struct { float mvp[16]; float tr[4]; } u{};
     if (hasTransform_) mul(proj_, transform_, u.mvp);
     else std::memcpy(u.mvp, proj_, sizeof u.mvp);
     u.tr[0] = translation.x; u.tr[1] = translation.y;
-    dev_->setPipeline(pipeline_);
+    u.tr[2] = linear_ && decode ? 1.0f : 0.0f;
+    ++draws_;
+    dev_->setPipeline(linear_ ? linPipeline_ : pipeline_);
     dev_->setVertexBuffer(g.vb);
     dev_->setIndexBuffer(g.ib);
     dev_->setTexture(0, tex);
@@ -192,14 +289,21 @@ Rml::TextureHandle UiRenderer::LoadTexture(Rml::Vector2i& dims, const Rml::Strin
                                    imageSource_(source, w, h, rgba) ||
                                    (source.rfind(kGame, 0) == 0 && imageSource_(kEngine + source.substr(kGame.size()), w, h, rgba)));
         if (!ok || size_t(w) * size_t(h) * 4 != rgba.size()) return 0;
+        dims = {w, h};
+        if (linear_) return createLinearImage(rgba.data(), dims);
         for (size_t i = 0; i < rgba.size(); i += 4)
             for (int c = 0; c < 3; ++c) rgba[i + size_t(c)] = static_cast<unsigned char>((rgba[i + size_t(c)] * rgba[i + 3] + 127) / 255);
-        dims = {w, h};
         return GenerateTexture({reinterpret_cast<const Rml::byte*>(rgba.data()), rgba.size()}, dims);
     }
     int w = 0, h = 0, n = 0;
     unsigned char* px = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(file.data()), int(file.size()), &w, &h, &n, 4);
     if (!px) { Rml::Log::Message(Rml::Log::LT_WARNING, "ui: cannot decode image '%s'", source.c_str()); return 0; }
+    if (linear_) {
+        dims = {w, h};
+        Rml::TextureHandle th = createLinearImage(px, dims);
+        stbi_image_free(px);
+        return th;
+    }
     for (int i = 0; i < w * h; ++i) { // premultiply, like every other RmlUi colour
         unsigned char* p = px + i * 4;
         for (int c = 0; c < 3; ++c) p[c] = static_cast<unsigned char>((p[c] * p[3] + 127) / 255);
@@ -216,6 +320,19 @@ Rml::TextureHandle UiRenderer::GenerateTexture(Rml::Span<const Rml::byte> source
     Texture t;
     t.tex = dev_->createTexture(td);
     t.owned = true;
+    if (!t.tex.valid()) return 0;
+    return put(texs_, freeTexs_, t);
+}
+
+// Straight-alpha sRGB image -> RGBA8_sRGB texture premultiplied in linear light (UiColor.h).
+Rml::TextureHandle UiRenderer::createLinearImage(unsigned char* rgba, Rml::Vector2i dims) {
+    premultiplyLinearSrgb8(rgba, size_t(dims.x) * size_t(dims.y));
+    gfx::TextureDesc td;
+    td.width = dims.x; td.height = dims.y; td.data = rgba; td.format = gfx::PixelFormat::RGBA8_sRGB; td.label = "ui-image";
+    Texture t;
+    t.tex = dev_->createTexture(td);
+    t.owned = true;
+    t.linear = true;
     if (!t.tex.valid()) return 0;
     return put(texs_, freeTexs_, t);
 }

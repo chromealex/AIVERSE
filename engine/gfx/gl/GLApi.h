@@ -40,6 +40,9 @@
   #define GL_FUNC_SUBTRACT 0x800A
   #define GL_FUNC_REVERSE_SUBTRACT 0x800B
   #define GL_FRAMEBUFFER_SRGB 0x8DB9
+  #define GL_SRGB8_ALPHA8 0x8C43
+  #define GL_READ_FRAMEBUFFER 0x8CA8
+  #define GL_DRAW_FRAMEBUFFER 0x8CA9
   #define GL_DEPTH_COMPONENT24 0x81A6
   #define GL_RGBA32F 0x8814
   #define GL_EXTENSIONS 0x1F03
@@ -94,7 +97,8 @@
     X(void, glBindFramebuffer, (GLenum t, GLuint f)) \
     X(void, glFramebufferTexture2D, (GLenum t, GLenum a, GLenum tt, GLuint tex, GLint l)) \
     X(GLenum, glCheckFramebufferStatus, (GLenum t)) \
-    X(void, glDrawBuffers, (GLsizei n, const GLenum* b))
+    X(void, glDrawBuffers, (GLsizei n, const GLenum* b)) \
+    X(void, glBlitFramebuffer, (GLint sx0, GLint sy0, GLint sx1, GLint sy1, GLint dx0, GLint dy0, GLint dx1, GLint dy1, GLbitfield m, GLenum f))
   #define RTS_GL_DECLARE(ret, name, args) typedef ret (APIENTRY* PFN_##name) args; extern PFN_##name name;
   RTS_GL_FUNCS(RTS_GL_DECLARE)
   #undef RTS_GL_DECLARE

@@ -935,6 +935,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         dev.beginPass(pass);
     }
     overlay_.render();
+    ui_.setTarget(hostColor_, hostDepth_);   // linear UI blending reopens this pass
     ui_.render();
     dev.endPass();
 }

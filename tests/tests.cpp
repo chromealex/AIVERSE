@@ -12708,6 +12708,39 @@ TEST(native_editor_build_helpers) {
 }
 #endif
 
+
+// ---- linear UI blending (ui-linear): sRGB curves, linear premultiplication of images, game.json key
+#include "engine/ui/UiColor.h"
+TEST(ui_linear_blend_colour_space) {
+    using namespace rts::ui;
+    CHECK(srgbToLinear(0.0f) == 0.0f && std::fabs(srgbToLinear(1.0f) - 1.0f) < 1e-6f);
+    CHECK(std::fabs(srgbToLinear(0.5f) - 0.214041f) < 1e-5f);
+    bool roundTrip = true;   // every 8-bit code survives decode + encode (the composite relies on it)
+    for (int i = 0; i < 256; ++i) roundTrip = roundTrip && linearToSrgb8(srgbToLinear(float(i) / 255.0f)) == i;
+    CHECK(roundTrip);
+    CHECK(linearToSrgb8(0.5f) == 188);   // 50% black over white in linear light (gamma blending gives 128)
+    // images: rgb' = enc(dec(rgb) * a); opaque texels untouched, transparent ones zeroed
+    uint8_t px[4 * 4] = {200, 100, 50, 255, 255, 255, 255, 0, 255, 255, 255, 128, 90, 180, 30, 40};
+    premultiplyLinearSrgb8(px, 4);
+    CHECK(px[0] == 200 && px[1] == 100 && px[2] == 50 && px[3] == 255);
+    CHECK(px[4] == 0 && px[5] == 0 && px[6] == 0 && px[7] == 0);
+    CHECK(px[8] == linearToSrgb8(128.0f / 255.0f) && px[11] == 128);
+    bool exact = true;   // table lookup == direct formula, over a grid of colours and alphas
+    for (int a = 1; a < 255; a += 7)
+        for (int c = 0; c < 256; c += 3) {
+            uint8_t p[4] = {uint8_t(c), uint8_t(c), uint8_t(c), uint8_t(a)};
+            premultiplyLinearSrgb8(p, 1);
+            const int want = linearToSrgb8(srgbToLinear(float(c) / 255.0f) * float(a) / 255.0f);
+            exact = exact && std::abs(int(p[0]) - want) <= 1 && p[3] == a;   // 1: float ties at a code boundary
+        }
+    CHECK(exact);
+    std::string err;
+    CHECK(parseUiBlend(rts::Json::parse("{}"), &err) == UiBlend::Srgb && err.empty());
+    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "linear"}})"), &err) == UiBlend::Linear && err.empty());
+    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "srgb"}})"), &err) == UiBlend::Srgb && err.empty());
+    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "gamma2"}})"), &err) == UiBlend::Srgb && err.find("gamma2") != std::string::npos);
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

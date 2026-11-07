@@ -154,6 +154,7 @@ public:
         MTLPixelFormat pf = d.format == PixelFormat::R8 ? MTLPixelFormatR8Unorm
                           : d.format == PixelFormat::RGBA32F ? MTLPixelFormatRGBA32Float
                           : d.format == PixelFormat::Depth ? MTLPixelFormatDepth32Float
+                          : d.format == PixelFormat::RGBA8_sRGB ? (d.renderTarget ? MTLPixelFormatBGRA8Unorm_sRGB : MTLPixelFormatRGBA8Unorm_sRGB)
                           : d.renderTarget ? MTLPixelFormatBGRA8Unorm   // same format as the screen: pipelines are shared
                           : MTLPixelFormatRGBA8Unorm;
         const bool mips = d.mipmaps && d.format != PixelFormat::Depth && d.format != PixelFormat::RGBA32F && !d.renderTarget;
@@ -226,7 +227,9 @@ public:
         pd.vertexFunction = s->vs;
         pd.fragmentFunction = s->fs; // depth-only shaders without fs_main get nil (no fragment stage)
         pd.vertexDescriptor = vd;
-        pd.colorAttachments[0].pixelFormat = d.depthOnly ? MTLPixelFormatInvalid : layer_.pixelFormat;
+        pd.colorAttachments[0].pixelFormat = d.depthOnly ? MTLPixelFormatInvalid
+                                           : d.colorFormat == PixelFormat::RGBA8_sRGB ? MTLPixelFormatBGRA8Unorm_sRGB   // sRGB render targets
+                                           : layer_.pixelFormat;
         pd.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
         auto* ca = pd.colorAttachments[0];
         if (!d.colorWrite) ca.writeMask = MTLColorWriteMaskNone;
@@ -281,9 +284,29 @@ public:
         if (captured_ && captured_->ready) {
             auto c = captured_;
             captured_.reset();
-            layer_.framebufferOnly = YES;
+            layer_.framebufferOnly = screenReadable_ ? NO : YES;
             if (c->fn) c->fn(c->w, c->h, std::move(c->px));
         }
+    }
+
+    void setScreenReadable(bool readable) override {
+        screenReadable_ = readable;
+        if (!capture_ && !captured_) layer_.framebufferOnly = readable ? NO : YES;
+    }
+    bool copyColor(TextureHandle from, TextureHandle to) override {
+        auto* dst = textures_.get(to.id);
+        if (!cmd_ || enc_ || !dst) return false;
+        id<MTLTexture> src = nil;
+        if (from.valid()) { if (auto* s = textures_.get(from.id)) src = s->tex; }
+        else if (drawable_) src = drawable_.texture;
+        if (!src || src.framebufferOnly || src.pixelFormat != dst->tex.pixelFormat ||
+            src.width != dst->tex.width || src.height != dst->tex.height) return false;
+        id<MTLBlitCommandEncoder> blit = [cmd_ blitCommandEncoder];
+        [blit copyFromTexture:src sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
+                   sourceSize:MTLSizeMake(src.width, src.height, 1)
+                    toTexture:dst->tex destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0, 0, 0)];
+        [blit endEncoding];
+        return true;
     }
 
     void beginFrame(int w, int h) override {
@@ -447,6 +470,7 @@ private:
     dispatch_semaphore_t frameSemaphore_;
     uint64_t frame_ = 0;
     bool firstPass_ = true;
+    bool screenReadable_ = false;   // setScreenReadable: drawables stay copyable (copyColor)
     DeviceInfo info_;
     std::string error_;
     Pool<MTBuffer> buffers_;

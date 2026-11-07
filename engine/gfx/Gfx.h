@@ -41,8 +41,10 @@ enum class Backend { Metal, GLES3, GL33 };
 enum class BufferType { Vertex, Index };
 enum class Usage { Immutable, Dynamic };          // Dynamic: updated (whole or partially) every frame
 enum class PixelFormat { RGBA8, R8, Depth, RGBA32F,
-                         ETC2_RGB8, ETC2_RGBA8, BC1, BC3, BC7, ASTC_4x4 };  // block-compressed: upload levels, check supports()   // Depth: 24/32-bit depth render target; RGBA32F: data textures
+                         ETC2_RGB8, ETC2_RGBA8, BC1, BC3, BC7, ASTC_4x4,   // block-compressed: upload levels, check supports()   // Depth: 24/32-bit depth render target; RGBA32F: data textures
                                                         // (bone matrices, morph deltas), nearest only, read with texelFetch / read()
+                         RGBA8_sRGB };  // sRGB-encoded RGBA8 (check supports()): sampling decodes to linear (before filtering),
+                                        // as a render target the GPU encodes on write and blends in linear; alpha stays linear
 enum class Filter { Nearest, Linear };
 enum class VertexFormat { Float2, Float3, Float4, UByte4N, UByte4 }; // UByte4: integers 0..255 (GLSL float / MSL uchar4)
 enum class IndexType { None, UInt16, UInt32 };
@@ -107,6 +109,8 @@ struct PipelineDesc {
                                      // A fragment stage, when the shader has one, still runs (alpha-tested casters).
     float depthBiasConstant = 0;     // polygon offset, used by shadow casters
     float depthBiasSlope = 0;
+    PixelFormat colorFormat = PixelFormat::RGBA8;   // colour target it draws into: RGBA8 (screen, RGBA8 targets) or RGBA8_sRGB
+                                                    // (Metal bakes it into the pipeline state; GL ignores it)
     const char* label = nullptr;
 };
 
@@ -148,6 +152,12 @@ public:
     virtual const std::string& lastError() const = 0;
     // Formats the GPU samples natively (block-compressed ones vary by GPU and API).
     virtual bool supports(PixelFormat f) const { return f == PixelFormat::RGBA8 || f == PixelFormat::R8 || f == PixelFormat::Depth || f == PixelFormat::RGBA32F; }
+    // Copies the colour of a render target (invalid = the screen as drawn so far this frame) into `to`: an RGBA8
+    // render target of the same size. Only between passes. False when the backend can't (the screen is not
+    // readable: see setScreenReadable, sizes differ); the caller then takes another path.
+    virtual bool copyColor(TextureHandle from, TextureHandle to) { (void)from; (void)to; return false; }
+    // The screen may be a copyColor source (Metal: drawables stop being framebuffer-only from the next frame).
+    virtual void setScreenReadable(bool readable) { (void)readable; }
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;

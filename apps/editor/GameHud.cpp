@@ -2,6 +2,7 @@
 #include "Editor.h"
 #include "apps/client/RegionSettings.h"
 #include "engine/i18n/GameLanguage.h"
+#include "engine/ui/UiColor.h"
 #include "modules/rts/view/ScriptHud.h"
 #include "modules/rts/view/WorldCounters.h"
 #include <cstdio>
@@ -31,6 +32,7 @@ void GameHud::init(Editor& ed) {
     i18n::loadGameLocalization(loc_, read, languages, i18n::chooseLanguage(languages, i18n::readSavedLanguage(platform::userDataDir())));
     if (!ui_.init(ed.device(), "fonts/ui.ttf", read)) return;
     ui_.setOnScreenKeyboard(rts::ui::UiLayer::OnScreenKeyboard::Never);
+    ui_.setLinearBlending(rts::ui::parseUiBlend(ed.ws().project.manifest) == rts::ui::UiBlend::Linear);
     ui_.setTranslator([this](const std::string& key) { return loc_.tr(key); });
     auto c = ui_.context()->CreateDataModel("game");
     client::bindUiState(c, bound_);
@@ -278,6 +280,7 @@ void GameHud::commandCard(Editor& ed, client::UiState& s) {
 void GameHud::render(Editor& ed, const Viewport& vp) {
     if(!ui_.context())return;
     gfx::PassDesc pass; pass.colorTarget=vp.color; pass.depthTarget=vp.depth; pass.clearColorEnabled=false; pass.clearDepthEnabled=false;
+    ui_.setTarget(vp.color, vp.depth);
     ed.device().beginPass(pass); ui_.render(); ed.device().endPass();
 }
 

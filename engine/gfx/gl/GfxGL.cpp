@@ -25,6 +25,9 @@ bool loadGLFunctions() {
 namespace rts::gfx {
 namespace {
 
+// desktop GL only (ES / WebGL always encode into sRGB attachments); GLES headers lack the name
+constexpr GLenum kGL_FRAMEBUFFER_SRGB = 0x8DB9;
+
 // compressed formats (may be missing from older headers)
 constexpr GLenum kGL_ETC2_RGB8 = 0x9274, kGL_ETC2_RGBA8 = 0x9278, kGL_DXT1_RGBA = 0x83F1, kGL_DXT5 = 0x83F3,
                  kGL_BPTC_UNORM = 0x8E8C, kGL_ASTC_4x4 = 0x93B0;
@@ -173,6 +176,7 @@ public:
             }
         } else if (d.format == PixelFormat::R8) glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, d.width, d.height, 0, GL_RED, GL_UNSIGNED_BYTE, d.data);
         else if (d.format == PixelFormat::RGBA32F) { t.mips = false; glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, d.width, d.height, 0, GL_RGBA, GL_FLOAT, d.data); }
+        else if (d.format == PixelFormat::RGBA8_sRGB) glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, d.width, d.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, d.data);
         else glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, d.width, d.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, d.data);
         GLint f = d.filter == Filter::Linear && d.format != PixelFormat::RGBA32F ? GL_LINEAR : GL_NEAREST; // float textures are not filterable on ES3
         if (t.mips) {
@@ -325,6 +329,11 @@ public:
             glBindFramebuffer(GL_FRAMEBUFFER, framebufferFor(d.colorTarget.id, d.depthTarget.id));
             auto* t = textures_.get(d.colorTarget.valid() ? d.colorTarget.id : d.depthTarget.id);
             if (t) { passW_ = t->w; passH_ = t->h; }
+            auto* c = textures_.get(d.colorTarget.id);
+            if (c && c->fmt == PixelFormat::RGBA8_sRGB && info_.backend == Backend::GL33 && !srgbWrite_) {
+                glEnable(kGL_FRAMEBUFFER_SRGB);   // desktop GL encodes (and blends in linear) only when asked
+                srgbWrite_ = true;
+            }
         } else {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }
@@ -347,7 +356,28 @@ public:
     void endPass() override {
         if (passW_ != fbW_ || passH_ != fbH_ || true) glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDisable(GL_POLYGON_OFFSET_FILL);
+        if (srgbWrite_) { glDisable(kGL_FRAMEBUFFER_SRGB); srgbWrite_ = false; }
         passW_ = fbW_; passH_ = fbH_;
+    }
+
+    bool copyColor(TextureHandle from, TextureHandle to) override {
+        auto* dst = textures_.get(to.id);
+        if (!dst || dst->fmt != PixelFormat::RGBA8) return false;
+        int sw = fbW_, sh = fbH_;
+        if (from.valid()) {
+            auto* src = textures_.get(from.id);
+            if (!src) return false;
+            sw = src->w; sh = src->h;
+        }
+        if (sw != dst->w || sh != dst->h) return false;
+        // a blit (not glCopyTexSubImage2D): converts RGB8 / multisampled default framebuffers too
+        const GLuint readFbo = from.valid() ? framebufferFor(from.id, 0) : 0, drawFbo = framebufferFor(to.id, 0);  // may bind while creating
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFbo);
+        glDisable(GL_SCISSOR_TEST);
+        glBlitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return true;
     }
 
     void setViewport(const Rect& r) override { glViewport(r.x, passH_ - (r.y + r.h), r.w, r.h); }
@@ -485,6 +515,7 @@ private:
     GLuint webUbos_[kMaxUniformSlots] = {};
     size_t uboAlign_ = 256, uboOffset_ = 0;
     bool etc2_ = false, s3tc_ = false, bptc_ = false, astc_ = false;
+    bool srgbWrite_ = false;   // GL33: GL_FRAMEBUFFER_SRGB enabled for the current pass
     std::vector<uint8_t> slotData_[kMaxUniformSlots]; // last data per slot, re-uploaded when the ring is orphaned
     int passW_ = 0, passH_ = 0;
     std::vector<GLFramebuffer> fbos_;

@@ -14,6 +14,7 @@
 #include "engine/net/NetLocalize.h"
 #include "modules/rts/RtsLocalize.h"
 #include "engine/atlas/AtlasFormat.h"
+#include "engine/ui/UiColor.h"
 
 namespace rts::client {
 
@@ -64,6 +65,11 @@ private:
 
 void GameClient::initUi() {
     if (!ui_.init(*dev_, "fonts/ui.ttf")) { error_ = "ui: init failed"; return; }
+    {   // game.json "ui": {"blend": "linear"}: translucent UI blends in linear light (before any image loads)
+        std::string err;
+        if (ui::parseUiBlend(manifest_, &err) == ui::UiBlend::Linear) ui_.setLinearBlending(true);
+        if (!err.empty()) std::fprintf(stderr, "[ui] %s\n", err.c_str());
+    }
     initLua();   // before any document: <script> and onclick="..." need the plugin
     ui_.setKeyboardLanguage(loc_.language());
     // UI images the build packed into texture atlases are no longer plain files.
