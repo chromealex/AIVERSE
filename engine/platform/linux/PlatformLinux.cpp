@@ -137,8 +137,12 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     if (const char* h = std::getenv("HOME")) S.userDir = std::string(h) + "/.local/share/rtsengine";
     // RTS_TOUCH_EMULATE=1 (tests): the left button is a finger (TouchBegin / Move / End, no hover) on a touch device,
     // so the mobile input paths can be driven by XTEST on a desktop / Xvfb
+    // With Ctrl held at the press, the left button is two fingers (pinch, as the iOS Simulator's Option key): finger 1
+    // at the pointer, finger 2 mirrored around the window centre.
     const char* touchEnv = std::getenv("RTS_TOUCH_EMULATE");
     const bool touchEmu = touchEnv && touchEnv[0] == '1';
+    bool touchPinch = false;
+    auto pinchTwin = [&](float x, float y, Event& t) { t.touchId = 2; t.x = S.winW - x; t.y = S.winH - y; };
     if (touchEmu) S.touch = true;
     if (S.cb.configure) S.cb.configure(S.cfg);   // game data: window size and mode
 
@@ -209,7 +213,9 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
                 if (touchEmu) {
                     if (!(xe.xmotion.state & Button1Mask)) break;
                     e.type = EventType::TouchMove; e.touchId = 1; e.x = float(xe.xmotion.x); e.y = float(xe.xmotion.y);
-                    detail::dispatch(e); break;
+                    detail::dispatch(e);
+                    if (touchPinch) { Event t = e; pinchTwin(e.x, e.y, t); detail::dispatch(t); }
+                    break;
                 }
                 e.type = EventType::MouseMove; e.x = float(xe.xmotion.x); e.y = float(xe.xmotion.y); e.mods = mods(xe.xmotion.state);
                 detail::dispatch(e); break;
@@ -227,7 +233,11 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
                 }
                 if (touchEmu && b == 1) {
                     e.type = xe.type == ButtonPress ? EventType::TouchBegin : EventType::TouchEnd; e.touchId = 1;
-                    detail::dispatch(e); break;
+                    if (xe.type == ButtonPress) touchPinch = (xe.xbutton.state & ControlMask) != 0;
+                    detail::dispatch(e);
+                    if (touchPinch) { Event t = e; pinchTwin(e.x, e.y, t); detail::dispatch(t); }
+                    if (xe.type == ButtonRelease) touchPinch = false;
+                    break;
                 }
                 e.type = xe.type == ButtonPress ? EventType::MouseDown : EventType::MouseUp;
                 e.button = b == 1 ? 0 : b == 3 ? 1 : 2;

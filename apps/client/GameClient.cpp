@@ -657,6 +657,8 @@ void GameClient::event(const Event& e) {
         if (!touches_.count(e.touchId)) return;
         bool single = touches_.size() == 1 && e.type == EventType::TouchEnd;
         touches_.erase(e.touchId);
+        // a pinch ends with one finger left: it pans from where it is (not from the pinch midpoint)
+        if (touches_.size() == 1) { downX_ = touches_.begin()->second.first; downY_ = touches_.begin()->second.second; }
         if (rectDrag_) {
             Event up = e; up.type = EventType::MouseUp; up.button = 0;
             if (single) toolMouseUp(up); else rectDrag_ = false;
