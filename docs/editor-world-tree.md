@@ -129,4 +129,7 @@ shown in the details.
 
 - Planet maps: the preview's game-created objects are listed, but not drawn / picked in the edit Scene.
 - Live Lua data is as of the last observation (5 Hz).
+- Hosted client («Как в клиенте»): the editor sees the match only when the client has one (menus: the edit
+  preview stays); objects count as *setup* only if the editor saw the match within its first 2 seconds, and
+  map entities are not linked (the client may play another map than the open one).
 - Native module state (`NativeStore`) is global, not per object; it is not shown per object.
