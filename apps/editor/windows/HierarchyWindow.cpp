@@ -254,6 +254,7 @@ private:
             emitNodes(ed, top, 1, "", open);
         }
         mapSections(ed, open);
+        if (anchor_ >= int(rows_.size()) || (anchor_ >= 0 && rowOf(ed.selection) >= 0)) anchor_ = rowOf(ed.selection);
     }
 
     template <class Open>
@@ -596,7 +597,10 @@ private:
         if (renameFocus_) { ImGui::SetKeyboardFocusHere(); renameFocus_ = false; }
         const bool enter = ui::inputString("##rename", renameText_, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
         if (enter || ImGui::IsItemDeactivatedAfterEdit()) applyRename(ed);
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && !renameFocus_ && !enter)) renaming_ = false;
+        // the field takes focus a frame later: close it once it was active and lost focus (or never got it)
+        if (ImGui::IsItemActive()) renameActive_ = true;
+        else if (renameActive_ || ++renameWait_ > 3) renaming_ = false;
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) renaming_ = false;
         ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + rowH));
         ImGui::Dummy(ImVec2(0, 0));
     }
@@ -804,6 +808,8 @@ private:
         else return;
         renaming_ = true;
         renameFocus_ = true;
+        renameActive_ = false;
+        renameWait_ = 0;
         renameSel_ = r.sel;
         renameRow_ = r.key + "|" + r.label;
         scrollTo_ = row;
@@ -987,7 +993,8 @@ private:
     int anchor_ = -1, scrollTo_ = -1;
     bool focused_ = false;
     std::vector<int> dragged_;
-    bool renaming_ = false, renameFocus_ = false;
+    bool renaming_ = false, renameFocus_ = false, renameActive_ = false;
+    int renameWait_ = 0;
     std::string renameText_, renameRow_;
     Selection renameSel_;
 };
