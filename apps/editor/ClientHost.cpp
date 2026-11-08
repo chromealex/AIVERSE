@@ -29,7 +29,7 @@ void ClientHost::start(gfx::Device& dev, const std::string& projectDir, const st
     view_.width = 360; view_.height = 640; view_.fbWidth = 360; view_.fbHeight = 640;   // until the first frame
     client_ = std::make_unique<client::GameClient>();
     step_ = 0;
-    captured_ = false;
+    captured_ = finger_ = false;
 }
 
 void ClientHost::stop() {
@@ -40,7 +40,7 @@ void ClientHost::stop() {
         client_.reset();
     }
     step_ = 0;
-    captured_ = false;
+    captured_ = finger_ = false;
 }
 
 float ClientHost::progress() const {
@@ -69,19 +69,32 @@ void ClientHost::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle d
 void ClientHost::event(const Event& in) {
     if (!client_ || step_ < kSteps) return;
     Event e = in;
-    switch (in.type) {
+    // A touch device profile gets touches, as on the phone (and as RTS_TOUCH_EMULATE in PlatformLinux): the left button
+    // is finger 1 (TouchBegin / Move / End, no hover moves), so the client's touch paths run - one-finger pan, touch
+    // map-drags (view.targeting().touch: e.g. an aim offset above the finger). Right / middle button and wheel stay mouse.
+    const bool left = (in.type == EventType::MouseDown || in.type == EventType::MouseUp) && in.button == 0;
+    if (in.type == EventType::MouseDown && left) finger_ = view_.touch;
+    if (in.type == EventType::FocusLost) finger_ = false;   // the client cancels its pointer interactions itself
+    if (finger_) {
+        if (left) { e.type = in.type == EventType::MouseDown ? EventType::TouchBegin : EventType::TouchEnd; e.touchId = 1; }
+        else if (in.type == EventType::MouseMove) { e.type = EventType::TouchMove; e.touchId = 1; }
+        if (in.type == EventType::MouseUp && left) finger_ = false;
+    } else if (view_.touch && in.type == EventType::MouseMove) {
+        return;   // no hover on a touch screen
+    }
+    switch (e.type) {
     case EventType::MouseMove: case EventType::MouseDown: case EventType::MouseUp: case EventType::MouseWheel:
     case EventType::TouchBegin: case EventType::TouchMove: case EventType::TouchEnd: case EventType::TouchCancel: {
         e.x = (in.x - x_) / k_;
         e.y = (in.y - y_) / k_;
         const bool inside = e.x >= 0 && e.y >= 0 && e.x < view_.width && e.y < view_.height;
-        if (in.type == EventType::MouseDown || in.type == EventType::TouchBegin) {
-            if (!inside) return;
+        if (e.type == EventType::MouseDown || e.type == EventType::TouchBegin) {
+            if (!inside) { finger_ = false; return; }
             captured_ = true;
-        } else if (in.type == EventType::MouseUp || in.type == EventType::TouchEnd || in.type == EventType::TouchCancel) {
+        } else if (e.type == EventType::MouseUp || e.type == EventType::TouchEnd || e.type == EventType::TouchCancel) {
             if (!captured_) return;
             captured_ = false;
-        } else if (in.type == EventType::MouseWheel) {
+        } else if (e.type == EventType::MouseWheel) {
             if (!inside) return;
         }
         break;   // moves always: hover leaves, edge scrolling stops outside the screen

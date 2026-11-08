@@ -4,7 +4,7 @@
 // platform::setHostedView (size / scale / safe area / content root of the device screen) and
 // restores the editor's ImGui context afterwards. Events of the editor window are mapped into the
 // device screen (logical points) and forwarded: pointer events inside it (or captured by a press
-// inside), keys while the Game window has focus.
+// inside), keys while the Game window has focus. On a touch device profile the left button is a finger.
 #pragma once
 #include <memory>
 #include <string>
@@ -48,6 +48,7 @@ private:
     int step_ = 0;
     float x_ = 0, y_ = 0, k_ = 1;
     bool focused_ = false, captured_ = false;
+    bool finger_ = false;   // touch profile: the left button is down as finger 1 (event)
 };
 
 } // namespace rts::editor

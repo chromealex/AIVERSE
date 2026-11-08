@@ -499,7 +499,7 @@ end)
 | `ui.set(key, value)` | a top-level value of model `script` (numbers, strings, booleans, fx, tables / arrays); unchanged values are not resent. A document binds its `{{names}}` when it loads: set every key it uses before (or in the same frame as) its first `ui.open` |
 | `ui.open(name [, params])`, `ui.close(name)` | show / hide `ui/hud/<name>.rml` (while the host screen is `playing`, or one of the screens its `<body screens="playing paused over">` lists: a game's own pause / result panels, a HUD under them); `params` -> `{{params.*}}` |
 | `ui.on(event, fn(args))` | `event('name', ...)` in a document; `args` = the extra values as an array |
-| `ui.on("back", fn(args))` | Esc / Android Back (Back arrives as Escape) during a match (`playing` or `paused`). With such a handler the client skips its own pause / resume / tool cancel and leaves the key to the script: `args = {screen = "playing" \| "paused", platform = "android" \| "ios" \| "web" \| "macos" \| "windows" \| "linux"}`; return `true` to also cancel the pointer interaction in progress (a `map-drag` press, a skill drag, a tool mode). Pause / resume from the script with `view.ui_call('game.pause')` / `view.ui_call('game.resume')` |
+| `ui.on("back", fn(args))` | Esc / Android Back (Back arrives as Escape) during a match (`playing` or `paused`). With such a handler the client skips its own pause / resume / tool cancel and leaves the key to the script: `args = {screen = "playing" \| "paused", platform = "android" \| "ios" \| "web" \| "macos" \| "windows" \| "linux"}`; return `true` to also cancel the pointer interaction in progress (a `map-drag` press, a skill drag, a tool mode). Pause / resume from the script with `view.ui_call('game.pause')` / `view.ui_call('game.resume')` (client, and the editor's Game window playing as in the client while it has focus) |
 | `view.state()` | the simulation scripts' `state` as of this tick (a copy; writing to it changes nothing) |
 
 `send('id', {...})` in a document sends a script command as the local player (the current selection
@@ -592,7 +592,9 @@ allowed-area masks and cursor previews; authoritative validation remains in the
 command's simulation handler. Client and editor clear it when targeting ends.
 In `mapClick` games a drag that started on a `map-drag` HUD element (drag-to-cast discs) reports
 `ability = "map-drag"` with the pointer's ground point while the drag lasts (`overWorld`: over the
-map, not over the UI, where a release taps the map); client only. A map-drag also reports `touch` (the drag
+map, not over the UI, where a release taps the map); client and the editor's Game window when it plays as in the
+client (the same GameClient; its touch device profiles send the left button as a finger, so `touch` is true there
+as on a phone). A map-drag also reports `touch` (the drag
 is a touch, not the mouse) and `sx`, `sy` (the pointer in window points). `view.set_map_drag_offset(dx, dy)`
 (window points, reset when a map-drag starts) moves the point the drag aims at: the ground point (`x`, `z`)
 and the release tap are taken at the pointer + (dx, dy), while `overWorld` and the release over the UI stay
