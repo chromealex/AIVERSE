@@ -72,6 +72,12 @@ shows its colour unchanged), `"modelOutput": "srgb"` (model shaders encode their
 as a Unity project in linear colour space does, instead of the engine's default sqrt, which renders midtones darker; GLSL
 and MSL). Map keys win over game keys.
 
+Optional `"editor": {"hierarchy": {...}}`: how the editor's world tree (Hierarchy / Inspector «Детали») shows this
+game's objects — `previewTicks` (ticks the edit-mode preview runs after setup, default 2), `label` (a `game.data(h)` key
+naming the row), `categories` (tags in priority order: an object's category), `groupings` (`[{"title", "by": [keys]}]`,
+keys `owner`, `type`, `kind`, `category`, `origin`, `region`, `parent`, `tag`, `component`, `data:<key>`). Only the
+editor reads it. Details: docs/editor-world-tree.md § Game hooks.
+
 ## rules.json — top level
 
 | key | meaning |

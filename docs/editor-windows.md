@@ -76,7 +76,10 @@ F5 test, Ctrl/Cmd+B build window; in the Scene 1…0 pick tools, F focus, [ ] br
 | `ed.ws()` | the `Workspace`: project (manifest, `rulesJson`, parsed `rules`), map document, activity log, and **`ws().call(op, params)`** — run any MCP operation (`rules_set`, `entity_place`, `match_run`, ...) exactly like an agent; prefer this over editing data directly, it validates and records history |
 | `ed.doc()` | the open map (`MapDoc`): `data` (terrain layers, players, entities, roads, `extra` JSON blocks), `beginEdit()` before a change (undo snapshot), `touched()` after a change (views rebuild) |
 | `ed.rules()` | parsed rules of the open game (read-only; change rules through `rules_set`) |
-| `ed.selection`, `ed.select(...)`, `ed.selectEntity(i)` | what the Inspector shows |
+| `ed.selection`, `ed.select(...)`, `ed.selectEntity(i)` | what the Inspector shows (the primary item) |
+| `ed.selected()`, `ed.selectToggle/selectAdd/selectMany`, `ed.isSelected(s)`, `ed.selectedEntities()`, `ed.removeSelectedEntities()` | multi-selection (Hierarchy, Scene, Inspector «Детали»); `Selection::Live` = a world object by `ref` |
+| `ed.world()`, `ed.worldLive()`, `ed.worldSim()`, `ed.worldRow(s)`, `ed.worldSelection(row)`, `ed.refreshWorld()` | world tree: every object of the game world — edit mode: the map's setup run in a throwaway preview; play: the running test (docs/editor-world-tree.md) |
+| `ed.hover`, `ed.setHover(s)`, `ed.pickObject(vp, cam, x, y)`, `ed.sceneHidden` / `ed.sceneLocked` | hover shared by Scene and Hierarchy, picking of any object, eye / lock in the Scene |
 | `ed.tool`, `ed.brush`, `ed.placeType`, ... | Scene tool state |
 | `ed.sceneCam`, `ed.focusScene(x, z)`, `ed.flash(x0, z0, x1, z1)` | camera and highlight in Scene |
 | `ed.playing()`, `ed.sim()`, `ed.simModule()`, `ed.startPlay(slot)`, `ed.stopPlay()` | the play-test simulation (read-only from windows; issue player commands with `ed.issueCommand`) |

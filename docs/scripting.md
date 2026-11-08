@@ -148,6 +148,8 @@ netcode rewinds or a save is loaded. A tick that only changes Lua tables costs n
   game.has_data(h, "morale")  game.clear_data(h)
   ```
   View scripts get a read-only copy of the stored table.
+  The editor shows these tables too (Inspector «Детали» → «Данные скрипта»; Hierarchy search `d:`); with game.json
+  `editor.hierarchy` a key can name the row (`label`) or group the tree (`data:<key>`), docs/editor-world-tree.md.
 - Allowed in `state` and `game.data`: integers, `fx`, strings, booleans and nested tables whose keys
   are integers or strings. A value that can't be stored (function, float, table key, cycle) is left
   out of the saved state and logged; keep such values out of persistent tables.
