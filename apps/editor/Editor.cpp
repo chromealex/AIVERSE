@@ -165,7 +165,15 @@ EditorWindow* Editor::window(const std::string& id) {
 }
 
 void Editor::focusWindow(const std::string& id) {
-    if (auto* w = window(id)) { w->open = true; ImGui::SetWindowFocus(w->imguiName()); }
+    EditorWindow* w = window(id);
+    if (!w) return;
+    w->open = true;
+    // windows that change the picture (fog, terrain, lighting, post effects…) are useless next to the Game tab's
+    // "test not running" placeholder: bring the Scene to the front of the center area as well
+    const std::string g = w->group(), area = w->dockArea();
+    if ((g == "world" || g == "look") && area != "center" && !playing() && !clientPlaying())
+        if (EditorWindow* scene = window("scene"); scene && scene->open) ImGui::SetWindowFocus(scene->imguiName());
+    ImGui::SetWindowFocus(w->imguiName());
 }
 
 // ============================ documents ============================
@@ -851,13 +859,15 @@ void Editor::drawDockspace() {
         ImGui::DockBuilderAddNode(dock, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dock, size);
         ImGuiID center = dock;
-        ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.19f, nullptr, &center);
-        ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.27f, nullptr, &center);
+        ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.18f, nullptr, &center);
+        ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.32f, nullptr, &center);
+        // the Inspector stays visible on top; rules and the world / look tool windows share the tabs under it
+        ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.62f, nullptr, &right);
         ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.27f, nullptr, &center);
         ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.45f, nullptr, &left);
         for (auto& w : windows_) {
             std::string a = w->dockArea();
-            ImGuiID node = a == "left" ? left : a == "left-bottom" ? leftBottom : a == "bottom" ? bottom : a == "center" ? center : right;
+            ImGuiID node = a == "left" ? left : a == "left-bottom" ? leftBottom : a == "right-bottom" ? rightBottom : a == "bottom" ? bottom : a == "center" ? center : right;
             ImGui::DockBuilderDockWindow(w->imguiName(), node);
         }
         ImGui::DockBuilderFinish(dock);

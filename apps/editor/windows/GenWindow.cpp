@@ -13,7 +13,7 @@ public:
     const char* id() const override { return "generate"; }
     const char* title() const override { return "Генерация"; }
     const char* group() const override { return "world"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
 
@@ -51,15 +51,19 @@ public:
             ui::prop("Симметрия", "Авто: 2 игрока — центральная, 4 — поворот на 90° (квадрат) или две оси, иначе — вращение. Симметрия даёт честные старты.");
             ImGui::Combo("##sym", &sym_, symNames, 8);
             ui::propWide();
-            ImGui::Checkbox("Объекты по образцу карты", &useTemplate_);
+            ui::checkbox("Объекты по образцу карты", &useTemplate_);
             ImGui::SetItemTooltip("Стартовый набор игрока 1 и нейтральные объекты открытой карты задают, что и сколько ставить. Иначе — по типам из rules.json.");
             ui::propWide();
-            ImGui::Checkbox("Оставить размер открытой карты", &keepSize_);
+            ui::checkbox("Оставить размер открытой карты", &keepSize_);
             ui::endProps();
         }
         (void)syms;
         if (planet) ui::hint("Пресет планеты строит всю карту-мир: тела из блока world открытой карты или солнце + планета + луна.");
-        else ui::hint((cur.getStr("genre") + (cur.getStr("source") == "game" ? " · пресет из rules.json" : "")).c_str());
+        else {
+            const std::string genre = cur.getStr("genre");
+            const std::string g = genre.empty() || genre == "any" ? "Подходит любому жанру" : "Жанр: " + genre;
+            ui::hint((g + (cur.getStr("source") == "game" ? " · пресет из rules.json" : "")).c_str());
+        }
         if (ImGui::TreeNode("Параметры пресета (JSON)")) {
             if (params_.empty()) params_ = cur["params"].dump(-1);
             ui::inputMultiline("##params", params_, ImVec2(-1, 90));
@@ -70,7 +74,7 @@ public:
         ImGui::Spacing();
         if (ui::wideButton(ICON_WAND, "Сгенерировать", 0, 2, true)) run(ed, "bake");
         if (ui::wideButton(ICON_DICE, "Ещё вариант", 1, 2)) { ++seed_; run(ed, "bake"); }
-        if (ui::wideButton(ICON_PLAY, "Генерировать при старте матча")) run(ed, "match");
+        if (ui::wideButton(ICON_PLAY, "Новая карта в каждом матче")) run(ed, "match");
         ImGui::SetItemTooltip("Записывает в карту блок generate с seed \"match\": каждый матч (и мультиплеер, и повтор) генерирует свою карту детерминированно.");
         if (ws.map.data.extra.has("generate")) {
             ui::callout(ui::Tone::Accent, "Карта генерируется при старте матча: " + ws.map.data.extra["generate"].dump(-1));

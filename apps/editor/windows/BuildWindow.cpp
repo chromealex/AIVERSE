@@ -123,7 +123,7 @@ public:
         missingPopup(ed);
         ImGui::Separator();
         if (ImGui::BeginTable("##build", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {
-            ImGui::TableSetupColumn("settings", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 24);
+            ImGui::TableSetupColumn("settings", ImGuiTableColumnFlags_WidthFixed, std::max(ImGui::GetFontSize() * 24, ImGui::GetContentRegionAvail().x * 0.5f));
             ImGui::TableSetupColumn("files", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableNextColumn();
             ImGui::BeginChild("##settings", ImVec2(0, 0));
@@ -146,19 +146,25 @@ private:
                                        ICON_MONITOR "  Windows", ICON_MONITOR "  Linux"};
         static_assert(sizeof labels / sizeof *labels == kTargetCount);
         if (ui::choiceGrid("##target", target_, labels, kTargetCount, 104)) touched();
+        // row 2: configuration, secondary actions on the left; the main action («Собрать») on the right edge
         static const char* configs[] = {"Debug", "Release"};
         ui::segmented("##cfg", release_, configs, 2, ImGui::GetFontSize() * 9);
         ImGui::SameLine(0, 12);
         ImGui::BeginDisabled(ws.building());
-        if (ui::button(ICON_BUILD, ("Собрать " + std::string(kTargets[target_].name)).c_str(), true)) build(ed, kTargets[target_].id);
-        ImGui::SameLine();
         if (ui::button(ICON_HARD_DRIVE, "Оценить размер")) estimate(ed);
+        ImGui::SetItemTooltip("Собрать только пак контента и показать размер по файлам (секунды, без приложения)");
         ImGui::SameLine();
         if (ui::button(ICON_LAYOUT, "Все платформы")) build(ed, "all");
-        ImGui::EndDisabled();
+        ImGui::SetItemTooltip("Собрать игру для каждой платформы, для которой есть инструменты");
         ImGui::SameLine();
-        ImGui::Checkbox("Пересчитывать сразу", &autoEstimate_);
-        ui::help("После каждого изменения настроек размер оценивается заново (собирается только пак контента, без приложения — секунды).");
+        const std::string main = "Собрать " + std::string(kTargets[target_].name);
+        const float mainW = ImGui::CalcTextSize((std::string(ICON_BUILD) + "  " + main).c_str()).x + ImGui::GetStyle().FramePadding.x * 4;
+        const float rx = ImGui::GetWindowContentRegionMax().x - mainW;
+        if (rx > ImGui::GetCursorPosX() + 8) ImGui::SetCursorPosX(rx); else ImGui::NewLine();
+        if (ui::button(ICON_BUILD, main.c_str(), true, ImVec2(mainW, 0))) build(ed, kTargets[target_].id);
+        ImGui::EndDisabled();
+        ui::checkbox("Пересчитывать размер после каждого изменения", &autoEstimate_);
+        ImGui::SetItemTooltip("Собирается только пак контента, без приложения — секунды.");
         if (ws.building()) { ImGui::SameLine(); ui::toneText(ui::Tone::Warn, "%s %s", ICON_REFRESH, estimating_ ? "оценка…" : ws.runLabel().rfind("toolchain-", 0) == 0 ? "идёт установка…" : "идёт сборка…"); }
     }
 
@@ -211,11 +217,11 @@ private:
                 if (ImGui::IsItemDeactivatedAfterEdit()) { block.set("minWidth", Json::number(int64_t(std::max(0, mn[0])))); block.set("minHeight", Json::number(int64_t(std::max(0, mn[1])))); changed = true; }
                 ui::propWide();
                 bool aspect = view.getBool("keepAspect", false);
-                if (ImGui::Checkbox("Сохранять пропорции при изменении размера", &aspect)) { block.set("keepAspect", Json::fromBool(aspect)); changed = true; }
+                if (ui::checkbox("Сохранять пропорции при изменении размера", &aspect)) { block.set("keepAspect", Json::fromBool(aspect)); changed = true; }
             }
             ui::propWide();
             bool fs = view.getBool("allowFullscreen", true);
-            if (ImGui::Checkbox("Разрешить полный экран (F11, Alt+Enter, зелёная кнопка Mac)", &fs)) { block.set("allowFullscreen", Json::fromBool(fs)); changed = true; }
+            if (ui::checkbox("Разрешить полный экран (F11, Alt+Enter, зелёная кнопка Mac)", &fs)) { block.set("allowFullscreen", Json::fromBool(fs)); changed = true; }
             ui::endProps();
         }
         windowPreview(eff, tid);
@@ -363,7 +369,11 @@ private:
         const Target& t = kTargets[target_];
         auto it = checks_.find(t.id);
         if (it == checks_.end()) { ImGui::TextDisabled("%s Проверяю инструменты для %s…", ICON_REFRESH, t.name); return; }
-        if (!it->second.error.empty()) { ui::toneText(ui::Tone::Error, "Проверка инструментов не удалась: %s", it->second.error.c_str()); return; }
+        if (!it->second.error.empty()) {
+            ui::callout(ui::Tone::Error, std::string("Не удалось проверить инструменты сборки для ") + t.name + ": " + it->second.error);
+            if (ui::button(ICON_REFRESH, "Проверить снова")) checks_.erase(t.id);
+            return;
+        }
         const Json& st = it->second.status;
         const ImVec4 red = ui::toneColor(ui::Tone::Error), green = ui::toneColor(ui::Tone::Ok), yellow = ui::toneColor(ui::Tone::Warn);
         ImGui::PushID("toolchain");
@@ -382,7 +392,7 @@ private:
         if (ImGui::SmallButton(ICON_REFRESH " Проверить снова")) { checks_.erase(t.id); requestCheck(ed, t.id); }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Checkbox("Устанавливать недостающее автоматически", &autoInstall_)) ImGui::MarkIniSettingsDirty();
+        if (ui::checkbox("Устанавливать недостающее автоматически", &autoInstall_)) ImGui::MarkIniSettingsDirty();
         ui::help("«Собрать» сначала поставит то, чего не хватает (rtsbuild --install-missing), в папку ~/.rtsengine/toolchains — без прав администратора. "
                  "Удалить всё установленное: удалите эту папку.");
         for (auto& r : st["requirements"].items()) {
@@ -561,7 +571,7 @@ private:
 
         ui::section(nullptr, "Атласы текстур");
         bool atlas = m["atlas"].getBool("enable", true);
-        if (ImGui::Checkbox("Собирать атласы", &atlas)) save(ed, "atlas.enable", Json::fromBool(atlas));
+        if (ui::checkbox("Собирать атласы", &atlas)) save(ed, "atlas.enable", Json::fromBool(atlas));
         ui::help("Мелкие 2D-картинки (UI, спрайты, тайлы) собираются в страницы-атласы: меньше переключений текстур и меньше пак.");
         const Json& mp = m["atlas"]["maxPage"];
         const char* tid = kTargets[target_].id;
@@ -586,7 +596,7 @@ private:
         ui::section(nullptr, "Докачка (разбиение)");
         const Json& pt = m["packaging"]["targets"][tid];
         bool split = pt.has("split") ? pt.getBool("split", false) : m["packaging"].getBool("split", false);
-        if (ImGui::Checkbox("Делить на базу и докачку", &split)) save(ed, std::string("packaging.targets.") + tid + ".split", Json::fromBool(split));
+        if (ui::checkbox("Делить на базу и докачку", &split)) save(ed, std::string("packaging.targets.") + tid + ".split", Json::fromBool(split));
         ui::help("В сборке остаётся только нужное для старта, остальное — части для CDN, игра докачивает их сама (packaging.sources).");
         if (split) {
             std::string base = pt.has("baseSize") ? pt.getStr("baseSize") : m["packaging"].getStr("baseSize", "");
@@ -599,7 +609,7 @@ private:
         }
 
         ui::section(nullptr, "Правила файлов");
-        ImGui::Checkbox("Только для этой платформы", &perTarget_);
+        ui::checkbox("Только для этой платформы", &perTarget_);
         ui::help("Выключено: настройки файлов в таблице действуют на все платформы (packaging.files). Включено: только на выбранную (packaging.targets.<платформа>.files) — например, уменьшить текстуры только на Android.");
         Json list = rulesList(ed);
         if (list.size() == 0) ImGui::TextDisabled("нет — всё по умолчанию");
@@ -765,7 +775,7 @@ private:
                 ImGui::TableNextColumn();
                 bool ex = rule && rule->getBool("exclude", false);
                 if (rw.path.rfind("engine/", 0) == 0 || rw.path == "game.json" || rw.path.rfind("_atlas/", 0) == 0) ImGui::TextDisabled("—");
-                else if (ImGui::Checkbox("##ex", &ex)) setRule(ed, rw.path, "exclude", ex ? Json::fromBool(true) : Json());
+                else if (ui::checkbox("##ex", &ex)) setRule(ed, rw.path, "exclude", ex ? Json::fromBool(true) : Json());
                 ImGui::PopID();
             }
         ImGui::EndTable();

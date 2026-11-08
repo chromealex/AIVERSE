@@ -293,7 +293,7 @@ void Workspace::startCommand(const std::string& command, const std::string& show
 
 Json Workspace::toolchainCheck(const std::string& target) const {
     for (char c : target) if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-')) throw std::runtime_error("bad target: " + target);
-    std::string cmd = shellQuote(buildTool) + " --check-toolchain " + target + " --json";
+    std::string cmd = shellQuote(buildTool) + " --check-toolchain " + target + " --json 2>&1";
 #if defined(_WIN32)
     cmd = "\"" + cmd + "\"";
     FILE* p = _popen(cmd.c_str(), "r");
@@ -310,7 +310,12 @@ Json Workspace::toolchainCheck(const std::string& target) const {
     pclose(p);
 #endif
     size_t brace = out.find('{');
-    if (brace == std::string::npos) throw std::runtime_error("rtsbuild --check-toolchain: " + out.substr(0, 400));
+    if (brace == std::string::npos) {
+        while (!out.empty() && std::isspace(static_cast<unsigned char>(out.back()))) out.pop_back();
+        std::error_code ec;
+        if (buildTool.empty() || !std::filesystem::exists(buildTool, ec)) throw std::runtime_error("rtsbuild не найден: " + (buildTool.empty() ? std::string("путь не задан") : buildTool));
+        throw std::runtime_error(out.empty() ? "rtsbuild ничего не ответил (" + buildTool + ")" : "rtsbuild: " + out.substr(0, 400));
+    }
     return Json::parse(out.substr(brace));
 }
 

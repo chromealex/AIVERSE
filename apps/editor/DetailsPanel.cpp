@@ -255,10 +255,10 @@ void DetailsPanel::mapFields(Editor& ed) {
         if (ImGui::IsItemActivated()) doc.beginEdit();
         if (c3) { for (int i : idx) d.entities[size_t(i)].amount = a; doc.touched(); }
     }
-    ui::prop("id", "Имя объекта для дорог и ссылок из триггеров");
+    ui::prop("Имя (id)", "Необязательно. Имя объекта для дорог, триггеров и скриптов");
     if (idx.size() == 1) {
         auto& id = d.entities[size_t(idx[0])].id;
-        if (ImGui::InputTextWithHint("##id", "без имени", id.data(), id.capacity() + 1, ImGuiInputTextFlags_CallbackResize, ui::stringResize, &id)) doc.touched();
+        if (ImGui::InputTextWithHint("##id", "необязательно", id.data(), id.capacity() + 1, ImGuiInputTextFlags_CallbackResize, ui::stringResize, &id)) doc.touched();
     } else {
         ImGui::BeginDisabled();
         std::string dash = "—";

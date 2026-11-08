@@ -182,7 +182,7 @@ void EditorTheme::apply() {
     s.CellPadding = ImVec2(6, 4);
     s.IndentSpacing = 16;
     s.ScrollbarSize = 10; s.ScrollbarRounding = 6; s.ScrollbarPadding = 2;
-    s.GrabMinSize = 10; s.GrabRounding = 4;
+    s.GrabMinSize = 4; s.GrabRounding = 2;   // thin slider grab: the value text stays readable over it
     s.WindowRounding = 6; s.ChildRounding = 6; s.FrameRounding = 5; s.PopupRounding = 6;
     s.TabRounding = 5; s.MenuItemRounding = 4; s.ImageRounding = 0;
     s.WindowBorderSize = 1; s.ChildBorderSize = 1; s.PopupBorderSize = 1;

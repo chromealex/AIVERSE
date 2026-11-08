@@ -42,19 +42,19 @@ public:
     void draw(Editor& ed) override {
         auto& ws = ed.ws();
         if (ws.project.dir.empty()) { ui::emptyStateHere(ICON_IMAGE, "Игра не открыта", "Файл → Открыть проект"); return; }
-        if (ImGui::Button("Обновить")) reload(ed);
+        static const char* tabs[] = {"Иконки", "Заставка"};
+        const float refreshW = ImGui::GetFrameHeight();
+        ui::segmented("##brand", tab_, tabs, 2, std::min(320.0f, ImGui::GetContentRegionAvail().x - refreshW - 8));
         ImGui::SameLine();
-        ImGui::TextDisabled("game.json: icons, splash · сборка: rtsbuild генерирует все размеры для каждой платформы");
+        if (ui::toolButton(ICON_REFRESH, "Перечитать картинки с диска")) reload(ed);
+        ui::hint("game.json → icons, splash. Сборка сама делает все размеры для каждой платформы.");
         if (!error_.empty()) ui::toneText(ui::Tone::Error, "%s", error_.c_str());
         for (auto& w : warnings_) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
-        if (ImGui::BeginTabBar("##brand")) {
-            if (ImGui::BeginTabItem("Иконки")) { icons(ed); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Заставка")) { splashTab(ed); ImGui::EndTabItem(); }
-            ImGui::EndTabBar();
-        }
+        if (tab_ == 0) icons(ed); else splashTab(ed);
     }
 
 private:
+    int tab_ = 0;   // 0 icons, 1 splash
     // ------------------------------------------------------------ data
     void reload(Editor& ed) {
         auto& ws = ed.ws();
@@ -110,7 +110,7 @@ private:
     bool pickImage(const char* label, std::string& path) {
         bool changed = false;
         ImGui::PushID(label);
-        ImGui::SetNextItemWidth(260);
+        if (!ImGui::GetCurrentTable()) ImGui::SetNextItemWidth(260);
         if (ImGui::BeginCombo(label, path.empty() ? "(нет)" : path.c_str())) {
             if (ImGui::Selectable("(нет)", path.empty())) { path.clear(); changed = true; }
             for (auto& im : images_)
@@ -140,27 +140,29 @@ private:
         const Json& ic = m["icons"];
         ui::section(nullptr, "Основная картинка");
         std::string master = ic.isObject() ? ic.getStr("default", m.getStr("icon")) : m.getStr("icon");
-        if (pickImage("Мастер (от 1024x1024)", master)) save(ed, "icons.default", Json::string(master));
-        ui::help("Квадратная картинка не меньше 1024 px; из неё сборка делает все размеры. Можно задать отдельные картинки для платформ ниже.");
+        bool props = ui::beginProps("##icon", 190);
+        ui::prop("Мастер (от 1024×1024)", "Квадратная картинка не меньше 1024 px; из неё сборка делает все размеры. Можно задать отдельные картинки для платформ ниже.");
+        if (pickImage("##master", master)) save(ed, "icons.default", Json::string(master));
         splash::Color bg{0, 0, 0, 1};
         bool hasBg = splash::parseColor(ic["background"], bg);
         float c3[3] = {bg.r, bg.g, bg.b};
-        if (ImGui::Checkbox("Фон для непрозрачных иконок", &hasBg)) save(ed, "icons.background", hasBg ? Json::string(splash::colorHex(bg)) : Json());
+        ui::prop("Фон", "iOS, apple-touch, maskable PWA и обычная иконка Android не могут быть прозрачными: прозрачность заливается этим цветом (иначе — цветом края картинки).");
+        if (ui::checkbox("Заливать прозрачное##hasbg", &hasBg)) save(ed, "icons.background", hasBg ? Json::string(splash::colorHex(bg)) : Json());
         if (hasBg) {
             ImGui::SameLine();
             if (ImGui::ColorEdit3("##bg", c3, ImGuiColorEditFlags_NoInputs)) {}
             if (ImGui::IsItemDeactivatedAfterEdit()) save(ed, "icons.background", Json::string(splash::colorHex({c3[0], c3[1], c3[2], 1})));
         }
-        ui::help("iOS, apple-touch, maskable PWA и обычная иконка Android не могут быть прозрачными: прозрачность заливается этим цветом (иначе — цветом края картинки).");
         float padding = float(ic["padding"].toDouble(0)), radius = float(ic["cornerRadius"].toDouble(0));
-        ImGui::SetNextItemWidth(160);
-        ImGui::SliderFloat("Отступ", &padding, 0, 0.4f, "%.2f");
+        ui::prop("Отступ", "Поле вокруг картинки, доля стороны");
+        ImGui::SliderFloat("##pad", &padding, 0, 0.4f, "%.2f");
         if (ImGui::IsItemDeactivatedAfterEdit()) save(ed, "icons.padding", Json::number(double(padding), 3));
-        ImGui::SetNextItemWidth(160);
-        ImGui::SliderFloat("Скругление (Android)", &radius, 0, 0.5f, "%.2f");
+        ui::prop("Скругление (Android)");
+        ImGui::SliderFloat("##radius", &radius, 0, 0.5f, "%.2f");
         if (ImGui::IsItemDeactivatedAfterEdit()) save(ed, "icons.cornerRadius", Json::number(double(radius), 3));
+        if (props) ui::endProps();
 
-        if (ImGui::CollapsingHeader("Картинки для платформ")) {
+        if (ui::collapsing("Картинки для платформ")) {
             for (const char* p : {"ios", "macos", "windows", "web", "linux"}) {
                 const Json& v = ic[p];
                 std::string path = v.isString() ? v.str() : v.getStr("image");
@@ -256,11 +258,11 @@ private:
         if (ImGui::IsItemDeactivatedAfterEdit()) save(ed, "splash.maxSeconds", Json::number(double(maxS), 2));
         ui::help("Заставка уходит, когда всё загружено и прошло минимальное время (по умолчанию — пока не проиграются все логотипы). Максимум ограничивает минимум, но не загрузку.");
         bool skip = sp.getBool("skippable", true), loop = sp.getBool("loop", false);
-        if (ImGui::Checkbox("Пропуск касанием", &skip)) save(ed, "splash.skippable", Json::fromBool(skip));
+        if (ui::checkbox("Пропуск касанием", &skip)) save(ed, "splash.skippable", Json::fromBool(skip));
         ImGui::SameLine();
-        if (ImGui::Checkbox("Повторять, пока грузится", &loop)) save(ed, "splash.loop", Json::fromBool(loop));
+        if (ui::checkbox("Повторять, пока грузится", &loop)) save(ed, "splash.loop", Json::fromBool(loop));
         bool bar = spec_.progress.show;
-        if (ImGui::Checkbox("Полоса загрузки", &bar)) save(ed, "splash.progress.show", Json::fromBool(bar));
+        if (ui::checkbox("Полоса загрузки", &bar)) save(ed, "splash.progress.show", Json::fromBool(bar));
         if (bar) {
             ImGui::SameLine();
             float pc[3] = {spec_.progress.color.r, spec_.progress.color.g, spec_.progress.color.b};

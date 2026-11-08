@@ -15,7 +15,7 @@ public:
     const char* id() const override { return "overlays"; }
     const char* title() const override { return "Оверлеи"; }
     const char* group() const override { return "look"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 7; }
     bool openByDefault() const override { return false; }
 
@@ -98,6 +98,7 @@ public:
 
         // ---- list
         ui::section(ICON_LAYERS, "Оверлеи (порядок отрисовки)");
+        ui::hint(ICON_EYE "  — показать в «Сцене» сейчас, без условий    " ICON_CHECK "  — включён в игре");
         const float listH = std::max(120.0f, ImGui::GetContentRegionAvail().y * 0.45f);
         ImGui::BeginChild("##list", ImVec2(0, listH), ImGuiChildFlags_Borders);
         for (auto& o : list["overlays"].items()) {
@@ -110,7 +111,7 @@ public:
             }
             ImGui::SameLine();
             bool en = o.getBool("enabled", true);
-            if (ImGui::Checkbox("##en", &en)) {
+            if (ui::checkbox("##en", &en)) {
                 Json p = Json::object();
                 Json e = Json::object();
                 e.set("id", Json::string(id));

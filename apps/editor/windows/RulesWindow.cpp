@@ -11,7 +11,7 @@ public:
     const char* title() const override { return "Правила"; }
     const char* group() const override { return "logic"; }
     int order() const override { return 1; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
 
     void draw(Editor& ed) override {
         static const char* modes[] = {"Общие", "Триггеры", "Весь rules.json"};
@@ -26,6 +26,7 @@ public:
             current = R["triggers"].isNull() ? Json::array() : R["triggers"];
             ui::hint("Триггеры правил работают на всех картах игры. Триггеры одной карты — в «Иерархии».");
         } else ui::hint("Весь файл правил. Ошибка в JSON или в правилах не сохраняется — файл останется прежним.");
+        if (mode_ == 0) damageMatrix(R);
         std::string key = std::to_string(mode_) + "\n" + current.dump();
         if (key != textFor_) { text_ = current.dump(); textFor_ = key; }
         const bool dirty = text_ != current.dump();
@@ -36,7 +37,7 @@ public:
         else if (dirty) ui::toneText(ui::Tone::Warn, "%s Есть несохранённые изменения", ICON_PENCIL);
         else ui::toneText(ui::Tone::Dim, "%s Совпадает с rules.json", ICON_CHECK);
         ImGui::BeginDisabled(!dirty || !parseError.empty());
-        if (ui::wideButton(ICON_SAVE, "Применить и сохранить", 0, 2, true)) {
+        if (ui::wideButton(ICON_SAVE, "Сохранить", 0, 2, true)) {
             try {
                 Json v = Json::parse(text_);
                 Json backup = R;
@@ -49,6 +50,7 @@ public:
             } catch (const std::exception& e) { message_ = std::string("JSON: ") + e.what(); }
         }
         ImGui::EndDisabled();
+        ImGui::SetItemTooltip("Проверить правила и записать в rules.json (с ошибкой файл не меняется)");
         ImGui::BeginDisabled(!dirty);
         if (ui::wideButton(ICON_UNDO, "Отменить правку", 1, 2)) textFor_.clear();
         ImGui::EndDisabled();
@@ -56,6 +58,34 @@ public:
     }
 
 private:
+    // damageTable as a matrix (attack type × armor): faster to read than nested JSON; edits stay in the JSON below
+    static void damageMatrix(const Json& R) {
+        const Json& dt = R["damageTable"];
+        const Json& armors = R["armorTypes"];
+        if (!dt.isObject() || dt.size() == 0 || !armors.isArray() || armors.size() == 0) return;
+        if (!ui::collapsing("Таблица урона (атака × броня)", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        const int cols = int(armors.size()) + 1;
+        if (cols > 63) return;
+        if (ImGui::BeginTable("##dmg", cols, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings)) {
+            ImGui::TableSetupColumn("");
+            for (size_t a = 0; a < armors.size(); ++a) ImGui::TableSetupColumn(armors[a].str().c_str());
+            ImGui::TableHeadersRow();
+            for (const auto& [attack, row] : dt.members()) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(attack.c_str());
+                for (size_t a = 0; a < armors.size(); ++a) {
+                    ImGui::TableNextColumn();
+                    const double k = row[armors[a].str()].toDouble(1.0);
+                    const ui::Tone t = k > 1.001 ? ui::Tone::Ok : k < 0.999 ? ui::Tone::Error : ui::Tone::Dim;
+                    ui::toneText(t, "%.2f", k);
+                }
+            }
+            ImGui::EndTable();
+        }
+        ui::hint("Зелёный — больше урона, красный — меньше, 1.00 — без изменений. Править — в JSON ниже.");
+    }
+
     int mode_ = 0;
     std::string text_, textFor_, message_;
 };

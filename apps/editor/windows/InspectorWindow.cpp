@@ -147,7 +147,7 @@ private:
                 }
             }
             ui::prop("Сценарий", "Сторона без ИИ и без игрока: только волны и триггеры");
-            if (ImGui::Checkbox("Волны вместо игрока##waves", &pl.waves)) doc.touched();
+            if (ui::checkbox("Волны вместо игрока##waves", &pl.waves)) doc.touched();
             ui::prop("Старт");
             if (pl.hasStart) {
                 float st[2] = {pl.startX, pl.startZ};
@@ -380,7 +380,7 @@ private:
             ImGui::EndDisabled();
             ui::prop("Дороги", "Юниты ходят только по дорогам между зданиями (Mushroom Wars)");
             bool ro = d.roadsOnly;
-            if (ImGui::Checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
+            if (ui::checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
             ui::endProps();
         }
         ui::section(ICON_STARTS, "Победа (поверх правил)");

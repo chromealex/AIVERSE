@@ -21,7 +21,7 @@ public:
     const char* id() const override { return "lighting"; }
     const char* title() const override { return "Освещение"; }
     const char* group() const override { return "look"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
 
@@ -41,11 +41,11 @@ public:
     void draw(Editor& ed) override {
         render::LightSystem& ls = ed.renderer().lights;
         if (!ImGui::IsAnyItemActive()) editing_ = false;
-        ImGui::Checkbox(ICON_MAP_PIN "  Маркеры источников в «Сцене»", &gizmos_);
+        ui::checkbox(ICON_MAP_PIN "  Маркеры источников в «Сцене»", &gizmos_);
         ui::help("Пока окно открыто: круг — радиус, у прожектора линии конуса до земли. Маркер можно перетащить мышью; Ctrl+Z отменяет.");
         if (gizmos_) drawGizmos(ed);
         ui::section(ICON_EYE, "Предпросмотр");
-        ImGui::Checkbox("Время суток и погода вручную", &preview_);
+        ui::checkbox("Время суток и погода вручную", &preview_);
         ui::help("Только для просмотра в редакторе: в игре время идёт по блоку \"lighting\" карты или game.json.");
         ImGui::BeginDisabled(!preview_);
         const bool pp = ui::beginProps("##preview");
@@ -157,11 +157,11 @@ public:
                 ch |= ImGui::Combo("##Режим", &pat, pats, 4);
                 if (pat != 0) { ui::prop("Частота"); ch |= ImGui::DragFloat("##rate", &rate, 0.01f, 0.05f, 10.0f, "%.2f Гц"); }
                 ui::propWide();
-                ch |= ImGui::Checkbox("Только ночью", &nightOnly);
+                ch |= ui::checkbox("Только ночью", &nightOnly);
                 bool spot = m.spot;
                 float ang = m.angle, pit = m.pitch, yw = m.yaw, swp = m.sweep, sws = m.sweepSpeed;
                 ui::propWide();
-                ch |= ImGui::Checkbox("Прожектор", &spot);
+                ch |= ui::checkbox("Прожектор", &spot);
                 if (spot) {
                     ui::prop("Угол конуса");
                     ch |= ImGui::DragFloat("##Угол конуса", &ang, 0.5f, 2.0f, 170.0f, "%.0f°");
@@ -204,7 +204,7 @@ private:
     void drawGizmos(Editor& ed) {
         const Viewport* vp = ed.sceneViewport;
         const Json& arr = ed.doc().data.extra["lights"];
-        if (!vp || vp->pointsW < 8 || vp->pointsH < 8 || !arr.isArray() || arr.size() == 0) return;
+        if (!vp || !ed.sceneVisible() || vp->pointsW < 8 || vp->pointsH < 8 || !arr.isArray() || arr.size() == 0) return;
         const render::RTSCamera& cam = ed.sceneCam;
         const render::mat4 vpm = cam.proj(vp->pointsW / vp->pointsH, false) * cam.view();
         auto toScreen = [&](render::float3 p, ImVec2& out) {
