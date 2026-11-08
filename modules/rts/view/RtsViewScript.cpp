@@ -30,6 +30,7 @@ struct ViewScripts::Impl {
     std::shared_ptr<Collector> collector;
     uint8_t player = 0;
     ViewTargeting targeting;
+    float dragDx = 0, dragDy = 0;     // view.set_map_drag_offset (window points)
     ViewCamera camera;
     std::string screen = "playing";   // host screen state (view.screen()): playing | paused | over
     ViewCameraRequest cameraRequest{};
@@ -313,7 +314,17 @@ int vTargeting(lua_State* L, Vm& vm) {
     lua_pushboolean(L,t.active);lua_setfield(L,-2,"active");
     lua_pushboolean(L,t.overWorld);lua_setfield(L,-2,"overWorld");
     lua_pushinteger(L,lua_Integer(t.caster));lua_setfield(L,-2,"caster");
+    lua_pushboolean(L,t.touch);lua_setfield(L,-2,"touch");
+    lua_pushnumber(L,t.sx);lua_setfield(L,-2,"sx");
+    lua_pushnumber(L,t.sy);lua_setfield(L,-2,"sy");
     return 1;
+}
+int vSetMapDragOffset(lua_State* L, Vm& vm) {
+    const double dx=toDouble(L,1), dy=toDouble(L,2);
+    if(!std::isfinite(dx)||!std::isfinite(dy)) return fail(vm,"view.set_map_drag_offset(dx, dy): finite window points");
+    auto& v=viewOf(vm);
+    v.dragDx=float(std::clamp(dx,-4096.0,4096.0));v.dragDy=float(std::clamp(dy,-4096.0,4096.0));
+    return 0;
 }
 int vCamera(lua_State* L, Vm& vm) {
     const auto& c = viewOf(vm).camera;
@@ -705,6 +716,8 @@ std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return i
 std::shared_ptr<EntityFxStore> ViewScripts::entityFx() const { return impl_->fx; }
 
 void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=target; }
+void ViewScripts::mapDragOffset(float& dx, float& dy) const { dx=impl_->dragDx; dy=impl_->dragDy; }
+void ViewScripts::setMapDragOffset(float dx, float dy) { impl_->dragDx=dx; impl_->dragDy=dy; }
 void ViewScripts::setCamera(const ViewCamera& camera) { impl_->camera = camera; }
 void ViewScripts::setScreen(const std::string& screen) { impl_->screen = screen.empty() ? "playing" : screen; }
 bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
@@ -726,7 +739,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     im.handlers.clear(); im.frame.clear(); im.requests.clear(); im.commands.clear();
     im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stats.clear(); im.statOf.clear(); im.frameCost = im.frames = im.frameTotal = im.frameMax = 0; im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
     log_.clear();
-    im.paint=std::make_shared<render::PaintLayers>();im.fx=std::make_shared<EntityFxStore>();im.targeting={};im.cameraRequested=false;
+    im.paint=std::make_shared<render::PaintLayers>();im.fx=std::make_shared<EntityFxStore>();im.targeting={};im.dragDx=im.dragDy=0;im.cameraRequested=false;
     const auto files = scriptFiles(rules, map, true);
     if (files.empty() || sim.module().name() != "rts") return false;
     Vm& vm = im.vm;
@@ -742,7 +755,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>},
                                      {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>}, {"screen", bind<vScreen>},
                                      {"send", bind<vSend>}, {"state", bind<vState>}, {"ui_call", bind<vUiCall>},
-                                     {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
+                                     {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {"set_map_drag_offset", bind<vSetMapDragOffset>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
                                      {"draw_ground", bind<vDrawGround>}, {"entity_fx", bind<vEntityFx>}, {nullptr, nullptr}};

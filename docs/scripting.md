@@ -592,7 +592,11 @@ allowed-area masks and cursor previews; authoritative validation remains in the
 command's simulation handler. Client and editor clear it when targeting ends.
 In `mapClick` games a drag that started on a `map-drag` HUD element (drag-to-cast discs) reports
 `ability = "map-drag"` with the pointer's ground point while the drag lasts (`overWorld`: over the
-map, not over the UI, where a release taps the map); client only.
+map, not over the UI, where a release taps the map); client only. A map-drag also reports `touch` (the drag
+is a touch, not the mouse) and `sx`, `sy` (the pointer in window points). `view.set_map_drag_offset(dx, dy)`
+(window points, reset when a map-drag starts) moves the point the drag aims at: the ground point (`x`, `z`)
+and the release tap are taken at the pointer + (dx, dy), while `overWorld` and the release over the UI stay
+the pointer's own — e.g. aim above a finger so the target is not under it.
 
 The client data-model callback `skill_drag(actionId, progress)` starts a point-target
 HUD drag on `mousedown` for an enabled action with nonnegative progress (the support

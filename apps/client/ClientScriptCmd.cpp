@@ -129,8 +129,9 @@ bool GameClient::scriptCommandClick(const Event& e) {
 }
 
 // A press on a script HUD element carrying the attribute map-drag (OpenWar's ability discs: uGUI drag sources) that is
-// released over the map sends the mapClick tap at the release point: the element's press armed the game's aim (its own
-// mousedown event), the drop is the tap that casts. Released over the UI: nothing (the HUD element handles it).
+// released over the map sends the mapClick tap at the release point (+ the view's view.set_map_drag_offset): the element's
+// press armed the game's aim (its own mousedown event), the drop is the tap that casts. Released over the UI: nothing (the
+// HUD element handles it).
 void GameClient::mapDragEvent(const Event& e, bool uiWants) {
     using platform::EventType;
     if ((e.type == EventType::MouseDown && e.button == 0) || e.type == EventType::TouchBegin) {
@@ -138,6 +139,7 @@ void GameClient::mapDragEvent(const Event& e, bool uiWants) {
         mapDrag_ = uiWants && screen_ == Screen::Playing && ui_.pointerHasAttribute("map-drag");
         mapDragOverUi_ = true; mapDragTouch_ = e.type == EventType::TouchBegin ? e.touchId : -1;
         mapDragX_ = e.x; mapDragY_ = e.y;
+        if (mapDrag_) viewScripts_.setMapDragOffset(0, 0);   // the view sets its offset for this drag (view.targeting().touch)
         return;
     }
     if (!mapDrag_) return;
@@ -152,7 +154,8 @@ void GameClient::mapDragEvent(const Event& e, bool uiWants) {
         mapDrag_ = false;
         // touch: UiLayer already left the hover state on release, so the last move decides
         const bool overUi = e.type == EventType::MouseUp ? ui_.pointerOverUi() : mapDragOverUi_;
-        if (!overUi) mapClickTap(e.x, e.y);
+        float dx = 0, dy = 0; viewScripts_.mapDragOffset(dx, dy);   // view.set_map_drag_offset: the tap at the aimed point
+        if (!overUi) mapClickTap(e.x + dx, e.y + dy);
     }
 }
 
