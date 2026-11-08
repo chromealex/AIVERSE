@@ -107,7 +107,10 @@ public:
     std::vector<ViewGroundBatch> takeGroundDraws();
     // From the UI: data-event-click="event('name', ...)" -> ui.on("name", fn(args)) handlers;
     // send('id', {...}) -> a script command like view.send (false: unknown id / bad args, see log)
-    void uiEvent(Simulation& sim, const std::string& name, const Json& args);
+    // Returns true when a handler returned a true value (the event's meaning decides what that asks of the host).
+    bool uiEvent(Simulation& sim, const std::string& name, const Json& args);
+    // A ui.on(name, fn) handler is registered (e.g. "back": the script owns Esc / Android Back during a match)
+    bool hasUiHandler(const std::string& name) const;
     bool send(Simulation& sim, const std::string& id, const Json& args);
     ViewScriptProfile profile() const;
     const std::vector<ScriptLogEntry>& log() const { return log_; }

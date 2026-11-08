@@ -67,13 +67,15 @@ struct ViewScripts::Impl {
     // Every handler call gets the whole budget. A call over budget is aborted and skipped (logged); only a handler
     // over budget kOverrunLimit calls in a row (an endless loop, not a spike) or failing with an error is disabled.
     static constexpr int kOverrunLimit = 10;
-    void call(int& ref, int nargs) {
+    // result: when set, receives the truthiness of the handler's first return value (false on an error)
+    void call(int& ref, int nargs, bool* result = nullptr) {
         ViewScriptProfile::Handler& st = statFor(ref);
         lua_rawgeti(vm.L, LUA_REGISTRYINDEX, ref);
         lua_insert(vm.L, -nargs - 1);
         vm.used = 0; vm.exceeded = false;
         std::string err;
-        const bool ok = protectedCall(vm, nargs, 0, &err);
+        const bool ok = protectedCall(vm, nargs, result ? 1 : 0, &err);
+        if (result) { *result = ok && lua_toboolean(vm.L, -1); if (ok) lua_pop(vm.L, 1); }
         const int64_t cost = instructionsUsed(vm);
         ++st.calls; st.total += cost; st.max = std::max(st.max, cost); st.last += cost; frameCost += cost;
         if (ok) { st.streak = 0; return; }
@@ -859,18 +861,31 @@ std::vector<UiRequest> ViewScripts::takeUiRequests() {
     return out;
 }
 
-void ViewScripts::uiEvent(Simulation& sim, const std::string& name, const Json& args) {
+bool ViewScripts::uiEvent(Simulation& sim, const std::string& name, const Json& args) {
     Impl& im = *impl_;
-    if (!im.vm.L) return;
+    if (!im.vm.L) return false;
     auto it = im.uiHandlers.find(name);
-    if (it == im.uiHandlers.end()) { im.logLine(true, "ui event '" + name + "': no ui.on handler"); return; }
+    if (it == im.uiHandlers.end()) { im.logLine(true, "ui event '" + name + "': no ui.on handler"); return false; }
     im.vm.sim = &sim; im.vm.spatialOk = false;
     im.vm.used = 0; im.vm.exceeded = false;
+    bool any = false;
     for (int& ref : it->second) {
         if (ref == LUA_NOREF) continue;
         pushUiJson(im.vm.L, args);
-        im.call(ref, 1);
+        bool r = false;
+        im.call(ref, 1, &r);
+        any = any || r;
     }
+    return any;
+}
+
+bool ViewScripts::hasUiHandler(const std::string& name) const {
+    const Impl& im = *impl_;
+    if (!im.vm.L) return false;
+    auto it = im.uiHandlers.find(name);
+    if (it == im.uiHandlers.end()) return false;
+    for (int ref : it->second) if (ref != LUA_NOREF) return true;
+    return false;
 }
 
 bool ViewScripts::send(Simulation& sim, const std::string& id, const Json& args) {

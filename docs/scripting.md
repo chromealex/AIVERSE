@@ -499,6 +499,7 @@ end)
 | `ui.set(key, value)` | a top-level value of model `script` (numbers, strings, booleans, fx, tables / arrays); unchanged values are not resent. A document binds its `{{names}}` when it loads: set every key it uses before (or in the same frame as) its first `ui.open` |
 | `ui.open(name [, params])`, `ui.close(name)` | show / hide `ui/hud/<name>.rml` (while the host screen is `playing`, or one of the screens its `<body screens="playing paused over">` lists: a game's own pause / result panels, a HUD under them); `params` -> `{{params.*}}` |
 | `ui.on(event, fn(args))` | `event('name', ...)` in a document; `args` = the extra values as an array |
+| `ui.on("back", fn(args))` | Esc / Android Back (Back arrives as Escape) during a match (`playing` or `paused`). With such a handler the client skips its own pause / resume / tool cancel and leaves the key to the script: `args = {screen = "playing" \| "paused", platform = "android" \| "ios" \| "web" \| "macos" \| "windows" \| "linux"}`; return `true` to also cancel the pointer interaction in progress (a `map-drag` press, a skill drag, a tool mode). Pause / resume from the script with `view.ui_call('game.pause')` / `view.ui_call('game.resume')` |
 | `view.state()` | the simulation scripts' `state` as of this tick (a copy; writing to it changes nothing) |
 
 `send('id', {...})` in a document sends a script command as the local player (the current selection

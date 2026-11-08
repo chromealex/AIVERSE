@@ -451,6 +451,19 @@ void GameClient::event(const Event& e) {
     mapDragEvent(e, uiWants);   // rules "mapClick": drag from a map-drag HUD element onto the map (ClientScriptCmd.cpp)
     if (e.type == EventType::KeyDown || e.type == EventType::KeyUp) keys_[int(e.key)] = e.type == EventType::KeyDown;
     if (e.type == EventType::MouseMove || e.type == EventType::MouseDown) { mouseX_ = e.x; mouseY_ = e.y; }
+    // A view script with ui.on("back", fn) owns Esc / Android Back (which arrives as Escape) during a match: the engine's
+    // pause / resume / tool cancel are skipped; a true return cancels the pointer interaction in progress (docs/scripting.md)
+    if (e.type == EventType::KeyDown && e.key == Key::Escape && !e.repeat && sim_ && !howtoOpen_ &&
+        (screen_ == Screen::Playing || screen_ == Screen::Paused) && viewScripts_.hasUiHandler("back")) {
+        Json args = Json::object();
+        args.set("screen", Json::string(screen_ == Screen::Paused ? "paused" : "playing"));
+        args.set("platform", Json::string(platform::name()));
+        if (viewScripts_.uiEvent(*sim_, "back", args)) {
+            mapDrag_ = false; skillDragging_ = false; skillTouch_ = -1; rectDrag_ = false; uiOwnsPointer_ = false;
+            if (mode_ != Mode::Normal) mode_ = Mode::Normal;
+        }
+        return;
+    }
     // Script HUD drags own their pointer from button press through release on the world.
     if(skillDragging_) {
         const bool begin=e.type==EventType::MouseDown||e.type==EventType::TouchBegin;
