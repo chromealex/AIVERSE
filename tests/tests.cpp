@@ -12741,6 +12741,166 @@ TEST(ui_linear_blend_colour_space) {
     CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "gamma2"}})"), &err) == UiBlend::Srgb && err.find("gamma2") != std::string::npos);
 }
 
+// ---------------- Editor world tree (apps/editor/core/WorldInspect, docs/editor-world-tree.md) ----------------
+#ifdef RTS_TESTS_EDITOR_CORE
+#include "apps/editor/core/SimTools.h"
+#include "apps/editor/core/WorldInspect.h"
+namespace {
+std::filesystem::path worldTreeCopy(const char* tmpl) {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / ("rts_world_tree_" + std::string(tmpl) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::remove_all(root);
+    fs::create_directories(root);
+    fs::copy(fs::path(RTS_SOURCE_DIR) / "templates" / tmpl, root / tmpl, fs::copy_options::recursive);
+    return root;
+}
+bool worldTreePreview(editor::Workspace& ws, editor::WorldPreview& pv, const editor::WorldConfig& cfg) {
+    const Json simMap = editor::mapForSim(ws.map.toJson(), ws.project.dir);
+    return pv.build(ws.project.simRules(simMap), simMap, ws.map.data, cfg);
+}
+} // namespace
+
+TEST(world_tree_preview_lists_map_entities) {
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame((root / "skirmish").string(), &err));
+    CHECK(!ws.map.data.entities.empty());
+    editor::WorldPreview pv;
+    const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
+    CHECK(worldTreePreview(ws, pv, cfg) && pv.error().empty());
+    editor::WorldModel m;
+    readWorld(*pv.sim(), *pv.module(), cfg, pv.links(), pv.setupRefs(), &ws.map.data, m);
+    // every map entity is linked to exactly one world object (map entity 0 is world object 0: ref 1, never 0)
+    std::set<uint64_t> linked(pv.links().begin(), pv.links().end());
+    CHECK(pv.links().size() == ws.map.data.entities.size() && !linked.count(0) && linked.size() == pv.links().size());
+    CHECK(m.rows.size() == ws.map.data.entities.size());
+    size_t mapRows = 0;
+    for (auto& r : m.rows) mapRows += r.origin == editor::WorldOrigin::Map && r.doc >= 0;
+    CHECK(mapRows == m.rows.size());
+    const auto& R = pv.module()->rules();
+    for (auto& r : m.rows) {
+        const auto& de = ws.map.data.entities[size_t(r.doc)];
+        if (R.types[size_t(r.type)].id != de.type || r.owner != de.owner) { CHECK(false); break; }
+    }
+    // grouping and search
+    size_t peasants1 = 0;
+    for (auto& e : ws.map.data.entities) peasants1 += e.type == "peasant" && e.owner == 1;
+    size_t found = 0, owner1 = 0;
+    for (auto& r : m.rows) {
+        found += editor::worldRowMatches(m, R, &ws.map.data, r, "t:peasant p:Blue");
+        owner1 += editor::worldGroupValue(m, R, r, "owner") == "Blue";
+    }
+    CHECK(peasants1 > 0 && found == peasants1);
+    size_t docOwner1 = 0;
+    for (auto& e : ws.map.data.entities) docOwner1 += e.owner == 1;
+    CHECK(owner1 == docOwner1);
+    size_t withUnit = 0;
+    for (auto& r : m.rows) withUnit += editor::worldRowMatches(m, R, &ws.map.data, r, "c:unit");
+    CHECK(withUnit == m.rows.size());
+    // details of one object
+    const editor::WorldRow* peasant = nullptr;
+    for (auto& r : m.rows) if (R.types[size_t(r.type)].id == "peasant") { peasant = &r; break; }
+    CHECK(peasant != nullptr);
+    if (peasant) {
+        const Json d = editor::inspectEntity(*pv.sim(), *pv.module(), peasant->e, ws.project.rulesJson);
+        CHECK(d["components"]["Unit"].getStr("type") == "peasant");
+        CHECK(d["components"].has("Transform") && d["components"].has("Owner") && d["components"].has("Mobile"));
+        CHECK(d["stats"]["maxHp"]["base"].toDouble() > 0 && d["stats"]["maxHp"]["effective"].toDouble() == d["stats"]["maxHp"]["base"].toDouble());
+        CHECK(d["rules"].isObject() && d.getStr("type") == "peasant");
+    }
+    // the same data gives the same refs (a selection survives a preview rebuild)
+    editor::WorldPreview pv2;
+    CHECK(worldTreePreview(ws, pv2, cfg));
+    CHECK(pv2.links() == pv.links());
+    fs::remove_all(root);
+}
+
+TEST(world_tree_describes_every_component_pool) {
+    // a save state touches every pool type of the RTS module: the inspector must describe all of them
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame((root / "skirmish").string(), &err));
+    editor::WorldPreview pv;
+    CHECK(worldTreePreview(ws, pv, editor::WorldConfig{}));
+    CHECK(!pv.sim()->serialize().empty());
+    World described;
+    const size_t n = editor::touchWorldComponentPools(described);
+    CHECK(described.poolCount() == n);
+    CHECK(pv.sim()->world().poolCount() == n);
+    CHECK(editor::worldComponents().size() == n && editor::findWorldComponent("unit") >= 0 && editor::findWorldComponent("Гарнизон") >= 0);
+    fs::remove_all(root);
+}
+
+TEST(world_tree_script_objects_labels_and_groupings) {
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    const fs::path dir = root / "skirmish";
+    fs::create_directories(dir / "scripts");
+    {
+        std::ofstream(dir / "scripts" / "scouts.lua") <<
+            "function on_start()\n"
+            "  local h = game.spawn('peasant', 2, 30, 20)\n"
+            "  local d = game.data(h)\n"
+            "  d.name = 'Scout North'\n"
+            "  d.front = 'north'\n"
+            "end\n";
+    }
+    Json rules = Json::parseFile((dir / "rules.json").string());
+    Json scripts = Json::array();
+    scripts.push(Json::string("scripts/scouts.lua"));
+    rules.set("scripts", scripts);
+    { std::ofstream(dir / "rules.json") << rules.dump(); }
+    Json game = Json::parseFile((dir / "game.json").string());
+    game.set("editor", Json::parse(R"({"hierarchy": {"label": "name", "previewTicks": 3, "categories": ["nope"],
+        "groupings": [{"title": "Фронты", "by": ["data:front", "owner"]}, {"title": "Плохая", "by": ["colour"]}]}})"));
+    { std::ofstream(dir / "game.json") << game.dump(); }
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame(dir.string(), &err));
+    const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
+    CHECK(cfg.labelKey == "name" && cfg.previewTicks == 3 && cfg.groupings.size() == 1 && cfg.errors.size() == 1);
+    editor::WorldPreview pv;
+    CHECK(worldTreePreview(ws, pv, cfg));
+    CHECK(pv.error().empty());
+    editor::WorldModel m;
+    readWorld(*pv.sim(), *pv.module(), cfg, pv.links(), pv.setupRefs(), &ws.map.data, m);
+    CHECK(m.rows.size() == ws.map.data.entities.size() + 1);
+    const editor::WorldRow* scout = nullptr;
+    for (auto& r : m.rows) if (r.doc < 0) scout = &r;
+    CHECK(scout != nullptr);
+    if (scout) {
+        const auto& R = pv.module()->rules();
+        CHECK(scout->origin == editor::WorldOrigin::Setup && scout->label == "Scout North" && scout->owner == 2);
+        CHECK(editor::worldRowName(m, R, &ws.map.data, *scout) == "Scout North");
+        CHECK(editor::worldGroupValue(m, R, *scout, "data:front") == "north");
+        CHECK(editor::worldRowMatches(m, R, &ws.map.data, *scout, "d:north") && editor::worldRowMatches(m, R, &ws.map.data, *scout, "scout"));
+        CHECK(!editor::worldRowMatches(m, R, &ws.map.data, m.rows[0], "d:north"));
+        const Json d = editor::inspectEntity(*pv.sim(), *pv.module(), scout->e, ws.project.rulesJson);
+        CHECK(d["components"]["ScriptData"].getStr("name") == "Scout North");
+    }
+    fs::remove_all(root);
+}
+
+TEST(world_tree_script_blob_decoding) {
+    auto u64 = [](uint64_t v) { std::string s; for (int i = 0; i < 8; ++i) s += char(uint8_t(v >> (8 * i))); return s; };
+    auto str = [&](const std::string& t) { return "s" + u64(t.size()) + t; };
+    // {name = "a", hp = fx(1.5), list = {7, 8}, ok = true}
+    std::string list = "{" + u64(2) + "i" + u64(1) + "i" + u64(7) + "i" + u64(2) + "i" + u64(8);
+    std::string blob = "{" + u64(4) + str("hp") + "x" + u64(uint64_t(Fixed::fromRatio(3, 2).raw)) + str("list") + list + str("name") + str("a") + str("ok") + "t";
+    const Json j = editor::decodeScriptBlob(blob);
+    CHECK(j.getStr("name") == "a" && j["hp"].toDouble() == 1.5 && j["list"].isArray() && j["list"].size() == 2 && j["list"][1].integer() == 8 && j.getBool("ok"));
+    CHECK(editor::decodeScriptBlob("{" + u64(9)).isObject() && editor::decodeScriptBlob("{" + u64(9)).size() == 0);   // truncated: nothing, no crash
+    CHECK(editor::decodeScriptBlob("").size() == 0);
+}
+#endif
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

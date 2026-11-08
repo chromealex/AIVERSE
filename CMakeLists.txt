@@ -553,7 +553,7 @@ if(RTS_BUILD_EDITOR OR RTS_BUILD_TOOLS)
     add_library(rts_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
-    apps/editor/core/ToolchainOps.cpp)   # scenario_run, rules_lint, rules_schema keys
+    apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
     target_link_libraries(rts_editor_core PUBLIC rts_game)
     target_link_libraries(rts_editor_core PUBLIC rts_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(rts_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
