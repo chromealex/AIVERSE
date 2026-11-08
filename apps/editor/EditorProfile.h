@@ -1,7 +1,8 @@
 // Per-phase timings of the editor's world tree (docs/editor-world-tree.md § Performance). Always collected
 // (a steady_clock read per phase); RTS_EDITOR_PROFILE=1 prints a line every 2 s to stdout:
 //   [profile] frames 120 avg 8.10 max 14.2 ms | readWorld 10× avg 0.41 max 0.60 | ...
-// The Hierarchy's status tooltip shows the same numbers.
+// previewBuild = the editor thread's part of a preview rebuild (map / rules to JSON), previewWorker = the setup
+// on the background thread (not frame time). The Hierarchy's status tooltip shows the same line.
 #pragma once
 #include <algorithm>
 #include <chrono>
@@ -13,9 +14,9 @@ namespace rts::editor {
 
 class EditorProfile {
 public:
-    enum Phase { ReadWorld, Snapshot, PreviewBuild, Hierarchy, Details, WorldUpdate, Count };
+    enum Phase { ReadWorld, Snapshot, PreviewBuild, PreviewWorker, Hierarchy, Details, WorldUpdate, Count };
     static const char* name(Phase p) {
-        static const char* n[] = {"readWorld", "prepareSnapshot", "previewBuild", "hierarchy", "details", "worldUpdate"};
+        static const char* n[] = {"readWorld", "prepareSnapshot", "previewBuild", "previewWorker", "hierarchy", "details", "worldUpdate"};
         return n[p];
     }
 

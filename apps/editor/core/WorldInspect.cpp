@@ -6,6 +6,9 @@
 #include <cmath>
 #include <set>
 #include "SimTools.h"
+#if RTS_PREVIEW_THREAD
+#include <thread>
+#endif
 
 namespace rts::editor {
 
@@ -374,15 +377,81 @@ std::vector<uint64_t> linkMapEntities(Simulation& sim, RtsModule& mod, const Map
     return out;
 }
 
-void readWorld(Simulation& sim, RtsModule& mod, const WorldConfig& cfg, const std::vector<uint64_t>& links,
-               const std::vector<uint64_t>& setupRefs, const MapData* doc, WorldModel& out) {
+namespace {
+// The row fields of one alive entity into r (reused: clears what it sets).
+void fillRow(Simulation& sim, RtsModule& mod, const WorldConfig& cfg, const GameState* gs, Entity e, WorldRow& r, const WorldReadOptions& opt) {
     World& w = sim.world();
     const Rules& R = mod.rules();
+    r.e = e;
+    r.ref = worldRef(e);
+    r.type = -1; r.owner = 0; r.kind = WorldKind::Other; r.hasPos = false; r.x = r.y = r.z = 0; r.hp = r.maxHp = 0; r.flags = 0;
+    r.parent = 0; r.parentRel = ""; r.region = -1;
+    r.comps.reset();
+    const auto& D = descs();
+    for (size_t c = 0; c < D.size() && c < kMaxWorldComponents; ++c) if (D[c].has(w, e)) r.comps.set(c);
+    if (auto* o = w.tryGet<Owner>(e)) r.owner = o->player == kHostileNeutral ? -1 : int(o->player);
+    if (auto* tr = w.tryGet<Transform>(e)) {
+        r.hasPos = true;
+        r.x = float(tr->pos.x.toDouble()); r.y = float(tr->pos.y.toDouble()); r.z = float(tr->pos.z.toDouble());
+        if (gs && !gs->surface && !gs->regionNames.empty()) r.region = mod.regionAt(sim, tr->pos);
+    }
+    const UnitType* ut = nullptr;
+    if (auto* u = w.tryGet<Unit>(e)) {
+        r.type = int(u->type);
+        ut = size_t(u->type) < R.types.size() ? &R.types[u->type] : nullptr;
+        r.hp = float(u->hp.toDouble());
+        r.maxHp = ut ? float(ut->maxHp.toDouble()) : 0;
+        r.flags = u->flags;
+    }
+    if (auto* p = w.tryGet<Projectile>(e)) {
+        r.kind = WorldKind::Projectile;
+        r.owner = p->owner == kHostileNeutral ? -1 : int(p->owner);
+        if (p->source.valid()) { r.parent = worldRef(p->source); r.parentRel = "выпущен"; }
+    } else if (auto* a = w.tryGet<Area>(e)) {
+        r.kind = WorldKind::Effect;
+        if (a->caster.valid()) { r.parent = worldRef(a->caster); r.parentRel = "создан"; }
+    } else if (ut) {
+        r.kind = ut->hero ? WorldKind::Hero : ut->resourceNode >= 0 ? WorldKind::Resource : ut->structure ? WorldKind::Structure : WorldKind::Unit;
+    }
+    if (auto* b = w.tryGet<Boarded>(e); b && b->carrier.valid()) { r.parent = worldRef(b->carrier); r.parentRel = "в транспорте"; }
+    else if (auto* s = w.tryGet<Summon>(e); s && s->summoner.valid()) { r.parent = worldRef(s->summoner); r.parentRel = "призван"; }
+    const char* category = worldKindTitle(r.kind);
+    if (ut)
+        for (auto& tag : cfg.categoryTags) {
+            bool has = false;
+            for (size_t ti = 0; ti < R.tagNames.size() && ti < 64 && !has; ++ti) has = R.tagNames[ti] == tag && (ut->tags >> ti & 1);
+            if (has) { category = tag.c_str(); break; }
+        }
+    r.category = category;
+    r.label.clear();
+    r.data.clear();
+    if (!opt.scriptData) return;
+    if (auto* sd = w.tryGet<ScriptData>(e)) setWorldRowData(cfg, sd->blob, r);
+}
+} // namespace
+
+void setWorldRowData(const WorldConfig& cfg, const std::string& blob, WorldRow& r) {
+    r.data.clear();
+    r.label.clear();
+    if (blob.empty()) return;
+    const Json data = decodeScriptBlob(blob);
+    for (auto& [key, v] : data.members()) if (std::string t = scalarText(v); !t.empty()) r.data[key] = t;
+    if (!cfg.labelKey.empty()) if (auto it = r.data.find(cfg.labelKey); it != r.data.end()) r.label = it->second;
+}
+
+bool readWorldRow(Simulation& sim, RtsModule& mod, const WorldConfig& cfg, Entity e, WorldRow& r, const WorldReadOptions& opt) {
+    if (!sim.world().alive(e)) return false;
+    fillRow(sim, mod, cfg, sim.world().resource<GameState>(), e, r, opt);
+    return true;
+}
+
+void readWorld(Simulation& sim, RtsModule& mod, const WorldConfig& cfg, const std::vector<uint64_t>& links,
+               const std::vector<uint64_t>& setupRefs, const MapData* doc, WorldModel& out, const WorldReadOptions& opt) {
+    World& w = sim.world();
     GameState* gs = w.resource<GameState>();
-    out.rows.clear();
-    out.byRef.clear();
     out.tick = sim.tick();
     ++out.serial;
+    out.scriptData = opt.scriptData;
     out.regionNames = gs ? gs->regionNames : std::vector<std::string>();
     out.playerNames.assign(1, "Нейтральные");
     for (auto& p : sim.players()) {
@@ -394,60 +463,26 @@ void readWorld(Simulation& sim, RtsModule& mod, const WorldConfig& cfg, const st
             if (out.playerNames.size() <= p + 1) out.playerNames.resize(p + 2);
             if (!doc->players[p].name.empty()) out.playerNames[p + 1] = doc->players[p].name;
         }
-    std::map<uint64_t, int> docOf;
-    for (size_t i = 0; i < links.size(); ++i) if (links[i]) docOf[links[i]] = int(i);
+    // map links by entity index (refs carry the generation: compared below)
     const auto st = w.entityState();
-    const auto& D = descs();
+    out.byIndex.assign(st.alive.size(), -1);
+    std::vector<int32_t> docAt(st.alive.size(), -1);
+    for (size_t i = 0; i < links.size(); ++i)
+        if (links[i]) if (const uint32_t k = worldEntity(links[i]).index; k < docAt.size()) docAt[k] = int32_t(i);
+    out.byDoc.assign(links.size(), -1);
+    size_t n = 0;
     for (uint32_t k = 0; k < st.alive.size(); ++k) {
         if (!st.alive[k]) continue;
-        WorldRow r;
-        r.e = Entity{k, st.gens[k]};
-        r.ref = worldRef(r.e);
-        for (size_t c = 0; c < D.size(); ++c) if (D[c].has(w, r.e)) r.comps.push_back(uint8_t(c));
-        if (auto* o = w.tryGet<Owner>(r.e)) r.owner = o->player == kHostileNeutral ? -1 : int(o->player);
-        if (auto* tr = w.tryGet<Transform>(r.e)) {
-            r.hasPos = true;
-            r.x = float(tr->pos.x.toDouble()); r.y = float(tr->pos.y.toDouble()); r.z = float(tr->pos.z.toDouble());
-            if (gs && !gs->surface && !gs->regionNames.empty()) r.region = mod.regionAt(sim, tr->pos);
-        }
-        const UnitType* ut = nullptr;
-        if (auto* u = w.tryGet<Unit>(r.e)) {
-            r.type = int(u->type);
-            ut = size_t(u->type) < R.types.size() ? &R.types[u->type] : nullptr;
-            r.hp = float(u->hp.toDouble());
-            r.maxHp = ut ? float(ut->maxHp.toDouble()) : 0;
-            r.flags = u->flags;
-        }
-        if (auto* p = w.tryGet<Projectile>(r.e)) {
-            r.kind = WorldKind::Projectile;
-            r.owner = p->owner == kHostileNeutral ? -1 : int(p->owner);
-            if (p->source.valid()) { r.parent = worldRef(p->source); r.parentRel = "выпущен"; }
-        } else if (auto* a = w.tryGet<Area>(r.e)) {
-            r.kind = WorldKind::Effect;
-            if (a->caster.valid()) { r.parent = worldRef(a->caster); r.parentRel = "создан"; }
-        } else if (ut) {
-            r.kind = ut->hero ? WorldKind::Hero : ut->resourceNode >= 0 ? WorldKind::Resource : ut->structure ? WorldKind::Structure : WorldKind::Unit;
-        }
-        if (auto* b = w.tryGet<Boarded>(r.e); b && b->carrier.valid()) { r.parent = worldRef(b->carrier); r.parentRel = "в транспорте"; }
-        else if (auto* s = w.tryGet<Summon>(r.e); s && s->summoner.valid()) { r.parent = worldRef(s->summoner); r.parentRel = "призван"; }
-        r.category = worldKindTitle(r.kind);
-        if (ut) {
-            auto tagged = [&](const std::string& tag) {
-                for (size_t ti = 0; ti < R.tagNames.size() && ti < 64; ++ti) if (R.tagNames[ti] == tag && (ut->tags >> ti & 1)) return true;
-                return false;
-            };
-            for (auto& tag : cfg.categoryTags) if (tagged(tag)) { r.category = tag; break; }
-        }
-        if (auto* sd = w.tryGet<ScriptData>(r.e); sd && !sd->blob.empty()) {
-            const Json data = decodeScriptBlob(sd->blob);
-            for (auto& [key, v] : data.members()) if (std::string t = scalarText(v); !t.empty()) r.data[key] = t;
-            if (!cfg.labelKey.empty()) if (auto it = r.data.find(cfg.labelKey); it != r.data.end()) r.label = it->second;
-        }
-        if (auto it = docOf.find(r.ref); it != docOf.end()) { r.doc = it->second; r.origin = WorldOrigin::Map; }
+        if (n == out.rows.size()) out.rows.emplace_back();
+        WorldRow& r = out.rows[n];
+        fillRow(sim, mod, cfg, gs, Entity{k, st.gens[k]}, r, opt);
+        r.doc = -1;
+        if (const int32_t d = docAt[k]; d >= 0 && links[size_t(d)] == r.ref) { r.doc = d; r.origin = WorldOrigin::Map; out.byDoc[size_t(d)] = int32_t(n); }
         else r.origin = std::binary_search(setupRefs.begin(), setupRefs.end(), r.ref) ? WorldOrigin::Setup : WorldOrigin::Runtime;
-        out.byRef[r.ref] = out.rows.size();
-        out.rows.push_back(std::move(r));
+        out.byIndex[k] = int32_t(n);
+        ++n;
     }
+    out.rows.resize(n);
 }
 
 Json decodeScriptBlob(const std::string& blob) {
@@ -501,7 +536,7 @@ std::string worldGroupValue(const WorldModel& m, const Rules& R, const WorldRow&
     if (key == "category") return r.category;
     if (key == "origin") return worldOriginTitle(r.origin);
     if (key == "region") return r.region >= 0 && size_t(r.region) < m.regionNames.size() ? m.regionNames[size_t(r.region)] : "Вне регионов";
-    if (key == "component") return r.comps.empty() ? "Без компонентов" : worldComponents()[r.comps[0]].title;
+    if (key == "component") { const int c = r.firstComp(); return c < 0 ? "Без компонентов" : worldComponents()[size_t(c)].title; }
     if (key == "parent") {
         if (!r.parent) return "Верхний уровень";
         const WorldRow* p = m.find(r.parent);
@@ -547,8 +582,9 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
         auto typeOk = [&] { return has(typeId, v) || has(worldGroupValue(m, R, r, "type"), v) || has(r.label, v) || has(r.category, v); };
         auto ownerOk = [&] { return has(ownerName(m, r.owner), v) || v == std::to_string(r.owner); };
         auto compOk = [&] {
-            for (uint8_t c : r.comps) if (has(worldComponents()[c].id, v) || has(worldComponents()[c].title, v)) return true;
-            return false;
+            bool any = false;
+            r.eachComp([&](int c) { any = any || has(worldComponents()[size_t(c)].id, v) || has(worldComponents()[size_t(c)].title, v); });
+            return any;
         };
         auto regionOk = [&] { return r.region >= 0 && has(worldGroupValue(m, R, r, "region"), v); };
         auto dataOk = [&] {
@@ -572,37 +608,116 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
 // ---------------------------------------------------------------- preview
 game::RtsModule* WorldPreview::module() { return sim_ ? dynamic_cast<game::RtsModule*>(&sim_->module()) : nullptr; }
 
-bool WorldPreview::build(const Json& simRules, const Json& simMap, const MapData& doc, const WorldConfig& cfg) {
+WorldPreview::Result WorldPreview::run(const Json* simRules, const Json* simMap, const Prepare& prepare, const MapData& doc, const WorldConfig& cfg) {
     const auto t0 = std::chrono::steady_clock::now();
-    error_.clear();
-    scriptErrors_ = 0;
-    links_.clear();
-    setupRefs_.clear();
-    sim_.reset();
+    Result res;
     try {
+        Json preparedRules, preparedMap;
+        if (prepare) { prepare(preparedRules, preparedMap); simRules = &preparedRules; simMap = &preparedMap; }
         SimConfig sc;
         sc.seed = 1;   // fixed: the same data gives the same entity ids, so a selection survives a refresh
         auto sim = std::make_unique<Simulation>(sc, std::make_unique<game::RtsModule>());
-        sim->setup(simRules, simMap);
+        sim->setup(*simRules, *simMap);
         auto* mod = dynamic_cast<game::RtsModule*>(&sim->module());
-        links_ = linkMapEntities(*sim, *mod, doc);
+        res.links = linkMapEntities(*sim, *mod, doc);
         for (int k = 0; k < cfg.previewTicks; ++k) sim->step();
         sim->module().prepareSnapshot(*sim);   // Lua entity tables into the world (this sim is ours)
         const auto st = sim->world().entityState();
-        for (uint32_t k = 0; k < st.alive.size(); ++k) if (st.alive[k]) setupRefs_.push_back(worldRef(Entity{k, st.gens[k]}));
-        std::sort(setupRefs_.begin(), setupRefs_.end());
+        for (uint32_t k = 0; k < st.alive.size(); ++k) if (st.alive[k]) res.setupRefs.push_back(worldRef(Entity{k, st.gens[k]}));
+        std::sort(res.setupRefs.begin(), res.setupRefs.end());
         if (auto* se = mod->scripts()) {
-            scriptErrors_ = se->errorCount();
-            for (auto& l : se->log()) if (l.error) { error_ = "Скрипт: " + l.text; break; }
+            res.scriptErrors = se->errorCount();
+            for (auto& l : se->log()) if (l.error) { res.error = "Скрипт: " + l.text; break; }
         }
-        sim_ = std::move(sim);
+        res.sim = std::move(sim);
     } catch (const std::exception& e) {
-        error_ = e.what();
+        res.error = e.what();
     } catch (...) {
-        error_ = "неизвестная ошибка";
+        res.error = "неизвестная ошибка";
     }
-    ms_ = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    res.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    return res;
+}
+
+WorldPreview::WorldPreview() = default;
+
+void WorldPreview::adopt(Result&& r) {
+#if RTS_PREVIEW_THREAD
+    if (sim_) trash_.push_back(std::move(sim_));
+#endif
+    sim_ = std::move(r.sim);
+    links_ = std::move(r.links);
+    setupRefs_ = std::move(r.setupRefs);
+    error_ = std::move(r.error);
+    scriptErrors_ = r.scriptErrors;
+    ms_ = r.ms;
+}
+
+bool WorldPreview::build(const Json& simRules, const Json& simMap, const MapData& doc, const WorldConfig& cfg) {
+    adopt(run(&simRules, &simMap, {}, doc, cfg));
     return sim_ != nullptr;
 }
+
+#if RTS_PREVIEW_THREAD
+struct WorldPreview::Job {
+    Request req;
+    std::vector<std::unique_ptr<Simulation>> trash;
+    Result res;
+    std::atomic<bool> done{false};
+    std::thread thread;
+};
+
+void WorldPreview::launch(Request&& r) {
+    static const bool warm = [] { World w; touchWorldComponentPools(w); return true; }();   // pool ids assigned here first
+    (void)warm;
+    job_ = std::make_unique<Job>();
+    job_->req = std::move(r);
+    job_->trash = std::move(trash_);
+    trash_.clear();
+    Job* j = job_.get();
+    job_->thread = std::thread([j] {
+        j->trash.clear();
+        j->res = run(nullptr, nullptr, j->req.prepare, j->req.doc, j->req.cfg);
+        j->done.store(true, std::memory_order_release);
+    });
+}
+
+void WorldPreview::start(Prepare prepare, const MapData& doc, const WorldConfig& cfg) {
+    Request r;
+    r.prepare = std::move(prepare);
+    r.doc.entities = doc.entities;   // linking needs the entities and whether it is a planet map
+    r.doc.bodies = doc.bodies;
+    r.cfg = cfg;
+    if (job_) queued_ = std::make_unique<Request>(std::move(r));
+    else launch(std::move(r));
+}
+
+bool WorldPreview::poll() {
+    if (!job_ || !job_->done.load(std::memory_order_acquire)) return false;
+    job_->thread.join();
+    Result res = std::move(job_->res);
+    job_.reset();
+    if (queued_) {   // the data changed while it ran: its result is already old (freed by the next job)
+        if (res.sim) trash_.push_back(std::move(res.sim));
+        auto q = std::move(queued_);
+        launch(std::move(*q));
+        return false;
+    }
+    adopt(std::move(res));
+    return true;
+}
+
+WorldPreview::~WorldPreview() {
+    if (job_ && job_->thread.joinable()) job_->thread.join();
+}
+#else
+struct WorldPreview::Job {};
+void WorldPreview::start(Prepare prepare, const MapData& doc, const WorldConfig& cfg) {
+    adopt(run(nullptr, nullptr, prepare, doc, cfg));
+    adopted_ = true;
+}
+bool WorldPreview::poll() { const bool a = adopted_; adopted_ = false; return a; }
+WorldPreview::~WorldPreview() = default;
+#endif
 
 } // namespace rts::editor

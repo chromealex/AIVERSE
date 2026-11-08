@@ -117,6 +117,15 @@ bool Editor::selectionPos(const Selection& s, float& x, float& z) const {
         x = d.entities[size_t(s.index)].x; z = d.entities[size_t(s.index)].z;
         return true;
     case Selection::Live:
+        if (worldLive_) {   // the running world itself: the rows may be old (or not read when nobody shows them)
+            Simulation* sim = const_cast<Editor*>(this)->worldSim();
+            const Entity e = worldEntity(s.ref);
+            if (!sim || !sim->world().alive(e)) return false;
+            const auto* tr = sim->world().tryGet<Transform>(e);
+            if (!tr) return false;
+            x = float(tr->pos.x.toDouble()); z = float(tr->pos.z.toDouble());
+            return true;
+        }
         if (const WorldRow* r = world_.find(s.ref); r && r->hasPos) { x = r->x; z = r->z; return true; }
         return false;
     case Selection::Player:
@@ -165,6 +174,27 @@ Selection Editor::pickObject(const Viewport& vp, const render::RTSCamera& cam, f
     }
     float x, z;
     if (view_.planetMode() || !groundAt(vp, cam, sx, sy, x, z)) return {};
+    if (worldLive_) {   // play: the running world (positions of this frame; the rows are only read for the Hierarchy)
+        Simulation* sim = const_cast<Editor*>(this)->worldSim();
+        if (!sim) return {};
+        Entity bestE = kNullEntity;
+        float bestD = 1e9f;
+        World& w = sim->world();
+        w.each<game::Unit, Transform>([&](Entity e, game::Unit& u, Transform& tr) {
+            if ((u.flags & game::kUnitOffMap) || size_t(u.type) >= rules().types.size()) return;
+            const auto* o = w.tryGet<Owner>(e);
+            const int owner = !o ? 0 : o->player == game::kHostileNeutral ? -1 : int(o->player);
+            const std::string& tid = rules().types[u.type].id;
+            if (objectHidden(owner, tid) || objectLocked(owner, tid)) return;
+            const float rad = const_cast<game::RtsView&>(view_).selectionRadius(u.type) + 0.2f;
+            const float dd = std::hypot(x - float(tr.pos.x.toDouble()), z - float(tr.pos.z.toDouble()));
+            if (dd < rad && dd < bestD) { bestE = e; bestD = dd; }
+        });
+        if (!bestE.valid()) return {};
+        Selection s{Selection::Live, -1, {}};
+        s.ref = worldRef(bestE);
+        return s;
+    }
     const WorldRow* best = nullptr;
     float bestD = 1e9f;
     for (auto& r : world_.rows) {
@@ -186,6 +216,25 @@ namespace {
 uint64_t mix(uint64_t h, uint64_t v) { return (h ^ v) * 1099511628211ull; }
 }
 
+void Editor::readLiveWorld(Simulation& live, game::RtsModule& mod) {
+    const bool data = worldDataWanted();
+    if (data) { auto ps = prof.scope(EditorProfile::Snapshot); live.module().prepareSnapshot(live); }   // observation only (as every checksum does)
+    auto rs = prof.scope(EditorProfile::ReadWorld);
+    readWorld(live, mod, worldCfg_, liveLinks_, liveSetup_, &doc().data, world_, WorldReadOptions{data});
+    worldStale_ = false;
+}
+
+void Editor::ensureWorld() {
+    worldDataAt_ = worldWantAt_ = time_;
+    if (worldLive_) {
+        Simulation* live = worldSim();
+        auto* mod = worldModule();
+        if (live && mod && (worldStale_ || !world_.scriptData || world_.tick != live->tick())) readLiveWorld(*live, *mod);
+        return;
+    }
+    if (!preview_.sim() || (!preview_.busy() && previewKey_ != previewSeenKey_)) previewForce_ = true;
+}
+
 void Editor::updateWorld() {
     auto profScope = prof.scope(EditorProfile::WorldUpdate);
     Simulation* live = sim_ ? sim_.get() : clientHost_.active() ? clientHost_.simulation() : nullptr;
@@ -197,6 +246,8 @@ void Editor::updateWorld() {
             // a new match: what exists at its start is "setup", map entities are known for the editor's own play-test
             liveSim_ = live;
             liveLinks_ = live == sim_.get() ? playDocLinks_ : std::vector<uint64_t>();
+            liveDocOf_.clear();
+            for (size_t i = 0; i < liveLinks_.size(); ++i) if (liveLinks_[i]) liveDocOf_[liveLinks_[i]] = int(i);
             liveSetup_.clear();
             if (live->tick() <= live->tickRate() * 2) {
                 const auto st = live->world().entityState();
@@ -214,17 +265,25 @@ void Editor::updateWorld() {
             if (!worldLive_) selectMany(next);
             worldLive_ = true;
             worldReadAt_ = 0;
+            world_ = {};
+            worldStale_ = true;
         }
-        if (time_ >= worldReadAt_ || fresh) {
+        // rows only for a consumer (Hierarchy open, MCP): 5 times a second, at once when one appears or wants script data
+        const bool want = worldWanted();
+        const bool due = time_ >= worldReadAt_;
+        if (want && (due || worldStale_ || (worldDataWanted() && !world_.scriptData))) {
             worldReadAt_ = time_ + 0.2;
-            { auto ps = prof.scope(EditorProfile::Snapshot); live->module().prepareSnapshot(*live); }   // observation only: Lua entity tables into the world (as every checksum does)
-            auto rs = prof.scope(EditorProfile::ReadWorld);
-            readWorld(*live, *mod, worldCfg_, liveLinks_, liveSetup_, &doc().data, world_);
-            // live objects that died leave the selection
+            readLiveWorld(*live, *mod);
+        } else if (due) {
+            worldReadAt_ = time_ + 0.2;
+            worldStale_ = true;
+        }
+        if (due) {
+            // live objects that died leave the selection (checked on the world: no read needed)
             std::vector<Selection> keep;
             bool changed = false;
             for (auto& s : selected()) {
-                if (s.kind == Selection::Live && !world_.find(s.ref)) { changed = true; continue; }
+                if (s.kind == Selection::Live && !live->world().alive(worldEntity(s.ref))) { changed = true; continue; }
                 keep.push_back(s);
             }
             if (changed) {
@@ -239,7 +298,7 @@ void Editor::updateWorld() {
         std::vector<Selection> next;
         for (auto& s : selected()) {
             if (s.kind == Selection::Live) {
-                if (const WorldRow* r = world_.find(s.ref); r && r->doc >= 0) next.push_back({Selection::Entity, r->doc, {}});
+                if (auto it = liveDocOf_.find(s.ref); it != liveDocOf_.end()) next.push_back({Selection::Entity, it->second, {}});
             } else next.push_back(s);
         }
         worldLive_ = false;
@@ -250,8 +309,23 @@ void Editor::updateWorld() {
         selectMany(next);
     }
     if (ws_.project.dir.empty()) return;
+    // a background build finished: adopt it and read its rows (once per build: the preview does not run)
+    if (preview_.poll()) {
+        prof.add(EditorProfile::PreviewWorker, preview_.buildMs());
+        if (Simulation* ps = preview_.sim()) {
+            if (auto* pm = preview_.module()) {
+                auto rs = prof.scope(EditorProfile::ReadWorld);
+                readWorld(*ps, *pm, worldCfg_, preview_.links(), preview_.setupRefs(), &doc().data, world_);
+            }
+        } else world_ = {};
+        if (preview_.buildMs() > 2500 && worldAuto) {
+            worldAuto = false;   // big games: rebuild on request (Hierarchy refresh button)
+            ws_.log("world", "Предпросмотр мира долгий (" + std::to_string(int(preview_.buildMs())) + " мс): автообновление выключено");
+        }
+    }
+    const bool want = worldWanted() || previewForce_;
     // project scripts: their newest change time, checked once a second (hot edits from the Scripts window / agents)
-    if (time_ >= scriptsCheckAt_) {
+    if (want && time_ >= scriptsCheckAt_) {
         scriptsCheckAt_ = time_ + 1.0;
         uint64_t stamp = 0;
         std::error_code ec;
@@ -266,28 +340,27 @@ void Editor::updateWorld() {
     key = mix(key, scriptsStamp_);
     key = mix(key, std::hash<std::string>{}(ws_.project.dir + "\n" + doc().path));
     if (key != previewSeenKey_) { previewSeenKey_ = key; previewDue_ = time_ + 0.6; }   // debounce while the user drags / paints
+    // never while a stroke / drag / slider is held: the map changes every frame then (rebuild after the release)
+    const ImGuiIO& io = ImGui::GetIO();
+    const bool holding = io.MouseDown[0] || io.MouseDown[1] || io.MouseDown[2];
+    if (holding && key != previewKey_) previewDue_ = std::max(previewDue_, time_ + 0.25);
     if (previewForce_) previewDue_ = std::min(previewDue_, time_);
-    if (key != previewKey_ && (worldAuto || previewForce_)) {
-        if (time_ >= previewDue_) {
-            previewForce_ = false;
-            previewKey_ = key;
-            try {
-                const Json simMap = mapForSim(doc().toJson(), ws_.project.dir);
-                auto bs = prof.scope(EditorProfile::PreviewBuild);
-                preview_.build(ws_.project.simRules(simMap), simMap, doc().data, worldCfg_);
-            } catch (const std::exception& e) {
-                preview_.clear();
-                world_ = {};
-                ws_.log("world", std::string("Предпросмотр мира: ") + e.what(), true);
-            }
-            if (Simulation* ps = preview_.sim())
-                if (auto* pm = preview_.module()) if (auto rs = prof.scope(EditorProfile::ReadWorld); true) readWorld(*ps, *pm, worldCfg_, preview_.links(), preview_.setupRefs(), &doc().data, world_);
-            if (!preview_.sim()) world_ = {};
-            if (preview_.buildMs() > 2500 && worldAuto) {
-                worldAuto = false;   // big games: rebuild on request (Hierarchy refresh button)
-                ws_.log("world", "Предпросмотр мира долгий (" + std::to_string(int(preview_.buildMs())) + " мс): автообновление выключено");
-            }
-        }
+    if (key != previewKey_ && (worldAuto || previewForce_) && want && time_ >= previewDue_) {
+        previewForce_ = false;
+        previewKey_ = key;
+        // this thread only copies the inputs; the map / rules JSON, the scripts and the setup are made on the worker
+        auto bs = prof.scope(EditorProfile::PreviewBuild);
+        auto data = std::make_shared<MapData>(doc().data);
+        preview_.start([data, path = doc().path, dir = ws_.project.dir, rules = ws_.project.rulesJson](Json& simRules, Json& simMap) {
+            MapDoc md;
+            md.data = std::move(*data);
+            md.path = path;
+            simMap = mapForSim(md.toJson(), dir);
+            Project p;
+            p.dir = dir;
+            p.rulesJson = rules;
+            simRules = p.simRules(simMap);
+        }, doc().data, worldCfg_);
     }
     // runtime objects of the preview that vanished on a rebuild leave the selection
     std::vector<Selection> keep;
@@ -299,7 +372,39 @@ void Editor::updateWorld() {
     if (changed) selectMany(keep);
 }
 
-bool Editor::worldFresh() const { return !worldLive_ && preview_.sim() && previewKey_ != 0 && previewKey_ == previewSeenKey_ && !previewForce_; }
+bool Editor::worldDetails(const Selection& s, WorldRow& row, Json* data) {
+    if (worldLive_) {
+        if (s.kind != Selection::Live) return false;
+        Simulation* sim = worldSim();
+        game::RtsModule* mod = worldModule();
+        const Entity e = worldEntity(s.ref);
+        if (!sim || !mod || !readWorldRow(*sim, *mod, worldCfg_, e, row, WorldReadOptions{false})) return false;
+        if (auto it = liveDocOf_.find(row.ref); it != liveDocOf_.end()) { row.doc = it->second; row.origin = WorldOrigin::Map; }
+        else { row.doc = -1; row.origin = std::binary_search(liveSetup_.begin(), liveSetup_.end(), row.ref) ? WorldOrigin::Setup : WorldOrigin::Runtime; }
+        // Lua data as the scripts hold it now, without flushing the whole VM into the world
+        std::string blob;
+        const bool hasData = mod->scripts() && mod->scripts()->peekData(*sim, e, blob);
+        if (hasData) setWorldRowData(worldCfg_, blob, row);
+        if (data) {
+            *data = inspectEntity(*sim, *mod, e, ws_.project.rulesJson);
+            if (hasData && (*data)["components"].isObject()) data->member("components").set("ScriptData", decodeScriptBlob(blob));
+        }
+        return true;
+    }
+    const WorldRow* r = worldRow(s);
+    if (!r) return false;
+    row = *r;
+    if (data) {
+        Simulation* sim = worldSim();
+        game::RtsModule* mod = worldModule();
+        if (sim && mod) *data = inspectEntity(*sim, *mod, r->e, ws_.project.rulesJson);
+    }
+    return true;
+}
+
+bool Editor::worldFresh() const {
+    return !worldLive_ && preview_.sim() && !preview_.busy() && previewKey_ != 0 && previewKey_ == previewSeenKey_ && !previewForce_;
+}
 
 // ---------------------------------------------------------------- MCP
 void Editor::registerWorldOps() {
@@ -321,7 +426,7 @@ void Editor::registerWorldOps() {
         if (r.parent) { j.set("parent", Json::number(int64_t(r.parent))); j.set("parentRelation", Json::string(r.parentRel)); }
         if (!r.label.empty()) j.set("label", Json::string(r.label));
         Json c = Json::array();
-        for (uint8_t k : r.comps) c.push(Json::string(worldComponents()[k].id));
+        r.eachComp([&](int k) { c.push(Json::string(worldComponents()[size_t(k)].id)); });
         j.set("components", c);
         return j;
     };
@@ -333,6 +438,7 @@ void Editor::registerWorldOps() {
         R"J({"properties": {"group": {"type": "array", "items": {"type": "string"}}, "filter": {"type": "string"},
             "limit": {"type": "integer", "description": "entities listed (default 200, 0 = only groups)"}}})J",
         [this, rowJson](const Json& p) {
+            ensureWorld();
             if (!worldLive_ && !preview_.sim()) {
                 previewForce_ = true;
                 throw std::runtime_error(preview_.error().empty() ? "world preview not ready yet, call again" : "world preview failed: " + preview_.error());
@@ -368,6 +474,7 @@ void Editor::registerWorldOps() {
         "stats, the rules block of its type, Lua data (game.data). By 'ref' (from world_entities) or 'doc' (map entity index).",
         R"J({"properties": {"ref": {"type": "integer"}, "doc": {"type": "integer"}}})J",
         [this, rowJson](const Json& p) {
+            ensureWorld();
             const WorldRow* r = p.has("ref") ? world_.find(uint64_t(p["ref"].integer())) : p.has("doc") ? world_.findDoc(int(p["doc"].integer())) : nullptr;
             Simulation* s = worldSim();
             game::RtsModule* m = worldModule();
@@ -383,6 +490,7 @@ void Editor::registerWorldOps() {
         R"J({"properties": {"docs": {"type": "array", "items": {"type": "integer"}}, "refs": {"type": "array", "items": {"type": "integer"}},
             "focus": {"type": "boolean"}}})J",
         [this](const Json& p) {
+            ensureWorld();
             std::vector<Selection> v;
             for (auto& d : p["docs"].items()) {
                 const int i = int(d.integer(-1));

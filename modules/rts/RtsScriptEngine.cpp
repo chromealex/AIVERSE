@@ -683,6 +683,20 @@ void ScriptEngine::flush(Simulation& sim) {
     impl_->flushData(sim);
 }
 
+bool ScriptEngine::peekData(Simulation& sim, Entity e, std::string& blob) {
+    const auto* sd = sim.world().tryGet<ScriptData>(e);
+    if (!sd) return false;
+    Impl& im = *impl_;
+    auto it = im.dataCache.find(e.packed());
+    if (!im.vm.L || it == im.dataCache.end() || !it->second.dirty) { blob = sd->blob; return true; }   // the world copy is current
+    blob.clear();
+    im.dataTable(e.packed());
+    std::string where;
+    if (lua_istable(im.vm.L, -1)) serialize(im.vm.L, -1, blob, where, 0, true);
+    lua_pop(im.vm.L, 1);
+    return true;
+}
+
 bool ScriptEngine::hasFunction(const std::string& name) const {
     lua_State* L = impl_->vm.L;
     if (!L) return false;

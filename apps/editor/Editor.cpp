@@ -508,6 +508,7 @@ void Editor::buildEditScene(game::RtsScene& out) const {
         out.objects.push_back(o);
     }
     // what the game creates at start (world tree preview: faction start units, script / C++ module objects); read-only
+    if (showGameObjects && !worldLive_ && !d.planet() && !sceneHidden.count("game")) wantWorld();   // the preview is built for the Scene too
     if (showGameObjects && !worldLive_ && !d.planet() && !sceneHidden.count("game"))
         for (auto& r : world_.rows) {
             if (r.doc >= 0 || r.type < 0 || !r.hasPos || (r.flags & game::kUnitOffMap) || size_t(r.type) >= rules().types.size()) continue;

@@ -51,6 +51,11 @@ public:
     const char* dockArea() const override { return "left"; }
 
     void draw(Editor& ed) override {
+        // the rows are read for us (play: 5 Hz) only while we are shown; script data only when the label, a
+        // data: grouping or the search can use it
+        bool data = !ed.worldConfig().labelKey.empty() || !filter_.empty();
+        for (auto& k : groupingKeys(ed)) data = data || k.rfind("data:", 0) == 0;
+        ed.wantWorld(data);
         toolbar(ed);
         statusLine(ed);
         rebuild(ed);
@@ -78,10 +83,14 @@ public:
 private:
     // ---------------------------------------------------------------- model
     struct Entry {
-        WorldRow row;               // world row (map entities: synthesized + the preview's components when fresh)
+        // world row: a row of Editor::world() (valid until its next read, which bumps the serial and so rebuilds
+        // us before any use), or for map entities in edit mode a synthesized one (+ the preview's data when fresh)
+        const WorldRow* src = nullptr;
+        WorldRow own;
         Selection sel;
-        std::string name, typeId;
+        std::string typeId;
         bool editable = false;      // a map document entity in edit mode
+        const WorldRow& row() const { return src ? *src : own; }
     };
     struct Row {
         int depth = 0;
@@ -114,50 +123,53 @@ private:
         const auto& d = ed.doc().data;
         const auto& R = ed.rules();
         const WorldModel& W = ed.world();
+        entries_.reserve(W.rows.size() + (ed.worldLive() ? 0 : d.entities.size()));
         if (!ed.worldLive()) {
             const bool fresh = ed.worldFresh();
             for (size_t i = 0; i < d.entities.size(); ++i) {
                 const DocEntity& de = d.entities[i];
-                Entry en;
-                if (const WorldRow* pr = fresh ? W.findDoc(int(i)) : nullptr) en.row = *pr;
-                en.row.doc = int(i);
-                en.row.origin = WorldOrigin::Map;
-                en.row.owner = de.owner;
-                en.row.type = R.findType(de.type);
-                en.row.hasPos = true;
-                en.row.x = de.x; en.row.z = de.z;
-                if (en.row.type >= 0) {
-                    const auto& t = R.types[size_t(en.row.type)];
-                    if (!fresh) {
-                        en.row.kind = t.hero ? WorldKind::Hero : t.resourceNode >= 0 ? WorldKind::Resource : t.structure ? WorldKind::Structure : WorldKind::Unit;
-                        en.row.category = worldKindTitle(en.row.kind);
-                    }
+                Entry& en = entries_.emplace_back();
+                WorldRow& row = en.own;
+                if (const WorldRow* pr = fresh ? W.findDoc(int(i)) : nullptr) row = *pr;
+                row.doc = int(i);
+                row.origin = WorldOrigin::Map;
+                row.owner = de.owner;
+                row.type = R.findType(de.type);
+                row.hasPos = true;
+                row.x = de.x; row.z = de.z;
+                if (row.type >= 0 && !fresh) {
+                    const auto& t = R.types[size_t(row.type)];
+                    row.kind = t.hero ? WorldKind::Hero : t.resourceNode >= 0 ? WorldKind::Resource : t.structure ? WorldKind::Structure : WorldKind::Unit;
+                    row.category = worldKindTitle(row.kind);
                 }
                 en.sel = {Selection::Entity, int(i), {}};
                 en.typeId = de.type;
-                en.name = en.row.type >= 0 ? worldRowName(W, R, &d, en.row) : de.type + " (?)";
                 en.editable = true;
-                entries_.push_back(std::move(en));
             }
         }
         for (auto& r : W.rows) {
             if (!ed.worldLive() && r.doc >= 0) continue;   // shown above from the document
-            Entry en;
-            en.row = r;
+            Entry& en = entries_.emplace_back();
+            en.src = &r;
             en.sel = ed.worldSelection(r);
-            en.typeId = r.type >= 0 && size_t(r.type) < R.types.size() ? R.types[size_t(r.type)].id : "";
-            en.name = worldRowName(W, R, &d, r);
-            entries_.push_back(std::move(en));
+            if (r.type >= 0 && size_t(r.type) < R.types.size()) en.typeId = R.types[size_t(r.type)].id;
         }
+    }
+
+    std::string entryName(Editor& ed, const Entry& en) const {
+        const auto& R = ed.rules();
+        const auto& d = ed.doc().data;
+        if (en.editable && en.row().type < 0) return (size_t(en.row().doc) < d.entities.size() ? d.entities[size_t(en.row().doc)].type : en.typeId) + " (?)";
+        return worldRowName(ed.world(), R, &d, en.row());
     }
 
     // value + sort key of a grouping level
     std::pair<std::string, std::string> groupOf(Editor& ed, const Entry& en, const std::string& key) const {
-        std::string v = worldGroupValue(ed.world(), ed.rules(), en.row, key);
+        std::string v = worldGroupValue(ed.world(), ed.rules(), en.row(), key);
         if (key == "owner") {
             const auto& pl = ed.doc().data.players;   // names as the map document has them (also without a preview)
-            if (en.row.owner > 0 && en.row.owner <= int(pl.size()) && !ed.worldLive()) v = pl[size_t(en.row.owner - 1)].name;   // players first, then neutral, then hostile
-            const int o = en.row.owner;
+            if (en.row().owner > 0 && en.row().owner <= int(pl.size()) && !ed.worldLive()) v = pl[size_t(en.row().owner - 1)].name;   // players first, then neutral, then hostile
+            const int o = en.row().owner;
             char buf[16];
             std::snprintf(buf, sizeof buf, "%04d", o > 0 ? o : o == 0 ? 9000 : 9001);
             return {v, buf};
@@ -186,6 +198,8 @@ private:
         cacheKey_ = key;
         auto prof = ed.prof.scope(EditorProfile::Hierarchy);
         buildEntries(ed);
+        gameRows_ = 0;
+        for (auto& r : ed.world().rows) gameRows_ += r.doc < 0;
         rows_.clear();
         const bool filtering = !filter_.empty();
         const auto& R = ed.rules();
@@ -205,7 +219,7 @@ private:
 
         std::vector<int> matched;
         for (size_t i = 0; i < entries_.size(); ++i)
-            if (!filtering || worldRowMatches(ed.world(), R, &d, entries_[i].row, filter_)) matched.push_back(int(i));
+            if (!filtering || worldRowMatches(ed.world(), R, &d, entries_[i].row(), filter_)) matched.push_back(int(i));
         const std::vector<std::string> keys = groupingKeys(ed);
         if (keys.size() == 1 && keys[0] == "parent") buildNesting(ed, matched, open);
         else {
@@ -214,37 +228,67 @@ private:
             if (keys[0] == "owner" && !filtering) {   // every player shows, even without objects
                 for (size_t p = 0; p < d.players.size(); ++p) {
                     Entry fake;
-                    fake.row.owner = int(p + 1);
+                    fake.own.owner = int(p + 1);
                     auto [v, sk] = groupOf(ed, fake, "owner");
                     Node& n = top.children[sk];
                     n.label = v; n.sortKey = sk; n.owner = int(p + 1);
                 }
             }
+            // values of a level depend on a few row fields: memoized per (level, fields), so thousands of objects
+            // cost a map lookup each instead of building strings
+            using GV = std::pair<std::string, std::string>;
+            std::vector<std::map<uint64_t, GV>> memo(keys.size());
+            std::vector<GV> scratch(keys.size()), comps;
+            for (auto& c : worldComponents()) comps.push_back({c.title, c.title});
+            const GV noComps[2] = {{"Объекты карты (предпросмотр не готов)", "~"}, {"Без компонентов", "~"}};
+            auto memoKey = [](const std::string& k, const WorldRow& r, bool& ok) -> uint64_t {
+                ok = true;
+                if (k == "owner") return uint64_t(int64_t(r.owner) + 1000);
+                if (k == "type" || k == "tag" || k == "category") return uint64_t(int64_t(r.type) + 1) << 8 | uint64_t(r.kind);
+                if (k == "kind") return uint64_t(r.kind);
+                if (k == "origin") return uint64_t(r.origin);
+                if (k == "region") return uint64_t(int64_t(r.region) + 1);
+                ok = false;
+                return 0;
+            };
+            std::vector<std::vector<const GV*>> levels(keys.size());   // per level: values (component: several)
             for (int e : matched) {
                 const Entry& en = entries_[size_t(e)];
-                std::vector<std::vector<std::pair<std::string, std::string>>> levels;   // per level: values (component: several)
-                for (auto& k : keys) {
+                const WorldRow& row = en.row();
+                for (size_t l = 0; l < keys.size(); ++l) {
+                    auto& lv = levels[l];
+                    lv.clear();
+                    const std::string& k = keys[l];
                     if (k == "component") {
-                        std::vector<std::pair<std::string, std::string>> vs;
-                        for (uint8_t c : en.row.comps) vs.push_back({worldComponents()[c].title, worldComponents()[c].title});
-                        if (vs.empty()) vs.push_back({en.editable ? "Объекты карты (предпросмотр не готов)" : "Без компонентов", "~"});
-                        levels.push_back(vs);
-                    } else levels.push_back({groupOf(ed, en, k)});
+                        row.eachComp([&](int c) { lv.push_back(&comps[size_t(c)]); });
+                        if (lv.empty()) lv.push_back(&noComps[en.editable ? 0 : 1]);
+                        continue;
+                    }
+                    bool ok;
+                    const uint64_t mk = memoKey(k, row, ok);
+                    if (!ok) { scratch[l] = groupOf(ed, en, k); lv.push_back(&scratch[l]); continue; }
+                    auto it = memo[l].find(mk);
+                    if (it == memo[l].end()) it = memo[l].emplace(mk, groupOf(ed, en, k)).first;
+                    lv.push_back(&it->second);
                 }
                 // walk every combination (only the component level has several values)
                 std::vector<size_t> idx(levels.size(), 0);
                 while (true) {
                     Node* n = &top;
                     for (size_t l = 0; l < levels.size(); ++l) {
-                        auto& [v, sk] = levels[l][idx[l]];
-                        Node& c = n->children[sk];
-                        if (c.label.empty()) {
-                            c.label = v; c.sortKey = sk;
-                            if (keys[l] == "owner") c.owner = en.row.owner;
-                            if (keys[l] == "type") c.type = en.row.type;
+                        const GV& g = *levels[l][idx[l]];
+                        auto ci = n->children.find(g.second);
+                        if (ci == n->children.end()) {
+                            ci = n->children.emplace(g.second, Node{}).first;
+                            Node& c = ci->second;
+                            c.label = g.first; c.sortKey = g.second;
+                            if (keys[l] == "owner") c.owner = row.owner;
+                            if (keys[l] == "type") c.type = row.type;
+                        } else if (ci->second.label.empty()) {   // a player row made above without objects
+                            ci->second.label = g.first; ci->second.sortKey = g.second;
                         }
-                        addTo(c, e);
-                        n = &c;
+                        addTo(ci->second, e);
+                        n = &ci->second;
                     }
                     n->items.push_back(e);
                     int l = int(levels.size()) - 1;
@@ -305,40 +349,46 @@ private:
 
     void itemRow(Editor&, int e, int depth, const std::string& key = {}) {
         const Entry& en = entries_[size_t(e)];
-        Row r;
+        const WorldRow& row = en.row();
+        Row& r = rows_.emplace_back();
         r.depth = depth;
         r.key = key;
         r.entry = e;
         r.sel = en.sel;
         r.members = {e};
-        r.label = en.name;
         r.dim = !en.editable;
-        r.icon = en.row.kind == WorldKind::Structure ? ICON_CASTLE : en.row.kind == WorldKind::Projectile ? ICON_ZAP
-               : en.row.kind == WorldKind::Effect ? ICON_FLAME : en.row.kind == WorldKind::Resource ? ICON_FIELDS : ICON_DOT;
-        if (en.row.owner > 0) { const render::float4 c = game::RtsView::playerColor(en.row.owner); r.iconColor = ImVec4(c.x, c.y, c.z, 1); }
-        r.hasPos = en.row.hasPos;
-        r.fx = en.row.x; r.fz = en.row.z;
+        r.icon = row.kind == WorldKind::Structure ? ICON_CASTLE : row.kind == WorldKind::Projectile ? ICON_ZAP
+               : row.kind == WorldKind::Effect ? ICON_FLAME : row.kind == WorldKind::Resource ? ICON_FIELDS : ICON_DOT;
+        if (row.owner > 0) { const render::float4 c = game::RtsView::playerColor(row.owner); r.iconColor = ImVec4(c.x, c.y, c.z, 1); }
+        r.hasPos = row.hasPos;
+        r.fx = row.x; r.fz = row.z;
+        // label / tooltip: when the row is first drawn (lists of thousands are clipped)
+    }
+
+    void itemText(Editor& ed, Row& r) {
+        const Entry& en = entries_[size_t(r.entry)];
+        const WorldRow& row = en.row();
+        const std::string name = entryName(ed, en);
         char pos[48] = "";
-        if (en.row.hasPos) std::snprintf(pos, sizeof pos, "(%.0f, %.0f)", en.row.x, en.row.z);
-        r.tip = en.name + "  " + pos + "\n" + (en.editable ? std::string("Объект карты") : std::string(worldOriginTitle(en.row.origin)) + " — только чтение") +
-                (en.row.parent ? std::string(", ") + en.row.parentRel : "") + "\n#" + std::to_string(en.row.e.index);
-        r.label += std::string("  ") + pos;
-        rows_.push_back(std::move(r));
+        if (row.hasPos) std::snprintf(pos, sizeof pos, "(%.0f, %.0f)", row.x, row.z);
+        r.tip = name + "  " + pos + "\n" + (en.editable ? std::string("Объект карты") : std::string(worldOriginTitle(row.origin)) + " — только чтение") +
+                (row.parent ? std::string(", ") + row.parentRel : "") + "\n#" + std::to_string(row.e.index);
+        r.label = name + "  " + pos;
     }
 
     template <class Open>
     void buildNesting(Editor& ed, const std::vector<int>& matched, Open&& open) {
         std::map<uint64_t, std::vector<int>> kids;
         std::set<uint64_t> present;
-        for (int e : matched) present.insert(entries_[size_t(e)].row.ref);
+        for (int e : matched) present.insert(entries_[size_t(e)].row().ref);
         std::vector<int> top;
         for (int e : matched) {
-            const auto& r = entries_[size_t(e)].row;
+            const auto& r = entries_[size_t(e)].row();
             if (r.parent && present.count(r.parent)) kids[r.parent].push_back(e);
             else top.push_back(e);
         }
         std::function<void(int, int)> emit = [&](int e, int depth) {
-            const uint64_t ref = entries_[size_t(e)].row.ref;
+            const uint64_t ref = entries_[size_t(e)].row().ref;
             auto it = kids.find(ref);
             const std::string k = it != kids.end() && ref ? "p/" + std::to_string(ref) : "";
             itemRow(ed, e, depth, k);
@@ -464,16 +514,17 @@ private:
         if (ed.worldLive()) {
             const Simulation* s = const_cast<Editor&>(ed).worldSim();
             ui::toneText(ui::Tone::Accent, "%s Живой мир · тик %u · объектов %zu", ICON_ACTIVITY, s ? s->tick() : 0u, ed.world().rows.size());
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Читается 5 раз в секунду, пока открыта «Иерархия».\n%s", ed.prof.line().c_str());
         } else if (!P.error().empty()) {
             ui::toneText(ui::Tone::Warn, "%s Предпросмотр: %s", ICON_WARNING, P.error().c_str());
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", P.error().c_str());
         } else if (ed.worldPending()) {
             ui::toneText(ui::Tone::Dim, "%s %s", ICON_CLOCK, ed.worldAuto ? "Обновляю объекты игры…" : "Объекты игры устарели — обновите (↻)");
         } else if (P.sim()) {
-            size_t game = 0;
-            for (auto& r : ed.world().rows) game += r.doc < 0;
-            ui::toneText(ui::Tone::Dim, "%s На карте %zu · создаёт игра %zu", ICON_CHECK, ed.doc().data.entities.size(), game);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Игра установлена в отдельной копии (%.0f мс): карта, скрипты, модули. Объекты, созданные игрой, отмечены и только для чтения.", P.buildMs());
+            ui::toneText(ui::Tone::Dim, "%s На карте %zu · создаёт игра %zu", ICON_CHECK, ed.doc().data.entities.size(), gameRows_);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Игра установлена в отдельной копии (%.0f мс, в фоне): карта, скрипты, модули. Объекты, созданные игрой, отмечены и только для чтения.\n%s",
+                                  P.buildMs(), ed.prof.line().c_str());
         }
     }
 
@@ -486,6 +537,7 @@ private:
 
     void drawRow(Editor& ed, int i, float rowH) {
         Row& r = rows_[size_t(i)];
+        if (r.entry >= 0 && r.label.empty()) itemText(ed, r);
         ImGui::PushID(i);
         const float indent = ImGui::GetFontSize() * 0.9f;
         const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -645,13 +697,13 @@ private:
             if (!(keys.size() == 1 && keys[0] == "parent")) {
                 std::string path;
                 for (auto& k : keys) {
-                    std::string sk = k == "component" ? (entries_[size_t(entry)].row.comps.empty() ? "~" : worldComponents()[entries_[size_t(entry)].row.comps[0]].title)
+                    std::string sk = k == "component" ? (entries_[size_t(entry)].row().firstComp() < 0 ? "~" : worldComponents()[size_t(entries_[size_t(entry)].row().firstComp())].title)
                                                       : groupOf(ed, entries_[size_t(entry)], k).second;
                     path += "/" + sk;
                     expanded_.insert(path);
                 }
             } else {
-                for (uint64_t p = entries_[size_t(entry)].row.parent; p;) {
+                for (uint64_t p = entries_[size_t(entry)].row().parent; p;) {
                     expanded_.insert("p/" + std::to_string(p));
                     const WorldRow* pr = ed.world().find(p);
                     p = pr ? pr->parent : 0;
@@ -683,7 +735,7 @@ private:
     void focusMembers(Editor& ed, const std::vector<int>& members) {
         float x0 = 1e9f, z0 = 1e9f, x1 = -1e9f, z1 = -1e9f;
         for (int e : members) {
-            const auto& r = entries_[size_t(e)].row;
+            const auto& r = entries_[size_t(e)].row();
             if (!r.hasPos) continue;
             x0 = std::min(x0, r.x); z0 = std::min(z0, r.z); x1 = std::max(x1, r.x); z1 = std::max(z1, r.z);
         }
@@ -897,8 +949,8 @@ private:
                 if (ui::menuItem(ICON_TRASH, idx.size() > 1 ? "Удалить выбранные" : "Удалить", "Del")) ed.removeSelectedEntities();
             } else {
                 ImGui::Separator();
-                ImGui::TextDisabled("%s  %s — только чтение", ICON_SPARKLES, worldOriginTitle(en.row.origin));
-                if (ui::menuItem(ICON_COPY, "Копировать ссылку (ref)")) ImGui::SetClipboardText(std::to_string(en.row.ref).c_str());
+                ImGui::TextDisabled("%s  %s — только чтение", ICON_SPARKLES, worldOriginTitle(en.row().origin));
+                if (ui::menuItem(ICON_COPY, "Копировать ссылку (ref)")) ImGui::SetClipboardText(std::to_string(en.row().ref).c_str());
             }
             return;
         }
@@ -990,6 +1042,7 @@ private:
     std::vector<Row> rows_;
     std::set<std::string> expanded_;
     uint64_t cacheKey_ = 0, expandRev_ = 0;
+    size_t gameRows_ = 0;       // objects the game created (edit mode status line)
     Selection mine_;            // last selection this window made or revealed
     int anchor_ = -1, scrollTo_ = -1;
     bool focused_ = false;

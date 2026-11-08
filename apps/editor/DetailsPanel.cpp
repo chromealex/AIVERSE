@@ -1,6 +1,7 @@
 // Inspector «Детали»: see DetailsPanel.h.
 #include "DetailsPanel.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <map>
 #include "EditorUtil.h"
@@ -19,9 +20,8 @@ bool isRef(const Json& v) { return v.isObject() && v.has("$entity"); }
 // otherwise the "mixed" marker.
 Json merge(const std::vector<const Json*>& vs) {
     if (vs.empty()) return Json();
-    const std::string first = vs[0]->dump(-1);
     bool same = true;
-    for (size_t i = 1; i < vs.size() && same; ++i) same = vs[i]->dump(-1) == first;
+    for (size_t i = 1; i < vs.size() && same; ++i) same = *vs[i] == *vs[0];
     if (same) return *vs[0];
     bool objects = true, arrays = true;
     for (auto* v : vs) { objects &= v->isObject() && !isRef(*v); arrays &= v->isArray() && v->size() == vs[0]->size(); }
@@ -78,32 +78,94 @@ ImVec4 ownerColor(int owner) {
 } // namespace
 
 void DetailsPanel::collect(Editor& ed) {
-    uint64_t key = ed.world().serial * 1000003ull ^ ed.doc().revision * 7919ull ^ uint64_t(ed.worldLive()) << 62;
+    // edit mode: the preview's rows (rebuilt with the map); play mode: the running world read directly for the
+    // selected objects, again and again (one pass a few times a second, less often for big selections), whether
+    // the Hierarchy is open or not. Reading has a time budget per frame; the sections are merged once a pass ends.
+    if (!ed.worldLive()) ed.wantWorld();
+    // edit mode: the data comes from the preview (its serial), valid while it matches the map (worldFresh)
+    uint64_t key = ed.worldLive() ? 1ull << 62 : ed.world().serial * 1000003ull ^ uint64_t(ed.worldFresh()) << 61;
     for (auto& s : ed.selected()) key = (key ^ (uint64_t(s.kind) << 40 ^ uint64_t(uint32_t(s.index)) ^ s.ref)) * 1099511628211ull;
-    if (key == cacheKey_) return;
-    cacheKey_ = key;
-    auto prof = ed.prof.scope(EditorProfile::Details);
-    items_.clear();
-    truncated_ = 0;
-    Simulation* sim = ed.worldSim();
-    game::RtsModule* mod = ed.worldModule();
-    for (auto& s : ed.selected()) {
-        if (s.kind != Selection::Entity && s.kind != Selection::Live) continue;
-        Item it;
-        it.sel = s;
-        if (s.kind == Selection::Entity) it.doc = s.index;
-        if (const WorldRow* r = ed.worldRow(s)) {
-            it.row = *r;
-            it.hasRow = true;
-            if (it.doc < 0 && !ed.worldLive()) it.doc = r->doc;
-            if (sim && mod && items_.size() < kMaxItems) it.data = inspectEntity(*sim, *mod, r->e, ed.ws().project.rulesJson);
-            else if (items_.size() >= kMaxItems) ++truncated_;
+    if (key != cacheKey_) {
+        cacheKey_ = key;
+        items_.clear();
+        truncated_ = 0;
+        for (auto& s : ed.selected()) {
+            if (s.kind != Selection::Entity && s.kind != Selection::Live) continue;
+            Item it;
+            it.sel = s;
+            if (s.kind == Selection::Entity) it.doc = s.index;
+            items_.push_back(std::move(it));
         }
-        items_.push_back(std::move(it));
+        cursor_ = 0;
+        dirty_ = true;
+        sections_.clear();
+        withData_ = 0;
+    } else if (cursor_ >= items_.size() && ed.worldLive() && ed.time() >= refreshAt_) {
+        cursor_ = 0;   // play: the next pass
     }
+    if (cursor_ < items_.size()) {
+        const auto t0 = std::chrono::steady_clock::now();
+        size_t done = 0;
+        for (; cursor_ < items_.size(); ++cursor_) {
+            if (done > 0 && std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() > 2.0) break;
+            Item& it = items_[cursor_];
+            const bool full = cursor_ < kMaxItems;
+            it.hasRow = ed.worldDetails(it.sel, it.row, full ? &it.data : nullptr);
+            if (!it.hasRow) it.data = Json();
+            if (it.hasRow && it.doc < 0 && !ed.worldLive()) it.doc = it.row.doc;
+            it.fresh = true;
+            ++done;
+        }
+        dirty_ = true;
+        if (cursor_ >= items_.size()) {
+            truncated_ = items_.size() > kMaxItems ? int(items_.size() - kMaxItems) : 0;
+            refreshAt_ = ed.time() + std::min(2.0, 0.2 * std::max<double>(1.0, double(std::min(items_.size(), kMaxItems)) / 25.0));
+        }
+    }
+    // merge when a pass is complete, or the first time anything was read (a big selection shows up at once)
+    if (dirty_ && (cursor_ >= items_.size() || sections_.empty())) { prepare(); dirty_ = false; }
+}
+
+void DetailsPanel::prepare() {
+    sections_.clear();
+    std::vector<const Item*> withData;
+    for (auto& it : items_) if (it.fresh && it.data.isObject() && !it.data.has("error")) withData.push_back(&it);
+    withData_ = withData.size();
+    if (withData.empty()) return;
+    // effective vs base stats: "base → effective" (one value when they agree)
+    {
+        std::vector<Json> flat;
+        for (auto* it : withData) {
+            if (!it->data.has("stats")) continue;
+            Json f = Json::object();
+            for (auto& [k, x] : it->data["stats"].members()) {
+                const std::string b = x["base"].dump(-1), e = x["effective"].dump(-1);
+                f.set(k, Json::string(b == e ? b : b + " → " + e));
+            }
+            flat.push_back(std::move(f));
+        }
+        std::vector<const Json*> v;
+        for (auto& f : flat) v.push_back(&f);
+        if (!v.empty()) sections_.push_back({"stats", "Характеристики (база → итог)", merge(v), v.size(), true});
+    }
+    // components in the engine's order
+    static const char* const open[] = {"Transform", "Owner", "Unit", "Orders", "Production", "Construction", "Garrison", "Cargo", "ResourceStock", "ScriptData", "Boarded", "Transport"};
+    for (auto& c : worldComponents()) {
+        std::vector<const Json*> v;
+        for (auto* it : withData) if (it->data["components"].has(c.id)) v.push_back(&it->data["components"][c.id]);
+        if (v.empty()) continue;
+        bool def = false;
+        for (auto* o : open) def |= std::string(o) == c.id;
+        sections_.push_back({c.id, c.title, merge(v), v.size(), def});
+    }
+    // the rules block of the type
+    std::vector<const Json*> rules;
+    for (auto* it : withData) if (it->data["rules"].isObject()) rules.push_back(&it->data["rules"]);
+    if (!rules.empty()) sections_.push_back({"rules", "Правила типа (rules.json)", merge(rules), rules.size(), false});
 }
 
 void DetailsPanel::draw(Editor& ed) {
+    auto prof = ed.prof.scope(EditorProfile::Details);   // all of it: reading + merging + drawing
     collect(ed);
     if (items_.empty()) { ui::emptyStateHere(ICON_INSPECTOR, "Объект исчез", "Его больше нет в мире игры."); return; }
     header(ed);
@@ -327,15 +389,16 @@ void DetailsPanel::property(Editor& ed, const std::string& key, const Json& v, c
     ImGui::PopID();
 }
 
-void DetailsPanel::section(Editor& ed, const char* id, const char* title, const std::vector<const Json*>& values, size_t of, bool defaultOpen) {
-    if (values.empty()) return;
-    const Json merged = merge(values);
+void DetailsPanel::section(Editor& ed, const Section& sec) {
+    const char* id = sec.id.c_str();
+    const char* title = sec.title.c_str();
+    const Json& merged = sec.value;
     if (!filter_.empty() && !matches(title, merged) && !matches(id, merged)) return;
     char label[160];
-    if (values.size() < of) std::snprintf(label, sizeof label, "%s  (%zu из %zu)###%s", title, values.size(), of, id);
+    if (sec.have < withData_) std::snprintf(label, sizeof label, "%s  (%zu из %zu)###%s", title, sec.have, withData_, id);
     else std::snprintf(label, sizeof label, "%s###%s", title, id);
     if (!filter_.empty()) ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-    if (!ImGui::CollapsingHeader(label, defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0)) return;
+    if (!ImGui::CollapsingHeader(label, sec.open ? ImGuiTreeNodeFlags_DefaultOpen : 0)) return;
     if (ImGui::BeginPopupContextItem()) {
         if (ui::menuItem(ICON_BRACES, "Копировать раздел как JSON")) ImGui::SetClipboardText(merged.dump().c_str());
         ImGui::EndPopup();
@@ -346,8 +409,8 @@ void DetailsPanel::section(Editor& ed, const char* id, const char* title, const 
     if (ImGui::BeginTable("##props", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("##k", ImGuiTableColumnFlags_WidthStretch, 0.45f);
         ImGui::TableSetupColumn("##v", ImGuiTableColumnFlags_WidthStretch, 0.55f);
-        if (merged.isObject() && !isRef(merged)) for (auto& [k, x] : merged.members()) property(ed, k, x, std::string(id) + "." + k);
-        else property(ed, "значение", merged, id);
+        if (merged.isObject() && !isRef(merged)) for (auto& [k, x] : merged.members()) property(ed, k, x, sec.id + "." + k);
+        else property(ed, "значение", merged, sec.id);
         ImGui::EndTable();
     }
     ImGui::PopID();
@@ -355,48 +418,16 @@ void DetailsPanel::section(Editor& ed, const char* id, const char* title, const 
 }
 
 void DetailsPanel::sections(Editor& ed) {
-    std::vector<const Item*> withData;
-    for (auto& it : items_) if (it.data.isObject() && !it.data.has("error")) withData.push_back(&it);
-    if (withData.empty()) {
+    if (sections_.empty()) {
         const auto& P = ed.worldPreview();
         ImGui::Spacing();
-        if (!ed.worldLive() && !P.error().empty()) ui::callout(ui::Tone::Warn, "Данные мира недоступны: " + P.error());
+        if (cursor_ < items_.size()) ui::hint(ICON_CLOCK "  Читаю данные объектов…");
+        else if (!ed.worldLive() && !P.error().empty()) ui::callout(ui::Tone::Warn, "Данные мира недоступны: " + P.error());
         else if (!ed.worldLive() && (ed.worldPending() || !P.sim())) ui::hint(ICON_CLOCK "  Данные мира (компоненты, характеристики) появятся после обновления предпросмотра.");
         return;
     }
-    const size_t n = withData.size();
-    if (truncated_) ui::hint(("Данные показаны для первых " + std::to_string(n) + " объектов").c_str());
-    // effective vs base stats: "base → effective" (one value when they agree)
-    {
-        std::vector<Json> flat;
-        for (auto* it : withData) {
-            if (!it->data.has("stats")) continue;
-            Json f = Json::object();
-            for (auto& [k, x] : it->data["stats"].members()) {
-                const std::string b = x["base"].dump(-1), e = x["effective"].dump(-1);
-                f.set(k, Json::string(b == e ? b : b + " → " + e));
-            }
-            flat.push_back(std::move(f));
-        }
-        std::vector<const Json*> v;
-        for (auto& f : flat) v.push_back(&f);
-        section(ed, "stats", "Характеристики (база → итог)", v, n, true);
-    }
-    // components in the engine's order
-    const auto& comps = worldComponents();
-    static const char* const open[] = {"Transform", "Owner", "Unit", "Orders", "Production", "Construction", "Garrison", "Cargo", "ResourceStock", "ScriptData", "Boarded", "Transport"};
-    for (auto& c : comps) {
-        std::vector<const Json*> v;
-        for (auto* it : withData) if (it->data["components"].has(c.id)) v.push_back(&it->data["components"][c.id]);
-        if (v.empty()) continue;
-        bool def = false;
-        for (auto* o : open) def |= std::string(o) == c.id;
-        section(ed, c.id, c.title, v, n, def);
-    }
-    // the rules block of the type
-    std::vector<const Json*> rules;
-    for (auto* it : withData) if (it->data["rules"].isObject()) rules.push_back(&it->data["rules"]);
-    section(ed, "rules", "Правила типа (rules.json)", rules, n, false);
+    if (truncated_) ui::hint(("Данные показаны для первых " + std::to_string(withData_) + " объектов").c_str());
+    for (auto& sec : sections_) section(ed, sec);
 }
 
 } // namespace rts::editor

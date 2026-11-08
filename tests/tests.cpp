@@ -13787,3 +13787,106 @@ view.entity_fx(a, {pitch = 0, roll = 0, time = 1}); assert(view.entity_fx(a).pit
         }
     CHECK(worst < 1e-3f);
 }
+
+// ---------------- Editor world tree performance (world-perf): background preview, cheap reads, Lua peek ----------------
+#ifdef RTS_TESTS_EDITOR_CORE
+TEST(world_tree_background_preview_and_reused_reads) {
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame((root / "skirmish").string(), &err));
+    const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
+    editor::WorldPreview sync;
+    CHECK(worldTreePreview(ws, sync, cfg));
+    // the background build (inputs made on the worker from copies) gives the same world
+    editor::WorldPreview bg;
+    const std::string dir = ws.project.dir;
+    const Json rules = ws.project.rulesJson;
+    auto data = std::make_shared<editor::MapData>(ws.map.data);
+    const std::string path = ws.map.path;
+    bg.start([data, path, dir, rules](Json& simRules, Json& simMap) {
+        editor::MapDoc md;
+        md.data = *data;
+        md.path = path;
+        simMap = editor::mapForSim(md.toJson(), dir);
+        editor::Project p;
+        p.dir = dir;
+        p.rulesJson = rules;
+        simRules = p.simRules(simMap);
+    }, ws.map.data, cfg);
+    CHECK(bg.busy() || RTS_PREVIEW_THREAD == 0);
+    bool adopted = false;
+    for (int i = 0; i < 20000 && !adopted; ++i) { adopted = bg.poll(); if (!adopted) std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    CHECK(adopted && !bg.busy() && bg.sim() && bg.error().empty());
+    if (bg.sim()) {
+        CHECK(bg.links() == sync.links() && bg.setupRefs() == sync.setupRefs());
+        CHECK(bg.sim()->checksum() == sync.sim()->checksum());
+    }
+    // a second start while one runs: only the newest request is adopted
+    bg.start([](Json&, Json&) { throw std::runtime_error("old request"); }, ws.map.data, cfg);
+    bg.start([](Json&, Json&) { throw std::runtime_error("newest request"); }, ws.map.data, cfg);
+    adopted = false;
+    for (int i = 0; i < 20000 && !adopted; ++i) { adopted = bg.poll(); if (!adopted) std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    CHECK(adopted && !bg.sim() && bg.error() == "newest request");
+    // reads into the same model reuse its rows and give the same result; lookups by ref / map entity
+    editor::WorldModel a, b;
+    readWorld(*sync.sim(), *sync.module(), cfg, sync.links(), sync.setupRefs(), &ws.map.data, a);
+    readWorld(*sync.sim(), *sync.module(), cfg, sync.links(), sync.setupRefs(), &ws.map.data, b);
+    readWorld(*sync.sim(), *sync.module(), cfg, sync.links(), sync.setupRefs(), &ws.map.data, b, editor::WorldReadOptions{false});
+    CHECK(a.rows.size() == b.rows.size() && b.serial == 2 && !b.scriptData && a.scriptData);
+    bool same = a.rows.size() == b.rows.size();
+    for (size_t i = 0; same && i < a.rows.size(); ++i)
+        same = a.rows[i].ref == b.rows[i].ref && a.rows[i].doc == b.rows[i].doc && a.rows[i].comps == b.rows[i].comps && a.rows[i].x == b.rows[i].x &&
+               a.rows[i].category == b.rows[i].category && b.find(a.rows[i].ref) == &b.rows[i];
+    CHECK(same);
+    for (size_t d = 0; d < ws.map.data.entities.size(); ++d) if (!b.findDoc(int(d)) || b.findDoc(int(d))->doc != int(d)) { CHECK(false); break; }
+    CHECK(!b.find(0) && !b.find(a.rows.back().ref + (uint64_t(1) << 32)));   // other generation: not found
+    // one row read alone equals the row of a full read
+    editor::WorldRow one;
+    CHECK(editor::readWorldRow(*sync.sim(), *sync.module(), cfg, a.rows[3].e, one) && one.ref == a.rows[3].ref && one.comps == a.rows[3].comps && one.type == a.rows[3].type);
+    fs::remove_all(root);
+}
+
+TEST(world_tree_lua_peek_is_observation_only) {
+    // The editor's Details read game.data through ScriptEngine::peekData every frame or so: it must show the
+    // table's current content and never change the simulation (same checksums as without it).
+    auto run = [&](bool peek, std::string* last) {
+        auto sim = scriptSim({{"scripts/a.lua", R"(
+            function on_start()
+              local hall = game.units{owner = 1, type = "townhall"}[1]
+              local x, z = game.pos(hall)
+              state.h = game.spawn("peasant", 1, x + 3, z)
+              game.data(state.h).n = 0
+            end
+            function on_tick(t)
+              local d = game.data(state.h)
+              d.n = d.n + 1
+              d.label = "n" .. d.n
+            end
+        )"}});
+        auto& m = mod(*sim);
+        std::vector<uint64_t> sums;
+        for (int i = 0; i < 60; ++i) {
+            sim->step();
+            if (peek && m.scripts()) {
+                sim->world().each<game::ScriptData>([&](Entity e, game::ScriptData& sd) {
+                    std::string blob;
+                    const std::string before = sd.blob;
+                    if (m.scripts()->peekData(*sim, e, blob)) { if (last) *last = blob; }
+                    if (sd.blob != before) CHECK(false);   // the world copy is not written
+                });
+            }
+            if (i % 10 == 9) sums.push_back(sim->checksum());
+        }
+        return sums;
+    };
+    std::string blob;
+    const auto withPeek = run(true, &blob);
+    const auto without = run(false, nullptr);
+    CHECK(!withPeek.empty() && withPeek == without);
+    const Json d = editor::decodeScriptBlob(blob);
+    CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
+}
+#endif

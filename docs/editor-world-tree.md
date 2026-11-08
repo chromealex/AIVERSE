@@ -15,20 +15,23 @@ several map entities as one undo step).
 | Mode | Source | Editable |
 |---|---|---|
 | Edit (no test running) | the map document + a **preview**: the open map set up in a throwaway `Simulation` (seed 1) exactly as a match starts — map entities, faction start units, the game's Lua scripts, C++ modules (`nativeModules`), engine systems — then `previewTicks` ticks (default 2) | map entities: yes; what the game created: read-only (✦ marker) |
-| Play (editor play-test or «Как в клиенте») | the running simulation, read 5 times a second | read-only, live values |
+| Play (editor play-test or «Как в клиенте») | the running simulation: the rows 5 times a second while the Hierarchy is shown; the Inspector reads the selected objects directly | read-only, live values |
 
 - The preview is rebuilt 0.6 s after the last change of the map, the rules (`reloadRules`) or any
-  `scripts/**/*.lua` file of the project (checked once a second). A preview slower than 2.5 s switches
-  automatic rebuilds off (the refresh button ↻ in the Hierarchy rebuilds on request). Errors (a loader
-  error, the first script error) are shown under the search field; the editor never crashes on them and
-  the document is never touched.
+  `scripts/**/*.lua` file of the project (checked once a second), never while a mouse button / slider is
+  held (a stroke or drag: it waits for the release). It is built on a background thread (§ Performance);
+  the old one stays shown until the new one is ready ("Обновляю объекты игры…"). A preview slower than
+  2.5 s switches automatic rebuilds off (the refresh button ↻ in the Hierarchy rebuilds on request).
+  Errors (a loader error, the first script error) are shown under the search field; the editor never
+  crashes on them and the document is never touched.
 - Map entities are matched to the objects spawned for them right after `setup` (`linkMapEntities`: the
   module spawns them in document order after the faction start units; type, owner and, on flat maps, the
   position must agree). Objects present when a world is first seen are *setup* objects ("Создан игрой на
   старте"), later ones *runtime* ("Создан во время игры").
-- Reading never changes the simulation. The only call into it is `GameModule::prepareSnapshot`
-  (`ScriptEngine::flush`), the observation step every checksum / snapshot runs anyway, so the Lua entity
-  tables (`game.data`) are current.
+- Reading never changes the simulation. The rows need `game.data` only for the game's `label`, a `data:`
+  grouping or the search; only then does a read call `GameModule::prepareSnapshot` (`ScriptEngine::flush`,
+  the observation step every checksum / snapshot runs anyway). The Inspector reads the selected objects'
+  Lua data with `ScriptEngine::peekData` (the table as it is now, serialized, nothing written).
 - Ids: a world object is identified by its **ref** = packed entity + 1 (`worldRef`, 0 = none). Seeds and
   setup are deterministic, so the same data gives the same refs and a selection survives a preview
   rebuild; in play mode the entity generation keeps refs unique.
@@ -128,8 +131,43 @@ shown in the details.
 ## Limits
 
 - Planet maps: the preview's game-created objects are listed, but not drawn / picked in the edit Scene.
-- Live Lua data is as of the last observation (5 Hz).
+- The Hierarchy's live Lua data (labels, `data:` groups, search) is as of the last read (5 Hz).
 - Hosted client («Как в клиенте»): the editor sees the match only when the client has one (menus: the edit
   preview stays); objects count as *setup* only if the editor saw the match within its first 2 seconds, and
   map entities are not linked (the client may play another map than the open one).
 - Native module state (`NativeStore`) is global, not per object; it is not shown per object.
+
+## Performance
+
+Nothing of the world tree runs for nobody: consumers say so every frame (`Editor::wantWorld`: the
+Hierarchy, the Scene drawing the preview's objects, the Inspector in edit mode, MCP calls through
+`ensureWorld`). Without one, the play world is not read and the preview is not built.
+
+| Part | Cost model |
+|---|---|
+| Preview (edit) | on a worker thread (`WorldPreview::start` / `poll`; not on a web build without pthreads: `RTS_PREVIEW_THREAD`): map / rules JSON, scripts, setup, ticks, and freeing the replaced simulation. The editor thread only copies the map data (~1 ms for 160×570 cells) and reads the rows once per build. A change while one runs queues the newest request. |
+| Rows (play) | 5 Hz while a consumer is shown; `readWorld` reuses the rows (no per-row allocations but strings), components are a bitset, lookups by ref / map entity are O(1). Script data only when needed (above). |
+| Hierarchy | rebuilt when the rows / map / grouping / filter / expansion change; grouping values are memoized per (level, owner / type / kind / origin / region); item labels and tooltips are made when a row is first drawn (the list is clipped). |
+| Inspector | edit: from the preview rows; play: the selected objects are read from the running world in passes (2 ms of reading per frame at most, a pass every 0.2 s … 2 s depending on the selection size); the merged sections are built once per pass, not per frame. |
+| Scene (play) | hover / picking iterate the running world directly (current positions), not the rows. |
+
+`RTS_EDITOR_PROFILE=1` prints the per-phase times every 2 s (`[profile] frames … | readWorld … | prepareSnapshot …
+| previewBuild …` (editor thread) `| previewWorker …` (background) `| hierarchy … | details … | worldUpdate …`); the
+same line is in the tooltip of the Hierarchy's status line. `RTS_HOSTED_MAP=<index>` starts the hosted client
+(«Как в клиенте») straight in a match of that map (automated tests / profiling).
+
+Measured (Linux, Release, Xvfb + llvmpipe, 2 CPUs; worst single call of the tree on the editor thread /
+average tree ms per frame; "before" = the first world-tree version, whose Inspector timing covered only its
+reads, not the per-frame merge of the sections):
+
+| Scenario | before | after |
+|---|---|---|
+| skirmish (534 objects), edit: drag / strokes | 5.9 ms / 0.09 | 0.4 ms / 0.07 |
+| skirmish, play-test, Hierarchy + 10 selected | 4.4 ms / 0.43 | 2.2 ms / 0.38 |
+| horde (2 348 map objects), edit: drag | 20.5 ms / 0.26 | 1.4 ms / 0.11 |
+| horde, edit: strokes with pauses (preview 14–16 ms on the editor thread) | 21.0 ms / 0.34 | 1.5 ms / 0.10 |
+| horde, 300 selected | 6.5 ms + ~2.4 ms every frame (merge) | 3.2 ms once / 0.11 |
+| horde, play-test, Hierarchy + 50 selected | 21.7 ms / 5.6 | 4.4 ms / 0.65 |
+| horde, hosted client («Как в клиенте») | 16.9 ms / 1.04 | 3.8 ms / 0.30 |
+| OpenWar (785 objects from scripts), edit: each change (preview 0.6–0.9 s) | 924 ms / 9.9 | 0.9 ms / 0.04 (preview 0.7–0.9 s in the background) |
+| OpenWar / any game, play-test with the Hierarchy closed | rows + Lua flush 5×/s | no reads |

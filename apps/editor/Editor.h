@@ -135,7 +135,15 @@ public:
     const WorldPreview& worldPreview() const { return preview_; }
     const WorldConfig& worldConfig() const { return worldCfg_; }
     void refreshWorld() { previewKey_ = 0; previewForce_ = true; }
-    bool worldPending() const { return !worldLive_ && previewKey_ != previewSeenKey_; }   // preview older than the map
+    bool worldPending() const { return !worldLive_ && (previewKey_ != previewSeenKey_ || preview_.busy()); }   // preview older than the map
+    bool worldBuilding() const { return !worldLive_ && preview_.busy(); }     // a background preview build runs
+    // Consumers of the rows say so every frame they use them (Hierarchy, the Scene's game objects, Details in
+    // edit mode); without one the play world is not read and the preview is not built. scriptData: the rows
+    // need game.data (label / data grouping / search), which costs a Lua flush + decoding every blob.
+    void wantWorld(bool scriptData = false) const { worldWantAt_ = time_; if (scriptData) worldDataAt_ = time_; }
+    // One selected object as it is now: its row, and (data) inspectEntity + the current Lua data. Play mode reads
+    // the running simulation directly (not the 5 Hz rows). False: gone / not in the world tree.
+    bool worldDetails(const Selection& s, WorldRow& row, Json* data);
     bool worldAuto = true;                             // rebuild the preview on map / rules / script changes
     bool showGameObjects = true;                       // Scene (edit mode): draw what the game creates at start
     Selection worldSelection(const WorldRow& r) const; // Entity(doc) while editing a map object, Live(ref) otherwise
@@ -364,6 +372,13 @@ private:
     uint64_t previewKey_ = 0, previewSeenKey_ = 0;
     double previewDue_ = 0, worldReadAt_ = 0;
     bool previewForce_ = false;
+    mutable double worldWantAt_ = -1e9, worldDataAt_ = -1e9;   // last frame a consumer used the rows / their script data
+    bool worldStale_ = true;                   // play: rows not read since the last 0.2 s mark (nobody looked)
+    std::map<uint64_t, int> liveDocOf_;        // live ref -> map entity (liveLinks_ inverted)
+    bool worldWanted() const { return time_ - worldWantAt_ < 0.5; }
+    bool worldDataWanted() const { return time_ - worldDataAt_ < 0.5; }
+    void readLiveWorld(Simulation& live, game::RtsModule& mod);
+    void ensureWorld();                        // MCP: rows (with script data) current now
     int rulesRevision_ = 0;
     const Simulation* liveSim_ = nullptr;      // live world last read (setup refs belong to it)
     std::vector<uint64_t> liveLinks_, liveSetup_;
