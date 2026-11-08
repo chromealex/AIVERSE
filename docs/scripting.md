@@ -662,6 +662,7 @@ on the local machine only:
 |---|---|
 | `scale` | number or `{x, y, z}`: multiplies the model in its own axes about its ground point (1) |
 | `lift` | world units the model is raised along its up (negative: lowered); the ground shadow stays (0) |
+| `pitch`, `roll` | degrees the model tilts on top of its facing, about its origin (lift included): `pitch` > 0 lowers the nose, `roll` > 0 raises the right side; applied roll first, then pitch, then the facing (Unity's `Euler(pitch, yaw, roll)`), so a flyer can dive and bank while `game.set_facing` / its movement turn it; the sun shadow follows, the `groundShadow` image does not; 3D models only (0, 0) |
 | `corpse_age` | seconds since the death on the script's own clock: the corpse (death clip, fall, sink, `corpseFade`) shows that moment and stays while it is below the type's `corpse` (a paused match holds a dying model like Unity's frozen `Elapsed`); an entity removed without a death event (`game.kill(h, true)`, or a death in a frame that ran several ticks) becomes a corpse when its values carry `corpse_age`; `false`: the view's frame clock again (unset) |
 | `opacity` | 0..1: below .99 the model is drawn in the blended pass (sorted back to front, no shadow-map casting) and still writes depth, so the ground layers drawn after that pass (paint layers, `draw_ground`, sprites) stay behind it; 0 draws nothing (1) |
 | `tint` | `{r, g, b}` multiplies the surface colour (1, 1, 1) |
@@ -681,7 +682,7 @@ x = width, y = height, `opacity`). Scripts that run per frame can also set value
 (OpenWar computes Unity's per-tick curves from the match time it publishes in `state`). Presentation only: the
 simulation and its checksum never see them; the headless server has no view scripts. Store: `modules/rts/view/EntityFx.h`
 (`ViewScripts::entityFx()` -> `RtsScene::entityFx`, client and editor play-test). Tests: `view_entity_fx_script_api`,
-`view_entity_fx_renders_scaled_translucent`, `view_entity_fx_ground_shadow`.
+`view_entity_fx_renders_scaled_translucent`, `view_entity_fx_ground_shadow`, `view_entity_fx_pitch_roll`.
 
 View script budget: every handler call (`view.on`, `view.on_frame`, `ui.on`) has its own budget of 5,000,000 VM
 instructions (the C functions it calls are not counted), so one heavy handler never starves the others in that frame.

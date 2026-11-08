@@ -465,7 +465,7 @@ int vDrawGround(lua_State* L, Vm& vm) {
     im.groundVerts += count;
     return 0;
 }
-// view.entity_fx(h, {scale =, lift =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
+// view.entity_fx(h, {scale =, lift =, pitch =, roll =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
 // sets an entity's presentation overrides (EntityFx.h); fields left out keep their target. view.entity_fx(h, nil)
 // removes them (drawn unchanged at once); view.entity_fx(h) returns the values drawn now, or nil.
 int vEntityFx(lua_State* L, Vm& vm) {
@@ -488,6 +488,8 @@ int vEntityFx(lua_State* L, Vm& vm) {
         lua_pushnumber(L, cur.v[V::kTeamGlow]); lua_setfield(L, -2, "team_glow");
         lua_pushnumber(L, cur.v[V::kShadow]); lua_setfield(L, -2, "shadow");
         lua_pushnumber(L, cur.v[V::kLift]); lua_setfield(L, -2, "lift");
+        lua_pushnumber(L, cur.v[V::kPitch]); lua_setfield(L, -2, "pitch");
+        lua_pushnumber(L, cur.v[V::kRoll]); lua_setfield(L, -2, "roll");
         if (cur.v[V::kCorpseAge] >= 0) { lua_pushnumber(L, cur.v[V::kCorpseAge]); lua_setfield(L, -2, "corpse_age"); }
         return 1;
     }
@@ -527,6 +529,8 @@ int vEntityFx(lua_State* L, Vm& vm) {
     field("team_glow", V::kTeamGlow, 1, true, 0.0f, 64.0f);
     field("shadow", V::kShadow, 1, true, 0.0f, 1.0f);
     field("lift", V::kLift, 1, true, -1000.0f, 1000.0f);
+    field("pitch", V::kPitch, 1, true, -360.0f, 360.0f);
+    field("roll", V::kRoll, 1, true, -360.0f, 360.0f);
     {   // corpse_age = seconds since the death on the script's clock (false: the view's own clock again)
         lua_getfield(L, 2, "corpse_age");
         const bool own = lua_type(L, -1) == LUA_TBOOLEAN && !lua_toboolean(L, -1);

@@ -13546,3 +13546,84 @@ TEST(mech_dungeon_fliers_follow_tunnels) {
         CHECK((sim->world().get<Transform>(b).pos - g.cellCenter(16, 6)).xz().length() < Fixed::fromInt(1));   // through the tunnel
     }
 }
+
+TEST(view_entity_fx_pitch_roll) {
+    // view.entity_fx pitch / roll (degrees): the script API stores and returns them; RtsView tilts the model in its
+    // faced frame (world rotation = rotateY(yaw) * rotateZ(-pitch) * rotateX(-roll) * rotateY(-yaw) on top of the
+    // plain matrix): pitch 90 turns the facing straight down, the column lengths (scale) stay
+    using namespace entityfxtest;
+    {
+        Json rules = Json::parseFile(kSkirmish + "/rules.json");
+        rules.set("viewScripts", Json::parse(R"(["scripts/view/tilt.lua"])"));
+        Json src = Json::object(); src.set("scripts/view/tilt.lua", Json::string(R"LUA(
+local a = game.units{player = 1}[1]
+view.entity_fx(a, {pitch = 30, roll = -7})
+local v = view.entity_fx(a)
+assert(v.pitch == 30 and v.roll == -7 and v.lift == 0)
+view.entity_fx(a, {lift = 1}); assert(view.entity_fx(a).pitch == 30)
+assert(not pcall(view.entity_fx, a, {pitch = 0 / 0}))
+view.entity_fx(a, {pitch = 0, roll = 0, time = 1}); assert(view.entity_fx(a).pitch == 30)   -- eases from what is drawn
+)LUA")); rules.set("$scriptSources", src);
+        Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+        Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+        game::ViewScripts vs; CHECK(vs.load(sim, rules, map, 1));
+        for (auto& l : vs.log()) std::printf("  tilt log: %s\n", l.text.c_str());
+        CHECK(vs.log().empty());
+        vs.update(sim, .5f);
+        game::EntityFxValues v; auto fx = vs.entityFx();
+        CHECK(fx && fx->entries.size() == 1);
+        if (fx && !fx->entries.empty()) {
+            CHECK(fx->lookup(fx->entries.begin()->first, v));
+            CHECK(std::fabs(v.v[game::EntityFxValues::kPitch] - 15) < 1e-4f && std::fabs(v.v[game::EntityFxValues::kRoll] + 3.5f) < 1e-4f);
+        }
+    }
+    Json rules = Json::parseFile(kSkirmish + "/rules.json"), map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const game::Rules& R = mod(sim).rules();
+    RecordingDevice dev;
+    render::Renderer3D r3d; CHECK(r3d.init(dev));
+    game::RtsView view; CHECK(view.init(dev, R, [](const std::string&, std::string&) { return false; }));
+    game::RtsScene scene; game::sceneFromSim(sim, scene, 1, 0);
+    game::SceneObject unit;
+    for (auto& o : scene.objects) if (!o.isProjectile && !R.types[o.type].structure) { unit = o; break; }
+    CHECK(unit.entity.valid());
+    scene.objects = {unit};
+    render::RTSCamera cam; cam.target = unit.pos; cam.distance = 12; cam.pitch = 1.0f;
+    auto frame = [&](double t) {
+        dev.draws.clear();
+        r3d.beginScene(cam, 640, 480);
+        view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
+        r3d.render(rts::gfx::PassDesc{});
+        std::vector<RecordingDevice::Draw> out = dev.draws;
+        return out;
+    };
+    frame(0);
+    const auto plain = frame(0);
+    CHECK(!plain.empty());
+    auto fx = std::make_shared<game::EntityFxStore>();
+    game::EntityFxEntry e; using V = game::EntityFxValues;
+    const float pitch = 90, roll = 20;
+    e.to.v[V::kPitch] = pitch; e.to.v[V::kRoll] = roll; e.from = e.to;
+    fx->entries[unit.entity.packed()] = e;
+    scene.entityFx = fx;
+    const auto tilted = frame(0);
+    CHECK(tilted.size() == plain.size());
+    if (tilted.size() != plain.size() || plain.empty()) return;
+    const float yaw = std::atan2(-unit.facing.z, unit.facing.x), d = 0.017453292f;
+    const render::mat4 rw = render::mat4::rotateY(yaw) * render::mat4::rotateZ(-pitch * d) * render::mat4::rotateX(-roll * d) * render::mat4::rotateY(-yaw);
+    // the faced forward (cos yaw, 0, -sin yaw) points down at pitch 90
+    const render::float3 fwd = rw.transformPoint({std::cos(yaw), 0, -std::sin(yaw)});
+    CHECK(fwd.y < -0.999f);
+    float worst = 0;
+    for (size_t i = 0; i < plain.size(); ++i)
+        for (uint32_t k = 0; k < plain[i].instances && k < tilted[i].instances; ++k) {
+            const float* a = plain[i].inst.data() + size_t(k) * 32;
+            const float* b = tilted[i].inst.data() + size_t(k) * 32;
+            for (int c = 0; c < 3; ++c) {
+                const render::float3 col = rw.transformPoint({a[c * 4], a[c * 4 + 1], a[c * 4 + 2]});
+                const float scale = std::max(1e-3f, std::sqrt(a[c * 4] * a[c * 4] + a[c * 4 + 1] * a[c * 4 + 1] + a[c * 4 + 2] * a[c * 4 + 2]));
+                worst = std::max({worst, std::fabs(col.x - b[c * 4]) / scale, std::fabs(col.y - b[c * 4 + 1]) / scale, std::fabs(col.z - b[c * 4 + 2]) / scale});
+            }
+        }
+    CHECK(worst < 1e-3f);
+}

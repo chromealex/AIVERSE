@@ -55,6 +55,14 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     } else {
         base = mat4::translate(p) * mat4::rotateY(st.yaw) * mat4::scale({k, k, k});
     }
+    if (hasFx && (fx.v[EntityFxValues::kPitch] != 0.0f || fx.v[EntityFxValues::kRoll] != 0.0f)) {
+        // view.entity_fx pitch / roll (degrees) in the faced frame (forward +X, up +Y, right +Z), roll first, then
+        // pitch, then the facing (Unity's Euler(pitch, yaw, roll) order): pitch > 0 lowers the nose, roll > 0 raises
+        // the right side; about the model's origin (lift included), so the model keeps its place
+        constexpr float kDeg = 0.017453292f;
+        const mat4 tilt = mat4::rotateZ(-fx.v[EntityFxValues::kPitch] * kDeg) * mat4::rotateX(-fx.v[EntityFxValues::kRoll] * kDeg);
+        base = mat4::translate(p) * mat4::rotateY(st.yaw) * tilt * mat4::rotateY(-st.yaw) * mat4::translate(-p) * base;
+    }
     if (hasFx) base = base * mat4::scale({fx.scale(0), fx.scale(1), fx.scale(2)});
     if (placement) base = *placement * base;   // flat maps: untouched (bit-identical)
     ModelDraw d;
