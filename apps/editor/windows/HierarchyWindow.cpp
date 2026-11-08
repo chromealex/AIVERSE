@@ -184,6 +184,7 @@ private:
                              (uint64_t(ed.worldFresh()) << 61) ^ (uint64_t(grouping_) << 52) ^ (expandRev_ * 104729ull) ^ std::hash<std::string>{}(filter_);
         if (key == cacheKey_ && !rows_.empty()) return;
         cacheKey_ = key;
+        auto prof = ed.prof.scope(EditorProfile::Hierarchy);
         buildEntries(ed);
         rows_.clear();
         const bool filtering = !filter_.empty();

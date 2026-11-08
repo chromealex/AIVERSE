@@ -82,6 +82,7 @@ void DetailsPanel::collect(Editor& ed) {
     for (auto& s : ed.selected()) key = (key ^ (uint64_t(s.kind) << 40 ^ uint64_t(uint32_t(s.index)) ^ s.ref)) * 1099511628211ull;
     if (key == cacheKey_) return;
     cacheKey_ = key;
+    auto prof = ed.prof.scope(EditorProfile::Details);
     items_.clear();
     truncated_ = 0;
     Simulation* sim = ed.worldSim();

@@ -950,6 +950,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     deliverShots(dev);
     FrameStats fs_{float(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()), lastSimMs_, r3d_.drawCalls()};
     frameHistory.push_back(fs_);
+    prof.frame(fs_.frameMs, time_);
     if (frameHistory.size() > 240) frameHistory.pop_front();
     if (quit_) platform::requestQuit();
 }

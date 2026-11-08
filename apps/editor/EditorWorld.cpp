@@ -187,6 +187,7 @@ uint64_t mix(uint64_t h, uint64_t v) { return (h ^ v) * 1099511628211ull; }
 }
 
 void Editor::updateWorld() {
+    auto profScope = prof.scope(EditorProfile::WorldUpdate);
     Simulation* live = sim_ ? sim_.get() : clientHost_.active() ? clientHost_.simulation() : nullptr;
     if (live) {
         auto* mod = dynamic_cast<game::RtsModule*>(&live->module());
@@ -216,7 +217,8 @@ void Editor::updateWorld() {
         }
         if (time_ >= worldReadAt_ || fresh) {
             worldReadAt_ = time_ + 0.2;
-            live->module().prepareSnapshot(*live);   // observation only: Lua entity tables into the world (as every checksum does)
+            { auto ps = prof.scope(EditorProfile::Snapshot); live->module().prepareSnapshot(*live); }   // observation only: Lua entity tables into the world (as every checksum does)
+            auto rs = prof.scope(EditorProfile::ReadWorld);
             readWorld(*live, *mod, worldCfg_, liveLinks_, liveSetup_, &doc().data, world_);
             // live objects that died leave the selection
             std::vector<Selection> keep;
@@ -271,6 +273,7 @@ void Editor::updateWorld() {
             previewKey_ = key;
             try {
                 const Json simMap = mapForSim(doc().toJson(), ws_.project.dir);
+                auto bs = prof.scope(EditorProfile::PreviewBuild);
                 preview_.build(ws_.project.simRules(simMap), simMap, doc().data, worldCfg_);
             } catch (const std::exception& e) {
                 preview_.clear();
@@ -278,7 +281,7 @@ void Editor::updateWorld() {
                 ws_.log("world", std::string("Предпросмотр мира: ") + e.what(), true);
             }
             if (Simulation* ps = preview_.sim())
-                if (auto* pm = preview_.module()) readWorld(*ps, *pm, worldCfg_, preview_.links(), preview_.setupRefs(), &doc().data, world_);
+                if (auto* pm = preview_.module()) if (auto rs = prof.scope(EditorProfile::ReadWorld); true) readWorld(*ps, *pm, worldCfg_, preview_.links(), preview_.setupRefs(), &doc().data, world_);
             if (!preview_.sim()) world_ = {};
             if (preview_.buildMs() > 2500 && worldAuto) {
                 worldAuto = false;   // big games: rebuild on request (Hierarchy refresh button)

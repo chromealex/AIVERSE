@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ClientHost.h"
+#include "EditorProfile.h"
 #include "EditorTheme.h"
 #include "EditorNativeBuild.h"
 #include "modules/rts/view/RtsViewScript.h"
@@ -257,6 +258,7 @@ public:
     // statistics
     struct FrameStats { float frameMs = 0, simMs = 0; uint32_t drawCalls = 0; };
     std::deque<FrameStats> frameHistory;
+    EditorProfile prof;                                // world tree phase timings (RTS_EDITOR_PROFILE=1 prints them)
     struct PlaySample { float t; std::vector<int> units, structures; std::vector<std::vector<float>> resources; };
     std::vector<PlaySample> playHistory;
 
