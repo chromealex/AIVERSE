@@ -178,7 +178,7 @@ void Editor::drawMenuBar() {
         if (item(ICON_UNDO, "Отменить", "Ctrl+Z", false, doc().canUndo() && !playing())) { doc().undo(); selection = {}; }
         if (item(ICON_REDO, "Повторить", "Ctrl+Y", false, doc().canRedo() && !playing())) { doc().redo(); selection = {}; }
         ImGui::Separator();
-        if (item(ICON_TRASH, "Удалить выбранный объект", "Del", false, selectedEntity() >= 0)) { doc().removeEntity(selectedEntity()); selection = {}; }
+        if (item(ICON_TRASH, "Удалить выбранные объекты", "Del", false, !selectedEntities().empty() && !playing())) removeSelectedEntities();
         if (item(ICON_FIT, "Показать всю карту", "F")) fitScene();
         ImGui::SeparatorText("Симметрия");
         if (item(ICON_COPY, "Зеркально: левая половина → правая")) { doc().mirrorHorizontal(); status = "Отражено, игроки 1 и 2 поменяны в копии"; }
