@@ -32,6 +32,7 @@
 #include "../../Include/RmlUi/Core/ComputedValues.h"
 #include "../../Include/RmlUi/Core/Element.h"
 #include "../../Include/RmlUi/Core/ElementScroll.h"
+#include "../../Include/RmlUi/Core/PropertyIdSet.h"
 #include "../../Include/RmlUi/Core/Traits.h"
 #include "../../Include/RmlUi/Core/Types.h"
 #include "ControlledLifetimeResource.h"
@@ -53,6 +54,7 @@ struct ElementMeta {
 	ElementEffects effects;
 	ElementScroll scroll;
 	Style::ComputedValues computed_values;
+	PropertyIdSet style_attribute_ids; // RTSEngine: properties the last `style` attribute set (a new value drops the ones it no longer lists)
 };
 
 struct ElementMetaPool {

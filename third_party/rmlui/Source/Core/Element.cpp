@@ -1744,10 +1744,25 @@ void Element::OnAttributeChange(const ElementAttributes& changed_attributes)
 				StyleSheetParser parser;
 				parser.ParseProperties(properties, value.GetReference<String>());
 
+				// RTSEngine: like HTML, a new style attribute replaces the old one; only properties the previous
+				// attribute set are dropped, so properties set through the style API are kept
+				for (const PropertyId id : meta->style_attribute_ids)
+					if (!properties.GetProperty(id))
+						meta->style.RemoveProperty(id);
+				meta->style_attribute_ids = PropertyIdSet();
 				for (const auto& name_value : properties.GetProperties())
+				{
 					meta->style.SetProperty(name_value.first, name_value.second);
+					meta->style_attribute_ids.Insert(name_value.first);
+				}
 			}
-			else if (value.GetType() != Variant::NONE)
+			else if (value.GetType() == Variant::NONE)
+			{
+				for (const PropertyId id : meta->style_attribute_ids)
+					meta->style.RemoveProperty(id);
+				meta->style_attribute_ids = PropertyIdSet();
+			}
+			else
 				Log::Message(Log::LT_WARNING, "Invalid 'style' attribute, string type required. In element: %s", GetAddress().c_str());
 		}
 		else if (attribute == "lang")

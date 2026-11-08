@@ -103,6 +103,20 @@ int main() {
         check(found,"clip mask under a scale transform -> scissor 30,50 50x40");
         clip->Close(); ui.update();
     } else check(false,"clip document");
+    // a new style attribute replaces the previous one (HTML semantics); properties set through the style API stay
+    if(doc){
+        if(auto* el=doc->GetElementById("action")){
+            el->SetAttribute("style","left: 5px; opacity: 0.5;"); ui.update();
+            el->SetProperty("top","7px");
+            el->SetAttribute("style","opacity: 0.25;"); ui.update();
+            check(el->GetLocalStyleProperties().count(Rml::PropertyId::Left)==0,"style attribute drops properties it no longer lists");
+            const Rml::Property* op=el->GetLocalProperty(Rml::PropertyId::Opacity);
+            check(op && op->Get<float>()==0.25f,"style attribute sets the new value");
+            check(el->GetLocalProperty(Rml::PropertyId::Top)!=nullptr,"style API properties survive a style attribute change");
+            el->RemoveAttribute("style"); ui.update();
+            check(el->GetLocalProperty(Rml::PropertyId::Opacity)==nullptr,"removing the style attribute drops its properties");
+        }
+    }
     ui.shutdown(); check(dev.alive==0,"UI texture cleanup");
     check(ui.init(dev,nullptr,read),"reinitialize for another play session");
     ui.shutdown(); check(dev.alive==0,"second session texture cleanup");
