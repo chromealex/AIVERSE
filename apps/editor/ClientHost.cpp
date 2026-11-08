@@ -1,4 +1,5 @@
 #include "ClientHost.h"
+#include <cstdlib>
 #include "imgui.h"
 #include "apps/client/GameClient.h"
 
@@ -61,7 +62,12 @@ void ClientHost::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle d
     view_.safe = safe;
     Scope s(*this);
     client_->setHostTarget(color, depth, w, h);
-    if (step_ < kSteps) { client_->initStep(*dev_, step_++); return; }
+    if (step_ < kSteps) {
+        client_->initStep(*dev_, step_++);
+        // RTS_HOSTED_MAP=<index>: straight into a match of that map (automated tests / profiling, like the client's --map)
+        if (step_ == kSteps) if (const char* m = std::getenv("RTS_HOSTED_MAP"); m && *m) client_->autostart(size_t(std::atoi(m)));
+        return;
+    }
     if (resized) { Event e; e.type = EventType::Resized; client_->event(e); }
     client_->frame(*dev_, dt);
 }
