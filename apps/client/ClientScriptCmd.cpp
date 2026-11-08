@@ -137,12 +137,16 @@ void GameClient::mapDragEvent(const Event& e, bool uiWants) {
         if (mapDrag_ && e.type == EventType::TouchBegin) return;   // a second finger
         mapDrag_ = uiWants && screen_ == Screen::Playing && ui_.pointerHasAttribute("map-drag");
         mapDragOverUi_ = true; mapDragTouch_ = e.type == EventType::TouchBegin ? e.touchId : -1;
+        mapDragX_ = e.x; mapDragY_ = e.y;
         return;
     }
     if (!mapDrag_) return;
     const bool touch = e.type == EventType::TouchMove || e.type == EventType::TouchEnd || e.type == EventType::TouchCancel;
     if (touch && e.touchId != mapDragTouch_) return;
-    if (e.type == EventType::MouseMove || e.type == EventType::TouchMove) { mapDragOverUi_ = ui_.pointerOverUi(); return; }
+    if (e.type == EventType::MouseMove || e.type == EventType::TouchMove) {
+        mapDragOverUi_ = ui_.pointerOverUi(); mapDragX_ = e.x; mapDragY_ = e.y;
+        return;
+    }
     if (e.type == EventType::FocusLost || e.type == EventType::TouchCancel || screen_ != Screen::Playing) { mapDrag_ = false; return; }
     if (e.type == EventType::MouseUp || e.type == EventType::TouchEnd) {
         mapDrag_ = false;

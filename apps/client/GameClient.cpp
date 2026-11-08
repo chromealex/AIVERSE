@@ -753,6 +753,13 @@ void GameClient::runViewScripts(float dt) {
         float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&(!skillDragging_||skillOverWorld_);
         target.x=p.x;target.z=p.z;
     }
+    // a drag from a map-drag HUD element (mapClick games' drag-to-cast): ability "map-drag", the pointer's ground point,
+    // overWorld while it is over the map (a release there taps it)
+    if(screen_==Screen::Playing&&mapDrag_&&!target.active){
+        target.active=true;target.ability="map-drag";
+        float3 p{};target.overWorld=groundAt(mapDragX_,mapDragY_,p)&&!mapDragOverUi_;
+        target.x=p.x;target.z=p.z;
+    }
     if(screen_==Screen::Playing&&entityPointer_)if(const auto* source=entityActions_.source()){
         target.active=true;target.ability=source->abilityId;target.caster=source->entity.packed();
         float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&!ui_.pointerOverUi();target.x=p.x;target.z=p.z;

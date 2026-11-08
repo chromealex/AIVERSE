@@ -590,6 +590,9 @@ current player-ability target. Coordinates are world X/Z floats. This is present
 state only: it is neither replicated nor written into the simulation. Use it for
 allowed-area masks and cursor previews; authoritative validation remains in the
 command's simulation handler. Client and editor clear it when targeting ends.
+In `mapClick` games a drag that started on a `map-drag` HUD element (drag-to-cast discs) reports
+`ability = "map-drag"` with the pointer's ground point while the drag lasts (`overWorld`: over the
+map, not over the UI, where a release taps the map); client only.
 
 The client data-model callback `skill_drag(actionId, progress)` starts a point-target
 HUD drag on `mousedown` for an enabled action with nonnegative progress (the support
