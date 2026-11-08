@@ -4,6 +4,7 @@
 // not read (.blend, .lwo, .x, ...) are converted to a "<file>.glb" sidecar with modelconv (next to
 // rtsbuild) when they are first used and whenever they change. Agents get the same information
 // through the `model_info` operation.
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include "../Editor.h"
@@ -60,7 +61,7 @@ public:
     const char* id() const override { return "models"; }
     const char* title() const override { return "Модели"; }
     const char* group() const override { return "look"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 3; }
     bool openByDefault() const override { return false; }
 
@@ -72,36 +73,45 @@ public:
         if (ed.selection.kind == Selection::Type)
             for (size_t i = 0; i < types.size(); ++i) if (types[i].id == ed.selection.key) type_ = int(i);
         type_ = std::clamp(type_, 0, int(types.size()) - 1);
-        if (ImGui::BeginCombo("Тип", types[size_t(type_)].id.c_str())) {
-            for (size_t i = 0; i < types.size(); ++i)
-                if (ImGui::Selectable(types[i].id.c_str(), int(i) == type_)) type_ = int(i);
-            ImGui::EndCombo();
+        if (ui::beginProps("##model")) {
+            ui::prop("Тип");
+            if (ImGui::BeginCombo("##type", types[size_t(type_)].id.c_str())) {
+                for (size_t i = 0; i < types.size(); ++i)
+                    if (ImGui::Selectable(types[i].id.c_str(), int(i) == type_)) type_ = int(i);
+                ImGui::EndCombo();
+            }
+            ui::prop("Игрок", "Цвет игрока на превью (0 — нейтральный)");
+            ImGui::SliderInt("##owner", &owner_, 0, 8);
+            ui::endProps();
         }
-        ImGui::SliderInt("Игрок", &owner_, 0, 8);
         if (!portraitInit_) { portraitInit_ = true; portrait_.init(ed.device(), 256); }
         time_ += ImGui::GetIO().DeltaTime;
         portrait_.render(ed.view(), uint16_t(type_), uint8_t(owner_), time_);
         if (portrait_.texture().valid()) {
             const bool flip = ed.device().info().renderTargetFlipY;
-            ImGui::Image(ImTextureRef(ImTextureID(portrait_.texture().id)), ImVec2(192, 192), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
+            const float side = std::clamp(ImGui::GetContentRegionAvail().x, 120.0f, 260.0f);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - side) * 0.5f);
+            ImGui::Image(ImTextureRef(ImTextureID(portrait_.texture().id)), ImVec2(side, side), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
         }
         const std::string& tid = types[size_t(type_)].id;
         for (const auto& w : ed.view().warnings())
             if (w.find("type '" + tid + "'") == 0) ui::toneText(ui::Tone::Warn, "%s", w.c_str());
         const render::Model* m = ed.view().modelOf(uint16_t(type_));
         if (!m) return;
-        ImGui::Text("%s", m->path.c_str());
-        ImGui::Text("Узлов %zu, мешей %zu, материалов %zu, текстур %zu, скинов %zu%s", m->nodes.size(), m->meshes.size(), m->materials.size(),
+        ImGui::TextUnformatted(m->path.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ui::pal().textDim);
+        ImGui::TextWrapped("Узлов %zu, мешей %zu, материалов %zu, текстур %zu, скинов %zu%s", m->nodes.size(), m->meshes.size(), m->materials.size(),
                     m->images.size(), m->skins.size(), m->baked.tex.valid() ? ", клипы запечены" : "");
-        if (ImGui::CollapsingHeader("Клипы", ImGuiTreeNodeFlags_DefaultOpen))
+        ImGui::PopStyleColor();
+        if (ui::collapsing("Клипы", ImGuiTreeNodeFlags_DefaultOpen))
             for (const auto& c : m->clips) ImGui::BulletText("%s  %.2f с", c.name.c_str(), double(c.duration));
-        if (ImGui::CollapsingHeader("Материалы"))
+        if (ui::collapsing("Материалы"))
             for (const auto& mt : m->materials)
                 ImGui::BulletText("%s%s%s", mt.name.c_str(), mt.team != render::TeamMode::None ? "  [цвет игрока]" : "",
                                   mt.alpha == render::AlphaMode::Blend ? "  [прозрачный]" : mt.alpha == render::AlphaMode::Mask ? "  [маска]" : "");
-        if (!m->variants.empty() && ImGui::CollapsingHeader("Варианты"))
+        if (!m->variants.empty() && ui::collapsing("Варианты"))
             for (const auto& v : m->variants) ImGui::BulletText("%s", v.c_str());
-        if (ImGui::CollapsingHeader("Узлы (для procedural, attach, fx, muzzle)"))
+        if (ui::collapsing("Узлы (для procedural, attach, fx, muzzle)"))
             for (const auto& n : m->nodes) ImGui::BulletText("%s", n.name.c_str());
     }
 

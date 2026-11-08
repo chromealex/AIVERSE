@@ -32,7 +32,7 @@ public:
     void registerSettings();
     // Layout version stored in the ini: lower than kLayoutVersion means the saved docking refers to
     // old window names (before Title###id) and must be rebuilt.
-    static constexpr int kLayoutVersion = 2;
+    static constexpr int kLayoutVersion = 3;
     int loadedLayoutVersion() const { return loadedLayout_; }
 
     Mode mode() const { return mode_; }

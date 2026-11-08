@@ -4,6 +4,7 @@
 #include <filesystem>
 #include "Editor.h"
 #include "EditorIcons.h"
+#include "EditorUtil.h"
 
 namespace fs = std::filesystem;
 
@@ -66,7 +67,9 @@ void drawMcpConnect(Editor& ed, McpConnectState& st) {
             ImGui::TableNextColumn();
             ImGui::PushID(c.id.c_str());
             const float trashW = c.installed ? ImGui::GetFrameHeight() + style.ItemSpacing.x : 0;
-            if (ImGui::Button(c.upToDate ? "Переподключить" : c.installed ? "Обновить" : "Подключить", ImVec2(ImGui::GetContentRegionAvail().x - trashW, 0))) run(ed, st, c, false);
+            // a found client that isn't connected yet is the obvious next step: accent button
+            const bool next = (c.present && !c.installed) || (c.installed && !c.upToDate);
+            if (ui::button(nullptr, c.upToDate ? "Переподключить" : c.installed ? "Обновить" : "Подключить", next, ImVec2(ImGui::GetContentRegionAvail().x - trashW, 0))) run(ed, st, c, false);
             if (c.installed) {
                 ImGui::SameLine();
                 if (ImGui::Button(ICON_TRASH, ImVec2(ImGui::GetFrameHeight(), 0))) run(ed, st, c, true);

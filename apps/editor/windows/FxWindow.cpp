@@ -106,6 +106,8 @@ public:
             if (!preview_.init(dev_)) ed.status = preview_.lastError();
         }
         if (listDirty_) refreshList(ed);
+        // open on the first effect instead of a page of instructions: the preview is what the window is for
+        if (!autoPicked_ && sel_.empty() && !bindings_ && !names_.empty()) { autoPicked_ = true; select(ed, names_.front()); }
 
         ImGui::BeginChild("##fxlist", ImVec2(ImGui::GetFontSize() * 11, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
         drawList(ed);
@@ -237,7 +239,9 @@ private:
     void drawList(Editor& ed) {
         if (ImGui::Selectable("Привязки (fx.json)", bindings_)) openBindings(ed);
         ImGui::Separator();
+        if (names_.size() > 8) ui::searchField("##fxf", filter_, "Поиск");
         for (auto& n : names_) {
+            if (!filter_.empty() && !ui::contains(n, filter_)) continue;
             const bool cur = !bindings_ && n == sel_;
             if (ImGui::Selectable((n + (cur && dirty_ ? " *" : "")).c_str(), cur) && !cur) {
                 if (dirty_) pendingSelect_ = n, ImGui::OpenPopup("##unsaved");
@@ -252,7 +256,7 @@ private:
             ImGui::EndPopup();
         }
         ImGui::Separator();
-        if (ImGui::Button("+ Новый")) { newName_.clear(); ImGui::OpenPopup("##newfx"); }
+        if (ui::wideButton(ICON_PLUS, "Новый эффект")) { newName_.clear(); ImGui::OpenPopup("##newfx"); }
         if (ImGui::BeginPopup("##newfx")) {
             ImGui::TextUnformatted("Имя файла (латиница, цифры, _):");
             ui::inputString("##name", newName_);
@@ -301,8 +305,8 @@ private:
     void drawEffect(Editor& ed) {
         // toolbar
         if (ImGui::Button("Повторить")) { preview_.clear(); handle_ = {}; nextPlay_ = 0; played_ = false; }
-        ImGui::SameLine(); ImGui::Checkbox("Цикл", &loop_);
-        ImGui::SameLine(); ImGui::Checkbox("Движение", &moving_);
+        ImGui::SameLine(); ui::checkbox("Цикл", &loop_);
+        ImGui::SameLine(); ui::checkbox("Движение", &moving_);
         ui::help("Эмиттер летает по кругу: так видно шлейфы (perMeter) и эффекты, привязанные к объекту.");
         ImGui::SameLine(); ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6); ImGui::SliderFloat("Скорость", &speed_, 0.1f, 2.0f, "%.1fx");
         ImGui::SameLine(); ImGui::SetNextItemWidth(ImGui::GetFontSize() * 11); ImGui::Combo("Качество", &quality_, kQualityLabels, 4);
@@ -367,7 +371,7 @@ private:
             ImGui::PushID(int(i));
             static const char* kBlend[] = {"alpha", "additive", "premultiplied", "multiply", "subtract", "opaque"};
             const std::string head = "Эмиттер " + std::to_string(i + 1) + " — " + (d.meshes.empty() ? d.texture : d.meshes[0]) + ", " + kBlend[size_t(d.blend)];
-            if (ImGui::CollapsingHeader(head.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ui::collapsing(head.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                 ch |= fxui::emitterUi(d);
                 if (ImGui::SmallButton("Копия")) dup = int(i);
                 ImGui::SameLine();
@@ -398,6 +402,8 @@ private:
     float speed_ = 1, moveT_ = 0;
     bool listDirty_ = true, bindings_ = false, dirty_ = false, rawIsSource_ = true, loop_ = true, moving_ = false, played_ = false;
     int revision_ = 0;
+    bool autoPicked_ = false;
+    std::string filter_;
 };
 
 RTS_EDITOR_WINDOW(FxWindow);

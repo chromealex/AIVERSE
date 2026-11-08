@@ -145,7 +145,7 @@ void Editor::drawGamePicker() {
     if (H.templates.empty() || ImGui::GetTime() - H.templatesAt > 10) { H.templates = listTemplates(ws_.engineDir); H.templatesAt = ImGui::GetTime(); }
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     const bool wide = H.tab == 2;   // the game wizard has many answers: a bigger hub
-    ImGui::SetNextWindowSize(ImVec2(std::min(wide ? 1240.f : 1000.f, io.DisplaySize.x - 40), std::min(wide ? 880.f : 660.f, io.DisplaySize.y - 40)));
+    ImGui::SetNextWindowSize(ImVec2(std::min(wide ? 1240.f : 1160.f, io.DisplaySize.x - 40), std::min(wide ? 880.f : 780.f, io.DisplaySize.y - 40)));
     ImGui::Begin("Проекты", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar);
 
     // left: navigation
@@ -157,9 +157,10 @@ void Editor::drawGamePicker() {
     if (ImGui::Selectable(ICON_PLUS "  Новый проект", H.tab == 1, 0, ImVec2(0, 30))) H.tab = 1;
     {   // .rtsproj double-click: does the OS know this editor?
         const AssocStatus& fa = fileAssoc();
-        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - (ws_.project.dir.empty() ? 40 : 80) - (fa.registered || !fa.supported ? 0 : 30));
-        if (fa.registered) ImGui::TextDisabled(ICON_CHECK " .rtsproj: этот редактор");
-        else ImGui::TextColored(ImVec4(1, 0.7f, 0.4f, 1), ICON_WARNING " .rtsproj: %s", fa.supported ? "не связан" : "недоступно");
+        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - (ws_.project.dir.empty() ? 40 : 80) - (fa.registered || !fa.supported ? 0 : 50));
+        if (fa.registered) ImGui::TextDisabled(ICON_CHECK " .rtsproj открываются здесь");
+        else if (fa.supported) { ImGui::PushTextWrapPos(0); ImGui::TextDisabled("Открывать .rtsproj двойным кликом в этом редакторе"); ImGui::PopTextWrapPos(); }
+        else ImGui::TextDisabled(".rtsproj: связь недоступна");
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Двойной клик по файлу проекта .rtsproj открывает его в редакторе.\n%s", fa.detail.c_str());
         if (!fa.registered && fa.supported && ImGui::Button(ICON_LINK " Связать", ImVec2(-1, 0))) registerFileAssoc();
     }
@@ -175,18 +176,20 @@ void Editor::drawGamePicker() {
     if (!status.empty() && status.rfind("Не удалось", 0) == 0)   // open failed: say why right here
         ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), ICON_WARNING " %s", status.c_str());
     if (H.tab == 0) {
-        ui::heading("Проекты");
-        ImGui::SameLine(std::max(140.0f, ImGui::GetWindowContentRegionMax().x - 540));
-        ImGui::SetNextItemWidth(170);
-        ImGui::InputTextWithHint("##search", ICON_SEARCH " поиск", H.search, sizeof H.search);
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FOLDER_OPEN " Открыть…")) { H.browsing = true; H.browseFor = 1; H.browseDir = defaultProjectsDir(); }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_PLUS " Новый")) H.tab = 1;
-        ImGui::SameLine();
-        if (ui::button(ICON_ZAP, "Сделать игру", true)) H.tab = 2;
-        ImGui::Separator();
+        // «Новый проект» and «Сделать игру» live in the navigation on the left: the header keeps search + open
         auto projects = recentProjects();
+        ui::heading("Проекты");
+        const float openW = ImGui::CalcTextSize(ICON_FOLDER_OPEN "  Открыть…").x + ImGui::GetStyle().FramePadding.x * 2;
+        const float searchW = 220;
+        ImGui::SameLine(std::max(140.0f, ImGui::GetWindowContentRegionMax().x - openW - searchW - ImGui::GetStyle().ItemSpacing.x));
+        if (!projects.empty()) {
+            ImGui::SetNextItemWidth(searchW);
+            ImGui::InputTextWithHint("##search", ICON_SEARCH " поиск", H.search, sizeof H.search);
+            ImGui::SameLine();
+        } else ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - openW);
+        if (ui::button(ICON_FOLDER_OPEN, "Открыть…")) { H.browsing = true; H.browseFor = 1; H.browseDir = defaultProjectsDir(); }
+        ImGui::SetItemTooltip("Открыть папку проекта (с game.json) или файл .rtsproj");
+        ImGui::Separator();
         ImGui::BeginChild("##list");
         int shown = 0;
         for (auto& pr : projects) {
@@ -208,7 +211,7 @@ void Editor::drawGamePicker() {
             ImGui::PushClipRect(ImVec2(p0.x, p0.y), ImVec2(textMax, p0.y + 48), true);
             ImGui::BeginGroup();
             ImGui::TextUnformatted(pr.name.c_str());
-            if (pr.exists) ImGui::TextDisabled("%s", pr.dir.c_str());
+            if (pr.exists) ImGui::TextDisabled("%s", ui::prettyPath(pr.dir).c_str());
             else ImGui::TextColored(ImVec4(1, 0.55f, 0.4f, 1), ICON_WARNING " папка не найдена: %s", pr.dir.c_str());
             ImGui::EndGroup();
             ImGui::PopClipRect();
@@ -225,24 +228,47 @@ void Editor::drawGamePicker() {
             ImGui::Dummy(ImVec2(0, 0));
             ImGui::PopID();
         }
-        if (shown == 0) {
+        if (shown == 0 && !projects.empty()) { ImGui::Spacing(); ImGui::TextDisabled("Ничего не найдено."); }
+        if (projects.empty()) {
+            // first start: two large choices instead of a line of text and duplicate buttons
+            ImGui::Spacing(); ImGui::Spacing();
+            ImGui::TextDisabled("Проектов пока нет. С чего начнём?");
             ImGui::Spacing();
-            ImGui::TextDisabled(projects.empty() ? "Проектов пока нет. Создайте новый из шаблона или откройте папку проекта."
-                                                 : "Ничего не найдено.");
-            if (projects.empty() && ImGui::Button(ICON_PLUS " Создать проект")) H.tab = 1;
-            if (projects.empty()) { ImGui::SameLine(); if (ui::button(ICON_ZAP, "Сделать игру", true)) H.tab = 2; }
+            const float gap = 16, cw = std::min(340.0f, (ImGui::GetContentRegionAvail().x - gap) * 0.5f), ch = 150;
+            auto card = [&](const char* id, const char* icon, const char* title, const char* text, bool primary) {
+                const ImVec2 p0 = ImGui::GetCursorScreenPos();
+                const bool hit = ImGui::InvisibleButton(id, ImVec2(cw, ch));
+                const bool hov = ImGui::IsItemHovered();
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                const auto& pal = ui::pal();
+                dl->AddRectFilled(p0, ImVec2(p0.x + cw, p0.y + ch), ImGui::GetColorU32(hov ? pal.frameHover : pal.panelRaised), 10);
+                dl->AddRect(p0, ImVec2(p0.x + cw, p0.y + ch), ImGui::GetColorU32(primary || hov ? pal.accent : pal.border), 10, 0, primary ? 2.0f : 1.0f);
+                dl->AddRectFilled(ImVec2(p0.x + 18, p0.y + 18), ImVec2(p0.x + 58, p0.y + 58), ImGui::GetColorU32(primary ? pal.accent : pal.frame), 8);
+                const ImVec2 is = ImGui::CalcTextSize(icon);
+                dl->AddText(ImVec2(p0.x + 38 - is.x * 0.5f, p0.y + 38 - is.y * 0.5f), IM_COL32(255, 255, 255, 240), icon);
+                ImGui::PushFont(ui::headingFont(), 0.0f);
+                dl->AddText(ImVec2(p0.x + 18, p0.y + 72), ImGui::GetColorU32(pal.text), title);
+                ImGui::PopFont();
+                dl->AddText(nullptr, 0, ImVec2(p0.x + 18, p0.y + 98), ImGui::GetColorU32(pal.textDim), text, nullptr, cw - 36);
+                return hit;
+            };
+            if (card("##new", ICON_TEMPLATE, "Новый проект из шаблона", "Готовая игра-образец: правила, карта, юниты. Меняйте под себя.", false)) H.tab = 1;
+            ImGui::SameLine(0, gap);
+            if (card("##wiz", ICON_ZAP, "Сделать игру из арта", "Мастер соберёт проект из ваших картинок, моделей и идеи: обучение, уровни, меню.", true)) H.tab = 2;
         }
         ImGui::EndChild();
     } else if (H.tab == 2) {
         drawGameWizard();
     } else {
         ui::heading("Новый проект");
-        ImGui::TextDisabled("Шаблоны из %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
+        ImGui::TextDisabled("Выберите шаблон: проект начнётся с его правил, карт и юнитов.");
+        ImGui::SetItemTooltip("Шаблоны: %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
         ImGui::Separator();
         const float formH = 150;
         ImGui::BeginChild("##templates", ImVec2(0, -formH));
-        const float cardW = 210, cardH = 92;
-        const int cols = std::max(1, int(ImGui::GetContentRegionAvail().x / (cardW + 10)));
+        const float cardH = 92, gapX = ImGui::GetStyle().ItemSpacing.x;
+        const int cols = std::max(1, int((ImGui::GetContentRegionAvail().x + gapX) / (210 + gapX)));
+        const float cardW = std::floor((ImGui::GetContentRegionAvail().x - gapX * float(cols - 1)) / float(cols));   // cards fill the row
         H.templ = std::clamp(H.templ, 0, int(H.templates.size()) - 1);
         for (size_t i = 0; i < H.templates.size(); ++i) {
             const TemplateInfo& t = H.templates[i];
@@ -265,16 +291,20 @@ void Editor::drawGamePicker() {
         }
         ImGui::EndChild();
         ImGui::Separator();
-        ImGui::SetNextItemWidth(320);
-        ImGui::InputText("Название", H.title, sizeof H.title);
-        ImGui::SetNextItemWidth(520);
-        ImGui::InputText("##loc", H.location, sizeof H.location);
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FOLDER_OPEN " Папка…")) { H.browsing = true; H.browseFor = 0; H.browseDir = H.location; }
-        ImGui::SameLine();
-        ImGui::TextUnformatted("Расположение");
         const std::string target = (fs::path(H.location) / projectFolderName(H.title)).string();
-        ImGui::TextDisabled("Будет создан: %s", target.c_str());
+        if (ui::beginProps("##newform", 120)) {
+            ui::prop("Название");
+            ImGui::InputText("##title", H.title, sizeof H.title);
+            ui::prop("Где создать", "Папка, в которой появится папка проекта");
+            const float bw = ImGui::CalcTextSize(ICON_FOLDER_OPEN "  Выбрать…").x + ImGui::GetStyle().FramePadding.x * 2;
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - bw - ImGui::GetStyle().ItemSpacing.x);
+            ImGui::InputText("##loc", H.location, sizeof H.location);
+            ImGui::SameLine();
+            if (ui::button(ICON_FOLDER_OPEN, "Выбрать…")) { H.browsing = true; H.browseFor = 0; H.browseDir = H.location; }
+            ui::propWide();
+            ImGui::TextDisabled("Папка проекта: %s", ui::prettyPath(target).c_str());
+            ui::endProps();
+        }
         if (!H.error.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", H.error.c_str());
         ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - 190);
         if (ui::button(ICON_PLUS, "Создать проект", true, ImVec2(180, 0))) {

@@ -30,13 +30,18 @@ public:
         std::snprintf(a, sizeof a, "%.0f", ImGui::GetIO().Framerate);
         std::snprintf(b, sizeof b, "%.2f мс", avg);
         std::snprintf(c, sizeof c, "%u", draws);
-        std::snprintf(e, sizeof e, ed.playing() ? "%.2f мс" : "—", simAvg);
+        std::snprintf(e, sizeof e, ed.playing() ? "%.2f мс" : "нет теста", simAvg);
         const Card cards[] = {{"FPS", a, avg > 33 ? ui::Tone::Warn : ui::Tone::Normal}, {"Кадр (CPU)", b, avg > 33 ? ui::Tone::Warn : ui::Tone::Normal},
                               {"Отрисовок", c, ui::Tone::Normal}, {"Симуляция", e, simAvg > 16 ? ui::Tone::Warn : ui::Tone::Normal}};
         cardRow(cards, 4);
         if (!frame.empty()) {
-            char ov[48]; std::snprintf(ov, sizeof ov, "кадр, мс (пик %.1f)", peak);
-            ImGui::PlotLines("##frame", frame.data(), int(frame.size()), 0, ov, 0, std::max(33.0f, peak), ImVec2(-1, 44));
+            // scale by the 95th percentile, not the peak: one long frame (loading, a shader compile) used to squash
+            // the whole graph into a flat line at the bottom; spikes above the scale are clipped at the top
+            std::vector<float> sorted = frame;
+            std::sort(sorted.begin(), sorted.end());
+            const float p95 = sorted[std::min(sorted.size() - 1, size_t(float(sorted.size()) * 0.95f))];
+            char ov[64]; std::snprintf(ov, sizeof ov, "кадр, мс (95%%: %.1f, пик %.1f)", p95, peak);
+            ImGui::PlotLines("##frame", frame.data(), int(frame.size()), 0, ov, 0, std::max(20.0f, p95 * 1.5f), ImVec2(-1, 44));
         }
         if (ed.playing() && !sim.empty()) ImGui::PlotLines("##sim", sim.data(), int(sim.size()), 0, "симуляция, мс", 0, 16, ImVec2(-1, 44));
         ui::section(ICON_REGIONS, "Карта");
@@ -57,7 +62,7 @@ public:
             std::snprintf(head, sizeof head, "%s  ·  армия %d  ·  здания %d###pl%zu", name.c_str(), p < last.units.size() ? last.units[p] : 0,
                           p < last.structures.size() ? last.structures[p] : 0, p);
             ImGui::PushStyleColor(ImGuiCol_Text, col);
-            const bool open = ImGui::CollapsingHeader(head, p < 2 ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+            const bool open = ui::collapsing(head, p < 2 ? ImGuiTreeNodeFlags_DefaultOpen : 0);
             ImGui::PopStyleColor();
             if (!open) continue;
             ImGui::PushStyleColor(ImGuiCol_PlotLines, col);

@@ -617,12 +617,15 @@ void Editor::drawGameWizard() {
     endCard();
     // back / next
     ImGui::Dummy(ImVec2(0, 6));
-    ImGui::BeginDisabled(busy || W.page == 0);
-    if (ImGui::Button("Назад", ImVec2(130, 0)) && W.page > 0) --W.page;
-    ImGui::EndDisabled();
-    ImGui::SameLine(mainW - 130);
+    if (W.page > 0) {   // no dead «Назад» on the first step
+        ImGui::BeginDisabled(busy);
+        if (ImGui::Button("Назад", ImVec2(130, 0))) --W.page;
+        ImGui::EndDisabled();
+        ImGui::SameLine(mainW - 130);
+    } else ImGui::SetCursorPosX(ImGui::GetCursorPosX() + mainW - 130);
     ImGui::BeginDisabled(busy || W.page == kPageCount - 1);
-    if (ImGui::Button("Далее " ICON_CHEVRON_RIGHT, ImVec2(130, 0)) && W.page < kPageCount - 1) ++W.page;
+    // the main action while answering is the next step; «Сделать игру» becomes primary on the last step
+    if (ui::button(nullptr, "Далее " ICON_CHEVRON_RIGHT, W.page < kPageCount - 1, ImVec2(130, 0)) && W.page < kPageCount - 1) ++W.page;
     ImGui::EndDisabled();
     ImGui::EndGroup();
     ImGui::SameLine(0, gap);
@@ -729,14 +732,15 @@ void Editor::drawGameWizard() {
         fact(ICON_GLOBE, "Языки", langs.empty() ? "—" : langs);
         const std::string who = S.agent ? agentClientFor(W, S) : std::string();
         fact(ICON_AGENT, "Агент", !S.agent ? "без доводки (шаблон как есть)" : g_agent.running() ? "работает: " + std::to_string(g_agent.toolCalls()) + " действий"
-                                  : who.empty() ? "не подключён — задание для копирования" : (who == "codex" ? "Codex CLI" : "Claude Code") + std::string(" доведёт по описанию"));
+                                  : who.empty() ? "не подключён: мастер даст задание, его можно отдать агенту вручную" : (who == "codex" ? "Codex CLI" : "Claude Code") + std::string(" доведёт по описанию"));
     }
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
     const std::string target = (fs::path(S.location) / projectFolderName(S.title)).string();
     ImGui::TextDisabled("Будет создан");
     ImGui::PushTextWrapPos(0);
-    ImGui::TextUnformatted(target.c_str());
+    ImGui::TextUnformatted(ui::prettyPath(target).c_str());
     ImGui::PopTextWrapPos();
+    ui::tooltipIfHovered(target);
 
     // bottom: progress / result / the button
     const float bottomH = 54 + (busy ? 46 : 0) + (W.phase == WizardUi::Done || W.phase == WizardUi::Failed ? 70 : 0);
@@ -783,13 +787,20 @@ void Editor::drawGameWizard() {
     }
     const bool ready = !busy && !S.title.empty() && W.planError.empty() && (W.source != 1 || !S.artUrl.empty());
     ImGui::BeginDisabled(!ready);
+    // before the last step the button is secondary: it still works (unanswered steps use the defaults), but «Далее»
+    // reads as the way forward
+    const bool final = W.page == kPageCount - 1 || W.phase == WizardUi::Done;
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10);
-    ImGui::PushStyleColor(ImGuiCol_Button, ui::accentColor());
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, mix(ui::accentColor(), ImVec4(1, 1, 1, 1), 0.15f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, mix(ui::accentColor(), ImVec4(0, 0, 0, 1), 0.15f));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-    const bool go = ImGui::Button(W.phase == WizardUi::Done ? ICON_ZAP "  Сделать ещё одну" : ICON_ZAP "  Сделать игру", ImVec2(-1, 48));
-    ImGui::PopStyleColor(4);
+    if (final) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ui::accentColor());
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, mix(ui::accentColor(), ImVec4(1, 1, 1, 1), 0.15f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, mix(ui::accentColor(), ImVec4(0, 0, 0, 1), 0.15f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+    }
+    const bool go = ImGui::Button(W.phase == WizardUi::Done ? ICON_ZAP "  Сделать ещё одну"
+                                  : final ? ICON_ZAP "  Сделать игру" : ICON_ZAP "  Сделать сейчас", ImVec2(-1, final ? 48 : 36));
+    if (!final) ImGui::SetItemTooltip("Собрать игру сразу: шаги, до которых вы не дошли, мастер решит сам");
+    if (final) ImGui::PopStyleColor(4);
     ImGui::PopStyleVar();
     ImGui::EndDisabled();
     if (go) {

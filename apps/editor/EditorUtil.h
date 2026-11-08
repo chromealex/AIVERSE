@@ -5,11 +5,13 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <utility>
 #include "imgui.h"
 #include "imgui_internal.h" // MenuItemEx: icons in menus
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include "EditorIcons.h"
 #include "EditorTheme.h"
 
@@ -25,6 +27,10 @@ inline int stringResize(ImGuiInputTextCallbackData* d) {
 }
 inline bool inputString(const char* label, std::string& s, ImGuiInputTextFlags f = 0) {
     return ImGui::InputText(label, s.data(), s.capacity() + 1, f | ImGuiInputTextFlags_CallbackResize, stringResize, &s);
+}
+// Text field with a dim placeholder shown while it is empty.
+inline bool inputHint(const char* label, const char* hint, std::string& s, ImGuiInputTextFlags f = 0) {
+    return ImGui::InputTextWithHint(label, hint, s.data(), s.capacity() + 1, f | ImGuiInputTextFlags_CallbackResize, stringResize, &s);
 }
 inline bool inputMultiline(const char* label, std::string& s, ImVec2 size, ImGuiInputTextFlags f = ImGuiInputTextFlags_AllowTabInput) {
     return ImGui::InputTextMultiline(label, s.data(), s.capacity() + 1, size, f | ImGuiInputTextFlags_CallbackResize, stringResize, &s);
@@ -125,9 +131,84 @@ inline void endToolbar(float bottom) {
     ImGui::SetCursorScreenPos(ImVec2(ImGui::GetWindowPos().x + ImGui::GetStyle().WindowPadding.x, bottom));
 }
 
+// Visible part of an ImGui label ("Текст##id" -> "Текст") and the "##id" / "###id" tail.
+inline std::pair<std::string, std::string> splitLabel(const char* label) {
+    std::string s = label ? label : "";
+    const size_t p = s.find("##");
+    if (p == std::string::npos) return {s, {}};
+    return {s.substr(0, p), s.substr(p)};
+}
+// Text shortened with "…" to fit maxW (UTF-8 safe); the input itself when it fits.
+inline std::string ellipsize(const std::string& text, float maxW) {
+    if (maxW <= 0 || ImGui::CalcTextSize(text.c_str()).x <= maxW) return text;
+    const float dots = ImGui::CalcTextSize("…").x;
+    std::string s = text;
+    while (!s.empty() && ImGui::CalcTextSize(s.c_str()).x + dots > maxW) {
+        size_t n = s.size() - 1;
+        while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;   // back to a code point start
+        s.resize(n);
+    }
+    while (!s.empty() && s.back() == ' ') s.pop_back();
+    return s + "…";
+}
+inline void tooltipIfHovered(const std::string& text) {
+    if (!text.empty() && ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28); ImGui::TextUnformatted(text.c_str()); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+}
+
+// A path for display: the home folder shortened to "~" (full path belongs in a tooltip).
+inline std::string prettyPath(const std::string& path) {
+    const char* home = std::getenv("HOME");
+#if defined(_WIN32)
+    if (!home || !*home) home = std::getenv("USERPROFILE");
+#endif
+    if (home && *home) {
+        std::string h = home;
+        while (h.size() > 1 && (h.back() == '/' || h.back() == '\\')) h.pop_back();
+        if (path.size() >= h.size() && path.compare(0, h.size(), h) == 0 && (path.size() == h.size() || path[h.size()] == '/' || path[h.size()] == '\\'))
+            return "~" + path.substr(h.size());
+    }
+    return path;
+}
+// Dim path text shortened to maxW with "…" (keeps the end: the folder name matters most), full path on hover.
+inline void pathText(const std::string& path, float maxW) {
+    std::string shown = prettyPath(path);
+    if (maxW > 0 && ImGui::CalcTextSize(shown.c_str()).x > maxW) {
+        const float dots = ImGui::CalcTextSize("…").x;
+        size_t start = 0;
+        while (start < shown.size() && ImGui::CalcTextSize(shown.c_str() + start).x + dots > maxW) {
+            ++start;
+            while (start < shown.size() && (static_cast<unsigned char>(shown[start]) & 0xC0) == 0x80) ++start;
+        }
+        shown = "…" + shown.substr(start);
+    }
+    ImGui::TextDisabled("%s", shown.c_str());
+    tooltipIfHovered(path);
+}
+
+// Checkbox whose label is shortened with "…" to the available width (full text in a tooltip), so a narrow
+// column never cuts a label in the middle of a word.
+inline bool checkbox(const char* label, bool* v) {
+    auto [text, id] = splitLabel(label);
+    const float box = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
+    const float avail = ImGui::GetContentRegionAvail().x - box;
+    const std::string shown = ellipsize(text, avail);
+    if (shown == text) return ImGui::Checkbox(label, v);
+    const bool r = ImGui::Checkbox((shown + (id.empty() ? "###" + text : id)).c_str(), v);
+    tooltipIfHovered(text);
+    return r;
+}
+
 // Button with an icon and a label; primary = filled with the accent (the main action of a window).
+// With a fixed width a label that doesn't fit is shortened with "…" and shown whole in a tooltip.
 inline bool button(const char* icon, const char* label, bool primary = false, ImVec2 size = ImVec2(0, 0)) {
-    std::string text = icon && *icon ? std::string(icon) + "  " + label : std::string(label);
+    auto [visible, id] = splitLabel(label);
+    std::string text = icon && *icon ? std::string(icon) + "  " + visible : visible;
+    bool clipped = false;
+    if (size.x > 0) {
+        const std::string shown = ellipsize(text, size.x - ImGui::GetStyle().FramePadding.x * 2);
+        if (shown != text) { clipped = true; text = shown; }
+    }
+    text += id.empty() ? (clipped ? "###" + visible : std::string()) : id;
     if (primary) {
         const ImVec4 a = accentColor();
         ImGui::PushStyleColor(ImGuiCol_Button, a);
@@ -138,6 +219,7 @@ inline bool button(const char* icon, const char* label, bool primary = false, Im
     }
     bool r = ImGui::Button(text.c_str(), size);
     if (primary) ImGui::PopStyleColor(5);
+    if (clipped) tooltipIfHovered(visible);
     return r;
 }
 
@@ -295,6 +377,17 @@ inline void section(const char* icon, const char* title) {
     const float x1 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
     const float y = (ImGui::GetItemRectMin().y + a.y) * 0.5f;
     if (x1 > a.x + 12) ImGui::GetWindowDrawList()->AddLine(ImVec2(a.x + 10, y), ImVec2(x1, y), ImGui::GetColorU32(ImGuiCol_Separator));
+}
+
+// Collapsible section header in the neutral frame colour (ImGui's default fills it with the selection accent,
+// which made every closed section look selected). Same arguments as ImGui::CollapsingHeader.
+inline bool collapsing(const char* label, ImGuiTreeNodeFlags flags = 0) {
+    ImGui::PushStyleColor(ImGuiCol_Header, pal().frame);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, pal().frameHover);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, pal().frameHover);
+    const bool open = ImGui::CollapsingHeader(label, flags);
+    ImGui::PopStyleColor(3);
+    return open;
 }
 
 // Small rounded label ("3", "изменено", "ошибка") at the cursor, on the same line.

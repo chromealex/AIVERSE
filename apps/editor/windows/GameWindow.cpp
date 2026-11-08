@@ -94,6 +94,7 @@ public:
         dl->PushClipRect(ImVec2(sx, sy), ImVec2(sx + sw, sy + sh), true); // overlays of off-screen units stay inside
         ed.renderGame(vp_, ed.gameCam);
         dl->PopClipRect();
+        vp_.drawnFrame = ImGui::GetFrameCount();
         ed.gameViewport = &vp_;
         if (dev && dev->w > 0) deviceChrome(dl, *dev, ed.gameLandscape, ed.gameSafeArea, sx, sy, sw, sh, k);
         region_.configure(ed.ws().project.manifest);
@@ -147,6 +148,7 @@ private:
             ImGui::SetCursorScreenPos(ImVec2(sx, sy));
             ImGui::InvisibleButton("##clientscreen", ImVec2(sw, sh), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
         }
+        vp_.drawnFrame = ImGui::GetFrameCount();
         ed.gameViewport = &vp_;
         if (device) deviceChrome(dl, *dev, ed.gameLandscape, ed.gameSafeArea, sx, sy, sw, sh, k);
         if (host.quitRequested()) ed.stopClientPlay();   // the game's own "Quit"

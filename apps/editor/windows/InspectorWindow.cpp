@@ -113,8 +113,14 @@ private:
             ownerCombo(ed, "##owner", d.entities[size_t(i)].owner);
             ui::prop("Позиция", "x и z в клетках; перетаскивание в «Сцене» тоже двигает");
             float pos[2] = {e.x, e.z};
-            bool ch = ImGui::DragFloat2("##pos", pos, 0.1f, 0, 0, "%.1f");
-            if (ImGui::IsItemActivated()) doc.beginEdit();
+            const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemInnerSpacing.x) * 0.5f;
+            ImGui::SetNextItemWidth(half);
+            bool ch = ImGui::DragFloat("##posx", &pos[0], 0.1f, 0, 0, "X  %.1f");
+            bool act = ImGui::IsItemActivated();
+            ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ch |= ImGui::DragFloat("##posz", &pos[1], 0.1f, 0, 0, "Z  %.1f");
+            if (act || ImGui::IsItemActivated()) doc.beginEdit();
             if (ch) { d.entities[size_t(i)].x = pos[0]; d.entities[size_t(i)].z = pos[1]; doc.touched(); }
             if (ti >= 0 && rules.types[size_t(ti)].garrisonMax > 0) {
                 ui::prop("Гарнизон", "Юнитов внутри на старте");
@@ -130,15 +136,16 @@ private:
                 if (ImGui::IsItemActivated()) doc.beginEdit();
                 if (c3) { d.entities[size_t(i)].amount = a; doc.touched(); }
             }
-            ui::prop("id", "Имя объекта для дорог и ссылок из триггеров");
-            if (ImGui::InputTextWithHint("##id", "без имени", d.entities[size_t(i)].id.data(), d.entities[size_t(i)].id.capacity() + 1,
+            ui::prop("Имя (id)", "Необязательно. Имя объекта для дорог, триггеров и скриптов");
+            if (ImGui::InputTextWithHint("##id", "необязательно", d.entities[size_t(i)].id.data(), d.entities[size_t(i)].id.capacity() + 1,
                                          ImGuiInputTextFlags_CallbackResize, ui::stringResize, &d.entities[size_t(i)].id))
                 doc.touched();
             ui::endProps();
         }
         ImGui::Spacing();
         if (ui::wideButton(ICON_CROSSHAIR, "Показать", 0, 3)) ed.focusScene(e.x, e.z, 18);
-        if (ui::wideButton(ICON_RULES, "Правила типа", 1, 3)) ed.select({Selection::Type, -1, e.type});
+        if (ui::wideButton(ICON_RULES, "Правила", 1, 3)) ed.select({Selection::Type, -1, e.type});
+        ImGui::SetItemTooltip("Открыть правила типа «%s»", e.type.c_str());
         if (ui::wideButton(ICON_TRASH, "Удалить", 2, 3)) { doc.removeEntity(i); ed.select({}); }
     }
 
@@ -175,7 +182,7 @@ private:
                 }
             }
             ui::prop("Сценарий", "Сторона без ИИ и без игрока: только волны и триггеры");
-            if (ImGui::Checkbox("Волны вместо игрока##waves", &pl.waves)) doc.touched();
+            if (ui::checkbox("Волны вместо игрока##waves", &pl.waves)) doc.touched();
             ui::prop("Старт");
             if (pl.hasStart) {
                 float st[2] = {pl.startX, pl.startZ};
@@ -403,7 +410,7 @@ private:
             ImGui::EndDisabled();
             ui::prop("Дороги", "Юниты ходят только по дорогам между зданиями (Mushroom Wars)");
             bool ro = d.roadsOnly;
-            if (ImGui::Checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
+            if (ui::checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
             ui::endProps();
         }
         ui::section(ICON_STARTS, "Победа (поверх правил)");

@@ -30,6 +30,7 @@ public:
         // image first (like the Game window): the screen overlays renderScene adds (bars, labels) stay on top of it
         vp_.image(ed.device(), avail.x, avail.y);
         ed.renderScene(vp_, ed.sceneCam, !ed.playing());
+        vp_.drawnFrame = ImGui::GetFrameCount();
         ed.sceneViewport = &vp_;
         if (ImGui::IsWindowFocused() || vp_.hovered) input(ed);
         hud(ed);

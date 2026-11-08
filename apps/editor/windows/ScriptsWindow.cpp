@@ -28,9 +28,21 @@ public:
         const auto& rules = ed.ws().project.rulesJson;
         const Json map = ed.doc().toJson();
         auto sims = game::scriptFiles(rules, map, false), views = game::scriptFiles(rules, map, true);
-        if (sims.empty() && views.empty())
-            ui::callout(ui::Tone::Normal, "У игры нет скриптов. Добавьте файл scripts/x.lua и строку \"scripts\": [\"scripts/x.lua\"] в rules.json "
-                                          "(или MCP script_write {register: true}). Справка: docs/scripting.md, MCP script_api.");
+        if (sims.empty() && views.empty()) {
+            ui::callout(ui::Tone::Normal, "У игры нет скриптов. Скрипт на Lua добавляет правила: события, таймеры, условия победы, сообщения игрокам.");
+            if (ui::button(ICON_PLUS, "Создать scripts/main.lua", true)) {
+                Json p = Json::object();
+                p.set("path", Json::string("scripts/main.lua"));
+                p.set("text", Json::string("-- Скрипт правил игры. Справка: docs/scripting.md\n\n"
+                                           "function on_start()\n  game.message(0, \"Игра началась!\")   -- 0 = всем игрокам\nend\n\n"
+                                           "on(\"unit_died\", function(e)\n  -- e.owner, e.type, e.killer...\nend)\n"));
+                p.set("register", Json::fromBool(true));
+                const Json r = ed.ws().call("script_write", p);
+                created_ = r.has("error") ? "Ошибка: " + r.getStr("error") : "Создан scripts/main.lua и добавлен в rules.json";
+            }
+            ImGui::SetItemTooltip("Файл с обработчиками on_start и unit_died, сразу подключён в rules.json \"scripts\"");
+            ui::resultMessage(created_);
+        }
         if (!sims.empty() || !views.empty()) {
             if (ImGui::BeginTable("##files", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                 for (auto& f : sims) { ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TextUnformatted((std::string(ICON_BRACES "  ") + f).c_str()); ImGui::TableNextColumn(); ImGui::TextDisabled("симуляция"); }
@@ -38,7 +50,7 @@ public:
                 ImGui::EndTable();
             }
         }
-        ImGui::Checkbox("Перезапускать тест при изменении файлов", &autoRestart_);
+        ui::checkbox("Перезапускать тест при изменении файлов", &autoRestart_);
         auto* m = ed.simModule();
         auto* se = m ? m->scripts() : nullptr;
         ui::section(ICON_SCROLL_TEXT, "Журнал теста");
@@ -46,7 +58,7 @@ public:
         if (se->errorCount() > 0) { char t[48]; std::snprintf(t, sizeof t, "%s ошибок: %d", ICON_ALERT, se->errorCount()); ui::badge(t, ui::toneColor(ui::Tone::Error)); }
         else ui::toneText(ui::Tone::Ok, "%s Ошибок нет", ICON_CIRCLE_CHECK);
         ImGui::SameLine();
-        ImGui::Checkbox("Только ошибки", &errorsOnly_);
+        ui::checkbox("Только ошибки", &errorsOnly_);
         ImGui::BeginChild("##scriptlog", ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
         for (auto& e : se->log()) {
             if (errorsOnly_ && !e.error) continue;
@@ -133,6 +145,7 @@ public:
 
 private:
     bool autoRestart_ = true, errorsOnly_ = false;
+    std::string created_;
     double since_ = 0;
     std::string dir_;
     game::ScriptEngine* attached_ = nullptr;

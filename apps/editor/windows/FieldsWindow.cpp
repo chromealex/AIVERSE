@@ -14,7 +14,7 @@ public:
     const char* id() const override { return "fields"; }
     const char* title() const override { return "Поля"; }
     const char* group() const override { return "world"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
 
@@ -26,7 +26,18 @@ public:
         catch (const std::exception& e) { ui::callout(ui::Tone::Error, std::string("Ошибка в полях карты: ") + e.what()); return; }
         if (defs.empty()) {
             ui::emptyStateHere(ICON_FLAME, "В игре нет клеточных полей",
-                               "Добавьте в rules.json блок \"fields\" (огонь, вода, крип, влияние…) или вызовите field_set_rules.");
+                               "Поле — число в каждой клетке: огонь, вода, крип, влияние. Оно растекается, гаснет и действует на юнитов.",
+                               ImGui::GetContentRegionAvail().y * 0.6f);
+            const float bw = std::min(ImGui::GetContentRegionAvail().x, 300.0f);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - bw) * 0.5f);
+            if (ui::button(ICON_PLUS, "Добавить пример: влияние игроков", true, ImVec2(bw, 0))) {
+                Json p = Json::parse(R"({"id": "influence", "field": {"type": "int", "min": 0, "max": 100, "perPlayer": true, "resolution": 2,
+                    "kernels": [{"type": "diffuse", "period": 20, "rate": 0.25}, {"type": "decay", "period": 20, "amount": 2}]}})");
+                const Json r = ws.call("field_set_rules", p);
+                answer_ = r.has("error") ? "Ошибка: " + r.getStr("error") : "Добавлено поле influence в rules.json";
+            }
+            ImGui::SetItemTooltip("Растекается и гаснет со временем; рисуется кистью в «Сцене». Справка — docs/fields.md");
+            ui::resultMessage(answer_);
             return;
         }
         if (sel_ >= int(defs.size())) sel_ = 0;
@@ -55,7 +66,7 @@ public:
         }
         ui::section(ICON_BRUSH, "Кисть");
         bool active = ed.tool == Tool::Count && owner_;
-        if (ImGui::Checkbox("Рисовать в «Сцене»", &active)) { owner_ = active; ed.tool = active ? Tool::Count : Tool::Select; }
+        if (ui::checkbox("Рисовать в «Сцене»", &active)) { owner_ = active; ed.tool = active ? Tool::Count : Tool::Select; }
         static const char* modes[] = {"Задать", "Добавить", "Максимум", "Стереть"};
         ui::segmented("##mode", mode_, modes, 4);
         if (ui::beginProps("##brush")) {
@@ -82,7 +93,7 @@ public:
 
     void update(Editor& ed, double) override {
         if (ed.tool != Tool::Count) owner_ = false;
-        if (!owner_ || ed.playing() || !ed.sceneViewport || id_.empty()) { painting_ = false; return; }
+        if (!owner_ || ed.playing() || !ed.sceneVisible() || id_.empty()) { painting_ = false; return; }
         ImGuiIO& io = ImGui::GetIO();
         Viewport& vp = *ed.sceneViewport;
         if (!io.MouseDown[0]) { painting_ = false; return; }
@@ -100,6 +111,7 @@ public:
     }
 
 private:
+    std::string answer_;
     int sel_ = 0, mode_ = 0, radius_ = 2, player_ = 1;
     double value_ = 100;
     std::string id_;

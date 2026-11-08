@@ -14,7 +14,7 @@ public:
     const char* id() const override { return "fog"; }
     const char* title() const override { return "Туман войны"; }
     const char* group() const override { return "world"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 6; }
     bool openByDefault() const override { return false; }
 
@@ -31,9 +31,9 @@ public:
         if (ui::segmented("##mode", mi, modeNames, 3)) set(ed, "mode", Json::string(modes[mi]));
         ui::hint(modeHelp[mi]);
         bool share = f.getBool("shareAllies", true);
-        if (ImGui::Checkbox("Союзники видят общее", &share)) set(ed, "shareAllies", Json::fromBool(share));
+        if (ui::checkbox("Союзники видят общее", &share)) set(ed, "shareAllies", Json::fromBool(share));
         bool los = f.getBool("lineOfSight", false);
-        if (ImGui::Checkbox("3D: линия видимости по высотам", &los)) set(ed, "lineOfSight", Json::fromBool(los));
+        if (ui::checkbox("3D: линия видимости по высотам", &los)) set(ed, "lineOfSight", Json::fromBool(los));
         ui::help("Видимость считается лучом от глаз юнита: холмы, уровни скал, стены (тип \"vision\": {\"blocks\": h}), "
                  "дым (delivery.blocksVision) и нераскопанная порода закрывают то, что за ними. Вышки видят дальше "
                  "(\"vision\": {\"eye\": h}), летающие и \"seesOver\" — поверх всего.");
@@ -47,7 +47,7 @@ public:
 
         ui::section(ICON_PALETTE, "Вид");
         bool show = f.getBool("show", true);
-        if (ImGui::Checkbox("Рисовать туман", &show)) set(ed, "show", Json::fromBool(show));
+        if (ui::checkbox("Рисовать туман", &show)) set(ed, "show", Json::fromBool(show));
         ui::help("Выключено: туман не рисуется, но враги вне видимости всё равно скрыты (режим выше).");
         if (ui::beginProps("##look")) {
             float col[3] = {8 / 255.0f, 10 / 255.0f, 14 / 255.0f};

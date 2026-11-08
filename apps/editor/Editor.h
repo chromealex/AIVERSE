@@ -53,6 +53,7 @@ struct Viewport {
     float pointsW = 0, pointsH = 0;   // logical size in the window
     float originX = 0, originY = 0;   // top-left on screen (points)
     bool hovered = false;
+    int drawnFrame = -100;            // ImGui frame the owning window last drew it (hidden tab: stale)
     void ensure(gfx::Device& dev, int pw, int ph);
     void release(gfx::Device& dev);
     // ImGui::Image with the right orientation for the backend
@@ -95,6 +96,7 @@ public:
     const game::MapGrid& editGrid() const { return grid_; }
     const Options& options() const { return opt_; }
     int mcpPort() const { return server_.port(); }
+    bool enableAgentLink() { return server_.listening() || server_.listenAvailable(); }   // after --listen 0: open the channel now
     double time() const { return time_; }
 
     Selection selection;
@@ -147,6 +149,9 @@ public:
     bool gameSafeArea = false;          // Game window: show the device safe area on top of the picture
     Viewport* gameViewport = nullptr;          // set by the Game window (screenshots crop to it)
     Viewport* sceneViewport = nullptr;
+    // the Scene tab drew its viewport this frame or the last one (false while another tab covers it):
+    // gizmos and brushes of other windows must not use a stale sceneViewport
+    bool sceneVisible() const { return sceneViewport && sceneViewport->drawnFrame >= ImGui::GetFrameCount() - 1; }
     void issueCommand(Command c);             // from the human player in the Game window
 
     // documents
