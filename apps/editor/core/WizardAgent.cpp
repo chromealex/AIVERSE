@@ -23,14 +23,14 @@ namespace rts::editor {
 
 namespace {
 
-std::string q(const std::string& s) {
+[[maybe_unused]] std::string q(const std::string& s) {
     std::string o = "'";
     for (char c : s) { if (c == '\'') o += "'\\''"; else o += c; }
     return o + "'";
 }
 
 // The user's login shell: GUI apps on macOS don't get the PATH where npm / brew put claude and codex.
-std::string loginShell() {
+[[maybe_unused]] std::string loginShell() {
     const char* s = std::getenv("SHELL");
     return s && *s ? s : "/bin/zsh";
 }
@@ -93,7 +93,7 @@ std::string findCli(const std::string& name) {
 #endif
 }
 
-std::string clip(const std::string& s, size_t n) {
+[[maybe_unused]] std::string clip(const std::string& s, size_t n) {
     std::string o = s.substr(0, n);
     for (char& c : o) if (c == '\n' || c == '\r') c = ' ';
     return s.size() > n ? o + "…" : o;
