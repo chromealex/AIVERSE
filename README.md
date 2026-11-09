@@ -625,6 +625,69 @@ HTML; для Google Play и RuStore собирайте отдельно: `--plug
 | Web | .zip; при `DEPLOY_WEB_PAGES=true` (переменная репозитория) — публикация на GitHub Pages | — |
 
 Без секретов релиз всё равно выходит: APK подписан отладочным ключом, .app — ad-hoc, Windows без подписи.
+
+### Готовые сборки движка (ветка `builds`) и rtsmcp без компилятора
+
+Редактор и инструменты (`rtsmcp`, `rts_headless`, `rtsbuild`, `assetpipe`) уже собранными лежат в ветке
+**`builds`**: `<platform>/RTSEngine-<version>-<commit>-<platform>.zip` (сейчас `windows` x86_64 и `macos`
+arm64; `linux` x86_64 — когда интегратор опубликует). Внутри — папка `RTSEngine/` с исходниками движка на
+этом коммите (шаблоны `templates/`, `engine/assets`, `docs/` — их читает MCP-сервер) и `RTSEngine/bin/` с
+программами. Собирает `tools/release/package_engine.py`, публикует `tools/release/publish_builds.py`
+(AGENTS.md §8); Linux-пакет может быть без редактора — только `rtsmcp` и `rts_headless`.
+
+MCP-сервер из распакованной папки (матчи ботов и `balance_*` идут внутри rtsmcp, отдельный
+`rts_headless` ему не нужен; редактор — по желанию, без него `--no-editor`):
+
+```bash
+unzip RTSEngine-0.2.0-77126fa9-macos.zip -d ~/rts      # unzip сохраняет флаг исполняемого файла
+~/rts/RTSEngine/bin/rtsmcp --no-editor --engine ~/rts/RTSEngine
+```
+
+`--engine` можно не указывать в сборках с коммита, где rtsmcp ищет движок рядом с собой
+(`engine/platform/EngineDir.h`, как редактор); в опубликованных раньше он обязателен. Распаковщики, которые
+не восстанавливают права (Python `zipfile`), — `chmod +x` для файлов из `bin/`. На macOS скачанный
+браузером файл может получить карантин: `xattr -dr com.apple.quarantine ~/rts/RTSEngine`.
+
+Программы, которые скачивают движок сами, читают **`index.json`** в корне ветки
+(`https://raw.githubusercontent.com/chromealex/rts-engine/builds/index.json`), а не README:
+
+```json
+{
+  "schema": 1,
+  "repository": "chromealex/rts-engine",
+  "branch": "builds",
+  "packages": [
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "version": "0.2.0",
+      "commit": "77126fa9",
+      "file": "macos/RTSEngine-0.2.0-77126fa9-macos.zip",
+      "url": "https://raw.githubusercontent.com/chromealex/rts-engine/builds/macos/RTSEngine-0.2.0-77126fa9-macos.zip",
+      "size": 43055202,
+      "sha256": "c08044fd5a13648016f4d0f2184edb6054d338a814c2b2de2caab09b4cf4513d",
+      "root": "RTSEngine",
+      "rtsmcp": "RTSEngine/bin/rtsmcp",
+      "editor": "RTSEngine/bin/RTSEditor.app",
+      "headless": "RTSEngine/bin/rts_headless"
+    }
+  ]
+}
+```
+
+- `packages` — от новых к старым; первая запись с нужными `platform` + `arch` — самая свежая сборка.
+- `platform`: `windows` | `macos` | `linux`; `arch`: `x86_64` | `arm64` | `universal` (macOS fat) | `null`
+  (не распознан) — определяется по заголовку `rtsmcp` внутри zip.
+- `rtsmcp`, `editor`, `headless` — пути внутри архива или `null`, если программы в пакете нет; `--engine` —
+  папка `root`. `editor` на macOS — бандл `.app`.
+- `url` указывает на ветку, которая перезаписывается при каждой публикации (хранятся 5 версий на
+  платформу): старые записи исчезают, поэтому скачивайте по свежему `index.json` и сверяйте `sha256`.
+- Новые поля могут добавляться; несовместимое изменение формата увеличит `schema`.
+
+Проверка: `python3 tools/release/test_release.py [build/linux-release/rtsmcp]` (CTest `release_tools`) —
+формат `index.json`, а с путём к rtsmcp — упаковка Linux-пакета, распаковка во временную папку и MCP-вызовы
+из неё без `--engine` (`tools/list`, `create_project`, `map_generate`, `map_validate`, `map_ascii`).
+
 Режим скриншота (`RTS_SCREENSHOT`, `RTS_EXIT_AFTER_FRAMES`) шагает ровно по 1/60 с на кадр, поэтому
 кадр N одинаков на любой машине.
 

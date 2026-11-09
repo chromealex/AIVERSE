@@ -212,6 +212,9 @@ themselves (`engine/platform/EngineDir.h`), so the unpacked folder runs anywhere
 3. `python3 tools/release/package_engine.py --platform windows|macos --bin <build dir>` → `build/dist/*.zip`.
 4. `python3 tools/release/publish_builds.py <zips>` — replaces the branch with one commit holding the newest
    5 versions per platform (force-push), so the repository does not grow with every build.
+   It also writes `index.json` (platform, arch, url, size, sha256, rtsmcp path per zip) that other apps
+   download from: keep its fields backward compatible (README § Готовые сборки движка).
+   Linux is optional: `package_engine.py --platform linux --bin build/linux-release` (tools only is fine).
 
 The version is `project(RTSEngine VERSION x.y.z)` in CMakeLists.txt + the short commit hash; bump the
 version for releases worth naming. Only publish builds whose tests and template matches passed.
