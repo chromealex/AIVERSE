@@ -3,6 +3,7 @@
 
     python3 tools/release/package_engine.py --platform windows --bin build/.temp/windows [--out build/dist]
     python3 tools/release/package_engine.py --platform macos   --bin build/mac
+    python3 tools/release/package_engine.py --platform linux   --bin build/linux-release
 
 The zip holds RTSEngine/ = a snapshot of the sources at HEAD (git archive: templates, engine assets,
 everything rtsbuild needs to build games) + RTSEngine/bin/ with the executables. The editor and the
@@ -19,7 +20,8 @@ BINARIES = {
     "macos": ["RTSEditor.app", "RTSGame.app", "rtsmcp", "rtsbuild", "rts_headless", "assetpipe"],
     "linux": ["rts_editor", "rtsmcp", "rtsbuild", "rts_headless", "RTSGame", "assetpipe"],
 }
-REQUIRED = {"windows": "rts_editor.exe", "macos": "RTSEditor.app", "linux": "rts_editor"}
+# a package needs one of these; Linux may be tools only (rtsmcp + rts_headless, no editor: CI hosts, MCP clients)
+REQUIRED = {"windows": ["rts_editor.exe"], "macos": ["RTSEditor.app"], "linux": ["rts_editor", "rtsmcp"]}
 
 
 def git(*args):
@@ -58,8 +60,8 @@ def main():
     a = ap.parse_args()
     if git("status", "--porcelain", "--untracked-files=no"):
         print("warning: uncommitted changes are not in the source snapshot (git archive HEAD)", file=sys.stderr)
-    if not os.path.exists(os.path.join(a.bin, REQUIRED[a.platform])):
-        sys.exit(f"no {REQUIRED[a.platform]} in {a.bin}")
+    if not any(os.path.exists(os.path.join(a.bin, r)) for r in REQUIRED[a.platform]):
+        sys.exit(f"no {' / '.join(REQUIRED[a.platform])} in {a.bin}")
     ver, commit, date = version()
     name = f"RTSEngine-{ver}-{commit}-{a.platform}.zip"
     os.makedirs(os.path.join(a.out, ".temp"), exist_ok=True)

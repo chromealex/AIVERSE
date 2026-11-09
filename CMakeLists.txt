@@ -1044,6 +1044,15 @@ if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME native_project_build COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_project_build.py ${CMAKE_COMMAND})
 endif()
 
+# builds-branch tooling: index.json, and a packaged rtsmcp run from an unpacked tools-only Linux zip
+if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    if(TARGET rtsmcp AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py $<TARGET_FILE:rtsmcp>)
+    else()
+        add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py)
+    endif()
+endif()
+
 # Project import (shared Python pipeline + editor/MCP bridge).
 if(TARGET rts_editor_core)
     target_sources(rts_editor_core PRIVATE apps/editor/core/PortOps.cpp)
