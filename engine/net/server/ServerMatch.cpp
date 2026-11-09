@@ -3,6 +3,7 @@
 // after its tick was confirmed is moved to the next unconfirmed tick, so nobody waits on a
 // lagging player for longer than the tolerance.
 #include "ServerInternal.h"
+#include <utility>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -35,11 +36,11 @@ void Server::Impl::startMatch(Room& r) {
         if (Client* c = client(s.clientId); c && s.kind == SlotKind::Human) m->keyBySlot[p.slot] = c->key;
         if (s.kind == SlotKind::Human) {
             Member mb;
-            mb.clientId = s.clientId; mb.slot = p.slot; mb.slots = {p.slot}; mb.nextFrame = r.settings.inputDelay;
-            m->members.push_back(mb);
+            mb.clientId = s.clientId; mb.slot = p.slot; mb.slots.push_back(p.slot); mb.nextFrame = r.settings.inputDelay;
+            m->members.push_back(std::move(mb));
         }
     }
-    for (uint32_t id : r.spectators) { Member mb; mb.clientId = id; m->members.push_back(mb); }
+    for (uint32_t id : r.spectators) { Member mb; mb.clientId = id; m->members.push_back(std::move(mb)); }
     r.match = std::move(m);
     r.phase = RoomPhase::InMatch;
     for (auto& mb : r.match->members) if (mb.clientId == r.hostId && mb.slot) host = &mb;

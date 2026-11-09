@@ -2,6 +2,7 @@
 // calls from data (trigger conditions/actions, ability effects) and the persistent `state` table.
 #include "RtsScriptInternal.h"
 #include <algorithm>
+#include <iterator>
 #include "RtsInternal.h"
 #include "RtsStdLua.h"
 

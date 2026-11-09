@@ -26,6 +26,28 @@
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"
+#include <cmath>
+#include <limits>
+
+// IEEE-exact primitives: compiler builtins on GCC / Clang, the (correctly rounded) <cmath> versions on MSVC
+namespace {
+#if defined(__GNUC__) || defined(__clang__)
+inline float ieeeSqrtf(float a) { return __builtin_sqrtf(a); }
+inline double ieeeSqrt(double a) { return __builtin_sqrt(a); }
+inline float ieeeFabsf(float a) { return __builtin_fabsf(a); }
+inline float ieeeFloorf(float a) { return __builtin_floorf(a); }
+inline float ieeeNextafterf(float a, float b) { return __builtin_nextafterf(a, b); }
+inline float ieeeInff() { return __builtin_inff(); }
+#else
+inline float ieeeSqrtf(float a) { return std::sqrt(a); }
+inline double ieeeSqrt(double a) { return std::sqrt(a); }
+inline float ieeeFabsf(float a) { return std::fabs(a); }
+inline float ieeeFloorf(float a) { return std::floor(a); }
+inline float ieeeNextafterf(float a, float b) { return std::nextafter(a, b); }
+inline float ieeeInff() { return std::numeric_limits<float>::infinity(); }
+#endif
+} // namespace
+
 }
 
 #if !defined(FLT_EVAL_METHOD) || FLT_EVAL_METHOD != 0
@@ -90,7 +112,7 @@ int f32Add(lua_State* L) { requireEnv(L); const float r = f32Of(arg32(L, 1)) + f
 int f32Sub(lua_State* L) { requireEnv(L); const float r = f32Of(arg32(L, 1)) - f32Of(arg32(L, 2)); return push32(L, r); }
 int f32Mul(lua_State* L) { requireEnv(L); const float r = f32Of(arg32(L, 1)) * f32Of(arg32(L, 2)); return push32(L, r); }
 int f32Div(lua_State* L) { requireEnv(L); const float r = f32Of(arg32(L, 1)) / f32Of(arg32(L, 2)); return push32(L, r); }
-int f32Sqrt(lua_State* L) { requireEnv(L); const float a = f32Of(arg32(L, 1)); const float r = __builtin_sqrtf(a); return push32(L, r); }
+int f32Sqrt(lua_State* L) { requireEnv(L); const float a = f32Of(arg32(L, 1)); const float r = ieeeSqrtf(a); return push32(L, r); }
 int f32FromInt(lua_State* L) { requireEnv(L); const float r = float(argInteger(L, 1, "f32.fromint")); return push32(L, r); }
 int f32Lt(lua_State* L) { lua_pushboolean(L, f32Of(arg32(L, 1)) < f32Of(arg32(L, 2))); return 1; }
 int f32Le(lua_State* L) { lua_pushboolean(L, f32Of(arg32(L, 1)) <= f32Of(arg32(L, 2))); return 1; }
@@ -111,7 +133,7 @@ float dot2(float a, float b, float c, float d) {
         const double err = (p1 - (sum - back)) + (p2 - back);
         const double rd = double(r);
         if (err != 0.0 && rd != sum) {
-            const float other = __builtin_nextafterf(r, sum > rd ? __builtin_inff() : -__builtin_inff());
+            const float other = ieeeNextafterf(r, sum > rd ? ieeeInff() : -ieeeInff());
             const double mid = (rd + double(other)) * 0.5;
             if (sum == mid) r = (err > 0.0) == (other > r) ? other : r;
         }
@@ -131,7 +153,7 @@ inline lua_Integer floorInt(lua_State* L, uint32_t a) {
     const uint32_t be = (a >> 23) & 255u;
     if (be == 255u) luaL_error(L, "non-finite float-to-int conversion");
     if (be > 157u) luaL_error(L, "float-to-int outside signed int32 range");
-    return lua_Integer(__builtin_floorf(f32Of(a)));
+    return lua_Integer(ieeeFloorf(f32Of(a)));
 }
 inline uint32_t field32(lua_State* L, int t, const char* k) {
     lua_getfield(L, t, k);
@@ -174,7 +196,7 @@ int f64Add(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) + 
 int f64Sub(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) - f64Of(arg64(L, 2)); return push64(L, r); }
 int f64Mul(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) * f64Of(arg64(L, 2)); return push64(L, r); }
 int f64Div(lua_State* L) { requireEnv(L); const double r = f64Of(arg64(L, 1)) / f64Of(arg64(L, 2)); return push64(L, r); }
-int f64Sqrt(lua_State* L) { requireEnv(L); const double a = f64Of(arg64(L, 1)); const double r = __builtin_sqrt(a); return push64(L, r); }
+int f64Sqrt(lua_State* L) { requireEnv(L); const double a = f64Of(arg64(L, 1)); const double r = ieeeSqrt(a); return push64(L, r); }
 int f64FromInt(lua_State* L) { requireEnv(L); const double r = double(argInteger(L, 1, "f64.fromint")); return push64(L, r); }
 int f64Lt(lua_State* L) { lua_pushboolean(L, f64Of(arg64(L, 1)) < f64Of(arg64(L, 2))); return 1; }
 int f64Le(lua_State* L) { lua_pushboolean(L, f64Of(arg64(L, 1)) <= f64Of(arg64(L, 2))); return 1; }
@@ -222,8 +244,8 @@ int f32Segment(lua_State* L) {
     const float inf = f32Of(0x7f800000u), one = 1.0f;
     const float vx = f32Of(tx0) - f32Of(fx), vy = f32Of(ty0) - f32Of(fy);
     const int sx = vx < 0.0f ? -1 : 1, sy = vy < 0.0f ? -1 : 1;
-    const float dx = vx == 0.0f ? inf : one / __builtin_fabsf(vx);
-    const float dy = vy == 0.0f ? inf : one / __builtin_fabsf(vy);
+    const float dx = vx == 0.0f ? inf : one / ieeeFabsf(vx);
+    const float dy = vy == 0.0f ? inf : one / ieeeFabsf(vy);
     float tx, ty;
     if (vx == 0.0f) tx = inf; else { const float edge = float(floorInt(L, fx) + (sx > 0 ? 1 : 0)); const float gap = edge - f32Of(fx); tx = gap / vx; }
     if (vy == 0.0f) ty = inf; else { const float edge = float(floorInt(L, fy) + (sy > 0 ? 1 : 0)); const float gap = edge - f32Of(fy); ty = gap / vy; }

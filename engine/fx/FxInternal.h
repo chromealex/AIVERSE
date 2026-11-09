@@ -1,6 +1,7 @@
 // Internal state of ParticleSystem (engine/fx only): shared by ParticleSystem.cpp (API, simulation),
 // FxEmit.cpp (spawning, shapes), FxRender.cpp (quads, trails, ribbons, meshes) and FxMeshes.cpp.
 #pragma once
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
