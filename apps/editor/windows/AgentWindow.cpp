@@ -18,7 +18,10 @@ public:
 
     void draw(Editor& ed) override {
         auto& ws = ed.ws();
-        if (ed.mcpPort() == 0) ui::callout(ui::Tone::Warn, "Канал для агентов выключен (редактор запущен с --listen 0).");
+        if (ed.mcpPort() == 0) {
+            ui::callout(ui::Tone::Warn, "Канал для ИИ-агентов выключен: агенты не видят этот редактор.");
+            if (ui::button(ICON_PLUG_ZAP, "Включить канал", true) && !ed.enableAgentLink()) ed.status = "Не удалось открыть порт для агентов";
+        }
         else {
             char t[96];
             std::snprintf(t, sizeof t, "Канал MCP слушает порт %d", ed.mcpPort());
@@ -31,8 +34,8 @@ public:
         ImGui::SetNextItemWidth(-1);
         ui::searchField("##ff", filter_, "Фильтр действий", ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Только ошибки").x - ImGui::GetFrameHeight() * 2 - 12);
         ImGui::SameLine();
-        ImGui::Checkbox("Только ошибки", &errorsOnly_);
-        ImGui::Checkbox("Камера «Сцены» следует за правками агента", &ed.followAgent);
+        ui::checkbox("Только ошибки", &errorsOnly_);
+        ui::checkbox("Камера «Сцены» следует за правками агента", &ed.followAgent);
         if (ImGui::BeginTable("##feed", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_SizingFixedFit, ImVec2(0, 0))) {
             ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Время", ImGuiTableColumnFlags_WidthFixed, ImGui::CalcTextSize("00:00 ").x);
@@ -61,7 +64,7 @@ private:
     // One click per AI client (EditorMcpConnect.h, shared with the game wizard: one connection for both)
     void connectSection(Editor& ed) {
         refreshMcpClients(ed, mcp_);
-        if (ImGui::CollapsingHeader(ICON_PLUG "  Подключить ИИ-агента", mcpConnectedAny(mcp_) ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ui::collapsing(ICON_PLUG "  Подключить ИИ-агента", mcpConnectedAny(mcp_) ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::TextDisabled("Кнопка прописывает сервер rtsmcp в настройки клиента. После этого перезапустите клиент.");
             drawMcpConnect(ed, mcp_);
         }

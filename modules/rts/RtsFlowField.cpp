@@ -255,7 +255,34 @@ int MapGrid::flowBlock(FlowField& f, int c) {
         const uint32_t d = f.D[size_t(f.base[size_t(c)]) + i];
         if (d != kInf) sd.push_back({nodes[i], d});
     }
-    for (int32_t s : f.seeds) if (flowClusterOf(s) == c) sd.push_back({s, 0u});
+    bool goalCluster = false;
+    for (int32_t s : f.seeds) if (flowClusterOf(s) == c) { sd.push_back({s, 0u}); goalCluster = true; }
+    // Next to the goal: entrances alone can force a detour much longer than the short straight path, so cells on
+    // the border with a goal cluster are also seeded with one legal step into it plus that cell's value there.
+    if (!goalCluster) {
+        std::vector<int> gcs;
+        for (int32_t s : f.seeds) gcs.push_back(flowClusterOf(s));
+        std::sort(gcs.begin(), gcs.end());
+        gcs.erase(std::unique(gcs.begin(), gcs.end()), gcs.end());
+        int x0, y0, cw, ch;
+        flowClusterRect(c, x0, y0, cw, ch);
+        for (int y = y0; y < y0 + ch; ++y)
+            for (int x = x0; x < x0 + cw; ++x) {
+                if (y != y0 && y != y0 + ch - 1 && x != x0 && x != x0 + cw - 1) continue;   // border cells only
+                const int u = y * w + x;
+                if (flowClusterOf(u) != c) continue;
+                for (int k = 0; k < 8; ++k) {
+                    const int v = flowNeighbor(u, k);
+                    const int vc = flowClusterOf(v);
+                    if (vc < 0 || vc == c || !std::binary_search(gcs.begin(), gcs.end(), vc)) continue;
+                    bool diag = false;
+                    if (!flowStepInto(u, v, f.layer, diag)) continue;
+                    const int gb = flowBlock(f, vc);
+                    const uint32_t gv = f.blockVal[size_t(gb)][size_t(flowLocalIndex(vc, v))];
+                    if (gv != kInf) sd.push_back({u, gv + (diag ? 14u : 10u)});
+                }
+            }
+    }
     std::sort(sd.begin(), sd.end());
     uint64_t hash = 1469598103934665603ull;
     for (auto& [cell, d] : sd) { hash = (hash ^ uint64_t(uint32_t(cell))) * 1099511628211ull; hash = (hash ^ d) * 1099511628211ull; }

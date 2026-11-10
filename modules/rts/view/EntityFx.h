@@ -1,5 +1,6 @@
 // Per-entity presentation overrides set by view scripts (view.entity_fx, docs/scripting.md § Entity scale and
-// opacity): scale, opacity, colour multiply, team colour mix and glow, ground shadow opacity / size. Presentation only:
+// opacity): scale, opacity, colour multiply, team colour mix and glow, ground shadow opacity / size, lift, pitch / roll
+// (the model's tilt on top of its facing). Presentation only:
 // the simulation never reads them. The store lives with the view scripts (ViewScripts::entityFx) and is shared with
 // RtsView through RtsScene::entityFx, like the paint layers. Values change at once or ease over a time in seconds of
 // frame time (ViewScripts::update advances them before the frame's handlers run).
@@ -13,8 +14,8 @@ namespace rts::game {
 
 // The drawn values. Defaults = no change.
 struct EntityFxValues {
-    enum : int { kScale = 0, kOpacity = 3, kTint = 4, kTeamMix = 7, kTeamGlow = 11, kShadow = 12, kShadowScale = 13, kLift = 16, kCorpseAge = 17, kCount = 18 };
-    float v[kCount] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, -1};   // corpse age -1: the view's own clock
+    enum : int { kScale = 0, kOpacity = 3, kTint = 4, kTeamMix = 7, kTeamGlow = 11, kShadow = 12, kShadowScale = 13, kLift = 16, kCorpseAge = 17, kPitch = 18, kRoll = 19, kCount = 20 };
+    float v[kCount] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, -1, 0, 0};   // corpse age -1: the view's own clock; pitch / roll in degrees
     float scale(int axis) const { return v[kScale + axis]; }
     float opacity() const { return v[kOpacity]; }
     bool identity() const { static const EntityFxValues d; for (int i = 0; i < kCount; ++i) if (v[i] != d.v[i]) return false; return true; }

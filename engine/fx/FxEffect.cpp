@@ -1055,7 +1055,6 @@ Json effectToJson(const EffectDef& def) {
     root.set("emitters", list);
     if (!def.forceFields.empty()) {
         Json a = Json::array();
-        const FxForceField fb;
         for (auto& f : def.forceFields) {
             Json o = Json::object();
             if (nonzero(f.position)) o.set("position", vecJ(f.position));

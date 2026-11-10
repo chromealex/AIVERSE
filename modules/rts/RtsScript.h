@@ -156,6 +156,9 @@ public:
     // Writes the VM's `state` and changed entity data into the world (ScriptStore / ScriptData). Called
     // before checksums, rollback snapshots and saves; cheap when nothing changed.
     void flush(Simulation& sim);
+    // Observation for tools (the editor's Details): `e`'s game.data as the Lua table holds it now, serialized like
+    // flush would, without writing anything into the world. False: the entity has no script data.
+    bool peekData(Simulation& sim, Entity e, std::string& blob);
 
     // Entry points for data: trigger condition / action {"type": "script", "fn": ...} and the ability
     // effect {"type": "script", "fn": ...} (queued, runs in this tick's scripts phase).

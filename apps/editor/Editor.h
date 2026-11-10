@@ -8,10 +8,12 @@
 #include <cmath>
 #include <deque>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "ClientHost.h"
+#include "EditorProfile.h"
 #include "EditorTheme.h"
 #include "EditorNativeBuild.h"
 #include "modules/rts/view/RtsViewScript.h"
@@ -20,6 +22,7 @@
 #include "core/Net.h"
 #include "core/Workspace.h"
 #include "core/FieldOps.h"
+#include "core/WorldInspect.h"
 #include "engine/fx/ParticleSystem.h"
 #include "engine/render/TextureCache.h"
 #include "engine/gfx/Gfx.h"
@@ -38,10 +41,15 @@ namespace rts::editor {
 
 // What the Inspector shows. Hierarchy/Project/Scene set it.
 struct Selection {
-    enum Kind { None, Entity, Player, Area, Region, Wave, Trigger, Type, Resource, Tech, Faction, MapProps, GameProps } kind = None;
-    int index = -1;          // entity / player (0-based) / wave / trigger
-    std::string key;         // area name, region letter, rule id
-    bool operator==(const Selection& o) const { return kind == o.kind && index == o.index && key == o.key; }
+    enum Kind { None, Entity, Player, Area, Region, Wave, Trigger, Type, Resource, Tech, Faction, MapProps, GameProps,
+                Live,       // an object of the world tree that is not a map entity being edited (ref): created by the game, or play mode
+                MapBlock,   // a block of the map document's extra JSON (key = path: "lights[2]", "gridFields")
+                Road,       // map road (index)
+                Body } kind = None;   // planet map body (index)
+    int index = -1;          // entity / player (0-based) / wave / trigger / road / body
+    std::string key;         // area name, region letter, rule id, map block path
+    uint64_t ref = 0;        // Live: worldRef (packed + 1) of an entity of the world tree (Editor::world())
+    bool operator==(const Selection& o) const { return kind == o.kind && index == o.index && key == o.key && ref == o.ref; }
 };
 
 enum class Tool { Select, Place, Terrain, Level, Height, Field, Region, Area, Start, Road, Erase, Count };
@@ -53,6 +61,7 @@ struct Viewport {
     float pointsW = 0, pointsH = 0;   // logical size in the window
     float originX = 0, originY = 0;   // top-left on screen (points)
     bool hovered = false;
+    int drawnFrame = -100;            // ImGui frame the owning window last drew it (hidden tab: stale)
     void ensure(gfx::Device& dev, int pw, int ph);
     void release(gfx::Device& dev);
     // ImGui::Image with the right orientation for the backend
@@ -95,12 +104,56 @@ public:
     const game::MapGrid& editGrid() const { return grid_; }
     const Options& options() const { return opt_; }
     int mcpPort() const { return server_.port(); }
+    bool enableAgentLink() { return server_.listening() || server_.listenAvailable(); }   // after --listen 0: open the channel now
     double time() const { return time_; }
 
+    // Selection: `selection` is the primary item (Inspector header, F focus); selectionSet holds every selected
+    // item (multi-selection from the Hierarchy / Scene). Code that assigns `selection` directly gets a set of one.
     Selection selection;
-    void select(Selection s) { selection = std::move(s); }
+    std::vector<Selection> selectionSet;
+    void select(Selection s) { selection = std::move(s); selectionSet.clear(); if (selection.kind != Selection::None) selectionSet.push_back(selection); }
     int selectedEntity() const { return selection.kind == Selection::Entity ? selection.index : -1; }
-    void selectEntity(int i) { if (i < 0) selection = {}; else selection = {Selection::Entity, i, {}}; }
+    void selectEntity(int i) { if (i < 0) select({}); else select({Selection::Entity, i, {}}); }
+    void selectToggle(const Selection& s);             // Ctrl / Cmd click
+    void selectAdd(const Selection& s);                // keeps the others, makes s primary
+    void selectMany(std::vector<Selection> items);     // first = primary
+    bool isSelected(const Selection& s);
+    const std::vector<Selection>& selected();          // the set, in sync with `selection`
+    std::vector<int> selectedEntities();               // map document entities of the set (sorted)
+    void removeSelectedEntities();                     // one undo step
+    // Hover shared by the Scene and the Hierarchy: windows call setHover() while drawing; `hover` is last frame's.
+    Selection hover;
+    void setHover(const Selection& s) { hoverNext_ = s; }
+
+    // ---- world tree (EditorWorld.cpp, docs/editor-world-tree.md): every object of the game world. Edit mode: the
+    // map's setup run once in a throwaway simulation (map entities + what the game creates at start); play mode:
+    // the running test (the editor's play-test or the hosted client).
+    const WorldModel& world() const { return world_; }
+    bool worldLive() const { return worldLive_; }
+    Simulation* worldSim();                            // the simulation the rows were read from (null: none)
+    game::RtsModule* worldModule();
+    const WorldPreview& worldPreview() const { return preview_; }
+    const WorldConfig& worldConfig() const { return worldCfg_; }
+    void refreshWorld() { previewKey_ = 0; previewForce_ = true; }
+    bool worldPending() const { return !worldLive_ && (previewKey_ != previewSeenKey_ || preview_.busy()); }   // preview older than the map
+    bool worldBuilding() const { return !worldLive_ && preview_.busy(); }     // a background preview build runs
+    // Consumers of the rows say so every frame they use them (Hierarchy, the Scene's game objects, Details in
+    // edit mode); without one the play world is not read and the preview is not built. scriptData: the rows
+    // need game.data (label / data grouping / search), which costs a Lua flush + decoding every blob.
+    void wantWorld(bool scriptData = false) const { worldWantAt_ = time_; if (scriptData) worldDataAt_ = time_; }
+    // One selected object as it is now: its row, and (data) inspectEntity + the current Lua data. Play mode reads
+    // the running simulation directly (not the 5 Hz rows). False: gone / not in the world tree.
+    bool worldDetails(const Selection& s, WorldRow& row, Json* data);
+    bool worldAuto = true;                             // rebuild the preview on map / rules / script changes
+    bool showGameObjects = true;                       // Scene (edit mode): draw what the game creates at start
+    Selection worldSelection(const WorldRow& r) const; // Entity(doc) while editing a map object, Live(ref) otherwise
+    const WorldRow* worldRow(const Selection& s) const;
+    bool worldFresh() const;                           // edit mode: the preview matches the map as it is now
+    bool selectionPos(const Selection& s, float& x, float& z) const;   // where to focus
+    // Scene visibility / lock (Hierarchy eye / lock): keys "o<owner>", "t<type id>", "o<owner>/t<type id>", "game"
+    std::set<std::string> sceneHidden, sceneLocked;
+    bool objectHidden(int owner, const std::string& type) const;
+    bool objectLocked(int owner, const std::string& type) const;
 
     // tools (Tools window edits these; Scene window applies them)
     Tool tool = Tool::Select;
@@ -147,6 +200,9 @@ public:
     bool gameSafeArea = false;          // Game window: show the device safe area on top of the picture
     Viewport* gameViewport = nullptr;          // set by the Game window (screenshots crop to it)
     Viewport* sceneViewport = nullptr;
+    // the Scene tab drew its viewport this frame or the last one (false while another tab covers it):
+    // gizmos and brushes of other windows must not use a stale sceneViewport
+    bool sceneVisible() const { return sceneViewport && sceneViewport->drawnFrame >= ImGui::GetFrameCount() - 1; }
     void issueCommand(Command c);             // from the human player in the Game window
 
     // documents
@@ -182,6 +238,9 @@ public:
     // helpers for windows
     bool groundAt(const Viewport& vp, const render::RTSCamera& cam, float sx, float sy, float& x, float& z) const;
     int pickEntity(const Viewport& vp, const render::RTSCamera& cam, float sx, float sy) const;
+    // Any object under the cursor: map entities (not hidden / locked) and the world tree's objects shown in
+    // the Scene (game-created objects in edit mode, live objects in play mode). None when nothing is hit.
+    Selection pickObject(const Viewport& vp, const render::RTSCamera& cam, float sx, float sy) const;
     int pickRoad(const Viewport& vp, const render::RTSCamera& cam, float sx, float sy) const;
     float snapCoord(float v, int typeIdx) const;
     void flash(float x0, float z0, float x1, float z1, double seconds = 1.6);
@@ -207,6 +266,7 @@ public:
     // statistics
     struct FrameStats { float frameMs = 0, simMs = 0; uint32_t drawCalls = 0; };
     std::deque<FrameStats> frameHistory;
+    EditorProfile prof;                                // world tree phase timings (RTS_EDITOR_PROFILE=1 prints them)
     struct PlaySample { float t; std::vector<int> units, structures; std::vector<std::vector<float>> resources; };
     std::vector<PlaySample> playHistory;
 
@@ -236,6 +296,9 @@ private:
     // particle lights into r3d_.lights); render them after Renderer3D::render.
     void tickFx(const render::RTSCamera& cam, int w, int h, const std::vector<game::SceneObject>* objects);
     void samplePlayStats();
+    void updateWorld();       // EditorWorld.cpp: preview / live rows, selection kept across rebuilds
+    void syncSelection();
+    void registerWorldOps();  // EditorWorld.cpp: world_entities, world_entity, editor_select
     void deliverShots(gfx::Device& dev);
     void setOverlayContext(const Viewport& vp, const render::RTSCamera& cam, bool play);   // input state for RtsOverlays
 
@@ -300,6 +363,29 @@ private:
     int human_ = 0;
     std::map<std::string, Entity> playIds_;   // map entity "id" -> live entity of the play-test (play_command names)
     float lastSimMs_ = 0;
+
+    // world tree (EditorWorld.cpp)
+    WorldModel world_;
+    WorldConfig worldCfg_;
+    WorldPreview preview_;
+    bool worldLive_ = false;
+    uint64_t previewKey_ = 0, previewSeenKey_ = 0;
+    double previewDue_ = 0, worldReadAt_ = 0;
+    bool previewForce_ = false;
+    mutable double worldWantAt_ = -1e9, worldDataAt_ = -1e9;   // last frame a consumer used the rows / their script data
+    bool worldStale_ = true;                   // play: rows not read since the last 0.2 s mark (nobody looked)
+    std::map<uint64_t, int> liveDocOf_;        // live ref -> map entity (liveLinks_ inverted)
+    bool worldWanted() const { return time_ - worldWantAt_ < 0.5; }
+    bool worldDataWanted() const { return time_ - worldDataAt_ < 0.5; }
+    void readLiveWorld(Simulation& live, game::RtsModule& mod);
+    void ensureWorld();                        // MCP: rows (with script data) current now
+    int rulesRevision_ = 0;
+    const Simulation* liveSim_ = nullptr;      // live world last read (setup refs belong to it)
+    std::vector<uint64_t> liveLinks_, liveSetup_;
+    std::vector<uint64_t> playDocLinks_;       // editor play-test: map entity -> live entity (set at startPlay)
+    Selection hoverNext_;
+    double scriptsCheckAt_ = 0;
+    uint64_t scriptsStamp_ = 0;
 
     net::LineServer server_;
     struct PendingShot { int client; int64_t id; std::string device; };

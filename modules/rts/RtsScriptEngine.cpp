@@ -2,6 +2,7 @@
 // calls from data (trigger conditions/actions, ability effects) and the persistent `state` table.
 #include "RtsScriptInternal.h"
 #include <algorithm>
+#include <iterator>
 #include "RtsInternal.h"
 #include "RtsStdLua.h"
 
@@ -681,6 +682,20 @@ void ScriptEngine::flush(Simulation& sim) {
     if (!impl_->vm.L || !userScripts_) return;
     impl_->flushState(sim);
     impl_->flushData(sim);
+}
+
+bool ScriptEngine::peekData(Simulation& sim, Entity e, std::string& blob) {
+    const auto* sd = sim.world().tryGet<ScriptData>(e);
+    if (!sd) return false;
+    Impl& im = *impl_;
+    auto it = im.dataCache.find(e.packed());
+    if (!im.vm.L || it == im.dataCache.end() || !it->second.dirty) { blob = sd->blob; return true; }   // the world copy is current
+    blob.clear();
+    im.dataTable(e.packed());
+    std::string where;
+    if (lua_istable(im.vm.L, -1)) serialize(im.vm.L, -1, blob, where, 0, true);
+    lua_pop(im.vm.L, 1);
+    return true;
 }
 
 bool ScriptEngine::hasFunction(const std::string& name) const {

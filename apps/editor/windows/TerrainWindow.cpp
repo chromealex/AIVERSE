@@ -16,7 +16,7 @@ public:
     const char* id() const override { return "terrain"; }
     const char* title() const override { return "Рельеф"; }
     const char* group() const override { return "world"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 5; }
     bool openByDefault() const override { return false; }
 
@@ -38,11 +38,10 @@ public:
 
         bool active = ed.tool == Tool::Count && owner_;
         ImGui::PushStyleColor(ImGuiCol_Text, active ? ui::toneColor(ui::Tone::Accent) : ImGui::GetStyle().Colors[ImGuiCol_Text]);
-        if (ImGui::Checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
+        if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
         ImGui::PopStyleColor();
         if (!ed.planetMap()) {
-            ImGui::SameLine();
-            ImGui::Checkbox("Детально", &detail_);
+            ui::checkbox("Детальная карта высот", &detail_);
             ImGui::SetItemTooltip("Кисти работают по детальной карте высот (k точек на клетку, мягкий край), а не по углам клеток. "
                                   "Первый мазок создаёт её из того, что нарисовано сейчас. На картах heightfield углы клеток следуют за ней.");
         }
@@ -86,7 +85,7 @@ public:
             ImGui::InputFloat("##scale", &scale_, 0.5f, 2.0f, "%.2f");
             ui::prop("Смещение");
             ImGui::InputFloat("##offset", &offset_, 0.25f, 1.0f, "%.2f");
-            if (!ed.planetMap()) { ui::propWide(); ImGui::Checkbox("Детальная (k точек на клетку)", &pngDetail_); }
+            if (!ed.planetMap()) { ui::propWide(); ui::checkbox("Детальная (k точек на клетку)", &pngDetail_); }
             ui::endProps();
         }
         const int n = hf ? 3 : 2;
@@ -106,6 +105,8 @@ public:
             report(ed, r);
         }
         ImGui::EndDisabled();
+        if (!(hf || (pngDetail_ && d.detailScale > 0)))
+            ImGui::SetItemTooltip("Нечего экспортировать: сначала нарисуйте рельеф кистью или импортируйте PNG");
         if (hf && ui::wideButton(ICON_TRASH, "Удалить рельеф", 2, n)) {
             Json p = Json::object(); p.set("enabled", Json::fromBool(false));
             report(ed, ws.call("map_heightfield", p));
@@ -115,7 +116,7 @@ public:
 
     void update(Editor& ed, double) override {
         if (ed.tool != Tool::Count) owner_ = false;
-        if (!owner_ || ed.playing() || !ed.sceneViewport) { painting_ = false; return; }
+        if (!owner_ || ed.playing() || !ed.sceneVisible()) { painting_ = false; return; }
         ImGuiIO& io = ImGui::GetIO();
         Viewport& vp = *ed.sceneViewport;
         if (!io.MouseDown[0]) { painting_ = false; stamped_ = false; return; }

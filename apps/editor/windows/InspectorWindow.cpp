@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "../Editor.h"
 #include "../EditorUtil.h"
+#include "../DetailsPanel.h"
 
 namespace rts::editor {
 
@@ -60,7 +61,10 @@ public:
         Selection& s = ed.selection;
         if (!(s == lastSel_)) { message_.clear(); lastSel_ = s; }
         switch (s.kind) {
-            case Selection::Entity: entity(ed); break;
+            case Selection::Entity: case Selection::Live: details_.draw(ed); break;   // «Детали»: one or many world objects
+            case Selection::MapBlock: mapJson(ed, s.key, ICON_BRACES, s.key, "Блок карты (JSON)"); break;
+            case Selection::Road: road(ed); break;
+            case Selection::Body: body(ed); break;
             case Selection::Player: player(ed); break;
             case Selection::Area: area(ed); break;
             case Selection::Region: region(ed); break;
@@ -91,66 +95,34 @@ private:
         return ImVec4(c.x, c.y, c.z, 1);
     }
 
-    // ---------------- map object
-    void entity(Editor& ed) {
-        auto& doc = ed.doc();
-        auto& d = doc.data;
-        int i = ed.selectedEntity();
-        if (i < 0 || i >= int(d.entities.size())) { ed.select({}); return; }
-        auto& e = d.entities[size_t(i)];
-        const auto& rules = ed.rules();
-        int ti = rules.findType(e.type);
-        const bool structure = ti >= 0 && rules.types[size_t(ti)].structure;
-        ui::headerCard(structure ? ICON_CASTLE : ICON_OBJECTS, ti >= 0 ? rules.types[size_t(ti)].name : e.type,
-                       ownerName(ed, e.owner) + (e.id.empty() ? std::string() : "  ·  #" + e.id), ownerColor(e.owner));
-        if (ui::beginProps("##entity")) {
-            ui::prop("Тип");
-            if (ImGui::BeginCombo("##type", ti >= 0 ? rules.types[size_t(ti)].name.c_str() : e.type.c_str(), ImGuiComboFlags_HeightLarge)) {
-                for (auto& t : rules.types) if (ImGui::Selectable((t.name + "##" + t.id).c_str(), t.id == e.type)) { doc.beginEdit(); d.entities[size_t(i)].type = t.id; }
-                ImGui::EndCombo();
-            }
-            ui::prop("Владелец");
-            ownerCombo(ed, "##owner", d.entities[size_t(i)].owner);
-            ui::prop("Позиция", "x и z в клетках; перетаскивание в «Сцене» тоже двигает");
-            float pos[2] = {e.x, e.z};
-            bool ch = ImGui::DragFloat2("##pos", pos, 0.1f, 0, 0, "%.1f");
-            if (ImGui::IsItemActivated()) doc.beginEdit();
-            if (ch) { d.entities[size_t(i)].x = pos[0]; d.entities[size_t(i)].z = pos[1]; doc.touched(); }
-            if (ti >= 0 && rules.types[size_t(ti)].garrisonMax > 0) {
-                ui::prop("Гарнизон", "Юнитов внутри на старте");
-                int g = std::max(0, d.entities[size_t(i)].garrison);
-                bool c2 = ImGui::SliderInt("##garrison", &g, 0, rules.types[size_t(ti)].garrisonMax * 2);
-                if (ImGui::IsItemActivated()) doc.beginEdit();
-                if (c2) { d.entities[size_t(i)].garrison = g; doc.touched(); }
-            }
-            if (ti >= 0 && rules.types[size_t(ti)].resourceNode >= 0) {
-                ui::prop("Запас", "-1 — бесконечный");
-                float a = d.entities[size_t(i)].amount >= 0 ? d.entities[size_t(i)].amount : float(rules.types[size_t(ti)].resourceAmount.toDouble());
-                bool c3 = ImGui::DragFloat("##amount", &a, 10.0f, -1.0f, 1e7f, "%.0f");
-                if (ImGui::IsItemActivated()) doc.beginEdit();
-                if (c3) { d.entities[size_t(i)].amount = a; doc.touched(); }
-            }
-            ui::prop("id", "Имя объекта для дорог и ссылок из триггеров");
-            if (ImGui::InputTextWithHint("##id", "без имени", d.entities[size_t(i)].id.data(), d.entities[size_t(i)].id.capacity() + 1,
-                                         ImGuiInputTextFlags_CallbackResize, ui::stringResize, &d.entities[size_t(i)].id))
-                doc.touched();
-            ui::endProps();
-        }
-        ImGui::Spacing();
-        if (ui::wideButton(ICON_CROSSHAIR, "Показать", 0, 3)) ed.focusScene(e.x, e.z, 18);
-        if (ui::wideButton(ICON_RULES, "Правила типа", 1, 3)) ed.select({Selection::Type, -1, e.type});
-        if (ui::wideButton(ICON_TRASH, "Удалить", 2, 3)) { doc.removeEntity(i); ed.select({}); }
+    // ---------------- road / planet body
+    void road(Editor& ed) {
+        auto& d = ed.doc().data;
+        const int i = ed.selection.index;
+        if (i < 0 || i >= int(d.roads.size())) { ed.select({}); return; }
+        auto name = [&](int k) { const auto& e = d.entities[size_t(k)]; return e.id.empty() ? e.type + " #" + std::to_string(k) : e.id; };
+        const auto [a, b] = d.roads[size_t(i)];
+        ui::headerCard(ICON_ROADS, name(a) + " — " + name(b), "Дорога между объектами карты");
+        if (ui::wideButton(ICON_OBJECTS, "Начало", 0, 4)) ed.selectEntity(a);
+        if (ui::wideButton(ICON_OBJECTS, "Конец", 1, 4)) ed.selectEntity(b);
+        if (ui::wideButton(ICON_CROSSHAIR, "Показать", 2, 4)) ed.focusScene((d.entities[size_t(a)].x + d.entities[size_t(b)].x) * 0.5f, (d.entities[size_t(a)].z + d.entities[size_t(b)].z) * 0.5f, 18);
+        if (ui::wideButton(ICON_TRASH, "Удалить", 3, 4)) { ed.doc().removeRoad(size_t(i)); ed.select({}); }
     }
 
-    void ownerCombo(Editor& ed, const char* label, int& owner) {
+    void body(Editor& ed) {
         auto& d = ed.doc().data;
-        if (ImGui::BeginCombo(label, ownerName(ed, owner).c_str())) {
-            if (ImGui::Selectable("Нейтральный", owner == 0)) { ed.doc().beginEdit(); owner = 0; }
-            if (ImGui::Selectable("Враждебные монстры", owner == -1)) { ed.doc().beginEdit(); owner = -1; }
-            for (size_t p = 0; p < d.players.size(); ++p)
-                if (ImGui::Selectable(d.players[p].name.c_str(), owner == int(p + 1))) { ed.doc().beginEdit(); owner = int(p + 1); }
-            ImGui::EndCombo();
+        const int i = ed.selection.index;
+        if (i < 0 || i >= int(d.bodies.size())) { ed.select({}); return; }
+        const DocBody& b = d.bodies[size_t(i)];
+        ui::headerCard(ICON_GLOBE, b.id, b.surface() ? "Тело с поверхностью · грань " + std::to_string(b.faceSize) + " клеток" : "Тело без поверхности");
+        if (ui::beginProps("##body")) {
+            for (auto& [k, v] : b.meta.members()) {
+                ui::prop(k.c_str());
+                ImGui::TextWrapped("%s", v.dump(-1).c_str());
+            }
+            ui::endProps();
         }
+        ui::hint("Рельеф и клетки тел — окно «Рельеф» и инструменты «Сцены»; ключи тела — блок world карты (docs/planets.md).");
     }
 
     // ---------------- player
@@ -175,7 +147,7 @@ private:
                 }
             }
             ui::prop("Сценарий", "Сторона без ИИ и без игрока: только волны и триггеры");
-            if (ImGui::Checkbox("Волны вместо игрока##waves", &pl.waves)) doc.touched();
+            if (ui::checkbox("Волны вместо игрока##waves", &pl.waves)) doc.touched();
             ui::prop("Старт");
             if (pl.hasStart) {
                 float st[2] = {pl.startX, pl.startZ};
@@ -317,8 +289,13 @@ private:
         }
         if (del) {
             ed.doc().beginEdit();
-            std::string arr = path.substr(0, path.find('['));
-            if (Json* a = ed.doc().data.extra.find(arr)) a->eraseAt(size_t(ed.selection.index));
+            const size_t lb = path.find('[');
+            const std::string arr = path.substr(0, lb);
+            if (lb == std::string::npos) ed.doc().data.extra.erase(arr);   // a whole map block
+            else if (Json* a = ed.doc().data.extra.find(arr)) {
+                const size_t at = size_t(std::atoi(path.c_str() + lb + 1));
+                if (at < a->size()) a->eraseAt(at);
+            }
             ed.select({});
             return;
         }
@@ -403,7 +380,7 @@ private:
             ImGui::EndDisabled();
             ui::prop("Дороги", "Юниты ходят только по дорогам между зданиями (Mushroom Wars)");
             bool ro = d.roadsOnly;
-            if (ImGui::Checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
+            if (ui::checkbox("Только по дорогам##ro", &ro)) { doc.beginEdit(); d.roadsOnly = ro; }
             ui::endProps();
         }
         ui::section(ICON_STARTS, "Победа (поверх правил)");
@@ -429,6 +406,7 @@ private:
             ui::callout(ui::Tone::Ok, issues_.empty() ? "Ошибок и предупреждений нет" : "Ошибок нет");
     }
 
+    DetailsPanel details_;
     std::string text_, textFor_, message_;
     Selection lastSel_;
     float radiusEdit_ = 0, massEdit_ = 0;

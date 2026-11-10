@@ -30,7 +30,7 @@ public:
     const char* title() const override { return "Материалы"; }
     const char* group() const override { return "world"; }
     const char* icon() const override { return ICON_PALETTE; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 4; }
     bool openByDefault() const override { return false; }
 
@@ -66,10 +66,14 @@ public:
         catch (const std::exception& e) { ui::toneText(ui::Tone::Error, "%s", e.what()); return; }
 
         // ---- library list
-        ImGui::SetNextItemWidth(150);
-        ui::inputString("##newname", newName_);
+        const float createW = ImGui::CalcTextSize("+  Создать").x + ImGui::GetStyle().FramePadding.x * 2;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - createW - ImGui::GetStyle().ItemSpacing.x);
+        ui::inputHint("##newname", "имя нового материала (латиница)", newName_);
         ImGui::SameLine();
-        if (ImGui::Button("Создать") && !newName_.empty()) {
+        ImGui::BeginDisabled(newName_.empty());
+        const bool create = ui::button(ICON_PLUS, "Создать");
+        ImGui::EndDisabled();
+        if (create && !newName_.empty()) {
             Json m = Json::object();
             m.set("color", Json::parse("[0.8, 0.8, 0.8]"));
             m.set("roughness", Json::number(0.6, 2));
@@ -77,13 +81,13 @@ public:
             select(ed, newName_);
             newName_.clear();
         }
-        ImGui::BeginChild("##lib", ImVec2(0, 110), ImGuiChildFlags_Borders);
+        ImGui::BeginChild("##lib", ImVec2(0, lib.size() == 0 ? ImGui::GetFrameHeightWithSpacing() * 1.6f : 110), ImGuiChildFlags_Borders);
         for (const auto& [name, m] : lib.members()) {
             std::string label = name + (m.has("base") ? "  ← " + m.getStr("base") : "");
             if (ImGui::Selectable(label.c_str(), name == selected_)) select(ed, name);
             if (m.has("description") && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", m.getStr("description").c_str());
         }
-        if (lib.size() == 0) ImGui::TextDisabled("Библиотека пуста: создайте материал");
+        if (lib.size() == 0) ImGui::TextDisabled("Библиотека пуста: введите имя и нажмите «Создать»");
         ImGui::EndChild();
 
         // ---- preview
@@ -92,14 +96,13 @@ public:
         preview_.renderMaterial(ed.view(), edit_, shape_, time_);
         if (preview_.texture().valid()) {
             const bool flip = ed.device().info().renderTargetFlipY;
-            ImGui::Image(ImTextureRef(ImTextureID(preview_.texture().id)), ImVec2(200, 200), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
+            const float side = std::clamp(ImGui::GetContentRegionAvail().x, 120.0f, 220.0f);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - side) * 0.5f);
+            ImGui::Image(ImTextureRef(ImTextureID(preview_.texture().id)), ImVec2(side, side), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
         }
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        ImGui::RadioButton("Шар", &shape_, 0);
-        ImGui::RadioButton("Куб", &shape_, 1);
-        ImGui::TextDisabled("%s", selected_.empty() ? "(не сохранён)" : selected_.c_str());
-        ImGui::EndGroup();
+        static const char* shapes[] = {"Шар", "Куб"};
+        ui::segmented("##shape", shape_, shapes, 2);
+        ImGui::TextDisabled("%s", selected_.empty() ? "Материал не сохранён" : selected_.c_str());
 
         // ---- properties: widgets show the effective value (own key, else inherited through "base"),
         // a change writes the own key only
@@ -113,53 +116,70 @@ public:
             }
         }
         bool changed = false;
-        {
+        if (ui::beginProps("##mat")) {
             const std::string cur = edit_.getStr("base");
-            if (ImGui::BeginCombo("База", cur.empty() ? "(нет)" : cur.c_str())) {
+            ui::prop("База", "Материал, от которого наследуются незаданные свойства");
+            if (ImGui::BeginCombo("##base", cur.empty() ? "(нет)" : cur.c_str())) {
                 if (ImGui::Selectable("(нет)", cur.empty())) { edit_.erase("base"); changed = true; }
                 for (const auto& [name, m] : lib.members())
                     if (name != selected_ && ImGui::Selectable(name.c_str(), name == cur)) { edit_.set("base", Json::string(name)); changed = true; }
                 ImGui::EndCombo();
             }
+            float c[3];
+            color3(eff["color"], c, 1);
+            ui::prop("Цвет");
+            if (ImGui::ColorEdit3("##color", c)) { edit_.set("color", arr(c, 3)); changed = true; }
+            float metal = numOf(eff["metallic"], 0), rough = numOf(eff["roughness"], 0.8f);
+            ui::prop("Металл");
+            if (ImGui::SliderFloat("##metal", &metal, 0, 1)) { edit_.set("metallic", Json::number(double(metal), 2)); changed = true; }
+            ui::prop("Шероховатость");
+            if (ImGui::SliderFloat("##rough", &rough, 0, 1)) { edit_.set("roughness", Json::number(double(rough), 2)); changed = true; }
+            float e[3];
+            color3(eff["emissive"], e, 0);
+            ui::prop("Свечение");
+            if (ImGui::ColorEdit3("##emissive", e)) { edit_.set("emissive", arr(e, 3)); changed = true; }
+            static const char* alphaKeys[] = {"opaque", "mask", "blend"};
+            static const char* alphaNames[] = {"непрозрачный", "вырез по маске", "полупрозрачный"};
+            int ai = 0;
+            for (int i = 0; i < 3; ++i) if (eff.getStr("alpha", "opaque") == alphaKeys[i]) ai = i;
+            ui::prop("Прозрачность", "alpha: opaque | mask | blend");
+            if (ImGui::Combo("##alpha", &ai, alphaNames, 3)) { edit_.set("alpha", Json::string(alphaKeys[ai])); changed = true; }
+            static const char* teams[] = {"(как в модели)", "tint", "mask", "alpha", "vertex", "none"};
+            static const char* teamNames[] = {"как в модели", "оттенок (tint)", "по маске (mask)", "по альфе (alpha)", "по вершинам (vertex)", "нет (none)"};
+            int ti = 0;
+            for (int i = 1; i < 6; ++i) if (eff.getStr("team") == teams[i]) ti = i;
+            ui::prop("Цвет игрока", "team: как цвет игрока ложится на материал");
+            if (ImGui::Combo("##team", &ti, teamNames, 6)) { if (ti == 0) edit_.erase("team"); else edit_.set("team", Json::string(teams[ti])); changed = true; }
+            bool two = eff.getBool("doubleSided"), unlit = eff.getBool("unlit");
+            ui::propWide();
+            if (ui::checkbox("Двусторонний", &two)) { edit_.set("doubleSided", Json::fromBool(two)); changed = true; }
+            ui::propWide();
+            if (ui::checkbox("Без освещения", &unlit)) { edit_.set("unlit", Json::fromBool(unlit)); changed = true; }
+            static const char* texKeys[] = {"texture", "normalMap", "emissiveMap", "teamMask"};
+            static const char* texNames[] = {"Текстура", "Карта нормалей", "Карта свечения", "Маска игрока"};
+            for (int i = 0; i < 4; ++i) {
+                const char* k = texKeys[i];
+                std::string v = edit_.getStr(k);
+                const std::string inherited = !edit_.has(k) && eff.has(k) ? "база: " + eff.getStr(k) : std::string("путь к png");
+                ui::prop(texNames[i], k);
+                ImGui::PushID(k);
+                if (ui::inputHint("##tex", inherited.c_str(), v, ImGuiInputTextFlags_EnterReturnsTrue)) { if (v.empty()) edit_.erase(k); else edit_.set(k, Json::string(v)); changed = true; }
+                ImGui::PopID();
+            }
+            float uv[2] = {eff["uvScale"].size() == 2 ? float(eff["uvScale"][size_t(0)].toDouble(1)) : 1.0f,
+                           eff["uvScale"].size() == 2 ? float(eff["uvScale"][size_t(1)].toDouble(1)) : 1.0f};
+            ui::prop("Тайлинг", "uvScale: повтор текстуры по U и V");
+            if (ImGui::DragFloat2("##uv", uv, 0.05f, 0.05f, 64)) { edit_.set("uvScale", arr(uv, 2)); changed = true; }
+            ui::endProps();
         }
-        float c[3];
-        color3(eff["color"], c, 1);
-        if (ImGui::ColorEdit3("Цвет", c)) { edit_.set("color", arr(c, 3)); changed = true; }
-        float metal = numOf(eff["metallic"], 0), rough = numOf(eff["roughness"], 0.8f);
-        if (ImGui::SliderFloat("Металл", &metal, 0, 1)) { edit_.set("metallic", Json::number(double(metal), 2)); changed = true; }
-        if (ImGui::SliderFloat("Шероховатость", &rough, 0, 1)) { edit_.set("roughness", Json::number(double(rough), 2)); changed = true; }
-        float e[3];
-        color3(eff["emissive"], e, 0);
-        if (ImGui::ColorEdit3("Свечение", e)) { edit_.set("emissive", arr(e, 3)); changed = true; }
-        static const char* alphas[] = {"opaque", "mask", "blend"};
-        int ai = 0;
-        for (int i = 0; i < 3; ++i) if (eff.getStr("alpha", "opaque") == alphas[i]) ai = i;
-        if (ImGui::Combo("Прозрачность", &ai, alphas, 3)) { edit_.set("alpha", Json::string(alphas[ai])); changed = true; }
-        static const char* teams[] = {"(как в модели)", "tint", "mask", "alpha", "vertex", "none"};
-        int ti = 0;
-        for (int i = 1; i < 6; ++i) if (eff.getStr("team") == teams[i]) ti = i;
-        if (ImGui::Combo("Цвет игрока", &ti, teams, 6)) { if (ti == 0) edit_.erase("team"); else edit_.set("team", Json::string(teams[ti])); changed = true; }
-        bool two = eff.getBool("doubleSided"), unlit = eff.getBool("unlit");
-        if (ImGui::Checkbox("Двусторонний", &two)) { edit_.set("doubleSided", Json::fromBool(two)); changed = true; }
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Без освещения", &unlit)) { edit_.set("unlit", Json::fromBool(unlit)); changed = true; }
-        for (const char* k : {"texture", "normalMap", "emissiveMap", "teamMask"}) {
-            std::string v = edit_.getStr(k);
-            if (ui::inputString(k, v, ImGuiInputTextFlags_EnterReturnsTrue)) { if (v.empty()) edit_.erase(k); else edit_.set(k, Json::string(v)); changed = true; }
-            if (!edit_.has(k) && eff.has(k)) { ImGui::SameLine(); ImGui::TextDisabled("(база: %s)", eff.getStr(k).c_str()); }
-        }
-        float uv[2] = {eff["uvScale"].size() == 2 ? float(eff["uvScale"][size_t(0)].toDouble(1)) : 1.0f,
-                       eff["uvScale"].size() == 2 ? float(eff["uvScale"][size_t(1)].toDouble(1)) : 1.0f};
-        if (ImGui::DragFloat2("Тайлинг (uvScale)", uv, 0.05f, 0.05f, 64)) { edit_.set("uvScale", arr(uv, 2)); changed = true; }
         (void)changed;
-        if (!selected_.empty() && ui::button(ICON_SAVE, "Сохранить", true)) call(ed, "material_set", nameParams(selected_, edit_));
+        if (!selected_.empty() && ui::wideButton(ICON_SAVE, "Сохранить", 0, 2, true)) call(ed, "material_set", nameParams(selected_, edit_));
         if (!selected_.empty()) {
-            ImGui::SameLine();
-            if (ImGui::Button("Удалить")) { Json p = Json::object(); p.set("name", Json::string(selected_)); call(ed, "material_delete", p); selected_.clear(); edit_ = Json::object(); }
+            if (ui::wideButton(ICON_TRASH, "Удалить", 1, 2)) { Json p = Json::object(); p.set("name", Json::string(selected_)); call(ed, "material_delete", p); selected_.clear(); edit_ = Json::object(); }
         }
 
         // ---- procedural texture
-        if (ImGui::CollapsingHeader("Текстура по узору")) {
+        if (ui::collapsing("Текстура по узору")) {
             static std::vector<std::string> pats = render::texturePatterns();
             if (ImGui::BeginCombo("Узор", pats[size_t(pattern_)].c_str())) {
                 for (size_t i = 0; i < pats.size(); ++i) if (ImGui::Selectable(pats[i].c_str(), int(i) == pattern_)) pattern_ = int(i);
@@ -190,7 +210,7 @@ public:
         }
 
         // ---- apply to a type
-        if (!selected_.empty() && ImGui::CollapsingHeader("Назначить типу")) {
+        if (!selected_.empty() && ui::collapsing("Назначить типу")) {
             const auto& types = ed.rules().types;
             if (!types.empty()) {
                 applyType_ = std::clamp(applyType_, 0, int(types.size()) - 1);

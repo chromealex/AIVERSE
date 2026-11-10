@@ -148,6 +148,8 @@ netcode rewinds or a save is loaded. A tick that only changes Lua tables costs n
   game.has_data(h, "morale")  game.clear_data(h)
   ```
   View scripts get a read-only copy of the stored table.
+  The editor shows these tables too (Inspector «Детали» → «Данные скрипта»; Hierarchy search `d:`); with game.json
+  `editor.hierarchy` a key can name the row (`label`) or group the tree (`data:<key>`), docs/editor-world-tree.md.
 - Allowed in `state` and `game.data`: integers, `fx`, strings, booleans and nested tables whose keys
   are integers or strings. A value that can't be stored (function, float, table key, cycle) is left
   out of the saved state and logged; keep such values out of persistent tables.
@@ -499,6 +501,7 @@ end)
 | `ui.set(key, value)` | a top-level value of model `script` (numbers, strings, booleans, fx, tables / arrays); unchanged values are not resent. A document binds its `{{names}}` when it loads: set every key it uses before (or in the same frame as) its first `ui.open` |
 | `ui.open(name [, params])`, `ui.close(name)` | show / hide `ui/hud/<name>.rml` (while the host screen is `playing`, or one of the screens its `<body screens="playing paused over">` lists: a game's own pause / result panels, a HUD under them); `params` -> `{{params.*}}` |
 | `ui.on(event, fn(args))` | `event('name', ...)` in a document; `args` = the extra values as an array |
+| `ui.on("back", fn(args))` | Esc / Android Back (Back arrives as Escape) during a match (`playing` or `paused`). With such a handler the client skips its own pause / resume / tool cancel and leaves the key to the script: `args = {screen = "playing" \| "paused", platform = "android" \| "ios" \| "web" \| "macos" \| "windows" \| "linux"}`; return `true` to also cancel the pointer interaction in progress (a `map-drag` press, a skill drag, a tool mode). Pause / resume from the script with `view.ui_call('game.pause')` / `view.ui_call('game.resume')` (client, and the editor's Game window playing as in the client while it has focus) |
 | `view.state()` | the simulation scripts' `state` as of this tick (a copy; writing to it changes nothing) |
 
 `send('id', {...})` in a document sends a script command as the local player (the current selection
@@ -589,6 +592,15 @@ current player-ability target. Coordinates are world X/Z floats. This is present
 state only: it is neither replicated nor written into the simulation. Use it for
 allowed-area masks and cursor previews; authoritative validation remains in the
 command's simulation handler. Client and editor clear it when targeting ends.
+In `mapClick` games a drag that started on a `map-drag` HUD element (drag-to-cast discs) reports
+`ability = "map-drag"` with the pointer's ground point while the drag lasts (`overWorld`: over the
+map, not over the UI, where a release taps the map); client and the editor's Game window when it plays as in the
+client (the same GameClient; its touch device profiles send the left button as a finger, so `touch` is true there
+as on a phone). A map-drag also reports `touch` (the drag
+is a touch, not the mouse) and `sx`, `sy` (the pointer in window points). `view.set_map_drag_offset(dx, dy)`
+(window points, reset when a map-drag starts) moves the point the drag aims at: the ground point (`x`, `z`)
+and the release tap are taken at the pointer + (dx, dy), while `overWorld` and the release over the UI stay
+the pointer's own — e.g. aim above a finger so the target is not under it.
 
 The client data-model callback `skill_drag(actionId, progress)` starts a point-target
 HUD drag on `mousedown` for an enabled action with nonnegative progress (the support
@@ -658,6 +670,7 @@ on the local machine only:
 |---|---|
 | `scale` | number or `{x, y, z}`: multiplies the model in its own axes about its ground point (1) |
 | `lift` | world units the model is raised along its up (negative: lowered); the ground shadow stays (0) |
+| `pitch`, `roll` | degrees the model tilts on top of its facing, about its origin (lift included): `pitch` > 0 lowers the nose, `roll` > 0 raises the right side; applied roll first, then pitch, then the facing (Unity's `Euler(pitch, yaw, roll)`), so a flyer can dive and bank while `game.set_facing` / its movement turn it; the sun shadow follows, the `groundShadow` image does not; 3D models only (0, 0) |
 | `corpse_age` | seconds since the death on the script's own clock: the corpse (death clip, fall, sink, `corpseFade`) shows that moment and stays while it is below the type's `corpse` (a paused match holds a dying model like Unity's frozen `Elapsed`); an entity removed without a death event (`game.kill(h, true)`, or a death in a frame that ran several ticks) becomes a corpse when its values carry `corpse_age`; `false`: the view's frame clock again (unset) |
 | `opacity` | 0..1: below .99 the model is drawn in the blended pass (sorted back to front, no shadow-map casting) and still writes depth, so the ground layers drawn after that pass (paint layers, `draw_ground`, sprites) stay behind it; 0 draws nothing (1) |
 | `tint` | `{r, g, b}` multiplies the surface colour (1, 1, 1) |
@@ -677,7 +690,7 @@ x = width, y = height, `opacity`). Scripts that run per frame can also set value
 (OpenWar computes Unity's per-tick curves from the match time it publishes in `state`). Presentation only: the
 simulation and its checksum never see them; the headless server has no view scripts. Store: `modules/rts/view/EntityFx.h`
 (`ViewScripts::entityFx()` -> `RtsScene::entityFx`, client and editor play-test). Tests: `view_entity_fx_script_api`,
-`view_entity_fx_renders_scaled_translucent`, `view_entity_fx_ground_shadow`.
+`view_entity_fx_renders_scaled_translucent`, `view_entity_fx_ground_shadow`, `view_entity_fx_pitch_roll`.
 
 View script budget: every handler call (`view.on`, `view.on_frame`, `ui.on`) has its own budget of 5,000,000 VM
 instructions (the C functions it calls are not counted), so one heavy handler never starves the others in that frame.

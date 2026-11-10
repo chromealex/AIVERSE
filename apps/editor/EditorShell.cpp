@@ -178,7 +178,7 @@ void Editor::drawMenuBar() {
         if (item(ICON_UNDO, "Отменить", "Ctrl+Z", false, doc().canUndo() && !playing())) { doc().undo(); selection = {}; }
         if (item(ICON_REDO, "Повторить", "Ctrl+Y", false, doc().canRedo() && !playing())) { doc().redo(); selection = {}; }
         ImGui::Separator();
-        if (item(ICON_TRASH, "Удалить выбранный объект", "Del", false, selectedEntity() >= 0)) { doc().removeEntity(selectedEntity()); selection = {}; }
+        if (item(ICON_TRASH, "Удалить выбранные объекты", "Del", false, !selectedEntities().empty() && !playing())) removeSelectedEntities();
         if (item(ICON_FIT, "Показать всю карту", "F")) fitScene();
         ImGui::SeparatorText("Симметрия");
         if (item(ICON_COPY, "Зеркально: левая половина → правая")) { doc().mirrorHorizontal(); status = "Отражено, игроки 1 и 2 поменяны в копии"; }
@@ -297,9 +297,25 @@ void Editor::drawTopBarControls() {
     const float crumbX = menusEnd + 18, crumbW = ImGui::CalcTextSize(crumb.c_str()).x + (doc().dirty ? 14 : 0);
     if (crumbX + crumbW + 16 > cx) cx = crumbX + crumbW + 16; // narrow window: push the controls right
     if (cx + playW < rightX) {
+        // both parts are links: the game opens «Проект», the map its properties in the Inspector
         ImGui::SetCursorPos(ImVec2(crumbX, textY));
-        ImGui::TextColored(pal.textDim, "%s", crumb.c_str());
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", doc().path.empty() ? "Карта ещё не сохранена" : ws_.relative(doc().path).c_str());
+        auto link = [&](const std::string& text, const char* tip) {
+            ImGui::TextColored(pal.textDim, "%s", text.c_str());
+            const bool hov = ImGui::IsItemHovered();
+            if (hov) {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddLine(ImVec2(a.x, b.y), ImVec2(b.x, b.y), ImGui::GetColorU32(pal.textDim));
+                ImGui::SetTooltip("%s", tip);
+            }
+            return hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        };
+        if (link(game, "Проект: типы, ресурсы, карты")) focusWindow("project");
+        ImGui::SameLine(0, 0);
+        ImGui::TextColored(pal.textDim, "  %s  ", ICON_CHEVRON_RIGHT);
+        ImGui::SameLine(0, 0);
+        const std::string mapTip = (doc().path.empty() ? std::string("Карта ещё не сохранена") : ws_.relative(doc().path)) + "\nКлик — свойства карты";
+        if (link(map, mapTip.c_str())) { select({Selection::MapProps, -1, {}}); focusWindow("inspector"); }
         if (doc().dirty) {
             ImVec2 m = ImGui::GetItemRectMax();
             ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(m.x + 9, m.y - ImGui::GetTextLineHeight() * 0.5f), 3.5f, ImGui::GetColorU32(pal.accent));
@@ -410,30 +426,53 @@ void Editor::drawStatusBar() {
 }
 
 void Editor::drawActivityToasts() {
-    // the last agent actions, fading out over the main viewport
+    // the last agent actions, fading out in the bottom-right corner above the status bar; repeats of the same
+    // message collapse into one toast with a "×N" counter, at most 3 toasts at once (the full list: Консоль / ИИ-агент)
     const auto& pal = theme_.palette();
     ImGuiViewport* mv = ImGui::GetMainViewport();
     ImDrawList* dl = ImGui::GetForegroundDrawList(mv);
-    float y = mv->WorkPos.y + mv->WorkSize.y - statusBarHeight() - 44;
-    int shown = 0;
-    for (auto it = ws_.activity.rbegin(); it != ws_.activity.rend() && shown < 5; ++it) {
+    struct Toast { std::string text; bool error; double newest; int count; };
+    std::vector<Toast> toasts;
+    for (auto it = ws_.activity.rbegin(); it != ws_.activity.rend(); ++it) {
         if (it->source == "editor") continue;
-        double age = time_ - it->time;
-        if (age > 6) break;
-        float a = float(std::clamp(1.0 - (age - 4) / 2, 0.0, 1.0));
-        const std::string icon = it->error ? ICON_ALERT : ICON_AGENT;
-        ImVec2 ts = ImGui::CalcTextSize(it->text.c_str()), is = ImGui::CalcTextSize(icon.c_str());
-        float w = is.x + 8 + ts.x, x = mv->WorkPos.x + mv->WorkSize.x * 0.5f - w * 0.5f;
+        if (time_ - it->time > 6) break;
+        bool merged = false;
+        for (auto& t : toasts) if (t.text == it->text && t.error == it->error) { ++t.count; merged = true; break; }
+        if (!merged) toasts.push_back({it->text, it->error, it->time, 1});
+    }
+    // anchored to the bottom-right corner of the Scene (or Game) view: over the picture, never over buttons
+    const Viewport* host = sceneVisible() ? sceneViewport : gameViewport;
+    float right = mv->WorkPos.x + mv->WorkSize.x, bottom = mv->WorkPos.y + mv->WorkSize.y - statusBarHeight();
+    float maxW = std::min(520.0f, mv->WorkSize.x * 0.45f);
+    if (host && host->pointsW > 120 && host->drawnFrame >= ImGui::GetFrameCount() - 1) {
+        right = host->originX + host->pointsW; bottom = host->originY + host->pointsH; maxW = std::min(maxW, host->pointsW - 60);
+    }
+    float y = bottom - 12;
+    int shown = 0;
+    for (const Toast& t : toasts) {
+        if (shown == 3) break;
+        const double age = time_ - t.newest;
+        const float a = float(std::clamp(1.0 - (age - 4) / 2, 0.0, 1.0));
+        const std::string icon = t.error ? ICON_ALERT : ICON_AGENT;
+        const std::string count = t.count > 1 ? "×" + std::to_string(t.count) : "";
+        const ImVec2 is = ImGui::CalcTextSize(icon.c_str()), cs = ImGui::CalcTextSize(count.c_str());
+        const float textW = maxW - is.x - 8 - (count.empty() ? 0 : cs.x + 10);
+        const ImVec2 ts = ImGui::CalcTextSize(t.text.c_str(), nullptr, false, textW);
+        const float w = is.x + 8 + std::min(ts.x, textW) + (count.empty() ? 0 : cs.x + 10), h = ts.y;
+        const float x = right - 16 - 12 - w;
+        y -= h + 8;
         ImVec4 bg = pal.panelRaised; bg.w = 0.96f * a;
-        ImVec4 br = pal.border; br.w = a;
-        dl->AddRectFilled(ImVec2(x - 12, y - 7), ImVec2(x + w + 12, y + ts.y + 7), ImGui::GetColorU32(ImVec4(0, 0, 0, 0.25f * a)), 9); // soft shadow
-        dl->AddRectFilled(ImVec2(x - 12, y - 8), ImVec2(x + w + 12, y + ts.y + 6), ImGui::GetColorU32(bg), 8);
-        dl->AddRect(ImVec2(x - 12, y - 8), ImVec2(x + w + 12, y + ts.y + 6), ImGui::GetColorU32(br), 8);
-        ImVec4 ic = it->error ? pal.danger : pal.accent; ic.w = a;
-        ImVec4 tc = it->error ? pal.danger : pal.text; tc.w = a;
+        ImVec4 br = t.error ? pal.danger : pal.border; br.w = a * (t.error ? 0.7f : 1.0f);
+        dl->AddRectFilled(ImVec2(x - 12, y - 7), ImVec2(x + w + 12, y + h + 9), ImGui::GetColorU32(ImVec4(0, 0, 0, 0.25f * a)), 9); // soft shadow
+        dl->AddRectFilled(ImVec2(x - 12, y - 8), ImVec2(x + w + 12, y + h + 8), ImGui::GetColorU32(bg), 8);
+        dl->AddRect(ImVec2(x - 12, y - 8), ImVec2(x + w + 12, y + h + 8), ImGui::GetColorU32(br), 8);
+        ImVec4 ic = t.error ? pal.danger : pal.accent; ic.w = a;
+        ImVec4 tc = pal.text; tc.w = a;
+        ImVec4 mc = pal.textDim; mc.w = a;
         dl->AddText(ImVec2(x, y), ImGui::GetColorU32(ic), icon.c_str());
-        dl->AddText(ImVec2(x + is.x + 8, y), ImGui::GetColorU32(tc), it->text.c_str());
-        y -= ts.y + 20;
+        dl->AddText(nullptr, 0, ImVec2(x + is.x + 8, y), ImGui::GetColorU32(tc), t.text.c_str(), nullptr, textW);
+        if (!count.empty()) dl->AddText(ImVec2(x + w - cs.x, y), ImGui::GetColorU32(mc), count.c_str());
+        y -= 20;
         ++shown;
     }
 }

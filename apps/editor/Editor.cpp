@@ -106,6 +106,7 @@ void Editor::init(gfx::Device& dev) {
     std::stable_sort(windows_.begin(), windows_.end(), [](auto& a, auto& b) { return a->order() < b->order(); });
     registerGuiOps();
     registerPlayOps();
+    registerWorldOps();
     registerFxPreviewOps();
     if (!opt_.projectDir.empty()) {
         std::string err;
@@ -164,7 +165,15 @@ EditorWindow* Editor::window(const std::string& id) {
 }
 
 void Editor::focusWindow(const std::string& id) {
-    if (auto* w = window(id)) { w->open = true; ImGui::SetWindowFocus(w->imguiName()); }
+    EditorWindow* w = window(id);
+    if (!w) return;
+    w->open = true;
+    // windows that change the picture (fog, terrain, lighting, post effects…) are useless next to the Game tab's
+    // "test not running" placeholder: bring the Scene to the front of the center area as well
+    const std::string g = w->group(), area = w->dockArea();
+    if ((g == "world" || g == "look") && area != "center" && !playing() && !clientPlaying())
+        if (EditorWindow* scene = window("scene"); scene && scene->open) ImGui::SetWindowFocus(scene->imguiName());
+    ImGui::SetWindowFocus(w->imguiName());
 }
 
 // ============================ documents ============================
@@ -208,6 +217,9 @@ void Editor::reloadRules() {
     view_.init(*dev_, rules(), projectReader(ws_.project.dir));
     for (auto& w : view_.warnings()) ws_.log("view", w, true);
     gridRevision_ = ~0ull;
+    ++rulesRevision_;   // the world tree's preview rebuilds
+    worldCfg_ = parseWorldConfig(ws_.project.manifest);
+    for (auto& e : worldCfg_.errors) ws_.log("world", "game.json " + e, true);
     placeType = std::clamp(placeType, 0, std::max(0, int(rules().types.size()) - 1));
     reloadFx();
 }
@@ -341,6 +353,7 @@ int Editor::pickEntity(const Viewport& vp, const RTSCamera& cam, float sx, float
         for (size_t i = 0; i < d.entities.size(); ++i) {
             int eb; float3 el;
             if (!planetLocal(d.entities[i].at, eb, el) || eb != body) continue;
+            if (objectHidden(d.entities[i].owner, d.entities[i].type) || objectLocked(d.entities[i].owner, d.entities[i].type)) continue;
             const int t = rules().findType(d.entities[i].type);
             const float r = t >= 0 ? const_cast<game::RtsView&>(view_).selectionRadius(uint16_t(t)) + 0.2f : 0.6f;
             const float dd = length(el - local);
@@ -355,6 +368,7 @@ int Editor::pickEntity(const Viewport& vp, const RTSCamera& cam, float sx, float
     const auto& d = ws_.map.data;
     for (size_t i = 0; i < d.entities.size(); ++i) {
         const auto& e = d.entities[i];
+        if (objectHidden(e.owner, e.type) || objectLocked(e.owner, e.type)) continue;
         int t = rules().findType(e.type);
         float r = t >= 0 ? const_cast<game::RtsView&>(view_).selectionRadius(uint16_t(t)) + 0.2f : 0.6f;
         float dd = std::hypot(x - e.x, z - e.z);
@@ -473,11 +487,11 @@ void Editor::buildEditScene(game::RtsScene& out) const {
     out.objects.clear();
     out.roads.clear();
     out.moveMarkers.clear();
-    const int sel = selectedEntity();
+    auto inSet = [&](const Selection& s) { return std::find(selectionSet.begin(), selectionSet.end(), s) != selectionSet.end() || selection == s; };
     for (size_t i = 0; i < d.entities.size(); ++i) {
         const auto& e = d.entities[i];
         int t = rules().findType(e.type);
-        if (t < 0) continue;
+        if (t < 0 || objectHidden(e.owner, e.type)) continue;
         game::SceneObject o;
         o.type = uint16_t(t);
         o.owner = e.owner < 0 ? uint8_t(game::kHostileNeutral) : uint8_t(std::clamp(e.owner, 0, 16));
@@ -488,9 +502,28 @@ void Editor::buildEditScene(game::RtsScene& out) const {
             o.body = int16_t(body); o.pos = local;
         }
         if (rules().types[size_t(t)].garrisonMax > 0) o.garrison = e.garrison >= 0 ? e.garrison : 0;
-        o.selected = int(i) == sel || int(i) == roadStart;
+        const Selection me{Selection::Entity, int(i), {}};
+        o.selected = inSet(me) || int(i) == roadStart;
+        o.hovered = hover == me;
         out.objects.push_back(o);
     }
+    // what the game creates at start (world tree preview: faction start units, script / C++ module objects); read-only
+    if (showGameObjects && !worldLive_ && !d.planet() && !sceneHidden.count("game")) wantWorld();   // the preview is built for the Scene too
+    if (showGameObjects && !worldLive_ && !d.planet() && !sceneHidden.count("game"))
+        for (auto& r : world_.rows) {
+            if (r.doc >= 0 || r.type < 0 || !r.hasPos || (r.flags & game::kUnitOffMap) || size_t(r.type) >= rules().types.size()) continue;
+            if (objectHidden(r.owner, rules().types[size_t(r.type)].id)) continue;
+            game::SceneObject o;
+            o.type = uint16_t(r.type);
+            o.owner = r.owner < 0 ? uint8_t(game::kHostileNeutral) : uint8_t(std::clamp(r.owner, 0, 16));
+            o.pos = {r.x, 0, r.z};
+            o.hp = r.maxHp > 0 ? std::clamp(r.hp / r.maxHp, 0.0f, 1.0f) : 1.0f;
+            Selection me{Selection::Live, -1, {}};
+            me.ref = r.ref;
+            o.selected = inSet(me);
+            o.hovered = hover == me;
+            out.objects.push_back(o);
+        }
     if (!d.planet()) for (auto [a, b] : d.roads) out.roads.push_back({{d.entities[size_t(a)].x, 0, d.entities[size_t(a)].z}, {d.entities[size_t(b)].x, 0, d.entities[size_t(b)].z}});
 }
 
@@ -592,7 +625,16 @@ void Editor::renderGame(Viewport& vp, const RTSCamera& cam) {
     game::sceneFromSim(*sim_, sc, float(sim_->alpha()), uint8_t(human_));
     sc.paintLayers = paintLayers;
     sc.entityFx = entityFx;
-    for (auto& o : sc.objects) o.selected = std::find(gameSelection.begin(), gameSelection.end(), o.entity) != gameSelection.end();
+    const bool sceneView = &vp == sceneViewport;   // the Scene shows the editor's selection / hover of the world tree
+    for (auto& o : sc.objects) {
+        o.selected = std::find(gameSelection.begin(), gameSelection.end(), o.entity) != gameSelection.end();
+        if (sceneView && o.entity.valid()) {
+            Selection me{Selection::Live, -1, {}};
+            me.ref = worldRef(o.entity);
+            o.selected = std::find(selectionSet.begin(), selectionSet.end(), me) != selectionSet.end();
+            o.hovered = hover == me;
+        }
+    }
     r3d_.beginScene(cam, vp.w, vp.h);
     setOverlayContext(vp, cam, true);
     view_.draw(r3d_, sc, time_, human_ ? &gs.vision[size_t(human_)] : nullptr, gs.grid);
@@ -696,6 +738,7 @@ void Editor::startPlay(int humanSlot) {
         if (!game::applyTilesToMap(mapJson, read, &terr)) throw std::runtime_error(terr);
         sim_->setup(ws_.project.simRules(mapJson), mapJson);
         playIds_ = mapEntityIds(*sim_, *simModule(), mapJson);
+        playDocLinks_ = linkMapEntities(*sim_, *simModule(), doc().data);   // world tree: map entity -> live object
         view_.lights().configure(ws_.project.manifest["lighting"], mapJson["lighting"], mapJson["lights"]); // day/night, map lights
         if (auto pe = rts::game::configurePlayerColors(ws_.project.manifest["playerColors"]); !pe.empty()) { status = pe; ws_.log("play", pe, true); }
     } catch (const std::exception& e) {
@@ -817,13 +860,15 @@ void Editor::drawDockspace() {
         ImGui::DockBuilderAddNode(dock, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dock, size);
         ImGuiID center = dock;
-        ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.19f, nullptr, &center);
-        ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.27f, nullptr, &center);
+        ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.18f, nullptr, &center);
+        ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.32f, nullptr, &center);
+        // the Inspector stays visible on top; rules and the world / look tool windows share the tabs under it
+        ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.62f, nullptr, &right);
         ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.27f, nullptr, &center);
         ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.45f, nullptr, &left);
         for (auto& w : windows_) {
             std::string a = w->dockArea();
-            ImGuiID node = a == "left" ? left : a == "left-bottom" ? leftBottom : a == "bottom" ? bottom : a == "center" ? center : right;
+            ImGuiID node = a == "left" ? left : a == "left-bottom" ? leftBottom : a == "right-bottom" ? rightBottom : a == "bottom" ? bottom : a == "center" ? center : right;
             ImGui::DockBuilderDockWindow(w->imguiName(), node);
         }
         ImGui::DockBuilderFinish(dock);
@@ -854,6 +899,10 @@ void Editor::frame(gfx::Device& dev, double dt) {
         samplePlayStats();
     }
     flashes_.erase(std::remove_if(flashes_.begin(), flashes_.end(), [&](const Flash& f) { return f.until < time_; }), flashes_.end());
+    hover = hoverNext_;   // set by the Scene / Hierarchy while drawing the previous frame
+    hoverNext_ = {};
+    syncSelection();
+    updateWorld();
     for (auto& w : windows_) w->update(*this, dt);
 
     theme_.applyPending();
@@ -902,6 +951,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     deliverShots(dev);
     FrameStats fs_{float(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()), lastSimMs_, r3d_.drawCalls()};
     frameHistory.push_back(fs_);
+    prof.frame(fs_.frameMs, time_);
     if (frameHistory.size() > 240) frameHistory.pop_front();
     if (quit_) platform::requestQuit();
 }

@@ -44,6 +44,16 @@ public:
     void update();   // layout + data bindings; call once per frame before render()
     void render();   // inside an active render pass, after the scene
 
+    // Linear blending (game.json "ui": {"blend": "linear"}, UiColor.h): translucent UI blends in linear light as in
+    // a Unity project in linear colour space. render() then ends the caller's pass, draws into its own sRGB layer,
+    // composites it over the target in one full-screen pass and leaves a pass on the target open again (the caller
+    // still ends it). Call before loading documents (loaded images keep their encoding until reloaded). Returns
+    // false, keeping the default path, when the GPU lacks sRGB render targets.
+    bool setLinearBlending(bool on);
+    bool linearBlending() const;
+    // The pass render() draws in (linear blending reopens it): invalid handles = the screen.
+    void setTarget(gfx::TextureHandle color, gfx::TextureHandle depth);
+
     Rml::Context* context() const;
     // Loads "engine/ui/<name>" (or the game's "ui/<name>" override). Returns null on error (logged).
     Rml::ElementDocument* loadDocument(const std::string& name);

@@ -41,7 +41,7 @@ public:
     const char* id() const override { return "postfx"; }
     const char* title() const override { return "Постэффекты"; }
     const char* group() const override { return "look"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 7; }
     bool openByDefault() const override { return false; }
 
@@ -75,16 +75,18 @@ public:
         if (!ImGui::IsAnyItemActive() && dirty_) save(ed);
         ui::section(nullptr, "Предпросмотр");
         int t = int(tier_);
-        if (ImGui::Combo("Качество", &t, kTiersRu, 4)) tier_ = PostFxQuality(t);
-        ui::help("Только для просмотра: в игре уровень выбирается по видеокарте (слабые Android — низкое, телефоны — среднее, ПК — высокое), "
-                 "игрок может снизить его, а при медленных кадрах он снижается сам.");
-        ImGui::Checkbox("Показывать в «Сцене»", &inScene_);
+        if (ui::beginProps("##pv")) {
+            ui::prop("Качество", "Только для просмотра: в игре уровень выбирается по видеокарте (слабые Android — низкое, телефоны — среднее, ПК — высокое), "
+                                 "игрок может снизить его, а при медленных кадрах он снижается сам.");
+            if (ImGui::Combo("##tier", &t, kTiersRu, 4)) tier_ = PostFxQuality(t);
+            ui::endProps();
+        }
+        ui::checkbox("Показывать в «Сцене»", &inScene_);
         ImGui::TextDisabled("Последний кадр: проходов %d, эффектов %d", pf.stats().passes, pf.stats().effects);
 
         ui::section(nullptr, "Где");
-        ImGui::RadioButton("game.json (вся игра)", &scope_, 0);
-        ImGui::SameLine();
-        ImGui::RadioButton("Эта карта", &scope_, 1);
+        static const char* scopes[] = {"Вся игра (game.json)", "Эта карта"};
+        ui::segmented("##scope", scope_, scopes, 2);
         ui::help("Эффект карты заменяет эффект того же типа из game.json (только для этой карты); \"enabled\": false на карте выключает его.");
         const std::string scope = scope_ ? "map" : "game";
 
@@ -128,6 +130,7 @@ private:
         ui::section(nullptr, "Готовые наборы");
         const auto& ps = postFxPresets();
         preset_ = std::clamp(preset_, 0, int(ps.size()) - 1);
+        ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo("##preset", ps[size_t(preset_)].label)) {
             for (int i = 0; i < int(ps.size()); ++i) {
                 if (ImGui::Selectable(ps[size_t(i)].label, i == preset_)) preset_ = i;
@@ -135,10 +138,10 @@ private:
             }
             ImGui::EndCombo();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Заменить")) applyPreset(ed, scope, "replace");
-        ImGui::SameLine();
-        if (ImGui::Button("Добавить")) applyPreset(ed, scope, "merge");
+        if (ui::wideButton(ICON_REFRESH, "Заменить", 0, 2)) applyPreset(ed, scope, "replace");
+        ImGui::SetItemTooltip("Убрать текущие эффекты и поставить набор");
+        if (ui::wideButton(ICON_PLUS, "Добавить", 1, 2)) applyPreset(ed, scope, "merge");
+        ImGui::SetItemTooltip("Добавить эффекты набора к текущим");
     }
     void applyPreset(Editor& ed, const std::string& scope, const char* mode) {
         Json p = Json::object();
@@ -151,7 +154,7 @@ private:
     void drawEffects(Editor& ed, const std::string& scope) {
         ui::section(ICON_SPARKLES, scope == "map" ? "Эффекты карты" : "Эффекты игры");
         const Json effects = block(ed, scope).isArray() ? block(ed, scope) : block(ed, scope)["effects"];
-        if (effects.size() == 0) { ImGui::TextDisabled("Нет эффектов: картинка идёт в экран без постобработки (ноль затрат)."); return; }
+        if (effects.size() == 0) { ui::hint("Нет эффектов: картинка идёт в экран без постобработки (ноль затрат)."); return; }
         int removeAt = -1;
         for (size_t i = 0; i < effects.size(); ++i) {
             const Json& ej = effects[i];
@@ -161,12 +164,12 @@ private:
             PostFxEffect e;
             try { e = parsePostFxEffect(ej, false); } catch (...) { ImGui::PopID(); continue; }
             bool en = e.enabled;
-            if (ImGui::Checkbox("##en", &en)) edit(ed, scope, [&](Json& arr) { arr.at(i).set("enabled", Json::fromBool(en)); });
+            if (ui::checkbox("##en", &en)) edit(ed, scope, [&](Json& arr) { arr.at(i).set("enabled", Json::fromBool(en)); });
             ImGui::SameLine();
             costDots(d->cost);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s эффект", costRu(d->cost));
             ImGui::SameLine();
-            const bool open = ImGui::CollapsingHeader((std::string(d->label) + "###h").c_str());
+            const bool open = ui::collapsing((std::string(d->label) + "###h").c_str());
             if (open) {
                 drawParams(ed, scope, i, *d, e);
                 ImGui::Indent();
@@ -201,7 +204,7 @@ private:
             }
             case PostFxParamKind::Bool: {
                 bool v = e.values[size_t(off)] > 0.5f;
-                if (ImGui::Checkbox(p.label, &v)) edit(ed, scope, [&](Json& arr) { arr.at(i).set(p.name, Json::fromBool(v)); });
+                if (ui::checkbox(p.label, &v)) edit(ed, scope, [&](Json& arr) { arr.at(i).set(p.name, Json::fromBool(v)); });
                 off += 1;
                 break;
             }
@@ -270,7 +273,7 @@ private:
             ImGui::TableSetupColumn("Устройство", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("Эфф.");
             ImGui::TableSetupColumn("мс");
-            ImGui::TableSetupColumn("60 →");
+            ImGui::TableSetupColumn("из 60 fps");
             ImGui::TableHeadersRow();
             for (size_t k = 0; k < postFxProfiles().size(); ++k) {
                 const auto& p = postFxProfiles()[k];

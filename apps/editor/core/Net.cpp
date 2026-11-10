@@ -5,7 +5,9 @@
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
+#if defined(_MSC_VER)
+#pragma comment(lib, "ws2_32.lib")   // MinGW links ws2_32 through CMake
+#endif
 using socklen_t = int;
 #define RTS_CLOSE closesocket
 static void netInit() { static bool done = false; if (!done) { WSADATA d; WSAStartup(MAKEWORD(2, 2), &d); done = true; } }

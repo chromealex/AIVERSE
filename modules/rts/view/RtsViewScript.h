@@ -30,6 +30,8 @@ struct ViewTargeting {
     float x=0, z=0;
     bool active=false, overWorld=false;
     uint64_t caster=0; // Packed entity ID; zero for player abilities.
+    bool touch=false;  // map-drag: the drag is a touch (not the mouse)
+    float sx=0, sy=0;  // map-drag: the dragging pointer in window points (x, z are the ground point under it + the drag offset)
 };
 
 // view.camera() / view.set_camera{...}: the host's camera in the units of game.json "camera" — zoom = visible
@@ -87,6 +89,10 @@ public:
     // Per frame: dispatches the collected events and on_frame(dt).
     void update(Simulation& sim, float dt);
     void setTargeting(const ViewTargeting& target);
+    // view.set_map_drag_offset(dx, dy): window points added to a map-drag pointer before its ground pick and its release
+    // tap (e.g. aim above a finger); the client resets it when a map-drag starts.
+    void mapDragOffset(float& dx, float& dy) const;
+    void setMapDragOffset(float dx, float dy);
     // The Lua `sound` table's host (voice handles, music; ScriptSound.h); null = silent no-ops.
     void setSound(ScriptSound* sound);
     // view.ui_call's host: called with the view state's stack (1 = function name, 2.. = arguments), pushes ok and the
@@ -107,7 +113,10 @@ public:
     std::vector<ViewGroundBatch> takeGroundDraws();
     // From the UI: data-event-click="event('name', ...)" -> ui.on("name", fn(args)) handlers;
     // send('id', {...}) -> a script command like view.send (false: unknown id / bad args, see log)
-    void uiEvent(Simulation& sim, const std::string& name, const Json& args);
+    // Returns true when a handler returned a true value (the event's meaning decides what that asks of the host).
+    bool uiEvent(Simulation& sim, const std::string& name, const Json& args);
+    // A ui.on(name, fn) handler is registered (e.g. "back": the script owns Esc / Android Back during a match)
+    bool hasUiHandler(const std::string& name) const;
     bool send(Simulation& sim, const std::string& id, const Json& args);
     ViewScriptProfile profile() const;
     const std::vector<ScriptLogEntry>& log() const { return log_; }

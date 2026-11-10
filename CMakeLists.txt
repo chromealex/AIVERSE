@@ -553,7 +553,7 @@ if(RTS_BUILD_EDITOR OR RTS_BUILD_TOOLS)
     add_library(rts_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
-    apps/editor/core/ToolchainOps.cpp)   # scenario_run, rules_lint, rules_schema keys
+    apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
     target_link_libraries(rts_editor_core PUBLIC rts_game)
     target_link_libraries(rts_editor_core PUBLIC rts_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(rts_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
@@ -568,7 +568,7 @@ endif()
 if(RTS_BUILD_EDITOR)
     # windows register themselves (RTS_EDITOR_WINDOW): any .cpp in apps/editor/windows is part of the editor
     file(GLOB RTS_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
-    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp
+    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp apps/editor/EditorWorld.cpp apps/editor/DetailsPanel.cpp
                    ${RTS_EDITOR_WINDOWS} $<TARGET_OBJECTS:rts_runtime>)
     target_link_libraries(rts_editor PRIVATE rts_runtime rts_game_view rts_editor_core)
     target_link_libraries(rts_editor PRIVATE rts_game_fx)
@@ -750,7 +750,8 @@ if(NOT MSVC)
     target_compile_options(rts_rmlui_lua PRIVATE -w)
 endif()
 
-add_library(rts_ui STATIC engine/ui/UiLayer.cpp engine/ui/UiRender.cpp engine/ui/UiFont.cpp engine/ui/UiStb.cpp engine/ui/UiKeyboard.cpp engine/ui/UiLua.cpp)
+add_library(rts_ui STATIC engine/ui/UiLayer.cpp engine/ui/UiRender.cpp engine/ui/UiFont.cpp engine/ui/UiStb.cpp engine/ui/UiKeyboard.cpp engine/ui/UiLua.cpp
+    engine/ui/UiLinear.cpp)   # linear UI blending (ui-linear)
 target_include_directories(rts_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
 target_link_libraries(rts_ui PUBLIC rts_rmlui rts_rmlui_lua rts_lua rts_engine)
 if(TARGET rts_client)
@@ -1041,6 +1042,15 @@ endif()
 # Project-local C++ module build selection (no graphics or game execution).
 if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME native_project_build COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_project_build.py ${CMAKE_COMMAND})
+endif()
+
+# builds-branch tooling: index.json, and a packaged rtsmcp run from an unpacked tools-only Linux zip
+if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    if(TARGET rtsmcp AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py $<TARGET_FILE:rtsmcp>)
+    else()
+        add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py)
+    endif()
 endif()
 
 # Project import (shared Python pipeline + editor/MCP bridge).

@@ -22,6 +22,7 @@
 
 #include "apps/editor/core/Net.h"
 #include "apps/editor/core/Workspace.h"
+#include "engine/platform/EngineDir.h"
 
 #ifndef RTS_SOURCE_DIR
 #define RTS_SOURCE_DIR "."
@@ -211,6 +212,9 @@ const char* kInstructions =
 
 int main(int argc, char** argv) {
     Options opt;
+    // without --engine: the source tree it was built from, or a packaged engine next to the executable
+    // (RTSEngine/bin/rtsmcp of a builds-branch zip), the same lookup as the editor and rtsbuild
+    opt.engine = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argc > 0 ? argv[0] : nullptr);
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--engine" && i + 1 < argc) opt.engine = argv[++i];

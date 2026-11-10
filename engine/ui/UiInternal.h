@@ -20,6 +20,11 @@ public:
     void shutdown();
     void beginFrame(int fbW, int fbH);
     void setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h);
+    // Linear blending (UiLinear.h): images become RGBA8_sRGB premultiplied in linear light and the linear
+    // pipeline draws into an sRGB layer. Applies to textures loaded afterwards. False if unsupported.
+    bool setLinear(bool on);
+    bool linear() const { return linear_; }
+    uint32_t draws() const { return draws_; }   // geometry drawn since beginFrame
     using ImageSource = std::function<bool(const std::string& path, int& w, int& h, std::vector<unsigned char>& rgba)>;
     void setImageSource(ImageSource s) { imageSource_ = std::move(s); }
 
@@ -40,13 +45,19 @@ public:
 private:
     struct Geometry { gfx::BufferHandle vb, ib; uint32_t count = 0; float lo[2] = {0, 0}, hi[2] = {0, 0}; };
     void applyScissor();
-    struct Texture { gfx::TextureHandle tex; bool owned = false; std::string dynamicName; };
+    // linear: RGBA8_sRGB premultiplied in linear light (no decode in the shader)
+    struct Texture { gfx::TextureHandle tex; bool owned = false; bool linear = false; std::string dynamicName; };
+    Rml::TextureHandle createLinearImage(unsigned char* rgba, Rml::Vector2i dims);
     template <class T> static uintptr_t put(std::vector<T>& v, std::vector<uintptr_t>& freeList, T item);
 
     gfx::Device* dev_ = nullptr;
     gfx::ShaderHandle shader_;
     gfx::PipelineHandle pipeline_;
     gfx::TextureHandle white_;
+    gfx::ShaderHandle linShader_;
+    gfx::PipelineHandle linPipeline_;
+    bool linear_ = false;
+    uint32_t draws_ = 0;
     std::vector<Geometry> geos_;
     std::vector<uintptr_t> freeGeos_;
     std::vector<Texture> texs_;

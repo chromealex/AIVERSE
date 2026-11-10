@@ -30,6 +30,7 @@ struct ViewScripts::Impl {
     std::shared_ptr<Collector> collector;
     uint8_t player = 0;
     ViewTargeting targeting;
+    float dragDx = 0, dragDy = 0;     // view.set_map_drag_offset (window points)
     ViewCamera camera;
     std::string screen = "playing";   // host screen state (view.screen()): playing | paused | over
     ViewCameraRequest cameraRequest{};
@@ -67,13 +68,15 @@ struct ViewScripts::Impl {
     // Every handler call gets the whole budget. A call over budget is aborted and skipped (logged); only a handler
     // over budget kOverrunLimit calls in a row (an endless loop, not a spike) or failing with an error is disabled.
     static constexpr int kOverrunLimit = 10;
-    void call(int& ref, int nargs) {
+    // result: when set, receives the truthiness of the handler's first return value (false on an error)
+    void call(int& ref, int nargs, bool* result = nullptr) {
         ViewScriptProfile::Handler& st = statFor(ref);
         lua_rawgeti(vm.L, LUA_REGISTRYINDEX, ref);
         lua_insert(vm.L, -nargs - 1);
         vm.used = 0; vm.exceeded = false;
         std::string err;
-        const bool ok = protectedCall(vm, nargs, 0, &err);
+        const bool ok = protectedCall(vm, nargs, result ? 1 : 0, &err);
+        if (result) { *result = ok && lua_toboolean(vm.L, -1); if (ok) lua_pop(vm.L, 1); }
         const int64_t cost = instructionsUsed(vm);
         ++st.calls; st.total += cost; st.max = std::max(st.max, cost); st.last += cost; frameCost += cost;
         if (ok) { st.streak = 0; return; }
@@ -311,7 +314,17 @@ int vTargeting(lua_State* L, Vm& vm) {
     lua_pushboolean(L,t.active);lua_setfield(L,-2,"active");
     lua_pushboolean(L,t.overWorld);lua_setfield(L,-2,"overWorld");
     lua_pushinteger(L,lua_Integer(t.caster));lua_setfield(L,-2,"caster");
+    lua_pushboolean(L,t.touch);lua_setfield(L,-2,"touch");
+    lua_pushnumber(L,t.sx);lua_setfield(L,-2,"sx");
+    lua_pushnumber(L,t.sy);lua_setfield(L,-2,"sy");
     return 1;
+}
+int vSetMapDragOffset(lua_State* L, Vm& vm) {
+    const double dx=toDouble(L,1), dy=toDouble(L,2);
+    if(!std::isfinite(dx)||!std::isfinite(dy)) return fail(vm,"view.set_map_drag_offset(dx, dy): finite window points");
+    auto& v=viewOf(vm);
+    v.dragDx=float(std::clamp(dx,-4096.0,4096.0));v.dragDy=float(std::clamp(dy,-4096.0,4096.0));
+    return 0;
 }
 int vCamera(lua_State* L, Vm& vm) {
     const auto& c = viewOf(vm).camera;
@@ -463,7 +476,7 @@ int vDrawGround(lua_State* L, Vm& vm) {
     im.groundVerts += count;
     return 0;
 }
-// view.entity_fx(h, {scale =, lift =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
+// view.entity_fx(h, {scale =, lift =, pitch =, roll =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
 // sets an entity's presentation overrides (EntityFx.h); fields left out keep their target. view.entity_fx(h, nil)
 // removes them (drawn unchanged at once); view.entity_fx(h) returns the values drawn now, or nil.
 int vEntityFx(lua_State* L, Vm& vm) {
@@ -486,6 +499,8 @@ int vEntityFx(lua_State* L, Vm& vm) {
         lua_pushnumber(L, cur.v[V::kTeamGlow]); lua_setfield(L, -2, "team_glow");
         lua_pushnumber(L, cur.v[V::kShadow]); lua_setfield(L, -2, "shadow");
         lua_pushnumber(L, cur.v[V::kLift]); lua_setfield(L, -2, "lift");
+        lua_pushnumber(L, cur.v[V::kPitch]); lua_setfield(L, -2, "pitch");
+        lua_pushnumber(L, cur.v[V::kRoll]); lua_setfield(L, -2, "roll");
         if (cur.v[V::kCorpseAge] >= 0) { lua_pushnumber(L, cur.v[V::kCorpseAge]); lua_setfield(L, -2, "corpse_age"); }
         return 1;
     }
@@ -525,6 +540,8 @@ int vEntityFx(lua_State* L, Vm& vm) {
     field("team_glow", V::kTeamGlow, 1, true, 0.0f, 64.0f);
     field("shadow", V::kShadow, 1, true, 0.0f, 1.0f);
     field("lift", V::kLift, 1, true, -1000.0f, 1000.0f);
+    field("pitch", V::kPitch, 1, true, -360.0f, 360.0f);
+    field("roll", V::kRoll, 1, true, -360.0f, 360.0f);
     {   // corpse_age = seconds since the death on the script's clock (false: the view's own clock again)
         lua_getfield(L, 2, "corpse_age");
         const bool own = lua_type(L, -1) == LUA_TBOOLEAN && !lua_toboolean(L, -1);
@@ -699,6 +716,8 @@ std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return i
 std::shared_ptr<EntityFxStore> ViewScripts::entityFx() const { return impl_->fx; }
 
 void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=target; }
+void ViewScripts::mapDragOffset(float& dx, float& dy) const { dx=impl_->dragDx; dy=impl_->dragDy; }
+void ViewScripts::setMapDragOffset(float dx, float dy) { impl_->dragDx=dx; impl_->dragDy=dy; }
 void ViewScripts::setCamera(const ViewCamera& camera) { impl_->camera = camera; }
 void ViewScripts::setScreen(const std::string& screen) { impl_->screen = screen.empty() ? "playing" : screen; }
 bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
@@ -720,7 +739,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     im.handlers.clear(); im.frame.clear(); im.requests.clear(); im.commands.clear();
     im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stats.clear(); im.statOf.clear(); im.frameCost = im.frames = im.frameTotal = im.frameMax = 0; im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
     log_.clear();
-    im.paint=std::make_shared<render::PaintLayers>();im.fx=std::make_shared<EntityFxStore>();im.targeting={};im.cameraRequested=false;
+    im.paint=std::make_shared<render::PaintLayers>();im.fx=std::make_shared<EntityFxStore>();im.targeting={};im.dragDx=im.dragDy=0;im.cameraRequested=false;
     const auto files = scriptFiles(rules, map, true);
     if (files.empty() || sim.module().name() != "rts") return false;
     Vm& vm = im.vm;
@@ -736,7 +755,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>},
                                      {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>}, {"screen", bind<vScreen>},
                                      {"send", bind<vSend>}, {"state", bind<vState>}, {"ui_call", bind<vUiCall>},
-                                     {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>},
+                                     {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {"set_map_drag_offset", bind<vSetMapDragOffset>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
                                      {"draw_ground", bind<vDrawGround>}, {"entity_fx", bind<vEntityFx>}, {nullptr, nullptr}};
@@ -859,18 +878,31 @@ std::vector<UiRequest> ViewScripts::takeUiRequests() {
     return out;
 }
 
-void ViewScripts::uiEvent(Simulation& sim, const std::string& name, const Json& args) {
+bool ViewScripts::uiEvent(Simulation& sim, const std::string& name, const Json& args) {
     Impl& im = *impl_;
-    if (!im.vm.L) return;
+    if (!im.vm.L) return false;
     auto it = im.uiHandlers.find(name);
-    if (it == im.uiHandlers.end()) { im.logLine(true, "ui event '" + name + "': no ui.on handler"); return; }
+    if (it == im.uiHandlers.end()) { im.logLine(true, "ui event '" + name + "': no ui.on handler"); return false; }
     im.vm.sim = &sim; im.vm.spatialOk = false;
     im.vm.used = 0; im.vm.exceeded = false;
+    bool any = false;
     for (int& ref : it->second) {
         if (ref == LUA_NOREF) continue;
         pushUiJson(im.vm.L, args);
-        im.call(ref, 1);
+        bool r = false;
+        im.call(ref, 1, &r);
+        any = any || r;
     }
+    return any;
+}
+
+bool ViewScripts::hasUiHandler(const std::string& name) const {
+    const Impl& im = *impl_;
+    if (!im.vm.L) return false;
+    auto it = im.uiHandlers.find(name);
+    if (it == im.uiHandlers.end()) return false;
+    for (int ref : it->second) if (ref != LUA_NOREF) return true;
+    return false;
 }
 
 bool ViewScripts::send(Simulation& sim, const std::string& id, const Json& args) {

@@ -9,6 +9,7 @@
 // Structural changes while iterating: adding components of OTHER types and creating entities is
 // fine; destroying entities or removing components must go through destroyLater()/flush().
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <vector>
 #include <memory>
@@ -29,7 +30,9 @@ struct Entity {
 inline constexpr Entity kNullEntity{};
 
 namespace detail {
-inline uint32_t nextComponentTypeId() { static uint32_t counter = 0; return counter++; }
+// Atomic: tools build simulations on worker threads (the editor's world preview), and two types first used
+// at the same time on two threads must not get the same id (each type's own id is a thread-safe static).
+inline uint32_t nextComponentTypeId() { static std::atomic<uint32_t> counter{0}; return counter.fetch_add(1, std::memory_order_relaxed); }
 template <class T> uint32_t componentTypeId() { static const uint32_t id = nextComponentTypeId(); return id; }
 } // namespace detail
 

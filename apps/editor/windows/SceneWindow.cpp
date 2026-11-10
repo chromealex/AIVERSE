@@ -5,6 +5,7 @@
 #include "../Editor.h"
 #include "../core/PlanetOps.h"
 #include "../EditorUtil.h"
+#include "../EditorWorldEdit.h"
 
 namespace rts::editor {
 
@@ -30,6 +31,7 @@ public:
         // image first (like the Game window): the screen overlays renderScene adds (bars, labels) stay on top of it
         vp_.image(ed.device(), avail.x, avail.y);
         ed.renderScene(vp_, ed.sceneCam, !ed.playing());
+        vp_.drawnFrame = ImGui::GetFrameCount();
         ed.sceneViewport = &vp_;
         if (ImGui::IsWindowFocused() || vp_.hovered) input(ed);
         hud(ed);
@@ -179,10 +181,8 @@ private:
             hoverX_ = mx; hoverY_ = my;
             if (ed.playing()) return;
             if (!io.WantTextInput && (ImGui::IsWindowFocused() || vp_.hovered)) {
-                if ((ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) && ed.selectedEntity() >= 0) {
-                    ed.doc().removeEntity(ed.selectedEntity());
-                    ed.select({});
-                }
+                if ((ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) && !ed.selectedEntities().empty())
+                    ed.removeSelectedEntities();
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ed.select({});
             }
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && vp_.hovered) planetDown(ed, mx, my, io);
@@ -215,14 +215,12 @@ private:
         }
         if (!io.WantTextInput && ImGui::IsWindowFocused() && !looking_) {
             if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
-                int s = ed.selectedEntity();
-                if (s >= 0 && s < int(ed.doc().data.entities.size())) ed.focusScene(ed.doc().data.entities[size_t(s)].x, ed.doc().data.entities[size_t(s)].z, 18);
+                float fx, fz;
+                if (ed.selectionPos(ed.selection, fx, fz)) ed.focusScene(fx, fz, 18);
                 else ed.fitScene();
             }
-            if ((ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) && ed.selectedEntity() >= 0) {
-                ed.doc().removeEntity(ed.selectedEntity());
-                ed.select({});
-            }
+            if ((ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) && !ed.selectedEntities().empty())
+                ed.removeSelectedEntities();
             if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) ed.brush = std::max(1, ed.brush - 1);
             if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) ed.brush = std::min(16, ed.brush + 1);
             if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { ed.select({}); ed.roadStart = -1; }
@@ -231,7 +229,13 @@ private:
                 for (int k = 0; k < 10 && k < int(Tool::Count); ++k)
                     if (ImGui::IsKeyPressed(ImGuiKey(ImGuiKey_1 + (k == 9 ? -1 : k)), false)) { ed.tool = Tool(k); ed.roadStart = -1; }
         }
-        if (ed.playing()) return;
+        // the object under the cursor: highlighted here and in the Hierarchy
+        if (vp_.hovered && !looking_ && !panning_ && (ed.tool == Tool::Select || ed.playing())) ed.setHover(ed.pickObject(vp_, cam, mx, my));
+        if (ed.playing()) {   // play: the Select tool picks live objects for the Inspector (read-only)
+            if (ed.tool == Tool::Select && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && vp_.hovered) pickSelect(ed, ed.pickObject(vp_, cam, mx, my), io);
+            hoverX_ = mx; hoverY_ = my;
+            return;
+        }
         // tools
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && vp_.hovered) down(ed, mx, my, io);
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && (dragging_ || painting_) && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) drag(ed, mx, my, io);
@@ -247,9 +251,15 @@ private:
         auto& d = doc.data;
         const auto& rules = ed.rules();
         switch (ed.tool) {
-        case Tool::Select:
-            ed.selectEntity(n);
-            if (n >= 0) {
+        case Tool::Select: {
+            const Selection picked = ed.pickObject(vp_, ed.sceneCam, sx, sy);
+            const bool keepSet = picked.kind == Selection::Entity && ed.isSelected(picked) && !io.KeyCtrl && !io.KeySuper && !io.KeyShift;
+            if (!keepSet) pickSelect(ed, picked, io);   // a click on a selected object keeps the set: drag moves all of it
+            else ed.selectAdd(picked);
+            keepSetClick_ = keepSet && ed.selected().size() > 1;
+            clicked_ = picked;
+            dragMoved_ = false;
+            if (n >= 0 && picked.kind == Selection::Entity && ed.isSelected(picked) && !io.KeyCtrl && !io.KeySuper && !io.KeyShift) {
                 doc.beginEdit();
                 dragging_ = true;
                 dragOffX_ = d.entities[size_t(n)].x - x;
@@ -262,6 +272,7 @@ private:
                 }
             }
             break;
+        }
         case Tool::Place: {
             if (n >= 0 && !io.KeyShift) { ed.selectEntity(n); break; }
             if (!ground || rules.types.empty()) break;
@@ -314,11 +325,16 @@ private:
         auto& doc = ed.doc();
         auto& d = doc.data;
         int sel = ed.selectedEntity();
-        if (dragging_ && sel >= 0 && sel < int(d.entities.size())) {
+        if (dragging_ && sel >= 0 && sel < int(d.entities.size())) {   // the primary follows the cursor, the rest of the set keeps its offsets
             auto& e = d.entities[size_t(sel)];
             int t = ed.rules().findType(e.type);
-            e.x = ed.snapCoord(x + dragOffX_, t); e.z = ed.snapCoord(z + dragOffZ_, t);
-            doc.touched();
+            const float dx = ed.snapCoord(x + dragOffX_, t) - e.x, dz = ed.snapCoord(z + dragOffZ_, t) - e.z;
+            if (dx != 0 || dz != 0) {
+                dragMoved_ = true;
+                std::vector<int> idx;
+                for (int i : ed.selectedEntities()) if (!ed.objectLocked(d.entities[size_t(i)].owner, d.entities[size_t(i)].type) || i == sel) idx.push_back(i);
+                worldedit::move(doc, idx, dx, dz);
+            }
         }
         if (!painting_) return;
         int cx = int(std::floor(x)), cz = int(std::floor(z));
@@ -355,6 +371,8 @@ private:
                 ed.status = "Зона «" + name + "» — переименуйте в Инспекторе";
             }
         }
+        if (dragging_ && keepSetClick_ && !dragMoved_) ed.select(clicked_);   // a plain click inside a multi-selection picks that one
+        keepSetClick_ = false;
         dragging_ = painting_ = false;
     }
 
@@ -419,6 +437,15 @@ private:
             ui::viewportLabel(dl, ImVec2(vp_.originX + 12, vp_.originY + 10), ICON_PLAY "  Идёт тест — правка отключена (F5 — стоп)", ImVec4(1, 0.9f, 0.47f, 1));
     }
 
+    // Click selection: Ctrl / Cmd toggles, Shift adds, a plain click selects one (nothing: clears).
+    static void pickSelect(Editor& ed, const Selection& s, const ImGuiIO& io) {
+        if (io.KeyCtrl || io.KeySuper) { if (s.kind != Selection::None) ed.selectToggle(s); }
+        else if (io.KeyShift) { if (s.kind != Selection::None) ed.selectAdd(s); }
+        else ed.select(s);
+    }
+
+    Selection clicked_;
+    bool keepSetClick_ = false, dragMoved_ = false;
     Viewport vp_;
     bool looking_ = false, panning_ = false, dragging_ = false, painting_ = false, areaDrag_ = false;
     float dragOffX_ = 0, dragOffZ_ = 0, areaX0_ = 0, areaZ0_ = 0, hoverX_ = 0, hoverY_ = 0;

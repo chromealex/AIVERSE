@@ -4,15 +4,79 @@
     python3 tools/release/publish_builds.py build/dist/RTSEngine-0.2.0-1a2b3c4d-windows.zip [more zips] [--keep 5]
 
 The `builds` branch is an orphan branch (no shared history with main) with <platform>/<zip> files and a
-README listing them. It always is ONE commit that is force-pushed: the newest --keep versions per
+README listing them, plus index.json — the same list for programs that download a build (format:
+README.md § Готовые сборки движка). It always is ONE commit that is force-pushed: the newest --keep versions per
 platform stay in it, older ones disappear from the branch, so the repository does not grow with every
 build. Work happens in build/.temp/builds (git-ignored). Authorship as the repo's git config.
 """
-import argparse, os, re, shutil, subprocess, sys
+import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, zipfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 WORK = os.path.join(ROOT, "build", ".temp", "builds")
 NAME = re.compile(r"^RTSEngine-([0-9.]+)-([0-9a-f]+)-(\w+)\.zip$")
+INDEX_SCHEMA = 1
+# executables inside a package, by platform (package_engine.py: RTSEngine/bin/...)
+EXE = {"windows": {"rtsmcp": "rtsmcp.exe", "editor": "rts_editor.exe", "headless": "rts_headless.exe"},
+       "macos": {"rtsmcp": "rtsmcp", "editor": "RTSEditor.app", "headless": "rts_headless"},
+       "linux": {"rtsmcp": "rtsmcp", "editor": "rts_editor", "headless": "rts_headless"}}
+
+
+def binary_arch(head):
+    """CPU of an executable from its first bytes: x86_64, arm64, universal (Mach-O fat) or None."""
+    if head[:2] == b"MZ" and len(head) >= 0x40:   # PE: machine after the PE signature
+        off = struct.unpack_from("<I", head, 0x3C)[0]
+        if head[off:off + 4] == b"PE\0\0":
+            return {0x8664: "x86_64", 0xAA64: "arm64", 0x14C: "x86"}.get(struct.unpack_from("<H", head, off + 4)[0])
+    if head[:4] == b"\x7fELF":
+        return {62: "x86_64", 183: "arm64"}.get(struct.unpack_from("<H", head, 18)[0])
+    if head[:4] == b"\xca\xfe\xba\xbe":
+        return "universal"
+    if head[:4] == b"\xcf\xfa\xed\xfe":
+        return {0x01000007: "x86_64", 0x0100000C: "arm64"}.get(struct.unpack_from("<I", head, 4)[0])
+    return None
+
+
+def package_entry(work, rel, repo, branch):
+    """One index.json record for <work>/<rel> (a zip from package_engine.py)."""
+    ver, commit, plat = NAME.match(os.path.basename(rel)).groups()
+    path = os.path.join(work, rel)
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    names = EXE.get(plat, EXE["linux"])
+    found, arch = {}, None
+    with zipfile.ZipFile(path) as z:
+        listed = set(z.namelist())
+        for key, exe in names.items():
+            inner = "RTSEngine/bin/" + exe
+            if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):
+                found[key] = inner
+        for key in ("rtsmcp", "headless"):   # arch from a plain executable (the editor may be an .app)
+            if key in found and arch is None:
+                with z.open(found[key]) as f:
+                    arch = binary_arch(f.read(4096))
+    return {"platform": plat, "arch": arch, "version": ver, "commit": commit, "file": rel,
+            "url": f"https://raw.githubusercontent.com/{repo}/{branch}/{rel}",
+            "size": os.path.getsize(path), "sha256": h.hexdigest(),
+            "root": "RTSEngine", "rtsmcp": found.get("rtsmcp"), "editor": found.get("editor"),
+            "headless": found.get("headless")}
+
+
+def write_index(work, kept, repo, branch="builds"):
+    """index.json next to README.md: every kept package, newest first (the order of index.txt)."""
+    index = {"schema": INDEX_SCHEMA, "repository": repo, "branch": branch,
+             "packages": [package_entry(work, rel, repo, branch) for rel in kept]}
+    with open(os.path.join(work, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump(index, fh, indent=2)
+        fh.write("\n")
+    return index
+
+
+def repo_slug(url):
+    """owner/name from a GitHub remote URL (https or ssh)."""
+    m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$", url)
+    return m.group(1) if m else url
 
 
 def run(*args, cwd=None, check=True):
@@ -50,9 +114,12 @@ def main():
     new = [NAME.match(os.path.basename(z)).group(3) + "/" + os.path.basename(z) for z in a.zips]
     order = new + [o for o in order if o and o not in new and os.path.exists(os.path.join(WORK, o))]
     lines = ["# RTSEngine builds", "",
-             "Ready-to-run editor + tools. Unpack the zip anywhere and start `RTSEngine/bin/rts_editor.exe` (Windows) "
-             "or `RTSEngine/bin/RTSEditor.app` (macOS). The folder also holds the engine sources at that commit, "
-             "which rtsbuild uses to build games.", "",
+             "Ready-to-run editor + tools. Unpack the zip anywhere and start `RTSEngine/bin/rts_editor.exe` (Windows), "
+             "`RTSEngine/bin/RTSEditor.app` (macOS) or `RTSEngine/bin/rts_editor` (Linux, when the package has it). "
+             "The folder also holds the engine sources at that commit, which rtsbuild and the MCP server "
+             "(`RTSEngine/bin/rtsmcp`) use.", "",
+             "Programs that download a build read [index.json](index.json): every package with platform, arch, "
+             "version, commit, URL, size, sha256 and the paths of rtsmcp / the editor inside the zip.", "",
              "Published by tools/release/publish_builds.py; this branch is a single commit that is replaced on "
              f"every publish (the newest {a.keep} versions per platform are kept).", ""]
     kept = []
@@ -71,6 +138,7 @@ def main():
         fh.write("\n".join(o for o in order if o in kept) + "\n")
     with open(os.path.join(WORK, "README.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
+    write_index(WORK, [o for o in order if o in kept], repo_slug(url))
     run("git", "add", "-A", cwd=WORK)
     names = ", ".join(os.path.basename(z) for z in a.zips)
     run("git", "commit", "-q", "-m", f"Builds: {names}", cwd=WORK)

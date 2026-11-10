@@ -201,6 +201,7 @@ void copyDir(const fs::path& from, const fs::path& to) {
 }
 void copyFile(const fs::path& from, const fs::path& to) {
     std::error_code ec;
+    if (to.has_parent_path()) fs::create_directories(to.parent_path(), ec);   // e.g. Builds/android removed by the user
     if (!rts::pack::copyFileReplace(from, to, ec)) die("не удалось скопировать " + from.string() + " -> " + to.string() + ": " + ec.message());
 }
 std::string sanitize(const std::string& s) {

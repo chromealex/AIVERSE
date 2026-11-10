@@ -11,6 +11,7 @@
 
 #include "UiInternal.h"
 #include "UiKeyboard.h"
+#include "UiLinear.h"
 
 namespace rts::ui {
 
@@ -133,6 +134,8 @@ struct UiLayer::Impl {
     UiRenderer renderer;
     UiFontEngine fonts;
     UiKeyboard keyboard;
+    UiLinearComposite linear;
+    gfx::TextureHandle targetColor, targetDepth;
     Rml::Context* context = nullptr;
     gfx::Device* dev = nullptr;
     int width = 0, height = 0;
@@ -185,6 +188,7 @@ void UiLayer::shutdown() {
         Rml::Shutdown(); // releases contexts, documents and all render resources
         impl_->context = nullptr;
     }
+    impl_->linear.shutdown();
     impl_->renderer.shutdown();
     impl_.reset();
 }
@@ -363,12 +367,46 @@ void UiLayer::update() {
     syncTextInput(); // focus changed by a script or a closed document
 }
 
+bool UiLayer::setLinearBlending(bool on) {
+    if (!impl_) return false;
+    Impl& m = *impl_;
+    if (on == m.renderer.linear()) return true;
+    if (on && !m.linear.ready() && !m.linear.init(*m.dev)) {
+        std::fprintf(stderr, "[ui] linear blending: no sRGB render targets on this GPU, UI blends in sRGB\n");
+        return false;
+    }
+    if (!m.renderer.setLinear(on)) { m.linear.shutdown(); return false; }
+    if (!on) m.linear.shutdown();
+    if (m.context) Rml::ReleaseTextures();   // loaded images change encoding: RmlUi reloads them on use
+    return true;
+}
+
+bool UiLayer::linearBlending() const { return impl_ && impl_->renderer.linear(); }
+
+void UiLayer::setTarget(gfx::TextureHandle color, gfx::TextureHandle depth) {
+    if (impl_) { impl_->targetColor = color; impl_->targetDepth = depth; }
+}
+
 void UiLayer::render() {
     if (!context()) return;
-    const auto dims = impl_->context->GetDimensions();
-    impl_->renderer.beginFrame(dims.x, dims.y);
-    impl_->context->Render();
-    impl_->dev->setScissor({});
+    Impl& m = *impl_;
+    const auto dims = m.context->GetDimensions();
+    if (m.renderer.linear()) {
+        m.dev->endPass();   // the caller's pass: the UI goes into the layer first
+        const bool layer = m.linear.beginLayer(dims.x, dims.y);
+        if (layer) {
+            m.renderer.beginFrame(dims.x, dims.y);
+            m.context->Render();
+            m.dev->setScissor({});
+            m.dev->endPass();
+        }
+        m.linear.composite(m.targetColor, m.targetDepth, dims.x, dims.y, layer && m.renderer.draws() > 0);
+        m.dev->setScissor({});
+        return;
+    }
+    m.renderer.beginFrame(dims.x, dims.y);
+    m.context->Render();
+    m.dev->setScissor({});
 }
 
 } // namespace rts::ui

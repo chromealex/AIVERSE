@@ -13,7 +13,7 @@ public:
     const char* id() const override { return "tiles"; }
     const char* title() const override { return "Тайлы"; }
     const char* group() const override { return "world"; }
-    const char* dockArea() const override { return "right"; }
+    const char* dockArea() const override { return "right-bottom"; }
     int order() const override { return 4; }
     bool openByDefault() const override { return false; }
 
@@ -27,10 +27,10 @@ public:
         if (!ts) { drawInit(ed, err); return; }
         ui::headerCard(ICON_TILES, ts->name, "Набор тайлов · " + ws.map.data.extra["tiles"].getStr("tileset"));
         bool active = ed.tool == Tool::Count;
-        if (ImGui::Checkbox(ICON_BRUSH "  Рисовать в «Сцене»", &active)) ed.tool = active ? Tool::Count : Tool::Select;
+        if (ui::checkbox(ICON_BRUSH "  Рисовать в «Сцене»", &active)) ed.tool = active ? Tool::Count : Tool::Select;
         ui::help("Левая кнопка мыши в «Сцене» рисует выбранной местностью. Края и углы подбираются автоматически по соседям (автотайлы).");
         ImGui::SameLine();
-        ImGui::Checkbox("Автотайлы", &autotile_);
+        ui::checkbox("Автотайлы", &autotile_);
         ui::help("Выключено: ставится ровно выбранный тайл атласа (ручная правка краёв, декор).");
         if (ui::beginProps("##brush")) {
             ui::prop("Кисть");
@@ -55,7 +55,7 @@ public:
     }
 
     void update(Editor& ed, double) override {
-        if (ed.tool != Tool::Count || ed.playing() || !ed.sceneViewport) { painting_ = false; return; }
+        if (ed.tool != Tool::Count || ed.playing() || !ed.sceneVisible()) { painting_ = false; return; }
         ImGuiIO& io = ImGui::GetIO();
         Viewport& vp = *ed.sceneViewport;
         if (!io.MouseDown[0]) { painting_ = false; lastX_ = lastY_ = -9999; return; }
@@ -78,7 +78,11 @@ private:
         if (ws.map.data.extra["tiles"].isObject()) ui::callout(ui::Tone::Error, err);
         else ui::callout(ui::Tone::Normal, "У карты нет слоя тайлов. Тайлы нужны 2D-играм с тайловой картой (Red Alert, Dune II, Warcraft II).");
         auto sets = listTilesets(ws);
-        if (sets.empty()) { ui::hint("В игре нет наборов tilesets/*.json"); return; }
+        if (sets.empty()) {
+            ui::hint("В игре нет наборов тайлов (tilesets/*.json). Готовый набор есть в шаблоне «Crystal Dunes» (templates/tiles2d): "
+                     "скопируйте его папку tilesets/ с картинками в папку игры — набор появится здесь.");
+            return;
+        }
         pick_ = std::clamp(pick_, 0, int(sets.size()) - 1);
         if (ui::beginProps("##init")) {
             ui::prop("Набор");
@@ -87,7 +91,7 @@ private:
                 ImGui::EndCombo();
             }
             ui::propWide();
-            ImGui::Checkbox("По текущему рельефу", &fromTerrain_);
+            ui::checkbox("По текущему рельефу", &fromTerrain_);
             ImGui::SetItemTooltip("Подобрать местность каждой клетке по её типу (вода, скалы...), иначе залить первой местностью набора.");
             ui::endProps();
         }

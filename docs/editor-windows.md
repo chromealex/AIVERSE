@@ -23,7 +23,7 @@ public:
     const char* id() const override { return "balance"; }        // stable latin id (MCP, layout)
     const char* title() const override { return "Баланс"; }      // tab title, Russian (must be unique)
     const char* group() const override { return "logic"; }       // top menu: scene | world | look | logic | publish | service
-    const char* dockArea() const override { return "bottom"; }   // left | left-bottom | right | center | bottom
+    const char* dockArea() const override { return "bottom"; }   // left | left-bottom | right (Inspector) | right-bottom (rules, world / look tools) | center | bottom
     int order() const override { return 5; }                     // tab order in that area (0 = shown first)
     bool openByDefault() const override { return false; }        // hidden until opened from the menu
 
@@ -76,7 +76,10 @@ F5 test, Ctrl/Cmd+B build window; in the Scene 1…0 pick tools, F focus, [ ] br
 | `ed.ws()` | the `Workspace`: project (manifest, `rulesJson`, parsed `rules`), map document, activity log, and **`ws().call(op, params)`** — run any MCP operation (`rules_set`, `entity_place`, `match_run`, ...) exactly like an agent; prefer this over editing data directly, it validates and records history |
 | `ed.doc()` | the open map (`MapDoc`): `data` (terrain layers, players, entities, roads, `extra` JSON blocks), `beginEdit()` before a change (undo snapshot), `touched()` after a change (views rebuild) |
 | `ed.rules()` | parsed rules of the open game (read-only; change rules through `rules_set`) |
-| `ed.selection`, `ed.select(...)`, `ed.selectEntity(i)` | what the Inspector shows |
+| `ed.selection`, `ed.select(...)`, `ed.selectEntity(i)` | what the Inspector shows (the primary item) |
+| `ed.selected()`, `ed.selectToggle/selectAdd/selectMany`, `ed.isSelected(s)`, `ed.selectedEntities()`, `ed.removeSelectedEntities()` | multi-selection (Hierarchy, Scene, Inspector «Детали»); `Selection::Live` = a world object by `ref` |
+| `ed.world()`, `ed.worldLive()`, `ed.worldSim()`, `ed.worldRow(s)`, `ed.worldSelection(row)`, `ed.refreshWorld()` | world tree: every object of the game world — edit mode: the map's setup run in a throwaway preview; play: the running test (docs/editor-world-tree.md) |
+| `ed.hover`, `ed.setHover(s)`, `ed.pickObject(vp, cam, x, y)`, `ed.sceneHidden` / `ed.sceneLocked` | hover shared by Scene and Hierarchy, picking of any object, eye / lock in the Scene |
 | `ed.tool`, `ed.brush`, `ed.placeType`, ... | Scene tool state |
 | `ed.sceneCam`, `ed.focusScene(x, z)`, `ed.flash(x0, z0, x1, z1)` | camera and highlight in Scene |
 | `ed.playing()`, `ed.sim()`, `ed.simModule()`, `ed.startPlay(slot)`, `ed.stopPlay()` | the play-test simulation (read-only from windows; issue player commands with `ed.issueCommand`) |
@@ -109,6 +112,12 @@ Icons: Lucide font merged into the UI font, constants in `apps/editor/EditorIcon
 | `ui::button(ICON_X, "Текст", primary)` | icon + label button; `primary` = filled with the accent |
 | `ui::emptyState(...)` / `ui::emptyStateHere(icon, title, hint)` | centred placeholder: big icon, title, hint |
 | `ui::heading("Текст")` | section title in the semibold heading font |
+| `ui::checkbox("Текст", &v)` | checkbox whose label is shortened with "…" to the column (full text in a tooltip); use instead of `ImGui::Checkbox` |
+| `ui::button` / `ui::wideButton` with a width | a label that doesn't fit is shortened with "…", the whole label in a tooltip |
+| `ui::collapsing("Секция")` | collapsible section in the neutral frame colour (ImGui's default looks selected) |
+| `ui::inputHint("##id", "подсказка", str)` | `std::string` text field with a placeholder |
+| `ui::pathText(path, maxW)` / `ui::prettyPath(path)` | path for display: home as `~`, shortened from the left, full path on hover |
+| `ed.sceneVisible()` | the Scene tab drew this frame: check it before drawing gizmos or painting with `ed.sceneViewport` (a hidden tab leaves a stale viewport) |
 | `ui::section(ICON_X, "Текст")` | section title with an icon and a hairline to the right edge (instead of `SeparatorText`) |
 | `ui::beginProps("##id")` + `ui::prop("Подпись", "подсказка")` + widget with a `"##"` label + `ui::endProps()` | property grid: dim labels in a left column, full-width widgets on the right; `ui::propWide()` for a row of its own (checkbox, buttons) |
 | `ui::searchField("##id", str, "Подсказка")` | search field with the hint inside and a clear button; `ui::contains(text, filter)` matches case-insensitively |

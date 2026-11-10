@@ -71,7 +71,7 @@ public:
                 if (items.empty()) continue;
                 char head[96];
                 std::snprintf(head, sizeof head, "%s  %s  (%zu)###g%d", groupIcons[group], groups[group], items.size(), group);
-                if (!ImGui::CollapsingHeader(head, ImGuiTreeNodeFlags_DefaultOpen)) continue;
+                if (!ui::collapsing(head, ImGuiTreeNodeFlags_DefaultOpen)) continue;
                 for (size_t i : items) {
                     const auto& ty = rules.types[i];
                     if (ImGui::Selectable((ty.name + "##" + ty.id).c_str(), ed.placeType == int(i))) ed.placeType = int(i);
@@ -149,7 +149,7 @@ public:
         default: break;
         }
         ImGui::Spacing();
-        ImGui::Checkbox(ICON_MAGNET "  Привязка к сетке", &ed.snap);
+        ui::checkbox(ICON_MAGNET "  Привязка к сетке", &ed.snap);
     }
 
 private:

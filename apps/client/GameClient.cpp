@@ -451,6 +451,19 @@ void GameClient::event(const Event& e) {
     mapDragEvent(e, uiWants);   // rules "mapClick": drag from a map-drag HUD element onto the map (ClientScriptCmd.cpp)
     if (e.type == EventType::KeyDown || e.type == EventType::KeyUp) keys_[int(e.key)] = e.type == EventType::KeyDown;
     if (e.type == EventType::MouseMove || e.type == EventType::MouseDown) { mouseX_ = e.x; mouseY_ = e.y; }
+    // A view script with ui.on("back", fn) owns Esc / Android Back (which arrives as Escape) during a match: the engine's
+    // pause / resume / tool cancel are skipped; a true return cancels the pointer interaction in progress (docs/scripting.md)
+    if (e.type == EventType::KeyDown && e.key == Key::Escape && !e.repeat && sim_ && !howtoOpen_ &&
+        (screen_ == Screen::Playing || screen_ == Screen::Paused) && viewScripts_.hasUiHandler("back")) {
+        Json args = Json::object();
+        args.set("screen", Json::string(screen_ == Screen::Paused ? "paused" : "playing"));
+        args.set("platform", Json::string(platform::name()));
+        if (viewScripts_.uiEvent(*sim_, "back", args)) {
+            mapDrag_ = false; skillDragging_ = false; skillTouch_ = -1; rectDrag_ = false; uiOwnsPointer_ = false;
+            if (mode_ != Mode::Normal) mode_ = Mode::Normal;
+        }
+        return;
+    }
     // Script HUD drags own their pointer from button press through release on the world.
     if(skillDragging_) {
         const bool begin=e.type==EventType::MouseDown||e.type==EventType::TouchBegin;
@@ -657,6 +670,8 @@ void GameClient::event(const Event& e) {
         if (!touches_.count(e.touchId)) return;
         bool single = touches_.size() == 1 && e.type == EventType::TouchEnd;
         touches_.erase(e.touchId);
+        // a pinch ends with one finger left: it pans from where it is (not from the pinch midpoint)
+        if (touches_.size() == 1) { downX_ = touches_.begin()->second.first; downY_ = touches_.begin()->second.second; }
         if (rectDrag_) {
             Event up = e; up.type = EventType::MouseUp; up.button = 0;
             if (single) toolMouseUp(up); else rectDrag_ = false;
@@ -736,6 +751,16 @@ void GameClient::runViewScripts(float dt) {
     if(screen_==Screen::Playing&&mode_==Mode::Skill&&abilityIndex_>=0&&size_t(abilityIndex_)<rules_.playerAbilities.size()){
         target.active=true;target.ability=rules_.playerAbilities[size_t(abilityIndex_)].id;
         float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&(!skillDragging_||skillOverWorld_);
+        target.x=p.x;target.z=p.z;
+    }
+    // a drag from a map-drag HUD element (mapClick games' drag-to-cast): ability "map-drag", the pointer's ground point,
+    // overWorld while it is over the map (a release there taps it)
+    // (the view's map-drag offset moves the ground point, e.g. above a finger; overWorld stays the pointer's own)
+    if(screen_==Screen::Playing&&mapDrag_&&!target.active){
+        target.active=true;target.ability="map-drag";target.touch=mapDragTouch_>=0;target.sx=mapDragX_;target.sy=mapDragY_;
+        float dx=0,dy=0;viewScripts_.mapDragOffset(dx,dy);
+        float3 p{};target.overWorld=groundAt(mapDragX_,mapDragY_,p)&&!mapDragOverUi_;
+        if(dx!=0||dy!=0){p={};if(!groundAt(mapDragX_+dx,mapDragY_+dy,p))target.overWorld=false;}
         target.x=p.x;target.z=p.z;
     }
     if(screen_==Screen::Playing&&entityPointer_)if(const auto* source=entityActions_.source()){
@@ -933,6 +958,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         dev.beginPass(pass);
     }
     overlay_.render();
+    ui_.setTarget(hostColor_, hostDepth_);   // linear UI blending reopens this pass
     ui_.render();
     dev.endPass();
 }

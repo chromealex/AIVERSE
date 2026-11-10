@@ -30,10 +30,12 @@ public:
         ImGui::TextUnformatted(ws.project.manifest.getStr("name", "без названия").c_str());
         ImGui::PopFont();
         ImGui::SameLine();
-        ImGui::TextDisabled("%s", ws.project.dir.c_str());
         const float btnW = ImGui::CalcTextSize(ICON_FOLDER_OPEN "  Другой проект…").x + ImGui::GetStyle().FramePadding.x * 2;
         const float searchW = std::min(260.0f, ImGui::GetContentRegionAvail().x * 0.35f);
-        ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8, ImGui::GetWindowContentRegionMax().x - searchW - btnW - 8));
+        const float rightX = ImGui::GetWindowContentRegionMax().x - searchW - btnW - ImGui::GetStyle().ItemSpacing.x * 2;
+        ImGui::AlignTextToFramePadding();
+        ui::pathText(ws.project.dir, rightX - ImGui::GetCursorPosX() - 12);
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8, rightX));
         ui::searchField("##f", filter_, "Фильтр", searchW);
         ImGui::SameLine();
         if (ui::button(ICON_FOLDER_OPEN, "Другой проект…")) ed.showGamePicker();

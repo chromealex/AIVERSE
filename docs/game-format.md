@@ -48,6 +48,16 @@ tablets are always fullscreen, the web build fills the page). Editor: **Сбор
 Runs with `RTS_EXIT_AFTER_FRAMES` (screenshots, CI) and `--size WxH` stay windowed at the asked size.
 Code: `engine/platform/WindowSettings.h` (parser, checks), `AppConfig` window fields, `AppCallbacks::configure`.
 
+Optional `"ui"` block: how the in-game UI (RmlUi documents) blends.
+`"ui": {"blend": "linear"}` makes translucent UI blend in linear light, as a Unity project in linear colour space does
+(faded icons, dims, glows and soft edges over lighter art come out lighter than with the default); `"srgb"` (default,
+also when the block is missing) blends the sRGB-encoded values, byte-identical to builds without the key. In linear mode
+vertex colours (CSS colours, `opacity`, vertex gradients) and images are decoded to linear light (images are premultiplied
+in linear light and uploaded as sRGB textures), font atlases stay coverage (alpha only), the UI is blended into its own
+sRGB-encoded layer and one full-screen pass composites it over the scene in linear light (skipped when the UI draws
+nothing). GPUs without sRGB render targets silently keep the default. Code: `engine/ui/UiColor.h` (curves, key),
+`UiLinear.*` (layer + composite, GLSL and MSL), RHI `PixelFormat::RGBA8_sRGB`, `Device::copyColor`.
+
 Optional `"camera"` block (2D games, see "2D games" below):
 `{"projection": "ortho", "pitch": 90, "yaw": 0, "fov": 43, "zoom": 20, "zoomMin": 8, "zoomMax": 40, "pixelsPerCell": 32, "rotate": false}`.
 
@@ -61,6 +71,12 @@ Lighting block (game.json / map `"lighting"`), flat-art keys: `"day": {"sun", "s
 shows its colour unchanged), `"modelOutput": "srgb"` (model shaders encode their linear result with the exact sRGB curve,
 as a Unity project in linear colour space does, instead of the engine's default sqrt, which renders midtones darker; GLSL
 and MSL). Map keys win over game keys.
+
+Optional `"editor": {"hierarchy": {...}}`: how the editor's world tree (Hierarchy / Inspector «Детали») shows this
+game's objects — `previewTicks` (ticks the edit-mode preview runs after setup, default 2), `label` (a `game.data(h)` key
+naming the row), `categories` (tags in priority order: an object's category), `groupings` (`[{"title", "by": [keys]}]`,
+keys `owner`, `type`, `kind`, `category`, `origin`, `region`, `parent`, `tag`, `component`, `data:<key>`). Only the
+editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 
 ## rules.json — top level
 

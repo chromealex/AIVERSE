@@ -12708,6 +12708,199 @@ TEST(native_editor_build_helpers) {
 }
 #endif
 
+
+// ---- linear UI blending (ui-linear): sRGB curves, linear premultiplication of images, game.json key
+#include "engine/ui/UiColor.h"
+TEST(ui_linear_blend_colour_space) {
+    using namespace rts::ui;
+    CHECK(srgbToLinear(0.0f) == 0.0f && std::fabs(srgbToLinear(1.0f) - 1.0f) < 1e-6f);
+    CHECK(std::fabs(srgbToLinear(0.5f) - 0.214041f) < 1e-5f);
+    bool roundTrip = true;   // every 8-bit code survives decode + encode (the composite relies on it)
+    for (int i = 0; i < 256; ++i) roundTrip = roundTrip && linearToSrgb8(srgbToLinear(float(i) / 255.0f)) == i;
+    CHECK(roundTrip);
+    CHECK(linearToSrgb8(0.5f) == 188);   // 50% black over white in linear light (gamma blending gives 128)
+    // images: rgb' = enc(dec(rgb) * a); opaque texels untouched, transparent ones zeroed
+    uint8_t px[4 * 4] = {200, 100, 50, 255, 255, 255, 255, 0, 255, 255, 255, 128, 90, 180, 30, 40};
+    premultiplyLinearSrgb8(px, 4);
+    CHECK(px[0] == 200 && px[1] == 100 && px[2] == 50 && px[3] == 255);
+    CHECK(px[4] == 0 && px[5] == 0 && px[6] == 0 && px[7] == 0);
+    CHECK(px[8] == linearToSrgb8(128.0f / 255.0f) && px[11] == 128);
+    bool exact = true;   // table lookup == direct formula, over a grid of colours and alphas
+    for (int a = 1; a < 255; a += 7)
+        for (int c = 0; c < 256; c += 3) {
+            uint8_t p[4] = {uint8_t(c), uint8_t(c), uint8_t(c), uint8_t(a)};
+            premultiplyLinearSrgb8(p, 1);
+            const int want = linearToSrgb8(srgbToLinear(float(c) / 255.0f) * float(a) / 255.0f);
+            exact = exact && std::abs(int(p[0]) - want) <= 1 && p[3] == a;   // 1: float ties at a code boundary
+        }
+    CHECK(exact);
+    std::string err;
+    CHECK(parseUiBlend(rts::Json::parse("{}"), &err) == UiBlend::Srgb && err.empty());
+    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "linear"}})"), &err) == UiBlend::Linear && err.empty());
+    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "srgb"}})"), &err) == UiBlend::Srgb && err.empty());
+    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "gamma2"}})"), &err) == UiBlend::Srgb && err.find("gamma2") != std::string::npos);
+}
+
+// ---------------- Editor world tree (apps/editor/core/WorldInspect, docs/editor-world-tree.md) ----------------
+#ifdef RTS_TESTS_EDITOR_CORE
+#include "apps/editor/core/SimTools.h"
+#include "apps/editor/core/WorldInspect.h"
+namespace {
+std::filesystem::path worldTreeCopy(const char* tmpl) {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / ("rts_world_tree_" + std::string(tmpl) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::remove_all(root);
+    fs::create_directories(root);
+    fs::copy(fs::path(RTS_SOURCE_DIR) / "templates" / tmpl, root / tmpl, fs::copy_options::recursive);
+    return root;
+}
+bool worldTreePreview(editor::Workspace& ws, editor::WorldPreview& pv, const editor::WorldConfig& cfg) {
+    const Json simMap = editor::mapForSim(ws.map.toJson(), ws.project.dir);
+    return pv.build(ws.project.simRules(simMap), simMap, ws.map.data, cfg);
+}
+} // namespace
+
+TEST(world_tree_preview_lists_map_entities) {
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame((root / "skirmish").string(), &err));
+    CHECK(!ws.map.data.entities.empty());
+    editor::WorldPreview pv;
+    const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
+    CHECK(worldTreePreview(ws, pv, cfg) && pv.error().empty());
+    editor::WorldModel m;
+    readWorld(*pv.sim(), *pv.module(), cfg, pv.links(), pv.setupRefs(), &ws.map.data, m);
+    // every map entity is linked to exactly one world object (map entity 0 is world object 0: ref 1, never 0)
+    std::set<uint64_t> linked(pv.links().begin(), pv.links().end());
+    CHECK(pv.links().size() == ws.map.data.entities.size() && !linked.count(0) && linked.size() == pv.links().size());
+    CHECK(m.rows.size() == ws.map.data.entities.size());
+    size_t mapRows = 0;
+    for (auto& r : m.rows) mapRows += r.origin == editor::WorldOrigin::Map && r.doc >= 0;
+    CHECK(mapRows == m.rows.size());
+    const auto& R = pv.module()->rules();
+    for (auto& r : m.rows) {
+        const auto& de = ws.map.data.entities[size_t(r.doc)];
+        if (R.types[size_t(r.type)].id != de.type || r.owner != de.owner) { CHECK(false); break; }
+    }
+    // grouping and search
+    size_t peasants1 = 0;
+    for (auto& e : ws.map.data.entities) peasants1 += e.type == "peasant" && e.owner == 1;
+    size_t found = 0, owner1 = 0;
+    for (auto& r : m.rows) {
+        found += editor::worldRowMatches(m, R, &ws.map.data, r, "t:peasant p:Blue");
+        owner1 += editor::worldGroupValue(m, R, r, "owner") == "Blue";
+    }
+    CHECK(peasants1 > 0 && found == peasants1);
+    size_t docOwner1 = 0;
+    for (auto& e : ws.map.data.entities) docOwner1 += e.owner == 1;
+    CHECK(owner1 == docOwner1);
+    size_t withUnit = 0;
+    for (auto& r : m.rows) withUnit += editor::worldRowMatches(m, R, &ws.map.data, r, "c:unit");
+    CHECK(withUnit == m.rows.size());
+    // details of one object
+    const editor::WorldRow* peasant = nullptr;
+    for (auto& r : m.rows) if (R.types[size_t(r.type)].id == "peasant") { peasant = &r; break; }
+    CHECK(peasant != nullptr);
+    if (peasant) {
+        const Json d = editor::inspectEntity(*pv.sim(), *pv.module(), peasant->e, ws.project.rulesJson);
+        CHECK(d["components"]["Unit"].getStr("type") == "peasant");
+        CHECK(d["components"].has("Transform") && d["components"].has("Owner") && d["components"].has("Mobile"));
+        CHECK(d["stats"]["maxHp"]["base"].toDouble() > 0 && d["stats"]["maxHp"]["effective"].toDouble() == d["stats"]["maxHp"]["base"].toDouble());
+        CHECK(d["rules"].isObject() && d.getStr("type") == "peasant");
+    }
+    // the same data gives the same refs (a selection survives a preview rebuild)
+    editor::WorldPreview pv2;
+    CHECK(worldTreePreview(ws, pv2, cfg));
+    CHECK(pv2.links() == pv.links());
+    fs::remove_all(root);
+}
+
+TEST(world_tree_describes_every_component_pool) {
+    // a save state touches every pool type of the RTS module: the inspector must describe all of them
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame((root / "skirmish").string(), &err));
+    editor::WorldPreview pv;
+    CHECK(worldTreePreview(ws, pv, editor::WorldConfig{}));
+    CHECK(!pv.sim()->serialize().empty());
+    World described;
+    const size_t n = editor::touchWorldComponentPools(described);
+    CHECK(described.poolCount() == n);
+    CHECK(pv.sim()->world().poolCount() == n);
+    CHECK(editor::worldComponents().size() == n && editor::findWorldComponent("unit") >= 0 && editor::findWorldComponent("Гарнизон") >= 0);
+    fs::remove_all(root);
+}
+
+TEST(world_tree_script_objects_labels_and_groupings) {
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    const fs::path dir = root / "skirmish";
+    fs::create_directories(dir / "scripts");
+    {
+        std::ofstream(dir / "scripts" / "scouts.lua") <<
+            "function on_start()\n"
+            "  local h = game.spawn('peasant', 2, 30, 20)\n"
+            "  local d = game.data(h)\n"
+            "  d.name = 'Scout North'\n"
+            "  d.front = 'north'\n"
+            "end\n";
+    }
+    Json rules = Json::parseFile((dir / "rules.json").string());
+    Json scripts = Json::array();
+    scripts.push(Json::string("scripts/scouts.lua"));
+    rules.set("scripts", scripts);
+    { std::ofstream(dir / "rules.json") << rules.dump(); }
+    Json game = Json::parseFile((dir / "game.json").string());
+    game.set("editor", Json::parse(R"({"hierarchy": {"label": "name", "previewTicks": 3, "categories": ["nope"],
+        "groupings": [{"title": "Фронты", "by": ["data:front", "owner"]}, {"title": "Плохая", "by": ["colour"]}]}})"));
+    { std::ofstream(dir / "game.json") << game.dump(); }
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame(dir.string(), &err));
+    const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
+    CHECK(cfg.labelKey == "name" && cfg.previewTicks == 3 && cfg.groupings.size() == 1 && cfg.errors.size() == 1);
+    editor::WorldPreview pv;
+    CHECK(worldTreePreview(ws, pv, cfg));
+    CHECK(pv.error().empty());
+    editor::WorldModel m;
+    readWorld(*pv.sim(), *pv.module(), cfg, pv.links(), pv.setupRefs(), &ws.map.data, m);
+    CHECK(m.rows.size() == ws.map.data.entities.size() + 1);
+    const editor::WorldRow* scout = nullptr;
+    for (auto& r : m.rows) if (r.doc < 0) scout = &r;
+    CHECK(scout != nullptr);
+    if (scout) {
+        const auto& R = pv.module()->rules();
+        CHECK(scout->origin == editor::WorldOrigin::Setup && scout->label == "Scout North" && scout->owner == 2);
+        CHECK(editor::worldRowName(m, R, &ws.map.data, *scout) == "Scout North");
+        CHECK(editor::worldGroupValue(m, R, *scout, "data:front") == "north");
+        CHECK(editor::worldRowMatches(m, R, &ws.map.data, *scout, "d:north") && editor::worldRowMatches(m, R, &ws.map.data, *scout, "scout"));
+        CHECK(!editor::worldRowMatches(m, R, &ws.map.data, m.rows[0], "d:north"));
+        const Json d = editor::inspectEntity(*pv.sim(), *pv.module(), scout->e, ws.project.rulesJson);
+        CHECK(d["components"]["ScriptData"].getStr("name") == "Scout North");
+    }
+    fs::remove_all(root);
+}
+
+TEST(world_tree_script_blob_decoding) {
+    auto u64 = [](uint64_t v) { std::string s; for (int i = 0; i < 8; ++i) s += char(uint8_t(v >> (8 * i))); return s; };
+    auto str = [&](const std::string& t) { return "s" + u64(t.size()) + t; };
+    // {name = "a", hp = fx(1.5), list = {7, 8}, ok = true}
+    std::string list = "{" + u64(2) + "i" + u64(1) + "i" + u64(7) + "i" + u64(2) + "i" + u64(8);
+    std::string blob = "{" + u64(4) + str("hp") + "x" + u64(uint64_t(Fixed::fromRatio(3, 2).raw)) + str("list") + list + str("name") + str("a") + str("ok") + "t";
+    const Json j = editor::decodeScriptBlob(blob);
+    CHECK(j.getStr("name") == "a" && j["hp"].toDouble() == 1.5 && j["list"].isArray() && j["list"].size() == 2 && j["list"][1].integer() == 8 && j.getBool("ok"));
+    CHECK(editor::decodeScriptBlob("{" + u64(9)).isObject() && editor::decodeScriptBlob("{" + u64(9)).size() == 0);   // truncated: nothing, no crash
+    CHECK(editor::decodeScriptBlob("").size() == 0);
+}
+#endif
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]
@@ -13513,3 +13706,187 @@ TEST(mech_dungeon_fliers_follow_tunnels) {
         CHECK((sim->world().get<Transform>(b).pos - g.cellCenter(16, 6)).xz().length() < Fixed::fromInt(1));   // through the tunnel
     }
 }
+
+TEST(view_entity_fx_pitch_roll) {
+    // view.entity_fx pitch / roll (degrees): the script API stores and returns them; RtsView tilts the model in its
+    // faced frame (world rotation = rotateY(yaw) * rotateZ(-pitch) * rotateX(-roll) * rotateY(-yaw) on top of the
+    // plain matrix): pitch 90 turns the facing straight down, the column lengths (scale) stay
+    using namespace entityfxtest;
+    {
+        Json rules = Json::parseFile(kSkirmish + "/rules.json");
+        rules.set("viewScripts", Json::parse(R"(["scripts/view/tilt.lua"])"));
+        Json src = Json::object(); src.set("scripts/view/tilt.lua", Json::string(R"LUA(
+local a = game.units{player = 1}[1]
+view.entity_fx(a, {pitch = 30, roll = -7})
+local v = view.entity_fx(a)
+assert(v.pitch == 30 and v.roll == -7 and v.lift == 0)
+view.entity_fx(a, {lift = 1}); assert(view.entity_fx(a).pitch == 30)
+assert(not pcall(view.entity_fx, a, {pitch = 0 / 0}))
+view.entity_fx(a, {pitch = 0, roll = 0, time = 1}); assert(view.entity_fx(a).pitch == 30)   -- eases from what is drawn
+)LUA")); rules.set("$scriptSources", src);
+        Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+        Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+        game::ViewScripts vs; CHECK(vs.load(sim, rules, map, 1));
+        for (auto& l : vs.log()) std::printf("  tilt log: %s\n", l.text.c_str());
+        CHECK(vs.log().empty());
+        vs.update(sim, .5f);
+        game::EntityFxValues v; auto fx = vs.entityFx();
+        CHECK(fx && fx->entries.size() == 1);
+        if (fx && !fx->entries.empty()) {
+            CHECK(fx->lookup(fx->entries.begin()->first, v));
+            CHECK(std::fabs(v.v[game::EntityFxValues::kPitch] - 15) < 1e-4f && std::fabs(v.v[game::EntityFxValues::kRoll] + 3.5f) < 1e-4f);
+        }
+    }
+    Json rules = Json::parseFile(kSkirmish + "/rules.json"), map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::RtsModule>()); sim.setup(rules, map);
+    const game::Rules& R = mod(sim).rules();
+    RecordingDevice dev;
+    render::Renderer3D r3d; CHECK(r3d.init(dev));
+    game::RtsView view; CHECK(view.init(dev, R, [](const std::string&, std::string&) { return false; }));
+    game::RtsScene scene; game::sceneFromSim(sim, scene, 1, 0);
+    game::SceneObject unit;
+    for (auto& o : scene.objects) if (!o.isProjectile && !R.types[o.type].structure) { unit = o; break; }
+    CHECK(unit.entity.valid());
+    scene.objects = {unit};
+    render::RTSCamera cam; cam.target = unit.pos; cam.distance = 12; cam.pitch = 1.0f;
+    auto frame = [&](double t) {
+        dev.draws.clear();
+        r3d.beginScene(cam, 640, 480);
+        view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
+        r3d.render(rts::gfx::PassDesc{});
+        std::vector<RecordingDevice::Draw> out = dev.draws;
+        return out;
+    };
+    frame(0);
+    const auto plain = frame(0);
+    CHECK(!plain.empty());
+    auto fx = std::make_shared<game::EntityFxStore>();
+    game::EntityFxEntry e; using V = game::EntityFxValues;
+    const float pitch = 90, roll = 20;
+    e.to.v[V::kPitch] = pitch; e.to.v[V::kRoll] = roll; e.from = e.to;
+    fx->entries[unit.entity.packed()] = e;
+    scene.entityFx = fx;
+    const auto tilted = frame(0);
+    CHECK(tilted.size() == plain.size());
+    if (tilted.size() != plain.size() || plain.empty()) return;
+    const float yaw = std::atan2(-unit.facing.z, unit.facing.x), d = 0.017453292f;
+    const render::mat4 rw = render::mat4::rotateY(yaw) * render::mat4::rotateZ(-pitch * d) * render::mat4::rotateX(-roll * d) * render::mat4::rotateY(-yaw);
+    // the faced forward (cos yaw, 0, -sin yaw) points down at pitch 90
+    const render::float3 fwd = rw.transformPoint({std::cos(yaw), 0, -std::sin(yaw)});
+    CHECK(fwd.y < -0.999f);
+    float worst = 0;
+    for (size_t i = 0; i < plain.size(); ++i)
+        for (uint32_t k = 0; k < plain[i].instances && k < tilted[i].instances; ++k) {
+            const float* a = plain[i].inst.data() + size_t(k) * 32;
+            const float* b = tilted[i].inst.data() + size_t(k) * 32;
+            for (int c = 0; c < 3; ++c) {
+                const render::float3 col = rw.transformPoint({a[c * 4], a[c * 4 + 1], a[c * 4 + 2]});
+                const float scale = std::max(1e-3f, std::sqrt(a[c * 4] * a[c * 4] + a[c * 4 + 1] * a[c * 4 + 1] + a[c * 4 + 2] * a[c * 4 + 2]));
+                worst = std::max({worst, std::fabs(col.x - b[c * 4]) / scale, std::fabs(col.y - b[c * 4 + 1]) / scale, std::fabs(col.z - b[c * 4 + 2]) / scale});
+            }
+        }
+    CHECK(worst < 1e-3f);
+}
+
+// ---------------- Editor world tree performance (world-perf): background preview, cheap reads, Lua peek ----------------
+#ifdef RTS_TESTS_EDITOR_CORE
+TEST(world_tree_background_preview_and_reused_reads) {
+    namespace fs = std::filesystem;
+    const fs::path root = worldTreeCopy("skirmish");
+    editor::Workspace ws;
+    ws.engineDir = RTS_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame((root / "skirmish").string(), &err));
+    const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
+    editor::WorldPreview sync;
+    CHECK(worldTreePreview(ws, sync, cfg));
+    // the background build (inputs made on the worker from copies) gives the same world
+    editor::WorldPreview bg;
+    const std::string dir = ws.project.dir;
+    const Json rules = ws.project.rulesJson;
+    auto data = std::make_shared<editor::MapData>(ws.map.data);
+    const std::string path = ws.map.path;
+    bg.start([data, path, dir, rules](Json& simRules, Json& simMap) {
+        editor::MapDoc md;
+        md.data = *data;
+        md.path = path;
+        simMap = editor::mapForSim(md.toJson(), dir);
+        editor::Project p;
+        p.dir = dir;
+        p.rulesJson = rules;
+        simRules = p.simRules(simMap);
+    }, ws.map.data, cfg);
+    CHECK(bg.busy() || RTS_PREVIEW_THREAD == 0);
+    bool adopted = false;
+    for (int i = 0; i < 20000 && !adopted; ++i) { adopted = bg.poll(); if (!adopted) std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    CHECK(adopted && !bg.busy() && bg.sim() && bg.error().empty());
+    if (bg.sim()) {
+        CHECK(bg.links() == sync.links() && bg.setupRefs() == sync.setupRefs());
+        CHECK(bg.sim()->checksum() == sync.sim()->checksum());
+    }
+    // a second start while one runs: only the newest request is adopted
+    bg.start([](Json&, Json&) { throw std::runtime_error("old request"); }, ws.map.data, cfg);
+    bg.start([](Json&, Json&) { throw std::runtime_error("newest request"); }, ws.map.data, cfg);
+    adopted = false;
+    for (int i = 0; i < 20000 && !adopted; ++i) { adopted = bg.poll(); if (!adopted) std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    CHECK(adopted && !bg.sim() && bg.error() == "newest request");
+    // reads into the same model reuse its rows and give the same result; lookups by ref / map entity
+    editor::WorldModel a, b;
+    readWorld(*sync.sim(), *sync.module(), cfg, sync.links(), sync.setupRefs(), &ws.map.data, a);
+    readWorld(*sync.sim(), *sync.module(), cfg, sync.links(), sync.setupRefs(), &ws.map.data, b);
+    readWorld(*sync.sim(), *sync.module(), cfg, sync.links(), sync.setupRefs(), &ws.map.data, b, editor::WorldReadOptions{false});
+    CHECK(a.rows.size() == b.rows.size() && b.serial == 2 && !b.scriptData && a.scriptData);
+    bool same = a.rows.size() == b.rows.size();
+    for (size_t i = 0; same && i < a.rows.size(); ++i)
+        same = a.rows[i].ref == b.rows[i].ref && a.rows[i].doc == b.rows[i].doc && a.rows[i].comps == b.rows[i].comps && a.rows[i].x == b.rows[i].x &&
+               a.rows[i].category == b.rows[i].category && b.find(a.rows[i].ref) == &b.rows[i];
+    CHECK(same);
+    for (size_t d = 0; d < ws.map.data.entities.size(); ++d) if (!b.findDoc(int(d)) || b.findDoc(int(d))->doc != int(d)) { CHECK(false); break; }
+    CHECK(!b.find(0) && !b.find(a.rows.back().ref + (uint64_t(1) << 32)));   // other generation: not found
+    // one row read alone equals the row of a full read
+    editor::WorldRow one;
+    CHECK(editor::readWorldRow(*sync.sim(), *sync.module(), cfg, a.rows[3].e, one) && one.ref == a.rows[3].ref && one.comps == a.rows[3].comps && one.type == a.rows[3].type);
+    fs::remove_all(root);
+}
+
+TEST(world_tree_lua_peek_is_observation_only) {
+    // The editor's Details read game.data through ScriptEngine::peekData every frame or so: it must show the
+    // table's current content and never change the simulation (same checksums as without it).
+    auto run = [&](bool peek, std::string* last) {
+        auto sim = scriptSim({{"scripts/a.lua", R"(
+            function on_start()
+              local hall = game.units{owner = 1, type = "townhall"}[1]
+              local x, z = game.pos(hall)
+              state.h = game.spawn("peasant", 1, x + 3, z)
+              game.data(state.h).n = 0
+            end
+            function on_tick(t)
+              local d = game.data(state.h)
+              d.n = d.n + 1
+              d.label = "n" .. d.n
+            end
+        )"}});
+        auto& m = mod(*sim);
+        std::vector<uint64_t> sums;
+        for (int i = 0; i < 60; ++i) {
+            sim->step();
+            if (peek && m.scripts()) {
+                sim->world().each<game::ScriptData>([&](Entity e, game::ScriptData& sd) {
+                    std::string blob;
+                    const std::string before = sd.blob;
+                    if (m.scripts()->peekData(*sim, e, blob)) { if (last) *last = blob; }
+                    if (sd.blob != before) CHECK(false);   // the world copy is not written
+                });
+            }
+            if (i % 10 == 9) sums.push_back(sim->checksum());
+        }
+        return sums;
+    };
+    std::string blob;
+    const auto withPeek = run(true, &blob);
+    const auto without = run(false, nullptr);
+    CHECK(!withPeek.empty() && withPeek == without);
+    const Json d = editor::decodeScriptBlob(blob);
+    CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
+}
+#endif
