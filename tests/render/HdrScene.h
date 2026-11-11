@@ -3,6 +3,7 @@
 #include "engine/render/PostFx.h"
 #include "engine/render/ScreenLighting.h"
 #include "HdrShaders.h"
+#include "engine/render/graph/ShaderGraph.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -13,7 +14,7 @@ struct HdrScene {
     Renderer3D renderer;
     PostFx post;
     ScreenLighting screen;
-    bool advanced = false, ownsFrame = true;
+    bool advanced = false, ownsFrame = true, materialGallery = false;
     PostProcess* pipeline() { return advanced ? static_cast<PostProcess*>(&screen) : static_cast<PostProcess*>(&post); }
     RTSCamera camera;
     Mesh floor, cube, water;
@@ -47,6 +48,17 @@ struct HdrScene {
             Material m; m.baseColor={0.7f,0.38f,0.12f,1}; m.metallic=i/4.0f; m.roughness=0.1f+i*0.19f;
             parts.push_back({"sphere",&sphere,m,mat4::translate({float(i-2)*2.0f,0.75f,-2.5f})});
         }
+        if(const char* library=std::getenv("AIVERSE_MATERIAL_LIBRARY")) {
+            materialGallery=true;parts.clear();auto materials=Json::parseFile(library)["materials"];
+            int i=0;for(const auto& [name,data]:materials.members()){
+                Material m;m.name=name;m.vertexColors=false;m.baseColor={1,1,1,1};
+                m.shaderGraph=std::make_shared<graph::Program>(graph::compile(data["shaderGraph"],"material"));
+                parts.push_back({name,&sphere,m,mat4::translate({float(i%3-1)*2.6f,.75f,float(i/3-1)*2.6f})});
+                std::printf("Material gallery %d: %s\n",i++,name.c_str());
+            }
+            camera.target={0,.4f,0};camera.distance=14;camera.pitch=.9f;camera.yaw=0;
+            renderer.lighting.sunColor={1,1,1};renderer.lighting.skyColor={.5f,.55f,.65f};
+        }
         spheres=modelFromParts("hdr material chart",parts); uploadModel(d,*spheres);
         post.configure(Json::parse(R"({"hdr":"auto","effects":[{"type":"bloom","threshold":0.9,"intensity":0.35},{"type":"fxaa"},{"type":"colorGrade","exposure":-1}]})"),Json());
         post.setQuality(PostFx::defaultQualityFor(d,false));
@@ -76,12 +88,14 @@ struct HdrScene {
         renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
         renderer.drawMesh(floor,{}, {0.34f,0.36f,0.4f,1});
         ModelDraw md; md.model=spheres.get(); renderer.drawModel(md);
+        if(!materialGallery){
         // Same albedo, increasing radiance: LDR clamps before bloom, HDR retains differences.
         for(int i=0;i<5;++i) renderer.drawMesh(cube,mat4::translate({float(i-2)*2,0,-4.5f}),{0.6f,0.24f,0.06f,1},kDrawUnlit,0,float(1<<i));
         renderer.drawMesh(cube,mat4::translate({-2.8f,0,1}),{0.08f,0.5f,0.95f,0.5f},kDrawUnlit,0,0);
         renderer.drawMesh(cube,mat4::translate({-2.3f,0,1.3f}),{0.95f,0.15f,0.1f,0.5f},kDrawUnlit,0,0);
         renderer.drawMesh(water,mat4::translate({0,0.12f,0}),{0.08f,0.16f,0.22f,0.65f},kDrawNoCastShadow,0.9f);
         renderer.lights.add({2,1.5f,0.8f},4,{0.15f,0.5f,1},3);
+        }
         gfx::PassDesc pass = output; pass.clearColor[0]=0.09f;pass.clearColor[1]=0.11f;pass.clearColor[2]=0.15f;
         renderer.render(pass,pipeline());
         const bool hdr=post.linearScene();
