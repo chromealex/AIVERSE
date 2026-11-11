@@ -403,5 +403,18 @@
   "value": "RGBA value",
   "input": "Input",
   "remove": "Delete node"
+},
+  "physicsDemo": {
+  "title": "Physics sandbox",
+  "description": "Boxes, sphere, capsule and pendulum",
+  "tick": "Tick: {tick}",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "launch": "Launch sphere",
+  "save": "Save state",
+  "restore": "Restore state",
+  "orbit": "Orbit",
+  "zoom": "Distance"
 }
 }
