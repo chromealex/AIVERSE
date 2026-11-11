@@ -297,6 +297,8 @@ endif()
 # Models (models agent): glTF / OBJ / procedural models, PBR materials, skeletal and procedural
 # animation. CPU side only (no platform code), so tests and tools can load models too.
 add_library(aiverse_models STATIC
+    engine/render/Geometry.cpp
+    engine/render/GeometrySceneData.cpp
     engine/render/MeshBuilder.cpp
     engine/render/Model.cpp
     engine/render/ModelGltf.cpp
@@ -344,6 +346,7 @@ set(AIVERSE_RUNTIME_SRC
     engine/platform/PlatformCommon.cpp
     engine/render/Renderer3D.cpp
     engine/render/Renderer3DModels.cpp
+    engine/render/GeometryScene.cpp
     engine/render/Lights.cpp
     engine/render/QualityGovernor.cpp
     engine/render/Renderer3DReflect.cpp
@@ -730,7 +733,7 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_tests PRIVATE aiverse_game_view)   # fog of war look parsing (view, no GPU)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
     target_sources(aiverse_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
-        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp)
+        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp engine/render/GeometryScene.cpp)
     target_sources(aiverse_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
     target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
@@ -941,7 +944,7 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp apps/editor/core/GeometryOps.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
@@ -1287,4 +1290,10 @@ if(AIVERSE_ENABLE_PHYSICS)
         target_link_libraries(aiverse_physics_demo PRIVATE AIVERSE::physics aiverse_runtime aiverse_i18n)
         target_compile_definitions(aiverse_physics_demo PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
     endif()
+endif()
+
+# Geometry visibility verification uses the same renderer on GL and Metal.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_geometry_preview tests/geometry/preview.cpp)
+    target_link_libraries(aiverse_geometry_preview PRIVATE aiverse_runtime)
 endif()

@@ -493,3 +493,8 @@ for the format, API, runnable showcase and explicit scope.
 
 See [Model and animation authoring](modeling.md) for parameterized geometry, rigs,
 clip editing, GLB export, editor windows and the `modeling_*` MCP tools.
+### Geometry visibility and static HLOD
+
+Optional `view.geometry` policies enable cluster detail selection and conservative occlusion.
+Static scene HLOD is configured separately so gameplay entities retain independent identity.
+See [geometry.md](geometry.md) for the schema, `geometry_*` agent tools, budgets and verification.

@@ -303,19 +303,22 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 }
 
 Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::string& path) {
-    auto it = models_.find(path);
+    const auto policy = parseGeometryPolicy(t.view["geometry"]);
+    const std::string key = path + ((policy.clusters || policy.occluder) ? "#geometry" : "");
+    auto it = models_.find(key);
     if (it == models_.end()) {
         std::unique_ptr<Model> m;
         try {
             std::vector<std::string> w;
             m = loadModel(path, read_, &w);
             for (auto& s : w) warn(t, s);
+            if (policy.clusters || policy.occluder) prepareGeometry(*m);
             uploadModel(dev, *m);
         } catch (const std::exception& e) {
             warn(t, e.what());
             m.reset();
         }
-        it = models_.emplace(path, std::move(m)).first;
+        it = models_.emplace(key, std::move(m)).first;
     }
     return it->second.get();
 }
@@ -406,7 +409,7 @@ void RtsView::finishChoice(const UnitType& t, ModelChoice& c) {
 
 std::vector<std::string> RtsView::modelFiles() const {
     std::vector<std::string> out;
-    for (const auto& [path, m] : models_) if (path.rfind("shape:", 0) != 0) out.push_back(path);
+    for (const auto& [path, m] : models_) if (path.rfind("shape:", 0) != 0) out.push_back(m ? m->path : path);
     return out;
 }
 
@@ -439,6 +442,7 @@ void RtsView::configureChoice(gfx::Device& dev, const UnitType& t, const Json& v
         try { c.graph = AnimationGraph::compile(m, v["animationGraph"], animationOperations_, animationTraits_); }
         catch (const std::exception& e) { warn(t, e.what()); }
     }
+    c.geometry = parseGeometryPolicy(t.view["geometry"]);
     // ---- placement: centre on the ground, rotate the model's forward axis to +X, fit, offset
     const std::string fwd = v.getStr("forward", isShape ? "+x" : "+z");
     float yaw = fwd == "+z" ? 90 * kDeg : fwd == "-z" ? -90 * kDeg : fwd == "-x" ? 180 * kDeg : 0;

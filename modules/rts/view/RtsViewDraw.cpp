@@ -67,6 +67,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     if (placement) base = *placement * base;   // flat maps: untouched (bit-identical)
     ModelDraw d;
     d.model = show->model;
+    d.geometry = show->geometry;
     d.world = base * st.objXf * show->fix;
     d.materials = &show->materials;
     d.nodeMaterial = show->nodeMaterial.empty() ? nullptr : &show->nodeMaterial;
@@ -144,6 +145,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
             if (at.carry != -2 && !(o.carry > 0 && (at.carry == -1 || at.carry == o.carryRes))) continue;
             ModelDraw ad = d;
             ad.model = at.model;
+            ad.geometry = {};
             ad.materials = &at.materials;
             ad.nodeWorld = nullptr; ad.pose = nullptr; ad.baked = nullptr; ad.variant = -1; ad.nodeMaterial = nullptr;
             const mat4 socket = at.node >= 0 && size_t(at.node) < st.world.size() ? st.world[size_t(at.node)] : mat4{};

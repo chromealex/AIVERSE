@@ -141,6 +141,7 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
     modelItems_.clear(); jointData_.clear(); morphData_.clear();
+    geometryStats_ = {}; geometryMainView_ = true;
     computeShadowMatrix(cam, aspect);
     lights.begin(cam, aspect);
 }
@@ -274,6 +275,7 @@ void Renderer3D::resolvePostFx() {
 
 void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     drawCalls_ = 0;
+    prepareOcclusion();
     // ---- shadow pass
     if (quality_ != ShadowQuality::Off && shadowMap_.valid()) {
         gfx::PassDesc sp;

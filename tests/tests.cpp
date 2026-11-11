@@ -12903,6 +12903,7 @@ TEST(world_tree_script_blob_decoding) {
 
 #include "animation/view.inc"
 #include "animation/editor.inc"
+#include "geometry/runtime.inc"
 
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {

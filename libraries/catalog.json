@@ -2,6 +2,17 @@
   "schema": 1,
   "packages": [
     {
+      "id": "geometry",
+      "version": "0.1.0",
+      "layer": "presentation",
+      "status": "engine-reference",
+      "source": "engine/render/Geometry.h",
+      "skill": "docs/ai-skills/rts-geometry/SKILL.md",
+      "summary": "Rigid mesh clusters, static scenery HLOD and conservative CPU occlusion",
+      "notes": "Use geometry_catalog/analyze before setting explicit policies. Ordinary instancing remains for crowds. HLOD is static scenery only, not gameplay or fog visibility. Verify real cameras and hardware; no virtual geometry streaming or GPU Hi-Z.",
+      "verifiedPlatforms": []
+    },
+    {
       "id": "math",
       "version": "0.1.0",
       "layer": "simulation",

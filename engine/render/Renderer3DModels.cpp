@@ -247,6 +247,11 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (d.variant >= 0 && d.variant < int(p.variantMaterial.size()) && p.variantMaterial[size_t(d.variant)] >= 0) mi = p.variantMaterial[size_t(d.variant)];
             if (d.nodeMaterial && size_t(n) < d.nodeMaterial->size() && (*d.nodeMaterial)[size_t(n)] >= 0 && &mats == d.materials) mi = (*d.nodeMaterial)[size_t(n)];
             ModelItem it;
+            it.geometry = d.geometry;
+            it.firstIndex = p.firstIndex; it.indexCount = p.indexCount;
+            size_t pi = 0;
+            for (int mesh = 0; mesh < node.mesh; ++mesh) pi += m->meshes[size_t(mesh)].primitives.size();
+            it.geometryPrimitive = pi + size_t(&p - m->meshes[size_t(node.mesh)].primitives.data());
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
@@ -358,7 +363,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     }
     dev_->setVertexBuffer(it.model->vb);
     dev_->setIndexBuffer(it.model->ib);
-    dev_->drawIndexed(it.prim->indexCount, it.prim->firstIndex, 0, count);
+    dev_->drawIndexed(it.indexCount, it.firstIndex, 0, count);
     lastItem_ = &it;
     ++drawCalls_;
 }
@@ -371,6 +376,13 @@ void Renderer3D::renderModels(int phase) {
         const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags);
         bool take = phase == 0 ? it.inShadow : phase == 3 ? it.inView && it.outline.w > 0 : phase == 4 ? it.inView && transparentItem(it.flags) :
                     it.inView && (phase == 2) == blended;
+        // Reflection has its own view, never consume main-view occlusion there.
+        if (phase == 1 && !geometryMainView_) take = !blended && geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
+        if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
+            geometryOcclusion_.hidden(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax)) {
+            if (phase == 1 || phase == 2) ++geometryStats_.occluded;
+            take = false;
+        }
         if (take) order_.push_back(i);
     }
     if (order_.empty()) return;
@@ -399,9 +411,52 @@ void Renderer3D::renderModels(int phase) {
         if (batchable(modelItems_[order_[i]]))
             while (j < order_.size() && j - i < size_t(kMaxInstances) && batchable(modelItems_[order_[j]]) &&
                    sameBatch(modelItems_[order_[i]], modelItems_[order_[j]])) ++j;
-        drawModelBatch(order_.data() + i, uint32_t(j - i), phase);
+        drawGeometryBatch(order_.data() + i, uint32_t(j - i), phase);
         i = j;
     }
 }
 
+void Renderer3D::prepareOcclusion() {
+    geometryOcclusion_.clear(dev_->info().clipDepthZeroToOne);
+    uint32_t budget = 8192;
+    for (const auto& it : modelItems_) {
+        if (!budget) break;
+        if (!it.inView || !it.geometry.occluder || !it.model->geometry || it.joints >= 0 || it.baked || it.morph >= 0 ||
+            it.mat->alpha != AlphaMode::Opaque || it.mat->transparent || it.mat->shaderGraph ||
+            it.tint.w < 1 || it.dissolve > 0 || transparentItem(it.flags)) continue;
+        for (const auto& t : it.model->geometry->occluders[it.geometryPrimitive]) {
+            geometryOcclusion_.triangle(viewProj_ * it.world, t, it.mat->doubleSided);
+            ++geometryStats_.occluderTriangles;
+            if (!--budget) break;
+        }
+    }
+}
+void Renderer3D::drawGeometryBatch(const uint32_t* items, uint32_t count, int phase) {
+    auto& it = modelItems_[items[0]];
+    const bool eligible = count == 1 && phase == 1 && geometryMainView_ && it.geometry.clusters && it.model->geometry &&
+        it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 && it.dissolve == 0;
+    if (!eligible) { drawModelBatch(items,count,phase); return; }
+    const auto& clusters = it.model->geometry->primitives[it.geometryPrimitive];
+    if (clusters.empty() || clusters.size() > 8192 || geometryStats_.clustersTested + clusters.size() > 16384) { drawModelBatch(items,count,phase); return; }
+    const mat4 clip = viewProj_ * it.world;
+    const auto first = it.firstIndex, indices = it.indexCount;
+    std::vector<std::pair<uint32_t,uint32_t>> runs;
+    uint32_t culled = 0, reduced = 0;
+    for (const auto& c : clusters) {
+        ++geometryStats_.clustersTested;
+        if (!geometryBoxVisible(clip,c.min,c.max) || (it.geometry.occlusion && geometryOcclusion_.hidden(clip,c.min,c.max))) {
+            ++culled; continue;
+        }
+        // The occlusion buffer contains source triangles, so an occluder must render exact geometry.
+        const bool coarse = !it.geometry.occluder && c.coarseCount < c.indexCount && geometryErrorPixels(clip,c.min,c.max,c.error,sceneW_,sceneH_) <= it.geometry.errorPixels;
+        if (coarse) ++reduced;
+        const auto begin = coarse ? c.coarseFirst : c.firstIndex, length = coarse ? c.coarseCount : c.indexCount;
+        if (!runs.empty() && runs.back().first + runs.back().second == begin) runs.back().second += length;
+        else runs.push_back({begin,length});
+    }
+    if (runs.size() > 256 || (!culled && !reduced)) { drawModelBatch(items,count,phase); return; }
+    geometryStats_.clustersCulled += culled; geometryStats_.coarseClusters += reduced;
+    for (auto [begin,length] : runs) { it.firstIndex = begin; it.indexCount = length; drawModelBatch(items,count,phase); }
+    it.firstIndex = first; it.indexCount = indices;
+}
 } // namespace aiverse::render

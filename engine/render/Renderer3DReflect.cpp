@@ -56,7 +56,9 @@ void Renderer3D::renderReflection() {
             dev_->drawIndexed(it.mesh->indexCount);
             ++drawCalls_;
         }
+        geometryMainView_ = false;
         renderModels(1);
+        geometryMainView_ = true;
         lights.drawHalos(viewProj_, false);   // lights glitter in the water; no ground decals
         lights.endReflection();
     }

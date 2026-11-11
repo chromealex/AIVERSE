@@ -155,6 +155,15 @@ void Editor::registerGuiOps() {
         ws_.registerOp({name, desc, Json::parse(schema), std::move(fn), true});
     };
     auto okSummary = [](const std::string& s) { Json r = Json::object(); r.set("ok", Json::fromBool(true)); r.set("summary", Json::string(s)); return r; };
+    add("geometry_stats", "Counters for the last rendered editor view, reset each frame. Compare policy on/off at the same camera; counters are not GPU timing.", "{}", [this](const Json&) {
+        const auto& s = r3d_.geometryStats(); Json r=Json::object();
+        r.set("clustersTested",Json::number(int64_t(s.clustersTested)));
+        r.set("clustersCulled",Json::number(int64_t(s.clustersCulled)));
+        r.set("coarseClusters",Json::number(int64_t(s.coarseClusters)));
+        r.set("occluded",Json::number(int64_t(s.occluded)));
+        r.set("occluderTriangles",Json::number(int64_t(s.occluderTriangles)));
+        r.set("drawCalls",Json::number(int64_t(r3d_.drawCalls()))); return r;
+    });
     add("view_screenshot", "Screenshot of the editor (window: 'all' | 'scene' | 'game'); with 'device' the Game window shows that device first. Returns a PNG image.",
         R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game"]}, "device": {"type": "string"}, "x": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}})",
         [](const Json&) -> Json { throw std::runtime_error("screenshots are answered asynchronously by the editor link"); });

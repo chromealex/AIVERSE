@@ -41,6 +41,19 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
     if (!models_.count("shape:generic")) buildShapes(dev);
     looks_.clear();
     warnings_.clear();
+    geometryScene_.shutdown(dev);
+    try {
+        std::string text;
+        if (read_("game.json", text)) {
+            const auto game = Json::parse(text);
+            const auto file = game.getStr("geometryScene");
+            if (!file.empty()) {
+                if (!read_(file, text)) throw std::runtime_error("geometryScene: file not found: " + file);
+                geometryScene_.load(dev, Json::parse(text), read_);
+            }
+        }
+    } catch (const std::exception& e) { warnings_.push_back(e.what()); }
+
     {   // shared materials of the game (docs/models.md "Material library")
         materialLib_ = Json::object();
         std::string text;
@@ -68,6 +81,7 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
 }
 
 void RtsView::shutdown(gfx::Device& dev) {
+    geometryScene_.shutdown(dev);
     for (auto& [k, m] : models_) if (m) releaseModel(dev, *m);
     models_.clear(); looks_.clear(); anims_.clear(); animationCache_.clear(); tracers_.clear();
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
@@ -150,6 +164,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
         for(float x:{a.x,b.x})for(float y:{a.y,b.y})for(float z:{a.z,b.z}){auto v=transform.transformPoint({x,y,z});lo={std::min(lo.x,v.x),std::min(lo.y,v.y),std::min(lo.z,v.z)};hi={std::max(hi.x,v.x),std::max(hi.y,v.y),std::max(hi.z,v.z)};}
         animationObstacles_.push_back({o.entity,lo,hi,o.entity.valid()?o.entity.packed()+2:uint64_t(oi)+2});
     }
+    geometryScene_.draw(r);
     const bool tiles = twoD_ && twoD_->hasTiles();
     if (twoD_) twoD_->beginFrame(r.camera(), time, r, &grid, rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f);
     bars_.assign(s.objects.size(), {});

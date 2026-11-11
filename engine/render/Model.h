@@ -21,6 +21,7 @@
 namespace aiverse::render {
 
 class MeshBuilder;
+struct GeometryData;
 
 enum class AlphaMode : uint8_t { Opaque, Mask, Blend };
 enum class ShadingModel : uint8_t { Pbr, Unlit };
@@ -140,6 +141,7 @@ struct AnimClip {
 };
 
 struct Model {
+    std::shared_ptr<GeometryData> geometry;
     std::string path;
     std::vector<Node> nodes;
     std::vector<int> order;            // node indices, parents before children (finalize())

@@ -10,6 +10,7 @@
 //   units:      worker, soldier, ranged, vehicle, tank, flyer, mushroom, generic
 //   structures: hall, house, barracks, workshop, factory, tower, mine, tree, rock, mushroomhouse, structure
 #pragma once
+#include "engine/render/GeometryScene.h"
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -260,6 +261,7 @@ private:
     struct LegIK { int hip = -1, knee = -1, foot = -1; };
     struct ModelChoice {
         std::shared_ptr<const render::AnimationGraph> graph;
+        render::GeometryPolicy geometry;
         render::Model* model = nullptr;
         std::vector<render::Material> materials;  // per-type copy with overrides applied
         std::vector<int> nodeMaterial;            // "assign": node -> index into materials (-1 = the model's)
@@ -382,6 +384,7 @@ private:
     Json materialLib_ = Json::object();   // materials.json "materials"
     gfx::Device* dev_ = nullptr;
     std::map<std::string, std::unique_ptr<render::Model>> models_;  // by path; shapes as "shape:<name>"
+    render::GeometryScene geometryScene_;
     std::vector<TypeLook> looks_;
     std::vector<std::string> warnings_;
     std::unordered_map<uint64_t, EntityAnim> anims_;   // presentation only: iteration order never matters

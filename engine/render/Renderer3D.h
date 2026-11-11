@@ -5,6 +5,7 @@
 // Frame:  beginScene(camera) -> drawMesh()/line()/... -> render(pass)  [shadow pass + main pass;
 //         the main pass is left open so the caller can draw UI, then calls device.endPass()]
 #pragma once
+#include "Geometry.h"
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -116,6 +117,7 @@ struct BakedSample { int clipA = -1, clipB = -1; float timeA = 0, timeB = 0, mix
 // One model instance. Node matrices come from an animated pose (Animation.h) or the bind pose.
 // Rigid parts and baked-skinned meshes of identical instances are drawn instanced (32 per draw).
 struct ModelDraw {
+    GeometryPolicy geometry;
     const Model* model = nullptr;
     mat4 world;                                    // model space -> world
     const std::vector<mat4>* nodeWorld = nullptr;  // pose, model space; null = bind pose
@@ -182,8 +184,6 @@ public:
     void drawCustomShadow(CustomDraw fn) { customShadow_.push_back(std::move(fn)); }
     const mat4& lightViewProj() const { return lightViewProj_; }
     const RTSCamera& camera() const { return cam_; }
-    int sceneWidth() const { return sceneW_; }
-    int sceneHeight() const { return sceneH_; }
 
     // Traced lighting ("trace" tier, Renderer3DTrace.cpp): sun rays marched over the terrain height
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
@@ -207,12 +207,19 @@ public:
     const float3& cameraPos() const { return camPos_; }
     Lighting lighting;
     LightSystem lights;   // dynamic point lights: add between beginScene() and render()
+    struct GeometryStats { uint32_t clustersTested=0, clustersCulled=0, coarseClusters=0, occluded=0, occluderTriangles=0; };
+    const GeometryStats& geometryStats() const { return geometryStats_; }
+    int sceneWidth() const { return sceneW_; }
+    int sceneHeight() const { return sceneH_; }
     uint32_t drawCalls() const { return drawCalls_; }
 
 private:
     struct DrawItem { const Mesh* mesh; mat4 model; float4 color; uint32_t flags; float specular, emissive; };
     struct ModelItem {
         const Model* model; const Primitive* prim; const Material* mat;
+        GeometryPolicy geometry;
+        size_t geometryPrimitive = 0;
+        uint32_t firstIndex = 0, indexCount = 0;
         mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
         bool baked;         // skinned from the baked texture (rows in anim)
@@ -277,6 +284,11 @@ private:
     float3 camFwd_;
 
     // models
+    GeometryStats geometryStats_;
+    GeometryOcclusion geometryOcclusion_;
+    void prepareOcclusion();
+    void drawGeometryBatch(const uint32_t* items, uint32_t count, int phase);
+    bool geometryMainView_ = true;
     MaterialQuality matQuality_ = MaterialQuality::High;
     std::vector<ModelItem> modelItems_;
     std::vector<float> jointData_, morphData_, instData_;

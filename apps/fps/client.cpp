@@ -6,6 +6,7 @@
 #include "engine/platform/Platform.h"
 #include "engine/world/ChunkScene.h"
 #include "engine/render/Renderer3D.h"
+#include "engine/render/GeometryScene.h"
 #include "engine/render/ImGuiLayer.h"
 #include "engine/i18n/Localization.h"
 #include "imgui.h"
@@ -27,6 +28,7 @@ struct App {
     net::UdpListener udp;net::WsListener ws;
 #endif
     world::SpatialWorld geometry;world::ChunkScene chunks;std::string projectRoot;
+    render::GeometryScene staticGeometry;
     render::Renderer3D renderer;render::ImGuiLayer gui;render::Mesh cube;
     i18n::Localization lang;
     std::set<platform::Key> keys;
@@ -41,6 +43,11 @@ struct App {
     net::authority::Snapshot previousSnapshot,received;uint32_t lastSnapshotTick=0;double snapshotAge=0;
     void init(gfx::Device& device) {
         renderer.init(device);renderer.setShadowQuality(render::ShadowQuality::Low);
+        if (const auto file=map.getStr("geometryScene"); !file.empty()) {
+            auto reader=[&](const std::string& path,std::string& text){return platform::readContentFile(projectRoot+"/"+path,text);};
+            std::string text;if(!reader(file,text))throw std::runtime_error("geometryScene: file not found: "+file);
+            staticGeometry.load(device,Json::parse(text),reader);
+        }
         gui.init(device,"engine/assets/fonts/ui.ttf",17);
         render::MeshBuilder builder;builder.color(render::rgba(255,255,255)).box({0,0.5f,0},{1,1,1});cube=builder.upload(device);
         lang.load([](const auto& path,auto& out){return platform::readContentFile(path,out);},"en",{"engine/assets/lang"});
@@ -146,6 +153,7 @@ struct App {
         if(aimHeld)cam.fovY=(weapon.range>=700_fx||(actor.attachments[actor.weaponIndex]&1))?0.28f:0.65f;
         audio::ListenerPose listener;auto globalEye=visual(eye);listener.pos[0]=globalEye.x;listener.pos[1]=globalEye.y;listener.pos[2]=globalEye.z;auto forward=render::normalize(cam.target-cam.eye());listener.forward[0]=forward.x;listener.forward[1]=forward.y;listener.forward[2]=forward.z;audio.setListener(listener);
         renderer.beginScene(cam,device.framebufferWidth(),device.framebufferHeight());
+        staticGeometry.draw(renderer);
         chunks.update(actor.pos,2,2,[&](const auto& file,auto& data){return platform::readContentFile(projectRoot+"/"+file,data);});
         for(const auto& [cell,boxes]:chunks.chunks())for(const auto& b:boxes) {
             (void)cell;
@@ -225,7 +233,7 @@ struct App {
         if(actor.blindUntil>client->snapshot().tick){auto remain=actor.blindUntil-client->snapshot().tick;auto alpha=int(std::min(1.0,double(remain)/std::max(1u,config.systems.flashTicks))*255);draw->AddRectFilled({0,0},{w,h},IM_COL32(255,255,255,alpha));}
         gui.render();device.endPass();device.endFrame();
     }
-    void shutdown(gfx::Device& device){platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
+    void shutdown(gfx::Device& device){staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
 };
 }
 int aiverseMain(int argc,char** argv) {
