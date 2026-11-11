@@ -511,6 +511,10 @@
   "zoom": "Расстояние"
 },
 "clothDemo": {
+  "gpuCpu": "CPU: подготовка GPU",
+  "gpuFrame": "GPU: готовый кадр",
+  "gpu": "Расчёт: GPU compute",
+  "cpu": "Расчёт: CPU",
   "autoLod": "Учитывать автоматический LOD",
   "lod": "Частота обновления по LOD",
   "lodCounts": "60 / 30 / 15 / 10 Гц: {a} / {b} / {c} / {d}",

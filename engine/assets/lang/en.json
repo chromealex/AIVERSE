@@ -511,6 +511,10 @@
   "zoom": "Distance"
 },
 "clothDemo": {
+  "gpuCpu": "CPU submission",
+  "gpuFrame": "GPU frame (completed)",
+  "gpu": "Solver: GPU compute",
+  "cpu": "Solver: CPU",
   "autoLod": "Use existing automatic LOD",
   "lod": "Temporal LOD",
   "lodCounts": "60 / 30 / 15 / 10 Hz: {a} / {b} / {c} / {d}",

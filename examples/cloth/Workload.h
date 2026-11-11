@@ -17,6 +17,7 @@ struct Workload {
     std::vector<Cloth> cloths;
     std::vector<Capsule> capsules;
     Environment env;
+    std::vector<Environment> perObject; // optional validation/host-specific local forces and colliders
     Batch batch;
     TemporalLod lod;
     int columns;
@@ -31,7 +32,8 @@ struct Workload {
     void step(int tick){env.wind={.6f*std::sin(float(tick)*.023f),0,3+2*std::sin(float(tick)*.017f)};batch.step(cloths,1.0f/60,env);}
     void step(int tick,Vec camera,bool lodEnabled,std::span<const LodHint> hints={}){
         env.wind={.6f*std::sin(float(tick)*.023f),0,3+2*std::sin(float(tick)*.017f)};
-        lod.setEnabled(lodEnabled);lod.step(cloths,batch,camera,env,{},hints);
+        for(auto& input:perObject)input.wind=env.wind;
+        lod.setEnabled(lodEnabled);lod.step(cloths,batch,camera,env,perObject,hints);
     }
     float stretch()const{float x=1;for(auto& c:cloths)x=std::max(x,c.maxStretch());return x;}
     bool healthy()const{for(auto& c:cloths)if(!c.healthy())return false;return true;}

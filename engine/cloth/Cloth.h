@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -36,7 +37,8 @@ public:
     void step(float dt,const Environment& environment);
     void movePins(Vec offset); // local offset of the pinned top edge
     const Grid& grid()const{return *grid_;}
-    std::span<const Vec> positions()const{return p_;}
+    std::span<const Vec> positions()const{return externalState_?std::span<const Vec>{}:std::span<const Vec>(p_);}
+    bool cpuStateAvailable()const{return !externalState_;}
     Vec origin()const{return origin_;}
     float maxStretch()const;
     bool healthy()const;
@@ -44,6 +46,9 @@ public:
     bool active=true; // host-controlled culling; inactive cloth freezes (no hidden catch-up)
 private:
     friend class Batch;
+    friend class GpuSolver;
+    void recordStep(float,const Environment&);
+    bool externalState_=false;
     uint64_t fingerprint();
     bool sameState(const Cloth&) const;
     uint64_t fingerprint_=0;
@@ -76,6 +81,10 @@ public:
     int workers()const;
 private:
     friend class TemporalLod;
+    friend class GpuSolver;
+    using Executor=std::function<bool(std::span<Cloth>,std::span<const size_t>,std::span<const size_t>,std::span<const float>,const Environment&,std::span<const Environment>)>;
+    void setExecutor(Executor);
+    bool hasExecutor()const;
     void run(std::span<Cloth>,float,const Environment&,std::span<const Environment>,std::span<const float>,bool execute=true);
     struct Impl;
     std::unique_ptr<Impl> impl_;
