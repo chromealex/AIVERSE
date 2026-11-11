@@ -629,6 +629,10 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(assetpipe PRIVATE aiverse_pack_writer)
     target_compile_definitions(assetpipe PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(aiversebuild PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # Building just the editor must also produce its packager. Native editors may disable tools.
+    if(TARGET aiverse_editor)
+        add_dependencies(aiverse_editor aiversebuild)
+    endif()
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
     add_executable(aiversemcp tools/mcp/main.cpp)
     target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
@@ -730,6 +734,9 @@ if(AIVERSE_BUILD_TESTS)
     endif()
     target_compile_definitions(aiverse_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_tests COMMAND aiverse_tests)
+    add_executable(aiverse_build_tool_tests tests/editor/build_tool.cpp)
+    target_include_directories(aiverse_build_tool_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME editor_build_tool COMMAND aiverse_build_tool_tests "${CMAKE_CURRENT_BINARY_DIR}/build-tool-fixture")
 endif()
 
 # ---------------------------------------------------------------------------

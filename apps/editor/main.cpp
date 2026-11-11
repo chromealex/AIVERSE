@@ -4,6 +4,7 @@
 //              [--native-editor] [--tools-from <dir>]   (set by the switch to a per-project build: EditorNativeBuild.cpp)
 // Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
 #include "engine/platform/EngineDir.h"
+#include "core/BuildTool.h"
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -44,21 +45,6 @@ static std::string findNear(const std::string& dir, std::initializer_list<const 
     return {};
 }
 
-static std::string findBuildTool(const std::string& dir) {
-    if (const char* env = std::getenv("AIVERSE_BUILD_TOOL")) return env;
-#if defined(_WIN32)
-    const char* name = "aiversebuild.exe";
-#else
-    const char* name = "aiversebuild";
-#endif
-    // next to the editor, or next to the .app bundle on macOS (AiverseEditor.app/Contents/MacOS/..)
-    for (fs::path c : {fs::path(dir) / name, fs::path(dir) / ".." / ".." / ".." / name, fs::path(dir) / "Release" / name, fs::path(dir) / "Debug" / name}) {
-        std::error_code ec;
-        if (fs::exists(c, ec)) return fs::canonical(c, ec).string();
-    }
-    return name; // rely on PATH
-}
-
 int aiverseMain(int argc, char** argv) {
     editor::Editor::Options opt;
     opt.engineDir = aiverse::platform::resolveEngineDir(AIVERSE_SOURCE_DIR, argv[0]);   // source tree, or a packaged engine
@@ -90,7 +76,7 @@ int aiverseMain(int argc, char** argv) {
     if (!opt.openMap.empty()) opt.openMap = fs::absolute(opt.openMap, ec).string();
     // a per-project build has only the editor: the other tools come from the regular build (--tools-from)
     const std::string toolDir = toolsFrom.empty() ? exeDir(argv[0]) : toolsFrom;
-    opt.buildTool = findBuildTool(toolDir);
+    opt.buildTool = editor::findBuildTool(toolDir, opt.engineDir);
     opt.mcpTool = findNear(toolDir, {"aiversemcp", "aiversemcp.exe", "Release/aiversemcp.exe"});
     {
         std::error_code ec2;
