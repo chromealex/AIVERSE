@@ -117,6 +117,10 @@ public:
         }
     }
     ~GLDevice() override {
+#if defined(__APPLE__) || defined(_WIN32)
+        if (queryActive_) glEndQuery(GL_TIME_ELAPSED);
+        for (const auto& t:timedQueries_) glDeleteQueries(1,&t.query);
+#endif
 #if defined(__EMSCRIPTEN__)
         glDeleteBuffers(kMaxUniformSlots, webUbos_);
 #else
@@ -343,6 +347,28 @@ public:
 
     // ---------- frame ----------
     CaptureFn capture_;
+#if defined(__APPLE__) || defined(_WIN32)
+    struct TimedQuery { uint64_t tag; GLuint query; };
+    std::vector<TimedQuery> timedQueries_;
+    bool queryActive_ = false;
+    bool timeGpuFrame(uint64_t tag) override {
+        if (info_.backend != Backend::GL33 || queryActive_ || timedQueries_.size() >= 64) return false;
+        GLuint q=0; glGenQueries(1,&q); glBeginQuery(GL_TIME_ELAPSED,q);
+        timedQueries_.push_back({tag,q}); queryActive_=true; return true;
+    }
+    std::vector<GpuTiming> takeGpuTimings() override {
+        std::vector<GpuTiming> out;
+        for (size_t i=0;i<timedQueries_.size();) {
+            auto t=timedQueries_[i]; GLuint ready=0;
+            glGetQueryObjectuiv(t.query,GL_QUERY_RESULT_AVAILABLE,&ready);
+            if (!ready) {++i;continue;}
+            GLuint64 ns=0; glGetQueryObjectui64v(t.query,GL_QUERY_RESULT,&ns);
+            out.push_back({t.tag,double(ns)/1000000.0,true}); glDeleteQueries(1,&t.query);
+            timedQueries_.erase(timedQueries_.begin()+i);
+        }
+        return out;
+    }
+#endif
     void beginFrame(int w, int h) override {
         fbW_ = w; fbH_ = h;
         uboOffset_ = 0;
@@ -354,6 +380,9 @@ public:
         glBindVertexArray(vao_);
     }
     void endFrame() override { // swap is done by the platform layer (EGL/WGL/browser)
+#if defined(__APPLE__) || defined(_WIN32)
+        if (queryActive_) {glEndQuery(GL_TIME_ELAPSED);queryActive_=false;glFlush();}
+#endif
         if (!capture_) return;
         std::vector<uint8_t> px(size_t(fbW_) * size_t(fbH_) * 4);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);

@@ -65,7 +65,17 @@
   #define GL_COLOR_ATTACHMENT0 0x8CE0
   #define GL_DEPTH_ATTACHMENT 0x8D00
   #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
+  #define GL_TIME_ELAPSED 0x88BF
+  #define GL_QUERY_RESULT 0x8866
+  #define GL_QUERY_RESULT_AVAILABLE 0x8867
+  typedef unsigned long long GLuint64;
   #define RTS_GL_FUNCS(X) \
+    X(void, glGenQueries, (GLsizei n, GLuint* ids)) \
+    X(void, glDeleteQueries, (GLsizei n, const GLuint* ids)) \
+    X(void, glBeginQuery, (GLenum target, GLuint id)) \
+    X(void, glEndQuery, (GLenum target)) \
+    X(void, glGetQueryObjectuiv, (GLuint id, GLenum pname, GLuint* params)) \
+    X(void, glGetQueryObjectui64v, (GLuint id, GLenum pname, GLuint64* params)) \
     X(const GLubyte*, glGetStringi, (GLenum name, GLuint index)) \
     X(void, glGenBuffers, (GLsizei n, GLuint* b)) \
     X(void, glDeleteBuffers, (GLsizei n, const GLuint* b)) \
