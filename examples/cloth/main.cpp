@@ -49,7 +49,8 @@ struct Demo {
             auto resolved=render::projectedAnimationLod(viewProj,center,center+cloth::Vec{0,s.height/2,0});
             hints[i]={resolved.interval==0?0:resolved.interval<=1.f/30?1:3,resolved.visible};
         }
-        if(!paused)workload->step(tick,camera.eye(),distanceLod,autoLod?std::span<const cloth::LodHint>(hints):std::span<const cloth::LodHint>{});auto simEnd=clothdemo::Clock::now();
+        if(!paused)workload->step(tick,camera.eye(),distanceLod,autoLod?std::span<const cloth::LodHint>(hints):std::span<const cloth::LodHint>{});
+        auto simEnd=clothdemo::Clock::now();
         d.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());auto uploadBegin=clothdemo::Clock::now();renderer.upload(workload->cloths,workload->batch.representatives());auto uploadEnd=clothdemo::Clock::now();
         gfx::PassDesc pass;pass.clearColor[0]=.035f;pass.clearColor[1]=.05f;pass.clearColor[2]=.08f;d.beginPass(pass);
         renderer.draw(camera.proj(float(d.framebufferWidth())/d.framebufferHeight(),d.info().clipDepthZeroToOne)*camera.view());
