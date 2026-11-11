@@ -13,7 +13,9 @@ from analyze import summarize
 def verify(scene):
     config=json.loads(scene.read_text())
     manifest=json.loads((scene.parent/'asset-manifest.json').read_text())
-    lock=json.loads(Path(__file__).with_name('sponza-lock.json').read_text())
+    lock_name=config.get('assetLock','sponza-lock.json')
+    if lock_name not in ('sponza-lock.json','sponza-full-lock.json'): raise ValueError('unknown asset lock')
+    lock=json.loads(Path(__file__).with_name(lock_name).read_text())
     if manifest['fingerprint']!=lock['fingerprint'] or config['assetFingerprint']!=lock['fingerprint']:
         raise ValueError('asset fingerprint does not match repository lock')
     for entry in lock['files']:
@@ -29,7 +31,7 @@ def verify(scene):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('binary',type=Path);p.add_argument('--scene',required=True,type=Path)
-    p.add_argument('--out',required=True,type=Path);p.add_argument('--profile',choices=['baseline','hdr','low'],default='baseline')
+    p.add_argument('--out',required=True,type=Path);p.add_argument('--profile',choices=['baseline','hdr','full','low'],default='baseline')
     p.add_argument('--repeats',type=int,default=3);p.add_argument('--warmup',type=int,default=90);p.add_argument('--samples',type=int,default=240)
     p.add_argument('--camera',type=int);p.add_argument('--capture',action='store_true');a=p.parse_args()
     if not 1<=a.repeats<=20:p.error('repeats must be 1..20')

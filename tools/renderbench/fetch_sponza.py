@@ -16,8 +16,9 @@ URL = 'https://cdrdv2.intel.com/v1/dl/getContent/830833'
 MODEL = 'main_sponza/NewSponza_Main_glTF_003.gltf'
 
 class RemoteZip(io.RawIOBase):
-    def __init__(self):
-        with urllib.request.urlopen(urllib.request.Request(URL, method='HEAD'), timeout=60) as r:
+    def __init__(self, source=URL):
+        self.source = source
+        with urllib.request.urlopen(urllib.request.Request(source+'?refresh='+str(time.time_ns()), method='HEAD'), timeout=60) as r:
             self.url, self.size = r.url, int(r.headers['Content-Length'])
             self.etag = r.headers.get('ETag', '')
         self.pos = 0
@@ -36,7 +37,7 @@ class RemoteZip(io.RawIOBase):
         except urllib.error.HTTPError as e:
             if e.code != 403: raise
             # Intel's redirect is signed and expires during a multi-GB download.
-            with urllib.request.urlopen(urllib.request.Request(URL+'?refresh='+str(time.time_ns()), method='HEAD'), timeout=60) as fresh:
+            with urllib.request.urlopen(urllib.request.Request(self.source+'?refresh='+str(time.time_ns()), method='HEAD'), timeout=60) as fresh:
                 if int(fresh.headers['Content-Length']) != self.size or fresh.headers.get('ETag','') != self.etag:
                     raise RuntimeError('archive changed during download')
                 self.url = fresh.url

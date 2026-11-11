@@ -2,6 +2,8 @@
 #pragma once
 #include "engine/platform/Platform.h"
 #include "engine/render/PostFx.h"
+#include "engine/render/ScreenLighting.h"
+#include "SceneAssets.h"
 #include <chrono>
 #include <fstream>
 #include <filesystem>
@@ -27,7 +29,7 @@ struct Options {
             else throw std::runtime_error("unknown option: "+k);
         }
         if(o.scene.empty()||o.warmup<1||o.samples<30||o.samples>100000||o.warmup>10000||o.camera < -1)throw std::runtime_error("require --scene; warmup 1..10000; samples 30..100000; camera >= 0 (or omit)");
-        if(o.profile!="baseline"&&o.profile!="hdr"&&o.profile!="low")throw std::runtime_error("profile: baseline, hdr or low");
+        if(o.profile!="baseline"&&o.profile!="hdr"&&o.profile!="low"&&o.profile!="full")throw std::runtime_error("profile: baseline, hdr, full or low");
         return o;
     }
 };
@@ -37,6 +39,8 @@ struct Bench {
     platform::HostedView content;
     Renderer3D renderer;
     PostFx post;
+    ScreenLighting screen;
+    SceneAssets additions;
     std::unique_ptr<Model> model;
     std::vector<RTSCamera> cameras;
     std::vector<std::string> cameraNames;
@@ -77,7 +81,7 @@ struct Bench {
                 cameras.push_back(c);cameraNames.push_back(j.getStr("name"));
             }
             if(cameras.empty())throw std::runtime_error("no selected cameras");
-            if(!renderer.init(d)||!post.init(d))throw std::runtime_error(d.lastError());
+            if(!renderer.init(d)||!post.init(d)||(options.profile=="full"&&!screen.init(d,post)))throw std::runtime_error(d.lastError());
             bool unusedSecondaryUv=false;
             const auto path=config.getStr("model");
             if(std::filesystem::path(path).extension()==".gltf") {
@@ -90,13 +94,17 @@ struct Bench {
             Json warn=Json::array(),notes=Json::array();
             for(auto& w:warnings) {
                 // Explicit benchmark cameras/lighting replace these imported nodes; keep the audit trail.
-                const bool replaced=w.ends_with("cameras and lights are ignored")||w.ends_with("extension KHR_lights_punctual is ignored")||(unusedSecondaryUv&&w.ends_with("TEXCOORD_1 is ignored"));
+                const bool replaced=w.ends_with("cameras are ignored")||w.ends_with("cameras and lights are ignored")||w.ends_with("extension KHR_lights_punctual is ignored")||(unusedSecondaryUv&&w.ends_with("TEXCOORD_1 is ignored"));
                 (replaced?notes:warn).push(Json::string(w));std::fprintf(stderr,"asset %s: %s\n",replaced?"note":"warning",w.c_str());
             }
+            additions.load(d,config,warn,notes);
+            report.set("additions",additions.audit);
+            report.set("sourcePointLights",Json::number(int64_t(additions.lights.size())));
             report.set("assetWarnings",warn);report.set("importNotes",notes);
             report.set("vertices",Json::number(int64_t(model->vertices.size())));report.set("indices",Json::number(int64_t(model->indices.size())));
             uint64_t triangles=0;
             for(const auto& node:model->nodes)if(node.mesh>=0)for(const auto& primitive:model->meshes[size_t(node.mesh)].primitives)triangles+=primitive.indexCount/3;
+            for(const auto& entry:additions.audit.items())triangles+=uint64_t(entry["triangles"].integer());
             report.set("sceneTriangles",Json::number(int64_t(triangles)));
             report.set("materials",Json::number(int64_t(model->materials.size())));report.set("textures",Json::number(int64_t(model->images.size())));
             auto bounds=[](float3 v){Json j=Json::array();j.push(Json::number(double(v.x)));j.push(Json::number(double(v.y)));j.push(Json::number(double(v.z)));return j;};
@@ -105,15 +113,25 @@ struct Bench {
             report.set("loadAndUploadMs",Json::number(ms(start,Clock::now())));
             renderer.setShadowQuality(options.profile=="low"?ShadowQuality::Low:ShadowQuality::High);
             renderer.setMaterialQuality(options.profile=="low"?MaterialQuality::Medium:MaterialQuality::High);
-            renderer.setTraceEnabled(false);renderer.lights.setQuality(LightQuality::Off);
+            renderer.setTraceEnabled(options.profile=="full");renderer.setModelReflectionsEnabled(options.profile=="full");
+            renderer.lights.setQuality(options.profile=="low"||additions.lights.empty()?LightQuality::Off:LightQuality::High);
             renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(config["sunColor"]);
             renderer.lighting.sunIntensity=float(config["sunIntensity"].toDouble());
             renderer.lighting.skyColor=v3(config["skyColor"]);renderer.lighting.groundColor=v3(config["groundColor"]);
             renderer.lighting.fogDensity=0;
             PostFxSettings s;s.hdr=options.profile=="low"?HdrMode::Off:HdrMode::On;
-            if(options.profile=="hdr")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
+            if(options.profile=="hdr"||options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
+            if(options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25}]})"),Json());
+            screen.setEnabled(options.profile=="full");
             post.setSettings(s);post.setQuality(options.profile=="low"?PostFxQuality::Low:PostFxQuality::High);
             report.set("schema",Json::number(int64_t(1)));report.set("engine",Json::string("AIVERSE"));
+#if defined(__aarch64__) || defined(__arm64__)
+            report.set("binaryArchitecture",Json::string("arm64"));
+#elif defined(__x86_64__) || defined(_M_X64)
+            report.set("binaryArchitecture",Json::string("x86_64"));
+#else
+            report.set("binaryArchitecture",Json::string("other"));
+#endif
             report.set("revision",Json::string(AIVERSE_BENCH_REVISION));report.set("build",Json::string(AIVERSE_BENCH_BUILD));
             std::string hardware=d.info().name;
             if(auto slash=hardware.find(" / ");slash!=std::string::npos)hardware.resize(slash);
@@ -145,10 +163,12 @@ struct Bench {
         const auto start=Clock::now();d.beginFrame(width,height);const auto encodeStart=Clock::now();
         const uint64_t thisTag=++tag;
         bool timed=false;if(measuring){timed=d.timeGpuFrame(thisTag);gpuSupported&=timed;}
-        renderer.beginScene(cameras[size_t(ci)],width,height);
+        if(frame==0&&view<int(cameras.size())){screen.reset();additions.selectLights(cameras[size_t(ci)].eye());}
+        renderer.beginScene(screen.jittered(cameras[size_t(ci)],width,height),width,height);
         ModelDraw md;md.model=model.get();renderer.drawModel(md);
+        additions.draw(renderer,float(view<int(cameras.size())?frame:options.warmup+options.samples-1)/60.0f,options.profile!="low");
         auto pass=output;pass.clearColor[0]=.1f;pass.clearColor[1]=.15f;pass.clearColor[2]=.23f;
-        renderer.render(pass,&post);renderer.resolvePostFx();
+        renderer.render(pass,options.profile=="full"?static_cast<PostProcess*>(&screen):static_cast<PostProcess*>(&post));renderer.resolvePostFx();
         if(!report.has("renderSettings")) {
             Json settings=Json::object();settings.set("linearHdr",Json::fromBool(post.linearScene()));
             settings.set("shadows",Json::string(options.profile=="low"?"low":"high"));
@@ -156,8 +176,13 @@ struct Bench {
             settings.set("shadowPcfSamples",Json::number(int64_t(options.profile=="low"?4:16)));
             settings.set("materials",Json::string(options.profile=="low"?"medium":"high"));
             settings.set("bloomFxaa",Json::fromBool(options.profile=="hdr"));
-            settings.set("gi",Json::string("hemisphere ambient only"));settings.set("rayTracing",Json::fromBool(false));
-            settings.set("ssr",Json::fromBool(false));settings.set("dynamicResolution",Json::fromBool(false));
+            settings.set("gi",Json::string(screen.running()?"screen-space diffuse gather (16 samples)":"hemisphere ambient only"));
+            settings.set("taa",Json::fromBool(screen.running()));
+            settings.set("bloom",Json::fromBool(options.profile=="hdr"||options.profile=="full"));
+            settings.set("animationStepSeconds",Json::number(1.0/60.0));
+            settings.set("lightAttenuation",Json::string("RTS finite-radius approximation; not photometric glTF"));
+            settings.set("pointLightBudget",Json::number(int64_t(options.profile=="low"?0:std::min(additions.lights.size(),LightSystem::kMaxLights))));settings.set("rayTracing",Json::fromBool(false));
+            settings.set("ssr",Json::fromBool(renderer.ssrActive()));settings.set("dynamicResolution",Json::fromBool(false));
             report.set("renderSettings",settings);
         }
         const auto encodeEnd=Clock::now();
@@ -176,7 +201,7 @@ struct Bench {
             Json r=Json::object();r.set("camera",Json::string(cameraNames[size_t(ci)]));r.set("sample",Json::number(int64_t(frame-options.warmup)));
             r.set("cpuEncodeMs",Json::number(ms(encodeStart,encodeEnd),6));r.set("cpuFrameMs",Json::number(ms(start,end),6));
             r.set("gpuMs",Json());r.set("drawCalls",Json::number(int64_t(renderer.drawCalls())));
-            r.set("postPasses",Json::number(int64_t(post.stats().passes)));
+            r.set("postPasses",Json::number(int64_t(post.stats().passes+(screen.running()?3:0))));
             if(timed)tags.emplace(thisTag,rows.size());
             rows.push(std::move(r));
         }
@@ -185,6 +210,7 @@ struct Bench {
             if(!tags.empty()||(!options.capture.empty()&&!captured))fail("GPU/capture completion timeout");else done=true;
         }
         if(!renderer.modelError().empty())fail(renderer.modelError());
+        if(!screen.lastError().empty())fail(screen.lastError());
         if(!post.lastError().empty())fail(post.lastError());
     }
     void shutdown(gfx::Device& d) {
@@ -192,7 +218,7 @@ struct Bench {
         report.set("error",Json::string(error));report.set("frames",rows);
         std::ofstream f(options.output);f<<report.dump()<<"\n";if(!f)fail("cannot write report");
         if(model)releaseModel(d,*model);
-        post.shutdown();renderer.shutdown();platform::setHostedView(nullptr);
+        additions.release(d);screen.shutdown();post.shutdown();renderer.shutdown();platform::setHostedView(nullptr);
     }
 };
 }

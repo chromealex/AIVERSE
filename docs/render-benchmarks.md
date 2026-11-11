@@ -107,3 +107,7 @@ models/machines. CPU wall time is deliberately not used for cross-backend rankin
 
 Only AIVERSE measurements have been produced by this task. Unreal/Unity adapters and
 measurements require their actual installed engines; no comparison ranking is implied.
+
+Полная сцена с тканями, растительностью, свечами, анимированным рыцарем и профилем
+`full` (SSR/GI/TAA): [рецепт, ограничения и запуск](sponza-full.md). Базовые locks и
+замеры этой страницы сохраняются; нагрузки нельзя смешивать при сравнении.

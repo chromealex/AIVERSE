@@ -33,7 +33,7 @@ def summarize(report):
 
 def compare(a, b, sa, sb):
     # CPU frame wall time includes platform pacing; never rank it across presentation paths.
-    for key in ('scene', 'profile', 'renderSettings', 'hardware', 'hostId'):
+    for key in ('scene', 'profile', 'renderSettings', 'hardware', 'hostId', 'binaryArchitecture'):
         if not a.get(key) or a.get(key) != b.get(key):
             raise ValueError(f'incompatible {key}; comparison refused')
     if a.get('assetVerification') != 'sha256' or b.get('assetVerification') != 'sha256':

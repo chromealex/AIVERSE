@@ -4,7 +4,7 @@ from analyze import distribution, summarize, compare
 
 class AnalysisTests(unittest.TestCase):
     def report(self):
-        return dict(complete=True, error='', scene={'asset':'a'}, profile='baseline', hardware='gpu', hostId='machine', assetVerification='sha256',
+        return dict(complete=True, error='', scene={'asset':'a'}, profile='baseline', hardware='gpu', hostId='machine', binaryArchitecture='arm64', assetVerification='sha256',
                     renderSettings={'hdr':True}, assetWarnings=[], frames=[dict(camera='a',sample=i,cpuEncodeMs=1.,cpuFrameMs=2.,gpuMs=3.,drawCalls=1) for i in range(30)])
     def test_statistics(self):
         d=distribution(list(range(1,101)))
@@ -21,6 +21,9 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(compare(a,b,summarize(a),summarize(b))['a']['gpuMedianRatioBoverA'],2)
         b['scene']={'asset':'b'}
         with self.assertRaises(ValueError):compare(a,b,summarize(a),summarize(b))
+    def test_refuse_different_binary_architecture(self):
+        a=self.report();b=copy.deepcopy(a);b['binaryArchitecture']='x86_64'
+        with self.assertRaisesRegex(ValueError,'binaryArchitecture'):compare(a,b,summarize(a),summarize(b))
     def test_insufficient(self):
         with self.assertRaises(ValueError):distribution([1]*29)
 
