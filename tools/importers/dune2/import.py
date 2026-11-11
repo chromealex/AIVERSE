@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Dune II importer: turns the user's own copy of Dune II into an RTSEngine game folder.
+"""Dune II importer: turns the user's own copy of Dune II into an AIVERSE game folder.
 
-    python3 tools/importers/dune2/import.py --source "~/Downloads/Dune II" --out ~/RTSGames/dune2 [--json]
+    python3 tools/importers/dune2/import.py --source "~/Downloads/Dune II" --out ~/AiverseGames/dune2 [--json]
 
 Reads every .PAK under --source (Westwood PAK, see tools/unpackers/wwpak) and writes:
   game.json (top-down ortho camera), rules.json (our balance, tools/importers/dune2/rules.json), lang/{en,ru}.json,
@@ -13,7 +13,7 @@ Reads every .PAK under --source (Westwood PAK, see tools/unpackers/wwpak) and wr
   pictures/*.png, pictures/anim/*.png   CPS pictures and WSA animation sheets
   audio/*.wav + audio.json   VOC sounds and voices mapped to engine sound events
 
-Everything written is derived from copyrighted data: game.json is marked "external", so rtsbuild
+Everything written is derived from copyrighted data: game.json is marked "external", so aiversebuild
 flags the pack, and the output must never be committed or redistributed.
 
 Terrain: Dune II scenarios store only a seed for the original procedural landscape generator. The
@@ -811,7 +811,7 @@ def run(src, out, only_maps=False):
             wjson(path, data, compact_rows=True)
 
     wjson(os.path.join(out, 'game.json'), {
-        'name': 'Dune II (imported)', 'id': 'com.rtsengine.import.dune2', 'version': '0.1.0', 'build': 1, 'module': 'rts',
+        'name': 'Dune II (imported)', 'id': 'com.aiverse.import.dune2', 'version': '0.1.0', 'build': 1, 'module': 'rts',
         'sourceLanguage': 'en', 'languages': ['en', 'ru'], 'rules': 'rules.json', 'maps': maps, 'orientation': 'landscape',
         'camera': {'projection': 'ortho', 'pitch': 90, 'yaw': 0, 'pixelsPerCell': 32, 'zoomMin': 8, 'zoomMax': 40, 'rotate': False},
         'external': True,
@@ -825,7 +825,7 @@ def run(src, out, only_maps=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Import Dune II into an RTSEngine game folder')
+    ap = argparse.ArgumentParser(description='Import Dune II into an AIVERSE game folder')
     ap.add_argument('--source', required=True, help='Dune II folder (contains DUNE.PAK, SCENARIO.PAK, ...)')
     ap.add_argument('--out', required=True, help='output game folder (outside the repository)')
     ap.add_argument('--maps-only', action='store_true', help='rules, maps and lang only (fast)')

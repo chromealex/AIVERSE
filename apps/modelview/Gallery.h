@@ -1,4 +1,4 @@
-// Gallery mode of rts_modelview: every type of a game in a row, drawn by the game's own view
+// Gallery mode of aiverse_modelview: every type of a game in a row, drawn by the game's own view
 // (RtsView: view blocks, material overrides, clips, procedural animation), driven by a scripted
 // scene that cycles each object through idle -> move -> attack (+ hit) -> death -> respawn.
 #pragma once
@@ -7,7 +7,7 @@
 #include <vector>
 #include "../../modules/rts/view/RtsPortrait.h"
 
-namespace rts::modelview {
+namespace aiverse::modelview {
 
 class Gallery {
 public:
@@ -40,4 +40,4 @@ private:
     gfx::Device* dev_ = nullptr;
 };
 
-} // namespace rts::modelview
+} // namespace aiverse::modelview

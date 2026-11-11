@@ -1,0 +1,55 @@
+{
+  "module": "generated_demo",
+  "version": 2,
+  "commandType": 33001,
+  "fields": [
+    {
+      "name": "credits",
+      "type": "int64",
+      "min": 0,
+      "max": 1000000,
+      "default": 100
+    },
+    {
+      "name": "complete",
+      "type": "bool",
+      "default": 0
+    }
+  ],
+  "commands": [
+    {
+      "name": "build",
+      "id": 1,
+      "args": [
+        {
+          "name": "kind",
+          "min": 0,
+          "max": 10,
+          "default": 0
+        },
+        {
+          "name": "queued",
+          "type": "bool",
+          "default": 0
+        }
+      ]
+    },
+    {
+      "name": "finish",
+      "id": 2,
+      "args": []
+    }
+  ],
+  "migrations": [
+    {
+      "from": 1,
+      "to": 2,
+      "rename": {
+        "gold": "credits"
+      },
+      "set": {
+        "complete": 0
+      }
+    }
+  ]
+}

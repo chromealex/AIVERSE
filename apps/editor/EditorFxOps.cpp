@@ -7,7 +7,7 @@
 #include "Editor.h"
 #include "core/FxOps.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 constexpr float kOrbit = 2.0f, kOrbitSpeed = 1.6f;   // fx_preview {moving}: like the Effects window's "movement"
@@ -131,4 +131,4 @@ void Editor::registerFxPreviewOps() {
         true});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

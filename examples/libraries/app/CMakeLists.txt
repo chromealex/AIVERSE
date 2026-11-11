@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22)
+project(RtsAppConsumer LANGUAGES CXX)
+set(AIVERSE_ENGINE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." CACHE PATH "Engine source/export root")
+add_subdirectory("${AIVERSE_ENGINE_ROOT}/libraries" libraries)
+add_executable(aiverse_app_example main.cpp)
+target_link_libraries(aiverse_app_example PRIVATE AIVERSE::libraries)

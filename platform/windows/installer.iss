@@ -1,5 +1,5 @@
 ; Windows installer for a packaged game (Inno Setup 6). Used by .github/workflows/release.yml:
-;   iscc /DAppName="Iron and Gold" /DAppVersion=0.1.0 /DAppId=com.rtsengine.ironandgold
+;   iscc /DAppName="Iron and Gold" /DAppVersion=0.1.0 /DAppId=com.aiverse.ironandgold
 ;        /DExeName=Iron_and_Gold /DSourceDir=dist\windows /DOutputDir=out platform\windows\installer.iss
 ; Per-user install (no admin prompt), Start menu + optional desktop shortcut, clean uninstall.
 #ifndef AppName

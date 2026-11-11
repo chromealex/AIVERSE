@@ -6,7 +6,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class AgentWindow : public EditorWindow {
 public:
@@ -65,7 +65,7 @@ private:
     void connectSection(Editor& ed) {
         refreshMcpClients(ed, mcp_);
         if (ui::collapsing(ICON_PLUG "  Подключить ИИ-агента", mcpConnectedAny(mcp_) ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::TextDisabled("Кнопка прописывает сервер rtsmcp в настройки клиента. После этого перезапустите клиент.");
+            ImGui::TextDisabled("Кнопка прописывает сервер aiversemcp в настройки клиента. После этого перезапустите клиент.");
             drawMcpConnect(ed, mcp_);
         }
     }
@@ -75,6 +75,6 @@ private:
     bool errorsOnly_ = false;
 };
 
-RTS_EDITOR_WINDOW(AgentWindow);
+AIVERSE_EDITOR_WINDOW(AgentWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

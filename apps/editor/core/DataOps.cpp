@@ -13,7 +13,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -146,7 +146,7 @@ void registerDataOps(Workspace& ws) {
             return r;
         }});
     ws.registerOp({"build_estimate",
-        "Estimated build size for a platform before building: runs rtsbuild --estimate (the real content pack with the "
+        "Estimated build size for a platform before building: runs aiversebuild --estimate (the real content pack with the "
         "game's settings: atlases, sound profile, packaging.files rules, split), returns pack size, atlas stats and the "
         "heaviest files. Per-file settings live in game.json packaging.files [{match, exclude, level (0 = store), maxSize, "
         "scale}] (packaging.targets.<t>.files for one platform), set with set_manifest.",
@@ -163,7 +163,7 @@ void registerDataOps(Workspace& ws) {
 #else
             FILE* pipe = popen(cmd.c_str(), "r");
 #endif
-            if (!pipe) throw std::runtime_error("cannot start rtsbuild");
+            if (!pipe) throw std::runtime_error("cannot start aiversebuild");
             std::string log; char buf[512];
             while (std::fgets(buf, sizeof buf, pipe)) log += buf;
 #if defined(_WIN32)
@@ -171,7 +171,7 @@ void registerDataOps(Workspace& ws) {
 #else
             int rc = pclose(pipe);
 #endif
-            if (rc != 0) throw std::runtime_error("rtsbuild --estimate failed:\n" + log.substr(log.size() > 3000 ? log.size() - 3000 : 0));
+            if (rc != 0) throw std::runtime_error("aiversebuild --estimate failed:\n" + log.substr(log.size() > 3000 ? log.size() - 3000 : 0));
             Json rep = Json::parseFile((out / target / "size-report.json").string());
             Json r = Json::object();
             r.set("target", Json::string(target));
@@ -240,4 +240,4 @@ void registerDataOps(Workspace& ws) {
         }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

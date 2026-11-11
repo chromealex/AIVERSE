@@ -9,7 +9,7 @@
 #include <sstream>
 #include "engine/platform/Platform.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 ImVec4 hex(unsigned rgb, float a = 1.0f) {
@@ -88,8 +88,8 @@ bool EditorTheme::loadFonts(const std::string& engineDir) {
 
 void EditorTheme::registerSettings() {
     ImGuiSettingsHandler h;
-    h.TypeName = "RtsEditor";
-    h.TypeHash = ImHashStr("RtsEditor");
+    h.TypeName = "AiverseEditor";
+    h.TypeHash = ImHashStr("AiverseEditor");
     h.UserData = this;
     h.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler* hh, const char* name) -> void* {
         return std::strcmp(name, "Theme") == 0 ? hh->UserData : nullptr;
@@ -269,4 +269,4 @@ void EditorTheme::apply() {
     g_haveCurrent = true;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

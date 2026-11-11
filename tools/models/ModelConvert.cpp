@@ -12,15 +12,15 @@
 
 #include "engine/pack/PackWriter.h"
 
-#if defined(RTS_HAVE_ASSIMP) && !defined(_WIN32) && !defined(__EMSCRIPTEN__)
-#define RTS_CONVERT_FORK 1
+#if defined(AIVERSE_HAVE_ASSIMP) && !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+#define AIVERSE_CONVERT_FORK 1
 #include <sys/wait.h>
 #include <unistd.h>
 #else
-#define RTS_CONVERT_FORK 0
+#define AIVERSE_CONVERT_FORK 0
 #endif
 
-#if defined(RTS_HAVE_ASSIMP)
+#if defined(AIVERSE_HAVE_ASSIMP)
 #include <assimp/Exporter.hpp>
 #include <assimp/IOStream.hpp>
 #include <assimp/IOSystem.hpp>
@@ -33,7 +33,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::models {
+namespace aiverse::models {
 
 namespace {
 
@@ -67,7 +67,7 @@ bool readDisk(const std::string& path, std::string& out) {
     return true;
 }
 
-#if defined(RTS_HAVE_ASSIMP)
+#if defined(AIVERSE_HAVE_ASSIMP)
 std::string normalizePath(std::string p) {
     std::replace(p.begin(), p.end(), '\\', '/');
     std::vector<std::string> parts;
@@ -215,8 +215,8 @@ bool convertInProcess(const std::string& path, const ReadFn& read, std::string& 
     return true;
 }
 
-#if RTS_CONVERT_FORK
-// assimp has crashing corner cases on broken files; a child process keeps rtsbuild / modelconv
+#if AIVERSE_CONVERT_FORK
+// assimp has crashing corner cases on broken files; a child process keeps aiversebuild / modelconv
 // alive and turns a crash into a readable error.
 void putU32(std::string& o, uint32_t v) { o.append(reinterpret_cast<const char*>(&v), 4); }
 void putStr(std::string& o, const std::string& s) { putU32(o, uint32_t(s.size())); o += s; }
@@ -286,7 +286,7 @@ bool convertIsolated(const std::string& path, const ReadFn& read, std::string& g
 } // namespace
 
 bool converterAvailable() {
-#if defined(RTS_HAVE_ASSIMP)
+#if defined(AIVERSE_HAVE_ASSIMP)
     return true;
 #else
     return false;
@@ -294,7 +294,7 @@ bool converterAvailable() {
 }
 
 std::string converterVersion() {
-#if defined(RTS_HAVE_ASSIMP)
+#if defined(AIVERSE_HAVE_ASSIMP)
     return "assimp " + std::to_string(aiGetVersionMajor()) + "." + std::to_string(aiGetVersionMinor()) + "." + std::to_string(aiGetVersionPatch());
 #else
     return {};
@@ -303,7 +303,7 @@ std::string converterVersion() {
 
 std::vector<std::string> convertibleExtensions() {
     std::set<std::string> exts(std::begin(kKnown), std::end(kKnown));
-#if defined(RTS_HAVE_ASSIMP)
+#if defined(AIVERSE_HAVE_ASSIMP)
     Assimp::Importer imp;
     std::string list;
     imp.GetExtensionList(list);   // "*.3ds;*.obj;..."
@@ -331,15 +331,15 @@ bool needsConversion(const std::string& path) {
 std::string sidecarPath(const std::string& path) { return path + ".glb"; }
 
 bool convertModel(const std::string& path, const ReadFn& read, std::string& glb, ConvertInfo* info, std::string* error) {
-#if defined(RTS_HAVE_ASSIMP)
-#if RTS_CONVERT_FORK
+#if defined(AIVERSE_HAVE_ASSIMP)
+#if AIVERSE_CONVERT_FORK
     return convertIsolated(path, read, glb, info, error);
 #else
     return convertInProcess(path, read, glb, info, error);
 #endif
 #else
     (void)read; (void)glb; (void)info;
-    if (error) *error = path + ": this build has no model converter (configure with -DRTS_ASSIMP=ON)";
+    if (error) *error = path + ": this build has no model converter (configure with -DAIVERSE_ASSIMP=ON)";
     return false;
 #endif
 }
@@ -414,4 +414,4 @@ bool applyModelConversion(pack::PackWriter& w, ConvertReport& report, std::strin
     return true;
 }
 
-} // namespace rts::models
+} // namespace aiverse::models

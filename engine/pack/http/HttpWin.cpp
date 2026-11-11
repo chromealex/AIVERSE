@@ -7,7 +7,7 @@
 
 #include "ThreadDownload.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 std::wstring widen(const std::string& s) {
@@ -36,8 +36,8 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
         // Resume a partial file with a Range request.
         uint64_t have = 0;
         if (std::FILE* f = std::fopen(destPath.c_str(), "rb")) { std::fseek(f, 0, SEEK_END); have = uint64_t(std::ftell(f)); std::fclose(f); }
-        HINTERNET s = WinHttpOpen(L"RTSEngine/1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-        if (!s) s = WinHttpOpen(L"RTSEngine/1", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        HINTERNET s = WinHttpOpen(L"AIVERSE/1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        if (!s) s = WinHttpOpen(L"AIVERSE/1", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         HINTERNET c = s ? WinHttpConnect(s, h.c_str(), port, 0) : nullptr;
         HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", p.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, tls ? WINHTTP_FLAG_SECURE : 0) : nullptr;
         auto closeAll = [&] { if (r) WinHttpCloseHandle(r); if (c) WinHttpCloseHandle(c); if (s) WinHttpCloseHandle(s); };
@@ -72,4 +72,4 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
 
 void setAndroidJavaVm(void*) {}
 
-} // namespace rts::pack
+} // namespace aiverse::pack

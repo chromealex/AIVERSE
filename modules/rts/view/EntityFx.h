@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-namespace rts::game {
+namespace aiverse::game {
 
 // The drawn values. Defaults = no change.
 struct EntityFxValues {
@@ -52,4 +52,4 @@ struct EntityFxStore {
     void advance(float dt) { for (auto& [k, e] : entries) e.age += dt; }
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

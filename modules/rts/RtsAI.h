@@ -10,7 +10,7 @@
 #include "../../engine/core/Random.h"
 #include "RtsModule.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct AIConfig {
     uint32_t thinkTicks = 10;     // reaction time
@@ -70,7 +70,7 @@ private:
     bool build(Simulation& sim, RtsModule& m, uint16_t type, int depth = 0, const Vec3* at = nullptr);
     bool train(Simulation& sim, RtsModule& m, uint16_t type); // from any idle producer
     void send(Simulation& sim, Command c);
-    void stateIo(class rts::Archive& a);
+    void stateIo(class aiverse::Archive& a);
 
     uint8_t player_;
     Random rng_;
@@ -130,4 +130,4 @@ private:
     bool enemyOffBody_ = false;              // no enemy structure shares our body: invasion is the only way
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -5,7 +5,7 @@
 
 #include "GameClient.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 namespace {
 
@@ -117,4 +117,4 @@ void Minimap::update(gfx::Device& dev, const GameState& gs, const Rules& rules, 
     dev.updateTexture(tex_, 0, 0, w_, h_, pixels_.data(), w_ * 4);
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

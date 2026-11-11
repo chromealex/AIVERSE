@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cstdio>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -63,4 +63,4 @@ void RtsGroundCanvas::draw(Renderer3D& r, gfx::Device& dev, const std::vector<Vi
     r.drawCustom([this, vp](gfx::Device& d) { batch_.flush(d, vp); });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

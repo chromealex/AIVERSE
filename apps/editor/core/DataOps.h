@@ -2,6 +2,6 @@
 #pragma once
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 void registerDataOps(Workspace& ws);
 }

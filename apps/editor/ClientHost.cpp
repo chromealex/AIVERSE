@@ -3,7 +3,7 @@
 #include "imgui.h"
 #include "apps/client/GameClient.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using platform::Event;
 using platform::EventType;
@@ -64,8 +64,8 @@ void ClientHost::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle d
     client_->setHostTarget(color, depth, w, h);
     if (step_ < kSteps) {
         client_->initStep(*dev_, step_++);
-        // RTS_HOSTED_MAP=<index>: straight into a match of that map (automated tests / profiling, like the client's --map)
-        if (step_ == kSteps) if (const char* m = std::getenv("RTS_HOSTED_MAP"); m && *m) client_->autostart(size_t(std::atoi(m)));
+        // AIVERSE_HOSTED_MAP=<index>: straight into a match of that map (automated tests / profiling, like the client's --map)
+        if (step_ == kSteps) if (const char* m = std::getenv("AIVERSE_HOSTED_MAP"); m && *m) client_->autostart(size_t(std::atoi(m)));
         return;
     }
     if (resized) { Event e; e.type = EventType::Resized; client_->event(e); }
@@ -75,7 +75,7 @@ void ClientHost::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle d
 void ClientHost::event(const Event& in) {
     if (!client_ || step_ < kSteps) return;
     Event e = in;
-    // A touch device profile gets touches, as on the phone (and as RTS_TOUCH_EMULATE in PlatformLinux): the left button
+    // A touch device profile gets touches, as on the phone (and as AIVERSE_TOUCH_EMULATE in PlatformLinux): the left button
     // is finger 1 (TouchBegin / Move / End, no hover moves), so the client's touch paths run - one-finger pan, touch
     // map-drags (view.targeting().touch: e.g. an aim offset above the finger). Right / middle button and wheel stay mouse.
     const bool left = (in.type == EventType::MouseDown || in.type == EventType::MouseUp) && in.button == 0;
@@ -118,4 +118,4 @@ void ClientHost::event(const Event& in) {
 Simulation* ClientHost::simulation() { return client_ && step_ >= kSteps ? client_->simulation() : nullptr; }
 bool ClientHost::inMatch() const { return client_ && step_ >= kSteps && client_->inMatch(); }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

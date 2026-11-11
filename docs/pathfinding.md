@@ -58,7 +58,7 @@ face seams and cube corners (7 neighbours) are ordinary steps.
   than the classic search): a path to a goal inside a structure / obstacle aims at the free cell around it nearest to
   the start, instead of A* exploring the whole reachable area for the closest cell (chasing a building).
 
-### Measured (VM, headless `--bench-group N --bench-flow on|off`, one move order across the map; `RTS_BENCH_HIST=1`
+### Measured (VM, headless `--bench-group N --bench-flow on|off`, one move order across the map; `AIVERSE_BENCH_HIST=1`
 prints where the units ended up)
 
 See the table in the agent-flowfield report / `docs/planets.md`. On flat 256² / 1024² and a faceSize-128 planet the

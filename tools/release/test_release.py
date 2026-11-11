@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Tests of the builds-branch tooling.
 
-    python3 tools/release/test_release.py [path/to/rtsmcp]
+    python3 tools/release/test_release.py [path/to/aiversemcp]
 
 1. index.json (publish_builds.write_index): fake packages for windows / macos / linux, every field checked.
-2. With an rtsmcp path: package_engine.py --platform linux from a folder holding only that rtsmcp (a
-   tools-only package), unpack it to a temp folder outside the repo and drive the unpacked rtsmcp over
+2. With an aiversemcp path: package_engine.py --platform linux from a folder holding only that aiversemcp (a
+   tools-only package), unpack it to a temp folder outside the repo and drive the unpacked aiversemcp over
    MCP stdio WITHOUT --engine: tools/list, create_project from a template, map_generate, map_validate,
    map_ascii, rules_schema. The source path compiled into that copy is overwritten with a missing one
    (as on a machine that never had the sources), so it must find the engine next to itself; the
@@ -49,15 +49,15 @@ def write_zip(path, files):
 def test_index():
     with tempfile.TemporaryDirectory(prefix="rts-index-") as work:
         pkgs = {
-            "windows/RTSEngine-0.2.0-aaaaaaaa-windows.zip": {
-                "RTSEngine/bin/rtsmcp.exe": fake_pe(0x8664), "RTSEngine/bin/rts_editor.exe": b"x",
-                "RTSEngine/bin/rts_headless.exe": fake_pe(0x8664), "RTSEngine/templates/skirmish/game.json": b"{}"},
-            "macos/RTSEngine-0.2.0-aaaaaaaa-macos.zip": {
-                "RTSEngine/bin/rtsmcp": b"\xca\xfe\xba\xbe" + bytes(60),
-                "RTSEngine/bin/RTSEditor.app/Contents/MacOS/RTSEditor": b"x"},
-            "macos/RTSEngine-0.1.9-bbbbbbbb-macos.zip": {"RTSEngine/bin/rtsmcp": fake_macho(0x0100000C)},
-            "linux/RTSEngine-0.2.0-aaaaaaaa-linux.zip": {
-                "RTSEngine/bin/rtsmcp": fake_elf(62), "RTSEngine/bin/rts_headless": fake_elf(62)},
+            "windows/AIVERSE-0.2.0-aaaaaaaa-windows.zip": {
+                "AIVERSE/bin/aiversemcp.exe": fake_pe(0x8664), "AIVERSE/bin/aiverse_editor.exe": b"x",
+                "AIVERSE/bin/aiverse_headless.exe": fake_pe(0x8664), "AIVERSE/templates/skirmish/game.json": b"{}"},
+            "macos/AIVERSE-0.2.0-aaaaaaaa-macos.zip": {
+                "AIVERSE/bin/aiversemcp": b"\xca\xfe\xba\xbe" + bytes(60),
+                "AIVERSE/bin/AiverseEditor.app/Contents/MacOS/AiverseEditor": b"x"},
+            "macos/AIVERSE-0.1.9-bbbbbbbb-macos.zip": {"AIVERSE/bin/aiversemcp": fake_macho(0x0100000C)},
+            "linux/AIVERSE-0.2.0-aaaaaaaa-linux.zip": {
+                "AIVERSE/bin/aiversemcp": fake_elf(62), "AIVERSE/bin/aiverse_headless": fake_elf(62)},
         }
         for rel, files in pkgs.items():
             write_zip(os.path.join(work, rel), files)
@@ -70,16 +70,16 @@ def test_index():
         by = {p["file"]: p for p in idx["packages"]}
         w = by[order[0]]
         assert (w["platform"], w["arch"], w["version"], w["commit"]) == ("windows", "x86_64", "0.2.0", "aaaaaaaa"), w
-        assert w["rtsmcp"] == "RTSEngine/bin/rtsmcp.exe" and w["editor"] == "RTSEngine/bin/rts_editor.exe", w
-        assert w["headless"] == "RTSEngine/bin/rts_headless.exe" and w["root"] == "RTSEngine", w
+        assert w["rtsmcp"] == "AIVERSE/bin/aiversemcp.exe" and w["editor"] == "AIVERSE/bin/aiverse_editor.exe", w
+        assert w["headless"] == "AIVERSE/bin/aiverse_headless.exe" and w["root"] == "AIVERSE", w
         assert w["url"] == "https://raw.githubusercontent.com/owner/repo/builds/" + order[0], w
         data = open(os.path.join(work, order[0]), "rb").read()
         assert w["size"] == len(data) and w["sha256"] == hashlib.sha256(data).hexdigest(), w
         m = by[order[1]]
-        assert m["arch"] == "universal" and m["editor"] == "RTSEngine/bin/RTSEditor.app" and m["headless"] is None, m
+        assert m["arch"] == "universal" and m["editor"] == "AIVERSE/bin/AiverseEditor.app" and m["headless"] is None, m
         assert by[order[2]]["arch"] == "arm64" and by[order[2]]["version"] == "0.1.9", by[order[2]]
         l = by[order[3]]
-        assert l["arch"] == "x86_64" and l["editor"] is None and l["rtsmcp"] == "RTSEngine/bin/rtsmcp", l
+        assert l["arch"] == "x86_64" and l["editor"] is None and l["rtsmcp"] == "AIVERSE/bin/aiversemcp", l
     for url, slug in [("https://github.com/chromealex/rts-engine", "chromealex/rts-engine"),
                       ("https://github.com/chromealex/rts-engine.git", "chromealex/rts-engine"),
                       ("git@github.com:chromealex/rts-engine.git", "chromealex/rts-engine")]:
@@ -98,7 +98,7 @@ def unzip_with_modes(path, dest):
 
 
 def forget_source_dir(src, dst, source_dir):
-    """Copy of an executable whose compiled-in RTS_SOURCE_DIR points nowhere (same length, so the
+    """Copy of an executable whose compiled-in AIVERSE_SOURCE_DIR points nowhere (same length, so the
     binary stays valid): what a package built on another machine sees."""
     data = open(src, "rb").read()
     old = source_dir.encode()
@@ -111,9 +111,9 @@ def forget_source_dir(src, dst, source_dir):
 
 class Mcp:
     def __init__(self, exe, cwd, home):
-        # no --engine: the packaged rtsmcp must find RTSEngine/ next to itself
+        # no --engine: the packaged aiversemcp must find AIVERSE/ next to itself
         env = dict(os.environ, HOME=home, USERPROFILE=home)
-        env.pop("RTS_ENGINE_DIR", None)
+        env.pop("AIVERSE_ENGINE_DIR", None)
         self.p = subprocess.Popen([exe, "--no-editor", "--port", "1"], cwd=cwd, stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, text=True, env=env)
         self.seq = 0
@@ -137,30 +137,30 @@ class Mcp:
         assert self.p.wait(timeout=60) == 0
 
 
-def test_package(rtsmcp):
+def test_package(aiversemcp):
     with tempfile.TemporaryDirectory(prefix="rts-tools-pkg-") as tmp:
         bin_dir = os.path.join(tmp, "bin")
         os.makedirs(bin_dir)
-        forget_source_dir(rtsmcp, os.path.join(bin_dir, "rtsmcp"), ROOT)
+        forget_source_dir(aiversemcp, os.path.join(bin_dir, "aiversemcp"), ROOT)
         zpath = subprocess.check_output([sys.executable, os.path.join(HERE, "package_engine.py"), "--platform", "linux",
                                          "--bin", bin_dir, "--out", os.path.join(tmp, "dist")], text=True).strip()
         assert os.path.basename(zpath).endswith("-linux.zip"), zpath
         unpacked = os.path.join(tmp, "unpacked")
         unzip_with_modes(zpath, unpacked)
         os.remove(zpath)
-        exe = os.path.join(unpacked, "RTSEngine", "bin", "rtsmcp")
-        assert os.stat(exe).st_mode & stat.S_IXUSR, "rtsmcp lost its executable bit"
+        exe = os.path.join(unpacked, "AIVERSE", "bin", "aiversemcp")
+        assert os.stat(exe).st_mode & stat.S_IXUSR, "aiversemcp lost its executable bit"
         work, home = os.path.join(tmp, "work"), os.path.join(tmp, "home")
         os.makedirs(work)
         os.makedirs(home)
         mcp = Mcp(exe, work, home)
         try:
             init = mcp.request("initialize", {"protocolVersion": "2025-06-18"})
-            assert init["serverInfo"]["name"] == "rtsengine", init
+            assert init["serverInfo"]["name"] == "aiverse", init
             tools = {t["name"] for t in mcp.request("tools/list")["tools"]}
             for need in ("create_project", "map_generate", "map_validate", "map_ascii", "match_run", "rules_schema"):
                 assert need in tools, f"tools/list lacks {need}"
-            engine = os.path.realpath(os.path.join(unpacked, "RTSEngine"))
+            engine = os.path.realpath(os.path.join(unpacked, "AIVERSE"))
             templates = json.loads(mcp.call("list_projects"))["templates"]
             dirs = [t["dir"] for t in templates if "dir" in t]
             assert dirs and all(os.path.realpath(d).startswith(engine + os.sep) for d in dirs), dirs
@@ -176,7 +176,7 @@ def test_package(rtsmcp):
             assert len(schema) > 1000, schema[:200]
         finally:
             mcp.close()
-    print(f"packaged rtsmcp: ok ({len(tools)} tools)")
+    print(f"packaged aiversemcp: ok ({len(tools)} tools)")
 
 
 if __name__ == "__main__":

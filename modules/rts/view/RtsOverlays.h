@@ -23,7 +23,7 @@
 #include "RtsOverlayData.h"
 #include "ViewCanvas.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct RtsScene;
 struct SceneObject;
@@ -61,7 +61,7 @@ public:
     void shutdown(gfx::Device& dev);
     void setContext(const OverlayContext& c) { ctx_ = c; }
     const OverlayContext& context() const { return ctx_; }
-    // Default: from the renderer's material quality (RTS_OVERLAYS=low|medium|high overrides).
+    // Default: from the renderer's material quality (AIVERSE_OVERLAYS=low|medium|high overrides).
     void setQuality(OverlayQuality q) { quality_ = q; qualityForced_ = true; }
     OverlayQuality quality() const { return quality_; }
     const OverlaySet& set() const { return set_; }
@@ -188,4 +188,4 @@ private:
     gfx::TextureHandle white_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

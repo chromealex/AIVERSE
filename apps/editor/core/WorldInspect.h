@@ -21,12 +21,12 @@
 
 // Background preview builds need threads: everywhere but a web build without pthreads.
 #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
-#define RTS_PREVIEW_THREAD 0
+#define AIVERSE_PREVIEW_THREAD 0
 #else
-#define RTS_PREVIEW_THREAD 1
+#define AIVERSE_PREVIEW_THREAD 1
 #endif
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // Component types the inspector knows (one per ECS pool of the RTS module). `id` is the C++ name.
 constexpr size_t kMaxWorldComponents = 128;   // WorldRow::comps bits (tests check the described pools fit)
@@ -188,7 +188,7 @@ private:
     int scriptErrors_ = 0;
     double ms_ = 0;
     std::unique_ptr<Job> job_;                 // the running background build
-#if RTS_PREVIEW_THREAD
+#if AIVERSE_PREVIEW_THREAD
     void launch(Request&& r);
     std::unique_ptr<Request> queued_;          // the newest request while one runs
     std::vector<std::unique_ptr<Simulation>> trash_;   // replaced previews: freed by the next job's thread
@@ -197,4 +197,4 @@ private:
 #endif
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

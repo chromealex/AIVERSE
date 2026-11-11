@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "domain": "material",
+  "nodes": [
+    {
+      "id": "surface",
+      "op": "input",
+      "position": [
+        20,
+        20
+      ]
+    },
+    {
+      "id": "tint",
+      "op": "constant",
+      "position": [
+        20,
+        120
+      ],
+      "value": [
+        0.08,
+        0.8,
+        0.65,
+        1
+      ]
+    },
+    {
+      "id": "color",
+      "op": "multiply",
+      "position": [
+        230,
+        20
+      ],
+      "inputs": [
+        "surface",
+        "tint"
+      ]
+    },
+    {
+      "id": "rough",
+      "op": "constant",
+      "position": [
+        230,
+        130
+      ],
+      "value": 0.25
+    },
+    {
+      "id": "metal",
+      "op": "constant",
+      "position": [
+        230,
+        230
+      ],
+      "value": 0.65
+    },
+    {
+      "id": "glow",
+      "op": "constant",
+      "position": [
+        230,
+        330
+      ],
+      "value": [
+        0.01,
+        0.08,
+        0.05,
+        0
+      ]
+    }
+  ],
+  "outputs": {
+    "color": "color",
+    "roughness": "rough",
+    "metallic": "metal",
+    "emission": "glow"
+  }
+}

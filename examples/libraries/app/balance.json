@@ -1,0 +1,18 @@
+{
+  "samples": [
+    {
+      "seed": 3,
+      "ticks": 100,
+      "first": "blue",
+      "second": "red",
+      "winner": "blue"
+    },
+    {
+      "seed": 4,
+      "ticks": 100,
+      "first": "blue",
+      "second": "red",
+      "winner": ""
+    }
+  ]
+}

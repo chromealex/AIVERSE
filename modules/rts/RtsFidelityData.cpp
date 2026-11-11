@@ -5,7 +5,7 @@
 #include "RtsEffectsData.h"
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error(where + ": " + what); }
@@ -75,4 +75,4 @@ void loadFidelity(Rules& r, const Json& j, EffectParser& ep) {
     r.fidelity = any;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -20,19 +20,19 @@ DLL/dylib и hot reload не используются. Механизм не з�
 3. Соберите движок для проекта:
 
 ```sh
-cmake -S /path/to/RTSEngine -B build/my-game -DCMAKE_BUILD_TYPE=Release \
-  -DRTS_CONTENT_DIR=/path/to/project
-cmake --build build/my-game --target rts_client rts_editor rts_headless
-build/my-game/rts_headless --project /path/to/project --seed 3
+cmake -S /path/to/AIVERSE -B build/my-game -DCMAKE_BUILD_TYPE=Release \
+  -DAIVERSE_CONTENT_DIR=/path/to/project
+cmake --build build/my-game --target aiverse_client aiverse_editor aiverse_headless
+build/my-game/aiverse_headless --project /path/to/project --seed 3
 ```
 
-`rtsbuild --target <target> --project /path/to/project` тоже подхватывает `native/`.
+`aiversebuild --target <target> --project /path/to/project` тоже подхватывает `native/`.
 При экспорте исходников C++ переносится вместе с проектом, даже если данные
 упакованы в `.rpak`: исходники находятся в `native/` рядом с корневым CMakeLists.
 C++ не включается в ресурс-пак.
 Для разработки нескольких игр можно собрать общий набор модулей через
-`-DRTS_NATIVE_DIR=/path/to/modules`. Пустое значение возвращает выбор `native/`
-из `RTS_CONTENT_DIR`. В редакторе нужно открывать именно пересобранную версию; обычный редактор
+`-DAIVERSE_NATIVE_DIR=/path/to/modules`. Пустое значение возвращает выбор `native/`
+из `AIVERSE_CONTENT_DIR`. В редакторе нужно открывать именно пересобранную версию; обычный редактор
 предлагает собрать её сам (см. «Редактор с модулями проекта»).
 
 ## Редактор с модулями проекта
@@ -49,12 +49,12 @@ C++ не включается в ресурс-пак.
   «Собрать редактор с модулями проекта». Сборка идёт в фоне, вывод — в окне Console и в
   `logs/native-editor-*.log`; после успешной сборки редактор сам перезапускается в собранном.
 
-Собирается `cmake -S <движок> -B <project>/Builds/.temp/editor-<платформа> -DRTS_CONTENT_DIR=<project>
--DCMAKE_BUILD_TYPE=Release` и цели `rts_editor` + `rts_headless` (`RTS_NATIVE_BUILD_JOBS` задаёт число
-потоков). CMake и Ninja ищутся так же, как для окна «Сборка» (`rtsbuild --check-toolchain`: Homebrew,
-`~/.rtsengine/toolchains` и т. п.); если CMake нет, баннер предлагает его установить.
+Собирается `cmake -S <движок> -B <project>/Builds/.temp/editor-<платформа> -DAIVERSE_CONTENT_DIR=<project>
+-DCMAKE_BUILD_TYPE=Release` и цели `aiverse_editor` + `aiverse_headless` (`AIVERSE_NATIVE_BUILD_JOBS` задаёт число
+потоков). CMake и Ninja ищутся так же, как для окна «Сборка» (`aiversebuild --check-toolchain`: Homebrew,
+`~/.aiverse/toolchains` и т. п.); если CMake нет, баннер предлагает его установить.
 
-Вся папка сборки CMake лежит в скрытой `Builds/.temp/` (там же промежуточные файлы `rtsbuild`):
+Вся папка сборки CMake лежит в скрытой `Builds/.temp/` (там же промежуточные файлы `aiversebuild`):
 в самой `Builds/` остаются только готовые сборки.
 
 Движок и его репозиторий при этом не меняются. Папка `Builds/` игнорируется git движка на любой
@@ -62,8 +62,8 @@ C++ не включается в ресурс-пак.
 на случай, если проект лежит в собственном репозитории. Реестр модулей генерируется в папку сборки;
 папки `build/` движка и обычный редактор не трогаются. Собранный редактор — инструмент одного
 проекта: он не регистрируется обработчиком `.rtsproj` (файлы по-прежнему открывает основной
-редактор; на macOS у его `RTSEditor.app` свой bundle id `com.rtsengine.editor.project`), запускается только переключением и получает `--native-editor`
-(`RTS_NATIVE_EDITOR=1`), поэтому сам дальше не переключается. `rtsbuild`, `rtsmcp` и `RTSGame`
+редактор; на macOS у его `AiverseEditor.app` свой bundle id `com.aiverse.editor.project`), запускается только переключением и получает `--native-editor`
+(`AIVERSE_NATIVE_EDITOR=1`), поэтому сам дальше не переключается. `aiversebuild`, `aiversemcp` и `AiverseGame`
 он берёт из обычной сборки (`--tools-from`).
 
 Агенты делают то же через MCP: `native_status` (чего не хватает, где сборка, актуальна ли она) и
@@ -75,7 +75,7 @@ C++ не включается в ресурс-пак.
 `native/CMakeLists.txt`:
 
 ```cmake
-rts_native_module(ID income VERSION 1 ENTRY createIncomeModule SOURCES Income.cpp)
+aiverse_native_module(ID income VERSION 1 ENTRY createIncomeModule SOURCES Income.cpp)
 ```
 
 ID — уникальный идентификатор из строчных латинских букв, цифр и `_`, начиная
@@ -83,11 +83,11 @@ ID — уникальный идентификатор из строчных л�
 или схемы состояния. ENTRY — уникальная фабрика в глобальном namespace:
 
 ```cpp
-std::unique_ptr<rts::game::NativeModule> createIncomeModule();
+std::unique_ptr<aiverse::game::NativeModule> createIncomeModule();
 ```
 
 В одном CMakeLists можно зарегистрировать несколько модулей; SOURCES принимает
-несколько файлов. Создаётся object target `rts_native_<id>`: к нему можно добавить
+несколько файлов. Создаётся object target `aiverse_native_<id>`: к нему можно добавить
 include directories и compile definitions. Реестр генерируется с прямыми ссылками
 на фабрики: оптимизация линковщика не удалит регистрацию. Настройки и исходники
 должны быть самодостаточными внутри `native/`, чтобы экспорт работал на другой машине.
@@ -192,8 +192,8 @@ MyGame/
 ```
 
 ```cmake
-rts_native_module(ID quests VERSION 1 ENTRY createQuests SOURCES Quests.cpp)
-rts_native_module(ID factions VERSION 1 ENTRY createFactions SOURCES Factions.cpp)
+aiverse_native_module(ID quests VERSION 1 ENTRY createQuests SOURCES Quests.cpp)
+aiverse_native_module(ID factions VERSION 1 ENTRY createFactions SOURCES Factions.cpp)
 ```
 
 В `rules.json` именно этой игры:
@@ -209,9 +209,34 @@ rts_native_module(ID factions VERSION 1 ENTRY createFactions SOURCES Factions.cp
 определяет сам модуль; пример не требует универсальной схемы заданий или фракций.
 Другие проекты эти исходники не компилируют и модули не запускают. В разных
 проектах можно использовать одинаковые ID: они принадлежат отдельным сборкам.
-`rtsbuild --project ...` сбрасывает сохранённый `RTS_NATIVE_DIR` и выбирает
+`aiversebuild --project ...` сбрасывает сохранённый `AIVERSE_NATIVE_DIR` и выбирает
 `native/` текущей игры. Общую библиотеку можно явно подключить через
 `add_subdirectory` из CMakeLists проекта. Для ручной CMake-сборки при смене проекта
-также сбросьте прежний override через `-DRTS_NATIVE_DIR=` либо используйте отдельную
+также сбросьте прежний override через `-DAIVERSE_NATIVE_DIR=` либо используйте отдельную
 папку сборки. Готовый исполняемый файл не может подгрузить C++ другой игры без
 пересборки; это относится и к редактору.
+
+## Общие библиотеки алгоритмов из native проекта
+
+C++20 пакеты доступны внешним играм через публичный target:
+
+```cmake
+aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp)
+target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
+```
+
+Используйте `#include <aiverselib/Graphs.h>` (и другие headers из `libraries/include/aiverselib`).
+Не копируйте алгоритмы и не правьте engine CMake ради конкретной игры: target уже
+объявлен до загрузки native проекта. `aiversebuild` переносит библиотеки в source exports.
+Полный пример: `examples/native/libraries`; API и ограничения: `docs/libraries.md`.
+Контейнеры библиотеки не входят в сохранение автоматически: persistent state хранится
+в NativeState, а временные структуры восстанавливаются локально.
+
+## Мета-библиотека из native-кода
+
+Для магазина, офферов, наград, заданий, рейтингов и чатов используйте `aiverse::meta`.
+После `aiverse_native_module(...)` вызовите `aiverse_native_use_meta(aiverse_native_<id>)`:
+helper связывает object target и итоговую библиотеку, поэтому зависимости не теряются.
+Мета-сервисы живут вне simulation tick; доступность из native-кода не разрешает ввод
+недетерминированных данных в матч. Полный контракт и внешний пример: `docs/meta-game.md`,
+`examples/meta/`. Нужные определения можно генерировать без изменения движка.

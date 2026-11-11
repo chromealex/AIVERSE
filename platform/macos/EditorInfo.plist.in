@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- RTS Editor bundle (CMake target rts_editor). Games use Info.plist.in. Declares the project file
-     type: <Title>.rtsproj (UTI com.rtsengine.project) opens in the editor by double-click / Open With
-     (PlatformMac.mm application:openURLs: -> EventType::OpenFile). Icons: rts_projicon. -->
+<!-- AIVERSE Editor bundle (CMake target aiverse_editor). Games use Info.plist.in. Declares the project file
+     type: <Title>.rtsproj (UTI com.aiverse.project) opens in the editor by double-click / Open With
+     (PlatformMac.mm application:openURLs: -> EventType::OpenFile). Icons: aiverse_projicon. -->
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
@@ -22,24 +22,24 @@
     <key>NSSupportsAutomaticTermination</key><false/>
     <key>NSSupportsSuddenTermination</key><false/>
     <!-- dictation in the game wizard (apps/editor/EditorSpeech_mac.mm) -->
-    <key>NSMicrophoneUsageDescription</key><string>RTS Editor слушает микрофон, когда вы наговариваете идею игры в мастере «Сделать игру».</string>
-    <key>NSSpeechRecognitionUsageDescription</key><string>RTS Editor превращает надиктованную идею игры в текст.</string>
+    <key>NSMicrophoneUsageDescription</key><string>AIVERSE Editor слушает микрофон, когда вы наговариваете идею игры в мастере «Сделать игру».</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>AIVERSE Editor превращает надиктованную идею игры в текст.</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
-            <key>CFBundleTypeName</key><string>RTSEngine Project</string>
+            <key>CFBundleTypeName</key><string>AIVERSE Project</string>
             <key>CFBundleTypeRole</key><string>Editor</string>
             <key>LSHandlerRank</key><string>Owner</string>
             <key>CFBundleTypeIconFile</key><string>rtsproj</string>
             <key>LSItemContentTypes</key>
-            <array><string>com.rtsengine.project</string></array>
+            <array><string>com.aiverse.project</string></array>
         </dict>
     </array>
     <key>UTExportedTypeDeclarations</key>
     <array>
         <dict>
-            <key>UTTypeIdentifier</key><string>com.rtsengine.project</string>
-            <key>UTTypeDescription</key><string>RTSEngine Project</string>
+            <key>UTTypeIdentifier</key><string>com.aiverse.project</string>
+            <key>UTTypeDescription</key><string>AIVERSE Project</string>
             <key>UTTypeIconFile</key><string>rtsproj</string>
             <!-- public.data, not public.json: the type is ours, so a double-click opens the editor
                  instead of a text editor that claims JSON -->
@@ -48,7 +48,7 @@
             <key>UTTypeTagSpecification</key>
             <dict>
                 <key>public.filename-extension</key><array><string>rtsproj</string></array>
-                <key>public.mime-type</key><array><string>application/x-rtsengine-project</string></array>
+                <key>public.mime-type</key><array><string>application/x-aiverse-project</string></array>
             </dict>
         </dict>
     </array>

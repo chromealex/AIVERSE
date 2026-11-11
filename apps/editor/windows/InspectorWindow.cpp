@@ -2,10 +2,11 @@
 // trigger, map, or a rules item (type / resource / tech / faction) with block templates.
 #include <algorithm>
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
 #include "../DetailsPanel.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 struct BlockTemplate { const char* key; const char* json; const char* hint; };
@@ -58,6 +59,11 @@ public:
     const char* dockArea() const override { return "right"; }
 
     void draw(Editor& ed) override {
+        if(ed.ws().project.isFps()) {
+            ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            return;
+        }
         Selection& s = ed.selection;
         if (!(s == lastSel_)) { message_.clear(); lastSel_ = s; }
         switch (s.kind) {
@@ -416,6 +422,6 @@ private:
     std::vector<Issue> issues_;
 };
 
-RTS_EDITOR_WINDOW(InspectorWindow);
+AIVERSE_EDITOR_WINDOW(InspectorWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

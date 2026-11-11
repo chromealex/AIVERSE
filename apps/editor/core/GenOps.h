@@ -5,7 +5,7 @@
 #include <string>
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerGenOps(Workspace& ws);
 
@@ -24,4 +24,4 @@ Json generateIntoMap(Workspace& ws, const GenOptions& o);
 // Writes a match-time "generate" block into the map (the map regenerates at every match start).
 void setMatchGenerate(Workspace& ws, const GenOptions& o, bool matchSeed);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

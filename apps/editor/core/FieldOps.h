@@ -10,9 +10,9 @@
 #include "modules/rts/RtsGridFieldData.h"
 #include "modules/rts/view/RtsFieldView.h"
 
-namespace rts::game { struct RtsScene; }
+namespace aiverse::game { struct RtsScene; }
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerFieldOps(Workspace& ws);
 
@@ -37,4 +37,4 @@ private:
     uint32_t version_ = 0;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

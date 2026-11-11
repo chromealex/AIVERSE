@@ -1,7 +1,7 @@
 #include "engine/render/PostFxData.h"
 #include <cstdio>
-using namespace rts;
-using namespace rts::render;
+using namespace aiverse;
+using namespace aiverse::render;
 int main() {
     int errors=0;
     auto check=[&](bool v){if(!v)++errors;};

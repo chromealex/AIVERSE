@@ -17,9 +17,9 @@
 #include <string_view>
 #include <vector>
 
-namespace rts { class Json; }
+namespace aiverse { class Json; }
 
-namespace rts::i18n {
+namespace aiverse::i18n {
 
 enum class Plural : uint8_t { Zero, One, Two, Few, Many, Other };
 constexpr int kPluralCount = 6;
@@ -141,4 +141,4 @@ struct Issue {
 std::vector<Issue> check(const Catalog& base, const std::string& baseLanguage,
                          const Catalog& lang, const std::string& language);
 
-} // namespace rts::i18n
+} // namespace aiverse::i18n

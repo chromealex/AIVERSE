@@ -1,0 +1,4 @@
+aiverse_native_module(ID library_demo VERSION 3 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
+target_link_libraries(aiverse_native_library_demo PRIVATE AIVERSE::gameplay_native)
+aiverse_native_use_bots(aiverse_native_library_demo RTS FPS)
+aiverse_native_use_genre(aiverse_native_library_demo)

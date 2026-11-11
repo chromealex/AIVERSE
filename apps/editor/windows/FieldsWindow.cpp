@@ -7,7 +7,7 @@
 #include "../core/FieldOps.h"
 #include <cmath>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class FieldsWindow : public EditorWindow {
 public:
@@ -120,6 +120,6 @@ private:
     double lastT_ = 0;
 };
 
-RTS_EDITOR_WINDOW(FieldsWindow);
+AIVERSE_EDITOR_WINDOW(FieldsWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

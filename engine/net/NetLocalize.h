@@ -1,10 +1,10 @@
 // Translating NetText with the game's Localization. Header-only so engine/net itself stays free of
-// engine/i18n: only code that includes this (the client UI, tools) must link rts_i18n.
+// engine/i18n: only code that includes this (the client UI, tools) must link aiverse_i18n.
 #pragma once
 #include "NetText.h"
 #include "../i18n/Localization.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 // String arguments are data from the server: a queue title from its config ("@net.queue.2v2"),
 // a bot/unnamed player ("@net.bot", "@net.player.unnamed", filled from the same arguments) or a
@@ -26,4 +26,4 @@ inline std::string displayName(const i18n::Localization& loc, const std::string&
     return loc.text(name);
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

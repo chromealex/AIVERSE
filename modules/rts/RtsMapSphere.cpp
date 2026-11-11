@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <queue>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 int nbIndex(const Surface& s, int c0, int c1) {
@@ -214,4 +214,4 @@ bool MapGrid::findPathSphere(Vec3 from, Vec3 to, uint8_t layer, std::vector<Vec3
     return found;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

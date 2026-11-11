@@ -7,7 +7,7 @@
 #include <algorithm>
 #include "RtsInternal.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace script;
 using namespace detail;
 namespace detail { void changeUnitType(RtsModule& m, Simulation& sim, Entity e, uint16_t type); }   // RtsEffects.cpp
@@ -1353,4 +1353,4 @@ Json scriptApiReference() {
     return r;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -10,7 +10,7 @@
 #include "../../../engine/render/TextureCache.h"
 #include "ViewCanvas.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 class RtsGroundCanvas {
 public:
@@ -28,4 +28,4 @@ private:
     bool failed_ = false;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -7,7 +7,7 @@
 #include "../core/ECS.h"
 #include "../core/Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 enum CommandFlags : uint8_t {
     kCmdQueue = 1 << 0, // shift-queue: append instead of replacing current orders
@@ -61,4 +61,4 @@ private:
 void writeCommand(ByteWriter& w, const Command& c);
 Command readCommand(ByteReader& r);
 
-} // namespace rts
+} // namespace aiverse

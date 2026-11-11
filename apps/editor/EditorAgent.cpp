@@ -1,4 +1,4 @@
-// Agent link: the editor serves MCP tool calls forwarded by rtsmcp over localhost, implements the
+// Agent link: the editor serves MCP tool calls forwarded by aiversemcp over localhost, implements the
 // editor-only tools (screenshots, camera, play-test, device simulator, windows), and launches the
 // game client on a simulated device.
 #include <algorithm>
@@ -24,7 +24,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 std::string base64(const std::vector<uint8_t>& in) {
@@ -131,12 +131,12 @@ void Editor::launchOnDevice(const std::string& device, bool landscape) {
         saveMap(f);
     }
     std::string exe = opt_.gameExe;
-    if (exe.empty()) { status = "Не найден исполняемый файл игры (RTSGame)"; return; }
+    if (exe.empty()) { status = "Не найден исполняемый файл игры (AiverseGame)"; return; }
     std::string cmd = "\"" + exe + "\" --map-file \"" + doc().path + "\" --device " + device + (landscape ? ":landscape" : ":portrait");
 #if defined(_WIN32)
     cmd = "start \"\" " + cmd;
 #else
-    cmd = "RTS_CONTENT=\"" + ws_.project.dir + "\" " + cmd + " >/dev/null 2>&1 &";
+    cmd = "AIVERSE_CONTENT=\"" + ws_.project.dir + "\" " + cmd + " >/dev/null 2>&1 &";
 #endif
     if (std::system(cmd.c_str()) != 0) status = "Не удалось запустить игру";
     else status = "Игра запущена: " + device;
@@ -192,7 +192,7 @@ void Editor::registerGuiOps() {
         for (auto& p : sim_->players()) {
             Json pj = Json::object();
             int units = 0, structs = 0;
-            sim_->world().each<game::Unit, Owner>([&](rts::Entity, game::Unit& u, Owner& o) { if (o.player == p.slot) (rules().types[u.type].structure ? structs : units)++; });
+            sim_->world().each<game::Unit, Owner>([&](aiverse::Entity, game::Unit& u, Owner& o) { if (o.player == p.slot) (rules().types[u.type].structure ? structs : units)++; });
             pj.set("name", Json::string(p.name)); pj.set("alive", Json::fromBool(p.alive));
             pj.set("units", Json::number(int64_t(units))); pj.set("structures", Json::number(int64_t(structs)));
             Json res = Json::object();
@@ -300,4 +300,4 @@ void Editor::registerGuiOps() {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

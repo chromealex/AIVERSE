@@ -6,7 +6,7 @@
 #include "engine/sim/Simulation.h"
 #include "modules/rts/RtsModule.h"
 
-namespace rts::strategic {
+namespace aiverse::strategic {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error("strategic " + where + ": " + what); }
@@ -555,4 +555,4 @@ void StrategicGame::botTurn(int player) {
     endTurn(player);
 }
 
-} // namespace rts::strategic
+} // namespace aiverse::strategic

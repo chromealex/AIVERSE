@@ -4,11 +4,11 @@
 #include "NativeBuild.h"
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 constexpr const char* kNativeBuildLabel = "native-editor";   // Workspace::runLabel() of the build
 
-// cmake / ninja for this host: rtsbuild --check-toolchain <host> (Homebrew, ~/.rtsengine/toolchains, ...),
+// cmake / ninja for this host: aiversebuild --check-toolchain <host> (Homebrew, ~/.aiverse/toolchains, ...),
 // else PATH + the usual folders. cmake "" = not found (`problem` says why).
 struct NativeTools { std::string cmake, ninja, problem; bool cmakeAutoInstall = false; };
 NativeTools findNativeTools(const Workspace& ws);
@@ -26,7 +26,7 @@ bool nativeBuildReady(const Workspace& ws, const NativeBuilt& b, const std::stri
 // {required, compiled, missing, buildDir, editor, headless, built, upToDate, ready, why, building}
 Json nativeStatus(Workspace& ws, const std::string& engineExe);
 
-// engineExe: the binary whose mtime marks the engine version for the up-to-date check ("" = rtsbuild).
+// engineExe: the binary whose mtime marks the engine version for the up-to-date check ("" = aiversebuild).
 void registerNativeBuildOps(Workspace& ws, const std::string& engineExe = "");
 
-} // namespace rts::editor
+} // namespace aiverse::editor

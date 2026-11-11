@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unity particle effects -> RTSEngine particle effects ("make the same effect").
+"""Unity particle effects -> AIVERSE particle effects ("make the same effect").
 
     python3 tools/importers/unity_vfx/import.py --source <file.prefab | folder | file.unitypackage>
         --game templates/<id> [--name fire] [--prefab Explosion] [--scale 1] [--ignore-root-rotation] [--json] [--dry-run]
@@ -336,7 +336,7 @@ def find_inputs(source, rep):
 
 
 def run(argv=None):
-    ap = argparse.ArgumentParser(description='Unity particle effects -> RTSEngine fx')
+    ap = argparse.ArgumentParser(description='Unity particle effects -> AIVERSE fx')
     ap.add_argument('--source', required=True, help='.prefab, a folder with prefabs (+ materials, textures, .meta) or a .unitypackage')
     ap.add_argument('--game', required=True, help='game folder (templates/<id>): writes fx/<name>.json and fx/textures/')
     ap.add_argument('--name', help='effect name (default: the prefab name)')

@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <functional>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -91,6 +91,10 @@ void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Mater
     const Json o = resolveMaterial(t, ref);
     if (o.getBool("replace")) { const std::string keep = mt.name; mt = Material{}; mt.name = keep; }
     if (const Json& col = o["color"]; col.size() >= 3) mt.baseColor = {num(col[0], 1), num(col[1], 1), num(col[2], 1), col.size() > 3 ? num(col[3], 1) : mt.baseColor.w};
+    if (o.has("shaderGraph")) {
+        try { mt.shaderGraph = std::make_shared<graph::Program>(graph::compile(o["shaderGraph"], "material")); }
+        catch (const std::exception& e) { warn(t, e.what()); mt.shaderGraph.reset(); }
+    }
     mt.metallic = num(o["metallic"], mt.metallic);
     mt.roughness = num(o["roughness"], mt.roughness);
     if (o.has("emissive")) mt.emissive = vec3(o["emissive"], mt.emissive);
@@ -676,4 +680,4 @@ void RtsView::defaultProcedural(const UnitType& t, const TypeLook& L, ModelChoic
     if (!c.hasClip[kAnimSpawn]) add("pop", [](ProcAnim&) {});
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

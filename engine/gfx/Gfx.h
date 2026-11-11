@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::gfx {
+namespace aiverse::gfx {
 
 template <class Tag> struct Handle {
     uint32_t id = 0;
@@ -85,7 +85,7 @@ struct ShaderDesc {
     int textureSlots = 0;               // number of sampled textures (tex0..)
     int uniformSlots = 1;               // number of uniform blocks (U0..)
     const char* label = nullptr;
-    bool linearTarget = false; // internal variant: RTS_HDR=1, selected for RGBA16F passes
+    bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
 };
 
 struct VertexAttr {
@@ -199,4 +199,4 @@ protected:
 std::unique_ptr<Device> createMetalDevice(void* nativeSurface);
 std::unique_ptr<Device> createGLDevice(Backend glFlavor);
 
-} // namespace rts::gfx
+} // namespace aiverse::gfx

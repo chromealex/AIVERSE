@@ -16,7 +16,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -178,7 +178,7 @@ std::string runCommand(const std::string& cmd, int& rc) {
 }
 
 std::string pythonExe() {
-    if (const char* p = std::getenv("RTS_PYTHON")) return p;
+    if (const char* p = std::getenv("AIVERSE_PYTHON")) return p;
 #if defined(_WIN32)
     return "python";
 #else
@@ -453,7 +453,7 @@ void registerFxOps(Workspace& ws) {
         std::string out = runCommand(cmd + " 2>&1", rc);
         size_t brace = out.rfind('{', 0) == 0 ? 0 : out.find("\n{");
         if (brace != std::string::npos && brace > 0) ++brace;
-        if (brace == std::string::npos) throw std::runtime_error("the importer failed (is Python 3 installed? set RTS_PYTHON):\n" + out.substr(0, 3000));
+        if (brace == std::string::npos) throw std::runtime_error("the importer failed (is Python 3 installed? set AIVERSE_PYTHON):\n" + out.substr(0, 3000));
         Json rep;
         try { rep = Json::parse(out.substr(brace)); }
         catch (const std::exception&) { throw std::runtime_error("the importer failed:\n" + out.substr(0, 3000)); }
@@ -561,4 +561,4 @@ void registerFxOps(Workspace& ws) {
     });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

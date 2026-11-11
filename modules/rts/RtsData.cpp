@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 const Fixed kFxOne = Fixed::fromInt(1);
@@ -798,4 +798,4 @@ Rules loadRules(const Json& j) {
     return r;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

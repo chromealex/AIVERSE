@@ -8,7 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using render::float4;
 
@@ -860,4 +860,4 @@ Json overlayTemplates() {
     return Json::parse(kText);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

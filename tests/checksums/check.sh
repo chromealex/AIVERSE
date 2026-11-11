@@ -12,9 +12,12 @@ fail=0
 # sample games (templates/) + fixtures that exercise mechanics the samples don't (tests/checksums/games)
 for gd in templates/* "$DIR"/games/*; do
   [ -f "$gd/game.json" ] || continue
+  # This baseline guards the deterministic RTS module; other genres have separate suites.
+  module=$(python3 .github/scripts/game-info.py "$gd" | sed -n 's/^MODULE=//p')
+  [ "$module" = "rts" ] || continue
   g=$(basename "$gd")
   for s in 1 2 3; do
-    line=$("$B/rts_headless" --project "$gd" --seed $s --quiet 2>&1)
+    line=$("$B/aiverse_headless" --project "$gd" --seed $s --quiet 2>&1)
     sum=$(echo "$line" | sed -n 's/^Checksum: //p')
     ms=$(echo "$line" | sed -n 's/.*sim=\([0-9]*\) ms.*/\1/p')
     win=$(echo "$line" | sed -n 's/^Result: winner=\([^ ]*\).*/\1/p')

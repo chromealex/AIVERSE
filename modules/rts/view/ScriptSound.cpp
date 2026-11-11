@@ -8,7 +8,7 @@ extern "C" {
 #include "lauxlib.h"
 }
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 
@@ -122,10 +122,10 @@ int sAvailable(lua_State* L) {
     lua_pushboolean(L, h && h->available());
     return 1;
 }
-// sound.trace(text): one line on stdout ("audio| text") when RTS_AUDIO_LOG is set — for tools that
+// sound.trace(text): one line on stdout ("audio| text") when AIVERSE_AUDIO_LOG is set — for tools that
 // compare what a game's sound logic decided; otherwise nothing.
 int sTrace(lua_State* L) {
-    static const bool on = [] { const char* e = std::getenv("RTS_AUDIO_LOG"); return e && *e && *e != '0'; }();
+    static const bool on = [] { const char* e = std::getenv("AIVERSE_AUDIO_LOG"); return e && *e && *e != '0'; }();
     if (!on) return 0;
     size_t n = 0;
     const char* s = luaL_tolstring(L, 1, &n);
@@ -151,4 +151,4 @@ void openScriptSound(lua_State* L, ScriptSound* const* h) {
     lua_setglobal(L, "sound");
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

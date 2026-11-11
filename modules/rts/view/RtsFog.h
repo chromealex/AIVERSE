@@ -15,7 +15,7 @@
 #include "engine/gfx/Gfx.h"
 #include "engine/render/Renderer3D.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct FogLook {
     enum Style : int { Smooth = 0, Cells = 1, Grid = 2, Pattern = 3 };
@@ -73,4 +73,4 @@ private:
     std::function<void(std::vector<uint8_t>&, int)> blur_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

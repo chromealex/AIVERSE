@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <queue>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 constexpr uint32_t kInf = FlowField::kInf;
@@ -438,4 +438,4 @@ int64_t MapGrid::astarCellCost(int s, int g, uint8_t layer, std::vector<int>* ce
     return cost;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

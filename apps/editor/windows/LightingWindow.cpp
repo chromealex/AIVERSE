@@ -8,7 +8,7 @@
 #include "../EditorUtil.h"
 #include "../core/LightOps.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json n3(double v) { return Json::number(v, 3); }
@@ -302,7 +302,7 @@ private:
         auto add = [&ed](const char* name, const char* desc, const char* schema, bool gui, Workspace::OpFn fn) {
             ed.ws().registerOp({name, desc, Json::parse(schema), std::move(fn), gui});
         };
-        // the core registers a stub (so rtsmcp lists it); the window replaces it with the real preview
+        // the core registers a stub (so aiversemcp lists it); the window replaces it with the real preview
         add("view_lighting", "Editor preview of time of day / clouds / storm (does not change the map): time 0..1, clouds 0..1, storm 0..1; off=true returns to the map's own lighting. Combine with view_screenshot to check night scenes.",
             R"({"properties": {"time": {"type": "number"}, "clouds": {"type": "number"}, "storm": {"type": "number"}, "off": {"type": "boolean"}}})", true, [this](const Json& p) {
                 preview_ = !p.getBool("off");
@@ -317,6 +317,6 @@ private:
     float time_ = 0.5f, clouds_ = 0, storm_ = 0;
 };
 
-RTS_EDITOR_WINDOW(LightingWindow);
+AIVERSE_EDITOR_WINDOW(LightingWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

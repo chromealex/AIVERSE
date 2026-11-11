@@ -24,7 +24,7 @@
 #include "../gfx/Gfx.h"
 #include "FxEffect.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 struct QualityLimits {
     int maxParticles;       // pool size: spawns beyond it are dropped
@@ -35,7 +35,7 @@ struct QualityLimits {
 };
 QualityLimits limitsFor(FxQuality q);
 
-// Default tier: env RTS_PARTICLES=off|low|medium|high, else by GPU name (same weak-GPU list as shadows).
+// Default tier: env AIVERSE_PARTICLES=off|low|medium|high, else by GPU name (same weak-GPU list as shadows).
 FxQuality defaultQualityFor(const std::string& gpuName, bool mobile);
 FxQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
 
@@ -165,4 +165,4 @@ private:
     std::string error_;
 };
 
-} // namespace rts::fx
+} // namespace aiverse::fx

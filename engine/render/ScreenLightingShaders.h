@@ -1,5 +1,5 @@
 #pragma once
-namespace rts::render::screenlighting {
+namespace aiverse::render::screenlighting {
 // Shared GLSL/MSL bodies. UVs are in projected bottom-up space; texture reads flip on Metal.
 inline const char* common = R"(
 #define UV(p) (px.z > 0.5 ? vec2((p).x, 1.0-(p).y) : (p))

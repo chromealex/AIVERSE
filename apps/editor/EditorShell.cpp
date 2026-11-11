@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include "Editor.h"
+#include "EditorGenreUi.h"
 #include "core/Projects.h"
 #include "EditorUtil.h"
 #include "imgui.h"
@@ -11,7 +12,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 // Menu item with an icon in the icon column (imgui_internal MenuItemEx).
@@ -282,7 +283,7 @@ void Editor::drawTopBarControls() {
         const float pulse = busy ? float(0.5 + 0.5 * std::sin(time_ * 6.0)) : 0.0f;
         pill(text, busy ? pal.accent : clients > 0 ? pal.success : pal.textDim, pulse, pal);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Канал MCP для агентов: порт %d\nПодключено серверов rtsmcp: %d\nОкно «ИИ-агент» — как подключить и журнал действий", server_.port(), clients);
+            ImGui::SetTooltip("Канал MCP для агентов: порт %d\nПодключено серверов aiversemcp: %d\nОкно «ИИ-агент» — как подключить и журнал действий", server_.port(), clients);
         if (ImGui::IsItemClicked()) focusWindow("agent");
         rightX -= 12;
     }
@@ -334,6 +335,11 @@ void Editor::drawPlayControls() {
     auto at = [&] { ImGui::SetCursorScreenPos(ImVec2(origin.x + step * float(n++), origin.y)); };
     ui::beginSegment();
     const bool on = playing() || clientPlaying();
+    if(ws_.project.isFps()) {
+        at();if(ui::toolButton(ICON_PLAY,genreText(ws_,"fps.editor.play").c_str(),false,!ws_.building()))startFpsPlay();
+        at();if(ui::toolButton(ICON_GAME,genreText(ws_,"fps.editor.open").c_str()))focusWindow("fps");
+        ui::endSegment();ImGui::PopStyleVar();return;
+    }
     const bool asClient = prefersClientPlay();   // the game's own screens: F5 plays as in the client
     auto stopAll = [&] { stopClientPlay(); stopPlay(); };
     std::string playTip = on ? "Остановить тест (F5)" : asClient ? std::string("Играть как в клиенте (F5)") : lastPlaySlot_ > 0 && size_t(lastPlaySlot_) <= doc().data.players.size()
@@ -478,4 +484,4 @@ void Editor::drawActivityToasts() {
 }
 
 
-} // namespace rts::editor
+} // namespace aiverse::editor

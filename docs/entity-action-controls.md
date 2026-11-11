@@ -37,7 +37,7 @@ edge/overlap layout, missile flight/impact visuals and complete B10 styling rema
 pending. Do not mark GDD B10 complete on these tests alone.
 
 Validation (2026-10-30): `entity_action_controls_preserve_source_and_cancel_invalid_drags`
-passes 37 checks. Full `rts_tests`: 5210 checks, with one sandbox loopback-listen
+passes 37 checks. Full `aiverse_tests`: 5210 checks, with one sandbox loopback-listen
 failure in `editor_mcp_ports_are_unique_and_route_to_the_right_listener`; that test
 passes all 27 checks when rerun with loopback access. The test target builds with
 no source compilation warnings; the existing duplicate-library linker warning

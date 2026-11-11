@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <queue>
 
-namespace rts::game {
+namespace aiverse::game {
 
 void AITerrain::build(Simulation& sim, RtsModule& m, const std::vector<uint8_t>* savedPass) {
     World& wd = sim.world();
@@ -169,4 +169,4 @@ void AITerrain::distances(const MapGrid& g, const std::vector<int>& from, int32_
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -14,7 +14,7 @@
 // Vertex: a_pos (float3), a_uv (float2), a_col (ubyte4 normalized)
 #pragma once
 
-namespace rts::fx::shaders {
+namespace aiverse::fx::shaders {
 
 inline const char* kParticleVS = R"(
 layout(std140) uniform U0 { mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params; };
@@ -43,7 +43,7 @@ out lowp vec4 o_color;
 layout(std140) uniform U0 { mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params; };
 void main() {
     vec4 c = texture(tex0, v_uv) * v_col;
-#if RTS_HDR
+#if AIVERSE_HDR
     if (u_params.y > 0.5) c.rgb = rtsSrgbDecode(c.rgb / max(c.a, 0.0001)) * c.a;
     else c = rtsDisplay(c);
 #endif
@@ -80,7 +80,7 @@ vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
 }
 fragment half4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
     float4 c = float4(tex0.sample(s0, in.uv) * in.col);
-#if RTS_HDR
+#if AIVERSE_HDR
     if (u.params.y > 0.5) c.rgb = rtsSrgbDecode(c.rgb / max(c.a, 0.0001)) * c.a;
     else c = rtsDisplay(c);
 #endif
@@ -112,4 +112,4 @@ fragment half4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], textu
 }
 )";
 
-} // namespace rts::fx::shaders
+} // namespace aiverse::fx::shaders

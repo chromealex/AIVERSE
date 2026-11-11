@@ -7,7 +7,7 @@
 #include <algorithm>
 #include "RtsInternal.h"
 
-namespace rts::game::script {
+namespace aiverse::game::script {
 
 namespace {
 
@@ -285,4 +285,4 @@ void openFieldApi(Vm& vm) {
     lua_setglobal(L, "field");
 }
 
-} // namespace rts::game::script
+} // namespace aiverse::game::script

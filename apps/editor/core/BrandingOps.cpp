@@ -9,7 +9,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -173,4 +173,4 @@ void registerBrandingOps(Workspace& ws) {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

@@ -13,7 +13,7 @@ int testFontEffects(Rml::RenderManager& manager) {
     auto check=[&](bool ok,const char* name){if(!ok){++errors;std::fprintf(stderr,"font effects: %s\n",name);}};
     std::ifstream input(std::filesystem::path(__FILE__).parent_path().parent_path()/"third_party/fonts/inter/Inter-Regular.ttf",std::ios::binary);
     std::string bytes((std::istreambuf_iterator<char>(input)),{});
-    rts::ui::UiFontEngine fonts;
+    aiverse::ui::UiFontEngine fonts;
     if (!fonts.addFont(bytes,"test",Rml::Style::FontStyle::Normal,Rml::Style::FontWeight::Normal)) return 1;
     const auto face=fonts.GetFontFaceHandle("test",Rml::Style::FontStyle::Normal,Rml::Style::FontWeight::Normal,24);
     auto outline=std::make_shared<Rml::FontEffectOutline>();outline->Initialise(2);outline->SetColour({19,42,58,255});outline->SetFingerprint(1);

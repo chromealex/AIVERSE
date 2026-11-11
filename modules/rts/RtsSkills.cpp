@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cstdio>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -563,9 +563,9 @@ bool RtsModule::smartTarget(Simulation& sim, uint8_t player, int payload, Target
     return found;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 // A unit arrives at a garrison structure (advanced effects): illusions vanish, invulnerable structures
@@ -626,4 +626,4 @@ void RtsModule::enterGarrison(Simulation& sim, Entity e, Entity s) {
     die();
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

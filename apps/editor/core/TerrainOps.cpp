@@ -30,7 +30,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 constexpr float kUnit = 16.0f;            // corner values are 1/16 world units
@@ -218,7 +218,7 @@ bool writeHeightPng(const std::vector<int16_t>& grid, int W, int H, const std::s
     ihdr += std::string("\x10\x00\x00\x00\x00", 5); // depth 16, grayscale, deflate, filter 0, no interlace
     chunk(png, "IHDR", ihdr);
     // tEXt: how to read the values back
-    chunk(png, "tEXt", std::string("rtsengine") + '\0' + "scale=" + std::to_string(scale) + " offset=" + std::to_string(offset));
+    chunk(png, "tEXt", std::string("aiverse") + '\0' + "scale=" + std::to_string(scale) + " offset=" + std::to_string(offset));
     chunk(png, "IDAT", std::string(reinterpret_cast<char*>(z), size_t(zlen)));
     STBIW_FREE(z);
     chunk(png, "IEND", "");
@@ -434,4 +434,4 @@ void registerTerrainOps(Workspace& ws) {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

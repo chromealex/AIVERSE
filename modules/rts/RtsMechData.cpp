@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error(where + ": " + what); }
@@ -481,4 +481,4 @@ Json expandDesigns(const Json& j) {
     return out;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

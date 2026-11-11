@@ -12,7 +12,7 @@
 #include "Model.h"
 #include "engine/data/Json.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 // Fills `out` (width, height, rgba). Throws std::runtime_error with a readable message on a bad spec
 // (unknown pattern, size out of 8..2048).
@@ -21,4 +21,4 @@ std::vector<std::string> texturePatterns();
 // One-line description per pattern and the keys it reads (MCP schema / editor tooltips).
 std::string texturePatternHelp();
 
-} // namespace rts::render
+} // namespace aiverse::render

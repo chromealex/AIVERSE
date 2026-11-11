@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Publish packaged engine zips (tools/release/package_engine.py) to the `builds` branch on GitHub.
 
-    python3 tools/release/publish_builds.py build/dist/RTSEngine-0.2.0-1a2b3c4d-windows.zip [more zips] [--keep 5]
+    python3 tools/release/publish_builds.py build/dist/AIVERSE-0.2.0-1a2b3c4d-windows.zip [more zips] [--keep 5]
 
 The `builds` branch is an orphan branch (no shared history with main) with <platform>/<zip> files and a
 README listing them, plus index.json — the same list for programs that download a build (format:
@@ -13,12 +13,12 @@ import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, zipfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 WORK = os.path.join(ROOT, "build", ".temp", "builds")
-NAME = re.compile(r"^RTSEngine-([0-9.]+)-([0-9a-f]+)-(\w+)\.zip$")
+NAME = re.compile(r"^(?:AIVERSE|RTSEngine)-([0-9.]+)-([0-9a-f]+)-(\w+)\.zip$")
 INDEX_SCHEMA = 1
-# executables inside a package, by platform (package_engine.py: RTSEngine/bin/...)
-EXE = {"windows": {"rtsmcp": "rtsmcp.exe", "editor": "rts_editor.exe", "headless": "rts_headless.exe"},
-       "macos": {"rtsmcp": "rtsmcp", "editor": "RTSEditor.app", "headless": "rts_headless"},
-       "linux": {"rtsmcp": "rtsmcp", "editor": "rts_editor", "headless": "rts_headless"}}
+# executables inside a package, by platform (package_engine.py: AIVERSE/bin/...)
+EXE = {"windows": {"rtsmcp": "aiversemcp.exe", "editor": "aiverse_editor.exe", "headless": "aiverse_headless.exe"},
+       "macos": {"rtsmcp": "aiversemcp", "editor": "AiverseEditor.app", "headless": "aiverse_headless"},
+       "linux": {"rtsmcp": "aiversemcp", "editor": "aiverse_editor", "headless": "aiverse_headless"}}
 
 
 def binary_arch(head):
@@ -44,12 +44,16 @@ def package_entry(work, rel, repo, branch):
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
-    names = EXE.get(plat, EXE["linux"])
+    legacy = os.path.basename(rel).startswith("RTSEngine-")
+    package_root = "RTSEngine" if legacy else "AIVERSE"
+    names = dict(EXE.get(plat, EXE["linux"]))
+    if legacy:
+        names = {k: v.replace("aiversemcp", "rtsmcp").replace("aiverse_", "rts_").replace("AiverseEditor", "RTSEditor") for k, v in names.items()}
     found, arch = {}, None
     with zipfile.ZipFile(path) as z:
         listed = set(z.namelist())
         for key, exe in names.items():
-            inner = "RTSEngine/bin/" + exe
+            inner = package_root + "/bin/" + exe
             if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):
                 found[key] = inner
         for key in ("rtsmcp", "headless"):   # arch from a plain executable (the editor may be an .app)
@@ -59,7 +63,7 @@ def package_entry(work, rel, repo, branch):
     return {"platform": plat, "arch": arch, "version": ver, "commit": commit, "file": rel,
             "url": f"https://raw.githubusercontent.com/{repo}/{branch}/{rel}",
             "size": os.path.getsize(path), "sha256": h.hexdigest(),
-            "root": "RTSEngine", "rtsmcp": found.get("rtsmcp"), "editor": found.get("editor"),
+            "root": package_root, "rtsmcp": found.get("rtsmcp"), "editor": found.get("editor"),
             "headless": found.get("headless")}
 
 
@@ -113,13 +117,13 @@ def main():
     order = [l.strip() for l in open(idx, encoding="utf-8")] if os.path.exists(idx) else []
     new = [NAME.match(os.path.basename(z)).group(3) + "/" + os.path.basename(z) for z in a.zips]
     order = new + [o for o in order if o and o not in new and os.path.exists(os.path.join(WORK, o))]
-    lines = ["# RTSEngine builds", "",
-             "Ready-to-run editor + tools. Unpack the zip anywhere and start `RTSEngine/bin/rts_editor.exe` (Windows), "
-             "`RTSEngine/bin/RTSEditor.app` (macOS) or `RTSEngine/bin/rts_editor` (Linux, when the package has it). "
-             "The folder also holds the engine sources at that commit, which rtsbuild and the MCP server "
-             "(`RTSEngine/bin/rtsmcp`) use.", "",
+    lines = ["# AIVERSE builds", "",
+             "Ready-to-run editor + tools. Unpack the zip anywhere and start `AIVERSE/bin/aiverse_editor.exe` (Windows), "
+             "`AIVERSE/bin/AiverseEditor.app` (macOS) or `AIVERSE/bin/aiverse_editor` (Linux, when the package has it). "
+             "The folder also holds the engine sources at that commit, which aiversebuild and the MCP server "
+             "(`AIVERSE/bin/aiversemcp`) use.", "",
              "Programs that download a build read [index.json](index.json): every package with platform, arch, "
-             "version, commit, URL, size, sha256 and the paths of rtsmcp / the editor inside the zip.", "",
+             "version, commit, URL, size, sha256 and the paths of aiversemcp / the editor inside the zip.", "",
              "Published by tools/release/publish_builds.py; this branch is a single commit that is replaced on "
              f"every publish (the newest {a.keep} versions per platform are kept).", ""]
     kept = []

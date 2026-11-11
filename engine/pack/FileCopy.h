@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <system_error>
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 // Copies `from` over `to` (replacing it). Refuses to copy a file onto itself.
 inline bool copyFileReplace(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec) {
@@ -49,4 +49,4 @@ inline bool copyTree(const std::filesystem::path& from, const std::filesystem::p
     return !ec;
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

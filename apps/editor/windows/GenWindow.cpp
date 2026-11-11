@@ -6,7 +6,7 @@
 #include "../core/GenOps.h"
 #include "modules/rts/gen/MapGen.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class GenWindow : public EditorWindow {
 public:
@@ -119,6 +119,6 @@ private:
     std::string params_, result_, detail_;
 };
 
-RTS_EDITOR_WINDOW(GenWindow);
+AIVERSE_EDITOR_WINDOW(GenWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

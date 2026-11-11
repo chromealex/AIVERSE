@@ -5,7 +5,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -813,4 +813,4 @@ void RtsModule::hashEffects(Simulation& sim, Hasher& h) {
     h.u32(gs.nextGroupId);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

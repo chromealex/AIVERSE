@@ -13,12 +13,12 @@
 #include "Workspace.h"
 #include "engine/data/Json.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 struct WizardSpec {
     // project
     std::string title = "Моя стратегия";
-    std::string location;                    // parent folder ("" = ~/RTSProjects)
+    std::string location;                    // parent folder ("" = ~/AiverseProjects)
     std::string studio = "mystudio";         // bundle id: com.<studio>.<slug>
     std::string version = "0.1.0";
     // sources: a folder with art, music, models, fonts, texts (a GDD in .md / .txt is read as the idea too),
@@ -110,4 +110,4 @@ private:
     std::shared_ptr<Ctx> ctx_;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

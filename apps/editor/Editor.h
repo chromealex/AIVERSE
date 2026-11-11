@@ -37,7 +37,7 @@
 #include "modules/rts/fx/RtsFx.h"
 #include "modules/rts/view/RtsView.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // What the Inspector shows. Hierarchy/Project/Scene set it.
 struct Selection {
@@ -72,15 +72,15 @@ class Editor {
 public:
     struct Options {
         std::string projectDir;   // folder with game.json (empty: show the game picker)
-        std::string engineDir;    // engine checkout (templates/, docs/, rtsbuild)
-        std::string buildTool;    // path to rtsbuild
+        std::string engineDir;    // engine checkout (templates/, docs/, aiversebuild)
+        std::string buildTool;    // path to aiversebuild
         std::string gameExe;      // path to the game client (device runs)
-        std::string ownGameExe;   // RTSGame built in the same tree as this editor (same C++ modules); may be empty
-        std::string mcpTool;      // path to rtsmcp (one-click agent setup in the Agent window)
-        std::string editorExe;    // this executable (rtsmcp launches it when the editor isn't running)
+        std::string ownGameExe;   // AiverseGame built in the same tree as this editor (same C++ modules); may be empty
+        std::string mcpTool;      // path to aiversemcp (one-click agent setup in the Agent window)
+        std::string editorExe;    // this executable (aiversemcp launches it when the editor isn't running)
         std::string openMap;
         int listenPort = -1; // -1 = automatic, 0 = no agent link, positive = exact port
-        bool nativeChild = false;    // --native-editor / RTS_NATIVE_EDITOR=1: started by the switch to the project's build (EditorNativeBuild.cpp)
+        bool nativeChild = false;    // --native-editor / AIVERSE_NATIVE_EDITOR=1: started by the switch to the project's build (EditorNativeBuild.cpp)
     };
 
     explicit Editor(Options o) : opt_(std::move(o)) {}
@@ -181,6 +181,8 @@ public:
     bool playing() const { return sim_ != nullptr; }
     Simulation* sim() { return sim_.get(); }
     game::RtsModule* simModule() { return sim_ ? dynamic_cast<game::RtsModule*>(&sim_->module()) : nullptr; }
+    void startFpsPlay(bool listen=false, const std::string& address="");
+    void renderFpsScene(Viewport&,const render::RTSCamera&);
     void startPlay(int humanSlot = 0);
     void stopPlay();
     // Play as in the game client, inside the Game window (EditorClientPlay.cpp, ClientHost.h): the game's
@@ -194,7 +196,7 @@ public:
     float playSpeed = 1.0f;
     bool playPaused = false;
     render::RTSCamera gameCam;
-    std::vector<rts::Entity> gameSelection;
+    std::vector<aiverse::Entity> gameSelection;
     std::string gameDevice = "none";           // simulator preset (Devices.h)
     bool gameLandscape = true;
     bool gameSafeArea = false;          // Game window: show the device safe area on top of the picture
@@ -253,7 +255,7 @@ public:
     const std::vector<std::unique_ptr<EditorWindow>>& windows() const { return windows_; }
     void resetLayout() { resetLayout_ = true; }
     void launchOnDevice(const std::string& device, bool landscape);
-    // The project in a separate game client window (RTSGame with RTS_CONTENT = project), as players get it:
+    // The project in a separate game client window (AiverseGame with AIVERSE_CONTENT = project), as players get it:
     // the game's own menus, scripts and input (EditorClientPlay.cpp).
     void launchClient();
     void focusWindow(const std::string& id);   // open + bring to front (by stable id)
@@ -266,7 +268,7 @@ public:
     // statistics
     struct FrameStats { float frameMs = 0, simMs = 0; uint32_t drawCalls = 0; };
     std::deque<FrameStats> frameHistory;
-    EditorProfile prof;                                // world tree phase timings (RTS_EDITOR_PROFILE=1 prints them)
+    EditorProfile prof;                                // world tree phase timings (AIVERSE_EDITOR_PROFILE=1 prints them)
     struct PlaySample { float t; std::vector<int> units, structures; std::vector<std::vector<float>> resources; };
     std::vector<PlaySample> playHistory;
 
@@ -308,6 +310,7 @@ private:
     render::ImGuiLayer ui_;
     ClientHost clientHost_;   // after ui_: shut down first (its ImGui context, RmlUi)
     render::Renderer3D r3d_;
+    render::Mesh fpsPreviewMesh_;
     render::PostFx postFx_;
     game::RtsView view_;
     bool showPicker_ = false;
@@ -394,4 +397,4 @@ private:
     bool overlayKeys_[int(platform::Key::Count)] = {};
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

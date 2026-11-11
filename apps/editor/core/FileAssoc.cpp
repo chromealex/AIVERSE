@@ -24,7 +24,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -79,19 +79,19 @@ fs::path home() {
 }
 
 bool automated() {
-    if (const char* v = std::getenv("RTS_FILE_ASSOC"); v && (std::string(v) == "off" || std::string(v) == "0")) return true;
-    return std::getenv("RTS_SCREENSHOT") || std::getenv("RTS_EXIT_AFTER_FRAMES");
+    if (const char* v = std::getenv("AIVERSE_FILE_ASSOC"); v && (std::string(v) == "off" || std::string(v) == "0")) return true;
+    return std::getenv("AIVERSE_SCREENSHOT") || std::getenv("AIVERSE_EXIT_AFTER_FRAMES");
 }
 
-[[maybe_unused]] fs::path iconsDir() { return home() / ".rtsengine" / "icons"; }
+[[maybe_unused]] fs::path iconsDir() { return home() / ".aiverse" / "icons"; }
 
 std::string& logoPath() { static std::string p; return p; }
 
 // ------------------------------------------------------------------------------------- Linux
 #if !defined(_WIN32) && !defined(__APPLE__)
-const char* kIconName = "application-x-rtsengine-project";
-const char* kAppIconName = "rtsengine-editor";
-const char* kMimeXml = "rtsengine-project.xml";
+const char* kIconName = "application-x-aiverse-project";
+const char* kAppIconName = "aiverse-editor";
+const char* kMimeXml = "aiverse-project.xml";
 
 fs::path desktopFile() { return fs::path(xdgDataHome()) / "applications" / kEditorDesktopId; }
 fs::path mimeXmlFile() { return fs::path(xdgDataHome()) / "mime" / "packages" / kMimeXml; }
@@ -138,11 +138,11 @@ bool setDefaultHandler() {
 
 std::string mimeXml() {
     return R"(<?xml version="1.0" encoding="UTF-8"?>
-<!-- RTSEngine project file; installed by the RTS editor (apps/editor/core/FileAssoc.cpp) -->
+<!-- AIVERSE project file; installed by the AIVERSE editor (apps/editor/core/FileAssoc.cpp) -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type=")" + std::string(kProjectMimeType) + R"(">
-    <comment>RTSEngine project</comment>
-    <comment xml:lang="ru">Проект RTSEngine</comment>
+    <comment>AIVERSE project</comment>
+    <comment xml:lang="ru">Проект AIVERSE</comment>
     <sub-class-of type="application/json"/>
     <icon name=")" + kIconName + R"("/>
     <generic-icon name=")" + kIconName + R"("/>
@@ -156,18 +156,18 @@ std::string desktopEntry(const std::string& exe) {
     return "[Desktop Entry]\n"
            "Type=Application\n"
            "Version=1.0\n"
-           "Name=RTS Editor\n"
-           "Name[ru]=Редактор RTS Engine\n"
+           "Name=AIVERSE Editor\n"
+           "Name[ru]=Редактор AIVERSE Engine\n"
            "GenericName=Game Editor\n"
-           "Comment=Edit RTSEngine game projects\n"
-           "Comment[ru]=Редактор проектов игр RTSEngine\n"
+           "Comment=Edit AIVERSE game projects\n"
+           "Comment[ru]=Редактор проектов игр AIVERSE\n"
            "Exec=" + desktopExec(exe) + "\n"
            "Icon=" + kAppIconName + "\n"
            "Terminal=false\n"
            "Categories=Development;Game;\n"
            "MimeType=" + kProjectMimeType + ";\n"
-           "StartupWMClass=rts_editor\n"
-           "X-RTSEngine-Exe=" + exe + "\n";
+           "StartupWMClass=aiverse_editor\n"
+           "X-AIVERSE-Exe=" + exe + "\n";
 }
 
 bool globsKnow() {   // update-mime-database ran over our package
@@ -179,7 +179,7 @@ AssocStatus statusLinux(const std::string& exe) {
     s.supported = !home().empty() && !exe.empty();
     if (!s.supported) { s.detail = "нет домашней папки (HOME)"; return s; }
     std::error_code ec;
-    const bool desk = readText(desktopFile()).find("X-RTSEngine-Exe=" + exe + "\n") != std::string::npos;
+    const bool desk = readText(desktopFile()).find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos;
     const bool mime = fs::exists(mimeXmlFile(), ec);
     const std::string def = defaultHandler();
     if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .rtsproj не зарегистрирован";
@@ -284,7 +284,7 @@ AssocStatus statusWindows() {
     else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".rtsproj открывает другой редактор: " + wideToUtf8(cmd);
     else if (!choice.empty() && choice != progId()) {
         s.otherDefault = true;
-        s.detail = "в Windows для .rtsproj выбрана другая программа (" + wideToUtf8(choice) + "): «Открыть с помощью» → RTS Editor → «Всегда»";
+        s.detail = "в Windows для .rtsproj выбрана другая программа (" + wideToUtf8(choice) + "): «Открыть с помощью» → AIVERSE Editor → «Всегда»";
     }
     else { s.registered = true; s.detail = ".rtsproj открывается этим редактором"; }
     return s;
@@ -298,10 +298,10 @@ bool registerWindows(std::string* msg) {
     bool ok = regSet(kClasses + L".rtsproj", nullptr, pid) &&
               regSet(kClasses + L".rtsproj", L"Content Type", utf8ToWide(kProjectMimeType)) &&
               regSet(kClasses + L".rtsproj\\OpenWithProgids", pid.c_str(), L"") &&
-              regSet(kClasses + pid, nullptr, utf8ToWide("Проект RTSEngine")) &&
-              regSet(kClasses + pid, L"FriendlyTypeName", utf8ToWide("Проект RTSEngine")) &&
+              regSet(kClasses + pid, nullptr, utf8ToWide("Проект AIVERSE")) &&
+              regSet(kClasses + pid, L"FriendlyTypeName", utf8ToWide("Проект AIVERSE")) &&
               regSet(kClasses + pid + L"\\DefaultIcon", nullptr, L"\"" + ico + L"\",0") &&
-              regSet(kClasses + pid + L"\\shell\\open", L"FriendlyAppName", L"RTS Editor") &&
+              regSet(kClasses + pid + L"\\shell\\open", L"FriendlyAppName", L"AIVERSE Editor") &&
               regSet(kClasses + pid + L"\\shell\\open\\command", nullptr, openCommand());
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
     if (msg) *msg = ok ? "Файлы .rtsproj открываются этим редактором (HKCU\\Software\\Classes\\.rtsproj)" : "не удалось записать реестр HKCU\\Software\\Classes";
@@ -317,7 +317,7 @@ std::string bundleOf(const std::string& exe) {
     const size_t at = exe.find(".app/Contents/MacOS/");
     return at == std::string::npos ? std::string() : exe.substr(0, at + 4);
 }
-fs::path stateFile() { return home() / ".rtsengine" / "fileassoc.json"; }
+fs::path stateFile() { return home() / ".aiverse" / "fileassoc.json"; }
 std::string registeredBundle() {
     try { return Json::parseFile(stateFile().string()).getStr("macos"); } catch (...) { return {}; }
 }
@@ -329,7 +329,7 @@ std::string cf(CFStringRef s) {
 std::string ownBundleId() {
     CFBundleRef b = CFBundleGetMainBundle();
     std::string id = b ? cf(CFBundleGetIdentifier(b)) : std::string();
-    return id.empty() ? "com.rtsengine.editor" : id;
+    return id.empty() ? "com.aiverse.editor" : id;
 }
 std::string defaultHandlerMac() {
     CFStringRef uti = CFStringCreateWithCString(nullptr, kProjectUti, kCFStringEncodingUTF8);
@@ -344,7 +344,7 @@ AssocStatus statusMac(const std::string& exe) {
     AssocStatus s;
     const std::string bundle = bundleOf(exe);
     s.supported = !bundle.empty();
-    if (!s.supported) { s.detail = "редактор запущен не из RTSEditor.app: тип .rtsproj объявляет Info.plist бандла"; return s; }
+    if (!s.supported) { s.detail = "редактор запущен не из AiverseEditor.app: тип .rtsproj объявляет Info.plist бандла"; return s; }
     const std::string h = defaultHandlerMac();
     if (registeredBundle() != bundle) s.detail = "бандл " + bundle + " ещё не зарегистрирован в LaunchServices";
     else if (h.empty() || h != ownBundleId()) {
@@ -357,7 +357,7 @@ AssocStatus statusMac(const std::string& exe) {
 
 bool registerMac(const std::string& exe, std::string* msg) {
     const std::string bundle = bundleOf(exe);
-    if (bundle.empty()) { if (msg) *msg = "запустите редактор из RTSEditor.app"; return false; }
+    if (bundle.empty()) { if (msg) *msg = "запустите редактор из AiverseEditor.app"; return false; }
     const char* ls = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
     std::error_code ec;
     if (fs::exists(ls, ec)) run(shellQuote(ls) + " -f " + shellQuote(bundle));
@@ -442,4 +442,4 @@ std::string ensureFileAssociation(const std::string& editorExe) {
     return msg;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

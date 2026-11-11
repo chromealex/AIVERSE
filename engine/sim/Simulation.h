@@ -21,7 +21,7 @@
 #include "../data/Json.h"
 #include "Command.h"
 
-namespace rts {
+namespace aiverse {
 
 class Simulation;
 
@@ -79,6 +79,7 @@ struct SimConfig {
     uint64_t seed = 1;
     uint32_t tickRate = 20;        // ticks per second
     uint32_t inputDelayTicks = 2;  // commands issued at tick T execute at T + delay (lockstep latency hiding)
+    bool recordCommands = true;  // dedicated realtime servers may use an external bounded replay sink
 };
 
 class Simulation {
@@ -164,4 +165,4 @@ private:
     CommandSink sink_;
 };
 
-} // namespace rts
+} // namespace aiverse

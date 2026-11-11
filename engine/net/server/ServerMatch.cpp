@@ -13,7 +13,7 @@
 #include "../../data/Json.h"
 #include "../../sim/Replay.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 Member* Server::Impl::member(Room& r, uint32_t clientId) {
     if (!r.match) return nullptr;
@@ -440,4 +440,4 @@ void Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t e
     if (rep.save(path)) log("replay %s", path.c_str());
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

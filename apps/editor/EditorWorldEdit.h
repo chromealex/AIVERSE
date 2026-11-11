@@ -5,7 +5,7 @@
 #include <vector>
 #include "core/MapDoc.h"
 
-namespace rts::editor::worldedit {
+namespace aiverse::editor::worldedit {
 
 inline bool valid(const MapDoc& doc, int i) { return i >= 0 && i < int(doc.data.entities.size()); }
 
@@ -58,4 +58,4 @@ inline void move(MapDoc& doc, const std::vector<int>& idx, float dx, float dz) {
     doc.touched();
 }
 
-} // namespace rts::editor::worldedit
+} // namespace aiverse::editor::worldedit

@@ -12,7 +12,7 @@
 #include "ECS.h"
 #include "Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 class Archive {
 public:
@@ -86,4 +86,4 @@ template <class T, class... R> void Archive::operator()(T& v, R&... rest) {
     if constexpr (sizeof...(R) > 0) (*this)(rest...);
 }
 
-} // namespace rts
+} // namespace aiverse

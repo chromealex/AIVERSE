@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace detail;
 
@@ -77,13 +77,13 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (g.bigMap())
         for (auto& t : rules_.types)
             if (t.speed.raw > 0 && (!(t.layer & kLayerAir) || g.airSolid)) g.prepareHpa(t.pathLayer);
-    // planets: HPA* on bodies above the cell threshold (RtsHpaSphere.cpp). RTS_PLANET_HPA=1 / 0 forces it on / off
+    // planets: HPA* on bodies above the cell threshold (RtsHpaSphere.cpp). AIVERSE_PLANET_HPA=1 / 0 forces it on / off
     // (testing and benchmarks only: every peer of a match must use the same setting)
     g.sphereHpaMinCells = rules_.movement.planetHpaCells;
     g.flowMaxFields = rules_.movement.flow.maxFields;
     g.blockedGoalNearest = rules_.movement.blockedGoalNearest;
     g.flowBudgetBytes = size_t(rules_.movement.flow.budgetMB) << 20;
-    if (const char* f = std::getenv("RTS_PLANET_HPA"); f && *f) g.sphereHpaMinCells = *f == '0' ? (1 << 30) : 0;
+    if (const char* f = std::getenv("AIVERSE_PLANET_HPA"); f && *f) g.sphereHpaMinCells = *f == '0' ? (1 << 30) : 0;
     if (g.surf)   // planets: bodies above the cell threshold (RtsHpaSphere.cpp)
         for (auto& t : rules_.types)
             if (t.speed.raw > 0 && !(t.layer & kLayerAir)) g.prepareHpaSphere(t.pathLayer);
@@ -1446,4 +1446,4 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

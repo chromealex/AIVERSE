@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor::wiz {
+namespace aiverse::editor::wiz {
 
 namespace {
 
@@ -38,7 +38,7 @@ std::string copyInto(GameMaker::Ctx& c, const fs::path& src, const std::string& 
     fs::path to = fs::path(c.dir) / relDir / relName;
     std::error_code ec;
     fs::create_directories(to.parent_path(), ec);
-    rts::pack::copyFileReplace(src, to, ec);
+    aiverse::pack::copyFileReplace(src, to, ec);
     if (ec) { c.warn("не скопирован " + src.string() + ": " + ec.message()); return ""; }
     return (fs::path(relDir) / relName).generic_string();
 }
@@ -198,7 +198,7 @@ void importContent(GameMaker::Ctx& c) {
             c.fonts.push_back(to);
             if (!fontDone && f.path.extension() != ".otf") {   // the first TrueType font becomes the title font of the screens
                 std::error_code ec;
-                rts::pack::copyFileReplace(f.path, fs::path(c.dir) / "fonts" / "title.ttf", ec);
+                aiverse::pack::copyFileReplace(f.path, fs::path(c.dir) / "fonts" / "title.ttf", ec);
                 writeText(c.path("fonts/SOURCE.txt"), "fonts/title.ttf: " + f.rel.generic_string() +
                           " from the game's content folder (the game wizard). Check its license before release.\n");
                 fontDone = true;
@@ -374,7 +374,7 @@ void applyPalette(GameMaker::Ctx& c) {
     const std::string menu = c.menuArt.empty() ? c.keyArt : c.menuArt;
     const std::string bgName = "wiz_bg" + fs::path(menu).extension().string();
     std::error_code ec;
-    rts::pack::copyFileReplace(c.path(menu), c.path("ui/" + bgName), ec);
+    aiverse::pack::copyFileReplace(c.path(menu), c.path("ui/" + bgName), ec);
     const std::string screenBg = darkN ? hex(dark[0] / darkN * 0.6, dark[1] / darkN * 0.6, dark[2] / darkN * 0.6) + "b8" : "#0c0f14b8";
     std::string css = "\n/* game wizard: colours from the key art (" + c.keyArt + "); edit or delete freely */\n"
         "h1, .screen-title { color: " + accent + "; }\n"
@@ -390,4 +390,4 @@ void applyPalette(GameMaker::Ctx& c) {
     c.did("цвета интерфейса из арта: акцент " + accent);
 }
 
-} // namespace rts::editor::wiz
+} // namespace aiverse::editor::wiz

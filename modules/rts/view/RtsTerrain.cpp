@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cstdio>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -56,4 +56,4 @@ void RtsView::buildTerrain(gfx::Device& dev, const MapGrid& g) {
     if (twoD_) twoD_->buildTiles(dev, g, rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

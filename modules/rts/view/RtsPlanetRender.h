@@ -22,7 +22,7 @@
 #include "RtsPlanetCamera.h"
 #include "RtsTerrainRender.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 class PlanetRenderer {
 public:
@@ -110,4 +110,4 @@ private:
     Stats stats_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

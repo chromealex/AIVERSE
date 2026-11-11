@@ -9,7 +9,7 @@
 #include "../core/PlanetOps.h"
 #include "../core/TerrainOps.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class TerrainWindow : public EditorWindow {
 public:
@@ -201,6 +201,6 @@ private:
     uint32_t seed_ = 1;
 };
 
-RTS_EDITOR_WINDOW(TerrainWindow);
+AIVERSE_EDITOR_WINDOW(TerrainWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

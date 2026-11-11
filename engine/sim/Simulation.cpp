@@ -1,7 +1,7 @@
 #include "Simulation.h"
 #include <algorithm>
 
-namespace rts {
+namespace aiverse {
 
 void writeCommand(ByteWriter& w, const Command& c) {
     w.u32(c.tick); w.u8(c.player); w.u8(uint8_t(c.args.empty() ? c.flags & ~kCmdHasArgs : c.flags | kCmdHasArgs)); w.u16(c.type); w.u32(c.seq);
@@ -89,7 +89,7 @@ void Simulation::step() {
         });
         for (auto& c : cmds) {
             module_->applyCommand(*this, c);
-            executed_.push_back(std::move(c));
+            if (cfg_.recordCommands) executed_.push_back(std::move(c));
         }
         world_.flush();
     }
@@ -210,4 +210,4 @@ uint64_t Simulation::checksum() {
     return h.value();
 }
 
-} // namespace rts
+} // namespace aiverse

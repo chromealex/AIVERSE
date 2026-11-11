@@ -17,7 +17,7 @@
 #include "../../../engine/render/Math3D.h"
 #include "../RtsData.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 // owner of an entity relative to the local player
 enum OvRelation : uint8_t { kRelOwn = 1, kRelAlly = 2, kRelEnemy = 4, kRelNeutral = 8 };
@@ -170,4 +170,4 @@ render::float4 parseOverlayColor(const Json& j, const std::string& where, bool* 
 uint16_t overlayEventKind(const std::string& name);   // 0 = unknown
 const char* overlayEventName(uint16_t kind);
 
-} // namespace rts::game
+} // namespace aiverse::game

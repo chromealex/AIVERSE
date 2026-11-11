@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::render {
+namespace aiverse::render {
 namespace {
 struct Uniforms { mat4 invVP, prevVP; float4 eye, prevEye, px, params; };
 float halton(int index, int base) {

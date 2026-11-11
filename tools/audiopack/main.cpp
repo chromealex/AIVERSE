@@ -1,8 +1,8 @@
-// rts_audiopack — build-time audio compression outside rtsbuild (preview, CI, single files).
+// aiverse_audiopack — build-time audio compression outside aiversebuild (preview, CI, single files).
 //
-//   rts_audiopack --project templates/skirmish --profile mobile [--out dir]
+//   aiverse_audiopack --project templates/skirmish --profile mobile [--out dir]
 //       converts the game's audio for a profile; without --out only prints what it would do
-//   rts_audiopack --encode in.wav out.ogg --codec vorbis [--quality 0.4] [--mono] [--rate 32000]
+//   aiverse_audiopack --encode in.wav out.ogg --codec vorbis [--quality 0.4] [--mono] [--rate 32000]
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -14,11 +14,11 @@
 #include "tools/audiopack/AudioPack.h"
 
 namespace fs = std::filesystem;
-using namespace rts;
+using namespace aiverse;
 
 static int usage() {
-    std::puts("usage: rts_audiopack --project <game dir> --profile <desktop|mobile|web> [--out <dir>]\n"
-              "       rts_audiopack --encode <in> <out> --codec <pcm|adpcm|vorbis> [--quality q] [--mono] [--rate hz]");
+    std::puts("usage: aiverse_audiopack --project <game dir> --profile <desktop|mobile|web> [--out <dir>]\n"
+              "       aiverse_audiopack --encode <in> <out> --codec <pcm|adpcm|vorbis> [--quality q] [--mono] [--rate hz]");
     return 2;
 }
 
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
         return o ? 0 : 1;
     }
     if (project.empty()) return usage();
-    const fs::path staging = outDir.empty() ? fs::temp_directory_path() / "rts_audiopack_preview" : fs::path(outDir);
+    const fs::path staging = outDir.empty() ? fs::temp_directory_path() / "aiverse_audiopack_preview" : fs::path(outDir);
     audiopack::Report report;
     if (!audiopack::stageGame(project, staging.string(), profile, report, &err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 1; }
     std::printf("audio, profile %s:\n%s", profile.c_str(), report.items.empty() ? "  nothing to convert\n" : report.text().c_str());

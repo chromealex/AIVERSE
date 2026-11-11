@@ -20,9 +20,9 @@
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 
-namespace rts { class Simulation; class Hasher; class Archive; }
+namespace aiverse { class Simulation; class Hasher; class Archive; }
 
-namespace rts::game {
+namespace aiverse::game {
 
 class RtsModule;
 struct MapGrid;
@@ -128,4 +128,4 @@ private:
     std::vector<uint8_t> mark_, tagMask_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

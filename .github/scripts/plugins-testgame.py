@@ -12,7 +12,7 @@ text = (out / "game.json").read_text(encoding="utf-8")
 game = json.loads(re.sub(r"^\s*//.*$", "", text, flags=re.M))
 game["plugins"] = {
     "googleplay": {},
-    "rustore": {"consoleAppId": "1234567", "scheme": "rtsenginetest"},
+    "rustore": {"consoleAppId": "1234567", "scheme": "aiversetest"},
     "appstore": {},
     "admob": {
         "appId": {"android": "ca-app-pub-3940256099942544~3347511713", "ios": "ca-app-pub-3940256099942544~1458002511"},

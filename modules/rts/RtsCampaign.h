@@ -8,7 +8,7 @@
 #include "../../engine/data/Json.h"
 #include "../../engine/sim/Simulation.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 // Units and resources of `player` that the spec keeps: {"resources": {id: amount}, "units": [{"type", "hp", "rank", "level"}]}.
 Json collectCarry(Simulation& sim, const Json& carrySpec, uint8_t player);
@@ -20,4 +20,4 @@ MissionOutcome missionOutcome(Simulation& sim, const Json& mission, uint8_t play
 // After setup: adds the carried resources and restores hp / ranks of the carried units (placed as plain map entities).
 void restoreCarry(Simulation& sim, const Json& carry, uint8_t player);
 
-} // namespace rts::game
+} // namespace aiverse::game

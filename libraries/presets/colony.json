@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "construction": {
+    "requireTerritory": true,
+    "refundPerMille": 1000
+  },
+  "inventory": {
+    "slots": 40
+  },
+  "tutorial": {
+    "hard": false
+  }
+}

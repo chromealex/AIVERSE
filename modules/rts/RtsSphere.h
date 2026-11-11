@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct IVec3 {
     int x = 0, y = 0, z = 0;
@@ -83,4 +83,4 @@ private:
     std::vector<Fixed> warp_;   // N + 1 cell-edge values, strictly increasing; inverse warp by binary search
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

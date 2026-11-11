@@ -6,7 +6,7 @@
 #include "RtsInternal.h"
 #include "RtsStdLua.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace script;
 using namespace detail;
 
@@ -984,4 +984,4 @@ RtsModule::RtsModule() : nativeDefinitions_(compiledNativeModules()) {}
 RtsModule::RtsModule(std::vector<NativeDefinition> definitions) : nativeDefinitions_(std::move(definitions)) {}
 RtsModule::~RtsModule() = default;
 
-} // namespace rts::game
+} // namespace aiverse::game

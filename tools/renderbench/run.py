@@ -37,7 +37,7 @@ def main():
     if not 1<=a.repeats<=20:p.error('repeats must be 1..20')
     scene=a.scene.resolve();verify(scene);a.out.mkdir(parents=True,exist_ok=True)
     env=os.environ.copy()
-    for key in ('RTS_HDR','RTS_POSTFX','RTS_EXIT_AFTER_FRAMES','RTS_SCREENSHOT','MTL_DEBUG_LAYER','AIVERSE_HDR','AIVERSE_POSTFX'):
+    for key in ('AIVERSE_HDR','AIVERSE_POSTFX','AIVERSE_EXIT_AFTER_FRAMES','AIVERSE_SCREENSHOT','MTL_DEBUG_LAYER','AIVERSE_HDR','AIVERSE_POSTFX'):
         env.pop(key,None)
     summaries=[]
     for i in range(a.repeats):

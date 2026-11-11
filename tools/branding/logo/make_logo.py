@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RTSEngine logo: the one source of the mark's geometry and every file made from it.
+"""AIVERSE logo: the one source of the mark's geometry and every file made from it.
 
     python3 tools/branding/logo/make_logo.py          # rewrites the outputs below (needs Pillow)
 
@@ -8,7 +8,7 @@ Outputs (committed):
       layers of the default loading screen (engine/splash/SplashDefault.cpp), white / orange on
       transparent, all in the same 1024 frame so they line up with the same anchor and scale
   engine/assets/branding/mark.png              the whole mark on transparent (white blades)
-  apps/editor/branding/AppIcon.icns, RTSEditor.ico, icon_1024.png   editor application icon
+  apps/editor/branding/AppIcon.icns, AiverseEditor.ico, icon_1024.png   editor application icon
   docs/images/icon.png                         README
 
 The default game icon is drawn from the same polygons in C++ (tools/branding/Icons.cpp,
@@ -78,7 +78,7 @@ def main():
     save(body, "apps", "editor", "branding", "icon_1024.png")
     body.save(out("apps", "editor", "branding", "AppIcon.icns"))
     square = render(256, ink, bg=WHITE, inset=0.06)
-    square.save(out("apps", "editor", "branding", "RTSEditor.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    square.save(out("apps", "editor", "branding", "AiverseEditor.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
     save(render(512, ink, bg=WHITE, inset=0.08), "docs", "images", "icon.png")
 

@@ -8,7 +8,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -353,4 +353,4 @@ void RtsModule::moveAgents(Simulation& sim) {
         }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <queue>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 constexpr uint32_t kInf = UINT32_MAX;
@@ -254,4 +254,4 @@ bool MapGrid::hpaPath(int sx, int sy, int gx, int gy, uint8_t layer, std::vector
     return true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

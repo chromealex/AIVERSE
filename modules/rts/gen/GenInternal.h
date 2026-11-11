@@ -11,7 +11,7 @@
 #include "modules/rts/RtsMap.h"
 #include "modules/rts/RtsSphere.h"
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 enum Biome : uint8_t { BOcean, BCoast, BGrass, BForest, BDesert, BSteppe, BRock, BSnow, BSwamp, BCount };
 const char* biomeName(int b);
@@ -133,4 +133,4 @@ void unblockStarts(Ctx& c);               // removes objects that cut starts off
 void genRegions(Ctx& c);                  // Voronoi regions (when the template map has regions)
 std::string fmtQ16(int64_t raw);          // exact decimal text of a Q16 value (multiples of 1/16 stay short)
 
-} // namespace rts::gen
+} // namespace aiverse::gen

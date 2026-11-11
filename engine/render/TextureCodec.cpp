@@ -5,7 +5,7 @@
 
 #include "../../third_party/zstd/zstd.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -452,4 +452,4 @@ bool decodeBlocks(const CompressedImage& in, int level, std::vector<uint8_t>& rg
     return true;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

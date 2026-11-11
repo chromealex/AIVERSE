@@ -4,12 +4,12 @@
   "provides": ["ads"],
   "android": {
     "java": "android/java",
-    "classes": { "applovin": "com.rtsengine.plugins.AppLovinMaxPlugin" },
+    "classes": { "applovin": "com.aiverse.plugins.AppLovinMaxPlugin" },
     "dependencies": ["com.applovin:applovin-sdk:13.6.3", "com.google.android.gms:play-services-ads-identifier:18.1.0"]
   },
   "ios": {
     "sources": ["ios/*.mm"],
-    "classes": { "applovin": "RTSAppLovinMaxPlugin" },
+    "classes": { "applovin": "AiverseAppLovinMaxPlugin" },
     "pods": ["pod 'AppLovinSDK', '13.6.3'"],
     "skAdNetworks": ["ludvb6z3bs"]
   }

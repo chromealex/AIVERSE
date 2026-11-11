@@ -10,7 +10,7 @@
 #include "engine/sim/Simulation.h"
 #include "modules/rts/RtsModule.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 const char* simEventName(uint16_t type);          // "" for unknown types
 int simEventByName(const std::string& name);      // -1 if unknown
@@ -47,4 +47,4 @@ Json entityJson(const SimRefs& refs, Entity e);
 Json mapForSim(Json map, const std::string& gameDir);
 
 Fixed toFixed(double v);
-} // namespace rts::editor
+} // namespace aiverse::editor

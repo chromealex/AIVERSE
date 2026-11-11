@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 constexpr float kPi = 3.14159265358979f;
@@ -522,4 +522,4 @@ void applyProcedural(const std::vector<ProcAnim>& mods, const ProcInputs& in, st
     }
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

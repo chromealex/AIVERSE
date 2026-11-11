@@ -1,6 +1,6 @@
 #include "FixedMath.h"
 
-namespace rts {
+namespace aiverse {
 
 namespace {
 // sin(i/1024 * pi/2) * 65536, rounded - python: round(math.sin(i/1024*math.pi/2)*65536)
@@ -169,4 +169,4 @@ Vec3 fxNormalize(Vec3 v) {
 
 Vec3 fxCross(Vec3 a, Vec3 b) { return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}; }
 
-} // namespace rts
+} // namespace aiverse

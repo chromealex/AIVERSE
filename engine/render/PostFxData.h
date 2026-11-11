@@ -1,6 +1,6 @@
 // Post-processing effects as data: the "postfx" block of game.json (and of a map, which overrides
 // it), the catalog of effects with their parameters, presets, and a frame-cost estimate per device
-// class. GPU-free (links into the editor core, rtsmcp and tests); the renderer is PostFx.h.
+// class. GPU-free (links into the editor core, aiversemcp and tests); the renderer is PostFx.h.
 //
 // Format (game.json, the same block in a map overrides it):
 //   "postfx": {
@@ -18,14 +18,14 @@
 // tiltShift -> bloom -> sunShafts -> colorGrade -> lut -> posterize -> vignette -> grain -> fade ->
 // letterbox), whatever the order in the list. Every effect has "enabled" and "minQuality"
 // (low | medium | high: the effect is skipped on lower post-processing tiers; the default depends on
-// how heavy the effect is). The tier is chosen per GPU (old Android: low), RTS_POSTFX=off|low|medium|high.
+// how heavy the effect is). The tier is chosen per GPU (old Android: low), AIVERSE_POSTFX=off|low|medium|high.
 // The whole post chain costs nothing when no effect is active (the scene renders straight to the screen).
 #pragma once
 #include <string>
 #include <vector>
 #include "engine/data/Json.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 enum class PostFxQuality { Off = 0, Low = 1, Medium = 2, High = 3 };
 enum class HdrMode { Auto, Off, On };
@@ -37,7 +37,7 @@ enum class PostFxCostClass { Cheap, Medium, Heavy };
 
 enum class PostFxType {
     Fxaa, Pixelate, ChromaticAberration, Sharpen, TiltShift, Bloom, SunShafts,
-    ColorGrade, Lut, Posterize, Vignette, Grain, Fade, Letterbox, Count
+    ColorGrade, Lut, Posterize, Vignette, Grain, Fade, Letterbox, ShaderGraph, Count
 };
 
 enum class PostFxParamKind { Number, Color, Bool, Text };
@@ -70,6 +70,7 @@ const char* postFxCostName(PostFxCostClass c);
 
 // One resolved effect. Values are indexed like the type's params; a Color takes 3 consecutive floats.
 struct PostFxEffect {
+    Json shaderGraph;
     PostFxType type = PostFxType::ColorGrade;
     bool enabled = true;
     PostFxQuality minQuality = PostFxQuality::Low;
@@ -138,4 +139,4 @@ Json postFxCostReport(const PostFxSettings& s);
 // Warnings for one effect only (MCP add / set): heavy, or heavy forced onto low tiers.
 std::vector<std::string> postFxEffectWarnings(const PostFxEffect& e);
 
-} // namespace rts::render
+} // namespace aiverse::render

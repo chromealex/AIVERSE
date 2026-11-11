@@ -34,11 +34,11 @@ const fakeSdk = {
 };
 const window = {
   YaGames: { init: async () => fakeSdk },
-  RTSPlugins: { plugins: {}, register(n, p) { this.plugins[n] = p; }, emit(n, e, d) { events.push(e); } },
+  AiversePlugins: { plugins: {}, register(n, p) { this.plugins[n] = p; }, emit(n, e, d) { events.push(e); } },
 };
 const src = fs.readFileSync(fileURLToPath(new URL('./yandex-games.js', import.meta.url)), 'utf8');
 vm.runInNewContext(src, { window, Promise, Array, Math, parseFloat, isNaN, String, Error });
-const p = window.RTSPlugins.plugins['yandex-games'];
+const p = window.AiversePlugins.plugins['yandex-games'];
 
 const same = (a, b) => assert.equal(JSON.stringify(a), JSON.stringify(b)); // objects come from another VM realm
 same(await p.init({}), { lang: 'ru' });

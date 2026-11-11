@@ -5,7 +5,7 @@ The editor's **Иерархия** lists every object of the game world, whatever
 any game on the engine: nothing in it knows a particular game; a game can add its own grouping and
 row names through `game.json` (below).
 
-Code: `apps/editor/core/WorldInspect.*` (GPU-free, in `rts_editor_core`, unit-tested), `apps/editor/EditorWorld.cpp`
+Code: `apps/editor/core/WorldInspect.*` (GPU-free, in `aiverse_editor_core`, unit-tested), `apps/editor/EditorWorld.cpp`
 (preview / live rows, multi-selection, Scene picking, MCP), `apps/editor/windows/HierarchyWindow.cpp`,
 `apps/editor/DetailsPanel.*` (used by `InspectorWindow.cpp`), `apps/editor/EditorWorldEdit.h` (edits of
 several map entities as one undo step).
@@ -145,15 +145,15 @@ Hierarchy, the Scene drawing the preview's objects, the Inspector in edit mode, 
 
 | Part | Cost model |
 |---|---|
-| Preview (edit) | on a worker thread (`WorldPreview::start` / `poll`; not on a web build without pthreads: `RTS_PREVIEW_THREAD`): map / rules JSON, scripts, setup, ticks, and freeing the replaced simulation. The editor thread only copies the map data (~1 ms for 160×570 cells) and reads the rows once per build. A change while one runs queues the newest request. |
+| Preview (edit) | on a worker thread (`WorldPreview::start` / `poll`; not on a web build without pthreads: `AIVERSE_PREVIEW_THREAD`): map / rules JSON, scripts, setup, ticks, and freeing the replaced simulation. The editor thread only copies the map data (~1 ms for 160×570 cells) and reads the rows once per build. A change while one runs queues the newest request. |
 | Rows (play) | 5 Hz while a consumer is shown; `readWorld` reuses the rows (no per-row allocations but strings), components are a bitset, lookups by ref / map entity are O(1). Script data only when needed (above). |
 | Hierarchy | rebuilt when the rows / map / grouping / filter / expansion change; grouping values are memoized per (level, owner / type / kind / origin / region); item labels and tooltips are made when a row is first drawn (the list is clipped). |
 | Inspector | edit: from the preview rows; play: the selected objects are read from the running world in passes (2 ms of reading per frame at most, a pass every 0.2 s … 2 s depending on the selection size); the merged sections are built once per pass, not per frame. |
 | Scene (play) | hover / picking iterate the running world directly (current positions), not the rows. |
 
-`RTS_EDITOR_PROFILE=1` prints the per-phase times every 2 s (`[profile] frames … | readWorld … | prepareSnapshot …
+`AIVERSE_EDITOR_PROFILE=1` prints the per-phase times every 2 s (`[profile] frames … | readWorld … | prepareSnapshot …
 | previewBuild …` (editor thread) `| previewWorker …` (background) `| hierarchy … | details … | worldUpdate …`); the
-same line is in the tooltip of the Hierarchy's status line. `RTS_HOSTED_MAP=<index>` starts the hosted client
+same line is in the tooltip of the Hierarchy's status line. `AIVERSE_HOSTED_MAP=<index>` starts the hosted client
 («Как в клиенте») straight in a match of that map (automated tests / profiling).
 
 Measured (Linux, Release, Xvfb + llvmpipe, 2 CPUs; worst single call of the tree on the editor thread /

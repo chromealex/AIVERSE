@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::render::interchange {
+namespace aiverse::render::interchange {
 
 inline std::string dirOf(const std::string& p) {
     size_t s = p.find_last_of("/\\");
@@ -146,4 +146,4 @@ private:
     size_t pos_, end_;
 };
 
-} // namespace rts::render::interchange
+} // namespace aiverse::render::interchange

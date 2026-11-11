@@ -20,7 +20,7 @@
 #include <vector>
 #include "../sim/Simulation.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 struct SessionConfig {
     uint32_t inputDelay = 2;
@@ -107,4 +107,4 @@ private:
     bool broken_ = false;
 };
 
-} // namespace rts::net
+} // namespace aiverse::net

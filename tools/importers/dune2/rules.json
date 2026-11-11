@@ -1,4 +1,4 @@
-// Dune II rules for RTSEngine, written for the importer (tools/importers/dune2).
+// Dune II rules for AIVERSE, written for the importer (tools/importers/dune2).
 // Numbers approximate the original game's balance from public descriptions; they are our own data,
 // not extracted from DUNE2.EXE. Speeds are map cells per second, times are game seconds.
 // The importer adds `sprite` blocks (docs/game-format.md, "2D games") for every type it has art for;

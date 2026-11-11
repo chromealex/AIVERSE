@@ -22,7 +22,7 @@
 #include "RtsSpriteShadow.h"
 #include "EntityFx.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct SceneObject;
 
@@ -105,7 +105,7 @@ private:
     render::float3 casterRight_;            // caster quad axis this frame (RtsSpriteShadow casterRight)
     GroundSurface surface_;
     std::vector<render::float3> surfTris_;
-    double cpuMs_ = 0;                      // RTS_SPRITE_STATS
+    double cpuMs_ = 0;                      // AIVERSE_SPRITE_STATS
     std::map<uint64_t, Seen> seen_;
     std::vector<Corpse> corpses_;
 
@@ -121,4 +121,4 @@ private:
     int depletedOf(int terrain) const;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

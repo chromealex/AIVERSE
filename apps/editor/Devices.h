@@ -4,7 +4,7 @@
 #pragma once
 #include <string>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 enum class Cutout : unsigned char { None, Notch, Island, PunchCenter, PunchLeft, Waterdrop };
 
@@ -104,4 +104,4 @@ inline Insets4 deviceInsets(const DeviceProfile& d, bool landscape) {
     return naturalPortrait == !landscape ? d.portrait : d.landscape;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

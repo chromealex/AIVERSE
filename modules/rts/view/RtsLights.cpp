@@ -6,7 +6,7 @@
 #include <cmath>
 #include <unordered_map>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -182,4 +182,4 @@ void RtsLights::draw(Renderer3D& r, const RtsScene& s, double time, const std::v
     emitActive(ls, time);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

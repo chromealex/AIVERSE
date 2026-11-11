@@ -34,7 +34,7 @@
 #include "RtsTerrainRender.h"
 #include "EntityFx.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct Lane;
 
@@ -437,4 +437,4 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer);
 class RtsModule;
 void sceneFromSphere(Simulation& sim, RtsModule& m, const Surface& surf, RtsScene& out, float alpha, uint8_t viewer);
 
-} // namespace rts::game
+} // namespace aiverse::game

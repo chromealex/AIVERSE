@@ -8,7 +8,7 @@
 #include <vector>
 #include "../../engine/core/Fixed.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class StanceMode : uint8_t { Aggressive = 0, Defensive = 1, Hold = 2, Passive = 3 };
 
@@ -187,4 +187,4 @@ struct MechRules {
     int findItem(const std::string& id) const { for (size_t i = 0; i < items.size(); ++i) if (items[i].id == id) return int(i); return -1; }
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

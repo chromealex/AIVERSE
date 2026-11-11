@@ -3,7 +3,7 @@
 #include <cctype>
 #include <stdexcept>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 std::string word(const Json& p, const char* key) {
@@ -26,7 +26,7 @@ void registerToolchainOps(Workspace& ws) {
         [w](const Json& p) { return w->toolchainCheck(word(p, "target")); });
     add("toolchain_install",
         "Install what a target needs (or one requirement id from toolchain_check: emsdk, cmake, jdk, android-sdk, android-ndk, android-cmake, "
-        "gradle, xcode-clt) into ~/.rtsengine/toolchains, in the background with progress in the build log. Poll build_status, then call "
+        "gradle, xcode-clt) into ~/.aiverse/toolchains, in the background with progress in the build log. Poll build_status, then call "
         "toolchain_check again. Downloads can be large (Emscripten ~400 MB, Android NDK ~700 MB).",
         R"({"properties": {"target": {"type": "string"}, "id": {"type": "string"}}})", [w](const Json& p) {
             std::string what = p.has("id") ? word(p, "id") : word(p, "target");
@@ -39,4 +39,4 @@ void registerToolchainOps(Workspace& ws) {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

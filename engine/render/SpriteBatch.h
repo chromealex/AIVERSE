@@ -19,7 +19,7 @@
 #include "Math3D.h"
 #include "TextureCache.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 // rpos: receive point for lighting (lit shader): xyz, w > 0 = upright sprite (see SpriteShaders.h)
 struct SpriteVertex { float3 pos; float2 uv; uint32_t color; uint32_t team; float4 rpos; };
@@ -85,4 +85,4 @@ private:
     uint32_t drawCalls_ = 0;
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

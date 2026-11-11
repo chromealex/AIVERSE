@@ -5,7 +5,7 @@
 #include <cctype>
 #include <stdexcept>
 
-namespace rts::i18n {
+namespace aiverse::i18n {
 
 // ------------------------------------------------------------------ plurals
 
@@ -493,4 +493,4 @@ std::vector<Issue> check(const Catalog& base, const std::string& baseLang, const
     return out;
 }
 
-} // namespace rts::i18n
+} // namespace aiverse::i18n

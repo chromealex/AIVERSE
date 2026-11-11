@@ -3,7 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #include "Bench.h"
 #include "engine/gfx/gl/GLApi.h"
-int rtsMain(int argc, char** argv) {
+int aiverseMain(int argc, char** argv) {
     try {
     @autoreleasepool {
         NSOpenGLPixelFormatAttribute attrs[]={NSOpenGLPFAOpenGLProfile,NSOpenGLProfileVersion4_1Core,NSOpenGLPFAColorSize,24,NSOpenGLPFADepthSize,24,0};
@@ -12,16 +12,16 @@ int rtsMain(int argc, char** argv) {
         [context makeCurrentContext];
         if(!context) return 1;
         while (glGetError()!=GL_NO_ERROR) {} // Cocoa context setup may leave legacy GL errors.
-        auto dev=rts::gfx::createGLDevice(rts::gfx::Backend::GL33);
+        auto dev=aiverse::gfx::createGLDevice(aiverse::gfx::Backend::GL33);
         if (GLenum e=glGetError()) {std::fprintf(stderr,"GL device error %x\n",e);return 1;}
-        rts::bench::Bench scene(rts::bench::Options::parse(argc,argv));
+        aiverse::bench::Bench scene(aiverse::bench::Options::parse(argc,argv));
         const int width=scene.width,height=scene.height;
         if (GLenum e=glGetError()) {std::fprintf(stderr,"GL init error %x\n",e);return 1;}
-        rts::gfx::TextureDesc td;td.width=width;td.height=height;td.renderTarget=true;
-        scene.output.colorTarget=dev->createTexture(td);td.format=rts::gfx::PixelFormat::Depth;
+        aiverse::gfx::TextureDesc td;td.width=width;td.height=height;td.renderTarget=true;
+        scene.output.colorTarget=dev->createTexture(td);td.format=aiverse::gfx::PixelFormat::Depth;
         scene.output.depthTarget=dev->createTexture(td);
         if (GLenum e=glGetError()) {std::fprintf(stderr,"GL target error %x\n",e);return 1;}
-        scene.readOutput=[width,height](rts::gfx::Device::CaptureFn fn){
+        scene.readOutput=[width,height](aiverse::gfx::Device::CaptureFn fn){
             std::vector<uint8_t> raw(width*height*4), px(raw.size());
             glReadBuffer(GL_COLOR_ATTACHMENT0);glPixelStorei(GL_PACK_ALIGNMENT,1);
             glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,raw.data());

@@ -24,7 +24,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 namespace {
 
@@ -520,4 +520,4 @@ std::string AtlasStats::report() const {
     return s;
 }
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

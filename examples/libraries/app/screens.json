@@ -1,0 +1,18 @@
+{
+  "id": "build",
+  "titleKey": "build.title",
+  "rows": [
+    {
+      "id": "farm",
+      "labelKey": "farm.title",
+      "value": "100",
+      "action": "build",
+      "reasonKey": "",
+      "enabled": true
+    }
+  ],
+  "translations": {
+    "build.title": "Construction",
+    "farm.title": "Farm"
+  }
+}

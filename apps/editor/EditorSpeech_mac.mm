@@ -12,7 +12,7 @@
 #include <atomic>
 #include <mutex>
 
-namespace rts::editor::speech {
+namespace aiverse::editor::speech {
 
 namespace {
 std::mutex g_m;
@@ -135,11 +135,11 @@ void start(const std::string& locale, const std::vector<std::string>& vocabulary
     const std::string loc = locale;
     [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
         if (status != SFSpeechRecognizerAuthorizationStatusAuthorized) {
-            fail("нет доступа к распознаванию речи: Системные настройки → Конфиденциальность и безопасность → Распознавание речи → RTS Editor");
+            fail("нет доступа к распознаванию речи: Системные настройки → Конфиденциальность и безопасность → Распознавание речи → AIVERSE Editor");
             return;
         }
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
-            if (!granted) { fail("нет доступа к микрофону: Системные настройки → Конфиденциальность и безопасность → Микрофон → RTS Editor"); return; }
+            if (!granted) { fail("нет доступа к микрофону: Системные настройки → Конфиденциальность и безопасность → Микрофон → AIVERSE Editor"); return; }
             dispatch_async(dispatch_get_main_queue(), ^{ if (g_listening) begin(loc); });
         }];
     }];
@@ -174,4 +174,4 @@ bool takeResult(std::string& out) {
     return true;
 }
 
-} // namespace rts::editor::speech
+} // namespace aiverse::editor::speech

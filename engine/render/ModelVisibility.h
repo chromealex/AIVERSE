@@ -2,7 +2,7 @@
 #include "Math3D.h"
 #include <algorithm>
 #include <limits>
-namespace rts::render {
+namespace aiverse::render {
 // Conservative homogeneous clipping: the GL near plane also safely contains Metal's [0,w].
 inline bool modelBoxVisible(const mat4& clip, float3 mn, float3 mx) {
     int outside[6]={};

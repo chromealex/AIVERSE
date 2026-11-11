@@ -3,7 +3,7 @@
 #include <cmath>
 #include "../data/Json.h"
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 namespace {
 
@@ -120,4 +120,4 @@ std::vector<int16_t> renderSynth(const std::vector<SynthLayer>& layers, int samp
     return pcm;
 }
 
-} // namespace rts::audio
+} // namespace aiverse::audio

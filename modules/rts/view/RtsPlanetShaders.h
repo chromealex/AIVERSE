@@ -18,17 +18,17 @@
 #pragma once
 #include "../../../engine/render/Shaders.h"
 
-namespace rts::game::shaders {
+namespace aiverse::game::shaders {
 
-#define RTS_PLANET_GLSL_U0 \
+#define AIVERSE_PLANET_GLSL_U0 \
     "layout(std140) uniform U0 { mat4 p_model; vec4 p_morph; vec4 p_body; vec4 p_opts; vec4 p_scale; vec4 p_tint[4];\n" \
     "  vec4 p_cliff; vec4 p_cliffTint; vec4 p_water; vec4 p_fog; vec4 p_fogColor; vec4 p_atmo; vec4 p_sun; vec4 p_detail; vec4 p_rock; };\n"
-#define RTS_PLANET_MSL_U0 \
+#define AIVERSE_PLANET_MSL_U0 \
     "struct PU0 { float4x4 model; float4 morph; float4 body; float4 opts; float4 scale; float4 tint[4];\n" \
     "  float4 cliff; float4 cliffTint; float4 water; float4 fog; float4 fogColor; float4 atmo; float4 sun; float4 detail; float4 rock; };\n"
 
 inline const char* kPlanetVS =
-    RTS_PLANET_GLSL_U0 RTS_GLSL_FRAME
+    AIVERSE_PLANET_GLSL_U0 AIVERSE_GLSL_FRAME
     R"(
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_nrm;
@@ -69,7 +69,7 @@ void main() {
 )";
 
 inline const char* kPlanetFS =
-    RTS_PLANET_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS
+    AIVERSE_PLANET_GLSL_U0 AIVERSE_GLSL_FRAME AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS
     R"(
 uniform mediump sampler2D tex2;
 uniform sampler2D tex5;
@@ -156,7 +156,7 @@ void main() {
 )";
 
 inline const char* kPlanetMSL =
-    "#include <metal_stdlib>\nusing namespace metal;\n" RTS_PLANET_MSL_U0 RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS
+    "#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_PLANET_MSL_U0 AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float3 nrm [[attribute(1)]]; float4 col [[attribute(2)]]; float3 morph [[attribute(3)]];
              float2 uv [[attribute(4)]]; float4 splat [[attribute(5)]];
@@ -274,11 +274,11 @@ fragment float4 fs_main(VOut in [[stage_in]], constant PU0& u [[buffer(1)]], con
 //            vec4 starColor (rgb, w intensity)
 //   U0 atmo: mat4 model (unit sphere -> world); vec4 body (xyz centre, w planet radius); vec4 shell (x outer radius,
 //            y strength); vec4 color (rgb); vec4 sun (xyz direction to the star)
-#define RTS_SKY_GLSL_U0 "layout(std140) uniform U0 { mat4 s_inv; vec4 s_eye; vec4 s_star; vec4 s_starColor; };\n"
-#define RTS_ATMO_GLSL_U0 "layout(std140) uniform U0 { mat4 a_model; vec4 a_body; vec4 a_shell; vec4 a_color; vec4 a_sun; };\n"
+#define AIVERSE_SKY_GLSL_U0 "layout(std140) uniform U0 { mat4 s_inv; vec4 s_eye; vec4 s_star; vec4 s_starColor; };\n"
+#define AIVERSE_ATMO_GLSL_U0 "layout(std140) uniform U0 { mat4 a_model; vec4 a_body; vec4 a_shell; vec4 a_color; vec4 a_sun; };\n"
 
 inline const char* kSkyVS =
-    RTS_SKY_GLSL_U0
+    AIVERSE_SKY_GLSL_U0
     R"(
 out vec2 v_ndc;
 void main() {
@@ -289,7 +289,7 @@ void main() {
 )";
 
 inline const char* kSkyFS =
-    RTS_SKY_GLSL_U0
+    AIVERSE_SKY_GLSL_U0
     R"(
 in vec2 v_ndc;
 out vec4 o_color;
@@ -313,7 +313,7 @@ void main() {
     col += starLayer(d, 180.0, 0.05 * s_eye.w) * 0.7;
     float g = max(dot(d, normalize(s_star.xyz)), 0.0);
     col += s_starColor.rgb * s_starColor.w * (pow(g, s_star.w) * 0.6 + pow(g, s_star.w * 12.0) * 2.0);
-    o_color = vec4(rtsEncodeScene(RTS_HDR != 0 ? col : clamp(col, 0.0, 1.0)), 1.0);
+    o_color = vec4(rtsEncodeScene(AIVERSE_HDR != 0 ? col : clamp(col, 0.0, 1.0)), 1.0);
 }
 )";
 
@@ -349,12 +349,12 @@ fragment float4 fs_main(VOut in [[stage_in]], constant SU0& u [[buffer(1)]]) {
     col += starLayer(d, 180.0, 0.05 * u.eye.w) * 0.7;
     float g = max(dot(d, normalize(u.star.xyz)), 0.0);
     col += u.starColor.rgb * u.starColor.w * (pow(g, u.star.w) * 0.6 + pow(g, u.star.w * 12.0) * 2.0);
-    return float4(rtsEncodeScene(RTS_HDR != 0 ? col : clamp(col, 0.0, 1.0)), 1.0);
+    return float4(rtsEncodeScene(AIVERSE_HDR != 0 ? col : clamp(col, 0.0, 1.0)), 1.0);
 }
 )";
 
 inline const char* kAtmoVS =
-    RTS_ATMO_GLSL_U0 RTS_GLSL_FRAME
+    AIVERSE_ATMO_GLSL_U0 AIVERSE_GLSL_FRAME
     R"(
 layout(location = 0) in vec3 a_pos;
 out vec3 v_wpos;
@@ -368,7 +368,7 @@ void main() {
 // Optical depth of the view ray through the shell, minus the part hidden by the planet; lit by the
 // star (forward scattering towards the star, a thin bright terminator ring).
 inline const char* kAtmoFS =
-    RTS_ATMO_GLSL_U0 RTS_GLSL_FRAME
+    AIVERSE_ATMO_GLSL_U0 AIVERSE_GLSL_FRAME
     R"(
 in vec3 v_wpos;
 out vec4 o_color;
@@ -397,7 +397,7 @@ void main() {
 
 inline const char* kAtmoMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
-    "struct AU0 { float4x4 model; float4 body; float4 shell; float4 color; float4 sun; };\n" RTS_MSL_FRAME
+    "struct AU0 { float4x4 model; float4 body; float4 shell; float4 color; float4 sun; };\n" AIVERSE_MSL_FRAME
     R"(
 struct VIn { float3 pos [[attribute(0)]]; };
 struct VOut { float4 pos [[position]]; float3 wpos; };
@@ -431,4 +431,4 @@ fragment float4 fs_main(VOut in [[stage_in]], constant AU0& u [[buffer(1)]], con
 }
 )";
 
-} // namespace rts::game::shaders
+} // namespace aiverse::game::shaders

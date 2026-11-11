@@ -113,7 +113,7 @@ def quat_z(deg):
 
 class Gltf:
     def __init__(self):
-        self.doc = {"asset": {"version": "2.0", "generator": "RTSEngine gen_sample_models.py (CC0)"},
+        self.doc = {"asset": {"version": "2.0", "generator": "AIVERSE gen_sample_models.py (CC0)"},
                     "scene": 0, "scenes": [{"nodes": []}], "nodes": [], "meshes": [], "materials": [],
                     "accessors": [], "bufferViews": [], "buffers": []}
         self.bin = bytearray()

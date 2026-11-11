@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 constexpr uint32_t kMaxQuadsPerDraw = 16384;   // 16-bit indices
@@ -247,4 +247,4 @@ void SpriteBatch::drawMesh(gfx::Device& dev, const SpriteMesh& m, gfx::TextureHa
     drawRange(dev, m.vb, 0, m.quads);
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

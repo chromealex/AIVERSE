@@ -6,7 +6,7 @@
 #include <memory>
 #include "RtsView.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 class Portrait {
 public:
@@ -19,6 +19,7 @@ public:
     void renderMaterial(RtsView& view, const Json& material, int shape, double time);
     gfx::TextureHandle texture() const { return color_; }
     int size() const { return size_; }
+    const std::string& lastError() const { return r3d_.modelError(); }
 
 private:
     gfx::Device* dev_ = nullptr;
@@ -29,4 +30,4 @@ private:
     int size_ = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

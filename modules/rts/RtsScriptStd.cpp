@@ -7,7 +7,7 @@
 #include <algorithm>
 #include "RtsInternal.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace script;
 using namespace detail;
 
@@ -869,4 +869,4 @@ void openStdApi(Vm& vm) {
 }
 
 } // namespace script
-} // namespace rts::game
+} // namespace aiverse::game

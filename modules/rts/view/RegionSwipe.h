@@ -7,7 +7,7 @@
 #include <map>
 #include <functional>
 #include <vector>
-namespace rts::game {
+namespace aiverse::game {
 class RegionSwipe {
 public:
     struct Anchor { Entity entity; int region=-1; uint8_t owner=0; render::float3 point{}; int count=0,landCells=0; std::string infoKey; int ability[3]={-1,-1,-1}; };

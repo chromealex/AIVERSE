@@ -19,11 +19,12 @@
 #pragma comment(lib, "shell32.lib")
 #endif
 
-namespace rts::platform {
+namespace aiverse::platform {
 using detail::state;
 
 namespace {
 HWND g_hwnd = nullptr;
+bool g_pointerLocked = false;
 HDC g_hdc = nullptr;
 HGLRC g_rc = nullptr;
 bool g_surrogatePending = false;
@@ -137,7 +138,16 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         SetWindowPos(h, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
         updateSize(); return 0;
     }
-    case WM_MOUSEMOVE: mouse(EventType::MouseMove, 0); return 0;
+    case WM_MOUSEMOVE: if (!g_pointerLocked) mouse(EventType::MouseMove, 0); return 0;
+    case WM_INPUT: {
+        RAWINPUT input{}; UINT size = sizeof(input);
+        if (g_pointerLocked && GetRawInputData(reinterpret_cast<HRAWINPUT>(lp), RID_INPUT, &input, &size, sizeof(RAWINPUTHEADER)) == size && input.header.dwType == RIM_TYPEMOUSE) {
+            Event motion; motion.type = EventType::MouseMove;
+            motion.deltaX = float(input.data.mouse.lLastX); motion.deltaY = float(input.data.mouse.lLastY);
+            detail::dispatch(motion);
+        }
+        break;
+    }
     case WM_LBUTTONDOWN: SetCapture(h); mouse(EventType::MouseDown, 0); return 0;
     case WM_LBUTTONUP: ReleaseCapture(); mouse(EventType::MouseUp, 0); return 0;
     case WM_RBUTTONDOWN: SetCapture(h); mouse(EventType::MouseDown, 1); return 0;
@@ -170,7 +180,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_SETFOCUS: e.type = EventType::FocusGained; detail::dispatch(e); return 0;
-    case WM_KILLFOCUS: e.type = EventType::FocusLost; detail::dispatch(e); return 0;
+    case WM_KILLFOCUS: setPointerLock(false); e.type = EventType::FocusLost; detail::dispatch(e); return 0;
     default: break;
     }
     return DefWindowProcW(h, msg, wp, lp);
@@ -265,7 +275,7 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
         DWORD len = GetEnvironmentVariableW(n, buf, 2048);
         return len > 0 && len < 2048 ? narrow(buf) : std::string();
     };
-    if (std::string env = getenvW(L"RTS_CONTENT"); !env.empty()) S.contentRoot = env;
+    if (std::string env = getenvW(L"AIVERSE_CONTENT"); !env.empty()) S.contentRoot = env;
     else if (GetFileAttributesW(widen(exeDir + "\\content").c_str()) != INVALID_FILE_ATTRIBUTES) S.contentRoot = exeDir + "\\content";
     else S.contentRoot = "content";
     if (std::string ad = getenvW(L"APPDATA"); !ad.empty()) S.userDir = ad + "\\" + cfg.title;
@@ -277,7 +287,7 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     HINSTANCE inst = GetModuleHandleW(nullptr);
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof wc; wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW; wc.lpfnWndProc = wndProc;
-    wc.hInstance = inst; wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512) /* IDC_ARROW */); wc.lpszClassName = L"RTSEngineWindow";
+    wc.hInstance = inst; wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512) /* IDC_ARROW */); wc.lpszClassName = L"AIVERSEWindow";
     wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
     // painted until the first frame is presented (games: the splash background, see AppConfig::clearColor)
     wc.hbrBackground = CreateSolidBrush(RGB(int(cfg.clearColor[0] * 255), int(cfg.clearColor[1] * 255), int(cfg.clearColor[2] * 255)));
@@ -288,14 +298,14 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     g_hwnd = CreateWindowExW(0, wc.lpszClassName, widen(cfg.title).c_str(), style, CW_USEDEFAULT, CW_USEDEFAULT,
                              r.right - r.left, r.bottom - r.top, nullptr, nullptr, inst, nullptr);
     g_hdc = GetDC(g_hwnd);
-    if (!createGLContext()) { MessageBoxW(nullptr, L"OpenGL 3.3 is required", L"RTSEngine", MB_ICONERROR); return 1; }
+    if (!createGLContext()) { MessageBoxW(nullptr, L"OpenGL 3.3 is required", L"AIVERSE", MB_ICONERROR); return 1; }
     ShowWindow(g_hwnd, cfg.windowMode == AppConfig::WindowMode::Maximized && cfg.resizable ? SW_SHOWMAXIMIZED : SW_SHOW);
     if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) detail::applyFullscreen(true);
     updateSize();
 
     auto device = gfx::createGLDevice(gfx::Backend::GL33);
     if (S.cb.init) S.cb.init(*device);
-    // CI hooks (same as Linux): RTS_SCREENSHOT=out.ppm RTS_EXIT_AFTER_FRAMES=N
+    // CI hooks (same as Linux): AIVERSE_SCREENSHOT=out.ppm AIVERSE_EXIT_AFTER_FRAMES=N
     const detail::CaptureRequest capture = detail::captureRequestFromEnv();
     detail::FrameClock clock(capture.active());
     long frameNo = 0;
@@ -330,7 +340,20 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     return 0;
 }
 
-} // namespace rts::platform
+bool pointerLocked() { return g_pointerLocked; }
+bool setPointerLock(bool enabled) {
+    if (g_pointerLocked == enabled) return true;
+    RAWINPUTDEVICE device{0x01, 0x02, enabled ? DWORD(0) : DWORD(RIDEV_REMOVE), enabled ? g_hwnd : nullptr};
+    if (!RegisterRawInputDevices(&device, 1, sizeof(device))) return false;
+    if (enabled) {
+        RECT rect; GetClientRect(g_hwnd, &rect);
+        POINT points[2]={{rect.left,rect.top},{rect.right,rect.bottom}};
+        ClientToScreen(g_hwnd,&points[0]); ClientToScreen(g_hwnd,&points[1]);
+        rect={points[0].x,points[0].y,points[1].x,points[1].y}; ClipCursor(&rect); ShowCursor(FALSE);
+    } else { ClipCursor(nullptr); ShowCursor(TRUE); }
+    g_pointerLocked=enabled; return true;
+}
+} // namespace aiverse::platform
 
-int main(int argc, char** argv) { return rtsMain(argc, argv); }
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return rtsMain(__argc, __argv); }
+int main(int argc, char** argv) { return aiverseMain(argc, argv); }
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return aiverseMain(__argc, __argv); }

@@ -3,7 +3,7 @@
 #include "Workspace.h"
 #include "SimTools.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 void registerScenarioOps(Workspace& ws);
 // Event log entry / trigger log shared with match_run: {"t", "event", "player", "a", "b", "value", "x", "z"}.
 Json eventJson(const SimRefs& refs, const SimEvent& ev);

@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <thread>
 
-namespace rts::bench {
+namespace aiverse::bench {
 using namespace render;
 using Clock = std::chrono::steady_clock;
 inline double ms(Clock::time_point a, Clock::time_point b) { return std::chrono::duration<double,std::milli>(b-a).count(); }

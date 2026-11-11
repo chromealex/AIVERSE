@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 void RtsModule::mechSetup(Simulation& sim, const Json& map) {
@@ -341,4 +341,4 @@ void RtsModule::mechTickEconomy(Simulation& sim) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -7,7 +7,7 @@
 #include "modules/rts/RtsMap.h"
 #include "modules/rts/RtsSphere.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using render::float3;
 
@@ -314,4 +314,4 @@ void registerPlanetOps(Workspace& ws) {
                    }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

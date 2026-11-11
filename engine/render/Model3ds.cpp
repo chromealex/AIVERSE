@@ -23,7 +23,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 using namespace interchange;
 
@@ -587,4 +587,4 @@ std::unique_ptr<Model> load3ds(const std::string& path, const std::string& bytes
     return r.load();
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

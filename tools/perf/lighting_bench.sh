@@ -19,8 +19,8 @@ run() { # tier -> ms per frame (best of 2: the first run also warms caches)
     for _ in 1 2; do
         local t0 t1 ms
         t0=$(date +%s%N)
-        RTS_CONTENT="$GAME" RTS_LIGHTS="$1" RTS_SHADOWS=low RTS_ADAPTIVE=off RTS_TIME_OF_DAY=0.0 RTS_AUDIO=off \
-            RTS_EXIT_AFTER_FRAMES="$FRAMES" "$BUILD/RTSGame" --map 0 --spectate >/dev/null 2>&1
+        AIVERSE_CONTENT="$GAME" AIVERSE_LIGHTS="$1" AIVERSE_SHADOWS=low AIVERSE_ADAPTIVE=off AIVERSE_TIME_OF_DAY=0.0 AIVERSE_AUDIO=off \
+            AIVERSE_EXIT_AFTER_FRAMES="$FRAMES" "$BUILD/AiverseGame" --map 0 --spectate >/dev/null 2>&1
         t1=$(date +%s%N)
         ms=$(( (t1 - t0) / 1000 / FRAMES ))   # microseconds per frame
         (( ms < best )) && best=$ms

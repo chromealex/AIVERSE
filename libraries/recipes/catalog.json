@@ -1,0 +1,6 @@
+{
+  "resource": {"checks": ["unique resource ID", "engine rule parsing", "gather/dropoff definitions remain game-specific"]},
+  "building": {"checks": ["unique type ID", "structure definition", "all builder references", "builder menus updated", "engine placement and costs validation"]},
+  "ability": {"checks": ["owner type exists", "unique ability ID on owner", "engine validates targets, effects and costs"]},
+  "faction": {"checks": ["unique faction ID", "engine validates start type references"]}
+}

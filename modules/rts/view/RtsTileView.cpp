@@ -5,7 +5,7 @@
 #include "../../../engine/platform/Platform.h"
 #include "Rts2DView.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -76,4 +76,4 @@ void Rts2DView::refreshTiles(gfx::Device& dev, const MapGrid& grid, float lh) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

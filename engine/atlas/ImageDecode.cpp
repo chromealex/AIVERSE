@@ -18,7 +18,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 bool decodeImageFile(const std::string& bytes, Image& out) {
     int w = 0, h = 0, n = 0;
@@ -31,4 +31,4 @@ bool decodeImageFile(const std::string& bytes, Image& out) {
     return true;
 }
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

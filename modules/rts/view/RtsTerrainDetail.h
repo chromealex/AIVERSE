@@ -11,7 +11,7 @@
 // The renderer draws it (RtsTerrainRender: height texture + CDLOD patches) and RtsView::heightAt samples
 // it, so units and overlays stand on what is drawn. The editor core uses the same synthesis to create a
 // paintable detail layer and to compare it with the simulation surface (map_validate).
-// Library rts_terrain_detail (linked by the view and the editor core).
+// Library aiverse_terrain_detail (linked by the view and the editor core).
 #pragma once
 #include <cstdint>
 #include <string>
@@ -19,7 +19,7 @@
 #include "../../../engine/data/Json.h"
 #include "../RtsMap.h"
 
-namespace rts::game::terrain {
+namespace aiverse::game::terrain {
 
 struct DetailParams {
     int scale = 4;            // samples per cell wanted (1, 2, 4, 8); capped by maxSamples
@@ -63,4 +63,4 @@ bool loadMapDetail(const Json& map, const ContentReader& read, DetailSurface& ou
 void detailFromInt16(int w, int h, int k, const std::vector<int16_t>& v, DetailSurface& out);
 std::vector<int16_t> detailToInt16(const DetailSurface& d);
 
-} // namespace rts::game::terrain
+} // namespace aiverse::game::terrain

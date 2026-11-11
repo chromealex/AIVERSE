@@ -11,7 +11,7 @@
 #include "RtsTerrainShaders.h"
 #include "RtsTerrainSurface.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -731,14 +731,14 @@ void TerrainRenderer::updateVision(gfx::Device& dev, const std::vector<uint8_t>&
 // ------------------------------------------------------------------ draw
 
 int TerrainRenderer::tierFor0() const {
-    if (const char* e = std::getenv("RTS_TERRAIN")) { std::string v = e; return v == "low" ? 0 : v == "medium" ? 1 : 2; }
+    if (const char* e = std::getenv("AIVERSE_TERRAIN")) { std::string v = e; return v == "low" ? 0 : v == "medium" ? 1 : 2; }
     if (!dev_) return 2;
     const MaterialQuality q = Renderer3D::defaultMaterialQualityFor(*dev_, platform::isTouchDevice());
     return q == MaterialQuality::Low ? 0 : q == MaterialQuality::Medium ? 1 : 2;
 }
 
 int TerrainRenderer::tierFor(const Renderer3D& r) const {
-    if (const char* e = std::getenv("RTS_TERRAIN")) {
+    if (const char* e = std::getenv("AIVERSE_TERRAIN")) {
         std::string v = e;
         return v == "low" ? 0 : v == "medium" ? 1 : 2;
     }
@@ -913,8 +913,8 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
         for (auto& it : *items) drawLod(*it.lod, it.morphStart, it.morphEnd);
     });
     if (hasWater_ && water_.indexCount) r.drawMesh(water_, mat4{}, look_.waterColor, kDrawNoCastShadow, 0.9f);
-    // RTS_TERRAIN_STATS=1: chunks / triangles / frame time every 60 frames (stderr; perf checks on big maps)
-    static const bool printStats = std::getenv("RTS_TERRAIN_STATS") != nullptr;
+    // AIVERSE_TERRAIN_STATS=1: chunks / triangles / frame time every 60 frames (stderr; perf checks on big maps)
+    static const bool printStats = std::getenv("AIVERSE_TERRAIN_STATS") != nullptr;
     if (printStats) {
         static auto last = std::chrono::steady_clock::now();
         static int frames = 0;
@@ -966,4 +966,4 @@ void TerrainRenderer::updateHeightField(gfx::Device& dev, const MapGrid& g) {
     heightField_.heightMin = mn; heightField_.heightRange = mx - mn > 1e-3f ? mx - mn : 0.0f;   // flat map: nothing to shadow
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

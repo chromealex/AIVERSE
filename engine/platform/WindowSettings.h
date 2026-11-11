@@ -11,7 +11,7 @@
 //   }
 //
 // Mobile apps are always fullscreen (orientation: game.json "orientation"); the web build ignores
-// the block. Used by the game client (AppCallbacks::configure) and checked by the editor and rtsbuild.
+// the block. Used by the game client (AppCallbacks::configure) and checked by the editor and aiversebuild.
 #pragma once
 #include <algorithm>
 #include <string>
@@ -19,7 +19,7 @@
 #include "Platform.h"
 #include "engine/data/Json.h"
 
-namespace rts::platform {
+namespace aiverse::platform {
 
 inline const char* windowModeId(AppConfig::WindowMode m, bool resizable) {
     switch (m) {
@@ -77,4 +77,4 @@ inline void applyWindowSettings(AppConfig& cfg, const Json& window, const std::s
     cfg.allowFullscreen = b.getBool("allowFullscreen", true);
 }
 
-} // namespace rts::platform
+} // namespace aiverse::platform

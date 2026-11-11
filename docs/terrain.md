@@ -22,7 +22,7 @@ Without a `terrain` block and without `corners` everything behaves and looks exa
   small per-cell textures, so the mesh is not rebuilt during play. Editor edits rebuild only dirty chunks.
 - Maps up to 1024x1024 (and larger): chunk culling + CDLOD-style LOD with geomorphing on large maps.
 - Quality tiers for weak Android (vertex colours / splat / splat + normals + triplanar), shaders in GLSL and MSL with
-  `RTS_*_SHADOW` and `RTS_*_LIGHTS`. Textures via `TextureCache::resolve(path)`; tiling splat textures are kept out of atlases.
+  `AIVERSE_*_SHADOW` and `AIVERSE_*_LIGHTS`. Textures via `TextureCache::resolve(path)`; tiling splat textures are kept out of atlases.
 - 2D tile maps (`RtsTileView`) are drawn separately and must not change: check `templates/tiles2d` and `templates/km2d`.
 
 ## Rules for the simulation (`model: "heightfield"`) — implemented (agent-terrain-sim)
@@ -57,9 +57,9 @@ Without a `terrain` block and without `corners` everything behaves and looks exa
   dig cells / blockers (diffed against the last pass) instead of rebuilt over the map; line-of-sight rays from per-radius
   offset tables (no divisions). Caches are derived and live in the module (`VisionCache`), tied to the `GameState` by
   `visionToken` (not saved / hashed): a snapshot restore, a loaded save or another simulation rebuilds them from scratch.
-- **Verification:** `RTS_VISION=ref` runs the reference, `RTS_VISION=check` runs both every pass and aborts on any
+- **Verification:** `AIVERSE_VISION=ref` runs the reference, `AIVERSE_VISION=check` runs both every pass and aborts on any
   difference; `RtsModule::setVisionReference(true)` for tests (`vision_fast_equals_reference_flat` / `_planet`: random maps,
-  moving / parked units, blockers, smoke, digging, sculpting, rollback, save loading). `rts_headless --profile` prints
+  moving / parked units, blockers, smoke, digging, sculpting, rollback, save loading). `aiverse_headless --profile` prints
   per-system time.
 - Measured (Release, arm64 VM): Big Planet 0.72 → 0.064 ms/tick (80% → 27% of the tick); faceSize-256 planet 0.42 → 0.043;
   1024² heightfield, 500 moving units 0.47 → 0.12; metaltide 0.015 → 0.004. Checksums of every template unchanged.

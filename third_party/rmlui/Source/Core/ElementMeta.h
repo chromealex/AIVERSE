@@ -54,7 +54,7 @@ struct ElementMeta {
 	ElementEffects effects;
 	ElementScroll scroll;
 	Style::ComputedValues computed_values;
-	PropertyIdSet style_attribute_ids; // RTSEngine: properties the last `style` attribute set (a new value drops the ones it no longer lists)
+	PropertyIdSet style_attribute_ids; // AIVERSE: properties the last `style` attribute set (a new value drops the ones it no longer lists)
 };
 
 struct ElementMetaPool {

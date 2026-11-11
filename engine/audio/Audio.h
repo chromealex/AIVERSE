@@ -29,11 +29,11 @@
 #include <string_view>
 #include <vector>
 
-namespace rts {
+namespace aiverse {
 class Json;
 }
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 enum class Bus : uint8_t { Sfx, Ui, Voice, Music, Ambient, Count };
 const char* busName(Bus b);
@@ -279,4 +279,4 @@ bool decodeClip(const std::string& bytes, Clip& out, std::string& error);
 // `sampleRate` (0 = keep). Used by the build tools to downmix and resample before encoding.
 bool decodeClipAs(const std::string& bytes, int channels, int sampleRate, Clip& out, std::string& error);
 
-} // namespace rts::audio
+} // namespace aiverse::audio

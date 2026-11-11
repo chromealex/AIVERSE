@@ -1,4 +1,4 @@
-/* Written for RTSEngine instead of the configure-generated file: fixed-width types from stdint. */
+/* Written for AIVERSE instead of the configure-generated file: fixed-width types from stdint. */
 #ifndef __CONFIG_TYPES_H__
 #define __CONFIG_TYPES_H__
 #include <stdint.h>

@@ -5,7 +5,7 @@
 #include <imgui.h>
 #include "engine/render/TextureCache.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 struct HudHit { bool hovered=false, modal=false; int ability=-1; bool point=false; };
 inline HudHit drawScriptHud(const std::vector<game::ScriptHudPanel>& panels, ImVec2 origin, ImVec2 size, render::TextureCache& textures, const std::string& base, int selectedAbility=-1) {
     HudHit hit;

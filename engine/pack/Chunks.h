@@ -25,7 +25,7 @@
 #include "Pack.h"
 #include "Sha256.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 // One transfer into a local file. Implementations update their state from any thread; the
 // manager only reads it from poll().
@@ -122,4 +122,4 @@ const char* statusName(ChunkManager::Status s);
 // folder) after checking their SHA-256. Returns how many were attached; problems are listed.
 size_t attachChunksNextTo(Pack& pack, const std::string& packPath, std::vector<std::string>* problems = nullptr);
 
-} // namespace rts::pack
+} // namespace aiverse::pack

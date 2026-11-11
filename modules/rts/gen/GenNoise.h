@@ -4,7 +4,7 @@
 #pragma once
 #include <cstdint>
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 constexpr int32_t kOne = 65536;
 
@@ -33,4 +33,4 @@ inline int64_t qmul(int64_t a, int64_t b) { return (a * b) >> 16; }
 int32_t smoothstepQ(int32_t e0, int32_t e1, int32_t x);       // 0..65536
 int64_t isqrt(int64_t v);                                      // floor(sqrt(v))
 
-} // namespace rts::gen
+} // namespace aiverse::gen

@@ -1,7 +1,7 @@
 // Optional screen-space diffuse bounce and temporal accumulation before HDR tone mapping.
 #pragma once
 #include "PostFx.h"
-namespace rts::render {
+namespace aiverse::render {
 class ScreenLighting : public PostProcess {
 public:
     bool init(gfx::Device& dev, PostFx& post);

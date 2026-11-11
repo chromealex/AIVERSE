@@ -1,6 +1,7 @@
 // Strategic map tools for agents (agent-mech stage 5, TB): load a campaign map of provinces and armies, give
 // orders, let bots play turns, fight battles auto-resolved or simulated on the game's own rules. The state lives
 // in the workspace process; strategic_save writes it to the project. See modules/strategic/Strategic.h.
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -9,7 +10,7 @@
 #include "Workspace.h"
 #include "modules/strategic/Strategic.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace fs = std::filesystem;
 using strategic::StrategicGame;
@@ -138,4 +139,4 @@ void registerStrategicOps(Workspace& ws) {
         }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

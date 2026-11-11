@@ -4,7 +4,7 @@
 #include <cstring>
 #include "FxInternal.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 namespace {
 
@@ -437,7 +437,7 @@ void ParticleSystem::render(const FxFog& fog) {
         while (j < I.recs.size() && I.recs[j].batch == b && (I.recs[j].kind == Impl::MeshPart) == meshRun) ++j;
         const auto& batch = I.batches[b];
         const int pi = int(batch.blend);
-        const gfx::PipelineHandle pipe = meshRun ? I.meshPipe[pi] : I.pipe[pi];
+        const gfx::PipelineHandle pipe = batch.graphPipe[meshRun ? 1 : 0].valid() ? batch.graphPipe[meshRun ? 1 : 0] : (meshRun ? I.meshPipe[pi] : I.pipe[pi]);
         if (!(pipe == lastPipe)) { I.dev->setPipeline(pipe); lastPipe = pipe; }
         u.params[0] = batch.blend == FxBlend::Additive || batch.blend == FxBlend::Subtract ? 1.0f : 0.0f;
         u.params[1] = batch.blend == FxBlend::Premultiplied ? 1.0f : 0.0f;
@@ -499,4 +499,4 @@ void ParticleSystem::collectLights(std::vector<FxPointLight>& out, int maxLights
     }
 }
 
-} // namespace rts::fx
+} // namespace aiverse::fx

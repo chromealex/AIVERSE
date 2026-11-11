@@ -11,7 +11,7 @@
 #include "RtsSurface.h"
 #include <memory>
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum CellFlags : uint8_t {
     kCellGround = 1,   // walkable for ground units
@@ -221,7 +221,7 @@ struct MapGrid {
     int64_t pathNs = 0;
 
     // Planets: bodies with at least this many cells (6 N^2) use HPA* for long paths (0 forces it on every body;
-    // headless --planet-hpa / RTS_PLANET_HPA=1). Same threshold as the flat 256x256.
+    // headless --planet-hpa / AIVERSE_PLANET_HPA=1). Same threshold as the flat 256x256.
     int sphereHpaMinCells = 256 * 256;
     bool sphereHpaBody(int body) const;
     void prepareHpaSphere(uint8_t layer);   // build the graph now (match start) for the active bodies
@@ -359,4 +359,4 @@ struct SpatialHash {
     }
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

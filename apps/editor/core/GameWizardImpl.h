@@ -12,7 +12,7 @@
 #include <vector>
 #include "GameWizard.h"
 
-namespace rts::editor::wiz {
+namespace aiverse::editor::wiz {
 
 // What the template's rules offer, read from rules.json (not the parsed Rules: names / ids are enough).
 struct TypeInfo {
@@ -52,9 +52,9 @@ bool writeText(const std::string& path, const std::string& text, std::string* er
 std::string readText(const std::string& path);
 std::string slugOf(const std::string& title);
 
-} // namespace rts::editor::wiz
+} // namespace aiverse::editor::wiz
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 struct GameMaker::Ctx {
     std::string engineDir, kitDir;           // engine checkout, templates/_wizard
@@ -121,4 +121,4 @@ void writeReport(GameMaker::Ctx& c);
 void copyKit(GameMaker::Ctx& c);
 } // namespace wiz
 
-} // namespace rts::editor
+} // namespace aiverse::editor

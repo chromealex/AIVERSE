@@ -9,9 +9,9 @@
 #include <chrono>
 #include <memory>
 
-using namespace rts;
-using namespace rts::platform;
-using rts::platform::detail::state;
+using namespace aiverse;
+using namespace aiverse::platform;
+using aiverse::platform::detail::state;
 
 static int g_argc = 0;
 static char** g_argv = nullptr;
@@ -20,7 +20,7 @@ static std::chrono::steady_clock::time_point g_last;
 
 // The Metal view doubles as the text input client: becoming first responder shows the keyboard,
 // UIKeyInput delivers typed text (any language) and Backspace.
-@interface RTSMetalView : UIView <UIKeyInput>
+@interface AiverseMetalView : UIView <UIKeyInput>
 @property(nonatomic) UITextAutocorrectionType autocorrectionType;
 @property(nonatomic) UITextAutocapitalizationType autocapitalizationType;
 @property(nonatomic) UITextSpellCheckingType spellCheckingType;
@@ -29,7 +29,7 @@ static std::chrono::steady_clock::time_point g_last;
 @property(nonatomic) UIReturnKeyType returnKeyType;
 @property(nonatomic) UIKeyboardType keyboardType;
 @end
-static __weak RTSMetalView* g_view = nil;
+static __weak AiverseMetalView* g_view = nil;
 static int g_pointerButton = 0;
 
 static uint8_t modsOf(UIKeyModifierFlags f) {
@@ -83,7 +83,7 @@ static Key keyFromHID(UIKeyboardHIDUsage u) {
 }
 static bool g_closingKeyboard = false; // resignFirstResponder initiated by stopTextInput()
 
-@implementation RTSMetalView
+@implementation AiverseMetalView
 + (Class)layerClass { return [CAMetalLayer class]; }
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
@@ -175,12 +175,12 @@ static bool g_closingKeyboard = false; // resignFirstResponder initiated by stop
 }
 @end
 
-@interface RTSViewController : UIViewController
+@interface AiverseViewController : UIViewController
 @property(strong) CADisplayLink* link;
 @end
-@implementation RTSViewController
+@implementation AiverseViewController
 - (void)loadView {
-    RTSMetalView* v = [[RTSMetalView alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    AiverseMetalView* v = [[AiverseMetalView alloc] initWithFrame:UIScreen.mainScreen.bounds];
     v.multipleTouchEnabled = YES;
     UIHoverGestureRecognizer* hover = [[UIHoverGestureRecognizer alloc] initWithTarget:v action:@selector(hover:)];
     [v addGestureRecognizer:hover];
@@ -202,7 +202,7 @@ static bool g_closingKeyboard = false; // resignFirstResponder initiated by stop
         Event e; e.type = down ? EventType::KeyDown : EventType::KeyUp;
         e.key = keyFromHID(k.keyCode); e.mods = modsOf(k.modifierFlags);
         if (state().textInput) {
-            // the text field (RTSMetalView/UIKeyInput) already received text, Backspace and Return
+            // the text field (AiverseMetalView/UIKeyInput) already received text, Backspace and Return
             if (e.key == Key::Backspace || e.key == Key::Enter || (e.key >= Key::A && e.key <= Key::Num9) || e.key == Key::Space) continue;
         }
         if (e.key != Key::Unknown) detail::dispatch(e);
@@ -239,9 +239,9 @@ static bool g_closingKeyboard = false; // resignFirstResponder initiated by stop
     @autoreleasepool {
         auto now = std::chrono::steady_clock::now();
         double dt = std::chrono::duration<double>(now - g_last).count();
-        if (dt > rts::platform::detail::FrameClock::kMaxDt) dt = rts::platform::detail::FrameClock::kMaxDt; // after sleep/background
-        rts::platform::pollContent(); // pack chunk downloads
-        rts::platform::detail::pluginFrame(); // plugin replies and events
+        if (dt > aiverse::platform::detail::FrameClock::kMaxDt) dt = aiverse::platform::detail::FrameClock::kMaxDt; // after sleep/background
+        aiverse::platform::pollContent(); // pack chunk downloads
+        aiverse::platform::detail::pluginFrame(); // plugin replies and events
         g_last = now;
         g_device->beginFrame(S.fbW, S.fbH);
         if (S.cb.frame) S.cb.frame(*g_device, dt);
@@ -250,34 +250,34 @@ static bool g_closingKeyboard = false; // resignFirstResponder initiated by stop
 }
 @end
 
-@interface RTSAppDelegate : UIResponder <UIApplicationDelegate>
+@interface AiverseAppDelegate : UIResponder <UIApplicationDelegate>
 @property(strong) UIWindow* window;
 @end
-@implementation RTSAppDelegate
+@implementation AiverseAppDelegate
 - (BOOL)application:(UIApplication*)app didFinishLaunchingWithOptions:(NSDictionary*)opts {
     self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
-    self.window.rootViewController = [RTSViewController new];
+    self.window.rootViewController = [AiverseViewController new];
     [self.window makeKeyAndVisible];
     return YES;
 }
 // iOS kills apps that submit GPU work in the background, so the display link stops while inactive.
 - (void)applicationWillResignActive:(UIApplication*)a {
-    ((RTSViewController*)self.window.rootViewController).link.paused = YES;
+    ((AiverseViewController*)self.window.rootViewController).link.paused = YES;
     Event e; e.type = EventType::FocusLost; detail::dispatch(e);
 }
 - (void)applicationDidBecomeActive:(UIApplication*)a {
     g_last = std::chrono::steady_clock::now(); // no catch-up for the time spent in background
-    ((RTSViewController*)self.window.rootViewController).link.paused = NO;
+    ((AiverseViewController*)self.window.rootViewController).link.paused = NO;
     Event e; e.type = EventType::FocusGained; detail::dispatch(e);
 }
 - (void)applicationWillTerminate:(UIApplication*)a { if (state().cb.shutdown) state().cb.shutdown(); g_device.reset(); }
 @end
 
-namespace rts::platform {
+namespace aiverse::platform {
 
 namespace detail {
 void showSoftKeyboard(bool show, const TextInputArea&) {
-    RTSMetalView* v = g_view;
+    AiverseMetalView* v = g_view;
     if (!v) return;
     if (show) {
         if (!v.isFirstResponder) [v becomeFirstResponder];
@@ -313,10 +313,10 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
         S.contentRoot = std::string([[NSBundle mainBundle] resourcePath].UTF8String) + "/content";
         NSArray* docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
         if (docs.count) S.userDir = [docs[0] UTF8String];
-        return UIApplicationMain(g_argc, g_argv, nil, NSStringFromClass([RTSAppDelegate class]));
+        return UIApplicationMain(g_argc, g_argv, nil, NSStringFromClass([AiverseAppDelegate class]));
     }
 }
 
-} // namespace rts::platform
+} // namespace aiverse::platform
 
-int main(int argc, char** argv) { g_argc = argc; g_argv = argv; return rtsMain(argc, argv); }
+int main(int argc, char** argv) { g_argc = argc; g_argv = argv; return aiverseMain(argc, argv); }

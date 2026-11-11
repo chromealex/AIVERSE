@@ -7,7 +7,7 @@
 // Vertex: a_pos (float3), a_uv (float2), a_col (ubyte4 normalized)
 #pragma once
 
-namespace rts::game::shaders {
+namespace aiverse::game::shaders {
 
 inline const char* kOverlayVS = R"(
 layout(std140) uniform U0 { mat4 u_viewProj; };
@@ -50,4 +50,4 @@ fragment half4 fs_main(VOut in [[stage_in]], texture2d<half> tex0 [[texture(0)]]
 }
 )";
 
-} // namespace rts::game::shaders
+} // namespace aiverse::game::shaders

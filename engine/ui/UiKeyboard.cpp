@@ -6,7 +6,7 @@
 
 #include "engine/data/Json.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 namespace {
 
@@ -241,4 +241,4 @@ void UiKeyboard::update() {
     }
 }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

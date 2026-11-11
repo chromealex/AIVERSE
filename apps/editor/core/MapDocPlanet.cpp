@@ -9,7 +9,7 @@
 #include "modules/rts/RtsMap.h"
 #include "modules/rts/RtsSphere.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void MapDoc::loadWorld(const Json& w, MapData& d) {
     d.bodies.clear();
@@ -182,4 +182,4 @@ void MapDoc::validateWorld(const game::Rules& rules, std::vector<Issue>& out) co
     (void)rules;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

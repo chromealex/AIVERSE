@@ -8,7 +8,7 @@
 #include <vector>
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerFxOps(Workspace& ws);
 
@@ -22,4 +22,4 @@ FxCheck checkFx(const Workspace& ws, const std::string& name, const Json& j);
 
 bool validFxName(const std::string& n);   // a-z, 0-9, _ (1..48)
 
-} // namespace rts::editor
+} // namespace aiverse::editor

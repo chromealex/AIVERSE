@@ -12,10 +12,11 @@
 #include <map>
 #include <set>
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
 #include "../EditorWorldEdit.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 struct Grouping { const char* title; std::vector<std::string> by; };
@@ -51,6 +52,20 @@ public:
     const char* dockArea() const override { return "left"; }
 
     void draw(Editor& ed) override {
+        if(ed.ws().project.isFps()) {
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            if(ImGui::TreeNodeEx(genreText(ed.ws(),"fps.settings.geometry").c_str(),ImGuiTreeNodeFlags_DefaultOpen)) {
+                for(const auto& box:ed.doc().data.fps["colliders"].items()) {
+                    auto label=genreText(ed.ws(),"fps.settings.collider")+" #"+std::to_string(box.getInt("id"));
+                    if(ImGui::Selectable(label.c_str())) {
+                        ed.sceneCam.target={float((box["min"][0].toDouble()+box["max"][0].toDouble())/2),float(box["min"][1].toDouble()),float((box["min"][2].toDouble()+box["max"][2].toDouble())/2)};
+                        ed.sceneCam.distance=25;
+                    }
+                }
+                ImGui::TreePop();
+            }
+            return;
+        }
         // the rows are read for us (play: 5 Hz) only while we are shown; script data only when the label, a
         // data: grouping or the search can use it
         bool data = !ed.worldConfig().labelKey.empty() || !filter_.empty();
@@ -554,12 +569,12 @@ private:
         // drag objects onto a player
         if (r.entry >= 0 && entries_[size_t(r.entry)].editable && ImGui::BeginDragDropSource()) {
             dragged_ = ed.isSelected(r.sel) ? ed.selectedEntities() : std::vector<int>{r.sel.index};
-            ImGui::SetDragDropPayload("RTS_MAP_ENTITIES", "x", 1);
+            ImGui::SetDragDropPayload("AIVERSE_MAP_ENTITIES", "x", 1);
             ImGui::Text("%s  %zu → игроку", ICON_MOVE, dragged_.size());
             ImGui::EndDragDropSource();
         }
         if (r.dropOwner != -1000 && !ed.worldLive() && ImGui::BeginDragDropTarget()) {
-            if (ImGui::AcceptDragDropPayload("RTS_MAP_ENTITIES")) {
+            if (ImGui::AcceptDragDropPayload("AIVERSE_MAP_ENTITIES")) {
                 worldedit::setOwner(ed.doc(), dragged_, r.dropOwner);
                 ed.status = "Владелец: " + r.label + " (" + std::to_string(dragged_.size()) + ")";
             }
@@ -1053,6 +1068,6 @@ private:
     Selection renameSel_;
 };
 
-RTS_EDITOR_WINDOW(HierarchyWindow);
+AIVERSE_EDITOR_WINDOW(HierarchyWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

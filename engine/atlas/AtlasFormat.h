@@ -22,7 +22,7 @@
 #include <string_view>
 #include <vector>
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 constexpr const char* kManifestPath = "_atlas/atlas.json";
 constexpr const char* kAtlasDir = "_atlas/";
@@ -113,4 +113,4 @@ bool decodeImageFile(const std::string& bytes, Image& out);
 
 bool loadPageImage(const std::string& bytes, const ImageSource::DecodeFn& decodePng, Image& out);
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

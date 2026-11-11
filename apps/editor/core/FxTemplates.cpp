@@ -3,7 +3,7 @@
 // layers (sparks, trails, rings) start at "minQuality": "medium" so weak phones keep the core look.
 #include "FxOps.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -212,4 +212,4 @@ const FxTemplate* fxTemplates(size_t& count) {
     return kTemplates;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

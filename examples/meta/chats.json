@@ -1,0 +1,5 @@
+{
+  "global": {"maxBytes": 1024, "maxHistory": 200, "maxMessages": 100000, "cooldown": 2, "retention": 86400, "kinds": ["text", "emote"]},
+  "clan": {"maxBytes": 2048, "maxHistory": 500, "maxMessages": 100000, "cooldown": 1, "retention": 604800, "kinds": ["text", "emote", "help"]},
+  "direct": {"maxBytes": 4096, "maxHistory": 1000, "maxMessages": 100000, "cooldown": 0, "retention": 0, "kinds": ["text"]}
+}

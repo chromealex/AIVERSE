@@ -1,0 +1,95 @@
+{
+  "fps": {
+    "tickRate": 30,
+    "snapshotRate": 10,
+    "maxPlayers": 100,
+    "mode": "battleRoyale",
+    "worldLimit": 8192,
+    "interestRadius": 500,
+    "rewindTicks": 6,
+    "roundTicks": 54000,
+    "zone": {
+      "center": [
+        0,
+        0,
+        0
+      ],
+      "radius": 4000,
+      "endRadius": 10,
+      "startTick": 1800,
+      "durationTicks": 36000
+    },
+    "weapons": [
+      {
+        "nameKey": "fps.weapon.pistol",
+        "damage": 28,
+        "magazine": 12,
+        "reserve": 72,
+        "intervalTicks": 8,
+        "reloadTicks": 38,
+        "range": 150,
+        "automatic": false,
+        "hipSpread": 0.001,
+        "moveSpread": 0.003,
+        "recoil": 0.0015,
+        "price": 300,
+        "penetration": 0,
+        "bulletSpeed": 350
+      },
+      {
+        "nameKey": "fps.weapon.rifle",
+        "damage": 25,
+        "magazine": 30,
+        "reserve": 120,
+        "intervalTicks": 3,
+        "reloadTicks": 60,
+        "range": 400,
+        "hipSpread": 0.002,
+        "moveSpread": 0.006,
+        "recoil": 0.0025,
+        "price": 1500,
+        "penetration": 1,
+        "bulletSpeed": 700
+      },
+      {
+        "nameKey": "fps.weapon.shotgun",
+        "damage": 14,
+        "magazine": 8,
+        "reserve": 40,
+        "intervalTicks": 27,
+        "reloadTicks": 75,
+        "range": 60,
+        "pellets": 9,
+        "spread": 0.006,
+        "automatic": false,
+        "hipSpread": 0.001,
+        "moveSpread": 0.005,
+        "recoil": 0.003,
+        "price": 1200,
+        "penetration": 0,
+        "bulletSpeed": 200
+      },
+      {
+        "nameKey": "fps.weapon.sniper",
+        "damage": 100,
+        "magazine": 5,
+        "reserve": 25,
+        "intervalTicks": 36,
+        "reloadTicks": 80,
+        "range": 1500,
+        "automatic": false,
+        "hipSpread": 0.0005,
+        "moveSpread": 0.01,
+        "recoil": 0.005,
+        "price": 3500,
+        "penetration": 2,
+        "bulletSpeed": 1000
+      }
+    ],
+    "mechanics": {
+      "enabled": true,
+      "knockdown": true,
+      "startArmor": 0
+    }
+  }
+}

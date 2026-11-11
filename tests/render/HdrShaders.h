@@ -7,7 +7,7 @@
 #include "modules/rts/view/RtsGroundFxShaders.h"
 #include "modules/rts/view/RtsOverlayShaders.h"
 #include <cstdio>
-namespace rts::test {
+namespace aiverse::test {
 inline bool checkHdrShaders(gfx::Device& device) {
     struct Source {const char* name;const char* vs;const char* fs;const char* msl;const char* defs;};
     using namespace render::shaders;

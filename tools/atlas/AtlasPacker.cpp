@@ -4,7 +4,7 @@
 #include <map>
 #include <tuple>
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 // ------------------------------------------------------------------ MaxRects (BSSF)
 MaxRects::MaxRects(int width, int height) : w_(width), h_(height) { free_.push_back({0, 0, width, height}); }
@@ -225,4 +225,4 @@ PackedPages packRects(const std::vector<PackItem>& items, const PackSettings& s)
     return res;
 }
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

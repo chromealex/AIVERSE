@@ -7,7 +7,7 @@
 #include "../Editor.h"
 #include "../EditorUtil.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class FogWindow : public EditorWindow {
 public:
@@ -154,6 +154,6 @@ private:
     float tmp_[2][3] = {};
 };
 
-RTS_EDITOR_WINDOW(FogWindow);
+AIVERSE_EDITOR_WINDOW(FogWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

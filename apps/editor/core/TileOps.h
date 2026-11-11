@@ -8,7 +8,7 @@
 #include "Workspace.h"
 #include "modules/rts/RtsTiles.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerTileOps(Workspace& ws);
 
@@ -23,4 +23,4 @@ void initTiles(Workspace& ws, const std::string& path, const std::string& fill, 
 void paintTiles(Workspace& ws, int cx, int cy, int radius, int terrain, int fixedTile = -1);
 void paintTilesRect(Workspace& ws, int x0, int y0, int x1, int y1, int terrain, int fixedTile = -1);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

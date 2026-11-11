@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 namespace {
 constexpr int kBlock = 256;             // frames mixed per inner iteration
@@ -605,4 +605,4 @@ void Mixer::render(float* out, int frames) {
     }
 }
 
-} // namespace rts::audio
+} // namespace aiverse::audio

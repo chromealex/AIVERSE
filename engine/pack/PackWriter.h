@@ -1,4 +1,4 @@
-// Builds .rpak files (host tools only: assetpipe, rtsbuild, tests). Output is reproducible:
+// Builds .rpak files (host tools only: assetpipe, aiversebuild, tests). Output is reproducible:
 // the same inputs and options always give byte-identical packs (no timestamps, sorted order,
 // per-file compression independent of thread count).
 #pragma once
@@ -9,7 +9,7 @@
 
 #include "Pack.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 struct WriteOptions {
     int level = 19;          // zstd level (1..22); 19 is a good size/time trade-off for release
@@ -118,4 +118,4 @@ std::string formatBytes(uint64_t n);
 // per-folder totals, so it is obvious what makes a build big.
 std::string sizeReport(const WriteStats& st, size_t top = 10);
 
-} // namespace rts::pack
+} // namespace aiverse::pack

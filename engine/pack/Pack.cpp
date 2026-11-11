@@ -6,7 +6,7 @@
 
 #include "third_party/zstd/zstd.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 
@@ -263,4 +263,4 @@ bool PackSet::read(std::string_view path, std::string& out) {
     return false;
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

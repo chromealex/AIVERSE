@@ -1,6 +1,6 @@
 #include "Plugins.h"
 #include "PluginJson.h"
-#if RTS_WITH_MOCK_PLUGINS
+#if AIVERSE_WITH_MOCK_PLUGINS
 #include "engine/services/MockPlugins.h"
 #endif
 #include <cstdlib>
@@ -12,7 +12,7 @@
 #include <TargetConditionals.h>
 #endif
 
-namespace rts::plugins {
+namespace aiverse::plugins {
 namespace {
 
 #if defined(__ANDROID__)
@@ -60,11 +60,11 @@ json::Value resolve(const json::Value& v, const std::string& platform) {
 }
 
 // Desktop mocks (mock-store / mock-ads) exist only where they were asked for: listed in game.json
-// "plugins" or RTS_MOCK_PLUGINS=1 in the environment. Packaged builds compile them out entirely
-// unless the game lists them (rtsbuild → plugins.cmake → RTS_MOCK_PLUGINS).
+// "plugins" or AIVERSE_MOCK_PLUGINS=1 in the environment. Packaged builds compile them out entirely
+// unless the game lists them (aiversebuild → plugins.cmake → AIVERSE_MOCK_PLUGINS).
 void syncMocks(const json::Value& config) {
-#if RTS_WITH_MOCK_PLUGINS
-    const char* env = std::getenv("RTS_MOCK_PLUGINS");
+#if AIVERSE_WITH_MOCK_PLUGINS
+    const char* env = std::getenv("AIVERSE_MOCK_PLUGINS");
     const bool all = env && std::string(env) == "1";
     for (const char* name : {"mock-store", "mock-ads"})
         if (all || config.find(name)) services::registerMockPlugin(name);
@@ -349,4 +349,4 @@ void broadcast(const std::string& method, const std::string& argsJson) {
 }
 } // namespace detail
 
-} // namespace rts::plugins
+} // namespace aiverse::plugins

@@ -1,20 +1,20 @@
 // platform::HostedView (the editor hosting the game client, apps/editor/ClientHost.h): while set, window /
 // content queries answer for the hosted view, requestQuit is recorded, "engine/..." maps to the engine
-// assets; clearing it restores the app's. Its own executable: the platform layer (rts_runtime) owns main().
+// assets; clearing it restores the app's. Its own executable: the platform layer (aiverse_runtime) owns main().
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include "engine/platform/Platform.h"
 
-using namespace rts;
+using namespace aiverse;
 
 static int g_failed = 0;
 #define CHECK(c) do { if (!(c)) { std::fprintf(stderr, "FAILED %s:%d: %s\n", __FILE__, __LINE__, #c); ++g_failed; } } while (0)
 
-int rtsMain(int, char**) {
+int aiverseMain(int, char**) {
     namespace fs = std::filesystem;
-    const fs::path root = fs::temp_directory_path() / "rts_hosted_view_test";
+    const fs::path root = fs::temp_directory_path() / "aiverse_hosted_view_test";
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root / "game", ec);

@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace rts::plugins::json {
+namespace aiverse::plugins::json {
 namespace {
 
 struct Parser {
@@ -232,4 +232,4 @@ std::string quote(const std::string& s) {
     return o + "\"";
 }
 
-} // namespace rts::plugins::json
+} // namespace aiverse::plugins::json

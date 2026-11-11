@@ -12,7 +12,7 @@
 #include "../../../engine/data/Json.h"
 #include "../../../engine/render/Math3D.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct CameraSetup {
     bool present = false, ortho = false, rotate = true;
@@ -60,4 +60,4 @@ inline bool applyCameraSetup(const CameraSetup& c, render::RTSCamera& cam, float
     return true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

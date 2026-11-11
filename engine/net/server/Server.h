@@ -15,9 +15,9 @@
 #include "../Conn.h"
 #include "../Protocol.h"
 
-namespace rts { class Json; }
+namespace aiverse { class Json; }
 
-namespace rts::net {
+namespace aiverse::net {
 
 struct QueueConfig {
     std::string id = "1v1", title = "@net.queue.default";   // shown to players: "@key" or literal text
@@ -50,7 +50,7 @@ struct ArbiterResult {
 using Arbiter = std::function<ArbiterResult(const ArbiterJob&)>;
 
 struct ServerConfig {
-    std::string name = "RTSEngine server";
+    std::string name = "AIVERSE server";
     uint16_t udpPort = kDefaultUdpPort;   // 0 = disabled
     uint16_t wsPort = kDefaultWsPort;     // 0 = disabled
     std::string replayDir;                // empty = do not save replays
@@ -69,7 +69,7 @@ struct ServerConfig {
 
 // Parse a server config (all keys optional):
 // {"name": "...", "udpPort": 27015, "wsPort": 27016, "replays": "replays", "ratings": "ratings.txt",
-//  "games": {"com.rtsengine.ironandgold": "templates/skirmish"}, "reconnectGraceSec": 120,
+//  "games": {"com.aiverse.ironandgold": "templates/skirmish"}, "reconnectGraceSec": 120,
 //  "queues": [{"id": "1v1", "title": "1 на 1", "teams": 2, "teamSize": 1, "botFillSec": 60,
 //              "ratingRange": 150, "ratingWidenPerSec": 10,
 //              "tickRate": 20, "inputDelay": 2, "rollbackWindow": 8, "lagToleranceMs": 300}]}
@@ -98,4 +98,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace rts::net
+} // namespace aiverse::net

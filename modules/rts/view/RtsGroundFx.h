@@ -14,7 +14,7 @@
 //   "terrain": { "territory": {...}, "dig": {...}, "lanes": {...}, "roads": {...} }  (any block may be false)
 // Keys are documented in docs/game-format.md ("Terrain overlays"). Without them: built-in defaults.
 // Quality: MaterialQuality::Low (weak Android GPUs) drops the glow pulse, vein crystals, side lanes
-// and road edge/cobble geometry; RTS_GROUNDFX=low|high overrides for testing.
+// and road edge/cobble geometry; AIVERSE_GROUNDFX=low|high overrides for testing.
 #pragma once
 #include <cstdint>
 #include <map>
@@ -25,7 +25,7 @@
 #include "../RtsData.h"
 #include "../RtsMap.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct RtsScene;
 class RtsView;
@@ -154,4 +154,4 @@ private:
     float time_ = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

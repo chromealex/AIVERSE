@@ -45,7 +45,7 @@
 //      "flicker": 0.2, "halo": 0.8 }]   ("pos": [x, z] works too); shown once the cell is explored.
 //   Spot fields as for types; "yaw" is absolute here (0 = +X, 90 = +Z).
 // Without the block the scene keeps the renderer's default (noon) lighting.
-// Testing: RTS_TIME_OF_DAY=0..1 sets the start time, RTS_NIGHT=0..1 forces a fixed night amount.
+// Testing: AIVERSE_TIME_OF_DAY=0..1 sets the start time, AIVERSE_NIGHT=0..1 forces a fixed night amount.
 // At night emissive materials glow brighter (Renderer3D::lights.setNightGlow).
 #pragma once
 #include <cstdint>
@@ -56,7 +56,7 @@
 #include "../RtsData.h"
 #include "../RtsMap.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct RtsScene;
 class RtsView;
@@ -148,4 +148,4 @@ private:
     render::Lighting base_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

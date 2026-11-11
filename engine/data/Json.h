@@ -9,7 +9,7 @@
 #include <cstdint>
 #include "../core/Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 class Json;
 // Tools only (rules_lint, rules_schema): while installed on a thread, every key lookup (has, [],
@@ -98,4 +98,4 @@ private:
 
 struct JsonError : std::runtime_error { using std::runtime_error::runtime_error; };
 
-} // namespace rts
+} // namespace aiverse

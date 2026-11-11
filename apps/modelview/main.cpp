@@ -1,14 +1,14 @@
-// rts_modelview: look at models the way the game renders them (materials, shadows, skinning,
+// aiverse_modelview: look at models the way the game renders them (materials, shadows, skinning,
 // clips, variants, team colours, quality tiers). For artists checking an export and for CI
 // screenshots of the model pipeline.
 //
-//   rts_modelview a.glb b.gltf@Walk c.obj [--clip Walk] [--time 0.4] [--variant winter] [--baked]
+//   aiverse_modelview a.glb b.gltf@Walk c.obj [--clip Walk] [--time 0.4] [--variant winter] [--baked]
 //                 [--team 0.9,0.2,0.2] [--quality low|medium|high] [--height 1.5] [--native] [--distance 6]
 //                 [--yaw 20] [--pitch 30] [--spacing 2.2]
 //   file@Clip plays that clip on that instance. Keys: Space next clip, Q quality, V variant,
-//   P pause, T team colour; drag to orbit, wheel to zoom. RTS_SCREENSHOT works as in the client.
+//   P pause, T team colour; drag to orbit, wheel to zoom. AIVERSE_SCREENSHOT works as in the client.
 //
-//   rts_modelview --game templates/showcase [--types footman,catapult] [--start 4] [--fixed-dt 0.016]
+//   aiverse_modelview --game templates/showcase [--types footman,catapult] [--start 4] [--fixed-dt 0.016]
 //   gallery: every type of the game through the game's own view (view blocks, overrides,
 //   procedural animation), cycling idle -> move -> attack -> death -> respawn.
 #include "../../engine/platform/Platform.h"
@@ -26,8 +26,8 @@
 #include <memory>
 #include <sstream>
 
-using namespace rts;
-using namespace rts::render;
+using namespace aiverse;
+using namespace aiverse::render;
 
 namespace {
 
@@ -261,7 +261,7 @@ float3 parse3(const std::string& s) {
 
 } // namespace
 
-int rtsMain(int argc, char** argv) {
+int aiverseMain(int argc, char** argv) {
     static Viewer v;
     g_viewer = &v;
     for (int i = 1; i < argc; ++i) {
@@ -295,12 +295,12 @@ int rtsMain(int argc, char** argv) {
         }
     }
     if (v.files.empty() && v.gameDir.empty()) {
-        std::printf("usage: rts_modelview model.glb [model2.gltf@Clip ...] [--clip C] [--time T] [--variant V] [--quality low|medium|high]\n"
-                    "       rts_modelview --game templates/<id> [--types a,b] [--start T] [--fixed-dt S]\n");
+        std::printf("usage: aiverse_modelview model.glb [model2.gltf@Clip ...] [--clip C] [--time T] [--variant V] [--quality low|medium|high]\n"
+                    "       aiverse_modelview --game templates/<id> [--types a,b] [--start T] [--fixed-dt S]\n");
         return 1;
     }
     platform::AppConfig cfg;
-    cfg.title = "RTSEngine model viewer";
+    cfg.title = "AIVERSE model viewer";
     cfg.width = 1280; cfg.height = 720;
     platform::AppCallbacks cb;
     cb.init = [](gfx::Device& d) { g_viewer->init(d); };

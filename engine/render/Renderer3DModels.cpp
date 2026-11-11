@@ -11,7 +11,7 @@
 #include <cstring>
 #include <string>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float misc[4]; float uv0[4]; float uv1[4]; float light[4]; };
@@ -27,7 +27,7 @@ bool transparentItem(uint32_t flags) { return (flags & kDrawTransparent) != 0; }
 } // namespace
 
 MaterialQuality Renderer3D::defaultMaterialQualityFor(const gfx::Device& dev, bool mobile) {
-    if (const char* q = std::getenv("RTS_MATERIALS")) { // testing override: low|medium|high
+    if (const char* q = std::getenv("AIVERSE_MATERIALS")) { // testing override: low|medium|high
         std::string v = q;
         return v == "low" ? MaterialQuality::Low : v == "medium" ? MaterialQuality::Medium : MaterialQuality::High;
     }
@@ -52,6 +52,7 @@ void Renderer3D::initModels() {
 }
 
 void Renderer3D::shutdownModels() {
+    modelError_.clear();
     for (auto& [k, p] : modelPipes_) dev_->destroyPipeline(p);
     for (auto& [k, s] : modelShaders_) if (s.shader.valid()) dev_->destroyShader(s.shader);
     modelPipes_.clear(); modelShaders_.clear();
@@ -79,23 +80,46 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u);
     const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
-    for (auto& [k, p] : modelPipes_) if (k == pipeKey) return p;
+    const auto* graph = it.mat->shaderGraph.get();
+    const ModelShaderKey skey{shaderKey, it.mat->shaderGraph};
+    const ModelShaderKey pkey{pipeKey, it.mat->shaderGraph};
+    for (auto& [k, p] : modelPipes_) if (k == pkey) return p;
 
     ShaderEntry* entry = nullptr;
-    for (auto& [k, s] : modelShaders_) if (k == shaderKey) entry = &s;
+    for (auto& [k, s] : modelShaders_) if (k == skey) entry = &s;
     if (!entry) {
         std::string defs;
-        defs += "#define RTS_INST " + std::to_string(instanced ? kMaxInstances : 1) + "\n";
+        defs += "#define AIVERSE_INST " + std::to_string(instanced ? kMaxInstances : 1) + "\n";
         if (skinned) defs += "#define SKINNED 1\n";
         if (baked) defs += "#define BAKED 1\n";
         if (morph) defs += "#define MORPH 1\n";
         if (normalMap) defs += "#define NORMALMAP 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
-        defs += "#define RTS_Q " + std::to_string(int(matQuality_)) + "\n";
+        defs += "#define AIVERSE_Q " + std::to_string(int(matQuality_)) + "\n";
         const std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
-        const std::string fs = defs + (shadow ? shaders::kModelShadowFS : shaders::kModelFS);
-        const std::string msl = defs + (shadow ? shaders::kModelShadowMSL : shaders::kModelMSL);
+        std::string fs = defs + (shadow ? shaders::kModelShadowFS : shaders::kModelFS);
+        std::string msl = defs + (shadow ? shaders::kModelShadowMSL : shaders::kModelMSL);
+        if (graph) {
+            auto inject = [&](std::string& source, bool metal) {
+                auto replace = [&](const std::string& marker, const std::string& text) {
+                    size_t at = source.find(marker);
+                    if (at != std::string::npos) source.replace(at, marker.size(), text);
+                };
+                const std::string v = metal ? "float4" : "vec4";
+                std::string code = "\n#define SG_SAMPLE(uv) " + std::string(metal ? "tex1.sample(s1,uv)" : "texture(tex1,uv)") + "\n";
+                code += std::string(metal ? "float2 sg_uv = in.uv;" : "vec2 sg_uv = v_uv;") + v + " sg_input = base;\n";
+                code += graph::statements(*graph, metal) + "base = " + graph->outputs.at("color") + ";\n#undef SG_SAMPLE\n";
+                replace("// SG_COLOR", code);
+                std::string surface;
+                for (auto name : {"roughness", "metallic", "emission"}) {
+                    auto output = graph->outputs.find(name);
+                    if (output != graph->outputs.end()) surface += std::string(name == std::string("roughness") ? "rough" : name == std::string("emission") ? "emis" : "metallic") + " = " + output->second + (name == std::string("emission") ? ".rgb;\n" : ".r;\n");
+                }
+                replace("// SG_SURFACE", surface);
+            };
+            inject(fs, false); inject(msl, true);
+        }
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
         sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = shadow ? 9 : 13; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
@@ -106,7 +130,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
             modelError_ = "model shader (" + defs + "): " + dev_->lastError();
             std::fprintf(stderr, "%s\n", modelError_.c_str());
         }
-        modelShaders_.push_back({shaderKey, e});
+        modelShaders_.push_back({skey, e});
         entry = &modelShaders_.back().second;
     }
     gfx::PipelineHandle ph;
@@ -137,7 +161,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         ph = dev_->createPipeline(pd);
         if (!ph.valid()) modelError_ = "model pipeline: " + dev_->lastError();
     }
-    modelPipes_.push_back({pipeKey, ph});
+    modelPipes_.push_back({pkey, ph});
     return ph;
 }
 
@@ -351,4 +375,4 @@ void Renderer3D::renderModels(int phase) {
     }
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

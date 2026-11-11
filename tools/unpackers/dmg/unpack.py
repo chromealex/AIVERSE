@@ -13,7 +13,7 @@ from contextlib import contextmanager
 
 sys.dont_write_bytecode = True  # keep the plugin folder clean
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
-from rtsunpack import run, Entry, log  # noqa: E402
+from aiverseunpack import run, Entry, log  # noqa: E402
 
 
 def probe(path):

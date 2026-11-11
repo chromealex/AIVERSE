@@ -1,12 +1,12 @@
 // Build: everything about a build before it is made. Platform and configuration, quality
 // settings (pack compression, texture atlases, sound profile, split/download), an estimate of the
-// build size (rtsbuild --estimate: the real content pack, no app build), the heaviest files, and
+// build size (aiversebuild --estimate: the real content pack, no app build), the heaviest files, and
 // per-file settings: zstd level or store, image size per platform, leave a file out. Settings are
 // stored in game.json ("packaging", "atlas"), so builds from the command line and CI match.
 // Toolchains: for the selected platform the window checks in the background what the build needs
-// (rtsbuild --check-toolchain, tools/rtsbuild/Toolchains.h), shows what is found / missing and
-// installs it (rtsbuild --install-toolchain) through the same streamed runner as builds. A build
-// that stops with RTS_MISSING_TOOLCHAIN offers to install and rebuild.
+// (aiversebuild --check-toolchain, tools/aiversebuild/Toolchains.h), shows what is found / missing and
+// installs it (aiversebuild --install-toolchain) through the same streamed runner as builds. A build
+// that stops with AIVERSE_MISSING_TOOLCHAIN offers to install and rebuild.
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -27,7 +27,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 struct Target { const char* id; const char* name; const char* audio; double engineMB; double storeLimitMB; const char* storeNote; };
@@ -84,8 +84,8 @@ public:
         // "Устанавливать недостающее автоматически" is a preference of this user, not of the game
         if (!ImGui::GetCurrentContext()) return;
         ImGuiSettingsHandler h;
-        h.TypeName = "RtsBuild";
-        h.TypeHash = ImHashStr("RtsBuild");
+        h.TypeName = "AiverseBuild";
+        h.TypeHash = ImHashStr("AiverseBuild");
         h.UserData = this;
         h.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler* hh, const char* name) -> void* { return std::strcmp(name, "Prefs") == 0 ? hh->UserData : nullptr; };
         h.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler*, void* entry, const char* line) {
@@ -307,7 +307,7 @@ private:
         }
         const std::string tid = kTargets[target_].id;
         if (open && !checking_.valid() && !checks_.count(tid)) requestCheck(ed, tid);
-        // a run of rtsbuild finished: after an install re-check (and rebuild); after a build look for missing tools
+        // a run of aiversebuild finished: after an install re-check (and rebuild); after a build look for missing tools
         if (ws.runCount() == seenRuns_ || ws.building()) return;
         seenRuns_ = ws.runCount();
         const std::string label = ws.runLabel();
@@ -322,7 +322,7 @@ private:
         if (label.rfind("build-", 0) == 0 && ws.buildResult() != 0) {
             missing_.clear();
             std::string log = ws.buildLog();
-            for (size_t pos = 0; (pos = log.find("RTS_MISSING_TOOLCHAIN ", pos)) != std::string::npos;) {
+            for (size_t pos = 0; (pos = log.find("AIVERSE_MISSING_TOOLCHAIN ", pos)) != std::string::npos;) {
                 size_t e = log.find('\n', pos);
                 std::string line = log.substr(pos + 22, e == std::string::npos ? std::string::npos : e - pos - 22);
                 pos = e == std::string::npos ? log.size() : e;
@@ -393,7 +393,7 @@ private:
         ImGui::EndDisabled();
         ImGui::SameLine();
         if (ui::checkbox("Устанавливать недостающее автоматически", &autoInstall_)) ImGui::MarkIniSettingsDirty();
-        ui::help("«Собрать» сначала поставит то, чего не хватает (rtsbuild --install-missing), в папку ~/.rtsengine/toolchains — без прав администратора. "
+        ui::help("«Собрать» сначала поставит то, чего не хватает (aiversebuild --install-missing), в папку ~/.aiverse/toolchains — без прав администратора. "
                  "Удалить всё установленное: удалите эту папку.");
         for (auto& r : st["requirements"].items()) {
             if (r.getBool("found") || (!r.getBool("required") && r.getStr("id") != "ninja")) continue;
@@ -464,7 +464,7 @@ private:
             ImGui::TextWrapped("Сборка остановлена: на этом компьютере не хватает инструментов.");
             for (auto& [target, ids] : missing_) ImGui::BulletText("%s: %s", targetName(target).c_str(), ids.c_str());
             ImGui::Spacing();
-            ImGui::TextWrapped("Их можно установить автоматически в ~/.rtsengine/toolchains — без прав администратора и изменений в системе "
+            ImGui::TextWrapped("Их можно установить автоматически в ~/.aiverse/toolchains — без прав администратора и изменений в системе "
                                "(удалить: удалить эту папку). После установки сборка запустится снова.");
             ImGui::Spacing();
             auto install = [&](bool rebuild) {
@@ -801,6 +801,6 @@ private:
     int seenRuns_ = 0;
 };
 
-RTS_EDITOR_WINDOW(BuildWindow);
+AIVERSE_EDITOR_WINDOW(BuildWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

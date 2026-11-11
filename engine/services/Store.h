@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::store {
+namespace aiverse::store {
 
 enum class ProductType : uint8_t { Consumable, NonConsumable, Subscription };
 
@@ -66,4 +66,4 @@ void onPurchase(std::function<void(const Purchase&)> handler);
 
 ProductType typeOf(const std::string& productId); // from game.json; Consumable if unknown
 
-} // namespace rts::store
+} // namespace aiverse::store

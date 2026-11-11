@@ -13,7 +13,7 @@
 #include <filesystem>
 #include <iterator>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 // keys the structured part owns; everything else round-trips through `extra`
@@ -109,6 +109,7 @@ bool MapDoc::load(const std::string& file, std::string* err) {
 bool MapDoc::loadJson(const Json& j, std::string* err) {
     try {
         MapData d;
+        if(j["colliders"].isArray()&&j["spawns"].isArray())d.fps=j;
         d.name = j.getStr("name", "Untitled");
         d.w = std::clamp(int(j["size"][0].integer(64)), 4, game::kMaxMapSize);
         d.h = std::clamp(int(j["size"][1].integer(48)), 4, game::kMaxMapSize);
@@ -210,7 +211,7 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
         }
         d.extra = Json::object();
         for (auto& [k, v] : j.members()) if (!owned(k)) d.extra.set(k, v);
-        if (j["world"].isObject()) loadWorld(j["world"], d);
+        if (d.fps.isNull() && j["world"].isObject()) loadWorld(j["world"], d);
         data = std::move(d);
         dirty = false;
         ++revision;
@@ -224,6 +225,7 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
 
 Json MapDoc::toJson() const {
     const auto& d = data;
+    if(!d.fps.isNull())return d.fps;
     Json j = Json::object();
     j.set("name", Json::string(d.name));
     Json size = Json::array();
@@ -762,4 +764,4 @@ std::vector<Issue> MapDoc::validate(const game::Rules& rules, const Json& rulesJ
     return out;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

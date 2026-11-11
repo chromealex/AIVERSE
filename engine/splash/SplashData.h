@@ -1,5 +1,5 @@
 // Splash / loading screen: the game.json "splash" block and its timeline (CPU only, no GPU).
-// The client draws it through SplashScreen (engine/splash/SplashScreen.h); rtsbuild and the editor
+// The client draws it through SplashScreen (engine/splash/SplashScreen.h); aiversebuild and the editor
 // use the same evaluation for previews and for the native launch screens. Format: docs/game-format.md
 // "Icons and splash".
 //
@@ -24,7 +24,7 @@
 
 #include "engine/data/Json.h"
 
-namespace rts::splash {
+namespace aiverse::splash {
 
 struct Color {
     float r = 0, g = 0, b = 0, a = 1;
@@ -102,7 +102,7 @@ struct Spec {
 // Parses game.json["splash"]. Throws std::runtime_error with a readable message ("splash.logos[1]:
 // unknown fit 'x'"); warnings get non-fatal notes.
 Spec parseSpec(const Json& splash, std::vector<std::string>* warnings = nullptr);
-// The engine's default "splash" block (the RTSEngine mark), used when game.json has none;
+// The engine's default "splash" block (the AIVERSE mark), used when game.json has none;
 // "splash": false keeps the old behaviour (background colour only while loading).
 Json defaultBlock();
 
@@ -130,4 +130,4 @@ void layerState(const Layer& l, float local, float out[kPropCount]);
 // When the client may leave the splash: loading done, minimum time reached (or skipped).
 bool readyToLeave(const Spec& s, float elapsed, bool loaded, bool skipped);
 
-} // namespace rts::splash
+} // namespace aiverse::splash

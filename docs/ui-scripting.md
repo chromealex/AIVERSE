@@ -89,13 +89,13 @@ Game content is untrusted code (games are downloaded data): base (without `dofil
 Edit files with `game_file_read` / `game_file_write`, images with `asset_import`. Typical loop:
 `ui_api` → `ui_screen_create` → `game_file_write ui/screens/<name>.rml` → `ui_validate` → `ui_preview` → repeat.
 
-Client flags behind `ui_preview`: `RTSGame --ui-screen <name> [--ui-params json] [--ui-profile json] [--ui-lua code]`
-with `RTS_UI_SAVE_DIR` (scratch saves) and `RTS_UI_SAFE_AREA=l,t,r,b`.
+Client flags behind `ui_preview`: `AiverseGame --ui-screen <name> [--ui-params json] [--ui-profile json] [--ui-lua code]`
+with `AIVERSE_UI_SAVE_DIR` (scratch saves) and `AIVERSE_UI_SAFE_AREA=l,t,r,b`.
 
 ## Engine side
 
-- Lua 5.4.7: `third_party/lua` (target `rts_lua`, guarded so the engine-wide scripting module can own it).
-- RmlUi Lua plugin: `third_party/rmlui/Source/Lua` (`rts_rmlui_lua`), text-only chunk loading patched in.
+- Lua 5.4.7: `third_party/lua` (target `aiverse_lua`, guarded so the engine-wide scripting module can own it).
+- RmlUi Lua plugin: `third_party/rmlui/Source/Lua` (`aiverse_rmlui_lua`), text-only chunk loading patched in.
 - `engine/ui/UiLua.h`: `luaSandbox`, `luaRunFile`, `luaRunString`, `luaPushJson`, `luaToJson`;
   `UiLayer::attachLua(L)` after `init()`, before loading documents; the caller closes the state after `shutdown()`.
 - `apps/client/ClientScript.cpp`: the state (to be replaced by the engine's shared one), `game` / `storage` /
@@ -116,7 +116,7 @@ Implementation: `RtsInitialVars.h`, setup in `RtsModule`, local launch in `Clien
 fit the window): RmlUi asks for a clip mask there, and the renderer turns each mask into the scissor rectangle of its
 screen bounds (exact for rectangles under translate / scale; rotated or rounded masks clip to their bounding box,
 inverse masks do not clip). Note that absolutely positioned children do not extend a scroll container's scroll area:
-put the scrolled content in flow (`position: relative`). Test: `rts_ui_viewport_tests`.
+put the scrolled content in flow (`position: relative`). Test: `aiverse_ui_viewport_tests`.
 
 ## Font effects
 
@@ -131,7 +131,7 @@ effects allocate another atlas, bounded by the same 4096-pixel height limit as t
 base atlas. Oversized masks that cannot fit omit that effect glyph. This backend
 uses grayscale font masks; color-font/custom multicolor effects remain unsupported.
 
-`rts_ui_viewport_tests` includes checks for outline bounds, shadow offsets,
+`aiverse_ui_viewport_tests` includes checks for outline bounds, shadow offsets,
 back/base/front ordering, premultiplied opacity, handle/texture reuse, new-glyph
 invalidation, unchanged text width, and resource cleanup. macOS client screenshots
 verify ordinary and narrow-screen counters. Android, Windows and Web builds were

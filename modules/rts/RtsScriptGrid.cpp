@@ -5,7 +5,7 @@
 #include <limits>
 #include <queue>
 
-namespace rts::game::script {
+namespace aiverse::game::script {
 namespace {
 int gridPath(lua_State* L, Vm& vm) {
     int64_t width, height, start, goal, label = 0;

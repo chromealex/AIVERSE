@@ -7,7 +7,7 @@
 #include "modules/rts/view/WorldCounters.h"
 #include <cstdio>
 
-namespace rts::editor {
+namespace aiverse::editor {
 using client::UiAction;
 using i18n::Args;
 
@@ -31,8 +31,8 @@ void GameHud::init(Editor& ed) {
     const auto languages = i18n::readGameLanguages(ed.ws().project.manifest);
     i18n::loadGameLocalization(loc_, read, languages, i18n::chooseLanguage(languages, i18n::readSavedLanguage(platform::userDataDir())));
     if (!ui_.init(ed.device(), "fonts/ui.ttf", read)) return;
-    ui_.setOnScreenKeyboard(rts::ui::UiLayer::OnScreenKeyboard::Never);
-    ui_.setLinearBlending(rts::ui::parseUiBlend(ed.ws().project.manifest) == rts::ui::UiBlend::Linear);
+    ui_.setOnScreenKeyboard(aiverse::ui::UiLayer::OnScreenKeyboard::Never);
+    ui_.setLinearBlending(aiverse::ui::parseUiBlend(ed.ws().project.manifest) == aiverse::ui::UiBlend::Linear);
     ui_.setTranslator([this](const std::string& key) { return loc_.tr(key); });
     auto c = ui_.context()->CreateDataModel("game");
     client::bindUiState(c, bound_);
@@ -289,4 +289,4 @@ bool GameHud::finish(Editor& ed) {
     if(!request)return false;
     const int player=ed.humanSlot(); ed.stopPlay(); reset(); if(request==1)ed.startPlay(player); return true;
 }
-} // namespace rts::editor
+} // namespace aiverse::editor

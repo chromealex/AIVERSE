@@ -13,17 +13,17 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using Stage = NativeBuildUi::Stage;
 
-// started by a switch (--native-editor / RTS_NATIVE_EDITOR) or living in <project>/Builds/.temp/editor-*
+// started by a switch (--native-editor / AIVERSE_NATIVE_EDITOR) or living in <project>/Builds/.temp/editor-*
 bool Editor::projectBuild() const { return opt_.nativeChild || isProjectBuildExe(opt_.editorExe); }
 
 void Editor::refreshNativeBuild(bool withTools) {
     auto& n = native_;
     if (withTools) {
-        n.tools = findNativeTools(ws_);   // rtsbuild --check-toolchain: about a second
+        n.tools = findNativeTools(ws_);   // aiversebuild --check-toolchain: about a second
         n.plan = nativePlanFor(ws_, n.tools);
     }
     n.existing = findNativeBuilt(ws_);
@@ -85,7 +85,7 @@ void Editor::restartIntoNativeBuild() {
         return;
     }
     if (playing()) stopPlay();
-    // rtsbuild / rtsmcp / RTSGame stay those of this (regular) build: the project build has only the editor
+    // aiversebuild / aiversemcp / AiverseGame stay those of this (regular) build: the project build has only the editor
     std::string tools;
     if (fs::path bt(opt_.buildTool); bt.is_absolute() && fs::exists(bt, ec)) tools = bt.parent_path().string();
     const std::string arg = ws_.project.file.empty() ? ws_.project.dir : ws_.project.file;
@@ -255,4 +255,4 @@ void Editor::drawNativeBuild() {
     ImGui::End();
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

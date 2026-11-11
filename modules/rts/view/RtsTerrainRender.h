@@ -13,7 +13,7 @@
 // Materials: optional visual `terrain` block (rules.json, game.json wins per key) with up to four
 // tiling splat layers per cell kind, a cliff texture and the water look; see docs/game-format.md
 // ("Terrain materials"). Quality: Renderer3D::materialQuality() - Low = vertex colours, Medium =
-// splat, High = splat + normal maps + triplanar cliffs (RTS_TERRAIN=low|medium|high overrides).
+// splat, High = splat + normal maps + triplanar cliffs (AIVERSE_TERRAIN=low|medium|high overrides).
 // Without layers, Medium/High add filtered world-space grain; High also adds micro normals.
 // Low retains the classic vertex colours (docs/terrain-textures.md).
 #pragma once
@@ -27,7 +27,7 @@
 #include "../RtsMap.h"
 #include "RtsTerrainDetail.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct TerrainLook {
     struct Layer { std::string id, texture, normal; float scale = 4; render::float3 tint{1, 1, 1}; };
@@ -179,4 +179,4 @@ private:
     size_t geoBytes_ = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

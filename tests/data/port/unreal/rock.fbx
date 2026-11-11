@@ -1,12 +1,12 @@
 ; FBX 7.4.0 project file
-; Hand-written test asset for RTSEngine (CC0): a 1 x 2 x 1 m box (units: cm) with two
+; Hand-written test asset for AIVERSE (CC0): a 1 x 2 x 1 m box (units: cm) with two
 ; materials, a two-bone skin (Root, Top) and a one-second animation "Bend".
 ; ----------------------------------------------------
 
 FBXHeaderExtension:  {
 	FBXHeaderVersion: 1003
 	FBXVersion: 7400
-	Creator: "RTSEngine hand-written test"
+	Creator: "AIVERSE hand-written test"
 }
 GlobalSettings:  {
 	Version: 1000

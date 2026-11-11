@@ -1,5 +1,5 @@
-// Terrain shader (RtsTerrainRender): the lit shader of Shaders.h (sun + soft shadows RTS_*_SHADOW +
-// point lights / clouds RTS_*_LIGHTS + fog + ACES) with terrain-only inputs. Three quality tiers,
+// Terrain shader (RtsTerrainRender): the lit shader of Shaders.h (sun + soft shadows AIVERSE_*_SHADOW +
+// point lights / clouds AIVERSE_*_LIGHTS + fog + ACES) with terrain-only inputs. Three quality tiers,
 // selected by prepending "#define TERRAIN_TIER n" (GLSL after the backend's #version line, MSL
 // before the includes):
 //   0 Low     vertex colours only - exactly the classic look (weak Mali / Adreno / PowerVR)
@@ -26,13 +26,13 @@
 #pragma once
 #include "../../../engine/render/Shaders.h"
 
-namespace rts::game::shaders {
+namespace aiverse::game::shaders {
 
-#define RTS_TERRAIN_GLSL_U0 \
+#define AIVERSE_TERRAIN_GLSL_U0 \
     "layout(std140) uniform U0 { vec4 t_lod; vec4 t_mode; vec4 t_scale; vec4 t_cliff; vec4 t_fog; vec4 t_tint[4]; vec4 t_cliffTint; vec4 t_fogColor; vec4 t_fogGrid; vec4 t_detail; vec4 t_rock; vec4 t_blend; };\n"
 
 inline const char* kTerrainVS =
-    RTS_TERRAIN_GLSL_U0 RTS_GLSL_FRAME
+    AIVERSE_TERRAIN_GLSL_U0 AIVERSE_GLSL_FRAME
     R"(
 uniform highp sampler2D tex2;
 uniform highp sampler2D tex3;
@@ -80,7 +80,7 @@ void main() {
 )";
 
 inline const char* kTerrainFS =
-    RTS_TERRAIN_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS RTS_GLSL_TRACE_AT("tex18")
+    AIVERSE_TERRAIN_GLSL_U0 AIVERSE_GLSL_FRAME AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS AIVERSE_GLSL_TRACE_AT("tex18")
     R"(
 uniform sampler2D tex4;
 uniform sampler2D tex5;
@@ -289,7 +289,7 @@ void main() {
                 float g = t_fogGrid.a * (1.0 - smoothstep(0.015, 0.05, min(min(fw.x, 1.0 - fw.x), min(fw.y, 1.0 - fw.y))));
                 fc = mix(fc, t_fogGrid.rgb, g / max(a + g, 0.001)); a = max(a, g);
             }
-            outc = mix(outc, RTS_HDR != 0 ? rtsSrgbDecode(fc) : fc, a);
+            outc = mix(outc, AIVERSE_HDR != 0 ? rtsSrgbDecode(fc) : fc, a);
         }
     }
     o_color = vec4(outc, 1.0);
@@ -299,7 +299,7 @@ void main() {
 inline const char* kTerrainMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "struct TU0 { float4 lod; float4 mode; float4 scale; float4 cliff; float4 fog; float4 tint[4]; float4 cliffTint; float4 fogColor; float4 fogGrid; float4 detail; float4 rock; float4 blend; };\n"
-    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE
+    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE
     R"(
 
 #if TERRAIN_TIER >= 1
@@ -537,11 +537,11 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
                 float g = u.fogGrid.a * (1.0 - smoothstep(0.015, 0.05, min(min(fw.x, 1.0 - fw.x), min(fw.y, 1.0 - fw.y))));
                 fc = mix(fc, u.fogGrid.rgb, g / max(a + g, 0.001)); a = max(a, g);
             }
-            outc = mix(outc, RTS_HDR != 0 ? rtsSrgbDecode(fc) : fc, a);
+            outc = mix(outc, AIVERSE_HDR != 0 ? rtsSrgbDecode(fc) : fc, a);
         }
     }
     return float4(outc, 1.0);
 }
 )";
 
-} // namespace rts::game::shaders
+} // namespace aiverse::game::shaders

@@ -12,10 +12,10 @@
 #include "modules/rts/RtsAI.h"
 #include "modules/rts/RtsModule.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
-using namespace rts::game;
+using namespace aiverse::game;
 
 Json num(double v, int dec = 2) { return Json::number(v, dec); }
 Json inum(int64_t v) { return Json::number(v); }
@@ -441,4 +441,4 @@ void registerBalanceOps(Workspace& ws) {
         [&ws](const Json& p) { return stats(ws, p); }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

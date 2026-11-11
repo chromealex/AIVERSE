@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-namespace rts::bench {
+namespace aiverse::bench {
 using namespace render;
 struct SceneAsset {
     std::unique_ptr<Model> model;

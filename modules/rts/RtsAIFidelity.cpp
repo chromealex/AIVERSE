@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace rts::game {
+namespace aiverse::game {
 
 void RtsAI::fidelity(Simulation& sim, RtsModule& m) {
     World& w = sim.world();
@@ -58,4 +58,4 @@ void RtsAI::fidelity(Simulation& sim, RtsModule& m) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

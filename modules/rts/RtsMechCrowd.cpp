@@ -5,7 +5,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 void RtsModule::mechSeparation(Simulation& sim, const std::vector<Fixed>& weight, const std::vector<uint8_t>& anchored, Fixed deadZone, size_t,
@@ -79,4 +79,4 @@ void RtsModule::mechSeparation(Simulation& sim, const std::vector<Fixed>& weight
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

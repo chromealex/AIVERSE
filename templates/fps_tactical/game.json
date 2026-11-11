@@ -1,0 +1,24 @@
+{
+  "id": "fps_tactical",
+  "name": "Breach Protocol",
+  "description": "Tactical rounds: buy weapons, plant and defuse the bomb.",
+  "module": "fps",
+  "genre": "fps",
+  "version": "0.1.0",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/start.json",
+      "title": "Crossfire Arena"
+    }
+  ],
+  "network": {
+    "architecture": "authoritative",
+    "transport": "udp",
+    "port": 27100
+  },
+  "window": {
+    "width": 1280,
+    "height": 720
+  }
+}

@@ -17,7 +17,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 
@@ -496,4 +496,4 @@ std::string sizeReport(const WriteStats& st, size_t top) {
     return o.str();
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

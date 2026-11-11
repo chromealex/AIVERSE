@@ -8,12 +8,12 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 McpServerSpec editorMcpSpec(Editor& ed) {
     McpServerSpec s;
     s.command = ed.options().mcpTool;
-    if (s.command.empty()) s.command = (fs::path(ed.options().buildTool).parent_path() / "rtsmcp").string();
+    if (s.command.empty()) s.command = (fs::path(ed.options().buildTool).parent_path() / "aiversemcp").string();
     s.args = {"--engine", ed.options().engineDir, "--port", std::to_string(ed.mcpPort())};
     if (!ed.options().editorExe.empty()) { s.args.push_back("--editor"); s.args.push_back(ed.options().editorExe); }
     return s;
@@ -36,7 +36,7 @@ static void run(Editor& ed, McpConnectState& st, const McpClientInfo& c, bool re
     std::string err;
     const bool ok = remove ? mcpUninstall(c.id, sp, ed.options().engineDir, &err) : mcpInstall(c.id, sp, ed.options().engineDir, &err);
     st.messageError = !ok;
-    st.message = ok ? (remove ? c.name + ": отключено" : c.name + ": подключено. Если клиент открыт — перезапустите его, инструменты rtsengine появятся в списке.") : err;
+    st.message = ok ? (remove ? c.name + ": отключено" : c.name + ": подключено. Если клиент открыт — перезапустите его, инструменты aiverse появятся в списке.") : err;
     ed.ws().log("editor", ok ? st.message : "MCP " + c.name + ": " + err, !ok);
     st.clients.clear();
 }
@@ -61,7 +61,7 @@ void drawMcpConnect(Editor& ed, McpConnectState& st) {
             ImGui::TableNextColumn();
             ImGui::AlignTextToFramePadding();
             if (c.upToDate) ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.5f, 1), ICON_CHECK " подключено");
-            else if (c.installed) { ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.3f, 1), "обновите"); if (ImGui::IsItemHovered()) ImGui::SetTooltip("Записан старый путь к rtsmcp"); }
+            else if (c.installed) { ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.3f, 1), "обновите"); if (ImGui::IsItemHovered()) ImGui::SetTooltip("Записан старый путь к aiversemcp"); }
             else if (c.present) ImGui::TextDisabled("найден");
             else ImGui::TextDisabled("не установлен");
             ImGui::TableNextColumn();
@@ -86,7 +86,7 @@ void drawMcpConnect(Editor& ed, McpConnectState& st) {
         ImGui::TextColored(st.messageError ? ImVec4(1, 0.5f, 0.4f, 1) : ImVec4(0.4f, 0.85f, 0.5f, 1), "%s", st.message.c_str());
         ImGui::PopTextWrapPos();
     }
-    std::string cmd = "claude mcp add rtsengine -- \"" + sp.command + "\"";
+    std::string cmd = "claude mcp add aiverse -- \"" + sp.command + "\"";
     for (auto& a : sp.args) cmd += " \"" + a + "\"";
     ImGui::TextDisabled("Вручную:");
     ImGui::SameLine();
@@ -94,4 +94,4 @@ void drawMcpConnect(Editor& ed, McpConnectState& st) {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", cmd.c_str());
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

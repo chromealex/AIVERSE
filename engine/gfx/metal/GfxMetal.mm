@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::gfx {
+namespace aiverse::gfx {
 namespace {
 
 constexpr int kFramesInFlight = 3;
@@ -548,4 +548,4 @@ std::unique_ptr<Device> createMetalDevice(void* nativeSurface) {
     return std::make_unique<MetalDevice>((__bridge CAMetalLayer*)nativeSurface);
 }
 
-} // namespace rts::gfx
+} // namespace aiverse::gfx

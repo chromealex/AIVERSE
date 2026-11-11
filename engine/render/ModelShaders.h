@@ -1,16 +1,16 @@
 // Model shaders (GLSL ES 3.00 + MSL), compiled as permutations: the renderer prepends
-//   #define RTS_INST n    instances per draw (1, or 32 for instanced batches)
+//   #define AIVERSE_INST n    instances per draw (1, or 32 for instanced batches)
 //   #define SKINNED      GPU skinning from a joint palette in U3 (80 joints, 4 influences)
 //   #define BAKED        GPU skinning from baked clips: joint matrices in tex7, rows per instance
 //   #define MORPH        morph targets: deltas in tex8, weights in U4
 //   #define NORMALMAP    tangent-space normal map (tex3) with vertex tangents
 //   #define ALPHAMASK    alpha test against the material cutoff
 //   #define OUTLINE      selection outline: hull extruded along normals, flat colour
-//   #define RTS_Q 0|1|2  material quality: 0 Blinn-Phong, factors only (weak GPUs)
+//   #define AIVERSE_Q 0|1|2  material quality: 0 Blinn-Phong, factors only (weak GPUs)
 //                        1 GGX + metallic-roughness / emissive textures + normal maps
 //                        2 + occlusion texture
 // Uniforms (std140 / MSL layouts match):
-//   U0 per draw:  Inst inst[RTS_INST]: mat4 model; vec4 tint (rgb multiply, a opacity);
+//   U0 per draw:  Inst inst[AIVERSE_INST]: mat4 model; vec4 tint (rgb multiply, a opacity);
 //                 vec4 team (rgb team colour / outline colour, a hit flash);
 //                 vec4 draw (x receive shadow, y dissolve 0..1, z outline width, w team glow: emission = team * w
 //                 on team-coloured surfaces);
@@ -32,13 +32,13 @@
 #pragma once
 #include "Shaders.h"
 
-namespace rts::render::shaders {
+namespace aiverse::render::shaders {
 
-#define RTS_GLSL_MODEL_BLOCKS \
-    "#if !defined(RTS_INST)\n#define RTS_INST 1\n#endif\n" \
+#define AIVERSE_GLSL_MODEL_BLOCKS \
+    "#if !defined(AIVERSE_INST)\n#define AIVERSE_INST 1\n#endif\n" \
     "struct Inst { mat4 model; vec4 tint; vec4 team; vec4 draw; vec4 anim; };\n" \
-    "layout(std140) uniform U0 { Inst u_inst[RTS_INST]; };\n" \
-    RTS_GLSL_FRAME \
+    "layout(std140) uniform U0 { Inst u_inst[AIVERSE_INST]; };\n" \
+    AIVERSE_GLSL_FRAME \
     "layout(std140) uniform U2 { vec4 m_base; vec4 m_emissive; vec4 m_pbr; vec4 m_misc; vec4 m_uv0; vec4 m_uv1; vec4 m_light; };\n" \
     "#if defined(SKINNED)\n" \
     "layout(std140) uniform U3 { vec4 u_joints[240]; };\n" \
@@ -50,7 +50,7 @@ namespace rts::render::shaders {
     "#endif\n"
 
 // Vertex deformation shared by the colour and shadow vertex shaders: morph, then skin.
-#define RTS_GLSL_MODEL_DEFORM \
+#define AIVERSE_GLSL_MODEL_DEFORM \
     "#if defined(BAKED)\n" \
     "uniform highp sampler2D tex7;\n" \
     "vec4 boneRow(int row, int joint, int r) { return texelFetch(tex7, ivec2(joint * 3 + r, row), 0); }\n" \
@@ -98,7 +98,7 @@ namespace rts::render::shaders {
     "    return vec2(c * uv.x + s * uv.y, -s * uv.x + c * uv.y) + m_uv0.xy;\n" \
     "}\n"
 
-#define RTS_GLSL_MODEL_ATTRIBS \
+#define AIVERSE_GLSL_MODEL_ATTRIBS \
     "layout(location = 0) in vec3 a_pos;\n" \
     "layout(location = 1) in vec3 a_nrm;\n" \
     "layout(location = 2) in vec2 a_uv;\n" \
@@ -108,12 +108,12 @@ namespace rts::render::shaders {
     "layout(location = 5) in vec4 a_joints;\n" \
     "layout(location = 6) in vec4 a_weights;\n" \
     "#endif\n" \
-    "#if RTS_INST > 1\n#define INSTANCE u_inst[gl_InstanceID]\n#else\n#define INSTANCE u_inst[0]\n#endif\n"
+    "#if AIVERSE_INST > 1\n#define INSTANCE u_inst[gl_InstanceID]\n#else\n#define INSTANCE u_inst[0]\n#endif\n"
 
 // ---------------------------------------------------------------- GLSL
 
 inline const char* kModelVS =
-    RTS_GLSL_MODEL_BLOCKS RTS_GLSL_MODEL_ATTRIBS RTS_GLSL_MODEL_DEFORM
+    AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_MODEL_ATTRIBS AIVERSE_GLSL_MODEL_DEFORM
     R"(
 out vec3 v_wpos;
 out vec3 v_opos;
@@ -149,7 +149,7 @@ void main() {
 )";
 
 inline const char* kModelFS =
-    "#define RTS_MODEL_SSR 1\n" RTS_GLSL_MODEL_BLOCKS RTS_GLSL_SHADOW RTS_GLSL_LIGHTS_AT("U5", "tex9") RTS_GLSL_TRACE_AT("tex10") RTS_GLSL_SSR_AT("tex11", "tex12")
+    "#define AIVERSE_MODEL_SSR 1\n" AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS_AT("U5", "tex9") AIVERSE_GLSL_TRACE_AT("tex10") AIVERSE_GLSL_SSR_AT("tex11", "tex12")
     R"(
 uniform mediump sampler2D tex1;
 uniform mediump sampler2D tex2;
@@ -168,7 +168,7 @@ flat in vec4 v_team;
 flat in vec4 v_draw;
 out vec4 o_color;
 
-vec3 toLinear(vec3 c) { return RTS_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
+vec3 toLinear(vec3 c) { return AIVERSE_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
 vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -205,6 +205,7 @@ void main() {
         teamW = clamp(m * m_misc.z, 0.0, 1.0);
         base.rgb = mix(base.rgb, v_team.rgb * k, teamW);
     }
+    // SG_COLOR
     base.rgb *= v_tint.rgb;
 #if defined(ALPHAMASK)
     if (base.a < m_misc.x) discard;
@@ -212,7 +213,7 @@ void main() {
 #endif
     vec3 n = normalize(v_nrm);
     if (!gl_FrontFacing) n = -n;
-#if defined(NORMALMAP) && RTS_Q >= 1
+#if defined(NORMALMAP) && AIVERSE_Q >= 1
     {
         vec3 t = normalize(v_tan.xyz - n * dot(n, v_tan.xyz));
         vec3 b = cross(n, t) * v_tan.w;
@@ -223,15 +224,16 @@ void main() {
 #endif
     float metallic = m_pbr.x, rough = m_pbr.y, ao = 1.0;
     vec3 emis = m_emissive.rgb;
-#if RTS_Q >= 1
+#if AIVERSE_Q >= 1
     vec4 mr = texture(tex2, v_uv);
     rough *= mr.g;
     metallic *= mr.b;
     emis *= toLinear(texture(tex5, v_uv).rgb);
 #endif
-#if RTS_Q >= 2
+#if AIVERSE_Q >= 2
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
 #endif
+    // SG_SURFACE
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -248,7 +250,7 @@ void main() {
     vec3 F0 = mix(vec3(0.04), base.rgb, metallic);
     vec3 H = normalize(L + V);
     float ndh = max(dot(n, H), 0.0);
-#if RTS_Q == 0
+#if AIVERSE_Q == 0
     float a2 = rough * rough * rough * rough;
     float e = clamp(2.0 / a2 - 2.0, 1.0, 512.0);
     vec3 spec = F0 * pow(ndh, e) * (e + 8.0) * 0.125 * ndl;
@@ -270,7 +272,7 @@ void main() {
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     vec3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
-#if RTS_HDR && RTS_Q > 0
+#if AIVERSE_HDR && AIVERSE_Q > 0
     if (u_trace2.w > 1.5 && m_uv1.y < 0.5 && rough < 0.8) {
         float hit; vec3 reflected = ssrWater(v_wpos + n * 0.02, n, V, hit);
         vec3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndv, 5.0);
@@ -284,13 +286,13 @@ void main() {
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
     col = rtsToneScene(col, u_skyColor.w > 0.5);
-    o_color = vec4(RTS_HDR != 0 ? col : (u_groundColor.w > 1.5 ? toSrgb(col) : sqrt(col)), base.a * v_tint.a);
+    o_color = vec4(AIVERSE_HDR != 0 ? col : (u_groundColor.w > 1.5 ? toSrgb(col) : sqrt(col)), base.a * v_tint.a);
 #endif
 }
 )";
 
 inline const char* kModelShadowVS =
-    RTS_GLSL_MODEL_BLOCKS RTS_GLSL_MODEL_ATTRIBS RTS_GLSL_MODEL_DEFORM
+    AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_MODEL_ATTRIBS AIVERSE_GLSL_MODEL_DEFORM
     R"(
 out vec2 v_uv;
 void main() {
@@ -304,31 +306,33 @@ void main() {
 )";
 
 inline const char* kModelShadowFS =
-    RTS_GLSL_MODEL_BLOCKS
+    AIVERSE_GLSL_MODEL_BLOCKS
     R"(
 uniform mediump sampler2D tex1;
 in vec2 v_uv;
 void main() {
 #if defined(ALPHAMASK)
-    if (m_base.a * texture(tex1, v_uv).a < m_misc.x) discard;
+    vec4 base = m_base * texture(tex1, v_uv);
+    // SG_COLOR
+    if (base.a < m_misc.x) discard;
 #endif
 }
 )";
 
 // ---------------------------------------------------------------- MSL
 
-#define RTS_MSL_MODEL_BLOCKS \
+#define AIVERSE_MSL_MODEL_BLOCKS \
     "#include <metal_stdlib>\nusing namespace metal;\n" \
-    "#if !defined(RTS_INST)\n#define RTS_INST 1\n#endif\n" \
+    "#if !defined(AIVERSE_INST)\n#define AIVERSE_INST 1\n#endif\n" \
     "struct Inst { float4x4 model; float4 tint; float4 team; float4 draw; float4 anim; };\n" \
-    "struct MU0 { Inst inst[RTS_INST]; };\n" \
-    RTS_MSL_FRAME \
+    "struct MU0 { Inst inst[AIVERSE_INST]; };\n" \
+    AIVERSE_MSL_FRAME \
     "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; float4 light; };\n" \
     "struct MU3 { float4 v[240]; };\n" \
     "struct MU4 { float4 w[2]; float4 info; float4 info2; };\n"
 
 // Vertex inputs, argument list and deformation shared by the colour and shadow vertex functions.
-#define RTS_MSL_MODEL_VERTEX \
+#define AIVERSE_MSL_MODEL_VERTEX \
     "struct VIn {\n" \
     "    float3 pos [[attribute(0)]];\n" \
     "    float3 nrm [[attribute(1)]];\n" \
@@ -394,10 +398,10 @@ void main() {
     "    float2 uv = uv0 * m.uv0.zw;\n" \
     "    return float2(c * uv.x + s * uv.y, -s * uv.x + c * uv.y) + m.uv0.xy;\n" \
     "}\n" \
-    "#if RTS_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n"
+    "#if AIVERSE_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n"
 
 inline const char* kModelMSL =
-    "#define RTS_MODEL_SSR 1\n" RTS_MSL_MODEL_BLOCKS RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE RTS_MSL_SSR RTS_MSL_MODEL_VERTEX
+    "#define AIVERSE_MODEL_SSR 1\n" AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_SSR AIVERSE_MSL_MODEL_VERTEX
     R"(
 struct VOut {
     float4 pos [[position]];
@@ -427,7 +431,7 @@ vertex VOut vs_main(VERTEX_ARGS) {
     return o;
 }
 
-static float3 toLinear(float3 c) { return RTS_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
+static float3 toLinear(float3 c) { return AIVERSE_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
 static float3 toSrgb(float3 c) { return mix(c * 12.92, 1.055 * pow(c, float3(1.0 / 2.4)) - 0.055, step(float3(0.0031308), c)); }
 static float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 static float hash3(float3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -476,6 +480,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
         teamW = clamp(tm * m.misc.z, 0.0, 1.0);
         base.rgb = mix(base.rgb, in.team.rgb * k, teamW);
     }
+    // SG_COLOR
     base.rgb *= in.tint.rgb;
 #if defined(ALPHAMASK)
     if (base.a < m.misc.x) discard_fragment();
@@ -483,7 +488,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
     float3 n = normalize(in.nrm);
     if (!frontFacing) n = -n;
-#if defined(NORMALMAP) && RTS_Q >= 1
+#if defined(NORMALMAP) && AIVERSE_Q >= 1
     {
         float3 t = normalize(in.tan.xyz - n * dot(n, in.tan.xyz));
         float3 b = cross(n, t) * in.tan.w;
@@ -494,15 +499,16 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
     float metallic = m.pbr.x, rough = m.pbr.y, ao = 1.0;
     float3 emis = m.emissive.rgb;
-#if RTS_Q >= 1
+#if AIVERSE_Q >= 1
     float4 mr = tex2.sample(s2, in.uv);
     rough *= mr.g;
     metallic *= mr.b;
     emis *= toLinear(tex5.sample(s5, in.uv).rgb);
 #endif
-#if RTS_Q >= 2
+#if AIVERSE_Q >= 2
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
 #endif
+    // SG_SURFACE
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -519,7 +525,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 F0 = mix(float3(0.04), base.rgb, metallic);
     float3 H = normalize(L + V);
     float ndh = max(dot(n, H), 0.0);
-#if RTS_Q == 0
+#if AIVERSE_Q == 0
     float a2 = rough * rough * rough * rough;
     float e = clamp(2.0 / a2 - 2.0, 1.0, 512.0);
     float3 spec = F0 * pow(ndh, e) * (e + 8.0) * 0.125 * ndl;
@@ -541,7 +547,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     float3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
-#if RTS_HDR && RTS_Q > 0
+#if AIVERSE_HDR && AIVERSE_Q > 0
     if (f.trace2.w > 1.5 && m.uv1.y < 0.5 && rough < 0.8) {
         float hit; float3 reflected = ssrWater(f, tex11, s11, tex12, s12, in.wpos + n * 0.02, n, V, hit);
         float3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndv, 5.0);
@@ -555,13 +561,13 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
     col = rtsToneScene(col, f.skyColor.w > 0.5);
-    return float4(RTS_HDR != 0 ? col : (f.groundColor.w > 1.5 ? toSrgb(col) : sqrt(col)), base.a * in.tint.a);
+    return float4(AIVERSE_HDR != 0 ? col : (f.groundColor.w > 1.5 ? toSrgb(col) : sqrt(col)), base.a * in.tint.a);
 #endif
 }
 )";
 
 inline const char* kModelShadowMSL =
-    RTS_MSL_MODEL_BLOCKS RTS_MSL_MODEL_VERTEX
+    AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_MODEL_VERTEX
     R"(
 struct VOut { float4 pos [[position]]; float2 uv; };
 vertex VOut vs_main(VERTEX_ARGS) {
@@ -575,9 +581,11 @@ vertex VOut vs_main(VERTEX_ARGS) {
 #if defined(ALPHAMASK)
 fragment void fs_main(VOut in [[stage_in]], constant MU2& m [[buffer(3)]],
                       texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]]) {
-    if (m.base.a * tex1.sample(s1, in.uv).a < m.misc.x) discard_fragment();
+    float4 base = m.base * tex1.sample(s1, in.uv);
+    // SG_COLOR
+    if (base.a < m.misc.x) discard_fragment();
 }
 #endif
 )";
 
-} // namespace rts::render::shaders
+} // namespace aiverse::render::shaders

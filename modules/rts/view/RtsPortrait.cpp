@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -147,4 +147,4 @@ void Portrait::render(RtsView& view, uint16_t type, uint8_t owner, double time, 
     dev_->endPass();
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -1,0 +1,5 @@
+{
+  "weekly_wins": {"update": "sum", "rank": "competition", "ascending": false, "season": {"start": 345600, "period": 604800}},
+  "best_time": {"update": "best", "rank": "dense", "ascending": true, "minimum": 1, "maximum": 1000000000},
+  "rating": {"update": "latest", "rank": "ordinal", "minimum": 0, "maximum": 100000}
+}

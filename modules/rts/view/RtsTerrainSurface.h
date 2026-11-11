@@ -16,7 +16,7 @@
 #include <utility>
 #include "../RtsMap.h"
 
-namespace rts::game::terrain {
+namespace aiverse::game::terrain {
 
 constexpr float kHeightUnit = 1.0f / 16.0f;
 
@@ -113,4 +113,4 @@ inline float heightAt(const MapGrid& g, float lh, float x, float z) {
     return g.hasCorners() ? cornerSurface(g, x, z) : levelsSurface(g, lh, x, z);
 }
 
-} // namespace rts::game::terrain
+} // namespace aiverse::game::terrain

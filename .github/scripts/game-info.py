@@ -2,7 +2,7 @@
 """Prints a game's packaging info as KEY=value lines (append to $GITHUB_OUTPUT in CI).
 
 Usage: game-info.py templates/skirmish
-Mirrors tools/rtsbuild: game.json may contain comments; EXE is rtsbuild's sanitize(name).
+Mirrors tools/aiversebuild: game.json may contain comments; EXE is aiversebuild's sanitize(name).
 """
 import json, re, sys
 from pathlib import Path
@@ -34,7 +34,7 @@ def strip_comments(text):
     return "".join(out)
 
 
-def sanitize(name):  # same as rtsbuild: every non-alphanumeric *byte* becomes '_', runs collapse
+def sanitize(name):  # same as aiversebuild: every non-alphanumeric *byte* becomes '_', runs collapse
     b = name.encode("utf-8")
     s = "".join(chr(x) if chr(x).isascii() and chr(x).isalnum() else "_" for x in b)
     s = re.sub("_+", "_", s)
@@ -44,6 +44,7 @@ def sanitize(name):  # same as rtsbuild: every non-alphanumeric *byte* becomes '
 game = json.loads(strip_comments((Path(sys.argv[1]) / "game.json").read_text(encoding="utf-8")))
 name = game.get("name", "Game")
 info = {
+    "MODULE": game.get("module", "rts"),
     "NAME": name,
     "ID": game.get("id", "com.example.game"),
     "VERSION": game.get("version", "0.1.0"),

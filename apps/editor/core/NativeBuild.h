@@ -15,7 +15,7 @@
 
 #include "engine/data/Json.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 std::string nativeHost();                                    // "linux" | "macos" | "windows"
 
@@ -36,7 +36,7 @@ struct NativeBuildPlan {
     std::string headlessBinary;
 };
 
-// <project>/Builds/.temp: hidden intermediates of every build of the project (rtsbuild's _build, _pack, ...
+// <project>/Builds/.temp: hidden intermediates of every build of the project (aiversebuild's _build, _pack, ...
 // and the per-project editor); Builds/ itself holds only final builds.
 std::string projectBuildsTempDir(const std::string& projectDir);
 // <project>/Builds/.temp/editor-<host>: the whole CMake tree of the per-project editor
@@ -47,7 +47,7 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
                                 const std::string& cmake, const std::string& ninja, bool cacheExists, int jobs);
 // One shell line: configure && build (stdout + stderr merged by the runner).
 std::string nativeBuildCommand(const NativeBuildPlan& plan);
-// Parallel jobs for the build: RTS_NATIVE_BUILD_JOBS, else half the cores (linking the editor is memory hungry).
+// Parallel jobs for the build: AIVERSE_NATIVE_BUILD_JOBS, else half the cores (linking the editor is memory hungry).
 int nativeBuildJobs();
 
 // The build dir must not end up in the engine repository: outside the engine tree, or inside it
@@ -76,12 +76,12 @@ enum class NativeOpenAction { None, Switch, Offer };
 NativeOpenAction nativeOpenAction(bool modulesMissing, bool buildReady, bool nativeChild);
 
 // Shell line that starts the built editor detached on `projectArg` (.rtsproj or folder). toolsDir:
-// where rtsbuild / rtsmcp / RTSGame of the regular build are (the project build has only the editor).
-// The child gets --native-editor (and RTS_NATIVE_EDITOR=1 where the shell can set it): it never switches again.
+// where aiversebuild / aiversemcp / AiverseGame of the regular build are (the project build has only the editor).
+// The child gets --native-editor (and AIVERSE_NATIVE_EDITOR=1 where the shell can set it): it never switches again.
 std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg, const std::string& toolsDir);
 
 // The executable is a per-project build (<...>/Builds/.temp/editor-*/...): it must not take over the .rtsproj
 // file association of the regular editor.
 bool isProjectBuildExe(const std::string& exe);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

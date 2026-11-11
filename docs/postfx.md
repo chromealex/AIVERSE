@@ -61,7 +61,7 @@ nightVision, clean.
 
 `PostFxQuality` off / low / medium / high: weak Android GPUs (Mali-4xx/T, Adreno 3xx/4xx/50x,
 PowerVR SGX/GE) and software GL get **low**, other phones **medium**, desktops **high**;
-`RTS_POSTFX=off|low|medium|high` overrides. When the adaptive governor (`QualityGovernor`) steps
+`AIVERSE_POSTFX=off|low|medium|high` overrides. When the adaptive governor (`QualityGovernor`) steps
 shadows / lights down, post effects go down one tier per step (never below low). Heavy effects run
 cheaper plans on lower tiers (`bloomPlan`, `tiltBlurPlan`, `shaftsPlan`: smaller targets, fewer
 levels / samples).

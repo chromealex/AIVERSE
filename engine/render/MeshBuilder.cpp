@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 constexpr float kPi = 3.14159265358979f;
@@ -138,4 +138,4 @@ Mesh MeshBuilder::upload(gfx::Device& dev) const {
     return m;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

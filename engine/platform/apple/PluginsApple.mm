@@ -1,5 +1,5 @@
-// Plugin backend for iOS and macOS: classes from Info.plist "RTSPlugins", called on the main thread.
-#import "RTSPlugin.h"
+// Plugin backend for iOS and macOS: classes from Info.plist "AiversePlugins", called on the main thread.
+#import "AiversePlugin.h"
 #include "../Plugins.h"
 
 #include <TargetConditionals.h>
@@ -9,7 +9,7 @@
 
 #include <string>
 
-@interface RTSPluginReply ()
+@interface AiversePluginReply ()
 - (instancetype)initWithCallId:(uint64_t)callId;
 @end
 
@@ -28,17 +28,17 @@ std::string toJson(id data) {
 }
 
 NSString* classNameFor(const std::string& name) {
-    NSDictionary* map = [NSBundle.mainBundle objectForInfoDictionaryKey:@"RTSPlugins"];
+    NSDictionary* map = [NSBundle.mainBundle objectForInfoDictionaryKey:@"AiversePlugins"];
     id cls = [map isKindOfClass:NSDictionary.class] ? map[[NSString stringWithUTF8String:name.c_str()]] : nil;
     return [cls isKindOfClass:NSString.class] ? cls : nil;
 }
 
-NSMutableDictionary<NSString*, id<RTSPlugin>>* instances() {
+NSMutableDictionary<NSString*, id<AiversePlugin>>* instances() {
     static NSMutableDictionary* d = [NSMutableDictionary new];
     return d;
 }
 
-struct AppleBackend : rts::plugins::detail::Backend {
+struct AppleBackend : aiverse::plugins::detail::Backend {
     bool available(const std::string& name) override {
         NSString* cls = classNameFor(name);
         return cls && NSClassFromString(cls) != nil;
@@ -48,11 +48,11 @@ struct AppleBackend : rts::plugins::detail::Backend {
         NSString* m = [NSString stringWithUTF8String:method.c_str()];
         NSData* a = [NSData dataWithBytes:args.data() length:args.size()];
         dispatch_async(dispatch_get_main_queue(), ^{ // never re-enter the game inside call()
-            RTSPluginReply* reply = [[RTSPluginReply alloc] initWithCallId:callId];
-            id<RTSPlugin> p = instances()[n];
+            AiversePluginReply* reply = [[AiversePluginReply alloc] initWithCallId:callId];
+            id<AiversePlugin> p = instances()[n];
             if (!p) {
                 Class cls = NSClassFromString(classNameFor(toStd(n)));
-                if (![cls conformsToProtocol:@protocol(RTSPlugin)]) { [reply fail:[NSString stringWithFormat:@"plugin '%@' is not in this build", n]]; return; }
+                if (![cls conformsToProtocol:@protocol(AiversePlugin)]) { [reply fail:[NSString stringWithFormat:@"plugin '%@' is not in this build", n]]; return; }
                 p = [cls new];
                 instances()[n] = p;
             }
@@ -69,29 +69,29 @@ struct AppleBackend : rts::plugins::detail::Backend {
 AppleBackend g_backend;
 
 // Installed when the runtime loads; the Apple platform files run before any plugin call.
-struct Install { Install() { rts::plugins::detail::setBackend(&g_backend); } } g_install;
+struct Install { Install() { aiverse::plugins::detail::setBackend(&g_backend); } } g_install;
 } // namespace
 
-@implementation RTSPluginReply {
+@implementation AiversePluginReply {
     uint64_t _callId;
     BOOL _done;
 }
 - (instancetype)initWithCallId:(uint64_t)callId { if ((self = [super init])) _callId = callId; return self; }
 - (void)ok:(id)data {
     @synchronized (self) { if (_done) return; _done = YES; }
-    rts::plugins::detail::completeCall(_callId, true, toJson(data));
+    aiverse::plugins::detail::completeCall(_callId, true, toJson(data));
 }
 - (void)fail:(NSString*)error {
     @synchronized (self) { if (_done) return; _done = YES; }
-    rts::plugins::detail::completeCall(_callId, false, toStd(error.length ? error : @"error"));
+    aiverse::plugins::detail::completeCall(_callId, false, toStd(error.length ? error : @"error"));
 }
 @end
 
-void RTSPluginEmit(NSString* plugin, NSString* event, id data) {
-    rts::plugins::emit(toStd(plugin), toStd(event), toJson(data));
+void AiversePluginEmit(NSString* plugin, NSString* event, id data) {
+    aiverse::plugins::emit(toStd(plugin), toStd(event), toJson(data));
 }
 
-id RTSPluginPresentingViewController(void) {
+id AiversePluginPresentingViewController(void) {
 #if TARGET_OS_IPHONE
     UIViewController* vc = nil;
     for (UIScene* s in UIApplication.sharedApplication.connectedScenes)

@@ -12,7 +12,7 @@
 #include "modules/rts/RtsSphere.h"
 #include "modules/rts/view/RtsPlanet.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using render::float3;
 
@@ -247,4 +247,4 @@ Json planetDetailOp(Workspace& ws, const Json& p) {
     return r;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

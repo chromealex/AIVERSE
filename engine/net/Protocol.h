@@ -8,7 +8,7 @@
 #include "NetText.h"
 #include "../sim/Command.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 constexpr uint32_t kProtocolVersion = 3; // 2: texts are localization keys (NetText); 3: delta resume
 
@@ -144,4 +144,4 @@ Bytes encode(Msg type, const ChatMsg&); bool decode(ByteReader&, ChatMsg&); // M
 // Small requests built inline by NetClient (type + a few fields) use Writer directly.
 inline Msg peekType(const Bytes& b) { return b.empty() ? Msg(0) : Msg(b[0]); }
 
-} // namespace rts::net
+} // namespace aiverse::net

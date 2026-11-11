@@ -38,7 +38,7 @@ command-buffer timestamps start after submission. Inspect CPU encode time alongs
 GPU time, and do not call their ratio a shader-speed ratio.
 
 This branch builds on the HDR branch, before the main working tree's AIVERSE rename:
-existing `rts_runtime`/`rtsMain` internal symbols are retained until integration. New tool
+existing `aiverse_runtime`/`rtsMain` internal symbols are retained until integration. New tool
 names use AIVERSE. The base's unrelated `<cmath>`/`extern C` build issue and workaround
 are documented in [hdr.md](hdr.md).
 

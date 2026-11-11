@@ -17,7 +17,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::audiopack {
+namespace aiverse::audiopack {
 
 namespace {
 
@@ -181,7 +181,7 @@ bool encodeVorbis(const std::vector<int16_t>& pcm, int channels, int rate, float
     }
     vorbis_comment vc;
     vorbis_comment_init(&vc);
-    vorbis_comment_add_tag(&vc, "ENCODER", "rts_audiopack");
+    vorbis_comment_add_tag(&vc, "ENCODER", "aiverse_audiopack");
     vorbis_dsp_state vd;
     vorbis_block vb;
     vorbis_analysis_init(&vd, &vi);
@@ -451,13 +451,13 @@ bool copyTree(const fs::path& from, const fs::path& to, std::error_code& ec) {
         const fs::path rel = it->path().lexically_relative(from);
         // project outputs and editor state live inside the project (Builds/ holds this very staging dir)
         const std::string top = rel.begin() == rel.end() ? std::string() : rel.begin()->string();
-        if (top == "Builds" || top == "dist" || top == "logs" || top == "Logs" || top == ".rtsengine") {
+        if (top == "Builds" || top == "dist" || top == "logs" || top == "Logs" || top == ".aiverse") {
             if (it->is_directory(ec)) it.disable_recursion_pending();
             continue;
         }
         const fs::path out = to / rel;
         if (it->is_directory(ec)) fs::create_directories(out, ec);
-        else if (it->is_regular_file(ec)) rts::pack::copyFileReplace(it->path(), out, ec);
+        else if (it->is_regular_file(ec)) aiverse::pack::copyFileReplace(it->path(), out, ec);
         if (ec) return false;
     }
     return !ec;
@@ -518,4 +518,4 @@ bool stageGame(const std::string& projectDir, const std::string& stagingDir, con
     return true;
 }
 
-} // namespace rts::audiopack
+} // namespace aiverse::audiopack

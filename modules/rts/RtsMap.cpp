@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <queue>
 
-namespace rts::game {
+namespace aiverse::game {
 
 uint8_t cellFlagsFromChar(char c) {
     switch (c) {
@@ -504,4 +504,4 @@ void SpatialHash::insert(Entity e, Vec3 p) {
     b.push_back(e);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

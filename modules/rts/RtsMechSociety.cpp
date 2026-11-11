@@ -3,7 +3,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 Fixed RtsModule::staffFraction(Simulation& sim, Entity e) const {
@@ -206,4 +206,4 @@ bool RtsModule::applyMechSocietyCommand(Simulation& sim, const Command& cmd) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

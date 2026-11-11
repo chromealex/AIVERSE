@@ -6,7 +6,7 @@
 #include <compare>
 #include <string>
 
-namespace rts {
+namespace aiverse {
 
 namespace detail {
 // Portable signed 64x64 -> 128 multiply, then shift right by `shift` with round-half-up.
@@ -14,7 +14,7 @@ namespace detail {
 // Works on MSVC (no __int128), GCC, Clang, Emscripten; both paths are bit-identical.
 inline int64_t mulShift(int64_t a, int64_t b, int shift) {
     const uint64_t half = uint64_t(1) << (shift - 1);
-#if defined(__SIZEOF_INT128__) && !defined(RTS_FORCE_PORTABLE_MUL)
+#if defined(__SIZEOF_INT128__) && !defined(AIVERSE_FORCE_PORTABLE_MUL)
     __extension__ typedef __int128 i128;
     i128 p = static_cast<i128>(a) * b + static_cast<i128>(half);
     return static_cast<int64_t>(p >> shift);
@@ -118,4 +118,4 @@ struct Vec3 {
 // Move `from` toward `to` by at most `step`. Returns true if destination reached.
 bool moveTowards(Vec3& from, Vec3 to, Fixed step);
 
-} // namespace rts
+} // namespace aiverse

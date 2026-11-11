@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error(where + ": " + what); }
@@ -149,4 +149,4 @@ void loadMechStage4(Rules& r, const Json& j) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

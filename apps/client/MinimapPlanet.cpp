@@ -9,7 +9,7 @@
 
 #include "GameClient.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 namespace {
 constexpr int kSide = 192;
@@ -170,9 +170,9 @@ void Minimap::updatePlanet(gfx::Device& dev, const RtsView& view, const RtsScene
     dumpMinimap(pixels_, w_, h_);
 }
 
-// RTS_MINIMAP_DUMP=file.ppm: writes the planet minimap image every 60 updates (headless checks: the HUD is not in screenshots)
+// AIVERSE_MINIMAP_DUMP=file.ppm: writes the planet minimap image every 60 updates (headless checks: the HUD is not in screenshots)
 static void dumpMinimap(const std::vector<uint32_t>& p, int w, int h) {
-    static const char* path = std::getenv("RTS_MINIMAP_DUMP");
+    static const char* path = std::getenv("AIVERSE_MINIMAP_DUMP");
     static int n = 0;
     if (!path || ++n % 60) return;
     if (FILE* f = std::fopen(path, "wb")) {
@@ -214,4 +214,4 @@ bool Minimap::planetPointer(RtsView& view, float u, float v) const {
     return true;
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

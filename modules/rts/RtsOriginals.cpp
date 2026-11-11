@@ -14,7 +14,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -614,4 +614,4 @@ void RtsModule::hashOriginals(Simulation& sim, Hasher& h) {
     w.each<Hero>([&](Entity e, Hero& hr) { h.u64(e.packed()); h.u32(hr.points); for (auto s : hr.skill) h.u32(s); });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

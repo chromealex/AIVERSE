@@ -11,7 +11,7 @@
 #include <map>
 #include <queue>
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 namespace {
 
@@ -816,4 +816,4 @@ bool generateWorld(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     return true;
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

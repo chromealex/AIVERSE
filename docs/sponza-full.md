@@ -33,8 +33,8 @@ python3 tools/renderbench/run.py build/.temp/hdr-mac/aiverse_renderbench \
 ```sh
 cmake -S . -B /Volumes/KINGSTON/AIVERSE/Builds/.temp/sponza-arm64 \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
-  -DAIVERSE_BUILD_RENDERBENCH=ON -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TOOLS=OFF \
-  -DRTS_BUILD_TESTS=OFF -DRTS_BUILD_CLIENT=OFF -DRTS_BUILD_HEADLESS=OFF
+  -DAIVERSE_BUILD_RENDERBENCH=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF \
+  -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_HEADLESS=OFF
 cmake --build /Volumes/KINGSTON/AIVERSE/Builds/.temp/sponza-arm64 \
   --target aiverse_renderbench aiverse_renderbench_gl -j8
 ```
@@ -117,8 +117,8 @@ SSR/GI ограничены видимой геометрией; это не а�
 High shadows. По умолчанию отключено, существующие игры не меняют поведение.
 Обе реализации используют только RHI, шейдерные тела GLSL и MSL.
 
-Проверки: `RTS_HDR_VERIFY=1 RTS_SCREEN_LIGHTING=1 rts_hdr_scene` / `rts_hdr_gl`;
-`RTS_SCREEN_LIGHTING=1 RTS_HDR_CAPTURE=...` — синтетическая визуальная сцена.
+Проверки: `AIVERSE_HDR_VERIFY=1 AIVERSE_SCREEN_LIGHTING=1 aiverse_hdr_scene` / `aiverse_hdr_gl`;
+`AIVERSE_SCREEN_LIGHTING=1 AIVERSE_HDR_CAPTURE=...` — синтетическая визуальная сцена.
 Основные тесты включают загрузку обязательного расширения света, трансформы,
 исключение узлов другой сцены и некорректные параметры.
 

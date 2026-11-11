@@ -6,7 +6,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -244,4 +244,4 @@ bool RtsModule::runLaneWalk(Simulation& sim, Entity e, Order&) {
     return lw->pos >= pts.size();
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

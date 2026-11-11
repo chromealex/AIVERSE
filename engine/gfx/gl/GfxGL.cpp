@@ -9,22 +9,22 @@
 #include <string>
 #include <vector>
 
-#if defined(RTS_GL_LOADER)
-#define RTS_GL_DEFINE(ret, name, args) PFN_##name name = nullptr;
-RTS_GL_FUNCS(RTS_GL_DEFINE)
-#undef RTS_GL_DEFINE
-namespace rts::gfx {
+#if defined(AIVERSE_GL_LOADER)
+#define AIVERSE_GL_DEFINE(ret, name, args) PFN_##name name = nullptr;
+AIVERSE_GL_FUNCS(AIVERSE_GL_DEFINE)
+#undef AIVERSE_GL_DEFINE
+namespace aiverse::gfx {
 bool loadGLFunctions() {
     bool ok = true;
-#define RTS_GL_LOAD(ret, name, args) name = (PFN_##name)wglGetProcAddress(#name); if (!name) ok = false;
-    RTS_GL_FUNCS(RTS_GL_LOAD)
-#undef RTS_GL_LOAD
+#define AIVERSE_GL_LOAD(ret, name, args) name = (PFN_##name)wglGetProcAddress(#name); if (!name) ok = false;
+    AIVERSE_GL_FUNCS(AIVERSE_GL_LOAD)
+#undef AIVERSE_GL_LOAD
     return ok;
 }
-} // namespace rts::gfx
+} // namespace aiverse::gfx
 #endif
 
-namespace rts::gfx {
+namespace aiverse::gfx {
 namespace {
 
 // desktop GL only (ES / WebGL always encode into sRGB attachments); GLES headers lack the name
@@ -425,7 +425,7 @@ public:
         if (d.clearColorEnabled) { glClearColor(d.clearColor[0], d.clearColor[1], d.clearColor[2], d.clearColor[3]); mask |= GL_COLOR_BUFFER_BIT; }
         if (d.clearDepthEnabled) {
             glDepthMask(GL_TRUE);
-#if defined(RTS_GL_LOADER)
+#if defined(AIVERSE_GL_LOADER)
             glClearDepth(d.clearDepth);
 #else
             glClearDepthf(d.clearDepth);
@@ -620,4 +620,4 @@ private:
 
 std::unique_ptr<Device> createGLDevice(Backend flavor) { return std::make_unique<GLDevice>(flavor); }
 
-} // namespace rts::gfx
+} // namespace aiverse::gfx

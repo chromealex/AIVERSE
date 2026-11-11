@@ -5,10 +5,10 @@
     python3 tools/release/package_engine.py --platform macos   --bin build/mac
     python3 tools/release/package_engine.py --platform linux   --bin build/linux-release
 
-The zip holds RTSEngine/ = a snapshot of the sources at HEAD (git archive: templates, engine assets,
-everything rtsbuild needs to build games) + RTSEngine/bin/ with the executables. The editor and the
+The zip holds AIVERSE/ = a snapshot of the sources at HEAD (git archive: templates, engine assets,
+everything aiversebuild needs to build games) + AIVERSE/bin/ with the executables. The editor and the
 tools find the engine next to themselves (engine/platform/EngineDir.h), so the folder works anywhere.
-Intermediates go to <out>/.temp; <out> gets only RTSEngine-<version>-<commit>-<platform>.zip.
+Intermediates go to <out>/.temp; <out> gets only AIVERSE-<version>-<commit>-<platform>.zip.
 Prints the zip path. Publishing: tools/release/publish_builds.py.
 """
 import argparse, io, os, re, shutil, stat, subprocess, sys, tarfile, zipfile
@@ -16,12 +16,12 @@ import argparse, io, os, re, shutil, stat, subprocess, sys, tarfile, zipfile
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 BINARIES = {
-    "windows": ["rts_editor.exe", "rtsmcp.exe", "rtsbuild.exe", "rts_headless.exe", "RTSGame.exe", "assetpipe.exe"],
-    "macos": ["RTSEditor.app", "RTSGame.app", "rtsmcp", "rtsbuild", "rts_headless", "assetpipe"],
-    "linux": ["rts_editor", "rtsmcp", "rtsbuild", "rts_headless", "RTSGame", "assetpipe"],
+    "windows": ["aiverse_editor.exe", "aiversemcp.exe", "aiversebuild.exe", "aiverse_headless.exe", "AiverseGame.exe", "assetpipe.exe", "aiverse_fps_client.exe", "aiverse_fps_server.exe"],
+    "macos": ["AiverseEditor.app", "AiverseGame.app", "aiversemcp", "aiversebuild", "aiverse_headless", "assetpipe", "aiverse_fps_client", "aiverse_fps_server"],
+    "linux": ["aiverse_editor", "aiversemcp", "aiversebuild", "aiverse_headless", "AiverseGame", "assetpipe", "aiverse_fps_client", "aiverse_fps_server"],
 }
-# a package needs one of these; Linux may be tools only (rtsmcp + rts_headless, no editor: CI hosts, MCP clients)
-REQUIRED = {"windows": ["rts_editor.exe"], "macos": ["RTSEditor.app"], "linux": ["rts_editor", "rtsmcp"]}
+# a package needs one of these; Linux may be tools only (aiversemcp + aiverse_headless, no editor: CI hosts, MCP clients)
+REQUIRED = {"windows": ["aiverse_editor.exe"], "macos": ["AiverseEditor.app"], "linux": ["aiverse_editor", "aiversemcp"]}
 
 
 def git(*args):
@@ -30,7 +30,7 @@ def git(*args):
 
 def version():
     text = open(os.path.join(ROOT, "CMakeLists.txt"), encoding="utf-8").read()
-    m = re.search(r"project\(RTSEngine VERSION ([0-9.]+)", text)
+    m = re.search(r"project\(AIVERSE VERSION ([0-9.]+)", text)
     return (m.group(1) if m else "0.0.0"), git("rev-parse", "--short=8", "HEAD"), git("log", "-1", "--format=%cs")
 
 
@@ -63,14 +63,14 @@ def main():
     if not any(os.path.exists(os.path.join(a.bin, r)) for r in REQUIRED[a.platform]):
         sys.exit(f"no {' / '.join(REQUIRED[a.platform])} in {a.bin}")
     ver, commit, date = version()
-    name = f"RTSEngine-{ver}-{commit}-{a.platform}.zip"
+    name = f"AIVERSE-{ver}-{commit}-{a.platform}.zip"
     os.makedirs(os.path.join(a.out, ".temp"), exist_ok=True)
     tmp_zip = os.path.join(a.out, ".temp", name)
     src_tar = subprocess.check_output(["git", "-C", ROOT, "archive", "--format=tar", "HEAD"])
     with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         with tarfile.open(fileobj=io.BytesIO(src_tar)) as t:
             for m in t.getmembers():
-                info = zipfile.ZipInfo("RTSEngine/" + m.name + ("/" if m.isdir() else ""))
+                info = zipfile.ZipInfo("AIVERSE/" + m.name + ("/" if m.isdir() else ""))
                 info.date_time = (1980, 1, 1, 0, 0, 0)
                 info.compress_type = zipfile.ZIP_DEFLATED
                 if m.isdir():
@@ -84,9 +84,11 @@ def main():
                     z.writestr(info, t.extractfile(m).read())
         for b in BINARIES[a.platform]:
             p = os.path.join(a.bin, b)
+            if not os.path.exists(p) and b.startswith("aiverse_fps_"):
+                p = os.path.join(a.bin, "modules", "fps", b)
             if os.path.exists(p):
-                add_tree(z, p, "RTSEngine/bin/" + b)
-        z.writestr("RTSEngine/BUILD.txt", f"RTSEngine {ver}\ncommit {commit} ({date})\nplatform {a.platform}\n")
+                add_tree(z, p, "AIVERSE/bin/" + b)
+        z.writestr("AIVERSE/BUILD.txt", f"AIVERSE {ver}\ncommit {commit} ({date})\nplatform {a.platform}\n")
     final = os.path.join(a.out, name)
     shutil.move(tmp_zip, final)
     print(final)

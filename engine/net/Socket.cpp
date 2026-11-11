@@ -9,7 +9,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 using socklen_t = int;
-#define RTS_INVALID INVALID_SOCKET
+#define AIVERSE_INVALID INVALID_SOCKET
 static bool wouldBlock() { int e = WSAGetLastError(); return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS; }
 static void closeSock(SOCKET s) { closesocket(s); }
 static void setNonBlocking(SOCKET s) { u_long one = 1; ioctlsocket(s, FIONBIO, &one); }
@@ -26,7 +26,7 @@ static void initSockets() {
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#define RTS_INVALID (-1)
+#define AIVERSE_INVALID (-1)
 static bool wouldBlock() { return errno == EWOULDBLOCK || errno == EAGAIN || errno == EINPROGRESS; }
 static void closeSock(int s) { ::close(s); }
 static void setNonBlocking(int s) { fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK); }
@@ -37,7 +37,7 @@ static void initSockets() {}
 #define MSG_NOSIGNAL 0
 #endif
 
-namespace rts::net {
+namespace aiverse::net {
 
 static const sockaddr* sa(const Address& a) { return reinterpret_cast<const sockaddr*>(a.storage); }
 
@@ -101,7 +101,7 @@ bool UdpSocket::open(uint16_t port, int family) {
     close();
     auto tryOpen = [&](int fam) -> bool {
         auto s = ::socket(fam, SOCK_DGRAM, IPPROTO_UDP);
-        if (s == RTS_INVALID) return false;
+        if (s == AIVERSE_INVALID) return false;
         if (fam == AF_INET6) { int off = 0; setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char*>(&off), sizeof(off)); }
         sockaddr_storage ss{};
         socklen_t len;
@@ -128,8 +128,8 @@ bool UdpSocket::open(uint16_t port, int family) {
     return tryOpen(AF_INET6) || tryOpen(AF_INET);
 }
 
-void UdpSocket::close() { if (s_ != SocketHandle(RTS_INVALID)) { closeSock(s_); s_ = SocketHandle(RTS_INVALID); } }
-bool UdpSocket::isOpen() const { return s_ != SocketHandle(RTS_INVALID); }
+void UdpSocket::close() { if (s_ != SocketHandle(AIVERSE_INVALID)) { closeSock(s_); s_ = SocketHandle(AIVERSE_INVALID); } }
+bool UdpSocket::isOpen() const { return s_ != SocketHandle(AIVERSE_INVALID); }
 
 bool UdpSocket::sendTo(const Address& to, const uint8_t* data, size_t n) {
     if (!isOpen()) return false;
@@ -188,7 +188,7 @@ bool TcpSocket::connect(const Address& to) {
     initSockets();
     close();
     auto s = ::socket(to.family(), SOCK_STREAM, IPPROTO_TCP);
-    if (s == RTS_INVALID) return false;
+    if (s == AIVERSE_INVALID) return false;
     setNonBlocking(s);
     int one = 1;
     setsockopt(s, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&one), sizeof(one));
@@ -225,15 +225,15 @@ int TcpSocket::recv(uint8_t* buf, size_t cap) {
     return int(r);
 }
 
-void TcpSocket::close() { if (s_ != SocketHandle(RTS_INVALID)) { closeSock(s_); s_ = SocketHandle(RTS_INVALID); } }
-bool TcpSocket::isOpen() const { return s_ != SocketHandle(RTS_INVALID); }
+void TcpSocket::close() { if (s_ != SocketHandle(AIVERSE_INVALID)) { closeSock(s_); s_ = SocketHandle(AIVERSE_INVALID); } }
+bool TcpSocket::isOpen() const { return s_ != SocketHandle(AIVERSE_INVALID); }
 
 bool TcpListener::listen(uint16_t port) {
     initSockets();
     close();
     for (int fam : {AF_INET6, AF_INET}) {
         auto s = ::socket(fam, SOCK_STREAM, IPPROTO_TCP);
-        if (s == RTS_INVALID) continue;
+        if (s == AIVERSE_INVALID) continue;
         int one = 1, off = 0;
         setsockopt(s, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&one), sizeof(one));
         sockaddr_storage ss{};
@@ -257,11 +257,11 @@ bool TcpListener::listen(uint16_t port) {
 }
 
 std::unique_ptr<TcpSocket> TcpListener::accept(Address* from) {
-    if (s_ == SocketHandle(RTS_INVALID)) return nullptr;
+    if (s_ == SocketHandle(AIVERSE_INVALID)) return nullptr;
     sockaddr_storage ss{};
     socklen_t len = sizeof(ss);
     auto c = ::accept(s_, reinterpret_cast<sockaddr*>(&ss), &len);
-    if (c == RTS_INVALID) return nullptr;
+    if (c == AIVERSE_INVALID) return nullptr;
     setNonBlocking(c);
     int one = 1;
     setsockopt(c, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&one), sizeof(one));
@@ -272,7 +272,7 @@ std::unique_ptr<TcpSocket> TcpListener::accept(Address* from) {
     return std::make_unique<TcpSocket>(SocketHandle(c));
 }
 
-void TcpListener::close() { if (s_ != SocketHandle(RTS_INVALID)) { closeSock(s_); s_ = SocketHandle(RTS_INVALID); } }
+void TcpListener::close() { if (s_ != SocketHandle(AIVERSE_INVALID)) { closeSock(s_); s_ = SocketHandle(AIVERSE_INVALID); } }
 
 uint16_t TcpListener::localPort() const {
     sockaddr_storage ss{};
@@ -282,5 +282,5 @@ uint16_t TcpListener::localPort() const {
     return ntohs(reinterpret_cast<sockaddr_in*>(&ss)->sin_port);
 }
 
-} // namespace rts::net
+} // namespace aiverse::net
 #endif

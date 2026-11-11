@@ -1,7 +1,7 @@
 #include "engine/render/ModelVisibility.h"
 #include <cassert>
 #include <cmath>
-using namespace rts::render;
+using namespace aiverse::render;
 int main(){
     mat4 clip=mat4::identity();
     assert(modelBoxVisible(clip,{-.5f,-.5f,-.5f},{.5f,.5f,.5f}));

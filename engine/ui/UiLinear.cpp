@@ -1,6 +1,6 @@
 #include "UiLinear.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 namespace {
 
@@ -165,4 +165,4 @@ void UiLinearComposite::composite(gfx::TextureHandle color, gfx::TextureHandle d
     dev_->draw(3);
 }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

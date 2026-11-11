@@ -13,7 +13,7 @@
 
 namespace Rml { class Context; class ElementDocument; }
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 class UiKeyboard {
 public:
@@ -62,4 +62,4 @@ private:
     float caretY_ = 0;
 };
 
-} // namespace rts::ui
+} // namespace aiverse::ui

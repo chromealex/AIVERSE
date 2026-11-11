@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error(where + ": " + what); }
@@ -430,4 +430,4 @@ void EffectParser::playerAbility(const std::string& where, const Json& pj, Playe
         }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

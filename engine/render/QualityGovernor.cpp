@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 constexpr double kWindow = 2.0;        // seconds per measurement window
@@ -19,9 +19,9 @@ void QualityGovernor::reset(int shadows, int lights) {
     windowTime_ = sinceChange_ = fastTime_ = 0;
     bestMs_ = 1e9f;
     locked_ = false;
-    const char* off = std::getenv("RTS_ADAPTIVE");
+    const char* off = std::getenv("AIVERSE_ADAPTIVE");
     disabled_ = off && (std::strcmp(off, "off") == 0 || std::strcmp(off, "0") == 0);
-    const char* fake = std::getenv("RTS_ADAPTIVE_FAKE_MS");
+    const char* fake = std::getenv("AIVERSE_ADAPTIVE_FAKE_MS");
     fakeMs_ = fake ? float(std::atof(fake)) : 0.0f;
 }
 
@@ -75,4 +75,4 @@ bool QualityGovernor::update(double dt) {
     return false;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

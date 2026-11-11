@@ -14,7 +14,7 @@
 #include "engine/data/Json.h"
 #include "modules/rts/RtsData.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 struct GameInfo { std::string id, dir, name; int maps = 0; };
 
@@ -31,6 +31,7 @@ struct Project {
     bool saveRules(std::string* err);
     bool saveManifest(std::string* err);
     std::string rulesPath() const;
+    bool isFps() const { return manifest.getStr("module", "rts") == "fps"; }
     bool reloadRules();           // parse rulesJson -> rules; false keeps the previous rules
     // rulesJson + the game's scripts embedded for a simulation of `map` (ScriptOps.cpp; missing files are
     // left out and reported by the script engine)
@@ -54,8 +55,8 @@ public:
 
     Workspace();
     ~Workspace();
-    std::string engineDir;        // engine checkout (templates/, docs/, rtsbuild)
-    std::string buildTool;        // rtsbuild executable
+    std::string engineDir;        // engine checkout (templates/, docs/, aiversebuild)
+    std::string buildTool;        // aiversebuild executable
     std::string gameExe;          // game client (ui_preview renders screens with it)
     Project project;
     MapDoc map;
@@ -77,14 +78,14 @@ public:
     void note(Change c) { changes.push_back(std::move(c)); }
     void log(const std::string& source, const std::string& text, bool error = false);
 
-    // background build (rtsbuild)
+    // background build (aiversebuild)
     bool building() const { return building_; }
     std::string logsDir() const;   // <engine>/logs, created on demand
     std::string buildLog() { std::lock_guard<std::mutex> lk(buildMutex_); return buildLog_; }
-    // extraArgs: more rtsbuild flags (Build window: --estimate --out ..., --audio, --no-atlas, ...)
+    // extraArgs: more aiversebuild flags (Build window: --estimate --out ..., --audio, --no-atlas, ...)
     void startBuild(const std::string& target, const std::string& config, const std::string& extraArgs = "");
     int buildResult() { std::lock_guard<std::mutex> lk(buildMutex_); return buildRc_; }
-    // Any rtsbuild run streamed into the same log (Build window / MCP): args after the executable;
+    // Any aiversebuild run streamed into the same log (Build window / MCP): args after the executable;
     // `label` names the log file (logs/<label>-<time>.log); withProject adds --project / --engine.
     void startTool(const std::string& args, const std::string& label, bool withProject);
     // Any shell command streamed the same way (per-project editor build, NativeBuild.h): `shown` is
@@ -95,7 +96,7 @@ public:
     std::string runLabel() { std::lock_guard<std::mutex> lk(buildMutex_); return runLabel_; }   // "build-web", "estimate", "toolchain-web"
     std::string lastLogFile() { std::lock_guard<std::mutex> lk(buildMutex_); return logFile_; }
     int runCount() const { return runCount_; }   // increments when a run finishes
-    // rtsbuild --check-toolchain <target> --json (blocking: probes tools, about a second).
+    // aiversebuild --check-toolchain <target> --json (blocking: probes tools, about a second).
     Json toolchainCheck(const std::string& target) const;
 
 private:
@@ -114,4 +115,4 @@ private:
 Json* jsonPath(Json& j, const std::string& path, bool create);
 const Json* jsonPath(const Json& j, const std::string& path);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

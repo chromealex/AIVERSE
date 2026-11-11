@@ -8,7 +8,7 @@
 #include <vector>
 #include "Editor.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class DetailsPanel {
 public:
@@ -41,4 +41,4 @@ private:
     int truncated_ = 0;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

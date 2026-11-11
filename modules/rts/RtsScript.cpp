@@ -16,7 +16,7 @@ extern "C" {
 #include "lstate.h"   // lua_State::hookcount: the count hook's residual (instructionsUsed)
 }
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace script;
 
 namespace script {
@@ -45,8 +45,8 @@ struct LuaProfile {
     int state = -1;   // -1 unknown, 0 off, 1 on
     std::string prefix;
     int64_t periodUs = 100, slowUs = 50000;
-    bool lines = false;   // RTS_LUA_PROFILE_LINES=1: every frame also names its executing line (#line)
-    std::string split;    // RTS_LUA_PROFILE_SPLIT=text: per tick "tick us sampled_us matching_us" (<prefix>.split)
+    bool lines = false;   // AIVERSE_LUA_PROFILE_LINES=1: every frame also names its executing line (#line)
+    std::string split;    // AIVERSE_LUA_PROFILE_SPLIT=text: per tick "tick us sampled_us matching_us" (<prefix>.split)
     std::vector<std::string> splitRows;
     bool inTick = false;
     std::chrono::steady_clock::time_point last;
@@ -54,14 +54,14 @@ struct LuaProfile {
     std::vector<std::pair<uint64_t, std::unordered_map<std::string, int64_t>>> slowTicks;
     bool on() {
         if (state < 0) {
-            const char* p = std::getenv("RTS_LUA_PROFILE");
+            const char* p = std::getenv("AIVERSE_LUA_PROFILE");
             state = p && *p ? 1 : 0;
             if (state) {
                 prefix = p;
-                if (const char* v = std::getenv("RTS_LUA_PROFILE_US")) periodUs = std::max<int64_t>(1, std::atoll(v));
-                if (const char* v = std::getenv("RTS_LUA_PROFILE_SLOW")) slowUs = int64_t(std::atof(v) * 1000);
-                if (const char* v = std::getenv("RTS_LUA_PROFILE_LINES")) lines = *v == '1';
-                if (const char* v = std::getenv("RTS_LUA_PROFILE_SPLIT")) split = v;
+                if (const char* v = std::getenv("AIVERSE_LUA_PROFILE_US")) periodUs = std::max<int64_t>(1, std::atoll(v));
+                if (const char* v = std::getenv("AIVERSE_LUA_PROFILE_SLOW")) slowUs = int64_t(std::atof(v) * 1000);
+                if (const char* v = std::getenv("AIVERSE_LUA_PROFILE_LINES")) lines = *v == '1';
+                if (const char* v = std::getenv("AIVERSE_LUA_PROFILE_SPLIT")) split = v;
             }
         }
         return state == 1;
@@ -539,8 +539,8 @@ local function keyless(a, b)
 end
 -- sorted_pairs(t): the keys collected (raw next) and checked, sorted with table.sort (plain `<` when all keys
 -- are numbers or all strings, keyless otherwise), then walked in that order returning k, t[k]. Built in C by
--- the host (rts_sorted_pairs: the same steps, without a VM loop per key); this Lua version is the fallback.
-local sorted_pairs = rts_sorted_pairs and rts_sorted_pairs(sort, keyless)
+-- the host (aiverse_sorted_pairs: the same steps, without a VM loop per key); this Lua version is the fallback.
+local sorted_pairs = aiverse_sorted_pairs and aiverse_sorted_pairs(sort, keyless)
 if not sorted_pairs then sorted_pairs = function(t)
   if rawtype(t) ~= "table" then error("pairs: table expected, got " .. rawtype(t), 2) end
   local keys, n, kind, mixed = {}, 0, nil, false
@@ -560,7 +560,7 @@ if not sorted_pairs then sorted_pairs = function(t)
     if k ~= nil then return k, t[k] end
   end, t, nil
 end end
-rts_sorted_pairs = nil
+aiverse_sorted_pairs = nil
 pairs = sorted_pairs
 _G.sorted_pairs = sorted_pairs
 local function safe_tostring(v)
@@ -614,7 +614,7 @@ bool Vm::open(Mode m, size_t limit) {
     lua_pushcfunction(L, [](lua_State* S) -> int { lua_settop(S, 2); if (lua_next(S, 1)) return 2; lua_pushnil(S); return 1; });
     lua_setglobal(L, "next");
     lua_pushcfunction(L, makeSortedPairs);
-    lua_setglobal(L, "rts_sorted_pairs");
+    lua_setglobal(L, "aiverse_sorted_pairs");
     lua_getglobal(L, LUA_TABLIBNAME);
     lua_pushcfunction(L, tableCount);
     lua_setfield(L, -2, "count");
@@ -1018,9 +1018,9 @@ std::string checkScriptSyntax(const std::string& name, const std::string& text, 
     return "";
 }
 
-} // namespace rts::game
+} // namespace aiverse::game
 
-namespace rts::game {
+namespace aiverse::game {
 bool luaProfileEnabled() { return script::luaProfile().on(); }
 void luaProfileTickBegin() {
     auto& p = script::luaProfile();
@@ -1059,4 +1059,4 @@ void luaProfileWrite() {
     const long long run = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     for (auto& [t, m] : p.slowTicks) for (auto& [k, v] : m) f << "tick " << t << " run " << run << ';' << k << ' ' << v << '\n';
 }
-} // namespace rts::game
+} // namespace aiverse::game

@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error(where + ": " + what); }
@@ -336,4 +336,4 @@ bool decodeFieldRle(const std::string& s, size_t n, std::vector<int32_t>& out) {
     return out.size() == n;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

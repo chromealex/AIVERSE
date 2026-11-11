@@ -3,7 +3,7 @@
 #include "../../../engine/audio/Audio.h"
 #include "../view/ScriptSound.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 class AudioScriptSound final : public ScriptSound {
 public:
@@ -25,4 +25,4 @@ private:
     audio::AudioEngine& e_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

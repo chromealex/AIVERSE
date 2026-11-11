@@ -16,7 +16,7 @@ automatically (CMake `GLOB ... CONFIGURE_DEPENDS`), nothing else to register.
 #include "../Editor.h"
 #include "../EditorUtil.h"     // ui::inputString, ui::inputMultiline, ui::help
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class BalanceWindow : public EditorWindow {
 public:
@@ -36,9 +36,9 @@ public:
     void update(Editor& ed, double dt) override {}              // optional: every frame, even when closed
 };
 
-RTS_EDITOR_WINDOW(BalanceWindow);
+AIVERSE_EDITOR_WINDOW(BalanceWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor
 ```
 
 `title()` is the plain tab text (MCP `editor_windows` reports it). The ImGui name is
@@ -142,7 +142,7 @@ ed.ws().registerOp({"balance_report", "Damage per cost of every unit type.", Jso
                     [&ed](const Json&) { Json r = Json::object(); /* ... */ return r; }, true});
 ```
 
-Operations appear in MCP `tools/list` for agents connected through `rtsmcp` (the tool list is the
+Operations appear in MCP `tools/list` for agents connected through `aiversemcp` (the tool list is the
 `Workspace` registry; GUI-only operations have `guiOnly = true` and fail politely without the
 editor window).
 
@@ -167,8 +167,8 @@ are not hosted by the editor adapter. For those use **Play as in the client** be
 
 ## Play as in the client
 
-The Game window can also run the game exactly as RTSGame does: the same `GameClient`
-(`apps/client/GameClient*.cpp`, `Client*.cpp`; RTSGame's `main.cpp` adds only the entry point)
+The Game window can also run the game exactly as AiverseGame does: the same `GameClient`
+(`apps/client/GameClient*.cpp`, `Client*.cpp`; AiverseGame's `main.cpp` adds only the entry point)
 hosted by `apps/editor/ClientHost` and rendered into the window's offscreen target, inside the
 device simulator frame. Everything is the client's: the game's menus / meta screens
 (`ui/main.lua`, `ui.screen` / `ui.popup`), launch parameters, battle -> result -> meta flow,
@@ -181,8 +181,8 @@ pause, stats) stay for the map play-test; the two never run at once.
   the play popup of the top bar, menu Логика → Тест, MCP `play_start {"client": true}`; F5 and
   the top-bar Play button start it for games with their own screens (`ui/main.lua`). Stop /
   restart in the Game toolbar, F5, `play_stop`; the game's own Quit stops it too.
-- «В отдельном окне клиента» (external-link button): the project in a separate RTSGame window
-  (RTS_CONTENT = project), the one built next to this editor first (same C++ modules).
+- «В отдельном окне клиента» (external-link button): the project in a separate AiverseGame window
+  (AIVERSE_CONTENT = project), the one built next to this editor first (same C++ modules).
 - The project's C++ modules (rules `nativeModules`) must be in the editor binary, as for the
   play-test (the banner offers the per-project editor build).
 - Hosting: while the host calls into the client it sets `platform::setHostedView` (logical size of
@@ -191,5 +191,5 @@ pause, stats) stay for the map play-test; the two never run at once.
   title is left alone) and restores the editor's ImGui context afterwards (every `ImGuiLayer` owns
   its context). Pointer events inside the device screen (or captured by a press inside) and keys
   while the Game window has focus are mapped into screen points and forwarded.
-- Profiles / saves go to the editor's user data dir (`RTS_UI_SAVE_DIR` overrides, as in the client).
-- Command line (automated checks): `rts_editor --project <dir> --play-client --device iphone-se:portrait --window game`.
+- Profiles / saves go to the editor's user data dir (`AIVERSE_UI_SAVE_DIR` overrides, as in the client).
+- Command line (automated checks): `aiverse_editor --project <dir> --play-client --device iphone-se:portrait --window game`.

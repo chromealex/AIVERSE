@@ -9,7 +9,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 std::string findOnPath(const std::string& name) {
@@ -28,7 +28,8 @@ std::string findOnPath(const std::string& name) {
     // a GUI app started from Finder has a minimal PATH
     for (const char* d : {"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"}) dirs.push_back(d);
     if (const char* h = std::getenv("HOME")) {
-        dirs.push_back(fs::path(h) / ".rtsengine" / "toolchains" / "py" / "bin");
+        dirs.push_back(fs::path(h) / ".aiverse" / "toolchains" / "py" / "bin");
+        dirs.push_back(fs::path(h) / ".rtsengine" / "toolchains" / "py" / "bin"); // existing installations
         dirs.push_back(fs::path(h) / ".local" / "bin");
     }
     std::error_code ec;
@@ -57,7 +58,7 @@ NativeTools findNativeTools(const Workspace& ws) {
                 t.problem = r.getStr("name", id) + " не найден: " + r.getStr("detail") + (r.has("manual") ? " (" + r.getStr("manual") + ")" : "");
         }
     } catch (const std::exception&) {
-        // rtsbuild missing or too old: plain search
+        // aiversebuild missing or too old: plain search
         t.cmake = findOnPath("cmake");
         t.ninja = findOnPath("ninja");
         if (t.cmake.empty()) { t.problem = "CMake не найден (PATH, /opt/homebrew/bin, /usr/local/bin)"; t.cmakeAutoInstall = true; }
@@ -82,13 +83,13 @@ std::string startNativeBuild(Workspace& ws, const NativeBuildPlan& plan) {
     if (ws.project.dir.empty()) return fail("проект не открыт");
     if (ws.building()) return fail("уже идёт другая сборка (" + ws.runLabel() + ")");
     if (plan.cmake == "cmake" && findOnPath("cmake").empty()) return fail("CMake не найден");
-    if (!fs::exists(fs::path(plan.engineDir) / "CMakeLists.txt")) return fail("нет исходников движка в " + plan.engineDir + " (RTS_SOURCE_DIR)");
+    if (!fs::exists(fs::path(plan.engineDir) / "CMakeLists.txt")) return fail("нет исходников движка в " + plan.engineDir + " (AIVERSE_SOURCE_DIR)");
     if (std::string p = nativeBuildDirProblem(plan.engineDir, plan.buildDir); !p.empty()) return fail(p);
     std::error_code ec;
     fs::create_directories(plan.buildDir, ec);
     if (ec) return fail("не удалось создать " + plan.buildDir + ": " + ec.message());
     // ignored in any repository the project may live in (its own git, not only the engine's)
-    if (std::ofstream f(fs::path(plan.buildDir) / ".gitignore"); f) f << "# per-project editor build (RTSEngine): never commit\n*\n";
+    if (std::ofstream f(fs::path(plan.buildDir) / ".gitignore"); f) f << "# per-project editor build (AIVERSE): never commit\n*\n";
     if (std::string p = nativeBuildGitProblem(plan.buildDir); !p.empty()) return fail(p);
     const std::string cmd = nativeBuildCommand(plan);
     try { ws.startCommand(cmd, "$ " + cmd, kNativeBuildLabel); }
@@ -150,9 +151,9 @@ void registerNativeBuildOps(Workspace& ws, const std::string& engineExe) {
         "binary paths, built, buildModules, upToDate (newer than native/ sources and the engine binary), ready (up to date and has every module: the editor switches to it on open without asking), why. See docs/native-modules.md.",
         Json::parse("{}"), [w, engineExe](const Json&) { return nativeStatus(*w, engineExe); }, false});
     ws.registerOp({"native_build",
-        "Configure + build the engine for the open project (-DRTS_CONTENT_DIR=<project>, Release, targets rts_editor + rts_headless) "
+        "Configure + build the engine for the open project (-DAIVERSE_CONTENT_DIR=<project>, Release, targets aiverse_editor + aiverse_headless) "
         "into <project>/Builds/.temp/editor-<host> (git-ignored; never touches the engine checkout). Output streams into the build log: "
-        "poll build_status, then native_status. wait=true blocks until the build ends (rtsmcp without the editor; inside the "
+        "poll build_status, then native_status. wait=true blocks until the build ends (aiversemcp without the editor; inside the "
         "editor the window freezes meanwhile). Returns the editor / headless binary paths. Restart into it: GUI only.",
         Json::parse(R"({"properties": {"wait": {"type": "boolean"}}})"), [w, engineExe](const Json& p) {
             if (w->project.dir.empty()) throw std::runtime_error("no game is open");
@@ -186,4 +187,4 @@ void registerNativeBuildOps(Workspace& ws, const std::string& engineExe) {
         }, false});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

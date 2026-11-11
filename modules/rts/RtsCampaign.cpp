@@ -3,7 +3,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 void RtsModule::campaignAction(Simulation& sim, const TrigAction& a, const std::vector<uint8_t>& players, Entity unit, Vec3 at) {
@@ -149,4 +149,4 @@ MissionOutcome missionOutcome(Simulation& sim, const Json& mission, uint8_t play
     return o;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

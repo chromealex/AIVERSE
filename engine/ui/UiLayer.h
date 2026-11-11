@@ -20,7 +20,7 @@ namespace Rml { class Context; class ElementDocument; }
 
 typedef struct lua_State lua_State;
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 class UiLayer {
 public:
@@ -71,7 +71,7 @@ public:
     void setImageSource(ImageSource source);
 
     // On-screen keyboard (UiKeyboard): opens when a text field gets focus. Auto = on touch devices
-    // only (or with RTS_OSK=1 in the environment, to try it on a desktop).
+    // only (or with AIVERSE_OSK=1 in the environment, to try it on a desktop).
     enum class OnScreenKeyboard { Auto, Always, Never };
     void setOnScreenKeyboard(OnScreenKeyboard mode);
     void setKeyboardLanguage(const std::string& tag);  // layout that opens first (UI language)
@@ -93,4 +93,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace rts::ui
+} // namespace aiverse::ui

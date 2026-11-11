@@ -1,0 +1,29 @@
+{
+  "recipes": [
+    {
+      "id": "data",
+      "dependencies": [],
+      "files": [
+        "rules.json"
+      ],
+      "checks": [
+        "headless"
+      ]
+    },
+    {
+      "id": "hud",
+      "dependencies": [
+        "data"
+      ],
+      "files": [
+        "ui/hud.rml"
+      ],
+      "checks": [
+        "visual"
+      ]
+    }
+  ],
+  "requested": [
+    "hud"
+  ]
+}

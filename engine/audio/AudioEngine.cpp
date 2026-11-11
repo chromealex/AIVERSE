@@ -10,7 +10,7 @@
 #include "AudioMixer.h"
 #include "Synth.h"
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 namespace {
 
@@ -867,4 +867,4 @@ void AudioEngine::render(float* out, int frames) {
 
 int AudioEngine::activeVoices() const { return impl_->mixer.activeVoices(); }
 
-} // namespace rts::audio
+} // namespace aiverse::audio

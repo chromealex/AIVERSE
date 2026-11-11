@@ -1744,7 +1744,7 @@ void Element::OnAttributeChange(const ElementAttributes& changed_attributes)
 				StyleSheetParser parser;
 				parser.ParseProperties(properties, value.GetReference<String>());
 
-				// RTSEngine: like HTML, a new style attribute replaces the old one; only properties the previous
+				// AIVERSE: like HTML, a new style attribute replaces the old one; only properties the previous
 				// attribute set are dropped, so properties set through the style API are kept
 				for (const PropertyId id : meta->style_attribute_ids)
 					if (!properties.GetProperty(id))

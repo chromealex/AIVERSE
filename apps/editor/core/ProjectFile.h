@@ -1,15 +1,15 @@
 // Project file `<Title>.rtsproj` at the root of a project folder: the file the user double-clicks
 // to open the project in the editor (like Unity's / Godot's project files). game.json stays the
-// runtime manifest (client, rtsbuild, packs read it); the .rtsproj only marks the folder as a
+// runtime manifest (client, aiversebuild, packs read it); the .rtsproj only marks the folder as a
 // project and carries editor-side facts. Format (JSON, comments allowed):
 //
 //   {"format": 1, "name": "My RTS", "engine": "0.2.0", "manifest": "game.json", "created": "2026-10-28"}
 //
-// Unknown keys are kept when the editor rewrites the file. rtsbuild never packs *.rtsproj.
+// Unknown keys are kept when the editor rewrites the file. aiversebuild never packs *.rtsproj.
 #pragma once
 #include <string>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 inline constexpr const char* kProjectExt = ".rtsproj";
 inline constexpr int kProjectFormat = 1;
@@ -41,4 +41,4 @@ std::string resolveProjectDir(const std::string& path, std::string* err);
 // e.g. a read-only folder); `created` tells whether a new file was written.
 std::string ensureProjectFile(const std::string& dir, bool* created = nullptr);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

@@ -3,7 +3,7 @@
 #include <cmath>
 #include "FxInternal.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 namespace {
 
@@ -274,4 +274,4 @@ bool ParticleSystem::Impl::emit(Instance& in, uint32_t owner, int effect, int em
     return true;
 }
 
-} // namespace rts::fx
+} // namespace aiverse::fx

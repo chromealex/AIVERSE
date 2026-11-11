@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "assets": {
+    "gold": {"cap": 1000000000, "metadata": {"name": "@meta.gold"}},
+    "gems": {"cap": 1000000000},
+    "energy": {"cap": 100},
+    "sword": {"cap": 1},
+    "pass_ticket": {"cap": 1}
+  },
+  "offers": {
+    "sword": {"cost": {"gold": 100}, "reward": {"sword": 1}, "limit": 1, "group": "equipment"},
+    "starter": {
+      "reward": {"gold": 500, "gems": 20}, "product": "starter_pack", "limit": 1,
+      "priority": 10, "group": "featured",
+      "condition": {"maximum": {"accountAge": 604800}, "excludedTags": ["owns_starter"]},
+      "metadata": {"title": "@meta.starter", "art": "ui/art/starter.png"}
+    },
+    "daily_exchange": {
+      "cost": {"gems": 1}, "reward": {"gold": 100}, "limit": 3,
+      "schedule": {"period": 86400}, "cooldown": 10
+    },
+    "craft_sword": {"cost": {"gold": 50, "gems": 2}, "reward": {"sword": 1}},
+    "pass": {"product": "season_pass", "reward": {"pass_ticket": 1}, "limit": 1}
+  },
+  "tracks": {
+    "first_win": {"metric": "wins", "thresholds": [1], "rewards": [{"gold": 100}]},
+    "daily_wins": {
+      "metric": "wins", "thresholds": [1, 3, 5],
+      "rewards": [{"gold": 10}, {"gold": 25}, {"gems": 1}],
+      "schedule": {"period": 86400}
+    },
+    "season_free": {
+      "metric": "season_xp", "thresholds": [100, 250, 500],
+      "rewards": [{"gold": 100}, {"gold": 200}, {"gems": 5}],
+      "schedule": {"start": 0, "period": 2592000}
+    },
+    "season_premium": {
+      "metric": "season_xp", "premiumTag": "season_premium",
+      "thresholds": [100, 250, 500], "rewards": [{"gems": 5}, {"gems": 10}, {"gems": 20}],
+      "schedule": {"start": 0, "period": 2592000}
+    }
+  },
+  "daily": {
+    "login": {"period": 86400, "resetOnMiss": true, "loop": true,
+      "rewards": [{"gold": 10}, {"gold": 20}, {"gold": 30}, {"gold": 40}, {"gold": 50}, {"gold": 60}, {"gems": 5}]}
+  },
+  "energy": {"stamina": {"asset": "energy", "cap": 100, "amount": 1, "interval": 300}},
+  "metadata": {"screens": ["shop", "offers", "quests", "pass", "inbox", "leaderboard", "chat"]}
+}

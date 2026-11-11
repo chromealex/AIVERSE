@@ -13,8 +13,8 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
-using namespace rts;
-using namespace rts::render;
+using namespace aiverse;
+using namespace aiverse::render;
 namespace fs=std::filesystem;
 namespace {
 struct Vertex { float3 p,n; float2 uv; };

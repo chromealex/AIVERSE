@@ -8,7 +8,7 @@
 #pragma once
 #include "Localization.h"
 
-namespace rts::i18n {
+namespace aiverse::i18n {
 
 struct GameLanguages {
     std::string source = "en";
@@ -34,4 +34,4 @@ std::string languageSelfName(const FileReader& read, const std::string& tag);
 std::string readSavedLanguage(const std::string& userDir);
 bool saveLanguage(const std::string& userDir, const std::string& tag);
 
-} // namespace rts::i18n
+} // namespace aiverse::i18n

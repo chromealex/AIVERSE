@@ -12,7 +12,7 @@
 
 #include "engine/gfx/Gfx.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 class UiRenderer final : public Rml::RenderInterface {
 public:
@@ -104,4 +104,4 @@ private:
     std::vector<std::unique_ptr<Face>> faces_;
 };
 
-} // namespace rts::ui
+} // namespace aiverse::ui

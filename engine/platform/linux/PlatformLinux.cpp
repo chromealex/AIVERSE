@@ -1,5 +1,5 @@
 // Linux: X11 window + EGL + OpenGL ES 3. Used for development and CI (works under Xvfb with Mesa).
-// Debug hooks (env):  RTS_SCREENSHOT=out.ppm  RTS_EXIT_AFTER_FRAMES=N  -> capture frame N and exit.
+// Debug hooks (env):  AIVERSE_SCREENSHOT=out.ppm  AIVERSE_EXIT_AFTER_FRAMES=N  -> capture frame N and exit.
 #include "../PlatformCommon.h"
 #include "../../gfx/Gfx.h"
 
@@ -19,12 +19,13 @@
 #include <unistd.h>
 #include <vector>
 
-namespace rts::platform {
+namespace aiverse::platform {
 using detail::state;
 
 namespace {
 Display* g_dpy = nullptr;
 Window g_win = 0;
+bool g_pointerLocked = false;
 Atom g_wmDelete = 0;
 
 uint8_t mods(unsigned s) {
@@ -126,7 +127,7 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     auto& S = state();
     S.cfg = cfgIn; S.cb = std::move(cb);
     const AppConfig& cfg = S.cfg;   // configure (below) may change it
-    if (const char* c = std::getenv("RTS_CONTENT")) S.contentRoot = c;
+    if (const char* c = std::getenv("AIVERSE_CONTENT")) S.contentRoot = c;
     else {
         char exe[4096] = {};
         ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
@@ -134,12 +135,12 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
         dir = dir.substr(0, dir.find_last_of('/'));
         S.contentRoot = access((dir + "/content").c_str(), F_OK) == 0 ? dir + "/content" : "content";
     }
-    if (const char* h = std::getenv("HOME")) S.userDir = std::string(h) + "/.local/share/rtsengine";
-    // RTS_TOUCH_EMULATE=1 (tests): the left button is a finger (TouchBegin / Move / End, no hover) on a touch device,
+    if (const char* h = std::getenv("HOME")) S.userDir = std::string(h) + "/.local/share/aiverse";
+    // AIVERSE_TOUCH_EMULATE=1 (tests): the left button is a finger (TouchBegin / Move / End, no hover) on a touch device,
     // so the mobile input paths can be driven by XTEST on a desktop / Xvfb
     // With Ctrl held at the press, the left button is two fingers (pinch, as the iOS Simulator's Option key): finger 1
     // at the pointer, finger 2 mirrored around the window centre.
-    const char* touchEnv = std::getenv("RTS_TOUCH_EMULATE");
+    const char* touchEnv = std::getenv("AIVERSE_TOUCH_EMULATE");
     const bool touchEmu = touchEnv && touchEnv[0] == '1';
     bool touchPinch = false;
     auto pinchTwin = [&](float x, float y, Event& t) { t.touchId = 2; t.x = S.winW - x; t.y = S.winH - y; };
@@ -166,9 +167,9 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
 
     EGLDisplay ed = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(g_dpy));
     eglInitialize(ed, nullptr, nullptr);
-    // RTS_GL=desktop: desktop GL 3.3 core through EGL (the GL33 backend used on Windows) - for Mesa
+    // AIVERSE_GL=desktop: desktop GL 3.3 core through EGL (the GL33 backend used on Windows) - for Mesa
     // builds without GLES (dev VMs, CI images); the default stays GLES3 like Android/web.
-    const char* glEnv = std::getenv("RTS_GL");
+    const char* glEnv = std::getenv("AIVERSE_GL");
     const bool desktopGL = glEnv && std::strcmp(glEnv, "desktop") == 0;
     eglBindAPI(desktopGL ? EGL_OPENGL_API : EGL_OPENGL_ES_API);
     const EGLint attrs[] = {EGL_RENDERABLE_TYPE, desktopGL ? EGL_OPENGL_BIT : EGL_OPENGL_ES3_BIT, EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
@@ -218,6 +219,12 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
                     break;
                 }
                 e.type = EventType::MouseMove; e.x = float(xe.xmotion.x); e.y = float(xe.xmotion.y); e.mods = mods(xe.xmotion.state);
+                if (g_pointerLocked) {
+                    int cx=int(S.winW)/2, cy=int(S.winH)/2;
+                    e.deltaX=float(xe.xmotion.x-cx); e.deltaY=float(xe.xmotion.y-cy);
+                    if (e.deltaX==0 && e.deltaY==0) break;
+                    XWarpPointer(g_dpy,None,g_win,0,0,0,0,cx,cy);
+                }
                 detail::dispatch(e); break;
             case ButtonPress: case ButtonRelease: {
                 e.x = float(xe.xbutton.x); e.y = float(xe.xbutton.y); e.mods = mods(xe.xbutton.state);
@@ -266,7 +273,7 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
                 break;
             }
             case FocusIn: e.type = EventType::FocusGained; detail::dispatch(e); break;
-            case FocusOut: e.type = EventType::FocusLost; detail::dispatch(e); break;
+            case FocusOut: setPointerLock(false); e.type = EventType::FocusLost; detail::dispatch(e); break;
             default: break;
             }
         }
@@ -290,6 +297,20 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     return 0;
 }
 
-} // namespace rts::platform
+bool pointerLocked() { return g_pointerLocked; }
+bool setPointerLock(bool enabled) {
+    if (enabled==g_pointerLocked) return true;
+    if (enabled) {
+        char empty[8]={}; XColor black{};
+        Pixmap bitmap=XCreateBitmapFromData(g_dpy,g_win,empty,8,8);
+        Cursor cursor=XCreatePixmapCursor(g_dpy,bitmap,bitmap,&black,&black,0,0);
+        int result=XGrabPointer(g_dpy,g_win,True,PointerMotionMask|ButtonPressMask|ButtonReleaseMask,GrabModeAsync,GrabModeAsync,g_win,cursor,CurrentTime);
+        XFreeCursor(g_dpy,cursor);XFreePixmap(g_dpy,bitmap);
+        if(result!=GrabSuccess)return false;
+        XWarpPointer(g_dpy,None,g_win,0,0,0,0,int(state().winW)/2,int(state().winH)/2);
+    } else XUngrabPointer(g_dpy,CurrentTime);
+    g_pointerLocked=enabled;return true;
+}
+} // namespace aiverse::platform
 
-int main(int argc, char** argv) { return rtsMain(argc, argv); }
+int main(int argc, char** argv) { return aiverseMain(argc, argv); }

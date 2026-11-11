@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -313,4 +313,4 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

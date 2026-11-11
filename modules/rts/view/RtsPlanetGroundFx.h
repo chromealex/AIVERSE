@@ -18,7 +18,7 @@
 #include "RtsGroundFx.h"
 #include "RtsPlanetRender.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct RtsScene;
 
@@ -53,4 +53,4 @@ private:
     bool init_ = false, hi_ = true;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

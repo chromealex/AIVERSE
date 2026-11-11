@@ -21,9 +21,9 @@ extern "C" {
 #include "lualib.h"
 }
 
-namespace rts { class Simulation; }
+namespace aiverse { class Simulation; }
 
-namespace rts::game::script {
+namespace aiverse::game::script {
 
 enum class Mode : uint8_t { Sim, View };
 
@@ -123,4 +123,4 @@ void openFieldApi(Vm& vm);          // `field` table: grid fields (RtsGridFields
 void pushEntity(lua_State* L, Entity e);
 bool argEntity(lua_State* L, int idx, Entity& out); // integer handle (no liveness check)
 
-} // namespace rts::game::script
+} // namespace aiverse::game::script

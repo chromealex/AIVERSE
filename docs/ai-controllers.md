@@ -12,4 +12,4 @@ The setting does not disable simulation systems, automatic unit combat, human/ne
 
 Controller ownership is immutable rules data. Replays store the rules and recorded commands; they do not rerun external AI. No mutable simulation state or new save field is introduced. Changing the controller changes the input stream, so old balance measurements involving built-in AI must be repeated for the new controller.
 
-Validation: `rts_tests rts_scripted_ai_controller` covers default/explicit built-in, invalid configuration, no commands or state difference against an unautomated reference, manual training, and absence of wave-player exemptions. Game-level tests must separately prove that the supplied director still acts.
+Validation: `aiverse_tests aiverse_scripted_ai_controller` covers default/explicit built-in, invalid configuration, no commands or state difference against an unautomated reference, manual training, and absence of wave-player exemptions. Game-level tests must separately prove that the supplied director still acts.

@@ -5,33 +5,33 @@
 //   sun (Lambert + Blinn specular) x shadow map with hardware PCF
 //   + hemisphere ambient (sky/ground) + rim + distance fog + ACES tonemap, lighting in linear space.
 #pragma once
-#include "LightShaders.h"   // RTS_GLSL_LIGHTS / RTS_MSL_LIGHTS: dynamic point lights (U2, tex1)
+#include "LightShaders.h"   // AIVERSE_GLSL_LIGHTS / AIVERSE_MSL_LIGHTS: dynamic point lights (U2, tex1)
 
-namespace rts::render::shaders {
+namespace aiverse::render::shaders {
 
 // Uniform blocks shared by the lit and shadow shaders (std140 / MSL layouts match):
 //   U0 (per draw):  mat4 model; vec4 color; vec4 params(x unlit, y specular, z receiveShadow, w emissive)
 //   U1 (per frame): mat4 viewProj; mat4 lightViewProj; mat4 invViewProj; vec4 sunDir(xyz, w intensity); vec4 sunColor;
 //                   vec4 skyColor; vec4 groundColor; vec4 fog(rgb, density); vec4 camPos;
 //                   vec4 shadow(x uvFlipY, y depthScale, z depthOffset, w texel); vec4 quality(x taps, y enabled, z radius uv, w normal offset)
-//                   Traced lighting (RTS_*_TRACE, Renderer3D "trace" tier):
+//                   Traced lighting (AIVERSE_*_TRACE, Renderer3D "trace" tier):
 //                   vec4 trace0(x,y height-field origin xz, z,w 1 / extent xz)
 //                   vec4 trace1(x height min, y height range (<= 0: terrain shadows off), z march distance, w penumbra tan)
 //                   vec4 trace2(xyz camera forward, w screen-space reflections on (scene colour + depth bound))
 //                   vec4 trace3(x SSR distance, y thickness (world), z steps, w ray bias)
-#define RTS_GLSL_FRAME \
+#define AIVERSE_GLSL_FRAME \
     "layout(std140) uniform U1 { mat4 u_viewProj; mat4 u_lightViewProj; mat4 u_invViewProj; vec4 u_sunDir; vec4 u_sunColor;\n" \
     "  vec4 u_skyColor; vec4 u_groundColor; vec4 u_fog; vec4 u_camPos; vec4 u_shadow; vec4 u_quality;\n" \
     "  vec4 u_trace0; vec4 u_trace1; vec4 u_trace2; vec4 u_trace3; };\n"
-#define RTS_GLSL_BLOCKS \
-    "layout(std140) uniform U0 { mat4 u_model; vec4 u_color; vec4 u_params; };\n" RTS_GLSL_FRAME
+#define AIVERSE_GLSL_BLOCKS \
+    "layout(std140) uniform U0 { mat4 u_model; vec4 u_color; vec4 u_params; };\n" AIVERSE_GLSL_FRAME
 
-#define RTS_MSL_FRAME \
+#define AIVERSE_MSL_FRAME \
     "struct U1 { float4x4 viewProj; float4x4 lightViewProj; float4x4 invViewProj; float4 sunDir; float4 sunColor;\n" \
     "  float4 skyColor; float4 groundColor; float4 fog; float4 camPos; float4 shadow; float4 quality;\n" \
     "  float4 trace0; float4 trace1; float4 trace2; float4 trace3; };\n"
-#define RTS_MSL_BLOCKS \
-    "struct U0 { float4x4 model; float4 color; float4 params; };\n" RTS_MSL_FRAME
+#define AIVERSE_MSL_BLOCKS \
+    "struct U0 { float4x4 model; float4 color; float4 params; };\n" AIVERSE_MSL_FRAME
 
 // Traced terrain shadows (Renderer3D "trace" tier, needs U1 and the height field in slot TEX):
 // the sun ray is marched over a 16-bit height map of the whole map (R high byte, G low byte; built by
@@ -39,7 +39,7 @@ namespace rts::render::shaders {
 // still cast long, soft shadows at dawn and dusk. Penumbra grows with the distance to the occluder
 // (horizon-angle test, u_trace1.w), the shadow-map term stays for objects. Steps grow geometrically:
 // fine near the receiver, coarse far away. Returns 1 when the height field is not bound.
-#define RTS_GLSL_TRACE_AT(TEX) \
+#define AIVERSE_GLSL_TRACE_AT(TEX) \
     "uniform highp sampler2D " TEX ";\n" \
     "float traceHeight(vec2 xz) {\n" \
     "    vec2 uv = (xz - u_trace0.xy) * u_trace0.zw;\n" \
@@ -67,9 +67,9 @@ namespace rts::render::shaders {
     "    }\n" \
     "    return 1.0 - clamp(occ, 0.0, 1.0);\n" \
     "}\n"
-#define RTS_GLSL_TRACE_NONE "float terrainShadow(vec3 wpos) { return 1.0; }\n"
+#define AIVERSE_GLSL_TRACE_NONE "float terrainShadow(vec3 wpos) { return 1.0; }\n"
 
-#define RTS_MSL_TRACE \
+#define AIVERSE_MSL_TRACE \
     "static float traceHeight(constant U1& f, texture2d<float> hf, sampler hs, float2 xz) {\n" \
     "    float2 uv = (xz - f.trace0.xy) * f.trace0.zw;\n" \
     "    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return f.trace1.x - 1.0e4;\n" \
@@ -102,7 +102,7 @@ namespace rts::render::shaders {
 // a colour + depth target, a depth-restoring blit, then water and the rest on top). A hit replaces the
 // planar reflection at that pixel (banks, cliffs and terrain that the mirrored pass skips); misses
 // keep the planar result. Needs the scene colour in COLOR and the scene depth in DEPTH.
-#define RTS_GLSL_SSR_AT(COLOR, DEPTH) \
+#define AIVERSE_GLSL_SSR_AT(COLOR, DEPTH) \
     "uniform mediump sampler2D " COLOR ";\n" \
     "uniform highp sampler2D " DEPTH ";\n" \
     "vec3 ssrUnproject(vec2 uv, float d01) {\n" \
@@ -115,7 +115,7 @@ namespace rts::render::shaders {
     "    hit = 0.0;\n" \
     "    if (u_trace2.w < 0.5) return vec3(0.0);\n" \
     "    vec3 R = reflect(-V, n);\n" \
-    "#ifndef RTS_MODEL_SSR\n    if (R.y <= 0.01) return vec3(0.0);\n#endif\n" \
+    "#ifndef AIVERSE_MODEL_SSR\n    if (R.y <= 0.01) return vec3(0.0);\n#endif\n" \
     "    vec3 fwd = u_trace2.xyz;\n" \
     "    int steps = int(u_trace3.z);\n" \
     "    float d = 0.0, stepLen = u_trace3.x / float(steps) * 0.35, growth = 1.12;\n" \
@@ -160,7 +160,7 @@ namespace rts::render::shaders {
     "    return vec3(0.0);\n" \
     "}\n"
 
-#define RTS_MSL_SSR \
+#define AIVERSE_MSL_SSR \
     "static float3 ssrUnproject(constant U1& f, float2 uv, float d01) {\n" \
     "    float z = (d01 - f.shadow.z) / f.shadow.y;\n" \
     "    float4 w = f.invViewProj * float4(uv * 2.0 - 1.0, z, 1.0);\n" \
@@ -170,7 +170,7 @@ namespace rts::render::shaders {
     "    hit = 0.0;\n" \
     "    if (f.trace2.w < 0.5) return float3(0.0);\n" \
     "    float3 R = reflect(-V, n);\n" \
-    "#ifndef RTS_MODEL_SSR\n    if (R.y <= 0.01) return float3(0.0);\n#endif\n" \
+    "#ifndef AIVERSE_MODEL_SSR\n    if (R.y <= 0.01) return float3(0.0);\n#endif\n" \
     "    float3 fwd = f.trace2.xyz;\n" \
     "    int steps = int(f.trace3.z);\n" \
     "    float d = 0.0, stepLen = f.trace3.x / float(steps) * 0.35, growth = 1.12;\n" \
@@ -216,7 +216,7 @@ namespace rts::render::shaders {
 
 
 // Shadow lookup shared by every lit shader (needs U1 and the shadow map in slot 0).
-#define RTS_GLSL_SHADOW \
+#define AIVERSE_GLSL_SHADOW \
     "uniform highp sampler2DShadow tex0;\n" \
     "// Soft shadows: rotated Poisson-disc PCF over hardware 2x2 compare taps.\n" \
     "//   u_quality.x taps (1 / 4 / 8 / 16), u_quality.z filter radius in shadow UV, u_quality.w normal offset (world)\n" \
@@ -259,7 +259,7 @@ namespace rts::render::shaders {
     "    return s / float(n_);\n" \
     "}\n"
 
-#define RTS_MSL_SHADOW \
+#define AIVERSE_MSL_SHADOW \
     "constant float2 kDisk[16] = {\n" \
     "    float2(-0.613, 0.617), float2(0.170, -0.040), float2(-0.299, 0.791), float2(0.645, 0.493),\n" \
     "    float2(-0.651, 0.717), float2(0.421, 0.027), float2(-0.817, -0.271), float2(-0.705, -0.668),\n" \
@@ -298,7 +298,7 @@ namespace rts::render::shaders {
     "}\n"
 
 inline const char* kLitVS =
-    RTS_GLSL_BLOCKS
+    AIVERSE_GLSL_BLOCKS
     R"(
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_nrm;
@@ -316,7 +316,7 @@ void main() {
 )";
 
 inline const char* kLitFS =
-    RTS_GLSL_BLOCKS RTS_GLSL_SHADOW RTS_GLSL_LIGHTS RTS_GLSL_WATER_REFLECT("tex2") RTS_GLSL_TRACE_AT("tex3") RTS_GLSL_SSR_AT("tex4", "tex5")
+    AIVERSE_GLSL_BLOCKS AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS AIVERSE_GLSL_WATER_REFLECT("tex2") AIVERSE_GLSL_TRACE_AT("tex3") AIVERSE_GLSL_SSR_AT("tex4", "tex5")
     R"(
 in vec3 v_nrm;
 in vec3 v_wpos;
@@ -359,7 +359,7 @@ void main() {
 )";
 
 inline const char* kLitMSL =
-    "#include <metal_stdlib>\nusing namespace metal;\n" RTS_MSL_BLOCKS RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_WATER_REFLECT RTS_MSL_TRACE RTS_MSL_SSR
+    "#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_MSL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_WATER_REFLECT AIVERSE_MSL_TRACE AIVERSE_MSL_SSR
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float3 nrm [[attribute(1)]]; float4 col [[attribute(2)]]; };
 struct VOut { float4 pos [[position]]; float3 nrm; float3 wpos; float4 col; };
@@ -450,7 +450,7 @@ fragment FOut fs_main(VOut in [[stage_in]], texture2d<float> tex0 [[texture(0)]]
 
 // Depth-only shadow caster
 inline const char* kShadowVS =
-    RTS_GLSL_BLOCKS
+    AIVERSE_GLSL_BLOCKS
     R"(
 layout(location = 0) in vec3 a_pos;
 void main() { gl_Position = u_lightViewProj * (u_model * vec4(a_pos, 1.0)); }
@@ -459,7 +459,7 @@ inline const char* kShadowFS = R"(
 void main() {}
 )";
 inline const char* kShadowMSL =
-    "#include <metal_stdlib>\nusing namespace metal;\n" RTS_MSL_BLOCKS
+    "#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_MSL_BLOCKS
     R"(
 struct VIn { float3 pos [[attribute(0)]]; };
 struct VOut { float4 pos [[position]]; };
@@ -470,7 +470,7 @@ vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]], constant 
 
 // ---------------- colored lines / flat triangles (overlays, no lighting) ----------------
 inline const char* kColorVS =
-    RTS_GLSL_BLOCKS
+    AIVERSE_GLSL_BLOCKS
     R"(
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec4 a_col;
@@ -483,7 +483,7 @@ out vec4 o_color;
 void main() { o_color = rtsDisplay(v_col); }
 )";
 inline const char* kColorMSL =
-    "#include <metal_stdlib>\nusing namespace metal;\n" RTS_MSL_BLOCKS
+    "#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_MSL_BLOCKS
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float4 col [[attribute(1)]]; };
 struct VOut { float4 pos [[position]]; float4 col; };
@@ -533,4 +533,4 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]],
 }
 )";
 
-} // namespace rts::render::shaders
+} // namespace aiverse::render::shaders

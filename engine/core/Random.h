@@ -4,7 +4,7 @@
 #include <cstdint>
 #include "Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 class Random {
 public:
@@ -45,4 +45,4 @@ private:
     uint64_t state_ = 0, inc_ = 0;
 };
 
-} // namespace rts
+} // namespace aiverse

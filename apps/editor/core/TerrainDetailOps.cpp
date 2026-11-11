@@ -13,7 +13,7 @@
 #include "modules/rts/view/RtsTerrainDetail.h"
 #include "modules/rts/view/RtsTerrainSurface.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -383,4 +383,4 @@ DetailDeviation detailDeviation(const MapData& d, const game::Rules& rules, floa
     return out;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

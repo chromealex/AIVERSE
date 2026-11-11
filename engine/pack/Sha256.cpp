@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 constexpr uint32_t kK[64] = {
@@ -75,4 +75,4 @@ std::string toHex(const uint8_t* data, size_t n) {
     return s;
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

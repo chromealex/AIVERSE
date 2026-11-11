@@ -22,7 +22,7 @@
 #pragma once
 #include "Shaders.h"
 
-namespace rts::render::shaders {
+namespace aiverse::render::shaders {
 
 inline const char* kSpriteVS = R"(
 layout(std140) uniform U0 { mat4 u_viewProj; vec4 u_params; };
@@ -37,7 +37,7 @@ out vec3 v_wpos;
 void main() { v_uv = a_uv; v_col = a_col; v_team = a_team; v_wpos = a_pos; gl_Position = u_viewProj * vec4(a_pos, 1.0); }
 )";
 
-inline const char* kSpriteFS = RTS_GLSL_LIGHTS_AT("U2", "tex1") R"(
+inline const char* kSpriteFS = AIVERSE_GLSL_LIGHTS_AT("U2", "tex1") R"(
 layout(std140) uniform U0 { mat4 u_viewProj; vec4 u_params; };
 uniform sampler2D tex0;
 in vec2 v_uv;
@@ -55,7 +55,7 @@ void main() {
 }
 )";
 
-inline const char* kSpriteMSL = "#include <metal_stdlib>\nusing namespace metal;\n" RTS_MSL_LIGHTS R"(
+inline const char* kSpriteMSL = "#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_MSL_LIGHTS R"(
 struct U0 { float4x4 viewProj; float4 params; };
 struct VIn { float3 pos [[attribute(0)]]; float2 uv [[attribute(1)]]; float4 col [[attribute(2)]]; float4 team [[attribute(3)]]; };
 struct VOut { float4 pos [[position]]; float2 uv; float4 col; float4 team; float3 wpos; };
@@ -74,10 +74,10 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]],
 }
 )";
 
-#define RTS_GLSL_SPRITE_LIT_U0 "layout(std140) uniform U0 { mat4 u_spriteVP; vec4 u_sp; vec4 u_ref; };\n"
+#define AIVERSE_GLSL_SPRITE_LIT_U0 "layout(std140) uniform U0 { mat4 u_spriteVP; vec4 u_sp; vec4 u_ref; };\n"
 
 inline const char* kSpriteLitVS =
-    RTS_GLSL_SPRITE_LIT_U0
+    AIVERSE_GLSL_SPRITE_LIT_U0
     R"(
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec2 a_uv;
@@ -92,7 +92,7 @@ void main() { v_uv = a_uv; v_col = a_col; v_team = a_team; v_rpos = a_rpos; gl_P
 )";
 
 inline const char* kSpriteLitFS =
-    RTS_GLSL_SPRITE_LIT_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS
+    AIVERSE_GLSL_SPRITE_LIT_U0 AIVERSE_GLSL_FRAME AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS
     R"(
 uniform sampler2D tex2;
 in vec2 v_uv;
@@ -116,7 +116,7 @@ void main() {
     vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
     vec3 light = u_skyColor.rgb * u_skyColor.rgb + sun * (max(L.y, 0.0) * sh);
     light += dynamicLight(p, vec3(0.0, 1.0, 0.0), normalize(u_camPos.xyz - p), 0.0);
-#if RTS_HDR
+#if AIVERSE_HDR
     o_color = vec4(rtsSrgbDecode(c * v_col.rgb) * min(light / u_ref.rgb, vec3(2.56)), t.a * v_col.a);
     return;
 #endif
@@ -128,7 +128,7 @@ void main() {
 inline const char* kSpriteLitMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "struct SU0 { float4x4 viewProj; float4 sp; float4 ref; };\n"
-    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS
+    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float2 uv [[attribute(1)]]; float4 col [[attribute(2)]]; float4 team [[attribute(3)]]; float4 rpos [[attribute(4)]]; };
 struct VOut { float4 pos [[position]]; float2 uv; float4 col; float4 team; float4 rpos; };
@@ -152,7 +152,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant SU0& u [[buffer(1)]], con
     float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
     float3 light = f.skyColor.rgb * f.skyColor.rgb + sun * (max(L.y, 0.0) * sh);
     light += dynamicLight(l, tex1, s1, p, float3(0.0, 1.0, 0.0), normalize(f.camPos.xyz - p), 0.0);
-#if RTS_HDR
+#if AIVERSE_HDR
     return float4(rtsSrgbDecode(c * in.col.rgb) * min(light / u.ref.rgb, float3(2.56)), t.a * in.col.a);
 #endif
     c *= min(sqrt(light / u.ref.rgb), float3(1.6));
@@ -190,4 +190,4 @@ fragment void fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], textur
 }
 )";
 
-} // namespace rts::render::shaders
+} // namespace aiverse::render::shaders

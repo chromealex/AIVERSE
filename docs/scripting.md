@@ -74,7 +74,7 @@ sees one:
 2. **Float arithmetic raises an error** — `/` and `^` always produce floats in Lua, so `7 / 2`,
    `n / 2`, `2 ^ 3` fail with *"float arithmetic is not allowed in simulation scripts (use fx()
    numbers, or // for integer division)"*. Use `7 // 2` (integer division, = 3) or `fx(7) / 2`
-   (= 3.5). The guard sits inside the VM (`third_party/lua/rts_luaconf.h`), so it also catches
+   (= 3.5). The guard sits inside the VM (`third_party/lua/aiverse_luaconf.h`), so it also catches
    floats made from strings (`"1.5" + 1`).
 3. **Every API function that takes a number accepts only integers or `fx`**; a float gives
    *"got a float - use fx() or integers"*.
@@ -184,7 +184,7 @@ netcode rewinds or a save is loaded. A tick that only changes Lua tables costs n
   match (deterministically: the flag is simulation state). Functions called from data
   (`"fn"` of effects and trigger hooks) are disabled the same way.
 - Loading errors (syntax, float literals, a missing file) skip that file; the match still starts.
-- Script cost per tick: `rts_headless --tick-times FILE` writes the wall time of every simulation step
+- Script cost per tick: `aiverse_headless --tick-times FILE` writes the wall time of every simulation step
   (`tick microseconds` per line).
 
 ## Events
@@ -367,7 +367,7 @@ of simulation: `game.json` → `terrain.territory: {smooth:true, transition:0.2,
 Ownership remains deterministic cell data; the view reconstructs a soft contour and animates it.
 The view never writes ownership or decides victory.
 
-Validation for this API: `rts_tests script_territory_brush_frontier_and_placement` checks brush
+Validation for this API: `aiverse_tests script_territory_brush_frontier_and_placement` checks brush
 counts, overwriting ownership, the connected-brush restriction, frontier segment counts,
 invalid placement, overlapping units with `avoidance:none`, and snapshot replay equivalence.
 The full macOS suite passed 4967 checks. A 3600-tick project battle replay matched all checkpoints.
@@ -455,7 +455,7 @@ the battle. Presentation only, never part of the simulation.
 | `sound.music(name \| nil [, fade])`, `sound.current_music()` | plays a playlist of `"music"` (crossfade `fade` seconds, default 1.5; a playlist that is still fading out comes back from where it is); nil stops |
 | `sound.music_gain(g)` | script level of the music 0..4 (ducking), on top of the bus and the player's setting |
 | `sound.settings()` → `{music, sfx, musicOn, sfxOn}` | the player's volumes 0..1 and on / off switches (client data model `music`, `sfx`, `musicOn`, `sfxOn`) |
-| `sound.available()`, `sound.trace(text)` | a mixer runs; `trace` prints `audio\| text` on stdout when `RTS_AUDIO_LOG=1` (tools compare a game's sound decisions) |
+| `sound.available()`, `sound.trace(text)` | a mixer runs; `trace` prints `audio\| text` on stdout when `AIVERSE_AUDIO_LOG=1` (tools compare a game's sound decisions) |
 
 **One mixer for menus and matches: `view.ui_call(name, ...)`** → `ok, results...` calls the client UI Lua's global function
 `name` (dotted, e.g. `"MyAudio.play"`) synchronously with the arguments copied (nil, booleans, numbers, strings, tables of
@@ -558,7 +558,7 @@ in `tests/checksums/games` (seeds 1-3) with `baseline.txt`, recorded from the C+
   returned and nothing is saved; `register: true` adds it to rules `"scripts"`), `script_check
   {seconds, seed}` (compiles everything and runs a headless bot match, returns errors with
   file:line). `game_file_write` checks `.lua` files the same way.
-- Headless: `rts_headless --project templates/scripted --seed 3` prints the script log (errors also with
+- Headless: `aiverse_headless --project templates/scripted --seed 3` prints the script log (errors also with
   `--quiet`).
 
 ## Engine side
@@ -698,13 +698,13 @@ A call over the budget is aborted and skipped for that frame (logged `... [view 
 times a handler); the handler is disabled only after 10 calls in a row over the budget (an endless loop, not a spike)
 or on an error (`[view handler disabled ...]`). An aborted call may leave its own caches half built, so a script that
 builds incrementally should publish a cache only once it is whole. `ViewScripts::profile()` gives the instructions
-per handler (calls, total, most expensive call, last frame, overruns, disabled) and per frame; `RTS_VIEW_PROFILE=file`
+per handler (calls, total, most expensive call, last frame, overruns, disabled) and per frame; `AIVERSE_VIEW_PROFILE=file`
 makes the client write it every frame (`h <index> <file:line>` once per handler, then `f <tick> <frame total>
-<per handler ...>`, -1 = disabled), and `RTS_SIM_SPEED=s` (testing) runs the match s times faster than real time
+<per handler ...>`, -1 = disabled), and `AIVERSE_SIM_SPEED=s` (testing) runs the match s times faster than real time
 (up to 8*s ticks a frame) so long battles fit a profiling run. Test: `view_handler_budget_per_call`.
 
 View scripts' log (`game.log` lines and errors, which disable the failing handler) is kept by the host; with
-`RTS_SCRIPT_LOG=1` the client also prints each line on stdout as `[view] t=<tick> ...` / `[view error] ...`, next to the
+`AIVERSE_SCRIPT_LOG=1` the client also prints each line on stdout as `[view] t=<tick> ...` / `[view error] ...`, next to the
 simulation scripts' `[script] ...` lines (screenshot and capture runs). Hook: `ViewScripts::onLog`; test
 `view_script_log_callback`.
 
@@ -753,7 +753,7 @@ The returned one-based array excludes start and includes goal; unreachable or ou
 
 ### Headless snapshot and save-state verification
 
-`rts_headless --project <dir> --max-seconds 35 --verify-restore-at 15 --verify-restore-ticks 200` captures both `SimSnapshot` and `Simulation::serialize()` at 15 seconds, advances 200 ticks, then repeats the same interval after snapshot and serialized restoration in the **same live VM**, and after serialized restoration into a newly initialized simulation/VM. Every tick's simulation checksum must match, and script errors fail the verification. External C++ bot objects are copied along with the verification baseline so their input decisions repeat; ordinary save-state files do not serialize those external controllers. A plain `--load` bot match can therefore receive different commands and is not by itself a deterministic save/load comparison.
+`aiverse_headless --project <dir> --max-seconds 35 --verify-restore-at 15 --verify-restore-ticks 200` captures both `SimSnapshot` and `Simulation::serialize()` at 15 seconds, advances 200 ticks, then repeats the same interval after snapshot and serialized restoration in the **same live VM**, and after serialized restoration into a newly initialized simulation/VM. Every tick's simulation checksum must match, and script errors fail the verification. External C++ bot objects are copied along with the verification baseline so their input decisions repeat; ordinary save-state files do not serialize those external controllers. A plain `--load` bot match can therefore receive different commands and is not by itself a deterministic save/load comparison.
 
 The checker retains normal final state and recording behavior. `--record` can be replayed normally; verification wall time includes the repeated intervals and is not a normal performance benchmark. Restore ticks must be 1..100000 and fit before the requested match limit. A natural match end shortens the checked interval and the actual count is printed. A match ending before the restore point fails rather than reporting success. Verification cannot be combined with replay/setup-only/path/group benchmark modes. Exit 1 reports failed verification; exit 2 reports invalid configuration or failed setup. `tests/check_headless_restore.py <binary>` exercises all three restoration paths, tick-zero startup, replay consistency, invalid intervals and a deliberately untracked Lua local that must desynchronize.
 

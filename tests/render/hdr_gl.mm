@@ -3,7 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #include "HdrScene.h"
 #include "engine/gfx/gl/GLApi.h"
-int rtsMain(int, char**) {
+int aiverseMain(int, char**) {
     @autoreleasepool {
         NSOpenGLPixelFormatAttribute attrs[]={NSOpenGLPFAOpenGLProfile,NSOpenGLProfileVersion4_1Core,NSOpenGLPFAColorSize,24,NSOpenGLPFADepthSize,24,0};
         NSOpenGLPixelFormat* pf=[[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
@@ -11,15 +11,15 @@ int rtsMain(int, char**) {
         [context makeCurrentContext];
         if(!context) return 1;
         while (glGetError()!=GL_NO_ERROR) {} // Cocoa context setup may leave legacy GL errors.
-        auto dev=rts::gfx::createGLDevice(rts::gfx::Backend::GL33);
+        auto dev=aiverse::gfx::createGLDevice(aiverse::gfx::Backend::GL33);
         if (GLenum e=glGetError()) {std::fprintf(stderr,"GL device error %x\n",e);return 1;}
-        rts::test::HdrScene scene; scene.init(*dev);
+        aiverse::test::HdrScene scene; scene.init(*dev);
         if (GLenum e=glGetError()) {std::fprintf(stderr,"GL init error %x\n",e);return 1;}
-        rts::gfx::TextureDesc td;td.width=960;td.height=640;td.renderTarget=true;
-        scene.output.colorTarget=dev->createTexture(td);td.format=rts::gfx::PixelFormat::Depth;
+        aiverse::gfx::TextureDesc td;td.width=960;td.height=640;td.renderTarget=true;
+        scene.output.colorTarget=dev->createTexture(td);td.format=aiverse::gfx::PixelFormat::Depth;
         scene.output.depthTarget=dev->createTexture(td);
         if (GLenum e=glGetError()) {std::fprintf(stderr,"GL target error %x\n",e);return 1;}
-        scene.readOutput=[](rts::gfx::Device::CaptureFn fn){
+        scene.readOutput=[](aiverse::gfx::Device::CaptureFn fn){
             std::vector<uint8_t> raw(960*640*4), px(raw.size());
             glReadBuffer(GL_COLOR_ATTACHMENT0);glPixelStorei(GL_PACK_ALIGNMENT,1);
             glReadPixels(0,0,960,640,GL_RGBA,GL_UNSIGNED_BYTE,raw.data());

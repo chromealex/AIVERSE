@@ -9,9 +9,9 @@ or stored in sim state, and the client localizes its own display copy of `Rules`
 |---|---|
 | `Localization.{h,cpp}` | string tables, fallback chain, `{placeholders}`, CLDR plural rules, pseudo-locale, `check()` |
 | `GameLanguage.{h,cpp}` | `game.json` languages, choosing the language (saved → OS → source), loading engine + game tables |
-| `SystemLanguage.cpp` | OS languages: CoreFoundation (macOS/iOS), `GetUserPreferredUILanguages` (Windows), `navigator.languages` (web), system properties (Android), `LANGUAGE`/`LANG` (Linux). `RTS_LANG=de` overrides everywhere |
+| `SystemLanguage.cpp` | OS languages: CoreFoundation (macOS/iOS), `GetUserPreferredUILanguages` (Windows), `navigator.languages` (web), system properties (Android), `LANGUAGE`/`LANG` (Linux). `AIVERSE_LANG=de` overrides everywhere |
 | `modules/rts/RtsLocalize.{h,cpp}` | key scheme for RTS data, `localizeRules()`, `collectSourceStrings()` |
-| `tools/i18n` | `rts_i18n check` (tables and `.rml` documents) / `rts_i18n extract` |
+| `tools/i18n` | `aiverse_i18n check` (tables and `.rml` documents) / `aiverse_i18n extract` |
 | `engine/assets/lang/<tag>.json` | engine/client strings (`en` is the base) |
 | `<project>/lang/<tag>.json` | a game's strings; may also override engine keys |
 
@@ -54,10 +54,10 @@ the `tr` transform of the client's data model:
 
 `lang` is only there so the text is re-evaluated when the player switches language (no document
 reload). Text with values (`Health {hp} / {max}`) is formatted in C++ and bound as a variable.
-`rts_i18n check` reports unknown keys and hard-coded words in documents.
+`aiverse_i18n check` reports unknown keys and hard-coded words in documents.
 
 Every user-facing string goes through `tr()`; add the key to `engine/assets/lang/en.json` **and**
-`ru.json` in the same change (`rts_tests` fails if `ru` misses a key or a placeholder differs).
+`ru.json` in the same change (`aiverse_tests` fails if `ru` misses a key or a placeholder differs).
 Never build sentences by concatenation (`"Built: " + name`) — word order differs between languages;
 put the whole sentence in the table with placeholders.
 
@@ -68,13 +68,13 @@ under derived keys: `game.name`, `map.<stem>.title|name|player.<n>`, `resource.<
 `tech.<id>`, `faction.<id>`, `ability.<id>`. A name written as `"@my.key"` uses that key instead.
 
 ```sh
-rts_i18n extract --project templates/skirmish --lang de --write   # creates/updates lang/de.json, // TODO marks new keys
-rts_i18n check   --project templates/skirmish                     # errors: bad placeholders/plurals; warnings: untranslated
+aiverse_i18n extract --project templates/skirmish --lang de --write   # creates/updates lang/de.json, // TODO marks new keys
+aiverse_i18n check   --project templates/skirmish                     # errors: bad placeholders/plurals; warnings: untranslated
 ```
 
 ## Testing
 
-- `--lang ru` on the client command line, or `RTS_LANG=ru`.
+- `--lang ru` on the client command line, or `AIVERSE_LANG=ru`.
 - `--lang qps`: pseudo-locale — every string accented and ~35% longer in `[ ]`. Text that shows up
   plain is hard-coded; text that gets clipped needs a wider layout.
 

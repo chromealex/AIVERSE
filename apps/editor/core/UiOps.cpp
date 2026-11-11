@@ -31,7 +31,7 @@ extern "C" {
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -145,7 +145,7 @@ std::vector<std::string> gameLanguages(const Workspace& ws) {
 } // namespace
 
 // directory that holds the engine assets as "engine/..." next to the client (the client reads them
-// relative to its working directory when RTS_CONTENT points at a project folder)
+// relative to its working directory when AIVERSE_CONTENT points at a project folder)
 fs::path engineAssetsRoot(const Workspace& ws, const std::string& exe) {
     // a folder with only engine/ in it: the client's own content folder also holds a sample game, whose
     // files would fill in for what the project lacks (audio.json, fx) through the relative-path fallback
@@ -483,7 +483,7 @@ void registerUiOps(Workspace& ws) {
             "frame": {"type": "boolean", "description": "draw the device cut-out and home indicator, default true"}}})"),
         [&ws](const Json& p) {
             fs::path g; requireGame(ws, g);
-            if (ws.gameExe.empty() || !fs::exists(ws.gameExe)) throw std::runtime_error("game client (RTSGame) not found next to the editor / rtsmcp");
+            if (ws.gameExe.empty() || !fs::exists(ws.gameExe)) throw std::runtime_error("game client (AiverseGame) not found next to the editor / aiversemcp");
             int w = int(p["width"].integer(0)), h = int(p["height"].integer(0));
             std::string devName;
             if (p.has("device")) {
@@ -521,18 +521,18 @@ void registerUiOps(Workspace& ws) {
             const fs::path cwd = engineAssetsRoot(ws, ws.gameExe);
             std::string cmd;
 #if defined(_WIN32)
-            _putenv_s("RTS_CONTENT", g.string().c_str());
-            _putenv_s("RTS_UI_SAVE_DIR", (tmp / "save").string().c_str());
-            _putenv_s("RTS_SCREENSHOT", shot.string().c_str());
-            _putenv_s("RTS_EXIT_AFTER_FRAMES", std::to_string(frames).c_str());
-            _putenv_s("RTS_SPLASH", "off");
-            _putenv_s("RTS_AUDIO", "off");
-            _putenv_s("RTS_UI_SAFE_AREA", safeEnv);
+            _putenv_s("AIVERSE_CONTENT", g.string().c_str());
+            _putenv_s("AIVERSE_UI_SAVE_DIR", (tmp / "save").string().c_str());
+            _putenv_s("AIVERSE_SCREENSHOT", shot.string().c_str());
+            _putenv_s("AIVERSE_EXIT_AFTER_FRAMES", std::to_string(frames).c_str());
+            _putenv_s("AIVERSE_SPLASH", "off");
+            _putenv_s("AIVERSE_AUDIO", "off");
+            _putenv_s("AIVERSE_UI_SAFE_AREA", safeEnv);
             cmd = "cd /d " + shellArg(cwd.string()) + " && " + shellArg(ws.gameExe) + args + " 2>&1";
 #else
-            cmd = "cd " + shellArg(cwd.string()) + " && RTS_CONTENT=" + shellArg(g.string()) + " RTS_UI_SAVE_DIR=" + shellArg((tmp / "save").string()) +
-                  " RTS_SCREENSHOT=" + shellArg(shot.string()) + " RTS_EXIT_AFTER_FRAMES=" + std::to_string(frames) +
-                  " RTS_SPLASH=off RTS_AUDIO=off RTS_UI_SAFE_AREA=" + shellArg(safeEnv) + " " + shellArg(ws.gameExe) + args + " 2>&1";
+            cmd = "cd " + shellArg(cwd.string()) + " && AIVERSE_CONTENT=" + shellArg(g.string()) + " AIVERSE_UI_SAVE_DIR=" + shellArg((tmp / "save").string()) +
+                  " AIVERSE_SCREENSHOT=" + shellArg(shot.string()) + " AIVERSE_EXIT_AFTER_FRAMES=" + std::to_string(frames) +
+                  " AIVERSE_SPLASH=off AIVERSE_AUDIO=off AIVERSE_UI_SAFE_AREA=" + shellArg(safeEnv) + " " + shellArg(ws.gameExe) + args + " 2>&1";
 #endif
             int rc = 0;
             const std::string out = runCapture(cmd, rc);
@@ -579,4 +579,4 @@ void registerUiOps(Workspace& ws) {
         }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

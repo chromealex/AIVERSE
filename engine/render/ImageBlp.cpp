@@ -14,7 +14,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -417,4 +417,4 @@ bool decodeBlp(const std::string& bytes, Image& out) {
     return true;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

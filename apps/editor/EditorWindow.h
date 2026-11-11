@@ -1,4 +1,4 @@
-// Dockable editor windows. Each window is a small class registered with RTS_EDITOR_WINDOW; the
+// Dockable editor windows. Each window is a small class registered with AIVERSE_EDITOR_WINDOW; the
 // editor creates one instance of each, lists them in the top menu of its group(), docks them, saves the layout
 // and lets agents open/close them over MCP. See docs/editor-windows.md.
 #pragma once
@@ -9,7 +9,7 @@
 #include "imgui.h"
 #include "EditorIcons.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class Editor;
 
@@ -51,8 +51,8 @@ struct WindowRegistrar {
     explicit WindowRegistrar(WindowRegistry::Factory f) { WindowRegistry::factories().push_back(std::move(f)); }
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor
 
 // Put this once in the .cpp of a window class (files in apps/editor/windows/ are built automatically).
-#define RTS_EDITOR_WINDOW(Class) \
-    static ::rts::editor::WindowRegistrar rtsEditorWindow_##Class([] { return std::unique_ptr<::rts::editor::EditorWindow>(new Class()); })
+#define AIVERSE_EDITOR_WINDOW(Class) \
+    static ::aiverse::editor::WindowRegistrar aiverseEditorWindow_##Class([] { return std::unique_ptr<::aiverse::editor::EditorWindow>(new Class()); })

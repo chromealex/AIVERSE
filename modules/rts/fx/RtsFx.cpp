@@ -4,7 +4,7 @@
 #include "../RtsModule.h"
 #include "../view/RtsView.h"   // SceneObject (plain struct, no link dependency)
 
-namespace rts::game {
+namespace aiverse::game {
 
 using fx::float3;
 using fx::float4;
@@ -330,4 +330,4 @@ void RtsFx::update(Simulation& sim, const std::vector<SceneObject>* scene) {
         }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

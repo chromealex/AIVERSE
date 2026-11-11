@@ -1,12 +1,12 @@
 # Linear HDR scene rendering
 
 `postfx.hdr` in game.json or the map selects `auto` (default), `on`, or `off`.
-`RTS_HDR=auto|on|off` overrides it for comparisons. This is an HDR **rendering pipeline**
+`AIVERSE_HDR=auto|on|off` overrides it for comparisons. This is an HDR **rendering pipeline**
 resolved to an ordinary SDR/sRGB image, not HDR10/EDR monitor output.
 
 - **Auto** uses HDR on the High post-processing tier when the device supports RGBA16F.
 - **On** also allows Medium. Low and Off always use the original RGBA8 renderer, even
-  when HDR was requested. `RTS_POSTFX=low` is the weak-device comparison.
+  when HDR was requested. `AIVERSE_POSTFX=low` is the weak-device comparison.
 - **Off**, `postfx.enabled: false`, and disabled editor post preview preserve the LDR path.
 - GL checks half-float colour-rendering support and validates HDR framebuffer allocations.
   Metal uses RGBA16Float. An unavailable format or failed scene allocation falls back to LDR.
@@ -45,7 +45,7 @@ without a PostProcess hook remains LDR (including independent portrait previews)
 
 RHI pipelines lazily cache a separate shader/Metal PSO for RGBA16F attachments, so
 one renderer can alternate editor view sizes and HDR/LDR targets. `gfx/ColorSpace.h`
-injects matching GLSL/MSL helpers and `RTS_HDR`. New scene shaders must use
+injects matching GLSL/MSL helpers and `AIVERSE_HDR`. New scene shaders must use
 `rtsToneScene`/`rtsEncodeScene` for radiance or `rtsDisplay` for display-authored RGB.
 Data shaders and exact colour/depth blits must not apply those conversions.
 The old shader variant preserves gamma-2 output where the engine previously used it.
@@ -61,18 +61,18 @@ not a migration of every asset to GPU sRGB textures or linear texture mip genera
 
 ## Reproducible checks
 
-Configure with `-DRTS_BUILD_HDR_TESTS=ON`. Build `rts_hdr_scene` and `rts_hdr_policy`;
-on macOS also build `rts_hdr_gl` (production GL backend, offscreen desktop GL context).
+Configure with `-DAIVERSE_BUILD_HDR_TESTS=ON`. Build `aiverse_hdr_scene` and `aiverse_hdr_policy`;
+on macOS also build `aiverse_hdr_gl` (production GL backend, offscreen desktop GL context).
 The scene is asset-free: PBR spheres, emissive radiance steps, overlapping transparent
 objects, shadows, planar water reflections and SSR. No user project is modified.
 
 ```sh
-RTS_HDR=on RTS_HDR_CAPTURE=/tmp/hdr.ppm ./build/.temp/hdr-mac/rts_hdr_scene
-RTS_HDR=off RTS_HDR_CAPTURE=/tmp/ldr.ppm ./build/.temp/hdr-mac/rts_hdr_scene
-RTS_POSTFX=low RTS_HDR_CAPTURE=/tmp/low.ppm ./build/.temp/hdr-mac/rts_hdr_scene
-RTS_HDR_VERIFY=1 ./build/.temp/hdr-mac/rts_hdr_scene
-RTS_HDR_VERIFY=1 ./build/.temp/hdr-mac/rts_hdr_gl
-./build/.temp/hdr-mac/rts_hdr_policy
+AIVERSE_HDR=on AIVERSE_HDR_CAPTURE=/tmp/hdr.ppm ./build/.temp/hdr-mac/aiverse_hdr_scene
+AIVERSE_HDR=off AIVERSE_HDR_CAPTURE=/tmp/ldr.ppm ./build/.temp/hdr-mac/aiverse_hdr_scene
+AIVERSE_POSTFX=low AIVERSE_HDR_CAPTURE=/tmp/low.ppm ./build/.temp/hdr-mac/aiverse_hdr_scene
+AIVERSE_HDR_VERIFY=1 ./build/.temp/hdr-mac/aiverse_hdr_scene
+AIVERSE_HDR_VERIFY=1 ./build/.temp/hdr-mac/aiverse_hdr_gl
+./build/.temp/hdr-mac/aiverse_hdr_policy
 ```
 
 The GPU probes check measured centre pixels against the expected transfer: linear

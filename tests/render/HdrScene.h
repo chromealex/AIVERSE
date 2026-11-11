@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 
-namespace rts::test {
+namespace aiverse::test {
 using namespace render;
 struct HdrScene {
     Renderer3D renderer;
@@ -28,7 +28,7 @@ struct HdrScene {
     void init(gfx::Device& d) {
         std::printf("GPU: %s; RGBA16F=%d\n", d.info().name.c_str(), d.supports(gfx::PixelFormat::RGBA16F));
         if (!renderer.init(d) || !post.init(d)) { failed = true; return; }
-        advanced = std::getenv("RTS_SCREEN_LIGHTING") != nullptr;
+        advanced = std::getenv("AIVERSE_SCREEN_LIGHTING") != nullptr;
         if (advanced && !screen.init(d,post)) { failed=true; return; }
         screen.setEnabled(advanced);renderer.setModelReflectionsEnabled(advanced);
         renderer.setShadowQuality(ShadowQuality::High);
@@ -50,13 +50,13 @@ struct HdrScene {
         spheres=modelFromParts("hdr material chart",parts); uploadModel(d,*spheres);
         post.configure(Json::parse(R"({"hdr":"auto","effects":[{"type":"bloom","threshold":0.9,"intensity":0.35},{"type":"fxaa"},{"type":"colorGrade","exposure":-1}]})"),Json());
         post.setQuality(PostFx::defaultQualityFor(d,false));
-        verify = std::getenv("RTS_HDR_VERIFY") != nullptr;
+        verify = std::getenv("AIVERSE_HDR_VERIFY") != nullptr;
         if (verify) {
             if (!checkHdrShaders(d)) { failed=true; return; }
 #ifdef _WIN32
-            _putenv_s("RTS_HDR", "");
+            _putenv_s("AIVERSE_HDR", "");
 #else
-            unsetenv("RTS_HDR");
+            unsetenv("AIVERSE_HDR");
 #endif
             MeshBuilder plane; plane.quad({-100,-100,0},{100,-100,0},{100,100,0},{-100,100,0});
             Material m; m.shading=ShadingModel::Unlit;m.vertexColors=false;m.castShadow=false;
@@ -67,7 +67,7 @@ struct HdrScene {
             renderer.setShadowQuality(ShadowQuality::Off);renderer.lights.setQuality(LightQuality::Off);
             camera.target={0,0,0};camera.pitch=0;camera.yaw=0;camera.distance=10;
         }
-        const char* p=std::getenv("RTS_HDR_CAPTURE"); path=p?p:"/tmp/hdr-scene.ppm";
+        const char* p=std::getenv("AIVERSE_HDR_CAPTURE"); path=p?p:"/tmp/hdr-scene.ppm";
     }
     void draw(gfx::Device& d, int w, int h) {
         if (failed) return;

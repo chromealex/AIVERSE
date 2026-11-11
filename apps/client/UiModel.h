@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::client {
+namespace aiverse::client {
 // Values bound to the "game" data model (see engine/assets/ui/*.rml). Compared every frame so only
 // changed variables are marked dirty.
 struct UiItem {          // resource bar entry
@@ -101,21 +101,21 @@ inline void bindUiState(Rml::DataModelConstructor& c, UiState& b) {
 }
 
 inline void syncUiState(Rml::DataModelHandle model_, UiState& bound_, UiState s) {
-#define RTS_SYNC(name)                                       \
+#define AIVERSE_SYNC(name)                                       \
     if (!(s.name == bound_.name)) {                          \
         bound_.name = std::move(s.name);                     \
         model_.DirtyVariable(#name);                         \
     }
-        RTS_SYNC(screen) RTS_SYNC(gameName) RTS_SYNC(error) RTS_SYNC(platformInfo) RTS_SYNC(maps)
-        RTS_SYNC(worldCounters) RTS_SYNC(entityActions) RTS_SYNC(top) RTS_SYNC(topActions) RTS_SYNC(clock) RTS_SYNC(notices) RTS_SYNC(hasSelection) RTS_SYNC(ownSelection)
-        RTS_SYNC(scriptTop) RTS_SYNC(scriptCards) RTS_SYNC(scriptStatus) RTS_SYNC(scriptSupport) RTS_SYNC(scriptTitle)
-        RTS_SYNC(selTitle) RTS_SYNC(emptyHint) RTS_SYNC(selInfo) RTS_SYNC(card) RTS_SYNC(overTitle) RTS_SYNC(overTime)
-        RTS_SYNC(dispatchCount) RTS_SYNC(dispatchCaption) RTS_SYNC(dispatchRatio) RTS_SYNC(dispatchStyle)
-        RTS_SYNC(modeHint) RTS_SYNC(hintStyle) RTS_SYNC(boxStyle) RTS_SYNC(minimapStyle) RTS_SYNC(lines) RTS_SYNC(touch) RTS_SYNC(showCard)
-        RTS_SYNC(languages) RTS_SYNC(lang) RTS_SYNC(tools) RTS_SYNC(hasHowto) RTS_SYNC(howtoOpen)
-        RTS_SYNC(howtoLike) RTS_SYNC(howtoGoal) RTS_SYNC(howtoTip) RTS_SYNC(howtoSteps) RTS_SYNC(lobby) RTS_SYNC(netStatus) RTS_SYNC(netError) RTS_SYNC(roomTitle) RTS_SYNC(roomInfo)
-        RTS_SYNC(spectators) RTS_SYNC(waitHint) RTS_SYNC(queues) RTS_SYNC(rooms) RTS_SYNC(createMaps) RTS_SYNC(slots) RTS_SYNC(chat)
-        RTS_SYNC(isHost) RTS_SYNC(myReady) RTS_SYNC(canStart) RTS_SYNC(netMatch) RTS_SYNC(searching)
-#undef RTS_SYNC
+        AIVERSE_SYNC(screen) AIVERSE_SYNC(gameName) AIVERSE_SYNC(error) AIVERSE_SYNC(platformInfo) AIVERSE_SYNC(maps)
+        AIVERSE_SYNC(worldCounters) AIVERSE_SYNC(entityActions) AIVERSE_SYNC(top) AIVERSE_SYNC(topActions) AIVERSE_SYNC(clock) AIVERSE_SYNC(notices) AIVERSE_SYNC(hasSelection) AIVERSE_SYNC(ownSelection)
+        AIVERSE_SYNC(scriptTop) AIVERSE_SYNC(scriptCards) AIVERSE_SYNC(scriptStatus) AIVERSE_SYNC(scriptSupport) AIVERSE_SYNC(scriptTitle)
+        AIVERSE_SYNC(selTitle) AIVERSE_SYNC(emptyHint) AIVERSE_SYNC(selInfo) AIVERSE_SYNC(card) AIVERSE_SYNC(overTitle) AIVERSE_SYNC(overTime)
+        AIVERSE_SYNC(dispatchCount) AIVERSE_SYNC(dispatchCaption) AIVERSE_SYNC(dispatchRatio) AIVERSE_SYNC(dispatchStyle)
+        AIVERSE_SYNC(modeHint) AIVERSE_SYNC(hintStyle) AIVERSE_SYNC(boxStyle) AIVERSE_SYNC(minimapStyle) AIVERSE_SYNC(lines) AIVERSE_SYNC(touch) AIVERSE_SYNC(showCard)
+        AIVERSE_SYNC(languages) AIVERSE_SYNC(lang) AIVERSE_SYNC(tools) AIVERSE_SYNC(hasHowto) AIVERSE_SYNC(howtoOpen)
+        AIVERSE_SYNC(howtoLike) AIVERSE_SYNC(howtoGoal) AIVERSE_SYNC(howtoTip) AIVERSE_SYNC(howtoSteps) AIVERSE_SYNC(lobby) AIVERSE_SYNC(netStatus) AIVERSE_SYNC(netError) AIVERSE_SYNC(roomTitle) AIVERSE_SYNC(roomInfo)
+        AIVERSE_SYNC(spectators) AIVERSE_SYNC(waitHint) AIVERSE_SYNC(queues) AIVERSE_SYNC(rooms) AIVERSE_SYNC(createMaps) AIVERSE_SYNC(slots) AIVERSE_SYNC(chat)
+        AIVERSE_SYNC(isHost) AIVERSE_SYNC(myReady) AIVERSE_SYNC(canStart) AIVERSE_SYNC(netMatch) AIVERSE_SYNC(searching)
+#undef AIVERSE_SYNC
 }
-} // namespace rts::client
+} // namespace aiverse::client

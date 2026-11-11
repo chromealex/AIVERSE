@@ -4,7 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -296,4 +296,4 @@ void registerFieldOps(Workspace& ws) {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

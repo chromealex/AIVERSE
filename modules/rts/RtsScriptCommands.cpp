@@ -6,7 +6,7 @@
 #include <algorithm>
 #include "RtsInternal.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace script;
 
 namespace {
@@ -227,4 +227,4 @@ void pushScriptArgs(lua_State* L, const ScriptCommandDef& d, const Command& c) {
 }
 
 } // namespace script
-} // namespace rts::game
+} // namespace aiverse::game

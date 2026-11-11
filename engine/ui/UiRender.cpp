@@ -12,7 +12,7 @@
 #include "engine/render/Math3D.h"
 #include "stb_image.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 namespace {
 
@@ -395,4 +395,4 @@ void UiRenderer::SetTransform(const Rml::Matrix4f* t) {
     if (t) std::memcpy(transform_, t->data(), sizeof transform_); // RmlUi default: column-major, like the RHI
 }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

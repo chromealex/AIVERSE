@@ -13,7 +13,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor::wiz {
+namespace aiverse::editor::wiz {
 
 namespace {
 
@@ -466,4 +466,4 @@ void makeHints(GameMaker::Ctx& c) {
     c.did("подсказки: " + std::to_string(hints.size()));
 }
 
-} // namespace rts::editor::wiz
+} // namespace aiverse::editor::wiz

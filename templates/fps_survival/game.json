@@ -1,0 +1,24 @@
+{
+  "id": "com.rtsengine.fps_survival",
+  "name": "Last Survivor",
+  "description": "Большая карта, 100 мест, потоковая загрузка окружения и сужающаяся зона.",
+  "module": "fps",
+  "genre": "fps",
+  "version": "0.1.0",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/start.json",
+      "title": "Last Survivor"
+    }
+  ],
+  "network": {
+    "architecture": "authoritative",
+    "transport": "udp",
+    "port": 27100
+  },
+  "window": {
+    "width": 1280,
+    "height": 720
+  }
+}

@@ -24,7 +24,7 @@
 
 #include "engine/atlas/AtlasFormat.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 bool decodeImage(const std::string& bytes, int& w, int& h, std::vector<uint8_t>& rgba) {
     int n = 0;
@@ -125,4 +125,4 @@ TextureRef TextureCache::addGenerated(const std::string& name, int w, int h, con
     return r;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

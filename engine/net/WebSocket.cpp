@@ -11,7 +11,7 @@
 #include <emscripten/websocket.h>
 #endif
 
-namespace rts::net {
+namespace aiverse::net {
 
 // ---------------------------------------------------------------- SHA-1 / base64 (handshake only)
 std::array<uint8_t, 20> sha1(const void* data, size_t n) {
@@ -376,4 +376,4 @@ std::unique_ptr<Conn> connectTo(const std::string& address) {
     }
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

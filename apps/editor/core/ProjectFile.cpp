@@ -8,13 +8,13 @@
 #include "Projects.h"
 #include "engine/data/Json.h"
 
-#ifndef RTS_ENGINE_VERSION
-#define RTS_ENGINE_VERSION "0.0.0"
+#ifndef AIVERSE_ENGINE_VERSION
+#define AIVERSE_ENGINE_VERSION "0.0.0"
 #endif
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 std::string lower(std::string s) {
@@ -35,7 +35,7 @@ std::string today() {
 }
 } // namespace
 
-std::string engineVersion() { return RTS_ENGINE_VERSION; }
+std::string engineVersion() { return AIVERSE_ENGINE_VERSION; }
 
 bool isProjectFilePath(const std::string& path) { return lower(fs::path(path).extension().string()) == kProjectExt; }
 
@@ -126,4 +126,4 @@ std::string ensureProjectFile(const std::string& dir, bool* created) {
     return path;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

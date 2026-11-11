@@ -7,7 +7,7 @@
 #include <cmath>
 #include <optional>
 
-namespace rts::game {
+namespace aiverse::game {
 class EntityActionControls {
 public:
     struct Item {
@@ -115,4 +115,4 @@ private:
     int width_=0,height_=0;
     uint8_t player_=0;
 };
-} // namespace rts::game
+} // namespace aiverse::game

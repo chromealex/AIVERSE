@@ -4,7 +4,7 @@
   "provides": ["ads"],
   "android": {
     "java": "android/java",
-    "classes": { "ironsource": "com.rtsengine.plugins.LevelPlayPlugin" },
+    "classes": { "ironsource": "com.aiverse.plugins.LevelPlayPlugin" },
     "dependencies": [
       "com.unity3d.ads-mediation:mediation-sdk:9.5.0",
       "com.google.android.gms:play-services-appset:16.0.0",
@@ -20,7 +20,7 @@
   },
   "ios": {
     "sources": ["ios/*.mm"],
-    "classes": { "ironsource": "RTSLevelPlayPlugin" },
+    "classes": { "ironsource": "AiverseLevelPlayPlugin" },
     "pods": ["pod 'IronSourceSDK', '9.5.0.0'"],
     "plist": ["<key>NSAdvertisingAttributionReportEndpoint</key><string>https://postbacks-is.com/</string>"],
     "skAdNetworks": ["su67r6k2v3"]

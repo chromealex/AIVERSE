@@ -1,0 +1,6 @@
+[
+  {"source":"/types/*/builds/*","target":"/types/@keys"},
+  {"source":"/types/*/trains/*","target":"/types/@keys"},
+  {"source":"/types/*/cost/@keys","target":"/resources/@keys","ignore":["time","supply"]},
+  {"source":"/types/*/view/model","kind":"file"}
+]

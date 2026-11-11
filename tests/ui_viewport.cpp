@@ -4,41 +4,41 @@
 #include <cstdio>
 #include <RmlUi/Core.h>
 #include <map>
-class UiTestDevice final : public rts::gfx::Device {
+class UiTestDevice final : public aiverse::gfx::Device {
 public:
     std::vector<std::pair<int, int>> created;
     int alive = 0;
-    rts::gfx::DeviceInfo info_;
+    aiverse::gfx::DeviceInfo info_;
     std::string err_;
-    const rts::gfx::DeviceInfo& info() const override { return info_; }
-    rts::gfx::BufferHandle createBuffer(const rts::gfx::BufferDesc&) override { return {}; }
-    void updateBuffer(rts::gfx::BufferHandle, const void*, size_t, size_t) override {}
-    void destroyBuffer(rts::gfx::BufferHandle) override {}
-    rts::gfx::TextureHandle createTexture(const rts::gfx::TextureDesc& d) override { created.push_back({d.width, d.height}); ++alive; return {uint32_t(created.size())}; }
-    void updateTexture(rts::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
-    void destroyTexture(rts::gfx::TextureHandle) override { --alive; }
-    rts::gfx::ShaderHandle createShader(const rts::gfx::ShaderDesc&) override { return {1}; }
-    void destroyShader(rts::gfx::ShaderHandle) override {}
-    rts::gfx::PipelineHandle createPipeline(const rts::gfx::PipelineDesc&) override { return {1}; }
-    void destroyPipeline(rts::gfx::PipelineHandle) override {}
+    const aiverse::gfx::DeviceInfo& info() const override { return info_; }
+    aiverse::gfx::BufferHandle createBuffer(const aiverse::gfx::BufferDesc&) override { return {}; }
+    void updateBuffer(aiverse::gfx::BufferHandle, const void*, size_t, size_t) override {}
+    void destroyBuffer(aiverse::gfx::BufferHandle) override {}
+    aiverse::gfx::TextureHandle createTexture(const aiverse::gfx::TextureDesc& d) override { created.push_back({d.width, d.height}); ++alive; return {uint32_t(created.size())}; }
+    void updateTexture(aiverse::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
+    void destroyTexture(aiverse::gfx::TextureHandle) override { --alive; }
+    aiverse::gfx::ShaderHandle createShader(const aiverse::gfx::ShaderDesc&) override { return {1}; }
+    void destroyShader(aiverse::gfx::ShaderHandle) override {}
+    aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc&) override { return {1}; }
+    void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
-    void beginPass(const rts::gfx::PassDesc&) override {}
+    void beginPass(const aiverse::gfx::PassDesc&) override {}
     void endPass() override {}
-    rts::gfx::Rect viewport;
-    void setViewport(const rts::gfx::Rect& r) override { viewport = r; }
-    std::vector<rts::gfx::Rect> scissors;
-    void setScissor(const rts::gfx::Rect& r) override { scissors.push_back(r); }
-    void setPipeline(rts::gfx::PipelineHandle) override {}
-    void setVertexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setIndexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setTexture(int, rts::gfx::TextureHandle) override {}
+    aiverse::gfx::Rect viewport;
+    void setViewport(const aiverse::gfx::Rect& r) override { viewport = r; }
+    std::vector<aiverse::gfx::Rect> scissors;
+    void setScissor(const aiverse::gfx::Rect& r) override { scissors.push_back(r); }
+    void setPipeline(aiverse::gfx::PipelineHandle) override {}
+    void setVertexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setIndexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setTexture(int, aiverse::gfx::TextureHandle) override {}
     void setUniforms(int, const void*, size_t) override {}
     void draw(uint32_t, uint32_t) override {}
     void drawIndexed(uint32_t, uint32_t, int32_t, uint32_t) override {}
 };
-namespace rts::platform {
+namespace aiverse::platform {
 int framebufferWidth() { return 1920; }
 int framebufferHeight() { return 1080; }
 float dpiScale() { return 1; }
@@ -55,7 +55,7 @@ int main() {
     int errors = 0;
     auto check = [&](bool ok, const char* name) { if(!ok) { std::fprintf(stderr,"FAIL: %s\n",name); ++errors; } };
     UiTestDevice dev;
-    rts::ui::UiLayer ui;
+    aiverse::ui::UiLayer ui;
     std::map<std::string,std::string> files{
         {"engine/ui/keyboard.rml", "<rml><body/></rml>"},
         {"engine/ui/hud.rml", "<rml><body id='fallback'/></rml>"},
@@ -69,10 +69,10 @@ int main() {
     check(ui.init(dev,nullptr,read),"initialization");
     if (!ui.context()) return 1;
     check(testFontEffects(ui.context()->GetRenderManager())==0,"font effect rendering");
-    ui.setOnScreenKeyboard(rts::ui::UiLayer::OnScreenKeyboard::Never);
+    ui.setOnScreenKeyboard(aiverse::ui::UiLayer::OnScreenKeyboard::Never);
     auto c=ui.context()->CreateDataModel("game");
-    rts::client::UiState bound;
-    rts::client::bindUiState(c,bound);
+    aiverse::client::UiState bound;
+    aiverse::client::bindUiState(c,bound);
     int clicks=0;
     c.BindEventCallback("act",[&](Rml::DataModelHandle,Rml::Event&,const Rml::VariantList&){++clicks;});
     auto* doc=ui.loadDocument("hud.rml");
@@ -83,11 +83,11 @@ int main() {
     auto* button=doc?doc->GetElementById("action"):nullptr;
     check(button && button->GetBox().GetSize(Rml::BoxArea::Content).x==200,"project CSS and dp scaling");
     auto next=bound; next.screen="playing"; next.scriptTitle="support";
-    rts::client::syncUiState(c.GetModelHandle(),bound,next);
+    aiverse::client::syncUiState(c.GetModelHandle(),bound,next);
     check(bound.screen=="playing" && bound.scriptTitle=="support","shared model synchronization");
     ui.update();
     auto* same=doc->GetElementById("action");
-    rts::client::syncUiState(c.GetModelHandle(),bound,next); ui.update();
+    aiverse::client::syncUiState(c.GetModelHandle(),bound,next); ui.update();
     check(same==doc->GetElementById("action"),"unchanged model preserves input elements");
     ui.context()->ProcessMouseMove(20,20,0); ui.context()->ProcessMouseButtonDown(0,0); ui.context()->ProcessMouseButtonUp(0,0);
     check(clicks==1,"RML action callback");

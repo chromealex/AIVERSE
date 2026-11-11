@@ -3,7 +3,7 @@
 #include <cstdint>
 #include "../core/Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 struct Transform {
     Vec3 pos{};
@@ -15,4 +15,4 @@ struct Owner {
     uint8_t player = 0; // 0 = neutral
 };
 
-} // namespace rts
+} // namespace aiverse

@@ -3,7 +3,7 @@
 #include "../data/Json.h"
 #include "../sim/Replay.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 MapInfo describeMap(const std::string& gameDir, const std::string& mapFile, const std::string& rulesFile, const std::string& title) {
     MapInfo m;
@@ -254,4 +254,4 @@ void NetClient::leaveMatch() {
     leaveRoom();
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

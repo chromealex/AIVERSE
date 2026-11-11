@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <queue>
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 // ---------------------------------------------------------------- symmetry
 
@@ -250,4 +250,4 @@ int32_t quantile(std::vector<int32_t> vals, int32_t q) {
     return vals[k];
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

@@ -90,7 +90,7 @@ CPU like quads (no instancing), one draw per texture and blend.
 | medium | 2500 | 0.7x | 25% | yes | other phones/tablets |
 | high | 12000 | 1x | 45% | yes | desktop |
 
-`RTS_PARTICLES=off|low|medium|high` overrides the GPU guess; the pause menu switches it in game.
+`AIVERSE_PARTICLES=off|low|medium|high` overrides the GPU guess; the pause menu switches it in game.
 What the renderer avoids on purpose: instancing, compute, transform feedback, depth reads (soft
 particles), `discard`, per-pixel fog, highp in the fragment shader. One-shot effects that start
 off-screen or beyond the tier's distance are not spawned. Emitters with `"minQuality": "medium"` drop
@@ -115,7 +115,7 @@ shows it) by shrinking `size`/`sizeOverLife` or the burst before anything else.
 | `fx_bind` | `{effect, cue, type?, weapon?, ability?, category?, height, scale, teamColor, below}` → `fx/fx.json` (`effect: null` = none, `remove: true` = back to the fallback) |
 | `fx_preview` | GUI: plays an effect at `x, z` in the Scene view (Game view during a play-test) and moves the camera there; `advance` + `freeze` hold a moment for `view_screenshot`, `moving` circles it (trails), `pitch`, `quality`, `loop`, `stop` |
 
-Core ops live in `apps/editor/core/FxOps.cpp` (also work in `rtsmcp` without an editor), `fx_preview` in
+Core ops live in `apps/editor/core/FxOps.cpp` (also work in `aiversemcp` without an editor), `fx_preview` in
 `apps/editor/EditorFxOps.cpp`. Every write notes `Change::Fx`: the editor reloads effects and textures.
 
 ## Unity import
@@ -176,4 +176,4 @@ instead), audio, animators, scene meshes / colliders not used by a particle modu
 `tests/data/unity_vfx` (synthetic, hand-written: `Assets/FX` = the classic modules, `Assets/Modules` = every
 other module, nested prefabs, variants, force fields, meshes, sprites); tests:
 `tools/importers/unity_vfx/test_import.py` (CTest `unity_vfx_importer`) and `fx_unity_importer_output_is_valid`
-in `rts_tests`.
+in `aiverse_tests`.

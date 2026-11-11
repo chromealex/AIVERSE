@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <map>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 // ================================================================= queries
@@ -828,4 +828,4 @@ void RtsModule::sysMovement(Simulation& sim) {
         });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

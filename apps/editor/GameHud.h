@@ -5,7 +5,7 @@
 #include "modules/rts/view/RegionSwipe.h"
 #include "modules/rts/view/EntityActionControls.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 class Editor;
 struct Viewport;
 // Hosts the client's RML documents over the editor's existing play-test simulation.
@@ -26,7 +26,7 @@ private:
     void input(const Viewport&);
     int action(std::function<void()> fn, bool enabled = true);
     void commandCard(Editor&, client::UiState&);   // train / research / queue / build, as the client's card
-    rts::ui::UiLayer ui_;
+    aiverse::ui::UiLayer ui_;
     i18n::Localization loc_;
     client::UiState bound_;
     Rml::DataModelHandle model_;
@@ -37,4 +37,4 @@ private:
     bool blocked_ = false, howto_ = false;
     bool pressed_[3]{};
 };
-} // namespace rts::editor
+} // namespace aiverse::editor

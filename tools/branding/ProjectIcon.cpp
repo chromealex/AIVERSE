@@ -8,7 +8,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::branding {
+namespace aiverse::branding {
 
 namespace {
 
@@ -125,4 +125,4 @@ std::vector<std::string> writeEditorIcons(const std::string& dir, const std::str
     return out;
 }
 
-} // namespace rts::branding
+} // namespace aiverse::branding

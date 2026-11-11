@@ -12,7 +12,7 @@
 #include "modules/rts/RtsTiles.h"
 #include <RmlUi/Core/Input.h>
 
-namespace rts::client {
+namespace aiverse::client {
 
 using i18n::Args;
 
@@ -327,4 +327,4 @@ void GameClient::buildLobby(UiState& s) {
     if (!s.canStart) s.waitHint = tr("lobby.waiting");
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

@@ -5,7 +5,7 @@
 #pragma once
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerMaterialOps(Workspace& ws);
 
@@ -17,4 +17,4 @@ const std::vector<std::string>& materialKeys();
 // Problems of one material definition ("unknown key 'colour'", "metallic must be 0..1").
 std::vector<std::string> checkMaterial(const Json& m);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

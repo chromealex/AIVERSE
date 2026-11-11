@@ -25,7 +25,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 std::string lower(std::string s) {
@@ -134,7 +134,7 @@ using Loader = std::unique_ptr<Model> (*)(const std::string&, const std::string&
 struct Format { const char* ext; Loader load; };
 const Format kFormats[] = {
     {".gltf", loadGltf}, {".glb", loadGltf}, {".obj", loadObj},
-#if !defined(RTS_NO_FBX)
+#if !defined(AIVERSE_NO_FBX)
     {".fbx", loadFbx},
 #endif
     {".vox", loadVox}, {".vxl", loadVxl}, {".ply", loadPly}, {".stl", loadStl}, {".3ds", load3ds}, {".dae", loadDae},
@@ -163,8 +163,8 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
             m->path = path;
             return m;
         }
-#if defined(RTS_NO_FBX)
-        if (ext == ".fbx") throw std::runtime_error(path + ": FBX import is disabled in this build (RTS_FBX=OFF); convert to .glb");
+#if defined(AIVERSE_NO_FBX)
+        if (ext == ".fbx") throw std::runtime_error(path + ": FBX import is disabled in this build (AIVERSE_FBX=OFF); convert to .glb");
 #endif
         if (!read(path, bytes)) throw std::runtime_error(path + ": file not found");
         throw std::runtime_error(path + ": unsupported model format '" + ext + "' (convert it with tools/models/modelconv, "
@@ -395,4 +395,4 @@ void releaseModel(gfx::Device& dev, Model& m) {
     m.morphTex = {}; m.baked = Model::Baked{};
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-namespace rts {
+namespace aiverse {
 
 namespace { const Json kNullJson{}; }
 
@@ -301,4 +301,4 @@ std::string Json::dump(int indent) const {
     return out;
 }
 
-} // namespace rts
+} // namespace aiverse

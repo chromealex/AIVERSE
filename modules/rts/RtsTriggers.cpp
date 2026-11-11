@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include "RtsInternal.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 // ================================================================= parsing
@@ -244,4 +244,4 @@ void loadTriggers(const Rules& rules, const Json& rulesJson, const Json& mapJson
 
 // runtime: modules/rts/lua/triggers.lua (standard Lua library, std.triggers)
 
-} // namespace rts::game
+} // namespace aiverse::game

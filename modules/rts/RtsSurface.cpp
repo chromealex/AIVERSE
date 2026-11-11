@@ -2,7 +2,7 @@
 #include "engine/core/FixedMath.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 
 void Surface::build() {
     auto t = std::make_shared<SphereTables>();
@@ -250,4 +250,4 @@ Vec3 Surface::bodyPosition(int body, Fixed seconds) const {
     return c + Vec3{fxCosTurns(turns) * b.orbitRadius, Fixed{}, fxSinTurns(turns) * b.orbitRadius};
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

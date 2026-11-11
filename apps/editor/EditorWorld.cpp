@@ -12,7 +12,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // ---------------------------------------------------------------- selection
 void Editor::syncSelection() {
@@ -236,6 +236,7 @@ void Editor::ensureWorld() {
 }
 
 void Editor::updateWorld() {
+    if(ws_.project.isFps())return; // FPS has its own document hierarchy; never build an RTS preview.
     auto profScope = prof.scope(EditorProfile::WorldUpdate);
     Simulation* live = sim_ ? sim_.get() : clientHost_.active() ? clientHost_.simulation() : nullptr;
     if (live) {
@@ -513,4 +514,4 @@ void Editor::registerWorldOps() {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

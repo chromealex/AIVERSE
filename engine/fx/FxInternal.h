@@ -10,7 +10,7 @@
 #include <vector>
 #include "ParticleSystem.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 using render::mat4;
 using render::RTSCamera;
@@ -145,7 +145,7 @@ bool builtinMesh(const std::string& name, FxMesh& out);
 using namespace detail;
 
 struct ParticleSystem::Impl {
-    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; };
+    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; };
     struct MeshRT {
         std::vector<float3> pos, nrm;
         std::vector<float2> uv;
@@ -318,7 +318,7 @@ struct ParticleSystem::Impl {
     FxTexture builtin(size_t i) const;
     FxTexture texture(const std::string& name, std::vector<std::string>& errors, const std::string& where);
     int mesh(const std::string& name, std::vector<std::string>& errors, const std::string& where);
-    uint16_t batchFor(const FxTexture& t, FxBlend blend);
+    uint16_t batchFor(const FxTexture& t, FxBlend blend, const Json& graph = {});
     void build(EffectRT& e, std::vector<std::string>& errors);
 
     // ---- particles (ParticleSystem.cpp)
@@ -340,4 +340,4 @@ struct ParticleSystem::Impl {
     bool emit(Instance& in, uint32_t owner, int effect, int emitter, float3 at, int& dropped, float u = 0, float burstFrac = -1);
 };
 
-} // namespace rts::fx
+} // namespace aiverse::fx

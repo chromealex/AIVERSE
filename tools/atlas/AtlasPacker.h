@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 struct PackRect { int x = 0, y = 0, w = 0, h = 0; };
 
@@ -63,4 +63,4 @@ struct PackedPages {
 int footprint(int size, const PackSettings& s);
 PackedPages packRects(const std::vector<PackItem>& items, const PackSettings& s);
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

@@ -55,7 +55,7 @@
 | ИИ | `AIConfig` (сложность) | универсальный C++ ИИ подстраивается под данные, кидает способности по `smart` | свой ИИ на Lua, подсказки ИИ для script-способностей |
 | Карты | `maps/*.json`, `generate` | ручные и генерируемые (шум, эрозия, реки, биомы, симметрия), планеты, 2D-тайлы | генератор на Lua; изменение рельефа в матче (кроме копания и воронок-укрытий) |
 | Сеть, сохранения | — | lockstep + откаты, реплеи, `serialize()` всего мира (включая `state`) | асинхронный / пошаговый мультиплеер, снимки мира из Lua |
-| MCP / редактор | `rtsmcp`, окна | ≈ 70 операций: правила, карты, скрипты (`script_write` / `script_check`), матчи, оверлеи, fx, постэффекты, генерация, кампании, скриншоты | — (достаточно для агентов) |
+| MCP / редактор | `aiversemcp`, окна | ≈ 70 операций: правила, карты, скрипты (`script_write` / `script_check`), матчи, оверлеи, fx, постэффекты, генерация, кампании, скриншоты | — (достаточно для агентов) |
 
 Вывод по слою: **симуляция расширяема хорошо, представление и ввод — почти никак**. Почти
 каждая «невозможная» игра в §3 упирается в то, что у неё *свой интерфейс* или *своя
@@ -122,7 +122,7 @@
 ## 4. Прототипы (`templates/lua_lab`)
 
 Игра «Iron and Gold» (как `templates/scripted`) + пять механик, которых нет в C++. Только
-публичный Lua API (плюс данные). Запуск: `build/lin/rts_headless --project templates/lua_lab --seed 3`.
+публичный Lua API (плюс данные). Запуск: `build/lin/aiverse_headless --project templates/lua_lab --seed 3`.
 
 | № | Механика | Файл | Результат (seed 3, боты, матч до победы) | Где API не хватило |
 |---|---|---|---|---|
@@ -269,9 +269,9 @@ C++-ядро и только параметры из данных/Lua, у виз
 
 ```sh
 cmake -S . -B build/lin -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/lin -j3
-build/lin/rts_headless --project templates/lua_lab --seed 3            # прототипы, лог script: fire/attrition/...
-build/lin/rts_tests | grep lua_lab                                      # тест прототипов + детерминизм
-build/lin/rts_headless --project templates/lua_lab/bench --map maps/n1000_read.json --max-seconds 60
+build/lin/aiverse_headless --project templates/lua_lab --seed 3            # прототипы, лог script: fire/attrition/...
+build/lin/aiverse_tests | grep lua_lab                                      # тест прототипов + детерминизм
+build/lin/aiverse_headless --project templates/lua_lab/bench --map maps/n1000_read.json --max-seconds 60
 ```
 
 Карты бенча: `maps/n{100,1000,5000}_{idle,read,unit,state,order}.json`, `maps/n100_field.json`

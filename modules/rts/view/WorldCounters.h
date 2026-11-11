@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::game {
+namespace aiverse::game {
 struct WorldCounter { int64_t value=0; render::float3 position{}; };
 inline std::vector<WorldCounter> worldCounters(const std::map<std::string,Fixed>& vars,const Json& definitions) {
     std::vector<WorldCounter> out;

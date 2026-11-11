@@ -10,7 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -49,7 +49,7 @@ void RtsOverlays::init(const Rules& rules, const Json& rulesOverlays, const Json
         else if (ent) screenEntityDefs_.push_back(uint16_t(i));
         else screenOtherDefs_.push_back(uint16_t(i));
     }
-    if (const char* q = std::getenv("RTS_OVERLAYS")) {
+    if (const char* q = std::getenv("AIVERSE_OVERLAYS")) {
         std::string s = q;
         if (s == "low") setQuality(OverlayQuality::Low);
         else if (s == "medium") setQuality(OverlayQuality::Medium);
@@ -589,4 +589,4 @@ const std::string& RtsOverlays::format(const OverlayDef& d, const Inst& in) {
     return text_;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

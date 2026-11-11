@@ -12,9 +12,9 @@
 #include "engine/render/PostFxData.h"
 #include "engine/render/TextureCache.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
-using namespace rts::render;
+using namespace aiverse::render;
 
 namespace {
 ImVec4 costColor(PostFxCostClass c) {
@@ -321,7 +321,7 @@ private:
     }
 
     void registerOps(Editor& ed) {
-        // the core registers a stub (rtsmcp lists it); the window replaces it with the real preview
+        // the core registers a stub (aiversemcp lists it); the window replaces it with the real preview
         ed.ws().registerOp({"view_postfx", "Editor preview of post-processing (does not change the game): quality off | low | medium | high shows what "
                             "weak phones (low) or strong devices (high) get; scene=false hides effects in the Scene view (Game view keeps them). "
                             "Combine with view_screenshot to compare tiers.",
@@ -348,6 +348,6 @@ private:
     Json lastAnswer_;
 };
 
-RTS_EDITOR_WINDOW(PostFxWindow);
+AIVERSE_EDITOR_WINDOW(PostFxWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

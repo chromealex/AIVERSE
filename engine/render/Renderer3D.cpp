@@ -6,7 +6,7 @@
 #include <cstring>
 #include <string>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 constexpr float kPi = 3.14159265358979f;
@@ -25,7 +25,7 @@ void put3(float* d, float3 v, float w) { d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3
 // ============================== Renderer3D ==============================
 
 ShadowQuality Renderer3D::defaultQualityFor(const gfx::Device& dev, bool mobile) {
-    if (const char* q = std::getenv("RTS_SHADOWS")) { // testing override: off|low|medium|high
+    if (const char* q = std::getenv("AIVERSE_SHADOWS")) { // testing override: off|low|medium|high
         std::string v = q;
         return v == "off" ? ShadowQuality::Off : v == "low" ? ShadowQuality::Low : v == "high" ? ShadowQuality::High : ShadowQuality::Medium;
     }
@@ -378,4 +378,4 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     }
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

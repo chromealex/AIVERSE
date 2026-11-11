@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs a bot match on every sample game and writes "<game> <seed> <checksum> <winner>" lines.
-# Usage: headless-checksums.sh <rts_headless binary (or "wine path.exe")> <out file>
+# Usage: headless-checksums.sh <aiverse_headless binary (or "wine path.exe")> <out file>
 # The CI "determinism" job compares these files across platforms: they must be byte-identical.
 set -euo pipefail
 bin="$1"; out="$2"; : > "$out"

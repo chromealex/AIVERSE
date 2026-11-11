@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -204,7 +204,7 @@ void registerOverlayOps(Workspace& ws) {
         "ghost / placement overlays at the cursor or the view centre. off=true ends the preview. Combine with view_screenshot.",
         R"({"properties": {"ids": {"type": "array", "items": {"type": "string"}}, "placeType": {"type": "string"},
             "x": {"type": "number"}, "z": {"type": "number"}, "off": {"type": "boolean"}}})",
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start rts_editor)"); }, true);
+        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true);
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

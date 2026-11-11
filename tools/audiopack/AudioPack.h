@@ -1,6 +1,6 @@
-// Build-time audio compression (host tools only: rtsbuild, rts_audiopack, tests).
+// Build-time audio compression (host tools only: aiversebuild, aiverse_audiopack, tests).
 //
-// The game's audio.json chooses codecs per build profile ("build" section); rtsbuild stages a copy
+// The game's audio.json chooses codecs per build profile ("build" section); aiversebuild stages a copy
 // of the game with the referenced sound and music files re-encoded and audio.json pointing at
 // the new files, then packs that copy. Games never link this: they only decode.
 //
@@ -21,11 +21,11 @@
 #include <string>
 #include <vector>
 
-namespace rts {
+namespace aiverse {
 class Json;
 }
 
-namespace rts::audiopack {
+namespace aiverse::audiopack {
 
 enum class Codec { Keep, Pcm, Adpcm, Vorbis };
 const char* codecName(Codec c);
@@ -51,7 +51,7 @@ struct Report {
     std::vector<std::string> warnings;
     uint64_t before() const;
     uint64_t after() const;
-    std::string text() const;      // human-readable table (Russian, like rtsbuild's other output)
+    std::string text() const;      // human-readable table (Russian, like aiversebuild's other output)
 };
 
 using FileReader = std::function<bool(const std::string& path, std::string& out)>;
@@ -75,4 +75,4 @@ std::string encodeWav(const std::vector<int16_t>& pcm, int channels, int rate);
 std::string encodeAdpcm(const std::vector<int16_t>& pcm, int channels, int rate, bool loop = false);
 bool encodeVorbis(const std::vector<int16_t>& pcm, int channels, int rate, float quality, uint32_t serial, std::string& out, std::string* error);
 
-} // namespace rts::audiopack
+} // namespace aiverse::audiopack

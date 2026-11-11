@@ -5,7 +5,7 @@
 #pragma once
 #include <vector>
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 class Reverb {
 public:
@@ -30,4 +30,4 @@ private:
     float feedback_ = 0.84f, damp_ = 0.2f;
 };
 
-} // namespace rts::audio
+} // namespace aiverse::audio

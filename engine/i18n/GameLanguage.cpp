@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace rts::i18n {
+namespace aiverse::i18n {
 
 const std::vector<std::string> kDefaultLangDirs = {"engine/lang", "lang"};
 
@@ -65,4 +65,4 @@ bool saveLanguage(const std::string& userDir, const std::string& tag) {
     return bool(f);
 }
 
-} // namespace rts::i18n
+} // namespace aiverse::i18n
