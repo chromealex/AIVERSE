@@ -79,8 +79,8 @@ public:
         GLint align = 256;
         glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
         uboAlign_ = align > 0 ? size_t(align) : 256;
-#if defined(__EMSCRIPTEN__)
-        glGenBuffers(kMaxUniformSlots, webUbos_);
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+        glGenBuffers(kMaxUniformSlots, slotUbos_);
 #else
         glGenBuffers(1, &ubo_);
         glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
@@ -121,8 +121,8 @@ public:
         if (queryActive_) glEndQuery(GL_TIME_ELAPSED);
         for (const auto& t:timedQueries_) glDeleteQueries(1,&t.query);
 #endif
-#if defined(__EMSCRIPTEN__)
-        glDeleteBuffers(kMaxUniformSlots, webUbos_);
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+        glDeleteBuffers(kMaxUniformSlots, slotUbos_);
 #else
         glDeleteBuffers(1, &ubo_);
 #endif
@@ -373,7 +373,7 @@ public:
         fbW_ = w; fbH_ = h;
         uboOffset_ = 0;
         for (auto& d : slotData_) d.clear();
-#if !defined(__EMSCRIPTEN__)
+#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
         glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
         glBufferData(GL_UNIFORM_BUFFER, kUniformRingSize, nullptr, GL_STREAM_DRAW); // orphan the ring
 #endif
@@ -520,12 +520,12 @@ public:
     }
     void setUniforms(int slot, const void* data, size_t size) override {
         if (slot < 0 || slot >= kMaxUniformSlots || size == 0) return;
-#if defined(__EMSCRIPTEN__)
-        // ANGLE/Metal copies a busy buffer on subData, even for disjoint ring ranges.
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+        // Metal-backed GL/ANGLE can copy a busy buffer on subData, even for disjoint ring ranges.
         // Orphan only this slot's small block instead of cloning the 1 MB ring per draw.
-        glBindBuffer(GL_UNIFORM_BUFFER, webUbos_[slot]);
+        glBindBuffer(GL_UNIFORM_BUFFER, slotUbos_[slot]);
         glBufferData(GL_UNIFORM_BUFFER, GLsizeiptr(size), data, GL_STREAM_DRAW);
-        glBindBufferRange(GL_UNIFORM_BUFFER, GLuint(slot), webUbos_[slot], 0, GLsizeiptr(size));
+        glBindBufferRange(GL_UNIFORM_BUFFER, GLuint(slot), slotUbos_[slot], 0, GLsizeiptr(size));
         return;
 #endif
         size_t off = (uboOffset_ + uboAlign_ - 1) / uboAlign_ * uboAlign_;
@@ -599,7 +599,7 @@ private:
     DeviceInfo info_;
     std::string error_;
     GLuint vao_ = 0, ubo_ = 0, currentProgram_ = 0;
-    GLuint webUbos_[kMaxUniformSlots] = {};
+    GLuint slotUbos_[kMaxUniformSlots] = {};
     size_t uboAlign_ = 256, uboOffset_ = 0;
     bool etc2_ = false, s3tc_ = false, bptc_ = false, astc_ = false;
     bool srgbWrite_ = false;   // GL33: GL_FRAMEBUFFER_SRGB enabled for the current pass
