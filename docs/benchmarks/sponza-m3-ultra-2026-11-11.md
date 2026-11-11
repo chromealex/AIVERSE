@@ -1,7 +1,10 @@
 # Intel Sponza: AIVERSE baseline on Apple M3 Ultra
 
 Date: 2026-11-11. Renderer source: `1e4b30f4` (builds on the linear HDR commit
-`a2011562`). Release build, 1280×720, three authored cameras. Asset fingerprint:
+`a2011562`). Release build, 1280×720, three authored cameras.
+Architecture audit during the full-scene work confirmed this build tree produces
+x86_64 binaries: these runs used Rosetta on Apple Silicon. Do not mix their CPU
+measurements with the later native arm64 series. Asset fingerprint:
 `df6130778c6dcc33089fb2df6813bac1b6d32ba9eccd933cdd02eede7a505550`.
 
 Baseline: three independent launches per backend; each camera uses 60 warm-up frames

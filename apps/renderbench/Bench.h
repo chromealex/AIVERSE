@@ -111,6 +111,10 @@ struct Bench {
             report.set("boundsMin",bounds(model->boundsMin));report.set("boundsMax",bounds(model->boundsMax));
             if(!uploadModel(d,*model))throw std::runtime_error("model upload failed: "+d.lastError());
             report.set("loadAndUploadMs",Json::number(ms(start,Clock::now())));
+            const auto& optim=config["modelOptimization"];
+            renderer.setModelLodEnabled(optim.getBool("lod",true));
+            renderer.setModelCullingEnabled(optim.getBool("culling",true));
+            renderer.setModelInstancingEnabled(optim.getBool("instancing",true));
             renderer.setShadowQuality(options.profile=="low"?ShadowQuality::Low:ShadowQuality::High);
             renderer.setMaterialQuality(options.profile=="low"?MaterialQuality::Medium:MaterialQuality::High);
             renderer.setTraceEnabled(options.profile=="full");renderer.setModelReflectionsEnabled(options.profile=="full");
@@ -183,6 +187,7 @@ struct Bench {
             settings.set("lightAttenuation",Json::string("RTS finite-radius approximation; not photometric glTF"));
             settings.set("pointLightBudget",Json::number(int64_t(options.profile=="low"?0:std::min(additions.lights.size(),LightSystem::kMaxLights))));settings.set("rayTracing",Json::fromBool(false));
             settings.set("ssr",Json::fromBool(renderer.ssrActive()));settings.set("dynamicResolution",Json::fromBool(false));
+            settings.set("modelOptimization",config["modelOptimization"]);
             report.set("renderSettings",settings);
         }
         const auto encodeEnd=Clock::now();
@@ -201,6 +206,11 @@ struct Bench {
             Json r=Json::object();r.set("camera",Json::string(cameraNames[size_t(ci)]));r.set("sample",Json::number(int64_t(frame-options.warmup)));
             r.set("cpuEncodeMs",Json::number(ms(encodeStart,encodeEnd),6));r.set("cpuFrameMs",Json::number(ms(start,end),6));
             r.set("gpuMs",Json());r.set("drawCalls",Json::number(int64_t(renderer.drawCalls())));
+            const auto& stats=renderer.modelStats();
+            r.set("submittedModelTriangles",Json::number(int64_t(stats.triangles)));
+            r.set("culledModelNodes",Json::number(int64_t(stats.culledNodes)));
+            r.set("instancedModelDraws",Json::number(int64_t(stats.instancedDraws)));
+            Json lods=Json::array();for(auto n:stats.lodNodes)lods.push(Json::number(int64_t(n)));r.set("modelLodNodes",lods);
             r.set("postPasses",Json::number(int64_t(post.stats().passes+(screen.running()?3:0))));
             if(timed)tags.emplace(thisTag,rows.size());
             rows.push(std::move(r));

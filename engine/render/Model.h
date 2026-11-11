@@ -96,10 +96,15 @@ struct Primitive {
     std::vector<float> morphDeltas;      // CPU: [target][vertex] position xyz, normal xyz (released after upload)
 };
 
+struct ModelLod { int mesh = -1; float maxPixels = 0; };
+
 struct MeshDef {
     std::string name;
     std::vector<Primitive> primitives;
     std::vector<float> weights;          // default morph weights
+    std::vector<ModelLod> lods;          // coarse alternatives, descending maximum projected diameter
+    float3 boundsMin, boundsMax;
+    bool deformable = false;
 };
 
 struct Node {

@@ -1101,8 +1101,25 @@ if(RTS_BUILD_HDR_TESTS AND RTS_DESKTOP)
 endif()
 
 # Reproducible architectural rendering benchmark (assets remain external).
+option(AIVERSE_BUILD_AUTOLOD "Build the host meshoptimizer LOD worker" OFF)
+if(AIVERSE_BUILD_AUTOLOD AND RTS_DESKTOP)
+    add_library(rts_meshoptimizer_lod STATIC
+        third_party/meshoptimizer/src/allocator.cpp
+        third_party/meshoptimizer/src/indexgenerator.cpp
+        third_party/meshoptimizer/src/simplifier.cpp
+        third_party/meshoptimizer/src/vcacheoptimizer.cpp)
+    target_include_directories(rts_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
+    add_executable(aiverse_model_visibility_test tests/render/ModelVisibility.cpp)
+    target_include_directories(aiverse_model_visibility_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_model_visibility_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_executable(aiverse_lod_simplify tools/models/lod_simplify.cpp)
+    target_link_libraries(aiverse_lod_simplify PRIVATE rts_meshoptimizer_lod)
+endif()
+
 option(AIVERSE_BUILD_RENDERBENCH "Build the Sponza rendering benchmark" OFF)
 if(AIVERSE_BUILD_RENDERBENCH AND RTS_DESKTOP)
+    add_executable(aiverse_reinstance tools/renderbench/reinstance.cpp)
+    target_link_libraries(aiverse_reinstance PRIVATE rts_engine)
     execute_process(COMMAND git describe --always --dirty WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE BENCH_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
     add_executable(aiverse_renderbench apps/renderbench/main.cpp $<TARGET_OBJECTS:rts_runtime>)
     target_link_libraries(aiverse_renderbench PRIVATE rts_runtime)

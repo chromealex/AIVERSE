@@ -136,7 +136,7 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     cam_ = cam;
     ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
-    modelItems_.clear(); jointData_.clear(); morphData_.clear();
+    modelItems_.clear(); jointData_.clear(); morphData_.clear(); modelStats_ = {};
     RTSCamera shadowCamera = cam; shadowCamera.jitter = {};
     computeShadowMatrix(shadowCamera, aspect);
     lights.begin(cam, aspect);

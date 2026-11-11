@@ -3,6 +3,7 @@
 #include "Renderer3D.h"
 #include "ModelShaders.h"
 #include "Animation.h"
+#include "ModelVisibility.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -23,18 +24,6 @@ constexpr int kMaxInstances = 32; // 128-byte instance records in a 4 KB uniform
 
 bool transparentItem(uint32_t flags) { return (flags & kDrawTransparent) != 0; }
 
-// AABB (in `xf` space) against a clip-space frustum: false only when all corners are outside one plane.
-bool boxVisible(const mat4& clip, float3 mn, float3 mx) {
-    int out[6] = {0, 0, 0, 0, 0, 0};
-    for (int c = 0; c < 8; ++c) {
-        float4 p = clip * float4{c & 1 ? mx.x : mn.x, c & 2 ? mx.y : mn.y, c & 4 ? mx.z : mn.z, 1};
-        out[0] += p.x < -p.w; out[1] += p.x > p.w;
-        out[2] += p.y < -p.w; out[3] += p.y > p.w;
-        out[4] += p.z < -p.w; out[5] += p.z > p.w;
-    }
-    for (int i = 0; i < 6; ++i) if (out[i] == 8) return false;
-    return true;
-}
 } // namespace
 
 MaterialQuality Renderer3D::defaultMaterialQualityFor(const gfx::Device& dev, bool mobile) {
@@ -157,9 +146,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
     // whole-model culling with the bind-pose bounds (padded: animation moves limbs outside them)
     float3 c = (m->boundsMin + m->boundsMax) * 0.5f, e = (m->boundsMax - m->boundsMin) * 0.75f + float3{0.1f, 0.1f, 0.1f};
-    const bool inView = boxVisible(viewProj_ * d.world, c - e, c + e);
+    const bool inView = modelBoxVisible(viewProj_ * d.world, c - e, c + e);
     const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 &&
-                          boxVisible(lightViewProj_ * d.world, c - e, c + e);
+                          modelBoxVisible(lightViewProj_ * d.world, c - e, c + e);
     if (!inView && !inShadow) return;
     const std::vector<mat4>& world = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
     const std::vector<Material>& mats = d.materials && d.materials->size() >= m->materials.size() ? *d.materials : m->materials;
@@ -173,7 +162,25 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     for (int n : m->order) {
         const Node& node = m->nodes[size_t(n)];
         if (node.mesh < 0) continue;
-        for (const Primitive& p : m->meshes[size_t(node.mesh)].primitives) {
+        ++modelStats_.nodes;
+        const MeshDef& baseMesh = m->meshes[size_t(node.mesh)];
+        const bool rigid = node.skin < 0 && !baseMesh.deformable;
+        const mat4 nodeWorld = d.world * world[size_t(n)];
+        bool nodeView = inView, nodeShadow = inShadow;
+        if (rigid && modelCullingEnabled_) {
+            nodeView = inView && modelBoxVisible(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax);
+            nodeShadow = inShadow && modelBoxVisible(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax);
+            if (!nodeView && !nodeShadow) ++modelStats_.culledNodes; // retained for later mirror/spot frusta
+        }
+        int meshIndex = node.mesh; size_t level = 0;
+        if (rigid && modelLodEnabled_ && !baseMesh.lods.empty()) {
+            float pixels = nodeView ? modelPixelDiameter(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, sceneW_, sceneH_) : 0;
+            if (nodeShadow) pixels = std::max(pixels, modelPixelDiameter(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, shadowSize_, shadowSize_));
+            if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity();
+            for (size_t i = 0; i < baseMesh.lods.size(); ++i) if (pixels < baseMesh.lods[i].maxPixels) { meshIndex = baseMesh.lods[i].mesh; level = i + 1; }
+        }
+        ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
+        for (const Primitive& p : m->meshes[size_t(meshIndex)].primitives) {
             if (p.indexCount == 0) continue;
             int mi = p.material;
             if (d.variant >= 0 && d.variant < int(p.variantMaterial.size()) && p.variantMaterial[size_t(d.variant)] >= 0) mi = p.variantMaterial[size_t(d.variant)];
@@ -182,7 +189,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
-            it.inView = inView; it.inShadow = inShadow && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
+            it.rigid = rigid;
+            it.castShadow = !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
+            it.inView = nodeView; it.inShadow = nodeShadow && it.castShadow;
             it.joints = -1; it.baked = false; it.anim = anim; it.morph = -1;
             const bool skinnedPrim = node.skin >= 0 && !p.jointPalette.empty();
             if (skinnedPrim && canBake && node.skin == m->baked.skin) {
@@ -291,6 +300,8 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     dev_->setIndexBuffer(it.model->ib);
     dev_->drawIndexed(it.prim->indexCount, it.prim->firstIndex, 0, count);
     lastItem_ = &it;
+    modelStats_.triangles += uint64_t(it.prim->indexCount / 3) * count;
+    if (count > 1) { ++modelStats_.instancedDraws; modelStats_.drawnInstances += count; }
     ++drawCalls_;
 }
 
@@ -300,8 +311,13 @@ void Renderer3D::renderModels(int phase) {
     for (uint32_t i = 0; i < modelItems_.size(); ++i) {
         const ModelItem& it = modelItems_[i];
         const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags);
-        bool take = phase == 0 ? it.inShadow : phase == 3 ? it.inView && it.outline.w > 0 : phase == 4 ? it.inView && transparentItem(it.flags) :
-                    it.inView && (phase == 2) == blended;
+        bool visible = it.inView, shadow = it.inShadow;
+        if (auxiliaryModelPass_ && it.rigid && modelCullingEnabled_) {
+            visible = modelBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
+            shadow = it.castShadow && modelBoxVisible(lightViewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
+        }
+        bool take = phase == 0 ? shadow : phase == 3 ? visible && it.outline.w > 0 : phase == 4 ? visible && transparentItem(it.flags) :
+                    visible && (phase == 2) == blended;
         if (take) order_.push_back(i);
     }
     if (order_.empty()) return;
@@ -319,7 +335,7 @@ void Renderer3D::renderModels(int phase) {
     }
     currentPipe_ = {};
     lastItem_ = nullptr;
-    auto batchable = [&](const ModelItem& x) { return x.joints < 0 && x.morph < 0; };
+    auto batchable = [&](const ModelItem& x) { return modelInstancingEnabled_ && x.joints < 0 && x.morph < 0; };
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
         return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by &&

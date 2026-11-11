@@ -148,6 +148,11 @@ enum DrawFlags : uint32_t {
     kDrawTransparent = 16,
 };
 
+struct ModelRenderStats {
+    uint64_t nodes = 0, culledNodes = 0, lodNodes[4] = {};
+    uint64_t triangles = 0, instancedDraws = 0, drawnInstances = 0;
+};
+
 class Renderer3D {
 public:
     bool init(gfx::Device& dev);
@@ -210,11 +215,16 @@ public:
     Lighting lighting;
     LightSystem lights;   // dynamic point lights: add between beginScene() and render()
     uint32_t drawCalls() const { return drawCalls_; }
+    void setModelLodEnabled(bool on) { modelLodEnabled_ = on; }
+    void setModelCullingEnabled(bool on) { modelCullingEnabled_ = on; }
+    void setModelInstancingEnabled(bool on) { modelInstancingEnabled_ = on; }
+    const ModelRenderStats& modelStats() const { return modelStats_; }
 
 private:
     struct DrawItem { const Mesh* mesh; mat4 model; float4 color; uint32_t flags; float specular, emissive; };
     struct ModelItem {
         const Model* model; const Primitive* prim; const Material* mat;
+        bool rigid = false, castShadow = false;
         mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
         bool baked;         // skinned from the baked texture (rows in anim)
@@ -279,6 +289,9 @@ private:
     float3 camFwd_;
 
     // models
+    ModelRenderStats modelStats_;
+    bool modelLodEnabled_ = true, modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
+    bool auxiliaryModelPass_ = false;
     MaterialQuality matQuality_ = MaterialQuality::High;
     std::vector<ModelItem> modelItems_;
     std::vector<float> jointData_, morphData_, instData_;

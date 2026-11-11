@@ -12924,6 +12924,28 @@ TEST(models_gltf_punctual_lights) {
     }
 }
 
+TEST(models_gltf_lod_metadata) {
+    using namespace render;
+    auto read = [](const std::string&, std::string&) { return false; };
+    auto source = [](const std::string& levels, const std::string& other = "{}") {
+        return "{\"asset\":{\"version\":\"2.0\"},\"meshes\":[{\"extras\":{\"rtsLods\":" + levels + "}}," + other + "]}";
+    };
+    auto model = loadGltf("lod.gltf", source(R"([{"mesh":1,"maxPixels":64}])"), read, nullptr);
+    CHECK(model->meshes.size() == 2);
+    CHECK(model->meshes[0].lods.size() == 1);
+    CHECK(model->meshes[0].lods[0].mesh == 1);
+    for (const char* levels : {R"([{"mesh":0,"maxPixels":64}])", R"([{"mesh":2,"maxPixels":64}])",
+          R"([{"mesh":1,"maxPixels":0}])", R"([{"mesh":1,"maxPixels":32},{"mesh":1,"maxPixels":64}])", R"([{"maxPixels":64}])"}) {
+        bool rejected = false;
+        try { loadGltf("bad.gltf", source(levels), read, nullptr); } catch (const std::exception&) { rejected = true; }
+        CHECK(rejected);
+    }
+    bool rejected = false;
+    try { loadGltf("cycle.gltf", source(R"([{"mesh":1,"maxPixels":64}])", R"({"extras":{"rtsLods":[{"mesh":0,"maxPixels":32}]}})"), read, nullptr); }
+    catch (const std::exception&) { rejected = true; }
+    CHECK(rejected);
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

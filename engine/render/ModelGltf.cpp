@@ -472,7 +472,20 @@ private:
             const auto& prims = jm["primitives"].items();
             for (size_t pi = 0; pi < prims.size(); ++pi) loadPrimitive(prims[pi], md, skinOfMesh.count(int(mi)) > 0);
             for (const auto& w : jm["weights"].items()) md.weights.push_back(float(num(w, 0)));
+            float previousPixels = 1e30f;
+            for (const auto& level : jm["extras"]["rtsLods"].items()) {
+                if (!level["mesh"].isNumber() || !level["maxPixels"].isNumber()) fail("LOD requires mesh and maxPixels numbers");
+                ModelLod lod; lod.mesh = inum(level["mesh"]); lod.maxPixels = float(num(level["maxPixels"], 0));
+                if (lod.mesh < 0 || lod.mesh >= int(meshes.size()) || lod.mesh == int(mi) || !std::isfinite(lod.maxPixels) || lod.maxPixels <= 0 || lod.maxPixels >= previousPixels)
+                    fail("mesh '" + md.name + "': invalid LOD mesh or pixel threshold");
+                previousPixels = lod.maxPixels; md.lods.push_back(lod);
+            }
             model_->meshes.push_back(std::move(md));
+        }
+        for (const auto& mesh : model_->meshes) for (const auto& lod : mesh.lods) {
+            const auto& target = model_->meshes[size_t(lod.mesh)];
+            if (!target.lods.empty()) fail("nested or cyclic LOD chains are unsupported");
+            for (const auto& p : target.primitives) if (p.morphTargets || !p.jointPalette.empty()) fail("LOD targets must be static");
         }
         for (size_t i = 0; i < model_->nodes.size(); ++i) {
             Node& n = model_->nodes[i];

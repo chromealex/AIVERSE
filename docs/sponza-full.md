@@ -10,7 +10,7 @@
 архитектура, ткани (флаги/шторы), плющ, кипарис, 10 000 свечей и анимированный рыцарь.
 Сохранены исходные лицензии, SHA-256 каждого файла и locks пакетов. Ассеты внешние,
 в Git попадают только рецепты и контрольные суммы. Локальная сборка сцены:
-`/Volumes/KINGSTON/AIVERSE/Sponza/scene.json` (~3,7 GB).
+`/Volumes/KINGSTON/AIVERSE/Sponza/scene.json` (119 файлов, 3,82 GB).
 
 ```sh
 python3 tools/renderbench/fetch_sponza.py /Volumes/KINGSTON/AIVERSE/Sponza
@@ -27,6 +27,21 @@ python3 tools/renderbench/run.py build/.temp/hdr-mac/aiverse_renderbench \
 ту же геометрию без GI/SSR/TAA/bloom. Результаты разных профилей не являются
 сравнением одинакового качества. Шаг анимации фиксирован: 1/60 секунды на кадр,
 сброс на каждой камере. Число прогревочных кадров меняет фазу анимации и должно совпадать.
+
+Нативная сборка для Apple Silicon (исключает Rosetta из CPU-измерений):
+
+```sh
+cmake -S . -B /Volumes/KINGSTON/AIVERSE/Builds/.temp/sponza-arm64 \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DAIVERSE_BUILD_RENDERBENCH=ON -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TOOLS=OFF \
+  -DRTS_BUILD_TESTS=OFF -DRTS_BUILD_CLIENT=OFF -DRTS_BUILD_HEADLESS=OFF
+cmake --build /Volumes/KINGSTON/AIVERSE/Builds/.temp/sponza-arm64 \
+  --target aiverse_renderbench aiverse_renderbench_gl -j8
+```
+
+В командах `run.py` выше замените путь бинарника на этот каталог. Поле
+`binaryArchitecture` записывается самим C++-бинарником; анализатор отвергает
+сравнение разных архитектур, даже если модель GPU и физический компьютер совпали.
 
 ## Восстановление материалов рыцаря
 

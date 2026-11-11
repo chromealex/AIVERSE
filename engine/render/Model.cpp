@@ -85,7 +85,9 @@ void Model::finalize() {
         }
     }
     // primitive bounds from the vertices they reference
-    for (auto& mesh : meshes)
+    for (auto& mesh : meshes) {
+        mesh.boundsMin = {1e30f, 1e30f, 1e30f}; mesh.boundsMax = {-1e30f, -1e30f, -1e30f};
+        mesh.deformable = false;
         for (auto& p : mesh.primitives) {
             p.boundsMin = {1e30f, 1e30f, 1e30f}; p.boundsMax = {-1e30f, -1e30f, -1e30f};
             for (uint32_t i = 0; i < p.indexCount; ++i) {
@@ -93,7 +95,11 @@ void Model::finalize() {
                 p.boundsMin = min3(p.boundsMin, v); p.boundsMax = max3(p.boundsMax, v);
             }
             if (p.indexCount == 0) p.boundsMin = p.boundsMax = {0, 0, 0};
+            mesh.boundsMin = min3(mesh.boundsMin, p.boundsMin); mesh.boundsMax = max3(mesh.boundsMax, p.boundsMax);
+            mesh.deformable |= !p.jointPalette.empty() || p.morphTargets > 0;
         }
+        if (mesh.primitives.empty()) mesh.boundsMin = mesh.boundsMax = {};
+    }
     // model bounds in bind pose
     std::vector<mat4> world(nodes.size());
     for (int n : order) {
