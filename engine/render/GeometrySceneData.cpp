@@ -19,9 +19,15 @@ void GeometryScene::validate(const Json& j){
     std::set<std::string> ids;
     for(auto& i:j["instances"].items()){
         if(!i.isObject())throw std::runtime_error("geometry scene: instance must be object");
-        for(auto& [k,v]:i.members())if(k!="id"&&k!="model"&&k!="position"&&k!="rotation"&&k!="scale"&&k!="geometry")throw std::runtime_error("geometry scene: unknown instance key '"+k+"'");
+        for(auto& [k,v]:i.members())if(k!="id"&&k!="model"&&k!="position"&&k!="rotation"&&k!="scale"&&k!="geometry"&&k!="proxy")throw std::runtime_error("geometry scene: unknown instance key '"+k+"'");
         if(i.getStr("id").empty()||!ids.insert(i.getStr("id")).second)throw std::runtime_error("geometry scene: unique nonempty instance id required");
         path(i.getStr("model"));parseGeometryPolicy(i["geometry"]);
+        if(i.has("proxy")){
+            const auto& p=i["proxy"];if(!p.isObject())throw std::runtime_error("geometry scene: proxy must be object");
+            for(auto& [k,v]:p.members())if(k!="model"&&k!="maxPixels")throw std::runtime_error("geometry scene: unknown proxy key '"+k+"'");
+            path(p.getStr("model"));number(p,"maxPixels",1,512);
+            if(p.getStr("model")==i.getStr("model"))throw std::runtime_error("geometry scene: proxy must differ from source");
+        }
         for(auto key:{"position","rotation","scale"})if(i.has(key)){
             const auto& v=i[key];if(!v.isArray()||v.size()!=3)throw std::runtime_error(std::string("geometry scene: expected xyz ")+key);
             for(auto& x:v.items())if(!x.isNumber()||!std::isfinite(x.toDouble())||std::fabs(x.toDouble())>1000000||(std::string(key)=="scale"&&(x.toDouble()<.0001||x.toDouble()>10000)))throw std::runtime_error("geometry scene: invalid transform");

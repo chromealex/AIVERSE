@@ -66,7 +66,7 @@ limits. The transformation bound accounts for nonuniform scale. If materials are
 masked or use Shader Graph, or the proxy budget is exhausted, the children remain active.
 Groups which cannot reduce either geometry or estimated instanced draw count keep the originals.
 Identical untextured materials can merge across assets; textured materials merge within the same source.
-Textures/materials are preserved; there is no texture atlasing or material baking. Each unique
+Automatic HLOD preserves textures/materials without atlasing or material baking (offline baked proxies are described below). Each unique
 material can still require a draw. Proxies switch without cross-fade. This first implementation
 builds proxies in memory and may duplicate textures; inspect memory before using large scenes.
 
@@ -117,3 +117,83 @@ instances instead retain existing instancing when a proxy cannot help. The occlu
 removed one hidden main-pass draw. The far-LOD fixture selected all 64 coarse clusters, reducing
 8192 source triangles to 4096 in the main pass. These are fixture results, not general frame-time
 or speedup claims. Android, WebGL and Windows runtime rendering have not been verified here.
+
+## Offline baked surface proxies
+
+`geometry_proxy_bake` converts a **rigid model** (including its transformed child meshes) into
+an ordinary self-contained GLB. Source files are unchanged; the target must not exist.
+It uses CPU directional rasterization before game runtime, no GPU bake or external tools.
+
+```json
+{"model":"models/log_wall.glb","target":"models/log_wall_far.glb",
+ "mode":"plane","axis":"z","resolution":128}
+```
+
+- `plane`: two opposing quads (4 triangles), suitable for a thin wall; `auto` chooses the
+  thinnest local axis. Thickness must be at most 25% of the longest extent. Edge-on views
+  lose side faces; choose `box` if those views matter.
+- `box` (default): up to six outer faces (12 triangles). Empty directional views are omitted.
+  This is an axis-aligned surface approximation, not arbitrary topology reconstruction.
+- Three embedded PNG maps: sRGB base colour + sampled coverage, tangent-space normals,
+  linear packed occlusion/roughness/metallic. Source textures, vertex colours, material factors,
+  UV transforms and normal maps contribute. Lighting is not baked.
+- Resolution is 16..512 per face; atlas charts have 4-pixel attribute gutters. Alpha holes are
+  not dilated. Thin details below a texel can disappear; mip filtering can erode tiny openings.
+- Skins, clips, morphs, material variants, translucent, unlit, emissive, team-colour, fixed-light
+  and Shader Graph materials are rejected. Missing-texture/import warnings must be resolved.
+- Budget: 2 million source vertices, 1 million transformed triangles and 100 million raster
+  candidates. Exhaustion fails without publishing a partial GLB. Source must retain CPU data.
+
+Returns source/proxy triangle counts, sampled coverage/depth deviation, texture bytes and a
+static-scene binding suggestion. **sampledDepthError is not a certified error bound.** Box
+projections can show shifted surfaces or overlaps from oblique views. This is for far scenery,
+not a substitute for high-quality near meshes. Always preview actual assets and transitions.
+
+To append to an RTS type's existing LOD chain:
+
+```json
+{"type":"house","source":"models/log_wall.glb",
+ "model":"models/log_wall_far.glb","distance":70}
+```
+
+Call `geometry_proxy_lod`. It verifies the expected source path, rejects animated sources,
+keeps other view settings and existing LODs, and requires a distance beyond existing levels.
+Review model-dependent material overrides separately: they can modify the baked material.
+Existing RTS model LOD switches by distance; there is no new simulation or collision state.
+
+For static scenery, add to an instance in `geometry_scene_set`:
+
+```json
+"proxy": {"model":"models/log_wall_far.glb","maxPixels":96}
+```
+
+At runtime the original is used above the projected-size threshold, including near-plane
+fallback; below it the proxy is drawn. `maxPixels` (1..512) is a conservative bounding-size
+threshold, **not** a geometric-error test. Source and proxy stay resident. The switch is hard,
+without cross-fade. Both follow the same instance transform. Shadows/reflections use the
+selected model, so their approximation also needs review. The proxy never becomes an occluder.
+Groups containing explicit proxies keep their children instead of applying automatic parent
+HLOD; other groups still use existing HLOD. No changes to gameplay entities or fog visibility.
+
+`aiverse_surface_proxy_tests [output-dir]` checks baking, hole coverage, normal variation,
+material/texture GLB roundtrip, budgets, unsupported assets and Workspace bake/binding.
+`aiverse_surface_proxy_preview [plane|box|hole] [yaw-radians]` compares source (left) and
+proxy (right) through the real renderer. Use AIVERSE_SCREENSHOT/AIVERSE_EXIT_AFTER_FRAMES.
+
+Regenerate a proxy after changing source geometry or materials; there is no automatic source
+invalidation/cache. Use a new target name and explicitly replace the LOD/scene binding after
+preview. Bake publication uses a per-target lock and atomic hard link in the destination
+filesystem; a filesystem without hard-link support reports an error without overwriting data.
+
+### Surface proxy verification (2026-11-12)
+
+macOS x86_64 builds: editor, MCP, surface-proxy preview and tests. Surface bake/Workspace
+suite: 34 checks; model authoring: 618 checks; full engine: 7772 checks, zero failures.
+The final geometry subset passed 1631 checks. Skirmish/mushrooms seed 3 ended with winners
+and retained checksums ae6a5687d79765c2 / a06caad4f1d88f10. Catalog validation (72 entries),
+nine library test suites and the external native/export consumer passed.
+Real Metal captures checked front, oblique and opening fixtures after GLB export/reload.
+The 1280-triangle log wall became 4 plane triangles or 12 box triangles. Normal shading and
+the opening survived; oblique projection and silhouette differences remain visible up close.
+These are asset/visual results, not measured frame-time gains. MinGW syntax checks of changed
+C++ sources passed with -Wall -Wextra. Windows execution, OpenGL, Android and WebGL were not run.

@@ -1,4 +1,5 @@
 #include "Modeling.h"
+#include "tools/branding/BrandImage.h"
 #include <bit>
 #include <cstring>
 namespace aiverse::modeling {
@@ -91,12 +92,37 @@ std::string exportGlb(const Model &m) {
     }
     scene.set("nodes", roots);
     w.root.member("scenes").push(scene);
+    if (!m.images.empty()) {
+        auto images=Json::array(),textures=Json::array(),samplers=Json::array();
+        for (const auto& im:m.images) {
+            require(im.width>0 && im.height>0 && im.rgba.size()==size_t(im.width)*size_t(im.height)*4,
+                    "GLB export: texture CPU pixels unavailable");
+            branding::Image pixels;pixels.width=im.width;pixels.height=im.height;pixels.rgba=im.rgba;
+            const auto png=branding::encodePng(pixels);
+            require(!png.empty(),"GLB export: PNG encoding failed");
+            while(w.bin.size()%4)w.bin.push_back(0);
+            auto view=Json::object();view.set("buffer",num(0));view.set("byteOffset",num(int64_t(w.bin.size())));view.set("byteLength",num(int64_t(png.size())));
+            auto image=Json::object();image.set("bufferView",num(int64_t(w.root["bufferViews"].size())));image.set("mimeType",Json::string("image/png"));image.set("name",Json::string(im.name));
+            w.root.member("bufferViews").push(view);w.bin+=png;images.push(image);
+            auto sampler=Json::object();sampler.set("wrapS",num(im.repeat?10497:33071));sampler.set("wrapT",num(im.repeat?10497:33071));
+            sampler.set("magFilter",num(im.nearest?9728:9729));sampler.set("minFilter",num(im.nearest?9984:9987));samplers.push(sampler);
+            auto tex=Json::object();tex.set("source",num(int64_t(textures.size())));tex.set("sampler",num(int64_t(textures.size())));textures.push(tex);
+        }
+        w.root.set("images",images);w.root.set("textures",textures);w.root.set("samplers",samplers);
+    }
+    auto texture=[&](Json& object,const char* key,int id){if(id<0)return;require(size_t(id)<m.images.size(),"GLB export: texture index out of range");
+        auto t=Json::object();t.set("index",num(id));object.set(key,t);};
     for (auto &mt : m.materials) {
         auto j = Json::object(), pbr = Json::object();
         j.set("name", Json::string(mt.name));
         pbr.set("baseColorFactor", floats({mt.baseColor.x, mt.baseColor.y, mt.baseColor.z, mt.baseColor.w}));
         pbr.set("metallicFactor", Json::number(double(mt.metallic), 8));
         pbr.set("roughnessFactor", Json::number(double(mt.roughness), 8));
+        texture(pbr,"baseColorTexture",mt.baseTex);texture(pbr,"metallicRoughnessTexture",mt.mrTex);
+        texture(j,"normalTexture",mt.normalTex);texture(j,"occlusionTexture",mt.occlusionTex);texture(j,"emissiveTexture",mt.emissiveTex);
+        if(mt.normalTex>=0)j.member("normalTexture").set("scale",Json::number(double(mt.normalScale),8));
+        if(mt.occlusionTex>=0)j.member("occlusionTexture").set("strength",Json::number(double(mt.occlusionStrength),8));
+        if(mt.alpha==AlphaMode::Mask){j.set("alphaMode",Json::string("MASK"));j.set("alphaCutoff",Json::number(double(mt.alphaCutoff),8));}
         j.set("pbrMetallicRoughness", pbr);
         j.set("emissiveFactor", floats({mt.emissive.x, mt.emissive.y, mt.emissive.z}));
         j.set("doubleSided", Json::fromBool(mt.doubleSided));
