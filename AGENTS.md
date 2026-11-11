@@ -173,6 +173,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Meta-game C++ policies, JSON presets and agent recipes | `engine/meta`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/meta-*`, `docs/meta-game.md`; minimal CMake/native dependency hooks | meta-library agent |
 | FPS, authoritative sessions and large worlds | `modules/fps`, `engine/net/authority`, `engine/world`, `apps/fps`, `tests/fps`, `examples/fps`, `docs/fps.md`; additive build/platform hooks | FPS task (current agent) |
 | AIVERSE naming migration | Engine-wide branding, shared namespaces, build/tool names, platform bridges, documentation; preserve genre RTS | aiverse-rename (user assigned) |
+| Jolt physics evaluation | `tools/physics`, `docs/physics-evaluation.md` | codex/jolt-evaluation |
 | Other areas | as assigned by the user | the agent the user assigned |
 
 If your task is not in this table, the user's first message to you defines your area: write it
