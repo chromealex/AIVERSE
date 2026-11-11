@@ -415,6 +415,9 @@
   "animationEditor.unsupported": "Нет опоры",
   "animationEditor.contactReport": "Опор: %d | Стопы: %.3f | Проникновение: %.3f | Баланс: %.3f",
   "animationEditor.previewGround": "Высота опоры",
+  "animationEditor.climbReport": "Опор: %d | В шаге: %d | Ошибка лап: %.3f",
+  "animationEditor.attached": "Удерживается на поверхности",
+  "animationEditor.detached": "Недостаточно достижимых опор",
   "animationEditor.openProject": "Откройте проект",
   "animationEditor.save": "Сохранить",
   "animationEditor.load": "Загрузить",
@@ -506,5 +509,22 @@
   "restore": "Восстановить",
   "orbit": "Поворот",
   "zoom": "Расстояние"
+},
+"clothDemo": {
+  "autoLod": "Учитывать автоматический LOD",
+  "lod": "Частота обновления по LOD",
+  "lodCounts": "60 / 30 / 15 / 10 Гц: {a} / {b} / {c} / {d}",
+  "gust": "Порыв для первой ткани",
+  "sharing": "Объединять одинаковые ткани",
+  "groups": "Расчётов: {solves}, копий: {copies}",
+  "frame": "кадр",
+  "title": "Ткань XPBD",
+  "count": "Объектов: {count}; треугольников на объект: {triangles}",
+  "grid": "{particles} частиц на ткань; потоков: {workers}",
+  "pause": "Пауза",
+  "resume": "Продолжить",
+  "reset": "Сбросить",
+  "orbit": "Поворот",
+  "distance": "Расстояние"
 }
 }

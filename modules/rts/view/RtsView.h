@@ -407,8 +407,9 @@ private:
     std::vector<ViewGroundBatch> shadowDraws_, groundMerged_;   // "groundShadow" quads of this frame (one batch per image)
     void addGroundShadow(const TypeLook& L, const EntityAnim& st, render::float3 pos, float ground, const EntityFxValues* fx = nullptr);
     std::function<void(Entity,render::AnimationEnvironment&)> animationEnvironmentQuery_;
-    struct AnimationObstacle { Entity entity; render::float3 lo,hi; uint64_t surface; };
+    struct AnimationObstacle { const SceneObject* object=nullptr; Entity entity; render::float3 lo,hi,localMin,localMax; uint64_t surface; render::mat4 transform; };
     std::vector<AnimationObstacle> animationObstacles_;
+    std::shared_ptr<std::map<uint64_t,render::mat4>> animationSurfaceFrames_;
     std::shared_ptr<const render::AnimationEnvironment> animationEnvironment(const SceneObject&,const EntityAnim&,const ModelChoice&,const MapGrid&);
     EntityFxStore* fx_ = nullptr;   // this frame's view.entity_fx store (RtsScene::entityFx)
     bool fxFor(const SceneObject& o, EntityFxValues& out) const { return fx_ && o.entity.valid() && fx_->lookup(o.entity.packed(), out); }

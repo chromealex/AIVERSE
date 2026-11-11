@@ -1,0 +1,11 @@
+{
+  "cpu": "Apple M3 Ultra",
+  "physical_cores": 28,
+  "logical_cores": 28,
+  "memory_bytes": 103079215104,
+  "os": "macOS 15.6 (24G84)",
+  "binary_arch": "arm64",
+  "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)",
+  "configuration": "Release",
+  "verification": "sysctl, sw_vers, uname and compiler output; Python runner itself may run under Rosetta"
+}

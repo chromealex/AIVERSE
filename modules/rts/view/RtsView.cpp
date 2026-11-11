@@ -155,14 +155,25 @@ void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batc
 void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
     fx_ = s.entityFx.get();   // view.entity_fx
     if (planets_.active()) { drawPlanets(r, s, time, vision, grid); return; }   // RtsPlanetView.cpp
-    animationObstacles_.clear();
+    animationObstacles_.clear();animationSurfaceFrames_=std::make_shared<std::map<uint64_t,mat4>>();
     bool contacts=fx_&&!fx_->animations.empty();for(const auto& look:looks_)for(const auto& ch:look.models)contacts|=ch.graph&&ch.graph->hasContacts();
     for(size_t oi=0;contacts&&oi<s.objects.size();++oi){const auto& o=s.objects[oi];if(!o.visible||o.isProjectile||o.body!=-1||o.type>=looks_.size())continue;
-        const auto& look=looks_[o.type];if(look.models.empty()||!look.models[0].model)continue;const auto& ch=look.models[0];
-        auto transform=mat4::translate({o.pos.x,heightAt(grid,o.pos.x,o.pos.z)+(look.air?look.flyHeight:0),o.pos.z})*mat4::rotateY(std::atan2(-o.facing.z,o.facing.x))*mat4::scale({look.scale,look.scale,look.scale})*ch.fix;
-        float3 lo{1e20f,1e20f,1e20f},hi{-1e20f,-1e20f,-1e20f};auto a=ch.model->boundsMin,b=ch.model->boundsMax;
-        for(float x:{a.x,b.x})for(float y:{a.y,b.y})for(float z:{a.z,b.z}){auto v=transform.transformPoint({x,y,z});lo={std::min(lo.x,v.x),std::min(lo.y,v.y),std::min(lo.z,v.z)};hi={std::max(hi.x,v.x),std::max(hi.y,v.y),std::max(hi.z,v.z)};}
-        animationObstacles_.push_back({o.entity,lo,hi,o.entity.valid()?o.entity.packed()+2:uint64_t(oi)+2});
+        const auto& look=looks_[o.type];if(look.models.empty())continue;uint64_t key=o.entity.valid()?o.entity.packed():(uint64_t(1)<<63)|oi;auto state=anims_.find(key);
+        size_t choice=state!=anims_.end()&&size_t(state->second.choice)<look.models.size()?size_t(state->second.choice):0;const ModelChoice* ch=&look.models[choice];
+        const Stage* stage=nullptr;for(const auto& sg:look.stages){if(o.build<1&&look.construction==Construction::Stages&&sg.build>=0&&sg.build<=o.build&&(!stage||sg.build>stage->build))stage=&sg;if(o.build>=1&&sg.hp>=0&&o.hp<=sg.hp&&(!stage||sg.hp<stage->hp))stage=&sg;}if(stage)ch=&stage->choice;if(!ch->model)continue;
+        EntityFxValues values;bool hasFx=fxFor(o,values);float lift=hasFx?values.v[EntityFxValues::kLift]:0;float3 position{o.pos.x,heightAt(grid,o.pos.x,o.pos.z)+(look.air?look.flyHeight:0)+lift,o.pos.z};
+        float yaw=state!=anims_.end()?state->second.yaw:std::atan2(-o.facing.z,o.facing.x);float k=look.scale,grow=look.construction==Construction::Grow?std::clamp(o.build,.15f,1.f):1;
+        mat4 base;if(look.structure&&look.shape&&!stage)base=mat4::translate(position)*mat4::scale({look.sx*k,k*std::max(look.sx,look.sz)*.75f*grow,look.sz*k});else base=mat4::translate(position)*mat4::rotateY(yaw)*mat4::scale({k,k*(look.structure?grow:1),k});
+        if(hasFx){auto tilt=mat4::rotateZ(-values.v[EntityFxValues::kPitch]*.017453292f)*mat4::rotateX(-values.v[EntityFxValues::kRoll]*.017453292f);base=mat4::translate(position)*mat4::rotateY(yaw)*tilt*mat4::rotateY(-yaw)*mat4::translate(-position)*base*mat4::scale({values.scale(0),values.scale(1),values.scale(2)});}
+        if(state!=anims_.end())base=base*state->second.objXf;base=base*ch->fix;const auto& model=*ch->model;
+        const auto& matrices=!stage&&state!=anims_.end()&&state->second.world.size()==model.nodes.size()?state->second.world:model.bindWorld;
+        for(size_t node=0;node<model.nodes.size()&&node<matrices.size();++node){int mesh=model.nodes[node].mesh;if(mesh<0||size_t(mesh)>=model.meshes.size())continue;auto transform=base*matrices[node];const auto& primitives=model.meshes[size_t(mesh)].primitives;
+            for(size_t part=0;part<primitives.size()&&part<256;++part){auto a=primitives[part].boundsMin,b=primitives[part].boundsMax;float3 lo{1e20f,1e20f,1e20f},hi{-1e20f,-1e20f,-1e20f};
+                for(float x:{a.x,b.x})for(float y:{a.y,b.y})for(float z:{a.z,b.z}){auto v=transform.transformPoint({x,y,z});lo={std::min(lo.x,v.x),std::min(lo.y,v.y),std::min(lo.z,v.z)};hi={std::max(hi.x,v.x),std::max(hi.y,v.y),std::max(hi.z,v.z)};}
+                uint64_t id=key^((node+1)*0x9e3779b97f4a7c15ull)^((part+1)*0xbf58476d1ce4e5b9ull);id^=id>>30;id*=0xbf58476d1ce4e5b9ull;id^=id>>27;id=(id&0x3fffffffffffffffull)+2;
+                animationObstacles_.push_back({&o,o.entity,lo,hi,a,b,id,transform});(*animationSurfaceFrames_)[id]=transform;
+            }
+        }
     }
     geometryScene_.draw(r);
     const bool tiles = twoD_ && twoD_->hasTiles();

@@ -415,6 +415,9 @@
   "animationEditor.unsupported": "No support",
   "animationEditor.contactReport": "Supports: %d | Foot: %.3f | Penetration: %.3f | Balance: %.3f",
   "animationEditor.previewGround": "Preview ground",
+  "animationEditor.climbReport": "Stance: %d | Swing: %d | Foot error: %.3f",
+  "animationEditor.attached": "Attached to surface",
+  "animationEditor.detached": "Insufficient reachable support",
   "animationEditor.openProject": "Open a project",
   "animationEditor.save": "Save draft",
   "animationEditor.load": "Load",
@@ -506,5 +509,22 @@
   "restore": "Restore state",
   "orbit": "Orbit",
   "zoom": "Distance"
+},
+"clothDemo": {
+  "autoLod": "Use existing automatic LOD",
+  "lod": "Temporal LOD",
+  "lodCounts": "60 / 30 / 15 / 10 Hz: {a} / {b} / {c} / {d}",
+  "gust": "Gust on first cloth",
+  "sharing": "Share identical simulations",
+  "groups": "Solves: {solves}, copies: {copies}",
+  "frame": "frame",
+  "title": "XPBD cloth",
+  "count": "Cloth objects: {count}; triangles each: {triangles}",
+  "grid": "{particles} particles / cloth; {workers} workers",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "orbit": "Orbit",
+  "distance": "Distance"
 }
 }

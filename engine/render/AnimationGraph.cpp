@@ -234,7 +234,7 @@ void AnimationGraphInstance::bindChild(size_t i){
 AnimationGraphInstance* AnimationGraphInstance::child(const std::string& name){if(graph_)for(size_t i=0;i<children_.size();++i)if(graph_->nodes()[i].id==name)return children_[i].get();return nullptr;}
 const MotionPlayer* AnimationGraphInstance::motion(const std::string& name)const{if(graph_)for(size_t i=0;i<motions_.size();++i)if(graph_->nodes()[i].id==name)return motions_[i].get();return nullptr;}
 bool AnimationGraph::hasContacts() const {
-    for(const auto& n:nodes()){if(n.subgraph&&n.subgraph->hasContacts())return true;if(n.rig)for(auto& u:n.rig->units())if(u.fullBody&&u.fullBody->contacts())return true;for(auto& t:n.traits)if(t.rig)for(auto& u:t.rig->units())if(u.fullBody&&u.fullBody->contacts())return true;}return false;
+    for(const auto& n:nodes()){if(n.subgraph&&n.subgraph->hasContacts())return true;if(n.rig)for(auto& u:n.rig->units())if(u.locomotion||(u.fullBody&&u.fullBody->contacts()))return true;for(auto& t:n.traits)if(t.rig)for(auto& u:t.rig->units())if(u.locomotion||(u.fullBody&&u.fullBody->contacts()))return true;}return false;
 }
 bool AnimationGraphInstance::hasContacts() const {return graph_&&graph_->hasContacts();}
 AnimationContactReport AnimationGraphInstance::contactReport() const {
@@ -243,6 +243,9 @@ AnimationContactReport AnimationGraphInstance::contactReport() const {
     auto rig=[&](const AnimationRig& r,const AnimationRigState* state){if(!state)return;for(size_t i=0;i<r.units().size()&&i<state->contacts.size();++i){auto& u=r.units()[i];if(u.fullBody&&u.fullBody->contacts())add(u.fullBody->contacts()->report(*graph_->model(),parameters_,last_,world,state->contacts[i]));}};
     for(int index:graph_->states()[size_t(state_)].program){size_t i=size_t(index);const auto& n=graph_->nodes()[i];if(n.rig)rig(*n.rig,rigs_[i].get());for(size_t t=0;t<n.traits.size();++t)if(n.traits[t].rig&&traitState_[i][t].enabled)rig(*n.traits[t].rig,traitState_[i][t].rig.get());if(children_[i])add(children_[i]->contactReport());}
     result.supported=result.supports>0;result.stable=result.supported&&result.supportError<.005f&&result.penetration<.005f&&result.balanceError<.005f;return result;
+}
+SurfaceLocomotionReport AnimationGraphInstance::locomotionReport() const {
+    if(!graph_)return {};for(int index:graph_->states()[size_t(state_)].program){size_t i=size_t(index);if(rigs_[i])for(auto& s:rigs_[i]->locomotion)if(s.report.active)return s.report;for(auto& t:traitState_[i])if(t.enabled&&t.rig)for(auto& s:t.rig->locomotion)if(s.report.active)return s.report;if(children_[i]){auto r=children_[i]->locomotionReport();if(r.active)return r;}}return {};
 }
 void AnimationGraphInstance::traitFailure(size_t i,size_t t){traitState_[i][t].enabled=false;healthy_=false;error_="trait failed at node '"+graph_->nodes()[i].id+"'";}
 const std::string& AnimationGraphInstance::state() const {
@@ -256,6 +259,8 @@ void AnimationGraphInstance::update(float dt) {
     for(int instruction:graph_->states()[size_t(state_)].program) {
         const size_t i=size_t(instruction);
         const auto& n=graph_->nodes()[i];
+        if(rigs_[i])rigs_[i]->pendingTime=std::min(.1f,rigs_[i]->pendingTime+dt);
+        for(auto& t:traitState_[i])if(t.enabled&&t.rig)t.rig->pendingTime=std::min(.1f,t.rig->pendingTime+dt);
         for(size_t t=n.traits.size();t-->0;){auto& st=traitState_[i][t];const auto& op=n.traits[t].implementation;
             if(st.enabled&&op&&op->preUpdate&&!op->preUpdate(n.traits[t].config,parameters_,dt,st.data))traitFailure(i,t);
         }

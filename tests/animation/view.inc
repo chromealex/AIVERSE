@@ -101,3 +101,23 @@ end)
     auto store=view.entityFx();auto m=render::loadModel(std::string(AIVERSE_SOURCE_DIR)+"/templates/showcase/models/golem.glb",modeltest::diskReader(),nullptr);auto asset=store->animationDefinitions.at("contacts");render::AnimationGraphInstance graph;graph.reset(render::AnimationGraph::compile(*m,asset->definition));render::Pose pose;graph.evaluate(pose);auto report=graph.contactReport();CHECK(report.stable);CHECK(report.supports==2);store->animations.begin()->second.contacts=report;
     view.uiEvent(sim,"contact_status",Json::array());CHECK(view.log().empty());CHECK(store->animations.begin()->second.parameters.values.at("plant")==0);CHECK(sim.checksum()==hash);
 }
+
+TEST(animation_surface_locomotion_lua) {
+    Json rules=Json::parseFile(kSkirmish+"/rules.json");rules.set("viewScripts",Json::parse(R"(["scripts/view/crawl.lua"])"));Json sources=Json::object();
+    sources.set("scripts/view/crawl.lua",Json::string(R"LUA(
+local legs={}
+for i=0,3 do legs[#legs+1]={hip="hip"..i,knee="knee"..i,foot="foot"..i} end
+view.animation_define("crawl",{parameters={velocity={0,0,0.3},adhesion=1},nodes={{id="bind",kind="bind"},{id="rig",kind="rig",input="bind",units={{op="surfaceLocomotion",bone="body",velocity="velocity",adhesion="adhesion",legs=legs,world=false,obstacles={{kind="plane",normal={0,1,0}}}}}}},output="rig"})
+local actor=game.units{player=1}[1]
+view.animation_use(actor,"crawl")
+ui.on("climb_status",function()
+ local s=view.animation_status(actor)
+ assert(s.climbing and s.attached and s.stanceFeet>=3 and s.steppingFeet<=1)
+ assert(s.footError<0.01 and s.bodyPosition[3]>0 and s.surfaceNormal[2]>0.99)
+ view.animation(actor,{velocity={0,0,0},adhesion=0})
+end)
+)LUA"));rules.set("$scriptSources",sources);
+    Json map=Json::parseFile(kSkirmish+"/maps/valley.json");Simulation sim(SimConfig{},std::make_unique<game::RtsModule>());sim.setup(rules,map);auto hash=sim.checksum();game::ViewScripts view;CHECK(view.load(sim,rules,map,1));CHECK(view.log().empty());
+    render::Model m;m.nodes.resize(13);m.order.push_back(0);m.nodes[0].name="body";m.nodes[0].t={0,.5f,0};for(int i=0;i<4;++i){int h=1+i*3;float x=i%2?1.f:-1.f,z=i<2?-1.f:1.f;m.nodes[0].children.push_back(h);for(int j=0;j<3;++j){m.order.push_back(h+j);m.nodes[h+j].name=std::string(j==0?"hip":j==1?"knee":"foot")+std::to_string(i);m.nodes[h+j].parent=j==0?0:h+j-1;if(j<2)m.nodes[h+j].children={h+j+1};}m.nodes[h].t={x*.25f,0,z*.25f};m.nodes[h+1].t={x*.35f,-.1f,z*.1f};m.nodes[h+2].t={x*.2f,-.4f,0};}
+    auto store=view.entityFx();render::AnimationGraphInstance graph;graph.reset(render::AnimationGraph::compile(m,store->animationDefinitions.at("crawl")->definition));render::Pose pose;for(int i=0;i<30;++i){graph.update(1.f/60);graph.evaluate(pose);}store->animations.begin()->second.locomotion=graph.locomotionReport();view.uiEvent(sim,"climb_status",Json::array());CHECK(view.log().empty());CHECK(store->animations.begin()->second.parameters.values.at("adhesion")==0);CHECK(sim.checksum()==hash);
+}

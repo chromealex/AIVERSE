@@ -19,6 +19,23 @@ float3 localNormal(const AnimationParameters& p,float3 v){return p.environment?n
 float scaleOf(const mat4& m){return std::max({length(m.transformDir({1,0,0})),length(m.transformDir({0,1,0})),length(m.transformDir({0,0,1}))});}
 struct V2{float x,y;};float cross2(V2 a,V2 b,V2 c){return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);}
 }
+bool ikRayBox(float3 start,float3 end,float3 lo,float3 hi,const mat4& transform,IKHit& hit){
+    auto inv=transform.inverse();auto a=inv.transformPoint(start),delta=inv.transformPoint(end)-a;float enter=0,leave=1;float3 normal{};
+    float origin[]={a.x,a.y,a.z},direction[]={delta.x,delta.y,delta.z},minimum[]={lo.x,lo.y,lo.z},maximum[]={hi.x,hi.y,hi.z};
+    for(int k=0;k<3;++k){if(std::abs(direction[k])<1e-8f){if(origin[k]<minimum[k]||origin[k]>maximum[k])return false;continue;}float t0=(minimum[k]-origin[k])/direction[k],t1=(maximum[k]-origin[k])/direction[k],sign=direction[k]>0?-1:1;if(t0>t1)std::swap(t0,t1);if(t0>enter){enter=t0;normal={};if(k==0)normal.x=sign;if(k==1)normal.y=sign;if(k==2)normal.z=sign;}leave=std::min(leave,t1);if(enter>leave)return false;}
+    if(enter<0||enter>1||length(normal)<.5f)return false;hit={start+(end-start)*enter,normalize(transform.transformDir(normal)),0,0};return true;
+}
+bool ikSphereOBB(float3 center,float radius,float3 lo,float3 hi,const mat4& transform,IKHit& hit){
+    auto local=transform.inverse().transformPoint(center);float3 nearest{std::clamp(local.x,lo.x,hi.x),std::clamp(local.y,lo.y,hi.y),std::clamp(local.z,lo.z,hi.z)};auto point=transform.transformPoint(nearest),delta=center-point;float distance=length(delta);if(distance>=radius)return false;
+    if(distance>1e-7f){hit={point,delta*(1/distance),radius-distance,0};return true;}
+    float3 normals[]={{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1}};float d[]={local.x-lo.x,hi.x-local.x,local.y-lo.y,hi.y-local.y,local.z-lo.z,hi.z-local.z};int best=0;
+    for(int i=0;i<6;++i){d[i]*=length(transform.transformDir(normals[i]));if(d[i]<d[best])best=i;}auto n=normalize(transform.transformDir(normals[best]));hit={center+n*d[best],n,radius+d[best],0};return true;
+}
+bool AnimationContacts::surfaceFrame(const AnimationParameters& p,uint64_t surface,mat4& frame)const{
+    constexpr uint64_t external=uint64_t(1)<<63;
+    if(surface&external)return p.environment&&p.environment->surfaceTransform&&p.environment->surfaceTransform(surface&~external,frame);
+    if(surface==0||surface>shapes_.size())return false;const auto& shape=shapes_[size_t(surface-1)];frame=(p.environment?p.environment->modelToWorld:mat4{})*mat4::translate(param(p,shape.positionParameter,shape.point));return true;
+}
 bool ikSpherePlane(float3 c,float r,float3 p,float3 n,IKHit& h){float len=length(n);if(len<1e-6f)return false;n=n*(1/len);float d=dot(c-p,n);if(d>=r)return false;h={c-n*d,n,r-d,0};return true;}
 bool ikSphereSphere(float3 c,float r,float3 p,float radius,IKHit& h){auto d=c-p;float l=length(d);if(l>=r+radius)return false;auto n=l>1e-7f?d*(1/l):float3{0,1,0};h={p+n*radius,n,r+radius-l,0};return true;}
 bool ikSphereBox(float3 c,float r,float3 lo,float3 hi,IKHit& h){float3 p{std::clamp(c.x,lo.x,hi.x),std::clamp(c.y,lo.y,hi.y),std::clamp(c.z,lo.z,hi.z)};auto d=c-p;float l=length(d);if(l>=r)return false;if(l>1e-7f){h={p,d*(1/l),r-l,0};return true;}float distances[]={c.x-lo.x,hi.x-c.x,c.y-lo.y,hi.y-c.y,c.z-lo.z,hi.z-c.z};float3 normals[]={{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1}};int best=0;for(int i=1;i<6;++i)if(distances[i]<distances[best])best=i;h={c+normals[best]*distances[best],normals[best],r+distances[best],0};return true;}
@@ -95,14 +112,14 @@ bool AnimationContacts::contact(const AnimationParameters& p,float3 center,float
     bool found=false;hit={};for(size_t i=0;i<shapes_.size();++i){auto& s=shapes_[i];IKHit h;auto pos=param(p,s.positionParameter,s.point);bool ok=s.kind=="plane"?ikSpherePlane(center,radius,pos,s.normal,h):s.kind=="box"?ikSphereBox(center,radius,pos-s.extent,pos+s.extent,h):ikSphereSphere(center,radius,pos,s.radius,h);if(ok&&(!found||h.depth>hit.depth)){hit=h;hit.surface=i+1;found=true;}}
     if(world_&&p.environment&&p.environment->sphereContact){IKHit h;auto& e=*p.environment;float scale=scaleOf(e.modelToWorld);if(scale>1e-6f&&e.sphereContact(e.modelToWorld.transformPoint(center),radius*scale,h)&&finite(h.normal)&&length(h.normal)>.5f&&std::isfinite(h.depth)&&h.depth>0){auto correction=e.modelToWorld.inverse().transformDir(normalize(h.normal)*h.depth);h.depth=length(correction);h.normal=normalize(correction);h.surface|=uint64_t(1)<<63;h.point=e.modelToWorld.inverse().transformPoint(h.point);if(!found||h.depth>hit.depth){hit=h;found=true;}}}return found;
 }
-bool AnimationContacts::ground(const AnimationParameters& p,float3 start,float3 end,IKHit& hit)const{
+bool AnimationContacts::ground(const AnimationParameters& p,float3 start,float3 end,IKHit& hit,bool anySurface)const{
     bool found=false;float best=2;auto delta=end-start;
     for(size_t i=0;i<shapes_.size();++i){auto& s=shapes_[i];auto pos=param(p,s.positionParameter,s.point);float t=2;float3 normal{};
         if(s.kind=="plane"){float d=dot(delta,s.normal);if(std::abs(d)>1e-7f){t=dot(pos-start,s.normal)/d;normal=s.normal;}}
         else if(s.kind=="sphere"){auto r=start-pos;float a=dot(delta,delta),b=dot(r,delta),disc=b*b-a*(dot(r,r)-s.radius*s.radius);if(a>1e-9f&&disc>=0){t=(-b-std::sqrt(disc))/a;normal=normalize(start+delta*t-pos);}}
         else {float enter=0,exit=1;float o[]={start.x,start.y,start.z},d[]={delta.x,delta.y,delta.z};auto lo=pos-s.extent,hi=pos+s.extent;float l[]={lo.x,lo.y,lo.z},h[]={hi.x,hi.y,hi.z};bool ok=true;for(int k=0;k<3;++k){if(std::abs(d[k])<1e-8f){if(o[k]<l[k]||o[k]>h[k])ok=false;continue;}float a=(l[k]-o[k])/d[k],b=(h[k]-o[k])/d[k];float sign=-1;if(a>b){std::swap(a,b);sign=1;}if(a>enter){enter=a;normal={};if(k==0)normal.x=sign;if(k==1)normal.y=sign;if(k==2)normal.z=sign;}exit=std::min(exit,b);if(enter>exit)ok=false;}if(ok)t=enter;}
-        if(t>=0&&t<=1&&t<best&&dot(normal,up)>=maxSlope_){hit={start+delta*t,normal,0,i+1};best=t;found=true;}}
-    if(world_&&p.environment&&p.environment->raycast){IKHit h;auto& e=*p.environment;if(e.raycast(worldPoint(p,start),worldPoint(p,end),h)&&finite(h.point)&&finite(h.normal)&&length(h.normal)>.5f){h.surface|=uint64_t(1)<<63;h.point=localPoint(p,h.point);h.normal=localNormal(p,h.normal);float t=dot(h.point-start,delta)/std::max(dot(delta,delta),1e-9f);if(t>=0&&t<=1&&t<best&&dot(h.normal,up)>=maxSlope_){hit=h;found=true;}}}return found;
+        if(t>=0&&t<=1&&t<best&&(anySurface||dot(normal,up)>=maxSlope_)){hit={start+delta*t,normal,0,i+1};best=t;found=true;}}
+    if(world_&&p.environment&&p.environment->raycast){IKHit h;auto& e=*p.environment;if(e.raycast(worldPoint(p,start),worldPoint(p,end),h)&&finite(h.point)&&finite(h.normal)&&length(h.normal)>.5f){h.surface|=uint64_t(1)<<63;h.point=localPoint(p,h.point);h.normal=localNormal(p,h.normal);float t=dot(h.point-start,delta)/std::max(dot(delta,delta),1e-9f);if(t>=0&&t<=1&&t<best&&(anySurface||dot(h.normal,up)>=maxSlope_)){hit=h;found=true;}}}return found;
 }
 void AnimationContacts::plant(const Model&,const AnimationParameters& p,const Pose&,const std::vector<mat4>& world,AnimationContactState& state)const{
     state.active=true;state.feet.resize(feet_.size());for(size_t i=0;i<feet_.size();++i){const auto& f=feet_[i];auto& foot=state.feet[i];auto sole=world[size_t(f.bone)].transformPoint(f.offset);float plant=scalar(p,f.plant,1);IKHit hit;
