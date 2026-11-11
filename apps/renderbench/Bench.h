@@ -18,6 +18,7 @@ inline double ms(Clock::time_point a, Clock::time_point b) { return std::chrono:
 struct Options {
     std::string scene, output="benchmark.json", profile="baseline", capture;
     int warmup=90, samples=240, camera=-1;
+    std::string captureSequence; float motionYaw=0, freezeTime=-1, previewSeconds=0, motionSpeed=0.018f;
     static Options parse(int argc,char** argv) {
         Options o;
         for(int i=1;i<argc;++i) {
@@ -25,11 +26,17 @@ struct Options {
             std::string v=argv[++i];
             if(k=="--scene")o.scene=v;else if(k=="--output")o.output=v;else if(k=="--profile")o.profile=v;
             else if(k=="--capture")o.capture=v;else if(k=="--warmup")o.warmup=std::stoi(v);
+            else if(k=="--preview-seconds")o.previewSeconds=std::stof(v);else if(k=="--motion-speed")o.motionSpeed=std::stof(v);
+            else if(k=="--sequence")o.captureSequence=v;else if(k=="--motion-yaw")o.motionYaw=std::stof(v);else if(k=="--freeze-time")o.freezeTime=std::stof(v);
             else if(k=="--samples")o.samples=std::stoi(v);else if(k=="--camera")o.camera=std::stoi(v);
             else throw std::runtime_error("unknown option: "+k);
         }
         if(o.scene.empty()||o.warmup<1||o.samples<30||o.samples>100000||o.warmup>10000||o.camera < -1)throw std::runtime_error("require --scene; warmup 1..10000; samples 30..100000; camera >= 0 (or omit)");
         if(o.profile!="baseline"&&o.profile!="hdr"&&o.profile!="low"&&o.profile!="full")throw std::runtime_error("profile: baseline, hdr, full or low");
+        if(!std::isfinite(o.motionYaw)||!std::isfinite(o.freezeTime)||std::abs(o.motionYaw)>0.1f||o.freezeTime < -1)throw std::runtime_error("invalid validation motion/time");
+        if(!o.captureSequence.empty()&&o.camera<0)throw std::runtime_error("sequence capture requires one --camera");
+        if(!std::isfinite(o.previewSeconds)||o.previewSeconds<0||o.previewSeconds>3600||!std::isfinite(o.motionSpeed)||std::abs(o.motionSpeed)>1)throw std::runtime_error("invalid preview duration/speed");
+        if(o.previewSeconds>0&&(!o.captureSequence.empty()||o.camera<0))throw std::runtime_error("preview requires one camera and no sequence readback");
         return o;
     }
 };
@@ -47,16 +54,18 @@ struct Bench {
     std::map<uint64_t,size_t> tags;
     gfx::PassDesc output;
     std::function<void(gfx::Device::CaptureFn)> readOutput;
-    int width=1280,height=720,view=0,frame=0,drain=0;
+    int width=1280,height=720,view=0,frame=0,drain=0,sequenceCaptures=0;
+    bool sequencePending=false, ownsFrame=true;
     uint64_t tag=0;
     bool done=false,failed=false,gpuSupported=true,captureRequested=false,captured=false;
     std::string error;
-    Clock::time_point lastProgress=Clock::now();
+    Clock::time_point lastProgress=Clock::now(), previewStart;
     explicit Bench(Options o):options(std::move(o)) {
         config=Json::parseFile(options.scene);
         width=int(config.getInt("width",1280));height=int(config.getInt("height",720));
         if(width<64||height<64||width>8192||height>8192)throw std::runtime_error("invalid resolution");
         content.contentRoot=std::filesystem::absolute(options.scene).parent_path().string();
+        if(!options.captureSequence.empty())std::filesystem::create_directories(options.captureSequence);
         content.width=float(width);content.height=float(height);content.fbWidth=width;content.fbHeight=height;
     }
     static float3 v3(const Json& j) { if(!j.isArray()||j.size()!=3)throw std::runtime_error("expected xyz vector");return {float(j[0].toDouble()),float(j[1].toDouble()),float(j[2].toDouble())}; }
@@ -70,6 +79,7 @@ struct Bench {
     }
     void init(gfx::Device& d) {
         platform::setHostedView(&content);
+        if(!options.captureSequence.empty())d.setScreenReadable(true);
         try {
             for(size_t i=0;i<config["cameras"].size();++i) {
                 if(options.camera>=0&&int(i)!=options.camera)continue;
@@ -162,15 +172,19 @@ struct Bench {
         poll(d);
         // Match the native three-frame queue without inserting GPU waits into a timed frame.
         if(tags.size()>=3){if(ms(lastProgress,Clock::now())>30000)fail("GPU timer completion timeout");else std::this_thread::sleep_for(std::chrono::milliseconds(1));return;}
-        const bool measuring=view<int(cameras.size())&&frame>=options.warmup&&frame<options.warmup+options.samples;
+        const bool measuring=options.previewSeconds<=0&&view<int(cameras.size())&&frame>=options.warmup&&frame<options.warmup+options.samples;
         const int ci=std::min(view,int(cameras.size())-1);
-        const auto start=Clock::now();d.beginFrame(width,height);const auto encodeStart=Clock::now();
+        const auto start=Clock::now();if(ownsFrame)d.beginFrame(width,height);const auto encodeStart=Clock::now();
         const uint64_t thisTag=++tag;
         bool timed=false;if(measuring){timed=d.timeGpuFrame(thisTag);gpuSupported&=timed;}
         if(frame==0&&view<int(cameras.size())){screen.reset();additions.selectLights(cameras[size_t(ci)].eye());}
-        renderer.beginScene(screen.jittered(cameras[size_t(ci)],width,height),width,height);
+        if(options.previewSeconds>0&&frame==options.warmup&&view<int(cameras.size()))previewStart=Clock::now();
+        const double previewTime=previewStart==Clock::time_point{}?0.0:std::clamp(ms(previewStart,Clock::now())/1000.0,0.0,double(options.previewSeconds));
+        auto camera=cameras[size_t(ci)];
+        camera.yaw+=options.previewSeconds>0?options.motionSpeed*float(previewTime):options.motionYaw*float(frame);
+        renderer.beginScene(screen.jittered(camera,width,height),width,height);
         ModelDraw md;md.model=model.get();renderer.drawModel(md);
-        additions.draw(renderer,float(view<int(cameras.size())?frame:options.warmup+options.samples-1)/60.0f,options.profile!="low");
+        additions.draw(renderer,options.freezeTime>=0?options.freezeTime:options.previewSeconds>0?float(previewTime):float(view<int(cameras.size())?frame:options.warmup+options.samples-1)/60.0f,options.profile!="low");
         auto pass=output;pass.clearColor[0]=.1f;pass.clearColor[1]=.15f;pass.clearColor[2]=.23f;
         renderer.render(pass,options.profile=="full"?static_cast<PostProcess*>(&screen):static_cast<PostProcess*>(&post));renderer.resolvePostFx();
         if(!report.has("renderSettings")) {
@@ -188,9 +202,26 @@ struct Bench {
             settings.set("pointLightBudget",Json::number(int64_t(options.profile=="low"?0:std::min(additions.lights.size(),LightSystem::kMaxLights))));settings.set("rayTracing",Json::fromBool(false));
             settings.set("ssr",Json::fromBool(renderer.ssrActive()));settings.set("dynamicResolution",Json::fromBool(false));
             settings.set("modelOptimization",config["modelOptimization"]);
+            settings.set("validationMotionYawPerFrame",Json::number(double(options.motionYaw),8));
+            settings.set("validationFreezeTime",Json::number(double(options.freezeTime)));
+            settings.set("validationSequenceCapture",Json::fromBool(!options.captureSequence.empty()));
+            settings.set("previewSeconds",Json::number(double(options.previewSeconds)));
+            settings.set("previewMotionRadiansPerSecond",Json::number(double(options.motionSpeed)));
             report.set("renderSettings",settings);
         }
         const auto encodeEnd=Clock::now();
+        if(measuring&&!options.captureSequence.empty()&&!sequencePending&&sequenceCaptures<16) {
+            sequencePending=true;
+            const auto path=std::filesystem::path(options.captureSequence)/(std::to_string(ci)+"-"+std::to_string(sequenceCaptures)+".ppm");
+            auto cb=[this,path](int w,int h,std::vector<uint8_t> px){
+                if(w!=width||h!=height||px.size()!=size_t(w*h*4)){fail("invalid sequence capture");return;}
+                std::ofstream file(path,std::ios::binary);file<<"P6\n"<<w<<" "<<h<<"\n255\n";
+                for(size_t i=0;i<px.size();i+=4)file.write(reinterpret_cast<const char*>(px.data()+i),3);
+                if(!file)fail("cannot write sequence capture");
+                sequencePending=false;++sequenceCaptures;
+            };
+            if(readOutput)readOutput(cb);else d.captureNextFrame(cb);
+        }
         if(view>=int(cameras.size())&&!captureRequested&&!options.capture.empty()) {
             captureRequested=true;
             auto cb=[this](int w,int h,std::vector<uint8_t> px){
@@ -201,7 +232,7 @@ struct Bench {
             };
             if(readOutput)readOutput(cb);else d.captureNextFrame(cb);
         }
-        d.endPass();d.endFrame();const auto end=Clock::now();
+        d.endPass();if(ownsFrame)d.endFrame();const auto end=Clock::now();
         if(measuring){
             Json r=Json::object();r.set("camera",Json::string(cameraNames[size_t(ci)]));r.set("sample",Json::number(int64_t(frame-options.warmup)));
             r.set("cpuEncodeMs",Json::number(ms(encodeStart,encodeEnd),6));r.set("cpuFrameMs",Json::number(ms(start,end),6));
@@ -215,7 +246,10 @@ struct Bench {
             if(timed)tags.emplace(thisTag,rows.size());
             rows.push(std::move(r));
         }
-        if(view<int(cameras.size())) {if(++frame==options.warmup+options.samples){++view;frame=0;}}
+        if(view<int(cameras.size())) {
+            ++frame;
+            if(options.previewSeconds>0 ? previewTime>=options.previewSeconds : frame==options.warmup+options.samples){++view;frame=0;}
+        }
         else if((tags.empty()&&(options.capture.empty()||captured))||++drain>120) {
             if(!tags.empty()||(!options.capture.empty()&&!captured))fail("GPU/capture completion timeout");else done=true;
         }
@@ -224,6 +258,8 @@ struct Bench {
         if(!post.lastError().empty())fail(post.lastError());
     }
     void shutdown(gfx::Device& d) {
+        if(!options.captureSequence.empty()&&(sequenceCaptures!=16||sequencePending))fail("incomplete validation sequence; increase samples");
+        if(!options.captureSequence.empty())d.setScreenReadable(false);
         poll(d);report.set("gpuTimingSupported",Json::fromBool(gpuSupported));report.set("complete",Json::fromBool(done&&!failed));
         report.set("error",Json::string(error));report.set("frames",rows);
         std::ofstream f(options.output);f<<report.dump()<<"\n";if(!f)fail("cannot write report");

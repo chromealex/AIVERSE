@@ -2,6 +2,7 @@
 int rtsMain(int argc,char** argv) {
     try {
         rts::bench::Bench bench(rts::bench::Options::parse(argc,argv));
+        bench.ownsFrame=false; // platform::run wraps the callback in beginFrame/endFrame
         rts::gfx::Device* device=nullptr;
         rts::platform::AppConfig c;c.title="AIVERSE — Sponza benchmark";c.width=bench.width;c.height=bench.height;c.highDpi=false;c.resizable=false;
         rts::platform::AppCallbacks cb;

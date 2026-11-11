@@ -313,7 +313,7 @@ public:
     void captureNextFrame(CaptureFn fn) override {
         capture_ = std::move(fn);
         layer_.framebufferOnly = NO; // drawables acquired from now on can be blitted
-        captureDelay_ = 1;
+        captureDelay_ = drawable_ && !drawable_.texture.framebufferOnly ? 0 : 1;
     }
     void deliverCapture() {
         if (captured_ && captured_->ready) {

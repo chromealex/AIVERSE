@@ -1,7 +1,7 @@
 #include "HdrScene.h"
 #include "engine/platform/Platform.h"
 int rtsMain(int, char**) {
-    rts::test::HdrScene scene;
+    rts::test::HdrScene scene;scene.ownsFrame=false;
     rts::gfx::Device* device=nullptr;
     rts::platform::AppConfig cfg; cfg.title="HDR validation";cfg.width=960;cfg.height=640;cfg.highDpi=false;
     rts::platform::AppCallbacks cb;

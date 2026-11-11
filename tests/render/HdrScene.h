@@ -13,7 +13,7 @@ struct HdrScene {
     Renderer3D renderer;
     PostFx post;
     ScreenLighting screen;
-    bool advanced = false;
+    bool advanced = false, ownsFrame = true;
     PostProcess* pipeline() { return advanced ? static_cast<PostProcess*>(&screen) : static_cast<PostProcess*>(&post); }
     RTSCamera camera;
     Mesh floor, cube, water;
@@ -72,7 +72,7 @@ struct HdrScene {
     void draw(gfx::Device& d, int w, int h) {
         if (failed) return;
         if (verify) { drawProbe(d,w,h); return; }
-        d.beginFrame(w,h);
+        if(ownsFrame)d.beginFrame(w,h);
         renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
         renderer.drawMesh(floor,{}, {0.34f,0.36f,0.4f,1});
         ModelDraw md; md.model=spheres.get(); renderer.drawModel(md);
@@ -97,7 +97,7 @@ struct HdrScene {
             if (readOutput) readOutput(receive); else d.captureNextFrame(receive);
         }
         d.endPass();
-        d.endFrame(); ++frame;
+        if(ownsFrame)d.endFrame(); ++frame;
         if (!renderer.modelError().empty() || !post.lastError().empty() || !screen.lastError().empty()) {
             std::fprintf(stderr,"renderer: %s; post: %s\n",renderer.modelError().c_str(),post.lastError().c_str()); failed=true;
         }
@@ -113,7 +113,7 @@ struct HdrScene {
         const float value=(probeIndex==1 || probeIndex==6)?4.0f:0.25f;
         probeBg->materials[0].baseColor={value,value,value,1};
         probeFg->materials[0].baseColor={0.75f,0.75f,0.75f,0.5f};
-        d.beginFrame(w,h);
+        if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
             renderer.beginScene(camera,w/2,h/2);
             ModelDraw small;small.model=probeBg.get();renderer.drawModel(small);
@@ -141,7 +141,7 @@ struct HdrScene {
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }
-        d.endPass();d.endFrame();++frame;
+        d.endPass();if(ownsFrame)d.endFrame();++frame;
     }
     void shutdown(gfx::Device& d) {
         if(probeBg)releaseModel(d,*probeBg);
