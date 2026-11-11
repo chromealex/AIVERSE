@@ -120,6 +120,9 @@ struct Bench {
                 const bool replaced=w.ends_with("cameras are ignored")||w.ends_with("cameras and lights are ignored")||w.ends_with("extension KHR_lights_punctual is ignored")||(unusedSecondaryUv&&w.ends_with("TEXCOORD_1 is ignored"));
                 (replaced?notes:warn).push(Json::string(w));std::fprintf(stderr,"asset %s: %s\n",replaced?"note":"warning",w.c_str());
             }
+            const float normalScale=float(config["mainNormalScale"].toDouble(1));
+            if(!std::isfinite(normalScale)||normalScale<0||normalScale>2)throw std::runtime_error("mainNormalScale must be in 0..2");
+            for(auto& material:model->materials)material.normalScale*=normalScale;
             additions.applyGraphs(*model,config["materialGraphs"]);
             additions.load(d,config,warn,notes);
             if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2))))throw std::runtime_error("static light grid upload failed");
@@ -147,10 +150,12 @@ struct Bench {
             renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(config["sunColor"]);
             renderer.lighting.sunIntensity=float(config["sunIntensity"].toDouble());
             renderer.lighting.skyColor=v3(config["skyColor"]);renderer.lighting.groundColor=v3(config["groundColor"]);
-            renderer.lighting.fogDensity=0;
+            renderer.lighting.fogDensity=float(config["fogDensity"].toDouble(0));
+            if(config.has("fogColor"))renderer.lighting.fogColor=v3(config["fogColor"]);
             PostFxSettings s;s.hdr=options.profile=="low"?HdrMode::Off:HdrMode::On;
             if(options.profile=="hdr"||options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
             if(options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25}]})"),Json());
+            if(options.profile!="low"&&config.has("postfx"))s=parsePostFx(config["postfx"],Json());
             screen.setEnabled(options.profile=="full");
             post.setSettings(s);post.setQuality(options.profile=="low"?PostFxQuality::Low:PostFxQuality::High);
             report.set("schema",Json::number(int64_t(1)));report.set("engine",Json::string("AIVERSE"));

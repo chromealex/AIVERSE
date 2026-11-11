@@ -178,3 +178,20 @@ at the root for the main model and inside each `models` entry for additions.
 Files are read through the content API, validated as material graphs and cached
 by path. Unknown material names and missing/invalid graphs fail loading.
 GL and Metal use the existing shared Shader Graph compiler/render integration.
+
+## Daylight reference study
+
+`python3 tools/renderbench/day_reference.py /path/to/scene-candle-day.json --output /path/to/scene-day-reference.json`
+creates a separate architectural daylight scene with curtains and ivy, without
+candles, trees or the knight. Output must stay beside the source asset recipe.
+It uses a manually adjusted camera, daylight and color grade based on a supplied
+reference frame, not recovered Unreal camera/light settings or a pixel-identical match.
+
+Optional benchmark recipe keys: `fogDensity`, `fogColor`, `mainNormalScale`
+(0..2, multiplier on imported main-model normal strengths) and `postfx` (existing
+PostFx schema, ignored by the low profile). Defaults preserve old benchmark scenes.
+No image-space blur was introduced. This study keeps the original textured
+materials; it does not replace their roughness/normal maps with gallery constants.
+The current hemisphere ambient and screen-space bounce cannot reproduce all
+occluded/off-screen indirect lighting in the reference. Compare screenshots at a
+fixed camera; do not treat a matched color grade as equivalent GI or benchmark parity.
