@@ -149,7 +149,7 @@ void main() {
 )";
 
 inline const char* kModelFS =
-    RTS_GLSL_MODEL_BLOCKS RTS_GLSL_SHADOW RTS_GLSL_LIGHTS_AT("U5", "tex9") RTS_GLSL_TRACE_AT("tex10")
+    "#define RTS_MODEL_SSR 1\n" RTS_GLSL_MODEL_BLOCKS RTS_GLSL_SHADOW RTS_GLSL_LIGHTS_AT("U5", "tex9") RTS_GLSL_TRACE_AT("tex10") RTS_GLSL_SSR_AT("tex11", "tex12")
     R"(
 uniform mediump sampler2D tex1;
 uniform mediump sampler2D tex2;
@@ -270,6 +270,13 @@ void main() {
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     vec3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
+#if RTS_HDR && RTS_Q > 0
+    if (u_trace2.w > 1.5 && m_uv1.y < 0.5 && rough < 0.8) {
+        float hit; vec3 reflected = ssrWater(v_wpos + n * 0.02, n, V, hit);
+        vec3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndv, 5.0);
+        col += (reflected * fresnel - ambSpec * ao) * hit * (1.0 - rough) * (1.0 - rough);
+    }
+#endif
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
     { vec3 dd, ds; dynLight(v_wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
     if (m_uv1.y > 0.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
@@ -390,7 +397,7 @@ void main() {
     "#if RTS_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n"
 
 inline const char* kModelMSL =
-    RTS_MSL_MODEL_BLOCKS RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE RTS_MSL_MODEL_VERTEX
+    "#define RTS_MODEL_SSR 1\n" RTS_MSL_MODEL_BLOCKS RTS_MSL_SHADOW RTS_MSL_LIGHTS RTS_MSL_TRACE RTS_MSL_SSR RTS_MSL_MODEL_VERTEX
     R"(
 struct VOut {
     float4 pos [[position]];
@@ -441,7 +448,9 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         texture2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]],
                         texture2d<float> tex6 [[texture(6)]], sampler s6 [[sampler(6)]],
                         constant LightU& lu [[buffer(6)]], texture2d<float> tex9 [[texture(9)]], sampler s9 [[sampler(9)]],
-                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]]) {
+                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]],
+                        texture2d<float> tex11 [[texture(11)]], sampler s11 [[sampler(11)]],
+                        depth2d<float> tex12 [[texture(12)]], sampler s12 [[sampler(12)]]) {
 #if defined(OUTLINE)
     return float4(rtsEncodeScene(in.team.rgb), in.tint.a);
 #else
@@ -532,6 +541,13 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     float3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
+#if RTS_HDR && RTS_Q > 0
+    if (f.trace2.w > 1.5 && m.uv1.y < 0.5 && rough < 0.8) {
+        float hit; float3 reflected = ssrWater(f, tex11, s11, tex12, s12, in.wpos + n * 0.02, n, V, hit);
+        float3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndv, 5.0);
+        col += (reflected * fresnel - ambSpec * ao) * hit * (1.0 - rough) * (1.0 - rough);
+    }
+#endif
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
     { float3 dd, ds; dynLight(lu, tex9, s9, in.wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
     if (m.uv1.y > 0.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;

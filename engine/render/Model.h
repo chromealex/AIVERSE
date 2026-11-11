@@ -110,6 +110,7 @@ struct Node {
     quat r;
     float3 s{1, 1, 1};
     int mesh = -1, skin = -1;
+    int light = -1; // KHR_lights_punctual definition, attached to this node
     float weights[kMaxMorphTargets] = {}; // morph weights (from the node or its mesh)
 };
 
@@ -136,9 +137,20 @@ struct AnimClip {
     std::vector<AnimChannel> channels;
 };
 
+struct ModelLight {
+    enum class Type { Directional, Point, Spot };
+    Type type = Type::Point;
+    std::string name;
+    float3 color{1, 1, 1}; // linear RGB
+    float intensity = 1; // candela (point/spot), lux (directional)
+    float range = 0; // zero means unbounded
+    float innerCone = 0, outerCone = 0.785398163f;
+};
+
 struct Model {
     std::string path;
     std::vector<Node> nodes;
+    std::vector<ModelLight> lights; // callers select a light budget; drawModel does not add lights implicitly
     std::vector<int> order;            // node indices, parents before children (finalize())
     std::vector<mat4> bindWorld;       // node world matrices of the bind pose (finalize())
     std::vector<MeshDef> meshes;

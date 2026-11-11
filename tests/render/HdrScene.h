@@ -1,6 +1,7 @@
 // Deterministic, asset-free visual fixture shared by GL and Metal runners.
 #pragma once
 #include "engine/render/PostFx.h"
+#include "engine/render/ScreenLighting.h"
 #include "HdrShaders.h"
 #include <cstdio>
 #include <cstdlib>
@@ -11,6 +12,9 @@ using namespace render;
 struct HdrScene {
     Renderer3D renderer;
     PostFx post;
+    ScreenLighting screen;
+    bool advanced = false;
+    PostProcess* pipeline() { return advanced ? static_cast<PostProcess*>(&screen) : static_cast<PostProcess*>(&post); }
     RTSCamera camera;
     Mesh floor, cube, water;
     std::unique_ptr<Model> spheres;
@@ -24,6 +28,9 @@ struct HdrScene {
     void init(gfx::Device& d) {
         std::printf("GPU: %s; RGBA16F=%d\n", d.info().name.c_str(), d.supports(gfx::PixelFormat::RGBA16F));
         if (!renderer.init(d) || !post.init(d)) { failed = true; return; }
+        advanced = std::getenv("RTS_SCREEN_LIGHTING") != nullptr;
+        if (advanced && !screen.init(d,post)) { failed=true; return; }
+        screen.setEnabled(advanced);renderer.setModelReflectionsEnabled(advanced);
         renderer.setShadowQuality(ShadowQuality::High);
         renderer.setMaterialQuality(MaterialQuality::High);
         renderer.setTraceEnabled(true);
@@ -66,7 +73,7 @@ struct HdrScene {
         if (failed) return;
         if (verify) { drawProbe(d,w,h); return; }
         d.beginFrame(w,h);
-        renderer.beginScene(camera,w,h);
+        renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
         renderer.drawMesh(floor,{}, {0.34f,0.36f,0.4f,1});
         ModelDraw md; md.model=spheres.get(); renderer.drawModel(md);
         // Same albedo, increasing radiance: LDR clamps before bloom, HDR retains differences.
@@ -76,7 +83,7 @@ struct HdrScene {
         renderer.drawMesh(water,mat4::translate({0,0.12f,0}),{0.08f,0.16f,0.22f,0.65f},kDrawNoCastShadow,0.9f);
         renderer.lights.add({2,1.5f,0.8f},4,{0.15f,0.5f,1},3);
         gfx::PassDesc pass = output; pass.clearColor[0]=0.09f;pass.clearColor[1]=0.11f;pass.clearColor[2]=0.15f;
-        renderer.render(pass,&post);
+        renderer.render(pass,pipeline());
         const bool hdr=post.linearScene();
         renderer.resolvePostFx();
         if(frame==5) {
@@ -91,7 +98,7 @@ struct HdrScene {
         }
         d.endPass();
         d.endFrame(); ++frame;
-        if (!renderer.modelError().empty() || !post.lastError().empty()) {
+        if (!renderer.modelError().empty() || !post.lastError().empty() || !screen.lastError().empty()) {
             std::fprintf(stderr,"renderer: %s; post: %s\n",renderer.modelError().c_str(),post.lastError().c_str()); failed=true;
         }
     }
@@ -110,12 +117,12 @@ struct HdrScene {
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
             renderer.beginScene(camera,w/2,h/2);
             ModelDraw small;small.model=probeBg.get();renderer.drawModel(small);
-            renderer.render(output,&post);renderer.resolvePostFx();d.endPass();
+            renderer.render(output,pipeline());renderer.resolvePostFx();d.endPass();
         }
-        renderer.beginScene(camera,w,h);
+        renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
         ModelDraw bg;bg.model=probeBg.get();renderer.drawModel(bg);
         if(probeIndex==2) {ModelDraw fg;fg.model=probeFg.get();fg.world=mat4::translate({0,0,1});renderer.drawModel(fg);}
-        renderer.render(output,&post);renderer.resolvePostFx();
+        renderer.render(output,pipeline());renderer.resolvePostFx();
         if(frame==5) {
             const int test=probeIndex;
             float expected=probeIndex==2?0.5f:0.25f;
@@ -141,7 +148,7 @@ struct HdrScene {
         if(probeFg)releaseModel(d,*probeFg);
         if(spheres) releaseModel(d,*spheres);
         for(auto* m:{&floor,&cube,&water}) {d.destroyBuffer(m->vb);d.destroyBuffer(m->ib);}
-        post.shutdown(); renderer.shutdown();
+        screen.shutdown();post.shutdown(); renderer.shutdown();
     }
 };
 }

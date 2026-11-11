@@ -12901,6 +12901,29 @@ TEST(world_tree_script_blob_decoding) {
 }
 #endif
 
+TEST(models_gltf_punctual_lights) {
+    using namespace render;
+    auto read = modeltest::mapReader({});
+    const std::string source = R"({"asset":{"version":"2.0"},"extensionsRequired":["KHR_lights_punctual"],
+      "extensions":{"KHR_lights_punctual":{"lights":[{"type":"point","color":[1,0.5,0],"intensity":2,"range":3},
+      {"type":"spot","spot":{"innerConeAngle":0.1,"outerConeAngle":0.5}},{"type":"directional"}]}},
+      "nodes":[{"translation":[1,2,3],"children":[1]},{"translation":[0,4,0],"extensions":{"KHR_lights_punctual":{"light":0}}},
+      {"extensions":{"KHR_lights_punctual":{"light":1}}}],"scenes":[{"nodes":[0]}]})";
+    auto m = loadGltf("lights.gltf", source, read, nullptr);
+    CHECK(m->lights.size() == 3 && m->nodes[1].light == 0 && m->nodes[2].light == -1);
+    CHECK(m->lights[0].intensity == 2 && m->lights[0].range == 3 && m->lights[0].color.y == 0.5f);
+    CHECK(m->lights[1].type == ModelLight::Type::Spot && m->lights[2].type == ModelLight::Type::Directional);
+    const auto pos = m->bindWorld[1].transformPoint({0,0,0});
+    CHECK(pos.x == 1 && pos.y == 6 && pos.z == 3);
+    for (const std::string& bad : {std::string(R"({"type":"point","range":-1})"),
+                                  std::string(R"({"type":"spot","spot":{"innerConeAngle":1,"outerConeAngle":0.5}})")}) {
+        bool threw = false;
+        try { loadGltf("bad.gltf", "{\"asset\":{\"version\":\"2.0\"},\"extensions\":{\"KHR_lights_punctual\":{\"lights\":["+bad+"]}}}", read, nullptr); }
+        catch(const std::runtime_error&) { threw = true; }
+        CHECK(threw);
+    }
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]

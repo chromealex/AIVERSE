@@ -336,7 +336,7 @@ set(RTS_RUNTIME_SRC
     engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, rtsmcp, tests)
-list(APPEND RTS_RUNTIME_SRC engine/render/PostFx.cpp)
+list(APPEND RTS_RUNTIME_SRC engine/render/PostFx.cpp engine/render/ScreenLighting.cpp)
 add_library(rts_postfx_data STATIC engine/render/PostFxData.cpp)
 target_link_libraries(rts_postfx_data PUBLIC rts_engine)
 

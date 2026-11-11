@@ -190,6 +190,7 @@ public:
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
     // reflections on water. On by default with High shadows; RTS_TRACE=off|on overrides.
     void setTraceEnabled(bool on) { traceWanted_ = on; }
+    void setModelReflectionsEnabled(bool on) { modelReflections_ = on; }
     bool traceEnabled() const { return traceWanted_; }
     bool traceActive() const;                              // this frame: wanted, High shadows, height field bound
     static bool defaultTraceFor(const gfx::Device& dev, bool mobile);
@@ -263,6 +264,7 @@ private:
     // trace tier
     bool traceWanted_ = true;
     bool ssrThisFrame_ = false;
+    bool modelReflections_ = false; // opt-in opaque PBR SSR; High trace + HDR only
     bool hdrFrame_ = false;
     HeightField heightField_;
     struct SceneTarget { int w = 0, h = 0; bool hdr = false; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };

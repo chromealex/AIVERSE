@@ -115,7 +115,7 @@ namespace rts::render::shaders {
     "    hit = 0.0;\n" \
     "    if (u_trace2.w < 0.5) return vec3(0.0);\n" \
     "    vec3 R = reflect(-V, n);\n" \
-    "    if (R.y <= 0.01) return vec3(0.0);\n" \
+    "#ifndef RTS_MODEL_SSR\n    if (R.y <= 0.01) return vec3(0.0);\n#endif\n" \
     "    vec3 fwd = u_trace2.xyz;\n" \
     "    int steps = int(u_trace3.z);\n" \
     "    float d = 0.0, stepLen = u_trace3.x / float(steps) * 0.35, growth = 1.12;\n" \
@@ -170,7 +170,7 @@ namespace rts::render::shaders {
     "    hit = 0.0;\n" \
     "    if (f.trace2.w < 0.5) return float3(0.0);\n" \
     "    float3 R = reflect(-V, n);\n" \
-    "    if (R.y <= 0.01) return float3(0.0);\n" \
+    "#ifndef RTS_MODEL_SSR\n    if (R.y <= 0.01) return float3(0.0);\n#endif\n" \
     "    float3 fwd = f.trace2.xyz;\n" \
     "    int steps = int(f.trace3.z);\n" \
     "    float d = 0.0, stepLen = f.trace3.x / float(steps) * 0.35, growth = 1.12;\n" \

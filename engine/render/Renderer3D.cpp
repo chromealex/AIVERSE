@@ -137,7 +137,8 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
     modelItems_.clear(); jointData_.clear(); morphData_.clear();
-    computeShadowMatrix(cam, aspect);
+    RTSCamera shadowCamera = cam; shadowCamera.jitter = {};
+    computeShadowMatrix(shadowCamera, aspect);
     lights.begin(cam, aspect);
 }
 
@@ -218,7 +219,7 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
         f.trace1[2] = std::max(lighting.terrainShadowDistance, 2.0f);
         f.trace1[3] = std::max(lighting.terrainShadowSoftness, 0.005f);
     }
-    put3(f.trace2, camFwd_, ssrThisFrame_ && !forShadow ? 1.0f : 0.0f);
+    put3(f.trace2, camFwd_, ssrThisFrame_ && !forShadow ? (modelReflections_ ? 2.0f : 1.0f) : 0.0f);
     f.trace3[0] = 48.0f;    // SSR march distance (world)
     f.trace3[1] = 0.6f;     // thickness: a ray passing further behind a surface is a miss (thin objects)
     f.trace3[2] = 16.0f;    // steps (+4 refinement)
@@ -310,7 +311,7 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     renderReflection();
     // trace tier + water: the opaque scene goes into colour + depth textures first (SSR reads them),
     // then it is blitted (with depth) into the main pass and the rest is drawn on top
-    bool capture = false;
+    bool capture = modelReflections_ && hdrFrame_ && traceActive();
     if (traceActive()) {
         for (const auto& it : items_)
             if (it.color.w < 0.99f && it.specular >= 0.85f && !(it.flags & kDrawUnlit)) { capture = true; break; }
@@ -341,7 +342,11 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     for (auto& it : items_) if (it.color.w >= 0.99f) drawItem(it);
     renderModels(1);
     renderModels(3);
-    if (capture) { endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh}); }
+    if (capture) {
+        endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh});
+        // Read the first opaque pass while shading into a different target (no feedback).
+        if (modelReflections_ && hdrFrame_) { uploadFrameUniforms(false); renderModels(1); }
+    }
     // translucent meshes (water, ghosts) before overlays so that overlays (fog of war, markers) stay on top
     bool any = false;
     for (auto& it : items_) {
