@@ -12,15 +12,39 @@ void append(std::vector<float>& v,float3 p){v.push_back(p.x);v.push_back(p.y);v.
 void sampleWorld(const Model& m,int clip,float t,Pose& p,std::vector<mat4>& w){bindPose(m,p);sampleClip(m.clips[size_t(clip)],std::clamp(t,0.f,m.clips[size_t(clip)].duration),p);worldMatrices(m,p,w);}
 }
 std::shared_ptr<const MotionDatabase> MotionDatabase::compile(const Model& m,const Json& j,const AnimationParameters& p){
-    if(!j.isObject())fail("database must be object");auto d=std::make_shared<MotionDatabase>();d->model=&m;
-    d->root=m.findNode(j.getStr("root"));if(d->root<0)fail("unknown root bone");
-    d->fps=num(j["fps"],30);d->interval=num(j["searchInterval"],.1f);d->blend=num(j["blend"],.15f);d->continuationBias=num(j["continuationBias"],.05f);d->stripRoot=j.getBool("stripRoot",true);
-    if(d->fps<1||d->fps>120||d->interval<.016f||d->interval>10||d->blend<0||d->blend>10||d->continuationBias<0)fail("invalid sampling/search settings");
-    auto budget=j.getInt("maxCandidates",8192);if(budget<1||budget>8192)fail("maxCandidates must be 1..8192");d->maxCandidates=size_t(budget);
-    if((!j["bones"].isArray()&&!(j["bones"].isObject()&&j["bones"].size()==0))||j["bones"].size()>8)fail("bones must have at most 8 entries");
-    float pw=num(j["poseWeight"],1),vw=num(j["velocityWeight"],.1f),tw=num(j["trajectoryWeight"],2);
-    if(pw<0||vw<0||tw<=0)fail("invalid feature weights");
-    for(const auto& b:j["bones"].items()){int id=m.findNode(b.str());if(id<0)fail("unknown feature bone");d->bones.push_back(id);for(int k=0;k<3;++k)d->weights.push_back(pw);for(int k=0;k<3;++k)d->weights.push_back(vw);}
+  if (!j.isObject())
+    fail("database must be object");
+  auto d = std::make_shared<MotionDatabase>();
+  d->model = &m;
+  d->root = m.findNode(j.getStr("root"));
+  if (d->root < 0)
+    fail("unknown root bone");
+  d->fps = num(j["fps"], 30);
+  d->interval = num(j["searchInterval"], .1f);
+  d->blend = num(j["blend"], .15f);
+  d->continuationBias = num(j["continuationBias"], .05f);
+  d->stripRoot = j.getBool("stripRoot", true);
+  if (d->fps < 1 || d->fps > 120 || d->interval < .016f || d->interval > 10 || d->blend < 0 || d->blend > 10 ||
+      d->continuationBias < 0)
+    fail("invalid sampling/search settings");
+  auto budget = j.getInt("maxCandidates", 8192);
+  if (budget < 1 || budget > 8192)
+    fail("maxCandidates must be 1..8192");
+  d->maxCandidates = size_t(budget);
+  if ((!j["bones"].isArray() && !(j["bones"].isObject() && j["bones"].size() == 0)) || j["bones"].size() > 8)
+    fail("bones must have at most 8 entries");
+  float pw = num(j["poseWeight"], 1), vw = num(j["velocityWeight"], .1f), tw = num(j["trajectoryWeight"], 2);
+  if (pw < 0 || vw < 0 || tw <= 0)
+    fail("invalid feature weights");
+  for (const auto &b : j["bones"].items()) {
+    int id = m.findNode(b.str());
+    if (id < 0)
+      fail("unknown feature bone");
+    d->bones.push_back(id);
+    for (int k = 0; k < 3; ++k)
+      d->weights.push_back(pw);
+    for (int k = 0; k < 3; ++k)
+      d->weights.push_back(vw);}
     if(!j["trajectory"].isArray()||j["trajectory"].size()==0||j["trajectory"].size()>4)fail("trajectory must have 1..4 samples");
     for(const auto& t:j["trajectory"].items()){Trajectory sample{num(t["time"],.3f),t.getStr("parameter")};if(sample.time<=0||sample.time>2||!p.vectors.count(sample.parameter))fail("invalid trajectory control/time");d->trajectory.push_back(sample);for(int k=0;k<3;++k)d->weights.push_back(tw);}
     if(!j["clips"].isArray()||j["clips"].size()==0||j["clips"].size()>64)fail("clips must contain 1..64 names");
@@ -63,17 +87,35 @@ size_t MotionDatabase::search(std::span<const float> query,int continuing,float 
 }
 void MotionPlayer::reset(std::shared_ptr<const MotionDatabase> db){db_=std::move(db);clip_=-1;time_=untilSearch_=fade_=cost_=0;source_.clear();query_.clear();}
 void MotionPlayer::update(float dt,const AnimationParameters& parameters){
-    if(!db_||!std::isfinite(dt)||dt<0)return;dt=std::min(dt,1.f);fade_+=dt;untilSearch_-=dt;
-    if(clip_>=0)time_=std::fmod(time_+dt,db_->model->clips[size_t(clip_)].duration);
-    if(clip_<0||untilSearch_<=0){
-        int featureClip=clip_<0?db_->frames[0].clip:clip_;db_->features(featureClip,time_,query_);
-        size_t at=db_->bones.size()*6;
-        for(const auto& tr:db_->trajectory){auto it=parameters.vectors.find(tr.parameter);float3 v=it==parameters.vectors.end()?float3{}:it->second;query_[at++]=v.x;query_[at++]=v.y;query_[at++]=v.z;}
-        size_t selected=db_->search(query_,clip_,time_,cost_);const auto& f=db_->frames[selected];
-        if(std::isfinite(cost_)&&(clip_<0||f.clip!=clip_||std::abs(f.time-time_)>2/db_->fps)){
-            Pose frozen;evaluate(frozen);source_=std::move(frozen);clip_=f.clip;time_=f.time;fade_=0;
-        }
-        untilSearch_=db_->interval;
+  if (!db_ || !std::isfinite(dt) || dt < 0)
+    return;
+  dt = std::min(dt, 1.f);
+  fade_ += dt;
+  untilSearch_ -= dt;
+  if (clip_ >= 0)
+    time_ = std::fmod(time_ + dt, db_->model->clips[size_t(clip_)].duration);
+  if (clip_ < 0 || untilSearch_ <= 0) {
+    int featureClip = clip_ < 0 ? db_->frames[0].clip : clip_;
+    db_->features(featureClip, time_, query_);
+    size_t at = db_->bones.size() * 6;
+    for (const auto &tr : db_->trajectory) {
+      auto it = parameters.vectors.find(tr.parameter);
+      float3 v = it == parameters.vectors.end() ? float3{} : it->second;
+      query_[at++] = v.x;
+      query_[at++] = v.y;
+      query_[at++] = v.z;
+    }
+    size_t selected = db_->search(query_, clip_, time_, cost_);
+    const auto &f = db_->frames[selected];
+    if (std::isfinite(cost_) && (clip_ < 0 || f.clip != clip_ || std::abs(f.time - time_) > 2 / db_->fps)) {
+      Pose frozen;
+      evaluate(frozen);
+      source_ = std::move(frozen);
+      clip_ = f.clip;
+      time_ = f.time;
+      fade_ = 0;
+    }
+    untilSearch_ = db_->interval;
     }
 }
 void MotionPlayer::evaluate(Pose& out)const{

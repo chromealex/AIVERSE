@@ -23,17 +23,72 @@ bool ikSpherePlane(float3 c,float r,float3 p,float3 n,IKHit& h){float len=length
 bool ikSphereSphere(float3 c,float r,float3 p,float radius,IKHit& h){auto d=c-p;float l=length(d);if(l>=r+radius)return false;auto n=l>1e-7f?d*(1/l):float3{0,1,0};h={p+n*radius,n,r+radius-l,0};return true;}
 bool ikSphereBox(float3 c,float r,float3 lo,float3 hi,IKHit& h){float3 p{std::clamp(c.x,lo.x,hi.x),std::clamp(c.y,lo.y,hi.y),std::clamp(c.z,lo.z,hi.z)};auto d=c-p;float l=length(d);if(l>=r)return false;if(l>1e-7f){h={p,d*(1/l),r-l,0};return true;}float distances[]={c.x-lo.x,hi.x-c.x,c.y-lo.y,hi.y-c.y,c.z-lo.z,hi.z-c.z};float3 normals[]={{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1}};int best=0;for(int i=1;i<6;++i)if(distances[i]<distances[best])best=i;h={c+normals[best]*distances[best],normals[best],r+distances[best],0};return true;}
 std::shared_ptr<const AnimationContacts> AnimationContacts::compile(const Model& m,const Json& j,const AnimationParameters& p){
-    if(!j.isObject())fail("contacts must be object");auto c=std::make_shared<AnimationContacts>();c->up=unit(vec(j["up"],{0,1,0}));if(length(c->up)<.5f)fail("up is zero");c->world_=j.getBool("world",true);
-    c->rootAdjust=num(j["rootAdjust"],.5f);c->collisionWeight=num(j["collisionWeight"],30);c->maxCorrection=num(j["maxCorrection"],.05f);float slope=num(j["maxSlope"],45);
-    if(c->rootAdjust<0||c->rootAdjust>1||c->collisionWeight<=0||c->collisionWeight>1000||c->maxCorrection<=0||c->maxCorrection>2||slope<0||slope>=90)fail("invalid contact settings");c->maxSlope_=std::cos(slope*.01745329252f);
-    auto bone=[&](const Json& v,const char* k){int b=m.findNode(v.getStr(k));if(b<0)fail(std::string("unknown bone ")+v.getStr(k));return b;};
-    auto array=[&](const char* k,size_t max){if(j.has(k)&&((!j[k].isArray()&&!(j[k].isObject()&&j[k].size()==0))||j[k].size()>max))fail(std::string("invalid array ")+k);};array("feet",8);array("capsules",16);array("obstacles",32);
-    for(const auto& v:j["feet"].items()){Foot f;f.bone=bone(v,"bone");f.offset=vec(v["offset"]);f.up=unit(vec(v["up"],{0,1,0}));f.plant=v.getStr("plantParameter");f.radius=num(v["radius"],.08f);f.probeUp=num(v["probeUp"],.3f);f.probeDown=num(v["probeDown"],.6f);f.release=num(v["releaseDistance"],.5f);f.weight=num(v["weight"],20);f.align=num(v["align"],.5f);
-        if((!f.plant.empty()&&!p.values.count(f.plant))||f.radius<=0||f.radius>2||f.probeUp<0||f.probeUp>5||f.probeDown<=0||f.probeDown>5||f.release<=0||f.release>10||f.weight<=0||f.weight>1000||f.align<0||f.align>1||length(f.up)<.5f)fail("invalid foot settings");for(auto& other:c->feet_)if(other.bone==f.bone)fail("duplicate foot");c->feet_.push_back(f);}
+  if (!j.isObject())
+    fail("contacts must be object");
+  auto c = std::make_shared<AnimationContacts>();
+  c->up = unit(vec(j["up"], {0, 1, 0}));
+  if (length(c->up) < .5f)
+    fail("up is zero");
+  c->world_ = j.getBool("world", true);
+  c->rootAdjust = num(j["rootAdjust"], .5f);
+  c->collisionWeight = num(j["collisionWeight"], 30);
+  c->maxCorrection = num(j["maxCorrection"], .05f);
+  float slope = num(j["maxSlope"], 45);
+  if (c->rootAdjust < 0 || c->rootAdjust > 1 || c->collisionWeight <= 0 || c->collisionWeight > 1000 ||
+      c->maxCorrection <= 0 || c->maxCorrection > 2 || slope < 0 || slope >= 90)
+    fail("invalid contact settings");
+  c->maxSlope_ = std::cos(slope * .01745329252f);
+  auto bone = [&](const Json &v, const char *k) {
+    int b = m.findNode(v.getStr(k));
+    if (b < 0)
+      fail(std::string("unknown bone ") + v.getStr(k));
+    return b;
+  };
+  auto array = [&](const char *k, size_t max) {
+    if (j.has(k) && ((!j[k].isArray() && !(j[k].isObject() && j[k].size() == 0)) || j[k].size() > max))
+      fail(std::string("invalid array ") + k);
+  };
+  array("feet", 8);
+  array("capsules", 16);
+  array("obstacles", 32);
+  for (const auto &v : j["feet"].items()) {
+    Foot f;
+    f.bone = bone(v, "bone");
+    f.offset = vec(v["offset"]);
+    f.up = unit(vec(v["up"], {0, 1, 0}));
+    f.plant = v.getStr("plantParameter");
+    f.radius = num(v["radius"], .08f);
+    f.probeUp = num(v["probeUp"], .3f);
+    f.probeDown = num(v["probeDown"], .6f);
+    f.release = num(v["releaseDistance"], .5f);
+    f.weight = num(v["weight"], 20);
+    f.align = num(v["align"], .5f);
+    if ((!f.plant.empty() && !p.values.count(f.plant)) || f.radius <= 0 || f.radius > 2 || f.probeUp < 0 ||
+        f.probeUp > 5 || f.probeDown <= 0 || f.probeDown > 5 || f.release <= 0 || f.release > 10 || f.weight <= 0 ||
+        f.weight > 1000 || f.align < 0 || f.align > 1 || length(f.up) < .5f)
+      fail("invalid foot settings");
+    for (auto &other : c->feet_)
+      if (other.bone == f.bone)
+        fail("duplicate foot");
+    c->feet_.push_back(f);
+  }
     for(const auto& v:j["capsules"].items()){Capsule a;a.bone=bone(v,"bone");a.end=v.has("end")?bone(v,"end"):-1;a.offset=vec(v["offset"]);a.radius=num(v["radius"],.1f);auto samples=v.getInt("samples",4);if(samples<1||samples>8||a.radius<=0||a.radius>2||(a.end>=0&&m.nodes[size_t(a.end)].parent!=a.bone))fail("capsule requires a direct child, radius>0 and 1..8 samples");a.samples=int(samples);c->capsules_.push_back(a);}
     for(const auto& v:j["obstacles"].items()){Shape s;s.kind=v.getStr("kind");s.point=vec(v["point"]);s.positionParameter=v.getStr("positionParameter");s.normal=unit(vec(v["normal"],{0,1,0}));s.extent=vec(v["extent"],{.5f,.5f,.5f});s.radius=num(v["radius"],.5f);if((s.kind!="plane"&&s.kind!="sphere"&&s.kind!="box")||(!s.positionParameter.empty()&&!p.vectors.count(s.positionParameter))||length(s.normal)<.5f||s.extent.x<=0||s.extent.y<=0||s.extent.z<=0||s.radius<=0)fail("invalid obstacle");c->shapes_.push_back(s);}
     auto b=j["balance"];if(!b.isNull()&&!b.isObject())fail("balance must be object");c->balanceStrength_=num(b["strength"],0);c->margin_=num(b["margin"],.02f);if(c->balanceStrength_<0||c->balanceStrength_>1||c->margin_<0||c->margin_>1)fail("invalid balance settings");
-    if(b.has("masses")&&(!b["masses"].isArray()||b["masses"].size()>32))fail("invalid masses");for(const auto& v:b["masses"].items()){Mass mass;mass.bone=bone(v,"bone");mass.mass=num(v["mass"],1);mass.offset=vec(v["offset"]);if(mass.mass<=0||mass.mass>10000)fail("mass must be positive");c->masses_.push_back(mass);}if(c->balanceStrength_>0&&(c->feet_.empty()||c->masses_.empty()))fail("balance requires feet and masses");return c;
+    if (b.has("masses") && (!b["masses"].isArray() || b["masses"].size() > 32))
+      fail("invalid masses");
+    for (const auto &v : b["masses"].items()) {
+      Mass mass;
+      mass.bone = bone(v, "bone");
+      mass.mass = num(v["mass"], 1);
+      mass.offset = vec(v["offset"]);
+      if (mass.mass <= 0 || mass.mass > 10000)
+        fail("mass must be positive");
+      c->masses_.push_back(mass);
+    }
+    if (c->balanceStrength_ > 0 && (c->feet_.empty() || c->masses_.empty()))
+      fail("balance requires feet and masses");
+    return c;
 }
 std::vector<int> AnimationContacts::bones()const{std::vector<int> r;for(auto& f:feet_)r.push_back(f.bone);for(auto& c:capsules_)r.push_back(c.bone);for(auto& m:masses_)r.push_back(m.bone);return r;}
 bool AnimationContacts::contact(const AnimationParameters& p,float3 center,float radius,IKHit& hit)const{
@@ -63,13 +118,43 @@ void AnimationContacts::goals(const Model&,const AnimationParameters& p,const Po
         for(int i=0;i<=count;++i){auto offset=count?lerp(c.offset,localEnd,float(i)/count):c.offset;auto point=world[size_t(c.bone)].transformPoint(offset);IKHit h;if(contact(p,point,radius,h))out.push_back({c.bone,offset,point+h.normal*h.depth,collisionWeight});}}
 }
 float3 AnimationContacts::balance(const AnimationParameters& p,const std::vector<mat4>& world,const AnimationContactState& state,float* error)const{
-    if(error)*error=0;if(balanceStrength_<=0)return {};float mass=0;float3 com{};for(auto& m:masses_){com+=world[size_t(m.bone)].transformPoint(m.offset)*m.mass;mass+=m.mass;}com=com*(1/std::max(mass,1e-9f));
-    float3 axis=normalize(cross(up,std::abs(up.z)<.9f?float3{0,0,1}:float3{1,0,0})),other=cross(up,axis);auto project=[&](float3 v){return V2{dot(v,axis),dot(v,other)};};std::vector<V2> points;
-    for(size_t i=0;i<feet_.size();++i)if(i<state.feet.size()&&state.feet[i].planted){auto a=localPoint(p,state.feet[i].anchor);float r=std::max(.001f,feet_[i].radius-margin_);for(float x:{-r,r})for(float y:{-r,r})points.push_back(project(a+axis*x+other*y));}
-    if(points.empty())return {};std::sort(points.begin(),points.end(),[](auto a,auto b){return a.x==b.x?a.y<b.y:a.x<b.x;});std::vector<V2> hull;
-    for(auto v:points){while(hull.size()>1&&cross2(hull[hull.size()-2],hull.back(),v)<=0)hull.pop_back();hull.push_back(v);}size_t lower=hull.size();for(int i=int(points.size())-2;i>=0;--i){auto v=points[size_t(i)];while(hull.size()>lower&&cross2(hull[hull.size()-2],hull.back(),v)<=0)hull.pop_back();hull.push_back(v);}if(hull.size()>1)hull.pop_back();
+  if (error)
+    *error = 0;
+  if (balanceStrength_ <= 0)
+    return {};
+  float mass = 0;
+  float3 com{};
+  for (auto &m : masses_) {
+    com += world[size_t(m.bone)].transformPoint(m.offset) * m.mass;
+    mass += m.mass;
+  }
+  com = com * (1 / std::max(mass, 1e-9f));
+  float3 axis = normalize(cross(up, std::abs(up.z) < .9f ? float3{0, 0, 1} : float3{1, 0, 0})), other = cross(up, axis);
+  auto project = [&](float3 v) { return V2{dot(v, axis), dot(v, other)}; };
+  std::vector<V2> points;
+  for (size_t i = 0; i < feet_.size(); ++i)
+    if (i < state.feet.size() && state.feet[i].planted) {
+      auto a = localPoint(p, state.feet[i].anchor);
+      float r = std::max(.001f, feet_[i].radius - margin_);
+      for (float x : {-r, r})
+        for (float y : {-r, r})
+          points.push_back(project(a + axis * x + other * y));
+    }
+  if (points.empty())
+    return {};
+  std::sort(points.begin(), points.end(), [](auto a, auto b) { return a.x == b.x ? a.y < b.y : a.x < b.x; });
+  std::vector<V2> hull;
+  for (auto v : points) {
+    while (hull.size() > 1 && cross2(hull[hull.size() - 2], hull.back(), v) <= 0)
+      hull.pop_back();
+    hull.push_back(v);}size_t lower=hull.size();for(int i=int(points.size())-2;i>=0;--i){auto v=points[size_t(i)];while(hull.size()>lower&&cross2(hull[hull.size()-2],hull.back(),v)<=0)hull.pop_back();hull.push_back(v);}if(hull.size()>1)hull.pop_back();
     auto c=project(com);bool inside=true;float best=1e30f;V2 closest=c;for(size_t i=0;i<hull.size();++i){auto a=hull[i],b=hull[(i+1)%hull.size()];inside&=cross2(a,b,c)>=-1e-6f;float x=b.x-a.x,y=b.y-a.y,t=std::clamp(((c.x-a.x)*x+(c.y-a.y)*y)/std::max(x*x+y*y,1e-12f),0.f,1.f);V2 q{a.x+x*t,a.y+y*t};float d=(q.x-c.x)*(q.x-c.x)+(q.y-c.y)*(q.y-c.y);if(d<best){best=d;closest=q;}}
-    if(inside)return {};auto delta=axis*(closest.x-c.x)+other*(closest.y-c.y);if(error)*error=length(delta);return delta*balanceStrength_;
+    if (inside)
+      return {};
+    auto delta = axis * (closest.x - c.x) + other * (closest.y - c.y);
+    if (error)
+      *error = length(delta);
+    return delta * balanceStrength_;
 }
 AnimationContactReport AnimationContacts::report(const Model& m,const AnimationParameters& p,const Pose& pose,const std::vector<mat4>& world,const AnimationContactState& state)const{
     AnimationContactReport r;if(!state.active)return r;for(auto& f:state.feet)if(f.planted)++r.supports;r.supported=r.supports>0;balance(p,world,state,&r.balanceError);

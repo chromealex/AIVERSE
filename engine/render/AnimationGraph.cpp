@@ -128,7 +128,9 @@ std::shared_ptr<const AnimationGraph> AnimationGraph::compileImpl(const Model& m
                 if(n.subgraph->defaults().values.count(child))scalar(parent.str());
                 else if(n.subgraph->defaults().vectors.count(child))vec(parent.str());
                 else bad("unknown child parameter '"+child+"'");
-                if(parent.str().empty())bad("empty parent parameter");n.bindings[child]=parent.str();
+                if (parent.str().empty())
+                  bad("empty parent parameter");
+                n.bindings[child] = parent.str();
             }
         } else if(kind=="native") {
             n.kind=Kind::Native; n.a=ref(ids,v.getStr("input"),"earlier input node");

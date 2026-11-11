@@ -32,7 +32,9 @@ std::shared_ptr<const FullBodyIK> FullBodyIK::compile(const Model& m,const Json&
         if(e.bone<0||!descendant(e.bone,s->root_))fail("effector must descend from root");
         if(!p.vectors.count(e.target)||(!e.rotation.empty()&&!p.vectors.count(e.rotation))||(!e.weightParameter.empty()&&!p.values.count(e.weightParameter)))fail("unknown control parameter");
         if(e.weight<0||e.weight>1||e.rotationWeight<0||e.rotationWeight>1||(e.rotationWeight>0&&e.rotation.empty()))fail("weights must be 0..1");
-        if(std::any_of(s->effectors_.begin(),s->effectors_.end(),[&](auto& x){return x.bone==e.bone;}))fail("duplicate effector");s->effectors_.push_back(e);
+        if (std::any_of(s->effectors_.begin(), s->effectors_.end(), [&](auto &x) { return x.bone == e.bone; }))
+          fail("duplicate effector");
+        s->effectors_.push_back(e);
     }
     // Reverse hierarchy order: distal joints first, common ancestors combine all goals.
     for(auto it=m.order.rbegin();it!=m.order.rend();++it){int bone=*it;std::vector<size_t> affected;
@@ -86,6 +88,8 @@ FullBodyIK::Result FullBodyIK::solve(const Model& m,const AnimationParameters& p
     }
     if(weight<1)for(size_t i=0;i<pose.size();++i){pose[i].t=lerp(input[i].t,pose[i].t,weight);pose[i].r=nlerp(input[i].r,pose[i].r,weight);}
     worldMatrices(m,pose,world);result.error=error();result.converged=result.error<=tolerance_;
-    if(contacts_)result.contacts=state.report=contacts_->report(m,parameters,pose,world,state);return result;
+    if (contacts_)
+      result.contacts = state.report = contacts_->report(m, parameters, pose, world, state);
+    return result;
 }
 }
