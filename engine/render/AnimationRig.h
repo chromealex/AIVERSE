@@ -6,7 +6,7 @@ class FullBodyIK;
 struct AnimationRigState { std::vector<AnimationContactState> contacts; };
 class AnimationRig {
 public:
-    enum class Kind { Transform, Copy, Aim, TwoBoneIK, Limit, FullBodyIK };
+    enum class Kind { Transform, Copy, Aim, TwoBoneIK, Limit, FullBodyIK, AngularLimit };
     struct Unit {
         Kind kind = Kind::Transform;
         std::shared_ptr<const FullBodyIK> fullBody;

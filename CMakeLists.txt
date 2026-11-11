@@ -1241,3 +1241,31 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_shader_graph_tests PRIVATE aiverse_shader_graph aiverse_postfx_data aiverse_fx)
     add_test(NAME shader_graph COMMAND aiverse_shader_graph_tests)
 endif()
+
+# Host authoring: shared by the editor, MCP and CPU tests.
+if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
+    add_library(aiverse_modeling STATIC tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
+        tools/modeling/Document.cpp tools/modeling/Export.cpp tools/modeling/Clips.cpp tools/modeling/Recipes.cpp)
+    target_link_libraries(aiverse_modeling PUBLIC aiverse_models)
+    target_include_directories(aiverse_modeling PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ModelingOps.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_modeling)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_editor_core)
+    add_executable(aiverse_modeling_tests tests/modeling/modeling.cpp)
+    target_link_libraries(aiverse_modeling_tests PRIVATE aiverse_editor_core aiverse_modeling aiverse_zstd_dec)
+    add_test(NAME modeling_authoring COMMAND aiverse_modeling_tests)
+endif()
+
+if(TARGET aiverse_editor_core AND AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_modeling_cli tools/modeling/main.cpp)
+    set_target_properties(aiverse_modeling_cli PROPERTIES OUTPUT_NAME aiverse_modeling)
+    target_link_libraries(aiverse_modeling_cli PRIVATE aiverse_editor_core aiverse_modeling aiverse_zstd_dec)
+endif()
+if(TARGET aiverse_modeling AND NOT MSVC)
+    target_compile_options(aiverse_modeling PRIVATE -Wall -Wextra)
+endif()

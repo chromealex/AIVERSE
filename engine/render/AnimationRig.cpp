@@ -26,7 +26,7 @@ std::shared_ptr<const AnimationRig> AnimationRig::compile(const Model& m,const J
         else if(kind=="aim"){u.kind=Kind::Aim;u.target=binding(v,"target");if(u.target.empty())fail("aim needs target");u.axis=vec(v["axis"],u.axis);if(length(u.axis)<1e-6f)fail("aim axis is zero");}
         else if(kind=="twoBoneIK"){u.kind=Kind::TwoBoneIK;u.knee=bone(v,"knee");u.end=bone(v,"end");u.target=binding(v,"target");u.pole=binding(v,"pole");if(u.target.empty()||u.pole.empty()||m.nodes[size_t(u.knee)].parent!=u.bone||m.nodes[size_t(u.end)].parent!=u.knee||u.bone==u.end)fail("invalid IK chain/controls");}
         else if(kind=="fullBodyIK"){u.kind=Kind::FullBodyIK;u.fullBody=FullBodyIK::compile(m,v,p);}
-        else if(kind=="limit"){u.kind=Kind::Limit;u.minimum=vec(v["min"],u.minimum);u.maximum=vec(v["max"],u.maximum);if(u.minimum.x>u.maximum.x||u.minimum.y>u.maximum.y||u.minimum.z>u.maximum.z)fail("inverted limits");}
+        else if(kind=="limit"||kind=="angularLimit"){u.kind=kind=="limit"?Kind::Limit:Kind::AngularLimit;u.minimum=vec(v["min"],u.minimum);u.maximum=vec(v["max"],u.maximum);if(u.minimum.x>u.maximum.x||u.minimum.y>u.maximum.y||u.minimum.z>u.maximum.z)fail("inverted limits");}
         else fail("unknown operation '"+kind+"'");
         auto space=v.getStr("space","local");if(space!="local"&&space!="model")fail("space must be local or model");u.global=space=="model";
         u.additive=v.getBool("additive");u.weight=num(v["weight"],1);if(u.weight<0||u.weight>1)fail("weight must be 0..1");
@@ -49,7 +49,14 @@ void AnimationRig::execute(const Model& m,const AnimationParameters& params,Pose
         else if(u.kind==Kind::Copy){
             desired=pose[size_t(u.source)];
             if(u.global){auto local=parentWorld.inverse()*world[size_t(u.source)];desired.t=position(local);desired.r=rotationOf(local);desired.s={length({local.at(0,0),local.at(1,0),local.at(2,0)}),length({local.at(0,1),local.at(1,1),local.at(2,1)}),length({local.at(0,2),local.at(1,2),local.at(2,2)})};}
-        } else if(u.kind==Kind::Limit){desired.t={std::clamp(p.t.x,u.minimum.x,u.maximum.x),std::clamp(p.t.y,u.minimum.y,u.maximum.y),std::clamp(p.t.z,u.minimum.z,u.maximum.z)};}
+        } else if(u.kind==Kind::AngularLimit){
+            // Local XYZ Euler limits, matching transform's Rz*Ry*Rx convention.
+            const quat q=qnormalize(p.r);
+            float3 angles{std::atan2(2*(q.w*q.x+q.y*q.z),1-2*(q.x*q.x+q.y*q.y)),
+                std::asin(std::clamp(2*(q.w*q.y-q.z*q.x),-1.f,1.f)),
+                std::atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))};
+            desired.r=euler({std::clamp(angles.x,u.minimum.x,u.maximum.x),std::clamp(angles.y,u.minimum.y,u.maximum.y),std::clamp(angles.z,u.minimum.z,u.maximum.z)});
+        }else if(u.kind==Kind::Limit){desired.t={std::clamp(p.t.x,u.minimum.x,u.maximum.x),std::clamp(p.t.y,u.minimum.y,u.maximum.y),std::clamp(p.t.z,u.minimum.z,u.maximum.z)};}
         else {
             float3 t=parameter(params,u.translation,u.t),r=parameter(params,u.rotation,u.r),s=parameter(params,u.scale,u.s);
             if(u.global){

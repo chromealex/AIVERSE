@@ -391,7 +391,7 @@ private:
     uint64_t scriptsStamp_ = 0;
 
     net::LineServer server_;
-    struct PendingShot { int client; int64_t id; std::string device; };
+    struct PendingShot { int client; int64_t id; std::string device; Json metadata; };
     std::vector<PendingShot> shots_;
     bool captureArmed_ = false;
     bool overlayKeys_[int(platform::Key::Count)] = {};

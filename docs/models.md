@@ -488,3 +488,8 @@ Optional `view.animationGraph` supports pose graphs, state transitions, masked b
 additive poses and parameter-driven two-bone IK. C++ hosts use `AnimationGraphInstance`;
 view scripts use `view.animation(entity, parameters)`. See [animation-graphs.md](animation-graphs.md)
 for the format, API, runnable showcase and explicit scope.
+
+## Editable model authoring
+
+See [Model and animation authoring](modeling.md) for parameterized geometry, rigs,
+clip editing, GLB export, editor windows and the `modeling_*` MCP tools.
