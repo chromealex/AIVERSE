@@ -328,6 +328,14 @@ endif()
 # with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
 target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 
+# Programmable presentation animation graphs reuse the existing model sampler and IK.
+target_sources(aiverse_models PRIVATE engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_animation_tests tests/animation/graphs.cpp apps/editor/core/AnimationDocument.cpp)
+    target_link_libraries(aiverse_animation_tests PRIVATE aiverse_models aiverse_zstd_dec)
+    add_test(NAME animation_graphs COMMAND aiverse_animation_tests)
+endif()
+
 set(AIVERSE_RUNTIME_SRC
     engine/platform/PlatformCommon.cpp
     engine/render/Renderer3D.cpp
@@ -629,6 +637,10 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(assetpipe PRIVATE aiverse_pack_writer)
     target_compile_definitions(assetpipe PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(aiversebuild PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # Building just the editor must also produce its packager. Native editors may disable tools.
+    if(TARGET aiverse_editor)
+        add_dependencies(aiverse_editor aiversebuild)
+    endif()
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
     add_executable(aiversemcp tools/mcp/main.cpp)
     target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
@@ -730,6 +742,9 @@ if(AIVERSE_BUILD_TESTS)
     endif()
     target_compile_definitions(aiverse_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_tests COMMAND aiverse_tests)
+    add_executable(aiverse_build_tool_tests tests/editor/build_tool.cpp)
+    target_include_directories(aiverse_build_tool_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME editor_build_tool COMMAND aiverse_build_tool_tests "${CMAKE_CURRENT_BINARY_DIR}/build-tool-fixture")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -922,7 +937,7 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder

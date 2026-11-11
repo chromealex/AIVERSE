@@ -12901,6 +12901,9 @@ TEST(world_tree_script_blob_decoding) {
 }
 #endif
 
+#include "animation/view.inc"
+#include "animation/editor.inc"
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // aiverse_tests [name filter]

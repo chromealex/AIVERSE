@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <unordered_map>
+#include "../../../engine/render/AnimationGraph.h"
 
 namespace aiverse::game {
 
@@ -38,7 +39,22 @@ struct EntityFxEntry {
     }
 };
 
+struct AnimationDefinition {
+    Json definition;
+    render::AnimationTraits traits;
+};
+struct EntityAnimationEntry {
+    std::shared_ptr<const AnimationDefinition> graph;
+    std::string state, error;
+    render::AnimationParameters parameters;
+    render::AnimationContactReport contacts;
+    float goneFor = -1;
+};
+
 struct EntityFxStore {
+    render::AnimationTraits animationTraits;
+    std::map<std::string,std::shared_ptr<const AnimationDefinition>> animationDefinitions;
+    std::unordered_map<uint64_t, EntityAnimationEntry> animations;
     std::unordered_map<uint64_t, EntityFxEntry> entries;   // packed entity id -> entry
     // The values to draw for an entity (with the shadow scale resolved); false = none (draw unchanged).
     bool lookup(uint64_t entity, EntityFxValues& out) const {

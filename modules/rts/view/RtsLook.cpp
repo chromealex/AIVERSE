@@ -394,10 +394,10 @@ void RtsView::finishChoice(const UnitType& t, ModelChoice& c) {
     // modifiers, additive clips, IK) need the CPU palette path.
     const std::string mode = t.view.getStr("skinning", "auto");
     if (mode != "auto" && mode != "baked" && mode != "palette") warn(t, "skinning must be auto, baked or palette");
-    const bool palette = mode == "palette" || (mode == "auto" && (overlays || nodeProcs || !c.additive.empty() || !c.legs.empty()));
+    const bool palette = c.programmableAnimation || bool(c.graph) || mode == "palette" || (mode == "auto" && (overlays || nodeProcs || !c.additive.empty() || !c.legs.empty()));
     c.baked = skinned && !palette && dev_ && bakeAnimations(*dev_, *c.model);
     if (c.baked) for (auto& cs : c.clips) { if (cs.layer > 0) { cs.layer = 0; cs.mask = -1; } } // one-shots on the base layer
-    c.needsPose = (!c.baked && (anyClip || nodeProcs)) || !c.attach.empty() || c.muzzle >= 0 || !c.legs.empty();
+    c.needsPose = c.programmableAnimation || bool(c.graph) || (!c.baked && (anyClip || nodeProcs)) || !c.attach.empty() || c.muzzle >= 0 || !c.legs.empty();
     for (auto& f : c.fx) c.needsPose |= f.node >= 0;
 }
 
@@ -431,6 +431,11 @@ int RtsView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const st
 
 void RtsView::configureChoice(gfx::Device& dev, const UnitType& t, const Json& v, ModelChoice& c, bool isShape) {
     Model& m = *c.model;
+    c.programmableAnimation=v.getBool("programmableAnimation")||v.has("animationGraph");
+    if (v.has("animationGraph")) {
+        try { c.graph = AnimationGraph::compile(m, v["animationGraph"], animationOperations_, animationTraits_); }
+        catch (const std::exception& e) { warn(t, e.what()); }
+    }
     // ---- placement: centre on the ground, rotate the model's forward axis to +X, fit, offset
     const std::string fwd = v.getStr("forward", isShape ? "+x" : "+z");
     float yaw = fwd == "+z" ? 90 * kDeg : fwd == "-z" ? -90 * kDeg : fwd == "-x" ? 180 * kDeg : 0;
