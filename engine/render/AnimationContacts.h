@@ -11,6 +11,8 @@ struct AnimationEnvironment {
     mat4 modelToWorld;
     std::function<bool(float3 start,float3 end,IKHit&)> raycast;
     std::function<bool(float3 center,float radius,IKHit&)> sphereContact;
+    // Stable world surface ID -> current local-to-world frame. False means removed.
+    std::function<bool(uint64_t surface,mat4&)> surfaceTransform;
 };
 struct AnimationContactReport { int supports=0,collisions=0;float penetration=0,balanceError=0,supportError=0;bool supported=false,stable=false; };
 struct AnimationContactState {
@@ -34,7 +36,8 @@ public:
     float3 balance(const AnimationParameters&,const std::vector<mat4>&,const AnimationContactState&,float* error=nullptr) const;
     AnimationContactReport report(const Model&,const AnimationParameters&,const Pose&,const std::vector<mat4>&,const AnimationContactState&) const;
     bool contact(const AnimationParameters&,float3 center,float radius,IKHit&) const;
-    bool ground(const AnimationParameters&,float3 start,float3 end,IKHit&) const;
+    bool ground(const AnimationParameters&,float3 start,float3 end,IKHit&,bool anySurface=false) const;
+    bool surfaceFrame(const AnimationParameters&,uint64_t surface,mat4&) const;
     std::vector<int> bones() const;
     const std::vector<Foot>& feet() const{return feet_;}
     const std::vector<Shape>& shapes() const{return shapes_;}
@@ -47,6 +50,8 @@ private:
     std::vector<Foot> feet_;std::vector<Capsule> capsules_;std::vector<Shape> shapes_;std::vector<Mass> masses_;
 };
 // Exact sphere-vs-primitive query reused by runtime host adapters and rig preview.
+bool ikRayBox(float3 start,float3 end,float3 minimum,float3 maximum,const mat4& transform,IKHit&);
+bool ikSphereOBB(float3 center,float radius,float3 minimum,float3 maximum,const mat4& transform,IKHit&);
 bool ikSpherePlane(float3 center,float radius,float3 point,float3 normal,IKHit&);
 bool ikSphereBox(float3 center,float radius,float3 minimum,float3 maximum,IKHit&);
 bool ikSphereSphere(float3 center,float radius,float3 obstacle,float obstacleRadius,IKHit&);

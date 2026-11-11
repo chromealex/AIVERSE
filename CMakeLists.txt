@@ -333,7 +333,7 @@ endif()
 target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 
 # Programmable presentation animation graphs reuse the existing model sampler and IK.
-target_sources(aiverse_models PRIVATE engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
+target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_animation_tests tests/animation/graphs.cpp apps/editor/core/AnimationDocument.cpp)
     target_link_libraries(aiverse_animation_tests PRIVATE aiverse_models aiverse_zstd_dec)

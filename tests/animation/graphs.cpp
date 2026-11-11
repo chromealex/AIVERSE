@@ -83,5 +83,6 @@ int main() {
     #include "uaf.inc"
 #include "fullbody.inc"
 #include "contacts.inc"
+#include "climbing.inc"
     std::printf("Animation graph checks: %d passed\n",checks);
 }

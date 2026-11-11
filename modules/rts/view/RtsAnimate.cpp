@@ -21,22 +21,23 @@ std::shared_ptr<const AnimationEnvironment> RtsView::animationEnvironment(const 
     environment->modelToWorld=mat4::translate(pos)*mat4::rotateY(st.yaw)*tilt*mat4::scale({look.scale,look.scale*grow,look.scale});
     if(hasFx)environment->modelToWorld=environment->modelToWorld*mat4::scale({fx.scale(0),fx.scale(1),fx.scale(2)});
     environment->modelToWorld=environment->modelToWorld*ch.fix;
+    auto locomotion=st.graph.locomotionReport();auto queryCenter=locomotion.active?locomotion.position:pos;
     std::vector<AnimationObstacle> boxes;float reach=std::max(2.f,length(ch.model->boundsMax-ch.model->boundsMin)*look.scale*2);
-    for(const auto& b:animationObstacles_){if(o.entity.valid()&&b.entity==o.entity)continue;auto nearest=float3{std::clamp(pos.x,b.lo.x,b.hi.x),std::clamp(pos.y,b.lo.y,b.hi.y),std::clamp(pos.z,b.lo.z,b.hi.z)};
-        if(length(nearest-pos)>reach)continue;if(!o.entity.valid()&&pos.x>=b.lo.x&&pos.x<=b.hi.x&&pos.z>=b.lo.z&&pos.z<=b.hi.z)continue;boxes.push_back(b);}
-    std::stable_sort(boxes.begin(),boxes.end(),[&](const auto& a,const auto& b){return length((a.lo+a.hi)*.5f-pos)<length((b.lo+b.hi)*.5f-pos);});if(boxes.size()>64)boxes.resize(64);
+    for(const auto& b:animationObstacles_){if(b.object==&o||(o.entity.valid()&&b.entity==o.entity))continue;auto nearest=float3{std::clamp(queryCenter.x,b.lo.x,b.hi.x),std::clamp(queryCenter.y,b.lo.y,b.hi.y),std::clamp(queryCenter.z,b.lo.z,b.hi.z)};
+        if(length(nearest-queryCenter)>reach)continue;boxes.push_back(b);}
+    std::stable_sort(boxes.begin(),boxes.end(),[&](const auto& a,const auto& b){return length((a.lo+a.hi)*.5f-queryCenter)<length((b.lo+b.hi)*.5f-queryCenter);});if(boxes.size()>64)boxes.resize(64);
     auto ground=[this,&grid](float3 p){return heightAt(grid,p.x,p.z);};
     auto normal=[ground](float3 p){constexpr float e=.03f;return normalize(float3{ground(p+float3{-e,0,0})-ground(p+float3{e,0,0}),2*e,ground(p+float3{0,0,-e})-ground(p+float3{0,0,e})});};
     environment->sphereContact=[boxes,ground,normal](float3 center,float radius,IKHit& hit){
         bool found=ikSpherePlane(center,radius,{center.x,ground(center),center.z},normal(center),hit);if(found)hit.surface=1;
-        for(const auto& b:boxes){IKHit h;if(ikSphereBox(center,radius,b.lo,b.hi,h)&&(!found||h.depth>hit.depth)){hit=h;hit.surface=b.surface;found=true;}}return found;};
+        for(const auto& b:boxes){IKHit h;if(ikSphereOBB(center,radius,b.localMin,b.localMax,b.transform,h)&&(!found||h.depth>hit.depth)){hit=h;hit.surface=b.surface;found=true;}}return found;};
     environment->raycast=[boxes,ground,normal](float3 start,float3 end,IKHit& hit){
         bool found=false;float best=2;auto delta=end-start;float previous=start.y-ground(start);
         for(int i=1;i<=32;++i){float t=float(i)/32;auto p=start+delta*t;float d=p.y-ground(p);if(previous>=0&&d<=0){float lo=float(i-1)/32,hi=t;for(int j=0;j<12;++j){float mid=(lo+hi)*.5f;auto q=start+delta*mid;if(q.y>=ground(q))lo=mid;else hi=mid;}best=(lo+hi)*.5f;auto q=start+delta*best;hit={q,normal(q),0,1};found=true;break;}previous=d;}
-        for(const auto& box:boxes){float enter=0,leave=1;float3 n{};float s[]={start.x,start.y,start.z},d[]={delta.x,delta.y,delta.z},lo[]={box.lo.x,box.lo.y,box.lo.z},hi[]={box.hi.x,box.hi.y,box.hi.z};bool ok=true;
-            for(int k=0;k<3;++k){if(std::abs(d[k])<1e-8f){if(s[k]<lo[k]||s[k]>hi[k])ok=false;continue;}float a=(lo[k]-s[k])/d[k],b=(hi[k]-s[k])/d[k],sign=-1;if(a>b){std::swap(a,b);sign=1;}if(a>enter){enter=a;n={};if(k==0)n.x=sign;if(k==1)n.y=sign;if(k==2)n.z=sign;}leave=std::min(leave,b);if(enter>leave)ok=false;}
-            if(ok&&enter>=0&&enter<=1&&enter<best&&length(n)>.5f){best=enter;hit={start+delta*enter,n,0,box.surface};found=true;}}
-        return found;};if(animationEnvironmentQuery_)animationEnvironmentQuery_(o.entity,*environment);return environment;
+        for(const auto& box:boxes){IKHit h;if(ikRayBox(start,end,box.localMin,box.localMax,box.transform,h)){float t=dot(h.point-start,delta)/std::max(dot(delta,delta),1e-9f);if(t<best){best=t;hit=h;hit.surface=box.surface;found=true;}}}
+        return found;};
+    auto frames=animationSurfaceFrames_;environment->surfaceTransform=[frames](uint64_t id,mat4& frame){if(id==1){frame={};return true;}if(!frames)return false;auto it=frames->find(id);if(it==frames->end())return false;frame=it->second;return true;};
+    if(animationEnvironmentQuery_)animationEnvironmentQuery_(o.entity,*environment);return environment;
 }
 
 namespace {
@@ -250,7 +251,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         if(st.graph.hasContacts()&&grid&&o.body==-1)p.environment=animationEnvironment(o,st,ch,*grid);
         st.graph.update(dt);
         if (updatePose || st.pose.empty()) st.graph.evaluate(st.pose);
-        if(control){control->state=st.graph.state();control->contacts=st.graph.contactReport();if(!st.graph.healthy())control->error=st.graph.error();}
+        if(control){control->state=st.graph.state();control->contacts=st.graph.contactReport();control->locomotion=st.graph.locomotionReport();if(!st.graph.healthy())control->error=st.graph.error();}
     } else if (!m.clips.empty()) {
         auto pick = [&](int kind) { const auto& v = ch.clips[kind].clips; return v[size_t(mix64(uint64_t(st.distance * 7) + uint64_t(kind)) % v.size())]; };
         auto play = [&](int kind, bool restart) {
