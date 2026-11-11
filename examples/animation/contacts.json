@@ -1,0 +1,24 @@
+{
+  "model":"models/golem.glb",
+  "parameters":{"plantLeft":1,"plantRight":1,"strength":1,"obstacle":[0.8,1.2,0]},
+  "nodes":[
+    {"id":"base","kind":"bind","position":[25,45]},
+    {"id":"body","kind":"rig","input":"base","position":[250,45],"units":[
+      {"op":"fullBodyIK","bone":"hips","iterations":48,"weightParameter":"strength","effectors":[],
+       "contacts":{
+         "world":true,"up":[0,1,0],"maxSlope":45,"rootAdjust":0.6,"collisionWeight":30,"maxCorrection":0.05,
+         "feet":[
+           {"bone":"leg.L","offset":[0,-0.85,0],"plantParameter":"plantLeft","radius":0.16,"probeUp":0.4,"probeDown":0.6,"releaseDistance":0.5,"weight":30,"align":0.7},
+           {"bone":"leg.R","offset":[0,-0.85,0],"plantParameter":"plantRight","radius":0.16,"probeUp":0.4,"probeDown":0.6,"releaseDistance":0.5,"weight":30,"align":0.7}
+         ],
+         "capsules":[
+           {"bone":"hips","end":"spine","radius":0.18,"samples":4},
+           {"bone":"spine","end":"arm.L","radius":0.1,"samples":6},
+           {"bone":"spine","end":"arm.R","radius":0.1,"samples":6}
+         ],
+         "obstacles":[{"kind":"sphere","positionParameter":"obstacle","radius":0.2}],
+         "balance":{"strength":0.5,"margin":0.03,"masses":[{"bone":"hips","mass":4},{"bone":"spine","mass":6},{"bone":"head","mass":2}]}
+       }}
+    ]}
+  ],"output":"body"
+}

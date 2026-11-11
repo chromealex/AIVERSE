@@ -332,6 +332,14 @@ endif()
 # with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
 target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 
+# Programmable presentation animation graphs reuse the existing model sampler and IK.
+target_sources(aiverse_models PRIVATE engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_animation_tests tests/animation/graphs.cpp apps/editor/core/AnimationDocument.cpp)
+    target_link_libraries(aiverse_animation_tests PRIVATE aiverse_models aiverse_zstd_dec)
+    add_test(NAME animation_graphs COMMAND aiverse_animation_tests)
+endif()
+
 set(AIVERSE_RUNTIME_SRC
     engine/platform/PlatformCommon.cpp
     engine/render/Renderer3D.cpp
@@ -633,6 +641,10 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(assetpipe PRIVATE aiverse_pack_writer)
     target_compile_definitions(assetpipe PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(aiversebuild PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # Building just the editor must also produce its packager. Native editors may disable tools.
+    if(TARGET aiverse_editor)
+        add_dependencies(aiverse_editor aiversebuild)
+    endif()
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
     add_executable(aiversemcp tools/mcp/main.cpp)
     target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
@@ -734,6 +746,9 @@ if(AIVERSE_BUILD_TESTS)
     endif()
     target_compile_definitions(aiverse_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_tests COMMAND aiverse_tests)
+    add_executable(aiverse_build_tool_tests tests/editor/build_tool.cpp)
+    target_include_directories(aiverse_build_tool_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME editor_build_tool COMMAND aiverse_build_tool_tests "${CMAKE_CURRENT_BINARY_DIR}/build-tool-fixture")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -926,7 +941,7 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
@@ -1229,6 +1244,34 @@ if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_shader_graph_tests tests/shader_graph/compiler.cpp)
     target_link_libraries(aiverse_shader_graph_tests PRIVATE aiverse_shader_graph aiverse_postfx_data aiverse_fx)
     add_test(NAME shader_graph COMMAND aiverse_shader_graph_tests)
+endif()
+
+# Host authoring: shared by the editor, MCP and CPU tests.
+if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
+    add_library(aiverse_modeling STATIC tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
+        tools/modeling/Document.cpp tools/modeling/Export.cpp tools/modeling/Clips.cpp tools/modeling/Recipes.cpp)
+    target_link_libraries(aiverse_modeling PUBLIC aiverse_models)
+    target_include_directories(aiverse_modeling PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ModelingOps.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_modeling)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_editor_core)
+    add_executable(aiverse_modeling_tests tests/modeling/modeling.cpp)
+    target_link_libraries(aiverse_modeling_tests PRIVATE aiverse_editor_core aiverse_modeling aiverse_models aiverse_zstd_dec)
+    add_test(NAME modeling_authoring COMMAND aiverse_modeling_tests)
+endif()
+
+if(TARGET aiverse_editor_core AND AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_modeling_cli tools/modeling/main.cpp)
+    set_target_properties(aiverse_modeling_cli PROPERTIES OUTPUT_NAME aiverse_modeling)
+    target_link_libraries(aiverse_modeling_cli PRIVATE aiverse_editor_core aiverse_modeling aiverse_models aiverse_zstd_dec)
+endif()
+if(TARGET aiverse_modeling AND NOT MSVC)
+    target_compile_options(aiverse_modeling PRIVATE -Wall -Wextra)
 endif()
 
 # Optional standalone physics example; normal RTS/FPS clients do not create a physics world.

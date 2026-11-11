@@ -85,7 +85,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
         }
     } else if (show == lod) {
         auto map = [&](int c) { return c >= 0 && size_t(c) < lod->clipMap.size() ? lod->clipMap[size_t(c)] : -1; };
-        if (lod->baked) {
+        if (lod->baked && !st.graph.graph()) {
             const auto b = st.anim.baseSample();
             bs = {map(b.clipA), map(b.clipB), b.timeA, b.timeB, b.w, b.loopA, b.loopB};
             d.baked = &bs;

@@ -109,6 +109,19 @@ void Portrait::renderMaterial(RtsView& view, const Json& material, int shape, do
     dev_->endPass();
 }
 
+void Portrait::renderPose(const Model& model,const Pose& pose,float yaw) {
+    if(!dev_||!color_.valid()||pose.size()!=model.nodes.size())return;
+    std::vector<mat4> world;worldMatrices(model,pose,world);
+    RTSCamera cam;cam.target=(model.boundsMin+model.boundsMax)*.5f;
+    auto e=model.boundsMax-model.boundsMin;cam.distance=std::max({e.x,e.y,e.z,.3f})*2.1f;
+    cam.minDistance=.01f;cam.pitch=.15f;cam.yaw=yaw;cam.fovY=.6f;
+    r3d_.lighting.skyColor={.8f,.85f,.9f};r3d_.lighting.groundColor={.5f,.5f,.5f};
+    r3d_.beginScene(cam,size_,size_);ModelDraw d;d.model=&model;d.nodeWorld=&world;d.pose=&pose;d.team={.1f,.4f,.9f};r3d_.drawModel(d);
+    gfx::PassDesc pass;pass.colorTarget=color_;pass.depthTarget=depth_;
+    pass.clearColor[0]=.12f;pass.clearColor[1]=.14f;pass.clearColor[2]=.18f;pass.clearColor[3]=1;
+    r3d_.render(pass);dev_->endPass();
+}
+
 void Portrait::shutdown() {
     if (!dev_) return;
     for (auto& s : shapes_) if (s) { releaseModel(*dev_, *s); s.reset(); }

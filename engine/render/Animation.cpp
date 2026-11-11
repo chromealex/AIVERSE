@@ -162,7 +162,6 @@ quat rotationOf(const mat4& m) {
 namespace {
 float3 posOf(const mat4& m) { return {m.at(0, 3), m.at(1, 3), m.at(2, 3)}; }
 quat inverse(const quat& q) { return {-q.x, -q.y, -q.z, q.w}; }
-float safeAcos(float x) { return std::acos(std::clamp(x, -1.0f, 1.0f)); }
 // world matrices of a node and its subtree after its local pose changed
 void refreshSubtree(const Model& m, const Pose& pose, std::vector<mat4>& world, int root) {
     std::vector<int> stack{root};
@@ -179,35 +178,51 @@ void refreshSubtree(const Model& m, const Pose& pose, std::vector<mat4>& world, 
 
 void solveTwoBoneIK(const Model& m, Pose& pose, std::vector<mat4>& world, int a, int b, int c, float3 target, float3 pole, float weight) {
     const int n = int(pose.size());
-    if (a < 0 || b < 0 || c < 0 || a >= n || b >= n || c >= n || world.size() != pose.size() || weight <= 0) return;
+    auto finite = [](float3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+    if (a < 0 || b < 0 || c < 0 || a >= n || b >= n || c >= n || a == b || b == c || a == c ||
+        m.nodes.size() != pose.size() || world.size() != pose.size() ||
+        m.nodes[size_t(b)].parent != a || m.nodes[size_t(c)].parent != b ||
+        !finite(target) || !finite(pole) || !std::isfinite(weight) || weight <= 0) return;
     const float3 pa = posOf(world[size_t(a)]), pb = posOf(world[size_t(b)]), pc = posOf(world[size_t(c)]);
-    const float lab = length(pb - pa), lcb = length(pb - pc);
-    if (lab < 1e-5f || lcb < 1e-5f) return;
-    const float lat = std::clamp(length(target - pa), 1e-4f, lab + lcb - 1e-4f);
-    // current and wanted interior angles (law of cosines)
-    const float acab0 = safeAcos(dot(normalize(pc - pa), normalize(pb - pa)));
-    const float babc0 = safeAcos(dot(normalize(pa - pb), normalize(pc - pb)));
-    const float acab1 = safeAcos((lcb * lcb - lab * lab - lat * lat) / (-2 * lab * lat));
-    const float babc1 = safeAcos((lat * lat - lab * lab - lcb * lcb) / (-2 * lab * lcb));
-    // keep the chain's current bend plane; the pole only decides it for a straight chain
-    float3 axis0 = cross(pc - pa, pb - pa);
-    if (dot(axis0, axis0) < 1e-8f * lab * lab) axis0 = cross(pc - pa, pole - pa);
-    if (dot(axis0, axis0) < 1e-10f) return;
-    axis0 = normalize(axis0);
-    const quat ga = rotationOf(world[size_t(a)]), gb = rotationOf(world[size_t(b)]);
-    auto local = [](const quat& g, float3 axis) { return inverse(g).rotate(axis); };
-    // 1) bend: knee angle for the target distance (c stays on the a->c ray)
-    pose[size_t(a)].r = qnormalize(pose[size_t(a)].r * quat::axisAngle(local(ga, axis0), (acab1 - acab0) * weight));
-    pose[size_t(b)].r = qnormalize(pose[size_t(b)].r * quat::axisAngle(local(gb, axis0), (babc1 - babc0) * weight));
-    refreshSubtree(m, pose, world, a);
-    // 2) swing the whole chain so a->c points at the target
-    const float3 pc2 = posOf(world[size_t(c)]);
-    float3 axis1 = cross(pc2 - pa, target - pa);
-    if (dot(axis1, axis1) > 1e-10f) {
-        const float ang = safeAcos(dot(normalize(pc2 - pa), normalize(target - pa)));
-        pose[size_t(a)].r = qnormalize(pose[size_t(a)].r * quat::axisAngle(local(rotationOf(world[size_t(a)]), normalize(axis1)), ang * weight));
-        refreshSubtree(m, pose, world, a);
+    const float upper = length(pb-pa), lower = length(pc-pb);
+    if (upper < 1e-5f || lower < 1e-5f) return;
+    float3 direction = target-pa;
+    if (length(direction) < 1e-6f) direction = pc-pa;
+    if (length(direction) < 1e-6f) direction = pb-pa;
+    direction = normalize(direction);
+    const float distance = std::clamp(length(target-pa), std::abs(upper-lower)+1e-6f, upper+lower-1e-6f);
+    float3 bend = pole-pa-direction*dot(pole-pa,direction);
+    if (length(bend) < 1e-6f) bend = pb-pa-direction*dot(pb-pa,direction);
+    if (length(bend) < 1e-6f) {
+        const float3 axis = std::abs(direction.y) < .9f ? float3{0,1,0} : float3{1,0,0};
+        bend = axis-direction*dot(axis,direction);
     }
+    bend = normalize(bend);
+    const float along = (upper*upper-lower*lower+distance*distance)/(2*distance);
+    const float height = std::sqrt(std::max(0.f,upper*upper-along*along));
+    const float3 knee = pa+direction*along+bend*height, end = pa+direction*distance;
+    const quat oldA=pose[size_t(a)].r, oldB=pose[size_t(b)].r;
+    auto between = [](float3 from, float3 to) {
+        from=normalize(from); to=normalize(to);
+        const float d=std::clamp(dot(from,to),-1.f,1.f);
+        if(d < -.99999f) {
+            const float3 axis=std::abs(from.y)<.9f?float3{0,1,0}:float3{1,0,0};
+            return quat::axisAngle(normalize(cross(from,axis)),kPi);
+        }
+        const float3 axis=cross(from,to);
+        return qnormalize(quat{axis.x,axis.y,axis.z,1+d});
+    };
+    auto rotate = [&](int node, quat delta) {
+        const quat global=rotationOf(world[size_t(node)]);
+        pose[size_t(node)].r=qnormalize(pose[size_t(node)].r*inverse(global)*delta*global);
+        refreshSubtree(m,pose,world,node);
+    };
+    rotate(a,between(pb-pa,knee-pa));
+    rotate(b,between(posOf(world[size_t(c)])-posOf(world[size_t(b)]),end-posOf(world[size_t(b)])));
+    weight=std::clamp(weight,0.f,1.f);
+    pose[size_t(a)].r=nlerp(oldA,pose[size_t(a)].r,weight);
+    pose[size_t(b)].r=nlerp(oldB,pose[size_t(b)].r,weight);
+    refreshSubtree(m,pose,world,a);
 }
 
 bool bakeAnimations(gfx::Device& dev, Model& m, float fps, int maxRows) {

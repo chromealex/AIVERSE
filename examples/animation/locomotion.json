@@ -1,0 +1,15 @@
+{
+  "parameters": {"speed":0,"moving":0,"dead":0,"attackWeight":0,"ikWeight":0,"footTarget":[0,0,0],"kneePole":[0,0,1]},
+  "nodes": [
+    {"id":"idle","kind":"clip","clip":"Idle"},
+    {"id":"walk","kind":"clip","clip":"Walk"},
+    {"id":"attack","kind":"clip","clip":"Attack","loop":false},
+    {"id":"walkingAttack","kind":"blend","a":"walk","b":"attack","mask":"Spine","parameter":"attackWeight"},
+    {"id":"grounded","kind":"twoBoneIK","input":"walkingAttack","hip":"LeftHip","knee":"LeftKnee","foot":"LeftFoot","target":"footTarget","pole":"kneePole","parameter":"ikWeight"}
+  ],
+  "initial":"idle",
+  "states":[
+    {"id":"idle","output":"idle","transitions":[{"to":"walk","fade":0.15,"when":[{"parameter":"moving","op":"gt","value":0}]}]},
+    {"id":"walk","output":"grounded","transitions":[{"to":"idle","fade":0.2,"when":[{"parameter":"moving","op":"eq","value":0}]}]}
+  ]
+}

@@ -1,0 +1,5 @@
+-- In an existing view.on_frame callback, using an actual game entity handle:
+-- view.animation(character, {attackWeight = 0.6, ikWeight = 1,
+--     footTarget = {0.2, 0.1, 0}, kneePole = {0, 0, 1}})
+-- Remove all overrides (automatic inputs and JSON defaults resume):
+-- view.animation(character, nil)
