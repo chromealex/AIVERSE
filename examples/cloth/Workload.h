@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/cloth/Cloth.h"
+#include "engine/cloth/TemporalLod.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -17,6 +18,7 @@ struct Workload {
     std::vector<Capsule> capsules;
     Environment env;
     Batch batch;
+    TemporalLod lod;
     int columns;
     explicit Workload(int count,int cells,int workers,int iterations=4,bool share=false,int windGroups=17):batch(workers,share){
         if(count<1||count>2048)throw std::invalid_argument("cloth count must be 1..2048");
@@ -27,6 +29,10 @@ struct Workload {
         capsules.push_back({{1.5f,-1.6f,.3f},{1.5f,-2.1f,.3f},.45f});env.capsules=capsules;
     }
     void step(int tick){env.wind={.6f*std::sin(float(tick)*.023f),0,3+2*std::sin(float(tick)*.017f)};batch.step(cloths,1.0f/60,env);}
+    void step(int tick,Vec camera,bool lodEnabled,std::span<const LodHint> hints={}){
+        env.wind={.6f*std::sin(float(tick)*.023f),0,3+2*std::sin(float(tick)*.017f)};
+        lod.setEnabled(lodEnabled);lod.step(cloths,batch,camera,env,{},hints);
+    }
     float stretch()const{float x=1;for(auto& c:cloths)x=std::max(x,c.maxStretch());return x;}
     bool healthy()const{for(auto& c:cloths)if(!c.healthy())return false;return true;}
 };

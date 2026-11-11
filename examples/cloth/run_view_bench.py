@@ -19,7 +19,7 @@ for count,cells,workers in [(100,16,8),(256,16,8),(512,16,8),(256,24,8),(256,24,
     for repeat in range(a.repeats):
         with tempfile.TemporaryDirectory(prefix='aiverse-cloth-frame-') as tmp:
             output=Path(tmp)/'frame.json'
-            cmd=[str(a.binary),'--objects',str(count),'--cells',str(cells),'--workers',str(workers),'--frames',str(a.frames),'--warmup',str(a.warmup),'--report',str(output),'--share','0']
+            cmd=[str(a.binary),'--objects',str(count),'--cells',str(cells),'--workers',str(workers),'--frames',str(a.frames),'--warmup',str(a.warmup),'--report',str(output),'--share','0','--lod','0','--auto-lod','0']
             result=subprocess.run(cmd,env=env,capture_output=True,text=True,timeout=300)
             if result.returncode or not output.exists():raise RuntimeError(result.stdout+result.stderr)
             row=json.loads(output.read_text())

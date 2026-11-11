@@ -423,6 +423,9 @@
   "zoom": "Distance"
 },
 "clothDemo": {
+  "autoLod": "Use existing automatic LOD",
+  "lod": "Temporal LOD",
+  "lodCounts": "60 / 30 / 15 / 10 Hz: {a} / {b} / {c} / {d}",
   "gust": "Gust on first cloth",
   "sharing": "Share identical simulations",
   "groups": "Solves: {solves}, copies: {copies}",

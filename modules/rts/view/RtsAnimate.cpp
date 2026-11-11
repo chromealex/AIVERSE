@@ -3,6 +3,7 @@
 // and procedural envelopes, clip events, foot IK, animation LOD, corpses that outlive their
 // entity. Presentation only; reads the scene, never the simulation.
 #include "RtsView.h"
+#include "engine/render/AnimationLod.h"
 #include "../RtsModule.h"
 
 #include <algorithm>
@@ -171,13 +172,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     bool updatePose = true;
     if (animLod_ && st.poseValid) {
         const float3 p = viewPos ? *viewPos : o.pos;
-        const float4 c = viewProj_ * float4{p.x, p.y + 0.5f, p.z, 1};
-        const bool onScreen = c.w > 0 && std::fabs(c.x) < c.w * 1.2f && std::fabs(c.y) < c.w * 1.2f;
-        // Projected size works for orthographic cameras too: camera distance is not
-        // a measure of how visible a walking character is in that projection.
-        const float4 top = viewProj_ * float4{p.x, p.y + 1.5f, p.z, 1};
-        const float extent = c.w > 0 && top.w > 0 ? std::fabs(top.y / top.w - c.y / c.w) : 0;
-        const float interval = !onScreen ? 1e9f : extent > 0.012f ? 0.0f : extent > 0.004f ? 1.0f / 30.0f : 0.1f;
+        const float interval = projectedAnimationLod(viewProj_, p + float3{0,0.5f,0}, p + float3{0,1.5f,0}).interval;
         st.lodAccum += dt;
         if (st.lodAccum < interval) updatePose = false;
         else st.lodAccum = 0;

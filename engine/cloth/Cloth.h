@@ -48,6 +48,8 @@ private:
     bool sameState(const Cloth&) const;
     uint64_t fingerprint_=0;
     bool fingerprintValid_=false;
+    std::shared_ptr<const uint8_t> proofOwner_;
+    uint64_t proofId_=0;
     std::shared_ptr<const Grid> grid_;
     Vec origin_,pinOffset_{};
     std::vector<Vec> p_,previous_,velocity_;
@@ -57,7 +59,7 @@ private:
 // Owner thread calls step(); do not mutate cloths until it returns. Web always uses one worker.
 class Batch {
 public:
-    struct Stats {size_t activeObjects=0, simulatedObjects=0, copiedObjects=0;};
+    struct Stats {size_t activeObjects=0, simulatedObjects=0, copiedObjects=0, deferredObjects=0;};
     explicit Batch(int workers=1,bool shareIdentical=false);
     ~Batch();
     Batch(const Batch&)=delete;
@@ -65,11 +67,16 @@ public:
     void step(std::span<Cloth> cloths,float dt,const Environment& environment);
     // Per-object inputs are in each cloth's local coordinates. Empty = use common environment.
     void step(std::span<Cloth> cloths,float dt,const Environment& common,std::span<const Environment> perObject);
+    // One dt per object; zero defers that object without changing its state.
+    void stepScheduled(std::span<Cloth> cloths,std::span<const float> steps,const Environment& common,
+                       std::span<const Environment> perObject={});
     void setSharing(bool enabled);
     Stats stats()const;
     std::span<const size_t> representatives()const; // valid until next step; one source index per object
     int workers()const;
 private:
+    friend class TemporalLod;
+    void run(std::span<Cloth>,float,const Environment&,std::span<const Environment>,std::span<const float>,bool execute=true);
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
