@@ -243,3 +243,46 @@ rebake; these maps must not be reused after geometry/light changes.
 Tests: CPU wall/open-ray and nearest-hit BVH checks, all six cube faces against an
 analytic box, atlas offsets and malformed map rejection. HDR GPU probes 9/10
 check complete blockage versus unchanged open-light radiance on GL and Metal.
+
+
+### Static single diffuse bounce and daylight refinement
+
+`reference_refinement.py SOURCE --mode day|night --output OUTPUT` creates a separate
+recipe beside SOURCE and refuses to overwrite existing files. Use the day-lit recipe
+for day mode and the night-shadowed recipe for night mode. Day changes sun direction,
+exposure, saturation, haze and a small camera target adjustment. It is a visual study
+of the supplied reference, not a recovered Unreal lighting setup: the foreground vault
+is still cooler and indirect light/shadow softness differ.
+
+Night opts into `staticPointBounce: {"samples":16,"radius":8,"strength":1.5,"spacing":2}`.
+This requires static point shadows; low skips the entire bake. Deterministic spherical
+rays find illuminated opaque surfaces. Their averaged imported linear diffuse albedo
+(including metallic attenuation) colors virtual emitters; BVH visibility then bakes
+these into a first-order directional irradiance field. Arbitrary Shader Graph outputs
+and per-hit texture UVs are not evaluated by the CPU bake.
+
+The GPU interpolates eight nearby probes with coarse 4x4 cube visibility and plane
+correction, using the existing light atlas. No virtual-emitter loop, random temporal
+sampling or additional image blur runs per frame. Screen-space diffuse gather is
+disabled for this recipe to avoid double counting; TAA and SSR remain. The field is
+static, approximate and low frequency: thin occluders, probe boundaries and high
+frequency lighting are not guaranteed accurate. No sun bounce, transmission, multiple
+bounces, dynamic rebaking or Lumen-equivalent GI. Moving lights/geometry invalidate it.
+
+Limits: 4..32 source rays, radius (0,20], strength [0,2], spacing [.5,4], at most
+20,000 probes; each probe adds 100 RGBA32F texels within the shared 64 MiB budget.
+The current scene has 156 virtual sources and 6,256 probes (~9.55 MiB payload).
+It retains 14 direct lights. The measured extra bake was ~0.55 s on the test Mac,
+in addition to ~5.53 s for BVH/direct shadows; no disk cache yet.
+
+CPU checks cover colored bounce, orientation, deterministic repetition, black/empty
+controls, field packing and malformed visibility. Both macOS GL and Metal compiled
+22 shader variants and passed 15 HDR probes including visible/occluded diffuse fields.
+Android, Windows and web have not been tested. Screenshots are inspected on a fixed
+reference camera; this does not establish motion stability or equal quality to Unreal.
+
+The initial fixed-camera captures measured median GPU time of 21.52 ms on Metal
+and 14.72 ms on desktop GL, using different presentation paths. These are diagnostic
+single runs, not a controlled backend ranking or a speedup claim. Keep bounce opt-in;
+it adds significant shader work relative to direct shadows alone. The Low path
+retains the previous inexpensive lighting and performs no diffuse bake.

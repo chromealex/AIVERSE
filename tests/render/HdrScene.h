@@ -137,8 +137,17 @@ struct HdrScene {
                     StaticShadowGeometry geometry;float x=probeIndex==9?0:4;
                     geometry.triangles={{{x-1,-1,.5f},{x+1,-1,.5f},{x+1,1,.5f}},{{x-1,-1,.5f},{x+1,1,.5f},{x-1,1,.5f}}};
                     geometry.build();shadows.push_back(geometry.bake(light.pos,light.radius,32));
+                    if(probeIndex>=11)shadows[0].emitterNormal={0,0,probeIndex==11?1.0f:-1.0f};
                 }
-                if(!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows)){failed=true;return;}}
+                StaticDiffuseField diffuse;
+                if(probeIndex>=13){
+                    light.pos={0,0,.2f};light.radius=.5f;light.intensity=0;
+                    diffuse.origin={-1.6f,-1.6f,-1.6f};diffuse.spacing=1;diffuse.nx=diffuse.ny=diffuse.nz=3;
+                    diffuse.probes.resize(27);
+                    for(auto& probe:diffuse.probes){for(auto& coefficient:probe.irradiance)coefficient={.2f,0,0,0};
+                        probe.visibility.resolution=4;probe.visibility.distances.assign(96,probeIndex==13?5.0f:0.0f);probe.visibility.normals.resize(96);}
+                }
+                if(!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows,diffuse.probes.empty()?nullptr:&diffuse)){failed=true;return;}}
         }
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
@@ -156,7 +165,10 @@ struct HdrScene {
             if(probeIndex==1) expected=(2.51f+0.03f)/(2.43f+0.59f+0.14f);
             if(probeIndex==6) expected=(1.5f*(2.51f*1.5f+0.03f))/(1.5f*(2.43f*1.5f+0.59f)+0.14f);
             if(probeIndex==7||probeIndex==10)expected=0.28125f*(1+0.04f*0.64f); // N.L + rough specular at d=1, radius=2
-            if(probeIndex==8||probeIndex==9)expected=0; // same XY, outside the 3D radius
+            if(probeIndex==8||probeIndex==9||probeIndex==11)expected=0;
+            if(probeIndex==12)expected=.28125f; // hemisphere facing receiver, diffuse only // same XY, outside the 3D radius
+            if(probeIndex==13)expected=.2f;
+            if(probeIndex==14)expected=0;
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
                 if(cw<=0||ch<=0||px.size()!=size_t(cw*ch*4)) {failed=true;return;}
@@ -166,7 +178,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==11)captured=true;
+                if(probeIndex==15)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }

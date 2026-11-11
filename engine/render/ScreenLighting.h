@@ -7,6 +7,7 @@ public:
     bool init(gfx::Device& dev, PostFx& post);
     void shutdown();
     void setEnabled(bool on) { if (enabled_ != on) reset(); enabled_ = on; }
+    void setDiffuseBounceEnabled(bool on) { if(diffuseBounce_!=on){diffuseBounce_=on;reset();} }
     void reset() { valid_ = false; sequence_ = 0; }
     RTSCamera jittered(RTSCamera camera, int w, int h);
     bool active() const override { return post_ && post_->active(); }
@@ -14,6 +15,7 @@ public:
     gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) override;
     void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) override;
     bool running() const { return running_; }
+    int passCount() const { return running_?(diffuseBounce_?3:2):0; }
     const std::string& lastError() const { return error_; }
 private:
     void releaseTargets();
@@ -25,6 +27,7 @@ private:
     gfx::ShaderHandle shaders_[3];
     gfx::PipelineHandle pipes_[3];
     int w_ = 0, h_ = 0, current_ = 0, sequence_ = 0;
+    bool diffuseBounce_ = true;
     bool enabled_ = false, valid_ = false, running_ = false;
     mat4 previous_;
     float3 previousEye_;

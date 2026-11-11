@@ -91,7 +91,8 @@ void ScreenLighting::resolve(gfx::Device& d,const gfx::PassDesc& out,const PostF
             d.setTexture(0,source);d.setTexture(1,scene_.depthTarget);d.setTexture(2,history_[1-current_]);
             d.setVertexBuffer(triangle_);d.draw(3);d.endPass();
         };
-        draw(0,bounce_,scene_.colorTarget);draw(1,history_[current_],bounce_);draw(2,scene_.colorTarget,history_[current_]);
+        if(diffuseBounce_)draw(0,bounce_,scene_.colorTarget);
+        draw(1,history_[current_],diffuseBounce_?bounce_:scene_.colorTarget);draw(2,scene_.colorTarget,history_[current_]);
         previous_=f.viewProj;previousEye_=f.cameraPos;valid_=true;current_=1-current_;
     }
     post_->resolve(d,out,f);

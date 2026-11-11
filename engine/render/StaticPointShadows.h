@@ -10,26 +10,31 @@ namespace aiverse::render {
 struct StaticPointShadow {
     int resolution=0;
     float bias=.025f;
+    float3 emitterNormal{}; // Nonzero: diffuse-only hemisphere emitter for a baked bounce.
     std::vector<float> distances;
     std::vector<float3> normals; // Hit-plane normals allow receiver-plane depth correction.
 };
 // Load-time acceleration structure for immutable opaque geometry. Two-sided occlusion.
 class StaticShadowGeometry {
 public:
-    struct Triangle { float3 a,b,c; };
+    struct Triangle { float3 a,b,c; uint32_t surface=0; };
     std::vector<Triangle> triangles;
+    std::vector<float3> albedos;
     static float3 cubeDirection(int face,float u,float v) {
         switch(face){case 0:return normalize(float3{1,v,-u});case 1:return normalize(float3{-1,v,u});
         case 2:return normalize(float3{u,1,-v});case 3:return normalize(float3{u,-1,v});
         case 4:return normalize(float3{u,v,1});default:return normalize(float3{-u,v,-1});}
     }
     void build(){nodes_.clear();if(!triangles.empty())split(0,uint32_t(triangles.size()));}
-    float distance(float3 origin,float3 direction,float limit,float3* normal=nullptr) const {
-        float3 n{};float hit=nodes_.empty()?limit:trace(0,origin,direction,limit,n);
-        if(normal)*normal=n;return hit;
+    float distance(float3 origin,float3 direction,float limit,float3* normal=nullptr,float3* albedo=nullptr) const {
+        float3 n{};uint32_t surface=~0u;
+        float hit=nodes_.empty()?limit:trace(0,origin,direction,limit,n,surface);
+        if(normal)*normal=n;
+        if(albedo)*albedo=surface<albedos.size()?albedos[surface]:float3{};
+        return hit;
     }
     StaticPointShadow bake(float3 origin,float radius,int resolution) const {
-        if(resolution<16||resolution>256||!std::isfinite(radius)||radius<=0)throw std::runtime_error("invalid point shadow bake");
+        if(resolution<4||resolution>256||!std::isfinite(radius)||radius<=0)throw std::runtime_error("invalid point shadow bake");
         StaticPointShadow out;out.resolution=resolution;out.distances.reserve(size_t(6*resolution*resolution));
         out.normals.reserve(size_t(6*resolution*resolution));
         for(int face=0;face<6;++face)for(int y=0;y<resolution;++y)for(int x=0;x<resolution;++x){
@@ -63,14 +68,14 @@ private:
             float x=(mn-p)/v,y=(mx-p)/v;if(x>y)std::swap(x,y);lo=std::max(lo,x);hi=std::min(hi,y);if(lo>hi)return false;}
         return true;
     }
-    float trace(uint32_t index,float3 o,float3 d,float limit,float3& normal) const {
+    float trace(uint32_t index,float3 o,float3 d,float limit,float3& normal,uint32_t& surface) const {
         const auto& n=nodes_[index];if(!hitBox(n,o,d,limit))return limit;
-        if(!n.count){limit=trace(n.left,o,d,limit,normal);return trace(n.right,o,d,limit,normal);}
+        if(!n.count){limit=trace(n.left,o,d,limit,normal,surface);return trace(n.right,o,d,limit,normal,surface);}
         for(uint32_t i=n.begin;i<n.begin+n.count;++i){const auto& t=triangles[i];auto e1=t.b-t.a,e2=t.c-t.a,p=cross(d,e2);float det=dot(e1,p);
             if(std::abs(det)<1e-10f)continue;
             float inv=1/det;auto s=o-t.a;float u=dot(s,p)*inv;if(u<0||u>1)continue;
             auto q=cross(s,e1);float v=dot(d,q)*inv;if(v<0||u+v>1)continue;
-            float hit=dot(e2,q)*inv;if(hit>.001f&&hit<limit){limit=hit;normal=normalize(cross(e1,e2));}
+            float hit=dot(e2,q)*inv;if(hit>.001f&&hit<limit){limit=hit;normal=normalize(cross(e1,e2));surface=t.surface;}
         }
         return limit;
     }

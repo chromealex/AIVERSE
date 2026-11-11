@@ -4,6 +4,7 @@
 #include "engine/render/PostFx.h"
 #include "engine/render/ScreenLighting.h"
 #include "SceneAssets.h"
+#include "engine/render/StaticPointBounce.h"
 #include "CameraTour.h"
 #include <chrono>
 #include <fstream>
@@ -127,7 +128,10 @@ struct Bench {
             const bool bakePointShadows=config.getBool("staticPointShadows",false)&&options.profile!="low";
             if(bakePointShadows)appendShadowGeometry(additions.shadowGeometry,*model);
             additions.load(d,config,warn,notes,bakePointShadows);
+            const size_t primaryLightCount=additions.lights.size();
+            if(config.has("staticPointBounce")&&!bakePointShadows&&options.profile!="low")throw std::runtime_error("staticPointBounce requires static point shadows");
             std::vector<StaticPointShadow> pointShadows;
+            StaticDiffuseField diffuseField;
             if(bakePointShadows){
                 if(!config.getBool("staticPointLightGrid",false)||additions.lights.size()>32)throw std::runtime_error("static point shadows require a grid and at most 32 lights");
                 const double requested=config["pointShadowResolution"].toDouble(128);
@@ -139,12 +143,25 @@ struct Bench {
                 additions.shadowGeometry.build();
                 for(const auto& light:additions.lights)pointShadows.push_back(additions.shadowGeometry.bake(light.pos,light.radius,resolution));
                 report.set("staticPointShadowBakeMs",Json::number(ms(shadowStart,Clock::now())));
+                if(config.has("staticPointBounce")){
+                    const auto& settings=config["staticPointBounce"];
+                    const double samples=settings["samples"].toDouble(16);
+                    if(!std::isfinite(samples)||samples<4||samples>32||samples!=std::floor(samples))throw std::runtime_error("bounce samples must be an integer in 4..32");
+                    const auto bounceStart=Clock::now();
+                    auto bounce=bakePointBounce(additions.shadowGeometry,additions.lights,int(samples),float(settings["radius"].toDouble(5)),float(settings["strength"].toDouble(1)));
+                    diffuseField=bakeDiffuseField(additions.shadowGeometry,additions.lights,bounce,float(settings["spacing"].toDouble(2)));
+                    report.set("staticDiffuseProbes",Json::number(int64_t(diffuseField.probes.size())));
+                    report.set("staticBounceSources",Json::number(int64_t(bounce.size())));
+                    report.set("staticBounceBakeMs",Json::number(ms(bounceStart,Clock::now())));
+                    std::fprintf(stderr,"Static bounce: %zu surface emitters\n",bounce.size());
+                }
                 report.set("staticPointShadowMaps",Json::number(int64_t(pointShadows.size())));
             }
             additions.shadowGeometry=StaticShadowGeometry{};
-            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2)),pointShadows.empty()?nullptr:&pointShadows))throw std::runtime_error("static light grid upload failed");
+            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2)),pointShadows.empty()?nullptr:&pointShadows,diffuseField.probes.empty()?nullptr:&diffuseField))throw std::runtime_error("static light grid upload failed");
             report.set("additions",additions.audit);
-            report.set("sourcePointLights",Json::number(int64_t(additions.lights.size())));
+            report.set("sourcePointLights",Json::number(int64_t(primaryLightCount)));
+            report.set("totalGridLights",Json::number(int64_t(additions.lights.size())));
             report.set("assetWarnings",warn);report.set("importNotes",notes);
             report.set("vertices",Json::number(int64_t(model->vertices.size())));report.set("indices",Json::number(int64_t(model->indices.size())));
             uint64_t triangles=0;
@@ -173,6 +190,7 @@ struct Bench {
             if(options.profile=="hdr"||options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
             if(options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25}]})"),Json());
             if(options.profile!="low"&&config.has("postfx"))s=parsePostFx(config["postfx"],Json());
+            screen.setDiffuseBounceEnabled(!(bakePointShadows&&config.has("staticPointBounce")));
             screen.setEnabled(options.profile=="full");
             post.setSettings(s);post.setQuality(options.profile=="low"?PostFxQuality::Low:PostFxQuality::High);
             report.set("schema",Json::number(int64_t(1)));report.set("engine",Json::string("AIVERSE"));
@@ -236,7 +254,7 @@ struct Bench {
             settings.set("shadowPcfSamples",Json::number(int64_t(options.profile=="low"?4:16)));
             settings.set("materials",Json::string(options.profile=="low"?"medium":"high"));
             settings.set("bloomFxaa",Json::fromBool(options.profile=="hdr"));
-            settings.set("gi",Json::string(screen.running()?"screen-space diffuse gather (16 samples)":"hemisphere ambient only"));
+            settings.set("gi",Json::string(report.has("staticBounceSources")?"baked single diffuse bounce":screen.running()?"screen-space diffuse gather (16 samples)":"hemisphere ambient only"));
             settings.set("taa",Json::fromBool(screen.running()));
             settings.set("bloom",Json::fromBool(options.profile=="hdr"||options.profile=="full"));
             settings.set("animationStepSeconds",Json::number(1.0/60.0));
@@ -286,7 +304,7 @@ struct Bench {
             r.set("culledModelNodes",Json::number(int64_t(stats.culledNodes)));
             r.set("instancedModelDraws",Json::number(int64_t(stats.instancedDraws)));
             Json lods=Json::array();for(auto n:stats.lodNodes)lods.push(Json::number(int64_t(n)));r.set("modelLodNodes",lods);
-            r.set("postPasses",Json::number(int64_t(post.stats().passes+(screen.running()?3:0))));
+            r.set("postPasses",Json::number(int64_t(post.stats().passes+screen.passCount())));
             if(timed)tags.emplace(thisTag,rows.size());
             rows.push(std::move(r));
         }

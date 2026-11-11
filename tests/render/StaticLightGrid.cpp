@@ -1,4 +1,5 @@
 #include "engine/render/Lights.h"
+#include "engine/render/StaticPointBounce.h"
 #include <cassert>
 #include <iostream>
 using namespace aiverse::render;
@@ -52,6 +53,30 @@ int main(){
         float expected=2/std::max({std::abs(ray.x),std::abs(ray.y),std::abs(ray.z)});
         assert(std::abs(roomMap.distances[size_t(face*256+y*16+x)]-expected)<1e-4f);
     }
+    StaticShadowGeometry redWall;redWall.albedos={{.5f,0,0}};
+    redWall.triangles={{{-10,-10,2},{10,-10,2},{10,10,2}},{{-10,-10,2},{10,10,2},{-10,10,2}}};redWall.build();
+    PointLight white;white.pos={0,0,0};white.color={1,1,1};white.radius=5;
+    auto bounce=bakePointBounce(redWall,{white},16,4,1);assert(!bounce.empty());
+    for(const auto& source:bounce){assert(source.light.color.x>.99f&&source.light.color.y==0&&source.light.color.z==0);assert(source.light.pos.z<2&&source.normal.z<-.99f);assert(source.light.intensity>0);}
+    auto repeated=bakePointBounce(redWall,{white},16,4,1);assert(repeated.size()==bounce.size());
+    for(size_t i=0;i<bounce.size();++i)assert(repeated[i].light.pos.x==bounce[i].light.pos.x&&repeated[i].light.intensity==bounce[i].light.intensity);
+    assert(bakePointBounce(redWall,{white},16,4,0).empty());
+    StaticShadowGeometry empty;empty.build();assert(bakePointBounce(empty,{white}).empty());
+    redWall.albedos[0]={0,0,0};assert(bakePointBounce(redWall,{white}).empty());
+    maps={shadow};maps[0].emitterNormal={0,0,-1};g.build(one,2,&maps);
+    for(int cell=0;cell<int(g.size.x*g.size.y*g.size.z);++cell)if(g.texels[size_t(cell)].y>0){
+        auto meta=g.texels[size_t(int(g.texels[size_t(int(g.texels[size_t(cell)].x)+1)].w))];
+        assert(meta.z==1&&g.texels[size_t(int(meta.w))].z==-1);break;
+    }
+    auto field=bakeDiffuseField(redWall,{white},bounce,2);
+    assert(!field.probes.empty()&&field.probes.size()==size_t(field.nx*field.ny*field.nz));
+    bool litProbe=false;for(const auto& probe:field.probes)litProbe|=probe.irradiance[0].x>0;
+    assert(litProbe);g.build(std::vector<PointLight>{white},2,nullptr,&field);
+    assert(g.texels[0].z>0);int probeOffset=int(g.texels[0].z);
+    assert(g.texels[size_t(probeOffset+3)].x==4);
+    field.probes[0].visibility.distances.clear();rejected=false;
+    try{g.build(std::vector<PointLight>{white},2,nullptr,&field);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    std::cout<<"one-bounce color transfer, orientation, determinism and black/empty controls PASS\n";
     std::cout<<"static point shadow BVH, cube faces, atlas layout and validation PASS\n";
     std::cout<<"static light grid conservative coverage and validation PASS\n";
 }
