@@ -85,7 +85,8 @@ private:
     bool check(const Json& r){error_=r.has("error");message_=r.getStr("error");return !error_;}
     bool save(Editor& ed){Json p=Json::object();p.set("name",Json::string(name_));p.set("graph",doc_);if(!check(ed.ws().call("shader_graph_set",p)))return false;saved_=doc_;dirty_=false;drafts_.erase(project_);return true;}
     void add(const render::graph::Op& op) {
-        if(doc_["nodes"].size()>=128)return;remember();Json n=Json::object();
+        if(doc_["nodes"].size()>=128)return;
+        remember();Json n=Json::object();
         std::string id;int serial=1;do {id="node"+std::to_string(serial++);}while(std::any_of(doc_["nodes"].items().begin(),doc_["nodes"].items().end(),[&](auto& x){return x.getStr("id")==id;}));
         n.set("id",Json::string(id));n.set("op",Json::string(op.id));Json ins=Json::array();for(int i=0;i<op.inputs;++i)ins.push(doc_["nodes"][0]["id"]);n.set("inputs",ins);
         if(std::string(op.id)=="constant")n.set("value",Json::parse("[0.2,0.6,1,1]"));
@@ -128,7 +129,8 @@ private:
             if(doc_.getStr("domain")!="material"&&std::string(key)!="color")continue;
             if(ImGui::BeginCombo(key,doc_["outputs"][key].str("-").c_str())) {
                 if(std::string(key)!="color"&&ImGui::Selectable("-")){remember();doc_.find("outputs")->erase(key);}
-                for(auto& n:doc_["nodes"].items())if(ImGui::Selectable(n.getStr("id").c_str())){remember();doc_.find("outputs")->set(key,n["id"]);}ImGui::EndCombo();
+                for(auto& n:doc_["nodes"].items())if(ImGui::Selectable(n.getStr("id").c_str())){remember();doc_.find("outputs")->set(key,n["id"]);}
+                ImGui::EndCombo();
             }
         }
     }

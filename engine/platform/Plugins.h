@@ -19,6 +19,7 @@
 //
 // Standard plugin protocols ("store", "ads") and their C++ front-ends: engine/services.
 #pragma once
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>

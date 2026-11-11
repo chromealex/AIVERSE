@@ -39,6 +39,7 @@
 #define ROBIN_HOOD_VERSION_PATCH 0 // for backwards-compatible bug fixes
 
 #include <limits>
+#include <cstdint>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
