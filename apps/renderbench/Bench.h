@@ -4,6 +4,7 @@
 #include "engine/render/PostFx.h"
 #include "engine/render/ScreenLighting.h"
 #include "SceneAssets.h"
+#include "CameraTour.h"
 #include <chrono>
 #include <fstream>
 #include <filesystem>
@@ -18,6 +19,7 @@ inline double ms(Clock::time_point a, Clock::time_point b) { return std::chrono:
 struct Options {
     std::string scene, output="benchmark.json", profile="baseline", capture;
     int warmup=90, samples=240, camera=-1;
+    std::string tourPath; float tourStart=0;
     std::string captureSequence; float motionYaw=0, freezeTime=-1, previewSeconds=0, motionSpeed=0.018f;
     static Options parse(int argc,char** argv) {
         Options o;
@@ -25,12 +27,16 @@ struct Options {
             std::string k=argv[i];if(i+1>=argc)throw std::runtime_error("missing option value: "+k);
             std::string v=argv[++i];
             if(k=="--scene")o.scene=v;else if(k=="--output")o.output=v;else if(k=="--profile")o.profile=v;
+            else if(k=="--tour")o.tourPath=v;else if(k=="--tour-start")o.tourStart=std::stof(v);
             else if(k=="--capture")o.capture=v;else if(k=="--warmup")o.warmup=std::stoi(v);
             else if(k=="--preview-seconds")o.previewSeconds=std::stof(v);else if(k=="--motion-speed")o.motionSpeed=std::stof(v);
             else if(k=="--sequence")o.captureSequence=v;else if(k=="--motion-yaw")o.motionYaw=std::stof(v);else if(k=="--freeze-time")o.freezeTime=std::stof(v);
             else if(k=="--samples")o.samples=std::stoi(v);else if(k=="--camera")o.camera=std::stoi(v);
             else throw std::runtime_error("unknown option: "+k);
         }
+        if(!o.tourPath.empty())o.camera=0;
+        if(!std::isfinite(o.tourStart)||o.tourStart<0)throw std::runtime_error("invalid tour start");
+        if(!o.tourPath.empty()&&(!o.captureSequence.empty()||o.motionYaw!=0))throw std::runtime_error("tour cannot use frame-step validation motion or sequence capture");
         if(o.scene.empty()||o.warmup<1||o.samples<30||o.samples>100000||o.warmup>10000||o.camera < -1)throw std::runtime_error("require --scene; warmup 1..10000; samples 30..100000; camera >= 0 (or omit)");
         if(o.profile!="baseline"&&o.profile!="hdr"&&o.profile!="low"&&o.profile!="full")throw std::runtime_error("profile: baseline, hdr, full or low");
         if(!std::isfinite(o.motionYaw)||!std::isfinite(o.freezeTime)||std::abs(o.motionYaw)>0.1f||o.freezeTime < -1)throw std::runtime_error("invalid validation motion/time");
@@ -48,6 +54,7 @@ struct Bench {
     PostFx post;
     ScreenLighting screen;
     SceneAssets additions;
+    CameraTour tour; int tourShot=-1;
     std::unique_ptr<Model> model;
     std::vector<RTSCamera> cameras;
     std::vector<std::string> cameraNames;
@@ -62,6 +69,12 @@ struct Bench {
     Clock::time_point lastProgress=Clock::now(), previewStart;
     explicit Bench(Options o):options(std::move(o)) {
         config=Json::parseFile(options.scene);
+        if(!options.tourPath.empty()){
+            auto track=Json::parseFile(options.tourPath);tour.load(track);
+            if(options.tourStart>=tour.duration)throw std::runtime_error("tour start is past the end");
+            options.previewSeconds=float(options.previewSeconds>0?std::min(double(options.previewSeconds),tour.duration-options.tourStart):tour.duration-options.tourStart);
+            report.set("cameraTour",track);
+        }
         width=int(config.getInt("width",1280));height=int(config.getInt("height",720));
         if(width<64||height<64||width>8192||height>8192)throw std::runtime_error("invalid resolution");
         content.contentRoot=std::filesystem::absolute(options.scene).parent_path().string();
@@ -182,9 +195,14 @@ struct Bench {
         const double previewTime=previewStart==Clock::time_point{}?0.0:std::clamp(ms(previewStart,Clock::now())/1000.0,0.0,double(options.previewSeconds));
         auto camera=cameras[size_t(ci)];
         camera.yaw+=options.previewSeconds>0?options.motionSpeed*float(previewTime):options.motionYaw*float(frame);
+        if(!tour.shots.empty()){
+            int shot;auto pose=tour.sample(options.tourStart+previewTime,shot);
+            pose.zNear=camera.zNear;pose.zFar=camera.zFar;camera=pose;
+            if(shot!=tourShot){screen.reset();additions.selectLights(camera.eye());tourShot=shot;}
+        }
         renderer.beginScene(screen.jittered(camera,width,height),width,height);
         ModelDraw md;md.model=model.get();renderer.drawModel(md);
-        additions.draw(renderer,options.freezeTime>=0?options.freezeTime:options.previewSeconds>0?float(previewTime):float(view<int(cameras.size())?frame:options.warmup+options.samples-1)/60.0f,options.profile!="low");
+        additions.draw(renderer,options.freezeTime>=0?options.freezeTime:options.previewSeconds>0?float(previewTime+options.tourStart):float(view<int(cameras.size())?frame:options.warmup+options.samples-1)/60.0f,options.profile!="low");
         auto pass=output;pass.clearColor[0]=.1f;pass.clearColor[1]=.15f;pass.clearColor[2]=.23f;
         renderer.render(pass,options.profile=="full"?static_cast<PostProcess*>(&screen):static_cast<PostProcess*>(&post));renderer.resolvePostFx();
         if(!report.has("renderSettings")) {
@@ -205,6 +223,7 @@ struct Bench {
             settings.set("validationMotionYawPerFrame",Json::number(double(options.motionYaw),8));
             settings.set("validationFreezeTime",Json::number(double(options.freezeTime)));
             settings.set("validationSequenceCapture",Json::fromBool(!options.captureSequence.empty()));
+            settings.set("tourStart",Json::number(double(options.tourStart)));
             settings.set("previewSeconds",Json::number(double(options.previewSeconds)));
             settings.set("previewMotionRadiansPerSecond",Json::number(double(options.motionSpeed)));
             report.set("renderSettings",settings);
