@@ -158,3 +158,23 @@ High shadows. По умолчанию отключено, существующи
 проб на GL и Metal (включая ожидаемую яркость и источник вне радиуса в 3D).
 Полная ночная сцена проверяется с `--camera 2 --freeze-time 2 --warmup 30 --samples 30`.
 Windows/Android/Web для нового пути не проверены.
+
+## Shader Graph materials
+
+`python3 tools/renderbench/sponza_materials.py /path/to/scene-candle-day.json`
+creates `scene-candle-day-materials.json` and editable `shaders-sponza/*.json`.
+Repeat for `scene-candle-night.json`. Original scenes and model files are unchanged.
+Existing edited graphs and existing output scene recipes are not overwritten.
+
+The recipe binds library-derived graphs to stone, curtains, knight metal/cloth,
+wax and flame. Textured variants preserve imported base/normal/metal/roughness
+maps and alpha; their graph only adjusts color (stone gets a mild warm tint).
+They intentionally do not substitute flat gallery colors for texture detail.
+Wax uses the library surface parameters with the original wax color; flame uses
+HDR emission. This does not add cloth sheen, wax SSS or point-light occlusion.
+
+Benchmark recipes accept `materialGraphs: {"exact material name": "graph.json"}`
+at the root for the main model and inside each `models` entry for additions.
+Files are read through the content API, validated as material graphs and cached
+by path. Unknown material names and missing/invalid graphs fail loading.
+GL and Metal use the existing shared Shader Graph compiler/render integration.

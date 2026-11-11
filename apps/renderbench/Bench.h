@@ -120,6 +120,7 @@ struct Bench {
                 const bool replaced=w.ends_with("cameras are ignored")||w.ends_with("cameras and lights are ignored")||w.ends_with("extension KHR_lights_punctual is ignored")||(unusedSecondaryUv&&w.ends_with("TEXCOORD_1 is ignored"));
                 (replaced?notes:warn).push(Json::string(w));std::fprintf(stderr,"asset %s: %s\n",replaced?"note":"warning",w.c_str());
             }
+            additions.applyGraphs(*model,config["materialGraphs"]);
             additions.load(d,config,warn,notes);
             if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2))))throw std::runtime_error("static light grid upload failed");
             report.set("additions",additions.audit);

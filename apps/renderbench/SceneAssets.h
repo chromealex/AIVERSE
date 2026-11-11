@@ -2,6 +2,8 @@
 #include "engine/render/Animation.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/data/Json.h"
+#include "engine/render/graph/ShaderGraph.h"
+#include <map>
 #include <filesystem>
 #include <stdexcept>
 
@@ -29,6 +31,22 @@ struct SceneAssets {
         }
         if(j.isArray())for(const auto& value:j.items())if(secondaryUv(value))return true;
         return false;
+    }
+    std::map<std::string,std::shared_ptr<const graph::Program>> materialGraphs;
+    void applyGraphs(Model& model,const Json& bindings) {
+        for(const auto& [name,file]:bindings.members()) {
+            auto it=std::find_if(model.materials.begin(),model.materials.end(),[&](const Material& m){return m.name==name;});
+            if(it==model.materials.end())throw std::runtime_error("unknown graph material: "+name);
+            const auto path=file.str();
+            auto& program=materialGraphs[path];
+            if(!program){
+                std::string bytes;
+                if(!platform::readContentFile(path,bytes))throw std::runtime_error("cannot read material graph: "+path);
+                program=std::make_shared<graph::Program>(graph::compile(Json::parse(bytes),"material"));
+            }
+            it->shaderGraph=program;
+            std::fprintf(stderr,"material graph: %s <- %s\n",name.c_str(),path.c_str());
+        }
     }
     void load(gfx::Device& d,const Json& config,Json& warnings,Json& notes) {
         for(const auto& entry:config["models"].items()) {
@@ -69,6 +87,7 @@ struct SceneAssets {
                 if(override.has("normalTexture"))m.normalTex=image("normalTexture",false);
                 if(override.has("roughnessTexture")){m.mrTex=image("roughnessTexture",true);m.roughness=1;}
             }
+            applyGraphs(*a.model,entry["materialGraphs"]);
             std::string animation=entry.getStr("animation");
             if(!animation.empty()) {
                 std::vector<std::string> animProblems;
