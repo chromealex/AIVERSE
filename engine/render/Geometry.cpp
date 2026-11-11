@@ -139,7 +139,8 @@ void GeometryOcclusion::triangle(const mat4& clip,const std::array<float3,3>& v,
     for(int i=0;i<3;++i){auto q=clip*float4{v[i].x,v[i].y,v[i].z,1};
         if(!finite(q)||q.w<=1e-6f||q.z<(zeroToOne_?0:-q.w)||q.z>q.w)return;
         p[i]={(q.x/q.w*.5f+.5f)*kWidth,(q.y/q.w*.5f+.5f)*kHeight,q.z/q.w};
-        if(!std::isfinite(p[i].x)||!std::isfinite(p[i].y)||!std::isfinite(p[i].z))return;z=std::max(z,p[i].z);}
+        if(!std::isfinite(p[i].x)||!std::isfinite(p[i].y)||!std::isfinite(p[i].z))return;
+        z=std::max(z,p[i].z);}
     auto edge=[](float3 a,float3 b,float x,float y){return (b.x-a.x)*(y-a.y)-(b.y-a.y)*(x-a.x);};
     float area=edge(p[0],p[1],p[2].x,p[2].y);if(!std::isfinite(area)||std::fabs(area)<1e-6f)return;
     if(area<0){if(!doubleSided)return;std::swap(p[1],p[2]);}
