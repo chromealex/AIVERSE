@@ -1,11 +1,23 @@
 // Included in RtsViewScript.cpp's binding namespace: same sandbox and error discipline.
 // Lua graph assets are data. Native callbacks retain a revocable VM token across hot reload.
 bool animationJson(lua_State* L,int index,Json& out,int depth,size_t& budget) {
-    if(depth>24||budget==0||!lua_checkstack(L,8))return false;--budget;index=lua_absindex(L,index);
-    switch(lua_type(L,index)){
-    case LUA_TNIL:out=Json{};return true;
-    case LUA_TBOOLEAN:out=Json::fromBool(lua_toboolean(L,index));return true;
-    case LUA_TNUMBER:{double n=toDouble(L,index);if(!std::isfinite(n)||std::abs(n)>1000000)return false;out=Json::number(n,6);return true;}
+  if (depth > 24 || budget == 0 || !lua_checkstack(L, 8))
+    return false;
+  --budget;
+  index = lua_absindex(L, index);
+  switch (lua_type(L, index)) {
+  case LUA_TNIL:
+    out = Json{};
+    return true;
+  case LUA_TBOOLEAN:
+    out = Json::fromBool(lua_toboolean(L, index));
+    return true;
+  case LUA_TNUMBER: {
+    double n = toDouble(L, index);
+    if (!std::isfinite(n) || std::abs(n) > 1000000)
+      return false;
+    out = Json::number(n, 6);
+    return true;}
     case LUA_TSTRING:{size_t len=0;const char* s=lua_tolstring(L,index,&len);if(len>4096)return false;out=Json::string(std::string(s,len));return true;}
     case LUA_TTABLE:{
         size_t n=lua_rawlen(L,index);if(n>1024)return false;out=n?Json::array():Json::object();size_t count=0;
@@ -30,7 +42,16 @@ void animationPushJson(lua_State* L,const Json& j){
 void animationPushVector(lua_State* L,const float* values,int size){lua_createtable(L,size,0);for(int i=0;i<size;++i){lua_pushnumber(L,values[i]);lua_rawseti(L,-2,i+1);}}
 bool animationReadVector(lua_State* L,int table,const char* key,float* values,int size){
     lua_pushstring(L,key);lua_rawget(L,table);bool ok=lua_istable(L,-1)&&lua_rawlen(L,-1)==size_t(size);
-    if(ok)for(int i=0;i<size;++i){lua_rawgeti(L,-1,i+1);double n=toDouble(L,-1);ok=ok&&lua_isnumber(L,-1)&&std::isfinite(n)&&std::abs(n)<=1000000;values[i]=float(n);lua_pop(L,1);}lua_pop(L,1);return ok;
+    if (ok)
+      for (int i = 0; i < size; ++i) {
+        lua_rawgeti(L, -1, i + 1);
+        double n = toDouble(L, -1);
+        ok = ok && lua_isnumber(L, -1) && std::isfinite(n) && std::abs(n) <= 1000000;
+        values[i] = float(n);
+        lua_pop(L, 1);
+      }
+    lua_pop(L, 1);
+    return ok;
 }
 bool animationCall(const std::shared_ptr<AnimationLuaContext>& context,int ref,const Json& config,
                    const render::AnimationParameters& params,float dt,std::span<float> mutableState,
@@ -79,7 +100,9 @@ int vAnimationTrait(lua_State* L,Vm& vm){
     auto& im=viewOf(vm);if(lua_type(L,1)!=LUA_TSTRING||!lua_istable(L,2))return fail(vm,"animation_trait(name, callbacks) expected");
     std::string name=lua_tostring(L,1);if(name.empty()||name.size()>128||im.animationContext->registrations>=64)return fail(vm,"animation trait registration limit");
     auto trait=std::make_shared<render::AnimationTrait>();lua_pushliteral(L,"stateSize");lua_rawget(L,2);lua_Integer count=lua_isnil(L,-1)?0:lua_tointeger(L,-1);bool valid=lua_isnil(L,-1)||lua_isinteger(L,-1);lua_pop(L,1);
-    if(!valid||count<0||count>256)return fail(vm,"trait stateSize must be 0..256");trait->stateFloats=size_t(count);
+    if (!valid || count < 0 || count > 256)
+      return fail(vm, "trait stateSize must be 0..256");
+    trait->stateFloats = size_t(count);
     const char* names[]={"pre_update","post_update","pre_evaluate","post_evaluate"};
     for(auto name:names){lua_pushstring(L,name);lua_rawget(L,2);bool ok=lua_isnil(L,-1)||lua_isfunction(L,-1);lua_pop(L,1);if(!ok)return fail(vm,"trait hook must be function");}
     auto context=im.animationContext;

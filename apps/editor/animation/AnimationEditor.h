@@ -17,9 +17,57 @@ public:
     explicit AnimationEditorPanel(bool rig):rigMode_(rig){}
     ~AnimationEditorPanel(){release();}
     void update(Editor& ed,double dt){dt_=float(std::min(dt,.1));if(registered_)return;registered_=true;
-        ed.ws().registerOp({rigMode_?"rig_editor_open":"animation_editor_open","Open an animation asset in the visual editor; refuses unsaved replacement.",Json::parse(R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"}}})"),[this,&ed](const Json& p){
-            if(dirty_)throw std::runtime_error("save or discard current edits");Json g=p["graph"];if(g.isNull()){auto r=ed.ws().call("animation_graph_get",p);if(r.has("error"))return r;g=r["graph"];}animation::sort(g);project_=ed.ws().project.dir;name_=p.getStr("name","untitled");doc_=saved_=g;reset();ed.focusWindow(rigMode_?"animation_rig":"animation_graph");Json r=Json::object();r.set("ok",Json::fromBool(true));return r;},true});
-        ed.ws().registerOp({rigMode_?"rig_editor_status":"animation_editor_status","Current preview state and evaluated pose after a rendered frame.",Json::object(),[this](const Json&){Json r=Json::object();r.set("error",Json::string(error_));r.set("ready",Json::fromBool(ready_));r.set("dirty",Json::fromBool(dirty_));r.set("graph",doc_);Json a=Json::array();for(const auto& p:pose_){Json v=Json::array();v.push(Json::number(double(p.t.x)));v.push(Json::number(double(p.t.y)));v.push(Json::number(double(p.t.z)));a.push(v);}r.set("translations",a);auto report=instance_.contactReport();r.set("supported",Json::fromBool(report.supported));r.set("stable",Json::fromBool(report.stable));r.set("supports",Json::number(int64_t(report.supports)));r.set("penetration",Json::number(double(report.penetration)));r.set("balanceError",Json::number(double(report.balanceError)));r.set("supportError",Json::number(double(report.supportError)));return r;},true});
+      ed.ws().registerOp({rigMode_ ? "rig_editor_open" : "animation_editor_open",
+                          "Open an animation asset in the visual editor; refuses unsaved replacement.",
+                          Json::parse(R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"}}})"),
+                          [this, &ed](const Json &p) {
+                            if (dirty_)
+                              throw std::runtime_error("save or discard current edits");
+                            Json g = p["graph"];
+                            if (g.isNull()) {
+                              auto r = ed.ws().call("animation_graph_get", p);
+                              if (r.has("error"))
+                                return r;
+                              g = r["graph"];
+                            }
+                            animation::sort(g);
+                            project_ = ed.ws().project.dir;
+                            name_ = p.getStr("name", "untitled");
+                            doc_ = saved_ = g;
+                            reset();
+                            ed.focusWindow(rigMode_ ? "animation_rig" : "animation_graph");
+                            Json r = Json::object();
+                            r.set("ok", Json::fromBool(true));
+                            return r;
+                          },
+                          true});
+      ed.ws().registerOp({rigMode_ ? "rig_editor_status" : "animation_editor_status",
+                          "Current preview state and evaluated pose after a rendered frame.", Json::object(),
+                          [this](const Json &) {
+                            Json r = Json::object();
+                            r.set("error", Json::string(error_));
+                            r.set("ready", Json::fromBool(ready_));
+                            r.set("dirty", Json::fromBool(dirty_));
+                            r.set("graph", doc_);
+                            Json a = Json::array();
+                            for (const auto &p : pose_) {
+                              Json v = Json::array();
+                              v.push(Json::number(double(p.t.x)));
+                              v.push(Json::number(double(p.t.y)));
+                              v.push(Json::number(double(p.t.z)));
+                              a.push(v);
+                            }
+                            r.set("translations", a);
+                            auto report = instance_.contactReport();
+                            r.set("supported", Json::fromBool(report.supported));
+                            r.set("stable", Json::fromBool(report.stable));
+                            r.set("supports", Json::number(int64_t(report.supports)));
+                            r.set("penetration", Json::number(double(report.penetration)));
+                            r.set("balanceError", Json::number(double(report.balanceError)));
+                            r.set("supportError", Json::number(double(report.supportError)));
+                            return r;
+                          },
+                          true});
     }
     void draw(Editor& ed){
         ws_=&ed.ws();auto tr=[&](const char* k){return text(k);};
@@ -56,7 +104,10 @@ public:
         if(ImGui::CollapsingHeader(tr("parameters").c_str(),ImGuiTreeNodeFlags_DefaultOpen)){editValue(graph().member("parameters"),"parameters",0);}
         if(ImGui::CollapsingHeader(tr("states").c_str())){if(!graph().has("states")){if(ImGui::Button(tr("addState").c_str()))graph().set("states",Json::parse(R"([{"id":"state","output":"bind","transitions":[]}])"));}else editValue(graph().member("states"),"states",0);std::string initial=graph().getStr("initial");if(ui::inputString("initial",initial))graph().set("initial",Json::string(initial));}
         if(!(before==doc_))remember(before);
-        if(!error_.empty())ui::callout(ui::Tone::Error,error_);if(!message_.empty())ui::hint(message_.c_str());
+        if (!error_.empty())
+          ui::callout(ui::Tone::Error, error_);
+        if (!message_.empty())
+          ui::hint(message_.c_str());
         ui::hint(tr("help").c_str());ImGui::EndChild();
     }
 private:
@@ -69,8 +120,15 @@ private:
     bool check(const Json& r){if(r.has("error")){error_=r.getStr("error");return false;}error_.clear();return true;}
     bool save(Editor& ed){Json p=Json::object();p.set("name",Json::string(name_));p.set("graph",doc_);p.set("expected",saved_);auto r=ed.ws().call("animation_graph_set",p);if(!check(r))return false;doc_=saved_=r["graph"];dirty_=false;message_=text("savedDraft");return true;}
     void editValue(Json& value,const std::string& key,int depth){
-        if(depth>16)return;ImGui::PushID(key.c_str());
-        if(value.isString()){ImGui::TextUnformatted(key.c_str());ImGui::SetNextItemWidth(-1);auto s=value.str();if(ui::inputString("##value",s))value=Json::string(s);}
+      if (depth > 16)
+        return;
+      ImGui::PushID(key.c_str());
+      if (value.isString()) {
+        ImGui::TextUnformatted(key.c_str());
+        ImGui::SetNextItemWidth(-1);
+        auto s = value.str();
+        if (ui::inputString("##value", s))
+          value = Json::string(s);}
         else if(value.isNumber()){ImGui::TextUnformatted(key.c_str());ImGui::SetNextItemWidth(-1);float f=float(value.toDouble());if(ImGui::DragFloat("##value",&f,.01f,-1000000,1000000,"%.4f"))value=Json::number(double(f),6);}
         else if(value.type()==Json::Type::Bool){bool b=value.boolean();if(ImGui::Checkbox(key.c_str(),&b))value=Json::fromBool(b);}
         else if(value.isArray()&&value.size()==3&&value[0].isNumber()&&value[1].isNumber()&&value[2].isNumber()){ImGui::TextUnformatted(key.c_str());ImGui::SetNextItemWidth(-1);float v[]={float(value[0].toDouble()),float(value[1].toDouble()),float(value[2].toDouble())};if(ImGui::DragFloat3("##value",v,.01f)){value=Json::array();for(auto f:v)value.push(Json::number(double(f),6));}}
@@ -85,8 +143,14 @@ private:
     }
     void rigProperties(Json& n){auto& units=n.member("units");if(ImGui::BeginCombo(text("addUnit").c_str(),"+")){for(auto op:{"transform","copy","aim","twoBoneIK","limit","fullBodyIK"})if(ImGui::Selectable(op)){auto u=animation::makeUnit(op);if(model_&&!model_->nodes.empty())u.set("bone",Json::string(model_->nodes[0].name));units.push(u);}ImGui::EndCombo();}for(size_t i=0;i<units.size();++i){ImGui::PushID(int(i));ImGui::Text("%zu: %s",i,units[i].getStr("op").c_str());if(units[i].getStr("op")=="fullBodyIK"&&!units[i].has("contacts")){ImGui::SameLine();if(ImGui::SmallButton(text("addContacts").c_str())){auto bone=units[i].getStr("bone"),foot=units[i]["effectors"][0].getStr("bone",bone);units.at(i).set("contacts",animation::makeContacts(bone,foot));}}if(i>0){ImGui::SameLine();if(ImGui::SmallButton("^"))std::swap(units.at(i),units.at(i-1));}ImGui::PopID();}}
     void canvas(){
-        if(!ImGui::IsMouseDown(0))dragging_=false;auto origin=ImGui::GetCursorScreenPos();auto avail=ImGui::GetContentRegionAvail();auto* dl=ImGui::GetWindowDrawList();
-        if(ImGui::IsWindowHovered()&&ImGui::IsMouseDragging(ImGuiMouseButton_Middle)){pan_.x+=ImGui::GetIO().MouseDelta.x;pan_.y+=ImGui::GetIO().MouseDelta.y;}
+      if (!ImGui::IsMouseDown(0))
+        dragging_ = false;
+      auto origin = ImGui::GetCursorScreenPos();
+      auto avail = ImGui::GetContentRegionAvail();
+      auto *dl = ImGui::GetWindowDrawList();
+      if (ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        pan_.x += ImGui::GetIO().MouseDelta.x;
+        pan_.y += ImGui::GetIO().MouseDelta.y;}
         if(ImGui::IsWindowHovered()&&ImGui::GetIO().MouseWheel!=0)zoom_=std::clamp(zoom_+ImGui::GetIO().MouseWheel*.1f,.5f,1.6f);
         if(rigMode_){auto* rig=node(graph(),selected_);if(!rig||rig->getStr("kind")!="rig"){for(auto& n:graph().member("nodes").itemsMut())if(n.getStr("kind")=="rig"){selected_=n.getStr("id");rig=&n;break;}}
             if(rig&&rig->getStr("kind")=="rig"){
@@ -125,7 +189,13 @@ private:
             ImGui::Image(ImTextureRef(ImTextureID(portrait_.texture().id)),{size,size},{0,flip?0.f:1.f},{1,flip?1.f:0.f});ImGui::SameLine();skeleton({std::max(80.f,ImGui::GetContentRegionAvail().x),size});
             const char* planes[]={"XY","XZ","YZ"};ImGui::SetNextItemWidth(100);ImGui::Combo("##plane",&plane_,planes,3);ImGui::SameLine();
             if(ImGui::Button(text("keepControls").c_str())){remember();auto& params=graph().member("parameters");for(auto& [name,v]:controls_.values)params.set(name,Json::number(double(v),6));for(auto& [name,v]:controls_.vectors){Json a=Json::array();for(float f:{v.x,v.y,v.z})a.push(Json::number(double(f),6));params.set(name,a);}}
-            for(auto& [name,v]:controls_.values)ImGui::DragFloat(name.c_str(),&v,.01f);for(auto& [name,v]:controls_.vectors){float f[]={v.x,v.y,v.z};if(ImGui::DragFloat3(name.c_str(),f,.01f))v={f[0],f[1],f[2]};}
+            for (auto &[name, v] : controls_.values)
+              ImGui::DragFloat(name.c_str(), &v, .01f);
+            for (auto &[name, v] : controls_.vectors) {
+              float f[] = {v.x, v.y, v.z};
+              if (ImGui::DragFloat3(name.c_str(), f, .01f))
+                v = {f[0], f[1], f[2]};
+            }
         }catch(const std::exception& e){error_=e.what();instance_.reset({});}
     }
     void skeleton(ImVec2 size){
