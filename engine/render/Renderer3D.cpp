@@ -1,6 +1,7 @@
 #include "Renderer3D.h"
 #include "Shaders.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -127,6 +128,9 @@ void Renderer3D::shutdown() {
 }
 
 void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
+    const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if(graphEpoch_ < 0) graphEpoch_ = now;
+    graphTime_ = float(now - graphEpoch_);
     sceneW_ = fbW; sceneH_ = fbH; // viewport of the main pass (screen or an offscreen target of this size)
     float aspect = fbH > 0 ? float(fbW) / float(fbH) : 1.0f;
     viewProj_ = cam.proj(aspect, dev_->info().clipDepthZeroToOne) * cam.view();
@@ -227,7 +231,7 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
     put3(f.skyColor, lighting.skyColor, lighting.tonemap ? 1.0f : 0.0f);   // w: tonemap switch of the lit shaders
     put3(f.groundColor, lighting.groundColor, lighting.srgbModels ? 2.0f : 1.0f);   // w: model output encoding (2 = sRGB)
     put3(f.fog, lighting.fogColor, lighting.fogDensity);
-    put3(f.camPos, camPos_, 1);
+    put3(f.camPos, camPos_, graphTime_);
     const bool zeroToOne = dev_->info().clipDepthZeroToOne;
     f.shadow[0] = dev_->info().renderTargetFlipY ? 1.0f : 0.0f;
     f.shadow[1] = zeroToOne ? 1.0f : 0.5f;

@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "domain": "postfx",
+  "nodes": [
+    {
+      "id": "uv",
+      "op": "uv",
+      "position": [
+        20,
+        20
+      ]
+    },
+    {
+      "id": "frequency",
+      "op": "constant",
+      "position": [
+        20,
+        115
+      ],
+      "value": [
+        0,
+        25,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "phase",
+      "op": "multiply",
+      "position": [
+        20,
+        210
+      ],
+      "inputs": [
+        "uv",
+        "frequency"
+      ]
+    },
+    {
+      "id": "yPhase",
+      "op": "green",
+      "inputs": [
+        "phase"
+      ],
+      "position": [
+        20,
+        305
+      ]
+    },
+    {
+      "id": "time",
+      "op": "time",
+      "position": [
+        20,
+        400
+      ]
+    },
+    {
+      "id": "scroll",
+      "op": "add",
+      "position": [
+        230,
+        20
+      ],
+      "inputs": [
+        "yPhase",
+        "time"
+      ]
+    },
+    {
+      "id": "wave",
+      "op": "sin",
+      "position": [
+        230,
+        115
+      ],
+      "inputs": [
+        "scroll"
+      ]
+    },
+    {
+      "id": "strength",
+      "op": "parameter",
+      "position": [
+        230,
+        210
+      ],
+      "name": "distortion",
+      "value": [
+        0.035,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "shift",
+      "op": "multiply",
+      "position": [
+        230,
+        305
+      ],
+      "inputs": [
+        "wave",
+        "strength"
+      ]
+    },
+    {
+      "id": "distorted",
+      "op": "add",
+      "position": [
+        230,
+        400
+      ],
+      "inputs": [
+        "uv",
+        "shift"
+      ]
+    },
+    {
+      "id": "scene",
+      "op": "texture",
+      "position": [
+        440,
+        20
+      ],
+      "inputs": [
+        "distorted"
+      ]
+    }
+  ],
+  "outputs": {
+    "color": "scene"
+  }
+}

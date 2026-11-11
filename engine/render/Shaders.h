@@ -12,7 +12,7 @@ namespace aiverse::render::shaders {
 // Uniform blocks shared by the lit and shadow shaders (std140 / MSL layouts match):
 //   U0 (per draw):  mat4 model; vec4 color; vec4 params(x unlit, y specular, z receiveShadow, w emissive)
 //   U1 (per frame): mat4 viewProj; mat4 lightViewProj; mat4 invViewProj; vec4 sunDir(xyz, w intensity); vec4 sunColor;
-//                   vec4 skyColor; vec4 groundColor; vec4 fog(rgb, density); vec4 camPos;
+//                   vec4 skyColor; vec4 groundColor; vec4 fog(rgb, density); vec4 camPos(xyz, presentation time);
 //                   vec4 shadow(x uvFlipY, y depthScale, z depthOffset, w texel); vec4 quality(x taps, y enabled, z radius uv, w normal offset)
 //                   Traced lighting (AIVERSE_*_TRACE, Renderer3D "trace" tier):
 //                   vec4 trace0(x,y height-field origin xz, z,w 1 / extent xz)

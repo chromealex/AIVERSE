@@ -26,13 +26,13 @@ Json result(const Json& g) {
     const auto p=render::graph::compile(g);
     Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("graph",g);
     r.set("nodes",Json::number(int64_t(p.nodes)));r.set("samples",Json::number(int64_t(p.samples)));
-    r.set("glsl",Json::string(p.glsl));r.set("msl",Json::string(p.msl));return r;
+    r.set("vertexGlsl",Json::string(p.vertexGlsl));r.set("vertexMsl",Json::string(p.vertexMsl));r.set("glsl",Json::string(p.glsl));r.set("msl",Json::string(p.msl));return r;
 }
 }
 void registerShaderGraphOps(Workspace& ws) {
     const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
     ws.registerOp({"shader_graph_catalog","Supported operations and domains; all ports are RGBA vectors, scalar constants splat.",Json::object(),[](const Json&){
-        Json r=Json::object(),ops=Json::array();for(auto& op:render::graph::catalog()) {Json n=Json::object();n.set("id",Json::string(op.id));n.set("inputs",Json::number(int64_t(op.inputs)));ops.push(n);}r.set("nodes",ops);r.set("domains",Json::parse(R"(["material","postfx","particle"] )"));return r;
+        Json r=Json::object(),ops=Json::array();for(auto& op:render::graph::catalog()) {Json n=Json::object();n.set("id",Json::string(op.id));n.set("inputs",Json::number(int64_t(op.inputs)));n.set("vertex",Json::fromBool(op.vertex));Json domains=Json::array();for(auto d:{"material","postfx","particle"})if(render::graph::supports(op,d))domains.push(Json::string(d));n.set("domains",domains);ops.push(n);}r.set("nodes",ops);r.set("domains",Json::parse(R"(["material","postfx","particle"] )"));return r;
     }});
     ws.registerOp({"shader_graph_list","List project shader graph assets.",Json::object(),[&ws](const Json&){
         const auto dir=graphPath(ws,"placeholder").parent_path();std::vector<std::string> names;

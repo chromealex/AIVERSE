@@ -70,6 +70,8 @@ the *engine* add mechanics generically — never a special case for one game.
 - After touching the sim run the determinism tests and a headless bot match on every sample game.
 
 **Rendering/platform:**
+- Before shader or Shader Graph work, read [the agent guide](docs/shader-graph-agents.md)
+  and follow its validation, preview and application workflow.
 - All GPU work through `gfx::Device` (RHI). Every shader exists in GLSL *and* MSL in the same change.
 - Must run on weak Android GPUs: every expensive feature has a quality tier (`ShadowQuality`, etc.).
 - Content files are read via `platform::readContentFile` (works on Android assets, web preload, packs).

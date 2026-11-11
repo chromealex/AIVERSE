@@ -92,7 +92,10 @@ void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Mater
     if (o.getBool("replace")) { const std::string keep = mt.name; mt = Material{}; mt.name = keep; }
     if (const Json& col = o["color"]; col.size() >= 3) mt.baseColor = {num(col[0], 1), num(col[1], 1), num(col[2], 1), col.size() > 3 ? num(col[3], 1) : mt.baseColor.w};
     if (o.has("shaderGraph")) {
-        try { mt.shaderGraph = std::make_shared<graph::Program>(graph::compile(o["shaderGraph"], "material")); }
+        try {
+            mt.shaderGraph = std::make_shared<graph::Program>(graph::compile(o["shaderGraph"], "material"));
+            for(size_t i=0;i<mt.shaderGraph->textures.size();++i) mt.graphTextures[i]=loadTexture(dev,t,m,mt.shaderGraph->textures[i]);
+        }
         catch (const std::exception& e) { warn(t, e.what()); mt.shaderGraph.reset(); }
     }
     mt.metallic = num(o["metallic"], mt.metallic);

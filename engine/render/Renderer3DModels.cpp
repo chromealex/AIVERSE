@@ -91,9 +91,10 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u);
     const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
-    const auto* graph = it.mat->shaderGraph.get();
-    const ModelShaderKey skey{shaderKey, it.mat->shaderGraph};
-    const ModelShaderKey pkey{pipeKey, it.mat->shaderGraph};
+    const auto selectedGraph=it.mat->shaderGraph && int(matQuality_)>=it.mat->shaderGraph->minQuality?it.mat->shaderGraph:nullptr;
+    const auto* graph = selectedGraph.get();
+    const ModelShaderKey skey{shaderKey, selectedGraph};
+    const ModelShaderKey pkey{pipeKey, selectedGraph};
     for (auto& [k, p] : modelPipes_) if (k == pkey) return p;
 
     ShaderEntry* entry = nullptr;
@@ -108,32 +109,73 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
         defs += "#define AIVERSE_Q " + std::to_string(int(matQuality_)) + "\n";
-        const std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
+        std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
         std::string fs = defs + (shadow ? shaders::kModelShadowFS : shaders::kModelFS);
         std::string msl = defs + (shadow ? shaders::kModelShadowMSL : shaders::kModelMSL);
         if (graph) {
-            auto inject = [&](std::string& source, bool metal) {
-                auto replace = [&](const std::string& marker, const std::string& text) {
-                    size_t at = source.find(marker);
-                    if (at != std::string::npos) source.replace(at, marker.size(), text);
-                };
-                const std::string v = metal ? "float4" : "vec4";
-                std::string code = "\n#define SG_SAMPLE(uv) " + std::string(metal ? "tex1.sample(s1,uv)" : "texture(tex1,uv)") + "\n";
-                code += std::string(metal ? "float2 sg_uv = in.uv;" : "vec2 sg_uv = v_uv;") + v + " sg_input = base;\n";
-                code += graph::statements(*graph, metal) + "base = " + graph->outputs.at("color") + ";\n#undef SG_SAMPLE\n";
-                replace("// SG_COLOR", code);
-                std::string surface;
-                for (auto name : {"roughness", "metallic", "emission"}) {
-                    auto output = graph->outputs.find(name);
-                    if (output != graph->outputs.end()) surface += std::string(name == std::string("roughness") ? "rough" : name == std::string("emission") ? "emis" : "metallic") + " = " + output->second + (name == std::string("emission") ? ".rgb;\n" : ".r;\n");
-                }
-                replace("// SG_SURFACE", surface);
+            auto replace = [](std::string& source,const std::string& marker,const std::string& text) {
+                const auto at=source.find(marker);if(at!=std::string::npos)source.replace(at,marker.size(),text);
             };
-            inject(fs, false); inject(msl, true);
+            auto inject = [&](std::string& source,bool metal,bool vertexOnly) {
+                const std::string v=metal?"float4":"vec4", v3=metal?"float3":"vec3";
+                if(!vertexOnly) {
+                    std::string declarations, args, macros;
+                    for(size_t i=0;i<graph->textures.size();++i) {
+                        const auto slot=std::to_string(11+i), index=std::to_string(i);
+                        declarations+="uniform sampler2D tex"+slot+";\n";
+                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]], sampler s"+slot+" [[sampler("+slot+")]]";
+                        macros+="#define SG_TEXTURE"+index+"(uv) "+(metal?"tex"+slot+".sample(s"+slot+",uv)":"texture(tex"+slot+",uv)")+"\n";
+                        macros+="#define SG_TEXTURE_LOD"+index+"(uv,lod) "+(metal?"tex"+slot+".sample(s"+slot+",uv,level(lod))":"textureLod(tex"+slot+",uv,lod)")+"\n";
+                    }
+                    if(metal) {
+                        const auto f=source.find("fragment ");const auto at=source.find(") {",f);
+                        if(at!=std::string::npos)source.insert(at,args);
+                    } else source=declarations+source;
+                    const auto uv=metal?"in.uv":"v_uv", wp=metal?"in.wpos":"v_wpos", np=metal?"in.nrm":"v_nrm";
+                    std::string code="\n#define SG_SAMPLE(uv) "+std::string(metal?"tex1.sample(s1,uv)":"texture(tex1,uv)")+"\n"+macros;
+                    code+=std::string(metal?"float2":"vec2")+" sg_uv="+uv+"; "+v+" sg_input=base;\n";
+                    code+=v3+" sg_world="+wp+", sg_object="+(metal?"in.opos":"v_opos")+", sg_normal="+np+", sg_view="+(metal?"f.camPos.xyz":"u_camPos.xyz")+"-"+wp+";\n";
+                    code+=v+" sg_color="+(metal?"in.col":"v_col")+"; float sg_time="+(metal?"f.camPos.w":"u_camPos.w")+";\n";
+                    // Projected world position gives the same normalized screen coordinates in colour/shadow passes.
+                    code+=v+" sg_clip="+(metal?"f.viewProj":"u_viewProj")+"*"+v+"("+wp+",1.0); "+(metal?"float2":"vec2")+" sg_screen=sg_clip.xy/max(abs(sg_clip.w),0.00001)*0.5+0.5;\n";
+                    code+=graph::statements(*graph,metal)+"base="+graph->outputs.at("color")+";\n#undef SG_SAMPLE\n";
+                    replace(source,"// SG_COLOR",code);
+                    std::string surface;
+                    for(auto name:{"roughness","metallic","emission","normal"}) {
+                        auto it=graph->outputs.find(name);if(it==graph->outputs.end())continue;
+                        const std::string key=name;
+                        if(key=="normal") surface+="n="+it->second+".xyz/max(length("+it->second+".xyz),0.00001);\n";
+                        else surface+=(key=="roughness"?"rough":key=="emission"?"emis":"metallic")+std::string(" = ")+it->second+(key=="emission"?".rgb;\n":".r;\n");
+                    }
+                    replace(source,"// SG_SURFACE",surface);
+                }
+                if(vertexOnly || metal) {
+                    const std::string pos=metal?"d.p":"p", normal=metal?"d.n":"n";
+                    std::string code="{\n"+std::string(metal?"float2 sg_uv=uvTransform(m,in.uv);":"vec2 sg_uv=uvTransform(a_uv);");
+                    code+=v3+" sg_object="+pos+".xyz, sg_world=(I.model*"+pos+").xyz;\n";
+                    code+=v3+" sg_c0=I.model[0].xyz,sg_c1=I.model[1].xyz,sg_c2=I.model[2].xyz;\n";
+                    code+=v3+" sg_normal="+(metal?"float3x3":"mat3")+"(cross(sg_c1,sg_c2),cross(sg_c2,sg_c0),cross(sg_c0,sg_c1))*"+normal+"*(dot(sg_c0,cross(sg_c1,sg_c2))<0.0?-1.0:1.0);\n";
+                    code+=v3+" sg_view="+(metal?"f.camPos.xyz":"u_camPos.xyz")+"-sg_world; "+v+" sg_color="+(metal?"in.col":"a_col")+"; float sg_time="+(metal?"f.camPos.w":"u_camPos.w")+";\n";
+                    std::string args,declarations,macros;
+                    for(size_t i=0;i<graph->textures.size();++i) {
+                        const auto slot=std::to_string(11+i),index=std::to_string(i);
+                        declarations+="uniform sampler2D tex"+slot+";\n";
+                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]], sampler s"+slot+" [[sampler("+slot+")]]";
+                        macros+="#define SG_TEXTURE_LOD"+index+"(uv,lod) "+(metal?"tex"+slot+".sample(s"+slot+",uv,level(lod))":"textureLod(tex"+slot+",uv,lod)")+"\n";
+                    }
+                    if(metal)replace(source,"vs_main(VERTEX_ARGS)","vs_main(VERTEX_ARGS"+args+")");else source=declarations+source;
+                    code+=macros;
+                    code+=metal?graph->vertexMsl:graph->vertexGlsl;
+                    if(auto it=graph->outputs.find("vertexOffset");it!=graph->outputs.end())code+=pos+".xyz += "+it->second+".xyz;\n";
+                    if(auto it=graph->outputs.find("vertexNormal");it!=graph->outputs.end())code+=normal+" = "+it->second+".xyz;\n";
+                    code+="}\n";replace(source,"// SG_VERTEX",code);
+                }
+            };
+            inject(vs,false,true);inject(fs,false,false);inject(msl,true,false);
         }
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = shadow ? 9 : 11; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
+        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = graph && !graph->textures.empty() ? 11+int(graph->textures.size()) : shadow ? 9 : 11; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
         e.shader = dev_->createShader(sd);
         if (!e.shader.valid()) {
@@ -181,9 +223,11 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
     // whole-model culling with the bind-pose bounds (padded: animation moves limbs outside them)
     float3 c = (m->boundsMin + m->boundsMax) * 0.5f, e = (m->boundsMax - m->boundsMin) * 0.75f + float3{0.1f, 0.1f, 0.1f};
-    const bool inView = boxVisible(viewProj_ * d.world, c - e, c + e);
+    const auto& graphMaterials=d.materials && d.materials->size()>=m->materials.size()?*d.materials:m->materials;
+    const bool displaced=std::any_of(graphMaterials.begin(),graphMaterials.end(),[this](const Material& mat){return mat.shaderGraph && int(matQuality_)>=mat.shaderGraph->minQuality && mat.shaderGraph->outputs.count("vertexOffset");});
+    const bool inView = displaced || boxVisible(viewProj_ * d.world, c - e, c + e);
     const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 &&
-                          boxVisible(lightViewProj_ * d.world, c - e, c + e);
+                          (displaced || boxVisible(lightViewProj_ * d.world, c - e, c + e));
     if (!inView && !inShadow) return;
     const std::vector<mat4>& world = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
     const std::vector<Material>& mats = d.materials && d.materials->size() >= m->materials.size() ? *d.materials : m->materials;
@@ -286,6 +330,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
             return idx >= 0 && idx < int(it.model->images.size()) && it.model->images[size_t(idx)].tex.valid() ? it.model->images[size_t(idx)].tex : def;
         };
         dev_->setTexture(1, tex(mt.baseTex, white_));
+        if(mt.shaderGraph)for(size_t i=0;i<mt.shaderGraph->textures.size();++i)dev_->setTexture(11+int(i),tex(mt.graphTextures[i],white_));
         if (phase != 0) {
             dev_->setTexture(2, tex(mt.mrTex, white_));
             dev_->setTexture(3, tex(mt.normalTex, flatNormal_));

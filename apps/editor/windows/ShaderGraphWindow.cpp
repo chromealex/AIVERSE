@@ -50,9 +50,17 @@ public:
         ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.redo").c_str())&&!redo_.empty()){undo_.push_back(doc_);doc_=redo_.back();redo_.pop_back();dirty_=true;}
         if(dirty_){ImGui::SameLine();ImGui::TextUnformatted("*");ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.discard").c_str())){doc_=saved_;dirty_=false;undo_.clear();redo_.clear();drafts_.erase(project_);}}
         const char* domains[]={"material","postfx","particle"};int domain=doc_.getStr("domain")=="postfx"?1:doc_.getStr("domain")=="particle"?2:0;
-        ImGui::SetNextItemWidth(150);if(ImGui::Combo(tr("shaderGraph.domain").c_str(),&domain,domains,3)){remember();doc_.set("domain",Json::string(domains[domain]));if(domain)for(auto k:{"roughness","metallic","emission"})doc_.find("outputs")->erase(k);preview_.shutdown();}
+        ImGui::SetNextItemWidth(150);if(ImGui::Combo(tr("shaderGraph.domain").c_str(),&domain,domains,3)){remember();doc_.set("domain",Json::string(domains[domain]));if(domain)doc_.erase("minQuality");if(domain)for(auto k:{"roughness","metallic","emission","normal","vertexOffset","vertexNormal"})doc_.find("outputs")->erase(k);preview_.shutdown();}
+        if(domain==0) {
+            ImGui::SameLine();ImGui::SetNextItemWidth(120);
+            if(ImGui::BeginCombo(tr("shaderGraph.quality").c_str(),doc_.getStr("minQuality","low").c_str())) {
+                for(auto q:{"low","medium","high"})if(ImGui::Selectable(q)){remember();doc_.set("minQuality",Json::string(q));}
+                ImGui::EndCombo();
+            }
+        }
+        ImGui::SetNextItemWidth(150);ui::inputHint("##node_search",tr("shaderGraph.search").c_str(),search_);
         ImGui::SameLine();ImGui::SetNextItemWidth(170);if(ImGui::BeginCombo(tr("shaderGraph.add").c_str(),"+")) {
-            for(const auto& op:render::graph::catalog())if(ImGui::Selectable(op.id))add(op);
+            for(const auto& op:render::graph::catalog())if(render::graph::supports(op,doc_.getStr("domain")) && (search_.empty() || std::string(op.id).find(search_)!=std::string::npos))if(ImGui::Selectable(op.id))add(op);
             ImGui::EndCombo();
         }
         ImGui::TextWrapped("%s",tr("shaderGraph.help").c_str());
@@ -89,7 +97,9 @@ private:
         remember();Json n=Json::object();
         std::string id;int serial=1;do {id="node"+std::to_string(serial++);}while(std::any_of(doc_["nodes"].items().begin(),doc_["nodes"].items().end(),[&](auto& x){return x.getStr("id")==id;}));
         n.set("id",Json::string(id));n.set("op",Json::string(op.id));Json ins=Json::array();for(int i=0;i<op.inputs;++i)ins.push(doc_["nodes"][0]["id"]);n.set("inputs",ins);
-        if(std::string(op.id)=="constant")n.set("value",Json::parse("[0.2,0.6,1,1]"));
+        if(std::string(op.id)=="constant" || std::string(op.id)=="parameter")n.set("value",Json::parse("[0.2,0.6,1,1]"));
+        if((std::string(op.id)=="sampleTexture" || std::string(op.id)=="sampleTextureLod"))n.set("texture",Json::string("textures/example.png"));
+        if(std::string(op.id)=="parameter")n.set("name",Json::string(id));
         n.set("position",Json::parse("[220,120]"));doc_.find("nodes")->push(n);selected_=int(doc_["nodes"].size())-1;
     }
     void canvas() {
@@ -121,11 +131,29 @@ private:
         auto tr=[&](const char* key){return genreText(ed.ws(),key);};
         selected_=std::clamp(selected_,0,int(doc_["nodes"].size())-1);
         if(selected_>=0){auto& n=doc_.find("nodes")->at(size_t(selected_));ImGui::TextUnformatted(n.getStr("id").c_str());
-            if(n.getStr("op")=="constant") {float c[4];for(int i=0;i<4;++i)c[i]=float(n["value"].isNumber()?n["value"].toDouble():n["value"][size_t(i)].toDouble());if(ImGui::DragFloat4(tr("shaderGraph.value").c_str(),c,.01f,-1000000,1000000)){remember();Json a=Json::array();for(float x:c)a.push(Json::number(double(x),6));n.set("value",a);}}
+            if(n.getStr("op")=="constant" || n.getStr("op")=="parameter") {
+                const auto key=n.getStr("name",n.getStr("id"));
+                const bool overrideValue=n.getStr("op")=="parameter" && doc_["parameters"].has(key);
+                const auto& value=overrideValue?doc_["parameters"][key]:n["value"];
+                float c[4];for(int i=0;i<4;++i)c[i]=float(value.isNumber()?value.toDouble():value[size_t(i)].toDouble());
+                if(ImGui::DragFloat4(tr("shaderGraph.value").c_str(),c,.01f,-1000000,1000000)) {
+                    remember();Json a=Json::array();for(float x:c)a.push(Json::number(double(x),6));
+                    if(overrideValue)doc_.find("parameters")->set(key,a);else n.set("value",a);
+                }
+            }
+            auto field=[&](const char* key,const char* label,const char* fallback) {
+                std::string value=n.getStr(key,fallback);if(ui::inputString(tr(label).c_str(),value)){remember();n.set(key,Json::string(value));}
+            };
+            if(n.getStr("op")=="parameter")field("name","shaderGraph.parameter","parameter");
+            if(n.getStr("op")=="swizzle")field("mask","shaderGraph.swizzle","rgba");
+            if((n.getStr("op")=="sampleTexture" || n.getStr("op")=="sampleTextureLod")) {
+                field("texture","shaderGraph.texture","");bool srgb=n.getBool("srgb");
+                if(ImGui::Checkbox("sRGB",&srgb)){remember();n.set("srgb",Json::fromBool(srgb));}
+            }
             for(size_t i=0;i<n["inputs"].size();++i){ImGui::PushID(int(i));if(ImGui::BeginCombo(tr("shaderGraph.input").c_str(),n["inputs"][i].str().c_str())){for(auto& src:doc_["nodes"].items())if(ImGui::Selectable(src.getStr("id").c_str())){remember();n.find("inputs")->at(i)=src["id"];}ImGui::EndCombo();}ImGui::PopID();}
             ImGui::BeginDisabled(doc_["nodes"].size()<=1);if(ImGui::Button(tr("shaderGraph.remove").c_str())){remember();doc_.find("nodes")->eraseAt(size_t(selected_));selected_=0;}ImGui::EndDisabled();
         }
-        for(auto key:{"color","roughness","metallic","emission"}) {
+        for(auto key:{"color","roughness","metallic","emission","normal","vertexOffset","vertexNormal"}) {
             if(doc_.getStr("domain")!="material"&&std::string(key)!="color")continue;
             if(ImGui::BeginCombo(key,doc_["outputs"][key].str("-").c_str())) {
                 if(std::string(key)!="color"&&ImGui::Selectable("-")){remember();doc_.find("outputs")->erase(key);}
@@ -136,7 +164,7 @@ private:
     }
     Json doc_=render::graph::makeDefault("material"),saved_=doc_;std::vector<Json> undo_,redo_;
     std::map<std::string,std::pair<std::string,Json>> drafts_;
-    std::string project_,name_="untitled",target_,connecting_,message_;int selected_=0,emitter_=0;
+    std::string project_,name_="untitled",target_,connecting_,message_,search_;int selected_=0,emitter_=0;
     bool dirty_=false,error_=false,registered_=false,previewReady_=false,draggingNode_=false;ImVec2 pan_{20,20};double time_=0;float dt_=0;ShaderGraphPreview preview_;
 };
 AIVERSE_EDITOR_WINDOW(ShaderGraphWindow);
