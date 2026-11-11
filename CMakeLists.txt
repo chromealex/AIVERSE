@@ -1245,3 +1245,8 @@ if(AIVERSE_ENABLE_PHYSICS)
         target_compile_definitions(aiverse_physics_demo PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
     endif()
 endif()
+
+option(AIVERSE_ENABLE_CLOTH "Build optional presentation XPBD cloth" OFF)
+if(AIVERSE_ENABLE_CLOTH)
+    add_subdirectory(engine/cloth)
+endif()

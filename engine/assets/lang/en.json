@@ -421,5 +421,19 @@
   "restore": "Restore state",
   "orbit": "Orbit",
   "zoom": "Distance"
+},
+"clothDemo": {
+  "gust": "Gust on first cloth",
+  "sharing": "Share identical simulations",
+  "groups": "Solves: {solves}, copies: {copies}",
+  "frame": "frame",
+  "title": "XPBD cloth",
+  "count": "Cloth objects: {count}; triangles each: {triangles}",
+  "grid": "{particles} particles / cloth; {workers} workers",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "orbit": "Orbit",
+  "distance": "Distance"
 }
 }
