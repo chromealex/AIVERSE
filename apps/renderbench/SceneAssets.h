@@ -136,6 +136,20 @@ struct SceneAssets {
             if(!uploadModel(d,*a.model))throw std::runtime_error("addon upload failed: "+d.lastError());
             audit.push(item);assets.push_back(std::move(a));
         }
+        // Recipe lights use linear RGB, like glTF punctual lights.
+        for(const auto& entry:config["pointLights"].items()) {
+            if(!entry["position"].isArray()||entry["position"].size()!=3||!entry["color"].isArray()||entry["color"].size()!=3)
+                throw std::runtime_error("point light requires position and color xyz");
+            PointLight light;light.pos=vector3(entry["position"]);auto color=vector3(entry["color"]);
+            light.radius=float(entry["radius"].toDouble(0));light.intensity=float(entry["intensity"].toDouble(0));
+            for(float value:{light.pos.x,light.pos.y,light.pos.z,color.x,color.y,color.z,light.radius,light.intensity})
+                if(!std::isfinite(value))throw std::runtime_error("nonfinite recipe point light");
+            if(light.radius<=0||light.intensity<0||light.intensity>1e6f||color.x<0||color.y<0||color.z<0||color.x>1||color.y>1||color.z>1)
+                throw std::runtime_error("recipe point light out of range");
+            auto srgb=[](float value){return value<=.0031308f?12.92f*value:1.055f*std::pow(value,1.0f/2.4f)-.055f;};
+            light.color={srgb(color.x),srgb(color.y),srgb(color.z)};light.key=uint32_t(lights.size()+1);
+            lights.push_back(light);
+        }
         lightOrder.resize(lights.size());for(size_t i=0;i<lights.size();++i)lightOrder[i]=i;
     }
     void selectLights(float3 eye) {

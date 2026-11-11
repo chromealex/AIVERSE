@@ -195,3 +195,21 @@ materials; it does not replace their roughness/normal maps with gallery constant
 The current hemisphere ambient and screen-space bounce cannot reproduce all
 occluded/off-screen indirect lighting in the reference. Compare screenshots at a
 fixed camera; do not treat a matched color grade as equivalent GI or benchmark parity.
+
+### Architectural day/night lighting without candles
+
+Run `python3 tools/renderbench/reference_lighting.py /path/to/scene-day-reference-materials.json`
+to create `scene-reference-day-lit.json` and `scene-reference-night-lit.json` beside
+that scene. Existing outputs are not overwritten. The camera, material graphs
+and original texture assets are preserved; only curtains and ivy remain as addons.
+Day retains the calibrated daylight setup. Night uses 14 local point lights for
+the galleries, doorway and upper red accent, with almost no sun/ambient illumination.
+These are artistic reference settings, not recovered Unreal light values.
+
+Benchmark recipes accept `pointLights: [{"position":[x,y,z], "color":[r,g,b],
+"radius":3, "intensity":10}]`. Color is linear RGB in 0..1; radius is in world
+units. The loader validates finite values and ranges. With `staticPointLightGrid`
+the existing GL/MSL 3D light-grid path evaluates all intersecting sources. Low
+profile retains its existing light fallback. These lights do not cast point
+shadows or calculate geometry occlusion; a small radius limits their influence
+but does not substitute for shadows or bounced GI.
