@@ -91,7 +91,7 @@ bool Renderer3D::beginSceneCapture(int w, int h) {
     if (!blitPipe_.valid() || w <= 0 || h <= 0) return false;
     ++traceFrame_;
     SceneTarget* t = nullptr;
-    for (auto& s : sceneTargets_) if (s.w == w && s.h == h) { t = &s; break; }
+    for (auto& s : sceneTargets_) if (s.w == w && s.h == h && s.hdr == hdrFrame_) { t = &s; break; }
     if (!t) {
         // drop targets of sizes not used for a while (resized window); keep a few (editor views)
         for (size_t i = 0; i < sceneTargets_.size();) {
@@ -103,7 +103,8 @@ bool Renderer3D::beginSceneCapture(int w, int h) {
         gfx::TextureDesc cd; cd.width = w; cd.height = h; cd.renderTarget = true; cd.filter = gfx::Filter::Linear; cd.label = "scene colour";
         gfx::TextureDesc dd; dd.width = w; dd.height = h; dd.format = gfx::PixelFormat::Depth; dd.renderTarget = true;
         dd.filter = gfx::Filter::Nearest; dd.label = "scene depth";
-        SceneTarget n; n.w = w; n.h = h; n.color = dev_->createTexture(cd); n.depth = dev_->createTexture(dd);
+        cd.format = hdrFrame_ ? gfx::PixelFormat::RGBA16F : gfx::PixelFormat::RGBA8;
+        SceneTarget n; n.hdr = hdrFrame_; n.w = w; n.h = h; n.color = dev_->createTexture(cd); n.depth = dev_->createTexture(dd);
         if (!n.color.valid() || !n.depth.valid()) { if (n.color.valid()) dev_->destroyTexture(n.color); if (n.depth.valid()) dev_->destroyTexture(n.depth); return false; }
         sceneTargets_.push_back(n);
         t = &sceneTargets_.back();
@@ -114,6 +115,10 @@ bool Renderer3D::beginSceneCapture(int w, int h) {
     p.colorTarget = sceneColor_;
     p.depthTarget = sceneDepth_;
     std::memcpy(p.clearColor, postOut_.clearColor, sizeof p.clearColor);
+    if (hdrFrame_) for (int i = 0; i < 3; ++i) {
+        const float c = std::max(p.clearColor[i], 0.0f);
+        p.clearColor[i] = c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    }
     p.clearColorEnabled = true; p.clearDepthEnabled = true;
     dev_->beginPass(p);
     return true;

@@ -159,6 +159,11 @@ inline const char* kComposite = R"(
 #ifdef PF_SHAFTS
     col += TEX3(uv).rgb * shafts.rgb;
 #endif
+    if (filt.x > 0.5) {
+        col = max(col * filt.z, vec3(0.0));
+        if (filt.y > 0.5) col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+        col = rtsSrgbEncode(clamp(col, vec3(0.0), vec3(1.0)));
+    }
 #ifdef PF_GRADE
     col *= grade1.rgb;
     col = gain.rgb * (col + lift.rgb * (vec3(1.0) - col));

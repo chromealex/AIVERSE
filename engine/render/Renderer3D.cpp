@@ -266,6 +266,7 @@ void Renderer3D::resolvePostFx() {
     dev_->endPass();
     PostFrame f{viewProj_, camPos_, lighting, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight()};
     post->resolve(*dev_, postOut_, f);
+    hdrFrame_ = false;
 }
 
 void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
@@ -297,13 +298,16 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
 
     renderSpotShadow();   // High: the main spot light's shadow map (Renderer3DReflect.cpp)
     lights.renderMap();
-    renderReflection();   // High: mirrored pass for water (Renderer3DReflect.cpp)
+
 
     // ---- main pass (left open for the caller's UI; with a post hook: the hook's scene target)
     post_ = post && post->active() ? post : nullptr;
     postOut_ = screenPass;
     const int sw = sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sh = sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight();
     const gfx::PassDesc mainPass = post_ ? post_->scenePass(screenPass, sw, sh) : screenPass;
+    hdrFrame_ = post_ && post_->linearScene();
+    lights.setLinearScene(hdrFrame_);
+    renderReflection();
     // trace tier + water: the opaque scene goes into colour + depth textures first (SSR reads them),
     // then it is blitted (with depth) into the main pass and the rest is drawn on top
     bool capture = false;

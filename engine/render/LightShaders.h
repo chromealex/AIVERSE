@@ -189,7 +189,7 @@ namespace rts::render::shaders {
     "}\n"
 
 // Planar water reflection (lit shader only; REFL = reflection texture rendered mirrored and flipped
-// in x, sampled at the fragment's screen position with a ripple wobble). c: display-space colour.
+// in x, sampled at the fragment's screen position with a ripple wobble). c: scene colour (linear in HDR, display-space in LDR).
 #define RTS_GLSL_WATER_REFLECT(REFL) \
     "uniform mediump sampler2D " REFL ";\n" \
     "vec3 waterReflect(vec3 c, vec3 wpos, vec3 n, vec3 V, float specK) {\n" \
@@ -314,7 +314,7 @@ void main() {
     float d2 = dot(v_uv, v_uv);
     float f = clamp(1.0 - d2, 0.0, 1.0);
     float g = f * f * 0.55 + exp(-d2 * 18.0) * 0.6;   // wide glow + bright core
-    o_color = vec4(v_col.rgb * (g * v_col.a), 1.0);
+    o_color = rtsDisplay(vec4(v_col.rgb * (g * v_col.a), 1.0));
 }
 )";
 inline const char* kHaloMSL = R"(#include <metal_stdlib>
@@ -329,7 +329,7 @@ fragment float4 fs_main(VOut in [[stage_in]]) {
     float d2 = dot(in.uv, in.uv);
     float f = clamp(1.0 - d2, 0.0, 1.0);
     float g = f * f * 0.55 + exp(-d2 * 18.0) * 0.6;
-    return float4(in.col.rgb * (g * in.col.a), 1.0);
+    return rtsDisplay(float4(in.col.rgb * (g * in.col.a), 1.0));
 }
 )";
 
@@ -371,7 +371,7 @@ out vec4 o_color;
 void main() {
     float across = 1.0 - abs(v_uv.x);
     float g = across * (0.35 + 0.65 * (1.0 - v_uv.y)) * smoothstep(0.0, 0.1, v_uv.y) * smoothstep(1.0, 0.7, v_uv.y);   // reaches the pool
-    o_color = vec4(v_col.rgb * (g * v_col.a), 1.0);
+    o_color = rtsDisplay(vec4(v_col.rgb * (g * v_col.a), 1.0));
 }
 )";
 inline const char* kBeamMSL = R"(#include <metal_stdlib>
@@ -385,7 +385,7 @@ vertex VOut vs_main(VIn in [[stage_in]], constant HU0& u [[buffer(1)]]) {
 fragment float4 fs_main(VOut in [[stage_in]]) {
     float across = 1.0 - abs(in.uv.x);
     float g = across * (0.35 + 0.65 * (1.0 - in.uv.y)) * smoothstep(0.0, 0.1, in.uv.y) * smoothstep(1.0, 0.7, in.uv.y);
-    return float4(in.col.rgb * (g * in.col.a), 1.0);
+    return rtsDisplay(float4(in.col.rgb * (g * in.col.a), 1.0));
 }
 )";
 

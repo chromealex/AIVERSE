@@ -1084,3 +1084,18 @@ if(RTS_BUILD_TESTS AND (RTS_PLATFORM STREQUAL "linux" OR RTS_PLATFORM STREQUAL "
     target_link_libraries(rts_hosted_view_tests PRIVATE rts_runtime)
     add_test(NAME rts_hosted_view_tests COMMAND rts_hosted_view_tests)
 endif()
+
+# Asset-free HDR visual regression fixture (opt-in, uses the actual backends).
+option(RTS_BUILD_HDR_TESTS "Build HDR GPU validation scene" OFF)
+if(RTS_BUILD_HDR_TESTS AND RTS_DESKTOP)
+    add_executable(rts_hdr_policy tests/render/hdr_policy.cpp)
+    target_link_libraries(rts_hdr_policy PRIVATE rts_postfx_data)
+    add_test(NAME hdr_policy COMMAND rts_hdr_policy)
+    add_executable(rts_hdr_scene tests/render/hdr_scene.cpp $<TARGET_OBJECTS:rts_runtime>)
+    target_link_libraries(rts_hdr_scene PRIVATE rts_runtime)
+    if(RTS_PLATFORM STREQUAL "macos")
+        add_executable(rts_hdr_gl tests/render/hdr_gl.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:rts_runtime>)
+        target_link_libraries(rts_hdr_gl PRIVATE rts_runtime "-framework OpenGL")
+        set_source_files_properties(tests/render/hdr_gl.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
+endif()

@@ -19,7 +19,7 @@ void main(){
  float v=texture(tex0,uv).a;float aa=max(fwidth(v),0.015);
  float fill=smoothstep(0.5-aa,0.5+aa,v);
  float edge=1.0-smoothstep(style.y,style.y+aa,abs(v-0.5));
- outColor=vec4(mix(color.rgb,vec3(1),edge*0.55),fill*style.x);
+ outColor=rtsDisplay(vec4(mix(color.rgb,vec3(1),edge*0.55),fill*style.x));
 }
 )";
 const char* msl=R"(
@@ -31,7 +31,7 @@ fragment float4 fs_main(Out i [[stage_in]],constant U& u [[buffer(1)]],texture2d
  if(any(i.uv<float2(0))||any(i.uv>float2(1)))discard_fragment();
  float v=tex0.sample(s,i.uv).a;float aa=max(fwidth(v),0.015f);
  float fill=smoothstep(0.5f-aa,0.5f+aa,v);float edge=1-smoothstep(u.style.y,u.style.y+aa,abs(v-0.5f));
- return float4(mix(u.color.rgb,float3(1),edge*0.55f),fill*u.style.x);
+ return rtsDisplay(float4(mix(u.color.rgb,float3(1),edge*0.55f),fill*u.style.x));
 }
 )";
 // Categorical cell raster: port of the ownership look of OpenWar's ArmyMapWorld.shader (desktop 5x5 smoothstep
@@ -153,7 +153,7 @@ void main(){
  }
  if(groundA.z>0.5||coastA.y>0.5)color=style.z>0.5?toSrgb(groundLinear(toLin(color),fid,aa)):groundLinear(color,fid,aa);
  color=mix(color,borderColor.rgb,edge*borderColor.a);
- outColor=vec4(color,abs(fid-style.w)<0.5?0.0:style.x);   // style.w: the transparent id (-1: none)
+ outColor=rtsDisplay(vec4(color,abs(fid-style.w)<0.5?0.0:style.x));   // style.w: the transparent id (-1: none)
 }
 )";
 const char* cellMsl=R"(
@@ -264,7 +264,7 @@ fragment float4 fs_main(Out i [[stage_in]],constant U& u [[buffer(1)]],texture2d
  }
  if(u.groundA.z>0.5||u.coastA.y>0.5)color=u.style.z>0.5?toSrgb(ground(u,tex1,smp,i.uv,toLin(color),fid,aa)):ground(u,tex1,smp,i.uv,color,fid,aa);
  color=mix(color,u.borderColor.rgb,edge*u.borderColor.a);
- return float4(color,abs(fid-u.style.w)<0.5?0.0:u.style.x);
+ return rtsDisplay(float4(color,abs(fid-u.style.w)<0.5?0.0:u.style.x));
 }
 )";
 }

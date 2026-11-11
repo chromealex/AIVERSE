@@ -51,7 +51,7 @@ void main() {
     float k = clamp((min(t.r, t.b) - t.g) * 4.0, 0.0, 1.0) * clamp(1.0 - abs(t.r - t.b) * 4.0, 0.0, 1.0) * v_team.a;
     vec3 c = mix(t.rgb, v_team.rgb * max(t.r, t.b), k);
     c *= unlitTint() + mapLight(v_wpos) * 0.8;   // lights (LightShaders.h)
-    o_color = vec4(c, t.a) * v_col;
+    o_color = rtsDisplay(vec4(c, t.a) * v_col);
 }
 )";
 
@@ -70,7 +70,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]],
     float k = clamp((min(t.r, t.b) - t.g) * 4.0, 0.0, 1.0) * clamp(1.0 - abs(t.r - t.b) * 4.0, 0.0, 1.0) * in.team.a;
     float3 c = mix(t.rgb, in.team.rgb * max(t.r, t.b), k);
     c *= unlitTint(l) + mapLight(l, tex1, s1, in.wpos) * 0.8;
-    return float4(c, t.a) * in.col;
+    return rtsDisplay(float4(c, t.a) * in.col);
 }
 )";
 
@@ -116,8 +116,12 @@ void main() {
     vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
     vec3 light = u_skyColor.rgb * u_skyColor.rgb + sun * (max(L.y, 0.0) * sh);
     light += dynamicLight(p, vec3(0.0, 1.0, 0.0), normalize(u_camPos.xyz - p), 0.0);
+#if RTS_HDR
+    o_color = vec4(rtsSrgbDecode(c * v_col.rgb) * min(light / u_ref.rgb, vec3(2.56)), t.a * v_col.a);
+    return;
+#endif
     c *= min(sqrt(light / u_ref.rgb), vec3(1.6));   // linear ratio -> display (~sqrt)
-    o_color = vec4(c, t.a) * v_col;
+    o_color = rtsDisplay(vec4(c, t.a) * v_col);
 }
 )";
 
@@ -148,8 +152,11 @@ fragment float4 fs_main(VOut in [[stage_in]], constant SU0& u [[buffer(1)]], con
     float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
     float3 light = f.skyColor.rgb * f.skyColor.rgb + sun * (max(L.y, 0.0) * sh);
     light += dynamicLight(l, tex1, s1, p, float3(0.0, 1.0, 0.0), normalize(f.camPos.xyz - p), 0.0);
+#if RTS_HDR
+    return float4(rtsSrgbDecode(c * in.col.rgb) * min(light / u.ref.rgb, float3(2.56)), t.a * in.col.a);
+#endif
     c *= min(sqrt(light / u.ref.rgb), float3(1.6));
-    return float4(c, t.a) * in.col;
+    return rtsDisplay(float4(c, t.a) * in.col);
 }
 )";
 

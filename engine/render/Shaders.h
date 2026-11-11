@@ -327,15 +327,15 @@ float shadowFactor(vec3 n) { return u_params.z < 0.5 ? 1.0 : min(shadowAt(v_wpos
 
 void main() {
     vec4 albedo = u_color * v_col;
-    vec3 base = albedo.rgb * albedo.rgb;                  // ~sRGB -> linear
+    vec3 base = rtsDecodeScene(albedo.rgb);                  // ~sRGB -> linear
     vec3 n = normalize(v_nrm);
     vec3 L = normalize(u_sunDir.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
     float sh = ndl > 0.0 ? shadowFactor(n) : 1.0;
     sh *= cloudShade(v_wpos);
-    vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
-    vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
+    vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
+    vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u_params.y;
@@ -344,15 +344,15 @@ void main() {
     col += base * dynamicLight(v_wpos, n, V, u_params.y);
     col = mix(col, base, u_params.x) + base * (u_params.w * (1.0 + nightGlow()));
     float dist = length(u_camPos.xyz - v_wpos);
-    col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0); // ACES fit
-    vec3 outc = waterReflect(sqrt(col), v_wpos, n, V, u_params.y);   // planar reflection (water, High)
+    col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
+    col = rtsToneScene(col, u_skyColor.w > 0.5); // ACES fit
+    vec3 outc = waterReflect(rtsEncodeScene(col), v_wpos, n, V, u_params.y);   // planar reflection (water, High)
     if (u_params.y >= 0.85 && u_trace2.w > 0.5) {                     // screen-space reflection (trace tier)
         vec3 nn = normalize(n + vec3(sin(v_wpos.z * 3.0 + l_cloud.x * 11.0), 0.0, sin(v_wpos.x * 2.6 - l_cloud.y * 9.0)) * 0.02);
         float hit;
         vec3 rc = ssrWater(v_wpos, nn, V, hit);
         float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
-        outc = mix(outc, mix(sqrt(col), rc, fres), hit);
+        outc = mix(outc, mix(rtsEncodeScene(col), rc, fres), hit);
     }
     o_color = vec4(outc, albedo.a);
 }
@@ -384,15 +384,15 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
                         texture2d<float> tex4 [[texture(4)]], sampler s4 [[sampler(4)]],
                         depth2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]]) {
     float4 albedo = u.color * in.col;
-    float3 base = albedo.rgb * albedo.rgb;
+    float3 base = rtsDecodeScene(albedo.rgb);
     float3 n = normalize(in.nrm);
     float3 L = normalize(f.sunDir.xyz);
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
     float sh = ndl > 0.0 ? shadowFactor(u, f, in.wpos, n, in.pos.xy, tex0, s0, tex3, s3) : 1.0;
     sh *= cloudShade(l, in.wpos);
-    float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
-    float3 amb = mix(f.groundColor.rgb * f.groundColor.rgb, f.skyColor.rgb * f.skyColor.rgb, n.y * 0.5 + 0.5);
+    float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
+    float3 amb = mix(rtsDecodeScene(f.groundColor.rgb), rtsDecodeScene(f.skyColor.rgb), n.y * 0.5 + 0.5);
     float3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u.params.y;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
@@ -400,15 +400,15 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     col += base * dynamicLight(l, tex1, s1, in.wpos, n, V, u.params.y);
     col = mix(col, base, u.params.x) + base * (u.params.w * (1.0 + l.info.w));
     float dist = length(f.camPos.xyz - in.wpos);
-    col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    float3 outc = waterReflect(l, tex2, s2, in.pos.xy, sqrt(col), in.wpos, n, V, u.params.y);
+    col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
+    col = rtsToneScene(col, f.skyColor.w > 0.5);
+    float3 outc = waterReflect(l, tex2, s2, in.pos.xy, rtsEncodeScene(col), in.wpos, n, V, u.params.y);
     if (u.params.y >= 0.85 && f.trace2.w > 0.5) {
         float3 nn = normalize(n + float3(sin(in.wpos.z * 3.0 + l.cloud.x * 11.0), 0.0, sin(in.wpos.x * 2.6 - l.cloud.y * 9.0)) * 0.02);
         float hit;
         float3 rc = ssrWater(f, tex4, s4, tex5, s5, in.wpos, nn, V, hit);
         float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
-        outc = mix(outc, mix(sqrt(col), rc, fres), hit);
+        outc = mix(outc, mix(rtsEncodeScene(col), rc, fres), hit);
     }
     return float4(outc, albedo.a);
 }
@@ -480,7 +480,7 @@ void main() { v_col = a_col; gl_Position = u_viewProj * vec4(a_pos, 1.0); }
 inline const char* kColorFS = R"(
 in vec4 v_col;
 out vec4 o_color;
-void main() { o_color = v_col; }
+void main() { o_color = rtsDisplay(v_col); }
 )";
 inline const char* kColorMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n" RTS_MSL_BLOCKS
@@ -490,7 +490,7 @@ struct VOut { float4 pos [[position]]; float4 col; };
 vertex VOut vs_main(VIn in [[stage_in]], constant U1& f [[buffer(2)]]) {
     VOut o; o.pos = f.viewProj * float4(in.pos, 1.0); o.col = in.col; return o;
 }
-fragment float4 fs_main(VOut in [[stage_in]]) { return in.col; }
+fragment float4 fs_main(VOut in [[stage_in]]) { return rtsDisplay(in.col); }
 )";
 
 // ---------------- Dear ImGui ----------------
@@ -513,7 +513,7 @@ out vec4 o_color;
 void main() {
     vec4 t = texture(tex0, v_uv);
     if (u_params.x > 0.5) t = vec4(1.0, 1.0, 1.0, t.r);
-    o_color = v_col * t;
+    o_color = rtsDisplay(v_col * t);
 }
 )";
 inline const char* kImGuiMSL = R"(
@@ -529,7 +529,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]],
                         texture2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
     float4 t = tex0.sample(s0, in.uv);
     if (u.params.x > 0.5) t = float4(1.0, 1.0, 1.0, t.r);
-    return in.col * t;
+    return rtsDisplay(in.col * t);
 }
 )";
 

@@ -346,11 +346,13 @@ void LightSystem::setClouds(float coverage, float strength, float scale, float o
 bool LightSystem::beginReflection(int viewW, int viewH, float3 clear) {
     if (!reflectionsWanted() || viewW <= 0 || viewH <= 0) return false;
     const int w = std::max(viewW / 2, 16), h = std::max(viewH / 2, 16);
-    if (w != reflW_ || h != reflH_ || !reflColor_.valid()) {
+    if (w != reflW_ || h != reflH_ || !reflColor_.valid() || reflectionLinear_ != linearScene_) {
         if (reflColor_.valid()) dev_->destroyTexture(reflColor_);
         if (reflDepth_.valid()) dev_->destroyTexture(reflDepth_);
         gfx::TextureDesc td;
         td.width = w; td.height = h; td.renderTarget = true; td.filter = gfx::Filter::Linear; td.label = "water reflection";
+        td.format = linearScene_ ? gfx::PixelFormat::RGBA16F : gfx::PixelFormat::RGBA8;
+        reflectionLinear_ = linearScene_;
         reflColor_ = dev_->createTexture(td);
         gfx::TextureDesc dd = td;
         dd.format = gfx::PixelFormat::Depth; dd.filter = gfx::Filter::Nearest; dd.label = "water reflection depth";
@@ -362,6 +364,10 @@ bool LightSystem::beginReflection(int viewW, int viewH, float3 clear) {
     gfx::PassDesc p;
     p.colorTarget = reflColor_;
     p.depthTarget = reflDepth_;
+    if (linearScene_) {
+        auto decode = [](float c) { c = std::max(c, 0.0f); return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); };
+        clear = {decode(clear.x), decode(clear.y), decode(clear.z)};
+    }
     p.clearColor[0] = clear.x; p.clearColor[1] = clear.y; p.clearColor[2] = clear.z; p.clearColor[3] = 1;
     dev_->beginPass(p);
     dev_->setViewport({0, 0, w, h});

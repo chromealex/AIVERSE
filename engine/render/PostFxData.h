@@ -28,6 +28,11 @@
 namespace rts::render {
 
 enum class PostFxQuality { Off = 0, Low = 1, Medium = 2, High = 3 };
+enum class HdrMode { Auto, Off, On };
+inline bool hdrAtQuality(HdrMode mode, PostFxQuality quality, bool supported) {
+    return supported && quality > PostFxQuality::Low &&
+        (mode == HdrMode::On || (mode == HdrMode::Auto && quality == PostFxQuality::High));
+}
 enum class PostFxCostClass { Cheap, Medium, Heavy };
 
 enum class PostFxType {
@@ -76,6 +81,7 @@ struct PostFxEffect {
 
 struct PostFxSettings {
     bool enabled = true;
+    HdrMode hdr = HdrMode::Auto;
     std::vector<PostFxEffect> effects;   // at most one per type, catalog order
     const PostFxEffect* find(PostFxType t) const;
     // Effects that run on the given tier.

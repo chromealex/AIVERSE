@@ -29,7 +29,7 @@ uniform lowp sampler2D tex0;
 in mediump vec2 v_uv;
 in lowp vec4 v_col;
 out lowp vec4 o_color;
-void main() { o_color = texture(tex0, v_uv) * v_col; }
+void main() { o_color = rtsDisplay(texture(tex0, v_uv) * v_col); }
 )";
 
 inline const char* kOverlayMSL = R"(
@@ -46,7 +46,7 @@ vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
     return o;
 }
 fragment half4 fs_main(VOut in [[stage_in]], texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
-    return tex0.sample(s0, in.uv) * in.col;
+    return half4(rtsDisplay(float4(tex0.sample(s0, in.uv) * in.col)));
 }
 )";
 

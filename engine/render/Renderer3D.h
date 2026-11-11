@@ -106,6 +106,7 @@ class PostProcess {
 public:
     virtual ~PostProcess() = default;
     virtual bool active() const = 0;
+    virtual bool linearScene() const { return false; }
     virtual gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) = 0;
     virtual void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) = 0;
 };
@@ -262,8 +263,9 @@ private:
     // trace tier
     bool traceWanted_ = true;
     bool ssrThisFrame_ = false;
+    bool hdrFrame_ = false;
     HeightField heightField_;
-    struct SceneTarget { int w = 0, h = 0; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
+    struct SceneTarget { int w = 0, h = 0; bool hdr = false; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
     std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)
     gfx::TextureHandle sceneColor_, sceneDepth_;   // this frame's capture
     gfx::TextureHandle dummyDepth_, dummyHeight_;

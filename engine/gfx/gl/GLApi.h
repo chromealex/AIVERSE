@@ -3,6 +3,16 @@
 //  * Windows: desktop GL 3.3 core, functions above GL 1.1 are loaded at runtime via
 //    wglGetProcAddress (no GLEW/GLAD dependency).
 #pragma once
+#ifndef GL_RGBA16F
+#define GL_RGBA16F 0x881A
+#endif
+#ifndef GL_HALF_FLOAT
+#define GL_HALF_FLOAT 0x140B
+#endif
+#ifndef GL_DRAW_FRAMEBUFFER_BINDING
+#define GL_DRAW_FRAMEBUFFER_BINDING 0x8CA6
+#define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
+#endif
 
 #if defined(_WIN32)
   #ifndef WIN32_LEAN_AND_MEAN
@@ -46,6 +56,7 @@
   #define GL_DEPTH_COMPONENT24 0x81A6
   #define GL_RGBA32F 0x8814
   #define GL_EXTENSIONS 0x1F03
+  #define GL_NUM_EXTENSIONS 0x821D
   #define GL_TEXTURE_MAX_LEVEL 0x813D
   #define GL_TEXTURE_COMPARE_MODE 0x884C
   #define GL_TEXTURE_COMPARE_FUNC 0x884D
@@ -55,6 +66,7 @@
   #define GL_DEPTH_ATTACHMENT 0x8D00
   #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
   #define RTS_GL_FUNCS(X) \
+    X(const GLubyte*, glGetStringi, (GLenum name, GLuint index)) \
     X(void, glGenBuffers, (GLsizei n, GLuint* b)) \
     X(void, glDeleteBuffers, (GLsizei n, const GLuint* b)) \
     X(void, glBindBuffer, (GLenum t, GLuint b)) \
@@ -103,6 +115,9 @@
   RTS_GL_FUNCS(RTS_GL_DECLARE)
   #undef RTS_GL_DECLARE
   namespace rts::gfx { bool loadGLFunctions(); }
+#elif defined(__APPLE__)
+  #define GL_SILENCE_DEPRECATION
+  #include <OpenGL/gl3.h>
 #elif defined(__EMSCRIPTEN__)
   #include <GLES3/gl3.h>
 #else

@@ -115,6 +115,7 @@ public:
     void bind(int uniformSlot = 2, int textureSlot = 1, int reflectionSlot = -1);
 
     // Planar water reflection (Renderer3D::renderReflection): High tier only.
+    void setLinearScene(bool on) { linearScene_ = on; }
     void setWaterReflections(bool on) { reflectOn_ = on; }
     bool waterReflections() const { return reflectOn_; }
     bool reflectionsWanted() const { return reflectOn_ && quality_ == LightQuality::High && dev_; }
@@ -170,6 +171,7 @@ private:
     gfx::TextureHandle reflColor_, reflDepth_;
     int reflW_ = 0, reflH_ = 0;
     float viewW_ = 1, viewH_ = 1;
+    bool linearScene_ = false, reflectionLinear_ = false;
     bool reflectOn_ = true, reflReady_ = false;
     LightUniforms u_{};
     LightStats stats_;
