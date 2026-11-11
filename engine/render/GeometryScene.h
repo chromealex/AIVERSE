@@ -23,6 +23,7 @@ private:
         std::unique_ptr<Model> proxy;
         float3 min,max;
         float error=0;
+        bool occlusion=false;
     };
     int buildGroup(gfx::Device& dev, std::vector<size_t> ids);
     void drawGroup(Renderer3D& renderer,int group);

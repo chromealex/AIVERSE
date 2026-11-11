@@ -64,6 +64,8 @@ world-space proxies, and uses cluster coarse indices where available. Original s
 resident. It selects a proxy only within both the projected group extent and geometric-error
 limits. The transformation bound accounts for nonuniform scale. If materials are transparent,
 masked or use Shader Graph, or the proxy budget is exhausted, the children remain active.
+Groups which cannot reduce either geometry or estimated instanced draw count keep the originals.
+Identical untextured materials can merge across assets; textured materials merge within the same source.
 Textures/materials are preserved; there is no texture atlasing or material baking. Each unique
 material can still require a draw. Proxies switch without cross-fade. This first implementation
 builds proxies in memory and may duplicate textures; inspect memory before using large scenes.
@@ -75,7 +77,8 @@ builds proxies in memory and may duplicate textures; inspect memory before using
 Each cluster has fine/coarse indices, bounds and an accumulated displacement bound. Coarsening
 collapses compatible interior edges to existing vertices; boundary/seam vertices are locked.
 This conservative attribute filter may produce little simplification on hard-edged/UV-heavy art.
-The original model remains a fallback. Skinning, animation clips and morph targets are excluded.
+The original model remains a fallback. Skinning, animation clips and morph targets are excluded. Shader Graph materials bypass cluster
+and candidate occlusion tests because vertex displacement can invalidate source bounds.
 
 The main opaque pass selects coarse clusters by projected error. Near-plane/unstable projection
 falls back to fine geometry. Contiguous ranges are merged. Instanced batches, outlines, dissolve,
@@ -104,3 +107,13 @@ coarse reduction, projection scaling, both depth conventions, holes, backfaces, 
 near-plane fallback, rendered culling, disabled/dissolved/masked occluders, and HLOD near/far switch.
 `aiverse_geometry_preview [off]` renders a real-backend static HLOD fixture. Use
 `AIVERSE_SCREENSHOT=/tmp/geometry.ppm AIVERSE_EXIT_AFTER_FRAMES=5` for an image comparison.
+
+### Verified reference fixtures (macOS / Metal)
+
+The real-backend preview accepts `[on|off] [hlod|clusters|occlusion|lod]`.
+On/off captures matched byte-for-byte for all four fixtures. In the HLOD fixture, 48 distinct
+untextured source assets changed from 96 total draws (including shadows) to 8; identical low-poly
+instances instead retain existing instancing when a proxy cannot help. The occlusion fixture
+removed one hidden main-pass draw. The far-LOD fixture selected all 64 coarse clusters, reducing
+8192 source triangles to 4096 in the main pass. These are fixture results, not general frame-time
+or speedup claims. Android, WebGL and Windows runtime rendering have not been verified here.

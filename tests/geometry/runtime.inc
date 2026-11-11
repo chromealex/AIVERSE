@@ -73,6 +73,9 @@ TEST(geometry_hlod_scene_switch_and_validation) {
     cam.distance=10;r.beginScene(cam,800,600);scene.draw(r);r.render(gfx::PassDesc{});CHECK(scene.stats().submitted==2);
     for(auto bad:{R"({"version":1,"instances":[{"id":"x","model":"../secret.obj"}]})",R"({"version":1,"instances":[{"id":"x","model":"box.obj","scale":[-1,1,1]}]})",R"({"version":1,"instances":[],"hlod":{"enabled":"yes"}})"}){bool caught=false;try{GeometryScene::validate(Json::parse(bad));}catch(...){caught=true;}CHECK(caught);}
     for(auto bad:{R"({"clusters":"yes"})",R"({"errorPixels":0})",R"({"typo":true})"}){bool caught=false;try{parseGeometryPolicy(Json::parse(bad));}catch(...){caught=true;}CHECK(caught);}
+    json.member("instances").at(1).set("model",Json::string("box.obj"));
+    scene.load(dev,json,[](const std::string&,std::string& out){out=geometrytest::boxObj();return true;});
+    CHECK(scene.stats().proxies==0); // identical low-poly sources already use one instanced draw
     scene.shutdown(dev);r.shutdown();
 }
 #ifdef AIVERSE_TESTS_EDITOR_CORE

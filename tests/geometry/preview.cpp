@@ -17,9 +17,11 @@ int aiverseMain(int argc,char** argv){
     platform::AppConfig config;config.title="AIVERSE Geometry Verification";config.width=960;config.height=640;
     platform::AppCallbacks cb;
     cb.init=[&](gfx::Device& dev){device=&dev;renderer.init(dev);renderer.setShadowQuality(render::ShadowQuality::Medium);
-        if(mode!="hlod") {wall=makeGrid(mode=="clusters"?64:1,mode=="clusters"?60.f:10.f);target=makeGrid(1,1);
+        if(mode!="hlod") {wall=makeGrid((mode=="clusters"||mode=="lod")?64:1,mode=="clusters"?60.f:10.f);target=makeGrid(1,1);
             wall.materials[0].baseColor={.2f,.6f,.8f,1};target.materials[0].baseColor={1,.1f,.1f,1};
-            render::prepareGeometry(wall);render::uploadModel(dev,wall);render::uploadModel(dev,target);return;}
+            render::prepareGeometry(wall);
+            if(mode=="lod"){uint32_t fine=0,coarse=0;float error=0;for(auto& c:wall.geometry->primitives[0]){fine+=c.indexCount;coarse+=c.coarseCount;error=std::max(error,c.error);}std::printf("cluster asset fine=%u coarse=%u error=%f\n",fine/3,coarse/3,error);}
+            render::uploadModel(dev,wall);render::uploadModel(dev,target);return;}
         Json j=Json::parse(R"({"version":1,"hlod":{"enabled":false,"maxPixels":512},"instances":[]})");j.member("hlod").set("enabled",Json::fromBool(enabled));
         for(int z=0;z<6;++z)for(int x=0;x<8;++x){Json i=Json::object();i.set("id",Json::string(std::to_string(z*8+x)));i.set("model",Json::string("box"+std::to_string(z*8+x)+".obj"));
             Json pos=Json::array();pos.push(Json::number(int64_t(x*4-14)));pos.push(Json::number(int64_t(1)));pos.push(Json::number(int64_t(z*4-10)));i.set("position",pos);
@@ -28,10 +30,10 @@ int aiverseMain(int argc,char** argv){
         scene.load(dev,j,[obj](const std::string&,std::string& out){out=obj;return true;});
     };
     int frame=0;
-    cb.frame=[&](gfx::Device& dev,double){render::RTSCamera cam;cam.target={0,0,0};cam.distance=80;cam.pitch=.6f;cam.yaw=.4f;if(mode!="hlod"){cam.distance=20;cam.pitch=0;cam.yaw=0;}
+    cb.frame=[&](gfx::Device& dev,double){render::RTSCamera cam;cam.target={0,0,0};cam.distance=80;cam.pitch=.6f;cam.yaw=.4f;if(mode!="hlod"){cam.distance=mode=="lod"?800:20;cam.pitch=0;cam.yaw=0;}
         renderer.beginScene(cam,dev.framebufferWidth(),dev.framebufferHeight());
         if(mode=="hlod")scene.draw(renderer);
-        else {render::ModelDraw d;d.model=&wall;d.geometry.clusters=enabled&&mode=="clusters";d.geometry.occluder=enabled&&mode=="occlusion";renderer.drawModel(d);
+        else {render::ModelDraw d;d.model=&wall;d.geometry.clusters=enabled&&(mode=="clusters"||mode=="lod");d.geometry.errorPixels=2;d.geometry.occluder=enabled&&mode=="occlusion";renderer.drawModel(d);
             d.model=&target;d.geometry={};d.geometry.occlusion=enabled;d.world=render::mat4::translate({-2,0,-3})*render::mat4::scale({.2f,.2f,.2f});renderer.drawModel(d);}
         gfx::PassDesc p;p.clearColor[0]=.08f;p.clearColor[1]=.1f;p.clearColor[2]=.14f;renderer.render(p);
         if(++frame==3){const auto& s=renderer.geometryStats();std::printf("geometry enabled=%d instances=%u proxies=%u submitted=%u draws=%u occluded=%u clusters=%u coarse=%u\n",enabled,scene.stats().instances,scene.stats().proxies,scene.stats().submitted,renderer.drawCalls(),s.occluded,s.clustersTested,s.coarseClusters);}

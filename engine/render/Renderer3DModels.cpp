@@ -377,8 +377,8 @@ void Renderer3D::renderModels(int phase) {
         bool take = phase == 0 ? it.inShadow : phase == 3 ? it.inView && it.outline.w > 0 : phase == 4 ? it.inView && transparentItem(it.flags) :
                     it.inView && (phase == 2) == blended;
         // Reflection has its own view, never consume main-view occlusion there.
-        if (phase == 1 && !geometryMainView_) take = !blended && geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
-        if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
+        if (phase == 1 && !geometryMainView_) take = !blended && (it.mat->shaderGraph || geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax));
+        if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && !it.mat->shaderGraph && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
             geometryOcclusion_.hidden(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax)) {
             if (phase == 1 || phase == 2) ++geometryStats_.occluded;
             take = false;
@@ -433,7 +433,7 @@ void Renderer3D::prepareOcclusion() {
 }
 void Renderer3D::drawGeometryBatch(const uint32_t* items, uint32_t count, int phase) {
     auto& it = modelItems_[items[0]];
-    const bool eligible = count == 1 && phase == 1 && geometryMainView_ && it.geometry.clusters && it.model->geometry &&
+    const bool eligible = count == 1 && phase == 1 && geometryMainView_ && it.geometry.clusters && !it.mat->shaderGraph && it.model->geometry &&
         it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 && it.dissolve == 0;
     if (!eligible) { drawModelBatch(items,count,phase); return; }
     const auto& clusters = it.model->geometry->primitives[it.geometryPrimitive];

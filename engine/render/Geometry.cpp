@@ -36,6 +36,7 @@ std::vector<Triangle> coarse(const Model& m, std::vector<Triangle> tris, float& 
     for (auto t : tris) for (int i=0;i<3;++i) ++edges[std::minmax(t[i],t[(i+1)%3])];
     std::set<uint32_t> locked;
     for (auto [e,n] : edges) if (n != 2) { locked.insert(e.first); locked.insert(e.second); }
+    std::map<uint32_t,float> displacement;
     const size_t target = tris.size()/2;
     for (size_t pass=0;pass<128 && tris.size()>target;++pass) {
         float best=std::numeric_limits<float>::infinity(); uint32_t from=0,to=0;
@@ -43,13 +44,22 @@ std::vector<Triangle> coarse(const Model& m, std::vector<Triangle> tris, float& 
             const auto a=t[e],b=t[(e+1)%3];
             if (locked.count(a) || locked.count(b)) continue;
             const auto& x=m.vertices[a]; const auto& y=m.vertices[b];
-            if (x.color!=y.color || dot(x.nrm,y.nrm)<.999f || std::fabs(x.uv.x-y.uv.x)>.02f || std::fabs(x.uv.y-y.uv.y)>.02f) continue;
+            if (x.color!=y.color || x.tangent.w!=y.tangent.w || dot(float3{x.tangent.x,x.tangent.y,x.tangent.z},float3{y.tangent.x,y.tangent.y,y.tangent.z})<.999f || dot(x.nrm,y.nrm)<.999f || std::fabs(x.uv.x-y.uv.x)>.02f || std::fabs(x.uv.y-y.uv.y)>.02f) continue;
             const float d=length(x.pos-y.pos);
             if (d>=best) continue;
-            bool valid=true;
+            std::set<uint32_t> na,nb,opposite;int incident=0;
+            for(auto q:tris){bool ha=false,hb=false;for(auto v:q){ha|=v==a;hb|=v==b;}
+                if(ha)for(auto v:q)if(v!=a)na.insert(v);
+                if(hb)for(auto v:q)if(v!=b)nb.insert(v);
+                if(ha&&hb){++incident;for(auto v:q)if(v!=a&&v!=b)opposite.insert(v);}}
+            std::set<uint32_t> common;for(auto v:na)if(nb.count(v))common.insert(v);
+            if(incident!=2||common!=opposite)continue; // manifold link condition
+            bool valid=true;std::set<Triangle> faces;
             for(auto q:tris) {
                 auto r=q;for(auto& v:r)if(v==a)v=b;
                 if(r[0]==r[1]||r[1]==r[2]||r[0]==r[2])continue;
+                auto face=r;std::sort(face.begin(),face.end());
+                if(!faces.insert(face).second){valid=false;break;} // never erase an isolated closed component
                 const auto oldN=cross(m.vertices[q[1]].pos-m.vertices[q[0]].pos,m.vertices[q[2]].pos-m.vertices[q[0]].pos);
                 const auto newN=cross(m.vertices[r[1]].pos-m.vertices[r[0]].pos,m.vertices[r[2]].pos-m.vertices[r[0]].pos);
                 if(dot(oldN,newN)<=0) {valid=false;break;}
@@ -57,7 +67,8 @@ std::vector<Triangle> coarse(const Model& m, std::vector<Triangle> tris, float& 
             if(valid){best=d;from=a;to=b;}
         }
         if(!std::isfinite(best))break;
-        error+=best;
+        displacement[to]=std::max(displacement[to],displacement[from]+best);
+        error=std::max(error,displacement[to]);
         for(auto& t:tris)for(auto& v:t)if(v==from)v=to;
         std::erase_if(tris,[](auto t){return t[0]==t[1]||t[1]==t[2]||t[0]==t[2];});
     }
@@ -115,7 +126,7 @@ bool geometryBoxVisible(const mat4& clip,float3 mn,float3 mx) {
 float geometryErrorPixels(const mat4& clip,float3 mn,float3 mx,float error,int width,int height) {
     float w=1e30f,x=0,y=0;
     for(int c=0;c<8;++c){auto p=clip*float4{c&1?mx.x:mn.x,c&2?mx.y:mn.y,c&4?mx.z:mn.z,1};
-        if(!finite(p)||p.w<=0||p.z < -p.w)return 1e30f;
+        if(!finite(p)||p.w<=0||p.z < 0)return 1e30f;
         w=std::min(w,p.w);x=std::max(x,std::fabs(p.x));y=std::max(y,std::fabs(p.y));}
     auto norm=[&](int r){return length({clip.at(r,0),clip.at(r,1),clip.at(r,2)});};
     const float dw=norm(3)*error;

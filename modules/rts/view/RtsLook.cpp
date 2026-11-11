@@ -303,7 +303,9 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 }
 
 Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::string& path) {
-    const auto policy = parseGeometryPolicy(t.view["geometry"]);
+    GeometryPolicy policy;
+    try { policy = parseGeometryPolicy(t.view["geometry"]); }
+    catch (const std::exception& e) { warn(t, e.what()); }
     const std::string key = path + ((policy.clusters || policy.occluder) ? "#geometry" : "");
     auto it = models_.find(key);
     if (it == models_.end()) {
@@ -442,7 +444,8 @@ void RtsView::configureChoice(gfx::Device& dev, const UnitType& t, const Json& v
         try { c.graph = AnimationGraph::compile(m, v["animationGraph"], animationOperations_, animationTraits_); }
         catch (const std::exception& e) { warn(t, e.what()); }
     }
-    c.geometry = parseGeometryPolicy(t.view["geometry"]);
+    try { c.geometry = parseGeometryPolicy(t.view["geometry"]); }
+    catch (const std::exception& e) { warn(t, e.what()); }
     // ---- placement: centre on the ground, rotate the model's forward axis to +X, fit, offset
     const std::string fwd = v.getStr("forward", isShape ? "+x" : "+z");
     float yaw = fwd == "+z" ? 90 * kDeg : fwd == "-z" ? -90 * kDeg : fwd == "-x" ? 180 * kDeg : 0;

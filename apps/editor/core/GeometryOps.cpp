@@ -60,6 +60,7 @@ void registerGeometryOps(Workspace& ws){
         // Validate all referenced assets before committing the scene file.
         std::set<std::string> seen; size_t vertices=0;
         for(auto& i:p["scene"]["instances"].items())if(seen.insert(i.getStr("model")).second){auto m=render::loadModel(i.getStr("model"),reader(ws));
+            if(m->vertices.empty()||m->indices.empty())throw std::runtime_error("geometry scene: source has no triangles");
             vertices+=m->vertices.size();if(vertices>2000000)throw std::runtime_error("geometry scene: exceeds 2 million source vertices");
             if(!m->skins.empty()||!m->clips.empty())throw std::runtime_error("geometry scene: animated assets must remain entities");
             for(auto& mesh:m->meshes)for(auto& primitive:mesh.primitives)if(primitive.morphTargets)throw std::runtime_error("geometry scene: morph assets must remain entities");}

@@ -32,15 +32,17 @@ void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& rea
                 if(!m->skins.empty()||!m->clips.empty())throw std::runtime_error("geometry scene: animated model '"+file+"' must use ordinary entities");
                 for(auto& mesh:m->meshes)for(auto& p:mesh.primitives)if(p.morphTargets)throw std::runtime_error("geometry scene: morph model must use ordinary entities");
                 vertices+=m->vertices.size();if(vertices>2000000)throw std::runtime_error("geometry scene: exceeds 2 million source vertices");
-                prepareGeometry(*m);models_[file]=std::move(m);
+                if(m->vertices.empty()||m->indices.empty())throw std::runtime_error("geometry scene: source has no triangles: "+file);
+                models_[file]=std::move(m);
             }
             Instance in;in.model=models_.at(file).get();in.policy=parseGeometryPolicy(i["geometry"]);
             auto rot=vector(i["rotation"],{});constexpr float deg=.0174532925199433f;
             in.world=mat4::translate(vector(i["position"],{}))*mat4::rotateY(rot.y*deg)*mat4::rotateX(rot.x*deg)*mat4::rotateZ(rot.z*deg)*mat4::scale(vector(i["scale"],{1,1,1}));
             instances_.push_back(in);
         }
+        for(auto& [file,m]:models_)if(hlod_||std::any_of(instances_.begin(),instances_.end(),[&](const Instance& i){return i.model==m.get()&&(i.policy.clusters||i.policy.occluder);}))prepareGeometry(*m);
         if(hlod_&&!instances_.empty()){std::vector<size_t> ids(instances_.size());std::iota(ids.begin(),ids.end(),0);buildGroup(dev,std::move(ids));}
-        for(auto& [k,m]:models_)if(!uploadModel(dev,*m))throw std::runtime_error("geometry scene: source GPU upload failed");
+        for(auto& [k,m]:models_)if(!uploadModel(dev,*m)||!m->vb.valid()||!m->ib.valid())throw std::runtime_error("geometry scene: source GPU upload failed");
         stats_.instances=uint32_t(instances_.size());stats_.groups=uint32_t(groups_.size());
     }catch(...){shutdown(dev);throw;}
 }
@@ -102,14 +104,15 @@ int GeometryScene::buildGroup(gfx::Device& dev,std::vector<size_t> ids){
         auto middle=ids.begin()+ids.size()/2;const int l=buildGroup(dev,{ids.begin(),middle}),r=buildGroup(dev,{middle,ids.end()});groups_[size_t(index)].left=l;groups_[size_t(index)].right=r;
     }else groups_[size_t(index)].instances=ids;
     auto& group=groups_[size_t(index)];
-    if(ids.size()>1){group.proxy=makeProxy(ids,group.error);if(group.proxy){if(!uploadModel(dev,*group.proxy))throw std::runtime_error("geometry scene: proxy GPU upload failed");++stats_.proxies;}}
+    group.occlusion=std::all_of(ids.begin(),ids.end(),[&](size_t id){return instances_[id].policy.occlusion;});
+    if(ids.size()>1){group.proxy=makeProxy(ids,group.error);if(group.proxy){if(!uploadModel(dev,*group.proxy)||!group.proxy->vb.valid()||!group.proxy->ib.valid())throw std::runtime_error("geometry scene: proxy GPU upload failed");++stats_.proxies;}}
     return index;
 }
 void GeometryScene::drawGroup(Renderer3D& r,int index){auto& g=groups_[size_t(index)];
     // Retain offscreen source draws so their shadows/reflections remain available.
     const float extent=length(g.max-g.min);
     const bool far=geometryErrorPixels(r.viewProj(),g.min,g.max,extent,r.sceneWidth(),r.sceneHeight())<=maxPixels_;
-    if(g.proxy&&far&&geometryErrorPixels(r.viewProj(),g.min,g.max,g.error,r.sceneWidth(),r.sceneHeight())<=errorPixels_){ModelDraw d;d.model=g.proxy.get();d.geometry.occlusion=true;r.drawModel(d);++stats_.submitted;return;}
+    if(g.proxy&&far&&geometryErrorPixels(r.viewProj(),g.min,g.max,g.error,r.sceneWidth(),r.sceneHeight())<=errorPixels_){ModelDraw d;d.model=g.proxy.get();d.geometry.occlusion=g.occlusion;r.drawModel(d);++stats_.submitted;return;}
     if(g.left>=0){drawGroup(r,g.left);drawGroup(r,g.right);return;}
     for(auto id:g.instances){auto& i=instances_[id];ModelDraw d;d.model=i.model;d.world=i.world;d.geometry=i.policy;r.drawModel(d);++stats_.submitted;}
 }
