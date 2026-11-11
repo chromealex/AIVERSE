@@ -4,6 +4,8 @@ Shader Graph v1 edits bounded fragment graphs in **Графика → Shader Gra
 One graph produces GLSL ES 3.00 / desktop GLSL 330 and Metal MSL. No shader source
 from project data is executed directly. Existing games and built-in shaders remain valid.
 
+Agent workflow and three applied examples: [Shader Graph agent guide](shader-graph-agents.md).
+
 ## Editing
 
 Open a project, choose `material`, `postfx` or `particle`, add nodes and connect

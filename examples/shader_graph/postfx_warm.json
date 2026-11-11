@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "domain": "postfx",
+  "nodes": [
+    {
+      "id": "scene",
+      "op": "input",
+      "position": [
+        20,
+        20
+      ]
+    },
+    {
+      "id": "tint",
+      "op": "constant",
+      "position": [
+        20,
+        120
+      ],
+      "value": [
+        1,
+        0.72,
+        0.42,
+        1
+      ]
+    },
+    {
+      "id": "warm",
+      "op": "multiply",
+      "position": [
+        220,
+        20
+      ],
+      "inputs": [
+        "scene",
+        "tint"
+      ]
+    },
+    {
+      "id": "amount",
+      "op": "constant",
+      "position": [
+        220,
+        150
+      ],
+      "value": 0.6
+    },
+    {
+      "id": "result",
+      "op": "mix",
+      "position": [
+        420,
+        20
+      ],
+      "inputs": [
+        "scene",
+        "warm",
+        "amount"
+      ]
+    }
+  ],
+  "outputs": {
+    "color": "result"
+  }
+}
