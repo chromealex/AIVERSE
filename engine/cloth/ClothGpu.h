@@ -25,14 +25,19 @@ public:
     unsigned dispatches()const{return dispatches_;}
 private:
     bool execute(std::span<Cloth>,std::span<const size_t>,std::span<const size_t>,std::span<const float>,const Environment&,std::span<const Environment>);
-    struct Input {render::float4 forceH,pinFloor,solver;std::array<uint32_t,4> meta;};
+    struct Input {render::float4 forceH,pinFloor,solver;std::array<uint32_t,4> meta;render::float4 sleep;std::array<uint32_t,4> epoch;};
+    struct SleepState {float quiet;uint32_t candidate,sleeping,epochLo,epochHi,pad0,pad1,pad2;};
+    struct Readback {bool ready=false;std::vector<uint8_t> bytes;std::vector<uint64_t> revisions;};
+    std::vector<std::shared_ptr<Readback>> readbacks_;
+    void pollSleep();
+    bool exported_=false;
     struct CapsuleData {render::float4 a,b;};
     gfx::Device* device_=nullptr;
     Batch* batch_=nullptr;
     std::span<Cloth> cloths_;
     gfx::ComputeHandle shader_;
     gfx::TextureHandle texture_;
-    std::array<gfx::BufferHandle,10> buffers_{}; // slot 8 reserved for uniform bytes
+    std::array<gfx::BufferHandle,12> buffers_{}; // slot 8 reserved for uniform bytes
     std::vector<size_t> offsets_;
     std::vector<Input> inputs_;
     std::vector<CapsuleData> capsules_;

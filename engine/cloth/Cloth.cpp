@@ -17,6 +17,8 @@ namespace {
 void hashFloat(Hasher&,float);
 void hashVec(Hasher&,Vec);
 void hashEnvironment(Hasher&,const Environment&);
+bool sameVec(Vec,Vec);
+bool sameEnvironment(const Environment&,const Environment&);
 bool finite(Vec v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);}
 void positive(float x,const char* name){if(!std::isfinite(x)||x<=0)throw std::invalid_argument(name);}
 }
@@ -43,10 +45,33 @@ Cloth::Cloth(std::shared_ptr<const Grid> g,Vec origin):grid_(std::move(g)),origi
     weights_.assign(p_.size(),float(p_.size())/grid_->settings.mass);
     std::fill_n(weights_.begin(),grid_->settings.cells+1,0.0f);
 }
-void Cloth::reset(){externalState_=false;proofOwner_.reset();fingerprintValid_=false;p_=grid_->rest;previous_=p_;std::fill(velocity_.begin(),velocity_.end(),Vec{});pinOffset_={};}
-void Cloth::movePins(Vec offset){if(finite(offset))pinOffset_=offset;}
+void Cloth::reset(){wake();externalState_=false;proofOwner_.reset();fingerprintValid_=false;p_=grid_->rest;previous_=p_;std::fill(velocity_.begin(),velocity_.end(),Vec{});pinOffset_={};}
+void Cloth::movePins(Vec offset){if(finite(offset)&&!sameVec(offset,pinOffset_)){pinOffset_=offset;wake();}}
+bool Cloth::setSleepSettings(SleepSettings s){
+    if(!std::isfinite(s.speedThreshold)||s.speedThreshold<0||!std::isfinite(s.displacementThreshold)||s.displacementThreshold<0||!std::isfinite(s.quietSeconds)||s.quietSeconds<=0)return false;
+    if(s!=sleep_){sleep_=s;wake();}return true;
+}
+void Cloth::wake(){sleeping_=false;quietTime_=0;wakePending_=true;forceNext_=true;++sleepRevision_;}
+void Cloth::prepareSleep(const Environment& env){
+    if(env.capsules.size()>lastCapsules_.size())return;
+    // Keep collider values, never a span into mutable host storage.
+    Environment old=lastEnvironment_;old.capsules={lastCapsules_.data(),lastEnvironment_.capsules.size()};
+    if(!inputValid_||!sameEnvironment(old,env)||lastWindScale_!=windScale||(active&&!wasActive_)){
+        bool force=forceNext_||sleeping_||(active&&!wasActive_);wake();forceNext_=force;
+        lastEnvironment_=env;std::copy(env.capsules.begin(),env.capsules.end(),lastCapsules_.begin());lastEnvironment_.capsules={lastCapsules_.data(),env.capsules.size()};lastWindScale_=windScale;inputValid_=true;
+    }
+    wasActive_=active;
+}
+void Cloth::observeMotion(float dt,float speed2){
+    motionSpeed2_=speed2;wakePending_=false;forceNext_=false;
+    if(!sleep_.enabled||!std::isfinite(speed2)||speed2>sleep_.speedThreshold*sleep_.speedThreshold||speed2*dt*dt>sleep_.displacementThreshold*sleep_.displacementThreshold){quietTime_=0;return;}
+    quietTime_+=dt;sleeping_=quietTime_>=sleep_.quietSeconds;
+}
 void Cloth::step(float dt,const Environment& env){
+    if(!externalState_)prepareSleep(env);
     if(externalState_||env.capsules.size()>32||!active||!std::isfinite(windScale)||!std::isfinite(dt)||dt<=0||dt>0.1f||!finite(env.gravity)||!finite(env.wind)||!std::isfinite(env.floor))return;
+    if(sleeping_)return;
+    float speed2=0;
     recordStep(dt,env);
     auto& s=grid_->settings;
     // Bound integration dt when the scheduler accumulates time. Distant updates trade
@@ -84,8 +109,11 @@ void Cloth::step(float dt,const Environment& env){
                 }
             }
         }
-        for(size_t i=0;i<p_.size();++i)velocity_[i]=weights_[i]>0?(p_[i]-previous_[i])*(1/h):Vec{};
+        for(size_t i=0;i<p_.size();++i){velocity_[i]=weights_[i]>0?(p_[i]-previous_[i])*(1/h):Vec{};
+            float v2=dot(velocity_[i],velocity_[i]);speed2=std::isfinite(v2)?std::max(speed2,v2):INFINITY;
+        }
     }
+    observeMotion(dt,speed2);
 }
 void Cloth::recordStep(float dt,const Environment& env){
     proofOwner_.reset();
@@ -125,7 +153,7 @@ bool sameEnvironment(const Environment& a,const Environment& b){
 struct Batch::Impl {
     int count;bool sharing=false;Stats stats;
     Executor executor;
-    std::vector<float> externalSteps;
+    std::vector<float> scheduledSteps;
     std::shared_ptr<const uint8_t> proofOwner=std::make_shared<const uint8_t>(0);
     uint64_t proofCounter=0;
     struct Candidate {uint64_t key;size_t index;};
@@ -175,12 +203,19 @@ void Batch::stepScheduled(std::span<Cloth> cloths,std::span<const float> steps,c
     if(steps.size()!=cloths.size()){impl_->stats={};return;}
     run(cloths,0,env,inputs,steps);
 }
+void Batch::prepareSleep(std::span<Cloth> cloths,const Environment& env,std::span<const Environment> inputs){
+    if(beforeStep_)beforeStep_();
+    for(size_t i=0;i<cloths.size();++i)cloths[i].prepareSleep(inputs.empty()?env:inputs[i]);
+}
 void Batch::run(std::span<Cloth> cloths,float dt,const Environment& env,std::span<const Environment> inputs,std::span<const float> steps,bool execute){auto& p=*impl_;
     p.stats={};
     if(steps.empty()&&(!std::isfinite(dt)||dt<0||dt>0.1f))return;
     if(!inputs.empty()&&inputs.size()!=cloths.size())return;
     for(float step:steps)if(!std::isfinite(step)||step<0||step>0.1f)return;
-    p.steps=steps;
+    prepareSleep(cloths,env,inputs);
+    p.scheduledSteps.resize(cloths.size());
+    for(size_t i=0;i<cloths.size();++i){p.scheduledSteps[i]=cloths[i].sleeping_?0:(steps.empty()?dt:steps[i]);if(cloths[i].active&&cloths[i].sleeping_)++p.stats.sleepingObjects;}
+    steps=p.scheduledSteps;p.steps=steps;
     p.cloths=cloths;p.dt=dt;p.env=env;p.inputs=inputs;p.next=0;
     p.jobs.clear();p.jobs.reserve(cloths.size());p.groups.clear();p.groups.reserve(cloths.size());p.leader.resize(cloths.size());
     if(p.sharing||p.executor){
@@ -188,7 +223,7 @@ void Batch::run(std::span<Cloth> cloths,float dt,const Environment& env,std::spa
         for(size_t i=0;i<cloths.size();++i){auto& c=cloths[i];p.leader[i]=i;if(!c.active)continue;++p.stats.activeObjects;
             Hasher h;h.u64(uint64_t(reinterpret_cast<uintptr_t>(c.grid_.get())));h.u64(c.fingerprint());
             float step=p.timeStep(i);hashFloat(h,step);
-            if(step>0){hashVec(h,c.pinOffset_);hashFloat(h,c.windScale);hashEnvironment(h,p.input(i));}
+            if(step>0){hashFloat(h,c.quietTime_);h.u32(c.wakePending_);h.u32(c.sleep_.enabled);hashFloat(h,c.sleep_.speedThreshold);hashFloat(h,c.sleep_.displacementThreshold);hashFloat(h,c.sleep_.quietSeconds);hashVec(h,c.pinOffset_);hashFloat(h,c.windScale);hashEnvironment(h,p.input(i));}
             else ++p.stats.deferredObjects;
             p.candidates.push_back({h.value(),i});
         }
@@ -199,7 +234,7 @@ void Batch::run(std::span<Cloth> cloths,float dt,const Environment& env,std::spa
             size_t i=candidate.index;auto& c=cloths[i];bool found=false;
             for(size_t j=bucket;j<p.groups.size();++j){size_t leader=p.groups[j];auto& other=cloths[leader];
                 // Hashes only narrow the search. Exact state/input comparisons prevent false sharing.
-                if(sameFloat(p.timeStep(i),p.timeStep(leader))&&(p.timeStep(i)==0||(sameVec(c.pinOffset_,other.pinOffset_)&&sameFloat(c.windScale,other.windScale)&&sameEnvironment(p.input(i),p.input(leader))))&&c.sameState(other)){
+                if(sameFloat(p.timeStep(i),p.timeStep(leader))&&(p.timeStep(i)==0||(sameFloat(c.quietTime_,other.quietTime_)&&c.wakePending_==other.wakePending_&&c.sleep_==other.sleep_&&sameVec(c.pinOffset_,other.pinOffset_)&&sameFloat(c.windScale,other.windScale)&&sameEnvironment(p.input(i),p.input(leader))))&&c.sameState(other)){
                     p.leader[i]=leader;found=true;break;
                 }
             }
@@ -217,9 +252,8 @@ void Batch::run(std::span<Cloth> cloths,float dt,const Environment& env,std::spa
     p.stats.simulatedObjects=p.jobs.size();p.stats.copiedObjects=p.stats.activeObjects-p.stats.deferredObjects-p.jobs.size();
     if(!execute)return;
     if(p.executor){
-        if(steps.empty()){p.externalSteps.assign(cloths.size(),dt);steps=p.externalSteps;}
         if(!p.executor(cloths,p.jobs,p.leader,steps,env,inputs))return;
-        for(auto i:p.jobs){cloths[i].recordStep(p.timeStep(i),p.input(i));cloths[i].externalState_=true;}
+        for(auto i:p.jobs){cloths[i].recordStep(p.timeStep(i),p.input(i));cloths[i].externalState_=true;cloths[i].quietTime_+=p.timeStep(i);cloths[i].wakePending_=false;cloths[i].forceNext_=false;}
     }else{
     if(p.jobs.empty())return;
 #ifndef __EMSCRIPTEN__
@@ -238,6 +272,8 @@ void Batch::run(std::span<Cloth> cloths,float dt,const Environment& env,std::spa
         if(p.executor&&!p.sharing)for(auto i:p.jobs){auto source=p.proofLeader[i];if(source!=i){cloths[i].proofOwner_=cloths[source].proofOwner_;cloths[i].proofId_=cloths[source].proofId_;}}
         for(size_t i=0;i<cloths.size();++i){if(p.leader[i]==i||p.timeStep(i)==0)continue;auto& c=cloths[i];auto& source=cloths[p.leader[i]];
             if(!p.executor){std::copy(source.p_.begin(),source.p_.end(),c.p_.begin());std::copy(source.velocity_.begin(),source.velocity_.end(),c.velocity_.begin());}
+            if(!p.executor)c.observeMotion(p.timeStep(i),source.motionSpeed2_);
+            else {c.quietTime_=source.quietTime_;c.wakePending_=false;c.forceNext_=false;}
             c.externalState_=source.externalState_;
             c.proofOwner_=source.proofOwner_;c.proofId_=source.proofId_;
             c.fingerprint_=source.fingerprint_;c.fingerprintValid_=source.fingerprintValid_;

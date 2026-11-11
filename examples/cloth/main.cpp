@@ -15,6 +15,8 @@ namespace {
 struct Demo {
     int count=256,cells=16,workers=8,renderCells=71,iterations=4,frames=0,warmup=120,tick=0;
     std::string report,language="ru";
+    bool sleepEnabled=true,calm=false,verifySleep=false;
+    int sleepChecks=0;
     bool paused=false,sharing=true,distanceLod=true,autoLod=true;
     render::QualityGovernor governor;
     std::vector<cloth::LodHint> hints;
@@ -37,6 +39,10 @@ struct Demo {
     void init(gfx::Device& d){
         for(auto* samples:{&simTimes,&uploadTimes,&callbackTimes,&intervalTimes})samples->reserve(size_t(frames));
         device=&d;workload=std::make_unique<clothdemo::Workload>(count,cells,workers,iterations,sharing,windGroups);
+        workload->calm=calm;
+        if(calm){workload->env.wind={};workload->env.capsules={};}
+        if(verifySleep){workload->calm=true;workload->env.gravity={};workload->env.wind={};workload->env.capsules={};workload->env.floor=-10;}
+        for(auto& c:workload->cloths){auto settings=c.sleepSettings();settings.enabled=sleepEnabled;c.setSleepSettings(settings);}
         if(!renderer.init(d,count,cells,renderCells))throw std::runtime_error("cloth renderer: "+d.lastError());
         for(auto lang:{"ru","en"}){std::string text;if(platform::readContentFile(AIVERSE_SOURCE_DIR "/engine/assets/lang/"+std::string(lang)+".json",text))loc.addTable(lang,Json::parse(text));}
         loc.setLanguage(language);gui.init(d,AIVERSE_SOURCE_DIR "/engine/assets/fonts/ui.ttf",16);
@@ -60,6 +66,16 @@ struct Demo {
         auto begin=clothdemo::Clock::now();double interval=clothdemo::ms(previous,begin);previous=begin;
         d.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());
         auto simulationBegin=clothdemo::Clock::now();
+        // Deterministic sleep/wake exercise on the real backend, including far LOD.
+        if(verifySleep){
+            if(tick==80||tick==170){bool all=true;for(auto& c:workload->cloths)all=all&&c.sleeping();
+                all=all&&workload->batch.stats().simulatedObjects==0&&(!gpuActive||(gpu.dispatches()==0&&gpu.uploadBytes()==0));
+                if(!all){verifyFailed=true;std::cerr<<"cloth did not sleep by checkpoint "<<tick<<'\n';}else ++sleepChecks;
+            }
+            if(tick==90)workload->cloths[0].wake();
+            if(tick==180)workload->env.wind={0,0,3};
+            if(tick==210)workload->cloths[0].movePins({.1f,0,0});
+        }
         if(verifyGpu)for(auto* w:{workload.get(),reference.get()}){
             if(tick==10){w->cloths[0].windScale+=3;w->lod.requestUpdate(0);}
             if(tick==20)w->cloths[0].windScale-=3;
@@ -80,6 +96,11 @@ struct Demo {
             hints[i]={resolved.interval==0?0:resolved.interval<=1.f/30?1:3,resolved.visible};
         }
         if(!paused)workload->step(tick,camera.eye(),distanceLod,autoLod?std::span<const cloth::LodHint>(hints):std::span<const cloth::LodHint>{});
+        if(verifySleep&&(tick==90||tick==180)){
+            size_t expected=tick==90?1:workload->cloths.size();size_t awake=0;
+            for(auto& c:workload->cloths)awake+=!c.sleeping();
+            if(awake!=expected||workload->lod.timeSteps()[0]!=1.f/60){verifyFailed=true;std::cerr<<"sleep wake/LOD check failed at "<<tick<<'\n';}else ++sleepChecks;
+        }
         auto simEnd=clothdemo::Clock::now();
         if(reference&&!paused){reference->lod.setMinimumLevel(autoLod?unsigned(governor.stepsDown()/2):0);reference->step(tick,camera.eye(),distanceLod,autoLod?std::span<const cloth::LodHint>(hints):std::span<const cloth::LodHint>{});}
         if(reference&&tick%7==0){
@@ -101,12 +122,17 @@ struct Demo {
         ImGui::TextUnformatted(loc.tr("clothDemo.count",i18n::Args().num("count",count).num("triangles",2*renderCells*renderCells)).c_str());
         ImGui::TextUnformatted(loc.tr("clothDemo.grid",i18n::Args().num("particles",(cells+1)*(cells+1)).num("workers",workload->batch.workers())).c_str());
         ImGui::TextUnformatted(loc.tr("clothDemo.groups",i18n::Args().num("solves",workload->batch.stats().simulatedObjects).num("copies",workload->batch.stats().copiedObjects)).c_str());
+        size_t sleeping=0;for(auto& c:workload->cloths)sleeping+=c.sleeping();
+        ImGui::TextUnformatted(loc.tr("clothDemo.sleeping",i18n::Args().num("count",sleeping)).c_str());
         auto levels=workload->lod.counts();
         ImGui::TextUnformatted(loc.tr("clothDemo.lodCounts",i18n::Args().num("a",levels[0]).num("b",levels[1]).num("c",levels[2]).num("d",levels[3])).c_str());
         ImGui::TextUnformatted(loc.tr(gpuActive?"clothDemo.gpu":"clothDemo.cpu").c_str());
         ImGui::Text("%s: %.2f ms | %s: %.2f ms",loc.tr(gpuActive?"clothDemo.gpuCpu":"clothDemo.cpu").c_str(),clothdemo::ms(simulationBegin,simEnd),loc.tr("clothDemo.frame").c_str(),interval);
         if(gpuActive)ImGui::Text("%s: %.2f ms",loc.tr("clothDemo.gpuFrame").c_str(),d.gpuFrameMs());
         if(!frames){
+            if(ImGui::Checkbox(loc.tr("clothDemo.calm").c_str(),&workload->calm))workload->env.wind={};
+            if(ImGui::Checkbox(loc.tr("clothDemo.sleep").c_str(),&sleepEnabled))for(auto& c:workload->cloths){auto s=c.sleepSettings();s.enabled=sleepEnabled;c.setSleepSettings(s);}
+            if(ImGui::Button(loc.tr("clothDemo.touch").c_str())){workload->cloths[0].movePins({.12f,0,0});}
             ImGui::Checkbox(loc.tr("clothDemo.autoLod").c_str(),&autoLod);
             ImGui::Checkbox(loc.tr("clothDemo.lod").c_str(),&distanceLod);
             if(ImGui::Checkbox(loc.tr("clothDemo.sharing").c_str(),&sharing))workload->batch.setSharing(sharing);
@@ -123,9 +149,10 @@ struct Demo {
     void shutdown(){
         if(gpuActive&&!gpu.download())throw std::runtime_error("GPU cloth readback failed");
         if(reference){for(size_t i=0;i<workload->cloths.size();++i){auto a=workload->cloths[i].positions(),b=reference->cloths[i].positions();for(size_t j=0;j<a.size();++j)referenceError=std::max(referenceError,double(render::length(a[j]-b[j])));}
-            verifyFailed=referenceError>0.01||!workload->healthy();std::cerr<<"GPU colored CPU reference max error: "<<referenceError<<'\n';}
+            verifyFailed=verifyFailed||referenceError>0.01||!workload->healthy();std::cerr<<"GPU colored CPU reference max error: "<<referenceError<<'\n';}
 
         if(frames){std::ostringstream out;out<<std::setprecision(6)<<"{\"objects\":"<<count<<",\"physical_cells\":"<<cells<<",\"render_triangles_per_object\":"<<2*renderCells*renderCells<<",\"triangles_total\":"<<renderer.triangles()<<",\"workers\":"<<workload->batch.workers()<<",\"frames\":"<<simTimes.size()<<",\"warmup\":"<<warmup<<",\"framebuffer\":["<<device->framebufferWidth()<<','<<device->framebufferHeight()<<"],\"upload_bytes\":"<<renderer.uploadBytes()<<",";
+            out<<"\"sleeping_objects\":"<<workload->batch.stats().sleepingObjects<<",\"sleep_checks\":"<<sleepChecks<<",\"sleep_enabled\":"<<(sleepEnabled?"true":"false")<<",\"calm\":"<<(calm?"true":"false")<<",";
             out<<"\"gpu_input_upload_bytes\":"<<(gpuActive?gpu.uploadBytes():0)<<",";
             out<<"\"iterations\":"<<iterations<<",\"gpu_dispatches\":"<<(gpuActive?gpu.dispatches():0)<<",";
             out<<"\"gpu\":"<<(gpuActive?"true":"false")<<",\"gpu_memory_bytes\":"<<(gpuActive?gpu.memoryBytes():0)<<",\"gpu_reference_max_error\":"<<referenceError<<",";
@@ -144,8 +171,12 @@ struct Demo {
 int aiverseMain(int argc,char** argv){try{
     for(int i=1;i<argc;++i){std::string key=argv[i];if(i+1>=argc)throw std::invalid_argument("missing option value");std::string value=argv[++i];
         if(key=="--objects")demo.count=std::stoi(value);else if(key=="--cells")demo.cells=std::stoi(value);else if(key=="--workers")demo.workers=std::stoi(value);else if(key=="--render-cells")demo.renderCells=std::stoi(value);
+        else if(key=="--sleep")demo.sleepEnabled=std::stoi(value)!=0;
+        else if(key=="--calm")demo.calm=std::stoi(value)!=0;
+        else if(key=="--verify-sleep")demo.verifySleep=std::stoi(value)!=0;
         else if(key=="--iterations")demo.iterations=std::stoi(value);else if(key=="--camera-distance")demo.initialDistance=std::stof(value);else if(key=="--gpu")demo.gpuRequested=std::stoi(value)!=0;else if(key=="--verify-gpu")demo.verifyGpu=std::stoi(value)!=0;else if(key=="--frames")demo.frames=std::stoi(value);else if(key=="--warmup")demo.warmup=std::stoi(value);else if(key=="--auto-lod")demo.autoLod=std::stoi(value)!=0;else if(key=="--lod")demo.distanceLod=std::stoi(value)!=0;else if(key=="--share")demo.sharing=std::stoi(value)!=0;else if(key=="--wind-groups")demo.windGroups=std::stoi(value);else if(key=="--report")demo.report=value;else if(key=="--lang")demo.language=value;else throw std::invalid_argument("unknown option "+key);
     }
+    if(demo.verifySleep&&(demo.verifyGpu||!demo.sleepEnabled||demo.frames+demo.warmup<220||demo.autoLod))throw std::invalid_argument("sleep verification requires sleep=1, auto-lod=0, verify-gpu=0 and at least 220 frames");
     if(!std::isfinite(demo.initialDistance)||demo.initialDistance<0)throw std::invalid_argument("camera distance");
     if(demo.frames<0||demo.frames>100000||demo.warmup<0||demo.warmup>100000)throw std::invalid_argument("benchmark frame count");
     platform::AppConfig config;config.title="AIVERSE XPBD Cloth";config.width=1280;config.height=800;

@@ -179,6 +179,10 @@ public:
     virtual void endCompute() {}
     // Debug/readback only, between frames. Never used in normal simulation/rendering.
     virtual bool readBuffer(BufferHandle,void*,size_t) { return false; }
+    // Small asynchronous status readback, inside a frame and outside encoders. Callback on
+    // owner thread at a later beginFrame; empty data on GPU error. Unsupported returns false.
+    using BufferReadFn=std::function<void(std::vector<uint8_t>)>;
+    virtual bool readBufferAsync(BufferHandle,size_t,BufferReadFn) { return false; }
     virtual bool gpuHealthy() const { return true; }
     virtual double gpuFrameMs() const { return 0; } // last completed frame; asynchronous
 

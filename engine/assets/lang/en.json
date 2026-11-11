@@ -511,6 +511,11 @@
   "zoom": "Distance"
 },
 "clothDemo": {
+  "sleeping": "Sleeping: {count}",
+  "calm": "Constant wind (calm on enable)",
+  "sleep": "Sleep settled cloth",
+  "touch": "Move first cloth anchor",
+
   "gpuCpu": "CPU submission",
   "gpuFrame": "GPU frame (completed)",
   "gpu": "Solver: GPU compute",

@@ -17,6 +17,11 @@ int main(){try{
     auto external=d.createTexture(externalDesc);r.uploadGpu(objects,sources,external);r.draw({});
     check(d.bound[0]==external&&r.uploadBytes()==4*16,"GPU renderer uploaded CPU particles");
     for(int i=0;i<4;++i)check(d.textures.at(d.bound[1].id).data[size_t(i)].w==sources[i],"GPU source tile compacted incorrectly");
+    r.uploadGpu(objects,sources,external);check(r.uploadBytes()==0,"unchanged GPU instance metadata reuploaded");
     r.upload(objects);r.draw({});check(d.bound[0]!=external,"CPU upload retained GPU texture");
+    cloth::Environment still;still.gravity={};still.wind={};still.floor=-10;cloth::Batch batch;
+    for(int t=0;t<60;++t)batch.step(objects,1.f/60,still);
+    r.upload(objects);r.upload(objects);check(r.uploadBytes()==0,"sleeping CPU atlas reuploaded");
+    objects[0].reset();r.upload(objects);check(r.uploadBytes()>0,"reset retained sleeping CPU atlas");
     r.shutdown();check(d.textures.size()==1,"renderer destroyed borrowed GPU texture");d.destroyTexture(external);check(d.textures.empty(),"texture leak");std::cout<<"cloth render: group atlas, transforms, split growth and frame texture ring passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

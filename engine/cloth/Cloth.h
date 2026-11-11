@@ -6,6 +6,7 @@
 #include <functional>
 #include <span>
 #include <vector>
+#include <array>
 
 namespace aiverse::cloth {
 using Vec = render::float3;
@@ -30,10 +31,19 @@ struct Environment {
     float floor=-3.2f;
     std::span<const Capsule> capsules; // at most 32; invalid colliders are ignored
 };
+struct SleepSettings {
+    bool enabled=true;
+    float speedThreshold=.01f, displacementThreshold=.0005f, quietSeconds=.5f;
+    bool operator==(const SleepSettings&)const=default;
+};
 class Cloth {
 public:
     explicit Cloth(std::shared_ptr<const Grid> grid, Vec origin={});
     void reset();
+    void wake(); // explicit touch/impulse notification; also forces the next LOD update
+    bool sleeping()const{return sleeping_;} // GPU status arrives asynchronously
+    bool setSleepSettings(SleepSettings);
+    const SleepSettings& sleepSettings()const{return sleep_;}
     void step(float dt,const Environment& environment);
     void movePins(Vec offset); // local offset of the pinned top edge
     const Grid& grid()const{return *grid_;}
@@ -45,9 +55,20 @@ public:
     float windScale=1; // finite host-supplied gust multiplier
     bool active=true; // host-controlled culling; inactive cloth freezes (no hidden catch-up)
 private:
+    friend class Renderer;
+    friend class TemporalLod;
     friend class Batch;
     friend class GpuSolver;
     void recordStep(float,const Environment&);
+    void prepareSleep(const Environment&);
+    void observeMotion(float dt,float speed2);
+    SleepSettings sleep_;
+    bool sleeping_=false, wakePending_=true, forceNext_=false, inputValid_=false, wasActive_=true;
+    // CPU: quiet duration. GPU proxy: elapsed since wake, guarding shared sleep histories.
+    float quietTime_=0, motionSpeed2_=0, lastWindScale_=1;
+    uint64_t sleepRevision_=1;
+    Environment lastEnvironment_;
+    std::array<Capsule,32> lastCapsules_{};
     bool externalState_=false;
     uint64_t fingerprint();
     bool sameState(const Cloth&) const;
@@ -64,7 +85,7 @@ private:
 // Owner thread calls step(); do not mutate cloths until it returns. Web always uses one worker.
 class Batch {
 public:
-    struct Stats {size_t activeObjects=0, simulatedObjects=0, copiedObjects=0, deferredObjects=0;};
+    struct Stats {size_t activeObjects=0, simulatedObjects=0, copiedObjects=0, deferredObjects=0, sleepingObjects=0;};
     explicit Batch(int workers=1,bool shareIdentical=false);
     ~Batch();
     Batch(const Batch&)=delete;
@@ -83,6 +104,8 @@ private:
     friend class TemporalLod;
     friend class GpuSolver;
     using Executor=std::function<bool(std::span<Cloth>,std::span<const size_t>,std::span<const size_t>,std::span<const float>,const Environment&,std::span<const Environment>)>;
+    void prepareSleep(std::span<Cloth>,const Environment&,std::span<const Environment>);
+    std::function<void()> beforeStep_;
     void setExecutor(Executor);
     bool hasExecutor()const;
     void run(std::span<Cloth>,float,const Environment&,std::span<const Environment>,std::span<const float>,bool execute=true);

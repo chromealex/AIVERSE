@@ -4,26 +4,54 @@ inline constexpr const char* kClothComputeMetal=R"GPU(#include <metal_stdlib>
 using namespace metal;
 
 struct Edge {uint a;uint b;float rest;float compliance;};
-struct Input {float4 forceH;float4 pinFloor;float4 solver;uint4 meta;};
+struct Input {float4 forceH;float4 pinFloor;float4 solver;uint4 meta;float4 sleep;uint4 epoch;};
+struct SleepState {float quiet;uint candidate;uint sleeping;uint epochLo;uint epochHi;uint pad0;uint pad1;uint pad2;};
 struct Capsule {float4 a;float4 b;};
 struct Uniforms {uint mode;uint n;uint edgeTotal;uint jobCount;uint edgeStart;uint edgeCount;uint sub;uint iter;uint objects;uint columns;uint pad0;uint pad1;float4 physical;};
 
-kernel void cs_main(uint2 id [[thread_position_in_grid]],
+kernel void cs_main(uint2 id [[thread_position_in_grid]],uint lane [[thread_index_in_simdgroup]],
  device float4* positions [[buffer(0)]],device float4* previous [[buffer(1)]],device float4* velocity [[buffer(2)]],
  device const Edge* edges [[buffer(3)]],device float* lambdas [[buffer(4)]],device const uint* jobs [[buffer(5)]],
  device const uint* mapping [[buffer(6)]],device const Input* inputs [[buffer(7)]],constant Uniforms& u [[buffer(8)]],
- device const Capsule* capsules [[buffer(9)]],texture2d<float,access::write> output [[texture(0)]]){
+ device const Capsule* capsules [[buffer(9)]],device atomic_uint* moving [[buffer(10)]],device SleepState* states [[buffer(11)]],texture2d<float,access::write> output [[texture(0)]]){
 
     uint particle=id.x;
+    // These passes run one lane per object, with an RHI barrier between modes.
+    if(u.mode==5u){
+        if(particle!=0u||id.y>=u.objects)return;
+        uint object=id.y;Input input=inputs[object];
+        if(states[object].epochLo!=input.epoch.x||states[object].epochHi!=input.epoch.y){
+            states[object].quiet=0.0;states[object].candidate=0u;states[object].sleeping=0u;
+            states[object].epochLo=input.epoch.x;states[object].epochHi=input.epoch.y;
+        }
+        atomic_store_explicit(&moving[object],0u,memory_order_relaxed);atomic_store_explicit(&moving[u.objects+object],0u,memory_order_relaxed);return;
+    }
+    if(u.mode==6u){
+        if(particle!=0u||id.y>=u.objects)return;
+        uint object=id.y,source=mapping[object];Input input=inputs[object];
+        if(input.sleep.w<=0.0||states[object].sleeping!=0u)return;
+        bool quiet=input.sleep.x>=0.0&&atomic_load_explicit(&moving[source],memory_order_relaxed)==0u;
+        states[object].quiet=quiet?states[object].quiet+input.sleep.w:0.0;
+        states[object].candidate=quiet&&states[object].quiet>=input.sleep.z?1u:0u;
+        if(states[object].candidate==0u)atomic_fetch_or_explicit(&moving[u.objects+source],1u,memory_order_relaxed);return;
+    }
+    if(u.mode==7u){
+        if(particle!=0u||id.y>=u.objects)return;
+        uint object=id.y;if(inputs[object].sleep.w<=0.0)return;
+        states[object].sleeping=atomic_load_explicit(&moving[u.objects+mapping[object]],memory_order_relaxed)==0u?1u:0u;
+        return;
+    }
+
     if(u.mode==4u){
         if(id.y>=u.objects||particle>=u.n*u.n)return;
         uint object=id.y,source=mapping[object],dst=object*u.n*u.n+particle,src=source*u.n*u.n+particle;
-        if(source!=object){if(inputs[source].forceH.w>0.0){positions[dst]=positions[src];velocity[dst]=velocity[src];}return;}
+        if(source!=object){if(inputs[source].forceH.w>0.0&&states[source].sleeping==0u){positions[dst]=positions[src];velocity[dst]=velocity[src];}return;}
         uint2 xy=uint2((object%u.columns)*u.n+particle%u.n,(object/u.columns)*u.n+particle/u.n);
         output.write(positions[src],xy);return;
     }
     if(id.y>=u.jobCount)return;
     uint object=jobs[id.y];Input input=inputs[object];
+    if(states[object].sleeping!=0u)return;
     if(u.sub>=input.meta.x)return;
     uint base=object*u.n*u.n;
     float h=input.forceH.w;
@@ -37,6 +65,15 @@ kernel void cs_main(uint2 id [[thread_position_in_grid]],
         float dl=(-(len-e.rest)-alpha*lam)/(wa+wb+alpha);lambdas[li]=lam+dl;
         float3 correction=d*(dl/len);
         positions[a]=float4(positions[a].xyz+correction*wa,wa);positions[b]=float4(positions[b].xyz-correction*wb,wb);return;
+    }
+    if(u.mode==3u){
+        bool moved=false;
+        if(particle<u.n*u.n){uint index=base+particle;float4 p=positions[index];
+            float3 v=p.w>0.0?(p.xyz-previous[index].xyz)*input.solver.z:float3(0);velocity[index]=float4(v,0);
+            float speed2=dot(v,v);moved=!isfinite(speed2)||speed2>input.sleep.x||speed2*input.sleep.w*input.sleep.w>input.sleep.y;
+        }
+        if(input.sleep.x>=0.0){bool anyMoved=simd_any(moved);if(lane==0u&&anyMoved)atomic_fetch_or_explicit(&moving[object],1u,memory_order_relaxed);}
+        return;
     }
     if(particle>=u.n*u.n)return;
     uint index=base+particle;float4 p=positions[index];
@@ -57,14 +94,14 @@ kernel void cs_main(uint2 id [[thread_position_in_grid]],
         }
         positions[index]=p;return;
     }
-    if(u.mode==3u)velocity[index]=float4(p.w>0.0?(p.xyz-previous[index].xyz)*input.solver.z:float3(0),0);
 }
 )GPU";
 inline constexpr const char* kClothComputeGLSL=R"GPU(#version 430
 layout(local_size_x=64,local_size_y=1) in;
 
 struct Edge {uint a;uint b;float rest;float compliance;};
-struct Input {vec4 forceH;vec4 pinFloor;vec4 solver;uvec4 meta;};
+struct Input {vec4 forceH;vec4 pinFloor;vec4 solver;uvec4 meta;vec4 sleep;uvec4 epoch;};
+struct SleepState {float quiet;uint candidate;uint sleeping;uint epochLo;uint epochHi;uint pad0;uint pad1;uint pad2;};
 struct Capsule {vec4 a;vec4 b;};
 struct Uniforms {uint mode;uint n;uint edgeTotal;uint jobCount;uint edgeStart;uint edgeCount;uint sub;uint iter;uint objects;uint columns;uint pad0;uint pad1;vec4 physical;};
 
@@ -78,19 +115,49 @@ layout(std430,binding=6) readonly buffer M {uint mapping[];};
 layout(std430,binding=7) readonly buffer I {Input objectInputs[];};
 layout(std140,binding=8) uniform U {Uniforms u;};
 layout(std430,binding=9) readonly buffer C {Capsule capsules[];};
+layout(std430,binding=10) buffer Motion {uint moving[];};
+layout(std430,binding=11) buffer Sleep {SleepState states[];};
+shared uint motionGroup[64];
 layout(rgba32f,binding=0) uniform writeonly image2D outputImage;
 void main(){uvec2 id=gl_GlobalInvocationID.xy;
 
     uint particle=id.x;
+    // These passes run one lane per object, with an RHI barrier between modes.
+    if(u.mode==5u){
+        if(particle!=0u||id.y>=u.objects)return;
+        uint object=id.y;Input objectInput=objectInputs[object];
+        if(states[object].epochLo!=objectInput.epoch.x||states[object].epochHi!=objectInput.epoch.y){
+            states[object].quiet=0.0;states[object].candidate=0u;states[object].sleeping=0u;
+            states[object].epochLo=objectInput.epoch.x;states[object].epochHi=objectInput.epoch.y;
+        }
+        moving[object]=0u;moving[u.objects+object]=0u;return;
+    }
+    if(u.mode==6u){
+        if(particle!=0u||id.y>=u.objects)return;
+        uint object=id.y,source=mapping[object];Input objectInput=objectInputs[object];
+        if(objectInput.sleep.w<=0.0||states[object].sleeping!=0u)return;
+        bool quiet=objectInput.sleep.x>=0.0&&moving[source]==0u;
+        states[object].quiet=quiet?states[object].quiet+objectInput.sleep.w:0.0;
+        states[object].candidate=quiet&&states[object].quiet>=objectInput.sleep.z?1u:0u;
+        if(states[object].candidate==0u)atomicOr(moving[u.objects+source],1u);return;
+    }
+    if(u.mode==7u){
+        if(particle!=0u||id.y>=u.objects)return;
+        uint object=id.y;if(objectInputs[object].sleep.w<=0.0)return;
+        states[object].sleeping=moving[u.objects+mapping[object]]==0u?1u:0u;
+        return;
+    }
+
     if(u.mode==4u){
         if(id.y>=u.objects||particle>=u.n*u.n)return;
         uint object=id.y,source=mapping[object],dst=object*u.n*u.n+particle,src=source*u.n*u.n+particle;
-        if(source!=object){if(objectInputs[source].forceH.w>0.0){positions[dst]=positions[src];velocity[dst]=velocity[src];}return;}
+        if(source!=object){if(objectInputs[source].forceH.w>0.0&&states[source].sleeping==0u){positions[dst]=positions[src];velocity[dst]=velocity[src];}return;}
         uvec2 xy=uvec2((object%u.columns)*u.n+particle%u.n,(object/u.columns)*u.n+particle/u.n);
         imageStore(outputImage,ivec2(xy),positions[src]);return;
     }
     if(id.y>=u.jobCount)return;
     uint object=jobs[id.y];Input objectInput=objectInputs[object];
+    if(states[object].sleeping!=0u)return;
     if(u.sub>=objectInput.meta.x)return;
     uint base=object*u.n*u.n;
     float h=objectInput.forceH.w;
@@ -104,6 +171,18 @@ void main(){uvec2 id=gl_GlobalInvocationID.xy;
         float dl=(-(len-e.rest)-alpha*lam)/(wa+wb+alpha);lambdas[li]=lam+dl;
         vec3 correction=d*(dl/len);
         positions[a]=vec4(positions[a].xyz+correction*wa,wa);positions[b]=vec4(positions[b].xyz-correction*wb,wb);return;
+    }
+    if(u.mode==3u){
+        bool moved=false;
+        if(particle<u.n*u.n){uint index=base+particle;vec4 p=positions[index];
+            vec3 v=p.w>0.0?(p.xyz-previous[index].xyz)*objectInput.solver.z:vec3(0);velocity[index]=vec4(v,0);
+            float speed2=dot(v,v);moved=isnan(speed2)||isinf(speed2)||speed2>objectInput.sleep.x||speed2*objectInput.sleep.w*objectInput.sleep.w>objectInput.sleep.y;
+        }
+        if(objectInput.sleep.x>=0.0){
+            motionGroup[gl_LocalInvocationIndex]=moved?1u:0u;barrier();
+            if(gl_LocalInvocationIndex==0u){uint anyMoved=0u;for(uint i=0u;i<64u;++i)anyMoved=anyMoved|motionGroup[i];if(anyMoved!=0u)atomicOr(moving[object],1u);}
+        }
+        return;
     }
     if(particle>=u.n*u.n)return;
     uint index=base+particle;vec4 p=positions[index];
@@ -124,7 +203,6 @@ void main(){uvec2 id=gl_GlobalInvocationID.xy;
         }
         positions[index]=p;return;
     }
-    if(u.mode==3u)velocity[index]=vec4(p.w>0.0?(p.xyz-previous[index].xyz)*objectInput.solver.z:vec3(0),0);
 }
 )GPU";
 }

@@ -201,6 +201,29 @@ public:
         [cb commit];[cb waitUntilCompleted];if(cb.status==MTLCommandBufferStatusError)return false;
         memcpy(data,dst.contents,size);return true;
     }
+    struct BufferRead {std::vector<uint8_t> bytes;BufferReadFn callback;std::atomic<bool> ready{false};};
+    std::vector<std::shared_ptr<BufferRead>> bufferReads_;
+    bool readBufferAsync(BufferHandle h,size_t size,BufferReadFn callback) override {
+        auto* b=buffers_.get(h.id);
+        if(!cmd_||enc_||compute_||!b||!size||size>b->size||size>65536||!callback||bufferReads_.size()>=32)return false;
+        id<MTLBuffer> dst=[device_ newBufferWithLength:size options:MTLResourceStorageModeShared];if(!dst)return false;
+        auto read=std::make_shared<BufferRead>();read->bytes.resize(size);read->callback=std::move(callback);
+        id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];
+        [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> cb){
+            if(cb.status==MTLCommandBufferStatusError)read->bytes.clear();else memcpy(read->bytes.data(),dst.contents,size);
+            read->ready.store(true,std::memory_order_release);
+        }];
+        bufferReads_.push_back(std::move(read));return true;
+    }
+    void deliverBufferReads(){
+        // Move ready entries before callbacks, allowing callbacks to enqueue other work.
+        std::vector<std::shared_ptr<BufferRead>> ready;
+        for(auto it=bufferReads_.begin();it!=bufferReads_.end();){
+            if((*it)->ready.load(std::memory_order_acquire)){ready.push_back(*it);it=bufferReads_.erase(it);}else ++it;
+        }
+        for(auto& read:ready)read->callback(std::move(read->bytes));
+    }
     bool gpuHealthy() const override { return gpuHealthy_->load(); }
     double gpuFrameMs() const override { return gpuMs_->load(); }
 
@@ -392,6 +415,7 @@ public:
     void beginFrame(int w, int h) override {
         fbW_ = w; fbH_ = h;
         dispatch_semaphore_wait(frameSemaphore_, DISPATCH_TIME_FOREVER);
+        deliverBufferReads();
         deliverCapture(); // the previous frame's GPU work is done here
         ++frame_;
         layer_.drawableSize = CGSizeMake(w, h);

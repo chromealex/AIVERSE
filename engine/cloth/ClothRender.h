@@ -19,6 +19,11 @@ public:
     size_t uploadBytes()const{return uploadBytes_;}
     uint32_t triangles()const{return indices_/3*uint32_t(objects_);}
 private:
+    bool reusable(std::span<const Cloth>,std::span<const size_t>,gfx::TextureHandle)const;
+    void remember(std::span<const Cloth>,std::span<const size_t>);
+    const Cloth* cachedCloths_=nullptr;
+    std::vector<size_t> cachedSources_;
+    std::vector<uint64_t> cachedStates_;
     gfx::Device* device_=nullptr;
     gfx::ShaderHandle shader_;
     gfx::TextureHandle externalTexture_;

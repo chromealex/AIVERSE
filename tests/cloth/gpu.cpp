@@ -3,6 +3,18 @@
 #include "engine/cloth/TemporalLod.h"
 #include <iostream>
 void check(bool b,const char* message){if(!b)throw std::runtime_error(message);}
+// Delayed status-only readbacks exercise ownership and revision checks, not GPU maths.
+struct SleepDevice:FakeDevice {
+    gfx::BufferHandle input;
+    struct Pending {BufferReadFn fn;std::vector<uint8_t> data;};std::vector<Pending> pending;
+    void setComputeBuffer(int slot,gfx::BufferHandle h)override{if(slot==7)input=h;}
+    bool readBufferAsync(gfx::BufferHandle,size_t size,BufferReadFn fn)override{
+        std::vector<uint8_t> data(size);auto& bytes=buffers.at(input.id);
+        for(size_t i=0;i<size/32;++i){uint32_t yes=1;std::memcpy(data.data()+i*32+8,&yes,4);std::memcpy(data.data()+i*32+12,bytes.data()+i*96+80,8);}
+        pending.push_back({std::move(fn),std::move(data)});return true;
+    }
+    void deliver(){auto ready=std::move(pending);pending.clear();for(auto& p:ready)p.fn(std::move(p.data));}
+};
 int main(){try{
     for(int cells:{2,8,71,128}){cloth::Settings s;s.cells=cells;cloth::Grid grid(s);cloth::ColoredGrid colored(grid);
         check(colored.edges.size()==grid.edges.size(),"coloring lost constraints");
@@ -29,6 +41,16 @@ int main(){try{
     check(gpu.healthy()&&d.dispatchCount>0,"no compute commands");
     check(gpu.download()&&objects[0].cpuStateAvailable()&&objects[0].healthy(),"readback did not restore CPU ownership");
     gpu.shutdown();check(d.buffers.empty()&&d.textures.empty(),"GPU resources leaked");batch.step(objects,1.f/60,env);check(objects[0].healthy(),"CPU solver not restored");
+    SleepDevice async;async.computeEnabled=true;std::vector<cloth::Cloth> sleepers;for(int i=0;i<3;++i)sleepers.emplace_back(grid);
+    cloth::Batch sleepBatch(1,true);cloth::GpuSolver sleepGpu;check(sleepGpu.init(async,sleepBatch,sleepers),"async init");
+    auto sleepStep=[&]{async.beginFrame(100,100);sleepBatch.step(sleepers,1.f/60,env);async.endFrame();};
+    sleepStep();sleepers[0].wake();async.deliver();sleepStep();
+    check(!sleepers[0].sleeping()&&sleepers[1].sleeping()&&sleepers[2].sleeping(),"stale async result undid explicit wake");
+    check(sleepBatch.stats().simulatedObjects==1,"sleep status did not prune GPU jobs");
+    async.deliver();sleepStep();sleepStep();
+    check(sleepBatch.stats().sleepingObjects==3&&sleepBatch.stats().simulatedObjects==0&&sleepGpu.dispatches()==0&&sleepGpu.uploadBytes()==0,"sleep still submits GPU work");
+    sleepers[1].reset();sleepStep();check(!sleepers[1].sleeping()&&sleepGpu.dispatches()>0,"reset skipped GPU upload");
+    sleepGpu.shutdown();async.deliver();check(async.buffers.empty(),"late status callback retained GPU resources");
     std::cout<<"cloth GPU: race-free coloring, fallback, ownership, split/regroup, reset and readback plumbing passed\n";
     return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
