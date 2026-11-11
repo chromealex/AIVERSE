@@ -210,6 +210,36 @@ Benchmark recipes accept `pointLights: [{"position":[x,y,z], "color":[r,g,b],
 "radius":3, "intensity":10}]`. Color is linear RGB in 0..1; radius is in world
 units. The loader validates finite values and ranges. With `staticPointLightGrid`
 the existing GL/MSL 3D light-grid path evaluates all intersecting sources. Low
-profile retains its existing light fallback. These lights do not cast point
+profile retains its existing light fallback. Without the opt-in baking below, these lights do not cast point
 shadows or calculate geometry occlusion; a small radius limits their influence
 but does not substitute for shadows or bounced GI.
+
+
+### Baked static point shadows (HDR / High)
+
+Set `staticPointShadows: true` and `pointShadowResolution: 128` alongside
+`staticPointLightGrid: true` in a static benchmark recipe. The night comparison
+uses a separate `scene-reference-night-shadowed.json`; keep the unshadowed recipe
+for controlled A/B screenshots. The Low profile does not collect geometry, bake,
+or sample these maps. The default remains off for existing scenes.
+
+At load time, a CPU BVH traces six radial-distance faces per source against the
+main model and static opaque addons. Maps share the existing RGBA32F light-grid
+atlas, so no additional sampler or per-frame shadow render pass is needed.
+GLSL and MSL use four angular PCF samples with face reselection across cube seams.
+Each texel also stores a hit-plane normal; depth is corrected to the receiver ray
+to reduce sloped-surface self-shadowing without blurring the scene color.
+
+Limits: immutable geometry/lights; at most 32 sources; 16..256 pixels per face;
+the combined grid/maps atlas stays within 4,194,304 texels (64 MiB before row
+padding). 14 maps at 128 use about 21 MiB for shadow texels. Geometry and CPU maps
+are released after upload. Every scene load rebakes; no disk cache is implemented.
+The report records `staticPointShadowBakeMs` and `staticPointShadowMaps`.
+Skinned/animated/morphing casters, transparent and alpha-tested materials are
+excluded. Opaque cloth casts a solid shadow. This is direct-light occlusion,
+not transmission, area-light penumbrae or bounced GI. Moving content requires a
+rebake; these maps must not be reused after geometry/light changes.
+
+Tests: CPU wall/open-ray and nearest-hit BVH checks, all six cube faces against an
+analytic box, atlas offsets and malformed map rejection. HDR GPU probes 9/10
+check complete blockage versus unchanged open-light radiance on GL and Metal.

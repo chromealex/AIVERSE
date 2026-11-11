@@ -4,6 +4,7 @@
 #include "engine/data/Json.h"
 #include "engine/render/graph/ShaderGraph.h"
 #include <map>
+#include "ShadowGeometry.h"
 #include <filesystem>
 #include <stdexcept>
 
@@ -18,6 +19,7 @@ struct SceneAsset {
 };
 struct SceneAssets {
     std::vector<SceneAsset> assets;
+    StaticShadowGeometry shadowGeometry;
     std::vector<PointLight> lights;
     std::vector<size_t> lightOrder;
     Json audit=Json::array();
@@ -48,7 +50,7 @@ struct SceneAssets {
             std::fprintf(stderr,"material graph: %s <- %s\n",name.c_str(),path.c_str());
         }
     }
-    void load(gfx::Device& d,const Json& config,Json& warnings,Json& notes) {
+    void load(gfx::Device& d,const Json& config,Json& warnings,Json& notes,bool bakeShadows=false) {
         for(const auto& entry:config["models"].items()) {
             const std::string path=entry.getStr("path");
             std::vector<std::string> problems;
@@ -133,6 +135,7 @@ struct SceneAssets {
             auto xyz=[](float3 v){Json j=Json::array();for(float x:{v.x,v.y,v.z})j.push(Json::number(double(x)));return j;};
             item.set("boundsMin",xyz(a.model->boundsMin));item.set("boundsMax",xyz(a.model->boundsMax));
             std::fprintf(stderr,"loaded %s: %llu triangles, %zu clips, bounds %s .. %s\n",path.c_str(),(unsigned long long)triangles,a.model->clips.size(),item["boundsMin"].dump().c_str(),item["boundsMax"].dump().c_str());
+            if(bakeShadows&&!a.animated)appendShadowGeometry(shadowGeometry,*a.model,a.transform);
             if(!uploadModel(d,*a.model))throw std::runtime_error("addon upload failed: "+d.lastError());
             audit.push(item);assets.push_back(std::move(a));
         }

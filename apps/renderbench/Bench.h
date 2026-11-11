@@ -124,8 +124,25 @@ struct Bench {
             if(!std::isfinite(normalScale)||normalScale<0||normalScale>2)throw std::runtime_error("mainNormalScale must be in 0..2");
             for(auto& material:model->materials)material.normalScale*=normalScale;
             additions.applyGraphs(*model,config["materialGraphs"]);
-            additions.load(d,config,warn,notes);
-            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2))))throw std::runtime_error("static light grid upload failed");
+            const bool bakePointShadows=config.getBool("staticPointShadows",false)&&options.profile!="low";
+            if(bakePointShadows)appendShadowGeometry(additions.shadowGeometry,*model);
+            additions.load(d,config,warn,notes,bakePointShadows);
+            std::vector<StaticPointShadow> pointShadows;
+            if(bakePointShadows){
+                if(!config.getBool("staticPointLightGrid",false)||additions.lights.size()>32)throw std::runtime_error("static point shadows require a grid and at most 32 lights");
+                const double requested=config["pointShadowResolution"].toDouble(128);
+                if(!std::isfinite(requested)||requested<16||requested>256||std::floor(requested)!=requested)throw std::runtime_error("pointShadowResolution must be an integer in 16..256");
+                const int resolution=int(requested);
+                if(additions.lights.size()*size_t(6*resolution*resolution+1)>4194304)throw std::runtime_error("point shadow maps exceed atlas budget");
+                std::fprintf(stderr,"Baking static point shadows: %zu triangles, %zu lights, %d pixels per face\n",additions.shadowGeometry.triangles.size(),additions.lights.size(),resolution);
+                const auto shadowStart=Clock::now();
+                additions.shadowGeometry.build();
+                for(const auto& light:additions.lights)pointShadows.push_back(additions.shadowGeometry.bake(light.pos,light.radius,resolution));
+                report.set("staticPointShadowBakeMs",Json::number(ms(shadowStart,Clock::now())));
+                report.set("staticPointShadowMaps",Json::number(int64_t(pointShadows.size())));
+            }
+            additions.shadowGeometry=StaticShadowGeometry{};
+            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2)),pointShadows.empty()?nullptr:&pointShadows))throw std::runtime_error("static light grid upload failed");
             report.set("additions",additions.audit);
             report.set("sourcePointLights",Json::number(int64_t(additions.lights.size())));
             report.set("assetWarnings",warn);report.set("importNotes",notes);

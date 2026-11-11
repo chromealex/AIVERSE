@@ -131,8 +131,14 @@ struct HdrScene {
             renderer.lighting.sunIntensity=0;renderer.lighting.skyColor={0,0,0};renderer.lighting.groundColor={0,0,0};
             auto& material=probeBg->materials[0];material.shading=ShadingModel::Pbr;material.baseColor={1,1,1,1};material.roughness=1;material.metallic=0;
             renderer.lights.setQuality(LightQuality::High);
-            if(gridProbe!=probeIndex){gridProbe=probeIndex;PointLight light;light.pos={0,0,probeIndex==7?1.0f:3.0f};light.radius=2;light.color={1,1,1};light.intensity=1;
-                if(!renderer.lights.setStaticPointLights({light},1)){failed=true;return;}}
+            if(gridProbe!=probeIndex){gridProbe=probeIndex;PointLight light;light.pos={0,0,probeIndex==8?3.0f:1.0f};light.radius=2;light.color={1,1,1};light.intensity=1;
+                std::vector<StaticPointShadow> shadows;
+                if(probeIndex>=9){
+                    StaticShadowGeometry geometry;float x=probeIndex==9?0:4;
+                    geometry.triangles={{{x-1,-1,.5f},{x+1,-1,.5f},{x+1,1,.5f}},{{x-1,-1,.5f},{x+1,1,.5f},{x-1,1,.5f}}};
+                    geometry.build();shadows.push_back(geometry.bake(light.pos,light.radius,32));
+                }
+                if(!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows)){failed=true;return;}}
         }
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
@@ -149,8 +155,8 @@ struct HdrScene {
             float expected=probeIndex==2?0.5f:0.25f;
             if(probeIndex==1) expected=(2.51f+0.03f)/(2.43f+0.59f+0.14f);
             if(probeIndex==6) expected=(1.5f*(2.51f*1.5f+0.03f))/(1.5f*(2.43f*1.5f+0.59f)+0.14f);
-            if(probeIndex==7)expected=0.28125f*(1+0.04f*0.64f); // N.L + rough specular at d=1, radius=2
-            if(probeIndex==8)expected=0; // same XY, outside the 3D radius
+            if(probeIndex==7||probeIndex==10)expected=0.28125f*(1+0.04f*0.64f); // N.L + rough specular at d=1, radius=2
+            if(probeIndex==8||probeIndex==9)expected=0; // same XY, outside the 3D radius
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
                 if(cw<=0||ch<=0||px.size()!=size_t(cw*ch*4)) {failed=true;return;}
@@ -160,7 +166,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==9)captured=true;
+                if(probeIndex==11)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }

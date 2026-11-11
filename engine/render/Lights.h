@@ -93,8 +93,8 @@ public:
     LightQuality quality() const { return quality_; }
     static LightQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
     // Opt-in HDR/High replacement for dynamic point-light map/detail; immutable sources only.
-    // No point-light shadows. Low/LDR keep the existing bounded dynamic path.
-    bool setStaticPointLights(const std::vector<PointLight>& lights, float cellSize=2);
+    // Optional baked opaque point shadows. Low/LDR keep the existing bounded dynamic path.
+    bool setStaticPointLights(const std::vector<PointLight>& lights, float cellSize=2, const std::vector<StaticPointShadow>* shadows=nullptr);
     bool staticPointLightsActive() const { return staticGrid_.valid() && linearScene_ && quality_ == LightQuality::High; }
     void setNightGlow(float g) { nightGlow_ = g; }   // extra emissive multiplier (0 by day)
     void setUnlitTint(float3 t) { unlitTint_ = t; }  // 2D sprites have no sun: day/night is a tint

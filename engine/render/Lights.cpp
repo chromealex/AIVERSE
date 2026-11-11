@@ -99,9 +99,9 @@ bool LightSystem::init(gfx::Device& dev) {
     return pipe_.valid() && vb_.valid() && black_.valid() && haloPipe_.valid() && haloVB_.valid() && decalPipe_.valid() && decalVB_.valid();
 }
 
-bool LightSystem::setStaticPointLights(const std::vector<PointLight>& lights,float cellSize) {
+bool LightSystem::setStaticPointLights(const std::vector<PointLight>& lights,float cellSize,const std::vector<StaticPointShadow>* shadows) {
     if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
-    StaticLightGrid grid;grid.build(lights,cellSize);
+    StaticLightGrid grid;grid.build(lights,cellSize,shadows);
     if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
     staticGrid_={};gridOrigin_={};gridSize_={};
     if(grid.texels.empty())return true;
