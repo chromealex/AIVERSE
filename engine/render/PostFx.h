@@ -62,7 +62,7 @@ private:
     gfx::TextureHandle depthFor(Sized& s, int w, int h);
     Sized& sized(int w, int h);
     gfx::PipelineHandle program(Prog p);
-    gfx::PipelineHandle composite(uint32_t mask);
+    gfx::PipelineHandle composite(uint32_t mask, const Json* graph = nullptr);
     void draw(Sized& s, const Target& dst, gfx::PipelineHandle pipe, const void* u, size_t size,
               std::initializer_list<std::pair<int, gfx::TextureHandle>> tex);
     const Lut* lut(const std::string& path);
@@ -77,8 +77,8 @@ private:
     gfx::ShaderHandle shaders_[kProgCount];
     gfx::PipelineHandle pipes_[kProgCount];
     bool failed_[kProgCount] = {};
-    std::map<uint32_t, std::pair<gfx::ShaderHandle, gfx::PipelineHandle>> composites_;
-    std::map<uint32_t, bool> compositeFailed_;
+    std::map<std::string, std::pair<gfx::ShaderHandle, gfx::PipelineHandle>> composites_;
+    std::map<std::string, bool> compositeFailed_;
     std::vector<Sized> sizes_;
     std::map<std::string, Lut> luts_;
     ImageLoader loader_;

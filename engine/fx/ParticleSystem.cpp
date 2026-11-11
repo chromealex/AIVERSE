@@ -8,6 +8,7 @@
 #include "FxInternal.h"
 #include "FxNoise.h"
 #include "ParticleShaders.h"
+#include "engine/render/graph/ShaderGraph.h"
 
 namespace aiverse::fx {
 
@@ -159,10 +160,33 @@ int ParticleSystem::Impl::mesh(const std::string& name, std::vector<std::string>
     return int(meshes.size() - 1);
 }
 
-uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend) {
+uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const Json& graphData) {
+    const std::string key = graphData.isNull() ? "" : graphData.dump(-1);
     for (size_t i = 0; i < batches.size(); ++i)
-        if (batches[i].texId == t.tex.id && batches[i].blend == blend) return uint16_t(i);
-    batches.push_back({t.tex.id, blend, t.tex});
+        if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].graphKey == key) return uint16_t(i);
+    Batch batch{t.tex.id, blend, t.tex, key, {}, {}, {}};
+    if (dev && !key.empty()) {
+        try {
+            const auto program = render::graph::compile(graphData, "particle");
+            const std::string fs = "precision highp float; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; out vec4 o_color;\n#define SG_SAMPLE(uv) texture(tex0,uv)\nvoid main(){vec2 sg_uv=v_uv; vec4 sg_input=texture(tex0,v_uv)*v_col;\n" + program.glsl + "vec4 c=" + program.outputs.at("color") + "; o_color=" + (blend==FxBlend::Multiply ? "vec4(mix(vec3(1.0),c.rgb,c.a),c.a)" : "c") + ";}";
+            std::string msl = shaders::kParticleMSL;
+            const std::string marker="    return tex0.sample(s0, in.uv) * in.col;";
+            const std::string code="\n#define SG_SAMPLE(uv) float4(tex0.sample(s0,uv))\nfloat2 sg_uv=in.uv; float4 sg_input=float4(tex0.sample(s0,in.uv)*in.col);\n" + program.msl + "float4 c="+program.outputs.at("color")+"; return half4("+(blend==FxBlend::Multiply ? "float4(mix(float3(1.0),c.rgb,c.a),c.a)" : "c")+");";
+            msl.replace(msl.find(marker),marker.size(),code);
+            gfx::ShaderDesc sd; sd.glslVertex=shaders::kParticleVS; sd.glslFragment=fs.c_str(); sd.msl=msl.c_str(); sd.textureSlots=1;
+            batch.shader=dev->createShader(sd);
+            if (!batch.shader.valid()) throw std::runtime_error(dev->lastError());
+            for(int mesh=0;mesh<2;++mesh) {
+                gfx::PipelineDesc pd; pd.shader=batch.shader;
+                pd.attrs[0]={0,gfx::VertexFormat::Float3,0}; pd.attrs[1]={1,gfx::VertexFormat::Float2,12}; pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
+                pd.attrCount=3; pd.stride=sizeof(Vertex); pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
+                pd.cull=gfx::CullMode::None; pd.blend=gfxBlend(int(blend)); pd.depthWrite=blend==FxBlend::Opaque;
+                batch.graphPipe[mesh]=dev->createPipeline(pd);
+                if(!batch.graphPipe[mesh].valid()) throw std::runtime_error(dev->lastError());
+            }
+        } catch(const std::exception& ex) { batch.error=ex.what(); std::fprintf(stderr,"particle shader graph: %s\n",ex.what()); }
+    }
+    batches.push_back(std::move(batch));
     return uint16_t(batches.size() - 1);
 }
 
@@ -176,7 +200,8 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
         const std::string where = "fx/" + e.name + ".json: emitters[" + std::to_string(i) + "]";
         EmitterRT r;
         r.tex = texture(d.texture, errors, where);
-        r.batch = batchFor(r.tex, d.blend);
+        r.batch = batchFor(r.tex, d.blend, d.shaderGraph);
+        if(!batches[r.batch].error.empty()) errors.push_back(where + ": " + batches[r.batch].error);
         lutColor(r.color, d.color);
         float maxK = 0;
         for (auto& k : d.sizeOverLife) maxK = std::max(maxK, k.k);
@@ -221,7 +246,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
         for (auto& sp : d.sprites) {
             FxTexture t = texture(sp, errors, where + ".sprites");
             r.spriteTex.push_back(t);
-            r.spriteBatch.push_back(batchFor(t, d.blend));
+            r.spriteBatch.push_back(batchFor(t, d.blend, d.shaderGraph));
         }
         e.em.push_back(r);
         if (!d.loop) e.emitEnd = std::max(e.emitEnd, d.endTime());
@@ -654,6 +679,7 @@ void ParticleSystem::shutdown() {
     if (!impl_) return;
     auto& I = *impl_;
     if (I.dev) {
+        for (auto& b : I.batches) { for(auto p:b.graphPipe) if(p.valid()) I.dev->destroyPipeline(p); if(b.shader.valid()) I.dev->destroyShader(b.shader); }
         for (auto& p : I.pipe) if (p.valid()) I.dev->destroyPipeline(p);
         for (auto& p : I.meshPipe) if (p.valid()) I.dev->destroyPipeline(p);
         if (I.shader.valid()) I.dev->destroyShader(I.shader);
@@ -769,6 +795,7 @@ void ParticleSystem::reloadAll() {
     I.effects.clear();
     I.byName.clear();
     I.textures.clear();
+    if (I.dev) for(auto& b:I.batches) { for(auto p:b.graphPipe) if(p.valid()) I.dev->destroyPipeline(p); if(b.shader.valid()) I.dev->destroyShader(b.shader); }
     I.batches.clear();
     I.meshes.clear();
     I.meshByName.clear();

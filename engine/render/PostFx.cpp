@@ -1,4 +1,5 @@
 #include "PostFx.h"
+#include "graph/ShaderGraph.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -131,7 +132,7 @@ void PostFx::configure(const Json& game, const Json& map, std::vector<std::strin
     if (!issues) for (auto& m : local) std::fprintf(stderr, "[postfx] %s\n", m.c_str());
 }
 
-void PostFx::setSettings(PostFxSettings s) { settings_ = std::move(s); }
+void PostFx::setSettings(PostFxSettings s) { settings_ = std::move(s); error_.clear(); }
 
 bool PostFx::active() const {
     return dev_ && triangle_.valid() && enabled_ && settings_.anyActive(quality_);
@@ -219,9 +220,10 @@ gfx::PipelineHandle PostFx::program(Prog p) {
     return pipes_[p];
 }
 
-gfx::PipelineHandle PostFx::composite(uint32_t mask) {
-    if (auto it = composites_.find(mask); it != composites_.end()) return it->second.second;
-    if (compositeFailed_.count(mask)) return {};
+gfx::PipelineHandle PostFx::composite(uint32_t mask, const Json* graphData) {
+    const std::string key = std::to_string(mask) + (graphData ? graphData->dump(-1) : "");
+    if (auto it = composites_.find(key); it != composites_.end()) return it->second.second;
+    if (compositeFailed_.count(key)) return {};
     std::string defines;
     for (int i = 0; i < 13; ++i) if (mask & (1u << i)) defines += std::string("#define ") + kPfNames[i] + " 1\n";
     uint32_t tex = 1;
@@ -229,13 +231,22 @@ gfx::PipelineHandle PostFx::composite(uint32_t mask) {
     if (mask & kPfTilt) tex |= 4;
     if (mask & kPfShafts) tex |= 8;
     if (mask & kPfLut) tex |= 16;
-    Built b = buildProgram(kCompositeFields, 14, tex, defines, postfx::kCompositeHelpers, postfx::kComposite);
+    std::string body = postfx::kComposite;
+    if (graphData) {
+        try {
+            auto program = graph::compile(*graphData, "postfx");
+            const std::string marker = "    RETURN(vec4(clamp(col, vec3(0.0), vec3(1.0)), 1.0));";
+            const std::string code = "\n#define SG_SAMPLE(uv) TEX0(TUV(uv))\nvec2 sg_uv = s; vec4 sg_input = vec4(col,1.0);\n" + program.glsl + "\nRETURN(" + program.outputs.at("color") + ");\n";
+            body.replace(body.find(marker), marker.size(), code);
+        } catch (const std::exception& ex) { error_ = ex.what(); compositeFailed_[key] = true; return {}; }
+    }
+    Built b = buildProgram(kCompositeFields, 14, tex, defines, postfx::kCompositeHelpers, body.c_str());
     gfx::ShaderDesc sd;
     sd.glslVertex = b.vs.c_str(); sd.glslFragment = b.fs.c_str(); sd.msl = b.msl.c_str();
     sd.textureSlots = 5; sd.uniformSlots = 1; sd.label = "postfx composite";
     gfx::ShaderHandle sh = dev_->createShader(sd);
     if (!sh.valid()) {
-        compositeFailed_[mask] = true;
+        compositeFailed_[key] = true;
         error_ = "postfx composite: " + dev_->lastError();
         std::fprintf(stderr, "[postfx] %s\n", error_.c_str());
         return {};
@@ -250,8 +261,8 @@ gfx::PipelineHandle PostFx::composite(uint32_t mask) {
     pd.depthTest = false; pd.depthWrite = false;
     pd.label = "postfx composite";
     gfx::PipelineHandle p = dev_->createPipeline(pd);
-    if (!p.valid()) { dev_->destroyShader(sh); compositeFailed_[mask] = true; return {}; }
-    composites_[mask] = {sh, p};
+    if (!p.valid()) { dev_->destroyShader(sh); compositeFailed_[key] = true; return {}; }
+    composites_[key] = {sh, p};
     return p;
 }
 
@@ -500,7 +511,8 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
         default: break;
         }
     }
-    gfx::PipelineHandle pipe = composite(mask);
+    const auto* graphEffect = find(PostFxType::ShaderGraph);
+    gfx::PipelineHandle pipe = composite(mask, graphEffect ? &graphEffect->shaderGraph : nullptr);
     if (!pipe.valid()) pipe = composite(0);   // a broken variant still shows the scene
     dev.beginPass(out);
     dev.setViewport({0, 0, w, h});

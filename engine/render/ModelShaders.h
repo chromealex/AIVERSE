@@ -205,6 +205,7 @@ void main() {
         teamW = clamp(m * m_misc.z, 0.0, 1.0);
         base.rgb = mix(base.rgb, v_team.rgb * k, teamW);
     }
+    // SG_COLOR
     base.rgb *= v_tint.rgb;
 #if defined(ALPHAMASK)
     if (base.a < m_misc.x) discard;
@@ -232,6 +233,7 @@ void main() {
 #if AIVERSE_Q >= 2
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
 #endif
+    // SG_SURFACE
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -303,7 +305,9 @@ uniform mediump sampler2D tex1;
 in vec2 v_uv;
 void main() {
 #if defined(ALPHAMASK)
-    if (m_base.a * texture(tex1, v_uv).a < m_misc.x) discard;
+    vec4 base = m_base * texture(tex1, v_uv);
+    // SG_COLOR
+    if (base.a < m_misc.x) discard;
 #endif
 }
 )";
@@ -467,6 +471,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
         teamW = clamp(tm * m.misc.z, 0.0, 1.0);
         base.rgb = mix(base.rgb, in.team.rgb * k, teamW);
     }
+    // SG_COLOR
     base.rgb *= in.tint.rgb;
 #if defined(ALPHAMASK)
     if (base.a < m.misc.x) discard_fragment();
@@ -494,6 +499,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #if AIVERSE_Q >= 2
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
 #endif
+    // SG_SURFACE
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -559,7 +565,9 @@ vertex VOut vs_main(VERTEX_ARGS) {
 #if defined(ALPHAMASK)
 fragment void fs_main(VOut in [[stage_in]], constant MU2& m [[buffer(3)]],
                       texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]]) {
-    if (m.base.a * tex1.sample(s1, in.uv).a < m.misc.x) discard_fragment();
+    float4 base = m.base * tex1.sample(s1, in.uv);
+    // SG_COLOR
+    if (base.a < m.misc.x) discard_fragment();
 }
 #endif
 )";

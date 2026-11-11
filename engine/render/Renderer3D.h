@@ -281,9 +281,18 @@ private:
     const ModelItem* lastItem_ = nullptr;   // state already bound (material, model textures, palette)
     std::vector<mat4> palette_;
     std::vector<uint32_t> order_;
+    struct ModelShaderKey {
+        uint32_t variant;
+        std::shared_ptr<const graph::Program> graph;
+        bool operator==(const ModelShaderKey& other) const {
+            if (variant != other.variant) return false;
+            if (graph == other.graph) return true;
+            return graph && other.graph && graph->glsl == other.graph->glsl && graph->outputs == other.graph->outputs;
+        }
+    };
     struct ShaderEntry { gfx::ShaderHandle shader; bool failed = false; };
-    std::vector<std::pair<uint32_t, ShaderEntry>> modelShaders_;
-    std::vector<std::pair<uint32_t, gfx::PipelineHandle>> modelPipes_;
+    std::vector<std::pair<ModelShaderKey, ShaderEntry>> modelShaders_;
+    std::vector<std::pair<ModelShaderKey, gfx::PipelineHandle>> modelPipes_;
     gfx::TextureHandle white_, black_, flatNormal_;
     gfx::PipelineHandle currentPipe_;
     std::string modelError_;

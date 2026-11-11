@@ -274,7 +274,7 @@ target_link_libraries(aiverse_game_audio PUBLIC aiverse_game aiverse_audio)
 
 # Particles: CPU simulation + RHI rendering (presentation only), and the RTS event bridge.
 add_library(aiverse_fx STATIC engine/fx/FxEffect.cpp engine/fx/ParticleSystem.cpp engine/fx/FxEmit.cpp engine/fx/FxRender.cpp engine/fx/FxMeshes.cpp)
-target_link_libraries(aiverse_fx PUBLIC aiverse_engine)
+target_link_libraries(aiverse_fx PUBLIC aiverse_engine aiverse_shader_graph)
 add_library(aiverse_game_fx STATIC modules/rts/fx/RtsFx.cpp)
 target_link_libraries(aiverse_game_fx PUBLIC aiverse_game aiverse_fx)
 
@@ -339,8 +339,11 @@ set(AIVERSE_RUNTIME_SRC
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
 list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp)
+add_library(aiverse_shader_graph STATIC engine/render/graph/ShaderGraph.cpp)
+target_link_libraries(aiverse_shader_graph PUBLIC aiverse_engine)
+
 add_library(aiverse_postfx_data STATIC engine/render/PostFxData.cpp)
-target_link_libraries(aiverse_postfx_data PUBLIC aiverse_engine)
+target_link_libraries(aiverse_postfx_data PUBLIC aiverse_engine aiverse_shader_graph)
 
 if(AIVERSE_PLATFORM STREQUAL "macos")
     list(APPEND AIVERSE_RUNTIME_SRC engine/platform/macos/PlatformMac.mm engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm)
@@ -378,7 +381,7 @@ endif()
 
 add_library(aiverse_runtime OBJECT ${AIVERSE_RUNTIME_SRC})
 target_link_libraries(aiverse_runtime PUBLIC aiverse_engine aiverse_models aiverse_imgui aiverse_pack aiverse_zstd_dec aiverse_plugins)
-target_link_libraries(aiverse_runtime PUBLIC aiverse_postfx_data)   # postfx agent
+target_link_libraries(aiverse_runtime PUBLIC aiverse_postfx_data aiverse_shader_graph)   # postfx agent
 if(APPLE)
     set_source_files_properties(engine/platform/macos/PlatformMac.mm engine/platform/ios/PlatformIOS.mm
         engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
@@ -919,7 +922,7 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/MaterialOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
@@ -1216,4 +1219,10 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_world)
     add_executable(aiverse_library_genre_tests tests/libraries/genre_tests.cpp)
     target_link_libraries(aiverse_library_genre_tests PRIVATE AIVERSE::genre)
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${PROJECT_SOURCE_DIR})
+endif()
+
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_shader_graph_tests tests/shader_graph/compiler.cpp)
+    target_link_libraries(aiverse_shader_graph_tests PRIVATE aiverse_shader_graph aiverse_postfx_data aiverse_fx)
+    add_test(NAME shader_graph COMMAND aiverse_shader_graph_tests)
 endif()

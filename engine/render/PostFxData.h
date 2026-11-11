@@ -32,7 +32,7 @@ enum class PostFxCostClass { Cheap, Medium, Heavy };
 
 enum class PostFxType {
     Fxaa, Pixelate, ChromaticAberration, Sharpen, TiltShift, Bloom, SunShafts,
-    ColorGrade, Lut, Posterize, Vignette, Grain, Fade, Letterbox, Count
+    ColorGrade, Lut, Posterize, Vignette, Grain, Fade, Letterbox, ShaderGraph, Count
 };
 
 enum class PostFxParamKind { Number, Color, Bool, Text };
@@ -65,6 +65,7 @@ const char* postFxCostName(PostFxCostClass c);
 
 // One resolved effect. Values are indexed like the type's params; a Color takes 3 consecutive floats.
 struct PostFxEffect {
+    Json shaderGraph;
     PostFxType type = PostFxType::ColorGrade;
     bool enabled = true;
     PostFxQuality minQuality = PostFxQuality::Low;

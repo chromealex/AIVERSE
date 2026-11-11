@@ -233,6 +233,7 @@ struct FxForceField {
 };
 
 struct EmitterDef {
+    Json shaderGraph;
     std::string texture = "builtin:soft";
     int frameCols = 1, frameRows = 1;
     float fps = 0;

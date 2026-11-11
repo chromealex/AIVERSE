@@ -383,5 +383,25 @@
   "editor.port.busy": "Import is running…",
   "editor.port.mode": "Scene mode",
   "editor.port.auto": "Auto",
-  "editor.port.truncated": "Preview truncated. Full details are in port-report.json or port_report."
+  "editor.port.truncated": "Preview truncated. Full details are in port-report.json or port_report.",
+  "shaderGraph": {
+  "openProject": "Open a game project to edit shader graphs.",
+  "save": "Save",
+  "load": "Load",
+  "new": "New",
+  "undo": "Undo",
+  "redo": "Redo",
+  "discard": "Discard edits",
+  "domain": "Domain",
+  "add": "Add node",
+  "help": "Drag node headers. Middle drag pans. Click output then input to connect; Escape cancels.",
+  "target": "Material / effect name",
+  "emitter": "Emitter index",
+  "apply": "Save and apply",
+  "applied": "Graph applied.",
+  "snapshot": "Apply embeds a snapshot. Reapply after editing. Assign library materials to objects in Materials.",
+  "value": "RGBA value",
+  "input": "Input",
+  "remove": "Delete node"
+}
 }

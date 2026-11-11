@@ -16,6 +16,7 @@
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
 #include "TextureCodec.h"
+#include "graph/ShaderGraph.h"
 
 namespace aiverse::render {
 
@@ -31,6 +32,7 @@ enum class ShadingModel : uint8_t { Pbr, Unlit };
 enum class TeamMode : uint8_t { None, Tint, Mask, BaseAlpha, VertexAlpha };
 
 struct Material {
+    std::shared_ptr<const graph::Program> shaderGraph;
     std::string name;
     ShadingModel shading = ShadingModel::Pbr;
     float4 baseColor{1, 1, 1, 1};          // linear

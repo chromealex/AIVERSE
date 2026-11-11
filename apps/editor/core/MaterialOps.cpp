@@ -142,7 +142,7 @@ const char* kMaterialDoc =
 } // namespace
 
 const std::vector<std::string>& materialKeys() {
-    static const std::vector<std::string> keys = {"color", "metallic", "roughness", "emissive", "emissiveStrength", "alpha", "cutoff",
+    static const std::vector<std::string> keys = {"shaderGraph", "color", "metallic", "roughness", "emissive", "emissiveStrength", "alpha", "cutoff",
                                                   "doubleSided", "unlit", "castShadow", "receiveShadow", "vertexColors", "team", "teamStrength",
                                                   "teamMask", "texture", "normalMap", "emissiveMap", "uvScale", "base", "use", "replace", "description"};
     return keys;
@@ -154,6 +154,7 @@ std::vector<std::string> checkMaterial(const Json& m) {
     const auto& keys = materialKeys();
     for (const auto& [k, v] : m.members()) {
         if (std::find(keys.begin(), keys.end(), k) == keys.end()) { out.push_back("unknown key '" + k + "'"); continue; }
+        if (k == "shaderGraph") { try { render::graph::compile(v, "material"); } catch (const std::exception& e) { out.push_back(e.what()); } }
         if ((k == "color" || k == "emissive") && (!v.isArray() || v.size() < 3)) out.push_back(k + " must be [r, g, b]");
         if ((k == "metallic" || k == "roughness" || k == "cutoff" || k == "teamStrength") && (!v.isNumber() || v.toDouble() < 0 || v.toDouble() > 1))
             out.push_back(k + " must be a number 0..1");

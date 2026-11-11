@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "domain": "particle",
+  "nodes": [
+    {
+      "id": "source",
+      "op": "input",
+      "position": [
+        30,
+        40
+      ]
+    },
+    {
+      "id": "tint",
+      "op": "constant",
+      "value": [
+        0.2,
+        0.7,
+        1,
+        1
+      ],
+      "position": [
+        30,
+        170
+      ]
+    },
+    {
+      "id": "result",
+      "op": "multiply",
+      "inputs": [
+        "source",
+        "tint"
+      ],
+      "position": [
+        250,
+        65
+      ]
+    }
+  ],
+  "outputs": {
+    "color": "result"
+  }
+}

@@ -19,6 +19,7 @@ public:
     void renderMaterial(RtsView& view, const Json& material, int shape, double time);
     gfx::TextureHandle texture() const { return color_; }
     int size() const { return size_; }
+    const std::string& lastError() const { return r3d_.modelError(); }
 
 private:
     gfx::Device* dev_ = nullptr;

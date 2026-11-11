@@ -1,4 +1,5 @@
 #include "PostFxData.h"
+#include "graph/ShaderGraph.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -73,6 +74,7 @@ std::vector<PostFxTypeDef> buildCatalog() {
     c.push_back({T::Letterbox, "letterbox", "Кинорамка", "Bars at the top and bottom (cinematic).", C::Cheap, kLow, {
         num("amount", 0.12f, 0, 0.5f, "share of the screen height covered by both bars", "Высота полос"),
         col("color", 0, 0, 0, 0, 1, "bar colour", "Цвет")}});
+    c.push_back({T::ShaderGraph, "shaderGraph", "Shader Graph", "Custom bounded fragment graph.", C::Medium, PostFxQuality::Medium, {}});
     return c;
 }
 
@@ -125,6 +127,7 @@ const float* PostFxEffect::color(const char* name) const {
 PostFxEffect defaultPostFxEffect(PostFxType t) {
     const PostFxTypeDef& d = postFxType(t);
     PostFxEffect e;
+    if(t == PostFxType::ShaderGraph) e.shaderGraph = graph::makeDefault("postfx");
     e.type = t;
     e.minQuality = d.defaultMinQuality;
     for (auto& p : d.params) for (int i = 0; i < floatsOf(p); ++i) e.values.push_back(p.def[i]);
@@ -145,8 +148,12 @@ PostFxEffect parsePostFxEffect(const Json& j, bool strict, std::vector<std::stri
         throw std::runtime_error("postfx: unknown effect type '" + id + "' (known: " + known + ")");
     }
     PostFxEffect e = defaultPostFxEffect(d->type);
+    if (d->type == PostFxType::ShaderGraph) {
+        try { const Json g = j.has("graph") ? j["graph"] : e.shaderGraph; graph::compile(g, "postfx"); e.shaderGraph = g; }
+        catch (const std::exception& ex) { e.enabled = false; e.shaderGraph = {}; problem(ex.what()); }
+    }
     for (auto& [k, v] : j.members()) {
-        if (k == "type") continue;
+        if (k == "type" || (k == "graph" && d->type == PostFxType::ShaderGraph)) continue;
         if (k == "enabled") { e.enabled = v.boolean(true); continue; }
         if (k == "minQuality") {
             PostFxQuality q;
@@ -190,6 +197,7 @@ PostFxEffect parsePostFxEffect(const Json& j, bool strict, std::vector<std::stri
         }
     }
     if (d->type == PostFxType::Lut && e.text.empty()) problem("postfx 'lut': needs \"texture\" (an image in the game folder)");
+    if (d->type == PostFxType::ShaderGraph && e.shaderGraph.isNull()) e.enabled = false;
     return e;
 }
 
@@ -197,6 +205,7 @@ Json postFxEffectJson(const PostFxEffect& e) {
     const PostFxTypeDef& d = postFxType(e.type);
     Json j = Json::object();
     j.set("type", Json::string(d.id));
+    if (e.type == PostFxType::ShaderGraph) j.set("graph", e.shaderGraph);
     if (!e.enabled) j.set("enabled", Json::fromBool(false));
     if (e.minQuality != d.defaultMinQuality) j.set("minQuality", Json::string(postFxQualityName(e.minQuality)));
     int off = 0;
@@ -324,6 +333,7 @@ PostFxWork postFxEffectWork(const PostFxEffect& e, PostFxQuality tier, bool igno
     if (tier == PostFxQuality::Off || (!ignoreMin && (int(tier) < int(e.minQuality) || !e.enabled))) return {};
     using T = PostFxType;
     switch (e.type) {
+    case T::ShaderGraph: return {1.0f + float(e.shaderGraph["nodes"].size()) * 0.08f, 0};
     case T::ColorGrade: return {0.15f, 0};
     case T::Vignette: return {0.05f, 0};
     case T::Grain: return {0.1f, 0};
@@ -396,6 +406,7 @@ Json postFxCostReport(const PostFxSettings& s) {
         const PostFxTypeDef& d = postFxType(e.type);
         Json j = Json::object();
         j.set("type", Json::string(d.id));
+    if (e.type == PostFxType::ShaderGraph) j.set("graph", e.shaderGraph);
         j.set("class", Json::string(postFxCostName(d.cost)));
         j.set("enabled", Json::fromBool(e.enabled));
         j.set("minQuality", Json::string(postFxQualityName(e.minQuality)));
