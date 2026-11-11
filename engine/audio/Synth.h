@@ -10,11 +10,11 @@
 #include <string>
 #include <vector>
 
-namespace rts {
+namespace aiverse {
 class Json;
 }
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 enum class Wave : uint8_t { Sine, Square, Saw, Triangle, Noise };
 
@@ -37,4 +37,4 @@ bool parseSynth(const Json& j, std::vector<SynthLayer>& out, std::string& error)
 // Renders the layers into mono 16-bit PCM. `seed` makes noise reproducible per sound name.
 std::vector<int16_t> renderSynth(const std::vector<SynthLayer>& layers, int sampleRate, uint32_t seed);
 
-} // namespace rts::audio
+} // namespace aiverse::audio

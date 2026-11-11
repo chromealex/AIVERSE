@@ -12,7 +12,7 @@
 #include <vector>
 #include "Model.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 struct NodePose { float3 t; quat r; float3 s{1, 1, 1}; float w[kMaxMorphTargets] = {}; };
 using Pose = std::vector<NodePose>;
@@ -140,4 +140,4 @@ struct ProcRuntime { float weight = 0, aim = 0, aimPitch = 0; quat align; };
 // `rt` is per-instance state (resized to mods.size()).
 void applyProcedural(const std::vector<ProcAnim>& mods, const ProcInputs& in, std::vector<ProcRuntime>& rt, Pose& pose, mat4& objectXf);
 
-} // namespace rts::render
+} // namespace aiverse::render

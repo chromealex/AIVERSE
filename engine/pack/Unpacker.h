@@ -1,6 +1,6 @@
 // Unpacker plugins: host-side support for archive formats the engine doesn't know (zip, tar,
 // archives of other games, ...). A plugin is a folder with `unpacker.json` and a program in any
-// language; see tools/unpackers/PROTOCOL.md. Plugins only run in host tools (assetpipe, rtsbuild,
+// language; see tools/unpackers/PROTOCOL.md. Plugins only run in host tools (assetpipe, aiversebuild,
 // editor/MCP) to convert archives into .rpak — the game runtime reads .rpak only.
 #pragma once
 #include <cstdint>
@@ -9,7 +9,7 @@
 
 #include "PackWriter.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 constexpr int kUnpackerProtocol = 1;
 
@@ -32,7 +32,7 @@ public:
     UnpackerRegistry();                    // registers the built-in "rpak" format
     // Scans `dir/unpacker.json` and `dir/*/unpacker.json`. Bad manifests go to errors().
     void addSearchDir(const std::string& dir);
-    // Standard search path: <engine>/tools/unpackers, every dir in $RTS_UNPACKERS, then
+    // Standard search path: <engine>/tools/unpackers, every dir in $AIVERSE_UNPACKERS, then
     // <project>/unpackers. Later dirs win on name clashes (a game can override a plugin).
     void addDefaultDirs(const std::string& engineDir, const std::string& projectDir = "");
     bool loadManifest(const std::string& manifestPath, std::string* error = nullptr);
@@ -76,10 +76,10 @@ bool importArchive(const UnpackerRegistry& reg, const std::string& archive, cons
                    ImportResult* result = nullptr, std::string* error = nullptr);
 
 // Writes a working plugin skeleton for a new format: manifest, Python script and a copy of the
-// rtsunpack.py helper from <engineDir>/tools/unpackers/lib (so the plugin is self-contained).
+// aiverseunpack.py helper from <engineDir>/tools/unpackers/lib (so the plugin is self-contained).
 bool scaffoldUnpacker(const std::string& dir, const std::string& name, const std::string& engineDir, std::string* error = nullptr);
 
 // Minimal JSON string escaping for tool output (--json) and protocol requests.
 std::string jsonEscape(const std::string& s);
 
-} // namespace rts::pack
+} // namespace aiverse::pack

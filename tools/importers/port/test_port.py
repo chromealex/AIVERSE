@@ -1,4 +1,4 @@
-"""Synthetic projects only; run with RTS_PORT_HEADLESS for the real engine loader check."""
+"""Synthetic projects only; run with AIVERSE_PORT_HEADLESS for the real engine loader check."""
 import copy
 import json
 import os
@@ -16,7 +16,7 @@ from godot_project import importer as godot
 from unreal_export import importer as unreal
 ROOT=Path(__file__).resolve().parents[3]
 DATA=ROOT/'tests/data/port'
-CLI=Path(__file__).with_name('rts_port.py')
+CLI=Path(__file__).with_name('aiverse_port.py')
 
 class PortTests(unittest.TestCase):
     def setUp(self):
@@ -112,11 +112,11 @@ class PortTests(unittest.TestCase):
         model=unity.extract(DATA/'unity'); first=emit(model,self.out)
         second=emit(read_json(self.out/'port.json'),self.out)
         self.assertEqual(first,second)
-    @unittest.skipUnless(os.environ.get('RTS_PORT_HEADLESS'),'RTS_PORT_HEADLESS not set')
+    @unittest.skipUnless(os.environ.get('AIVERSE_PORT_HEADLESS'),'AIVERSE_PORT_HEADLESS not set')
     def test_headless_load(self):
         for name,module in [('unity',unity),('unity2d',unity),('godot',godot),('godot2d',godot),('unreal',unreal)]:
             out=self.root/name; emit(module.extract(DATA/name),out)
-            p=subprocess.run([os.environ['RTS_PORT_HEADLESS'],'--project',str(out),'--seed','3','--max-seconds','2'],capture_output=True,text=True)
+            p=subprocess.run([os.environ['AIVERSE_PORT_HEADLESS'],'--project',str(out),'--seed','3','--max-seconds','2'],capture_output=True,text=True)
             self.assertEqual(p.returncode,0,p.stdout+p.stderr)
             if name=='unity': self.assertIn('winner=Player 1',p.stdout)
 

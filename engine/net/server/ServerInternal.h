@@ -15,7 +15,7 @@
 #include "../WebSocket.h"
 #endif
 
-namespace rts::net {
+namespace aiverse::net {
 
 struct Client {
     uint32_t id = 0;
@@ -177,4 +177,4 @@ struct Server::Impl {
     void saveRatings();
 };
 
-} // namespace rts::net
+} // namespace aiverse::net

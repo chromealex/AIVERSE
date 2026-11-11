@@ -28,7 +28,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -399,4 +399,4 @@ void registerMaterialOps(Workspace& ws) {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

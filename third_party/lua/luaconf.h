@@ -794,7 +794,7 @@
 ** without modifying the main part of the file.
 */
 
-#include "rts_luaconf.h"   /* RTSEngine: deterministic seeds, float guard (see README.rts.md) */
+#include "aiverse_luaconf.h"   /* AIVERSE: deterministic seeds, float guard (see README.rts.md) */
 
 
 

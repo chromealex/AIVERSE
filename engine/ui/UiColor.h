@@ -13,7 +13,7 @@
 
 #include "engine/data/Json.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 enum class UiBlend { Srgb, Linear };   // Srgb: today's behaviour (blending on sRGB-encoded values)
 
@@ -61,4 +61,4 @@ inline UiBlend parseUiBlend(const Json& manifest, std::string* error = nullptr) 
     return UiBlend::Srgb;
 }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

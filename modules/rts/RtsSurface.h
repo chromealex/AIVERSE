@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class BodyKind : uint8_t { Plane, Planet, Moon, Star };
 
@@ -121,4 +121,4 @@ public:
     int findBody(const std::string& id) const;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

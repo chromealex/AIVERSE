@@ -5,7 +5,7 @@
 
 struct ImGuiContext;
 
-namespace rts::render {
+namespace aiverse::render {
 
 // Each layer owns its ImGui context and makes it current in init / handleEvent / newFrame / render /
 // shutdown, so two layers can live in one process (the editor hosting the game client's overlays);
@@ -33,4 +33,4 @@ private:
     int64_t primaryTouch_ = -1;
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

@@ -27,7 +27,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 using namespace interchange;
 
@@ -491,4 +491,4 @@ std::unique_ptr<Model> loadStl(const std::string& path, const std::string& bytes
     return model;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

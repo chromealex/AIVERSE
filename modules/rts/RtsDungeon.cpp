@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -1140,4 +1140,4 @@ void RtsModule::hashDungeon(Simulation& sim, Hasher& h) {
     w.each<Possessed>([&](Entity e, Possessed& p) { h.u64(e.packed()); h.v3(p.dir); h.u32(p.fire); h.u32(p.lastTick); });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

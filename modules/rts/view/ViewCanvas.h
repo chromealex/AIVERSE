@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct ViewDrawVertex { float x = 0, y = 0, u = 0, v = 0; uint32_t rgba = 0xffffffffu; };   // rgba = 0xRRGGBBAA
 struct ViewDrawBatch {
@@ -24,4 +24,4 @@ struct ViewGroundBatch {
     std::vector<ViewGroundVertex> verts;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

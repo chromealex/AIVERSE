@@ -1,5 +1,5 @@
 // Per-phase timings of the editor's world tree (docs/editor-world-tree.md § Performance). Always collected
-// (a steady_clock read per phase); RTS_EDITOR_PROFILE=1 prints a line every 2 s to stdout:
+// (a steady_clock read per phase); AIVERSE_EDITOR_PROFILE=1 prints a line every 2 s to stdout:
 //   [profile] frames 120 avg 8.10 max 14.2 ms | readWorld 10× avg 0.41 max 0.60 | ...
 // previewBuild = the editor thread's part of a preview rebuild (map / rules to JSON), previewWorker = the setup
 // on the background thread (not frame time). The Hierarchy's status tooltip shows the same line.
@@ -10,7 +10,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class EditorProfile {
 public:
@@ -26,7 +26,7 @@ public:
         ~Scope() { p.add(ph, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()); }
     };
 
-    EditorProfile() { const char* e = std::getenv("RTS_EDITOR_PROFILE"); print_ = e && *e && *e != '0'; }
+    EditorProfile() { const char* e = std::getenv("AIVERSE_EDITOR_PROFILE"); print_ = e && *e && *e != '0'; }
     Scope scope(Phase p) { return Scope{*this, p}; }
     void add(Phase p, double ms) { auto& s = cur_[p]; s.sum += ms; s.max = std::max(s.max, ms); ++s.n; }
     // Once per frame: total frame ms; rolls the window every 2 s.
@@ -62,4 +62,4 @@ private:
     bool print_ = false;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

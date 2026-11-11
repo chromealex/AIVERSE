@@ -1,5 +1,5 @@
 // Tests for networking: rollback snapshots, protocol, transports, lockstep/rollback sessions,
-// server rooms and matchmaking. Run: ./rts_net_tests (from the repo root or with RTS_SOURCE_DIR).
+// server rooms and matchmaking. Run: ./aiverse_net_tests (from the repo root or with AIVERSE_SOURCE_DIR).
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -27,7 +27,7 @@
 #include "modules/rts/RtsAI.h"
 #include "modules/rts/RtsModule.h"
 
-using namespace rts;
+using namespace aiverse;
 
 static int g_failed = 0, g_checks = 0;
 #define CHECK(cond) do { ++g_checks; if (!(cond)) { ++g_failed; std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } } while (0)
@@ -35,11 +35,11 @@ static std::vector<std::pair<const char*, std::function<void()>>>& registry() { 
 struct Reg { Reg(const char* n, std::function<void()> f) { registry().push_back({n, std::move(f)}); } };
 #define TEST(name) static void name(); static Reg reg_##name(#name, name); static void name()
 
-#ifndef RTS_SOURCE_DIR
-#define RTS_SOURCE_DIR "."
+#ifndef AIVERSE_SOURCE_DIR
+#define AIVERSE_SOURCE_DIR "."
 #endif
-static const std::string kSkirmish = std::string(RTS_SOURCE_DIR) + "/templates/skirmish";
-static const std::string kMushrooms = std::string(RTS_SOURCE_DIR) + "/templates/mushrooms";
+static const std::string kSkirmish = std::string(AIVERSE_SOURCE_DIR) + "/templates/skirmish";
+static const std::string kMushrooms = std::string(AIVERSE_SOURCE_DIR) + "/templates/mushrooms";
 
 static std::unique_ptr<Simulation> makeSim(const std::string& game, const std::string& map, uint64_t seed) {
     SimConfig cfg; cfg.seed = seed;
@@ -226,7 +226,7 @@ static const std::string kReplayDir = [] {
     std::error_code ec;
     auto base = std::filesystem::temp_directory_path(ec);
     if (ec) base = ".";
-    auto dir = base / ("rts_net_test_replays-" + std::to_string(net::nowMs()));
+    auto dir = base / ("aiverse_net_test_replays-" + std::to_string(net::nowMs()));
     std::filesystem::create_directories(dir, ec);
     return dir.string();
 }();
@@ -579,7 +579,7 @@ TEST(net_crashing_out_still_costs_rating) {
 
 TEST(net_server_verdict_matches_offline_on_a_tile_map) {
     // The server's re-simulation must load maps exactly like the game: 2D tile maps get their tileset.
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/tiles2d";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/tiles2d";
     Json manifest = Json::parseFile(dir + "/game.json");
     const std::string mapFile = manifest["maps"][size_t(0)].getStr("file");
     auto data = netgame::loadMatchData(dir, mapFile);
@@ -655,7 +655,7 @@ TEST(net_network_drop_resumes_with_a_delta) {
 // ---------------- localization of network texts ----------------
 TEST(net_texts_are_localization_keys) {
     auto readTable = [](const std::string& lang) {
-        std::ifstream f(std::string(RTS_SOURCE_DIR) + "/engine/assets/lang/" + lang + ".json");
+        std::ifstream f(std::string(AIVERSE_SOURCE_DIR) + "/engine/assets/lang/" + lang + ".json");
         std::stringstream ss; ss << f.rdbuf();
         return Json::parse(ss.str());
     };
@@ -691,7 +691,7 @@ TEST(net_texts_are_localization_keys) {
     CHECK(net::decode(r, d) && d.code == e.code && d.text == e.text);
     // Nothing user-facing in the network code is a hard-coded sentence any more.
     for (const char* f : {"/engine/net/NetClient.cpp", "/engine/net/server/Server.cpp", "/engine/net/server/ServerMatch.cpp", "/engine/net/server/Matchmaker.cpp"}) {
-        std::ifstream in(std::string(RTS_SOURCE_DIR) + f);
+        std::ifstream in(std::string(AIVERSE_SOURCE_DIR) + f);
         std::string line; int n = 0, bad = 0;
         while (std::getline(in, line)) {
             ++n;
@@ -705,7 +705,7 @@ TEST(net_texts_are_localization_keys) {
 
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
-        if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue; // ./rts_net_tests <name filter>
+        if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue; // ./aiverse_net_tests <name filter>
         int before = g_failed;
         fn();
         std::printf("%s %s\n", g_failed == before ? "[ OK ]" : "[FAIL]", name);

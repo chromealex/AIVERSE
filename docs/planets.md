@@ -75,7 +75,7 @@ Face order and basis (cubemap convention). A face point is `n + u * s' + v * t'`
 - **HPA\* on planets** (`RtsHpaSphere.cpp`, the counterpart of `RtsHpa.cpp`: same 10/14 costs, entrance rule, A\*
   refinement). Bodies with >= `rules movement.planetHpaCells` cells (default 65,536 = the flat 256x256 threshold, i.e.
   faceSize >= 105) route trips longer than 2 clusters through it; smaller bodies (templates/planets) keep plain A\*.
-  `RTS_PLANET_HPA=1|0` / headless `--planet-hpa on|off` force it (tests, benchmarks; all peers must agree).
+  `AIVERSE_PLANET_HPA=1|0` / headless `--planet-hpa on|off` force it (tests, benchmarks; all peers must agree).
   - Clusters: 16x16 tiles of each face; the last row / column is partial when faceSize is not a multiple of 16.
     A cluster is a rect of grid rows, so cluster costs are a Dijkstra on the neighbour table inside the rect.
   - Borders: every orthogonal cell step between two clusters, taken from the surface neighbour table — inside a face
@@ -201,7 +201,7 @@ gold nuggets / gem crystals per diggable kind, the viewer's dig marks with a dig
 road networks), MW2 lanes (the sim's surface lanes) and map `roads` between buildings (great-circle ribbons). Meshes
 are body-local per 32x32 tile of a face; a tile rebuilds only when a layer changes in it or next to it (across seams).
 Fog-of-war memory as on flat maps (territory and rock learned by seeing them); a dug cell the viewer saw updates the
-planet terrain's cell flags. Real territory comes from the simulation (the former `RTS_PLANET_TERRITORY_DEMO` knob is
+planet terrain's cell flags. Real territory comes from the simulation (the former `AIVERSE_PLANET_TERRITORY_DEMO` knob is
 gone).
 
 Fog blur on planets (`PlanetFieldBlur`, installed through `FogOfWar::setBlur`): every face is box-blurred as an
@@ -214,11 +214,11 @@ Quality: Low material tier = vertex colours by cell kind, no atmosphere shell; M
 visual `terrain.layers` by cell kind + slope cliff texture (no normal maps on spheres yet) + atmosphere. Shadows only
 at surface zoom (the shadow map fit follows the RTS camera).
 
-Test knobs: `RTS_PLANET_CAM="distance[,pitch degrees[,body id]]"` overrides the start view (with a body id: looks at
-the player's / an orbit unit there), `RTS_SEED=n` fixes the match seed, `RTS_FAST_FORWARD=seconds` lets bots play
-(the human slot too) before the first frame, `RTS_PLANET_DEBUG=1` prints transit / orbit / other-body counts, `RTS_PLANET_CAM_FIGHT=1` looks at a fighting
-unit, `RTS_FX_DEBUG=1` prints effect counters, `RTS_TERRAIN_STATS=1`
-prints `[planet] chunks / drawn / culled / tris`, `RTS_MINIMAP_DUMP=file.ppm` writes the planet minimap (the HUD is
+Test knobs: `AIVERSE_PLANET_CAM="distance[,pitch degrees[,body id]]"` overrides the start view (with a body id: looks at
+the player's / an orbit unit there), `AIVERSE_SEED=n` fixes the match seed, `AIVERSE_FAST_FORWARD=seconds` lets bots play
+(the human slot too) before the first frame, `AIVERSE_PLANET_DEBUG=1` prints transit / orbit / other-body counts, `AIVERSE_PLANET_CAM_FIGHT=1` looks at a fighting
+unit, `AIVERSE_FX_DEBUG=1` prints effect counters, `AIVERSE_TERRAIN_STATS=1`
+prints `[planet] chunks / drawn / culled / tris`, `AIVERSE_MINIMAP_DUMP=file.ppm` writes the planet minimap (the HUD is
 not in screenshots).
 
 Measured (llvmpipe software GL, 1280 x 760, faceSize 128 planet with radius 81 + a 32 moon + a 64 planet + star):

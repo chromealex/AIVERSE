@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::platform {
+namespace aiverse::platform {
 using detail::state;
 
 namespace {
@@ -33,7 +33,7 @@ EGLConfig g_cfg = nullptr;
 std::unique_ptr<gfx::Device> g_device;
 bool g_inited = false;
 
-// ---- on-screen keyboard (RtsActivity.java). Java calls arrive on the UI thread; they are queued
+// ---- on-screen keyboard (AiverseActivity.java). Java calls arrive on the UI thread; they are queued
 // and dispatched on the game thread, which owns the UI and the sim.
 struct TextMsg { enum Kind { Text, Backspace, Enter, Keyboard, Ended, SafeArea } kind; std::string text; int px = 0; int inset[4] = {}; };
 std::mutex g_textMutex;
@@ -301,7 +301,7 @@ void showSoftKeyboard(bool show, const TextInputArea&) {
     jclass cls = env->GetObjectClass(activity);
     jmethodID m = env->GetMethodID(cls, "showTextInput", "(Z)V");
     if (m) env->CallVoidMethod(activity, m, jboolean(show));
-    else __android_log_print(ANDROID_LOG_WARN, "rts", "activity has no showTextInput: not RtsActivity?");
+    else __android_log_print(ANDROID_LOG_WARN, "rts", "activity has no showTextInput: not AiverseActivity?");
     if (env->ExceptionCheck()) env->ExceptionClear(); // never let a Java error kill the game thread
     env->DeleteLocalRef(cls);
 }
@@ -325,7 +325,7 @@ jstring toJString(JNIEnv* env, const std::string& s) {
 }
 } // namespace
 
-// ---- native plugins: Java classes registered in the manifest (RtsActivity / RtsPlugin.java)
+// ---- native plugins: Java classes registered in the manifest (AiverseActivity / AiversePlugin.java)
 namespace {
 struct AndroidPluginBackend : plugins::detail::Backend {
     bool available(const std::string& name) override {
@@ -349,7 +349,7 @@ struct AndroidPluginBackend : plugins::detail::Backend {
         jmethodID m = env->GetMethodID(cls, "pluginCall", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)V");
         if (!m) {
             if (env->ExceptionCheck()) env->ExceptionClear();
-            plugins::detail::completeCall(id, false, "activity has no pluginCall: not RtsActivity");
+            plugins::detail::completeCall(id, false, "activity has no pluginCall: not AiverseActivity");
         } else {
             jstring a = toJString(env, name), b = toJString(env, method), c = toJString(env, args);
             env->CallVoidMethod(act, m, a, b, c, jlong(id));
@@ -505,42 +505,42 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
     return 0;
 }
 
-} // namespace rts::platform
+} // namespace aiverse::platform
 
-// ---- JNI entry points of com.rtsengine.platform.RtsActivity (UI thread)
+// ---- JNI entry points of com.aiverse.platform.AiverseActivity (UI thread)
 
 extern "C" {
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativeText(JNIEnv* env, jclass, jstring s) {
-    rts::platform::pushText({rts::platform::TextMsg::Text, rts::platform::utf8(env, s)});
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativeText(JNIEnv* env, jclass, jstring s) {
+    aiverse::platform::pushText({aiverse::platform::TextMsg::Text, aiverse::platform::utf8(env, s)});
 }
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativeKey(JNIEnv*, jclass, jint key) {
-    rts::platform::pushText({key == 0 ? rts::platform::TextMsg::Backspace : rts::platform::TextMsg::Enter, {}});
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativeKey(JNIEnv*, jclass, jint key) {
+    aiverse::platform::pushText({key == 0 ? aiverse::platform::TextMsg::Backspace : aiverse::platform::TextMsg::Enter, {}});
 }
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativeKeyboard(JNIEnv*, jclass, jint px) {
-    rts::platform::TextMsg m{rts::platform::TextMsg::Keyboard, {}}; m.px = px;
-    rts::platform::pushText(std::move(m));
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativeKeyboard(JNIEnv*, jclass, jint px) {
+    aiverse::platform::TextMsg m{aiverse::platform::TextMsg::Keyboard, {}}; m.px = px;
+    aiverse::platform::pushText(std::move(m));
 }
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativeSafeArea(JNIEnv*, jclass, jint l, jint t, jint r, jint b) {
-    rts::platform::TextMsg m{rts::platform::TextMsg::SafeArea, {}};
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativeSafeArea(JNIEnv*, jclass, jint l, jint t, jint r, jint b) {
+    aiverse::platform::TextMsg m{aiverse::platform::TextMsg::SafeArea, {}};
     m.inset[0] = l; m.inset[1] = t; m.inset[2] = r; m.inset[3] = b;
-    rts::platform::pushText(std::move(m));
+    aiverse::platform::pushText(std::move(m));
 }
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativePluginReply(JNIEnv* env, jclass, jlong id, jboolean ok, jstring data) {
-    rts::plugins::detail::completeCall(uint64_t(id), ok != JNI_FALSE, rts::platform::utf8(env, data));
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativePluginReply(JNIEnv* env, jclass, jlong id, jboolean ok, jstring data) {
+    aiverse::plugins::detail::completeCall(uint64_t(id), ok != JNI_FALSE, aiverse::platform::utf8(env, data));
 }
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativePluginEvent(JNIEnv* env, jclass, jstring plugin, jstring event, jstring data) {
-    rts::plugins::emit(rts::platform::utf8(env, plugin), rts::platform::utf8(env, event), rts::platform::utf8(env, data));
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativePluginEvent(JNIEnv* env, jclass, jstring plugin, jstring event, jstring data) {
+    aiverse::plugins::emit(aiverse::platform::utf8(env, plugin), aiverse::platform::utf8(env, event), aiverse::platform::utf8(env, data));
 }
-JNIEXPORT void JNICALL Java_com_rtsengine_platform_RtsActivity_nativeTextInputEnded(JNIEnv*, jclass) {
-    rts::platform::pushText({rts::platform::TextMsg::Ended, {}});
+JNIEXPORT void JNICALL Java_com_aiverse_platform_AiverseActivity_nativeTextInputEnded(JNIEnv*, jclass) {
+    aiverse::platform::pushText({aiverse::platform::TextMsg::Ended, {}});
 }
 }
 
 void android_main(android_app* app) {
-    rts::platform::g_app = app;
-    char arg0[] = "rts";
+    aiverse::platform::g_app = app;
+    char arg0[] = "aiverse";
     char* argv[] = {arg0, nullptr};
-    rtsMain(1, argv);
+    aiverseMain(1, argv);
     app->activity->vm->DetachCurrentThread();
     // NativeActivity may call android_main again in the same process when the activity is
     // recreated, but the engine and the app keep function-level statics (platform state with

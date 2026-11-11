@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    {"id":1,"textKey":"story.guard.greeting","choices":[
+      {"id":1,"textKey":"story.guard.show_pass","next":2,"conditions":[{"key":1,"minimum":1,"maximum":1}],"changes":[{"key":2,"value":1}]},
+      {"id":2,"textKey":"story.guard.leave","next":0}
+    ]},
+    {"id":2,"textKey":"story.guard.welcome","choices":[{"id":1,"textKey":"story.continue","next":0}]}
+  ]
+}

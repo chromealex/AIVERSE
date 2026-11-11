@@ -8,9 +8,9 @@
 #pragma once
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerBrandingOps(Workspace& ws);
 std::string base64Encode(const std::string& bytes);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

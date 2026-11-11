@@ -9,7 +9,7 @@
 // The vertex stage is a full-screen triangle (one Float2 attribute).
 #pragma once
 
-namespace rts::render::postfx {
+namespace aiverse::render::postfx {
 
 // Bloom bright pass + 4-tap downsample. px.xy = source texel * tap spread; p0 = threshold, knee.
 inline const char* kPrefilter = R"(
@@ -210,4 +210,4 @@ inline const char* kComposite = R"(
     RETURN(vec4(clamp(col, vec3(0.0), vec3(1.0)), 1.0));
 )";
 
-} // namespace rts::render::postfx
+} // namespace aiverse::render::postfx

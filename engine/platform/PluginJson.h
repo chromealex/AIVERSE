@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace rts::plugins::json {
+namespace aiverse::plugins::json {
 
 struct Member;
 
@@ -63,4 +63,4 @@ std::string quote(const std::string& s); // JSON string literal with escapes
 // Removes // and /* */ comments outside strings (game.json allows them, like engine/data/Json).
 std::string stripComments(const std::string& text);
 
-} // namespace rts::plugins::json
+} // namespace aiverse::plugins::json

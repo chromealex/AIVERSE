@@ -7,7 +7,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 struct Cached { fs::file_time_type mtime; std::unique_ptr<game::Tileset> ts; std::string error; };
@@ -231,4 +231,4 @@ void registerTileOps(Workspace& ws) {
     });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

@@ -2,7 +2,7 @@
 
 #include <set>
 
-namespace rts::game {
+namespace aiverse::game {
 
 std::string mapStem(const std::string& mapFile) {
     size_t slash = mapFile.find_last_of("/\\");
@@ -73,4 +73,4 @@ std::vector<SourceString> collectSourceStrings(const Json& manifest, const Json&
     return out;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

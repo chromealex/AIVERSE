@@ -7,7 +7,7 @@
 
 #include "ThreadDownload.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 
@@ -106,7 +106,7 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
         c.setopt(h, kOptConnectTimeout, 20L);
         c.setopt(h, kOptLowSpeedLimit, 1L);       // abort after 60 s without data
         c.setopt(h, kOptLowSpeedTime, 60L);
-        c.setopt(h, kOptUserAgent, "RTSEngine/1");
+        c.setopt(h, kOptUserAgent, "AIVERSE/1");
         if (s.resumed) c.setopt(h, kOptResumeFromLarge, static_cast<long long>(s.base));
         int rc = c.perform(h);
         long code = 0;
@@ -125,4 +125,4 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
 
 void setAndroidJavaVm(void*) {}
 
-} // namespace rts::pack
+} // namespace aiverse::pack

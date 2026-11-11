@@ -6,6 +6,6 @@
 #pragma once
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 void registerOverlayOps(Workspace& ws);
 }

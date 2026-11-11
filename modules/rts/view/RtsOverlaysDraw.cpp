@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstdio>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -691,9 +691,9 @@ void RtsOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in,
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game
 
-namespace rts::game {
+namespace aiverse::game {
 void RtsOverlays::drawCanvas(const std::vector<ViewDrawBatch>& batches, float ox, float oy, void* drawList) {
     if (batches.empty() || !dev_) return;
     ImDrawList* dl = drawList ? static_cast<ImDrawList*>(drawList) : ImGui::GetBackgroundDrawList();
@@ -733,4 +733,4 @@ void RtsOverlays::drawCanvas(const std::vector<ViewDrawBatch>& batches, float ox
         if (textured) dl->PopTexture();
     }
 }
-} // namespace rts::game
+} // namespace aiverse::game

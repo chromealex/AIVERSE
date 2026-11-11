@@ -14,7 +14,7 @@
 #include "../../../engine/render/Math3D.h"
 #include "RtsPlanet.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct PlanetViewFrame {
     render::float3 origin;               // world point mapped to the view-world origin
@@ -169,4 +169,4 @@ private:
     render::RTSCamera cam_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

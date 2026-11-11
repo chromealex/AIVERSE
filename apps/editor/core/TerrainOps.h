@@ -9,7 +9,7 @@
 #include <vector>
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerTerrainOps(Workspace& ws);
 void registerTerrainDetailOps(Workspace& ws);   // TerrainDetailOps.cpp (called by registerTerrainOps)
@@ -52,4 +52,4 @@ struct DetailDeviation { float maxDev = 0; int cellsOver = 0, x = -1, y = -1; };
 DetailDeviation detailDeviation(const Workspace& ws, float threshold);
 DetailDeviation detailDeviation(const MapData& d, const game::Rules& rules, float threshold);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

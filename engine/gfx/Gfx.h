@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::gfx {
+namespace aiverse::gfx {
 
 template <class Tag> struct Handle {
     uint32_t id = 0;
@@ -191,4 +191,4 @@ protected:
 std::unique_ptr<Device> createMetalDevice(void* nativeSurface);
 std::unique_ptr<Device> createGLDevice(Backend glFlavor);
 
-} // namespace rts::gfx
+} // namespace aiverse::gfx

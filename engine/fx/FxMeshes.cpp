@@ -4,7 +4,7 @@
 #include <cmath>
 #include "FxInternal.h"
 
-namespace rts::fx::detail {
+namespace aiverse::fx::detail {
 
 namespace {
 
@@ -95,4 +95,4 @@ bool builtinMesh(const std::string& name, FxMesh& m) {
     return false;
 }
 
-} // namespace rts::fx::detail
+} // namespace aiverse::fx::detail

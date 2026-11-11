@@ -9,7 +9,7 @@
 #include "FxNoise.h"
 #include "ParticleShaders.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 namespace {
 
@@ -47,7 +47,7 @@ QualityLimits limitsFor(FxQuality q) {
 }
 
 FxQuality defaultQualityFor(const std::string& n, bool mobile) {
-    if (const char* q = std::getenv("RTS_PARTICLES")) {
+    if (const char* q = std::getenv("AIVERSE_PARTICLES")) {
         FxQuality v;
         if (qualityFromName(q, v)) return v;
     }
@@ -969,4 +969,4 @@ void ParticleSystem::update(float dt) {
     stats_.instances = live;
 }
 
-} // namespace rts::fx
+} // namespace aiverse::fx

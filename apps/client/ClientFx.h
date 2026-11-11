@@ -7,7 +7,7 @@
 #include "modules/rts/fx/RtsFx.h"
 #include "modules/rts/view/RtsView.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 class ClientFx {
 public:
@@ -40,4 +40,4 @@ private:
     render::mat4 space_;
 };
 
-} // namespace rts::client
+} // namespace aiverse::client

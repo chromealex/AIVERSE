@@ -4,7 +4,7 @@
 #include "modules/rts/RtsModule.h"
 #include "engine/i18n/Localization.h"
 
-namespace rts::game {
+namespace aiverse::game {
 struct ScriptHudItem {
     std::string label, description, badge, image, status, frameImage, frameSprite;
     int frameIndex = 0, frameColumns = 1;
@@ -74,4 +74,4 @@ inline bool scriptHudAbility(const Json& manifest, const std::string& id) {
             if (item.getStr("ability") == id) return true;
     return false;
 }
-} // namespace rts::game
+} // namespace aiverse::game

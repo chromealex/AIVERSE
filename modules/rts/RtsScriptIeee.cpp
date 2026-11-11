@@ -19,6 +19,8 @@
 // destructor is alive in them (see RtsScriptInternal.h, error discipline).
 #include "RtsScriptIeee.h"
 #include <cfloat>
+#include <cmath>
+#include <limits>
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
@@ -26,8 +28,7 @@
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"
-#include <cmath>
-#include <limits>
+}
 
 // IEEE-exact primitives: compiler builtins on GCC / Clang, the (correctly rounded) <cmath> versions on MSVC
 namespace {
@@ -48,8 +49,6 @@ inline float ieeeInff() { return std::numeric_limits<float>::infinity(); }
 #endif
 } // namespace
 
-}
-
 #if !defined(FLT_EVAL_METHOD) || FLT_EVAL_METHOD != 0
 #error "RtsScriptIeee needs FLT_EVAL_METHOD 0 (no extended-precision intermediates)"
 #endif
@@ -57,7 +56,7 @@ inline float ieeeInff() { return std::numeric_limits<float>::infinity(); }
 #error "RtsScriptIeee must not be built with -ffast-math"
 #endif
 
-namespace rts::game::script {
+namespace aiverse::game::script {
 namespace {
 
 constexpr uint32_t kNan32 = 0x7fc00000u;
@@ -437,4 +436,4 @@ void openIeee(lua_State* L) {
     lua_setglobal(L, "f64");
 }
 
-} // namespace rts::game::script
+} // namespace aiverse::game::script

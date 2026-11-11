@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::render {
+namespace aiverse::render {
 
 // None = uncompressed RGBA8 (levels hold width*height*4 bytes each).
 enum class BlockFormat : uint8_t { None, ETC2_RGB8, ETC2_RGBA8, EAC_R11, BC1, BC3, BC4, BC7, ASTC_4x4 };
@@ -52,4 +52,4 @@ bool decodeBlocks(const CompressedImage& in, int level, std::vector<uint8_t>& rg
 // Returns false for formats without a CPU decoder.
 bool decodeBlock(BlockFormat f, const uint8_t* block, uint8_t out[64]);
 
-} // namespace rts::render
+} // namespace aiverse::render

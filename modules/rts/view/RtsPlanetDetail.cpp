@@ -16,7 +16,7 @@
 #include "../RtsMap.h"
 #include "../RtsSphere.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using render::float3;
 
@@ -284,4 +284,4 @@ bool PlanetSurface::updateDetail(const std::vector<int16_t>& detail, Rect (&sr)[
     return true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

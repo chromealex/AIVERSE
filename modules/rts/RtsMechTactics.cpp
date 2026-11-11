@@ -4,7 +4,7 @@
 #include <algorithm>
 #include "../../engine/core/FixedMath.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -137,4 +137,4 @@ void RtsModule::mechTacticsDeath(Simulation& sim, Entity e) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

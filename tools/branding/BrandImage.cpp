@@ -24,7 +24,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::branding {
+namespace aiverse::branding {
 
 namespace {
 
@@ -421,4 +421,4 @@ std::string encodeIcns(const std::vector<std::pair<std::string, Image>>& entries
     return out + body;
 }
 
-} // namespace rts::branding
+} // namespace aiverse::branding

@@ -1,9 +1,10 @@
 // Rules: game-wide settings (victory, heights, regions, upkeep, auto-build, wave clock, ...),
 // rules-level triggers, or the whole rules.json as text. Items (types etc.) are edited in the Inspector.
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class RulesWindow : public EditorWindow {
 public:
@@ -14,6 +15,11 @@ public:
     const char* dockArea() const override { return "right-bottom"; }
 
     void draw(Editor& ed) override {
+        if(ed.ws().project.isFps()) {
+            ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            return;
+        }
         static const char* modes[] = {"Общие", "Триггеры", "Весь rules.json"};
         if (ui::segmented("##m", mode_, modes, 3)) message_.clear();
         Json& R = ed.ws().project.rulesJson;
@@ -90,6 +96,6 @@ private:
     std::string text_, textFor_, message_;
 };
 
-RTS_EDITOR_WINDOW(RulesWindow);
+AIVERSE_EDITOR_WINDOW(RulesWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

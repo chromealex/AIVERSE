@@ -1,9 +1,9 @@
 // Desktop stand-ins for store and ad SDKs, so purchase and ad flows can be built and tested without
-// a phone. The bridge registers one when game.json "plugins" lists it (or RTS_MOCK_PLUGINS=1);
-// packaged builds leave this file out unless the game lists a mock (CMake RTS_MOCK_PLUGINS).
+// a phone. The bridge registers one when game.json "plugins" lists it (or AIVERSE_MOCK_PLUGINS=1);
+// packaged builds leave this file out unless the game lists a mock (CMake AIVERSE_MOCK_PLUGINS).
 //
-//   RTS_MOCK_STORE = purchased (default) | pending | cancelled | failed   — outcome of purchase()
-//   RTS_MOCK_ADS   = ok (default) | noreward | fail                        — outcome of show()
+//   AIVERSE_MOCK_STORE = purchased (default) | pending | cancelled | failed   — outcome of purchase()
+//   AIVERSE_MOCK_ADS   = ok (default) | noreward | fail                        — outcome of show()
 #include "MockPlugins.h"
 
 #include "engine/platform/PluginJson.h"
@@ -14,7 +14,7 @@
 #include <set>
 #include <string>
 
-namespace rts::services {
+namespace aiverse::services {
 namespace {
 namespace json = plugins::json;
 
@@ -47,7 +47,7 @@ public:
             return;
         }
         if (method == "purchase") {
-            std::string outcome = env("RTS_MOCK_STORE", "purchased");
+            std::string outcome = env("AIVERSE_MOCK_STORE", "purchased");
             if (outcome == "cancelled") { reply.fail("cancelled"); return; }
             if (outcome == "failed") { reply.fail("mock store: payment declined"); return; }
             json::Value p = json::Value::object();
@@ -107,7 +107,7 @@ public:
         if (method == "load") { plugins::emit("mock-ads", "loaded", json::dump(ev)); reply.ok(); return; }
         if (method == "banner") { reply.ok(); return; }
         if (method == "show") {
-            std::string outcome = env("RTS_MOCK_ADS", "ok");
+            std::string outcome = env("AIVERSE_MOCK_ADS", "ok");
             if (outcome == "fail") { reply.fail("mock ads: no fill"); return; }
             plugins::emit("mock-ads", "app.pause", "{}");
             plugins::emit("mock-ads", "opened", json::dump(ev));
@@ -134,4 +134,4 @@ void registerMockPlugins() {
     registerMockPlugin("mock-ads");
 }
 
-} // namespace rts::services
+} // namespace aiverse::services

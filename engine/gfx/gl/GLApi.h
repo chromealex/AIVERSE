@@ -14,7 +14,7 @@
   #include <windows.h>
   #include <GL/gl.h>
   #include <cstddef>
-  #define RTS_GL_LOADER 1
+  #define AIVERSE_GL_LOADER 1
   typedef char GLchar;
   typedef ptrdiff_t GLsizeiptr;
   typedef ptrdiff_t GLintptr;
@@ -54,7 +54,7 @@
   #define GL_COLOR_ATTACHMENT0 0x8CE0
   #define GL_DEPTH_ATTACHMENT 0x8D00
   #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
-  #define RTS_GL_FUNCS(X) \
+  #define AIVERSE_GL_FUNCS(X) \
     X(void, glGenBuffers, (GLsizei n, GLuint* b)) \
     X(void, glDeleteBuffers, (GLsizei n, const GLuint* b)) \
     X(void, glBindBuffer, (GLenum t, GLuint b)) \
@@ -99,10 +99,10 @@
     X(GLenum, glCheckFramebufferStatus, (GLenum t)) \
     X(void, glDrawBuffers, (GLsizei n, const GLenum* b)) \
     X(void, glBlitFramebuffer, (GLint sx0, GLint sy0, GLint sx1, GLint sy1, GLint dx0, GLint dy0, GLint dx1, GLint dy1, GLbitfield m, GLenum f))
-  #define RTS_GL_DECLARE(ret, name, args) typedef ret (APIENTRY* PFN_##name) args; extern PFN_##name name;
-  RTS_GL_FUNCS(RTS_GL_DECLARE)
-  #undef RTS_GL_DECLARE
-  namespace rts::gfx { bool loadGLFunctions(); }
+  #define AIVERSE_GL_DECLARE(ret, name, args) typedef ret (APIENTRY* PFN_##name) args; extern PFN_##name name;
+  AIVERSE_GL_FUNCS(AIVERSE_GL_DECLARE)
+  #undef AIVERSE_GL_DECLARE
+  namespace aiverse::gfx { bool loadGLFunctions(); }
 #elif defined(__EMSCRIPTEN__)
   #include <GLES3/gl3.h>
 #else

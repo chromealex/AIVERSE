@@ -16,7 +16,7 @@
 #include "../../engine/core/Archive.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 Fixed dist(Vec3 a, Vec3 b) { return Surface::onSphere(a) ? (a - b).length() : (a - b).xz().length(); }
@@ -942,11 +942,12 @@ void RtsAI::stateIo(Archive& a) {
     io(a, waveCentre_); io(a, waveMoveTick_);
     io(a, badSpots_); io(a, invaders_); io(a, invadeBody_); io(a, invasions_); io(a, invadeTick_); io(a, enemyOffBody_);
     if (version >= 2) {   // the terrain analysis' walkable mask from match start (neutral blockers may be gone by now)
-        std::vector<uint8_t> pass = a.writing() && terr_ ? terr_->pass : std::vector<uint8_t>{};
+        // A freshly restored bot may be saved again before its terrain cache is rebuilt.
+        std::vector<uint8_t> pass = a.writing() ? (terr_ ? terr_->pass : savedPass_) : std::vector<uint8_t>{};
         io(a, pass);
         if (!a.writing()) { savedPass_ = std::move(pass); terr_.reset(); }
     }
     if (version >= 3) io(a, noSpot_);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

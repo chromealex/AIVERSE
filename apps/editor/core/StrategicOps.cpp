@@ -9,7 +9,7 @@
 #include "Workspace.h"
 #include "modules/strategic/Strategic.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace fs = std::filesystem;
 using strategic::StrategicGame;
@@ -138,4 +138,4 @@ void registerStrategicOps(Workspace& ws) {
         }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

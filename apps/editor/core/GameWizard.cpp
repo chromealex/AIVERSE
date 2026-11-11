@@ -16,7 +16,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace wiz {
 
@@ -676,4 +676,4 @@ Json GameMaker::runAll() {
     return report_;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

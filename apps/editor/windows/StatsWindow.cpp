@@ -5,7 +5,7 @@
 #include "../Editor.h"
 #include "../EditorUtil.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class StatsWindow : public EditorWindow {
 public:
@@ -101,6 +101,6 @@ private:
     }
 };
 
-RTS_EDITOR_WINDOW(StatsWindow);
+AIVERSE_EDITOR_WINDOW(StatsWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

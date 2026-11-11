@@ -4,7 +4,7 @@
 #include <cmath>
 #include "RtsTerrainSurface.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -153,4 +153,4 @@ float3 casterRight(float3 gRight, float3 gFront, float3 sunDir) {
     return cross(float3{0, 1, 0}, nr);   // gRight = up x gFront
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

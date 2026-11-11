@@ -1,10 +1,22 @@
-<p align="center"><img src="docs/images/logo.png" alt="RTSEngine" width="520"></p>
+<p align="center"><img src="docs/images/aiverse-logo-original.png" alt="AIVERSE" width="520"></p>
 
-# RTSEngine
+# AIVERSE
 
-Движок для любых RTS на C++20: от Mushroom Wars до Warcraft, Red Alert и Total Annihilation.
-Игра — это **данные** (`game.json`, `rules.json`, карты), а не код: один и тот же клиент, редактор и
-сборщик работают с любой игрой.
+**Игровой движок на C++20 для RTS, FPS и создания игр вместе с AI-агентами.**
+
+AIVERSE (ранее RTSEngine) объединяет рендер, платформенный слой и инструменты создания игр
+с отдельными жанровыми модулями. RTS-модуль охватывает стратегии от Mushroom Wars до Warcraft,
+Red Alert и Total Annihilation; FPS-направление развивается в отдельном модуле с клиентом,
+авторитетным сервером и поддержкой больших миров.
+
+Игры описываются **данными**: `game.json`, `rules.json`, картами и ресурсами. Для собственной
+логики RTS-проектов доступны Lua и нативные C++-модули. Редактор и MCP-инструменты позволяют
+AI-агентам работать с игровыми проектами, а каталог библиотек и навыков помогает переиспользовать
+готовые механики.
+
+Приложения называются `AiverseEditor` и `AiverseGame`, инструменты — `aiversebuild` и
+`aiversemcp`. Общий C++ namespace — `aiverse`, параметры сборки и окружения — `AIVERSE_*`.
+Переход со старых имён описан в [руководстве по миграции](docs/aiverse-migration.md).
 
 Платформы: macOS и iOS (Metal), Android и HTML5 (OpenGL ES 3 / WebGL2), Windows (OpenGL 3.3),
 Linux (для разработки и CI).
@@ -16,6 +28,8 @@ engine/
   core/      Fixed (Q47.16), Vec3, Random (PCG32), Hash, ECS
   data/      JSON без float (числа сразу в fixed-point)
   sim/       детерминированная симуляция, команды, реплеи
+  net/authority/ авторитетные сетевые сессии для FPS
+  world/     пространственные структуры и загрузка мира по чанкам
   gfx/       RHI + бэкенды Metal и GL (ES3/WebGL2/GL3.3), рендер в текстуру
   render/    3D-рендер: свет, тени (shadow map + PCF), туман, тонмаппинг; Dear ImGui через RHI;
              модели glTF/OBJ, материалы PBR, скелетная и процедурная анимация
@@ -24,12 +38,15 @@ engine/
 modules/rts/ универсальный RTS-слой: типы из данных, приказы, A*, бой, экономика, стройка,
              производство, гарнизоны (Mushroom Wars), дороги, туман войны, ИИ
              view/ — отрисовка любых типов по блоку "view" в rules.json
+modules/fps/ FPS-модуль (в разработке): движение, бой и состояние матча
 apps/
+  fps/       отдельные FPS-клиент и сервер
   client/    игра (меню, матч с ботами, HUD, мини-карта, мышь и тач)
   editor/    редактор карт (рельеф, объекты, дороги, игроки, проверка, тест с ботами, меню «Сборка»)
   headless/  матчи ботов и проверка реплеев без графики
   modelview/ просмотр моделей, клипов, материалов и всех типов игры
-tools/rtsbuild/  сборщик: exe / app / проект Xcode / проект Gradle / web
+tools/mcp/      MCP-сервер для работы AI-агентов с редактором
+tools/aiversebuild/  сборщик: exe / app / проект Xcode / проект Gradle / web
 templates/
   skirmish/  «Iron and Gold» — пример в духе Warcraft/Red Alert
   mushrooms/ «Mushroom Clash» — пример в духе Mushroom Wars
@@ -42,33 +59,33 @@ platform/    шаблоны упаковки (Info.plist, Gradle-проект, H
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # нужны Xcode и CMake
 cmake --build build/mac -j 8
-open build/mac/RTSEditor.app                              # редактор (проект templates/skirmish)
-open build/mac/RTSGame.app                                # игра
-./build/mac/rts_tests
+open build/mac/AiverseEditor.app                              # редактор (проект templates/skirmish)
+open build/mac/AiverseGame.app                                # игра
+./build/mac/aiverse_tests
 ```
 
-Другую игру в редакторе: `RTSEditor.app/Contents/MacOS/RTSEditor --project templates/mushrooms`.
-Чтобы игра запускалась с другим набором данных, задайте `-DRTS_CONTENT_DIR=.../templates/mushrooms`.
+Другую игру в редакторе: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
+Чтобы игра запускалась с другим набором данных, задайте `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
 
 ### Несколько редакторов одновременно
 
 Каждый процесс редактора может открыть свой проект через `--project <папка>`.
 Без `--listen` первый экземпляр занимает MCP-порт `47321`, а при занятом порте
 ОС автоматически выделяет свободный. Фактический порт показан в строке состояния;
-окно **Agent** добавляет его в конфигурацию подключения (`rtsmcp --port <порт>`).
+окно **Agent** добавляет его в конфигурацию подключения (`aiversemcp --port <порт>`).
 Автоматически выделенный порт может измениться после перезапуска редактора.
 `--listen <порт>` закрепляет точный порт (при конфликте MCP не запускается),
 `--listen 0` отключает MCP. Существующие MCP-клиенты сами между окнами не переключаются.
 
-## Сборка под платформы — rtsbuild
+## Сборка под платформы — aiversebuild
 
 ```bash
-./build/mac/rtsbuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (подписан ad-hoc)
-./build/mac/rtsbuild --project templates/skirmish --target ios       # Builds/ios/xcode/RTSEngine.xcodeproj + сборка для симулятора
-./build/mac/rtsbuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk, если есть SDK/NDK и gradle
-./build/mac/rtsbuild --project templates/skirmish --target web       # Builds/web (нужен emsdk)
-./build/mac/rtsbuild --project templates/skirmish --target windows   # .exe через mingw-w64 (brew install mingw-w64) или исходники + build.bat
-./build/mac/rtsbuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (подписан ad-hoc)
+./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + сборка для симулятора
+./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk, если есть SDK/NDK и gradle
+./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (нужен emsdk)
+./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe через mingw-w64 (brew install mingw-w64) или исходники + build.bat
+./build/mac/aiversebuild --project templates/skirmish --target all
 ```
 
 Результат кладётся в `<проект>/Builds/<платформа>/` — там только готовые сборки и отчёт о размере.
@@ -85,11 +102,11 @@ Gradle-проект для Android Studio кладётся в `Builds/android/<N
 
 ### Инструменты сборки: проверка и автоустановка
 
-Перед сборкой `rtsbuild` проверяет, что нужно платформе, и ищет это не только в `PATH` (редактор,
+Перед сборкой `aiversebuild` проверяет, что нужно платформе, и ищет это не только в `PATH` (редактор,
 запущенный из Finder, видит лишь `/usr/bin:/bin:/usr/sbin:/sbin`): Homebrew (`/opt/homebrew/bin`,
 `/usr/local/bin`), `~/.local/bin`, `~/Library/Python/*/bin`, `~/emsdk`, `$EMSDK`, `ANDROID_HOME` /
 `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, `~/Android/Sdk`, `%LOCALAPPDATA%\Android\Sdk`, `JAVA_HOME`,
-`/usr/libexec/java_home`, Visual Studio (vswhere) и свою папку `~/.rtsengine/toolchains`. Найденные папки
+`/usr/libexec/java_home`, Visual Studio (vswhere) и свою папку `~/.aiverse/toolchains`. Найденные папки
 добавляются в `PATH` дочерних процессов.
 
 | Платформа | Нужно | Ставится автоматически |
@@ -102,20 +119,20 @@ Gradle-проект для Android Studio кладётся в `Builds/android/<N
 | linux | компилятор C++, CMake | CMake |
 
 ```bash
-rtsbuild --check-toolchain web            # что есть, чего нет (--json — для редактора и MCP)
-rtsbuild --install-toolchain web          # поставить недостающее (или один id: emsdk, cmake, jdk, android-ndk, gradle, ...)
-rtsbuild --project ... --target web --install-missing   # поставить и сразу собрать
+aiversebuild --check-toolchain web            # что есть, чего нет (--json — для редактора и MCP)
+aiversebuild --install-toolchain web          # поставить недостающее (или один id: emsdk, cmake, jdk, android-ndk, gradle, ...)
+aiversebuild --project ... --target web --install-missing   # поставить и сразу собрать
 ```
 
 Без `--install-missing` нехватка инструментов останавливает сборку с кодом выхода 3 и строкой
-`RTS_MISSING_TOOLCHAIN web: emsdk` (её распознаёт редактор). В редакторе окно **Сборка** показывает для
+`AIVERSE_MISSING_TOOLCHAIN web: emsdk` (её распознаёт редактор). В редакторе окно **Сборка** показывает для
 выбранной платформы, что найдено (пути, версии) и чего не хватает, с кнопкой **Установить автоматически**
 и галочкой «Устанавливать недостающее автоматически»; ход установки — в **Консоли** (текст можно выделять и
 копировать, «Открыть папку логов» — `<движок>/logs`). Агенты делают то же через MCP: `toolchain_check`,
 `toolchain_install`, `build_start {"installMissing": true}`.
 
-Всё ставится в `~/.rtsengine/toolchains` (Windows: `%USERPROFILE%\.rtsengine\toolchains`; другая папка —
-переменная `RTS_TOOLCHAINS_DIR`) без `sudo` и изменений в системе: `emsdk/`, `py/` (venv с cmake и ninja),
+Всё ставится в `~/.aiverse/toolchains` (Windows: `%USERPROFILE%\.aiverse\toolchains`; другая папка —
+переменная `AIVERSE_TOOLCHAINS_DIR`) без `sudo` и изменений в системе: `emsdk/`, `py/` (venv с cmake и ninja),
 `cmake/`, `ninja/`, `jdk-17/`, `android-sdk/`, `gradle-8.10.2/`. Повторный запуск безопасен (готовое
 пропускается). Удалить всё установленное — удалить эту папку. Исключения: Command Line Tools ставит
 установщик Apple, а если найден Android SDK пользователя, недостающие пакеты `sdkmanager` ставит в него.
@@ -129,8 +146,8 @@ rtsbuild --project ... --target web --install-missing   # поставить и 
 пак поверх (патч, DLC). Каждая сборка печатает отчёт о размере и пишет его в `dist/<платформа>/size-report.txt`.
 
 ```bash
-rtsbuild ... --no-pack          # класть папки как есть (отладка)
-rtsbuild ... --pack-level 9     # уровень zstd (по умолчанию 19 для Release, 3 для Debug)
+aiversebuild ... --no-pack          # класть папки как есть (отладка)
+aiversebuild ... --pack-level 9     # уровень zstd (по умолчанию 19 для Release, 3 для Debug)
 
 assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # собрать пак вручную
 assetpipe list content.rpak       # файлы, размеры, сжатие
@@ -147,7 +164,7 @@ assetpipe diff old.rpak new.rpak  # что изменилось между ве�
 
 По желанию сборку можно разбить: в приложение попадает только базовый пак с тем, что нужно для запуска,
 остальное — в части (`content.001.rpkc`, …) заданного размера, которые игра докачивает из любого источника.
-Всё решает автор игры, в `game.json` (общие настройки и отдельно для каждой платформы) или флагами `rtsbuild`:
+Всё решает автор игры, в `game.json` (общие настройки и отдельно для каждой платформы) или флагами `aiversebuild`:
 
 ```json
 "packaging": {
@@ -165,7 +182,7 @@ assetpipe diff old.rpak new.rpak  # что изменилось между ве�
 ```
 
 ```bash
-rtsbuild --project templates/x --target web --split --chunk-size 4MB --base-size 15MB   # флаги важнее game.json
+aiversebuild --project templates/x --target web --split --chunk-size 4MB --base-size 15MB   # флаги важнее game.json
 ```
 
 Части кладутся рядом со сборкой (`dist/<платформа>/chunks/`) — их выкладывают по адресу из `sources`
@@ -196,7 +213,7 @@ assetpipe unpackers new tools/unpackers myformat    # заготовка нов�
 assetpipe unpackers check                           # проверить все плагины
 ```
 
-У всех команд есть `--json` — так их вызывает MCP-сервер. В `game.json` можно перечислить `"imports"`, и `rtsbuild`
+У всех команд есть `--json` — так их вызывает MCP-сервер. В `game.json` можно перечислить `"imports"`, и `aiversebuild`
 сам распакует их в пак при сборке (`"optional": true` — если файла нет на этой машине, сборка идёт без него).
 Пак с импортированным сторонним контентом помечается флагом «external»: такие сборки только для личного
 использования, их нельзя коммитить и распространять.
@@ -206,8 +223,8 @@ assetpipe unpackers check                           # проверить все 
 Импортёр превращает вашу копию старой игры в папку игры для движка. Сейчас есть Dune II:
 
 ```bash
-python3 tools/importers/dune2/import.py --source "~/Downloads/Dune II" --out ~/RTSGames/dune2
-rtsbuild --project ~/RTSGames/dune2 --target macos
+python3 tools/importers/dune2/import.py --source "~/Downloads/Dune II" --out ~/AiverseGames/dune2
+aiversebuild --project ~/AiverseGames/dune2 --target macos
 ```
 
 Получается 2D-игра в формате движка (`docs/game-format.md`, «2D games»): камера сверху, 66 миссий кампании
@@ -223,7 +240,7 @@ rtsbuild --project ~/RTSGames/dune2 --target macos
 
 Проект — папка где угодно на диске (`game.json`, `rules.json`, `maps/`, ...). В её корне лежит
 файл проекта **`<Название>.rtsproj`** — его открывают двойным кликом, как `.uproject` в Unity/Unreal
-или `project.godot`. `game.json` остаётся манифестом игры (его читают клиент, rtsbuild, паки);
+или `project.godot`. `game.json` остаётся манифестом игры (его читают клиент, aiversebuild, паки);
 `.rtsproj` только помечает папку как проект и хранит сведения редактора:
 
 ```json
@@ -233,24 +250,24 @@ rtsbuild --project ~/RTSGames/dune2 --target macos
 - Создаётся вместе с проектом (хаб «Новый проект», MCP `create_project`); у старого проекта без
   него — при первом открытии в редакторе. У шаблонов в `templates/*/` он уже есть (и в новый проект
   не копируется: тот получает свой).
-- Везде, где редактор принимает путь проекта, подходит и `.rtsproj`, и папка: `rts_editor "Моя
+- Везде, где редактор принимает путь проекта, подходит и `.rtsproj`, и папка: `aiverse_editor "Моя
   стратегия.rtsproj"`, `--project`, «Открыть…» в хабе (показывает `.rtsproj` и папки проектов),
-  недавние, MCP `open_game`, `rtsbuild --project x.rtsproj`. В сборку `.rtsproj` не попадает.
+  недавние, MCP `open_game`, `aiversebuild --project x.rtsproj`. В сборку `.rtsproj` не попадает.
 - **Двойной клик.** Редактор при запуске сам связывает `.rtsproj` с собой (для пользователя, без прав
   администратора), если связи нет или она ведёт к другому экземпляру редактора; выбранную вами другую
   программу не перебивает. Вручную: «Проект → Сделать редактор программой по умолчанию для .rtsproj»;
-  состояние — внизу слева в хабе. Отключить: `RTS_FILE_ASSOC=off`.
-  - **macOS:** тип `com.rtsengine.project` объявлен в Info.plist `RTSEditor.app`
-    (`platform/macos/EditorInfo.plist.in`; иконку документа `rtsproj.icns` рисует `rts_projicon` из логотипа
+  состояние — внизу слева в хабе. Отключить: `AIVERSE_FILE_ASSOC=off`.
+  - **macOS:** тип `com.aiverse.project` объявлен в Info.plist `AiverseEditor.app`
+    (`platform/macos/EditorInfo.plist.in`; иконку документа `rtsproj.icns` рисует `aiverse_projicon` из логотипа
     редактора `apps/editor/branding/icon_1024.png`); редактор регистрирует бандл
     в LaunchServices (`lsregister -f`) и становится обработчиком по умолчанию. Двойной клик и
-    `open -a RTSEditor x.rtsproj` открывают проект в уже запущенном редакторе (при несохранённой
+    `open -a AiverseEditor x.rtsproj` открывают проект в уже запущенном редакторе (при несохранённой
     карте он спросит, сохранить ли её).
-  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `RTSEngine.Project` (иконка
-    `%USERPROFILE%\.rtsengine\icons\rtsproj.ico`, команда `"<rts_editor.exe>" "%1"`). Если в
+  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (иконка
+    `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, команда `"<aiverse_editor.exe>" "%1"`). Если в
     Windows для `.rtsproj` уже выбрана другая программа, хаб подскажет «Открыть с помощью → Всегда».
-  - **Linux:** тип `application/x-rtsengine-project` (`~/.local/share/mime/packages/rtsengine-project.xml`),
-    `~/.local/share/applications/rtsengine-editor.desktop` (`Exec=<редактор> %f`), иконки в
+  - **Linux:** тип `application/x-aiverse-project` (`~/.local/share/mime/packages/aiverse-project.xml`),
+    `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<редактор> %f`), иконки в
     `~/.local/share/icons/hicolor`, программа по умолчанию в `~/.config/mimeapps.list`;
     `update-mime-database`, `update-desktop-database`, `xdg-mime` вызываются, если установлены.
 
@@ -299,12 +316,12 @@ rtsbuild --project ~/RTSGames/dune2 --target macos
 ```
 
 ```bash
-./build/mac/rts_i18n extract --project templates/skirmish --lang de --write   # заготовка lang/de.json, новые строки помечены // TODO
-./build/mac/rts_i18n check   --project templates/skirmish                     # плейсхолдеры, формы мн. числа, непереведённое
+./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # заготовка lang/de.json, новые строки помечены // TODO
+./build/mac/aiverse_i18n check   --project templates/skirmish                     # плейсхолдеры, формы мн. числа, непереведённое
 ```
 
 Язык выбирается так: выбор игрока в меню (запоминается) → язык системы → исходный язык игры.
-Для проверки: `--lang ru`, `RTS_LANG=ru`, псевдоязык `--lang qps` (все строки искажены и длиннее —
+Для проверки: `--lang ru`, `AIVERSE_LANG=ru`, псевдоязык `--lang qps` (все строки искажены и длиннее —
 сразу видно непереведённое и то, что не влезает). Формы множественного числа — по CLDR
 («1 секунду / 2 секунды / 5 секунд»). Подробнее: `engine/i18n/README.md`.
 
@@ -329,7 +346,7 @@ rtsbuild --project ~/RTSGames/dune2 --target macos
 - Тексты в документах пишутся ключами `@menu.play`: перевод берётся из `engine/assets/lang` (и `lang/`
   игры) при загрузке документа, смена языка в меню перезагружает документы.
 - Экранная клавиатура (`engine/ui/UiKeyboard.*`): своя, на RmlUi, открывается при фокусе в поле
-  ввода на сенсорных устройствах (на ПК — `RTS_OSK=1`). Раскладки (en, ru, символы; Shift, Caps по
+  ввода на сенсорных устройствах (на ПК — `AIVERSE_OSK=1`). Раскладки (en, ru, символы; Shift, Caps по
   двойному нажатию, смена языка) — в `keyboard.json`, вид — `keyboard.rml` / `keyboard.rcss`; игра
   заменяет любой из файлов в своей `ui/`. Если курсор внизу экрана, клавиатура встаёт сверху.
 - Сетевая игра (`lobby.rml`, `apps/client/Lobby.cpp`): адрес сервера и имя, быстрая игра по очередям
@@ -362,10 +379,10 @@ Linux ARM64 (GCC), macOS ARM64 (AppleClang) — одинаковые контр�
   лагающий игрок не останавливает остальных. Клиент не ждёт подтверждения: играет вперёд со своими
   командами, а при расхождении восстанавливает снимок и пересчитывает (снимок ~10 мкс).
   `rollbackWindow: 0` — классический lockstep для слабых устройств.
-- **Сервер `rts_server`** не нужен контент игры: комнаты (слоты, боты, зрители, готовность, проверка
+- **Сервер `aiverse_server`** не нужен контент игры: комнаты (слоты, боты, зрители, готовность, проверка
   версии данных), автоматический матчмейкинг по очередям из `server.json` (рейтинг Elo с расширением
   окна, общая карта, баланс команд, добор ботами), сверка контрольных сумм (рассинхрон), реплеи
-  (`rts_headless --replay` их проигрывает), переподключение, зрители с задержкой.
+  (`aiverse_headless --replay` их проигрывает), переподключение, зрители с задержкой.
 - **Выход = сдача.** Ушедший игрок (или не вернувшийся за `reconnectGraceSec`) сдаётся командой в общем
   потоке ввода: исход решает симуляция у всех одинаково, и это видно в реплее. Рейтинг при этом списывается.
 - **Вердикт сервера.** Если исход никто не подтвердил (все ушли, результаты расходятся), сервер в фоновом
@@ -382,11 +399,11 @@ Linux ARM64 (GCC), macOS ARM64 (AppleClang) — одинаковые контр�
   лежат в `engine/assets/lang/*.json` под `net.*`. Названия очередей в `server.json` — тоже ключи (`"@net.queue.1v1"`).
 
 ```bash
-./build/mac/rts_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/rts_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # бот в очередь
-./build/mac/rts_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
-./build/mac/rts_net_tests                                          # сетевые тесты
-docker build -f apps/server/Dockerfile -t rts-server .             # сервер в контейнере
+./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
+./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # бот в очередь
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_net_tests                                          # сетевые тесты
+docker build -f apps/server/Dockerfile -t aiverse-server .             # сервер в контейнере
 ```
 
 Для `wss://` (страница игры по HTTPS) поставьте перед сервером TLS-прокси (nginx, Caddy).
@@ -427,14 +444,14 @@ docker build -f apps/server/Dockerfile -t rts-server .             # серве�
 | события (cues) | `attack hit miss died spawned trainStarted ready buildPlaced buildDone gathered captured lost playerDefeated victory defeat notEnough notEnoughSupply noRoom researched levelUp ability readyToPlace sold regionClaimed wave lowPower upgraded message underAttack baseUnderAttack select move attackOrder buildOrder click error` |
 | поиск звука | тип → оружие/способность по id → `events` |
 | музыка | плейлисты `menu`, `match`, `battle`, `victory`, `defeat` (и `match.<карта>`); кроссфейд, интро + бесшовные петли, слои по интенсивности боя, переходы по долям/тактам, стингеры, приглушение под голос |
-| сжатие при сборке | `rtsbuild` перекодирует звук под платформу: ADPCM для эффектов, Vorbis для музыки, понижение частоты, моно; профили `desktop`/`mobile`/`web` в `audio.json` → `build`; `--audio off` — без перекодирования |
+| сжатие при сборке | `aiversebuild` перекодирует звук под платформу: ADPCM для эффектов, Vorbis для музыки, понижение частоты, моно; профили `desktop`/`mobile`/`web` в `audio.json` → `build`; `--audio off` — без перекодирования |
 
 Звуки боя слышны только там, где нет тумана войны; «нас атакуют» — с паузой, и только если камера
 смотрит в другое место. Громкость (общая и музыка) — в меню паузы, хранится в `userDataDir/audio.cfg`.
 На телефоне при сворачивании звук ставится на паузу.
 
-Отладка без звуковой карты: `RTS_AUDIO=null` (настоящий аудиопоток без железа), `RTS_AUDIO=off`,
-`RTS_AUDIO_CAPTURE=/tmp/mix.wav` — записать всё, что прозвучало, в WAV.
+Отладка без звуковой карты: `AIVERSE_AUDIO=null` (настоящий аудиопоток без железа), `AIVERSE_AUDIO=off`,
+`AIVERSE_AUDIO_CAPTURE=/tmp/mix.wav` — записать всё, что прозвучало, в WAV.
 
 ## Модели, материалы, анимация
 
@@ -452,7 +469,7 @@ docker build -f apps/server/Dockerfile -t rts-server .             # серве�
   винты), колёса по пройденному пути, наведение башни на цель, отдача, наклон в повороте,
   падение и погружение при смерти и т.д.; срабатывает по состояниям и событиям боя.
 - **Уровни качества** материалов (`low` / `medium` / `high`) выбираются по GPU, как тени;
-  `RTS_MATERIALS=low|medium|high` — переопределение для проверки.
+  `AIVERSE_MATERIALS=low|medium|high` — переопределение для проверки.
 - **Толпы**: клипы запекаются в текстуру, одинаковые юниты рисуются инстансингом (300 анимированных
   юнитов — 61 draw call вместо 1801); LOD моделей по дистанции, анимация вне экрана и вдали
   обновляется реже.
@@ -475,7 +492,7 @@ docker build -f apps/server/Dockerfile -t rts-server .             # серве�
   `material_*` / `texture_generate` для агентов.
 
 Сломанная модель не ломает игру: тип рисуется фигурой, причина пишется в консоль редактора.
-Просмотр: `rts_modelview модель.glb@Walk` или `rts_modelview --game templates/showcase` (все типы игры
+Просмотр: `aiverse_modelview модель.glb@Walk` или `aiverse_modelview --game templates/showcase` (все типы игры
 так, как их рисует игра); в редакторе — окно **Models** (клипы, узлы, материалы, портрет,
 перезагрузка при сохранении файла модели). Пример — `templates/showcase`, полный формат — `docs/models.md`.
 
@@ -484,10 +501,10 @@ docker build -f apps/server/Dockerfile -t rts-server .             # серве�
 Динамический свет рассчитан на старые Android (Mali-T, Adreno 3xx/4xx): все источники рисуются в
 маленькую световую карту над видимой землёй, шейдер берёт свет одной выборкой текстуры, сколько бы
 источников ни было. Уровни: `off`, `low` (карта 128², обновление через кадр), `medium` (256²),
-`high` (+ 8 источников попиксельно с бликом). Выбирается по GPU, как тени; вручную: `RTS_LIGHTS=…`.
+`high` (+ 8 источников попиксельно с бликом). Выбирается по GPU, как тени; вручную: `AIVERSE_LIGHTS=…`.
 Если во время матча кадры стабильно не успевают, клиент сам понижает свет и тени по ступеням
 (сначала самое дорогое и наименее заметное) и после тяжёлого боя возвращает одну ступень; ручной
-выбор теней в меню это отключает (`RTS_ADAPTIVE=off`).
+выбор теней в меню это отключает (`AIVERSE_ADAPTIVE=off`).
 
 - **Свет типов и боя** — `view.light` (костры, кузницы, светящиеся грибы), вспышки выстрелов,
   попаданий, взрывов, свет снарядов (`attackLight`, `projectileLight`, `hitLight`, `deathLight`),
@@ -504,8 +521,8 @@ docker build -f apps/server/Dockerfile -t rts-server .             # серве�
   список источников. Для агентов: `light_add`, `light_update`, `light_delete`, `light_list`,
   `lighting_set`, `view_lighting`.
 
-Формат полей — в шапке `modules/rts/view/RtsLights.h`. Тестовые переменные: `RTS_TIME_OF_DAY`,
-`RTS_NIGHT`, `RTS_CLOUDS`, `RTS_STORM`.
+Формат полей — в шапке `modules/rts/view/RtsLights.h`. Тестовые переменные: `AIVERSE_TIME_OF_DAY`,
+`AIVERSE_NIGHT`, `AIVERSE_CLOUDS`, `AIVERSE_STORM`.
 
 ## Проверка механик через MCP
 
@@ -534,7 +551,7 @@ docker build -f apps/server/Dockerfile -t rts-server .             # серве�
 FXAA, зерно, аберрация, резкость, пикселизация, постеризация, заливка и кинорамка, плюс готовые
 наборы (кино, сочный, нуар, ретро, миниатюра, закат, зима, ночное видение). У каждого эффекта
 `minQuality`. Уровень выбирается по GPU: слабые Android получают «низкое», телефоны «среднее», ПК
-«высокое»; `RTS_POSTFX` переопределяет уровень. Без эффектов постобработка ничего не стоит. Лёгкие
+«высокое»; `AIVERSE_POSTFX` переопределяет уровень. Без эффектов постобработка ничего не стоит. Лёгкие
 эффекты собраны в один проход, тяжёлые (bloom, FXAA, лучи) добавляют свои.
 
 Редактор: окно **Постэффекты** (предпросмотр уровней, таблица стоимости кадра по классам устройств).
@@ -544,7 +561,7 @@ MCP: `postfx_catalog/get/add/set/remove/preset/enable/estimate/lut_neutral`, `vi
 ## Проверено / не проверено
 
 - ✅ Linux: клиент, редактор, тесты; Windows .exe (кросс-сборка MinGW, запуск под Wine).
-- ✅ macOS: сборка, тесты, запуск игры на Metal; rtsbuild → .app и проект iOS (+ сборка для симулятора).
+- ✅ macOS: сборка, тесты, запуск игры на Metal; aiversebuild → .app и проект iOS (+ сборка для симулятора).
 - ✅ Web: собирается (Emscripten 3.1.50), матч запускается в headless Chromium (WebGL2/SwiftShader).
 - ⏳ Android: проект Gradle генерируется; APK и запуск в эмуляторе — в CI (job `android`), локально не собирался.
 - ⏳ Windows на реальном железе и iOS на устройстве — не запускались (в CI: MSVC-сборка и сборка iOS для симулятора).
@@ -556,10 +573,10 @@ MCP: `postfx_catalog/get/add/set/remove/preset/enable/estimate/lut_neutral`, `vi
 | Job | Что делает |
 |---|---|
 | `linux` | gcc и clang (x64) + gcc (ARM64), предупреждения = ошибки, тесты, матчи ботов, скриншоты под Xvfb |
-| `windows-msvc` | Visual Studio 2022, тесты, матчи, `rtsbuild --target windows` |
+| `windows-msvc` | Visual Studio 2022, тесты, матчи, `aiversebuild --target windows` |
 | `windows-mingw` | кросс-сборка MinGW-w64, тесты и матчи под Wine |
-| `macos` | universal-сборка Xcode, тесты, матчи, `rtsbuild` → .app и проект iOS со сборкой для симулятора |
-| `android` | `.so` через NDK, APK через `rtsbuild`, в эмуляторе: запуск → касание → фон → возврат → «назад» → повторный запуск, проверка logcat на падения |
+| `macos` | universal-сборка Xcode, тесты, матчи, `aiversebuild` → .app и проект iOS со сборкой для симулятора |
+| `android` | `.so` через NDK, APK через `aiversebuild`, в эмуляторе: запуск → касание → фон → возврат → «назад» → повторный запуск, проверка logcat на падения |
 | `web` | Emscripten, запуск матча в headless Chromium, проверка консоли и кадра |
 | `determinism` | сравнивает контрольные суммы матчей (обе игры × 3 сида) со всех платформ — должны совпасть побитово |
 
@@ -571,7 +588,7 @@ MCP: `postfx_catalog/get/add/set/remove/preset/enable/estimate/lut_neutral`, `vi
 # Windows .exe с Linux/macOS
 cmake -S . -B build/mingw -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=platform/cmake/mingw-w64.cmake
 # матчи ботов на всех играх → файл контрольных сумм (сравнить между машинами через diff)
-.github/scripts/headless-checksums.sh build/linux-release/rts_headless sums.txt
+.github/scripts/headless-checksums.sh build/linux-release/aiverse_headless sums.txt
 # смоук-тест web-сборки
 node platform/web/smoke.mjs build/web
 ```
@@ -599,21 +616,21 @@ UI (`UiLayer`) вызывает это сам при фокусе на `<input t
 
 Любой SDK платформы подключается плагином на её родном языке — Java (Android), Objective-C (iOS/macOS),
 JavaScript (web) или C++ — через один асинхронный мост `engine/platform/Plugins.h`. Игра пользуется
-общими API `rts::store` (покупки) и `rts::ads` (реклама) из `engine/services`, а провайдер выбирается
+общими API `aiverse::store` (покупки) и `aiverse::ads` (реклама) из `engine/services`, а провайдер выбирается
 по платформе в `game.json`. Готовые плагины в `plugins/`: **App Store**, **Google Play**, **RuStore**,
 **Яндекс Игры** (web: покупки и реклама), **Steam** (покупки через Inventory Service и DLC, Windows/
 Linux/macOS), **Yandex Mobile Ads**, **AdMob**, **AppLovin MAX**, **ironSource (Unity LevelPlay)**. В билд попадают только выбранные игрой плагины (`"plugins"` в
 game.json или `--plugins`): чужих SDK, зависимостей, записей манифеста и ключей Info.plist в нём нет,
 CI это проверяет. Для отладки на десктопе есть заглушки магазина и рекламы (`mock-store`, `mock-ads`;
-`RTS_MOCK_STORE`, `RTS_MOCK_ADS`): весь сценарий покупки проходит без телефона, а в релизные сборки
-заглушки не компилируются. rtsbuild сам вписывает плагины в Gradle/манифест, Info.plist/Podfile и
+`AIVERSE_MOCK_STORE`, `AIVERSE_MOCK_ADS`): весь сценарий покупки проходит без телефона, а в релизные сборки
+заглушки не компилируются. aiversebuild сам вписывает плагины в Gradle/манифест, Info.plist/Podfile и
 HTML; для Google Play и RuStore собирайте отдельно: `--plugins googleplay,admob` и
 `--plugins rustore,yandex-ads`. Подробно — `docs/plugins.md`.
 
 ### Релизы
 
 `.github/workflows/release.yml`: тег `v1.2.3` (или ручной запуск с выбором папки игры) собирает все
-платформы через `rtsbuild` и публикует GitHub Release:
+платформы через `aiversebuild` и публикует GitHub Release:
 
 | Платформа | Что выходит | Подпись (секреты репозитория) |
 |---|---|---|
@@ -626,30 +643,32 @@ HTML; для Google Play и RuStore собирайте отдельно: `--plug
 
 Без секретов релиз всё равно выходит: APK подписан отладочным ключом, .app — ad-hoc, Windows без подписи.
 
-### Готовые сборки движка (ветка `builds`) и rtsmcp без компилятора
+### Готовые сборки движка (ветка `builds`) и aiversemcp без компилятора
 
-Редактор и инструменты (`rtsmcp`, `rts_headless`, `rtsbuild`, `assetpipe`) уже собранными лежат в ветке
-**`builds`**: `<platform>/RTSEngine-<version>-<commit>-<platform>.zip` (сейчас `windows` x86_64 и `macos`
-arm64; `linux` x86_64 — когда интегратор опубликует). Внутри — папка `RTSEngine/` с исходниками движка на
-этом коммите (шаблоны `templates/`, `engine/assets`, `docs/` — их читает MCP-сервер) и `RTSEngine/bin/` с
+Готовые редактор и инструменты публикуются в ветке
+**`builds`**: `<platform>/AIVERSE-<version>-<commit>-<platform>.zip` (сейчас `windows` x86_64 и `macos`
+arm64; `linux` x86_64 — когда интегратор опубликует). Внутри — папка `AIVERSE/` с исходниками движка на
+этом коммите (шаблоны `templates/`, `engine/assets`, `docs/` — их читает MCP-сервер) и `AIVERSE/bin/` с
 программами. Собирает `tools/release/package_engine.py`, публикует `tools/release/publish_builds.py`
-(AGENTS.md §8); Linux-пакет может быть без редактора — только `rtsmcp` и `rts_headless`.
+(AGENTS.md §8); Linux-пакет может быть без редактора — только `aiversemcp` и `aiverse_headless`.
 
-MCP-сервер из распакованной папки (матчи ботов и `balance_*` идут внутри rtsmcp, отдельный
-`rts_headless` ему не нужен; редактор — по желанию, без него `--no-editor`):
+MCP-сервер из распакованной папки (матчи ботов и `balance_*` идут внутри aiversemcp, отдельный
+`aiverse_headless` ему не нужен; редактор — по желанию, без него `--no-editor`):
 
 ```bash
-unzip RTSEngine-0.2.0-77126fa9-macos.zip -d ~/rts      # unzip сохраняет флаг исполняемого файла
-~/rts/RTSEngine/bin/rtsmcp --no-editor --engine ~/rts/RTSEngine
+# ARCHIVE — путь к скачанному архиву AIVERSE из index.json.
+unzip "$ARCHIVE" -d ~/aiverse      # unzip сохраняет флаг исполняемого файла
+~/aiverse/AIVERSE/bin/aiversemcp --no-editor --engine ~/aiverse/AIVERSE
 ```
 
-`--engine` можно не указывать в сборках с коммита, где rtsmcp ищет движок рядом с собой
+`--engine` можно не указывать в сборках с коммита, где aiversemcp ищет движок рядом с собой
 (`engine/platform/EngineDir.h`, как редактор); в опубликованных раньше он обязателен. Распаковщики, которые
 не восстанавливают права (Python `zipfile`), — `chmod +x` для файлов из `bin/`. На macOS скачанный
-браузером файл может получить карантин: `xattr -dr com.apple.quarantine ~/rts/RTSEngine`.
+браузером файл может получить карантин: `xattr -dr com.apple.quarantine ~/aiverse/AIVERSE`.
 
 Программы, которые скачивают движок сами, читают **`index.json`** в корне ветки
-(`https://raw.githubusercontent.com/chromealex/rts-engine/builds/index.json`), а не README:
+(`https://raw.githubusercontent.com/chromealex/rts-engine/builds/index.json`), а не README. Ниже — пример исторической записи RTSEngine;
+в новых сборках пути содержат AIVERSE, ключ `rtsmcp` сохраняется:
 
 ```json
 {
@@ -677,18 +696,18 @@ unzip RTSEngine-0.2.0-77126fa9-macos.zip -d ~/rts      # unzip сохраняе�
 
 - `packages` — от новых к старым; первая запись с нужными `platform` + `arch` — самая свежая сборка.
 - `platform`: `windows` | `macos` | `linux`; `arch`: `x86_64` | `arm64` | `universal` (macOS fat) | `null`
-  (не распознан) — определяется по заголовку `rtsmcp` внутри zip.
+  (не распознан) — определяется по заголовку `aiversemcp` внутри zip.
 - `rtsmcp`, `editor`, `headless` — пути внутри архива или `null`, если программы в пакете нет; `--engine` —
   папка `root`. `editor` на macOS — бандл `.app`.
 - `url` указывает на ветку, которая перезаписывается при каждой публикации (хранятся 5 версий на
   платформу): старые записи исчезают, поэтому скачивайте по свежему `index.json` и сверяйте `sha256`.
 - Новые поля могут добавляться; несовместимое изменение формата увеличит `schema`.
 
-Проверка: `python3 tools/release/test_release.py [build/linux-release/rtsmcp]` (CTest `release_tools`) —
-формат `index.json`, а с путём к rtsmcp — упаковка Linux-пакета, распаковка во временную папку и MCP-вызовы
+Проверка: `python3 tools/release/test_release.py [build/linux-release/aiversemcp]` (CTest `release_tools`) —
+формат `index.json`, а с путём к aiversemcp — упаковка Linux-пакета, распаковка во временную папку и MCP-вызовы
 из неё без `--engine` (`tools/list`, `create_project`, `map_generate`, `map_validate`, `map_ascii`).
 
-Режим скриншота (`RTS_SCREENSHOT`, `RTS_EXIT_AFTER_FRAMES`) шагает ровно по 1/60 с на кадр, поэтому
+Режим скриншота (`AIVERSE_SCREENSHOT`, `AIVERSE_EXIT_AFTER_FRAMES`) шагает ровно по 1/60 с на кадр, поэтому
 кадр N одинаков на любой машине.
 
 ## Дальше
@@ -699,7 +718,31 @@ RVO для больших армий, улучшения ИИ, скриптин�
 ## Модули игры на C++
 
 Помимо Lua, проект может содержать `native/CMakeLists.txt` и C++20-модули.
-Они подключаются через `rts_native_module(...)` при сборке и включаются массивом
+Они подключаются через `aiverse_native_module(...)` при сборке и включаются массивом
 `nativeModules` в `rules.json`. Поддержаны тики, команды, rollback и сохранение
 состояния; Lua и C++ работают вместе. После изменения C++ нужна пересборка игры
 и редактора. [API, пример и инструкция сборки](docs/native-modules.md).
+
+## Переиспользуемая мета-библиотека C++
+
+`aiverse::meta` — настраиваемые магазин/офферы/крафт, валюты и предметы, задания и пассы,
+ежедневные награды, энергия, почта, рейтинги, чаты и сегменты. Доступна native-коду
+проекта без Lua/GPU; определения — JSON, алгоритмы не нужно генерировать заново.
+Старт: `python3 tools/meta/scaffold.py --preset mobile --out <project>`.
+Документация: [docs/meta-game.md](docs/meta-game.md); агентам — `skills/meta-game/SKILL.md`.
+Локальные политики работают без сервера; для общения между устройствами и глобальных
+рейтингов подключается реальный backend. Готовый облачный сервис в пакет не входит.
+
+Пресет `full --with-ui` добавляет друзей/кланы, коллекцию экземпляров, экипировку,
+слияние, подписки и турнирные лиги. `aiverse::meta::Service` выполняет операции атомарно;
+`tools/meta/server.py` — локальный HTTP/SQLite-хост с проверкой сессий. В комплекте
+браузерные экраны меты и каталог коротких рецептов для агентов.
+[Сборка, запуск и ограничения](docs/meta-service.md).
+
+В `full` также входят 15 групп LiveOps: сундуки с pity, альбомы/обмены, очереди работ,
+исследования/престиж, составные задания, события, войны кланов, асинхронное PvP,
+матчмейкинг партий, Elo/Glicko-2, рефералы/промокоды, rewarded ads, цепочки офферов,
+уведомления и офлайн-доход. Все параметры — `extensions.liveops`; новые отдельные
+UI-экраны и внешние SDK этим пресетом не устанавливаются.
+`python3 tools/meta/catalog.py describe matchmaking` выдаёт только нужную схему и пример.
+[API, политики и ограничения](docs/meta-liveops.md).

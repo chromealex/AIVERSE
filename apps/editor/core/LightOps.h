@@ -3,7 +3,7 @@
 #pragma once
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerLightOps(Workspace& ws);
 // Copies the known light fields (x, z, height, color, radius, intensity, flicker, halo, name) from
@@ -11,4 +11,4 @@ void registerLightOps(Workspace& ws);
 void applyLightParams(Json& light, const Json& params);
 Json& mapLightsMut(MapDoc& doc);   // the map's "lights" array (created when missing)
 
-} // namespace rts::editor
+} // namespace aiverse::editor

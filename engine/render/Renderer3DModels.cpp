@@ -10,7 +10,7 @@
 #include <cstring>
 #include <string>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float misc[4]; float uv0[4]; float uv1[4]; float light[4]; };
@@ -38,7 +38,7 @@ bool boxVisible(const mat4& clip, float3 mn, float3 mx) {
 } // namespace
 
 MaterialQuality Renderer3D::defaultMaterialQualityFor(const gfx::Device& dev, bool mobile) {
-    if (const char* q = std::getenv("RTS_MATERIALS")) { // testing override: low|medium|high
+    if (const char* q = std::getenv("AIVERSE_MATERIALS")) { // testing override: low|medium|high
         std::string v = q;
         return v == "low" ? MaterialQuality::Low : v == "medium" ? MaterialQuality::Medium : MaterialQuality::High;
     }
@@ -96,14 +96,14 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     for (auto& [k, s] : modelShaders_) if (k == shaderKey) entry = &s;
     if (!entry) {
         std::string defs;
-        defs += "#define RTS_INST " + std::to_string(instanced ? kMaxInstances : 1) + "\n";
+        defs += "#define AIVERSE_INST " + std::to_string(instanced ? kMaxInstances : 1) + "\n";
         if (skinned) defs += "#define SKINNED 1\n";
         if (baked) defs += "#define BAKED 1\n";
         if (morph) defs += "#define MORPH 1\n";
         if (normalMap) defs += "#define NORMALMAP 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
-        defs += "#define RTS_Q " + std::to_string(int(matQuality_)) + "\n";
+        defs += "#define AIVERSE_Q " + std::to_string(int(matQuality_)) + "\n";
         const std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
         const std::string fs = defs + (shadow ? shaders::kModelShadowFS : shaders::kModelFS);
         const std::string msl = defs + (shadow ? shaders::kModelShadowMSL : shaders::kModelMSL);
@@ -335,4 +335,4 @@ void Renderer3D::renderModels(int phase) {
     }
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

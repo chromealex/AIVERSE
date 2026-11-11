@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Executable entry point for aiverse_port; Python modules remain next to this launcher."""
+import sys
+sys.dont_write_bytecode = True
+from aiverse_port import run
+sys.exit(run())

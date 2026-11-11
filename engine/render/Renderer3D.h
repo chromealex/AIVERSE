@@ -14,7 +14,7 @@
 #include "Math3D.h"
 #include "Model.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 struct Mesh {
     gfx::BufferHandle vb, ib;
@@ -172,7 +172,7 @@ public:
     using CustomDraw = std::function<void(gfx::Device&)>;
     void drawCustom(CustomDraw fn) { custom_.push_back(std::move(fn)); }
     // Inside a custom draw: bind what the lit shaders share (U1 frame, U2 + tex1 point lights, tex0
-    // shadow map), so custom lit shaders built on RTS_*_SHADOW / RTS_*_LIGHTS get the same lighting.
+    // shadow map), so custom lit shaders built on AIVERSE_*_SHADOW / AIVERSE_*_LIGHTS get the same lighting.
     void bindLitFrame();
     // Opaque custom renderers (terrain): run first in the main pass, before meshes and models, so
     // translucent meshes (water) blend over them. Same lifetime rules as drawCustom.
@@ -187,14 +187,14 @@ public:
 
     // Traced lighting ("trace" tier, Renderer3DTrace.cpp): sun rays marched over the terrain height
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
-    // reflections on water. On by default with High shadows; RTS_TRACE=off|on overrides.
+    // reflections on water. On by default with High shadows; AIVERSE_TRACE=off|on overrides.
     void setTraceEnabled(bool on) { traceWanted_ = on; }
     bool traceEnabled() const { return traceWanted_; }
     bool traceActive() const;                              // this frame: wanted, High shadows, height field bound
     static bool defaultTraceFor(const gfx::Device& dev, bool mobile);
     void setHeightField(const HeightField& hf) { heightField_ = hf; }   // the terrain renderer owns the texture
     const HeightField& heightField() const { return heightField_; }
-    // Inside a custom lit draw (terrain): bind the height field for RTS_*_TRACE_AT(slot).
+    // Inside a custom lit draw (terrain): bind the height field for AIVERSE_*_TRACE_AT(slot).
     void bindTrace(int textureSlot);
     bool ssrActive() const { return ssrThisFrame_; }       // the scene targets are bound this frame (water SSR)
 
@@ -289,4 +289,4 @@ private:
     std::string modelError_;
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

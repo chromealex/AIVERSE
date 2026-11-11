@@ -4,7 +4,7 @@
 #pragma once
 #include "Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 Fixed fxSinTurns(Fixed turns);           // |error| <= 2 raw units (Q16)
 Fixed fxCosTurns(Fixed turns);
@@ -17,4 +17,4 @@ Fixed fxAcosTurns(Fixed v);              // [0, 0.5]
 Vec3 fxNormalize(Vec3 v);                // zero vector -> zero vector
 Vec3 fxCross(Vec3 a, Vec3 b);
 
-} // namespace rts
+} // namespace aiverse

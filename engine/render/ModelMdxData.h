@@ -7,7 +7,7 @@
 #include <vector>
 #include "Math3D.h"
 
-namespace rts::render::mdx {
+namespace aiverse::render::mdx {
 
 // ---------------------------------------------------------------- intermediate structure
 
@@ -72,4 +72,4 @@ inline void appendFaces(Geoset& g, uint32_t type, const uint16_t* idx, size_t n,
 // Parses .mdl text; throws std::runtime_error("path:line: what") on broken files.
 Mdlx parseMdl(const std::string& path, const std::string& text);
 
-} // namespace rts::render::mdx
+} // namespace aiverse::render::mdx

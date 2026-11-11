@@ -11,7 +11,7 @@
 //    24  u64     TOC stored size
 //    32  u64     TOC raw size
 //    40  u64     TOC hash   (FNV-1a 64 of the raw TOC)
-//    48  u64     content hash (rts::Hasher over str(path), u64(raw hash) of every entry, TOC order)
+//    48  u64     content hash (aiverse::Hasher over str(path), u64(raw hash) of every entry, TOC order)
 //    56  u64     v2: offset of the chunk table inside the raw TOC (0 = none)
 //   Blobs, each 16-byte aligned (identical files share one blob)
 //   TOC: entry records (40 bytes each, sorted by path bytes) followed by the path string table
@@ -39,7 +39,7 @@
 #include <string_view>
 #include <vector>
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 constexpr uint32_t kPackVersion = 1;       // written when nothing is split
 constexpr uint32_t kPackVersionSplit = 2;
@@ -151,4 +151,4 @@ private:
     std::vector<std::unique_ptr<Pack>> packs_;
 };
 
-} // namespace rts::pack
+} // namespace aiverse::pack

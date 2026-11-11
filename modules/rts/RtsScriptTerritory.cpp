@@ -3,7 +3,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game::script {
+namespace aiverse::game::script {
 namespace {
 bool flatGrid(Vm& vm) {
     if (vm.module->state(*vm.sim).grid.surf) { vm.err = "territory brush/formation API requires a flat map"; return false; }
@@ -130,4 +130,4 @@ void openTerritoryApi(Vm& vm) {
     luaL_setfuncs(vm.L, queries, 0);
     if (vm.mode == Mode::Sim) luaL_setfuncs(vm.L, actions, 0);
 }
-} // namespace rts::game::script
+} // namespace aiverse::game::script

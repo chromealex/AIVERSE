@@ -11,7 +11,7 @@ extern "C" {
 #include "GameClient.h"
 #include "engine/ui/UiLua.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 namespace {
 GameClient& host(lua_State* L) { return *static_cast<GameClient*>(lua_touserdata(L, lua_upvalueindex(1))); }
@@ -88,4 +88,4 @@ void GameClient::scriptUiFrame() {
     }
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

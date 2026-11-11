@@ -1,9 +1,9 @@
-// rts_i18n — string tables for the engine and games.
+// aiverse_i18n — string tables for the engine and games.
 //
-//   rts_i18n check   [--project templates/skirmish] [--engine engine/assets]
+//   aiverse_i18n check   [--project templates/skirmish] [--engine engine/assets]
 //       Validates engine tables against English and the game's tables against its data
 //       (names in rules/maps/game.json). Exit code 1 if there are errors.
-//   rts_i18n extract --project templates/skirmish --lang ru [--write]
+//   aiverse_i18n extract --project templates/skirmish --lang ru [--write]
 //       Prints lang/ru.json with every translatable key: existing translations are kept,
 //       missing ones get the source text and a // TODO comment. --write saves it.
 #include "engine/data/Json.h"
@@ -19,7 +19,7 @@
 #include <sstream>
 #include <algorithm>
 
-using namespace rts;
+using namespace aiverse;
 namespace fs = std::filesystem;
 
 namespace {
@@ -178,7 +178,7 @@ int checkGame(const Game& g, const fs::path& assets, int& warnings) {
         if (tag == g.langs.source) continue;
         fs::path f = g.dir / "lang" / (tag + ".json");
         if (!fs::exists(f)) {
-            std::printf("%s: warning: missing (run: rts_i18n extract --project %s --lang %s --write)\n",
+            std::printf("%s: warning: missing (run: aiverse_i18n extract --project %s --lang %s --write)\n",
                         f.string().c_str(), g.dir.string().c_str(), tag.c_str());
             ++warnings;
             continue;
@@ -270,8 +270,8 @@ int extract(const Game& g, const std::string& tagIn, bool write) {
 
 int usage() {
     std::fprintf(stderr,
-                 "usage: rts_i18n check [--project DIR] [--engine DIR]\n"
-                 "       rts_i18n extract --project DIR --lang TAG [--write]\n");
+                 "usage: aiverse_i18n check [--project DIR] [--engine DIR]\n"
+                 "       aiverse_i18n extract --project DIR --lang TAG [--write]\n");
     return 2;
 }
 
@@ -280,8 +280,8 @@ int usage() {
 int main(int argc, char** argv) {
     if (argc < 2) return usage();
     std::string cmd = argv[1], project, lang;
-#ifdef RTS_SOURCE_DIR
-    fs::path assets = fs::path(RTS_SOURCE_DIR) / "engine" / "assets";
+#ifdef AIVERSE_SOURCE_DIR
+    fs::path assets = fs::path(AIVERSE_SOURCE_DIR) / "engine" / "assets";
 #else
     fs::path assets = "engine/assets";
 #endif
@@ -316,7 +316,7 @@ int main(int argc, char** argv) {
             return extract(loadGame(project), lang, write);
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "rts_i18n: %s\n", e.what());
+        std::fprintf(stderr, "aiverse_i18n: %s\n", e.what());
         return 1;
     }
     return usage();

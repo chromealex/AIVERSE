@@ -1,4 +1,4 @@
-// Traced lighting ("trace" tier, Shaders.h RTS_*_TRACE / RTS_*_SSR). No ray-tracing API: the GLES 3.0
+// Traced lighting ("trace" tier, Shaders.h AIVERSE_*_TRACE / AIVERSE_*_SSR). No ray-tracing API: the GLES 3.0
 // floor has none, so the rays are marched in the fragment shaders against data every backend has.
 //
 //   * Terrain shadows: every lit shader marches the sun ray over a 16-bit height map of the whole
@@ -18,20 +18,20 @@
 #include <cstring>
 #include <string>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 struct BlitUniforms { float params[4]; };
 } // namespace
 
 bool Renderer3D::defaultTraceFor(const gfx::Device& dev, bool mobile) {
-    if (const char* e = std::getenv("RTS_TRACE")) { std::string v = e; return v != "off" && v != "0"; }
+    if (const char* e = std::getenv("AIVERSE_TRACE")) { std::string v = e; return v != "off" && v != "0"; }
     return defaultQualityFor(dev, mobile) == ShadowQuality::High;
 }
 
 bool Renderer3D::traceActive() const {
     if (!traceWanted_ || quality_ != ShadowQuality::High || !dev_) return false;
-    if (const char* e = std::getenv("RTS_TRACE")) { std::string v = e; if (v == "off" || v == "0") return false; }
+    if (const char* e = std::getenv("AIVERSE_TRACE")) { std::string v = e; if (v == "off" || v == "0") return false; }
     return true;
 }
 
@@ -138,4 +138,4 @@ void Renderer3D::endSceneCapture(const gfx::PassDesc& mainPass, int w, int h) {
     ++drawCalls_;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

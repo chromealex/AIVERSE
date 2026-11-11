@@ -15,7 +15,7 @@
 #include "EditorIcons.h"
 #include "EditorTheme.h"
 
-namespace rts::editor::ui {
+namespace aiverse::editor::ui {
 
 inline int stringResize(ImGuiInputTextCallbackData* d) {
     if (d->EventFlag == ImGuiInputTextFlags_CallbackResize) {
@@ -515,4 +515,4 @@ inline void viewportLabel(ImDrawList* dl, ImVec2 pos, const char* text, ImVec4 c
     dl->AddText(pos, ImGui::GetColorU32(color), text);
 }
 
-} // namespace rts::editor::ui
+} // namespace aiverse::editor::ui

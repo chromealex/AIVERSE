@@ -10,7 +10,7 @@
 #include "RtsView.h"
 #include "RtsTerrainSurface.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -286,7 +286,7 @@ void Rts2DView::emit(const SpriteLook& L, float3 ground, float3 facing, int act,
 }
 
 void Rts2DView::addObject(const SceneObject& o, float groundY, const EntityFxValues* fx) {
-    struct Acc {   // RTS_SPRITE_STATS
+    struct Acc {   // AIVERSE_SPRITE_STATS
         double& ms; std::chrono::steady_clock::time_point t;
         ~Acc() { ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); }
     } acc{cpuMs_, std::chrono::steady_clock::now()};
@@ -354,8 +354,8 @@ static float3 referenceLight() {
 
 void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
     if (!ready_) return;
-    // RTS_SPRITE_STATS=1: quads / shadow casters / CPU time of the sprite queueing, every 60 frames
-    static const bool printStats = std::getenv("RTS_SPRITE_STATS") != nullptr;
+    // AIVERSE_SPRITE_STATS=1: quads / shadow casters / CPU time of the sprite queueing, every 60 frames
+    static const bool printStats = std::getenv("AIVERSE_SPRITE_STATS") != nullptr;
     if (printStats && frame_ % 60 == 0) {
         std::fprintf(stderr, "[sprites] quads %zu casters %zu cpu %.2f ms/frame\n", batch_.size(), batch_.casterCount(), cpuMs_ / 60.0);
         cpuMs_ = 0;
@@ -403,4 +403,4 @@ bool Rts2DView::hit(const RTSCamera& cam, const SceneObject& o, float groundY, f
     return !(pos && neg);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -1,5 +1,5 @@
 // Build step: replaces small 2D images in a pack by texture atlas pages + a manifest
-// (host tools only: rtsbuild, assetpipe, tests). Configuration: the optional "atlas" block of
+// (host tools only: aiversebuild, assetpipe, tests). Configuration: the optional "atlas" block of
 // game.json (docs/game-format.md, "Texture atlases"). Output is reproducible.
 //
 // Grouping (what may share a page) — an image joins group key
@@ -24,9 +24,9 @@
 #include "engine/data/Json.h"
 #include "tools/atlas/AtlasPacker.h"
 
-namespace rts::pack { class PackWriter; struct WriteStats; }
+namespace aiverse::pack { class PackWriter; struct WriteStats; }
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 struct FileProps {
     std::string group;            // "" = not a candidate
@@ -37,7 +37,7 @@ struct FileProps {
 
 struct AtlasConfig {
     bool enabled = true;
-    std::string profile;          // rtsbuild target (web, android, ios, macos, windows, linux) or custom
+    std::string profile;          // aiversebuild target (web, android, ios, macos, windows, linux) or custom
     PackSettings pack;            // maxPage from the profile, padding, extrude, pow2
     bool trim = true;
     int maxTextureSize = 0;       // 0 = maxPage / 4
@@ -92,7 +92,7 @@ struct AtlasOutput {
 
 bool buildAtlas(const std::vector<SourceImage>& images, const AtlasConfig& cfg, AtlasOutput& out, std::string* error = nullptr);
 
-// rtsbuild/assetpipe: atlases the writer's image inputs in place (removes consumed files, adds
+// aiversebuild/assetpipe: atlases the writer's image inputs in place (removes consumed files, adds
 // pages + manifest). No-op when disabled or nothing qualifies.
 bool applyAtlas(pack::PackWriter& w, const AtlasConfig& cfg, AtlasStats& stats, std::string* error = nullptr);
 // After PackWriter::write: fills storedBytes from the pack statistics.
@@ -104,4 +104,4 @@ void collectSheets(const Json& j, std::set<std::string>& out);
 void scanSheets(const pack::PackWriter& w, AtlasConfig& cfg);   // over the writer's .json inputs
 std::string encodePng(const Image& img);
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

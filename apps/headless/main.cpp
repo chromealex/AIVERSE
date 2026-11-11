@@ -1,6 +1,6 @@
 // Headless runner: bot-vs-bot matches, replay recording and verification for any game project.
-//   rts_headless --project templates/skirmish [--map maps/valley.json] --seed 7 --record m.rpl
-//   rts_headless --replay m.rpl
+//   aiverse_headless --project templates/skirmish [--map maps/valley.json] --seed 7 --record m.rpl
+//   aiverse_headless --replay m.rpl
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -23,7 +23,7 @@
 #include "modules/rts/RtsScript.h"
 #include "modules/rts/gen/MapGen.h"
 
-using namespace rts;
+using namespace aiverse;
 namespace fs = std::filesystem;
 
 static std::unique_ptr<GameModule> makeModule(const std::string& name) {
@@ -279,7 +279,7 @@ static int benchGroup(Simulation& sim, const Args& a) {
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     int near = 0;
     for (Entity e : c.units) if (sim.world().alive(e) && (sim.world().get<Transform>(e).pos - goalPos).length() < arriveR) ++near;
-    if (std::getenv("RTS_BENCH_HIST")) {   // where the stragglers are: distance histogram, moving / stopped
+    if (std::getenv("AIVERSE_BENCH_HIST")) {   // where the stragglers are: distance histogram, moving / stopped
         int hist[12][2] = {};
         for (Entity e : c.units) {
             if (!sim.world().alive(e)) continue;
@@ -352,7 +352,7 @@ static int play(const Args& a) {
         if (!a.genParams.empty()) g.set("params", Json::parse(a.genParams));
         g.set("template", Json::string(fs::relative(mapPath, a.project).generic_string()));
         m.set("generate", g);
-        mapPath = (a.record.empty() ? (fs::temp_directory_path() / ("rts_gen_" + a.generate + "_" + std::to_string(a.seed) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json")).string() : a.record + ".map.json");
+        mapPath = (a.record.empty() ? (fs::temp_directory_path() / ("aiverse_gen_" + a.generate + "_" + std::to_string(a.seed) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json")).string() : a.record + ".map.json");
         std::ofstream(mapPath) << m.dump();
     }
     Json mapJson = loadMap(mapPath, a.project);
@@ -526,6 +526,8 @@ static int replay(const Args& a) {
     return ok ? 0 : 1;
 }
 
+#include "FpsRunner.h"
+
 int main(int argc, char** argv) {
     Args a;
     for (int i = 1; i < argc; ++i) {
@@ -552,9 +554,9 @@ int main(int argc, char** argv) {
         else if (k == "--bench-flow") a.benchFlow = next() == "on" ? 1 : 0;
         else if (k == "--planet-hpa") {
 #if defined(_WIN32)
-            _putenv_s("RTS_PLANET_HPA", next() == "off" ? "0" : "1");
+            _putenv_s("AIVERSE_PLANET_HPA", next() == "off" ? "0" : "1");
 #else
-            setenv("RTS_PLANET_HPA", next() == "off" ? "0" : "1", 1);
+            setenv("AIVERSE_PLANET_HPA", next() == "off" ? "0" : "1", 1);
 #endif
         }   // force planet HPA* on / off
         else if (k == "--generate") a.generate = next();
@@ -562,9 +564,12 @@ int main(int argc, char** argv) {
         else if (k == "--symmetry") a.symmetry = next();
         else if (k == "--gen-params") a.genParams = next();
         else if (k == "--gen-out") a.genOut = next();
-        else { std::printf("usage: rts_headless --project DIR [--map FILE] [--seed N] [--record F] [--save F --save-at S] [--load F] [--tick-times F] [--verify-restore-at S --verify-restore-ticks N] [--generate PRESET [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]] | --replay F\n"); return 2; }
+        else { std::printf("usage: aiverse_headless --project DIR [--map FILE] [--seed N] [--record F] [--save F --save-at S] [--load F] [--tick-times F] [--verify-restore-at S --verify-restore-ticks N] [--generate PRESET [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]] | --replay F\n"); return 2; }
     }
     if (a.verifyRestore && (!a.replay.empty() || a.benchPaths>0 || a.benchGroup>0 || a.maxSeconds==0)) { std::fprintf(stderr,"restore verification requires a normal match\n");return 2; }
-    try { return a.replay.empty() ? play(a) : replay(a); }
+    try {
+        if(a.replay.empty()&&Json::parseFile(a.project+"/game.json").getStr("module","rts")=="fps")return playFps(a);
+        return a.replay.empty() ? play(a) : replay(a);
+    }
     catch (const std::exception& e) { std::fprintf(stderr, "error: %s\n", e.what()); return 2; }
 }

@@ -10,7 +10,7 @@
 #include "engine/render/TextureGen.h"
 #include "modules/rts/view/RtsPortrait.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 float numOf(const Json& j, float def) { return j.isNumber() ? float(j.toDouble(def)) : def; }
@@ -267,6 +267,6 @@ private:
     Json edit_ = Json::object();
 };
 
-RTS_EDITOR_WINDOW(MaterialsWindow);
+AIVERSE_EDITOR_WINDOW(MaterialsWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

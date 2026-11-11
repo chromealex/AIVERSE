@@ -11,12 +11,12 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 const char* kSpecSchema = R"J({"properties": {
   "title": {"type": "string", "description": "game title (also the project folder and the .rtsproj name)"},
-  "location": {"type": "string", "description": "parent folder of the project (default ~/RTSProjects)"},
+  "location": {"type": "string", "description": "parent folder of the project (default ~/AiverseProjects)"},
   "artDir": {"type": "string", "description": "folder with art, models, music, sounds, fonts and .md/.txt texts (a GDD is read as the idea)"},
   "artUrl": {"type": "string", "description": "link to an image / archive (.zip, .tar.gz) with the content; downloaded with curl"},
   "idea": {"type": "string", "description": "what the game is about, any language; empty = the wizard decides"},
@@ -49,7 +49,7 @@ std::string stagingDir() {
     char b[32];
     std::time_t t = std::time(nullptr);
     std::strftime(b, sizeof b, "%Y%m%d-%H%M%S", std::localtime(&t));
-    return (fs::path(h ? h : ".") / ".rtsengine" / "wizard" / b).string();
+    return (fs::path(h ? h : ".") / ".aiverse" / "wizard" / b).string();
 }
 } // namespace
 
@@ -98,4 +98,4 @@ void registerWizardOps(Workspace& ws) {
         }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

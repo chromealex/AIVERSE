@@ -1,5 +1,5 @@
 // Dedicated game server: lobby, matchmaking and the input relay for network matches.
-//   rts_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]
+//   aiverse_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -13,7 +13,7 @@
 #include "engine/net/server/Server.h"
 #include "modules/rts/RtsModule.h"
 
-using namespace rts;
+using namespace aiverse;
 
 static std::atomic<bool> g_stop{false};
 
@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
         else if (k == "--ratings") cfg.ratingsFile = next();
         else if (k == "--quiet") cfg.log = false;
         else {
-            std::printf("usage: rts_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]\n");
+            std::printf("usage: aiverse_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]\n");
             return 2;
         }
     }

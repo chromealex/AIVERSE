@@ -2,7 +2,7 @@
 #include "GenInternal.h"
 #include "engine/core/Hash.h"
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 namespace {
 
@@ -291,4 +291,4 @@ bool applyGenerate(Json& map, const game::Rules& rules, const Json& rulesJson, u
     return true;
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

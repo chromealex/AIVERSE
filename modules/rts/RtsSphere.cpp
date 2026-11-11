@@ -1,7 +1,7 @@
 #include "RtsSphere.h"
 #include "engine/core/FixedMath.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 const SphereFace kSphereFaces[6] = {
     {{+1, 0, 0}, {0, 0, -1}, {0, -1, 0}},
@@ -209,4 +209,4 @@ Vec3 sphereRotateToward(Vec3 from, Vec3 to, Fixed maxTurns, bool* reached) {
     return fxNormalize(from * fxCosTurns(maxTurns) + t * fxSinTurns(maxTurns));
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

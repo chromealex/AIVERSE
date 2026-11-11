@@ -15,7 +15,7 @@
 // per platform: {"android": "...", "ios": "...", "web": "..."} is replaced by the current
 // platform's value. The bridge sends the config to each plugin once, as method "init", before the
 // first other call. Packaging (sources, Gradle/CocoaPods dependencies, manifest/plist entries)
-// is described by plugins/<name>/plugin.json and applied by rtsbuild — see docs/plugins.md.
+// is described by plugins/<name>/plugin.json and applied by aiversebuild — see docs/plugins.md.
 //
 // Standard plugin protocols ("store", "ads") and their C++ front-ends: engine/services.
 #pragma once
@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::plugins {
+namespace aiverse::plugins {
 
 struct Result {
     bool ok = false;
@@ -89,9 +89,9 @@ void unregisterPlugin(const std::string& name);
 // "app.banner" {"height": points, "position": "top"|"bottom"} adds an ad banner to safeAreaInsets().
 void emit(const std::string& plugin, const std::string& event, const std::string& dataJson = "{}");
 
-// Static registration in a C++ plugin's .cpp:  RTS_PLUGIN("my-sdk", MySdkPlugin)
-#define RTS_PLUGIN(name, Class) \
-    static const bool rtsPluginRegistered_##Class = (::rts::plugins::registerPlugin(name, std::make_shared<Class>()), true)
+// Static registration in a C++ plugin's .cpp:  AIVERSE_PLUGIN("my-sdk", MySdkPlugin)
+#define AIVERSE_PLUGIN(name, Class) \
+    static const bool aiversePluginRegistered_##Class = (::aiverse::plugins::registerPlugin(name, std::make_shared<Class>()), true)
 
 // ---------------------------------------------------------------- platform backends
 namespace detail {
@@ -114,4 +114,4 @@ void completeCall(uint64_t callId, bool ok, const std::string& dataOrError);
 std::string resolvePlatformValues(const std::string& json, const std::string& platformName);
 } // namespace detail
 
-} // namespace rts::plugins
+} // namespace aiverse::plugins

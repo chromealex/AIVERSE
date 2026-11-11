@@ -1,0 +1,17 @@
+{
+  "steps": [
+    {
+      "tick": 0,
+      "action": "build",
+      "payload": "farm"
+    }
+  ],
+  "checks": [
+    {
+      "tick": 20,
+      "metric": "farms",
+      "minimum": 1,
+      "maximum": 1
+    }
+  ]
+}

@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstdio>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -356,4 +356,4 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
         }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

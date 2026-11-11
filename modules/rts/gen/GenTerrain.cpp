@@ -3,7 +3,7 @@
 #include "GenInternal.h"
 #include <queue>
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 const char* biomeName(int b) {
     static const char* n[] = {"ocean", "coast", "grass", "forest", "desert", "steppe", "rock", "snow", "swamp"};
@@ -606,4 +606,4 @@ Json heightsOut(const Ctx& c) {
     return any ? a : Json();
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

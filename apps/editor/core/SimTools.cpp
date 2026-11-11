@@ -8,9 +8,9 @@
 #include "modules/rts/RtsScript.h"
 #include <stdexcept>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
-using namespace rts::game;
+using namespace aiverse::game;
 
 namespace {
 // Index = GameEvent value (RtsModule.h). Keep in the enum's order; new events go at the end.
@@ -368,4 +368,4 @@ Json entityJson(const SimRefs& refs, Entity e) {
     return j;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

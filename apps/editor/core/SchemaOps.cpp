@@ -20,10 +20,10 @@
 #include "engine/sim/Simulation.h"
 #include "modules/rts/RtsModule.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace fs = std::filesystem;
-using namespace rts::game;
+using namespace aiverse::game;
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -318,4 +318,4 @@ void registerSchemaOps(Workspace& ws) {
     }
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

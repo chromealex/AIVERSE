@@ -8,7 +8,7 @@
 #include <utility>
 #include "Command.h"
 
-namespace rts {
+namespace aiverse {
 
 struct Replay {
     static constexpr uint32_t kMagic = 0x50525452; // "RTRP"
@@ -32,4 +32,4 @@ struct Replay {
 
 uint64_t hashFileContents(const std::vector<std::string>& paths);
 
-} // namespace rts
+} // namespace aiverse

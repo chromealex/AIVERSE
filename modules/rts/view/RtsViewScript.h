@@ -19,9 +19,9 @@ struct lua_State;
 #include "ScriptSound.h"
 #include "EntityFx.h"
 
-namespace rts { class Simulation; }
+namespace aiverse { class Simulation; }
 
-namespace rts::game {
+namespace aiverse::game {
 
 class RtsModule;
 
@@ -120,7 +120,7 @@ public:
     bool send(Simulation& sim, const std::string& id, const Json& args);
     ViewScriptProfile profile() const;
     const std::vector<ScriptLogEntry>& log() const { return log_; }
-    // Called for every new log line (script errors, game.log) when set; testing hosts print them (RTS_SCRIPT_LOG).
+    // Called for every new log line (script errors, game.log) when set; testing hosts print them (AIVERSE_SCRIPT_LOG).
     std::function<void(const ScriptLogEntry&)> onLog;
     bool active() const;
     std::shared_ptr<render::PaintLayers> paintLayers() const;
@@ -133,4 +133,4 @@ private:
     std::vector<ScriptLogEntry> log_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

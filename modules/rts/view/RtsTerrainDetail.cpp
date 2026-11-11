@@ -5,7 +5,7 @@
 #include <cstring>
 #include "RtsTerrainSurface.h"
 
-namespace rts::game::terrain {
+namespace aiverse::game::terrain {
 
 namespace {
 uint32_t hash3(int x, int y, uint32_t s) {
@@ -215,4 +215,4 @@ std::vector<int16_t> detailToInt16(const DetailSurface& d) {
     return v;
 }
 
-} // namespace rts::game::terrain
+} // namespace aiverse::game::terrain

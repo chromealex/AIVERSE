@@ -1,0 +1,17 @@
+{
+  "library.showcase.title": "Проверка C++ библиотек",
+  "library.showcase.start": "Начать матч",
+  "library.showcase.pause": "Пауза / продолжить",
+  "library.showcase.save": "Сохранить и восстановить",
+  "library.showcase.time": "Тик симуляции",
+  "library.showcase.build": "Построено зданий",
+  "library.showcase.combat": "Атаки",
+  "library.showcase.reward": "Золото профиля",
+  "library.showcase.result": "Результат матча",
+  "library.showcase.running": "Идёт матч",
+  "library.showcase.waiting": "Готово",
+  "library.showcase.finished": "Завершён",
+  "library.showcase.restore": "Проверка сохранения",
+  "library.showcase.yes": "Проверено",
+  "library.showcase.no": "Ожидание"
+}

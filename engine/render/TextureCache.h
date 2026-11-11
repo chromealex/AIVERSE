@@ -14,9 +14,9 @@
 #include <vector>
 #include "../gfx/Gfx.h"
 
-namespace rts::atlas { class ImageSource; }
+namespace aiverse::atlas { class ImageSource; }
 
-namespace rts::render {
+namespace aiverse::render {
 
 struct TextureRef {
     gfx::TextureHandle tex;
@@ -55,4 +55,4 @@ private:
 // Decodes an image file in memory to RGBA8 (top row first). Returns false on bad data.
 bool decodeImage(const std::string& bytes, int& w, int& h, std::vector<uint8_t>& rgba);
 
-} // namespace rts::render
+} // namespace aiverse::render

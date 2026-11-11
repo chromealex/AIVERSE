@@ -6,6 +6,7 @@
 #include <filesystem>
 #include "Editor.h"
 #include "EditorHub.h"
+#include "EditorGenreUi.h"
 #include "EditorIcons.h"
 #include "EditorUtil.h"
 #include "core/ProjectFile.h"
@@ -13,7 +14,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -22,6 +23,7 @@ struct HubState {
     char search[128] = "";
     char title[128] = "Моя стратегия";
     char location[1024] = "";
+    int genre = 0;
     int templ = 1;                     // index into listTemplates (0 = empty)
     std::string error;
     // folder browser
@@ -150,7 +152,7 @@ void Editor::drawGamePicker() {
 
     // left: navigation
     ImGui::BeginChild("##nav", ImVec2(190, 0));
-    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), ICON_CASTLE "  RTS Engine");
+    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), ICON_CASTLE "  AIVERSE");
     ImGui::Spacing(); ImGui::Spacing();
     if (ImGui::Selectable(ICON_PROJECT "  Проекты", H.tab == 0, 0, ImVec2(0, 30))) H.tab = 0;
     if (ImGui::Selectable(ICON_ZAP "  Сделать игру", H.tab == 2, 0, ImVec2(0, 30))) H.tab = 2;
@@ -261,18 +263,35 @@ void Editor::drawGamePicker() {
         drawGameWizard();
     } else {
         ui::heading("Новый проект");
-        ImGui::TextDisabled("Выберите шаблон: проект начнётся с его правил, карт и юнитов.");
+        ui::heading(genreText(ws_, "hub.genre").c_str());
+        const float genreWidth=std::max(120.0f,(ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ItemSpacing.x)*0.5f);
+        for(int genre=0;genre<2;++genre) {
+            if(genre)ImGui::SameLine();
+            ImGui::PushID(genre+10000);
+            if(ImGui::Selectable(genreText(ws_,genre?"hub.genre.fps":"hub.genre.rts").c_str(),H.genre==genre,0,ImVec2(genreWidth,42))) {
+                H.genre=genre;H.templ=-1;
+                if(std::string(H.title)=="Моя стратегия"||std::string(H.title)=="Мой шутер")std::snprintf(H.title,sizeof H.title,"%s",genre?"Мой шутер":"Моя стратегия");
+            }
+            ImGui::SetItemTooltip("%s",genreText(ws_,genre?"hub.genre.fps.detail":"hub.genre.rts.detail").c_str());
+            ImGui::PopID();
+        }
+        ImGui::TextWrapped("%s",genreText(ws_,H.genre?"hub.genre.fps.detail":"hub.genre.rts.detail").c_str());
+        ui::heading(genreText(ws_, "hub.template").c_str());
         ImGui::SetItemTooltip("Шаблоны: %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
         ImGui::Separator();
         const float formH = 150;
         ImGui::BeginChild("##templates", ImVec2(0, -formH));
-        const float cardH = 92, gapX = ImGui::GetStyle().ItemSpacing.x;
+        const float cardH = 128, gapX = ImGui::GetStyle().ItemSpacing.x;
         const int cols = std::max(1, int((ImGui::GetContentRegionAvail().x + gapX) / (210 + gapX)));
         const float cardW = std::floor((ImGui::GetContentRegionAvail().x - gapX * float(cols - 1)) / float(cols));   // cards fill the row
-        H.templ = std::clamp(H.templ, 0, int(H.templates.size()) - 1);
+        std::vector<size_t> visible;
+        for(size_t i=0;i<H.templates.size();++i)if((H.templates[i].genre=="fps")==bool(H.genre))visible.push_back(i);
+        if(std::find(visible.begin(),visible.end(),size_t(H.templ))==visible.end())H.templ=visible.empty()?-1:int(visible.front());
+        size_t shown=0;
         for (size_t i = 0; i < H.templates.size(); ++i) {
             const TemplateInfo& t = H.templates[i];
-            if (i % size_t(cols)) ImGui::SameLine();
+            if((t.genre=="fps")!=bool(H.genre))continue;
+            if (shown++ % size_t(cols)) ImGui::SameLine();
             ImGui::PushID(int(i));
             const ImVec2 p0 = ImGui::GetCursorScreenPos();
             if (ImGui::Selectable("##t", H.templ == int(i), ImGuiSelectableFlags_AllowDoubleClick, ImVec2(cardW, cardH))) H.templ = int(i);
@@ -307,12 +326,14 @@ void Editor::drawGamePicker() {
         }
         if (!H.error.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", H.error.c_str());
         ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - 190);
+        ImGui::BeginDisabled(H.templ<0);
         if (ui::button(ICON_PLUS, "Создать проект", true, ImVec2(180, 0))) {
             std::string err;
             const std::string dir = createProject(ws_.engineDir, H.templates[size_t(H.templ)].id, H.title, H.location, "", &err);
             if (dir.empty()) H.error = err;
             else { H.error.clear(); requestOpenProject(dir); }
         }
+        ImGui::EndDisabled();
     }
     if (hubFolderBrowser(H.browsing, H.browseDir, H.newFolder, sizeof H.newFolder, H.browseFor == 1, browsed)) {
         if (H.browseFor == 0) std::snprintf(H.location, sizeof H.location, "%s", browsed.c_str());
@@ -322,4 +343,4 @@ void Editor::drawGamePicker() {
     ImGui::End();
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

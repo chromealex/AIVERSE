@@ -46,7 +46,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -870,4 +870,4 @@ std::unique_ptr<Model> loadVxl(const std::string& path, const std::string& b, co
     return model;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

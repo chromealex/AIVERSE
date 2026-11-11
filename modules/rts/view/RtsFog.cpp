@@ -4,7 +4,7 @@
 #include <cstring>
 #include <string>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -315,4 +315,4 @@ void FogOfWar::draw(Renderer3D& r, double time, bool lowTier) {
     });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

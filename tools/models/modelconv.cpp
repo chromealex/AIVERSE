@@ -14,7 +14,7 @@
 #include "engine/data/Json.h"
 #include "engine/render/Model.h"
 
-using namespace rts;
+using namespace aiverse;
 
 namespace {
 

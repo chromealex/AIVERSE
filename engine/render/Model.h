@@ -17,7 +17,7 @@
 #include "Math3D.h"
 #include "TextureCodec.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 class MeshBuilder;
 
@@ -223,4 +223,4 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu = false);
 int addImage(gfx::Device& dev, Model& m, Image img);   // extra texture for material overrides; returns index
 void releaseModel(gfx::Device& dev, Model& m);
 
-} // namespace rts::render
+} // namespace aiverse::render

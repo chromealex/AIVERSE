@@ -16,7 +16,7 @@
 #include "engine/atlas/AtlasFormat.h"
 #include "engine/ui/UiColor.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 using i18n::Args;
 
@@ -287,7 +287,7 @@ void GameClient::updateUi() {
             quality_.lock();   // the player chose: no adaptive changes any more
         }
         if (matQuality_ != boundMatQuality_) { // changed from the pause menu
-            r3d_.setMaterialQuality(rts::render::MaterialQuality(std::clamp(matQuality_, 0, 2)));
+            r3d_.setMaterialQuality(aiverse::render::MaterialQuality(std::clamp(matQuality_, 0, 2)));
             boundMatQuality_ = matQuality_;
         }
         if (fxQuality_ != boundFxQuality_) { // changed from the pause menu
@@ -660,4 +660,4 @@ void GameClient::buildOverlays(UiState& s) {
     }
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

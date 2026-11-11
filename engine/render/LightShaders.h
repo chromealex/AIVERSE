@@ -12,10 +12,10 @@
 // Light map texture: tex1 in the lit shader, tex7 in the model shader (RGBA8, light / range).
 #pragma once
 
-namespace rts::render::shaders {
+namespace aiverse::render::shaders {
 
 // GLSL: block / sampler names are parameters because each shader has its own slots.
-#define RTS_GLSL_LIGHTS_AT(BLOCK, TEX) \
+#define AIVERSE_GLSL_LIGHTS_AT(BLOCK, TEX) \
     "layout(std140) uniform " BLOCK " { vec4 l_map; vec4 l_info; vec4 l_cloud; vec4 l_sky; vec4 l_env; vec4 l_pos[8]; vec4 l_col[8]; vec4 l_spot[8]; };\n" \
     "uniform mediump sampler2D " TEX ";\n" \
     "float nightGlow() { return l_info.w; }\n" \
@@ -102,11 +102,11 @@ namespace rts::render::shaders {
     "    dd = max(dd, vec3(0.0));\n" \
     "}\n"
 
-#define RTS_GLSL_LIGHTS RTS_GLSL_LIGHTS_AT("U2", "tex1")
+#define AIVERSE_GLSL_LIGHTS AIVERSE_GLSL_LIGHTS_AT("U2", "tex1")
 
 // MSL: the block and the texture are function arguments (buffer / texture indices are chosen in
 // each fragment function's signature).
-#define RTS_MSL_LIGHTS \
+#define AIVERSE_MSL_LIGHTS \
     "struct LightU { float4 map; float4 info; float4 cloud; float4 sky; float4 env; float4 pos[8]; float4 col[8]; float4 spot[8]; };\n" \
     "static bool lightsBound(constant LightU& l) { return abs(l.info.y - 4.0) < 0.01; }\n" \
     "static float3 unlitTint(constant LightU& l) { return lightsBound(l) ? l.env.yzw : float3(1.0); }\n" \
@@ -190,7 +190,7 @@ namespace rts::render::shaders {
 
 // Planar water reflection (lit shader only; REFL = reflection texture rendered mirrored and flipped
 // in x, sampled at the fragment's screen position with a ripple wobble). c: display-space colour.
-#define RTS_GLSL_WATER_REFLECT(REFL) \
+#define AIVERSE_GLSL_WATER_REFLECT(REFL) \
     "uniform mediump sampler2D " REFL ";\n" \
     "vec3 waterReflect(vec3 c, vec3 wpos, vec3 n, vec3 V, float specK) {\n" \
     "    if (specK < 0.85 || l_sky.y <= 0.0) return c;\n" \
@@ -201,7 +201,7 @@ namespace rts::render::shaders {
     "    float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
     "    return mix(c, r, fres * l_sky.y);\n" \
     "}\n"
-#define RTS_MSL_WATER_REFLECT \
+#define AIVERSE_MSL_WATER_REFLECT \
     "static float3 waterReflect(constant LightU& l, texture2d<float> rt, sampler rs, float2 fragCoord, float3 c, float3 wpos, float3 n, float3 V, float specK) {\n" \
     "    if (specK < 0.85 || l.sky.y <= 0.0) return c;\n" \
     "    float2 uv = fragCoord * l.sky.zw;\n" \
@@ -389,4 +389,4 @@ fragment float4 fs_main(VOut in [[stage_in]]) {
 }
 )";
 
-} // namespace rts::render::shaders
+} // namespace aiverse::render::shaders

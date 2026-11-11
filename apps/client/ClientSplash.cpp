@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 
-namespace rts::client {
+namespace aiverse::client {
 
 void ClientBoot::init(gfx::Device& dev, GameClient& client, Mode mode, std::function<void()> afterLoad) {
     dev_ = &dev;
@@ -90,4 +90,4 @@ void ClientBoot::shutdown() {
     if (phase_ != Phase::Loading || step_ >= GameClient::kInitSteps) client_->shutdown();
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

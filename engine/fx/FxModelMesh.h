@@ -6,7 +6,7 @@
 #include "../render/Model.h"
 #include "ParticleSystem.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 // Every mesh of the model in its bind pose, in model space (Y up, right-handed, metres).
 inline bool meshFromModelFile(const std::string& path, const render::FileReader& read, FxMesh& out) {
@@ -42,4 +42,4 @@ inline bool meshFromModelFile(const std::string& path, const render::FileReader&
     return !out.pos.empty() && !out.idx.empty();
 }
 
-} // namespace rts::fx
+} // namespace aiverse::fx

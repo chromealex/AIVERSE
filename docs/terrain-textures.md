@@ -13,7 +13,7 @@ retain their existing rendering. No textures or extra GPU memory are allocated.
 The GLSL and MSL implementations use the same frequencies, strengths and filtering.
 
 This improves the default ground material; it does not increase geometry resolution
-or replace user-supplied low-resolution textures. `RTS_TERRAIN=low|medium|high` can be
+or replace user-supplied low-resolution textures. `AIVERSE_TERRAIN=low|medium|high` can be
 used to compare tiers on the same scene.
 
 Validation (2026-10-28): macOS Release client/editor built, six terrain MSL

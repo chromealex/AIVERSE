@@ -4,7 +4,7 @@
 
 #include "engine/data/Json.h"
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 namespace {
 void put32(std::string& s, uint32_t v) { for (int i = 0; i < 4; ++i) s.push_back(char(uint8_t(v >> (8 * i)))); }
@@ -175,4 +175,4 @@ bool ImageSource::load(const std::string& path, Image& out) {
     return extractRegion(cache_, *r, out);
 }
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

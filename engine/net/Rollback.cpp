@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <chrono>
 
-namespace rts::net {
+namespace aiverse::net {
 
 static bool canonicalLess(const Command& a, const Command& b) {
     return a.player != b.player ? a.player < b.player : a.seq < b.seq;
@@ -152,4 +152,4 @@ int RollbackSession::update(double seconds, uint64_t nowMs) {
     return stepped;
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -248,4 +248,4 @@ void RtsView::drawPreview(Renderer3D& r, uint16_t type, uint8_t owner, double ti
     drawObject(r, st, o, 0, 1);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

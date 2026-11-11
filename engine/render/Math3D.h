@@ -2,7 +2,7 @@
 #pragma once
 #include <cmath>
 
-namespace rts::render {
+namespace aiverse::render {
 
 struct float2 { float x = 0, y = 0; };
 struct float3 {
@@ -237,4 +237,4 @@ struct RTSCamera {
     }
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

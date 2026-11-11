@@ -1,7 +1,7 @@
 #include "Reliable.h"
 #include <algorithm>
 
-namespace rts::net {
+namespace aiverse::net {
 
 void writePacketHeader(ByteWriter& w, PacketKind kind, uint32_t token) {
     w.u16(kPacketMagic); w.u8(uint8_t(kind)); w.u32(token);
@@ -11,7 +11,7 @@ bool readPacketHeader(ByteReader& r, PacketKind& kind, uint32_t& token) {
     if (r.u16() != kPacketMagic) return false;
     uint8_t k = r.u8();
     token = r.u32();
-    if (!r.ok() || k > uint8_t(PacketKind::Disconnect)) return false;
+    if (!r.ok() || k > uint8_t(PacketKind::Latest)) return false;
     kind = PacketKind(k);
     return true;
 }
@@ -121,4 +121,4 @@ void ReliableChannel::flush(uint64_t now, uint32_t token, const std::function<vo
     } while (i < out_.size() && ++packets < 64);
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

@@ -15,7 +15,7 @@
 
 typedef struct lua_State lua_State;
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 using LuaReader = std::function<bool(const std::string& path, std::string& out)>;
 
@@ -43,4 +43,4 @@ void luaCopy(lua_State* from, int index, lua_State* to, int depth = 0);
 // how many it pushed. Two states of one thread (a view script calling the client's UI Lua: view.ui_call).
 int luaCallAcross(lua_State* from, lua_State* ui);
 
-} // namespace rts::ui
+} // namespace aiverse::ui

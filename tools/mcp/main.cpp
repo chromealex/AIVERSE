@@ -1,4 +1,4 @@
-// rtsmcp — Model Context Protocol server (stdio) for building games with the RTS engine.
+// aiversemcp — Model Context Protocol server (stdio) for building games with AIVERSE.
 //
 // Every tool is an editor operation (see apps/editor/core/Workspace.cpp). When the editor is
 // running (or can be started) the call is forwarded to it over localhost, so the user watches the
@@ -7,11 +7,11 @@
 //
 // The server only touches game projects (any folder with game.json; templates in <engine>/templates). It never edits engine code.
 //
-//   rtsmcp [--engine DIR] [--game ID] [--port N] [--no-editor] [--editor PATH]
+//   aiversemcp [--engine DIR] [--game ID] [--port N] [--no-editor] [--editor PATH]
 //
-// Claude Code:   claude mcp add rtsengine -- /path/to/rtsmcp --engine /path/to/RTSEngine
+// Claude Code:   claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 // Claude Desktop (claude_desktop_config.json):
-//   {"mcpServers": {"rtsengine": {"command": "/path/to/rtsmcp", "args": ["--engine", "/path/to/RTSEngine"]}}}
+//   {"mcpServers": {"aiverse": {"command": "/path/to/aiversemcp", "args": ["--engine", "/path/to/AIVERSE"]}}}
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -24,18 +24,18 @@
 #include "apps/editor/core/Workspace.h"
 #include "engine/platform/EngineDir.h"
 
-#ifndef RTS_SOURCE_DIR
-#define RTS_SOURCE_DIR "."
+#ifndef AIVERSE_SOURCE_DIR
+#define AIVERSE_SOURCE_DIR "."
 #endif
 
 namespace fs = std::filesystem;
-using namespace rts;
-using namespace rts::editor;
+using namespace aiverse;
+using namespace aiverse::editor;
 
 namespace {
 
 struct Options {
-    std::string engine = RTS_SOURCE_DIR, game, editorPath;
+    std::string engine = AIVERSE_SOURCE_DIR, game, editorPath;
     int port = net::kDefaultPort;
     bool noEditor = false;
 };
@@ -51,8 +51,8 @@ std::string exeDir() {
 
 std::string findEditor(const Options& o, const std::string& self) {
     if (!o.editorPath.empty()) return o.editorPath;
-    for (fs::path c : {fs::path(self) / "rts_editor", fs::path(self) / "RTSEditor.app/Contents/MacOS/RTSEditor",
-                       fs::path(self) / "rts_editor.exe", fs::path(self) / "Release/rts_editor.exe"}) {
+    for (fs::path c : {fs::path(self) / "aiverse_editor", fs::path(self) / "AiverseEditor.app/Contents/MacOS/AiverseEditor",
+                       fs::path(self) / "aiverse_editor.exe", fs::path(self) / "Release/aiverse_editor.exe"}) {
         std::error_code ec;
         if (fs::exists(c, ec)) return c.string();
     }
@@ -169,7 +169,7 @@ Json toContent(const Json& result) {
 }
 
 const char* kInstructions =
-    "Tools to build real-time strategy games with RTSEngine: a game is data (game.json, rules.json, maps). "
+    "Tools to build real-time strategy games with AIVERSE: a game is data (game.json, rules.json, maps). "
     "Projects live anywhere on disk; the engine ships templates (sample games). "
     "Workflow: list_projects (recent projects + templates) / create_project {name, template, location} / open_game {game: folder} -> read rules_schema (the data format reference) -> rules_list / rules_get -> "
     "edit rules with rules_set / rules_merge -> build maps (map_new, terrain_paint, terrain_level, field_paint, region_paint, "
@@ -213,8 +213,8 @@ const char* kInstructions =
 int main(int argc, char** argv) {
     Options opt;
     // without --engine: the source tree it was built from, or a packaged engine next to the executable
-    // (RTSEngine/bin/rtsmcp of a builds-branch zip), the same lookup as the editor and rtsbuild
-    opt.engine = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argc > 0 ? argv[0] : nullptr);
+    // (AIVERSE/bin/aiversemcp of a builds-branch zip), the same lookup as the editor and aiversebuild
+    opt.engine = aiverse::platform::resolveEngineDir(AIVERSE_SOURCE_DIR, argc > 0 ? argv[0] : nullptr);
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--engine" && i + 1 < argc) opt.engine = argv[++i];
@@ -229,9 +229,9 @@ int main(int argc, char** argv) {
 
     Workspace local;                      // used when no editor is reachable
     local.engineDir = opt.engine;
-    local.buildTool = findTool(self, "rtsbuild");
-    for (fs::path c : {fs::path(self) / "RTSGame", fs::path(self) / "RTSGame.exe", fs::path(self) / "RTSGame.app/Contents/MacOS/RTSGame",
-                       fs::path(self) / "Release/RTSGame.exe"}) {   // ui_preview renders screens with the client
+    local.buildTool = findTool(self, "aiversebuild");
+    for (fs::path c : {fs::path(self) / "AiverseGame", fs::path(self) / "AiverseGame.exe", fs::path(self) / "AiverseGame.app/Contents/MacOS/AiverseGame",
+                       fs::path(self) / "Release/AiverseGame.exe"}) {   // ui_preview renders screens with the client
         std::error_code ec2;
         if (fs::exists(c, ec2)) { local.gameExe = c.string(); break; }
     }
@@ -252,7 +252,7 @@ int main(int argc, char** argv) {
                 r.set("protocolVersion", Json::string(msg["params"].getStr("protocolVersion", "2025-06-18")));
                 caps.set("tools", Json::object());
                 r.set("capabilities", caps);
-                info.set("name", Json::string("rtsengine"));
+                info.set("name", Json::string("aiverse"));
                 info.set("version", Json::string("0.2.0"));
                 r.set("serverInfo", info);
                 r.set("instructions", Json::string(kInstructions));

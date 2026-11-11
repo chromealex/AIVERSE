@@ -12,7 +12,7 @@ extern "C" {
 #include <cstdio>
 #include <memory>
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 namespace {
 
@@ -266,4 +266,4 @@ int luaCallAcross(lua_State* V, lua_State* U) {
     return results + 1;
 }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

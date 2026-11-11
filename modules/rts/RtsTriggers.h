@@ -17,7 +17,7 @@
 #include "../../engine/data/Json.h"
 #include "RtsData.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class TrigEvent : uint8_t {
     Start, Time, Every, EnterArea, LeaveArea, UnitDied, Built, Trained, Researched, Captured,
@@ -125,4 +125,4 @@ struct TriggerState {
     bool started = false;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

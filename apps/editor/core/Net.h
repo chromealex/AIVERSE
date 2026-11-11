@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::editor::net {
+namespace aiverse::editor::net {
 
 constexpr int kDefaultPort = 47321;
 
@@ -44,4 +44,4 @@ private:
     std::string buf_;
 };
 
-} // namespace rts::editor::net
+} // namespace aiverse::editor::net

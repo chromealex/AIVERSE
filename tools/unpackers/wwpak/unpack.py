@@ -9,7 +9,7 @@ import sys
 
 sys.dont_write_bytecode = True  # keep the plugin folder clean
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
-from rtsunpack import run, Entry  # noqa: E402
+from aiverseunpack import run, Entry  # noqa: E402
 
 NAME_OK = set(b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-~!#$%&()@^{}')
 

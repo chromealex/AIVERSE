@@ -3,18 +3,18 @@
 //
 // The converted file is a "sidecar" next to the source: models/ship.lwo -> models/ship.lwo.glb.
 // rules.json keeps referring to models/ship.lwo; render::loadModel picks the sidecar up. Builds
-// (rtsbuild) convert and ship only the sidecar; the editor converts on open / save.
+// (aiversebuild) convert and ship only the sidecar; the editor converts on open / save.
 //
-// Without assimp (RTS_ASSIMP=OFF, the default) conversion is unavailable, but packing still works:
+// Without assimp (AIVERSE_ASSIMP=OFF, the default) conversion is unavailable, but packing still works:
 // pre-converted sidecars are used and sources are left out of the pack.
 #pragma once
 #include <functional>
 #include <string>
 #include <vector>
 
-namespace rts::pack { class PackWriter; }
+namespace aiverse::pack { class PackWriter; }
 
-namespace rts::models {
+namespace aiverse::models {
 
 // Reads a file by path (relative paths of textures / .mtl next to the model resolve through it).
 using ReadFn = std::function<bool(const std::string& path, std::string& out)>;
@@ -50,4 +50,4 @@ bool convertDirectory(const std::string& dir, bool force, ConvertReport& report,
 // out too and are reported (the game would fail to load them anyway).
 bool applyModelConversion(pack::PackWriter& w, ConvertReport& report, std::string* error);
 
-} // namespace rts::models
+} // namespace aiverse::models

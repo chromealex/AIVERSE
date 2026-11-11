@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <functional>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -676,4 +676,4 @@ void RtsView::defaultProcedural(const UnitType& t, const TypeLook& L, ModelChoic
     if (!c.hasClip[kAnimSpawn]) add("pop", [](ProcAnim&) {});
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -1,6 +1,6 @@
 // Agent operations for Lua scripts of the open game (docs/scripting.md): list / read / write (syntax
 // checked before saving) / check (compile + a short headless bot match) / api (the reference as JSON).
-// Work without the GUI (rtsmcp). Paths are confined to scripts/ of the game folder.
+// Work without the GUI (aiversemcp). Paths are confined to scripts/ of the game folder.
 #include "ScriptOps.h"
 #include <algorithm>
 #include <filesystem>
@@ -13,7 +13,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using game::ScriptReader;
 
@@ -194,4 +194,4 @@ Json Project::simRules(const Json& map) const {
     return r;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

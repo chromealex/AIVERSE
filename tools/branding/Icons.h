@@ -19,7 +19,7 @@
 #include "engine/data/Json.h"
 #include "tools/branding/BrandImage.h"
 
-namespace rts::branding {
+namespace aiverse::branding {
 
 // How one platform's icon is drawn from an image: the icon square has a transparent `margin`
 // around a body (rounded by cornerRadius, a fraction of the body size); the body is filled with
@@ -59,7 +59,7 @@ std::vector<std::string> validateIcons(const IconSpec& spec, const std::string& 
 
 // Loads a project image (or the built-in default icon when path is empty / missing; noted in warnings).
 Image loadIconSource(const std::string& projectDir, const std::string& path, std::vector<std::string>* warnings);
-Image defaultIcon(int size);      // the RTSEngine mark on white (no art in the game yet)
+Image defaultIcon(int size);      // the AIVERSE mark on white (no art in the game yet)
 // Renders one icon of `size` pixels with a look.
 Image renderIcon(const Image& src, int size, const IconLook& look);
 
@@ -104,4 +104,4 @@ const std::vector<IosIcon>& iosIconSet();
 const std::vector<int>& windowsIcoSizes();
 const std::vector<int>& linuxIconSizes();
 
-} // namespace rts::branding
+} // namespace aiverse::branding

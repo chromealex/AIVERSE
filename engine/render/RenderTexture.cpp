@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdio>
 
-namespace rts::render {
+namespace aiverse::render {
 namespace {
 const char* vs = R"(
 layout(location=0) in vec2 pos;

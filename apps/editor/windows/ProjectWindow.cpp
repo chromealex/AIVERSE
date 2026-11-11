@@ -4,11 +4,12 @@
 #include <algorithm>
 #include <filesystem>
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class ProjectWindow : public EditorWindow {
 public:
@@ -19,6 +20,11 @@ public:
     const char* dockArea() const override { return "bottom"; }
 
     void draw(Editor& ed) override {
+        if(ed.ws().project.isFps()) {
+            ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            return;
+        }
         auto& ws = ed.ws();
         if (ws.project.dir.empty()) {
             ui::emptyStateHere(ICON_PROJECT, "Игра не открыта", "Файл → Открыть проект");
@@ -146,6 +152,6 @@ private:
     char newId_[64] = "";
 };
 
-RTS_EDITOR_WINDOW(ProjectWindow);
+AIVERSE_EDITOR_WINDOW(ProjectWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

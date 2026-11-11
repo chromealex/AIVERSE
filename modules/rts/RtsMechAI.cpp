@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 void RtsAI::mech(Simulation& sim, RtsModule& m) {
@@ -231,4 +231,4 @@ bool RtsAI::mechTurnAI(Simulation& sim, RtsModule& m) {
     return true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

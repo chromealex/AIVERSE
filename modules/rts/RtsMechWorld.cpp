@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -286,4 +286,4 @@ void RtsModule::hashMechGlobal(Simulation& sim, Hasher& h) {
     for (size_t i = 0; i < m.cover.size(); i += 7) h.u32(m.cover[i]);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

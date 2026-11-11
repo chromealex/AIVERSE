@@ -1,8 +1,8 @@
 // Playing the project as in the game client. startClientPlay: the GameClient itself hosted in the Game
-// window (ClientHost.h). launchClient: the project in a separate RTSGame window. Both exactly as players get it -
+// window (ClientHost.h). launchClient: the project in a separate AiverseGame window. Both exactly as players get it -
 // the game's own menus / meta screens (ui/main.lua), view scripts, script UI, mapClick input and audio.
 // The client is the one built next to this editor (same C++ modules: rules "nativeModules"), else the
-// regular build's. RTS_CONTENT = project folder; the working directory holds only engine/ (the client
+// regular build's. AIVERSE_CONTENT = project folder; the working directory holds only engine/ (the client
 // reads engine assets relative to it, see engineAssetsRoot).
 #include <cstdlib>
 #include <filesystem>
@@ -12,7 +12,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 std::string shellQuote(const std::string& s) {
@@ -28,22 +28,22 @@ std::string shellQuote(const std::string& s) {
 
 void Editor::launchClient() {
     if (ws_.project.dir.empty()) { status = "Нет открытого проекта"; return; }
-    if (checkNativeModules(true)) return;   // this build lacks the project's modules: so does its RTSGame (banner offers a build)
+    if (checkNativeModules(true)) return;   // this build lacks the project's modules: so does its AiverseGame (banner offers a build)
     if (doc().dirty && !doc().path.empty()) saveMap(doc().path);   // the client reads the maps from disk
     std::string exe = !opt_.ownGameExe.empty() ? opt_.ownGameExe : opt_.gameExe;
-    if (exe.empty()) { status = "Не найден исполняемый файл игры (RTSGame) рядом с редактором"; ws_.log("play", status, true); return; }
+    if (exe.empty()) { status = "Не найден исполняемый файл игры (AiverseGame) рядом с редактором"; ws_.log("play", status, true); return; }
     if (exe != opt_.ownGameExe && !requiredNativeModules(ws_.project.rulesJson).empty())
-        ws_.log("play", "RTSGame не из сборки этого редактора: модулей C++ проекта в нём может не быть (" + exe + ")", true);
+        ws_.log("play", "AiverseGame не из сборки этого редактора: модулей C++ проекта в нём может не быть (" + exe + ")", true);
     std::error_code ec;
     const fs::path cwd = engineAssetsRoot(ws_, exe);
     const fs::path logDir = fs::path(projectBuildsTempDir(ws_.project.dir));
     fs::create_directories(logDir, ec);
     const std::string log = (logDir / "client-play.log").string();
 #if defined(_WIN32)
-    _putenv_s("RTS_CONTENT", ws_.project.dir.c_str());
+    _putenv_s("AIVERSE_CONTENT", ws_.project.dir.c_str());
     const std::string cmd = "start \"\" /D " + shellQuote(cwd.string()) + " " + shellQuote(exe);
 #else
-    const std::string cmd = "( cd " + shellQuote(cwd.string()) + " && RTS_CONTENT=" + shellQuote(ws_.project.dir) + " " + shellQuote(exe) +
+    const std::string cmd = "( cd " + shellQuote(cwd.string()) + " && AIVERSE_CONTENT=" + shellQuote(ws_.project.dir) + " " + shellQuote(exe) +
                             " > " + shellQuote(log) + " 2>&1 & )";
 #endif
     ws_.log("play", "Запуск клиента игры: " + cmd);
@@ -58,6 +58,7 @@ bool Editor::prefersClientPlay() const {
 }
 
 void Editor::startClientPlay() {
+    if(ws_.project.isFps()){startFpsPlay();return;}
     if (ws_.project.dir.empty()) { status = "Нет открытого проекта"; return; }
     if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
     if (playing()) stopPlay();
@@ -79,4 +80,4 @@ void Editor::stopClientPlay() {
     status = "Редактирование";
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

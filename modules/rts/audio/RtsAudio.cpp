@@ -4,7 +4,7 @@
 #include <filesystem>
 #include "../RtsModule.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using audio::kNoSound;
 using audio::SoundId;
@@ -355,4 +355,4 @@ audio::ListenerPose RtsAudio::cameraListener(const float target[3], const float 
     return pose;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

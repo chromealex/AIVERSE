@@ -30,7 +30,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -508,4 +508,4 @@ std::unique_ptr<Model> loadFbx(const std::string& path, const std::string& bytes
     return r.load(bytes);
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

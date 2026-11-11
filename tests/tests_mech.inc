@@ -566,12 +566,13 @@ static Json mechLoadMap(const std::string& dir, const std::string& file) {
 TEST(mech_save_states_all_games) {
     namespace fs = std::filesystem;
     std::vector<std::string> games;
-    for (auto& e : fs::directory_iterator(std::string(RTS_SOURCE_DIR) + "/templates"))
+    for (auto& e : fs::directory_iterator(std::string(AIVERSE_SOURCE_DIR) + "/templates"))
         if (e.is_directory() && fs::exists(e.path() / "rules.json") && e.path().filename().string()[0] != '_') games.push_back(e.path().string());
     std::sort(games.begin(), games.end());
     CHECK(games.size() >= 20);
     for (auto& dir : games) {
         Json manifest = Json::parseFile(dir + "/game.json");
+        if (manifest.getStr("module", "rts") != "rts") continue; // RTS save-state coverage; FPS has its own suite.
         const Json& m0 = manifest["maps"][size_t(0)];
         std::string file = m0.isString() ? m0.str() : m0.getStr("file");
         if (file.empty()) continue;
@@ -793,7 +794,7 @@ TEST(mech_rounds) {
 }
 
 // ---------------------------------------------------------------- UD: unit designs from chassis + parts
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/SchemaOps.h"
 #endif
 TEST(mech_designs) {
@@ -818,7 +819,7 @@ TEST(mech_designs) {
     bool threw = false;
     try { game::loadRules(Json::parse(bad)); } catch (const std::exception& e) { threw = std::string(e.what()).find("slot") != std::string::npos; }
     CHECK(threw);
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
     // rules_lint reads the expanded types: no false "unknown key" for design / slots
     std::string err;
     Json issues = editor::lintGameData(Json::parse(rules), Json::parse(flatMap(20, 20, "")), &err);
@@ -960,12 +961,12 @@ TEST(mech_flow_fields) {
     CHECK(arrF >= arrA * 9 / 10 && arrF > 200);
 }
 
-// RTS_BENCH_ARMY=N: N units per side walk into each other on a 160x100 map (prints ms per tick; no checks).
+// AIVERSE_BENCH_ARMY=N: N units per side walk into each other on a 160x100 map (prints ms per tick; no checks).
 TEST(mech_bench_army) {
-    const char* env = std::getenv("RTS_BENCH_ARMY");
+    const char* env = std::getenv("AIVERSE_BENCH_ARMY");
     if (!env) return;
     const int n = std::atoi(env);
-    const bool flow = std::getenv("RTS_BENCH_NOFLOW") == nullptr;
+    const bool flow = std::getenv("AIVERSE_BENCH_NOFLOW") == nullptr;
     std::string rules = std::string(R"({"resources": {"gold": {}}, "victory": {"mode": "score", "seconds": 10000, "keyLoses": false},)") +
         (flow ? R"("flowFields": true,)" : "") +
         R"("types": {"hq": {"structure": {"footprint": [2, 2]}, "health": {"max": 100}},

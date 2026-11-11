@@ -15,7 +15,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor::wiz {
+namespace aiverse::editor::wiz {
 
 namespace {
 Json num(int64_t v) { return Json::number(v); }
@@ -42,7 +42,7 @@ void copyKit(GameMaker::Ctx& c) {
         if (r.rfind("ui/screens/", 0) == 0 && c.spec.tutorial == "none" && false) continue;
         const fs::path to = fs::path(c.dir) / rel;
         fs::create_directories(to.parent_path(), ec);
-        rts::pack::copyFileReplaceOrThrow(it->path(), to);
+        aiverse::pack::copyFileReplaceOrThrow(it->path(), to);
         ++n;
     }
     // menus: ui/main.lua loads the wizard's meta first (an existing main.lua keeps its code after it)
@@ -450,7 +450,7 @@ void verifyGame(Workspace& ws, GameMaker::Ctx& c) {
 }
 
 void writeReport(GameMaker::Ctx& c) {
-    std::string md = "# " + c.spec.title + "\n\nСделано мастером «Сделать игру» (RTSEngine). Шаблон: **" + c.plan.getStr("templateName") +
+    std::string md = "# " + c.spec.title + "\n\nСделано мастером «Сделать игру» (AIVERSE). Шаблон: **" + c.plan.getStr("templateName") +
                      "** (`" + c.templ + "`) — " + c.plan.getStr("reason") + ".\n\n## Что сделано\n\n";
     for (auto& d : c.done.items()) md += "- " + d.str() + "\n";
     if (c.assigned.size()) {
@@ -527,4 +527,4 @@ void applyAiTexts(GameMaker::Ctx& c) {
     if (n) c.did("ИИ: " + std::to_string(n) + " текстов игры (слоган, приветствие, валюты, улучшения, уровни)");
 }
 
-} // namespace rts::editor::wiz
+} // namespace aiverse::editor::wiz

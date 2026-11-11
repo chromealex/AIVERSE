@@ -1,6 +1,6 @@
 #include "GameClient.h"
 #include "RegionSettings.h"
-namespace rts::client {
+namespace aiverse::client {
 bool GameClient::regionEvent(const platform::Event& e,bool uiWants){
     using namespace platform;
     regionSwipe_.configure(manifest_);if(!regionSwipe_.enabled||spectator_)return false;

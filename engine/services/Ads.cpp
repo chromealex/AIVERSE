@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace rts::ads {
+namespace aiverse::ads {
 namespace {
 namespace json = plugins::json;
 
@@ -111,4 +111,4 @@ void setConsent(bool personalized, bool ageRestricted) {
     plugins::call(S().provider, "consent", json::dump(a));
 }
 
-} // namespace rts::ads
+} // namespace aiverse::ads

@@ -41,10 +41,10 @@
 namespace Rml { class ElementDocument; class Element; }
 typedef struct lua_State lua_State;
 
-namespace rts::client {
+namespace aiverse::client {
 
-using namespace rts::render;
-using namespace rts::game;
+using namespace aiverse::render;
+using namespace aiverse::game;
 
 struct MapEntry { std::string file, title; };
 struct Notice { std::string text; double until; };
@@ -267,7 +267,7 @@ private:
     RTSCamera cam_;
     Json manifest_, rulesJson_;
     std::vector<MapEntry> maps_;
-    std::string gameName_ = "RTSEngine";
+    std::string gameName_ = "AIVERSE";
     Rules rules_;
     i18n::Localization loc_;
     i18n::GameLanguages langs_;
@@ -337,4 +337,4 @@ private:
     std::vector<std::pair<float3, double>> markers_;
 };
 
-} // namespace rts::client
+} // namespace aiverse::client

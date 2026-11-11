@@ -12,7 +12,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -350,4 +350,4 @@ void RtsModule::hashFidelity(Simulation& sim, Hasher& h) {
     w.each<TeleportBack>([&](Entity e, TeleportBack& tb) { h.u64(e.packed()); h.v3(tb.home); h.u32(tb.at); });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -5,7 +5,7 @@
 
 #include "core/NativeBuildOps.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 struct NativeBuildUi {
     enum class Stage { Hidden, Offer, Building, Done, Failed } stage = Stage::Hidden;
@@ -22,4 +22,4 @@ struct NativeBuildUi {
     bool restartPending = false, restartAsked = false;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

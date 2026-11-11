@@ -1,4 +1,4 @@
-// Console: build log (rtsbuild: builds, size estimates, toolchain installs). The log is a
+// Console: build log (aiversebuild: builds, size estimates, toolchain installs). The log is a
 // read-only text field, so a fragment can be selected and copied (Cmd/Ctrl+C); lines with errors
 // and warnings are tinted. Every run is also written to <engine>/logs (Workspace::logsDir()).
 #include <algorithm>
@@ -9,13 +9,13 @@
 #include "../EditorUtil.h"
 #include "imgui_internal.h" // the multiline field's child window: scroll + line tints
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 enum class Kind { Plain, Error, Warning, Ok };
 Kind lineKind(const char* b, const char* e) {
     std::string_view l(b, size_t(e - b));
-    for (const char* k : {"ОШИБКА", "error:", "Error:", "FAILED", "RTS_MISSING_TOOLCHAIN", "не удал"}) if (l.find(k) != std::string_view::npos) return Kind::Error;
+    for (const char* k : {"ОШИБКА", "error:", "Error:", "FAILED", "AIVERSE_MISSING_TOOLCHAIN", "не удал"}) if (l.find(k) != std::string_view::npos) return Kind::Error;
     for (const char* k : {"предупреждение", "warning:", "Warning:", "ВНИМАНИЕ"}) if (l.find(k) != std::string_view::npos) return Kind::Warning;
     for (const char* k : {"=== OK ===", "Готово", "Сборка завершена", "Установка завершена"}) if (l.find(k) != std::string_view::npos) return Kind::Ok;
     return Kind::Plain;
@@ -135,6 +135,6 @@ private:
     int filter_ = 0;
 };
 
-RTS_EDITOR_WINDOW(ConsoleWindow);
+AIVERSE_EDITOR_WINDOW(ConsoleWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

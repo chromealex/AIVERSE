@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -415,4 +415,4 @@ void RtsModule::hashWorld(Simulation& sim, Hasher& h) {
     w.each<Transit>([&](Entity e, Transit& t) { h.u64(e.packed()); h.i32(t.from); h.i32(t.to); h.u32(t.depart); h.u32(t.arrive); h.v3(t.arrival); });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

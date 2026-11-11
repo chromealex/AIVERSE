@@ -43,7 +43,7 @@ under the cursor; double-tapping/clicking water resets fit. Optional automatic f
 is not implemented by this controller. Desktop/editor input was exercised; real-device
 multitouch, Android and Web builds were not verified.
 
-Tests: `rts_tests region_swipe` checks multi-source commands, ownership, cancelled releases and
+Tests: `aiverse_tests region_swipe` checks multi-source commands, ownership, cancelled releases and
 that input preview does not change the simulation checksum. Project tests must check gameplay
 selection/dispatch semantics separately.
 

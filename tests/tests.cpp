@@ -1,5 +1,5 @@
 #include <chrono>
-// Dependency-free unit tests. Run: ctest  (or ./rts_tests)
+// Dependency-free unit tests. Run: ctest  (or ./aiverse_tests)
 #include "engine/ui/UiLua.h"
 extern "C" {
 #include <lauxlib.h>
@@ -28,7 +28,7 @@ extern "C" {
 #include "modules/rts/RtsSphere.h"
 #include <algorithm>
 
-using namespace rts;
+using namespace aiverse;
 
 static int g_failed = 0, g_checks = 0;
 #define CHECK(cond) do { ++g_checks; if (!(cond)) { ++g_failed; std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } } while (0)
@@ -37,8 +37,8 @@ static std::vector<std::pair<const char*, std::function<void()>>>& registry() { 
 struct Reg { Reg(const char* n, std::function<void()> f) { registry().push_back({n, std::move(f)}); } };
 #define TEST(name) static void name(); static Reg reg_##name(#name, name); static void name()
 
-#ifndef RTS_SOURCE_DIR
-#define RTS_SOURCE_DIR "."
+#ifndef AIVERSE_SOURCE_DIR
+#define AIVERSE_SOURCE_DIR "."
 #endif
 
 // ---------------- Fixed ----------------
@@ -182,8 +182,8 @@ TEST(command_serialization_roundtrip) {
 }
 
 // ---------------- Generic RTS gameplay ----------------
-static const std::string kSkirmish = std::string(RTS_SOURCE_DIR) + "/templates/skirmish";
-static const std::string kMushrooms = std::string(RTS_SOURCE_DIR) + "/templates/mushrooms";
+static const std::string kSkirmish = std::string(AIVERSE_SOURCE_DIR) + "/templates/skirmish";
+static const std::string kMushrooms = std::string(AIVERSE_SOURCE_DIR) + "/templates/mushrooms";
 
 static std::unique_ptr<Simulation> makeSim(const std::string& game, const std::string& map, uint64_t seed) {
     SimConfig cfg; cfg.seed = seed;
@@ -199,7 +199,7 @@ static Entity findType(Simulation& sim, const std::string& type, uint8_t owner) 
     return found;
 }
 
-TEST(rts_rules_load) {
+TEST(aiverse_rules_load) {
     game::Rules r = game::loadRules(Json::parseFile(kSkirmish + "/rules.json"));
     CHECK(r.findType("peasant") >= 0 && r.findType("townhall") >= 0);
     CHECK(r.types[size_t(r.findType("archer"))].weapons[0].projectileSpeed > Fixed{});
@@ -210,7 +210,7 @@ TEST(rts_rules_load) {
     CHECK(threw);
 }
 
-TEST(rts_pathfinding_avoids_water) {
+TEST(aiverse_pathfinding_avoids_water) {
     game::MapGrid g;
     g.init(20, 10);
     for (int y = 0; y < 9; ++y) g.flags[size_t(g.index(10, y))] = game::kCellWater; // wall with a gap at y=9
@@ -222,7 +222,7 @@ TEST(rts_pathfinding_avoids_water) {
     CHECK(usedGap);
 }
 
-TEST(rts_train_and_gather) {
+TEST(aiverse_train_and_gather) {
     auto sim = makeSim(kSkirmish, "maps/valley.json", 1);
     World& w = sim->world();
     auto& gs = mod(*sim).state(*sim);
@@ -243,7 +243,7 @@ TEST(rts_train_and_gather) {
     CHECK(gs.players[1].stock[size_t(gold)] > before - Fixed::fromInt(75)); // gathered more than the peasant cost
 }
 
-TEST(rts_build_structure) {
+TEST(aiverse_build_structure) {
     auto sim = makeSim(kSkirmish, "maps/valley.json", 1);
     Entity worker = findType(*sim, "peasant", 1);
     Command c; c.player = 1; c.type = game::kCmdBuild; c.units = {worker};
@@ -260,7 +260,7 @@ TEST(rts_build_structure) {
     CHECK(farms == 2); // the starting farm + the new one
 }
 
-TEST(rts_invalid_commands_ignored) {
+TEST(aiverse_invalid_commands_ignored) {
     auto sim = makeSim(kSkirmish, "maps/valley.json", 1);
     Entity enemyHall = findType(*sim, "townhall", 2);
     Command c; c.player = 1; c.type = game::kCmdTrain; c.units = {enemyHall}; c.param = 0;
@@ -271,7 +271,7 @@ TEST(rts_invalid_commands_ignored) {
     CHECK(sim->world().get<game::Production>(enemyHall).queue.empty());
 }
 
-TEST(rts_garrison_send_and_capture) {
+TEST(aiverse_garrison_send_and_capture) {
     auto sim = makeSim(kMushrooms, "maps/duel.json", 1);
     World& w = sim->world();
     Entity home, target;
@@ -631,8 +631,8 @@ namespace {
 // Content layout as packaged: "engine/..." from engine/assets, everything else from the game folder.
 i18n::FileReader contentReader(const std::string& game) {
     return [game](const std::string& rel, std::string& out) {
-        std::string path = rel.rfind("engine/", 0) == 0 ? std::string(RTS_SOURCE_DIR) + "/engine/assets/" + rel.substr(7)
-                                                         : std::string(RTS_SOURCE_DIR) + "/templates/" + game + "/" + rel;
+        std::string path = rel.rfind("engine/", 0) == 0 ? std::string(AIVERSE_SOURCE_DIR) + "/engine/assets/" + rel.substr(7)
+                                                         : std::string(AIVERSE_SOURCE_DIR) + "/templates/" + game + "/" + rel;
         std::ifstream f(path, std::ios::binary);
         if (!f) return false;
         std::stringstream ss; ss << f.rdbuf(); out = ss.str();
@@ -787,12 +787,12 @@ TEST(i18n_localize_rules_changes_only_names) {
 #include <random>
 #include "engine/pack/PackWriter.h"
 
-static std::unique_ptr<rts::pack::Pack> openPackBytes(const std::string& bytes, std::string* err = nullptr) {
-    return rts::pack::Pack::open(rts::pack::memorySource(bytes), err);
+static std::unique_ptr<aiverse::pack::Pack> openPackBytes(const std::string& bytes, std::string* err = nullptr) {
+    return aiverse::pack::Pack::open(aiverse::pack::memorySource(bytes), err);
 }
 
 TEST(pack_roundtrip_codecs_and_dedup) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     std::string text;
     for (int i = 0; i < 2000; ++i) text += "{\"unit\": \"peasant\", \"hp\": " + std::to_string(i % 37) + "},\n";
     std::string noise(50000, '\0');
@@ -830,7 +830,7 @@ TEST(pack_roundtrip_codecs_and_dedup) {
 }
 
 TEST(pack_output_is_reproducible) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     auto build = [](unsigned threads, bool reverse) {
         PackWriter w;
         std::vector<std::string> names = {"a.json", "b/c.json", "b/d.json", "z.txt"};
@@ -846,7 +846,7 @@ TEST(pack_output_is_reproducible) {
 }
 
 TEST(pack_rejects_corruption) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     PackWriter w;
     std::string text(20000, 'x');
     for (size_t i = 0; i < text.size(); i += 7) text[i] = char('a' + i % 13);
@@ -865,7 +865,7 @@ TEST(pack_rejects_corruption) {
 }
 
 TEST(pack_paths_and_ignore_rules) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     CHECK(normalizePath("./maps//a.json") == "maps/a.json");
     CHECK(normalizePath("ui\\hud\\.\\x.rml") == "ui/hud/x.rml");
     CHECK(normalizePath("/abs/") == "abs" && normalizePath(".") == "");
@@ -881,11 +881,11 @@ TEST(pack_paths_and_ignore_rules) {
 
 // A match loaded from a pack must be bit-identical to one loaded from the folder.
 TEST(pack_sample_games_match_folder) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     for (auto [game, map] : {std::pair{kSkirmish, std::string("maps/valley.json")}, std::pair{kMushrooms, std::string("maps/duel.json")}}) {
         PackWriter w;
         CHECK(w.addDirectory(game, "", IgnoreRules{}) > 0);
-        CHECK(w.addDirectory(std::string(RTS_SOURCE_DIR) + "/engine/assets", "engine", IgnoreRules{}) > 0);
+        CHECK(w.addDirectory(std::string(AIVERSE_SOURCE_DIR) + "/engine/assets", "engine", IgnoreRules{}) > 0);
         std::string bytes;
         CHECK(w.writeToString(bytes, WriteOptions{}));
         auto p = openPackBytes(bytes);
@@ -963,7 +963,7 @@ bool loadBank(audio::AudioEngine& a, const std::string& json, std::string* err =
 }
 
 std::string readSource(const std::string& rel) {
-    std::ifstream f(std::string(RTS_SOURCE_DIR) + "/" + rel, std::ios::binary);
+    std::ifstream f(std::string(AIVERSE_SOURCE_DIR) + "/" + rel, std::ios::binary);
     std::stringstream s;
     s << f.rdbuf();
     return s.str();
@@ -1234,7 +1234,7 @@ TEST(audio_sample_games_banks_load_cleanly) {
     }
 }
 
-TEST(audio_rts_mapping_warnings) {
+TEST(audio_aiverse_mapping_warnings) {
     auto a = offlineAudio();
     CHECK(loadBank(*a, R"({"sounds":{"s":{"synth":{}}}})"));
     game::Rules rules = game::loadRules(Json::parse(R"({"resources":{"gold":{"kind":"stock"}},"types":{"guy":{"weapons":[{"id":"axe"}]}}})"));
@@ -1246,7 +1246,7 @@ TEST(audio_rts_mapping_warnings) {
     CHECK(!s.init(*a, rules, Json::parse(R"({"types":[1,2]})"), &err) && err.find("\"types\" must be an object") != std::string::npos);
 }
 
-TEST(audio_rts_events_keep_sim_deterministic) {
+TEST(audio_aiverse_events_keep_sim_deterministic) {
     // The same bot match with and without sound attached must produce identical checksums, and the
     // attached run must actually produce sounds (combat, deaths, the viewer's notifications).
     const std::string dir = "templates/skirmish/";
@@ -1316,7 +1316,7 @@ namespace {
 namespace tfs = std::filesystem;
 
 tfs::path testDir(const std::string& name) {
-    tfs::path d = tfs::temp_directory_path() / ("rts_tests_" + name);
+    tfs::path d = tfs::temp_directory_path() / ("aiverse_tests_" + name);
     std::error_code ec;
     tfs::remove_all(d, ec);
     tfs::create_directories(d);
@@ -1338,7 +1338,7 @@ std::string le32(uint32_t v) { std::string s; for (int i = 0; i < 4; ++i) s += c
 } // namespace
 
 TEST(pack_external_flag_and_merge) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     PackWriter a;
     a.addData("x.txt", "hello");
     WriteOptions ext; ext.external = true;
@@ -1362,7 +1362,7 @@ TEST(pack_external_flag_and_merge) {
 }
 
 TEST(unpacker_manifests_are_validated) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     tfs::path d = testDir("manifests");
     writeFile(d / "good" / "unpacker.json", R"({"protocol":1,"name":"good","extensions":["ABC"],"magic":[{"offset":-4,"ascii":"TAIL"}],"command":["tool"]})");
     writeFile(d / "oldproto" / "unpacker.json", R"({"protocol":7,"name":"old","extensions":[".x"],"command":["t"]})");
@@ -1382,11 +1382,11 @@ TEST(unpacker_manifests_are_validated) {
 }
 
 TEST(unpacker_plugins_import_synthetic_archives) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     if (!havePython()) { std::printf("  (python3 not found: plugin tests skipped)\n"); return; }
     tfs::path d = testDir("plugins");
     UnpackerRegistry reg;
-    reg.addDefaultDirs(RTS_SOURCE_DIR);
+    reg.addDefaultDirs(AIVERSE_SOURCE_DIR);
     CHECK(reg.errors().empty());
     for (const char* n : {"zip", "tar", "war", "zpac", "zrsc", "dmg"}) {
         const UnpackerInfo* u = reg.byName(n);
@@ -1436,7 +1436,7 @@ TEST(unpacker_plugins_import_synthetic_archives) {
 
 #if !defined(_WIN32)
 TEST(unpacker_hostile_plugin_is_contained) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     if (!havePython()) return;
     tfs::path d = testDir("hostile");
     writeFile(d / "plug" / "unpacker.json", R"({"protocol":1,"name":"evil","extensions":[".evil"],"command":["python3","p.py"]})");
@@ -1474,7 +1474,7 @@ elif m == 'extract':
 #endif
 
 TEST(unpacker_westwood_pak) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     if (!havePython()) return;
     tfs::path d = testDir("wwpak");
     // Dune II layout: (offset, name\0)... 0 terminator, then data.
@@ -1484,7 +1484,7 @@ TEST(unpacker_westwood_pak) {
     writeFile(d / "T.PAK", pak);
     writeFile(d / "Q.PAK", "PACK" + std::string(12, '\0'));  // Quake pak must not be taken for Westwood
     UnpackerRegistry reg;
-    reg.addDefaultDirs(RTS_SOURCE_DIR);
+    reg.addDefaultDirs(AIVERSE_SOURCE_DIR);
     std::string why;
     const UnpackerInfo* u = reg.detect((d / "T.PAK").string(), &why);
     CHECK(u && u->name == "wwpak");
@@ -1505,7 +1505,7 @@ TEST(unpacker_westwood_pak) {
 
 TEST(importer_dune2_rules_and_synthetic_scenario) {
     if (!havePython()) return;
-    CHECK(std::system("python3 " RTS_SOURCE_DIR "/tools/importers/lib/selftest.py >/dev/null") == 0);
+    CHECK(std::system("python3 " AIVERSE_SOURCE_DIR "/tools/importers/lib/selftest.py >/dev/null") == 0);
     tfs::path d = testDir("dune2");
     // A made-up scenario in the Dune II INI layout (no game data): two houses, a base, units, spice.
     std::string ini = "[BASIC]\nMapScale=1\nWinFlags=6\n[MAP]\nField=1300\nBloom=2409\nSeed=353\n"
@@ -1515,7 +1515,7 @@ TEST(importer_dune2_rules_and_synthetic_scenario) {
                       "[STRUCTURES]\nID000=Atreides,Const Yard,256,1630\nID001=Ordos,Windtrap,256,2660\nGEN2662=Ordos,Wall\nGEN2663=Ordos,Concrete\n";
     std::string pak = le32(4 + 13 + 4) + std::string("SCENA001.INI\0", 13) + le32(0) + ini;
     writeFile(d / "src" / "SCENARIO.PAK", pak);
-    std::string cmd = "python3 " RTS_SOURCE_DIR "/tools/importers/dune2/import.py --maps-only --json --source '" + (d / "src").string() +
+    std::string cmd = "python3 " AIVERSE_SOURCE_DIR "/tools/importers/dune2/import.py --maps-only --json --source '" + (d / "src").string() +
                       "' --out '" + (d / "out").string() + "' > '" + (d / "report.json").string() + "'";
     CHECK(std::system(cmd.c_str()) == 0);
     Json rep = Json::parseFile((d / "report.json").string());
@@ -2042,7 +2042,7 @@ TEST(sample_games_bot_matches_deterministic) {
         {"borderrush", "maps/five_lands.json"}, {"hearthhaul", "maps/green_dale.json"}, {"sporelanes", "maps/spore_field.json"},
         {"spellbunkers", "maps/rune_field.json"}};
     for (auto& g : games) {
-        std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/" + g[0];
+        std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/" + g[0];
         std::vector<Command> cmds;
         uint64_t a = botMatch(dir, g[1], 3, 20 * 60, &cmds), b = botMatch(dir, g[1], 3, 20 * 60);
         bool ok = a == b && !cmds.empty();
@@ -2100,7 +2100,7 @@ TEST(tiles2d_terrain_applied_to_map_idempotent) {
 
 TEST(tiles2d_sample_games_deterministic) {
     for (const char* g : {"tiles2d", "km2d"}) {
-        std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/" + g;
+        std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/" + g;
         Json manifest = Json::parseFile(dir + "/game.json");
         auto run = [&] {
             Json map = Json::parseFile(dir + "/" + manifest["maps"][size_t(0)].getStr("file"));
@@ -2135,8 +2135,8 @@ TEST(tiles2d_sample_games_deterministic) {
 
 namespace {
 // Opaque blob of `w x h` inside a transparent canvas at (ox, oy); `seed` varies the pixels.
-rts::atlas::Image atlasTestImage(int cw, int ch, int ox, int oy, int w, int h, uint32_t seed, bool opaqueCanvas = false) {
-    rts::atlas::Image img;
+aiverse::atlas::Image atlasTestImage(int cw, int ch, int ox, int oy, int w, int h, uint32_t seed, bool opaqueCanvas = false) {
+    aiverse::atlas::Image img;
     img.width = cw; img.height = ch;
     img.rgba.assign(size_t(cw) * size_t(ch) * 4, 0);
     uint32_t s = seed * 2654435761u + 1;
@@ -2150,15 +2150,15 @@ rts::atlas::Image atlasTestImage(int cw, int ch, int ox, int oy, int w, int h, u
         }
     return img;
 }
-rts::atlas::SourceImage atlasSrc(const std::string& path, const rts::atlas::Image& img) { return {path, rts::atlas::encodePng(img)}; }
-rts::atlas::AtlasConfig atlasCfg(const std::string& json, const std::string& profile = "linux") {
-    return rts::atlas::AtlasConfig::fromGame(rts::Json::parse(json), profile);
+aiverse::atlas::SourceImage atlasSrc(const std::string& path, const aiverse::atlas::Image& img) { return {path, aiverse::atlas::encodePng(img)}; }
+aiverse::atlas::AtlasConfig atlasCfg(const std::string& json, const std::string& profile = "linux") {
+    return aiverse::atlas::AtlasConfig::fromGame(aiverse::Json::parse(json), profile);
 }
-bool sameImage(const rts::atlas::Image& a, const rts::atlas::Image& b) { return a.width == b.width && a.height == b.height && a.rgba == b.rgba; }
+bool sameImage(const aiverse::atlas::Image& a, const aiverse::atlas::Image& b) { return a.width == b.width && a.height == b.height && a.rgba == b.rgba; }
 } // namespace
 
 TEST(atlas_maxrects_no_overlap_bounds_padding) {
-    using namespace rts::atlas;
+    using namespace aiverse::atlas;
     for (int pass = 0; pass < 3; ++pass) {
         PackSettings s;
         s.maxPage = pass == 2 ? 256 : 1024;   // pass 2 forces several pages
@@ -2221,7 +2221,7 @@ TEST(atlas_maxrects_no_overlap_bounds_padding) {
 }
 
 TEST(atlas_build_is_deterministic) {
-    using namespace rts::atlas;
+    using namespace aiverse::atlas;
     std::vector<SourceImage> in;
     for (int i = 0; i < 40; ++i)
         in.push_back(atlasSrc("units/u" + std::to_string(i % 5) + "/f" + std::to_string(i) + ".png", atlasTestImage(40, 40, i % 7, i % 5, 10 + i % 23, 12 + i % 17, uint32_t(i))));
@@ -2244,7 +2244,7 @@ TEST(atlas_build_is_deterministic) {
 }
 
 TEST(atlas_dedupe_trim_rotation_extract) {
-    using namespace rts::atlas;
+    using namespace aiverse::atlas;
     Image blob = atlasTestImage(30, 20, 0, 0, 30, 20, 7);
     auto placed = [&](int cw, int ch, int ox, int oy) {
         Image img;
@@ -2288,7 +2288,7 @@ TEST(atlas_dedupe_trim_rotation_extract) {
 }
 
 TEST(atlas_grouping_rules) {
-    using namespace rts::atlas;
+    using namespace aiverse::atlas;
     Image col = atlasTestImage(32, 32, 0, 0, 32, 32, 3, true);
     std::vector<SourceImage> in = {
         atlasSrc("units/knight/body.png", col), atlasSrc("units/knight/body_n.png", atlasTestImage(32, 32, 0, 0, 32, 32, 4, true)),
@@ -2324,7 +2324,7 @@ TEST(atlas_grouping_rules) {
 }
 
 TEST(atlas_sprite_sheets_are_never_trimmed) {
-    using namespace rts;
+    using namespace aiverse;
     pack::PackWriter w;
     atlas::Image sheet = atlasTestImage(64, 32, 3, 2, 50, 28, 31), other = atlasTestImage(64, 32, 3, 2, 50, 28, 32);
     CHECK(w.addData("rules.json", R"({"types": {"tank": {"sprite": {"sheet": "sprites/tank.png", "frame": [32, 32]}}}})"));
@@ -2344,7 +2344,7 @@ TEST(atlas_sprite_sheets_are_never_trimmed) {
 }
 
 TEST(atlas_pack_integration_and_runtime_lookup) {
-    using namespace rts;
+    using namespace aiverse;
     pack::PackWriter w;
     atlas::Image sprite = atlasTestImage(40, 30, 6, 4, 20, 18, 11), tile = atlasTestImage(16, 16, 0, 0, 16, 16, 12, true);
     CHECK(w.addData("game.json", R"({"name": "t", "atlas": {"maxPage": {"default": 512}}})"));
@@ -2384,7 +2384,7 @@ TEST(atlas_pack_integration_and_runtime_lookup) {
 #include <sstream>
 
 namespace modeltest {
-using namespace rts::render;
+using namespace aiverse::render;
 inline bool near(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) <= eps; }
 inline std::string b64(const std::string& in) {
     static const char* a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -2591,7 +2591,7 @@ TEST(models_procedural_modifiers) {
 
 TEST(models_sample_assets_load) {
     using namespace modeltest;
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/showcase/models/";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/";
     std::vector<std::string> warn;
     auto golem = loadModel(dir + "golem.glb", diskReader(), &warn);
     CHECK(golem->clips.size() == 6 && golem->skins.size() == 1 && golem->skins[0].joints.size() == 8);
@@ -2644,7 +2644,7 @@ TEST(i18n_ui_documents_translated) {
     namespace fs = std::filesystem;
     auto read = contentReader("skirmish");
     int docs = 0;
-    for (auto& entry : fs::directory_iterator(fs::path(RTS_SOURCE_DIR) / "engine" / "assets" / "ui")) {
+    for (auto& entry : fs::directory_iterator(fs::path(AIVERSE_SOURCE_DIR) / "engine" / "assets" / "ui")) {
         if (entry.path().extension() != ".rml") continue;
         ++docs;
         const std::string doc = entry.path().filename().string();
@@ -2672,34 +2672,34 @@ TEST(i18n_ui_documents_translated) {
 
 namespace {
 // Records texture creation; everything else is a no-op.
-class FakeDevice final : public rts::gfx::Device {
+class FakeDevice final : public aiverse::gfx::Device {
 public:
     std::vector<std::pair<int, int>> created;
     int alive = 0;
-    rts::gfx::DeviceInfo info_;
+    aiverse::gfx::DeviceInfo info_;
     std::string err_;
-    const rts::gfx::DeviceInfo& info() const override { return info_; }
-    rts::gfx::BufferHandle createBuffer(const rts::gfx::BufferDesc&) override { return {}; }
-    void updateBuffer(rts::gfx::BufferHandle, const void*, size_t, size_t) override {}
-    void destroyBuffer(rts::gfx::BufferHandle) override {}
-    rts::gfx::TextureHandle createTexture(const rts::gfx::TextureDesc& d) override { created.push_back({d.width, d.height}); ++alive; return {uint32_t(created.size())}; }
-    void updateTexture(rts::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
-    void destroyTexture(rts::gfx::TextureHandle) override { --alive; }
-    rts::gfx::ShaderHandle createShader(const rts::gfx::ShaderDesc&) override { return {}; }
-    void destroyShader(rts::gfx::ShaderHandle) override {}
-    rts::gfx::PipelineHandle createPipeline(const rts::gfx::PipelineDesc&) override { return {}; }
-    void destroyPipeline(rts::gfx::PipelineHandle) override {}
+    const aiverse::gfx::DeviceInfo& info() const override { return info_; }
+    aiverse::gfx::BufferHandle createBuffer(const aiverse::gfx::BufferDesc&) override { return {}; }
+    void updateBuffer(aiverse::gfx::BufferHandle, const void*, size_t, size_t) override {}
+    void destroyBuffer(aiverse::gfx::BufferHandle) override {}
+    aiverse::gfx::TextureHandle createTexture(const aiverse::gfx::TextureDesc& d) override { created.push_back({d.width, d.height}); ++alive; return {uint32_t(created.size())}; }
+    void updateTexture(aiverse::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
+    void destroyTexture(aiverse::gfx::TextureHandle) override { --alive; }
+    aiverse::gfx::ShaderHandle createShader(const aiverse::gfx::ShaderDesc&) override { return {}; }
+    void destroyShader(aiverse::gfx::ShaderHandle) override {}
+    aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc&) override { return {}; }
+    void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
-    void beginPass(const rts::gfx::PassDesc&) override {}
+    void beginPass(const aiverse::gfx::PassDesc&) override {}
     void endPass() override {}
-    void setViewport(const rts::gfx::Rect&) override {}
-    void setScissor(const rts::gfx::Rect&) override {}
-    void setPipeline(rts::gfx::PipelineHandle) override {}
-    void setVertexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setIndexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setTexture(int, rts::gfx::TextureHandle) override {}
+    void setViewport(const aiverse::gfx::Rect&) override {}
+    void setScissor(const aiverse::gfx::Rect&) override {}
+    void setPipeline(aiverse::gfx::PipelineHandle) override {}
+    void setVertexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setIndexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setTexture(int, aiverse::gfx::TextureHandle) override {}
     void setUniforms(int, const void*, size_t) override {}
     void draw(uint32_t, uint32_t) override {}
     void drawIndexed(uint32_t, uint32_t, int32_t, uint32_t) override {}
@@ -2707,7 +2707,7 @@ public:
 } // namespace
 
 TEST(atlas_texture_library_is_transparent) {
-    using namespace rts;
+    using namespace aiverse;
     pack::PackWriter w;
     atlas::Image a = atlasTestImage(40, 40, 8, 6, 20, 24, 21), b = atlasTestImage(40, 40, 0, 0, 30, 30, 22), m = atlasTestImage(8, 4, 0, 0, 8, 4, 23, true);
     CHECK(w.addData("units/x/a.png", atlas::encodePng(a)));
@@ -2838,7 +2838,7 @@ TEST(terrain_line_of_sight_behind_ridge) {
 #include "engine/pack/Sha256.h"
 
 TEST(pack_sha256_vectors) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     auto a = sha256("abc", 3);
     CHECK(toHex(a.data(), a.size()) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     std::string m(1000000, 'a');
@@ -2852,8 +2852,8 @@ std::string noise(size_t n, uint32_t seed) {   // incompressible test data (not 
     for (char& c : s) { seed = seed * 1664525u + 1013904223u; c = char(seed >> 24); }
     return s;
 }
-rts::pack::PackWriter splitInputs() {
-    rts::pack::PackWriter w;
+aiverse::pack::PackWriter splitInputs() {
+    aiverse::pack::PackWriter w;
     w.addData("game.json", "{\"name\":\"x\"}");
     w.addData("rules.json", "{}");
     w.addData("maps/a.json", noise(3000, 1));
@@ -2864,7 +2864,7 @@ rts::pack::PackWriter splitInputs() {
 } // namespace
 
 TEST(pack_split_layout_and_reading) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     PackWriter w = splitInputs();
     SplitOptions so;
     so.chunkSize = 100000;
@@ -2903,7 +2903,7 @@ TEST(pack_split_layout_and_reading) {
 }
 
 TEST(pack_split_budgets) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     std::string base, err;
     std::vector<std::string> chunks;
     SplitOptions tight;
@@ -2928,7 +2928,7 @@ TEST(pack_split_budgets) {
 }
 
 TEST(pack_chunk_manager_sources_cache_and_tampering) {
-    using namespace rts::pack;
+    using namespace aiverse::pack;
     tfs::path d = testDir("chunks");
     PackWriter w = splitInputs();
     SplitOptions so;
@@ -3309,7 +3309,7 @@ TEST(audiopack_profiles_and_conversion) {
 
 TEST(audiopack_stage_game_folder) {
     namespace fs = std::filesystem;
-    const fs::path root = fs::temp_directory_path() / "rts_audiopack_test";
+    const fs::path root = fs::temp_directory_path() / "aiverse_audiopack_test";
     std::error_code cleanup;
     fs::remove_all(root, cleanup);
     fs::create_directories(root / "game" / "music");
@@ -3390,9 +3390,9 @@ TEST(fx_quality_tiers_bound_particles) {
     CHECK(count(fx::FxQuality::Low) == fx::limitsFor(fx::FxQuality::Low).maxParticles);   // budget is a hard cap
     CHECK(count(fx::FxQuality::Medium) == 1400);                                           // 2000 x 0.7, high-only emitter off
     CHECK(count(fx::FxQuality::High) == 2010);
-    CHECK(fx::defaultQualityFor("Mali-T720", true) == fx::FxQuality::Low || std::getenv("RTS_PARTICLES"));
-    CHECK(fx::defaultQualityFor("Adreno (TM) 640", true) == fx::FxQuality::Medium || std::getenv("RTS_PARTICLES"));
-    CHECK(fx::defaultQualityFor("Apple M2", false) == fx::FxQuality::High || std::getenv("RTS_PARTICLES"));
+    CHECK(fx::defaultQualityFor("Mali-T720", true) == fx::FxQuality::Low || std::getenv("AIVERSE_PARTICLES"));
+    CHECK(fx::defaultQualityFor("Adreno (TM) 640", true) == fx::FxQuality::Medium || std::getenv("AIVERSE_PARTICLES"));
+    CHECK(fx::defaultQualityFor("Apple M2", false) == fx::FxQuality::High || std::getenv("AIVERSE_PARTICLES"));
 }
 
 TEST(fx_attached_trail_follows_and_stops) {
@@ -3438,7 +3438,7 @@ TEST(fx_sample_games_have_valid_effects) {
         CHECK(bridge.init(ps, rules, Json::parse(readSource(dir + "fx/fx.json")), &err));
         for (auto& w : bridge.warnings()) std::printf("    %s: %s\n", g.c_str(), w.c_str());
         CHECK(bridge.warnings().empty());
-        for (auto& entry : std::filesystem::directory_iterator(std::string(RTS_SOURCE_DIR) + "/" + dir + "fx")) {
+        for (auto& entry : std::filesystem::directory_iterator(std::string(AIVERSE_SOURCE_DIR) + "/" + dir + "fx")) {
             const std::string name = entry.path().stem().string();
             if (name == "fx") continue;
             CHECK(ps.effect(name) >= 0);
@@ -3448,7 +3448,7 @@ TEST(fx_sample_games_have_valid_effects) {
     }
 }
 
-TEST(fx_rts_events_keep_sim_deterministic) {
+TEST(fx_aiverse_events_keep_sim_deterministic) {
     // Same bot match with and without effects: identical checksums, and effects actually played.
     const std::string dir = "templates/skirmish/";
     Json rulesJson = Json::parse(readSource(dir + "rules.json"));
@@ -4299,7 +4299,7 @@ TEST(terrain_incremental_clearance_matches_full) {
 }
 
 TEST(terrain_heightfield_match_is_deterministic) {
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/metaltide";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/metaltide";
     Json rules = Json::parseFile(dir + "/rules.json"), map = Json::parseFile(dir + "/maps/twin_craters.json");
     CHECK(game::loadRules(rules).terrain.heightfield());
     auto run = [&] {
@@ -4407,7 +4407,7 @@ TEST(terrain_view_grid_corner_from_levels) {
 #include "third_party/zstd/zstd.h"
 #include <cstring>
 
-using namespace rts::render;
+using namespace aiverse::render;
 
 namespace ktxtest {
 std::vector<uint8_t> be64(uint32_t hi, uint32_t lo) {
@@ -4639,7 +4639,7 @@ TEST(ktx2_rejects_bad_files) {
 TEST(models_fbx_skinned_cube) {
     using namespace modeltest;
     std::vector<std::string> warn;
-    const std::string path = std::string(RTS_SOURCE_DIR) + "/tests/data/models/cube.fbx";
+    const std::string path = std::string(AIVERSE_SOURCE_DIR) + "/tests/data/models/cube.fbx";
     auto m = loadModel(path, diskReader(), &warn);
     for (auto& w : warn) std::printf("  warning: %s\n", w.c_str());
     CHECK(warn.empty());
@@ -4708,45 +4708,45 @@ TEST(models_fbx_readable_errors) {
 #include "engine/gfx/Gfx.h"
 namespace modeltest {
 // Records textures so baking / uploads can be checked without a GPU.
-class NullDevice final : public rts::gfx::Device {
+class NullDevice final : public aiverse::gfx::Device {
 public:
-    struct Tex { rts::gfx::TextureDesc desc; std::vector<float> data; };
+    struct Tex { aiverse::gfx::TextureDesc desc; std::vector<float> data; };
     std::vector<Tex> textures;
-    const rts::gfx::DeviceInfo& info() const override { return info_; }
-    rts::gfx::BufferHandle createBuffer(const rts::gfx::BufferDesc&) override { return {++next_}; }
-    void updateBuffer(rts::gfx::BufferHandle, const void*, size_t, size_t) override {}
-    void destroyBuffer(rts::gfx::BufferHandle) override {}
-    rts::gfx::TextureHandle createTexture(const rts::gfx::TextureDesc& d) override {
+    const aiverse::gfx::DeviceInfo& info() const override { return info_; }
+    aiverse::gfx::BufferHandle createBuffer(const aiverse::gfx::BufferDesc&) override { return {++next_}; }
+    void updateBuffer(aiverse::gfx::BufferHandle, const void*, size_t, size_t) override {}
+    void destroyBuffer(aiverse::gfx::BufferHandle) override {}
+    aiverse::gfx::TextureHandle createTexture(const aiverse::gfx::TextureDesc& d) override {
         Tex t; t.desc = d;
-        if (d.format == rts::gfx::PixelFormat::RGBA32F && d.data) {
+        if (d.format == aiverse::gfx::PixelFormat::RGBA32F && d.data) {
             const float* f = static_cast<const float*>(d.data);
             t.data.assign(f, f + size_t(d.width) * size_t(d.height) * 4);
         }
         textures.push_back(std::move(t));
         return {uint32_t(textures.size())};
     }
-    void updateTexture(rts::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
-    void destroyTexture(rts::gfx::TextureHandle) override {}
-    rts::gfx::ShaderHandle createShader(const rts::gfx::ShaderDesc&) override { return {++next_}; }
-    void destroyShader(rts::gfx::ShaderHandle) override {}
-    rts::gfx::PipelineHandle createPipeline(const rts::gfx::PipelineDesc&) override { return {++next_}; }
-    void destroyPipeline(rts::gfx::PipelineHandle) override {}
+    void updateTexture(aiverse::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
+    void destroyTexture(aiverse::gfx::TextureHandle) override {}
+    aiverse::gfx::ShaderHandle createShader(const aiverse::gfx::ShaderDesc&) override { return {++next_}; }
+    void destroyShader(aiverse::gfx::ShaderHandle) override {}
+    aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc&) override { return {++next_}; }
+    void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
-    void beginPass(const rts::gfx::PassDesc&) override {}
+    void beginPass(const aiverse::gfx::PassDesc&) override {}
     void endPass() override {}
-    void setViewport(const rts::gfx::Rect&) override {}
-    void setScissor(const rts::gfx::Rect&) override {}
-    void setPipeline(rts::gfx::PipelineHandle) override {}
-    void setVertexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setIndexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setTexture(int, rts::gfx::TextureHandle) override {}
+    void setViewport(const aiverse::gfx::Rect&) override {}
+    void setScissor(const aiverse::gfx::Rect&) override {}
+    void setPipeline(aiverse::gfx::PipelineHandle) override {}
+    void setVertexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setIndexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setTexture(int, aiverse::gfx::TextureHandle) override {}
     void setUniforms(int, const void*, size_t) override {}
     void draw(uint32_t, uint32_t) override {}
     void drawIndexed(uint32_t, uint32_t, int32_t, uint32_t) override {}
 private:
-    rts::gfx::DeviceInfo info_;
+    aiverse::gfx::DeviceInfo info_;
     std::string err_;
     uint32_t next_ = 0;
 };
@@ -4811,7 +4811,7 @@ TEST(models_additive_and_blend_space) {
 
 TEST(models_morph_targets_and_weights) {
     using namespace modeltest;
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/showcase/models/";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/";
     auto m = loadModel(dir + "slime.glb", diskReader(), nullptr);
     const Primitive& p = m->meshes[0].primitives[0];
     CHECK(p.morphTargets == 2 && p.vertexCount > 0 && p.morphDeltas.size() == size_t(2) * p.vertexCount * 6);
@@ -4825,12 +4825,12 @@ TEST(models_morph_targets_and_weights) {
     CHECK(m->morphTex.valid() && m->morphTexWidth == 2048);
     const auto& tex = dev.textures[m->morphTex.id - 1];
     const size_t texel = p.morphTexel + 2 * 5;    // target 0, vertex 5: position delta
-    CHECK(tex.desc.format == rts::gfx::PixelFormat::RGBA32F && tex.data.size() > texel * 4 + 2);
+    CHECK(tex.desc.format == aiverse::gfx::PixelFormat::RGBA32F && tex.data.size() > texel * 4 + 2);
 }
 
 TEST(models_baked_clips_match_the_pose) {
     using namespace modeltest;
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/showcase/models/";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/";
     auto m = loadModel(dir + "golem.glb", diskReader(), nullptr);
     NullDevice dev;
     CHECK(bakeAnimations(dev, *m, 30));
@@ -5130,7 +5130,7 @@ TEST(vision_fast_equals_reference_planet) {
         }, 420, seed, &passes));
         CHECK(passes > 60);
         // and the shipped planet maps over a stretch of a match
-        auto big = [&] { return makeSim(std::string(RTS_SOURCE_DIR) + "/templates/planets", "maps/two_worlds.json", seed); };
+        auto big = [&] { return makeSim(std::string(AIVERSE_SOURCE_DIR) + "/templates/planets", "maps/two_worlds.json", seed); };
         auto ptBig = [&](Simulation& s, VisionLcg& rr) { const game::Surface* S = mod(s).surface(s); const int b = S->startBody, M = S->bodies[size_t(b)].faceSize; return S->cellCenter(S->gridCell(b, rr.below(6), rr.below(M), rr.below(M))); };
         if (seed == 1) CHECK(visionMatches(big, ptBig, [](Simulation&, VisionLcg&) {}, 300, seed, &passes));
     }
@@ -5238,7 +5238,7 @@ TEST(lighting_type_and_map_data) {
     const auto& cat = L.typeLights(uint16_t(sk.findType("catapult")));
     CHECK(!cat.projectile.on && cat.hit.on);                     // data: "projectileLight": false
     // abilities: one light per ability, colour from what it does (artillery = damage -> orange)
-    const std::string fc = std::string(RTS_SOURCE_DIR) + "/templates/frostcrown/rules.json";
+    const std::string fc = std::string(AIVERSE_SOURCE_DIR) + "/templates/frostcrown/rules.json";
     if (std::filesystem::exists(fc)) {
         const game::Rules fr = game::loadRules(Json::parseFile(fc));
         game::RtsLights F;
@@ -5408,7 +5408,7 @@ TEST(plugin_bridge_calls_replies_events) {
     plugins::registerPlugin("echo", echo);
     CHECK(plugins::available("echo") && !plugins::available("no-such-plugin"));
     // desktop mocks exist only when the game lists them (a shipped build must not offer fake purchases)
-    if (!std::getenv("RTS_MOCK_PLUGINS")) CHECK(!plugins::available("mock-store") && !plugins::available("mock-ads"));
+    if (!std::getenv("AIVERSE_MOCK_PLUGINS")) CHECK(!plugins::available("mock-store") && !plugins::available("mock-ads"));
     std::vector<std::string> got;
     plugins::pump();
     CHECK(echo->updates == 0); // no per-frame work before "init"
@@ -5451,14 +5451,14 @@ TEST(store_and_ads_through_mock_plugins) {
 
     std::vector<store::Purchase> done, async;
     store::onPurchase([&](const store::Purchase& p) { async.push_back(p); });
-    setEnvVar("RTS_MOCK_STORE", "purchased");
+    setEnvVar("AIVERSE_MOCK_STORE", "purchased");
     store::purchase("noads", [&](const store::Purchase& p) { done.push_back(p); });
-    setEnvVar("RTS_MOCK_STORE", "cancelled");
+    setEnvVar("AIVERSE_MOCK_STORE", "cancelled");
     store::purchase("gems", [&](const store::Purchase& p) { done.push_back(p); });
-    setEnvVar("RTS_MOCK_STORE", "pending");
+    setEnvVar("AIVERSE_MOCK_STORE", "pending");
     store::purchase("gems", [&](const store::Purchase& p) { done.push_back(p); });
     plugins::pump();
-    setEnvVar("RTS_MOCK_STORE", "purchased");
+    setEnvVar("AIVERSE_MOCK_STORE", "purchased");
     CHECK(done.size() == 3);
     CHECK(done[0].state == store::PurchaseState::Purchased && done[0].productId == "noads" && !done[0].token.empty());
     CHECK(done[1].state == store::PurchaseState::Cancelled);
@@ -5479,9 +5479,9 @@ TEST(store_and_ads_through_mock_plugins) {
     int pauses = 0;
     int l = plugins::addListener("*", [&](const std::string& ev, const std::string&) { pauses += ev == "app.pause"; });
     ads::show(ads::Format::Rewarded, [&](const ads::ShowResult& r) { shown.push_back(r); }, "double_reward");
-    setEnvVar("RTS_MOCK_ADS", "noreward");
+    setEnvVar("AIVERSE_MOCK_ADS", "noreward");
     ads::show(ads::Format::Rewarded, [&](const ads::ShowResult& r) { shown.push_back(r); });
-    setEnvVar("RTS_MOCK_ADS", "ok");
+    setEnvVar("AIVERSE_MOCK_ADS", "ok");
     ads::setEnabled(false);
     ads::show(ads::Format::Interstitial, [&](const ads::ShowResult& r) { shown.push_back(r); });
     ads::setEnabled(true);
@@ -5806,8 +5806,8 @@ TEST(fx_unity_importer_output_is_valid) {
         std::printf("    (skipped: python3 not found)\n");
         return;
     }
-    const std::string src = std::string(RTS_SOURCE_DIR);
-    const std::string out = (std::filesystem::temp_directory_path() / "rts_unity_vfx_test").string();
+    const std::string src = std::string(AIVERSE_SOURCE_DIR);
+    const std::string out = (std::filesystem::temp_directory_path() / "aiverse_unity_vfx_test").string();
     std::filesystem::remove_all(out);
     std::filesystem::create_directories(out);
     const std::string cmd = "python3 \"" + src + "/tools/importers/unity_vfx/import.py\" --source \"" + src +
@@ -6137,8 +6137,8 @@ TEST(fx_unity_importer_all_modules_play) {
         std::printf("    (skipped: python3 not found)\n");
         return;
     }
-    const std::string src = std::string(RTS_SOURCE_DIR);
-    const std::string out = (std::filesystem::temp_directory_path() / "rts_unity_vfx_modules").string();
+    const std::string src = std::string(AIVERSE_SOURCE_DIR);
+    const std::string out = (std::filesystem::temp_directory_path() / "aiverse_unity_vfx_modules").string();
     std::filesystem::remove_all(out);
     std::filesystem::create_directories(out);
     const std::string cmd = "python3 \"" + src + "/tools/importers/unity_vfx/import.py\" --source \"" + src +
@@ -6182,7 +6182,7 @@ TEST(fx_unity_importer_all_modules_play) {
 
 // ---------------- Cube-sphere (RtsSphere) ----------------
 TEST(sphere_cells_and_dirs_round_trip) {
-    using namespace rts::game;
+    using namespace aiverse::game;
     for (int N : {1, 4, 7, 16}) {
         CubeSphere s(N);
         int bad = 0;
@@ -6202,7 +6202,7 @@ TEST(sphere_cells_and_dirs_round_trip) {
 }
 
 TEST(sphere_neighbors_symmetric_and_adjacent) {
-    using namespace rts::game;
+    using namespace aiverse::game;
     for (int N : {1, 2, 5, 8}) {
         CubeSphere s(N);
         int asym = 0, far = 0, cornerCells = 0, total = 0;
@@ -6239,7 +6239,7 @@ TEST(sphere_neighbors_symmetric_and_adjacent) {
 }
 
 TEST(sphere_corner_duplicates_and_seams) {
-    using namespace rts::game;
+    using namespace aiverse::game;
     for (int N : {1, 3, 8}) {
         CubeSphere s(N);
         int bad = 0, dup2 = 0, dup3 = 0;
@@ -6271,7 +6271,7 @@ TEST(sphere_corner_duplicates_and_seams) {
 }
 
 TEST(sphere_great_circle_steps) {
-    using namespace rts::game;
+    using namespace aiverse::game;
     CubeSphere s(16);
     const Vec3 a = s.cellCenterDir(s.cellId(0, 3, 4)), b = s.cellCenterDir(s.cellId(5, 12, 9));
     const Fixed arc0 = sphereArcTurns(a, b);
@@ -6408,7 +6408,7 @@ TEST(gen_fair_and_connected) {
                 CHECK(g.getBool("connected"));
                 if (!g.getBool("connected")) {
                     std::printf("  not connected: %s seed %d players %d %s\n", preset, int(seed), np, g["warnings"].dump(-1).c_str());
-                    if (const char* dbg = std::getenv("RTS_GEN_DUMP")) { FILE* f = std::fopen(dbg, "w"); if (f) { std::fputs(m.dump().c_str(), f); std::fclose(f); } }
+                    if (const char* dbg = std::getenv("AIVERSE_GEN_DUMP")) { FILE* f = std::fopen(dbg, "w"); if (f) { std::fputs(m.dump().c_str(), f); std::fclose(f); } }
                 }
                 CHECK(int(m["players"].size()) == np);
                 // symmetric layouts: every start is an image of player 1's start, objects per owner equal
@@ -6503,12 +6503,12 @@ TEST(gen_planet_seams) {
 // ---- planet view (agent-planet-render): float cube-sphere surface of RtsPlanet.h
 #include "modules/rts/view/RtsPlanet.h"
 TEST(planet_view_surface_seams_and_picking) {
-    using namespace rts::render;
-    rts::game::PlanetBody b;
+    using namespace aiverse::render;
+    aiverse::game::PlanetBody b;
     b.radius = 40; b.faceSize = 16;
     const int N = 16, S = (N + 1) * (N + 1);
     b.corners.assign(size_t(6 * S), 0);
-    rts::game::CubeSphere cs(N);
+    aiverse::game::CubeSphere cs(N);
     // heights as a function of the corner direction: duplicates on seams get equal values
     for (int f = 0; f < 6; ++f)
         for (int j = 0; j <= N; ++j)
@@ -6516,7 +6516,7 @@ TEST(planet_view_surface_seams_and_picking) {
                 const Vec3 d = cs.cornerDir(f, i, j);
                 b.corners[size_t(cs.cornerId(f, i, j))] = int16_t((d.x.toDouble() * 3 + d.y.toDouble() * 2) * 16);
             }
-    rts::game::PlanetSurface s;
+    aiverse::game::PlanetSurface s;
     s.init(b);
     bool seamsShared = true;   // every duplicated corner has the same position on all its faces
     for (int f = 0; f < 6; ++f)
@@ -6549,11 +6549,11 @@ TEST(planet_view_surface_seams_and_picking) {
         {"id": "p", "kind": "planet", "radius": 20, "faceSize": 4, "orbit": {"around": "sun", "radius": 100, "period": 10, "phase": 0.25}}],
         "start": "p"}})");
     std::vector<std::string> warn;
-    rts::game::PlanetWorld w = rts::game::loadPlanetWorld(map, &warn);
+    aiverse::game::PlanetWorld w = aiverse::game::loadPlanetWorld(map, &warn);
     CHECK(w.bodies.size() == 2 && w.start == 1 && w.bodies[1].parent == 0 && warn.empty()); // no corners: a smooth sphere
     const float3 c0 = w.center(1, 0), c5 = w.center(1, 5);   // quarter turn, then half a period later
     CHECK(std::fabs(c0.x) < 1e-3f && std::fabs(c0.z - 100) < 1e-3f && std::fabs(c5.z + 100) < 1e-2f);
-    CHECK(rts::game::loadPlanetWorld(Json::parse("{}")).empty());
+    CHECK(aiverse::game::loadPlanetWorld(Json::parse("{}")).empty());
 }
 
 // ---------------- Sound groups and steal modes ----------------
@@ -6805,7 +6805,7 @@ TEST(icons_ico_icns_png_writers) {
 
 TEST(icons_generate_platform_sets) {
     namespace fs = std::filesystem;
-    const fs::path dir = fs::temp_directory_path() / "rts_icons_test";
+    const fs::path dir = fs::temp_directory_path() / "aiverse_icons_test";
     fs::remove_all(dir);
     fs::create_directories(dir / "game");
     branding::Image master = branding::makeImage(512, 384, {0.9f, 0.6f, 0.1f, 0.5f});   // too small, not square, alpha
@@ -6857,10 +6857,10 @@ TEST(icons_generate_platform_sets) {
     branding::generateIOSLaunch(n, (dir / "game").string(), (dir / "ios" / "Assets.xcassets").string(), (dir / "ios").string(), g);
     CHECK(fs::exists(dir / "ios" / "LaunchScreen.storyboard") && fs::exists(dir / "ios" / "Assets.xcassets" / "LaunchImage.imageset" / "launch@3x.png"));
     branding::generateAndroidLaunch(n, (dir / "game").string(), (dir / "res").string(), g);
-    std::ifstream tv31(dir / "res" / "values-v31" / "rts_themes.xml");
+    std::ifstream tv31(dir / "res" / "values-v31" / "aiverse_themes.xml");
     std::string themes((std::istreambuf_iterator<char>(tv31)), {});
-    CHECK(themes.find("windowSplashScreenBackground") != std::string::npos && themes.find("rts_splash_icon") != std::string::npos);
-    CHECK(fs::exists(dir / "res" / "drawable" / "rts_launch.xml") && fs::exists(dir / "res" / "drawable-xxhdpi" / "rts_splash_logo.png"));
+    CHECK(themes.find("windowSplashScreenBackground") != std::string::npos && themes.find("aiverse_splash_icon") != std::string::npos);
+    CHECK(fs::exists(dir / "res" / "drawable" / "aiverse_launch.xml") && fs::exists(dir / "res" / "drawable-xxhdpi" / "aiverse_splash_logo.png"));
     CHECK(branding::splashBaseFiles(game).size() == 1);
     CHECK(g.warnings.empty());
     // previews render (agents look at them through MCP)
@@ -6979,37 +6979,37 @@ TEST(sprite_shadow_caster_faces_camera_unless_sun_grazes) {
 
 
 // ---------------- one-click MCP setup (editor Agent window) ----------------
-#if defined(RTS_TESTS_EDITOR_CORE)
+#if defined(AIVERSE_TESTS_EDITOR_CORE)
 #include "apps/editor/core/McpInstall.h"
 TEST(mcp_install_patches_configs_as_text) {
-    using namespace rts::editor;
-    McpServerSpec sp; sp.command = "/opt/rts/rtsmcp"; sp.args = {"--engine", "/opt/rts"};
+    using namespace aiverse::editor;
+    McpServerSpec sp; sp.command = "/opt/rts/aiversemcp"; sp.args = {"--engine", "/opt/rts"};
     const std::string entry = mcpEntryJson(sp);
     std::string err, t;
-    CHECK(mcpPatchJson(t, "rtsengine", entry, &err));                        // empty file -> fresh config
-    CHECK(Json::parse(t)["mcpServers"]["rtsengine"]["command"].str() == "/opt/rts/rtsmcp");
+    CHECK(mcpPatchJson(t, "aiverse", entry, &err));                        // empty file -> fresh config
+    CHECK(Json::parse(t)["mcpServers"]["aiverse"]["command"].str() == "/opt/rts/aiversemcp");
     // unrelated content stays byte for byte, including numbers our reader would round
     std::string user = "{\n  \"numStartups\": 123456789012345,\n  \"ratio\": 0.123456789,\n  \"theme\": \"dark\"\n}\n";
     t = user;
-    CHECK(mcpPatchJson(t, "rtsengine", entry, &err));
+    CHECK(mcpPatchJson(t, "aiverse", entry, &err));
     CHECK(t.find("123456789012345") != std::string::npos && t.find("0.123456789") != std::string::npos && t.find("\"theme\": \"dark\"") != std::string::npos);
-    CHECK(Json::parse(t)["mcpServers"]["rtsengine"]["args"].size() == 2);
+    CHECK(Json::parse(t)["mcpServers"]["aiverse"]["args"].size() == 2);
     // existing servers: added next to them, replaced in place on update, removed cleanly
     t = R"({"mcpServers": {"other": {"command": "x"}}, "z": 1})";
-    CHECK(mcpPatchJson(t, "rtsengine", entry, &err));
+    CHECK(mcpPatchJson(t, "aiverse", entry, &err));
     Json j = Json::parse(t);
-    CHECK(j["mcpServers"]["other"]["command"].str() == "x" && j["mcpServers"]["rtsengine"]["command"].str() == "/opt/rts/rtsmcp");
-    sp.command = "/new/rtsmcp";
-    CHECK(mcpPatchJson(t, "rtsengine", mcpEntryJson(sp), &err));
-    CHECK(Json::parse(t)["mcpServers"]["rtsengine"]["command"].str() == "/new/rtsmcp" && t.find("/opt/rts/rtsmcp") == std::string::npos);
-    CHECK(mcpPatchJson(t, "rtsengine", "", &err));
+    CHECK(j["mcpServers"]["other"]["command"].str() == "x" && j["mcpServers"]["aiverse"]["command"].str() == "/opt/rts/aiversemcp");
+    sp.command = "/new/aiversemcp";
+    CHECK(mcpPatchJson(t, "aiverse", mcpEntryJson(sp), &err));
+    CHECK(Json::parse(t)["mcpServers"]["aiverse"]["command"].str() == "/new/aiversemcp" && t.find("/opt/rts/aiversemcp") == std::string::npos);
+    CHECK(mcpPatchJson(t, "aiverse", "", &err));
     j = Json::parse(t);
-    CHECK(!j["mcpServers"].has("rtsengine") && j["mcpServers"]["other"]["command"].str() == "x" && j["z"].integer() == 1);
-    t = R"({"mcpServers": {"a": {}, "rtsengine": {"command": "y"}}})";       // last member: the comma before it goes
-    CHECK(mcpPatchJson(t, "rtsengine", "", &err));
-    CHECK(!Json::parse(t)["mcpServers"].has("rtsengine") && Json::parse(t)["mcpServers"].has("a"));
+    CHECK(!j["mcpServers"].has("aiverse") && j["mcpServers"]["other"]["command"].str() == "x" && j["z"].integer() == 1);
+    t = R"({"mcpServers": {"a": {}, "aiverse": {"command": "y"}}})";       // last member: the comma before it goes
+    CHECK(mcpPatchJson(t, "aiverse", "", &err));
+    CHECK(!Json::parse(t)["mcpServers"].has("aiverse") && Json::parse(t)["mcpServers"].has("a"));
     t = "[1, 2]";
-    CHECK(!mcpPatchJson(t, "rtsengine", entry, &err) && !err.empty());   // not an object: refused, untouched
+    CHECK(!mcpPatchJson(t, "aiverse", entry, &err) && !err.empty());   // not an object: refused, untouched
     CHECK(t == "[1, 2]");
 }
 #endif
@@ -7021,7 +7021,7 @@ TEST(mcp_install_patches_configs_as_text) {
 TEST(models_converted_sidecar_loads_for_the_source_path) {
     using namespace modeltest;
     std::string glb;
-    CHECK(diskReader()(std::string(RTS_SOURCE_DIR) + "/templates/showcase/models/sword.glb", glb));
+    CHECK(diskReader()(std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/sword.glb", glb));
     CHECK(isNativeModelFormat("a/b.MDX") && isNativeModelFormat("x.vox") && !isNativeModelFormat("ship.lwo") && !isNativeModelFormat("noext"));
     auto m = loadModel("units/ship.lwo", mapReader({{"units/ship.lwo", "LWO source"}, {"units/ship.lwo.glb", glb}}), nullptr);
     CHECK(m && m->path == "units/ship.lwo" && !m->meshes.empty());
@@ -7031,13 +7031,13 @@ TEST(models_converted_sidecar_loads_for_the_source_path) {
     CHECK(threw);
 }
 
-#if defined(RTS_TEST_MODELCONV)
+#if defined(AIVERSE_TEST_MODELCONV)
 #include "tools/models/ModelConvert.h"
 TEST(models_pack_step_ships_sidecars_not_sources) {
-    using namespace rts::models;
+    using namespace aiverse::models;
     CHECK(needsConversion("m/a.blend") && needsConversion("m/A.LWO") && !needsConversion("m/a.glb") && !needsConversion("m/a.mdx") &&
           !needsConversion("m/a.png") && sidecarPath("m/a.x") == "m/a.x.glb");
-    rts::pack::PackWriter w;
+    aiverse::pack::PackWriter w;
     CHECK(w.addData("models/ship.lwo", "source"));
     CHECK(w.addData("models/ship.lwo.glb", "converted"));
     CHECK(w.addData("models/broken.x", "not a model at all"));
@@ -7056,7 +7056,7 @@ TEST(models_pack_step_ships_sidecars_not_sources) {
 #include <array>
 // ---------------- models: voxels (.vox MagicaVoxel, .vxl/.hva Westwood) ----------------
 namespace voxtest {
-using namespace rts::render;
+using namespace aiverse::render;
 using Kv = std::vector<std::pair<std::string, std::string>>;
 inline void i32(std::string& b, int32_t v) { b.append(reinterpret_cast<const char*>(&v), 4); }
 inline void f32(std::string& b, float v) { b.append(reinterpret_cast<const char*>(&v), 4); }
@@ -7220,7 +7220,7 @@ TEST(models_vox_greedy_scene_team) {
     CHECK(warn.empty());
     // the generated showcase sample loads with its scene graph
     std::vector<std::string> w2;
-    auto tank = loadModel(std::string(RTS_SOURCE_DIR) + "/templates/showcase/models/voxel_tank.vox", modeltest::diskReader(), &w2);
+    auto tank = loadModel(std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/voxel_tank.vox", modeltest::diskReader(), &w2);
     const int turret = tank->findNode("Turret"), barrel = tank->findNode("Barrel");
     CHECK(turret >= 0 && barrel >= 0 && tank->findNode("Hull") >= 0 && w2.empty());
     if (barrel >= 0) CHECK(tank->nodes[size_t(barrel)].parent == turret);
@@ -7302,7 +7302,7 @@ TEST(models_voxel_broken_files) {
 
 // ---------------- models (MDX agent): Warcraft III .mdx / .mdl, BLP textures ----------------
 namespace mdxtest {
-using namespace rts::render;
+using namespace aiverse::render;
 using modeltest::put;
 inline std::string cstr(const std::string& s, size_t n) { std::string r = s; r.resize(n, '\0'); return r; }
 inline std::string u32s(std::initializer_list<uint32_t> v) { std::string b; put<uint32_t>(b, v); return b; }
@@ -7644,7 +7644,7 @@ TEST(models_blp_decode) {
 
 
 TEST(models_find_clip_numbered_variants) {
-    using namespace rts::render;
+    using namespace aiverse::render;
     Model m;
     for (const char* n : {"Stand Ready", "Attack - 1", "Attack - 2", "Walk", "Spell_01"}) { AnimClip c; c.name = n; m.clips.push_back(c); }
     CHECK(m.findClip("Attack") == 1 && m.findClip("attack - 2") == 2 && m.findClip("walk") == 3 && m.findClip("Spell") == 4);
@@ -7654,7 +7654,7 @@ TEST(models_find_clip_numbered_variants) {
 // ---- interchange formats: Collada, 3DS, PLY, STL (models agent, interchange loaders)
 
 namespace interchangetest {
-using namespace rts::render;
+using namespace aiverse::render;
 using modeltest::near;
 using modeltest::mapReader;
 // 2x2 uncompressed 32-bit TGA (stb_image reads it): red, green, blue, white
@@ -8056,7 +8056,7 @@ TEST(models_interchange_fuzz_never_crashes) {
 // ---- classic formats: Total Annihilation .3do / .gaf, C&C Generals .w3d, DDS (synthetic data) ----
 
 namespace classictest {
-using namespace rts::render;
+using namespace aiverse::render;
 using modeltest::near;
 template <class T> void put(std::string& b, T v) { b.append(reinterpret_cast<const char*>(&v), sizeof v); }
 template <class T> void putAt(std::string& b, size_t at, T v) { std::memcpy(&b[at], &v, sizeof v); }
@@ -8537,15 +8537,15 @@ TEST(models_dds_formats) {
 
 
 // ---------------- one-click MCP setup (editor Agent window) ----------------
-#if defined(RTS_TESTS_EDITOR_CORE)
+#if defined(AIVERSE_TESTS_EDITOR_CORE)
 #include "apps/editor/core/McpInstall.h"
 #endif
 
 // ---------------- Planets: surface, world block, orbit layer, transit ----------------
-static const std::string kPlanets = std::string(RTS_SOURCE_DIR) + "/templates/planets";
+static const std::string kPlanets = std::string(AIVERSE_SOURCE_DIR) + "/templates/planets";
 
 TEST(planet_surface_offsets_and_hash_buckets) {
-    using namespace rts::game;
+    using namespace aiverse::game;
     CubeSphere s(12);
     // offsets inside a face are exact; across seams they agree with neighbour steps
     int bad = 0;
@@ -8694,7 +8694,7 @@ TEST(planet_matches_deterministic_and_replay) {
     CHECK(run(3, nullptr, &cmds) == c1);   // replaying the recorded commands gives the same state
 }
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/MapDoc.h"
 TEST(planet_mapdoc_round_trip_and_validate) {
     editor::MapDoc doc;
@@ -8996,7 +8996,7 @@ TEST(sprite_shadow_lighting_sun_dir_and_softness) {
 // ---------------------------------------------------------------------------------------------
 #include "engine/render/TextureGen.h"
 TEST(materials_texture_patterns_tile_and_repeat) {
-    using namespace rts::render;
+    using namespace aiverse::render;
     for (const auto& pat : texturePatterns()) {
         Json spec = Json::object();
         spec.set("pattern", Json::string(pat));
@@ -9032,16 +9032,16 @@ TEST(materials_texture_patterns_tile_and_repeat) {
     CHECK(threw);
 }
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/Workspace.h"
 TEST(materials_library_ops_round_trip) {
     namespace fs = std::filesystem;
-    const fs::path root = fs::temp_directory_path() / ("rts_mat_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const fs::path root = fs::temp_directory_path() / ("aiverse_mat_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::remove_all(root);
     fs::create_directories(root / "games");
-    fs::copy(fs::path(RTS_SOURCE_DIR) / "templates" / "showcase", root / "games" / "showcase", fs::copy_options::recursive);
+    fs::copy(fs::path(AIVERSE_SOURCE_DIR) / "templates" / "showcase", root / "games" / "showcase", fs::copy_options::recursive);
     editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
     CHECK(ws.openGame((root / "games" / "showcase").string(), &err));
     auto ok = [](const Json& r) { if (r.has("error")) std::printf("  (op error) %s\n", r.getStr("error").c_str()); return !r.has("error"); };
@@ -9530,9 +9530,9 @@ TEST(crowd_blocked_goal_nearest) {
 
 TEST(pack_file_copy_into_existing) {
     // fs::copy / copy_file(overwrite_existing) fail on MinGW when the destination exists;
-    // rtsbuild re-stages into the same folders, the editor copies a template over dst/maps.
+    // aiversebuild re-stages into the same folders, the editor copies a template over dst/maps.
     namespace fs = std::filesystem;
-    fs::path dir = fs::temp_directory_path() / "rts_filecopy_test";
+    fs::path dir = fs::temp_directory_path() / "aiverse_filecopy_test";
     std::error_code ec;
     fs::remove_all(dir, ec);
     fs::create_directories(dir / "src" / "maps" / "sub");
@@ -9540,15 +9540,15 @@ TEST(pack_file_copy_into_existing) {
     std::ofstream(dir / "src" / "maps" / "sub" / "b.txt") << "b";
     fs::create_directories(dir / "dst" / "maps");
     std::ofstream(dir / "dst" / "a.txt") << "old-and-longer";
-    CHECK(rts::pack::copyTree(dir / "src", dir / "dst", ec));
-    CHECK(rts::pack::copyTree(dir / "src", dir / "dst", ec));   // twice: every file exists now
+    CHECK(aiverse::pack::copyTree(dir / "src", dir / "dst", ec));
+    CHECK(aiverse::pack::copyTree(dir / "src", dir / "dst", ec));   // twice: every file exists now
     std::ifstream a(dir / "dst" / "a.txt");
     std::string av((std::istreambuf_iterator<char>(a)), {});
     a.close();
     CHECK(av == "new" && fs::exists(dir / "dst" / "maps" / "sub" / "b.txt"));
-    CHECK(rts::pack::copyFileReplace(dir / "src" / "a.txt", dir / "dst" / "maps" / "a2.txt", ec));
-    CHECK(rts::pack::copyFileReplace(dir / "src" / "a.txt", dir / "dst" / "maps" / "a2.txt", ec));
-    CHECK(!rts::pack::copyFileReplace(dir / "src" / "a.txt", dir / "src" / "." / "a.txt", ec));   // never onto itself
+    CHECK(aiverse::pack::copyFileReplace(dir / "src" / "a.txt", dir / "dst" / "maps" / "a2.txt", ec));
+    CHECK(aiverse::pack::copyFileReplace(dir / "src" / "a.txt", dir / "dst" / "maps" / "a2.txt", ec));
+    CHECK(!aiverse::pack::copyFileReplace(dir / "src" / "a.txt", dir / "src" / "." / "a.txt", ec));   // never onto itself
     CHECK(fs::file_size(dir / "src" / "a.txt", ec) == 3);
     fs::remove_all(dir, ec);
 }
@@ -9561,7 +9561,7 @@ TEST(pack_file_copy_into_existing) {
 // ---- post-processing data (postfx agent): parsing, map overrides, cost model, presets
 #include "engine/render/PostFxData.h"
 TEST(postfx_parse_merge_and_cost) {
-    using namespace rts::render;
+    using namespace aiverse::render;
     Json game = Json::parse(R"({"effects": [{"type": "bloom", "intensity": 1.5}, {"type": "vignette"}, {"type": "colorGrade", "saturation": 9}]})");
     Json map = Json::parse(R"({"effects": [{"type": "bloom", "threshold": 0.5}, {"type": "vignette", "enabled": false}, {"type": "grain"}]})");
     std::vector<std::string> issues;
@@ -9609,12 +9609,12 @@ TEST(postfx_parse_merge_and_cost) {
     }
 }
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/PostFxOps.h"
 TEST(postfx_neutral_lut_png) {
-    const std::vector<uint8_t> px = rts::editor::neutralLut(16);
+    const std::vector<uint8_t> px = aiverse::editor::neutralLut(16);
     CHECK(px.size() == 256u * 16u * 4u);
-    const std::string png = rts::editor::encodePngRgba(256, 16, px);
+    const std::string png = aiverse::editor::encodePngRgba(256, 16, px);
     CHECK(png.compare(0, 8, "\x89PNG\r\n\x1a\n") == 0 && png.find("IHDR") == 12 && png.find("IEND") != std::string::npos);
     // IDAT = zlib header + stored blocks: unpack and compare with the filter-0 rows
     const size_t at = png.find("IDAT");
@@ -9633,12 +9633,12 @@ TEST(postfx_neutral_lut_png) {
 }
 #endif
 
-// ---- toolchains agent: what each build target needs (tools/rtsbuild/Toolchains.h), fake HOME
-#include "tools/rtsbuild/Toolchains.h"
+// ---- toolchains agent: what each build target needs (tools/aiversebuild/Toolchains.h), fake HOME
+#include "tools/aiversebuild/Toolchains.h"
 TEST(toolchain_detection_fake_home) {
     namespace fs = std::filesystem;
-    using namespace rts::build;
-    fs::path home = fs::temp_directory_path() / "rts_toolchain_test";
+    using namespace aiverse::build;
+    fs::path home = fs::temp_directory_path() / "aiverse_toolchain_test";
     std::error_code ec;
     fs::remove_all(home, ec);
     fs::create_directories(home / "bin");
@@ -9652,7 +9652,7 @@ TEST(toolchain_detection_fake_home) {
 
     ToolchainStatus st = checkToolchain("web", env);
     CHECK(!st.ok());
-    CHECK(machineLine(st) == "RTS_MISSING_TOOLCHAIN web: cmake,python3,emsdk");   // ninja is optional
+    CHECK(machineLine(st) == "AIVERSE_MISSING_TOOLCHAIN web: cmake,python3,emsdk");   // ninja is optional
     CHECK(st.find("emsdk") && st.find("emsdk")->autoInstall && !st.find("emsdk")->size.empty());
     CHECK(st.toJson()["missing"].size() == 3);
 
@@ -9662,8 +9662,8 @@ TEST(toolchain_detection_fake_home) {
     st = checkToolchain("web", env);
     CHECK(!st.find("emsdk")->found && st.find("emsdk")->detail.find("emsdk install") != std::string::npos);
 
-    // what our installers leave in ~/.rtsengine/toolchains
-    const fs::path tcd = home / ".rtsengine" / "toolchains";
+    // what our installers leave in ~/.aiverse/toolchains
+    const fs::path tcd = home / ".aiverse" / "toolchains";
     CHECK(toolchainsDir(env) == tcd);
     touch(tcd / "py" / "bin" / "cmake");
     touch(tcd / "py" / "bin" / "ninja");
@@ -9678,7 +9678,7 @@ TEST(toolchain_detection_fake_home) {
     CHECK(st.find("cmake")->path == (tcd / "py" / "bin" / "cmake").string());
     CHECK(st.env["EMSDK"] == (tcd / "emsdk").string() && st.env.count("EM_CONFIG"));
     CHECK(std::find(st.binDirs.begin(), st.binDirs.end(), tcd / "emsdk" / "node" / "20.18.0_64bit" / "bin") != st.binDirs.end());
-    CHECK(machineLine(st) == "RTS_MISSING_TOOLCHAIN web:");
+    CHECK(machineLine(st) == "AIVERSE_MISSING_TOOLCHAIN web:");
     // an emsdk too old for the engine is not used
     touch(tcd / "emsdk" / "upstream" / "emscripten" / "emscripten-version.txt", "\"3.1.6\"\n");
     st = checkToolchain("web", env);
@@ -9686,11 +9686,11 @@ TEST(toolchain_detection_fake_home) {
     touch(tcd / "emsdk" / "upstream" / "emscripten" / "emscripten-version.txt", "\"4.0.12\"\n");
     CHECK(checkToolchain("web", env).ok());
 
-    // RTS_TOOLCHAINS_DIR moves our folder
-    env.vars["RTS_TOOLCHAINS_DIR"] = (home / "elsewhere").string();
+    // AIVERSE_TOOLCHAINS_DIR moves our folder
+    env.vars["AIVERSE_TOOLCHAINS_DIR"] = (home / "elsewhere").string();
     CHECK(toolchainsDir(env) == home / "elsewhere");
     CHECK(checkToolchain("web", env).find("cmake")->found == false);
-    env.vars.erase("RTS_TOOLCHAINS_DIR");
+    env.vars.erase("AIVERSE_TOOLCHAINS_DIR");
 
     // Android: a too new JAVA_HOME is skipped for our JDK 17; newest NDK wins
     CHECK(javaMajorFromRelease("JAVA_VERSION=\"17.0.12\"") == 17 && javaMajorFromRelease("JAVA_VERSION=\"1.8.0_392\"") == 8);
@@ -9711,7 +9711,7 @@ TEST(toolchain_detection_fake_home) {
     CHECK(st.find("jdk")->found && st.find("jdk")->version == "17" && st.env["JAVA_HOME"] == (tcd / "jdk-17" / "Contents" / "Home").string());
     CHECK(st.find("android-sdk")->found && st.env["ANDROID_HOME"] == sdk.string());
     CHECK(st.find("android-ndk")->version == "27.0.12077973");
-    CHECK(machineLine(st) == "RTS_MISSING_TOOLCHAIN android: android-cmake,gradle");
+    CHECK(machineLine(st) == "AIVERSE_MISSING_TOOLCHAIN android: android-cmake,gradle");
     fs::create_directories(sdk / "cmake" / "3.22.1");
     touch(tcd / "gradle-8.10.2" / "bin" / "gradle");
     st = checkToolchain("android", env);
@@ -9976,7 +9976,7 @@ TEST(script_data_hooks) {
 }
 
 static std::unique_ptr<Simulation> scriptedGame(uint64_t seed) {
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/scripted";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/scripted";
     Json rules = Json::parseFile(dir + "/rules.json");
     Json map = Json::parseFile(dir + "/maps/valley.json");
     std::string err;
@@ -10132,7 +10132,7 @@ TEST(terrain_detail_codec_roundtrip) {
 // Lua lab (docs/lua-coverage.md): prototypes of mechanics the C++ core doesn't have, written with the
 // public Lua API only (fire spread, attrition, unit programs, rewind, bounty flags).
 static std::unique_ptr<Simulation> luaLabGame(uint64_t seed) {
-    const std::string dir = std::string(RTS_SOURCE_DIR) + "/templates/lua_lab";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/lua_lab";
     Json rules = Json::parseFile(dir + "/rules.json");
     Json map = Json::parseFile(dir + "/maps/valley.json");
     std::string err;
@@ -10319,7 +10319,7 @@ TEST(ui_lua_meta_and_templates) {
         std::stringstream ss; ss << f.rdbuf(); out = ss.str();
         return true;
     };
-    const std::string root = RTS_SOURCE_DIR;
+    const std::string root = AIVERSE_SOURCE_DIR;
     lua_State* L = luaL_newstate();
     std::string code, err;
     CHECK(readFile(root + "/engine/assets/ui/lib/meta.lua", code));
@@ -10576,10 +10576,10 @@ TEST(script_hud_card_layout_and_cooldown) {
     CHECK(panels[0].items[0].progress==1.f);CHECK(panels[0].items[0].status=="Ready");
 }
 
-#if defined(RTS_TESTS_EDITOR_CORE)
+#if defined(AIVERSE_TESTS_EDITOR_CORE)
 #include "apps/editor/core/Net.h"
 TEST(editor_mcp_ports_are_unique_and_route_to_the_right_listener) {
-    using namespace rts::editor::net;
+    using namespace aiverse::editor::net;
     LineServer first, second, third, exact;
     CHECK(first.listen(0));
     if (!first.listening()) return;
@@ -10653,7 +10653,7 @@ end)
 
 #include "apps/editor/core/BuildFixes.h"
 TEST(atlas_build_resize_fixes_preserve_rules_and_fit) {
-    using namespace rts::atlas;
+    using namespace aiverse::atlas;
     std::vector<SourceImage> images = {
         atlasSrc("ui/big.png", atlasTestImage(80, 80, 0, 0, 80, 80, 1)),
         atlasSrc("ui/other.png", atlasTestImage(80, 80, 0, 0, 80, 80, 2)),
@@ -10685,7 +10685,7 @@ TEST(atlas_build_resize_fixes_preserve_rules_and_fit) {
     CHECK(after.stats.excluded.size() == 1);
 }
 
-#include "tools/rtsbuild/UiSpriteSheets.h"
+#include "tools/aiversebuild/UiSpriteSheets.h"
 TEST(ui_spritesheet_build_protection) {
     const auto paths = build::uiSpriteSheetImages(R"css(
         /* @spritesheet ignored { src: bad.png; } */
@@ -11340,7 +11340,7 @@ TEST(region_preview_virtual_reserve_and_physical_ranking) {
     CHECK(swipe.count()==0); // An unreachable pooled source cannot issue a physical-only substitute order.
 }
 
-TEST(rts_scripted_ai_controller) {
+TEST(aiverse_scripted_ai_controller) {
     auto rules = Json::parseFile(kSkirmish + "/rules.json");
     CHECK(!game::loadRules(rules).scriptedAI);
     rules.set("ai", Json::parse(R"({"controller":"builtin"})"));
@@ -12309,40 +12309,40 @@ view.on_frame(function() last = view.entity_fx(a) end)
 }
 
 #include "engine/platform/Platform.h"
-// rts_tests builds the 3D renderer without a platform layer (CMakeLists: view.entity_fx draw tests): no touch, no content files
-namespace rts::platform {
+// aiverse_tests builds the 3D renderer without a platform layer (CMakeLists: view.entity_fx draw tests): no touch, no content files
+namespace aiverse::platform {
 bool isTouchDevice() { return false; }
 bool readContentFile(const std::string&, std::string&) { return false; }
-} // namespace rts::platform
+} // namespace aiverse::platform
 namespace entityfxtest {
 // Records what the renderer submits: per draw the pipeline's blend / depth write and the per-instance block.
-class RecordingDevice final : public rts::gfx::Device {
+class RecordingDevice final : public aiverse::gfx::Device {
 public:
     struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; bool colorWrite = true; };
     std::vector<Draw> draws;
-    std::vector<rts::gfx::PipelineDesc> pipes;
-    const rts::gfx::DeviceInfo& info() const override { return info_; }
-    rts::gfx::BufferHandle createBuffer(const rts::gfx::BufferDesc&) override { return {++next_}; }
-    void updateBuffer(rts::gfx::BufferHandle, const void*, size_t, size_t) override {}
-    void destroyBuffer(rts::gfx::BufferHandle) override {}
-    rts::gfx::TextureHandle createTexture(const rts::gfx::TextureDesc&) override { return {++next_}; }
-    void updateTexture(rts::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
-    void destroyTexture(rts::gfx::TextureHandle) override {}
-    rts::gfx::ShaderHandle createShader(const rts::gfx::ShaderDesc&) override { return {++next_}; }
-    void destroyShader(rts::gfx::ShaderHandle) override {}
-    rts::gfx::PipelineHandle createPipeline(const rts::gfx::PipelineDesc& d) override { pipes.push_back(d); return {uint32_t(pipes.size())}; }
-    void destroyPipeline(rts::gfx::PipelineHandle) override {}
+    std::vector<aiverse::gfx::PipelineDesc> pipes;
+    const aiverse::gfx::DeviceInfo& info() const override { return info_; }
+    aiverse::gfx::BufferHandle createBuffer(const aiverse::gfx::BufferDesc&) override { return {++next_}; }
+    void updateBuffer(aiverse::gfx::BufferHandle, const void*, size_t, size_t) override {}
+    void destroyBuffer(aiverse::gfx::BufferHandle) override {}
+    aiverse::gfx::TextureHandle createTexture(const aiverse::gfx::TextureDesc&) override { return {++next_}; }
+    void updateTexture(aiverse::gfx::TextureHandle, int, int, int, int, const void*, int) override {}
+    void destroyTexture(aiverse::gfx::TextureHandle) override {}
+    aiverse::gfx::ShaderHandle createShader(const aiverse::gfx::ShaderDesc&) override { return {++next_}; }
+    void destroyShader(aiverse::gfx::ShaderHandle) override {}
+    aiverse::gfx::PipelineHandle createPipeline(const aiverse::gfx::PipelineDesc& d) override { pipes.push_back(d); return {uint32_t(pipes.size())}; }
+    void destroyPipeline(aiverse::gfx::PipelineHandle) override {}
     const std::string& lastError() const override { return err_; }
     void beginFrame(int, int) override {}
     void endFrame() override {}
-    void beginPass(const rts::gfx::PassDesc&) override {}
+    void beginPass(const aiverse::gfx::PassDesc&) override {}
     void endPass() override {}
-    void setViewport(const rts::gfx::Rect&) override {}
-    void setScissor(const rts::gfx::Rect&) override {}
-    void setPipeline(rts::gfx::PipelineHandle p) override { pipe_ = p.id; }
-    void setVertexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setIndexBuffer(rts::gfx::BufferHandle, size_t) override {}
-    void setTexture(int, rts::gfx::TextureHandle) override {}
+    void setViewport(const aiverse::gfx::Rect&) override {}
+    void setScissor(const aiverse::gfx::Rect&) override {}
+    void setPipeline(aiverse::gfx::PipelineHandle p) override { pipe_ = p.id; }
+    void setVertexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setIndexBuffer(aiverse::gfx::BufferHandle, size_t) override {}
+    void setTexture(int, aiverse::gfx::TextureHandle) override {}
     void setUniforms(int slot, const void* d, size_t n) override {
         if (slot == 0) { const float* f = static_cast<const float*>(d); u0_.assign(f, f + n / sizeof(float)); }
     }
@@ -12352,10 +12352,10 @@ public:
         const auto& p = pipes[pipe_ - 1];
         const std::string label = p.label ? p.label : "";
         if (p.depthOnly || (label != "model" && label != "model depth")) return;   // model passes on the scene target only
-        draws.push_back({p.blend != rts::gfx::BlendMode::Opaque, p.depthWrite, u0_, instances, p.colorWrite});
+        draws.push_back({p.blend != aiverse::gfx::BlendMode::Opaque, p.depthWrite, u0_, instances, p.colorWrite});
     }
 private:
-    rts::gfx::DeviceInfo info_;
+    aiverse::gfx::DeviceInfo info_;
     std::string err_;
     uint32_t next_ = 0, pipe_ = 0;
     std::vector<float> u0_;
@@ -12384,7 +12384,7 @@ TEST(view_entity_fx_renders_scaled_translucent) {
         dev.draws.clear();
         r3d.beginScene(cam, 640, 480);
         view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
-        r3d.render(rts::gfx::PassDesc{});
+        r3d.render(aiverse::gfx::PassDesc{});
         std::vector<RecordingDevice::Draw> out = dev.draws;
         return out;
     };
@@ -12459,7 +12459,7 @@ TEST(view_transparent_model_option) {
         render::RTSCamera cam; cam.target = unit.pos; cam.distance = 12; cam.pitch = 1.0f; cam.ortho = true;
         r3d.beginScene(cam, 640, 480);
         view.draw(r3d, scene, 0, nullptr, mod(sim).state(sim).grid);
-        r3d.render(rts::gfx::PassDesc{});
+        r3d.render(aiverse::gfx::PassDesc{});
         std::vector<RecordingDevice::Draw> out = dev.draws;
         view.shutdown(dev); r3d.shutdown();
         return out;
@@ -12507,7 +12507,7 @@ TEST(view_entity_fx_ground_shadow) {
     auto quad = [&](double t) {
         r3d.beginScene(cam, 640, 480);
         view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
-        r3d.render(rts::gfx::PassDesc{});
+        r3d.render(aiverse::gfx::PassDesc{});
         const auto& b = view.groundShadows();
         return b.empty() || b[0].verts.size() != 6 ? std::vector<game::ViewGroundVertex>{} : b[0].verts;
     };
@@ -12581,7 +12581,7 @@ assert(not pcall(view.paint_layer, {bounds = {0, 0, 4, 2}, cells = {width = 4, h
 
 TEST(view_script_log_callback) {
     // ViewScripts::onLog sees every new log line (game.log and errors) as it is written: hosts print view logs
-    // with it (client: RTS_SCRIPT_LOG), the stored log() is unchanged
+    // with it (client: AIVERSE_SCRIPT_LOG), the stored log() is unchanged
     Json rules = Json::parseFile(kSkirmish + "/rules.json");
     rules.set("viewScripts", Json::parse(R"(["scripts/view/logger.lua"])"));
     Json sources = Json::object(); sources.set("scripts/view/logger.lua", Json::string(R"LUA(
@@ -12600,30 +12600,30 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
     }
 }
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 TEST(project_import_mcp_bridge) {
-    rts::editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    aiverse::editor::Workspace ws;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     Json p = Json::object();
-    p.set("path", Json::string(std::string(RTS_SOURCE_DIR) + "/tests/data/port/unity"));
+    p.set("path", Json::string(std::string(AIVERSE_SOURCE_DIR) + "/tests/data/port/unity"));
     Json scan = ws.call("port_scan", p);
     CHECK(scan.getBool("ok"));
     CHECK(scan.getStr("engine") == "unity");
     CHECK(scan["scenes"].size() == 1);
-    p.set("path", Json::string(std::string(RTS_SOURCE_DIR) + "/tests/data/port/missing"));
+    p.set("path", Json::string(std::string(AIVERSE_SOURCE_DIR) + "/tests/data/port/missing"));
     Json missing = ws.call("port_scan", p);
     CHECK(!missing.getBool("ok", true));
     CHECK(missing.has("error"));
 }
 #endif
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/NativeBuild.h"
 // Per-project editor build with the project's C++ modules (NativeBuild.h): missing modules, the cmake
 // line / build dir, the build dir never in the engine repo, up-to-date check, the switch decision.
 TEST(native_editor_build_helpers) {
     namespace fs = std::filesystem;
-    using namespace rts::editor;
+    using namespace aiverse::editor;
     // missing modules against what the binary has
     Json rules = Json::parse(R"({"nativeModules": [{"id": "income", "config": {}}, {"id": "openwar"}, {"id": "income"}]})");
     CHECK((requiredNativeModules(rules) == std::vector<std::string>{"income", "openwar"}));
@@ -12638,27 +12638,27 @@ TEST(native_editor_build_helpers) {
     CHECK(p.buildDir == "/games/My Game/Builds/.temp/editor-linux");
     CHECK(nativeBuildDir("/games/x", "macos") == "/games/x/Builds/.temp/editor-macos");
     auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
-    CHECK(has(p.configureArgs, "-DRTS_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
-    CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DRTS_NATIVE_DIR="));
-    CHECK(has(p.buildArgs, "rts_editor") && has(p.buildArgs, "rts_headless") && has(p.buildArgs, "3"));
-    CHECK(p.editorBinary == "/games/My Game/Builds/.temp/editor-linux/rts_editor" && p.launchTarget == p.editorBinary);
+    CHECK(has(p.configureArgs, "-DAIVERSE_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
+    CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DAIVERSE_NATIVE_DIR="));
+    CHECK(has(p.buildArgs, "aiverse_editor") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
+    CHECK(p.editorBinary == "/games/My Game/Builds/.temp/editor-linux/aiverse_editor" && p.launchTarget == p.editorBinary);
     const std::string cmd = nativeBuildCommand(p);
     CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '/games/My Game/Builds/.temp/editor-linux'", 0) == 0);
     CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
     CHECK(!has(planNativeBuild("/eng", "/g", "linux", "cmake", "/usr/bin/ninja", true, 0).configureArgs, "-G"));   // keeps the cached generator
     NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
-    CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/RTSEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor");
+    CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/AiverseEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor");
     CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
-    CHECK(has(mac.configureArgs, "-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project") && !has(p.configureArgs, "-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project"));
-    CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/rts_editor.exe").string());
-    CHECK(nativeRestartCommand("macos", "/g/B/RTSEditor.app", "/g/G.rtsproj", "/eng/build") ==
-          "open -n '/g/B/RTSEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
-    CHECK(nativeRestartCommand("linux", "/g/rts_editor", "/g", "").find("RTS_NATIVE_EDITOR=1 '/g/rts_editor' '/g' --native-editor") != std::string::npos);
-    CHECK(isProjectBuildExe("/g/Builds/.temp/editor-linux/rts_editor") && isProjectBuildExe("/g/Builds/editor-linux/rts_editor") && isProjectBuildExe("/g/Builds/.temp/editor-macos/RTSEditor.app/Contents/MacOS/RTSEditor"));
-    CHECK(!isProjectBuildExe("/eng/build/lin/rts_editor") && !isProjectBuildExe("/Applications/RTSEditor.app/Contents/MacOS/RTSEditor"));
+    CHECK(has(mac.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project") && !has(p.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project"));
+    CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/aiverse_editor.exe").string());
+    CHECK(nativeRestartCommand("macos", "/g/B/AiverseEditor.app", "/g/G.rtsproj", "/eng/build") ==
+          "open -n '/g/B/AiverseEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
+    CHECK(nativeRestartCommand("linux", "/g/aiverse_editor", "/g", "").find("AIVERSE_NATIVE_EDITOR=1 '/g/aiverse_editor' '/g' --native-editor") != std::string::npos);
+    CHECK(isProjectBuildExe("/g/Builds/.temp/editor-linux/aiverse_editor") && isProjectBuildExe("/g/Builds/editor-linux/aiverse_editor") && isProjectBuildExe("/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
+    CHECK(!isProjectBuildExe("/eng/build/lin/aiverse_editor") && !isProjectBuildExe("/Applications/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
 
     // the build dir never lands in the engine repository
-    const std::string eng = RTS_SOURCE_DIR;
+    const std::string eng = AIVERSE_SOURCE_DIR;
     CHECK(nativeBuildDirProblem(eng, "/somewhere/else/Builds/editor-linux").empty());
     CHECK(nativeBuildDirProblem(eng, nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
     CHECK(nativeBuildDirProblem(eng, nativeBuildDir(eng + "/games/sub/proj", "linux")).empty());
@@ -12673,7 +12673,7 @@ TEST(native_editor_build_helpers) {
     }
 
     // up to date: newer than native/ sources and the engine binary; registry lists the modules
-    const fs::path root = fs::temp_directory_path() / "rts_native_editor_test";
+    const fs::path root = fs::temp_directory_path() / "aiverse_native_editor_test";
     fs::remove_all(root);
     fs::create_directories(root / "proj" / "native");
     fs::create_directories(root / "proj" / "Builds" / ".temp" / "editor-linux" / "gen");
@@ -12681,7 +12681,7 @@ TEST(native_editor_build_helpers) {
         std::ofstream(f) << "x";
         fs::last_write_time(f, fs::file_time_type::clock::now() - std::chrono::seconds(ageSec));
     };
-    const fs::path bin = root / "proj" / "Builds" / ".temp" / "editor-linux" / "rts_editor", engine = root / "engine_exe";
+    const fs::path bin = root / "proj" / "Builds" / ".temp" / "editor-linux" / "aiverse_editor", engine = root / "engine_exe";
     const std::string proj = (root / "proj").string(), bd = nativeBuildDir(proj, "linux");
     std::string why;
     CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && !why.empty());   // no build
@@ -12712,7 +12712,7 @@ TEST(native_editor_build_helpers) {
 // ---- linear UI blending (ui-linear): sRGB curves, linear premultiplication of images, game.json key
 #include "engine/ui/UiColor.h"
 TEST(ui_linear_blend_colour_space) {
-    using namespace rts::ui;
+    using namespace aiverse::ui;
     CHECK(srgbToLinear(0.0f) == 0.0f && std::fabs(srgbToLinear(1.0f) - 1.0f) < 1e-6f);
     CHECK(std::fabs(srgbToLinear(0.5f) - 0.214041f) < 1e-5f);
     bool roundTrip = true;   // every 8-bit code survives decode + encode (the composite relies on it)
@@ -12735,23 +12735,23 @@ TEST(ui_linear_blend_colour_space) {
         }
     CHECK(exact);
     std::string err;
-    CHECK(parseUiBlend(rts::Json::parse("{}"), &err) == UiBlend::Srgb && err.empty());
-    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "linear"}})"), &err) == UiBlend::Linear && err.empty());
-    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "srgb"}})"), &err) == UiBlend::Srgb && err.empty());
-    CHECK(parseUiBlend(rts::Json::parse(R"({"ui": {"blend": "gamma2"}})"), &err) == UiBlend::Srgb && err.find("gamma2") != std::string::npos);
+    CHECK(parseUiBlend(aiverse::Json::parse("{}"), &err) == UiBlend::Srgb && err.empty());
+    CHECK(parseUiBlend(aiverse::Json::parse(R"({"ui": {"blend": "linear"}})"), &err) == UiBlend::Linear && err.empty());
+    CHECK(parseUiBlend(aiverse::Json::parse(R"({"ui": {"blend": "srgb"}})"), &err) == UiBlend::Srgb && err.empty());
+    CHECK(parseUiBlend(aiverse::Json::parse(R"({"ui": {"blend": "gamma2"}})"), &err) == UiBlend::Srgb && err.find("gamma2") != std::string::npos);
 }
 
 // ---------------- Editor world tree (apps/editor/core/WorldInspect, docs/editor-world-tree.md) ----------------
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/SimTools.h"
 #include "apps/editor/core/WorldInspect.h"
 namespace {
 std::filesystem::path worldTreeCopy(const char* tmpl) {
     namespace fs = std::filesystem;
-    const fs::path root = fs::temp_directory_path() / ("rts_world_tree_" + std::string(tmpl) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const fs::path root = fs::temp_directory_path() / ("aiverse_world_tree_" + std::string(tmpl) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::remove_all(root);
     fs::create_directories(root);
-    fs::copy(fs::path(RTS_SOURCE_DIR) / "templates" / tmpl, root / tmpl, fs::copy_options::recursive);
+    fs::copy(fs::path(AIVERSE_SOURCE_DIR) / "templates" / tmpl, root / tmpl, fs::copy_options::recursive);
     return root;
 }
 bool worldTreePreview(editor::Workspace& ws, editor::WorldPreview& pv, const editor::WorldConfig& cfg) {
@@ -12764,7 +12764,7 @@ TEST(world_tree_preview_lists_map_entities) {
     namespace fs = std::filesystem;
     const fs::path root = worldTreeCopy("skirmish");
     editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
     CHECK(ws.openGame((root / "skirmish").string(), &err));
     CHECK(!ws.map.data.entities.empty());
@@ -12823,7 +12823,7 @@ TEST(world_tree_describes_every_component_pool) {
     namespace fs = std::filesystem;
     const fs::path root = worldTreeCopy("skirmish");
     editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
     CHECK(ws.openGame((root / "skirmish").string(), &err));
     editor::WorldPreview pv;
@@ -12861,7 +12861,7 @@ TEST(world_tree_script_objects_labels_and_groupings) {
         "groupings": [{"title": "Фронты", "by": ["data:front", "owner"]}, {"title": "Плохая", "by": ["colour"]}]}})"));
     { std::ofstream(dir / "game.json") << game.dump(); }
     editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
     CHECK(ws.openGame(dir.string(), &err));
     const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
@@ -12903,7 +12903,7 @@ TEST(world_tree_script_blob_decoding) {
 
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
-        if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // rts_tests [name filter]
+        if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // aiverse_tests [name filter]
         int before = g_failed;
         fn();
         std::printf("%s %s\n", g_failed == before ? "[ OK ]" : "[FAIL]", name);
@@ -12975,7 +12975,7 @@ TEST(planet_territory_claims_and_dig_cross_seams) {
 
 // ---- planet fog blur (agent-planet-render): seam-aware separable blur, timing on faceSize 256
 TEST(planet_fog_blur_seams_and_speed) {
-    using namespace rts::game;
+    using namespace aiverse::game;
     auto S = std::make_shared<Surface>();
     BodyDef b; b.id = "p"; b.radius = Fixed::fromInt(400); b.faceSize = 256;
     S->bodies.push_back(b);
@@ -13073,7 +13073,7 @@ TEST(ai_terrain_analysis_high_ground_routes_chokes) {
 
 TEST(ai_bot_state_survives_save_load) {
     // a bot match saved at 90 s and continued from the save (sim + bot states) ends exactly like the original
-    for (const std::string& game : {kSkirmish, std::string(RTS_SOURCE_DIR) + "/templates/metaltide"}) {
+    for (const std::string& game : {kSkirmish, std::string(AIVERSE_SOURCE_DIR) + "/templates/metaltide"}) {
         const std::string map = game == kSkirmish ? "maps/valley.json" : "maps/twin_craters.json";
         auto a = makeSim(game, map, 4);
         std::vector<game::RtsAI> botsA;
@@ -13122,19 +13122,19 @@ TEST(ai_invades_separate_planets) {
 }
 // ---- project-file agent: <Title>.rtsproj (apps/editor/core/ProjectFile.h), OS file association
 // (FileAssoc.h, Linux part under a temporary HOME), editor / document icons (tools/branding/ProjectIcon.h)
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/FileAssoc.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
 #include "tools/branding/ProjectIcon.h"
 namespace {
-// HOME (and XDG_*) pointed at a fresh temp folder for the scope of a test: nothing reaches the real ~/.rtsengine
+// HOME (and XDG_*) pointed at a fresh temp folder for the scope of a test: nothing reaches the real ~/.aiverse
 struct TempHome {
     std::filesystem::path dir;
     std::string oldHome, oldData, oldConfig;
     bool hadHome = false, hadData = false, hadConfig = false;
     explicit TempHome(const char* tag) {
-        dir = std::filesystem::temp_directory_path() / (std::string("rts_") + tag + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        dir = std::filesystem::temp_directory_path() / (std::string("aiverse_") + tag + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         std::filesystem::create_directories(dir);
         auto save = [](const char* k, std::string& v, bool& had) { if (const char* e = std::getenv(k)) { v = e; had = true; } };
         save("HOME", oldHome, hadHome); save("XDG_DATA_HOME", oldData, hadData); save("XDG_CONFIG_HOME", oldConfig, hadConfig);
@@ -13158,11 +13158,11 @@ std::string slurp(const std::filesystem::path& p) { std::ifstream f(p, std::ios:
 
 TEST(project_file_create_resolve_migrate) {
     namespace fs = std::filesystem;
-    using namespace rts::editor;
+    using namespace aiverse::editor;
     TempHome home("projfile");
     std::string err;
     // a new project from a template: its own <Title>.rtsproj, the template's one is not copied
-    const std::string dir = createProject(RTS_SOURCE_DIR, "skirmish", "Моя стратегия", (home.dir / "Projects").string(), "", &err);
+    const std::string dir = createProject(AIVERSE_SOURCE_DIR, "skirmish", "Моя стратегия", (home.dir / "Projects").string(), "", &err);
     CHECK(!dir.empty());
     const fs::path file = fs::path(dir) / "Моя стратегия.rtsproj";
     CHECK(fs::exists(file));
@@ -13202,11 +13202,11 @@ TEST(project_file_create_resolve_migrate) {
     // migration: a project made before .rtsproj existed gets one when opened
     const fs::path old = home.dir / "Projects" / "legacy";
     fs::create_directories(old / "maps");
-    fs::copy_file(fs::path(RTS_SOURCE_DIR) / "templates/skirmish/rules.json", old / "rules.json");
+    fs::copy_file(fs::path(AIVERSE_SOURCE_DIR) / "templates/skirmish/rules.json", old / "rules.json");
     std::ofstream(old / "game.json") << R"({"name": "Old Game", "rules": "rules.json", "maps": []})";
     {
         Workspace ws;
-        ws.engineDir = RTS_SOURCE_DIR;
+        ws.engineDir = AIVERSE_SOURCE_DIR;
         CHECK(ws.openGame(old.string(), &err));
         CHECK(ws.project.file == (fs::weakly_canonical(old) / "Old Game.rtsproj").string());
         CHECK(fs::exists(old / "Old Game.rtsproj"));
@@ -13225,9 +13225,9 @@ TEST(project_file_create_resolve_migrate) {
 
 TEST(templates_have_project_files) {
     namespace fs = std::filesystem;
-    using namespace rts::editor;
+    using namespace aiverse::editor;
     int n = 0;
-    for (auto& e : fs::directory_iterator(fs::path(RTS_SOURCE_DIR) / "templates")) {
+    for (auto& e : fs::directory_iterator(fs::path(AIVERSE_SOURCE_DIR) / "templates")) {
         if (!fs::exists(e.path() / "game.json")) continue;
         ++n;
         int files = 0;
@@ -13244,20 +13244,20 @@ TEST(templates_have_project_files) {
         }
     }
     CHECK(n > 10);
-    // rtsbuild's pack rule: a .rtsproj at the root is not content
-    rts::pack::IgnoreRules rules;
+    // aiversebuild's pack rule: a .rtsproj at the root is not content
+    aiverse::pack::IgnoreRules rules;
     rules.add("*.rtsproj");
     CHECK(rules.ignored("Iron and Gold.rtsproj", false) && !rules.ignored("rules.json", false));
 }
 
 TEST(project_document_icons) {
     namespace fs = std::filesystem;
-    using namespace rts::branding;
+    using namespace aiverse::branding;
     TempHome home("projicon");
     std::string err;
-    auto files = writeEditorIcons((home.dir / "icons").string(), std::string(RTS_SOURCE_DIR) + "/apps/editor/branding/icon_1024.png", &err);
+    auto files = writeEditorIcons((home.dir / "icons").string(), std::string(AIVERSE_SOURCE_DIR) + "/apps/editor/branding/icon_1024.png", &err);
     CHECK(files.size() == 5);
-    rts::branding::Image doc;
+    aiverse::branding::Image doc;
     CHECK(loadImageFile((home.dir / "icons" / "rtsproj.png").string(), doc, &err) && doc.width == 256 && doc.height == 256);
     CHECK(doc.px(2, 2)[3] == 0 && doc.px(253, 2)[3] == 0);           // the engine tile: transparent corners
     CHECK(doc.px(128, 128)[3] == 255 && doc.px(128, 70)[3] == 255);  // opaque tile
@@ -13273,60 +13273,60 @@ TEST(project_document_icons) {
 #if defined(__linux__)
 TEST(file_assoc_linux_registration_temp_home) {
     namespace fs = std::filesystem;
-    using namespace rts::editor;
+    using namespace aiverse::editor;
     TempHome home("assoc");
-    unsetenv("RTS_FILE_ASSOC");
+    unsetenv("AIVERSE_FILE_ASSOC");
     // Exec= quoting (Desktop Entry spec)
-    CHECK(desktopExec("/usr/bin/rts_editor") == "/usr/bin/rts_editor %f");
-    CHECK(desktopExec("/opt/RTS Engine/rts_editor") == "\"/opt/RTS Engine/rts_editor\" %f");
+    CHECK(desktopExec("/usr/bin/aiverse_editor") == "/usr/bin/aiverse_editor %f");
+    CHECK(desktopExec("/opt/AIVERSE Engine/aiverse_editor") == "\"/opt/AIVERSE Engine/aiverse_editor\" %f");
     CHECK(desktopExec("/o/a$b\\c 100%") == "\"/o/a\\\\$b\\\\\\\\c 100%%\" %f");
     CHECK(xdgDataHome() == (home.dir / ".local" / "share").string() && xdgConfigHome() == (home.dir / ".config").string());
 
-    const std::string exe = "/opt/RTS Engine/rts_editor";
+    const std::string exe = "/opt/AIVERSE Engine/aiverse_editor";
     AssocStatus st = fileAssociationStatus(exe);
     CHECK(st.supported && !st.registered && !st.otherDefault);
     std::string msg;
     CHECK(registerFileAssociation(exe, &msg));
     const fs::path data = home.dir / ".local" / "share";
-    const std::string desk = slurp(data / "applications" / "rtsengine-editor.desktop");
-    CHECK(desk.find("Exec=\"/opt/RTS Engine/rts_editor\" %f\n") != std::string::npos);
-    CHECK(desk.find("MimeType=application/x-rtsengine-project;\n") != std::string::npos && desk.find("Icon=rtsengine-editor\n") != std::string::npos);
-    const std::string xml = slurp(data / "mime" / "packages" / "rtsengine-project.xml");
-    CHECK(xml.find("type=\"application/x-rtsengine-project\"") != std::string::npos && xml.find("<glob pattern=\"*.rtsproj\"") != std::string::npos);
-    CHECK(fs::exists(data / "icons/hicolor/48x48/mimetypes/application-x-rtsengine-project.png"));
-    CHECK(fs::exists(data / "icons/hicolor/256x256/apps/rtsengine-editor.png"));
-    CHECK(slurp(home.dir / ".config" / "mimeapps.list").find("application/x-rtsengine-project=rtsengine-editor.desktop") != std::string::npos);
+    const std::string desk = slurp(data / "applications" / "aiverse-editor.desktop");
+    CHECK(desk.find("Exec=\"/opt/AIVERSE Engine/aiverse_editor\" %f\n") != std::string::npos);
+    CHECK(desk.find("MimeType=application/x-aiverse-project;\n") != std::string::npos && desk.find("Icon=aiverse-editor\n") != std::string::npos);
+    const std::string xml = slurp(data / "mime" / "packages" / "aiverse-project.xml");
+    CHECK(xml.find("type=\"application/x-aiverse-project\"") != std::string::npos && xml.find("<glob pattern=\"*.rtsproj\"") != std::string::npos);
+    CHECK(fs::exists(data / "icons/hicolor/48x48/mimetypes/application-x-aiverse-project.png"));
+    CHECK(fs::exists(data / "icons/hicolor/256x256/apps/aiverse-editor.png"));
+    CHECK(slurp(home.dir / ".config" / "mimeapps.list").find("application/x-aiverse-project=aiverse-editor.desktop") != std::string::npos);
     st = fileAssociationStatus(exe);
     CHECK(st.registered);
     const bool mimeDb = std::system("command -v update-mime-database >/dev/null 2>&1") == 0;
-    if (mimeDb) CHECK(slurp(data / "mime" / "globs2").find("application/x-rtsengine-project:*.rtsproj") != std::string::npos);
+    if (mimeDb) CHECK(slurp(data / "mime" / "globs2").find("application/x-aiverse-project:*.rtsproj") != std::string::npos);
     if (std::system("command -v xdg-mime >/dev/null 2>&1") == 0) {
-        const std::string q = "xdg-mime query default application/x-rtsengine-project > '" + (home.dir / "q.txt").string() + "' 2>/dev/null";
-        CHECK(std::system(q.c_str()) == 0 && slurp(home.dir / "q.txt").find("rtsengine-editor.desktop") != std::string::npos);
+        const std::string q = "xdg-mime query default application/x-aiverse-project > '" + (home.dir / "q.txt").string() + "' 2>/dev/null";
+        CHECK(std::system(q.c_str()) == 0 && slurp(home.dir / "q.txt").find("aiverse-editor.desktop") != std::string::npos);
     }
     std::printf("  registered under a temp HOME (update-mime-database: %s): %s\n", mimeDb ? "yes" : "no", msg.c_str());
 
     // another editor build: not ours any more -> startup re-registers it
-    CHECK(!fileAssociationStatus("/other/rts_editor").registered);
-    CHECK(!ensureFileAssociation("/other/rts_editor").empty());
-    CHECK(fileAssociationStatus("/other/rts_editor").registered && !fileAssociationStatus(exe).registered);
-    CHECK(ensureFileAssociation("/other/rts_editor").empty());   // nothing to do
+    CHECK(!fileAssociationStatus("/other/aiverse_editor").registered);
+    CHECK(!ensureFileAssociation("/other/aiverse_editor").empty());
+    CHECK(fileAssociationStatus("/other/aiverse_editor").registered && !fileAssociationStatus(exe).registered);
+    CHECK(ensureFileAssociation("/other/aiverse_editor").empty());   // nothing to do
     // the user picked another program: reported, never overridden at startup
     {
         std::string list = slurp(home.dir / ".config" / "mimeapps.list");
-        const std::string a = "application/x-rtsengine-project=rtsengine-editor.desktop";
-        list.replace(list.find(a), a.size(), "application/x-rtsengine-project=org.gnome.TextEditor.desktop");
+        const std::string a = "application/x-aiverse-project=aiverse-editor.desktop";
+        list.replace(list.find(a), a.size(), "application/x-aiverse-project=org.gnome.TextEditor.desktop");
         std::ofstream(home.dir / ".config" / "mimeapps.list") << list;
     }
-    st = fileAssociationStatus("/other/rts_editor");
+    st = fileAssociationStatus("/other/aiverse_editor");
     CHECK(!st.registered && st.otherDefault && st.detail.find("org.gnome.TextEditor") != std::string::npos);
-    CHECK(ensureFileAssociation("/other/rts_editor").empty());
+    CHECK(ensureFileAssociation("/other/aiverse_editor").empty());
     // the menu item does it on request
-    CHECK(registerFileAssociation("/other/rts_editor", &msg) && fileAssociationStatus("/other/rts_editor").registered);
+    CHECK(registerFileAssociation("/other/aiverse_editor", &msg) && fileAssociationStatus("/other/aiverse_editor").registered);
     // automated runs never touch the user's desktop
-    setenv("RTS_FILE_ASSOC", "off", 1);
-    CHECK(ensureFileAssociation("/third/rts_editor").empty() && !fileAssociationStatus("/third/rts_editor").registered);
-    unsetenv("RTS_FILE_ASSOC");
+    setenv("AIVERSE_FILE_ASSOC", "off", 1);
+    CHECK(ensureFileAssociation("/third/aiverse_editor").empty() && !fileAssociationStatus("/third/aiverse_editor").registered);
+    unsetenv("AIVERSE_FILE_ASSOC");
 }
 #endif
 #endif
@@ -13335,11 +13335,11 @@ TEST(file_assoc_linux_registration_temp_home) {
 // ------------------------------------------------------------------ planet detail grids (agent-terrain)
 
 TEST(planet_detail_grid_seams_and_height) {
-    using namespace rts::render;
-    rts::game::PlanetBody b;
-    b.id = "m"; b.kind = rts::game::PlanetBody::Kind::Moon; b.radius = 12; b.faceSize = 8;
+    using namespace aiverse::render;
+    aiverse::game::PlanetBody b;
+    b.id = "m"; b.kind = aiverse::game::PlanetBody::Kind::Moon; b.radius = 12; b.faceSize = 8;
     const int N = 8, S = (N + 1) * (N + 1);
-    rts::game::CubeSphere cs(N);
+    aiverse::game::CubeSphere cs(N);
     b.corners.assign(size_t(6 * S), 0);
     for (int f = 0; f < 6; ++f)   // smooth relief as a function of the direction: seam duplicates equal
         for (int j = 0; j <= N; ++j)
@@ -13347,19 +13347,19 @@ TEST(planet_detail_grid_seams_and_height) {
                 const auto d = cs.cornerDir(f, i, j);
                 b.corners[size_t(cs.cornerId(f, i, j))] = int16_t(std::lround(16.0 * 2.0 * std::sin(3.0 * d.x.toDouble()) * std::cos(2.0 * d.z.toDouble())));
             }
-    b.flags.assign(size_t(6 * N * N), rts::game::kCellGround);
-    rts::game::PlanetSurface s;
+    b.flags.assign(size_t(6 * N * N), aiverse::game::kCellGround);
+    aiverse::game::PlanetSurface s;
     s.init(b);
     CHECK(s.detailScale() == 0 && s.gridSize() == N);
     const float3 probe = normalize(float3{0.3f, 0.8f, -0.4f});
     CHECK(s.heightAt(probe) == s.coarseHeightAt(probe));   // no detail: the corner surface, unchanged
-    rts::game::PlanetDetailParams p;
+    aiverse::game::PlanetDetailParams p;
     p.k = 4; p.roughness = 0.08f; p.craters = 0.6f; p.seed = 7;
     s.initDetail(b, p);
     const int M = N * 4;
     CHECK(s.detailScale() == 4 && s.gridSize() == M);
     // seam samples: one direction (bit-identical) and one height on every face that has them
-    rts::game::CubeSphere ds(M);
+    aiverse::game::CubeSphere ds(M);
     bool same = true;
     for (int f = 0; f < 6; ++f)
         for (int j = 0; j <= M; ++j)
@@ -13391,35 +13391,35 @@ TEST(planet_detail_grid_seams_and_height) {
     std::vector<int16_t> ex(size_t(6) * size_t(M + 1) * size_t(M + 1));
     for (int f = 0; f < 6; ++f)
         for (int j = 0; j <= M; ++j)
-            for (int i = 0; i <= M; ++i) ex[size_t(s.gridIndex(f, i, j))] = int16_t(std::lround(s.gridHeight(f, i, j) * rts::game::kPlanetDetailUnit));
+            for (int i = 0; i <= M; ++i) ex[size_t(s.gridIndex(f, i, j))] = int16_t(std::lround(s.gridHeight(f, i, j) * aiverse::game::kPlanetDetailUnit));
     std::vector<int16_t> back;
-    CHECK(rts::game::decodePlanetDetail(rts::game::encodePlanetDetail(ex), N, 4, back, nullptr) && back == ex);
-    CHECK(!rts::game::decodePlanetDetail("xx", N, 4, back, nullptr));
+    CHECK(aiverse::game::decodePlanetDetail(aiverse::game::encodePlanetDetail(ex), N, 4, back, nullptr) && back == ex);
+    CHECK(!aiverse::game::decodePlanetDetail("xx", N, 4, back, nullptr));
     b.detail = ex; b.detailK = 4;
-    rts::game::PlanetSurface e2;
+    aiverse::game::PlanetSurface e2;
     e2.init(b);
-    rts::game::PlanetDetailParams p2; p2.k = 2;
+    aiverse::game::PlanetDetailParams p2; p2.k = 2;
     e2.initDetail(b, p2);
     CHECK(e2.gridSize() == 2 * N && std::fabs(e2.gridHeight(3, 6, 10) - s.gridHeight(3, 12, 20)) < 0.01f);
     // map keys
     Json map = Json::parse(R"({"world": {"bodies": [{"id": "p", "kind": "planet", "radius": 20, "faceSize": 4,
         "terrain": {"style": "smooth", "detailLook": {"scale": 2, "roughness": 0.1, "craters": 0.3}, "detail": {"scale": 2, "file": "maps/x.r16"}}}]}})");
-    rts::game::PlanetWorld w = rts::game::loadPlanetWorld(map);
+    aiverse::game::PlanetWorld w = aiverse::game::loadPlanetWorld(map);
     CHECK(w.bodies[0].style == 1 && w.bodies[0].detailScale == 2 && std::fabs(w.bodies[0].craters - 0.3f) < 1e-6f && w.bodies[0].detailK == 2 && w.bodies[0].detail.empty());
     std::vector<std::string> warn;
-    rts::game::loadPlanetDetailFiles(w, map, [](const std::string& f, std::string& out) { out.assign(size_t(6 * 9 * 9 * 2), '\0'); return f == "maps/x.r16"; }, &warn);
+    aiverse::game::loadPlanetDetailFiles(w, map, [](const std::string& f, std::string& out) { out.assign(size_t(6 * 9 * 9 * 2), '\0'); return f == "maps/x.r16"; }, &warn);
     CHECK(w.bodies[0].detail.size() == size_t(6 * 9 * 9) && warn.empty());
 }
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/PlanetOps.h"
 TEST(planet_detail_editor_sculpt_seams_save) {
     namespace fs = std::filesystem;
-    const fs::path root = fs::temp_directory_path() / ("rts_pdetail_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const fs::path root = fs::temp_directory_path() / ("aiverse_pdetail_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     fs::copy(kPlanets, root / "planets", fs::copy_options::recursive);
     editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
     CHECK(ws.openGame((root / "planets").string(), &err));
     auto ok = [](const Json& r) { if (r.has("error")) std::printf("  (op error) %s\n", r.getStr("error").c_str()); return !r.has("error"); };
@@ -13431,7 +13431,7 @@ TEST(planet_detail_editor_sculpt_seams_save) {
     Json r = ws.call("terrain_sculpt", Json::parse(R"({"body": "luna", "op": "raise", "face": 0, "x": 0.0, "y": 6, "radius": 1.5, "strength": 1})"));
     CHECK(ok(r) && r["samples"].integer() > 50);
     const int N = b->faceSize, M = N * 4;
-    rts::game::CubeSphere cs(M);
+    aiverse::game::CubeSphere cs(M);
     int bad = 0, faces = 0;
     bool touched[6] = {};
     const std::vector<int16_t> fresh = b->detail;
@@ -13466,7 +13466,7 @@ TEST(planet_detail_editor_sculpt_seams_save) {
 }
 #endif
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 // A map whose players have no objects: an error for plain rules, only a warning when simulation scripts build the match.
 TEST(mapdoc_validate_scripted_players_without_start) {
     editor::MapDoc doc;
@@ -13524,14 +13524,14 @@ TEST(script_command_card_false_hides_the_button) {
     CHECK(cs[1].id == "b" && !cs[1].card);
 }
 
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/GameWizard.h"
 #include "tools/branding/BrandImage.h"
 TEST(game_wizard_plan_picks_a_template_by_the_idea) {
-    using namespace rts::editor;
+    using namespace aiverse::editor;
     WizardSpec s;
     s.title = "T";
-    auto pick = [&](const std::string& idea) { s.idea = idea; return planGame(RTS_SOURCE_DIR, s).getStr("template"); };
+    auto pick = [&](const std::string& idea) { s.idea = idea; return planGame(AIVERSE_SOURCE_DIR, s).getStr("template"); };
     const std::string shroom = pick("Грибы захватывают деревни, отправка процента войск");
     CHECK(shroom == "mushrooms" || shroom == "shroomwars" || shroom == "sporelanes" || shroom == "spellbunkers");
     CHECK(pick("StarCraft: три расы в космосе") == "starfall");
@@ -13539,29 +13539,29 @@ TEST(game_wizard_plan_picks_a_template_by_the_idea) {
     CHECK(pick("") == pick(""));                                   // the same answers make the same game
     s.idea.clear();
     s.orientation = "portrait";
-    const std::string portrait = planGame(RTS_SOURCE_DIR, s).getStr("template");
+    const std::string portrait = planGame(AIVERSE_SOURCE_DIR, s).getStr("template");
     CHECK(portrait == "borderrush" || portrait == "laneclash");
     s.genre = "laneclash";
-    Json p = planGame(RTS_SOURCE_DIR, s);
+    Json p = planGame(AIVERSE_SOURCE_DIR, s);
     CHECK(p.getStr("template") == "laneclash" && p.getStr("tutorialArchetype") == "autobuild");
     s.genre = "mushrooms";
-    CHECK(planGame(RTS_SOURCE_DIR, s).getStr("tutorialArchetype") == "garrison");
+    CHECK(planGame(AIVERSE_SOURCE_DIR, s).getStr("tutorialArchetype") == "garrison");
     s.genre = "nope";
     bool threw = false;
-    try { planGame(RTS_SOURCE_DIR, s); } catch (const std::exception&) { threw = true; }
+    try { planGame(AIVERSE_SOURCE_DIR, s); } catch (const std::exception&) { threw = true; }
     CHECK(threw);
     // the spec survives JSON (the .rtsproj keeps it)
     s.genre = "skirmish"; s.levels = 5; s.features = {"economy", "base"}; s.ads = true;
     WizardSpec back = WizardSpec::fromJson(s.toJson());
     CHECK(back.genre == "skirmish" && back.levels == 5 && back.features.size() == 2 && back.ads && back.orientation == "portrait");
     CHECK(WizardSpec::fromJson(Json::parse(R"({"levels": 999})")).levels == 40);
-    Json cat = wizardCatalog(RTS_SOURCE_DIR);
+    Json cat = wizardCatalog(AIVERSE_SOURCE_DIR);
     CHECK(cat["templates"].size() >= 10 && cat["features"].size() > 5 && cat["defaults"].getStr("tutorial") == "both");
 }
 
 TEST(game_wizard_makes_a_playable_project) {
     namespace fs = std::filesystem;
-    using namespace rts::editor;
+    using namespace aiverse::editor;
     TempHome home("wizard");
     // the user's content: key art, an icon, a GDD
     const fs::path art = home.dir / "art";
@@ -13572,7 +13572,7 @@ TEST(game_wizard_makes_a_playable_project) {
     CHECK(branding::writePng((art / "logo_icon.png").string(), branding::makeImage(300, 300, {0.9f, 0.7f, 0.1f, 1})));
     { std::ofstream f(art / "gdd.md"); f << "Рыцари строят замок и добывают золото.\n"; }
     Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     WizardSpec s;
     s.title = "Wizard Test";
     s.location = (home.dir / "Projects").string();
@@ -13753,7 +13753,7 @@ view.entity_fx(a, {pitch = 0, roll = 0, time = 1}); assert(view.entity_fx(a).pit
         dev.draws.clear();
         r3d.beginScene(cam, 640, 480);
         view.draw(r3d, scene, t, nullptr, mod(sim).state(sim).grid);
-        r3d.render(rts::gfx::PassDesc{});
+        r3d.render(aiverse::gfx::PassDesc{});
         std::vector<RecordingDevice::Draw> out = dev.draws;
         return out;
     };
@@ -13789,12 +13789,12 @@ view.entity_fx(a, {pitch = 0, roll = 0, time = 1}); assert(view.entity_fx(a).pit
 }
 
 // ---------------- Editor world tree performance (world-perf): background preview, cheap reads, Lua peek ----------------
-#ifdef RTS_TESTS_EDITOR_CORE
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 TEST(world_tree_background_preview_and_reused_reads) {
     namespace fs = std::filesystem;
     const fs::path root = worldTreeCopy("skirmish");
     editor::Workspace ws;
-    ws.engineDir = RTS_SOURCE_DIR;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
     CHECK(ws.openGame((root / "skirmish").string(), &err));
     const editor::WorldConfig cfg = editor::parseWorldConfig(ws.project.manifest);
@@ -13816,7 +13816,7 @@ TEST(world_tree_background_preview_and_reused_reads) {
         p.rulesJson = rules;
         simRules = p.simRules(simMap);
     }, ws.map.data, cfg);
-    CHECK(bg.busy() || RTS_PREVIEW_THREAD == 0);
+    CHECK(bg.busy() || AIVERSE_PREVIEW_THREAD == 0);
     bool adopted = false;
     for (int i = 0; i < 20000 && !adopted; ++i) { adopted = bg.poll(); if (!adopted) std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
     CHECK(adopted && !bg.busy() && bg.sim() && bg.error().empty());

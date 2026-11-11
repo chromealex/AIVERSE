@@ -15,17 +15,17 @@
 #include "engine/data/Json.h"
 
 #if defined(_WIN32)
-#define RTS_POPEN _popen
-#define RTS_PCLOSE _pclose
+#define AIVERSE_POPEN _popen
+#define AIVERSE_PCLOSE _pclose
 #else
 #include <sys/wait.h>
-#define RTS_POPEN popen
-#define RTS_PCLOSE pclose
+#define AIVERSE_POPEN popen
+#define AIVERSE_PCLOSE pclose
 #endif
 
 namespace fs = std::filesystem;
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 
@@ -122,12 +122,12 @@ bool call(const UnpackerInfo& u, const std::string& method, const std::string& r
     cmd = "\"" + cmd + "\""; // cmd.exe strips one pair of outer quotes
 #endif
     std::fflush(nullptr);
-    std::FILE* p = RTS_POPEN(cmd.c_str(), "r");
+    std::FILE* p = AIVERSE_POPEN(cmd.c_str(), "r");
     if (!p) return fail(err, u.name + ": cannot start " + u.command[0]);
     std::string out;
     char buf[4096];
     for (size_t n; (n = std::fread(buf, 1, sizeof buf, p)) > 0;) out.append(buf, n);
-    int rc = RTS_PCLOSE(p);
+    int rc = AIVERSE_PCLOSE(p);
 #if !defined(_WIN32)
     if (rc != -1 && WIFEXITED(rc)) rc = WEXITSTATUS(rc);
 #endif
@@ -184,7 +184,7 @@ bool UnpackerInfo::can(const std::string& cap) const { return std::find(capabili
 
 UnpackerRegistry::UnpackerRegistry() {
     UnpackerInfo r;
-    r.name = "rpak"; r.title = "RTSEngine resource pack"; r.version = "1"; r.builtin = true;
+    r.name = "rpak"; r.title = "AIVERSE resource pack"; r.version = "1"; r.builtin = true;
     r.extensions = {".rpak"};
     r.magic = {{0, "RPAK"}};
     r.capabilities = {"probe", "list", "extract"};
@@ -266,7 +266,7 @@ void UnpackerRegistry::addSearchDir(const std::string& dir) {
 
 void UnpackerRegistry::addDefaultDirs(const std::string& engineDir, const std::string& projectDir) {
     if (!engineDir.empty()) addSearchDir((fs::path(engineDir) / "tools" / "unpackers").string());
-    if (const char* env = std::getenv("RTS_UNPACKERS")) {
+    if (const char* env = std::getenv("AIVERSE_UNPACKERS")) {
 #if defined(_WIN32)
         const char sep = ';';
 #else
@@ -465,12 +465,12 @@ bool scaffoldUnpacker(const std::string& dir, const std::string& name, const std
          "}\n";
     std::ofstream s(d / "unpack.py");
     s << "#!/usr/bin/env python3\n"
-         "\"\"\"Unpacker for " << name << " (RTSEngine unpacker protocol 1, see tools/unpackers/PROTOCOL.md).\"\"\"\n"
+         "\"\"\"Unpacker for " << name << " (AIVERSE unpacker protocol 1, see tools/unpackers/PROTOCOL.md).\"\"\"\n"
          "import os, sys\n"
          "sys.dont_write_bytecode = True\n"
          "HERE = os.path.dirname(os.path.abspath(__file__))\n"
          "sys.path[:0] = [HERE, os.path.join(HERE, '..', 'lib')]  # bundled copy first, then tools/unpackers/lib\n"
-         "from rtsunpack import run, Entry\n"
+         "from aiverseunpack import run, Entry\n"
          "\n"
          "NAME = '" << name << "'\n"
          "\n"
@@ -485,10 +485,10 @@ bool scaffoldUnpacker(const std::string& dir, const std::string& name, const std
          "if __name__ == '__main__':\n"
          "    run(NAME, '0.1.0', probe, entries)\n";
     if (!m || !s) return fail(error, "cannot write plugin files in " + d.string());
-    // Bundle the helper so the plugin works from any folder (game repo, $RTS_UNPACKERS, shared).
-    fs::path lib = fs::path(engineDir) / "tools" / "unpackers" / "lib" / "rtsunpack.py";
-    if (!engineDir.empty() && fs::exists(lib, ec)) copyFileReplace(lib, d / "rtsunpack.py", ec);
+    // Bundle the helper so the plugin works from any folder (game repo, $AIVERSE_UNPACKERS, shared).
+    fs::path lib = fs::path(engineDir) / "tools" / "unpackers" / "lib" / "aiverseunpack.py";
+    if (!engineDir.empty() && fs::exists(lib, ec)) copyFileReplace(lib, d / "aiverseunpack.py", ec);
     return true;
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

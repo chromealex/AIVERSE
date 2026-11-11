@@ -4,7 +4,7 @@
   "provides": ["ads"],
   "android": {
     "java": "android/java",
-    "classes": { "admob": "com.rtsengine.plugins.AdMobPlugin" },
+    "classes": { "admob": "com.aiverse.plugins.AdMobPlugin" },
     "dependencies": ["com.google.android.gms:play-services-ads:25.5.0"],
     "manifest": {
       "application": ["<meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"${appId}\" />"]
@@ -12,7 +12,7 @@
   },
   "ios": {
     "sources": ["ios/*.mm"],
-    "classes": { "admob": "RTSAdMobPlugin" },
+    "classes": { "admob": "AiverseAdMobPlugin" },
     "pods": ["pod 'Google-Mobile-Ads-SDK', '~> 13.11'"],
     "plist": [
       "<key>GADApplicationIdentifier</key><string>${appId}</string>"

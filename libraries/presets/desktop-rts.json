@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "input": {
+    "deadzone": 100,
+    "dragPixels": 6
+  },
+  "camera": {
+    "maxZoom": 200
+  },
+  "construction": {
+    "requireTerritory": false
+  }
+}

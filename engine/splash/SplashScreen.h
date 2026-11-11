@@ -12,9 +12,9 @@
 #include "engine/gfx/Gfx.h"
 #include "engine/splash/SplashData.h"
 
-namespace rts::atlas { class ImageSource; }
+namespace aiverse::atlas { class ImageSource; }
 
-namespace rts::splash {
+namespace aiverse::splash {
 
 class SplashScreen {
 public:
@@ -69,4 +69,4 @@ private:
     std::unique_ptr<atlas::ImageSource> images_;
 };
 
-} // namespace rts::splash
+} // namespace aiverse::splash

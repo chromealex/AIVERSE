@@ -20,7 +20,12 @@
 #include <TargetConditionals.h>
 #endif
 
-namespace rts::platform {
+namespace aiverse::platform {
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+bool setPointerLock(bool) { return false; }
+bool pointerLocked() { return false; }
+#endif
+
 
 namespace detail {
 State& state() { static State s; return s; }
@@ -43,11 +48,11 @@ CaptureRequest captureRequestFromEnv() {
         }
         return s;
     };
-    c.path = get(L"RTS_SCREENSHOT");
-    c.frames = std::atol(get(L"RTS_EXIT_AFTER_FRAMES").c_str());
+    c.path = get(L"AIVERSE_SCREENSHOT");
+    c.frames = std::atol(get(L"AIVERSE_EXIT_AFTER_FRAMES").c_str());
 #else
-    if (const char* p = std::getenv("RTS_SCREENSHOT")) c.path = p;
-    if (const char* n = std::getenv("RTS_EXIT_AFTER_FRAMES")) c.frames = std::atol(n);
+    if (const char* p = std::getenv("AIVERSE_SCREENSHOT")) c.path = p;
+    if (const char* n = std::getenv("AIVERSE_EXIT_AFTER_FRAMES")) c.frames = std::atol(n);
 #endif
     return c;
 }
@@ -241,13 +246,13 @@ bool mountSource(std::unique_ptr<pack::Source> src, const std::string& path) {
     return true;
 }
 
-// Sources: $RTS_CONTENT_SOURCES first (testing, self-hosted mirrors), then game.json
+// Sources: $AIVERSE_CONTENT_SOURCES first (testing, self-hosted mirrors), then game.json
 // `packaging.sources`, unless the game set its own with setContentSources().
 void initSources() {
     auto& S = state();
     if (S.sourcesSet) return;
     std::vector<std::string> urls;
-    if (const char* env = std::getenv("RTS_CONTENT_SOURCES")) {
+    if (const char* env = std::getenv("AIVERSE_CONTENT_SOURCES")) {
         std::string e = env;
         for (size_t a = 0; a <= e.size();) {
             size_t b = e.find(';', a);
@@ -408,4 +413,4 @@ bool urlAllowed(const std::string& url) {
 }
 } // namespace detail
 
-} // namespace rts::platform
+} // namespace aiverse::platform

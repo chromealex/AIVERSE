@@ -3,7 +3,7 @@
 #include <fstream>
 #include <iterator>
 
-namespace rts {
+namespace aiverse {
 
 bool Replay::save(const std::string& path) const {
     ByteWriter w;
@@ -51,4 +51,4 @@ uint64_t hashFileContents(const std::vector<std::string>& paths) {
     return h.value();
 }
 
-} // namespace rts
+} // namespace aiverse

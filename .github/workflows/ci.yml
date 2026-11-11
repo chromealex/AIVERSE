@@ -1,4 +1,4 @@
-# RTSEngine CI: builds every platform, runs tests and bot matches, smoke-runs the game on
+# AIVERSE CI: builds every platform, runs tests and bot matches, smoke-runs the game on
 # Android (emulator) and Web (headless Chromium), and checks that the simulation is bit-identical
 # everywhere (the "determinism" job diffs headless checksums from all platforms).
 name: CI
@@ -37,16 +37,16 @@ jobs:
       - name: Build
         run: cmake --build build/linux-release
       - name: Tests
-        run: build/linux-release/rts_tests
+        run: build/linux-release/aiverse_tests
       - name: Bot matches
-        run: .github/scripts/headless-checksums.sh build/linux-release/rts_headless checksums-linux-${{ matrix.arch }}-${{ matrix.cc }}.txt
+        run: .github/scripts/headless-checksums.sh build/linux-release/aiverse_headless checksums-linux-${{ matrix.arch }}-${{ matrix.cc }}.txt
       - name: Screenshot (Xvfb, software GL)
         if: matrix.cc == 'gcc'
         run: |
           Xvfb :97 -screen 0 1280x800x24 & sleep 1
           for g in skirmish mushrooms; do
-            DISPLAY=:97 RTS_CONTENT=templates/$g RTS_SHADOWS=medium RTS_SCREENSHOT=shot-$g.ppm RTS_EXIT_AFTER_FRAMES=300 \
-              timeout 300 build/linux-release/RTSGame --map 0 --spectate
+            DISPLAY=:97 AIVERSE_CONTENT=templates/$g AIVERSE_SHADOWS=medium AIVERSE_SCREENSHOT=shot-$g.ppm AIVERSE_EXIT_AFTER_FRAMES=300 \
+              timeout 300 build/linux-release/AiverseGame --map 0 --spectate
           done
           python3 .github/scripts/check-screenshot.py shot-*.ppm
       - uses: actions/upload-artifact@v4
@@ -70,12 +70,12 @@ jobs:
       - name: Build
         run: cmake --build build/windows-msvc --config Release
       - name: Tests
-        run: build/windows-msvc/Release/rts_tests.exe
+        run: build/windows-msvc/Release/aiverse_tests.exe
       - name: Bot matches
         shell: bash
-        run: .github/scripts/headless-checksums.sh build/windows-msvc/Release/rts_headless.exe checksums-windows-msvc.txt
-      - name: Package (rtsbuild)
-        run: build/windows-msvc/Release/rtsbuild.exe --project templates/skirmish --target windows --out dist
+        run: .github/scripts/headless-checksums.sh build/windows-msvc/Release/aiverse_headless.exe checksums-windows-msvc.txt
+      - name: Package (aiversebuild)
+        run: build/windows-msvc/Release/aiversebuild.exe --project templates/skirmish --target windows --out dist
       - uses: actions/upload-artifact@v4
         with: { name: checksums-windows-msvc, path: checksums-*.txt }
       - uses: actions/upload-artifact@v4
@@ -95,8 +95,8 @@ jobs:
       - name: Tests and bot matches under Wine
         env: { WINEDEBUG: -all }
         run: |
-          wine build/mingw/rts_tests.exe
-          .github/scripts/headless-checksums.sh "wine build/mingw/rts_headless.exe" checksums-windows-mingw.txt
+          wine build/mingw/aiverse_tests.exe
+          .github/scripts/headless-checksums.sh "wine build/mingw/aiverse_headless.exe" checksums-windows-mingw.txt
       - uses: actions/upload-artifact@v4
         with: { name: checksums-windows-mingw, path: checksums-*.txt }
 
@@ -111,13 +111,13 @@ jobs:
           cmake --preset macos
           cmake --build build/macos --config Release -- -quiet
       - name: Tests
-        run: build/macos/Release/rts_tests
+        run: build/macos/Release/aiverse_tests
       - name: Bot matches
-        run: .github/scripts/headless-checksums.sh build/macos/Release/rts_headless checksums-macos-arm64.txt
-      - name: Package .app and iOS project (rtsbuild)
+        run: .github/scripts/headless-checksums.sh build/macos/Release/aiverse_headless checksums-macos-arm64.txt
+      - name: Package .app and iOS project (aiversebuild)
         run: |
-          build/macos/Release/rtsbuild --project templates/skirmish --target macos --out dist
-          build/macos/Release/rtsbuild --project templates/skirmish --target ios --out dist
+          build/macos/Release/aiversebuild --project templates/skirmish --target macos --out dist
+          build/macos/Release/aiversebuild --project templates/skirmish --target ios --out dist
       - uses: actions/upload-artifact@v4
         with: { name: checksums-macos-arm64, path: checksums-*.txt }
       - uses: actions/upload-artifact@v4
@@ -136,15 +136,15 @@ jobs:
       - name: Host tools
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q ninja-build
-          cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Release -DRTS_BUILD_CLIENT=OFF -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TESTS=OFF -DRTS_BUILD_HEADLESS=OFF
-          cmake --build build/host --target rtsbuild
+          cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF
+          cmake --build build/host --target aiversebuild
       - name: Native library (NDK, arm64)
         run: |
           export ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME
-          cmake --preset android-arm64 -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TOOLS=OFF -DRTS_BUILD_HEADLESS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          cmake --preset android-arm64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           cmake --build build/android-arm64
-      - name: APK (rtsbuild → Gradle)
-        run: build/host/rtsbuild --project templates/skirmish --target android --out dist
+      - name: APK (aiversebuild → Gradle)
+        run: build/host/aiversebuild --project templates/skirmish --target android --out dist
       - uses: actions/upload-artifact@v4
         with: { name: game-android, path: dist/android/*.apk }
       - name: Enable KVM
@@ -175,7 +175,7 @@ jobs:
       - name: Build
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q ninja-build
-          emcmake cmake -S . -B build/web -G Ninja -DCMAKE_BUILD_TYPE=Release -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TOOLS=OFF -DRTS_BUILD_TESTS=OFF -DRTS_BUILD_HEADLESS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          emcmake cmake -S . -B build/web -G Ninja -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           cmake --build build/web
           ls -la build/web/index.*
       - name: Smoke test in headless Chromium
@@ -203,13 +203,13 @@ jobs:
       - name: Build APK with all Android plugins
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q ninja-build
-          cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Release -DRTS_BUILD_CLIENT=OFF -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TESTS=OFF -DRTS_BUILD_HEADLESS=OFF
-          cmake --build build/host --target rtsbuild
+          cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF
+          cmake --build build/host --target aiversebuild
           python3 .github/scripts/plugins-testgame.py build/plugins-game
-          build/host/rtsbuild --project build/plugins-game --target android --out build/plugins-dist --config Debug
+          build/host/aiversebuild --project build/plugins-game --target android --out build/plugins-dist --config Debug
           ls -la build/plugins-dist/android/*.apk
       - name: Only selected plugins get into a build
-        run: python3 .github/scripts/check-plugin-isolation.py build/host/rtsbuild build/isolation
+        run: python3 .github/scripts/check-plugin-isolation.py build/host/aiversebuild build/isolation
       - name: Yandex Games plugin protocol
         run: node plugins/yandex-games/web/test.mjs
 
@@ -228,12 +228,12 @@ jobs:
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev
           cmake --preset linux-release -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
-          cmake --build build/linux-release --target rts_plugins rtsbuild
+          cmake --build build/linux-release --target aiverse_plugins aiversebuild
           plugins/steam/test/run.sh
       - name: Packaged Linux game with the steam plugin
         run: |
           python3 .github/scripts/plugins-testgame.py build/plugins-game
-          build/linux-release/rtsbuild --project build/plugins-game --target linux --out build/plugins-dist --plugins steam
+          build/linux-release/aiversebuild --project build/plugins-game --target linux --out build/plugins-dist --plugins steam
           for d in build/plugins-dist/linux/*/; do ldd "$d$(basename "$d")" | grep "libsteam_api.so => .*$(basename "$d")/libsteam_api.so"; done
 
   plugins-ios:
@@ -243,10 +243,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Xcode project + CocoaPods + simulator build with all iOS plugins
         run: |
-          cmake -S . -B build/host -DCMAKE_BUILD_TYPE=Release -DRTS_BUILD_CLIENT=OFF -DRTS_BUILD_EDITOR=OFF -DRTS_BUILD_TESTS=OFF -DRTS_BUILD_HEADLESS=OFF
-          cmake --build build/host --target rtsbuild
+          cmake -S . -B build/host -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF
+          cmake --build build/host --target aiversebuild
           python3 .github/scripts/plugins-testgame.py build/plugins-game
-          build/host/rtsbuild --project build/plugins-game --target ios --out build/plugins-dist --plugins appstore,admob,yandex-ads,applovin,ironsource
+          build/host/aiversebuild --project build/plugins-game --target ios --out build/plugins-dist --plugins appstore,admob,yandex-ads,applovin,ironsource
 
   # ---------------------------------------------------------------- Cross-platform determinism
   determinism:

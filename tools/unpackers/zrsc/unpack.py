@@ -5,7 +5,7 @@ written as NNNN.bin (sprite decoding is an importer's job, not the unpacker's)."
 import os, struct, sys
 sys.dont_write_bytecode = True  # keep the plugin folder clean
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
-from rtsunpack import run, Entry, log  # noqa: E402
+from aiverseunpack import run, Entry, log  # noqa: E402
 
 
 def table(d):

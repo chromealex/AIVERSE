@@ -1,7 +1,7 @@
 // The game wizard's agent step: after GameMaker made the starting project (a template = a starting point), a connected
 // AI agent rebuilds it into the game the description / GDD asks for, 1 to 1, through the editor's own MCP tools (the
-// same rtsmcp link as the Agent window: connect once, both use it). Agents that can run headless are launched here:
-//   Claude Code  claude -p (stream-json), the rtsengine MCP tools allowed
+// same aiversemcp link as the Agent window: connect once, both use it). Agents that can run headless are launched here:
+//   Claude Code  claude -p (stream-json), the aiverse MCP tools allowed
 //   Codex CLI    codex exec --full-auto
 // Others (Cursor, Windsurf, Claude Desktop) get the task to paste. The task text is WIZARD_TASK.md in the project.
 #pragma once
@@ -12,7 +12,7 @@
 #include <vector>
 #include "GameWizard.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // The task for the agent (Russian + the description verbatim). `idea` = the user's text + texts of the content folder.
 std::string wizardAgentTask(const WizardSpec& spec, const std::string& projectDir, const std::string& templ, const std::string& idea);
@@ -48,4 +48,4 @@ private:
     std::string result_, client_, pidFile_;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

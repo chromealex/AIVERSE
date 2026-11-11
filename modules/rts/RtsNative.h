@@ -4,7 +4,7 @@
 
 struct lua_State;
 
-namespace rts::game {
+namespace aiverse::game {
 class RtsModule;
 
 // Each module owns one namespace. Use Fixed::raw / fromRaw for fixed-point values,
@@ -62,4 +62,4 @@ private:
     };
     std::vector<Entry> entries_;
 };
-} // namespace rts::game
+} // namespace aiverse::game

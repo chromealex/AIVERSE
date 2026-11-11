@@ -7,7 +7,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 
@@ -291,4 +291,4 @@ ChunkManager::Status ChunkManager::status(const Pack& pack, size_t index) const 
     return Status::NotDownloaded;
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

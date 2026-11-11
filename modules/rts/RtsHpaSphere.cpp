@@ -16,7 +16,7 @@
 #include <climits>
 #include <queue>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 constexpr uint32_t kInf = UINT32_MAX;
@@ -330,4 +330,4 @@ bool MapGrid::sphereCellPath(int s, int g, uint8_t layer, bool hpa, std::vector<
     return astarSphere(s, g, layer, maxNodes, cells);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

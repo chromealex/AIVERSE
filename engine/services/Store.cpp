@@ -5,7 +5,7 @@
 
 #include <map>
 
-namespace rts::store {
+namespace aiverse::store {
 namespace {
 namespace json = plugins::json;
 
@@ -168,4 +168,4 @@ void onPurchase(std::function<void(const Purchase&)> handler) {
     ensureListener();
 }
 
-} // namespace rts::store
+} // namespace aiverse::store

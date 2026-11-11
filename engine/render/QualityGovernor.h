@@ -6,12 +6,12 @@
 // over 18 ms. A device that is capped at 30 fps from the start keeps its tiers (it is not slowing
 // down). Steps, cheapest loss first: lights High->Medium, shadows High->Medium, shadows ->Low,
 // lights ->Low, shadows ->Off, lights ->Off. After a long fast period one step is given back.
-// A manual choice by the player (lock()) stops it. RTS_ADAPTIVE=off disables it,
-// RTS_ADAPTIVE_FAKE_MS=<ms> adds load to every frame (testing).
+// A manual choice by the player (lock()) stops it. AIVERSE_ADAPTIVE=off disables it,
+// AIVERSE_ADAPTIVE_FAKE_MS=<ms> adds load to every frame (testing).
 #pragma once
 #include <cstdint>
 
-namespace rts::render {
+namespace aiverse::render {
 
 class QualityGovernor {
 public:
@@ -38,4 +38,4 @@ private:
     bool locked_ = false, disabled_ = false;
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

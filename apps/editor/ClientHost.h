@@ -1,4 +1,4 @@
-// The game client hosted inside the editor's Game window: the same GameClient as RTSGame (menus /
+// The game client hosted inside the editor's Game window: the same GameClient as AiverseGame (menus /
 // meta screens of ui/main.lua, view scripts, script UI, mapClick input, audio, pause screen), rendered
 // into the window's offscreen target. While the host calls into the client it sets
 // platform::setHostedView (size / scale / safe area / content root of the device screen) and
@@ -11,10 +11,10 @@
 #include "engine/gfx/Gfx.h"
 #include "engine/platform/Platform.h"
 
-namespace rts { class Simulation; }
-namespace rts::client { class GameClient; }
+namespace aiverse { class Simulation; }
+namespace aiverse::client { class GameClient; }
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class ClientHost {
 public:
@@ -51,4 +51,4 @@ private:
     bool finger_ = false;   // touch profile: the left button is down as finger 1 (event)
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

@@ -3,7 +3,7 @@
 #include <set>
 #include "../../data/Json.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 // Text typed by players is shown as is: clients treat a leading "@" as a localization key
 // (titles from the server config may use that), so escape it ("@@x" displays "@x").
@@ -430,4 +430,4 @@ void Server::Impl::sweepRooms() {
     }
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

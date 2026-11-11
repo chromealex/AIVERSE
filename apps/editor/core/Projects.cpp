@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -56,7 +56,7 @@ std::string canonical(const std::string& dir) {
 bool skipped(const fs::path& rel) {
     const std::string top = rel.begin() == rel.end() ? std::string() : rel.begin()->string();
     if (std::distance(rel.begin(), rel.end()) == 1 && isProjectFilePath(top)) return true;   // the new project gets its own
-    return top == "Builds" || top == "dist" || top == "logs" || top == "Logs" || top == ".rtsengine";
+    return top == "Builds" || top == "dist" || top == "logs" || top == "Logs" || top == ".aiverse" || top == ".rtsengine";
 }
 
 const char* kEmptyRules = R"({
@@ -77,7 +77,7 @@ const char* kEmptyMap = R"({"name": "Start", "size": [48, 32], "players": [{"nam
 
 std::vector<TemplateInfo> listTemplates(const std::string& engineDir) {
     std::vector<TemplateInfo> out;
-    out.push_back({"empty", "", "Пустой проект", "Один тип юнита, рудник и пустая карта: начать с нуля.", "", "", 1});
+    out.push_back({"empty", "", "Пустой проект", "Один тип юнита, рудник и пустая карта: начать с нуля.", "rts", "", 1});
     std::error_code ec;
     std::vector<TemplateInfo> found;
     for (auto& e : fs::directory_iterator(fs::path(engineDir) / "templates", ec)) {
@@ -89,7 +89,7 @@ std::vector<TemplateInfo> listTemplates(const std::string& engineDir) {
             Json m = Json::parseFile((e.path() / "game.json").string());
             t.name = m.getStr("name", t.id);
             t.description = m.getStr("description", "");
-            t.genre = m.getStr("genre", "");
+            t.genre = m.getStr("genre", m.getStr("module", "rts"));
             t.maps = int(m["maps"].size());
             std::string pv = m.getStr("preview", "");
             if (pv.empty() && m["icons"].isObject()) pv = m["icons"].getStr("default", "");
@@ -104,8 +104,14 @@ std::vector<TemplateInfo> listTemplates(const std::string& engineDir) {
     return out;
 }
 
-std::string projectsRegistry() { return (home() / ".rtsengine" / "projects.json").string(); }
-std::string defaultProjectsDir() { return (home() / "RTSProjects").string(); }
+std::string projectsRegistry() {
+    const auto current = home() / ".aiverse" / "projects.json";
+    const auto legacy = home() / ".rtsengine" / "projects.json";
+    std::error_code ec;
+    if (!fs::exists(current, ec) && fs::exists(legacy, ec)) return legacy.string();
+    return current.string();
+}
+std::string defaultProjectsDir() { return (home() / "AiverseProjects").string(); }
 
 std::vector<ProjectInfo> recentProjects() {
     std::vector<ProjectInfo> out;
@@ -181,7 +187,7 @@ std::string createProject(const std::string& engineDir, const std::string& templ
                 if (skipped(rel)) { if (it->is_directory()) it.disable_recursion_pending(); continue; }
                 const fs::path to = dst / rel;
                 if (it->is_directory()) fs::create_directories(to);
-                else rts::pack::copyFileReplaceOrThrow(it->path(), to);
+                else aiverse::pack::copyFileReplaceOrThrow(it->path(), to);
             }
         } else {
             writeFile(dst / "rules.json", kEmptyRules);
@@ -190,7 +196,7 @@ std::string createProject(const std::string& engineDir, const std::string& templ
         }
         Json m = Json::parseFile((dst / "game.json").string());
         m.set("name", Json::string(title));
-        m.set("id", Json::string("com.rtsengine." + slug(name)));
+        m.set("id", Json::string("com.aiverse." + slug(name)));
         m.set("version", Json::string("0.1.0"));
         if (!m.has("module")) m.set("module", Json::string("rts"));
         if (!m.has("rules")) m.set("rules", Json::string("rules.json"));
@@ -213,4 +219,4 @@ std::string createProject(const std::string& engineDir, const std::string& templ
     return dst.lexically_normal().string();
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

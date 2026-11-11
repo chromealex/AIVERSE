@@ -1,0 +1,1646 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 560ca13..beb91a3 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -375,3 +375,13 @@ Build regional navmeshes from authoritative collision and agent dimensions; reje
+ and budget exhaustion. AABB raster meshes do not imply triangle/slope/off-mesh/streaming support.
+ Use generated mesh components for reachable patrol targets. Run actual motor detour and bot restore
+ checks, external native/export builds, and full engine/template checks for simulation changes.
++
++### Cross-genre action and narrative policies
++
++For character jump/motion policies, melee timing/combos, recoil/projectiles, rounds/capture and
++story choices, read `docs/genre-packages.md` and matching catalog skills. Reuse built-in movement,
++weapon/ammo, damage/status and victory owners where applicable; these are explicit custom policies.
++Use generated settings adapters and stable localized narrative graph IDs. Persist typed state with
++its immutable definition versions. Native OBJECT modules use aiverse_native_use_genre to propagate
++backend dependencies. Test collision, repeated commands, invalid choices, overflow and restore.
++Do not claim climbing, a complete fighting game, bomb rules or cinematic playback from these policies.
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ec8c2a0..696ee22 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1211,3 +1211,9 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_fps)
+     target_link_libraries(aiverse_library_navmesh_tests PRIVATE AIVERSE::fps_bots)
+     add_test(NAME library_navmesh COMMAND aiverse_library_navmesh_tests)
+ endif()
++
++if(AIVERSE_BUILD_TESTS AND TARGET aiverse_world)
++    add_executable(aiverse_library_genre_tests tests/libraries/genre_tests.cpp)
++    target_link_libraries(aiverse_library_genre_tests PRIVATE AIVERSE::genre)
++    add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${PROJECT_SOURCE_DIR})
++endif()
+diff --git a/docs/ai-skills/rts-character-locomotion/SKILL.md b/docs/ai-skills/rts-character-locomotion/SKILL.md
+new file mode 100644
+index 0000000..3dc4973
+--- /dev/null
++++ b/docs/ai-skills/rts-character-locomotion/SKILL.md
+@@ -0,0 +1,14 @@
++---
++name: rts-character-locomotion
++description: Reuse AIVERSE fixed character movement policy with ground/air acceleration, jump buffer and coyote time when building native C++ games across genres.
++---
++
++# character-locomotion
++
++1. Read `docs/genre-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/genre/Locomotion.h` for exact runtime behavior.
++2. Prefer existing engine mechanics for built-in FPS movement/ammo, RTS abilities/damage and victory. Use these policies for an explicit custom owner; never maintain duplicate health, inventory or cooldown state.
++3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
++4. Host executables link AIVERSE::genre. Registered native OBJECT modules call aiverse_native_use_genre(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.
++5. Route external actions as Commands, validate ownership/resources/targets, and consume policy outcomes in the authoritative owner. Presentation only reads committed state. Use sim.rng for spread, integer ticks and Fixed arithmetic.
++6. Persist state with genre::save/load and storeBytes/loadBytes in a separate NativeState key. Bind configuration/definition versions in the save envelope. Do not put mutable state on a NativeModule instance or keep future state after rollback.
++7. Run catalog/generator checks, tests/libraries/run.py, native_consumer.py and aiverse_library_genre_tests. Add real project replay/collision/UI checks for integration changes. Report policies separately from fully wired genre gameplay and list platform gaps.
+diff --git a/docs/ai-skills/rts-configuration/SKILL.md b/docs/ai-skills/rts-configuration/SKILL.md
+index 02918dc..b6b8104 100644
+--- a/docs/ai-skills/rts-configuration/SKILL.md
++++ b/docs/ai-skills/rts-configuration/SKILL.md
+@@ -35,3 +35,5 @@ headers with catalog.py; review pin changes when upgrading.
+ 
+ The additive 0.2.0 settings include loot.guaranteeAfter, perception.capacity/lifetimeTicks,
+ and decisionReport.maxFacts. Use systems/Configured.h to map them to runtime policies.
++
++Configuration 0.3.0 adds locomotion, melee, projectile and matchRules scalar sections. Read docs/genre-packages.md for units and adapters; narrative graphs are separate data.
+diff --git a/docs/ai-skills/rts-match-rules/SKILL.md b/docs/ai-skills/rts-match-rules/SKILL.md
+new file mode 100644
+index 0000000..e504914
+--- /dev/null
++++ b/docs/ai-skills/rts-match-rules/SKILL.md
+@@ -0,0 +1,14 @@
++---
++name: rts-match-rules
++description: Reuse AIVERSE team score events, rounds, overtime, draws and contested capture policies when building native C++ games across genres.
++---
++
++# match-rules
++
++1. Read `docs/genre-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/genre/Match.h` for exact runtime behavior.
++2. Prefer existing engine mechanics for built-in FPS movement/ammo, RTS abilities/damage and victory. Use these policies for an explicit custom owner; never maintain duplicate health, inventory or cooldown state.
++3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
++4. Host executables link AIVERSE::genre. Registered native OBJECT modules call aiverse_native_use_genre(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.
++5. Route external actions as Commands, validate ownership/resources/targets, and consume policy outcomes in the authoritative owner. Presentation only reads committed state. Use sim.rng for spread, integer ticks and Fixed arithmetic.
++6. Persist state with genre::save/load and storeBytes/loadBytes in a separate NativeState key. Bind configuration/definition versions in the save envelope. Do not put mutable state on a NativeModule instance or keep future state after rollback.
++7. Run catalog/generator checks, tests/libraries/run.py, native_consumer.py and aiverse_library_genre_tests. Add real project replay/collision/UI checks for integration changes. Report policies separately from fully wired genre gameplay and list platform gaps.
+diff --git a/docs/ai-skills/rts-melee-combat/SKILL.md b/docs/ai-skills/rts-melee-combat/SKILL.md
+new file mode 100644
+index 0000000..d70a677
+--- /dev/null
++++ b/docs/ai-skills/rts-melee-combat/SKILL.md
+@@ -0,0 +1,14 @@
++---
++name: rts-melee-combat
++description: Reuse AIVERSE custom melee timing, buffered combos, active-window hit deduplication and defense outcomes when building native C++ games across genres.
++---
++
++# melee-combat
++
++1. Read `docs/genre-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/genre/Melee.h` for exact runtime behavior.
++2. Prefer existing engine mechanics for built-in FPS movement/ammo, RTS abilities/damage and victory. Use these policies for an explicit custom owner; never maintain duplicate health, inventory or cooldown state.
++3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
++4. Host executables link AIVERSE::genre. Registered native OBJECT modules call aiverse_native_use_genre(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.
++5. Route external actions as Commands, validate ownership/resources/targets, and consume policy outcomes in the authoritative owner. Presentation only reads committed state. Use sim.rng for spread, integer ticks and Fixed arithmetic.
++6. Persist state with genre::save/load and storeBytes/loadBytes in a separate NativeState key. Bind configuration/definition versions in the save envelope. Do not put mutable state on a NativeModule instance or keep future state after rollback.
++7. Run catalog/generator checks, tests/libraries/run.py, native_consumer.py and aiverse_library_genre_tests. Add real project replay/collision/UI checks for integration changes. Report policies separately from fully wired genre gameplay and list platform gaps.
+diff --git a/docs/ai-skills/rts-narrative-graphs/SKILL.md b/docs/ai-skills/rts-narrative-graphs/SKILL.md
+new file mode 100644
+index 0000000..0a71d11
+--- /dev/null
++++ b/docs/ai-skills/rts-narrative-graphs/SKILL.md
+@@ -0,0 +1,14 @@
++---
++name: rts-narrative-graphs
++description: Reuse AIVERSE localized narrative graphs with conditional choices and atomic fact transactions when building native C++ games across genres.
++---
++
++# narrative-graphs
++
++1. Read `docs/genre-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/genre/Narrative.h` for exact runtime behavior.
++2. Prefer existing engine mechanics for built-in FPS movement/ammo, RTS abilities/damage and victory. Use these policies for an explicit custom owner; never maintain duplicate health, inventory or cooldown state.
++3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
++4. Host executables link AIVERSE::genre. Registered native OBJECT modules call aiverse_native_use_genre(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.
++5. Route external actions as Commands, validate ownership/resources/targets, and consume policy outcomes in the authoritative owner. Presentation only reads committed state. Use sim.rng for spread, integer ticks and Fixed arithmetic.
++6. Persist state with genre::save/load and storeBytes/loadBytes in a separate NativeState key. Bind configuration/definition versions in the save envelope. Do not put mutable state on a NativeModule instance or keep future state after rollback.
++7. Run catalog/generator checks, tests/libraries/run.py, native_consumer.py and aiverse_library_genre_tests. Add real project replay/collision/UI checks for integration changes. Report policies separately from fully wired genre gameplay and list platform gaps.
+diff --git a/docs/ai-skills/rts-weapon-policies/SKILL.md b/docs/ai-skills/rts-weapon-policies/SKILL.md
+new file mode 100644
+index 0000000..1e6d890
+--- /dev/null
++++ b/docs/ai-skills/rts-weapon-policies/SKILL.md
+@@ -0,0 +1,14 @@
++---
++name: rts-weapon-policies
++description: Reuse AIVERSE seeded spread, recoil recovery and swept projectiles with bounded ricochets when building native C++ games across genres.
++---
++
++# weapon-policies
++
++1. Read `docs/genre-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/genre/Weapons.h` for exact runtime behavior.
++2. Prefer existing engine mechanics for built-in FPS movement/ammo, RTS abilities/damage and victory. Use these policies for an explicit custom owner; never maintain duplicate health, inventory or cooldown state.
++3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
++4. Host executables link AIVERSE::genre. Registered native OBJECT modules call aiverse_native_use_genre(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.
++5. Route external actions as Commands, validate ownership/resources/targets, and consume policy outcomes in the authoritative owner. Presentation only reads committed state. Use sim.rng for spread, integer ticks and Fixed arithmetic.
++6. Persist state with genre::save/load and storeBytes/loadBytes in a separate NativeState key. Bind configuration/definition versions in the save envelope. Do not put mutable state on a NativeModule instance or keep future state after rollback.
++7. Run catalog/generator checks, tests/libraries/run.py, native_consumer.py and aiverse_library_genre_tests. Add real project replay/collision/UI checks for integration changes. Report policies separately from fully wired genre gameplay and list platform gaps.
+diff --git a/docs/bots.md b/docs/bots.md
+index 08c5d1c..1d81c91 100644
+--- a/docs/bots.md
++++ b/docs/bots.md
+@@ -71,7 +71,8 @@ and **turns** (one turn = 360 degrees). Reaction and sensor cadence therefore de
+ 
+ `fpsConfig` validates all fields. `fpsCommand(sim,module,slot,config,waypoints,state,objective,mesh)`
+ returns at most one command per increasing tick. Target selection is stable by distance then slot.
+-Targets must be alive enemies within FOV/range and unobstructed by collision. Lost targets retain
++Targets must be alive enemies within FOV/range and unobstructed by collision. Current stance height,
++weapon range and temporary blindness are read from the expanded FPS module. Lost targets retain
+ only their last observed position until TTL expires. A target respawn has a new life ID and resets
+ reaction. Aim changes are bounded per tick; deterministic aim bias models inaccuracy without using
+ platform randomness. A friendly actor in the firing ray suppresses fire.
+@@ -85,7 +86,8 @@ Patrol can use authored waypoints, a project objective, or reachable polygons in
+ Decision enum values are Idle, Patrol, Investigate, Engage, Reload, Retreat, Zone, Blocked. They are
+ codes for diagnostics, not localized display strings. More complex game goals (bomb placement,
+ hostages, loot pickups, vehicles, weapon selection) require a game adapter for the actual mechanics;
+-the current FPS module does not expose all of those mechanics yet.
++the generic adapter does not drive those newer FPS systems automatically. Use the authoritative
++FpsSystems actions when extending objectives rather than synthesizing inventory or round state.
+ 
+ ## Save and rollback
+ 
+diff --git a/docs/gameplay-settings.md b/docs/gameplay-settings.md
+index b2255f4..50dedb0 100644
+--- a/docs/gameplay-settings.md
++++ b/docs/gameplay-settings.md
+@@ -55,9 +55,35 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
+ | perception | capacity | integer | 128 | 1..100000 |
+ | perception | lifetimeTicks | integer | 200 | 1..2147483647 |
+ | decisionReport | maxFacts | integer | 32 | 0..10000 |
++| locomotion | groundSpeedMilli | integer | 6000 | 0..100000 |
++| locomotion | airSpeedMilli | integer | 6000 | 0..100000 |
++| locomotion | accelerationMilli | integer | 30000 | 1..1000000 |
++| locomotion | brakingMilli | integer | 40000 | 1..1000000 |
++| locomotion | gravityMilli | integer | 20000 | 0..1000000 |
++| locomotion | jumpSpeedMilli | integer | 7000 | 0..100000 |
++| locomotion | coyoteTicks | integer | 6 | 0..3600 |
++| locomotion | bufferTicks | integer | 6 | 0..3600 |
++| locomotion | maxJumps | integer | 1 | 1..16 |
++| melee | windup | integer | 6 | 0..3600 |
++| melee | active | integer | 4 | 1..3600 |
++| melee | recovery | integer | 12 | 0..3600 |
++| melee | bufferTicks | integer | 8 | 0..3600 |
++| projectile | gravityMilli | integer | 20000 | 0..1000000 |
++| projectile | radiusMilli | integer | 50 | 0..2000 |
++| projectile | retentionMilli | integer | 750 | 0..1000 |
++| projectile | lifetime | integer | 600 | 1..100000 |
++| projectile | maxBounces | integer | 0 | 0..32 |
++| matchRules | warmupTicks | integer | 60 | 0..10000000 |
++| matchRules | roundTicks | integer | 3600 | 1..10000000 |
++| matchRules | overtimeTicks | integer | 600 | 0..10000000 |
++| matchRules | intermissionTicks | integer | 120 | 0..10000000 |
++| matchRules | roundsToWin | integer | 1 | 1..100 |
++| matchRules | maxRounds | integer | 5 | 1..1000 |
++| matchRules | scoreToWin | integer | 10 | 1..1000000000 |
+ 
+ ## Cross-field constraints
+ 
+ Constraint: `camera.minZoom <= camera.maxZoom` (checked by loader and CLI).
+ Constraint: `camera.minPitch <= camera.maxPitch` (checked by loader and CLI).
+ Constraint: `abilities.minRange <= abilities.maxRange` (checked by loader and CLI).
++Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).
+diff --git a/docs/genre-mechanics-roadmap.md b/docs/genre-mechanics-roadmap.md
+index 8930e7a..8c7de1a 100644
+--- a/docs/genre-mechanics-roadmap.md
++++ b/docs/genre-mechanics-roadmap.md
+@@ -1,6 +1,7 @@
+ # Cross-genre mechanics: proposed library roadmap
+ 
+-Status: proposals for the next batches, not a claim that these APIs are already implemented.
++Status: roadmap. The first bounded C++ policy batch is implemented in [genre-packages.md](genre-packages.md);
++the full mechanics listed below remain proposed scope.
+ Audit each area against the current engine modules and libraries/catalog.json before implementing.
+ The engine is expanding across genres; shared mechanics should have one owner and genre presets.
+ Existing attributes, statuses, abilities, inventory, progression, interactions, meta economy,
+diff --git a/docs/genre-packages.md b/docs/genre-packages.md
+new file mode 100644
+index 0000000..82a47b9
+--- /dev/null
++++ b/docs/genre-packages.md
+@@ -0,0 +1,113 @@
++# Cross-genre C++ gameplay packages: first batch
++
++These are reusable deterministic policies for project-native/host code. They compose with engine
++mechanics; they do not silently replace existing FPS movement, RTS abilities/damage or match rules.
++
++| Package | Implemented API | Boundaries |
++|---|---|---|
++| character-locomotion | MotionConfig/State/Input, stepMotion: ground/air speed, acceleration/braking, gravity, jump buffer, coyote time, bounded extra jumps, ceiling response | Returns velocity; collision owner reports grounded/ceiling and applies movement. No climbing, swimming, mantle or animation controller yet. |
++| melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
++| weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets | Existing FPS ammo/reload/fire cadence remain authoritative. No penetration/material model, weapon attachments or automatic replacement of hitscan. |
++| match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
++| narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
++
++## Native/host integration
++
++Include `<aiverselib/genre/Configured.h>`, the needed policy header and `genre/Persistence.h`.
++Executable hosts link `AIVERSE::genre`; registered OBJECT modules call
++`aiverse_native_use_genre(aiverse_native_<id>)` after `aiverse_native_module(...)`. The helper puts collision
++backend dependencies on the owning aiverse_game target, avoiding object-library linkage cycles.
++For header-only policies without projectile collision, `AIVERSE::gameplay_native` is sufficient.
++
++See `examples/native/libraries/GenreConsumer.cpp` for validated settings and NativeState storage.
++The library_demo native module now initializes these records in setup (module VERSION 3).
++`tests/libraries/genre_tests.cpp` runs trajectories, combos, world collision, round transitions,
++choice transactions and restoration checks. No engine source edit is required in a consuming project.
++
++External input must arrive as validated Commands. Use these helpers inside the owning authoritative
++system/handler, not from presentation. Keep immutable definitions separately from dynamic state.
++Use integer ticks and Fixed dt. Save every outcome-affecting state and do not update the same controller
++twice per tick. Motion, melee and match policies reject repeated/backwards ticks. Recoil/projectile
++steppers are per-step primitives; their owner is responsible for exactly one update per simulation tick.
++
++## Configuration
++
++Scalar defaults are in `libraries/spec/gameplay.json` (configuration package 0.3.0): sections
++`locomotion`, `melee`, `projectile`, `matchRules`. Run generate_gameplay.py after spec changes.
++Load through `readGameplaySettings`, then `motionConfig`, `attackConfig`, `projectileConfig`,
++`matchConfig`. Metres/seconds use integer milli-units in JSON; C++ converts directly to Fixed.
++Tick durations are literal ticks at the project's tick rate. Existing settings remain optional.
++
++`examples/libraries/genre/settings.json` configures a double-jump controller, attack timing,
++a ricocheting projectile and best-of rounds. Attack definitions are typed AttackSet entries:
++set stable positive IDs, allowed combo IDs and cancelFrom explicitly. Graph validation rejects
++unknown combo edges. `attackConfig(settings,id)` cancels into combos from recovery start by default.
++RecoilConfig is a typed public settings struct; angles use turns and recovery is per simulation step.
++
++Narrative JSON uses `readStory` and the example `examples/libraries/genre/story.json`. Every node and
++choice has a localization key. Choice `next:0` ends the graph; conditions reference integer fact IDs.
++Missing facts fail their conditions. Define an explicit ending choice even for a final dialogue node.
++Unknown fields, duplicate IDs, broken edges and invalid integer values are rejected during loading.
++
++## Runtime contracts
++
++**Motion:** `jumpPressed` is an input edge, not a held button. The physics owner must provide the actual
++collision result on the next tick. Walking off a ledge consumes the ground jump once the coyote window
++expires. A buffered press may fire on landing before expiry. The policy clamps terminal falling speed
++at 1000 units/second and accepts dt in (0,1]. It does not add extra jumps to the FPS motor automatically.
++
++**Melee:** one active attack owns a sorted list of already-hit target IDs. Use stable packed entity IDs
++that fit positive int64 (or project-owned IDs). `recordMeleeHit` records only active-window contacts;
++call it after the authoritative spatial/team check. `stepMelee` calls authorization only when an attack
++can start; make spending atomic in that callback and issue resulting effects through the existing owner.
++`resolveMeleeContact` prioritizes invulnerability, then parry, then block, then normal hit. It does not
++compute another damage formula. Input buffering expires; no hit may be emitted twice for one swing.
++
++**Weapons:** use `sim.rng()` with `sampleSpread`; invalid spread consumes no RNG. Sampling uses uniform
++integer yaw/pitch offsets, not a uniform solid-angle cone. Persist recoil if it changes authoritative aim.
++Projectile movement uses the world's real swept AABB collision (radius as equal half-extents), avoiding
++fast-projectile tunneling through boxes. One impact is handled per tick; leftover travel after bounce is
++discarded. Every impact is returned for the damage/effects owner to process. Lifetime counts completed
++steps, so lifetime=1 moves once. Projectiles leaving +/-100000 world bounds are clamped and terminated.
++No physics position, velocity, ammunition or damage is silently copied into the existing FPS actor state.
++
++**Matches:** initialize unique positive team IDs with makeMatch. `awardScore` accepts nonnegative points
++only during live/overtime, with strictly increasing event IDs per team. Persist those IDs across rounds;
++never reuse them while delayed commands can arrive. Step evaluates score/clock transitions. Overtime
++ends on a sole leader or its limit; tied rounds may draw. Match win uses round wins. Capture points
++freeze while contested, decay progress by one per empty tick, and commit ownership at the threshold.
++The caller validates presence and awards associated score/rewards. Presence counts are not trusted input.
++
++**Narrative:** available choices are stable by ID. `chooseStory` rechecks conditions, applies all fact
++changes to a copy, rejects integer overflow, commits the next node and records the command ID atomically.
++One explicit choice produces one transition; loops are allowed without recursive auto-execution.
++Only project-owned story facts are mutated. For rewards/inventory, use an existing transactional owner
++and an idempotent event from the committed story transition; do not treat a fact increment as a wallet.
++
++## State and verification
++
++`genre::save/load` provides version-1 Archive records for MotionState, MeleeState, RecoilState,
++ProjectileState, MatchState, CaptureState and StoryState. Each subsystem needs its own key;
++records include a state-type discriminator. Load validates limits and canonical encoding, rejects
++truncation/trailing data without replacing destination. Bind the exact immutable configuration and
++definition versions in the project save envelope. `storeBytes/loadBytes` reuse runtime/NativeBytes.h
++to bridge records to NativeState arrays. Bot persistence uses the same byte bridge.
++
++Run catalog.py check, generate_gameplay.py --check, tests/libraries/run.py and native_consumer.py.
++Run root `aiverse_library_genre_tests` and the standalone test under ASan/UBSan. For engine wiring, add
++real gameplay acceptance and replay/save checks. Current tests exercise the C++ policies and real
++collision; they are not a claim that a complete platformer/fighting/story UI is shipped. No rendering
++changes in this batch. Windows, Metal presentation, mobile and web runtime paths remain unverified.
++
++The broader proposed scope is in [genre-mechanics-roadmap.md](genre-mechanics-roadmap.md).
++
++## Verified integration snapshot (2026-11-11)
++
++AIVERSE namespace/targets/includes were used for the final integration. All 5771 engine checks,
++9 standalone library suites, native/export consumer builds and all three 200-tick native restore
++modes passed. Separate RTS/FPS controller tests compare 300 ticks after a fresh restore. Real
++library-controlled matches completed: skirmish at tick 8081 (217 commands), FPS arena at tick 264
++(2640 commands, 58 shots, 5 deaths). All 30 templates ran without process errors; fourages reached
++its 1800-second limit, and the four FPS reference-template runs were 30-second smoke tests without
++winners. ASan/UBSan passed the genre and navmesh regression scenarios. Cross-platform runtime and
++rendered UI remain outside this verification.
+diff --git a/docs/libraries.md b/docs/libraries.md
+index db0c84a..7c60547 100644
+--- a/docs/libraries.md
++++ b/docs/libraries.md
+@@ -154,3 +154,8 @@ curves and AI memory are documented in [gameplay-systems.md](gameplay-systems.md
+ See [bots.md](bots.md) for RTS/FPS profiles, command-based native/host adapters, versioned checkpoints,
+ automatic layered collision navmesh, region/agent limits, the mesh exporter and actual-match runner.
+ Use [genre-mechanics-roadmap.md](genre-mechanics-roadmap.md) for the proposed cross-genre expansion.
++
++## First cross-genre action/narrative batch
++
++See [genre-packages.md](genre-packages.md) for locomotion policies, melee combos, recoil/projectiles,
++round/capture rules and narrative graphs, with validated settings and native state codecs.
+diff --git a/examples/libraries/genre/settings.json b/examples/libraries/genre/settings.json
+new file mode 100644
+index 0000000..f503687
+--- /dev/null
++++ b/examples/libraries/genre/settings.json
+@@ -0,0 +1,7 @@
++{
++  "schemaVersion": 1,
++  "locomotion": {"coyoteTicks": 6, "bufferTicks": 8, "maxJumps": 2},
++  "melee": {"windup": 5, "active": 3, "recovery": 10},
++  "projectile": {"gravityMilli": 0, "maxBounces": 2, "lifetime": 120},
++  "matchRules": {"warmupTicks": 0, "roundTicks": 600, "scoreToWin": 3, "roundsToWin": 2, "maxRounds": 3}
++}
+diff --git a/examples/libraries/genre/story.json b/examples/libraries/genre/story.json
+new file mode 100644
+index 0000000..2e62f06
+--- /dev/null
++++ b/examples/libraries/genre/story.json
+@@ -0,0 +1,9 @@
++{
++  "nodes": [
++    {"id":1,"textKey":"story.guard.greeting","choices":[
++      {"id":1,"textKey":"story.guard.show_pass","next":2,"conditions":[{"key":1,"minimum":1,"maximum":1}],"changes":[{"key":2,"value":1}]},
++      {"id":2,"textKey":"story.guard.leave","next":0}
++    ]},
++    {"id":2,"textKey":"story.guard.welcome","choices":[{"id":1,"textKey":"story.continue","next":0}]}
++  ]
++}
+diff --git a/examples/native/libraries/CMakeLists.txt b/examples/native/libraries/CMakeLists.txt
+index cfdae49..927ed6c 100644
+--- a/examples/native/libraries/CMakeLists.txt
++++ b/examples/native/libraries/CMakeLists.txt
+@@ -1,3 +1,4 @@
+-aiverse_native_module(ID library_demo VERSION 2 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp)
++aiverse_native_module(ID library_demo VERSION 3 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
+ target_link_libraries(aiverse_native_library_demo PRIVATE AIVERSE::gameplay_native)
+ aiverse_native_use_bots(aiverse_native_library_demo RTS FPS)
++aiverse_native_use_genre(aiverse_native_library_demo)
+diff --git a/examples/native/libraries/GenreConsumer.cpp b/examples/native/libraries/GenreConsumer.cpp
+new file mode 100644
+index 0000000..9b735e2
+--- /dev/null
++++ b/examples/native/libraries/GenreConsumer.cpp
+@@ -0,0 +1,12 @@
++#include <aiverselib/genre/Configured.h>
++#include <aiverselib/genre/Persistence.h>
++#include <aiverselib/genre/Data.h>
++#include "modules/rts/RtsNative.h"
++// Custom native state initialization; the project's command/physics owners consume the policies.
++bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
++    using namespace aiverse::lib::genre;
++    auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
++    if(!valid(motionConfig(*parsed.value))||!valid(matchConfig(*parsed.value)))return false;
++    auto graph=readStory(story);auto initial=beginStory(graph,graph.begin()->first,{{1,1}});if(!initial)return false;
++    return storeBytes(state,"genre.story",save(*initial))&&storeBytes(state,"genre.motion",save(MotionState{}));
++}
+diff --git a/examples/native/libraries/LibraryDemo.cpp b/examples/native/libraries/LibraryDemo.cpp
+index 803229d..72533d2 100644
+--- a/examples/native/libraries/LibraryDemo.cpp
++++ b/examples/native/libraries/LibraryDemo.cpp
+@@ -8,6 +8,8 @@
+ #include <aiverselib/gameplay/Tutorial.h>
+ #include <aiverselib/gameplay/NativeCommands.h>
+ 
++bool libraryBotConsumerExample(aiverse::game::NativeState&);
++bool libraryGenreConsumerExample(aiverse::game::NativeState&,const aiverse::Json&,const aiverse::Json&);
+ bool librarySystemsConsumerExample(aiverse::game::NativeState&);
+ bool librarySystemsTickExample(aiverse::Simulation&,aiverse::game::NativeState&);
+ 
+@@ -23,6 +25,8 @@ public:
+         if(!parsed.value)throw std::runtime_error("library_demo: "+parsed.errors.front());
+         const auto& options=*parsed.value;
+         if(!librarySystemsConsumerExample(state))throw std::runtime_error("workshop initialization failed");
++        auto story=aiverse::Json::parse(R"({"nodes":[{"id":1,"textKey":"demo.story","choices":[{"id":1,"textKey":"demo.finish","next":0}]}]})");
++        if(!libraryBotConsumerExample(state)||!libraryGenreConsumerExample(state,document,story))throw std::runtime_error("genre initialization failed");
+         state.values["cast_ticks"]=options.abilities.castTicks;
+         state.values["cooldown_ticks"]=options.abilities.cooldownTicks;
+         state.values["ready_tick"]=0;
+diff --git a/libraries/CMakeLists.txt b/libraries/CMakeLists.txt
+index 77a0fcb..7bab2c3 100644
+--- a/libraries/CMakeLists.txt
++++ b/libraries/CMakeLists.txt
+@@ -38,3 +38,14 @@ function(aiverse_native_use_bots target)
+         endif()
+     endforeach()
+ endfunction()
++
++add_library(aiverse_genre_library INTERFACE)
++add_library(AIVERSE::genre ALIAS aiverse_genre_library)
++target_link_libraries(aiverse_genre_library INTERFACE AIVERSE::gameplay_native aiverse_world)
++function(aiverse_native_use_genre target)
++    if(NOT TARGET ${target} OR NOT TARGET aiverse_game)
++        message(FATAL_ERROR "aiverse_native_use_genre requires a registered native target")
++    endif()
++    target_link_libraries(${target} PRIVATE AIVERSE::gameplay_native)
++    target_link_libraries(aiverse_game PUBLIC aiverse_world)
++endfunction()
+diff --git a/libraries/catalog.json b/libraries/catalog.json
+index 6d0a93f..2c4a5ea 100644
+--- a/libraries/catalog.json
++++ b/libraries/catalog.json
+@@ -394,7 +394,7 @@
+     },
+     {
+       "id": "configuration",
+-      "version": "0.2.0",
++      "version": "0.3.0",
+       "layer": "tools",
+       "status": "cpp-subsystem",
+       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
+@@ -837,7 +837,7 @@
+     },
+     {
+       "id": "bots-fps",
+-      "version": "0.1.0",
++      "version": "0.1.2",
+       "layer": "simulation",
+       "status": "cpp-subsystem",
+       "source": "libraries/include/aiverselib/bots/Fps.h",
+@@ -881,6 +881,96 @@
+       "summary": "Actual RTS/FPS bot matches, decision counters and restoration regression tests",
+       "notes": "Build aiverse_bot_match and root library bot/navmesh tests. Example FPS navmesh bounds target arena; author region bounds for other maps. A timeout is not a win, and bot difficulty presets are not an Elo claim.",
+       "verifiedPlatforms": []
++    },
++    {
++      "id": "character-locomotion",
++      "version": "0.1.0",
++      "layer": "simulation",
++      "status": "cpp-subsystem",
++      "source": "libraries/include/aiverselib/genre/Locomotion.h",
++      "skill": "docs/ai-skills/rts-character-locomotion/SKILL.md",
++      "summary": "Fixed character movement policy with ground/air acceleration, jump buffer and coyote time",
++      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
++      "verifiedPlatforms": [],
++      "cmakeTarget": "AIVERSE::genre",
++      "dependencies": [
++        "libraries/include/aiverselib/genre/Configured.h",
++        "libraries/include/aiverselib/genre/Persistence.h",
++        "libraries/include/aiverselib/genre/Data.h",
++        "docs/genre-packages.md"
++      ]
++    },
++    {
++      "id": "melee-combat",
++      "version": "0.1.0",
++      "layer": "simulation",
++      "status": "cpp-subsystem",
++      "source": "libraries/include/aiverselib/genre/Melee.h",
++      "skill": "docs/ai-skills/rts-melee-combat/SKILL.md",
++      "summary": "Custom melee timing, buffered combos, active-window hit deduplication and defense outcomes",
++      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
++      "verifiedPlatforms": [],
++      "cmakeTarget": "AIVERSE::genre",
++      "dependencies": [
++        "libraries/include/aiverselib/genre/Configured.h",
++        "libraries/include/aiverselib/genre/Persistence.h",
++        "libraries/include/aiverselib/genre/Data.h",
++        "docs/genre-packages.md"
++      ]
++    },
++    {
++      "id": "weapon-policies",
++      "version": "0.1.0",
++      "layer": "simulation",
++      "status": "cpp-subsystem",
++      "source": "libraries/include/aiverselib/genre/Weapons.h",
++      "skill": "docs/ai-skills/rts-weapon-policies/SKILL.md",
++      "summary": "Seeded spread, recoil recovery and swept projectiles with bounded ricochets",
++      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
++      "verifiedPlatforms": [],
++      "cmakeTarget": "AIVERSE::genre",
++      "dependencies": [
++        "libraries/include/aiverselib/genre/Configured.h",
++        "libraries/include/aiverselib/genre/Persistence.h",
++        "libraries/include/aiverselib/genre/Data.h",
++        "docs/genre-packages.md"
++      ]
++    },
++    {
++      "id": "match-rules",
++      "version": "0.1.0",
++      "layer": "simulation",
++      "status": "cpp-subsystem",
++      "source": "libraries/include/aiverselib/genre/Match.h",
++      "skill": "docs/ai-skills/rts-match-rules/SKILL.md",
++      "summary": "Team score events, rounds, overtime, draws and contested capture policies",
++      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
++      "verifiedPlatforms": [],
++      "cmakeTarget": "AIVERSE::genre",
++      "dependencies": [
++        "libraries/include/aiverselib/genre/Configured.h",
++        "libraries/include/aiverselib/genre/Persistence.h",
++        "libraries/include/aiverselib/genre/Data.h",
++        "docs/genre-packages.md"
++      ]
++    },
++    {
++      "id": "narrative-graphs",
++      "version": "0.1.0",
++      "layer": "simulation",
++      "status": "cpp-subsystem",
++      "source": "libraries/include/aiverselib/genre/Narrative.h",
++      "skill": "docs/ai-skills/rts-narrative-graphs/SKILL.md",
++      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
++      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
++      "verifiedPlatforms": [],
++      "cmakeTarget": "AIVERSE::genre",
++      "dependencies": [
++        "libraries/include/aiverselib/genre/Configured.h",
++        "libraries/include/aiverselib/genre/Persistence.h",
++        "libraries/include/aiverselib/genre/Data.h",
++        "docs/genre-packages.md"
++      ]
+     }
+   ]
+ }
+diff --git a/libraries/include/aiverselib/bots/Fps.h b/libraries/include/aiverselib/bots/Fps.h
+index 8ec039f..9c5cbb5 100644
+--- a/libraries/include/aiverselib/bots/Fps.h
++++ b/libraries/include/aiverselib/bots/Fps.h
+@@ -53,8 +53,8 @@ inline bool valid(const FpsState& s){
+ inline Vec3 flat(Vec3 v){v.y={};return v;}
+ inline Fixed wrapTurn(Fixed angle){angle.raw%=Fixed::kOne;if(angle<Fixed{})angle+=1_fx;return angle;}
+ inline Fixed turnDelta(Fixed to,Fixed from){auto d=wrapTurn(to-from);return d>Fixed::fromRatio(1,2)?d-1_fx:d;}
+-inline Vec3 eye(const fps::Actor& a,const fps::MotorConfig& c){return a.pos+Vec3{{},(a.crouched?c.crouchHeight:c.height)-Fixed::fromRatio(1,10),{}};}
+-inline Vec3 center(const fps::Actor& a,const fps::MotorConfig& c){return a.pos+Vec3{{},(a.crouched?c.crouchHeight:c.height)/2,{}};}
++inline Vec3 eye(const fps::Actor& a,const fps::MotorConfig& c){return a.pos+Vec3{{},fps::stanceHeight(a,c)-Fixed::fromRatio(1,10),{}};}
++inline Vec3 center(const fps::Actor& a,const fps::MotorConfig& c){return a.pos+Vec3{{},fps::stanceHeight(a,c)/2,{}};}
+ inline bool visible(const fps::Actor& self,const fps::Actor& other,const fps::Module& module,const FpsConfig& c){
+     if(other.slot==self.slot||other.team==self.team||other.health<=0)return false;
+     auto delta=center(other,module.config().motor)-eye(self,module.config().motor);auto distance=delta.length();
+@@ -83,7 +83,8 @@ inline std::optional<Command> fpsCommand(Simulation& sim,const fps::Module& modu
+     const fps::Actor* target=nullptr;
+     // Recheck current target each tick for LOS; new sightings are sampled at the configured cadence.
+     for(const auto& a:world.actors)if(a.slot==s.target&&a.life==s.targetLife&&visible(self,a,module,c))target=&a;
+-    if(!target&&(!state.initialized||tick-s.lastSensor>=c.sensorTicks)){
++    if(self.blindUntil>tick)target=nullptr;
++    if(self.blindUntil<=tick&&!target&&(!state.initialized||tick-s.lastSensor>=c.sensorTicks)){
+         s.lastSensor=tick;Fixed best=c.sightRange*c.sightRange;
+         for(const auto& a:world.actors)if(visible(self,a,module,c)){
+             auto d=(a.pos-self.pos).lengthSq();if(!target||d<best||(d==best&&a.slot<target->slot)){best=d;target=&a;}
+@@ -129,6 +130,7 @@ inline std::optional<Command> fpsCommand(Simulation& sim,const fps::Module& modu
+     }
+     // Safe-zone movement has priority over chasing and stationary shooting.
+     const auto& cfg=module.config();
++    const auto& weapon=self.weaponIndex<cfg.weapons.size()?cfg.weapons[self.weaponIndex]:cfg.weapon;
+     if(cfg.mode=="battleRoyale"){
+         auto elapsed=tick>cfg.zoneStart?std::min(tick-cfg.zoneStart,cfg.zoneDuration):0;
+         auto radius=cfg.zoneRadius+(cfg.zoneEndRadius-cfg.zoneRadius)*Fixed::fromRatio(elapsed,cfg.zoneDuration);
+@@ -146,9 +148,10 @@ inline std::optional<Command> fpsCommand(Simulation& sim,const fps::Module& modu
+         if(target){auto error=slot%2?c.aimError:-c.aimError;desired=wrapTurn(desired+error);pitch+=error;}
+         input.yaw=wrapTurn(self.yaw+fxClamp(turnDelta(desired,self.yaw),-c.turnPerTick,c.turnPerTick));
+         input.pitch=fxClamp(self.pitch+fxClamp(pitch-self.pitch,-c.turnPerTick,c.turnPerTick),Fixed::fromRatio(-24,100),Fixed::fromRatio(24,100));
+-        if(target&&!retreat&&!reload&&self.reloadUntil==0&&self.ammo>0&&tick-s.acquired>=c.reactionTicks&&
++        if(target&&!retreat&&!reload&&self.reloadUntil==0&&self.ammo>0&&tick>=self.switchUntil&&
++           (weapon.automatic||(!self.fireHeld&&tick>=self.nextFire))&&tick-s.acquired>=c.reactionTicks&&
+            fxAbs(turnDelta(desired,input.yaw))<=c.aimTolerance&&fxAbs(pitch-input.pitch)<=c.aimTolerance&&
+-           delta.length()<=cfg.weapon.range&&!friendlyInLine(self,world,module,input.yaw,input.pitch,delta.length()+cfg.motor.radius))input.buttons|=fps::Fire;
++           delta.length()<=weapon.range&&!friendlyInLine(self,world,module,input.yaw,input.pitch,delta.length()+cfg.motor.radius))input.buttons|=fps::Fire;
+     }
+     const auto arrival=navigation?fxMin(navigation->config.cellSize/8,Fixed::fromRatio(1,10)):c.arrivalRadius;
+     if(goal&&(self.pos-*goal).xz().length()>arrival){
+diff --git a/libraries/include/aiverselib/bots/Persistence.h b/libraries/include/aiverselib/bots/Persistence.h
+index 62ec5a8..3ed46f6 100644
+--- a/libraries/include/aiverselib/bots/Persistence.h
++++ b/libraries/include/aiverselib/bots/Persistence.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include "Fps.h"
++#include "../runtime/NativeBytes.h"
+ #include <string>
+ namespace aiverse::lib::bots {
+ inline void io(Archive& a,FpsState& s){a(s.slot,s.target,s.life,s.targetLife,s.lastTick,s.lastSensor,s.acquired,s.lastSeen,s.sequence,s.initialized,s.lastKnown,s.patrol,s.decision);}
+@@ -10,18 +11,6 @@ inline bool loadFps(const std::string& bytes,FpsState& state){
+     if(bytes.size()>256)return false;Archive a(bytes);uint32_t version=0;FpsState copy;a(version,copy);
+     if(!a.ok()||a.remaining()||version!=1||!valid(copy)||saveFps(copy)!=bytes)return false;state=copy;return true;
+ }
+-// NativeState-compatible arrays; no engine-internal pointer or unmanaged mutable member.
+-// Host saves must also bind the same rules/map/settings/waypoint content before restoring a bot.
+-template<class NativeState>
+-bool storeBytes(NativeState& state,const std::string& key,const std::string& bytes){
+-    if(bytes.empty()||bytes.size()>16*1024*1024)return false;
+-    std::vector<int64_t> values;values.reserve(bytes.size()+1);values.push_back(1);
+-    for(unsigned char byte:bytes)values.push_back(byte);state.arrays[key]=std::move(values);return true;
+-}
+-template<class NativeState>
+-std::optional<std::string> loadBytes(const NativeState& state,const std::string& key){
+-    auto it=state.arrays.find(key);if(it==state.arrays.end()||it->second.size()<2||it->second.size()>16*1024*1024+1||it->second[0]!=1)return {};
+-    std::string bytes;bytes.reserve(it->second.size()-1);
+-    for(size_t i=1;i<it->second.size();++i){auto byte=it->second[i];if(byte<0||byte>255)return {};bytes.push_back(char(byte));}return bytes;
+-}
++using runtime::storeBytes;
++using runtime::loadBytes;
+ }
+diff --git a/libraries/include/aiverselib/gameplay/Configuration.h b/libraries/include/aiverselib/gameplay/Configuration.h
+index e69db0f..f0af9da 100644
+--- a/libraries/include/aiverselib/gameplay/Configuration.h
++++ b/libraries/include/aiverselib/gameplay/Configuration.h
+@@ -87,6 +87,39 @@ struct PerceptionSettings {
+ struct DecisionReportSettings {
+     std::int64_t maxFacts=32;
+ };
++struct LocomotionSettings {
++    std::int64_t groundSpeedMilli=6000;
++    std::int64_t airSpeedMilli=6000;
++    std::int64_t accelerationMilli=30000;
++    std::int64_t brakingMilli=40000;
++    std::int64_t gravityMilli=20000;
++    std::int64_t jumpSpeedMilli=7000;
++    std::int64_t coyoteTicks=6;
++    std::int64_t bufferTicks=6;
++    std::int64_t maxJumps=1;
++};
++struct MeleeSettings {
++    std::int64_t windup=6;
++    std::int64_t active=4;
++    std::int64_t recovery=12;
++    std::int64_t bufferTicks=8;
++};
++struct ProjectileSettings {
++    std::int64_t gravityMilli=20000;
++    std::int64_t radiusMilli=50;
++    std::int64_t retentionMilli=750;
++    std::int64_t lifetime=600;
++    std::int64_t maxBounces=0;
++};
++struct MatchRuleSettings {
++    std::int64_t warmupTicks=60;
++    std::int64_t roundTicks=3600;
++    std::int64_t overtimeTicks=600;
++    std::int64_t intermissionTicks=120;
++    std::int64_t roundsToWin=1;
++    std::int64_t maxRounds=5;
++    std::int64_t scoreToWin=10;
++};
+ struct GameplaySettings {
+     InputSettings input;
+     CameraSettings camera;
+@@ -103,6 +136,10 @@ struct GameplaySettings {
+     LootSettings loot;
+     PerceptionSettings perception;
+     DecisionReportSettings decisionReport;
++    LocomotionSettings locomotion;
++    MeleeSettings melee;
++    ProjectileSettings projectile;
++    MatchRuleSettings matchRules;
+ };
+ struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
+ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
+@@ -119,7 +156,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
+         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
+     };
+     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
+-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport") result.errors.push_back(entry.first+": unknown section");
++    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="projectile" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
+     if(root.has("input")) { const auto& section=root["input"];
+         if(!section.isObject()) result.errors.push_back("input: expected object");
+         else {
+@@ -264,6 +301,56 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
+             if(section.has("maxFacts")) number(section["maxFacts"],settings.decisionReport.maxFacts,0,10000,"decisionReport.maxFacts");
+         }
+     }
++    if(root.has("locomotion")) { const auto& section=root["locomotion"];
++        if(!section.isObject()) result.errors.push_back("locomotion: expected object");
++        else {
++            for(const auto& entry:section.members()) if(entry.first!="groundSpeedMilli" && entry.first!="airSpeedMilli" && entry.first!="accelerationMilli" && entry.first!="brakingMilli" && entry.first!="gravityMilli" && entry.first!="jumpSpeedMilli" && entry.first!="coyoteTicks" && entry.first!="bufferTicks" && entry.first!="maxJumps") result.errors.push_back("locomotion."+entry.first+": unknown field");
++            if(section.has("groundSpeedMilli")) number(section["groundSpeedMilli"],settings.locomotion.groundSpeedMilli,0,100000,"locomotion.groundSpeedMilli");
++            if(section.has("airSpeedMilli")) number(section["airSpeedMilli"],settings.locomotion.airSpeedMilli,0,100000,"locomotion.airSpeedMilli");
++            if(section.has("accelerationMilli")) number(section["accelerationMilli"],settings.locomotion.accelerationMilli,1,1000000,"locomotion.accelerationMilli");
++            if(section.has("brakingMilli")) number(section["brakingMilli"],settings.locomotion.brakingMilli,1,1000000,"locomotion.brakingMilli");
++            if(section.has("gravityMilli")) number(section["gravityMilli"],settings.locomotion.gravityMilli,0,1000000,"locomotion.gravityMilli");
++            if(section.has("jumpSpeedMilli")) number(section["jumpSpeedMilli"],settings.locomotion.jumpSpeedMilli,0,100000,"locomotion.jumpSpeedMilli");
++            if(section.has("coyoteTicks")) number(section["coyoteTicks"],settings.locomotion.coyoteTicks,0,3600,"locomotion.coyoteTicks");
++            if(section.has("bufferTicks")) number(section["bufferTicks"],settings.locomotion.bufferTicks,0,3600,"locomotion.bufferTicks");
++            if(section.has("maxJumps")) number(section["maxJumps"],settings.locomotion.maxJumps,1,16,"locomotion.maxJumps");
++        }
++    }
++    if(root.has("melee")) { const auto& section=root["melee"];
++        if(!section.isObject()) result.errors.push_back("melee: expected object");
++        else {
++            for(const auto& entry:section.members()) if(entry.first!="windup" && entry.first!="active" && entry.first!="recovery" && entry.first!="bufferTicks") result.errors.push_back("melee."+entry.first+": unknown field");
++            if(section.has("windup")) number(section["windup"],settings.melee.windup,0,3600,"melee.windup");
++            if(section.has("active")) number(section["active"],settings.melee.active,1,3600,"melee.active");
++            if(section.has("recovery")) number(section["recovery"],settings.melee.recovery,0,3600,"melee.recovery");
++            if(section.has("bufferTicks")) number(section["bufferTicks"],settings.melee.bufferTicks,0,3600,"melee.bufferTicks");
++        }
++    }
++    if(root.has("projectile")) { const auto& section=root["projectile"];
++        if(!section.isObject()) result.errors.push_back("projectile: expected object");
++        else {
++            for(const auto& entry:section.members()) if(entry.first!="gravityMilli" && entry.first!="radiusMilli" && entry.first!="retentionMilli" && entry.first!="lifetime" && entry.first!="maxBounces") result.errors.push_back("projectile."+entry.first+": unknown field");
++            if(section.has("gravityMilli")) number(section["gravityMilli"],settings.projectile.gravityMilli,0,1000000,"projectile.gravityMilli");
++            if(section.has("radiusMilli")) number(section["radiusMilli"],settings.projectile.radiusMilli,0,2000,"projectile.radiusMilli");
++            if(section.has("retentionMilli")) number(section["retentionMilli"],settings.projectile.retentionMilli,0,1000,"projectile.retentionMilli");
++            if(section.has("lifetime")) number(section["lifetime"],settings.projectile.lifetime,1,100000,"projectile.lifetime");
++            if(section.has("maxBounces")) number(section["maxBounces"],settings.projectile.maxBounces,0,32,"projectile.maxBounces");
++        }
++    }
++    if(root.has("matchRules")) { const auto& section=root["matchRules"];
++        if(!section.isObject()) result.errors.push_back("matchRules: expected object");
++        else {
++            for(const auto& entry:section.members()) if(entry.first!="warmupTicks" && entry.first!="roundTicks" && entry.first!="overtimeTicks" && entry.first!="intermissionTicks" && entry.first!="roundsToWin" && entry.first!="maxRounds" && entry.first!="scoreToWin") result.errors.push_back("matchRules."+entry.first+": unknown field");
++            if(section.has("warmupTicks")) number(section["warmupTicks"],settings.matchRules.warmupTicks,0,10000000,"matchRules.warmupTicks");
++            if(section.has("roundTicks")) number(section["roundTicks"],settings.matchRules.roundTicks,1,10000000,"matchRules.roundTicks");
++            if(section.has("overtimeTicks")) number(section["overtimeTicks"],settings.matchRules.overtimeTicks,0,10000000,"matchRules.overtimeTicks");
++            if(section.has("intermissionTicks")) number(section["intermissionTicks"],settings.matchRules.intermissionTicks,0,10000000,"matchRules.intermissionTicks");
++            if(section.has("roundsToWin")) number(section["roundsToWin"],settings.matchRules.roundsToWin,1,100,"matchRules.roundsToWin");
++            if(section.has("maxRounds")) number(section["maxRounds"],settings.matchRules.maxRounds,1,1000,"matchRules.maxRounds");
++            if(section.has("scoreToWin")) number(section["scoreToWin"],settings.matchRules.scoreToWin,1,1000000000,"matchRules.scoreToWin");
++        }
++        if(settings.matchRules.roundsToWin>settings.matchRules.maxRounds)result.errors.push_back("matchRules.roundsToWin: must not exceed maxRounds");
++    }
+     if(result.errors.empty()) result.value=settings;
+     return result;
+ }
+diff --git a/libraries/include/aiverselib/genre/Configured.h b/libraries/include/aiverselib/genre/Configured.h
+new file mode 100644
+index 0000000..a5689db
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Configured.h
+@@ -0,0 +1,12 @@
++#pragma once
++#include "../gameplay/Configuration.h"
++#include "Locomotion.h"
++#include "Melee.h"
++#include "Weapons.h"
++#include "Match.h"
++namespace aiverse::lib::genre {
++inline MotionConfig motionConfig(const gameplay::GameplaySettings& s){const auto& p=s.locomotion;return {Fixed::fromRatio(p.groundSpeedMilli,1000),Fixed::fromRatio(p.airSpeedMilli,1000),Fixed::fromRatio(p.accelerationMilli,1000),Fixed::fromRatio(p.brakingMilli,1000),Fixed::fromRatio(p.gravityMilli,1000),Fixed::fromRatio(p.jumpSpeedMilli,1000),uint32_t(p.coyoteTicks),uint32_t(p.bufferTicks),uint32_t(p.maxJumps)};}
++inline AttackDef attackConfig(const gameplay::GameplaySettings& s,int64_t id){const auto& p=s.melee;return {id,uint32_t(p.windup),uint32_t(p.active),uint32_t(p.recovery),uint32_t(p.windup+p.active),uint32_t(p.bufferTicks),{}};}
++inline ProjectileConfig projectileConfig(const gameplay::GameplaySettings& s){const auto& p=s.projectile;return {Fixed::fromRatio(p.gravityMilli,1000),Fixed::fromRatio(p.radiusMilli,1000),Fixed::fromRatio(p.retentionMilli,1000),uint32_t(p.lifetime),uint32_t(p.maxBounces)};}
++inline MatchConfig matchConfig(const gameplay::GameplaySettings& s){const auto& p=s.matchRules;return {uint32_t(p.warmupTicks),uint32_t(p.roundTicks),uint32_t(p.overtimeTicks),uint32_t(p.intermissionTicks),uint32_t(p.roundsToWin),uint32_t(p.maxRounds),p.scoreToWin};}
++}
+diff --git a/libraries/include/aiverselib/genre/Data.h b/libraries/include/aiverselib/genre/Data.h
+new file mode 100644
+index 0000000..f4434ce
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Data.h
+@@ -0,0 +1,30 @@
++#pragma once
++#include "Narrative.h"
++#include "engine/data/Json.h"
++#include <charconv>
++namespace aiverse::lib::genre {
++inline int64_t storyInteger(const Json& j,const char* label){
++    if(!j.isNumber())throw JsonError(std::string("story.")+label+": expected integer");auto text=j.numberLiteral();int64_t value=0;
++    auto parsed=std::from_chars(text.data(),text.data()+text.size(),value);if(parsed.ec!=std::errc{}||parsed.ptr!=text.data()+text.size())throw JsonError(std::string("story.")+label+": invalid integer");return value;
++}
++inline void storyKeys(const Json& j,std::initializer_list<std::string_view> names){
++    if(!j.isObject())throw JsonError("story: expected object");for(const auto& [key,value]:j.members()){(void)value;bool found=false;for(auto name:names)if(name==key)found=true;if(!found)throw JsonError("story: unknown key '"+key+"'");}
++}
++inline std::string storyText(const Json& j){if(!j.isString()||j.str().empty())throw JsonError("story: expected nonempty localization key");return j.str();}
++inline Story readStory(const Json& j){
++    storyKeys(j,{"nodes"});if(!j["nodes"].isArray()||j["nodes"].size()>10000)throw JsonError("story.nodes: expected at most 10000 nodes");Story graph;
++    for(const auto& item:j["nodes"].items()){
++        storyKeys(item,{"id","textKey","choices"});StoryNode node;node.id=storyInteger(item["id"],"id");node.textKey=storyText(item["textKey"]);
++        if(!item["choices"].isArray()||item["choices"].size()>128)throw JsonError("story.choices: expected at most 128 choices");
++        for(const auto& raw:item["choices"].items()){
++            storyKeys(raw,{"id","next","textKey","conditions","changes"});StoryChoice choice;choice.id=storyInteger(raw["id"],"choice.id");choice.next=storyInteger(raw["next"],"next");choice.textKey=storyText(raw["textKey"]);
++            for(auto field:{"conditions","changes"})if(raw.has(field)&&(!raw[field].isArray()||raw[field].size()>256))throw JsonError(std::string("story.")+field+": expected at most 256 records");
++            for(const auto& cond:raw["conditions"].items()){storyKeys(cond,{"key","minimum","maximum"});choice.conditions.push_back({storyInteger(cond["key"],"key"),storyInteger(cond["minimum"],"minimum"),storyInteger(cond["maximum"],"maximum")});}
++            for(const auto& effect:raw["changes"].items()){
++                storyKeys(effect,{"key","value","add"});if(effect.has("add")&&effect["add"].type()!=Json::Type::Bool)throw JsonError("story.add: expected bool");
++                choice.changes.push_back({storyInteger(effect["key"],"key"),storyInteger(effect["value"],"value"),effect.getBool("add",false)});
++            }node.choices.push_back(std::move(choice));
++        }if(!graph.emplace(node.id,std::move(node)).second)throw JsonError("story: duplicate node id");
++    }if(!valid(graph))throw JsonError("story: invalid graph, choice or condition");return graph;
++}
++}
+diff --git a/libraries/include/aiverselib/genre/Locomotion.h b/libraries/include/aiverselib/genre/Locomotion.h
+new file mode 100644
+index 0000000..fdb1151
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Locomotion.h
+@@ -0,0 +1,38 @@
++#pragma once
++#include "engine/core/FixedMath.h"
++#include <optional>
++namespace aiverse::lib::genre {
++struct MotionConfig {
++    Fixed groundSpeed=6_fx,airSpeed=6_fx,acceleration=30_fx,braking=40_fx,gravity=20_fx,jumpSpeed=7_fx;
++    uint32_t coyoteTicks=6,bufferTicks=6,maxJumps=1;
++};
++struct MotionState {
++    Vec3 velocity{};uint32_t lastTick=0,lastGround=0,jumpTick=0,jumps=0;
++    bool initialized=false,hasGround=false,buffered=false;
++};
++struct MotionInput {Vec2 wish{};bool grounded=false,jumpPressed=false,ceiling=false;};
++struct MotionResult {Vec3 velocity{};bool jumped=false;};
++inline bool valid(const MotionConfig& c){return c.groundSpeed>=Fixed{}&&c.groundSpeed<=100_fx&&c.airSpeed>=Fixed{}&&c.airSpeed<=100_fx&&c.acceleration>Fixed{}&&c.acceleration<=1000_fx&&c.braking>Fixed{}&&c.braking<=1000_fx&&c.gravity>=Fixed{}&&c.gravity<=1000_fx&&c.jumpSpeed>=Fixed{}&&c.jumpSpeed<=100_fx&&c.maxJumps>=1&&c.maxJumps<=16&&c.coyoteTicks<=3600&&c.bufferTicks<=3600;}
++inline std::optional<MotionResult> stepMotion(const MotionConfig& c,MotionState& state,MotionInput in,uint32_t tick,Fixed dt){
++    for(auto value:{state.velocity.x,state.velocity.y,state.velocity.z})if(value< -1000_fx||value>1000_fx)return {};
++    if(state.jumps>16||(state.hasGround&&state.lastGround>tick)||(state.buffered&&state.jumpTick>tick))return {};
++    if(!valid(c)||dt<=Fixed{}||dt>1_fx||(state.initialized&&tick<=state.lastTick)||in.wish.x< -1_fx||in.wish.x>1_fx||in.wish.y< -1_fx||in.wish.y>1_fx)return {};
++    auto s=state;s.initialized=true;s.lastTick=tick;
++    if(in.grounded){s.lastGround=tick;s.hasGround=true;s.jumps=0;if(s.velocity.y<Fixed{})s.velocity.y={};}
++    if(in.ceiling&&s.velocity.y>Fixed{})s.velocity.y={};
++    if(in.jumpPressed){s.buffered=true;s.jumpTick=tick;}
++    if(s.buffered&&tick-s.jumpTick>c.bufferTicks)s.buffered=false;
++    const bool coyote=s.hasGround&&tick-s.lastGround<=c.coyoteTicks&&s.jumps==0;
++    if(!in.grounded&&!coyote&&s.jumps==0)s.jumps=1;
++    bool jump=s.buffered&&!in.ceiling&&(in.grounded||coyote||s.jumps<c.maxJumps);
++    if(jump){s.velocity.y=c.jumpSpeed;++s.jumps;s.buffered=false;}
++    auto wish=Vec3{in.wish.x,{},in.wish.y};if(wish.lengthSq()>1_fx)wish=fxNormalize(wish);
++    auto desired=wish*(in.grounded?c.groundSpeed:c.airSpeed);auto diff=Vec3{desired.x-s.velocity.x,{},desired.z-s.velocity.z};
++    auto length=diff.length(),amount=(wish.lengthSq().raw?c.acceleration:c.braking)*dt;
++    if(length>amount)diff=fxNormalize(diff)*amount;s.velocity.x+=diff.x;s.velocity.z+=diff.z;
++    if(!in.grounded||jump)s.velocity.y=fxMax(s.velocity.y-c.gravity*dt,-1000_fx);
++    state=s;return MotionResult{s.velocity,jump};
++}
++// The existing character/physics owner performs collision and reports grounded/ceiling next tick.
++// This policy never writes positions or bypasses the FPS motor/authoritative command path.
++}
+diff --git a/libraries/include/aiverselib/genre/Match.h b/libraries/include/aiverselib/genre/Match.h
+new file mode 100644
+index 0000000..7fb26c3
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Match.h
+@@ -0,0 +1,49 @@
++#pragma once
++#include <cstdint>
++#include <map>
++#include <optional>
++#include <limits>
++#include <span>
++namespace aiverse::lib::genre {
++enum class MatchPhase:uint8_t {Warmup,Live,Overtime,Intermission,Finished};
++struct MatchConfig {uint32_t warmupTicks=60,roundTicks=3600,overtimeTicks=600,intermissionTicks=120,roundsToWin=1,maxRounds=5;int64_t scoreToWin=10;};
++struct TeamScore {int64_t score=0;uint32_t wins=0;uint64_t lastEvent=0;};
++struct MatchState {std::map<int64_t,TeamScore> teams;MatchPhase phase=MatchPhase::Warmup;uint32_t phaseStart=0,lastTick=0,round=1;int64_t winner=0;bool initialized=false;};
++inline bool valid(const MatchConfig& c){return c.warmupTicks<=10000000&&c.roundTicks>0&&c.roundTicks<=10000000&&c.overtimeTicks<=10000000&&c.intermissionTicks<=10000000&&c.roundsToWin>0&&c.roundsToWin<=100&&c.maxRounds>=c.roundsToWin&&c.maxRounds<=1000&&c.scoreToWin>0;}
++inline std::optional<MatchState> makeMatch(std::span<const int64_t> teams){
++    if(teams.size()<2||teams.size()>200)return {};MatchState s;for(auto team:teams)if(team<=0||!s.teams.emplace(team,TeamScore{}).second)return {};return s;
++}
++inline bool awardScore(MatchState& s,int64_t team,uint64_t event,int64_t points){
++    auto it=s.teams.find(team);if((s.phase!=MatchPhase::Live&&s.phase!=MatchPhase::Overtime)||it==s.teams.end()||event==0||event<=it->second.lastEvent||points<0||it->second.score>std::numeric_limits<int64_t>::max()-points)return false;
++    it->second.lastEvent=event;it->second.score+=points;return true;
++}
++inline std::pair<int64_t,int64_t> leadingTeam(const MatchState& s,bool wins=false){
++    int64_t leader=-1,best=-1;for(const auto& [team,value]:s.teams){auto score=wins?int64_t(value.wins):value.score;if(score>best){best=score;leader=team;}else if(score==best)leader=-1;}return {leader,best};
++}
++inline bool stepMatch(const MatchConfig& c,MatchState& s,uint32_t tick){
++    if(s.phaseStart>tick||!valid(c)||s.teams.size()<2||uint8_t(s.phase)>uint8_t(MatchPhase::Finished)||(s.initialized&&tick<=s.lastTick))return false;
++    if(!s.initialized){s.initialized=true;s.phaseStart=tick;}s.lastTick=tick;auto age=tick-s.phaseStart;
++    if(s.phase==MatchPhase::Finished)return true;
++    if(s.phase==MatchPhase::Warmup){if(age>=c.warmupTicks){s.phase=MatchPhase::Live;s.phaseStart=tick;}return true;}
++    if(s.phase==MatchPhase::Intermission){if(age>=c.intermissionTicks){++s.round;for(auto& [team,score]:s.teams){(void)team;score.score=0;}s.phase=MatchPhase::Live;s.phaseStart=tick;}return true;}
++    auto [leader,score]=leadingTeam(s);bool finish=leader>0&&score>=c.scoreToWin;
++    if(s.phase==MatchPhase::Live&&age>=c.roundTicks){
++        if(leader<0&&c.overtimeTicks){s.phase=MatchPhase::Overtime;s.phaseStart=tick;return true;}finish=true;
++    }
++    if(s.phase==MatchPhase::Overtime&&(leader>0||age>=c.overtimeTicks))finish=true;
++    if(!finish)return true;
++    if(leader>0)++s.teams.at(leader).wins;
++    if((leader>0&&s.teams.at(leader).wins>=c.roundsToWin)||s.round>=c.maxRounds){s.phase=MatchPhase::Finished;s.winner=leadingTeam(s,true).first;}
++    else {s.phase=MatchPhase::Intermission;s.phaseStart=tick;}return true;
++}
++struct CaptureState {int64_t owner=0,candidate=0;uint32_t progress=0,lastTick=0;bool initialized=false;};
++inline std::optional<bool> stepCapture(CaptureState& s,const std::map<int64_t,uint32_t>& occupants,uint32_t requiredTicks,uint32_t tick){
++    if(s.owner<0||s.candidate<0||s.progress>10000000||!requiredTicks||requiredTicks>10000000||(s.initialized&&tick<=s.lastTick))return {};
++    int64_t candidate=0;for(auto [team,count]:occupants){if(team<=0)return {};if(!count)continue;if(candidate){candidate=-1;break;}candidate=team;}
++    s.initialized=true;s.lastTick=tick;if(candidate<0)return false;
++    if(candidate==0){if(s.progress)--s.progress;return false;}
++    if(candidate==s.owner){s.progress=0;s.candidate=0;return false;}
++    if(candidate!=s.candidate){s.candidate=candidate;s.progress=0;}
++    if(++s.progress>=requiredTicks){s.owner=candidate;s.candidate=0;s.progress=0;return true;}return false;
++}
++}
+diff --git a/libraries/include/aiverselib/genre/Melee.h b/libraries/include/aiverselib/genre/Melee.h
+new file mode 100644
+index 0000000..eb4252c
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Melee.h
+@@ -0,0 +1,45 @@
++#pragma once
++#include <algorithm>
++#include <cstdint>
++#include <map>
++#include <optional>
++#include <vector>
++namespace aiverse::lib::genre {
++enum class AttackPhase {Idle,Windup,Active,Recovery};
++struct AttackDef {int64_t id=0;uint32_t windup=6,active=4,recovery=12,cancelFrom=10,bufferTicks=8;std::vector<int64_t> combos;};
++using AttackSet=std::map<int64_t,AttackDef>;
++struct MeleeState {int64_t attack=0,queued=0;uint32_t started=0,queuedAt=0,lastTick=0;bool initialized=false;std::vector<int64_t> hitTargets;};
++inline bool valid(const AttackSet& defs){
++    if(defs.empty()||defs.size()>1024)return false;
++    for(const auto& [id,d]:defs){if(id<=0||d.id!=id||d.active==0||d.windup>3600||d.active>3600||d.recovery>3600||d.cancelFrom>d.windup+d.active+d.recovery||d.bufferTicks>3600)return false;for(auto next:d.combos)if(!defs.contains(next))return false;}return true;
++}
++inline AttackPhase attackPhase(const AttackSet& defs,const MeleeState& s,uint32_t tick){
++    auto it=defs.find(s.attack);if(it==defs.end()||tick<s.started)return AttackPhase::Idle;const auto& d=it->second;auto age=tick-s.started;
++    if(age<d.windup)return AttackPhase::Windup;if(age<d.windup+d.active)return AttackPhase::Active;if(age<d.windup+d.active+d.recovery)return AttackPhase::Recovery;return AttackPhase::Idle;
++}
++// Authorization includes stamina/cooldown/ownership; this helper owns only custom animation/combo timing.
++template<class Authorize>
++bool stepMelee(const AttackSet& defs,MeleeState& state,uint32_t tick,int64_t requested,Authorize authorize){
++    if(!valid(defs)||(state.attack&&!defs.contains(state.attack))||(state.queued&&!defs.contains(state.queued))||(state.initialized&&tick<=state.lastTick)||(requested&&!defs.contains(requested)))return false;
++    auto s=state;s.lastTick=tick;s.initialized=true;
++    auto phase=attackPhase(defs,s,tick);
++    if(requested){s.queued=requested;s.queuedAt=tick;}
++    auto active=defs.find(s.attack);bool canStart=phase==AttackPhase::Idle;
++    if(s.queued&&tick-s.queuedAt>defs.at(s.queued).bufferTicks)s.queued=0;
++    if(s.queued&&active!=defs.end()){
++        if(tick-s.queuedAt>active->second.bufferTicks)s.queued=0;
++        else if(tick-s.started>=active->second.cancelFrom&&std::find(active->second.combos.begin(),active->second.combos.end(),s.queued)!=active->second.combos.end())canStart=true;
++    }
++    if(s.queued&&canStart&&authorize(s.queued)){s.attack=s.queued;s.queued=0;s.started=tick;s.hitTargets.clear();}
++    else if(phase==AttackPhase::Idle){s.attack=0;s.hitTargets.clear();}
++    state=std::move(s);return true;
++}
++inline bool recordMeleeHit(const AttackSet& defs,MeleeState& s,uint32_t tick,int64_t target){
++    if(target<=0||attackPhase(defs,s,tick)!=AttackPhase::Active||s.hitTargets.size()>=4096)return false;
++    auto at=std::lower_bound(s.hitTargets.begin(),s.hitTargets.end(),target);if(at!=s.hitTargets.end()&&*at==target)return false;s.hitTargets.insert(at,target);return true;
++}
++enum class MeleeContact {Hit,Blocked,Parried,Evaded};
++inline MeleeContact resolveMeleeContact(bool invulnerable,bool parryWindow,bool blocking,bool insideGuard){
++    if(invulnerable)return MeleeContact::Evaded;if(insideGuard&&parryWindow)return MeleeContact::Parried;if(insideGuard&&blocking)return MeleeContact::Blocked;return MeleeContact::Hit;
++}
++}
+diff --git a/libraries/include/aiverselib/genre/Narrative.h b/libraries/include/aiverselib/genre/Narrative.h
+new file mode 100644
+index 0000000..35cc2ff
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Narrative.h
+@@ -0,0 +1,49 @@
++#pragma once
++#include "../systems/Tags.h"
++#include <algorithm>
++#include <limits>
++#include <map>
++#include <optional>
++#include <string>
++#include <vector>
++namespace aiverse::lib::genre {
++struct FactChange {int64_t key=0,value=0;bool add=false;};
++struct StoryChoice {int64_t id=0,next=0;std::string textKey;std::vector<systems::Condition> conditions;std::vector<FactChange> changes;};
++struct StoryNode {int64_t id=0;std::string textKey;std::vector<StoryChoice> choices;};
++using Story=std::map<int64_t,StoryNode>;
++struct StoryState {int64_t node=0;std::map<int64_t,int64_t> facts,visits;uint64_t lastCommand=0;bool complete=false;};
++inline bool valid(const Story& graph){
++    if(graph.empty()||graph.size()>10000)return false;
++    for(const auto& [id,node]:graph){
++        if(id<=0||node.id!=id||node.textKey.empty()||node.choices.size()>128)return false;std::vector<int64_t> ids;
++        for(const auto& choice:node.choices){
++            if(choice.id<=0||choice.textKey.empty()||(choice.next&&!graph.contains(choice.next))||std::find(ids.begin(),ids.end(),choice.id)!=ids.end())return false;ids.push_back(choice.id);
++            if(choice.changes.size()>256||choice.conditions.size()>256)return false;
++            for(auto condition:choice.conditions)if(condition.key<=0||condition.minimum>condition.maximum)return false;
++            for(auto change:choice.changes)if(change.key<=0)return false;
++        }
++    }return true;
++}
++inline std::optional<StoryState> beginStory(const Story& graph,int64_t node,std::map<int64_t,int64_t> facts={}){
++    if(!valid(graph)||!graph.contains(node)||facts.size()>10000)return {};for(auto [key,value]:facts){(void)value;if(key<=0)return {};}
++    StoryState s;s.node=node;s.facts=std::move(facts);s.visits[node]=1;return s;
++}
++inline bool choiceAllowed(const StoryChoice& choice,const StoryState& s){
++    return systems::conditions(std::span<const systems::Condition>(choice.conditions),[&](int64_t key)->std::optional<int64_t>{auto it=s.facts.find(key);if(it==s.facts.end())return {};return it->second;});
++}
++inline std::vector<int64_t> storyChoices(const Story& graph,const StoryState& s){
++    std::vector<int64_t> choices;auto node=graph.find(s.node);if(node==graph.end()||s.complete)return choices;
++    for(const auto& choice:node->second.choices)if(choiceAllowed(choice,s))choices.push_back(choice.id);std::sort(choices.begin(),choices.end());return choices;
++}
++inline bool chooseStory(const Story& graph,StoryState& state,int64_t id,uint64_t command){
++    if(!valid(graph)||state.complete||command==0||command<=state.lastCommand)return false;auto node=graph.find(state.node);if(node==graph.end())return false;
++    auto found=std::find_if(node->second.choices.begin(),node->second.choices.end(),[&](const auto& c){return c.id==id;});if(found==node->second.choices.end()||!choiceAllowed(*found,state))return false;
++    auto next=state;
++    for(auto change:found->changes){auto& value=next.facts[change.key];if(change.add){if((change.value>0&&value>std::numeric_limits<int64_t>::max()-change.value)||(change.value<0&&value<std::numeric_limits<int64_t>::min()-change.value))return false;value+=change.value;}else value=change.value;}
++    if(next.facts.size()>10000)return false;next.lastCommand=command;next.node=found->next;next.complete=found->next==0;
++    if(!next.complete){auto& count=next.visits[next.node];if(count==std::numeric_limits<int64_t>::max())return false;++count;}
++    state=std::move(next);return true;
++}
++// textKey/choice.textKey are localization keys. Camera/animation/dialogue UI consume the committed node;
++// this graph does not perform scene transitions or issue economy rewards by itself.
++}
+diff --git a/libraries/include/aiverselib/genre/Persistence.h b/libraries/include/aiverselib/genre/Persistence.h
+new file mode 100644
+index 0000000..e9fed25
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Persistence.h
+@@ -0,0 +1,47 @@
++#pragma once
++#include "Locomotion.h"
++#include "Melee.h"
++#include "Weapons.h"
++#include "Match.h"
++#include "Narrative.h"
++#include "engine/core/Archive.h"
++#include "../runtime/NativeBytes.h"
++namespace aiverse::lib::genre {
++inline void io(Archive& a,MotionState& s){a(s.velocity,s.lastTick,s.lastGround,s.jumpTick,s.jumps,s.initialized,s.hasGround,s.buffered);}
++inline void io(Archive& a,MeleeState& s){a(s.attack,s.queued,s.started,s.queuedAt,s.lastTick,s.initialized,s.hitTargets);}
++inline void io(Archive& a,RecoilState& s){a(s.yaw,s.pitch);}
++inline void io(Archive& a,ProjectileState& s){a(s.position,s.velocity,s.age,s.bounces,s.alive);}
++inline void io(Archive& a,TeamScore& s){a(s.score,s.wins,s.lastEvent);}
++inline void io(Archive& a,MatchState& s){a(s.teams,s.phase,s.phaseStart,s.lastTick,s.round,s.winner,s.initialized);}
++inline void io(Archive& a,CaptureState& s){a(s.owner,s.candidate,s.progress,s.lastTick,s.initialized);}
++inline void io(Archive& a,StoryState& s){a(s.node,s.facts,s.visits,s.lastCommand,s.complete);}
++inline bool bounded(Vec3 p,Fixed maximum){return p.x>= -maximum&&p.x<=maximum&&p.y>= -maximum&&p.y<=maximum&&p.z>= -maximum&&p.z<=maximum;}
++inline bool valid(const MotionState& s){return bounded(s.velocity,1000_fx)&&s.jumps<=16&&(!s.hasGround||s.lastGround<=s.lastTick)&&(!s.buffered||s.jumpTick<=s.lastTick);}
++inline bool valid(const MeleeState& s){return s.attack>=0&&s.queued>=0&&s.started<=s.lastTick&&s.queuedAt<=s.lastTick&&s.hitTargets.size()<=4096&&std::is_sorted(s.hitTargets.begin(),s.hitTargets.end())&&std::adjacent_find(s.hitTargets.begin(),s.hitTargets.end())==s.hitTargets.end()&&(s.hitTargets.empty()||s.hitTargets.front()>0);}
++inline bool valid(const RecoilState& s){return s.yaw>=Fixed::fromRatio(-1,4)&&s.yaw<=Fixed::fromRatio(1,4)&&s.pitch>=Fixed::fromRatio(-1,4)&&s.pitch<=Fixed::fromRatio(1,4);}
++inline bool valid(const ProjectileState& s){return bounded(s.position,100000_fx)&&bounded(s.velocity,1000_fx)&&s.age<=100000&&s.bounces<=32;}
++inline bool valid(const MatchState& s){
++    if(s.teams.size()<2||s.teams.size()>200||uint8_t(s.phase)>uint8_t(MatchPhase::Finished)||s.phaseStart>s.lastTick||!s.round||s.round>1000||(s.winner>0&&!s.teams.contains(s.winner))||s.winner< -1)return false;
++    for(auto [team,score]:s.teams)if(team<=0||score.score<0||score.wins>1000)return false;return true;
++}
++inline bool valid(const CaptureState& s){return s.owner>=0&&s.candidate>=0&&s.progress<=10000000;}
++inline bool valid(const StoryState& s){
++    if(s.node<0||s.facts.size()>10000||s.visits.size()>10000||(s.complete&&s.node!=0))return false;
++    for(auto [key,value]:s.facts){(void)value;if(key<=0)return false;}for(auto [key,value]:s.visits)if(key<=0||value<1)return false;return true;
++}
++inline uint16_t stateKind(const MotionState&){return 1;}
++inline uint16_t stateKind(const MeleeState&){return 2;}
++inline uint16_t stateKind(const RecoilState&){return 3;}
++inline uint16_t stateKind(const ProjectileState&){return 4;}
++inline uint16_t stateKind(const MatchState&){return 5;}
++inline uint16_t stateKind(const CaptureState&){return 6;}
++inline uint16_t stateKind(const StoryState&){return 7;}
++template<class State> std::string save(State s){
++    if(!valid(s))return {};std::string bytes;Archive a(&bytes);uint32_t version=1;auto kind=stateKind(s);a(version,kind,s);return bytes;
++}
++template<class State> bool load(const std::string& bytes,State& state){
++    if(bytes.size()>1024*1024)return false;Archive a(bytes);uint32_t version=0;uint16_t kind=0;State copy;a(version,kind);if(version!=1||kind!=stateKind(copy))return false;a(copy);
++    if(!a.ok()||a.remaining()||version!=1||!valid(copy)||save(copy)!=bytes)return false;state=std::move(copy);return true;
++}
++using runtime::storeBytes;using runtime::loadBytes;
++}
+diff --git a/libraries/include/aiverselib/genre/Weapons.h b/libraries/include/aiverselib/genre/Weapons.h
+new file mode 100644
+index 0000000..e1802df
+--- /dev/null
++++ b/libraries/include/aiverselib/genre/Weapons.h
+@@ -0,0 +1,41 @@
++#pragma once
++#include "engine/core/FixedMath.h"
++#include "engine/core/Random.h"
++#include "engine/world/SpatialWorld.h"
++#include <optional>
++namespace aiverse::lib::genre {
++struct RecoilConfig {Fixed yawImpulse=Fixed::fromRatio(1,1000),pitchImpulse=Fixed::fromRatio(1,100),recovery=Fixed::fromRatio(1,1000),maximum=Fixed::fromRatio(1,8);};
++struct RecoilState {Fixed yaw{},pitch{};};
++inline bool stepRecoil(const RecoilConfig& c,RecoilState& s,bool fired){
++    if(c.maximum<Fixed{}||c.maximum>Fixed::fromRatio(1,4)||c.recovery<Fixed{}||c.recovery>c.maximum||c.yawImpulse< -c.maximum||c.yawImpulse>c.maximum||c.pitchImpulse< -c.maximum||c.pitchImpulse>c.maximum)return false;
++    auto recover=[&](Fixed value){return value-fxClamp(value,-c.recovery,c.recovery);};
++    s.yaw=fxClamp(recover(s.yaw)+(fired?c.yawImpulse:Fixed{}),-c.maximum,c.maximum);
++    s.pitch=fxClamp(recover(s.pitch)+(fired?c.pitchImpulse:Fixed{}),-c.maximum,c.maximum);return true;
++}
++inline std::optional<Vec2> sampleSpread(Random& rng,Fixed halfAngle){
++    if(halfAngle<Fixed{}||halfAngle>Fixed::fromRatio(1,8))return {};if(!halfAngle.raw)return Vec2{};
++    auto sample=[&]{return Fixed::fromRaw(int64_t(rng.below(uint32_t(halfAngle.raw*2+1)))-halfAngle.raw);};return Vec2{sample(),sample()};
++}
++struct ProjectileConfig {Fixed gravity=20_fx,radius=Fixed::fromRatio(1,20),retention=Fixed::fromRatio(3,4);uint32_t lifetime=600,maxBounces=0;};
++struct ProjectileState {Vec3 position{},velocity{};uint32_t age=0,bounces=0;bool alive=true;};
++struct ProjectileImpact {uint32_t collider=0;Vec3 point{},normal{};bool bounced=false;};
++struct ProjectileStep {bool accepted=false;std::optional<ProjectileImpact> impact;};
++inline ProjectileStep stepProjectile(const ProjectileConfig& c,ProjectileState& state,const world::SpatialWorld& world,Fixed dt){
++    if(!state.alive||dt<=Fixed{}||dt>1_fx||c.gravity<Fixed{}||c.gravity>1000_fx||c.radius<Fixed{}||c.radius>2_fx||c.retention<Fixed{}||c.retention>1_fx||c.lifetime==0||c.lifetime>100000||c.maxBounces>32)return {};
++    for(auto value:{state.position.x,state.position.y,state.position.z})if(value< -100000_fx||value>100000_fx)return {};
++    for(auto value:{state.velocity.x,state.velocity.y,state.velocity.z})if(value< -1000_fx||value>1000_fx)return {};
++    if(state.bounces>32||state.age>100000)return {};
++    auto s=state;
++    if(s.age>=c.lifetime){s.alive=false;state=s;return {true,{}};}
++    s.velocity.y=fxMax(s.velocity.y-c.gravity*dt,-1000_fx);auto delta=s.velocity*dt;
++    auto hit=world.cast(s.position,delta,{c.radius,c.radius,c.radius});std::optional<ProjectileImpact> impact;
++    if(hit.hit){s.position+=delta*hit.fraction;bool bounce=s.bounces<c.maxBounces&&hit.normal.lengthSq()>Fixed{}&&s.velocity.dot(hit.normal)<Fixed{};
++        impact=ProjectileImpact{hit.id,s.position,hit.normal,bounce};
++        if(bounce){++s.bounces;s.velocity=(s.velocity-hit.normal*(s.velocity.dot(hit.normal)*2))*c.retention;s.position+=hit.normal*Fixed::fromRatio(1,1000);}else s.alive=false;
++    }else s.position+=delta;
++    for(auto* value:{&s.position.x,&s.position.y,&s.position.z})if(*value< -100000_fx||*value>100000_fx){*value=fxClamp(*value,-100000_fx,100000_fx);s.alive=false;}
++    ++s.age;if(s.age>=c.lifetime)s.alive=false;state=s;return {true,impact};
++}
++// At most one impact per tick; unspent travel after a ricochet is discarded deliberately.
++// Damage, ownership, ammo/cooldowns and spawn commands stay with the existing combat owner.
++}
+diff --git a/libraries/include/aiverselib/runtime/NativeBytes.h b/libraries/include/aiverselib/runtime/NativeBytes.h
+new file mode 100644
+index 0000000..3fe5d31
+--- /dev/null
++++ b/libraries/include/aiverselib/runtime/NativeBytes.h
+@@ -0,0 +1,20 @@
++#pragma once
++#include <cstdint>
++#include <optional>
++#include <string>
++#include <vector>
++namespace aiverse::lib::runtime {
++// NativeState-compatible arrays for an existing versioned binary codec.
++template<class NativeState>
++bool storeBytes(NativeState& state,const std::string& key,const std::string& bytes){
++    if(bytes.empty()||bytes.size()>16*1024*1024)return false;
++    std::vector<int64_t> values;values.reserve(bytes.size()+1);values.push_back(1);
++    for(unsigned char byte:bytes)values.push_back(byte);state.arrays[key]=std::move(values);return true;
++}
++template<class NativeState>
++std::optional<std::string> loadBytes(const NativeState& state,const std::string& key){
++    auto it=state.arrays.find(key);if(it==state.arrays.end()||it->second.size()<2||it->second.size()>16*1024*1024+1||it->second[0]!=1)return {};
++    std::string bytes;bytes.reserve(it->second.size()-1);
++    for(size_t i=1;i<it->second.size();++i){auto byte=it->second[i];if(byte<0||byte>255)return {};bytes.push_back(char(byte));}return bytes;
++}
++}
+diff --git a/libraries/spec/gameplay.json b/libraries/spec/gameplay.json
+index 19b5c59..8e98d69 100644
+--- a/libraries/spec/gameplay.json
++++ b/libraries/spec/gameplay.json
+@@ -375,6 +375,182 @@
+           "maximum": 10000
+         }
+       }
++    },
++    "locomotion": {
++      "type": "LocomotionSettings",
++      "fields": {
++        "groundSpeedMilli": {
++          "type": "integer",
++          "default": 6000,
++          "minimum": 0,
++          "maximum": 100000
++        },
++        "airSpeedMilli": {
++          "type": "integer",
++          "default": 6000,
++          "minimum": 0,
++          "maximum": 100000
++        },
++        "accelerationMilli": {
++          "type": "integer",
++          "default": 30000,
++          "minimum": 1,
++          "maximum": 1000000
++        },
++        "brakingMilli": {
++          "type": "integer",
++          "default": 40000,
++          "minimum": 1,
++          "maximum": 1000000
++        },
++        "gravityMilli": {
++          "type": "integer",
++          "default": 20000,
++          "minimum": 0,
++          "maximum": 1000000
++        },
++        "jumpSpeedMilli": {
++          "type": "integer",
++          "default": 7000,
++          "minimum": 0,
++          "maximum": 100000
++        },
++        "coyoteTicks": {
++          "type": "integer",
++          "default": 6,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "bufferTicks": {
++          "type": "integer",
++          "default": 6,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "maxJumps": {
++          "type": "integer",
++          "default": 1,
++          "minimum": 1,
++          "maximum": 16
++        }
++      }
++    },
++    "melee": {
++      "type": "MeleeSettings",
++      "fields": {
++        "windup": {
++          "type": "integer",
++          "default": 6,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "active": {
++          "type": "integer",
++          "default": 4,
++          "minimum": 1,
++          "maximum": 3600
++        },
++        "recovery": {
++          "type": "integer",
++          "default": 12,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "bufferTicks": {
++          "type": "integer",
++          "default": 8,
++          "minimum": 0,
++          "maximum": 3600
++        }
++      }
++    },
++    "projectile": {
++      "type": "ProjectileSettings",
++      "fields": {
++        "gravityMilli": {
++          "type": "integer",
++          "default": 20000,
++          "minimum": 0,
++          "maximum": 1000000
++        },
++        "radiusMilli": {
++          "type": "integer",
++          "default": 50,
++          "minimum": 0,
++          "maximum": 2000
++        },
++        "retentionMilli": {
++          "type": "integer",
++          "default": 750,
++          "minimum": 0,
++          "maximum": 1000
++        },
++        "lifetime": {
++          "type": "integer",
++          "default": 600,
++          "minimum": 1,
++          "maximum": 100000
++        },
++        "maxBounces": {
++          "type": "integer",
++          "default": 0,
++          "minimum": 0,
++          "maximum": 32
++        }
++      }
++    },
++    "matchRules": {
++      "type": "MatchRuleSettings",
++      "fields": {
++        "warmupTicks": {
++          "type": "integer",
++          "default": 60,
++          "minimum": 0,
++          "maximum": 10000000
++        },
++        "roundTicks": {
++          "type": "integer",
++          "default": 3600,
++          "minimum": 1,
++          "maximum": 10000000
++        },
++        "overtimeTicks": {
++          "type": "integer",
++          "default": 600,
++          "minimum": 0,
++          "maximum": 10000000
++        },
++        "intermissionTicks": {
++          "type": "integer",
++          "default": 120,
++          "minimum": 0,
++          "maximum": 10000000
++        },
++        "roundsToWin": {
++          "type": "integer",
++          "default": 1,
++          "minimum": 1,
++          "maximum": 100
++        },
++        "maxRounds": {
++          "type": "integer",
++          "default": 5,
++          "minimum": 1,
++          "maximum": 1000
++        },
++        "scoreToWin": {
++          "type": "integer",
++          "default": 10,
++          "minimum": 1,
++          "maximum": 1000000000
++        }
++      },
++      "relations": [
++        [
++          "roundsToWin",
++          "maxRounds"
++        ]
++      ]
+     }
+   }
+ }
+diff --git a/libraries/spec/gameplay.schema.json b/libraries/spec/gameplay.schema.json
+index c336b44..4a24886 100644
+--- a/libraries/spec/gameplay.schema.json
++++ b/libraries/spec/gameplay.schema.json
+@@ -383,6 +383,180 @@
+           "maximum": 10000
+         }
+       }
++    },
++    "locomotion": {
++      "type": "object",
++      "additionalProperties": false,
++      "properties": {
++        "groundSpeedMilli": {
++          "type": "integer",
++          "default": 6000,
++          "minimum": 0,
++          "maximum": 100000
++        },
++        "airSpeedMilli": {
++          "type": "integer",
++          "default": 6000,
++          "minimum": 0,
++          "maximum": 100000
++        },
++        "accelerationMilli": {
++          "type": "integer",
++          "default": 30000,
++          "minimum": 1,
++          "maximum": 1000000
++        },
++        "brakingMilli": {
++          "type": "integer",
++          "default": 40000,
++          "minimum": 1,
++          "maximum": 1000000
++        },
++        "gravityMilli": {
++          "type": "integer",
++          "default": 20000,
++          "minimum": 0,
++          "maximum": 1000000
++        },
++        "jumpSpeedMilli": {
++          "type": "integer",
++          "default": 7000,
++          "minimum": 0,
++          "maximum": 100000
++        },
++        "coyoteTicks": {
++          "type": "integer",
++          "default": 6,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "bufferTicks": {
++          "type": "integer",
++          "default": 6,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "maxJumps": {
++          "type": "integer",
++          "default": 1,
++          "minimum": 1,
++          "maximum": 16
++        }
++      }
++    },
++    "melee": {
++      "type": "object",
++      "additionalProperties": false,
++      "properties": {
++        "windup": {
++          "type": "integer",
++          "default": 6,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "active": {
++          "type": "integer",
++          "default": 4,
++          "minimum": 1,
++          "maximum": 3600
++        },
++        "recovery": {
++          "type": "integer",
++          "default": 12,
++          "minimum": 0,
++          "maximum": 3600
++        },
++        "bufferTicks": {
++          "type": "integer",
++          "default": 8,
++          "minimum": 0,
++          "maximum": 3600
++        }
++      }
++    },
++    "projectile": {
++      "type": "object",
++      "additionalProperties": false,
++      "properties": {
++        "gravityMilli": {
++          "type": "integer",
++          "default": 20000,
++          "minimum": 0,
++          "maximum": 1000000
++        },
++        "radiusMilli": {
++          "type": "integer",
++          "default": 50,
++          "minimum": 0,
++          "maximum": 2000
++        },
++        "retentionMilli": {
++          "type": "integer",
++          "default": 750,
++          "minimum": 0,
++          "maximum": 1000
++        },
++        "lifetime": {
++          "type": "integer",
++          "default": 600,
++          "minimum": 1,
++          "maximum": 100000
++        },
++        "maxBounces": {
++          "type": "integer",
++          "default": 0,
++          "minimum": 0,
++          "maximum": 32
++        }
++      }
++    },
++    "matchRules": {
++      "type": "object",
++      "additionalProperties": false,
++      "properties": {
++        "warmupTicks": {
++          "type": "integer",
++          "default": 60,
++          "minimum": 0,
++          "maximum": 10000000
++        },
++        "roundTicks": {
++          "type": "integer",
++          "default": 3600,
++          "minimum": 1,
++          "maximum": 10000000
++        },
++        "overtimeTicks": {
++          "type": "integer",
++          "default": 600,
++          "minimum": 0,
++          "maximum": 10000000
++        },
++        "intermissionTicks": {
++          "type": "integer",
++          "default": 120,
++          "minimum": 0,
++          "maximum": 10000000
++        },
++        "roundsToWin": {
++          "type": "integer",
++          "default": 1,
++          "minimum": 1,
++          "maximum": 100
++        },
++        "maxRounds": {
++          "type": "integer",
++          "default": 5,
++          "minimum": 1,
++          "maximum": 1000
++        },
++        "scoreToWin": {
++          "type": "integer",
++          "default": 10,
++          "minimum": 1,
++          "maximum": 1000000000
++        }
++      }
+     }
+   }
+ }
+diff --git a/tests/libraries/CMakeLists.txt b/tests/libraries/CMakeLists.txt
+index b7c0238..7358d8d 100644
+--- a/tests/libraries/CMakeLists.txt
++++ b/tests/libraries/CMakeLists.txt
+@@ -53,9 +53,10 @@ endif()
+ add_test(NAME aiverse_systems_tests COMMAND aiverse_systems_tests)
+ 
+ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/FpsModule.cpp")
++    file(GLOB AIVERSE_LIBRARY_FPS_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/Fps*.cpp")
+     add_executable(aiverse_library_fps_bot_tests bots/fps_tests.cpp
+         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
+-        ../../engine/sim/Simulation.cpp ../../modules/fps/FpsModule.cpp ../../modules/fps/FpsMotor.cpp
++        ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
+         ../../engine/world/SpatialWorld.cpp)
+     target_link_libraries(aiverse_library_fps_bot_tests PRIVATE AIVERSE::gameplay_native)
+     if(NOT MSVC)
+@@ -67,7 +68,7 @@ endif()
+ if(TARGET aiverse_library_fps_bot_tests)
+     add_executable(aiverse_library_navmesh_tests bots/navmesh_tests.cpp
+         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
+-        ../../engine/sim/Simulation.cpp ../../modules/fps/FpsModule.cpp ../../modules/fps/FpsMotor.cpp
++        ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
+         ../../engine/world/SpatialWorld.cpp)
+     target_link_libraries(aiverse_library_navmesh_tests PRIVATE AIVERSE::gameplay_native)
+     if(NOT MSVC)
+@@ -75,3 +76,13 @@ if(TARGET aiverse_library_fps_bot_tests)
+     endif()
+     add_test(NAME library_navmesh COMMAND aiverse_library_navmesh_tests)
+ endif()
++
++if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/world/SpatialWorld.cpp")
++    add_executable(aiverse_library_genre_tests genre_tests.cpp
++        ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp ../../engine/world/SpatialWorld.cpp)
++    target_link_libraries(aiverse_library_genre_tests PRIVATE AIVERSE::gameplay_native)
++    if(NOT MSVC)
++        target_compile_options(aiverse_library_genre_tests PRIVATE -Wall -Wextra -Werror -pedantic)
++    endif()
++    add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
++endif()
+diff --git a/tests/libraries/bots/fps_tests.cpp b/tests/libraries/bots/fps_tests.cpp
+index f430697..913f038 100644
+--- a/tests/libraries/bots/fps_tests.cpp
++++ b/tests/libraries/bots/fps_tests.cpp
+@@ -34,6 +34,18 @@ void policies(){
+     auto zoneRules=rules();zoneRules.member("fps").set("mode",Json::string("battleRoyale"));zoneRules.member("fps").set("zone",Json::parse(R"({"center":[30,0,0],"radius":5,"endRadius":1})"));
+     auto zone=make(zoneRules);FpsState zs;CHECK(fpsCommand(*zone,module(*zone),1,c,{},zs)&&zs.decision==FpsDecision::Zone);
+ }
++void expandedWeapons(){
++    auto sim=make();auto& m=module(*sim);auto& self=m.state(*sim).actors[0];self.blindUntil=10;FpsState state;auto cfg=fpsConfig(Json::parse(R"({"preset":"hard","reactionTicks":0})"));
++    auto blind=fpsCommand(*sim,m,1,cfg,{},state);CHECK(blind&&state.target==0&&!(input(*blind).buttons&fps::Fire));
++    self.prone=true;CHECK(eye(self,m.config().motor).y==self.pos.y+fps::stanceHeight(self,m.config().motor)-Fixed::fromRatio(1,10));
++    auto r=rules();r.member("fps").set("weapons",Json::parse(R"([{"range":100},{"range":2,"automatic":false,"intervalTicks":1}])"));
++    auto ranged=make(r);auto& rm=module(*ranged);rm.state(*ranged).actors[0].weaponIndex=1;FpsState rs;
++    auto limited=fpsCommand(*ranged,rm,1,cfg,{},rs);CHECK(limited&&!(input(*limited).buttons&fps::Fire));
++    r.member("fps").set("weapons",Json::parse(R"([{"range":100,"automatic":false,"intervalTicks":1}])"));
++    auto semi=make(r);FpsState ss;uint32_t shots=0;
++    for(int i=0;i<30;++i){auto cmd=fpsCommand(*semi,module(*semi),1,cfg,{},ss);CHECK(cmd);semi->submit(*cmd);semi->step();for(const auto& e:semi->events())shots+=e.type==1;}
++    CHECK(shots>=2);
++}
+ void navigation(){
+     world::SpatialWorld w;CHECK(w.add({1,{{-2_fx,0_fx,3_fx},{2_fx,4_fx,7_fx}}}));
+     auto nodes=readWaypoints(Json::parse(R"([{"point":[5,0,2],"links":[1]},{"point":[5,0,8],"links":[0],"cover":true}])"));
+@@ -52,4 +64,4 @@ void combatRestore(){
+     }a->step();b->step();CHECK(a->checksum()==b->checksum());}
+     int kills=0;for(const auto& actor:module(*a).state(*a).actors)kills+=actor.kills;CHECK(kills>0);
+ }
+-int main(){try{policies();navigation();combatRestore();std::cout<<"FPS bot visibility, reaction, team safety, navigation, combat and 300-tick restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
++int main(){try{policies();expandedWeapons();navigation();combatRestore();std::cout<<"FPS bot visibility, reaction, team safety, navigation, combat and 300-tick restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+diff --git a/tests/libraries/genre_tests.cpp b/tests/libraries/genre_tests.cpp
+new file mode 100644
+index 0000000..f4b9956
+--- /dev/null
++++ b/tests/libraries/genre_tests.cpp
+@@ -0,0 +1,49 @@
++#include <aiverselib/genre/Configured.h>
++#include <aiverselib/genre/Persistence.h>
++#include <aiverselib/genre/Data.h>
++#include <array>
++#include <iostream>
++#include <stdexcept>
++using namespace aiverse;using namespace aiverse::lib::genre;
++#define CHECK(x) do{if(!(x))throw std::runtime_error(std::string(__FILE__)+":"+std::to_string(__LINE__)+": " #x);}while(false)
++template<class State> void roundtrip(const State& s){auto bytes=save(s);CHECK(!bytes.empty());State copy;CHECK(load(bytes,copy));CHECK(save(copy)==bytes);CHECK(!load(bytes+"x",copy));CHECK(!load(bytes.substr(0,bytes.size()-1),copy));CHECK(save(copy)==bytes);}
++void movement(){
++    MotionConfig c;MotionState s;auto dt=Fixed::fromRatio(1,60);
++    CHECK(stepMotion(c,s,{{},true,false,false},0,dt));CHECK(stepMotion(c,s,{{},false,true,false},3,dt)->jumped);CHECK(!stepMotion(c,s,{{},false,true,false},4,dt)->jumped);
++    CHECK(!stepMotion(c,s,{},4,dt));roundtrip(s);
++    MotionState falling;CHECK(!stepMotion(c,falling,{{},false,true,false},0,dt)->jumped);CHECK(stepMotion(c,falling,{{},true,false,false},2,dt)->jumped);
++    c.maxJumps=2;MotionState doubleJump;CHECK(stepMotion(c,doubleJump,{{},true,true,false},0,dt)->jumped);CHECK(stepMotion(c,doubleJump,{{},false,true,false},1,dt)->jumped);CHECK(!stepMotion(c,doubleJump,{{},false,true,false},2,dt)->jumped);
++    MotionState a,b;Vec3 pa{},pb{};
++    for(uint32_t t=0;t<240;++t){MotionInput in{{1_fx,{}},pa.y<=Fixed{},t%90==0,false};auto x=stepMotion(c,a,in,t,dt),y=stepMotion(c,b,in,t,dt);CHECK(x&&y&&x->velocity==y->velocity&&x->jumped==y->jumped);pa+=x->velocity*dt;pb+=y->velocity*dt;if(pa.y<Fixed{})pa.y={};if(pb.y<Fixed{})pb.y={};CHECK(pa==pb);CHECK(load(save(b),b));}
++    CHECK(pa.x>10_fx);CHECK(!stepMotion(c,a,{},240,Fixed{}));
++}
++void combat(){
++    AttackSet defs{{1,{1,2,2,4,4,8,{2}}},{2,{2,1,2,3,3,8,{1}}}};CHECK(valid(defs));MeleeState s;auto yes=[](auto){return true;};
++    CHECK(stepMelee(defs,s,0,1,yes));CHECK(attackPhase(defs,s,1)==AttackPhase::Windup);CHECK(!recordMeleeHit(defs,s,1,10));CHECK(recordMeleeHit(defs,s,2,10));CHECK(!recordMeleeHit(defs,s,2,10));
++    CHECK(stepMelee(defs,s,3,2,yes)&&s.attack==1);CHECK(stepMelee(defs,s,4,0,yes)&&s.attack==2&&s.hitTargets.empty());CHECK(recordMeleeHit(defs,s,5,10));roundtrip(s);
++    CHECK(resolveMeleeContact(true,true,true,true)==MeleeContact::Evaded);CHECK(resolveMeleeContact(false,true,true,true)==MeleeContact::Parried);CHECK(resolveMeleeContact(false,false,true,false)==MeleeContact::Hit);
++    MeleeState refused;CHECK(stepMelee(defs,refused,0,1,[](auto){return false;}));CHECK(stepMelee(defs,refused,9,0,yes));CHECK(refused.attack==0&&refused.queued==0);
++}
++void weapons(){
++    RecoilState s;RecoilConfig c;CHECK(stepRecoil(c,s,true)&&s.pitch>Fixed{});for(int i=0;i<100;++i)CHECK(stepRecoil(c,s,false));CHECK(s.pitch==Fixed{});roundtrip(s);
++    Random a(3),b(3);for(int i=0;i<100;++i){auto x=sampleSpread(a,Fixed::fromRatio(1,100)),y=sampleSpread(b,Fixed::fromRatio(1,100));CHECK(x&&y&&x->x==y->x&&x->y==y->y);}auto rng=a.state();CHECK(!sampleSpread(a,-1_fx)&&a.state()==rng);
++    world::SpatialWorld world;CHECK(world.add({1,{{-5_fx,-5_fx,5_fx},{5_fx,5_fx,6_fx}}}));ProjectileConfig pc;pc.gravity={};pc.maxBounces=1;
++    ProjectileState p;p.velocity={0_fx,0_fx,600_fx};auto hit=stepProjectile(pc,p,world,Fixed::fromRatio(1,60));CHECK(hit.accepted&&hit.impact&&hit.impact->bounced&&p.velocity.z<Fixed{}&&p.alive);roundtrip(p);
++    CHECK(stepProjectile(pc,p,world,Fixed::fromRatio(1,60)).accepted&&p.position.z<4_fx);
++    pc.lifetime=1;ProjectileState once;once.velocity={1_fx,{}, {}};CHECK(stepProjectile(pc,once,world,Fixed::fromRatio(1,60)).accepted&&!once.alive&&once.position.x>Fixed{});
++}
++void matches(){
++    const std::array<int64_t,2> teams{1,2};auto state=makeMatch(teams);CHECK(state);MatchConfig c;c.warmupTicks=0;c.intermissionTicks=1;c.roundsToWin=2;c.scoreToWin=3;
++    CHECK(stepMatch(c,*state,0)&&state->phase==MatchPhase::Live);CHECK(awardScore(*state,1,1,3));CHECK(!awardScore(*state,1,1,3));CHECK(stepMatch(c,*state,1)&&state->phase==MatchPhase::Intermission);CHECK(!awardScore(*state,1,2,3));
++    CHECK(stepMatch(c,*state,2)&&state->phase==MatchPhase::Live);CHECK(!awardScore(*state,1,1,3));CHECK(awardScore(*state,1,2,3));CHECK(stepMatch(c,*state,3)&&state->phase==MatchPhase::Finished&&state->winner==1);roundtrip(*state);
++    auto tie=makeMatch(teams);c.roundTicks=5;c.overtimeTicks=3;c.roundsToWin=1;c.maxRounds=1;CHECK(stepMatch(c,*tie,0));CHECK(stepMatch(c,*tie,5)&&tie->phase==MatchPhase::Overtime);CHECK(stepMatch(c,*tie,8)&&tie->winner==-1);roundtrip(*tie);
++    CaptureState capture;CHECK(stepCapture(capture,{{1,1}},3,0));CHECK(stepCapture(capture,{{1,1},{2,1}},3,1)&&capture.progress==1);CHECK(stepCapture(capture,{{1,1}},3,2));auto taken=stepCapture(capture,{{1,1}},3,3);CHECK(taken&&*taken&&capture.owner==1);CHECK(!stepCapture(capture,{},3,3));roundtrip(capture);
++}
++void narrative(const std::string& root){
++    auto graph=readStory(Json::parseFile(root+"/examples/libraries/genre/story.json"));auto s=beginStory(graph,1);CHECK(s&&storyChoices(graph,*s)==std::vector<int64_t>{2});CHECK(!chooseStory(graph,*s,1,1));
++    s=beginStory(graph,1,{{1,1}});CHECK(s&&chooseStory(graph,*s,1,1)&&s->node==2&&s->facts.at(2)==1);CHECK(!chooseStory(graph,*s,1,1));roundtrip(*s);CHECK(chooseStory(graph,*s,1,2)&&s->complete);roundtrip(*s);
++    auto bad=graph;bad[1].choices[0].next=99;CHECK(!valid(bad));
++    auto overflow=graph;overflow[1].choices[0].changes={{2,1,true}};auto initial=beginStory(overflow,1,{{1,1},{2,INT64_MAX}});auto before=save(*initial);CHECK(!chooseStory(overflow,*initial,1,1)&&save(*initial)==before);
++    auto settings=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/settings.json"));CHECK(settings.value&&motionConfig(*settings.value).maxJumps==2&&matchConfig(*settings.value).roundsToWin==2);
++}
++int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);std::cout<<"Genre policies: locomotion, melee, projectiles, rounds/capture, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

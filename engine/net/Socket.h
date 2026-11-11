@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-namespace rts::net {
+namespace aiverse::net {
 
 #ifdef _WIN32
 using SocketHandle = uintptr_t;
@@ -74,5 +74,5 @@ private:
     SocketHandle s_ = SocketHandle(-1);
 };
 
-} // namespace rts::net
+} // namespace aiverse::net
 #endif

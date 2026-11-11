@@ -28,7 +28,7 @@ extern "C" {
 #include "engine/services/Store.h"
 #include "engine/ui/UiLua.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 namespace {
 
@@ -204,10 +204,10 @@ struct LuaApi {
     }
     static int notice(lua_State* L) { client(L).notice(luaL_checkstring(L, 1)); return 0; }
     static int lastResult(lua_State* L) { ui::luaPushJson(L, client(L).lastResult_); return 1; }
-    // game.safeArea() -> {left, top, right, bottom} in dp: notch, home indicator, ad banner (RTS_UI_SAFE_AREA="l,t,r,b" for previews)
+    // game.safeArea() -> {left, top, right, bottom} in dp: notch, home indicator, ad banner (AIVERSE_UI_SAFE_AREA="l,t,r,b" for previews)
     static int safeArea(lua_State* L) {
         platform::Insets in = platform::safeAreaInsets();
-        if (const char* e = std::getenv("RTS_UI_SAFE_AREA"); e && *e) std::sscanf(e, "%f,%f,%f,%f", &in.left, &in.top, &in.right, &in.bottom);
+        if (const char* e = std::getenv("AIVERSE_UI_SAFE_AREA"); e && *e) std::sscanf(e, "%f,%f,%f,%f", &in.left, &in.top, &in.right, &in.bottom);
         lua_createtable(L, 0, 4);
         lua_pushnumber(L, in.left); lua_setfield(L, -2, "left");
         lua_pushnumber(L, in.top); lua_setfield(L, -2, "top");
@@ -391,7 +391,7 @@ const char* GameClient::screenName() const {
 }
 
 std::string GameClient::saveDir() const {
-    if (const char* d = std::getenv("RTS_UI_SAVE_DIR"); d && *d) return d;   // previews / tests: never the real save
+    if (const char* d = std::getenv("AIVERSE_UI_SAVE_DIR"); d && *d) return d;   // previews / tests: never the real save
     std::string id = manifest_.getStr("id", "game");
     for (char& ch : id) if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '.' || ch == '-' || ch == '_')) ch = '_';
     return platform::userDataDir() + "/" + id;
@@ -490,4 +490,4 @@ void GameClient::shutdownLua() {   // after the UI: RmlUi's documents hold refer
     lua_ = nullptr;
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

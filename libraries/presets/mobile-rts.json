@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "input": {
+    "deadzone": 180,
+    "dragPixels": 12
+  },
+  "camera": {
+    "responseMilli": 6000
+  },
+  "feedback": {
+    "cooldownTicks": 8
+  }
+}

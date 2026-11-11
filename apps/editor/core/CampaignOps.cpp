@@ -9,10 +9,10 @@
 #include "modules/rts/RtsAI.h"
 #include "modules/rts/RtsCampaign.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace fs = std::filesystem;
-using namespace rts::game;
+using namespace aiverse::game;
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -118,4 +118,4 @@ void registerCampaignOps(Workspace& ws) {
         }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

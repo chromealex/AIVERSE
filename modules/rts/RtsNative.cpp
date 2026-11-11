@@ -3,7 +3,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 namespace {
 void hashState(Hasher& h, const NativeState& s) {
     h.u32(uint32_t(s.values.size()));
@@ -48,7 +48,7 @@ void NativeModules::load(RtsModule& rts, Simulation& sim, const Json& rules,
             for (const auto& d : definitions) have += (have.empty() ? "" : ", ") + d.id;
             throw std::runtime_error("native module '" + id + "': not compiled into this build (compiled: " +
                                      (have.empty() ? std::string("none") : have) +
-                                     "); rebuild the engine with -DRTS_CONTENT_DIR=<project folder> so it compiles <project>/native, "
+                                     "); rebuild the engine with -DAIVERSE_CONTENT_DIR=<project folder> so it compiles <project>/native, "
                                      "then open the project in that editor (docs/native-modules.md)");
         }
         Json config = item.has("config") ? item["config"] : Json::object();
@@ -112,4 +112,4 @@ bool NativeModules::serialize(Simulation& sim, Archive& a) const {
     }
     return a.ok();
 }
-} // namespace rts::game
+} // namespace aiverse::game

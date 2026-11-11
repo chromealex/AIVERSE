@@ -6,7 +6,7 @@
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/RtsScript.h"
 
-namespace rts::netgame {
+namespace aiverse::netgame {
 
 MatchData loadMatchData(const std::string& gameDir, const std::string& mapFile) {
     MatchData d;
@@ -68,4 +68,4 @@ net::Arbiter makeArbiter(std::map<std::string, std::string> gameDirs) {
     };
 }
 
-} // namespace rts::netgame
+} // namespace aiverse::netgame

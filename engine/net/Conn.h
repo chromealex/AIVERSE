@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::net {
+namespace aiverse::net {
 
 using Bytes = std::vector<uint8_t>;
 
@@ -27,6 +27,8 @@ class Conn {
 public:
     virtual ~Conn() = default;
     virtual void send(const Bytes& msg) = 0;   // queued; delivered reliably and in order
+    // Replaceable snapshots: UDP is unreliable/latest-only; ordered transports fall back to send.
+    virtual void sendLatest(const Bytes& msg) { send(msg); }
     virtual bool recv(Bytes& msg) = 0;         // next received message, if any
     virtual void update(uint64_t now) = 0;     // pump I/O, resends, keepalives, timeouts
     virtual ConnState state() const = 0;
@@ -49,4 +51,4 @@ std::unique_ptr<Conn> connectWebSocket(const std::string& url);
 // WebSocket on the web). Returns nullptr for a malformed address.
 std::unique_ptr<Conn> connectTo(const std::string& address);
 
-} // namespace rts::net
+} // namespace aiverse::net

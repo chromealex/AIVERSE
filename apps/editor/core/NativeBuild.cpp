@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 std::string quote(const std::string& s) {
@@ -115,27 +115,27 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
     if (useNinja) { p.configureArgs.insert(p.configureArgs.end(), {"-G", "Ninja", "-DCMAKE_MAKE_PROGRAM=" + ninja}); }
     p.configureArgs.insert(p.configureArgs.end(), {
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DRTS_CONTENT_DIR=" + projectDir,
-        "-DRTS_NATIVE_DIR=",            // a stale override must not pick another project's modules
-        "-DRTS_BUILD_TESTS=OFF", "-DRTS_BUILD_SERVER=OFF"});
-    // macOS picks the .rtsproj handler by bundle id: the project's RTSEditor.app must not share the regular one's
-    if (host == "macos") p.configureArgs.push_back("-DRTS_EDITOR_BUNDLE_ID=com.rtsengine.editor.project");
-    p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "rts_editor", "rts_headless"};
+        "-DAIVERSE_CONTENT_DIR=" + projectDir,
+        "-DAIVERSE_NATIVE_DIR=",            // a stale override must not pick another project's modules
+        "-DAIVERSE_BUILD_TESTS=OFF", "-DAIVERSE_BUILD_SERVER=OFF"});
+    // macOS picks the .rtsproj handler by bundle id: the project's AiverseEditor.app must not share the regular one's
+    if (host == "macos") p.configureArgs.push_back("-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project");
+    p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "aiverse_editor", "aiverse_headless"};
     if (jobs > 0) p.buildArgs.insert(p.buildArgs.end(), {"--parallel", std::to_string(jobs)});
     const fs::path bd(p.buildDir);
     // multi-config generators (Visual Studio) put binaries in Release/; Ninja / Makefiles in the dir itself
     const bool multiConfig = host == "windows" && ninja.empty();
     const fs::path bin = multiConfig ? bd / "Release" : bd;
     if (host == "macos") {
-        p.launchTarget = (bin / "RTSEditor.app").string();
-        p.editorBinary = (bin / "RTSEditor.app" / "Contents" / "MacOS" / "RTSEditor").string();
-        p.headlessBinary = (bin / "rts_headless").string();
+        p.launchTarget = (bin / "AiverseEditor.app").string();
+        p.editorBinary = (bin / "AiverseEditor.app" / "Contents" / "MacOS" / "AiverseEditor").string();
+        p.headlessBinary = (bin / "aiverse_headless").string();
     } else if (host == "windows") {
-        p.editorBinary = p.launchTarget = (bin / "rts_editor.exe").string();
-        p.headlessBinary = (bin / "rts_headless.exe").string();
+        p.editorBinary = p.launchTarget = (bin / "aiverse_editor.exe").string();
+        p.headlessBinary = (bin / "aiverse_headless.exe").string();
     } else {
-        p.editorBinary = p.launchTarget = (bin / "rts_editor").string();
-        p.headlessBinary = (bin / "rts_headless").string();
+        p.editorBinary = p.launchTarget = (bin / "aiverse_editor").string();
+        p.headlessBinary = (bin / "aiverse_headless").string();
     }
     return p;
 }
@@ -150,7 +150,7 @@ std::string nativeBuildCommand(const NativeBuildPlan& p) {
 }
 
 int nativeBuildJobs() {
-    if (const char* e = std::getenv("RTS_NATIVE_BUILD_JOBS"); e && std::atoi(e) > 0) return std::atoi(e);
+    if (const char* e = std::getenv("AIVERSE_NATIVE_BUILD_JOBS"); e && std::atoi(e) > 0) return std::atoi(e);
     return std::max(1, int(std::thread::hardware_concurrency() / 2));
 }
 
@@ -239,7 +239,7 @@ std::string nativeRestartCommand(const std::string& host, const std::string& lau
     if (host == "macos") return "open -n " + q(launchTarget) + " --args " + args;
     if (host == "windows") return "start \"\" " + q(launchTarget) + " " + args;
     // double fork: the new editor is not a child of this one (survives its exit, no zombie)
-    return "( RTS_NATIVE_EDITOR=1 " + q(launchTarget) + " " + args + " >/dev/null 2>&1 & )";
+    return "( AIVERSE_NATIVE_EDITOR=1 " + q(launchTarget) + " " + args + " >/dev/null 2>&1 & )";
 }
 
 bool isProjectBuildExe(const std::string& exe) {
@@ -252,4 +252,4 @@ bool isProjectBuildExe(const std::string& exe) {
     return false;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

@@ -13,7 +13,7 @@
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 constexpr uint16_t kNoType = UINT16_MAX;
 constexpr uint8_t kHostileNeutral = 255;   // owner of creeps/monsters: hostile to every player
@@ -99,10 +99,10 @@ struct WeaponDef {
 
 // ------------------------------------------------------------------ abilities and effects
 struct Amount { uint16_t res = 0; Fixed value{}; };
-} // namespace rts::game
+} // namespace aiverse::game
 #include "RtsAbilityData.h"
 #include "RtsGridFieldData.h"
-namespace rts::game {
+namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
 struct GatherDef { uint16_t res = 0; Fixed carry = Fixed::fromInt(10); Fixed time = Fixed::fromInt(2); };
 
@@ -158,9 +158,9 @@ struct AttractDef {
     Fixed weight = Fixed::fromInt(1);
 };
 
-}   // namespace rts::game
+}   // namespace aiverse::game
 #include "RtsMechData.h"   // agent-mech data (needs StatMod, Amount, layers)
-namespace rts::game {
+namespace aiverse::game {
 
 // ------------------------------------------------------------------ type
 struct UnitType {
@@ -614,4 +614,4 @@ Json expandDesigns(const Json& j);
 void loadMechStage4(Rules& r, const Json& j);   // RtsMechData4.cpp: morale, fatigue, charge, supply, conveyors
 VictoryRules loadVictory(const Json& j, const VictoryRules& def);
 
-} // namespace rts::game
+} // namespace aiverse::game

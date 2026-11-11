@@ -2,7 +2,7 @@
 #include "engine/data/Json.h"
 #include <set>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // Put exact size overrides before wildcard rules (packaging uses the first matching size).
 // Preserve compression/exclusion settings and all unrelated rules.
@@ -30,4 +30,4 @@ inline Json atlasSizeFixRules(const Json& existing, const Json& excluded) {
     return out;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

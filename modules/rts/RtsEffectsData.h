@@ -3,7 +3,7 @@
 #include <functional>
 #include "RtsData.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct EffectParser {
     Rules& r;
@@ -34,4 +34,4 @@ void loadOriginals(Rules& r, const Json& j, EffectParser& ep);
 // Foundations, traps (RtsFidelityData.cpp), called right after loadOriginals.
 void loadFidelity(Rules& r, const Json& j, EffectParser& ep);
 
-} // namespace rts::game
+} // namespace aiverse::game

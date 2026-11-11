@@ -4,7 +4,7 @@
 #include "../RtsMap.h"
 #include "../RtsSphere.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -425,4 +425,4 @@ void PlanetFieldBlur::operator()(std::vector<uint8_t>& f, int r) {
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

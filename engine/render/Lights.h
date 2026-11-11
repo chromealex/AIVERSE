@@ -28,7 +28,7 @@
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 enum class LightQuality { Off, Low, Medium, High };
 
@@ -179,4 +179,4 @@ private:
     bool mapReady_ = false, mapHasLights_ = false;
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

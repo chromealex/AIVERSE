@@ -1,7 +1,7 @@
 // Platform layer: window/surface, main loop, input, file access.
 // One implementation per OS lives next to this file; the game/editor only sees this API.
 //
-// Entry point: the application defines   int rtsMain(int argc, char** argv);
+// Entry point: the application defines   int aiverseMain(int argc, char** argv);
 // and calls platform::run() from it. Each platform provides the real main()/android_main/WinMain.
 #pragma once
 #include <cstdint>
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-namespace rts::gfx { class Device; }
+namespace aiverse::gfx { class Device; }
 
-namespace rts::platform {
+namespace aiverse::platform {
 
 enum class Key : uint16_t {
     Unknown = 0,
@@ -41,6 +41,7 @@ struct Event {
     EventType type{};
     float x = 0, y = 0;          // logical points, origin top-left
     float wheelX = 0, wheelY = 0;
+    float deltaX = 0, deltaY = 0; // relative mouse motion when pointerLocked()
     int button = 0;              // 0 left, 1 right, 2 middle
     Key key = Key::Unknown;
     uint32_t codepoint = 0;      // Char
@@ -51,12 +52,12 @@ struct Event {
 };
 
 struct AppConfig {
-    std::string title = "RTSEngine";
+    std::string title = "AIVERSE";
     int width = 1280, height = 720;  // logical size of the initial window (desktop)
     bool highDpi = true;
     float clearColor[3] = {0.08f, 0.09f, 0.11f};  // window background until the first frame (Windows, macOS)
     // "landscape" | "portrait" | "any". Locks the screen when the web build goes fullscreen; native
-    // mobile apps get it from game.json through rtsbuild (Info.plist / AndroidManifest).
+    // mobile apps get it from game.json through aiversebuild (Info.plist / AndroidManifest).
     std::string orientation = "landscape";
     // Desktop window (macOS, Windows, Linux; mobile and web ignore these). Games set them from
     // game.json "window" (engine/platform/WindowSettings.h) in AppCallbacks::configure.
@@ -88,6 +89,9 @@ int framebufferWidth();   // pixels
 int framebufferHeight();
 float dpiScale();         // framebuffer pixels per logical point
 bool isTouchDevice();
+// Desktop FPS input; web requests must originate from a user gesture. Mobile returns false.
+bool setPointerLock(bool enabled);
+bool pointerLocked();
 const char* name();       // "macos", "ios", "android", "web", "windows", "linux"
 void requestQuit();        // Android's Back button arrives as Key::Escape; quit from your own menu
 void setTitle(const std::string& title);
@@ -134,9 +138,9 @@ bool mountPack(const std::string& path);
 // Content hash of the mounted packs (0 when running from loose files) — identifies the data set.
 uint64_t contentPacksHash();
 
-// Split builds (rtsbuild --split): content not shipped with the app lives in pack chunks that are
+// Split builds (aiversebuild --split): content not shipped with the app lives in pack chunks that are
 // downloaded on demand from the sources in game.json `packaging.sources` (mirrors tried in order),
-// sources set here, or $RTS_CONTENT_SOURCES (';'-separated). Chunks are verified (SHA-256) and
+// sources set here, or $AIVERSE_CONTENT_SOURCES (';'-separated). Chunks are verified (SHA-256) and
 // cached in userDataDir()/content-cache. readContentFile on a file that isn't downloaded yet
 // returns false and queues its chunk; a loading screen polls contentProgress() until it's ready.
 enum class ContentState { Missing, Ready, NotDownloaded };
@@ -185,6 +189,6 @@ struct HostedView {
 void setHostedView(HostedView* view);   // nullptr: back to the real window
 HostedView* hostedView();
 
-} // namespace rts::platform
+} // namespace aiverse::platform
 
-int rtsMain(int argc, char** argv);
+int aiverseMain(int argc, char** argv);

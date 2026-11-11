@@ -7,7 +7,7 @@
 #include "EditorUtil.h"
 #include "EditorWorldEdit.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 constexpr size_t kMaxItems = 300;   // objects whose data is read (the map fields cover the whole selection)
@@ -430,4 +430,4 @@ void DetailsPanel::sections(Editor& ed) {
     for (auto& sec : sections_) section(ed, sec);
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

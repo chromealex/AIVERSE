@@ -4,7 +4,7 @@
 // additive blending, animated noise (fire flicker, water ripples, creep pulse, drifting gas). Optional
 // particles: a bounded number of one-shot effects (fx/<name>.json) on hot cells the viewer can see, handed to
 // the host with takeEffects(). Presentation only: reads RtsScene::fields (sim or editor data).
-// Quality: lowTier (weak GPUs: Renderer3D materialQuality Low or shadows off/low, RTS_FIELDS=low) uses a
+// Quality: lowTier (weak GPUs: Renderer3D materialQuality Low or shadows off/low, AIVERSE_FIELDS=low) uses a
 // half-resolution texture, no animation and no particles. GLSL + MSL in RtsFieldView.cpp.
 //
 // "view": {"show": true, "preset": "fire" | "water" | "lava" | "gas" | "creep" | "heat",
@@ -20,7 +20,7 @@
 #include "../../../engine/render/Renderer3D.h"
 #include "../RtsGridFieldData.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct MapGrid;
 class RtsView;
@@ -79,4 +79,4 @@ private:
     std::vector<Effect> effects_;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

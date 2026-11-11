@@ -1,0 +1,334 @@
+{
+  "loot": {
+    "chest": {
+      "cost": {
+        "gold": 10
+      },
+      "rolls": 1,
+      "pity": 3,
+      "entries": [
+        {
+          "id": "coin",
+          "weight": 99,
+          "rare": false,
+          "reward": {
+            "gold": 1
+          }
+        },
+        {
+          "id": "rare",
+          "weight": 1,
+          "rare": true,
+          "reward": {
+            "sword": 1
+          },
+          "uniqueAsset": "sword",
+          "duplicateReward": {
+            "gems": 2
+          }
+        }
+      ]
+    }
+  },
+  "albums": {
+    "launch": {
+      "required": {
+        "gold": 10,
+        "gems": 1
+      },
+      "reward": {
+        "gems": 3
+      },
+      "consume": false,
+      "start": 0,
+      "end": 0
+    }
+  },
+  "jobs": {
+    "forge": {
+      "slots": 2,
+      "maxQueued": 4,
+      "duration": 10,
+      "cost": {
+        "gold": 10
+      },
+      "reward": {
+        "gems": 1
+      },
+      "refundPermille": 500,
+      "speedAsset": "gems",
+      "speedCost": 1
+    }
+  },
+  "research": {
+    "tech": {
+      "nodes": {
+        "root": {
+          "requires": [],
+          "cost": {
+            "gold": 5
+          },
+          "reward": {}
+        },
+        "child": {
+          "requires": [
+            "root"
+          ],
+          "cost": {
+            "gold": 5
+          },
+          "reward": {
+            "gems": 1
+          }
+        }
+      },
+      "prestigeCount": 2,
+      "prestigeCost": {},
+      "prestigeReward": {
+        "gems": 2
+      }
+    }
+  },
+  "quests": {
+    "daily": {
+      "period": 86400,
+      "requires": [],
+      "maxRerolls": 1,
+      "rerollCost": {
+        "gold": 1
+      },
+      "variants": [
+        {
+          "steps": [
+            {
+              "mode": "all",
+              "goals": [
+                {
+                  "metric": "wins",
+                  "target": 2
+                }
+              ]
+            },
+            {
+              "mode": "any",
+              "goals": [
+                {
+                  "metric": "kills",
+                  "target": 3
+                },
+                {
+                  "metric": "builds",
+                  "target": 2
+                }
+              ]
+            }
+          ],
+          "reward": {
+            "gems": 2
+          }
+        },
+        {
+          "steps": [
+            {
+              "mode": "all",
+              "goals": [
+                {
+                  "metric": "wins",
+                  "target": 2
+                }
+              ]
+            },
+            {
+              "mode": "any",
+              "goals": [
+                {
+                  "metric": "kills",
+                  "target": 3
+                },
+                {
+                  "metric": "builds",
+                  "target": 2
+                }
+              ]
+            }
+          ],
+          "reward": {
+            "gems": 2
+          }
+        }
+      ]
+    }
+  },
+  "events": {
+    "festival": {
+      "start": 0,
+      "end": 0,
+      "period": 100,
+      "personal": false,
+      "allowLate": true,
+      "catchUp": true,
+      "claimSeconds": 50,
+      "phases": [
+        {
+          "id": "first",
+          "duration": 50,
+          "cost": {},
+          "reward": {
+            "gold": 10
+          }
+        },
+        {
+          "id": "final",
+          "duration": 50,
+          "cost": {},
+          "reward": {
+            "gems": 1
+          }
+        }
+      ]
+    }
+  },
+  "wars": {
+    "launch": {
+      "start": 0,
+      "end": 100,
+      "minimumContribution": 1,
+      "winReward": {
+        "gems": 5
+      },
+      "drawReward": {
+        "gems": 2
+      },
+      "loseReward": {
+        "gold": 5
+      }
+    }
+  },
+  "asyncPvp": {
+    "raid": {
+      "attackCost": {
+        "gold": 5
+      },
+      "winReward": {
+        "gold": 10
+      },
+      "shieldSeconds": 20,
+      "attackLimit": 3,
+      "period": 100,
+      "timeout": 10,
+      "ratingRange": 100,
+      "revengeBypassShield": true,
+      "maxSnapshotBytes": 1024
+    }
+  },
+  "matchmaking": {
+    "duel": {
+      "rating": "ranked",
+      "teamSize": 1,
+      "teams": 2,
+      "initialRange": 100,
+      "expandPerSecond": 5,
+      "maxRange": 500,
+      "ticketSeconds": 60,
+      "maxTickets": 100,
+      "leavePenaltySeconds": 10
+    }
+  },
+  "ratings": {
+    "ranked": {
+      "method": "glicko2",
+      "initial": 1500,
+      "minimum": 0,
+      "maximum": 5000,
+      "k": 32,
+      "provisionalK": 64,
+      "provisionalGames": 10,
+      "streakBonus": 1,
+      "leavePenalty": 10,
+      "tauMilli": 500
+    }
+  },
+  "referrals": {
+    "friends": {
+      "codes": {
+        "WELCOME": {
+          "start": 0,
+          "end": 0,
+          "maxUses": 10,
+          "reward": {
+            "gold": 10
+          }
+        }
+      },
+      "maxAccountAge": 100,
+      "maxInvitees": 10,
+      "milestones": {
+        "win": {
+          "metric": "wins",
+          "target": 1,
+          "inviterReward": {
+            "gems": 2
+          },
+          "inviteeReward": {
+            "gems": 1
+          }
+        }
+      }
+    }
+  },
+  "ads": {
+    "bonus": {
+      "cooldown": 5,
+      "period": 100,
+      "limit": 3,
+      "timeout": 10,
+      "reward": {
+        "gold": 5
+      }
+    }
+  },
+  "chains": {
+    "welcome": {
+      "start": "first",
+      "cooldown": 5,
+      "period": 100,
+      "maxShows": 3,
+      "nodes": {
+        "first": {
+          "offer": "daily_exchange",
+          "accept": "last",
+          "reject": "last"
+        },
+        "last": {
+          "offer": "sword"
+        }
+      }
+    }
+  },
+  "notifications": {
+    "gift": {
+      "group": "rewards",
+      "priority": 10,
+      "delay": 5,
+      "repeat": 10,
+      "lifetime": 100,
+      "metadata": {
+        "title": "@meta.gift"
+      }
+    }
+  },
+  "offline": {
+    "mine": {
+      "maxAway": 100,
+      "interval": 10,
+      "tiers": [
+        {
+          "gold": 2
+        },
+        {
+          "gold": 5
+        }
+      ]
+    }
+  }
+}

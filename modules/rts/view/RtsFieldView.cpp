@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -335,7 +335,7 @@ void RtsFieldView::upload(Tex& t, const FieldSceneLayer& L, const Look& look, co
 void RtsFieldView::draw(Renderer3D& r, const std::vector<FieldSceneLayer>& layers, const std::vector<uint8_t>* vision, const MapGrid& grid,
                         const RtsView& view, double time, bool lowTier, uint8_t viewer) {
     if (!dev_ || !alpha_.valid() || layers.empty()) return;
-    if (const char* q = std::getenv("RTS_FIELDS")) lowTier = std::string(q) == "low";
+    if (const char* q = std::getenv("AIVERSE_FIELDS")) lowTier = std::string(q) == "low";
     if (meshDirty_ || meshW_ != grid.w || meshH_ != grid.h) buildMesh(grid, view);
     for (const FieldSceneLayer& L : layers) {
         if (L.field < 0 || size_t(L.field) >= looks_.size() || !L.v) continue;
@@ -396,4 +396,4 @@ void RtsFieldView::draw(Renderer3D& r, const std::vector<FieldSceneLayer>& layer
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

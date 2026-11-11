@@ -21,7 +21,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using namespace render;
 
@@ -97,7 +97,7 @@ void Editor::init(gfx::Device& dev) {
     postFx_.init(dev);
     postFx_.setQuality(render::PostFx::defaultQualityFor(dev, false));
     r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, false));
-    r3d_.lights.setQuality(rts::render::LightSystem::defaultQualityFor(dev, false));
+    r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, false));
     for (auto& f : WindowRegistry::factories()) {
         windows_.push_back(f());
         windows_.back()->open = windows_.back()->openByDefault();
@@ -154,6 +154,8 @@ void Editor::shutdown() {
     windows_.clear(); // windows release their viewports in their destructors via update()? keep simple: textures die with the device
     view_.shutdown(*dev_);
     postFx_.shutdown();
+    if(fpsPreviewMesh_.vb.valid())dev_->destroyBuffer(fpsPreviewMesh_.vb);
+    if(fpsPreviewMesh_.ib.valid())dev_->destroyBuffer(fpsPreviewMesh_.ib);
     r3d_.shutdown();
     ui_.shutdown();
     dev_ = nullptr;
@@ -193,6 +195,11 @@ void Editor::openGame(const std::string& idOrDir) {
     fitScene();
     status = "Игра: " + ws_.project.manifest.getStr("name", idOrDir);
     checkNativeModules(false);
+    if(ws_.project.isFps()) {
+        focusWindow("fps");
+        const auto& spawn=doc().data.fps["spawns"][0];
+        sceneCam.target={float(spawn[0].toDouble()),0,float(spawn[2].toDouble())};sceneCam.distance=35;
+    }
 }
 
 void Editor::reloadFx() {
@@ -583,6 +590,7 @@ void Editor::drawEditOverlays3D() {
 }
 
 void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) {
+    if(ws_.project.isFps()){if(vp.color.valid())renderFpsScene(vp,cam);return;}
     if (!vp.color.valid()) return;
     if (playing()) { renderGame(vp, cam); return; }
     buildEditScene(scene_);
@@ -713,6 +721,7 @@ void Editor::applyChanges() {
 // ============================ play-test ============================
 
 void Editor::startPlay(int humanSlot) {
+    if(ws_.project.isFps()){startFpsPlay();return;}
     if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
     stopClientPlay();
     auto issues = doc().validate(rules(), ws_.project.rulesJson);
@@ -740,7 +749,7 @@ void Editor::startPlay(int humanSlot) {
         playIds_ = mapEntityIds(*sim_, *simModule(), mapJson);
         playDocLinks_ = linkMapEntities(*sim_, *simModule(), doc().data);   // world tree: map entity -> live object
         view_.lights().configure(ws_.project.manifest["lighting"], mapJson["lighting"], mapJson["lights"]); // day/night, map lights
-        if (auto pe = rts::game::configurePlayerColors(ws_.project.manifest["playerColors"]); !pe.empty()) { status = pe; ws_.log("play", pe, true); }
+        if (auto pe = aiverse::game::configurePlayerColors(ws_.project.manifest["playerColors"]); !pe.empty()) { status = pe; ws_.log("play", pe, true); }
     } catch (const std::exception& e) {
         status = std::string("Ошибка запуска: ") + e.what();
         ws_.log("play", status, true);
@@ -802,7 +811,7 @@ void Editor::samplePlayStats() {
     s.t = t;
     for (auto& p : sim_->players()) {
         int units = 0, structs = 0;
-        sim_->world().each<game::Unit, Owner>([&](rts::Entity, game::Unit& u, Owner& o) { if (o.player == p.slot) (rules().types[u.type].structure ? structs : units)++; });
+        sim_->world().each<game::Unit, Owner>([&](aiverse::Entity, game::Unit& u, Owner& o) { if (o.player == p.slot) (rules().types[u.type].structure ? structs : units)++; });
         s.units.push_back(units);
         s.structures.push_back(structs);
         std::vector<float> res;
@@ -942,7 +951,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     pass.clearColor[0] = 0.10f; pass.clearColor[1] = 0.11f; pass.clearColor[2] = 0.13f;
     dev.beginPass(pass);
     dev.setViewport({0, 0, dev.framebufferWidth(), dev.framebufferHeight()});
-    std::string title = "RTS Editor — " + ws_.project.manifest.getStr("name", "без игры") + " — " +
+    std::string title = "AIVERSE Editor — " + ws_.project.manifest.getStr("name", "без игры") + " — " +
                         (doc().path.empty() ? std::string("без имени") : fs::path(doc().path).filename().string()) + (doc().dirty ? " *" : "");
     static std::string lastTitle;
     if (title != lastTitle) { platform::setTitle(title); lastTitle = title; }
@@ -956,4 +965,4 @@ void Editor::frame(gfx::Device& dev, double dt) {
     if (quit_) platform::requestQuit();
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

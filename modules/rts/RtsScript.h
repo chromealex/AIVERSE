@@ -7,7 +7,7 @@
 //    userdata with arithmetic metamethods). Floats are kept out of the simulation at three levels:
 //      1. float literals (1.5, 1e3, 0x1p4) are rejected when a file is loaded, with file:line;
 //      2. every float arithmetic primitive of the VM (/, ^, float + - * % //, constant folding)
-//         raises "float arithmetic is not allowed" (guard macros in third_party/lua/rts_luaconf.h);
+//         raises "float arithmetic is not allowed" (guard macros in third_party/lua/aiverse_luaconf.h);
 //      3. every API call that takes a number accepts only integers or fx ("use fx() or integers").
 //    `7 // 2` is integer division; fractional math is `fx(7) / 2`, `fx("1.25")`, `fx(3, 4)`.
 //    The library is reduced to deterministic parts: no os/io/debug/package/load/dofile/collectgarbage/
@@ -37,9 +37,9 @@
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
 
-namespace rts { class Simulation; class Hasher; struct Command; }
+namespace aiverse { class Simulation; class Hasher; struct Command; }
 
-namespace rts::game {
+namespace aiverse::game {
 
 class RtsModule;
 struct Rules;
@@ -201,17 +201,17 @@ private:
 };
 
 
-// Development profiler of Lua script time (env RTS_LUA_PROFILE=<prefix>; off otherwise, no cost but one branch per
-// count-hook call). The count hook (every 1000 instructions) samples the Lua stack when >= RTS_LUA_PROFILE_US
+// Development profiler of Lua script time (env AIVERSE_LUA_PROFILE=<prefix>; off otherwise, no cost but one branch per
+// count-hook call). The count hook (every 1000 instructions) samples the Lua stack when >= AIVERSE_LUA_PROFILE_US
 // (default 100) microseconds of wall time passed since the last sample and charges that time to the stack.
 // Hosts bracket simulation steps with luaProfileTickBegin / luaProfileTickEnd; luaProfileWrite writes folded stacks
-// (<prefix>.all.folded: every tick; <prefix>.slow.folded: ticks over RTS_LUA_PROFILE_SLOW ms, default 50;
+// (<prefix>.all.folded: every tick; <prefix>.slow.folded: ticks over AIVERSE_LUA_PROFILE_SLOW ms, default 50;
 // <prefix>.ticks.folded: the same per slow tick, first frame "tick N run R", R the write time in ms). Values are microseconds.
-// RTS_LUA_PROFILE_LINES=1 adds each frame's executing line ("fn@file:defined#line"); RTS_LUA_PROFILE_SPLIT=text
+// AIVERSE_LUA_PROFILE_LINES=1 adds each frame's executing line ("fn@file:defined#line"); AIVERSE_LUA_PROFILE_SPLIT=text
 // writes <prefix>.split: per tick "tick wall_us sampled_us us_of_stacks_containing_text".
 bool luaProfileEnabled();
 void luaProfileTickBegin();
 void luaProfileTickEnd(uint64_t tick, int64_t us);
 void luaProfileWrite();
 
-} // namespace rts::game
+} // namespace aiverse::game

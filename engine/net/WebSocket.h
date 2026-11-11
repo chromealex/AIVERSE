@@ -7,7 +7,7 @@
 #include <string>
 #include "Conn.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 std::array<uint8_t, 20> sha1(const void* data, size_t n);
 std::string base64(const uint8_t* data, size_t n);
@@ -30,4 +30,4 @@ private:
 };
 #endif
 
-} // namespace rts::net
+} // namespace aiverse::net

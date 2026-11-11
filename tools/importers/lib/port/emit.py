@@ -169,7 +169,7 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
         map_list.append(dict(file=rel,title=scene['name']))
         item(model,scene['source'],'approx','Scene placed with translated origin; ownership, starts, rotation and victory require review.',rel,key='scene')
     writer.rules(dict(victory='noEntities',resources={'gold':{'name':'Gold','kind':'stock','start':0}},types=types))
-    manifest = dict(name=model['name'],id='com.rtsengine.'+ident(model['name']),version='0.1.0',module='rts',rules='rules.json',maps=map_list,external=True)
+    manifest = dict(name=model['name'],id='com.aiverse.'+ident(model['name']),version='0.1.0',module='rts',rules='rules.json',maps=map_list,external=True)
     if is2d: manifest['camera'] = dict(projection='ortho',pitch=90,yaw=0,rotate=False)
     writer.json('game.json',manifest)
     writer.json(ident(model['name'])+'.rtsproj',dict(format=1,name=model['name'],manifest='game.json'))

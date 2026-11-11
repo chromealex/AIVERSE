@@ -7,10 +7,10 @@
 #include <cstring>
 #include <string>
 
-namespace rts::render {
+namespace aiverse::render {
 
 LightQuality LightSystem::defaultQualityFor(const gfx::Device& dev, bool mobile) {
-    if (const char* q = std::getenv("RTS_LIGHTS")) { // testing override: off|low|medium|high
+    if (const char* q = std::getenv("AIVERSE_LIGHTS")) { // testing override: off|low|medium|high
         std::string v = q;
         return v == "off" ? LightQuality::Off : v == "low" ? LightQuality::Low : v == "high" ? LightQuality::High : LightQuality::Medium;
     }
@@ -453,4 +453,4 @@ void LightSystem::drawHalos(const mat4& viewProj, bool decals) {
     dev_->draw(uint32_t(halos_.size()));
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

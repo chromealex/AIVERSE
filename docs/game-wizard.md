@@ -13,7 +13,7 @@ Code: `apps/editor/core/GameWizard*.cpp` (no UI), `apps/editor/core/WizardOps.cp
 
 | Group | Keys |
 |---|---|
-| Content | `artDir` (folder: png/jpg/tga, glb/gltf/obj/fbx, wav/ogg/mp3/flac, ttf/otf, md/txt), `artUrl` (a file or a .zip / .tar.gz; downloaded with the system curl into `~/.rtsengine/wizard/<time>`) |
+| Content | `artDir` (folder: png/jpg/tga, glb/gltf/obj/fbx, wav/ogg/mp3/flac, ttf/otf, md/txt), `artUrl` (a file or a .zip / .tar.gz; downloaded with the system curl into `~/.aiverse/wizard/<time>`) |
 | Idea | `idea` (any language; .md/.txt in the folder are read too), `genre` (template id or `auto`), `features` (economy base army garrison lanes waves territory heroes spells survival planets 2d casual portrait scifi modern) |
 | Project | `title`, `location`, `studio` (bundle id `com.<studio>.<slug>`), `version`, `orientation`, `languages`, `platforms`, `seed` |
 | Tutorial | `tutorial` (`both` / `hard` / `soft` / `none`), `tutorialForced`, `tutorialSkippable`, `tutorialDim`, `hints` |
@@ -61,9 +61,9 @@ the editor): types, stats, factions, mechanics (rules or Lua), maps, victory, te
 `map_validate`, `match_run` and writes «## Агент: что сделано» into WIZARD.md.
 
 - Connection: the wizard shows the same "connect an AI agent" panel as the Agent window (`EditorMcpConnect.*`,
-  `core/McpInstall.h`): one click writes rtsmcp into the client's config, and that one connection serves both.
+  `core/McpInstall.h`): one click writes aiversemcp into the client's config, and that one connection serves both.
 - Launched from the editor (`core/WizardAgent.*`, through the user's login shell so the CLI is found):
-  Claude Code `claude -p --output-format stream-json --allowedTools mcp__rtsengine` and Codex CLI `codex exec --full-auto`,
+  Claude Code `claude -p --output-format stream-json --allowedTools mcp__aiverse` and Codex CLI `codex exec --full-auto`,
   the task on stdin, the project folder as the working directory. The CLI is found in PATH, the usual install folders, the user's shell, and inside the desktop apps
   (Claude Code in `~/Library/Application Support/Claude/claude-code/<version>/…/claude.app`, Codex in `ChatGPT.app/Contents/Resources/codex-cli`). Progress goes to the activity feed (Agent window), the
   status bar and the wizard page (Stop button); the full log to `logs/wizard-agent-<time>.log`.
@@ -77,7 +77,7 @@ the editor): types, stats, factions, mechanics (rules or Lua), maps, victory, te
 
 The tutorial in the editor's Game view: the editor has no game UI to show the step panel, so the view script sends
 `wiz_tut_off` and the tutorial map plays as an ordinary match there. The panel, the arrow and the gate work in the game
-client (RTSGame, builds). The editor opens the first level, not the tutorial.
+client (AiverseGame, builds). The editor opens the first level, not the tutorial.
 
 ## Check
 

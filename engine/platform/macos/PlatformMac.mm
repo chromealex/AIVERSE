@@ -10,12 +10,13 @@
 #include <chrono>
 #include <memory>
 
-using namespace rts;
-using namespace rts::platform;
-using rts::platform::detail::state;
+using namespace aiverse;
+using namespace aiverse::platform;
+using aiverse::platform::detail::state;
 
 static std::unique_ptr<gfx::Device> g_device;
 static NSWindow* g_window = nil;
+static bool g_pointerLocked = false;
 // Strong owner of the app delegate: NSApp.delegate is weak, and once the timer is invalidated
 // nothing else retains it (a freed delegate crashed in -tick when the window closed).
 static id g_delegate = nil;
@@ -65,10 +66,10 @@ static void updateSizes(NSView* view) {
     ((CAMetalLayer*)view.layer).contentsScale = scale;
 }
 
-@interface RTSView : NSView
+@interface AiverseView : NSView
 @end
 
-@implementation RTSView
+@implementation AiverseView
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)wantsUpdateLayer { return YES; }
@@ -92,6 +93,7 @@ static void updateSizes(NSView* view) {
 - (void)mouse:(NSEvent*)ev type:(EventType)t button:(int)b {
     NSPoint p = [self convertPoint:ev.locationInWindow fromView:nil];
     Event e; e.type = t; e.x = float(p.x); e.y = float(p.y); e.button = b; e.mods = modsFrom(ev.modifierFlags);
+    e.deltaX = float(ev.deltaX); e.deltaY = float(ev.deltaY);
     detail::dispatch(e);
 }
 - (void)mouseDown:(NSEvent*)e { [self mouse:e type:EventType::MouseDown button:0]; }
@@ -149,12 +151,12 @@ static void updateSizes(NSView* view) {
 }
 @end
 
-@interface RTSAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
-@property(strong) RTSView* view;
+@interface AiverseAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
+@property(strong) AiverseView* view;
 @property(strong) NSTimer* timer;
 @end
 
-@implementation RTSAppDelegate
+@implementation AiverseAppDelegate
 - (void)applicationDidFinishLaunching:(NSNotification*)n {
     auto& S = state();
     if (S.cb.configure) S.cb.configure(S.cfg);   // game data: window size and mode (content root is known: run() set it)
@@ -174,7 +176,7 @@ static void updateSizes(NSView* view) {
     g_window.acceptsMouseMovedEvents = YES;
     // shown until the first frame is presented (games: the splash background, see AppConfig::clearColor)
     g_window.backgroundColor = [NSColor colorWithSRGBRed:S.cfg.clearColor[0] green:S.cfg.clearColor[1] blue:S.cfg.clearColor[2] alpha:1];
-    self.view = [[RTSView alloc] initWithFrame:frame];
+    self.view = [[AiverseView alloc] initWithFrame:frame];
     g_window.contentView = self.view;
     [g_window center];
     updateSizes(self.view);
@@ -196,16 +198,16 @@ static void updateSizes(NSView* view) {
     if (S.quit || !g_window) { [self.timer invalidate]; [NSApp terminate:nil]; return; }
     if (S.fbW <= 0 || S.fbH <= 0 || g_window.isMiniaturized || !g_window.visible) return;
     @autoreleasepool {
-        // RTS_SCREENSHOT / RTS_EXIT_AFTER_FRAMES (same hooks as Linux/Win32): fixed 1/60 s steps,
+        // AIVERSE_SCREENSHOT / AIVERSE_EXIT_AFTER_FRAMES (same hooks as Linux/Win32): fixed 1/60 s steps,
         // capture frame N through the device, write it and quit once the GPU delivered it.
         static const detail::CaptureRequest capture = detail::captureRequestFromEnv();
         static long frameNo = 0;
         static bool armed = false;
         auto now = std::chrono::steady_clock::now();
         double dt = std::chrono::duration<double>(now - g_last).count();
-        if (dt > rts::platform::detail::FrameClock::kMaxDt) dt = rts::platform::detail::FrameClock::kMaxDt; // after sleep/background
-        rts::platform::pollContent(); // pack chunk downloads
-        rts::platform::detail::pluginFrame(); // plugin replies and events
+        if (dt > aiverse::platform::detail::FrameClock::kMaxDt) dt = aiverse::platform::detail::FrameClock::kMaxDt; // after sleep/background
+        aiverse::platform::pollContent(); // pack chunk downloads
+        aiverse::platform::detail::pluginFrame(); // plugin replies and events
         if (capture.active()) dt = 1.0 / 60.0;
         g_last = now;
         if (capture.active() && !armed && ++frameNo >= capture.frames) {
@@ -252,18 +254,27 @@ static void updateMacSafeArea() {
 - (void)windowDidEnterFullScreen:(NSNotification*)n { state().fullscreen = true; updateMacSafeArea(); }
 - (void)windowDidExitFullScreen:(NSNotification*)n { state().fullscreen = false; updateMacSafeArea(); }
 - (void)windowDidBecomeKey:(NSNotification*)n { Event e; e.type = EventType::FocusGained; detail::dispatch(e); }
-- (void)windowDidResignKey:(NSNotification*)n { Event e; e.type = EventType::FocusLost; detail::dispatch(e); }
+- (void)windowDidResignKey:(NSNotification*)n { setPointerLock(false); Event e; e.type = EventType::FocusLost; detail::dispatch(e); }
 - (void)applicationWillTerminate:(NSNotification*)n {
     [self.timer invalidate];
     static bool done = false; // terminate may arrive twice (window close + menu)
     if (done) return;
     done = true;
+    setPointerLock(false);
     if (state().cb.shutdown) state().cb.shutdown();
     g_device.reset();
 }
 @end
 
-namespace rts::platform {
+namespace aiverse::platform {
+bool pointerLocked() { return g_pointerLocked; }
+bool setPointerLock(bool enabled) {
+    if (enabled == g_pointerLocked) return true;
+    if (CGAssociateMouseAndMouseCursorPosition(!enabled) != kCGErrorSuccess) return false;
+    if (enabled) [NSCursor hide]; else [NSCursor unhide];
+    g_pointerLocked = enabled; return true;
+}
+
 
 namespace detail {
 void applyFullscreen(bool on) {
@@ -297,13 +308,13 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
         // content: env override -> app bundle Resources/content -> ./content
         NSString* res = [[NSBundle mainBundle] resourcePath];
         NSString* bundled = [res stringByAppendingPathComponent:@"content"];
-        if (const char* env = getenv("RTS_CONTENT")) S.contentRoot = env;
+        if (const char* env = getenv("AIVERSE_CONTENT")) S.contentRoot = env;
         else if ([[NSFileManager defaultManager] fileExistsAtPath:bundled]) S.contentRoot = bundled.UTF8String;
         else S.contentRoot = "content";
         NSArray* dirs = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
         if (dirs.count) S.userDir = std::string([dirs[0] UTF8String]) + "/" + cfg.title;
 
-        // argv is the app's own business (rtsMain parses it): AppKit must not turn bare arguments into
+        // argv is the app's own business (aiverseMain parses it): AppKit must not turn bare arguments into
         // openURLs requests as well
         [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"NSTreatUnknownArgumentsAsOpen": @"NO"}];
         [NSApplication sharedApplication];
@@ -316,7 +327,7 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
         [appMenu addItem:[[NSMenuItem alloc] initWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"]];
         appItem.submenu = appMenu;
         NSApp.mainMenu = bar;
-        RTSAppDelegate* del = [RTSAppDelegate new];
+        AiverseAppDelegate* del = [AiverseAppDelegate new];
         g_delegate = del;
         NSApp.delegate = del;
         [NSApp run];
@@ -324,6 +335,6 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
     return 0;
 }
 
-} // namespace rts::platform
+} // namespace aiverse::platform
 
-int main(int argc, char** argv) { return rtsMain(argc, argv); }
+int main(int argc, char** argv) { return aiverseMain(argc, argv); }

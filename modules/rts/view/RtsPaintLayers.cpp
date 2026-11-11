@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-namespace rts::game {
+namespace aiverse::game {
 namespace {
 const char* vs=R"(
 layout(location=0) in vec3 pos;

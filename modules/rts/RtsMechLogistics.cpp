@@ -5,7 +5,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -217,4 +217,4 @@ void RtsModule::hashLogistics(Simulation& sim, Hasher& h) {
         if (M.beltRes[c] >= 0) { h.u32(uint32_t(c)); h.i32(M.beltRes[c]); h.fx(M.beltAmt[c]); h.fx(M.beltProg[c]); }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

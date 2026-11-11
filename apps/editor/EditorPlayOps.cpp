@@ -7,9 +7,9 @@
 #include "Editor.h"
 #include "core/SimTools.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
-using namespace rts::game;
+using namespace aiverse::game;
 
 void Editor::registerPlayOps() {
     auto add = [this](const char* name, const std::string& desc, const char* schema, Workspace::OpFn fn) {
@@ -60,4 +60,4 @@ void Editor::registerPlayOps() {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

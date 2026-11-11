@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-namespace rts::client {
+namespace aiverse::client {
 
 using platform::Event;
 using platform::EventType;
@@ -21,7 +21,7 @@ bool GameClient::objectScreen(const SceneObject& o, float lift, float2& sp) cons
     return cam_.worldToScreen(view_.objectViewPos(o, lift), W, H, sp);
 }
 
-// Start over the player's base on the start body. RTS_PLANET_CAM="distance[,pitch deg[,body id]]"
+// Start over the player's base on the start body. AIVERSE_PLANET_CAM="distance[,pitch deg[,body id]]"
 // overrides the start view (screenshots of the planet / system zoom levels).
 Vec3 GameClient::simPoint(float3 g) {
     auto q = [](float v) { return Fixed::fromInt(int64_t(std::lround(double(v) * 256.0))) / 256; };
@@ -40,7 +40,7 @@ void GameClient::fitPlanetCamera() {
             if (o.owner == me && o.body >= 0 && (pass == 1 || rules_.types[o.type].structure)) { body = o.body; dir = o.pos; break; }
     float dist = -1, pitchDeg = -1;
     char id[64] = {};
-    if (const char* e = std::getenv("RTS_PLANET_CAM")) {
+    if (const char* e = std::getenv("AIVERSE_PLANET_CAM")) {
         std::sscanf(e, "%f,%f,%63s", &dist, &pitchDeg, id);
         if (id[0] && W.find(id) >= 0) { // look at the first unit on that body (or the face 2 centre)
             body = W.find(id); dir = {0, 0, 0};
@@ -52,10 +52,10 @@ void GameClient::fitPlanetCamera() {
             }
         }
     }
-    if (std::getenv("RTS_PLANET_CAM_FIGHT")) // testing: look at a ground unit that is fighting
+    if (std::getenv("AIVERSE_PLANET_CAM_FIGHT")) // testing: look at a ground unit that is fighting
         for (auto& o : scene_.objects)
             if (o.body >= 0 && o.hasTarget && !o.isProjectile && !(rules_.types[o.type].layer & kLayerOrbit)) { body = o.body; dir = o.pos; break; }
-    if (const char* e = std::getenv("RTS_PLANET_CAM_SUN")) { // testing: turn the view towards the lit side (0..1)
+    if (const char* e = std::getenv("AIVERSE_PLANET_CAM_SUN")) { // testing: turn the view towards the lit side (0..1)
         const int star = W.starOf(body);
         if (star >= 0 && star != body && dot(dir, dir) > 0) {
             const float3 sun = normalize(W.center(star, scene_.seconds) - W.center(body, scene_.seconds));
@@ -157,4 +157,4 @@ bool GameClient::planetCameraEvent(const Event& e, bool uiWants) {
     }
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

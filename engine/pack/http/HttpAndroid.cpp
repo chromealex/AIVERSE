@@ -6,7 +6,7 @@
 
 #include "ThreadDownload.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 JavaVM* g_vm = nullptr;
@@ -77,4 +77,4 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
     return dl;
 }
 
-} // namespace rts::pack
+} // namespace aiverse::pack

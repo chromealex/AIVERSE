@@ -16,7 +16,7 @@
 --
 -- State for the view (scripts/view/wizard/tutorial_view.lua): state.wiz_tut = {i, n, need, focus, x, z, over}.
 -- Test mode: map initialVars {wiz_tutorial_auto = 1} makes the script play every step itself, through the same gate as
--- a player (rts_headless / the wizard's check: the whole tutorial can be finished; `auto` in a step says how).
+-- a player (aiverse_headless / the wizard's check: the whole tutorial can be finished; `auto` in a step says how).
 local cfg = require("wizard.tutorial_steps")
 local P = cfg.player or 1
 local hard = cfg.mode ~= "soft"

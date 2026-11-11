@@ -8,7 +8,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -113,7 +113,7 @@ bool readText(const fs::path& p, std::string& out) {
 bool writeText(const fs::path& p, const std::string& text, std::string* error) {
     std::error_code ec;
     fs::create_directories(p.parent_path(), ec);
-    if (fs::exists(p, ec)) rts::pack::copyFileReplace(p, fs::path(p.string() + ".bak"), ec);
+    if (fs::exists(p, ec)) aiverse::pack::copyFileReplace(p, fs::path(p.string() + ".bak"), ec);
     const fs::path tmp = p.string() + ".tmp";
     {
         std::ofstream f(tmp, std::ios::binary);
@@ -308,7 +308,7 @@ static bool apply(const std::string& clientId, const McpServerSpec& spec, const 
     if (!client) { if (error) *error = "неизвестный клиент '" + clientId + "'"; return false; }
     if (!remove) {
         std::error_code ec;
-        if (spec.command.empty() || !fs::exists(spec.command, ec)) { if (error) *error = "не найден rtsmcp рядом с редактором (" + spec.command + "): соберите цель rtsmcp"; return false; }
+        if (spec.command.empty() || !fs::exists(spec.command, ec)) { if (error) *error = "не найден aiversemcp рядом с редактором (" + spec.command + "): соберите цель aiversemcp"; return false; }
     }
     if (client->kind == Client::ClaudeCode && haveCommand("claude")) {
         // the official way: the CLI owns its config file
@@ -350,4 +350,4 @@ bool mcpUninstall(const std::string& clientId, const McpServerSpec& spec, const 
     return apply(clientId, spec, engineDir, true, error);
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

@@ -3,7 +3,7 @@
 #include <deque>
 #include "../core/Random.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 uint64_t nowMs() {
     using namespace std::chrono;
@@ -65,4 +65,4 @@ std::pair<std::unique_ptr<Conn>, std::unique_ptr<Conn>> makeLoopbackPair(Loopbac
     return {std::make_unique<LoopbackConn>(s, true), std::make_unique<LoopbackConn>(s, false)};
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

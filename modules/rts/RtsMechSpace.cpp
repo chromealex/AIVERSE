@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 void RtsModule::mechAltitudeCommand(Simulation& sim, const Command& cmd) {
@@ -66,4 +66,4 @@ Fixed RtsModule::mechContact3D(Simulation& sim, Entity a, Entity b) {
     return fxMax(d3 - A.radius - (B.structure ? Fixed{} : B.radius), Fixed{});
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

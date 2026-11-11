@@ -29,8 +29,8 @@
 
 namespace {
 
-namespace json = rts::plugins::json;
-using rts::plugins::Reply;
+namespace json = aiverse::plugins::json;
+using aiverse::plugins::Reply;
 using Clock = std::chrono::steady_clock;
 
 constexpr const char* kName = "steam";
@@ -223,7 +223,7 @@ private:
         return {};
     }
 
-    void emitPurchase(const json::Value& p) { rts::plugins::emit(kName, "purchase", json::dump(p)); }
+    void emitPurchase(const json::Value& p) { aiverse::plugins::emit(kName, "purchase", json::dump(p)); }
 
     STEAM_CALLBACK(Session, onResult, SteamInventoryResultReady_t) {
         SteamInventoryResult_t h = pParam->m_handle;
@@ -278,7 +278,7 @@ private:
 
     STEAM_CALLBACK(Session, onOverlay, GameOverlayActivated_t) {
         // the overlay covers the game: pause the match and mute, like an ad or a store dialog
-        rts::plugins::emit(kName, pParam->m_bActive ? "app.pause" : "app.resume", "null");
+        aiverse::plugins::emit(kName, pParam->m_bActive ? "app.pause" : "app.resume", "null");
         if (!pParam->m_bActive && purchase_.reply) {
             purchase_.overlayClosedAt = Clock::now();
             purchase_.checks = 0;
@@ -313,7 +313,7 @@ private:
     Purchase purchase_;
 };
 
-class SteamPlugin final : public rts::plugins::NativePlugin {
+class SteamPlugin final : public aiverse::plugins::NativePlugin {
 public:
     ~SteamPlugin() override {
         if (session_) { session_.reset(); SteamAPI_Shutdown(); }
@@ -341,14 +341,14 @@ private:
         AppId_t app = static_cast<AppId_t>(config["appId"].i64());
         // Release builds started outside Steam relaunch through it (and this process must quit).
         if (app && config["restartIfNecessary"].boolean(false) && SteamAPI_RestartAppIfNecessary(app)) {
-            rts::plugins::emit(kName, "app.log", json::quote("steam: relaunching through the Steam client"));
+            aiverse::plugins::emit(kName, "app.log", json::quote("steam: relaunching through the Steam client"));
             std::exit(0);
         }
         SteamErrMsg err = {};
         if (SteamAPI_InitEx(&err) != k_ESteamAPIInitResult_OK) {
             error_ = std::string("SteamAPI_Init failed: ") + err +
                      " (is Steam running? for development put steam_appid.txt with the app id next to the executable)";
-            rts::plugins::emit(kName, "app.log", json::quote("steam: " + error_));
+            aiverse::plugins::emit(kName, "app.log", json::quote("steam: " + error_));
             return;
         }
         session_ = std::make_unique<Session>(config);
@@ -360,4 +360,4 @@ private:
 
 } // namespace
 
-RTS_PLUGIN("steam", SteamPlugin);
+AIVERSE_PLUGIN("steam", SteamPlugin);

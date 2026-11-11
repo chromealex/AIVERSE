@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace rts::render::xml {
+namespace aiverse::render::xml {
 
 struct Element {
     std::string name;
@@ -210,4 +210,4 @@ private:
 
 inline Element parse(std::string_view s) { return Parser(s).parse(); }
 
-} // namespace rts::render::xml
+} // namespace aiverse::render::xml

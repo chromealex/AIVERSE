@@ -7,7 +7,7 @@
 #include "engine/atlas/AtlasFormat.h"
 #include "engine/splash/SplashShaders.h"
 
-namespace rts::splash {
+namespace aiverse::splash {
 
 namespace {
 constexpr int kMaxTexture = 2048;   // splash images are downscaled to this on load (weak GPUs, memory)
@@ -239,4 +239,4 @@ void SplashScreen::draw(gfx::Device& dev, float opacity, bool clear, float pixel
     dev.endPass();
 }
 
-} // namespace rts::splash
+} // namespace aiverse::splash

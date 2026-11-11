@@ -3,7 +3,7 @@
 #include <string>
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 void registerWizardOps(Workspace& ws);
-std::string wizardStagingDir();   // ~/.rtsengine/wizard/<time>: where an art link is downloaded
+std::string wizardStagingDir();   // ~/.aiverse/wizard/<time>: where an art link is downloaded
 }

@@ -3,9 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 struct ToolInfo { const char* icon; const char* name; const char* help; };
@@ -34,6 +35,11 @@ public:
     const char* dockArea() const override { return "left-bottom"; }
 
     void draw(Editor& ed) override {
+        if(ed.ws().project.isFps()) {
+            ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            return;
+        }
         toolGrid(ed);
         if (int(ed.tool) >= 0 && int(ed.tool) < int(Tool::Count)) ui::hint(kTools[int(ed.tool)].help);
         else ui::hint("Кисть другого окна (поля, рельеф) рисует в «Сцене».");
@@ -187,6 +193,6 @@ private:
     std::string filter_;
 };
 
-RTS_EDITOR_WINDOW(ToolsWindow);
+AIVERSE_EDITOR_WINDOW(ToolsWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

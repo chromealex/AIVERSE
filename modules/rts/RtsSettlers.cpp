@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -463,4 +463,4 @@ void RtsModule::hashSettlers(Simulation& sim, Hasher& h) {
     for (auto f : gs.grid.flags) h.u32(f);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

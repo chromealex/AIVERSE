@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-namespace rts::editor {
+namespace aiverse::editor {
 namespace {
 std::string quote(const std::string& value) {
     if (value.find_first_of("\r\n") != std::string::npos) throw std::runtime_error("newline in command argument");
@@ -25,9 +25,9 @@ Json runProjectPort(const std::string& engineDir, const std::string& operation, 
     if (path.empty()) throw std::runtime_error("path is required");
     if (operation != "scan" && operation != "import" && operation != "report" && operation != "item" && operation != "resolve")
         throw std::runtime_error("unknown project import operation");
-    const auto script = std::filesystem::path(engineDir) / "tools/importers/port/rts_port.py";
-    if (!std::filesystem::exists(script)) throw std::runtime_error("rts_port.py not found in engine directory");
-    const char* python = std::getenv("RTS_PYTHON");
+    const auto script = std::filesystem::path(engineDir) / "tools/importers/port/aiverse_port.py";
+    if (!std::filesystem::exists(script)) throw std::runtime_error("aiverse_port.py not found in engine directory");
+    const char* python = std::getenv("AIVERSE_PYTHON");
 #if defined(_WIN32)
     if (!python) python = "python";
 #else

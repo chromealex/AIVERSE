@@ -14,7 +14,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 struct Tex { gfx::TextureHandle h; int w = 0, h2 = 0; };
@@ -314,6 +314,6 @@ private:
     bool playing_ = false, iconsDirty_ = true, splashDirty_ = true;
 };
 
-RTS_EDITOR_WINDOW(BrandingWindow);
+AIVERSE_EDITOR_WINDOW(BrandingWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

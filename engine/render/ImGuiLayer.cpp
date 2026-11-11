@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 ImGuiKey toImGuiKey(platform::Key k) {
@@ -51,8 +51,8 @@ bool ImGuiLayer::init(gfx::Device& dev, const char* fontPath, float fontSize) {
     ctx_ = ImGui::CreateContext();
     ImGui::SetCurrentContext(ctx_);   // CreateContext keeps another layer's context current
     ImGuiIO& io = ImGui::GetIO();
-    io.BackendRendererName = "rts_rhi";
-    io.BackendPlatformName = "rts_platform";
+    io.BackendRendererName = "aiverse_rhi";
+    io.BackendPlatformName = "aiverse_platform";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures | ImGuiBackendFlags_RendererHasVtxOffset;
     io.IniFilename = nullptr; // layout is set up by the application
     ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
@@ -266,4 +266,4 @@ void ImGuiLayer::render() {
     dev_->setScissor({});
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

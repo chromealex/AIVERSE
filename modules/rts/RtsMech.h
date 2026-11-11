@@ -6,7 +6,7 @@
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 // Stance (Age of Empires, Warcraft): how an idle unit reacts to enemies.
 struct Stance { uint8_t mode = 0; Vec3 home{}; bool homeSet = false; };
@@ -86,4 +86,4 @@ struct MechState {
     uint32_t turnIndex = 0, turnStart = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

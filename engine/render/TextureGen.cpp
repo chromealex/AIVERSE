@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -313,4 +313,4 @@ void generateTexture(const Json& j, Image& out) {
         }
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

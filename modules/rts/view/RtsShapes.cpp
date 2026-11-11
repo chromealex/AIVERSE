@@ -6,7 +6,7 @@
 #include <map>
 #include <memory>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -132,4 +132,4 @@ void RtsView::buildShapes(gfx::Device& dev) {
     projectile_ = pb.upload(dev);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

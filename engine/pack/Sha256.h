@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string>
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 class Sha256 {
 public:
@@ -25,4 +25,4 @@ private:
 std::array<uint8_t, 32> sha256(const void* data, size_t n);
 std::string toHex(const uint8_t* data, size_t n);
 
-} // namespace rts::pack
+} // namespace aiverse::pack

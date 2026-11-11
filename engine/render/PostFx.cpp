@@ -6,7 +6,7 @@
 #include <cstring>
 #include "PostFxShaders.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -75,7 +75,7 @@ void put(float* d, float a, float b, float c, float e) { d[0] = a; d[1] = b; d[2
 } // namespace
 
 PostFxQuality PostFx::defaultQualityFor(const gfx::Device& dev, bool mobile) {
-    if (const char* q = std::getenv("RTS_POSTFX")) {   // testing override: off|low|medium|high
+    if (const char* q = std::getenv("AIVERSE_POSTFX")) {   // testing override: off|low|medium|high
         PostFxQuality r;
         if (parsePostFxQuality(q, r)) return r;
     }
@@ -519,4 +519,4 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
     ++stats_.passes;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

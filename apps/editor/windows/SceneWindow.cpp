@@ -3,11 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../core/PlanetOps.h"
 #include "../EditorUtil.h"
 #include "../EditorWorldEdit.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using namespace render;
 
@@ -22,7 +23,10 @@ public:
     ImGuiWindowFlags flags() const override { return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse; }
 
     void draw(Editor& ed) override {
-        toolbar(ed);
+        if(ed.ws().project.isFps()) {
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            ImGui::SameLine();ImGui::TextDisabled("%s",genreText(ed.ws(),"fps.editor.camera").c_str());
+        } else toolbar(ed);
         ImVec2 avail = ImGui::GetContentRegionAvail();
         const float dpi = ImGui::GetIO().DisplayFramebufferScale.x;
         vp_.ensure(ed.device(), int(avail.x * dpi), int(avail.y * dpi));
@@ -33,8 +37,12 @@ public:
         ed.renderScene(vp_, ed.sceneCam, !ed.playing());
         vp_.drawnFrame = ImGui::GetFrameCount();
         ed.sceneViewport = &vp_;
-        if (ImGui::IsWindowFocused() || vp_.hovered) input(ed);
-        hud(ed);
+        if(ed.ws().project.isFps()) {
+            ImGuiIO& io=ImGui::GetIO();
+            if(vp_.hovered&&io.MouseWheel!=0)ed.sceneCam.distance=std::clamp(ed.sceneCam.distance*std::pow(0.85f,io.MouseWheel),1.0f,2000.0f);
+            if(vp_.hovered&&ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {ed.sceneCam.yaw-=io.MouseDelta.x*0.005f;ed.sceneCam.pitch=std::clamp(ed.sceneCam.pitch+io.MouseDelta.y*0.005f,0.05f,1.5f);}
+            if(vp_.hovered&&ImGui::IsMouseDragging(ImGuiMouseButton_Middle)){ed.sceneCam.target.x-=io.MouseDelta.x*ed.sceneCam.distance*0.002f;ed.sceneCam.target.z-=io.MouseDelta.y*ed.sceneCam.distance*0.002f;}
+        } else {if (ImGui::IsWindowFocused() || vp_.hovered) input(ed);hud(ed);}
     }
 
 private:
@@ -451,6 +459,6 @@ private:
     float dragOffX_ = 0, dragOffZ_ = 0, areaX0_ = 0, areaZ0_ = 0, hoverX_ = 0, hoverY_ = 0;
 };
 
-RTS_EDITOR_WINDOW(SceneWindow);
+AIVERSE_EDITOR_WINDOW(SceneWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

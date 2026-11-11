@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::game {
+namespace aiverse::game {
 
 bool AudioScriptSound::available() const { return e_.running(); }
 
@@ -52,4 +52,4 @@ ScriptSoundSettings AudioScriptSound::settings() const {
     return s;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

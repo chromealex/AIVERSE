@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <limits>
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 namespace {
 
@@ -1072,4 +1072,4 @@ Json effectToJson(const EffectDef& def) {
     return root;
 }
 
-} // namespace rts::fx
+} // namespace aiverse::fx

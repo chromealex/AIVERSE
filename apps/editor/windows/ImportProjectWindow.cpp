@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <future>
 
-namespace rts::editor {
+namespace aiverse::editor {
 class ImportProjectWindow : public EditorWindow {
 public:
     const char* id() const override { return "project_import"; }
@@ -92,5 +92,5 @@ private:
     Json report_;
     std::future<Json> job_;
 };
-RTS_EDITOR_WINDOW(ImportProjectWindow);
+AIVERSE_EDITOR_WINDOW(ImportProjectWindow);
 }

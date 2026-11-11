@@ -42,7 +42,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -866,4 +866,4 @@ std::unique_ptr<Model> loadW3d(const std::string& path, const std::string& bytes
     return l.load(bytes);
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

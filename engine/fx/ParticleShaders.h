@@ -14,7 +14,7 @@
 // Vertex: a_pos (float3), a_uv (float2), a_col (ubyte4 normalized)
 #pragma once
 
-namespace rts::fx::shaders {
+namespace aiverse::fx::shaders {
 
 inline const char* kParticleVS = R"(
 layout(std140) uniform U0 { mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params; };
@@ -99,4 +99,4 @@ fragment half4 fs_main(VOut in [[stage_in]], texture2d<half> tex0 [[texture(0)]]
 }
 )";
 
-} // namespace rts::fx::shaders
+} // namespace aiverse::fx::shaders

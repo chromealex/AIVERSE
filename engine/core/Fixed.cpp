@@ -1,7 +1,7 @@
 #include "Fixed.h"
 #include <cstdio>
 
-namespace rts {
+namespace aiverse {
 
 Fixed Fixed::operator/(Fixed o) const {
     if (o.raw == 0) return fromRaw(raw >= 0 ? INT64_MAX : INT64_MIN); // saturate; caller bug
@@ -67,4 +67,4 @@ bool moveTowards(Vec3& from, Vec3 to, Fixed step) {
     return false;
 }
 
-} // namespace rts
+} // namespace aiverse

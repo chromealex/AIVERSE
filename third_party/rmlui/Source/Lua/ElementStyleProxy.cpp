@@ -84,7 +84,7 @@ int ElementStyleProxy__newindex(lua_State* L)
 			const char* value = lua_tostring(L, 3);
 			if (!*value)
 			{
-				// RTSEngine: like the DOM, an empty value removes the inline property (it used to fail to parse and keep the old value)
+				// AIVERSE: like the DOM, an empty value removes the inline property (it used to fail to parse and keep the old value)
 				es->owner->RemoveProperty(key);
 				lua_pushboolean(L, true);
 				return 1;

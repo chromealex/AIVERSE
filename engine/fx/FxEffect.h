@@ -97,7 +97,7 @@
 #include "../data/Json.h"
 #include "../render/Math3D.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 using render::float2;
 using render::float3;
@@ -344,4 +344,4 @@ Json effectToJson(const EffectDef& def);
 bool parseColor(const Json& j, float4& out);  // "#rrggbb", "#rrggbbaa" or [r, g, b(, a)] in 0..1
 std::string colorToHex(float4 c);
 
-} // namespace rts::fx
+} // namespace aiverse::fx

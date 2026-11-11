@@ -5,7 +5,7 @@
 #include "engine/core/FixedMath.h"
 #include <map>
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 std::string fmtQ16(int64_t raw) {
     const bool neg = raw < 0;
@@ -824,4 +824,4 @@ void validateFairness(Ctx& c) {
     }
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

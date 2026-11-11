@@ -5,15 +5,15 @@
 // "waitForContent"). When loading is done and the minimum time has passed (or the player tapped a
 // skippable splash), the menu fades in under the splash.
 //
-// RTS_SPLASH=off loads everything in the init callback as before; with --map (tests, CI
-// screenshots) the splash only covers the loading time unless RTS_SPLASH=full.
+// AIVERSE_SPLASH=off loads everything in the init callback as before; with --map (tests, CI
+// screenshots) the splash only covers the loading time unless AIVERSE_SPLASH=full.
 #pragma once
 #include <functional>
 
 #include "GameClient.h"
 #include "engine/splash/SplashScreen.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 class ClientBoot {
 public:
@@ -38,4 +38,4 @@ private:
     float fade_ = 1;
 };
 
-} // namespace rts::client
+} // namespace aiverse::client

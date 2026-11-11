@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::editor::speech {
+namespace aiverse::editor::speech {
 bool supported();
 // Starts listening in `locale` ("ru-RU", "en-US"); permissions are asked asynchronously (error() says when refused).
 void start(const std::string& locale, const std::vector<std::string>& vocabulary = {});   // vocabulary: words to expect
@@ -15,4 +15,4 @@ bool listening();
 std::string transcript();       // the text heard so far in this session
 bool takeResult(std::string& out);   // the session's final text, once, after it ended
 std::string error();
-} // namespace rts::editor::speech
+} // namespace aiverse::editor::speech

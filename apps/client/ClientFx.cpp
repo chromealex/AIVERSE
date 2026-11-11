@@ -4,7 +4,7 @@
 #include "engine/fx/FxModelMesh.h"
 #include "engine/platform/Platform.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 void ClientFx::init(gfx::Device& dev, const game::Rules& rules) {
     ps_.setQuality(fx::defaultQualityFor(dev, platform::isTouchDevice()));
@@ -74,7 +74,7 @@ void ClientFx::update(Simulation& sim, const game::RtsScene& scene, const render
     ps_.setView(cam, viewProj, fbW, fbH);
     if (attached_ && dt > 0) bridge_.update(sim, &scene.objects);
     ps_.update(dt);
-    static const bool dbg = std::getenv("RTS_FX_DEBUG") != nullptr;
+    static const bool dbg = std::getenv("AIVERSE_FX_DEBUG") != nullptr;
     static int frames = 0;
     if (dbg && ++frames % 30 == 0) std::fprintf(stderr, "[fx] played %d rejected %d particles %d culled %d drawn %d\n", bridge_.played(), bridge_.rejected(), ps_.stats().particles, ps_.stats().culled, ps_.stats().drawn);
 }
@@ -90,4 +90,4 @@ void ClientFx::render(const render::Lighting& lighting) {
     ps_.render({lighting.fogColor, lighting.fogDensity});
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

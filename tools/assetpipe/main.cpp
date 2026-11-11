@@ -14,12 +14,12 @@
 //                                          texture atlas preview: pages as PNG + atlas.json + report
 //
 // pack options: --level N, --store, --threads N, --ignore <glob>, --atlas <profile> (pack 2D images
-//               into texture atlases like rtsbuild; settings from game.json "atlas" of the root input)
+//               into texture atlases like aiversebuild; settings from game.json "atlas" of the root input)
 // global: --json (one JSON object on stdout, for the MCP server / editor), --unpackers <dir>
 //         (extra plugin folder, repeatable), --project <dir> (also loads <dir>/unpackers),
 //         --engine <dir> (default: source tree; plugins in <engine>/tools/unpackers)
 //
-// Example (what rtsbuild does):
+// Example (what aiversebuild does):
 //   assetpipe pack -o dist/content.rpak templates/skirmish engine/assets=engine
 #include "engine/platform/EngineDir.h"
 #include <cstdio>
@@ -39,19 +39,19 @@
 #include "engine/pack/Unpacker.h"
 #include "tools/atlas/AtlasBuild.h"
 
-#ifndef RTS_SOURCE_DIR
-#define RTS_SOURCE_DIR "."
+#ifndef AIVERSE_SOURCE_DIR
+#define AIVERSE_SOURCE_DIR "."
 #endif
 
 namespace fs = std::filesystem;
-using namespace rts::pack;
-using rts::Json;
+using namespace aiverse::pack;
+using aiverse::Json;
 
 namespace {
 
 struct Global {
     bool json = false;
-    std::string engine = RTS_SOURCE_DIR, project;   // main() resolves a packaged engine next to the exe
+    std::string engine = AIVERSE_SOURCE_DIR, project;   // main() resolves a packaged engine next to the exe
     std::vector<std::string> unpackerDirs;
 };
 Global G;
@@ -166,11 +166,11 @@ int finishPack(PackWriter& w, const PackArgs& a, const std::string& importsJson)
     std::string err;
     WriteOptions opt = a.opt;
     opt.external = opt.external || a.external;
-    rts::atlas::AtlasStats as;
+    aiverse::atlas::AtlasStats as;
     if (!a.atlas.empty()) {
         try {
-            auto cfg = rts::atlas::AtlasConfig::fromGame(rootGameJson(a.inputs), a.atlas);
-            if (!rts::atlas::applyAtlas(w, cfg, as, &err)) return die(err);
+            auto cfg = aiverse::atlas::AtlasConfig::fromGame(rootGameJson(a.inputs), a.atlas);
+            if (!aiverse::atlas::applyAtlas(w, cfg, as, &err)) return die(err);
         } catch (const std::exception& e) { return die(e.what()); }
     }
     SplitResult sr;
@@ -180,7 +180,7 @@ int finishPack(PackWriter& w, const PackArgs& a, const std::string& importsJson)
     } else if (!w.write(a.out, opt, &st, &err)) {
         return die(err);
     }
-    rts::atlas::finishStats(as, st);
+    aiverse::atlas::finishStats(as, st);
     bool external = opt.external || w.external();
     if (G.json) {
         std::cout << "{\"ok\":true,\"out\":" << q(a.out) << ",\"files\":" << st.items.size() << ",\"rawBytes\":" << st.rawBytes
@@ -242,19 +242,19 @@ int cmdAtlas(int argc, char** argv) {
     IgnoreRules rules;
     std::string err;
     for (auto& [dir, prefix] : inputs) if (w.addDirectory(dir, prefix, rules, &err) < 0) return die(err);
-    std::vector<rts::atlas::SourceImage> imgs;
-    rts::atlas::AtlasOutput res;
+    std::vector<aiverse::atlas::SourceImage> imgs;
+    aiverse::atlas::AtlasOutput res;
     try {
-        auto cfg = rts::atlas::AtlasConfig::fromGame(rootGameJson(inputs), profile);
-        rts::atlas::scanSheets(w, cfg);
+        auto cfg = aiverse::atlas::AtlasConfig::fromGame(rootGameJson(inputs), profile);
+        aiverse::atlas::scanSheets(w, cfg);
         for (const std::string& p : w.paths()) {
-            if (!rts::atlas::isImagePath(p)) continue;
-            rts::atlas::SourceImage src;
+            if (!aiverse::atlas::isImagePath(p)) continue;
+            aiverse::atlas::SourceImage src;
             src.path = p;
             if (!w.readInput(p, src.bytes)) return die("не удалось прочитать " + p);
             imgs.push_back(std::move(src));
         }
-        if (!rts::atlas::buildAtlas(imgs, cfg, res, &err)) return die(err);
+        if (!aiverse::atlas::buildAtlas(imgs, cfg, res, &err)) return die(err);
     } catch (const std::exception& e) { return die(e.what()); }
     auto save = [&](const fs::path& f, const std::string& data) {
         fs::create_directories(f.parent_path());
@@ -263,9 +263,9 @@ int cmdAtlas(int argc, char** argv) {
     };
     for (size_t i = 0; i < res.pageImages.size(); ++i) {
         fs::path f = fs::path(out) / res.manifest.pages()[i].file;
-        save(f.replace_extension(".png"), rts::atlas::encodePng(res.pageImages[i]));
+        save(f.replace_extension(".png"), aiverse::atlas::encodePng(res.pageImages[i]));
     }
-    save(fs::path(out) / rts::atlas::kManifestPath, res.manifest.serialize());
+    save(fs::path(out) / aiverse::atlas::kManifestPath, res.manifest.serialize());
     save(fs::path(out) / "atlas-report.json", res.stats.toJson().dump(2) + "\n");
     if (G.json) std::cout << "{\"ok\":true,\"out\":" << q(out) << ",\"atlas\":" << res.stats.toJson().dump(-1) << "}" << std::endl;
     else std::cout << res.stats.report() << "-> " << out << std::endl;
@@ -435,7 +435,7 @@ int cmdFormats() {
         for (auto& e : u.extensions) ext += (ext.empty() ? "" : " ") + e;
         std::cout << u.name << "\t" << (ext.empty() ? "-" : ext) << "\t" << u.title << (u.builtin ? "  [встроенный]" : "") << "\n";
     }
-    std::cout << "\nплагины ищутся в: " << (fs::path(G.engine) / "tools" / "unpackers").string() << ", $RTS_UNPACKERS, <проект>/unpackers, --unpackers" << std::endl;
+    std::cout << "\nплагины ищутся в: " << (fs::path(G.engine) / "tools" / "unpackers").string() << ", $AIVERSE_UNPACKERS, <проект>/unpackers, --unpackers" << std::endl;
     return 0;
 }
 
@@ -509,7 +509,7 @@ int cmdUnpackers(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-    G.engine = rts::platform::resolveEngineDir(G.engine, argc > 0 ? argv[0] : nullptr);
+    G.engine = aiverse::platform::resolveEngineDir(G.engine, argc > 0 ? argv[0] : nullptr);
     // Pull global options out first so they may appear anywhere.
     std::vector<char*> args;
     for (int i = 1; i < argc; ++i) {

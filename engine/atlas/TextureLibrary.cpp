@@ -2,7 +2,7 @@
 
 #include <cstdio>
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 namespace {
 bool allOpaque(const Image& img) {
@@ -93,4 +93,4 @@ bool TextureLibrary::loadImage(const std::string& path, Image& out) {
     return read_(path, bytes) && decodeImageFile(bytes, out);
 }
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

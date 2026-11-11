@@ -14,7 +14,7 @@
 
 #include <utility>
 
-namespace rts::game {
+namespace aiverse::game {
 
 std::string mapStem(const std::string& mapFile);
 
@@ -25,9 +25,9 @@ std::string localizedPlayerName(const i18n::Localization& loc, const std::string
                                 const std::string& dataName);
 
 // Every translatable data string of a game as (key, source text), in a stable order: game.json,
-// maps, then rules. Used by the rts_i18n tool to create/update tables.
+// maps, then rules. Used by the aiverse_i18n tool to create/update tables.
 struct SourceString { std::string key, text, where; };
 std::vector<SourceString> collectSourceStrings(const Json& manifest, const Json& rules,
                                                const std::vector<std::pair<std::string, Json>>& maps);
 
-} // namespace rts::game
+} // namespace aiverse::game

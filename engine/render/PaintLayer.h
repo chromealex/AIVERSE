@@ -2,7 +2,7 @@
 #include "RenderTexture.h"
 #include <map>
 #include <memory>
-namespace rts::render {
+namespace aiverse::render {
 // CPU command description; scripts own this, the renderer owns all GPU objects.
 struct PaintLayer {
     int width=512,height=512;

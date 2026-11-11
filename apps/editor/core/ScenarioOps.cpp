@@ -11,9 +11,9 @@
 #include "SimTools.h"
 #include "modules/rts/RtsAI.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
-using namespace rts::game;
+using namespace aiverse::game;
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -411,4 +411,4 @@ void registerScenarioOps(Workspace& ws) {
         Json::parse(schema), [&ws](const Json& p) { return scenarioRun(ws, p); }});
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

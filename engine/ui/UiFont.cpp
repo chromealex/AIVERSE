@@ -15,7 +15,7 @@
 
 #include "stb_truetype.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 struct UiFontEngine::File {
     std::string data;
@@ -326,4 +326,4 @@ int UiFontEngine::GetVersion(Rml::FontFaceHandle handle) {
 void UiFontEngine::ReleaseFontResources() { faces_.clear(); }
 void UiFontEngine::Shutdown() { faces_.clear(); }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

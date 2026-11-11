@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 
-namespace rts::render {
+namespace aiverse::render {
 // Persistent RGBA canvas. Coordinates are normalized UVs, identical for uploads and GPU painting
 // on both backends. flush() must be called outside a render pass; handle() can be sampled anywhere.
 class RenderTexture {

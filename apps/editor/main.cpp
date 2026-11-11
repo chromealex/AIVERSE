@@ -1,5 +1,5 @@
-// RTS editor entry point.
-//   rts_editor [<project.rtsproj | project dir>] [--game <id> | --project <.rtsproj | dir with game.json>] [--map <file.json>] [--engine <engine dir>]
+// AIVERSE editor entry point.
+//   aiverse_editor [<project.rtsproj | project dir>] [--game <id> | --project <.rtsproj | dir with game.json>] [--map <file.json>] [--engine <engine dir>]
 //              [--listen <port>|0] [--play]
 //              [--native-editor] [--tools-from <dir>]   (set by the switch to a per-project build: EditorNativeBuild.cpp)
 // Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
@@ -11,12 +11,12 @@
 
 #include "Editor.h"
 
-#ifndef RTS_SOURCE_DIR
-#define RTS_SOURCE_DIR "."
+#ifndef AIVERSE_SOURCE_DIR
+#define AIVERSE_SOURCE_DIR "."
 #endif
 
 namespace fs = std::filesystem;
-using namespace rts;
+using namespace aiverse;
 
 static std::unique_ptr<editor::Editor> g_editor;
 static int g_demoSelect = -1;
@@ -45,13 +45,13 @@ static std::string findNear(const std::string& dir, std::initializer_list<const 
 }
 
 static std::string findBuildTool(const std::string& dir) {
-    if (const char* env = std::getenv("RTS_BUILD_TOOL")) return env;
+    if (const char* env = std::getenv("AIVERSE_BUILD_TOOL")) return env;
 #if defined(_WIN32)
-    const char* name = "rtsbuild.exe";
+    const char* name = "aiversebuild.exe";
 #else
-    const char* name = "rtsbuild";
+    const char* name = "aiversebuild";
 #endif
-    // next to the editor, or next to the .app bundle on macOS (RTSEditor.app/Contents/MacOS/..)
+    // next to the editor, or next to the .app bundle on macOS (AiverseEditor.app/Contents/MacOS/..)
     for (fs::path c : {fs::path(dir) / name, fs::path(dir) / ".." / ".." / ".." / name, fs::path(dir) / "Release" / name, fs::path(dir) / "Debug" / name}) {
         std::error_code ec;
         if (fs::exists(c, ec)) return fs::canonical(c, ec).string();
@@ -59,13 +59,13 @@ static std::string findBuildTool(const std::string& dir) {
     return name; // rely on PATH
 }
 
-int rtsMain(int argc, char** argv) {
+int aiverseMain(int argc, char** argv) {
     editor::Editor::Options opt;
-    opt.engineDir = rts::platform::resolveEngineDir(RTS_SOURCE_DIR, argv[0]);   // source tree, or a packaged engine
+    opt.engineDir = aiverse::platform::resolveEngineDir(AIVERSE_SOURCE_DIR, argv[0]);   // source tree, or a packaged engine
     for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--play") g_demoPlay = true;
     for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--play-client") g_demoClient = true;
     std::string game, toolsFrom;
-    if (const char* e = std::getenv("RTS_NATIVE_EDITOR"); e && *e && std::string(e) != "0") opt.nativeChild = true;
+    if (const char* e = std::getenv("AIVERSE_NATIVE_EDITOR"); e && *e && std::string(e) != "0") opt.nativeChild = true;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         // a bare argument is a project to open: "<editor> path/My Game.rtsproj" (Windows / Linux
@@ -78,7 +78,7 @@ int rtsMain(int argc, char** argv) {
         else if (a == "--listen") opt.listenPort = std::atoi(argv[++i]);
         else if (a == "--map") opt.openMap = argv[++i];
         else if (a == "--engine") opt.engineDir = argv[++i];
-        else if (a == "--tools-from") toolsFrom = argv[++i];   // rtsbuild / rtsmcp / RTSGame of the regular build
+        else if (a == "--tools-from") toolsFrom = argv[++i];   // aiversebuild / aiversemcp / AiverseGame of the regular build
         else if (a == "--device") g_demoDevice = argv[++i];
         else if (a == "--window") g_demoWindow = argv[++i];   // open + focus a window (automated screenshots)
         else if (a == "--select") g_demoSelect = std::atoi(argv[++i]); // used by automated screenshots
@@ -91,7 +91,7 @@ int rtsMain(int argc, char** argv) {
     // a per-project build has only the editor: the other tools come from the regular build (--tools-from)
     const std::string toolDir = toolsFrom.empty() ? exeDir(argv[0]) : toolsFrom;
     opt.buildTool = findBuildTool(toolDir);
-    opt.mcpTool = findNear(toolDir, {"rtsmcp", "rtsmcp.exe", "Release/rtsmcp.exe"});
+    opt.mcpTool = findNear(toolDir, {"aiversemcp", "aiversemcp.exe", "Release/aiversemcp.exe"});
     {
         std::error_code ec2;
 #if defined(__linux__)
@@ -102,12 +102,12 @@ int rtsMain(int argc, char** argv) {
 #endif
         opt.editorExe = self.lexically_normal().string();
     }
-    opt.gameExe = findNear(toolDir, {"RTSGame", "RTSGame.app/Contents/MacOS/RTSGame", "RTSGame.exe", "Release/RTSGame.exe"});
-    opt.ownGameExe = findNear(exeDir(argv[0]), {"RTSGame", "RTSGame.app/Contents/MacOS/RTSGame", "RTSGame.exe", "Release/RTSGame.exe"});
+    opt.gameExe = findNear(toolDir, {"AiverseGame", "AiverseGame.app/Contents/MacOS/AiverseGame", "AiverseGame.exe", "Release/AiverseGame.exe"});
+    opt.ownGameExe = findNear(exeDir(argv[0]), {"AiverseGame", "AiverseGame.app/Contents/MacOS/AiverseGame", "AiverseGame.exe", "Release/AiverseGame.exe"});
 
     g_editor = std::make_unique<editor::Editor>(opt);
     platform::AppConfig cfg;
-    cfg.title = "RTS Editor";
+    cfg.title = "AIVERSE Editor";
     cfg.width = 1440; cfg.height = 900;
     platform::AppCallbacks cb;
     cb.init = [](gfx::Device& d) {

@@ -1,5 +1,5 @@
 // Shader of the ground overlays (RtsGroundFx): the lit shader of Shaders.h (sun + soft shadows
-// RTS_*_SHADOW + point lights RTS_*_LIGHTS + fog + ACES) for translucent ground decals, with an
+// AIVERSE_*_SHADOW + point lights AIVERSE_*_LIGHTS + fog + ACES) for translucent ground decals, with an
 // optional world-space planar/triplanar albedo texture (tex2, resolved by TextureCache: the uv rect is
 // applied after fract() so atlas pages work without wrap) and an animated emissive pulse (glowing
 // territory borders, dig marks).
@@ -10,12 +10,12 @@
 #pragma once
 #include "../../../engine/render/Shaders.h"
 
-namespace rts::game::shaders {
+namespace aiverse::game::shaders {
 
-#define RTS_GROUNDFX_GLSL_U0 "layout(std140) uniform U0 { vec4 u_color; vec4 u_params; vec4 u_params2; vec4 u_rect; };\n"
+#define AIVERSE_GROUNDFX_GLSL_U0 "layout(std140) uniform U0 { vec4 u_color; vec4 u_params; vec4 u_params2; vec4 u_rect; };\n"
 
 inline const char* kGroundFxVS =
-    RTS_GROUNDFX_GLSL_U0 RTS_GLSL_FRAME
+    AIVERSE_GROUNDFX_GLSL_U0 AIVERSE_GLSL_FRAME
     R"(
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_nrm;
@@ -32,7 +32,7 @@ void main() {
 )";
 
 inline const char* kGroundFxFS =
-    RTS_GROUNDFX_GLSL_U0 RTS_GLSL_FRAME RTS_GLSL_SHADOW RTS_GLSL_LIGHTS
+    AIVERSE_GROUNDFX_GLSL_U0 AIVERSE_GLSL_FRAME AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS
     R"(
 uniform sampler2D tex2;
 in vec3 v_nrm;
@@ -72,7 +72,7 @@ void main() {
 inline const char* kGroundFxMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "struct GU0 { float4 color; float4 params; float4 params2; float4 rect; };\n"
-    RTS_MSL_FRAME RTS_MSL_SHADOW RTS_MSL_LIGHTS
+    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS
     R"(
 struct VIn { float3 pos [[attribute(0)]]; float3 nrm [[attribute(1)]]; float4 col [[attribute(2)]]; };
 struct VOut { float4 pos [[position]]; float3 nrm; float3 wpos; float4 col; };
@@ -117,4 +117,4 @@ fragment float4 fs_main(VOut in [[stage_in]], constant GU0& u [[buffer(1)]], con
 }
 )";
 
-} // namespace rts::game::shaders
+} // namespace aiverse::game::shaders

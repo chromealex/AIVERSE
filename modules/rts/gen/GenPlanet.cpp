@@ -7,7 +7,7 @@
 #include "modules/rts/RtsSphere.h"
 #include "engine/core/FixedMath.h"
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 using game::sphereArcTurns;
 namespace {
@@ -239,4 +239,4 @@ bool generatePlanet(Ctx& c, Json& body, std::string* err) {
     return true;
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

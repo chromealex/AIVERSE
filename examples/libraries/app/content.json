@@ -1,0 +1,24 @@
+{
+  "packages": [
+    {
+      "id": "mod",
+      "digest": "sha256-from-host",
+      "version": 1,
+      "dependencies": [
+        {
+          "id": "base",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "base",
+      "digest": "sha256-from-host",
+      "version": 1,
+      "dependencies": [],
+      "conflicts": []
+    }
+  ]
+}

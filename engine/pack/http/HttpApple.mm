@@ -5,7 +5,7 @@
 
 #include "ThreadDownload.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& destPath, std::string& error) {
     NSURL* u = [NSURL URLWithString:[NSString stringWithUTF8String:url.c_str()]];
@@ -56,4 +56,4 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
 
 void setAndroidJavaVm(void*) {}
 
-} // namespace rts::pack
+} // namespace aiverse::pack

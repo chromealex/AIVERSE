@@ -10,7 +10,7 @@
 #include <vector>
 #include "ParticleSystem.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 using render::mat4;
 using render::RTSCamera;
@@ -340,4 +340,4 @@ struct ParticleSystem::Impl {
     bool emit(Instance& in, uint32_t owner, int effect, int emitter, float3 at, int& dropped, float u = 0, float burstFrac = -1);
 };
 
-} // namespace rts::fx
+} // namespace aiverse::fx

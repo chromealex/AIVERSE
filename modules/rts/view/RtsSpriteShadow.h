@@ -1,4 +1,4 @@
-// Shadows and lighting of 2D sprites (Rts2DView), pure part: no GPU, linked into rts_tests.
+// Shadows and lighting of 2D sprites (Rts2DView), pure part: no GPU, linked into aiverse_tests.
 //
 // Data (docs/game-format.md, "type sprite" / "sprites"):
 //   rules.json / game.json "sprites": {"shadow": "cast" | "blob" | "none", "lit": bool}
@@ -21,7 +21,7 @@
 #include "../../../engine/render/Renderer3D.h"
 #include "../RtsMap.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class SpriteShadowMode : uint8_t { None, Blob, Cast };
 
@@ -65,4 +65,4 @@ int clipToRect(const render::float3 (&tri)[3], render::float3 origin, render::fl
 // towards the sun when the sun shines almost along the sprite plane (the shadow would be a sliver).
 render::float3 casterRight(render::float3 gRight, render::float3 gFront, render::float3 sunDir);
 
-} // namespace rts::game
+} // namespace aiverse::game

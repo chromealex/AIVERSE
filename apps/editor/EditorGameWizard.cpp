@@ -27,7 +27,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -390,7 +390,7 @@ void Editor::drawGameWizard() {
             W.genreLabels.push_back(t.getStr("name") + "  ·  " + t.getStr("description"));
         }
         if (S.location.empty()) S.location = defaultProjectsDir();
-        if (const char* p = std::getenv("RTS_WIZARD_PAGE")) W.page = std::clamp(std::atoi(p), 0, kPageCount - 1);   // screenshots
+        if (const char* p = std::getenv("AIVERSE_WIZARD_PAGE")) W.page = std::clamp(std::atoi(p), 0, kPageCount - 1);   // screenshots
     }
     const bool busy = W.phase == WizardUi::Fetching || W.phase == WizardUi::Making;
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 7));
@@ -771,7 +771,7 @@ void Editor::drawGameWizard() {
                     std::string t((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
                     ImGui::SetClipboardText(t.c_str());
                 }
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Вставьте в Claude Code, Cursor, Windsurf или Claude Desktop с подключённым rtsengine.\n%s", W.taskFile.c_str());
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Вставьте в Claude Code, Cursor, Windsurf или Claude Desktop с подключённым aiverse.\n%s", W.taskFile.c_str());
             }
         }
         const Json& warns = W.report["warnings"];
@@ -834,9 +834,9 @@ void Editor::drawGameWizard() {
     }
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor
 
-namespace rts::editor {
+namespace aiverse::editor {
 // Every frame (Editor.cpp): the agent's progress into the activity feed and the status bar, also when the hub is closed.
 void Editor::pollGameWizard() {
     for (auto& l : g_agent.takeLines()) ws_.log("agent", l);
@@ -845,4 +845,4 @@ void Editor::pollGameWizard() {
     else if (wasRunning) status = "Агент закончил: " + std::to_string(g_agent.toolCalls()) + " действий, итог — в WIZARD.md проекта";
     wasRunning = g_agent.running();
 }
-} // namespace rts::editor
+} // namespace aiverse::editor

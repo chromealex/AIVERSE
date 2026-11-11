@@ -1,7 +1,7 @@
 #pragma once
 #include "../../../engine/render/PaintLayer.h"
 #include "../../../engine/render/Renderer3D.h"
-namespace rts::game {
+namespace aiverse::game {
 struct MapGrid; class RtsView;
 class RtsPaintLayers {
 public:

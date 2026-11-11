@@ -8,7 +8,7 @@
 #include "../EditorUtil.h"
 #include "engine/fx/ParticleSystem.h"
 
-namespace rts::editor::fxui {
+namespace aiverse::editor::fxui {
 
 using fx::EmitterDef;
 using fx::FxRange;
@@ -561,4 +561,4 @@ inline bool forceFieldsUi(fx::EffectDef& def) {
     return ch;
 }
 
-} // namespace rts::editor::fxui
+} // namespace aiverse::editor::fxui

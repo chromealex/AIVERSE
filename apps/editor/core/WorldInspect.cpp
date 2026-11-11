@@ -6,13 +6,13 @@
 #include <cmath>
 #include <set>
 #include "SimTools.h"
-#if RTS_PREVIEW_THREAD
+#if AIVERSE_PREVIEW_THREAD
 #include <thread>
 #endif
 
-namespace rts::editor {
+namespace aiverse::editor {
 
-using namespace rts::game;
+using namespace aiverse::game;
 
 namespace {
 
@@ -94,30 +94,30 @@ Json orderJson(J& j, const Order& o) {
     return r;
 }
 
-#define RTS_C(T, TITLE, ...) Desc{{#T, TITLE}, &hasC<T>, &touchC<T>, [](J& j, Entity e) { auto& x = *j.w.tryGet<T>(e); (void)x; __VA_ARGS__; }}
+#define AIVERSE_C(T, TITLE, ...) Desc{{#T, TITLE}, &hasC<T>, &touchC<T>, [](J& j, Entity e) { auto& x = *j.w.tryGet<T>(e); (void)x; __VA_ARGS__; }}
 
 const std::vector<Desc>& descs() {
     static const std::vector<Desc> d = {
-        RTS_C(Transform, "Положение", j.f("pos", x.pos).f("yaw", x.yaw)),
-        RTS_C(Owner, "Владелец", j.f("player", x.player)),
-        RTS_C(Unit, "Объект", {
+        AIVERSE_C(Transform, "Положение", j.f("pos", x.pos).f("yaw", x.yaw)),
+        AIVERSE_C(Owner, "Владелец", j.f("player", x.player)),
+        AIVERSE_C(Unit, "Объект", {
             j.type("type", x.type).f("hp", x.hp).f("energy", x.energy).f("facing", x.facing).f("lastAttacker", x.lastAttacker).f("lastHitBy", x.lastHitBy);
             Json fl = Json::array();
             static const char* names[] = {"hold", "underConstruction", "disabled", "silent", "inHand", "possessed", "inTransit", "inCargo", "infected"};
             for (int b = 0; b < 9; ++b) if (x.flags & (1u << b)) fl.push(Json::string(names[b]));
             j.o.set("flags", fl);
         }),
-        RTS_C(Orders, "Приказы", {
+        AIVERSE_C(Orders, "Приказы", {
             Json a = Json::array();
             for (auto& o : x.queue) a.push(orderJson(j, o));
             j.o.set("queue", a);
         }),
-        RTS_C(Mobile, "Движение", j.f("moving", x.moving).f("goal", x.goal).f("goalRadius", x.goalRadius).f("pathLength", x.path.size()).f("pathPos", x.pathPos)
+        AIVERSE_C(Mobile, "Движение", j.f("moving", x.moving).f("goal", x.goal).f("goalRadius", x.goalRadius).f("pathLength", x.path.size()).f("pathPos", x.pathPos)
                                      .f("velocity", x.vel).f("stuck", x.stuck).f("flow", x.flow).f("yielded", x.yielded)),
-        RTS_C(Combat, "Бой", j.f("target", x.target).f("autoTarget", x.autoTarget).list("cooldown", std::vector<Fixed>(x.cooldown, x.cooldown + 4))
+        AIVERSE_C(Combat, "Бой", j.f("target", x.target).f("autoTarget", x.autoTarget).list("cooldown", std::vector<Fixed>(x.cooldown, x.cooldown + 4))
                                  .f("chargeTarget", x.chargeTarget).f("slot", int(x.slot))),
-        RTS_C(Cargo, "Груз", j.res("resource", x.res).f("amount", x.amount).f("lastNode", x.lastNode).f("field", x.field)),
-        RTS_C(Production, "Производство", {
+        AIVERSE_C(Cargo, "Груз", j.res("resource", x.res).f("amount", x.amount).f("lastNode", x.lastNode).f("field", x.field)),
+        AIVERSE_C(Production, "Производство", {
             Json q = Json::array();
             for (auto& it : x.queue) {
                 Json r = Json::object();
@@ -133,17 +133,17 @@ const std::vector<Desc>& descs() {
             if (x.hasRally) j.f("rally", x.rally);
             j.f("rallyTarget", x.rallyTarget).type("ready", x.ready).f("charges", x.charges);
         }),
-        RTS_C(Construction, "Стройка", j.f("progress", x.progress).f("paid", x.paid).f("builder", x.builder).f("selfBuild", x.selfBuild)),
-        RTS_C(ResourceStock, "Запас ресурса", j.res("resource", x.res).f("amount", x.amount).f("infinite", x.infinite)),
-        RTS_C(Extractor, "Добытчик", j.type("nodeType", x.nodeType).f("remaining", x.remaining)),
-        RTS_C(Footprint, "Площадь", j.f("x", x.x).f("y", x.y).f("w", x.w).f("h", x.h)),
-        RTS_C(Garrison, "Гарнизон", j.f("count", x.count).f("growth", x.growth).f("pendingOut", x.pendingOut).f("pendingTarget", x.pendingTarget).f("lost", x.lost)),
-        RTS_C(Projectile, "Снаряд", j.f("source", x.source).f("target", x.target).f("aim", x.aim).f("speed", x.speed).f("damage", x.damage).f("splash", x.splash)
+        AIVERSE_C(Construction, "Стройка", j.f("progress", x.progress).f("paid", x.paid).f("builder", x.builder).f("selfBuild", x.selfBuild)),
+        AIVERSE_C(ResourceStock, "Запас ресурса", j.res("resource", x.res).f("amount", x.amount).f("infinite", x.infinite)),
+        AIVERSE_C(Extractor, "Добытчик", j.type("nodeType", x.nodeType).f("remaining", x.remaining)),
+        AIVERSE_C(Footprint, "Площадь", j.f("x", x.x).f("y", x.y).f("w", x.w).f("h", x.h)),
+        AIVERSE_C(Garrison, "Гарнизон", j.f("count", x.count).f("growth", x.growth).f("pendingOut", x.pendingOut).f("pendingTarget", x.pendingTarget).f("lost", x.lost)),
+        AIVERSE_C(Projectile, "Снаряд", j.f("source", x.source).f("target", x.target).f("aim", x.aim).f("speed", x.speed).f("damage", x.damage).f("splash", x.splash)
                                         .f("owner", x.owner).type("sourceType", x.sourceType).f("travel", x.travel).f("total", x.total)),
-        RTS_C(Hero, "Герой", j.f("level", x.level).f("xp", x.xp).f("points", x.points).list("skills", std::vector<int>(x.skill, x.skill + 8))),
-        RTS_C(Transit, "Перелёт", j.f("from", x.from).f("to", x.to).ticks("depart", x.depart).ticks("arrive", x.arrive).f("arrival", x.arrival)),
-        RTS_C(Squad, "Отряд", j.f("reinforcing", x.reinforcing).f("reinforceTimer", x.reinforceTimer)),
-        RTS_C(Buffs, "Баффы", {
+        AIVERSE_C(Hero, "Герой", j.f("level", x.level).f("xp", x.xp).f("points", x.points).list("skills", std::vector<int>(x.skill, x.skill + 8))),
+        AIVERSE_C(Transit, "Перелёт", j.f("from", x.from).f("to", x.to).ticks("depart", x.depart).ticks("arrive", x.arrive).f("arrival", x.arrival)),
+        AIVERSE_C(Squad, "Отряд", j.f("reinforcing", x.reinforcing).f("reinforceTimer", x.reinforceTimer)),
+        AIVERSE_C(Buffs, "Баффы", {
             Json a = Json::array();
             for (auto& b : x.list) {
                 Json r = Json::object();
@@ -156,9 +156,9 @@ const std::vector<Desc>& descs() {
             j.o.set("list", a);
             j.ticks("stunUntil", x.stunUntil);
         }),
-        RTS_C(AbilityState, "Способности", j.list("readyAt", std::vector<uint32_t>(x.readyAt, x.readyAt + 8)).list("charges", std::vector<int>(x.charges, x.charges + 8))
+        AIVERSE_C(AbilityState, "Способности", j.list("readyAt", std::vector<uint32_t>(x.readyAt, x.readyAt + 8)).list("charges", std::vector<int>(x.charges, x.charges + 8))
                                                .ticks("busyUntil", x.busyUntil)),
-        RTS_C(Statuses, "Статусы", {
+        AIVERSE_C(Statuses, "Статусы", {
             Json a = Json::array();
             for (auto& s : x.list) {
                 Json r = Json::object();
@@ -173,50 +173,50 @@ const std::vector<Desc>& descs() {
             j.o.set("list", a);
             j.f("flags", x.flags);
         }),
-        RTS_C(Area, "Зона эффекта", j.f("caster", x.caster).type("sourceType", x.sourceType).f("radius", x.radius).ticks("fireAt", x.fireAt).ticks("endAt", x.endAt)
+        AIVERSE_C(Area, "Зона эффекта", j.f("caster", x.caster).type("sourceType", x.sourceType).f("radius", x.radius).ticks("fireAt", x.fireAt).ticks("endAt", x.endAt)
                                         .f("triggers", x.triggers).f("follow", x.follow).f("dest", x.dest).f("lane", x.lane)),
-        RTS_C(Channel, "Поддержание", j.f("target", x.target).f("point", x.point).f("ability", x.ability).ticks("nextAt", x.nextAt).ticks("endAt", x.endAt)),
-        RTS_C(GroupTag, "Группа", j.f("id", x.id).f("from", x.from).f("to", x.to)),
-        RTS_C(Capture, "Захват", j.f("progress", x.progress).f("team", x.team)),
-        RTS_C(Guard, "Охрана", j.f("home", x.home).f("leash", x.leash).f("returning", x.returning)),
-        RTS_C(Summon, "Призванный", j.ticks("expire", x.expire).type("summonerType", x.summonerType).f("summoner", x.summoner)),
-        RTS_C(Needs, "Потребности", j.f("hunger", x.hunger).f("sleep", x.sleep).f("happiness", x.happiness).f("leaving", x.leaving)),
-        RTS_C(Possessed, "Под управлением", j.f("dir", x.dir).f("target", x.target).f("fire", x.fire)),
-        RTS_C(PortalState, "Портал", j.f("timer", x.timer)),
-        RTS_C(AutoTrainState, "Автонайм", j.f("timer", x.timer)),
-        RTS_C(ClaimState, "Захват клеток", j.f("acc", x.acc)),
-        RTS_C(Advancer, "Наступает", (void)0),
-        RTS_C(Inventory, "Склад", j.resList("have", x.have).resList("incoming", x.incoming).resList("reserved", x.reserved)),
-        RTS_C(Workshop, "Мастерская", j.f("progress", x.progress).f("running", x.running)),
-        RTS_C(Carrier, "Носильщик", j.f("from", x.from).f("to", x.to).res("resource", x.res).f("amount", x.amount).f("loaded", x.loaded)),
-        RTS_C(LaneWalker, "Идёт по линии", j.f("lane", x.lane).f("pos", x.pos).f("reverse", x.reverse)),
-        RTS_C(Stance, "Стойка", j.f("mode", std::string(stanceName(x.mode))).f("home", x.home).f("homeSet", x.homeSet)),
-        RTS_C(Retreating, "Отступает", j.f("to", x.to).f("point", x.point)),
-        RTS_C(Transport, "Транспорт", j.list("cargo", x.cargo).f("used", x.used).f("unloading", x.unloading).f("unloadAt", x.unloadAt)),
-        RTS_C(Boarded, "В транспорте", j.f("carrier", x.carrier).f("fires", x.fires)),
-        RTS_C(Veteran, "Ветеран", j.f("level", x.level).f("xp", x.xp).f("lastHit", x.lastHit)),
-        RTS_C(RallyPath, "Путь сбора", j.list("points", x.points)),
-        RTS_C(Shield, "Щит", j.f("value", x.value).ticks("lastHit", x.lastHit)),
-        RTS_C(Eater, "Пожиратель", j.f("kills", x.kills)),
-        RTS_C(Formation, "Строй", j.f("group", x.group).f("shape", x.shape).f("offset", x.offset)),
-        RTS_C(BridgeLaid, "Мост / ворота", j.f("laid", x.laid).f("cells", x.cells.size())),
-        RTS_C(Ammo, "Боезапас", j.list("left", std::vector<int>(x.left, x.left + 4))),
-        RTS_C(Merging, "Слияние", j.f("partner", x.partner)),
-        RTS_C(Trader, "Торговец", j.f("home", x.home).f("dest", x.dest).f("loaded", x.loaded)),
-        RTS_C(ItemBag, "Предметы", j.list("items", x.items).list("charges", x.charges)),
-        RTS_C(Suppression, "Подавление", j.f("value", x.value)),
-        RTS_C(Turret, "Башня", j.list("dir", std::vector<Vec3>(x.dir, x.dir + 4))),
-        RTS_C(GrowState, "Рост", j.f("timer", x.timer)),
-        RTS_C(Morale, "Мораль", j.f("value", x.value).f("fatigue", x.fatigue).f("state", x.state).f("outOfSupply", x.outOfSupply)),
-        RTS_C(Weathering, "Выветривание", j.f("bare", x.bare)),
-        RTS_C(TrapState, "Ловушка", j.f("charges", x.charges).ticks("readyAt", x.readyAt)),
-        RTS_C(TeleportBack, "Возврат телепорта", j.f("home", x.home).ticks("at", x.at).f("caster", x.caster)),
-        RTS_C(Belt, "Конвейер", j.f("dir", x.dir)),
-        RTS_C(Crafter, "Производитель", j.resList("in", x.in).resList("out", x.out).f("timer", x.timer)),
-        RTS_C(TurnBudget, "Ход", j.f("move", x.move).f("shots", x.shots).f("turn", x.turn)),
-        RTS_C(Altitude, "Высота полёта", j.f("target", x.target).f("y", x.y)),
-        RTS_C(ScriptData, "Данные скрипта", j.o = decodeScriptBlob(x.blob)),
-        RTS_C(ScriptStats, "Базы статов скрипта", {
+        AIVERSE_C(Channel, "Поддержание", j.f("target", x.target).f("point", x.point).f("ability", x.ability).ticks("nextAt", x.nextAt).ticks("endAt", x.endAt)),
+        AIVERSE_C(GroupTag, "Группа", j.f("id", x.id).f("from", x.from).f("to", x.to)),
+        AIVERSE_C(Capture, "Захват", j.f("progress", x.progress).f("team", x.team)),
+        AIVERSE_C(Guard, "Охрана", j.f("home", x.home).f("leash", x.leash).f("returning", x.returning)),
+        AIVERSE_C(Summon, "Призванный", j.ticks("expire", x.expire).type("summonerType", x.summonerType).f("summoner", x.summoner)),
+        AIVERSE_C(Needs, "Потребности", j.f("hunger", x.hunger).f("sleep", x.sleep).f("happiness", x.happiness).f("leaving", x.leaving)),
+        AIVERSE_C(Possessed, "Под управлением", j.f("dir", x.dir).f("target", x.target).f("fire", x.fire)),
+        AIVERSE_C(PortalState, "Портал", j.f("timer", x.timer)),
+        AIVERSE_C(AutoTrainState, "Автонайм", j.f("timer", x.timer)),
+        AIVERSE_C(ClaimState, "Захват клеток", j.f("acc", x.acc)),
+        AIVERSE_C(Advancer, "Наступает", (void)0),
+        AIVERSE_C(Inventory, "Склад", j.resList("have", x.have).resList("incoming", x.incoming).resList("reserved", x.reserved)),
+        AIVERSE_C(Workshop, "Мастерская", j.f("progress", x.progress).f("running", x.running)),
+        AIVERSE_C(Carrier, "Носильщик", j.f("from", x.from).f("to", x.to).res("resource", x.res).f("amount", x.amount).f("loaded", x.loaded)),
+        AIVERSE_C(LaneWalker, "Идёт по линии", j.f("lane", x.lane).f("pos", x.pos).f("reverse", x.reverse)),
+        AIVERSE_C(Stance, "Стойка", j.f("mode", std::string(stanceName(x.mode))).f("home", x.home).f("homeSet", x.homeSet)),
+        AIVERSE_C(Retreating, "Отступает", j.f("to", x.to).f("point", x.point)),
+        AIVERSE_C(Transport, "Транспорт", j.list("cargo", x.cargo).f("used", x.used).f("unloading", x.unloading).f("unloadAt", x.unloadAt)),
+        AIVERSE_C(Boarded, "В транспорте", j.f("carrier", x.carrier).f("fires", x.fires)),
+        AIVERSE_C(Veteran, "Ветеран", j.f("level", x.level).f("xp", x.xp).f("lastHit", x.lastHit)),
+        AIVERSE_C(RallyPath, "Путь сбора", j.list("points", x.points)),
+        AIVERSE_C(Shield, "Щит", j.f("value", x.value).ticks("lastHit", x.lastHit)),
+        AIVERSE_C(Eater, "Пожиратель", j.f("kills", x.kills)),
+        AIVERSE_C(Formation, "Строй", j.f("group", x.group).f("shape", x.shape).f("offset", x.offset)),
+        AIVERSE_C(BridgeLaid, "Мост / ворота", j.f("laid", x.laid).f("cells", x.cells.size())),
+        AIVERSE_C(Ammo, "Боезапас", j.list("left", std::vector<int>(x.left, x.left + 4))),
+        AIVERSE_C(Merging, "Слияние", j.f("partner", x.partner)),
+        AIVERSE_C(Trader, "Торговец", j.f("home", x.home).f("dest", x.dest).f("loaded", x.loaded)),
+        AIVERSE_C(ItemBag, "Предметы", j.list("items", x.items).list("charges", x.charges)),
+        AIVERSE_C(Suppression, "Подавление", j.f("value", x.value)),
+        AIVERSE_C(Turret, "Башня", j.list("dir", std::vector<Vec3>(x.dir, x.dir + 4))),
+        AIVERSE_C(GrowState, "Рост", j.f("timer", x.timer)),
+        AIVERSE_C(Morale, "Мораль", j.f("value", x.value).f("fatigue", x.fatigue).f("state", x.state).f("outOfSupply", x.outOfSupply)),
+        AIVERSE_C(Weathering, "Выветривание", j.f("bare", x.bare)),
+        AIVERSE_C(TrapState, "Ловушка", j.f("charges", x.charges).ticks("readyAt", x.readyAt)),
+        AIVERSE_C(TeleportBack, "Возврат телепорта", j.f("home", x.home).ticks("at", x.at).f("caster", x.caster)),
+        AIVERSE_C(Belt, "Конвейер", j.f("dir", x.dir)),
+        AIVERSE_C(Crafter, "Производитель", j.resList("in", x.in).resList("out", x.out).f("timer", x.timer)),
+        AIVERSE_C(TurnBudget, "Ход", j.f("move", x.move).f("shots", x.shots).f("turn", x.turn)),
+        AIVERSE_C(Altitude, "Высота полёта", j.f("target", x.target).f("y", x.y)),
+        AIVERSE_C(ScriptData, "Данные скрипта", j.o = decodeScriptBlob(x.blob)),
+        AIVERSE_C(ScriptStats, "Базы статов скрипта", {
             Json m = Json::object();
             for (auto& s : x.list) m.set(std::to_string(int(s.stat)), J::num(s.base));
             j.o.set("base", m);
@@ -224,7 +224,7 @@ const std::vector<Desc>& descs() {
     };
     return d;
 }
-#undef RTS_C
+#undef AIVERSE_C
 
 std::string lower(std::string s) { for (auto& c : s) c = char(std::tolower(uint8_t(c))); return s; }
 
@@ -642,7 +642,7 @@ WorldPreview::Result WorldPreview::run(const Json* simRules, const Json* simMap,
 WorldPreview::WorldPreview() = default;
 
 void WorldPreview::adopt(Result&& r) {
-#if RTS_PREVIEW_THREAD
+#if AIVERSE_PREVIEW_THREAD
     if (sim_) trash_.push_back(std::move(sim_));
 #endif
     sim_ = std::move(r.sim);
@@ -658,7 +658,7 @@ bool WorldPreview::build(const Json& simRules, const Json& simMap, const MapData
     return sim_ != nullptr;
 }
 
-#if RTS_PREVIEW_THREAD
+#if AIVERSE_PREVIEW_THREAD
 struct WorldPreview::Job {
     Request req;
     std::vector<std::unique_ptr<Simulation>> trash;
@@ -720,4 +720,4 @@ bool WorldPreview::poll() { const bool a = adopted_; adopted_ = false; return a;
 WorldPreview::~WorldPreview() = default;
 #endif
 
-} // namespace rts::editor
+} // namespace aiverse::editor

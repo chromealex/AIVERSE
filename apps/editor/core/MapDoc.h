@@ -12,7 +12,7 @@
 #include "engine/data/Json.h"
 #include "modules/rts/RtsData.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 struct DocEntity {
     std::string id;          // optional; required for road endpoints
@@ -65,6 +65,7 @@ struct DocBody {
 };
 
 struct MapData {
+    Json fps; // FPS documents round-trip verbatim; RTS grid tools never own these fields.
     std::string name = "New map";
     int w = 64, h = 48;
     bool roadsOnly = false;
@@ -170,4 +171,4 @@ private:
     std::vector<MapData> undo_, redo_;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

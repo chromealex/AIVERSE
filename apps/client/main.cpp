@@ -1,4 +1,4 @@
-// Entry point of the game client (RTSGame): command line, window settings, splash -> GameClient.
+// Entry point of the game client (AiverseGame): command line, window settings, splash -> GameClient.
 // The client itself (GameClient*.cpp, Client*.cpp) is also hosted by the editor's Game window.
 #include <cstdio>
 #include <cstdlib>
@@ -8,26 +8,26 @@
 #include "ClientSplash.h"
 #include "GameClient.h"
 
-using namespace rts;
+using namespace aiverse;
 using platform::Event;
 
-namespace rts::client {
+namespace aiverse::client {
 GameClient* g_client = nullptr;
 }
 
-int rtsMain(int argc, char** argv) {
-    using namespace rts::client;
+int aiverseMain(int argc, char** argv) {
+    using namespace aiverse::client;
     static GameClient client;
     static ClientBoot boot;   // splash / loading screen (ClientSplash.h)
     static size_t autostartMap = size_t(-1);
     g_client = &client;
     platform::AppConfig cfg;
-    cfg.title = "RTSEngine";
+    cfg.title = "AIVERSE";
     cfg.width = 1280; cfg.height = 760;
-#ifdef RTS_SPLASH_BACKGROUND   // rtsbuild: game.json splash.background, the window colour before the first frame
-    cfg.clearColor[0] = float((RTS_SPLASH_BACKGROUND >> 16) & 0xff) / 255.0f;
-    cfg.clearColor[1] = float((RTS_SPLASH_BACKGROUND >> 8) & 0xff) / 255.0f;
-    cfg.clearColor[2] = float(RTS_SPLASH_BACKGROUND & 0xff) / 255.0f;
+#ifdef AIVERSE_SPLASH_BACKGROUND   // aiversebuild: game.json splash.background, the window colour before the first frame
+    cfg.clearColor[0] = float((AIVERSE_SPLASH_BACKGROUND >> 16) & 0xff) / 255.0f;
+    cfg.clearColor[1] = float((AIVERSE_SPLASH_BACKGROUND >> 8) & 0xff) / 255.0f;
+    cfg.clearColor[2] = float(AIVERSE_SPLASH_BACKGROUND & 0xff) / 255.0f;
 #endif
     platform::AppCallbacks cb;
     cb.frame = [](gfx::Device& d, double dt) { boot.frame(d, dt); };
@@ -61,21 +61,21 @@ int rtsMain(int argc, char** argv) {
         code += previewLua;
         g_client->previewScreen(code);
     }
-    // RTS_SPLASH=off: load in the init callback (old behaviour); full: the whole splash even with --map
+    // AIVERSE_SPLASH=off: load in the init callback (old behaviour); full: the whole splash even with --map
     ClientBoot::Mode mode = autostartMap != size_t(-1) ? ClientBoot::Mode::LoadingOnly : ClientBoot::Mode::Full;
-    if (const char* s = std::getenv("RTS_SPLASH")) {
+    if (const char* s = std::getenv("AIVERSE_SPLASH")) {
         if (std::string(s) == "off") mode = ClientBoot::Mode::Off;
         else if (std::string(s) == "full") mode = ClientBoot::Mode::Full;
     }
     if (!previewScreen.empty()) mode = ClientBoot::Mode::Off;   // previews show the screen at once
     // game.json "window": size and mode of the desktop window (WindowSettings.h). Screenshot / CI runs
-    // (RTS_EXIT_AFTER_FRAMES) and --size stay windowed at the asked size, so captures are the same on every machine.
+    // (AIVERSE_EXIT_AFTER_FRAMES) and --size stay windowed at the asked size, so captures are the same on every machine.
     cb.configure = [](platform::AppConfig& c) {
         std::string text;
         if (!platform::readContentFile("game.json", text)) return;
         try {
             const Json window = Json::parse(text)["window"];
-            const bool capture = std::getenv("RTS_EXIT_AFTER_FRAMES") != nullptr;
+            const bool capture = std::getenv("AIVERSE_EXIT_AFTER_FRAMES") != nullptr;
             platform::applyWindowSettings(c, window, platform::name(), sizeFromArgs || capture);
             if (capture || sizeFromArgs) c.windowMode = platform::AppConfig::WindowMode::Windowed;
         } catch (const std::exception&) {}   // a broken game.json is reported by the game itself later

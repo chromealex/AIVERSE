@@ -21,7 +21,7 @@
 #include "engine/atlas/AtlasFormat.h"
 #include "engine/gfx/Gfx.h"
 
-namespace rts::atlas {
+namespace aiverse::atlas {
 
 struct TextureRef {
     gfx::TextureHandle texture;
@@ -75,4 +75,4 @@ private:
     std::map<std::string, bool, std::less<>> missing_;
 };
 
-} // namespace rts::atlas
+} // namespace aiverse::atlas

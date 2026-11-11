@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 // Symmetry of a fair flat map: n images of the fundamental domain (player k+1 lives in image k).
 // Coordinates are Q16 cell units (corner (x, y) = (x << 16, y << 16)); the centre is (w/2, h/2).
@@ -65,4 +65,4 @@ template <class T> void symmetrizeCells(std::vector<T>& cells, int w, int h, con
 // Height at quantile q (Q16, 0..65536) of the values (copy + nth_element; deterministic).
 int32_t quantile(std::vector<int32_t> vals, int32_t qQ16);
 
-} // namespace rts::gen
+} // namespace aiverse::gen

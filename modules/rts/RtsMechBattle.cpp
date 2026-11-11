@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -215,4 +215,4 @@ void RtsModule::mechArmyBlock(Simulation& sim, const std::vector<Entity>& ms, Ve
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

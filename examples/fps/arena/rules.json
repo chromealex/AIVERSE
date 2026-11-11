@@ -1,0 +1,27 @@
+{
+  "fps": {
+    "tickRate": 60,
+    "snapshotRate": 20,
+    "maxPlayers": 10,
+    "mode": "elimination",
+    "worldLimit": 128,
+    "interestRadius": 250,
+    "rewindTicks": 12,
+    "roundTicks": 7200,
+    "weapon": {
+      "intervalTicks": 6,
+      "reloadTicks": 120
+    },
+    "zone": {
+      "center": [
+        0,
+        0,
+        0
+      ],
+      "radius": 4000,
+      "endRadius": 10,
+      "startTick": 1800,
+      "durationTicks": 36000
+    }
+  }
+}

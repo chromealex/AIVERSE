@@ -3,7 +3,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 
@@ -144,4 +144,4 @@ void RtsModule::sysNeutrals(Simulation& sim) {
 // waves: modules/rts/lua/waves.lua (standard Lua library, std.waves)
 // victory: modules/rts/lua/victory.lua (standard Lua library, std.victory)
 
-} // namespace rts::game
+} // namespace aiverse::game

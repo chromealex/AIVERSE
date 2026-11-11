@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 Fixed dist(Vec3 a, Vec3 b) { return Surface::onSphere(a) ? (a - b).length() : (a - b).xz().length(); }
@@ -1460,4 +1460,4 @@ bool RtsAI::waitForArmyProducer(Simulation& sim, RtsModule& m, const std::vector
     return anyCandidate;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

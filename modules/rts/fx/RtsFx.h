@@ -27,7 +27,7 @@
 #include "../../../engine/sim/Simulation.h"
 #include "../RtsData.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct SceneObject;
 
@@ -107,4 +107,4 @@ private:
     int played_ = 0, rejected_ = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

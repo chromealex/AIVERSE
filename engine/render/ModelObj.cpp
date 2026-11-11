@@ -11,7 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 
@@ -218,4 +218,4 @@ std::unique_ptr<Model> loadObj(const std::string& path, const std::string& text,
     return model;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

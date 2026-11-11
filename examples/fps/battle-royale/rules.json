@@ -1,0 +1,27 @@
+{
+  "fps": {
+    "tickRate": 30,
+    "snapshotRate": 10,
+    "maxPlayers": 100,
+    "mode": "battleRoyale",
+    "worldLimit": 8192,
+    "interestRadius": 500,
+    "rewindTicks": 6,
+    "roundTicks": 54000,
+    "weapon": {
+      "intervalTicks": 3,
+      "reloadTicks": 60
+    },
+    "zone": {
+      "center": [
+        0,
+        0,
+        0
+      ],
+      "radius": 4000,
+      "endRadius": 10,
+      "startTick": 1800,
+      "durationTicks": 36000
+    }
+  }
+}

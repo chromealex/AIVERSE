@@ -19,7 +19,7 @@
 #include <sys/system_properties.h>
 #endif
 
-namespace rts::i18n {
+namespace aiverse::i18n {
 
 namespace {
 
@@ -41,7 +41,7 @@ void addList(std::vector<std::string>& out, const std::string& list, char sep) {
 }
 
 #if defined(__EMSCRIPTEN__)
-EM_JS(char*, rtsBrowserLanguages, (), {
+EM_JS(char*, aiverseBrowserLanguages, (), {
     var l = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || ""];
     return stringToNewUTF8(l.join(","));
 });
@@ -51,8 +51,8 @@ EM_JS(char*, rtsBrowserLanguages, (), {
 
 std::vector<std::string> systemLanguages() {
     std::vector<std::string> out;
-    // Explicit override for testing any platform: RTS_LANG=de or RTS_LANG=uk,ru
-    if (const char* forced = std::getenv("RTS_LANG"); forced && *forced) addList(out, forced, ',');
+    // Explicit override for testing any platform: AIVERSE_LANG=de or AIVERSE_LANG=uk,ru
+    if (const char* forced = std::getenv("AIVERSE_LANG"); forced && *forced) addList(out, forced, ',');
 
 #if defined(__APPLE__)
     if (CFArrayRef langs = CFLocaleCopyPreferredLanguages()) {
@@ -76,7 +76,7 @@ std::vector<std::string> systemLanguages() {
         }
     }
 #elif defined(__EMSCRIPTEN__)
-    if (char* s = rtsBrowserLanguages()) { addList(out, s, ','); std::free(s); }
+    if (char* s = aiverseBrowserLanguages()) { addList(out, s, ','); std::free(s); }
 #elif defined(__ANDROID__)
     // System locale ("ru-RU"); older devices only have language + region properties.
     char v[PROP_VALUE_MAX] = {};
@@ -92,4 +92,4 @@ std::vector<std::string> systemLanguages() {
     return out;
 }
 
-} // namespace rts::i18n
+} // namespace aiverse::i18n

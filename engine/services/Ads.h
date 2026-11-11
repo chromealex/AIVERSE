@@ -15,7 +15,7 @@
 #include <functional>
 #include <string>
 
-namespace rts::ads {
+namespace aiverse::ads {
 
 enum class Format : uint8_t { Interstitial, Rewarded, Banner };
 
@@ -45,4 +45,4 @@ bool enabled();
 // Privacy: personalised ads allowed (GDPR consent), child-directed / age-restricted audience.
 void setConsent(bool personalized, bool ageRestricted = false);
 
-} // namespace rts::ads
+} // namespace aiverse::ads

@@ -15,7 +15,7 @@
 #include "PostFxData.h"
 #include "Renderer3D.h"
 
-namespace rts::render {
+namespace aiverse::render {
 
 struct PostFxStats { int passes = 0; int effects = 0; int width = 0, height = 0; };
 
@@ -31,7 +31,7 @@ public:
 
     void setQuality(PostFxQuality q) { quality_ = q; }
     PostFxQuality quality() const { return quality_; }
-    static PostFxQuality defaultQualityFor(const gfx::Device& dev, bool mobile);   // RTS_POSTFX overrides
+    static PostFxQuality defaultQualityFor(const gfx::Device& dev, bool mobile);   // AIVERSE_POSTFX overrides
     void setEnabled(bool on) { enabled_ = on; }          // editor: preview on / off
     bool enabled() const { return enabled_; }
 
@@ -87,4 +87,4 @@ private:
     std::string error_;
 };
 
-} // namespace rts::render
+} // namespace aiverse::render

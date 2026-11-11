@@ -6,7 +6,7 @@
 #include "../RtsModule.h"
 #include "../RtsScriptInternal.h"
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace script;
 
 namespace {
@@ -924,4 +924,4 @@ bool ViewScripts::send(Simulation& sim, const std::string& id, const Json& args)
     return true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

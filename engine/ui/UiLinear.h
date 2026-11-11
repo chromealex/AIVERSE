@@ -4,7 +4,7 @@
 #pragma once
 #include "engine/gfx/Gfx.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 class UiLinearComposite {
 public:
@@ -29,4 +29,4 @@ private:
     int w_ = 0, h_ = 0;
 };
 
-} // namespace rts::ui
+} // namespace aiverse::ui

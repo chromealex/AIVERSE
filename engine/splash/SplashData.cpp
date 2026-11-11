@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <stdexcept>
 
-namespace rts::splash {
+namespace aiverse::splash {
 
 namespace {
 
@@ -324,7 +324,7 @@ bool readyToLeave(const Spec& s, float elapsed, bool loaded, bool skipped) {
     return loaded && (skipped || elapsed >= s.minimumTime());
 }
 
-// The engine's loading screen for games without a "splash" block: the RTSEngine mark assembles —
+// The engine's loading screen for games without a "splash" block: the AIVERSE mark assembles —
 // the blades slide in from their sides, the orange diamond turns into place and keeps pulsing while
 // loading runs. Art: engine/assets/branding (tools/branding/logo/make_logo.py).
 Json defaultBlock() {
@@ -349,4 +349,4 @@ Json defaultBlock() {
     return j;
 }
 
-} // namespace rts::splash
+} // namespace aiverse::splash

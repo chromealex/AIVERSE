@@ -7,6 +7,7 @@
 #include <cmath>
 #include "../Devices.h"
 #include "../Editor.h"
+#include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
 #include "../GameHud.h"
 #include "modules/rts/view/RegionSwipe.h"
@@ -15,7 +16,7 @@
 #include "engine/i18n/Localization.h"
 #include "modules/rts/RtsScript.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 using namespace render;
 
@@ -32,6 +33,15 @@ public:
     void update(Editor& ed, double dt) override { dt_ = dt; if (!ed.playing()) gameHud_.reset(); }
 
     void draw(Editor& ed) override {
+        if(ed.ws().project.isFps()) {
+            ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+            ImGui::BeginDisabled(ed.ws().building());
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.play").c_str()))ed.startFpsPlay();
+            ImGui::SameLine();if(ImGui::Button(genreText(ed.ws(),"fps.editor.listen").c_str()))ed.startFpsPlay(true);
+            ImGui::EndDisabled();
+            if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+            ed.gameViewport=nullptr;return;
+        }
         toolbar(ed);
         ImVec2 avail = ImGui::GetContentRegionAvail();
         ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -168,7 +178,7 @@ private:
         } else if (!ed.playing()) {
             if (ui::toolButton(ICON_GAME, "Играть как в клиенте игры, в этом окне: меню, экраны и скрипты игры, её ввод и звук")) { gameHud_.reset(); ed.startClientPlay(); }
             ImGui::SameLine();
-            if (ui::toolButton(ICON_EXTERNAL, "Играть в клиенте игры: отдельное окно RTSGame с меню, скриптами и вводом игры, как у игроков")) ed.launchClient();
+            if (ui::toolButton(ICON_EXTERNAL, "Играть в клиенте игры: отдельное окно AiverseGame с меню, скриптами и вводом игры, как у игроков")) ed.launchClient();
             ImGui::SameLine();
             if (ui::toolButton(ICON_BOT, "Боты против ботов")) ed.startPlay(0);
             for (size_t p = 0; p < ed.doc().data.players.size(); ++p) {
@@ -326,7 +336,7 @@ private:
                 Command c;
                 c.type = game::kCmdBuild;
                 c.param = place;
-                if (io.KeyShift) c.flags = rts::kCmdQueue;
+                if (io.KeyShift) c.flags = aiverse::kCmdQueue;
                 for (Entity e : ed.gameSelection)
                     if (auto* u = w.tryGet<game::Unit>(e)) {
                         const auto& b = ed.rules().types[u->type].builds;
@@ -366,7 +376,7 @@ private:
                 c.units = ed.gameSelection;
                 c.point = {Fixed::fromRatio(int64_t(x * 256), 256), Fixed{}, Fixed::fromRatio(int64_t(z * 256), 256)};
                 c.target = pickSim(io.MousePos.x, io.MousePos.y);
-                if (io.KeyShift) c.flags = rts::kCmdQueue;
+                if (io.KeyShift) c.flags = aiverse::kCmdQueue;
                 ed.issueCommand(c);
             }
         }
@@ -569,6 +579,6 @@ private:
     ImVec2 boxA_{};
 };
 
-RTS_EDITOR_WINDOW(GameWindow);
+AIVERSE_EDITOR_WINDOW(GameWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

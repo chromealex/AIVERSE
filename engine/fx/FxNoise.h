@@ -7,7 +7,7 @@
 #include <vector>
 #include "../render/Math3D.h"
 
-namespace rts::fx::detail {
+namespace aiverse::fx::detail {
 
 using render::float3;
 constexpr int kAtlasCell = 64, kAtlasCells = 4;
@@ -75,4 +75,4 @@ inline std::vector<uint8_t> makeBuiltinAtlas() {
     return px;
 }
 
-} // namespace rts::fx::detail
+} // namespace aiverse::fx::detail

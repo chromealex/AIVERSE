@@ -8,7 +8,7 @@
 #include "GameClient.h"
 #include "modules/rts/RtsScript.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 using platform::Event;
 using platform::Key;
@@ -193,4 +193,4 @@ void GameClient::issueViewCommands() {
     for (auto& c : viewScripts_.takeCommands()) if (!spectator_) issue(std::move(c));
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

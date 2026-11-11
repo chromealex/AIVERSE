@@ -19,7 +19,7 @@
 #include <vector>
 #include "../../engine/data/Json.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class AutoTile : uint8_t { None, Mask16, Corner16, Blob47 };
 
@@ -81,4 +81,4 @@ void applyTilesToMap(Json& map, const Tileset& ts);
 // returns true when the map has no tiles layer.
 bool applyTilesToMap(Json& map, const std::function<bool(const std::string&, std::string&)>& read, std::string* err);
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
-project(RTSEngine VERSION 0.2.0 LANGUAGES C CXX)
+project(AIVERSE VERSION 0.2.0 LANGUAGES C CXX)
 # Apple ld: the same static library listed twice in a link line is harmless (CMake repeats them for dependencies)
 if(APPLE)
     include(CheckLinkerFlag)
-    check_linker_flag(CXX "-Wl,-no_warn_duplicate_libraries" RTS_LD_NO_DUP_WARN)
-    if(RTS_LD_NO_DUP_WARN)
+    check_linker_flag(CXX "-Wl,-no_warn_duplicate_libraries" AIVERSE_LD_NO_DUP_WARN)
+    if(AIVERSE_LD_NO_DUP_WARN)
         add_link_options("-Wl,-no_warn_duplicate_libraries")
     endif()
 endif()
@@ -17,61 +17,61 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Platform detection
 # ---------------------------------------------------------------------------
 if(EMSCRIPTEN)
-    set(RTS_PLATFORM web)
+    set(AIVERSE_PLATFORM web)
 elseif(ANDROID)
-    set(RTS_PLATFORM android)
+    set(AIVERSE_PLATFORM android)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(RTS_PLATFORM ios)
+    set(AIVERSE_PLATFORM ios)
 elseif(APPLE)
-    set(RTS_PLATFORM macos)
+    set(AIVERSE_PLATFORM macos)
 elseif(WIN32)
-    set(RTS_PLATFORM windows)
+    set(AIVERSE_PLATFORM windows)
 else()
-    set(RTS_PLATFORM linux)
+    set(AIVERSE_PLATFORM linux)
 endif()
-message(STATUS "RTSEngine platform: ${RTS_PLATFORM}")
+message(STATUS "AIVERSE platform: ${AIVERSE_PLATFORM}")
 
-set(RTS_DESKTOP OFF)
-if(RTS_PLATFORM MATCHES "^(macos|windows|linux)$")
-    set(RTS_DESKTOP ON)
+set(AIVERSE_DESKTOP OFF)
+if(AIVERSE_PLATFORM MATCHES "^(macos|windows|linux)$")
+    set(AIVERSE_DESKTOP ON)
 endif()
 
-option(RTS_BUILD_TESTS "Build unit tests" ${RTS_DESKTOP})
-option(RTS_BUILD_HEADLESS "Build headless runner" ${RTS_DESKTOP})
-option(RTS_BUILD_CLIENT "Build the game client" ON)
-option(RTS_BUILD_EDITOR "Build the map editor" ${RTS_DESKTOP})
-option(RTS_BUILD_TOOLS "Build rtsbuild packager" ${RTS_DESKTOP})
-option(RTS_BUILD_SERVER "Build the network game server and the network bot client" ${RTS_DESKTOP})
+option(AIVERSE_BUILD_TESTS "Build unit tests" ${AIVERSE_DESKTOP})
+option(AIVERSE_BUILD_HEADLESS "Build headless runner" ${AIVERSE_DESKTOP})
+option(AIVERSE_BUILD_CLIENT "Build the game client" ON)
+option(AIVERSE_BUILD_EDITOR "Build the map editor" ${AIVERSE_DESKTOP})
+option(AIVERSE_BUILD_TOOLS "Build aiversebuild packager" ${AIVERSE_DESKTOP})
+option(AIVERSE_BUILD_SERVER "Build the network game server and the network bot client" ${AIVERSE_DESKTOP})
 
-# Game being built (rtsbuild overrides these).
-set(RTS_CONTENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/templates/skirmish" CACHE PATH "Game content folder (contains game.json)")
+# Game being built (aiversebuild overrides these).
+set(AIVERSE_CONTENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/templates/skirmish" CACHE PATH "Game content folder (contains game.json)")
 # build folders configured before games/ became templates/ keep the old cached path
-if(NOT EXISTS "${RTS_CONTENT_DIR}/game.json" AND RTS_CONTENT_DIR MATCHES "/games/")
-    string(REPLACE "/games/" "/templates/" _rts_content "${RTS_CONTENT_DIR}")
-    if(EXISTS "${_rts_content}/game.json")
-        set(RTS_CONTENT_DIR "${_rts_content}" CACHE PATH "Game content folder (contains game.json)" FORCE)
+if(NOT EXISTS "${AIVERSE_CONTENT_DIR}/game.json" AND AIVERSE_CONTENT_DIR MATCHES "/games/")
+    string(REPLACE "/games/" "/templates/" _aiverse_content "${AIVERSE_CONTENT_DIR}")
+    if(EXISTS "${_aiverse_content}/game.json")
+        set(AIVERSE_CONTENT_DIR "${_aiverse_content}" CACHE PATH "Game content folder (contains game.json)" FORCE)
     endif()
 endif()
-set(RTS_ENGINE_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/engine/assets")
-set(RTS_GAME_NAME "RTSEngine Game" CACHE STRING "Display name")
-set(RTS_GAME_ID "com.rtsengine.game" CACHE STRING "Bundle / application id")
-set(RTS_GAME_VERSION "0.1.0" CACHE STRING "Version string")
-set(RTS_GAME_BUILD "1" CACHE STRING "Build number")
-set(RTS_GAME_EXECUTABLE "RTSGame" CACHE STRING "Executable / bundle file name")
-set(RTS_APPLE_TEAM_ID "" CACHE STRING "Apple development team id (iOS signing)")
-set(RTS_GEN_DIR "" CACHE PATH "Generated packaging assets from rtsbuild (icons)")
-# Native plugins selected by rtsbuild (plugins/*/plugin.json): sources, frameworks, Info.plist keys.
+set(AIVERSE_ENGINE_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/engine/assets")
+set(AIVERSE_GAME_NAME "AIVERSE Game" CACHE STRING "Display name")
+set(AIVERSE_GAME_ID "com.aiverse.game" CACHE STRING "Bundle / application id")
+set(AIVERSE_GAME_VERSION "0.1.0" CACHE STRING "Version string")
+set(AIVERSE_GAME_BUILD "1" CACHE STRING "Build number")
+set(AIVERSE_GAME_EXECUTABLE "AiverseGame" CACHE STRING "Executable / bundle file name")
+set(AIVERSE_APPLE_TEAM_ID "" CACHE STRING "Apple development team id (iOS signing)")
+set(AIVERSE_GEN_DIR "" CACHE PATH "Generated packaging assets from aiversebuild (icons)")
+# Native plugins selected by aiversebuild (plugins/*/plugin.json): sources, frameworks, Info.plist keys.
 # Exported projects (Android/iOS) carry plugins.cmake next to this file.
-set(RTS_PLUGINS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/plugins.cmake" CACHE FILEPATH "Generated by rtsbuild")
-set(RTS_PLUGIN_SOURCES "")
-set(RTS_PLUGIN_FRAMEWORKS "")
-set(RTS_PLUGIN_PLIST_XML "")
-set(RTS_PLUGIN_INCLUDE_DIRS "")
-set(RTS_PLUGIN_LIBRARIES "")
-set(RTS_PLUGIN_RUNTIME_FILES "")
-if(EXISTS "${RTS_PLUGINS_FILE}")
-    include("${RTS_PLUGINS_FILE}")
-    message(STATUS "RTSEngine plugins: ${RTS_PLUGIN_NAMES}")
+set(AIVERSE_PLUGINS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/plugins.cmake" CACHE FILEPATH "Generated by aiversebuild")
+set(AIVERSE_PLUGIN_SOURCES "")
+set(AIVERSE_PLUGIN_FRAMEWORKS "")
+set(AIVERSE_PLUGIN_PLIST_XML "")
+set(AIVERSE_PLUGIN_INCLUDE_DIRS "")
+set(AIVERSE_PLUGIN_LIBRARIES "")
+set(AIVERSE_PLUGIN_RUNTIME_FILES "")
+if(EXISTS "${AIVERSE_PLUGINS_FILE}")
+    include("${AIVERSE_PLUGINS_FILE}")
+    message(STATUS "AIVERSE plugins: ${AIVERSE_PLUGIN_NAMES}")
 endif()
 
 if(MSVC)
@@ -88,16 +88,17 @@ endif()
 # ---------------------------------------------------------------------------
 # Core: deterministic simulation (no platform code, no float in gameplay)
 # ---------------------------------------------------------------------------
-add_library(rts_engine STATIC
+add_library(aiverse_engine STATIC
     engine/core/Fixed.cpp
     engine/core/FixedMath.cpp
     engine/data/Json.cpp
     engine/sim/Simulation.cpp
     engine/sim/Replay.cpp)
-target_include_directories(rts_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(aiverse_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_subdirectory(engine/meta)
 
 # Generic data-driven RTS gameplay (units, orders, economy, combat, garrisons, AI)
-add_library(rts_game STATIC
+add_library(aiverse_game STATIC
     modules/rts/RtsData.cpp
     modules/rts/RtsMap.cpp
     modules/rts/RtsHpa.cpp
@@ -130,80 +131,81 @@ add_library(rts_game STATIC
     modules/rts/RtsAIFidelity.cpp
     modules/rts/RtsAITerrain.cpp
     modules/rts/RtsAITactics.cpp)
-target_link_libraries(rts_game PUBLIC rts_engine)
+target_link_libraries(aiverse_game PUBLIC aiverse_engine)
+add_subdirectory(libraries)
 include(modules/rts/native/Build.cmake)
 # agent-mech: mechanics of the top-100 strategy games plan (stances, transports, ...)
-file(GLOB RTS_MECH_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/RtsMech*.cpp)
-target_sources(rts_game PRIVATE ${RTS_MECH_SOURCES} modules/rts/RtsSave.cpp modules/rts/RtsCampaign.cpp   # + save states, campaigns
+file(GLOB AIVERSE_MECH_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/RtsMech*.cpp)
+target_sources(aiverse_game PRIVATE ${AIVERSE_MECH_SOURCES} modules/rts/RtsSave.cpp modules/rts/RtsCampaign.cpp   # + save states, campaigns
     modules/strategic/Strategic.cpp)   # strategic map: provinces, armies, battles on RtsModule
 
 # Localization: string tables, plurals, language choice (presentation only, no sim dependency).
 # RtsLocalize maps RTS data (types, resources, maps...) to string keys.
-add_library(rts_i18n STATIC
+add_library(aiverse_i18n STATIC
     engine/i18n/Localization.cpp
     engine/i18n/GameLanguage.cpp
     engine/i18n/SystemLanguage.cpp
     modules/rts/RtsLocalize.cpp)
-target_link_libraries(rts_i18n PUBLIC rts_game)
+target_link_libraries(aiverse_i18n PUBLIC aiverse_game)
 if(APPLE)
-    target_link_libraries(rts_i18n PUBLIC "-framework CoreFoundation")
+    target_link_libraries(aiverse_i18n PUBLIC "-framework CoreFoundation")
 endif()
 
 # ---------------------------------------------------------------------------
 # Resource packs (.rpak). The runtime links only the zstd decoder; host tools that write packs
-# link rts_pack_writer, which carries the full zstd library instead (never link both).
+# link aiverse_pack_writer, which carries the full zstd library instead (never link both).
 # ---------------------------------------------------------------------------
-set(RTS_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by rtsbuild)")
-add_library(rts_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+set(AIVERSE_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by aiversebuild)")
+add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
 # HTTP fetcher for chunk downloads, per platform (see engine/pack/Chunks.h).
-if(RTS_PLATFORM STREQUAL "windows")
-    set(RTS_PACK_HTTP engine/pack/http/HttpWin.cpp)
-elseif(RTS_PLATFORM STREQUAL "macos" OR RTS_PLATFORM STREQUAL "ios")
-    set(RTS_PACK_HTTP engine/pack/http/HttpApple.mm)
-elseif(RTS_PLATFORM STREQUAL "android")
-    set(RTS_PACK_HTTP engine/pack/http/HttpAndroid.cpp)
-elseif(RTS_PLATFORM STREQUAL "web")
-    set(RTS_PACK_HTTP engine/pack/http/HttpWeb.cpp)
+if(AIVERSE_PLATFORM STREQUAL "windows")
+    set(AIVERSE_PACK_HTTP engine/pack/http/HttpWin.cpp)
+elseif(AIVERSE_PLATFORM STREQUAL "macos" OR AIVERSE_PLATFORM STREQUAL "ios")
+    set(AIVERSE_PACK_HTTP engine/pack/http/HttpApple.mm)
+elseif(AIVERSE_PLATFORM STREQUAL "android")
+    set(AIVERSE_PACK_HTTP engine/pack/http/HttpAndroid.cpp)
+elseif(AIVERSE_PLATFORM STREQUAL "web")
+    set(AIVERSE_PACK_HTTP engine/pack/http/HttpWeb.cpp)
 elseif(UNIX)
-    set(RTS_PACK_HTTP engine/pack/http/HttpCurl.cpp)
+    set(AIVERSE_PACK_HTTP engine/pack/http/HttpCurl.cpp)
 else()
-    set(RTS_PACK_HTTP engine/pack/http/HttpNone.cpp)
+    set(AIVERSE_PACK_HTTP engine/pack/http/HttpNone.cpp)
 endif()
-add_library(rts_pack STATIC engine/pack/Pack.cpp engine/pack/Sha256.cpp engine/pack/Chunks.cpp ${RTS_PACK_HTTP})
+add_library(aiverse_pack STATIC engine/pack/Pack.cpp engine/pack/Sha256.cpp engine/pack/Chunks.cpp ${AIVERSE_PACK_HTTP})
 find_package(Threads)
 if(Threads_FOUND)
-    target_link_libraries(rts_pack PUBLIC Threads::Threads)
+    target_link_libraries(aiverse_pack PUBLIC Threads::Threads)
 endif()
-if(RTS_PLATFORM STREQUAL "windows")
-    target_link_libraries(rts_pack PUBLIC winhttp)
-elseif(RTS_PLATFORM STREQUAL "macos" OR RTS_PLATFORM STREQUAL "ios")
+if(AIVERSE_PLATFORM STREQUAL "windows")
+    target_link_libraries(aiverse_pack PUBLIC winhttp)
+elseif(AIVERSE_PLATFORM STREQUAL "macos" OR AIVERSE_PLATFORM STREQUAL "ios")
     set_source_files_properties(engine/pack/http/HttpApple.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-    target_link_libraries(rts_pack PUBLIC "-framework Foundation")
-elseif(RTS_PLATFORM STREQUAL "web")
-    target_link_options(rts_pack PUBLIC -sFETCH=1)
+    target_link_libraries(aiverse_pack PUBLIC "-framework Foundation")
+elseif(AIVERSE_PLATFORM STREQUAL "web")
+    target_link_options(aiverse_pack PUBLIC -sFETCH=1)
 elseif(UNIX AND NOT ANDROID)
-    target_link_libraries(rts_pack PUBLIC ${CMAKE_DL_LIBS})
+    target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
-target_include_directories(rts_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if(NOT MSVC)
-    target_compile_options(rts_zstd_dec PRIVATE -w)
+    target_compile_options(aiverse_zstd_dec PRIVATE -w)
 endif()
-if(RTS_BUILD_TOOLS OR RTS_BUILD_TESTS)
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
     find_package(Threads REQUIRED)
-    add_library(rts_zstd STATIC third_party/zstd/zstd.c)
-    target_link_libraries(rts_zstd PUBLIC Threads::Threads)
+    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
+    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
     if(NOT MSVC)
-        target_compile_options(rts_zstd PRIVATE -w)
+        target_compile_options(aiverse_zstd PRIVATE -w)
     endif()
-    add_library(rts_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
-    target_link_libraries(rts_pack_writer PUBLIC rts_pack rts_engine rts_zstd)
+    add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
+    target_link_libraries(aiverse_pack_writer PUBLIC aiverse_pack aiverse_engine aiverse_zstd)
 endif()
 
 # ---------------------------------------------------------------------------
 # Networking: transports (UDP, WebSocket), rollback lockstep session, lobby client.
 # The server part needs no game data and no graphics.
 # ---------------------------------------------------------------------------
-add_library(rts_net STATIC
+add_library(aiverse_net STATIC
     engine/net/Loopback.cpp
     engine/net/Socket.cpp
     engine/net/Reliable.cpp
@@ -212,24 +214,24 @@ add_library(rts_net STATIC
     engine/net/Protocol.cpp
     engine/net/Rollback.cpp
     engine/net/NetClient.cpp)
-target_link_libraries(rts_net PUBLIC rts_engine)
+target_link_libraries(aiverse_net PUBLIC aiverse_engine)
 if(WIN32)
-    target_link_libraries(rts_net PUBLIC ws2_32)
+    target_link_libraries(aiverse_net PUBLIC ws2_32)
 elseif(EMSCRIPTEN)
-    target_link_options(rts_net PUBLIC -lwebsocket.js)
+    target_link_options(aiverse_net PUBLIC -lwebsocket.js)
 endif()
 
-add_library(rts_net_server STATIC
+add_library(aiverse_net_server STATIC
     engine/net/server/Server.cpp
     engine/net/server/ServerMatch.cpp
     engine/net/server/Matchmaker.cpp)
-target_link_libraries(rts_net_server PUBLIC rts_net)
+target_link_libraries(aiverse_net_server PUBLIC aiverse_net)
 # Game data on the network side: match loading like the game (tile maps) and the server's verdict
 # (re-simulating a match nobody settled). Server, bot client and net tests share it.
-# Not part of the game client: exported source trees (rtsbuild iOS / Android / web) don't ship apps/server.
+# Not part of the game client: exported source trees (aiversebuild iOS / Android / web) don't ship apps/server.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
-    add_library(rts_net_game STATIC apps/server/GameData.cpp)
-    target_link_libraries(rts_net_game PUBLIC rts_net_server rts_game)
+    add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
+    target_link_libraries(aiverse_net_game PUBLIC aiverse_net_server aiverse_game)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -239,58 +241,58 @@ endif()
 # ---------------------------------------------------------------------------
 if(APPLE)
     enable_language(OBJC)   # miniaudio's AVAudioSession / CoreAudio code is Objective-C
-    set(RTS_MINIAUDIO_IMPL engine/audio/MiniaudioImpl.m)
+    set(AIVERSE_MINIAUDIO_IMPL engine/audio/MiniaudioImpl.m)
 else()
-    set(RTS_MINIAUDIO_IMPL engine/audio/MiniaudioImpl.c)
+    set(AIVERSE_MINIAUDIO_IMPL engine/audio/MiniaudioImpl.c)
 endif()
-add_library(rts_audio STATIC
+add_library(aiverse_audio STATIC
     engine/audio/AudioEngine.cpp
     engine/audio/AudioMixer.cpp
     engine/audio/AudioReverb.cpp
     engine/audio/AudioDecode.cpp
     engine/audio/Synth.cpp
-    ${RTS_MINIAUDIO_IMPL})
-target_link_libraries(rts_audio PUBLIC rts_engine)
-set_source_files_properties(${RTS_MINIAUDIO_IMPL} PROPERTIES COMPILE_OPTIONS "$<IF:$<BOOL:${MSVC}>,/w,-w>")
+    ${AIVERSE_MINIAUDIO_IMPL})
+target_link_libraries(aiverse_audio PUBLIC aiverse_engine)
+set_source_files_properties(${AIVERSE_MINIAUDIO_IMPL} PROPERTIES COMPILE_OPTIONS "$<IF:$<BOOL:${MSVC}>,/w,-w>")
 if(APPLE)
-    target_link_libraries(rts_audio PUBLIC "-framework CoreFoundation" "-framework AudioToolbox")
-    if(RTS_PLATFORM STREQUAL "ios")
-        target_link_libraries(rts_audio PUBLIC "-framework AVFoundation")
+    target_link_libraries(aiverse_audio PUBLIC "-framework CoreFoundation" "-framework AudioToolbox")
+    if(AIVERSE_PLATFORM STREQUAL "ios")
+        target_link_libraries(aiverse_audio PUBLIC "-framework AVFoundation")
     else()
-        target_link_libraries(rts_audio PUBLIC "-framework CoreAudio")
+        target_link_libraries(aiverse_audio PUBLIC "-framework CoreAudio")
     endif()
-elseif(RTS_PLATFORM STREQUAL "linux" OR RTS_PLATFORM STREQUAL "android")
-    target_link_libraries(rts_audio PUBLIC ${CMAKE_DL_LIBS})
-    if(RTS_PLATFORM STREQUAL "linux")
+elseif(AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFORM STREQUAL "android")
+    target_link_libraries(aiverse_audio PUBLIC ${CMAKE_DL_LIBS})
+    if(AIVERSE_PLATFORM STREQUAL "linux")
         find_package(Threads REQUIRED)
-        target_link_libraries(rts_audio PUBLIC Threads::Threads m)
+        target_link_libraries(aiverse_audio PUBLIC Threads::Threads m)
     endif()
 endif()
 
-add_library(rts_game_audio STATIC modules/rts/audio/RtsAudio.cpp modules/rts/audio/AudioScriptSound.cpp)
-target_link_libraries(rts_game_audio PUBLIC rts_game rts_audio)
+add_library(aiverse_game_audio STATIC modules/rts/audio/RtsAudio.cpp modules/rts/audio/AudioScriptSound.cpp)
+target_link_libraries(aiverse_game_audio PUBLIC aiverse_game aiverse_audio)
 
 # Particles: CPU simulation + RHI rendering (presentation only), and the RTS event bridge.
-add_library(rts_fx STATIC engine/fx/FxEffect.cpp engine/fx/ParticleSystem.cpp engine/fx/FxEmit.cpp engine/fx/FxRender.cpp engine/fx/FxMeshes.cpp)
-target_link_libraries(rts_fx PUBLIC rts_engine)
-add_library(rts_game_fx STATIC modules/rts/fx/RtsFx.cpp)
-target_link_libraries(rts_game_fx PUBLIC rts_game rts_fx)
+add_library(aiverse_fx STATIC engine/fx/FxEffect.cpp engine/fx/ParticleSystem.cpp engine/fx/FxEmit.cpp engine/fx/FxRender.cpp engine/fx/FxMeshes.cpp)
+target_link_libraries(aiverse_fx PUBLIC aiverse_engine)
+add_library(aiverse_game_fx STATIC modules/rts/fx/RtsFx.cpp)
+target_link_libraries(aiverse_game_fx PUBLIC aiverse_game aiverse_fx)
 
 # ---------------------------------------------------------------------------
 # Runtime: platform layer + RHI backend + renderer + Dear ImGui
 # ---------------------------------------------------------------------------
-add_library(rts_imgui STATIC
+add_library(aiverse_imgui STATIC
     third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp
     third_party/imgui/imgui_tables.cpp third_party/imgui/imgui_widgets.cpp
     third_party/imgui/imgui_demo.cpp)
-target_include_directories(rts_imgui PUBLIC third_party/imgui)
+target_include_directories(aiverse_imgui PUBLIC third_party/imgui)
 if(NOT MSVC)
-    target_compile_options(rts_imgui PRIVATE -w)
+    target_compile_options(aiverse_imgui PRIVATE -w)
 endif()
 
 # Models (models agent): glTF / OBJ / procedural models, PBR materials, skeletal and procedural
 # animation. CPU side only (no platform code), so tests and tools can load models too.
-add_library(rts_models STATIC
+add_library(aiverse_models STATIC
     engine/render/MeshBuilder.cpp
     engine/render/Model.cpp
     engine/render/ModelGltf.cpp
@@ -310,23 +312,23 @@ add_library(rts_models STATIC
     engine/render/ImageDds.cpp
     engine/render/TextureGen.cpp)
 # ufbx (MIT / public domain): FBX parser, compiled as its own C library without warnings.
-# RTS_FBX=OFF keeps it out of size-sensitive builds (FBX files then fail with a readable error).
-option(RTS_FBX "FBX import in the runtime (ufbx, ~0.5 MB of code)" ON)
-if(RTS_FBX)
-    add_library(rts_ufbx STATIC third_party/ufbx/ufbx.c)
+# AIVERSE_FBX=OFF keeps it out of size-sensitive builds (FBX files then fail with a readable error).
+option(AIVERSE_FBX "FBX import in the runtime (ufbx, ~0.5 MB of code)" ON)
+if(AIVERSE_FBX)
+    add_library(aiverse_ufbx STATIC third_party/ufbx/ufbx.c)
     if(NOT MSVC)
-        target_compile_options(rts_ufbx PRIVATE -w)
+        target_compile_options(aiverse_ufbx PRIVATE -w)
     endif()
-    target_sources(rts_models PRIVATE engine/render/ModelFbx.cpp)
-    target_link_libraries(rts_models PUBLIC rts_ufbx)
+    target_sources(aiverse_models PRIVATE engine/render/ModelFbx.cpp)
+    target_link_libraries(aiverse_models PUBLIC aiverse_ufbx)
 else()
-    target_compile_definitions(rts_models PRIVATE RTS_NO_FBX=1)
+    target_compile_definitions(aiverse_models PRIVATE AIVERSE_NO_FBX=1)
 endif()
-# KTX2 zstd supercompression: the decoder comes with rts_runtime (rts_zstd_dec) or, in host tools,
-# with rts_pack_writer (full zstd); linking rts_zstd_dec here would pull both into tests and tools.
-target_link_libraries(rts_models PUBLIC rts_engine)
+# KTX2 zstd supercompression: the decoder comes with aiverse_runtime (aiverse_zstd_dec) or, in host tools,
+# with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
+target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 
-set(RTS_RUNTIME_SRC
+set(AIVERSE_RUNTIME_SRC
     engine/platform/PlatformCommon.cpp
     engine/render/Renderer3D.cpp
     engine/render/Renderer3DModels.cpp
@@ -335,72 +337,72 @@ set(RTS_RUNTIME_SRC
     engine/render/Renderer3DReflect.cpp
     engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
-# post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, rtsmcp, tests)
-list(APPEND RTS_RUNTIME_SRC engine/render/PostFx.cpp)
-add_library(rts_postfx_data STATIC engine/render/PostFxData.cpp)
-target_link_libraries(rts_postfx_data PUBLIC rts_engine)
+# post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp)
+add_library(aiverse_postfx_data STATIC engine/render/PostFxData.cpp)
+target_link_libraries(aiverse_postfx_data PUBLIC aiverse_engine)
 
-if(RTS_PLATFORM STREQUAL "macos")
-    list(APPEND RTS_RUNTIME_SRC engine/platform/macos/PlatformMac.mm engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm)
-elseif(RTS_PLATFORM STREQUAL "ios")
-    list(APPEND RTS_RUNTIME_SRC engine/platform/ios/PlatformIOS.mm engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm)
-elseif(RTS_PLATFORM STREQUAL "android")
-    list(APPEND RTS_RUNTIME_SRC engine/platform/android/PlatformAndroid.cpp engine/gfx/gl/GfxGL.cpp)
-elseif(RTS_PLATFORM STREQUAL "web")
-    list(APPEND RTS_RUNTIME_SRC engine/platform/web/PlatformWeb.cpp engine/gfx/gl/GfxGL.cpp)
-elseif(RTS_PLATFORM STREQUAL "windows")
-    list(APPEND RTS_RUNTIME_SRC engine/platform/windows/PlatformWin32.cpp engine/gfx/gl/GfxGL.cpp)
+if(AIVERSE_PLATFORM STREQUAL "macos")
+    list(APPEND AIVERSE_RUNTIME_SRC engine/platform/macos/PlatformMac.mm engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm)
+elseif(AIVERSE_PLATFORM STREQUAL "ios")
+    list(APPEND AIVERSE_RUNTIME_SRC engine/platform/ios/PlatformIOS.mm engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm)
+elseif(AIVERSE_PLATFORM STREQUAL "android")
+    list(APPEND AIVERSE_RUNTIME_SRC engine/platform/android/PlatformAndroid.cpp engine/gfx/gl/GfxGL.cpp)
+elseif(AIVERSE_PLATFORM STREQUAL "web")
+    list(APPEND AIVERSE_RUNTIME_SRC engine/platform/web/PlatformWeb.cpp engine/gfx/gl/GfxGL.cpp)
+elseif(AIVERSE_PLATFORM STREQUAL "windows")
+    list(APPEND AIVERSE_RUNTIME_SRC engine/platform/windows/PlatformWin32.cpp engine/gfx/gl/GfxGL.cpp)
 else()
-    list(APPEND RTS_RUNTIME_SRC engine/platform/linux/PlatformLinux.cpp engine/gfx/gl/GfxGL.cpp)
+    list(APPEND AIVERSE_RUNTIME_SRC engine/platform/linux/PlatformLinux.cpp engine/gfx/gl/GfxGL.cpp)
 endif()
 
 # The platform files define main(); they are compiled into each executable through an OBJECT
 # library so that the entry point lands in the final binary on every toolchain.
 # Native plugins bridge + store/ads services (engine/platform/Plugins.h, engine/services). No window
 # needed, so tests link it directly; platform backends live in the runtime sources.
-# Desktop mock store/ads: on for development builds; rtsbuild turns it off in packaged games unless
-# game.json lists a mock (plugins.cmake sets RTS_MOCK_PLUGINS), so they are not even compiled in.
-if(NOT DEFINED RTS_MOCK_PLUGINS)
-    set(RTS_MOCK_PLUGINS ON)
+# Desktop mock store/ads: on for development builds; aiversebuild turns it off in packaged games unless
+# game.json lists a mock (plugins.cmake sets AIVERSE_MOCK_PLUGINS), so they are not even compiled in.
+if(NOT DEFINED AIVERSE_MOCK_PLUGINS)
+    set(AIVERSE_MOCK_PLUGINS ON)
 endif()
-add_library(rts_plugins STATIC
+add_library(aiverse_plugins STATIC
     engine/platform/Plugins.cpp
     engine/platform/PluginJson.cpp
     engine/services/Store.cpp
     engine/services/Ads.cpp)
-target_include_directories(rts_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-if(RTS_MOCK_PLUGINS)
-    target_sources(rts_plugins PRIVATE engine/services/MockPlugins.cpp)
-    target_compile_definitions(rts_plugins PUBLIC RTS_WITH_MOCK_PLUGINS=1)
+target_include_directories(aiverse_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(AIVERSE_MOCK_PLUGINS)
+    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp)
+    target_compile_definitions(aiverse_plugins PUBLIC AIVERSE_WITH_MOCK_PLUGINS=1)
 endif()
 
-add_library(rts_runtime OBJECT ${RTS_RUNTIME_SRC})
-target_link_libraries(rts_runtime PUBLIC rts_engine rts_models rts_imgui rts_pack rts_zstd_dec rts_plugins)
-target_link_libraries(rts_runtime PUBLIC rts_postfx_data)   # postfx agent
+add_library(aiverse_runtime OBJECT ${AIVERSE_RUNTIME_SRC})
+target_link_libraries(aiverse_runtime PUBLIC aiverse_engine aiverse_models aiverse_imgui aiverse_pack aiverse_zstd_dec aiverse_plugins)
+target_link_libraries(aiverse_runtime PUBLIC aiverse_postfx_data)   # postfx agent
 if(APPLE)
     set_source_files_properties(engine/platform/macos/PlatformMac.mm engine/platform/ios/PlatformIOS.mm
         engine/gfx/metal/GfxMetal.mm engine/platform/apple/PluginsApple.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-    target_link_libraries(rts_runtime PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation")
-    if(RTS_PLATFORM STREQUAL "macos")
-        target_link_libraries(rts_runtime PUBLIC "-framework Cocoa")
+    target_link_libraries(aiverse_runtime PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation")
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        target_link_libraries(aiverse_runtime PUBLIC "-framework Cocoa")
     else()
-        target_link_libraries(rts_runtime PUBLIC "-framework UIKit")
+        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit")
     endif()
-elseif(RTS_PLATFORM STREQUAL "android")
+elseif(AIVERSE_PLATFORM STREQUAL "android")
     set(GLUE ${ANDROID_NDK}/sources/android/native_app_glue)
     add_library(native_app_glue STATIC ${GLUE}/android_native_app_glue.c)
     target_include_directories(native_app_glue PUBLIC ${GLUE})
-    target_link_libraries(rts_runtime PUBLIC native_app_glue android EGL GLESv3 log)
-elseif(RTS_PLATFORM STREQUAL "web")
+    target_link_libraries(aiverse_runtime PUBLIC native_app_glue android EGL GLESv3 log)
+elseif(AIVERSE_PLATFORM STREQUAL "web")
     # -lidbfs.js: userDataDir() is persisted in IndexedDB (engine/platform/web)
-    target_link_options(rts_runtime PUBLIC -sUSE_WEBGL2=1 -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2 -sALLOW_MEMORY_GROWTH=1 -lidbfs.js)
-elseif(RTS_PLATFORM STREQUAL "windows")
-    target_link_libraries(rts_runtime PUBLIC opengl32 user32 gdi32 shell32)
+    target_link_options(aiverse_runtime PUBLIC -sUSE_WEBGL2=1 -sMAX_WEBGL_VERSION=2 -sMIN_WEBGL_VERSION=2 -sALLOW_MEMORY_GROWTH=1 -lidbfs.js)
+elseif(AIVERSE_PLATFORM STREQUAL "windows")
+    target_link_libraries(aiverse_runtime PUBLIC opengl32 user32 gdi32 shell32)
 else()
-    target_link_libraries(rts_runtime PUBLIC X11 EGL GLESv2)
+    target_link_libraries(aiverse_runtime PUBLIC X11 EGL GLESv2)
 endif()
 
-add_library(rts_game_view STATIC modules/rts/view/RtsView.cpp modules/rts/view/RtsTerrain.cpp
+add_library(aiverse_game_view STATIC modules/rts/view/RtsView.cpp modules/rts/view/RtsTerrain.cpp
     modules/rts/view/RtsShapes.cpp modules/rts/view/RtsLook.cpp modules/rts/view/RtsAnimate.cpp
     modules/rts/view/RtsViewDraw.cpp modules/rts/view/RtsPortrait.cpp
     modules/rts/view/RtsLights.cpp modules/rts/view/RtsLightsData.cpp modules/rts/view/RtsGroundFx.cpp modules/rts/view/RtsTerrainRender.cpp modules/rts/view/RtsTerrainDetailMesh.cpp
@@ -408,239 +410,239 @@ add_library(rts_game_view STATIC modules/rts/view/RtsView.cpp modules/rts/view/R
     modules/rts/view/RtsPlanetRender.cpp modules/rts/view/RtsPlanetView.cpp modules/rts/view/RtsPlanetGroundFx.cpp)
 # visual terrain detail surface (agent-terrain): shared by the view and the editor core (sculpt, validate)
 # + the planet surface maths (RtsPlanet*: float cube-sphere surface, detail grid synthesis; editor planet detail ops)
-add_library(rts_terrain_detail STATIC modules/rts/view/RtsTerrainDetail.cpp modules/rts/view/RtsPlanet.cpp modules/rts/view/RtsPlanetDetail.cpp)
-target_link_libraries(rts_terrain_detail PUBLIC rts_game)
-target_link_libraries(rts_game_view PUBLIC rts_game rts_models rts_imgui)
-target_link_libraries(rts_game_view PUBLIC rts_terrain_detail)
+add_library(aiverse_terrain_detail STATIC modules/rts/view/RtsTerrainDetail.cpp modules/rts/view/RtsPlanet.cpp modules/rts/view/RtsPlanetDetail.cpp)
+target_link_libraries(aiverse_terrain_detail PUBLIC aiverse_game)
+target_link_libraries(aiverse_game_view PUBLIC aiverse_game aiverse_models aiverse_imgui)
+target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 
 # Helper: package content + platform metadata around an executable.
-function(rts_package_app target)
+function(aiverse_package_app target)
     # the editor's project file (<Title>.rtsproj) is not game content: dropped from loose dev bundles
-    file(GLOB _rts_projfiles RELATIVE "${RTS_CONTENT_DIR}" "${RTS_CONTENT_DIR}/*.rtsproj")
-    set(_rts_rm_exe "")
-    foreach(f ${_rts_projfiles})
-        list(APPEND _rts_rm_exe "$<TARGET_FILE_DIR:${target}>/content/${f}")
+    file(GLOB _aiverse_projfiles RELATIVE "${AIVERSE_CONTENT_DIR}" "${AIVERSE_CONTENT_DIR}/*.rtsproj")
+    set(_aiverse_rm_exe "")
+    foreach(f ${_aiverse_projfiles})
+        list(APPEND _aiverse_rm_exe "$<TARGET_FILE_DIR:${target}>/content/${f}")
     endforeach()
-    if(RTS_PLATFORM STREQUAL "macos" OR RTS_PLATFORM STREQUAL "ios")
+    if(AIVERSE_PLATFORM STREQUAL "macos" OR AIVERSE_PLATFORM STREQUAL "ios")
         set_target_properties(${target} PROPERTIES
             MACOSX_BUNDLE TRUE
-            OUTPUT_NAME "${RTS_GAME_EXECUTABLE}"
-            MACOSX_BUNDLE_BUNDLE_NAME "${RTS_GAME_NAME}"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "${RTS_GAME_ID}"
-            MACOSX_BUNDLE_BUNDLE_VERSION "${RTS_GAME_BUILD}"
-            MACOSX_BUNDLE_SHORT_VERSION_STRING "${RTS_GAME_VERSION}"
-            XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${RTS_GAME_ID}")
-        if(RTS_PLATFORM STREQUAL "ios" AND RTS_GEN_DIR AND EXISTS "${RTS_GEN_DIR}/Assets.xcassets")
-            target_sources(${target} PRIVATE "${RTS_GEN_DIR}/Assets.xcassets")
-            set_source_files_properties("${RTS_GEN_DIR}/Assets.xcassets" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+            OUTPUT_NAME "${AIVERSE_GAME_EXECUTABLE}"
+            MACOSX_BUNDLE_BUNDLE_NAME "${AIVERSE_GAME_NAME}"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "${AIVERSE_GAME_ID}"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${AIVERSE_GAME_BUILD}"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${AIVERSE_GAME_VERSION}"
+            XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${AIVERSE_GAME_ID}")
+        if(AIVERSE_PLATFORM STREQUAL "ios" AND AIVERSE_GEN_DIR AND EXISTS "${AIVERSE_GEN_DIR}/Assets.xcassets")
+            target_sources(${target} PRIVATE "${AIVERSE_GEN_DIR}/Assets.xcassets")
+            set_source_files_properties("${AIVERSE_GEN_DIR}/Assets.xcassets" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
             set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon")
         endif()
-        if(RTS_PLATFORM STREQUAL "macos" AND RTS_GEN_DIR AND EXISTS "${RTS_GEN_DIR}/AppIcon.icns")
-            target_sources(${target} PRIVATE "${RTS_GEN_DIR}/AppIcon.icns")
-            set_source_files_properties("${RTS_GEN_DIR}/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+        if(AIVERSE_PLATFORM STREQUAL "macos" AND AIVERSE_GEN_DIR AND EXISTS "${AIVERSE_GEN_DIR}/AppIcon.icns")
+            target_sources(${target} PRIVATE "${AIVERSE_GEN_DIR}/AppIcon.icns")
+            set_source_files_properties("${AIVERSE_GEN_DIR}/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         endif()
-        if(RTS_PLATFORM STREQUAL "ios")
+        if(AIVERSE_PLATFORM STREQUAL "ios")
             set_target_properties(${target} PROPERTIES
                 MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/ios/Info.plist.in"
                 XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
                 XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0"
                 XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
-                XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${RTS_APPLE_TEAM_ID}")
+                XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${AIVERSE_APPLE_TEAM_ID}")
             set(res_dir "$<TARGET_BUNDLE_DIR:${target}>")
         else()
             set_target_properties(${target} PROPERTIES
                 MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
             set(res_dir "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources")
         endif()
-        set(_rts_rm_bundle "")
-        foreach(f ${_rts_projfiles})
-            list(APPEND _rts_rm_bundle "${res_dir}/content/${f}")
+        set(_aiverse_rm_bundle "")
+        foreach(f ${_aiverse_projfiles})
+            list(APPEND _aiverse_rm_bundle "${res_dir}/content/${f}")
         endforeach()
-        if(RTS_CONTENT_PACK)
+        if(AIVERSE_CONTENT_PACK)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}/content"
-                COMMAND ${CMAKE_COMMAND} -E copy "${RTS_CONTENT_PACK}" "${res_dir}/content/content.rpak"
+                COMMAND ${CMAKE_COMMAND} -E copy "${AIVERSE_CONTENT_PACK}" "${res_dir}/content/content.rpak"
                 COMMENT "Bundling content pack")
         else()
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}"
-                COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_CONTENT_DIR}" "${res_dir}/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_rts_rm_bundle}   # project outputs, .rtsproj
-                COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_ENGINE_ASSETS}" "${res_dir}/content/engine"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "${res_dir}/content"
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, .rtsproj
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "${res_dir}/content/engine"
                 COMMENT "Bundling content")
         endif()
-    elseif(RTS_PLATFORM STREQUAL "web")
+    elseif(AIVERSE_PLATFORM STREQUAL "web")
         set_target_properties(${target} PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
-        if(RTS_CONTENT_PACK)
-            target_link_options(${target} PRIVATE "--preload-file=${RTS_CONTENT_PACK}@/content/content.rpak")
+        if(AIVERSE_CONTENT_PACK)
+            target_link_options(${target} PRIVATE "--preload-file=${AIVERSE_CONTENT_PACK}@/content/content.rpak")
         else()
             target_link_options(${target} PRIVATE
-                "--preload-file=${RTS_CONTENT_DIR}@/content"
-                "--preload-file=${RTS_ENGINE_ASSETS}@/content/engine")
+                "--preload-file=${AIVERSE_CONTENT_DIR}@/content"
+                "--preload-file=${AIVERSE_ENGINE_ASSETS}@/content/engine")
         endif()
         target_link_options(${target} PRIVATE "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/platform/web/shell.html")
-    elseif(RTS_PLATFORM STREQUAL "windows" OR RTS_PLATFORM STREQUAL "linux")
-        set_target_properties(${target} PROPERTIES OUTPUT_NAME "${RTS_GAME_EXECUTABLE}")
+    elseif(AIVERSE_PLATFORM STREQUAL "windows" OR AIVERSE_PLATFORM STREQUAL "linux")
+        set_target_properties(${target} PROPERTIES OUTPUT_NAME "${AIVERSE_GAME_EXECUTABLE}")
         if(WIN32)
             set_target_properties(${target} PROPERTIES WIN32_EXECUTABLE TRUE)
         endif()
-        if(RTS_CONTENT_PACK)
+        if(AIVERSE_CONTENT_PACK)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/content"
-                COMMAND ${CMAKE_COMMAND} -E copy "${RTS_CONTENT_PACK}" "$<TARGET_FILE_DIR:${target}>/content/content.rpak"
+                COMMAND ${CMAKE_COMMAND} -E copy "${AIVERSE_CONTENT_PACK}" "$<TARGET_FILE_DIR:${target}>/content/content.rpak"
                 COMMENT "Copying content pack next to the executable")
         else()
             add_custom_command(TARGET ${target} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_CONTENT_DIR}" "$<TARGET_FILE_DIR:${target}>/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_rts_rm_exe}   # project outputs, .rtsproj
-                COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_ENGINE_ASSETS}" "$<TARGET_FILE_DIR:${target}>/content/engine"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "$<TARGET_FILE_DIR:${target}>/content"
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_aiverse_rm_exe}   # project outputs, .rtsproj
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "$<TARGET_FILE_DIR:${target}>/content/engine"
                 COMMENT "Copying content next to the executable")
         endif()
     endif()
 endfunction()
 
-if(RTS_BUILD_CLIENT)
-    if(RTS_PLATFORM STREQUAL "android")
-        add_library(main SHARED apps/client/main.cpp $<TARGET_OBJECTS:rts_runtime>)
-        target_link_libraries(main PRIVATE rts_runtime rts_game_view rts_i18n)
-        target_link_libraries(main PRIVATE rts_runtime rts_game_view rts_game_audio)
+if(AIVERSE_BUILD_CLIENT)
+    if(AIVERSE_PLATFORM STREQUAL "android")
+        add_library(main SHARED apps/client/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(main PRIVATE aiverse_runtime aiverse_game_view aiverse_i18n)
+        target_link_libraries(main PRIVATE aiverse_runtime aiverse_game_view aiverse_game_audio)
         # Keep ANativeActivity_onCreate from the glue library.
         set_target_properties(main PROPERTIES LINK_FLAGS "-u ANativeActivity_onCreate")
-        set(RTS_CLIENT_TARGET main)
+        set(AIVERSE_CLIENT_TARGET main)
     else()
-        add_executable(rts_client apps/client/main.cpp $<TARGET_OBJECTS:rts_runtime>)
-        target_link_libraries(rts_client PRIVATE rts_runtime rts_game_view rts_i18n)
-        target_link_libraries(rts_client PRIVATE rts_runtime rts_game_view rts_game_audio)
-        rts_package_app(rts_client)
-        set(RTS_CLIENT_TARGET rts_client)
+        add_executable(aiverse_client apps/client/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_client PRIVATE aiverse_runtime aiverse_game_view aiverse_i18n)
+        target_link_libraries(aiverse_client PRIVATE aiverse_runtime aiverse_game_view aiverse_game_audio)
+        aiverse_package_app(aiverse_client)
+        set(AIVERSE_CLIENT_TARGET aiverse_client)
     endif()
     # Native plugins (platforms agent): C++ / Objective-C++ sources compiled into the game itself,
-    # so RTS_PLUGIN(...) static registration is never dropped by the linker.
-    if(RTS_PLUGIN_SOURCES)
-        target_sources(${RTS_CLIENT_TARGET} PRIVATE ${RTS_PLUGIN_SOURCES})
+    # so AIVERSE_PLUGIN(...) static registration is never dropped by the linker.
+    if(AIVERSE_PLUGIN_SOURCES)
+        target_sources(${AIVERSE_CLIENT_TARGET} PRIVATE ${AIVERSE_PLUGIN_SOURCES})
         if(APPLE)
-            foreach(src ${RTS_PLUGIN_SOURCES})
+            foreach(src ${AIVERSE_PLUGIN_SOURCES})
                 if(src MATCHES "\\.(m|mm)$")
                     set_source_files_properties(${src} PROPERTIES COMPILE_FLAGS "-fobjc-arc")
                 endif()
             endforeach()
         endif()
     endif()
-    foreach(fw ${RTS_PLUGIN_FRAMEWORKS})
-        target_link_libraries(${RTS_CLIENT_TARGET} PRIVATE "-framework ${fw}")
+    foreach(fw ${AIVERSE_PLUGIN_FRAMEWORKS})
+        target_link_libraries(${AIVERSE_CLIENT_TARGET} PRIVATE "-framework ${fw}")
     endforeach()
     # Desktop SDKs the developer installs (e.g. Steamworks): headers, import libraries, and shared
     # libraries copied next to the executable (rpath $ORIGIN / @loader_path finds them there).
-    if(RTS_PLUGIN_INCLUDE_DIRS)
-        target_include_directories(${RTS_CLIENT_TARGET} SYSTEM PRIVATE ${RTS_PLUGIN_INCLUDE_DIRS})
+    if(AIVERSE_PLUGIN_INCLUDE_DIRS)
+        target_include_directories(${AIVERSE_CLIENT_TARGET} SYSTEM PRIVATE ${AIVERSE_PLUGIN_INCLUDE_DIRS})
     endif()
-    if(RTS_PLUGIN_LIBRARIES)
-        target_link_libraries(${RTS_CLIENT_TARGET} PRIVATE ${RTS_PLUGIN_LIBRARIES})
+    if(AIVERSE_PLUGIN_LIBRARIES)
+        target_link_libraries(${AIVERSE_CLIENT_TARGET} PRIVATE ${AIVERSE_PLUGIN_LIBRARIES})
     endif()
-    if(RTS_PLUGIN_RUNTIME_FILES)
-        add_custom_command(TARGET ${RTS_CLIENT_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RTS_PLUGIN_RUNTIME_FILES} "$<TARGET_FILE_DIR:${RTS_CLIENT_TARGET}>")
+    if(AIVERSE_PLUGIN_RUNTIME_FILES)
+        add_custom_command(TARGET ${AIVERSE_CLIENT_TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${AIVERSE_PLUGIN_RUNTIME_FILES} "$<TARGET_FILE_DIR:${AIVERSE_CLIENT_TARGET}>")
         if(UNIX AND NOT APPLE)
-            set_target_properties(${RTS_CLIENT_TARGET} PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
+            set_target_properties(${AIVERSE_CLIENT_TARGET} PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
         elseif(APPLE)
-            set_target_properties(${RTS_CLIENT_TARGET} PROPERTIES BUILD_RPATH "@loader_path" INSTALL_RPATH "@loader_path")
+            set_target_properties(${AIVERSE_CLIENT_TARGET} PROPERTIES BUILD_RPATH "@loader_path" INSTALL_RPATH "@loader_path")
         endif()
     endif()
 endif()
 
-if(RTS_BUILD_EDITOR OR RTS_BUILD_TOOLS)
-    # Editor core: project/map documents and the operation registry shared by the editor and rtsmcp.
-    add_library(rts_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
+    # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
+    add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
     apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
-    target_link_libraries(rts_editor_core PUBLIC rts_game)
-    target_link_libraries(rts_editor_core PUBLIC rts_postfx_data)   # postfx_* ops (postfx agent)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
-    target_link_libraries(rts_editor_core PUBLIC rts_terrain_detail)
-    target_include_directories(rts_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_game)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_postfx_data)   # postfx_* ops (postfx agent)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_terrain_detail)
+    target_include_directories(aiverse_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     if(WIN32)
-        target_link_libraries(rts_editor_core PUBLIC ws2_32)
+        target_link_libraries(aiverse_editor_core PUBLIC ws2_32)
     endif()
 endif()
 
-if(RTS_BUILD_EDITOR)
-    # windows register themselves (RTS_EDITOR_WINDOW): any .cpp in apps/editor/windows is part of the editor
-    file(GLOB RTS_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
-    add_executable(rts_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp apps/editor/EditorWorld.cpp apps/editor/DetailsPanel.cpp
-                   ${RTS_EDITOR_WINDOWS} $<TARGET_OBJECTS:rts_runtime>)
-    target_link_libraries(rts_editor PRIVATE rts_runtime rts_game_view rts_editor_core)
-    target_link_libraries(rts_editor PRIVATE rts_game_fx)
-    target_compile_definitions(rts_editor PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+if(AIVERSE_BUILD_EDITOR)
+    # windows register themselves (AIVERSE_EDITOR_WINDOW): any .cpp in apps/editor/windows is part of the editor
+    file(GLOB AIVERSE_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
+    add_executable(aiverse_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp apps/editor/EditorWorld.cpp apps/editor/DetailsPanel.cpp
+                   ${AIVERSE_EDITOR_WINDOWS} $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_editor PRIVATE aiverse_runtime aiverse_game_view aiverse_editor_core)
+    target_link_libraries(aiverse_editor PRIVATE aiverse_game_fx)
+    target_compile_definitions(aiverse_editor PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     if(WIN32)
-        target_sources(rts_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
+        target_sources(aiverse_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
     endif()
     if(APPLE)
         # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .rtsproj default
         # handler (chosen by bundle id) stays the regular editor
-        set(RTS_EDITOR_BUNDLE_ID "com.rtsengine.editor" CACHE STRING "Bundle identifier of RTSEditor.app")
-        set_target_properties(rts_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "RTSEditor"
-            MACOSX_BUNDLE_BUNDLE_NAME "RTS Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "${RTS_EDITOR_BUNDLE_ID}"
+        set(AIVERSE_EDITOR_BUNDLE_ID "com.aiverse.editor" CACHE STRING "Bundle identifier of AiverseEditor.app")
+        set_target_properties(aiverse_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "AiverseEditor"
+            MACOSX_BUNDLE_BUNDLE_NAME "AIVERSE Editor" MACOSX_BUNDLE_GUI_IDENTIFIER "${AIVERSE_EDITOR_BUNDLE_ID}"
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/Info.plist.in")
         # application icon (CFBundleIconFile AppIcon; art: tools/branding/logo/make_logo.py)
-        target_sources(rts_editor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns")
+        target_sources(aiverse_editor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns")
         set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/AppIcon.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         # engine assets (UI font) inside the bundle, so the editor works when moved elsewhere
-        add_custom_command(TARGET rts_editor POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${RTS_ENGINE_ASSETS}" "$<TARGET_BUNDLE_CONTENT_DIR:rts_editor>/Resources/content/engine"
+        add_custom_command(TARGET aiverse_editor POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_editor>/Resources/content/engine"
             # editor fonts and icons (EditorTheme.cpp): content path engine/editor-fonts/
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts" "$<TARGET_BUNDLE_CONTENT_DIR:rts_editor>/Resources/content/engine/editor-fonts")
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts" "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_editor>/Resources/content/engine/editor-fonts")
     elseif(WIN32)
-        set_target_properties(rts_editor PROPERTIES WIN32_EXECUTABLE TRUE)
+        set_target_properties(aiverse_editor PROPERTIES WIN32_EXECUTABLE TRUE)
     endif()
 endif()
 
 # ---------------------------------------------------------------------------
 # Build-time audio compression (host tools and tests only; games just decode): IMA ADPCM and
-# OGG Vorbis encoders (libvorbis, BSD), profiles from audio.json, used by rtsbuild per target.
+# OGG Vorbis encoders (libvorbis, BSD), profiles from audio.json, used by aiversebuild per target.
 # ---------------------------------------------------------------------------
-if(RTS_BUILD_TOOLS OR RTS_BUILD_TESTS)
-    add_library(rts_vorbisenc STATIC
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    add_library(aiverse_vorbisenc STATIC
         third_party/vorbis/src/ogg/bitwise.c third_party/vorbis/src/ogg/framing.c
         third_party/vorbis/src/vorbis/analysis.c third_party/vorbis/src/vorbis/bitrate.c third_party/vorbis/src/vorbis/block.c third_party/vorbis/src/vorbis/codebook.c third_party/vorbis/src/vorbis/envelope.c third_party/vorbis/src/vorbis/floor0.c third_party/vorbis/src/vorbis/floor1.c third_party/vorbis/src/vorbis/info.c third_party/vorbis/src/vorbis/lookup.c third_party/vorbis/src/vorbis/lpc.c third_party/vorbis/src/vorbis/lsp.c third_party/vorbis/src/vorbis/mapping0.c third_party/vorbis/src/vorbis/mdct.c third_party/vorbis/src/vorbis/psy.c third_party/vorbis/src/vorbis/registry.c third_party/vorbis/src/vorbis/res0.c third_party/vorbis/src/vorbis/sharedbook.c third_party/vorbis/src/vorbis/smallft.c third_party/vorbis/src/vorbis/synthesis.c third_party/vorbis/src/vorbis/vorbisenc.c third_party/vorbis/src/vorbis/window.c)
-    target_include_directories(rts_vorbisenc PUBLIC third_party/vorbis/include PRIVATE third_party/vorbis/src/vorbis)
-    target_compile_options(rts_vorbisenc PRIVATE $<IF:$<BOOL:${MSVC}>,/w,-w>)
+    target_include_directories(aiverse_vorbisenc PUBLIC third_party/vorbis/include PRIVATE third_party/vorbis/src/vorbis)
+    target_compile_options(aiverse_vorbisenc PRIVATE $<IF:$<BOOL:${MSVC}>,/w,-w>)
     if(NOT MSVC)
-        target_link_libraries(rts_vorbisenc PUBLIC m)
+        target_link_libraries(aiverse_vorbisenc PUBLIC m)
     endif()
-    add_library(rts_audiopack STATIC tools/audiopack/AudioPack.cpp)
-    target_link_libraries(rts_audiopack PUBLIC rts_audio rts_vorbisenc)
-    add_executable(rts_audiopack_tool tools/audiopack/main.cpp)
-    set_target_properties(rts_audiopack_tool PROPERTIES OUTPUT_NAME rts_audiopack)
-    target_link_libraries(rts_audiopack_tool PRIVATE rts_audiopack)
+    add_library(aiverse_audiopack STATIC tools/audiopack/AudioPack.cpp)
+    target_link_libraries(aiverse_audiopack PUBLIC aiverse_audio aiverse_vorbisenc)
+    add_executable(aiverse_audiopack_tool tools/audiopack/main.cpp)
+    set_target_properties(aiverse_audiopack_tool PROPERTIES OUTPUT_NAME aiverse_audiopack)
+    target_link_libraries(aiverse_audiopack_tool PRIVATE aiverse_audiopack)
 endif()
 
-if(RTS_BUILD_TOOLS)
-    add_executable(rtsbuild tools/rtsbuild/main.cpp tools/rtsbuild/FileRules.cpp tools/rtsbuild/Plugins.cpp)
-    target_sources(rtsbuild PRIVATE tools/rtsbuild/Toolchains.cpp tools/rtsbuild/ToolchainInstall.cpp)   # toolchains agent
-    target_link_libraries(rtsbuild PRIVATE rts_engine rts_pack_writer rts_audiopack rts_plugins)
+if(AIVERSE_BUILD_TOOLS)
+    add_executable(aiversebuild tools/aiversebuild/main.cpp tools/aiversebuild/FileRules.cpp tools/aiversebuild/Plugins.cpp)
+    target_sources(aiversebuild PRIVATE tools/aiversebuild/Toolchains.cpp tools/aiversebuild/ToolchainInstall.cpp)   # toolchains agent
+    target_link_libraries(aiversebuild PRIVATE aiverse_engine aiverse_pack_writer aiverse_audiopack aiverse_plugins)
     add_executable(assetpipe tools/assetpipe/main.cpp)
-    target_link_libraries(assetpipe PRIVATE rts_pack_writer)
-    target_compile_definitions(assetpipe PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_definitions(rtsbuild PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(assetpipe PRIVATE aiverse_pack_writer)
+    target_compile_definitions(assetpipe PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(aiversebuild PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
-    add_executable(rtsmcp tools/mcp/main.cpp)
-    target_link_libraries(rtsmcp PRIVATE rts_editor_core)
-    target_compile_definitions(rtsmcp PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_executable(aiversemcp tools/mcp/main.cpp)
+    target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
+    target_compile_definitions(aiversemcp PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
 # Model converter (models agent): formats the runtime does not read -> glTF sidecars (assimp, BSD-3).
-# Host only. RTS_ASSIMP=ON uses an installed assimp (find_package) or downloads v5.4.3 from GitHub
-# at configure time (RTS_FETCH_ASSIMP); OFF keeps the tools working with pre-converted sidecars.
-if(RTS_BUILD_TOOLS)
-    option(RTS_ASSIMP "Model converter (modelconv, rtsbuild) built with assimp" OFF)
-    option(RTS_FETCH_ASSIMP "Download assimp when RTS_ASSIMP=ON and no installed one is found" ON)
-    add_library(rts_modelconv STATIC tools/models/ModelConvert.cpp)
-    target_link_libraries(rts_modelconv PUBLIC rts_pack_writer)
-    if(RTS_ASSIMP)
+# Host only. AIVERSE_ASSIMP=ON uses an installed assimp (find_package) or downloads v5.4.3 from GitHub
+# at configure time (AIVERSE_FETCH_ASSIMP); OFF keeps the tools working with pre-converted sidecars.
+if(AIVERSE_BUILD_TOOLS)
+    option(AIVERSE_ASSIMP "Model converter (modelconv, aiversebuild) built with assimp" OFF)
+    option(AIVERSE_FETCH_ASSIMP "Download assimp when AIVERSE_ASSIMP=ON and no installed one is found" ON)
+    add_library(aiverse_modelconv STATIC tools/models/ModelConvert.cpp)
+    target_link_libraries(aiverse_modelconv PUBLIC aiverse_pack_writer)
+    if(AIVERSE_ASSIMP)
         find_package(assimp CONFIG QUIET)
-        if(NOT assimp_FOUND AND RTS_FETCH_ASSIMP)
+        if(NOT assimp_FOUND AND AIVERSE_FETCH_ASSIMP)
             include(FetchContent)
             set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
             set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
@@ -656,383 +658,383 @@ if(RTS_BUILD_TOOLS)
             FetchContent_MakeAvailable(assimp)
         endif()
         if(TARGET assimp::assimp)
-            target_link_libraries(rts_modelconv PRIVATE assimp::assimp)
+            target_link_libraries(aiverse_modelconv PRIVATE assimp::assimp)
         elseif(TARGET assimp)
-            target_link_libraries(rts_modelconv PRIVATE assimp)
+            target_link_libraries(aiverse_modelconv PRIVATE assimp)
         else()
-            message(FATAL_ERROR "RTS_ASSIMP=ON: assimp not found (install it or allow RTS_FETCH_ASSIMP)")
+            message(FATAL_ERROR "AIVERSE_ASSIMP=ON: assimp not found (install it or allow AIVERSE_FETCH_ASSIMP)")
         endif()
-        target_compile_definitions(rts_modelconv PRIVATE RTS_HAVE_ASSIMP=1)
+        target_compile_definitions(aiverse_modelconv PRIVATE AIVERSE_HAVE_ASSIMP=1)
     endif()
     add_executable(modelconv tools/models/modelconv.cpp)
-    target_link_libraries(modelconv PRIVATE rts_modelconv rts_models)
-    target_link_libraries(rtsbuild PRIVATE rts_modelconv)
+    target_link_libraries(modelconv PRIVATE aiverse_modelconv aiverse_models)
+    target_link_libraries(aiversebuild PRIVATE aiverse_modelconv)
 endif()
 
 # Model viewer (models agent): models, materials, clips and quality tiers as the game renders them.
-if(RTS_BUILD_TOOLS AND RTS_DESKTOP)
-    add_executable(rts_modelview apps/modelview/main.cpp apps/modelview/Gallery.cpp $<TARGET_OBJECTS:rts_runtime>)
-    target_link_libraries(rts_modelview PRIVATE rts_runtime rts_game_view)
+if(AIVERSE_BUILD_TOOLS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_modelview apps/modelview/main.cpp apps/modelview/Gallery.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_modelview PRIVATE aiverse_runtime aiverse_game_view)
 endif()
 
-if(RTS_BUILD_TOOLS)
-    add_executable(rts_i18n_tool tools/i18n/main.cpp)
-    set_target_properties(rts_i18n_tool PROPERTIES OUTPUT_NAME rts_i18n)
-    target_link_libraries(rts_i18n_tool PRIVATE rts_i18n)
-    target_compile_definitions(rts_i18n_tool PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+if(AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_i18n_tool tools/i18n/main.cpp)
+    set_target_properties(aiverse_i18n_tool PROPERTIES OUTPUT_NAME aiverse_i18n)
+    target_link_libraries(aiverse_i18n_tool PRIVATE aiverse_i18n)
+    target_compile_definitions(aiverse_i18n_tool PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
-if(RTS_BUILD_HEADLESS)
-    add_executable(rts_headless apps/headless/main.cpp)
-    target_link_libraries(rts_headless PRIVATE rts_game)
+if(AIVERSE_BUILD_HEADLESS)
+    add_executable(aiverse_headless apps/headless/main.cpp)
+    target_link_libraries(aiverse_headless PRIVATE aiverse_game)
 endif()
 
-if(RTS_BUILD_SERVER)
-    add_executable(rts_server apps/server/main.cpp)
-    target_link_libraries(rts_server PRIVATE rts_net_game)
-    add_executable(rts_netbot apps/netbot/main.cpp)
-    target_link_libraries(rts_netbot PRIVATE rts_net_game rts_i18n)
+if(AIVERSE_BUILD_SERVER)
+    add_executable(aiverse_server apps/server/main.cpp)
+    target_link_libraries(aiverse_server PRIVATE aiverse_net_game)
+    add_executable(aiverse_netbot apps/netbot/main.cpp)
+    target_link_libraries(aiverse_netbot PRIVATE aiverse_net_game aiverse_i18n)
 endif()
 
-if(RTS_BUILD_TESTS)
+if(AIVERSE_BUILD_TESTS)
     enable_testing()
-    add_executable(rts_net_tests tests/net_tests.cpp)
-    target_link_libraries(rts_net_tests PRIVATE rts_net_game rts_i18n)
-    target_compile_definitions(rts_net_tests PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    add_test(NAME rts_net_tests COMMAND rts_net_tests)
-    add_executable(rts_tests tests/tests.cpp)
-    target_link_libraries(rts_tests PRIVATE rts_game rts_i18n rts_pack_writer rts_models)
-    target_link_libraries(rts_tests PRIVATE rts_postfx_data)   # postfx agent
-    target_link_libraries(rts_tests PRIVATE rts_game rts_game_audio rts_audiopack)
-    target_link_libraries(rts_tests PRIVATE rts_game_fx)
-    target_link_libraries(rts_tests PRIVATE rts_terrain_detail)   # terrain detail surface tests (agent-terrain)
-    target_link_libraries(rts_tests PRIVATE rts_game_view)   # fog of war look parsing (view, no GPU)
+    add_executable(aiverse_net_tests tests/net_tests.cpp)
+    target_link_libraries(aiverse_net_tests PRIVATE aiverse_net_game aiverse_i18n)
+    target_compile_definitions(aiverse_net_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME aiverse_net_tests COMMAND aiverse_net_tests)
+    add_executable(aiverse_tests tests/tests.cpp)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_i18n aiverse_pack_writer aiverse_models)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_postfx_data)   # postfx agent
+    target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_game_audio aiverse_audiopack)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_game_fx)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_terrain_detail)   # terrain detail surface tests (agent-terrain)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_game_view)   # fog of war look parsing (view, no GPU)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
-    target_sources(rts_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
+    target_sources(aiverse_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
         engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp)
-    target_sources(rts_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
-    target_link_libraries(rts_tests PRIVATE rts_lua)
-    target_link_libraries(rts_tests PRIVATE rts_plugins)     # native plugins bridge, store/ads services
-    target_sources(rts_tests PRIVATE tools/rtsbuild/Toolchains.cpp)   # toolchain detection (fake HOME)
-    if(TARGET rts_modelconv)   # model conversion step of packs (models agent)
-        target_link_libraries(rts_tests PRIVATE rts_modelconv)
-        target_compile_definitions(rts_tests PRIVATE RTS_TEST_MODELCONV=1)
+    target_sources(aiverse_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
+    target_sources(aiverse_tests PRIVATE tools/aiversebuild/Toolchains.cpp)   # toolchain detection (fake HOME)
+    if(TARGET aiverse_modelconv)   # model conversion step of packs (models agent)
+        target_link_libraries(aiverse_tests PRIVATE aiverse_modelconv)
+        target_compile_definitions(aiverse_tests PRIVATE AIVERSE_TEST_MODELCONV=1)
     endif()
-    target_link_libraries(rts_tests PRIVATE rts_plugins)     # native plugins bridge, store/ads services
-    if(TARGET rts_editor_core)   # planet map documents (MapDoc world block)
-        target_link_libraries(rts_tests PRIVATE rts_editor_core)
-        target_compile_definitions(rts_tests PRIVATE RTS_TESTS_EDITOR_CORE=1)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
+    if(TARGET aiverse_editor_core)   # planet map documents (MapDoc world block)
+        target_link_libraries(aiverse_tests PRIVATE aiverse_editor_core)
+        target_compile_definitions(aiverse_tests PRIVATE AIVERSE_TESTS_EDITOR_CORE=1)
     endif()
-    target_compile_definitions(rts_tests PRIVATE RTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    add_test(NAME rts_tests COMMAND rts_tests)
+    target_compile_definitions(aiverse_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME aiverse_tests COMMAND aiverse_tests)
 endif()
 
 # ---------------------------------------------------------------------------
 # In-game UI (UI agent): RmlUi (HTML/CSS) rendered through the RHI, fonts via stb_truetype.
 # Documents live in engine/assets/ui; a game overrides any of them with templates/<id>/ui/<same name>.
 # ---------------------------------------------------------------------------
-file(GLOB RTS_RMLUI_SRC CONFIGURE_DEPENDS
+file(GLOB AIVERSE_RMLUI_SRC CONFIGURE_DEPENDS
     third_party/rmlui/Source/Core/*.cpp third_party/rmlui/Source/Core/Elements/*.cpp
     third_party/rmlui/Source/Core/Layout/*.cpp third_party/rmlui/Source/Debugger/*.cpp)
-add_library(rts_rmlui STATIC ${RTS_RMLUI_SRC})
-target_include_directories(rts_rmlui PUBLIC third_party/rmlui/Include)
-target_compile_definitions(rts_rmlui PUBLIC RMLUI_STATIC_LIB PRIVATE RMLUI_VERSION="6.1")
+add_library(aiverse_rmlui STATIC ${AIVERSE_RMLUI_SRC})
+target_include_directories(aiverse_rmlui PUBLIC third_party/rmlui/Include)
+target_compile_definitions(aiverse_rmlui PUBLIC RMLUI_STATIC_LIB PRIVATE RMLUI_VERSION="6.1")
 if(NOT MSVC)
-    target_compile_options(rts_rmlui PRIVATE -w)
+    target_compile_options(aiverse_rmlui PRIVATE -w)
 endif()
 
-# Lua 5.4: target rts_lua is defined by the scripting block below (deterministic build, no os/io libs).
+# Lua 5.4: target aiverse_lua is defined by the scripting block below (deterministic build, no os/io libs).
 # RmlUi's Lua plugin (<script>, onclick="...", rmlui.* in documents)
-file(GLOB RTS_RMLUI_LUA_SRC CONFIGURE_DEPENDS third_party/rmlui/Source/Lua/*.cpp third_party/rmlui/Source/Lua/Elements/*.cpp)
-add_library(rts_rmlui_lua STATIC ${RTS_RMLUI_LUA_SRC})
-target_link_libraries(rts_rmlui_lua PUBLIC rts_rmlui rts_lua)
+file(GLOB AIVERSE_RMLUI_LUA_SRC CONFIGURE_DEPENDS third_party/rmlui/Source/Lua/*.cpp third_party/rmlui/Source/Lua/Elements/*.cpp)
+add_library(aiverse_rmlui_lua STATIC ${AIVERSE_RMLUI_LUA_SRC})
+target_link_libraries(aiverse_rmlui_lua PUBLIC aiverse_rmlui aiverse_lua)
 if(NOT MSVC)
-    target_compile_options(rts_rmlui_lua PRIVATE -w)
+    target_compile_options(aiverse_rmlui_lua PRIVATE -w)
 endif()
 
-add_library(rts_ui STATIC engine/ui/UiLayer.cpp engine/ui/UiRender.cpp engine/ui/UiFont.cpp engine/ui/UiStb.cpp engine/ui/UiKeyboard.cpp engine/ui/UiLua.cpp
+add_library(aiverse_ui STATIC engine/ui/UiLayer.cpp engine/ui/UiRender.cpp engine/ui/UiFont.cpp engine/ui/UiStb.cpp engine/ui/UiKeyboard.cpp engine/ui/UiLua.cpp
     engine/ui/UiLinear.cpp)   # linear UI blending (ui-linear)
-target_include_directories(rts_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
-target_link_libraries(rts_ui PUBLIC rts_rmlui rts_rmlui_lua rts_lua rts_engine)
-if(TARGET rts_client)
-    target_sources(rts_client PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
-    target_link_libraries(rts_client PRIVATE rts_ui rts_net rts_game_fx)
+target_include_directories(aiverse_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
+target_link_libraries(aiverse_ui PUBLIC aiverse_rmlui aiverse_rmlui_lua aiverse_lua aiverse_engine)
+if(TARGET aiverse_client)
+    target_sources(aiverse_client PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
+    target_link_libraries(aiverse_client PRIVATE aiverse_ui aiverse_net aiverse_game_fx)
 endif()
 if(TARGET main)
     target_sources(main PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
-    target_link_libraries(main PRIVATE rts_ui rts_net rts_game_fx)
+    target_link_libraries(main PRIVATE aiverse_ui aiverse_net aiverse_game_fx)
 endif()
 
 # ---------------------------------------------------------------------------
 # 2D games (2D-mode agent): tile maps + autotiling (deterministic, part of the game library),
 # sprite batch + textures (RHI only), sprite/tile presentation in the RTS view.
 # ---------------------------------------------------------------------------
-target_sources(rts_game PRIVATE modules/rts/RtsTiles.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsTiles.cpp)
 # terrain / map generator (agent-terrain-gen): integer noise, erosion, biomes, fair starts, presets, planets
-target_sources(rts_game PRIVATE modules/rts/gen/GenNoise.cpp modules/rts/gen/GenField.cpp modules/rts/gen/GenTerrain.cpp
+target_sources(aiverse_game PRIVATE modules/rts/gen/GenNoise.cpp modules/rts/gen/GenField.cpp modules/rts/gen/GenTerrain.cpp
     modules/rts/gen/GenContent.cpp modules/rts/gen/GenPlanet.cpp modules/rts/gen/GenWorld.cpp modules/rts/gen/MapGen.cpp)
-add_library(rts_render2d STATIC engine/render/SpriteBatch.cpp engine/render/TextureCache.cpp)
-target_include_directories(rts_render2d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
-target_sources(rts_game_view PRIVATE modules/rts/view/RtsSprites.cpp modules/rts/view/RtsTileView.cpp modules/rts/view/RtsSpriteShadow.cpp)
-target_link_libraries(rts_game_view PUBLIC rts_render2d)
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/TileOps.cpp)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/TerrainOps.cpp apps/editor/core/TerrainDetailOps.cpp)   # terrain agent: sculpt, materials, heightmaps
-    target_sources(rts_editor_core PRIVATE apps/editor/core/GenOps.cpp)       # terrain-gen agent: map_generate, gen_presets
+add_library(aiverse_render2d STATIC engine/render/SpriteBatch.cpp engine/render/TextureCache.cpp)
+target_include_directories(aiverse_render2d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
+target_sources(aiverse_game_view PRIVATE modules/rts/view/RtsSprites.cpp modules/rts/view/RtsTileView.cpp modules/rts/view/RtsSpriteShadow.cpp)
+target_link_libraries(aiverse_game_view PUBLIC aiverse_render2d)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/TileOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/TerrainOps.cpp apps/editor/core/TerrainDetailOps.cpp)   # terrain agent: sculpt, materials, heightmaps
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/GenOps.cpp)       # terrain-gen agent: map_generate, gen_presets
 endif()
 
 # ---------------------------------------------------------------------------
-# Texture atlases (atlas agent). rts_atlas: runtime manifest/page reader, CPU image source and
-# the GPU texture lookup (TextureLibrary, through gfx::Device only). rts_atlas_builder: host-only
-# packer used by rtsbuild/assetpipe at build time.
+# Texture atlases (atlas agent). aiverse_atlas: runtime manifest/page reader, CPU image source and
+# the GPU texture lookup (TextureLibrary, through gfx::Device only). aiverse_atlas_builder: host-only
+# packer used by aiversebuild/assetpipe at build time.
 # ---------------------------------------------------------------------------
-add_library(rts_atlas STATIC engine/atlas/AtlasFormat.cpp engine/atlas/ImageDecode.cpp engine/atlas/TextureLibrary.cpp)
-target_include_directories(rts_atlas PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
-target_link_libraries(rts_atlas PUBLIC rts_engine)
-foreach(t rts_client main)
+add_library(aiverse_atlas STATIC engine/atlas/AtlasFormat.cpp engine/atlas/ImageDecode.cpp engine/atlas/TextureLibrary.cpp)
+target_include_directories(aiverse_atlas PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
+target_link_libraries(aiverse_atlas PUBLIC aiverse_engine)
+foreach(t aiverse_client main)
     if(TARGET ${t})
-        target_link_libraries(${t} PRIVATE rts_atlas)
+        target_link_libraries(${t} PRIVATE aiverse_atlas)
     endif()
 endforeach()
-if(TARGET rts_render2d)
-    target_link_libraries(rts_render2d PUBLIC rts_atlas)  # TextureCache resolves atlased sprites
+if(TARGET aiverse_render2d)
+    target_link_libraries(aiverse_render2d PUBLIC aiverse_atlas)  # TextureCache resolves atlased sprites
 endif()
-if(RTS_BUILD_TOOLS OR RTS_BUILD_TESTS)
-    add_library(rts_atlas_builder STATIC tools/atlas/AtlasPacker.cpp tools/atlas/AtlasBuild.cpp)
-    target_include_directories(rts_atlas_builder PRIVATE third_party/stb_image_write)
-    target_link_libraries(rts_atlas_builder PUBLIC rts_atlas rts_pack_writer)
-    foreach(t rtsbuild assetpipe rts_tests)
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    add_library(aiverse_atlas_builder STATIC tools/atlas/AtlasPacker.cpp tools/atlas/AtlasBuild.cpp)
+    target_include_directories(aiverse_atlas_builder PRIVATE third_party/stb_image_write)
+    target_link_libraries(aiverse_atlas_builder PUBLIC aiverse_atlas aiverse_pack_writer)
+    foreach(t aiversebuild assetpipe aiverse_tests)
         if(TARGET ${t})
-            target_link_libraries(${t} PRIVATE rts_atlas_builder)
+            target_link_libraries(${t} PRIVATE aiverse_atlas_builder)
         endif()
     endforeach()
 endif()
-if(TARGET rts_editor_core) # lighting agent: light_* / lighting_set operations
-    target_sources(rts_editor_core PRIVATE apps/editor/core/LightOps.cpp)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/PlanetOps.cpp apps/editor/core/PlanetDetailOps.cpp)   # planet-render agent: planet sculpt / paint
+if(TARGET aiverse_editor_core) # lighting agent: light_* / lighting_set operations
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PlanetOps.cpp apps/editor/core/PlanetDetailOps.cpp)   # planet-render agent: planet sculpt / paint
 endif()
-if(TARGET rts_tests) # lighting agent: GPU-free lighting logic under test
-    target_sources(rts_tests PRIVATE modules/rts/view/RtsLightsData.cpp engine/render/QualityGovernor.cpp)
+if(TARGET aiverse_tests) # lighting agent: GPU-free lighting logic under test
+    target_sources(aiverse_tests PRIVATE modules/rts/view/RtsLightsData.cpp engine/render/QualityGovernor.cpp)
 endif()
 
 # ---------------------------------------------------------------------------
 # Overlays (overlays agent): data-driven helper elements (build grids, ranges, rally lines, damage
-# numbers, bars). rts_overlay_data: GPU-free schema / validation / templates, shared by the view and
-# the editor core (MCP overlay_* operations); the evaluator + renderer live in rts_game_view.
+# numbers, bars). aiverse_overlay_data: GPU-free schema / validation / templates, shared by the view and
+# the editor core (MCP overlay_* operations); the evaluator + renderer live in aiverse_game_view.
 # ---------------------------------------------------------------------------
-add_library(rts_overlay_data STATIC modules/rts/view/RtsOverlayData.cpp)
-target_link_libraries(rts_overlay_data PUBLIC rts_game)
-target_include_directories(rts_overlay_data PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_sources(rts_game_view PRIVATE modules/rts/view/RtsOverlays.cpp modules/rts/view/RtsOverlaysDraw.cpp)
-target_link_libraries(rts_game_view PUBLIC rts_overlay_data)
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/OverlayOps.cpp)
-    target_link_libraries(rts_editor_core PUBLIC rts_overlay_data)
+add_library(aiverse_overlay_data STATIC modules/rts/view/RtsOverlayData.cpp)
+target_link_libraries(aiverse_overlay_data PUBLIC aiverse_game)
+target_include_directories(aiverse_overlay_data PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_sources(aiverse_game_view PRIVATE modules/rts/view/RtsOverlays.cpp modules/rts/view/RtsOverlaysDraw.cpp)
+target_link_libraries(aiverse_game_view PUBLIC aiverse_overlay_data)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/OverlayOps.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_overlay_data)
 endif()
 # grid fields in the editor (field_* MCP ops, Scene preview)
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/FieldOps.cpp)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/FieldOps.cpp)
 endif()
 
 # VFX tools (vfx tools agent): Unity particle importer tests (Python, stdlib only) and the fx_* editor
 # operations (list / get / set / delete / templates / import_unity / bind; fx_preview in the editor GUI).
 # ---------------------------------------------------------------------------
-if(RTS_BUILD_TESTS)
+if(AIVERSE_BUILD_TESTS)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME unity_vfx_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/unity_vfx/test_import.py)
     endif()
 endif()
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/FxOps.cpp apps/editor/core/FxTemplates.cpp)
-    target_link_libraries(rts_editor_core PUBLIC rts_game_fx)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/FxOps.cpp apps/editor/core/FxTemplates.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_game_fx)
 endif()
-if(TARGET rts_editor)
-    target_sources(rts_editor PRIVATE apps/editor/EditorFxOps.cpp)   # fx_preview (GUI)
+if(TARGET aiverse_editor)
+    target_sources(aiverse_editor PRIVATE apps/editor/EditorFxOps.cpp)   # fx_preview (GUI)
 endif()
 
-# Splash & icons (splash agent). rts_splash: game.json "splash" timeline + the in-engine loading
-# screen (RHI quads, GLSL + MSL) driven by apps/client/ClientSplash.cpp. rts_branding: host-only
+# Splash & icons (splash agent). aiverse_splash: game.json "splash" timeline + the in-engine loading
+# screen (RHI quads, GLSL + MSL) driven by apps/client/ClientSplash.cpp. aiverse_branding: host-only
 # icon / launch screen generation (resize, .ico, .icns, Android/iOS/web/Linux sets, previews) used
-# by rtsbuild, the editor core (branding_* / icons_preview / splash_preview) and the tests.
+# by aiversebuild, the editor core (branding_* / icons_preview / splash_preview) and the tests.
 # ---------------------------------------------------------------------------
-add_library(rts_splash STATIC engine/splash/SplashData.cpp engine/splash/SplashScreen.cpp)
-target_include_directories(rts_splash PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(rts_splash PUBLIC rts_engine rts_atlas)
-# rtsbuild: window colour before the first frame (0xRRGGBB from game.json splash.background)
-set(RTS_SPLASH_BACKGROUND "" CACHE STRING "Window background before the first frame, 0xRRGGBB (set by rtsbuild)")
-foreach(t rts_client main)
+add_library(aiverse_splash STATIC engine/splash/SplashData.cpp engine/splash/SplashScreen.cpp)
+target_include_directories(aiverse_splash PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(aiverse_splash PUBLIC aiverse_engine aiverse_atlas)
+# aiversebuild: window colour before the first frame (0xRRGGBB from game.json splash.background)
+set(AIVERSE_SPLASH_BACKGROUND "" CACHE STRING "Window background before the first frame, 0xRRGGBB (set by aiversebuild)")
+foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/ClientSplash.cpp)
-        target_link_libraries(${t} PRIVATE rts_splash)
-        if(RTS_SPLASH_BACKGROUND)
-            target_compile_definitions(${t} PRIVATE RTS_SPLASH_BACKGROUND=${RTS_SPLASH_BACKGROUND})
+        target_link_libraries(${t} PRIVATE aiverse_splash)
+        if(AIVERSE_SPLASH_BACKGROUND)
+            target_compile_definitions(${t} PRIVATE AIVERSE_SPLASH_BACKGROUND=${AIVERSE_SPLASH_BACKGROUND})
         endif()
     endif()
 endforeach()
-# Generated packaging assets (rtsbuild --target ...): Windows icon resource, iOS launch storyboard.
-if(TARGET rts_client AND RTS_PLATFORM STREQUAL "windows" AND RTS_GEN_DIR AND EXISTS "${RTS_GEN_DIR}/app.rc")
+# Generated packaging assets (aiversebuild --target ...): Windows icon resource, iOS launch storyboard.
+if(TARGET aiverse_client AND AIVERSE_PLATFORM STREQUAL "windows" AND AIVERSE_GEN_DIR AND EXISTS "${AIVERSE_GEN_DIR}/app.rc")
     enable_language(RC)
-    target_sources(rts_client PRIVATE "${RTS_GEN_DIR}/app.rc")
+    target_sources(aiverse_client PRIVATE "${AIVERSE_GEN_DIR}/app.rc")
 endif()
-set(RTS_IOS_LAUNCH_STORYBOARD "")   # Info.plist: launch storyboard key when rtsbuild generated one
-if(TARGET rts_client AND RTS_PLATFORM STREQUAL "ios" AND RTS_GEN_DIR AND EXISTS "${RTS_GEN_DIR}/LaunchScreen.storyboard")
-    target_sources(rts_client PRIVATE "${RTS_GEN_DIR}/LaunchScreen.storyboard")
-    set_property(TARGET rts_client APPEND PROPERTY RESOURCE "${RTS_GEN_DIR}/LaunchScreen.storyboard")
-    set(RTS_IOS_LAUNCH_STORYBOARD "<key>UILaunchStoryboardName</key><string>LaunchScreen</string>")
+set(AIVERSE_IOS_LAUNCH_STORYBOARD "")   # Info.plist: launch storyboard key when aiversebuild generated one
+if(TARGET aiverse_client AND AIVERSE_PLATFORM STREQUAL "ios" AND AIVERSE_GEN_DIR AND EXISTS "${AIVERSE_GEN_DIR}/LaunchScreen.storyboard")
+    target_sources(aiverse_client PRIVATE "${AIVERSE_GEN_DIR}/LaunchScreen.storyboard")
+    set_property(TARGET aiverse_client APPEND PROPERTY RESOURCE "${AIVERSE_GEN_DIR}/LaunchScreen.storyboard")
+    set(AIVERSE_IOS_LAUNCH_STORYBOARD "<key>UILaunchStoryboardName</key><string>LaunchScreen</string>")
 endif()
-if(RTS_BUILD_TOOLS OR RTS_BUILD_TESTS)
-    add_library(rts_branding STATIC tools/branding/BrandImage.cpp tools/branding/Icons.cpp tools/branding/Splash.cpp)
-    target_include_directories(rts_branding PRIVATE third_party/stb_image_write)
-    target_link_libraries(rts_branding PUBLIC rts_splash)
-    foreach(t rtsbuild rts_tests)
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    add_library(aiverse_branding STATIC tools/branding/BrandImage.cpp tools/branding/Icons.cpp tools/branding/Splash.cpp)
+    target_include_directories(aiverse_branding PRIVATE third_party/stb_image_write)
+    target_link_libraries(aiverse_branding PUBLIC aiverse_splash)
+    foreach(t aiversebuild aiverse_tests)
         if(TARGET ${t})
-            target_link_libraries(${t} PRIVATE rts_branding)
+            target_link_libraries(${t} PRIVATE aiverse_branding)
         endif()
     endforeach()
-    if(TARGET rtsbuild)
-        target_sources(rtsbuild PRIVATE tools/rtsbuild/Branding.cpp)
+    if(TARGET aiversebuild)
+        target_sources(aiversebuild PRIVATE tools/aiversebuild/Branding.cpp)
     endif()
 endif()
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/BrandingOps.cpp)
-    target_link_libraries(rts_editor_core PUBLIC rts_branding)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/UiOps.cpp)   # UI agent: game screens + ui_preview
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/BrandingOps.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_branding)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/UiOps.cpp)   # UI agent: game screens + ui_preview
     # game wizard ("Сделать игру"): a whole project from art + idea (docs/game-wizard.md)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/GameWizard.cpp apps/editor/core/GameWizardContent.cpp
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/GameWizard.cpp apps/editor/core/GameWizardContent.cpp
         apps/editor/core/GameWizardTutorial.cpp apps/editor/core/GameWizardMeta.cpp apps/editor/core/WizardOps.cpp
         apps/editor/core/WizardAgent.cpp)
-    if(TARGET rts_editor)   # dictation for the wizard's text fields (EditorSpeech.h)
+    if(TARGET aiverse_editor)   # dictation for the wizard's text fields (EditorSpeech.h)
         if(APPLE)
-            target_sources(rts_editor PRIVATE apps/editor/EditorSpeech_mac.mm)
+            target_sources(aiverse_editor PRIVATE apps/editor/EditorSpeech_mac.mm)
             set_source_files_properties(apps/editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-            target_link_libraries(rts_editor PRIVATE "-framework Speech" "-framework AVFoundation")
+            target_link_libraries(aiverse_editor PRIVATE "-framework Speech" "-framework AVFoundation")
         else()
-            target_sources(rts_editor PRIVATE apps/editor/EditorSpeech.cpp)
+            target_sources(aiverse_editor PRIVATE apps/editor/EditorSpeech.cpp)
         endif()
     endif()
-    target_link_libraries(rts_editor_core PUBLIC rts_lua)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_lua)
 endif()
 
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/MaterialOps.cpp)
-    target_link_libraries(rts_editor_core PUBLIC rts_models)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/MaterialOps.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
 endif()
-if(TARGET rtsmcp)   # KTX2 zstd in rts_models: rtsmcp links no pack writer, so it takes the decoder
-    target_link_libraries(rtsmcp PRIVATE rts_models rts_zstd_dec)
+if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
+    target_link_libraries(aiversemcp PRIVATE aiverse_models aiverse_zstd_dec)
 endif()
 
 # ---------------------------------------------------------------------------
 # Scripting (scripting agent): Lua 5.4 (third_party/lua, MIT) compiled as C without the os / io /
 # package / debug libraries (same build on web, iOS, Android, desktop). Simulation scripts are
-# deterministic (fx numbers, float guard in rts_luaconf.h); docs/scripting.md.
+# deterministic (fx numbers, float guard in aiverse_luaconf.h); docs/scripting.md.
 # ---------------------------------------------------------------------------
-set(RTS_LUA_SRC lapi.c lauxlib.c lbaselib.c lcode.c lcorolib.c lctype.c ldebug.c ldo.c ldump.c lfunc.c lgc.c
+set(AIVERSE_LUA_SRC lapi.c lauxlib.c lbaselib.c lcode.c lcorolib.c lctype.c ldebug.c ldo.c ldump.c lfunc.c lgc.c
     llex.c lmathlib.c lmem.c lobject.c lopcodes.c lparser.c lstate.c lstring.c lstrlib.c ltable.c ltablib.c
-    ltm.c lundump.c lutf8lib.c lvm.c lzio.c rts_lua.c)
-list(TRANSFORM RTS_LUA_SRC PREPEND third_party/lua/)
-add_library(rts_lua STATIC ${RTS_LUA_SRC})
-target_include_directories(rts_lua PUBLIC third_party/lua)
-set_target_properties(rts_lua PROPERTIES LINKER_LANGUAGE C)
+    ltm.c lundump.c lutf8lib.c lvm.c lzio.c aiverse_lua.c)
+list(TRANSFORM AIVERSE_LUA_SRC PREPEND third_party/lua/)
+add_library(aiverse_lua STATIC ${AIVERSE_LUA_SRC})
+target_include_directories(aiverse_lua PUBLIC third_party/lua)
+set_target_properties(aiverse_lua PROPERTIES LINKER_LANGUAGE C)
 if(MSVC)
-    target_compile_options(rts_lua PRIVATE /W0)
+    target_compile_options(aiverse_lua PRIVATE /W0)
 else()
-    target_compile_options(rts_lua PRIVATE -w)
+    target_compile_options(aiverse_lua PRIVATE -w)
 endif()
 # os library for the UI / meta-screen Lua (engine/ui/UiLua.cpp: clocks and dates only, the dangerous
 # functions are removed there); simulation states never open it
-target_sources(rts_lua PRIVATE third_party/lua/loslib.c)
+target_sources(aiverse_lua PRIVATE third_party/lua/loslib.c)
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    target_compile_definitions(rts_lua PRIVATE LUA_USE_IOS)   # no system() on iOS
+    target_compile_definitions(aiverse_lua PRIVATE LUA_USE_IOS)   # no system() on iOS
 endif()
 if(UNIX)
-    target_compile_definitions(rts_lua PRIVATE LUA_USE_POSIX)  # os.tmpname via mkstemp (the linker warns about tmpnam)
+    target_compile_definitions(aiverse_lua PRIVATE LUA_USE_POSIX)  # os.tmpname via mkstemp (the linker warns about tmpnam)
 endif()
-target_sources(rts_game PRIVATE modules/rts/RtsScriptTerritory.cpp)
-target_sources(rts_game PRIVATE modules/rts/RtsScriptGrid.cpp)
-target_sources(rts_game PRIVATE modules/rts/RtsScript.cpp modules/rts/RtsScriptEngine.cpp modules/rts/RtsScriptApi.cpp modules/rts/RtsScriptCommands.cpp
+target_sources(aiverse_game PRIVATE modules/rts/RtsScriptTerritory.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsScriptGrid.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsScript.cpp modules/rts/RtsScriptEngine.cpp modules/rts/RtsScriptApi.cpp modules/rts/RtsScriptCommands.cpp
     modules/rts/RtsScriptStd.cpp modules/rts/RtsScriptIeee.cpp)
 if(NOT MSVC)
     # one IEEE operation per binding: never contract into FMA (RtsScriptIeee.cpp)
     set_source_files_properties(modules/rts/RtsScriptIeee.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 endif()
 # grid fields (G5): data, kernels, Lua `field` table (docs/fields.md)
-target_sources(rts_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
-file(GLOB RTS_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
-set(RTS_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
-add_custom_command(OUTPUT ${RTS_STD_LUA_H}
-    COMMAND ${CMAKE_COMMAND} -DOUT=${RTS_STD_LUA_H} -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua -P ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/embed.cmake
-    DEPENDS ${RTS_STD_LUA} ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/embed.cmake VERBATIM)
-target_sources(rts_game PRIVATE ${RTS_STD_LUA_H})
-target_include_directories(rts_game PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
-target_link_libraries(rts_game PUBLIC rts_lua)
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/ScriptOps.cpp)
+file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
+set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
+add_custom_command(OUTPUT ${AIVERSE_STD_LUA_H}
+    COMMAND ${CMAKE_COMMAND} -DOUT=${AIVERSE_STD_LUA_H} -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua -P ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/embed.cmake
+    DEPENDS ${AIVERSE_STD_LUA} ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/embed.cmake VERBATIM)
+target_sources(aiverse_game PRIVATE ${AIVERSE_STD_LUA_H})
+target_include_directories(aiverse_game PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
+target_link_libraries(aiverse_game PUBLIC aiverse_lua)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ScriptOps.cpp)
 endif()
-target_sources(rts_game_view PRIVATE modules/rts/view/RtsViewScript.cpp modules/rts/view/ScriptSound.cpp)
+target_sources(aiverse_game_view PRIVATE modules/rts/view/RtsViewScript.cpp modules/rts/view/ScriptSound.cpp)
 
 # Generic GPU canvases and Lua world-space paint layers.
-target_sources(rts_game_view PRIVATE engine/render/RenderTexture.cpp modules/rts/view/RtsPaintLayers.cpp modules/rts/view/RtsGroundCanvas.cpp)
+target_sources(aiverse_game_view PRIVATE engine/render/RenderTexture.cpp modules/rts/view/RtsPaintLayers.cpp modules/rts/view/RtsGroundCanvas.cpp)
 
 # Shared region gesture input; gameplay remains in project Lua ability effects.
-foreach(t rts_client main)
+foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/ClientRegionInput.cpp)
     endif()
 endforeach()
 
-if(TARGET rts_editor)
-    target_link_libraries(rts_editor PRIVATE rts_i18n)
+if(TARGET aiverse_editor)
+    target_link_libraries(aiverse_editor PRIVATE aiverse_i18n)
 endif()
 
 # Game viewport uses the same RmlUi renderer and documents as the client.
-if(TARGET rts_editor)
-    target_link_libraries(rts_editor PRIVATE rts_ui)
-    target_sources(rts_editor PRIVATE apps/editor/GameHud.cpp)
+if(TARGET aiverse_editor)
+    target_link_libraries(aiverse_editor PRIVATE aiverse_ui)
+    target_sources(aiverse_editor PRIVATE apps/editor/GameHud.cpp)
 endif()
 
-if(RTS_BUILD_TESTS)
-    add_executable(rts_ui_viewport_tests tests/ui_viewport.cpp tests/ui_font_effects.cpp)
-    target_link_libraries(rts_ui_viewport_tests PRIVATE rts_ui)
-    add_test(NAME rts_ui_viewport_tests COMMAND rts_ui_viewport_tests)
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_ui_viewport_tests tests/ui_viewport.cpp tests/ui_font_effects.cpp)
+    target_link_libraries(aiverse_ui_viewport_tests PRIVATE aiverse_ui)
+    add_test(NAME aiverse_ui_viewport_tests COMMAND aiverse_ui_viewport_tests)
 endif()
 
 # ---------------------------------------------------------------------------
 # Project files `<Title>.rtsproj` and opening them from the OS (project-file agent): ProjectFile /
 # FileAssoc in the editor core (Linux mime + .desktop, Windows HKCU registry, macOS LaunchServices),
-# the editor's own Info.plist (document type com.rtsengine.project) and the document icon drawn by
-# rts_projicon (tools/branding/ProjectIcon.*).
+# the editor's own Info.plist (document type com.aiverse.project) and the document icon drawn by
+# aiverse_projicon (tools/branding/ProjectIcon.*).
 # ---------------------------------------------------------------------------
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/ProjectFile.cpp apps/editor/core/FileAssoc.cpp)
-    set_property(SOURCE apps/editor/core/ProjectFile.cpp APPEND PROPERTY COMPILE_DEFINITIONS "RTS_ENGINE_VERSION=\"${PROJECT_VERSION}\"")
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ProjectFile.cpp apps/editor/core/FileAssoc.cpp)
+    set_property(SOURCE apps/editor/core/ProjectFile.cpp APPEND PROPERTY COMPILE_DEFINITIONS "AIVERSE_ENGINE_VERSION=\"${PROJECT_VERSION}\"")
     if(WIN32)
-        target_link_libraries(rts_editor_core PUBLIC advapi32 shell32)
+        target_link_libraries(aiverse_editor_core PUBLIC advapi32 shell32)
     elseif(APPLE)
-        target_link_libraries(rts_editor_core PUBLIC "-framework CoreServices")
+        target_link_libraries(aiverse_editor_core PUBLIC "-framework CoreServices")
     endif()
 endif()
-if(TARGET rts_branding)
-    target_sources(rts_branding PRIVATE tools/branding/ProjectIcon.cpp)
+if(TARGET aiverse_branding)
+    target_sources(aiverse_branding PRIVATE tools/branding/ProjectIcon.cpp)
     if(NOT CMAKE_CROSSCOMPILING)
-        add_executable(rts_projicon tools/branding/projicon_main.cpp)
-        target_link_libraries(rts_projicon PRIVATE rts_branding)
+        add_executable(aiverse_projicon tools/branding/projicon_main.cpp)
+        target_link_libraries(aiverse_projicon PRIVATE aiverse_branding)
     endif()
 endif()
-if(TARGET rts_editor)
-    target_sources(rts_editor PRIVATE apps/editor/EditorOpenFile.cpp)
+if(TARGET aiverse_editor)
+    target_sources(aiverse_editor PRIVATE apps/editor/EditorOpenFile.cpp)
     if(APPLE)
-        set_target_properties(rts_editor PROPERTIES
+        set_target_properties(aiverse_editor PROPERTIES
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platform/macos/EditorInfo.plist.in"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}" MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
-        if(TARGET rts_projicon)
-            add_dependencies(rts_editor rts_projicon)
+        if(TARGET aiverse_projicon)
+            add_dependencies(aiverse_editor aiverse_projicon)
             # Resources/rtsproj.icns: the document icon in Finder, drawn from the editor logo
-            add_custom_command(TARGET rts_editor POST_BUILD
-                COMMAND $<TARGET_FILE:rts_projicon> "$<TARGET_BUNDLE_CONTENT_DIR:rts_editor>/Resources"
+            add_custom_command(TARGET aiverse_editor POST_BUILD
+                COMMAND $<TARGET_FILE:aiverse_projicon> "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_editor>/Resources"
                         "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/icon_1024.png"
                 COMMENT ".rtsproj document icon")
         endif()
@@ -1040,47 +1042,178 @@ if(TARGET rts_editor)
 endif()
 
 # Project-local C++ module build selection (no graphics or game execution).
-if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME native_project_build COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_project_build.py ${CMAKE_COMMAND})
 endif()
 
-# builds-branch tooling: index.json, and a packaged rtsmcp run from an unpacked tools-only Linux zip
-if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
-    if(TARGET rtsmcp AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py $<TARGET_FILE:rtsmcp>)
+# builds-branch tooling: index.json, and a packaged aiversemcp run from an unpacked tools-only Linux zip
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    if(TARGET aiversemcp AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py $<TARGET_FILE:aiversemcp>)
     else()
         add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py)
     endif()
 endif()
 
 # Project import (shared Python pipeline + editor/MCP bridge).
-if(TARGET rts_editor_core)
-    target_sources(rts_editor_core PRIVATE apps/editor/core/PortOps.cpp)
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/PortOps.cpp)
 endif()
-if(RTS_BUILD_TESTS AND Python3_Interpreter_FOUND)
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME project_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_port.py)
-    if(TARGET rts_headless)
-        set_tests_properties(project_importer PROPERTIES ENVIRONMENT "RTS_PORT_HEADLESS=$<TARGET_FILE:rts_headless>")
+    if(TARGET aiverse_headless)
+        set_tests_properties(project_importer PROPERTIES ENVIRONMENT "AIVERSE_PORT_HEADLESS=$<TARGET_FILE:aiverse_headless>")
     endif()
 endif()
 
-# The game client's core (GameClient: menus, script UI, view scripts, input, audio): RTSGame's
+# The game client's core (GameClient: menus, script UI, view scripts, input, audio): AiverseGame's
 # main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
-set(RTS_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
+set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
     apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp)
-foreach(t rts_client main)
+foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
     endif()
 endforeach()
-# Editor: play the project as in the game client, hosted in the Game window or in RTSGame (apps/editor/EditorClientPlay.cpp)
-if(TARGET rts_editor)
-    target_sources(rts_editor PRIVATE apps/editor/EditorClientPlay.cpp apps/editor/ClientHost.cpp ${RTS_CLIENT_CORE_SOURCES})
-    target_link_libraries(rts_editor PRIVATE rts_net rts_game_audio rts_atlas rts_ui rts_game_fx rts_i18n)
+# Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)
+if(TARGET aiverse_editor)
+    target_sources(aiverse_editor PRIVATE apps/editor/EditorClientPlay.cpp apps/editor/ClientHost.cpp ${AIVERSE_CLIENT_CORE_SOURCES})
+    target_link_libraries(aiverse_editor PRIVATE aiverse_net aiverse_game_audio aiverse_atlas aiverse_ui aiverse_game_fx aiverse_i18n)
 endif()
-if(RTS_BUILD_TESTS AND (RTS_PLATFORM STREQUAL "linux" OR RTS_PLATFORM STREQUAL "macos"))
-    add_executable(rts_hosted_view_tests tests/hosted_view.cpp $<TARGET_OBJECTS:rts_runtime>)
-    target_link_libraries(rts_hosted_view_tests PRIVATE rts_runtime)
-    add_test(NAME rts_hosted_view_tests COMMAND rts_hosted_view_tests)
+if(AIVERSE_BUILD_TESTS AND (AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFORM STREQUAL "macos"))
+    add_executable(aiverse_hosted_view_tests tests/hosted_view.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_hosted_view_tests PRIVATE aiverse_runtime)
+    add_test(NAME aiverse_hosted_view_tests COMMAND aiverse_hosted_view_tests)
+endif()
+
+# Reusable algorithms are public to external native game modules as well as engine code.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_library_tests tests/libraries/tests.cpp)
+    target_link_libraries(aiverse_library_tests PRIVATE AIVERSE::libraries)
+    add_test(NAME aiverse_library_tests COMMAND aiverse_library_tests)
+endif()
+
+# Meta-game policies: CPU-only tests, usable independently of a game or GPU.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_meta_tests tests/meta/tests.cpp)
+    target_link_libraries(aiverse_meta_tests PRIVATE aiverse::meta)
+    add_test(NAME aiverse_meta_tests COMMAND aiverse_meta_tests)
+endif()
+
+if(AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_meta_validate tools/meta/validate.cpp)
+    target_link_libraries(aiverse_meta_validate PRIVATE aiverse::meta)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME meta_native_link COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/meta/native_link.py ${CMAKE_COMMAND})
+endif()
+
+
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_gameplay_tests tests/libraries/gameplay_tests.cpp)
+    target_link_libraries(aiverse_gameplay_tests PRIVATE AIVERSE::gameplay_native aiverse_engine)
+    add_test(NAME aiverse_gameplay_tests COMMAND aiverse_gameplay_tests)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME aiverse_gameplay_generated COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/libraries/generate_gameplay.py --check)
+        add_test(NAME aiverse_gameplay_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/libraries/gameplay_tools.py)
+    endif()
+endif()
+
+# Reusable application packages: host policies remain independent of the simulation.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_app_tests tests/libraries/app_tests.cpp)
+    target_link_libraries(aiverse_app_tests PRIVATE AIVERSE::libraries)
+    add_test(NAME aiverse_app_tests COMMAND aiverse_app_tests)
+    if(TARGET aiverse::meta)
+        add_executable(aiverse_app_meta_tests tests/libraries/app_meta_tests.cpp)
+        target_link_libraries(aiverse_app_meta_tests PRIVATE AIVERSE::libraries aiverse::meta)
+        add_test(NAME aiverse_app_meta_tests COMMAND aiverse_app_meta_tests)
+    endif()
+endif()
+if(AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_app_tools tools/libraries/app_main.cpp)
+    target_link_libraries(aiverse_app_tools PRIVATE AIVERSE::gameplay_native aiverse_engine)
+endif()
+
+# Extended meta service remains host-side, outside deterministic match callbacks.
+if(AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_meta_service tools/meta/service_main.cpp)
+    target_link_libraries(aiverse_meta_service PRIVATE aiverse::meta)
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_meta_service_tests tests/meta/service_tests.cpp)
+    target_link_libraries(aiverse_meta_service_tests PRIVATE aiverse::meta)
+    add_test(NAME meta_service COMMAND aiverse_meta_service_tests ${CMAKE_CURRENT_SOURCE_DIR}/examples/meta/service.json)
+endif()
+
+# FPS is an independent GameModule; RTS lockstep remains available unchanged.
+add_subdirectory(modules/fps)
+
+# Opt-in end-to-end reusable library host, excluded from normal builds.
+option(AIVERSE_BUILD_LIBRARY_SHOWCASE "Build native library integration showcase" OFF)
+if(AIVERSE_BUILD_LIBRARY_SHOWCASE)
+    if(NOT TARGET aiverse::meta)
+        add_subdirectory(engine/meta)
+    endif()
+    add_executable(aiverse_library_showcase examples/libraries/showcase/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_compile_definitions(aiverse_library_showcase PRIVATE AIVERSE_LIBRARY_ENGINE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(aiverse_library_showcase PRIVATE aiverse_runtime aiverse_game_view aiverse_ui aiverse_i18n aiverse::meta AIVERSE::gameplay_native)
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_runtime_library_tests tests/libraries/runtime_tests.cpp)
+    target_link_libraries(aiverse_runtime_library_tests PRIVATE AIVERSE::gameplay_native aiverse_engine)
+    add_test(NAME aiverse_runtime_library_tests COMMAND aiverse_runtime_library_tests)
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_systems_tests tests/libraries/systems_tests.cpp)
+    target_link_libraries(aiverse_systems_tests PRIVATE AIVERSE::libraries)
+    add_test(NAME aiverse_systems_tests COMMAND aiverse_systems_tests)
+    add_executable(aiverse_systems_engine_tests tests/libraries/systems_engine_tests.cpp)
+    target_link_libraries(aiverse_systems_engine_tests PRIVATE AIVERSE::gameplay_native aiverse_game)
+    add_test(NAME aiverse_systems_engine_tests COMMAND aiverse_systems_engine_tests)
+endif()
+
+# LiveOps shares the meta aggregate; independently testable without GPU or network.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_meta_liveops_tests tests/meta/liveops_tests.cpp)
+    target_link_libraries(aiverse_meta_liveops_tests PRIVATE aiverse::meta)
+    add_test(NAME meta_liveops COMMAND aiverse_meta_liveops_tests ${CMAKE_CURRENT_SOURCE_DIR}/examples/meta/service.json ${CMAKE_CURRENT_SOURCE_DIR}/examples/meta/liveops.json)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME meta_liveops_schema COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/meta/generate_liveops.py --check)
+    endif()
+endif()
+
+# Reusable bot adapters: real engine integration, isolated from the reference FPS bot.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_library_aiverse_bot_tests tests/libraries/bots/aiverse_tests.cpp)
+    target_link_libraries(aiverse_library_aiverse_bot_tests PRIVATE AIVERSE::aiverse_bots)
+    add_test(NAME library_aiverse_bots COMMAND aiverse_library_aiverse_bot_tests ${PROJECT_SOURCE_DIR}/templates/skirmish)
+endif()
+if(TARGET aiverse_fps AND (AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_TOOLS))
+    add_executable(aiverse_bot_match examples/libraries/bots/main.cpp)
+    target_link_libraries(aiverse_bot_match PRIVATE AIVERSE::aiverse_bots AIVERSE::fps_bots)
+endif()
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_fps)
+    add_executable(aiverse_library_fps_bot_tests tests/libraries/bots/fps_tests.cpp)
+    target_link_libraries(aiverse_library_fps_bot_tests PRIVATE AIVERSE::fps_bots)
+    add_test(NAME library_fps_bots COMMAND aiverse_library_fps_bot_tests)
+endif()
+
+if(TARGET aiverse_fps AND (AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_TOOLS))
+    add_executable(aiverse_navmesh tools/libraries/navmesh_main.cpp)
+    target_link_libraries(aiverse_navmesh PRIVATE AIVERSE::fps_bots)
+endif()
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_fps)
+    add_executable(aiverse_library_navmesh_tests tests/libraries/bots/navmesh_tests.cpp)
+    target_link_libraries(aiverse_library_navmesh_tests PRIVATE AIVERSE::fps_bots)
+    add_test(NAME library_navmesh COMMAND aiverse_library_navmesh_tests)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_world)
+    add_executable(aiverse_library_genre_tests tests/libraries/genre_tests.cpp)
+    target_link_libraries(aiverse_library_genre_tests PRIVATE AIVERSE::genre)
+    add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${PROJECT_SOURCE_DIR})
 endif()

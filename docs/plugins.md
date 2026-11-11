@@ -6,33 +6,33 @@ language:
 
 | Platform | Language | Base / registration |
 |---|---|---|
-| Android | Java (calling Java/Kotlin SDKs) | `extends com.rtsengine.platform.RtsPlugin`, manifest `<meta-data android:name="rts.plugin.NAME">` |
-| iOS, macOS | Objective-C++ (`.mm`) | `<RTSPlugin>` (`engine/platform/apple/RTSPlugin.h`), Info.plist `RTSPlugins` |
-| Web | JavaScript | `RTSPlugins.register(name, { method(args) { ... } })` |
-| any (incl. desktop) | C++ | `plugins::NativePlugin` + `RTS_PLUGIN("name", Class)` |
+| Android | Java (calling Java/Kotlin SDKs) | `extends com.aiverse.platform.AiversePlugin`, manifest `<meta-data android:name="aiverse.plugin.NAME">` |
+| iOS, macOS | Objective-C++ (`.mm`) | `<AiversePlugin>` (`engine/platform/apple/AiversePlugin.h`), Info.plist `AiversePlugins` |
+| Web | JavaScript | `AiversePlugins.register(name, { method(args) { ... } })` |
+| any (incl. desktop) | C++ | `plugins::NativePlugin` + `AIVERSE_PLUGIN("name", Class)` |
 
-rtsbuild writes the registration entries from `plugin.json`; plugin code never touches the engine.
+aiversebuild writes the registration entries from `plugin.json`; plugin code never touches the engine.
 
 Games normally don't call plugins directly: they use the standard services in `engine/services`,
 which pick the provider for the current platform from `game.json`:
 
-- `rts::store` (`Store.h`) — products with localized prices, purchase, restore, finish.
-- `rts::ads` (`Ads.h`) — interstitial, rewarded, sticky banner, consent, "no ads" switch.
+- `aiverse::store` (`Store.h`) — products with localized prices, purchase, restore, finish.
+- `aiverse::ads` (`Ads.h`) — interstitial, rewarded, sticky banner, consent, "no ads" switch.
 
 Desktop dev builds have `mock-store` and `mock-ads` (C++, `engine/services/MockPlugins.cpp`) so the
 whole purchase and ad flow can be built and tested without a phone: list them in game.json "plugins"
-(or run with `RTS_MOCK_PLUGINS=1`), then `RTS_MOCK_STORE=purchased|pending|cancelled|failed`,
-`RTS_MOCK_ADS=ok|noreward|fail`.
+(or run with `AIVERSE_MOCK_PLUGINS=1`), then `AIVERSE_MOCK_STORE=purchased|pending|cancelled|failed`,
+`AIVERSE_MOCK_ADS=ok|noreward|fail`.
 
 ### Only what you use
 
 A build contains exactly the plugins the game selected — game.json `"plugins"`, or `--plugins a,b`
 for one build — and nothing else: no Gradle dependency, Maven repository, manifest entry, Java class,
 Objective-C source, pod, Info.plist key, SKAdNetwork id or web script of any other plugin. Plugins
-without a part for the target platform are skipped (rtsbuild prints why). The desktop mocks are
-compiled out of every packaged build unless the game lists `mock-*` (rtsbuild writes
-`set(RTS_MOCK_PLUGINS OFF)` into `plugins.cmake`; plain dev CMake builds keep them, but even there
-they register only when listed or with `RTS_MOCK_PLUGINS=1`). CI checks this for every plugin and for
+without a part for the target platform are skipped (aiversebuild prints why). The desktop mocks are
+compiled out of every packaged build unless the game lists `mock-*` (aiversebuild writes
+`set(AIVERSE_MOCK_PLUGINS OFF)` into `plugins.cmake`; plain dev CMake builds keep them, but even there
+they register only when listed or with `AIVERSE_MOCK_PLUGINS=1`). CI checks this for every plugin and for
 "no plugins" (`.github/scripts/check-plugin-isolation.py`).
 
 ## Ready plugins (`plugins/`)
@@ -81,7 +81,7 @@ they register only when listed or with `RTS_MOCK_PLUGINS=1`). CI checks this for
   rustore, yandex-games, steam, mock-store; ads = yandex-ads, admob, applovin, ironsource, yandex-games, mock-ads.
 - **Store policies**: an app published on Google Play must not contain another payment system, and a
   RuStore build should not need Google Play. Build them separately:
-  `rtsbuild --target android --plugins googleplay,admob` and `--plugins rustore,yandex-ads`
+  `aiversebuild --target android --plugins googleplay,admob` and `--plugins rustore,yandex-ads`
   (`--plugins` replaces the game.json list for that build).
 
 Test ids: Yandex `demo-interstitial-yandex`, `demo-rewarded-yandex`, `demo-banner-yandex`;
@@ -108,7 +108,7 @@ your own server (MicroTxn needs a backend and a publisher Web API key):
    sold as non-consumables: `"dlc": { "<product id>": <DLC app id> }` (overlay store page, ownership
    via `BIsDlcInstalled`). Store product `"ids"` may also map a product straight to a definition id.
 3. Build with the SDK: download it from partner.steamgames.com and set `STEAMWORKS_SDK=<sdk folder>`
-   (or `"sdk"` in the plugin config). Valve does not allow the SDK in the repo; rtsbuild stops with
+   (or `"sdk"` in the plugin config). Valve does not allow the SDK in the repo; aiversebuild stops with
    a hint when it is missing, links `steam_api`, and puts `steam_api64.dll` / `libsteam_api.so` /
    `libsteam_api.dylib` next to the executable.
 4. Development runs need `steam_appid.txt` with the app id next to the executable and Steam
@@ -203,7 +203,7 @@ Folder `plugins/<name>/` (engine-wide) or `<project>/plugins/<name>/` (one game)
                "repositories": ["https://maven.example.com"],
                "manifest": { "root": ["<uses-permission .../>"], "application": ["<meta-data ... android:value=\"${appKey}\"/>"],
                              "activity": ["<intent-filter>...</intent-filter>"] } },
-  "ios":     { "sources": ["ios/*.mm"], "classes": { "my-sdk": "RTSMySdkPlugin" },
+  "ios":     { "sources": ["ios/*.mm"], "classes": { "my-sdk": "AiverseMySdkPlugin" },
                "pods": ["pod 'MySdk', '~> 2.0'"], "frameworks": ["StoreKit"],
                "plist": ["<key>MySdkKey</key><string>${appKey}</string>"],
                "skAdNetworks": ["cstr6suwn9"] },        // ad networks: merged into one SKAdNetworkItems
@@ -218,20 +218,20 @@ Folder `plugins/<name>/` (engine-wide) or `<project>/plugins/<name>/` (one game)
 ```
 
 `${key}` / `${a.b}` in manifest, plist, pod and script strings are filled from the plugin's
-game.json config for that platform (rtsbuild warns about missing keys). rtsbuild then:
+game.json config for that platform (aiversebuild warns about missing keys). aiversebuild then:
 
 - Android — Java sources, Gradle dependencies/repositories, manifest entries (incl. the
-  `rts.plugin.*` registry); `RtsActivity` forwards `onResume/onPause/onDestroy/onNewIntent/
+  `aiverse.plugin.*` registry); `AiverseActivity` forwards `onResume/onPause/onDestroy/onNewIntent/
   onActivityResult` to plugins (the activity is `singleTask`, payment deep links come back through
   `onNewIntent`).
 - iOS — sources and frameworks via `plugins.cmake`, Info.plist keys (a key two plugins both set is
   written once, first plugin wins, with a warning; `skAdNetworks` of all plugins are merged into one
-  deduplicated `SKAdNetworkItems`), a Podfile for `rts_client` and `pod install` (open
-  `RTSEngine.xcworkspace` afterwards).
-- Web — copies the scripts and inserts `<script>` tags at `<meta name="rts-plugin-scripts">` in the
-  shell, plus `RTSPlugins.config[name]`.
+  deduplicated `SKAdNetworkItems`), a Podfile for `aiverse_client` and `pod install` (open
+  `AIVERSE.xcworkspace` afterwards).
+- Web — copies the scripts and inserts `<script>` tags at `<meta name="aiverse-plugin-scripts">` in the
+  shell, plus `AiversePlugins.config[name]`.
 - C++ sources are compiled into the game executable itself (not a static library), so
-  `RTS_PLUGIN(...)` self-registration works. Desktop `includeDirs`/`libraries` go to the game
+  `AIVERSE_PLUGIN(...)` self-registration works. Desktop `includeDirs`/`libraries` go to the game
   target, `runtime` files are copied next to the executable (rpath `$ORIGIN` / `@loader_path`).
   A C++ plugin can override `update()`: it runs every frame on the game thread (SDK callbacks).
 
@@ -244,7 +244,7 @@ thread); never block; send `app.pause`/`app.resume` around anything that covers 
 - ✅ Bridge, services, mocks: unit tests (`tests/tests.cpp`), Linux and Windows (MinGW/Wine).
 - ✅ Web bridge in Chromium (calls, config, events, errors, `LoadingAPI.ready`); `yandex-games`
   protocol test against a fake SDK (`node plugins/yandex-games/web/test.mjs`).
-- ✅ rtsbuild output: Android manifest/Gradle/Java, web script tags, iOS plugins.cmake/Podfile/
+- ✅ aiversebuild output: Android manifest/Gradle/Java, web script tags, iOS plugins.cmake/Podfile/
   SKAdNetworkItems; isolation check for every plugin (`check-plugin-isolation.py`).
 - ✅ `steam`: builds and links a packaged Linux game with the real SDK redistributables; purchase
   flow (prices, restore, overlay checkout, consume, DLC, cancel) tested against a fake Steam client

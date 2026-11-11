@@ -1,9 +1,11 @@
 #include "Workspace.h"
+#include "modules/fps/FpsModule.h"
 #include "ScenarioOps.h"
 #include "SchemaOps.h"
-namespace rts::editor { void registerCampaignOps(Workspace& ws); }   // CampaignOps.cpp
-namespace rts::editor { void registerStrategicOps(Workspace& ws); }   // StrategicOps.cpp
-namespace rts::editor { void registerUiOps(Workspace& ws); }         // UiOps.cpp (screens, ui_preview)
+namespace aiverse::editor { void registerFpsOps(Workspace& ws); }
+namespace aiverse::editor { void registerCampaignOps(Workspace& ws); }   // CampaignOps.cpp
+namespace aiverse::editor { void registerStrategicOps(Workspace& ws); }   // StrategicOps.cpp
+namespace aiverse::editor { void registerUiOps(Workspace& ws); }         // UiOps.cpp (screens, ui_preview)
 #include "SimTools.h"
 #include "TileOps.h"
 #include "TerrainOps.h"
@@ -44,7 +46,7 @@ namespace rts::editor { void registerUiOps(Workspace& ws); }         // UiOps.cp
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // ================================================================= json paths
 
@@ -158,7 +160,8 @@ bool Project::load(const std::string& d, std::string* err) {
     try {
         Json m = Json::parseFile(d + "/game.json");
         Json r = Json::parseFile(d + "/" + m.getStr("rules", "rules.json"));
-        game::Rules parsed = game::loadRules(r);
+        game::Rules parsed;
+        if(m.getStr("module", "rts")=="fps")fps::readConfig(r);else parsed=game::loadRules(r);
         dir = d; manifest = std::move(m); rulesJson = std::move(r); rules = std::move(parsed);
         rulesError.clear();
         rulesDirty = manifestDirty = false;
@@ -169,7 +172,7 @@ bool Project::load(const std::string& d, std::string* err) {
     }
 }
 bool Project::reloadRules() {
-    try { rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
+    try { if(isFps()){fps::readConfig(rulesJson);rules=game::Rules{};}else rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
     catch (const std::exception& e) { rulesError = e.what(); return false; }
 }
 bool Project::saveRules(std::string* err) {
@@ -185,7 +188,7 @@ bool Project::saveManifest(std::string* err) {
 
 // ================================================================= workspace
 
-Workspace::Workspace() { registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerWizardOps(*this); }
+Workspace::Workspace() { registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerWizardOps(*this); }
 Workspace::~Workspace() { if (buildThread_.joinable()) buildThread_.join(); }
 
 namespace {
@@ -223,7 +226,7 @@ void Workspace::startTool(const std::string& args, const std::string& label, boo
     if (building_) throw std::runtime_error("a build is already running");
     if (withProject && project.dir.empty()) throw std::runtime_error("no game is open");
     startCommand(shellQuote(buildTool) + (withProject ? " --project " + shellQuote(project.dir) : std::string()) + " --engine " + shellQuote(engineDir) + " " + args,
-                 "$ rtsbuild " + args, label);
+                 "$ aiversebuild " + args, label);
 }
 
 void Workspace::appendBuildLog(const std::string& line) {
@@ -285,7 +288,7 @@ void Workspace::startCommand(const std::string& command, const std::string& show
         }
         lf.close();
         std::error_code ec;
-        if (keep) rts::pack::copyFileReplace(logFile, logFile.parent_path() / "build-last.log", ec);
+        if (keep) aiverse::pack::copyFileReplace(logFile, logFile.parent_path() / "build-last.log", ec);
         ++runCount_;
         building_ = false;
     });
@@ -300,7 +303,7 @@ Json Workspace::toolchainCheck(const std::string& target) const {
 #else
     FILE* p = popen(cmd.c_str(), "r");
 #endif
-    if (!p) throw std::runtime_error("cannot start rtsbuild");
+    if (!p) throw std::runtime_error("cannot start aiversebuild");
     std::string out;
     char buf[1024];
     while (std::fgets(buf, sizeof buf, p)) out += buf;
@@ -313,8 +316,8 @@ Json Workspace::toolchainCheck(const std::string& target) const {
     if (brace == std::string::npos) {
         while (!out.empty() && std::isspace(static_cast<unsigned char>(out.back()))) out.pop_back();
         std::error_code ec;
-        if (buildTool.empty() || !std::filesystem::exists(buildTool, ec)) throw std::runtime_error("rtsbuild не найден: " + (buildTool.empty() ? std::string("путь не задан") : buildTool));
-        throw std::runtime_error(out.empty() ? "rtsbuild ничего не ответил (" + buildTool + ")" : "rtsbuild: " + out.substr(0, 400));
+        if (buildTool.empty() || !std::filesystem::exists(buildTool, ec)) throw std::runtime_error("aiversebuild не найден: " + (buildTool.empty() ? std::string("путь не задан") : buildTool));
+        throw std::runtime_error(out.empty() ? "aiversebuild ничего не ответил (" + buildTool + ")" : "aiversebuild: " + out.substr(0, 400));
     }
     return Json::parse(out.substr(brace));
 }
@@ -325,7 +328,7 @@ void Workspace::registerOp(Op op) {
 }
 
 // Every log of the editor and its tools goes to <engine>/logs (git-ignored): editor.log (agent and
-// editor actions), build-<target>-<time>.log + build-last.log (rtsbuild output).
+// editor actions), build-<target>-<time>.log + build-last.log (aiversebuild output).
 std::string Workspace::logsDir() const {
     std::error_code ec;
     fs::path d = (engineDir.empty() ? fs::current_path(ec) : fs::path(engineDir)) / "logs";
@@ -421,7 +424,7 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
     std::error_code ec;
     dir = fs::weakly_canonical(dir, ec).string();
     if (!project.load(dir, err)) return false;
-    {   // recent projects (shared with rtsmcp); the engine's own templates aren't user projects
+    {   // recent projects (shared with aiversemcp); the engine's own templates aren't user projects
         const std::string tpl = fs::weakly_canonical(fs::path(gamesDir()), ec).string();
         const bool isTemplate = dir.rfind(tpl, 0) == 0;
         bool created = false;
@@ -476,7 +479,7 @@ void Workspace::registerCoreOps() {
         Json arr = Json::array();
         for (auto& t : listTemplates(engineDir)) {
             Json j = Json::object();
-            j.set("id", str(t.id)); j.set("name", str(t.name));
+            j.set("id", str(t.id)); j.set("name", str(t.name));j.set("genre",str(t.genre));
             if (!t.description.empty()) j.set("description", str(t.description));
             if (!t.dir.empty()) j.set("dir", str(t.dir));
             j.set("maps", Json::number(int64_t(t.maps)));
@@ -535,7 +538,7 @@ void Workspace::registerCoreOps() {
         return r;
     };
     add("create_project", "Create a new game project in a folder of your choice from a template (list_projects shows them; "
-        "'empty' = minimal game) and open it. location: parent folder (default ~/RTSProjects); folder: name of the new folder (default: from the name).",
+        "'empty' = minimal game) and open it. location: parent folder (default ~/AiverseProjects); folder: name of the new folder (default: from the name).",
         R"({"properties": {"name": {"type": "string"}, "template": {"type": "string"}, "location": {"type": "string"}, "folder": {"type": "string"}}, "required": ["name"]})",
         create);
     add("create_game", "Same as create_project (older name; 'id' = folder).",
@@ -1345,7 +1348,7 @@ void Workspace::registerCoreOps() {
             if (canon.string().rfind(fs::weakly_canonical(project.dir).string(), 0) != 0) throw std::runtime_error("dest must stay inside the game folder");
             fs::create_directories(dst.parent_path());
             std::error_code ec;   // re-import over an existing file: MinGW-safe copy (FileCopy.h)
-            if (!rts::pack::copyFileReplace(ps(p, "source"), dst, ec)) throw std::runtime_error("copy " + ps(p, "source") + ": " + ec.message());
+            if (!aiverse::pack::copyFileReplace(ps(p, "source"), dst, ec)) throw std::runtime_error("copy " + ps(p, "source") + ": " + ec.message());
             Json r = ok();
             r.set("summary", str("Импортирован " + ps(p, "dest")));
             return r;
@@ -1371,7 +1374,7 @@ void Workspace::registerCoreOps() {
 
     // ---------------------------------------------------------------- build
     add("build_start", "Package the open game for a platform in the background: macos, ios, android, web, windows, linux, all. Poll build_status. "
-        "A missing toolchain ends the build with exit code 3 and a log line RTS_MISSING_TOOLCHAIN <target>: <ids> (toolchain_check / toolchain_install).",
+        "A missing toolchain ends the build with exit code 3 and a log line AIVERSE_MISSING_TOOLCHAIN <target>: <ids> (toolchain_check / toolchain_install).",
         R"({"properties": {"target": {"type": "string"}, "config": {"type": "string", "enum": ["Debug", "Release"]}, "installMissing": {"type": "boolean", "description": "install missing toolchains first, see toolchain_check"}}, "required": ["target"]})",
         [this](const Json& p) {
             startBuild(ps(p, "target"), ps(p, "config", "Release"), p.getBool("installMissing") ? "--install-missing" : "");
@@ -1392,7 +1395,7 @@ void Workspace::registerCoreOps() {
 
     // ---------------------------------------------------------------- editor-only (implemented by the GUI)
     auto gui = [this](const char* name, const char* desc, const char* sch) {
-        Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start rts_editor)"); }, true};
+        Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true};
         registerOp(std::move(op));
     };
     gui("view_screenshot", "Screenshot of the editor viewport (what the user sees), optionally inside a device frame. Returns a PNG image.",
@@ -1408,10 +1411,10 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"owner": {"type": "integer"}, "type": {"type": "string"}, "limit": {"type": "integer"}}})");
     registerOp({"play_command", "Issue a player command in the running play-test, exactly like player input (the user sees it live). command: " +
         commandNames() + ". " + kCommandHelp, schema((std::string(R"({"properties": {)") + commandSchemaProps() + R"(}, "required": ["command"]})").c_str()),
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start rts_editor)"); }, true});
+        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true});
     gui("device_list", "Device presets for the simulator (phones, tablets, desktops).", "{}");
     gui("device_set", "Show the viewport in a device frame (resolution, notch/safe area, orientation) like a phone simulator. 'none' turns it off.",
         R"({"properties": {"device": {"type": "string"}, "orientation": {"type": "string", "enum": ["portrait", "landscape"]}}, "required": ["device"]})");
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

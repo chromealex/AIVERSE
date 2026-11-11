@@ -1,0 +1,3 @@
+Edited with built-in image_gen. Output: docs/images/aiverse-logo-original.png
+
+Precise layout edit of the supplied AIVERSE logo. ONLY translate the entire existing AIVERSE wordmark straight down so its bounding box vertical midpoint aligns exactly with the vertical midpoint of the full left emblem bounding box. In the 2170x725 reference the emblem spans y=127..599, center y=363; text spans y=200..426, center y=313. Therefore move the text DOWN by approximately 50 pixels, to y=250..476. Preserve its horizontal position, size, bold font, exact lettering, black color and spacing. Preserve the left emblem exactly in place, all shapes, beige diamond, colors, dimensions and white background. Preserve canvas dimensions and aspect ratio. No redesign and no additional elements.

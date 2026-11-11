@@ -13,7 +13,7 @@
 #include "UiKeyboard.h"
 #include "UiLinear.h"
 
-namespace rts::ui {
+namespace aiverse::ui {
 
 namespace {
 
@@ -216,7 +216,7 @@ void UiLayer::setTranslator(std::function<std::string(const std::string&)> fn) {
 
 void UiLayer::setOnScreenKeyboard(OnScreenKeyboard mode) {
     if (!impl_) return;
-    const char* env = std::getenv("RTS_OSK");
+    const char* env = std::getenv("AIVERSE_OSK");
     const bool on = mode == OnScreenKeyboard::Always ||
                     (mode == OnScreenKeyboard::Auto && (platform::isTouchDevice() || (env && env[0] == '1')));
     impl_->keyboard.setEnabled(on);
@@ -409,4 +409,4 @@ void UiLayer::render() {
     m.dev->setScissor({});
 }
 
-} // namespace rts::ui
+} // namespace aiverse::ui

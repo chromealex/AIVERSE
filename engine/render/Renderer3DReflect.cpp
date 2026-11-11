@@ -7,7 +7,7 @@
 #include <chrono>
 #include <cstring>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 struct DrawUniformsR { float model[16]; float color[4]; float params[4]; };   // = DrawUniforms (Renderer3D.cpp)
@@ -90,4 +90,4 @@ void Renderer3D::renderSpotShadow() {
     lightViewProj_ = savedLVP;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

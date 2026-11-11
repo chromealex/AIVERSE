@@ -9,7 +9,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace rts::render::mdx {
+namespace aiverse::render::mdx {
 
 namespace {
 
@@ -284,4 +284,4 @@ private:
 
 Mdlx parseMdl(const std::string& path, const std::string& text) { return MdlReader(path, text).parse(); }
 
-} // namespace rts::render::mdx
+} // namespace aiverse::render::mdx

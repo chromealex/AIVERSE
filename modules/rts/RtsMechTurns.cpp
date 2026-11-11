@@ -5,7 +5,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 uint8_t RtsModule::turnPlayer(Simulation& sim) const { return sim.world().resource<GameState>()->mech.turnPlayer; }
@@ -99,4 +99,4 @@ void RtsModule::mechTurnStat(Simulation& sim, Entity e, Stat s, Fixed& mul) cons
     if (tb && tb->turn == M.turnIndex && tb->move.raw <= 0) mul = Fixed{};
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

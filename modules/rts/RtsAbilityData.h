@@ -11,7 +11,7 @@
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class TargetKind : uint8_t {
     None,       // no target (around the caster / whole map for player skills)
@@ -234,4 +234,4 @@ struct PlayerAbilityDef {
     std::vector<PlayerAbilityDef> levels;      // level 2..
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

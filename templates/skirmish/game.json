@@ -1,4 +1,4 @@
-// Game manifest: read by the client at startup and by rtsbuild when packaging.
+// Game manifest: read by the client at startup and by aiversebuild when packaging.
 {
   "description": "Классика Warcraft/RA: база, армия, башни.",
   "name": "Iron and Gold",

@@ -1,0 +1,17 @@
+{
+  "library.showcase.title": "Native library showcase",
+  "library.showcase.start": "Start match",
+  "library.showcase.pause": "Pause / resume",
+  "library.showcase.save": "Save and restore",
+  "library.showcase.time": "Simulation tick",
+  "library.showcase.build": "Completed buildings",
+  "library.showcase.combat": "Attacks",
+  "library.showcase.reward": "Profile gold",
+  "library.showcase.result": "Match result",
+  "library.showcase.running": "Running",
+  "library.showcase.waiting": "Ready",
+  "library.showcase.finished": "Finished",
+  "library.showcase.restore": "Save round trip",
+  "library.showcase.yes": "Verified",
+  "library.showcase.no": "Pending"
+}

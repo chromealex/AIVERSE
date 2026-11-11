@@ -1,7 +1,7 @@
 #include "Protocol.h"
 #include <algorithm>
 
-namespace rts::net {
+namespace aiverse::net {
 
 namespace {
 constexpr uint32_t kMaxList = 100000;
@@ -205,4 +205,4 @@ bool decode(ByteReader& r, MatchEndMsg& m) {
 Bytes encode(Msg type, const ChatMsg& m) { Writer w(type); w.u32(m.from); w.str(m.name); w.str(m.text); return w.buf; }
 bool decode(ByteReader& r, ChatMsg& m) { m.from = r.u32(); m.name = r.str(); m.text = r.str(); return r.ok(); }
 
-} // namespace rts::net
+} // namespace aiverse::net

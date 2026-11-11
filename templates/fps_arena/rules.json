@@ -1,0 +1,91 @@
+{
+  "fps": {
+    "tickRate": 60,
+    "snapshotRate": 20,
+    "maxPlayers": 10,
+    "mode": "elimination",
+    "worldLimit": 128,
+    "interestRadius": 250,
+    "rewindTicks": 12,
+    "roundTicks": 7200,
+    "zone": {
+      "center": [
+        0,
+        0,
+        0
+      ],
+      "radius": 4000,
+      "endRadius": 10,
+      "startTick": 1800,
+      "durationTicks": 36000
+    },
+    "weapons": [
+      {
+        "nameKey": "fps.weapon.pistol",
+        "damage": 28,
+        "magazine": 12,
+        "reserve": 72,
+        "intervalTicks": 15,
+        "reloadTicks": 75,
+        "range": 150,
+        "automatic": false,
+        "hipSpread": 0.001,
+        "moveSpread": 0.003,
+        "recoil": 0.0015,
+        "price": 300,
+        "penetration": 0
+      },
+      {
+        "nameKey": "fps.weapon.rifle",
+        "damage": 25,
+        "magazine": 30,
+        "reserve": 120,
+        "intervalTicks": 6,
+        "reloadTicks": 120,
+        "range": 400,
+        "hipSpread": 0.002,
+        "moveSpread": 0.006,
+        "recoil": 0.0025,
+        "price": 1500,
+        "penetration": 1
+      },
+      {
+        "nameKey": "fps.weapon.shotgun",
+        "damage": 14,
+        "magazine": 8,
+        "reserve": 40,
+        "intervalTicks": 54,
+        "reloadTicks": 150,
+        "range": 60,
+        "pellets": 9,
+        "spread": 0.006,
+        "automatic": false,
+        "hipSpread": 0.001,
+        "moveSpread": 0.005,
+        "recoil": 0.003,
+        "price": 1200,
+        "penetration": 0
+      },
+      {
+        "nameKey": "fps.weapon.sniper",
+        "damage": 100,
+        "magazine": 5,
+        "reserve": 25,
+        "intervalTicks": 72,
+        "reloadTicks": 160,
+        "range": 1500,
+        "automatic": false,
+        "hipSpread": 0.0005,
+        "moveSpread": 0.01,
+        "recoil": 0.005,
+        "price": 3500,
+        "penetration": 2
+      }
+    ],
+    "mechanics": {
+      "enabled": true,
+      "knockdown": false,
+      "startArmor": 50
+    }
+  }
+}

@@ -6,7 +6,7 @@
 //   tex0:   RGBA image (straight alpha)
 #pragma once
 
-namespace rts::splash::shaders {
+namespace aiverse::splash::shaders {
 
 inline const char* kSplashVS = R"(
 layout(std140) uniform U0 { vec4 u_target; };
@@ -45,4 +45,4 @@ fragment float4 fs_main(VOut in [[stage_in]], texture2d<float> tex0 [[texture(0)
 }
 )";
 
-} // namespace rts::splash::shaders
+} // namespace aiverse::splash::shaders

@@ -8,7 +8,7 @@
 #include "../EditorUtil.h"
 #include "modules/rts/view/RtsOverlayData.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class OverlaysWindow : public EditorWindow {
 public:
@@ -186,6 +186,6 @@ private:
     std::string selected_, text_, message_;
 };
 
-RTS_EDITOR_WINDOW(OverlaysWindow);
+AIVERSE_EDITOR_WINDOW(OverlaysWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

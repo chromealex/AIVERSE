@@ -8,7 +8,7 @@
 #include <set>
 #include <sstream>
 
-namespace rts::net {
+namespace aiverse::net {
 
 const QueueConfig* Server::Impl::queue(const std::string& id) const {
     for (auto& q : cfg.queues) if (q.id == id) return &q;
@@ -152,4 +152,4 @@ void Server::Impl::saveRatings() {
     std::rename(tmp.c_str(), cfg.ratingsFile.c_str());
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

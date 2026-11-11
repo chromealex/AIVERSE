@@ -14,7 +14,7 @@
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class FieldKernelKind : uint8_t { Decay, Diffuse, Spread, Flow, Consume };
 
@@ -114,4 +114,4 @@ inline int fieldCellsW(const GridFieldDef& d, int mapW) { return (mapW + d.resol
 std::string encodeFieldRle(const std::vector<int32_t>& v);
 bool decodeFieldRle(const std::string& s, size_t n, std::vector<int32_t>& out);
 
-} // namespace rts::game
+} // namespace aiverse::game

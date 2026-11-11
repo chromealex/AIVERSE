@@ -4,12 +4,12 @@
   "provides": ["ads"],
   "android": {
     "java": "android/java",
-    "classes": { "yandex-ads": "com.rtsengine.plugins.YandexAdsPlugin" },
+    "classes": { "yandex-ads": "com.aiverse.plugins.YandexAdsPlugin" },
     "dependencies": ["com.yandex.android:mobileads:8.6.0"]
   },
   "ios": {
     "sources": ["ios/*.mm"],
-    "classes": { "yandex-ads": "RTSYandexAdsPlugin" },
+    "classes": { "yandex-ads": "AiverseYandexAdsPlugin" },
     "pods": ["pod 'YandexMobileAds', '8.6.0'"]
   }
 }

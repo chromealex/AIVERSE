@@ -8,7 +8,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -475,4 +475,4 @@ void RtsModule::hashMech(Simulation& sim, Hasher& h, Entity e) {
     if (auto* mo = w.tryGet<Morale>(e)) { h.u32(0x303A); h.fx(mo->value); h.fx(mo->fatigue); h.fx(mo->run); h.u32(mo->state); h.u32(mo->outOfSupply); h.u32(mo->lastCharge); }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

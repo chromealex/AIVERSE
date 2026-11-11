@@ -4,7 +4,7 @@
 #pragma once
 #include "Workspace.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerPostFxOps(Workspace& ws);
 
@@ -17,4 +17,4 @@ std::vector<uint8_t> neutralLut(int size);
 // Minimal PNG encoder (stored deflate blocks): RGBA8, top row first.
 std::string encodePngRgba(int w, int h, const std::vector<uint8_t>& rgba);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

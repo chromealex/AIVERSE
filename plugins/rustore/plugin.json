@@ -4,7 +4,7 @@
   "provides": ["store"],
   "android": {
     "java": "android/java",
-    "classes": { "rustore": "com.rtsengine.plugins.RuStorePayPlugin" },
+    "classes": { "rustore": "com.aiverse.plugins.RuStorePayPlugin" },
     "repositories": ["https://nexus-external.rustore.ru/repository/maven-rustore-exposed"],
     "platformDependencies": ["ru.rustore.sdk:bom:2026.10.01"],
     "dependencies": ["ru.rustore.sdk:pay"],

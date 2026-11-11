@@ -3,36 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>RTSEngine</title>
+<title>AIVERSE</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0f1214; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
   #status { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: calc(8% + 18px);
             box-sizing: border-box; color: #cfd6dc; font: 13px system-ui, sans-serif; pointer-events: none; z-index: 2; }
-  /* Launch splash until the wasm runs (colours/logo from game.json "splash", injected by rtsbuild);
+  /* Launch splash until the wasm runs (colours/logo from game.json "splash", injected by aiversebuild);
      the engine then draws its own animated splash on the same background. */
-  #rts-splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-                background: var(--rts-splash-bg, #0f1214); transition: opacity .35s; z-index: 1; }
-  #rts-splash img { display: none; width: var(--rts-splash-logo, 40vmin); max-height: 60vh; object-fit: contain;
-                    animation: rts-pulse 1.6s ease-in-out infinite; }
-  #rts-splash-bar { position: absolute; left: 30%; right: 30%; bottom: 8%; height: 6px; border-radius: 3px; overflow: hidden;
+  #aiverse-splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+                background: var(--aiverse-splash-bg, #0f1214); transition: opacity .35s; z-index: 1; }
+  #aiverse-splash img { display: none; width: var(--aiverse-splash-logo, 40vmin); max-height: 60vh; object-fit: contain;
+                    animation: aiverse-pulse 1.6s ease-in-out infinite; }
+  #aiverse-splash-bar { position: absolute; left: 30%; right: 30%; bottom: 8%; height: 6px; border-radius: 3px; overflow: hidden;
                     background: rgba(255, 255, 255, .18); }
-  #rts-splash-bar div { width: 0; height: 100%; background: var(--rts-splash-bar, #e0b040); transition: width .2s; }
-  @keyframes rts-pulse { 50% { transform: scale(1.04); } }
+  #aiverse-splash-bar div { width: 0; height: 100%; background: var(--aiverse-splash-bar, #e0b040); transition: width .2s; }
+  @keyframes aiverse-pulse { 50% { transform: scale(1.04); } }
 </style>
 <script>
   // Native-plugin registry stub: plugin scripts may load before the engine; the engine takes over
-  // RTSPlugins.emit at startup and replays queued events.
-  window.RTSPlugins = window.RTSPlugins || { plugins: {}, queue: [],
+  // AiversePlugins.emit at startup and replays queued events.
+  window.AiversePlugins = window.AiversePlugins || { plugins: {}, queue: [],
     register: function (name, impl) { this.plugins[name] = impl; },
     emit: function (plugin, event, data) { this.queue.push([plugin, event, data]); } };
 </script>
-<!-- rtsbuild inserts the plugins' <script> tags right after this marker (comments don't survive minification) -->
-<meta name="rts-plugin-scripts" content="">
+<!-- aiversebuild inserts the plugins' <script> tags right after this marker (comments don't survive minification) -->
+<meta name="aiverse-plugin-scripts" content="">
 </head>
 <body>
 <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-<div id="rts-splash"><img id="rts-splash-logo" alt=""><div id="rts-splash-bar"><div></div></div></div>
+<div id="aiverse-splash"><img id="aiverse-splash-logo" alt=""><div id="aiverse-splash-bar"><div></div></div></div>
 <div id="status">Loading…</div>
 <script>
   // URL query → command line, e.g. index.html?map=0&spectate → --map 0 --spectate
@@ -41,10 +41,10 @@
     new URLSearchParams(location.search).forEach(function (v, k) { a.push('--' + k); if (v) a.push(v); });
     return a;
   }
-  var splash = document.getElementById('rts-splash'), splashBar = document.querySelector('#rts-splash-bar div');
-  if (window.RTS_SPLASH && RTS_SPLASH.logo) {
-    var logo = document.getElementById('rts-splash-logo');
-    logo.src = RTS_SPLASH.logo; logo.style.display = 'block';
+  var splash = document.getElementById('aiverse-splash'), splashBar = document.querySelector('#aiverse-splash-bar div');
+  if (window.AIVERSE_SPLASH && AIVERSE_SPLASH.logo) {
+    var logo = document.getElementById('aiverse-splash-logo');
+    logo.src = AIVERSE_SPLASH.logo; logo.style.display = 'block';
   }
   // "Downloading data... (12345/67890)" from the .data preload drives the bar
   function splashProgress(t) {

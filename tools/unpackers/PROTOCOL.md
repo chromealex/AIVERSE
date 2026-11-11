@@ -2,7 +2,7 @@
 
 Unpackers add support for archive formats the engine doesn't know: zip, tar, disk images, and
 the data files of other games. An unpacker is a plugin folder with a manifest and a program
-written in any language. Host tools (`assetpipe`, `rtsbuild`, the editor/MCP server) call it to
+written in any language. Host tools (`assetpipe`, `aiversebuild`, the editor/MCP server) call it to
 turn an archive into plain files, which are then packed into `.rpak`. **The game runtime never
 runs unpackers**: it reads `.rpak` only, the same on every platform.
 
@@ -14,7 +14,7 @@ rebuilt.
 Later entries win on name clashes:
 
 1. `<engine>/tools/unpackers/*/unpacker.json`: plugins shipped with the engine.
-2. Every folder listed in `$RTS_UNPACKERS` (`:`-separated, `;` on Windows): the user's own
+2. Every folder listed in `$AIVERSE_UNPACKERS` (`:`-separated, `;` on Windows): the user's own
    plugins, e.g. importers for commercial games that are kept outside the repo.
 3. `<project>/unpackers/*/unpacker.json`: plugins that belong to one game (never packed into
    the game's content).
@@ -103,14 +103,14 @@ Each call is a separate process:
 ## Writing a plugin
 
 ```sh
-assetpipe unpackers new <dir> <name>          # manifest + unpack.py + rtsunpack.py helper
+assetpipe unpackers new <dir> <name>          # manifest + unpack.py + aiverseunpack.py helper
 assetpipe --unpackers <dir> unpackers check   # manifest valid + `info` handshake
 assetpipe --unpackers <dir> probe some.file   # detection
 assetpipe --unpackers <dir> list some.file    # what is inside
 assetpipe --unpackers <dir> import -o x.rpak some.file=imported/x
 ```
 
-With the Python helper (`lib/rtsunpack.py`, standard library only, Python 3.8+), a plugin
+With the Python helper (`lib/aiverseunpack.py`, standard library only, Python 3.8+), a plugin
 consists of two functions:
 
 ```python
@@ -145,7 +145,7 @@ Adding a new format from the MCP server takes four steps:
 
 ## Imports in game.json
 
-`rtsbuild` runs the imports listed in game.json while building `content.rpak`:
+`aiversebuild` runs the imports listed in game.json while building `content.rpak`:
 
 ```json
 "imports": [

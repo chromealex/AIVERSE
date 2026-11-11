@@ -1,4 +1,4 @@
-# Game data format (RTSEngine)
+# Game data format (AIVERSE)
 
 A game is a folder `<project>/`:
 
@@ -45,7 +45,7 @@ tablets are always fullscreen, the web build fills the page). Editor: **Сбор
 | `allowFullscreen` | F11 (Windows, Linux), Alt+Enter (Windows) and the green button (macOS) switch fullscreen (true) |
 | `macos`, `windows`, `linux` | objects with any of the keys above that override them on that platform |
 
-Runs with `RTS_EXIT_AFTER_FRAMES` (screenshots, CI) and `--size WxH` stay windowed at the asked size.
+Runs with `AIVERSE_EXIT_AFTER_FRAMES` (screenshots, CI) and `--size WxH` stay windowed at the asked size.
 Code: `engine/platform/WindowSettings.h` (parser, checks), `AppConfig` window fields, `AppCallbacks::configure`.
 
 Optional `"ui"` block: how the in-game UI (RmlUi documents) blends.
@@ -489,10 +489,10 @@ music's grid. Any sound can duck the music while it plays: `"duckMusic": 0.5` lo
 
 ### Compression at build time
 
-`rtsbuild` re-encodes the referenced sound and music files for each target before packing; the
+`aiversebuild` re-encodes the referenced sound and music files for each target before packing; the
 project folder is never changed. Profiles: `desktop` (macOS, Windows, Linux), `mobile` (iOS,
 Android), `web`. `--audio mobile` forces a profile, `--audio off` ships the files as they are;
-`rts_audiopack --project <game> --profile mobile` shows what a profile would do.
+`aiverse_audiopack --project <game> --profile mobile` shows what a profile would do.
 
 ```json
 "build": {
@@ -685,7 +685,7 @@ the texture is mapped in world space every `textureScale` units and mixed by `te
 | `roads` | road cells (map `+`, `roadNetwork` building) as road surfaces with edges, joins, crossings, rounded corners and dead ends; cobbles on high quality | `color`, `edge`, `width` 0.2..1, `alpha`, `cobbles`, `texture*` |
 
 What the viewer sees follows fog of war: territory, rooms, rock and roads are updated only where the cell is visible
-(remembered elsewhere). Weak GPUs (`MaterialQuality::Low`; testing: `RTS_GROUNDFX=low`) get no border pulse, no
+(remembered elsewhere). Weak GPUs (`MaterialQuality::Low`; testing: `AIVERSE_GROUNDFX=low`) get no border pulse, no
 vein/gem geometry (a tint instead), no rock bevels, no road edges, cobbles or lane tracks. 2D tile maps are not
 overlaid.
 
@@ -1137,7 +1137,7 @@ Types can be assembled from a chassis and parts (Master of Orion, Galactic Civil
 
 ## Field battles, big armies, logistics (agent-mech stage 4)
 
-Tested in `tests/tests_mech.inc` (`mech_battle`, `mech_flow_fields`, `mech_logistics`; `RTS_BENCH_ARMY=1500` runs a
+Tested in `tests/tests_mech.inc` (`mech_battle`, `mech_flow_fields`, `mech_logistics`; `AIVERSE_BENCH_ARMY=1500` runs a
 3000-unit benchmark).
 
 ### Morale, rout, fatigue, charge (Total War, Close Combat)
@@ -1246,7 +1246,7 @@ commands (replays continue), the entity allocator, every component pool in dense
 `GameState` (per-cell layers run-length encoded). Not saved: rules, triggers, the planet surface (from setup) and derived
 caches (clearance, HPA*, rebuilt on demand). The computer players keep their own memory, so bots resume from the loaded
 state with fresh plans. Module side: `RtsModule::serializeState` (`modules/rts/RtsSave.cpp`); a component type missing from
-its list makes saving fail. `rts_headless --save F --save-at S` / `--load F`; MCP `match_run` with `saveCheck` (seconds).
+its list makes saving fail. `aiverse_headless --save F --save-at S` / `--load F`; MCP `match_run` with `saveCheck` (seconds).
 A skirmish match at 90 s is ~150 KB.
 
 ## Campaigns (agent-mech)
@@ -1326,7 +1326,7 @@ player = triggering slot) — presentation/tools only, not hashed. `rules_lint` 
 `native_status` compares rules.json `nativeModules` with what the running editor binary has compiled in
 (`required`, `compiled`, `missing`) and describes the per-project editor build in `<project>/Builds/.temp/editor-<host>`
 (`editor`, `headless`, `built`, `buildModules`, `upToDate`, `ready`, `why`). `native_build` configures and builds
-`rts_editor` + `rts_headless` there with `-DRTS_CONTENT_DIR=<project>` (Release), streaming into the build log
+`aiverse_editor` + `aiverse_headless` there with `-DAIVERSE_CONTENT_DIR=<project>` (Release), streaming into the build log
 (`build_status`); `wait: true` blocks until it ends and returns the binary paths. See docs/native-modules.md.
 
 ## Texture atlases (game.json `atlas`, optional)
@@ -1340,7 +1340,7 @@ are ignored during packaging to preserve their frame coordinates. Other exclusio
 noAtlas, decode failures, a lone image in a group) require manual decisions. Recalculate a stale
 report before applying fixes; the button is disabled while settings differ from the report.
 
-When a game is packaged (`rtsbuild`, `assetpipe pack --atlas <profile>`), small 2D images are
+When a game is packaged (`aiversebuild`, `assetpipe pack --atlas <profile>`), small 2D images are
 packed into atlas pages: fewer texture switches/draw calls, trimmed transparent borders, identical
 images stored once, and pages compressed by the pack's zstd. Game code keeps using the original
 paths (`units/orc/grunt/walk_0.png`); the lookup is transparent at runtime. Loose-folder builds
@@ -1348,7 +1348,7 @@ paths (`units/orc/grunt/walk_0.png`); the lookup is transparent at runtime. Loos
 
 ```json
 "atlas": {
-  "enable": true,                                   // false (or rtsbuild --no-atlas): ship images as is
+  "enable": true,                                   // false (or aiversebuild --no-atlas): ship images as is
   "maxPage": { "web": 2048, "android": 2048, "default": 4096 },  // or a single number
   "pageSize": "mul4",          // page sides: multiples of 4 (default) or "pow2"
   "padding": 2,                // empty texels between images
@@ -1367,7 +1367,7 @@ paths (`units/orc/grunt/walk_0.png`); the lookup is transparent at runtime. Loos
 }
 ```
 
-Profiles are rtsbuild targets (`macos`, `ios`, `android`, `web`, `windows`, `linux`); built-in
+Profiles are aiversebuild targets (`macos`, `ios`, `android`, `web`, `windows`, `linux`); built-in
 page limits: 2048 for `web`/`android`, 4096 otherwise. Targets with equal settings share one pack.
 
 **What goes together.** An image's group key is *usage group* + *kind* (+ opaque/alpha when the
@@ -1410,7 +1410,7 @@ pivots given in original-image pixels stay valid. `.rtex`: 24-byte header (`RTEX
 width, height, flags: 1 alpha, 2 mips, 4 left-delta filtered rows) + RGBA8 rows top to bottom,
 straight alpha. Output is byte-identical for the same input.
 
-**Runtime API** (`engine/atlas/TextureLibrary.h`, link `rts_atlas`):
+**Runtime API** (`engine/atlas/TextureLibrary.h`, link `aiverse_atlas`):
 
 ```cpp
 atlas::TextureLibrary lib(dev, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });
@@ -1430,7 +1430,7 @@ Plain (non-atlased) images come back the same way (own texture, full UVs, no tri
 an original image: `lib.loadImage(path, img)` or `atlas::ImageSource` (the UI uses it, so RmlUi
 `<img src>` and decorators keep working with atlased files).
 
-**Build report.** `rtsbuild` prints atlas statistics and writes `size-report.json` next to
+**Build report.** `aiversebuild` prints atlas statistics and writes `size-report.json` next to
 `size-report.txt` (`<out>/<target>/`): `pack` {rawBytes, packBytes, entries, duplicates, top[]} and
 `atlas` {enabled, profile, maxPage, candidates, atlased, duplicates, pages, occupancyPercent,
 sourceBytes, atlasBytes, storedBytes, bytesSaved, gpuBytesBefore, gpuBytesAfter,
@@ -1440,7 +1440,7 @@ occupancyPercent}, excluded[] {path, reason}}. Preview: `assetpipe atlas --profi
 
 ## Icons and splash (game.json `icons`, `splash`, optional)
 
-Both blocks are read by `rtsbuild` (every size each platform needs, generated on the host without
+Both blocks are read by `aiversebuild` (every size each platform needs, generated on the host without
 sips/iconutil — works from Linux), by the client (the splash) and by the editor window
 **Иконки и заставка** (opened from **Сборка**) / MCP `branding_get`, `branding_set`,
 `icons_preview`, `splash_preview`. Paths are relative to the game folder. Code: `tools/branding`
@@ -1471,10 +1471,10 @@ icon body), `margin` (transparent space around the body), `cornerRadius` (fracti
 `circle`. Warnings (build log, `branding_get`): master missing, smaller than 1024, not square, iOS
 image with transparency (it is flattened on `background`).
 
-| Platform | Generated (rtsbuild) |
+| Platform | Generated (aiversebuild) |
 |---|---|
 | iOS | `gen/Assets.xcassets/AppIcon.appiconset`: iPhone 40..180, iPad 20..167, App Store 1024 + `Contents.json` (opaque) |
-| macOS | `gen/AppIcon.iconset` (16..512@2x) and `gen/AppIcon.icns` (written by rtsbuild; `iconutil` re-packs it on a Mac) |
+| macOS | `gen/AppIcon.iconset` (16..512@2x) and `gen/AppIcon.icns` (written by aiversebuild; `iconutil` re-packs it on a Mac) |
 | Android | `res/mipmap-{mdpi..xxxhdpi}/ic_launcher.png`, `ic_launcher_round.png`, `ic_launcher_foreground.png` (+ `_background`, `_monochrome`), `mipmap-anydpi-v26/ic_launcher(_round).xml`, `values/ic_launcher_background.xml`, `app/src/main/ic_launcher-playstore.png` (512); manifest gets `android:roundIcon` |
 | Windows | `gen/app.ico` (16, 20, 24, 32, 40, 48, 64 BMP + 256 PNG) and `gen/app.rc` (icon resource 1, also the window icon), compiled into the .exe |
 | Web | `favicon.ico` (16/32/48), `favicon-32.png`, `apple-touch-icon.png` (180, opaque), `icons/icon-{192,512}.png`, `icons/maskable-{192,512}.png`, `manifest.webmanifest` (PWA); links injected into `index.html` |
@@ -1519,20 +1519,20 @@ image with transparency (it is flattened on `background`).
   download of every pack chunk (`platform::contentProgress`).
 - **In-engine splash**: drawn through the RHI from the first frame (`engine/splash`, one textured
   quad pipeline, GLSL + MSL; images decoded one per frame and capped at 2048 px), so it runs on
-  any GPU. `RTS_SPLASH=off` loads the old way; with `--map` the splash only covers loading
-  (`RTS_SPLASH=full` plays it all).
+  any GPU. `AIVERSE_SPLASH=off` loads the old way; with `--map` the splash only covers loading
+  (`AIVERSE_SPLASH=full` plays it all).
 - **Native launch screen** (shown by the OS before the engine starts; a static image on a colour —
   `native`, else the first logo on `background`): iOS `LaunchScreen.storyboard` + `LaunchImage` /
   `LaunchBackground` in the asset catalog; Android 12+ splash theme (`windowSplashScreenBackground`,
   `windowSplashScreenAnimatedIcon`: the logo, or your animated vector drawable `androidIcon`) and a
-  pre-12 `windowBackground` drawable, activity theme `@style/RtsLaunchTheme`; web: HTML/CSS splash
+  pre-12 `windowBackground` drawable, activity theme `@style/AiverseLaunchTheme`; web: HTML/CSS splash
   in `platform/web/shell.html` with the `.data` download progress until the wasm starts; macOS and
   Windows: the window background colour.
 - Split builds always keep the splash images in the base pack.
-- **Defaults**: a game without a `splash` block gets the engine's loading screen — the RTSEngine
+- **Defaults**: a game without a `splash` block gets the engine's loading screen — the AIVERSE
   mark assembling on `#0e0f11` with an orange progress bar (`splash::defaultBlock()`, art in
   `engine/assets/branding`); `"splash": false` shows only the background colour while loading.
-  Without `icons` the build uses the RTSEngine mark on white (`branding::defaultIcon`). Both are
+  Without `icons` the build uses the AIVERSE mark on white (`branding::defaultIcon`). Both are
   drawn from one geometry: `tools/branding/logo/make_logo.py` (also the editor's icon,
   `apps/editor/branding`).
 - Sample: `templates/skirmish` (art generated by `templates/_tools/brandart.py`, CC0).
@@ -1594,13 +1594,13 @@ colours per cell kind, plateaus with sharp cliff walls, ramps, soft colour trans
 kind. Painted with the editor's **Рельеф** window or `terrain_material`.
 
 **Quality tiers** (pause menu *Ground textures*, `Renderer3D::materialQuality()`, capped by the device default;
-`RTS_TERRAIN=low|medium|high` overrides for testing): Low = vertex colours (weak Mali / Adreno / PowerVR, also every
+`AIVERSE_TERRAIN=low|medium|high` overrides for testing): Low = vertex colours (weak Mali / Adreno / PowerVR, also every
 game without `layers`), Medium = splat textures + cliff texture, High = + normal maps and triplanar cliffs. Shaders:
 `modules/rts/view/RtsTerrainShaders.h` (GLSL + MSL, sun + soft shadows + point lights + clouds as the lit shader).
 
 **Performance**: the terrain is cut into 32x32-cell chunks, frustum-culled; the editor rebuilds only chunks whose cells
 changed; during a match nothing is rebuilt: resource fields, creep and (heightfield maps) fog of war are read by the
-shader from small per-cell textures. `RTS_TERRAIN_STATS=1` prints chunks / triangles / frame time. Sample:
+shader from small per-cell textures. `AIVERSE_TERRAIN_STATS=1` prints chunks / triangles / frame time. Sample:
 `templates/frostcrown` (generated CC0 textures, `tools/terrain/make_textures.py`).
 
 **Editor / MCP** (heightfield maps, `apps/editor/core/TerrainOps.cpp`, window **Рельеф**):
@@ -1644,7 +1644,7 @@ Everything is integer / fixed point and deterministic.
 - **Checksums**: corners and the model are part of the state hash only for heightfield games.
 - **Big maps** (256x256 cells and more): long paths use hierarchical pathfinding (16x16 clusters with border
   entrances, refined with A*), built at match start and rebuilt only around structures that block cells.
-  `rts_headless --project DIR --bench-paths N` times path queries; `python3 templates/_tools/mapgen.py --big 1024
+  `aiverse_headless --project DIR --bench-paths N` times path queries; `python3 templates/_tools/mapgen.py --big 1024
   <scratch>/maps/big.json` writes a 1024x1024 test map (keep it out of `templates/`).
 
 MCP: `map_info.heightfield` (`corners`, `min`, `max`, `storage`, `model`), `map_heightfield {"enabled"}` adds a flat
@@ -1786,7 +1786,7 @@ gets per-face `rows`, `corners`, `material`; players get `start: {body, face, x,
   rival, per mille).
 - One body only: `world.bodies[].generate` (terrain + reported start sites, no objects), as before.
 
-`rts_headless --project templates/planets --generate rocky --seed N --players 3 [--gen-params '{"layout": "separate"}']`.
+`aiverse_headless --project templates/planets --generate rocky --seed N --players 3 [--gen-params '{"layout": "separate"}']`.
 
 All params (any preset): `shape`, `size` [w, h] (16..1024; the map's own size wins unless `params.size` is given), `water`
 (share of corners below sea level), `rivers` (0..1: flow accumulation carved into rivers), `lakes` (pit depth that stays a lake),
@@ -1801,7 +1801,7 @@ count, garrison}], `objects` [{type, near, far, centre, owner, garrison, amount}
 
 Games add presets in rules.json: `"mapgen": {"presets": {"my_valley": {"title": "Долина", "base": "classic", "params": {"water": 0.2}}}}`.
 
-**Tools**: `rts_headless --project DIR --generate PRESET [--seed N] [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]
+**Tools**: `aiverse_headless --project DIR --generate PRESET [--seed N] [--players N] [--symmetry S] [--gen-params JSON] [--gen-out F]
 [--max-seconds 0]` (the open map is the template; `--record` writes `<replay>.map.json` next to the replay so `--replay` regenerates).
 Editor: window **Генерация** (preset, seed, players, symmetry, params; *Сгенерировать* bakes, *При старте матча* writes
 `"seed": "match"`). MCP: `gen_presets`, `map_generate {preset, seed, players, symmetry, params, mode: bake | match | fixed,
@@ -1982,7 +1982,7 @@ standing at its foot, facing the camera's yaw (turned towards the sun when the s
 along it), current animation frame and facing; the shadow then falls on the terrain, 3D models
 and other lit sprites with the sun direction, softness and PCF tiers of the 3D games.
 
-| `RTS_SHADOWS` / shadow tier | sprites with `"shadow": "cast"` |
+| `AIVERSE_SHADOWS` / shadow tier | sprites with `"shadow": "cast"` |
 |---|---|
 | Off | blobs only (the classic look, no shadow pass) |
 | Low | buildings cast, units keep blobs; sprites don't sample the shadow map |
@@ -2223,7 +2223,7 @@ Events: `hit`, `died`, `spawned`, `attack`, `gathered`, `delivered`, `produced`,
 `upgraded`, `alert` (under attack), `status`, `area`, `claimed`, `wave`, `message`, `ping` (pings of
 the client / editor). Popups never appear in cells the local player cannot see.
 
-**Quality tiers** (renderer material quality; `RTS_OVERLAYS=low|medium|high` for testing): game
+**Quality tiers** (renderer material quality; `AIVERSE_OVERLAYS=low|medium|high` for testing): game
 overlays are capped per overlay (48 / 192 / 1024 elements), per grid / cells shape (600 / 3000 /
 12000 cells) and in live popups (24 / 96 / 256); low halves ring segments. Built-in overlays are
 never capped.

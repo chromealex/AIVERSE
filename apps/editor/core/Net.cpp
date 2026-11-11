@@ -9,7 +9,7 @@
 #pragma comment(lib, "ws2_32.lib")   // MinGW links ws2_32 through CMake
 #endif
 using socklen_t = int;
-#define RTS_CLOSE closesocket
+#define AIVERSE_CLOSE closesocket
 static void netInit() { static bool done = false; if (!done) { WSADATA d; WSAStartup(MAKEWORD(2, 2), &d); done = true; } }
 static void setNonBlocking(intptr_t fd) { u_long m = 1; ioctlsocket(SOCKET(fd), FIONBIO, &m); }
 static bool wouldBlock() { return WSAGetLastError() == WSAEWOULDBLOCK; }
@@ -22,7 +22,7 @@ static bool wouldBlock() { return WSAGetLastError() == WSAEWOULDBLOCK; }
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#define RTS_CLOSE ::close
+#define AIVERSE_CLOSE ::close
 static void netInit() {}
 static void setNonBlocking(intptr_t fd) { fcntl(int(fd), F_SETFL, fcntl(int(fd), F_GETFL, 0) | O_NONBLOCK); }
 static bool wouldBlock() { return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINPROGRESS; }
@@ -32,7 +32,7 @@ static bool wouldBlock() { return errno == EAGAIN || errno == EWOULDBLOCK || err
 #define MSG_NOSIGNAL 0
 #endif
 
-namespace rts::editor::net {
+namespace aiverse::editor::net {
 
 namespace {
 bool sendAll(intptr_t fd, const std::string& data) {
@@ -61,9 +61,9 @@ sockaddr_in loopback(int port) {
 LineServer::~LineServer() { close(); }
 
 void LineServer::close() {
-    for (auto& c : conns_) RTS_CLOSE(c.fd);
+    for (auto& c : conns_) AIVERSE_CLOSE(c.fd);
     conns_.clear();
-    if (fd_ >= 0) RTS_CLOSE(fd_);
+    if (fd_ >= 0) AIVERSE_CLOSE(fd_);
     fd_ = -1;
     port_ = 0;
 }
@@ -80,9 +80,9 @@ bool LineServer::listen(int port) {
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof yes);
 #endif
     sockaddr_in a = loopback(port);
-    if (::bind(fd, reinterpret_cast<sockaddr*>(&a), sizeof a) != 0 || ::listen(fd, 4) != 0) { RTS_CLOSE(fd); return false; }
+    if (::bind(fd, reinterpret_cast<sockaddr*>(&a), sizeof a) != 0 || ::listen(fd, 4) != 0) { AIVERSE_CLOSE(fd); return false; }
     socklen_t size = sizeof a;
-    if (::getsockname(fd, reinterpret_cast<sockaddr*>(&a), &size) != 0) { RTS_CLOSE(fd); return false; }
+    if (::getsockname(fd, reinterpret_cast<sockaddr*>(&a), &size) != 0) { AIVERSE_CLOSE(fd); return false; }
     setNonBlocking(fd);
     fd_ = fd;
     port_ = ntohs(a.sin_port);
@@ -118,7 +118,7 @@ std::vector<LineServer::Msg> LineServer::poll() {
             out.push_back({int(conns_[i].fd), conns_[i].in.substr(0, nl)});
             conns_[i].in.erase(0, nl + 1);
         }
-        if (closed) { RTS_CLOSE(conns_[i].fd); conns_.erase(conns_.begin() + long(i)); }
+        if (closed) { AIVERSE_CLOSE(conns_[i].fd); conns_.erase(conns_.begin() + long(i)); }
         else ++i;
     }
     return out;
@@ -131,7 +131,7 @@ void LineServer::send(int client, const std::string& line) {
 LineClient::~LineClient() { close(); }
 
 void LineClient::close() {
-    if (fd_ >= 0) RTS_CLOSE(fd_);
+    if (fd_ >= 0) AIVERSE_CLOSE(fd_);
     fd_ = -1;
     buf_.clear();
 }
@@ -144,15 +144,15 @@ bool LineClient::connect(int port, int timeoutMs) {
     sockaddr_in a = loopback(port);
     setNonBlocking(fd);
     int r = ::connect(fd, reinterpret_cast<sockaddr*>(&a), sizeof a);
-    if (r != 0 && !wouldBlock()) { RTS_CLOSE(fd); return false; }
+    if (r != 0 && !wouldBlock()) { AIVERSE_CLOSE(fd); return false; }
     if (r != 0) {
         fd_set w; FD_ZERO(&w); FD_SET(fd, &w);
         timeval tv{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
-        if (::select(int(fd + 1), nullptr, &w, nullptr, &tv) <= 0) { RTS_CLOSE(fd); return false; }
+        if (::select(int(fd + 1), nullptr, &w, nullptr, &tv) <= 0) { AIVERSE_CLOSE(fd); return false; }
         int err = 0;
         socklen_t len = sizeof err;
         getsockopt(fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&err), &len);
-        if (err != 0) { RTS_CLOSE(fd); return false; }
+        if (err != 0) { AIVERSE_CLOSE(fd); return false; }
     }
     fd_ = fd;
     return true;
@@ -182,4 +182,4 @@ bool LineClient::recv(std::string& line, int timeoutMs) {
     }
 }
 
-} // namespace rts::editor::net
+} // namespace aiverse::editor::net

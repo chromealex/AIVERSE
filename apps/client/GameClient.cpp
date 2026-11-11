@@ -34,13 +34,13 @@
 #include "modules/rts/view/RtsCamera.h"
 #include "modules/rts/view/RtsOverlayData.h"
 
-using namespace rts;
+using namespace aiverse;
 using platform::Event;
 using platform::EventType;
 using platform::Key;
 using i18n::Args;
 
-namespace rts::client {
+namespace aiverse::client {
 
 // ------------------------------------------------------------------ setup
 
@@ -83,7 +83,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         if (!r3d_.init(dev)) error_ = "renderer: " + dev.lastError();
         r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, platform::isTouchDevice()));
         r3d_.setMaterialQuality(Renderer3D::defaultMaterialQualityFor(dev, platform::isTouchDevice()));
-        r3d_.lights.setQuality(rts::render::LightSystem::defaultQualityFor(dev, platform::isTouchDevice()));
+        r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, platform::isTouchDevice()));
         postFx_.init(dev);
         postFxBase_ = render::PostFx::defaultQualityFor(dev, platform::isTouchDevice());
         postFx_.setQuality(postFxBase_);
@@ -103,11 +103,11 @@ void GameClient::initStep(gfx::Device& dev, int step) {
 void GameClient::initAudio() {
     audio::AudioConfig ac;
     ac.maxVoices = platform::isTouchDevice() ? 24 : 32;
-    if (const char* mode = std::getenv("RTS_AUDIO")) { // off | null (audio thread without hardware, CI)
+    if (const char* mode = std::getenv("AIVERSE_AUDIO")) { // off | null (audio thread without hardware, CI)
         ac.openDevice = std::string(mode) != "off";
         ac.nullBackend = std::string(mode) == "null";
     }
-    if (const char* wav = std::getenv("RTS_AUDIO_CAPTURE")) ac.capturePath = wav;
+    if (const char* wav = std::getenv("AIVERSE_AUDIO_CAPTURE")) ac.capturePath = wav;
     audio_.init(ac);
     std::ifstream settings(platform::userDataDir() + "/audio.cfg");
     if (settings) audio_.loadSettings(std::string(std::istreambuf_iterator<char>(settings), {}));
@@ -196,7 +196,7 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
     if (save) i18n::saveLanguage(platform::userDataDir(), loc_.language());
     langNames_.clear();
     for (auto& l : langs_.available) langNames_.push_back(i18n::languageSelfName(reader, l));
-    gameName_ = loc_.trOr("game.name", manifest_.getStr("name", "RTSEngine"));
+    gameName_ = loc_.trOr("game.name", manifest_.getStr("name", "AIVERSE"));
     if (!platform::hostedView()) platform::setTitle(gameName_);   // hosted: the editor keeps its title
     rules_ = loadRules(rulesJson_);
     localizeRules(rules_, loc_);
@@ -240,13 +240,13 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         SimConfig cfg;
         cfg.seed = uint64_t(std::time(nullptr));
-        if (const char* sd = std::getenv("RTS_SEED")) cfg.seed = uint64_t(std::strtoull(sd, nullptr, 10));   // testing: reproducible matches
+        if (const char* sd = std::getenv("AIVERSE_SEED")) cfg.seed = uint64_t(std::strtoull(sd, nullptr, 10));   // testing: reproducible matches
         sim_ = std::make_unique<Simulation>(cfg, std::make_unique<RtsModule>());
         Json rules = rulesJson_;
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
         scriptUiReset();
-        if (std::getenv("RTS_SCRIPT_LOG"))   // view scripts' log lines too ("[view]" / "[view error]")
+        if (std::getenv("AIVERSE_SCRIPT_LOG"))   // view scripts' log lines too ("[view]" / "[view error]")
             viewScripts_.onLog = [](const ScriptLogEntry& e) {
                 std::printf("[view%s] t=%u %s\n", e.error ? " error" : "", unsigned(e.tick), e.text.c_str()); std::fflush(stdout); };
         if (viewScripts_.load(*sim_, rules, map, uint8_t(spectator_ ? 0 : human_))) viewScripts_.attach(*sim_);
@@ -278,10 +278,10 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         view_.setTerrainDetail(vm);
     }
     view_.buildTerrain(*dev_, mod().state(*sim_).grid);
-    if (std::getenv("RTS_SCRIPT_LOG") && mod().scripts())   // testing (screenshots, captures): script log lines on stdout
+    if (std::getenv("AIVERSE_SCRIPT_LOG") && mod().scripts())   // testing (screenshots, captures): script log lines on stdout
         mod().scripts()->onLog = [](const ScriptLogEntry& e) {
             std::printf("[script%s] t=%u %s\n", e.error ? " error" : "", unsigned(e.tick), e.text.c_str()); std::fflush(stdout); };
-    if (const char* ff = std::getenv("RTS_FAST_FORWARD")) { // testing (screenshots): bots play N game seconds first
+    if (const char* ff = std::getenv("AIVERSE_FAST_FORWARD")) { // testing (screenshots): bots play N game seconds first
         const uint32_t ticks = uint32_t(std::max(0.0, std::atof(ff)) * sim_->tickRate());
         std::vector<RtsAI> ffBots = bots_;   // the human slot is played by a bot too while fast-forwarding
         if (!spectator_) ffBots.emplace_back(human_, sim_->config().seed, AIConfig{});
@@ -312,7 +312,7 @@ void GameClient::fitCamera() {
     float aspect = platform::windowHeight() > 0 ? platform::windowWidth() / platform::windowHeight() : 1.6f;
     cam_.distance = small ? std::max(g.w / aspect, float(g.h)) * 1.05f + 4 : 24.0f;
     applyCameraSetup(cameraSetupFrom(manifest_), cam_, float(platform::framebufferHeight())); // game.json "camera" (2D games)
-    if (const char* e = std::getenv("RTS_CAM")) { // testing (close-up screenshots): "x,z,distance[,pitchDeg[,yawDeg]]"
+    if (const char* e = std::getenv("AIVERSE_CAM")) { // testing (close-up screenshots): "x,z,distance[,pitchDeg[,yawDeg]]"
         float v[5] = {c.x, c.z, cam_.distance, cam_.pitch * 57.2958f, cam_.yaw * 57.2958f};
         int n = std::sscanf(e, "%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4]);
         if (n >= 2) { cam_.target = {v[0], 0, v[1]}; cam_.distance = v[2]; cam_.pitch = v[3] / 57.2958f; cam_.yaw = v[4] / 57.2958f; cam_.minDistance = std::min(cam_.minDistance, v[2]); }
@@ -780,7 +780,7 @@ void GameClient::runViewScripts(float dt) {
     }
     viewScripts_.setScreen(screen_ == Screen::Paused ? "paused" : screen_ == Screen::Over ? "over" : "playing");   // view.screen()
     viewScripts_.update(*sim_, dt);
-    if (static const char* pf = std::getenv("RTS_VIEW_PROFILE"); pf && *pf) {   // testing: view script cost per frame
+    if (static const char* pf = std::getenv("AIVERSE_VIEW_PROFILE"); pf && *pf) {   // testing: view script cost per frame
         static FILE* out = std::fopen(pf, "w");
         static size_t named = 0;
         if (out) {
@@ -851,7 +851,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         }
         if (quality_.update(dt)) { // too slow for these tiers: step down (keeps the pause menu in sync)
             r3d_.setShadowQuality(ShadowQuality(quality_.shadows()));
-            r3d_.lights.setQuality(rts::render::LightQuality(quality_.lights()));
+            r3d_.lights.setQuality(aiverse::render::LightQuality(quality_.lights()));
             shadowQuality_ = boundShadowQuality_ = quality_.shadows();
             // post effects follow: one tier down per governor step, but keep the cheap look (low)
             if (postFxBase_ != render::PostFxQuality::Off)
@@ -861,7 +861,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         steerPossessed();
         if (!netMatch_) {
             for (auto& b : bots_) b.update(*sim_);
-            static const double simSpeed = [] { const char* v = std::getenv("RTS_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
+            static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
             if (simSpeed == 1.0) sim_->advance(dt);
             else sim_->advance(dt * simSpeed, int(8 * simSpeed + .5));   // testing: match time faster than real time
             alpha = float(sim_->alpha());
@@ -963,4 +963,4 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     dev.endPass();
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

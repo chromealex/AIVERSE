@@ -42,7 +42,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace rts::render {
+namespace aiverse::render {
 
 using namespace interchange;
 using xml::Element;
@@ -1255,4 +1255,4 @@ std::unique_ptr<Model> loadDae(const std::string& path, const std::string& bytes
     return r.load(bytes);
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

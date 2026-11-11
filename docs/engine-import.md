@@ -8,16 +8,16 @@ The coverage and outstanding work below are part of the handoff to MAIN.
 ## CLI and intermediate data
 
 Python 3.8+; no Python packages are required. The executable launcher is
-`tools/importers/port/rts_port` (or use the explicit Python form below):
+`tools/importers/port/aiverse_port` (or use the explicit Python form below):
 
 ```sh
-python3 tools/importers/port/rts_port.py scan /path/to/UnityProject
-python3 tools/importers/port/rts_port.py extract /path/to/UnityProject --out /tmp/port.json
-python3 tools/importers/port/rts_port.py emit /tmp/port.json --out /path/to/Imported
-python3 tools/importers/port/rts_port.py /path/to/UnityProject --out /path/to/Imported --scale 1 --mode auto
-python3 tools/importers/port/rts_port.py report /path/to/Imported
-python3 tools/importers/port/rts_port.py item /path/to/Imported --id ITEM_ID
-python3 tools/importers/port/rts_port.py resolve /path/to/Imported --id ITEM_ID --how lua --reason 'Verified by scenario…'
+python3 tools/importers/port/aiverse_port.py scan /path/to/UnityProject
+python3 tools/importers/port/aiverse_port.py extract /path/to/UnityProject --out /tmp/port.json
+python3 tools/importers/port/aiverse_port.py emit /tmp/port.json --out /path/to/Imported
+python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/to/Imported --scale 1 --mode auto
+python3 tools/importers/port/aiverse_port.py report /path/to/Imported
+python3 tools/importers/port/aiverse_port.py item /path/to/Imported --id ITEM_ID
+python3 tools/importers/port/aiverse_port.py resolve /path/to/Imported --id ITEM_ID --how lua --reason 'Verified by scenario…'
 ```
 
 Every command prints JSON; failure exits with status 2. `scan` writes nothing. The input and
@@ -26,7 +26,7 @@ output directories must not overlap. Do not run concurrent imports into the same
 `emit` writes a game manifest, rules, maps, `.rtsproj`, copied assets, optional sprites/tiles/audio/fx,
 `port.json`, and JSON/Markdown reports. `sourceRoot` must still exist when emitting copied assets.
 Generated `.rpakignore` excludes the intermediate script index and reports from runtime packs.
-The manifest marks imported content `external: true`, which rtsbuild propagates into resource packs.
+The manifest marks imported content `external: true`, which aiversebuild propagates into resource packs.
 
 `--scale` means cells per metre; `--mode auto|2d|3d` selects the scene plane and camera. Unity 3D
 flips Z; Unity 2D projects XY onto the ground plane. Godot Vector2 maps to XZ. Origins are translated
@@ -68,7 +68,7 @@ Registered operations (import settings can also be nested in `options`):
 - `port_resolve {path?,id,how,reason}`: annotate verified work (`rules`, `lua`, `native`, `dropped`).
 
 Import is synchronous over MCP, like the existing VFX importer; large projects can take time.
-`RTS_PYTHON` selects the interpreter. Windows shell metacharacters `%`, `!`, quotes and line breaks
+`AIVERSE_PYTHON` selects the interpreter. Windows shell metacharacters `%`, `!`, quotes and line breaks
 in command arguments are rejected rather than interpolated.
 
 Agent workflow: inspect missing items, consult `rules_schema`, implement suitable mechanics as
@@ -109,14 +109,14 @@ hand-written CC0 `tests/data/models/cube.fbx`. No downloaded game assets are com
 - 34 existing VFX importer tests pass after the shared-code move.
 - 15 project importer tests cover serialization rejection, prefab overrides, units, protected
   edits, idempotence (including re-emitting `port.json`), source-change invalidation, path safety,
-  sprites/tiles and CLI resolution. With `RTS_PORT_HEADLESS`, all five fixtures load in the real
+  sprites/tiles and CLI resolution. With `AIVERSE_PORT_HEADLESS`, all five fixtures load in the real
   engine and the Unity combat fixture ends with Player 1 winning.
 - C++ suite: 5857 checks, one sandbox-only localhost listener failure; that test passed separately
   outside the network sandbox (27 checks). An additional focused MCP bridge test passed (5 checks).
 - Baseline compiler warning outside this change: unused `fb` in `engine/fx/FxEffect.cpp:1058`.
 
 Two public RTS repositories were downloaded only to `/tmp` and imported; **all emitted maps were
-loaded individually with `rts_headless --max-seconds 0`**, not merely the first/default map:
+loaded individually with `aiverse_headless --max-seconds 0`**, not merely the first/default map:
 
 | Source | Revision | Output | Report |
 |---|---|---|---|
@@ -138,10 +138,10 @@ verifying this branch; this branch does not publish builds.
 
 Final verification after the master merge and compatibility fix:
 
-- macOS editor (Metal), rtsmcp, rts_headless and rts_tests rebuilt successfully.
+- macOS editor (Metal), aiversemcp, aiverse_headless and aiverse_tests rebuilt successfully.
 - Full C++ suite outside the socket-restricted sandbox: **5930 checks, 0 failures**.
 - CTest: existing VFX and project importer targets pass (34 + 15 Python tests).
 - Focused MCP bridge: 5 checks; native editor build helpers: 42 checks, all pass.
-- End-to-end `rtsmcp --no-editor` import accepts nested `options`, applies scale=2 and handles an
+- End-to-end `aiversemcp --no-editor` import accepts nested `options`, applies scale=2 and handles an
   output path containing spaces and an apostrophe.
 - `skirmish --seed 3`: Blue wins at 470 game seconds; `mushrooms --seed 3`: Red wins at 92 seconds.

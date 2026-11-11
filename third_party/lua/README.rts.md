@@ -9,10 +9,10 @@ dynamic loading or debug library on any platform — works the same on web, iOS 
 Compiled as C (errors use setjmp/longjmp, which emscripten supports without C++ exceptions).
 
 Local changes (keep them when updating Lua):
-- `luaconf.h`: one line in the "Local configuration" section includes `rts_luaconf.h`.
-- `rts_luaconf.h` (new): constant string-hash seed and table.sort pivot (deterministic across runs and
+- `luaconf.h`: one line in the "Local configuration" section includes `aiverse_luaconf.h`.
+- `aiverse_luaconf.h` (new): constant string-hash seed and table.sort pivot (deterministic across runs and
   platforms), float-arithmetic guard macros.
-- `rts_lua.c` (new): the guard (`rts_lua_floatop`), raising an error in simulation states.
+- `aiverse_lua.c` (new): the guard (`aiverse_lua_floatop`), raising an error in simulation states.
 - `lvm.c`: `floatforloop` takes `lua_State *L` (the guard macros need it).
 - `lvm.c`: `vmfetch` counts a count-only hook down inline and calls `luaG_traceexec` only on the
   instruction that reaches zero (same instruction as before; the instruction budget's count hook made

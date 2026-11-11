@@ -6,7 +6,7 @@
 #include "../core/TileOps.h"
 #include "engine/render/TextureCache.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class TilesWindow : public EditorWindow {
 public:
@@ -137,6 +137,6 @@ private:
     render::TextureCache textures_;
 };
 
-RTS_EDITOR_WINDOW(TilesWindow);
+AIVERSE_EDITOR_WINDOW(TilesWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

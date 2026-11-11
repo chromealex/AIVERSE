@@ -19,7 +19,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 
@@ -112,7 +112,7 @@ bool agentClientCanRun(const std::string& id) { return !agentCliPath(id).empty()
 std::string wizardAgentTask(const WizardSpec& s, const std::string& dir, const std::string& templ, const std::string& idea) {
     std::string t;
     t += "# Задание: игра «" + s.title + "» точно по описанию\n\n";
-    t += "Ты делаешь игру в RTSEngine через MCP-инструменты rtsengine (сервер rtsmcp). В редакторе уже открыт проект " + dir +
+    t += "Ты делаешь игру в AIVERSE через MCP-инструменты aiverse (сервер aiversemcp). В редакторе уже открыт проект " + dir +
          " — все правки идут через инструменты и сразу видны в редакторе.\n\n";
     t += "Мастер «Сделать игру» собрал стартовый проект из шаблона `" + templ + "` (что сделано — WIZARD.md, прочитай через "
          "game_file_read). Шаблон — только точка старта. Цель: игра должна быть ровно такой, как в описании ниже — 1 в 1: каждый "
@@ -167,7 +167,7 @@ bool AgentRun::start(const std::string& clientId, const std::string& dir, const 
     const std::string pathPrefix = "PATH=" + q(fs::path(cli).parent_path().string()) + ":\"$PATH\" ";
     std::string inner;
     if (clientId == "claude-code")
-        inner = pathPrefix + q(cli) + " -p --output-format stream-json --verbose --allowedTools mcp__rtsengine --max-turns 400 < " + q(taskFile);
+        inner = pathPrefix + q(cli) + " -p --output-format stream-json --verbose --allowedTools mcp__aiverse --max-turns 400 < " + q(taskFile);
     else if (clientId == "codex")
         inner = pathPrefix + q(cli) + " exec --full-auto - < " + q(taskFile);
     else { if (err) *err = "этот клиент нельзя запустить из редактора: скопируйте задание"; return false; }
@@ -216,7 +216,7 @@ void AgentRun::reader(std::string cmd, std::string logFile) {
                         else if (c.getStr("type") == "tool_use") {
                             ++tools_;
                             std::string name = c.getStr("name");
-                            if (name.rfind("mcp__rtsengine__", 0) == 0) name = name.substr(16);
+                            if (name.rfind("mcp__aiverse__", 0) == 0) name = name.substr(16);
                             add("→ " + name + " " + clip(c["input"].dump(0), 120));
                         }
                     }
@@ -265,4 +265,4 @@ std::vector<std::string> AgentRun::lastLines(size_t n) {
 
 std::string AgentRun::result() { std::lock_guard<std::mutex> lk(m_); return result_; }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

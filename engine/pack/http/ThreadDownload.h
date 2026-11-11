@@ -8,7 +8,7 @@
 
 #include "../Chunks.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 class ThreadDownload : public Download {
 public:
@@ -30,4 +30,4 @@ private:
     std::thread worker_;
 };
 
-} // namespace rts::pack
+} // namespace aiverse::pack

@@ -4,9 +4,9 @@
 #include <stdexcept>
 #include "engine/render/PostFxData.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
-using namespace rts::render;
+using namespace aiverse::render;
 namespace fs = std::filesystem;
 
 namespace {
@@ -387,7 +387,7 @@ void registerPostFxOps(Workspace& ws) {
         "weak phones (low) or strong devices (high) get; scene=false hides effects in the Scene view (Game view keeps them). "
         "Combine with view_screenshot to compare tiers.",
         R"({"properties": {"quality": {"type": "string", "enum": ["off", "low", "medium", "high"]}, "scene": {"type": "boolean"}}})",
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start rts_editor)"); }, true);
+        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true);
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

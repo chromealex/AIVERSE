@@ -129,7 +129,7 @@ machine's cloud vCPU): see the commit / report numbers; a fully live 256x256 fie
 `none` / `fire` / `water` / `pulse` / `drift`, `speed`, `height` (above the ground), `cells` (hard cell edges),
 `fog` `explored` (default) / `visible` / `none`, `particles` {`effect` (fx/<name>.json), `above`, `max`,
 `every` seconds}. Per-player fields are tinted with the player colours. Weak GPUs (material quality Low or
-shadows off; `RTS_FIELDS=low`): half-resolution texture, no animation, no particles. Shaders: GLSL + MSL in
+shadows off; `AIVERSE_FIELDS=low`): half-resolution texture, no animation, no particles. Shaders: GLSL + MSL in
 `RtsFieldView.cpp` (the Metal path is not compiled on Linux CI).
 
 ## Editor and MCP

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace detail;
 
@@ -693,7 +693,7 @@ void GridFields::io(Simulation& sim, Archive& a) {
     GridFieldStore* st = store(sim);
     if (!st) return;
     uint32_t nf = uint32_t(st->fields.size());
-    rts::io(a, nf);
+    aiverse::io(a, nf);
     if (!a.writing() && nf != st->fields.size()) { a.fail(); return; }
     for (size_t fi = 0; fi < st->fields.size() && a.ok(); ++fi) {
         auto& f = st->fields[fi];
@@ -711,7 +711,7 @@ void GridFields::io(Simulation& sim, Archive& a) {
     }
     uint32_t nc = a.count(st->crossings.size(), 14);
     if (!a.writing()) st->crossings.assign(nc, {});
-    for (auto& c : st->crossings) { rts::io(a, c.hook); rts::io(a, c.layer); rts::io(a, c.cell); rts::io(a, c.value); }
+    for (auto& c : st->crossings) { aiverse::io(a, c.hook); aiverse::io(a, c.layer); aiverse::io(a, c.cell); aiverse::io(a, c.value); }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

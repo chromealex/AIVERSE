@@ -13,7 +13,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class ScriptsWindow : public EditorWindow {
 public:
@@ -155,6 +155,6 @@ private:
     std::map<std::string, fs::file_time_type> stamps_;
 };
 
-RTS_EDITOR_WINDOW(ScriptsWindow);
+AIVERSE_EDITOR_WINDOW(ScriptsWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

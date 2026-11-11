@@ -2,7 +2,7 @@
 #pragma once
 #include "RtsModule.h"
 
-namespace rts::game::detail {
+namespace aiverse::game::detail {
 
 inline const Fixed kHalf = Fixed::fromRatio(1, 2);
 inline const Fixed kOne = Fixed::fromInt(1);
@@ -20,4 +20,4 @@ inline Fixed maxWeaponRange(const UnitType& t) {
 }
 inline Fixed secondsToTicks(Fixed s, uint32_t rate) { return s * int64_t(rate); }
 
-} // namespace rts::game::detail
+} // namespace aiverse::game::detail

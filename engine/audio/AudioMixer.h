@@ -11,7 +11,7 @@
 #include "Audio.h"
 #include "AudioReverb.h"
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 // Streaming decoder for music (implemented on top of miniaudio in AudioDecode.cpp).
 class StreamDecoder {
@@ -209,4 +209,4 @@ private:
     std::shared_ptr<const std::vector<SoundGroupDef>> groupDefs_;
 };
 
-} // namespace rts::audio
+} // namespace aiverse::audio

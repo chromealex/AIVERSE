@@ -1,7 +1,7 @@
 // Game-side network client: connection, lobby, matchmaking queue, and the match itself.
 //
 // Typical use (the game owns the Simulation; this class never loads content):
-//   NetClient net(connectTo("play.example.com"), {"Alex", "com.rtsengine.ironandgold", key});
+//   NetClient net(connectTo("play.example.com"), {"Alex", "com.aiverse.ironandgold", key});
 //   each frame: net.update(nowMs());
 //   lobby:      net.rooms(), net.createRoom(...), net.joinRoom(...), net.joinQueue("1v1", maps) ...
 //   match:      if (net.matchReady()) { build sim from net.match().map.file, sim.setup(...);
@@ -19,7 +19,7 @@
 #include "Protocol.h"
 #include "Rollback.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 // Describe a map of a local game folder for the lobby/queue (reads the map's player slots and
 // hashes rules + map exactly like replays do).
@@ -131,4 +131,4 @@ private:
     uint64_t now_ = 0, lastPing_ = 0;
 };
 
-} // namespace rts::net
+} // namespace aiverse::net

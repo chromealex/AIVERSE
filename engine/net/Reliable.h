@@ -12,10 +12,10 @@
 #include "Conn.h"
 #include "../sim/Command.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 // Datagram header: magic, kind, session token. Shared by the client and the server listener.
-enum class PacketKind : uint8_t { Connect = 0, Accept = 1, Data = 2, Disconnect = 3 };
+enum class PacketKind : uint8_t { Connect = 0, Accept = 1, Data = 2, Disconnect = 3, Latest = 4 };
 constexpr uint16_t kPacketMagic = 0x4E52; // "RN"
 constexpr size_t kMaxDatagram = 1200;     // stays under typical path MTU (incl. mobile/IPv6 tunnels)
 constexpr uint32_t kUdpProtocolVersion = 1;
@@ -53,4 +53,4 @@ private:
     bool failed_ = false;
 };
 
-} // namespace rts::net
+} // namespace aiverse::net

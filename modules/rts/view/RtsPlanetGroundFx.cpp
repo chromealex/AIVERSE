@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -393,7 +393,7 @@ bool RtsPlanetGroundFx::draw(gfx::Device& dev, Renderer3D& r, const PlanetRender
     const Surface* S = W.sim.get();
     if (!S || g.surf.get() != S) return false;
     bool hi = r.materialQuality() != MaterialQuality::Low;
-    if (const char* q = std::getenv("RTS_GROUNDFX")) hi = std::string(q) != "low";
+    if (const char* q = std::getenv("AIVERSE_GROUNDFX")) hi = std::string(q) != "low";
     const size_t n = g.flags.size();
     if (!init_ || S_ != S || bodies_.size() != W.bodies.size() || memR_.size() != n || hi != hi_) {
         shutdown(dev);
@@ -483,4 +483,4 @@ bool RtsPlanetGroundFx::draw(gfx::Device& dev, Renderer3D& r, const PlanetRender
     return rockChanged;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

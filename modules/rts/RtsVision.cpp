@@ -24,7 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 struct VisionCache {
@@ -96,8 +96,8 @@ struct VisionCache {
 
 namespace {
 std::atomic<uint64_t> gVisionToken{0};
-int visionDebugMode() {   // RTS_VISION=ref: reference only, RTS_VISION=check: both, abort on a difference
-    static const int m = [] { const char* v = std::getenv("RTS_VISION"); return !v ? 0 : std::strcmp(v, "ref") == 0 ? 1 : std::strcmp(v, "check") == 0 ? 2 : 0; }();
+int visionDebugMode() {   // AIVERSE_VISION=ref: reference only, AIVERSE_VISION=check: both, abort on a difference
+    static const int m = [] { const char* v = std::getenv("AIVERSE_VISION"); return !v ? 0 : std::strcmp(v, "ref") == 0 ? 1 : std::strcmp(v, "check") == 0 ? 2 : 0; }();
     return m;
 }
 // fxSqrt(L) > s without the square root (exact: fxSqrt = floor(sqrt(L.raw << 16)) below 2^47)
@@ -779,4 +779,4 @@ void RtsModule::visionSphereRef(Simulation& sim) {
     });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

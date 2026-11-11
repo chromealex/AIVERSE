@@ -1,12 +1,12 @@
 // Editor look: the ImGui style (dark / light palette with one accent colour), the editor fonts
 // (Inter + symbol fallback + Lucide icons, third_party/fonts) and the theme choice persisted in the
-// editor's layout file (<userDataDir>/editor_layout.ini, section [RtsEditor][Theme]).
+// editor's layout file (<userDataDir>/editor_layout.ini, section [AiverseEditor][Theme]).
 // Only the editor uses it: the game's ImGui debug overlay keeps engine/render/ImGuiLayer's style.
 #pragma once
 #include <string>
 #include "imgui.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 class EditorTheme {
 public:
@@ -56,4 +56,4 @@ private:
     ImFont* heading_ = nullptr;
 };
 
-} // namespace rts::editor
+} // namespace aiverse::editor

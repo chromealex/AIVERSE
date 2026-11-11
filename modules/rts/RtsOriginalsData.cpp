@@ -5,7 +5,7 @@
 #include "RtsEffectsData.h"
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 [[noreturn]] void fail(const std::string& where, const std::string& what) { throw std::runtime_error(where + ": " + what); }
@@ -307,4 +307,4 @@ void loadOriginals(Rules& r, const Json& j, EffectParser& ep) {
     for (auto& u : r.upkeep) if (u.resMask != 0xFFFFFFFFu || u.incomeMult != Fixed::fromInt(1)) r.originals = true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

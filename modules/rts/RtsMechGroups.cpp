@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 namespace {
@@ -212,4 +212,4 @@ void RtsModule::mechTickGroups(Simulation& sim) {
     });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

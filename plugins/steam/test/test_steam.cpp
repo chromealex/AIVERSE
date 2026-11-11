@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <ctime>
 #include <string>
-using namespace rts;
+using namespace aiverse;
 extern "C" { void fake_overlay(bool); void fake_completePurchase(); void fake_buyDlc(); int fake_itemCount(); void fake_addItem(int); }
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL %d: %s\n", __LINE__, #c); ++fails; } } while (0)

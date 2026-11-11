@@ -14,7 +14,7 @@
 #include "RtsTerrainRender.h"
 #include "RtsTerrainSurface.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -172,7 +172,7 @@ bool TerrainRenderer::buildDetail(gfx::Device& dev, const MapGrid& g, bool flatD
     for (auto& c : chunks_) { c.lods.resize(size_t(lodLevels_)); c.lastUse.resize(size_t(lodLevels_), 0); }
     const auto tp1 = std::chrono::steady_clock::now();
     if (changed || resized) updateDetailTextures(dev, ri1 > ri0 ? ri0 : 0, rj1 > rj0 ? rj0 : 0, ri1 > ri0 ? ri1 : detail_.sw(), rj1 > rj0 ? rj1 : detail_.sh());
-    if (std::getenv("RTS_TERRAIN_STATS"))
+    if (std::getenv("AIVERSE_TERRAIN_STATS"))
         std::fprintf(stderr, "[terrain] detail build: surface+chunks %.1f ms, textures %.1f ms\n",
                      std::chrono::duration<double, std::milli>(tp1 - tp0).count(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tp1).count());
     detailOn_ = true;
@@ -326,4 +326,4 @@ void TerrainRenderer::buildDetailLod(gfx::Device& dev, const MapGrid& g, Chunk& 
     geoBytes_ += size_t(l.indexCount) * 4 + size_t(l.vertexCount) * sizeof(TV);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -9,7 +9,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void Editor::initFileAssoc() {
     setFileAssocLogo((fs::path(opt_.engineDir) / "apps" / "editor" / "branding" / "icon_1024.png").string());
@@ -113,4 +113,4 @@ void Editor::drawOpenRequest() {
     ImGui::EndPopup();
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

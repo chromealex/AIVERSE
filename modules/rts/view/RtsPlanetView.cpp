@@ -12,7 +12,7 @@
 #include "../RtsModule.h"
 #include "RtsView.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -233,7 +233,7 @@ void RtsView::drawPlanets(Renderer3D& r, const RtsScene& s, double time, const s
                 }
         planets_.setVision(int(bi), &pv, fog_.look());
     }
-    if (std::getenv("RTS_PLANET_DEBUG")) { // RTS_PLANET_DEBUG: what the scene holds (screenshot set-ups)
+    if (std::getenv("AIVERSE_PLANET_DEBUG")) { // AIVERSE_PLANET_DEBUG: what the scene holds (screenshot set-ups)
         int tr = 0, orbit = 0, moon = 0;
         for (auto& o : s.objects) {
             if (o.isProjectile) continue;
@@ -478,4 +478,4 @@ void sceneFromSphere(Simulation& sim, RtsModule& m, const Surface& S, RtsScene& 
         }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

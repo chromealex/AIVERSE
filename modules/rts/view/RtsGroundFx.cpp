@@ -9,7 +9,7 @@
 #include <cstring>
 #include <cstdio>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -860,7 +860,7 @@ void RtsGroundFx::draw(Renderer3D& r, const RtsScene& s, double time, const std:
     if (!dev_ || !rules_ || g.w <= 0 || g.h <= 0) return;
     time_ = float(std::fmod(time, 1000.0));
     bool hi = r.materialQuality() != MaterialQuality::Low;
-    if (const char* q = std::getenv("RTS_GROUNDFX")) hi = std::string(q) != "low";
+    if (const char* q = std::getenv("AIVERSE_GROUNDFX")) hi = std::string(q) != "low";
     if (hi != hi_) { hi_ = hi; invalid_ = true; }
     if (invalid_ || g.w != gridW_ || g.h != gridH_ || s.viewer != viewer_) { viewer_ = s.viewer; resetGrid(g); }
     if (geomDirty_) {
@@ -948,4 +948,4 @@ void RtsGroundFx::draw(Renderer3D& r, const RtsScene& s, double time, const std:
     });
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

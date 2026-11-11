@@ -2,7 +2,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json n3(double v) { return Json::number(v, 3); }
@@ -122,7 +122,7 @@ void registerLightOps(Workspace& ws) {
     add("view_lighting", "Editor preview of time of day / clouds / storm (does not change the map): time 0..1, clouds 0..1, "
         "storm 0..1; off=true returns to the map's own lighting. Combine with view_screenshot to check night scenes.",
         R"({"properties": {"time": {"type": "number"}, "clouds": {"type": "number"}, "storm": {"type": "number"}, "off": {"type": "boolean"}}})",
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start rts_editor)"); }, true);
+        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true);
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

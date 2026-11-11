@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace rts::modelview {
+namespace aiverse::modelview {
 
 using namespace render;
 using namespace game;
@@ -133,4 +133,4 @@ void Gallery::draw(Renderer3D& r, double time) {
     if (recent_.size() > 8) recent_.erase(recent_.begin(), recent_.end() - 8);
 }
 
-} // namespace rts::modelview
+} // namespace aiverse::modelview

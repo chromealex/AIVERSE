@@ -4,7 +4,7 @@
 #include <cstring>
 #include "FxInternal.h"
 
-namespace rts::fx {
+namespace aiverse::fx {
 
 namespace {
 
@@ -499,4 +499,4 @@ void ParticleSystem::collectLights(std::vector<FxPointLight>& out, int maxLights
     }
 }
 
-} // namespace rts::fx
+} // namespace aiverse::fx

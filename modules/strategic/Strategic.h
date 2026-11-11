@@ -13,7 +13,7 @@
 #include "engine/core/Fixed.h"
 #include "engine/data/Json.h"
 
-namespace rts::strategic {
+namespace aiverse::strategic {
 
 struct Stack { std::string type; int count = 0; };
 
@@ -91,4 +91,4 @@ private:
     uint64_t seed_ = 1;
 };
 
-} // namespace rts::strategic
+} // namespace aiverse::strategic

@@ -5,7 +5,7 @@
 #include <string_view>
 #include "Fixed.h"
 
-namespace rts {
+namespace aiverse {
 
 class Hasher {
 public:
@@ -27,4 +27,4 @@ private:
     uint64_t h_ = 0xcbf29ce484222325ull;
 };
 
-} // namespace rts
+} // namespace aiverse

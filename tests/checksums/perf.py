@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Headless sim time of two rts_headless builds (min of N alternating runs per game and seed).
+"""Headless sim time of two aiverse_headless builds (min of N alternating runs per game and seed).
 Usage: tests/checksums/perf.py BASE_BIN NEW_BIN [--runs 3] [--seeds 1,2,3] [--ir SECONDS] game_dir...
 The Lua port uses it to compare a module before/after (the machine is shared: take minimums).
 --ir N: instead of wall time, count executed instructions (valgrind callgrind, deterministic) of the

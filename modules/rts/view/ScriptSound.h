@@ -9,7 +9,7 @@
 
 struct lua_State;
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct ScriptSoundPlay {
     float gain = 1, pan = 0, pitch = 1, at = 0;   // at: seconds into the clip
@@ -43,4 +43,4 @@ public:
 // Registers the global `sound` table. *host may change or be null later (read on every call).
 void openScriptSound(lua_State* L, ScriptSound* const* host);
 
-} // namespace rts::game
+} // namespace aiverse::game

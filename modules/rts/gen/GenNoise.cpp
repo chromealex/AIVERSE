@@ -1,6 +1,6 @@
 #include "GenNoise.h"
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 uint32_t hash32(uint32_t a) {
     a ^= a >> 16; a *= 0x7feb352du; a ^= a >> 15; a *= 0x846ca68bu; a ^= a >> 16;
@@ -156,4 +156,4 @@ int64_t isqrt(int64_t v) {
     return r;
 }
 
-} // namespace rts::gen
+} // namespace aiverse::gen

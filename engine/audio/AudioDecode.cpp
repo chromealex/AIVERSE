@@ -3,7 +3,7 @@
 #include <algorithm>
 #include "AudioMixer.h"
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 namespace {
 
@@ -80,4 +80,4 @@ int StreamDecoder::read(float* stereo, int frames) {
     return int(got);
 }
 
-} // namespace rts::audio
+} // namespace aiverse::audio

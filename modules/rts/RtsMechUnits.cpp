@@ -3,7 +3,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 // ================================================================= detection
@@ -229,4 +229,4 @@ void RtsModule::mechTick(Simulation& sim) {
     for (Entity e : addVet) w.add<Veteran>(e, Veteran{});
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

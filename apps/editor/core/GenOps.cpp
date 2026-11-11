@@ -4,7 +4,7 @@
 #include "modules/rts/gen/MapGen.h"
 #include "modules/rts/RtsTiles.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
@@ -154,4 +154,4 @@ void registerGenOps(Workspace& ws) {
         });
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

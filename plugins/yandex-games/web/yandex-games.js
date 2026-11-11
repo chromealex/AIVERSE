@@ -8,7 +8,7 @@
   var NAME = "yandex-games";
   var cfg = {};
   var ysdk = null, payments = null;
-  var emit = function (ev, data) { window.RTSPlugins.emit(NAME, ev, data || {}); };
+  var emit = function (ev, data) { window.AiversePlugins.emit(NAME, ev, data || {}); };
 
   function sdk() {
     if (!ysdk) {
@@ -30,7 +30,7 @@
   }
   function message(e) { return e && e.message ? e.message : String(e); }
 
-  window.RTSPlugins.register(NAME, {
+  window.AiversePlugins.register(NAME, {
     init: function (config) {
       cfg = config || {};
       return sdk().then(function (y) {

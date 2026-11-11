@@ -5,7 +5,7 @@
 #include <array>
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 
 namespace {
 std::runtime_error err(const std::string& ts, const std::string& what) { return std::runtime_error("tileset '" + ts + "': " + what); }
@@ -314,4 +314,4 @@ bool applyTilesToMap(Json& map, const std::function<bool(const std::string&, std
     return true;
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

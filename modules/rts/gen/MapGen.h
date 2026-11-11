@@ -10,7 +10,7 @@
 #include "engine/data/Json.h"
 #include "modules/rts/RtsData.h"
 
-namespace rts::gen {
+namespace aiverse::gen {
 
 struct GenRequest {
     std::string preset = "continents";
@@ -47,4 +47,4 @@ bool presetParams(const std::string& id, const Json& rulesJson, Json& out, std::
 
 uint64_t mapHash(const Json& map);   // FNV-1a over the compact dump (golden tests, MCP)
 
-} // namespace rts::gen
+} // namespace aiverse::gen

@@ -17,7 +17,7 @@
 #include <tuple>
 #include <type_traits>
 
-namespace rts {
+namespace aiverse {
 
 struct Entity {
     uint32_t index = UINT32_MAX;
@@ -234,4 +234,4 @@ private:
     std::vector<Entity> pendingDestroy_;
 };
 
-} // namespace rts
+} // namespace aiverse

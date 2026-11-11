@@ -8,7 +8,7 @@
 
 #include "../Chunks.h"
 
-namespace rts::pack {
+namespace aiverse::pack {
 
 namespace {
 class WebDownload final : public Download {
@@ -62,4 +62,4 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
 
 void setAndroidJavaVm(void*) {}
 
-} // namespace rts::pack
+} // namespace aiverse::pack

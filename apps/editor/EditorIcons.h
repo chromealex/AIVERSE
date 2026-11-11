@@ -142,7 +142,7 @@
 #define ICON_BOOK            "\xee\x81\x9f"   // book-open U+E05F
 #define ICON_X               "\xee\x86\xb2"   // x U+E1B2
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 // Tab icon of a window by its stable id (EditorWindow::icon() overrides it).
 inline const char* windowIconFor(const char* id) {
@@ -158,4 +158,4 @@ inline const char* windowIconFor(const char* id) {
     return ICON_WINDOW;
 }
 
-} // namespace rts::editor
+} // namespace aiverse::editor

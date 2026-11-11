@@ -1,4 +1,4 @@
-// Host-side image helpers for icons and launch screens (rtsbuild, editor, MCP, tests): decode
+// Host-side image helpers for icons and launch screens (aiversebuild, editor, MCP, tests): decode
 // (stb_image via engine/atlas), high-quality resize, flatten, rounded/circle masks, PNG / ICO / ICNS
 // encoders. No GPU, no platform tools (sips/iconutil are not needed, so it works from Linux too).
 #pragma once
@@ -10,9 +10,9 @@
 #include "engine/atlas/AtlasFormat.h"
 #include "engine/splash/SplashData.h"
 
-namespace rts::branding {
+namespace aiverse::branding {
 
-using Image = rts::atlas::Image;
+using Image = aiverse::atlas::Image;
 using splash::Color;
 
 bool loadImageFile(const std::string& path, Image& out, std::string* err = nullptr);
@@ -52,4 +52,4 @@ std::string encodeIco(const std::vector<Image>& images);
 std::string encodeIcns(const std::vector<std::pair<std::string, Image>>& entries);
 bool writeFile(const std::string& path, const std::string& bytes, std::string* err = nullptr);
 
-} // namespace rts::branding
+} // namespace aiverse::branding

@@ -1,5 +1,5 @@
 // Pure part of RtsLights (no GPU, no view): data parsing, day/night sky, weather, lightning.
-// Linked into rts_tests.
+// Linked into aiverse_tests.
 #include "RtsLights.h"
 #include "../RtsAbilityData.h"
 
@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -271,10 +271,10 @@ void RtsLights::configure(const Json& game, const Json& map, const Json& lights)
     }
     shadowSoftness_ = pick("shadowSoftness", -1, -1.0f);
     if (shadowSoftness_ >= 0) shadowSoftness_ = std::clamp(shadowSoftness_, 0.02f, 1.0f);
-    if (const char* c = std::getenv("RTS_CLOUDS")) { clouds_ = std::clamp(float(std::atof(c)), 0.0f, 1.0f); cycle_ = true; }
-    if (const char* st = std::getenv("RTS_STORM")) { storm_ = std::clamp(float(std::atof(st)), 0.0f, 1.0f); cycle_ = true; }
-    if (const char* t = std::getenv("RTS_TIME_OF_DAY")) { startTime_ = float(std::atof(t)); cycle_ = true; }
-    if (const char* n = std::getenv("RTS_NIGHT")) { forcedNight_ = std::clamp(float(std::atof(n)), 0.0f, 1.0f); cycle_ = true; }
+    if (const char* c = std::getenv("AIVERSE_CLOUDS")) { clouds_ = std::clamp(float(std::atof(c)), 0.0f, 1.0f); cycle_ = true; }
+    if (const char* st = std::getenv("AIVERSE_STORM")) { storm_ = std::clamp(float(std::atof(st)), 0.0f, 1.0f); cycle_ = true; }
+    if (const char* t = std::getenv("AIVERSE_TIME_OF_DAY")) { startTime_ = float(std::atof(t)); cycle_ = true; }
+    if (const char* n = std::getenv("AIVERSE_NIGHT")) { forcedNight_ = std::clamp(float(std::atof(n)), 0.0f, 1.0f); cycle_ = true; }
 }
 
 float RtsLights::lightningAt(double seconds, float storm) {
@@ -359,4 +359,4 @@ void RtsLights::updateSky(Lighting& l, double seconds, float cycle) {
 }
 
 
-} // namespace rts::game
+} // namespace aiverse::game

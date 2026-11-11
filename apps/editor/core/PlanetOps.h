@@ -11,7 +11,7 @@
 #include "TerrainOps.h"
 #include "engine/render/Math3D.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 void registerPlanetOps(Workspace& ws);
 
@@ -39,4 +39,4 @@ void planetDetailFollowCorners(DocBody& b, const std::vector<int16_t>& oldCorner
 // terrain_detail {body, action info / create / remove, scale}
 Json planetDetailOp(Workspace& ws, const Json& p);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

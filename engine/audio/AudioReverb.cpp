@@ -1,7 +1,7 @@
 #include "AudioReverb.h"
 #include <algorithm>
 
-namespace rts::audio {
+namespace aiverse::audio {
 
 namespace {
 // Freeverb tunings at 44.1 kHz; the right channel is offset to decorrelate it.
@@ -51,4 +51,4 @@ void Reverb::process(const float* in, float* out, int n, float wet) {
     }
 }
 
-} // namespace rts::audio
+} // namespace aiverse::audio

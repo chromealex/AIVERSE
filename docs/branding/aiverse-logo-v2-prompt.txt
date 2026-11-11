@@ -1,0 +1,6 @@
+Generated with the built-in image_gen tool.
+Output: docs/images/aiverse-logo-v2.png
+
+Use case: logo-brand
+Asset type: alternative logo for AIVERSE game engine.
+Create a premium minimalist identity for AIVERSE, an AI-assisted game engine for RTS and FPS. One horizontal logo lockup: a distinctive compact abstract monogram combining A and V as interlocking geometric planes, followed by the wordmark AIVERSE. Symbol should suggest a portal into a constructed world, through negative space, without literal planets or orbit rings. Flat clean vector-like shapes, optically balanced, strong silhouette, few elements, beautiful exact geometry. Modern custom geometric sans serif wordmark, highly legible with carefully spaced letters. Text exactly "AIVERSE", spelled A I V E R S E. No tagline, no extra text. Restrained saturated violet and teal palette with medium-value lettering that reads on both white and dark backgrounds. Transparent background. Generous but compact margins. No mockups, 3D effects, gradients, glow, shadows, robots, brains, circuits, tiny details or watermark. A single polished logo, not a contact sheet.

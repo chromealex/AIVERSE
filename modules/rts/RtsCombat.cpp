@@ -4,7 +4,7 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts::game {
+namespace aiverse::game {
 using namespace detail;
 
 // ================================================================= targeting
@@ -604,4 +604,4 @@ void RtsModule::sysDeath(Simulation& sim) {
     if (rules_.originals) flushDeathSpawns(sim);
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

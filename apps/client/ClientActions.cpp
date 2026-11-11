@@ -8,7 +8,7 @@
 #include "GameClient.h"
 #include "modules/rts/view/ScriptHud.h"
 
-namespace rts::client {
+namespace aiverse::client {
 
 using i18n::Args;
 using platform::Event;
@@ -337,4 +337,4 @@ void GameClient::buildHowto(UiState& s) {
     }
 }
 
-} // namespace rts::client
+} // namespace aiverse::client

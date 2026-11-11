@@ -21,7 +21,7 @@
 #include "RtsNative.h"
 #include <memory>
 
-namespace rts::game {
+namespace aiverse::game {
 
 // ---------------------------------------------------------------- commands
 enum CommandType : uint16_t {
@@ -515,7 +515,7 @@ public:
     bool canAfford(Simulation& sim, uint8_t player, const std::vector<Amount>& cost, Fixed supply = {}, int* missing = nullptr) const;
     bool isVisible(Simulation& sim, uint8_t player, Vec3 p) const;
     // Tests / tools: run the brute-force reference vision instead of the cached one (results are identical;
-    // RTS_VISION=ref does the same, RTS_VISION=check runs both and aborts on a difference).
+    // AIVERSE_VISION=ref does the same, AIVERSE_VISION=check runs both and aborts on a difference).
     void setVisionReference(bool on);
     bool hostile(Simulation& sim, uint8_t a, uint8_t b) const;
     Fixed stat(Simulation& sim, Entity e, Stat s) const;          // effective stat with techs/levels/buffs
@@ -822,4 +822,4 @@ public:
     int bareCells(Simulation& sim, uint8_t player, int x0, int y0, int w, int h) const;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

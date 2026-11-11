@@ -2,7 +2,7 @@
 #include "engine/data/Json.h"
 #include <stdexcept>
 
-namespace rts::game {
+namespace aiverse::game {
 // Immutable match setup data: copied into the map before setup/replay recording.
 inline void validateInitialVars(const Json& values) {
     if (values.isNull()) return;
@@ -28,4 +28,4 @@ inline void mergeInitialVars(Json& map, const Json& overrides) {
     validateInitialVars(values);
     if (values.size()) map.set("initialVars", std::move(values));
 }
-} // namespace rts::game
+} // namespace aiverse::game

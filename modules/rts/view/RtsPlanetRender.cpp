@@ -12,7 +12,7 @@
 #include "../RtsSphere.h"
 #include "RtsPlanetShaders.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 using namespace render;
 
@@ -390,7 +390,7 @@ int PlanetRenderer::detailScaleFor(const PlanetBody& pb) const {
     int want = pb.detailScale > 0 ? pb.detailScale : !pb.detail.empty() ? pb.detailK : look_.detailScale;
     want = std::clamp(want, 1, 16);
     bool low = false;
-    if (const char* e = std::getenv("RTS_TERRAIN")) low = std::string(e) == "low";
+    if (const char* e = std::getenv("AIVERSE_TERRAIN")) low = std::string(e) == "low";
     else if (dev_) low = Renderer3D::defaultMaterialQualityFor(*dev_, platform::isTouchDevice()) == MaterialQuality::Low;
     if (low) want = std::min(want, 2);
     // budget: samples of one body (CPU ~32 B each + one atlas texel); the atlas side stays under the texture limit
@@ -424,7 +424,7 @@ void PlanetRenderer::setupDetail(const PlanetBody& pb, Body& b) {
         b.detailTex = dev_->createTexture(td);
     }
     stats_.buildMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    if (std::getenv("RTS_TERRAIN_STATS"))
+    if (std::getenv("AIVERSE_TERRAIN_STATS"))
         std::fprintf(stderr, "[terrain] planet '%s' detail k=%d (%s) samples=%zu atlas %dx%d in %.0f ms\n", pb.id.c_str(), k,
                      pb.detail.empty() ? "synthesised" : pb.detailK == k ? "explicit" : "explicit, resampled",
                      size_t(6) * size_t(G + 1) * size_t(G + 1), b.atlasW, b.atlasH,
@@ -532,7 +532,7 @@ void PlanetRenderer::setVision(int body, const std::vector<uint8_t>* field, cons
 
 int PlanetRenderer::tierFor(const Renderer3D& r) const {
     if (!look_.materials()) return 0;
-    if (const char* e = std::getenv("RTS_TERRAIN")) { std::string v = e; return v == "low" ? 0 : 1; }
+    if (const char* e = std::getenv("AIVERSE_TERRAIN")) { std::string v = e; return v == "low" ? 0 : 1; }
     auto tier = [](MaterialQuality q) { return q == MaterialQuality::Low ? 0 : 1; };
     static const int deviceTier = dev_ ? tier(Renderer3D::defaultMaterialQualityFor(*dev_, platform::isTouchDevice())) : 1;
     return std::min(tier(r.materialQuality()), deviceTier);
@@ -903,7 +903,7 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
         }
     }
     stats_.buildMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    static const bool printStats = std::getenv("RTS_TERRAIN_STATS") != nullptr;
+    static const bool printStats = std::getenv("AIVERSE_TERRAIN_STATS") != nullptr;
     if (printStats) {
         static int frames = 0;
         static auto last = std::chrono::steady_clock::now();
@@ -917,4 +917,4 @@ void PlanetRenderer::draw(Renderer3D& r, const PlanetViewFrame& fr, double secon
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

@@ -5,7 +5,7 @@
 #include <map>
 #include <stdexcept>
 
-namespace rts::render {
+namespace aiverse::render {
 
 namespace {
 using K = PostFxParamKind;
@@ -443,4 +443,4 @@ Json postFxCostReport(const PostFxSettings& s) {
     return r;
 }
 
-} // namespace rts::render
+} // namespace aiverse::render

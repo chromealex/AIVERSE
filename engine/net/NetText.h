@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace rts::net {
+namespace aiverse::net {
 
 struct NetText {
     struct Arg { std::string name, text; int64_t n = 0; bool isNum = false; };
@@ -24,7 +24,7 @@ struct NetText {
 inline bool operator==(const NetText::Arg& a, const NetText::Arg& b) { return a.name == b.name && a.text == b.text && a.n == b.n && a.isNum == b.isNum; }
 
 // Every key the network code can produce. Each must exist in engine/assets/lang/en.json and every
-// other engine table (rts_net_tests checks it).
+// other engine table (aiverse_net_tests checks it).
 inline const std::vector<std::string>& netTextKeys() {
     static const std::vector<std::string> keys = {
         "net.connected", "net.disconnected", "net.reconnecting", "net.chat_line", "net.desync", "net.rating_up", "net.rating_down",
@@ -38,4 +38,4 @@ inline const std::vector<std::string>& netTextKeys() {
     return keys;
 }
 
-} // namespace rts::net
+} // namespace aiverse::net

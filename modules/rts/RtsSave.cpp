@@ -5,12 +5,12 @@
 #include "RtsInternal.h"
 #include <algorithm>
 
-namespace rts {
+namespace aiverse {
 inline void io(Archive& a, Transform& x) { a(x.pos, x.prevPos, x.yaw); }
 inline void io(Archive& a, Owner& x) { a(x.player); }
 }
 
-namespace rts::game {
+namespace aiverse::game {
 
 void io(Archive& a, Unit& x) { a(x.type, x.hp, x.flags, x.lastAttacker, x.facing, x.energy, x.lastHitBy); }
 void io(Archive& a, Order& x) { a(x.type, x.target, x.point, x.point2, x.param, x.state, x.timer, x.flow); }
@@ -243,4 +243,4 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     return a.ok();
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

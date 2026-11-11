@@ -16,7 +16,7 @@
 #include "../RtsMap.h"
 #include "../RtsSurface.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 constexpr float kPlanetDetailUnit = 256.0f;   // explicit planet detail heights: value / 256 world units
 
@@ -176,4 +176,4 @@ private:
     render::float3 sampleNormal(int face, int i, int j) const;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

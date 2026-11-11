@@ -15,7 +15,7 @@
 #include "engine/fx/FxModelMesh.h"
 #include "engine/render/TextureCache.h"
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace fs = std::filesystem;
 using fx::EffectDef;
@@ -406,6 +406,6 @@ private:
     std::string filter_;
 };
 
-RTS_EDITOR_WINDOW(FxWindow);
+AIVERSE_EDITOR_WINDOW(FxWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

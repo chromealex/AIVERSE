@@ -8,7 +8,7 @@
 #include <vector>
 #include "RtsModule.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 struct AITerrain {
     static constexpr int kUnit = 256;     // elevation of one cliff level (height advantage 1)
@@ -63,4 +63,4 @@ template <class F> void AITerrain::neighbors(const MapGrid& g, int c, F&& f) con
     }
 }
 
-} // namespace rts::game
+} // namespace aiverse::game

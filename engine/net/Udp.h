@@ -7,7 +7,7 @@
 #include "Reliable.h"
 #include "Socket.h"
 
-namespace rts::net {
+namespace aiverse::net {
 
 // Drop a share of outgoing datagrams (both directions when set on client and server). Tests only.
 void setUdpTestFaults(UdpTestFaults f);
@@ -27,5 +27,5 @@ private:
     std::vector<std::weak_ptr<Peer>> peers_;
 };
 
-} // namespace rts::net
+} // namespace aiverse::net
 #endif

@@ -2,7 +2,7 @@
 // contains — clips, nodes, materials, variants, baked skinning — and the warnings of its view
 // block. Model files are watched: saving a model file reloads the views. Formats the runtime does
 // not read (.blend, .lwo, .x, ...) are converted to a "<file>.glb" sidecar with modelconv (next to
-// rtsbuild) when they are first used and whenever they change. Agents get the same information
+// aiversebuild) when they are first used and whenever they change. Agents get the same information
 // through the `model_info` operation.
 #include <algorithm>
 #include <cstdio>
@@ -13,7 +13,7 @@
 
 namespace fs = std::filesystem;
 
-namespace rts::editor {
+namespace aiverse::editor {
 
 namespace {
 Json modelInfo(const render::Model& m) {
@@ -161,7 +161,7 @@ public:
     }
 
 private:
-    // modelconv sits next to rtsbuild; one attempt per file and modification (no retry loops)
+    // modelconv sits next to aiversebuild; one attempt per file and modification (no retry loops)
     bool convert(Editor& ed, const std::string& src) {
         std::error_code ec;
         const auto t = fs::last_write_time(src, ec);
@@ -175,7 +175,7 @@ private:
                         "modelconv";
 #endif
         if (!fs::exists(tool, ec)) {
-            ed.ws().log("view", "нужна конвертация " + src + ", но modelconv не найден рядом с rtsbuild");
+            ed.ws().log("view", "нужна конвертация " + src + ", но modelconv не найден рядом с aiversebuild");
             return false;
         }
         const std::string cmd = "\"" + tool.string() + "\" \"" + src + "\" 2>&1";
@@ -205,6 +205,6 @@ private:
     std::map<std::string, fs::file_time_type> stamps_;
 };
 
-RTS_EDITOR_WINDOW(ModelWindow);
+AIVERSE_EDITOR_WINDOW(ModelWindow);
 
-} // namespace rts::editor
+} // namespace aiverse::editor

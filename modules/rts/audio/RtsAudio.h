@@ -22,7 +22,7 @@
 #include "../../../engine/sim/Simulation.h"
 #include "../RtsData.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 enum class Cue : uint8_t {
     Attack, Hit, Miss, Died, Spawned, TrainStarted, Ready, BuildPlaced, BuildDone, Gathered,
@@ -94,4 +94,4 @@ private:
     int played_ = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game

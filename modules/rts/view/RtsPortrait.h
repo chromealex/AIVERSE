@@ -6,7 +6,7 @@
 #include <memory>
 #include "RtsView.h"
 
-namespace rts::game {
+namespace aiverse::game {
 
 class Portrait {
 public:
@@ -29,4 +29,4 @@ private:
     int size_ = 0;
 };
 
-} // namespace rts::game
+} // namespace aiverse::game
