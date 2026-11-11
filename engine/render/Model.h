@@ -33,6 +33,7 @@ enum class TeamMode : uint8_t { None, Tint, Mask, BaseAlpha, VertexAlpha };
 
 struct Material {
     std::shared_ptr<const graph::Program> shaderGraph;
+    int graphTextures[4] = {-1,-1,-1,-1};
     std::string name;
     ShadingModel shading = ShadingModel::Pbr;
     float4 baseColor{1, 1, 1, 1};          // linear

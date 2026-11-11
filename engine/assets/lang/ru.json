@@ -385,6 +385,11 @@
   "editor.port.auto": "Авто",
   "editor.port.truncated": "Предпросмотр сокращён. Полный отчёт: port-report.json или port_report.",
   "shaderGraph": {
+  "quality": "Минимальное качество",
+  "search": "Найти узел",
+  "parameter": "Имя параметра",
+  "texture": "Путь текстуры",
+  "swizzle": "Перестановка каналов",
   "openProject": "Откройте проект игры для редактирования графов.",
   "save": "Сохранить",
   "load": "Загрузить",
@@ -488,5 +493,18 @@
   "modeling.deleteKey": "Удалить ключ",
   "modeling.openGraphEditor": "Открыть редактор графа",
   "modeling.openRigEditor": "Открыть редактор rig",
-  "modeling.importGraph": "Принять сохранённый граф в модель"
+  "modeling.importGraph": "Принять сохранённый граф в модель",
+  "physicsDemo": {
+  "title": "Физическая песочница",
+  "description": "Ящики, шар, капсула и маятник",
+  "tick": "Такт: {tick}",
+  "pause": "Пауза",
+  "resume": "Продолжить",
+  "reset": "Сбросить",
+  "launch": "Подбросить шар",
+  "save": "Сохранить",
+  "restore": "Восстановить",
+  "orbit": "Поворот",
+  "zoom": "Расстояние"
+}
 }

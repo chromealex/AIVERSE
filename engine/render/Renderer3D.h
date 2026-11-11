@@ -267,6 +267,8 @@ private:
     std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)
     gfx::TextureHandle sceneColor_, sceneDepth_;   // this frame's capture
     gfx::TextureHandle dummyDepth_, dummyHeight_;
+    double graphEpoch_ = -1;
+    float graphTime_ = 0;
     uint64_t traceFrame_ = 0;
     gfx::ShaderHandle blitShader_;
     gfx::PipelineHandle blitPipe_;
@@ -287,7 +289,7 @@ private:
         bool operator==(const ModelShaderKey& other) const {
             if (variant != other.variant) return false;
             if (graph == other.graph) return true;
-            return graph && other.graph && graph->glsl == other.graph->glsl && graph->outputs == other.graph->outputs;
+            return graph && other.graph && graph->glsl == other.graph->glsl && graph->vertexGlsl == other.graph->vertexGlsl && graph->textures.size() == other.graph->textures.size() && graph->outputs == other.graph->outputs;
         }
     };
     struct ShaderEntry { gfx::ShaderHandle shader; bool failed = false; };

@@ -1,10 +1,13 @@
 # Shader Graph
 
-Shader Graph v1 edits bounded fragment graphs in **Графика → Shader Graph**.
+Shader Graph edits bounded fragment and material vertex graphs in **Графика → Shader Graph**.
 One graph produces GLSL ES 3.00 / desktop GLSL 330 and Metal MSL. No shader source
 from project data is executed directly. Existing games and built-in shaders remain valid.
 
 Agent workflow and three applied examples: [Shader Graph agent guide](shader-graph-agents.md).
+
+Expanded catalog (103 operations), textures, parameters and vertex outputs:
+[Node reference](shader-graph-nodes.md).
 
 ## Editing
 
@@ -57,22 +60,23 @@ connections by numeric index: input entries reference stable node IDs. Material 
 are linear, particle colours follow the existing particle display-space path, postfx
 colours follow the existing LDR composite. UV nodes produce `[u,v,0,1]`.
 
-Nodes: constant, uv, input, texture, add, subtract, multiply, divide, mix, sin,
-fract, clamp (0..1), oneMinus, dot, length, step, red, green, blue, alpha.
+The [node reference](shader-graph-nodes.md) describes all 103 operations and their
+input order, domain and stage constraints. `shader_graph_catalog` reports arity,
+domains and vertex eligibility. All previous operations keep their meaning.
 Material texture samples decode sRGB RGB using the built-in model conversion and preserve alpha.
-Texture takes a UV input and samples the bound base texture (material/particle) or
-scene texture (postfx). No independent texture assets or sampler nodes in v1.
-Division clamps denominator magnitude to 0.00001 and preserves its sign.
-Material outputs: required color; optional roughness, metallic, emission. The graph
-runs before alpha testing and lighting; alpha-mask shadow passes evaluate the same
-colour graph. Existing skinning, instancing, normal maps and quality tiers remain.
-Postfx and particle domains expose color only.
+`texture` reads the existing base texture or scene; `sampleTexture` adds a project image,
+and `sampleTextureLod` samples an independent image in a material fragment or vertex stage.
+Up to four independent images are bound. `parameter` uses a named default or graph.parameters override.
+Material outputs: required color; optional roughness, metallic, emission, world-space normal,
+local-space vertexOffset and vertexNormal after skin/morph. Fragment graphs run before alpha
+testing and lighting; vertex displacement runs in colour, outline and shadow passes.
+Postfx and particle domains expose color only. See the node reference for clocks, particle
+age/lifetime/random, numerical guards, texture colour spaces and quality settings.
 
 Limits: 128 nodes, eight texture sample nodes, 64-character IDs, 256 KiB assets,
 finite constants within +/-1,000,000. Missing connections, cycles, duplicate IDs,
 unknown operations and incompatible output domains are errors. Cycles are checked
-using the existing library topological ordering implementation. No compute, vertex
-displacement, custom source nodes, time/particle-age inputs or Shader Graph imports.
+using the existing library topological ordering implementation. No compute, custom source nodes or Shader Graph imports.
 
 ## MCP
 

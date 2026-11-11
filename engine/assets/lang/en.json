@@ -385,6 +385,11 @@
   "editor.port.auto": "Auto",
   "editor.port.truncated": "Preview truncated. Full details are in port-report.json or port_report.",
   "shaderGraph": {
+  "quality": "Minimum quality",
+  "search": "Find node",
+  "parameter": "Parameter name",
+  "texture": "Texture path",
+  "swizzle": "Swizzle",
   "openProject": "Open a game project to edit shader graphs.",
   "save": "Save",
   "load": "Load",
@@ -488,5 +493,18 @@
   "modeling.deleteKey": "Delete key",
   "modeling.openGraphEditor": "Open graph editor",
   "modeling.openRigEditor": "Open rig editor",
-  "modeling.importGraph": "Import saved graph into model"
+  "modeling.importGraph": "Import saved graph into model",
+  "physicsDemo": {
+  "title": "Physics sandbox",
+  "description": "Boxes, sphere, capsule and pendulum",
+  "tick": "Tick: {tick}",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "launch": "Launch sphere",
+  "save": "Save state",
+  "restore": "Restore state",
+  "orbit": "Orbit",
+  "zoom": "Distance"
+}
 }

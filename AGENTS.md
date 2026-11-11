@@ -70,9 +70,8 @@ the *engine* add mechanics generically — never a special case for one game.
 - After touching the sim run the determinism tests and a headless bot match on every sample game.
 
 **Rendering/platform:**
-- Before working on shaders or Shader Graph (materials, post effects, particles), read
-  [Shader Graph agent guide](docs/shader-graph-agents.md) and follow its validation,
-  preview and application workflow.
+- Before shader or Shader Graph work, read [the agent guide](docs/shader-graph-agents.md)
+  and follow its validation, preview and application workflow.
 - All GPU work through `gfx::Device` (RHI). Every shader exists in GLSL *and* MSL in the same change.
 - Must run on weak Android GPUs: every expensive feature has a quality tier (`ShadowQuality`, etc.).
 - Content files are read via `platform::readContentFile` (works on Android assets, web preload, packs).
@@ -176,10 +175,10 @@ the commit message; prefer adding a new file over editing a shared one.
 | Meta-game C++ policies, JSON presets and agent recipes | `engine/meta`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/meta-*`, `docs/meta-game.md`; minimal CMake/native dependency hooks | meta-library agent |
 | FPS, authoritative sessions and large worlds | `modules/fps`, `engine/net/authority`, `engine/world`, `apps/fps`, `tests/fps`, `examples/fps`, `docs/fps.md`; additive build/platform hooks | FPS task (current agent) |
 | AIVERSE naming migration | Engine-wide branding, shared namespaces, build/tool names, platform bridges, documentation; preserve genre RTS | aiverse-rename (user assigned) |
-| Jolt physics evaluation | `tools/physics`, `docs/physics-evaluation.md` | codex/jolt-evaluation |
 | Shader Graph: material, postfx and particle graphs, compiler, editor and MCP | `engine/render/graph`, shader graph integration in render/fx/view, editor window/core, tests/shader_graph, docs/shader-graph.md | shader-graph agent |
 | Programmable animation: trait stacks, subgraphs, Motion Matching, full-body IK contacts/collisions/balance, visual editors and C++/Lua controls | `engine/render/AnimationGraph*`, `engine/render/AnimationRig*`, `engine/render/AnimationMotion*`, `engine/render/FullBodyIK*`, `engine/render/AnimationContacts*`, `apps/editor/animation`, `apps/editor/windows/Animation*`, `apps/editor/core/Animation*`, `tests/animation`, `examples/animation`, `docs/animation-graphs.md`; minimal view/model/Lua hooks | animation-system agent |
 | Model authoring and clip tools | `tools/modeling`, `tests/modeling`, `apps/editor/core/ModelingOps.*`, `apps/editor/windows/Model*`, `docs/modeling.md`; minimal registry, rig-limit, screenshot and localization hooks | codex/modeling-tools |
+| Optional Box3D runtime and physics sandbox | `engine/physics`, `third_party/box3d`, `examples/physics`, `tests/physics`, `docs/physics.md`; additive CMake hooks | codex/box3d-runtime |
 | Other areas | as assigned by the user | the agent the user assigned |
 
 If your task is not in this table, the user's first message to you defines your area: write it

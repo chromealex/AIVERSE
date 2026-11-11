@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "domain": "particle",
+  "nodes": [
+    {
+      "id": "input",
+      "op": "input",
+      "position": [
+        20,
+        20
+      ]
+    },
+    {
+      "id": "age",
+      "op": "particleAge01",
+      "position": [
+        20,
+        115
+      ]
+    },
+    {
+      "id": "young",
+      "op": "constant",
+      "position": [
+        20,
+        210
+      ],
+      "value": [
+        0.1,
+        0.9,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "old",
+      "op": "constant",
+      "position": [
+        20,
+        305
+      ],
+      "value": [
+        1,
+        0.1,
+        0.4,
+        1
+      ]
+    },
+    {
+      "id": "gradient",
+      "op": "mix",
+      "position": [
+        20,
+        400
+      ],
+      "inputs": [
+        "young",
+        "old",
+        "age"
+      ]
+    },
+    {
+      "id": "color",
+      "op": "multiply",
+      "position": [
+        230,
+        20
+      ],
+      "inputs": [
+        "input",
+        "gradient"
+      ]
+    }
+  ],
+  "outputs": {
+    "color": "color"
+  }
+}

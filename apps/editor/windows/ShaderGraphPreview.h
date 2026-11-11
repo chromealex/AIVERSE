@@ -2,6 +2,8 @@
 #include "modules/rts/view/RtsPortrait.h"
 #include "engine/render/PostFx.h"
 #include "engine/fx/ParticleSystem.h"
+#include "engine/render/TextureCache.h"
+#include "engine/platform/Platform.h"
 
 namespace aiverse::editor {
 // Uses the real material renderer, post-processing composite and particle renderer.
@@ -10,12 +12,18 @@ public:
     ~ShaderGraphPreview() { shutdown(); }
     void shutdown() {
         if(!dev_)return;
-        portrait_.shutdown();post_.shutdown();particles_.shutdown();
+        portrait_.shutdown();post_.shutdown();particles_.shutdown();textures_.shutdown();
         dev_->destroyTexture(color_);dev_->destroyTexture(depth_);dev_->destroyBuffer(vb_);
-        dev_->destroyPipeline(pipe_);dev_->destroyShader(shader_);dev_=nullptr;key_.clear();error.clear();
+        dev_->destroyPipeline(pipe_);dev_->destroyShader(shader_);dev_=nullptr;key_.clear();base_.clear();error.clear();
     }
     gfx::TextureHandle render(Editor& ed,const Json& g,double time,float dt) {
         if(!dev_ && !init(ed.device()))return {};
+        const std::string base=ed.ws().project.dir+"/";
+        if(base!=base_) {
+            base_=base;
+            post_.setImageLoader([base](const std::string& path,int& w,int& h,std::vector<uint8_t>& rgba){std::string bytes;return platform::readContentFile(base+path,bytes)&&render::decodeImage(bytes,w,h,rgba);});
+            particles_.setTextureLoader([this,base](const std::string& path,fx::FxTexture& out){auto t=textures_.resolve(path,false,base,true);out={t.tex,t.u0,t.v0,t.u1,t.v1};return t.valid();});
+        }
         const auto domain=g.getStr("domain");
         const std::string key=g.dump(-1);
         if(key!=key_) {
@@ -55,7 +63,7 @@ public:
     std::string error;
 private:
     bool init(gfx::Device& dev) {
-        dev_=&dev;if(!portrait_.init(dev)||!post_.init(dev)||!particles_.init(&dev)) {error=dev.lastError();shutdown();return false;}
+        dev_=&dev;textures_.init(dev);if(!portrait_.init(dev)||!post_.init(dev)||!particles_.init(&dev)) {error=dev.lastError();shutdown();return false;}
         post_.setQuality(render::PostFxQuality::High);
         gfx::TextureDesc td;td.width=td.height=256;td.renderTarget=true;color_=dev.createTexture(td);td.format=gfx::PixelFormat::Depth;depth_=dev.createTexture(td);
         const float vertices[]={-1,-1,3,-1,-1,3};gfx::BufferDesc bd;bd.data=vertices;bd.size=sizeof vertices;vb_=dev.createBuffer(bd);
@@ -71,6 +79,6 @@ fragment float4 fs_main(O o [[stage_in]],constant float4& p [[buffer(1)]],textur
         if(!pipe_.valid()){error=dev.lastError();shutdown();return false;}return true;
     }
     gfx::Device* dev_=nullptr;game::Portrait portrait_;render::PostFx post_;fx::ParticleSystem particles_;
-    gfx::TextureHandle color_,depth_;gfx::ShaderHandle shader_;gfx::PipelineHandle pipe_;gfx::BufferHandle vb_;std::string key_;
+    gfx::TextureHandle color_,depth_;gfx::ShaderHandle shader_;gfx::PipelineHandle pipe_;gfx::BufferHandle vb_;std::string key_,base_;render::TextureCache textures_;
 };
 }
