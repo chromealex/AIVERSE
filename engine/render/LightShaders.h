@@ -16,7 +16,7 @@ namespace aiverse::render::shaders {
 
 // GLSL: block / sampler names are parameters because each shader has its own slots.
 #define AIVERSE_GLSL_LIGHTS_AT(BLOCK, TEX) \
-    "layout(std140) uniform " BLOCK " { vec4 l_map; vec4 l_info; vec4 l_cloud; vec4 l_sky; vec4 l_env; vec4 l_pos[8]; vec4 l_col[8]; vec4 l_gridOrigin; vec4 l_gridSize; vec4 l_spot[8]; };\n" \
+    "layout(std140) uniform " BLOCK " { vec4 l_map; vec4 l_info; vec4 l_cloud; vec4 l_sky; vec4 l_env; vec4 l_pos[8]; vec4 l_col[8]; vec4 l_gridOrigin; vec4 l_gridSize; vec4 l_giPoint; vec4 l_giSun; vec4 l_giSky; vec4 l_spot[8]; };\n" \
     "uniform highp sampler2D " TEX ";\n" \
     "vec4 gridFetch(int i) { return texelFetch(" TEX ", ivec2(i % int(l_gridSize.w), i / int(l_gridSize.w)), 0); }\n" \
     "float gridVisibility(int offset, vec3 direction, float distance, float ndl, int taps) {\n" \
@@ -53,25 +53,56 @@ namespace aiverse::render::shaders {
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
+    "float probeVisibility(int offset, vec3 q, float distance) {\n" \
+    "    vec3 a=abs(q);vec2 uv;int face;\n" \
+    "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=vec2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
+    "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=vec2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
+    "    else{face=q.z>0.0?4:5;uv=vec2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
+    "    ivec2 pixel=ivec2(clamp(floor((uv*0.5+0.5)*4.0),vec2(0),vec2(3)));\n" \
+    "    vec4 plane=gridFetch(offset+4+face*16+pixel.y*4+pixel.x);\n" \
+    "    float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
+    "    if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
+    "        depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
+    "    return distance-0.03<=depth?1.0:0.0;\n" \
+    "}\n" \
     "vec3 gridIndirect(vec3 wpos, vec3 n) {\n" \
+    "    if(l_giPoint.w<0.5)return vec3(0.0);\n" \
     "    if(gridFetch(0).z<=0.0)return vec3(0.0);\n" \
     "    vec3 coordinate=(wpos-l_gridOrigin.xyz)*l_gridOrigin.w-0.5;\n" \
     "    vec3 base=floor(coordinate),fraction=coordinate-base;\n" \
     "    vec3 result=vec3(0.0);float total=0.0;\n" \
+    "    bool mobile=l_giPoint.w<1.5;\n" \
+    "    int first=fraction.x>=fraction.y?(fraction.x>=fraction.z?0:2):(fraction.y>=fraction.z?1:2);\n" \
+    "    int last=fraction.x<=fraction.y?(fraction.x<=fraction.z?0:2):(fraction.y<=fraction.z?1:2);\n" \
+    "    if(first==last)last=(first+2)%3;\n" \
+    "    int middle=3-first-last;\n" \
     "    for(int i=0;i<8;++i){\n" \
+    "        if(mobile && i>=4)break;\n" \
     "        vec3 corner=vec3(float(i%2),float((i/2)%2),float(i/4));\n" \
+    "        float tetraWeight=0.0;\n" \
+    "        if(mobile){\n" \
+    "            corner=vec3(0.0);\n" \
+    "            if(i>=1)corner[first]=1.0;\n" \
+    "            if(i>=2)corner[middle]=1.0;\n" \
+    "            if(i>=3)corner[last]=1.0;\n" \
+    "            tetraWeight=i==0?1.0-fraction[first]:i==1?fraction[first]-fraction[middle]:i==2?fraction[middle]-fraction[last]:fraction[last];\n" \
+    "        }\n" \
     "        vec3 cell=base+corner;\n" \
     "        if(cell.x<0.0||cell.y<0.0||cell.z<0.0||cell.x>=l_gridSize.x||cell.y>=l_gridSize.y||cell.z>=l_gridSize.z)continue;\n" \
     "        int index=int(cell.x+l_gridSize.x*(cell.y+l_gridSize.y*cell.z));\n" \
-    "        int offset=int(gridFetch(index).z);if(offset<=0)continue;\n" \
+    "        vec4 cellHeader=gridFetch(index);int offset=int(cellHeader.z);if(offset<=0)continue;\n" \
     "        vec3 weights=mix(vec3(1.0)-fraction,fraction,corner);\n" \
-    "        float weight=weights.x*weights.y*weights.z;\n" \
+    "        float weight=mobile?tetraWeight:weights.x*weights.y*weights.z;\n" \
+    "        if(weight<=1e-6)continue;\n" \
     "        vec3 position=l_gridOrigin.xyz+(cell+0.5)/l_gridOrigin.w;\n" \
     "        vec3 delta=wpos-position;float distance=length(delta);\n" \
-    "        if(distance>1e-5)weight*=gridVisibility(offset+3,delta,distance,1.0,1);\n" \
+    "        if(distance>1e-5)weight*=probeVisibility(offset,delta,distance);\n" \
     "        if(weight<=0.0)continue;\n" \
     "        vec4 normal=vec4(1.0,n);\n" \
-    "        vec3 value=vec3(dot(gridFetch(offset),normal),dot(gridFetch(offset+1),normal),dot(gridFetch(offset+2),normal));\n" \
+    "        vec3 value=vec3(0.0);if(mod(cellHeader.w,2.0)>=1.0)value=vec3(dot(gridFetch(offset),normal),dot(gridFetch(offset+1),normal),dot(gridFetch(offset+2),normal));\n" \
+    "        value*= l_giPoint.rgb;\n" \
+    "        if(mod(floor(cellHeader.w*0.5),2.0)>=1.0 && dot(l_giSun.rgb,l_giSun.rgb)>0.0)value+=vec3(dot(gridFetch(offset+100),normal),dot(gridFetch(offset+101),normal),dot(gridFetch(offset+102),normal))*l_giSun.rgb;\n" \
+    "        if(cellHeader.w>=4.0 && dot(l_giSky.rgb,l_giSky.rgb)>0.0)value+=vec3(dot(gridFetch(offset+103),normal),dot(gridFetch(offset+104),normal),dot(gridFetch(offset+105),normal))*l_giSky.rgb;\n" \
     "        result+=max(value,vec3(0.0))*weight;total+=weight;\n" \
     "    }\n" \
     "    return total>1e-5?result/total:vec3(0.0);\n" \
@@ -102,7 +133,7 @@ namespace aiverse::render::shaders {
     "        if(emission<=0.0)continue;\n" \
     "        float visibility = gridVisibility(int(energy.w), -delta, sqrt(d2), ndl, 4);\n" \
     "        if (visibility <= 0.0) continue;\n" \
-    "        vec3 radiance = energy.rgb * (a * a / (1.0 + d2)) * visibility * emission;\n" \
+    "        vec3 radiance = energy.rgb * l_giPoint.rgb * (a * a / (1.0 + d2)) * visibility * emission;\n" \
     "        vec3 H = L + V; H *= inversesqrt(max(dot(H,H),1e-6));\n" \
     "        dd += radiance * ndl;\n" \
     "        ds += radiance * (ndl * pow(max(dot(n,H),0.0),shin) * (shin+8.0)*0.04) * (1.0-diffuseOnly);\n" \
@@ -199,7 +230,7 @@ namespace aiverse::render::shaders {
 // MSL: the block and the texture are function arguments (buffer / texture indices are chosen in
 // each fragment function's signature).
 #define AIVERSE_MSL_LIGHTS \
-    "struct LightU { float4 map; float4 info; float4 cloud; float4 sky; float4 env; float4 pos[8]; float4 col[8]; float4 gridOrigin; float4 gridSize; float4 spot[8]; };\n" \
+    "struct LightU { float4 map; float4 info; float4 cloud; float4 sky; float4 env; float4 pos[8]; float4 col[8]; float4 gridOrigin; float4 gridSize; float4 giPoint; float4 giSun; float4 giSky; float4 spot[8]; };\n" \
     "static float4 gridFetch(texture2d<float> lm, int i, int width) { return lm.read(uint2(i % width, i / width)); }\n" \
     "static float gridVisibility(texture2d<float> lm, int width, int offset, float3 direction, float distance, float ndl, int taps) {\n" \
     "    if (offset <= 0) return 1.0;\n" \
@@ -235,25 +266,56 @@ namespace aiverse::render::shaders {
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
+    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance) {\n" \
+    "    float3 a=abs(q);float2 uv;int face;\n" \
+    "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=float2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
+    "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=float2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
+    "    else{face=q.z>0.0?4:5;uv=float2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
+    "    int2 pixel=int2(clamp(floor((uv*0.5+0.5)*4.0),float2(0),float2(3)));\n" \
+    "    float4 plane=gridFetch(lm,offset+4+face*16+pixel.y*4+pixel.x,width);\n" \
+    "    float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
+    "    if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
+    "        depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
+    "    return distance-0.03<=depth?1.0:0.0;\n" \
+    "}\n" \
     "static float3 gridIndirect(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n) {\n" \
+    "    if(l.giPoint.w<0.5)return float3(0.0);\n" \
     "    if(gridFetch(lm,0,int(l.gridSize.w)).z<=0.0)return float3(0.0);\n" \
     "    float3 coordinate=(wpos-l.gridOrigin.xyz)*l.gridOrigin.w-0.5;\n" \
     "    float3 base=floor(coordinate),fraction=coordinate-base;\n" \
     "    float3 result=float3(0.0);float total=0.0;\n" \
+    "    bool mobile=l.giPoint.w<1.5;\n" \
+    "    int first=fraction.x>=fraction.y?(fraction.x>=fraction.z?0:2):(fraction.y>=fraction.z?1:2);\n" \
+    "    int last=fraction.x<=fraction.y?(fraction.x<=fraction.z?0:2):(fraction.y<=fraction.z?1:2);\n" \
+    "    if(first==last)last=(first+2)%3;\n" \
+    "    int middle=3-first-last;\n" \
     "    for(int i=0;i<8;++i){\n" \
+    "        if(mobile && i>=4)break;\n" \
     "        float3 corner=float3(float(i%2),float((i/2)%2),float(i/4));\n" \
+    "        float tetraWeight=0.0;\n" \
+    "        if(mobile){\n" \
+    "            corner=float3(0.0);\n" \
+    "            if(i>=1)corner[first]=1.0;\n" \
+    "            if(i>=2)corner[middle]=1.0;\n" \
+    "            if(i>=3)corner[last]=1.0;\n" \
+    "            tetraWeight=i==0?1.0-fraction[first]:i==1?fraction[first]-fraction[middle]:i==2?fraction[middle]-fraction[last]:fraction[last];\n" \
+    "        }\n" \
     "        float3 cell=base+corner;\n" \
     "        if(cell.x<0.0||cell.y<0.0||cell.z<0.0||cell.x>=l.gridSize.x||cell.y>=l.gridSize.y||cell.z>=l.gridSize.z)continue;\n" \
     "        int index=int(cell.x+l.gridSize.x*(cell.y+l.gridSize.y*cell.z));\n" \
-    "        int offset=int(gridFetch(lm,index,int(l.gridSize.w)).z);if(offset<=0)continue;\n" \
+    "        float4 cellHeader=gridFetch(lm,index,int(l.gridSize.w));int offset=int(cellHeader.z);if(offset<=0)continue;\n" \
     "        float3 weights=mix(float3(1.0)-fraction,fraction,corner);\n" \
-    "        float weight=weights.x*weights.y*weights.z;\n" \
+    "        float weight=mobile?tetraWeight:weights.x*weights.y*weights.z;\n" \
+    "        if(weight<=1e-6)continue;\n" \
     "        float3 position=l.gridOrigin.xyz+(cell+0.5)/l.gridOrigin.w;\n" \
     "        float3 delta=wpos-position;float distance=length(delta);\n" \
-    "        if(distance>1e-5)weight*=gridVisibility(lm,int(l.gridSize.w),offset+3,delta,distance,1.0,1);\n" \
+    "        if(distance>1e-5)weight*=probeVisibility(lm,int(l.gridSize.w),offset,delta,distance);\n" \
     "        if(weight<=0.0)continue;\n" \
     "        float4 normal=float4(1.0,n);\n" \
-    "        float3 value=float3(dot(gridFetch(lm,offset,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+1,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+2,int(l.gridSize.w)),normal));\n" \
+    "        float3 value=float3(0.0);if(fmod(cellHeader.w,2.0)>=1.0)value=float3(dot(gridFetch(lm,offset,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+1,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+2,int(l.gridSize.w)),normal));\n" \
+    "        value*= l.giPoint.rgb;\n" \
+    "        if(fmod(floor(cellHeader.w*0.5),2.0)>=1.0 && dot(l.giSun.rgb,l.giSun.rgb)>0.0)value+=float3(dot(gridFetch(lm,offset+100,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+101,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+102,int(l.gridSize.w)),normal))*l.giSun.rgb;\n" \
+    "        if(cellHeader.w>=4.0 && dot(l.giSky.rgb,l.giSky.rgb)>0.0)value+=float3(dot(gridFetch(lm,offset+103,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+104,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+105,int(l.gridSize.w)),normal))*l.giSky.rgb;\n" \
     "        result+=max(value,float3(0.0))*weight;total+=weight;\n" \
     "    }\n" \
     "    return total>1e-5?result/total:float3(0.0);\n" \
@@ -284,7 +346,7 @@ namespace aiverse::render::shaders {
     "        if(emission<=0.0)continue;\n" \
     "        float visibility = gridVisibility(lm,int(l.gridSize.w),int(energy.w),-delta,sqrt(d2),ndl,4);\n" \
     "        if (visibility <= 0.0) continue;\n" \
-    "        float3 radiance = energy.rgb * (a * a / (1.0 + d2)) * visibility * emission;\n" \
+    "        float3 radiance = energy.rgb * l.giPoint.rgb * (a * a / (1.0 + d2)) * visibility * emission;\n" \
     "        float3 H = L + V; H *= rsqrt(max(dot(H,H),1e-6));\n" \
     "        dd += radiance * ndl;\n" \
     "        ds += radiance * (ndl * pow(max(dot(n,H),0.0),shin) * (shin+8.0)*0.04) * (1.0-diffuseOnly);\n" \

@@ -1,5 +1,7 @@
 #include "engine/render/Lights.h"
 #include "engine/render/StaticPointBounce.h"
+#include "engine/render/ProbeEnvironment.h"
+#include "engine/render/LightGridCache.h"
 #include <cassert>
 #include <iostream>
 using namespace aiverse::render;
@@ -74,6 +76,23 @@ int main(){
     assert(litProbe);g.build(std::vector<PointLight>{white},2,nullptr,&field);
     assert(g.texels[0].z>0);int probeOffset=int(g.texels[0].z);
     assert(g.texels[size_t(probeOffset+3)].x==4);
+    auto cache=encodeLightGrid(g,123);auto cached=decodeLightGrid(cache,123);
+    assert(cached.texels.size()==g.texels.size());
+    for(size_t i=0;i<g.texels.size();++i){auto a=g.texels[i],b=cached.texels[i];assert(a.x==b.x&&a.y==b.y&&a.z==b.z&&a.w==b.w);}
+    rejected=false;try{decodeLightGrid(cache,124);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    cache.back()^=1;rejected=false;try{decodeLightGrid(cache,123);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    rejected=false;try{decodeLightGrid(cache.substr(0,60),123);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    room.albedos={{.5f,.5f,.5f}};
+    auto sealed=makeDiffuseVolume(room,{-.5f,-.5f,-.5f},{-.5f,-.5f,-.5f},1);
+    bakeProbeEnvironment(room,sealed,{0,1,0},64,20);
+    for(const auto& probe:sealed.probes)for(int c=0;c<3;++c)assert(probe.sun[size_t(c)].x==0&&probe.sky[size_t(c)].x==0);
+    StaticShadowGeometry floor;floor.albedos={{.8f,0,0}};
+    floor.triangles={{{-20,0,-20},{20,0,-20},{20,0,20}},{{-20,0,-20},{20,0,20},{-20,0,20}}};floor.build();
+    auto sunny=makeDiffuseVolume(floor,{-.5f,.5f,-.5f},{-.5f,.5f,-.5f},1);
+    bakeProbeEnvironment(floor,sunny,{0,1,0},64,20);
+    assert(sunny.probes[0].sun[0].x>0&&sunny.probes[0].sky[0].x>0&&sunny.probes[0].sun[1].x==0);
+    g.build(std::vector<PointLight>{},1,nullptr,&sunny);assert(!g.texels.empty());
+    std::cout<<"environment probes: open sun, colored bounce, sealed room and cache validation PASS\n";
     field.probes[0].visibility.distances.clear();rejected=false;
     try{g.build(std::vector<PointLight>{white},2,nullptr,&field);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
     std::cout<<"one-bounce color transfer, orientation, determinism and black/empty controls PASS\n";

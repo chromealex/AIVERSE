@@ -1,5 +1,7 @@
 // Fixed-workload rendering benchmark. No simulation, adaptive quality, or asset normalization.
 #pragma once
+#include "engine/render/ProbeEnvironment.h"
+#include "engine/render/LightGridCache.h"
 #include "engine/platform/Platform.h"
 #include "engine/render/PostFx.h"
 #include "engine/render/ScreenLighting.h"
@@ -20,6 +22,7 @@ inline double ms(Clock::time_point a, Clock::time_point b) { return std::chrono:
 struct Options {
     std::string scene, output="benchmark.json", profile="baseline", capture;
     int warmup=90, samples=240, camera=-1;
+    std::string readLightCache,writeLightCache;
     std::string tourPath; float tourStart=0;
     std::string captureSequence; float motionYaw=0, freezeTime=-1, previewSeconds=0, motionSpeed=0.018f;
     static Options parse(int argc,char** argv) {
@@ -27,7 +30,7 @@ struct Options {
         for(int i=1;i<argc;++i) {
             std::string k=argv[i];if(i+1>=argc)throw std::runtime_error("missing option value: "+k);
             std::string v=argv[++i];
-            if(k=="--scene")o.scene=v;else if(k=="--output")o.output=v;else if(k=="--profile")o.profile=v;
+            if(k=="--read-light-cache")o.readLightCache=v;else if(k=="--write-light-cache")o.writeLightCache=v;else if(k=="--scene")o.scene=v;else if(k=="--output")o.output=v;else if(k=="--profile")o.profile=v;
             else if(k=="--tour")o.tourPath=v;else if(k=="--tour-start")o.tourStart=std::stof(v);
             else if(k=="--capture")o.capture=v;else if(k=="--warmup")o.warmup=std::stoi(v);
             else if(k=="--preview-seconds")o.previewSeconds=std::stof(v);else if(k=="--motion-speed")o.motionSpeed=std::stof(v);
@@ -125,14 +128,16 @@ struct Bench {
             if(!std::isfinite(normalScale)||normalScale<0||normalScale>2)throw std::runtime_error("mainNormalScale must be in 0..2");
             for(auto& material:model->materials)material.normalScale*=normalScale;
             additions.applyGraphs(*model,config["materialGraphs"]);
-            const bool bakePointShadows=config.getBool("staticPointShadows",false)&&options.profile!="low";
-            if(bakePointShadows)appendShadowGeometry(additions.shadowGeometry,*model);
-            additions.load(d,config,warn,notes,bakePointShadows);
+            const bool bakePointShadows=(config.getBool("staticPointShadows",false)||config.has("probeGI"))&&options.profile!="low";
+            if(options.profile!="low"&&(!options.readLightCache.empty()||!options.writeLightCache.empty())&&!config.getBool("staticPointLightGrid",false))throw std::runtime_error("light cache requires staticPointLightGrid");
+            const bool collectShadows=bakePointShadows&&options.readLightCache.empty();
+            if(collectShadows)appendShadowGeometry(additions.shadowGeometry,*model);
+            additions.load(d,config,warn,notes,collectShadows);
             const size_t primaryLightCount=additions.lights.size();
             if(config.has("staticPointBounce")&&!bakePointShadows&&options.profile!="low")throw std::runtime_error("staticPointBounce requires static point shadows");
             std::vector<StaticPointShadow> pointShadows;
             StaticDiffuseField diffuseField;
-            if(bakePointShadows){
+            if(collectShadows){
                 if(!config.getBool("staticPointLightGrid",false)||additions.lights.size()>32)throw std::runtime_error("static point shadows require a grid and at most 32 lights");
                 const double requested=config["pointShadowResolution"].toDouble(128);
                 if(!std::isfinite(requested)||requested<16||requested>256||std::floor(requested)!=requested)throw std::runtime_error("pointShadowResolution must be an integer in 16..256");
@@ -155,10 +160,34 @@ struct Bench {
                     report.set("staticBounceBakeMs",Json::number(ms(bounceStart,Clock::now())));
                     std::fprintf(stderr,"Static bounce: %zu surface emitters\n",bounce.size());
                 }
+                if(config.has("probeGI")){
+                    const auto& gi=config["probeGI"];const auto bakeStart=Clock::now();
+                    if(diffuseField.probes.empty())diffuseField=makeDiffuseVolume(additions.shadowGeometry,model->boundsMin,model->boundsMax,float(gi["spacing"].toDouble(3)));
+                    double samples=gi["samples"].toDouble(32);
+                    if(samples!=std::floor(samples)||samples<16||samples>128)throw std::runtime_error("probeGI samples must be 16..128");
+                    bakeProbeEnvironment(additions.shadowGeometry,diffuseField,v3(config["sunDirection"]),int(samples),float(gi["distance"].toDouble(50)));
+                    report.set("environmentProbeBakeMs",Json::number(ms(bakeStart,Clock::now())));
+                    report.set("staticDiffuseProbes",Json::number(int64_t(diffuseField.probes.size())));
+                }
                 report.set("staticPointShadowMaps",Json::number(int64_t(pointShadows.size())));
             }
             additions.shadowGeometry=StaticShadowGeometry{};
-            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2)),pointShadows.empty()?nullptr:&pointShadows,diffuseField.probes.empty()?nullptr:&diffuseField))throw std::runtime_error("static light grid upload failed");
+            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"){
+                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");
+                Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
+                Hasher keyHash;keyHash.str(keyConfig.dump());
+                StaticLightGrid grid;
+                if(!options.readLightCache.empty()){
+                    std::string bytes;if(!platform::readContentFile(options.readLightCache,bytes))throw std::runtime_error("cannot read light cache");
+                    grid=decodeLightGrid(bytes,keyHash.value());report.set("lightCacheLoaded",Json::fromBool(true));
+                }else grid.build(additions.lights,float(config["staticLightCellSize"].toDouble(2)),pointShadows.empty()?nullptr:&pointShadows,diffuseField.probes.empty()?nullptr:&diffuseField);
+                if(!renderer.lights.setStaticLightGrid(grid))throw std::runtime_error("static light grid upload failed");
+                report.set("lightAtlasBytes",Json::number(int64_t(grid.texels.size()*sizeof(float4))));
+                if(!options.writeLightCache.empty()){
+                    if(std::filesystem::exists(options.writeLightCache))throw std::runtime_error("light cache output already exists");
+                    auto bytes=encodeLightGrid(grid,keyHash.value());std::ofstream file(options.writeLightCache,std::ios::binary);file.write(bytes.data(),std::streamsize(bytes.size()));if(!file)throw std::runtime_error("cannot write light cache");
+                }
+            }
             report.set("additions",additions.audit);
             report.set("sourcePointLights",Json::number(int64_t(primaryLightCount)));
             report.set("totalGridLights",Json::number(int64_t(additions.lights.size())));
@@ -180,7 +209,12 @@ struct Bench {
             renderer.setShadowQuality(options.profile=="low"?ShadowQuality::Low:ShadowQuality::High);
             renderer.setMaterialQuality(options.profile=="low"?MaterialQuality::Medium:MaterialQuality::High);
             renderer.setTraceEnabled(options.profile=="full");renderer.setModelReflectionsEnabled(options.profile=="full");
-            renderer.lights.setQuality(options.profile=="low"||additions.lights.empty()?LightQuality::Off:LightQuality::High);
+            renderer.lights.setQuality(options.profile=="low"||(additions.lights.empty()&&!config.has("probeGI"))?LightQuality::Off:LightQuality::High);
+            const auto& gi=config["probeGI"];
+            const auto giQuality=gi.getStr("quality","high");
+            if(giQuality!="off"&&giQuality!="mobile"&&giQuality!="high")throw std::runtime_error("probeGI quality must be off, mobile or high");
+            renderer.lights.setIndirectQuality(giQuality=="off"?IndirectQuality::Off:giQuality=="mobile"?IndirectQuality::Mobile:IndirectQuality::High);
+            if(!renderer.lights.setStaticRadiance(SceneAssets::vector3(gi["points"],{1,1,1}),SceneAssets::vector3(gi["sun"],{}),SceneAssets::vector3(gi["sky"],{})))throw std::runtime_error("invalid probeGI radiance");
             renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(config["sunColor"]);
             renderer.lighting.sunIntensity=float(config["sunIntensity"].toDouble());
             renderer.lighting.skyColor=v3(config["skyColor"]);renderer.lighting.groundColor=v3(config["groundColor"]);
@@ -190,7 +224,7 @@ struct Bench {
             if(options.profile=="hdr"||options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
             if(options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25}]})"),Json());
             if(options.profile!="low"&&config.has("postfx"))s=parsePostFx(config["postfx"],Json());
-            screen.setDiffuseBounceEnabled(!(bakePointShadows&&config.has("staticPointBounce")));
+            screen.setDiffuseBounceEnabled(!(bakePointShadows&&(config.has("staticPointBounce")||config.has("probeGI"))));
             screen.setEnabled(options.profile=="full");
             post.setSettings(s);post.setQuality(options.profile=="low"?PostFxQuality::Low:PostFxQuality::High);
             report.set("schema",Json::number(int64_t(1)));report.set("engine",Json::string("AIVERSE"));
@@ -254,7 +288,12 @@ struct Bench {
             settings.set("shadowPcfSamples",Json::number(int64_t(options.profile=="low"?4:16)));
             settings.set("materials",Json::string(options.profile=="low"?"medium":"high"));
             settings.set("bloomFxaa",Json::fromBool(options.profile=="hdr"));
-            settings.set("gi",Json::string(report.has("staticBounceSources")?"baked single diffuse bounce":screen.running()?"screen-space diffuse gather (16 samples)":"hemisphere ambient only"));
+            settings.set("gi",Json::string(config.has("probeGI")&&options.profile!="low"?"cached environment probes (fixed geometry / sun direction)":report.has("staticBounceSources")?"baked single diffuse bounce":screen.running()?"screen-space diffuse gather (16 samples)":"hemisphere ambient only"));
+            const auto indirectMode=config["probeGI"].getStr("quality","high");
+            const bool indirectEnabled=options.profile!="low"&&indirectMode!="off"&&(config.has("probeGI")||config.has("staticPointBounce"));
+            settings.set("probeGIQuality",Json::string(indirectEnabled?indirectMode:"off"));
+            settings.set("probeGIProbesPerPixel",Json::number(int64_t(indirectEnabled?(indirectMode=="mobile"?4:8):0)));
+            if(config.has("probeGI")&&!indirectEnabled)settings.set("gi",Json::string("probe GI disabled"));
             settings.set("taa",Json::fromBool(screen.running()));
             settings.set("bloom",Json::fromBool(options.profile=="hdr"||options.profile=="full"));
             settings.set("animationStepSeconds",Json::number(1.0/60.0));

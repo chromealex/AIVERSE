@@ -26,7 +26,7 @@ int aiverseMain(int, char**) {
             for(int y=0;y<640;++y) std::copy_n(raw.data()+y*960*4,960*4,px.data()+(639-y)*960*4);
             fn(960,640,std::move(px));
         };
-        for(int i=0;i<80&&!scene.captured&&!scene.failed;++i) {
+        for(int i=0;i<256&&!scene.captured&&!scene.failed;++i) {
             scene.draw(*dev,960,640);
             GLenum err=glGetError();if(err) {std::fprintf(stderr,"GL frame error %x: %s\n",err,dev->lastError().c_str());scene.failed=true;}
         }

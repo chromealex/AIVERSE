@@ -286,3 +286,8 @@ and 14.72 ms on desktop GL, using different presentation paths. These are diagno
 single runs, not a controlled backend ranking or a speedup claim. Keep bounce opt-in;
 it adds significant shader work relative to direct shadows alone. The Low path
 retains the previous inexpensive lighting and performs no diffuse bake.
+
+
+The next opt-in path adds mobile four-probe interpolation, sun/sky transport, runtime
+radiance controls and a portable baked cache: [Scalable probe GI](probe-gi.md).
+The extended atlas uses 106 texels per probe (the original format above used 100).

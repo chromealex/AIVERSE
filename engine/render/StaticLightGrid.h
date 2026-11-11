@@ -15,7 +15,7 @@ struct StaticLightGrid {
     int maxCellLights=0;
     template<class Lights> void build(const Lights& lights,float cellSize,const std::vector<StaticPointShadow>* shadows=nullptr,const StaticDiffuseField* diffuse=nullptr) {
         texels.clear();maxCellLights=0;origin={};size={};
-        if(lights.empty())return;
+        if(lights.empty()&&!diffuse)return;
         if(lights.size()>100000)throw std::runtime_error("too many static point lights");
         if(!std::isfinite(cellSize)||cellSize<.25f)throw std::runtime_error("invalid static light cell size");
         float3 lo{1e9f,1e9f,1e9f},hi{-1e9f,-1e9f,-1e9f};
@@ -69,16 +69,19 @@ struct StaticLightGrid {
                 if(probe.visibility.resolution!=4||probe.visibility.distances.size()!=96||probe.visibility.normals.size()!=96)throw std::runtime_error("invalid diffuse visibility map");
                 for(float distance:probe.visibility.distances)if(!std::isfinite(distance)||distance<0)throw std::runtime_error("invalid probe visibility");
                 for(auto n:probe.visibility.normals)for(float c:{n.x,n.y,n.z})if(!std::isfinite(c))throw std::runtime_error("invalid probe plane");
-                for(const auto& coefficient:probe.irradiance)for(float c:{coefficient.x,coefficient.y,coefficient.z,coefficient.w})if(!std::isfinite(c))throw std::runtime_error("invalid diffuse coefficient");
+                for(const auto* basis:{&probe.irradiance,&probe.sun,&probe.sky})for(const auto& coefficient:*basis)for(float c:{coefficient.x,coefficient.y,coefficient.z,coefficient.w})if(!std::isfinite(c))throw std::runtime_error("invalid diffuse coefficient");
             }
-            end+=size_t(cells)*100;
+            end+=size_t(cells)*106;
         }
         if(end>4194304)throw std::runtime_error("static shadow atlas budget exceeded");
         texels.reserve(end);texels.resize(size_t(cells));
         auto decode=[](float c){return c<=.04045f?c/12.92f:std::pow((c+.055f)/1.055f,2.4f);};
         for(int c=0;c<cells;++c){auto& bin=bins[size_t(c)];maxCellLights=std::max(maxCellLights,int(bin.size()));
             if(bin.size()>512||texels.size()+2*bin.size()>4194304)throw std::runtime_error("static light grid budget exceeded: cell="+std::to_string(bin.size())+", texels="+std::to_string(texels.size()));
-            texels[size_t(c)]={float(texels.size()),float(bin.size()),diffuse?float(diffuseOffset+size_t(c)*100):0,0};
+            int basisMask=0;
+            if(diffuse){const auto& p=diffuse->probes[size_t(c)];int bit=1;
+                for(const auto* basis:{&p.irradiance,&p.sun,&p.sky}){bool nonzero=false;for(auto v:*basis)nonzero|=v.x!=0||v.y!=0||v.z!=0||v.w!=0;if(nonzero)basisMask|=bit;bit*=2;}}
+            texels[size_t(c)]={float(texels.size()),float(bin.size()),diffuse?float(diffuseOffset+size_t(c)*106):0,float(basisMask)};
             for(auto i:bin){const auto& l=lights[i];texels.push_back({l.pos.x,l.pos.y,l.pos.z,l.radius});texels.push_back({decode(l.color.x)*l.intensity,decode(l.color.y)*l.intensity,decode(l.color.z)*l.intensity,float(shadowOffsets[i])});}
         }
         if(shadows)for(size_t i=0;i<shadows->size();++i)if(shadowOffsets[i]){
@@ -90,7 +93,12 @@ struct StaticLightGrid {
         if(diffuse)for(const auto& probe:diffuse->probes){
             for(const auto& coefficient:probe.irradiance)texels.push_back(coefficient);
             texels.push_back({4,.03f,0,0});
-            for(size_t i=0;i<96;++i){auto n=probe.visibility.normals[i];texels.push_back({probe.visibility.distances[i],n.x,n.y,n.z});}
+            for(size_t i=0;i<96;++i){auto n=probe.visibility.normals[i];float depth=probe.visibility.distances[i];
+                int pixel=int(i%16);auto ray=StaticShadowGeometry::cubeDirection(int(i/16),2*((pixel%4)+.5f)/4-1,2*((pixel/4)+.5f)/4-1);
+                float plane=depth*dot(n,ray);n=std::abs(plane)>1e-8f?n*(1/plane):float3{};
+                texels.push_back({depth,n.x,n.y,n.z});}
+            for(const auto& c:probe.sun)texels.push_back(c);
+            for(const auto& c:probe.sky)texels.push_back(c);
         }
         constexpr int width=2048;texels.resize((texels.size()+width-1)/width*width);
         origin={lo.x,lo.y,lo.z,1*(1.0f/cellSize)};size={float(nx),float(ny),float(nz),float(width)};

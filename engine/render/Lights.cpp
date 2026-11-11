@@ -102,13 +102,24 @@ bool LightSystem::init(gfx::Device& dev) {
 bool LightSystem::setStaticPointLights(const std::vector<PointLight>& lights,float cellSize,const std::vector<StaticPointShadow>* shadows,const StaticDiffuseField* diffuse) {
     if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
     StaticLightGrid grid;grid.build(lights,cellSize,shadows,diffuse);
+    return setStaticLightGrid(grid);
+}
+
+bool LightSystem::setStaticRadiance(float3 points,float3 sun,float3 sky) {
+    for(auto v:{points,sun,sky})for(float c:{v.x,v.y,v.z})if(!std::isfinite(c)||c<0||c>10000)return false;
+    pointScale_=points;sunScale_=sun;skyScale_=sky;return true;
+}
+
+bool LightSystem::setStaticLightGrid(const StaticLightGrid& grid) {
+    if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
+    if(!grid.texels.empty()&&(grid.size.w!=2048||grid.texels.size()%2048||grid.texels.size()>4194304))return false;
     if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
     staticGrid_={};gridOrigin_={};gridSize_={};
     if(grid.texels.empty())return true;
     gfx::TextureDesc td;td.width=int(grid.size.w);td.height=int(grid.texels.size()/size_t(td.width));
     td.format=gfx::PixelFormat::RGBA32F;td.filter=gfx::Filter::Nearest;td.data=grid.texels.data();td.label="static point light grid";
     staticGrid_=dev_->createTexture(td);gridOrigin_=grid.origin;gridSize_=grid.size;
-    std::fprintf(stderr,"Static lights: %zu sources, max %d per cell, %d x %d atlas\n",lights.size(),grid.maxCellLights,td.width,td.height);
+    std::fprintf(stderr,"Static lights: max %d per cell, %d x %d atlas\n",grid.maxCellLights,td.width,td.height);
     return staticGrid_.valid();
 }
 
@@ -411,6 +422,8 @@ void LightSystem::bind(int uniformSlot, int textureSlot, int reflectionSlot) {
     u_.env[0] = quality_ == LightQuality::Medium || quality_ == LightQuality::High ? 1.0f : 0.0f;
     u_.env[1] = unlitTint_.x; u_.env[2] = unlitTint_.y; u_.env[3] = unlitTint_.z;
     const bool grid=staticPointLightsActive();
+    float4 giPoint{pointScale_.x,pointScale_.y,pointScale_.z,float(indirectQuality_)},giSun{sunScale_.x,sunScale_.y,sunScale_.z,0},giSky{skyScale_.x,skyScale_.y,skyScale_.z,0};
+    std::memcpy(u_.giPoint,&giPoint,sizeof giPoint);std::memcpy(u_.giSun,&giSun,sizeof giSun);std::memcpy(u_.giSky,&giSky,sizeof giSky);
     const float4 zero{};
     std::memcpy(u_.gridOrigin,grid?&gridOrigin_:&zero,sizeof(float4));
     std::memcpy(u_.gridSize,grid?&gridSize_:&zero,sizeof(float4));
