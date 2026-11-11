@@ -547,3 +547,9 @@ local status = view.animation_status(actor) -- результат последн
 На мобильных устройствах снижайте iterations, количество капсул и samples; работа
 ограничена данными, без потоков. Автоматический адаптер обрабатывает только видимые
 объекты, поэтому скрытые препятствия следует предоставлять собственным C++ запросом.
+
+## Surface locomotion
+
+The `surfaceLocomotion` rig unit adds multi-leg floor/wall/ceiling movement and adhesive
+support. See [the controller guide](surface-locomotion.md) for C++/Lua/editor setup,
+world query contracts, the generated spider demo and gameplay authority boundaries.

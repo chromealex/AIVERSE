@@ -2,6 +2,7 @@
 #pragma once
 #include "Animation.h"
 #include "AnimationContacts.h"
+#include "SurfaceLocomotion.h"
 #include "../data/Json.h"
 #include <map>
 #include <memory>
@@ -108,6 +109,7 @@ public:
     const MotionPlayer* motion(const std::string& node) const;
     bool hasContacts() const;
     AnimationContactReport contactReport() const;
+    SurfaceLocomotionReport locomotionReport() const;
     bool healthy() const { return healthy_; }
     const std::string& error() const { return error_; }
 private:

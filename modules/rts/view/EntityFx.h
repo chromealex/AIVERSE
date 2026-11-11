@@ -48,6 +48,7 @@ struct EntityAnimationEntry {
     std::string state, error;
     render::AnimationParameters parameters;
     render::AnimationContactReport contacts;
+    render::SurfaceLocomotionReport locomotion;
     float goneFor = -1;
 };
 

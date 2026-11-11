@@ -3,13 +3,14 @@
 namespace aiverse::render {
 // Ordered forward-solve rig program. Bone names and parameter types are resolved at compile time.
 class FullBodyIK;
-struct AnimationRigState { std::vector<AnimationContactState> contacts; };
+struct AnimationRigState { std::vector<AnimationContactState> contacts; std::vector<SurfaceLocomotionState> locomotion; float pendingTime=0; };
 class AnimationRig {
 public:
-    enum class Kind { Transform, Copy, Aim, TwoBoneIK, Limit, FullBodyIK, AngularLimit };
+    enum class Kind { Transform, Copy, Aim, TwoBoneIK, Limit, FullBodyIK, AngularLimit, SurfaceLocomotion };
     struct Unit {
         Kind kind = Kind::Transform;
         std::shared_ptr<const FullBodyIK> fullBody;
+        std::shared_ptr<const SurfaceLocomotion> locomotion;
         int bone=-1, source=-1, knee=-1, end=-1;
         bool global=false, additive=false;
         float weight=1;

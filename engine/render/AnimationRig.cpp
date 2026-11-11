@@ -26,6 +26,7 @@ std::shared_ptr<const AnimationRig> AnimationRig::compile(const Model& m,const J
         else if(kind=="aim"){u.kind=Kind::Aim;u.target=binding(v,"target");if(u.target.empty())fail("aim needs target");u.axis=vec(v["axis"],u.axis);if(length(u.axis)<1e-6f)fail("aim axis is zero");}
         else if(kind=="twoBoneIK"){u.kind=Kind::TwoBoneIK;u.knee=bone(v,"knee");u.end=bone(v,"end");u.target=binding(v,"target");u.pole=binding(v,"pole");if(u.target.empty()||u.pole.empty()||m.nodes[size_t(u.knee)].parent!=u.bone||m.nodes[size_t(u.end)].parent!=u.knee||u.bone==u.end)fail("invalid IK chain/controls");}
         else if(kind=="fullBodyIK"){u.kind=Kind::FullBodyIK;u.fullBody=FullBodyIK::compile(m,v,p);}
+        else if(kind=="surfaceLocomotion"){u.kind=Kind::SurfaceLocomotion;u.locomotion=SurfaceLocomotion::compile(m,v,p);}
         else if(kind=="limit"||kind=="angularLimit"){u.kind=kind=="limit"?Kind::Limit:Kind::AngularLimit;u.minimum=vec(v["min"],u.minimum);u.maximum=vec(v["max"],u.maximum);if(u.minimum.x>u.maximum.x||u.minimum.y>u.maximum.y||u.minimum.z>u.maximum.z)fail("inverted limits");}
         else fail("unknown operation '"+kind+"'");
         auto space=v.getStr("space","local");if(space!="local"&&space!="model")fail("space must be local or model");u.global=space=="model";
@@ -38,9 +39,10 @@ std::shared_ptr<const AnimationRig> AnimationRig::compile(const Model& m,const J
 }
 void AnimationRig::execute(const Model& m,const AnimationParameters& params,Pose& pose,std::vector<mat4>& world, AnimationRigState* state) const{
     if(pose.size()!=m.nodes.size())return;
-    if(state)state->contacts.resize(units_.size());
+    AnimationRigState temporary;if(!state)state=&temporary;state->contacts.resize(units_.size());state->locomotion.resize(units_.size());float dt=state->pendingTime;state->pendingTime=0;
     for(size_t ui=0;ui<units_.size();++ui){const auto& u=units_[ui];
-        float weight=u.weight;auto wi=params.values.find(u.weightParameter);if(wi!=params.values.end()&&std::isfinite(wi->second))weight=std::clamp(wi->second,0.f,1.f);if(weight<=0){if(state)state->contacts[ui].reset();continue;}
+        float weight=u.weight;auto wi=params.values.find(u.weightParameter);if(wi!=params.values.end()&&std::isfinite(wi->second))weight=std::clamp(wi->second,0.f,1.f);if(weight<=0){state->contacts[ui].reset();state->locomotion[ui].reset();continue;}
+        if(u.locomotion){u.locomotion->solve(m,params,pose,dt,state->locomotion[ui],weight);continue;}
         if(u.fullBody){u.fullBody->solve(m,params,pose,weight,state?&state->contacts[ui]:nullptr);continue;}
         worldMatrices(m,pose,world);auto& p=pose[size_t(u.bone)];NodePose desired=p;
         int parent=m.nodes[size_t(u.bone)].parent;mat4 parentWorld=parent<0?mat4{}:world[size_t(parent)];
