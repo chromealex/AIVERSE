@@ -27,6 +27,7 @@
 #include <vector>
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
+#include "StaticLightGrid.h"
 
 namespace aiverse::render {
 
@@ -67,6 +68,7 @@ struct LightUniforms {
                                  // yzw day/night tint for unlit (2D sprite) shaders
     float pos[8][4];             // xyz, radius
     float col[8][4];             // rgb * intensity, spot cosInner
+    float gridOrigin[4], gridSize[4]; // static point-light atlas, zero size disables
     float spot[8][4];            // spot direction xyz, cosOuter (< -1.5: point light)
 };
 
@@ -90,6 +92,10 @@ public:
     void setQuality(LightQuality q);
     LightQuality quality() const { return quality_; }
     static LightQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
+    // Opt-in HDR/High replacement for dynamic point-light map/detail; immutable sources only.
+    // No point-light shadows. Low/LDR keep the existing bounded dynamic path.
+    bool setStaticPointLights(const std::vector<PointLight>& lights, float cellSize=2);
+    bool staticPointLightsActive() const { return staticGrid_.valid() && linearScene_ && quality_ == LightQuality::High; }
     void setNightGlow(float g) { nightGlow_ = g; }   // extra emissive multiplier (0 by day)
     void setUnlitTint(float3 t) { unlitTint_ = t; }  // 2D sprites have no sun: day/night is a tint
     float nightGlow() const { return nightGlow_; }
@@ -173,6 +179,8 @@ private:
     float viewW_ = 1, viewH_ = 1;
     bool linearScene_ = false, reflectionLinear_ = false;
     bool reflectOn_ = true, reflReady_ = false;
+    gfx::TextureHandle staticGrid_;
+    float4 gridOrigin_{},gridSize_{};
     LightUniforms u_{};
     LightStats stats_;
     float nightGlow_ = 0;

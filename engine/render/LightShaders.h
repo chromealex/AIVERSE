@@ -16,8 +16,32 @@ namespace aiverse::render::shaders {
 
 // GLSL: block / sampler names are parameters because each shader has its own slots.
 #define AIVERSE_GLSL_LIGHTS_AT(BLOCK, TEX) \
-    "layout(std140) uniform " BLOCK " { vec4 l_map; vec4 l_info; vec4 l_cloud; vec4 l_sky; vec4 l_env; vec4 l_pos[8]; vec4 l_col[8]; vec4 l_spot[8]; };\n" \
-    "uniform mediump sampler2D " TEX ";\n" \
+    "layout(std140) uniform " BLOCK " { vec4 l_map; vec4 l_info; vec4 l_cloud; vec4 l_sky; vec4 l_env; vec4 l_pos[8]; vec4 l_col[8]; vec4 l_gridOrigin; vec4 l_gridSize; vec4 l_spot[8]; };\n" \
+    "uniform highp sampler2D " TEX ";\n" \
+    "vec4 gridFetch(int i) { return texelFetch(" TEX ", ivec2(i % int(l_gridSize.w), i / int(l_gridSize.w)), 0); }\n" \
+    "void gridLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds) {\n" \
+    "    dd = vec3(0.0); ds = vec3(0.0);\n" \
+    "    vec3 cell = floor((wpos - l_gridOrigin.xyz) * l_gridOrigin.w);\n" \
+    "    if (cell.x < 0.0 || cell.y < 0.0 || cell.z < 0.0 || cell.x >= l_gridSize.x || cell.y >= l_gridSize.y || cell.z >= l_gridSize.z) return;\n" \
+    "    int index = int(cell.x + l_gridSize.x * (cell.y + l_gridSize.y * cell.z));\n" \
+    "    vec4 header = gridFetch(index);\n" \
+    "    float gloss = 1.0 - rough;\n" \
+    "    float shin = mix(8.0, 256.0, gloss * gloss);\n" \
+    "    for (int i = 0; i < int(header.y); ++i) {\n" \
+    "        vec4 source = gridFetch(int(header.x) + i * 2);\n" \
+    "        vec3 delta = source.xyz - wpos;\n" \
+    "        float d2 = dot(delta, delta);\n" \
+    "        if (d2 >= source.w * source.w) continue;\n" \
+    "        vec3 L = delta * inversesqrt(max(d2, 1e-6));\n" \
+    "        float ndl = max(dot(n, L), 0.0);\n" \
+    "        if (ndl <= 0.0) continue;\n" \
+    "        float a = 1.0 - d2 / (source.w * source.w);\n" \
+    "        vec3 radiance = gridFetch(int(header.x) + i * 2 + 1).rgb * (a * a / (1.0 + d2));\n" \
+    "        vec3 H = L + V; H *= inversesqrt(max(dot(H,H),1e-6));\n" \
+    "        dd += radiance * ndl;\n" \
+    "        ds += radiance * (ndl * pow(max(dot(n,H),0.0),shin) * (shin+8.0)*0.04);\n" \
+    "    }\n" \
+    "}\n" \
     "float nightGlow() { return l_info.w; }\n" \
     "/* unlit (2D) shaders: day/night tint and the light map at a world point; a block that was never */\n" \
     "/* bound (map range != 4) leaves sprites as they were */\n" \
@@ -39,6 +63,7 @@ namespace aiverse::render::shaders {
     "    return 1.0 - smoothstep(1.0 - l_cloud.w, 1.25 - l_cloud.w, v) * l_sky.x;\n" \
     "}\n" \
     "vec3 dynamicLight(vec3 wpos, vec3 n, vec3 V, float specK) {\n" \
+    "    if (l_gridSize.x > 0.0) { vec3 dd, ds; gridLight(wpos,n,V,0.5,dd,ds); return dd + ds * specK; }\n" \
     "    vec3 c = vec3(0.0);\n" \
     "    if (l_map.w > 0.5) { /* ground-level light: weaker than the 3D path so the tiers match */\n" \
     "        vec2 uv = (wpos.xz - l_map.xy) * l_map.z;\n" \
@@ -69,6 +94,7 @@ namespace aiverse::render::shaders {
     "}\n" \
     "/* PBR materials: diffuse and specular apart, so metals reflect light (F0 tints dd/ds outside). */\n" \
     "void dynLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds) {\n" \
+    "    if (l_gridSize.x > 0.0) { gridLight(wpos,n,V,rough,dd,ds); return; }\n" \
     "    dd = vec3(0.0); ds = vec3(0.0);\n" \
     "    float gloss = 1.0 - rough;\n" \
     "    if (l_map.w > 0.5) {\n" \
@@ -107,7 +133,31 @@ namespace aiverse::render::shaders {
 // MSL: the block and the texture are function arguments (buffer / texture indices are chosen in
 // each fragment function's signature).
 #define AIVERSE_MSL_LIGHTS \
-    "struct LightU { float4 map; float4 info; float4 cloud; float4 sky; float4 env; float4 pos[8]; float4 col[8]; float4 spot[8]; };\n" \
+    "struct LightU { float4 map; float4 info; float4 cloud; float4 sky; float4 env; float4 pos[8]; float4 col[8]; float4 gridOrigin; float4 gridSize; float4 spot[8]; };\n" \
+    "static float4 gridFetch(texture2d<float> lm, int i, int width) { return lm.read(uint2(i % width, i / width)); }\n" \
+    "static void gridLight(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds) {\n" \
+    "    dd = float3(0.0); ds = float3(0.0);\n" \
+    "    float3 cell = floor((wpos - l.gridOrigin.xyz) * l.gridOrigin.w);\n" \
+    "    if (cell.x < 0.0 || cell.y < 0.0 || cell.z < 0.0 || cell.x >= l.gridSize.x || cell.y >= l.gridSize.y || cell.z >= l.gridSize.z) return;\n" \
+    "    int index = int(cell.x + l.gridSize.x * (cell.y + l.gridSize.y * cell.z));\n" \
+    "    float4 header = gridFetch(lm,index,int(l.gridSize.w));\n" \
+    "    float gloss = 1.0 - rough;\n" \
+    "    float shin = mix(8.0, 256.0, gloss * gloss);\n" \
+    "    for (int i = 0; i < int(header.y); ++i) {\n" \
+    "        float4 source = gridFetch(lm,int(header.x)+i*2,int(l.gridSize.w));\n" \
+    "        float3 delta = source.xyz - wpos;\n" \
+    "        float d2 = dot(delta, delta);\n" \
+    "        if (d2 >= source.w * source.w) continue;\n" \
+    "        float3 L = delta * rsqrt(max(d2, 1e-6));\n" \
+    "        float ndl = max(dot(n, L), 0.0);\n" \
+    "        if (ndl <= 0.0) continue;\n" \
+    "        float a = 1.0 - d2 / (source.w * source.w);\n" \
+    "        float3 radiance = gridFetch(lm,int(header.x)+i*2+1,int(l.gridSize.w)).rgb * (a * a / (1.0 + d2));\n" \
+    "        float3 H = L + V; H *= rsqrt(max(dot(H,H),1e-6));\n" \
+    "        dd += radiance * ndl;\n" \
+    "        ds += radiance * (ndl * pow(max(dot(n,H),0.0),shin) * (shin+8.0)*0.04);\n" \
+    "    }\n" \
+    "}\n" \
     "static bool lightsBound(constant LightU& l) { return abs(l.info.y - 4.0) < 0.01; }\n" \
     "static float3 unlitTint(constant LightU& l) { return lightsBound(l) ? l.env.yzw : float3(1.0); }\n" \
     "static float3 mapLight(constant LightU& l, texture2d<float> lm, sampler ls, float3 wpos) {\n" \
@@ -126,6 +176,7 @@ namespace aiverse::render::shaders {
     "    return 1.0 - smoothstep(1.0 - l.cloud.w, 1.25 - l.cloud.w, v) * l.sky.x;\n" \
     "}\n" \
     "static float3 dynamicLight(constant LightU& l, texture2d<float> lm, sampler ls, float3 wpos, float3 n, float3 V, float specK) {\n" \
+    "    if (l.gridSize.x > 0.0) { float3 dd, ds; gridLight(l,lm,wpos,n,V,0.5,dd,ds); return dd + ds * specK; }\n" \
     "    float3 c = float3(0.0);\n" \
     "    if (l.map.w > 0.5) {\n" \
     "        float2 uv = (wpos.xz - l.map.xy) * l.map.z;\n" \
@@ -155,6 +206,7 @@ namespace aiverse::render::shaders {
     "    return max(c, float3(0.0));\n" \
     "}\n" \
     "static void dynLight(constant LightU& l, texture2d<float> lm, sampler ls, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds) {\n" \
+    "    if (l.gridSize.x > 0.0) { gridLight(l,lm,wpos,n,V,rough,dd,ds); return; }\n" \
     "    dd = float3(0.0); ds = float3(0.0);\n" \
     "    float gloss = 1.0 - rough;\n" \
     "    if (l.map.w > 0.5) {\n" \

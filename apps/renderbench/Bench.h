@@ -121,6 +121,7 @@ struct Bench {
                 (replaced?notes:warn).push(Json::string(w));std::fprintf(stderr,"asset %s: %s\n",replaced?"note":"warning",w.c_str());
             }
             additions.load(d,config,warn,notes);
+            if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"&&!renderer.lights.setStaticPointLights(additions.lights,float(config["staticLightCellSize"].toDouble(2))))throw std::runtime_error("static light grid upload failed");
             report.set("additions",additions.audit);
             report.set("sourcePointLights",Json::number(int64_t(additions.lights.size())));
             report.set("assetWarnings",warn);report.set("importNotes",notes);
@@ -203,7 +204,7 @@ struct Bench {
         renderer.beginScene(screen.jittered(camera,width,height),width,height);
         ModelDraw md;md.model=model.get();renderer.drawModel(md);
         additions.draw(renderer,options.freezeTime>=0?options.freezeTime:options.previewSeconds>0?float(previewTime+options.tourStart):float(view<int(cameras.size())?frame:options.warmup+options.samples-1)/60.0f,options.profile!="low");
-        auto pass=output;pass.clearColor[0]=.1f;pass.clearColor[1]=.15f;pass.clearColor[2]=.23f;
+        auto pass=output;auto clear=SceneAssets::vector3(config["clearColor"],{.1f,.15f,.23f});pass.clearColor[0]=clear.x;pass.clearColor[1]=clear.y;pass.clearColor[2]=clear.z;
         renderer.render(pass,options.profile=="full"?static_cast<PostProcess*>(&screen):static_cast<PostProcess*>(&post));renderer.resolvePostFx();
         if(!report.has("renderSettings")) {
             Json settings=Json::object();settings.set("linearHdr",Json::fromBool(post.linearScene()));
@@ -216,8 +217,9 @@ struct Bench {
             settings.set("taa",Json::fromBool(screen.running()));
             settings.set("bloom",Json::fromBool(options.profile=="hdr"||options.profile=="full"));
             settings.set("animationStepSeconds",Json::number(1.0/60.0));
-            settings.set("lightAttenuation",Json::string("RTS finite-radius approximation; not photometric glTF"));
-            settings.set("pointLightBudget",Json::number(int64_t(options.profile=="low"?0:std::min(additions.lights.size(),LightSystem::kMaxLights))));settings.set("rayTracing",Json::fromBool(false));
+            settings.set("lightAttenuation",Json::string(renderer.lights.staticPointLightsActive()?"3D finite-radius attenuation / (1 + distance squared); linear RGB; unshadowed":"RTS finite-radius approximation; not photometric glTF"));
+            settings.set("staticPointLightGrid",Json::fromBool(renderer.lights.staticPointLightsActive()));
+            settings.set("pointLightBudget",Json::number(int64_t(options.profile=="low"?0:renderer.lights.staticPointLightsActive()?additions.lights.size():std::min(additions.lights.size(),LightSystem::kMaxLights))));settings.set("rayTracing",Json::fromBool(false));
             settings.set("ssr",Json::fromBool(renderer.ssrActive()));settings.set("dynamicResolution",Json::fromBool(false));
             settings.set("modelOptimization",config["modelOptimization"]);
             settings.set("validationMotionYawPerFrame",Json::number(double(options.motionYaw),8));

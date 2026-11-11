@@ -53,7 +53,9 @@ struct SceneAssets {
             for(const auto& [name, override] : entry["materials"].members()) {
                 auto it=std::find_if(a.model->materials.begin(),a.model->materials.end(),[&](const Material& m){return m.name==name;});
                 if(it==a.model->materials.end())throw std::runtime_error("unknown material override: "+name);
-                auto& m=*it;auto c=vector3(override["baseColor"],{1,1,1});m.baseColor={c.x,c.y,c.z,1};
+                auto& m=*it;auto c=vector3(override["baseColor"],{m.baseColor.x,m.baseColor.y,m.baseColor.z});m.baseColor={c.x,c.y,c.z,m.baseColor.w};
+                m.emissive=vector3(override["emissive"],m.emissive);
+                m.emissiveStrength=float(override["emissiveStrength"].toDouble(m.emissiveStrength));
                 m.vertexColors=override.getBool("vertexColors",m.vertexColors);
                 m.metallic=float(override["metallic"].toDouble(m.metallic));m.roughness=float(override["roughness"].toDouble(m.roughness));
                 auto image=[&](const char* key,bool roughness){
@@ -92,7 +94,8 @@ struct SceneAssets {
                     PointLight l;auto p=a.transform*a.model->bindWorld.at(i)*float4{0,0,0,1};l.pos={p.x,p.y,p.z};
                     // The RTS light system uses display RGB and finite game-unit attenuation.
                     auto srgb=[](float x){return x<=0.0031308f?12.92f*x:1.055f*std::pow(x,1.0f/2.4f)-0.055f;};
-                    l.color={srgb(definition.color.x),srgb(definition.color.y),srgb(definition.color.z)};l.intensity=definition.intensity*float(entry["lightIntensityScale"].toDouble(1));
+                    auto color=vector3(entry["lightColor"],definition.color);
+                    l.color={srgb(color.x),srgb(color.y),srgb(color.z)};l.intensity=definition.intensity*float(entry["lightIntensityScale"].toDouble(1));
                     l.radius=definition.range>0?definition.range:float(entry["lightRadius"].toDouble(0.75));l.key=uint32_t(lights.size()+1);
                     lights.push_back(l);
                 }

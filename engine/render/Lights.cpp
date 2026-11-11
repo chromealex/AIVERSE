@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 #include <string>
 
 namespace aiverse::render {
@@ -98,6 +99,19 @@ bool LightSystem::init(gfx::Device& dev) {
     return pipe_.valid() && vb_.valid() && black_.valid() && haloPipe_.valid() && haloVB_.valid() && decalPipe_.valid() && decalVB_.valid();
 }
 
+bool LightSystem::setStaticPointLights(const std::vector<PointLight>& lights,float cellSize) {
+    if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
+    StaticLightGrid grid;grid.build(lights,cellSize);
+    if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
+    staticGrid_={};gridOrigin_={};gridSize_={};
+    if(grid.texels.empty())return true;
+    gfx::TextureDesc td;td.width=int(grid.size.w);td.height=int(grid.texels.size()/size_t(td.width));
+    td.format=gfx::PixelFormat::RGBA32F;td.filter=gfx::Filter::Nearest;td.data=grid.texels.data();td.label="static point light grid";
+    staticGrid_=dev_->createTexture(td);gridOrigin_=grid.origin;gridSize_=grid.size;
+    std::fprintf(stderr,"Static lights: %zu sources, max %d per cell, %d x %d atlas\n",lights.size(),grid.maxCellLights,td.width,td.height);
+    return staticGrid_.valid();
+}
+
 void LightSystem::createMap(int size) {
     if (size == mapSize_ && (size == 0 || map_.valid())) return;
     if (map_.valid()) dev_->destroyTexture(map_);
@@ -152,6 +166,8 @@ void LightSystem::setQuality(LightQuality q) {
 void LightSystem::shutdown() {
     if (!dev_) return;
     createMap(0);
+    if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
+    staticGrid_={};
     if (spotShadow_.valid()) dev_->destroyTexture(spotShadow_);
     spotShadow_ = {};
     if (reflColor_.valid()) dev_->destroyTexture(reflColor_);
@@ -279,6 +295,7 @@ void LightSystem::renderMap() {
     stats_.mapSize = mapSize_;
     struct Done { LightSystem& s; std::chrono::steady_clock::time_point t0;
         ~Done() { s.stats_.mapMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count(); } } done{*this, t0};
+    if(staticPointLightsActive()){mapReady_=false;u_.info[0]=0;return;}
     pickPixelLights();
     stats_.lights = int(lights_.size());
     stats_.perPixel = int(u_.info[0]);
@@ -393,8 +410,12 @@ void LightSystem::bind(int uniformSlot, int textureSlot, int reflectionSlot) {
     u_.sky[2] = 1.0f / viewW_; u_.sky[3] = 1.0f / viewH_;
     u_.env[0] = quality_ == LightQuality::Medium || quality_ == LightQuality::High ? 1.0f : 0.0f;
     u_.env[1] = unlitTint_.x; u_.env[2] = unlitTint_.y; u_.env[3] = unlitTint_.z;
+    const bool grid=staticPointLightsActive();
+    const float4 zero{};
+    std::memcpy(u_.gridOrigin,grid?&gridOrigin_:&zero,sizeof(float4));
+    std::memcpy(u_.gridSize,grid?&gridSize_:&zero,sizeof(float4));
     dev_->setUniforms(uniformSlot, &u_, sizeof u_);
-    dev_->setTexture(textureSlot, useMap ? map_ : black_);
+    dev_->setTexture(textureSlot, grid ? staticGrid_ : useMap ? map_ : black_);
     if (reflectionSlot >= 0) dev_->setTexture(reflectionSlot, reflReady_ ? reflColor_ : black_);
 }
 
