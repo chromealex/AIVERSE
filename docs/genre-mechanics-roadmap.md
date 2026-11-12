@@ -9,6 +9,8 @@ Narrative and social scenes: relationships, knowledge, consequences, cue request
 Physical interaction: kinematic carry/throw, push/pull, ropes, doors, moving platforms and breakables are the
 `physical-interactions` package ([genre-packages.md](genre-packages.md#physical-interactions-physical-interactions-010));
 those policies are authoritative and Box3D stays presentation-only for them.
+Puzzle solvers: match-3, flood/connectivity, sliding/packing, Sokoban rules, constraint checking, solvable shuffles,
+hints and a puzzle bot are the `puzzle-solvers` package ([genre-packages.md](genre-packages.md#puzzle-solvers-puzzle-solvers-010)).
 Audit each area against the current engine modules and libraries/catalog.json before implementing.
 The engine is expanding across genres; shared mechanics should have one owner and genre presets.
 Existing attributes, statuses, abilities, inventory, progression, interactions, meta economy,
