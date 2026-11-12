@@ -121,6 +121,9 @@ void openGridApi(Vm& vm);           // pure integer-grid navigation queries
 void openRoutesApi(Vm& vm);         // routes / multiscreen (RtsScriptRoutes.cpp)
 void openStdApi(Vm& vm);            // `rts` table for the standard library (RtsScriptStd.cpp)
 void openFieldApi(Vm& vm);          // `field` table: grid fields (RtsGridFieldsApi.cpp)
+void openCareerApi(Vm& vm);         // `career` table: ladders, ranks, perks (RtsCareerApi.cpp)
+void openDrivingApi(Vm& vm);        // `driving` table: who drives what, how fast (RtsDrivingApi.cpp)
+void openCommerceApi(Vm& vm);       // `commerce` table: premises, businesses, the bank (RtsCommerceApi.cpp)
 void openRaidApi(Vm& vm);           // `raid` table: extraction raids (RtsRaidApi.cpp)
 void pushEntity(lua_State* L, Entity e);
 bool argEntity(lua_State* L, int idx, Entity& out); // integer handle (no liveness check)

@@ -636,7 +636,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter}, {"commerce", kCmdCommerce}, {"career", kCmdCareer}, {"topdown_weapon", kCmdTopDownWeapon},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
@@ -1256,6 +1256,9 @@ void openGameApi(Vm& vm) {
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
+    openCommerceApi(vm);   // premises, businesses, the bank (RtsCommerceApi.cpp)
+    openDrivingApi(vm);    // vehicles (RtsDrivingApi.cpp)
+    openCareerApi(vm);     // career ladders (RtsCareerApi.cpp)
 }
 
 } // namespace script
@@ -1330,7 +1333,7 @@ Json scriptApiReference() {
     a.push(fn("game.transform(h, type)", "change the type in place (same handle and data, hp fraction kept)"));
     a.push(fn("game.add_status(h, status [, seconds [, caster]]) / game.buff(h, stat, add, mul [, seconds])", "statuses (rules \"statuses\") and stat modifiers"));
     a.push(fn("game.order(units, \"move\"|\"attack\"|\"patrol\"|\"stop\"|\"hold\", x, z | target)", "orders (through the normal command path)"));
-    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
+    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability topdown_enter topdown_weapon; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
     a.push(fn("game.cast(h, ability, target | x, z) / game.player_ability(p, id, x, z [, free])", "abilities"));
     a.push(fn("game.set_var(name, v) / game.add_var(name, v)", "trigger variables (shared with rules triggers)"));
     a.push(fn("game.message(p, text [, x, z])", "notice for player p (0 = everyone)"));

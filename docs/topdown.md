@@ -41,6 +41,9 @@ Sample: `templates/topdown_arena` ("Scrapyard Arena").
 - **State / determinism.** `TopDownStore` world resource (rollback snapshots copy it), hashed, saved after the grid
   fields in `RtsSave`. Games without the block keep their checksums and save layout. Planets are not supported.
 
+Weapons with ammo, free fire along the aim, pickups and money (GTA2 style): rules `arsenal`, docs/arsenal.md.
+Vehicles the hero drives: rules `driving`, docs/driving.md.
+
 ## rules.json
 
 ```json
@@ -67,11 +70,31 @@ Sample: `templates/topdown_arena` ("Scrapyard Arena").
   "aimStick": {"enabled": true, "mode": "floating", "radius": 56, "deadzone": 0.2, "area": [0.5, 0.3, 1, 1]},
   "buttons": [{"ability": "missile", "key": "Q", "gamepad": 5, "anchor": [1, 1], "offset": [-70, -170], "radius": 32}],
   "gamepad": {"deadzone": 0.15},
+  "aimAssist": {"touch": true, "pad": false, "mouse": false, "cone": 30, "range": 0, "stickiness": 1.4,
+                "tapFire": true, "tapTime": 0.25, "tapFireTime": 0.4},
   "camera": {"pitch": 59, "yaw": 0, "distance": 22, "minDistance": 14, "maxDistance": 34, "smoothing": 6,
              "lookAhead": 2.5, "aimLookAhead": 1.5, "lookAheadSmoothing": 3, "lockOffsetIfNoInput": true,
+             "velocityLookAhead": 0.45, "maxLookAhead": 5,
+             "speedZoom": {"from": 2, "to": 9, "distance": 30, "smoothing": 1.2},
              "bounds": true, "margin": 4}
 }
 ```
+
+**Aim assist** (`aimAssist`, absent = off; `true` = touch + pad). Client side only: the aim of an assisted source
+(touch aim stick, pad stick, mouse) bends to the target least off it inside `cone` degrees (nearer ones win ties; the
+locked target stays inside `cone * stickiness`), and the sim receives an ordinary aim angle. Targets are
+`TopDown::aimCandidates` — the manual-aim rules of the sim (hostile, visible, hittable layer, line of fire) within
+`range` (0: rules `aim.range`, else the weapon range). `tapFire`: a touch on the aim stick shorter than `tapTime` that
+barely moves it shoots at the nearest target for `tapFireTime` seconds. The locked target gets a marker
+(`TopDownControls::drawLock`). Tests: `topdown_aim_assist_bends_touch_aim_and_taps_fire`,
+`topdown_aim_candidates_follow_the_manual_aim_rules`.
+
+**Speed camera** (GTA). The hero's speed is taken from its motion on screen, so it works on foot and at the wheel.
+`speedZoom`: the distance goes from `distance` (at `from` world units / s and slower) to `speedZoom.distance` (at `to`
+and faster) with its own `smoothing`; the player's wheel / pinch zoom stays underneath (min / max shift with it).
+`velocityLookAhead` (seconds) moves the focus ahead of the motion by velocity * seconds; `maxLookAhead` caps the whole
+look-ahead offset. At the wheel the stick look-ahead is off (the stick is pedals, not a direction). A jump of more
+than 8 units between frames (respawn) is not speed. Test: `topdown_speed_camera_zooms_out_and_looks_ahead`.
 
 Sticks: `floating` appears where the finger lands inside `area` (normalized screen rect) and follows a finger that
 runs past 1.5 radii; `fixed` sits at `center`. Desktop: WASD / arrows move (camera-relative), held LMB aims at the

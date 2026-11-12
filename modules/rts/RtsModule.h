@@ -23,7 +23,10 @@
 #include "RtsTopDown.h"
 #include "RtsEnv.h"
 #include "RtsDriving.h"
+#include "RtsCommerce.h"
+#include "RtsCareer.h"
 #include "RtsRoutes.h"
+#include "RtsArsenal.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -94,6 +97,9 @@ enum CommandType : uint16_t {
     kCmdTopDown,      // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
     kCmdTopDownAbility, // no units; param = ability index of the hero; target / point optional (default: along the aim)
     kCmdTopDownEnter,   // no units (rules "driving", RtsDriving.h): the hero gets into the nearest free vehicle / out of his car
+    kCmdCommerce,       // no units (rules "commerce", RtsCommerce.h): param = commercePack(op, premises, value)
+    kCmdTopDownWeapon,  // no units (rules "arsenal", RtsArsenal.h): param kWeaponNext / kWeaponPrev, or kWeaponSlot + slot
+    kCmdCareer,         // no units (rules "careers", RtsCareer.h): param = careerPack(op, career); open careers only
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -336,6 +342,8 @@ struct StatusInst {
     uint8_t revertOwner = 0;        // Capture: owner to give it back to
     bool revertsOwner = false;
     uint8_t capturedBy = 0;
+    int spent = 0;                  // targets used of an effect `budget`; skill objects: commandable / transfer used
+    uint32_t group = 0;             // commandable: the group sent from the structure
 };
 struct Statuses { std::vector<StatusInst> list; uint32_t flags = 0; };   // flags: union of active StatusFlags
 // Ground effect: delayed strike, persistent field, moving hazard, mine, portal, reveal, soul trap.
@@ -354,8 +362,15 @@ struct Area {
     Entity goal = kNullEntity;            // skill objects: the structure it heads for (onArrive target)
     bool arrived = false;
     int deaths = 0;                       // onDeath payloads applied (capped by maxTriggers)
+    int spent = 0;                        // targets used of an effect `budget`
 };
 // A unit pulled straight into a structure by a magnet (`pull` effect, RtsSkillObjects.cpp).
+// A garrison teleport in progress (BW PointsTeleport): grab from `from`, travel, fill `to`.
+struct Transfer {
+    Entity from = kNullEntity, to = kNullEntity;
+    uint8_t owner = 0;
+    Fixed toGrab{}, collected{}, acc{}, grabLeft{}, grabVel{}, wait{}, fillLeft{}, fillVel{};
+};
 struct Pulled {
     Entity target = kNullEntity;
     Vec3 start{};
@@ -440,6 +455,7 @@ struct PlayerAbilityState {
     uint32_t pendingAt = 0;            // activation delay: fires at this tick
     Vec3 pendingPoint{}; Entity pendingTarget = kNullEntity;
     uint32_t nextAuto = 0;
+    int8_t slot = -1;                  // loadout slot (BW skill slot; per-slot silence)
 };
 
 // Who / where an effect payload is applied (see RtsEffects.cpp).
@@ -452,6 +468,9 @@ struct EffectCtx {
     Fixed scale = Fixed::fromInt(1);   // chain / splash falloff
     int depth = 0;
     uint32_t group = 0;
+    Entity budgetEnt = kNullEntity;    // the area / status holder whose `budget` counter effects use
+    int16_t budgetDef = -1;            // status def (-1: an area)
+    Fixed areaRadius{};                // radius of the area the payload runs in
 };
 
 struct GameState {
@@ -542,6 +561,9 @@ public:
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
     Raid* raid() const { return raid_.get(); }                // extraction raids (RtsRaid.h); inactive without rules "raid"
+    Career* career() const { return career_.get(); }           // career ladders and perks (RtsCareer.h); null before setup
+    Commerce* commerce() const { return commerce_.get(); }     // premises, businesses, the bank (RtsCommerce.h); null before setup
+    Arsenal* arsenal() const { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (RtsArsenal.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     Environment* environment() const { return env_ && env_->active() ? env_.get() : nullptr; }   // map environment (RtsEnv.h); null without one
@@ -831,6 +853,7 @@ private:
     void impactProjectile(Simulation& sim, Entity p);
     const ProjectileFlight* projectileFlight(const Projectile& p) const;
     void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
+    friend class Arsenal;   // free fire launches weapon projectile programs at a point (RtsArsenal.cpp)
     void bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) const;
     void sysProjectilePrograms(Simulation& sim, const std::vector<Entity>& projectiles);
     // skill objects (RtsSkillObjects.cpp): objects spawned from units, goals, magnets, death payloads
@@ -846,6 +869,24 @@ private:
     void noteDeathInAreas(Simulation& sim, Entity dead, Vec3 pos);
     void flushAreaDeaths(Simulation& sim);
     void hashSkillObjects(Simulation& sim, Hasher& h);
+    int* budgetCounter(Simulation& sim, const EffectCtx& ctx);
+    bool routeFilterOk(Simulation& sim, uint8_t route, Entity unit, const EffectCtx& ctx);
+    void onUnitReleased(Simulation& sim, Entity from, Entity unit);   // a garrison sent a unit out (onSpawn, hypnosis)
+    bool skillSend(Simulation& sim, Entity from, Entity to, uint8_t player, int n);   // teleport sends; true: handled
+    bool hypnoticSend(Simulation& sim, const Command& cmd);           // sends from a structure the player commands
+    bool silencedFor(Simulation& sim, uint8_t player, int index) const;
+    void endCaptureStatuses(Simulation& sim, Entity s);
+    Fixed levelOfStock(int16_t res, Fixed stock) const;   // resource levels (morale stars), fractional
+    Fixed stockOfLevel(int16_t res, Fixed level) const;
+    void tickTransfers(Simulation& sim);
+    bool everyDue(Simulation& sim, const EffectDef& e, const EffectCtx& ctx);
+    void garrisonSend(Simulation& sim, const EffectDef& e, const EffectCtx& ctx, const std::vector<Entity>& targets);
+    void payDeathGain(Simulation& sim, Entity unit, uint8_t owner);
+    void swapRandom(Simulation& sim, const EffectDef& e, const EffectCtx& ctx, Entity h);
+    void closeGroups(Simulation& sim, const std::vector<Entity>& structures);
+    void areaOrbit(Simulation& sim, Entity a);
+    void staggerCast(Simulation& sim, int list, int index, const EffectCtx& ctx, Entity target, Fixed delay);
+    void staggerCastAt(Simulation& sim, int list, int index, const EffectCtx& ctx, Vec3 at, Fixed delay);
     void setupSkills(Simulation& sim, const Json& map);
     void hashEffects(Simulation& sim, Hasher& h);
     void enterGarrison(Simulation& sim, Entity unit, Entity structure);   // assault / reinforce with statuses (advanced)
@@ -914,6 +955,9 @@ private:
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
     std::unique_ptr<Raid> raid_;           // extraction raids (state: RaidStore resource)
+    std::unique_ptr<Career> career_;       // rules "careers" (state: CareerStore resource)
+    std::unique_ptr<Commerce> commerce_;   // rules "commerce" (state: CommerceStore resource)
+    std::unique_ptr<Arsenal> arsenal_;     // rules "arsenal" (state: ArsenalStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::unique_ptr<Environment> env_;     // map environment (RtsEnv.h; state: EnvState resource)

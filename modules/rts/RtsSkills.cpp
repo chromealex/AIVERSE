@@ -102,6 +102,7 @@ void RtsModule::effectGarrison(Simulation& sim, const EffectDef& e, EffectCtx& c
         }
         case EffectKind::Swap: {
             if (!g) break;
+            if (e.runTo >= 0) { swapRandom(sim, e, ctx, h); break; }
             const bool mine = o.player == ctx.owner;
             Entity other = nearestGarrison(pos, h, [&](uint8_t p) { return mine ? (p != 0 && hostile(sim, ctx.owner, p)) : p == ctx.owner; });
             if (!other.valid()) break;
@@ -231,6 +232,7 @@ void RtsModule::effectGroup(Simulation& sim, const EffectDef& e, EffectCtx& ctx,
             o.player = ctx.owner;
             if (auto* c = w.tryGet<Combat>(h)) c->target = kNullEntity;
             sim.emit({kEvCaptured, ctx.owner, h, ctx.caster, old, w.get<Transform>(h).pos});
+            if (e.payload >= 0) { EffectCtx c2 = ctx; c2.target = h; c2.point = w.get<Transform>(h).pos; applyPayload(sim, e.payload, c2); }
             break;
         }
         default: break;
@@ -250,11 +252,20 @@ void RtsModule::effectPlayer(Simulation& sim, const EffectDef& e, EffectCtx& ctx
             if (p >= gs.players.size() || e.resource < 0) continue;
             Fixed& stock = gs.players[p].stock[size_t(e.resource)];
             Fixed v = rollAmount(sim, e) * ctx.scale + e.percent * stock;
+            if (e.levels.raw != 0 || e.levelsMax)   // resource levels (BW morale stars, MoraleInfo.GetMoralePointsFromLevel)
+                v += stockOfLevel(e.resource, e.levelsMax ? Fixed::fromInt(1000) : levelOfStock(e.resource, stock) + e.levels) - stock;
             if (v.raw >= 0) { addResource(sim, p, uint16_t(e.resource), v); continue; }
             Fixed take = fxMin(stock, -v);
+            const Fixed lvBefore = e.levels.raw != 0 ? levelOfStock(e.resource, stock) : Fixed{};
             stock -= take;
             if (isGood(uint16_t(e.resource))) withdrawGoods(sim, p, uint16_t(e.resource), take);
-            if (e.transfer && ctx.owner != p) addResource(sim, ctx.owner, uint16_t(e.resource), take);
+            if (e.transfer && ctx.owner != p && ctx.owner < gs.players.size()) {
+                if (e.levels.raw != 0) {   // BW MoraleThief: the caster gains the stars actually taken, on its own level scale
+                    const Fixed got = lvBefore - levelOfStock(e.resource, stock);
+                    const Fixed mine = gs.players[ctx.owner].stock[size_t(e.resource)];
+                    addResource(sim, ctx.owner, uint16_t(e.resource), stockOfLevel(e.resource, levelOfStock(e.resource, mine) + got) - mine);
+                } else addResource(sim, ctx.owner, uint16_t(e.resource), take);
+            }
         }
         break;
     case EffectKind::PlayerStatus:
@@ -292,6 +303,7 @@ void RtsModule::effectPlayer(Simulation& sim, const EffectDef& e, EffectCtx& ctx
             if (p >= gs.playerAbilities.size()) continue;
             int64_t d = (rollAmount(sim, e) * int64_t(sim.tickRate())).toInt();
             for (auto& st : gs.playerAbilities[p]) {
+                if (e.slotMask && (st.slot < 0 || !((e.slotMask >> st.slot) & 1u))) continue;   // only these loadout slots
                 int64_t r = std::max<int64_t>(int64_t(st.readyAt), int64_t(tick)) + d;
                 st.readyAt = uint32_t(std::max<int64_t>(int64_t(tick), r));
             }
@@ -319,13 +331,15 @@ void RtsModule::setupSkills(Simulation& sim, const Json& map) {
         auto& st = gs.playerAbilities[p];
         if (lo.isArray()) {
             for (auto& s : st) s.owned = false;
-            int slots = 0;
+            int slots = 0, slots0 = 0;
             for (auto& item : lo.items()) {
+                ++slots0;
                 std::string id = item.isString() ? item.str() : item.getStr("id");
                 int k = rules_.findPlayerAbility(id);
                 if (k < 0) throw std::runtime_error("map player " + std::to_string(p) + " loadout: unknown player ability '" + id + "'");
                 if (rules_.loadoutSlots > 0 && ++slots > rules_.loadoutSlots) throw std::runtime_error("map player " + std::to_string(p) + " loadout: more than " + std::to_string(rules_.loadoutSlots) + " skills");
                 st[size_t(k)].owned = true;
+                st[size_t(k)].slot = int8_t(std::clamp<int64_t>(item.isObject() ? item.getInt("slot", slots0 - 1) : slots0 - 1, -1, 31));
                 st[size_t(k)].level = uint8_t(std::clamp<int64_t>(item.isObject() ? item.getInt("level", 1) : 1, 1, 1 + int64_t(rules_.playerAbilities[size_t(k)].levels.size())));
             }
         }
@@ -585,12 +599,15 @@ void RtsModule::enterGarrison(Simulation& sim, Entity e, Entity s) {
         std::vector<StatusInst> carry;
         for (auto& in : st->list) if (rules_.statuses[in.def].flags & kStSpreads) carry.push_back(in);
         for (auto& in : carry) {
+            const Fixed ch = rules_.statuses[in.def].spreadChance;   // BW plague infectionChancePercent
+            if (ch < kOne && sim.rng().unit() >= ch) continue;
             EffectCtx ctx; ctx.owner = in.owner; ctx.caster = in.source; ctx.sourceType = in.sourceType;
             Fixed left = in.until == UINT32_MAX ? Fixed{} : Fixed::fromInt(int64_t(in.until - sim.tick())) / int64_t(sim.tickRate());
             addStatus(sim, s, in.def, left, ctx);
         }
     }
     if (owner == me || (owner != 0 && owner != kHostileNeutral && sim.allied(owner, me))) { ++g->count; die(); return; }
+    if (rules_.anyDeathGain) payDeathGain(sim, e, me);   // BW BaseModule.Attack: unitsSacrifice.Sacrifice(attacker, count)
     const uint32_t sf = statusFlags(sim, s);
     if (sf & kStInvulnerable) { die(); return; }
     if (auto* st = w.tryGet<Statuses>(s))
@@ -606,6 +623,7 @@ void RtsModule::enterGarrison(Simulation& sim, Entity e, Entity s) {
     } else if (tt.capturable) {
         // revenge payloads of the defender and recapture of a temporarily captured structure
         std::vector<std::pair<int16_t, uint8_t>> revenge;
+        endCaptureStatuses(sim, s);   // skill objects: statuses that end with the owner (haunted house)
         if (auto* st = w.tryGet<Statuses>(s)) {
             for (auto& in : st->list) {
                 if (rules_.statuses[in.def].onCaptured >= 0) revenge.push_back({rules_.statuses[in.def].onCaptured, in.owner});

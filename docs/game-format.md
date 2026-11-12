@@ -858,6 +858,44 @@ Optional delivery keys of `area` / `projectile` effects and the `pull` effect (`
 
 For the view: `Area::goal` / `Area::arrived`, `Pulled` (target, way, vel) on pulled units; events as for areas / projectiles.
 
+#### Skill object keys from the Bunker Wars port (stage 2)
+
+Generic keys added for the 1:1 port of the BW energy skills (`docs/bunkerwars-skills.md`); any game may use them.
+
+| where | key | meaning |
+|---|---|---|
+| effect | `budget` | at most N targets over the life of the area / status the effect runs in (BW `maxKills`, Amulet `maxReverseCount`) |
+| effect | `radius: "area"` | the radius of the area it runs in (growing areas) |
+| effect | `duration: [min, max]` | rolled per target |
+| effect | `every` | inside an area / status tick: only every N s of its life |
+| effect | `targetChance` | each target is kept with this chance (rolled per target; BW betrayal `chanceToKill`) |
+| effect `resource` | `levels` (number or `"max"`), `transfer` | change by resource levels (morale stars, `resources.*.levels`); with `transfer` the caster gains the levels actually taken on its own scale |
+| effect `cooldown` | `slots` | only these loadout slots |
+| effect `cast` | `stagger` | the k-th target gets the payload k x stagger s later |
+| effect `cast` | `offsets`, `shuffle`, `shots` | the payload runs at fixed points around the click (`[[x, z], ...]` cells), k-th after k x stagger, shuffled once, `shots` cycles through them (BW blizzard) |
+| effect `swap` | `with` (filter: `affects`, `tags`), `swapType`, `effects` | swaps owner, garrison (and type) with a random structure of `with` (relative to the caster); `effects` then run on both |
+| effect `convert` | `effects` | payload on every converted unit (target = it) |
+| effect `garrisonSend` | `percent`, `amount`, `maxPoints`, `runTo` (filter relative to the structure owner) | the garrison walks out to the nearest (route length) destinations, ceil(units / count) each (BW panic) |
+| effect | `defeat`, `closeGroups` | the filtered players lose; groups still leaving the structures are closed |
+| filter | `aspect` | ellipse: z radius = radius x aspect (BW `world.aspectRatio`) |
+| filter | `heading: "to" / "from"` | only units walking to / that left the effect target |
+| filter | `affects: "neutral"` | neutral objects only |
+| area | `grow` | radius = `radius` + grow x age (BW `rangeVelocity`) |
+| area | `motion: "orbit"`, `orbit {a, b, speed, expand}` | circles the point on an ellipse a x b (degrees / s), growing to full size over `expand` s (tornado) |
+| status | `spreadChance` | `spreads`: chance a carrier infects the structure it enters |
+| status | `slots` | player silence: only these loadout slots |
+| status | `onSpawn` | structure: payload on every unit it sends out |
+| status | `endOnCapture` | removed without `onExpire` when the structure changes owner |
+| status | `command {capture, percent}` | the status owner may send from the structure once; with `capture` the units become theirs (hypnosis) |
+| status | `transfer {grab, fill, speed, percent}` | the owner's next send from it teleports the units (grab, travel route length / speed, fill) |
+| status | `collect {addPerSecond}` | the owner's other structures' production goes into the holder; they grow addPerSecond instead (BW redirect) |
+| status | `hitCap` | weapon hits on the holder are absorbed and cut the time left to hitCap s (kill aura) |
+| status | `endWhenEmpty` | structure: ends at a due tick when its garrison is empty (upkeep paid by `tick` effects) |
+| status | `deathGain {res: n}` | the unit's owner gains this when it is killed or spent assaulting (sacrifice) |
+| status | `stacking: "keep"` | a running one is left as it is |
+| status | flags `untargetable`, `skillImmune` | weapons do not pick it; effect filters skip it |
+| stat mod | `lerp`, `floor` | final value moves toward 1 by the summed lerp; the product of status multipliers stays >= floor |
+
 ### Effects
 
 Common keys: `amount` (number or `[min, max]` rolled with the sim RNG), `percent`, `radius`, `duration`,

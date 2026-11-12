@@ -44,6 +44,13 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     env_->setup(sim, *this, rulesJson, mapIn);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
+    commerce_ = std::make_unique<Commerce>();   // premises, businesses, the bank (rules "commerce"); nothing without the block
+    commerce_->setup(sim, *this, rulesJson, mapIn);
+    career_ = std::make_unique<Career>();   // career ladders (rules "careers"); nothing without the block
+    career_->setup(sim, *this, rulesJson);
+    driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
+    arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
+    arsenal_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -70,6 +77,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (commerce_->active()) sim.addSystem("commerce", [this](Simulation& s) { commerce_->tick(s); });   // RtsCommerce.cpp: days and weeks
     if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
     if (env_->active()) sim.addSystem("environment", [this](Simulation& s) { env_->tick(s); });   // RtsEnv.cpp (games with an environment only)
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
@@ -676,7 +684,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
         if (auto* ss = w.tryGet<ScriptStats>(e))
             for (auto& x : ss->list) if (x.stat == uint8_t(s)) base = x.base;
     uint8_t owner = w.get<Owner>(e).player;
-    Fixed add{}, mul = kOne;
+    Fixed add{}, mul = kOne, lerp{};
     if (auto* gs = w.resource<GameState>(); owner < gs->players.size() && !gs->players[owner].mods.empty()) {
         const TypeMods& m = gs->players[owner].mods[u.type];
         add += m.add[size_t(s)]; mul *= m.mul[size_t(s)];
@@ -686,10 +694,16 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
         for (auto& bf : b->list) if (bf.stat == s && bf.until > sim.tick()) { add += bf.add; mul *= bf.mul; }
     }
     if (rules_.advancedEffects) {
+        Fixed smul = kOne, floor{};
         if (auto* st = w.tryGet<Statuses>(e))
             for (auto& in : st->list)
                 for (auto& m : rules_.statuses[in.def].mods)
-                    if (m.stat == s) { add += m.add * in.stacks; for (int k = 0; k < in.stacks; ++k) mul *= m.mul; }
+                    if (m.stat == s) floor = fxMax(floor, m.floor);
+        if (auto* st = w.tryGet<Statuses>(e))
+            for (auto& in : st->list)
+                for (auto& m : rules_.statuses[in.def].mods)
+                    if (m.stat == s) { add += m.add * in.stacks; lerp += m.lerp * in.stacks; for (int k = 0; k < in.stacks; ++k) (floor.raw > 0 ? smul : mul) *= m.mul; }
+        if (floor.raw > 0) mul *= fxMax(smul, floor);
         if (auto* gs = w.resource<GameState>(); owner < gs->players.size())
             for (auto& in : gs->players[owner].statuses)
                 for (auto& m : rules_.statuses[in.def].mods)
@@ -700,6 +714,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
     if (s == Stat::Speed && env_ && env_->active()) env_->speed(sim, e, add, mul);   // environment: wind, zones, weather, traces, snow
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
+    if (lerp.raw > 0) { const Fixed v = (base + add) * mul; return v + (kOne - v) * fxMin(kOne, lerp); }
     return (base + add) * mul;
 }
 
@@ -994,7 +1009,10 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (career_ && career_->command(sim, cmd)) return;       // kCmdCareer (RtsCareer.cpp)
+    if (commerce_ && commerce_->command(sim, cmd)) return;   // kCmdCommerce (RtsCommerce.cpp)
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
+    if (arsenal_ && arsenal_->command(sim, cmd)) return;   // kCmdTopDownWeapon (RtsArsenal.cpp)
     if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
@@ -1023,6 +1041,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (cmd.type == kCmdAutoBuild) { script_->callStd(sim, StdFn::AutoBuild, {cmd.player, cmd.param}); return; }   // lua/commands.lua
 
     std::vector<Entity> sel;
+    if (cmd.type == kCmdSend && rules_.advancedEffects && hypnoticSend(sim, cmd)) return;   // a hypnotised garrison (RtsSkillObjects.cpp)
     for (Entity e : cmd.units) {
         auto* o = w.tryGet<Owner>(e);
         auto* u = w.tryGet<Unit>(e);
@@ -1313,6 +1332,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
             if (rules_.advancedEffects && (statusFlags(sim, e) & kStLock)) break;   // locked: can't send
             if (env_ && env_->active() && !env_->sendAllowed(sim, e, cmd.target)) break;   // linked caves, graveyards
             if (!canSend(sim, e, cmd.target)) break;   // authored routes: no route, no send (BW RoutesModule.FindUnlocked)
+            if (rules_.advancedEffects && skillSend(sim, e, cmd.target, cmd.player, cmd.param)) break;   // teleport (RtsSkillObjects.cpp)
             const int sendable = std::max(0, g->count - t.garrisonKeep);   // State.io: one soldier stays home
             // param < 0: exactly -param units (Bunker Wars MoveUnits counts, agent-bw-ai); else a percent
             int n = cmd.param < 0 ? int(std::min<int64_t>(sendable, -cmd.param))
@@ -1513,6 +1533,9 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
     if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
+    if (commerce_ && commerce_->active()) commerce_->hash(sim, h);   // games with rules "commerce" only
+    if (career_ && career_->active()) career_->hash(sim, h);         // games with rules "careers" only
+    if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
 }
 
 } // namespace aiverse::game

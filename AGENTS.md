@@ -91,6 +91,16 @@ the *engine* add mechanics generically — never a special case for one game.
 Original assets of commercial games are never committed; importers read them from the user's own
 copy and builds mark them external.
 
+**Model packs: every texture once.** A pack of models (`.glb`) that share materials must not embed the
+same images in every file: a 4-texture path kit became 1.4 GB (31 files x 42 MB of identical PNGs, 6 MB of
+geometry) and the client no longer fitted in memory. Before a pack goes into a game folder:
+- textures are external shared files next to the models (`tex/<hash>.png`, glTF `images[].uri`), one copy
+  per distinct image — `tools/citygen/make_city.py: copy_model(src, dst)` does this for any `.glb`;
+- texture size fits the game's zoom (tiling surfaces of a top-down game: 512 px; say so when you keep more);
+- the pack's install / build script does it itself, so a rebuild does not bring the copies back;
+- check the result: `du -sh` of the installed folder against the distinct-texture size, and state both in
+  the pack's README. A pack whose size is mostly repeated images is not finished.
+
 ## 4. Build, test, verify
 
 ```sh

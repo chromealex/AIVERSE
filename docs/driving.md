@@ -27,6 +27,44 @@ Tests: `aiverse_tests driving_`.
 - **State / determinism.** `DrivingStore` world resource: hashed, saved after the top-down heroes, copied by
   rollback snapshots. Fixed maths only. Games without the block keep their checksums and save layout.
 
+## Computer drivers
+
+`Driving::setAutopilot(sim, vehicle, VehicleInput)` gives a vehicle nobody drives its pedals (throttle, brake,
+steer, handbrake); `clearAutopilot` parks it again. It is simulation state (hashed, saved): call it from a system or
+a script effect, never from the view. A hero who gets in takes over, and the autopilot input applies again when he
+gets out. A parked car at rest is skipped by the controller, a car on autopilot never is. Traffic and traffic lights
+are built on this by their own module; the city planner's `"city"` block of the map has the road graph.
+
+## Levels: bridges over roads and tunnels
+
+The map grid is one floor. A second floor is described on the map as a list of decks:
+
+```json
+"decks": [
+  {"id": "ring_over_avenue", "width": 2, "path": [[40.5, 60], [40.5, 63, 5], [40.5, 71, 5], [40.5, 74]]},
+  {"id": "hill_tunnel", "width": 2, "path": [[80, 20.5], [83, 20.5, -4], [95, 20.5, -4], [98, 20.5]]}
+]
+```
+
+`path` is the centre line in cells (`[x, z]` or `[x, z, height in metres]`), `width` is the room between the
+walls in cells. Both ends are open mouths at ground height.
+
+- A car gets on when any part of it enters a mouth (the last 1.5 cells at either end) and gets off when the whole
+  body has left through an end.
+- On a deck the car is held between the deck's walls (railings, tunnel walls) and the grid is ignored: a tunnel
+  runs under blocked cells, a bridge over water or over another road.
+- A car deep on a deck (further than 1.5 cells from both ends) does not touch cars, people and posts on the
+  ground or on another deck, and they do not touch it. Near the mouths everybody collides as usual.
+- The hero cannot get out deep on a deck and cannot take a car that stands there.
+- `Driving::deckOf`, `deckIndex(id)`, `height` (metres above the ground, for the view) and `setDeck` (a traffic
+  system spawning a car inside a tunnel) are the code API. The deck of every car is part of the checksum and of saves.
+
+What the map has to respect: the ground at both mouths is passable, and no other road crosses a deck closer than
+two cells to its ends (a car crossing a mouth sideways would be taken onto the deck).
+
+Not done yet for levels: people on foot (they still walk on the one-floor grid, so a bridge over a river works for
+them, a tunnel and a bridge over a road do not), and the view does not lift a car to the deck height yet.
+
 ## rules.json
 
 ```json
@@ -43,8 +81,21 @@ Tests: `aiverse_tests driving_`.
 
 `wheeled` takes the library's keys (torque curve, gears, grip curves, wheels, ...); omitted ones keep its defaults.
 
+## Client and handling data
+
+- **Camera.** At the wheel the hero is off the map, so the top-down camera follows his car (`ClientTopDown.cpp`);
+  speed zoom and velocity look-ahead are in docs/topdown.md.
+- **Wheels.** View `procedural` type `"steer"` turns a node about its `axis` (default y) by the vehicle's steering
+  angle (`VehicleState::steer`, `SceneObject::steer`), clamped to `limit` degrees; list it before the node's `"wheel"`
+  entry so the wheel rolls in its turned frame. Mirrored (left) wheel nodes need the opposite spin axis.
+  Test: `driving_steer_procedural_turns_front_wheels`.
+- **Per-vehicle handling.** `tools/citygen/vehicle_handling.py <project>` writes `wheeled` for every vehicle from a
+  table (mass, torque, top speed, grip, steering, brakes, drive layout, reverse speed) and takes the wheel positions
+  from the model's `wheel_<axle>_<side>` nodes, plus the `steer` / `wheel` procedurals. The library defaults are a
+  road car: 20 degrees/s of turn at 100 km/h, 75 km/h in reverse, 0.6 s without drive per gear change at 20 ticks/s.
+  Headless bots steer the player's hero too: measure handling with rules `"ai": {"controller": "scripted"}`.
+
 ## Not done yet
 
-Client: the enter key / button, a camera that pulls back with speed, layered car sprites (body, doors, wheels,
-paint mask, reflection). Sim: passengers, computer drivers, per-surface grip, skid marks and crash events for
+Client: an on-screen enter button, doors, reverse wheel spin (wheels roll forward when backing up). Sim: passengers, computer drivers, per-surface grip, skid marks and crash events for
 effects and sound.

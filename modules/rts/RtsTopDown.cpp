@@ -442,6 +442,23 @@ bool TopDown::validTarget(Simulation& sim, Entity hero, uint8_t owner, Entity c,
     return true;
 }
 
+std::vector<TopDown::AimCandidate> TopDown::aimCandidates(Simulation& sim, uint8_t player, Fixed range) const {
+    std::vector<AimCandidate> out;
+    World& w = sim.world();
+    const Entity e = heroOf(sim, player);
+    if (!e.valid() || !w.alive(e)) return out;
+    const Unit* u = w.tryGet<Unit>(e);
+    if (!u || u->hp.raw <= 0 || (u->flags & kUnitOffMap)) return out;
+    const Fixed r = range.raw > 0 ? range : rules_.aimRange.raw > 0 ? rules_.aimRange : weaponRange(sim, e);
+    const Vec3 pos = w.get<Transform>(e).pos;
+    m_->state(sim).hash.query(pos, r + Fixed::fromInt(6), [&](Entity c) {
+        Fixed d;
+        if (validTarget(sim, e, player, c, r, Vec3{}, Fixed::fromInt(-2), &d)) out.push_back({c, w.get<Transform>(c).pos, d});
+    });
+    std::sort(out.begin(), out.end(), [](const AimCandidate& a, const AimCandidate& b) { return a.e.index < b.e.index; });
+    return out;
+}
+
 void TopDown::aimHero(Simulation& sim, TopDownPilot& p, uint8_t owner) {
     World& w = sim.world();
     const Entity e = p.hero;

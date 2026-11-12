@@ -464,16 +464,6 @@ def build_rules(src, races, race, battle, heroes, morale, lang):
         g = t.get('garrison')
         if g and g.get('onCapture') is not None and g['onCapture'] not in types:
             g.pop('onCapture')
-    # skill objects: UFO (Skill24, BW PositionFlyingTower: 600 px, 3.5 shots / s, bullet 300 px / s) and the barrier
-    types['bw_flying_tower'] = {'name': 'НЛО', 'tags': ['flying_tower'], 'structure': {'footprint': [1, 1]}, 'invulnerable': True,
-                                'sight': cells(600), 'weapons': [{'range': cells(600), 'rangeAspect': aspect, 'damage': 1,
-                                                                    'cooldown': per(3.5), 'projectileSpeed': cells(300)}],
-                                'view': {'shape': 'tower', 'scale': 0.8}}
-    types['bw_barrier'] = {'name': 'Баррикада', 'tags': ['barrier'], 'health': {'max': 10}, 'blocksLanes': True,
-                           'structure': {'footprint': [1, 1]}, 'view': {'shape': 'wall', 'scale': 1.0}}
-    for tid, ru, en in (('bw_flying_tower', 'НЛО', 'UFO'), ('bw_barrier', 'Баррикада', 'Barrier')):
-        lang['ru']['type.' + tid], lang['en']['type.' + tid] = ru, en
-
     # morale stars (MoraleInfo): levels with BW's non-compounding multipliers and point decay. The gains per building
     # (moraleCatch* / moraleLost / moraleUpgrade points, 10 per unit lost in an assault) wait for the modes agent's
     # `morale` block: until then the stock stays at 0 = level 0 = every multiplier 1, as in stage 1.
@@ -715,18 +705,31 @@ def read_debut(src, var, color_slot, point_kinds, warnings, mapname):
     return d
 
 
-def default_loadout(hero_id, cards):
-    """BW loadouts are the player's equipped cards (server inventory) + the hero's talent. A map player gets the
-    talent and, for each of the four slots, the lowest-numbered card allowed there."""
+def default_loadout(hero_id, cards, talents):
+    """BW loadouts are the player's equipped cards (server inventory) + the hero's talent. A map player gets, for each
+    of the four card slots, the first common card allowed there, and the hero's talent in slot 4 (as the skills
+    converter's default_loadout)."""
     out, used = [], set()
-    for mask in (1, 2, 4, 8):
+    for k in range(4):
         for c in cards:
-            if c['id'] not in used and (c.get('allowedSlot') or 0) & mask:
-                out.append(c['id'])
+            if c['id'] not in used and (int(c.get('allowedSlot') or 0) >> k) & 1:
+                out.append({'id': c['id'], 'slot': k})
                 used.add(c['id'])
                 break
-    out.append('bw_%s_talent' % hero_id)
+    if hero_id in talents:
+        out.append({'id': talents[hero_id], 'slot': 4})
     return out
+
+
+def _collect(obj, key, out):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == key and isinstance(v, str):
+                out.add(v)
+            _collect(v, key, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            _collect(v, key, out)
 
 
 def build_map(src, hp, header, players, ctx, warnings):
@@ -805,7 +808,7 @@ def build_map(src, hp, header, players, ctx, warnings):
         _, hinfo = src.ref(pl.get('hero'))
         hero = 'hero%d' % int(hinfo.get('clientId')) if hinfo and hinfo.get('clientId') else 'hero%d' % ((k % 6) + 1)
         mp = {'name': 'Игрок %d' % slot, 'team': int(pl.get('team') or slot),
-              'loadout': default_loadout(hero, ctx['cards'])}
+              'loadout': default_loadout(hero, ctx['cards'], ctx['talents'])}
         mplayers.append(mp)
         pi = players.get(pguid[k], {})
         if pi.get('color') is not None:
@@ -981,7 +984,7 @@ def convert_skills(src, out):
     os.makedirs(os.path.dirname(tmp), exist_ok=True)
     root = os.path.dirname(os.path.dirname(src.assets))
     rc = skconv.main(['--bw', root, '--out', tmp, '--px-per-cell', str(SCALE), '--energy-resource', 'skillEnergy',
-                      '--report', os.path.join(out, 'bw', 'skills_coverage.md')])
+                      '--aspect', '0.5', '--report', os.path.join(out, 'bw', 'skills_coverage.md')])
     if rc:
         src.warnings.append('skills converter failed (%s)' % rc)
         return None
@@ -1017,7 +1020,7 @@ def convert_tutorials(src, out, data_paths, cache):
         mid = tut.map_id(p)
         if mid in ids.values():
             mid = mid + '_' + re.sub(r'[^A-Za-z0-9_]', '_', os.path.basename(os.path.dirname(p))).lower()
-        ids[p] = mid
+        ids[os.path.normpath(p)] = mid
         os.makedirs(data_dir, exist_ok=True)
         with open(os.path.join(data_dir, mid + '.lua'), 'w', encoding='utf-8') as f:
             f.write('-- Bunker Wars tutorial of %s (tools/importers/bunkerwars/tutorial.py)\nreturn %s\n' % (src.rel(p), lua))
@@ -1090,7 +1093,7 @@ def mtime(*paths):
     return ','.join(str(int(os.path.getmtime(p))) if p and os.path.exists(p) else '-' for p in paths)
 
 
-def run(source, out, cache_dir=None):
+def run(source, out, cache_dir=None, skills=True):
     cache = Cache(cache_dir)
     src = Source(source)
     log('indexed')
@@ -1113,17 +1116,25 @@ def run(source, out, cache_dir=None):
     players = read_players(src)
     # player abilities: the skills converter (agent-bw-skills) at the same scale
     stamp = mtime(__file__, os.path.join(HERE, 'skills', 'convert.py'), os.path.join(HERE, 'skills', 'mapping.py'))
-    conv = cache.get('skills', stamp)
+    conv = cache.get('skills', stamp) if skills else {}
     if conv is None:
         conv = cache.put('skills', stamp, convert_skills(src, out))
     if conv:
         rules['playerAbilities'] = conv['playerAbilities']
         rules['bwSkills'] = conv.get('bwSkills', {})
-        rules['loadoutSlots'] = 5          # four card slots + the hero's talent
+        rules['loadoutSlots'] = 5          # four card slots + the hero's talent (slot 4)
+        for k, v in (conv.get('types') or {}).items():   # objects the skills spawn (UFO, barrier)
+            types.setdefault(k, v)
+        used = set()
+        _collect(conv['playerAbilities'], 'unit', used)
+        for u in sorted(used - set(types)):
+            src.warnings.append('skills spawn unknown type %s' % u)
     ids = {a['id'] for a in rules.get('playerAbilities', [])}
-    cards = sorted(({'id': 'bw_' + s['id'], 'allowedSlot': s.get('allowedSlot')} for s in skills
-                    if s['kind'] == 'card' and ('bw_' + s['id']) in ids),
+    # default loadout cards: common (rarity 0) cards, as the skills converter's default_loadout
+    cards = sorted(({'id': s['id'], 'allowedSlot': s.get('allowedSlot')} for s in skills
+                    if s['kind'] == 'card' and s.get('rarity') == 0 and s['id'] in ids),
                    key=lambda c: int(re.sub(r'\D', '', c['id']) or 0))
+    talents = {h['id']: stem_id(h['talent']) for h in heroes if h.get('talent') and stem_id(h['talent']) in ids}
     common = battle.get('common') or {}
     domi = next((b for b in races[race]['special'] if b.get('type') == 16), {})
     koh = next((b for b in races[race]['special'] if b.get('type') == 32), {})
@@ -1152,7 +1163,7 @@ def run(source, out, cache_dir=None):
         r = wp.get(k)
         if isinstance(r, dict):
             weather_params[k] = [r.get('x', 0), r.get('y', 0)]
-    ctx = {'types': types, 'cards': cards, 'weatherParams': weather_params}
+    ctx = {'types': types, 'cards': cards, 'talents': talents, 'weatherParams': weather_params}
 
     log('rules + skills')
     data_paths = []
@@ -1210,7 +1221,7 @@ def run(source, out, cache_dir=None):
         for k in range(np):
             lang['ru']['map.%s.player.%d' % (base, k + 1)] = 'Игрок %d' % (k + 1)
             lang['en']['map.%s.player.%d' % (base, k + 1)] = 'Player %d' % (k + 1)
-        tid = tut_ids.get(os.path.join(os.path.dirname(src.assets), side['source']['data']))
+        tid = tut_ids.get(os.path.normpath(os.path.join(os.path.dirname(src.assets), side['source']['data'])))
         if tid:
             m['scripts'] = ['scripts/bw/tut_%s.lua' % tid]
             m['viewScripts'] = ['scripts/view/bw/tutorial_view.lua']
@@ -1326,10 +1337,11 @@ def main():
     ap.add_argument('--source', required=True, help='Bunker Wars repository (or its Client / Client/Assets folder)')
     ap.add_argument('--out', required=True, help='output game folder')
     ap.add_argument('--json', action='store_true', help='one JSON report on stdout (MCP / editor)')
+    ap.add_argument('--no-skills', action='store_true', help='skip the energy skills converter (skills/convert.py)')
     ap.add_argument('--cache', help='folder for resumable results of the slow steps (outside the game folder)')
     a = ap.parse_args()
     try:
-        rep = run(a.source, os.path.expanduser(a.out), a.cache)
+        rep = run(a.source, os.path.expanduser(a.out), a.cache, skills=not a.no_skills)
     except SystemExit as ex:
         if a.json:
             print(json.dumps({'ok': False, 'error': str(ex)}, ensure_ascii=False))

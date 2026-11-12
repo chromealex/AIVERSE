@@ -64,7 +64,8 @@ void EffectParser::filter(const std::string& where, const Json& j, EffectDef& e)
     std::string aff = j.getStr("affects", "");
     if (aff == "self") { f.self = true; f.enemies = f.allies = false; }
     if (aff == "own") { f.allies = true; f.enemies = false; }
-    f.neutral = j.getBool("neutral", aff == "all" || aff == "any");
+    if (aff == "neutral") { f.allies = f.enemies = false; }   // neutral objects only (BW PlayersFilter.Neutral)
+    f.neutral = j.getBool("neutral", aff == "all" || aff == "any" || aff == "neutral");
     if (aff == "any") f.self = true;
     std::string sh = j.getStr("shape", "");
     if (!sh.empty()) {
@@ -74,7 +75,7 @@ void EffectParser::filter(const std::string& where, const Json& j, EffectDef& e)
         for (auto& [n, s] : shapes) if (sh == n) { f.shape = s; ok = true; }
         if (!ok) fail(where, "unknown shape '" + sh + "' (target, circle, line, cone, ring, map, group)");
         f.explicitShape = true;
-    } else if (e.radius.raw > 0) f.shape = Shape::Circle;
+    } else if (e.radius.raw > 0 || e.areaRadius) f.shape = Shape::Circle;
     f.width = j.getFx("width", f.width);
     if (j.has("angle")) f.angle = cosDeg(j.getFx("angle") / 2);
     f.ring = j.getFx("ring");
@@ -106,6 +107,12 @@ void EffectParser::filter(const std::string& where, const Json& j, EffectDef& e)
     }
     f.ownFirst = j.getBool("ownFirst", false);
     f.area = j.getStr("area", "");
+    f.aspect = j.getFx("aspect", f.aspect);
+    if (f.aspect.raw <= 0) fail(where, "aspect must be positive");
+    std::string hd = j.getStr("heading", "");
+    if (hd == "to") f.route = 1;
+    else if (hd == "from") f.route = 2;
+    else if (!hd.empty()) fail(where, "heading must be to or from (units walking to / that left the effect target)");
 }
 
 void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef& d) {
@@ -138,7 +145,8 @@ void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef
     else if (mo == "lane") d.motion = AreaMotion::Lane;
     else if (mo == "wander") d.motion = AreaMotion::Wander;
     else if (mo == "follow") d.motion = AreaMotion::Follow;
-    else if (!mo.empty() && mo != "static") fail(where, "motion must be static, toward, lane, wander or follow");
+    else if (mo == "orbit") d.motion = AreaMotion::Orbit;
+    else if (!mo.empty() && mo != "static") fail(where, "motion must be static, toward, lane, wander, follow or orbit");
     d.maxTriggers = int(j.getInt("maxTriggers", 0));
     d.sight = j.getFx("sight");
     d.blocksVision = j.getFx("blocksVision");
@@ -184,6 +192,16 @@ void EffectParser::skillObjects(const std::string& where, const Json& j, Deliver
     std::string st = j.getStr("start", "");
     if (st == "point") d.fromPoint = true;
     else if (!st.empty() && st != "caster") fail(where, "start must be caster or point");
+    d.grow = j.getFx("grow");
+    if (const Json& o = j["orbit"]; o.isObject()) {   // BW UnitsTornado: an ellipse around the point, growing to full size
+        d.orbitA = o.getFx("a"); d.orbitB = o.getFx("b", d.orbitA);
+        d.orbitSpeed = o.getFx("speed"); d.orbitExpand = o.getFx("expand");
+    }
+    d.stagger = j.getFx("stagger");
+    if (const Json& of = j["offsets"]; of.isArray())
+        for (auto& p : of.items()) d.offsets.push_back(Vec2{p[0].fx(), p[1].fx()});
+    d.shuffle = j.getBool("shuffle", false);
+    d.shots = std::max<int>(0, int(j.getInt("shots", 0)));
 }
 
 int EffectParser::status(const std::string& where, const Json& j) {
@@ -208,7 +226,7 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
     static const std::pair<const char*, uint32_t> flags[] = {{"stun", kStStun}, {"silence", kStSilence}, {"disarm", kStDisarm}, {"root", kStRoot},
         {"invulnerable", kStInvulnerable}, {"invisible", kStInvisible}, {"lock", kStLock}, {"blind", kStBlind}, {"hidden", kStHidden},
         {"flying", kStFlying}, {"fake", kStFake}, {"ignoreDefense", kStIgnoreDefense}, {"spreads", kStSpreads}, {"freezeRegen", kStFreezeRegen},
-        {"alert", kStAlert}, {"revealed", kStRevealed}};
+        {"alert", kStAlert}, {"revealed", kStRevealed}, {"untargetable", kStUntargetable}, {"skillImmune", kStSkillImmune}};
     for (auto& f : j["flags"].items()) {
         bool ok = false;
         for (auto& [n, b] : flags) if (f.str() == n) { s.flags |= b; ok = true; }
@@ -224,8 +242,8 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
     }
     s.shield = j.getFx("shield");
     std::string st = j.getStr("stacking", "refresh");
-    s.stacking = st == "stack" ? Stacking::Stack : st == "independent" ? Stacking::Independent : Stacking::Refresh;
-    if (st != "refresh" && st != "stack" && st != "independent") fail(where, "stacking must be refresh, stack or independent");
+    s.stacking = st == "stack" ? Stacking::Stack : st == "independent" ? Stacking::Independent : st == "keep" ? Stacking::Keep : Stacking::Refresh;
+    if (st != "refresh" && st != "stack" && st != "independent" && st != "keep") fail(where, "stacking must be refresh, stack, independent or keep");
     s.maxStacks = std::max<int>(1, int(j.getInt("maxStacks", s.stacking == Stacking::Refresh ? 1 : 5)));
     if (j.has("onExpire")) s.onExpire = int16_t(payload(where + " onExpire", j["onExpire"]));
     if (j.has("onCaptured")) s.onCaptured = int16_t(payload(where + " onCaptured", j["onCaptured"]));
@@ -233,6 +251,38 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
     for (auto& [res, v] : j["incomeMult"].members()) s.incomeMult.push_back({resRef(where + " incomeMult", res), v.fx()});
     s.garrisonPerSecond = j.getFx("garrisonPerSecond");
     s.view = j["view"];
+    // skill objects (RtsSkillObjects.cpp)
+    s.spreadChance = j.getFx("spreadChance", s.spreadChance);
+    for (auto& sl : j["slots"].items()) {
+        const int64_t k = sl.integer(-1);
+        if (k < 0 || k > 31) fail(where, "slots are loadout slot numbers 0..31");
+        s.slots |= 1u << k;
+    }
+    if (j.has("onSpawn")) s.onSpawn = int16_t(payload(where + " onSpawn", j["onSpawn"]));
+    s.endOnCapture = j.getBool("endOnCapture", false);
+    s.hitCap = j.getFx("hitCap");
+    s.endWhenEmpty = j.getBool("endWhenEmpty", false);
+    for (auto& [res, v] : j["deathGain"].members()) s.deathGain.push_back({uint16_t(resRef(where + " deathGain", res)), v.fx()});
+    if (!s.deathGain.empty()) r.anyDeathGain = true;
+    if (const Json& c = j["collect"]; c.isObject()) {
+        s.collect = true;
+        s.collectAdd = c.getFx("addPerSecond");
+    } else if (!c.isNull()) fail(where, "collect must be an object");
+    if (const Json& c = j["command"]; c.isObject()) {
+        s.commandable = true;
+        s.commandCapture = c.getBool("capture", false);
+        s.commandPercent = c.getFx("percent");
+    } else if (!c.isNull()) fail(where, "command must be an object");
+    if (const Json& t = j["transfer"]; t.isObject()) {
+        s.transfer = true;
+        s.transferGrab = t.getFx("grab");
+        s.transferFill = t.getFx("fill");
+        s.transferSpeed = t.getFx("speed", s.transferSpeed);
+        s.transferPercent = t.getFx("percent", s.transferPercent);
+        if (s.transferSpeed.raw <= 0) fail(where + " transfer", "speed must be positive");
+    } else if (!t.isNull()) fail(where, "transfer must be an object");
+    if (s.collect) r.anyCollect = true;
+    if (s.hitCap.raw > 0) r.anyHitCap = true;
     r.statuses[size_t(idx)] = s;
 }
 
@@ -260,7 +310,7 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
         {"playerStatus", EffectKind::PlayerStatus}, {"equalizeResource", EffectKind::EqualizeResource}, {"sacrifice", EffectKind::Sacrifice},
         {"stealSkill", EffectKind::StealSkill}, {"cooldown", EffectKind::Cooldown},
         {"addCharges", EffectKind::AddCharges}, {"teleportGroup", EffectKind::TeleportGroup}, {"script", EffectKind::Script}, {"field", EffectKind::Field},
-        {"pull", EffectKind::Pull}};
+        {"pull", EffectKind::Pull}, {"defeat", EffectKind::Defeat}, {"garrisonSend", EffectKind::GarrisonSend}, {"closeGroups", EffectKind::CloseGroups}};
     std::string k = ej.getStr("type", "damage");
     bool known = false;
     for (auto& [n, kk] : kinds) if (k == n) { e.kind = kk; known = true; }
@@ -285,9 +335,42 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
         e.fieldAmount = ej.getFx(ej.has("add") ? "add" : ej.has("set") ? "set" : "max");
     }
     e.percent = ej.getFx("percent");
-    e.radius = ej.getFx("radius");
-    e.duration = ej.getFx("duration");
+    if (ej["radius"].isString()) {
+        if (ej.getStr("radius") != "area") fail(w, "radius must be a number or \"area\"");
+        e.areaRadius = true;
+    } else e.radius = ej.getFx("radius");
+    e.budget = int(ej.getInt("budget", 0));
+    if (e.kind == EffectKind::Cooldown)
+        for (auto& sl : ej["slots"].items()) {
+            const int64_t k = sl.integer(-1);
+            if (k < 0 || k > 31) fail(w, "slots are loadout slot numbers 0..31");
+            e.slotMask |= 1u << k;
+        }
+    if (ej["levels"].isString()) {
+        if (ej.getStr("levels") != "max") fail(w, "levels must be a number or \"max\"");
+        e.levelsMax = true;
+    } else e.levels = ej.getFx("levels");
+    if (const Json& du = ej["duration"]; du.isArray()) {
+        e.duration = du[0].fx(); e.durationMax = du[1].fx();
+        if (e.durationMax < e.duration) fail(w, "duration range must be [min, max]");
+    } else e.duration = ej.getFx("duration");
+    e.every = ej.getFx("every");
+    if (e.kind == EffectKind::GarrisonSend || (e.kind == EffectKind::Swap && ej.has("with"))) {
+        const Json& rt = ej[e.kind == EffectKind::Swap ? "with" : "runTo"];
+        EffectDef o;
+        o.kind = EffectKind::Cast;
+        std::string aff = rt.getStr("affects", "own");
+        o.enemies = aff == "enemies" || aff == "all" || aff == "any";
+        o.allies = aff == "allies" || aff == "all" || aff == "any" || aff == "own";
+        filter(w + " runTo", rt.isObject() ? rt : Json::object(), o);
+        o.filter.units = false;
+        r.payloads.push_back({o});
+        e.runTo = int16_t(r.payloads.size() - 1);
+        e.maxPoints = std::max<int>(1, int(ej.getInt("maxPoints", 1)));
+        e.swapType = ej.getBool("swapType", false);
+    }
     e.chance = ej.getFx("chance", e.chance);
+    e.targetChance = ej.getFx("targetChance", e.targetChance);
     e.damageType = damageIdx(ej.getStr("damageType", "normal"));
     if (e.kind == EffectKind::Buff) e.mod = statMod(w, ej);
     if (ej.has("unit")) e.spawnType = typeRef(w, ej.getStr("unit"));

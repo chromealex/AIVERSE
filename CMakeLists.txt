@@ -931,7 +931,7 @@ endif()
 target_sources(aiverse_game PRIVATE modules/rts/RtsTiles.cpp)
 # terrain / map generator (agent-terrain-gen): integer noise, erosion, biomes, fair starts, presets, planets
 target_sources(aiverse_game PRIVATE modules/rts/gen/GenNoise.cpp modules/rts/gen/GenField.cpp modules/rts/gen/GenTerrain.cpp
-    modules/rts/gen/GenContent.cpp modules/rts/gen/GenPlanet.cpp modules/rts/gen/GenWorld.cpp modules/rts/gen/MapGen.cpp)
+    modules/rts/gen/GenContent.cpp modules/rts/gen/GenCity.cpp modules/rts/gen/GenPlanet.cpp modules/rts/gen/GenWorld.cpp modules/rts/gen/MapGen.cpp)
 add_library(aiverse_render2d STATIC engine/render/SpriteBatch.cpp engine/render/TextureCache.cpp)
 target_include_directories(aiverse_render2d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
 target_sources(aiverse_game_view PRIVATE modules/rts/view/RtsSprites.cpp modules/rts/view/RtsTileView.cpp modules/rts/view/RtsSpriteShadow.cpp)
@@ -1127,6 +1127,7 @@ endif()
 target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
 # extraction raids (agent-extraction): match loop, extraction points, raid inventory, interactables, receipts, bot, Lua `raid`
 target_sources(aiverse_game PRIVATE modules/rts/RtsRaid.cpp modules/rts/RtsRaidData.cpp modules/rts/RtsRaidBot.cpp modules/rts/RtsRaidApi.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsCommerce.cpp modules/rts/RtsCommerceApi.cpp modules/rts/RtsDrivingApi.cpp modules/rts/RtsCareer.cpp modules/rts/RtsCareerApi.cpp)   # agent-gta2: city economy
 # top-down heroes (agent-topdown-control): rules "topDown", stick input commands, aim / auto-fire (docs/topdown.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
 # map environment (Bunker Wars port: weather, wind, bosses, Mouro, scroller, caves, graveyards, souls, walls)
@@ -1135,6 +1136,7 @@ target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvDat
 target_sources(aiverse_game PRIVATE modules/rts/RtsDriving.cpp)
 # Bunker Wars routes, groups, multiscreen (docs/game-format.md § Routes)
 target_sources(aiverse_game PRIVATE modules/rts/RtsRoutes.cpp modules/rts/RtsRoutesData.cpp modules/rts/RtsScriptRoutes.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsArsenal.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
@@ -1157,6 +1159,7 @@ foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/ClientRegionInput.cpp)
         target_sources(${t} PRIVATE apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
+        target_sources(${t} PRIVATE apps/client/ClientCommerce.cpp)   # city economy (agent-gta2)
     endif()
 endforeach()
 
@@ -1263,9 +1266,10 @@ set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
     apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
     apps/client/ClientBaked.cpp   # ClientBaked: the map's baked lighting (agent-lightbake)
-    apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
+    apps/client/ClientTopDown.cpp apps/client/ClientCommerce.cpp)   # top-down heroes (agent-topdown-control), city economy (agent-gta2)
 foreach(t aiverse_client main)
     if(TARGET ${t})
+        target_link_libraries(${t} PRIVATE aiverse_content_reader)   # streamed world: worker-thread project reader
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
         target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # agent-lightbake
     endif()
