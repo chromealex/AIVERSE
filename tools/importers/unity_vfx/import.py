@@ -14,7 +14,8 @@ files) with the standard library only, maps every ParticleSystem module onto the
     <game>/fx/textures/*.png          main textures and exported sprites (TGA decoded here; PSD/JPG/TIF/EXR via ImageMagick/ffmpeg)
     <game>/models/<file>              FBX / OBJ / glTF meshes of mesh shapes and mesh particles (copied)
 
-and a report of what was mapped exactly, approximately or dropped (VFX Graph, custom shader code, soft
+VFX Graph assets / VisualEffect components through vfxgraph.py (block / operator subset, see docs), and a report of
+what was mapped exactly, approximately or dropped (custom shader code, soft
 particles / distortion, custom vertex streams, scripts, ...). Unity space (Y up, left-handed) becomes engine
 space by flipping Z; the effect's "direction" frame is the engine's play direction (+Y). Docs:
 docs/particles.md ("Unity import").
@@ -22,6 +23,7 @@ docs/particles.md ("Unity import").
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -200,8 +202,7 @@ def import_prefab(path, assets, opts, rep, name, game_dir, quiet=False):
                             used_refs.update(c.file_id for c in prefab.comp_by_go.get(get(comp.data, 'm_GameObject', 'fileID'), []) if c.class_id == 33)
     for d in prefab.docs:
         if d.class_id == CLASS_VISUAL_EFFECT:
-            rep.dropped.append('%s: VisualEffect (VFX Graph) component: VFX Graph effects are GPU node graphs, not ParticleSystems; '
-                               'they cannot be converted. Rebuild the look from fx_templates or describe it and edit with fx_set.' % rel_name)
+            continue   # converted below (vfxgraph.py)
         elif d.class_id == CLASS_MONO:
             script = assets.path(get(d.data, 'm_Script') or {})
             rep.dropped.append('%s: script %s (behaviour is code: bind the effect to game events with fx_bind instead)' %
@@ -235,10 +236,11 @@ def import_prefab(path, assets, opts, rep, name, game_dir, quiet=False):
             continue
         psr = next((c for c in comps if c.class_id == CLASS_PSR), None)
         systems.append((ps, psr, go, pos, rot, scale, p))
+    graph_outputs = import_visual_effects(prefab, assets, opts, rep, name, game_dir, ctx)
     if not systems:
-        if not quiet and not any(d.class_id == CLASS_VISUAL_EFFECT for d in prefab.docs):
+        if not quiet and not graph_outputs:
             rep.warnings.append('%s: no ParticleSystem in this prefab' % rel_name)
-        return []
+        return graph_outputs
     by_ps = {s[0].file_id: s for s in systems}
     sub_ids = set()
     for s in systems:
@@ -312,7 +314,50 @@ def import_prefab(path, assets, opts, rep, name, game_dir, quiet=False):
             done.add(i)
             build(sub_names[i], [by_ps[i]], True)
     opts.used_names = used_names
+    if graph_outputs:   # VFX Graph layers join the prefab's effect as extra emitters (up to 16)
+        main = next((o for o in outputs if o[0] == name), None)
+        if main is None:
+            outputs = graph_outputs + outputs
+        else:
+            main[1]['emitters'] = (main[1]['emitters'] + graph_outputs[0][1]['emitters'])[:16]
+            if 'forceFields' in graph_outputs[0][1]:
+                main[1].setdefault('forceFields', graph_outputs[0][1]['forceFields'])
+            outputs += graph_outputs[1:]
     return outputs
+
+
+def import_visual_effects(prefab, assets, opts, rep, name, game_dir, ctx):
+    """VisualEffect components of the hierarchy -> effects through vfxgraph.py (exposed-property overrides applied,
+    emitters moved to the component's place in the prefab)."""
+    import vfxgraph
+    import vfxgraph_model as vm
+    out = []
+    for tr, go, pos, rot, scale, path in prefab.walk():
+        for c in prefab.comp_by_go.get(go, []):
+            if c.class_id != CLASS_VISUAL_EFFECT:
+                continue
+            src = assets.path(c.data.get('m_Asset') or {})
+            if not src:
+                rep.dropped.append('%s: VisualEffect: its .vfx asset is not in the source folder' % path)
+                continue
+            if not int(num(c.data.get('m_Enabled'), 1)):
+                rep.notes.append('%s: VisualEffect disabled in the prefab (imported anyway: scripts usually enable it)' % path)
+            ename = name if not out else sanitize('%s_%s' % (name, prefab.name(go)), 44)
+            try:
+                res = vfxgraph.convert_file(src, assets, rep, ename, game_dir, opts.dry_run, opts.scale,
+                                            vm.property_overrides(c.data.get('m_PropertySheet')), opts.textures, opts.meshes)
+            except Exception as e:  # one broken graph must not stop the prefab
+                rep.warnings.append('error: %s: %s: %s' % (os.path.basename(src), type(e).__name__, e))
+                continue
+            off = ctx.eff_point(pos)
+            for _, eff in res[:1]:
+                for em in eff['emitters']:
+                    if v_len(off) > 1e-4:
+                        o = em.get('offset', [0, 0, 0])
+                        em['offset'] = mp.vec(tuple(a + b for a, b in zip(o, off)), 3)
+            rep.notes.append('%s: VFX Graph %s converted (%d effect(s))' % (path, os.path.basename(src), len(res)))
+            out += res
+    return out
 
 
 def find_inputs(source, rep):
@@ -366,9 +411,31 @@ def run(argv=None):
         return finish(rep, opts, 2)
     assets = Assets(project_roots(source), rep)
     prefabs, vfx = find_inputs(source, rep)
-    for v in vfx:
-        rep.dropped.append('%s: VFX Graph asset. VFX Graph runs node graphs on the GPU (compute), not the ParticleSystem '
-                           'modules, so there is nothing to map; describe the look and build it with fx_templates / fx_set.' % os.path.basename(v))
+    graph_effects = []
+    played = set()   # graphs a prefab plays: imported with that prefab (its property overrides), not twice
+    for p in prefabs:
+        try:
+            with open(p, 'r', encoding='utf-8', errors='replace') as f:
+                txt = f.read()
+        except OSError:
+            continue
+        if '!u!2083052967' in txt:
+            for m in re.finditer(r'm_Asset: \{fileID: -?\d+, guid: ([0-9a-f]{32})', txt):
+                q = assets.by_guid.get(m.group(1))
+                if q:
+                    played.add(os.path.abspath(q))
+    vfx = [v for v in vfx if os.path.abspath(v) not in played]
+    if vfx and not opts.prefab:
+        import vfxgraph
+        textures, meshes = Textures(game_dir, assets, rep, opts.dry_run), Meshes(game_dir, assets, rep, opts.dry_run)
+        opts.textures, opts.meshes = textures, meshes
+        for v in vfx:
+            stem = sanitize(opts.name if opts.name and len(vfx) == 1 and not prefabs else os.path.splitext(os.path.basename(v))[0], 40)
+            try:
+                graph_effects += [(e, n, os.path.basename(v)) for n, e in
+                                  vfxgraph.convert_file(v, assets, rep, stem, game_dir, opts.dry_run, opts.scale, None, textures, meshes)]
+            except Exception as e:
+                rep.warnings.append('error: %s: %s: %s' % (os.path.basename(v), type(e).__name__, e))
     if opts.prefab:
         prefabs = [p for p in prefabs if opts.prefab.lower() in os.path.basename(p).lower()]
     with_ps, maybe_empty = [], set()
@@ -390,6 +457,14 @@ def run(argv=None):
     if not with_ps and not vfx:
         rep.warnings.append('error: no prefab with a ParticleSystem found in %s' % opts.source)
     total = 0
+    for effect, ename, srcname in graph_effects:
+        rel = 'fx/%s.json' % ename
+        if not opts.dry_run:
+            os.makedirs(os.path.join(game_dir, 'fx'), exist_ok=True)
+            with open(os.path.join(game_dir, rel), 'w', encoding='utf-8') as f:
+                f.write(dumps_effect(effect))
+        rep.effects.append({'name': ename, 'file': rel, 'emitters': len(effect['emitters']), 'source': srcname})
+        total += 1
     for p in with_ps:
         stem = os.path.splitext(os.path.basename(p))[0]
         name = sanitize(opts.name if opts.name and len(with_ps) == 1 else ('%s_%s' % (opts.name, stem) if opts.name else stem), 40)

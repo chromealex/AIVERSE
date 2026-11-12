@@ -26,3 +26,9 @@ VisualEffect:
   m_Enabled: 1
   m_Asset: {fileID: 8926484042661614527, guid: f6a6b6c6d6e64f6a8b6c6d6e6f6a0001, type: 3}
   m_InitialEventName: OnPlay
+  m_PropertySheet:
+    m_Float:
+      m_Array:
+      - m_Value: 20
+        m_Name: EmberRate
+        m_Overridden: 1

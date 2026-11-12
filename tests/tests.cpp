@@ -5814,7 +5814,7 @@ TEST(fx_unity_importer_output_is_valid) {
                             "/tests/data/unity_vfx/Assets/FX\" --game \"" + out + "\" --json > \"" + out + "/report.json\"";
     CHECK(std::system(cmd.c_str()) == 0);
     Json rep = Json::parseFile(out + "/report.json");
-    CHECK(rep["effects"].size() == 3);
+    CHECK(rep["effects"].size() == 5);   // + the VFX Graph of VfxHolder.prefab and its GPU-event sub-effect
     fx::ParticleSystem ps;
     ps.setQuality(fx::FxQuality::High);
     ps.init(nullptr);
@@ -5838,6 +5838,8 @@ TEST(fx_unity_importer_output_is_valid) {
         CHECK(ex->emitters[2].subEmitters.size() == 1 && ex->emitters[2].align == fx::FxAlign::Velocity);
         CHECK(ex->emitters[1].bursts.size() == 2 && ex->emitters[1].noise.strength.max > 0);
     }
+    const fx::EffectDef* vg = ps.def(ps.effect("vfxholder"));
+    CHECK(vg && vg->emitters.size() == 1 && vg->emitters[0].subEmitters.size() == 1 && vg->emitters[0].loop);
     CHECK(std::filesystem::exists(out + "/fx/textures/smoke.png"));
     std::filesystem::remove_all(out);
 }
