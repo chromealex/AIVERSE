@@ -53,7 +53,9 @@ def extract(root, include=None):
         item(model, path, 'missing', 'Opaque Unity native asset (baked lighting, navigation or terrain); export from Unity Editor.', key='opaque')
     rep = Report()
     assets = Assets([str(root / 'Assets')], rep)
-    scripts = {a['path']: script_index(model, root, a) for a in model['assets'] if a['kind']=='script'}
+    script_assets = {a['path']: a for a in model['assets'] if a['kind']=='script'}
+    # a subset import (include) indexes only the scripts its objects use; reading every source is slow on big projects
+    scripts = {} if include else {p: script_index(model, root, a) for p, a in script_assets.items()}
     def reference(ref):
         p = assets.path(ref)
         return Path(p).relative_to(root).as_posix() if p else ''
@@ -77,6 +79,8 @@ def extract(root, include=None):
                     entity['scripts'].append(sp)
                     fields = {k:v for k,v in c.data.items() if not k.startswith('m_')}
                     entity['fields'].update(fields)
+                    if include and sp in script_assets and sp not in scripts:
+                        scripts[sp] = script_index(model, root, script_assets[sp])
                     if sp in scripts:
                         scripts[sp]['uses'].append(dict(entity=entity['id'], fields=fields))
                     road = world.road(c.data, pos, rot, scale)

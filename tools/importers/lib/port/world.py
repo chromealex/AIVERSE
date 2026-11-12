@@ -253,7 +253,7 @@ def classify(entity, rules):
     return None, None
 
 
-def bounds_markers(model, rules):
+def bounds_markers(model, rules, report=True):
     """ScriptableObject map configs (e.g. Drone Fall GD_Map: mapName / mapSize / mapPos) by map name."""
     out = {}
     for e in model['entities']:
@@ -267,8 +267,16 @@ def bounds_markers(model, rules):
         vals = [number(size.get('x')), number(size.get('y')), number(pos.get('x')), number(pos.get('y'))]
         if name and None not in vals:
             out[name] = dict(size=(vals[0], vals[1]), position=(vals[2], vals[3]), source=e['source'], name=e['name'])
-            item(model, e['source'], 'approx', 'Map config: bounds of scene "%s" -> map area map_bounds.' % name, key='map-config')
+            if report: item(model, e['source'], 'approx', 'Map config: bounds of scene "%s" -> map area map_bounds.' % name, key='map-config')
     return out
+
+
+def scene_bounds(bounds_by_name, name):
+    """Map config of a scene: exact map name, else the longest name the scene name extends ('World-FTUE' -> 'World-FTUE_Part_1')."""
+    if name in bounds_by_name:
+        return bounds_by_name[name]
+    hits = sorted((n for n in bounds_by_name if name.startswith(n + '_')), key=len)
+    return bounds_by_name[hits[-1]] if hits else None
 
 
 def _area(areas, counters, name, x, z, w, h):
@@ -314,9 +322,7 @@ class SceneWorld:
         for tile in self.tiles:
             terrains.fold(tile)
         self.markers, self.drop, self.grid = [], set(), None
-        self.bounds = bounds_by_name.get(scene['name'])
-        if self.bounds is None:
-            self.bounds = next((b for n, b in sorted(bounds_by_name.items()) if scene['name'].startswith(n + '_')), None)
+        self.bounds = scene_bounds(bounds_by_name, scene['name'])
         for o in scene['objects']:
             e = by_id.get(o['entity'])
             r, data = classify(e, rules) if e else (None, None)

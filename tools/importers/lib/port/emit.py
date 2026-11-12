@@ -88,8 +88,10 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     out = out.resolve()
     if out == root or is_within(out, root) or is_within(root, out):
         raise ValueError('source and destination must be separate directories')
+    markers = world.load_rules(mapping)
+    bounds = world.bounds_markers(model, markers, report=False)
     for scene in model['scenes']:
-        if scene.get('terrains'): continue  # world scenes are cut to their terrain / map bounds below
+        if scene.get('terrains') or world.scene_bounds(bounds, scene['name']): continue  # cut to terrain / map bounds below
         for axis in (0,2):
             values = [o['position'][axis]*scale for o in scene['objects']] + [0]
             if max(values)-min(values)+5 > 2048: raise ValueError('scene exceeds 2048 cells; reduce --scale')
@@ -98,7 +100,6 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     writer = Writer(out, model)
     mappings = read_json(Path(__file__).with_name('mapping.json'))
     if mapping: mappings.update(read_json(mapping))
-    markers = world.load_rules(mapping)
     mappings.pop('markers', None)
     for key, spec in mappings.items():
         if key.startswith('_'): continue
