@@ -8,6 +8,7 @@
 | bots-fps | Perception, remembered target, reaction, bounded aim, firing/reload, retreat, patrol, safe-zone movement | AIVERSE::fps_bots |
 | navmesh | Automatic layered polygon mesh from static AABB collision; agent clearance/erosion, step links, connected regions, bounded routes | AIVERSE::navmesh |
 | bot-matches | Headless actual-engine match runner and deterministic restoration scenarios | aiverse_bot_match |
+| genre-bots | Genre-independent melee/shooter bot policies, squad roles + formations, objective choice over owner-supplied perception ([genre-packages.md](genre-packages.md#genre-bots-genre-bots-010)) | AIVERSE::lib_genre_bots |
 
 Public headers live in `libraries/include/aiverselib/bots`. No Lua or project-specific engine edits are
 needed. Executable host targets link the appropriate target. Registered OBJECT native modules call

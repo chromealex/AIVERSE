@@ -9,6 +9,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
 | combat-actions | Frame-keyed hitboxes + hurtboxes (sphere/capsule/yaw box) with overlap tests, self/team filtering and once-per-swing hits; dodge i-frames + cooldown; directional guard arc + perfect-parry window with re-arm; poise damage/break/recovery and hit/block/parry stun; deterministic lock-on acquire/switch/break | Composes melee-combat. Returns contacts/outcomes; damage, stamina, health and statuses stay with the existing combat owner. No per-tick sweep, animation-driven boxes, ragdoll or camera presentation. |
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets; 0.2.0: material-layer penetration, radial explosions with owner LOS, ammo feeds (magazine/belt/per-shell/energy + overheat), charge tiers, attachment stat stacking, ballistic launch and lead solving (see [Weapons and ballistics](#weapons-and-ballistics-weapon-policies-020)) | Existing FPS ammo/reload/fire cadence remain authoritative for built-in FPS weapons. No automatic replacement of hitscan, no damage/health owner, no presentation. |
+| genre-bots | Melee bot (spacing band, phase-aware openings, hit-confirmed combos, telegraph dodge/parry timing, lock-on), shooter bot (turn-limited aim, seeded aim error, solveIntercept lead, recoil bursts, reload/overheat, cover choice), squad roles + formations, objective choice hook (see [Genre bots](#genre-bots-genre-bots-010)) | Returns player-equivalent inputs only; perception, cover, objectives and navigation come from owners. No pathfinding, match rules, senses or sports/racing/card bots. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 
@@ -274,3 +275,95 @@ Verified: header syntax checks (g++ 11, `-Wall -Wextra -Werror -pedantic`), `gen
 overheat sequences, charge tiers, attachment stacking, aim accuracy, save/restore and invalid data, and a
 standalone run of the GenreConsumer function. Not verified in that change: CMake/full engine build,
 `aiverse_tests`, headless matches, MSVC/clang, platform runtimes.
+
+## Genre bots (genre-bots 0.1.0)
+
+Headers under `bots/`: `GenreCommon.h` (difficulty, perception record, target pick), `MeleeBot.h`, `ShooterBot.h`,
+`ObjectivePolicy.h`, `SquadRoles.h`, `GenreBotPersistence.h`, umbrella `GenreBots.h`, settings adapters
+`GenreBotConfig.h`. Target `AIVERSE::lib_genre_bots` (depends on `combat-actions`, `weapon-policies`,
+`configuration`); native OBJECT modules call `aiverse_native_use_libraries(target genre-bots)`. Skill:
+`skills/aiverse-genre-bots`. Namespace `aiverse::lib::bots`; the policies are independent of genre labels.
+
+**Contract.** Each policy is a pure decision step: one call per bot (or squad) per strictly increasing tick
+(repeated/backwards ticks and invalid input return nullopt with state untouched). It reads an owner-supplied
+snapshot and returns the same input a player produces; the owner applies it through its ordinary authorization
+(`stepMelee`/`stepDodge`/`stepGuard`/`stepLockOn`, `stepFeed`/`stepRecoil`, navigation, `Command`s). Bots never
+write health, poses, ammunition, cooldowns or match state, and difficulty never changes stats. Run them on the
+authoritative host only; replays record the resulting commands. Randomness only through the passed `Random&`
+(`sim.rng()` or an RNG saved with the simulation); draws happen only for chances strictly inside (0,1000) and for
+aim error > 0, so the stream is reproducible.
+
+**Perception.** `PerceivedTarget{id,team,position,velocity,yaw,visible,guarding,vulnerable,healthMilli,threat}` is the
+minimal hand-off from the owner's senses (LOS/FOV/hearing). Only visible hostile targets are engaged (same nonzero
+team and the bot itself are skipped); the current lock/target is kept while visible, else nearest by distance then id.
+`meleeThreat(attacks,meleeState,tick,reach)` derives the telegraph (attack id, start, windup, active, reach) from the
+visible attack phase. A senses package can adapt its output to this struct without changing the policies.
+
+**Difficulty.** `BotDifficulty{reactionTicks,decisionTicks,aimError,misreadMilli}`; presets `difficultyPreset(0..2)`
+(easy 20/8/1/40 turn/600, normal 5/4/1/200/150, hard 2/2/1/2000/0). Reaction delays acting on a newly perceived
+target and reading a telegraph (counted from the swing start); the decision interval re-plans movement and
+re-samples aim error; misreads ignore a read swing.
+
+**Melee bot.** `stepMeleeBot(config, attacks, dodge, guard, state, tick, self, seen, rng) -> MeleeInput`.
+Spacing band `[minRange,maxRange]`: approach beyond, retreat inside, strafe within (side flips every strafeTicks;
+outside `attackRange` the strafe also closes in). Openings: when idle and within `attackRange` it requests `opener`
+with `openMilli` chance per tick (avoids mirrored trades), never into a raised guard when `respectGuard` unless the
+target is `vulnerable` (recovery/stagger: always punished). Combos: only after a hit confirm on this swing, requested
+when `age + bufferTicks >= cancelFrom` so stepMelee starts the follow-up at the cancel frame. Defense: a swing in
+reach is read once after the reaction delay; the answer is Dodge (start at `activeStart - invulnFrom`, so the
+i-frames cover the first active frames), Guard (raise at `activeStart - parryTicks/2`, perfect-parry window straddles
+the first active frame; hold until the swing ends), Ignore (misread) or Retreat (no dodge ready and unblockable).
+`dodgeMilli` biases dodge vs guard. Lock-on: toggles to acquire once reacted. Stagger/committed swings hold position.
+
+**Shooter bot.** `stepShooterBot(config, feed, state, tick, self, seen, cover, rng) -> ShooterInput`. View turns at
+most `turnPerTick` per axis towards the solution plus seeded aim error, minus `recoilCompensationMilli` of the current
+recoil. Hitscan aims at the reported position; projectile weapons (`projectileSpeed > 0`) lead through
+`genre::solveIntercept` with `aim` (AimConfig) and do not fire when no solution exists. Fire (held trigger level) only
+when aligned within `fireTolerance`, recoil settled under `recoilTolerance` (burst control), in `maxRange`, round
+available and the feed Ready. Reload when the magazine cannot fire and reserve remains, or with no target below
+`reloadIdleMilli`; never while engaging with rounds left. Heat hysteresis: stop at `heatStopMilli`, resume at
+`heatResumeMilli` of capacity (or while Overheated). Cover: while hurt (`retreatHealthMilli`), reloading or cooling
+with a target, choose the reachable candidate with the best `protectionMilli - distance*coverDistanceWeight` (ties by
+id), keep it until the next decision, move towards it (still firing when possible). Band: approach beyond
+`preferredRange`, retreat inside `minRange`, strafe between. Decisions Idle/Engage/Reload/Cool/Cover are diagnostics.
+
+**Squad roles.** `stepSquad(config, state, tick, objective, stance, members) -> SquadPlan`. Counts per role from the
+stance mix (`offense`/`defense` weights, largest remainder, ties by role index). Reassignment on the first call,
+when the alive composition (ids, capability masks, stance) changes, or every `intervalTicks`; otherwise stored roles
+and heading keep goals stable. Fill order Support, Flanker, Defender, Attacker; per slot the unassigned member with
+the smallest key (cannot take the role, keep: same previous role < new or surplus role < other, squared distance to
+the role anchor, id), so survivors keep roles after a death when counts allow. Goals: attackers in `attackShape` at
+the objective, defenders on a ring of `defendRadius`, support in a line `supportDistance` behind, flankers in a
+column `flankDistance` to the right of the heading. Orders are goals for each member's own controller/navigation.
+
+**Objective hook.** `chooseObjective(weights, team, from, objectives, current) -> ObjectiveChoice{id,score,stance}`
+over owner-supplied `ObjectiveInfo{id,kind(Capture/Hold/Escort/Attack/Defend),position,owner,valueMilli,progressMilli,
+allies,enemies,active}`. Integer score: value, minus distance cost, plus neutral/enemy-owned bonus and this team's
+progress for points it does not hold, threatened/ownedIdle for its own points and Defend objectives, escort + progress
+for its own payload, contested bonus, stickiness for the current choice; ties by smaller id. Stance Defense for own
+points/payloads and Defend objectives. Feed `ObjectiveInfo` from the match/objective owner (capture state, payload
+progress); the policy does not evaluate any rules itself.
+
+**Settings.** Optional `genreBots` section (configuration 0.3.3): reaction/decision ticks, `aimErrorMicro` (micro-
+turns), misread, melee band/attack range/opener/strafe/dodge preference/use flags, shooter band, projectile speed and
+gravity (milli), turn/fire/recoil tolerances (micro-turns), recoil compensation, reload/heat/retreat thresholds,
+cover distance weight, squad interval, offense/defense role weights, formation spacing/support/flank/defend radius,
+`attackShape` (0 line, 1 wedge, 2 column, 3 ring) and objective weights. The loader enforces the relations
+`meleeMin <= meleeMax`, `shooterMin <= shooterPreferred <= shooterMax`, `heatResume <= heatStop`;
+`genreBotSettingsErrors` adds readable cross-field errors (attack range below the band, projectile speed outside
+0 or 63..1000000, gravity without speed, all-zero role weights). Example: `examples/libraries/genre/bot-settings.json`.
+
+**State.** `MeleeBotState`, `ShooterBotState` and `SquadState` are `genre::save/load` records (version 1, kinds 56,
+57, 58; 59..63 reserved for later bot adapters), canonical and validated on load; `genreBotHash` /
+`hashGenreBot` fold them into the simulation checksum. Store each in its own NativeState key and bind configs,
+attack sets and weapon definitions in the save envelope. `GenreConsumer.cpp` (`genreBotConsumerExample`) runs one
+tick of each policy and stores `bots.genre.melee`, `bots.genre.shooter`, `bots.genre.squad` and `bots.genre.hash`.
+
+**Verification.** `tests/libraries/genre_tests.cpp` (`genreBots`) runs a melee bot-vs-bot duel over combat-actions
+(hitboxes, dodge, guard/parry, poise, lock-on) and a hitscan duel over the weapon feed/recoil/spread with a small owner
+simulation inside the test: reruns give equal hashes, a mid-fight save/restore continues bit-identically, and hard
+beats easy over seeds with swapped sides. Unit checks cover spacing, reaction delay, dodge/parry timing, hit-confirmed
+combos, lead, reload, heat hysteresis, burst control, cover, role stability, formations, objective scoring,
+persistence and invalid settings/data. Verified only with g++ 11 (Linux VM): header syntax checks, the genre tests
+built by hand (also ASan/UBSan) and a standalone run of the GenreConsumer function. Not verified: CMake/full engine
+build, `aiverse_tests`, CMake isolation, native module export, headless restore matches, MSVC/clang, platform runtimes.
