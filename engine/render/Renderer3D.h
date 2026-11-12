@@ -97,6 +97,8 @@ enum class ShadowQuality { Off, Low, Medium, High };
 enum class MaterialQuality { Low, Medium, High };
 
 struct NodePose;
+class BakedLighting;   // baked lightmaps + light probes of a map (BakedLighting.h, agent-lightbake)
+enum class BakedQuality { Off, Low, High };
 
 // Post-processing hook (engine/render/PostFx.h implements it). With an active hook, render() draws
 // the scene into the hook's offscreen target instead of `screenPass`; resolvePostFx() then runs the
@@ -158,6 +160,9 @@ enum DrawFlags : uint32_t {
     // part drawn earlier is painted over by a farther part drawn later; casts no shadow. Its depth is written afterwards
     // (colour mask off), so ground layers drawn after the translucent pass stay under it. Also per material: "transparent"
     kDrawTransparent = 16,
+    // static scenery (does not move for the whole map): receives a baked lightmap and is part of the scene
+    // the light baker captures (Renderer3D::setModelCapture). Dynamic objects get light probes instead.
+    kDrawStatic = 32,
 };
 
 class Renderer3D {
@@ -237,6 +242,22 @@ public:
     uint32_t instanceLimit() const { return instanceLimit_; }
     void setModelLodEnabled(bool enabled) { modelLodEnabled_=enabled; }
 
+    // Baked global illumination (agent-lightbake): lightmaps for static models (matched by model path,
+    // node and world transform), light probes for everything else, mixed with the realtime sun by the
+    // set's mode (indirect / shadowmask / subtractive). Null = realtime only. The set must outlive its use.
+    void setBakedLighting(const BakedLighting* b) { baked_ = b; }
+    const BakedLighting* bakedLighting() const { return baked_; }
+    void setBakedQuality(BakedQuality q);
+    BakedQuality bakedQuality() const { return bakedQuality_; }
+    static BakedQuality defaultBakedQualityFor(const gfx::Device& dev, bool mobile);
+    bool bakedActive() const { return baked_ && bakedQuality_ != BakedQuality::Off; }
+    // Light baker capture: every drawModel with kDrawStatic is reported (world matrix per node) until reset.
+    using ModelCapture = std::function<void(const ModelDraw& d, const std::vector<mat4>& nodeWorld)>;
+    void setModelCapture(ModelCapture fn) { capture_ = std::move(fn); }
+    // Inside a custom lit draw (terrain): bind the terrain lightmap for AIVERSE_*_BAKED_TERRAIN (BakedShaders.h):
+    // uniform block `uniformSlot`, RGBM page at `lightmapSlot`, shadow mask at `maskSlot` (placeholders when none).
+    void bindBakedTerrain(int uniformSlot, int lightmapSlot, int maskSlot);
+
 private:
     struct DrawItem { const Mesh* mesh; mat4 model; float4 color; uint32_t flags; float specular, emissive; };
     struct ModelItem {
@@ -251,6 +272,8 @@ private:
         float dissolve, teamGlow;
         float4 outline;
         int32_t morph;      // offset into morphData_ (8 weights), -1 = none
+        int16_t lmPage = -1;  // baked lightmap page (anim = uv2 scale / offset), -1 = none
+        uint8_t gi = 0;       // 0 realtime ambient, 1 lightmap, 2 light probes
         bool inView, inShadow; float depth;
     };
     void initModels();
@@ -339,6 +362,12 @@ private:
     gfx::TextureHandle white_, black_, flatNormal_;
     gfx::PipelineHandle currentPipe_;
     std::string modelError_;
+    // baked lighting (Renderer3DBaked.cpp)
+    const BakedLighting* baked_ = nullptr;
+    BakedQuality bakedQuality_ = BakedQuality::High;
+    ModelCapture capture_;
+    void bakedItem(ModelItem& it, const ModelDraw& d, int node);
+    void bindBakedGI(const ModelItem& it);
 };
 
 } // namespace aiverse::render

@@ -173,6 +173,7 @@ void RtsLights::draw(Renderer3D& r, const RtsScene& s, double time, const std::v
         PointLight l = glowLight(m, {m.x, view.heightAt(grid, m.x, m.z), m.z}, 0.0f, 1.0f, tt, mph);
         l.intensity *= lvl; l.halo *= std::sqrt(lvl);
         l.intensity *= glowK;
+        if (m.bake == 2 && r.bakedActive()) l.intensity = 0;   // in the lightmap already (agent-lightbake)
         l.priority = 0.3f;
         l.key = 0x40000000u + uint32_t(mi);
         l.haloAlpha = haloK;

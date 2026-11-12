@@ -83,6 +83,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         if (!r3d_.init(dev)) error_ = "renderer: " + dev.lastError();
         r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, platform::isTouchDevice()));
         r3d_.setMaterialQuality(Renderer3D::defaultMaterialQualityFor(dev, platform::isTouchDevice()));
+        r3d_.setBakedQuality(Renderer3D::defaultBakedQualityFor(dev, platform::isTouchDevice()));
         r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, platform::isTouchDevice()));
         postFx_.init(dev);
         postFxBase_ = render::PostFx::defaultQualityFor(dev, platform::isTouchDevice());
@@ -217,6 +218,8 @@ void GameClient::shutdown() {
     audio_.shutdown();
     view_.shutdown(*dev_);
     postFx_.shutdown();
+    r3d_.setBakedLighting(nullptr);
+    baked_.release();
     r3d_.shutdown();
     shutdownUi();
     minimap_.release(*dev_);
@@ -253,6 +256,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         view_.lights().configure(manifest_["lighting"], map["lighting"], map["lights"]); // day/night, map lights
         if (auto pe = game::configurePlayerColors(manifest_["playerColors"]); !pe.empty()) std::fprintf(stderr, "%s\n", pe.c_str());
         configurePostFx(map);
+        configureBakedLighting(maps_[idx].file);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
         error_ = e.what(); sim_.reset(); return;

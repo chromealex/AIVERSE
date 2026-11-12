@@ -6,6 +6,10 @@
 //   #define NORMALMAP    tangent-space normal map (tex3) with vertex tangents
 //   #define ALPHAMASK    alpha test against the material cutoff
 //   #define OUTLINE      selection outline: hull extruded along normals, flat colour
+//   #define LIGHTMAP     baked lightmap (BakedShaders.h): uv2 from the joints attribute (unorm16 pair), page in tex7,
+//                        shadow mask in tex8, GI block in U4, Inst.anim = uv2 scale / offset (never with SKINNED/BAKED/MORPH)
+//   #define PROBES       light probes for dynamic objects: probe texture tex8 read per vertex, GI block in U4 (never with MORPH)
+//   #define AIVERSE_GIQ 1|2  baked lighting tier (1 nearest probe, 2 trilinear)
 //   #define AIVERSE_Q 0|1|2  material quality: 0 Blinn-Phong, factors only (weak GPUs)
 //                        1 GGX + metallic-roughness / emissive textures + normal maps
 //                        2 + occlusion texture
@@ -31,6 +35,7 @@
 // Dynamic lights (LightShaders.h): U5 light block, tex9 light map. Traced terrain shadows: tex10 height field.
 #pragma once
 #include "Shaders.h"
+#include "BakedShaders.h"
 
 namespace aiverse::render::shaders {
 
@@ -47,6 +52,8 @@ namespace aiverse::render::shaders {
     "#endif\n" \
     "#if defined(MORPH)\n" \
     "layout(std140) uniform U4 { vec4 u_morphW[2]; vec4 u_morphInfo; vec4 u_morphInfo2; };\n" \
+    "#elif defined(LIGHTMAP) || defined(PROBES)\n" \
+    AIVERSE_GLSL_GI_BLOCK \
     "#endif\n"
 
 // Vertex deformation shared by the colour and shadow vertex shaders: morph, then skin.
@@ -107,6 +114,8 @@ namespace aiverse::render::shaders {
     "#if defined(SKINNED) || defined(BAKED)\n" \
     "layout(location = 5) in vec4 a_joints;\n" \
     "layout(location = 6) in vec4 a_weights;\n" \
+    "#elif defined(LIGHTMAP)\n" \
+    "layout(location = 5) in vec4 a_lmuv;\n" \
     "#endif\n" \
     "#if AIVERSE_INST > 1\n#define INSTANCE u_inst[gl_InstanceID]\n#else\n#define INSTANCE u_inst[0]\n#endif\n"
 
@@ -114,7 +123,14 @@ namespace aiverse::render::shaders {
 
 inline const char* kModelVS =
     AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_MODEL_ATTRIBS AIVERSE_GLSL_MODEL_DEFORM
+    "#if defined(PROBES)\n" AIVERSE_GLSL_PROBES "#endif\n"
     R"(
+#if defined(LIGHTMAP)
+out vec2 v_uv2;
+#endif
+#if defined(PROBES)
+out vec3 v_gia; out vec3 v_gibx; out vec3 v_giby; out vec3 v_gibz;
+#endif
 out vec3 v_wpos;
 out vec3 v_opos;
 out vec3 v_nrm;
@@ -145,6 +161,12 @@ void main() {
     v_uv = uvTransform(a_uv);
     v_col = a_col;
     v_tint = I.tint; v_team = I.team; v_draw = I.draw;
+#if defined(LIGHTMAP)
+    v_uv2 = vec2(a_lmuv.x + a_lmuv.y * 256.0, a_lmuv.z + a_lmuv.w * 256.0) * (1.0 / 65535.0) * I.anim.xy + I.anim.zw;
+#endif
+#if defined(PROBES)
+    probeAt(wp.xyz, v_gia, v_gibx, v_giby, v_gibz);
+#endif
     gl_Position = u_viewProj * wp;
 }
 )";
@@ -158,6 +180,14 @@ uniform mediump sampler2D tex3;
 uniform mediump sampler2D tex4;
 uniform mediump sampler2D tex5;
 uniform mediump sampler2D tex6;
+#if defined(LIGHTMAP)
+uniform mediump sampler2D tex7;
+uniform mediump sampler2D tex8;
+in vec2 v_uv2;
+#endif
+#if defined(PROBES)
+in vec3 v_gia; in vec3 v_gibx; in vec3 v_giby; in vec3 v_gibz;
+#endif
 in vec3 v_wpos;
 in vec3 v_opos;
 in vec3 v_nrm;
@@ -247,6 +277,23 @@ void main() {
     vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
     vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+    float giOcc = 1.0;   // specular occlusion from the baked light
+    int giMode = 0;
+#if defined(PROBES)
+    if (u_gi[0].w > 0.5) {
+        vec3 pa = max(v_gia + v_gibx * n.x + v_giby * n.y + v_gibz * n.z, vec3(0.0));
+        giOcc = clamp(luma(pa) / max(luma(amb), 1e-4), 0.0, 1.0);
+        amb = pa;
+    }
+#endif
+#if defined(LIGHTMAP)
+    vec4 lmS = texture(tex7, v_uv2);
+    vec3 lm = lmS.rgb * lmS.a * u_gi[1].w;
+    giMode = int(u_gi[2].w + 0.5);
+    if (giMode == 2) sh = min(sh, texture(tex8, v_uv2).r);
+    giOcc = clamp(luma(lm) / max(luma(amb), 1e-4), 0.0, 1.0);
+    amb = lm;
+#endif
     vec3 diff = base.rgb * (1.0 - metallic);
     vec3 F0 = mix(vec3(0.04), base.rgb, metallic);
     vec3 H = normalize(L + V);
@@ -272,7 +319,12 @@ void main() {
     vec3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
-    vec3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
+    vec3 direct = sun * ndl * sh;
+#if defined(LIGHTMAP)
+    if (giMode == 3) { amb = max(lm - sun * ndl * (1.0 - sh), min(lm, u_gi[3].rgb)); direct = vec3(0.0); }   // subtractive
+#endif
+    ambSpec *= giOcc;
+    vec3 col = diff * (amb * ao + direct) + sun * spec * sh + ambSpec * ao;
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
     { vec3 dd, ds; dynLight(v_wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
     if (m_uv1.y > 0.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
@@ -329,7 +381,8 @@ void main() {
     AIVERSE_MSL_FRAME \
     "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; float4 light; };\n" \
     "struct MU3 { float4 v[240]; };\n" \
-    "struct MU4 { float4 w[2]; float4 info; float4 info2; };\n"
+    "struct MU4 { float4 w[2]; float4 info; float4 info2; };\n" \
+    AIVERSE_MSL_GI_BLOCK
 
 // Vertex inputs, argument list and deformation shared by the colour and shadow vertex functions.
 #define AIVERSE_MSL_MODEL_VERTEX \
@@ -342,13 +395,19 @@ void main() {
     "#if defined(SKINNED) || defined(BAKED)\n" \
     "    uchar4 joints [[attribute(5)]];\n" \
     "    float4 weights [[attribute(6)]];\n" \
+    "#elif defined(LIGHTMAP)\n" \
+    "    uchar4 lmuv [[attribute(5)]];\n" \
     "#endif\n" \
     "};\n" \
+    "#if defined(LIGHTMAP) || defined(PROBES)\n#define GI_VARG , constant MU4G& gi [[buffer(5)]]\n#else\n#define GI_VARG\n#endif\n" \
+    "#if defined(PROBES)\n#define PROBE_VARG , texture2d<float> tex8 [[texture(8)]]\n#else\n#define PROBE_VARG\n#endif\n" \
+    "#if defined(LIGHTMAP)\n#define GI_FARGS , constant MU4G& gi [[buffer(5)]], texture2d<float> tex7 [[texture(7)]], sampler s7 [[sampler(7)]], texture2d<float> tex8 [[texture(8)]], sampler s8 [[sampler(8)]]\n" \
+    "#elif defined(PROBES)\n#define GI_FARGS , constant MU4G& gi [[buffer(5)]]\n#else\n#define GI_FARGS\n#endif\n" \
     "#if defined(SKINNED) || defined(BAKED)\n#define SKIN_ARG , constant MU3& sk [[buffer(4)]]\n#else\n#define SKIN_ARG\n#endif\n" \
     "#if defined(BAKED)\n#define BAKED_ARG , texture2d<float> tex7 [[texture(7)]]\n#else\n#define BAKED_ARG\n#endif\n" \
     "#if defined(MORPH)\n#define MORPH_ARG , constant MU4& mo [[buffer(5)]], texture2d<float> tex8 [[texture(8)]]\n#else\n#define MORPH_ARG\n#endif\n" \
     "#define VERTEX_ARGS VIn in [[stage_in]], uint iid [[instance_id]], uint vid [[vertex_id]], constant MU0& u [[buffer(1)]], " \
-    "constant U1& f [[buffer(2)]], constant MU2& m [[buffer(3)]] SKIN_ARG BAKED_ARG MORPH_ARG\n" \
+    "constant U1& f [[buffer(2)]], constant MU2& m [[buffer(3)]] SKIN_ARG BAKED_ARG MORPH_ARG GI_VARG PROBE_VARG\n" \
     "#if defined(SKINNED) || defined(BAKED)\n#define SKIN_PASS , sk\n#else\n#define SKIN_PASS\n#endif\n" \
     "#if defined(BAKED)\n#define BAKED_PASS , tex7\n#else\n#define BAKED_PASS\n#endif\n" \
     "#if defined(MORPH)\n#define MORPH_PASS , mo, tex8\n#else\n#define MORPH_PASS\n#endif\n" \
@@ -402,11 +461,18 @@ void main() {
 
 inline const char* kModelMSL =
     AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_MODEL_VERTEX
+    "#if defined(PROBES)\n" AIVERSE_MSL_PROBES "#endif\n"
     R"(
 struct VOut {
     float4 pos [[position]];
     float3 wpos; float3 opos; float3 nrm; float2 uv; float4 col; float4 tan;
     float4 tint [[flat]]; float4 team [[flat]]; float4 draw [[flat]];
+#if defined(LIGHTMAP)
+    float2 uv2;
+#endif
+#if defined(PROBES)
+    float3 gia; float3 gibx; float3 giby; float3 gibz;
+#endif
 };
 
 vertex VOut vs_main(VERTEX_ARGS) {
@@ -428,6 +494,12 @@ vertex VOut vs_main(VERTEX_ARGS) {
     o.uv = uvTransform(m, in.uv);
     o.col = in.col;
     o.tint = I.tint; o.team = I.team; o.draw = I.draw;
+#if defined(LIGHTMAP)
+    o.uv2 = float2(float(in.lmuv.x) + float(in.lmuv.y) * 256.0, float(in.lmuv.z) + float(in.lmuv.w) * 256.0) * (1.0 / 65535.0) * I.anim.xy + I.anim.zw;
+#endif
+#if defined(PROBES)
+    probeAt(gi, tex8, wp.xyz, o.gia, o.gibx, o.giby, o.gibz);
+#endif
     o.pos = f.viewProj * wp;
     return o;
 }
@@ -453,7 +525,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         texture2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]],
                         texture2d<float> tex6 [[texture(6)]], sampler s6 [[sampler(6)]],
                         constant LightU& lu [[buffer(6)]], texture2d<float> tex9 [[texture(9)]], sampler s9 [[sampler(9)]],
-                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]]) {
+                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]] GI_FARGS) {
 #if defined(OUTLINE)
     return float4(sqrt(in.team.rgb), in.tint.a);
 #else
@@ -520,6 +592,23 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
     float3 sky = f.skyColor.rgb * f.skyColor.rgb, ground = f.groundColor.rgb * f.groundColor.rgb;
     float3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+    float giOcc = 1.0;
+    int giMode = 0;
+#if defined(PROBES)
+    if (gi.gi[0].w > 0.5) {
+        float3 pa = max(in.gia + in.gibx * n.x + in.giby * n.y + in.gibz * n.z, float3(0.0));
+        giOcc = clamp(luma(pa) / max(luma(amb), 1e-4), 0.0, 1.0);
+        amb = pa;
+    }
+#endif
+#if defined(LIGHTMAP)
+    float4 lmS = tex7.sample(s7, in.uv2);
+    float3 lm = lmS.rgb * lmS.a * gi.gi[1].w;
+    giMode = int(gi.gi[2].w + 0.5);
+    if (giMode == 2) sh = min(sh, tex8.sample(s8, in.uv2).r);
+    giOcc = clamp(luma(lm) / max(luma(amb), 1e-4), 0.0, 1.0);
+    amb = lm;
+#endif
     float3 diff = base.rgb * (1.0 - metallic);
     float3 F0 = mix(float3(0.04), base.rgb, metallic);
     float3 H = normalize(L + V);
@@ -545,7 +634,12 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
     float3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
-    float3 col = diff * (amb * ao + sun * ndl * sh) + sun * spec * sh + ambSpec * ao;
+    float3 direct = sun * ndl * sh;
+#if defined(LIGHTMAP)
+    if (giMode == 3) { amb = max(lm - sun * ndl * (1.0 - sh), min(lm, gi.gi[3].rgb)); direct = float3(0.0); }
+#endif
+    ambSpec *= giOcc;
+    float3 col = diff * (amb * ao + direct) + sun * spec * sh + ambSpec * ao;
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
     { float3 dd, ds; dynLight(lu, tex9, s9, in.wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
     if (m.uv1.y > 0.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;
