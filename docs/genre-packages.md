@@ -5,7 +5,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 
 | Package | Implemented API | Boundaries |
 |---|---|---|
-| character-locomotion | MotionConfig/State/Input, stepMotion: ground/air speed, acceleration/braking, gravity, jump buffer, coyote time, bounded extra jumps, ceiling response | Returns velocity; collision owner reports grounded/ceiling and applies movement. No climbing, swimming, mantle or animation controller yet. |
+| character-locomotion | MotionConfig/State/Input, stepMotion: ground/air speed, acceleration/braking, gravity, jump buffer, coyote time, bounded extra jumps, ceiling response. LocomotionModes.h (0.2.0): stepLocomotion mode machine Ground/Air/Ledge/Ladder/Swim/Climb/Mantle with slopes, ledge grab/shimmy/climb-up, ladders, buoyant swimming, stamina-limited wall climbing and timed mantle/vault | Returns velocity, mode and events; collision owner reports grounded/ceiling, ground normal, ledges, ladders, water depth, climbable walls and obstacles, and applies movement. No physics queries, root motion or animation controller. |
 | melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets | Existing FPS ammo/reload/fire cadence remain authoritative. No penetration/material model, weapon attachments or automatic replacement of hitscan. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
@@ -32,10 +32,12 @@ steppers are per-step primitives; their owner is responsible for exactly one upd
 
 ## Configuration
 
-Scalar defaults are in `libraries/spec/gameplay.json` (configuration package 0.3.0): sections
+Scalar defaults are in `libraries/spec/gameplay.json` (configuration package 0.3.2): sections
 `locomotion`, `melee`, `projectile`, `matchRules`. Run generate_gameplay.py after spec changes.
-Load through `readGameplaySettings`, then `motionConfig`, `attackConfig`, `projectileConfig`,
-`matchConfig`. Metres/seconds use integer milli-units in JSON; C++ converts directly to Fixed.
+Load through `readGameplaySettings`, then `motionConfig`, `locomotionModeConfig`, `attackConfig`, `projectileConfig`,
+`matchConfig`. The locomotion mode keys are optional (`maxSlopeMilliDegrees`, `ledge*`, `ladder*`, `swim*`,
+`buoyancyMilli`, `climb*`, `mantle*`, `vault*`); relations such as swimExit <= swimEnter <= swimFloat <= swimDive
+and mantleMin <= vaultMax <= mantleMax are rejected with readable errors. Metres/seconds use integer milli-units in JSON; C++ converts directly to Fixed.
 Tick durations are literal ticks at the project's tick rate. Existing settings remain optional.
 
 `examples/libraries/genre/settings.json` configures a double-jump controller, attack timing,
@@ -48,6 +50,38 @@ Narrative JSON uses `readStory` and the example `examples/libraries/genre/story.
 choice has a localization key. Choice `next:0` ends the graph; conditions reference integer fact IDs.
 Missing facts fail their conditions. Define an explicit ending choice even for a final dialogue node.
 Unknown fields, duplicate IDs, broken edges and invalid integer values are rejected during loading.
+
+## Locomotion modes
+
+`genre/LocomotionModes.h` adds `LocomotionModeConfig/State/Input/Result` and `stepLocomotion`. It wraps
+`stepMotion` for Ground/Air (behaviour is bit-identical on flat ground) and adds modes driven only by
+`LocomotionEnvironment`, the per-tick report of the collision owner:
+
+- **Slopes:** ground normal with `normal.y >= cos(maxSlope)` is walkable and the velocity follows the
+  plane; steeper ground slides along the downhill tangent (slideAcceleration, capped at slideSpeed),
+  with no jump. Events SlideStart/SlideEnd.
+- **Ledge:** while falling (or on grab) next to a reported ledge whose top is ledgeMin..ledgeMax above
+  the feet: hang, shimmy with wish.x along cross(up, normal), jump/up climbs (timed LedgeClimb phase),
+  drop/down releases. A released ledge is ignored for ledgeRegrabTicks.
+- **Ladder:** grab attaches, vertical*ladderSpeed; ladderTop + up runs a timed exit phase onto the top,
+  ladderBottom/grounded + down exits to Ground; jump pushes off along the ladder normal.
+- **Swim:** immersion >= swimEnterDepth enters (not while rising), < swimExitDepth leaves. Buoyancy
+  drives the body to floatDepth; vertical input dives/surfaces (Dived/Surfaced at diveDepth); a jump
+  with the head above water leaves the water at waterJumpSpeed.
+- **Climb:** grab on a climbable wall (climbEnabled); moves along the wall, consumes stamina per tick
+  (built-in counter or the owner's pool through `stepLocomotionWithStamina`), wall-jumps, reaches a
+  reported ledge at the top or falls with StaminaDepleted.
+- **Mantle/vault:** jump next to an obstacle mantleMin..mantleMax high starts a timed phase: rise for
+  the first half, move over obstacleDepth for the rest. On the ground, obstacles up to vaultMaxHeight
+  taken at >= vaultMinSpeed vault in vaultTicks and keep momentum. A ceiling during the rise aborts.
+
+The owner keeps dt constant (phase velocities are computed at entry), calls once per tick, and moves the
+body with swept collision. Invalid config/state/input, dt outside (0,1] and repeated/backwards ticks
+return nullopt with the state untouched. All state (including the nested MotionState and mantle phase)
+is persisted by `genre::save/load` (state kind 20) and hashed by `locomotionHash`; bind
+`locomotionConfigHash` in the save envelope. Presentation climbing/IK (surface-locomotion.md) reads the
+mode and events; it does not decide them. Network prediction/rollback is the owner's concern: restore
+the saved record and replay the same inputs.
 
 ## Runtime contracts
 

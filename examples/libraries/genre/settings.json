@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "locomotion": {"coyoteTicks": 6, "bufferTicks": 8, "maxJumps": 2},
+  "locomotion": {"coyoteTicks": 6, "bufferTicks": 8, "maxJumps": 2, "maxSlopeMilliDegrees": 50000, "autoLedgeGrab": false, "climbStamina": 240, "swimSpeedMilli": 3000},
   "melee": {"windup": 5, "active": 3, "recovery": 10},
   "projectile": {"gravityMilli": 0, "maxBounces": 2, "lifetime": 120},
   "matchRules": {"warmupTicks": 0, "roundTicks": 600, "scoreToWin": 3, "roundsToWin": 2, "maxRounds": 3}
