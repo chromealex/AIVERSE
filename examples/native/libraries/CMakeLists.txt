@@ -12,3 +12,5 @@ aiverse_native_use_libraries(aiverse_native_library_demo combat-actions)
 aiverse_native_use_libraries(aiverse_native_library_demo stealth-senses)
 # Genre bots (melee/shooter policies, squad roles, objective choice) compose combat-actions and weapon-policies.
 aiverse_native_use_libraries(aiverse_native_library_demo genre-bots)
+# Physical interactions (carry/throw, push/pull, ropes, doors, moving platforms, breakables).
+aiverse_native_use_libraries(aiverse_native_library_demo physical-interactions)

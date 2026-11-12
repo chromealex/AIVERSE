@@ -12,6 +12,9 @@
 #include <aiverselib/genre/SensesData.h>
 #include <aiverselib/genre/SensesPersistence.h>
 #include <aiverselib/bots/GenreBotConfig.h>
+#include <aiverselib/genre/InteractionConfigured.h>
+#include <aiverselib/genre/InteractionData.h>
+#include <aiverselib/genre/InteractionPersistence.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
 #include <span>
@@ -137,6 +140,36 @@ static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aive
     state.values["bots.genre.objective"]=goal->id;
     return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
 }
+// Physical interactions: validated `interaction` settings + interactable definitions, one authoritative tick of
+// carry, door, platform and breakable policies against engine/world collision, states in NativeState. These
+// kinematic policies are authoritative; a Box3D world may only render the DebrisRequest output.
+static bool physicalInteractionConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::genre;using aiverse::Fixed;using aiverse::Vec3;
+    if(!interactionSettingsErrors(settings).empty())return false;
+    const auto config=interactionConfig(settings);
+    const auto defs=readInteractionDefinitions(aiverse::Json::parse(R"({"carryables":[{"id":1,"massMilli":6000,"halfMilli":[200,200,200]}],
+        "doors":[{"id":2,"kind":"sliding","panelMin":[3000,0,-100],"panelMax":[5000,2000,100],"slideMilli":[2000,0,0],"openTicks":12,"closeTicks":12}],
+        "platforms":[{"id":3,"halfMilli":[1000,250,1000],"speedMilli":1500,"waitTicks":20,"waypoints":[[0,0,8000],[0,4000,8000]]}],
+        "breakables":[{"id":4,"health":50,"stages":[{"stage":1,"health":20,"debris":[{"kind":1,"count":2}]}],"brokenDebris":[{"kind":2,"count":4}]}]})"));
+    aiverse::world::SpatialWorld world;if(!world.add({1,{{Fixed::fromInt(-20),Fixed::fromInt(-1),Fixed::fromInt(-20)},{Fixed::fromInt(20),Fixed{},Fixed::fromInt(20)}}}))return false;
+    const WorldCollision collision(world);const uint32_t tick=0;const auto dt=Fixed::fromRatio(1,60);
+    CarryState hands;CarryInput carry;CarrierInput carrier;carrier.carrier=10;carrier.pickUp=1;carry.carriers={carrier};carry.objects={{1,{{},Fixed::fromRatio(1,5),Fixed::fromInt(1)}}};
+    DoorState doors;PlatformState platforms;BreakableState breakables;
+    if(!addDoor(doors,defs.doors.at(2))||!addPlatform(platforms,defs.platforms.at(3))||!addBreakable(breakables,defs.breakables.at(4)))return false;
+    const std::array<DoorCommand,1> open{{{10,2,DoorAction::Open,{},{},false}}};
+    const std::array<RiderContact,1> riders{{{10,3}}};
+    const std::array<DamageInput,1> hit{{{1,4,1,35,10,{}}}};
+    auto held=stepCarry(config,defs.carryables,hands,tick,dt,carry,collision);auto door=stepDoors(config,defs.doors,doors,tick,open,collision);
+    auto ride=stepPlatforms(config,defs.platforms,platforms,tick,dt,{},riders);auto broken=stepBreakables(defs.breakables,breakables,tick,hit);
+    if(!held||!door||!ride||!broken||hands.held.size()!=1||ride->carry.size()!=1||broken->debris.size()!=1)return false;
+    // ride->carry[0].delta goes onto the rider before its stepLocomotion move; debris requests go to presentation.
+    aiverse::Hasher hash;hashInteraction(hash,hands);hashInteraction(hash,doors);hashInteraction(hash,platforms);hashInteraction(hash,breakables);
+    state.values["genre.interaction.hash"]=int64_t(hash.value()&0x7fffffffffffffffull);
+    state.values["genre.interaction.config"]=int64_t(interactionConfigHash(config)&0x7fffffffffffffffull);
+    state.values["genre.interaction.defs"]=int64_t(interactionDefinitionsHash(defs)&0x7fffffffffffffffull);
+    return storeBytes(state,"genre.interaction.carry",save(hands))&&storeBytes(state,"genre.interaction.doors",save(doors))
+        &&storeBytes(state,"genre.interaction.platforms",save(platforms))&&storeBytes(state,"genre.interaction.breakables",save(breakables));
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -153,5 +186,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
     if(!genreBotConsumerExample(state,*parsed.value))return false;
+    if(!physicalInteractionConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }
