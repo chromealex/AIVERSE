@@ -60,6 +60,9 @@ public:
     // Called before the world is copied or hashed (rollback snapshots, checksums): a module that keeps
     // state outside the World lazily (scripting VM) writes it in now.
     virtual void prepareSnapshot(Simulation&) {}
+    // Host resource gate. False must not consume a tick, commands, RNG or gameplay state.
+    // Immutable content readiness may delay wall time, never the outcome of a completed tick.
+    virtual bool readyToStep(Simulation&) { return true; }
 };
 
 // Everything that changes while the simulation runs (rollback netcode saves one per tick).

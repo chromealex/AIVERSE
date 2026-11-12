@@ -17,7 +17,7 @@ bool validActor(const fps::Actor& a) {
         fxAbs(a.pos.x)<=100000_fx&&fxAbs(a.pos.y)<=100000_fx&&fxAbs(a.pos.z)<=100000_fx;
 }
 }
-uint64_t contentId(const Json& rules,const Json& map){Hasher h;h.str(rules.dump(-1));h.str(map.dump(-1));return h.value();}
+uint64_t contentId(const Json& rules,const Json& map){Hasher h;h.str(rules.dump(-1));h.str(map.dump(-1));if(map["world"].getBool("async"))h.str("world-stream-v1");return h.value();}
 Bytes encodeSnapshot(const Snapshot& snapshot) {
     std::string s;Archive a(&s);Message type=Message::Snapshot;header(a,type);
     auto copy=snapshot;uint32_t count=uint32_t(copy.actors.size());a(copy.tick,copy.ack,copy.localSlot,copy.winner,count);
@@ -43,8 +43,8 @@ bool decodeSnapshot(const Bytes& b,Snapshot& out) {
     for(const auto& vehicle:v.vehicles)if(!position(vehicle.pos)||vehicle.driver>200||vehicle.health<0||vehicle.health>500)return false;
     if(!own||a.remaining()!=0)return false;out=std::move(v);return true;
 }
-Server::Server(const Json& rules,const Json& map,uint64_t seed):
-    simulation_({seed,fps::readConfig(rules).tickRate,0,false},std::make_unique<fps::Module>()),content_(contentId(rules,map)) {simulation_.setup(rules,map);}
+Server::Server(const Json& rules,const Json& map,uint64_t seed,world::AssetReader reader):
+    simulation_({seed,fps::readConfig(rules).tickRate,0,false},std::make_unique<fps::Module>()),content_(contentId(rules,map)) {simulation_.setup(rules,map);if(map["world"].getBool("async")){if(!reader)throw JsonError("world: server content reader required");module().setContentReader(std::move(reader));}}
 bool Server::occupied(uint8_t slot) const {for(const auto& p:peers_)if(p.slot==slot&&p.conn->state()!=ConnState::Closed)return true;return false;}
 bool Server::attach(uint8_t slot,std::unique_ptr<Conn> conn) {
     if(!conn||slot==0||slot>module().state(simulation_).actors.size()||occupied(slot))return false;
@@ -80,13 +80,15 @@ void Server::poll(uint64_t now) {
         it=peers_.erase(it);
     }else ++it;
 }
-void Server::step() {
+bool Server::step() {
+    if(!module().readyToStep(simulation_))return false;
     for(auto& p:peers_)if(p.ready&&!p.inputs.empty()) {
         auto c=fps::command(p.slot,p.inputs.front());p.inputs.pop_front();c.tick=simulation_.tick();simulation_.inject(c);
     }
     simulation_.step();
     auto& cfg=module().config();
     if(uint64_t(simulation_.tick())*cfg.snapshotRate/cfg.tickRate!=uint64_t(simulation_.tick()-1)*cfg.snapshotRate/cfg.tickRate)broadcast();
+    return true;
 }
 void Server::broadcast() {
     auto& actors=module().state(simulation_).actors;
@@ -110,9 +112,24 @@ void Server::broadcast() {
         p.conn->sendLatest(encodeSnapshot(s));
     }
 }
-Client::Client(const Json& rules,const Json& map,std::unique_ptr<Conn> conn):config_(fps::readConfig(rules)),conn_(std::move(conn)),content_(contentId(rules,map)) {
+Client::Client(const Json& rules,const Json& map,std::unique_ptr<Conn> conn,world::AssetReader reader):config_(fps::readConfig(rules)),conn_(std::move(conn)),content_(contentId(rules,map)) {
     Simulation local({1,config_.tickRate,0},std::make_unique<fps::Module>());local.setup(rules,map);
     collision_=static_cast<fps::Module&>(local.module()).collision();
+    if(map["world"].getBool("async")){if(!reader)throw JsonError("world: client content reader required");streamedCollision_=std::make_unique<world::CollisionStream>(map["world"],std::move(reader),collision_);predicted_.pos=world::worldVector(map["spawns"][0],100000_fx);}
+}
+void Client::updateStreaming() {
+    if(!streamedCollision_)return;
+    auto radius=fxMax(32_fx,config_.motor.sprintSpeed*Fixed::fromRatio(256,config_.tickRate)+16_fx);
+    Vec3 extent{radius,radius,radius};world::Bounds regions[2]={{predicted_.pos-extent,predicted_.pos+extent},{predicted_.pos-extent,predicted_.pos+extent}};
+    for(const auto& actor:latest_.actors)if(actor.slot==latest_.localSlot)regions[1]={actor.pos-extent,actor.pos+extent};
+    streamedCollision_->prepareRegions(regions);
+}
+void Client::predict(const fps::Input& input) {
+    // Never predict into a missing cell; keep authoritative pose until collision is available.
+    const auto radius=config_.motor.sprintSpeed/Fixed::fromInt(config_.tickRate)+8_fx;
+    Vec3 extent{radius,radius,radius};
+    if(streamedCollision_&&!streamedCollision_->covers({predicted_.pos-extent,predicted_.pos+extent}))return;
+    fps::moveActor(predicted_,input,config_.motor,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);
 }
 void Client::poll(uint64_t now) {
     conn_->update(now);
@@ -128,7 +145,7 @@ void Client::poll(uint64_t now) {
         predicted_=*own;
         if(!ready_)sequence_=latest_.ack;
         while(!pending_.empty()&&pending_.front().sequence<=latest_.ack)pending_.pop_front();
-        for(const auto& input:pending_)fps::moveActor(predicted_,input,config_.motor,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);
+        for(const auto& input:pending_)predict(input);
         ready_=true;
     }
 }
@@ -137,6 +154,6 @@ bool Client::submit(fps::Input input) {
     input.sequence=sequence_+1;input.viewTick=latest_.tick;
     fps::Input validated;if(!fps::decodeInput(fps::command(latest_.localSlot,input),validated))return false;
     ++sequence_;pending_.push_back(input);conn_->send(inputPacket(input));
-    fps::moveActor(predicted_,input,config_.motor,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);return true;
+    predict(input);return true;
 }
 }

@@ -1,6 +1,7 @@
 #include "engine/net/authority/Session.h"
 #include <aiverselib/net/LocalTickets.h>
 #include "modules/fps/Project.h"
+#include "engine/platform/ContentReader.h"
 #include <fstream>
 #include <iterator>
 #include "engine/net/Udp.h"
@@ -29,7 +30,7 @@ int main(int argc,char** argv) {
         if(admissionFile.empty()!=audience.empty())throw std::runtime_error("admission file and match audience must be specified together");
         auto data=aiverse::fps::readProject([&](const auto& file,std::string& text){std::ifstream input(project+"/"+file);if(!input)return false;text.assign(std::istreambuf_iterator<char>(input),{});return true;});
         auto rules=data.rules,map=data.map;
-        aiverse::net::authority::Server server(rules,map);
+        aiverse::net::authority::Server server(rules,map,1,aiverse::platform::makeContentReader(project));
         aiverse::net::UdpListener udp;aiverse::net::WsListener ws;
         if(!udp.open(port,loopbackOnly)||!ws.open(uint16_t(port+1),loopbackOnly))throw std::runtime_error("cannot bind FPS listeners");
         std::printf("FPS authority: UDP %u, WebSocket %u; %u Hz; %zu slots\n",unsigned(port),unsigned(port+1),server.simulation().tickRate(),server.simulation().players().size());std::fflush(stdout);
@@ -78,7 +79,7 @@ int main(int argc,char** argv) {
                     if(server.attach(principal.slot,std::move(peer.connection)))leases.emplace_back(acceptedTokens.at(principal.player),peer.access);
                 }
             }
-            int budget=8;while(accumulated>=step&&budget--&&(!ticks||server.simulation().tick()<ticks)){server.step();accumulated-=step;}
+            int budget=8;while(accumulated>=step&&budget--&&(!ticks||server.simulation().tick()<ticks)){if(!server.step()){accumulated=0;break;}accumulated-=step;}
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         std::printf("ticks=%u checksum=%llu rejected=%llu\n",server.simulation().tick(),(unsigned long long)server.simulation().checksum(),(unsigned long long)server.rejected());

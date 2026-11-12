@@ -1,0 +1,12 @@
+{
+  "fps": {
+    "mode": "deathmatch",
+    "tickRate": 60,
+    "maxPlayers": 2,
+    "worldLimit": 1024,
+    "roundTicks": 3600,
+    "weapon": {
+      "range": 60
+    }
+  }
+}

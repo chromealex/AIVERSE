@@ -69,6 +69,7 @@
   "fps.editor.noProject": "Выберите FPS-шаблон при создании проекта.",
 
   "fps.status": "Здоровье: {health}   Патроны: {ammo} / {reserve}   Тик сервера: {tick}",
+  "fps.worldLoading": "Загрузка мира…",
   "fps.controls": "ЛКМ: огонь / захват мыши; 1–4: оружие; R: перезарядка; WASD: движение; Shift: бег; Ctrl: присесть; Space: прыжок; Esc: курсор.",
   "fps.connecting": "Подключение к серверу...",
   "fps.disconnected": "Соединение с сервером потеряно.",

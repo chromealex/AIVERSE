@@ -6,6 +6,8 @@
 #include "engine/net/WebSocket.h"
 #include "engine/platform/Platform.h"
 #include "engine/world/ChunkScene.h"
+#include "engine/world/WorldScene.h"
+#include "engine/platform/ContentReader.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/GeometryScene.h"
 #include "engine/render/ImGuiLayer.h"
@@ -29,7 +31,8 @@ struct App {
 #ifndef __EMSCRIPTEN__
     net::UdpListener udp;net::WsListener ws;
 #endif
-    world::SpatialWorld geometry;world::ChunkScene chunks;std::string projectRoot;
+    world::SpatialWorld geometry;world::ChunkScene chunks;std::unique_ptr<world::WorldScene> streamedScene;std::string projectRoot;
+    platform::ContentReader contentReader;
     render::GeometryScene staticGeometry;
     render::Renderer3D renderer;render::ImGuiLayer gui;render::Mesh cube;
     i18n::Localization lang;
@@ -55,7 +58,8 @@ struct App {
         lang.load([](const auto& path,auto& out){return platform::readContentFile(path,out);},"en",{"engine/assets/lang"});
         Simulation sim({1,config.tickRate,0},std::make_unique<fps::Module>());sim.setup(rules,map);
         geometry=static_cast<fps::Module&>(sim.module()).collision();
-        chunks.configure(map["world"]);
+        if(map["world"].getBool("async"))streamedScene=std::make_unique<world::WorldScene>(map["world"],contentReader);
+        else chunks.configure(map["world"]);
         audio::AudioConfig ac;
         if(const char* mode=std::getenv("AIVERSE_AUDIO")){ac.openDevice=std::string(mode)!="off";ac.nullBackend=std::string(mode)=="null";}
         if(const char* wav=std::getenv("AIVERSE_AUDIO_CAPTURE"))ac.capturePath=wav;
@@ -102,7 +106,7 @@ struct App {
             admit(udp.poll(now));admit(ws.poll(now));
         }
 #endif
-        client->poll(now);if(server)server->poll(now);
+        client->updateStreaming();client->poll(now);if(server)server->poll(now);
         accumulated+=std::min(dt,0.25);int budget=8;
         while(accumulated>=1.0/config.tickRate&&budget--) {
             using K=platform::Key;
@@ -117,7 +121,7 @@ struct App {
             if(keys.contains(K::R))input.buttons|=fps::Reload;
             input.yaw=Fixed::fromRaw(int64_t(look.yaw*65536));input.pitch=Fixed::fromRaw(int64_t(look.pitch*65536));
             if(client->submit(input)){fireQueued=false;input.action=fps::Action::None;input.buttons&=~uint32_t(fps::Jump|fps::WeaponMask);}
-            if(server){server->poll(now);server->step();client->poll(now);}
+            if(server){server->poll(now);if(!server->step()){accumulated=0;break;}client->poll(now);}
             accumulated-=1.0/config.tickRate;
         }
         if(!platform::pointerLocked()){keys.clear();input.buttons=0;fireHeld=fireQueued=aimHeld=false;input.action=fps::Action::None;}
@@ -154,7 +158,9 @@ struct App {
         auto cam=cameraLook.camera(localEye);
         if(aimHeld)cam.fovY=(weapon.range>=700_fx||(actor.attachments[actor.weaponIndex]&1))?0.28f:0.65f;
         audio::ListenerPose listener;auto globalEye=visual(eye);listener.pos[0]=globalEye.x;listener.pos[1]=globalEye.y;listener.pos[2]=globalEye.z;auto forward=render::normalize(cam.target-cam.eye());listener.forward[0]=forward.x;listener.forward[1]=forward.y;listener.forward[2]=forward.z;audio.setListener(listener);
+        if(streamedScene)streamedScene->update(device,{&actor.pos,1});
         renderer.beginScene(cam,device.framebufferWidth(),device.framebufferHeight());
+        if(streamedScene)streamedScene->draw(renderer,origin,32);
         staticGeometry.draw(renderer);
         chunks.update(actor.pos,2,2,[&](const auto& file,auto& data){return platform::readContentFile(projectRoot+"/"+file,data);});
         for(const auto& [cell,boxes]:chunks.chunks())for(const auto& b:boxes) {
@@ -193,6 +199,7 @@ struct App {
         ImGui::Begin("##fps",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoInputs);
         auto text=lang.tr("fps.status",i18n::Args().num("health",actor.health).num("ammo",actor.ammo).num("reserve",actor.reserve).num("tick",client->snapshot().tick));
         ImGui::TextUnformatted(text.c_str());
+        if((streamedScene&&!streamedScene->status().complete())||(server&&server->module().streamingStatus()&&!server->module().streamingStatus()->complete()))ImGui::TextUnformatted(lang.tr("fps.worldLoading").c_str());
         ImGui::TextUnformatted(lang.tr(weapon.nameKey).c_str());
         if(actor.reloadUntil)ImGui::TextUnformatted(lang.tr("fps.reloading").c_str());
         else if(actor.ammo==0)ImGui::TextUnformatted(lang.tr("fps.empty").c_str());
@@ -235,7 +242,7 @@ struct App {
         if(actor.blindUntil>client->snapshot().tick){auto remain=actor.blindUntil-client->snapshot().tick;auto alpha=int(std::min(1.0,double(remain)/std::max(1u,config.systems.flashTicks))*255);draw->AddRectFilled({0,0},{w,h},IM_COL32(255,255,255,alpha));}
         gui.render();device.endPass();device.endFrame();
     }
-    void shutdown(gfx::Device& device){staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
+    void shutdown(gfx::Device& device){if(streamedScene)streamedScene->shutdown(device);server.reset();client.reset();staticGeometry.shutdown(device);platform::setPointerLock(false);audio.shutdown();gui.shutdown();renderer.shutdown();device.destroyBuffer(cube.vb);device.destroyBuffer(cube.ib);}
 };
 }
 int aiverseMain(int argc,char** argv) {
@@ -248,15 +255,15 @@ int aiverseMain(int argc,char** argv) {
         if(!sessionTokenFile.empty()&&(app.listen||connect.empty()))throw std::runtime_error("session token requires --connect");
         if(app.listen&&!connect.empty())throw std::runtime_error("choose --listen or --connect");
         auto data=fps::readProject([&](const auto& file,auto& text){return platform::readContentFile(project+"/"+file,text);});
-        app.projectRoot=project;app.rules=data.rules;app.map=data.map;app.config=fps::readConfig(app.rules);
+        app.projectRoot=project;app.contentReader=platform::makeContentReader(project);app.rules=data.rules;app.map=data.map;app.config=fps::readConfig(app.rules);
         if(connect.empty()) {
-            app.server=std::make_unique<net::authority::Server>(app.rules,app.map);
+            app.server=std::make_unique<net::authority::Server>(app.rules,app.map,1,app.contentReader);
             auto pair=net::makeLoopbackPair();app.server->attach(1,std::move(pair.first));
-            app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(pair.second));
+            app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(pair.second),app.contentReader);
 #ifndef __EMSCRIPTEN__
             if(app.listen&&(!app.udp.open(27100)||!app.ws.open(27101)))throw std::runtime_error("cannot open listen server");
 #endif
-        } else {auto conn=net::connectTo(connect);if(!conn)throw std::runtime_error("invalid server address");if(!sessionTokenFile.empty()){std::ifstream tokenFile(sessionTokenFile);std::string token;std::getline(tokenFile,token);if(!tokenFile||!aiverse::lib::session::detail::tokenValid(token))throw std::runtime_error("invalid session token file");conn=std::make_unique<aiverse::lib::session::ClientAdmission>(std::move(conn),std::move(token));}app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(conn));}
+        } else {auto conn=net::connectTo(connect);if(!conn)throw std::runtime_error("invalid server address");if(!sessionTokenFile.empty()){std::ifstream tokenFile(sessionTokenFile);std::string token;std::getline(tokenFile,token);if(!tokenFile||!aiverse::lib::session::detail::tokenValid(token))throw std::runtime_error("invalid session token file");conn=std::make_unique<aiverse::lib::session::ClientAdmission>(std::move(conn),std::move(token));}app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(conn),app.contentReader);}
         platform::AppConfig cfg;cfg.title="AIVERSE FPS";cfg.width=1280;cfg.height=720;
         gfx::Device* device=nullptr;platform::AppCallbacks cb;
         cb.init=[&](auto& d){device=&d;app.init(d);};cb.frame=[&](auto& d,double dt){app.frame(d,dt);};cb.event=[&](const auto& e){app.event(e);};cb.shutdown=[&]{app.shutdown(*device);};
