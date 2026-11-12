@@ -1,0 +1,9 @@
+{
+  "disguises": [
+    {"id": 1, "factions": [1], "zones": [10, 11], "blownBy": [7, 8], "scaleMilli": 200, "trespassScaleMilli": 1000}
+  ],
+  "hidingSpots": [
+    {"id": 5, "position": [0, 0, 4000], "capacity": 1},
+    {"id": 6, "position": [10000, 0, 10000], "capacity": 2}
+  ]
+}

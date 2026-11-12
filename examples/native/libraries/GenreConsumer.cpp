@@ -8,6 +8,9 @@
 #include <aiverselib/genre/WeaponPersistence.h>
 #include <aiverselib/genre/MatchObjectivesConfigured.h>
 #include <aiverselib/genre/MatchObjectivesData.h>
+#include <aiverselib/genre/SensesConfigured.h>
+#include <aiverselib/genre/SensesData.h>
+#include <aiverselib/genre/SensesPersistence.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
 #include <span>
@@ -38,6 +41,31 @@ static bool libraryCombatConsumerExample(aiverse::game::NativeState& state,const
     if(swing.hitTargets!=std::vector<int64_t>{defender.id}||target.lock.target!=attacker.id)return false;
     state.values["genre.combat_hash"]=int64_t(combatHash(target)&0x7fffffffffffffffull);
     return storeBytes(state,"genre.combat",save(target))&&storeBytes(state,"genre.combat_swing",save(swing));
+}
+// Stealth senses: validated settings + disguise/hiding definitions, one authoritative perception tick for a
+// guard pair and an intruder (owner LOS/occlusion callbacks), then the versioned state in NativeState.
+// Bots read SensesReport::perceived (PerceivedTarget) and searchGoal; movement stays with their controllers.
+static bool librarySensesConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::genre;using aiverse::Fixed;using aiverse::Vec3;
+    if(!sensesSettingsErrors(settings).empty())return false;
+    const auto config=sensesConfig(settings);
+    auto defs=readSenseDefinitions(aiverse::Json::parse(R"({"disguises":[{"id":1,"factions":[1],"zones":[2],"blownBy":[1]}],
+        "hidingSpots":[{"id":1,"position":[0,0,30000]}]})"));
+    SensesInput in;
+    SenseAgent guard;guard.id=1;guard.team=1;SenseAgent partner=guard;partner.id=2;partner.position={Fixed::fromInt(4),{},{}};
+    in.observers={guard,partner};
+    SenseTarget intruder;intruder.id=10;intruder.team=2;intruder.position={{},Fixed::fromRatio(17,10),Fixed::fromInt(6)};intruder.zone=2;intruder.equipDisguise=1;
+    intruder.lightMilli=600;intruder.stanceMilli=500;intruder.leaveTrail=true;in.targets={intruder};
+    NoiseEvent step;step.id=1;step.source=intruder.id;step.team=intruder.team;step.position=intruder.position;step.radius=Fixed::fromInt(8);step.loudnessMilli=400;in.noises={step};
+    in.candidates={{1,{{},{},Fixed::fromInt(30)},1}};
+    SensesState senses;
+    auto los=[](const SenseAgent&,const SenseTarget&){return true;};          // owner: world raycast eye -> target
+    auto occlusion=[](const SenseAgent&,const NoiseEvent&){return int64_t(1000);}; // owner: wall/door attenuation
+    auto report=stepSenses(config,defs,senses,0,in,los,occlusion);
+    if(!report||report->perceived.empty()||report->perceived.front().target!=intruder.id||!senses.disguises.contains(intruder.id))return false;
+    state.values["genre.senses.config"]=int64_t(sensesConfigHash(config)&0x7FFFFFFFFFFFFFFFull);
+    state.values["genre.senses_hash"]=int64_t(sensesHash(senses)&0x7FFFFFFFFFFFFFFFull);
+    return storeBytes(state,"genre.senses",save(senses));
 }
 namespace {
 // Weapon policies from the same validated settings plus project definitions (materials, frame,
@@ -97,5 +125,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!storeBytes(state,"genre.story",save(*initial))||!storeBytes(state,"genre.motion",save(MotionState{}))||!storeBytes(state,"genre.locomotion",save(body)))return false;
     if(!libraryCombatConsumerExample(state,*parsed.value))return false;
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
+    if(!librarySensesConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

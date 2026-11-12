@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1186,6 +1186,32 @@
       "packageDependencies": [
         "melee-combat"
       ]
+    },
+    {
+      "id": "stealth-senses",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Senses.h",
+      "skill": "skills/aiverse-stealth-senses/SKILL.md",
+      "summary": "Per-agent stealth perception: sight cones with near/peripheral ranges and owner multipliers, hearing with occlusion and noise budgets, footprint/scent trails, suspicion meters with Unaware/Suspicious/Searching/Alert thresholds, delayed ally alerts with shared last known positions, deterministic search points, disguises and hiding spots",
+      "notes": "Read docs/genre-packages.md (stealth-senses) for exact coverage and authority boundaries. Generic per-agent policy, not RTS fog of war (modules/rts vision stays authoritative there). The owner supplies poses, light/cover/stance/visibility multipliers, LOS and occlusion callbacks (called in observer-id then target/noise order under per-tick budgets) and search candidates; outputs are PerceivedTarget records and SenseEvents, never movement. Fixed math, integer ticks, repeated/backwards ticks rejected. Persist SensesState via genre::save/load (record kinds 48..55 reserved, 48..52 used) and hash with sensesHash; bind sensesConfigHash. Optional `senses` settings section.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_stealth_senses",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/SensesConfigured.h",
+        "libraries/include/aiverselib/genre/SensesData.h",
+        "libraries/include/aiverselib/genre/SensesPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/senses.json",
+        "examples/libraries/genre/senses-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
     },
     {
       "id": "weapon-policies",
