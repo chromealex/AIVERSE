@@ -35,6 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
 from unity import unity_yaml as uy  # noqa: E402
 
+CACHE_VERSION = 's2.3'           # bump when the map / skills conversion changes (--cache)
 SCALE = 50                      # BW world units per cell (the routes, skills and AI ports use the same)
 DEFAULT_MAP = (2720, 1520)      # MultiscreenModule.mapSize
 TYPE_HOUSE, TYPE_TOWER, TYPE_SMITHY = 1, 2, 4
@@ -1068,14 +1069,19 @@ class Cache:
     def get(self, name, stamp):
         if not self.root or not os.path.exists(self._path(name)):
             return None
-        with open(self._path(name), encoding='utf-8') as f:
-            d = json.load(f)
+        try:
+            with open(self._path(name), encoding='utf-8') as f:
+                d = json.load(f)
+        except ValueError:      # cut off while writing
+            return None
         return d.get('value') if d.get('stamp') == stamp else None
 
     def put(self, name, stamp, value):
         if self.root:
-            with open(self._path(name), 'w', encoding='utf-8') as f:
+            tmp = self._path(name) + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump({'stamp': stamp, 'value': value}, f, ensure_ascii=False, default=lambda d: num(d))
+            os.replace(tmp, self._path(name))
         return value
 
 
@@ -1115,7 +1121,7 @@ def run(source, out, cache_dir=None, skills=True):
     types = rules['types']
     players = read_players(src)
     # player abilities: the skills converter (agent-bw-skills) at the same scale
-    stamp = mtime(__file__, os.path.join(HERE, 'skills', 'convert.py'), os.path.join(HERE, 'skills', 'mapping.py'))
+    stamp = CACHE_VERSION + ',' + mtime(os.path.join(HERE, 'skills', 'convert.py'), os.path.join(HERE, 'skills', 'mapping.py'))
     conv = cache.get('skills', stamp) if skills else {}
     if conv is None:
         conv = cache.put('skills', stamp, convert_skills(src, out))
@@ -1194,7 +1200,7 @@ def run(source, out, cache_dir=None, skills=True):
             base += '_%d' % (len([k for k in seen if k.startswith(base)]) + 1)
         seen[base] = True
         key = 'map_' + base
-        mstamp = mtime(__file__, hp) + ',' + str(len(ctx['cards']))
+        mstamp = CACHE_VERSION + ',' + mtime(hp) + ',' + str(len(ctx['cards']))
         got = cache.get(key, mstamp)
         if got is None:
             w0 = len(src.warnings)
