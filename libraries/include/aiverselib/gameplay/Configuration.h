@@ -361,6 +361,18 @@ struct SensesSettings {
     std::int64_t searchMaxPoints=6;
     std::int64_t hideEnterRangeMilli=1500;
 };
+struct NarrativeSettings {
+    std::int64_t autoAdvanceTicks=180;
+    std::int64_t skipLinesPerTick=4;
+    std::int64_t backlogLimit=200;
+    std::int64_t barkCooldownTicks=600;
+    std::int64_t speakerCooldownTicks=120;
+    std::int64_t maxPendingConsequences=1024;
+    std::int64_t maxBarkRequests=64;
+    std::int64_t meterMinimum=-100;
+    std::int64_t meterInitial=0;
+    std::int64_t meterMaximum=100;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -390,6 +402,7 @@ struct GameplaySettings {
     MatchRuleSettings matchRules;
     ObjectiveSettings objectives;
     SensesSettings senses;
+    NarrativeSettings narrative;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -406,7 +419,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -904,6 +917,24 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(settings.senses.searchingAtMilli>settings.senses.alertAtMilli)result.errors.push_back("senses.searchingAtMilli: must not exceed alertAtMilli");
         if(settings.senses.alertAtMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertAtMilli: must not exceed suspicionMaxMilli");
         if(settings.senses.alertReceivedMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertReceivedMilli: must not exceed suspicionMaxMilli");
+    }
+    if(root.has("narrative")) { const auto& section=root["narrative"];
+        if(!section.isObject()) result.errors.push_back("narrative: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="autoAdvanceTicks" && entry.first!="skipLinesPerTick" && entry.first!="backlogLimit" && entry.first!="barkCooldownTicks" && entry.first!="speakerCooldownTicks" && entry.first!="maxPendingConsequences" && entry.first!="maxBarkRequests" && entry.first!="meterMinimum" && entry.first!="meterInitial" && entry.first!="meterMaximum") result.errors.push_back("narrative."+entry.first+": unknown field");
+            if(section.has("autoAdvanceTicks")) number(section["autoAdvanceTicks"],settings.narrative.autoAdvanceTicks,1,10000000,"narrative.autoAdvanceTicks");
+            if(section.has("skipLinesPerTick")) number(section["skipLinesPerTick"],settings.narrative.skipLinesPerTick,1,64,"narrative.skipLinesPerTick");
+            if(section.has("backlogLimit")) number(section["backlogLimit"],settings.narrative.backlogLimit,1,10000,"narrative.backlogLimit");
+            if(section.has("barkCooldownTicks")) number(section["barkCooldownTicks"],settings.narrative.barkCooldownTicks,0,10000000,"narrative.barkCooldownTicks");
+            if(section.has("speakerCooldownTicks")) number(section["speakerCooldownTicks"],settings.narrative.speakerCooldownTicks,0,10000000,"narrative.speakerCooldownTicks");
+            if(section.has("maxPendingConsequences")) number(section["maxPendingConsequences"],settings.narrative.maxPendingConsequences,1,65536,"narrative.maxPendingConsequences");
+            if(section.has("maxBarkRequests")) number(section["maxBarkRequests"],settings.narrative.maxBarkRequests,1,4096,"narrative.maxBarkRequests");
+            if(section.has("meterMinimum")) number(section["meterMinimum"],settings.narrative.meterMinimum,-1000000000,0,"narrative.meterMinimum");
+            if(section.has("meterInitial")) number(section["meterInitial"],settings.narrative.meterInitial,-1000000000,1000000000,"narrative.meterInitial");
+            if(section.has("meterMaximum")) number(section["meterMaximum"],settings.narrative.meterMaximum,0,1000000000,"narrative.meterMaximum");
+        }
+        if(settings.narrative.meterMinimum>settings.narrative.meterInitial)result.errors.push_back("narrative.meterMinimum: must not exceed meterInitial");
+        if(settings.narrative.meterInitial>settings.narrative.meterMaximum)result.errors.push_back("narrative.meterInitial: must not exceed meterMaximum");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

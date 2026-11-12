@@ -1901,6 +1901,72 @@
           "maximum": 1000000
         }
       }
+    },
+    "narrative": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "autoAdvanceTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "skipLinesPerTick": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "backlogLimit": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "barkCooldownTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "speakerCooldownTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "maxPendingConsequences": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "maxBarkRequests": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "meterMinimum": {
+          "type": "integer",
+          "default": -100,
+          "minimum": -1000000000,
+          "maximum": 0
+        },
+        "meterInitial": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        },
+        "meterMaximum": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
     }
   }
 }

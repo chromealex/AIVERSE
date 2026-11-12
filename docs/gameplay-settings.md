@@ -303,6 +303,16 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | senses | searchCandidateRadiusMilli | integer | 12000 | 0..100000000 |
 | senses | searchMaxPoints | integer | 6 | 1..64 |
 | senses | hideEnterRangeMilli | integer | 1500 | 0..1000000 |
+| narrative | autoAdvanceTicks | integer | 180 | 1..10000000 |
+| narrative | skipLinesPerTick | integer | 4 | 1..64 |
+| narrative | backlogLimit | integer | 200 | 1..10000 |
+| narrative | barkCooldownTicks | integer | 600 | 0..10000000 |
+| narrative | speakerCooldownTicks | integer | 120 | 0..10000000 |
+| narrative | maxPendingConsequences | integer | 1024 | 1..65536 |
+| narrative | maxBarkRequests | integer | 64 | 1..4096 |
+| narrative | meterMinimum | integer | -100 | -1000000000..0 |
+| narrative | meterInitial | integer | 0 | -1000000000..1000000000 |
+| narrative | meterMaximum | integer | 100 | 0..1000000000 |
 
 ## Cross-field constraints
 
@@ -337,3 +347,5 @@ Constraint: `senses.suspiciousAtMilli <= senses.searchingAtMilli` (checked by lo
 Constraint: `senses.searchingAtMilli <= senses.alertAtMilli` (checked by loader and CLI).
 Constraint: `senses.alertAtMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
 Constraint: `senses.alertReceivedMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
+Constraint: `narrative.meterMinimum <= narrative.meterInitial` (checked by loader and CLI).
+Constraint: `narrative.meterInitial <= narrative.meterMaximum` (checked by loader and CLI).
