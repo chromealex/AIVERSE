@@ -171,12 +171,14 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Resource packs (.rpak). The runtime links only the zstd decoder; host tools that write packs
-# link aiverse_pack_writer, which carries the full zstd library instead (see aiverse_zstd_dec below).
+# link aiverse_pack_writer, which carries the full zstd library (in host builds the decoder target
+# forwards to it, see below).
 # ---------------------------------------------------------------------------
 set(AIVERSE_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by aiversebuild)")
-# Builds with host tools or tests already compile the full zstd library (it includes the decoder): there
-# aiverse_zstd_dec is only an alias of it, so no executable can pull both copies (GNU ld rejects the duplicate
-# symbols). Game builds made by aiversebuild, Android and Web turn tools/tests off and keep the small decoder.
+# Host builds (tools or tests on) also compile the full zstd for pack writers; there aiverse_zstd_dec
+# forwards to it, so a binary that mixes runtime and tool libraries carries one zstd copy instead of two
+# (GNU ld rejects the duplicate symbols). Packaged builds (aiversebuild: tools/tests OFF) keep the
+# small decoder-only library.
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
     find_package(Threads REQUIRED)
     add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
