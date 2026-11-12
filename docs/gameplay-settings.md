@@ -342,6 +342,22 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | cinematic | qteMashScaleMilli | integer | 1000 | 100..10000 |
 | cinematic | qteHoldScaleMilli | integer | 1000 | 100..10000 |
 | cinematic | qteAutoSucceed | boolean | false |  |
+| cardGame | startingHand | integer | 4 | 0..20 |
+| cardGame | maxHand | integer | 10 | 1..20 |
+| cardGame | startingHealth | integer | 20 | 1..1000000 |
+| cardGame | turnLimit | integer | 60 | 0..100000 |
+| cardGame | botNodeBudget | integer | 256 | 1..100000 |
+| cardGame | botDepth | integer | 2 | 1..4 |
+| tactics | roundLimit | integer | 30 | 0..100000 |
+| tactics | halfCoverMilli | integer | 200 | 0..1000 |
+| tactics | fullCoverMilli | integer | 400 | 0..1000 |
+| tactics | flankBonusMilli | integer | 150 | 0..1000 |
+| tactics | rangePenaltyMilli | integer | 40 | 0..1000 |
+| tactics | overwatchPenaltyMilli | integer | 150 | 0..1000 |
+| tactics | minHitMilli | integer | 50 | 0..1000 |
+| tactics | maxHitMilli | integer | 950 | 0..1000 |
+| tactics | coverCosMilli | integer | 707 | 0..1000 |
+| tactics | botSearchBudget | integer | 512 | 1..100000 |
 
 ## Cross-field constraints
 
@@ -380,3 +396,6 @@ Constraint: `narrative.meterMinimum <= narrative.meterInitial` (checked by loade
 Constraint: `narrative.meterInitial <= narrative.meterMaximum` (checked by loader and CLI).
 Constraint: `interaction.throwMinImpulseMilli <= interaction.throwMaxImpulseMilli` (checked by loader and CLI).
 Constraint: `cinematic.slowMotionNumerator <= cinematic.slowMotionDenominator` (checked by loader and CLI).
+Constraint: `cardGame.startingHand <= cardGame.maxHand` (checked by loader and CLI).
+Constraint: `tactics.halfCoverMilli <= tactics.fullCoverMilli` (checked by loader and CLI).
+Constraint: `tactics.minHitMilli <= tactics.maxHitMilli` (checked by loader and CLI).
