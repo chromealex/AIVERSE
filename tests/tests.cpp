@@ -14180,3 +14180,4 @@ TEST(model_merge_static_primitives) {
     CHECK(!mergeStaticPrimitives(big, small).merged);
 }
 #include "tests_traffic.inc"   // city traffic: AI cars, signals, pedestrians (agent-traffic)
+#include "tests_city.inc"      // city planner (agent-gta2)

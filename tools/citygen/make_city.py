@@ -146,7 +146,18 @@ def make_road_tileset(assets, out):
     def load(n, cells):
         return Image.open(os.path.join(tex, n, 'basecolor.png')).convert('RGB').resize((RT * cells, RT * cells), Image.LANCZOS)
     ns = load('road_four_lane_ns', 4)
-    parts = [('ns', ns, 4), ('ew', ns.rotate(90), 4), ('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2)]
+    parts = [('ns', ns, 4), ('ew', ns.rotate(90), 4), ('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2),
+             ('street', load('road_plain_asphalt', 2), 2)]
+    for key, name in (('ns2', 'road_two_lane_ns'), ('ew2', 'road_two_lane_ew'), ('parking', 'road_parking')):
+        if os.path.exists(os.path.join(tex, name, 'basecolor.png')):
+            parts.append((key, load(name, 2), 2))
+    water = Image.new('RGB', (RT * 2, RT * 2), (38, 70, 92))
+    dw = ImageDraw.Draw(water)
+    wr = random.Random(9)
+    for _ in range(900):
+        x, y, k = wr.randrange(RT * 2), wr.randrange(RT * 2), wr.randint(4, 14)
+        dw.line((x, y, x + wr.randint(6, 26), y), fill=(38 + k, 70 + k, 92 + k))
+    parts.append(('water', water, 2))
     # Junctions are drawn here: the pack's four-lane crossroads has narrower lanes than its straight road, so the
     # markings would jump at every corner. Plain asphalt + a stop line on each arm that exists (right-hand traffic);
     # bit 1 = north arm, 2 = east, 4 = south, 8 = west. Arms that would lead off the map get nothing.
@@ -187,7 +198,10 @@ def make_road_tileset(assets, out):
                                            terr('line_v', 'Road (north-south)', 'v', [0.23, 0.23, 0.24], bases['ns']),
                                            terr('pavement', 'Pavement', 'p', [0.5, 0.48, 0.45], bases['walk']),
                                            terr('lot', 'Lot', 'l', [0.36, 0.35, 0.34], bases['lot']),
-                                           terr('grass', 'Grass', 'g', [0.24, 0.38, 0.19], bases['grass'])]})
+                                           terr('grass', 'Grass', 'g', [0.24, 0.38, 0.19], bases['grass']),
+                                           terr('street', 'Street', 's', [0.23, 0.23, 0.24], bases['street']),
+                                           terr('parking', 'Car park', 'k', [0.25, 0.25, 0.26], bases.get('parking', bases['street'])),
+                                           dict(terr('water', 'Water', 'w', [0.15, 0.27, 0.36], bases['water']), cell='~')]})
     return bases
 
 
@@ -207,7 +221,11 @@ def load_props(assets, out):
         if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(glb):
             shutil.copyfile(glb, dst)
         (x0, _, z0), (x1, _, z1) = it['bounds']
-        types['p' + it['id'][:2]] = {'name': it['id'][3:].replace('_', ' ').capitalize(), 'health': {'max': 100000}, 'invulnerable': True,
+        num = int(it['id'][:2])
+        small = num in (1, 2, 3, 4, 9, 10, 11, 16, 17, 18, 22, 23, 26, 27)       # things that stand on a pavement
+        types['p' + it['id'][:2]] = {'name': it['id'][3:].replace('_', ' ').capitalize(),
+                                     'tags': ['lamp', 'prop'] if num == 5 else ['prop'] if small else ['street_object'],
+                                     'health': {'max': 100000}, 'invulnerable': True,
                                      'move': {'speed': 0, 'radius': round(max(0.03, min(x1 - x0, z1 - z0) / 2 / M), 3)}, 'sight': 0,
                                      'view': {'model': 'models/props/' + it['id'] + '.glb', 'fit': False, 'center': False, 'scale': 1 / M}}
     return types
@@ -259,13 +277,95 @@ def load_trees(assets, out):
             shutil.copyfile(os.path.join(src, f), dst)
         tid = 't%02d' % n
         (trees if n <= 6 else bushes).append(tid)
-        types[tid] = {'name': f[3:-4].replace('_lod1', '').replace('_', ' ').capitalize(), 'health': {'max': 100000}, 'invulnerable': True,
+        types[tid] = {'name': f[3:-4].replace('_lod1', '').replace('_', ' ').capitalize(), 'tags': ['tree' if n <= 6 else 'bush'],
+                      'health': {'max': 100000}, 'invulnerable': True,
                       'move': {'speed': 0, 'radius': 0.1 if n <= 6 else 0.15}, 'sight': 0,
                       'view': {'model': 'models/trees/lod/' + f, 'fit': False, 'center': False, 'scale': 1 / M}}
     return trees, bushes, types
 
 
-def build(assets, out, seed):
+def game_manifest():
+    return {
+        'name': 'Kingston Streets', 'id': 'com.aiverse.kingstonstreets', 'version': '0.1.0', 'build': 1, 'module': 'rts',
+        'sourceLanguage': 'en', 'languages': ['en'], 'rules': 'rules.json',
+        'maps': [{'file': 'maps/city.json', 'title': 'Downtown'}],
+        'lighting': {'time': 0.42, 'clouds': 0.2}, 'orientation': 'landscape',
+        'topDown': {'touchControls': 'auto', 'mouseAim': 'hold',
+                    'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
+                    'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
+                    'buttons': [],
+                    'camera': {'pitch': 90, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
+                               'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}}
+
+
+def plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props):
+    """The layout comes from the engine's city planner (map generator preset "city"), baked into maps/city.json."""
+    import subprocess
+    types.update(building_types)                         # the planner chooses among all of them; unused ones are dropped after
+    people_scripts_overrides(assets, out, rules, types, [])
+    wjson(os.path.join(out, 'rules.json'), rules)
+    wjson(os.path.join(out, 'maps', 'city.json'), {'name': 'Downtown', 'size': list(size),
+          'players': [{'name': 'Player', 'team': 1}, {'name': 'City', 'team': 2}], 'victory': {'mode': 'survive', 'seconds': 360000}})
+    wjson(os.path.join(out, 'game.json'), game_manifest())
+    params = {'size': list(size), 'tileset': 'tilesets/city.json', 'tileBases': bases, 'river': True, 'roundabouts': 0.3}
+    baked = os.path.join(out, 'maps', 'city.baked.json')
+    res = subprocess.run([headless, '--project', out, '--generate', 'city', '--seed', str(seed), '--gen-params', json.dumps(params),
+                          '--gen-out', baked, '--max-seconds', '1', '--quiet'], capture_output=True, text=True)
+    if not os.path.exists(baked):
+        raise SystemExit('city planner failed:\n' + res.stdout[-2000:] + res.stderr[-2000:])
+    m = json.load(open(baked))
+    os.remove(baked)
+    m.pop('generate', None)
+    used = {e['type'] for e in m['entities']}
+    by_id = {b['id']: b for b in buildings}
+    for bid in building_types:
+        if bid not in used:
+            types.pop(bid, None)
+            continue
+        dst = os.path.join(out, by_id[bid]['file'])
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(by_id[bid]['src']):
+            shutil.copyfile(by_id[bid]['src'], dst)
+    wjson(os.path.join(out, 'rules.json'), rules)
+    wjson(os.path.join(out, 'maps', 'city.json'), m)
+    g = m.get('generated', {})
+    return {'size': m['size'], 'planner': 'engine', 'buildings': g.get('buildings'), 'cars': g.get('cars'), 'people': g.get('people'),
+            'roads': g.get('roads'), 'junctions': g.get('junctions'), 'bridges': g.get('bridges'), 'roundabouts': g.get('roundabouts'),
+            'blocks': g.get('blocks'), 'parks': g.get('parks'), 'entities': len(m['entities']), 'warnings': g.get('warnings')}
+
+
+def people_scripts_overrides(assets, out, rules, types, entities):
+    # people: the characters pack's types and gait profiles when it is there (characters-3d/source/crowd-types.json)
+    crowd = os.path.join(assets, 'characters-3d', 'source', 'crowd-types.json')
+    if os.path.exists(crowd):
+        patch = json.load(open(crowd))
+        for k in ('health', 'move', 'weapons', 'sight'):          # the generator's own numbers for the hero stay
+            if k in types['player'] and k in patch.get('player', {}):
+                patch['player'][k] = types['player'][k]
+        types.update(patch)
+        profiles = [k for k in ('ped_commuter', 'ped_office', 'ped_runner', 'ped_worker', 'ped_citizen') if k in patch]
+        i = 0
+        for e in entities:
+            if e['type'] == 'ped' and profiles:
+                e['type'] = profiles[(i * 3 + i // 5) % len(profiles)]
+                i += 1
+    if os.path.exists(os.path.join(out, 'scripts', 'crowd.lua')):
+        rules['scripts'] = ['scripts/crowd.lua']
+    if os.path.exists(os.path.join(out, 'scripts', 'view', 'crowd.lua')):
+        rules['viewScripts'] = ['scripts/view/crowd.lua']
+    # hand edits and other tools: rules.overrides.json in the project is merged over the generated rules
+    over = os.path.join(out, 'rules.overrides.json')
+    if os.path.exists(over):
+        def merge(a, b):
+            for k, v in b.items():
+                if isinstance(v, dict) and isinstance(a.get(k), dict):
+                    merge(a[k], v)
+                else:
+                    a[k] = v
+        merge(rules, json.load(open(over)))
+
+
+def build(assets, out, seed, headless=None, size=(96, 72)):
     rnd = random.Random(seed)
     os.makedirs(out, exist_ok=True)
     bases = make_road_tileset(assets, out)
@@ -286,7 +386,9 @@ def build(assets, out, seed):
     buildings = load_buildings(assets, out)
     building_types = {}
     for b in buildings:
-        building_types[b['id']] = {'name': b['name'], 'structure': {'footprint': [b['nx'], b['nz']]}, 'health': {'max': 100000}, 'sight': 1,
+        nb = int(b['id'][1:])
+        zone = 'residential' if nb <= 6 or nb == 23 or 25 <= nb <= 31 else 'industrial' if 13 <= nb <= 18 or nb >= 44 else 'commercial'
+        building_types[b['id']] = {'name': b['name'], 'tags': ['building', zone], 'structure': {'footprint': [b['nx'], b['nz']]}, 'health': {'max': 100000}, 'sight': 1,
                           'invulnerable': True,
                           'view': {'model': b['file'], 'fit': False, 'center': False, 'scale': 1 / M,
                                    'offset': [round(-b['centre'][0] / M, 4), 0, round(-b['centre'][1] / M, 4)]}}
@@ -311,6 +413,9 @@ def build(assets, out, seed):
                     'vehicles': driving},
         'types': types,
     }
+
+    if headless and bases:
+        return plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props)
 
     # street grid: roads ROAD cells wide around BLOCKS_X x BLOCKS_Z blocks; a pavement ring inside every block
     W, H = ROAD + BLOCKS_X * (BLOCK_W + ROAD), ROAD + BLOCKS_Z * (BLOCK_H + ROAD)
@@ -417,34 +522,7 @@ def build(assets, out, seed):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(by_id[bid]['src']):
             shutil.copyfile(by_id[bid]['src'], dst)
-    # people: the characters pack's types and gait profiles when it is there (characters-3d/source/crowd-types.json)
-    crowd = os.path.join(assets, 'characters-3d', 'source', 'crowd-types.json')
-    if os.path.exists(crowd):
-        patch = json.load(open(crowd))
-        for k in ('health', 'move', 'weapons', 'sight'):          # the generator's own numbers for the hero stay
-            if k in types['player'] and k in patch.get('player', {}):
-                patch['player'][k] = types['player'][k]
-        types.update(patch)
-        profiles = [k for k in ('ped_commuter', 'ped_office', 'ped_runner', 'ped_worker', 'ped_citizen') if k in patch]
-        i = 0
-        for e in entities:
-            if e['type'] == 'ped' and profiles:
-                e['type'] = profiles[(i * 3 + i // 5) % len(profiles)]
-                i += 1
-    if os.path.exists(os.path.join(out, 'scripts', 'crowd.lua')):
-        rules['scripts'] = ['scripts/crowd.lua']
-    if os.path.exists(os.path.join(out, 'scripts', 'view', 'crowd.lua')):
-        rules['viewScripts'] = ['scripts/view/crowd.lua']
-    # hand edits and other tools: rules.overrides.json in the project is merged over the generated rules
-    over = os.path.join(out, 'rules.overrides.json')
-    if os.path.exists(over):
-        def merge(a, b):
-            for k, v in b.items():
-                if isinstance(v, dict) and isinstance(a.get(k), dict):
-                    merge(a[k], v)
-                else:
-                    a[k] = v
-        merge(rules, json.load(open(over)))
+    people_scripts_overrides(assets, out, rules, types, entities)
     wjson(os.path.join(out, 'rules.json'), rules)
     start = [ROAD + 3.5, ROAD + 0.5]
     entities.insert(0, {'type': 'player', 'owner': 1, 'pos': start})
@@ -456,17 +534,7 @@ def build(assets, out, seed):
         'terrain': {'rows': ['.' * W for _ in range(H)]},
         'tiles': {'tileset': 'tilesets/city.json', 'rows': [''.join(r) for r in tiles], 'fixed': fixed, 'seed': seed},
         'entities': entities})
-    wjson(os.path.join(out, 'game.json'), {
-        'name': 'Kingston Streets', 'id': 'com.aiverse.kingstonstreets', 'version': '0.1.0', 'build': 1, 'module': 'rts',
-        'sourceLanguage': 'en', 'languages': ['en'], 'rules': 'rules.json',
-        'maps': [{'file': 'maps/city.json', 'title': 'Downtown'}],
-        'lighting': {'time': 0.42, 'clouds': 0.2}, 'orientation': 'landscape',
-        'topDown': {'touchControls': 'auto', 'mouseAim': 'hold',
-                    'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
-                    'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
-                    'buttons': [],
-                    'camera': {'pitch': 90, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
-                               'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}})
+    wjson(os.path.join(out, 'game.json'), game_manifest())
     return {'size': [W, H], 'buildings': sum(1 for e in entities if e['type'][0] == 'b' and e['type'][1:].isdigit()),
             'cars': sum(1 for e in entities if e['type'] in cars), 'trees': sum(1 for e in entities if e['type'] in tree_types), 'props': sum(1 for e in entities if e['type'] in props), 'vehicleTypes': len(cars), 'buildingTypes': len(buildings)}
 
@@ -476,8 +544,11 @@ def main():
     ap.add_argument('--assets', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--seed', type=int, default=7)
+    ap.add_argument('--headless', help='aiverse_headless: lay the city out with the engine planner (preset "city")')
+    ap.add_argument('--size', default='96x72', help='map size in cells for the planner, WxH')
     a = ap.parse_args()
-    print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed)))
+    w, h = [int(v) for v in a.size.lower().split('x')]
+    print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed, a.headless, (w, h))))
 
 
 if __name__ == '__main__':

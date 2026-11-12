@@ -385,7 +385,7 @@ TEST(traffic_goes_round_an_island_in_a_junction) {
 
 // ------------------------------------------------------------------ the living city: incidents and services
 namespace {
-const char* kCityRules = R"J({
+const char* kTrafficCityRules = R"J({
   "victory": "noUnits",
   "resources": {"gold": {"start": 0}},
   "topDown": {"heroes": ["guy"], "move": {"accel": 40, "decel": 60}, "autoFire": false},
@@ -419,7 +419,7 @@ const char* kCityRules = R"J({
   }
 })J";
 // the hero on the north sidewalk, a station object on the same road two blocks east, a lot inside the south-east block
-const char* kCityStart = R"({"type":"guy","owner":1,"pos":[8.5,4.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]},
+const char* kTrafficCityStart = R"({"type":"guy","owner":1,"pos":[8.5,4.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]},
     {"type":"hospital","owner":0,"pos":[20.5,4.4]},{"type":"lot","owner":0,"pos":[20.5,18.5]})";
 int countOfType(Simulation& sim, const char* id) {
     int n = 0;
@@ -434,7 +434,7 @@ const game::TrafficIncident* incidentKind(Simulation& sim, uint8_t kind) {
 } // namespace
 
 TEST(traffic_city_ambulance_takes_the_injured_to_hospital_and_he_walks_out) {
-    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]})"), 2);
+    auto sim = makeSimJson(kTrafficCityRules, trafficMap(std::string(kTrafficCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]})"), 2);
     auto& w = sim->world();
     run(*sim, 0.5);
     const Entity ped = firstOf(*sim, "ped");
@@ -471,7 +471,7 @@ TEST(traffic_city_ambulance_takes_the_injured_to_hospital_and_he_walks_out) {
 }
 
 TEST(traffic_city_a_fatal_blow_is_taken_to_hospital_too_but_never_comes_back) {
-    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]})"), 2);
+    auto sim = makeSimJson(kTrafficCityRules, trafficMap(std::string(kTrafficCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]})"), 2);
     run(*sim, 0.5);
     mod(*sim).dealDamage(*sim, firstOf(*sim, "ped"), Fixed::fromInt(200), 0, kNullEntity, 0);   // a rocket: five times his 40 hp
     trf(*sim).collect(*sim);
@@ -492,7 +492,7 @@ TEST(traffic_city_a_fatal_blow_is_taken_to_hospital_too_but_never_comes_back) {
 
 TEST(traffic_city_fire_engine_first_then_the_tow_truck_takes_the_wreck_to_the_lot) {
     // a parked car on the north road blows up
-    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"sedan","owner":0,"pos":[9.5,2.5],"facing":90})"), 2);
+    auto sim = makeSimJson(kTrafficCityRules, trafficMap(std::string(kTrafficCityStart) + R"(,{"type":"sedan","owner":0,"pos":[9.5,2.5],"facing":90})"), 2);
     run(*sim, 0.5);
     const Entity car = firstOf(*sim, "sedan");
     mod(*sim).dealDamage(*sim, car, Fixed::fromInt(100000), 0, kNullEntity, 0);
@@ -519,7 +519,7 @@ TEST(traffic_city_fire_engine_first_then_the_tow_truck_takes_the_wreck_to_the_lo
 }
 
 TEST(traffic_city_police_come_when_somebody_saw_it_and_fight) {
-    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[10.5,4.6]})"), 2);
+    auto sim = makeSimJson(kTrafficCityRules, trafficMap(std::string(kTrafficCityStart) + R"(,{"type":"ped","owner":2,"pos":[10.5,4.6]})"), 2);
     auto& w = sim->world();
     run(*sim, 0.5);
     const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
@@ -539,7 +539,7 @@ TEST(traffic_city_police_come_when_somebody_saw_it_and_fight) {
 }
 
 TEST(traffic_city_determinism_and_saves_with_services_on_call) {
-    const std::string map = trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]},{"type":"ped","owner":2,"pos":[10.5,4.6]},
+    const std::string map = trafficMap(std::string(kTrafficCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]},{"type":"ped","owner":2,"pos":[10.5,4.6]},
         {"type":"sedan","owner":0,"pos":[18.5,14.5],"facing":90})");
     auto play = [&](Simulation& sim, int from, int to, std::vector<uint64_t>* sums) {
         for (int i = from; i < to; ++i) {
@@ -549,7 +549,7 @@ TEST(traffic_city_determinism_and_saves_with_services_on_call) {
             if (sums && i % 50 == 0) sums->push_back(sim.checksum());
         }
     };
-    auto s1 = makeSimJson(kCityRules, map, 6), s2 = makeSimJson(kCityRules, map, 6);
+    auto s1 = makeSimJson(kTrafficCityRules, map, 6), s2 = makeSimJson(kTrafficCityRules, map, 6);
     std::vector<uint64_t> c1, c2;
     play(*s1, 0, 500, &c1);
     play(*s2, 0, 500, &c2);
@@ -559,7 +559,7 @@ TEST(traffic_city_determinism_and_saves_with_services_on_call) {
     for (auto& c : tstore(*s1).cars) onCall = onCall || c.task != game::kTaskNone;
     CHECK(onCall);
     std::string save = s1->serialize();
-    auto s3 = makeSimJson(kCityRules, map, 6);
+    auto s3 = makeSimJson(kTrafficCityRules, map, 6);
     std::string err;
     CHECK(s3->deserialize(save, &err));
     CHECK(s3->checksum() == s1->checksum());
@@ -579,7 +579,7 @@ namespace {
 // a game day of 1200 s (an hour = 50 s) that starts at 8:00; twelve people in one house, a shop with one keeper
 // (9-13) and a port with five jobs on a day shift (9-13) and five on a night shift (20-4): one is out of work
 std::string populationRules() {
-    std::string rules = kCityRules;
+    std::string rules = kTrafficCityRules;
     const std::string at = R"("services": {)";
     rules.insert(rules.find(at), R"("population": {"count": 12, "dayLength": 1200, "startHour": 8, "walk": 0.5, "types": ["ped"],
         "kinds": {"house": {"lives": 12}, "shop": {"jobs": 1, "shifts": [[9, 13]]}, "port": {"jobs": 5, "shifts": [[9, 13], [20, 4]]}}},
