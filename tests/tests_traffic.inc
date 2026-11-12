@@ -683,3 +683,240 @@ TEST(traffic_population_determinism_and_saves) {
     run(*s1, 10);
     CHECK(s1->checksum() == after);
 }
+
+// ------------------------------------------------------------------ getting to work: round the river, by car, by bus
+namespace {
+std::string replaced(std::string s, const std::string& from, const std::string& to) {
+    const size_t at = s.find(from);
+    if (at == std::string::npos) { std::printf("replaced: '%s' not found\n", from.c_str()); std::abort(); }
+    return s.replace(at, from.size(), to);
+}
+// the shares of the citizens who drive / take the bus, and whatever else the population block needs
+std::string commuteRules(const std::string& extra, const std::string& roads = R"("roads": {"tiles": "a"},)") {
+    std::string r = replaced(populationRules(), R"("walk": 0.5, "types": ["ped"],)", R"("walk": 0.5, "types": ["ped"], )" + extra);
+    r = replaced(r, R"("roads": {"tiles": "a"},)", roads);
+    return replaced(r, R"("ped":   {"health": {"max": 40}, "move": {"speed": 0.5,)", R"("ped":   {"health": {"max": 40}, "move": {"speed": 1.5,)");
+}
+}
+
+TEST(traffic_walk_route_goes_round_to_the_bridge) {
+    // 30 x 9 sidewalk field cut by a river (column 15) with one bridge in the bottom row
+    const int W = 30, H = 9;
+    std::vector<uint8_t> walk(size_t(W * H), 1);
+    for (int z = 0; z < H - 1; ++z) walk[size_t(z * W + 15)] = 0;
+    tl::TrafficWalkSearch search;
+    std::vector<int32_t> path, again;
+    CHECK(tl::trafficWalkRoute(W, H, walk, 0 * W + 13, 0 * W + 17, search, path));
+    CHECK(path.size() == 20 && path.back() == 17);   // 8 down, 4 across, 8 up
+    bool overBridge = false;
+    int prev = 13;
+    for (int c : path) {
+        CHECK(walk[size_t(c)] && std::abs(c % W - prev % W) + std::abs(c / W - prev / W) == 1);
+        overBridge = overBridge || c == (H - 1) * W + 15;
+        prev = c;
+    }
+    CHECK(overBridge);
+    CHECK(tl::trafficWalkRoute(W, H, walk, 13, 17, search, again) && again == path);   // the work arrays are reused
+    CHECK(!tl::trafficWalkRoute(W, H, walk, 13, 17, search, again, 10) && again.empty());   // gives up on a budget
+    walk[size_t((H - 1) * W + 15)] = 0;   // no bridge
+    CHECK(!tl::trafficWalkRoute(W, H, walk, 13, 17, search, again));
+    CHECK(tl::trafficWalkRoute(W, H, walk, 13, 13, search, again) && again.empty());
+}
+
+TEST(traffic_population_walkers_go_round_what_cuts_their_sidewalk) {
+    // no crossing between the house block and the shop block (the shop's corner cells are lawn): the only way is
+    // round through the two southern blocks
+    std::string map = trafficMap(R"({"type":"guy","owner":1,"pos":[14.5,13.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]})");
+    auto rows = trafficRows();
+    const std::string r4 = rows[4], r11 = rows[11];
+    rows[4][16] = 'l'; rows[11][16] = 'l';
+    map = replaced(map, "\"" + r4 + "\"", "\"" + rows[4] + "\"");
+    map = replaced(map, "\"" + r11 + "\"", "\"" + rows[11] + "\"");
+    map.insert(map.size() - 1, R"(,"places":[{"kind":"house","pos":[6.5,6.5]},{"kind":"shop","pos":[20.5,6.5]}])");
+    std::string rules = commuteRules("");
+    rules = replaced(rules, R"("house": {"lives": 12})", R"("house": {"lives": 1})");
+    auto sim = makeSimJson(rules, map, 3);
+    auto& w = sim->world();
+    run(*sim, 0.2);
+    CHECK(tstore(*sim).citizens.size() == 1 && tstore(*sim).citizens[0].work == 1);
+    bool south = false, seenNearDoor = false, unseen = false;
+    const Vec2 door = trf(*sim).places()[1].pos;
+    while (trf(*sim).minuteOfDay(*sim) != 12 * 60 && tstore(*sim).citizens[0].state != game::kCitizenWork) {
+        sim->step();
+        const auto& c = tstore(*sim).citizens[0];
+        if (c.state != game::kCitizenToWork) continue;
+        if (!c.e.valid()) { unseen = unseen || sim->tick() - c.left > 3 * sim->tickRate(); continue; }
+        const Vec3 p = w.get<Transform>(c.e).pos;
+        south = south || p.z > Fixed::fromInt(16);
+        seenNearDoor = seenNearDoor || (Vec2{p.x, p.z} - door).length() < Fixed::fromInt(5);
+    }
+    CHECK(tstore(*sim).citizens[0].state == game::kCitizenWork);
+    CHECK(south && seenNearDoor && !unseen);   // on his feet all the way, through the southern blocks, to the door
+}
+
+TEST(traffic_population_drivers_park_at_the_kerb_drive_to_work_and_walk_in) {
+    // everybody drives; one lane and a parking lane per side
+    const std::string rules = commuteRules(R"("car": 100, "parked": 12, "drive": 2,)", R"("roads": {"tiles": "a", "parkingLanes": 1},)");
+    auto sim = makeSimJson(rules, populationMap(), 3);
+    auto& w = sim->world();
+    run(*sim, 2.5);
+    const int cars0 = countOfType(*sim, "sedan");
+    int owned = 0;
+    for (auto& c : tstore(*sim).citizens) {
+        CHECK(c.commute == game::kCommuteCar);
+        if (!c.car.valid()) continue;
+        ++owned;
+        CHECK(mod(*sim).driving()->car(*sim, c.car) && !trf(*sim).onRoad({w.get<Transform>(c.car).pos.x, w.get<Transform>(c.car).pos.z}) == false);
+        CHECK(trf(*sim).kindOf(*sim, c.car) < 0);   // parked: not traffic
+    }
+    CHECK(owned >= 3 && owned == cars0 && tstore(*sim).cars.empty());   // their cars stand at the kerb by the house
+    int drove = -1;
+    bool parkedAtWork = false, walkedIn = false, lookedUp = false;
+    Entity theCar = kNullEntity;
+    while (trf(*sim).minuteOfDay(*sim) != 11 * 60) {
+        sim->step();
+        for (auto& tc : tstore(*sim).cars) {
+            if (tc.citizen < 0) continue;   // could not get to the kerb: it dropped him off and drives on
+            CHECK(tc.task == game::kTaskTrip);
+            if (drove < 0) { drove = tc.citizen; theCar = tc.e; }
+            if (tc.citizen == drove) lookedUp = lookedUp || trf(*sim).citizenOf(*sim, tc.e) == &tstore(*sim).citizens[size_t(drove)];
+        }
+        if (drove < 0) continue;
+        const auto& me = tstore(*sim).citizens[size_t(drove)];
+        if (me.car.valid() && me.state != game::kCitizenHome) {
+            const Vec3 p = w.get<Transform>(me.car).pos;
+            const Vec2 work = trf(*sim).places()[size_t(me.work)].pos;
+            parkedAtWork = parkedAtWork || ((Vec2{p.x, p.z} - work).length() < Fixed::fromInt(9) && trf(*sim).kindOf(*sim, me.car) < 0);
+        }
+        if (parkedAtWork && me.state == game::kCitizenWork) walkedIn = true;
+    }
+    CHECK(drove >= 0 && theCar.valid() && lookedUp);
+    CHECK(parkedAtWork && walkedIn);
+    CHECK(citizensIn(*sim, game::kCitizenWork, 0) == 6);
+    // the afternoon: they drive home again
+    runToHour(*sim, 15.5);
+    CHECK(citizensIn(*sim, game::kCitizenHome) >= 10);
+    const auto& me = tstore(*sim).citizens[size_t(drove)];
+    if (me.car.valid()) CHECK((w.get<Transform>(me.car).pos - Vec3{Fixed::fromRatio(13, 2), Fixed{}, Fixed::fromRatio(13, 2)}).length() < Fixed::fromInt(10));
+}
+
+TEST(traffic_population_a_stolen_car_is_reported_and_its_owner_goes_without) {
+    const std::string rules = commuteRules(R"("car": 100, "parked": 12, "drive": 2,)", R"("roads": {"tiles": "a", "parkingLanes": 1},)");
+    auto sim = makeSimJson(rules, populationMap(), 3);
+    run(*sim, 2.5);
+    // the hero takes the car of a citizen with a day job
+    int victim = -1;
+    for (size_t i = 0; i < tstore(*sim).citizens.size(); ++i) {
+        const auto& c = tstore(*sim).citizens[i];
+        if (c.car.valid() && c.work >= 0 && c.shift == 0 && victim < 0) victim = int(i);
+    }
+    CHECK(victim >= 0);
+    if (victim < 0) return;
+    Entity car = tstore(*sim).citizens[size_t(victim)].car;
+    const Vec3 at = sim->world().get<Transform>(car).pos;
+    const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    sim->world().get<Transform>(hero).pos = at + Vec3{Fixed{}, Fixed{}, Fixed::fromRatio(1, 2)};
+    sim->step();
+    Command enter; enter.player = 1; enter.type = game::kCmdTopDownEnter;
+    sim->submit(enter);
+    run(*sim, 2);
+    CHECK(mod(*sim).driving()->carOf(*sim, hero) != nullptr);
+    if (!mod(*sim).driving()->carOf(*sim, hero)) return;
+    car = mod(*sim).driving()->carOf(*sim, hero)->e;   // whichever of the parked cars he got into
+    victim = -1;
+    for (size_t i = 0; i < tstore(*sim).citizens.size(); ++i) if (tstore(*sim).citizens[i].car == car) victim = int(i);
+    CHECK(victim >= 0 && tstore(*sim).citizens[size_t(victim)].work >= 0);
+    if (victim < 0) return;
+    const bool day = tstore(*sim).citizens[size_t(victim)].shift == 0;
+    bool reported = false;
+    while (trf(*sim).minuteOfDay(*sim) != (day ? 11 : 22) * 60) {
+        sim->step();
+        for (auto& inc : tstore(*sim).incidents) reported = reported || (inc.kind == game::kIncidentCrime && inc.subject == car);
+    }
+    CHECK(reported);
+    const auto& c = tstore(*sim).citizens[size_t(victim)];
+    CHECK(!c.car.valid() && c.state == game::kCitizenWork);   // he got to work all the same
+}
+
+TEST(traffic_population_bus_riders_wait_at_the_stop_and_ride) {
+    const std::string rules = replaced(commuteRules(R"("bus": 100, "ride": 2,)"), R"("cars": {"types": ["sedan"], "max": 0,)",
+        R"("buses": {"types": ["sedan"], "max": 3, "autoStops": 1, "dwell": [1, 1], "speed": [6, 7]}, "cars": {"types": ["sedan"], "max": 0,)");
+    auto sim = makeSimJson(rules, populationMap(), 3);
+    run(*sim, 0.2);
+    for (auto& c : tstore(*sim).citizens) CHECK(c.commute == game::kCommuteBus);
+    int waited = 0, boarded = 0;
+    std::vector<uint8_t> leg(tstore(*sim).citizens.size(), game::kLegWalk);
+    while (trf(*sim).minuteOfDay(*sim) != 12 * 60) {
+        sim->step();
+        for (size_t i = 0; i < leg.size(); ++i) {
+            const auto& c = tstore(*sim).citizens[i];
+            if (c.state != game::kCitizenToWork) { leg[i] = game::kLegWalk; continue; }
+            if (c.leg == game::kLegAtStop && leg[i] != game::kLegAtStop) { ++waited; CHECK(c.e.valid() && c.stopA >= 0 && c.stopB >= 0 && c.stopA != c.stopB); }
+            if (c.leg == game::kLegRide && leg[i] == game::kLegAtStop) { ++boarded; CHECK(!c.e.valid()); }
+            leg[i] = c.leg;
+        }
+    }
+    CHECK(waited >= 3 && boarded >= 1);
+    CHECK(citizensIn(*sim, game::kCitizenWork, 0) == 6);   // by bus or, when none came, on foot
+}
+
+TEST(traffic_population_commute_determinism_and_saves) {
+    const std::string rules = replaced(commuteRules(R"("car": 40, "bus": 40, "parked": 8,)", R"("roads": {"tiles": "a", "parkingLanes": 1},)"),
+        R"("cars": {"types": ["sedan"], "max": 0,)", R"("buses": {"types": ["sedan"], "max": 2, "autoStops": 1, "dwell": [1, 1]}, "cars": {"types": ["sedan"], "max": 3,)");
+    auto s1 = makeSimJson(rules, populationMap(), 5), s2 = makeSimJson(rules, populationMap(), 5);
+    std::vector<uint64_t> c1, c2;
+    for (int i = 0; i < 1800; ++i) { s1->step(); s2->step(); if (i % 100 == 0) { c1.push_back(s1->checksum()); c2.push_back(s2->checksum()); } }
+    CHECK(c1 == c2 && c1.front() != c1.back());
+    int modes[3] = {0, 0, 0};
+    for (auto& c : tstore(*s1).citizens) modes[c.commute]++;
+    CHECK(modes[game::kCommuteCar] >= 1 && modes[game::kCommuteBus] >= 1 && modes[game::kCommuteWalk] >= 1);
+    std::string save = s1->serialize();
+    auto s3 = makeSimJson(rules, populationMap(), 5);
+    std::string err;
+    CHECK(s3->deserialize(save, &err));
+    CHECK(s3->checksum() == s1->checksum());
+    run(*s1, 120); run(*s3, 120);
+    CHECK(s3->checksum() == s1->checksum());
+    SimSnapshot snap;
+    s1->saveState(snap);
+    run(*s1, 10);
+    const uint64_t after = s1->checksum();
+    s1->loadState(snap);
+    run(*s1, 10);
+    CHECK(s1->checksum() == after);
+}
+
+TEST(traffic_people_jump_out_of_the_way_of_a_car) {
+    // the hero drives down the road at a man who stands in his lane
+    std::string rules = kTrafficRules;
+    rules = replaced(rules, R"("max": 6)", R"("max": 0)");
+    rules = replaced(rules, R"("max": 10, "owner": 2)", R"("max": 0, "owner": 2)");
+    auto sim = makeSimJson(rules, trafficMap(R"({"type":"guy","owner":1,"pos":[1.5,1.0]},{"type":"dummy","owner":2,"pos":[8.5,8.5]},
+        {"type":"sedan","owner":0,"pos":[1.5,1.5]},{"type":"ped","owner":2,"pos":[2.5,20.5]})"), 4);
+    auto& w = sim->world();
+    run(*sim, 0.1);
+    const Entity car = firstOf(*sim, "sedan"), man = firstOf(*sim, "ped"), hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    Command c; c.player = 1; c.type = game::kCmdTopDownEnter; sim->submit(c);
+    run(*sim, 0.5);
+    CHECK(car.valid() && man.valid() && mod(*sim).driving()->isDriving(*sim, hero));
+    if (!car.valid() || !man.valid() || !mod(*sim).driving()->isDriving(*sim, hero)) return;
+    steer(*sim, 1, kNorth);   // stick up = throttle
+    int guard = 0;
+    while (mod(*sim).driving()->speed(*sim, car) < Fixed::fromInt(5) && guard++ < 200) sim->step();
+    CHECK(guard < 200);
+    const auto* dc = mod(*sim).driving()->car(*sim, car);
+    Vec3 dir{dc->st.velocity.x, Fixed{}, dc->st.velocity.z};
+    dir = dir / dir.length();
+    w.get<Transform>(man).pos = w.get<Transform>(car).pos + dir * Fixed::fromRatio(7, 2);
+    const Fixed hp = w.get<game::Unit>(man).hp;
+    Fixed aside{};
+    bool passed = false;
+    for (int i = 0; i < 4 * int(sim->tickRate()) && w.alive(man); ++i) {
+        sim->step();
+        if (!w.alive(man)) break;
+        const Vec3 rel = w.get<Transform>(man).pos - w.get<Transform>(car).pos;
+        if (fxAbs(rel.x * dir.x + rel.z * dir.z) < Fixed::fromRatio(1, 2)) { passed = true; aside = fxMax(aside, fxAbs(rel.x * dir.z - rel.z * dir.x)); }
+    }
+    CHECK(w.alive(man) && w.get<game::Unit>(man).hp == hp);   // not touched
+    CHECK(passed && aside > Fixed::fromRatio(3, 5));           // he was beside the car when it passed
+}

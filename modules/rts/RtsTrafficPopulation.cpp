@@ -5,7 +5,8 @@
 // departure time and an arrival time (his position is the straight line between the two). When that position comes
 // near a hero he becomes a real pedestrian on the nearest sidewalk who walks to the door of his destination and
 // goes in; when the hero leaves, he goes on unseen from where he was. So anybody can be followed to his workplace.
-// A shop with one keeper is open while the keeper is in (Traffic::present).
+// A shop with one keeper is open while the keeper is in (Traffic::present). How they travel (on foot, by bus, in
+// their own car) is RtsTrafficCommute.cpp.
 // Fixed maths and integers only; the citizens are created from the simulation RNG on the first tick.
 #include "RtsTraffic.h"
 #include "RtsInternal.h"
@@ -47,6 +48,22 @@ void Traffic::parsePopulation(const Json& j, TrafficRules& r, const std::vector<
     if (p.has("walk")) pr.walk = p.getFx("walk");
     if (pr.walk.raw <= 0) throw std::runtime_error(where + ".walk: must be positive");
     pr.live = int(std::clamp<int64_t>(p.getInt("live", pr.live), 0, 2000));
+    pr.carShare = int(p.getInt("car", 0));
+    pr.busShare = int(p.getInt("bus", 0));
+    if (pr.carShare < 0 || pr.busShare < 0 || pr.carShare + pr.busShare > 100) throw std::runtime_error(where + ": car + bus are percent of the citizens (0..100 together)");
+    if (p.has("drive")) pr.drive = p.getFx("drive");
+    if (p.has("ride")) pr.ride = p.getFx("ride");
+    if (pr.drive.raw <= 0 || pr.ride.raw <= 0) throw std::runtime_error(where + ": drive and ride must be positive");
+    pr.parked = int(std::clamp<int64_t>(p.getInt("parked", pr.parked), 0, 500));
+    if (p.has("stopRange")) pr.stopRange = fxClamp(p.getFx("stopRange"), Fixed{}, Fixed::fromInt(1000));
+    {
+        const Json& ct = p["carTypes"];
+        if (ct.isArray()) for (const Json& e : ct.items()) pr.carTypes.push_back({typeOf(e.str(), where + ".carTypes"), 1});
+        else if (ct.isObject()) for (const auto& [tid, wgt] : ct.members()) pr.carTypes.push_back({typeOf(tid, where + ".carTypes"), int(std::clamp<int64_t>(wgt.integer(1), 1, 1000000))});
+        if (pr.carTypes.empty()) pr.carTypes = r.cars;
+        if (pr.carShare > 0 && pr.carTypes.empty()) throw std::runtime_error(where + ".car: needs carTypes (or cars.types): what they drive");
+        if (pr.busShare > 0 && r.buses.empty()) throw std::runtime_error(where + ".bus: needs traffic.buses");
+    }
     if (const Json& kinds = p["kinds"]; kinds.isObject())
         for (const auto& [id, v] : kinds.members()) {
             TrafficPlaceKind k;
@@ -118,8 +135,9 @@ void Traffic::setupPopulation(Simulation& sim, const Json& map) {
         }
     for (auto& f : found) {
         const int cell = door(f.p);
-        if (cell >= 0 && places_.size() < 1000000) places_.push_back({f.kind, f.p, cell, f.e});
+        if (cell >= 0 && places_.size() < 1000000) { Place pl; pl.kind = f.kind; pl.pos = f.p; pl.cell = cell; pl.object = f.e; places_.push_back(pl); }
     }
+    setupCommute();
 }
 
 int Traffic::minuteOfDay(Simulation& sim) const {
@@ -151,6 +169,10 @@ void Traffic::populate(Simulation& sim, TrafficStore& st) {
         c.home = beds[size_t(i)];
         if (size_t(i) < jobs.size()) { c.work = jobs[size_t(i)].place; c.shift = jobs[size_t(i)].shift; }
         c.state = kCitizenHome;
+        // how he gets about: one draw each, so the shares hold whatever the map
+        const int roll = int(sim.rng().below(100));
+        c.commute = roll < pr.carShare ? kCommuteCar : roll < pr.carShare + pr.busShare ? kCommuteBus : kCommuteWalk;
+        if (c.commute == kCommuteCar) c.carType = pick(sim, pr.carTypes);
     }
     // whoever is on shift at the start is at work already
     const int minute = minuteOfDay(sim);
@@ -164,12 +186,17 @@ bool Traffic::onShift(const TrafficCitizen& c, int minute, int lead) const {
     return inWindow(minute, ((sh.first - lead) % 1440 + 1440) % 1440, sh.second);
 }
 
-const TrafficCitizen* Traffic::citizenOf(Simulation& sim, Entity person) const {
+const TrafficCitizen* Traffic::citizenOf(Simulation& sim, Entity e) const {
     auto* st = store(sim);
     if (!st) return nullptr;
-    auto it = std::lower_bound(st->people.begin(), st->people.end(), person.index, [](const TrafficPerson& p, uint32_t i) { return p.e.index < i; });
-    if (it == st->people.end() || it->e != person || it->citizen < 0 || size_t(it->citizen) >= st->citizens.size()) return nullptr;
-    return &st->citizens[size_t(it->citizen)];
+    int32_t id = -1;
+    auto it = std::lower_bound(st->people.begin(), st->people.end(), e.index, [](const TrafficPerson& p, uint32_t i) { return p.e.index < i; });
+    if (it != st->people.end() && it->e == e) id = it->citizen;
+    else {
+        auto ct = std::lower_bound(st->cars.begin(), st->cars.end(), e.index, [](const TrafficCar& c, uint32_t i) { return c.e.index < i; });
+        if (ct != st->cars.end() && ct->e == e) id = ct->citizen;
+    }
+    return id >= 0 && size_t(id) < st->citizens.size() ? &st->citizens[size_t(id)] : nullptr;
 }
 
 int Traffic::present(Simulation& sim, int place) const {
@@ -186,78 +213,64 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
     const int minute = minuteOfDay(sim);
     const uint32_t rate = sim.tickRate();
     const int64_t minuteTicks = std::max<int64_t>(1, pr.dayTicks / 1440);
-    int live = 0;
+    int live = 0, driving = 0, parked = 0;
     for (auto& p : st.people) live += p.citizen >= 0;
-    const int cap = pr.live;
+    for (auto& c : st.cars) driving += c.citizen >= 0;
+    if (pr.carShare > 0) for (auto& c : st.citizens) parked += c.car.valid();
+    const int cap = pr.live, carCap = std::max(4, rules_.maxCars / 2);
     // a slice per tick: everybody is looked at every two seconds
     const size_t n = st.citizens.size(), slice = std::max<size_t>(1, (n + rate * 2 - 1) / (rate * 2));
     for (size_t k = 0; k < slice; ++k) {
         const size_t id = st.citizenCursor++ % n;
         TrafficCitizen& c = st.citizens[id];
         if (c.state == kCitizenDead) continue;
-        if (c.e.valid() && !(w.alive(c.e) && w.get<Unit>(c.e).hp.raw > 0)) {   // his body vanished without a report: assume the hospital
+        if (c.e.valid() && !(w.alive(c.e) && w.get<Unit>(c.e).hp.raw > 0)) {   // his body (his car) vanished without a report: assume the hospital
             c.e = kNullEntity;
             if (c.state == kCitizenToWork || c.state == kCitizenToHome) { c.state = kCitizenHospital; c.eta = sim.tick() + rules_.incidents.treatTicks; }
         }
+        if (c.commute == kCommuteCar) keepCar(sim, st, c, foci, parked);
         if (c.state == kCitizenHospital) {   // nobody brought him back: he is home again after a while
-            if (sim.tick() >= c.eta) c.state = kCitizenHome;
+            if (sim.tick() >= c.eta) { c.state = kCitizenHome; c.leg = kLegWalk; }
             continue;
         }
-        auto leave = [&](uint8_t state, int from, int to) {
-            c.state = state;
-            c.from = places_[size_t(from)].pos;
-            c.left = sim.tick();
-            c.eta = sim.tick() + ticksOf((places_[size_t(to)].pos - c.from).length() / pr.walk, rate) + 1;
-        };
         if (c.state == kCitizenHome) {
             if (c.work < 0) continue;
-            // leave early enough to walk there, and not all at the same minute
-            const int64_t walkTicks = ticksOf((places_[size_t(c.work)].pos - places_[size_t(c.home)].pos).length() / pr.walk, rate);
-            const int lead = int(std::min<int64_t>(600, walkTicks / minuteTicks)) + int(id * 2654435761u % 20);
-            if (onShift(c, minute, lead)) leave(kCitizenToWork, c.home, c.work);
+            // leave early enough to get there, and not all at the same minute
+            const int lead = int(std::min<int64_t>(600, tripTicks(c, c.home, c.work, rate) / minuteTicks)) + int(id * 2654435761u % 20);
+            if (onShift(c, minute, lead)) depart(sim, st, int32_t(id), kCitizenToWork);
             continue;
         }
         if (c.state == kCitizenWork) {
-            if (!onShift(c, minute, 0)) leave(kCitizenToHome, c.work, c.home);
+            if (!onShift(c, minute, 120)) depart(sim, st, int32_t(id), kCitizenToHome);   // in early is not "after work"
             continue;
         }
         // on his way
-        if (c.e.valid()) continue;   // as a real person: Traffic::people walks him
+        if (c.e.valid()) continue;   // as a real person or in his real car: Traffic::people / Traffic::cars move him
         const int to = c.state == kCitizenToWork ? c.work : c.home;
-        if (sim.tick() >= c.eta) { c.state = c.state == kCitizenToWork ? kCitizenWork : kCitizenHome; continue; }
-        if (foci.empty() || live >= cap) continue;
+        if (sim.tick() >= c.eta) {   // the end of the leg
+            if ((c.leg == kLegToStop || c.leg == kLegAtStop) && c.stopA >= 0) travel(sim, c, kLegRide, stops_[size_t(c.stopA)].kerb);
+            else if (c.leg == kLegRide && c.stopB >= 0) travel(sim, c, kLegWalk, stops_[size_t(c.stopB)].kerb);
+            else arrive(c);
+            continue;
+        }
+        if (foci.empty() || c.leg == kLegRide) continue;   // a rider gets off when a bus calls at his stop (Traffic::passengers)
         const Fixed t = Fixed::fromRatio(int64_t(sim.tick() - c.left), std::max<int64_t>(1, int64_t(c.eta - c.left)));
-        const Vec2 at = c.from + (places_[size_t(to)].pos - c.from) * t;
+        const Vec2 at = c.from + (legTarget(c) - c.from) * t;
         Fixed d2 = Fixed::fromInt(1 << 20);
         for (auto& f : foci) d2 = fxMin(d2, (f - at).lengthSq());
+        if (c.leg == kLegDrive) {   // his car drives into sight
+            if (driving < carCap && d2 <= rules_.spawnMax * rules_.spawnMax && d2 >= rules_.spawnMin * rules_.spawnMin && spawnTrip(sim, st, int32_t(id), at)) ++driving;
+            continue;
+        }
+        if (live >= cap) continue;
         // into sight from the edge of it; out of a door he may come right in front of the hero
         const bool atDoor = sim.tick() - c.left <= rate * 3;
         if (d2 > rules_.peopleMax * rules_.peopleMax || (!atDoor && d2 < rules_.peopleMin * rules_.peopleMin)) continue;
-        int cell = -1;
-        if (atDoor) cell = places_[size_t(c.state == kCitizenToWork ? c.home : c.work)].cell;
-        else {
-            const int cx = int(at.x.floorInt()), cz = int(at.y.floorInt());
-            for (int r = 0; r <= 5 && cell < 0; ++r)
-                for (int dz = -r; dz <= r && cell < 0; ++dz)
-                    for (int dx = -r; dx <= r; ++dx) {
-                        const int x = cx + dx, z = cz + dz;
-                        if (x < 0 || z < 0 || x >= net_.w || z >= net_.h || !side_[size_t(z * net_.w + x)]) continue;
-                        cell = z * net_.w + x; break;
-                    }
-        }
+        const int cell = atDoor ? sidewalkNear(c.from, 6) : sidewalkNear(at, 5);
+        const int goal = c.leg == kLegToStop && c.stopA >= 0 ? stopCell_[size_t(c.stopA)] : places_[size_t(to)].cell;
         if (cell < 0) continue;
         const Vec3 spot{Fixed::fromInt(cell % net_.w) + kHalf, Fixed{}, Fixed::fromInt(cell / net_.w) + kHalf};
-        const Entity e = m_->spawn(sim, c.type, rules_.peopleOwner, spot);
-        if (!e.valid()) continue;
-        c.e = e;
-        TrafficPerson p;
-        p.e = e; p.hp = w.get<Unit>(e).hp; p.lastPos = spot; p.until = sim.tick();
-        p.side = Fixed::fromRatio(int(id % 21) - 10, 10) * rules_.side;
-        p.citizen = int32_t(id);
-        p.goal = places_[size_t(to)].cell;
-        auto it = std::lower_bound(st.people.begin(), st.people.end(), e.index, [](const TrafficPerson& a, uint32_t i) { return a.e.index < i; });
-        st.people.insert(it, p);
-        ++live;
+        if (citizenPerson(sim, st, int32_t(id), spot, goal).valid()) ++live;
     }
 }
 

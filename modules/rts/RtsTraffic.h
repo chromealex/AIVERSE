@@ -77,16 +77,31 @@ struct TrafficPopulationRules {
     std::vector<TrafficWeighted> types;      // who they are (default: pedestrians.types)
     Fixed walk = Fixed::fromRatio(2, 5);     // cells / s of those nobody watches
     int live = 60;                           // citizens on the street as real people at a time, on top of pedestrians.max
+    // how they get to work (RtsTrafficCommute.cpp): by their own car, by bus, the rest on foot
+    int carShare = 0, busShare = 0;          // percent of the citizens
+    std::vector<TrafficWeighted> carTypes;   // their cars (default: cars.types)
+    Fixed drive = Fixed::fromRatio(5, 2), ride = Fixed::fromRatio(3, 2);   // cells / s unseen: driving, on the bus
+    int parked = 16;                         // their cars standing at the kerb as real cars at a time (near the heroes)
+    Fixed stopRange = Fixed::fromInt(30);    // cells: how far from the door a bus stop may be
 };
+enum TrafficCommute : uint8_t { kCommuteWalk = 0, kCommuteCar, kCommuteBus };
+// The stretch of the way a travelling citizen is on: on foot to the door, to the bus stop, waiting at it (only as a
+// real person), on the bus, in his car.
+enum TrafficLeg : uint8_t { kLegWalk = 0, kLegToStop, kLegAtStop, kLegRide, kLegDrive };
 enum TrafficCitizenState : uint8_t { kCitizenHome = 0, kCitizenToWork, kCitizenWork, kCitizenToHome, kCitizenHospital, kCitizenDead };
 struct TrafficCitizen {
     uint16_t type = UINT16_MAX;
     int32_t home = -1, work = -1;            // places
     uint8_t shift = 0;
     uint8_t state = kCitizenHome;
-    Entity e = kNullEntity;                  // on the street as a real person (near a hero)
-    Vec2 from{};                             // travelling unseen: from here since `left`, there at `eta`
-    uint32_t left = 0, eta = 0;
+    Entity e = kNullEntity;                  // on the street as a real person, or the car he drives (near a hero)
+    Vec2 from{};                             // travelling unseen: from here since `left`, at the end of the leg at `eta`
+    uint32_t left = 0, eta = 0;              // kLegAtStop: eta is when he gives up waiting and walks
+    uint8_t commute = kCommuteWalk;          // TrafficCommute
+    uint8_t leg = kLegWalk;                  // TrafficLeg
+    uint16_t carType = UINT16_MAX;
+    Entity car = kNullEntity;                // his car at the kerb where he is, as a real car (near a hero)
+    int32_t stopA = -1, stopB = -1;          // this trip's bus stops: gets on / gets off
 };
 
 struct TrafficRules {
@@ -163,6 +178,7 @@ struct TrafficCar {
     uint32_t taskUntil = 0;
     int32_t destPiece = -1, homePiece = -1;  // where it is going / the station it came out of
     Fixed destAlong{}, homeAlong{};
+    int32_t citizen = -1;                    // kTaskTrip: the citizen who drives it to his address
     std::vector<Entity> crew;                // out of the vehicle at the scene
     std::vector<TrafficWaypoint> route;      // route[wp] is the next point; route[wp - 1] the last one passed
     uint16_t wp = 0;
@@ -180,7 +196,8 @@ struct TrafficCar {
     lib::genre::VehicleInput input;          // planned this tick (derived: recomputed before the vehicle steps)
 };
 
-enum TrafficTask : uint8_t { kTaskNone = 0, kTaskGoing, kTaskCrewOut, kTaskWorking, kTaskCrewBack, kTaskHome };
+enum TrafficTask : uint8_t { kTaskNone = 0, kTaskGoing, kTaskCrewOut, kTaskWorking, kTaskCrewBack, kTaskHome,
+                             kTaskTrip };   // a citizen's drive to work / home (RtsTrafficCommute.cpp)
 
 struct TrafficIncident {
     uint32_t id = 0;
@@ -263,12 +280,17 @@ public:
     int junctionAt(Fixed x, Fixed z) const;  // junction of the cell, or the nearest one within 3 cells, -1: none
     bool walkAllowed(Simulation& sim, int strip) const;
     // something happened (scripts: game.traffic_report): the services answer it. Returns the incident id, 0: ignored
-    uint32_t report(Simulation& sim, uint8_t kind, Vec2 pos, Entity subject = kNullEntity, Entity offender = kNullEntity);
+    // `witnessed`: somebody certainly knows (a crime nobody is near is not reported otherwise)
+    uint32_t report(Simulation& sim, uint8_t kind, Vec2 pos, Entity subject = kNullEntity, Entity offender = kNullEntity, bool witnessed = false);
     static void parsePopulation(const Json& j, TrafficRules& r, const std::vector<std::string>& typeIds, uint32_t tickRate);
-    struct Place { uint16_t kind = 0; Vec2 pos{}; int32_t cell = -1; Entity object = kNullEntity; };
+    struct Place {
+        uint16_t kind = 0; Vec2 pos{}; int32_t cell = -1; Entity object = kNullEntity;
+        int32_t stop = -1;                   // the nearest bus stop (within population.stopRange)
+        int32_t piece = -1; int8_t dir = 1; Fixed along{};   // the kerb his car stands at: road piece, side, where
+    };
     const std::vector<Place>& places() const { return places_; }
     int minuteOfDay(Simulation& sim) const;  // 0..1439
-    const TrafficCitizen* citizenOf(Simulation& sim, Entity person) const;
+    const TrafficCitizen* citizenOf(Simulation& sim, Entity person) const;   // a person on the street or the car he drives
     int present(Simulation& sim, int place) const;   // workers at work in the place now (a shop is open when > 0)
     static void parseCity(const Json& j, TrafficRules& r, const std::vector<std::string>& typeIds, uint32_t tickRate);
     int kindOf(Simulation& sim, Entity vehicle) const;   // TrafficKind of a traffic car, -1: not one
@@ -315,6 +337,28 @@ private:
     void populate(Simulation& sim, TrafficStore& st);
     void population(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci);
     bool onShift(const TrafficCitizen& c, int minute, int lead) const;
+    // getting there (RtsTrafficCommute.cpp)
+    void setupCommute();
+    void travel(Simulation& sim, TrafficCitizen& c, uint8_t leg, Vec2 from) const;   // unseen from here on this leg
+    Vec2 legTarget(const TrafficCitizen& c) const;
+    uint32_t tripTicks(const TrafficCitizen& c, int from, int to, uint32_t rate) const;
+    void depart(Simulation& sim, TrafficStore& st, int32_t id, uint8_t state);
+    void arrive(TrafficCitizen& c) const;
+    bool citizenStep(Simulation& sim, TrafficStore& st, TrafficPerson& p, Vec2 pos);   // true: a walk was planned
+    void citizenUnseen(Simulation& sim, TrafficStore& st, TrafficPerson& p, Vec2 pos); // his body leaves the street
+    Entity citizenPerson(Simulation& sim, TrafficStore& st, int32_t id, Vec3 spot, int goalCell);
+    bool walkTo(Simulation& sim, TrafficPerson& p, int goalCell);
+    int sidewalkNear(Vec2 p, int radius) const;
+    bool kerbFree(Simulation& sim, int32_t piece, int dir, Fixed along, Entity self) const;
+    bool kerbSpot(Simulation& sim, const Place& pl, int dir, Fixed& along, Entity self, const Fixed* from, Fixed ahead) const;
+    void keepCar(Simulation& sim, TrafficStore& st, TrafficCitizen& c, const std::vector<Vec2>& foci, int& parked);
+    bool startTrip(Simulation& sim, TrafficStore& st, int32_t id, Entity car);          // out of the parking lane
+    bool spawnTrip(Simulation& sim, TrafficStore& st, int32_t id, Vec2 at);             // into sight, already driving
+    void trips(Simulation& sim, TrafficStore& st);
+    void tripGone(Simulation& sim, TrafficStore& st, TrafficCar& c);                    // the car leaves the street
+    Entity tripDriverOut(Simulation& sim, TrafficStore& st, TrafficCar& c, Vec3 spot, bool passable);
+    Fixed tripShift(Simulation& sim, const TrafficCar& c, Vec2 pos, Vec2 fwd, Vec2 target) const;
+    bool busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPerson* p);
     void startLeg(Simulation& sim, TrafficPerson& p);
     void nextPoint(Simulation& sim, TrafficPerson& p);
     void panic(Simulation& sim, TrafficPerson& p, Vec2 threat);
@@ -340,6 +384,8 @@ private:
     std::vector<Occupied> occupied_;         // island junctions with traffic inside this tick, ascending (derived)
     std::vector<Siren> sirens_;              // emergency vehicles this tick (derived)
     Fixed mpc_ = Fixed::fromInt(4);          // metres per cell (rules driving)
+    std::vector<int32_t> stopCell_;          // per bus stop: the sidewalk cell people wait on (-1: none)
+    mutable lib::genre::TrafficWalkSearch search_;   // work arrays of the long walks (derived)
 };
 
 } // namespace aiverse::game

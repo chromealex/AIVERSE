@@ -442,9 +442,10 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     h.u32(uint32_t(st->cars.size()));
     for (auto& c : st->cars) {
         h.u64(c.e.packed()); h.u32(c.kind); h.i32(c.lastStop); h.u32(c.dwellUntil);
-        h.i32(c.service); h.u32(c.task); h.u32(c.call); h.u32(c.taskUntil); h.i32(c.destPiece); h.i32(c.homePiece); h.fx(c.destAlong); h.fx(c.homeAlong);
+        h.i32(c.service); h.i32(c.citizen); h.u32(c.task); h.u32(c.call); h.u32(c.taskUntil); h.i32(c.destPiece); h.i32(c.homePiece); h.fx(c.destAlong); h.fx(c.homeAlong);
         h.u32(uint32_t(c.crew.size()));
-        for (Entity m : c.crew) h.u64(m.packed()); h.u32(c.wp); h.i32(c.tailPiece); h.i32(c.tailDir); h.u32(c.tailLane); h.fx(c.cruise);
+        for (Entity m : c.crew) h.u64(m.packed());
+        h.u32(c.wp); h.i32(c.tailPiece); h.i32(c.tailDir); h.u32(c.tailLane); h.fx(c.cruise);
         h.u32(c.stopped); h.u64(c.blocker.packed()); h.u64(c.ignore.packed()); h.u32(c.ignoreUntil); h.u32(c.reverseUntil); h.u32(c.lostSince);
         h.u32(uint32_t(c.route.size()));
         for (auto& p : c.route) { h.fx(p.p.x); h.fx(p.p.y); h.i32(p.junction); h.u32(uint32_t(p.axis) | uint32_t(p.turn) << 8); }
@@ -471,6 +472,7 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     for (auto& c : st->citizens) {
         h.u32(uint32_t(c.type) | uint32_t(c.shift) << 16 | uint32_t(c.state) << 24); h.i32(c.home); h.i32(c.work); h.u64(c.e.packed());
         h.fx(c.from.x); h.fx(c.from.y); h.u32(c.left); h.u32(c.eta);
+        h.u32(uint32_t(c.commute) | uint32_t(c.leg) << 8 | uint32_t(c.carType) << 16); h.u64(c.car.packed()); h.i32(c.stopA); h.i32(c.stopB);
     }
     h.u32(uint32_t(st->blows.size()));
     for (auto& b : st->blows) { h.u64(b.e.packed()); h.fx(b.damage); h.u32(b.tick); }
@@ -485,11 +487,11 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
 
 void io(Archive& a, TrafficWaypoint& p) { a(p.p.x, p.p.y, p.junction, p.axis, p.turn); }
 void io(Archive& a, TrafficCar& c) {
-    a(c.service, c.task, c.call, c.taskUntil, c.destPiece, c.homePiece, c.destAlong, c.homeAlong, c.crew);
+    a(c.service, c.task, c.call, c.taskUntil, c.destPiece, c.homePiece, c.destAlong, c.homeAlong, c.crew, c.citizen);
     a(c.e, c.kind, c.lastStop, c.dwellUntil, c.route, c.wp, c.tailPiece, c.tailDir, c.tailLane, c.cruise, c.stopped, c.blocker, c.ignore, c.ignoreUntil, c.reverseUntil, c.lostSince);
 }
 void io(Archive& a, TrafficPerson& p) { a(p.e, p.state, p.path, p.idx, p.legEnd, p.leg, p.legPt, p.until, p.moved, p.side, p.hp, p.lastPos, p.panic, p.citizen, p.goal); }
-void io(Archive& a, TrafficCitizen& c) { a(c.type, c.home, c.work, c.shift, c.state, c.e, c.from.x, c.from.y, c.left, c.eta); }
+void io(Archive& a, TrafficCitizen& c) { a(c.type, c.home, c.work, c.shift, c.state, c.e, c.from.x, c.from.y, c.left, c.eta, c.commute, c.leg, c.carType, c.car, c.stopA, c.stopB); }
 void io(Archive& a, TrafficIncident& i) { a(i.id, i.kind, i.state, i.pos.x, i.pos.y, i.subject, i.offender, i.born, i.assigned, i.responder, i.victim, i.fatal, i.citizen); }
 void io(Archive& a, TrafficPatient& q) { a(q.type, q.at.x, q.at.y, q.release, q.citizen); }
 void io(Archive& a, TrafficBlow& b) { a(b.e, b.damage, b.tick); }
@@ -643,7 +645,7 @@ void Traffic::extendRoute(Simulation& sim, TrafficCar& c) {
             total += wgt[sd];
         }
         int exitSide = inSide;
-        if (c.destPiece >= 0 && (c.task == kTaskGoing || c.task == kTaskHome)) {   // on call: the way to the address
+        if (c.destPiece >= 0 && (c.task == kTaskGoing || c.task == kTaskHome || c.task == kTaskTrip)) {   // on call, a citizen's trip: the way to the address
             exitSide = exitToward(J, inSide, c.tailPiece, c.destPiece);
         } else if (total > 0) {
             int r = int(sim.rng().below(uint32_t(total)));
@@ -818,14 +820,18 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
         TrafficCar& c = st.cars[i];
         const DrivingCar* dc = w.alive(c.e) && w.get<Unit>(c.e).hp.raw > 0 ? drv->car(sim, c.e) : nullptr;
         if (dc && !dc->driver.valid()) { ++i; continue; }
-        if (dc && dc->driver.valid() && rules_.driverPerson != UINT16_MAX) {   // hijacked: the driver gets out on the far side
+        if (dc && dc->driver.valid() && (rules_.driverPerson != UINT16_MAX || c.citizen >= 0)) {   // hijacked: the driver gets out on the far side
             const Vec3 cp = w.get<Transform>(c.e).pos, hp = w.get<Transform>(dc->driver).pos;
             Vec3 away = flat(cp - hp);
             const Fixed l = away.length();
             away = l.raw > 0 ? away / l : Vec3{kUnit, Fixed{}, Fixed{}};
             Vec3 spot = cp + away * Fixed::fromRatio(4, 5);
             if (!m_->state(sim).grid.passableAt(spot, kLayerGround)) spot = cp - away * Fixed::fromRatio(4, 5);
-            if (m_->state(sim).grid.passableAt(spot, kLayerGround)) {
+            const bool room = m_->state(sim).grid.passableAt(spot, kLayerGround);
+            if (c.citizen >= 0) {   // a citizen on his way: he is on the street now and goes on on foot
+                const Entity pe = tripDriverOut(sim, st, c, spot, room);
+                if (pe.valid()) panic(sim, *byEntity(st.people, pe), v2(hp));
+            } else if (room) {
                 const Entity pe = m_->spawn(sim, rules_.driverPerson, rules_.peopleOwner, spot);
                 if (pe.valid()) {
                     TrafficPerson p; p.e = pe; p.hp = w.get<Unit>(pe).hp; p.lastPos = spot;
@@ -841,18 +847,19 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
     // too far from every hero: gone (when nobody watches)
     if (!foci.empty())
         for (auto& c : st.cars) {
-            if (c.task != kTaskNone) continue;   // on call: it gets there wherever the heroes are
+            if (c.task != kTaskNone && c.task != kTaskTrip) continue;   // on call: it gets there wherever the heroes are
             const Vec2 p = v2(w.get<Transform>(c.e).pos);
             const Fixed d2 = nearestSq(foci, p);
             const bool stuckAway = c.stopped > sim.tickRate() * 30 && d2 > rules_.spawnMin * rules_.spawnMin;
             const bool lostAway = c.lostSince && sim.tick() - c.lostSince > sim.tickRate() * 5 && d2 > rules_.spawnMin * rules_.spawnMin;
-            if (d2 > rules_.despawn * rules_.despawn || stuckAway || lostAway) silentRemove(sim, c.e);
+            if (d2 > rules_.despawn * rules_.despawn || stuckAway || lostAway) { tripGone(sim, st, c); silentRemove(sim, c.e); }
         }
     for (size_t i = 0; i < st.cars.size();) {
         if (w.get<Unit>(st.cars[i].e).hp.raw <= 0) { dropCall(sim, st, st.cars[i]); st.cars.erase(st.cars.begin() + long(i)); continue; }
         ++i;
     }
     responders(sim, st);
+    trips(sim, st);
     for (size_t i = 0; i < st.cars.size();) {   // drove into its station
         if (w.get<Unit>(st.cars[i].e).hp.raw <= 0) { st.cars.erase(st.cars.begin() + long(i)); continue; }
         ++i;
@@ -949,6 +956,7 @@ void Traffic::plan(Simulation& sim, TrafficStore& st, TrafficCar& c) {
             else { yielding = true; shift = Fixed::fromRatio(3, 10); }
             break;
         }
+    if (shift.raw == 0) shift = tripShift(sim, c, pos, fwd, target);   // pulling in to the kerb at his address
     if (shift.raw != 0) {
         const Vec2 rv = rightOnScreen(dirRef) * (rules_.net.leftHand ? -shift : shift);
         target += rv;
@@ -999,7 +1007,7 @@ void Traffic::plan(Simulation& sim, TrafficStore& st, TrafficCar& c) {
     GameState& gs = m_->state(sim);
     const int hereCell = gs.grid.cellOf(v3(pos));
     const bool inMap = hereCell >= 0 && size_t(hereCell) < net_.pieceAt.size();
-    if ((c.task == kTaskGoing || c.task == kTaskHome) && inMap && net_.pieceAt[size_t(hereCell)] == c.destPiece && c.destPiece >= 0) {
+    if ((c.task == kTaskGoing || c.task == kTaskHome || c.task == kTaskTrip) && inMap && net_.pieceAt[size_t(hereCell)] == c.destPiece && c.destPiece >= 0) {
         const auto& P = net_.pieces[size_t(c.destPiece)];   // pull up at the address
         const int s = tl::trafficDetail::axisDir(P.axis, 1).dot(fwd).raw >= 0 ? 1 : -1;
         const Fixed d = (c.destAlong - tl::trafficAlongOf(P, pos)) * s;
@@ -1115,14 +1123,17 @@ void Traffic::plan(Simulation& sim, TrafficStore& st, TrafficCar& c) {
 void Traffic::passengers(Simulation& sim, TrafficStore& st, const BusStop& stop) {
     if (rules_.passengers <= 0 || rules_.people.empty()) return;
     World& w = sim.world();
+    const int stopIndex = int(&stop - stops_.data());
     int on = int(sim.rng().below(uint32_t(rules_.passengers + 1)));
     for (auto& p : st.people) {
-        if (on <= 0) break;
+        if (p.citizen >= 0) { busCitizen(sim, st, stopIndex, &p); continue; }   // citizens take the bus at their own stop only
+        if (on <= 0) continue;
         if (p.panic || p.state != PedState::Pause || !w.alive(p.e) || w.get<Unit>(p.e).hp.raw <= 0) continue;
         if ((v2(w.get<Transform>(p.e).pos) - stop.kerb).lengthSq() > Fixed::fromInt(4)) continue;
         silentRemove(sim, p.e);
         --on;
     }
+    busCitizen(sim, st, stopIndex, nullptr);
     const int off = int(sim.rng().below(uint32_t(rules_.passengers + 1)));
     const int cx = int(stop.kerb.x.floorInt()), cz = int(stop.kerb.y.floorInt());
     int cell = -1;
@@ -1349,15 +1360,7 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
     if (!foci.empty())
         for (auto& p : st.people)
             if (nearestSq(foci, v2(w.get<Transform>(p.e).pos)) > rules_.peopleDespawn * rules_.peopleDespawn) {
-                if (p.citizen >= 0 && size_t(p.citizen) < st.citizens.size()) {   // goes on unseen, from where he is
-                    TrafficCitizen& c = st.citizens[size_t(p.citizen)];
-                    c.e = kNullEntity;
-                    c.from = v2(w.get<Transform>(p.e).pos);
-                    c.left = sim.tick();
-                    const int to = c.state == kCitizenToWork ? c.work : c.home;
-                    const Fixed d = to >= 0 ? (places_[size_t(to)].pos - c.from).length() : Fixed{};
-                    c.eta = sim.tick() + ticksOf(d / rules_.population.walk, sim.tickRate()) + 1;
-                }
+                citizenUnseen(sim, st, p, v2(w.get<Transform>(p.e).pos));   // a citizen goes on unseen, from where he is
                 silentRemove(sim, p.e);
             }
     for (size_t i = 0; i < st.people.size();) {
@@ -1372,13 +1375,22 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
     // threats this tick: shots, hits, deaths; fast cars driven by heroes
     std::vector<Vec2> threats;
     for (const TrafficEvent& ev : st.happened) threats.push_back(v2(ev.pos));
+    // fast: driven by a hero (people run from them); coming: anything that rolls (people in its way jump aside)
     struct Fast { Vec2 p, v; };
+    struct Coming { Vec2 p, dir; Fixed speed, half; };
     std::vector<Fast> fast;
+    std::vector<Coming> coming;
     if (Driving* drv = m_->driving(); drv && drv->active())
         if (auto* ds = drv->store(sim))
-            for (auto& c : ds->cars)
-                if (c.driver.valid() && fxAbs(tl::vehicleForwardSpeed(c.st)) > Fixed::fromInt(6))
-                    fast.push_back({Vec2{c.st.position.x / mpc_, c.st.position.z / mpc_}, Vec2{c.st.velocity.x / mpc_, c.st.velocity.z / mpc_}});
+            for (auto& c : ds->cars) {
+                const Vec2 cp{c.st.position.x / mpc_, c.st.position.z / mpc_}, cv{c.st.velocity.x / mpc_, c.st.velocity.z / mpc_};
+                if (c.driver.valid() && fxAbs(tl::vehicleForwardSpeed(c.st)) > Fixed::fromInt(6)) fast.push_back({cp, cv});
+                const Fixed sp = cv.length();
+                if (sp * mpc_ < Fixed::fromInt(3) || !w.alive(c.e)) continue;
+                Fixed half = Fixed::fromRatio(1, 4);
+                for (auto& t : drv->rules().vehicles) if (t.type == w.get<Unit>(c.e).type) half = t.width / 2;
+                coming.push_back({cp, cv / sp, sp, half});
+            }
 
     const Fixed r2 = rules_.panicRadius * rules_.panicRadius;
     for (auto& p : st.people) {
@@ -1397,6 +1409,32 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
             if (rel.lengthSq() < Fixed::fromInt(9) && rel.dot(f.v).raw > 0) threat = &f.p;
         }
         p.hp = u.hp;
+        // a car about to hit him: a jump to the side, out of its way (wherever that is; back to the sidewalk afterwards)
+        const bool dodging = p.state == PedState::Walk && p.path.empty();
+        if (!dodging && u.hp.raw > 0)
+            for (auto& cm : coming) {
+                const Vec2 rel = pos - cm.p;
+                const Fixed ahead = rel.dot(cm.dir), lat = tl::trafficDetail::cross(cm.dir, rel);
+                if (ahead.raw <= 0 || ahead > cm.speed * Fixed::fromRatio(6, 5) + kUnit || fxAbs(lat) > cm.half + Fixed::fromRatio(2, 5)) continue;
+                // to the side he is already on (dead centre: by his entity index), as far as there is room
+                const bool neg = lat.raw != 0 ? lat.raw < 0 : (p.e.index & 1) != 0;
+                Vec2 perp{-cm.dir.y, cm.dir.x};   // cross(dir, perp) > 0
+                if (neg) perp = perp * -kUnit;
+                static const int kStep[4] = {12, 8, -12, -8};   // tenths of a cell: his side first, then the other
+                for (int stp : kStep) {
+                    const Vec3 to = v3(pos + perp * Fixed::fromRatio(stp, 10));
+                    if (!m_->state(sim).grid.passableAt(to, kLayerGround)) continue;
+                    if (auto* o = w.tryGet<Orders>(p.e)) o->queue.clear();
+                    p.path.clear(); p.idx = 0; p.legEnd = 0;
+                    p.leg.assign(1, to); p.legPt = 0;
+                    p.state = PedState::Walk; p.moved = sim.tick(); p.lastPos = pos3;
+                    if (!p.panic) if (auto* b = w.tryGet<Buffs>(p.e)) b->list.push_back({Stat::Speed, Fixed{}, rules_.panicSpeed * 2, sim.tick() + sim.tickRate(), kNoType});
+                    nextPoint(sim, p);
+                    break;
+                }
+                break;
+            }
+        if (p.state == PedState::Walk && p.path.empty() && !hurt) continue;   // jumping: nothing else on his mind
         if (threat && (!p.panic || hurt)) { panic(sim, p, *threat); continue; }
         if (threat && p.panic) p.until = std::max(p.until, sim.tick() + ticksOf(rules_.panicSeconds, sim.tickRate()) / 2);
 
@@ -1406,23 +1444,9 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
         switch (p.state) {
         case PedState::Pause:
             if (sim.tick() < p.until) break;
-            if (p.citizen >= 0 && !p.panic) {   // on his way to an address
-                if (!newWalk(sim, p, nullptr, p.goal)) {   // there (or as near as the sidewalk gets): through the door
-                    if (size_t(p.citizen) < st.citizens.size()) {
-                        TrafficCitizen& c = st.citizens[size_t(p.citizen)];
-                        c.e = kNullEntity;
-                        const Vec2 door{Fixed::fromInt(p.goal % net_.w) + kHalf, Fixed::fromInt(p.goal / net_.w) + kHalf};
-                        if ((pos - door).lengthSq() <= Fixed::fromInt(16)) c.state = c.state == kCitizenToWork ? kCitizenWork : kCitizenHome;
-                        else {   // the sidewalks here lead no nearer (a river, a fence): the rest of the way unseen
-                            const int to = c.state == kCitizenToWork ? c.work : c.home;
-                            c.from = pos; c.left = sim.tick();
-                            c.eta = sim.tick() + ticksOf((places_[size_t(to)].pos - pos).length() / rules_.population.walk, sim.tickRate()) + 1;
-                        }
-                    }
-                    p.citizen = -1;
-                    silentRemove(sim, p.e);
-                    break;
-                }
+            if (p.citizen >= 0 && size_t(p.citizen) >= st.citizens.size()) p.citizen = -1;
+            if (p.citizen >= 0 && !p.panic) {   // on his way to an address: the next stretch, the bus stop, the door
+                if (!citizenStep(sim, st, p, pos)) break;
             } else if (!newWalk(sim, p, nullptr)) { p.until = sim.tick() + sim.tickRate() * 2; break; }
             if (stripAt(p.path[0]) >= 0 && !walkAllowed(sim, stripAt(p.path[0]))) { p.state = PedState::Wait; break; }   // starts at the kerb
             startLeg(sim, p);

@@ -195,11 +195,11 @@ bool Traffic::isCasualtyType(uint16_t t) const {
 
 // ================================================================= incidents
 
-uint32_t Traffic::report(Simulation& sim, uint8_t kind, Vec2 pos, Entity subject, Entity offender) {
+uint32_t Traffic::report(Simulation& sim, uint8_t kind, Vec2 pos, Entity subject, Entity offender, bool witnessed) {
     auto* st = store(sim);
     if (!st || kind >= kIncidentKinds) return 0;
     World& w = sim.world();
-    if (kind == kIncidentCrime) {   // nobody saw it: nobody calls the police
+    if (kind == kIncidentCrime && !witnessed) {   // nobody saw it: nobody calls the police
         bool seen = false;
         const Fixed r2 = rules_.incidents.witness * rules_.incidents.witness;
         for (auto& p : st->people) if (living(w, p.e) && (v2(w.get<Transform>(p.e).pos) - pos).lengthSq() <= r2) { seen = true; break; }
@@ -327,8 +327,9 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
             if (q.citizen >= 0 && size_t(q.citizen) < st.citizens.size()) {   // a citizen: home from the hospital door, then his day goes on
                 TrafficCitizen& c = st.citizens[size_t(q.citizen)];
                 if (c.state == kCitizenHospital) {
-                    c.state = kCitizenToHome; c.from = q.at; c.left = sim.tick();
-                    c.eta = sim.tick() + ticksOf((places_[size_t(c.home)].pos - q.at).length() / rules_.population.walk, sim.tickRate()) + 1;
+                    c.state = kCitizenToHome;
+                    c.stopA = c.stopB = -1;
+                    travel(sim, c, kLegWalk, q.at);
                 }
                 continue;
             }
@@ -533,7 +534,7 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
     GameState& gs = m_->state(sim);
     Driving* drv = m_->driving();
     for (auto& c : st.cars) {
-        if (c.task == kTaskNone) continue;
+        if (c.task == kTaskNone || c.task == kTaskTrip) continue;
         const TrafficService& sv = rules_.services[size_t(c.service)];
         TrafficIncident* inc = incidentOf(st, c.call);
         const Vec3 pos3 = w.get<Transform>(c.e).pos;

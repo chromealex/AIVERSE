@@ -62,7 +62,8 @@ by a game's native module without the RTS module. Tests: `aiverse_tests traffic_
   the traffic across their way is green and at least 1.5 s of its walk window (`signals.walk`) are left. A person
   who is hurt, sees a shot, a hit or a death within `panic.radius`, or has a fast car (driven by a hero) coming at
   him panics: he runs (`panic.speed` multiplier) toward the sidewalk cell farthest from the threat for
-  `panic.seconds`, signals ignored. Orders from scripts or the computer player end the walk (the script owns it).
+  `panic.seconds`, signals ignored. Whoever stands in the way of anything that rolls faster than 3 m/s (within 1.2 s
+  of it) jumps to the side out of its path, wherever that is, and goes back to his walk. Orders from scripts or the computer player end the walk (the script owns it).
 - **Big cities.** Only the surroundings of the heroes are simulated, and no per-tick cost grows with the map:
   cars, buses and people are spawned by sampling cells of the square around a hero and removed beyond `despawn`;
   light props exist only at junctions within `signals.radius` of a hero (signal phases are a pure function of the
@@ -122,7 +123,8 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
 
 ## Population: homes, jobs, shifts
 
-`modules/rts/RtsTrafficPopulation.cpp`, rules `traffic.population`. Tests: `aiverse_tests traffic_population`.
+`modules/rts/RtsTrafficPopulation.cpp` (who, where, when) and `RtsTrafficCommute.cpp` (how they get there), rules
+`traffic.population`. Tests: `aiverse_tests traffic_population`.
 
 - **Places** are homes and workplaces: map objects of the types in `objects` and the entries of the map's
   `"places": [{"kind": "shop", "pos": [x, z]}]`. A place kind says how many people live there (`lives`) and how
@@ -137,6 +139,20 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
   sidewalk at the edge of sight), walks to the door of his destination, crossing on "walk" like everybody, and goes
   in. `live` caps how many are on the street at a time. When the heroes leave he goes on unseen from where he is.
   So anybody can be followed from his home to his workplace; `game.traffic_citizen(h)` tells who he is.
+- **On foot** he takes the shortest way over the sidewalks and crossings of the whole map (A*, `trafficWalkRoute`):
+  round a river to its bridge, round a fenced block. Only when no sidewalk leads to the door at all does he finish
+  the way unseen.
+- **By car** (`car` percent of the citizens, types `carTypes`, default `cars.types`). His car stands in the parking
+  lane next to the house / the workplace while a hero is around (`parked` real cars at a time; roads need
+  `parkingLanes`). When he leaves it pulls out, drives the junction graph to his address like a service vehicle,
+  pulls into the parking lane there (when the spot is free; else he is dropped off and the car drives on), he gets
+  out on the kerb side and walks to the door. Unseen he moves at `drive` cells/s and drives into sight at the edge
+  of it. A hero who takes the car while he drives puts him on the street (he goes on on foot); a parked car that is
+  gone or has somebody in it when he comes for it is a crime report, and he walks from then on.
+- **By bus** (`bus` percent; needs `traffic.buses`). When the stops next to his door and his destination (within
+  `stopRange` cells) save walking, he walks to his stop and waits; a bus that calls there takes him (he gives up
+  after two minutes and walks). Buses have no lines: unseen he rides at `ride` cells/s, and a bus that calls at his
+  stop when he is due lets him off, else he appears at the stop when his ride is over.
 - **Shops.** `Traffic::present(place)` / `work.open` in Lua: a workplace is open while one of its workers is in. A
   shop with one keeper opens when he arrives and shuts when he leaves.
 - **Hurt citizens** stay themselves: knocked down, the citizen is in hospital (the ambulance's, see above), then
@@ -146,13 +162,14 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
 
 ```json
 "population": {"count": 5000, "dayLength": 1200, "startHour": 7, "walk": 0.4, "live": 80,
+  "car": 45, "bus": 25, "drive": 2.5, "ride": 1.5, "parked": 16, "stopRange": 30, "carTypes": {"sedan": 3, "van": 1},
   "kinds": {"house": {"lives": 40}, "shop": {"jobs": 1, "shifts": [[9, 20]]}, "office": {"jobs": 25, "shifts": [[9, 18]]},
             "port": {"jobs": 200, "shifts": [[6, 14], [14, 22], [22, 6]]}},
   "objects": {"b_townhouse": "house", "b_market": "shop"}}
 ```
 
-Not done yet: commuting by car and by bus (everybody walks, so a big city needs a long day or short ways), long
-ways round rivers (a walker whose sidewalks lead no nearer finishes the way unseen), children and schools, lunch,
+Not done yet: bus lines (a rider takes any bus), a driver walking from his door to a car parked further off (he
+gets in at once), children and schools, lunch,
 shopping, money, the hero as a citizen.
 
 ## rules.json
@@ -206,6 +223,7 @@ to the point (within 3 cells) for traffic along that axis (default: the axis of 
 | `trafficDriverInput(params, yaw, speed, pos, target, targetSpeed)` | `VehicleInput` of the bot driver (handbrake at a standstill with target 0) |
 | `trafficPursuit(pos, polyline, ahead)`, `trafficCurve`, `trafficStopSpeed` | pure pursuit point, junction curves, braking envelope |
 | `trafficWalkField / trafficWalkPath` | breadth-first sidewalk distances and paths |
+| `trafficWalkRoute(w, h, walk, start, goal, search, out, maxNodes)` | shortest sidewalk route over the whole map (A*, reusable work arrays) |
 
 ## Not done yet
 

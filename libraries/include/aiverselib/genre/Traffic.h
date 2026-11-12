@@ -312,4 +312,60 @@ inline std::vector<int32_t> trafficWalkPath(const std::vector<int32_t>& parent, 
     return out;
 }
 
+// Shortest sidewalk route over the whole map (A*, 4 neighbours, Manhattan heuristic): the way round a river to its
+// bridge. `search` keeps the work arrays between calls (a call touches only the cells it visits, whatever the size of
+// the city). `out`: cells from the start (excluded) to the goal (included). False: no way, or more than `maxNodes`
+// cells would have to be looked at. Deterministic: ties go to the lower cell index.
+struct TrafficWalkSearch {
+    std::vector<uint32_t> seen;
+    std::vector<int32_t> g, parent;
+    uint32_t stamp = 0;
+    struct Node { int32_t f, h, cell; };
+    std::vector<Node> heap;
+};
+inline bool trafficWalkRoute(int w, int h, const std::vector<uint8_t>& walk, int start, int goal, TrafficWalkSearch& s, std::vector<int32_t>& out, int maxNodes = 200000) {
+    out.clear();
+    const size_t N = size_t(w) * size_t(h);
+    if (start < 0 || goal < 0 || size_t(start) >= N || size_t(goal) >= N || walk.size() != N || !walk[size_t(start)] || !walk[size_t(goal)]) return false;
+    if (start == goal) return true;
+    if (s.seen.size() != N) { s.seen.assign(N, 0); s.g.assign(N, 0); s.parent.assign(N, -1); s.stamp = 0; }
+    if (++s.stamp == 0) { std::fill(s.seen.begin(), s.seen.end(), 0); s.stamp = 1; }
+    const int gx = goal % w, gz = goal / w;
+    auto est = [&](int c) { const int dx = c % w - gx, dz = c / w - gz; return (dx < 0 ? -dx : dx) + (dz < 0 ? -dz : dz); };
+    auto after = [](const TrafficWalkSearch::Node& a, const TrafficWalkSearch::Node& b) {
+        return a.f != b.f ? a.f > b.f : a.h != b.h ? a.h > b.h : a.cell > b.cell;
+    };
+    s.heap.clear();
+    s.seen[size_t(start)] = s.stamp; s.g[size_t(start)] = 0; s.parent[size_t(start)] = -1;
+    s.heap.push_back({est(start), est(start), start});
+    int nodes = 0;
+    bool found = false;
+    while (!s.heap.empty()) {
+        std::pop_heap(s.heap.begin(), s.heap.end(), after);
+        const TrafficWalkSearch::Node n = s.heap.back();
+        s.heap.pop_back();
+        const int c = n.cell;
+        if (n.f - n.h > s.g[size_t(c)]) continue;   // a better way to it was found since
+        if (c == goal) { found = true; break; }
+        if (++nodes > maxNodes) break;
+        const int cx = c % w, cz = c / w;
+        const int nx[4] = {cx - 1, cx + 1, cx, cx}, nz[4] = {cz, cz, cz - 1, cz + 1};
+        for (int d = 0; d < 4; ++d) {
+            if (nx[d] < 0 || nz[d] < 0 || nx[d] >= w || nz[d] >= h) continue;
+            const int ni = nz[d] * w + nx[d];
+            if (!walk[size_t(ni)]) continue;
+            const int32_t ng = s.g[size_t(c)] + 1;
+            if (s.seen[size_t(ni)] == s.stamp && s.g[size_t(ni)] <= ng) continue;
+            s.seen[size_t(ni)] = s.stamp; s.g[size_t(ni)] = ng; s.parent[size_t(ni)] = c;
+            const int hh = est(ni);
+            s.heap.push_back({ng + hh, hh, ni});
+            std::push_heap(s.heap.begin(), s.heap.end(), after);
+        }
+    }
+    if (!found) return false;
+    for (int c = goal; c != start; c = s.parent[size_t(c)]) out.push_back(c);
+    std::reverse(out.begin(), out.end());
+    return true;
+}
+
 } // namespace aiverse::lib::genre

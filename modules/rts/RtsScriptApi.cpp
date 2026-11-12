@@ -1268,8 +1268,9 @@ int gTrafficClock(lua_State* L, Vm& vm) {
     pushFx(L, Fixed::fromRatio(t->minuteOfDay(sim), 60));
     return 1;
 }
-// game.traffic_citizen(h) -> {id-less record of the citizen behind a person on the street} or nil:
-// {state = "to_work"|"to_home"|..., home = {x, z}, work = {x, z, kind, open}, shift = {from, to} (hours)}
+// game.traffic_citizen(h) -> {id-less record of the citizen behind a person on the street or the car he drives} or nil:
+// {state = "to_work"|"to_home"|..., commute = "walk"|"car"|"bus", leg = "walk"|"to_stop"|"at_stop"|"drive" (on his way),
+//  home = {x, z}, work = {x, z, kind, open}, shift = {from, to} (hours)}
 int gTrafficCitizen(lua_State* L, Vm& vm) {
     CTX;
     Entity e;
@@ -1279,6 +1280,10 @@ int gTrafficCitizen(lua_State* L, Vm& vm) {
     static const char* states[] = {"home", "to_work", "work", "to_home", "hospital", "dead"};
     lua_createtable(L, 0, 4);
     lua_pushstring(L, states[std::min<int>(c->state, 5)]); lua_setfield(L, -2, "state");
+    static const char* commutes[] = {"walk", "car", "bus"};
+    static const char* legs[] = {"walk", "to_stop", "at_stop", "ride", "drive"};
+    lua_pushstring(L, commutes[std::min<int>(c->commute, 2)]); lua_setfield(L, -2, "commute");
+    if (c->state == kCitizenToWork || c->state == kCitizenToHome) { lua_pushstring(L, legs[std::min<int>(c->leg, 4)]); lua_setfield(L, -2, "leg"); }
     auto place = [&](int i, const char* key) {
         if (i < 0) return;
         const auto& p = t->places()[size_t(i)];
@@ -1404,7 +1409,7 @@ Json scriptApiReference() {
     q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
     q.push(fn("game.traffic_light(x, z [, \"x\"|\"z\"])", "signal of the junction at / next to the point for traffic along that axis (default: the road there): \"green\"|\"yellow\"|\"red\", nil without a signalised junction (rules traffic, docs/traffic.md)"));
     q.push(fn("game.traffic_incidents()", "{{id, kind = \"injured\"|\"crime\"|\"fire\"|\"wreck\", x, z, state = \"open\"|\"coming\"|\"working\"}, ...}: what the city services are dealing with (docs/traffic.md)"));
-    q.push(fn("game.traffic_citizen(h) / game.traffic_clock()", "the citizen behind a person on the street: {state, home = {x, z, kind}, work = {x, z, kind, open}, shift = {from, to}} or nil / hour of the game day (rules traffic.population, docs/traffic.md)"));
+    q.push(fn("game.traffic_citizen(h) / game.traffic_clock()", "the citizen behind a person on the street or the car he drives: {state, commute, leg, home = {x, z, kind}, work = {x, z, kind, open}, shift = {from, to}} or nil / hour of the game day (rules traffic.population, docs/traffic.md)"));
     q.push(fn("game.traffic_kind(h)", "\"car\"|\"bus\"|\"emergency\" for a vehicle the traffic drives (sirens, HUD), nil otherwise"));
     q.push(fn("game.var(name)", "trigger variable (fx)"));
     q.push(fn("game.territory_at(x,z) / game.territory_count(player)", "owner at flat-map ground point (nil outside ground), or owned cell count"));
