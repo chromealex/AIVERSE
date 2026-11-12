@@ -36,12 +36,14 @@ ALIASES = {
  'meta-ui':'screen interface экран интерфейс',
  'aiverse-card-runtime':'cards deck карточ колод', 'aiverse-turn-scheduler':'turn пошаг ход',
  'aiverse-grid-puzzles':'puzzle match3 головолом', 'aiverse-rhythm-timing':'rhythm ритм',
- 'aiverse-narrative-graphs':'story narrative сюжет диалог', 'rts-bots-rts':'rts bot ртс бот',
+ 'aiverse-narrative-graphs':'story narrative dialogue relationship knowledge bark visual novel backlog consequence сюжет диалог отношения реплик визуальная новелла', 'rts-bots-rts':'rts bot ртс бот',
  'aiverse-bots-fps':'fps bot фпс бот', 'aiverse-camera':'camera камер',
  'aiverse-orchestrator':'skill catalog orchestration скилл каталог оркестратор',
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
+ 'aiverse-cinematic-gameplay':'cinematic cutscene timeline qte slowmo hitstop timescale sync staging checkpoint катсцен ролик таймлайн замедлен синхрон постановк чекпоинт',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
+ 'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
  'aiverse-boss-encounters':'boss telegraph windup cone slam phase enrage adds rotation status stun burn slow mob wander hunt flee swarm босс телеграф замах конус фаз ярост призыв ротаци статус оглушен горен замедлен моб блужд охот бегств рой',
 }
 
