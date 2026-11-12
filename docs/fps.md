@@ -60,7 +60,7 @@ The first three binaries are under `<build>/modules/fps/`.
 ```
 
 Client and server require identical content and protocol. Weapon support uses FPS
-save version 6 (version-3 saves still load); earlier experimental FPS saves and older peers
+save version 7 (version 3 and 6 saves still load); earlier experimental FPS saves and older peers
 are rejected. RTS save/protocol versions are unchanged.
 
 ## Scope
@@ -89,6 +89,32 @@ Ricochet, Fly Through and scalar modifiers. This works independently of `mechani
 `flight.gravity` defaults to `bulletGravity`. Authoritative 3D sweeps, actor-life hit history,
 material penetration, save/rollback and existing snapshot presentation are supported.
 See [projectile programs](projectile-programs.md) for the JSON schema and trajectory semantics.
+
+## Close combat (opt-in)
+
+`fps.melee.enabled: true` adds an authoritative melee strike, guard, parry and lock-on.
+It is independent of `fps.mechanics`; rules without the block behave as before.
+Swing timing, input buffering, chaining and one-hit-per-target-per-swing come from the
+shared `melee-combat` library (`libraries/include/aiverselib/genre/Melee.h`).
+
+| Behavior | Implementation | Current limits |
+|---|---|---|
+| Strike | Windup, active and recovery ticks; the blade tip is swept from its previous position each active tick against actor bounds widened by `radius` | One attack type, no combos or weapon-specific swings; no skinned animation |
+| Guard | Held Block negates hits whose attacker is within `guardTurns` of the facing direction; Block also stops firing | No stamina or guard break |
+| Parry | Pressing Block opens a `parryTicks` window; a strike landing in it deals no damage and staggers the attacker | Parry gives no riposte bonus |
+| Stagger | A landed hit staggers the target and a parry staggers the attacker for `staggerTicks`; staggered actors cannot strike or fire | — |
+| Lock-on | Holding LockOn selects the nearest living enemy within `lockRange`; strikes aim at the locked target until it dies or moves out of twice the range | Camera does not follow the lock |
+
+Data: `fps.melee` accepts `enabled`, `damage`, `windupTicks`, `activeTicks`,
+`recoveryTicks`, `bufferTicks`, `parryTicks`, `staggerTicks` (ticks; defaults scale with
+tick rate), `range`, `radius`, `lockRange` (world units) and `guardTurns` (half-angle in
+turns, at most 0.25). Simulation events: 3 = swing started, 4 = contact (value = target
+slot | contact << 8, where contact is hit 0 / blocked 1 / parried 2). Melee state is saved
+from FPS save version 7 and hashed when the block is enabled.
+
+Desktop client controls when enabled: **Z** strike, hold **Left Alt** guard (press to
+parry), hold **T** lock-on. The client has no melee viewmodel or hit sounds yet; check
+it live before treating the feel as finished.
 
 ## Extended mechanics (opt-in)
 
