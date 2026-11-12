@@ -1,0 +1,22 @@
+{
+  "materials": [
+    {"id": 1, "resistanceMilli": 200, "damageFalloffMilli": 100, "velocityFalloffMilli": 100},
+    {"id": 2, "resistanceMilli": 5000, "damageFalloffMilli": 2000, "velocityFalloffMilli": 1000, "minThicknessMilli": 10},
+    {"id": 3, "impenetrable": true}
+  ],
+  "frame": {
+    "slots": [1, 2, 3],
+    "stats": [
+      {"id": 1, "baseMilli": 25000, "minimumMilli": 0, "maximumMilli": 100000},
+      {"id": 2, "baseMilli": 2000, "minimumMilli": 500, "maximumMilli": 10000},
+      {"id": 3, "baseMilli": 30000, "minimumMilli": 1000, "maximumMilli": 100000}
+    ]
+  },
+  "attachments": [
+    {"id": 10, "slot": 1, "modifiers": [{"stat": 1, "op": "add", "valueMilli": 5000}, {"stat": 1, "op": "mul", "valueMilli": 1200}]},
+    {"id": 11, "slot": 1, "modifiers": [{"stat": 2, "op": "mul", "valueMilli": 500}]},
+    {"id": 20, "slot": 2, "modifiers": [{"stat": 2, "op": "add", "valueMilli": -500}]},
+    {"id": 30, "slot": 3, "modifiers": [{"stat": 3, "op": "add", "valueMilli": 15000}, {"stat": 1, "op": "mul", "valueMilli": 900}]},
+    {"id": 31, "slot": 3, "modifiers": [{"stat": 3, "op": "mul", "valueMilli": 10000}]}
+  ]
+}

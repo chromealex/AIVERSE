@@ -23,7 +23,8 @@ std::string string(const Json& j){if(!j.isString()||j.str().empty())throw std::r
 std::int64_t integer(const Json& j){
     if(!j.isNumber())throw std::runtime_error("expected integer");
     const auto& s=j.numberLiteral();std::int64_t value=0;auto [p,e]=std::from_chars(s.data(),s.data()+s.size(),value);
-    if(e!=std::errc{}||p!=s.data()+s.size())throw std::runtime_error("invalid integer");return value;
+    if(e!=std::errc{}||p!=s.data()+s.size())throw std::runtime_error("invalid integer");
+    return value;
 }
 std::uint64_t positive(const Json& j){auto v=integer(j);if(v<0)throw std::runtime_error("expected nonnegative integer");return static_cast<std::uint64_t>(v);}
 const std::vector<Json>& array(const Json& j){if(!j.isArray())throw std::runtime_error("expected array");return j.items();}
@@ -72,7 +73,8 @@ int main(int argc,char** argv){
             object(input,{"steps","checks"});Scenario s;
             for(const auto& j:array(input["steps"])){object(j,{"tick","action","payload"});if(!j["payload"].isString())throw std::runtime_error("payload must be a string");s.steps.push_back({positive(j["tick"]),string(j["action"]),j["payload"].str()});}
             for(const auto& j:array(input["checks"])){object(j,{"tick","metric","minimum","maximum"});s.checks.push_back({positive(j["tick"]),string(j["metric"]),integer(j["minimum"]),integer(j["maximum"])});}
-            if(!validScenario(s))throw std::runtime_error("invalid scenario ordering/range");out.set("validated",Json::fromBool(true));
+            if(!validScenario(s))throw std::runtime_error("invalid scenario ordering/range");
+            out.set("validated",Json::fromBool(true));
         }else if(command=="curve"){
             object(input,{"points","samples","mode"});std::vector<aiverse::lib::systems::CurvePoint> points;
             for(const auto& p:array(input["points"])){object(p,{"x","y"});points.push_back({integer(p["x"]),integer(p["y"])});}
@@ -80,9 +82,11 @@ int main(int argc,char** argv){
             if(!aiverse::lib::systems::curve(points,0))throw std::runtime_error("invalid curve definition");
             auto values=Json::array();for(const auto& x:array(input["samples"])){
                 auto y=aiverse::lib::systems::curve(points,integer(x),mode=="step"?aiverse::lib::systems::CurveMode::Step:aiverse::lib::systems::CurveMode::Linear);
-                if(!y)throw std::runtime_error("invalid curve/domain or intermediate overflow");values.push(Json::number(*y));
+                if(!y)throw std::runtime_error("invalid curve/domain or intermediate overflow");
+                values.push(Json::number(*y));
             }
-            if(points.empty())throw std::runtime_error("empty curve");out.set("values",std::move(values));
+            if(points.empty())throw std::runtime_error("empty curve");
+            out.set("values",std::move(values));
         }else if(command=="genre"){
             object(input,{"genre"});const auto id=string(input["genre"]);Genre g;
             if(id=="classic-rts")g=Genre::ClassicRts;else if(id=="colony")g=Genre::Colony;else if(id=="tower-defense")g=Genre::TowerDefense;else if(id=="lane-battler")g=Genre::LaneBattler;else throw std::runtime_error("unknown genre");

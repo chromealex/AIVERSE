@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "vehicles": {
+    "raceLaps": 3,
+    "wrongWayTicks": 45,
+    "respawnWrongWayTicks": 240,
+    "stuckSpeedMilli": 500,
+    "stuckTicks": 300,
+    "botRubberBandMilli": 40
+  },
+  "sports": {
+    "periods": 2,
+    "periodTicks": 2700,
+    "overtimeTicks": 0,
+    "goldenGoal": true,
+    "clockMode": 2,
+    "maxStoppageTicks": 300,
+    "botTackleMilli": 300
+  }
+}

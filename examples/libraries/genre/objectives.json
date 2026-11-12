@@ -1,0 +1,19 @@
+{
+  "zones": [
+    {"id": 1, "kind": "capture", "center": [0, 0, 0], "radiusMilli": 4000, "heightMilli": 3000},
+    {"id": 2, "kind": "hill", "center": [30000, 0, 0], "radiusMilli": 6000},
+    {"id": 3, "kind": "extraction", "center": [-40000, 0, 20000], "radiusMilli": 5000, "heightMilli": 4000},
+    {"id": 4, "kind": "bombSite", "center": [0, 0, 50000], "radiusMilli": 3000, "heightMilli": 3000}
+  ],
+  "payload": {
+    "path": [[0, 0, 0], [20000, 0, 0], [20000, 2000, 30000], [50000, 2000, 30000]],
+    "checkpointsMilli": [20000, 50000]
+  },
+  "route": {
+    "gates": [
+      {"id": 1, "center": [0, 0, 10000], "normal": [0, 0, 1000], "radiusMilli": 6000},
+      {"id": 2, "center": [40000, 0, 40000], "normal": [1000, 0, 0], "radiusMilli": 6000},
+      {"id": 3, "center": [0, 0, 70000], "normal": [-1000, 0, 0], "radiusMilli": 6000}
+    ]
+  }
+}

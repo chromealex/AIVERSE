@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "matchRules": {"warmupTicks": 600, "roundTicks": 18000, "overtimeTicks": 0, "roundsToWin": 2, "maxRounds": 3, "scoreToWin": 100},
+  "objectives": {
+    "zoneCaptureTicks": 600, "zoneContestRule": 1, "zoneMaxCapturers": 3, "holdScoreInterval": 60,
+    "hillRotateTicks": 3600, "hillCount": 3,
+    "payloadPushSpeedMilli": 80, "payloadExtraPusherMilli": 300, "payloadReverseDelayTicks": 1800,
+    "respawnDelayTicks": 300, "respawnWaveTicks": 600,
+    "extractionHoldTicks": 600, "extractionRequiredItems": 1,
+    "bombPlantTicks": 200, "bombDefuseTicks": 600, "bombKitDefuseTicks": 150, "bombFuseTicks": 2700,
+    "overtimeGraceTicks": 180, "overtimeMaxTicks": 3600,
+    "spectatorKillCamTicks": 240, "routeLaps": 3
+  }
+}

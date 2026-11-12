@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "senses": {
+    "sightRangeMilli": 25000,
+    "sightHalfAngleMilli": 100,
+    "suspiciousAtMilli": 150,
+    "alertDelayTicks": 20,
+    "alertRelay": true,
+    "searchGiveUpTicks": 600,
+    "trailLifetimeTicks": 900
+  }
+}

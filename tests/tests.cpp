@@ -12951,6 +12951,8 @@ TEST(models_gltf_lod_metadata) {
 #include "animation/editor.inc"
 #include "geometry/runtime.inc"
 
+#include "tests_projectiles.inc"
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // aiverse_tests [name filter]

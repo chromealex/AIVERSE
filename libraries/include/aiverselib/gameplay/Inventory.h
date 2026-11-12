@@ -11,7 +11,8 @@ struct ItemStack { std::int64_t type=0,count=0; };
 struct InventoryConfig { std::size_t slots=20;std::int64_t maxWeight=1000000; };
 template<class Lookup>
 Decision checkInventory(const std::vector<ItemStack>& items,const InventoryConfig& c,Lookup lookup) {
-    if(c.maxWeight<0||c.slots>65536||items.size()>c.slots)return {Reason::Capacity};std::int64_t weight=0;
+    if(c.maxWeight<0||c.slots>65536||items.size()>c.slots)return {Reason::Capacity};
+    std::int64_t weight=0;
     for(const auto& stack:items) {
         auto type=lookup(stack.type);
         if(!type||type->maxStack<1||type->weight<0||stack.count<1||stack.count>type->maxStack)return {Reason::Invalid,stack.type};
@@ -30,7 +31,8 @@ Decision addItem(std::vector<ItemStack>& items,const InventoryConfig& c,ItemStac
     auto result=checkInventory(next,c,lookup);if(result)items=std::move(next);return result;
 }
 inline Decision removeItem(std::vector<ItemStack>& items,ItemStack item) {
-    if(item.count<1)return {Reason::Invalid};auto remaining=item.count;
+    if(item.count<1)return {Reason::Invalid};
+    auto remaining=item.count;
     for(const auto& s:items)if(s.type==item.type){if(s.count<1)return {Reason::Invalid};remaining-=std::min(remaining,s.count);}
     if(remaining)return {Reason::Missing,item.type,item.count,item.count-remaining};
     remaining=item.count;for(auto& s:items)if(s.type==item.type){auto n=std::min(remaining,s.count);s.count-=n;remaining-=n;}
@@ -38,7 +40,15 @@ inline Decision removeItem(std::vector<ItemStack>& items,ItemStack item) {
 }
 template<class Lookup>
 Decision transferItem(std::vector<ItemStack>& from,std::vector<ItemStack>& to,const InventoryConfig& targetConfig,ItemStack item,Lookup lookup) {
-    if(&from==&to)return {Reason::Invalid};auto a=from,b=to;auto d=removeItem(a,item);if(!d)return d;d=addItem(b,targetConfig,item,lookup);if(!d)return d;from=std::move(a);to=std::move(b);return {};
+    if(&from==&to)return {Reason::Invalid};
+    auto a=from,b=to;
+    auto d=removeItem(a,item);
+    if(!d)return d;
+    d=addItem(b,targetConfig,item,lookup);
+    if(!d)return d;
+    from=std::move(a);
+    to=std::move(b);
+    return {};
 }
 inline bool canEquip(const ItemType& type,std::uint32_t slot) {return slot<64 && (type.slots&(std::uint64_t{1}<<slot));}
 struct Equipment {std::uint32_t slot=0;std::int64_t type=0;};

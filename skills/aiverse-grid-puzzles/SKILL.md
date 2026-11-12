@@ -1,6 +1,6 @@
 ---
 name: aiverse-grid-puzzles
-description: Use AIVERSE Sokoban rules, undo/redo and bounded solution search in native C++ puzzle games. Does not replace match-3 or provide a universal puzzle solver.
+description: Use AIVERSE Sokoban rules, undo/redo, deadlock detection and bounded BFS/A* solution search in native C++ puzzle games. Match-3, flood, sliding, packing, CSP puzzles and the puzzle bot are in puzzle-solvers.
 ---
 
 # Push puzzles
@@ -16,6 +16,11 @@ Read `libraries/include/aiverselib/strategy/Puzzles.h` and
 - `PushHistory` implements undo/redo with an explicit bounded history. A new move
   clears redo. Route all player moves/history changes through Commands and check
   who owns the puzzle before invoking the helper.
+- `pushDeadCells(board)` marks simple-deadlock cells (no push sequence can bring a box from there to any goal);
+  `pushDeadlocked(board,state)` adds freeze deadlocks (boxes blocked on both axes off-goal). Both are sound,
+  never complete: false does not mean solvable.
+- `solvePushAStar(board,state,budget)` is a shortest-move A* (consistent Manhattan heuristic, deadlock
+  pruning, ties by f/h/insertion) for up to 1024 cells / 32 boxes; `pushHint` returns its first move.
 - `solvePush` returns a shortest sequence within its visited-state budget.
   Distinguish Solved, Unsolvable, BudgetExceeded and Invalid. Budget exhaustion is
   not a proof of impossibility. The solver supports at most 256 cells/16 boxes;
@@ -27,7 +32,8 @@ Read `libraries/include/aiverselib/strategy/Puzzles.h` and
   `python3 tests/libraries/strategy_native.py`. Test row edges, blocked pushes,
   true deadlocks versus budget exhaustion, undo/redo and solution replay.
 
-Generator/editor/hint presentation and other puzzle families remain separate.
+Sessions with move numbers, the puzzle bot and other puzzle families: `skills/aiverse-puzzle-solvers`.
+Generator/editor/hint presentation remain separate.
 
 Build selection: `AIVERSE::lib_grid_puzzles`; native OBJECT modules call
 `aiverse_native_use_libraries(target grid-puzzles)`. Only this header library and its

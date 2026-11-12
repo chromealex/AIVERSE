@@ -1,7 +1,8 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
-Read this file completely before changing anything. It is short on purpose. `README.md` has the
-user-facing overview (in Russian); this file is the engineering contract.
+Read this file completely before changing anything. It is short on purpose. `README.md` is the
+short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
+`docs/overview.md` the detailed overview; this file is the engineering contract.
 
 ## 1. What this is
 
@@ -172,6 +173,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Editor world tree: Hierarchy of every world object (edit-mode preview of the map's setup / live play world), multi-selection, Inspector «Детали» (components, stats, script data, mixed values), `editor.hierarchy` game.json hooks, MCP `world_entities` / `world_entity` / `editor_select` | `apps/editor/core/WorldInspect.*`, `apps/editor/EditorWorld.cpp`, `apps/editor/EditorWorldEdit.h`, `apps/editor/DetailsPanel.*`, `apps/editor/windows/HierarchyWindow.cpp`, entity part of `InspectorWindow.cpp`, `docs/editor-world-tree.md`; hooks: `Editor.h` (Selection kinds, selection set, world members), `Editor.cpp` (frame / startPlay / buildEditScene / renderGame / pickEntity), `SceneWindow.cpp` (multi-select, hover, play picking) | editor-world-tree (MAIN merges) |
 | World tree performance: consumer-driven reads, background preview builds, cheap row reads, Details read passes, `AIVERSE_EDITOR_PROFILE` / `AIVERSE_HOSTED_MAP` | `apps/editor/EditorProfile.h`, perf parts of the world-tree files above, `docs/editor-world-tree.md` § Performance; hooks: `ScriptEngine::peekData` (`RtsScript.h` / `RtsScriptEngine.cpp`), atomic component type ids (`engine/core/ECS.h`), `ClientHost` (`AIVERSE_HOSTED_MAP`) | world-perf (MAIN merges) |
 | Reusable libraries and AI skills | `libraries/`, `tools/libraries/`, `tests/libraries/`, `skills/`, `docs/libraries.md` | reusable-libraries agent |
+| Weapons and ballistics library policies: penetration, explosions, ammo feeds, charge, attachments, aim solver | `libraries/include/aiverselib/genre/{Ballistics,WeaponMods,WeaponData,WeaponPersistence}.h`, `skills/aiverse-weapon-policies`, `examples/libraries/genre/weapon*.json`; additive hooks: `libraries/spec/gameplay.json` sections + generated outputs, `weapon-policies` catalog entry, `GenreConsumer.cpp`, `tests/libraries/genre_tests.cpp`, `docs/genre-packages.md` § Weapons and ballistics | agent-weapons (MAIN merges) |
 | Meta-game C++ policies, JSON presets and agent recipes | `engine/meta`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/meta-*`, `docs/meta-game.md`; minimal CMake/native dependency hooks | meta-library agent |
 | FPS, authoritative sessions and large worlds | `modules/fps`, `engine/net/authority`, `engine/world`, `apps/fps`, `tests/fps`, `examples/fps`, `docs/fps.md`; additive build/platform hooks | FPS task (current agent) |
 | AIVERSE naming migration | Engine-wide branding, shared namespaces, build/tool names, platform bridges, documentation; preserve genre RTS | aiverse-rename (user assigned) |
@@ -182,8 +184,19 @@ the commit message; prefer adding a new file over editing a shared one.
 | Clusters, HLOD, conservative occlusion, baked surfaces and geometry performance | `engine/render/Geometry*`, `tools/modeling/SurfaceProxy*`, `apps/editor/core/{GeometryOps,SurfaceProxyOps}.*`, `tests/geometry`, `tools/geometrybench`, `tools/models/autolod.py`, `docs/geometry*.md`; minimal model LOD, renderer/view, Metal binding/uniform and macOS benchmark pacing hooks | codex/geometry-visibility |
 | XPBD cloth, CPU/GPU sleeping, Metal compute solver, instanced cloth rendering and benchmarks | `engine/cloth`, `examples/cloth`, `tests/cloth`, `docs/cloth.md`; shared projected animation LOD helper in `engine/render/AnimationLod.h`, minimal `RtsAnimate` hook; optional compute/storage/readback/timing RHI hooks in `engine/gfx/Gfx.h` and `metal/GfxMetal.mm`; additive CMake/localization hooks | codex/xpbd-cloth |
 | Genre audit implementation: shared strategy kernels and native integration | `libraries/include/aiverselib/strategy`, `tests/libraries/strategy*`, `examples/native/strategy`, matching catalog skills, `docs/genre-implementation.json`, `libraries/include/aiverselib/net`, `tests/meta/local*.py`, `tools/meta/local_match.py`, `docs/local-network.md`; minimal FPS host and loopback transport hooks | codex/genre-libraries |
+| Combat actions: hitboxes/hurtboxes, dodge i-frames, guard arc + perfect parry, poise/stagger, lock-on (`combat-actions` package over melee-combat) | `libraries/include/aiverselib/genre/Combat*.h`, `skills/aiverse-combat-actions`, `examples/libraries/genre/hitboxes.json`, docs/genre-packages.md § Combat actions; additive hooks: `combat` section of `libraries/spec/gameplay.json` (+ generated files), catalog entries, `GenreConsumer.cpp`, `tests/libraries/genre_tests.cpp` (`combatActions`) | agent-combat (MAIN merges) |
+| Stealth and senses: sight cones, hearing/occlusion/noise budgets, trails, suspicion, ally alerts, search, disguises, hiding (`stealth-senses` package, PerceivedTarget records for bots) | `libraries/include/aiverselib/genre/Senses*.h`, `skills/aiverse-stealth-senses`, `examples/libraries/genre/senses*.json`, docs/genre-packages.md § Stealth and senses; additive hooks: `senses` section of `libraries/spec/gameplay.json` (+ generated files), catalog entry, `GenreConsumer.cpp` function, tests appended to `tests/libraries/genre_tests.cpp`; record kinds 48..55 | agent-senses (MAIN merges) |
 | Meta composition and skill consolidation | `engine/meta/Client.*`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/`, catalog/skill links and meta docs | codex/meta-composition |
-
+| Character locomotion modes: slopes, ledges, ladders, swimming, wall climbing, mantle/vault mode machine on top of stepMotion | `libraries/include/aiverselib/genre/LocomotionModes.h`, `skills/aiverse-character-locomotion`, `locomotion` keys in `libraries/spec/gameplay.json` (+ generated files), locomotion tests at the end of `tests/libraries/genre_tests.cpp`, `docs/genre-packages.md` § Locomotion modes; hooks: `examples/native/libraries/GenreConsumer.cpp`, catalog entry | agent-locomotion (MAIN merges) |
+| Match objective modes: capture/hold zones + KotH, payload, elimination lives/respawn waves, extraction, bomb/defuse, route gates, contested overtime clock, spectator transitions (`match-rules` 0.2.0) | `libraries/include/aiverselib/genre/MatchObjectives*.h`, `skills/aiverse-match-rules`, `examples/libraries/genre/objective*.json`, docs/genre-packages.md § Match objectives; additive hooks: `objectives` section of `libraries/spec/gameplay.json` (+ generated files), catalog entry, `GenreConsumer.cpp`, `tests/libraries/genre_tests.cpp` (`matchObjectives`); save record kinds 40..47 | agent-match (MAIN merges) |
+| Genre bot adapters: melee/shooter bot policies, squad roles + formations, objective choice hook (`genre-bots` package, record kinds 56..63) | `libraries/include/aiverselib/bots/{GenreCommon,MeleeBot,ShooterBot,ObjectivePolicy,SquadRoles,GenreBotPersistence,GenreBots,GenreBotConfig}.h`, `skills/aiverse-genre-bots`, `examples/libraries/genre/bot-settings.json`, docs/genre-packages.md § Genre bots; additive hooks: `genreBots` section of `libraries/spec/gameplay.json` (+ generated files), catalog entry, `GenreConsumer.cpp`, `tests/libraries/genre_tests.cpp` (`genreBots`), docs/bots.md row | agent-genre-bots (MAIN merges) |
+| Narrative and social scenes: typed facts, relationship meters, knowledge, deferred consequences, chapters, speakers, cinematic CueRequest events, barks, visual-novel backlog/skip/auto (`narrative-graphs` 0.2.0, record kinds 64..71) | `libraries/include/aiverselib/genre/Narrative{Scenes,Cues,SceneData,ScenePersistence,Configured}.h`, `skills/aiverse-narrative-graphs`, `examples/libraries/genre/{story-social,narrative-settings}.json`, docs/genre-packages.md § Narrative scenes; additive hooks: `narrative` section of `libraries/spec/gameplay.json` (+ generated files), catalog entry, `GenreConsumer.cpp`, `tests/libraries/genre_tests.cpp` (`narrativeScenes`) | agent-narrative (MAIN merges) |
+| Physical interactions: pick up/carry/throw with arc preview, push/pull, XPBD ropes, doors (locks/keys/one-way/auto-reverse), moving platforms with rider carry, breakables with debris requests (`physical-interactions` package, record kinds 80..87) | `libraries/include/aiverselib/genre/{PhysicalCommon,InteractionConfig,Carry,Push,Ropes,Doors,Platforms,Breakables,PhysicalInteractions,InteractionConfigured,InteractionData,InteractionPersistence}.h`, `skills/aiverse-physical-interactions`, `examples/libraries/genre/{interactables,interaction-settings}.json`, docs/genre-packages.md § Physical interactions; additive hooks: `interaction` section of `libraries/spec/gameplay.json` (+ generated files), catalog entry (+ object-interactions cross-reference), `GenreConsumer.cpp`, `examples/native/libraries/CMakeLists.txt`, `tests/libraries/genre_tests.cpp` (`physicalInteractions`), skill search aliases | agent-interaction (MAIN merges) |
+| Cinematic gameplay: time-scale domains (hit-stop/slow-mo), scene timelines, dialogue/animation sync waits with timeouts, QTE with accessibility, interaction staging + input locks, checkpoints around scenes, narrative cue triggers (`cinematic-gameplay` package, record kinds 72..79) | `libraries/include/aiverselib/genre/Cinematic*.h`, `skills/aiverse-cinematic-gameplay`, `examples/libraries/genre/{scene,cinematic-settings}.json`, docs/genre-packages.md § Cinematic gameplay; additive hooks: `cinematic` section of `libraries/spec/gameplay.json` (+ generated files), catalog entry, `GenreConsumer.cpp` function, tests appended to `tests/libraries/genre_tests.cpp` (`cinematicGameplay`) | agent-cinematic (MAIN merges) |
+| Puzzle solvers: match-3 (specials, cascades, solvable shuffles, hints), flood/connectivity, sliding/packing, Sokoban sessions + deadlocks/A* (grid-puzzles 0.2.0), small-grid CSP (sudoku/nonogram, uniqueness), puzzle bot (`puzzle-solvers` package, record kinds 112..119) | `libraries/include/aiverselib/genre/Puzzle*.h`, `libraries/include/aiverselib/bots/PuzzleBot.h`, deadlock/A* part of `libraries/include/aiverselib/strategy/Puzzles.h`, `skills/aiverse-puzzle-solvers`, `examples/libraries/genre/puzzles`, `tests/libraries/genre_puzzles_tests.cpp`, `examples/native/libraries/PuzzlesConsumer.cpp`, docs/genre-packages.md § Puzzle solvers; additive hooks: catalog entries (+ grid-puzzles bump), `tests/libraries/CMakeLists.txt` block, library_demo SOURCES + one call in `GenreConsumer.cpp`, skill search aliases | agent-puzzles (MAIN merges) |
+| Cards and turn strategy: card rules with rule variants, stack/priority/fizzling and hidden information (`card-games`, composes card-runtime zones), square/hex tactics with cover/flanking, line of fire, AP, initiative, overwatch and WeGo (`tactics-grid`), card evaluator + turn planner bots (`cards-turns-bots`); record kinds 96..103 | `libraries/include/aiverselib/genre/{CardGame,CardGameRunner,CardGameData,CardGameConfigured,CardGamePersistence,TacticsGrid,TacticsTurns,TacticsWeGo,TacticsData,TacticsConfigured,TacticsPersistence}.h`, `libraries/include/aiverselib/bots/{CardBot,TacticsBot}.h`, `skills/aiverse-{card-games,tactics-grid,cards-turns-bots}`, `examples/libraries/genre/cards-turns/`, `tests/libraries/genre_cards_turns_tests.cpp`, `examples/native/libraries/CardsTurnsConsumer.cpp`, docs/genre-packages.md § Cards and turn strategy; additive hooks: `cardGame`/`tactics` sections of `libraries/spec/gameplay.json` (+ generated files), catalog entries, `GenreConsumer.cpp` call, `examples/native/libraries/CMakeLists.txt`, `tests/libraries/CMakeLists.txt`, skill search aliases, cross-references in card-runtime/turn-scheduler skills | agent-cards-turns (MAIN merges) |
+| Vehicles + sports: wheeled/tracked/hover/flight controllers, damage zones, seats, race checkpoints/positions, race bot (`vehicle-controllers`); ball possession/passes/shots/restarts/periods/fouls, formations, positioning bot (`sports-rules`); record kinds 88..95 | `libraries/include/aiverselib/genre/{Vehicle*,RaceCourse,Sports*}.h`, `libraries/include/aiverselib/bots/{RaceBot,SportsBot}.h`, `skills/aiverse-{vehicle-controllers,sports-rules}`, `examples/libraries/genre/vehicles-sports`, `tests/libraries/genre_vehicles_sports_tests.cpp`, `tests/libraries/vehicles_sports_example.cmake`, `examples/native/libraries/VehiclesSportsConsumer.cpp`, docs/genre-packages.md § Vehicles / § Sports; additive hooks: `vehicles` / `sports` sections of `libraries/spec/gameplay.json` (+ generated files), catalog entries, `tests/libraries/CMakeLists.txt` block, `GenreConsumer.cpp` call, library_demo SOURCES, skill aliases | agent-vehicles-sports (MAIN merges) |
+| Settlement/production + survival/ecology: colonist needs/mood, schedules, job preferences + deterministic assignment with reservations, recipes/bills, hauling, build/gather orders, disaster alerts, power/fluid graphs with brownout shedding (`settlement-production`), body temperature/wetness/hunger/thirst/stamina, weather modifiers, population ecosystems, animal behavior, resource renewal (`survival-ecology`), colony planner bot; record kinds 104..111 | `libraries/include/aiverselib/genre/{Colony,ColonyTypes,ColonyRunner,ColonyPower,ColonyData,ColonyConfigured,ColonyPersistence,SettlementJson,Survival,Ecology,EcologyAnimals,EcologyResources,EcologyData,SurvivalConfigured,SurvivalPersistence,SurvivalEcology}.h`, `libraries/include/aiverselib/bots/ColonyPlanner*.h`, `skills/aiverse-{settlement-production,survival-ecology}`, `examples/libraries/genre/production-survival`, `tests/libraries/genre_production_survival_tests.cpp`, `examples/native/libraries/ProductionSurvivalConsumer.cpp`, docs/genre-packages.md § Settlement and production / Survival and ecology; additive hooks: `colony` + `survival` sections of `libraries/spec/gameplay.json` (+ generated files), catalog entries, `GenreConsumer.cpp` (one call), `examples/native/libraries/CMakeLists.txt`, `tests/libraries/CMakeLists.txt` (two CTests), skill search aliases, docs/bots.md row | agent-production-survival (MAIN merges) |
 | Linear HDR scene pipeline | `engine/gfx`, `engine/render`, scene shader outputs in `engine/fx` and `modules/rts/view`, `tests/render`, `docs/hdr.md` | codex/linear-hdr (user assigned) |
 | Static model auto-LOD, instancing and frustum culling | `tools/models/autolod.py`, `tools/models/lod_simplify.cpp`, `third_party/meshoptimizer`, model LOD hooks in `engine/render`, `tools/renderbench/reinstance.cpp`, `docs/autolod.md` | codex/sponza-full (user assigned) |
 | Sponza full scene, model SSR, screen diffuse GI and temporal AA | `apps/renderbench`, `tools/renderbench`, `engine/render/ScreenLighting*`, model SSR hooks, glTF light metadata, `docs/sponza-full.md` | codex/sponza-full (user assigned) |
@@ -199,7 +212,8 @@ Partial earlier attempts for models / UI / packs exist as branches `agent-models
 Shared touch points and how to use them:
 - `CMakeLists.txt`: add your sources in your own `add_library` block; don't reorder others.
 - `tests/tests.cpp`: append tests at the end (before `main`), don't edit others' tests.
-- `README.md`: add or edit only your own section.
+- `docs/overview.md` (detailed overview): add or edit only your own section.
+- `README.md` + translations: short landing page, update rules in §11.
 - Sim → presentation: use existing `SimEvent`s; if you need a new event, ask the sim owner (or add
   it at the end of `GameEvent` in `RtsModule.h` and mention it in the commit).
 
@@ -277,6 +291,51 @@ Native game projects consume individual `AIVERSE::lib_<package>` targets after
 native CMake code executes. Keep `libraries/` in aiversebuild source exports. No Lua dependency
 or engine-source edit is required for a game to consume these headers. Do not store mutable
 library objects as NativeModule members: persist their fields through NativeState instead.
+
+### Where library code goes (`libraries/include/aiverselib`)
+
+Pick the folder by what the code is, not by who wrote it or which game needs it first.
+
+| Folder | Holds | Examples |
+|---|---|---|
+| root `*.h` | `cpp-foundation`: small generic algorithms with no gameplay meaning | `Graphs.h`, `Grid.h`, `Collections.h` |
+| `runtime/` | Native-module infrastructure, not gameplay: memory bounds, work budgets, hot settings, traces, state diff, byte helpers | `Bounded.h`, `WorkBudget.h`, `NativeBytes.h` |
+| `systems/` | Cross-genre gameplay building blocks any game can use | attributes, tags, loot, curves, reservations |
+| `gameplay/` | Player-facing subsystems with native command adapters | abilities, camera, inventory, construction |
+| `genre/<package>/` | Rules that define a kind of game: one subfolder per catalog package | `genre/melee/`, `genre/weapons/`, `genre/cards/` |
+| `bots/` | Computer players and navigation, including genre bots | RTS/FPS controllers, navmesh |
+| `app/` | Application layer outside the simulation: screens, session, lifecycle, balance tooling | `Screens.h`, `Session.h` |
+| `net/` | Network admission and ticket policies | `Admission.h` |
+
+Rules:
+- **One package, one folder.** A new genre package gets `genre/<package>/` with all its files:
+  the policy, its JSON reader (`Data.h`), generated settings adapter (`Configured.h`) and save
+  records (`Persistence.h`). Name the folder after the catalog ID without the genre noun
+  (`stealth-senses` → `genre/senses/`). Never add another flat file to `genre/` or `strategy/`.
+- **No aggregate headers.** A shared `Persistence.h`, `Configured.h` or `Data.h` that includes
+  several packages is forbidden: it makes every user compile and link all of them and forces
+  fake catalog dependencies. Shared code may only live in `genre/common/` and must not include
+  any package (record framing, kind/version constants, byte helpers).
+- **Include only declared dependencies.** A package header may include another package only if
+  that package is in its `packageDependencies`; add the dependency because the code needs it,
+  never to make a check pass. Save record kinds stay unique across packages (see the area
+  table for the ranges already taken).
+- **Infrastructure is not a genre.** If code is about running native modules (budgets, memory,
+  hot reload, tracing, serialization bytes) it goes to `runtime/`, even when one genre needs it
+  first. If it is reusable by any game (tags, curves, loot), it goes to `systems/`.
+- Namespaces follow the folder (`aiverse::lib::genre`, `aiverse::lib::runtime`, ...); a package
+  subfolder does not add a namespace level.
+
+Current state (legacy, being migrated): `genre/` holds 11 packages as 49 flat files, and
+`strategy/` holds non-action genre kits (cards, turns, puzzles, rhythm, idle/offline
+production, run and zone graphs, puzzle VM) — these are genre packages too and move to
+`genre/<package>/`. The shared `genre/Persistence.h`, `genre/Configured.h`, `genre/Data.h`
+and `strategy/Persistence.h` are aggregates to be split per package. When migrating, move
+files with `git mv`, leave a one-line forwarding header at every old path so existing
+`#include <aiverselib/genre/X.h>` keeps compiling, keep package IDs, CMake targets and
+namespaces, then drop dependencies that only existed because of the aggregates and prove
+isolation with `tests/skills/isolation.py`. Do not migrate a package while its owner has an
+unmerged branch touching it.
 
 ## 10. Reuse meta-game policies before generating code
 
@@ -400,6 +459,8 @@ Use generated settings adapters and stable localized narrative graph IDs. Persis
 its immutable definition versions. Native OBJECT modules use aiverse_native_use_genre to propagate
 backend dependencies. Test collision, repeated commands, invalid choices, overflow and restore.
 Do not claim climbing, a complete fighting game, bomb rules or cinematic playback from these policies.
+Scene flow, QTEs, time scales and staging use `cinematic-gameplay`; presentation stays a host that reports
+progress by tick and never drives the timeline.
 
 ## Procedural climbing, spider gaits and surface locomotion
 
@@ -472,6 +533,8 @@ adapter. Validate kits, native linking, client retries and selected UI screens.
 - State when to use the skill, its responsibility, public API/header, exact CMake
   target, dependencies, minimal working example and required validation. Link to
   detailed references; do not require loading unrelated recipes or whole schemas.
+- Put the library code in the folder that matches what it is (§9 "Where library code goes");
+  genre packages get their own `genre/<package>/` subfolder and no aggregate headers.
 - Every new code-providing skill must have an independently selectable library
   target with only required dependencies. Header-only implementations may use
   INTERFACE targets; compiled optional libraries must not build by default.
@@ -519,3 +582,36 @@ GENERATED responsibility/index map, not a replacement for the source catalogs.
   Isolation checks cover default build, actual link commands and binary symbols;
   do not rely solely on dead stripping or a successful compile. Core engine libraries
   already required by a game remain its baseline, not optional skill packages.
+
+## 11. README: keep it current when you ship a feature
+
+`README.md` (English) is the project's front page and the source of truth; `README.ru.md`,
+`README.zh-CN.md`, `README.ja.md`, `README.ko.md`, `README.es.md`, `README.pt-BR.md`,
+`README.de.md` and `README.fr.md` are its translations. Detailed descriptions belong in
+`docs/overview.md` and `docs/*.md`, not in the README.
+
+**When to update.** In the same branch as the feature, if it changes what a user or an agent can do:
+a new genre package or genre module, a new template, a new platform or store/ads plugin, a new tool,
+editor window or MCP area, an importer (Unity, Godot, ...), or a change of counts quoted in the README
+(templates, libraries, skills, MCP tools). Bug fixes, refactors and internal changes do not touch it.
+
+**Where.** Find the matching place and change it there — never add a new section for one feature:
+- genre mechanics → the «Any genre» table (one row per genre; add the package name to the row);
+- templates → the «Ready-made templates» table; engine parts → the «What's inside» lists;
+- importers / porting → «Coming from Unity»; tools and setup → «Quick start»;
+- verified platforms → «Status» (only what was actually verified; never write "not run",
+  "not verified" or "untested" there — unverified details go to `docs/overview.md`);
+- a new document worth reading → one row in «Documentation».
+
+**How.**
+- Change `README.md` and **all eight translations in the same commit**. Translate the text
+  properly; keep code, commands, identifiers, file names and product names untranslated.
+  Translations keep exactly the structure of `README.md`: same sections, rows, order, links and images.
+- Every claim must be backed by the repository (code, tests, docs). No future plans as features,
+  no invented numbers. Prefer capabilities to raw timings ("armies of thousands of units" rather
+  than "13 ms per order"): a millisecond figure without context reads as a cost.
+- Keep it short: one line per item, no paragraphs about internals.
+- Screenshots live in `docs/images/readme/` (PNG/JPEG, ≤ 1 MB each, real engine renders only).
+- Run `python3 tools/readme/check.py` — it must report 0 problems (structure of every
+  translation, language bar, broken links and images).
+

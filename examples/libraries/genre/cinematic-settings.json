@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "cinematic": {
+    "hitStopTicks": 4,
+    "slowMotionNumerator": 1,
+    "slowMotionDenominator": 3,
+    "slowMotionTicks": 120,
+    "qteWindowScaleMilli": 1000,
+    "qteAccessibleWindowMilli": 2000,
+    "qteMashScaleMilli": 500,
+    "qteAutoSucceed": false
+  }
+}

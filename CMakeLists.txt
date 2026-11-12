@@ -83,6 +83,18 @@ else()
     if(WIN32)
         add_compile_options(-Wno-cast-function-type) # GetProcAddress casts are intended
     endif()
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # GCC only (Linux gcc, MinGW). The compact one-line style used across the engine trips
+        # -Wmisleading-indentation, and -Wdangling-reference flags every `const Json& x = f(j[...], "path")`
+        # although Json::operator[] returns a reference into the document. Both are disabled.
+        add_compile_options(-Wno-misleading-indentation $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>)
+        # GCC 12+ -O3 reports these from inside libstdc++ (vector::assign, std::sort, memcpy); they stay visible
+        # as warnings but do not fail -DCMAKE_COMPILE_WARNING_AS_ERROR=ON builds.
+        add_compile_options(-Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=nonnull)
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-error=dangling-pointer>)
+        endif()
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -93,7 +105,8 @@ add_library(aiverse_engine STATIC
     engine/core/FixedMath.cpp
     engine/data/Json.cpp
     engine/sim/Simulation.cpp
-    engine/sim/Replay.cpp)
+    engine/sim/Replay.cpp
+    engine/sim/ProjectileData.cpp)
 target_include_directories(aiverse_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 option(AIVERSE_ENABLE_PHYSICS "Build optional Box3D physics module" OFF)
 if(AIVERSE_ENABLE_PHYSICS)
@@ -115,6 +128,7 @@ add_library(aiverse_game STATIC
     modules/rts/RtsPlanets.cpp
     modules/rts/RtsEconomy.cpp
     modules/rts/RtsUnits.cpp
+    modules/rts/RtsProjectilePrograms.cpp
     modules/rts/RtsCombat.cpp
     modules/rts/RtsWorld.cpp
     modules/rts/RtsVision.cpp
@@ -157,10 +171,29 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Resource packs (.rpak). The runtime links only the zstd decoder; host tools that write packs
-# link aiverse_pack_writer, which carries the full zstd library instead (never link both).
+# link aiverse_pack_writer, which carries the full zstd library (in host builds the decoder target
+# forwards to it, see below).
 # ---------------------------------------------------------------------------
 set(AIVERSE_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by aiversebuild)")
-add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+# Host builds (tools or tests on) also compile the full zstd for pack writers; there aiverse_zstd_dec
+# forwards to it, so a binary that mixes runtime and tool libraries carries one zstd copy instead of two
+# (GNU ld rejects the duplicate symbols). Packaged builds (aiversebuild: tools/tests OFF) keep the
+# small decoder-only library.
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    find_package(Threads REQUIRED)
+    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
+    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd PRIVATE -w)
+    endif()
+    add_library(aiverse_zstd_dec INTERFACE)
+    target_link_libraries(aiverse_zstd_dec INTERFACE aiverse_zstd)
+else()
+    add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd_dec PRIVATE -w)
+    endif()
+endif()
 # HTTP fetcher for chunk downloads, per platform (see engine/pack/Chunks.h).
 if(AIVERSE_PLATFORM STREQUAL "windows")
     set(AIVERSE_PACK_HTTP engine/pack/http/HttpWin.cpp)
@@ -191,16 +224,7 @@ elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT MSVC)
-    target_compile_options(aiverse_zstd_dec PRIVATE -w)
-endif()
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
-    find_package(Threads REQUIRED)
-    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
-    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
-    if(NOT MSVC)
-        target_compile_options(aiverse_zstd PRIVATE -w)
-    endif()
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
     target_link_libraries(aiverse_pack_writer PUBLIC aiverse_pack aiverse_engine aiverse_zstd)
 endif()
@@ -404,12 +428,14 @@ if(APPLE)
     if(AIVERSE_PLATFORM STREQUAL "macos")
         target_link_libraries(aiverse_runtime PUBLIC "-framework Cocoa")
     else()
-        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit")
+        # UIKit no longer re-exports CoreGraphics to the linker; PlatformIOS uses CGRect/CGPoint functions directly.
+        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit" "-framework CoreGraphics")
     endif()
 elseif(AIVERSE_PLATFORM STREQUAL "android")
     set(GLUE ${ANDROID_NDK}/sources/android/native_app_glue)
     add_library(native_app_glue STATIC ${GLUE}/android_native_app_glue.c)
     target_include_directories(native_app_glue PUBLIC ${GLUE})
+    target_compile_options(native_app_glue PRIVATE -w)   # NDK sample source (unused parameters under -Werror)
     target_link_libraries(aiverse_runtime PUBLIC native_app_glue android EGL GLESv3 log)
 elseif(AIVERSE_PLATFORM STREQUAL "web")
     # -lidbfs.js: userDataDir() is persisted in IndexedDB (engine/platform/web)
