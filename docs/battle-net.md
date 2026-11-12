@@ -192,8 +192,14 @@ how far clients run ahead of confirmation, server update time (p50 / p99 / max),
 bytes per player. Profiles: `lan`, `wifi`, `4g`, `3g`, `bad` (20% loss + bursts, 150 ms RTT, 40 ms
 jitter, 1% duplicates). Override them with `--loss`, `--rtt` and `--jitter`.
 
-Measured in the Linux VM (aarch64, Release build), 15 s matches, `bad` profile:
-see the numbers in the commit / report of this change (`hosted_battles_on_a_bad_mobile_link`).
+Measured in the Linux VM (aarch64, gcc Release) with `--matches 50 --players 2 --seconds 30 --profile bad`:
+all 50 matches finished, all 50 result reports agreed, 0 desyncs. Clients ran on average 4.5 ticks
+(max 12, the window) ahead of confirmation. Server update time: p50 0.19 ms, p99 0.34 ms, max 2.2 ms,
+about 1.9% of one core for 100 players. Traffic per player, packet headers included: about 4.9 KB/s
+up and 9.3 KB/s down. The whole run took 1.3 s of wall time.
+Clients and server share one process and the network is simulated: these numbers show what the relay
+costs. They are not a WAN capacity figure. For the HeroDuel stand-in, most traffic is commands
+(about one per player per tick, because the bots re-aim constantly) and their redundant copies.
 
 ## Visibility and anti-cheat: what this does and does not do
 
