@@ -1,4 +1,5 @@
-// SChannel TLS over memory buffers (Windows). Compiled with mingw-w64; not run on Windows here.
+// SChannel TLS over memory buffers (Windows). Verified with mingw-w64 builds under Wine (h2 + ALPN,
+// gRPC-Web, WebSocket bridge, custom roots, host-name mismatch); not run on real Windows.
 #if defined(_WIN32) && !defined(__EMSCRIPTEN__)
 #ifndef SECURITY_WIN32
 #define SECURITY_WIN32
@@ -15,6 +16,10 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+
+#ifndef SECURITY_FLAG_IGNORE_UNKNOWN_CA
+#define SECURITY_FLAG_IGNORE_UNKNOWN_CA 0x00000100 // wininet.h
+#endif
 
 namespace aiverse::grpc::detail {
 namespace {
