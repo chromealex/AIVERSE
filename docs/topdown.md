@@ -69,7 +69,9 @@ Sample: `templates/topdown_arena` ("Scrapyard Arena").
   stand)` walks the hero there with the stick (straight when walkable, else the next path waypoint; stops inside
   `stand` so channels work) and kites: foes whose single hit is at least 5% of the hero's health (Drone Fall
   guardians' clubs), or, below 60% health, a swarm of 6+, push it away once they are within their weapon range
-  + 2.5, with wall probes at 45 / 90 / 135 degrees. Otherwise the hero stands and auto-fires. The raid bot
+  + 2.5, with wall probes at 45 / 90 / 135 degrees; a hostile telegraph area (rules `encounters`) in windup or active
+  that covers the hero outweighs everything: it steps out (away from a circle / cone origin, sideways off a line, to
+  the nearer edge of a ring). Otherwise the hero stands and auto-fires. The raid bot
   (`RtsRaidBot.cpp`) uses it for objectives, kills, loot and extraction, keeps kiting before the raid starts and while
   it waits for a called point, and re-steers every 3 ticks. With rules `progression` it first walks over xp orbs
   within 14 units and, with a level banked and offers at circles, to the nearest summon circle
@@ -163,5 +165,4 @@ wheel / pinch zoom stays inside min / max. `AIVERSE_TOUCH_CONTROLS=1` draws the 
 Platform gamepad polling (pads feed `TopDownFrameInput` only), an aim-drag indicator drawn in the world (on screen a
 knob off the button shows the drag), escape preview effects beyond the move marker (Drone Fall's grayscale camera / telegraph
 circle: game view work), squad members walking as one rigid group (they path to their slots individually),
-mode rules for escape (PvE only is the game's data decision: leave `escape` out of PvP rules), telegraph dodging by
-the bot (it only kites by weapon range), planets.
+mode rules for escape (PvE only is the game's data decision: leave `escape` out of PvP rules), planets.

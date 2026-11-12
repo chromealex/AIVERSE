@@ -3,6 +3,7 @@
 // the stick, a computer pilot for bots. Integer / Fixed maths only; every loop runs in player-slot or entity order.
 #include "RtsTopDown.h"
 #include "RtsInternal.h"
+#include "RtsEncounters.h"
 #include "../../engine/core/Archive.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>
@@ -998,6 +999,35 @@ bool TopDown::steerCommand(Simulation& sim, uint8_t player, Vec3 goal, Fixed sta
     });
     const bool hurt = w.get<Unit>(e).hp * 10 < maxHp * 6;   // below 60%: a swarm is a threat too
     if (!threats && swarm >= 6 && hurt) { away = swarmAway; threats = swarm; }
+    // telegraphs (rules "encounters"): standing in a hostile area in windup / active steps out of it first
+    Vec3 dodge{};
+    if (Encounters* enc = m_->encounters(); enc && enc->active()) {
+        if (EncounterStore* es = enc->store(sim)) {
+            const int64_t mine = enc->teamKey(sim, player);
+            const Fixed r = m_->rules().types[w.get<Unit>(e).type].radius + Fixed::fromInt(1);
+            const Vec2 me{pos.x, pos.z};
+            for (const EncCast& c : es->casts) {   // ascending instance id: deterministic
+                const lib::genre::TelegraphView v = enc->view(c, sim.tick());
+                if (!v.live || v.team == mine || (v.phase != lib::genre::AttackPhase::Windup && v.phase != lib::genre::AttackPhase::Active)) continue;
+                lib::genre::AreaDef a;
+                a.shape = v.shape; a.radius = v.radius; a.inner = v.inner; a.halfAngle = v.halfAngle; a.length = v.length; a.halfWidth = v.halfWidth;
+                if (!lib::genre::areaHits(a, v.pose, me, r)) continue;
+                Vec2 out = me - v.pose.origin;
+                if (v.shape == lib::genre::AreaShape::Line) {   // sideways off the line
+                    const Vec2 right = lib::genre::areaRight(v.pose.yaw);
+                    out = out.dot(right).raw >= 0 ? right : Vec2{-right.x, -right.y};
+                } else if (v.shape == lib::genre::AreaShape::Ring) {   // the nearer edge: inward or outward
+                    const Fixed d = out.length();
+                    if (d - v.inner < v.radius - d) out = Vec2{-out.x, -out.y};
+                }
+                const Fixed ol = out.length();
+                if (ol.raw <= 0) out = lib::genre::areaRight(v.pose.yaw);
+                else out = Vec2{out.x / ol, out.y / ol};
+                dodge += Vec3{out.x, Fixed{}, out.y};
+            }
+        }
+    }
+    if (dodge.x.raw != 0 || dodge.z.raw != 0) { away += dodge * Fixed::fromInt(8); ++threats; }   // dodging outweighs kiting
     if (threats) {
         const Fixed al = away.length();
         const Fixed dl = dir.length();
