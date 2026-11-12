@@ -284,6 +284,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 | [パーティクル](docs/particles.md) · [モデル](docs/models.md) · [Shader Graph](docs/shader-graph.md) | ビジュアル |
 | [メタゲーム](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [プラグイン](docs/plugins.md) | 収益化とストア |
 | [FPS](docs/fps.md) · [大規模ワールド](docs/large-worlds.md) | FPS モジュール |
+| [見下ろし型ヒーロー](docs/topdown.md) · [運転](docs/driving.md) · [街の交通](docs/traffic.md) | 街のゲーム: 車、信号、歩行者、緊急サービス、仕事を持つ住民 |
 | [AGENTS.md](AGENTS.md) | エンジン本体を変更するエージェント向けのルール |
 | [Unity からの移行](docs/ja/engine-import.md) | シーン、プレハブ、アセットのインポートと、エージェントによるロジックの移植 |
 

@@ -284,6 +284,7 @@ Reference documents are in English. The overview, the game wizard, Unity migrati
 | [Particles](docs/particles.md) · [Models](docs/models.md) · [Shader Graph](docs/shader-graph.md) | visuals |
 | [Meta game](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monetization and stores |
 | [FPS](docs/fps.md) · [Large worlds](docs/large-worlds.md) | FPS module |
+| [Top-down heroes](docs/topdown.md) · [Driving](docs/driving.md) · [City traffic](docs/traffic.md) | city games: cars, traffic lights, pedestrians, services, citizens with jobs |
 | [AGENTS.md](AGENTS.md) | rules for agents that change the engine itself |
 | [Migrating from Unity](docs/engine-import.md) | importing scenes, prefabs and assets, then porting the logic with an agent |
 

@@ -1210,6 +1210,126 @@ int gEnableTrigger(lua_State* L, Vm& vm) {
     return 0;
 }
 
+// game.traffic_light(x, z [, "x"|"z"]): the signal of the junction at / next to the point for traffic along that axis
+// (default: the road the point is on), "green" | "yellow" | "red", or nil (no signalised junction there)
+int gTrafficLight(lua_State* L, Vm& vm) {
+    CTX;
+    Fixed x, z;
+    if (!argFx(L, vm, 1, x, "x") || !argFx(L, vm, 2, z, "z")) return -1;
+    Traffic* t = m.traffic();
+    const int j = t && t->active() ? t->junctionAt(x, z) : -1;
+    if (j < 0 || !t->net().junctions[size_t(j)].signal) { lua_pushnil(L); return 1; }
+    lib::genre::TrafficAxis axis = lib::genre::TrafficAxis::X;
+    if (lua_isstring(L, 3)) axis = std::string(lua_tostring(L, 3)) == "z" ? lib::genre::TrafficAxis::Z : lib::genre::TrafficAxis::X;
+    else {
+        const auto& net = t->net();
+        const int cx = int(x.floorInt()), cz = int(z.floorInt());
+        if (cx >= 0 && cz >= 0 && cx < net.w && cz < net.h)
+            if (const int pi = net.pieceAt[size_t(cz * net.w + cx)]; pi >= 0) axis = net.pieces[size_t(pi)].axis;
+    }
+    static const char* names[3] = {"green", "yellow", "red"};
+    lua_pushstring(L, names[int(t->light(sim, j, axis))]);
+    return 1;
+}
+
+// game.traffic_report(kind, x, z [, offender]): something happened ("injured" | "crime" | "fire" | "wreck"); the
+// city services answer it. Returns the incident id or nil (ignored: no witness for a crime, traffic off)
+int gTrafficReport(lua_State* L, Vm& vm) {
+    CTX;
+    std::string kind;
+    Fixed x, z;
+    if (!nameArg(L, vm, 1, kind, "kind") || !argFx(L, vm, 2, x, "x") || !argFx(L, vm, 3, z, "z")) return -1;
+    static const char* names[kIncidentKinds] = {"injured", "crime", "fire", "wreck"};
+    int k = -1;
+    for (int i = 0; i < kIncidentKinds; ++i) if (kind == names[i]) k = i;
+    if (k < 0) return fail(vm, "traffic_report: injured, crime, fire or wreck");
+    Entity who = kNullEntity;
+    if (!lua_isnoneornil(L, 4)) unitArg(L, vm, 4, who);
+    Traffic* t = m.traffic();
+    Entity subject = kNullEntity;
+    if (t && t->active() && k == kIncidentFire && t->rules().incidents.fire != UINT16_MAX) subject = m.spawn(sim, t->rules().incidents.fire, 0, Vec3{x, Fixed{}, z});
+    const uint32_t id = t && t->active() ? t->report(sim, uint8_t(k), Vec2{x, z}, subject, who) : 0;
+    if (id) lua_pushinteger(L, lua_Integer(id)); else lua_pushnil(L);
+    return 1;
+}
+// game.traffic_incidents(): {{id, kind, x, z, state = "open"|"coming"|"working"}, ...} (HUD, minimap, missions)
+int gTrafficIncidents(lua_State* L, Vm& vm) {
+    CTX;
+    lua_newtable(L);
+    Traffic* t = m.traffic();
+    auto* st = t && t->active() ? t->store(sim) : nullptr;
+    if (!st) return 1;
+    static const char* names[kIncidentKinds] = {"injured", "crime", "fire", "wreck"};
+    static const char* states[3] = {"open", "coming", "working"};
+    int n = 0;
+    for (auto& i : st->incidents) {
+        lua_createtable(L, 0, 5);
+        lua_pushinteger(L, lua_Integer(i.id)); lua_setfield(L, -2, "id");
+        lua_pushstring(L, names[i.kind]); lua_setfield(L, -2, "kind");
+        pushFx(L, i.pos.x); lua_setfield(L, -2, "x");
+        pushFx(L, i.pos.y); lua_setfield(L, -2, "z");
+        lua_pushstring(L, states[std::min<int>(i.state, 2)]); lua_setfield(L, -2, "state");
+        if (i.kind == kIncidentInjured) { lua_pushboolean(L, i.fatal); lua_setfield(L, -2, "fatal"); }
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+// game.traffic_clock() -> hour of the game day as fx (0..24), or nil without a population
+int gTrafficClock(lua_State* L, Vm& vm) {
+    CTX;
+    Traffic* t = m.traffic();
+    if (!t || !t->active() || t->rules().population.count <= 0) { lua_pushnil(L); return 1; }
+    pushFx(L, Fixed::fromRatio(t->minuteOfDay(sim), 60));
+    return 1;
+}
+// game.traffic_citizen(h) -> {id-less record of the citizen behind a person on the street or the car he drives} or nil:
+// {state = "to_work"|"to_home"|..., commute = "walk"|"car"|"bus", leg = "walk"|"to_stop"|"at_stop"|"drive" (on his way),
+//  home = {x, z}, work = {x, z, kind, open}, shift = {from, to} (hours)}
+int gTrafficCitizen(lua_State* L, Vm& vm) {
+    CTX;
+    Entity e;
+    Traffic* t = m.traffic();
+    const TrafficCitizen* c = t && t->active() && unitArg(L, vm, 1, e) ? t->citizenOf(sim, e) : nullptr;
+    if (!c) { lua_pushnil(L); return 1; }
+    static const char* states[] = {"home", "to_work", "work", "to_home", "hospital", "dead"};
+    lua_createtable(L, 0, 4);
+    lua_pushstring(L, states[std::min<int>(c->state, 5)]); lua_setfield(L, -2, "state");
+    static const char* commutes[] = {"walk", "car", "bus"};
+    static const char* legs[] = {"walk", "to_stop", "at_stop", "ride", "drive"};
+    lua_pushstring(L, commutes[std::min<int>(c->commute, 2)]); lua_setfield(L, -2, "commute");
+    if (c->state == kCitizenToWork || c->state == kCitizenToHome) { lua_pushstring(L, legs[std::min<int>(c->leg, 4)]); lua_setfield(L, -2, "leg"); }
+    auto place = [&](int i, const char* key) {
+        if (i < 0) return;
+        const auto& p = t->places()[size_t(i)];
+        lua_createtable(L, 0, 4);
+        pushFx(L, p.pos.x); lua_setfield(L, -2, "x");
+        pushFx(L, p.pos.y); lua_setfield(L, -2, "z");
+        lua_pushstring(L, t->rules().population.kinds[p.kind].id.c_str()); lua_setfield(L, -2, "kind");
+        lua_pushboolean(L, t->present(sim, i) > 0); lua_setfield(L, -2, "open");
+        lua_setfield(L, -2, key);
+    };
+    place(c->home, "home");
+    place(c->work, "work");
+    if (c->work >= 0) {
+        const auto& sh = t->rules().population.kinds[t->places()[size_t(c->work)].kind].shifts[c->shift];
+        lua_createtable(L, 0, 2);
+        pushFx(L, Fixed::fromRatio(sh.first, 60)); lua_setfield(L, -2, "from");
+        pushFx(L, Fixed::fromRatio(sh.second, 60)); lua_setfield(L, -2, "to");
+        lua_setfield(L, -2, "shift");
+    }
+    return 1;
+}
+// game.traffic_kind(h): "car" | "bus" | "emergency" for a vehicle the traffic drives, else nil
+int gTrafficKind(lua_State* L, Vm& vm) {
+    CTX;
+    Entity e;
+    Traffic* t = m.traffic();
+    const int k = t && t->active() && unitArg(L, vm, 1, e) ? t->kindOf(sim, e) : -1;
+    static const char* names[3] = {"car", "bus", "emergency"};
+    if (k < 0 || k > 2) lua_pushnil(L); else lua_pushstring(L, names[k]);
+    return 1;
+}
+
 } // namespace
 
 const char* commandName(uint16_t type) {
@@ -1230,7 +1350,7 @@ void openGameApi(Vm& vm) {
         {"var", bindQ<gVar>}, {"log", bindQ<gLog>}, {"data", bindQ<gData>}, {"has_data", bindQ<gHasData>},
         {"orders", bindQ<gOrders>}, {"current_order", bindQ<gCurrentOrder>}, {"target", bindQ<gTarget>}, {"idle", bindQ<gIdle>},
         {"facing", bindQ<gFacing>}, {"velocity", bindQ<gVelocity>}, {"path", bindQ<gPath>}, {"energy", bindQ<gEnergy>},
-        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {nullptr, nullptr}};
+        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {"traffic_light", bindQ<gTrafficLight>}, {"traffic_kind", bindQ<gTrafficKind>}, {"traffic_incidents", bindQ<gTrafficIncidents>}, {"traffic_clock", bindQ<gTrafficClock>}, {"traffic_citizen", bindQ<gTrafficCitizen>}, {nullptr, nullptr}};
     static const luaL_Reg actions[] = {
         {"give", bind<gGive>}, {"take", bind<gTake>}, {"spawn", bind<gSpawn>}, {"kill", bind<gKill>}, {"damage", bind<gDamage>},
         {"attack_event", bind<gAttackEvent>},
@@ -1241,7 +1361,7 @@ void openGameApi(Vm& vm) {
         {"add_score", bind<gAddScore>}, {"enable_trigger", bind<gEnableTrigger>}, {"clear_data", bind<gClearData>},
         {"set_pos", bind<gSetPos>}, {"teleport", bind<gSetPos>}, {"set_facing", bind<gSetFacing>}, {"impulse", bind<gImpulse>},
         {"knockback", bind<gKnockback>}, {"set_hp", bind<gSetHp>}, {"set_energy", bind<gSetEnergy>}, {"set_garrison", bind<gSetGarrison>},
-        {"set_stat_base", bind<gSetStatBase>}, {"transform", bind<gTransform>}, {nullptr, nullptr}};
+        {"set_stat_base", bind<gSetStatBase>}, {"transform", bind<gTransform>}, {"traffic_report", bind<gTrafficReport>}, {nullptr, nullptr}};
     luaL_newlib(L, queries);
     if (vm.mode == Mode::Sim) {
         luaL_setfuncs(L, actions, 0);
@@ -1302,6 +1422,10 @@ Json scriptApiReference() {
     q.push(fn("game.map_size() -> w, h / game.passable(x, z [, \"ground\"|\"air\"|\"naval\"]) / game.level(x, z) / game.height(x, z) / game.area(name)", "map queries; area = {x, z, w, h}"));
     q.push(fn("game.grid_path(width,height,cells,start,goal[,label])", "pure four-neighbour shortest grid path; zero-based cells, boolean true mask or exact integer labels; returns a one-based path excluding start, or nil; max 262144 cells"));
     q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
+    q.push(fn("game.traffic_light(x, z [, \"x\"|\"z\"])", "signal of the junction at / next to the point for traffic along that axis (default: the road there): \"green\"|\"yellow\"|\"red\", nil without a signalised junction (rules traffic, docs/traffic.md)"));
+    q.push(fn("game.traffic_incidents()", "{{id, kind = \"injured\"|\"crime\"|\"fire\"|\"wreck\", x, z, state = \"open\"|\"coming\"|\"working\"}, ...}: what the city services are dealing with (docs/traffic.md)"));
+    q.push(fn("game.traffic_citizen(h) / game.traffic_clock()", "the citizen behind a person on the street or the car he drives: {state, commute, leg, home = {x, z, kind}, work = {x, z, kind, open}, shift = {from, to}} or nil / hour of the game day (rules traffic.population, docs/traffic.md)"));
+    q.push(fn("game.traffic_kind(h)", "\"car\"|\"bus\"|\"emergency\" for a vehicle the traffic drives (sirens, HUD), nil otherwise"));
     q.push(fn("game.var(name)", "trigger variable (fx)"));
     q.push(fn("game.territory_at(x,z) / game.territory_count(player)", "owner at flat-map ground point (nil outside ground), or owned cell count"));
     q.push(fn("game.frontier(player)", "flat-map land boundary segments sorted by cell/edge: {x,z,nx,nz,owner,cell}; normal points outwards, owner is the neighbour"));

@@ -255,6 +255,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (env_ && env_->active()) env_->io(sim, a);            // map environment (games with one only)
     if (driving_ && driving_->active()) driving_->io(sim, a);   // vehicles (games with rules "driving" only)
     if (!ioModesState(*this, sim, a)) return false;           // match modes (games with modes only, RtsModes.cpp)
+    if (traffic_ && traffic_->active()) traffic_->io(sim, a);   // city traffic (games with rules "traffic" only)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

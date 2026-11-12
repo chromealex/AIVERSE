@@ -77,10 +77,13 @@ public:
     const DrivingCar* car(Simulation& sim, Entity vehicle) const;       // the state of a vehicle unit, or null
     bool isDriving(Simulation& sim, Entity hero) const { return carOf(sim, hero) != nullptr; }
     Fixed speed(Simulation& sim, Entity vehicle) const;                 // forward speed, m/s (0: not a vehicle)
+    // takes a just spawned vehicle unit now (instead of at its next tick), rolling forward at `speed` m/s (traffic)
+    bool adopt(Simulation& sim, Entity vehicle, Fixed speed);
 
 private:
     const DrivingVehicleType* typeOf(uint16_t unitType) const;
     void adoptAndDrop(Simulation& sim, DrivingStore& st);
+    void adoptOne(Simulation& sim, DrivingStore& st, Entity e);
     void enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity hero);
     bool leave(Simulation& sim, DrivingCar& c, bool forced);
     void drive(Simulation& sim, DrivingStore& st, size_t index);

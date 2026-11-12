@@ -2625,6 +2625,12 @@ aim snap cone, auto-fire policy, abilities along the aim, respawn) and game.json
 aim stick, ability buttons, keyboard / mouse / gamepad, follow camera). Keys, defaults and behaviour:
 [docs/topdown.md](topdown.md). Sample: `templates/topdown_arena`.
 
+## City traffic
+
+Rules block `traffic` (with `topDown` + `driving`): computer-driven cars on lanes built from the map's tile
+characters, signalised junctions with light props, pedestrians on the sidewalks who cross on "walk" and panic at
+gunfire; map `"traffic": false` switches it off. Keys, defaults and behaviour: [docs/traffic.md](traffic.md).
+
 ## Ordered projectile flight programs
 
 Weapons and projectile deliveries accept an optional `flight` object with ordered Split, Ricochet,

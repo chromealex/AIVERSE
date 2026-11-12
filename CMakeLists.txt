@@ -1128,6 +1128,8 @@ target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
 target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvData.cpp modules/rts/RtsEnvBoss.cpp modules/rts/RtsEnvScript.cpp modules/rts/RtsEnvPoints.cpp)
 # driving (agent-gta2): the top-down hero drives vehicles of the vehicle-controllers library (docs/driving.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsDriving.cpp)
+# traffic (agent-traffic): AI cars on lanes, signalised junctions, pedestrians (docs/traffic.md)
+target_sources(aiverse_game PRIVATE modules/rts/RtsTraffic.cpp modules/rts/RtsTrafficCity.cpp modules/rts/RtsTrafficPopulation.cpp modules/rts/RtsTrafficCommute.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)

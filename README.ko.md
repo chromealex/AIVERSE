@@ -281,6 +281,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 | [파티클](docs/particles.md) · [모델](docs/models.md) · [Shader Graph](docs/shader-graph.md) | 비주얼 |
 | [메타 게임](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [플러그인](docs/plugins.md) | 수익화와 스토어 |
 | [FPS](docs/fps.md) · [대형 월드](docs/large-worlds.md) | FPS 모듈 |
+| [탑다운 히어로](docs/topdown.md) · [운전](docs/driving.md) · [도시 교통](docs/traffic.md) | 도시 게임: 자동차, 신호등, 보행자, 긴급 서비스, 직장이 있는 시민 |
 | [AGENTS.md](AGENTS.md) | 엔진 자체를 수정하는 에이전트를 위한 규칙 |
 | [Unity에서 넘어오기](docs/ko/engine-import.md) | 씬, 프리팹, 에셋 가져오기와 에이전트를 통한 로직 이전 |
 

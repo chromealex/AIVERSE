@@ -14179,3 +14179,4 @@ TEST(model_merge_static_primitives) {
     Model big = make();ModelMergeOptions small;small.maxExtent = 1;
     CHECK(!mergeStaticPrimitives(big, small).merged);
 }
+#include "tests_traffic.inc"   // city traffic: AI cars, signals, pedestrians (agent-traffic)
