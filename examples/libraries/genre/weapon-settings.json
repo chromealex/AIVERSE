@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "penetration": {"powerMilli": 1000, "maxLayers": 4, "minDamageMilli": 1000},
+  "explosion": {"innerRadiusMilli": 1000, "outerRadiusMilli": 5000, "damageMilli": 100000, "edgeScaleMilli": 200, "impulseMilli": 10000, "maxTargets": 16},
+  "ammoFeed": {"kind": 2, "capacity": 6, "reloadStartTicks": 10, "shellTicks": 20, "intervalTicks": 40, "interruptible": true},
+  "charge": {"minTicks": 10, "maxTicks": 60, "autoReleaseTicks": 120, "tiers": 3, "minScaleMilli": 1000, "maxScaleMilli": 2000},
+  "aimSolver": {"maxIterations": 8, "toleranceMilli": 5, "preferHigh": false}
+}

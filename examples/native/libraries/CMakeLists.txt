@@ -1,4 +1,4 @@
-aiverse_native_module(ID library_demo VERSION 3 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
+aiverse_native_module(ID library_demo VERSION 4 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
 aiverse_native_use_libraries(aiverse_native_library_demo
     graphs behavior logistics configuration tutorial
     ui-binding screens themes app-lifecycle play-scenarios genre-kits change-planner

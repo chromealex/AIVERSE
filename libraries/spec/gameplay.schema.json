@@ -848,6 +848,244 @@
         }
       }
     },
+    "penetration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "powerMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "maxLayers": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "minDamageMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "minSpeedMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "explosion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "innerRadiusMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "outerRadiusMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "damageMilli": {
+          "type": "integer",
+          "default": 100000,
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "edgeScaleMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "impulseMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "maxTargets": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 4096
+        }
+      }
+    },
+    "ammoFeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 3
+        },
+        "capacity": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ammoPerShot": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "intervalTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "reloadTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "emptyReloadTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "reloadStartTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "shellTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "spinupTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "heatPerShot": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "heatCapacity": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "coolPerTick": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "overheatTicks": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "recoverHeat": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "autoReload": {
+          "type": "boolean",
+          "default": true
+        },
+        "interruptible": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "charge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minTicks": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "maxTicks": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "autoReleaseTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "tiers": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 64
+        },
+        "fireBelowMin": {
+          "type": "boolean",
+          "default": false
+        },
+        "minScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maxScaleMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "aimSolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxIterations": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "toleranceMilli": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "preferHigh": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
     "matchRules": {
       "type": "object",
       "additionalProperties": false,

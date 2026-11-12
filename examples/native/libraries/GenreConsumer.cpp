@@ -4,6 +4,8 @@
 #include <aiverselib/genre/LocomotionModes.h>
 #include <aiverselib/genre/CombatConfigured.h>
 #include <aiverselib/genre/CombatData.h>
+#include <aiverselib/genre/WeaponData.h>
+#include <aiverselib/genre/WeaponPersistence.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
 #include <span>
@@ -35,6 +37,25 @@ static bool libraryCombatConsumerExample(aiverse::game::NativeState& state,const
     state.values["genre.combat_hash"]=int64_t(combatHash(target)&0x7fffffffffffffffull);
     return storeBytes(state,"genre.combat",save(target))&&storeBytes(state,"genre.combat_swing",save(swing));
 }
+namespace {
+// Weapon policies from the same validated settings plus project definitions (materials, frame,
+// attachments). The host's fire/reload commands later call stepFeed/stepCharge once per tick in the
+// authoritative handler; here only validated initial records are stored, one NativeState key each.
+bool weaponConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse;using namespace aiverse::lib::genre;
+    if(!weaponSettingsErrors(settings).empty())return false;
+    auto defs=readWeaponDefinitions(Json::parse(R"({"materials":[{"id":1,"resistanceMilli":200,"damageFalloffMilli":100},{"id":2,"impenetrable":true}],
+        "frame":{"slots":[1],"stats":[{"id":1,"baseMilli":25000,"minimumMilli":0,"maximumMilli":100000}]},
+        "attachments":[{"id":10,"slot":1,"modifiers":[{"stat":1,"op":"mul","valueMilli":1200}]}]})"));
+    LoadoutState loadout;auto stats=equipAttachment(defs.frame,defs.attachments,loadout,10)?resolveStats(defs.frame,defs.attachments,loadout):std::nullopt;
+    auto feedRules=feedConfig(settings);auto charge=chargeConfig(settings);
+    auto shot=resolvePenetration(defs.materials,penetrationConfig(settings),{{1,1,{},1_fx,{},{}},{2,2,1_fx,{},{},{}}},stats?stats->at(1):Fixed{},800_fx);
+    auto blast=resolveExplosion(explosionConfig(settings),{},{{1,{2_fx,{},{}},{}}},[](const ExplosionTarget&){return 1_fx;});
+    auto aim=solveIntercept(aimConfig(settings),{},{20_fx,{},{}},{},50_fx,10_fx);
+    if(!stats||!valid(feedRules)||!valid(charge)||!shot||!blast||!aim||!aim->found)return false;
+    return storeBytes(state,"genre.weapon.feed",save(makeFeed(feedRules)))&&storeBytes(state,"genre.weapon.charge",save(ChargeState{}))&&storeBytes(state,"genre.weapon.loadout",save(loadout));
+}
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -47,5 +68,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!stepLocomotion(modes,body,spawn,0,aiverse::Fixed::fromRatio(1,60)))return false;
     state.values["genre.locomotion.config"]=int64_t(locomotionConfigHash(modes)&0x7FFFFFFFFFFFFFFFull);
     if(!storeBytes(state,"genre.story",save(*initial))||!storeBytes(state,"genre.motion",save(MotionState{}))||!storeBytes(state,"genre.locomotion",save(body)))return false;
-    return libraryCombatConsumerExample(state,*parsed.value);
+    if(!libraryCombatConsumerExample(state,*parsed.value))return false;
+    return weaponConsumerExample(state,*parsed.value);
 }

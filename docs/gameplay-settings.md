@@ -129,6 +129,42 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | projectile | retentionMilli | integer | 750 | 0..1000 |
 | projectile | lifetime | integer | 600 | 1..100000 |
 | projectile | maxBounces | integer | 0 | 0..32 |
+| penetration | powerMilli | integer | 1000 | 0..1000000000000 |
+| penetration | maxLayers | integer | 4 | 1..64 |
+| penetration | minDamageMilli | integer | 0 | 0..1000000000000 |
+| penetration | minSpeedMilli | integer | 0 | 0..1000000000 |
+| explosion | innerRadiusMilli | integer | 1000 | 0..10000000 |
+| explosion | outerRadiusMilli | integer | 5000 | 1..10000000 |
+| explosion | damageMilli | integer | 100000 | 0..1000000000000 |
+| explosion | edgeScaleMilli | integer | 0 | 0..1000 |
+| explosion | impulseMilli | integer | 0 | 0..1000000000 |
+| explosion | maxTargets | integer | 64 | 1..4096 |
+| ammoFeed | kind | integer | 0 | 0..3 |
+| ammoFeed | capacity | integer | 30 | 0..100000 |
+| ammoFeed | ammoPerShot | integer | 1 | 0..100000 |
+| ammoFeed | intervalTicks | integer | 0 | 0..100000 |
+| ammoFeed | reloadTicks | integer | 120 | 0..100000 |
+| ammoFeed | emptyReloadTicks | integer | 0 | 0..100000 |
+| ammoFeed | reloadStartTicks | integer | 0 | 0..100000 |
+| ammoFeed | shellTicks | integer | 30 | 0..100000 |
+| ammoFeed | spinupTicks | integer | 0 | 0..100000 |
+| ammoFeed | heatPerShot | integer | 0 | 0..1000000000 |
+| ammoFeed | heatCapacity | integer | 1000 | 1..1000000000 |
+| ammoFeed | coolPerTick | integer | 10 | 0..1000000000 |
+| ammoFeed | overheatTicks | integer | 60 | 0..100000 |
+| ammoFeed | recoverHeat | integer | 0 | 0..1000000000 |
+| ammoFeed | autoReload | boolean | true |  |
+| ammoFeed | interruptible | boolean | true |  |
+| charge | minTicks | integer | 10 | 0..100000 |
+| charge | maxTicks | integer | 60 | 1..100000 |
+| charge | autoReleaseTicks | integer | 0 | 0..100000 |
+| charge | tiers | integer | 3 | 0..64 |
+| charge | fireBelowMin | boolean | false |  |
+| charge | minScaleMilli | integer | 1000 | 0..1000000 |
+| charge | maxScaleMilli | integer | 2000 | 0..1000000 |
+| aimSolver | maxIterations | integer | 8 | 1..64 |
+| aimSolver | toleranceMilli | integer | 10 | 0..10000 |
+| aimSolver | preferHigh | boolean | false |  |
 | matchRules | warmupTicks | integer | 60 | 0..10000000 |
 | matchRules | roundTicks | integer | 3600 | 1..10000000 |
 | matchRules | overtimeTicks | integer | 600 | 0..10000000 |
@@ -151,4 +187,9 @@ Constraint: `locomotion.vaultMaxHeightMilli <= locomotion.mantleMaxHeightMilli` 
 Constraint: `combat.dodgeInvulnFrom <= combat.dodgeInvulnTo` (checked by loader and CLI).
 Constraint: `combat.dodgeInvulnTo <= combat.dodgeTicks` (checked by loader and CLI).
 Constraint: `combat.lockRangeMilli <= combat.lockBreakMilli` (checked by loader and CLI).
+Constraint: `explosion.innerRadiusMilli <= explosion.outerRadiusMilli` (checked by loader and CLI).
+Constraint: `ammoFeed.heatPerShot <= ammoFeed.heatCapacity` (checked by loader and CLI).
+Constraint: `ammoFeed.coolPerTick <= ammoFeed.heatCapacity` (checked by loader and CLI).
+Constraint: `charge.minTicks <= charge.maxTicks` (checked by loader and CLI).
+Constraint: `charge.minScaleMilli <= charge.maxScaleMilli` (checked by loader and CLI).
 Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).

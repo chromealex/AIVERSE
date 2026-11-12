@@ -8,7 +8,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | character-locomotion | MotionConfig/State/Input, stepMotion: ground/air speed, acceleration/braking, gravity, jump buffer, coyote time, bounded extra jumps, ceiling response. LocomotionModes.h (0.2.0): stepLocomotion mode machine Ground/Air/Ledge/Ladder/Swim/Climb/Mantle with slopes, ledge grab/shimmy/climb-up, ladders, buoyant swimming, stamina-limited wall climbing and timed mantle/vault | Returns velocity, mode and events; collision owner reports grounded/ceiling, ground normal, ledges, ladders, water depth, climbable walls and obstacles, and applies movement. No physics queries, root motion or animation controller. |
 | melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
 | combat-actions | Frame-keyed hitboxes + hurtboxes (sphere/capsule/yaw box) with overlap tests, self/team filtering and once-per-swing hits; dodge i-frames + cooldown; directional guard arc + perfect-parry window with re-arm; poise damage/break/recovery and hit/block/parry stun; deterministic lock-on acquire/switch/break | Composes melee-combat. Returns contacts/outcomes; damage, stamina, health and statuses stay with the existing combat owner. No per-tick sweep, animation-driven boxes, ragdoll or camera presentation. |
-| weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets | Existing FPS ammo/reload/fire cadence remain authoritative. No penetration/material model, weapon attachments or automatic replacement of hitscan. |
+| weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets; 0.2.0: material-layer penetration, radial explosions with owner LOS, ammo feeds (magazine/belt/per-shell/energy + overheat), charge tiers, attachment stat stacking, ballistic launch and lead solving (see [Weapons and ballistics](#weapons-and-ballistics-weapon-policies-020)) | Existing FPS ammo/reload/fire cadence remain authoritative for built-in FPS weapons. No automatic replacement of hitscan, no damage/health owner, no presentation. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 
@@ -21,7 +21,7 @@ backend dependencies on the owning aiverse_game target, avoiding object-library 
 For header-only policies without projectile collision, `AIVERSE::gameplay_native` is sufficient.
 
 See `examples/native/libraries/GenreConsumer.cpp` for validated settings and NativeState storage.
-The library_demo native module now initializes these records in setup (module VERSION 3).
+The library_demo native module now initializes these records in setup (module VERSION 4: locomotion modes, combat-actions and weapon records added).
 `tests/libraries/genre_tests.cpp` runs trajectories, combos, world collision, round transitions,
 choice transactions and restoration checks. No engine source edit is required in a consuming project.
 
@@ -197,3 +197,80 @@ hash the canonical bytes for the simulation checksum. All steppers reject repeat
 (Linux VM): header syntax checks, `aiverse_library_genre_tests` sources built by hand (also ASan/UBSan) and
 the consumer function in a standalone driver. Full engine build, aiverse_tests, CMake isolation tests,
 native module export and headless restore matches were not run for this package.
+
+## Weapons and ballistics (weapon-policies 0.2.0)
+
+New headers compose `Weapons.h` without changing it: `genre/Ballistics.h` (penetration, explosions,
+aiming), `genre/WeaponMods.h` (ammo feeds, charge, attachments), `genre/WeaponData.h` (settings
+adapters, weapons JSON) and `genre/WeaponPersistence.h` (save/load, hashing). All math is Fixed/integer;
+invalid input returns `std::nullopt` (or `false`) without calling owner callbacks or mutating state.
+
+**Penetration.** `traceLayers(world, start, delta, materialOf)` returns every collider crossed by the
+segment in (entry, collider id) order with geometric thickness (box entry/exit from two swept casts;
+triangles are zero-thickness sheets). Overlapping colliders are separate layers. `resolvePenetration`
+walks the layers with a `MaterialTable`: each layer costs `resistance * thickness` power
+(thickness at least `minThickness`), damage and speed are multiplied by `1 - falloff * thickness`
+(floored at 0). It stops on unknown/impenetrable material, exhausted power, `minDamage`, `minSpeed`
+or `maxLayers`, reporting `PenetrationStop` and per-layer `damageIn` (damage for that layer's occupant)
+and exit values. Applying damage to occupants remains the combat owner's job.
+
+**Explosions.** `resolveExplosion(config, center, targets, exposure)`: full effect inside `innerRadius`,
+linear falloff to `edgeScale` at `outerRadius`, nothing beyond. Distance is to the target's bounding
+sphere (radius). Targets need unique positive IDs. The owner-supplied `exposure(target)` (LOS/cover, 1
+visible, 0 occluded, clamped) is called once per in-range target in (distance, id) order, never for
+out-of-range ones, and stops at `maxTargets` exposed hits. Occluded targets are omitted. Results carry
+damage, impulse magnitude and direction (up for a coincident target), in the same order regardless of
+input order.
+
+**Ammo feeds.** `stepFeed(config, state, tick, {fire, reload, cancel}, draw)` is a per-tick state machine
+(one call per weapon per tick, strictly increasing ticks). Kinds: Magazine (whole reload, optional longer
+empty reload), Belt (each shot draws from the owner's reserve), PerShell (one round per `shellTicks` after
+`reloadStartTicks`), Energy (no ammunition). Optional heat on every kind: overheat at `heatCapacity`,
+locked at least `overheatTicks` and until `heat <= recoverHeat`; cooling `coolPerTick` per elapsed tick.
+`intervalTicks` and `spinupTicks` (held-trigger ticks before the first shot) are optional cadence rules.
+`draw(n)` must atomically remove up to n rounds from the owner's reserve (inventory, meta wallet, ...)
+and return the granted count; it is only called after validation, so the step always commits. Order per
+tick: cooling/recovery, reload cancel/interrupt, reload start (explicit or auto on dry fire), reload
+progress, fire. Firing with rounds left interrupts an interruptible reload: magazine progress is lost,
+inserted shells stay. These records are separate from `modules/fps` actor ammo: never mirror one magazine
+in both owners.
+
+**Charge modes.** `stepCharge(config, state, tick, {held, cancel})` (level input, one call per tick).
+Release before `minTicks` cancels (or fires tier 0 with `fireBelowMin`); held ticks are capped at
+`maxTicks`; `tier` counts reached thresholds, `fraction` is min-to-max progress, `scale` is the tier's
+scale (or `baseScale`). `autoReleaseTicks` fires automatically and latches until the trigger is released.
+
+**Attachments.** `WeaponFrame` (stats with base/min/max, allowed slots) + `AttachmentSet` (one slot each,
+add/mul modifiers). `equipAttachment` validates slot/ID and returns the replaced attachment;
+`resolveStats` applies base, then every Add, then every Mul (slot id ascending, authored order,
+sequential Fixed rounding), then clamps. Equip order never changes the result. Intermediates are clamped
+to +/-1e10 so no data overflows.
+
+**Aiming.** `solveLaunch(delta, speed, gravity)` returns 0, 1 or 2 launch solutions (low/high arc,
+gravity along -Y as in `ProjectileConfig`). It solves for flight time, so the analytic trajectory passes
+through the target up to Fixed rounding and |velocity| approximates `speed`; a power-of-two scaled
+discriminant keeps large ranges inside Q47.16. `solveIntercept(config, origin, target, velocity, ...)`
+leads a constant-velocity target with at most `maxIterations` solves; `converged` reports consecutive
+flight times within `tolerance` seconds. `found=false` when the predicted point becomes unreachable.
+
+**Configuration.** Generated sections `penetration`, `explosion`, `ammoFeed` (`kind`: 0 magazine, 1 belt,
+2 perShell, 3 energy), `charge` (`tiers` evenly spaced from minTicks to maxTicks, scales from minScale
+to maxScale) and `aimSolver`, all milli-units/ticks and optional. Adapters: `penetrationConfig`,
+`explosionConfig`, `feedConfig`, `chargeConfig`, `aimConfig`; `weaponSettingsErrors` reports readable
+cross-field problems (ammoPerShot vs capacity, shellTicks, recoverHeat, autoRelease, tier spacing).
+Tables use `readWeaponDefinitions` (`examples/libraries/genre/weapons.json`): `materials`, `frame`,
+`attachments`; unknown keys, duplicates, unknown slots/stats, bad ops and ranges throw
+`JsonError("weapons.<path>: ...")`. Example settings: `examples/libraries/genre/weapon-settings.json`.
+
+**State.** `FeedState`, `ChargeState` and `LoadoutState` use `genre::save/load` (version 1, kinds 16-18;
+canonical encoding, invalid records rejected). Store each in its own NativeState key and bind the
+immutable configs/definitions in the project save envelope. `hashWeapon(hasher, value)` / `weaponHash`
+fold the canonical encoding of states and of per-call outcomes (penetration, explosion hits, launch,
+feed/charge steps) into the owner's checksum. `GenreConsumer.cpp` validates settings and definitions,
+runs each policy once and stores initial feed/charge/loadout records.
+
+Verified: header syntax checks (g++ 11, `-Wall -Wextra -Werror -pedantic`), `genre_tests.cpp` with g++
+(also under ASan/UBSan) covering penetration chains, explosion ordering/falloff/occlusion, feed/reload/
+overheat sequences, charge tiers, attachment stacking, aim accuracy, save/restore and invalid data, and a
+standalone run of the GenreConsumer function. Not verified in that change: CMake/full engine build,
+`aiverse_tests`, headless matches, MSVC/clang, platform runtimes.
