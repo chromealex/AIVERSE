@@ -269,6 +269,7 @@ private:
         float dissolve, teamGlow;
         float4 outline;
         int32_t morph;      // offset into morphData_ (8 weights), -1 = none
+        uint8_t shadowRole = 0;   // 0 normal, 1 part covered by its mesh's shadow batch, 2 the shadow batch
         bool inView, inShadow; float depth;
     };
     void initModels();

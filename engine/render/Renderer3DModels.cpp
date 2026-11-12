@@ -295,8 +295,12 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (meshIndex != node.mesh) ++profile_.lodNodes;
         }
         ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
-        for (const Primitive& p : m->meshes[size_t(meshIndex)].primitives) {
-            if (p.indexCount == 0) continue;
+        // Shadow batch (mergeStaticPrimitives): one shadow draw covers the opaque parts of the mesh.
+        // Material overrides may change what casts, so they draw the parts one by one.
+        const MeshDef& drawMesh = m->meshes[size_t(meshIndex)];
+        const bool shadowBatch = drawMesh.shadowBatch.indexCount > 0 && !m->geometry && !d.materials && !d.nodeMaterial && d.variant < 0;
+        auto addItem = [&](const Primitive& p, uint8_t shadowRole) {
+            if (p.indexCount == 0) return;
             int mi = p.material;
             if (d.variant >= 0 && d.variant < int(p.variantMaterial.size()) && p.variantMaterial[size_t(d.variant)] >= 0) mi = p.variantMaterial[size_t(d.variant)];
             if (d.nodeMaterial && size_t(n) < d.nodeMaterial->size() && (*d.nodeMaterial)[size_t(n)] >= 0 && &mats == d.materials) mi = (*d.nodeMaterial)[size_t(n)];
@@ -305,7 +309,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.firstIndex = p.firstIndex; it.indexCount = p.indexCount;
             size_t pi = cache?cache->primitiveOffsets[size_t(meshIndex)]:0;
             if(!cache)for (int mesh = 0; mesh < meshIndex; ++mesh) pi += m->meshes[size_t(mesh)].primitives.size();
-            it.geometryPrimitive = pi + size_t(&p - m->meshes[size_t(meshIndex)].primitives.data());
+            it.geometryPrimitive = shadowRole == 2 ? 0 : pi + size_t(&p - m->meshes[size_t(meshIndex)].primitives.data());
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
@@ -342,8 +346,12 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             float3 wc = it.world.transformPoint((p.boundsMin + p.boundsMax) * 0.5f);
             // sort distance: ortho cameras along the view direction (Unity's TransparencySortMode.Default), else from the eye
             it.depth = cam_.ortho ? dot(wc - camPos_, normalize(cam_.target - camPos_)) : length(wc - camPos_);
+            it.shadowRole = shadowRole;
+            if (shadowRole == 2) it.inView = false;   // the batch exists only for shadow passes
             modelItems_.push_back(it);
-        }
+        };
+        for (const Primitive& p : drawMesh.primitives) addItem(p, shadowBatch && p.shadowBatched ? 1 : 0);
+        if (shadowBatch) addItem(drawMesh.shadowBatch, 2);
     }
 }
 
@@ -442,6 +450,7 @@ void Renderer3D::renderModels(int phase) {
         }
         bool take = phase == 0 ? shadow : phase == 3 ? visible && it.outline.w > 0 : phase == 4 ? visible && transparentItem(it.flags) :
                     visible && (phase == 2) == blended;
+        if (it.shadowRole == (phase == 0 ? 1 : 2)) take = false;   // batched parts cast through their shadow batch
         if(take&&phase==0&&!it.mat->shaderGraph&&it.joints<0&&!it.baked&&it.morph<0)
             take=geometryBoxVisible(lightViewProj_*it.world,it.prim->boundsMin,it.prim->boundsMax);
         // Reflection has its own view, never consume main-view occlusion there.

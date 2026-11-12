@@ -101,6 +101,7 @@ struct Primitive {
     int morphTargets = 0;                // 0..kMaxMorphTargets
     uint32_t morphTexel = 0;             // first texel of its deltas in Model::morphTex
     std::vector<float> morphDeltas;      // CPU: [target][vertex] position xyz, normal xyz (released after upload)
+    bool shadowBatched = false;          // cast through MeshDef::shadowBatch instead of its own shadow draw
 };
 
 struct ModelLod { int mesh = -1; float maxPixels = 0; };
@@ -110,6 +111,9 @@ struct MeshDef {
     std::vector<Primitive> primitives;
     std::vector<float> weights;          // default morph weights
     std::vector<ModelLod> lods;          // coarse alternatives, descending maximum projected diameter
+    // One index range covering the shadowBatched primitives (contiguous, opaque, same culling):
+    // drawn once in shadow passes instead of each part. Not part of `primitives`. indexCount 0 = none.
+    Primitive shadowBatch;
     float3 boundsMin, boundsMax;
     bool deformable = false;
 };
