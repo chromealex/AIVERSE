@@ -8,7 +8,7 @@ namespace aiverse::lib::genre {
 enum class AttackPhase {Idle,Windup,Active,Recovery};
 struct AttackDef {int64_t id=0;uint32_t windup=6,active=4,recovery=12,cancelFrom=10,bufferTicks=8;std::vector<int64_t> combos;};
 using AttackSet=std::map<int64_t,AttackDef>;
-struct MeleeState {int64_t attack=0,queued=0;uint32_t started=0,queuedAt=0,lastTick=0;bool initialized=false;std::vector<int64_t> hitTargets;};
+struct MeleeState {int64_t attack=0,queued=0;uint32_t started=0,queuedAt=0,lastTick=0;bool initialized=false;std::vector<int64_t> hitTargets;bool operator==(const MeleeState&)const=default;};
 inline bool valid(const AttackSet& defs){
     if(defs.empty()||defs.size()>1024)return false;
     for(const auto& [id,d]:defs){if(id<=0||d.id!=id||d.active==0||d.windup>3600||d.active>3600||d.recovery>3600||d.cancelFrom>d.windup+d.active+d.recovery||d.bufferTicks>3600)return false;for(auto next:d.combos)if(!defs.contains(next))return false;}return true;
