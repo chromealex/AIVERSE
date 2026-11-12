@@ -923,6 +923,62 @@ Garrison structures, groups and lanes come from `garrison`, `kCmdSend` and `lane
 Still needs code: **flying towers moving between points** (garrisons are fixed structures; a mobile
 garrison would need garrisons on units).
 
+#### Bunker Wars computer player (agent-bw-ai)
+
+`"ai": {"controller": "bw"}` hands every bot slot to the Bunker Wars / Mushroom Wars 2 bots ported as code
+(`modules/rts/RtsBwAI*`): **AI6** (map state, ranker, worker; Domination and King of the Hill modes; the
+`map17005` / `map11001` custom factories), **Bishop** (task queue), **Ashley**, the per-skill casters
+(`AISkill*`), debuts and map bot triggers. They only submit commands (sends with exact counts: `kCmdSend`
+param < 0 = that many units, upgrades / conversions, player abilities, surrender); all maths is Fixed. Points
+are the garrison structures in map order (point index n = n-th garrison entity of the map file); a point's BW
+role comes from `roles` tags, else from the type: weapons = tower, `playerMods` = smithy, breeds = house. Levels
+are the type `level`; upgrades / conversions are its `upgrades` (next level of the same role / lowest level of
+another role, paid with `cost.garrison`).
+
+```json
+"ai": {"controller": "bw", "bw": {
+  "difficulty": "normal",                 // default profile: easy | normal | hard | expert | bishop | ashley | own
+  "players": {"2": "expert"},             // per slot
+  "bots": [2],                            // slots played by bots (the action detector times only the others)
+  "mode": "auto",                         // auto | standard | domination | kingOfTheHill
+  "roles": {"house": ["village"], "tower": ["tower"], "smithy": ["forge"]},
+  "objectives": {"domination": ["flag"], "kingOfTheHill": ["throne"]},   // tags of objective points
+  "skills": {"freeze": "Freeze"},         // player ability -> BW caster (else inferred from its effects)
+  "pxPerCell": 40,                        // BW pixel constants (200 px "on the way", 2400 px max distance) in cells
+  "vars": {"blizzard": "blizzard", "kothScore": "koth_{player}", "kothMax": "koth_max"},
+  "profiles": {"boss": {"base": "expert", "minGroupSize": 10}}
+}}
+```
+
+Profile keys (BW AI6ComplexityInfo / AI6SharedComplexityInfo / AIBishopComplexityInfo): `algorithm` (ai6,
+bishop, ashley, none), `complexity`, `useSkills`, `canMoveInBlizzard`, `skillSlotAwait` [4 s], `minDelay`,
+`maxDelay`, `ignoreAverageActionTime`, `attackLimitPerUpdate`, `defenseLimitPerUpdate`, `limitOneUpgrade`,
+`structuredAttacks`, `attackDistanceSafety` (0..1), `reserveUnitsForCounterAttackFactor`, `minGroupSize`,
+`minGroupSizeOverride`, `attackTimeouts` {"point": s}, `pointRankFactors` {"point": [[s, factor], ...]},
+`counterAttackScanRadiusFactor`, `canDefendPointMinTimeFactor`, `towerRankFactor`, `smithyRankFactor`,
+`attackDistanceFactor`, `upgradeTimeout`, `allowConvert`, `defeat` [{timeToCheck, chance %, conditions:
+[{type: points | units | morale | time, cmp, delta}]}] (all hold: the bot surrenders), `custom` (map17005 +
+`freezeWave` {ability | interval, attacks, defenses, refresh}; map11001 + `testAttack` {target, playerSide,
+developTimeout}); Bishop: `analyzePeriod`, `attack` / `defense` {delay, minPercent, minCount, maxBuildings},
+`additionalAttackCount`, `increaseUnitsCoefficient`, `maxAttackTargets`, `upgradePeriod`,
+`disablePointsConvertation`, `errorPercentPerSecond`, `firstActionDelay`, `deniedConvert` [roles],
+`awaitForPlayerAction`. The built-ins carry the BW asset values.
+
+Map `"ai"` block: `profiles` (per-map overrides, as BW Maps/*/Bot assets), `difficulty`, `players`,
+`debuts` [{difficulty, slot, mode, actions: [{tick, send: [from, to, units]} | {tick, upgrade: point, to: type}
+| {tick, skill: id, at: [x, z]}], states: [{tick, point, type}]}] (played from the first tick; a recorded own
+point of another type or taken by someone else ends it), `triggers` [{name, enabled, elements: [{when: all | any,
+conditions: [instant | timer {name} | value {name, cmp, value} | pointCaptured {point} | unitsMove {who, from, to,
+minCount, minSpawned, progress} | time {cmp, value}], actions: [setTimer {name, seconds} | setValue | botAttack
+{sources, targets, count, useAllUnits, testing} | botIgnore {points} | botDisable {disabled} | botReset |
+botMoveUnits {from, to, percent} | groupSetState {groups, enabled} | botSet {attack, relocation, defense,
+upgrade}]}]}]. Map players: `"bot": "hard"` picks the slot's profile and marks it a bot. Morale / energy /
+production / time-scale trigger actions of BW belong to rules triggers. Hooks for other modes: the King of the
+Hill score is the trigger variable `kothScore` (else the team score), blizzard is the variable `blizzard` != 0.
+Engine gaps noted in the code: BW Hypnosis sends units out of the hypnotised enemy garrison (the engine has no
+such command), Downgrade ranks by units produced / tower kills (not counted by the engine yet).
+
+
 ## Army control (agent-mech): stances, retreat, transports
 
 Optional blocks; a game without them plays exactly as before (stances and retreat commands work in any game).

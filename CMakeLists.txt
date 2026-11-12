@@ -144,6 +144,9 @@ include(modules/rts/native/Build.cmake)
 file(GLOB AIVERSE_MECH_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/RtsMech*.cpp)
 target_sources(aiverse_game PRIVATE ${AIVERSE_MECH_SOURCES} modules/rts/RtsSave.cpp modules/rts/RtsCampaign.cpp   # + save states, campaigns
     modules/strategic/Strategic.cpp)   # strategic map: provinces, armies, battles on RtsModule
+# agent-bw-ai: Bunker Wars computer player (rules ai.controller "bw")
+file(GLOB AIVERSE_BWAI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/RtsBwAI*.cpp)
+target_sources(aiverse_game PRIVATE ${AIVERSE_BWAI_SOURCES})
 
 # Localization: string tables, plurals, language choice (presentation only, no sim dependency).
 # RtsLocalize maps RTS data (types, resources, maps...) to string keys.

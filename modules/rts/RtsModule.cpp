@@ -1,5 +1,6 @@
 // Setup, commands, shared queries and state hashing for the generic RTS module.
 #include "RtsInternal.h"
+#include "RtsBwAI.h"   // agent-bw-ai
 #include "RtsInitialVars.h"
 #include "gen/MapGen.h"
 #include <algorithm>
@@ -25,6 +26,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
         if (!(gm == map)) generated_ = std::move(gm);
     }
     const Json& mapIn = generated_.isObject() ? generated_ : map;
+    if (rules_.bwAI) bwAI_ = loadBwAIConfig(rulesJson["ai"], mapIn, rules_);   // agent-bw-ai: rules ai.bw + map "ai"
     setupMap(sim, mapIn);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
@@ -1285,9 +1287,10 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
             auto* g = w.tryGet<Garrison>(e);
             if (!g || !w.alive(cmd.target) || cmd.target == e || !w.has<Garrison>(cmd.target) || t.spawnUnit == kNoType) break;
             if (rules_.advancedEffects && (statusFlags(sim, e) & kStLock)) break;   // locked: can't send
-            int64_t pct = std::clamp<int64_t>(cmd.param, 1, 100);
             const int sendable = std::max(0, g->count - t.garrisonKeep);   // State.io: one soldier stays home
-            int n = int(int64_t(sendable) * pct / 100);
+            // param < 0: exactly -param units (Bunker Wars MoveUnits counts, agent-bw-ai); else a percent
+            int n = cmd.param < 0 ? int(std::min<int64_t>(sendable, -cmd.param))
+                                  : int(int64_t(sendable) * std::clamp<int64_t>(cmd.param, 1, 100) / 100);
             if (n <= 0 && sendable > 0) n = 1;
             if (n <= 0 && t.garrisonKeep > 0) break;
             g->count -= n;
