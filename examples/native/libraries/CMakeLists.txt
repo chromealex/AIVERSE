@@ -1,4 +1,4 @@
-aiverse_native_module(ID library_demo VERSION 5 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
+aiverse_native_module(ID library_demo VERSION 6 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
 aiverse_native_use_libraries(aiverse_native_library_demo
     graphs behavior logistics configuration tutorial
     ui-binding screens themes app-lifecycle play-scenarios genre-kits change-planner
@@ -12,3 +12,7 @@ aiverse_native_use_libraries(aiverse_native_library_demo combat-actions)
 aiverse_native_use_libraries(aiverse_native_library_demo stealth-senses)
 # Genre bots (melee/shooter policies, squad roles, objective choice) compose combat-actions and weapon-policies.
 aiverse_native_use_libraries(aiverse_native_library_demo genre-bots)
+# Physical interactions (carry/throw, push/pull, ropes, doors, moving platforms, breakables).
+aiverse_native_use_libraries(aiverse_native_library_demo physical-interactions)
+# Cinematic gameplay (time-scale domains, scene timelines, sync waits, QTE, staging, checkpoints).
+aiverse_native_use_libraries(aiverse_native_library_demo cinematic-gameplay)

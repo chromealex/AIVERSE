@@ -93,7 +93,8 @@ add_library(aiverse_engine STATIC
     engine/core/FixedMath.cpp
     engine/data/Json.cpp
     engine/sim/Simulation.cpp
-    engine/sim/Replay.cpp)
+    engine/sim/Replay.cpp
+    engine/sim/ProjectileData.cpp)
 target_include_directories(aiverse_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 option(AIVERSE_ENABLE_PHYSICS "Build optional Box3D physics module" OFF)
 if(AIVERSE_ENABLE_PHYSICS)
@@ -115,6 +116,7 @@ add_library(aiverse_game STATIC
     modules/rts/RtsPlanets.cpp
     modules/rts/RtsEconomy.cpp
     modules/rts/RtsUnits.cpp
+    modules/rts/RtsProjectilePrograms.cpp
     modules/rts/RtsCombat.cpp
     modules/rts/RtsWorld.cpp
     modules/rts/RtsVision.cpp

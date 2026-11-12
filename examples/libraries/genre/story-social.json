@@ -1,0 +1,55 @@
+{
+  "facts": [
+    {"id":1,"type":"bool","initial":false,"persistent":true},
+    {"id":2,"type":"int","min":0,"max":10,"initial":0,"persistent":true},
+    {"id":3,"type":"enum","values":["calm","suspicious","hostile"],"initial":"calm"},
+    {"id":4,"type":"bool","persistent":true}
+  ],
+  "characters": [
+    {"id":1,"nameKey":"character.guard","meters":{"trust":{"min":-50,"max":50,"initial":0}}},
+    {"id":2,"nameKey":"character.smuggler","meters":{"fear":{"min":0,"max":100,"initial":10}}}
+  ],
+  "flags": [{"id":1,"persistent":true},{"id":2,"persistent":false}],
+  "chapters": [
+    {"id":1,"act":1,"titleKey":"chapter.arrival"},
+    {"id":2,"act":1,"titleKey":"chapter.city"},
+    {"id":3,"act":2,"titleKey":"chapter.betrayal"}
+  ],
+  "initialChapter": 1,
+  "scenes": [
+    {"id":1,"entry":1,"chapter":1,"titleKey":"scene.gate"},
+    {"id":2,"entry":10,"chapter":2,"titleKey":"scene.tavern"}
+  ],
+  "nodes": [
+    {"id":1,"textKey":"story.gate.halt","speaker":1,"participants":[1,2],"cues":[100],"next":2},
+    {"id":2,"textKey":"story.gate.question","speaker":1,"participants":[1,2],"choices":[
+      {"id":1,"textKey":"story.gate.show_pass","next":3,"conditions":[{"fact":1}],
+       "effects":[{"meter":"trust","character":1,"add":10}],"cues":[101]},
+      {"id":2,"textKey":"story.gate.bribe","next":3,
+       "conditions":[{"any":[{"meter":"trust","character":1,"op":"ge","value":20},{"fact":2,"op":"lt","value":3}]}],
+       "effects":[{"add":2,"value":1},{"set":3,"value":"suspicious"},{"flag":2},{"schedule":1,"afterScenes":1}]},
+      {"id":3,"textKey":"story.gate.expose_smuggler","next":4,"once":true,
+       "conditions":[{"knows":4,"character":0},{"not":{"knows":4,"character":1}}],
+       "effects":[{"reveal":4,"to":[1]},{"meter":"fear","character":2,"add":30}],"cues":[{"id":103,"delay":10}]},
+      {"id":4,"textKey":"story.gate.leave","next":0}
+    ]},
+    {"id":3,"textKey":"story.gate.open","speaker":1,"cues":[{"id":102,"delay":30}],"onEnter":[{"flag":1}],"next":0},
+    {"id":4,"textKey":"story.gate.smuggler_flees","speaker":2,"next":0},
+    {"id":10,"textKey":"story.tavern.greeting","speaker":2,"participants":[2],"autoTicks":60,"next":11},
+    {"id":11,"textKey":"story.tavern.offer","speaker":2,"participants":[2],"choices":[
+      {"id":1,"textKey":"story.tavern.confront","next":0,"conditions":[{"knows":4}],
+       "effects":[{"chapter":3},{"meter":"affinity","character":2,"add":-40}]},
+      {"id":2,"textKey":"story.tavern.drink","next":0,"effects":[{"schedule":2,"afterTicks":600}]}
+    ]}
+  ],
+  "consequences": [
+    {"id":1,"conditions":[{"fact":2,"op":"ge","value":1}],"effects":[{"meter":"trust","character":1,"add":-15},{"reveal":4,"to":[0]}],"cues":[200]},
+    {"id":2,"effects":[{"meter":"affinity","character":2,"add":5}]}
+  ],
+  "barks": [
+    {"id":1,"trigger":1,"speaker":1,"textKey":"bark.guard.idle","priority":0,"cooldown":300},
+    {"id":2,"trigger":1,"speaker":1,"textKey":"bark.guard.suspicious","priority":5,"conditions":[{"fact":3,"value":"suspicious"}]},
+    {"id":3,"trigger":1,"speaker":2,"textKey":"bark.smuggler.whisper","priority":1,"once":true,"conditions":[{"knows":4}],"cues":[300]},
+    {"id":4,"trigger":2,"speaker":2,"textKey":"bark.smuggler.hum","cooldown":0}
+  ]
+}

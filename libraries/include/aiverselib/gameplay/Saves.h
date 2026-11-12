@@ -14,7 +14,8 @@ Decision migrate(State& state,std::int64_t& version,std::int64_t target,std::spa
     while(current<target){const Migration<State>* step=nullptr;
         for(const auto& m:migrations)if(m.from==current){if(step)return {Reason::Invalid,current};step=&m;}
         if(!step||step->to<=current||step->to>target||!step->apply)return {Reason::Version,0,target,current};
-        if(!step->apply(next))return {Reason::Invalid,current};current=step->to;
+        if(!step->apply(next))return {Reason::Invalid,current};
+        current=step->to;
     }
     state=std::move(next);version=current;return {};
 }

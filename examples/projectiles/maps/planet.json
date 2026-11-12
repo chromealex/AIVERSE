@@ -1,0 +1,143 @@
+{
+  "players": [
+    {
+      "start": {
+        "body": "p",
+        "face": 0,
+        "x": 8,
+        "y": 8
+      }
+    },
+    {
+      "start": {
+        "body": "p",
+        "face": 4,
+        "x": 8,
+        "y": 8
+      }
+    }
+  ],
+  "world": {
+    "start": "p",
+    "bodies": [
+      {
+        "id": "p",
+        "kind": "planet",
+        "radius": 20,
+        "faceSize": 16
+      }
+    ]
+  },
+  "entities": [
+    {
+      "type": "emitter",
+      "owner": 1,
+      "at": {
+        "body": "p",
+        "face": 0,
+        "x": 2,
+        "y": 8
+      }
+    },
+    {
+      "type": "ballistic",
+      "owner": 1,
+      "at": {
+        "body": "p",
+        "face": 0,
+        "x": 2,
+        "y": 5
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 12,
+        "y": 5
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 12,
+        "y": 8
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 12,
+        "y": 11
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 14,
+        "y": 5
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 14,
+        "y": 8
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 14,
+        "y": 11
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 15,
+        "y": 5
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 15,
+        "y": 8
+      }
+    },
+    {
+      "type": "target",
+      "owner": 2,
+      "at": {
+        "body": "p",
+        "face": 4,
+        "x": 15,
+        "y": 11
+      }
+    }
+  ]
+}

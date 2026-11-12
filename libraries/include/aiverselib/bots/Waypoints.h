@@ -10,7 +10,8 @@ inline Waypoints readWaypoints(const Json& j){
         if(!p.isArray()||p.size()!=3)throw JsonError("bots.waypoints.point: expected [x,y,z]");
         Fixed* fields[]={&node.point.x,&node.point.y,&node.point.z};
         for(size_t i=0;i<3;++i){if(!p[i].isNumber())throw JsonError("bots.waypoints.point: expected numbers");*fields[i]=p[i].fx();}
-        if(item.has("cover")&&item["cover"].type()!=Json::Type::Bool)throw JsonError("bots.waypoints.cover: expected bool");node.cover=item.getBool("cover",false);
+        if(item.has("cover")&&item["cover"].type()!=Json::Type::Bool)throw JsonError("bots.waypoints.cover: expected bool");
+        node.cover=item.getBool("cover",false);
         const auto& links=item["links"];if(!links.isArray())throw JsonError("bots.waypoints.links: expected array");
         for(const auto& link:links.items()){
             if(!link.isNumber()||link.fx().raw%Fixed::kOne||link.fx()<Fixed{}||link.fx()>=Fixed::fromInt(int64_t(j.size())))throw JsonError("bots.waypoints.links: invalid node index");
@@ -18,6 +19,7 @@ inline Waypoints readWaypoints(const Json& j){
         }
         std::sort(node.links.begin(),node.links.end());node.links.erase(std::unique(node.links.begin(),node.links.end()),node.links.end());result.push_back(std::move(node));
     }
-    if(!valid(result))throw JsonError("bots.waypoints: unsupported coordinates");return result;
+    if(!valid(result))throw JsonError("bots.waypoints: unsupported coordinates");
+    return result;
 }
 }
