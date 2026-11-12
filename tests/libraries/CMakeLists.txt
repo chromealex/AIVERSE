@@ -102,3 +102,21 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/world/SpatialWorld.cpp")
     endif()
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
 endif()
+
+# Cards + turn strategy (card-games, tactics-grid, CardBot/TacticsBot): own test executable and the executable
+# bot-vs-bot example (card duel + hex skirmish, each played twice; passes only with winners and identical hashes).
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/core/FixedMath.cpp")
+    add_executable(aiverse_library_cards_turns_tests genre_cards_turns_tests.cpp
+        ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+    target_link_libraries(aiverse_library_cards_turns_tests PRIVATE AIVERSE::gameplay_native)
+    add_executable(aiverse_cards_turns_example ../../examples/libraries/genre/cards-turns/main.cpp
+        ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+    target_link_libraries(aiverse_cards_turns_example PRIVATE AIVERSE::gameplay_native)
+    if(NOT MSVC)
+        target_compile_options(aiverse_library_cards_turns_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+        target_compile_options(aiverse_cards_turns_example PRIVATE -Wall -Wextra -Werror -pedantic)
+    endif()
+    add_test(NAME library_cards_turns COMMAND aiverse_library_cards_turns_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
+    add_test(NAME library_cards_turns_example COMMAND aiverse_cards_turns_example ${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/cards-turns 7)
+    set_tests_properties(library_cards_turns_example PROPERTIES PASS_REGULAR_EXPRESSION "deterministic replay: identical, winners: yes")
+endif()
