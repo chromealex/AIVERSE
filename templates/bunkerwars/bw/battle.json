@@ -1,0 +1,286 @@
+// Bunker Wars BattleParametersInfo (BW units and seconds).
+{
+ "manualMorale": {
+  "attackStep": 0.01,
+  "defenseStep": 0.01,
+  "speedStep": 0.005,
+  "critChanceStep": 0.01,
+  "critDamageStep": 0.07,
+  "baseCost": 2,
+  "baseDelta": 3,
+  "addMoraleFactor": 1,
+  "subtractMoraleFactor": 1
+ },
+ "winter": {
+  "unitMoveForce": 0.1,
+  "speed": [
+   {
+    "health": 1,
+    "speed": 1
+   },
+   {
+    "health": 0.9,
+    "speed": 1
+   },
+   {
+    "health": 0.7,
+    "speed": 0.9
+   },
+   {
+    "health": 0.4,
+    "speed": 0.75
+   },
+   {
+    "health": 0.1,
+    "speed": 0.5
+   }
+  ],
+  "gridSize": 30,
+  "meshGridSize": 1.25,
+  "textureScale": 0.1,
+  "visualOffset": {
+   "x": 0,
+   "y": -40,
+   "z": 0
+  },
+  "skillsBurnRangeFactor": 0.8,
+  "skillsBurnForce": 0.8,
+  "skillsOffset": {
+   "x": 0,
+   "y": 40
+  }
+ },
+ "fow": {
+  "textureScale": 0.5,
+  "unitRadius": 130,
+  "textureRadiusAdd": 0,
+  "startFowSize": 3000,
+  "defaultFowLifetime": 2,
+  "unitFowLifetime": 1,
+  "checkVisibleStateFrame": 1,
+  "copyFadesPerFrames": 1
+ },
+ "weather": {
+  "rainDropsTextureScale": 0.5,
+  "maxRainParticles": 3000,
+  "grassRainBurnRandomFactor": 0.5,
+  "puddlesFillSpeed": 20,
+  "puddlesDrySpeed": 20,
+  "rainWaitTime": 60,
+  "noRainWaitTime": 30,
+  "rainSfxVolMax": {
+   "fileID": 11400000,
+   "guid": "c8eaf6b3ca99a48839f18abc2990bc33",
+   "type": 2
+  },
+  "rainSfxVolMute": {
+   "fileID": 11400000,
+   "guid": "1b54ec3ca0a7b48ae8459a5cff690d8f",
+   "type": 2
+  },
+  "maxSnowParticles": 3000,
+  "snowRestoringSpeed": 0.005,
+  "snowWaitTime": 30,
+  "snowFillRandomFactor": 0.6,
+  "snowFillTimeRange": {
+   "x": 40,
+   "y": 60
+  },
+  "maxBlizzardParticles": 1000,
+  "blizzardWaitTime": 30,
+  "blizzardFillTime": 40,
+  "blizzardUnitKillSpeed": 5,
+  "blizzardUnitSpeedFactor": 0.5,
+  "blizzardUnitKillFactor": {
+   "x": 1,
+   "y": 2
+  },
+  "lightningKillTime": 2,
+  "lightningKillFactor": 70,
+  "lightningKillRange": 80,
+  "lightningPointKillValue": 10,
+  "lightningTime": 30,
+  "lightningWaitTime": 30,
+  "lightningSfx": {
+   "fileID": 11400000,
+   "guid": "52103cb809d874ba1aa86930f7e5f7ec",
+   "type": 2
+  }
+ },
+ "suddenDeath": {
+  "defaultInfo": {
+   "fileID": 11400000,
+   "guid": "0e3ae21a58ae54f75bb8d74f60e8fd71",
+   "type": 2
+  },
+  "items": []
+ },
+ "common": {
+  "isMultiplayer": 0,
+  "unitsInRow": 6,
+  "maxWeaponLevel": 4,
+  "generateRowSize": 6,
+  "endGameTimeout": 2,
+  "surrenderTimeout": 1,
+  "kingOfTheHillScoreVelocity": 1,
+  "dominationTimeout": 1.5,
+  "timeModTimeout": 240,
+  "timeModWinCondition": 0,
+  "timeWinConditionPointsComparisonCoefficient": 1,
+  "timeModParameters": {
+   "items": []
+  }
+ },
+ "world": {
+  "orthoAngle": 60,
+  "aspectRatio": 0.5,
+  "multiscreenScrollSpeed": 1000,
+  "multiscreenSmoothStepIncrease": 0.1,
+  "multiscreenSmoothStepDecrease": 0.05,
+  "multiscreenMovementSmooth": 10
+ },
+ "morale": {
+  "minValue": 0,
+  "maxValue": 8000,
+  "toBattlePointsConvertFactor": 1,
+  "unitsToPointsCoefficient": 10,
+  "defaultPointsIncreaseMultiplier": 1,
+  "pointsIncreaseMultiplier": 1,
+  "defaultPointsDecreaseMultiplier": 1,
+  "pointsDecreaseMultiplier": 1
+ },
+ "units": {
+  "crawlSpeed": 45,
+  "crawlAnimationRange": 0,
+  "lastFireTimer": 3,
+  "slowdownFactorOnCrawl": 0.5,
+  "killBombSpeed": 1.5,
+  "killBulletSpeed": 2,
+  "killBombRange": {
+   "x": 250,
+   "y": 300
+  },
+  "killBulletRange": {
+   "x": 50,
+   "y": 50
+  },
+  "killBombMultiplier": {
+   "x": 100,
+   "y": 150
+  },
+  "killBulletMultiplier": {
+   "x": 10,
+   "y": 20
+  },
+  "positionRandomOffset": 5,
+  "positionRandomOffsetSpeed": 5,
+  "positionRandomOffsetMaxFactor": 0.5,
+  "columnsPadding": 20,
+  "flyColumnsPadding": 45,
+  "alphaFadeThreshold": 20,
+  "rowsOffset": 70,
+  "unitSize": 110,
+  "flyUnitSize": 120,
+  "weaponSize": 85,
+  "defaultSpeed": 80,
+  "speed": 80,
+  "flyHeight": 90,
+  "takeOffDistance": 150,
+  "flyingRowsOffset": 80,
+  "arcFlyHeight": 350,
+  "arcFlyStartHeight": 0,
+  "arcFlyEndHeight": 0,
+  "enableBloodTrail": 1,
+  "minSpeedForBloodTrail": 0,
+  "bloodTrailSpawnTime": 1.5,
+  "maxHealthForBloodTrail": 0.5,
+  "unitsMapDimensions": {
+   "x": 512,
+   "y": 128
+  },
+  "unitsMapDimensionsBattleRoyal": {
+   "x": 256,
+   "y": 128
+  },
+  "unitsGridMultiplier": 8
+ },
+ "unitsAttack": {
+  "enabled": 1,
+  "configIndex": 1,
+  "configs": [
+   {
+    "attackTime": 0.1,
+    "deathDelayTime": 0.25,
+    "shootDelayTime": 0,
+    "moveDelayTime": 0,
+    "attackDistance": 500,
+    "attackDamage": 0.4,
+    "minDistFromPointForAttack": 200,
+    "damageRange": 0.2,
+    "attackSfx": {
+     "guid": "db3cd1a98b330d4458ebcdd906a12ce6",
+     "resourcePath": "Audio/Skills/Skill 32 fire"
+    }
+   },
+   {
+    "attackTime": 0.1,
+    "deathDelayTime": 0.25,
+    "shootDelayTime": 0.5,
+    "moveDelayTime": 0.2,
+    "attackDistance": 350,
+    "attackDamage": 22,
+    "minDistFromPointForAttack": 200,
+    "damageRange": 3,
+    "attackSfx": {
+     "guid": "db3cd1a98b330d4458ebcdd906a12ce6",
+     "resourcePath": "Audio/Skills/Skill 32 fire"
+    }
+   }
+  ]
+ },
+ "souls": {
+  "flyVelocity": 200,
+  "jumpHeight": 500,
+  "soulsProperties": []
+ },
+ "buildings": {
+  "pointRecatchLevelCooldown": 2,
+  "fireDuration": 5,
+  "attackerSouldDevider": 2,
+  "defenderSouldDevider": 2,
+  "defaultProductionSpeedMultiplier": 1,
+  "productionSpeedMultiplier": 1,
+  "defaultProductionLimitMultiplier": 1,
+  "productionLimitMultiplier": 1
+ },
+ "effects": {
+  "pointUpgradeStopTime": 2,
+  "pointChangeTime": 1.5,
+  "pointSelectionTime": 0.2,
+  "bulletFirePointDistanceEffect": 25,
+  "visualBulletSpeed": 1000,
+  "bulletRandomRange": 150,
+  "attackFrameIndex": 1,
+  "unitsBulletsFireRange": {
+   "x": 0,
+   "y": 0
+  },
+  "towerVisualAttackTime": 0.2,
+  "layout": {
+   "speed": 10,
+   "angle": 180,
+   "radiusX": 600,
+   "radiusY": 400,
+   "startAngle": 0,
+   "startPosition": {
+    "x": 0,
+    "y": 192.49
+   },
+   "maxAnglePerElement": 30,
+   "bothSided": 1,
+   "bothSidedSorted": 0,
+   "childAlignment": 1
+  }
+ },
+ "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Battle/BattleParametersInfo.asset"
+}
