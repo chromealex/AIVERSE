@@ -1,5 +1,8 @@
 // Dedicated game server: lobby, matchmaking and the input relay for network matches.
 //   aiverse_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]
+// Battle server mode (hosted matches from an orchestrator, docs/battle-net.md):
+//   [--battle-port N --server-key-file F] [--control-port N --control-key-file F] [--max-matches N]
+//   [--public-address host:port] [--hosted-only] [--loopback]
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -10,7 +13,10 @@
 
 #include "engine/data/Json.h"
 #include "apps/server/GameData.h"
+#include "engine/net/server/BattleControl.h"
 #include "engine/net/server/Server.h"
+#include <fstream>
+#include <memory>
 #include "modules/rts/RtsModule.h"
 
 using namespace aiverse;
@@ -33,6 +39,10 @@ int main(int argc, char** argv) {
     // by re-simulating them on the game data listed under "games".
     if (!cfg.surrenderCommand) cfg.surrenderCommand = game::kCmdSurrender;
     cfg.arbiter = netgame::makeArbiter(cfg.gameDirs);
+    uint16_t battlePort = 0, controlPort = 0;
+    std::string serverKeyFile, controlKeyFile, publicAddress;
+    uint32_t maxMatches = 64;
+    bool loopback = false;
     for (int i = 1; i < argc; ++i) {
         std::string k = argv[i];
         auto next = [&]() -> std::string { if (i + 1 >= argc) { std::fprintf(stderr, "missing value for %s\n", k.c_str()); std::exit(2); } return argv[++i]; };
@@ -42,17 +52,54 @@ int main(int argc, char** argv) {
         else if (k == "--replays") cfg.replayDir = next();
         else if (k == "--ratings") cfg.ratingsFile = next();
         else if (k == "--quiet") cfg.log = false;
+        else if (k == "--battle-port") battlePort = uint16_t(std::stoi(next()));
+        else if (k == "--server-key-file") serverKeyFile = next();
+        else if (k == "--control-port") controlPort = uint16_t(std::stoi(next()));
+        else if (k == "--control-key-file") controlKeyFile = next();
+        else if (k == "--max-matches") maxMatches = uint32_t(std::stoi(next()));
+        else if (k == "--public-address") publicAddress = next();
+        else if (k == "--hosted-only") cfg.hostedOnly = true;
+        else if (k == "--loopback") loopback = true;
         else {
-            std::printf("usage: aiverse_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]\n");
+            std::printf("usage: aiverse_server [--config server.json] [--udp-port N] [--ws-port N] [--replays DIR] [--ratings FILE] [--quiet]\n"
+                        "       battle mode: --battle-port N --server-key-file F [--control-port N --control-key-file F]\n"
+                        "                    [--max-matches N] [--public-address host:port] [--hosted-only] [--loopback]\n");
             return 2;
         }
     }
     std::signal(SIGINT, [](int) { g_stop = true; });
     std::signal(SIGTERM, [](int) { g_stop = true; });
 
+    // Keys are files (mode 0600), never command-line values: arguments show up in process lists.
+    auto readKey = [](const std::string& path, net::Key& key) {
+        std::ifstream f(path);
+        std::string hex;
+        f >> hex;
+        auto k = net::keyFromHex(hex);
+        if (!k) { std::fprintf(stderr, "error: %s does not hold a 64-digit hex key (aiverse_battle keygen)\n", path.c_str()); return false; }
+        key = *k;
+        return true;
+    };
     net::Server server(cfg);
     std::string err;
-    if (!server.listen(&err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+    if ((cfg.udpPort || cfg.wsPort) && !server.listen(&err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+    std::unique_ptr<net::BattleControl> control;
+    if (battlePort) {
+        net::Key serverKey;
+        if (serverKeyFile.empty() || !readKey(serverKeyFile, serverKey)) return 2;
+        if (!server.listenSecure(battlePort, serverKey, loopback, &err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+        net::wipe(serverKey.data(), serverKey.size());
+        if (controlPort) {
+            net::BattleControlConfig bc;
+            if (controlKeyFile.empty() || !readKey(controlKeyFile, bc.controlKey)) return 2;
+            bc.maxMatches = maxMatches;
+            bc.publicAddress = publicAddress.empty() ? "127.0.0.1:" + std::to_string(server.securePort()) : publicAddress;
+            control = std::make_unique<net::BattleControl>(server, bc, cfg.gameDirs);
+            if (!control->listen(controlPort, loopback, &err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+        }
+        std::printf("battle mode: secure udp %u, control %u, capacity %u matches%s\n", server.securePort(), control ? control->port() : 0,
+                    maxMatches, cfg.hostedOnly ? ", hosted only" : "");
+    }
     std::printf("%s: udp %u, websocket %u, %zu queue(s)%s%s\n", cfg.name.c_str(), server.udpPort(), server.wsPort(), cfg.queues.size(),
                 cfg.replayDir.empty() ? "" : ", replays in ", cfg.replayDir.c_str());
     std::fflush(stdout);
@@ -61,6 +108,7 @@ int main(int argc, char** argv) {
     while (!g_stop) {
         const uint64_t now = net::nowMs();
         server.update(now);
+        if (control) control->update(now);
         if (now - lastStats >= 60000) {
             lastStats = now;
             auto s = server.stats();

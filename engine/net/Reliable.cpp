@@ -50,7 +50,8 @@ bool ReliableChannel::onData(ByteReader& r, uint64_t now) {
     // Cumulative ack: drop everything below it; take an RTT sample from a never-resent message.
     while (!out_.empty() && int32_t(out_.front().seq - ack) < 0) {
         const Out& o = out_.front();
-        if (o.sends == 1 && o.firstSent) {
+        // With redundancy most messages are sent twice; the first send still bounds the RTT from below.
+        if ((o.sends == 1 || redundancyMs_) && o.firstSent) {
             uint32_t sample = uint32_t(std::min<uint64_t>(now - o.firstSent, 10000));
             uint32_t diff = sample > srtt_ ? sample - srtt_ : srtt_ - sample;
             rttvar_ = (rttvar_ * 3 + diff) / 4;
@@ -102,7 +103,13 @@ void ReliableChannel::flush(uint64_t now, uint32_t token, const std::function<vo
         size_t inFlight = 0;
         for (; i < out_.size() && inFlight < kMaxInFlight; ++i, ++inFlight) {
             Out& o = out_[i];
-            if (o.sends && now - o.lastSent < rto) continue;
+            if (o.sends && now - o.lastSent < rto) {
+                // Copies at a growing interval (r, 2r, 3r ...): a few cheap copies within one RTT, so even a
+                // burst of lost packets costs about one tick, while long outages do not flood the link.
+                const bool repeat = redundancyMs_ && packets == 0 && o.data.size() <= 256 &&
+                                    now - o.lastSent >= uint64_t(redundancyMs_) * o.sends;
+                if (!repeat) continue;
+            }
             if (w.buf.size() + kMsgHeader + o.data.size() > kMaxDatagram || count == 255) break;
             w.u32(o.seq);
             w.u16(uint16_t(o.data.size()) | (o.more ? kMoreBit : 0));

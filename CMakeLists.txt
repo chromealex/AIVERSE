@@ -217,10 +217,18 @@ add_library(aiverse_net STATIC
     engine/net/WebSocket.cpp
     engine/net/Protocol.cpp
     engine/net/Rollback.cpp
-    engine/net/NetClient.cpp)
+    engine/net/NetClient.cpp
+    # secure battle transport + hosted battles (agent-net-mobile, docs/battle-net.md)
+    engine/net/Crypto.cpp
+    engine/net/MatchTicket.cpp
+    engine/net/BattleProtocol.cpp
+    engine/net/SimNet.cpp
+    engine/net/SecureUdp.cpp
+    third_party/monocypher/monocypher.c)
+set_source_files_properties(third_party/monocypher/monocypher.c PROPERTIES COMPILE_OPTIONS "$<IF:$<BOOL:${MSVC}>,/w,-w>")
 target_link_libraries(aiverse_net PUBLIC aiverse_engine)
 if(WIN32)
-    target_link_libraries(aiverse_net PUBLIC ws2_32)
+    target_link_libraries(aiverse_net PUBLIC ws2_32 bcrypt)
 elseif(EMSCRIPTEN)
     target_link_options(aiverse_net PUBLIC -lwebsocket.js)
 endif()
@@ -228,11 +236,20 @@ endif()
 add_library(aiverse_net_server STATIC
     engine/net/server/Server.cpp
     engine/net/server/ServerMatch.cpp
-    engine/net/server/Matchmaker.cpp)
+    engine/net/server/Matchmaker.cpp
+    engine/net/server/ServerHosted.cpp
+    engine/net/server/BattleControl.cpp)
 target_link_libraries(aiverse_net_server PUBLIC aiverse_net)
 # Game data on the network side: match loading like the game (tile maps) and the server's verdict
 # (re-simulating a match nobody settled). Server, bot client and net tests share it.
 # Not part of the game client: exported source trees (aiversebuild iOS / Android / web) don't ship apps/server.
+# Hosted battles (agent-net-mobile, docs/battle-net.md): headless load harness with the HeroDuel stand-in
+# module; used by aiverse_battle, aiverse_battle_tests and the editor's battle_net_simulate op.
+if(NOT EMSCRIPTEN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/battle/BattleLoad.cpp")
+    add_library(aiverse_battle_load STATIC apps/battle/BattleLoad.cpp)
+    target_link_libraries(aiverse_battle_load PUBLIC aiverse_net_server)
+    target_include_directories(aiverse_battle_load PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
     add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
     target_link_libraries(aiverse_net_game PUBLIC aiverse_net_server aiverse_game)
@@ -580,6 +597,11 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_terrain_detail)
     target_include_directories(aiverse_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    if(TARGET aiverse_battle_load)   # battle_net_simulate (agent-net-mobile)
+        target_sources(aiverse_editor_core PRIVATE apps/editor/core/BattleNetOps.cpp)
+        target_link_libraries(aiverse_editor_core PUBLIC aiverse_battle_load)
+        target_compile_definitions(aiverse_editor_core PRIVATE AIVERSE_BATTLE_OPS=1)
+    endif()
     if(WIN32)
         target_link_libraries(aiverse_editor_core PUBLIC ws2_32)
     endif()
@@ -717,6 +739,11 @@ if(AIVERSE_BUILD_SERVER)
     add_executable(aiverse_netbot apps/netbot/main.cpp)
     target_link_libraries(aiverse_netbot PRIVATE aiverse_net_game aiverse_i18n)
 endif()
+# Hosted battles (agent-net-mobile): battle tool (the load harness library is defined next to aiverse_net_server).
+if(AIVERSE_BUILD_SERVER AND TARGET aiverse_battle_load)
+    add_executable(aiverse_battle apps/battle/main.cpp)
+    target_link_libraries(aiverse_battle PRIVATE aiverse_battle_load)
+endif()
 
 if(AIVERSE_BUILD_TESTS)
     enable_testing()
@@ -724,6 +751,11 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_net_tests PRIVATE aiverse_net_game aiverse_i18n)
     target_compile_definitions(aiverse_net_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_net_tests COMMAND aiverse_net_tests)
+    if(TARGET aiverse_battle_load)
+        add_executable(aiverse_battle_tests tests/net_mobile/battle_tests.cpp)
+        target_link_libraries(aiverse_battle_tests PRIVATE aiverse_battle_load)
+        add_test(NAME aiverse_battle_tests COMMAND aiverse_battle_tests)
+    endif()
     add_executable(aiverse_tests tests/tests.cpp)
     target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_i18n aiverse_pack_writer aiverse_models)
     target_link_libraries(aiverse_tests PRIVATE aiverse_postfx_data)   # postfx agent
