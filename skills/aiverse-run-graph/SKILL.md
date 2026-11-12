@@ -27,7 +27,7 @@ weighted selection instead of generating another graph/loot algorithm in a game.
   edges. The final claim completes the run. Repeated requests cannot call grant again.
   Sequence numbers are monotonic and owned by the command authority.
 - Persist the entire RunState with `strategy/Persistence.h` in NativeState. Link
-  `AIVERSE::strategy`. `examples/native/strategy` VERSION 3 uses commands 10/11/12
+  `AIVERSE::lib_run_graph`. `examples/native/strategy` VERSION 3 uses commands 10/11/12
   to demonstrate finish/claim/travel; its win command and reward counter are test fixtures,
   not production combat validation or a parallel wallet design.
 - Run strategy tests (200 seeds, budgets, reachability, failed grants, duplicate claims)
@@ -36,3 +36,7 @@ weighted selection instead of generating another graph/loot algorithm in a game.
 
 This does not generate room geometry, play encounters, implement relic/card effects,
 adapt a difficulty director, render a route UI or deploy durable backend rewards.
+
+Build selection: `AIVERSE::lib_run_graph`; native OBJECT modules call
+`aiverse_native_use_libraries(target run-graph)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

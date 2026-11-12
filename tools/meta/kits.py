@@ -14,12 +14,9 @@ LIVE = {'loot':'loot','albums':'albums','jobs':'jobs','research':'research','que
         'events':'events','wars':'wars','async-pvp':'asyncPvp','matchmaking':'matchmaking',
         'ratings':'ratings','referrals':'referrals','ads':'ads','offer-chains':'chains',
         'notifications':'notifications','offline':'offline'}
-DEPENDENCIES = {'economy':[], 'progression':['economy'], 'social':['economy'],
-                'clans':['social'], 'items':['economy'], 'tournaments':['social'],
-                'backend':['economy'], 'server':['backend'], 'database':['server'], 'client':[], 'ui':['client']}
-DEPENDENCIES.update({key:['economy'] for key in LIVE})
-DEPENDENCIES.update({'wars':['clans'], 'albums':['loot'], 'offer-chains':['economy'],
-                     'matchmaking':['social','ratings'], 'ratings':['social'], 'quests':['progression']})
+MODULES = {m['id']:m for m in json.loads((ROOT/'engine/meta/modules.json').read_text())['modules']}
+DEPENDENCIES = {key:value['dependencies'] for key,value in MODULES.items()}
+DEPENDENCIES.update({'server':['economy'], 'database':['server'], 'client':[], 'ui':['client']})
 PRESETS = {'minimal':['economy','progression'], 'mobile':['economy','progression','social','ui'],
            'competitive':['social','tournaments','matchmaking','ratings','ui'],
            'full':list(DEPENDENCIES)}
@@ -43,7 +40,7 @@ def definitions(features):
     for package in ('clans','items','tournaments'):
         if package in features:extensions[package]=service['extensions'][package]
     if 'social' in features:extensions['friends']=service['extensions']['friends']
-    extensions['entitlements']=service['extensions']['entitlements']
+    if 'backend' in features:extensions['entitlements']=service['extensions']['entitlements']
     live=json.loads((ROOT/'examples/meta/liveops.json').read_text())
     chosen={LIVE[key]:live[LIVE[key]] for key in features if key in LIVE}
     if chosen:extensions['liveops']=chosen
@@ -59,30 +56,46 @@ def definitions(features):
                 chats={'global':service['chats']['global']} if 'social' in features else {},
                 extensions=extensions)
 
-def plan(requested):
+def plan(requested,side="both"):
     from catalog import PACKAGES
+    if side not in ('both','client','server'):raise ValueError('unknown side')
     selected=resolve(requested)
+    screen_features=list(selected)
+    if side=='client':selected=sorted(set(['client']+[key for key in selected if key=='ui']))
+    elif side=='server':selected=[key for key in selected if key not in ('client','ui')]
     entries={key:dict(skill=f'skills/{skill}/SKILL.md',source=source) for key,_,skill,source in PACKAGES}
-    return dict(version=1,requested=sorted(set(requested)),resolved=selected,
+    return dict(version=2,side=side,serverModules=[key for key in selected if key in MODULES] if side!="client" else [],requested=sorted(set(requested)),resolved=selected,
                 recipes={key:entries[key] for key in selected},
-                screens=definitions(selected)['economy']['metadata']['metaScreens'])
+                screens=definitions(screen_features)['economy']['metadata']['metaScreens'])
 
-def apply(project,requested,validator):
-    project=project.resolve();recipe=plan(requested);features=recipe['resolved']
-    targets=[project/'meta']+([project/'ui/meta'] if 'ui' in features else [])
+def apply(project,requested,validator,side="both"):
+    project=project.resolve();recipe=plan(requested,side);features=recipe['resolved']
+    targets=[project/'meta']+([project/'ui/meta'] if 'ui' in features and side!='server' else [])
     if any(p.exists() or p.is_symlink() for p in targets):raise ValueError('destination exists; edit current definitions instead')
     # Stage all content and validate with the actual C++ implementation before installation.
     project.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.aiverse-meta-',dir=project.parent) as temporary:
         stage=Path(temporary);meta=stage/'meta';meta.mkdir()
-        config=definitions(features)
-        for key in ('economy','boards','chats','extensions'):
-            (meta/(key+'.json')).write_text(json.dumps(config[key],ensure_ascii=False,indent=2)+'\n')
-        generated=meta/'service.generated.json';generated.write_text(json.dumps(config,indent=2)+'\n')
-        subprocess.run([str(validator.resolve()),'service',str(generated)],check=True,capture_output=True,text=True)
+        if side!='client':
+            config=definitions(features)
+            for key in ('economy','boards','chats','extensions'):
+                (meta/(key+'.json')).write_text(json.dumps(config[key],ensure_ascii=False,indent=2)+'\n')
+            generated=meta/'service.generated.json';generated.write_text(json.dumps(config,indent=2)+'\n')
+            subprocess.run([str(validator.resolve()),'service',str(generated)],check=True,capture_output=True,text=True)
+            server=meta/'server';server.mkdir()
+            selected=recipe['serverModules'] or ['economy']
+            (server/'CMakeLists.txt').write_text('aiverse_add_meta_server(game_meta MODULES '+' '.join(selected)+')\n')
+            if 'database' in features:shutil.copytree(ROOT/'tools/meta/db',server/'db')
+        if side!='server':
+            client=meta/'client';client.mkdir()
+            (client/'CMakeLists.txt').write_text('add_library(game_meta_client INTERFACE)\ntarget_link_libraries(game_meta_client INTERFACE AIVERSE::meta_client)\n')
+            (client/'features.json').write_text(json.dumps({'features':recipe['requested'],'screens':recipe['screens']},indent=2)+'\n')
         (meta/'kit.json').write_text(json.dumps(recipe,indent=2)+'\n')
         context=['# Project meta integration','', 'Use aiverse::meta::Service on the host and aiverse::meta::Client for backend requests.',
-                 'Link aiverse::meta; native OBJECT modules call aiverse_native_use_meta(target).',
+                 'Client: AIVERSE::meta_client. Server: add_subdirectory(meta/server), link game_meta.',
+                 'Server construction: include game_meta.h; Service(kits::game_meta(), config, state, commit, draw).',
+                 'Native OBJECT modules call aiverse_native_use_meta(target CLIENT) or (target game_meta).',
+                 'Server JSON/SQL must never be bundled as client assets.',
                  'Keep network/time/profile state outside deterministic simulation callbacks.',
                  'Edit source JSON; compose.py validates and atomically replaces service.generated.json.',
                  'Do not generate another wallet, ranking, chat, receipt or retry implementation.', '', 'Selected recipes:']
@@ -91,7 +104,7 @@ def apply(project,requested,validator):
                     'Pin: tools/meta/catalog.py pin --project PROJECT',
                     'Browser screens require the authenticated reference host; they are not RmlUi documents.']
         (meta/'AGENTS.md').write_text('\n'.join(context)+'\n')
-        if 'ui' in features:
+        if 'ui' in features and side!='server':
             shutil.copytree(ROOT/'examples/meta/ui',stage/'ui/meta')
         project.mkdir(parents=True,exist_ok=True)
         installed=[]
@@ -113,13 +126,14 @@ def main():
     group=p.add_mutually_exclusive_group(required=True)
     group.add_argument('--preset',choices=PRESETS)
     group.add_argument('--features',help='comma-separated catalog package IDs')
+    p.add_argument('--side',choices=['both','client','server'],default='both')
     p.add_argument('--project',type=Path);p.add_argument('--validator',type=Path)
     a=p.parse_args();requested=PRESETS[a.preset] if a.preset else a.features.split(',')
     try:
         if a.command=='apply':
             if not a.project or not a.validator:p.error('apply requires --project and --validator')
-            result=apply(a.project,requested,a.validator)
-        else:result=plan(requested)
+            result=apply(a.project,requested,a.validator,a.side)
+        else:result=plan(requested,a.side)
         print(json.dumps(result,ensure_ascii=False,indent=2))
     except (ValueError,OSError,subprocess.CalledProcessError) as error:
         p.error(error.stderr if isinstance(error,subprocess.CalledProcessError) else str(error))

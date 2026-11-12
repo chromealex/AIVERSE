@@ -12,3 +12,7 @@ description: Reuse AIVERSE localized narrative graphs with conditional choices a
 5. Route external actions as Commands, validate ownership/resources/targets, and consume policy outcomes in the authoritative owner. Presentation only reads committed state. Use sim.rng for spread, integer ticks and Fixed arithmetic.
 6. Persist state with genre::save/load and storeBytes/loadBytes in a separate NativeState key. Bind configuration/definition versions in the save envelope. Do not put mutable state on a NativeModule instance or keep future state after rollback.
 7. Run catalog/generator checks, tests/libraries/run.py, native_consumer.py and aiverse_library_genre_tests. Add real project replay/collision/UI checks for integration changes. Report policies separately from fully wired genre gameplay and list platform gaps.
+
+Build selection: `AIVERSE::lib_narrative_graphs`; native OBJECT modules call
+`aiverse_native_use_libraries(target narrative-graphs)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

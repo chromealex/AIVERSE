@@ -14,7 +14,11 @@ Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/EngineMec
 5. Follow `examples/native/libraries/SystemsConsumer.cpp`, `tests/libraries/systems_tests.cpp` and `systems_engine_tests.cpp`.
 6. Run catalog/generator checks, library tests, engine integration tests and external native/export tests. Verify rollback for game-specific integration; do not mutate ECS while iterating.
 
-Pure policies link `AIVERSE::libraries`; EngineMechanics/Persistence adapters require
-`AIVERSE::gameplay_native` and the normal game host. Commands remain the only external
+Pure policies link `AIVERSE::lib_status_effects`; EngineMechanics/Persistence adapters require
+`AIVERSE::lib_status_effects` and the normal game host. Commands remain the only external
 simulation input. Presentation previews cannot authorize mutations. Keep docs, versions,
 examples and tests synchronized; describe exact coverage instead of claiming a full new engine.
+
+Build selection: `AIVERSE::lib_status_effects`; native OBJECT modules call
+`aiverse_native_use_libraries(target status-effects)`. Only this header library and its
+declared dependencies are selected. Requires the existing `aiverse_game` owner. See `skills/catalog.json` for dependency and responsibility routing.

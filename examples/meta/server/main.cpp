@@ -1,9 +1,9 @@
-#include "engine/meta/Service.h"
+#include "example_meta.h"
 int main() {
     using namespace aiverse::meta;
     auto config=ServiceConfig::parse(aiverse::Json::parse(R"({"economy":{"version":1,"assets":{"gold":{"cap":1000}}},"extensions":{"initial":{"gold":10}}})"));
     aiverse::Json database;int64_t revision=0;
-    Service server(config,{},[&](int64_t expected,const aiverse::Json& next){
+    Service server(kits::example_meta(),config,{},[&](int64_t expected,const aiverse::Json& next){
         if(revision!=expected)return false;
         database=next;revision=next.getInt("revision");return true;
     });

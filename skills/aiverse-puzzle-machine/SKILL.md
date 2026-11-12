@@ -22,7 +22,7 @@ remains the engine scripting owner; this VM models player-authored puzzle progra
 - Programs cannot access clocks, RNG, filesystem, network or host memory. Host adapters
   validate player ownership and permitted puzzle inputs before invoking the machine.
   Completion criteria compare actual output/state; do not trust a client success flag.
-- Link `AIVERSE::strategy`; persist MachineState through `strategy/Persistence.h` in
+- Link `AIVERSE::lib_puzzle_machine`; persist MachineState through `strategy/Persistence.h` in
   NativeState, including queues, input cursor, registers, memory, PC, steps and fault.
   Bind program revision/module VERSION. Never keep a mutable VM on NativeModule.
 - Follow `examples/native/strategy` VERSION 4, command 13, one instruction per sim tick.
@@ -31,3 +31,7 @@ remains the engine scripting owner; this VM models player-authored puzzle progra
 
 This is an integer register-machine puzzle model. It is not a Lua replacement, native-code
 sandbox, concurrent circuit simulator, program editor or complete Zachtronics game.
+
+Build selection: `AIVERSE::lib_puzzle_machine`; native OBJECT modules call
+`aiverse_native_use_libraries(target puzzle-machine)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

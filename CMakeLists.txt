@@ -1346,3 +1346,14 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
     add_executable(aiverse_instance_preview tests/geometry/instance_preview.cpp)
     target_link_libraries(aiverse_instance_preview PRIVATE aiverse_runtime aiverse_modeling)
 endif()
+
+# Skill metadata is checked alongside native integration; isolation is a host-only build check.
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME skill_catalog COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/skills/catalog.py check)
+    add_test(NAME skill_routing COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/catalog_test.py)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND AND UNIX AND NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME skill_library_isolation COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/isolation.py)
+    set_tests_properties(skill_library_isolation PROPERTIES TIMEOUT 600)
+endif()

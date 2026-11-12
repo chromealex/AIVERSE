@@ -21,7 +21,7 @@ A reverse door is never inferred. Start in a declared checkpoint.
 - Set the proof's respawn flag only when the game always permits that command. Otherwise
   a proof can hide a one-way trap. Locks with consumable keys, ability loss or temporary
   switches require a different state model; do not represent those as permanent bits.
-- Link `AIVERSE::strategy` after `aiverse_native_module`. Persist `ZoneState` through
+- Link `AIVERSE::lib_zone_graph` after `aiverse_native_module`. Persist `ZoneState` through
   `strategy/Persistence.h` in NativeState. Bind definition revision/module VERSION;
   check `compatible(graph,state)` after restore. Mutable state never lives on the module.
 - Follow `examples/native/strategy` (commands 6/7/8). Run strategy unit tests and
@@ -30,3 +30,7 @@ A reverse door is never inferred. Start in a declared checkpoint.
 
 Physical door interactions, regional loading, map UI and checkpoints for other subsystems
 remain host integration. This proof covers the declared graph only, not level geometry.
+
+Build selection: `AIVERSE::lib_zone_graph`; native OBJECT modules call
+`aiverse_native_use_libraries(target zone-graph)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

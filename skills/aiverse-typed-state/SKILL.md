@@ -17,3 +17,6 @@ Headers link through `AIVERSE::libraries`; engine adapters/generated modules use
 `AIVERSE::gameplay_native`. Keep host clocks, UI and hot reload outside simulation.
 Report exact tested coverage and platform limitations. Do not claim generated scaffolds
 contain the project's gameplay behavior or that a generic reference selector is a complete schema.
+
+Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
+it does not provide a separate runtime implementation. Pin the engine revision for that owner.

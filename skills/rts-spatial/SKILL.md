@@ -36,3 +36,6 @@ Run `python3 tools/libraries/catalog.py check`, `python3 tests/libraries/run.py`
 For simulation integration run full engine tests and headless restore/template checks from AGENTS.md.
 Coverage is deliberately bounded by the catalog; do not claim BT/GOAP, flow solvers or the entire
 category is implemented when only its foundational API exists.
+
+Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
+it does not provide a separate runtime implementation. Pin the engine revision for that owner.

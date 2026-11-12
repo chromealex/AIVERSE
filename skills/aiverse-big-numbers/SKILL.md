@@ -16,8 +16,8 @@ economy. Do not replace Fixed simulation geometry or fork the meta wallet.
   underflow and zero-divisor failure before committing any related transaction.
 - Division accepts a uint32 divisor and optionally returns the remainder.
   There is no arbitrary-denominator division, logarithmic number or tetration.
-- Pure code links `AIVERSE::libraries`; native code with persistence links
-  `AIVERSE::strategy` after `aiverse_native_module`. Save via
+- Pure code links `AIVERSE::lib_big_numbers`; native code with persistence links
+  `AIVERSE::lib_big_numbers` after `aiverse_native_module`. Save via
   `strategy/Persistence.h` and NativeState, never through double conversion.
 - Keep balancing/formulas in game definitions and pin the catalog package.
   Native example: `examples/native/strategy`. Run `strategy_libraries`, including
@@ -25,3 +25,7 @@ economy. Do not replace Fixed simulation geometry or fork the meta wallet.
   save tests; run `strategy_native.py` for the actual project/export bridge.
 
 Prestige graphs, fractional rates and compact UI notation need their own policies.
+
+Build selection: `AIVERSE::lib_big_numbers`; native OBJECT modules call
+`aiverse_native_use_libraries(target big-numbers)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

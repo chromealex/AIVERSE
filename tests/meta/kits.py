@@ -34,3 +34,17 @@ with tempfile.TemporaryDirectory() as directory:
     else:raise AssertionError('missing validator accepted')
     assert not (root/'failed').exists()
 print('All selected meta packages validated; guards preserve existing files')
+
+with tempfile.TemporaryDirectory() as directory:
+    root=Path(directory)
+    kits.apply(root/'client',['economy','social','database','ui'],validator,'client')
+    assert (root/'client/meta/client/CMakeLists.txt').exists()
+    assert not list((root/'client').rglob('*.sql'))
+    assert not (root/'client/meta/service.generated.json').exists()
+    assert not (root/'client/meta/economy.json').exists()
+    assert not (root/'client/meta/server').exists()
+    kits.apply(root/'server',['economy','database','ui'],validator,'server')
+    assert (root/'server/meta/server/db/001_initial.sql').exists()
+    assert not (root/'server/meta/client').exists()
+    assert not (root/'server/ui').exists()
+print('Client/server generation does not leak private JSON or SQL to client-only output')

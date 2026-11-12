@@ -20,7 +20,7 @@ Read `libraries/include/aiverselib/strategy/Puzzles.h` and
   Distinguish Solved, Unsolvable, BudgetExceeded and Invalid. Budget exhaustion is
   not a proof of impossibility. The solver supports at most 256 cells/16 boxes;
   runtime boards support up to 64×64. Don't run unlimited search in a frame.
-- Link `AIVERSE::strategy` from a registered native module. Persist PushHistory
+- Link `AIVERSE::lib_grid_puzzles` from a registered native module. Persist PushHistory
   with `strategy/Persistence.h` in NativeState; include the board revision.
   Board legality must be rechecked against those definitions after decoding.
 - Follow `examples/native/strategy`; run `strategy_libraries` and
@@ -28,3 +28,7 @@ Read `libraries/include/aiverselib/strategy/Puzzles.h` and
   true deadlocks versus budget exhaustion, undo/redo and solution replay.
 
 Generator/editor/hint presentation and other puzzle families remain separate.
+
+Build selection: `AIVERSE::lib_grid_puzzles`; native OBJECT modules call
+`aiverse_native_use_libraries(target grid-puzzles)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

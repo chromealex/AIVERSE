@@ -43,3 +43,6 @@ Use the benchmark's `static` profile to compare LOD/HLOD/surfaces plus caches wi
 or occlusion traversal. In open overview scenes those traversals can add CPU work while removing
 almost nothing; choose them only after paired scene measurements. See
 `docs/benchmarks/bistro-geometry-stack-2026-11-12.md` for the measured limits.
+
+Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
+it does not provide a separate runtime implementation. Pin the engine revision for that owner.

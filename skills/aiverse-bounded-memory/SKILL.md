@@ -13,7 +13,11 @@ Read `docs/native-toolkit.md`, `libraries/include/aiverselib/runtime/Bounded.h` 
 4. Run `python3 tests/libraries/toolkit_tools.py`, `python3 tests/libraries/run.py` and `python3 tools/libraries/catalog.py check`. For native integration also run `tests/libraries/native_consumer.py`.
 5. Preserve deterministic state, ordered iteration and normal Command routing. Re-run restoration tests when integrating gameplay state.
 
-Headers link through `AIVERSE::libraries`; engine adapters/generated modules use
-`AIVERSE::gameplay_native`. Keep host clocks, UI and hot reload outside simulation.
+Headers link through `AIVERSE::lib_bounded_memory`; engine adapters/generated modules use
+`AIVERSE::lib_bounded_memory`. Keep host clocks, UI and hot reload outside simulation.
 Report exact tested coverage and platform limitations. Do not claim generated scaffolds
 contain the project's gameplay behavior or that a generic reference selector is a complete schema.
+
+Build selection: `AIVERSE::lib_bounded_memory`; native OBJECT modules call
+`aiverse_native_use_libraries(target bounded-memory)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

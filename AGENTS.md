@@ -267,7 +267,7 @@ Run `python3 tools/libraries/catalog.py check`, `python3 tests/libraries/run.py`
 `python3 tests/libraries/native_consumer.py`.
 Integration changes to simulation still require the full tests and all template matches from §4.
 
-Native game projects consume foundation libraries via `AIVERSE::libraries` after
+Native game projects consume individual `AIVERSE::lib_<package>` targets after
 `aiverse_native_module(...)`; include `<aiverselib/Name.h>`. This target must exist before project
 native CMake code executes. Keep `libraries/` in aiversebuild source exports. No Lua dependency
 or engine-source edit is required for a game to consume these headers. Do not store mutable
@@ -281,8 +281,8 @@ Load only the matching recipe (`skills/meta-economy`, `skills/meta-progression`,
 `skills/meta-social`) and relevant sections of `docs/meta-game.md`.
 Use `aiverse::meta` from `engine/meta`; configure project-local JSON via
 `tools/meta/scaffold.py` and validate with `aiverse_meta_validate`. Do not reimplement the
-same algorithms in game scripts/native code. Native consumers link `aiverse::meta`;
-registered object modules use `aiverse_native_use_meta(aiverse_native_<id>)`.
+same algorithms in game scripts/native code. Native consumers select client or server policies;
+registered object modules use `aiverse_native_use_meta(aiverse_native_<id> CLIENT)` or a selected kit target.
 Meta clocks/network/storage stay outside deterministic simulation. Online authority,
 receipt validation and durable CAS storage belong to the backend. Local social
 policies are not an online service. Never describe an offline/mock service as deployed.
@@ -329,7 +329,7 @@ matching `skills/meta-{clans,items,tournaments,backend,ui}/SKILL.md`.
 Use `aiverse::meta::Service` from native host code; never run wall-clock/network policy
 inside simulation ticks. Preserve authenticated Principal, atomic aggregate Commit,
 operation IDs and authoritative payment/match inputs. Do not duplicate the wallet.
-Generate `--preset full --with-ui`, edit meta source JSON, then run tools/meta/compose.py
+Generate only selected features (full only when requested), edit meta source JSON, then run tools/meta/compose.py
 with the real C++ validator. Pin/verify with tools/meta/catalog.py. Run tests/meta and
 the external examples/meta consumer. Browser screens are not automatic RmlUi bindings;
 HTTP handler tests are not proof of live network/TLS or deployment. Document unverified
@@ -476,8 +476,9 @@ adapter. Validate kits, native linking, client retries and selected UI screens.
 - Explicitly separate client, server and database work. Client builds link
   `AIVERSE::meta_client`; authoritative hosts link `AIVERSE::meta_server`. Native
   OBJECT modules use `aiverse_native_use_meta(target CLIENT|SERVER)`. The legacy
-  `aiverse::meta` includes both sides. The server target still aggregates policies;
-  do not claim per-policy build isolation until it has been implemented and tested.
+  `aiverse::meta` includes both sides. The server target is the aggregate/transaction core only; select policies with
+  `aiverse_add_meta_server(game_meta MODULES ...)` and construct
+  `Service(kits::game_meta(), config, state, commit, draw)`.
 - Keep credentials, trusted grants, policy configuration, sessions and SQL on the
   server. Document schemas, migration ownership, compatibility, atomicity and
   restart behavior when persistence is involved. Never ship private DB contents.
@@ -487,3 +488,29 @@ adapter. Validate kits, native linking, client retries and selected UI screens.
   one library does not build/link unrelated libraries (including transitive deps).
   Report actual coverage and unverified platforms; do not describe routing or
   isolation requirements as completed implementations without evidence.
+
+## Skill orchestration and isolated builds
+
+Start cross-subsystem tasks with `skills/aiverse-orchestrator/SKILL.md` and
+`python3 tools/skills/catalog.py search INTENT`. Generate a plan with exact IDs and
+`--side client|server|both`; load only selected recipes. `skills/catalog.json` is a
+GENERATED responsibility/index map, not a replacement for the source catalogs.
+
+- New code skills get distinct targets. Gameplay header libraries use
+  `AIVERSE::lib_<package>` and `aiverse_native_use_libraries(target package ...)`.
+  Existing-engine reference/workflow recipes explicitly declare runtime none.
+- `engine/meta/modules.json` owns policy IDs, registration and selection dependencies.
+  `aiverse_add_meta_server` uses that manifest; a selected kit references only its
+  policies. No static registration or all-policy link is permitted on minimal paths.
+  `aiverse::meta` and the legacy Service constructor explicitly select everything.
+- Native OBJECT modules propagate the selected kit via
+  `aiverse_native_use_meta(target game_meta)`; clients use CLIENT. The generated
+  factory header must be used by the host. Missing-policy configuration fails closed.
+- Register source catalog entries, update CMake/source/API/skill/examples together,
+  then run `python3 tools/skills/catalog.py generate` and `check`. Update search
+  aliases only for meaningful domain terms; unknown/ambiguous requests need explicit IDs.
+- Run `python3 tests/skills/catalog_test.py`, `python3 tests/skills/isolation.py`,
+  meta tests and external native/export consumers after selection/linking changes.
+  Isolation checks cover default build, actual link commands and binary symbols;
+  do not rely solely on dead stripping or a successful compile. Core engine libraries
+  already required by a game remain its baseline, not optional skill packages.

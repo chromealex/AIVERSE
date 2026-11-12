@@ -16,3 +16,5 @@ description: Set up or migrate server-only AIVERSE meta storage using the SQLite
 - Back up before a destructive schema change; append a numbered migration and test upgrade,
   rollback-on-failure, repeat initialization, conflict and restart. Do not edit applied schemas
   to silently reinterpret existing data. Dedicated DB access belongs to authenticated server code.
+
+Runtime C++ library: none. This recipe owns server SQL migrations and the storage adapter.

@@ -36,3 +36,7 @@ Run `python3 tools/libraries/catalog.py check`, `python3 tests/libraries/run.py`
 For simulation integration run full engine tests and headless restore/template checks from AGENTS.md.
 Coverage is deliberately bounded by the catalog; do not claim BT/GOAP, flow solvers or the entire
 category is implemented when only its foundational API exists.
+
+Build selection: `AIVERSE::lib_graphs`; native OBJECT modules call
+`aiverse_native_use_libraries(target graphs)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

@@ -37,3 +37,7 @@ The additive 0.2.0 settings include loot.guaranteeAfter, perception.capacity/lif
 and decisionReport.maxFacts. Use systems/Configured.h to map them to runtime policies.
 
 Configuration 0.3.0 adds locomotion, melee, projectile and matchRules scalar sections. Read docs/genre-packages.md for units and adapters; narrative graphs are separate data.
+
+Build selection: `AIVERSE::lib_configuration`; native OBJECT modules call
+`aiverse_native_use_libraries(target configuration)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

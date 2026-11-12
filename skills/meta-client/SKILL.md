@@ -3,7 +3,7 @@ name: meta-client
 description: Connect AIVERSE native host or UI code to meta backends with a persisted request outbox, safe retry and restart recovery.
 ---
 
-Use `engine/meta/Client.h`; link `aiverse::meta` or the registered native helper.
+Use `engine/meta/Client.h`; link `AIVERSE::meta_client` or `aiverse_native_use_meta(target CLIENT)`.
 The Client is host state, outside deterministic simulation. Backend must outlive it.
 Backend callbacks and `pump()` run on the same owning thread, never directly on a worker.
 

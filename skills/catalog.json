@@ -1,0 +1,1941 @@
+{
+  "schema": 1,
+  "skills": [
+    {
+      "id": "aiverse-abilities",
+      "package": "abilities",
+      "path": "skills/aiverse-abilities/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Target/range/resource checks and optional native cast/cooldown lifecycle",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_abilities",
+      "dependencies": [
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Abilities.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-action-sequences",
+      "package": "action-sequences",
+      "path": "skills/aiverse-action-sequences/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Tick-based multi-stage actions with timeout and cancellation cleanup",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_action_sequences",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Sequence.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-ai-perception",
+      "package": "ai-perception",
+      "path": "skills/aiverse-ai-perception/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Bounded observation memory, expiration and threat selection",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_ai_perception",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Perception.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-app-lifecycle",
+      "package": "app-lifecycle",
+      "path": "skills/aiverse-app-lifecycle/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Application state transitions and stale loading completion rejection",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_app_lifecycle",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Lifecycle.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-attribute-modifiers",
+      "package": "attribute-modifiers",
+      "path": "skills/aiverse-attribute-modifiers/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Authoritative effective stat snapshots through existing modifiers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_attribute_modifiers",
+      "dependencies": [
+        "aiverse-loot-tables"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": "aiverse_game",
+      "source": "libraries/include/aiverselib/systems/EngineMechanics.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-balance-lab",
+      "package": "balance-lab",
+      "path": "skills/aiverse-balance-lab/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Mirrored round-robin cases and aggregate faction outcomes",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_balance_lab",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Balance.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-behavior",
+      "package": "behavior",
+      "path": "skills/aiverse-behavior/SKILL.md",
+      "domain": "gameplay",
+      "summary": "FSM transitions and utility selection",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_behavior",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Behavior.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-big-numbers",
+      "package": "big-numbers",
+      "path": "skills/aiverse-big-numbers/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Exact bounded arbitrary-precision nonnegative integers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_big_numbers",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/BigNumber.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-bot-matches",
+      "package": "bot-matches",
+      "path": "skills/aiverse-bot-matches/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Actual RTS/FPS bot matches, decision counters and restoration regression tests",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "examples/libraries/bots/main.cpp",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-bots-fps",
+      "package": "bots-fps",
+      "path": "skills/aiverse-bots-fps/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Command-driven FPS bots with perception, reaction, aiming, reload, retreat, zone and patrol",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_bots_fps",
+      "dependencies": [
+        "aiverse-navmesh"
+      ],
+      "backendDependencies": [
+        "aiverse_fps",
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/Fps.h",
+      "keywords": [
+        "fps",
+        "bot",
+        "фпс",
+        "бот"
+      ]
+    },
+    {
+      "id": "aiverse-bounded-memory",
+      "package": "bounded-memory",
+      "path": "skills/aiverse-bounded-memory/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Fixed-capacity scratch buffers and generational slot pools",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_bounded_memory",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/runtime/Bounded.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-camera",
+      "package": "camera",
+      "path": "skills/aiverse-camera/SKILL.md",
+      "domain": "gameplay",
+      "summary": "RTS/follow/orbit target controls, limits, smoothing and strategic icon threshold",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_camera",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Camera.h",
+      "keywords": [
+        "camera",
+        "камер"
+      ]
+    },
+    {
+      "id": "aiverse-card-runtime",
+      "package": "card-runtime",
+      "path": "skills/aiverse-card-runtime/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Card zones, priority stack and private views",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_card_runtime",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/Cards.h",
+      "keywords": [
+        "cards",
+        "deck",
+        "карточ",
+        "колод"
+      ]
+    },
+    {
+      "id": "aiverse-change-planner",
+      "package": "change-planner",
+      "path": "skills/aiverse-change-planner/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Dependency-ordered change recipes and verification checklist",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_change_planner",
+      "dependencies": [
+        "aiverse-content-mods"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Planner.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-character-locomotion",
+      "package": "character-locomotion",
+      "path": "skills/aiverse-character-locomotion/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Fixed character movement policy with ground/air acceleration, jump buffer and coyote time",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_character_locomotion",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Locomotion.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-collections",
+      "package": "collections",
+      "path": "skills/aiverse-collections/SKILL.md",
+      "domain": "gameplay",
+      "summary": "FIFO queue and stable top-K",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_collections",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Collections.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-configuration",
+      "package": "configuration",
+      "path": "skills/aiverse-configuration/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Generated C++ settings, JSON Schema, defaults and strict config parsing",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_configuration",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Configuration.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-construction",
+      "package": "construction",
+      "path": "skills/aiverse-construction/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Placement checks, resource explanations, refunds and native construction commands",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_construction",
+      "dependencies": [
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Construction.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-content-mods",
+      "package": "content-mods",
+      "path": "skills/aiverse-content-mods/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Versioned dependency resolution, conflicts and deterministic mod order",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_content_mods",
+      "dependencies": [
+        "aiverse-graphs"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Content.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-content-pipeline",
+      "package": "content-pipeline",
+      "path": "skills/aiverse-content-pipeline/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Content budgets, PNG dimensions, localization consistency and existing conversion tool orchestration",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/gameplay.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-decision-explanations",
+      "package": "decision-explanations",
+      "path": "skills/aiverse-decision-explanations/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Bounded structured decision facts using existing reason codes",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_decision_explanations",
+      "dependencies": [
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Decisions.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-diagnostics",
+      "package": "diagnostics",
+      "path": "skills/aiverse-diagnostics/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Structured refusal codes, values and bounded decision traces",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_diagnostics",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Diagnostics.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-feedback",
+      "package": "feedback",
+      "path": "skills/aiverse-feedback/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Event-to-sound/particle/animation/notification/camera actions with cooldowns",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_feedback",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Feedback.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-game-verification",
+      "package": "game-verification",
+      "path": "skills/aiverse-game-verification/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Headless seed checks, snapshot/serialized restore gates and machine-readable reports",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/gameplay.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-genre-kits",
+      "package": "genre-kits",
+      "path": "skills/aiverse-genre-kits/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Reusable capability and acceptance recipes for four genres",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_genre_kits",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Genre.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-geometry",
+      "package": "geometry",
+      "path": "skills/aiverse-geometry/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Rigid mesh clusters, static scenery HLOD, CPU occlusion and offline baked surface proxies",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/render/Geometry.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-graphs",
+      "package": "graphs",
+      "path": "skills/aiverse-graphs/SKILL.md",
+      "domain": "gameplay",
+      "summary": "BFS and topological ordering",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_graphs",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Graphs.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-grid",
+      "package": "grid",
+      "path": "skills/aiverse-grid/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Four-neighbor multi-source distance fields",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_grid",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Grid.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-grid-puzzles",
+      "package": "grid-puzzles",
+      "path": "skills/aiverse-grid-puzzles/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Sokoban moves, undo/redo and bounded solver",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_grid_puzzles",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/Puzzles.h",
+      "keywords": [
+        "puzzle",
+        "match3",
+        "головолом"
+      ]
+    },
+    {
+      "id": "aiverse-hot-reload",
+      "package": "hot-reload",
+      "path": "skills/aiverse-hot-reload/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Stage and atomically activate validated host settings",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_hot_reload",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/runtime/HotReload.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-input",
+      "package": "input",
+      "path": "skills/aiverse-input/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Context and priority input routing, axis deadzones, selection, control groups and drag gestures",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_input",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Input.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-inventory",
+      "package": "inventory",
+      "path": "skills/aiverse-inventory/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Stacked inventory, weight/slot limits, atomic transfer, equipment and crafting",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_inventory",
+      "dependencies": [
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Inventory.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-library-showcase",
+      "package": "library-showcase",
+      "path": "skills/aiverse-library-showcase/SKILL.md",
+      "domain": "gameplay",
+      "summary": "End-to-end real RTS simulation, RmlUi, save and meta reward example",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "examples/libraries/showcase/main.cpp",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-library-upgrades",
+      "package": "library-upgrades",
+      "path": "skills/aiverse-library-upgrades/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Read-only package upgrade plan from lock hashes",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/project_checks.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-logistics",
+      "package": "logistics",
+      "path": "skills/aiverse-logistics/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Atomic integer recipe consumption",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_logistics",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Logistics.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-loot-tables",
+      "package": "loot-tables",
+      "path": "skills/aiverse-loot-tables/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Weighted loot with exclusions and a guaranteed rare threshold",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_loot_tables",
+      "dependencies": [
+        "aiverse-progression"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Loot.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-match-bridge",
+      "package": "match-bridge",
+      "path": "skills/aiverse-match-bridge/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Authoritative match result to idempotent meta transaction",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_match_bridge",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/MatchBridge.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-match-rules",
+      "package": "match-rules",
+      "path": "skills/aiverse-match-rules/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Team score events, rounds, overtime, draws and contested capture policies",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_match_rules",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Match.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-math",
+      "package": "math",
+      "path": "skills/aiverse-math/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Fixed arithmetic, vectors and trigonometry",
+      "side": "simulation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/core/FixedMath.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-melee-combat",
+      "package": "melee-combat",
+      "path": "skills/aiverse-melee-combat/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Custom melee timing, buffered combos, active-window hit deduplication and defense outcomes",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_melee_combat",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Melee.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-narrative-graphs",
+      "package": "narrative-graphs",
+      "path": "skills/aiverse-narrative-graphs/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_narrative_graphs",
+      "dependencies": [
+        "aiverse-tag-conditions"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Narrative.h",
+      "keywords": [
+        "story",
+        "narrative",
+        "сюжет",
+        "диалог"
+      ]
+    },
+    {
+      "id": "aiverse-native-scaffold",
+      "package": "native-scaffold",
+      "path": "skills/aiverse-native-scaffold/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Generate a registered external native C++ module",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/native_codegen.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-navmesh",
+      "package": "navmesh",
+      "path": "skills/aiverse-navmesh/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Automatic deterministic layered AABB navigation mesh with clearance, erosion and bounded routing",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_navmesh",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/NavMesh.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-network-session",
+      "package": "network-session",
+      "path": "skills/aiverse-network-session/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Transport-independent lobby, reconnect and ordered delivery policy",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_network_session",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Session.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-object-interactions",
+      "package": "object-interactions",
+      "path": "skills/aiverse-object-interactions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Stable action previews plus native built-in interaction commands",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_object_interactions",
+      "dependencies": [
+        "aiverse-diagnostics",
+        "aiverse-tag-conditions"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Interactions.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-objectives",
+      "package": "objectives",
+      "path": "skills/aiverse-objectives/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Event counters and one-shot completion",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_objectives",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Objectives.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-offline-production",
+      "package": "offline-production",
+      "path": "skills/aiverse-offline-production/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Exact fast-forward for affine production chains",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_offline_production",
+      "dependencies": [
+        "aiverse-big-numbers"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/Offline.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-orchestrator",
+      "package": null,
+      "path": "skills/aiverse-orchestrator/SKILL.md",
+      "domain": "workflow",
+      "summary": "Find skills and resolve minimal library dependencies",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "tools/skills/catalog.py",
+      "keywords": [
+        "skill",
+        "catalog",
+        "orchestration",
+        "скилл",
+        "каталог",
+        "оркестратор"
+      ]
+    },
+    {
+      "id": "aiverse-performance-budgets",
+      "package": "performance-budgets",
+      "path": "skills/aiverse-performance-budgets/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Nearest-rank p95, peak limits and baseline regression checks",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_performance_budgets",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Performance.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-play-scenarios",
+      "package": "play-scenarios",
+      "path": "skills/aiverse-play-scenarios/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Tick-indexed actions and assertions for automated play",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_play_scenarios",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Scenario.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-presentation",
+      "package": "presentation",
+      "path": "skills/aiverse-presentation/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Smoothstep, lerp and timeline progress",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_presentation",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Presentation.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-production-networks",
+      "package": "production-networks",
+      "path": "skills/aiverse-production-networks/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Atomic recipes and bounded one-hop transport",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_production_networks",
+      "dependencies": [
+        "aiverse-logistics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/Production.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-progression",
+      "package": "progression",
+      "path": "skills/aiverse-progression/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Weighted selection and level thresholds",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_progression",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Progression.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-progression-curves",
+      "package": "progression-curves",
+      "path": "skills/aiverse-progression-curves/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Nonnegative integer step/linear progression tables and CLI preview",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_progression_curves",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Curves.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-project-recipes",
+      "package": "project-recipes",
+      "path": "skills/aiverse-project-recipes/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Plan and validated application of resource/building/ability/faction changes",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/gameplay.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-puzzle-machine",
+      "package": "puzzle-machine",
+      "path": "skills/aiverse-puzzle-machine/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Bounded deterministic integer VM for programming puzzles",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_puzzle_machine",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/PuzzleMachine.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-reference-validation",
+      "package": "reference-validation",
+      "path": "skills/aiverse-reference-validation/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Validate ID, file and localization/content references",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/project_checks.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-reservations",
+      "package": "reservations",
+      "path": "skills/aiverse-reservations/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Transactional reservation, release and consumption of custom capacities",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_reservations",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Reservations.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-rhythm-timing",
+      "package": "rhythm-timing",
+      "path": "skills/aiverse-rhythm-timing/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Integer tempo maps and frame-independent tap/hold judgement",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_rhythm_timing",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/Rhythm.h",
+      "keywords": [
+        "rhythm",
+        "ритм"
+      ]
+    },
+    {
+      "id": "aiverse-rules",
+      "package": "rules",
+      "path": "skills/aiverse-rules/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Ordered all/any predicates",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_rules",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Rules.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-run-graph",
+      "package": "run-graph",
+      "path": "skills/aiverse-run-graph/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Connected seeded runs, encounter budgets and persistent reward lifecycle",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_run_graph",
+      "dependencies": [
+        "aiverse-graphs",
+        "aiverse-progression"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/RunGraph.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-save-migrations",
+      "package": "save-migrations",
+      "path": "skills/aiverse-save-migrations/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Transactional versioned state migrations plus checksummed JSON backup tools",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_save_migrations",
+      "dependencies": [
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Saves.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-screens",
+      "package": "screens",
+      "path": "skills/aiverse-screens/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Configurable screen rows, modal routing and RmlUi binding",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_screens",
+      "dependencies": [
+        "aiverse-ui-binding"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Screens.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-session-admission",
+      "package": "session-admission",
+      "path": "skills/aiverse-session-admission/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Host-only Conn admission with audience-bound identity, expiry and revocation",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_session_admission",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_net"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/net/Admission.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-squads",
+      "package": "squads",
+      "path": "skills/aiverse-squads/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Leader election, role ordering, formation slots and native group commands",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_squads",
+      "dependencies": [
+        "aiverse-construction",
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Squads.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-state-diff",
+      "package": "state-diff",
+      "path": "skills/aiverse-state-diff/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Locate the first differing native field and trace tick",
+      "side": "tools",
+      "runtime": "header",
+      "target": "AIVERSE::lib_state_diff",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/runtime/StateDiff.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-status-effects",
+      "package": "status-effects",
+      "path": "skills/aiverse-status-effects/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Status snapshots and validated entry to the existing status engine",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_status_effects",
+      "dependencies": [
+        "aiverse-loot-tables"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": "aiverse_game",
+      "source": "libraries/include/aiverselib/systems/EngineMechanics.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-tag-conditions",
+      "package": "tag-conditions",
+      "path": "skills/aiverse-tag-conditions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "All/any/none tag filters and bounded-value conditions",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_tag_conditions",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/systems/Tags.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-tasks",
+      "package": "tasks",
+      "path": "skills/aiverse-tasks/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Priority task claiming and worker release",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_tasks",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/Tasks.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-themes",
+      "package": "themes",
+      "path": "skills/aiverse-themes/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Safe-area layouts, density clamp and validated theme tokens",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_themes",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Theme.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-turn-scheduler",
+      "package": "turn-scheduler",
+      "path": "skills/aiverse-turn-scheduler/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Initiative, AP and nested reaction scheduling",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_turn_scheduler",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/Turns.h",
+      "keywords": [
+        "turn",
+        "пошаг",
+        "ход"
+      ]
+    },
+    {
+      "id": "aiverse-tutorial",
+      "package": "tutorial",
+      "path": "skills/aiverse-tutorial/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Event-driven tutorial stages, counters, branches, skip and hard/soft action gating",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_tutorial",
+      "dependencies": [
+        "aiverse-diagnostics"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/Tutorial.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-typed-commands",
+      "package": "typed-commands",
+      "path": "skills/aiverse-typed-commands/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Generate typed native Command encoders and dispatch",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/native_codegen.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-typed-state",
+      "package": "typed-state",
+      "path": "skills/aiverse-typed-state/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Generate typed NativeState access and transactional migrations",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tools/libraries/native_codegen.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-ui-binding",
+      "package": "ui-binding",
+      "path": "skills/aiverse-ui-binding/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Snapshot UI bindings, escaped values and bounded action queues",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_ui_binding",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/app/Binding.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-ui-patterns",
+      "package": "ui-patterns",
+      "path": "skills/aiverse-ui-patterns/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Existing UI templates",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/ui/templates/README.md",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-verification",
+      "package": "verification",
+      "path": "skills/aiverse-verification/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Existing snapshot restoration verification",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "tests/check_headless_restore.py",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-weapon-policies",
+      "package": "weapon-policies",
+      "path": "skills/aiverse-weapon-policies/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Seeded spread, recoil recovery and swept projectiles with bounded ricochets",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_weapon_policies",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Weapons.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-work-budget",
+      "package": "work-budget",
+      "path": "skills/aiverse-work-budget/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic round-robin work with operation budgets",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_work_budget",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/runtime/WorkBudget.h",
+      "keywords": []
+    },
+    {
+      "id": "aiverse-zone-graph",
+      "package": "zone-graph",
+      "path": "skills/aiverse-zone-graph/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Permanent ability gates, checkpoints and exhaustive softlock proofs",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_zone_graph",
+      "dependencies": [
+        "aiverse-graphs"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/strategy/ZoneGraph.h",
+      "keywords": []
+    },
+    {
+      "id": "meta-ads",
+      "package": "ads",
+      "path": "skills/meta-ads/SKILL.md",
+      "domain": "meta",
+      "summary": "rewarded ads tickets caps cooldown server callbacks",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_ads",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "rewarded",
+        "ads",
+        "реклам"
+      ]
+    },
+    {
+      "id": "meta-albums",
+      "package": "albums",
+      "path": "skills/meta-albums/SKILL.md",
+      "domain": "meta",
+      "summary": "seasonal collections albums duplicate trades",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_albums",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "album",
+        "collection",
+        "trade",
+        "альбом",
+        "коллекц",
+        "обмен"
+      ]
+    },
+    {
+      "id": "meta-async-pvp",
+      "package": "async-pvp",
+      "path": "skills/meta-async-pvp/SKILL.md",
+      "domain": "meta",
+      "summary": "asynchronous PvP defense snapshots raids revenge shields",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_async_pvp",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "raid",
+        "revenge",
+        "рейд",
+        "месть",
+        "асинхрон"
+      ]
+    },
+    {
+      "id": "meta-backend",
+      "package": "backend",
+      "path": "skills/meta-backend/SKILL.md",
+      "domain": "meta",
+      "summary": "backend HTTP SQLite authentication persistence entitlements subscription native transport",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_backend",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Service.h",
+      "keywords": [
+        "entitlement",
+        "subscription",
+        "подписк",
+        "прав"
+      ]
+    },
+    {
+      "id": "meta-clans",
+      "package": "clans",
+      "path": "skills/meta-clans/SKILL.md",
+      "domain": "meta",
+      "summary": "friends requests clan roles donations goals",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_clans",
+      "dependencies": [
+        "meta-social"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Service.h",
+      "keywords": [
+        "clan",
+        "guild",
+        "клан",
+        "гильди"
+      ]
+    },
+    {
+      "id": "meta-client",
+      "package": "client",
+      "path": "skills/meta-client/SKILL.md",
+      "domain": "meta",
+      "summary": "native host UI durable outbox retry restart backend requests",
+      "side": "client",
+      "runtime": "static",
+      "target": "AIVERSE::meta_client",
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "engine/meta/Client.h",
+      "keywords": [
+        "client",
+        "outbox",
+        "retry",
+        "клиент",
+        "повтор"
+      ]
+    },
+    {
+      "id": "meta-compose",
+      "package": null,
+      "path": "skills/meta-compose/SKILL.md",
+      "domain": "workflow",
+      "summary": "Compose a selected meta project",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "tools/skills/catalog.py",
+      "keywords": []
+    },
+    {
+      "id": "meta-database",
+      "package": "database",
+      "path": "skills/meta-database/SKILL.md",
+      "domain": "meta",
+      "summary": "server SQLite schema migrations sessions atomic snapshot CAS",
+      "side": "database",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "meta-server"
+      ],
+      "backendDependencies": [],
+      "source": "tools/meta/db/001_initial.sql",
+      "keywords": [
+        "database",
+        "sqlite",
+        "migration",
+        "бд",
+        "баз",
+        "данных",
+        "миграц"
+      ]
+    },
+    {
+      "id": "meta-economy",
+      "package": "economy",
+      "path": "skills/meta-economy/SKILL.md",
+      "domain": "meta",
+      "summary": "shop offers currencies crafting rewards payments",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_economy",
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "engine/meta/Meta.h",
+      "keywords": [
+        "shop",
+        "store",
+        "offer",
+        "currency",
+        "wallet",
+        "магазин",
+        "оффер",
+        "валют",
+        "кошелек",
+        "покупк"
+      ]
+    },
+    {
+      "id": "meta-events",
+      "package": "events",
+      "path": "skills/meta-events/SKILL.md",
+      "domain": "meta",
+      "summary": "global personal events phases late joins catchup event currencies",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_events",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "event",
+        "событ",
+        "ивент"
+      ]
+    },
+    {
+      "id": "meta-game",
+      "package": null,
+      "path": "skills/meta-game/SKILL.md",
+      "domain": "workflow",
+      "summary": "Choose meta-game recipes",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "tools/skills/catalog.py",
+      "keywords": []
+    },
+    {
+      "id": "meta-items",
+      "package": "items",
+      "path": "skills/meta-items/SKILL.md",
+      "domain": "meta",
+      "summary": "collection instance equipment upgrade merge salvage",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_items",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Service.h",
+      "keywords": [
+        "equipment",
+        "instance",
+        "экипиров",
+        "предмет"
+      ]
+    },
+    {
+      "id": "meta-jobs",
+      "package": "jobs",
+      "path": "skills/meta-jobs/SKILL.md",
+      "domain": "meta",
+      "summary": "crafting construction queues timed slots speedups cancellation",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_jobs",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "queue",
+        "crafting",
+        "очередь",
+        "крафт"
+      ]
+    },
+    {
+      "id": "meta-loot",
+      "package": "loot",
+      "path": "skills/meta-loot/SKILL.md",
+      "domain": "meta",
+      "summary": "nested chests weighted rewards pity duplicate protection",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_loot",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "chest",
+        "loot",
+        "сундук",
+        "лут"
+      ]
+    },
+    {
+      "id": "meta-matchmaking",
+      "package": "matchmaking",
+      "path": "skills/meta-matchmaking/SKILL.md",
+      "domain": "meta",
+      "summary": "party matchmaking regions widening queues backfill leave penalties",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_matchmaking",
+      "dependencies": [
+        "meta-ratings"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "matchmaking",
+        "матчмейкинг",
+        "подбор"
+      ]
+    },
+    {
+      "id": "meta-notifications",
+      "package": "notifications",
+      "path": "skills/meta-notifications/SKILL.md",
+      "domain": "meta",
+      "summary": "notification badges grouped priorities reminders read state",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_notifications",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "notification",
+        "badge",
+        "уведомлен"
+      ]
+    },
+    {
+      "id": "meta-offer-chains",
+      "package": "offer-chains",
+      "path": "skills/meta-offer-chains/SKILL.md",
+      "domain": "meta",
+      "summary": "offer chains accept dismiss transitions impression frequency",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_offer_chains",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "chain",
+        "цепочк"
+      ]
+    },
+    {
+      "id": "meta-offline",
+      "package": "offline",
+      "path": "skills/meta-offline/SKILL.md",
+      "domain": "meta",
+      "summary": "offline income capped accrual rate tiers checkpoints",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_offline",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "offline",
+        "income",
+        "оффлайн",
+        "доход"
+      ]
+    },
+    {
+      "id": "meta-progression",
+      "package": "progression",
+      "path": "skills/meta-progression/SKILL.md",
+      "domain": "meta",
+      "summary": "quests achievements pass daily energy inbox",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_progression",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Meta.h",
+      "keywords": [
+        "daily",
+        "energy",
+        "battlepass",
+        "achievement",
+        "ежеднев",
+        "энерг",
+        "достижен",
+        "боевой",
+        "пропуск"
+      ]
+    },
+    {
+      "id": "meta-quests",
+      "package": "quests",
+      "path": "skills/meta-quests/SKILL.md",
+      "domain": "meta",
+      "summary": "compound quests all any goals daily variants reroll branching",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_quests",
+      "dependencies": [
+        "meta-progression"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "quest",
+        "квест",
+        "задан"
+      ]
+    },
+    {
+      "id": "meta-ratings",
+      "package": "ratings",
+      "path": "skills/meta-ratings/SKILL.md",
+      "domain": "meta",
+      "summary": "Elo Glicko2 ranked periods provisional teams streaks leavers",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_ratings",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "elo",
+        "glicko",
+        "эло",
+        "глико"
+      ]
+    },
+    {
+      "id": "meta-referrals",
+      "package": "referrals",
+      "path": "skills/meta-referrals/SKILL.md",
+      "domain": "meta",
+      "summary": "referral invites milestone rewards promo codes",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_referrals",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "referral",
+        "promo",
+        "реферал",
+        "промокод"
+      ]
+    },
+    {
+      "id": "meta-research",
+      "package": "research",
+      "path": "skills/meta-research/SKILL.md",
+      "domain": "meta",
+      "summary": "research trees dependencies exclusive branches prestige",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_research",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "research",
+        "prestige",
+        "исследован",
+        "престиж"
+      ]
+    },
+    {
+      "id": "meta-server",
+      "package": "server",
+      "path": "skills/meta-server/SKILL.md",
+      "domain": "meta",
+      "summary": "authoritative server policies permissions transactions service modules",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_server",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Service.h",
+      "keywords": [
+        "server",
+        "сервер",
+        "сервак"
+      ]
+    },
+    {
+      "id": "meta-social",
+      "package": "social",
+      "path": "skills/meta-social/SKILL.md",
+      "domain": "meta",
+      "summary": "leaderboards ranking chat moderation",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_social",
+      "dependencies": [
+        "meta-economy"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Social.h",
+      "keywords": [
+        "leaderboard",
+        "ranking",
+        "chat",
+        "лидeрборд",
+        "лидерборд",
+        "рейтинг",
+        "таблица",
+        "чат"
+      ]
+    },
+    {
+      "id": "meta-tournaments",
+      "package": "tournaments",
+      "path": "skills/meta-tournaments/SKILL.md",
+      "domain": "meta",
+      "summary": "tournament league cohorts seasons promotion rewards",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_tournaments",
+      "dependencies": [
+        "meta-social"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/Service.h",
+      "keywords": [
+        "tournament",
+        "league",
+        "турнир",
+        "лиг"
+      ]
+    },
+    {
+      "id": "meta-ui",
+      "package": "ui",
+      "path": "skills/meta-ui/SKILL.md",
+      "domain": "meta",
+      "summary": "screens shop chat leaderboard inbox UI themes localization",
+      "side": "client",
+      "runtime": "assets",
+      "target": null,
+      "dependencies": [
+        "meta-client"
+      ],
+      "backendDependencies": [],
+      "source": "examples/meta/ui/app.js",
+      "keywords": [
+        "screen",
+        "interface",
+        "экран",
+        "интерфейс"
+      ]
+    },
+    {
+      "id": "meta-wars",
+      "package": "wars",
+      "path": "skills/meta-wars/SKILL.md",
+      "domain": "meta",
+      "summary": "clan wars roster pairing contributions settlement rewards",
+      "side": "server",
+      "runtime": "static",
+      "target": "AIVERSE::meta_wars",
+      "dependencies": [
+        "meta-clans"
+      ],
+      "backendDependencies": [],
+      "source": "engine/meta/LiveOps.h",
+      "keywords": [
+        "clanwar",
+        "войн"
+      ]
+    },
+    {
+      "id": "rts-bots-rts",
+      "package": "bots-rts",
+      "path": "skills/rts-bots-rts/SKILL.md",
+      "domain": "gameplay",
+      "summary": "RTS bot profiles and transactional checkpoints over the existing RtsAI",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_bots_rts",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": "aiverse_game",
+      "source": "libraries/include/aiverselib/bots/Rts.h",
+      "keywords": [
+        "rts",
+        "bot",
+        "ртс",
+        "бот"
+      ]
+    },
+    {
+      "id": "rts-generation",
+      "package": "generation",
+      "path": "skills/rts-generation/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Existing deterministic map generator",
+      "side": "simulation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "modules/rts/gen/MapGen.h",
+      "keywords": []
+    },
+    {
+      "id": "rts-navigation",
+      "package": "navigation",
+      "path": "skills/rts-navigation/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Existing pathfinding and flow fields",
+      "side": "simulation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "docs/pathfinding.md",
+      "keywords": []
+    },
+    {
+      "id": "rts-spatial",
+      "package": "spatial",
+      "path": "skills/rts-spatial/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Existing game spatial queries",
+      "side": "simulation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "modules/rts/RtsModule.h",
+      "keywords": []
+    }
+  ]
+}

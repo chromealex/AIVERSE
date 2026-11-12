@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='rts-native-libraries-') as temp:
         run(['cmake','-S',str(engine),'-B',str(build_dir),'-DAIVERSE_CONTENT_DIR='+str(content),*flags])
         run(['cmake','--build',str(build_dir),'--target','aiverse_native_library_demo','--parallel','2'])
     build(ROOT,project,tmp/'build-external')
-    print('External game native module compiled with AIVERSE::libraries')
+    print('External game native module compiled with selected per-skill libraries')
     # Use the real source-export directory list, so removing libraries from it breaks this test.
     code=(ROOT/'tools/aiversebuild/main.cpp').read_text()
     body=code.split('void exportSources(',1)[1].split('// Native plugins',1)[0]

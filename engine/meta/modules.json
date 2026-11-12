@@ -1,0 +1,179 @@
+{
+  "schema": 1,
+  "modules": [
+    {
+      "id": "economy",
+      "target": "AIVERSE::meta_economy",
+      "register": "economy",
+      "dependencies": []
+    },
+    {
+      "id": "progression",
+      "target": "AIVERSE::meta_progression",
+      "register": "progression",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "social",
+      "target": "AIVERSE::meta_social",
+      "register": "social",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "clans",
+      "target": "AIVERSE::meta_clans",
+      "register": "clans",
+      "dependencies": [
+        "social"
+      ]
+    },
+    {
+      "id": "items",
+      "target": "AIVERSE::meta_items",
+      "register": "items",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "backend",
+      "target": "AIVERSE::meta_backend",
+      "register": "backend",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "tournaments",
+      "target": "AIVERSE::meta_tournaments",
+      "register": "tournaments",
+      "dependencies": [
+        "social"
+      ]
+    },
+    {
+      "id": "loot",
+      "target": "AIVERSE::meta_loot",
+      "register": "loot",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "albums",
+      "target": "AIVERSE::meta_albums",
+      "register": "albums",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "research",
+      "target": "AIVERSE::meta_research",
+      "register": "research",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "offline",
+      "target": "AIVERSE::meta_offline",
+      "register": "offline",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "jobs",
+      "target": "AIVERSE::meta_jobs",
+      "register": "jobs",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "quests",
+      "target": "AIVERSE::meta_quests",
+      "register": "quests",
+      "dependencies": [
+        "progression"
+      ]
+    },
+    {
+      "id": "events",
+      "target": "AIVERSE::meta_events",
+      "register": "events",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "notifications",
+      "target": "AIVERSE::meta_notifications",
+      "register": "notifications",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "referrals",
+      "target": "AIVERSE::meta_referrals",
+      "register": "referrals",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "ads",
+      "target": "AIVERSE::meta_ads",
+      "register": "ads",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "offer-chains",
+      "target": "AIVERSE::meta_offer_chains",
+      "register": "chains",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "wars",
+      "target": "AIVERSE::meta_wars",
+      "register": "wars",
+      "dependencies": [
+        "clans"
+      ]
+    },
+    {
+      "id": "async-pvp",
+      "target": "AIVERSE::meta_async_pvp",
+      "register": "asyncPvp",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "ratings",
+      "target": "AIVERSE::meta_ratings",
+      "register": "ratings",
+      "dependencies": [
+        "economy"
+      ]
+    },
+    {
+      "id": "matchmaking",
+      "target": "AIVERSE::meta_matchmaking",
+      "register": "matchmaking",
+      "dependencies": [
+        "ratings"
+      ]
+    }
+  ]
+}

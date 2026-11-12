@@ -14,4 +14,4 @@ struct Result {
     std::string detail;
     explicit operator bool() const { return code == Code::Ok || code == Code::Duplicate; }
 };
-}
+} // namespace aiverse::meta

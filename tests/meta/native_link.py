@@ -29,7 +29,10 @@ std::vector<NativeDefinition> compiledNativeModules();
 #include "engine/meta/Client.h"
 #include "engine/meta/Rating.h"
 #include "engine/meta/LiveOps.h"
+#include "native_meta.h"
 int metaProbe() {
+    aiverse::meta::Service service(aiverse::meta::kits::native_meta(), aiverse::meta::ServiceConfig{});
+    if(!service.execute({"p",false},{"profile","create","init",aiverse::Json::object()},1).result)return -5;
     aiverse::meta::OfflineBackend backend;
     aiverse::meta::Client client(backend);
     if(!client.begin(aiverse::meta::requests::view())) return -3;
@@ -43,8 +46,10 @@ int metaProbe() {
 }
 std::unique_ptr<aiverse::game::NativeModule> createMetaProbe() { return std::make_unique<aiverse::game::NativeModule>(); }
 ''')
-    (native / 'CMakeLists.txt').write_text('''aiverse_native_module(ID meta_probe VERSION 1 ENTRY createMetaProbe SOURCES Module.cpp)
-aiverse_native_use_meta(aiverse_native_meta_probe)
+    (native / 'CMakeLists.txt').write_text('''aiverse_add_meta_server(native_meta MODULES economy ratings)
+aiverse_native_module(ID meta_probe VERSION 1 ENTRY createMetaProbe SOURCES Module.cpp)
+aiverse_native_use_meta(aiverse_native_meta_probe native_meta)
+aiverse_native_use_meta(aiverse_native_meta_probe CLIENT)
 ''')
     (src / 'main.cpp').write_text('''#include "modules/rts/RtsNative.h"
 int metaProbe();

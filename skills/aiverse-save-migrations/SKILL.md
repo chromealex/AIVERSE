@@ -32,3 +32,7 @@ Run `python3 tools/libraries/generate_gameplay.py --check`, `python3 tools/libra
 `python3 tests/libraries/native_consumer.py`. For sim integration run project-specific headless
 restore checks and all sample matches as required by AGENTS.md. Pin the package and its transitive
 headers with catalog.py; review pin changes when upgrading.
+
+Build selection: `AIVERSE::lib_save_migrations`; native OBJECT modules call
+`aiverse_native_use_libraries(target save-migrations)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

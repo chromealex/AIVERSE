@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = '0.5.0'
+VERSION = '0.6.0'
 PACKAGES = [
     ('server', 'authoritative server policies permissions transactions service modules', 'meta-server', 'engine/meta/Service.h'),
     ('database', 'server SQLite schema migrations sessions atomic snapshot CAS', 'meta-database', 'tools/meta/db/001_initial.sql'),
@@ -69,6 +69,9 @@ def main():
             elif args.query=='ui': example=config['economy']['metadata']
             else: example={'service':'meta','action':'view','arguments':{}}
             result=dict(package,example=example,cmakeTarget=('AIVERSE::meta_client' if args.query=='client' else None if args.query in ('ui','database') else 'AIVERSE::meta_server'),nativeHelper='aiverse_native_use_meta')
+        modules={m['id']:m for m in json.loads((ROOT/'engine/meta/modules.json').read_text())['modules']}
+        result['cmakeTarget']=modules[args.query]['target'] if args.query in modules else {'client':'AIVERSE::meta_client','server':'AIVERSE::meta_server'}.get(args.query)
+        result['side']='client' if args.query in ('client','ui') else 'database' if args.query=='database' else 'server'
         if args.section:
             try:
                 value=result['example']
@@ -87,8 +90,8 @@ def main():
     if args.command == 'check':
         print(f'Validated {len(entries)} meta packages and project recipes')
         return
-    if not args.project or not (args.project/'meta/economy.json').is_file():
-        parser.error('--project must contain meta/economy.json')
+    if not args.project or not ((args.project/'meta/economy.json').is_file() or (args.project/'meta/kit.json').is_file()):
+        parser.error('--project must contain meta/economy.json or a generated meta/kit.json')
     files = set()
     for root in ['engine/meta', 'tools/meta', 'examples/meta/ui']:
         files.update(p for p in (ROOT/root).rglob('*') if p.is_file() and '__pycache__' not in p.parts)

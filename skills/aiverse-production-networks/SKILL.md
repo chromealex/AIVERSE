@@ -20,10 +20,14 @@ remain authoritative for games already using them; don't mirror their stocks.
   and offline models; link ordering is deterministic contention priority.
 - `stepFactory` accepts exactly `state.tick+1`. This is discrete transport, not
   fluid pressure, electrical load flow, shortest-path dispatch or rail signaling.
-- Link `AIVERSE::strategy` after `aiverse_native_module`. Persist FactoryState
+- Link `AIVERSE::lib_production_networks` after `aiverse_native_module`. Persist FactoryState
   through `strategy/Persistence.h` in NativeState; version recipes/topology. Keep
   graph changes as validated Commands and check compatibility before committing.
 - Follow `examples/native/strategy`. Run `strategy_libraries` and
   `python3 tests/libraries/strategy_native.py`. Verify blocked outputs consume
   nothing, fan-out conserves stock, chains cannot multi-hop, duplicate ticks do
   nothing and a fresh restore preserves future transfers.
+
+Build selection: `AIVERSE::lib_production_networks`; native OBJECT modules call
+`aiverse_native_use_libraries(target production-networks)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

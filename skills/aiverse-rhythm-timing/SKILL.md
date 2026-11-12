@@ -21,7 +21,7 @@ numerators before one division, avoiding accumulated rounding across tempo chang
   head grade, misses on an early release, tolerates release inside the final good window,
   and completes at its end while held. Release the lane before another press.
   Deadline events use timestamp/note order so frame batching preserves combo history.
-- Link `AIVERSE::strategy` and persist all `RhythmState` via `strategy/Persistence.h`
+- Link `AIVERSE::lib_rhythm_timing` and persist all `RhythmState` via `strategy/Persistence.h`
   in NativeState. Bind chart revision/module VERSION. Restore held keys and pending
   grades; do not recompute judgements from presentation animation.
 - Follow `examples/native/strategy` command 9 for a headless hold/restore example.
@@ -32,3 +32,7 @@ numerators before one division, avoiding accumulated rounding across tempo chang
 No audio playback, device latency measurement UI, streaming timestamp transport, note rendering,
 beat detection or hardware validation is implied. Chart-specific scoring can be added as a
 versioned policy rather than changing existing saved scores silently.
+
+Build selection: `AIVERSE::lib_rhythm_timing`; native OBJECT modules call
+`aiverse_native_use_libraries(target rhythm-timing)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

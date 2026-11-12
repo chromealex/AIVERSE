@@ -13,3 +13,6 @@ project guide is `meta/AGENTS.md`. Preserve legacy metadata on existing projects
 5. For native RmlUi consume the same projection through existing project UI components and Localization::tr. Browser assets are not RmlUi documents and are not auto-installed into the engine HUD.
 6. Hand real-money offers to existing native Store providers; browser example does not initiate platform payments.
 7. Verify desktop/mobile layouts and actual backend actions. State clearly if screenshots, native embedding or network tests could not run; static checks do not establish visual correctness.
+
+Separate client asset library: `examples/meta/ui/` (copied only when UI is selected).
+No C++ policy archive is required; native hosts use `AIVERSE::meta_client`.

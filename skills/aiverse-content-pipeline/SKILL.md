@@ -32,3 +32,6 @@ Run `python3 tools/libraries/generate_gameplay.py --check`, `python3 tools/libra
 `python3 tests/libraries/native_consumer.py`. For sim integration run project-specific headless
 restore checks and all sample matches as required by AGENTS.md. Pin the package and its transitive
 headers with catalog.py; review pin changes when upgrading.
+
+Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
+it does not provide a separate runtime implementation. Pin the engine revision for that owner.

@@ -15,8 +15,8 @@ description: Generate a complete or selected AIVERSE meta layer from reusable C+
    meta/UI folders are refused; modify their source JSON instead of overwriting them.
 4. Keep `meta/AGENTS.md` as the project's compact integration guide. Compose edited
    definitions using `tools/meta/compose.py`; pin/verify via `tools/meta/catalog.py`.
-5. Link `aiverse::meta`; registered native OBJECT modules use
-   `aiverse_native_use_meta(target)`. Host requests use `meta::Client`, see meta-client.
+5. Select client/server output with `--side client|server|both`. Link the generated
+   `game_meta` server kit or `AIVERSE::meta_client`; native modules use the matching selected target.
    Never put clocks, credentials or network/profile state in simulation callbacks.
 6. `ui` copies the maintained browser screens. `metadata.metaScreens` selects supported
    tabs. Serve them with the authenticated reference HTTP host using `--ui PROJECT/ui/meta`.
@@ -24,3 +24,6 @@ description: Generate a complete or selected AIVERSE meta layer from reusable C+
    provider or native RmlUi integration. Generated service chat uses global channels only.
 7. Run meta CTest, project configuration validation and the external native consumer.
    Inspect rendered selected screens when changing UI. Report actual runtime/platform coverage.
+
+Runtime library: none; composition generates project integration. Use the orchestrator plan
+from `skills/aiverse-orchestrator/SKILL.md`. Generated server config and SQL stay off clients.

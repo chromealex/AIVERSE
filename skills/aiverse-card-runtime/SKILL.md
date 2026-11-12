@@ -21,7 +21,7 @@ targets are not implemented.
   for spectators. Never send full CardState to opponents. RTS lockstep replicates
   simulation knowledge and is not suitable for confidential hands merely because
   the UI uses this projection. A server/view transport is a separate integration.
-- Link `AIVERSE::strategy` after `aiverse_native_module`. Save CardState through
+- Link `AIVERSE::lib_card_runtime` after `aiverse_native_module`. Save CardState through
   `strategy/Persistence.h` in NativeState, including pending frames, priority,
   pass count and command watermark. Bind immutable rules to module/config version
   and codec revision. Do not keep mutable state on the module object.
@@ -32,3 +32,7 @@ targets are not implemented.
 
 Deck building, elimination/winner rules, UI, custom effects and actual transport
 remain game integration work. Use the existing meta collection/wallet owner.
+
+Build selection: `AIVERSE::lib_card_runtime`; native OBJECT modules call
+`aiverse_native_use_libraries(target card-runtime)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

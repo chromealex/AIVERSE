@@ -21,7 +21,7 @@ players and movement/attack budgets suffice.
 - Do not remove actors referenced by pending actions. Mark life state and let
   the owner handle target invalidation, round progression and game over.
 - Register with `aiverse_native_module(...)`, then link
-  `AIVERSE::strategy`. Persist `TurnState` using `strategy/Persistence.h`
+  `AIVERSE::lib_turn_scheduler`. Persist `TurnState` using `strategy/Persistence.h`
   `storeState/restoreState` with a definition revision in NativeState.
   Mutable state must not live on NativeModule instances.
 - Follow `examples/native/strategy`. Run `strategy_libraries` and
@@ -30,3 +30,7 @@ players and movement/attack budgets suffice.
 
 Tactical grids, legal-action generation, reaction UI and tactical AI remain
 separate integrations. Do not describe this scheduler as full XCOM/D&D rules.
+
+Build selection: `AIVERSE::lib_turn_scheduler`; native OBJECT modules call
+`aiverse_native_use_libraries(target turn-scheduler)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

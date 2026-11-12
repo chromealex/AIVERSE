@@ -28,7 +28,7 @@ This package adds their missing admission boundary; it does not replace transpor
   Plain Internet UDP is not made confidential by this handshake.
 - Native OBJECT consumers call `aiverse_native_use_session(aiverse_native_<id>)` after
   registration; it propagates aiverse_net to the final owner. Ordinary hosts link
-  `AIVERSE::session` and the actual transport/authority targets. See
+  `AIVERSE::lib_session_admission` and the actual transport/authority targets. See
   `examples/native/strategy/AdmissionConsumer.cpp` and `SessionProbe.cpp`.
 - Do not put Access, credentials, sockets or wall clocks in NativeState or NativeModule
   setup/tick/command. These are host objects. Run `strategy_native.py` for real native and
@@ -40,3 +40,7 @@ For a local host, `LocalTickets.h` reads the private atomic table issued by
 network guide for slot retention, rotation, explicit revocation and `--loopback`.
 Clear/revoke on failed reload; never trust a client-provided table. Production identity
 issuance, distributed allocation, secure WAN transport and deployment limits remain work.
+
+Build selection: `AIVERSE::lib_session_admission`; native OBJECT modules call
+`aiverse_native_use_libraries(target session-admission)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.

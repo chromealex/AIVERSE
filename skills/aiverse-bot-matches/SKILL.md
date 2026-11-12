@@ -14,3 +14,6 @@ checksums, then run restoration tests. Use exported mesh polygons to diagnose re
 Keep the original reference bot disabled for library-owned FPS slots. Never claim a time-limited
 run ended in victory or that deterministic restore proves competitive playing strength.
 Run all engine tests/template matches after simulation changes. Report platform and rendering gaps.
+
+Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
+it does not provide a separate runtime implementation. Pin the engine revision for that owner.

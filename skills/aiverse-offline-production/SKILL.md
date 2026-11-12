@@ -19,7 +19,7 @@ Read `libraries/include/aiverselib/strategy/Offline.h` and
   budget. Reject backwards clocks and excessive gaps; duplicate tick is a no-op.
   The library does not read wall time or grant wallet rewards. For host clocks,
   server validation and idempotent claims reuse existing meta-service policies.
-- Link `AIVERSE::strategy` from the game's native registration. Store OfflineState
+- Link `AIVERSE::lib_offline_production` from the game's native registration. Store OfflineState
   in NativeState using `strategy/Persistence.h`, with the immutable law revision.
   On arithmetic-capacity failure, state remains unchanged; surface that failure.
 - Verify fast-forward against repeated single ticks, including chained growth,
@@ -28,3 +28,7 @@ Read `libraries/include/aiverselib/strategy/Offline.h` and
 
 The native example advances simulation ticks. It is not evidence of trusted
 wall-clock synchronization, nonlinear production or production cloud saves.
+
+Build selection: `AIVERSE::lib_offline_production`; native OBJECT modules call
+`aiverse_native_use_libraries(target offline-production)`. Only this header library and its
+declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
