@@ -46,12 +46,15 @@ RtsFx::Binding RtsFx::resolve(const Json& v, const std::string& where) {
     if (v.isString()) name = v.str();
     else if (v.isObject()) {
         for (auto& [k, x] : v.members())
-            if (k != "effect" && k != "height" && k != "scale" && k != "teamColor" && k != "below") warnings_.push_back(where + ": unknown field '" + k + "'");
+            if (k != "effect" && k != "height" && k != "scale" && k != "teamColor" && k != "below" && k != "upright" && k != "clear")
+                warnings_.push_back(where + ": unknown field '" + k + "'");
         name = v["effect"].str();
         b.height = float(v.getFx("height").toDouble());
         b.scale = float(v.getFx("scale", Fixed::fromInt(1)).toDouble());
         b.below = float(v.getFx("below", Fixed::fromRatio(1, 2)).toDouble());
         b.teamColor = v.getBool("teamColor");
+        b.upright = v.getBool("upright");
+        b.clear = v.getBool("clear");
     }
     if (name.empty()) { warnings_.push_back(where + ": expected an effect name or { \"effect\": ... }"); return b; }
     const size_t before = ps_->errors().size();
@@ -164,6 +167,7 @@ const RtsFx::Binding& RtsFx::trailFor(int type) const {
 
 bool RtsFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int owner) {
     if (!b.valid() || !ps_) return false;
+    if (b.upright) dir = {0, 1, 0};
     float3 p = toF(pos);
     const bool air = type >= 0 && size_t(type) < rules_->types.size() && (rules_->types[size_t(type)].layer & kLayerAir);
     if (place_) { // curved worlds: lift along the local up, directions given with +Y up turn with it
@@ -302,7 +306,7 @@ void RtsFx::update(Simulation& sim, const std::vector<SceneObject>* scene) {
                 auto* su = pr && w.alive(pr->source) ? w.tryGet<Unit>(pr->source) : nullptr;
                 const Binding& b = trailFor(su ? int(su->type) : -1);
                 if (!b.valid()) { trails_[key] = {{}, frame_}; continue; }   // remembered: no lookup every frame
-                trails_[key] = {ps_->play(b.effect, o.pos, up, b.scale), frame_};
+                trails_[key] = {ps_->play(b.effect, o.pos, up, b.scale), frame_, b.clear};
             } else {
                 it->second.frame = frame_;
                 ps_->move(it->second.h, o.pos);
@@ -325,7 +329,11 @@ void RtsFx::update(Simulation& sim, const std::vector<SceneObject>* scene) {
     // gone this frame (hit the target, died, went into the fog): stop emitting, particles fade out
     for (auto* m : {&trails_, &damaged_})
         for (auto it = m->begin(); it != m->end();) {
-            if (it->second.frame != frame_) { ps_->stop(it->second.h); it = m->erase(it); }
+            if (it->second.frame != frame_) {
+                if (it->second.clear) ps_->kill(it->second.h);
+                else ps_->stop(it->second.h);
+                it = m->erase(it);
+            }
             else ++it;
         }
 }

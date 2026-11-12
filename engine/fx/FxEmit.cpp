@@ -120,9 +120,11 @@ bool ParticleSystem::Impl::emit(Instance& in, uint32_t owner, int effect, int em
         off = shapeToWorld(mul3(q, d.box));
         break;
     }
-    case FxShape::Line:
-        off = shapeToWorld({(rng.unit() * 2 - 1) * d.radius, 0, 0});
+    case FxShape::Line: {   // arc modes (spread, loop, ping-pong) walk along the line; random keeps the original math
+        const float f = d.arcMode == FxArcMode::Random ? rng.unit() : around() / std::max(1e-6f, std::min(d.arc, 360.0f) * kDeg);
+        off = shapeToWorld({(f * 2 - 1) * d.radius, 0, 0});
         break;
+    }
     case FxShape::Donut: {   // torus around the effect Y axis: ring "radius", tube "donutRadius"
         float a = around(), b = rng.unit() * 2 * kPi;
         float rt = d.emitFrom == FxEmitFrom::Shell ? d.donutRadius : d.donutRadius * shellRadius(rng, d.thickness, 2);

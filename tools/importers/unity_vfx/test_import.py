@@ -160,7 +160,7 @@ class ImportTests(unittest.TestCase):
     def test_effects_and_textures_written(self):
         self.assertEqual(self.code, 0)
         self.assertTrue(self.rep['ok'])
-        self.assertEqual(sorted(self.fx), ['explosion', 'explosion_sparkpop', 'magicaura', 'vfxholder', 'vfxholder_sparks'])
+        self.assertEqual(sorted(self.fx), ['explosion', 'explosion_sparkpop', 'magicaura', 'ribbons', 'vfxholder', 'vfxholder_sparks'])
         for t in ('fire_sheet', 'smoke', 'spark', 'ring'):
             self.assertTrue(os.path.exists(os.path.join(self.tmp, 'fx', 'textures', t + '.png')), t)
         with open(os.path.join(self.tmp, 'fx', 'textures', 'smoke.png'), 'rb') as f:
@@ -248,6 +248,17 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(em['noise']['octaves'], 2)
         sp = self.fx['vfxholder_sparks']['emitters'][0]
         self.assertEqual((sp['burst'], sp['life'], sp['size'], sp['direction']), (1, 0.4, 0.05, [0, 1, 0]))
+
+    def test_trail_and_line_renderers(self):
+        trail, line = self.fx['ribbons']['emitters']
+        # TrailRenderer: hidden particles per metre moved, living the trail time, joined into one ribbon
+        self.assertEqual((trail['hidden'], trail['perMeter'], trail['life'], trail['size'], trail['loop']), (True, 4, 0.5, 0.5, True))
+        self.assertEqual((trail['trail']['mode'], trail['trail']['time'], trail['trail']['textureMode']), ('ribbon', 0.5, 'tile'))
+        self.assertEqual((trail['trail']['width'][0], trail['trail']['width'][-1]), ([0, 1], [1, 0]))
+        self.assertEqual(trail['sortOrder'], 2)
+        # LineRenderer circle of 12 points: a ring spread evenly, unrotated
+        self.assertEqual((line['shape'], line['radius'], line['arcMode'], line['bursts'][0]['count']), ('ring', 2, 'spread', 12))
+        self.assertNotIn('shapeRotation', line)
 
     def test_report_lists_what_could_not_be_mapped(self):
         dropped = '\n'.join(self.rep['dropped'])

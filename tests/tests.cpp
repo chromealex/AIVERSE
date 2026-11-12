@@ -5814,7 +5814,7 @@ TEST(fx_unity_importer_output_is_valid) {
                             "/tests/data/unity_vfx/Assets/FX\" --game \"" + out + "\" --json > \"" + out + "/report.json\"";
     CHECK(std::system(cmd.c_str()) == 0);
     Json rep = Json::parseFile(out + "/report.json");
-    CHECK(rep["effects"].size() == 5);   // + the VFX Graph of VfxHolder.prefab and its GPU-event sub-effect
+    CHECK(rep["effects"].size() == 6);   // + VFX Graph of VfxHolder.prefab (+ its GPU-event sub-effect), Ribbons.prefab
     fx::ParticleSystem ps;
     ps.setQuality(fx::FxQuality::High);
     ps.init(nullptr);
@@ -12910,6 +12910,7 @@ TEST(world_tree_script_blob_decoding) {
 #include "geometry/runtime.inc"
 
 #include "tests_projectiles.inc"
+#include "tests_vfx_tools.inc"   // agent-vfxgraph
 
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {

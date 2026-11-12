@@ -29,6 +29,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import convert as cv  # noqa: E402
+import lines  # noqa: E402
 import mapping as mp  # noqa: E402
 import mapping_look as ml  # noqa: E402
 from materials import Meshes, sanitize, Textures  # noqa: E402
@@ -184,7 +185,7 @@ def dumps_effect(effect):
 def import_prefab(path, assets, opts, rep, name, game_dir, quiet=False):
     prefab = Prefab(path, assets, rep)
     rel_name = os.path.basename(path)
-    if quiet and not any(d.class_id in (CLASS_PS, CLASS_VISUAL_EFFECT) for d in prefab.docs):
+    if quiet and not any(d.class_id in (CLASS_PS, CLASS_VISUAL_EFFECT, lines.CLASS_TRAIL, lines.CLASS_LINE) for d in prefab.docs):
         return []   # a prefab instance / legacy prefab without particle systems: nothing to report
     used_refs = set()   # components the particle systems use (trigger colliders, mesh / sprite shape renderers)
     for p in prefab.docs:
@@ -207,6 +208,8 @@ def import_prefab(path, assets, opts, rep, name, game_dir, quiet=False):
             script = assets.path(get(d.data, 'm_Script') or {})
             rep.dropped.append('%s: script %s (behaviour is code: bind the effect to game events with fx_bind instead)' %
                                (rel_name, os.path.basename(script) if script else get(d.data, 'm_Script', 'guid', default='?')))
+        elif d.class_id in (lines.CLASS_TRAIL, lines.CLASS_LINE) and not d.stripped:
+            continue   # ribbons (lines.py)
         elif d.class_id in OTHER_COMPONENTS and not d.stripped and d.file_id not in used_refs:
             go = get(d.data, 'm_GameObject', 'fileID')
             rep.dropped.append('%s: %s on %s' % (rel_name, OTHER_COMPONENTS[d.class_id], prefab.name(go)))
@@ -237,6 +240,28 @@ def import_prefab(path, assets, opts, rep, name, game_dir, quiet=False):
         psr = next((c for c in comps if c.class_id == CLASS_PSR), None)
         systems.append((ps, psr, go, pos, rot, scale, p))
     graph_outputs = import_visual_effects(prefab, assets, opts, rep, name, game_dir, ctx)
+    ribbons = []   # TrailRenderer / LineRenderer -> ribbon emitters (lines.py)
+    for tr, go, pos, rot, scale, p in walk:
+        for c in prefab.comp_by_go.get(go, []):
+            if c.stripped:
+                continue
+            if c.class_id == lines.CLASS_TRAIL:
+                em = lines.map_trail_renderer(ctx, c, p)
+                if em is not None:
+                    off = ctx.eff_point(pos)
+                    if v_len(off) > 1e-4:
+                        em['offset'] = mp.vec(off, 3)
+                    ribbons.append(em)
+            elif c.class_id == lines.CLASS_LINE:
+                em = lines.map_line_renderer(ctx, c, p, pos, rot, scale)
+                if em is not None:
+                    ribbons.append(em)
+    if ribbons:
+        graph_outputs = [(name, {'comment': 'Imported from Unity %s by tools/importers/unity_vfx (TrailRenderer / LineRenderer)' % rel_name,
+                                 'emitters': ribbons})] + graph_outputs
+        if len(graph_outputs) > 1 and graph_outputs[1][0] == name:   # merge with the VFX Graph of the same prefab
+            graph_outputs[0][1]['emitters'] = (graph_outputs[0][1]['emitters'] + graph_outputs[1][1]['emitters'])[:16]
+            graph_outputs.pop(1)
     if not systems:
         if not quiet and not graph_outputs:
             rep.warnings.append('%s: no ParticleSystem in this prefab' % rel_name)
@@ -449,7 +474,7 @@ def run(argv=None):
         if not txt.startswith('%YAML'):
             rep.warnings.append('error: %s is not a text prefab (Unity "Force Text" serialization is needed)' % os.path.basename(p))
             continue
-        if '--- !u!198 ' in txt or '!u!2083052967' in txt or len(prefabs) == 1:
+        if any(t in txt for t in ('--- !u!198 ', '!u!2083052967', '--- !u!96 ', '--- !u!120 ')) or len(prefabs) == 1:
             with_ps.append(p)
         elif 'm_SourcePrefab:' in txt:   # nested instances / variants: systems may come from the source prefab
             with_ps.append(p)
