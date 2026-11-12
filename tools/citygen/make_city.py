@@ -106,9 +106,9 @@ def make_tileset(out):
             im = speckle((58, 59, 62), 10, 2600)
             d = ImageDraw.Draw(im)
             if n == 'line_h':
-                d.rectangle((0, 0, TILE, 5), fill=(196, 150, 40))        # on the road axis = the tile's top edge
+                d.rectangle((0, 2, TILE, 7), fill=(196, 150, 40))        # by the road axis (the tile's top edge); inset: no bleeding into the next atlas tile
             if n == 'line_v':
-                d.rectangle((0, 0, 5, TILE), fill=(196, 150, 40))
+                d.rectangle((2, 0, 7, TILE), fill=(196, 150, 40))
         elif n.startswith('pavement'):
             im = speckle((128, 122, 114), 8, 1800)
             d = ImageDraw.Draw(im)
