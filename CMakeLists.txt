@@ -376,7 +376,7 @@ endif()
 
 # The platform files define main(); they are compiled into each executable through an OBJECT
 # library so that the entry point lands in the final binary on every toolchain.
-# Native plugins bridge + store/ads services (engine/platform/Plugins.h, engine/services). No window
+# Native plugins bridge + store/ads/analytics/privacy services (engine/platform/Plugins.h, engine/services). No window
 # needed, so tests link it directly; platform backends live in the runtime sources.
 # Desktop mock store/ads: on for development builds; aiversebuild turns it off in packaged games unless
 # game.json lists a mock (plugins.cmake sets AIVERSE_MOCK_PLUGINS), so they are not even compiled in.
@@ -387,8 +387,12 @@ add_library(aiverse_plugins STATIC
     engine/platform/Plugins.cpp
     engine/platform/PluginJson.cpp
     engine/services/Store.cpp
-    engine/services/Ads.cpp)
+    engine/services/Ads.cpp
+    engine/services/Analytics.cpp      # analytics / privacy (ATT, consent) services + their Lua tables
+    engine/services/Privacy.cpp
+    engine/services/ServicesLua.cpp)
 target_include_directories(aiverse_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(aiverse_plugins PUBLIC aiverse_lua)   # ServicesLua (analytics.* / privacy.* for the UI Lua)
 if(AIVERSE_MOCK_PLUGINS)
     target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp)
     target_compile_definitions(aiverse_plugins PUBLIC AIVERSE_WITH_MOCK_PLUGINS=1)
@@ -738,6 +742,7 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
     target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
     target_sources(aiverse_tests PRIVATE tools/aiversebuild/Toolchains.cpp)   # toolchain detection (fake HOME)
+    target_sources(aiverse_tests PRIVATE tools/aiversebuild/Plugins.cpp)   # plugin step: Info.plist / SKAdNetwork / Podfile (agent-sdk-plugins)
     if(TARGET aiverse_modelconv)   # model conversion step of packs (models agent)
         target_link_libraries(aiverse_tests PRIVATE aiverse_modelconv)
         target_compile_definitions(aiverse_tests PRIVATE AIVERSE_TEST_MODELCONV=1)

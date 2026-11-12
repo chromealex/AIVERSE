@@ -2,7 +2,7 @@
 // onclick="..." code in, plus the tables scripts drive the client with:
 //   game.*     client: language, maps, match start / pause / menu, events (game.on in ui/lib/meta.lua)
 //   storage.*  per-game JSON saves in the user folder (profile, progress)
-//   store.*    in-app purchases (engine/services/Store.h), ads.* (Ads.h)
+//   store.*    in-app purchases (engine/services/Store.h), ads.* (Ads.h), analytics.* / privacy.* (ServicesLua.h)
 // engine/ui/lib/meta.lua builds the meta-game layer on top (screens, profile, shop); a game's own code
 // goes into ui/*.lua (ui/main.lua runs once the documents are loaded; require('x') loads ui/x.lua).
 // Reference: docs/ui-scripting.md.
@@ -25,6 +25,7 @@ extern "C" {
 #include "GameClient.h"
 #include "modules/rts/RtsInitialVars.h"
 #include "engine/services/Ads.h"
+#include "engine/services/ServicesLua.h"
 #include "engine/services/Store.h"
 #include "engine/ui/UiLua.h"
 
@@ -424,6 +425,7 @@ void GameClient::initLua() {
                     {"buy", LuaApi::storeBuy}, {"finish", LuaApi::storeFinish}, {"restore", LuaApi::storeRestore}});
     table("ads", {{"available", LuaApi::adsAvailable}, {"ready", LuaApi::adsReady}, {"preload", LuaApi::adsPreload},
                   {"show", LuaApi::adsShow}, {"banner", LuaApi::adsBanner}, {"enabled", LuaApi::adsEnabled}});
+    services::openServicesLua(lua_, luaAlive_);   // analytics.* / privacy.* (engine/services/ServicesLua.h)
     lua_pushlightuserdata(lua_, this);
     lua_pushcclosure(lua_, LuaApi::log, 1);
     lua_setglobal(lua_, "print");   // print -> the client log
