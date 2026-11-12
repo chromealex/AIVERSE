@@ -89,7 +89,7 @@ inline bool sensesIdList(const std::vector<int64_t>& v){
     if(v.size()>kSensesMaxList)return false;
     for(std::size_t i=0;i<v.size();++i)if(v[i]<=0||(i&&v[i]<=v[i-1]))return false;return true;
 }
-inline bool contains(const std::vector<int64_t>& sorted,int64_t id){return std::binary_search(sorted.begin(),sorted.end(),id);}
+inline bool sensesContains(const std::vector<int64_t>& sorted,int64_t id){return std::binary_search(sorted.begin(),sorted.end(),id);}
 inline bool valid(const SenseDefinitions& d){
     if(d.disguises.size()>kSensesMaxAgents||d.spots.size()>kSensesMaxAgents)return false;
     for(const auto& [id,x]:d.disguises)if(id<=0||x.id!=id||!sensesIdList(x.factions)||!sensesIdList(x.zones)||!sensesIdList(x.blownBy)
@@ -239,8 +239,8 @@ inline int64_t trailStrength(const TrailConfig& c,const TrailMarker& m,uint32_t 
 // Milli scale applied to suspicion gains of an observer team from a disguised target in a zone.
 inline int64_t disguiseScale(const SenseDefinitions& defs,const SensesState& s,int64_t target,int64_t observerTeam,int64_t zone){
     auto it=s.disguises.find(target);if(it==s.disguises.end()||it->second.blown)return kSensesFull;
-    auto def=defs.disguises.find(it->second.disguise);if(def==defs.disguises.end()||!contains(def->second.factions,observerTeam))return kSensesFull;
-    return def->second.zones.empty()||contains(def->second.zones,zone)?def->second.scaleMilli:def->second.trespassScaleMilli;
+    auto def=defs.disguises.find(it->second.disguise);if(def==defs.disguises.end()||!sensesContains(def->second.factions,observerTeam))return kSensesFull;
+    return def->second.zones.empty()||sensesContains(def->second.zones,zone)?def->second.scaleMilli:def->second.trespassScaleMilli;
 }
 // Search points: the last known position first, then candidates within candidateRadius by (distance, id).
 inline std::vector<SearchPoint> planSearch(const SearchConfig& c,Vec3 lastKnown,const std::vector<SearchCandidate>& sorted){
@@ -325,7 +325,7 @@ std::optional<SensesReport> stepSenses(const SensesConfig& c,const SenseDefiniti
         else if(t.equipDisguise>0){s.disguises[t.id]=DisguiseState{t.equipDisguise,tick,false};event(SenseEventKind::DisguiseEquipped,0,t.id,t.equipDisguise);}
         if(auto d=s.disguises.find(t.id);d!=s.disguises.end()&&!d->second.blown){
             const auto& def=defs.disguises.at(d->second.disguise);
-            for(auto a:t.actions)if(contains(def.blownBy,a)){d->second.blown=true;event(SenseEventKind::DisguiseBlown,0,t.id,a);break;}
+            for(auto a:t.actions)if(sensesContains(def.blownBy,a)){d->second.blown=true;event(SenseEventKind::DisguiseBlown,0,t.id,a);break;}
         }
         if(auto h=s.hiding.find(t.id);h!=s.hiding.end()){
             auto spot=defs.spots.find(h->second.spot);
@@ -339,7 +339,7 @@ std::optional<SensesReport> stepSenses(const SensesConfig& c,const SenseDefiniti
         if(!o.sightMilli)continue;
         for(const auto& t:in.targets){
             if(t.id==o.id||!hostile(o.team,t.team))continue;
-            if(auto h=s.hiding.find(t.id);h!=s.hiding.end()&&!contains(h->second.revealedTo,o.id))continue;
+            if(auto h=s.hiding.find(t.id);h!=s.hiding.end()&&!sensesContains(h->second.revealedTo,o.id))continue;
             auto sample=sampleSight(c.sight,o,t);if(sample.strength<c.sight.minMilli)continue;
             if(r.losQueries>=c.sight.maxQueries){++r.losSkipped;continue;}
             ++r.losQueries;if(!los(static_cast<const SenseAgent&>(o),static_cast<const SenseTarget&>(t)))continue;
@@ -454,7 +454,7 @@ std::optional<SensesReport> stepSenses(const SensesConfig& c,const SenseDefiniti
                     const auto& p=q.points[q.next];event(SenseEventKind::SearchPointReached,o.id,q.target,p.candidate,q.next);
                     if(p.spot)for(auto& [hider,h]:s.hiding){
                         const auto* t=findId(in.targets,hider);
-                        if(h.spot!=p.spot||!t||t->id==o.id||!hostile(o.team,t->team)||contains(h.revealedTo,o.id))continue;
+                        if(h.spot!=p.spot||!t||t->id==o.id||!hostile(o.team,t->team)||sensesContains(h.revealedTo,o.id))continue;
                         h.revealedTo.insert(std::lower_bound(h.revealedTo.begin(),h.revealedTo.end(),o.id),o.id);event(SenseEventKind::HidingRevealed,o.id,hider,p.spot);
                     }
                     ++q.next;

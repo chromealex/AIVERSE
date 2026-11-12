@@ -361,6 +361,51 @@ struct SensesSettings {
     std::int64_t searchMaxPoints=6;
     std::int64_t hideEnterRangeMilli=1500;
 };
+struct NarrativeSettings {
+    std::int64_t autoAdvanceTicks=180;
+    std::int64_t skipLinesPerTick=4;
+    std::int64_t backlogLimit=200;
+    std::int64_t barkCooldownTicks=600;
+    std::int64_t speakerCooldownTicks=120;
+    std::int64_t maxPendingConsequences=1024;
+    std::int64_t maxBarkRequests=64;
+    std::int64_t meterMinimum=-100;
+    std::int64_t meterInitial=0;
+    std::int64_t meterMaximum=100;
+};
+struct InteractionSettings {
+    std::int64_t gravityMilli=9810;
+    std::int64_t skinMilli=16;
+    std::int64_t carryMaxMassMilli=30000;
+    std::int64_t carryReachMilli=2000;
+    std::int64_t carryHoldDistanceMilli=1200;
+    std::int64_t carryHoldHeightMilli=1200;
+    std::int64_t carryFollowSpeedMilli=12000;
+    std::int64_t carryBreakDistanceMilli=1000;
+    std::int64_t carrySpeedPenaltyMilli=15;
+    std::int64_t carryMinSpeedMilli=300;
+    std::int64_t throwMinImpulseMilli=20000;
+    std::int64_t throwMaxImpulseMilli=120000;
+    std::int64_t throwChargeTicks=45;
+    std::int64_t flightMaxTicks=600;
+    std::int64_t pushMaxSpeedMilli=1500;
+    std::int64_t pushGridMoveTicks=20;
+    std::int64_t ropeIterations=8;
+    std::int64_t ropeDampingMilli=10;
+};
+struct CinematicSettings {
+    std::int64_t hitStopTicks=6;
+    std::int64_t hitStopPriority=1000;
+    std::int64_t slowMotionNumerator=1;
+    std::int64_t slowMotionDenominator=4;
+    std::int64_t slowMotionTicks=90;
+    std::int64_t slowMotionPriority=500;
+    std::int64_t qteWindowScaleMilli=1000;
+    std::int64_t qteAccessibleWindowMilli=1000;
+    std::int64_t qteMashScaleMilli=1000;
+    std::int64_t qteHoldScaleMilli=1000;
+    bool qteAutoSucceed=false;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -390,6 +435,9 @@ struct GameplaySettings {
     MatchRuleSettings matchRules;
     ObjectiveSettings objectives;
     SensesSettings senses;
+    NarrativeSettings narrative;
+    InteractionSettings interaction;
+    CinematicSettings cinematic;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -406,7 +454,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -904,6 +952,67 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(settings.senses.searchingAtMilli>settings.senses.alertAtMilli)result.errors.push_back("senses.searchingAtMilli: must not exceed alertAtMilli");
         if(settings.senses.alertAtMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertAtMilli: must not exceed suspicionMaxMilli");
         if(settings.senses.alertReceivedMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertReceivedMilli: must not exceed suspicionMaxMilli");
+    }
+    if(root.has("narrative")) { const auto& section=root["narrative"];
+        if(!section.isObject()) result.errors.push_back("narrative: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="autoAdvanceTicks" && entry.first!="skipLinesPerTick" && entry.first!="backlogLimit" && entry.first!="barkCooldownTicks" && entry.first!="speakerCooldownTicks" && entry.first!="maxPendingConsequences" && entry.first!="maxBarkRequests" && entry.first!="meterMinimum" && entry.first!="meterInitial" && entry.first!="meterMaximum") result.errors.push_back("narrative."+entry.first+": unknown field");
+            if(section.has("autoAdvanceTicks")) number(section["autoAdvanceTicks"],settings.narrative.autoAdvanceTicks,1,10000000,"narrative.autoAdvanceTicks");
+            if(section.has("skipLinesPerTick")) number(section["skipLinesPerTick"],settings.narrative.skipLinesPerTick,1,64,"narrative.skipLinesPerTick");
+            if(section.has("backlogLimit")) number(section["backlogLimit"],settings.narrative.backlogLimit,1,10000,"narrative.backlogLimit");
+            if(section.has("barkCooldownTicks")) number(section["barkCooldownTicks"],settings.narrative.barkCooldownTicks,0,10000000,"narrative.barkCooldownTicks");
+            if(section.has("speakerCooldownTicks")) number(section["speakerCooldownTicks"],settings.narrative.speakerCooldownTicks,0,10000000,"narrative.speakerCooldownTicks");
+            if(section.has("maxPendingConsequences")) number(section["maxPendingConsequences"],settings.narrative.maxPendingConsequences,1,65536,"narrative.maxPendingConsequences");
+            if(section.has("maxBarkRequests")) number(section["maxBarkRequests"],settings.narrative.maxBarkRequests,1,4096,"narrative.maxBarkRequests");
+            if(section.has("meterMinimum")) number(section["meterMinimum"],settings.narrative.meterMinimum,-1000000000,0,"narrative.meterMinimum");
+            if(section.has("meterInitial")) number(section["meterInitial"],settings.narrative.meterInitial,-1000000000,1000000000,"narrative.meterInitial");
+            if(section.has("meterMaximum")) number(section["meterMaximum"],settings.narrative.meterMaximum,0,1000000000,"narrative.meterMaximum");
+        }
+        if(settings.narrative.meterMinimum>settings.narrative.meterInitial)result.errors.push_back("narrative.meterMinimum: must not exceed meterInitial");
+        if(settings.narrative.meterInitial>settings.narrative.meterMaximum)result.errors.push_back("narrative.meterInitial: must not exceed meterMaximum");
+    }
+    if(root.has("interaction")) { const auto& section=root["interaction"];
+        if(!section.isObject()) result.errors.push_back("interaction: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="gravityMilli" && entry.first!="skinMilli" && entry.first!="carryMaxMassMilli" && entry.first!="carryReachMilli" && entry.first!="carryHoldDistanceMilli" && entry.first!="carryHoldHeightMilli" && entry.first!="carryFollowSpeedMilli" && entry.first!="carryBreakDistanceMilli" && entry.first!="carrySpeedPenaltyMilli" && entry.first!="carryMinSpeedMilli" && entry.first!="throwMinImpulseMilli" && entry.first!="throwMaxImpulseMilli" && entry.first!="throwChargeTicks" && entry.first!="flightMaxTicks" && entry.first!="pushMaxSpeedMilli" && entry.first!="pushGridMoveTicks" && entry.first!="ropeIterations" && entry.first!="ropeDampingMilli") result.errors.push_back("interaction."+entry.first+": unknown field");
+            if(section.has("gravityMilli")) number(section["gravityMilli"],settings.interaction.gravityMilli,0,1000000,"interaction.gravityMilli");
+            if(section.has("skinMilli")) number(section["skinMilli"],settings.interaction.skinMilli,1,250,"interaction.skinMilli");
+            if(section.has("carryMaxMassMilli")) number(section["carryMaxMassMilli"],settings.interaction.carryMaxMassMilli,1,100000000,"interaction.carryMaxMassMilli");
+            if(section.has("carryReachMilli")) number(section["carryReachMilli"],settings.interaction.carryReachMilli,0,100000,"interaction.carryReachMilli");
+            if(section.has("carryHoldDistanceMilli")) number(section["carryHoldDistanceMilli"],settings.interaction.carryHoldDistanceMilli,0,100000,"interaction.carryHoldDistanceMilli");
+            if(section.has("carryHoldHeightMilli")) number(section["carryHoldHeightMilli"],settings.interaction.carryHoldHeightMilli,0,100000,"interaction.carryHoldHeightMilli");
+            if(section.has("carryFollowSpeedMilli")) number(section["carryFollowSpeedMilli"],settings.interaction.carryFollowSpeedMilli,1,1000000,"interaction.carryFollowSpeedMilli");
+            if(section.has("carryBreakDistanceMilli")) number(section["carryBreakDistanceMilli"],settings.interaction.carryBreakDistanceMilli,0,100000,"interaction.carryBreakDistanceMilli");
+            if(section.has("carrySpeedPenaltyMilli")) number(section["carrySpeedPenaltyMilli"],settings.interaction.carrySpeedPenaltyMilli,0,1000,"interaction.carrySpeedPenaltyMilli");
+            if(section.has("carryMinSpeedMilli")) number(section["carryMinSpeedMilli"],settings.interaction.carryMinSpeedMilli,0,1000,"interaction.carryMinSpeedMilli");
+            if(section.has("throwMinImpulseMilli")) number(section["throwMinImpulseMilli"],settings.interaction.throwMinImpulseMilli,0,10000000000,"interaction.throwMinImpulseMilli");
+            if(section.has("throwMaxImpulseMilli")) number(section["throwMaxImpulseMilli"],settings.interaction.throwMaxImpulseMilli,0,10000000000,"interaction.throwMaxImpulseMilli");
+            if(section.has("throwChargeTicks")) number(section["throwChargeTicks"],settings.interaction.throwChargeTicks,1,3600,"interaction.throwChargeTicks");
+            if(section.has("flightMaxTicks")) number(section["flightMaxTicks"],settings.interaction.flightMaxTicks,1,1000000,"interaction.flightMaxTicks");
+            if(section.has("pushMaxSpeedMilli")) number(section["pushMaxSpeedMilli"],settings.interaction.pushMaxSpeedMilli,1,100000,"interaction.pushMaxSpeedMilli");
+            if(section.has("pushGridMoveTicks")) number(section["pushGridMoveTicks"],settings.interaction.pushGridMoveTicks,1,3600,"interaction.pushGridMoveTicks");
+            if(section.has("ropeIterations")) number(section["ropeIterations"],settings.interaction.ropeIterations,1,64,"interaction.ropeIterations");
+            if(section.has("ropeDampingMilli")) number(section["ropeDampingMilli"],settings.interaction.ropeDampingMilli,0,1000,"interaction.ropeDampingMilli");
+        }
+        if(settings.interaction.throwMinImpulseMilli>settings.interaction.throwMaxImpulseMilli)result.errors.push_back("interaction.throwMinImpulseMilli: must not exceed throwMaxImpulseMilli");
+    }
+    if(root.has("cinematic")) { const auto& section=root["cinematic"];
+        if(!section.isObject()) result.errors.push_back("cinematic: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="hitStopTicks" && entry.first!="hitStopPriority" && entry.first!="slowMotionNumerator" && entry.first!="slowMotionDenominator" && entry.first!="slowMotionTicks" && entry.first!="slowMotionPriority" && entry.first!="qteWindowScaleMilli" && entry.first!="qteAccessibleWindowMilli" && entry.first!="qteMashScaleMilli" && entry.first!="qteHoldScaleMilli" && entry.first!="qteAutoSucceed") result.errors.push_back("cinematic."+entry.first+": unknown field");
+            if(section.has("hitStopTicks")) number(section["hitStopTicks"],settings.cinematic.hitStopTicks,1,600,"cinematic.hitStopTicks");
+            if(section.has("hitStopPriority")) number(section["hitStopPriority"],settings.cinematic.hitStopPriority,-1000000,1000000,"cinematic.hitStopPriority");
+            if(section.has("slowMotionNumerator")) number(section["slowMotionNumerator"],settings.cinematic.slowMotionNumerator,0,16,"cinematic.slowMotionNumerator");
+            if(section.has("slowMotionDenominator")) number(section["slowMotionDenominator"],settings.cinematic.slowMotionDenominator,1,16,"cinematic.slowMotionDenominator");
+            if(section.has("slowMotionTicks")) number(section["slowMotionTicks"],settings.cinematic.slowMotionTicks,0,1000000,"cinematic.slowMotionTicks");
+            if(section.has("slowMotionPriority")) number(section["slowMotionPriority"],settings.cinematic.slowMotionPriority,-1000000,1000000,"cinematic.slowMotionPriority");
+            if(section.has("qteWindowScaleMilli")) number(section["qteWindowScaleMilli"],settings.cinematic.qteWindowScaleMilli,100,10000,"cinematic.qteWindowScaleMilli");
+            if(section.has("qteAccessibleWindowMilli")) number(section["qteAccessibleWindowMilli"],settings.cinematic.qteAccessibleWindowMilli,1000,10000,"cinematic.qteAccessibleWindowMilli");
+            if(section.has("qteMashScaleMilli")) number(section["qteMashScaleMilli"],settings.cinematic.qteMashScaleMilli,100,10000,"cinematic.qteMashScaleMilli");
+            if(section.has("qteHoldScaleMilli")) number(section["qteHoldScaleMilli"],settings.cinematic.qteHoldScaleMilli,100,10000,"cinematic.qteHoldScaleMilli");
+            if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
+        }
+        if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

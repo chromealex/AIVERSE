@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "interaction": {
+    "carryMaxMassMilli": 25000,
+    "carrySpeedPenaltyMilli": 20,
+    "throwMinImpulseMilli": 15000,
+    "throwMaxImpulseMilli": 90000,
+    "throwChargeTicks": 40,
+    "pushGridMoveTicks": 16,
+    "ropeIterations": 12
+  }
+}
