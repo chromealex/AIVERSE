@@ -2337,3 +2337,10 @@ knobs in rules `ai` (above). What it does with the terrain:
 - **Save states**: `RtsAI::saveState()` / `loadState()` (headless `--save F` writes `F.ai` next to the sim state,
   `--load F` reads it): a restored bot plays on exactly like the saved one.
 
+
+## Ordered projectile flight programs
+
+Weapons and projectile deliveries accept an optional `flight` object with ordered Split, Ricochet,
+Fly Through and scalar modifiers. See [Projectile programs](projectile-programs.md) for the schema,
+inheritance rules, collision boundaries, save version and executable example. Legacy projectiles
+are unchanged when this block is absent.

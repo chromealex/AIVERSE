@@ -15,7 +15,10 @@ inline bool valid(const AttackSet& defs){
 }
 inline AttackPhase attackPhase(const AttackSet& defs,const MeleeState& s,uint32_t tick){
     auto it=defs.find(s.attack);if(it==defs.end()||tick<s.started)return AttackPhase::Idle;const auto& d=it->second;auto age=tick-s.started;
-    if(age<d.windup)return AttackPhase::Windup;if(age<d.windup+d.active)return AttackPhase::Active;if(age<d.windup+d.active+d.recovery)return AttackPhase::Recovery;return AttackPhase::Idle;
+    if(age<d.windup)return AttackPhase::Windup;
+    if(age<d.windup+d.active)return AttackPhase::Active;
+    if(age<d.windup+d.active+d.recovery)return AttackPhase::Recovery;
+    return AttackPhase::Idle;
 }
 // Authorization includes stamina/cooldown/ownership; this helper owns only custom animation/combo timing.
 template<class Authorize>
@@ -40,6 +43,9 @@ inline bool recordMeleeHit(const AttackSet& defs,MeleeState& s,uint32_t tick,int
 }
 enum class MeleeContact {Hit,Blocked,Parried,Evaded};
 inline MeleeContact resolveMeleeContact(bool invulnerable,bool parryWindow,bool blocking,bool insideGuard){
-    if(invulnerable)return MeleeContact::Evaded;if(insideGuard&&parryWindow)return MeleeContact::Parried;if(insideGuard&&blocking)return MeleeContact::Blocked;return MeleeContact::Hit;
+    if(invulnerable)return MeleeContact::Evaded;
+    if(insideGuard&&parryWindow)return MeleeContact::Parried;
+    if(insideGuard&&blocking)return MeleeContact::Blocked;
+    return MeleeContact::Hit;
 }
 }

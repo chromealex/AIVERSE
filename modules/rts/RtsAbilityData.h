@@ -95,6 +95,7 @@ enum class AreaMotion : uint8_t { Static, Toward, Lane, Wander, Follow };
 
 // How an effect's payload travels (projectiles, areas, chains).
 struct DeliveryDef {
+    ProjectileFlight flight;
     Fixed speed = Fixed::fromInt(12);   // projectile / moving area (cells per second)
     bool homing = false, arc = false, collide = false;
     Fixed arcHeight = Fixed::fromInt(2);

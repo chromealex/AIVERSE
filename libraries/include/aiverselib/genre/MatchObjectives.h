@@ -100,7 +100,8 @@ inline std::optional<ObjectiveEvents> stepZone(const ZoneConfig& c,ZoneState& s,
 // Rotating hills: index of the active zone, (tick - start) / rotateTicks modulo count. rotateTicks 0 = fixed.
 struct HillRotation{uint32_t rotateTicks=0,count=1;};
 inline std::optional<uint32_t> activeHill(const HillRotation& r,uint32_t start,uint32_t tick){
-    if(!r.count||r.count>64||tick<start)return {};return r.rotateTicks?(tick-start)/r.rotateTicks%r.count:0;
+    if(!r.count||r.count>64||tick<start)return {};
+    return r.rotateTicks?(tick-start)/r.rotateTicks%r.count:0;
 }
 
 // ---- Payload ---------------------------------------------------------------------------------------
@@ -119,7 +120,8 @@ inline bool valid(const PayloadTrack& t){
     Fixed last;for(auto c:t.checkpoints){if(c<=last||c>=t.length)return false;last=c;}return true;
 }
 inline std::optional<Vec3> payloadPoint(const PayloadTrack& t,Fixed distance){
-    if(!valid(t))return {};distance=fxClamp(distance,Fixed{},t.length);
+    if(!valid(t))return {};
+    distance=fxClamp(distance,Fixed{},t.length);
     for(std::size_t i=0;i<t.segments.size();++i){if(distance<=t.segments[i])return t.points[i]+(t.points[i+1]-t.points[i])*(distance/t.segments[i]);distance-=t.segments[i];}
     return t.points.back();
 }
@@ -164,13 +166,16 @@ inline bool valid(const EliminationState& s){
     if(s.players.size()<2||s.players.size()>kMaxPlayers||!sortedUnique(s.eliminated)||s.lastStanding< -1||(s.initialized&&s.start>s.lastTick)||(!s.initialized&&(s.start||s.lastTick)))return false;
     std::vector<int64_t> teams;for(const auto& [id,p]:s.players){if(id<=0||p.team<=0||p.lives>1000||(p.alive&&p.out)||(!p.alive&&p.diedAt>s.lastTick))return false;teams.push_back(p.team);}
     std::sort(teams.begin(),teams.end());teams.erase(std::unique(teams.begin(),teams.end()),teams.end());if(teams.size()<2)return false;
-    for(auto t:s.eliminated)if(!contains(teams,t))return false;return s.lastStanding<=0||contains(teams,s.lastStanding);
+    for(auto t:s.eliminated)if(!contains(teams,t))return false;
+    return s.lastStanding<=0||contains(teams,s.lastStanding);
 }
 // roster: (player, team) pairs with unique positive IDs and at least two teams.
 inline std::optional<EliminationState> makeElimination(const EliminationConfig& c,std::span<const std::pair<int64_t,int64_t>> roster){
-    if(!valid(c)||roster.size()>objectiveDetail::kMaxPlayers)return {};EliminationState s;
+    if(!valid(c)||roster.size()>objectiveDetail::kMaxPlayers)return {};
+    EliminationState s;
     for(auto [id,team]:roster)if(id<=0||team<=0||!s.players.emplace(id,CombatantState{team,c.lives,0,0,true,false}).second)return {};
-    if(!valid(s))return {};return s;
+    if(!valid(s))return {};
+    return s;
 }
 inline std::optional<ObjectiveEvents> stepElimination(const EliminationConfig& c,EliminationState& s,uint32_t tick,std::span<const int64_t> deaths){
     using namespace objectiveDetail;using K=ObjectiveEventKind;
@@ -178,7 +183,10 @@ inline std::optional<ObjectiveEvents> stepElimination(const EliminationConfig& c
     std::vector<int64_t> died(deaths.begin(),deaths.end());std::sort(died.begin(),died.end());
     if(std::adjacent_find(died.begin(),died.end())!=died.end())return {};
     for(auto id:died){auto it=s.players.find(id);if(it==s.players.end()||!it->second.alive)return {};}
-    if(!s.initialized)s.start=tick;s.initialized=true;s.lastTick=tick;ObjectiveEvents events;
+    if(!s.initialized)s.start=tick;
+    s.initialized=true;
+    s.lastTick=tick;
+    ObjectiveEvents events;
     for(auto id:died){
         auto& p=s.players.at(id);p.alive=false;p.diedAt=tick;if(c.lives)--p.lives;
         events.push_back({K::PlayerDied,p.team,id,int64_t(p.lives)});
@@ -190,7 +198,8 @@ inline std::optional<ObjectiveEvents> stepElimination(const EliminationConfig& c
     for(auto& [id,p]:s.players){
         auto& t=teams[p.team];
         if(!p.alive&&!p.out&&p.respawnAt<=tick&&!contains(s.eliminated,p.team)){p.alive=true;events.push_back({K::PlayerRespawned,p.team,id,0});}
-        if(!p.out)++t.first;if(p.alive)++t.second;
+        if(!p.out)++t.first;
+        if(p.alive)++t.second;
     }
     for(auto [team,count]:teams)if(!contains(s.eliminated,team)&&(!count.first||(c.wipeEliminates&&!count.second))){
         insertSorted(s.eliminated,team);events.push_back({K::TeamEliminated,team,0,0});
@@ -211,7 +220,8 @@ inline bool valid(const ExtractionConfig& c){return c.holdTicks>0&&c.holdTicks<=
 inline bool valid(const ExtractionState& s){
     using namespace objectiveDetail;
     if(s.progress.size()>kMaxPlayers||s.extracted.size()>kMaxPlayers||!sortedUnique(s.extracted)||(!s.extracted.empty()&&s.extracted.front()<=0)||(s.initialized&&s.start>s.lastTick)||(!s.initialized&&(s.start||s.lastTick||!s.progress.empty())))return false;
-    for(auto [id,ticks]:s.progress)if(id<=0||!ticks||ticks>kMaxTicks||contains(s.extracted,id))return false;return true;
+    for(auto [id,ticks]:s.progress)if(id<=0||!ticks||ticks>kMaxTicks||contains(s.extracted,id))return false;
+    return true;
 }
 // inside: every living body in the zone (extractors and hostiles), with the items each carries.
 inline std::optional<ObjectiveEvents> stepExtraction(const ExtractionConfig& c,ExtractionState& s,uint32_t tick,std::span<const Extractor> inside){
@@ -221,7 +231,10 @@ inline std::optional<ObjectiveEvents> stepExtraction(const ExtractionConfig& c,E
     std::vector<int64_t> teams;for(std::size_t i=0;i<bodies.size();++i){if(bodies[i].player<=0||bodies[i].team<=0||bodies[i].items>1000000||(i&&bodies[i].player==bodies[i-1].player))return {};teams.push_back(bodies[i].team);}
     for(auto [id,ticks]:s.progress)if(ticks>=c.holdTicks)return {};
     std::sort(teams.begin(),teams.end());teams.erase(std::unique(teams.begin(),teams.end()),teams.end());
-    if(!s.initialized)s.start=tick;s.initialized=true;s.lastTick=tick;ObjectiveEvents events;
+    if(!s.initialized)s.start=tick;
+    s.initialized=true;
+    s.lastTick=tick;
+    ObjectiveEvents events;
     if(tick-s.start<c.opensAtTicks)return events;
     std::map<int64_t,uint32_t> next;
     for(const auto& b:bodies){
@@ -341,9 +354,12 @@ inline std::vector<int64_t> routeStandings(const RouteState& s){
     std::vector<std::pair<int64_t,const RacerProgress*>> v;for(const auto& [id,r]:s.racers)v.push_back({id,&r});
     std::sort(v.begin(),v.end(),[](const auto& a,const auto& b){
         const auto& x=*a.second;const auto& y=*b.second;
-        if(x.finished!=y.finished)return x.finished;if(x.finished)return x.place<y.place;
-        if(x.lap!=y.lap)return x.lap>y.lap;if(x.nextGate!=y.nextGate)return x.nextGate>y.nextGate;
-        if(x.lastGateTick!=y.lastGateTick)return x.lastGateTick<y.lastGateTick;return a.first<b.first;});
+        if(x.finished!=y.finished)return x.finished;
+        if(x.finished)return x.place<y.place;
+        if(x.lap!=y.lap)return x.lap>y.lap;
+        if(x.nextGate!=y.nextGate)return x.nextGate>y.nextGate;
+        if(x.lastGateTick!=y.lastGateTick)return x.lastGateTick<y.lastGateTick;
+        return a.first<b.first;});
     std::vector<int64_t> out;for(const auto& e:v)out.push_back(e.first);return out;
 }
 
@@ -356,7 +372,12 @@ struct ObjectiveClockState{uint32_t start=0,deadline=0,lastTick=0,overtimeStart=
 inline bool valid(const ObjectiveClockConfig& c){using objectiveDetail::kMaxTicks;return c.limitTicks>0&&c.limitTicks<=kMaxTicks&&c.graceTicks<=kMaxTicks&&c.maxOvertimeTicks<=kMaxTicks&&c.maxDeadlineTicks>=c.limitTicks&&c.maxDeadlineTicks<=kMaxTicks*10;}
 inline bool valid(const ObjectiveClockState& s){return s.deadline>=s.start&&!(s.overtime&&s.expired)&&(!s.initialized||(s.lastTick>=s.start&&(!s.overtime||(s.overtimeStart<=s.lastTick&&s.overtimeStart>=s.deadline))&&s.lastContested<=s.lastTick));}
 inline std::optional<ObjectiveClockState> startClock(const ObjectiveClockConfig& c,uint32_t tick){
-    if(!valid(c)||uint64_t(tick)+c.limitTicks>UINT32_MAX)return {};ObjectiveClockState s;s.start=tick;s.deadline=tick+c.limitTicks;s.lastTick=tick;return s;
+    if(!valid(c)||uint64_t(tick)+c.limitTicks>UINT32_MAX)return {};
+    ObjectiveClockState s;
+    s.start=tick;
+    s.deadline=tick+c.limitTicks;
+    s.lastTick=tick;
+    return s;
 }
 inline bool extendClock(const ObjectiveClockConfig& c,ObjectiveClockState& s,uint32_t ticks){
     if(!valid(c)||!valid(s)||s.expired)return false;
@@ -437,7 +458,8 @@ inline std::optional<uint32_t> awardObjectiveEvents(MatchState& m,const Objectiv
     auto copy=m;auto id=nextEvent;uint32_t awarded=0;
     for(const auto& e:events){
         auto it=scoring.find(e.kind);if(e.team<=0||it==scoring.end())continue;
-        if(id==UINT64_MAX||!awardScore(copy,e.team,++id,it->second))return {};++awarded;
+        if(id==UINT64_MAX||!awardScore(copy,e.team,++id,it->second))return {};
+        ++awarded;
     }
     m=std::move(copy);nextEvent=id;return awarded;
 }

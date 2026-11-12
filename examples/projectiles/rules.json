@@ -1,0 +1,118 @@
+{
+  "victory": {
+    "mode": "survive",
+    "seconds": 30
+  },
+  "types": {
+    "emitter": {
+      "name": "Emitter",
+      "health": {
+        "max": 5000
+      },
+      "sight": 40,
+      "weapons": [
+        {
+          "id": "chain",
+          "range": 30,
+          "damage": 10,
+          "cooldown": 2,
+          "projectileSpeed": 12,
+          "flight": {
+            "radius": 0.12,
+            "maxDistance": 35,
+            "lifetime": 8,
+            "splitBudget": 12,
+            "modifiers": [
+              {
+                "kind": "flyThrough",
+                "count": 2,
+                "falloff": 0.8
+              },
+              {
+                "kind": "split",
+                "trigger": "time",
+                "after": 0.35,
+                "count": 3,
+                "angle": 30
+              },
+              {
+                "kind": "ricochet",
+                "count": 2,
+                "radius": 6
+              },
+              {
+                "kind": "damage",
+                "factor": 0.7
+              }
+            ]
+          }
+        }
+      ],
+      "view": {
+        "shape": "tower",
+        "scale": 1.2
+      }
+    },
+    "target": {
+      "name": "Target",
+      "health": {
+        "max": 10000
+      },
+      "view": {
+        "shape": "soldier",
+        "scale": 1.2
+      }
+    },
+    "ballistic": {
+      "name": "Ballistic emitter",
+      "health": {
+        "max": 5000
+      },
+      "sight": 40,
+      "weapons": [
+        {
+          "id": "chain",
+          "range": 30,
+          "damage": 10,
+          "cooldown": 2,
+          "projectileSpeed": 12,
+          "flight": {
+            "radius": 0.12,
+            "maxDistance": 35,
+            "lifetime": 8,
+            "splitBudget": 12,
+            "modifiers": [
+              {
+                "kind": "flyThrough",
+                "count": 2,
+                "falloff": 0.8
+              },
+              {
+                "kind": "split",
+                "trigger": "time",
+                "after": 0.35,
+                "count": 3,
+                "angle": 30
+              },
+              {
+                "kind": "ricochet",
+                "count": 2,
+                "radius": 6
+              },
+              {
+                "kind": "damage",
+                "factor": 0.7
+              }
+            ],
+            "gravity": 6,
+            "verticalSpeed": 6
+          }
+        }
+      ],
+      "view": {
+        "shape": "tower",
+        "scale": 1.2
+      }
+    }
+  }
+}
