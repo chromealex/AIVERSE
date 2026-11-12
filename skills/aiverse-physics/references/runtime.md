@@ -89,9 +89,9 @@ model pivots and offset collision hulls as needed. Joint local frames describe t
 world anchor and orientation in each body's local space, not two unrelated world poses.
 
 - A bumper can use a weld joint until breakage.
-- Doors/hood/trunk use revolute joints. Their hinge axis is **frame local X**. For an
+- Doors/hood/trunk use revolute joints. Their hinge axis is **frame local Z**. For an
   initially aligned Y-axis door, set both frame rotations with
-  `b3ComputeQuatBetweenUnitVectors(b3Vec3_axisX, b3Vec3_axisY)`; for rotated bodies,
+  `b3ComputeQuatBetweenUnitVectors(b3Vec3_axisZ, b3Vec3_axisY)`; for rotated bodies,
   transform the desired world joint frame into each body's frame independently.
 - Define closed angle, signed opening range and torque cap from the model. Limits at
   `[0,0]` lock a closed latch. Release to the authored range before starting a motor.

@@ -50,7 +50,7 @@ Body keys: unique nonempty `id`; `motion` static/dynamic/kinematic (dynamic);
 A mesh file or render node is not automatically a collider.
 
 Joint keys: `kind` distance/hinge; `a`, `b` body string IDs; local `anchorA`,
-`anchorB`; distance also accepts `length`. JSON hinge uses local X, no authored axis,
+`anchorB`; distance also accepts `length`. JSON hinge uses local Z, no authored axis,
 limits or motor keys. Do not invent JSON fields from C API properties.
 
 Wrapper shapes enable sensor/contact events, but **not hit events**. For hits enable
@@ -93,7 +93,7 @@ Each family has different capabilities; do not apply revolute setters to a weld 
 | Name | Intended constraint / relevant controls |
 |---|---|
 | Distance | distance, min/max range, spring and motor |
-| Revolute | one rotational axis (local X), angular limits, spring, motor speed/torque |
+| Revolute | one rotational axis (local Z), angular limits, spring, motor speed/torque |
 | Prismatic | one translational axis, limits, spring and motor |
 | Weld | rigid attachment with optional linear/angular compliance |
 | Spherical | ball joint with swing/twist constraints and motor |
