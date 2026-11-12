@@ -1,5 +1,7 @@
 #include "TextureCompress.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -29,7 +31,6 @@ bool executable(const fs::path& p) {
 }
 
 void put32(std::string& s, uint32_t v) { for (int i = 0; i < 4; ++i) s += char((v >> (8 * i)) & 0xff); }
-void put64(std::string& s, uint64_t v) { for (int i = 0; i < 8; ++i) s += char((v >> (8 * i)) & 0xff); }
 void set64(std::string& s, size_t at, uint64_t v) { for (int i = 0; i < 8; ++i) s[at + size_t(i)] = char((v >> (8 * i)) & 0xff); }
 
 // Uncompressed 32-bit TGA, top-left origin: read by astcenc without extra libraries.
