@@ -425,6 +425,10 @@ Rules loadRules(const Json& j) {
             w.targets = parseLayers(wj["targets"], kLayerGround | kLayerNaval | kLayerSandOnly);
             if (w.targets & kLayerGround) w.targets |= kLayerSandOnly | kLayerNaval;
             w.projectileSpeed = wj.getFx("projectileSpeed");
+            if (wj.has("flight")) {
+                w.flight = parseProjectileFlight(wj["flight"], where + " weapon " + w.id + " flight");
+                if (w.projectileSpeed <= Fixed{} || w.projectileSpeed > Fixed::fromInt(1024)) fail(where, "flight requires projectileSpeed in (0,1024]");
+            }
             w.splash = wj.getFx("splash");
             w.damageType = damageIdx(wj.getStr("damageType", "normal"));
             w.chargeTime = wj.getFx("chargeTime");

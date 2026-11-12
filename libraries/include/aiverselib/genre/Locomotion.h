@@ -29,7 +29,9 @@ inline std::optional<MotionResult> stepMotion(const MotionConfig& c,MotionState&
     auto wish=Vec3{in.wish.x,{},in.wish.y};if(wish.lengthSq()>1_fx)wish=fxNormalize(wish);
     auto desired=wish*(in.grounded?c.groundSpeed:c.airSpeed);auto diff=Vec3{desired.x-s.velocity.x,{},desired.z-s.velocity.z};
     auto length=diff.length(),amount=(wish.lengthSq().raw?c.acceleration:c.braking)*dt;
-    if(length>amount)diff=fxNormalize(diff)*amount;s.velocity.x+=diff.x;s.velocity.z+=diff.z;
+    if(length>amount)diff=fxNormalize(diff)*amount;
+    s.velocity.x+=diff.x;
+    s.velocity.z+=diff.z;
     if(!in.grounded||jump)s.velocity.y=fxMax(s.velocity.y-c.gravity*dt,-1000_fx);
     state=s;return MotionResult{s.velocity,jump};
 }

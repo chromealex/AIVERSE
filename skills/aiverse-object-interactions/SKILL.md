@@ -14,6 +14,9 @@ Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/Interacti
 5. Follow `examples/native/libraries/SystemsConsumer.cpp`, `tests/libraries/systems_tests.cpp` and `systems_engine_tests.cpp`.
 6. Run catalog/generator checks, library tests, engine integration tests and external native/export tests. Verify rollback for game-specific integration; do not mutate ECS while iterating.
 
+Physical carrying, throwing, pushing, ropes, doors, moving platforms and breakables are a separate
+package: `skills/aiverse-physical-interactions` (`AIVERSE::lib_physical_interactions`).
+
 Pure policies link `AIVERSE::lib_object_interactions`; EngineMechanics/Persistence adapters require
 `AIVERSE::lib_object_interactions` and the normal game host. Commands remain the only external
 simulation input. Presentation previews cannot authorize mutations. Keep docs, versions,
