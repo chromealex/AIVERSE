@@ -299,15 +299,29 @@ MatchRecord Server::Impl::record(Room& r) {
     rec.map = r.map; rec.settings = r.settings; rec.seed = M.seed; rec.players = M.players;
     rec.keyBySlot = M.keyBySlot;
     rec.history = M.history; rec.agreed = M.agreed; rec.confirmedNext = M.confirmedNext;
+    rec.externalId = r.externalId; rec.startMs = M.startMs;
     return rec;
 }
 
 // Ratings and the replay: everything about the outcome that does not need the room.
 std::vector<std::pair<uint8_t, int32_t>> Server::Impl::applyOutcome(const MatchRecord& rec, int32_t result, uint32_t endTick, uint64_t endHash,
                                                                    bool verified) {
-    saveReplay(rec, endTick, endHash);
+    const std::string replayFile = saveReplay(rec, endTick, endHash);
+    if (!rec.externalId.empty() && cfg.onExternalMatchEnd) {
+        ExternalMatchEnd e;
+        e.externalId = rec.externalId; e.started = true; e.result = result; e.endTick = endTick; e.endHash = endHash;
+        e.startMs = rec.startMs; e.endMs = now; e.verified = verified; e.desync = rec.desync; e.replayFile = replayFile;
+        for (auto& p : rec.players) {
+            ExternalSeatResult s;
+            s.slot = p.slot; s.team = p.team; s.bot = p.kind == SlotKind::Bot; s.joined = !s.bot;
+            auto k = rec.keyBySlot.find(p.slot);
+            s.userId = k != rec.keyBySlot.end() ? k->second : 0;   // external matches key humans by backend user id
+            e.seats.push_back(s);
+        }
+        cfg.onExternalMatchEnd(e);
+    }
     std::vector<std::pair<uint8_t, int32_t>> deltas;
-    if (rec.matchmade && result > 0 && (verified || !rec.desync)) {
+    if (rec.matchmade && rec.externalId.empty() && result > 0 && (verified || !rec.desync)) {   // external: the backend rates
         // Elo against the average rating of the other teams' humans (bots count as 1000).
         std::map<uint8_t, std::vector<int>> teamRatings;
         for (auto& p : rec.players) {
@@ -406,8 +420,8 @@ void Server::Impl::endMatch(Room& r, int32_t result, const NetText& reason, uint
     if (Room* still = room(roomId)) broadcastRoom(*still);
 }
 
-void Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t endHash) {
-    if (cfg.replayDir.empty()) return;
+std::string Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t endHash) {
+    if (cfg.replayDir.empty()) return {};
     Replay rep;
     std::string dir;
     if (auto it = cfg.gameDirs.find(M.gameId); it != cfg.gameDirs.end()) dir = it->second + "/";
@@ -437,7 +451,9 @@ void Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t e
     char stamp[32];
     std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::gmtime(&t));
     const std::string path = cfg.replayDir + "/" + stamp + "-room" + std::to_string(M.roomId) + (M.desync ? "-desync" : "") + ".rpl";
-    if (rep.save(path)) log("replay %s", path.c_str());
+    if (!rep.save(path)) return {};
+    log("replay %s", path.c_str());
+    return path;
 }
 
 } // namespace aiverse::net

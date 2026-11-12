@@ -49,6 +49,40 @@ struct ArbiterResult {
 };
 using Arbiter = std::function<ArbiterResult(const ArbiterJob&)>;
 
+// Matches placed by an external matchmaker (a meta backend such as the Bunker Wars servers, see
+// docs/meta-bunkerwars.md): the seats are known in advance and each player proves its seat with a
+// ticket, sent as the queue id "ticket:<ticket>" (QueueJoin with the client's maps, so the data hash
+// is still checked). The match starts when every human seat is taken.
+struct ReservedSeat {
+    uint8_t team = 0;            // informational; the map's slot teams decide the simulation
+    bool bot = false;
+    std::string name;
+    uint64_t userId = 0;         // backend user id the ticket must name
+};
+struct Reservation {
+    std::string externalId;      // backend game id (opaque to the server)
+    std::string gameId;          // engine game id (game.json "id")
+    std::string mapFile;         // relative to the game folder; players must have it with one data hash
+    RoomSettings settings;
+    std::vector<ReservedSeat> seats;   // map slot order (slot 1 first)
+    uint32_t joinTimeoutSec = 30;
+    bool fillMissingWithBots = false;  // false: an untaken seat cancels the match at the timeout
+};
+struct ExternalSeatResult { uint8_t slot = 0, team = 0; uint64_t userId = 0; bool bot = false, joined = false; };
+struct ExternalMatchEnd {
+    std::string externalId;
+    bool started = false;        // false: cancelled before start (seats not taken in time)
+    int32_t result = 0;          // winning team, -1 draw, 0 undecided
+    uint32_t endTick = 0;
+    uint64_t endHash = 0, startMs = 0, endMs = 0;
+    bool verified = false, desync = false;
+    std::vector<ExternalSeatResult> seats;
+    std::string replayFile;      // saved replay ("" if replays are off)
+    std::string reason;          // why it was cancelled
+};
+// ticket -> seat owner. Returns false for an invalid/expired ticket.
+using TicketCheck = std::function<bool(const std::string& ticket, std::string& externalId, uint64_t& userId)>;
+
 struct ServerConfig {
     std::string name = "AIVERSE server";
     uint16_t udpPort = kDefaultUdpPort;   // 0 = disabled
@@ -65,6 +99,10 @@ struct ServerConfig {
     uint16_t surrenderCommand = 0;
     Arbiter arbiter;                      // empty = matches nobody settled end without a winner
     bool log = true;
+    // External matchmaking (Server::reserve). Callbacks run inside update() on the server thread.
+    TicketCheck ticketCheck;
+    std::function<void(const std::string& externalId)> onExternalMatchStarted;
+    std::function<void(const ExternalMatchEnd&)> onExternalMatchEnd;
 };
 
 // Parse a server config (all keys optional):
@@ -92,6 +130,10 @@ public:
     ServerStats stats() const;
     bool busy() const;                             // a match verdict is still being computed
     int rating(const std::string& queueId, uint64_t clientKey) const;
+    // Host a match an external matchmaker formed (see Reservation). False if the id is taken or the
+    // reservation is malformed.
+    bool reserve(Reservation r, std::string* error = nullptr);
+    size_t reservations() const;                   // waiting for players
 
     struct Impl;
 private:

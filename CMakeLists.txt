@@ -230,7 +230,8 @@ endif()
 add_library(aiverse_net_server STATIC
     engine/net/server/Server.cpp
     engine/net/server/ServerMatch.cpp
-    engine/net/server/Matchmaker.cpp)
+    engine/net/server/Matchmaker.cpp
+    engine/net/server/ServerReserved.cpp)
 target_link_libraries(aiverse_net_server PUBLIC aiverse_net)
 # Game data on the network side: match loading like the game (tile maps) and the server's verdict
 # (re-simulating a match nobody settled). Server, bot client and net tests share it.
@@ -238,6 +239,11 @@ target_link_libraries(aiverse_net_server PUBLIC aiverse_net)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
     add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
     target_link_libraries(aiverse_net_game PUBLIC aiverse_net_server aiverse_game)
+endif()
+# Bunker Wars battle node bridge + plain internal HTTP (agent-bw-meta, docs/meta-bunkerwars.md). Native only.
+if(NOT EMSCRIPTEN)
+    add_library(aiverse_bw_node STATIC engine/meta/bw/BwHttp.cpp engine/meta/bw/BwNode.cpp)
+    target_link_libraries(aiverse_bw_node PUBLIC aiverse_meta_bw aiverse_net_server)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -715,7 +721,7 @@ endif()
 
 if(AIVERSE_BUILD_SERVER)
     add_executable(aiverse_server apps/server/main.cpp)
-    target_link_libraries(aiverse_server PRIVATE aiverse_net_game)
+    target_link_libraries(aiverse_server PRIVATE aiverse_net_game $<TARGET_NAME_IF_EXISTS:aiverse_bw_node>)
     add_executable(aiverse_netbot apps/netbot/main.cpp)
     target_link_libraries(aiverse_netbot PRIVATE aiverse_net_game aiverse_i18n)
 endif()
@@ -726,6 +732,10 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_net_tests PRIVATE aiverse_net_game aiverse_i18n)
     target_compile_definitions(aiverse_net_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_net_tests COMMAND aiverse_net_tests)
+    add_executable(aiverse_bw_meta_tests tests/bw_meta_tests.cpp)   # agent-bw-meta: BW backend adapter
+    target_link_libraries(aiverse_bw_meta_tests PRIVATE aiverse_bw_node aiverse_net_game)
+    target_compile_definitions(aiverse_bw_meta_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME aiverse_bw_meta_tests COMMAND aiverse_bw_meta_tests)
     add_executable(aiverse_tests tests/tests.cpp)
     target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_i18n aiverse_pack_writer aiverse_models)
     target_link_libraries(aiverse_tests PRIVATE aiverse_postfx_data)   # postfx agent

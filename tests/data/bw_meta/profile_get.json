@@ -1,0 +1,11 @@
+{"userId":4242,"name":"Commander","exp":1350,"leagueIndex":3,"leagueRating":1520,"eloRating":1490,"premiumFlag":false,
+ "avatarIndex":2,"avatarBorderIndex":1,"heroClientId":7,"createTs":1700000000000,"nowTs":1790000000000,"platform":"Android",
+ "gold":1250,"gems":40,"runes":7,"spareParts":300,
+ "currencies":[{"clientId":11,"count":5,"subtype":0},{"clientId":12,"count":2,"subtype":3}],
+ "heroes":[{"clientId":7,"level":4,"skills":[101,102],"skinHeroIndex":0},{"clientId":9,"level":1,"skills":[]}],
+ "skills":[{"id":501,"clientId":101,"level":3,"cards":12,"price":{"gold":400}}],
+ "things":{"slots":[{"slotId":1,"thingId":9001}]},
+ "cargoes":[{"index":0,"type":2,"openTs":0}],
+ "profileClanData":{"clanId":77,"role":1},
+ "offers":{"offers":[{"id":"starter","price":"0.99"}]},
+ "binDataVersion":3,"features":5}
