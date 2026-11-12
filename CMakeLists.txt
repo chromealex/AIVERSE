@@ -325,6 +325,7 @@ add_library(aiverse_models STATIC
     engine/render/GeometrySceneData.cpp
     engine/render/MeshBuilder.cpp
     engine/render/Model.cpp
+    engine/render/ModelMerge.cpp   # static batching of parts that share a material
     engine/render/ModelGltf.cpp
     engine/render/ModelObj.cpp
     engine/render/Animation.cpp
@@ -377,7 +378,7 @@ set(AIVERSE_RUNTIME_SRC
     engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
-list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp)
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp engine/render/ScreenLighting.cpp)
 add_library(aiverse_shader_graph STATIC engine/render/graph/ShaderGraph.cpp)
 target_link_libraries(aiverse_shader_graph PUBLIC aiverse_engine)
 
@@ -1275,6 +1276,21 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME shader_graph COMMAND aiverse_shader_graph_tests)
 endif()
 
+# Asset-free HDR visual regression fixture (opt-in, uses the actual backends).
+option(AIVERSE_BUILD_HDR_TESTS "Build HDR GPU validation scene" OFF)
+if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_hdr_policy tests/render/hdr_policy.cpp)
+    target_link_libraries(aiverse_hdr_policy PRIVATE aiverse_postfx_data)
+    add_test(NAME hdr_policy COMMAND aiverse_hdr_policy)
+    add_executable(aiverse_hdr_scene tests/render/hdr_scene.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_hdr_scene PRIVATE aiverse_runtime)
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_hdr_gl tests/render/hdr_gl.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_hdr_gl PRIVATE aiverse_runtime "-framework OpenGL")
+        set_source_files_properties(tests/render/hdr_gl.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
+endif()
+
 # Host authoring: shared by the editor, MCP and CPU tests.
 if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
     add_library(aiverse_modeling STATIC tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
@@ -1359,8 +1375,37 @@ if(AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP)
         third_party/meshoptimizer/src/simplifier.cpp
         third_party/meshoptimizer/src/vcacheoptimizer.cpp)
     target_include_directories(aiverse_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
+    add_executable(aiverse_model_visibility_test tests/render/ModelVisibility.cpp)
+    target_include_directories(aiverse_model_visibility_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_model_visibility_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
     add_executable(aiverse_lod_simplify tools/models/lod_simplify.cpp)
     target_link_libraries(aiverse_lod_simplify PRIVATE aiverse_meshoptimizer_lod)
+endif()
+
+option(AIVERSE_BUILD_RENDERBENCH "Build the Sponza rendering benchmark" OFF)
+if(AIVERSE_BUILD_RENDERBENCH AND AIVERSE_DESKTOP)
+    add_executable(aiverse_static_light_grid_test tests/render/StaticLightGrid.cpp)
+    target_include_directories(aiverse_static_light_grid_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_static_light_grid_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME static_light_grid COMMAND aiverse_static_light_grid_test)
+    add_executable(aiverse_camera_tour_test tests/render/CameraTour.cpp)
+    target_link_libraries(aiverse_camera_tour_test PRIVATE aiverse_engine)
+    target_compile_options(aiverse_camera_tour_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME camera_tour COMMAND aiverse_camera_tour_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/renderbench/sponza-tour-draft.json)
+    add_executable(aiverse_reinstance tools/renderbench/reinstance.cpp)
+    target_link_libraries(aiverse_reinstance PRIVATE aiverse_engine)
+    add_executable(aiverse_probe_visibility tools/renderbench/probe_visibility.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_probe_visibility PRIVATE aiverse_runtime)
+    execute_process(COMMAND git describe --always --dirty WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE BENCH_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
+    add_executable(aiverse_renderbench apps/renderbench/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_renderbench PRIVATE aiverse_runtime)
+    target_compile_definitions(aiverse_renderbench PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_renderbench_gl apps/renderbench/gl_mac.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_renderbench_gl PRIVATE aiverse_runtime "-framework OpenGL")
+        target_compile_definitions(aiverse_renderbench_gl PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
+        set_source_files_properties(apps/renderbench/gl_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
 endif()
 
 if(TARGET aiverse_geometry_bench AND TARGET aiverse_meshoptimizer_lod)

@@ -102,11 +102,13 @@ struct NodePose;
 // the scene into the hook's offscreen target instead of `screenPass`; resolvePostFx() then runs the
 // effect chain into `screenPass` and leaves that pass open (UI and overlays drawn after it are not
 // post-processed). Without a hook, or with no active effect, nothing changes and it costs nothing.
-struct PostFrame { mat4 viewProj; float3 cameraPos; Lighting lighting; int width = 0, height = 0; };
+struct PostFrame { mat4 viewProj; float3 cameraPos; Lighting lighting; int width = 0, height = 0;
+                   gfx::TextureHandle sunShadow; mat4 lightViewProj; }; // sunShadow: empty when shadows are off
 class PostProcess {
 public:
     virtual ~PostProcess() = default;
     virtual bool active() const = 0;
+    virtual bool linearScene() const { return false; }
     virtual gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) = 0;
     virtual void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) = 0;
 };
@@ -160,11 +162,22 @@ enum DrawFlags : uint32_t {
     kDrawTransparent = 16,
 };
 
+struct ModelRenderStats {
+    uint64_t nodes = 0, culledNodes = 0, lodNodes[4] = {};
+    uint64_t triangles = 0, instancedDraws = 0, drawnInstances = 0;
+};
+
 class Renderer3D {
 public:
     bool init(gfx::Device& dev);
     void shutdown();
+    // Optional fixed scene bounds for interior/model viewers; clear to use RTS ground fitting.
+    void setShadowBounds(float3 lo, float3 hi) { shadowBoundsMin_=lo; shadowBoundsMax_=hi; hasShadowBounds_=true; }
+    void clearShadowBounds() { hasShadowBounds_=false; }
     void setShadowQuality(ShadowQuality q);
+    // Desktop/benchmark override of the High-tier map size (2048 default). Low/Medium keep their sizes.
+    int shadowMapSize() const { return shadowSize_; }
+    bool setShadowMapSize(int size) { highShadowSize_=size; setShadowQuality(quality_); return quality_!=ShadowQuality::High||shadowMap_.valid(); }
     ShadowQuality shadowQuality() const { return quality_; }
     static ShadowQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
 
@@ -200,6 +213,7 @@ public:
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
     // reflections on water. On by default with High shadows; AIVERSE_TRACE=off|on overrides.
     void setTraceEnabled(bool on) { traceWanted_ = on; }
+    void setModelReflectionsEnabled(bool on) { modelReflections_ = on; }
     bool traceEnabled() const { return traceWanted_; }
     bool traceActive() const;                              // this frame: wanted, High shadows, height field bound
     static bool defaultTraceFor(const gfx::Device& dev, bool mobile);
@@ -224,6 +238,9 @@ public:
     int sceneWidth() const { return sceneW_; }
     int sceneHeight() const { return sceneH_; }
     uint32_t drawCalls() const { return drawCalls_; }
+    void setModelCullingEnabled(bool on) { modelCullingEnabled_ = on; }
+    void setModelInstancingEnabled(bool on) { modelInstancingEnabled_ = on; }
+    const ModelRenderStats& modelStats() const { return modelStats_; }
     struct RenderProfile {
         double submitMs=0,occlusionMs=0;
         std::array<double,5> selectMs{},sortMs{},drawMs{};
@@ -241,6 +258,7 @@ private:
     struct DrawItem { const Mesh* mesh; mat4 model; float4 color; uint32_t flags; float specular, emissive; };
     struct ModelItem {
         const Model* model; const Primitive* prim; const Material* mat;
+        bool rigid = false, castShadow = false;
         GeometryPolicy geometry;
         size_t geometryPrimitive = 0;
         uint32_t firstIndex = 0, indexCount = 0;
@@ -276,8 +294,11 @@ private:
     gfx::BufferHandle lineVB_, triVB_;
     gfx::TextureHandle shadowMap_;
     int shadowSize_ = 0;
+    int highShadowSize_ = 2048;
     float shadowTexelWorld_ = 0.05f;   // world size of one shadow-map texel
     float shadowExtent_ = 50.0f;       // world size covered by the shadow map
+    bool hasShadowBounds_ = false;
+    float3 shadowBoundsMin_{}, shadowBoundsMax_{};
     ShadowQuality quality_ = ShadowQuality::Medium;
     std::vector<DrawItem> items_;
     std::vector<ColorVertex> lines_, tris_;
@@ -293,8 +314,10 @@ private:
     // trace tier
     bool traceWanted_ = true;
     bool ssrThisFrame_ = false;
+    bool modelReflections_ = false; // opt-in opaque PBR SSR; High trace + HDR only
+    bool hdrFrame_ = false;
     HeightField heightField_;
-    struct SceneTarget { int w = 0, h = 0; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
+    struct SceneTarget { int w = 0, h = 0; bool hdr = false; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
     std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)
     gfx::TextureHandle sceneColor_, sceneDepth_;   // this frame's capture
     gfx::TextureHandle dummyDepth_, dummyHeight_;
@@ -308,6 +331,9 @@ private:
     float3 camFwd_;
 
     // models
+    ModelRenderStats modelStats_;
+    bool modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
+    bool auxiliaryModelPass_ = false;
     bool profiling_=false,modelLodEnabled_=true;
     RenderProfile profile_;
     uint32_t instanceLimit_=32;

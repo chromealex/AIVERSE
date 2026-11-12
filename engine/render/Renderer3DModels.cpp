@@ -3,6 +3,7 @@
 #include "Renderer3D.h"
 #include "ModelShaders.h"
 #include "Animation.h"
+#include "ModelVisibility.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -28,19 +29,13 @@ struct ProfileTimer {
 };
 
 bool transparentItem(uint32_t flags) { return (flags & kDrawTransparent) != 0; }
-
-// AABB (in `xf` space) against a clip-space frustum: false only when all corners are outside one plane.
-bool boxVisible(const mat4& clip, float3 mn, float3 mx) {
-    int out[6] = {0, 0, 0, 0, 0, 0};
-    for (int c = 0; c < 8; ++c) {
-        float4 p = clip * float4{c & 1 ? mx.x : mn.x, c & 2 ? mx.y : mn.y, c & 4 ? mx.z : mn.z, 1};
-        out[0] += p.x < -p.w; out[1] += p.x > p.w;
-        out[2] += p.y < -p.w; out[3] += p.y > p.w;
-        out[4] += p.z < -p.w; out[5] += p.z > p.w;
-    }
-    for (int i = 0; i < 6; ++i) if (out[i] == 8) return false;
-    return true;
+// Model fragment slots 0..6, 9..12 are taken (12: SSR scene depth); up to four graph textures follow.
+// Metal has sampler slots 0..15 only, so graph slots from 16 use a constexpr repeat/linear sampler.
+constexpr int kGraphTextureSlot = 13;
+std::string metalGraphSampler(int slot) {
+    return slot < 16 ? ", sampler s"+std::to_string(slot)+" [[sampler("+std::to_string(slot)+")]]" : std::string();
 }
+
 } // namespace
 
 MaterialQuality Renderer3D::defaultMaterialQualityFor(const gfx::Device& dev, bool mobile) {
@@ -147,9 +142,9 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                 if(!vertexOnly) {
                     std::string declarations, args, macros;
                     for(size_t i=0;i<graph->textures.size();++i) {
-                        const auto slot=std::to_string(11+i), index=std::to_string(i);
+                        const auto slot=std::to_string(kGraphTextureSlot+int(i)), index=std::to_string(i);
                         declarations+="uniform sampler2D tex"+slot+";\n";
-                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]], sampler s"+slot+" [[sampler("+slot+")]]";
+                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]]"+metalGraphSampler(kGraphTextureSlot+int(i));
                         macros+="#define SG_TEXTURE"+index+"(uv) "+(metal?"tex"+slot+".sample(s"+slot+",uv)":"texture(tex"+slot+",uv)")+"\n";
                         macros+="#define SG_TEXTURE_LOD"+index+"(uv,lod) "+(metal?"tex"+slot+".sample(s"+slot+",uv,level(lod))":"textureLod(tex"+slot+",uv,lod)")+"\n";
                     }
@@ -184,9 +179,9 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                     code+=v3+" sg_view="+(metal?"f.camPos.xyz":"u_camPos.xyz")+"-sg_world; "+v+" sg_color="+(metal?"in.col":"a_col")+"; float sg_time="+(metal?"f.camPos.w":"u_camPos.w")+";\n";
                     std::string args,declarations,macros;
                     for(size_t i=0;i<graph->textures.size();++i) {
-                        const auto slot=std::to_string(11+i),index=std::to_string(i);
+                        const auto slot=std::to_string(kGraphTextureSlot+int(i)),index=std::to_string(i);
                         declarations+="uniform sampler2D tex"+slot+";\n";
-                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]], sampler s"+slot+" [[sampler("+slot+")]]";
+                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]]"+metalGraphSampler(kGraphTextureSlot+int(i));
                         macros+="#define SG_TEXTURE_LOD"+index+"(uv,lod) "+(metal?"tex"+slot+".sample(s"+slot+",uv,level(lod))":"textureLod(tex"+slot+",uv,lod)")+"\n";
                     }
                     if(metal)replace(source,"vs_main(VERTEX_ARGS)","vs_main(VERTEX_ARGS"+args+")");else source=declarations+source;
@@ -198,10 +193,15 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                 }
             };
             inject(vs,false,true);inject(fs,false,false);inject(msl,true,false);
+            for(int slot=16;slot<kGraphTextureSlot+int(graph->textures.size());++slot) {
+                const auto at=msl.find("using namespace metal;");
+                if(at!=std::string::npos)msl.insert(at+22,"\nconstexpr sampler s"+std::to_string(slot)+"(coord::normalized, address::repeat, filter::linear, mip_filter::linear);");
+            }
         }
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = graph && !graph->textures.empty() ? 11+int(graph->textures.size()) : shadow ? 9 : 11; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
+        // tex11/tex12: SSR scene colour/depth; graph textures follow at kGraphTextureSlot.
+        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = graph && !graph->textures.empty() ? kGraphTextureSlot+int(graph->textures.size()) : shadow ? 9 : 13; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
         e.shader = dev_->createShader(sd);
         if (!e.shader.valid()) {
@@ -255,9 +255,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     float3 c = (m->boundsMin + m->boundsMax) * 0.5f, e = (m->boundsMax - m->boundsMin) * 0.75f + float3{0.1f, 0.1f, 0.1f};
     const auto& graphMaterials=d.materials && d.materials->size()>=m->materials.size()?*d.materials:m->materials;
     const bool displaced=cache?cache->displaced:std::any_of(graphMaterials.begin(),graphMaterials.end(),[this](const Material& mat){return mat.shaderGraph && int(matQuality_)>=mat.shaderGraph->minQuality && mat.shaderGraph->outputs.count("vertexOffset");});
-    const bool inView = displaced || (cache?boxVisible(viewProj_,cache->min,cache->max):boxVisible(viewProj_ * d.world, c - e, c + e));
+    const bool inView = displaced || (cache?modelBoxVisible(viewProj_,cache->min,cache->max):modelBoxVisible(viewProj_ * d.world, c - e, c + e));
     const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 &&
-                          (displaced || (cache?boxVisible(lightViewProj_,cache->min,cache->max):boxVisible(lightViewProj_ * d.world, c - e, c + e)));
+                          (displaced || (cache?modelBoxVisible(lightViewProj_,cache->min,cache->max):modelBoxVisible(lightViewProj_ * d.world, c - e, c + e)));
     if (!inView && !inShadow) return;
     const std::vector<mat4>& world = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
     const std::vector<Material>& mats = d.materials && d.materials->size() >= m->materials.size() ? *d.materials : m->materials;
@@ -271,15 +271,30 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     for (int n : m->order) {
         const Node& node = m->nodes[size_t(n)];
         if (node.mesh < 0) continue;
-        int meshIndex=node.mesh;
-        const auto& base=m->meshes[size_t(meshIndex)];
-        if(modelLodEnabled_&&!displaced&&node.skin<0&&!base.deformable&&!base.lods.empty()&&d.variant<0&&!d.nodeMaterial){
-            const mat4 xf=cache?cache->transforms[size_t(n)]:d.world*world[size_t(n)];
-            float pixels=geometryErrorPixels(viewProj_*xf,base.boundsMin,base.boundsMax,length(base.boundsMax-base.boundsMin),sceneW_,sceneH_,dev_->info().clipDepthZeroToOne);
-            if(inShadow)pixels=std::max(pixels,geometryErrorPixels(lightViewProj_*xf,base.boundsMin,base.boundsMax,length(base.boundsMax-base.boundsMin),shadowSize_,shadowSize_,dev_->info().clipDepthZeroToOne));
-            for(auto lod:base.lods)if(pixels<lod.maxPixels&&lod.mesh>=0&&size_t(lod.mesh)<m->meshes.size())meshIndex=lod.mesh;
-            if(meshIndex!=node.mesh)++profile_.lodNodes;
+        ++modelStats_.nodes;
+        const MeshDef& baseMesh = m->meshes[size_t(node.mesh)];
+        const bool rigid = node.skin < 0 && !baseMesh.deformable && !displaced;
+        const mat4 nodeWorld = cache ? cache->transforms[size_t(n)] : d.world * world[size_t(n)];
+        bool nodeView = inView, nodeShadow = inShadow;
+        if (rigid && modelCullingEnabled_) {
+            nodeView = inView && modelBoxVisible(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax);
+            nodeShadow = inShadow && modelBoxVisible(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax);
+            if (!nodeView && !nodeShadow) ++modelStats_.culledNodes; // retained for later mirror/spot frusta
         }
+        int meshIndex = node.mesh; size_t level = 0;
+        if (modelLodEnabled_ && rigid && !baseMesh.lods.empty() && d.variant < 0 && !d.nodeMaterial) {
+            const float error = length(baseMesh.boundsMax - baseMesh.boundsMin);
+            const bool zeroToOne = dev_->info().clipDepthZeroToOne;
+            float pixels = nodeView ? geometryErrorPixels(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, error, sceneW_, sceneH_, zeroToOne) : 0;
+            if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, error, shadowSize_, shadowSize_, zeroToOne));
+            if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity(); // full detail for later mirror/spot frusta
+            for (size_t i = 0; i < baseMesh.lods.size(); ++i) {
+                const auto& lod = baseMesh.lods[i];
+                if (pixels < lod.maxPixels && lod.mesh >= 0 && size_t(lod.mesh) < m->meshes.size()) { meshIndex = lod.mesh; level = i + 1; }
+            }
+            if (meshIndex != node.mesh) ++profile_.lodNodes;
+        }
+        ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
         for (const Primitive& p : m->meshes[size_t(meshIndex)].primitives) {
             if (p.indexCount == 0) continue;
             int mi = p.material;
@@ -294,7 +309,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
-            it.inView = inView; it.inShadow = inShadow && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
+            it.rigid = rigid;
+            it.castShadow = !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
+            it.inView = nodeView; it.inShadow = nodeShadow && it.castShadow;
             it.joints = -1; it.baked = false; it.anim = anim; it.morph = -1;
             const bool skinnedPrim = node.skin >= 0 && !p.jointPalette.empty();
             if (skinnedPrim && canBake && node.skin == m->baked.skin) {
@@ -337,7 +354,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     if (!ph.valid()) return;
     if (!(ph == currentPipe_)) {
         dev_->setPipeline(ph); currentPipe_ = ph;
-        if (phase != 0) { lights.bind(5, 9); bindTrace(10); }   // U5 / tex9: dynamic lights; tex10: height field (traced terrain shadows)
+        if (phase != 0) { lights.bind(5, 9); bindTrace(10); bindSceneTextures(11, 12); }   // U5 / tex9: dynamic lights; tex10: height field (traced terrain shadows)
     }
     // Upload the whole instance block declared by this backend's shader variant.
     const uint32_t slots = instanced ? instanceLimit_ : 1u;
@@ -364,7 +381,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         mu.emissive[0] = mt.emissive.x * mt.emissiveStrength; mu.emissive[1] = mt.emissive.y * mt.emissiveStrength; mu.emissive[2] = mt.emissive.z * mt.emissiveStrength;
         mu.pbr[0] = mt.metallic; mu.pbr[1] = mt.roughness; mu.pbr[2] = mt.normalScale; mu.pbr[3] = mt.occlusionStrength;
         mu.misc[0] = mt.alpha == AlphaMode::Mask ? mt.alphaCutoff : 0.0f;
-        mu.misc[1] = float(int(mt.team)); mu.misc[2] = mt.teamStrength; mu.misc[3] = mt.vertexColors ? 1.0f : 0.0f;
+        mu.misc[1] = float(int(mt.team)); mu.misc[2] = mt.teamStrength; mu.misc[3] = (mt.vertexColors ? 1.0f : 0.0f) + (mt.vertexOcclusion ? 2.0f : 0.0f) + (mt.vertexOcclusion && mt.backOcclusion ? 4.0f : 0.0f);
         mu.uv0[0] = mt.uvOffset.x; mu.uv0[1] = mt.uvOffset.y; mu.uv0[2] = mt.uvScale.x; mu.uv0[3] = mt.uvScale.y;
         mu.uv1[0] = mt.uvRotation; mu.uv1[1] = mt.shading == ShadingModel::Unlit ? 1.0f : 0.0f;
         mu.uv1[2] = mt.fixedShade.x; mu.uv1[3] = mt.fixedShade.y;
@@ -374,7 +391,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
             return idx >= 0 && idx < int(it.model->images.size()) && it.model->images[size_t(idx)].tex.valid() ? it.model->images[size_t(idx)].tex : def;
         };
         dev_->setTexture(1, tex(mt.baseTex, white_));
-        if(mt.shaderGraph)for(size_t i=0;i<mt.shaderGraph->textures.size();++i)dev_->setTexture(11+int(i),tex(mt.graphTextures[i],white_));
+        if(mt.shaderGraph)for(size_t i=0;i<mt.shaderGraph->textures.size();++i)dev_->setTexture(kGraphTextureSlot+int(i),tex(mt.graphTextures[i],white_));
         if (phase != 0) {
             dev_->setTexture(2, tex(mt.mrTex, white_));
             dev_->setTexture(3, tex(mt.normalTex, flatNormal_));
@@ -404,6 +421,8 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     dev_->setIndexBuffer(it.model->ib);
     dev_->drawIndexed(it.indexCount, it.firstIndex, 0, count);
     lastItem_ = &it;
+    modelStats_.triangles += uint64_t(it.indexCount / 3) * count;
+    if (count > 1) { ++modelStats_.instancedDraws; modelStats_.drawnInstances += count; }
     ++drawCalls_;
     ++profile_.draws[size_t(phase)];profile_.instances[size_t(phase)]+=count;
     profile_.triangles[size_t(phase)]+=it.indexCount/3*count;
@@ -416,8 +435,13 @@ void Renderer3D::renderModels(int phase) {
     for (uint32_t i = 0; i < modelItems_.size(); ++i) {
         const ModelItem& it = modelItems_[i];
         const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags);
-        bool take = phase == 0 ? it.inShadow : phase == 3 ? it.inView && it.outline.w > 0 : phase == 4 ? it.inView && transparentItem(it.flags) :
-                    it.inView && (phase == 2) == blended;
+        bool visible = it.inView, shadow = it.inShadow;
+        if (auxiliaryModelPass_ && it.rigid && modelCullingEnabled_) {
+            visible = modelBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
+            shadow = it.castShadow && modelBoxVisible(lightViewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
+        }
+        bool take = phase == 0 ? shadow : phase == 3 ? visible && it.outline.w > 0 : phase == 4 ? visible && transparentItem(it.flags) :
+                    visible && (phase == 2) == blended;
         if(take&&phase==0&&!it.mat->shaderGraph&&it.joints<0&&!it.baked&&it.morph<0)
             take=geometryBoxVisible(lightViewProj_*it.world,it.prim->boundsMin,it.prim->boundsMax);
         // Reflection has its own view, never consume main-view occlusion there.
@@ -447,7 +471,7 @@ void Renderer3D::renderModels(int phase) {
     ProfileTimer timer(profiling_?&profile_.drawMs[size_t(phase)]:nullptr);
     currentPipe_ = {};
     lastItem_ = nullptr;
-    auto batchable = [&](const ModelItem& x) { return x.joints < 0 && x.morph < 0; };
+    auto batchable = [&](const ModelItem& x) { return modelInstancingEnabled_ && x.joints < 0 && x.morph < 0; };
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
         return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by &&

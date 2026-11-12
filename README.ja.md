@@ -26,7 +26,7 @@
   <a href="#仕組み">仕組み</a> ·
   <a href="#すぐに使えるテンプレート">テンプレート</a> ·
   <a href="#クイックスタート">クイックスタート</a> ·
-  <a href="docs/overview.md">詳細な概要</a>
+  <a href="docs/ja/overview.md">詳細な概要</a>
 </p>
 
 ---
@@ -147,7 +147,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings、Unity IAP、Unity Ads | `aiversebuild`、ストアと広告のプラグイン |
 | Addressables / Asset Bundles | `.rpak` パック、ビルド分割とコンテンツのダウンロード |
 
-レポートでは各項目が「正確に移行」「近似で移行」「未移行」に分類されます。再インポートしても編集内容は保持されます。アセットのシリアライズは **Force Text** が必要です。Godot プロジェクトも同じ方法でインポートできます。詳細：[エンジンプロジェクトのインポート](docs/engine-import.md)。
+レポートでは各項目が「正確に移行」「近似で移行」「未移行」に分類されます。再インポートしても編集内容は保持されます。アセットのシリアライズは **Force Text** が必要です。Godot プロジェクトも同じ方法でインポートできます。詳細：[エンジンプロジェクトのインポート](docs/ja/engine-import.md)。
 
 ---
 
@@ -232,7 +232,7 @@ open build/mac/AiverseEditor.app        # エディター：プロジェクト�
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。コンパイルしたくない場合は、
 `builds` ブランチにビルド済みのエディターとツールがあります
-（[詳細](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)）。
+（[詳細](docs/ja/overview.md#ビルド済みエンジンbuilds-ブランチとコンパイラー不要の-aiversemcp)）。
 
 **2. ゲームを作る。** ハブで**「ゲームを作る」**を押すか、テンプレートからプロジェクトを作成します。
 Game ウィンドウですぐにボットと遊べます。
@@ -265,7 +265,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS と FPS 以外のジャンルのテンプレートは制作中
 
 サブシステムごとの詳細は
-[検証済み / 未検証](docs/overview.md#verified--not-verified)をご覧ください。
+[検証済み / 未検証](docs/ja/overview.md#検証済み--未検証)をご覧ください。
 
 ---
 
@@ -275,17 +275,17 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 
 | | |
 |---|---|
-| [**詳細な概要**](docs/overview.md) | 全サブシステム、ビルド、プラットフォーム、CI、リリース |
+| [**詳細な概要**](docs/ja/overview.md) | 全サブシステム、ビルド、プラットフォーム、CI、リリース |
 | [ゲームフォーマット](docs/game-format.md) | `game.json`、`rules.json`、マップと全データブロック |
 | [ジャンルパッケージ](docs/genre-packages.md) · [ライブラリ](docs/libraries.md) | あらゆるジャンルのメカニクス |
-| [「ゲームを作る」ウィザード](docs/game-wizard.md) | アイデアとアートが完成プロジェクトになるまで |
+| [「ゲームを作る」ウィザード](docs/ja/game-wizard.md) | アイデアとアートが完成プロジェクトになるまで |
 | [スクリプト](docs/scripting.md) · [C++ モジュール](docs/native-modules.md) | データで足りないとき |
 | [地形](docs/terrain.md) · [惑星](docs/planets.md) · [経路探索](docs/pathfinding.md) | 世界と移動 |
 | [パーティクル](docs/particles.md) · [モデル](docs/models.md) · [Shader Graph](docs/shader-graph.md) | ビジュアル |
 | [メタゲーム](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [プラグイン](docs/plugins.md) | 収益化とストア |
 | [FPS](docs/fps.md) · [大規模ワールド](docs/large-worlds.md) | FPS モジュール |
 | [AGENTS.md](AGENTS.md) | エンジン本体を変更するエージェント向けのルール |
-| [Unity からの移行](docs/engine-import.md) | シーン、プレハブ、アセットのインポートと、エージェントによるロジックの移植 |
+| [Unity からの移行](docs/ja/engine-import.md) | シーン、プレハブ、アセットのインポートと、エージェントによるロジックの移植 |
 
 ## ライセンス
 

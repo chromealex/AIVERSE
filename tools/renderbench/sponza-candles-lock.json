@@ -1,0 +1,24 @@
+{
+  "source": "https://cdrdv2.intel.com/v1/dl/getContent/726676",
+  "archiveBytes": 3190731713,
+  "archiveETag": "\"f43eedc38d8a26afef4ce8a62a1f51dc\"",
+  "model": "pkg_d_10k_candles/NewSponza_4_Combined_glTF.gltf",
+  "files": [
+    {
+      "path": "pkg_d_10k_candles/NewSponza_4_Combined_glTF.bin",
+      "bytes": 648098592,
+      "sha256": "de9e10dc8d7763adb80087cced117815e9b79d8e60f32691afc6fea95beec80a"
+    },
+    {
+      "path": "pkg_d_10k_candles/NewSponza_4_Combined_glTF.gltf",
+      "bytes": 6657188,
+      "sha256": "285326986de75d90bc9e662ca9a7e325efd04ac6e0d2142ade62878e31d1e453"
+    },
+    {
+      "path": "pkg_d_10k_candles/credits_license.txt",
+      "bytes": 15921,
+      "sha256": "3f981e31f8de04f3754e63d7c259a0a78f71db8f01b5155c58cac52fb79cc2b9"
+    }
+  ],
+  "fingerprint": "5a98c909e6faba98514ce3891af1e47aa7dbc94ff8e7127e48f83790fb04080d"
+}

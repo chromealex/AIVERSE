@@ -34,7 +34,7 @@ std::vector<PostFxTypeDef> buildCatalog() {
         num("falloff", 0.25f, 0, 1, "soft transition from sharp to blurred", "Переход"),
         num("blur", 0.8f, 0, 1, "blur radius", "Размытие")}});
     c.push_back({T::Bloom, "bloom", "Свечение (bloom)", "Bright areas glow (fire, lights, sun on water).", C::Heavy, kMed, {
-        num("threshold", 0.7f, 0, 1, "brightness where glow starts (0..1)", "Порог"),
+        num("threshold", 0.7f, 0, 64, "brightness where glow starts (linear radiance in HDR; display brightness in LDR)", "Порог"),
         num("knee", 0.5f, 0, 1, "soft start of the threshold", "Мягкость порога"),
         num("intensity", 0.8f, 0, 4, "glow strength", "Сила"),
         num("radius", 0.6f, 0, 1, "glow spread", "Радиус"),
@@ -260,6 +260,14 @@ PostFxSettings parsePostFx(const Json& game, const Json& map, std::vector<std::s
         if (map.isObject() && map.getBool("replace")) { byType.clear(); order.clear(); }
         addFrom(map, true);
     }
+    for (const Json* block : {&game, &map}) {
+        if (!block->isObject() || !block->has("hdr")) continue;
+        const auto v = block->getStr("hdr");
+        if (v == "auto") s.hdr = HdrMode::Auto;
+        else if (v == "off") s.hdr = HdrMode::Off;
+        else if (v == "on") s.hdr = HdrMode::On;
+        else if (issues) issues->push_back("postfx.hdr: expected auto, off or on");
+    }
     for (auto& d : postFxCatalog()) {          // catalog order = application order
         auto it = byType.find(d.id);
         if (it == byType.end()) continue;
@@ -427,7 +435,8 @@ Json postFxCostReport(const PostFxSettings& s) {
     for (auto& p : postFxProfiles()) {
         PostFxWork sum;
         const auto active = s.activeAt(p.tier);
-        if (!active.empty()) {
+        const bool hdr = s.enabled && hdrAtQuality(s.hdr, p.tier, true);
+        if (!active.empty() || hdr) {
             sum = postFxBaseWork();
             for (auto* e : active) { const PostFxWork w = postFxEffectWork(*e, p.tier); sum.units += w.units; sum.passes += w.passes; }
         }
@@ -435,6 +444,8 @@ Json postFxCostReport(const PostFxSettings& s) {
         Json t = Json::object();
         t.set("device", Json::string(p.label));
         t.set("tier", Json::string(postFxQualityName(p.tier)));
+        t.set("hdrIfSupported", Json::fromBool(hdr));
+        t.set("colorBytesPerPixel", Json::number(int64_t(hdr ? 8 : 4)));
         t.set("effects", Json::number(int64_t(active.size())));
         t.set("passes", Json::number(int64_t(sum.passes)));
         t.set("ms", n3(round2(ms)));
@@ -448,7 +459,7 @@ Json postFxCostReport(const PostFxSettings& s) {
     }
     r.set("effects", effects);
     r.set("total", totals);
-    r.set("note", Json::string("Estimates from the fill-rate model in engine/render/PostFxData.cpp (scene to texture + composite counted once). "
+    r.set("note", Json::string("LDR bandwidth estimates; HDR colour targets double colour storage/bandwidth, actual GPU cost must be measured. Estimates from the fill-rate model in engine/render/PostFxData.cpp (scene to texture + composite counted once). "
                                "Tiers: weak phones get 'low', mid phones 'medium', desktops 'high' by default; players can lower it."));
     r.set("warnings", warnings);
     return r;

@@ -27,8 +27,11 @@
 #include <vector>
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
+#include "StaticLightGrid.h"
 
 namespace aiverse::render {
+
+enum class IndirectQuality { Off, Mobile, High };
 
 enum class LightQuality { Off, Low, Medium, High };
 
@@ -67,6 +70,8 @@ struct LightUniforms {
                                  // yzw day/night tint for unlit (2D sprite) shaders
     float pos[8][4];             // xyz, radius
     float col[8][4];             // rgb * intensity, spot cosInner
+    float gridOrigin[4], gridSize[4]; // static point-light atlas, zero size disables
+    float giPoint[4], giSun[4], giSky[4]; // RGB source multipliers; giPoint.w = indirect quality.
     float spot[8][4];            // spot direction xyz, cosOuter (< -1.5: point light)
 };
 
@@ -90,6 +95,13 @@ public:
     void setQuality(LightQuality q);
     LightQuality quality() const { return quality_; }
     static LightQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
+    // Opt-in HDR replacement (High, or Medium with Mobile GI) for dynamic point-light map/detail; immutable sources only.
+    // Optional baked opaque point shadows. Low/LDR keep the existing bounded dynamic path.
+    bool setStaticPointLights(const std::vector<PointLight>& lights, float cellSize=2, const std::vector<StaticPointShadow>* shadows=nullptr, const StaticDiffuseField* diffuse=nullptr);
+    bool setStaticLightGrid(const StaticLightGrid& grid);
+    void setIndirectQuality(IndirectQuality q) { indirectQuality_=q; }
+    bool setStaticRadiance(float3 points, float3 sun, float3 sky);
+    bool staticPointLightsActive() const { return staticGrid_.valid() && linearScene_ && (quality_ == LightQuality::High || (quality_ == LightQuality::Medium && indirectQuality_ == IndirectQuality::Mobile)); }
     void setNightGlow(float g) { nightGlow_ = g; }   // extra emissive multiplier (0 by day)
     void setUnlitTint(float3 t) { unlitTint_ = t; }  // 2D sprites have no sun: day/night is a tint
     float nightGlow() const { return nightGlow_; }
@@ -115,6 +127,7 @@ public:
     void bind(int uniformSlot = 2, int textureSlot = 1, int reflectionSlot = -1);
 
     // Planar water reflection (Renderer3D::renderReflection): High tier only.
+    void setLinearScene(bool on) { linearScene_ = on; }
     void setWaterReflections(bool on) { reflectOn_ = on; }
     bool waterReflections() const { return reflectOn_; }
     bool reflectionsWanted() const { return reflectOn_ && quality_ == LightQuality::High && dev_; }
@@ -153,6 +166,8 @@ private:
     void createSpotShadow(int size);
     int mapSize_ = 0;
     LightQuality quality_ = LightQuality::Medium;
+    IndirectQuality indirectQuality_=IndirectQuality::High;
+    float3 pointScale_{1,1,1}, sunScale_{}, skyScale_{};
     float originX_ = 0, originZ_ = 0, extent_ = 64;   // wanted this frame
     float mapX_ = 0, mapZ_ = 0, mapExtent_ = 64;      // what the map texture holds
     float3 focus_, camRight_{1, 0, 0}, camUp_{0, 1, 0};
@@ -170,7 +185,10 @@ private:
     gfx::TextureHandle reflColor_, reflDepth_;
     int reflW_ = 0, reflH_ = 0;
     float viewW_ = 1, viewH_ = 1;
+    bool linearScene_ = false, reflectionLinear_ = false;
     bool reflectOn_ = true, reflReady_ = false;
+    gfx::TextureHandle staticGrid_;
+    float4 gridOrigin_{},gridSize_{};
     LightUniforms u_{};
     LightStats stats_;
     float nightGlow_ = 0;
