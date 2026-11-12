@@ -1,0 +1,19 @@
+// Extraction raid sample (docs/raid.md): loot crates, rescue the robot, leave through the landing zone or call
+// the helicopter. Engine-side match loop of extraction shooters (Drone Fall port: agent-extraction).
+{
+  "name": "Extraction Raid",
+  "description": "Extraction raid sample: containers, raid inventory, objectives, extraction points and receipts (docs/raid.md).",
+  "id": "com.rtsengine.extraction",
+  "version": "0.1.0",
+  "build": 1,
+  "module": "rts",
+  "sourceLanguage": "en",
+  "languages": ["en"],
+  "rules": "rules.json",
+  "maps": [
+    { "file": "maps/salvage.json", "title": "Salvage Run (PvE)" },
+    { "file": "maps/crossfire.json", "title": "Crossfire (PvP, 2 raiders)" }
+  ],
+  "lighting": { "time": 0.45, "dayLength": 600, "clouds": 0.3 },
+  "orientation": "landscape"
+}

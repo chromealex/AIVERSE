@@ -36,6 +36,7 @@ local V = rts.victory_rules()     -- constant for the match (rules + map overrid
 
 function std.victory(tick)
   if rts.winner() >= 0 then return end
+  if raid.active() then return end  -- extraction raids decide the match themselves (RtsRaid.cpp)
   local v = V
 
   for _, p in ipairs(rts.players()) do

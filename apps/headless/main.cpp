@@ -484,6 +484,10 @@ static int play(const Args& a) {
     std::printf("Events: spawned=%d died=%d attacks=%d trained=%d built=%d gathered=%d captured=%d\n",
                 ev[game::kEvSpawned], ev[game::kEvDied], ev[game::kEvAttack], ev[game::kEvTrainDone], ev[game::kEvBuildDone],
                 ev[game::kEvGathered], ev[game::kEvCaptured]);
+    if (auto* rm = dynamic_cast<game::RtsModule*>(&sim.module()); rm && rm->raid() && rm->raid()->active())   // extraction raids
+        if (auto* rs = rm->raid()->store(sim))
+            for (size_t i = 0; i < rs->players.size(); ++i)
+                std::printf("Raid receipt: %s\n", rs->receipts[i].empty() ? rm->raid()->receiptJson(sim, rs->players[i]).c_str() : rs->receipts[i].c_str());
     if (a.dump) dumpTypes(sim);
     if (a.profile) printProfile(sim);
     game::luaProfileWrite();
