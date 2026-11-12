@@ -42,6 +42,7 @@ ALIASES = {
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
+ 'aiverse-boss-encounters':'boss telegraph windup cone slam phase enrage adds rotation status stun burn slow mob wander hunt flee swarm босс телеграф замах конус фаз ярост призыв ротаци статус оглушен горен замедлен моб блужд охот бегств рой',
 }
 
 def generate():

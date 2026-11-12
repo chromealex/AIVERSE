@@ -1163,6 +1163,39 @@
       "packageDependencies": []
     },
     {
+      "id": "boss-encounters",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Telegraphs.h",
+      "skill": "skills/aiverse-boss-encounters/SKILL.md",
+      "summary": "Telegraphed area attacks (windup/active/recovery, circle/cone/line/ring fixed-point hit tests, periodic and sweeping strikes, falloff, statuses on the strike tick, progress-telegraph view records and ground decals), slow/root/stun/burn status instances with stacking and immunity, boss phases by HP or time with range-band/sequence/weighted attack patterns, enrage and add waves, encounter windows with personal requests and archetype rotation, and mob wander/hunt/flee/leash/swarm behaviour",
+      "notes": "Read docs/genre-packages.md (boss-encounters) for exact coverage and authority boundaries. Decisions and outcomes only: the owner applies damage, moves bodies (steering, flow field or navmesh), places bosses/adds and renders the TelegraphView / StatusViewEvent records (TelegraphDecals.h -> RtsGroundCanvas or view.draw_ground). Inside RtsModule games the engine statuses stay authoritative (rtsStatusRules maps the definitions). Fixed math, integer ticks, repeated/backwards ticks rejected, RNG only through the passed Random&. Persist states via genre::save/load (record kinds 112..119, 112..117 used), hash with encounterHash and bind encounterDataHash. aiverse_encounter validates data and runs the headless hero-vs-boss reference fight.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_boss_encounters",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/StatusEffects.h",
+        "libraries/include/aiverselib/genre/BossEncounter.h",
+        "libraries/include/aiverselib/genre/BossSchedule.h",
+        "libraries/include/aiverselib/genre/MobBehaviour.h",
+        "libraries/include/aiverselib/genre/EncounterData.h",
+        "libraries/include/aiverselib/genre/EncounterPersistence.h",
+        "libraries/include/aiverselib/genre/EncounterScenario.h",
+        "libraries/include/aiverselib/genre/TelegraphDecals.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/boss-encounter.json",
+        "tools/libraries/encounter_main.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "combat-actions"
+      ]
+    },
+    {
       "id": "combat-actions",
       "version": "0.1.0",
       "layer": "simulation",
