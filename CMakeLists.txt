@@ -390,7 +390,7 @@ add_library(aiverse_plugins STATIC
     engine/platform/PluginJson.cpp
     engine/services/Store.cpp
     engine/services/Ads.cpp
-    engine/services/Social.cpp engine/services/Push.cpp engine/services/Links.cpp)   # agent-bw-client
+    engine/services/Social.cpp engine/services/Push.cpp engine/services/Links.cpp engine/services/Consent.cpp)   # agent-bw-client
 target_include_directories(aiverse_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if(AIVERSE_MOCK_PLUGINS)
     target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp engine/services/MockClientPlugins.cpp)

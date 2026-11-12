@@ -165,6 +165,7 @@ TEST(spine_bad_data_is_reported) {
 
 // ---------------- client services: social (Steam), push, deep links through the desktop mocks ----------------
 #include "engine/platform/Plugins.h"
+#include "engine/services/Consent.h"
 #include "engine/services/Links.h"
 #include "engine/services/Push.h"
 #include "engine/services/Social.h"
@@ -241,6 +242,22 @@ TEST(client_services_social_push_links_through_mocks) {
     links::Parsed w = links::parse("https://bunkerwars.onelink.me/abc/clan?id=7#x");
     CHECK(w.scheme == "https" && w.host == "bunkerwars.onelink.me" && w.path == "abc/clan" && links::query(w, "id") == "7");
     links::removeListener(ll);
+
+    // consent: no CMP in the build -> nothing to ask; mock CMP -> the player's answer
+    consent::reset();
+    plugins::configureGame(R"({"plugins": {}})");
+    consent::Result none;
+    consent::request([&](const consent::Result& r) { none = r; });
+    CHECK(!consent::available() && none.status == consent::Status::NotRequired && none.personalized);
+    plugins::configureGame(R"({"plugins": {"mock-consent": {}}})");
+    consent::reset();
+    setEnvVar("AIVERSE_MOCK_CONSENT", "denied");
+    consent::Result cr;
+    consent::request([&](const consent::Result& r) { cr = r; }, true);
+    plugins::pump();
+    CHECK(consent::provider() == "mock-consent" && cr.status == consent::Status::Obtained && cr.canRequestAds && !cr.personalized && cr.privacyOptionsRequired);
+    setEnvVar("AIVERSE_MOCK_CONSENT", "");
+    consent::reset();
     social::reset(); push::reset(); links::reset();
     plugins::configureGame("{}");
 }

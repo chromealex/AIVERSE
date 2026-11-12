@@ -1,11 +1,12 @@
 // Desktop stand-ins for the client platform services (agent-bw-client): "mock-social" (Steam-like
-// achievements, stats, friends, presence, overlay), "mock-push" (local notifications, a fake token)
-// and "mock-links" (deep links). Registered like the store / ads mocks (MockPlugins.cpp): listed in
+// achievements, stats, friends, presence, overlay), "mock-push" (local notifications, a fake token),
+// "mock-links" (deep links) and "mock-consent" (a CMP form). Registered like the store / ads mocks (MockPlugins.cpp): listed in
 // game.json "plugins" or AIVERSE_MOCK_PLUGINS=1; compiled out of packaged builds.
 //
 //   AIVERSE_MOCK_LINK=<url>              mock-links: the launch link
 //   AIVERSE_MOCK_PUSH_OPENED=<json>      mock-push: started from a notification with this data
 //   AIVERSE_MOCK_SOCIAL_LOG=<file>       mock-social: every call appended as "method {json}"
+//   AIVERSE_MOCK_CONSENT=granted|denied|outside   mock-consent: the player's answer / not in a consent region
 #include "MockPlugins.h"
 
 #include "engine/platform/PluginJson.h"
@@ -215,12 +216,27 @@ public:
         reply.fail("mock-links: unknown method " + method);
     }
 };
+class MockConsent : public plugins::NativePlugin {
+public:
+    void call(const std::string& method, const std::string&, plugins::Reply reply) override {
+        if (method == "init" || method == "lifecycle") { reply.ok(); return; }
+        if (method != "request" && method != "options") { reply.fail("mock-consent: unknown method " + method); return; }
+        std::string answer = env("AIVERSE_MOCK_CONSENT");
+        json::Value r = json::Value::object();
+        bool outside = answer == "outside", granted = answer.empty() || answer == "granted";
+        r.set("status", json::Value::string(outside ? "notRequired" : "obtained")).set("canRequestAds", json::Value::boolean_(true))
+         .set("personalized", json::Value::boolean_(outside || granted)).set("optionsRequired", json::Value::boolean_(!outside));
+        if (!outside) { plugins::emit("mock-consent", "app.pause", "null"); plugins::emit("mock-consent", "app.resume", "null"); }
+        reply.ok(json::dump(r));
+    }
+};
 } // namespace
 
 bool registerClientMockPlugin(const std::string& name) {
     if (name == "mock-social") plugins::registerPlugin(name, std::make_shared<MockSocial>());
     else if (name == "mock-push") plugins::registerPlugin(name, std::make_shared<MockPush>());
     else if (name == "mock-links") plugins::registerPlugin(name, std::make_shared<MockLinks>());
+    else if (name == "mock-consent") plugins::registerPlugin(name, std::make_shared<MockConsent>());
     else return false;
     return true;
 }

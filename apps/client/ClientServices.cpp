@@ -7,6 +7,9 @@
 //   push.available() push.permission(fn(granted)) push.token(fn(t)) push.schedule{id, title, body, delay,
 //   category, tag, data, repeat} push.cancel(id) push.cancelCategory(c) push.cancelTag(t) push.cancelAll() push.badge(n)
 //   links.available() links.initial(fn(link)) links.parse(url) -> {scheme, host, path, query = {..}}
+//   consent.available() consent.request(fn(r)[, debugEEA]) consent.options(fn(r)): r = {status, canRequestAds, personalized, optionsRequired}
+//   plugins.available(name) plugins.call(name, method, args, fn(ok, data_or_error)): any plugin method (backend tokens,
+//   SDK extras such as xsolla.token) for game scripts that need more than the services above
 // Events through game.on (ui/lib/meta.lua): "social" {event, data}, "push" {event, data}, "link" {url, source, deferred, data}.
 extern "C" {
 #include <lauxlib.h>
@@ -17,6 +20,8 @@ extern "C" {
 #include <memory>
 
 #include "ClientServices.h"
+#include "engine/platform/Plugins.h"
+#include "engine/services/Consent.h"
 #include "engine/services/Links.h"
 #include "engine/services/Push.h"
 #include "engine/services/Social.h"
@@ -159,6 +164,35 @@ int lParse(lua_State* L) {
     return 1;
 }
 
+// ---------------------------------------------------------------- consent, plugins
+Json consentJson(const consent::Result& r) {
+    Json j = Json::object();
+    j.set("status", Json::string(consent::name(r.status))); j.set("canRequestAds", Json::fromBool(r.canRequestAds));
+    j.set("personalized", Json::fromBool(r.personalized)); j.set("optionsRequired", Json::fromBool(r.privacyOptionsRequired));
+    if (!r.error.empty()) j.set("error", Json::string(r.error));
+    return j;
+}
+int cAvailable(lua_State* L) { lua_pushboolean(L, consent::available()); return 1; }
+int cRequest(lua_State* L) {
+    auto cb = keep(L, 1);
+    consent::request([cb](const consent::Result& r) { cb->call(consentJson(r)); }, lua_toboolean(L, 2));
+    return 0;
+}
+int cOptions(lua_State* L) { auto cb = keep(L, 1); consent::showOptions([cb](const consent::Result& r) { cb->call(consentJson(r)); }); return 0; }
+int gAvailable(lua_State* L) { lua_pushboolean(L, plugins::available(luaL_checkstring(L, 1))); return 1; }
+int gCall(lua_State* L) {
+    std::string name = luaL_checkstring(L, 1), method = luaL_checkstring(L, 2);
+    std::string args = lua_isnoneornil(L, 3) ? "{}" : ui::luaToJson(L, 3).dump(-1);
+    auto cb = keep(L, 4);
+    plugins::call(name, method, args, [cb](const plugins::Result& r) {
+        Json data;
+        if (r.ok) { try { data = Json::parse(r.data); } catch (...) { data = Json::string(r.data); } }
+        else data = Json::string(r.error);
+        cb->call(Json::fromBool(r.ok), &data);
+    });
+    return 0;
+}
+
 void table(lua_State* L, Ctx* c, const char* name, std::initializer_list<luaL_Reg> fns) {
     lua_newtable(L);
     for (auto& f : fns) {
@@ -193,6 +227,8 @@ void ClientServices::attach(lua_State* L, std::shared_ptr<bool> alive, std::func
                          {"cancel", pCancel}, {"cancelCategory", pCancelCategory}, {"cancelTag", pCancelTag}, {"cancelAll", pCancelAll},
                          {"badge", pBadge}});
     table(L, c, "links", {{"available", lAvailable}, {"initial", lInitial}, {"parse", lParse}});
+    table(L, c, "consent", {{"available", cAvailable}, {"request", cRequest}, {"options", cOptions}});
+    table(L, c, "plugins", {{"available", gAvailable}, {"call", gCall}});
     auto relay = [c](const char* kind) {
         return [c, kind](const std::string& ev, const std::string& data) {
             if (!*c->alive || !c->emit) return;
