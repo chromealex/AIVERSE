@@ -303,6 +303,24 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | senses | searchCandidateRadiusMilli | integer | 12000 | 0..100000000 |
 | senses | searchMaxPoints | integer | 6 | 1..64 |
 | senses | hideEnterRangeMilli | integer | 1500 | 0..1000000 |
+| interaction | gravityMilli | integer | 9810 | 0..1000000 |
+| interaction | skinMilli | integer | 16 | 1..250 |
+| interaction | carryMaxMassMilli | integer | 30000 | 1..100000000 |
+| interaction | carryReachMilli | integer | 2000 | 0..100000 |
+| interaction | carryHoldDistanceMilli | integer | 1200 | 0..100000 |
+| interaction | carryHoldHeightMilli | integer | 1200 | 0..100000 |
+| interaction | carryFollowSpeedMilli | integer | 12000 | 1..1000000 |
+| interaction | carryBreakDistanceMilli | integer | 1000 | 0..100000 |
+| interaction | carrySpeedPenaltyMilli | integer | 15 | 0..1000 |
+| interaction | carryMinSpeedMilli | integer | 300 | 0..1000 |
+| interaction | throwMinImpulseMilli | integer | 20000 | 0..10000000000 |
+| interaction | throwMaxImpulseMilli | integer | 120000 | 0..10000000000 |
+| interaction | throwChargeTicks | integer | 45 | 1..3600 |
+| interaction | flightMaxTicks | integer | 600 | 1..1000000 |
+| interaction | pushMaxSpeedMilli | integer | 1500 | 1..100000 |
+| interaction | pushGridMoveTicks | integer | 20 | 1..3600 |
+| interaction | ropeIterations | integer | 8 | 1..64 |
+| interaction | ropeDampingMilli | integer | 10 | 0..1000 |
 
 ## Cross-field constraints
 
@@ -337,3 +355,4 @@ Constraint: `senses.suspiciousAtMilli <= senses.searchingAtMilli` (checked by lo
 Constraint: `senses.searchingAtMilli <= senses.alertAtMilli` (checked by loader and CLI).
 Constraint: `senses.alertAtMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
 Constraint: `senses.alertReceivedMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
+Constraint: `interaction.throwMinImpulseMilli <= interaction.throwMaxImpulseMilli` (checked by loader and CLI).
