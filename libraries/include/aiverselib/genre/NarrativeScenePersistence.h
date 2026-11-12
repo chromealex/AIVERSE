@@ -53,7 +53,7 @@ inline void io(Archive& a,MeterRange& m){a(m.minimum,m.maximum,m.initial);}
 inline void io(Archive& a,SceneCharacter& c){a(c.id,c.nameKey);for(auto& m:c.meters)io(a,m);}
 inline void io(Archive& a,SceneFlagDef& f){a(f.id,f.persistent);}
 inline void io(Archive& a,SceneChapter& c){a(c.id,c.act,c.titleKey);}
-inline void io(Archive& a,SceneDef& s){a(s.id,s.entry,s.chapter,s.titleKey);}
+inline void io(Archive& a,NarrativeSceneDef& s){a(s.id,s.entry,s.chapter,s.titleKey);}
 inline void io(Archive& a,SceneChoice& c){a(c.id,c.next,c.textKey,c.once,c.conditions,c.effects,c.cues);}
 inline void io(Archive& a,SceneNode& n){a(n.id,n.speaker,n.next,n.textKey,n.linear,n.autoTicks,n.participants,n.cues,n.onEnter,n.choices);}
 inline void io(Archive& a,SceneConsequence& c){a(c.id,c.conditions,c.effects,c.cues);}

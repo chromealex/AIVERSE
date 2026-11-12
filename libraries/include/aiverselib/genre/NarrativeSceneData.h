@@ -150,7 +150,7 @@ struct Reader {
         for(std::size_t i=0;i<list.size();++i)out.push_back(effect(list[i],idx(sub(path,key),i)));return out;
     }
     static std::vector<SceneCue> cues(const Json& parent,const std::string& path){
-        std::vector<SceneCue> out;const auto& list=array(parent,"cues",path,kSceneMaxCues);
+        std::vector<SceneCue> out;const auto& list=array(parent,"cues",path,kNarrativeSceneMaxCues);
         for(std::size_t i=0;i<list.size();++i){
             auto p=idx(sub(path,"cues"),i);SceneCue c;
             if(list[i].isObject()){keys(list[i],p,{"id","delay"});c.id=id(list[i],p);c.delay=ticks(list[i],"delay",p,0);}
@@ -232,12 +232,12 @@ inline NarrativeWorld readNarrativeWorld(const Json& j,const NarrativeConfig& de
         }
         if(!first)first=n.id;insertUnique(w.nodes,std::move(n),p,"node");
     }
-    const auto& scenes=array(j,"scenes","",kSceneMaxScenes);
+    const auto& scenes=array(j,"scenes","",kNarrativeMaxScenes);
     for(std::size_t i=0;i<scenes.size();++i){
         const auto& x=scenes[i];auto p=idx("scenes",i);keys(x,p,{"id","entry","titleKey","chapter"});
-        insertUnique(w.scenes,SceneDef{id(x,p),id(x,p,"entry"),integer(x,"chapter",p,0),text(x,"titleKey",p,false)},p,"scene");
+        insertUnique(w.scenes,NarrativeSceneDef{id(x,p),id(x,p,"entry"),integer(x,"chapter",p,0),text(x,"titleKey",p,false)},p,"scene");
     }
-    if(!j.has("scenes")&&first)w.scenes.emplace(1,SceneDef{1,first,0,{}});
+    if(!j.has("scenes")&&first)w.scenes.emplace(1,NarrativeSceneDef{1,first,0,{}});
     const auto& consequences=array(j,"consequences","",kSceneMaxConsequences);
     for(std::size_t i=0;i<consequences.size();++i){
         const auto& x=consequences[i];auto p=idx("consequences",i);keys(x,p,{"id","conditions","effects","cues"});

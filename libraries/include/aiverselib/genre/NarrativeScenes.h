@@ -20,8 +20,8 @@
 #include <vector>
 namespace aiverse::lib::genre {
 inline constexpr std::size_t kSceneMaxNodes=10000,kSceneMaxChoices=128,kSceneMaxFacts=10000,kSceneMaxCharacters=1024,kSceneMaxList=256,
-    kSceneMaxCues=32,kSceneMaxParticipants=32,kSceneMaxBarks=4096,kSceneMaxTerms=256,kSceneMaxDepth=16,kSceneMaxEnumValues=256,
-    kSceneMaxScenes=1024,kSceneMaxChapters=1024,kSceneMaxFlags=10000,kSceneMaxConsequences=4096,kSceneMaxBacklog=10000,
+    kNarrativeSceneMaxCues=32,kSceneMaxParticipants=32,kSceneMaxBarks=4096,kSceneMaxTerms=256,kSceneMaxDepth=16,kSceneMaxEnumValues=256,
+    kNarrativeMaxScenes=1024,kSceneMaxChapters=1024,kSceneMaxFlags=10000,kSceneMaxConsequences=4096,kSceneMaxBacklog=10000,
     kSceneMaxPending=65536,kSceneMaxCommands=256,kSceneMaxBarkRequests=4096;
 inline constexpr int64_t kSceneMeterLimit=1000000000,kScenePriorityLimit=1000000;
 inline constexpr uint32_t kSceneMaxTicks=10000000,kSceneMaxSkipLines=64;
@@ -51,7 +51,7 @@ struct MeterRange {int64_t minimum=-100,maximum=100,initial=0;};
 struct SceneCharacter {int64_t id=0;std::string nameKey;std::array<MeterRange,kSocialMeterCount> meters{};};
 struct SceneFlagDef {int64_t id=0;bool persistent=true;};
 struct SceneChapter {int64_t id=0,act=1;std::string titleKey;};
-struct SceneDef {int64_t id=0,entry=0,chapter=0;std::string titleKey;};
+struct NarrativeSceneDef {int64_t id=0,entry=0,chapter=0;std::string titleKey;};
 struct SceneChoice {int64_t id=0,next=0;std::string textKey;bool once=false;std::vector<SceneCondition> conditions;std::vector<SceneEffect> effects;std::vector<SceneCue> cues;};
 // linear: a line without choices that continues to `next` (0 ends the scene) on Advance, auto-advance or skip.
 struct SceneNode {
@@ -62,7 +62,7 @@ struct SceneConsequence {int64_t id=0;std::vector<SceneCondition> conditions;std
 struct SceneBark {int64_t id=0,trigger=0,speaker=0,priority=0,cooldown=-1;std::string textKey;bool once=false;std::vector<SceneCondition> conditions;std::vector<SceneCue> cues;}; // cooldown -1 = config default
 struct NarrativeWorld {
     int64_t initialChapter=0;std::map<int64_t,SceneFactDef> facts;std::map<int64_t,SceneCharacter> characters;std::map<int64_t,SceneFlagDef> flags;
-    std::map<int64_t,SceneChapter> chapters;std::map<int64_t,SceneDef> scenes;std::map<int64_t,SceneNode> nodes;
+    std::map<int64_t,SceneChapter> chapters;std::map<int64_t,NarrativeSceneDef> scenes;std::map<int64_t,SceneNode> nodes;
     std::map<int64_t,SceneConsequence> consequences;std::map<int64_t,SceneBark> barks;
 };
 struct NarrativeConfig {
@@ -121,7 +121,7 @@ inline std::string idx(const std::string& path,std::size_t i){return path+"["+st
 inline bool inDomain(const SceneFactDef& f,int64_t v){return v>=f.minimum&&v<=f.maximum;}
 inline bool knower(const NarrativeWorld& w,int64_t c){return c==0||w.characters.contains(c);}
 inline std::string cues(std::span<const SceneCue> list,const std::string& path){
-    if(list.size()>kSceneMaxCues)return path+": at most 32 cues";
+    if(list.size()>kNarrativeSceneMaxCues)return path+": at most 32 cues";
     for(std::size_t i=0;i<list.size();++i){if(list[i].id<=0)return idx(path,i)+".id: must be positive";if(list[i].delay>kSceneMaxTicks)return idx(path,i)+".delay: must be 0..10000000 ticks";}
     return {};
 }
@@ -197,7 +197,7 @@ inline std::string key(const std::string& text,const std::string& path){return t
 inline std::string narrativeWorldError(const NarrativeWorld& w){
     namespace d=scene_detail;
     if(w.nodes.empty()&&w.barks.empty())return "nodes: expected at least one node or bark";
-    if(w.facts.size()>kSceneMaxFacts||w.characters.size()>kSceneMaxCharacters||w.flags.size()>kSceneMaxFlags||w.chapters.size()>kSceneMaxChapters||w.scenes.size()>kSceneMaxScenes
+    if(w.facts.size()>kSceneMaxFacts||w.characters.size()>kSceneMaxCharacters||w.flags.size()>kSceneMaxFlags||w.chapters.size()>kSceneMaxChapters||w.scenes.size()>kNarrativeMaxScenes
         ||w.nodes.size()>kSceneMaxNodes||w.consequences.size()>kSceneMaxConsequences||w.barks.size()>kSceneMaxBarks)return "definitions: too many facts, characters, flags, chapters, scenes, nodes, consequences or barks";
     for(const auto& [id,f]:w.facts){
         auto p=d::at("","facts",id);if(id<=0||f.id!=id)return p+".id: must be positive and match its key";

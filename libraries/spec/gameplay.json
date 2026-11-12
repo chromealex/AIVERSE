@@ -2204,6 +2204,81 @@
           "throwMaxImpulseMilli"
         ]
       ]
+    },
+    "cinematic": {
+      "type": "CinematicSettings",
+      "fields": {
+        "hitStopTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 600
+        },
+        "hitStopPriority": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "slowMotionNumerator": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 16
+        },
+        "slowMotionDenominator": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 16
+        },
+        "slowMotionTicks": {
+          "type": "integer",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "slowMotionPriority": {
+          "type": "integer",
+          "default": 500,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "qteWindowScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteAccessibleWindowMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1000,
+          "maximum": 10000
+        },
+        "qteMashScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteHoldScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteAutoSucceed": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "relations": [
+        [
+          "slowMotionNumerator",
+          "slowMotionDenominator"
+        ]
+      ]
     }
   }
 }

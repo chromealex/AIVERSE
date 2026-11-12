@@ -331,6 +331,17 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | interaction | pushGridMoveTicks | integer | 20 | 1..3600 |
 | interaction | ropeIterations | integer | 8 | 1..64 |
 | interaction | ropeDampingMilli | integer | 10 | 0..1000 |
+| cinematic | hitStopTicks | integer | 6 | 1..600 |
+| cinematic | hitStopPriority | integer | 1000 | -1000000..1000000 |
+| cinematic | slowMotionNumerator | integer | 1 | 0..16 |
+| cinematic | slowMotionDenominator | integer | 4 | 1..16 |
+| cinematic | slowMotionTicks | integer | 90 | 0..1000000 |
+| cinematic | slowMotionPriority | integer | 500 | -1000000..1000000 |
+| cinematic | qteWindowScaleMilli | integer | 1000 | 100..10000 |
+| cinematic | qteAccessibleWindowMilli | integer | 1000 | 1000..10000 |
+| cinematic | qteMashScaleMilli | integer | 1000 | 100..10000 |
+| cinematic | qteHoldScaleMilli | integer | 1000 | 100..10000 |
+| cinematic | qteAutoSucceed | boolean | false |  |
 
 ## Cross-field constraints
 
@@ -368,3 +379,4 @@ Constraint: `senses.alertReceivedMilli <= senses.suspicionMaxMilli` (checked by 
 Constraint: `narrative.meterMinimum <= narrative.meterInitial` (checked by loader and CLI).
 Constraint: `narrative.meterInitial <= narrative.meterMaximum` (checked by loader and CLI).
 Constraint: `interaction.throwMinImpulseMilli <= interaction.throwMaxImpulseMilli` (checked by loader and CLI).
+Constraint: `cinematic.slowMotionNumerator <= cinematic.slowMotionDenominator` (checked by loader and CLI).

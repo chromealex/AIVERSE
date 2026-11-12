@@ -393,6 +393,19 @@ struct InteractionSettings {
     std::int64_t ropeIterations=8;
     std::int64_t ropeDampingMilli=10;
 };
+struct CinematicSettings {
+    std::int64_t hitStopTicks=6;
+    std::int64_t hitStopPriority=1000;
+    std::int64_t slowMotionNumerator=1;
+    std::int64_t slowMotionDenominator=4;
+    std::int64_t slowMotionTicks=90;
+    std::int64_t slowMotionPriority=500;
+    std::int64_t qteWindowScaleMilli=1000;
+    std::int64_t qteAccessibleWindowMilli=1000;
+    std::int64_t qteMashScaleMilli=1000;
+    std::int64_t qteHoldScaleMilli=1000;
+    bool qteAutoSucceed=false;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -424,6 +437,7 @@ struct GameplaySettings {
     SensesSettings senses;
     NarrativeSettings narrative;
     InteractionSettings interaction;
+    CinematicSettings cinematic;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -440,7 +454,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -981,6 +995,24 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("ropeDampingMilli")) number(section["ropeDampingMilli"],settings.interaction.ropeDampingMilli,0,1000,"interaction.ropeDampingMilli");
         }
         if(settings.interaction.throwMinImpulseMilli>settings.interaction.throwMaxImpulseMilli)result.errors.push_back("interaction.throwMinImpulseMilli: must not exceed throwMaxImpulseMilli");
+    }
+    if(root.has("cinematic")) { const auto& section=root["cinematic"];
+        if(!section.isObject()) result.errors.push_back("cinematic: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="hitStopTicks" && entry.first!="hitStopPriority" && entry.first!="slowMotionNumerator" && entry.first!="slowMotionDenominator" && entry.first!="slowMotionTicks" && entry.first!="slowMotionPriority" && entry.first!="qteWindowScaleMilli" && entry.first!="qteAccessibleWindowMilli" && entry.first!="qteMashScaleMilli" && entry.first!="qteHoldScaleMilli" && entry.first!="qteAutoSucceed") result.errors.push_back("cinematic."+entry.first+": unknown field");
+            if(section.has("hitStopTicks")) number(section["hitStopTicks"],settings.cinematic.hitStopTicks,1,600,"cinematic.hitStopTicks");
+            if(section.has("hitStopPriority")) number(section["hitStopPriority"],settings.cinematic.hitStopPriority,-1000000,1000000,"cinematic.hitStopPriority");
+            if(section.has("slowMotionNumerator")) number(section["slowMotionNumerator"],settings.cinematic.slowMotionNumerator,0,16,"cinematic.slowMotionNumerator");
+            if(section.has("slowMotionDenominator")) number(section["slowMotionDenominator"],settings.cinematic.slowMotionDenominator,1,16,"cinematic.slowMotionDenominator");
+            if(section.has("slowMotionTicks")) number(section["slowMotionTicks"],settings.cinematic.slowMotionTicks,0,1000000,"cinematic.slowMotionTicks");
+            if(section.has("slowMotionPriority")) number(section["slowMotionPriority"],settings.cinematic.slowMotionPriority,-1000000,1000000,"cinematic.slowMotionPriority");
+            if(section.has("qteWindowScaleMilli")) number(section["qteWindowScaleMilli"],settings.cinematic.qteWindowScaleMilli,100,10000,"cinematic.qteWindowScaleMilli");
+            if(section.has("qteAccessibleWindowMilli")) number(section["qteAccessibleWindowMilli"],settings.cinematic.qteAccessibleWindowMilli,1000,10000,"cinematic.qteAccessibleWindowMilli");
+            if(section.has("qteMashScaleMilli")) number(section["qteMashScaleMilli"],settings.cinematic.qteMashScaleMilli,100,10000,"cinematic.qteMashScaleMilli");
+            if(section.has("qteHoldScaleMilli")) number(section["qteHoldScaleMilli"],settings.cinematic.qteHoldScaleMilli,100,10000,"cinematic.qteHoldScaleMilli");
+            if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
+        }
+        if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

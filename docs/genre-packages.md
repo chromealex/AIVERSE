@@ -15,6 +15,9 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points. MatchObjectives.h (0.2.0): capture/hold zones with contest rules and decay, king of the hill, payload, elimination with lives/respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock, spectator transitions (see [Match objectives](#match-objectives-match-rules-020)) | Native extension policies returning events/scores for the match owner; existing built-in victory modes stay owned by their modules. Presence, deaths, pickups and gate crossings come from the authoritative owner. No cart physics, bomb/HUD presentation or network spectating. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings; 0.2.0 social scenes: typed facts, relationship meters, knowledge, AND/OR/NOT conditions, flags, chapters/acts, deferred consequences, speakers, cue requests, barks, VN backlog/skip-read/auto-advance (see [Narrative scenes](#narrative-scenes-narrative-graphs-020)) | Project UI/cinematics consume committed nodes, CueRequest records and bark lines. No scene playback, audio, QTE or online reward grant. |
 
+| narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
+| cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
+
 ## Native/host integration
 
 Include `<aiverselib/genre/Configured.h>`, the needed policy header and `genre/Persistence.h`.
@@ -24,7 +27,7 @@ backend dependencies on the owning aiverse_game target, avoiding object-library 
 For header-only policies without projectile collision, `AIVERSE::gameplay_native` is sufficient.
 
 See `examples/native/libraries/GenreConsumer.cpp` for validated settings and NativeState storage.
-The library_demo native module now initializes these records in setup (module VERSION 5: adds locomotion modes, combat-actions, weapons, match objectives, senses and genre-bot records).
+The library_demo native module now initializes these records in setup (module VERSION 6: adds locomotion modes, combat-actions, weapons, match objectives, senses, genre-bot, narrative scene, physical interaction and cinematic records).
 `tests/libraries/genre_tests.cpp` runs trajectories, combos, world collision, round transitions,
 choice transactions and restoration checks. No engine source edit is required in a consuming project.
 
@@ -742,3 +745,114 @@ immunity, duplicates, stages, debris seeds; invalid JSON/settings/inputs. Verifi
 syntax checks, the genre tests built by hand, the physical tests also under ASan/UBSan, and the full GenreConsumer
 chain in a standalone driver. Not verified: CMake/isolation, `aiverse_tests`, native module export, headless restore
 matches, MSVC/clang, platform runtimes, any Box3D debris presentation.
+
+## Cinematic gameplay (cinematic-gameplay 0.1.0)
+
+Headers `genre/CinematicTime.h` (time-scale domains), `genre/CinematicQte.h` (QTE judging),
+`genre/CinematicScene.h` (definitions, state, validation), `genre/CinematicRunner.h` (`stepScene`), umbrella
+`genre/Cinematic.h`, `genre/CinematicData.h` (scene JSON), `genre/CinematicConfigured.h` (settings adapters) and
+`genre/CinematicPersistence.h` (save/load, hashing). Target `AIVERSE::lib_cinematic_gameplay` (depends on
+`aiverse_engine`); native OBJECT modules call `aiverse_native_use_libraries(target cinematic-gameplay)`. Skill:
+`skills/aiverse-cinematic-gameplay`. Composes with the animation system (clips/markers are referenced by ID and
+reported back; `docs/animation-graphs.md` stays the playback owner) and with `narrative-graphs` (cue triggers).
+
+**Determinism model.** Authoritative, saved and hashed: time-scale requests and per-domain accumulators
+(`TimeState`), timeline position, cue emission bookkeeping, wait and QTE outcomes, staging status, input locks,
+queued triggers and QTE options (`SceneState`). Host/presentation, never authoritative: audio and animation
+playback progress, camera, navigation, teleport execution. Host facts enter only as `SceneInput` stamped with an
+authoritative tick (`LineReport`, `MarkerReport`, `ParticipantPose`/`arrived`, `QteInput`), validated against the
+cue's emission tick and the current tick, so replays and peers see the same inputs and outcomes. Every sync point
+and staging move has a timeout in authoritative ticks (never domain steps), so a slow device, a missing report or
+a frozen domain cannot stall the simulation. Integer math only (Fixed for mark positions), strictly increasing
+ticks; invalid input or repeated/backwards ticks return nullopt with state untouched; stale command sequence
+numbers are ignored (`CommandIgnored`). Presentation reads `SceneEvent`s; it never writes into either state.
+
+**Time-scale domains.** `TimeConfig` lists domains (default world 1, player 2 with parent world, ui 3,
+cinematic 4; custom ids allowed, parent id < child id). Scales are `TimeRatio{num,den}` with 0 <= num/den <= 16
+and den dividing 720720 (all denominators 1..16 are exact); values are held in 1/720720 step units and each domain
+keeps an integer accumulator, so a domain advances exactly floor(N*num/den) whole steps over N ticks (tested over
+300000 ticks). Requests (`TimeRequest{tag, domain, scale, priority, duration, blend}`) are applied per domain in
+(priority, id) order: `Override` replaces the running value, `Multiply` scales it (rounded down in step units when
+not exact); a child domain is multiplied by its parent. `duration` is authoritative ticks from the start tick
+(0 = until cancelled), so a hit-stop (scale 0) always ends. `stepTime` order at a tick: cancel ids, cancel tags,
+expire, add (ids assigned in input order), evaluate, accumulate; tick gaps are integrated exactly with expiries
+inside the gap. `DomainTick{steps, units, local}` per domain; at most 256 active requests (`Rejected` beyond).
+Presets: `hitStop(domain, ticks)`, `slowMotion(domain, ratio, ticks)`, library `timePresets` used by `timeScale`
+cues (tagged with the scene id and cancelled on skip/seek/resume/end).
+
+**Scene timelines.** A scene advances by the steps of its time domain (`domain` 0 = one step per tick). Cues
+(`dialogue`, `animation`, `camera`, `sound`, `event`, `timeScale`, `move`, `inputLock`, `inputRelease`) are sorted
+by (at, track, id) and emitted in that order when the position reaches `at`. Essential cues (events by default,
+always move/input) fire exactly once per scene run, also while skipping (`flags` 1); presentation cues fire once
+per pass and are recorded as skipped when skipped. Sync points and QTEs ("stops") hold the timeline at their
+position before cues at that position; held time is not banked. Commands (`SceneCommand{seq, kind, value,
+bindings}`): `TriggerScene`, `TriggerCue`, `Pause`/`Unpause` (all deadlines shift by paused ticks), `Skip` (to the
+next sync point, or the end), `SkipScene`, `Seek` (forward = skip semantics and requires `skippable`; backward
+re-arms stops and presentation cues), `Abort`, `ResumeCheckpoint`. Skipping teleports movers and resolves QTEs in
+between as `Skipped` without branching. Order in a tick: options, commands by seq, reports, then unless paused:
+start a scene triggered on an earlier tick, staging, QTE judging, sync waits, timeline advance. Call every tick:
+with tick gaps a released hold consumes the whole gap's steps.
+
+**Sync waits.** `SyncDef{id, at, timeout, checkpoint, waits}`; waits: `lineFinished{cue}` (dialogue/animation cue
+reported finished), `marker{cue, marker}` (animation marker reported, or the clip finished), `inPosition{participants}`
+(empty = all; InPosition or Teleported). Waited cues must start before the sync point. A wait on a skipped cue is
+satisfied. Release when all are met or at `timeout` ticks (`SyncReleased` value 1 = timed out; play continues).
+
+**QTE.** `QteDef` kinds: `press` (window [open, close] ticks after the prompt, optional `perfect` sub-window, early
+press fails), `mash` (`count` presses before close), `hold` (press before close, keep down `hold` ticks, early
+release fails), `sequence` (ordered `steps`, each window from the previous success). Wrong buttons are ignored
+unless `strict`. Judged on `QteInput.tick` in (prompt tick, current tick]. `QteOptions{windowScaleMilli
+(difficulty), accessibleWindowMilli (extended windows, 1000 = off), mashScaleMilli, holdScaleMilli, autoSucceed}`
+scale windows symmetrically around their centre (>= 1 tick, opening at >= 1) and are applied at the prompt;
+`autoSucceed` resolves `AutoSuccess` at the prompt. Outcomes (Success, Perfect, Fail, AutoSuccess, Skipped) are
+stored in `SceneState::results` and emitted as `QteResolved`. Branches: `onSuccess` must jump forward to a sync
+point (skip semantics), `onFail` may jump back to retry; `failAborts` aborts the scene.
+
+**Staging.** `MarkDef{id, position (milli-metres in JSON), toleranceMilli}`, `ParticipantDef{id, mark, lockInput,
+timeout, fallback teleport|proceed|abort}`. On start, locked participants get `InputLocked`, participants with a
+mark get `MoveToMark` and stay `Moving` until a pose within tolerance or an `arrived` report (`InPosition`), or
+their timeout: `TeleportRequested` (the host teleports; counted as in position), `StagingLate`, or abort. `move`
+cues re-stage mid-scene. Play starts when nobody is moving. `inputLocked(state, participant)` /
+`lockedEntities(state)` gate player commands; every end path (finish, skip, abort) releases all locks. Trigger
+bindings map participants to entities (events carry both).
+
+**Checkpoints and narrative.** `checkpointBefore` emits `SnapshotRequested` value 0 on the trigger tick while the
+scene is `Pending` (it starts on the next tick), checkpoint sync points emit value 1 when reached, `checkpointAfter`
+value 2 on completion. After loading any save, send `ResumeCheckpoint`: the timeline rewinds to the last sync point
+reached (or the start), re-arms its wait and replays presentation cues from there; essential cues never repeat.
+A narrative `CueRequest{cueId,...}` maps to `cueTrigger(seq, cueId, bindings)`; a scene's `trigger` cue id is
+indexed in `SceneLibrary::triggers` (`indexTriggers`, `sceneForCue`), unknown cues give `TriggerIgnored`, triggers
+during a scene are queued (8). This package does not include the narrative header; MAIN bridges the event type.
+
+**Data and settings.** `readSceneLibrary(json)` (`examples/libraries/genre/scene.json`): unknown keys, wrong types,
+out-of-range integers, unsorted/duplicate IDs, unknown marks/participants/presets/domains/cues, waits on later cues,
+backward `onSuccess`, timeouts of 0 and duplicate triggers throw `JsonError("cinematic.<path>: ...")` with index
+paths for syntax (`cinematic.scenes[0].cues[2].kind: unknown value 'x' ...`) and id paths for references
+(`cinematic.scene 10.sync 1.wait[0].cue: unknown dialogue/animation cue 9`). Optional `cinematic` settings section
+(configuration 0.3.4): `hitStopTicks` (>= 1), `hitStopPriority`, `slowMotionNumerator`/`Denominator` (<= 1),
+`slowMotionTicks`, `slowMotionPriority`, `qteWindowScaleMilli`, `qteAccessibleWindowMilli`, `qteMashScaleMilli`,
+`qteHoldScaleMilli`, `qteAutoSucceed`; adapters `qteOptions`, `hitStopRequest`, `slowMotionRequest`,
+`cinematicSettingsErrors`. Example `examples/libraries/genre/cinematic-settings.json`.
+
+**State.** `TimeState` kind 72, `SceneState` 73, `QteProgress` 74, `ParticipantState` 75; kinds 72..79 are reserved
+for this package (narrative uses 64..71). Records are canonical and validated on load; `stepScene` rejects a state
+whose scene id/version, cursor or stop indices do not match the library. `cinematicHash` hashes states, reports and
+definitions; bind `sceneLibraryHash(lib)` in the save envelope. `GenreConsumer.cpp`
+(`libraryCinematicConsumerExample`) starts a scene from narrative cue 42 through two ticks of time domains and stores
+`genre.cinematic.time`, `genre.cinematic.scene`, `genre.cinematic_hash` and `genre.cinematic.library`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks (`-Wall -Wextra -Werror -pedantic`), `genre_tests.cpp`
+built by hand covering time-scale exactness over 300000 ticks, gaps, nesting, stacked/cancelled/expiring requests,
+cue order with skip/seek, sync timeouts/pause/frozen domains, QTE judging per kind with difficulty and
+accessibility, in-scene branches, staging fallbacks and input locks, checkpoint resume, queued narrative triggers,
+save/restore mid-scene on the example library and invalid data; the cinematic tests also under ASan/UBSan, and the
+GenreConsumer function in a standalone driver. Not run: CMake/isolation, `aiverse_tests`, native module export,
+headless restore matches, clang/MSVC.
+
+**Narrative cues.** `genre/NarrativeCinematicBridge.h` connects narrative-graphs to scenes. Each tick the owner passes
+the narrative report's `CueRequest`s to `queueNarrativeCues(queue, cues)` and calls `releaseNarrativeCues(queue, tick,
+nextCommandSeq, bindings)` once before `stepScene`. Cues become due at `tick + delayTicks` and are released as
+`TriggerCue` commands ordered by (due tick, narrative sequence), using the owner's monotonic `SceneCommand` counter.
+Sequences at or below the last accepted one are ignored, so re-feeding a report after a restore never starts a scene
+twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
+(within this package's 72..79).

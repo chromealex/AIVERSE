@@ -1214,6 +1214,37 @@
       "packageDependencies": []
     },
     {
+      "id": "cinematic-gameplay",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Cinematic.h",
+      "skill": "skills/aiverse-cinematic-gameplay/SKILL.md",
+      "summary": "Authoritative scene flow: integer-ratio time-scale domains (world/player/ui/cinematic) with stacked priority requests, exact accumulators, hit-stop/slow-motion presets; scene timelines of dialogue/animation/camera/sound/event cues with play/pause/skip/seek; sync waits on host-reported line/marker/in-position facts with timeouts; QTE press/mash/hold/sequence judged on input ticks with difficulty and accessibility; interaction staging with marks, teleport fallback and input locks; checkpoint requests and resume at sync points; narrative cue triggers",
+      "notes": "Read docs/genre-packages.md (cinematic-gameplay) for the determinism model. Authoritative: time-scale requests/accumulators, timeline position, cue emission (essential cues once per run, presentation cues once per pass), wait/QTE outcomes, staging and input locks. Host: audio/animation/camera playback and navigation, reported back as tick-stamped SceneInput; every wait and staging move has a timeout so devices cannot stall the sim. stepTime/stepScene once per strictly increasing tick; invalid input returns nullopt with state untouched. Narrative CueRequest{cueId} bridges through cueTrigger/sceneForCue. Persist TimeState/SceneState via genre::save/load (record kinds 72..79 reserved, 72..75 used); hash with cinematicHash and bind sceneLibraryHash. Optional `cinematic` settings section. No rendering, audio, animation playback or cutscene editor. genre/NarrativeCinematicBridge.h (queueNarrativeCues/releaseNarrativeCues) schedules narrative-graphs CueRequest records (tick + delayTicks, deduped by sequence) into TriggerCue scene commands; its NarrativeCueQueue is record kind 76.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_cinematic_gameplay",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/NarrativeCinematicBridge.h",
+        "libraries/include/aiverselib/genre/CinematicTime.h",
+        "libraries/include/aiverselib/genre/CinematicQte.h",
+        "libraries/include/aiverselib/genre/CinematicScene.h",
+        "libraries/include/aiverselib/genre/CinematicRunner.h",
+        "libraries/include/aiverselib/genre/CinematicConfigured.h",
+        "libraries/include/aiverselib/genre/CinematicData.h",
+        "libraries/include/aiverselib/genre/CinematicPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/scene.json",
+        "examples/libraries/genre/cinematic-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
       "id": "weapon-policies",
       "version": "0.2.0",
       "layer": "simulation",
