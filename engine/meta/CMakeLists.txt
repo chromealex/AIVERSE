@@ -1,5 +1,5 @@
 # Can be consumed directly by any project's native C++ target.
-add_library(aiverse_meta STATIC Meta.cpp MetaData.cpp Leaderboard.cpp Chat.cpp Service.cpp ServiceData.cpp
+add_library(aiverse_meta STATIC Client.cpp Meta.cpp MetaData.cpp Leaderboard.cpp Chat.cpp Service.cpp ServiceData.cpp
     LiveOps.cpp LiveOpsData.cpp LiveOpsRewards.cpp LiveOpsActivities.cpp LiveOpsRetention.cpp
     LiveOpsCompetition.cpp LiveOpsMatchmaking.cpp LiveOpsRatings.cpp Rating.cpp)
 add_library(aiverse::meta ALIAS aiverse_meta)

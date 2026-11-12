@@ -81,7 +81,16 @@ private:
 // Backends implement authentication, authorization, server policies and durable storage.
 // JSON operation names are application protocol, not trusted executable code.
 struct ServiceRequest { std::string service, action, operation; Json arguments = Json::object(); };
-struct ServiceReply { Result result; Json data = Json::object(); };
+struct ServiceReply {
+    Result result;
+    Json data = Json::object();
+    // Local transport signal, never accepted from an untrusted response body.
+    // A server Code::Unavailable (e.g. closed event) is a definitive policy reply.
+    bool transportUncertain = false;
+};
+inline ServiceReply transportFailure(const std::string& detail) {
+    return {{Code::Unavailable,detail},Json::object(),true};
+}
 class Backend {
 public:
     using Callback = std::function<void(ServiceReply)>;

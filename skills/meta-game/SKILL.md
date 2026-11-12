@@ -3,6 +3,10 @@ name: meta-game
 description: Build AIVERSE game meta from reusable C++ policies and JSON presets. Use for shops, offers, leaderboards, chat, progression, daily rewards, energy, inbox, segmentation or a complete meta layer in a project, including native C++ callers.
 ---
 
+For complete/selected module generation, start with `skills/meta-compose/SKILL.md` and
+`tools/meta/kits.py plan`. Read only the resolved recipes. Native host request/retry
+integration uses `skills/meta-client/SKILL.md`.
+
 1. Read `docs/meta-game.md` only for the selected subsystem. Inspect the project's existing meta and UI first.
 2. Reuse `aiverse::meta` (`engine/meta/Meta.h`, `Social.h`); never rewrite its algorithms in game C++ or Lua.
 3. For a new project run `python3 tools/meta/scaffold.py --preset minimal|mobile|competitive --out <project>`. This writes definitions only, not a backend or UI integration.

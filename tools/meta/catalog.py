@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 PACKAGES = [
+    ('client', 'native host UI durable outbox retry restart backend requests', 'meta-client', 'engine/meta/Client.h'),
     ('economy', 'shop offers currencies crafting rewards payments', 'meta-economy', 'engine/meta/Meta.h'),
     ('progression', 'quests achievements pass daily energy inbox', 'meta-progression', 'engine/meta/Meta.h'),
     ('social', 'leaderboards ranking chat moderation', 'meta-social', 'engine/meta/Social.h'),
@@ -39,6 +40,7 @@ def main():
     parser.add_argument('command', choices=['list', 'search', 'describe', 'check', 'pin', 'verify'])
     parser.add_argument('query', nargs='?', default='')
     parser.add_argument('--project', type=Path)
+    parser.add_argument('--section', default='', help='dot path within describe example; reduces output')
     args = parser.parse_args()
     entries = [dict(id=k, version=VERSION, summary=summary, skill=f'skills/{skill}/SKILL.md', source=source)
                for k, summary, skill, source in PACKAGES]
@@ -47,13 +49,32 @@ def main():
         return
     if args.command == 'describe':
         services = {'loot': 'loot', 'albums': 'albums', 'jobs': 'jobs', 'research': 'research', 'quests': 'quests', 'events': 'events', 'wars': 'wars', 'async-pvp': 'asyncPvp', 'matchmaking': 'matchmaking', 'ratings': 'ratings', 'referrals': 'referrals', 'ads': 'ads', 'offer-chains': 'chains', 'notifications': 'notifications', 'offline': 'offline'}
-        if args.query not in services:
-            parser.error('describe requires a LiveOps package ID; use list/search')
-        service = services[args.query]
-        schema = json.loads((ROOT/'tools/meta/liveops.schema.json').read_text())
-        examples = json.loads((ROOT/'examples/meta/liveops.json').read_text())
-        print(json.dumps({'service': service, 'schema': schema['properties'][service],
-                          'example': examples[service]}, indent=2))
+        package = next((p for p in entries if p['id']==args.query), None)
+        if not package:
+            parser.error('unknown package')
+        if args.query in services:
+            service = services[args.query]
+            schema = json.loads((ROOT/'tools/meta/liveops.schema.json').read_text())
+            examples = json.loads((ROOT/'examples/meta/liveops.json').read_text())
+            result = dict(package, service=service, schema=schema['properties'][service], example=examples[service])
+        else:
+            from kits import definitions, resolve
+            config=definitions(resolve([args.query]))
+            if args.query=='economy': example=config['economy']
+            elif args.query=='progression': example={k:config['economy'][k] for k in ('tracks','daily','energy')}
+            elif args.query=='social': example={k:config[k] for k in ('boards','chats')}
+            elif args.query in ('clans','items','tournaments'): example=config['extensions'][args.query]
+            elif args.query=='ui': example=config['economy']['metadata']
+            else: example={'service':'meta','action':'view','arguments':{}}
+            result=dict(package,example=example,cmakeTarget='aiverse::meta',nativeHelper='aiverse_native_use_meta')
+        if args.section:
+            try:
+                value=result['example']
+                for key in args.section.split('.'): value=value[key]
+                result={k:v for k,v in result.items() if k not in ('schema','example')}
+                result['example']=value
+            except (KeyError,TypeError):parser.error('unknown example section')
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     for package in entries:
         assert (ROOT/package['source']).is_file(), package['source']

@@ -23,7 +23,7 @@ def main():
             assert p['status'] in ('cpp-foundation', 'engine-reference', 'cpp-subsystem', 'tool-workflow')
             for field in ('source', 'skill'):
                 assert (ROOT/p[field]).is_file(), p[field]
-            assert f"name: rts-{p['id']}" in (ROOT/p['skill']).read_text()
+            assert f"name: {Path(p['skill']).parent.name}\n" in (ROOT/p['skill']).read_text()
         print(f'Validated {len(packages)} catalog entries')
         return
     selected = [p for p in packages if args.query.lower() in json.dumps(p).lower()]

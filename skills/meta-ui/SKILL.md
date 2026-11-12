@@ -3,6 +3,9 @@ name: meta-ui
 description: Reuse AIVERSE meta browser screens and native view projections for shop, quests, leaderboards, chat, community, collection, inbox and tournaments.
 ---
 
+For selected screens use `tools/meta/kits.py` and `economy.metadata.metaScreens`; the
+project guide is `meta/AGENTS.md`. Preserve legacy metadata on existing projects.
+
 1. Generate with tools/meta/scaffold.py --preset full --with-ui --out PROJECT. Read docs/meta-service.md for compose/run commands.
 2. Reuse examples/meta/ui (HTML/CSS/JS, no external packages). Configure labels in lang.json and colors/layout through CSS variables. Do not regenerate the whole UI for each game.
 3. Bind screens to Service.view and the documented RPC catalog. Treat all text as plain text; keep receipt journals/server authority out of the UI.

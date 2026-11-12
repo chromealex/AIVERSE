@@ -171,7 +171,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Linear UI blending: game.json `ui.blend`, sRGB layer + linear composite of the RmlUi layer, RHI `PixelFormat::RGBA8_sRGB` / `copyColor` / `setScreenReadable` (GL + Metal) | `engine/ui/UiColor.h`, `engine/ui/UiLinear.*`, linear parts of `engine/ui/UiRender.cpp` / `UiLayer.*`; hooks: `engine/gfx` (format, pipeline `colorFormat`, copy), client `initUi` / frame `setTarget`, editor `GameHud` | ui-linear (MAIN merges) |
 | Editor world tree: Hierarchy of every world object (edit-mode preview of the map's setup / live play world), multi-selection, Inspector «Детали» (components, stats, script data, mixed values), `editor.hierarchy` game.json hooks, MCP `world_entities` / `world_entity` / `editor_select` | `apps/editor/core/WorldInspect.*`, `apps/editor/EditorWorld.cpp`, `apps/editor/EditorWorldEdit.h`, `apps/editor/DetailsPanel.*`, `apps/editor/windows/HierarchyWindow.cpp`, entity part of `InspectorWindow.cpp`, `docs/editor-world-tree.md`; hooks: `Editor.h` (Selection kinds, selection set, world members), `Editor.cpp` (frame / startPlay / buildEditScene / renderGame / pickEntity), `SceneWindow.cpp` (multi-select, hover, play picking) | editor-world-tree (MAIN merges) |
 | World tree performance: consumer-driven reads, background preview builds, cheap row reads, Details read passes, `AIVERSE_EDITOR_PROFILE` / `AIVERSE_HOSTED_MAP` | `apps/editor/EditorProfile.h`, perf parts of the world-tree files above, `docs/editor-world-tree.md` § Performance; hooks: `ScriptEngine::peekData` (`RtsScript.h` / `RtsScriptEngine.cpp`), atomic component type ids (`engine/core/ECS.h`), `ClientHost` (`AIVERSE_HOSTED_MAP`) | world-perf (MAIN merges) |
-| Reusable libraries and AI skills | `libraries/`, `tools/libraries/`, `tests/libraries/`, `docs/ai-skills/`, `docs/libraries.md` | reusable-libraries agent |
+| Reusable libraries and AI skills | `libraries/`, `tools/libraries/`, `tests/libraries/`, `skills/`, `docs/libraries.md` | reusable-libraries agent |
 | Meta-game C++ policies, JSON presets and agent recipes | `engine/meta`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/meta-*`, `docs/meta-game.md`; minimal CMake/native dependency hooks | meta-library agent |
 | FPS, authoritative sessions and large worlds | `modules/fps`, `engine/net/authority`, `engine/world`, `apps/fps`, `tests/fps`, `examples/fps`, `docs/fps.md`; additive build/platform hooks | FPS task (current agent) |
 | AIVERSE naming migration | Engine-wide branding, shared namespaces, build/tool names, platform bridges, documentation; preserve genre RTS | aiverse-rename (user assigned) |
@@ -182,6 +182,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Clusters, HLOD, conservative occlusion, baked surfaces and geometry performance | `engine/render/Geometry*`, `tools/modeling/SurfaceProxy*`, `apps/editor/core/{GeometryOps,SurfaceProxyOps}.*`, `tests/geometry`, `tools/geometrybench`, `tools/models/autolod.py`, `docs/geometry*.md`; minimal model LOD, renderer/view, Metal binding/uniform and macOS benchmark pacing hooks | codex/geometry-visibility |
 | XPBD cloth, CPU/GPU sleeping, Metal compute solver, instanced cloth rendering and benchmarks | `engine/cloth`, `examples/cloth`, `tests/cloth`, `docs/cloth.md`; shared projected animation LOD helper in `engine/render/AnimationLod.h`, minimal `RtsAnimate` hook; optional compute/storage/readback/timing RHI hooks in `engine/gfx/Gfx.h` and `metal/GfxMetal.mm`; additive CMake/localization hooks | codex/xpbd-cloth |
 | Genre audit implementation: shared strategy kernels and native integration | `libraries/include/aiverselib/strategy`, `tests/libraries/strategy*`, `examples/native/strategy`, matching catalog skills, `docs/genre-implementation.json`, `libraries/include/aiverselib/net`, `tests/meta/local*.py`, `tools/meta/local_match.py`, `docs/local-network.md`; minimal FPS host and loopback transport hooks | codex/genre-libraries |
+| Meta composition and skill consolidation | `engine/meta/Client.*`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/`, catalog/skill links and meta docs | codex/meta-composition |
 | Other areas | as assigned by the user | the agent the user assigned |
 
 If your task is not in this table, the user's first message to you defines your area: write it
@@ -249,7 +250,7 @@ Other agents don't publish; they say in their report that a republish is due.
 ## 9. Reuse libraries before implementing algorithms
 
 Before adding a reusable algorithm, read `libraries/catalog.json` and the matching
-`docs/ai-skills/rts-<id>/SKILL.md`. These are repository instructions, not globally installed skills.
+`skills/<skill-name>/SKILL.md`. These are repository instructions, not globally installed skills.
 Use `python3 tools/libraries/catalog.py search <term>` to discover capabilities.
 Prefer existing engine data/API, then a catalog package, then a minimal generic extension.
 Never duplicate a catalog implementation in a game. Respect coverage: `engine-reference`
@@ -434,3 +435,21 @@ are required for exact triangles/deforming skins. Test translation, rotation, ti
 on a moving support and removal. Use `spider_showcase.py ... --dynamic-tank` and the editor
 `animation_runtime_status` / `rig_runtime_status` operations to verify the actual scene;
 a static plane-only preview is not evidence of dynamic-object support.
+
+## Meta generation with minimal context
+
+All repository agent skills live in `skills/`. Resolve the exact skill path from
+`libraries/catalog.json` or `tools/meta/catalog.py`; general engine skills use
+`aiverse-*`, RTS-only navigation/spatial/generation/bots recipes keep `rts-*`.
+Keep package IDs and lock identities stable when moving recipes. Do not recreate
+skills under docs or load the entire catalog/schema to configure one subsystem.
+
+For a complete or selected meta layer start with `skills/meta-compose/SKILL.md`.
+Use `tools/meta/kits.py plan/apply --features ...` (or `--preset full`), with the real
+C++ validator. The generated `meta/AGENTS.md` lists only selected recipes. Read
+`catalog.py describe PACKAGE --section PATH` for a narrow example. Configure source
+JSON and recompose; keep the authoritative wallet, receipts and membership owner.
+Native UI/network hosts reuse `engine/meta/Client.h` with a durable per-account outbox;
+read `skills/meta-client/SKILL.md`. The same operation survives a lost reply/restart.
+Browser UI is selectable through `metadata.metaScreens`; it is not a native RmlUi
+adapter. Validate kits, native linking, client retries and selected UI screens.

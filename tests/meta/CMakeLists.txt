@@ -47,3 +47,13 @@ add_test(NAME meta_liveops COMMAND aiverse_meta_liveops_tests ${CMAKE_CURRENT_LI
 if(Python3_Interpreter_FOUND)
     add_test(NAME meta_liveops_schema COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/../../tools/meta/generate_liveops.py --check)
 endif()
+
+add_executable(aiverse_meta_client_tests client_tests.cpp)
+target_link_libraries(aiverse_meta_client_tests PRIVATE aiverse::meta)
+if(NOT MSVC)
+    target_compile_options(aiverse_meta_client_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME meta_client COMMAND aiverse_meta_client_tests)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME meta_kits COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/kits.py $<TARGET_FILE:aiverse_meta_validate>)
+endif()

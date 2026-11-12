@@ -26,9 +26,15 @@ std::vector<NativeDefinition> compiledNativeModules();
     (src / 'stub.cpp').write_text('')
     (native / 'Module.cpp').write_text('''#include "modules/rts/RtsNative.h"
 #include "engine/meta/Meta.h"
+#include "engine/meta/Client.h"
 #include "engine/meta/Rating.h"
 #include "engine/meta/LiveOps.h"
 int metaProbe() {
+    aiverse::meta::OfflineBackend backend;
+    aiverse::meta::Client client(backend);
+    if(!client.begin(aiverse::meta::requests::view())) return -3;
+    client.pump();
+    if(client.pending()||client.reply().result.code!=aiverse::meta::Code::Unsupported) return -4;
     if(aiverse::meta::elo(1500,1500,1,32)!=1516) return -2;
     aiverse::meta::validateLiveOps(aiverse::Json::object(),aiverse::meta::Config{});
     aiverse::meta::Config c; c.assets["gold"].cap=10;

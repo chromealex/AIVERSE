@@ -251,3 +251,8 @@ friends/clans, instance items, verified entitlements and ranked tournament group
 specified in [meta-service.md](meta-service.md). The earlier exclusions above describe
 the original policy-only layer. The extended host remains a local reference deployment;
 RmlUi embedding, public hosting and platform receipt verification are not automatic.
+
+## Selected module composition
+
+See [meta-composition.md](meta-composition.md) for validated kits, compact per-project
+agent instructions and the native Client outbox/retry API. Skills live in `skills/`.
