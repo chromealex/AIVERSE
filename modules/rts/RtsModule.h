@@ -282,6 +282,7 @@ struct Projectile {
     Vec3 start{};
     Fixed travel{}, total{};  // arc progress
     Fixed scale = Fixed::fromInt(1);
+    ProjectileProgram program;
     int8_t weapon = -1;       // weapon index of sourceType (bonus damage, armor class, crew kills)
 };
 
@@ -761,6 +762,10 @@ private:
     void tickStatuses(Simulation& sim);
     void tickPlayerSkills(Simulation& sim);
     void impactProjectile(Simulation& sim, Entity p);
+    const ProjectileFlight* projectileFlight(const Projectile& p) const;
+    void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
+    void bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) const;
+    void sysProjectilePrograms(Simulation& sim, const std::vector<Entity>& projectiles);
     void setupSkills(Simulation& sim, const Json& map);
     void hashEffects(Simulation& sim, Hasher& h);
     void enterGarrison(Simulation& sim, Entity unit, Entity structure);   // assault / reinforce with statuses (advanced)

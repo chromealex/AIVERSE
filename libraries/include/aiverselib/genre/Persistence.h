@@ -22,7 +22,8 @@ inline bool valid(const RecoilState& s){return s.yaw>=Fixed::fromRatio(-1,4)&&s.
 inline bool valid(const ProjectileState& s){return bounded(s.position,100000_fx)&&bounded(s.velocity,1000_fx)&&s.age<=100000&&s.bounces<=32;}
 inline bool valid(const MatchState& s){
     if(s.teams.size()<2||s.teams.size()>200||uint8_t(s.phase)>uint8_t(MatchPhase::Finished)||s.phaseStart>s.lastTick||!s.round||s.round>1000||(s.winner>0&&!s.teams.contains(s.winner))||s.winner< -1)return false;
-    for(auto [team,score]:s.teams)if(team<=0||score.score<0||score.wins>1000)return false;return true;
+    for(auto [team,score]:s.teams)if(team<=0||score.score<0||score.wins>1000)return false;
+    return true;
 }
 inline bool valid(const CaptureState& s){return s.owner>=0&&s.candidate>=0&&s.progress<=10000000;}
 inline bool valid(const StoryState& s){
@@ -37,11 +38,26 @@ inline uint16_t stateKind(const MatchState&){return 5;}
 inline uint16_t stateKind(const CaptureState&){return 6;}
 inline uint16_t stateKind(const StoryState&){return 7;}
 template<class State> std::string save(State s){
-    if(!valid(s))return {};std::string bytes;Archive a(&bytes);uint32_t version=1;auto kind=stateKind(s);a(version,kind,s);return bytes;
+    if(!valid(s))return {};
+    std::string bytes;
+    Archive a(&bytes);
+    uint32_t version=1;
+    auto kind=stateKind(s);
+    a(version,kind,s);
+    return bytes;
 }
 template<class State> bool load(const std::string& bytes,State& state){
-    if(bytes.size()>1024*1024)return false;Archive a(bytes);uint32_t version=0;uint16_t kind=0;State copy;a(version,kind);if(version!=1||kind!=stateKind(copy))return false;a(copy);
-    if(!a.ok()||a.remaining()||version!=1||!valid(copy)||save(copy)!=bytes)return false;state=std::move(copy);return true;
+    if(bytes.size()>1024*1024)return false;
+    Archive a(bytes);
+    uint32_t version=0;
+    uint16_t kind=0;
+    State copy;
+    a(version,kind);
+    if(version!=1||kind!=stateKind(copy))return false;
+    a(copy);
+    if(!a.ok()||a.remaining()||version!=1||!valid(copy)||save(copy)!=bytes)return false;
+    state=std::move(copy);
+    return true;
 }
 using runtime::storeBytes;using runtime::loadBytes;
 }

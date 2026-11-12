@@ -29,6 +29,7 @@ void io(Archive& a, Garrison& x) { a(x.count, x.growth, x.damageAcc, x.pendingOu
 void io(Archive& a, Projectile& x) {
     a(x.target, x.source, x.aim, x.speed, x.damage, x.splash, x.damageType, x.owner, x.layers, x.effList, x.effIndex, x.onHit,
       x.onHitChance, x.sourceType, x.start, x.travel, x.total, x.scale);
+    if (a.formatVersion >= 5) a(x.weapon, x.program);
 }
 void io(Archive& a, Hero& x) { a(x.level, x.xp, x.points); for (auto& k : x.skill) io(a, k); }   // skills: save version 4
 void io(Archive& a, Transit& x) { a(x.from, x.to, x.depart, x.arrive, x.fromWorld, x.toWorld, x.arrival); }
@@ -209,6 +210,11 @@ using kPools = PoolList<Transform, Owner, Unit, Orders, Mobile, Combat, Cargo, P
 bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     World& w = sim.world();
     GameState& gs = state(sim);
+    if (!a.writing() && a.formatVersion < 5) {
+        // A legacy save has no program state. Never silently add flight to existing shots.
+        for (const auto& t : rules_.types) for (const auto& wd : t.weapons) if (wd.flight.enabled) { a.fail(); return false; }
+        for (const auto& payload : rules_.payloads) for (const auto& e : payload) if (e.delivery.flight.enabled) { a.fail(); return false; }
+    }
     if (a.writing()) {
         if (script_) script_->flush(sim);   // Lua state / entity data are written into the world lazily
         // every component type the world has must be in kPools (+1: the GameState resource is not a pool)
@@ -219,6 +225,18 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (a.writing() && w.poolCount() != kPools::count) return false;   // an unlisted component type exists
     if (!a.writing() && pools != kPools::count) { a.fail(); return false; }
     kPools::run(a, w);
+    if (!a.writing()) {
+        w.each<Projectile>([&](Entity, Projectile& p) {
+            const auto& s = p.program;
+            if (!s.enabled) return;
+            const auto* f = projectileFlight(p);
+            if (!f || !projectile::valid(s,p.speed,*f) || s.cursor > f->modifiers.size() || s.remaining.size() != f->modifiers.size() ||
+                p.speed <= Fixed{} || p.speed > 2000_fx || s.radius < Fixed{} || s.radius > 4_fx ||
+                s.damageScale < Fixed{} || s.damageScale > 64_fx || s.distanceLeft < Fixed{} || s.distanceLeft > 4096_fx ||
+                s.lifetimeLeft < Fixed{} || s.lifetimeLeft > 120_fx || s.age < Fixed{} || s.age > 120_fx) { a.fail(); return; }
+            for (size_t i=0; i<s.remaining.size(); ++i) if (s.remaining[i] > f->modifiers[i].count) a.fail();
+        });
+    }
     ioState(a, gs);
     if (!native_.serialize(sim, a)) return false;
     // Lua state of games with their own scripts (the standard library keeps its state in GameState)

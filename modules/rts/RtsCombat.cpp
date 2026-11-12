@@ -195,6 +195,7 @@ void RtsModule::sysWeapons(Simulation& sim) {
     for (auto& s : shots) { // created after the loop: adding components may reallocate pools
         Entity p = w.create();
         w.add<Transform>(p, Transform{s.start, s.start, Fixed{}});
+        initProjectileProgram(sim, s.pr, s.start);
         w.add<Projectile>(p, s.pr);
         w.add<Owner>(p, Owner{s.pr.owner});
     }
@@ -210,10 +211,11 @@ void RtsModule::sysProjectiles(Simulation& sim) {
     World& w = sim.world();
     GameState& gs = state(sim);
     const Fixed dt = sim.dt();
-    std::vector<Entity> impacts;
+    std::vector<Entity> impacts, programs;
     struct OnHit { int16_t payload; Entity caster, target; uint8_t owner; uint16_t type; Vec3 at; };
     std::vector<OnHit> onHits;
     w.each<Projectile, Transform>([&](Entity p, Projectile& pr, Transform& tr) {
+        if (pr.program.enabled) { programs.push_back(p); return; }
         tr.prevPos = tr.pos;
         if (pr.effList >= 0) {
             // ability projectile: homing / ballistic arc / hits the first enemy on its way
@@ -256,6 +258,7 @@ void RtsModule::sysProjectiles(Simulation& sim) {
         }
         w.destroyLater(p);
     });
+    sysProjectilePrograms(sim, programs);
     for (Entity p : impacts) impactProjectile(sim, p);
     for (auto& h : onHits) {
         if (!w.alive(h.target)) continue;

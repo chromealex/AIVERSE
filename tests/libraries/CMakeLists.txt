@@ -72,7 +72,7 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/FpsModule.cpp")
     file(GLOB AIVERSE_LIBRARY_FPS_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/Fps*.cpp")
     add_executable(aiverse_library_fps_bot_tests bots/fps_tests.cpp
         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
-        ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
+        ../../engine/sim/Simulation.cpp ../../engine/sim/ProjectileData.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
         ${AIVERSE_LIBRARY_WORLD_SOURCES})
     target_link_libraries(aiverse_library_fps_bot_tests PRIVATE AIVERSE::gameplay_native Threads::Threads)
     if(NOT MSVC)
@@ -84,7 +84,7 @@ endif()
 if(TARGET aiverse_library_fps_bot_tests)
     add_executable(aiverse_library_navmesh_tests bots/navmesh_tests.cpp
         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
-        ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
+        ../../engine/sim/Simulation.cpp ../../engine/sim/ProjectileData.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
         ${AIVERSE_LIBRARY_WORLD_SOURCES})
     target_link_libraries(aiverse_library_navmesh_tests PRIVATE AIVERSE::gameplay_native Threads::Threads)
     if(NOT MSVC)

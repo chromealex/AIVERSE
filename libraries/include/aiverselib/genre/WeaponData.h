@@ -9,6 +9,12 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+// GCC 13+ flags the array helpers (they return their Json argument, never the temporary path
+// string) as possibly dangling; the referent is always the caller's Json.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 13
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
 namespace aiverse::lib::genre {
 inline Fixed weaponMilli(int64_t value){return Fixed::fromRatio(value,1000);}
 inline PenetrationConfig penetrationConfig(const gameplay::GameplaySettings& s){const auto& p=s.penetration;return {weaponMilli(p.powerMilli),weaponMilli(p.minDamageMilli),weaponMilli(p.minSpeedMilli),uint32_t(p.maxLayers)};}
@@ -111,3 +117,6 @@ inline WeaponDefinitions readWeaponDefinitions(const Json& j){
     return d;
 }
 }
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 13
+#pragma GCC diagnostic pop
+#endif

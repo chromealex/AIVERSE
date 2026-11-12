@@ -114,6 +114,12 @@ void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef
     d.arc = j.getBool("arc", false);
     d.arcHeight = j.getFx("arcHeight", d.arcHeight);
     d.collide = j.getBool("collide", false);
+    if (j.has("flight")) {
+        d.flight = parseProjectileFlight(j["flight"], where + " flight");
+        if (d.arc && (d.arcHeight < Fixed{} || d.arcHeight > 128_fx)) fail(where, "flight arcHeight must be in [0,128]");
+        if (d.arc && (d.flight.gravity.raw || d.flight.verticalSpeed.raw)) fail(where, "arc and flight gravity/verticalSpeed are alternative trajectory definitions");
+        if (d.speed <= Fixed{} || d.speed > Fixed::fromInt(1024)) fail(where, "flight speed must be in (0,1024]");
+    }
     d.scatter = j.getFx("scatter");
     d.falloff = j.getFx("falloff");
     d.delay = j.getFx("delay");
@@ -256,6 +262,7 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
     if (ej.has("status")) e.status = int16_t(status(w, ej["status"]));
     if ((e.kind == EffectKind::Status || e.kind == EffectKind::PlayerStatus) && e.status < 0) fail(w, "needs 'status'");
     delivery(w, ej, e.delivery);
+    if (e.delivery.flight.enabled && e.kind != EffectKind::Projectile) fail(w, "flight is only valid on projectile effects");
     if (ej.has("effects")) e.payload = int16_t(payload(w, ej["effects"]));
     if ((e.kind == EffectKind::Projectile || e.kind == EffectKind::Chain || e.kind == EffectKind::Cast) && e.payload < 0) fail(w, "needs 'effects'");
     if (ej.has("resource")) e.resource = int16_t(resRef(w, ej.getStr("resource")));
@@ -331,6 +338,7 @@ int EffectParser::deliveredPayload(const std::string& where, const Json& aj, boo
     if (inner < 0) { r.payloads.emplace_back(); inner = int(r.payloads.size() - 1); }
     if (!d.isObject()) return inner;
     std::string type = d.getStr("type", "instant");
+    if (d.has("flight") && type != "projectile") fail(where, "flight is only valid on projectile delivery");
     if (type == "instant") return inner;
     if (type == "channel") { if (channel) *channel = true; return inner; }
     if (type == "line" || type == "cone") {
@@ -355,6 +363,7 @@ int EffectParser::deliveredPayload(const std::string& where, const Json& aj, boo
     w.filter.neutral = d.getBool("neutral", false);
     w.radius = d.getFx("radius");
     delivery(where + " delivery", d, w.delivery);
+    if (w.delivery.flight.enabled && w.kind != EffectKind::Projectile) fail(where, "flight is only valid on projectile delivery");
     if (w.kind == EffectKind::Chain && w.delivery.jumps <= 0) w.delivery.jumps = 3;
     r.payloads.push_back({w});
     return int(r.payloads.size() - 1);
