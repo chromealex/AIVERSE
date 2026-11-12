@@ -591,3 +591,25 @@ Mean region error vs the reference: 26.9 (start of day) → 17.5 (previous look)
 [comparison](benchmarks/sponza-2026-11-12/sun-match.png). Remaining: the warm, visible vault
 over the foreground arch and warm upper-gallery interiors (Lumen's multi-bounce), and less
 vivid arcade curtains.
+
+### Colour matching with a fitted LUT (2026-11-12)
+
+Post-processing fixes what is a per-colour difference, not a per-place one. Because the camera
+is pixel-aligned with the reference, a colour LUT can be fitted automatically from
+"capture colour → reference colour" pairs, as a colourist would grade to a reference:
+
+```sh
+# capture without vignette/grain (they follow the LUT), same grade as the target recipe
+python3 tools/renderbench/fit_lut.py capture.ppm reference.png luts/sponza-reference.png
+```
+
+The fit keeps contrast: a monotonic luminance tone curve from histogram matching, plus a
+17³ chroma-only correction regularised by a Laplacian (a direct 3D regression flattened
+highlights through averaging). Renderbench now installs a postfx image loader, so the
+existing `lut` effect works there (it silently failed before: no loader). Recipe
+`scene-day-high-reference-lut.json` = sun 52°/182° + `day-sun52.avgic` + bloom, grade,
+`lut: luts/sponza-reference.png`, vignette. Mean region error 13.1 → 12.4; whole-frame
+error (160×90) 29.3 → 23.8 ([comparison](benchmarks/sponza-2026-11-12/lut-match.png)).
+The LUT is specific to this scene, camera and recipe; refit after changing the lighting.
+It cannot separate surfaces that render the same colour but differ in the reference
+(the remaining vault/pillar difference is lighting).

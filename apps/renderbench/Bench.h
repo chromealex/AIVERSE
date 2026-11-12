@@ -111,6 +111,9 @@ struct Bench {
             }
             if(cameras.empty())throw std::runtime_error("no selected cameras");
             if(!renderer.init(d)||!post.init(d)||(options.profile=="full"&&!screen.init(d,post)))throw std::runtime_error(d.lastError());
+            post.setImageLoader([](const std::string& path,int& w,int& h,std::vector<uint8_t>& rgba){ // postfx LUT images
+                std::string bytes;Image image;if(!platform::readContentFile(path,bytes)||!decodeImage(bytes,image))return false;
+                w=image.width;h=image.height;rgba=std::move(image.rgba);return true;});
             bool unusedSecondaryUv=false;
             const auto path=config.getStr("model");
             if(std::filesystem::path(path).extension()==".gltf") {
