@@ -114,7 +114,7 @@ void Simulation::step() {
 
 int Simulation::advance(double realSeconds, int maxTicks) {
     const double tickLen = 1.0 / tickRate_;
-    accumulator_ += realSeconds;
+    accumulator_ += realSeconds * module_->speedScale(*this);   // match modes speed (1 for every other game)
     int n = 0;
     while (accumulator_ >= tickLen && n < maxTicks) { const auto before=tick_;step();if(tick_==before){accumulator_=tickLen;break;}accumulator_ -= tickLen; ++n; }
     if (n == maxTicks && accumulator_ > tickLen) accumulator_ = tickLen; // spiral-of-death guard

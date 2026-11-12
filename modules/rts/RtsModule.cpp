@@ -28,6 +28,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     setupMap(sim, mapIn);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
+    modesSetup(sim, rulesJson, mapIn);   // match modes (RtsModes.cpp; before the scripts read the victory rules)
     validateInitialVars(mapIn["initialVars"]);
     for (const auto& [key, value] : mapIn["initialVars"].members()) state(sim).trig.vars[key] = value.fx();
     fields_ = std::make_unique<GridFields>();   // grid fields (rules "fields", map "gridFields"); nothing without them
@@ -63,11 +64,13 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     sim.addSystem("creep", [this](Simulation& s) { sysCreep(s); });
     if (fields_->active()) sim.addSystem("gridfields", [this](Simulation& s) { fields_->tick(s); });   // RtsGridFields.cpp
     sim.addSystem("vision", [this](Simulation& s) { sysVision(s); });
+    if (modes_.any) sim.addSystem("modes", [this](Simulation& s) { sysModes(s); });   // RtsModes.cpp: match modes decide before victory
     sim.addSystem("victory", [this](Simulation& s) { script_->callStd(s, StdFn::Victory); });   // lua/victory.lua
     sim.addSystem("triggers", [this](Simulation& s) {   // last: sees every event of the tick (lua/triggers.lua)
         if (!triggers_.defs.empty()) script_->callStd(s, StdFn::Triggers);
     });
     if (script_->hasUserScripts()) sim.addSystem("scripts", [this](Simulation& s) { script_->tick(s); }); // after triggers: same events
+    if (modes_.any && modes_.stats) sim.addSystem("matchstats", [this](Simulation& s) { sysMatchStats(s); });   // last: every event of the tick
     sysCreep(sim);
     sysEconomy(sim); // initial supply/tech counts
     // big maps: build the hierarchical pathing graph now (it is derived data, so this only moves the cost
@@ -1407,6 +1410,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (rules_.advancedEffects) hashEffects(sim, h);
     if (rules_.originals) hashOriginals(sim, h);
     if (rules_.fidelity) hashFidelity(sim, h);
+    if (modes_.any) hashModes(sim, h);   // match modes only (RtsModes.cpp)
     if (rules_.lanes.enabled) {
         h.u32(gs.laneSignature); h.u32(uint32_t(gs.lanes.size()));
         for (auto& l : gs.lanes) { h.u32(uint32_t(l.points.size())); if (!l.points.empty()) h.v3(l.points[l.points.size() / 2]); }

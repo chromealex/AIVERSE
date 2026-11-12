@@ -83,6 +83,7 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | key | meaning |
 |---|---|
 | `supplyCap` | max supply/population (default 200) |
+| `modes`, `matchModes`, `timedRules`, `matchStats` | match modes (domination, king of the hill, time limit, sudden death, battle-royal zones), presets picked by map `matchMode`, player statuses by time slots, match statistics: see "Match modes" |
 | `ai` | `{"controller":"builtin"}` (default) or `{"controller":"scripted"}`. Scripted control makes the generic RtsAI submit no commands in client, editor and headless. The game must provide its own controller; Lua handlers, human/network commands, combat, production and victory remain enabled. This is not the `waves` player flag and does not exempt players from defeat. |
 | `maxQueue` | production queue length (5) |
 | `costModel` | `"upfront"` (pay when ordering) or `"progressive"` (Total Annihilation: pay while building; stalls when short) |
@@ -922,6 +923,88 @@ Garrison structures, groups and lanes come from `garrison`, `kCmdSend` and `lane
 
 Still needs code: **flying towers moving between points** (garrisons are fixed structures; a mobile
 garrison would need garrisons on units).
+
+## Match modes (Bunker Wars: domination, king of the hill, time limit, sudden death, zones)
+
+Rule-level modes of Bunker Wars / Mushroom Wars 2 (`ModsModule`, `BattleRoyalModule`, `SuddenDeathModule`,
+`CustomRules`, `MoraleInfo`, `PlayerStatistic`), ported 1:1 in fixed point as generic data (`RtsModes.cpp`).
+Every block is optional; games without them keep their exact checksums and save format.
+
+```json
+"modes": {
+  "points": "garrison",                                     // what a "point" is: structures with a garrison (default) or "structures"
+  "domination": {"hold": 1.5, "rule": "auto", "type": "dom_tower", "garrison": 10},
+  "kingOfTheHill": {"score": 300, "teamScore": 300, "rate": 1, "alarm": 100, "type": "koh_tower", "garrison": 10},
+  "timeLimit": {"seconds": 120, "win": "maxPoints", "coefficient": 1, "speed": [{"remaining": 30, "speed": 1.5}, {"remaining": 10, "speed": 2}]},
+  "suddenDeath": {"at": 300, "preview": 3, "previewSpeed": 0.5, "end": 60, "counter": 5, "status": "sudden_death",
+                  "ruleSets": [[{"status": "fast_skills", "when": [{"from": 330, "to": 360}]}], [{"status": "double_income"}]]},
+  "zones": {"start": [{"rect": [0, 0, 40, 30], "stay": 60, "move": 20, "next": 0}], "steps": [{"rect": [5, 5, 30, 20], "stay": 9999}],
+            "neutralType": "village", "suddenDeathDelay": 30}
+},
+"matchModes": {"domination": {"modes": {"domination": {"hold": 1.5}}}, "koh": {"modes": {"kingOfTheHill": {}}, "victory": "noEntities"}},
+"timedRules": [{"status": "rush", "when": [{"from": 60, "to": 90}, {"every": 30, "duration": 5}]},
+               {"status": "underdog", "resource": "morale", "when": [{"levelBehind": 2}]}],
+"matchStats": true
+```
+
+Map keys: `"modes"` (replaces rules keys one by one, `false` switches a mode off), `"matchMode": "<preset>"` (a
+`matchModes` entry merged over rules `modes`; its `victory` applies unless the map has its own), entity
+`"modePoint": "domination" | "kingOfTheHill"` (a type can carry `"modePoint"` too). A lobby picks the mode by
+setting the map's `matchMode` (BW `BattleModesManager` / `WinModeInfo` -> preset ids). Sides are teams (BW FFA = one
+player per team, BW COOP = teams; the KotH score is shared by the team).
+
+| block | BW source | behaviour |
+|---|---|---|
+| (default) | `Conquest` | the normal `victory` (BW: a player with no units and no buildings is out = `noEntities`) |
+| `domination` | `Domination`, `BaseModule.dominationTimer` | a point's `hold` timer restarts on every owner change and runs while it is owned. When every domination point is owned (timers out, none neutral; points outside their owner's zone are skipped): `holdAny` (BW FFA) — sides owning none are out; `holdAll` (BW COOP) — one side owning them all wins. `auto`: `holdAny` when every team has one player. `type` / `garrison`: what the marked points become while the mode is on (BW domination building info and start value) |
+| `kingOfTheHill` | `KingOfTheHill`, `BaseModule.UpdateKingOfTheHillScore` | each side starts with `score` (`teamScore` when a team has several players) and loses `rate` per second per king point it owns (inside its zone); the first side at zero wins (lowest score, then lowest team id). Event at `alarm` (BW sound at 100) |
+| `timeLimit` | `TimeMod`, `BattleParametersInfo.timeModParameters` | counts `seconds` of game time down; at `remaining` the game speed becomes `speed` (BW gameplay time scale). At zero, by points per side: `maxPoints` — most wins, a tie of the best is a draw; `compare` — the only side with points x `coefficient` > best wins, else a draw. Sides without points take no part (as in BW) |
+| `suddenDeath` | `SuddenDeathModule`, `SuddenDeathInfo` | at `at` real seconds: preview (`preview` s, game speed `previewSpeed`), then every player gets `status` (BW `factor`: energy income / cooldowns — give the status `incomeMult` and `cooldownRate` mods). With `end` > 0 the side with most points wins `end` s later (all equal: draw; a tie of some: they win, the others draw — the match result is a draw); without `end` (BW `defaultTimeCount`) nothing ends. `counter` s before the start / the end `ModesState::sdCounter` is on (the counter screen). One of `ruleSets` (BW custom configs by league) is picked with the match RNG and joins `timedRules` (time slots shifted by `zones.suddenDeathDelay`) |
+| `zones` | `BattleRoyalModule`, `MapEnvironmentModule.BattleRoyal` | each player's zone is the `start` rect holding its first structure; a rect stays `stay` s, then morphs linearly into `steps[next]` over `move` s (real time). A point outside its owner's current rect turns neutral (and into `neutralType`; garrison kept). Rects are `[x, z, w, h]` in cells, half-open (BW rects are centred on their min corner: x = xMin - w / 2) |
+
+Clocks: BW scales the delta time of gameplay modules while zones, sudden death and time slots count unscaled
+ticks. Here a tick stays one tick: `RtsModule::speedScale()` (= time limit speed x preview speed) makes
+`Simulation::advance` run that many ticks per real tick; game timers (hold, KotH, time limit) use game time,
+zones / sudden death / `timedRules` use `ModesState::realTime` (sum of dt / speed). Network play steps ticks
+through the net session and does not apply the speed yet.
+
+`timedRules` (BW `CustomRulesInfo` rules + `TimeSlots`): every player has `status` (a player status: its `mods`,
+`incomeMult`, `flags`) while one of its `when` slots holds (no slots: always). A slot: `from` / `to` (real seconds,
+inclusive; `inverse`: keeps BW's semantics — outside the window it fails, inside only `every` can enable it),
+`every` / `duration` (t % every <= duration), `levelBehind` N (with `resource`: the player's level is exactly N
+below the best player's), `everyAbilities` N (the player's skill uses are a positive multiple of N). Custom rule
+kinds map to status mods: UnitsSpeed `speed`, UnitsAttack `damage`, VillageDefense `defense`, Production
+`productionSpeed`, PlayerSkillsCooldown / FastSkillRecharge `cooldownRate`, PlayerEnergy `incomeMult`, Upgrade
+`upgradeCost`, MaxMorale / MinMorale: resource `storage` / `min`.
+
+Resource `levels` (BW `MoraleInfo`: morale stars):
+
+```json
+"morale": {"start": 0, "min": 0, "capped": true, "storage": 8000, "levels": [
+  {"at": 0},
+  {"at": 1000, "mods": [{"stat": "damage", "mul": 1.1}, {"tags": ["village"], "stat": "defense", "mul": 1.1}, {"stat": "speed", "mul": 1.05}],
+   "decay": {"every": 5, "amount": 50, "after": 3}}]}
+```
+
+The player's level is the last one whose `at` the stock reached (none below the first); its `mods` apply to the
+player's objects (BW damagePercent / shieldPercent / speedPercent). `decay`: every `every` seconds of the current
+level the stock drops by `amount` if nothing was gained for more than `after` seconds (BW subtractPointsTime /
+Value / Cooldown). Gains come from the resource `gain` block / effects as before.
+
+`matchStats` (on with any mode): per player counters `ModesState::stats` (`MatchStat`: kills, lost, produced,
+captured, capturedNeutral, structuresLost, upgrades, abilities, maxUnits, maxPoints, points, levelUps, levelDowns,
+maxLevel, modeScore) and `abilityUses` per player ability — BW `PlayerStatistic` keys UnitsKilledByPlayer*,
+UnitsDeadBy*, UnitsProduceCount, PointsCatched*, PointsLost, PointsUpgraded, SkillSlot1..5, MaxUnitsOnTheField,
+PointsCount, MoraleAddStar / MoraleLostStar, MaxMoraleStars, KingOfTheHillPoints (fixed raw). `ModesState::outcome`
+per player: 1 won, 2 lost, 3 draw. Read with `RtsModule::matchStat`, `modeZone` (camera of a zone map),
+`speedScale`; events `kEvModePhase` (`ModePhaseEvent`: counter, preview, start, end, time step, time up, KotH alarm,
+domination held, zone lost / changed); defeats by a mode carry `kDefeatMode`.
+
+Not covered yet: BW `HeroCustomRules` meta flow (league configs come from their backend), custom rule kinds that
+are not stat mods (MoveUnits, AllowedTypes, Clouds, UseSkill, RandomUpgrade, CatchLevelDecreaseTo ...),
+`GameplayConditions` (HUD attack hints: use trigger conditions), multiscreen maps without zones, per-player
+morale gain multipliers (`moraleIncreaseCoefficient`, AI complexity coefficients), a team member without units
+staying in COOP conquest until the whole team is out.
 
 ## Army control (agent-mech): stances, retreat, transports
 

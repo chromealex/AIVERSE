@@ -13,6 +13,7 @@
 #include <vector>
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
+#include "RtsModes.h"
 
 namespace aiverse::game {
 
@@ -595,6 +596,7 @@ struct Rules {
     bool fidelity = false;                     // any of them present: their system runs, their state is hashed
     int16_t stTrapHidden = -1, stTrapSeen = -1; // built-in statuses of hidden / exposed traps
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
+    ModesRules modes;                          // match modes, timed rules, resource levels, match stats (RtsModes.h)
 
     int findRoom(const std::string& id) const;
     int findDiggable(char c) const;
@@ -615,5 +617,9 @@ void loadMechRules(Rules& r, const Json& j);   // RtsMechData.cpp, called by loa
 Json expandDesigns(const Json& j);
 void loadMechStage4(Rules& r, const Json& j);   // RtsMechData4.cpp: morale, fatigue, charge, supply, conveyors
 VictoryRules loadVictory(const Json& j, const VictoryRules& def);
+// match modes (RtsModesData.cpp): loadRules calls loadModes; setup merges rules / preset / map and parses the result
+void loadModes(Rules& r, const Json& j);
+ModesRules parseModes(const Rules& r, const Json& modes);
+Json effectiveModes(const Json& rules, const Json& map, std::string* presetId);
 
 } // namespace aiverse::game
