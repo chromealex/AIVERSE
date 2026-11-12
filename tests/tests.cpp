@@ -9648,7 +9648,14 @@ TEST(toolchain_detection_fake_home) {
     env.home = home;
     env.inherit = false;   // nothing from the real machine: no PATH, no system folders, no probing
     env.probe = false;
-    env.vars["PATH"] = (home / "bin").string();
+#if defined(_WIN32)
+    // the simulated Linux host splits PATH at ':', which a "C:\..." entry can't survive: the fake python3 goes to
+    // ~/.local/bin (pip --user, searched after PATH) instead; systemDirs would also probe the real /usr/lib/jvm
+    const fs::path fakeBin = home / ".local" / "bin";
+#else
+    const fs::path fakeBin = home / "bin";
+    env.vars["PATH"] = fakeBin.string();
+#endif
 
     ToolchainStatus st = checkToolchain("web", env);
     CHECK(!st.ok());
@@ -9667,7 +9674,7 @@ TEST(toolchain_detection_fake_home) {
     CHECK(toolchainsDir(env) == tcd);
     touch(tcd / "py" / "bin" / "cmake");
     touch(tcd / "py" / "bin" / "ninja");
-    touch(home / "bin" / "python3");
+    touch(fakeBin / "python3");
     touch(tcd / "emsdk" / "upstream" / "emscripten" / "emcc");
     touch(tcd / "emsdk" / "upstream" / "emscripten" / "emscripten-version.txt", "\"3.1.70\"\n");
     touch(tcd / "emsdk" / ".emscripten");
