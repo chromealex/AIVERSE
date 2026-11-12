@@ -11,7 +11,13 @@ python3 tools/importers/unity_materials/cli.py survey /path/to/UnityProject --ou
 python3 tools/importers/unity_materials/cli.py graphs /path/to/UnityProject --out graphs.json
 build/<dir>/aiverse_graphcheck graphs.json        # engine Shader Graph compiler (GLSL + MSL statements, no GPU)
 python3 tools/importers/unity_materials/cli.py material /path/to/UnityProject Assets/X.mat
+python3 tools/importers/unity_materials/cli.py dryrun /path/to/UnityProject --out DIR [--scenes]   # materials only, every prefab, low memory
 ```
+
+`dryrun` runs the material pipeline (slots, `materials.json`, repacked maps, `packaging.json`,
+`slots.json`, `port-materials.json`) over every prefab without the full importer's component
+capture; the full `aiverse_port` extract of a project of Drone Fall's size (4000 prefabs) needs
+several GB of memory.
 
 ## What an import writes
 
