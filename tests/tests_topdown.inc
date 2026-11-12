@@ -614,6 +614,8 @@ TEST(topdown_controls_aim_buttons_and_escape_preview) {
     bool done = false;
     for (int i = 0; i < 70 && !done; ++i) done = esc.update(1.0f / 60, 1, 0, passable);
     CHECK(done && !esc.active && esc.x < 8 && esc.x > 7.5f && esc.travelled <= esc.budget + 1e-3f);
+}
+
 TEST(topdown_aim_candidates_follow_the_manual_aim_rules) {
     // hostiles in weapon range count, an own unit and a hostile out of range (but in sight) do not; sorted by handle, read-only
     auto sim = makeSimJson(kTopDownRules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},
