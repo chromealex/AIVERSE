@@ -151,6 +151,9 @@ callable one). Enemies (owner -1 creeps, other AI players without raiders) keep 
 `raid_point` (add / replace / delete a map extraction point), `raid_run` (bot raid on the open map: receipts,
 phase timeline, outcome). The **Рейд** window lists points and objectives and runs a bot raid.
 
+Hero levels and level-up cards during a raid: rules `progression` ([progression.md](progression.md)); its battle deck
+comes from the same map's `players[i].deck`, kills inside the raid drop xp orbs, and the bot picks cards before it raids.
+
 ## Limits / not yet
 
 Respawns inside a raid, item weights / grid inventories, insurance, and per-item rarity tiers are not part of

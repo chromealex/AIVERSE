@@ -1093,6 +1093,8 @@ target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/Rt
 target_sources(aiverse_game PRIVATE modules/rts/RtsRaid.cpp modules/rts/RtsRaidData.cpp modules/rts/RtsRaidBot.cpp modules/rts/RtsRaidApi.cpp)
 # top-down heroes (agent-topdown-control): rules "topDown", stick input commands, aim / auto-fire (docs/topdown.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
+# in-match progression (agent-df-progression-glue): match-progression package on real units, rules "progression" (docs/progression.md)
+target_sources(aiverse_game PRIVATE modules/rts/RtsProgression.cpp modules/rts/RtsProgressionData.cpp modules/rts/RtsProgressionApi.cpp)
 # boss encounters (agent-df-encounters-glue): rules "encounters" over the boss-encounters library package (docs/encounters.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsEncounters.cpp modules/rts/RtsEncountersApi.cpp)
 target_link_libraries(aiverse_game PUBLIC AIVERSE::lib_boss_encounters)

@@ -86,6 +86,7 @@ void RtsModule::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t d
             if (ls.raw > 0) { Unit& su = w.get<Unit>(source); su.hp = fxMin(stat(sim, source, Stat::MaxHp), su.hp + fin * ls); }
         }
     }
+    if (progression_ && progression_->active()) fin = progression_->damage(sim, target, source, fin);   // perks: crits, incoming damage (RtsProgression.cpp)
     if (script_ && (script_->hooks() & ScriptEngine::kHookDamage)) fin = script_->beforeDamage(sim, target, source, sourceOwner, fin, dmgType);   // before_damage (G12)
     u->hp -= fin;
     if (sourceOwner != 0) u->lastAttacker = sourceOwner;
@@ -172,6 +173,7 @@ void RtsModule::sysWeapons(Simulation& sim) {
             if (wd.projectileSpeed.raw <= 0) {
                 dealDamage(sim, c.target, dmg, dtype, e, o.player, &wd);
                 if (proc) onHits.push_back({wd.onHit, e, c.target, o.player, u.type, tp});
+                if (progression_ && progression_->active()) if (int16_t ph = progression_->hitPayload(sim, e); ph >= 0) onHits.push_back({ph, e, c.target, o.player, u.type, tp});   // perk on-hit (burn, stun)
                 if (enchant >= 0) onHits.push_back({enchant, e, c.target, o.player, u.type, tp});
                 if (wd.splash.raw > 0) {
                     gs.hash.query(tp, wd.splash, [&](Entity s) {
@@ -194,7 +196,10 @@ void RtsModule::sysWeapons(Simulation& sim) {
     for (auto& s : shots) { // created after the loop: adding components may reallocate pools
         Entity p = w.create();
         w.add<Transform>(p, Transform{s.start, s.start, Fixed{}});
+        const bool perks = progression_ && progression_->active();
+        if (perks) progression_->beforeShot(sim, s.pr);   // bullet perks (split / ricochet / fly-through), splash, on-hit
         initProjectileProgram(sim, s.pr, s.start);
+        if (perks) progression_->afterShot(sim, s.pr);
         w.add<Projectile>(p, s.pr);
         w.add<Owner>(p, Owner{s.pr.owner});
     }
@@ -244,8 +249,7 @@ void RtsModule::sysProjectiles(Simulation& sim) {
         }
         if (w.alive(pr.target) && w.has<Unit>(pr.target)) { pr.aim = lift(sim, w.get<Transform>(pr.target).pos, Fixed::fromRatio(4, 10)); }
         if (!moveTowards(tr.pos, pr.aim, pr.speed * dt)) return;
-        const WeaponDef* pwd = pr.weapon >= 0 && pr.sourceType < rules_.types.size() && size_t(pr.weapon) < rules_.types[pr.sourceType].weapons.size()
-                               ? &rules_.types[pr.sourceType].weapons[size_t(pr.weapon)] : nullptr;
+        const WeaponDef* pwd = projectileWeapon(pr);
         if (w.alive(pr.target) && w.has<Unit>(pr.target)) dealDamage(sim, pr.target, pr.damage, pr.damageType, pr.source, pr.owner, pwd);
         if (pr.onHit >= 0 && w.alive(pr.target)) onHits.push_back({pr.onHit, pr.source, pr.target, pr.owner, pr.sourceType, pr.aim});
         if (pr.splash.raw > 0) {

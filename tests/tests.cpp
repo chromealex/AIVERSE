@@ -13960,4 +13960,5 @@ TEST(ktx2_astc6x6_and_packaging_writer) {
     }
 }
 #include "tests_topdown.inc"   // top-down heroes (agent-topdown-control)
+#include "tests_progression.inc"   // in-match progression on real units (agent-df-progression-glue)
 #include "tests_encounters.inc"   // boss encounters (agent-df-encounters-glue)

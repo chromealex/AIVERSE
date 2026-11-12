@@ -49,6 +49,9 @@ metaltide 3 16faea5911a0c70f
 mushrooms 1 b414ca20fff98526
 mushrooms 2 412966f2db05793f
 mushrooms 3 a06caad4f1d88f10
+perk_arena 1 107ba194c405c6bf
+perk_arena 2 b47bb51037b96420
+perk_arena 3 29ca9f0591eeb31f
 planets 1 124c8c10bb9bbdf4
 planets 2 eb381e9e20d5222c
 planets 3 b72f846e5d219199
