@@ -106,9 +106,9 @@ def make_tileset(out):
             im = speckle((58, 59, 62), 10, 2600)
             d = ImageDraw.Draw(im)
             if n == 'line_h':
-                d.rectangle((0, 0, TILE, 5), fill=(196, 150, 40))        # on the road axis = the tile's top edge
+                d.rectangle((0, 2, TILE, 7), fill=(196, 150, 40))        # by the road axis (the tile's top edge); inset: no bleeding into the next atlas tile
             if n == 'line_v':
-                d.rectangle((0, 0, 5, TILE), fill=(196, 150, 40))
+                d.rectangle((2, 0, 7, TILE), fill=(196, 150, 40))
         elif n.startswith('pavement'):
             im = speckle((128, 122, 114), 8, 1800)
             d = ImageDraw.Draw(im)
@@ -270,7 +270,7 @@ def build(assets, out, seed):
                     'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
                     'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
                     'buttons': [],
-                    'camera': {'pitch': 80, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
+                    'camera': {'pitch': 90, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
                                'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}})
     return {'size': [W, H], 'buildings': sum(1 for e in entities if e['type'][0] == 'b' and e['type'][1:].isdigit()),
             'cars': sum(1 for e in entities if e['type'] in cars), 'vehicleTypes': len(cars), 'buildingTypes': len(buildings)}
