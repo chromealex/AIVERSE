@@ -127,6 +127,7 @@ void registerMockPlugin(const std::string& name) {
     if (plugins::available(name)) return; // keep an already registered instance (and its state)
     if (name == "mock-store") plugins::registerPlugin(name, std::make_shared<MockStore>());
     else if (name == "mock-ads") plugins::registerPlugin(name, std::make_shared<MockAds>());
+    else registerClientMockPlugin(name);
 }
 
 void registerMockPlugins() {

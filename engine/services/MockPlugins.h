@@ -7,4 +7,6 @@ namespace aiverse::services {
 // in game.json "plugins" or with AIVERSE_MOCK_PLUGINS=1; call it yourself in tests or tools.
 void registerMockPlugins();
 void registerMockPlugin(const std::string& name);
+// Client service mocks "mock-social", "mock-push", "mock-links" (MockClientPlugins.cpp); false: not one of them.
+bool registerClientMockPlugin(const std::string& name);
 } // namespace aiverse::services

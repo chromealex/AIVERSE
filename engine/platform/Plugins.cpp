@@ -66,7 +66,7 @@ void syncMocks(const json::Value& config) {
 #if AIVERSE_WITH_MOCK_PLUGINS
     const char* env = std::getenv("AIVERSE_MOCK_PLUGINS");
     const bool all = env && std::string(env) == "1";
-    for (const char* name : {"mock-store", "mock-ads"})
+    for (const char* name : {"mock-store", "mock-ads", "mock-social", "mock-push", "mock-links"})
         if (all || config.find(name)) services::registerMockPlugin(name);
 #else
     (void)config;

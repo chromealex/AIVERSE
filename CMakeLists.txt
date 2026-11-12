@@ -387,10 +387,11 @@ add_library(aiverse_plugins STATIC
     engine/platform/Plugins.cpp
     engine/platform/PluginJson.cpp
     engine/services/Store.cpp
-    engine/services/Ads.cpp)
+    engine/services/Ads.cpp
+    engine/services/Social.cpp engine/services/Push.cpp engine/services/Links.cpp)   # agent-bw-client
 target_include_directories(aiverse_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if(AIVERSE_MOCK_PLUGINS)
-    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp)
+    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp engine/services/MockClientPlugins.cpp)
     target_compile_definitions(aiverse_plugins PUBLIC AIVERSE_WITH_MOCK_PLUGINS=1)
 endif()
 
@@ -1356,4 +1357,22 @@ endif()
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME skill_library_isolation COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/isolation.py)
     set_tests_properties(skill_library_isolation PROPERTIES TIMEOUT 600)
+endif()
+
+# ---------------------------------------------------------------------------
+# agent-bw-client: Spine 2D skeletal animation (engine/spine). aiverse_spine is GPU-free (data, pose,
+# animation state, draw lists: tests and tools link it); the RHI renderer and the client's UI views
+# (apps/client/ClientSpine.cpp, <img src="#spine:NAME"/>) go into every target that hosts GameClient.
+# ---------------------------------------------------------------------------
+add_library(aiverse_spine STATIC engine/spine/SpineData.cpp engine/spine/SpineSkeleton.cpp)
+target_include_directories(aiverse_spine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(aiverse_spine PUBLIC aiverse_engine)
+foreach(t aiverse_client main aiverse_editor)
+    if(TARGET ${t})
+        target_sources(${t} PRIVATE engine/spine/SpineRender.cpp apps/client/ClientSpine.cpp apps/client/ClientServices.cpp)
+        target_link_libraries(${t} PRIVATE aiverse_spine aiverse_render2d)
+    endif()
+endforeach()
+if(TARGET aiverse_tests)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_spine)
 endif()

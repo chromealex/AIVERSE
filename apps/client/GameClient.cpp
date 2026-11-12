@@ -218,6 +218,7 @@ void GameClient::shutdown() {
     view_.shutdown(*dev_);
     postFx_.shutdown();
     r3d_.shutdown();
+    spine_.shutdown();
     shutdownUi();
     minimap_.release(*dev_);
     overlay_.shutdown();
@@ -898,6 +899,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         regionTick_=sim_->tick();
     }
     updateUi();
+    spine_.render(float(dt));   // Spine views into their textures (outside the main pass)
     gfx::PassDesc pass;
     pass.colorTarget = hostColor_;
     pass.depthTarget = hostDepth_;

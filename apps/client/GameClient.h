@@ -35,6 +35,8 @@
 #include "modules/rts/audio/AudioScriptSound.h"
 #include "modules/rts/view/RtsView.h"
 #include "ClientFx.h"
+#include "ClientSpine.h"
+#include "ClientServices.h"
 #include "modules/rts/view/RtsViewScript.h"
 #include "modules/rts/view/RegionSwipe.h"
 
@@ -254,6 +256,8 @@ private:
     render::PostFxQuality postFxBase_ = render::PostFxQuality::Medium;   // tier before the governor stepped down
     void configurePostFx(const Json& map);
     RtsView view_;
+    ClientSpine spine_;
+    ClientServices services_;             // social / push / links Lua tables (ClientServices.cpp, agent-bw-client)                   // Spine skeletons in UI documents (ClientSpine.cpp, agent-bw-client)
     ClientFx fx_;                         // particle effects (ClientFx.cpp)
     game::ViewScripts viewScripts_;       // rules "viewScripts" (docs/scripting.md): notices / effects / sounds
     std::vector<game::ViewGroundBatch> groundCanvas_;   // view.draw_ground triangles of the last view-script update
