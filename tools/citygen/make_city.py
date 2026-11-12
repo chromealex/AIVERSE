@@ -15,12 +15,13 @@ One map cell = 4 m (rules driving.metersPerCell). Needs Pillow.
 import argparse
 import hashlib
 import json
+import math
 import os
 import random
 import shutil
 import struct
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 M = 4.0                      # metres per cell
 ROAD, BLOCK_W, BLOCK_H = 4, 12, 10
@@ -226,37 +227,56 @@ def weather(im, plain, seed, strength=1.0):
     return Image.fromarray(out.astype('uint8'))
 
 
-def damage(im, seed, cracks, patches):
-    """Cracks (thin dark jagged lines with branches) and repaired patches (fresh or faded asphalt with a tar seam)."""
+def damage(im, plain, seed, cracks, patches):
+    """Cracks and repaired patches that look laid, not drawn.
+
+    Cracks: wandering lines that taper and fork, painted four times larger and scaled down (soft edges, sub-pixel
+    width), darkening the asphalt under them with a faint pale rim. Patches: blobs with a ragged edge where the
+    paint is gone and the asphalt is a little darker or paler, with a tar seam around."""
+    try:
+        import numpy as np
+    except ImportError:
+        return im
     rnd = random.Random(seed)
+    rs = np.random.RandomState(seed)
     w, h = im.size
-    im = im.copy()
-    d = ImageDraw.Draw(im, 'RGBA')
+    a = np.asarray(im.convert('RGB')).astype(np.float32)
+    p = np.asarray(plain.resize((w, h)).convert('RGB')).astype(np.float32)
     for _ in range(patches):
         pw, ph = rnd.randint(RT // 2, RT * 3 // 2), rnd.randint(RT // 3, RT)
-        x, y = rnd.randint(0, max(1, w - pw)), rnd.randint(0, max(1, h - ph))
-        tone = rnd.choice([(38, 38, 41, 235), (44, 44, 46, 225), (74, 74, 76, 205)])
-        d.rectangle((x, y, x + pw, y + ph), fill=tone, outline=(20, 20, 22, 255), width=max(1, RT // 64))
+        x, y = rnd.randint(-pw // 4, w - pw * 3 // 4), rnd.randint(-ph // 4, h - ph * 3 // 4)
+        m = Image.new('L', (w, h), 0)
+        ImageDraw.Draw(m).rounded_rectangle((x, y, x + pw, y + ph), radius=RT // 10, fill=255)
+        soft = np.asarray(m.filter(ImageFilter.GaussianBlur(RT / 22))).astype(np.float32) / 255
+        ragged = np.asarray(Image.fromarray((rs.rand(h // 6 + 1, w // 6 + 1) * 255).astype('uint8')).resize((w, h), Image.BICUBIC)).astype(np.float32) / 255
+        inside = np.clip((soft + (ragged - 0.5) * 0.35 - 0.5) * 9, 0, 1)                       # ragged, slightly soft edge
+        seam = np.clip(1 - np.abs(soft + (ragged - 0.5) * 0.35 - 0.5) * 14, 0, 1)              # tar along the edge
+        tone = rnd.choice([0.80, 0.86, 1.16])
+        grain = 1 + (rs.rand(h, w).astype(np.float32) - 0.5) * 0.10
+        fresh = p * tone * grain[..., None]
+        a = a * (1 - inside[..., None]) + fresh * inside[..., None]
+        a *= (1 - 0.45 * seam)[..., None]
+    ss = 4
+    mask = Image.new('L', (w * ss, h * ss), 0)
+    d = ImageDraw.Draw(mask)
+
+    def crack(x, y, ang, length, width, depth, level):
+        n = max(4, int(length / (RT * 0.05)))
+        for i in range(n):
+            ang += rnd.gauss(0, 0.32)
+            nx, ny = x + RT * 0.05 * math.cos(ang), y + RT * 0.05 * math.sin(ang)
+            wd = width * (1 - i / n) ** 0.7 * rnd.uniform(0.55, 1.25)
+            d.line((x * ss, y * ss, nx * ss, ny * ss), fill=int(depth * rnd.uniform(0.6, 1.0)), width=max(1, int(round(wd * ss))))
+            x, y = nx, ny
+            if level < 2 and rnd.random() < 0.10:
+                crack(x, y, ang + rnd.choice([-1, 1]) * rnd.uniform(0.5, 1.2), length * rnd.uniform(0.25, 0.5), width * 0.6, depth * 0.85, level + 1)
+
     for _ in range(cracks):
-        x, y = rnd.uniform(0, w), rnd.uniform(0, h)
-        ang = rnd.uniform(0, 6.283)
-        pts = [(x, y)]
-        for k in range(rnd.randint(8, 26)):
-            ang += rnd.uniform(-0.6, 0.6)
-            x += RT * 0.09 * __import__('math').cos(ang)
-            y += RT * 0.09 * __import__('math').sin(ang)
-            pts.append((x, y))
-            if rnd.random() < 0.12:                              # a branch
-                bx, by, ba = x, y, ang + rnd.choice([-1, 1]) * rnd.uniform(0.7, 1.3)
-                br = [(bx, by)]
-                for _ in range(rnd.randint(3, 8)):
-                    ba += rnd.uniform(-0.5, 0.5)
-                    bx += RT * 0.07 * __import__('math').cos(ba)
-                    by += RT * 0.07 * __import__('math').sin(ba)
-                    br.append((bx, by))
-                d.line(br, fill=(22, 22, 24, 220), width=1)
-        d.line(pts, fill=(18, 18, 20, 235), width=max(1, RT // 80))
-    return im
+        crack(rnd.uniform(0, w), rnd.uniform(0, h), rnd.uniform(0, 6.283), RT * rnd.uniform(0.8, 3.2), RT * rnd.uniform(0.008, 0.022), 255, 0)
+    m = np.asarray(mask.filter(ImageFilter.GaussianBlur(ss * 0.55)).resize((w, h), Image.LANCZOS)).astype(np.float32) / 255
+    rim = np.asarray(Image.fromarray((m * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(RT / 50))).astype(np.float32) / 255
+    a = a * (1 - 0.72 * m)[..., None] + (np.clip(rim - m, 0, 1) * 10)[..., None]
+    return Image.fromarray(np.clip(a, 0, 255).astype('uint8'))
 
 
 def make_road_tileset(assets, out):
@@ -274,8 +294,8 @@ def make_road_tileset(assets, out):
 
     def add_variants(key, im, cells, plain_ref, seed):
         """Three looks of one road piece: worn paint; + cracks; + cracks and repaired patches."""
-        looks = [weather(im, plain_ref, seed), damage(weather(im, plain_ref, seed + 1, 1.2), seed + 2, 7 * cells, 0),
-                 weather(damage(weather(im, plain_ref, seed + 3), seed + 4, 4 * cells, cells), plain_ref, seed + 5, 0.4)]
+        looks = [weather(im, plain_ref, seed), damage(weather(im, plain_ref, seed + 1, 1.2), plain_ref, seed + 2, 3 * cells, 0),
+                 damage(weather(im, plain_ref, seed + 3), plain_ref, seed + 4, 2 * cells, max(1, cells // 2))]
         variants[key] = []
         for k, look in enumerate(looks):
             name = key if k == 0 else '%s~%d' % (key, k)
