@@ -14,6 +14,7 @@
 #include "../../engine/platform/Platform.h"
 #include "../../engine/render/Animation.h"
 #include "../../engine/render/ImGuiLayer.h"
+#include "../../engine/render/ModelMerge.h"
 #include "../../engine/render/Renderer3D.h"
 #include "imgui.h"
 #include "Gallery.h"
@@ -45,6 +46,7 @@ struct Viewer {
     std::vector<std::pair<std::string, std::string>> files;   // path, clip
     std::string clipAll, variantName;
     bool native = false;
+    bool merge = true;   // static batching of parts that share a material (--no-merge: as authored)
     float seek = -1, height = 0, spacing = 2.2f, distance = 0, yawDeg = 25, pitchDeg = 32;
     float3 team{0.92f * 0.92f, 0.22f * 0.22f, 0.20f * 0.20f};
     MaterialQuality quality = MaterialQuality::High;
@@ -59,6 +61,7 @@ struct Viewer {
     ImGuiLayer gui;
     RTSCamera cam;
     std::map<std::string, std::unique_ptr<Model>> models;
+    std::map<std::string, std::string> mergeInfo;   // path -> "parts 47 -> 14" or why not merged
     std::vector<Instance> inst;
     std::vector<std::string> log;
     Mesh ground;
@@ -107,6 +110,12 @@ struct Viewer {
                     std::vector<std::string> warn;
                     m = loadModel(path, readFile, &warn);
                     for (auto& w : warn) log.push_back(w);
+                    if (merge) {
+                        const auto mr = mergeStaticPrimitives(*m);
+                        mergeInfo[path] = mr.merged ? "parts " + std::to_string(mr.primitivesBefore) + " -> " + std::to_string(mr.primitivesAfter)
+                                                    : "parts not merged: " + mr.reason;
+                        log.push_back(path + ": " + mergeInfo[path]);
+                    }
                     uploadModel(d, *m);
                 // as the game view does by default: materials named "*team*" take the team colour
                 for (auto& mt : m->materials) {
@@ -206,7 +215,11 @@ struct Viewer {
         static const char* q[] = {"low", "medium", "high"};
         ImGui::Text("materials: %s   draw calls: %u", q[int(r3d.materialQuality())], r3d.drawCalls());
         for (auto& in : inst)
-            if (in.model) ImGui::Text("%s  %s", in.path.c_str(), in.clip >= 0 ? in.model->clips[size_t(in.clip)].name.c_str() : "(bind pose)");
+            if (in.model) {
+                ImGui::Text("%s  %s", in.path.c_str(), in.clip >= 0 ? in.model->clips[size_t(in.clip)].name.c_str() : "(bind pose)");
+                auto mi = mergeInfo.find(in.path);
+                if (mi != mergeInfo.end()) ImGui::Text("  %s", mi->second.c_str());
+            }
         if (portrait.valid()) {
             const bool flip = d.info().renderTargetFlipY;
             ImGui::Image(ImTextureRef(ImTextureID(portrait.id)), ImVec2(128, 128), ImVec2(0, flip ? 0.f : 1.f), ImVec2(1, flip ? 1.f : 0.f));
@@ -283,6 +296,7 @@ int aiverseMain(int argc, char** argv) {
         else if (a == "--spacing") v.spacing = std::stof(next());
         else if (a == "--distance") v.distance = std::stof(next());
         else if (a == "--native") v.native = true;
+        else if (a == "--no-merge") v.merge = false;
         else if (a == "--yaw") v.yawDeg = std::stof(next());
         else if (a == "--pitch") v.pitchDeg = std::stof(next());
         else if (a == "--quality") {
@@ -295,7 +309,7 @@ int aiverseMain(int argc, char** argv) {
         }
     }
     if (v.files.empty() && v.gameDir.empty()) {
-        std::printf("usage: aiverse_modelview model.glb [model2.gltf@Clip ...] [--clip C] [--time T] [--variant V] [--quality low|medium|high]\n"
+        std::printf("usage: aiverse_modelview model.glb [model2.gltf@Clip ...] [--clip C] [--time T] [--variant V] [--quality low|medium|high] [--no-merge]\n"
                     "       aiverse_modelview --game templates/<id> [--types a,b] [--start T] [--fixed-dt S]\n");
         return 1;
     }

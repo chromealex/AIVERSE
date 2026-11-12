@@ -13942,3 +13942,45 @@ TEST(world_tree_lua_peek_is_observation_only) {
     CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
 }
 #endif
+
+// Static batching (engine/render/ModelMerge): parts that share a material become one primitive in
+// model space; mirrored nodes keep front faces; animated models and kept nodes are left alone.
+#include "engine/render/ModelMerge.h"
+TEST(model_merge_static_primitives) {
+    using namespace aiverse::render;
+    auto make = [] {
+        Model m;
+        m.materials.resize(2);m.materials[0].name = "paint";m.materials[1].name = "glass";
+        // one triangle mesh with two primitives (paint, glass), drawn by three nodes
+        for (int k = 0; k < 2; ++k) for (int i = 0; i < 3; ++i) { ModelVertex v; v.pos = {float(i == 1), float(k), float(i == 2)}; v.nrm = {0, 1, 0}; m.vertices.push_back(v); }
+        m.indices = {0, 1, 2, 3, 4, 5};
+        MeshDef mesh; Primitive a; a.firstIndex = 0; a.indexCount = 3; a.material = 0; Primitive b; b.firstIndex = 3; b.indexCount = 3; b.material = 1;
+        mesh.primitives = {a, b}; m.meshes.push_back(mesh);
+        Node root; root.name = "root"; m.nodes.push_back(root);
+        for (int n = 0; n < 3; ++n) { Node node; node.name = "part" + std::to_string(n); node.parent = 0; node.mesh = 0; node.t = {float(n) * 2, 0, 0}; m.nodes.push_back(node); }
+        m.nodes[3].s = {-1, 1, 1};   // mirrored copy
+        m.finalize();
+        return m;
+    };
+    Model m = make();
+    const auto r = mergeStaticPrimitives(m);
+    CHECK(r.merged && r.primitivesBefore == 6 && r.primitivesAfter == 2);
+    int drawn = 0; for (const auto& n : m.nodes) if (n.mesh >= 0) drawn += int(m.meshes[size_t(n.mesh)].primitives.size());
+    CHECK(drawn == 2 && m.vertices.size() == 18 && m.indices.size() == 18);
+    // the third paint triangle comes from the mirrored node at x = 4: its winding is flipped back
+    const auto& paint = m.meshes[size_t(m.nodes.back().mesh)].primitives[0];
+    CHECK(paint.material == 0 && paint.indexCount == 9);
+    auto faceUp = [&](uint32_t first) {
+        const float3 a = m.vertices[m.indices[first]].pos, b = m.vertices[m.indices[first + 1]].pos, c = m.vertices[m.indices[first + 2]].pos;
+        return cross(b - a, c - a).y;
+    };
+    CHECK(faceUp(paint.firstIndex) * faceUp(paint.firstIndex + 6) > 0);
+    CHECK(std::abs(m.boundsMax.x - 4) < 1e-5f && std::abs(m.boundsMin.x - 0) < 1e-5f);
+    Model keep = make();ModelMergeOptions o;o.keepNodes = {"part1"};
+    const auto rk = mergeStaticPrimitives(keep, o);
+    CHECK(rk.merged && rk.primitivesAfter == 4 && keep.nodes[2].mesh >= 0);
+    Model animated = make();animated.clips.resize(1);
+    CHECK(!mergeStaticPrimitives(animated).merged && animated.vertices.size() == 6);
+    Model big = make();ModelMergeOptions small;small.maxExtent = 1;
+    CHECK(!mergeStaticPrimitives(big, small).merged);
+}
