@@ -146,6 +146,7 @@ static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aive
     state.values["bots.genre.objective"]=goal->id;
     return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
 }
+bool libraryProgressionConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings); // ProgressionConsumer.cpp
 // Narrative scenes: settings-driven config, a tiny social scene (relationship-gated choice, reveal, deferred
 // consequence, cue requests, one bark) for one authoritative tick, then the state in NativeState. The legacy story
 // JSON loads through the same reader. Cinematic/UI owners consume report cues and bark lines; they never write state.
@@ -237,6 +238,7 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
     if(!genreBotConsumerExample(state,*parsed.value))return false;
+    if(!libraryProgressionConsumerExample(state,*parsed.value))return false;
     if(!narrativeSceneConsumerExample(state,*parsed.value,story))return false;
     if(!physicalInteractionConsumerExample(state,*parsed.value))return false;
     if(!libraryCinematicConsumerExample(state,*parsed.value))return false;

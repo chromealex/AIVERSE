@@ -16,6 +16,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings; 0.2.0 social scenes: typed facts, relationship meters, knowledge, AND/OR/NOT conditions, flags, chapters/acts, deferred consequences, speakers, cue requests, barks, VN backlog/skip-read/auto-advance (see [Narrative scenes](#narrative-scenes-narrative-graphs-020)) | Project UI/cinematics consume committed nodes, CueRequest records and bark lines. No scene playback, audio, QTE or online reward grant. |
 
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
+| match-progression | Perk/modifier packages with an ordered stat pipeline, hero xp + level table/curve, seeded level-up offers (recruit / slot perk / player perk, explicit picks, rerolls, revisions), stacking/prerequisite/exclusion/upgrade rules, xp orb pickups (radius, magnet, attraction, budget), summon circles + charges + summoned ally lifecycle, pre-match battle deck limits (see [Match progression](#match-progression-match-progression-010)) | Values, events and requests only: the owner applies stats to units, spawns recruits/summons, moves units and renders cards/rings. Not meta progression (engine/meta) and not RTS hero xp/StatMods. |
 | cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
 
 ## Native/host integration
@@ -557,6 +558,99 @@ velocity, guard, telegraphed attack); a target at `rememberFrom` (default Search
 `lastKnown` position with `visible=false`, so bots approach but never shoot or lock it. Anonymous disturbances
 (target 0) are skipped; steer search with `genre::searchGoal`. Results are sorted by target id. `facts` returning
 nullopt drops a target. This makes `stealth-senses` a package dependency of `genre-bots`.
+
+## Match progression (match-progression 0.1.0)
+
+In-match progression for hero-squad shooters, survivors/bullet-heaven runs and roguelites (reference port: Drone
+Fall — per-player experience, level-up recruit/perk cards, modifier packages per deck slot or player, summon
+circles restoring fallen robots, battle deck unlock flags from the match start payload). Headers:
+`genre/Perks.h` (definitions, stat pipeline, xp, offers), `genre/XpPickups.h`, `genre/Summons.h`,
+`genre/BattleDeck.h`, `genre/PerksData.h` (JSON), `genre/PerksConfigured.h` (settings), `genre/PerksPersistence.h`.
+
+**Modifier pipeline.** A perk is one package of `ModEffect{stat, op, value, stage, bearer}`; well-known stats are
+`perk_stat::IncomingDamage, OutgoingDamage, MoveSpeed, FireInterval, FireCount, AttackRange, MaxHealth,
+SplashRadius, PickupRadius, PickupXp, CritChance, CritDamage, SummonCharges, SummonCooldown, HealthRegen`, games add
+their own ids in `stats` (with min/max clamps). `evaluateStat(defs, progress, stat, base, slot, bearer, &steps)`
+orders effects by stage (default Set 0, Add 1, Multiply 2; explicit 0..15), then slot-scoped before player-scoped
+packages, then occurrence id and effect index; Multiply is milli and truncates per step (sequential packages, not a
+folded product); the result is clamped; `steps` lists every applied effect with the value after it (explainable
+builds). Slot-scoped perks reach only queries for that deck slot, player-scoped perks reach every slot; a bearer
+(owner kind: robot/weapon/bullet/hero...) filters effects. `scaleAmount` applies damage multipliers with saturation;
+`rescaleHealth` keeps the health fraction when max health grows and clamps when it shrinks. Built-in RtsModule
+stats keep their own owner: this pipeline is for native/host games and custom stats.
+
+**Stacking and selection.** `maxSelections` (0 = unlimited) counts per player or per slot; `requires` /
+`excludes` look at the same slot and the player scope; `units` restricts slot perks to deck units; `minLevel` gates
+by the level being chosen; `upgrades` makes tier chains (selecting replaces one occurrence of the previous tier;
+loops rejected). `offerable=false` perks are only granted (initial abilities). `grantPerk` applies a perk under the
+same rules without xp (console, scripted rewards); `clearPerks` removes selected perks (optionally keeping initial
+ones); occurrence ids stay monotonic.
+
+**Experience and offers.** `xpToNext` reads the per-level table (`xp.toNext`, by current level), past its end adds
+`xpGrowthPerLevel` or caps; without a table the linear `xp.curve` (progression-curves `systems::curve`) is used;
+`maxLevel` caps both. `grantXp` adds kill/objective xp; with `pickupBonus` the player's `PickupXp` stat scales it and
+keeps the fractional remainder. Levels are banked: `availableLevels`, `levelProgressMilli` (HUD ring).
+`openOffer` builds the next level's offer from `offers.levels[level]` or `offers.default` (variant types recruit,
+slotPerk, playerPerk, anyPerk; explicit `perk` picks are reserved first), with the count from the battle deck
+(`choiceCount`, else `deck.choices` by tech level, else the variant count / `offerChoices`). Candidates are
+enumerated in ascending slot/perk order, filtered by the rules and an optional `PerkHooks::weight` hook, then drawn
+with the state's own PCG32 stream (`seedPerks`); unavailable positions are skipped without substitutes; an empty
+offer closes without spending xp. `preferNewRecruitAtLevel` narrows recruit picks to slots not yet recruited.
+`rerollOffer` spends one of `offerRerolls`, keeps explicit picks and avoids repeating items when alternatives exist.
+Every change bumps `offer.revision`; `selectOffer(revision, index)` re-validates, spends the level's xp, applies the
+perk (PerkSelected / PerkReplaced events with the perk's `hook` string, e.g. a Lua function name) or reports a
+Recruit for the owner to spawn, and opens the next banked offer. `closeOffer` cancels (stations). `botOfferChoice`
+picks the lowest `aiPriority` (recruits: `recruitAiPriority`; `aiPriorityLowHealth` when the bot is low on health).
+
+**Battle deck.** `readBattleDeck` parses the match start payload (player, techLevel, choiceCount, enforceUnlocks,
+slots with unit, level, opened, inTeam, perks). `battleDeckError` checks slot numbering, known units/perks,
+`maxSlots`, `maxSameUnit`, cost `budget` and the hero in slot 0. A slot is recruitable when `opened && inTeam`
+(unless `enforceUnlocks=false`, e.g. sandbox/AI); locked slots keep their index. `addPlayer` grants unit + slot
+initial perks once (player-scoped ones deduplicated) and marks the hero slot active. `maxSquad` and
+`maxRecruitsPerSlot` limit recruits.
+
+**XP pickups.** `stepPickups(config, state, tick, {spawns, collectors})`: orbs land after `pickupLandingTicks`,
+expire after `pickupLifetimeTicks` (0 = never), belong to anyone or to one player; a collector picks up orbs within
+its radius (owner passes the `PickupRadius` stat, 0 = `pickupRadiusMilli`) on the ground plane, or within
+`pickupMagnetRadiusMilli` on a magnet tick. With `pickupAttractSpeedMilli` 0 collection is instant (Drone Fall);
+otherwise orbs home in with acceleration up to `pickupMaxSpeedMilli` and are collected at `pickupGrabRadiusMilli`;
+a missing collector releases its orbs. `pickupMaxOrbs` bounds the field: an extra spawn merges into the nearest free
+orb of the same owner, else evicts the oldest. Ties go to the nearest collector, then the lower player id.
+
+**Summons.** `stepSummons(config, points, state, tick, {presences, died, removed})`: the lowest player id inside a
+point's radius that may summon there (team filter, owner gate `canSummon`, point not used/pending/cooling down,
+squad below `summonMaxAllies`, a dead acquired ally to restore or a recruit action, a charge when `summonCharges`
+> 0) fills progress one per tick (`progressTicks`, else `summonProgressTicks`); leaving resets it
+(`summonResetOnExit`). Completion emits a `SummonRequest` (restore: the dead ally with the lowest slot; recruit:
+the owner picks the slot) and marks the point pending; `confirmSummon` registers the new ally (restores replace
+the dead record) and consumes (`singleUse`) or cools down the point; `cancelSummon` frees it and refunds the
+charge. Allies record owner, unit, slot, spawn tick and optional lifetime; expired allies are listed in `despawn`;
+non-acquired allies are forgotten on death; `removeSummoner` returns live allies of a leaving player.
+`summonPointView` gives Ready / Progress (with milli progress) / Pending / Used / Cooldown / SquadFull / Blocked for
+circle visuals and hints. `useSummonCharge` spends a charge for non-point summon abilities; charges recharge every
+`summonChargeRechargeTicks`.
+
+**Data and hooks.** `examples/libraries/genre/perks.json` (Drone Fall-like units, perks, xp table, offers, summon
+points), `perks-deck.json` (payload with a locked and an out-of-team slot), `perks-settings.json`. Perk `hook` names
+and `PerkHooks::weight` are the scripting seams: a Lua bridge maps events to functions and may veto/reweight
+candidates; hooks must be deterministic and must not read wall clock or per-client state.
+
+**State.** `PerkState` (players: deck, xp, remainder, level, offer, occurrences, recruits; PCG32 stream),
+`PickupState`, `SummonState` are `genre::save/load` records (version 1, kinds 104, 105, 106; 107..111 reserved),
+canonical and validated on load; `progressionHash` folds them into checksums; bind `perkDefinitionsHash` and
+`progressionConfigHash` in the save envelope. `examples/native/libraries/ProgressionConsumer.cpp` runs a kill ->
+orb -> pickup -> offer -> choice chain and stores `genre.perks`, `genre.pickups`, `genre.summons`.
+
+**Verification.** `tests/libraries/perks_tests.cpp` (`aiverse_library_progression_tests <repo>`) covers JSON
+errors, deck limits and choice counts, the pipeline order/clamps/bearers/upgrades/health rescale, xp table/curve/
+growth/pickup remainder, offers (recruit-only levels with locked slots, preferred new recruits, explicit picks,
+rerolls, stale revisions, hooks, exhausted pools, bot choice), pickups (landing, ownership, magnet, merge budget,
+expiry, homing/release), summons (progress/reset, restore/confirm, single use, cooldown, squad full, cancel,
+expiry, charges, owner removal), persistence and settings. `aiverse_progression --root <repo> --verify` plays a
+5400-tick scripted bot run (kills, orbs, offers, recruits, deaths, summon restores) and requires identical
+checksums for a replay and for a mid-match save/restore. Verified only with g++ 11 on the Linux VM (headers with
+-Wall -Wextra -Werror -pedantic, tests and the headless run built by hand). Not verified: MSVC/clang, CMake isolation,
+native module export, platform runtimes, performance at bullet-heaven densities, UI/VFX integration.
 
 ## Narrative scenes (narrative-graphs 0.2.0)
 

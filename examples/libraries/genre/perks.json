@@ -1,0 +1,52 @@
+{
+  "stats": [
+    {"id": 1, "name": "incomingDamage", "min": 0, "max": 10000},
+    {"id": 9, "name": "pickupRadius", "min": 0, "max": 20000}
+  ],
+  "units": [
+    {"id": 1, "hero": true},
+    {"id": 2, "cost": 2},
+    {"id": 3, "cost": 3, "perks": [10]},
+    {"id": 4, "cost": 3},
+    {"id": 5, "cost": 2}
+  ],
+  "perks": [
+    {"id": 1, "key": "damage_boost", "scope": "slot", "maxSelections": 3, "aiPriority": 3,
+     "effects": [{"stat": "outgoingDamage", "op": "multiply", "value": 1150}]},
+    {"id": 2, "key": "max_health_boost", "scope": "slot", "maxSelections": 3, "aiPriorityLowHealth": 1,
+     "effects": [{"stat": "maxHealth", "op": "multiply", "value": 1200}]},
+    {"id": 3, "key": "splash_boost", "scope": "slot", "maxSelections": 3,
+     "effects": [{"stat": "splashRadius", "op": "multiply", "value": 1100}]},
+    {"id": 4, "key": "double_shot", "scope": "slot", "units": [1],
+     "effects": [{"stat": "fireCount", "op": "set", "value": 2}, {"stat": "fireInterval", "op": "set", "value": 100}]},
+    {"id": 5, "key": "pickup_radius", "maxSelections": 5,
+     "effects": [{"stat": "pickupRadius", "op": "multiply", "value": 1250}]},
+    {"id": 6, "key": "armor", "maxSelections": 1, "aiPriorityLowHealth": 0,
+     "effects": [{"stat": "incomingDamage", "op": "multiply", "value": 900}]},
+    {"id": 7, "key": "armor_2", "upgrades": 6, "minLevel": 3, "aiPriorityLowHealth": 0,
+     "effects": [{"stat": "incomingDamage", "op": "multiply", "value": 800}]},
+    {"id": 8, "key": "speed", "maxSelections": 0, "weight": 50,
+     "effects": [{"stat": "moveSpeed", "op": "add", "value": 500}]},
+    {"id": 9, "key": "burning_hits", "scope": "slot", "hook": "on_burning_hits", "excludes": [3]},
+    {"id": 10, "key": "fire_on_move", "scope": "slot", "offerable": false, "units": [3]},
+    {"id": 11, "key": "pickup_xp", "maxSelections": 3,
+     "effects": [{"stat": "pickupXp", "op": "multiply", "value": 1100}]}
+  ],
+  "deck": {"maxSlots": 6, "budget": 12, "choices": [{"minTech": 0, "count": 2}, {"minTech": 5, "count": 3}]},
+  "xp": {
+    "toNext": [5, 8, 12, 16, 20, 25, 30, 36, 42, 50],
+    "kill": [{"kind": 1, "xp": 1}, {"kind": 2, "xp": 3}, {"kind": 9, "xp": 25}]
+  },
+  "offers": {
+    "default": ["recruit", "slotPerk", "playerPerk"],
+    "levels": [
+      {"level": 1, "variants": ["recruit", "recruit", "recruit"]},
+      {"level": 5, "variants": ["playerPerk", "playerPerk", {"type": "playerPerk", "perk": 6}]}
+    ],
+    "preferNewRecruitAtLevel": 2
+  },
+  "summonPoints": [
+    {"id": 1, "position": [10000, 0, 0], "radiusMilli": 3000, "progressTicks": 30, "action": "restore"},
+    {"id": 2, "position": [-10000, 0, 0], "radiusMilli": 3000, "singleUse": false, "cooldownTicks": 60, "action": "restoreOrRecruit"}
+  ]
+}
