@@ -86,6 +86,8 @@ std::vector<TimedRule> timedRulesOf(const Rules& r, const std::string& where, co
 }
 } // namespace
 
+std::vector<TimedRule> parseTimedRules(const Rules& r, const std::string& where, const Json& list) { return timedRulesOf(r, where, list); }
+
 // Parses one effective "modes" object (rules + preset + map already merged).
 ModesRules parseModes(const Rules& r, const Json& m) {
     ModesRules o;
@@ -98,6 +100,7 @@ ModesRules parseModes(const Rules& r, const Json& m) {
     const std::string pts = m.getStr("points", "garrison");
     if (pts != "garrison" && pts != "structures") fail("modes.points", "expected \"garrison\" or \"structures\"");
     o.garrisonPoints = pts == "garrison";
+    if (const Json& c = m["conquest"]; c.isObject()) o.conquestTeam = c.getBool("team", false);
     if (const Json& d = m["domination"]; d.isObject()) {
         const std::string w = "modes.domination";
         o.domination = true;
@@ -227,6 +230,7 @@ void loadModes(Rules& r, const Json& j) {
     }
     r.modes.timedRules = timedRulesOf(r, "timedRules", j["timedRules"]);
     r.modes.stats = j.getBool("matchStats", false);
+    for (auto& [id, rs] : j["ruleSets"].members()) (void)timedRulesOf(r, "ruleSets." + id, rs);   // custom rule sets (map "ruleSets")
     // validate the rules block and every preset now (readable errors at load); setup parses the merged one
     ModesRules base = parseModes(r, j["modes"]);
     for (auto& [id, p] : j["matchModes"].members()) {
@@ -236,8 +240,59 @@ void loadModes(Rules& r, const Json& j) {
         (void)parseModes(r, m);
         if (p.has("victory")) (void)loadVictory(p["victory"], r.victory);
     }
+    // ---- battle core (RtsCore.cpp)
+    if (const Json& c = j["battleCore"]; c.isObject()) {
+        CoreRules& k = r.core;
+        k.any = true;
+        auto res = [&](const std::string& w, const Json& o) -> int16_t {
+            if (!o.has("resource")) fail(w, "missing resource");
+            int x = r.findResource(o.getStr("resource"));
+            if (x < 0) fail(w, "unknown resource '" + o.getStr("resource") + "'");
+            return int16_t(x);
+        };
+        if (const Json& m = c["morale"]; m.isObject()) {
+            const std::string w = "battleCore.morale";
+            k.moraleRes = res(w, m);
+            k.unitPoints = nonNeg(w, m, "unitPoints", k.unitPoints);
+            k.towerPoints = nonNeg(w, m, "towerPoints", k.towerPoints);
+            k.gainMult = nonNeg(w, m, "gainMult", k.gainMult);
+            k.lossMult = nonNeg(w, m, "lossMult", k.lossMult);
+            k.moraleMax = nonNeg(w, m, "max", Fixed{});
+        }
+        if (const Json& e = c["energy"]; e.isObject()) {
+            const std::string w = "battleCore.energy";
+            k.energyRes = res(w, e);
+            k.energyPerUnit = nonNeg(w, e, "perUnit", Fixed{});
+            k.energyLevels = int(e.getInt("levels", 0));
+        }
+        if (const Json& p = c["production"]; p.isObject()) {
+            const std::string w = "battleCore.production";
+            k.production = true;
+            k.limitMult = nonNeg(w, p, "limit", k.limitMult);
+            const Json& t = p.has("tiers") ? p["tiers"] : Json::parse("[[0.5, 0.75], [0.75, 0.5], [1, 0]]");
+            for (auto& x : t.items()) {
+                if (!x.isArray() || x.size() != 2) fail(w, "tiers are [share, rate] pairs");
+                if (!k.tiers.empty() && x[0].fx() < k.tiers.back().first) fail(w, "tiers must be sorted by share");
+                k.tiers.push_back({x[0].fx(), x[1].fx()});
+            }
+        }
+        k.neutralGrowth = c.getBool("neutralGrowth", false);
+        const size_t nt = r.types.size();
+        k.catchNeutral.assign(nt, Fixed{}); k.catchEnemy.assign(nt, Fixed{}); k.lost.assign(nt, Fixed{}); k.upgrade.assign(nt, Fixed{});
+        for (auto& [id, tj] : j["types"].members()) {
+            const Json& mp = tj["moralePoints"];
+            if (mp.isNull()) continue;
+            int t = r.findType(id);
+            if (t < 0) continue;
+            const std::string w = "type '" + id + "' moralePoints";
+            k.catchNeutral[size_t(t)] = nonNeg(w, mp, "catchNeutral", Fixed{});
+            k.catchEnemy[size_t(t)] = nonNeg(w, mp, "catchEnemy", Fixed{});
+            k.lost[size_t(t)] = nonNeg(w, mp, "lost", Fixed{});
+            k.upgrade[size_t(t)] = nonNeg(w, mp, "upgrade", Fixed{});
+        }
+    }
     // the modes system runs (and its state is hashed / saved) for any of these blocks; other games keep their checksums
-    r.modes.any = base.any || j["matchModes"].isObject() || !r.modes.levels.empty() || !r.modes.timedRules.empty() || r.modes.stats;
+    r.modes.any = base.any || r.core.any || j["matchModes"].isObject() || j["ruleSets"].isObject() || !r.modes.levels.empty() || !r.modes.timedRules.empty() || r.modes.stats;
     if (!r.modes.levels.empty()) r.originals = true;   // level mods go through playerModsStat
 }
 
