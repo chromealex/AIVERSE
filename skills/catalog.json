@@ -667,6 +667,51 @@
       "keywords": []
     },
     {
+      "id": "aiverse-match-progression",
+      "package": "match-progression",
+      "path": "skills/aiverse-match-progression/SKILL.md",
+      "domain": "gameplay",
+      "summary": "In-match progression: perk/modifier packages with an ordered Set/Add/Multiply stat pipeline (incoming/outgoing damage, speed, fire interval, max health rescale), hero/player xp with a level table or curve, seeded level-up offers of N alternatives (recruit a deck slot, slot perk, player perk, explicit picks, rerolls, revisions), stacking limits, prerequisites, exclusions and upgrade chains, xp orb pickups (radius, magnet, homing attraction, orb budget), summon circles, charges and summoned ally lifecycle, and the pre-match battle deck with limits from the match start payload",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_match_progression",
+      "dependencies": [
+        "aiverse-progression-curves",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Perks.h",
+      "keywords": [
+        "perk",
+        "modifier",
+        "xp",
+        "experience",
+        "level",
+        "levelup",
+        "offer",
+        "reroll",
+        "summon",
+        "ally",
+        "deck",
+        "loadout",
+        "pickup",
+        "magnet",
+        "перк",
+        "модификатор",
+        "опыт",
+        "уровень",
+        "прокачк",
+        "призыв",
+        "союзник",
+        "колод",
+        "лут",
+        "магнит"
+      ]
+    },
+    {
       "id": "aiverse-match-rules",
       "package": "match-rules",
       "path": "skills/aiverse-match-rules/SKILL.md",

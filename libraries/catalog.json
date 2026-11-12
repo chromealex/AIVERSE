@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1574,6 +1574,41 @@
         "aiverse_net"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "match-progression",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Perks.h",
+      "skill": "skills/aiverse-match-progression/SKILL.md",
+      "summary": "In-match progression: perk/modifier packages with an ordered Set/Add/Multiply stat pipeline (incoming/outgoing damage, speed, fire interval, max health rescale), hero/player xp with a level table or curve, seeded level-up offers of N alternatives (recruit a deck slot, slot perk, player perk, explicit picks, rerolls, revisions), stacking limits, prerequisites, exclusions and upgrade chains, xp orb pickups (radius, magnet, homing attraction, orb budget), summon circles, charges and summoned ally lifecycle, and the pre-match battle deck with limits from the match start payload",
+      "notes": "Read docs/genre-packages.md (match-progression) for exact coverage and authority boundaries. Pure policy: the owner applies effect values to its units through evaluateStat (never a parallel evaluator for built-in RtsModule stats), spawns recruits and summons and confirms them with entity ids, and dispatches PerkEvent hooks (e.g. to Lua). Offers draw from the state's own PCG32 stream (seedPerks) with ascending-id candidate order; stale revisions and invalid choices are rejected without changes. Level curves reuse progression-curves (systems/Curves.h) and weighted choice semantics from Progression.h. Persist PerkState/PickupState/SummonState via genre::save/load (record kinds 104..111 reserved, 104..106 used) and hash with progressionHash; bind perkDefinitionsHash and progressionConfigHash. Optional `perks` settings section; definitions/deck JSON via genre/PerksData.h. Headless check: aiverse_progression --verify.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_match_progression",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/BattleDeck.h",
+        "libraries/include/aiverselib/genre/XpPickups.h",
+        "libraries/include/aiverselib/genre/Summons.h",
+        "libraries/include/aiverselib/genre/PerksData.h",
+        "libraries/include/aiverselib/genre/PerksConfigured.h",
+        "libraries/include/aiverselib/genre/PerksPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "libraries/include/aiverselib/systems/Curves.h",
+        "examples/libraries/genre/perks.json",
+        "examples/libraries/genre/perks-deck.json",
+        "examples/libraries/genre/perks-settings.json",
+        "tools/libraries/progression_main.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "progression-curves",
+        "configuration"
+      ]
     }
   ]
 }

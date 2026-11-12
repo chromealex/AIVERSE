@@ -42,6 +42,7 @@ ALIASES = {
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
+ 'aiverse-match-progression':'perk modifier xp experience level levelup offer reroll summon ally deck loadout pickup magnet перк модификатор опыт уровень прокачк призыв союзник колод лут магнит',
 }
 
 def generate():

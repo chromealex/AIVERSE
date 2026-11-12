@@ -137,6 +137,7 @@ static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aive
     state.values["bots.genre.objective"]=goal->id;
     return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
 }
+bool libraryProgressionConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings); // ProgressionConsumer.cpp
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -153,5 +154,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
     if(!genreBotConsumerExample(state,*parsed.value))return false;
+    if(!libraryProgressionConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }
