@@ -189,7 +189,10 @@ void tacticsGrid(){
     CHECK(tacticsStepCost(g,tacticsIndex(g,{3,0}),tacticsIndex(g,{2,1}))==-1&&tacticsStepCost(g,tacticsIndex(g,{1,0}),tacticsIndex(g,{2,1}))==-1); // wall, corner
     auto big=tacticsReachable(g,0,40,free);auto path=tacticsPath(*big,tacticsIndex(g,{4,4}));
     CHECK(!path.empty()&&path.back()==tacticsIndex(g,{4,4})&&path==tacticsPath(*tacticsReachable(g,0,40,free),tacticsIndex(g,{4,4})));
-    auto blocked=free;blocked[std::size_t(tacticsIndex(g,{1,0}))]=kTacticsBlocked;blocked[std::size_t(tacticsIndex(g,{0,1}))]=kTacticsPassOnly;
+    // Indices checked first: tacticsIndex returns -1 off the grid, and GCC -O3 otherwise reports a possible
+    // out-of-range write (-Wstringop-overflow) through that path.
+    const auto wallCell=tacticsIndex(g,{1,0}),passCell=tacticsIndex(g,{0,1});CHECK(wallCell>=0&&passCell>=0&&std::size_t(passCell)<free.size()&&std::size_t(wallCell)<free.size());
+    auto blocked=free;blocked.at(std::size_t(wallCell))=kTacticsBlocked;blocked.at(std::size_t(passCell))=kTacticsPassOnly;
     auto rb=tacticsReachable(g,0,4,blocked);CHECK(rb->cost[std::size_t(tacticsIndex(g,{1,0}))]==-1&&!rb->canStop(tacticsIndex(g,{0,1}),blocked)&&rb->canStop(tacticsIndex(g,{0,2}),blocked));
     // Hex distance, neighbours and lines.
     TacticsGrid hex{TacticsShape::Hex,7,7,std::vector<TacticsCell>(49)};

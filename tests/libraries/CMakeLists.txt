@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 project(RtsLibraryTests LANGUAGES CXX)
 enable_testing()
+# The compact one-line style of the genre headers trips GCC's -Wmisleading-indentation (clang/MSVC do not warn);
+# every target here builds with -Werror, so silence that one diagnostic for GCC only.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wno-misleading-indentation)
+endif()
 add_executable(aiverse_strategy_library_tests strategy_tests.cpp)
 target_compile_features(aiverse_strategy_library_tests PRIVATE cxx_std_20)
 target_include_directories(aiverse_strategy_library_tests PRIVATE ../../libraries/include ../..)
@@ -120,6 +125,7 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/data/Json.cpp")
         -DEXAMPLE=$<TARGET_FILE:aiverse_puzzles_example>
         -DLEVELS=${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/puzzles/levels.json
         -P ${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/puzzles/run_twice.cmake)
+endif()
 # Cards + turn strategy (card-games, tactics-grid, CardBot/TacticsBot): own test executable and the executable
 # bot-vs-bot example (card duel + hex skirmish, each played twice; passes only with winners and identical hashes).
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/core/FixedMath.cpp")
@@ -136,6 +142,7 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/core/FixedMath.cpp")
     add_test(NAME library_cards_turns COMMAND aiverse_library_cards_turns_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
     add_test(NAME library_cards_turns_example COMMAND aiverse_cards_turns_example ${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/cards-turns 7)
     set_tests_properties(library_cards_turns_example PROPERTIES PASS_REGULAR_EXPRESSION "deterministic replay: identical, winners: yes")
+endif()
 # Vehicles + sports (vehicle-controllers, sports-rules): unit tests and the executable gameplay example, run twice
 # by vehicles_sports_example.cmake (must finish with a race winner and a match winner and print equal hashes).
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/core/FixedMath.cpp")
@@ -155,6 +162,7 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/core/FixedMath.cpp")
         -DEXAMPLE=$<TARGET_FILE:aiverse_vehicles_sports_example>
         -DDATA=${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/vehicles-sports
         -P ${CMAKE_CURRENT_LIST_DIR}/vehicles_sports_example.cmake)
+endif()
 # settlement-production + survival-ecology (+ colony planner bot): unit tests and the executable 20-day example
 # (examples/libraries/genre/production-survival: survival criteria, identical hashes across two runs and a restore).
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/data/Json.cpp")
