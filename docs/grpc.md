@@ -91,11 +91,11 @@ the server answers with a `0x80` header block, framed messages and a final `0x80
 
 | Platform | Backend | Status |
 |---|---|---|
-| Linux | OpenSSL 3 / 1.1 via `dlopen` (no build dependency; missing libssl = plaintext only) | verified (tests, ASan/UBSan) |
-| Windows | SChannel (`SCH_CREDENTIALS`, TLS 1.3 where available; legacy fallback TLS 1.2), ALPN, custom roots via an exclusive-root chain engine | compiles with mingw-w64; **not run** |
-| macOS / iOS | Secure Transport over buffers (TLS 1.2, ALPN, custom anchors) | **unverified** (not compiled here) |
-| Android | `javax.net.ssl.SSLEngine` through JNI; call `aiverse::grpc::setAndroidJavaVM(app->activity->vm)` once (fallback: `JNI_GetCreatedJavaVMs`, API 31+); ALPN from API 29 (gRPC-Web needs none); `verifyPeer=false` unsupported | **unverified** |
-| Web | browser `fetch` + `WebSocket` (Emscripten); `Http2` falls back to gRPC-Web; the server must allow CORS and expose `grpc-status`, `grpc-message` | **unverified** (no emcc) |
+| Linux | OpenSSL 3 / 1.1 via `dlopen` (no build dependency; missing libssl = plaintext only) | verified (tests, ASan/UBSan, interop below) |
+| Windows | SChannel (`SCH_CREDENTIALS`, TLS 1.3 where available; legacy fallback TLS 1.2), ALPN, custom roots | mingw-w64 build run under Wine: unit tests (plaintext) + TLS h2/gRPC-Web/bridge against OpenSSL and grpc-core servers; **not run on real Windows** |
+| macOS / iOS | Secure Transport over buffers (TLS 1.2, ALPN, custom anchors) | **unverified** (not compiled: no Apple SDK) |
+| Android | `javax.net.ssl.SSLEngine` through JNI; call `aiverse::grpc::setAndroidJavaVM(app->activity->vm)` once (fallback: `JNI_GetCreatedJavaVMs`, API 31+); ALPN from API 29 (gRPC-Web needs none); `verifyPeer=false` unsupported | same code run on a desktop OpenJDK 21 (`-DAIVERSE_GRPC_JNI_TLS`): h2 + ALPN, gRPC-Web, bridge, custom CA, host-name check; **not run on a device / Conscrypt, no NDK build** |
+| Web | browser `fetch` + `WebSocket` (Emscripten); `Http2` falls back to gRPC-Web; the server must allow CORS and expose `grpc-status`, `grpc-message` | syntax-checked against the Emscripten 3.1.x headers; **not built with emcc, not run** |
 
 `TlsConfig::caPem` adds trusted roots (tests, private CAs); `serverName` overrides SNI/host check.
 
@@ -138,5 +138,15 @@ gRPC-Web, WS bridge, TLS), deadlines, cancel, throttle FIFO, retries, connection
 the backend (login, refresh, matchmaking found / cancelled / unreachable / cancel, meta Backend,
 version mismatch, reconnect from a callback).
 
-Not verified: the real Drone Fall backend (not reachable from the build VM), HTTP/2 interop with
-grpc-dotnet/Kestrel, and all non-Linux TLS paths (see the table).
+### Interop (verified in a Linux container)
+
+| Server | Transports | Result |
+|---|---|---|
+| grpc-core (Python grpcio 1.7x) | h2c, h2 + TLS (OpenSSL, SChannel under Wine, JNI SSLEngine on OpenJDK) | unary 200 KB + auth, bidi, host-name rejection |
+| ASP.NET Core 8 + Grpc.AspNetCore(.Web) 2.70 + GrpcWebSocketBridge.AspNetCore 1.4.1 | gRPC-Web, `cs-grpc-bridge-v1` bridge, h2c, h2 + TLS | all pass |
+| same stack with the `extraction_rts` protos (stand-in for the Drone Fall backend) | `aiverse_grpc_probe --find square --assume-ping 33` | GetServiceMap (+ version mismatch), device Token, GetBattleServers over the WebSocket bridge with `Bearer`, FindMatch -> Queued / QueueUpdate / MatchFound ticket, stream closed after the match |
+
+`aiverse_grpc_tests --serve h2|web SECONDS` / `--remote h2|web URL` run the cross-process checks.
+
+Not verified: the real Drone Fall backend (not reachable from the build machines), Secure Transport,
+SChannel on real Windows, Android devices, and the browser transport at runtime.
