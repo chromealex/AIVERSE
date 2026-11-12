@@ -418,6 +418,7 @@ def wire(out, report):
     skin = os.path.join(out, 'ui', 'skin.rcss')
     cur = open(skin, encoding='utf-8').read() if os.path.exists(skin) else ''
     if 'bunkerwars client.py' not in cur:
+        os.makedirs(os.path.dirname(skin), exist_ok=True)
         with open(skin, 'w', encoding='utf-8') as f:
             f.write(cur + ('\n' if cur and not cur.endswith('\n') else '') + SKIN)
     gp = os.path.join(out, 'game.json')

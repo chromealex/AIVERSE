@@ -36,7 +36,7 @@ bool SpineRenderer::init(gfx::Device& dev) {
     shader_ = dev.createShader(sd);
     if (!shader_.valid()) return false;
     for (int depth = 0; depth < 2; depth++)
-        for (int mul = 0; mul < 2; mul++) {
+        for (int mul = 0; mul < 3; mul++) {
             gfx::PipelineDesc p;
             p.shader = shader_;
             p.attrs[0] = {0, gfx::VertexFormat::Float2, 0};
@@ -46,7 +46,7 @@ bool SpineRenderer::init(gfx::Device& dev) {
             p.stride = sizeof(DrawVertex);
             p.indexType = gfx::IndexType::UInt16;
             p.cull = gfx::CullMode::None;
-            p.blend = mul ? gfx::BlendMode::Multiply : gfx::BlendMode::Premultiplied;
+            p.blend = mul == 1 ? gfx::BlendMode::Multiply : mul == 2 ? gfx::BlendMode::Screen : gfx::BlendMode::Premultiplied;
             p.depthTest = depth != 0;
             p.depthWrite = false;
             p.label = "spine";
@@ -102,15 +102,15 @@ void SpineRenderer::draw(gfx::Device& dev, const DrawList& list, const std::vect
     for (size_t i = 0; i < list.batches.size(); i++) {
         const DrawBatch& b = list.batches[i];
         if (b.page < 0 || size_t(b.page) >= pages.size() || !pages[size_t(b.page)].valid() || b.indexCount == 0) continue;
-        int mul = b.blend == BlendMode::Multiply ? 1 : 0;
+        const int mul = b.blend == BlendMode::Multiply ? 1 : b.blend == BlendMode::Screen ? 2 : 0;
         if (mul != lastPipe) { dev.setPipeline(pipes_[depthTest ? 1 : 0][mul]); lastPipe = mul; }
         dev.setVertexBuffer(vb_, size_t(list.baseVertex[i]) * sizeof(DrawVertex));
         dev.setIndexBuffer(ib_);
         dev.setTexture(0, pages[size_t(b.page)]);
         u.params[0] = size_t(b.page) < pma.size() && pma[size_t(b.page)] ? 1.f : 0.f;
         u.params[1] = b.blend == BlendMode::Additive ? 1.f : 0.f;
-        u.params[2] = float(mul);
-        u.params[3] = b.blend == BlendMode::Screen ? 1.f : 0.f;
+        u.params[2] = mul == 1 ? 1.f : 0.f;
+        u.params[3] = 0;
         dev.setUniforms(0, &u, sizeof(u));
         dev.drawIndexed(b.indexCount, b.firstIndex, 0);
         drawCalls_++;

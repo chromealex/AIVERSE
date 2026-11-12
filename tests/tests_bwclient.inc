@@ -164,6 +164,58 @@ TEST(spine_bad_data_is_reported) {
 }
 
 // ---------------- client services: social (Steam), push, deep links through the desktop mocks ----------------
+// clipping attachments, path constraints, screen slots (Spine 4.0 JSON)
+TEST(spine_clipping_paths_and_screen_blend) {
+    auto atlas = std::make_shared<spine::Atlas>(spine::parseAtlas(bwc::readText("tests/data/spine/mini.atlas")));
+    // a 16 x 8 box at the origin (x -8..8, y -4..4) cut by a square clip (x -2..2, y -10..10) up to slot "box";
+    // slot "glow" draws after the clip ends with screen blending; bone "rider" follows a straight path along x
+    const char* json = R"({"skeleton": {"spine": "4.0.64"},
+      "bones": [{"name": "root"}, {"name": "rider", "parent": "root", "length": 10}, {"name": "rider2", "parent": "rider", "x": 10, "length": 10}],
+      "slots": [{"name": "clip", "bone": "root", "attachment": "clip"}, {"name": "box", "bone": "root", "attachment": "box"},
+                {"name": "glow", "bone": "root", "attachment": "box", "blend": "screen"}, {"name": "rail", "bone": "root", "attachment": "rail"}],
+      "path": [{"name": "ride", "bones": ["rider", "rider2"], "target": "rail", "rotateMode": "chain", "spacingMode": "length",
+                "positionMode": "fixed", "position": 20}],
+      "skins": [{"name": "default", "attachments": {
+          "clip": {"clip": {"type": "clipping", "end": "box", "vertexCount": 4, "vertices": [-2, -10, 2, -10, 2, 10, -2, 10]}},
+          "box": {"box": {"width": 16, "height": 8}},
+          "glow": {"box": {"width": 16, "height": 8}},
+          "rail": {"rail": {"type": "path", "constantSpeed": true, "vertexCount": 6, "lengths": [100],
+                            "vertices": [-10, 0, 0, 0, 10, 0, 90, 0, 100, 0, 110, 0]}}}}],
+      "animations": {"move": {"path": {"ride": {"position": [{"time": 0, "value": 20}, {"time": 1, "value": 60}]}}}}})";
+    auto d = spine::parseSkeleton(json, atlas);
+    CHECK(d->paths.size() == 1 && d->warnings.empty());
+    spine::Skeleton sk(d);
+    sk.updateWorldTransform();
+    spine::DrawList list;
+    sk.buildDrawList(list);
+    // box: clipped to x in [-2, 2]; glow: whole, its own (screen) batch
+    CHECK(list.batches.size() == 2 && list.batches[1].blend == spine::BlendMode::Screen);
+    float minX = 1e9f, maxX = -1e9f;
+    for (uint32_t i = 0; i < list.batches[0].indexCount; i++) {
+        const spine::DrawVertex& dv = list.vertices[list.baseVertex[0] + list.indices[list.batches[0].firstIndex + i]];
+        minX = std::min(minX, dv.x); maxX = std::max(maxX, dv.x);
+    }
+    CHECK(bwc::near(minX, -2) && bwc::near(maxX, 2));
+    CHECK(list.batches[1].indexCount == 6);
+    // uvs of a clipped vertex are interpolated: x = 0 is the middle of the box region (u 0 .. 0.25)
+    bool mid = false;
+    for (uint32_t i = 0; i < list.batches[0].indexCount; i++) {
+        const spine::DrawVertex& dv = list.vertices[list.baseVertex[0] + list.indices[list.batches[0].firstIndex + i]];
+        if (bwc::near(dv.x, 2)) mid |= bwc::near(dv.u, 0.125f + 0.25f * 2 / 16, 1e-3f) || bwc::near(dv.u, 0.125f - 0.25f * 2 / 16, 1e-3f);
+    }
+    CHECK(mid);
+    // path: the rider starts 20 units along the rail (fixed position), the chain keeps the bone on the x axis
+    const spine::Bone& r = sk.bones[size_t(sk.findBone("rider"))];
+    const spine::Bone& r2 = sk.bones[size_t(sk.findBone("rider2"))];
+    CHECK(bwc::near(r.worldX, 20, 0.5f) && bwc::near(r.worldY, 0, 0.01f) && bwc::near(r2.worldX, 30, 0.5f));
+    spine::AnimationState st(d);
+    st.setAnimation(0, "move", false);
+    st.update(1);
+    st.apply(sk);
+    sk.updateWorldTransform();
+    CHECK(bwc::near(sk.bones[size_t(sk.findBone("rider"))].worldX, 60, 0.5f));
+}
+
 #include "engine/platform/Plugins.h"
 #include "engine/services/Consent.h"
 #include "engine/services/Privacy.h"

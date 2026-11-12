@@ -506,6 +506,9 @@ public:
             case BlendMode::Subtract:
                 glEnable(GL_BLEND); glBlendEquationSeparate(GL_FUNC_REVERSE_SUBTRACT, GL_FUNC_ADD);
                 glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE); break;
+            case BlendMode::Screen:
+                glEnable(GL_BLEND); glBlendEquation(GL_FUNC_ADD);
+                glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_COLOR, GL_ONE, GL_ONE_MINUS_SRC_ALPHA); break;
         }
         attribsDirty_ = true;
     }

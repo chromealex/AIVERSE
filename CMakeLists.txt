@@ -1653,6 +1653,7 @@ if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)   # agent-bw-client: BW im
         set_tests_properties(bw_tutorial_importer PROPERTIES ENVIRONMENT "AIVERSE_HEADLESS=$<TARGET_FILE:aiverse_headless>")
     endif()
     add_test(NAME fmod_audio_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/fmod/test_import_audio.py)
+    add_test(NAME bw_client_layer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/bunkerwars/test_client.py)
 endif()
 # Windows: every executable gets platform/windows/utf8.manifest (activeCodePage UTF-8). Paths in the
 # engine are UTF-8 std::strings; without it the narrow CRT/STL file APIs use the legacy ANSI code page
