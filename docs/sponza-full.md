@@ -347,3 +347,29 @@ Android/web hardware remain unverified.
 Static GL/Metal captures were inspected, along with selected frames of a completed
 16-capture Metal camera-motion smoke check. This short check is not a general
 no-flicker guarantee; the existing temporal AA and PCF kernels were not changed.
+
+### Cloth normal-map minification (2026-11-12)
+
+The horizontal pattern on the right red banners remained with sun-shadow reception
+disabled, but disappeared with normalScale=0. The source color image had no such
+bands. Rebuilding suspect imported tangents did not remove the pattern and was
+rejected. Widening the sampled normal-map footprint did remove it: subpixel weave
+was aliasing into a much larger lighting pattern.
+
+GLSL/MSL now sample normal maps with explicit UV gradients. The footprint multiplier
+is 1 at <=1 source texel per pixel, smoothly increases to 4 at >=2 texels per pixel,
+and is bounded there (at most two additional mip levels). Magnification retains
+the original gradients; color textures, normal strength and mesh detail are unchanged.
+This is a normal-map prefilter before lighting, not a postprocess blur. It uses one
+normal texture sample, a few extra ALU operations, and no additional rendering pass.
+Low material quality still skips normal maps. Existing mip/nearest sampler policies
+remain in effect; this does not filter assets with no mip chain.
+
+The same Sponza banner crop was inspected on GL and Metal with the bands removed.
+All 41 HDR GPU controls passed on both. Controls 39/40 use an alternating normal
+texture to check minified averaging and retained magnified normal tilt. Android/web
+hardware remain unverified. The unrelated weak interior GI is still unresolved.
+A sunlit close-up of the red fabric was also inspected on GL: the source normal-map
+weave remains visible rather than being replaced by a flat normal. A 16-capture GL
+camera-motion smoke sequence completed; selected frames retained the corrected
+banner appearance. This short sequence is not a general no-flicker guarantee.

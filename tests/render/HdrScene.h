@@ -75,6 +75,9 @@ struct HdrScene {
             probeBg=modelFromParts("probe background",{{"plane",&plane,m,{}}});
             m.alpha=AlphaMode::Blend;
             probeFg=modelFromParts("probe foreground",{{"plane",&plane,m,{}}});
+            Image normals;normals.width=normals.height=256;normals.repeat=true;normals.rgba.resize(256*256*4);
+            for(int y=0;y<256;++y)for(int x=0;x<256;++x){size_t i=size_t(y*256+x)*4;normals.rgba[i]=x%2?204:51;normals.rgba[i+1]=128;normals.rgba[i+2]=230;normals.rgba[i+3]=255;}
+            probeBg->images.push_back(std::move(normals));
             uploadModel(d,*probeBg);uploadModel(d,*probeFg);
             renderer.setShadowQuality(ShadowQuality::Off);renderer.lights.setQuality(LightQuality::Off);
             camera.target={0,0,0};camera.pitch=0;camera.yaw=0;camera.distance=10;
@@ -168,6 +171,11 @@ struct HdrScene {
         // Rough receiver has no SSR contribution: the opaque redraw must preserve sun visibility.
         if(probeIndex>=36){renderer.setShadowQuality(ShadowQuality::High);renderer.setShadowBounds({-2,-2,-2},{2,2,2});renderer.setModelReflectionsEnabled(true);}
         if(probeIndex>=37){probeBg->materials[0].castShadow=true;probeBg->materials[0].doubleSided=true;}
+        if(probeIndex>=39){
+            auto& m=probeBg->materials[0];m.normalTex=0;m.normalScale=1;
+            m.uvScale=probeIndex==40?float2{.0001f,.0001f}:float2{1,1};m.uvOffset={65.5f/256,.25f};
+            renderer.setMaterialQuality(MaterialQuality::Medium);
+        }
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
             renderer.beginScene(camera,w/2,h/2);
@@ -200,6 +208,12 @@ struct HdrScene {
             if(probeIndex==31)expected=.21404114f*.25f;
             if(probeIndex==34||probeIndex>=36)expected=.25f*(1+.04f*9*.125f);
             if(probeIndex==35)expected=.2f;
+            // Medium GGX at N=L=V: specular=F0/4. Near: preserve the sampled normal tilt.
+            if(probeIndex>=39){float nz=1;
+                if(probeIndex==40){float x=204.0f/255*2-1,y=128.0f/255*2-1,z=230.0f/255*2-1;nz=z/std::sqrt(x*x+y*y+z*z);}
+                float vis=.25f/((nz*.5f+.5f)*(nz*.5f+.5f));
+                expected=.25f*nz*(1+.04f*vis);
+            }
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
                 if(cw<=0||ch<=0||px.size()!=size_t(cw*ch*4)) {failed=true;return;}
@@ -209,7 +223,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==39)captured=true;
+                if(probeIndex==41)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }

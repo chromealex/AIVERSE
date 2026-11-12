@@ -218,7 +218,12 @@ void main() {
     {
         vec3 t = normalize(v_tan.xyz - n * dot(n, v_tan.xyz));
         vec3 b = cross(n, t) * v_tan.w;
-        vec3 tn = texture(tex3, v_uv).xyz * 2.0 - 1.0;
+        // Subpixel normal weave needs a wider footprint before nonlinear lighting.
+        // Magnified texels retain the original gradients and detail.
+        vec2 dx = dFdx(v_uv), dy = dFdy(v_uv), size = vec2(textureSize(tex3, 0));
+        float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
+        float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
+        vec3 tn = textureGrad(tex3, v_uv, dx * normalFilter, dy * normalFilter).xyz * 2.0 - 1.0;
         tn.xy *= m_pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
@@ -496,7 +501,10 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     {
         float3 t = normalize(in.tan.xyz - n * dot(n, in.tan.xyz));
         float3 b = cross(n, t) * in.tan.w;
-        float3 tn = tex3.sample(s3, in.uv).xyz * 2.0 - 1.0;
+        float2 dx = dfdx(in.uv), dy = dfdy(in.uv), size = float2(tex3.get_width(), tex3.get_height());
+        float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
+        float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
+        float3 tn = tex3.sample(s3, in.uv, gradient2d(dx * normalFilter, dy * normalFilter)).xyz * 2.0 - 1.0;
         tn.xy *= m.pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
