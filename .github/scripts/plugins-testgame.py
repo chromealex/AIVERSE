@@ -32,6 +32,11 @@ game["plugins"] = {
         "rewarded": {"android": "syz3d8ekts22q0or", "ios": "l1quzz1xmmdhw5er"},
         "banner": {"android": "4fpetq4lhe5lsw3e", "ios": "xc2bsuntn9ea734t"},
     },
+    # analytics / privacy (agent-sdk-plugins): compile-only placeholders, no real keys in the repo
+    "gameanalytics": {"gameKey": "0" * 32, "secretKey": "0" * 40, "build": "ci", "currencies": ["coins"], "itemTypes": ["shop"]},
+    "facebook": {"appId": "1234567890", "clientToken": "ci0000000000000000000000000000000"},
+    "appmetrica": {"apiKey": "00000000-0000-0000-0000-000000000000"},
+    "att": {"usage": "CI build: this identifier is used to show you relevant ads.", "skAdNetworks": ["4fzdc2evr5"]},
 }
 game["store"] = {"products": [{"id": "gems_100", "type": "consumable"}, {"id": "no_ads", "type": "nonConsumable"}]}
 (out / "game.json").write_text(json.dumps(game, ensure_ascii=False, indent=2), encoding="utf-8")
