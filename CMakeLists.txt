@@ -1132,7 +1132,7 @@ endif()
 target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
 # extraction raids (agent-extraction): match loop, extraction points, raid inventory, interactables, receipts, bot, Lua `raid`
 target_sources(aiverse_game PRIVATE modules/rts/RtsRaid.cpp modules/rts/RtsRaidData.cpp modules/rts/RtsRaidBot.cpp modules/rts/RtsRaidApi.cpp)
-target_sources(aiverse_game PRIVATE modules/rts/RtsCommerce.cpp modules/rts/RtsCommerceApi.cpp modules/rts/RtsDrivingApi.cpp)   # agent-gta2: city economy
+target_sources(aiverse_game PRIVATE modules/rts/RtsCommerce.cpp modules/rts/RtsCommerceApi.cpp modules/rts/RtsDrivingApi.cpp modules/rts/RtsCareer.cpp modules/rts/RtsCareerApi.cpp)   # agent-gta2: city economy
 # top-down heroes (agent-topdown-control): rules "topDown", stick input commands, aim / auto-fire (docs/topdown.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
 # in-match progression (agent-df-progression-glue): match-progression package on real units, rules "progression" (docs/progression.md)
