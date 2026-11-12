@@ -126,7 +126,15 @@ void RtsModule::moveAgents(Simulation& sim) {
     std::vector<Agent> agents;
     std::vector<int32_t> byIndex;
     w.each<Mobile, Unit, Transform>([&](Entity e, Mobile& m, Unit& u, Transform& tr) {
-        if (u.flags & (kUnitOffMap | kUnitPossessed)) return;
+        if (u.flags & kUnitOffMap) return;
+        if (u.flags & kUnitPossessed) {   // top-down heroes (RtsTopDown.cpp) are moving obstacles; other possessed units are ignored
+            Vec3 hv;
+            if (!topDown_ || !topDown_->active() || !topDown_->heroVelocity(sim, e, hv)) return;
+            if (byIndex.size() <= e.index) byIndex.resize(e.index + 1, -1);
+            byIndex[e.index] = int32_t(agents.size());
+            agents.push_back(Agent{e, tr.pos.xz(), hv.xz(), {}, {}, rules_.types[u.type].radius, Fixed{}, rules_.types[u.type].layer, w.get<Owner>(e).player, false, false});
+            return;
+        }
         if (rules_.lanes.enabled && w.has<LaneWalker>(e)) return;
         const UnitType& t = rules_.types[u.type];
         Agent a{e, tr.pos.xz(), m.vel.xz(), {}, {}, t.radius, Fixed{}, t.layer, w.get<Owner>(e).player, false, false};

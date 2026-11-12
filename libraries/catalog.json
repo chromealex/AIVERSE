@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1653,6 +1653,74 @@
       "linkDependencies": [
         "aiverse_engine",
         "aiverse_world"
+      ],
+      "packageDependencies": [
+        "configuration"
+      ]
+    },
+    {
+      "id": "vehicle-controllers",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Vehicles.h",
+      "skill": "skills/aiverse-vehicle-controllers/SKILL.md",
+      "summary": "Deterministic kinematic vehicle controllers: wheeled arcade-sim (torque curve, auto/manual gears with shift time, per-wheel traction with slip/grip curves, weight transfer, handbrake, drift), tracked differential steering, hover altitude hold with drift damping, arcade flight with banked turns and stall; damage zones with per-zone performance penalties and critical disable; driver/passenger/gunner seats with validated enter/exit/switch/eject and owner-checked exit points; ordered checkpoints, laps, race positions, wrong-way detection and respawn at the last checkpoint; race bot (racing line, corner braking, overtaking lanes, rubber band)",
+      "notes": "Read docs/genre-packages.md (vehicle-controllers) for the determinism/network model. The controllers are the authoritative Fixed/integer state: the owner reports ground/wheel contacts (VehicleContacts) and resolves collisions after the step with vehicleResolveCollision; no physics backend is authoritative (Box3D may only mirror poses). stepVehicle/stepVehicleDamage/stepVehicleSeats/stepRace once per strictly increasing tick; invalid input returns nullopt with state untouched. Checkpoints reuse match-rules route gates (RouteGate, crossesGate, stepRoute). bots/RaceBot.h returns a VehicleInput like a player. Persist VehicleState 88, VehicleDamageState 89, VehicleSeatState 90, RaceState 91, RaceBotState 94 via genre::save/load (88..95 shared with sports-rules); hash with vehicleHash and bind vehicleDefinitionHash/raceCourseHash/raceLineHash. Optional `vehicles` settings section. Executable example: examples/libraries/genre/vehicles-sports (4-car race). No rendering, audio, suspension geometry or tyre thermal model.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_vehicle_controllers",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/VehicleControllers.h",
+        "libraries/include/aiverselib/genre/VehicleDamage.h",
+        "libraries/include/aiverselib/genre/VehicleSeats.h",
+        "libraries/include/aiverselib/genre/RaceCourse.h",
+        "libraries/include/aiverselib/bots/RaceBot.h",
+        "libraries/include/aiverselib/genre/VehicleConfigured.h",
+        "libraries/include/aiverselib/genre/VehicleData.h",
+        "libraries/include/aiverselib/genre/VehiclePersistence.h",
+        "libraries/include/aiverselib/genre/MatchObjectives.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/vehicles-sports/vehicles.json",
+        "examples/libraries/genre/vehicles-sports/settings.json",
+        "examples/libraries/genre/vehicles-sports/VehiclesSportsExample.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "match-rules",
+        "configuration"
+      ]
+    },
+    {
+      "id": "sports-rules",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Sports.h",
+      "skill": "skills/aiverse-sports-rules/SKILL.md",
+      "summary": "Deterministic ball-sport rules: possession with pickup radius and possession lock, tackles contested with the passed RNG, passes with receiver leading and shots with power and seeded accuracy error, interception at the closest approach along the ball path, goals, out of bounds and generic restarts (kickoff, throw-in, corner, goal kick, free kick, penalty, face-off), walls/rebound fields, periods with running/stopped/added-stoppage clocks and golden-goal overtime, fouls from contact rules; role-based formations with stable slot assignment; positioning bot (formation slots, press/mark/chase, keeper line, pass/shot choice)",
+      "notes": "Read docs/genre-packages.md (sports-rules). stepSports once per strictly increasing tick with owner-reported SportsPlayer snapshots (the owner moves bodies) and SportsActions from players or bots/SportsBot.h (same struct); RNG only through the passed engine Random, untouched on invalid input. Field frame Vec2{x length, y width}, team index 0 attacks +x in odd periods (swapEnds). Persist SportsState 92 and SportsBotState 95 via genre::save/load (93 reserved; 88..95 shared with vehicle-controllers) together with the RNG state; hash with sportsHash and bind sportsDefinitionsHash. Optional `sports` settings section. Executable example: examples/libraries/genre/vehicles-sports (3v3 football). No ball height/spin, offside, referees UI or animation.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_sports_rules",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/SportsRules.h",
+        "libraries/include/aiverselib/genre/SportsFormation.h",
+        "libraries/include/aiverselib/bots/SportsBot.h",
+        "libraries/include/aiverselib/genre/SportsConfigured.h",
+        "libraries/include/aiverselib/genre/SportsData.h",
+        "libraries/include/aiverselib/genre/SportsPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/vehicles-sports/sports.json",
+        "examples/libraries/genre/vehicles-sports/settings.json",
+        "examples/libraries/genre/vehicles-sports/VehiclesSportsExample.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
       ],
       "packageDependencies": [
         "configuration"

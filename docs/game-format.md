@@ -2338,6 +2338,13 @@ knobs in rules `ai` (above). What it does with the terrain:
   `--load F` reads it): a restored bot plays on exactly like the saved one.
 
 
+## Top-down heroes
+
+Rules block `topDown` (one directly controlled hero per player: stick movement with acceleration and wall sliding,
+aim snap cone, auto-fire policy, abilities along the aim, respawn) and game.json block `topDown` (virtual joystick,
+aim stick, ability buttons, keyboard / mouse / gamepad, follow camera). Keys, defaults and behaviour:
+[docs/topdown.md](topdown.md). Sample: `templates/topdown_arena`.
+
 ## Ordered projectile flight programs
 
 Weapons and projectile deliveries accept an optional `flight` object with ordered Split, Ricochet,

@@ -2279,6 +2279,310 @@
           "slowMotionDenominator"
         ]
       ]
+    },
+    "vehicles": {
+      "type": "VehicleSettings",
+      "fields": {
+        "maxEnterSpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maxExitSpeedMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "raceLaps": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "wrongWayTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "wrongWaySpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "respawnWrongWayTicks": {
+          "type": "integer",
+          "default": 240,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "stuckSpeedMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "stuckTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botLookaheadMilli": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "botLookaheadTimeMilli": {
+          "type": "integer",
+          "default": 350,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "botMaxSpeedMilli": {
+          "type": "integer",
+          "default": 60000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "botCornerAccelMilli": {
+          "type": "integer",
+          "default": 9000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "botBrakeDecelMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "botBrakeHorizonMilli": {
+          "type": "integer",
+          "default": 90000,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "botSteerGainMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botLaneOffsetMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botOvertakeDistanceMilli": {
+          "type": "integer",
+          "default": 14000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "botSkillMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 2000
+        },
+        "botRubberBandMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 500
+        }
+      }
+    },
+    "sports": {
+      "type": "SportsSettings",
+      "fields": {
+        "periods": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 16
+        },
+        "periodTicks": {
+          "type": "integer",
+          "default": 2700,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "overtimeTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "restartDelayTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "maxStoppageTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "clockMode": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 2
+        },
+        "swapEnds": {
+          "type": "boolean",
+          "default": true
+        },
+        "goldenGoal": {
+          "type": "boolean",
+          "default": true
+        },
+        "pickupRadiusMilli": {
+          "type": "integer",
+          "default": 700,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "controlSpeedMilli": {
+          "type": "integer",
+          "default": 14000,
+          "minimum": 0,
+          "maximum": 200000
+        },
+        "frictionMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "tackleRangeMilli": {
+          "type": "integer",
+          "default": 1400,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "tackleBaseMilli": {
+          "type": "integer",
+          "default": 450,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "interceptMilli": {
+          "type": "integer",
+          "default": 650,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "behindFoulMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "failFoulMilli": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "tackleCooldownTicks": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "possessionLockTicks": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "kickLockTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "passSpeedMinMilli": {
+          "type": "integer",
+          "default": 7000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "passSpeedMaxMilli": {
+          "type": "integer",
+          "default": 18000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "shotSpeedMinMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "shotSpeedMaxMilli": {
+          "type": "integer",
+          "default": 26000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "passErrorMilli": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 250
+        },
+        "shotErrorMilli": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 250
+        },
+        "botShootRangeMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "botTackleMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "botReactionTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "botDecisionTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 3600
+        }
+      },
+      "relations": [
+        [
+          "passSpeedMinMilli",
+          "passSpeedMaxMilli"
+        ],
+        [
+          "shotSpeedMinMilli",
+          "shotSpeedMaxMilli"
+        ]
+      ]
     }
   }
 }

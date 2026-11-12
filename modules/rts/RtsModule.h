@@ -19,6 +19,7 @@
 #include "RtsMech.h"
 #include "RtsGridFields.h"
 #include "RtsNative.h"
+#include "RtsTopDown.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -84,6 +85,9 @@ enum CommandType : uint16_t {
     kCmdLock,         // gates / doors: param 1 lock (closed for everyone), 2 unlock, 0 toggle
     kCmdEndTurn,      // turn-based mode: the active player ends the turn
     kCmdScript,       // rules "commands" (RtsScript.h): param = command index, args = encoded arguments, units = selection
+    // top-down heroes (rules "topDown", RtsTopDown.h)
+    kCmdTopDown,      // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
+    kCmdTopDownAbility, // no units; param = ability index of the hero; target / point optional (default: along the aim)
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -498,6 +502,7 @@ public:
     const TriggerSet& triggers() const { return triggers_; }
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
+    TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
     const Json* generatedMap() const { return generated_.isObject() ? &generated_ : nullptr; }
@@ -808,6 +813,7 @@ private:
     void captureOriginals(Simulation& sim, Entity structure, uint8_t from, uint8_t to);
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
+    std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::vector<NativeDefinition> nativeDefinitions_;
     NativeModules native_;
     std::unique_ptr<ScriptEngine> script_; // Lua VM (RtsScript.h); its persistent state is the ScriptStore resource
