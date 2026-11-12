@@ -28,6 +28,7 @@
 #include "engine/render/TextureCache.h"
 #include "ClientSplash.h"
 #include "GameClient.h"
+#include "modules/rts/view/EncounterDecals.h"   // boss encounters: ground marks
 #include "engine/platform/ContentReader.h"
 #include "RegionSettings.h"
 #include "modules/rts/RtsLocalize.h"
@@ -886,7 +887,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
 
         steerPossessed();
         topDownFrame(dt);
-        if (!netMatch_) {
+        if (!netMatch_ && !topDownPaused()) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
             static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
             if (simSpeed == 1.0) sim_->advance(dt);
@@ -912,7 +913,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         scene_.moveMarkers.clear();
         for (auto& [p, until] : markers_) if (until > time_) scene_.moveMarkers.push_back(p);
         markers_.erase(std::remove_if(markers_.begin(), markers_.end(), [&](auto& m) { return m.second < time_; }), markers_.end());
-        if (screen_ == Screen::Playing) topDownCamera(dt);
+        if (screen_ == Screen::Playing) { topDownPresent(dt, alpha); topDownCamera(dt); }
     }
 
     luaTick(dt);   // game.on("update", fn) in UI scripts
@@ -973,7 +974,11 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                    screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);
         fx_.addLights(r3d_.lights);   // particle lights ("light" module)
         runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
-        view_.drawGround(r3d_, groundCanvas_);
+        if (auto* enc = mod().encounters(); enc && enc->active()) {   // telegraph decals + status rings (EncounterDecals.h)
+            auto ground = groundCanvas_;
+            game::appendEncounterDecals(*sim_, mod(), view_, spectator_ ? 0 : human_, ground);
+            view_.drawGround(r3d_, ground);
+        } else view_.drawGround(r3d_, groundCanvas_);
         if (mode_ == Mode::Place && placeType_ >= 0) { // ghost of the building to place (its footprint is the "placement" overlay)
             bool ok;
             Vec3 c = placeCentre(mouseX_, mouseY_, ok);

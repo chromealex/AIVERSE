@@ -9,6 +9,7 @@
 // as screen-canvas triangles (ViewCanvas.h). Nothing here touches the simulation.
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 #include "ViewCanvas.h"
@@ -29,8 +30,12 @@ struct TopDownStickConfig {
 };
 
 struct TopDownButtonConfig {
-    std::string ability;             // ability id of the hero type
-    int abilityIndex = -1;           // resolved against the hero type
+    std::string ability;             // ability id of the hero type; "escape": the escape mode button (rules topDown.escape)
+    int abilityIndex = -1;           // resolved against the hero type (topdown::kEscapeAbility for "escape")
+    // tap: cast on press; aim: press shows the aim, dragging the button aims it (direction + distance), release casts;
+    // hold: press starts, release stops (rules topDown.abilities.hold repeats it while held)
+    enum class Mode { Tap, Aim, Hold } mode = Mode::Tap;
+    float dragRadius = 90;           // logical points of drag for the full ability range (aim mode)
     int weaponStep = 0;              // "weapon": "next" (+1) / "prev" (-1): switches the weapon in hand (rules "arsenal")
     int key = 0;                     // platform::Key (0: none)
     int padButton = -1;              // host gamepad button index (-1: none)
@@ -110,6 +115,30 @@ private:
     float ox_ = 0, oy_ = 0, vx_ = 0, vy_ = 0;   // origin, raw offset (points)
 };
 
+// A button event for the host to send as kCmdTopDownAbility (topdown::Ability). dirX / dirY: the button's drag in
+// screen axes (+y down), length 0..1 of dragRadius; hasDir false: no drag (the sim aims along the aim / facing).
+struct TopDownButtonEvent {
+    int button = -1;
+    topdown::Phase phase = topdown::Phase::Tap;
+    bool hasDir = false;
+    float dirX = 0, dirY = 0;
+};
+
+// Escape mode preview (Drone Fall HeroEscape): for `duration` seconds the move stick walks a ghost point at the hero's
+// speed (walls kept, at most `budget` world units travelled); then the host sends the point as the escape destination
+// (kCmdTopDownAbility, index topdown::kEscapeAbility). The hero stands still meanwhile; a single-player match pauses.
+struct TopDownEscapePreview {
+    bool active = false;
+    float x = 0, z = 0, speed = 0, timeLeft = 0, duration = 0, travelled = 0, budget = 0;
+    void begin(float heroX, float heroZ, float heroSpeed, float seconds) {
+        active = true; x = heroX; z = heroZ; speed = heroSpeed; duration = timeLeft = seconds; travelled = 0; budget = heroSpeed * seconds;
+    }
+    void cancel() { active = false; }
+    float progress() const { return duration > 0 ? 1 - timeLeft / duration : 1; }
+    // dirX / dirZ: world move stick (length <= 1); true once, when the time is up (send x, z and stop)
+    bool update(float dt, float dirX, float dirZ, const std::function<bool(float, float)>& passable);
+};
+
 // What the host read this frame besides pointer events.
 struct TopDownFrameInput {
     bool up = false, down = false, left = false, right = false;   // keyboard (WASD / arrows)
@@ -136,8 +165,17 @@ public:
     bool pointerMove(int64_t id, float x, float y);
     bool pointerUp(int64_t id, float x, float y);
     void cancelAll();
-    void pressAbility(int button) { if (button >= 0 && size_t(button) < cfg_.buttons.size()) presses_.push_back(button); }
-    std::vector<int> takeAbilityPresses() { std::vector<int> p; p.swap(presses_); return p; }
+    // keyboard / pad buttons: down / up (aim buttons aim with the cursor / aim stick then: no drag direction)
+    void buttonDown(int button);
+    void buttonUp(int button);
+    void pressAbility(int button) { buttonDown(button); buttonUp(button); }   // a click: down + up
+    std::vector<TopDownButtonEvent> takeButtonEvents() { std::vector<TopDownButtonEvent> e; e.swap(events_); return e; }
+    // a button event as the sim's payload; the drag is turned into a world direction for this camera yaw
+    static topdown::Ability abilityEvent(const TopDownButtonEvent& e, int abilityIndex, float cameraYaw);
+    static void screenToWorldDir(float sx, float sy, float cameraYaw, float& wx, float& wz);
+    TopDownEscapePreview& escape() { return escape_; }
+    const TopDownEscapePreview& escape() const { return escape_; }
+    void worldMove(float& x, float& z) const { x = moveDirX_; z = moveDirZ_; }   // last composed move stick (world)
     int buttonAt(float x, float y, float screenW, float screenH) const;   // -1: none
 
     // The input of this frame, camera-relative (cameraYaw radians, RTSCamera convention), quantized like the sim.
@@ -169,7 +207,10 @@ private:
     TopDownRules rules_;
     VirtualStick move_, aim_;
     std::vector<int64_t> buttonPointers_;   // per button: pointer holding it (-1 none)
-    std::vector<int> presses_;
+    std::vector<float> dragX_, dragY_, downX_, downY_;   // per button: where the finger went down / is now
+    std::vector<uint8_t> keyHeld_;          // per button: held by its key / pad button
+    std::vector<TopDownButtonEvent> events_;
+    TopDownEscapePreview escape_;
     topdown::Input sent_;
     bool haveSent_ = false;
     float moveDirX_ = 0, moveDirZ_ = 0, aimDirX_ = 0, aimDirZ_ = 0;   // last composed world directions (camera look-ahead)

@@ -21,6 +21,7 @@
 #include "RtsRaid.h"
 #include "RtsNative.h"
 #include "RtsTopDown.h"
+#include "RtsEncounters.h"
 #include "RtsEnv.h"
 #include "RtsDriving.h"
 #include "RtsCommerce.h"
@@ -93,13 +94,17 @@ enum CommandType : uint16_t {
     kCmdEndTurn,      // turn-based mode: the active player ends the turn
     kCmdScript,       // rules "commands" (RtsScript.h): param = command index, args = encoded arguments, units = selection
     kCmdRaid,         // extraction raids (RtsRaid.h): param = RaidOp | point index << 8 (call: -1 = nearest)
-    // top-down heroes (rules "topDown", RtsTopDown.h)
-    kCmdTopDown,      // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
-    kCmdTopDownAbility, // no units; param = ability index of the hero; target / point optional (default: along the aim)
+    // in-match progression (rules "progression", RtsProgression.h)
+    kCmdProgression,  // no units; param = ProgressionOp | card index << 8 | offer revision << 16 (choose / reroll / close / open)
     kCmdTopDownEnter,   // no units (rules "driving", RtsDriving.h): the hero gets into the nearest free vehicle / out of his car
     kCmdCommerce,       // no units (rules "commerce", RtsCommerce.h): param = commercePack(op, premises, value)
     kCmdTopDownWeapon,  // no units (rules "arsenal", RtsArsenal.h): param kWeaponNext / kWeaponPrev, or kWeaponSlot + slot
     kCmdCareer,         // no units (rules "careers", RtsCareer.h): param = careerPack(op, career); open careers only
+    // top-down heroes (rules "topDown", RtsTopDown.h). Engine-reserved hero ids (engine/net/HeroInput.h: net::kCmdHeroInput / kCmdHeroAbility), so hosted battles,
+    // the battle load test and every top-down game share one command scheme.
+    kCmdTopDown = 0xF100, // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
+    kCmdTopDownAbility,   // no units; param = topdown::abilityParam(Ability) (old clients: the ability index = tap);
+                          // target / point optional (default: along the button's stick, else the aim); index 255 = escape
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -166,7 +171,8 @@ enum GameEvent : uint16_t {
     kEvInfected,      // a = victim, value = spawned type
     kEvSubmerged,     // a = eater (sandworm) leaving; kEvSpawned marks its return
     kEvTrapFired,     // a = trap, b = victim, pos = victim
-    kEvGroupTeleport, // a = unit moved, b = caster (may be null), pos = arrival, value = 1 when it is a return trip
+    kEvGroupTeleport, // a = unit moved, b = caster (may be null), pos = arrival, value = 1 when it is a return trip;
+                      // top-down escape: value 2 = departure (pos = where it left), then value 0 at the arrival
     kEvPaved,         // a = slab (removed), value = cells paved, pos = slab centre
     kEvMorale,          // a = unit, value = 0 steady / 1 wavering / 2 routing (stage 4)
     kEvTurn,            // turn-based mode: player = whose turn starts, value = turn number
@@ -180,6 +186,24 @@ enum GameEvent : uint16_t {
     kEvRaidInteract,    // player, a = raider, b = object, value = object type | RaidChannelEv << 16 (0 start, 1 interrupted, 2 done)
     kEvRaidObjective,   // player, value = objective | 1 << 16 (completed)
     kEvRaidPlayer,      // player, value = RaidStatus (1 in raid, 2 extracted, 3 dead, 4 timed out, 5 abandoned)
+    // in-match progression (RtsProgression.h, docs/progression.md)
+    kEvProgXp,          // player, a = hero, value = xp gained (after the pickupXp stat), pos = hero
+    kEvProgLevel,       // player: a level is banked; value = levels banked | level reached << 32
+    kEvProgOffer,       // player, value = offer revision | cards << 32 | ProgOfferEv << 40 (0 opened, 1 rerolled, 2 closed, 3 empty)
+    kEvProgPerk,        // player, a = unit of the slot (hero for player perks), value = perk id | (slot + 1) << 32 (0: player scope) | 1 << 48 when it replaced a lower tier
+    kEvProgRecruit,     // player, a = new ally, value = deck slot, pos
+    kEvProgOrb,         // player = collector (0: none), value = xp | ProgOrbEv << 40 (0 spawned, 1 collected, 2 expired, 3 merged), pos
+    kEvProgSummon,      // player, a = ally (confirmed / died / expired), value = point id | SummonEventKind << 32, pos = circle centre
+    // boss encounters (rules "encounters", RtsEncounters.h, docs/encounters.md)
+    kEvBossEngaged,     // a = boss, b = its target, value = boss type, player = boss owner
+    kEvBossPhase,       // a = boss, b = target, value = phase index (0 = first)
+    kEvBossEnraged,     // a = boss, b = target, value = boss type
+    kEvBossAdds,        // a = boss, value = unit type | count << 16, pos = boss
+    kEvBossDefeated,    // a = boss, value = boss type, player = owner slot of the last damage source
+    kEvBossWindow,      // schedule: value = window index | state << 16 (0 opened, 1 boss spawned, 2 expired), player = participant, a = boss
+    kEvTelegraphStart,  // a = caster, b = aimed unit, value = attack index, pos = area origin, player = caster owner
+    kEvTelegraphStrike, // a = caster, b = unit struck, value = attack index | damage (whole units) << 16, pos = unit struck
+    kEvTelegraphEnd,    // a = caster, value = attack index | 1 << 16 when cancelled (caster died in the windup)
     kEvEnv,             // map environment (RtsEnv.h): value = EnvEventKind << 16 | data, a / b / pos per kind (weather, wind, worm, toad, bombs, Mouro, souls, walls)
     kEvModePhase,       // match modes (RtsModes.cpp): value = ModePhaseEvent, player = side concerned (0: everyone), a = point
 };
@@ -192,8 +216,12 @@ enum UnitFlags : uint16_t { kUnitHold = 1, kUnitUnderConstruction = 2, kUnitDisa
                           kUnitInHand = 16 /*picked up: off the map*/, kUnitPossessed = 32 /*directly controlled*/,
                           kUnitInTransit = 64 /*between bodies (set together with kUnitInHand: off every surface)*/,
                           kUnitInCargo = 128 /*inside a transport: off the map (agent-mech)*/,
-                          kUnitInfected = 256 /*killed by an infecting unit: rises as the infect type (originals)*/ };
+                          kUnitInfected = 256 /*killed by an infecting unit: rises as the infect type (originals)*/,
+                          kUnitFollower = 512 /*top-down squad member: follows its hero, not RTS orders / AI (RtsTopDown.cpp)*/ };
 constexpr uint16_t kUnitOffMap = kUnitInHand | kUnitInCargo;
+// Mask for clearing unit flags. Clearing used to go through uint8_t masks, which also dropped kUnitInfected; that
+// stays exactly as it was (checksums), while kUnitFollower (and later high flags) survive.
+constexpr uint16_t kKeepFlags(int notMask) { return uint16_t(notMask & 0xFF) | uint16_t(kUnitFollower); }
 
 struct Unit {
     uint16_t type = 0;
@@ -522,6 +550,13 @@ struct GameState {
 // ---------------------------------------------------------------- module
 struct VisionCache;   // RtsVision.cpp
 
+// Match outcome, frozen at the end of the first tick that has a result (docs/battle-net.md): result() keeps returning
+// it and the report blob never changes again, so every client's hosted-battle result report is identical however far
+// past the result tick its rollback session predicted. A world resource: rollback snapshots copy it; it is neither
+// hashed nor saved (checksums and save layouts of every game stay as they were).
+struct MatchOutcome { int result = 0; uint32_t tick = 0; std::vector<uint8_t> blob; };
+
+class Progression;   // RtsProgression.h (rules "progression")
 class RtsModule final : public GameModule {
 public:
     RtsModule();
@@ -535,6 +570,10 @@ public:
     void prepareSnapshot(Simulation& sim) override { if (script_) script_->flush(sim); }
     bool serializeState(Simulation& sim, Archive& a) override;   // RtsSave.cpp
     int result(Simulation& sim) override;
+    // Frozen outcome (null / empty until the match has a result). The blob is what hosted battle clients report
+    // (NetClient::setResultReporter): result, tick, per player slot / team / alive / units / structures / team score.
+    const MatchOutcome* outcome(Simulation& sim) const;
+    std::vector<uint8_t> outcomeBlob(Simulation& sim) const;
     double speedScale(Simulation& sim) override;   // match modes: time limit speed steps, sudden death preview (RtsModes.cpp)
     // ---- match modes (RtsModes.cpp): the effective modes of this match (rules + matchMode preset + map)
     const ModesRules& modes() const { return modes_; }
@@ -553,6 +592,8 @@ public:
     Arsenal* arsenal() const { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (RtsArsenal.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
+    Progression* progression() const { return progression_.get(); }   // in-match progression (RtsProgression.h); inactive without rules "progression"
+    Encounters* encounters() const { return encounters_.get(); }   // boss encounters (RtsEncounters.h); null before setup
     Environment* environment() const { return env_ && env_->active() ? env_.get() : nullptr; }   // map environment (RtsEnv.h); null without one
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
@@ -839,7 +880,10 @@ private:
     void tickPlayerSkills(Simulation& sim);
     void impactProjectile(Simulation& sim, Entity p);
     const ProjectileFlight* projectileFlight(const Projectile& p) const;
+    const WeaponDef* projectileWeapon(const Projectile& p) const;   // the weapon a shot came from (also bullet perk variants)
     void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
+    int liveResult(Simulation& sim);                 // the result the state shows now (result(): frozen once decided)
+    void freezeOutcome(Simulation& sim);             // "outcome" system: latches the first result + its report blob
     friend class Arsenal;   // free fire launches weapon projectile programs at a point (RtsArsenal.cpp)
     void bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) const;
     void sysProjectilePrograms(Simulation& sim, const std::vector<Entity>& projectiles);
@@ -924,11 +968,14 @@ private:
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
     std::unique_ptr<Raid> raid_;           // extraction raids (state: RaidStore resource)
+    friend class TopDown;                  // free fire launches weapon projectiles (initProjectileProgram)
     std::unique_ptr<Career> career_;       // rules "careers" (state: CareerStore resource)
     std::unique_ptr<Commerce> commerce_;   // rules "commerce" (state: CommerceStore resource)
     std::unique_ptr<Arsenal> arsenal_;     // rules "arsenal" (state: ArsenalStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
+    std::unique_ptr<Progression> progression_;   // rules "progression" (state: ProgressionStore resource)
+    std::unique_ptr<Encounters> encounters_;   // rules "encounters" (state: EncounterStore resource)
     std::unique_ptr<Environment> env_;     // map environment (RtsEnv.h; state: EnvState resource)
     std::vector<NativeDefinition> nativeDefinitions_;
     NativeModules native_;
