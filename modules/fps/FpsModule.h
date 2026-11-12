@@ -4,10 +4,12 @@
 #include <deque>
 #include "FpsSystems.h"
 #include "engine/world/CollisionStream.h"
+#include "libraries/include/aiverselib/genre/Melee.h"
 
 namespace aiverse::fps {
 constexpr uint16_t kInputCommand=1;
-enum Buttons : uint32_t { Fire=1, Jump=2, Crouch=4, Reload=8, Sprint=16, WeaponMask=224, Aim=256, Prone=512 };
+enum Buttons : uint32_t { Fire=1, Jump=2, Crouch=4, Reload=8, Sprint=16, WeaponMask=224, Aim=256, Prone=512, Melee=1024, Block=2048, LockOn=4096 };
+constexpr uint32_t kButtonBits=8191;
 constexpr uint32_t selectWeapon(uint32_t index) { return (index+1)<<5; }
 // Weapon selection occupies bits 5..7; zero means keep the equipped weapon.
 struct Input {
@@ -32,10 +34,17 @@ struct WeaponConfig {
     std::string nameKey="fps.weapon.rifle";
     projectile::ProjectileFlight flight;
 };
+// Opt-in close combat (`fps.melee`); timing and hit history use the shared melee-combat library.
+struct MeleeConfig {
+    bool enabled=false;
+    int32_t damage=50;
+    uint32_t windup=6,active=4,recovery=12,bufferTicks=8,parryTicks=8,staggerTicks=30;
+    Fixed range=2_fx,radius=Fixed::fromRatio(3,10),guardTurns=Fixed::fromRatio(1,8),lockRange=8_fx;
+};
 struct Config {
     uint32_t tickRate=60,snapshotRate=20,maxPlayers=100,rewindTicks=12,inputTimeout=15;
     Fixed interestRadius=250_fx,worldLimit=100000_fx;
-    MotorConfig motor; WeaponConfig weapon;SystemsConfig systems;
+    MotorConfig motor; WeaponConfig weapon;SystemsConfig systems;MeleeConfig melee;
     std::vector<WeaponConfig> weapons;
     std::string mode="deathmatch"; // deathmatch / elimination / battleRoyale
     uint32_t respawnTicks=180,roundTicks=7200,zoneStart=1800,zoneDuration=7200;
@@ -61,6 +70,10 @@ struct Actor {
     uint32_t bleedUntil=0,blindUntil=0,vehicle=0,lastDamage=0;
     Action activeAction=Action::None;uint32_t actionUntil=0,actionTarget=0;Vec3 actionOrigin{};
     std::vector<Item> bag;
+    // Melee (saved from FPS save version 7; zero when fps.melee is disabled).
+    lib::genre::MeleeState melee;
+    uint32_t parryUntil=0,staggerUntil=0;uint8_t lockTarget=0;
+    bool blockHeld=false,meleeHasTip=false;Vec3 meleeTip{};
 
     bool operator==(const Actor&) const = default;
 };
@@ -106,11 +119,13 @@ private:
     bool traceShot(Simulation&,uint8_t,Vec3,Vec3,int32_t,const WeaponConfig&,const std::vector<Actor>&,Projectile* projectile=nullptr);
     void damage(Simulation&,uint8_t,Actor&,int32_t,bool head=false);
     void action(Simulation&,Actor&,Action,uint32_t);
+    void tickMelee(Simulation&,Actor&,const Input&);
     void finishRound(Simulation&,int32_t);
     std::vector<world::Bounds> ladders_,sites_;
     std::map<uint32_t,Fixed> penetrable_;
     std::vector<Vehicle> initialVehicles_;
     std::vector<Loot> initialLoot_;
+    lib::genre::AttackSet meleeAttacks_;
 
     Config config_;
     world::SpatialWorld collision_;

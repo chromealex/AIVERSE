@@ -70,6 +70,40 @@ int main() {{
     assert {p.name for p in build.rglob('*.a')}=={'libaiverse_meta_data.a','libaiverse_meta_client.a'}
     client_symbols=run([nm,'-C',build/'check_client'])
     assert 'aiverse::meta::Service::' not in client_symbols and 'aiverse::meta::Economy::' not in client_symbols
+    # Exercise the selected reference service, not only direct Service construction.
+    with (root/'CMakeLists.txt').open('a') as out:
+        out.write('aiverse_add_meta_service(selected_rpc MODULES economy social)\n')
+    config=root/'service.json'
+    config.write_text(json.dumps(kits.definitions(kits.resolve(['economy','social']))))
+    run(['cmake','-S',root,'-B',build])
+    run(['cmake','--build',build,'--target','selected_rpc','-j','6'])
+    with subprocess.Popen([str(build/'selected_rpc'),str(config)],stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE,text=True) as process:
+        state=None
+        for service,action,operation,args,authority in [
+            ('profile','create','init',{},False),
+            ('economy','buy','buy',{'id':'sword'},False),
+            ('chat','send','chat',{'id':'global','text':'hello'},False),
+            ('board','submit','score',{'id':'global','score':25},True),
+            ('meta','view','',{},False)]:
+            process.stdin.write(json.dumps(dict(state=state,player='p',authority=authority,
+                now=100,request=dict(service=service,action=action,operation=operation,arguments=args)))+'\n')
+            process.stdin.flush()
+            response=json.loads(process.stdout.readline())
+            assert response['code'] in (0,1),response
+            state=response['state']
+        assert response['data']['profile']['balances']['gold']==400
+        assert response['data']['chats']['global'][0]['text']=='hello'
+        assert response['data']['boards']['global'][0]['score']==25
+        process.stdin.close()
+        assert process.wait(timeout=10)==0
+    symbols=run([nm,'-C',build/'selected_rpc'])
+    for forbidden in ['modules::all(', 'modules::loot(', 'modules::clans(', 'Client::', 'Economy::claimDaily(']:
+        assert forbidden not in symbols,forbidden
+    link=(build/'CMakeFiles/selected_rpc.dir/link.txt').read_text()
+    for key in modules:
+        archive='libaiverse_meta_'+key.replace('-','_')+'.a'
+        assert (archive in link)==(key in {'economy','social'}),(archive,link)
     for feature in requested:
         name=feature.replace('-','_');exe=build/('check_'+name)
         run(['cmake','--build',build,'--target',exe.name,'-j','6']);run([exe])

@@ -81,7 +81,7 @@ void deterministic(Json rules,Json map) {
     rules.member("fps").set("mode",Json::string("deathmatch"));
     auto a=simulation(rules,map),b=simulation(rules,map);
     for(uint32_t t=0;t<240;++t) {
-        fps::Input in;in.sequence=t+1;in.forward=t<100?1000:0;in.buttons=t==130?fps::Jump:0;
+        fps::Input in;in.sequence=t+1;in.forward=t<100?1000:0;in.buttons=t==130?uint32_t(fps::Jump):0u;
         auto cmd=fps::command(1,in);cmd.tick=t;a->inject(cmd);b->inject(cmd);a->step();b->step();CHECK(a->checksum()==b->checksum());
     }
     CHECK(state(*a).actors[0].pos.y<1_fx);CHECK(state(*a).actors[0].pos.z> -12_fx);
@@ -126,6 +126,7 @@ void weapons(Json rules,Json map) {
 }
 #include "systems.inc"
 #include "projectiles.inc"
+#include "melee.inc"
 void network(Json rules,Json map) {
     rules.member("fps").set("weapons",Json::parse(R"([{"magazine":12},{"magazine":30}])"));
     rules.member("fps").set("mode",Json::string("deathmatch"));
@@ -154,6 +155,6 @@ void network(Json rules,Json map) {
 }
 }
 int main(int argc,char** argv) {
-    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");audioBank(root+"/../../../engine/assets/fps_audio.json");spatial();cameraControls();latestChannel();chunks();deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
+    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");audioBank(root+"/../../../engine/assets/fps_audio.json");spatial();cameraControls();latestChannel();chunks();deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();melee();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
     catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}
 }
