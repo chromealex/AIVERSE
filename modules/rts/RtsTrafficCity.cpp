@@ -243,22 +243,32 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
     };
 
     // 1) what happened last tick
-    struct Happened { uint16_t ev; uint16_t type; Vec2 pos; Entity by; Fixed blow; };
+    struct Happened { uint16_t ev; uint16_t type; Vec2 pos; Entity by; Fixed blow; Entity who; };
     std::vector<Happened> happened;
     for (const TrafficEvent& ev : st.happened) {
-        if (ev.type == kEvDied) happened.push_back({kEvDied, ev.unitType, v2(ev.pos), ev.b, ev.blow});
-        else if (ev.type == kEvAttack) happened.push_back({kEvAttack, 0, v2(ev.pos), ev.a, Fixed{}});
+        if (ev.type == kEvDied) happened.push_back({kEvDied, ev.unitType, v2(ev.pos), ev.b, ev.blow, ev.a});
+        else if (ev.type == kEvAttack) happened.push_back({kEvAttack, 0, v2(ev.pos), ev.a, Fixed{}, kNullEntity});
     }
     for (auto& h : happened) {
         const Entity hero = heroBehind(h.by);
         if (h.ev == kEvAttack) { if (hero.valid()) report(sim, kIncidentCrime, h.pos, kNullEntity, hero); continue; }
         if (isCasualtyType(h.type)) {
+            // a citizen: he is in hospital now (back home by himself if no ambulance ever takes him there), or dead
+            int32_t citizen = -1;
+            const bool fatal = h.blow >= m_->rules().types[h.type].maxHp * ir.lethal;
+            for (auto& p : st.people) if (p.e == h.who) citizen = p.citizen;
+            if (citizen >= 0 && size_t(citizen) < st.citizens.size()) {
+                TrafficCitizen& c = st.citizens[size_t(citizen)];
+                c.e = kNullEntity;
+                c.state = fatal ? kCitizenDead : kCitizenHospital;
+                c.eta = sim.tick() + ir.bodyTicks + ir.treatTicks;
+            }
             if (ir.body != UINT16_MAX) {
                 const Entity body = m_->spawn(sim, ir.body, 0, v3(h.pos));
                 if (body.valid()) if (TrafficIncident* inc = incidentOf(st, report(sim, kIncidentInjured, h.pos, body))) {
                     inc->victim = h.type;
-                    // a pistol shot or a slow car knocks a person down; a rocket or a car at speed kills
-                    inc->fatal = h.blow >= m_->rules().types[h.type].maxHp * ir.lethal;
+                    inc->citizen = citizen;
+                    inc->fatal = fatal;   // a pistol shot or a slow car knocks a person down; a rocket or a car at speed kills
                 }
             }
             if (hero.valid()) report(sim, kIncidentCrime, h.pos, kNullEntity, hero);
@@ -314,6 +324,14 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
             const TrafficPatient q = st.patients[i];
             if (sim.tick() < q.release) { ++i; continue; }
             st.patients.erase(st.patients.begin() + long(i));
+            if (q.citizen >= 0 && size_t(q.citizen) < st.citizens.size()) {   // a citizen: home from the hospital door, then his day goes on
+                TrafficCitizen& c = st.citizens[size_t(q.citizen)];
+                if (c.state == kCitizenHospital) {
+                    c.state = kCitizenToHome; c.from = q.at; c.left = sim.tick();
+                    c.eta = sim.tick() + ticksOf((places_[size_t(c.home)].pos - q.at).length() / rules_.population.walk, sim.tickRate()) + 1;
+                }
+                continue;
+            }
             const int cx = int(q.at.x.floorInt()), cz = int(q.at.y.floorInt());
             int cell = -1;
             for (int r = 0; r <= 5 && cell < 0; ++r)
@@ -488,7 +506,7 @@ void Traffic::resolve(Simulation& sim, TrafficStore& st, TrafficIncident& inc) {
     if (inc.kind == kIncidentInjured) {   // to the hospital the ambulance came from; treated there, then back on his feet
         if (const TrafficCar* c = carOf(st, inc.responder); c && c->homePiece >= 0 && inc.victim != UINT16_MAX && !inc.fatal && st.patients.size() < 256)
             for (auto& s : stations_[size_t(c->service)])
-                if (s.piece == c->homePiece && s.along == c->homeAlong) { st.patients.push_back({inc.victim, s.pos, sim.tick() + ir.treatTicks}); break; }
+                if (s.piece == c->homePiece && s.along == c->homeAlong) { st.patients.push_back({inc.victim, s.pos, sim.tick() + ir.treatTicks, inc.citizen}); break; }
         silentRemove(sim, inc.subject);
     } else if (inc.kind == kIncidentFire) silentRemove(sim, inc.subject);
     else if (inc.kind == kIncidentWreck && living(w, inc.subject)) {

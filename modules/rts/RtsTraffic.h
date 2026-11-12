@@ -61,6 +61,34 @@ struct TrafficIncidentRules {
     std::vector<uint16_t> lots;              // map object types: towed cars are put next to the nearest one
 };
 
+// Population (RtsTrafficPopulation.cpp): everybody has a home and most have a job with a shift.
+struct TrafficPlaceKind {
+    std::string id;
+    int lives = 0;                           // residents per place
+    int jobs = 0;                            // workers per shift
+    std::vector<std::pair<int, int>> shifts; // minutes of the day [from, to); to < from: over midnight
+};
+struct TrafficPopulationRules {
+    int count = 0;                           // citizens (0: no population)
+    uint32_t dayTicks = 24000;               // ticks of a game day
+    int startMinute = 8 * 60;                // minute of the day at tick 0
+    std::vector<TrafficPlaceKind> kinds;
+    std::vector<std::pair<uint16_t, uint16_t>> objects;   // (object type, kind): map objects that are places, sorted
+    std::vector<TrafficWeighted> types;      // who they are (default: pedestrians.types)
+    Fixed walk = Fixed::fromRatio(2, 5);     // cells / s of those nobody watches
+    int live = 60;                           // citizens on the street as real people at a time, on top of pedestrians.max
+};
+enum TrafficCitizenState : uint8_t { kCitizenHome = 0, kCitizenToWork, kCitizenWork, kCitizenToHome, kCitizenHospital, kCitizenDead };
+struct TrafficCitizen {
+    uint16_t type = UINT16_MAX;
+    int32_t home = -1, work = -1;            // places
+    uint8_t shift = 0;
+    uint8_t state = kCitizenHome;
+    Entity e = kNullEntity;                  // on the street as a real person (near a hero)
+    Vec2 from{};                             // travelling unseen: from here since `left`, there at `eta`
+    uint32_t left = 0, eta = 0;
+};
+
 struct TrafficRules {
     bool enabled = false;
     std::string roadTiles;                   // map tile characters that are road
@@ -108,6 +136,7 @@ struct TrafficRules {
     Fixed pauseMin = Fixed::fromInt(1), pauseMax = Fixed::fromInt(6);    // seconds between walks
     Fixed side = Fixed::fromRatio(3, 10);    // cells off the sidewalk centre line (each person keeps one)
     Fixed panicRadius = Fixed::fromInt(6), panicSeconds = Fixed::fromInt(8), panicSpeed = Fixed::fromRatio(9, 5);
+    TrafficPopulationRules population;
     std::vector<TrafficService> services;
     TrafficIncidentRules incidents;
     uint16_t driverPerson = UINT16_MAX;      // pedestrian thrown out of a car the hero takes (none: nobody)
@@ -163,10 +192,11 @@ struct TrafficIncident {
     uint32_t born = 0, assigned = 0;
     Entity responder = kNullEntity;
     uint16_t victim = UINT16_MAX;            // injured: the type of the person (he comes back from the hospital)
+    int32_t citizen = -1;                    // injured: who it is
     bool fatal = false;                      // injured: the blow was too much (taken to the hospital, never comes back)
 };
 
-struct TrafficPatient { uint16_t type = UINT16_MAX; Vec2 at{}; uint32_t release = 0; };   // in hospital until `release`
+struct TrafficPatient { uint16_t type = UINT16_MAX; Vec2 at{}; uint32_t release = 0; int32_t citizen = -1; };   // in hospital until `release`
 
 // What the traffic remembers of a tick (kEvAttack / kEvHit / kEvDied) until it runs again: the simulation forgets
 // its events at the start of the next step, before the movement system.
@@ -190,6 +220,8 @@ struct TrafficPerson {
     Fixed hp{};
     Vec3 lastPos{};
     bool panic = false;
+    int32_t citizen = -1;                    // a citizen on his way (RtsTrafficPopulation.cpp), -1: just a passer-by
+    int32_t goal = -1;                       // the cell he is going to
 };
 
 struct TrafficLightProp { Entity e = kNullEntity; int32_t junction = -1; uint8_t axis = 0; uint8_t shown = 255; };
@@ -198,6 +230,8 @@ struct TrafficStore {
     std::vector<TrafficCar> cars;            // ascending entity index
     std::vector<TrafficPerson> people;       // ascending entity index
     std::vector<TrafficLightProp> lights;
+    std::vector<TrafficCitizen> citizens;    // the population; the index is the citizen's id
+    uint32_t citizenCursor = 0;              // the next one to look at (a slice per tick)
     std::vector<TrafficIncident> incidents;  // in the order they happened
     uint32_t nextIncident = 1;
     std::vector<TrafficUsedCar> used;        // ascending entity index
@@ -230,6 +264,12 @@ public:
     bool walkAllowed(Simulation& sim, int strip) const;
     // something happened (scripts: game.traffic_report): the services answer it. Returns the incident id, 0: ignored
     uint32_t report(Simulation& sim, uint8_t kind, Vec2 pos, Entity subject = kNullEntity, Entity offender = kNullEntity);
+    static void parsePopulation(const Json& j, TrafficRules& r, const std::vector<std::string>& typeIds, uint32_t tickRate);
+    struct Place { uint16_t kind = 0; Vec2 pos{}; int32_t cell = -1; Entity object = kNullEntity; };
+    const std::vector<Place>& places() const { return places_; }
+    int minuteOfDay(Simulation& sim) const;  // 0..1439
+    const TrafficCitizen* citizenOf(Simulation& sim, Entity person) const;
+    int present(Simulation& sim, int place) const;   // workers at work in the place now (a shop is open when > 0)
     static void parseCity(const Json& j, TrafficRules& r, const std::vector<std::string>& typeIds, uint32_t tickRate);
     int kindOf(Simulation& sim, Entity vehicle) const;   // TrafficKind of a traffic car, -1: not one
     bool onRoad(Vec2 p) const;               // a road cell (piece or junction)
@@ -270,7 +310,11 @@ private:
     void people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci);
     bool spawnPerson(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci, Fixed minDist);
     void adoptPeople(Simulation& sim, TrafficStore& st);
-    bool newWalk(Simulation& sim, TrafficPerson& p, const Vec2* threat);
+    bool newWalk(Simulation& sim, TrafficPerson& p, const Vec2* threat, int goalCell = -1);
+    void setupPopulation(Simulation& sim, const Json& map);
+    void populate(Simulation& sim, TrafficStore& st);
+    void population(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci);
+    bool onShift(const TrafficCitizen& c, int minute, int lead) const;
     void startLeg(Simulation& sim, TrafficPerson& p);
     void nextPoint(Simulation& sim, TrafficPerson& p);
     void panic(Simulation& sim, TrafficPerson& p, Vec2 threat);
@@ -288,6 +332,7 @@ private:
     std::vector<BusStop> stops_;             // sorted by (piece, along)
     std::vector<std::vector<int32_t>> jbucket_;   // signalised junctions by 16-cell bucket (lights near the heroes)
     int bw_ = 0, bh_ = 0;
+    std::vector<Place> places_;              // homes and workplaces (map objects and the map's "places")
     std::vector<std::vector<Station>> stations_;   // per service
     std::vector<Vec2> lots_;
     std::vector<Ring> ring_;                 // per junction: the way round its island (roundabouts, monuments)

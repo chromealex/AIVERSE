@@ -120,6 +120,41 @@ the fire a `view.light` and particles. Crew types are ordinary units: officers n
 team is hostile to the heroes' to fight them. Service keys default to `range` 90, `crewCount` 2, `work` 5,
 `maxWork` 60, `max` 1, `speed` [12, 15].
 
+## Population: homes, jobs, shifts
+
+`modules/rts/RtsTrafficPopulation.cpp`, rules `traffic.population`. Tests: `aiverse_tests traffic_population`.
+
+- **Places** are homes and workplaces: map objects of the types in `objects` and the entries of the map's
+  `"places": [{"kind": "shop", "pos": [x, z]}]`. A place kind says how many people live there (`lives`) and how
+  many work there per shift (`jobs`, `shifts` as `[from, to]` hours; `to` < `from` is a night shift). The door of a
+  place is the nearest sidewalk cell (within 6 cells).
+- **Citizens.** On the first tick `count` citizens are created: homes fill in place order, the jobs are dealt out at
+  random, whoever is left has no job. Everybody has a type of `types` (default: the pedestrian types).
+- **The day.** `dayLength` seconds are 24 hours, starting at `startHour`. A citizen leaves home early enough to
+  walk to work (plus up to 20 minutes of his own), works his shift and goes home. A citizen nobody is near is a
+  record that is looked at every two seconds: at home, at work, or on his way from A to B between two times.
+- **Near a hero** a citizen on his way becomes a real pedestrian (at his door when he leaves in sight, else on the
+  sidewalk at the edge of sight), walks to the door of his destination, crossing on "walk" like everybody, and goes
+  in. `live` caps how many are on the street at a time. When the heroes leave he goes on unseen from where he is.
+  So anybody can be followed from his home to his workplace; `game.traffic_citizen(h)` tells who he is.
+- **Shops.** `Traffic::present(place)` / `work.open` in Lua: a workplace is open while one of its workers is in. A
+  shop with one keeper opens when he arrives and shuts when he leaves.
+- **Hurt citizens** stay themselves: knocked down, the citizen is in hospital (the ambulance's, see above), then
+  walks home from its door and his days go on; a fatal blow removes him from the population for good.
+- **Cost.** Per tick `count / (2 x tick rate)` records are looked at; 5000 citizens on a 384 x 384 city add
+  0.02 ms per tick. `game.traffic_clock()` is the hour of the day.
+
+```json
+"population": {"count": 5000, "dayLength": 1200, "startHour": 7, "walk": 0.4, "live": 80,
+  "kinds": {"house": {"lives": 40}, "shop": {"jobs": 1, "shifts": [[9, 20]]}, "office": {"jobs": 25, "shifts": [[9, 18]]},
+            "port": {"jobs": 200, "shifts": [[6, 14], [14, 22], [22, 6]]}},
+  "objects": {"b_townhouse": "house", "b_market": "shop"}}
+```
+
+Not done yet: commuting by car and by bus (everybody walks, so a big city needs a long day or short ways), long
+ways round rivers (a walker whose sidewalks lead no nearer finishes the way unseen), children and schools, lunch,
+shopping, money, the hero as a citizen.
+
 ## rules.json
 
 ```json

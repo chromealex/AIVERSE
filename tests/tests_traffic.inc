@@ -573,3 +573,113 @@ TEST(traffic_city_determinism_and_saves_with_services_on_call) {
     run(*s1, 5);
     CHECK(s1->checksum() == after);
 }
+
+// ------------------------------------------------------------------ population: homes, jobs, shifts
+namespace {
+// a game day of 1200 s (an hour = 50 s) that starts at 8:00; twelve people in one house, a shop with one keeper
+// (9-13) and a port with five jobs on a day shift (9-13) and five on a night shift (20-4): one is out of work
+std::string populationRules() {
+    std::string rules = kCityRules;
+    const std::string at = R"("services": {)";
+    rules.insert(rules.find(at), R"("population": {"count": 12, "dayLength": 1200, "startHour": 8, "walk": 0.5, "types": ["ped"],
+        "kinds": {"house": {"lives": 12}, "shop": {"jobs": 1, "shifts": [[9, 13]]}, "port": {"jobs": 5, "shifts": [[9, 13], [20, 4]]}}},
+    )");
+    return rules;
+}
+const char* kPopulationPlaces = R"(,"places":[{"kind":"house","pos":[6.5,6.5]},{"kind":"shop","pos":[20.5,6.5]},{"kind":"port","pos":[20.5,20.5]}])";
+std::string populationMap() {
+    std::string map = trafficMap(R"({"type":"guy","owner":1,"pos":[8.5,4.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]})");
+    map.insert(map.size() - 1, kPopulationPlaces);
+    return map;
+}
+int citizensIn(Simulation& sim, int state, int shift = -1, int kind = -1) {
+    int n = 0;
+    for (auto& c : tstore(sim).citizens)
+        if (c.state == state && (shift < 0 || (c.work >= 0 && c.shift == shift)) && (kind < 0 || (c.work >= 0 && trf(sim).places()[size_t(c.work)].kind == kind))) ++n;
+    return n;
+}
+void runToHour(Simulation& sim, double hour) { while (trf(sim).minuteOfDay(sim) != int(hour * 60)) sim.step(); }
+} // namespace
+
+TEST(traffic_population_people_go_to_work_by_their_shifts_and_can_be_followed) {
+    auto sim = makeSimJson(populationRules(), populationMap(), 3);
+    auto& w = sim->world();
+    run(*sim, 0.2);
+    CHECK(trf(*sim).places().size() == 3 && tstore(*sim).citizens.size() == 12);
+    int employed = 0, keepers = 0;
+    for (auto& c : tstore(*sim).citizens) { employed += c.work >= 0; keepers += c.work == 1; CHECK(c.home == 0 && c.state == game::kCitizenHome); }
+    CHECK(employed == 11 && keepers == 1);
+    CHECK(trf(*sim).minuteOfDay(*sim) == 8 * 60 && trf(*sim).present(*sim, 1) == 0);   // 8:00, the shop is shut
+    // the morning: follow the first one who comes out of the house as a real person
+    int followed = -1, maxLive = 0;
+    Vec3 lastSeen{};
+    bool wentIn = false;
+    while (trf(*sim).minuteOfDay(*sim) != 11 * 60) {
+        sim->step();
+        int live = 0;
+        for (auto& p : tstore(*sim).people) {
+            if (p.citizen < 0) continue;
+            ++live;
+            if (followed < 0) { followed = p.citizen; CHECK(trf(*sim).citizenOf(*sim, p.e) == &tstore(*sim).citizens[size_t(followed)]); }
+            if (p.citizen == followed) lastSeen = w.get<Transform>(p.e).pos;
+        }
+        maxLive = std::max(maxLive, live);
+        if (followed >= 0 && tstore(*sim).citizens[size_t(followed)].state == game::kCitizenWork) wentIn = true;
+    }
+    CHECK(maxLive >= 3 && followed >= 0 && wentIn);
+    // he walked to the door of his own workplace and went in
+    const auto& me = tstore(*sim).citizens[size_t(followed)];
+    CHECK(!me.e.valid() && (lastSeen - Vec3{trf(*sim).places()[size_t(me.work)].pos.x, Fixed{}, trf(*sim).places()[size_t(me.work)].pos.y}).length() < Fixed::fromInt(7));
+    // 11:00: the day shifts are in, the shop is open, the night shift and the one without a job are at home
+    CHECK(citizensIn(*sim, game::kCitizenWork, 0) == 6 && trf(*sim).present(*sim, 1) == 1 && trf(*sim).present(*sim, 2) == 5);
+    CHECK(citizensIn(*sim, game::kCitizenHome) == 6);
+    // 15:30: everybody is home again (or nearly there), the shop is shut
+    runToHour(*sim, 15.5);
+    CHECK(trf(*sim).present(*sim, 1) == 0 && trf(*sim).present(*sim, 2) == 0 && citizensIn(*sim, game::kCitizenHome) >= 9);
+    // 22:00: the night shift of the port is at work
+    runToHour(*sim, 22);
+    CHECK(citizensIn(*sim, game::kCitizenWork, 1, 2) == 5 && trf(*sim).present(*sim, 2) == 5 && trf(*sim).present(*sim, 1) == 0);
+}
+
+TEST(traffic_population_far_from_the_hero_runs_on_the_schedule_alone) {
+    // people appear at most 3 cells from the hero: the whole commute happens unseen
+    std::string rules = populationRules();
+    const std::string from = R"("max": 0, "owner": 2, "spawnMin": 2, "spawnMax": 40, "despawn": 60})";
+    rules.replace(rules.find(from), from.size(), R"("max": 0, "owner": 2, "spawnMin": 1, "spawnMax": 2, "despawn": 3})");
+    auto sim = makeSimJson(rules, populationMap(), 3);
+    run(*sim, 0.2);
+    int units = 0;
+    sim->world().each<game::Unit, Transform>([&](Entity, game::Unit&, Transform&) { ++units; });
+    runToHour(*sim, 11);
+    CHECK(tstore(*sim).people.empty());
+    int now = 0;
+    sim->world().each<game::Unit, Transform>([&](Entity, game::Unit&, Transform&) { ++now; });
+    CHECK(now == units);   // nobody was ever spawned
+    CHECK(citizensIn(*sim, game::kCitizenWork, 0) == 6 && trf(*sim).present(*sim, 1) == 1);
+    runToHour(*sim, 15.5);
+    CHECK(citizensIn(*sim, game::kCitizenHome) == 12);
+}
+
+TEST(traffic_population_determinism_and_saves) {
+    auto s1 = makeSimJson(populationRules(), populationMap(), 5), s2 = makeSimJson(populationRules(), populationMap(), 5);
+    std::vector<uint64_t> c1, c2;
+    for (int i = 0; i < 1500; ++i) { s1->step(); s2->step(); if (i % 100 == 0) { c1.push_back(s1->checksum()); c2.push_back(s2->checksum()); } }
+    CHECK(c1 == c2 && c1.front() != c1.back());
+    bool live = false;
+    for (auto& p : tstore(*s1).people) live = live || p.citizen >= 0;
+    CHECK(live);   // saved in the middle of the morning walk
+    std::string save = s1->serialize();
+    auto s3 = makeSimJson(populationRules(), populationMap(), 5);
+    std::string err;
+    CHECK(s3->deserialize(save, &err));
+    CHECK(s3->checksum() == s1->checksum());
+    run(*s1, 60); run(*s3, 60);
+    CHECK(s3->checksum() == s1->checksum());
+    SimSnapshot snap;
+    s1->saveState(snap);
+    run(*s1, 10);
+    const uint64_t after = s1->checksum();
+    s1->loadState(snap);
+    run(*s1, 10);
+    CHECK(s1->checksum() == after);
+}
