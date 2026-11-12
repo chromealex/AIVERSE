@@ -63,6 +63,9 @@ public:
     // Host resource gate. False must not consume a tick, commands, RNG or gameplay state.
     // Immutable content readiness may delay wall time, never the outcome of a completed tick.
     virtual bool readyToStep(Simulation&) { return true; }
+    // Game speed derived from the simulation state (match modes speed the game up or slow it down). advance()
+    // runs that many ticks per real tick; the simulation itself is unchanged (presentation pacing only).
+    virtual double speedScale(Simulation&) { return 1.0; }
 };
 
 // Everything that changes while the simulation runs (rollback netcode saves one per tick).

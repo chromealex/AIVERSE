@@ -12949,6 +12949,7 @@ TEST(models_gltf_lod_metadata) {
     catch (const std::exception&) { rejected = true; }
     CHECK(rejected);
 }
+#include "tests_modes.inc"   // match modes (agent-bw-modes)
 #include "animation/view.inc"
 #include "animation/editor.inc"
 #include "geometry/runtime.inc"
