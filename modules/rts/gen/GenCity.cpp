@@ -83,12 +83,14 @@ std::vector<int> spread(Rng& rng, int L, int w, int spacing, int jitter) {
 struct Pt { int x, z; };
 struct Path { std::vector<Pt> pts; std::vector<int> hd; int w; int cls; int kind; };   // kind 0 radial, 1 ring, 2 street
 struct Seed { Pt p; int heading; int depth; int parent; };
+struct Node { Pt p; int a, b; const char* type; };       // where curved roads meet: road ids (b -1: none), t / cross / join / end
 
 struct Plan {
     int W = 0, H = 0;
     int dx0 = 0, dz0 = 0, dW = 0, dH = 0;                 // the centre with the street grid (the whole map in the grid layout)
     std::vector<int32_t> rid, rstep;                      // which road painted the cell first, and at which step
     std::vector<Path> paths;                              // organic roads
+    std::vector<Node> nodes;                              // their junctions and dead ends
     bool organic = false;
     std::vector<uint8_t> kind, bridge;
     std::vector<int16_t> vr, hr;                          // index of the vertical / horizontal road over the cell, -1
@@ -185,12 +187,18 @@ void growRadial(Plan& p, Rng& rng, Pt start, int base) {
     Path path{{start}, {base}, 4, 0, 0};
     Pt cur = start;
     int dev = 0, curv = 0;
+    if (inMap(p, start, 0)) {   // it continues an arterial of the centre (or leaves its ring road)
+        const Pt inside = advance(start, base + 32768, 256);
+        const int from = inMap(p, inside, 0) ? p.rid[size_t(p.ci(inside.x >> 8, inside.z >> 8))] : -1;
+        p.nodes.push_back({start, from, id, "join"});
+    }
     for (int step = 0; step < 4000; ++step) {
         curv = std::clamp(curv + rng.range(-260, 260) - dev / 48, -1100, 1100);
         dev = std::clamp(dev + curv, -9000, 9000);
         const Pt nx = advance(cur, base + dev, 512);
         Pt hit;
         if (step > 4 && nearRoad(p, nx, 4 * 256, id, step - 6, -2, true, hit)) {
+            p.nodes.push_back({hit, p.rid[size_t(p.ci(hit.x >> 8, hit.z >> 8))], id, "t"});   // it runs into another arterial
             paintSegment(p, cur, hit, 4, 0, id, step);
             path.pts.push_back(hit); path.hd.push_back(base + dev);
             break;
@@ -229,6 +237,7 @@ void growStreets(Plan& p, Rng& rng, std::vector<Seed>& queue, Pt centre, int max
         int heading = s.heading, curv = 0, since = 0, step = 0;
         const int len = rng.range(10, 30);
         bool joined = false;
+        Node joinNode{};
         for (; step < len; ++step) {
             curv = std::clamp(curv + rng.range(-420, 420), -1500, 1500);
             heading += curv;
@@ -239,6 +248,7 @@ void growStreets(Plan& p, Rng& rng, std::vector<Seed>& queue, Pt centre, int max
             Pt hit;
             if (nearRoad(p, nx, 5 * 256, id, step - 8, step < 6 ? s.parent : -2, false, hit)) {
                 if (step < 2) break;                           // squeezed between two roads: no street here
+                joinNode = {hit, p.rid[size_t(p.ci(hit.x >> 8, hit.z >> 8))], id, "t"};
                 paintSegment(p, cur, hit, 2, 1, id, step);
                 path.pts.push_back(hit); path.hd.push_back(heading);
                 joined = true;
@@ -254,6 +264,8 @@ void growStreets(Plan& p, Rng& rng, std::vector<Seed>& queue, Pt centre, int max
         }
         if (path.pts.size() < 3) continue;                     // a stub: its few cells stay as a driveway
         if (!joined) paintPoint(p, cur, 3, 1, id, step);       // cul-de-sac
+        p.nodes.push_back({s.p, s.parent, id, "t"});          // where it leaves its parent road
+        p.nodes.push_back(joined ? joinNode : Node{cur, id, -1, "end"});
         p.paths.push_back(std::move(path));
     }
 }
@@ -366,6 +378,24 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
             const int radius = p.dW * 128 * ring / 100;
             if (int64_t(radius) * 109 / 100 + 4 * 256 < std::min(W, H) * 128) growRing(p, rng, centre, radius);
         }
+        // where a ring road crosses an avenue
+        for (size_t r = 0; r < p.paths.size(); ++r)
+            for (size_t a = 0; p.paths[r].kind == 1 && a < p.paths.size(); ++a) {
+                if (p.paths[a].kind != 0) continue;
+                const auto& rp = p.paths[r].pts;
+                const auto& ap = p.paths[a].pts;
+                for (size_t i = 0; i + 1 < rp.size(); ++i)
+                    for (size_t j = 0; j + 1 < ap.size(); ++j) {
+                        const int64_t rx = rp[i + 1].x - rp[i].x, rz = rp[i + 1].z - rp[i].z, sx = ap[j + 1].x - ap[j].x, sz = ap[j + 1].z - ap[j].z;
+                        const int64_t den = rx * sz - rz * sx;
+                        if (den == 0) continue;
+                        const int64_t qx = ap[j].x - rp[i].x, qz = ap[j].z - rp[i].z;
+                        const int64_t tn = qx * sz - qz * sx, un = qx * rz - qz * rx;     // t = tn / den on the ring, u = un / den on the avenue
+                        const bool tin = den > 0 ? (tn >= 0 && tn < den) : (tn <= 0 && tn > den), uin = den > 0 ? (un >= 0 && un < den) : (un <= 0 && un > den);
+                        if (!tin || !uin) continue;
+                        p.nodes.push_back({{rp[i].x + int(rx * tn / den), rp[i].z + int(rz * tn / den)}, int(p.roads.size() + a), int(p.roads.size() + r), "cross"});
+                    }
+            }
         std::vector<Seed> queue;
         const size_t avenues = p.paths.size();
         for (size_t k = 0; k < avenues; ++k) {
@@ -843,7 +873,6 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     city.set("cellMeters", c.rulesJson["driving"]["metersPerCell"].isNumber() ? c.rulesJson["driving"]["metersPerCell"] : num(4));
     city.set("traffic", Json::string("right"));
     city.set("roads", jroads);
-    city.set("junctions", junctions);
     city.set("blocks", blocks);
     if (p.organic) {   // curved roads: centre lines in cells, the brush is `width` cells wide
         static const char* kPathKind[3] = {"avenue", "ring", "street"};
@@ -873,10 +902,20 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
             }
         }
         city.set("paths", paths);
+        for (const Node& nd : p.nodes) {                    // junctions of curved roads: a point and a radius instead of a rectangle
+            Json j = Json::object(), rs = Json::array();
+            j.set("x", Json::number(Fixed::fromRatio(nd.p.x, 256))); j.set("z", Json::number(Fixed::fromRatio(nd.p.z, 256)));
+            j.set("radius", num(3));
+            rs.push(num(nd.a)); if (nd.b >= 0) rs.push(num(nd.b));
+            j.set("roads", rs);
+            j.set("type", Json::string(nd.type));
+            junctions.push(j);
+        }
         Json dt = Json::object();
         dt.set("x", num(p.dx0)); dt.set("z", num(p.dz0)); dt.set("w", num(p.dW)); dt.set("h", num(p.dH));
         city.set("downtown", dt);
     }
+    city.set("junctions", junctions);
     city.set("bridges", bridges);
     if (p.river) { Json rv = Json::object(); rv.set("from", num(p.rmin)); rv.set("to", num(p.rmax)); city.set("river", rv); }
     out.set("city", city);
@@ -885,7 +924,7 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     g.set("preset", Json::string(req.preset));
     g.set("seed", Json::number(int64_t(req.seed & 0x7fffffffffffffffull)));
     g.set("players", num(c.np));
-    g.set("roads", num(int(p.roads.size()))); g.set("junctions", num(int(junctions.size()))); g.set("bridges", num(int(city["bridges"].size())));
+    g.set("roads", num(int(p.roads.size()))); g.set("junctions", num(int(city["junctions"].size()))); g.set("bridges", num(int(city["bridges"].size())));
     g.set("roundabouts", num(int(p.roundabouts.size()))); g.set("blocks", num(int(p.leaves.size()))); g.set("parks", num(nParks));
     if (p.organic) { g.set("paths", num(int(p.paths.size()))); g.set("houses", num(nHouses)); }
     g.set("buildings", num(nBuildings)); g.set("cars", num(nCars)); g.set("people", num(nPeople));

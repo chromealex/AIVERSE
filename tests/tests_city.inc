@@ -175,6 +175,25 @@ TEST(city_organic_layout_has_curved_streets_suburbs_and_hills) {
         curved = curved || std::fabs((x1 - x0) * (zm - z0) - (z1 - z0) * (xm - x0)) > 2.0 * std::hypot(x1 - x0, z1 - z0);
     }
     CHECK(avenues >= 4 && rings >= 1 && streets >= 30 && curved);
+    // junctions of the curved roads: every street leaves a road and joins one or ends; rings cross avenues
+    {
+        const int firstPath = int(city["roads"].size());
+        int tee = 0, cross = 0, ends = 0, joins = 0;
+        std::set<int64_t> withNode;
+        bool onMap = true;
+        for (auto& j : city["junctions"].items()) {
+            if (!j.has("radius")) continue;                    // the grid's rectangles
+            const std::string type = j.getStr("type");
+            tee += type == "t"; cross += type == "cross"; ends += type == "end"; joins += type == "join";
+            for (auto& r : j["roads"].items()) withNode.insert(r.integer());
+            const double x = j["x"].toDouble(), z = j["z"].toDouble();
+            onMap = onMap && x >= 0 && z >= 0 && x <= W && z <= H;
+        }
+        bool every = true;
+        for (auto& pth : city["paths"].items()) every = every && withNode.count(pth.getInt("id")) > 0;
+        CHECK(tee >= streets && cross >= 2 && ends >= 3 && joins >= 4 && onMap && every && firstPath > 8);
+        CHECK(gen.getInt("junctions") == int64_t(city["junctions"].size()));
+    }
     CHECK(city["downtown"].getInt("w") >= 40 && city["downtown"].getInt("w") < W - 40);
     CHECK(gen.getInt("houses") >= 60 && gen.getInt("buildings") > gen.getInt("houses") && gen.getInt("bridges") >= 1);
     // every road cell (tile characters a / s) belongs to one network (diagonal steps count)

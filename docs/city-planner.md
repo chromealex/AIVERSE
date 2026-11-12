@@ -45,6 +45,10 @@ For big cities (128..1024 cells per side; the preset is 384 x 384 = 1.5 km at 4 
 
 Curved roads are in `city.paths`: `{"id", "class", "kind": "avenue" | "ring" | "street", "width", "points": [[x, z], ...]}`
 (centre line in cells), `city.downtown` is the grid square, bridges on paths are `{"road", "from": [x, z], "to": [x, z]}`.
+Junctions of curved roads are in `city.junctions` next to the grid's rectangles, as a point with a radius:
+`{"x", "z", "radius", "roads": [a, b], "type"}` — `t` (a street leaves a road or joins one; an avenue runs into
+another), `cross` (a ring road crosses an avenue), `join` (an avenue continues an arterial of the centre), `end`
+(a turning circle; one road id). Every path has at least one.
 Exact road tiles (`tileBases`) apply to the grid; curved roads get the plain `street` tile.
 
 ## What it takes from the rules
