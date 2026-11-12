@@ -139,17 +139,18 @@ struct BwPoint {
     Fixed def = Fixed::fromInt(1), defNext = Fixed::fromInt(1);   // full defense coefficient (now / at next morale level)
     Fixed prod{};                                                // units per second
     bool upgrading = false, dom = false, koth = false, tower = false;
+    bool onScreen = true; Fixed screenTime{};                    // BW IsPointInsideScreen / inScreenBattleTime
     Fixed towerRange{}, towerCooldown = Fixed::fromInt(1), towerKills = Fixed::fromInt(1);
     int nextLevel = -1; int convertTo[4] = {-1, -1, -1, -1};     // upgrade types (rules type index)
     int upgradeCost = 0; int convertCost[4] = {};
-    int produced = 0, kills = 0;                                 // (Downgrade heuristics; not tracked by the engine yet)
+    int produced = 0, kills = 0;                                 // HouseModule.producedUnits / TowerModule.killCount (match stats)
 };
 struct BwPlayer { bool alive = false, neutral = true; uint8_t team = 0; Fixed damage = Fixed::fromInt(1), speed = Fixed::fromInt(1);
                   int units = 0, maxUnits = 0, smithy = 0; Fixed morale{}; int moraleLevel = 0; uint16_t unitType = 0; };
 struct BwGroup {
     uint32_t id = 0; uint8_t owner = 0; int from = -1, to = -1;
     int count = 0, pending = 0;                                  // in flight / still inside the source
-    Fixed minDist{}, maxDist{}, routeLen{};
+    Fixed minDist{}, maxDist{}, routeLen{};                      // along the route (BW minDistanceToTarget / route.GetLength)
     bool fake = false;
     std::vector<Vec3> units;                                     // positions (heatmap)
     std::vector<Entity> ents;
@@ -161,6 +162,9 @@ struct BwWorld {
     std::vector<BwPlayer> players;                               // by slot (0 = neutral)
     std::vector<BwGroup> groups;
     Fixed time{}, releaseRate = Fixed::fromInt(40), mapW = Fixed::fromInt(64), mapH = Fixed::fromInt(64);
+    Fixed rowDistance{};                                         // BW units.rowsOffset (routes.groups rowSpacing, else 70 px)
+    bool rows = false;                                           // BW groups (rows of rules lanes.routes.lines)
+    std::vector<uint8_t> open;                                   // n*n: route open now (RoutesModule.FindUnlocked)
     uint32_t tick = 0;
     int pointOf(Entity e) const;
 };
@@ -168,7 +172,10 @@ struct BwWorld {
 // Routes between points: lengths and tower coverage, rebuilt when the lanes change (not saved: derived).
 struct BwRoutes {
     uint32_t signature = 0; std::vector<Entity> nodes; bool lanes = false;
-    std::vector<Fixed> len;                                     // n*n, < 0: no route
+    std::vector<Fixed> len;                                     // n*n BW AI length (Route.GetAILength), < 0: no route
+    std::vector<Fixed> geo;                                     // n*n line 0 length (Route.GetLength)
+    std::vector<std::vector<Fixed>> laneCum;                    // per GameState lane: cumulative length along its points
+    size_t lanesCount = 0;
     std::vector<std::vector<Vec3>> poly;                        // n*n (built on demand)
     std::vector<int32_t> cover;                                 // n*n*n coverage of tower k on route i-j (raw/64, -1 unknown)
     std::vector<int> roadsInRange;                              // per tower point, -1 unknown
@@ -230,6 +237,7 @@ public:
     Fixed ashleyTimer_{};
     std::vector<std::pair<Entity, Fixed>> activeTargets_;          // (target, battle time it frees up)
     std::vector<std::pair<Entity, int>> ashleyNeed_;               // needUnitsToUpgrade
+    std::vector<std::pair<Entity, uint32_t>> screenSince_;         // point -> tick it came on screen (inScreenBattleTime)
     // Bishop
     Fixed bScan_{}, bAttack_{}, bDefense_{}, bUpgrade_{}, bAwait_ = Fixed::fromInt(-1), bError_{};
     bool bReady_ = false;

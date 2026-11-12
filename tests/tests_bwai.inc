@@ -129,3 +129,100 @@ TEST(bwai_save_restore) {
     for (size_t i = 0; i < states.size(); ++i) { bots2.emplace_back(sim2->players()[i].slot, 1234); CHECK(bots2.back().loadState(states[i])); }
     CHECK(play(*sim2, bots2, 1200) == expect);
 }
+
+// ---- stage 2: engine support of the BW bots (hypnosis sends, per point counters, bot trigger actions, BW groups)
+
+// BW PointsHypnosis: the caster sends a share of the hypnotised enemy garrison, once
+TEST(bwai_hypnosis_send) {
+    Json rules = bwaiRules();
+    rules.member("statuses").set("hypno", Json::parse(R"({"flags":["hypnotised"],"sendShare":0.5})"));
+    Json* abilities = rules.find("playerAbilities");
+    abilities->push(Json::parse(R"({"id":"hypno","target":"structure","cooldown":1,"effects":[{"type":"status","status":"hypno","duration":5,"affects":"enemies"}]})"));
+    Json map = bwaiMap();
+    map.find("players")->at(0).set("loadout", Json::parse(R"(["hypno"])"));
+    auto sim = bwaiSim(rules, map, 1);
+    CHECK(game::loadRules(rules).statuses.size() > 0);
+    const Entity enemy = findType(*sim, "village3", 2), mine = findType(*sim, "village1", 1);
+    CHECK(enemy.valid() && mine.valid());
+    const int ability = mod(*sim).rules().findPlayerAbility("hypno");
+    Command send; send.player = 1; send.type = game::kCmdSend; send.units = {enemy}; send.target = mine; send.param = -100;
+    sim->submit(send);   // not hypnotised: ignored
+    for (int i = 0; i < 4; ++i) sim->step();
+    CHECK(sim->world().get<game::Garrison>(enemy).pendingOut == 0);
+    Command cast; cast.player = 1; cast.type = game::kCmdPlayerAbility; cast.param = ability; cast.target = enemy; cast.point = sim->world().get<Transform>(enemy).pos;
+    sim->submit(cast);
+    for (int i = 0; i < 4; ++i) sim->step();
+    const int before = sim->world().get<game::Garrison>(enemy).count;
+    sim->submit(send);
+    for (int i = 0; i < 3; ++i) sim->step();
+    const auto& g = sim->world().get<game::Garrison>(enemy);
+    const int gone = before - g.count;
+    CHECK(gone > 0 && gone <= before / 2 + 1);   // at most sendShare of the garrison
+    sim->submit(send);   // the hypnosis ended with the first send
+    for (int i = 0; i < 3; ++i) sim->step();
+    CHECK(before - sim->world().get<game::Garrison>(enemy).count <= gone + 1);
+}
+
+// HouseModule.producedUnits / TowerModule.killCount for the BW bots (match stats on, BW controller only)
+TEST(bwai_point_counters) {
+    Json rules = bwaiRules();
+    rules.set("matchStats", Json::fromBool(true));
+    auto sim = bwaiSim(rules, bwaiMap(), 1);
+    for (int i = 0; i < 20 * 30; ++i) sim->step();
+    int64_t produced = 0;
+    for (auto v : mod(*sim).state(*sim).modes.pointProduced) produced += v;
+    CHECK(produced > 0);
+    Json plain = Json::parseFile(kBwaiShroom + "/rules.json");
+    plain.set("matchStats", Json::fromBool(true));
+    auto other = bwaiSim(plain, bwaiMap(), 1);
+    for (int i = 0; i < 20 * 30; ++i) other->step();
+    CHECK(mod(*other).state(*other).modes.pointProduced.empty());   // other games keep their checksums
+}
+
+// Database/AI ActionSetMorale / ActionAddSkillEnergy / ActionSetProductionCoefficient / ActionSetTimeScale as rules triggers
+TEST(bwai_trigger_actions) {
+    Json rules = bwaiRules();
+    rules.set("matchStats", Json::fromBool(true));
+    rules.set("triggers", Json::parse(R"([
+        {"id":"a","event":"start","actions":[{"type":"setResource","resource":"morale","amount":3,"player":1},
+                                             {"type":"setProduction","unit":"village3","player":1,"amount":2},
+                                             {"type":"timeScale","amount":2}]},
+        {"id":"b","event":{"type":"time","seconds":2},"actions":[{"type":"resetCooldowns","player":1}]}])"));
+    auto sim = bwaiSim(rules, bwaiMap(), 1);
+    const int ability = mod(*sim).rules().findPlayerAbility("explosive_shells");   // a status: the village stays a village
+    const Entity village = findType(*sim, "village3", 1);
+    mod(*sim).state(*sim).players[1].stock[size_t(mod(*sim).rules().findResource("energy"))] = Fixed::fromInt(500);
+    Command cast; cast.player = 1; cast.type = game::kCmdPlayerAbility; cast.param = ability;
+    cast.target = village; cast.point = sim->world().get<Transform>(cast.target).pos;
+    sim->submit(cast);
+    for (int i = 0; i < 10; ++i) sim->step();
+    auto& st = mod(*sim).state(*sim).playerAbilities[1][size_t(ability)];
+    const bool cooling = st.readyAt > sim->tick();
+    CHECK(mod(*sim).state(*sim).players[1].stock[size_t(mod(*sim).rules().findResource("morale"))] >= Fixed::fromInt(2));
+    CHECK(village.valid() && mod(*sim).stat(*sim, village, game::Stat::ProductionSpeed) == Fixed::fromInt(2));
+    CHECK(mod(*sim).state(*sim).modes.speed == Fixed::fromInt(2));
+    for (int i = 0; i < 20 * 3; ++i) sim->step();
+    CHECK(cooling);
+    CHECK(mod(*sim).state(*sim).playerAbilities[1][size_t(ability)].readyAt <= sim->tick());
+    bool rejected = false;
+    Json bad = bwaiRules();
+    bad.set("triggers", Json::parse(R"([{"id":"x","event":"start","actions":[{"type":"setResource","amount":1}]}])"));
+    try { game::loadRules(bad); auto s2 = bwaiSim(bad, bwaiMap(), 1); } catch (const std::exception& e) { rejected = std::string(e.what()).find("setResource") != std::string::npos; }
+    CHECK(rejected);
+}
+
+// The real Bunker Wars template with BW groups (rows paid as they leave): Expert beats Ashley from both sides
+TEST(bwai_bunkerwars_expert_beats_ashley) {
+    const std::string game = std::string(AIVERSE_SOURCE_DIR) + "/templates/bunkerwars";
+    Json rules = Json::parseFile(game + "/rules.json");
+    rules.set("ai", Json::parse(R"({"controller":"bw"})"));
+    rules.find("lanes")->set("groups", Json::fromBool(true));
+    for (int side = 0; side < 2; ++side) {
+        Json map = Json::parseFile(game + "/maps/2players_2001.json");
+        map.find("players")->at(0).set("bot", Json::string(side ? "ashley" : "expert"));
+        map.find("players")->at(1).set("bot", Json::string(side ? "expert" : "ashley"));
+        const BwaiMatch r = bwaiMatch(rules, map, 1, 20 * 60 * 20);
+        std::printf("  bunkerwars 2001 expert as p%d: winner %d after %us\n", side ? 2 : 1, r.result, r.ticks / 20);
+        CHECK(r.result == (side ? 2 : 1));
+    }
+}

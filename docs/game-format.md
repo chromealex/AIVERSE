@@ -919,7 +919,7 @@ Common keys: `amount` (number or `[min, max]` rolled with the sim RNG), `percent
 | key | meaning |
 |---|---|
 | `tags` | status tags for `dispel` (`buff`, `debuff`, `magic`, any word) |
-| `flags` | `stun`, `silence`, `disarm`, `root`, `invulnerable`, `invisible`, `lock` (no sending / production), `blind`, `hidden` (garrison counts hidden), `flying` (off the lane, straight to the goal), `fake`, `ignoreDefense`, `spreads` (sent units carry it into the structure they enter — plague), `freezeRegen`, `alert`, `revealed` |
+| `flags` | `stun`, `silence`, `disarm`, `root`, `invulnerable`, `invisible`, `lock` (no sending / production), `blind`, `hidden` (garrison counts hidden), `flying` (off the lane, straight to the goal), `fake`, `ignoreDefense`, `spreads` (sent units carry it into the structure they enter — plague), `freezeRegen`, `alert`, `revealed`, `hypnotised` (its caster may send from this enemy garrison once: `sendShare`, `captureSent`) |
 | `mods` | stat modifiers per stack (`stat`, `add`, `mul`) — on players they apply to all their objects (wind, global bonuses) |
 | `tick` | `damage` / `heal` per stack, `interval`, `effects` (a payload around the holder: kill aura, burning) |
 | `shield` | absorbs damage (or assaulting units on a garrison); the status ends when it breaks |
@@ -1168,11 +1168,23 @@ conditions: [instant | timer {name} | value {name, cmp, value} | pointCaptured {
 minCount, minSpawned, progress} | time {cmp, value}], actions: [setTimer {name, seconds} | setValue | botAttack
 {sources, targets, count, useAllUnits, testing} | botIgnore {points} | botDisable {disabled} | botReset |
 botMoveUnits {from, to, percent} | groupSetState {groups, enabled} | botSet {attack, relocation, defense,
-upgrade}]}]}]. Map players: `"bot": "hard"` picks the slot's profile and marks it a bot. Morale / energy /
-production / time-scale trigger actions of BW belong to rules triggers. Hooks for other modes: the King of the
-Hill score is the trigger variable `kothScore` (else the team score), blizzard is the variable `blizzard` != 0.
-Engine gaps noted in the code: BW Hypnosis sends units out of the hypnotised enemy garrison (the engine has no
-such command), Downgrade ranks by units produced / tower kills (not counted by the engine yet).
+upgrade}]}]}]. Map players: `"bot": "hard"` picks the slot's profile and marks it a bot. BW's morale / energy /
+production / time-scale bot trigger actions are rules trigger actions (`setResource`, `give` + `resetCooldowns`,
+`setProduction`, `timeScale`, § Triggers).
+
+What the bots read from the other BW systems: authored routes (`canSend` = BW FindUnlocked, distances = BW
+`GetAILength` of the route, group progress along the lane, BW groups' rows with `lanes.groups`: row time =
+`rowSpacing / speed`, tower losses = BW `TowerModule.GetUnitsDamageForSpline`), the multiscreen (`screen`: points
+off the screen are skipped and count from the moment they appear, BW `inScreenBattleTime`), match modes
+(Domination / King of the Hill points and scores from `modes`; `vars.kothScore` / `vars.kothMax` only without
+them), the environment's blizzard (`environment` weather; `vars.blizzard` without one), per point counters for
+Downgrade (units produced / tower kills, kept with `matchStats` on). Hypnosis: a status with the flag
+`hypnotised` (`sendShare` 0..1 of the garrison, `captureSent`: the units become the caster's) lets its caster send
+from that enemy garrison once (BW `PointsHypnosis`); the bot then sends it into a stronger neutral or an enemy, as
+`AISkillHypnosis` does. BW plays with groups: games ported from BW should set `"lanes": {"groups": true}` (without
+it units stream out at once and the bots' timing estimates no longer hold; Expert then loses to Ashley).
+Pacing: bots of one process count each other as bots (BW `isBot`), so bot-only matches use the profile's middle
+delay.
 
 
 Flying tower (BW `PositionFlyingTower`, Hero14 "UFO"): a temporary tower at the clicked point, as BW does it:
@@ -1576,7 +1588,10 @@ Actions: `spawn` (`unit`, `count`, `at` [x,z] / `area`, `attackMove`), `give` / 
 `duration`), `message` (`text`), `setVariable` / `addVariable` (`name`, `value`), `research` (`tech`),
 `enableType` / `disableType` (`unit`), `victory` / `defeat`, `enableTrigger` / `disableTrigger`
 (`trigger`), `addScore` (`amount`), `setRegionOwner` (`region` name), `attackMove` / `move` (units
-matching the filter to `at` / `area`), `setTickets` (`amount`).
+matching the filter to `at` / `area`), `setTickets` (`amount`); Bunker Wars bot triggers (agent-bw-ai):
+`setResource` (`resource`, `amount`: the stock becomes amount, e.g. morale), `resetCooldowns` (the players'
+player abilities are ready), `setProduction` (`amount`: production speed coefficient of the matching structures,
+replacing the previous one), `timeScale` (`amount`: game speed, needs match modes / `matchStats`).
 
 Action `player`: `"triggering"` (default: the player of the event), `"all"`, `"enemies"`, `"allies"`,
 `"creeps"`, `"neutral"`, or a slot number. `"target": "triggeringUnit"` acts on the event's unit.

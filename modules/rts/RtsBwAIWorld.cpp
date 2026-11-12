@@ -68,28 +68,45 @@ void BwImpl::refreshRoutes(Ctx& c) {
     c.sim.world().each<Garrison, Unit>([&](Entity e, Garrison&, Unit&) { nodes.push_back(e); });
     std::sort(nodes.begin(), nodes.end(), [](Entity a, Entity b) { return a.index < b.index; });
     const bool lanes = c.R.lanes.enabled;
-    if (!rt.len.empty() && nodes == rt.nodes && rt.lanes == lanes && (!lanes || (rt.signature == gs.laneSignature && !gs.lanesDirty))) return;
+    if (!rt.len.empty() && nodes == rt.nodes && rt.lanes == lanes && rt.lanesCount == gs.lanes.size() &&
+        (!lanes || (rt.signature == gs.laneSignature && !gs.lanesDirty))) return;
     rt = BwRoutes{};
-    rt.nodes = nodes; rt.lanes = lanes; rt.signature = gs.laneSignature;
+    rt.nodes = nodes; rt.lanes = lanes; rt.signature = gs.laneSignature; rt.lanesCount = gs.lanes.size();
     const size_t n = nodes.size();
     rt.len.assign(n * n, Fixed::fromInt(-1));
+    rt.geo.assign(n * n, Fixed::fromInt(-1));
     rt.poly.assign(n * n, {});
     rt.cover.assign(n * n * n, -1);
     rt.roadsInRange.assign(n, -1);
+    rt.laneCum.resize(gs.lanes.size());
+    for (size_t l = 0; l < gs.lanes.size(); ++l) {
+        auto& cum = rt.laneCum[l];
+        const auto& pts = gs.lanes[l].points;
+        cum.assign(pts.size(), Fixed{});
+        for (size_t k = 1; k < pts.size(); ++k) cum[k] = cum[k - 1] + len2(pts[k - 1], pts[k]);
+    }
     World& w = c.sim.world();
+    const auto& defs = c.m.routeDefs();
     for (size_t i = 0; i < n; ++i)
         for (size_t j = i + 1; j < n; ++j) {
             std::vector<Vec3> pl;
+            Fixed ai = Fixed::fromInt(-1);
             if (lanes) {
                 const std::vector<int> ls = c.m.lanesBetween(c.sim, nodes[i], nodes[j]);
                 if (ls.empty()) continue;          // no lane: no route (BW Routes.Find == null)
                 pl = gs.lanes[size_t(ls[0])].points;
+                // authored routes: BW Route.GetAILength (control points, slowdown segments stretched)
+                if (!defs.empty() && size_t(ls[0]) < gs.routes.laneRoute.size()) {
+                    const int r = gs.routes.laneRoute[size_t(ls[0])];
+                    if (r >= 0 && size_t(r) < defs.size()) ai = routeAiLength(defs[size_t(r)]);
+                }
             } else {
                 pl = {w.get<Transform>(nodes[i]).pos, w.get<Transform>(nodes[j]).pos};
             }
             Fixed L{};
             for (size_t k = 1; k < pl.size(); ++k) L += len2(pl[k - 1], pl[k]);
-            rt.len[i * n + j] = rt.len[j * n + i] = L;
+            rt.geo[i * n + j] = rt.geo[j * n + i] = L;
+            rt.len[i * n + j] = rt.len[j * n + i] = ai.raw >= 0 ? ai : L;
             rt.poly[i * n + j] = pl;
         }
 }
@@ -104,6 +121,8 @@ void BwImpl::buildWorld(Ctx& c, BwWorld& W) {
     W.tick = c.sim.tick();
     W.time = Fixed::fromInt(int64_t(c.sim.tick())) / int64_t(c.sim.tickRate());
     W.releaseRate = Fixed::fromInt(2 * int64_t(c.sim.tickRate()));   // sysGarrison streams 2 units per tick out of a garrison
+    W.rows = R.routes.groups;                                          // BW groups: rows walk rowSpacing apart
+    W.rowDistance = W.rows ? R.routes.rowSpacing : c.px(70);           // BW BattleParameters units.rowsOffset
     W.mapW = Fixed::fromInt(std::max(1, gs.grid.w)); W.mapH = Fixed::fromInt(std::max(1, gs.grid.h));
     const size_t nPlayers = std::max<size_t>(gs.players.size(), 2);
     W.players.assign(std::max<size_t>(nPlayers, 256), BwPlayer{});
@@ -124,6 +143,18 @@ void BwImpl::buildWorld(Ctx& c, BwWorld& W) {
         p.role = bwRoleOf(R, c.cfg, u.type);
         p.value = g.count; p.pendingOut = g.pendingOut;
         p.pos = w.get<Transform>(e).pos;
+        p.onScreen = c.m.onScreen(c.sim, p.pos);
+        {   // inScreenBattleTime: seconds since the point came onto the screen (multiscreen maps scroll)
+            auto& since = c.ai.screenSince_;
+            auto it = std::find_if(since.begin(), since.end(), [&](auto& s) { return s.first == e; });
+            if (!p.onScreen) { if (it != since.end()) since.erase(it); }
+            else {
+                if (it == since.end()) { since.push_back({e, c.sim.tick() == 0 || !c.m.screen().enabled ? 0u : c.sim.tick()}); it = since.end() - 1; }
+                p.screenTime = Fixed::fromInt(int64_t(c.sim.tick() - it->second)) / int64_t(c.sim.tickRate());
+            }
+        }
+        if (const auto& pc = gs.modes.pointProduced; e.index < pc.size()) p.produced = int(pc[e.index]);
+        if (const auto& pk = gs.modes.pointKills; e.index < pk.size()) p.kills = int(pk[e.index]);
         p.max = adv ? int(c.m.stat(c.sim, e, Stat::GarrisonCap).floorInt()) : t.garrisonMax;
         p.def = t.garrisonDefense * (statDef ? c.m.stat(c.sim, e, Stat::Defense) : Fixed::fromInt(1));
         p.defNext = p.def;
@@ -135,6 +166,7 @@ void BwImpl::buildWorld(Ctx& c, BwWorld& W) {
             p.prod = (adv ? c.m.stat(c.sim, e, Stat::ProductionSpeed) : Fixed::fromInt(1)) / t.spawnInterval;
         p.dom = c.cfg.dominationTags && (t.tags & c.cfg.dominationTags);
         p.koth = c.cfg.kothTags && (t.tags & c.cfg.kothTags);
+        for (auto& mp : gs.modes.points) if (mp.e == e) { p.dom = p.dom || mp.kind == 1; p.koth = p.koth || mp.kind == 2; }   // match modes
         if (!t.weapons.empty()) {
             p.tower = true;
             const WeaponDef& wd = t.weapons[0];
@@ -202,7 +234,13 @@ void BwImpl::buildWorld(Ctx& c, BwWorld& W) {
             W.groups.push_back(g);
         }
         BwGroup& g = W.groups[it->second];
-        const Fixed d = len2(tr.pos, W.pts[size_t(to)].pos);
+        if (auto* f = w.tryGet<Statuses>(e); f && R.advancedEffects && (c.m.statusFlags(c.sim, e) & kStFake)) g.fake = true;
+        // distance left along the lane (BW Unit.distanceToPoint walks the spline), else straight
+        Fixed d = len2(tr.pos, W.pts[size_t(to)].pos);
+        if (auto* lw = w.tryGet<LaneWalker>(e); lw && lw->lane >= 0 && size_t(lw->lane) < c.ai.routes_.laneCum.size()) {
+            const auto& cum = c.ai.routes_.laneCum[size_t(lw->lane)];
+            if (!cum.empty()) { const size_t k = std::min<size_t>(lw->pos, cum.size() - 1); d = lw->reverse ? cum[k] : cum.back() - cum[k]; }
+        }
         if (g.count == 0 || d < g.minDist) g.minDist = d;
         if (g.count == 0 || d > g.maxDist) g.maxDist = d;
         ++g.count;
@@ -210,6 +248,20 @@ void BwImpl::buildWorld(Ctx& c, BwWorld& W) {
         g.ents.push_back(e);
         if (o.player < W.players.size() && o.player != 0) W.players[o.player].units++;
     });
+    // BW groups still spawning rows (routes.groups): the rest is still inside the source
+    for (auto& sg : gs.routes.groups) {
+        const int from = W.pointOf(sg.from), to = W.pointOf(sg.to);
+        if (from < 0 || to < 0) continue;
+        auto it = byKey.find(sg.id);
+        if (it == byKey.end()) {
+            BwGroup ng; ng.id = sg.id; ng.owner = sg.owner; ng.from = from; ng.to = to;
+            it = byKey.emplace(uint64_t(sg.id), W.groups.size()).first;
+            W.groups.push_back(ng);
+        }
+        BwGroup& g = W.groups[it->second];
+        g.pending += std::max(0, sg.need - sg.spawned);
+        if (g.from < 0) g.from = from;
+    }
     // units still inside their source (sent, not out yet)
     for (size_t i = 0; i < W.pts.size(); ++i) {
         const BwPoint& p = W.pts[i];
@@ -228,13 +280,20 @@ void BwImpl::buildWorld(Ctx& c, BwWorld& W) {
         W.groups[it->second].pending += p.pendingOut;
         if (W.groups[it->second].from < 0) W.groups[it->second].from = int(i);
     }
+    const size_t nn = c.ai.routes_.nodes.size();
     for (auto& g : W.groups) {
-        g.routeLen = g.from >= 0 ? c.dist(g.from, g.to) : Fixed::fromInt(-1);
+        g.routeLen = g.from >= 0 && size_t(g.from) < nn ? c.ai.routes_.geo[size_t(g.from) * nn + size_t(g.to)] : Fixed::fromInt(-1);
         if (g.routeLen.raw < 0) g.routeLen = g.maxDist;
-        // still inside: the stream will be this much longer
-        if (g.pending > 0) g.maxDist += W.players[g.owner].speed * Fixed::fromInt(g.pending) / W.releaseRate;
+        if (g.count == 0) g.minDist = g.maxDist = g.routeLen;   // nothing out yet: the whole road ahead
+        // still inside: the rows / the stream behind the last unit
+        if (g.pending > 0) g.maxDist += W.rows ? W.rowDistance * ((g.pending + c.R.routes.lines - 1) / std::max(1, c.R.routes.lines))
+                                                : W.players[g.owner].speed * Fixed::fromInt(g.pending) / W.releaseRate;
     }
-    // fake groups (illusions) are clones: units with the Clone fake status would be flagged here (effects agent hook)
+    // open routes now (RoutesModule.FindUnlocked: blockers close them)
+    W.open.assign(nn * nn, 0);
+    for (size_t i = 0; i < W.pts.size() && i < nn; ++i)
+        for (size_t j = 0; j < W.pts.size() && j < nn; ++j)
+            if (i != j && c.ai.routes_.len[i * nn + j].raw >= 0) W.open[i * nn + j] = c.m.canSend(c.sim, W.pts[i].e, W.pts[j].e) ? 1 : 0;
 }
 
 Fixed BwAI::Ctx::dist(int i, int j) {
@@ -247,10 +306,17 @@ Fixed BwAI::Ctx::dist(int i, int j) {
     return rt.len[size_t(i) * n + size_t(j)];
 }
 
+bool BwAI::Ctx::route(int i, int j) {
+    BwWorld& W = world();
+    const size_t n = ai.routes_.nodes.size();
+    if (i == j || i < 0 || j < 0 || size_t(i) >= n || size_t(j) >= n || W.open.size() < n * n) return false;
+    return W.open[size_t(i) * n + size_t(j)] != 0;
+}
+
 int BwAI::Ctx::towerKillsOnRoute(int from, int to, int count, uint8_t owner, std::vector<std::pair<int, int>>* byTower) {
     BwWorld& W = world();
     if (byTower) byTower->clear();
-    if (!route(from, to)) return 0;
+    if (from == to || dist(from, to).raw < 0) return 0;   // Routes.Find: locked routes still count
     BwRoutes& rt = ai.routes_;
     const size_t n = rt.nodes.size();
     const size_t a = size_t(std::min(from, to)), b = size_t(std::max(from, to));
@@ -277,18 +343,24 @@ int BwAI::Ctx::towerKillsOnRoute(int from, int to, int count, uint8_t owner, std
             cv = int32_t(std::min<int64_t>(inside.raw, INT32_MAX));
         }
         if (cv <= 0) continue;
-        const Fixed tc = Fixed::fromRaw(cv) / speed;
+        // TowerModule.GetUnitsDamageForSpline / GetDamageBySpline: one unit per shot while the group is in range
+        const Fixed cov = Fixed::fromRaw(cv);
         Fixed kills;
-        if (count <= 0) kills = Fixed::fromInt((tc / t.towerCooldown).floorInt()) * t.towerKills;   // GetDamageBySpline: one wave
-        else {
-            const Fixed T = tc + Fixed::fromInt(count) / W.releaseRate;                       // the whole stream passes the tower
-            kills = fxMin(Fixed::fromInt(count), Fixed::fromInt((T / t.towerCooldown).floorInt()) * t.towerKills);
+        if (count <= 0) {
+            const Fixed reverse = W.rowDistance * t.towerCooldown / 8;
+            const Fixed spd = speed - reverse;
+            kills = spd.raw <= 0 ? Fixed::fromInt(1000000) : Fixed::fromInt((cov / spd).floorInt());
+        } else {
+            const int rowsCount = std::max(0, (count - 1) / 8);
+            const Fixed duration = (cov + W.rowDistance * rowsCount) / speed;
+            const Fixed shots = duration / t.towerCooldown;
+            kills = Fixed::fromInt((shots + Fixed::fromRaw(Fixed::kOne - 1)).floorInt());
         }
-        const int ki = int((kills + Fixed::fromRaw(Fixed::kOne - 1)).floorInt());
+        const int ki = int(kills.floorInt());
         if (ki > 0 && byTower) byTower->push_back({int(k), ki});
         total += kills;
     }
-    return int((total + Fixed::fromRaw(Fixed::kOne - 1)).floorInt());
+    return int(total.floorInt());
 }
 
 int BwAI::Ctx::roadsInTowerRange(int tower) {
@@ -324,7 +396,7 @@ template <class F> void eachPoint(BwAI::Ctx& c, int p, F&& f) { for (int q = 0; 
 #define BW_REDUCE(name, filter, init, op, fin)                                                  \
     Fixed BwAI::Ctx::name(int p, uint8_t player) {                                              \
         Fixed acc = init; int n = 0;                                                            \
-        eachPoint(*this, p, [&](int q) {                                                        \
+        if (screen(p)) eachPoint(*this, p, [&](int q) {                                         \
             const uint8_t o = world().pts[size_t(q)].owner;                                     \
             if (!(filter)) return;                                                              \
             ++n; const Fixed d = dist(p, q); if (d.raw < 0) return;                             \
@@ -382,22 +454,25 @@ std::string fill(std::string s, int player) {
     return s;
 }
 }
-// King of the Hill score (game-mode hook): trigger variable `vars.kothScore` ("koth_{player}"), else the team score.
+// King of the Hill score (match modes, BW Player.kingOfTheHillScore): the team's score; trigger variable vars.kothScore
+// for games scripting their own mode.
 Fixed BwAI::Ctx::kothScore(uint8_t player) {
     GameState& gs = m.state(sim);
+    const uint8_t team = world().players[player].team;
+    if (m.modes().koh && team < gs.modes.kohScore.size()) return gs.modes.kohScore[team];
     auto it = gs.trig.vars.find(fill(cfg.kothScoreVar, player));
     if (it != gs.trig.vars.end()) return it->second;
-    const uint8_t team = world().players[player].team;
     return team < gs.score.size() ? gs.score[team] : Fixed{};
 }
-Fixed BwAI::Ctx::kothMax() {
+Fixed BwAI::Ctx::kothMax() {   // MapHeader.kingOfTheHillFFAScore
+    if (m.modes().koh) return m.modes().kohScore;
     GameState& gs = m.state(sim);
     auto it = gs.trig.vars.find(cfg.kothMaxVar);
-    if (it != gs.trig.vars.end()) return it->second;
-    return Fixed::fromInt(100);   // MapHeader.kingOfTheHillFFAScore default
+    return it != gs.trig.vars.end() ? it->second : Fixed::fromInt(300);
 }
-// Blizzard (environment hook): trigger variable `vars.blizzard` != 0 stops bots without canMoveInBlizzard.
+// Environment.IsBlizzard (map environment weather), else the trigger variable vars.blizzard != 0.
 bool BwAI::Ctx::blizzard() {
+    if (Environment* env = m.environment()) { const EnvState* st = env->state(sim); return st && env->def().weather.blizzard && st->blizzardState == 0; }
     GameState& gs = m.state(sim);
     auto it = gs.trig.vars.find(cfg.blizzardVar);
     return it != gs.trig.vars.end() && it->second.raw != 0;

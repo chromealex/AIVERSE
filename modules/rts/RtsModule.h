@@ -6,6 +6,7 @@
 //   RtsCombat.cpp    targeting, weapons, projectiles, abilities, buffs, heroes, squads, death
 //   RtsWorld.cpp     vision (with heights), creep, control points, regions, waves, neutrals, victory
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -583,6 +584,9 @@ public:
     Fixed bwTypeStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, int moraleDelta) const;
     // agent-bw-ai: Bunker Wars bot settings (rules ai.bw + map "ai"), null unless rules ai.controller is "bw"
     const std::shared_ptr<const struct BwAIConfig>& bwAI() const { return bwAI_; }
+    // agent-bw-ai: slots played by BW bots in this process (not sim state: the bots' action detector ignores them)
+    void bwRegisterBot(uint8_t slot) const { if (std::find(bwBots_.begin(), bwBots_.end(), slot) == bwBots_.end()) bwBots_.push_back(slot); }
+    const std::vector<uint8_t>& bwBots() const { return bwBots_; }
     Fixed typeStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, Fixed base) const;
     int membersAlive(Simulation& sim, Entity e) const;
     int levelAt(Simulation& sim, Vec3 p) const;
@@ -773,6 +777,9 @@ private:
     void hashModes(Simulation& sim, Hasher& h);
     friend bool ioModesState(RtsModule& m, Simulation& sim, Archive& a);
     std::shared_ptr<const struct BwAIConfig> bwAI_;   // agent-bw-ai
+    mutable std::vector<uint8_t> bwBots_;             // agent-bw-ai: bot slots of this process (presentation-like, never read by the sim)
+    void bwNoteProduced(Simulation& sim, Entity e, int n);   // RtsBwAISim.cpp: per point produced units
+    bool hypnoticSend(Simulation& sim, const Command& cmd);  // RtsBwAISim.cpp: kCmdSend out of a hypnotised garrison
     Json generated_;                 // generated map (see generatedMap())
     void setupMap(Simulation& sim, const Json& map);
     // ---- planets (RtsPlanets.cpp)

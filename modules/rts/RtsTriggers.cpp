@@ -130,6 +130,8 @@ struct Parser {
             {"setRegionOwner", TrigAction::SetRegionOwner}, {"attackMove", TrigAction::AttackMove}, {"move", TrigAction::MoveUnits},
             {"setTickets", TrigAction::SetTickets}, {"castAbility", TrigAction::CastAbility},
             {"objective", TrigAction::Objective}, {"dialog", TrigAction::Dialog}, {"camera", TrigAction::Camera}, {"endMission", TrigAction::EndMission}, {"script", TrigAction::Script},
+            {"setResource", TrigAction::SetResource}, {"resetCooldowns", TrigAction::ResetCooldowns}, {"setProduction", TrigAction::SetProduction},
+            {"timeScale", TrigAction::TimeScale},
         };
         bool known = false;
         for (auto& [k, v] : kinds) if (t == k) { o.kind = v; known = true; }
@@ -140,7 +142,9 @@ struct Parser {
         o.triggeringUnit = a.getStr("target", "") == "triggeringUnit";
         if (a.has("unit")) o.type = type(a.getStr("unit"));
         o.count = int(a.getInt("count", 1));
-        o.amount = a.getFx("amount", a.getFx("value"));
+        o.amount = a.getFx("amount", a.getFx("value", a.getFx("coefficient", a.getFx("scale"))));
+        if (t == "setResource" && !a.has("resource")) fail(where, "setResource needs 'resource'");
+        if ((t == "setProduction" || t == "timeScale") && o.amount.raw < 0) fail(where, t + ": must be >= 0");
         o.duration = a.getFx("duration");
         o.text = a.getStr("text");
         o.name = a.getStr("name", a.getStr("trigger", a.getStr("region")));

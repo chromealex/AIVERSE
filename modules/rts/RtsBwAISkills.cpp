@@ -24,6 +24,8 @@ void scanEffects(const Rules& R, const std::vector<EffectDef>& effs, Info& in, i
         in.range = fxMax(in.range, e.radius);
         if (e.duration.raw > 0 && in.duration.raw == 0) in.duration = e.duration;
         if (e.percent.raw > 0 && in.percent.raw == 0) in.percent = e.percent;
+        if (e.kind == EffectKind::Status && e.status >= 0 && size_t(e.status) < R.statuses.size() &&
+            (R.statuses[size_t(e.status)].flags & kStHypnotised) && in.percent.raw == 0) in.percent = R.statuses[size_t(e.status)].sendShare;
         if (e.amount.raw != 0 && in.amount.raw == 0) in.amount = e.amount;
         if (e.levelDelta && !in.levelDelta) in.levelDelta = e.levelDelta;
         if (e.toType != 0xFFFF && in.toType < 0) in.toType = e.toType;
@@ -63,6 +65,7 @@ BwSkill infer(const Rules& R, const PlayerAbilityDef& a) {
         case EffectKind::Status: {
             if (e.status < 0 || size_t(e.status) >= R.statuses.size()) return BwSkill::Generic;
             const StatusDef& s = R.statuses[size_t(e.status)];
+            if (s.flags & kStHypnotised) return BwSkill::Hypnosis;
             if (s.flags & kStInvulnerable) return BwSkill::Invulnerability;
             if (s.flags & kStStun) return BwSkill::Freeze;
             if (s.flags & kStIgnoreDefense) return BwSkill::IgnoreDefence;
@@ -96,6 +99,7 @@ struct Heat {
     void addGroup(BwAI::Ctx& c, const BwGroup& g, bool positive, Fixed maxDist = Fixed::fromInt(-1)) {
         const Vec3 to = c.world().pts[size_t(g.to)].pos;
         for (auto& u : g.units) {
+            if (!c.m.onScreen(c.sim, u)) continue;   // IsPointInsideScreen(me, group)
             if (maxDist.raw >= 0 && (u - to).xz().length() > maxDist) continue;
             add(u, positive ? 1 : -1);
         }
@@ -126,6 +130,7 @@ struct Caster {
                 for (auto& pt : W().pts) { const Fixed d = (pt.pos - p).xz().length(); if (d <= bd) { bd = d; target = pt.e; } }
             }
         }
+        if (!c.m.onScreen(c.sim, p)) return false;   // UseSkill: only inside the screen
         return c.cast(k.ability, p, target);
     }
     bool usePoint(int i) { return i >= 0 && use(W().pts[size_t(i)].pos, W().pts[size_t(i)].e); }
@@ -510,17 +515,15 @@ struct Caster {
             for (auto& t : sorted) if (ms()[size_t(t.point)].fullDefense().raw < 0) return use(t.pos);
             return false;
         }
-        case BwSkill::Downgrade: {
-            // BW ranks enemy houses by units produced and towers by kills (>= 100): the engine keeps no such counters yet
-            // (BwPoint.produced / kills hook), so a downgrade aims at the highest-level enemy point instead
+        case BwSkill::Downgrade: {   // the enemy house that produced most / the tower that killed most (>= 100)
             const int delta = info().levelDelta;
-            int best = -1;
+            int best = -1, mx = 0;
             for (int i = 0; i < n; ++i) {
                 const BwPoint& p = w.pts[size_t(i)];
                 if (p.level + delta <= 2 || (p.role != BwRole::House && p.role != BwRole::Tower) || !c.enemy(me(), p.owner)) continue;
-                const int v = std::max(p.role == BwRole::House ? p.produced : p.kills * 2, p.level * 25 + p.value);
+                const int v = p.role == BwRole::House ? p.produced : p.kills * 2;
                 if (v < 100) continue;
-                if (best < 0 || v > std::max(w.pts[size_t(best)].produced, w.pts[size_t(best)].level * 25 + w.pts[size_t(best)].value)) best = i;
+                if (best < 0 || v > mx) { best = i; mx = v; }
             }
             return usePoint(best);
         }
@@ -607,22 +610,36 @@ void BwImpl::skills(Ctx& c) {
         }
     }
     ai.lastGroupId_ = maxId;
-    // Update: follow-ups (hypnotised garrisons sent away, illusions sent)
+    // Update: follow-ups (AISkillHypnosis.MoveUnitsTask: the hypnotised garrison is sent where it hurts its owner)
     for (auto& t : ai.moveTasks_) {
         t.timer -= c.dt;
         if (t.timer.raw > 0) continue;
         const int s = W.pointOf(t.from);
-        if (s < 0 || W.pts[size_t(s)].owner != t.owner || W.pts[size_t(s)].owner != c.me()) { t.timer = Fixed::fromInt(-1000); continue; }
-        // the engine has no "send from a hypnotised enemy garrison": the follow-up applies once the point is ours
-        int far = -1; Fixed fd{};
-        for (int i = 0; i < int(W.pts.size()); ++i) {
-            if (i == s || !c.ally(t.owner, W.pts[size_t(i)].owner) || !c.route(s, i)) continue;
-            const Fixed L = c.dist(s, i);
-            if (L < c.px(200)) continue;
-            if (far < 0 || fd < L) { far = i; fd = L; }
+        if (s < 0 || W.pts[size_t(s)].owner != t.owner) { t.timer = Fixed::fromInt(-1000); continue; }   // the point changed hands
+        bool hyp = false;   // the hypnosis is still on (cast resolved, not used yet)
+        if (auto* st = c.sim.world().tryGet<Statuses>(t.from))
+            for (auto& in : st->list) if ((c.R.statuses[in.def].flags & kStHypnotised) && in.owner == c.me() && in.until > c.sim.tick()) hyp = true;
+        if (!hyp) { t.timer = Fixed::fromInt(-1000); continue; }
+        const int count = int((Fixed::fromInt(W.pts[size_t(s)].value) * t.percent).floorInt());
+        int to = -1;
+        for (int i = 0; i < int(W.pts.size()) && to < 0; ++i) {
+            if (!c.screen(i) || i == s) continue;
+            const uint8_t o = W.pts[size_t(i)].owner;
+            if (!c.neutral(t.owner)) { if (c.neutral(o) && W.pts[size_t(i)].value >= count) to = i; }   // into a stronger neutral
+            else if (c.enemy(c.me(), o)) to = i;                                                       // neutrals: at an enemy
         }
-        if (far < 0) { t.timer = t.duration; continue; }
-        c.sendPercent(s, far, t.percent);
+        if (to < 0) {   // else the farthest point of its own side (at least 200 px away)
+            Fixed fd{};
+            for (int i = 0; i < int(W.pts.size()); ++i) {
+                if (!c.screen(i) || i == s || !c.ally(t.owner, W.pts[size_t(i)].owner) || !c.route(s, i)) continue;
+                const size_t n = c.ai.routes_.nodes.size();
+                const Fixed L = c.ai.routes_.geo[size_t(s) * n + size_t(i)];
+                if (L < c.px(200)) continue;
+                if (to < 0 || fd < L) { to = i; fd = L; }
+            }
+        }
+        if (to < 0) { t.timer = t.duration; continue; }
+        c.sendPercent(s, to, t.percent);
         t.timer = Fixed::fromInt(-1000);
     }
     ai.moveTasks_.erase(std::remove_if(ai.moveTasks_.begin(), ai.moveTasks_.end(), [](const BwAI::MoveTask& t) { return t.timer <= Fixed::fromInt(-1000); }), ai.moveTasks_.end());

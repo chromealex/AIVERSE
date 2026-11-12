@@ -11,7 +11,7 @@
 namespace aiverse::game {
 using namespace detail;
 
-void io(Archive& a, SendGroup& g) { a(g.id, g.from, g.to, g.owner, g.need, g.spawned, g.rowDist, g.flying); }
+void io(Archive& a, SendGroup& g) { a(g.id, g.from, g.to, g.owner, g.need, g.spawned, g.rowDist, g.flying, g.payer); }
 
 namespace {
 std::vector<int> intList(const Json& j) {
@@ -167,7 +167,7 @@ void RtsModule::sysSendGroups(Simulation& sim) {
     std::vector<SendGroup> keep;
     for (size_t gi = 0; gi < groups.size(); ++gi) {
         SendGroup sg = groups[gi];
-        if (!w.alive(sg.from) || !w.alive(sg.to) || !w.has<Garrison>(sg.from) || w.get<Owner>(sg.from).player != sg.owner) continue;
+        if (!w.alive(sg.from) || !w.alive(sg.to) || !w.has<Garrison>(sg.from) || w.get<Owner>(sg.from).player != (sg.payer ? sg.payer : sg.owner)) continue;
         const UnitType& ft = rules_.types[w.get<Unit>(sg.from).type];
         if (ft.spawnUnit == kNoType) continue;
         std::vector<int> lanes = lanesBetween(sim, sg.from, sg.to);
@@ -239,7 +239,7 @@ void RtsModule::hashRoutes(Simulation& sim, Hasher& h) {
     if (!rs.active) return;
     h.u32(rs.signature);
     for (Entity e : rs.ends) h.u64(e.packed());
-    for (const auto& g : rs.groups) { h.u32(g.id); h.u64(g.from.packed()); h.u64(g.to.packed()); h.i32(g.need); h.i32(g.spawned); h.fx(g.rowDist); }
+    for (const auto& g : rs.groups) { h.u32(g.id); h.u64(g.from.packed()); h.u64(g.to.packed()); h.i32(g.need); h.i32(g.spawned); h.fx(g.rowDist); if (g.payer) h.u32(uint32_t(g.payer) | uint32_t(g.owner) << 8); }
     h.v3(rs.screenCenter);
 }
 

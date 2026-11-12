@@ -354,7 +354,9 @@ void RtsModule::sysGarrison(Simulation& sim) {
                     if (in.def == uint16_t(rules_.stRedirect) && w.alive(in.link) && w.has<Garrison>(in.link)) into = &w.get<Garrison>(in.link);
             if (into->count < cap || into != &g) {
                 g.growth += dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
-                while (g.growth >= kOne && (into != &g || into->count < cap)) { ++into->count; g.growth -= kOne; }
+                int made = 0;
+                while (g.growth >= kOne && (into != &g || into->count < cap)) { ++into->count; g.growth -= kOne; ++made; }
+                if (made) bwNoteProduced(sim, e, made);   // agent-bw-ai: per point produced units (match stats)
                 if (into == &g && g.count >= cap) g.growth = Fixed{};
             } else if (g.count > cap) {
                 g.growth -= dt * t.garrisonDecay;
@@ -363,7 +365,9 @@ void RtsModule::sysGarrison(Simulation& sim) {
         } else if (o.player != 0 && t.spawnInterval.raw > 0) {
             if (g.count < t.garrisonMax) {
                 g.growth += dt / t.spawnInterval;
-                while (g.growth >= kOne && g.count < t.garrisonMax) { ++g.count; g.growth -= kOne; }
+                int made = 0;
+                while (g.growth >= kOne && g.count < t.garrisonMax) { ++g.count; g.growth -= kOne; ++made; }
+                if (made) bwNoteProduced(sim, e, made);   // agent-bw-ai
                 if (g.count >= t.garrisonMax) g.growth = Fixed{};
             } else if (g.count > t.garrisonMax) {
                 g.growth -= dt * t.garrisonDecay;

@@ -515,6 +515,7 @@ void RtsModule::sysModes(Simulation& sim) {
     }
     (void)decided0;
     ms.speed = ms.timeSpeed * ms.sdSpeed;
+    if (auto it = gs.trig.vars.find("timeScale"); it != gs.trig.vars.end() && it->second.raw > 0) ms.speed = ms.speed * it->second;   // trigger timeScale (agent-bw-ai)
 }
 
 // ================================================================= match statistics (PlayerStatistic)
@@ -533,10 +534,18 @@ void RtsModule::sysMatchStats(Simulation& sim) {
             if (ok(ev.player)) ++ms.stats[ev.player][kMsLost];
             if (w.alive(ev.b))
                 if (auto* o = w.tryGet<Owner>(ev.b); o && ok(o->player) && o->player != ev.player) ++ms.stats[o->player][kMsKills];
+            if (rules_.bwAI && w.alive(ev.b) && w.has<Garrison>(ev.b)) {   // agent-bw-ai: a tower's kills (for the BW bots)
+                if (ms.pointKills.size() <= ev.b.index) ms.pointKills.resize(ev.b.index + 1, 0);
+                ++ms.pointKills[ev.b.index];
+            }
             break;
         }
         case kEvTrainDone: if (ok(ev.player)) ++ms.stats[ev.player][kMsProduced]; break;
         case kEvCaptured:
+            if (w.alive(ev.a)) {   // agent-bw-ai: a captured point starts counting again
+                if (ev.a.index < ms.pointProduced.size()) ms.pointProduced[ev.a.index] = 0;
+                if (ev.a.index < ms.pointKills.size()) ms.pointKills[ev.a.index] = 0;
+            }
             if (ok(ev.player)) ++ms.stats[ev.player][ev.value == 0 ? kMsCapturedNeutral : kMsCaptured];
             if (ev.value > 0 && ev.value < int64_t(np) && ev.value != ev.player) ++ms.stats[size_t(ev.value)][kMsStructuresLost];
             break;
@@ -582,6 +591,8 @@ void RtsModule::hashModes(Simulation& sim, Hasher& h) {
     for (auto& v : ms.decayTimer) for (auto x : v) h.fx(x);
     for (auto& v : ms.lastGain) for (auto x : v) h.u32(x);
     for (auto& v : ms.stats) for (auto x : v) h.u64(uint64_t(x));
+    for (auto x : ms.pointProduced) h.u64(uint64_t(x));   // agent-bw-ai
+    for (auto x : ms.pointKills) h.u64(uint64_t(x));
     for (auto o : ms.outcome) h.i32(o);
 }
 
@@ -593,7 +604,8 @@ bool ioModesState(RtsModule& m, Simulation& sim, Archive& a) {
     if (!m.modes_.any) return true;   // games without modes keep their save format
     ModesState& s = m.state(sim).modes;
     a(s.realTime, s.speed, s.timeSpeed, s.sdSpeed, s.timeLeft, s.timeIndex, s.sdPhase, s.sdCounter, s.sdRuleSet, s.points, s.kohScore,
-      s.kohAlarmed, s.zone, s.ruleOn, s.level, s.decayTimer, s.lastStock, s.lastGain, s.stats, s.abilityUses, s.outcome);
+      s.kohAlarmed, s.zone, s.ruleOn, s.level, s.decayTimer, s.lastStock, s.lastGain, s.stats, s.abilityUses, s.outcome,
+      s.pointProduced, s.pointKills);   // agent-bw-ai: per point counters
     return a.ok();
 }
 

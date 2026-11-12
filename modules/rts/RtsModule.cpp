@@ -1022,6 +1022,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (cmd.type == kCmdScript) { script_->runCommand(sim, cmd); return; }   // rules "commands" (RtsScriptCommands.cpp)
     if (cmd.type == kCmdAutoBuild) { script_->callStd(sim, StdFn::AutoBuild, {cmd.player, cmd.param}); return; }   // lua/commands.lua
 
+    if (cmd.type == kCmdSend && hypnoticSend(sim, cmd)) return;   // agent-bw-ai: BW PointsHypnosis
     std::vector<Entity> sel;
     for (Entity e : cmd.units) {
         auto* o = w.tryGet<Owner>(e);

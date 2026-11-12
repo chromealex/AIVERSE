@@ -208,7 +208,7 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
     static const std::pair<const char*, uint32_t> flags[] = {{"stun", kStStun}, {"silence", kStSilence}, {"disarm", kStDisarm}, {"root", kStRoot},
         {"invulnerable", kStInvulnerable}, {"invisible", kStInvisible}, {"lock", kStLock}, {"blind", kStBlind}, {"hidden", kStHidden},
         {"flying", kStFlying}, {"fake", kStFake}, {"ignoreDefense", kStIgnoreDefense}, {"spreads", kStSpreads}, {"freezeRegen", kStFreezeRegen},
-        {"alert", kStAlert}, {"revealed", kStRevealed}};
+        {"alert", kStAlert}, {"revealed", kStRevealed}, {"hypnotised", kStHypnotised}};
     for (auto& f : j["flags"].items()) {
         bool ok = false;
         for (auto& [n, b] : flags) if (f.str() == n) { s.flags |= b; ok = true; }
@@ -232,6 +232,9 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
     if (j.has("onHit")) s.onHit = int16_t(payload(where + " onHit", j["onHit"]));
     for (auto& [res, v] : j["incomeMult"].members()) s.incomeMult.push_back({resRef(where + " incomeMult", res), v.fx()});
     s.garrisonPerSecond = j.getFx("garrisonPerSecond");
+    s.sendShare = j.getFx("sendShare", s.sendShare);   // hypnotised (agent-bw-ai)
+    if (s.sendShare.raw < 0 || s.sendShare > Fixed::fromInt(1)) fail(where, "sendShare must be 0..1");
+    s.captureSent = j.getBool("captureSent", s.captureSent);
     s.view = j["view"];
     r.statuses[size_t(idx)] = s;
 }
