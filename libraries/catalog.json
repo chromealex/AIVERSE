@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1243,6 +1243,90 @@
         "aiverse_engine"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "card-games",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/CardGame.h",
+      "skill": "skills/aiverse-card-games/SKILL.md",
+      "summary": "Card and board game rules: data-defined cards (units/spells/instants with targets and ordered effects: damage, heal, draw, energy, buff, counter, reveal, mill) and rule variants (hand/health/energy curve, draw per turn, first-player skip, fatigue, overdraw burn, board limit, turn limit, separate combat phase, rush, partial/full mulligan); seeded deck shuffles, draw/mulligan, phases, legal action generation, LIFO effect stack with priority passing, counters and fizzling on invalid targets, guard attacks, per-seat hidden information with a non-leaking cardViewFor projection and redacted/reveal events",
+      "notes": "Read docs/genre-packages.md (Cards and turn strategy) for exact coverage. Composes card-runtime's zone vocabulary (cardRuntimeZone) and leaves strategy/Cards.h unchanged. cardGameSetup/stepCardGame are the only mutation path: strictly increasing command seq, seat holding priority, action in cardLegalActions (computed from the seat's own view); invalid input returns nullopt with state and RNG untouched; RNG (passed-in aiverse::Random) only for setup/mulligan shuffles. Send seats only cardViewFor/cardEventsFor; lockstep replication is not confidential. Persist CardGameState via genre::save/load (record kind 96; 96..103 reserved for cards+turns), hash with cardGameHash, bind cardLibraryHash. JSON via readCardLibrary/readCardDecks with path-qualified errors; optional cardGame settings section. No deck builder, trigger/replacement language, collection or transport.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_card_games",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/CardGameRunner.h",
+        "libraries/include/aiverselib/genre/CardGameData.h",
+        "libraries/include/aiverselib/genre/CardGamePersistence.h",
+        "libraries/include/aiverselib/genre/CardGameConfigured.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/cards-turns/duel.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "card-runtime",
+        "configuration"
+      ]
+    },
+    {
+      "id": "tactics-grid",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/TacticsTurns.h",
+      "skill": "skills/aiverse-tactics-grid/SKILL.md",
+      "summary": "Turn strategy on square/hex grids: weighted 8-way/hex movement with deterministic reachable sets and paths, half/full cover from the owner grid with a flank angle, integer line of fire and shot previews (hit chance milli), action points, per-round initiative with speed modifiers and stable-id ties, delay, overwatch reservations firing reaction shots, per-team visibility projection, and WeGo simultaneous resolution (collected orders, lockstep movement with contested-cell/swap rules, simultaneous fire)",
+      "notes": "Read docs/genre-packages.md (Cards and turn strategy) for exact coverage. turn-scheduler (strategy/Turns.h, fixed order + nested LIFO reactions) is unchanged and remains the choice for host-applied effects; tactics-grid owns a dynamic order. stepTactics / tacticsResolveWeGo: strictly increasing seq, active unit only, action in tacticsLegalActions; invalid input returns nullopt with state untouched; one RNG draw per shot from the passed-in aiverse::Random. Send teams only tacticsViewFor/tacticsEventsFor. Persist TacticsState (98) and TacticsOrders (99) via genre::save/load; hash with tacticsHash, bind tacticsScenarioHash. JSON via readTacticsScenario with path-qualified errors; optional tactics settings section. Units never block line of fire; no elevation, destructible cover, campaign or animation.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_tactics_grid",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/TacticsGrid.h",
+        "libraries/include/aiverselib/genre/TacticsWeGo.h",
+        "libraries/include/aiverselib/genre/TacticsData.h",
+        "libraries/include/aiverselib/genre/TacticsPersistence.h",
+        "libraries/include/aiverselib/genre/TacticsConfigured.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/cards-turns/skirmish.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "configuration"
+      ]
+    },
+    {
+      "id": "cards-turns-bots",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/bots/CardBot.h",
+      "skill": "skills/aiverse-cards-turns-bots/SKILL.md",
+      "summary": "Deterministic turn and card bots that see only their own view: a tactics turn planner scoring reachable destinations, attacks and overwatch (expected damage, kill chance, seen threats, cover, objective advance) under a bounded search budget, and a card evaluator scoring legal actions with real-rules simulation on a view-rebuilt state and bounded lookahead",
+      "notes": "Read docs/genre-packages.md (Cards and turn strategy). Bots return player-equivalent CardAction/TacticsAction for stepCardGame/stepTactics and never write state; inputs are cardViewFor/tacticsViewFor only (hidden cards and unseen units cannot change a choice, tested). No RNG; stateless (nothing to persist). Budgets: cardGame.botNodeBudget/botDepth and tactics.botSearchBudget settings.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_cards_turns_bots",
+      "dependencies": [
+        "libraries/include/aiverselib/bots/TacticsBot.h",
+        "examples/libraries/genre/cards-turns/main.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "card-games",
+        "tactics-grid",
+        "configuration"
+      ]
     },
     {
       "id": "weapon-policies",

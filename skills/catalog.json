@@ -199,6 +199,49 @@
       ]
     },
     {
+      "id": "aiverse-card-games",
+      "package": "card-games",
+      "path": "skills/aiverse-card-games/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Card and board game rules: data-defined cards (units/spells/instants with targets and ordered effects: damage, heal, draw, energy, buff, counter, reveal, mill) and rule variants (hand/health/energy curve, draw per turn, first-player skip, fatigue, overdraw burn, board limit, turn limit, separate combat phase, rush, partial/full mulligan); seeded deck shuffles, draw/mulligan, phases, legal action generation, LIFO effect stack with priority passing, counters and fizzling on invalid targets, guard attacks, per-seat hidden information with a non-leaking cardViewFor projection and redacted/reveal events",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_card_games",
+      "dependencies": [
+        "aiverse-card-runtime",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/CardGame.h",
+      "keywords": [
+        "card",
+        "deck",
+        "hand",
+        "mulligan",
+        "stack",
+        "priority",
+        "counter",
+        "ccg",
+        "deckbuilder",
+        "board",
+        "game",
+        "hidden",
+        "reveal",
+        "карт",
+        "колод",
+        "рука",
+        "муллиган",
+        "стек",
+        "приоритет",
+        "контр",
+        "настольн",
+        "скрыт"
+      ]
+    },
+    {
       "id": "aiverse-card-runtime",
       "package": "card-runtime",
       "path": "skills/aiverse-card-runtime/SKILL.md",
@@ -216,6 +259,43 @@
         "deck",
         "карточ",
         "колод"
+      ]
+    },
+    {
+      "id": "aiverse-cards-turns-bots",
+      "package": "cards-turns-bots",
+      "path": "skills/aiverse-cards-turns-bots/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic turn and card bots that see only their own view: a tactics turn planner scoring reachable destinations, attacks and overwatch (expected damage, kill chance, seen threats, cover, objective advance) under a bounded search budget, and a card evaluator scoring legal actions with real-rules simulation on a view-rebuilt state and bounded lookahead",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_cards_turns_bots",
+      "dependencies": [
+        "aiverse-card-games",
+        "aiverse-tactics-grid",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/CardBot.h",
+      "keywords": [
+        "card",
+        "bot",
+        "turn",
+        "planner",
+        "tactics",
+        "ai",
+        "opponent",
+        "evaluator",
+        "lookahead",
+        "бот",
+        "карт",
+        "планировщ",
+        "ход",
+        "тактик",
+        "противник"
       ]
     },
     {
@@ -1336,6 +1416,51 @@
         "тревог",
         "маскиров",
         "укрыт"
+      ]
+    },
+    {
+      "id": "aiverse-tactics-grid",
+      "package": "tactics-grid",
+      "path": "skills/aiverse-tactics-grid/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Turn strategy on square/hex grids: weighted 8-way/hex movement with deterministic reachable sets and paths, half/full cover from the owner grid with a flank angle, integer line of fire and shot previews (hit chance milli), action points, per-round initiative with speed modifiers and stable-id ties, delay, overwatch reservations firing reaction shots, per-team visibility projection, and WeGo simultaneous resolution (collected orders, lockstep movement with contested-cell/swap rules, simultaneous fire)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_tactics_grid",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/TacticsTurns.h",
+      "keywords": [
+        "tactics",
+        "tactical",
+        "turn",
+        "hex",
+        "grid",
+        "cover",
+        "flank",
+        "overwatch",
+        "initiative",
+        "action",
+        "points",
+        "wego",
+        "line",
+        "of",
+        "fire",
+        "тактик",
+        "пошагов",
+        "гекс",
+        "сетк",
+        "укрыт",
+        "фланг",
+        "дозор",
+        "инициатив",
+        "очки",
+        "действ"
       ]
     },
     {

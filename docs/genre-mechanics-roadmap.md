@@ -11,6 +11,9 @@ Physical interaction: kinematic carry/throw, push/pull, ropes, doors, moving pla
 those policies are authoritative and Box3D stays presentation-only for them.
 Puzzle solvers: match-3, flood/connectivity, sliding/packing, Sokoban rules, constraint checking, solvable shuffles,
 hints and a puzzle bot are the `puzzle-solvers` package ([genre-packages.md](genre-packages.md#puzzle-solvers-puzzle-solvers-010)).
+Cards and turn strategy: card rules with stacks and hidden information (`card-games`), tactical grids with AP,
+initiative, cover, overwatch and WeGo (`tactics-grid`) and their card/turn bots (`cards-turns-bots`) are implemented
+([genre-packages.md](genre-packages.md#cards-and-turn-strategy-card-games-010-tactics-grid-010-cards-turns-bots-010)).
 Audit each area against the current engine modules and libraries/catalog.json before implementing.
 The engine is expanding across genres; shared mechanics should have one owner and genre presets.
 Existing attributes, statuses, abilities, inventory, progression, interactions, meta economy,

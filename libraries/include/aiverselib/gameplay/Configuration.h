@@ -406,6 +406,26 @@ struct CinematicSettings {
     std::int64_t qteHoldScaleMilli=1000;
     bool qteAutoSucceed=false;
 };
+struct CardGameSettings {
+    std::int64_t startingHand=4;
+    std::int64_t maxHand=10;
+    std::int64_t startingHealth=20;
+    std::int64_t turnLimit=60;
+    std::int64_t botNodeBudget=256;
+    std::int64_t botDepth=2;
+};
+struct TacticsSettings {
+    std::int64_t roundLimit=30;
+    std::int64_t halfCoverMilli=200;
+    std::int64_t fullCoverMilli=400;
+    std::int64_t flankBonusMilli=150;
+    std::int64_t rangePenaltyMilli=40;
+    std::int64_t overwatchPenaltyMilli=150;
+    std::int64_t minHitMilli=50;
+    std::int64_t maxHitMilli=950;
+    std::int64_t coverCosMilli=707;
+    std::int64_t botSearchBudget=512;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -438,6 +458,8 @@ struct GameplaySettings {
     NarrativeSettings narrative;
     InteractionSettings interaction;
     CinematicSettings cinematic;
+    CardGameSettings cardGame;
+    TacticsSettings tactics;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -454,7 +476,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="cardGame" && entry.first!="tactics") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -1013,6 +1035,37 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
         }
         if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
+    }
+    if(root.has("cardGame")) { const auto& section=root["cardGame"];
+        if(!section.isObject()) result.errors.push_back("cardGame: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="startingHand" && entry.first!="maxHand" && entry.first!="startingHealth" && entry.first!="turnLimit" && entry.first!="botNodeBudget" && entry.first!="botDepth") result.errors.push_back("cardGame."+entry.first+": unknown field");
+            if(section.has("startingHand")) number(section["startingHand"],settings.cardGame.startingHand,0,20,"cardGame.startingHand");
+            if(section.has("maxHand")) number(section["maxHand"],settings.cardGame.maxHand,1,20,"cardGame.maxHand");
+            if(section.has("startingHealth")) number(section["startingHealth"],settings.cardGame.startingHealth,1,1000000,"cardGame.startingHealth");
+            if(section.has("turnLimit")) number(section["turnLimit"],settings.cardGame.turnLimit,0,100000,"cardGame.turnLimit");
+            if(section.has("botNodeBudget")) number(section["botNodeBudget"],settings.cardGame.botNodeBudget,1,100000,"cardGame.botNodeBudget");
+            if(section.has("botDepth")) number(section["botDepth"],settings.cardGame.botDepth,1,4,"cardGame.botDepth");
+        }
+        if(settings.cardGame.startingHand>settings.cardGame.maxHand)result.errors.push_back("cardGame.startingHand: must not exceed maxHand");
+    }
+    if(root.has("tactics")) { const auto& section=root["tactics"];
+        if(!section.isObject()) result.errors.push_back("tactics: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="roundLimit" && entry.first!="halfCoverMilli" && entry.first!="fullCoverMilli" && entry.first!="flankBonusMilli" && entry.first!="rangePenaltyMilli" && entry.first!="overwatchPenaltyMilli" && entry.first!="minHitMilli" && entry.first!="maxHitMilli" && entry.first!="coverCosMilli" && entry.first!="botSearchBudget") result.errors.push_back("tactics."+entry.first+": unknown field");
+            if(section.has("roundLimit")) number(section["roundLimit"],settings.tactics.roundLimit,0,100000,"tactics.roundLimit");
+            if(section.has("halfCoverMilli")) number(section["halfCoverMilli"],settings.tactics.halfCoverMilli,0,1000,"tactics.halfCoverMilli");
+            if(section.has("fullCoverMilli")) number(section["fullCoverMilli"],settings.tactics.fullCoverMilli,0,1000,"tactics.fullCoverMilli");
+            if(section.has("flankBonusMilli")) number(section["flankBonusMilli"],settings.tactics.flankBonusMilli,0,1000,"tactics.flankBonusMilli");
+            if(section.has("rangePenaltyMilli")) number(section["rangePenaltyMilli"],settings.tactics.rangePenaltyMilli,0,1000,"tactics.rangePenaltyMilli");
+            if(section.has("overwatchPenaltyMilli")) number(section["overwatchPenaltyMilli"],settings.tactics.overwatchPenaltyMilli,0,1000,"tactics.overwatchPenaltyMilli");
+            if(section.has("minHitMilli")) number(section["minHitMilli"],settings.tactics.minHitMilli,0,1000,"tactics.minHitMilli");
+            if(section.has("maxHitMilli")) number(section["maxHitMilli"],settings.tactics.maxHitMilli,0,1000,"tactics.maxHitMilli");
+            if(section.has("coverCosMilli")) number(section["coverCosMilli"],settings.tactics.coverCosMilli,0,1000,"tactics.coverCosMilli");
+            if(section.has("botSearchBudget")) number(section["botSearchBudget"],settings.tactics.botSearchBudget,1,100000,"tactics.botSearchBudget");
+        }
+        if(settings.tactics.halfCoverMilli>settings.tactics.fullCoverMilli)result.errors.push_back("tactics.halfCoverMilli: must not exceed fullCoverMilli");
+        if(settings.tactics.minHitMilli>settings.tactics.maxHitMilli)result.errors.push_back("tactics.minHitMilli: must not exceed maxHitMilli");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

@@ -2151,6 +2151,114 @@
           "default": false
         }
       }
+    },
+    "cardGame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startingHand": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 0,
+          "maximum": 20
+        },
+        "maxHand": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 20
+        },
+        "startingHealth": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "turnLimit": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botNodeBudget": {
+          "type": "integer",
+          "default": 256,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "botDepth": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 4
+        }
+      }
+    },
+    "tactics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roundLimit": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "halfCoverMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "fullCoverMilli": {
+          "type": "integer",
+          "default": 400,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "flankBonusMilli": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "rangePenaltyMilli": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "overwatchPenaltyMilli": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "minHitMilli": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "maxHitMilli": {
+          "type": "integer",
+          "default": 950,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "coverCosMilli": {
+          "type": "integer",
+          "default": 707,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "botSearchBudget": {
+          "type": "integer",
+          "default": 512,
+          "minimum": 1,
+          "maximum": 100000
+        }
+      }
     }
   }
 }

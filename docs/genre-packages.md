@@ -19,6 +19,10 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
 | puzzle-solvers | Match-3 (swap validation, line/L/T matches, data-driven specials, seeded gravity/refill, ordered cascades, no-move detection, always-solvable shuffles, goals, hints), flood fill/regions, color flood with IDA*, pipe connectivity with leak checks, N-puzzle parity/shuffle/IDA*, sliding blocks (BFS), polyomino packing (exact cover, solution counting), Sokoban sessions over grid-puzzles (deadlocks, A*, undo), small-grid CSP (AllDifferent/Sum/Count/Runs: sudoku, nonogram) with propagation and uniqueness, puzzle bot (see [Puzzle solvers](#puzzle-solvers-puzzle-solvers-010)) | Rules, solvers and commands only; every search has a node budget and reports Unknown when it runs out. No rendering, input mapping, level generator/editor or meta progression. |
 
+| card-games | Data-defined cards and rule variants, seeded shuffles, draw/mulligan, phases, legal action generation, LIFO effect stack with priority passing, counters and fizzling, guard, per-seat hidden information (`cardViewFor`, redacted/reveal events) (see [Cards and turn strategy](#cards-and-turn-strategy-card-games-010-tactics-grid-010-cards-turns-bots-010)) | Composes card-runtime zones. No deck builder, trigger/replacement language, collection or confidential transport. |
+| tactics-grid | Square/hex grids, weighted reachable sets and paths, half/full cover with flank angle, line of fire and hit-chance previews, AP, initiative with speed modifiers and delay, overwatch reaction fire, per-team views, WeGo simultaneous resolution | turn-scheduler stays the fixed-order reaction queue. Units do not block fire; no elevation, destructible cover or campaign. |
+| cards-turns-bots | Card evaluator (real-rules simulation on a view-rebuilt state, bounded lookahead) and tactics turn planner (bounded deterministic destination/attack/overwatch scoring), both from the player's own view | Player-equivalent actions only; no RNG; stateless. |
+
 ## Native/host integration
 
 Include `<aiverselib/genre/Configured.h>`, the needed policy header and `genre/Persistence.h`.
@@ -913,3 +917,117 @@ Verified only with g++ 11 (Linux VM): header syntax checks, all genre/bots heade
 `library_genre_puzzles` and `library_genre_puzzles_example` CTests (also under ASan/UBSan), `strategy_libraries`,
 and the consumer in a standalone driver. Not run: the full `tests/libraries/run.py`, native module export,
 `aiverse_tests`, headless matches, clang/MSVC.
+
+## Cards and turn strategy (card-games 0.1.0, tactics-grid 0.1.0, cards-turns-bots 0.1.0)
+
+Headers `genre/CardGame.h` (definitions, rule variants, state, views, legal actions), `genre/CardGameRunner.h`
+(`cardGameSetup`, `stepCardGame`), `genre/CardGameData.h`, `genre/CardGameConfigured.h`, `genre/CardGamePersistence.h`;
+`genre/TacticsGrid.h` (grids, movement, cover, line of fire), `genre/TacticsTurns.h` (AP/initiative turns, views),
+`genre/TacticsWeGo.h`, `genre/TacticsData.h`, `genre/TacticsConfigured.h`, `genre/TacticsPersistence.h`; bots
+`bots/CardBot.h`, `bots/TacticsBot.h`. Targets `AIVERSE::lib_card_games` (depends on `lib_card_runtime`),
+`AIVERSE::lib_tactics_grid`, `AIVERSE::lib_cards_turns_bots` (depends on both); skills `aiverse-card-games`,
+`aiverse-tactics-grid`, `aiverse-cards-turns-bots`.
+
+**Relation to the strategy runtimes.** `card-runtime` (`strategy/Cards.h`) and `turn-scheduler` (`strategy/Turns.h`)
+are unchanged, including their `strategy/Persistence.h` records (kinds 3 and 4). card-games reuses card-runtime's zone
+vocabulary (Deck, Hand, Board, Discard, Exile; `cardRuntimeZone`) and adds the Stack, data-defined effects, targets,
+rule variants and hidden information that the bounded duel deliberately leaves out. turn-scheduler keeps its fixed
+initiative order with host-applied nested reactions; tactics-grid owns a per-round dynamic order (speed modifiers,
+delay) and resolves movement, cover and shots itself, so extending the scheduler in place would have changed its
+saved format and contract.
+
+**Determinism model.** All state is integer; randomness only from the passed-in `aiverse::Random` (card shuffles at
+setup and mulligan, one draw per shot). Every mutation goes through one function that takes a command with a
+strictly increasing sequence number (`CardCommand`, `TacticsCommand`, the WeGo `seq`) and validates it against the
+legal action list; an invalid, repeated or out-of-turn command returns nullopt with the state and RNG untouched.
+Iteration is by stable id (card instance ids, unit ids, stack ids); ties break by id. Player and bot inputs share
+the same path.
+
+**Cards.** `CardDef` kinds unit/spell/instant, `cost`, unit `power`/`health`/`guard`/`rush`, `target`
+(none/player/unit/character/stackItem) with `side` (any/enemy/friendly), ordered `effects` (damage, heal, draw, energy,
+buff, counter, reveal, mill) applied to the chosen target, the controller, opponents, enemy or friendly units.
+`CardRules` variants: seats 2..4, starting hand, max hand (overdraw burns), starting health, energy start/gain/max,
+draw per turn, first-player skips draw, fatigue (growing damage from an empty deck), board limit, turn limit (then
+highest health wins, ties draw), deck size, mulligan none/partial (choose cards by hand position, shuffle back,
+redraw)/full (with penalty), separate combat phase, units attack immediately. Turn flow: start (energy, untap,
+draws) -> Main -> (Combat) -> next living seat. Playing a card or declaring an attack puts an item on the stack and
+passes priority; instants may respond while holding priority; all living seats passing in a row resolves the top
+item (LIFO) and returns priority to the active seat. At resolution an item whose target left (unit gone, player
+eliminated, stack item countered) fizzles; an attack whose attacker died fizzles. Guard units must be attacked
+before their player. Dead units, eliminations and the winner are checked after every change.
+
+**Hidden information.** `CardGameCard::known` is a per-seat mask: decks are known to nobody (counts only), hands to
+their owner plus seats a reveal showed them (cleared when the card returns to the deck), public zones and the stack
+to everybody. `cardViewFor(lib, state, seat)` (seat -1 = spectator) never contains hidden cards, and legal actions
+are computed from that view (`cardLegalActions(lib, view)`), so neither can depend on hidden cards (tested by
+altering the opponent's hidden cards: the view and the bot choice are unchanged). `cardEventsFor(events, seat)`
+strips card identities from draws and reveals the seat may not see. RTS lockstep replicates the full state; only an
+authoritative server that sends projections keeps hands confidential.
+
+**Tactics grids.** Square boards move in 8 directions (orthogonal 2 half-units x cell cost, diagonal 3, no corner
+cutting); hex boards use axial coordinates in a parallelogram (2 per step). `tacticsReachable` is Dijkstra settling
+in (cost, cell) order and replacing a parent only on a strictly cheaper route, so paths are identical everywhere.
+Occupancy: allies pass through, enemies block, nobody stops on an occupied cell. Lines of fire sample one cell per
+grid step with a fixed nudge; intermediate `blocksSight` cells block (units never do). Cover: an adjacent cover cell
+protects against attackers within `coverCosMilli` (cosine of the half-angle, default 707 = 45 degrees, inclusive) of
+its direction; a target next to cover but outside every arc is flanked (+`flankBonusMilli`, +`flankDamage`), with no
+adjacent cover it is exposed. `tacticsPreviewShot` hit chance = aim - half/full cover - range penalty beyond optimal
+range - overwatch penalty (+ flank), clamped to [min, max]; 0 when blocked or out of range.
+
+**Turns.** Round order: effective initiative (base + active `tacticsSetSpeedModifier` deltas, applied from the next
+round) descending, ties by ascending unit id. The active unit gets full AP; Move costs ceil(path cost / (mobility x 2))
+AP; Attack rolls one RNG draw and ends the turn (`attackEndsTurn`); Overwatch ends the turn and arms a reservation
+that fires once at the first enemy entering a visible cell within range (reservations in unit-id order; a killed
+mover stops); Delay (with full AP, once per round) re-queues the unit at the end of the round; EndTurn. Overwatch
+expires at the reserving unit's next turn. Win: last team standing; at the round limit the team with more total
+health (ties draw, winner 0).
+
+**WeGo.** `tacticsSubmitOrders` (once per team per round; own living units; move within 1 AP; attack a target the team
+sees now; overwatch alone), then `tacticsResolveWeGo` when every living team has submitted: (1) overwatch armed;
+(2) lockstep movement, a contested cell goes to the higher effective initiative then lower id, head-on swaps and
+moves into a cell whose occupant does not leave stop (`Bumped`), reaction fire after each step in mover-id order;
+(3) shots rolled in unit-id order from post-movement positions, all damage applied together (mutual kills),
+shots without line/range `Fizzled`; (4) deaths, winner, next round. Pending `TacticsOrders` are saved (kind 99).
+
+**Visibility.** `tacticsViewFor(scenario, state, team)`: own units (dead with hp 0) and enemies some living own unit
+sees (sight range + clear line); order and active unit only when visible. `tacticsEventsFor(view, events)` drops
+movement of unseen units and blanks cells of unseen targets.
+
+**Bots.** `cardBotChoose(lib, view, config)`: legal actions from the view, each simulated with the real rules on
+`cardStateFromView` (others pass until the stack is empty; fatigue off since unknown decks are empty), scored by
+health/board/hand weights, then a bounded follow-up ply split evenly over candidates (`nodeBudget`, `depth`);
+mulligan replaces cards above a cost. `tacticsBotChoose(scenario, view, objectiveCell, config)`: destinations from a
+reachable set where only seen units block, in (cost, cell) order, scored by expected damage and kill chance of shots
+it enables, seen threats on the cell, cover, distance to the nearest seen enemy or to the objective cell (map data,
+never an unseen enemy position); overwatch only when a seen enemy could walk into range; `searchBudget` bounds
+evaluations. Both consume no RNG and keep the earlier candidate on ties. A move into a cell held by an unseen unit
+is rejected by `stepTactics`; the owner then ends the turn.
+
+**Data and settings.** `readCardLibrary(json, defaults)` / `readCardDecks` and `readTacticsScenario(json, defaults)`
+validate strictly with path-qualified `JsonError`s (`cards.cards[0]: unknown key 'foo'`,
+`cards.card 1.effects[0]: counter needs a stackItem target`, `tactics.grid.rows[1][0]: unknown cell 'x'`,
+`tactics.units[0].at: cell is impassable`). Optional generated settings sections (configuration 0.3.5): `cardGame`
+(`startingHand` <= `maxHand`, `startingHealth`, `turnLimit`, `botNodeBudget`, `botDepth`) and `tactics`
+(`roundLimit`, `halfCoverMilli` <= `fullCoverMilli`, `flankBonusMilli`, `rangePenaltyMilli`, `overwatchPenaltyMilli`,
+`minHitMilli` <= `maxHitMilli`, `coverCosMilli`, `botSearchBudget`); adapters `cardRulesFromSettings`,
+`tacticsRulesFromSettings`, `cardBotConfig`, `tacticsBotConfig`.
+
+**State.** Record kinds 96..103 are reserved for this batch: `CardGameState` 96, `TacticsState` 98, `TacticsOrders` 99
+(97 and 100..103 reserved). Hash with `cardGameHash` / `tacticsHash` (states, events, views, definitions) and bind
+`cardLibraryHash` / `tacticsScenarioHash` in the save envelope. Bots are stateless.
+
+**Example and tests.** `examples/libraries/genre/cards-turns/` (`duel.json`, `skirmish.json`, `main.cpp`): a two-seat
+duel with hidden hands, responses and guard, and a hex skirmish of two three-unit squads with AP, initiative, cover
+and overwatch, both bot-vs-bot, each played twice; CTest `library_cards_turns_example` passes only with winners and
+identical hashes. Seed 7 (g++ 11): duel won by seat 1 on turn 9, skirmish won by team 2 in round 3, final hash
+`4f6976405a5c23b1`. `tests/libraries/genre_cards_turns_tests.cpp` (CTest `library_cards_turns`) covers data errors,
+stack order/counter/fizzle, guard, separate combat, mulligans, fatigue/burn/turn limit, effects, hidden information
+and reveal, bot games across seeds with restore, grid costs/paths/lines/cover/hit chance, initiative/delay/speed
+modifiers/AP/overwatch, rejected commands, views and event filtering, WeGo conflicts/simultaneous fire/overwatch and
+persistence. `examples/native/libraries/CardsTurnsConsumer.cpp` stores `genre.cards.state`, `genre.tactics.state`,
+`genre.cards_turns_hash`, `genre.cards.library` and `genre.tactics.scenario` (module VERSION unchanged).
+
+Verified only with g++ 11 (Linux VM): header syntax checks, all genre/bots headers in one TU, the test file and the
+example built by hand (tests also under ASan/UBSan), GenreConsumer/CardsTurnsConsumer syntax checks and the consumer
+function in a standalone driver. Not run: CMake/CTest registration, isolation, native module export, headless
+restore matches, clang/MSVC.
