@@ -14,7 +14,7 @@
 namespace {
 using namespace aiverse;using namespace aiverse::lib;using namespace aiverse::lib::genre;
 constexpr int64_t kTicksPerHour=50,kDay=kTicksPerHour*24,kDays=20,kTicks=kDay*kDays,kFireTick=8*kDay+10*kTicksPerHour;
-constexpr int64_t kRawFood=1,kWood=2,kMeal=3,kField=1,kStore=2,kKitchen=50,kHeater=10,kPump=11,kLights=12,kWind=1,kSolar=2,kWater=20,kTap=22;
+constexpr int64_t kRawFood=1,kWood=2,kMeal=3,kField=1,kStore=2,kKitchen=50,kHeater=10,kPump=11,kWind=1,kSolar=2,kWater=20,kTap=22;
 constexpr int64_t kHuntNode1=9001,kHuntNode2=9002,kDeer=1,kWolf=2;
 struct Data {ColonyDefs colony;PowerGridState grid;EcologyDefs ecology;EcologyAnimalDefs animals;EcologyResourceState resources;bots::ColonyPlannerConfig planner;SurvivalConfig survival;};
 // Everything outcome-affecting: package states (saved through genre::save/load) + owner bookkeeping + RNG.
