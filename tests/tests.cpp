@@ -1329,7 +1329,8 @@ void writeFile(const tfs::path& p, const std::string& s) {
 }
 bool havePython() {
 #if defined(_WIN32)
-    return std::system("py -3 --version >NUL 2>&1") == 0;
+    // the tests and the unpacker plugins run "python3", not the "py" launcher: probe what is actually run
+    return std::system("python3 --version >NUL 2>&1") == 0;
 #else
     return std::system("python3 --version >/dev/null 2>&1") == 0;
 #endif
@@ -1505,7 +1506,14 @@ TEST(unpacker_westwood_pak) {
 
 TEST(importer_dune2_rules_and_synthetic_scenario) {
     if (!havePython()) return;
-    CHECK(std::system("python3 " AIVERSE_SOURCE_DIR "/tools/importers/lib/selftest.py >/dev/null") == 0);
+#if defined(_WIN32)
+    auto q = [](const std::string& s) { return "\"" + s + "\""; };   // cmd.exe: no single quotes
+    const std::string devnull = " >NUL";
+#else
+    auto q = [](const std::string& s) { return "'" + s + "'"; };
+    const std::string devnull = " >/dev/null";
+#endif
+    CHECK(std::system(("python3 " + q(AIVERSE_SOURCE_DIR "/tools/importers/lib/selftest.py") + devnull).c_str()) == 0);
     tfs::path d = testDir("dune2");
     // A made-up scenario in the Dune II INI layout (no game data): two houses, a base, units, spice.
     std::string ini = "[BASIC]\nMapScale=1\nWinFlags=6\n[MAP]\nField=1300\nBloom=2409\nSeed=353\n"
@@ -1515,8 +1523,8 @@ TEST(importer_dune2_rules_and_synthetic_scenario) {
                       "[STRUCTURES]\nID000=Atreides,Const Yard,256,1630\nID001=Ordos,Windtrap,256,2660\nGEN2662=Ordos,Wall\nGEN2663=Ordos,Concrete\n";
     std::string pak = le32(4 + 13 + 4) + std::string("SCENA001.INI\0", 13) + le32(0) + ini;
     writeFile(d / "src" / "SCENARIO.PAK", pak);
-    std::string cmd = "python3 " AIVERSE_SOURCE_DIR "/tools/importers/dune2/import.py --maps-only --json --source '" + (d / "src").string() +
-                      "' --out '" + (d / "out").string() + "' > '" + (d / "report.json").string() + "'";
+    std::string cmd = "python3 " + q(AIVERSE_SOURCE_DIR "/tools/importers/dune2/import.py") + " --maps-only --json --source " + q((d / "src").string()) +
+                      " --out " + q((d / "out").string()) + " > " + q((d / "report.json").string());
     CHECK(std::system(cmd.c_str()) == 0);
     Json rep = Json::parseFile((d / "report.json").string());
     CHECK(rep.getBool("ok") && rep.getInt("maps") == 1 && rep["skipped"].getInt("Frigate") == 1);
@@ -9650,7 +9658,14 @@ TEST(toolchain_detection_fake_home) {
     env.home = home;
     env.inherit = false;   // nothing from the real machine: no PATH, no system folders, no probing
     env.probe = false;
-    env.vars["PATH"] = (home / "bin").string();
+#if defined(_WIN32)
+    // the simulated Linux host splits PATH at ':', which a "C:\..." entry can't survive: the fake python3 goes to
+    // ~/.local/bin (pip --user, searched after PATH) instead; systemDirs would also probe the real /usr/lib/jvm
+    const fs::path fakeBin = home / ".local" / "bin";
+#else
+    const fs::path fakeBin = home / "bin";
+    env.vars["PATH"] = fakeBin.string();
+#endif
 
     ToolchainStatus st = checkToolchain("web", env);
     CHECK(!st.ok());
@@ -9669,7 +9684,7 @@ TEST(toolchain_detection_fake_home) {
     CHECK(toolchainsDir(env) == tcd);
     touch(tcd / "py" / "bin" / "cmake");
     touch(tcd / "py" / "bin" / "ninja");
-    touch(home / "bin" / "python3");
+    touch(fakeBin / "python3");
     touch(tcd / "emsdk" / "upstream" / "emscripten" / "emcc");
     touch(tcd / "emsdk" / "upstream" / "emscripten" / "emscripten-version.txt", "\"3.1.70\"\n");
     touch(tcd / "emsdk" / ".emscripten");
@@ -12606,6 +12621,13 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
 
 #ifdef AIVERSE_TESTS_EDITOR_CORE
 TEST(project_import_mcp_bridge) {
+    // the bridge runs tools/importers/port/aiverse_port.py: needs Python (not in Wine on CI)
+#if defined(_WIN32)
+    const bool python = std::system("python --version >NUL 2>&1") == 0;   // PortOps.cpp runs "python" on Windows
+#else
+    const bool python = havePython();
+#endif
+    if (!python) { std::printf("  (python not found: project import bridge skipped)\n"); return; }
     aiverse::editor::Workspace ws;
     ws.engineDir = AIVERSE_SOURCE_DIR;
     Json p = Json::object();
@@ -12639,22 +12661,24 @@ TEST(native_editor_build_helpers) {
 
     // plan: build dir, configure + build arguments
     NativeBuildPlan p = planNativeBuild("/eng", "/games/My Game", "linux", "/usr/bin/cmake", "/usr/bin/ninja", false, 3);
-    CHECK(p.buildDir == "/games/My Game/Builds/.temp/editor-linux");
-    CHECK(nativeBuildDir("/games/x", "macos") == "/games/x/Builds/.temp/editor-macos");
+    // paths come out in the native form (fs::path::lexically_normal: '\' on Windows): compare as paths
+    CHECK(fs::path(p.buildDir) == fs::path("/games/My Game/Builds/.temp/editor-linux"));
+    CHECK(fs::path(nativeBuildDir("/games/x", "macos")) == fs::path("/games/x/Builds/.temp/editor-macos"));
     auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
     CHECK(has(p.configureArgs, "-DAIVERSE_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
     CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DAIVERSE_NATIVE_DIR="));
     CHECK(has(p.buildArgs, "aiverse_editor") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
-    CHECK(p.editorBinary == "/games/My Game/Builds/.temp/editor-linux/aiverse_editor" && p.launchTarget == p.editorBinary);
+    CHECK(fs::path(p.editorBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/aiverse_editor") && p.launchTarget == p.editorBinary);
     const std::string cmd = nativeBuildCommand(p);
-    CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '/games/My Game/Builds/.temp/editor-linux'", 0) == 0);
+    CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '" + p.buildDir + "'", 0) == 0);
     CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
     CHECK(!has(planNativeBuild("/eng", "/g", "linux", "cmake", "/usr/bin/ninja", true, 0).configureArgs, "-G"));   // keeps the cached generator
     NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
-    CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/AiverseEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor");
+    CHECK(fs::path(mac.launchTarget) == fs::path("/g/Builds/.temp/editor-macos/AiverseEditor.app") &&
+          fs::path(mac.editorBinary) == fs::path("/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
     CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
     CHECK(has(mac.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project") && !has(p.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project"));
-    CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/aiverse_editor.exe").string());
+    CHECK(fs::path(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary) == fs::path("/g/Builds/.temp/editor-windows/Release/aiverse_editor.exe"));
     CHECK(nativeRestartCommand("macos", "/g/B/AiverseEditor.app", "/g/G.rtsproj", "/eng/build") ==
           "open -n '/g/B/AiverseEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
     CHECK(nativeRestartCommand("linux", "/g/aiverse_editor", "/g", "").find("AIVERSE_NATIVE_EDITOR=1 '/g/aiverse_editor' '/g' --native-editor") != std::string::npos);
@@ -12670,7 +12694,12 @@ TEST(native_editor_build_helpers) {
     CHECK(!nativeBuildDirProblem(eng, eng + "/templates/skirmish/out").empty());
     CHECK(!nativeBuildDirProblem(eng, eng).empty());
     // and git agrees (.gitignore "Builds/" at any depth); skipped without git
-    if (std::system(("git -C '" + eng + "' rev-parse --is-inside-work-tree >/dev/null 2>&1").c_str()) == 0) {
+#if defined(_WIN32)
+    const std::string gitProbe = "git -C \"" + eng + "\" rev-parse --is-inside-work-tree >NUL 2>&1";
+#else
+    const std::string gitProbe = "git -C '" + eng + "' rev-parse --is-inside-work-tree >/dev/null 2>&1";
+#endif
+    if (std::system(gitProbe.c_str()) == 0) {
         CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
         CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/new_game/deeper", "macos")).empty());
         CHECK(!nativeBuildGitProblem(eng + "/templates/skirmish/out").empty());
@@ -13188,6 +13217,13 @@ TEST(ai_invades_separate_planets) {
 namespace {
 // HOME (and XDG_*) pointed at a fresh temp folder for the scope of a test: nothing reaches the real ~/.aiverse
 struct TempHome {
+    static void putEnv(const char* k, const char* v) {   // v == nullptr: remove the variable
+#if defined(_WIN32)
+        _putenv_s(k, v ? v : "");   // an empty value removes it on Windows
+#else
+        if (v) setenv(k, v, 1); else unsetenv(k);
+#endif
+    }
     std::filesystem::path dir;
     std::string oldHome, oldData, oldConfig;
     bool hadHome = false, hadData = false, hadConfig = false;
@@ -13196,17 +13232,14 @@ struct TempHome {
         std::filesystem::create_directories(dir);
         auto save = [](const char* k, std::string& v, bool& had) { if (const char* e = std::getenv(k)) { v = e; had = true; } };
         save("HOME", oldHome, hadHome); save("XDG_DATA_HOME", oldData, hadData); save("XDG_CONFIG_HOME", oldConfig, hadConfig);
-#if !defined(_WIN32)
-        setenv("HOME", dir.string().c_str(), 1);
-        unsetenv("XDG_DATA_HOME");
-        unsetenv("XDG_CONFIG_HOME");
-#endif
+        // Windows too: the editor's home() (Projects.cpp, FileAssoc.cpp, McpInstall.cpp) takes HOME before USERPROFILE
+        putEnv("HOME", dir.string().c_str());
+        putEnv("XDG_DATA_HOME", nullptr);
+        putEnv("XDG_CONFIG_HOME", nullptr);
     }
     ~TempHome() {
-#if !defined(_WIN32)
-        auto restore = [](const char* k, const std::string& v, bool had) { if (had) setenv(k, v.c_str(), 1); else unsetenv(k); };
+        auto restore = [](const char* k, const std::string& v, bool had) { putEnv(k, had ? v.c_str() : nullptr); };
         restore("HOME", oldHome, hadHome); restore("XDG_DATA_HOME", oldData, hadData); restore("XDG_CONFIG_HOME", oldConfig, hadConfig);
-#endif
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);
     }
