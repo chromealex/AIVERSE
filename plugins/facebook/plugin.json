@@ -1,0 +1,33 @@
+{
+  "name": "facebook",
+  "description": "Facebook / Meta SDK 18 (Android facebook-core + facebook-applinks, iOS FBSDKCoreKit): app events (automatic activateApp / install attribution, custom events, purchases), user id, deferred app links, consent (auto-logging, advertiser id, Limited Data Use). No login / sharing. Protocol: analytics (docs/plugins.md). Config: appId, clientToken, displayName, autoLogAppEvents, advertiserIdCollection, skAdNetworks.",
+  "provides": ["analytics"],
+  "defaults": { "autoLogAppEvents": true, "advertiserIdCollection": true, "displayName": "${appId}" },
+  "android": {
+    "java": "android/java",
+    "classes": { "facebook": "com.aiverse.plugins.FacebookPlugin" },
+    "dependencies": ["com.facebook.android:facebook-core:18.3.0", "com.facebook.android:facebook-applinks:18.3.0"],
+    "manifest": {
+      "application": [
+        "<meta-data android:name=\"com.facebook.sdk.ApplicationId\" android:value=\"fb${appId}\" />",
+        "<meta-data android:name=\"com.facebook.sdk.ClientToken\" android:value=\"${clientToken}\" />",
+        "<meta-data android:name=\"com.facebook.sdk.AutoLogAppEventsEnabled\" android:value=\"${autoLogAppEvents}\" />",
+        "<meta-data android:name=\"com.facebook.sdk.AdvertiserIDCollectionEnabled\" android:value=\"${advertiserIdCollection}\" />"
+      ]
+    }
+  },
+  "ios": {
+    "sources": ["ios/*.mm"],
+    "classes": { "facebook": "AiverseFacebookPlugin" },
+    "pods": ["pod 'FBSDKCoreKit', '~> 18.0'"],
+    "frameworks": ["AdSupport", "AppTrackingTransparency"],
+    "plist": [
+      "<key>FacebookAppID</key><string>${appId}</string>",
+      "<key>FacebookClientToken</key><string>${clientToken}</string>",
+      "<key>FacebookDisplayName</key><string>${displayName}</string>",
+      "<key>FacebookAutoLogAppEventsEnabled</key><${autoLogAppEvents}/>",
+      "<key>FacebookAdvertiserIDCollectionEnabled</key><${advertiserIdCollection}/>"
+    ],
+    "skAdNetworks": ["v9rvwe8qw5", "n6fk4nfna4"]
+  }
+}

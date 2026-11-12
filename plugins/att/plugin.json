@@ -1,0 +1,12 @@
+{
+  "name": "att",
+  "description": "iOS App Tracking Transparency: the tracking authorization prompt (on privacy::requestTracking / Lua privacy.requestTracking, or by itself after the first interactive frame), its status, NSUserTrackingUsageDescription, SKAdNetwork ids from the config. Protocol: privacy (docs/plugins.md). Config: usage (the prompt text, required by App Review), prompt (\"manual\" | \"ready\"), delay (seconds after ready), skAdNetworks.",
+  "provides": ["privacy"],
+  "defaults": { "usage": "This identifier will be used to deliver personalized ads to you.", "prompt": "manual", "delay": 1 },
+  "ios": {
+    "sources": ["ios/*.mm"],
+    "classes": { "att": "AiverseAttPlugin" },
+    "frameworks": ["AppTrackingTransparency", "AdSupport"],
+    "plist": ["<key>NSUserTrackingUsageDescription</key><string>${usage}</string>"]
+  }
+}
