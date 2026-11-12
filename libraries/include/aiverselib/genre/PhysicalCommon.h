@@ -69,7 +69,8 @@ public:
             {fxMax(start.x,end.x)+half.x,fxMax(start.y,end.y)+half.y,fxMax(start.z,end.z)+half.z}};
         InteractionHit best;
         for(auto id:world_->query(swept)){
-            if(physIgnored(ignore,id))continue;auto h=world_->castCollider(id,start,delta,half);
+            if(physIgnored(ignore,id))continue;
+            auto h=world_->castCollider(id,start,delta,half);
             if(h.hit&&(!best.hit||h.fraction<best.fraction))best={true,h.id?h.id:id,h.fraction,h.normal};
         }
         return best;

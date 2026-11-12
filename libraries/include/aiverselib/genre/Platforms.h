@@ -14,7 +14,8 @@ struct PlatformDef {int64_t id=0;uint32_t collider=0;Vec3 half{1_fx,Fixed::fromR
 using PlatformDefs=std::map<int64_t,PlatformDef>;
 inline bool valid(const PlatformDef& d){
     if(d.id<=0||!physHalf(d.half)||d.waypoints.size()<2||d.waypoints.size()>kPhysMaxWaypoints||uint8_t(d.mode)>2||d.speed<=Fixed{}||d.speed>100_fx)return false;
-    if(d.waits.size()!=1&&d.waits.size()!=d.waypoints.size())return false;for(auto w:d.waits)if(w>kPhysMaxTicks)return false;
+    if(d.waits.size()!=1&&d.waits.size()!=d.waypoints.size())return false;
+    for(auto w:d.waits)if(w>kPhysMaxTicks)return false;
     for(std::size_t i=0;i<d.waypoints.size();++i)if(!physBounded(d.waypoints[i])||(i&&d.waypoints[i]==d.waypoints[i-1]))return false;
     return d.mode!=PlatformMode::Loop||d.waypoints.front()!=d.waypoints.back();
 }

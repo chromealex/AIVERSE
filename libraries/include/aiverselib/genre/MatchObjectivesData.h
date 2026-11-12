@@ -12,6 +12,12 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+// GCC 13+ flags the array helpers (they return their Json argument, never the temporary path
+// string) as possibly dangling; the referent is always the caller's Json.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 13
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
 namespace aiverse::lib::genre {
 enum class ObjectiveZoneKind:uint8_t{Capture,Hill,Extraction,BombSite};
 struct ObjectiveZone{int64_t id=0;ObjectiveZoneKind kind=ObjectiveZoneKind::Capture;Vec3 center;Fixed radius,height;};
@@ -31,7 +37,8 @@ inline void layoutKeys(const Json& j,const std::string& path,std::initializer_li
     for(const auto& [key,value]:j.members()){(void)value;bool found=false;for(auto name:names)if(name==key)found=true;if(!found)throw JsonError(path+": unknown key '"+key+"'");}
 }
 inline const Json& layoutArray(const Json& j,const std::string& path,std::size_t maximum){
-    if(!j.isArray()||j.size()>maximum)throw JsonError(path+": expected array of at most "+std::to_string(maximum));return j;
+    if(!j.isArray()||j.size()>maximum)throw JsonError(path+": expected array of at most "+std::to_string(maximum));
+    return j;
 }
 inline Vec3 layoutVector(const Json& j,const std::string& path){
     if(!j.isArray()||j.size()!=3)throw JsonError(path+": expected [x,y,z] in milli-metres");
@@ -65,7 +72,8 @@ inline ObjectiveLayout readObjectiveLayout(const Json& j){
         std::vector<Vec3> points;for(std::size_t i=0;i<raw.size();++i){
             auto path="objectives.payload.path["+std::to_string(i)+"]";auto v=layoutVector(raw[i],path);
             for(auto c:{v.x,v.y,v.z})if(fxAbs(c)>100000_fx)throw JsonError(path+": coordinates must stay within +/-100000000");
-            if(!points.empty()&&points.back()==v)throw JsonError(path+": repeats the previous point");points.push_back(v);
+            if(!points.empty()&&points.back()==v)throw JsonError(path+": repeats the previous point");
+            points.push_back(v);
         }
         std::vector<Fixed> checkpoints;
         if(p.has("checkpointsMilli")){
@@ -91,3 +99,6 @@ inline ObjectiveLayout readObjectiveLayout(const Json& j){
     return out;
 }
 }
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 13
+#pragma GCC diagnostic pop
+#endif

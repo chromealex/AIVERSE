@@ -30,7 +30,8 @@ inline int64_t carrySpeedMilli(const InteractionConfig& c,const CarryableDef& d)
     auto penalty=(d.mass*Fixed::fromInt(c.speedPenaltyMilli)).toInt();return std::max(c.minSpeedMilli,1000-std::min<int64_t>(penalty,1000));
 }
 inline int64_t carryChargeMilli(const InteractionConfig& c,const HeldObject& h,uint32_t tick){
-    if(!h.charging||tick<h.chargeStart)return 0;return std::min<int64_t>(1000,int64_t(tick-h.chargeStart)*1000/c.chargeTicks);
+    if(!h.charging||tick<h.chargeStart)return 0;
+    return std::min<int64_t>(1000,int64_t(tick-h.chargeStart)*1000/c.chargeTicks);
 }
 inline Fixed throwImpulse(const InteractionConfig& c,int64_t chargeMilli){
     return c.throwMinImpulse+(c.throwMaxImpulse-c.throwMinImpulse)*Fixed::fromRatio(std::clamp<int64_t>(chargeMilli,0,1000),1000);
@@ -64,7 +65,8 @@ template<class Collision> ThrowPreview previewThrow(const InteractionConfig& c,c
 }
 
 inline bool valid(const CarryState& s,const Carryables& defs){
-    if(s.held.size()>kPhysMaxObjects||s.flights.size()>kPhysMaxObjects)return false;std::vector<int64_t> objects;
+    if(s.held.size()>kPhysMaxObjects||s.flights.size()>kPhysMaxObjects)return false;
+    std::vector<int64_t> objects;
     for(const auto& [carrier,h]:s.held){if(carrier<=0||!defs.contains(h.object)||!physBounded(h.position)||h.since>s.lastTick||(h.charging&&h.chargeStart>s.lastTick))return false;objects.push_back(h.object);}
     for(const auto& [object,f]:s.flights){if(!defs.contains(object)||!physBounded(f.position)||!physBounded(f.velocity,kPhysMaxSpeed)||f.thrower<0)return false;objects.push_back(object);}
     std::sort(objects.begin(),objects.end());return std::adjacent_find(objects.begin(),objects.end())==objects.end();

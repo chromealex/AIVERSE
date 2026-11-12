@@ -68,6 +68,7 @@ template<class T> uint64_t narrativeHash(const T& value){Hasher h;hashNarrative(
 inline uint64_t narrativeWorldHash(const NarrativeWorld& w){return narrativeHash(w);}
 inline uint64_t narrativeConfigHash(const NarrativeConfig& c){
     Hasher h;for(auto v:{c.autoAdvanceTicks,c.skipLinesPerTick,c.backlogLimit,c.barkCooldownTicks,c.speakerCooldownTicks,c.maxPending,c.maxBarkRequests})h.u32(v);
-    for(auto v:{c.meter.minimum,c.meter.maximum,c.meter.initial})h.i64(v);return h.value();
+    for(auto v:{c.meter.minimum,c.meter.maximum,c.meter.initial})h.i64(v);
+    return h.value();
 }
 }
