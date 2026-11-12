@@ -102,3 +102,11 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/world/SpatialWorld.cpp")
     endif()
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
 endif()
+
+add_executable(aiverse_library_progression_tests perks_tests.cpp
+    ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+target_link_libraries(aiverse_library_progression_tests PRIVATE AIVERSE::gameplay_native)
+if(NOT MSVC)
+    target_compile_options(aiverse_library_progression_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+endif()
+add_test(NAME library_progression COMMAND aiverse_library_progression_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
