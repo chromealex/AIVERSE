@@ -26,7 +26,7 @@
   <a href="#工作原理">工作原理</a> ·
   <a href="#现成模板">模板</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="docs/overview.md">完整概览</a>
+  <a href="docs/zh-CN/overview.md">完整概览</a>
 </p>
 
 ---
@@ -142,7 +142,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings、Unity IAP、Unity Ads | `aiversebuild`、商店和广告插件 |
 | Addressables / Asset Bundles | `.rpak` 资源包、分包和内容下载 |
 
-报告会把每一项标记为精确迁移、近似迁移或未迁移。重复导入会保留你的修改。项目需要使用 **Force Text** 资源序列化。Godot 项目也以同样方式导入。详情：[引擎项目导入](docs/engine-import.md)。
+报告会把每一项标记为精确迁移、近似迁移或未迁移。重复导入会保留你的修改。项目需要使用 **Force Text** 资源序列化。Godot 项目也以同样方式导入。详情：[引擎项目导入](docs/zh-CN/engine-import.md)。
 
 ---
 
@@ -227,7 +227,7 @@ open build/mac/AiverseEditor.app        # 编辑器：项目中心和模板
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。如果不想编译，
 `builds` 分支提供预构建的编辑器和工具
-（[详情](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)）。
+（[详情](docs/zh-CN/overview.md#预构建引擎builds-分支与无需编译器的-aiversemcp)）。
 
 **2. 制作游戏。** 在项目中心点击**“制作游戏”**，或从模板创建项目。可以立即在 Game 窗口中与机器人对战。
 
@@ -259,7 +259,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS 和 FPS 以外类型的现成模板正在制作中
 
 各子系统的详细情况见
-[已验证 / 未验证](docs/overview.md#verified--not-verified)。
+[已验证 / 未验证](docs/zh-CN/overview.md#已验证--未验证)。
 
 ---
 
@@ -269,17 +269,17 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 
 | | |
 |---|---|
-| [**完整概览**](docs/overview.md) | 所有子系统、构建、平台、CI、发布 |
+| [**完整概览**](docs/zh-CN/overview.md) | 所有子系统、构建、平台、CI、发布 |
 | [游戏格式](docs/game-format.md) | `game.json`、`rules.json`、地图及所有数据块 |
 | [类型包](docs/genre-packages.md) · [库](docs/libraries.md) | 适用于任何类型的机制 |
-| [“制作游戏”向导](docs/game-wizard.md) | 想法加美术如何变成完整项目 |
+| [“制作游戏”向导](docs/zh-CN/game-wizard.md) | 想法加美术如何变成完整项目 |
 | [脚本](docs/scripting.md) · [C++ 模块](docs/native-modules.md) | 当数据不够用时 |
 | [地形](docs/terrain.md) · [星球](docs/planets.md) · [寻路](docs/pathfinding.md) | 世界与移动 |
 | [粒子](docs/particles.md) · [模型](docs/models.md) · [Shader Graph](docs/shader-graph.md) | 画面 |
 | [元游戏](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [插件](docs/plugins.md) | 变现与商店 |
 | [FPS](docs/fps.md) · [大世界](docs/large-worlds.md) | FPS 模块 |
 | [AGENTS.md](AGENTS.md) | 修改引擎本身的智能体须遵守的规则 |
-| [从 Unity 迁移](docs/engine-import.md) | 导入场景、预制体和资源，再由智能体迁移逻辑 |
+| [从 Unity 迁移](docs/zh-CN/engine-import.md) | 导入场景、预制体和资源，再由智能体迁移逻辑 |
 
 ## 许可证
 
