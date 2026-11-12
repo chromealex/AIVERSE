@@ -137,14 +137,16 @@ const char* kMaterialDoc =
     "Material keys: color [r,g,b(,a)] linear 0..1, metallic 0..1, roughness 0..1, emissive [r,g,b], emissiveStrength, "
     "alpha opaque|mask|blend, cutoff, doubleSided, unlit, castShadow, receiveShadow, vertexColors, team tint|mask|alpha|vertex|none, "
     "teamStrength, texture / normalMap / emissiveMap / teamMask (PNG/JPEG/TGA/KTX2 paths in the game folder, e.g. made by texture_generate), "
-    "uvScale [u,v] tiling, base (inherit another library material), replace (start from a blank material instead of the model's), description.";
+    "metallicRoughnessMap (glTF layout: G roughness, B metallic) / occlusionMap (R) with occlusionStrength, normalScale, "
+    "uvScale [u,v] tiling, uvOffset [u,v], base (inherit another library material), replace (start from a blank material instead of the model's), description.";
 
 } // namespace
 
 const std::vector<std::string>& materialKeys() {
     static const std::vector<std::string> keys = {"shaderGraph", "color", "metallic", "roughness", "emissive", "emissiveStrength", "alpha", "cutoff",
                                                   "doubleSided", "unlit", "castShadow", "receiveShadow", "vertexColors", "team", "teamStrength",
-                                                  "teamMask", "texture", "normalMap", "emissiveMap", "uvScale", "base", "use", "replace", "description"};
+                                                  "teamMask", "texture", "normalMap", "emissiveMap", "uvScale", "base", "use", "replace", "description",
+                                                  "metallicRoughnessMap", "occlusionMap", "occlusionStrength", "normalScale", "uvOffset"};
     return keys;
 }
 
@@ -161,7 +163,8 @@ std::vector<std::string> checkMaterial(const Json& m) {
         if (k == "alpha" && v.str() != "opaque" && v.str() != "mask" && v.str() != "blend") out.push_back("alpha must be opaque, mask or blend");
         if (k == "team" && v.str() != "tint" && v.str() != "mask" && v.str() != "alpha" && v.str() != "vertex" && v.str() != "none")
             out.push_back("team must be tint, mask, alpha, vertex or none");
-        if (k == "uvScale" && (!v.isArray() || v.size() != 2)) out.push_back("uvScale must be [u, v]");
+        if ((k == "uvScale" || k == "uvOffset") && (!v.isArray() || v.size() != 2)) out.push_back(k + " must be [u, v]");
+        if (k == "occlusionStrength" && (!v.isNumber() || v.toDouble() < 0 || v.toDouble() > 1)) out.push_back(k + " must be a number 0..1");
     }
     return out;
 }
@@ -271,7 +274,7 @@ void registerMaterialOps(Workspace& ws) {
                 throw std::runtime_error("material '" + name + "': base '" + mat.getStr("base") + "' is not in the library");
             if (mat.getStr("base") == name) throw std::runtime_error("a material can't be its own base");
             std::vector<std::string> warnings;
-            for (const char* k : {"texture", "normalMap", "emissiveMap", "teamMask"})
+            for (const char* k : {"texture", "normalMap", "emissiveMap", "teamMask", "metallicRoughnessMap", "occlusionMap"})
                 if (mat[k].isString() && !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
             const bool existed = lib.has(name);
             lib.set(name, mat);

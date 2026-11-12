@@ -10,6 +10,7 @@
 
 bool libraryBotConsumerExample(aiverse::game::NativeState&);
 bool libraryGenreConsumerExample(aiverse::game::NativeState&,const aiverse::Json&,const aiverse::Json&);
+bool libraryEncounterConsumerExample(aiverse::game::NativeState&);
 bool librarySystemsConsumerExample(aiverse::game::NativeState&);
 bool librarySystemsTickExample(aiverse::Simulation&,aiverse::game::NativeState&);
 
@@ -27,6 +28,7 @@ public:
         if(!librarySystemsConsumerExample(state))throw std::runtime_error("workshop initialization failed");
         auto story=aiverse::Json::parse(R"({"nodes":[{"id":1,"textKey":"demo.story","choices":[{"id":1,"textKey":"demo.finish","next":0}]}]})");
         if(!libraryBotConsumerExample(state)||!libraryGenreConsumerExample(state,document,story))throw std::runtime_error("genre initialization failed");
+        if(!libraryEncounterConsumerExample(state))throw std::runtime_error("boss encounter initialization failed");
         state.values["cast_ticks"]=options.abilities.castTicks;
         state.values["cooldown_ticks"]=options.abilities.cooldownTicks;
         state.values["ready_tick"]=0;

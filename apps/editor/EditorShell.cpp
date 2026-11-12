@@ -167,7 +167,7 @@ void Editor::drawMenuBar() {
             status = r.has("error") ? "Ошибка: " + r.getStr("error") : "Карта в списке игры";
         }
         ImGui::Separator();
-        if (item(ICON_LINK, "Открывать .rtsproj этим редактором", nullptr, fileAssoc().registered, fileAssoc().supported))
+        if (item(ICON_LINK, "Открывать .aiverse этим редактором", nullptr, fileAssoc().registered, fileAssoc().supported))
             registerFileAssoc();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", fileAssoc().detail.c_str());
         ImGui::Separator();

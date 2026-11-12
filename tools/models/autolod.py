@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline static glTF LOD generation. Requires the aiverse_lod_simplify host worker."""
+"""Offline static and opt-in skinned glTF LOD generation. Requires the aiverse_lod_simplify host worker."""
 import argparse
 import copy
 import hashlib
@@ -58,7 +58,7 @@ class Asset:
         return values
 
 
-def generate(source, output, worker, min_triangles=128):
+def generate(source, output, worker, min_triangles=128, skinned=False):
     source, output = source.resolve(), output.resolve()
     if source.suffix.lower() != '.gltf' or output.suffix.lower() != '.gltf':
         raise ValueError('input and output must be unpacked .gltf files')
@@ -87,7 +87,7 @@ def generate(source, output, worker, min_triangles=128):
     binary = bytearray()
     buffer_index = len(doc['buffers'])
     report = {'generator':'meshoptimizer v1.3', 'sourceSha256':hashlib.sha256(source.read_bytes()).hexdigest(), 'meshes':[]}
-    skinned = {n['mesh'] for n in doc.get('nodes', []) if 'mesh' in n and 'skin' in n}
+    skin_meshes = {n['mesh'] for n in doc.get('nodes', []) if 'mesh' in n and 'skin' in n}
 
     def append(data, spec):
         binary.extend(b'\0' * (-len(binary) % 4))
@@ -106,8 +106,9 @@ def generate(source, output, worker, min_triangles=128):
         for mi, mesh in enumerate(asset.doc['meshes']):
             summary = {'mesh':mi, 'levels':[]}
             report['meshes'].append(summary)
-            if mi in skinned or mesh.get('weights') or any(p.get('targets') or any(k.startswith(('JOINTS_', 'WEIGHTS_')) for k in p['attributes']) for p in mesh['primitives']):
-                summary['skipped'] = 'skinning/morph deformation needs a separate error metric'
+            has_skin = mi in skin_meshes or any('JOINTS_0' in p['attributes'] for p in mesh['primitives'])
+            if mesh.get('weights') or any(p.get('targets') for p in mesh['primitives']) or (has_skin and not skinned):
+                summary['skipped'] = 'morph targets unsupported; skinning requires --skinned'
                 continue
             prepared = []
             for p in mesh['primitives']:
@@ -124,13 +125,33 @@ def generate(source, output, worker, min_triangles=128):
                     values = asset.values(ai)
                     if len(values)!=len(pos):
                         raise ValueError('attribute vertex count mismatch')
-                    if key == 'POSITION':
+                    if key == 'POSITION' or key.startswith(('JOINTS_', 'WEIGHTS_')):
                         continue
                     weight = 10.0 if key.startswith('TEXCOORD_') else 1.0
                     columns.append(values)
                     weights.extend([weight]*len(values[0]))
-                if len(weights)>16:
-                    raise ValueError('more than 16 simplification attributes')
+                if has_skin:
+                    at = p['attributes']
+                    if 'JOINTS_0' not in at or 'WEIGHTS_0' not in at or 'JOINTS_1' in at or 'WEIGHTS_1' in at:
+                        raise ValueError('skinned LOD requires exactly four joint influences per vertex')
+                    joints = asset.values(at['JOINTS_0']); influence = asset.values(at['WEIGHTS_0'])
+                    if len(joints)!=len(pos) or len(influence)!=len(pos):
+                        raise ValueError('skin attribute vertex count mismatch')
+                    skins = [doc['skins'][n['skin']] for n in doc.get('nodes', []) if n.get('mesh')==mi and 'skin' in n]
+                    if not skins: raise ValueError('skin attributes require a skin binding')
+                    for js, ws in zip(joints, influence):
+                        if len(js)!=4 or len(ws)!=4 or any(not math.isfinite(w) or w<0 for w in ws) or abs(sum(ws)-1)>0.001:
+                            raise ValueError('invalid normalized skin weights')
+                        if any(not isinstance(j,int) or j<0 or any(j>=len(s['joints']) for s in skins) for j,w in zip(js,ws) if w>0):
+                            raise ValueError('skin joint index out of range')
+                    # Bone IDs are categorical: never simplify their numeric labels. A dense,
+                    # canonical weight field makes slot order irrelevant to the error metric.
+                    used=sorted({j for js,ws in zip(joints,influence) for j,w in zip(js,ws) if w>0})
+                    dense=[tuple(sum(w for j,w in zip(js,ws) if j==bone) for bone in used) for js,ws in zip(joints,influence)]
+                    columns.append(dense); weights.extend([8.0]*len(used))
+                    summary['skinMetric']='canonical joint weights (8x); original influences retained'
+                if len(weights)>32:
+                    raise ValueError('more than 32 simplification attributes; split joint/material regions first')
                 attrs = [v for i in range(len(pos)) for column in columns for v in column[i]]
                 prepared.append((p,pos,indices,attrs,weights))
             original_count = sum(len(p[2]) for p in prepared)
@@ -203,11 +224,12 @@ def main():
     p.add_argument('source',type=Path)
     p.add_argument('output',type=Path)
     p.add_argument('--worker',required=True,type=Path)
+    p.add_argument('--skinned',action='store_true',help='preserve skin attributes using canonical per-joint weight error')
     p.add_argument('--min-triangles',type=int,default=128)
     a=p.parse_args()
     if a.min_triangles<1:
         p.error('--min-triangles must be positive')
-    print(json.dumps(generate(a.source,a.output,a.worker.resolve(),a.min_triangles),indent=2))
+    print(json.dumps(generate(a.source,a.output,a.worker.resolve(),a.min_triangles,a.skinned),indent=2))
 
 if __name__=='__main__':
     main()

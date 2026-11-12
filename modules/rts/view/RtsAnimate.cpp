@@ -236,6 +236,15 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         p.set("speed", st.speed); p.set("moving", float(moving)); p.set("dead", float(st.dead));
         p.set("attacking", float((state & kProcAttacking) != 0));
         p.set("hasTarget", float(o.hasTarget));
+        {   // imported controllers (docs/unity-animation.md): body-relative move direction, event ages
+            const float3 f{std::cos(st.yaw), 0, -std::sin(st.yaw)}, r{-f.z, 0, f.x};
+            const float len = length(d);
+            const float3 u = moving && len > 1e-5f ? d * (1.f / len) : float3{0, 0, 0};
+            p.set("moveX", dot(u, r)); p.set("moveZ", dot(u, f));
+            p.set("attackAge", std::min(st.eventAge[kProcEvAttack], 1000.f));
+            p.set("hitAge", std::min(st.eventAge[kProcEvHit], 1000.f));
+            p.set("spawnAge", std::min(st.eventAge[kProcEvSpawn], 1000.f));
+        }
         if (fx_) {
             auto it = fx_->animations.find(o.entity.packed());
             if (it != fx_->animations.end()) {

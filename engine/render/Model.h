@@ -45,6 +45,8 @@ struct Material {
     AlphaMode alpha = AlphaMode::Opaque;
     float alphaCutoff = 0.5f;
     bool doubleSided = false;
+    bool vertexOcclusion = false;          // COLOR_0 alpha stores baked local AO, not opacity
+    bool backOcclusion = false;            // double-sided: COLOR_0 red stores the back-face AO (vertexColors off)
     bool vertexColors = true;              // multiply by COLOR_0
     bool castShadow = true, receiveShadow = true;
     bool transparent = false;              // drawn like DrawFlags kDrawTransparent (sorted, no depth write, depth after)
@@ -75,6 +77,9 @@ struct Image {
 };
 
 // 60 bytes, one interleaved stream for every model (unskinned meshes leave joints/weights zero).
+// Lightmap UVs (second UV set, Primitive::lightmapUv): unskinned primitives keep them in `joints` as two
+// unorm16 values (u = joints[0] | joints[1] << 8, v = joints[2] | joints[3] << 8, range [0, 1] per mesh),
+// so the vertex layout stays the same for every shader (engine/render/LightmapUv.h).
 struct ModelVertex {
     float3 pos;
     float3 nrm;
@@ -99,6 +104,8 @@ struct Primitive {
     int morphTargets = 0;                // 0..kMaxMorphTargets
     uint32_t morphTexel = 0;             // first texel of its deltas in Model::morphTex
     std::vector<float> morphDeltas;      // CPU: [target][vertex] position xyz, normal xyz (released after upload)
+    bool lightmapUv = false;             // vertices carry lightmap UVs in `joints` (unskinned only, see ModelVertex)
+    bool shadowBatched = false;          // cast through MeshDef::shadowBatch instead of its own shadow draw
 };
 
 struct ModelLod { int mesh = -1; float maxPixels = 0; };
@@ -108,6 +115,9 @@ struct MeshDef {
     std::vector<Primitive> primitives;
     std::vector<float> weights;          // default morph weights
     std::vector<ModelLod> lods;          // coarse alternatives, descending maximum projected diameter
+    // One index range covering the shadowBatched primitives (contiguous, opaque, same culling):
+    // drawn once in shadow passes instead of each part. Not part of `primitives`. indexCount 0 = none.
+    Primitive shadowBatch;
     float3 boundsMin, boundsMax;
     bool deformable = false;
 };
@@ -120,6 +130,7 @@ struct Node {
     quat r;
     float3 s{1, 1, 1};
     int mesh = -1, skin = -1;
+    int light = -1; // KHR_lights_punctual definition, attached to this node
     float weights[kMaxMorphTargets] = {}; // morph weights (from the node or its mesh)
 };
 
@@ -144,12 +155,26 @@ struct AnimClip {
     std::string name;
     float duration = 0;
     std::vector<AnimChannel> channels;
+    // Source timeline (FBX take start / frame rate) for frame-range splits (ModelClips.h), and the
+    // horizontal root speed removed by a clip sidecar's in-place conversion (units / s).
+    float sourceStart = 0, sourceFps = 0, rootSpeed = 0;
+};
+
+struct ModelLight {
+    enum class Type { Directional, Point, Spot };
+    Type type = Type::Point;
+    std::string name;
+    float3 color{1, 1, 1}; // linear RGB
+    float intensity = 1; // candela (point/spot), lux (directional)
+    float range = 0; // zero means unbounded
+    float innerCone = 0, outerCone = 0.785398163f;
 };
 
 struct Model {
     std::shared_ptr<GeometryData> geometry;
     std::string path;
     std::vector<Node> nodes;
+    std::vector<ModelLight> lights; // callers select a light budget; drawModel does not add lights implicitly
     std::vector<int> order;            // node indices, parents before children (finalize())
     std::vector<mat4> bindWorld;       // node world matrices of the bind pose (finalize())
     std::vector<MeshDef> meshes;

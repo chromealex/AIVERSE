@@ -1,0 +1,149 @@
+; FBX 7.4.0 project file
+; synthetic test model (AIVERSE tests, CC0)
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+}
+GlobalSettings:  {
+	Version: 1000
+	Properties70:  {
+		P: "UpAxis", "int", "Integer", "",1
+		P: "UpAxisSign", "int", "Integer", "",1
+		P: "FrontAxis", "int", "Integer", "",2
+		P: "FrontAxisSign", "int", "Integer", "",1
+		P: "CoordAxis", "int", "Integer", "",0
+		P: "CoordAxisSign", "int", "Integer", "",1
+		P: "UnitScaleFactor", "double", "Number", "",100
+	}
+}
+Objects:  {
+	Geometry: 1001, "Geometry::Body", "Mesh" {
+		Vertices: *24 {
+			a: -0.5,0,-0.5,0.5,0,-0.5,0.5,1,-0.5,-0.5,1,-0.5,-0.5,0,0.5,0.5,0,0.5,0.5,1,0.5,-0.5,1,0.5
+		}
+		PolygonVertexIndex: *24 {
+			a: 0,3,2,-2,4,5,6,-8,0,1,5,-5,3,7,6,-3,0,4,7,-4,1,2,6,-6
+		}
+		GeometryVersion: 124
+		LayerElementUV: 0 {
+			Version: 101
+			Name: "UVMap"
+			MappingInformationType: "ByPolygonVertex"
+			ReferenceInformationType: "IndexToDirect"
+			UV: *8 {
+				a: 0,0,1,0,1,1,0,1
+			}
+			UVIndex: *24 {
+				a: 0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3
+			}
+		}
+		LayerElementMaterial: 0 {
+			Version: 101
+			Name: ""
+			MappingInformationType: "ByPolygon"
+			ReferenceInformationType: "IndexToDirect"
+			Materials: *6 {
+				a: 0,0,0,0,1,1
+			}
+		}
+		Layer: 0 {
+			Version: 100
+			LayerElement:  {
+				Type: "LayerElementMaterial"
+				TypedIndex: 0
+			}
+			LayerElement:  {
+				Type: "LayerElementUV"
+				TypedIndex: 0
+			}
+		}
+	}
+	Geometry: 1002, "Geometry::Wheel", "Mesh" {
+		Vertices: *24 {
+			a: 0.4,0,-0.2,0.8,0,-0.2,0.8,0.4,-0.2,0.4,0.4,-0.2,0.4,0,0.2,0.8,0,0.2,0.8,0.4,0.2,0.4,0.4,0.2
+		}
+		PolygonVertexIndex: *24 {
+			a: 0,3,2,-2,4,5,6,-8,0,1,5,-5,3,7,6,-3,0,4,7,-4,1,2,6,-6
+		}
+		GeometryVersion: 124
+		LayerElementUV: 0 {
+			Version: 101
+			Name: "UVMap"
+			MappingInformationType: "ByPolygonVertex"
+			ReferenceInformationType: "IndexToDirect"
+			UV: *8 {
+				a: 0,0,1,0,1,1,0,1
+			}
+			UVIndex: *24 {
+				a: 0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3
+			}
+		}
+		LayerElementMaterial: 0 {
+			Version: 101
+			Name: ""
+			MappingInformationType: "ByPolygon"
+			ReferenceInformationType: "IndexToDirect"
+			Materials: *6 {
+				a: 0,0,0,0,0,0
+			}
+		}
+		Layer: 0 {
+			Version: 100
+			LayerElement:  {
+				Type: "LayerElementMaterial"
+				TypedIndex: 0
+			}
+			LayerElement:  {
+				Type: "LayerElementUV"
+				TypedIndex: 0
+			}
+		}
+	}
+	Model: 2001, "Model::Body", "Mesh" {
+		Version: 232
+		Properties70:  {
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+	Model: 2002, "Model::Wheel", "Mesh" {
+		Version: 232
+		Properties70:  {
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+	Material: 3001, "Material::M_Paint", "" {
+		Version: 102
+		ShadingModel: "phong"
+		MultiLayer: 0
+		Properties70:  {
+			P: "DiffuseColor", "Color", "", "A",0.8,0.2,0.2
+		}
+	}
+	Material: 3002, "Material::M_Glass", "" {
+		Version: 102
+		ShadingModel: "phong"
+		MultiLayer: 0
+		Properties70:  {
+			P: "DiffuseColor", "Color", "", "A",0.6,0.8,1
+		}
+	}
+	Material: 3003, "Material::M_Rubber", "" {
+		Version: 102
+		ShadingModel: "phong"
+		MultiLayer: 0
+		Properties70:  {
+			P: "DiffuseColor", "Color", "", "A",0.1,0.1,0.1
+		}
+	}
+}
+Connections:  {
+	C: "OO",2001,0
+	C: "OO",2002,0
+	C: "OO",1001,2001
+	C: "OO",1002,2002
+	C: "OO",3001,2001
+	C: "OO",3002,2001
+	C: "OO",3003,2002
+}

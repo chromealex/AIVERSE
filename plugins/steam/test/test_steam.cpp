@@ -1,18 +1,20 @@
 // Purchase flow of the steam plugin against fake_steam.cpp: products, restore, purchase through the
-// overlay, finish (consume), DLC, cancelled checkout. Built and run by run.sh.
+// overlay, finish (consume), DLC, cancelled checkout; then the "social" protocol (user, achievements,
+// stats, friends, presence, overlay, invites, join). Built and run by run.sh.
 #include "engine/platform/Plugins.h"
+#include "engine/services/Social.h"
 #include "engine/services/Store.h"
 #include <cstdio>
 #include <ctime>
 #include <string>
 using namespace aiverse;
-extern "C" { void fake_overlay(bool); void fake_completePurchase(); void fake_buyDlc(); int fake_itemCount(); void fake_addItem(int); }
+extern "C" { const char* fake_lastDialog(); const char* fake_presenceValue(const char*); int fake_storeCount(); void fake_join(const char*); void fake_overlay(bool); void fake_completePurchase(); void fake_buyDlc(); int fake_itemCount(); void fake_addItem(int); }
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL %d: %s\n", __LINE__, #c); ++fails; } } while (0)
 static void frames(int n) { for (int i = 0; i < n; ++i) plugins::pump(); }
 int main() {
     fake_addItem(100); // an unfinished purchase from an earlier session
-    plugins::configureGame(R"({ "plugins": { "steam": { "appId": 480, "items": { "gems_100": 100, "no_ads": 200 }, "dlc": { "expansion": 777 } } },
+    plugins::configureGame(R"({ "plugins": { "steam": { "appId": 480, "achievements": { "first_win": "ACH_WIN_ONE_GAME" }, "stats": { "wins": "NumWins" }, "floatStats": ["Playtime"], "items": { "gems_100": 100, "no_ads": 200 }, "dlc": { "expansion": 777 } } },
       "store": { "products": [ {"id":"gems_100","type":"consumable"}, {"id":"no_ads","type":"nonConsumable"}, {"id":"expansion","type":"nonConsumable"}, {"id":"missing","type":"consumable"} ] } })");
     CHECK(store::available() && store::provider() == "steam");
     std::vector<store::Product> prods; bool pok = false;
@@ -52,6 +54,43 @@ int main() {
     for (int i = 0; i < 1000 && !cd; ++i) { frames(1); struct timespec t{0, 10000000}; nanosleep(&t, nullptr); }
     CHECK(cd && c.state != store::PurchaseState::Purchased);
     std::printf("  cancelled: state %d error '%s'\n", int(c.state), c.error.c_str());
+    // ---- social
+    CHECK(social::available() && social::provider() == "steam");
+    std::vector<std::string> sev;
+    social::onEvent([&](const std::string& ev, const std::string& d) { sev.push_back(ev + d); });
+    social::User u;
+    social::user([&](const social::User& x) { u = x; });
+    bool un = false;
+    social::unlock("first_win", [&](bool ok, const std::string& e) { un = ok; if (!ok) std::printf("unlock: %s\n", e.c_str()); });
+    bool bad = true;
+    social::unlock("nope", [&](bool ok, const std::string&) { bad = ok; });
+    social::addStat("wins", 2); social::addStat("wins", 1);
+    social::setStat("Playtime", 1.5);
+    double wins = -1, pt = -1;
+    social::stat("wins", [&](bool ok, double v) { if (ok) wins = v; });
+    social::stat("Playtime", [&](bool ok, double v) { if (ok) pt = v; });
+    std::vector<social::Achievement> achs;
+    social::achievements([&](bool ok, const std::vector<social::Achievement>& a, const std::string&) { if (ok) achs = a; });
+    std::vector<social::Friend> fr;
+    social::friends([&](bool ok, const std::vector<social::Friend>& f, const std::string&) { if (ok) fr = f; });
+    social::setPresence("status", "Battle: 2 vs 2");
+    social::overlay("achievements");
+    frames(5);
+    CHECK(u.ok && u.name == "Tester" && u.id == "76561197960287930" && u.country == "DE");
+    CHECK(un && !bad && wins == 3 && pt == 1.5);
+    CHECK(achs.size() == 2 && achs[0].id == "first_win" && achs[0].unlocked && achs[0].unlockTime == 1700000000 && achs[1].id == "ACH_TRAVEL" && !achs[1].unlocked);
+    CHECK(fr.size() == 2 && fr[0].name == "Ally" && fr[0].state == "online" && fr[0].playingThisGame && fr[0].status == "In a match" && !fr[1].playingThisGame);
+    CHECK(std::string(fake_presenceValue("status")) == "Battle: 2 vs 2" && std::string(fake_lastDialog()) == "achievements");
+    for (int i = 0; i < 150; ++i) { frames(1); struct timespec t{0, 10000000}; nanosleep(&t, nullptr); }   // batched StoreStats (1 s)
+    CHECK(fake_storeCount() >= 2);
+    social::invite("+lobby 7");
+    fake_join("+lobby 9");
+    frames(3);
+    CHECK(std::string(fake_lastDialog()) == "+lobby 7");
+    bool ach = false, join = false;
+    for (auto& e : sev) { ach |= e == R"(achievement{"id":"first_win"})"; join |= e.rfind("join", 0) == 0 && e.find("+lobby 9") != std::string::npos; }
+    CHECK(ach && join);
+    for (auto& e : sev) std::printf("  social event: %s\n", e.c_str());
     std::printf("%s (%d failures)\n", fails ? "FAILED" : "OK", fails);
     return fails ? 1 : 0;
 }

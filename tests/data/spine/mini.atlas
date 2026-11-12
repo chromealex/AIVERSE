@@ -1,0 +1,11 @@
+mini.png
+size:64,64
+filter:Linear,Linear
+pma:true
+
+box
+bounds:0,0,16,8
+arm
+bounds:16,0,8,16
+offsets:1,2,10,20
+rotate:90

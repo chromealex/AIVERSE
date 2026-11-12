@@ -198,6 +198,14 @@ def map_emission(s, em):
             interval = max(0.001, num(b.get('repeatInterval'), 0.01) / sim)
             bursts.append({'time': clampv('time', num(b.get('time'), 0) / sim, log), 'count': cnt, 'cycles': cycles,
                            'interval': clampv('interval', interval, log), 'chance': rv(min(1, max(0, num(b.get('probability'), 1.0))))})
+        for b in bursts:
+            if isinstance(b['count'], (int, float)) and 0 < b['count'] < 0.5:
+                log.approx('emission', 'burst count %g -> 1 (fractional bursts round to whole particles)' % b['count'])
+                b['count'] = 1
+        empty = [b for b in bursts if b['count'] == 0 or b['count'] == [0, 0]]
+        if empty:   # count 0: a burst switched off (often by a prefab variant); the engine refuses emitters that emit nothing
+            bursts = [b for b in bursts if b not in empty]
+            log.ok('emission', '%d burst(s) with count 0 left out' % len(empty))
         log.ok('emission', 'rate over time / distance (curves over the duration), %d burst(s) (cycles, interval, probability)' % len(bursts))
     else:
         log.ok('emission', 'disabled (emits nothing on its own)')

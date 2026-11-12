@@ -1,38 +1,34 @@
-# Большие миры: участки и бюджет памяти
+# Large worlds: chunks and a memory budget
 
-`AIVERSE::world` предоставляет общий загрузчик `world::ChunkStreamer` для хоста
-игры. Он не зависит от FPS, GPU, потоков или файловой системы. Хост задаёт каталог
-участков, наблюдателей, закреплённые участки и функции загрузки/выгрузки ресурсов.
-Существующий FPS-клиент использует его через `ChunkScene` для прежних box-сцен.
-Для ландшафта, моделей и коллизий есть асинхронный путь `world.async`, описанный ниже.
+`AIVERSE::world` provides a shared loader, `world::ChunkStreamer`, for the game host. It does not depend on FPS, the GPU,
+threads or the file system. The host defines the chunk catalog, observers, pinned chunks and the functions that load and
+unload resources. The existing FPS client uses it through `ChunkScene` for the earlier box scenes. For terrain, models and
+collision there is an asynchronous `world.async` path, described below.
 
-## Возможности
+## Capabilities
 
-- Разреженный каталог до 100 000 участков; соседние участки ищутся по индексу,
-  без обхода всего каталога при движении наблюдателя.
-- Несколько наблюдателей с независимым радиусом 0..4 ячейки по каждой оси.
-  Пересекающиеся области загружаются один раз.
-- Приоритет: закреплённые участки, ячейка наблюдателя, затем ближайшие кольца.
-  Равные приоритеты разрешаются по координатам, независимо от порядка наблюдателей.
-- Жёсткий предел суммы **резервов ресурсов** и количества загруженных участков.
-  Резерв объявляет адаптер ресурса: он обязан включать все принадлежащие участку
-  ресурсы и не превышаться при загрузке. Это не измеритель RSS процесса.
-- Лимит попыток загрузки на обновление. Ошибки повторяются через заданное число
-  обновлений и не удерживают начало очереди каждый кадр.
-- Ненужные участки освобождаются перед загрузкой новых. При телепортации и
-  повреждённых файлах старые миры не накапливаются в памяти.
-- `StreamStatus`: требуемые/загруженные участки, резерв памяти, ожидающие загрузки,
-  не поместившиеся в бюджет, ошибки, число загрузок и выгрузок за обновление.
+- A sparse catalog of up to 100,000 chunks; neighbouring chunks are found through an index, without walking the whole
+  catalog when an observer moves.
+- Several observers with an independent radius of 0..4 cells on each axis. Overlapping areas are loaded once.
+- Priority: pinned chunks, the observer's cell, then the nearest rings. Equal priorities are resolved by coordinates,
+  independently of observer order.
+- A hard limit on the sum of **resource reservations** and the number of loaded chunks. The reservation is declared by
+  the resource adapter: it must include all resources owned by the chunk and must not be exceeded while loading. It is not
+  a measurement of the process RSS.
+- A limit on load attempts per update. Failures are retried after a set number of updates and do not block the head of
+  the queue every frame.
+- Unneeded chunks are released before new ones are loaded. On teleportation and with damaged files, old worlds do not pile
+  up in memory.
+- `StreamStatus`: required/loaded chunks, memory reservation, pending loads, chunks that did not fit the budget, errors,
+  the number of loads and unloads per update.
 
-Закрепление — повышенный приоритет, а не обход лимита памяти. Если закреплённые
-участки не помещаются, `ready()` остаётся ложным. Неизвестный закреплённый участок
-также препятствует готовности. Хост обязан проверять готовность до допуска игрока
-в область, для которой он требует ресурсы. Снятие всех наблюдателей и закреплений
-освобождает все ресурсы даже при нулевом бюджете загрузок.
+Pinning is a higher priority, not a bypass of the memory limit. If pinned chunks do not fit, `ready()` stays false. An
+unknown pinned chunk also prevents readiness. The host must check readiness before admitting a player into an area whose
+resources it requires. Removing all observers and pins releases all resources even with a zero load budget.
 
-## Настройка существующего загрузчика сцены
+## Configuring the existing scene loader
 
-Блок `world` в карте:
+The `world` block in a map:
 
 ```json
 {
@@ -50,68 +46,62 @@
 }
 ```
 
-Файл участка:
+A chunk file:
 
 ```json
 {"boxes": [{"min": [0, 0, 0], "max": [8, 3, 8]}]}
 ```
 
-При `coordinates: "local"` координаты отсчитываются от `cell * cellSize`.
-Смещение вычисляется в `Fixed`; преобразование в float происходит после
-вычитания начала координат камеры. Поэтому малая геометрия сохраняет точность
-далеко от нуля. Допустимые координаты ячейки: -100000..100000, размер: 16..4096.
-Это диапазон представления сцены; существующие игровые модули могут иметь
-собственные, более узкие ограничения на мир и коллизии.
+With `coordinates: "local"`, coordinates are measured from `cell * cellSize`. The offset is computed in `Fixed`; the
+conversion to float happens after the camera origin is subtracted, so small geometry keeps its precision far from zero.
+Valid cell coordinates: -100000..100000, size: 16..4096. This is the scene representation range; existing game modules
+may have their own, narrower limits on the world and collision.
 
-Без `coordinates` сохраняется старый формат абсолютных координат. Без бюджетов
-используются 64 MiB, 512 участков, повтор через 30 обновлений. `maxBoxes` по
-умолчанию 10000 (допустимо 1..10000). Резерв участка равен
-`maxBoxes * sizeof(world::Bounds)`: укажите реальный верхний предел, чтобы
-не резервировать избыточную память. Файл, превышающий этот предел, не публикуется.
-Резерв покрывает массив Bounds; каталог, контейнеры и временный разбор JSON не
-включены. Один файл ограничен 4 MiB после чтения. Reader обязан сам ограничивать
-входящий поток, если нужна защита от выделения памяти при чтении недоверенных файлов.
+Without `coordinates`, the old absolute-coordinate format is kept. Without budgets, 64 MiB, 512 chunks and a retry after
+30 updates are used. `maxBoxes` defaults to 10000 (valid 1..10000). A chunk's reservation equals
+`maxBoxes * sizeof(world::Bounds)`: give a real upper bound so as not to reserve excess memory. A file exceeding this limit
+is not published. The reservation covers the Bounds array; the catalog, containers and temporary JSON parsing are not
+included. One file is limited to 4 MiB after reading. The Reader itself must limit the incoming stream if protection
+against allocation while reading untrusted files is needed.
 
-`configure()` сначала проверяет новый каталог и лишь затем заменяет сцену.
-Ошибочный манифест оставляет прежнюю сцену доступной.
+`configure()` first validates the new catalog and only then replaces the scene. A bad manifest leaves the previous scene
+available.
 
-## Другие виды ресурсов
+## Other kinds of resources
 
 ```cpp
 world::ChunkStreamer stream({64 * 1024 * 1024, 512, 30});
-stream.add({0, 0, 0}, 1024 * 1024); // верхний предел ресурсов этого участка
+stream.add({0, 0, 0}, 1024 * 1024); // upper bound of this chunk's resources
 world::StreamObserver observer{{0, 0, 0}, 2};
 auto status = stream.update({&observer, 1}, {}, 2,
     [&](world::Cell cell) { return resources.loadAtomically(cell); },
     [&](world::Cell cell) { resources.release(cell); });
 ```
 
-Загрузка должна либо целиком опубликовать участок в пределах резерва, либо вернуть
-`false`, освободив всё выделенное. Выгрузка освобождает все ресурсы участка.
-Функции не должны бросать исключения или повторно вызывать загрузчик. Он синхронный:
-лимит попыток ограничивает число загрузок, но не гарантирует время кадра. Количество
-наблюдателей и закреплений контролирует вызывающий код. При смене/уничтожении
-загрузчика хост освобождает свои ресурсы (например, обновлением с пустым интересом).
+Loading must either publish the whole chunk within its reservation or return `false`, releasing everything allocated.
+Unloading releases all of the chunk's resources. The functions must not throw exceptions or re-enter the loader. It is
+synchronous: the attempt limit bounds the number of loads but does not guarantee frame time. The number of observers and
+pins is controlled by the caller. When the loader is replaced/destroyed, the host releases its resources (for example,
+with an update with empty interest).
 
-Этот синхронный API сохраняется для совместимости и небольших box-сцен.
-Асинхронные адаптеры ниже используют тот же планировщик резидентности.
+This synchronous API is kept for compatibility and small box scenes. The asynchronous adapters below use the same
+residency scheduler.
 
-## Проверка
+## Check
 
 ```sh
 cmake --build <build> --target aiverse_world_tests aiverse_fps_tests
 ctest --test-dir <build> -R '^(world_streaming|fps)$' --output-on-failure
 ```
 
-Тесты проверяют несколько наблюдателей, закрепления, переполнение бюджета,
-телепортацию, ошибки и восстановление загрузки, отрицательные/крайние ячейки,
-локальные координаты на расстоянии 409 600 000 единиц, атомарную смену манифеста
-и проход по 20 001 участку с ограниченным числом резидентных ресурсов.
+The tests check several observers, pinning, budget overflow, teleportation, load errors and recovery, negative/extreme
+cells, local coordinates at a distance of 409,600,000 units, atomic manifest replacement and a pass over 20,001 chunks with
+a bounded number of resident resources.
 
 
-## Асинхронные ландшафт, модели и коллизии
+## Asynchronous terrain, models and collision
 
-Рабочий пример: `examples/world/streamed`. Запуск:
+A working example: `examples/world/streamed`. Run:
 
 ```sh
 <build>/modules/fps/aiverse_fps_client --project examples/world/streamed
@@ -119,14 +109,13 @@ ctest --test-dir <build> -R '^(world_streaming|fps)$' --output-on-failure
 <build>/aiverse_headless --project examples/world/streamed --max-seconds 5 --verify-restore-at 1 --verify-restore-ticks 30
 ```
 
-`examples/world/generate_streamed.py` воспроизводит оригинальные ассеты: 16 участков
-ландшафта 128×128, арки с настоящим проёмом, OBJ/MTL и соответствующие треугольники
-коллизии. Генератор также вычисляет SHA-256 всех файлов. Это отдельный пример FPS;
-существующий RTS heightfield/MapGrid автоматически на этот формат не переводится.
+`examples/world/generate_streamed.py` reproduces the original assets: 16 terrain chunks of 128×128, arches with a real
+opening, OBJ/MTL and the matching collision triangles. The generator also computes the SHA-256 of all files. This is a
+separate FPS example; the existing RTS heightfield/MapGrid is not converted to this format automatically.
 
-### Манифест
+### Manifest
 
-В карте задайте `world`:
+In the map, set `world`:
 
 ```json
 {
@@ -150,20 +139,18 @@ ctest --test-dir <build> -R '^(world_streaming|fps)$' --output-on-failure
 }
 ```
 
-Хэши в этом фрагменте — обозначения; готовые действительные хэши находятся в примере.
-`assets` перечисляет **все** зависимости, включая buffers/textures/MTL модели. Файл,
-которого нет в списке или чей хэш изменился, не публикуется. Хэши включены в идентичность
-контента сетевой сессии и сохранения. Для async-карт добавлена метка версии runtime:
-старый клиент, который знает только box-сцены, не подключится к новой async-карте.
-Обычные карты сохраняют прежние идентификаторы и форматы.
+The hashes in this snippet are placeholders; real valid hashes are in the example. `assets` lists **all** dependencies,
+including the model's buffers/textures/MTL. A file that is not in the list or whose hash changed is not published. The
+hashes are part of the content identity of a network session and of saves. Async maps get a runtime version tag: an old
+client that only knows box scenes will not connect to a new async map. Regular maps keep their earlier identifiers and
+formats.
 
-Асинхронный формат делит мир на X/Z-колонки: Y координаты ячейки равен нулю,
-высота объектов внутри колонки свободна. До 32768 участков. Для коллизий сохраняются
-диапазоны `SpatialWorld` (±1000000 единиц) и более узкий `fps.worldLimit`. Размер
-колонки 16..4096, координаты данных локальные. Границы мешей и коллизий по X/Z должны
-помещаться в свою колонку; пересекающий границу объект нужно заранее разбить.
+The asynchronous format divides the world into X/Z columns: the cell's Y coordinate is zero, object height inside a
+column is free. Up to 32768 chunks. For collision, the `SpatialWorld` ranges (±1000000 units) and the narrower
+`fps.worldLimit` still apply. Column size 16..4096, data coordinates are local. Mesh and collision bounds on X/Z must fit
+in their column; an object crossing the border must be split in advance.
 
-### Файл участка
+### Chunk file
 
 ```json
 {
@@ -177,86 +164,73 @@ ctest --test-dir <build> -R '^(world_streaming|fps)$' --output-on-failure
 }
 ```
 
-Блоки необязательны. `terrain.resolution` — 2..129 вершин по каждой стороне;
-`heights` — абсолютные локальные высоты в единицах мира, построчно Z, затем X.
-Диагональ каждой клетки: (0,0)–(1,1). Визуальный меш и коллизия используют одинаковые
-треугольники. Необязательный `terrain.material` задаёт `color: [r,g,b]`,
-`baseTexture` и `normalTexture`; файлы также перечисляются в `assets`. `terrain.uvScale`
-задаёт повторов текстуры на единицу мира, UV фаза согласована между колонками.
-Соседние резидентные terrain-участки должны иметь одинаковое разрешение
-и совпадающие крайние высоты: иначе публикация коллизии отклоняется.
+The blocks are optional. `terrain.resolution` is 2..129 vertices per side; `heights` are absolute local heights in world
+units, row by row in Z, then X. The diagonal of each cell is (0,0)–(1,1). The visual mesh and the collision use the same
+triangles. The optional `terrain.material` sets `color: [r,g,b]`, `baseTexture` and `normalTexture`; the files are also
+listed in `assets`. `terrain.uvScale` sets texture repeats per world unit; the UV phase is consistent across columns.
+Neighbouring resident terrain chunks must have the same resolution and matching edge heights; otherwise collision
+publishing is rejected.
 
-`meshes` — до 256 экземпляров статических моделей, поддерживаемых `loadModel`
-(в том числе OBJ и glTF). Декодируются модели и текстуры; повторения файла внутри
-участка используют одну модель. Поддержаны `position`, положительный `scale` и
-`rotation` в градусах. Skins, clips и morphs требуют обычной сущности и отклоняются.
-Коллизия модели задаётся отдельно точными треугольниками в `collision`, а не
-придумывается по её AABB. `boxes` — только коллизия; визуализация у async-сцены явная.
+`meshes` are up to 256 instances of static models supported by `loadModel` (including OBJ and glTF). Models and textures
+are decoded; repeated files within a chunk share one model. `position`, a positive `scale` and `rotation` in degrees are
+supported. Skins, clips and morphs require a regular entity and are rejected. A model's collision is set separately with
+exact triangles in `collision`, not invented from its AABB. `boxes` are collision only; an async scene's visuals are
+explicit.
 
-Треугольники обрабатываются через существующий пространственный индекс и swept-AABB
-SAT narrow phase на `Fixed`. Это применяется к мотору, лучам/выстрелам, гранатам и
-проверкам свободного места. Отверстия не закрываются bounding box модели.
+Triangles are processed through the existing spatial index and a swept-AABB SAT narrow phase on `Fixed`. This applies to
+the motor, rays/shots, grenades and free-space checks. Openings are not closed by the model's bounding box.
 
-### Потоки, отмена и память
+### Threads, cancellation and memory
 
-`AsyncChunkStream` — общий двухфазный адаптер поверх `ChunkStreamer`:
+`AsyncChunkStream` is a shared two-phase adapter on top of `ChunkStreamer`:
 
-1. Основной поток выбирает участки и резервирует память.
-2. Один рабочий поток читает/проверяет файлы, декодирует модели и строит terrain/коллизии.
-3. Основной поток принимает готовые результаты. `WorldScene` создаёт GPU-ресурсы,
-   `CollisionStream` добавляет коллизии только между тиками.
-4. Потерявшая актуальность задача отменяется логически. Её резерв staging остаётся
-   занят до завершения работы; поздний результат не может вернуть выгруженный участок.
+1. The main thread selects chunks and reserves memory.
+2. One worker thread reads/verifies files, decodes models and builds terrain/collision.
+3. The main thread accepts the finished results. `WorldScene` creates GPU resources, `CollisionStream` adds collision only
+   between ticks.
+4. A task that is no longer relevant is cancelled logically. Its staging reservation stays occupied until the work
+   finishes; a late result cannot bring back an unloaded chunk.
 
-`maxResidentBytes` покрывает объявленные резервы выбранных участков, включая ожидающие
-подготовки/публикации. `maxStagingBytes` отдельно ограничивает одновременно работающие,
-ожидающие и отменённые задачи; `maxJobs` ограничивает очередь, рабочий поток один.
-Декодированный payload проверяется по консервативной оценке перед публикацией.
-`maxUploadBytes` ограничивает сумму резервов публикуемых за кадр участков; один участок
-должен помещаться целиком. По умолчанию не более двух публикаций и четырёх новых запросов
-за обновление визуальной сцены. GPU API вызывается только на потоке рендера.
+`maxResidentBytes` covers the declared reservations of the selected chunks, including those waiting for
+preparation/publishing. `maxStagingBytes` separately limits running, pending and cancelled tasks at the same time;
+`maxJobs` limits the queue, there is one worker thread. The decoded payload is checked against a conservative estimate
+before publishing. `maxUploadBytes` limits the sum of reservations of chunks published per frame; one chunk must fit
+whole. By default, no more than two publishes and four new requests per visual scene update. The GPU API is called only on
+the render thread.
 
-Это бюджеты ресурсов, а не строгий предел RSS: каталог, аллокатор, временный JSON,
-декодеры и драйвер имеют дополнительную память. Отдельный файл ограничен 32 MiB до
-чтения из файла/пакета в стандартном `platform::makeContentReader`; пользовательский
-Reader обязан соблюдать такой же контракт. Очень тяжёлый отдельный mesh или texture
-нужно делить заранее: загрузка GPU одного участка неделима, жёсткий предел миллисекунд
-кадра не гарантируется.
+These are resource budgets, not a strict RSS limit: the catalog, allocator, temporary JSON, decoders and driver use
+additional memory. A single file is limited to 32 MiB before reading from a file/pack in the standard
+`platform::makeContentReader`; a custom Reader must honour the same contract. A very heavy single mesh or texture must be
+split in advance: a chunk's GPU upload is indivisible, a hard frame-millisecond limit is not guaranteed.
 
-`platform::makeContentReader` создаёт независимый Reader с фиксированным корнем,
-собственным `content.rpak` и локальными split-chunks. Он не обращается из фонового
-потока к изменяемому состоянию hosted view/CWD/монтажу пакетов. Недоступный локально
-контент остаётся ошибкой загрузки; автоматическая сетевая доставка DLC не добавлена.
-APK-asset Reader для Android-хоста должен передаваться отдельно. В сборке web без
-pthreads подготовка выполняется кооперативно по одной задаче за обновление, а не
-на фоновом потоке. Нельзя рекламировать этот fallback как неблокирующий browser I/O.
+`platform::makeContentReader` creates an independent Reader with a fixed root, its own `content.rpak` and local split
+chunks. From the background thread it does not touch the mutable state of the hosted view/CWD/pack mounts. Content that
+is not available locally remains a load error; automatic network delivery of DLC is not added. An APK-asset Reader for an
+Android host must be passed separately. In a web build without pthreads, preparation runs cooperatively, one task per
+update, not on a background thread. This fallback must not be advertised as non-blocking browser I/O.
 
-### Авторитетность и сохранение
+### Authority and saving
 
-Перед тиком FPS вычисляет консервативный набор участков для всех актёров, дальности
-оружия, движения, транспорта, снарядов, взрывов и точек респавна. Если хоть одна
-нужная коллизия не готова, `GameModule::readyToStep` запрещает тик. `Simulation::step`
-не меняет номер тика, RNG, события и очередь команд. Сервер не извлекает входные
-команды до готовности. Скорость диска меняет время ожидания, а не результат тика.
+Before a tick, FPS computes a conservative set of chunks for all actors, weapon ranges, movement, vehicles, projectiles,
+explosions and respawn points. If any needed collision is not ready, `GameModule::readyToStep` forbids the tick.
+`Simulation::step` does not change the tick number, RNG, events or the command queue. The server does not take input
+commands until it is ready. Disk speed changes the waiting time, not the result of the tick.
 
-Бюджет сервера должен вмещать объединение областей всех игроков и точек респавна.
-Недостаточный бюджет не разрешает симуляцию с дырками: сервер остаётся в ожидании.
-Это безопасная остановка всей сессии, не распределённая симуляция независимых регионов.
-На клиенте предсказание не двигает актёра в отсутствующую область коллизии.
+The server budget must fit the union of the areas of all players and respawn points. An insufficient budget does not allow
+a simulation with holes: the server keeps waiting. This is a safe stop of the whole session, not a distributed simulation
+of independent regions. On the client, prediction does not move the actor into an area without collision.
 
-Статическая коллизия — восстановимый кэш неизменяемого, хэшированного контента.
-Она не записывается в save; после восстановления хост подгружает требуемые участки
-перед первым тиком. Динамические актёры сохраняются прежним механизмом. Изменяемый
-ландшафт, выгрузка/сохранение динамических сущностей и streamed navmesh не добавлены.
+Static collision is a recoverable cache of immutable, hashed content. It is not written into the save; after restoring,
+the host loads the required chunks before the first tick. Dynamic actors are saved by the existing mechanism. Mutable
+terrain, unloading/saving of dynamic entities and a streamed navmesh are not added.
 
-### Проверки async-пути
+### Async path checks
 
-`aiverse_world_async_tests` проверяет реальную работу на другом потоке, отмену с
-поздним завершением, сохранение staging-резерва до завершения, публикацию на потоке
-владельца, SHA-256, плохие стыки, треугольники, движение по склону и одинаковое
-продолжение симуляции после холодной загрузки сохранения. Интеграционный тест
-проходит через арку и границу участка через настоящие authority/client loopback,
-затем проверяет остановку перед колонной арки. Рабочий каталог теста — корень движка.
+`aiverse_world_async_tests` checks real work on another thread, cancellation with late completion, keeping the staging
+reservation until completion, publishing on the owner thread, SHA-256, bad seams, triangles, movement on a slope and an
+identical continuation of the simulation after a cold save load. An integration test passes through an arch and a chunk
+border through the real authority/client loopback, then checks stopping before the arch's column. The test's working
+directory is the engine root.
 
 ```sh
 cmake --build <build> --target aiverse_world_async_tests
@@ -264,9 +238,9 @@ ctest --test-dir <build> -R '^(world_async|world_streaming|fps)$' --output-on-fa
 ```
 
 
-Проверка реального GPU-жизненного цикла: `aiverse_world_preview` проходит три
-положения камеры, полностью выгружает сцену, затем загружает её снова. Проверяет
-число резидентных участков и резерв на каждом этапе; завершается с ошибкой при сбое.
+Checking the real GPU lifecycle: `aiverse_world_preview` goes through three camera positions, fully unloads the scene,
+then loads it again. It checks the number of resident chunks and the reservation at each stage and exits with an error on
+failure.
 
 ```sh
 AIVERSE_SCREENSHOT=/tmp/world.ppm AIVERSE_EXIT_AFTER_FRAMES=400 <build>/modules/fps/aiverse_world_preview examples/world/streamed

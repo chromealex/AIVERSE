@@ -44,6 +44,7 @@
 //   [{ "x": 10, "z": 12, "height": 1, "color": [1, 0.6, 0.3], "radius": 4, "intensity": 1.5,
 //      "flicker": 0.2, "halo": 0.8 }]   ("pos": [x, z] works too); shown once the cell is explored.
 //   Spot fields as for types; "yaw" is absolute here (0 = +X, 90 = +Z).
+//   "bake": "mixed" | "baked": the light baker (docs/lightbake.md) uses it; "baked" lights stop lighting in realtime.
 // Without the block the scene keeps the renderer's default (noon) lighting.
 // Testing: AIVERSE_TIME_OF_DAY=0..1 sets the start time, AIVERSE_NIGHT=0..1 forces a fixed night amount.
 // At night emissive materials glow brighter (Renderer3D::lights.setNightGlow).
@@ -86,7 +87,9 @@ public:
     // Brightness factor 0..1 of a light from its pattern, power, damage and the time of day
     // (night = max(night, dusk)); deterministic in (t, phase).
     static float glowLevel(const Glow& g, float t, float phase, float hp, bool powered, float night);
-    struct MapLight : Glow { float x = 0, z = 0; };
+    // "bake": "mixed" (realtime light, its bounce goes into the baked lightmap) | "baked" (only in the lightmap and
+    // the light probes: its realtime light and halo are off while a bake is loaded). agent-lightbake
+    struct MapLight : Glow { float x = 0, z = 0; uint8_t bake = 0; };
     static Glow parseGlow(const Json& j);
     // The renderer light of a Glow standing on `ground`, facing `yaw` (radians, 0 = +X) at time t
     // (flicker, sweep; `phase` desynchronises objects). Intensity before day/night scaling.

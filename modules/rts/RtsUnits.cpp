@@ -578,6 +578,11 @@ bool RtsModule::runOrder(Simulation& sim, Entity e, Order& o) {
     case OrderType::Enter: {
         if (!w.alive(o.target)) return true;
         Transform& tr = w.get<Transform>(e);
+        if (auto* pl = w.tryGet<Pulled>(e); pl && !pl->done) {   // magnet (RtsSkillObjects.cpp)
+            if (!runPull(sim, e, o)) return false;
+            o.state = 1;
+            if (m) stopMoving(sim, e);
+        }
         if (o.state == 3) {
             if (!runLaneWalk(sim, e, o)) return false;
             o.state = 1;
@@ -632,8 +637,10 @@ bool RtsModule::runOrder(Simulation& sim, Entity e, Order& o) {
             } else if (g->count > 0) {
                 Fixed atk = rules_.originals ? stat(sim, e, Stat::Damage) / fxMax(stat(sim, o.target, Stat::Defense), Fixed::fromRatio(1, 10)) : kOne;
                 g->damageAcc += atk / fxMax(tt.garrisonDefense, Fixed::fromRatio(1, 10));
+                const int before = g->count;
                 while (g->damageAcc >= kOne && g->count > 0) { --g->count; g->damageAcc -= kOne; }
                 if (rules_.originals) assaultOriginals(sim, e, o.target);
+                envAssault(sim, o.target, me, to.player, 1, before - g->count);
             } else if (tt.capturable) {
                 uint8_t old = to.player;
                 to.player = me;

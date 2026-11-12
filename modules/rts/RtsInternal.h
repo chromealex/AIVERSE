@@ -18,6 +18,13 @@ inline Fixed maxWeaponRange(const UnitType& t) {
     for (auto& w : t.weapons) r = fxMax(r, w.range);
     return r;
 }
+// Point b inside the ellipse around a with x radius r and z radius r * aspect (BW Math.IsInEllipse; flat maps).
+inline bool inRangeEllipse(Vec3 a, Vec3 b, Fixed r, Fixed aspect) {
+    const Fixed ry = r * aspect;
+    if (r.raw <= 0 || ry.raw <= 0) return false;
+    const Fixed dx = (b.x - a.x) / r, dz = (b.z - a.z) / ry;
+    return dx * dx + dz * dz <= kOne;
+}
 inline Fixed secondsToTicks(Fixed s, uint32_t rate) { return s * int64_t(rate); }
 
 } // namespace aiverse::game::detail

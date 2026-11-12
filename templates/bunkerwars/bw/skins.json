@@ -1,0 +1,3194 @@
+// Bunker Wars skins (headers; art stays in the client).
+{
+ "buildings": [
+  {
+   "m_Name": "Campaign_HospitalSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "a1b16721978324a3a933fa504e807c0e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_HospitalSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_HospitalSkin_Header.asset"
+  },
+  {
+   "m_Name": "Campaign_MegaTowerSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "99e9612a666524b8e84a0b79dfb59d22",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_MegaTowerSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_MegaTowerSkin_Header.asset"
+  },
+  {
+   "m_Name": "Campaign_PrisonSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "2f4bbb852f3e448708bbcd8ee38bd3ba",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_PrisonSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_PrisonSkin_Header.asset"
+  },
+  {
+   "m_Name": "Campaign_SnowBunkerSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "0701ca7387ef1804f890df4788edfe0a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_SnowBunkerSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_SnowBunkerSkin_Header.asset"
+  },
+  {
+   "m_Name": "Campaign_StorageSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "bb622caa3ce424bb594ccef2f85d03ad",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_StorageSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/CampaignBuildings/Hospital/Campaign_StorageSkin_Header.asset"
+  },
+  {
+   "m_Name": "DefaultCaveSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "9a98029ca7ae8ac4fb89bc62847654f6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultCaveSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultCaveSkin_Header.asset"
+  },
+  {
+   "m_Name": "DefaultDominationSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "3ea5dd06e7cda48cfb1d0f798c34e473",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultDominationSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultDominationSkin_Header.asset"
+  },
+  {
+   "m_Name": "DefaultGraveyardSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "35a29677c06e98a4dba0f71af955bdec",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultGraveyardSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultGraveyardSkin_Header.asset"
+  },
+  {
+   "m_Name": "DefaultKOHSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "705417ffa83a549758c3092b377aae3f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultKOHSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Common/Skins/Buildings/DefaultKOHSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race1_DefaultHouseSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "00407d252afd945e08aeda483daa48fc",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Buildings/Race1_DefaultHouseSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Buildings/Race1_DefaultHouseSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race1_DefaultSmithySkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "3239998fda37546b78a721044828618e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Buildings/Race1_DefaultSmithySkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Buildings/Race1_DefaultSmithySkin_Header.asset"
+  },
+  {
+   "m_Name": "Race1_DefaultTowerSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "cc7d61bbf17484ac991405c5dc066b78",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Buildings/Race1_DefaultTowerSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Buildings/Race1_DefaultTowerSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race1_HouseSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "beaf658949a51cf42a47755a89f1269d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Buildings/Race1_HouseSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Buildings/Race1_HouseSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race1_SmithySkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "93cffa30af2562042906fef33860691e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Buildings/Race1_SmithySkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Buildings/Race1_SmithySkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race1_TowerSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "677d820dbc8bbff409c187bd83999acc",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Buildings/Race1_TowerSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Buildings/Race1_TowerSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race2_DefaultHouseSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "07af83864c9a745018e94c1e4ba29776",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Buildings/Race2_DefaultHouseSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Buildings/Race2_DefaultHouseSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race2_DefaultSmithySkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "62cce6f0c847b45a1be2d90e9f0bcc3b",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Buildings/Race2_DefaultSmithySkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Buildings/Race2_DefaultSmithySkin_Header.asset"
+  },
+  {
+   "m_Name": "Race2_DefaultTowerSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "4b6f947cb21fd4cac963310f92fdf29d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Buildings/Race2_DefaultTowerSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Buildings/Race2_DefaultTowerSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race2_HouseSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "ea7a6d31acd80764ab686443ec8a1796",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Buildings/Race2_HouseSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Buildings/Race2_HouseSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race2_SmithySkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "bbf54300d370f4c429333f095e22e729",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Buildings/Race2_SmithySkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Buildings/Race2_SmithySkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race2_TowerSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "3964732e688593043a589941d5efbf0d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Buildings/Race2_TowerSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Buildings/Race2_TowerSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race3_DefaultHouseSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "e511158eb99314243960d5b126868c1f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Buildings/Race3_DefaultHouseSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Buildings/Race3_DefaultHouseSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race3_DefaultSmithySkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "f55efdc08b9bd480da192ccfdca780c6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Buildings/Race3_DefaultSmithySkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Buildings/Race3_DefaultSmithySkin_Header.asset"
+  },
+  {
+   "m_Name": "Race3_DefaultTowerSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "f60e88cf47c02459fac6de404ecd362e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Buildings/Race3_DefaultTowerSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Buildings/Race3_DefaultTowerSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race3_HouseSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "61e4f734a5f9cd045b69af6adea815ec",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Buildings/Race3_HouseSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Buildings/Race3_HouseSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race3_SmithySkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "d589ab1a5f449f842ad4985c17a2112a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Buildings/Race3_SmithySkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Buildings/Race3_SmithySkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race3_TowerSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "6970e5b672006524cb8181fbdc9609ad",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Buildings/Race3_TowerSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Buildings/Race3_TowerSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race4_DefaultHouseSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "6ea9c73df3f664fb78cc524551555f84",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Buildings/Race4_DefaultHouseSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Buildings/Race4_DefaultHouseSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race4_DefaultSmithySkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "9ab884ce7f5e64439b3c3ffb20d94b1d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Buildings/Race4_DefaultSmithySkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Buildings/Race4_DefaultSmithySkin_Header.asset"
+  },
+  {
+   "m_Name": "Race4_DefaultTowerSkin_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "a4399865257144bcc9958456581fd515",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Buildings/Race4_DefaultTowerSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Buildings/Race4_DefaultTowerSkin_Header.asset"
+  },
+  {
+   "m_Name": "Race4_HouseSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "0915742a375101c40b1afa81918916bd",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Buildings/Race4_HouseSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Buildings/Race4_HouseSkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race4_SmithySkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "6cc15ae4d0b2f7f4780a961a4da3af9e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Buildings/Race4_SmithySkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Buildings/Race4_SmithySkin1_Header.asset"
+  },
+  {
+   "m_Name": "Race4_TowerSkin1_Header",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|Skin1|Buildings",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "0cd21ebc4707c74408c1249173cdf4ab",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Buildings/Race4_TowerSkin1.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Buildings/Race4_TowerSkin1_Header.asset"
+  }
+ ],
+ "heroes": [
+  {
+   "m_Name": "Hero1-DefaultSkin",
+   "id": 320767748,
+   "countryCode": null,
+   "title": {
+    "key": "heroes|hero1 caption",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "f82619173f98045c3a4a1a43641aa139",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroUlta_img1.png",
+    "variants": []
+   },
+   "iconResource": {
+    "guid": "88fd2971f5a05d64fa9c16bc0a7bb8d9",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/SelCard_img_hero1.png",
+    "variants": []
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "description": {
+    "key": "heroes|hero1 description",
+    "parameters": 0
+   },
+   "items": [
+    {
+     "type": 1,
+     "tag": "hero_skill_tree_heroname",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "heroes|hero1 caption",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_skill_tree_image",
+     "image": {
+      "guid": "cd3a24db8bf2f4e52a54947d26f3c5f6",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPassiveTree/ST_hero1.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_background_image",
+     "image": {
+      "guid": "9fb330f3270a34d2c8ee09077c4ab273",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero1.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 1,
+     "tag": "hero_locked_text",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "HeroDescription|Hero1Locked",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_soul",
+     "image": {
+      "guid": "6e7aea951960942f3b167dbcb12ce62e",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero1.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_headIcon",
+     "image": {
+      "guid": "bb3f1de3aee6d7641b09c54353932ccf",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head1.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    }
+   ],
+   "heroClientId": 1,
+   "skinDescription": {
+    "key": "MobileUI|Skins|Heroes|Hero1|Description",
+    "parameters": 0
+   },
+   "skinShopTitle": {
+    "key": null,
+    "parameters": 0
+   },
+   "keyLockedCaption": {
+    "key": "HeroDescription|Hero1Locked",
+    "parameters": 0
+   },
+   "uiRaritySkin": {
+    "fileID": 11400000,
+    "guid": "a587097ac67ff43ce987c83b7d291f46",
+    "type": 2
+   },
+   "backViewAnimation": {
+    "guid": "ec84316d97f154a30a39a183db923b24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero_Back_Funny_1pic.prefab",
+    "variants": []
+   },
+   "mainViewAnimation": {
+    "guid": "53d1933447b94244d873c35d2a2e3723",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero1/Hero1_Spine.prefab",
+    "variants": []
+   },
+   "color": {
+    "r": 0.8117647,
+    "g": 0.35686275,
+    "b": 0,
+    "a": 1
+   },
+   "skillPointIconSmall": {
+    "guid": "d649e898618b74c7da2d5716f6837f81",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero1.png",
+    "variants": []
+   },
+   "skillPointIconNormal": {
+    "guid": "d649e898618b74c7da2d5716f6837f81",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero1.png",
+    "variants": []
+   },
+   "skillPointIconLarge": {
+    "guid": "d649e898618b74c7da2d5716f6837f81",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero1.png",
+    "variants": []
+   },
+   "skillPointIconSmallTexture": {
+    "guid": "b5ccbceaa1ba54ff3bf2ae22985d850c",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero1_tex.png",
+    "variants": []
+   },
+   "soulIcon": {
+    "guid": "6e7aea951960942f3b167dbcb12ce62e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero1.png",
+    "variants": []
+   },
+   "soulIconTexture": {
+    "guid": "c8d84e712ee2448d8a65a0f45de6fa08",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero1_tex.png",
+    "variants": []
+   },
+   "soulIconBack": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "movieTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "mainTextureResource": {
+    "guid": "291c04ee5a2014defaf9b179380c3a54",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img1.png",
+    "variants": []
+   },
+   "maskTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "shopItemBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockIconResource": {
+    "guid": "291c04ee5a2014defaf9b179380c3a54",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img1.png",
+    "variants": []
+   },
+   "heroPartIconResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "rewardPlateHero": {
+    "guid": "9c9f2536ae1544cb381a82c3ad9a6123",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesRewards/reward_img_Aviator.png",
+    "variants": []
+   },
+   "cardsCollectionBack": {
+    "guid": "6de5cf48c49b85e4583bbbbb03f78413",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroCardsCollection/Hero1/CardCollection_hero_img1.png",
+    "variants": []
+   },
+   "headIcon": {
+    "guid": "bb3f1de3aee6d7641b09c54353932ccf",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head1.png",
+    "variants": []
+   },
+   "fullHeroIcon": {
+    "guid": "4275537e09ddc784c8b9802cec5ab238",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesFull/aviator_trn_512.png",
+    "variants": []
+   },
+   "battlePassPremiumPopupHeroIcon": {
+    "guid": "9fb330f3270a34d2c8ee09077c4ab273",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero1.png",
+    "variants": []
+   },
+   "leagueHeroIcon": {
+    "guid": "4d26236b4e8a1a241908704434d0857d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/Leagues/LeaguesAtlas/Icons/leagues_hero1.png",
+    "variants": []
+   },
+   "battlePassHeroButtonIcon": {
+    "guid": "222908e3b6790194897388d0f214ef2d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/BattlePass/BattleButton/Heroes/bp_tabs_hero1.png",
+    "variants": []
+   },
+   "battlePassHeroPointIcon": {
+    "guid": "078fca0884f8fd749a124c56e50cd150",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointIcons/bp_point1.png",
+    "variants": []
+   },
+   "battlePassHeroPointTexture": {
+    "guid": "e8df900f09d5b7648837c9a41d632308",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointTextures/bp_point1.png",
+    "variants": []
+   },
+   "horizontalFlipShopImage": 0,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero1/Hero1-DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Hero2-DefaultSkin",
+   "id": 1694053830,
+   "countryCode": null,
+   "title": {
+    "key": "heroes|hero2 caption",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "59f32836d5c844f56a5286d6f452113e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroUlta_img2.png",
+    "variants": []
+   },
+   "iconResource": {
+    "guid": "de872fd2583b1bb4da5bfbc1bdbba3f2",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/SelCard_img_hero2.png",
+    "variants": []
+   },
+   "iconLargeResource": {
+    "guid": "37f9d585b811f448296afcb4d33daf2a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/ResourcesPacks/Resources_Offers/Offers_iconMini_hero2.png",
+    "variants": []
+   },
+   "description": {
+    "key": "heroes|hero2 description",
+    "parameters": 0
+   },
+   "items": [
+    {
+     "type": 1,
+     "tag": "hero_skill_tree_heroname",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "heroes|hero2 caption",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_skill_tree_image",
+     "image": {
+      "guid": "cfc7e19f98bc049c6a121951c2d98509",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPassiveTree/ST_hero2.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_background_image",
+     "image": {
+      "guid": "def6675bb157c4945a8a959cf7042ede",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero2.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 1,
+     "tag": "hero_locked_text",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "HeroDescription|Hero2Locked",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_soul",
+     "image": {
+      "guid": "631f5375d658f47e69045792fda37632",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero2.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_headIcon",
+     "image": {
+      "guid": "784830f051a73e14e88add514b762957",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head2.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    }
+   ],
+   "heroClientId": 2,
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinShopTitle": {
+    "key": null,
+    "parameters": 0
+   },
+   "keyLockedCaption": {
+    "key": "HeroDescription|Hero2Locked",
+    "parameters": 0
+   },
+   "uiRaritySkin": {
+    "fileID": 11400000,
+    "guid": "a587097ac67ff43ce987c83b7d291f46",
+    "type": 2
+   },
+   "backViewAnimation": {
+    "guid": "ec84316d97f154a30a39a183db923b24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero_Back_Funny_1pic.prefab",
+    "variants": []
+   },
+   "mainViewAnimation": {
+    "guid": "92755e60d72ee5e48a159c0169568aed",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero2/Hero2_Spine.prefab",
+    "variants": []
+   },
+   "color": {
+    "r": 0.8117647,
+    "g": 0.35686275,
+    "b": 0,
+    "a": 1
+   },
+   "skillPointIconSmall": {
+    "guid": "df8a484d6d07d4ddf9abe497c8b986f6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero2.png",
+    "variants": []
+   },
+   "skillPointIconNormal": {
+    "guid": "df8a484d6d07d4ddf9abe497c8b986f6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero2.png",
+    "variants": []
+   },
+   "skillPointIconLarge": {
+    "guid": "df8a484d6d07d4ddf9abe497c8b986f6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero2.png",
+    "variants": []
+   },
+   "skillPointIconSmallTexture": {
+    "guid": "2f0a46406cc9f487e9ad12b280e7e28e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero2_tex.png",
+    "variants": []
+   },
+   "soulIcon": {
+    "guid": "631f5375d658f47e69045792fda37632",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero2.png",
+    "variants": []
+   },
+   "soulIconTexture": {
+    "guid": "6f338f00e74a54c56adec3c25457f668",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero2_tex.png",
+    "variants": []
+   },
+   "soulIconBack": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "movieTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "mainTextureResource": {
+    "guid": "c8cf008ca599c4b279a5c1525aed0259",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img2.png",
+    "variants": []
+   },
+   "maskTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "shopItemBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockIconResource": {
+    "guid": "c8cf008ca599c4b279a5c1525aed0259",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img2.png",
+    "variants": []
+   },
+   "heroPartIconResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "rewardPlateHero": {
+    "guid": "7cbb2d2a8bef740589cdda778a2fbb0d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesRewards/reward_img_Sniper.png",
+    "variants": []
+   },
+   "cardsCollectionBack": {
+    "guid": "b9e4fad83cf77154a8dac96a2ef205db",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroCardsCollection/Hero2/CardCollection_hero_img2.png",
+    "variants": []
+   },
+   "headIcon": {
+    "guid": "784830f051a73e14e88add514b762957",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head2.png",
+    "variants": []
+   },
+   "fullHeroIcon": {
+    "guid": "d1d076ea7218a314992a84279ec09247",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesFull/sniper_trn_512.png",
+    "variants": []
+   },
+   "battlePassPremiumPopupHeroIcon": {
+    "guid": "def6675bb157c4945a8a959cf7042ede",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero2.png",
+    "variants": []
+   },
+   "leagueHeroIcon": {
+    "guid": "11c5902d6193f23418c1adf602d8d50e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/Leagues/LeaguesAtlas/Icons/leagues_hero2.png",
+    "variants": []
+   },
+   "battlePassHeroButtonIcon": {
+    "guid": "e139d908c5c83964a9141714505e8a83",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/BattlePass/BattleButton/Heroes/bp_tabs_hero2.png",
+    "variants": []
+   },
+   "battlePassHeroPointIcon": {
+    "guid": "c5049983a308ea740b96d5b21b3536f7",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointIcons/bp_point2.png",
+    "variants": []
+   },
+   "battlePassHeroPointTexture": {
+    "guid": "4d4a8358bbbb2144e96fa9e3763e9a60",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointTextures/bp_point2.png",
+    "variants": []
+   },
+   "horizontalFlipShopImage": 0,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero2/Hero2-DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Hero3-DefaultSkin",
+   "id": 3067339912,
+   "countryCode": null,
+   "title": {
+    "key": "heroes|hero3 caption",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "546df3cf63aac4cf4aef49cfe959d660",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroUlta_img3.png",
+    "variants": []
+   },
+   "iconResource": {
+    "guid": "8560a240adf7573409856b0833e408fe",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/SelCard_img_hero3.png",
+    "variants": []
+   },
+   "iconLargeResource": {
+    "guid": "8c86363cfe8b242b0821e6e27f481e70",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/ResourcesPacks/Resources_Offers/Offers_iconMini_hero3.png",
+    "variants": []
+   },
+   "description": {
+    "key": "heroes|hero3 description",
+    "parameters": 0
+   },
+   "items": [
+    {
+     "type": 1,
+     "tag": "hero_skill_tree_heroname",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "heroes|hero3 caption",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_skill_tree_image",
+     "image": {
+      "guid": "08d41b43ee45c46458f8901e6c21b04a",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPassiveTree/ST_hero3.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_background_image",
+     "image": {
+      "guid": "ccdbcefb02c7e4e6a861dd4d6d9a50da",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero3.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 1,
+     "tag": "hero_locked_text",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "HeroDescription|Hero3Locked",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_soul",
+     "image": {
+      "guid": "c26208c5c461745529010137fdefb701",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero3.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_headIcon",
+     "image": {
+      "guid": "9afbd4d506ee82f489a290bb2fa86a24",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head3.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    }
+   ],
+   "heroClientId": 3,
+   "skinDescription": {
+    "key": null,
+    "parameters": 0
+   },
+   "skinShopTitle": {
+    "key": null,
+    "parameters": 0
+   },
+   "keyLockedCaption": {
+    "key": "HeroDescription|Hero3Locked",
+    "parameters": 0
+   },
+   "uiRaritySkin": {
+    "fileID": 11400000,
+    "guid": "536645451332d496ba9e64691047a8ee",
+    "type": 2
+   },
+   "backViewAnimation": {
+    "guid": "ec84316d97f154a30a39a183db923b24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero_Back_Funny_1pic.prefab",
+    "variants": []
+   },
+   "mainViewAnimation": {
+    "guid": "33656cf4ba0dcf14bbe515b46acd5ac5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero3/Hero3_Spine.prefab",
+    "variants": []
+   },
+   "color": {
+    "r": 0.3019608,
+    "g": 0.5529412,
+    "b": 0.70980394,
+    "a": 1
+   },
+   "skillPointIconSmall": {
+    "guid": "370989e5d81a042b5884676ecb9e2ce3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero3.png",
+    "variants": []
+   },
+   "skillPointIconNormal": {
+    "guid": "370989e5d81a042b5884676ecb9e2ce3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero3.png",
+    "variants": []
+   },
+   "skillPointIconLarge": {
+    "guid": "370989e5d81a042b5884676ecb9e2ce3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero3.png",
+    "variants": []
+   },
+   "skillPointIconSmallTexture": {
+    "guid": "50de17d2e2fb745819288b4927178024",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero3_tex.png",
+    "variants": []
+   },
+   "soulIcon": {
+    "guid": "c26208c5c461745529010137fdefb701",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero3.png",
+    "variants": []
+   },
+   "soulIconTexture": {
+    "guid": "27d71aaa033dd46a3a70548cbc6762f0",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero3_tex.png",
+    "variants": []
+   },
+   "soulIconBack": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "movieTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "mainTextureResource": {
+    "guid": "4e5d413d6d35d49059473e6378eb5b98",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img3.png",
+    "variants": []
+   },
+   "maskTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "shopItemBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockIconResource": {
+    "guid": "4e5d413d6d35d49059473e6378eb5b98",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img3.png",
+    "variants": []
+   },
+   "heroPartIconResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "rewardPlateHero": {
+    "guid": "f9159324681674cc69057ffe4fbece63",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesRewards/reward_img_General.png",
+    "variants": []
+   },
+   "cardsCollectionBack": {
+    "guid": "191f2bcf30d8334478c236c85a4814fd",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroCardsCollection/Hero3/CardCollection_hero_img3.png",
+    "variants": []
+   },
+   "headIcon": {
+    "guid": "9afbd4d506ee82f489a290bb2fa86a24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head3.png",
+    "variants": []
+   },
+   "fullHeroIcon": {
+    "guid": "dd2f096f7524bd244b420a73736e3e6e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesFull/general_trn_512.png",
+    "variants": []
+   },
+   "battlePassPremiumPopupHeroIcon": {
+    "guid": "ccdbcefb02c7e4e6a861dd4d6d9a50da",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero3.png",
+    "variants": []
+   },
+   "leagueHeroIcon": {
+    "guid": "987549c25bc322f46871c42119f665e0",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/Leagues/LeaguesAtlas/Icons/leagues_hero3.png",
+    "variants": []
+   },
+   "battlePassHeroButtonIcon": {
+    "guid": "2c4e5f08c71a95e409142f7a3237ec6f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/BattlePass/BattleButton/Heroes/bp_tabs_hero3.png",
+    "variants": []
+   },
+   "battlePassHeroPointIcon": {
+    "guid": "952b23d8398ee234db2ecf327fde74f0",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointIcons/bp_point3.png",
+    "variants": []
+   },
+   "battlePassHeroPointTexture": {
+    "guid": "13d2263c2a92b884eaf24d9bdc66d537",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointTextures/bp_point3.png",
+    "variants": []
+   },
+   "horizontalFlipShopImage": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero3/Hero3-DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Hero4-DefaultSkin",
+   "id": 145658698,
+   "countryCode": null,
+   "title": {
+    "key": "heroes|hero4 caption",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "0c8db5c2d1b064ee9b920349879c81d6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroUlta_img4.png",
+    "variants": []
+   },
+   "iconResource": {
+    "guid": "07f2a8279def1bd48bcc980fc7e2458d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/SelCard_img_hero4.png",
+    "variants": []
+   },
+   "iconLargeResource": {
+    "guid": "fbfb7c8999ee74dbc9d0c9dbfc244953",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/ResourcesPacks/Resources_Offers/Offers_iconMini_hero4.png",
+    "variants": []
+   },
+   "description": {
+    "key": "heroes|hero4 description",
+    "parameters": 0
+   },
+   "items": [
+    {
+     "type": 1,
+     "tag": "hero_skill_tree_heroname",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "heroes|hero4 caption",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_skill_tree_image",
+     "image": {
+      "guid": "bc8dc452e99824d76b1b866f9dd61846",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPassiveTree/ST_hero4.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_background_image",
+     "image": {
+      "guid": "84d6bf107fced40d782c41e47dce2bc3",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero4.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 1,
+     "tag": "hero_locked_text",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "HeroDescription|Hero4Locked",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_soul",
+     "image": {
+      "guid": "8723a7e60e5a44136b1b9c6c4b528393",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero4.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_headIcon",
+     "image": {
+      "guid": "8ccdd6d399db87f4288d654794e12cfb",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head4.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    }
+   ],
+   "heroClientId": 4,
+   "skinDescription": {
+    "key": "MobileUI|Skins|Heroes|Hero4|Description",
+    "parameters": 0
+   },
+   "skinShopTitle": {
+    "key": null,
+    "parameters": 0
+   },
+   "keyLockedCaption": {
+    "key": "HeroDescription|Hero4Locked",
+    "parameters": 0
+   },
+   "uiRaritySkin": {
+    "fileID": 11400000,
+    "guid": "6cbb8242c2d1f41ec87bd1d6bfee5edc",
+    "type": 2
+   },
+   "backViewAnimation": {
+    "guid": "ec84316d97f154a30a39a183db923b24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero_Back_Funny_1pic.prefab",
+    "variants": []
+   },
+   "mainViewAnimation": {
+    "guid": "42b9273861b38e741afe702ee099830a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero4/Hero4_Spine.prefab",
+    "variants": []
+   },
+   "color": {
+    "r": 0.3019608,
+    "g": 0.5529412,
+    "b": 0.70980394,
+    "a": 1
+   },
+   "skillPointIconSmall": {
+    "guid": "e6dafa54df0af4a459f23796445aa3ee",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero4.png",
+    "variants": []
+   },
+   "skillPointIconNormal": {
+    "guid": "e6dafa54df0af4a459f23796445aa3ee",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero4.png",
+    "variants": []
+   },
+   "skillPointIconLarge": {
+    "guid": "e6dafa54df0af4a459f23796445aa3ee",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero4.png",
+    "variants": []
+   },
+   "skillPointIconSmallTexture": {
+    "guid": "5bf0971c26d2b4135a5e4a077b11e9b8",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero4_tex.png",
+    "variants": []
+   },
+   "soulIcon": {
+    "guid": "8723a7e60e5a44136b1b9c6c4b528393",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero4.png",
+    "variants": []
+   },
+   "soulIconTexture": {
+    "guid": "8416d3afa7f6f4315a3172c689851f74",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero4_tex.png",
+    "variants": []
+   },
+   "soulIconBack": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "movieTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "mainTextureResource": {
+    "guid": "1b2bf7db5680a433ab19bdc559ee8d93",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img4.png",
+    "variants": []
+   },
+   "maskTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "shopItemBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockIconResource": {
+    "guid": "1b2bf7db5680a433ab19bdc559ee8d93",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img4.png",
+    "variants": []
+   },
+   "heroPartIconResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "rewardPlateHero": {
+    "guid": "bc7fce9f523a84986979c99e11d44fbe",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesRewards/reward_img_Stormtrooper.png",
+    "variants": []
+   },
+   "cardsCollectionBack": {
+    "guid": "49e90181ab89f0e4fb86a719171e655d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroCardsCollection/Hero4/CardCollection_hero_img4.png",
+    "variants": []
+   },
+   "headIcon": {
+    "guid": "8ccdd6d399db87f4288d654794e12cfb",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head4.png",
+    "variants": []
+   },
+   "fullHeroIcon": {
+    "guid": "b07674f949abc57459f266bb9f891b8a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesFull/stormtrooper_trn_512.png",
+    "variants": []
+   },
+   "battlePassPremiumPopupHeroIcon": {
+    "guid": "84d6bf107fced40d782c41e47dce2bc3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero4.png",
+    "variants": []
+   },
+   "leagueHeroIcon": {
+    "guid": "f51ca77db3256e9478c65b5c51f48081",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/Leagues/LeaguesAtlas/Icons/leagues_hero4.png",
+    "variants": []
+   },
+   "battlePassHeroButtonIcon": {
+    "guid": "b516ff267cc90de4ebde5dbe53128392",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/BattlePass/BattleButton/Heroes/bp_tabs_hero4.png",
+    "variants": []
+   },
+   "battlePassHeroPointIcon": {
+    "guid": "e7e2db4a0bcca0e41afc88b3afacf1e0",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointIcons/bp_point4.png",
+    "variants": []
+   },
+   "battlePassHeroPointTexture": {
+    "guid": "743f20e740b81064288fbebb5eac3c59",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointTextures/bp_point4.png",
+    "variants": []
+   },
+   "horizontalFlipShopImage": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero4/Hero4-DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Hero5-DefaultSkin",
+   "id": 1518944780,
+   "countryCode": null,
+   "title": {
+    "key": "Heroes|Hero5 Caption",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "a0c8f075c7060344786cc86f928c1319",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroUlta_img5.png",
+    "variants": []
+   },
+   "iconResource": {
+    "guid": "1ef293343b4919c489d645a8f08a8050",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/SelCard_img_hero5.png",
+    "variants": []
+   },
+   "iconLargeResource": {
+    "guid": "5f164a2a844acb5449fdb2ec58a40d88",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/ResourcesPacks/Resources_Offers/Offers_iconMini_hero5.png",
+    "variants": []
+   },
+   "description": {
+    "key": "heroes|hero5 description",
+    "parameters": 0
+   },
+   "items": [
+    {
+     "type": 1,
+     "tag": "hero_skill_tree_heroname",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "heroes|hero5 caption",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_skill_tree_image",
+     "image": {
+      "guid": "1d8f5bf48d886c844b10c311846ad2d7",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPassiveTree/ST_hero5.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_background_image",
+     "image": {
+      "guid": "d2a16bbfeaf4906408ec6fa8c5d9f0dc",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero5.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 1,
+     "tag": "hero_locked_text",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "HeroDescription|Hero5Locked",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_soul",
+     "image": {
+      "guid": "660afde1b003374409f0d5d9bf00e33b",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero5.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    }
+   ],
+   "heroClientId": 0,
+   "skinDescription": {
+    "key": "MobileUI|Skins|Heroes|Hero5|Description",
+    "parameters": 0
+   },
+   "skinShopTitle": {
+    "key": null,
+    "parameters": 0
+   },
+   "keyLockedCaption": {
+    "key": "HeroDescription|Hero5Locked",
+    "parameters": 0
+   },
+   "uiRaritySkin": {
+    "fileID": 11400000,
+    "guid": "536645451332d496ba9e64691047a8ee",
+    "type": 2
+   },
+   "backViewAnimation": {
+    "guid": "ec84316d97f154a30a39a183db923b24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero_Back_Funny_1pic.prefab",
+    "variants": []
+   },
+   "mainViewAnimation": {
+    "guid": "6c733e43a6799364694e2daab4a3fde2",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero5/Hero5_Spine.prefab",
+    "variants": []
+   },
+   "color": {
+    "r": 0.3019608,
+    "g": 0.5529412,
+    "b": 0.70980394,
+    "a": 1
+   },
+   "skillPointIconSmall": {
+    "guid": "cb3f7c4fd50dfce4cb088724b7598109",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero5.png",
+    "variants": []
+   },
+   "skillPointIconNormal": {
+    "guid": "cb3f7c4fd50dfce4cb088724b7598109",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero5.png",
+    "variants": []
+   },
+   "skillPointIconLarge": {
+    "guid": "cb3f7c4fd50dfce4cb088724b7598109",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero5.png",
+    "variants": []
+   },
+   "skillPointIconSmallTexture": {
+    "guid": "82731e4bf24dac949a99e41f256a9b1e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero5_tex.png",
+    "variants": []
+   },
+   "soulIcon": {
+    "guid": "660afde1b003374409f0d5d9bf00e33b",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero5.png",
+    "variants": []
+   },
+   "soulIconTexture": {
+    "guid": "f196427fb1a37564089acc9a46058960",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero5_tex.png",
+    "variants": []
+   },
+   "soulIconBack": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "movieTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "mainTextureResource": {
+    "guid": "d2637c19ad129064c9ff4f1a90cadaeb",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img5.png",
+    "variants": []
+   },
+   "maskTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "shopItemBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockIconResource": {
+    "guid": "d2637c19ad129064c9ff4f1a90cadaeb",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img5.png",
+    "variants": []
+   },
+   "heroPartIconResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "rewardPlateHero": {
+    "guid": "005167bf5586b7745aa245a93f6c7a5d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesRewards/reward_img_Medic.png",
+    "variants": []
+   },
+   "cardsCollectionBack": {
+    "guid": "2404c4a38d939994f88cc4138b718bd9",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroCardsCollection/Hero5/CardCollection_hero_img5.png",
+    "variants": []
+   },
+   "headIcon": {
+    "guid": "19f69beb72876cc47bec48cc1ed5ab8f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head5.png",
+    "variants": []
+   },
+   "fullHeroIcon": {
+    "guid": "82f8c985ae40dc14e8b7c740f468592c",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesFull/medic_trn_512.png",
+    "variants": []
+   },
+   "battlePassPremiumPopupHeroIcon": {
+    "guid": "d2a16bbfeaf4906408ec6fa8c5d9f0dc",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero5.png",
+    "variants": []
+   },
+   "leagueHeroIcon": {
+    "guid": "fe129f232cba3a646ac6721c41aab37e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/Leagues/LeaguesAtlas/Icons/leagues_hero5.png",
+    "variants": []
+   },
+   "battlePassHeroButtonIcon": {
+    "guid": "d2aa464889cf9544a8db0726c3d59d08",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/BattlePass/BattleButton/Heroes/bp_tabs_hero5.png",
+    "variants": []
+   },
+   "battlePassHeroPointIcon": {
+    "guid": "6f9c216e25388ba409648dcf5c7421b9",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointIcons/bp_point5.png",
+    "variants": []
+   },
+   "battlePassHeroPointTexture": {
+    "guid": "951ddbb45382fe744aa73caea9f36f94",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointTextures/bp_point5.png",
+    "variants": []
+   },
+   "horizontalFlipShopImage": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero5/Hero5-DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Hero6-DefaultSkin",
+   "id": 2892230862,
+   "countryCode": null,
+   "title": {
+    "key": "Heroes|Hero6 Caption",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "ee63f7f8fac3f924a934719c46a9bbbb",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroUlta_img6.png",
+    "variants": []
+   },
+   "iconResource": {
+    "guid": "a38de3f49e3ef6a4a89a13fcbd4e7371",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/SelCard_img_hero6.png",
+    "variants": []
+   },
+   "iconLargeResource": {
+    "guid": "1294643de32cbc94595a48946211d6a9",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/ResourcesPacks/Resources_Offers/Offers_iconMini_hero6.png",
+    "variants": []
+   },
+   "description": {
+    "key": "heroes|hero6 description",
+    "parameters": 0
+   },
+   "items": [
+    {
+     "type": 1,
+     "tag": "hero_skill_tree_heroname",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "heroes|hero6 caption",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_skill_tree_image",
+     "image": {
+      "guid": "bda44b3342ba2824e830e06daf21b0c1",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPassiveTree/ST_hero6.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_background_image",
+     "image": {
+      "guid": "2befa7f956d39ae41bee86fff3971e7f",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero6.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 1,
+     "tag": "hero_locked_text",
+     "image": {
+      "guid": null,
+      "resourcePath": null,
+      "variants": []
+     },
+     "key": {
+      "key": "HeroDescription|Hero6Locked",
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    },
+    {
+     "type": 0,
+     "tag": "hero_soul",
+     "image": {
+      "guid": "6cc8705e6468f0e408e6bfac4e7feab1",
+      "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero6.png",
+      "variants": []
+     },
+     "key": {
+      "key": null,
+      "parameters": 0
+     },
+     "text": null,
+     "value": 0,
+     "color": {
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "a": 1
+     }
+    }
+   ],
+   "heroClientId": 6,
+   "skinDescription": {
+    "key": "MobileUI|Skins|Heroes|Hero6|Description",
+    "parameters": 0
+   },
+   "skinShopTitle": {
+    "key": null,
+    "parameters": 0
+   },
+   "keyLockedCaption": {
+    "key": "HeroDescription|Hero6Locked",
+    "parameters": 0
+   },
+   "uiRaritySkin": {
+    "fileID": 11400000,
+    "guid": "6cbb8242c2d1f41ec87bd1d6bfee5edc",
+    "type": 2
+   },
+   "backViewAnimation": {
+    "guid": "ec84316d97f154a30a39a183db923b24",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero_Back_Funny_1pic.prefab",
+    "variants": []
+   },
+   "mainViewAnimation": {
+    "guid": "18a3617eb4151b745995e6bb19db9178",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Heroes/HeroesArt/Hero6/Hero6_Spine.prefab",
+    "variants": []
+   },
+   "color": {
+    "r": 0.3019608,
+    "g": 0.5529412,
+    "b": 0.70980394,
+    "a": 1
+   },
+   "skillPointIconSmall": {
+    "guid": "b7eeae6288abe9647980ab6e596bd33b",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero6.png",
+    "variants": []
+   },
+   "skillPointIconNormal": {
+    "guid": "b7eeae6288abe9647980ab6e596bd33b",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero6.png",
+    "variants": []
+   },
+   "skillPointIconLarge": {
+    "guid": "b7eeae6288abe9647980ab6e596bd33b",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero6.png",
+    "variants": []
+   },
+   "skillPointIconSmallTexture": {
+    "guid": "5ad7295a4638e244b97350b56f710a14",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesPowerPoints/PowerPoints_hero6_tex.png",
+    "variants": []
+   },
+   "soulIcon": {
+    "guid": "6cc8705e6468f0e408e6bfac4e7feab1",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero6.png",
+    "variants": []
+   },
+   "soulIconTexture": {
+    "guid": "4d15834a3a751034fad0eef9d346f1fb",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesSouls/soul_Hero6_tex.png",
+    "variants": []
+   },
+   "soulIconBack": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "movieTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "mainTextureResource": {
+    "guid": "1b2bf7db5680a433ab19bdc559ee8d93",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img4.png",
+    "variants": []
+   },
+   "maskTextureResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "shopItemBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockBackResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "heroUnlockIconResource": {
+    "guid": "1b2bf7db5680a433ab19bdc559ee8d93",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroPlate_img4.png",
+    "variants": []
+   },
+   "heroPartIconResource": {
+    "guid": null,
+    "resourcePath": null,
+    "variants": []
+   },
+   "rewardPlateHero": {
+    "guid": "83c852d2795a98646bdb7c1e2818102c",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesRewards/reward_img_Stormtrooper2.png",
+    "variants": []
+   },
+   "cardsCollectionBack": {
+    "guid": "9635dcf4778912f4a9d90fa9a8c572dd",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroCardsCollection/Hero6/CardCollection_hero_img6.png",
+    "variants": []
+   },
+   "headIcon": {
+    "guid": "5f290b8529c9f2f4195282d4533dd448",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesHeads/hero_head6.png",
+    "variants": []
+   },
+   "fullHeroIcon": {
+    "guid": "c3de512b08431cb43a421b931436399f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/HeroesFull/heavy_trn_512.png",
+    "variants": []
+   },
+   "battlePassPremiumPopupHeroIcon": {
+    "guid": "2befa7f956d39ae41bee86fff3971e7f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/_HeroesArt/HeroesBackgrounds/heroes_hero6.png",
+    "variants": []
+   },
+   "leagueHeroIcon": {
+    "guid": "a4a8402efacf3ea4a87073b51ce7cee5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/Leagues/LeaguesAtlas/Icons/leagues_hero6.png",
+    "variants": []
+   },
+   "battlePassHeroButtonIcon": {
+    "guid": "226ad221bc9e3f84a9e31d71669fa522",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/BattlePass/BattleButton/Heroes/bp_tabs_hero6.png",
+    "variants": []
+   },
+   "battlePassHeroPointIcon": {
+    "guid": "ad223ee16b3afcd4697bf7b3bf21485e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointIcons/bp_point6.png",
+    "variants": []
+   },
+   "battlePassHeroPointTexture": {
+    "guid": "eebfb2ed2ae77d54c8e3381f1375e49d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/_Common/Res/HeroesBPPointTextures/bp_point6.png",
+    "variants": []
+   },
+   "horizontalFlipShopImage": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero6/Hero6-DefaultSkin.asset"
+  }
+ ],
+ "units": [
+  {
+   "m_Name": "Race1_Neutral_DefaultSkin",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Units",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "MobileUI|Skins|Default|UnitsRace1",
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": "MobileUI|Skins|Default|UnitsRace1",
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "partIconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "2a071f3dfe63f4d65854eded65062c39",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Data/Neutral/Race1_Neutral_DefaultSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1/Skins/Headers/Units/!Race1_Neutral_Skins/Race1_Neutral_DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Race2_Neutral_DefaultSkin",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Units",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "MobileUI|Skins|Default|UnitsRace2",
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": "MobileUI|Skins|Default|UnitsRace2",
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "partIconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "111ad1c1dbff34cca918e661ca374a66",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Data/Neutral/Race2_Neutral_DefaultSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2/Skins/Headers/Units/!Race2_Neutral_Skins/Race2_Neutral_DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Race3_Neutral_DefaultSkin",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Units",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "MobileUI|Skins|Default|UnitsRace3",
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": "MobileUI|Skins|Default|UnitsRace3",
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "partIconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "38a509b14d35f4207ab3f54d81328f1f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Data/Neutral/Race3_Neutral_DefaultSkins.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3/Skins/Headers/Units/!Race3_Neutral_Skins/Race3_Neutral_DefaultSkin.asset"
+  },
+  {
+   "m_Name": "Race4_Neutral_DefaultSkin",
+   "id": 0,
+   "title": {
+    "key": "MobileUI|Skins|SkinDefault|Units",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "MobileUI|Skins|Default|UnitsRace4",
+    "parameters": 0
+   },
+   "skinDescription": {
+    "key": "MobileUI|Skins|Default|UnitsRace4",
+    "parameters": 0
+   },
+   "uiBackground": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "partIconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "data": {
+    "guid": "015f73101ff5c4973b65c4ee70e33622",
+    "resourcePath": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Data/Neutral/Race4_Neutral_DefaultSkin.asset"
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4/Skins/Headers/Units/!Race4_Neutral_Skins/Race4_Neutral_DefaultSkin.asset"
+  }
+ ]
+}

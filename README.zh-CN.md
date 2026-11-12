@@ -26,7 +26,7 @@
   <a href="#工作原理">工作原理</a> ·
   <a href="#现成模板">模板</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="docs/overview.md">完整概览（俄语）</a>
+  <a href="docs/zh-CN/overview.md">完整概览</a>
 </p>
 
 ---
@@ -58,7 +58,7 @@
 | **多人游戏意味着无尽的不同步。** 一个 `float` 就足以让 iPhone 和 Android 上的对局分道扬镳。 | 模拟在所有平台上逐位一致：用定点数代替浮点、自有随机数生成器、校验和。CI 在每次推送时比对 Linux x64/ARM64、Windows 和 macOS 上的对局。网络上只传输指令；支持带回滚的锁步，以及带匹配和录像裁决的服务器。 |
 | **移动端 GPU 很弱，但游戏必须好看。** | 每个高开销功能——阴影、粒子、地形、后处理——都有画质等级并自动适配 GPU，从老旧的 Mali、Adreno 到 Apple Silicon。 |
 | **多平台发布本身就是一个项目。** 签名、图标、商店和广告 SDK。 | `aiversebuild` 一条命令生成 .app、Xcode 项目、Gradle/APK、Web 和 .exe。图标和启动画面自动生成。提供 App Store、Google Play、RuStore、Yandex Games、Steam、AdMob、AppLovin 等插件——构建中只包含游戏选用的那些。 |
-| **每款新游戏都从零开始。** | 30+ 个可玩模板、带验收清单的类型套件、118 个智能体技能。新游戏从一个能运行的游戏开始。 |
+| **每款新游戏都从零开始。** | 30+ 个可玩模板、带验收清单的类型套件、126 个智能体技能。新游戏从一个能运行的游戏开始。 |
 | **元游戏和 LiveOps 在每个项目里都要重写。** | `aiverse::meta`：商店、货币、任务、通行证、每日奖励、体力、公会、锦标赛、带保底的宝箱——用 JSON 配置。 |
 
 ---
@@ -142,7 +142,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings、Unity IAP、Unity Ads | `aiversebuild`、商店和广告插件 |
 | Addressables / Asset Bundles | `.rpak` 资源包、分包和内容下载 |
 
-报告会把每一项标记为精确迁移、近似迁移或未迁移。重复导入会保留你的修改。项目需要使用 **Force Text** 资源序列化。Godot 项目也以同样方式导入。详情：[引擎项目导入](docs/engine-import.md)。
+报告会把每一项标记为精确迁移、近似迁移或未迁移。重复导入会保留你的修改。项目需要使用 **Force Text** 资源序列化。Godot 项目也以同样方式导入。详情：[引擎项目导入](docs/zh-CN/engine-import.md)。
 
 ---
 
@@ -195,7 +195,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 - Unity 风格的可停靠编辑器：场景、检视器、地形、特效、光照、UI、试玩和设备模拟器
 - `aiversemcp`——面向智能体的 MCP 服务器
 - **“制作游戏”**向导
-- 118 个智能体技能和带验收清单的类型套件
+- 126 个智能体技能和带验收清单的类型套件
 - 从你自己的正版副本导入经典游戏资源
 
 </td>
@@ -227,7 +227,7 @@ open build/mac/AiverseEditor.app        # 编辑器：项目中心和模板
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。如果不想编译，
 `builds` 分支提供预构建的编辑器和工具
-（[详情，俄语](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)）。
+（[详情](docs/zh-CN/overview.md#预构建引擎builds-分支与无需编译器的-aiversemcp)）。
 
 **2. 制作游戏。** 在项目中心点击**“制作游戏”**，或从模板创建项目。可以立即在 Game 窗口中与机器人对战。
 
@@ -243,7 +243,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 **4. 发布：**
 
 ```bash
-./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS、iOS、Android、Web、Windows
+./build/mac/aiversebuild --project "My Game.aiverse" --target all   # macOS、iOS、Android、Web、Windows
 ```
 
 ---
@@ -259,27 +259,27 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS 和 FPS 以外类型的现成模板正在制作中
 
 各子系统的详细情况见
-[已验证 / 未验证](docs/overview.md#проверено--не-проверено)（俄语）。
+[已验证 / 未验证](docs/zh-CN/overview.md#已验证--未验证)。
 
 ---
 
 ## 文档
 
-大部分文档为俄语；`AGENTS.md`、库文档和部分技术指南为英语。
+参考文档为英文。概览、“制作游戏”向导、从 Unity 迁移和类型包也提供中文版。
 
 | | |
 |---|---|
-| [**完整概览**](docs/overview.md) | 所有子系统、构建、平台、CI、发布 |
+| [**完整概览**](docs/zh-CN/overview.md) | 所有子系统、构建、平台、CI、发布 |
 | [游戏格式](docs/game-format.md) | `game.json`、`rules.json`、地图及所有数据块 |
 | [类型包](docs/genre-packages.md) · [库](docs/libraries.md) | 适用于任何类型的机制 |
-| [“制作游戏”向导](docs/game-wizard.md) | 想法加美术如何变成完整项目 |
+| [“制作游戏”向导](docs/zh-CN/game-wizard.md) | 想法加美术如何变成完整项目 |
 | [脚本](docs/scripting.md) · [C++ 模块](docs/native-modules.md) | 当数据不够用时 |
 | [地形](docs/terrain.md) · [星球](docs/planets.md) · [寻路](docs/pathfinding.md) | 世界与移动 |
 | [粒子](docs/particles.md) · [模型](docs/models.md) · [Shader Graph](docs/shader-graph.md) | 画面 |
 | [元游戏](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [插件](docs/plugins.md) | 变现与商店 |
 | [FPS](docs/fps.md) · [大世界](docs/large-worlds.md) | FPS 模块 |
 | [AGENTS.md](AGENTS.md) | 修改引擎本身的智能体须遵守的规则 |
-| [从 Unity 迁移](docs/engine-import.md) | 导入场景、预制体和资源，再由智能体迁移逻辑 |
+| [从 Unity 迁移](docs/zh-CN/engine-import.md) | 导入场景、预制体和资源，再由智能体迁移逻辑 |
 
 ## 许可证
 

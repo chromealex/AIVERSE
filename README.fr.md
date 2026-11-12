@@ -26,7 +26,7 @@
   <a href="#fonctionnement">Fonctionnement</a> ·
   <a href="#modèles-prêts-à-lemploi">Modèles</a> ·
   <a href="#démarrage-rapide">Démarrage rapide</a> ·
-  <a href="docs/overview.md">Vue d’ensemble complète (RU)</a>
+  <a href="docs/fr/overview.md">Vue d’ensemble complète</a>
 </p>
 
 ---
@@ -63,7 +63,7 @@ travailler sur le jeu.
 | **Le multijoueur, c’est des désynchronisations sans fin.** Un seul `float` suffit pour qu’une partie entre un iPhone et un Android diverge. | La simulation est identique au bit près partout : virgule fixe au lieu de flottants, générateur aléatoire propre, sommes de contrôle. La CI compare les parties sur Linux x64/ARM64, Windows et macOS à chaque push. Seules les commandes transitent sur le réseau ; il y a un lockstep avec rollback et un serveur avec matchmaking et verdict par replay. |
 | **Les GPU mobiles sont faibles, mais le jeu doit être beau.** | Chaque fonction coûteuse — ombres, particules, terrain, post-traitement — a des niveaux de qualité et s’adapte au GPU, des vieux Mali et Adreno jusqu’à Apple Silicon. |
 | **Sortir sur toutes les plateformes est un projet à part entière.** Signatures, icônes, SDK des stores et de la publicité. | `aiversebuild` produit en une commande un .app, un projet Xcode, Gradle/APK, web et .exe. Icônes et écrans de démarrage sont générés. Plugins pour l’App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin et d’autres — un build n’embarque que ceux que le jeu choisit. |
-| **Chaque nouveau jeu repart de zéro.** | Plus de 30 modèles jouables, des kits de genre avec listes de recette, 118 compétences pour les agents. Un nouveau jeu part d’un jeu qui fonctionne déjà. |
+| **Chaque nouveau jeu repart de zéro.** | Plus de 30 modèles jouables, des kits de genre avec listes de recette, 126 compétences pour les agents. Un nouveau jeu part d’un jeu qui fonctionne déjà. |
 | **La méta et le LiveOps sont réécrits dans chaque projet.** | `aiverse::meta` : boutique, monnaies, quêtes, passes, récompenses quotidiennes, énergie, clans, tournois, coffres avec garantie — configurés en JSON. |
 
 ---
@@ -150,7 +150,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, plugins de stores et de publicité |
 | Addressables / Asset Bundles | paquets `.rpak`, builds fractionnés et téléchargement de contenu |
 
-Le rapport marque chaque élément comme transféré exactement, approximativement ou non transféré. Une réimportation conserve vos modifications. Le projet doit utiliser la sérialisation des ressources **Force Text**. Les projets Godot s’importent de la même façon. Détails : [Import d’un projet de moteur](docs/engine-import.md).
+Le rapport marque chaque élément comme transféré exactement, approximativement ou non transféré. Une réimportation conserve vos modifications. Le projet doit utiliser la sérialisation des ressources **Force Text**. Les projets Godot s’importent de la même façon. Détails : [Import d’un projet de moteur](docs/fr/engine-import.md).
 
 ---
 
@@ -203,7 +203,7 @@ Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l�
 - Éditeur à fenêtres ancrables façon Unity : scène, inspecteur, terrain, effets, éclairage, UI, partie de test et simulateur d’appareils
 - `aiversemcp` — serveur MCP pour les agents
 - Assistant **Créer un jeu**
-- 118 compétences pour les agents et kits de genre avec listes de recette
+- 126 compétences pour les agents et kits de genre avec listes de recette
 - Importateurs de ressources de jeux classiques depuis votre propre copie
 
 </td>
@@ -235,7 +235,7 @@ open build/mac/AiverseEditor.app        # éditeur : hub de projets et modèles
 
 Linux : `cmake --preset linux-release && cmake --build build/linux-release`. Si vous préférez ne pas
 compiler, la branche `builds` contient l’éditeur et les outils précompilés
-([détails, en russe](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([détails](docs/fr/overview.md#moteur-précompilé-branche-builds-et-aiversemcp-sans-compilateur)).
 
 **2. Créer un jeu.** Dans le hub, cliquez sur **Créer un jeu** ou créez un projet à partir d’un modèle. Vous
 pouvez y jouer contre des bots tout de suite dans la fenêtre Game.
@@ -252,7 +252,7 @@ carte hivernale, vérifie l’équilibrage de trois factions avec des bots et co
 **4. Publier :**
 
 ```bash
-./build/mac/aiversebuild --project "Mon jeu.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "Mon jeu.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---
@@ -268,27 +268,27 @@ Le moteur est en développement actif. Ce qui a été vérifié :
 - 🛠 Des modèles pour les genres autres que RTS et FPS sont en préparation
 
 Détails par sous-système dans
-[Vérifié / non vérifié](docs/overview.md#проверено--не-проверено) (en russe).
+[Vérifié / non vérifié](docs/fr/overview.md#vérifié--non-vérifié).
 
 ---
 
 ## Documentation
 
-La plupart des documents sont en russe ; `AGENTS.md`, la documentation des bibliothèques et quelques guides techniques sont en anglais.
+Les documents de référence sont en anglais. La vue d’ensemble, l’assistant de création, la migration depuis Unity et les paquets de genre existent aussi en français.
 
 | | |
 |---|---|
-| [**Vue d’ensemble complète**](docs/overview.md) | tous les sous-systèmes, compilation, plateformes, CI, versions |
+| [**Vue d’ensemble complète**](docs/fr/overview.md) | tous les sous-systèmes, compilation, plateformes, CI, versions |
 | [Format de jeu](docs/game-format.md) | `game.json`, `rules.json`, cartes et tous les blocs de données |
 | [Paquets de genre](docs/genre-packages.md) · [Bibliothèques](docs/libraries.md) | des mécaniques pour tous les genres |
-| [Assistant Créer un jeu](docs/game-wizard.md) | comment une idée et des illustrations deviennent un projet fini |
+| [Assistant Créer un jeu](docs/fr/game-wizard.md) | comment une idée et des illustrations deviennent un projet fini |
 | [Scripts](docs/scripting.md) · [Modules C++](docs/native-modules.md) | quand les données ne suffisent pas |
 | [Terrain](docs/terrain.md) · [Planètes](docs/planets.md) · [Recherche de chemin](docs/pathfinding.md) | monde et déplacement |
 | [Particules](docs/particles.md) · [Modèles 3D](docs/models.md) · [Shader Graph](docs/shader-graph.md) | visuel |
 | [Méta-jeu](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monétisation et stores |
 | [FPS](docs/fps.md) · [Grands mondes](docs/large-worlds.md) | module FPS |
 | [AGENTS.md](AGENTS.md) | règles pour les agents qui modifient le moteur lui-même |
-| [Venir d’Unity](docs/engine-import.md) | importer scènes, prefabs et ressources, puis porter la logique avec un agent |
+| [Venir d’Unity](docs/fr/engine-import.md) | importer scènes, prefabs et ressources, puis porter la logique avec un agent |
 
 ## Licence
 

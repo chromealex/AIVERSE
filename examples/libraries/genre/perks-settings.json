@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "perks": {
+    "offerChoices": 3,
+    "offerRerolls": 1,
+    "maxSquad": 15,
+    "pickupRadiusMilli": 2500,
+    "pickupMagnetRadiusMilli": 30000,
+    "pickupLandingTicks": 10,
+    "summonProgressTicks": 90,
+    "summonMaxAllies": 15
+  }
+}

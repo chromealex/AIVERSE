@@ -5,6 +5,9 @@
 
 #include <cstdio>
 
+#include <thread>
+
+#include "HttpRequest.h"
 #include "ThreadDownload.h"
 
 namespace aiverse::pack {
@@ -28,6 +31,8 @@ struct Curl {
     int (*getinfo)(void*, int, ...) = nullptr;
     void (*cleanup)(void*) = nullptr;
     const char* (*strerror)(int) = nullptr;
+    void* (*slistAppend)(void*, const char*) = nullptr;   // request API (httpRequest)
+    void (*slistFree)(void*) = nullptr;
     bool ok = false;
 };
 
@@ -44,6 +49,8 @@ const Curl& curl() {
         k.getinfo = reinterpret_cast<int (*)(void*, int, ...)>(dlsym(k.lib, "curl_easy_getinfo"));
         k.cleanup = reinterpret_cast<void (*)(void*)>(dlsym(k.lib, "curl_easy_cleanup"));
         k.strerror = reinterpret_cast<const char* (*)(int)>(dlsym(k.lib, "curl_easy_strerror"));
+        k.slistAppend = reinterpret_cast<void* (*)(void*, const char*)>(dlsym(k.lib, "curl_slist_append"));
+        k.slistFree = reinterpret_cast<void (*)(void*)>(dlsym(k.lib, "curl_slist_free_all"));
         k.ok = k.globalInit && k.init && k.setopt && k.perform && k.getinfo && k.cleanup && k.strerror && k.globalInit(3) == 0;
         return k;
     }();
@@ -121,6 +128,62 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
         d.succeed();
     });
     return dl;
+}
+
+namespace {
+size_t onBody(char* data, size_t size, size_t n, void* user) { static_cast<std::string*>(user)->append(data, size * n); return size * n; }
+size_t onHeader(char* data, size_t size, size_t n, void* user) { static_cast<std::string*>(user)->append(data, size * n); return size * n; }
+enum : int { kOptPostFields = 10015, kOptPostFieldSize = 60, kOptHttpHeader = 10023, kOptCustomRequest = 10036,
+             kOptHeaderFunction = 20079, kOptHeaderData = 10029, kOptTimeoutMs = 155, kOptConnectTimeoutMs = 156, kOptNoBody = 44 };
+} // namespace
+
+bool httpRequest(const HttpCall& call, std::function<void(HttpReply)> done) {
+    if (!curl().ok || !curl().slistAppend || !curl().slistFree) return false;
+    std::thread([call, done = std::move(done)]() {
+        const Curl& c = curl();
+        HttpReply r;
+        std::string headers;
+        char err[256] = {0};
+        void* h = c.init();
+        void* list = nullptr;
+        for (auto& [k, v] : call.headers) list = c.slistAppend(list, (k + ": " + v).c_str());
+        list = c.slistAppend(list, "Expect:");   // no 100-continue round trip for POST bodies
+        c.setopt(h, kOptUrl, call.url.c_str());
+        c.setopt(h, kOptCustomRequest, call.method.c_str());
+        if (call.method == "HEAD") c.setopt(h, kOptNoBody, 1L);
+        if (call.method != "GET" && call.method != "HEAD") {
+            c.setopt(h, kOptPostFieldSize, long(call.body.size()));
+            c.setopt(h, kOptPostFields, call.body.data());
+        }
+        c.setopt(h, kOptHttpHeader, list);
+        c.setopt(h, kOptWriteFunction, &onBody);
+        c.setopt(h, kOptWriteData, &r.body);
+        c.setopt(h, kOptHeaderFunction, &onHeader);
+        c.setopt(h, kOptHeaderData, &headers);
+        c.setopt(h, kOptErrorBuffer, err);
+        c.setopt(h, kOptNoSignal, 1L);
+        c.setopt(h, kOptFollowLocation, 1L);
+        c.setopt(h, kOptTimeoutMs, long(call.timeoutMs));
+        c.setopt(h, kOptConnectTimeoutMs, long(call.timeoutMs < 10000 ? call.timeoutMs : 10000));
+        c.setopt(h, kOptUserAgent, "AIVERSE/1");
+        const int rc = c.perform(h);
+        long code = 0;
+        c.getinfo(h, kInfoResponseCode, &code);
+        c.cleanup(h);
+        c.slistFree(list);
+        if (rc != 0) {
+            r = HttpReply{};
+            r.timeout = rc == 28;   // CURLE_OPERATION_TIMEDOUT
+            r.error = err[0] ? err : c.strerror(rc);
+        } else {
+            r.status = int(code);
+            // With redirects the block holds every response's headers: keep the last one.
+            const size_t last = headers.rfind("HTTP/");
+            parseHeaderBlock(last == std::string::npos ? headers : headers.substr(last), r.headers);
+        }
+        done(std::move(r));
+    }).detach();
+    return true;
 }
 
 void setAndroidJavaVm(void*) {}

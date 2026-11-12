@@ -298,7 +298,10 @@
     "end": {
       "opponents_left": "Your opponents left the game",
       "everyone_left": "All players left the match",
-      "result_mismatch": "Desync: players see different results"
+      "result_mismatch": "Desync: players see different results",
+      "no_show": "The match was cancelled: no players arrived",
+      "released": "The match was stopped by the server",
+      "time_limit": "Time is up"
     },
     "error": {
       "version": "Your game version does not match the server — please update",
@@ -311,7 +314,8 @@
       "slot_taken": "That slot is taken",
       "not_ready": "Not all players are ready",
       "no_such_queue": "No such game mode",
-      "no_maps_for_queue": "No suitable maps for “{queue}”"
+      "no_maps_for_queue": "No suitable maps for “{queue}”",
+      "ticket_required": "This server only accepts players sent by matchmaking"
     },
     "queue": {
       "default": "1 vs 1",

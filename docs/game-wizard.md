@@ -1,7 +1,7 @@
 # Game wizard («Сделать игру»)
 
 One window (project hub → **Сделать игру**, or **Проект → Сделать игру…**) or one MCP call (`game_make`) makes a whole game
-project with its `.rtsproj`: a template's game picked by the idea, the user's art / models / music / sounds, a hard
+project with its `.aiverse`: a template's game picked by the idea, the user's art / models / music / sounds, a hard
 tutorial map, soft hints in matches, generated levels, the meta game (menus, upgrades, shop, daily reward, profile,
 settings, result), purchases and ads when asked, languages, branding, and a check with bots. Everything it writes is
 ordinary game data that the game can edit afterwards.

@@ -63,6 +63,7 @@ void main() {
     c.rgb = max(c.rgb + vec3(shimmer), vec3(0.0)) * u_p2.y;
     float a = c.a * smoothstep(0.0, u_p2.x, v);
     if (a < 0.003) discard;
+    c = rtsDisplay(c);
     if (u_p2.z > 0.5) o_color = vec4(c.rgb * a, a);
     else o_color = vec4(c.rgb, a);
 }
@@ -115,6 +116,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], text
     c.rgb = max(c.rgb + float3(shimmer), float3(0.0)) * u.p2.y;
     float a = c.a * smoothstep(0.0, u.p2.x, v);
     if (a < 0.003) discard_fragment();
+    c = rtsDisplay(c);
     if (u.p2.z > 0.5) return float4(c.rgb * a, a);
     return float4(c.rgb, a);
 }

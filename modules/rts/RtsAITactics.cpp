@@ -12,6 +12,7 @@
 //   - build spots chosen by the bot (lanes between dropoffs and resources kept free, random tie-breaks so
 //     mirrored starts don't favour one side), stuck builders released.
 #include "RtsAI.h"
+#include "RtsBwAI.h"   // agent-bw-ai
 #include "RtsAITerrain.h"
 #include "../../engine/core/Archive.h"
 #include <algorithm>
@@ -920,9 +921,9 @@ bool RtsAI::loadState(const std::string& bytes) {
 }
 
 void RtsAI::stateIo(Archive& a) {
-    uint32_t version = 3;
+    uint32_t version = 4;
     io(a, version);
-    if (version < 1 || version > 3) { a.fail(); return; }
+    if (version < 1 || version > 4) { a.fail(); return; }
     uint64_t rs = rng_.state(), ri = rng_.inc();
     io(a, rs); io(a, ri);
     if (!a.writing()) rng_.restore(rs, ri);
@@ -948,6 +949,14 @@ void RtsAI::stateIo(Archive& a) {
         if (!a.writing()) { savedPass_ = std::move(pass); terr_.reset(); }
     }
     if (version >= 3) io(a, noSpot_);
+    if (version >= 4) {   // agent-bw-ai: Bunker Wars controller
+        bool has = bw_.p != nullptr;
+        io(a, has);
+        if (has) {
+            if (!a.writing()) bw_.p = std::make_unique<BwAI>(player_, 0);
+            bw_.p->stateIo(a);
+        } else if (!a.writing()) bw_.p.reset();
+    }
 }
 
 } // namespace aiverse::game

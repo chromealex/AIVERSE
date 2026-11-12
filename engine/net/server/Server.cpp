@@ -124,6 +124,10 @@ void Server::update(uint64_t now) {
         if (i.cfg.udpPort) for (auto& c : i.udp.poll(now)) addConnection(std::move(c));
         if (i.cfg.wsPort) for (auto& c : i.ws.poll(now)) addConnection(std::move(c));
     }
+    if (i.secure) {
+        i.secure->setLoad(uint8_t(std::min<size_t>(100, i.clients.size() * 100 / std::max<uint32_t>(1, i.cfg.maxClients))));
+        for (auto& a : i.secure->poll(now)) addSecureConnection(std::move(a.conn), a.claims);
+    }
 #endif
     std::vector<uint32_t> ids;
     for (auto& [id, c] : i.clients) ids.push_back(id);
@@ -146,7 +150,8 @@ void Server::update(uint64_t now) {
             i.dropClient(id);
         }
     }
-    if (now - i.lastMatchmake >= 250) { i.lastMatchmake = now; i.matchmake(); }
+    if (now - i.lastMatchmake >= 250) { i.lastMatchmake = now; i.matchmake(); i.updateReservations(); }
+    i.hostedUpdate();
     i.pollVerdicts();
     std::vector<uint32_t> roomIds;
     for (auto& [id, r] : i.rooms) roomIds.push_back(id);
@@ -263,6 +268,17 @@ void Server::Impl::handle(Client& c, const Bytes& msg) {
     case Msg::InputFrame: if (room && room->match) onInputFrame(c, *room, r); break;
     case Msg::Checksum: if (room && room->match) onChecksum(c, *room, r); break;
     case Msg::MatchResult: if (room && room->match) onMatchResult(c, *room, r); break;
+    case Msg::Away: {   // the app went to the background: stop waiting for its input (frames resume it)
+        const bool away = r.u8() != 0;
+        if (Member* m = room && room->match ? member(*room, c.id) : nullptr; m && m->slot && away) m->synced = false;
+        break;
+    }
+    case Msg::ResultReport: {
+        ResultReportMsg rr;
+        if (!room || !room->match || !decode(r, rr)) break;
+        if (Member* m = member(*room, c.id); m && m->slot) m->report = std::move(rr.blob);
+        break;
+    }
     case Msg::Ping: {
         Writer w(Msg::Pong); w.u64(r.u64());
         w.u32(room && room->match ? uint32_t((now - room->match->startMs) * room->settings.tickRate / 1000) : 0);
@@ -281,6 +297,7 @@ void Server::Impl::onHello(Client& c, ByteReader& r) {
         c.conn->close();
         return;
     }
+    if (onHostedHello(c, h)) return;   // ticket holders of hosted battles (and hostedOnly refusals)
     // Resume: a dropped client with this token takes over the new connection.
     if (h.reconnectToken) {
         for (auto& [id, old] : clients) {
@@ -318,6 +335,7 @@ void Server::Impl::onDisconnect(Client& c) {
     log("client #%u '%s' disconnected", c.id, c.name.c_str());
     c.conn.reset();
     leaveQueue(c);
+    releaseSeat(c.id);
     Room* r = room(c.roomId);
     if (r && r->match) {
         Member* m = member(*r, c.id);
@@ -407,7 +425,8 @@ void Server::Impl::leaveRoom(Client& c) {
     c.roomId = 0;
     if (!r) return;
     if (r->match) memberDropped(*r, c.id, true);
-    for (auto& s : r->slots) if (s.kind == SlotKind::Human && s.clientId == c.id) s = SlotEntry{};
+    // A hosted seat belongs to the ticket's player: it stays reserved for them.
+    for (auto& s : r->slots) if (s.kind == SlotKind::Human && s.clientId == c.id) { if (r->hosted) s.clientId = 0; else s = SlotEntry{}; }
     r->spectators.erase(std::remove(r->spectators.begin(), r->spectators.end(), c.id), r->spectators.end());
     if (c.conn) { RoomStateMsg none; send(c, encode(none)); } // id 0 = "you are in no room"
     if (r->hostId == c.id) { // hand the room over to someone still there
@@ -424,7 +443,7 @@ void Server::Impl::sweepRooms() {
     std::set<uint32_t> used;
     for (auto& [id, c] : clients) if (c->roomId) used.insert(c->roomId);
     for (auto it = rooms.begin(); it != rooms.end();) {
-        if (used.count(it->first)) { ++it; continue; }
+        if (used.count(it->first) || (it->second->hosted && !it->second->hosted->done)) { ++it; continue; }
         log("room #%u closed", it->first);
         it = rooms.erase(it);
     }

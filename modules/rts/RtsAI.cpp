@@ -1,5 +1,6 @@
 #include "RtsAI.h"
 #include "RtsAITerrain.h"
+#include "RtsBwAI.h"   // agent-bw-ai
 #include <algorithm>
 #include <vector>
 #include <cstdio>
@@ -34,6 +35,11 @@ void RtsAI::send(Simulation& sim, Command c) {
 void RtsAI::update(Simulation& sim) {
     auto* m = dynamic_cast<RtsModule*>(&sim.module());
     if (!m || m->rules().scriptedAI) return;
+    if (m->rules().bwAI) {   // agent-bw-ai: the Bunker Wars controller keeps its own clock (every tick)
+        if (!bw_.p) bw_.p = std::make_unique<BwAI>(player_, rng_.state());
+        bw_.p->update(sim, *m);
+        return;
+    }
     auto* pi = sim.player(player_);
     if (!pi || !pi->alive || sim.result() != 0 || sim.tick() < next_) return;
     next_ = sim.tick() + cfg_.thinkTicks + rng_.below(cfg_.thinkTicks / 2 + 1);
@@ -41,6 +47,7 @@ void RtsAI::update(Simulation& sim) {
     auto* gs = sim.world().resource<GameState>();
     if (m->rules().mech.turns && !mechTurnAI(sim, *m)) return;   // agent-mech TB: act only on its own turn
     if (std::find(gs->wavePlayers.begin(), gs->wavePlayers.end(), player_) != gs->wavePlayers.end()) return; // scripted side
+    if (Raid* raid = m->raid(); raid && raid->active() && raid->store(sim)->find(player_)) { raidBotThink(sim, *m, player_); return; }   // RtsRaidBot.cpp
     bool hasGarrisons = false, hasOther = false;
     sim.world().each<Unit, Owner>([&](Entity e, Unit& u, Owner& o) {
         if (o.player != player_) return;
@@ -1164,7 +1171,7 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
         const G& t = all[ti];
         if (t.owner == player_ || (t.owner != 0 && t.owner != kHostileNeutral && sim.allied(t.owner, player_))) continue;
         std::vector<size_t> mine;
-        for (size_t i = 0; i < all.size(); ++i) if (all[i].owner == player_ && all[i].count > 3) mine.push_back(i);
+        for (size_t i = 0; i < all.size(); ++i) if (all[i].owner == player_ && all[i].count > 3 && m.canSend(sim, all[i].e, t.e)) mine.push_back(i);   // authored routes: neighbours only
         std::sort(mine.begin(), mine.end(), [&](size_t a, size_t b) {
             if (mass && full(all[a]) != full(all[b])) return full(all[a]);
             Fixed da = dist(all[a].pos, t.pos), db = dist(all[b].pos, t.pos);
@@ -1210,7 +1217,7 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
         }
         if (front < 0) return;
         for (auto& g : all) {
-            if (g.owner != player_ || !full(g) || toEnemy(g) <= fd) continue;   // only from behind the front
+            if (g.owner != player_ || !full(g) || toEnemy(g) <= fd || !m.canSend(sim, g.e, all[size_t(front)].e)) continue;   // only from behind the front
             Command c; c.type = kCmdSend; c.units = {g.e}; c.target = all[size_t(front)].e; c.param = 50;
             send(sim, c);
         }

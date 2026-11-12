@@ -39,6 +39,9 @@ Json runProjectPort(const std::string& engineDir, const std::string& operation, 
     if (p.has("scale")) cmd += " --scale " + quote(p["scale"].dump());
     cmd += " 2>&1";
 #if defined(_WIN32)
+    // cmd.exe /c strips the first and last quote of a line that starts with one ("python" "x.py" ... "path"):
+    // wrap the whole line once more so the quoted program and arguments survive
+    cmd = "\"" + cmd + "\"";
     FILE* pipe = _popen(cmd.c_str(), "r");
 #else
     FILE* pipe = popen(cmd.c_str(), "r");

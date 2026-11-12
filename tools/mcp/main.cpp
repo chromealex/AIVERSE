@@ -182,6 +182,8 @@ const char* kInstructions =
     "Balancing: balance_stats (numbers side by side: DPS per armor, value per cost) -> balance_duel / balance_matrix "
     "(arena fights at equal cost: who counters whom) -> rules_set to adjust -> balance_batch (many bot matches: win rate per "
     "slot and faction, match length, what never gets built; 'mirror' separates map side from faction). "
+    "Online battles (direct-control PvP / PvE): battle_net_simulate {profile: bad, tickRate, rollbackWindow} checks network "
+    "settings on a simulated mobile link (docs/battle-net.md). "
     "Phones: device_list {filter} (iPhone, iPad, Pixel, Galaxy, Redmi, desktops: sizes, safe areas, cut-outs) -> "
     "device_set {device, orientation, safeArea: true} -> view_screenshot {window: game}. "
     "The game's own screens (main menu, levels, shop, profile, settings, popups; RmlUi + Lua): ui_api -> ui_screen_create "

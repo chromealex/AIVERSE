@@ -921,6 +921,8 @@ const std::pair<uint16_t, const char*> kSimEventNames[] = {
     {kEvMissionEnd, "mission_end"}, {kEvLearned, "learned"}, {kEvCrewKilled, "crew_killed"}, {kEvCrewed, "crewed"},
     {kEvInfected, "infected"}, {kEvSubmerged, "submerged"}, {kEvTrapFired, "trap_fired"},
     {kEvGroupTeleport, "group_teleport"}, {kEvPaved, "paved"}, {kEvMorale, "morale"}, {kEvTurn, "turn"},
+    {kEvRaidPhase, "raid_phase"}, {kEvRaidPoint, "raid_point"}, {kEvRaidChannel, "raid_channel"}, {kEvRaidExtracted, "raid_extracted"},
+    {kEvRaidLoot, "raid_loot"}, {kEvRaidInteract, "raid_interact"}, {kEvRaidObjective, "raid_objective"}, {kEvRaidPlayer, "raid_player"},
 };
 } // namespace
 const char* simEventName(uint16_t type) {

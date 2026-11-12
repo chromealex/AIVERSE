@@ -34,7 +34,8 @@ cfg = json.loads(re.sub(r"^\s*//.*$", "", text, flags=re.M))
 cfg.pop("plugins", None)
 (game / "game.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
-cases = [[]] + [[n] for n in plugins] + [["applovin", "ironsource"], ["mock-ads", "admob"]]
+cases = [[]] + [[n] for n in plugins] + [["applovin", "ironsource"], ["mock-ads", "admob"],
+                                         ["gameanalytics", "facebook", "appmetrica"], ["att", "mock-analytics", "mock-att"]]
 for chosen in cases:
     label = ",".join(chosen) or "(none)"
     print(f"== {label}")

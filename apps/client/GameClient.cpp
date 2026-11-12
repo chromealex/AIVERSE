@@ -84,6 +84,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         if (!r3d_.init(dev)) error_ = "renderer: " + dev.lastError();
         r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, platform::isTouchDevice()));
         r3d_.setMaterialQuality(Renderer3D::defaultMaterialQualityFor(dev, platform::isTouchDevice()));
+        r3d_.setBakedQuality(Renderer3D::defaultBakedQualityFor(dev, platform::isTouchDevice()));
         r3d_.lights.setQuality(aiverse::render::LightSystem::defaultQualityFor(dev, platform::isTouchDevice()));
         postFx_.init(dev);
         postFxBase_ = render::PostFx::defaultQualityFor(dev, platform::isTouchDevice());
@@ -219,7 +220,10 @@ void GameClient::shutdown() {
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
     view_.shutdown(*dev_);
     postFx_.shutdown();
+    r3d_.setBakedLighting(nullptr);
+    baked_.release();
     r3d_.shutdown();
+    spine_.shutdown();
     shutdownUi();
     minimap_.release(*dev_);
     overlay_.shutdown();
@@ -262,6 +266,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         view_.lights().configure(manifest_["lighting"], map["lighting"], map["lights"]); // day/night, map lights
         if (auto pe = game::configurePlayerColors(manifest_["playerColors"]); !pe.empty()) std::fprintf(stderr, "%s\n", pe.c_str());
         configurePostFx(map);
+        configureBakedLighting(maps_[idx].file);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
         error_ = e.what(); sim_.reset(); return;
@@ -449,6 +454,8 @@ Vec3 GameClient::placeCentre(float sx, float sy, bool& ok) {
 // ------------------------------------------------------------------ input
 
 void GameClient::event(const Event& e) {
+    if (!padInjecting_ && (e.type == EventType::MouseMove || e.type == EventType::MouseDown || e.type == EventType::TouchBegin))
+        gamepad_.mouseUsed(e.x, e.y);   // a real pointer hides the pad cursor (ClientGamepad.cpp)
     bool uiWants = ui_.handleEvent(e);
     if(screen_!=Screen::Playing || e.type==EventType::FocusLost){entityActions_.cancel();entityPointer_=false;mapTapPending_=false;}
     if (e.type == EventType::KeyDown && e.key == Key::F8 && !e.repeat) ui_.toggleDebugger();
@@ -830,6 +837,7 @@ void GameClient::runViewScripts(float dt) {
 
 void GameClient::frame(gfx::Device& dev, double dt) {
     time_ += dt;
+    updateGamepad(float(dt));   // pad input as mouse / key events + camera pan (ClientGamepad.cpp)
     float alpha = 0;
     bool netAdvanced = false;
     updateNet(dt, netAdvanced);   // online: the network session drives the sim, even behind the pause menu
@@ -853,12 +861,19 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             if (key(Key::Down) || (noSel && key(Key::S)) || (edges && mouseY_ > H - 3)) cam_.target += fwd * -speed;
             if (key(Key::Right) || (noSel && key(Key::D)) || (edges && mouseX_ > W - 3)) cam_.target += right * speed;
             if (key(Key::Left) || (noSel && key(Key::A)) || (edges && mouseX_ < 3)) cam_.target += right * -speed;
+            cam_.target += right * (speed * padPanX_) + fwd * (-speed * padPanY_);   // gamepad right stick / d-pad
         }
         auto& g = mod().state(*sim_).grid;
         if (planet()) planetCameraKeys(dt);
         else {
         cam_.target.x = std::clamp(cam_.target.x, 0.0f, float(g.w));
         cam_.target.z = std::clamp(cam_.target.z, 0.0f, float(g.h));
+        }
+        if (const auto& scr = mod().screen(); scr.enabled && !planet()) {   // map "screen" (BW MultiscreenModule): follow its centre
+            const auto c = mod().screenCenter(*sim_);
+            const float k = std::min(1.0f, float(dt) * float(scr.smooth.toDouble()));
+            cam_.target.x += (float(c.x.toDouble()) - cam_.target.x) * k;
+            cam_.target.z += (float(c.z.toDouble()) - cam_.target.z) * k;
         }
         if (quality_.update(dt)) { // too slow for these tiers: step down (keeps the pause menu in sync)
             r3d_.setShadowQuality(ShadowQuality(quality_.shadows()));
@@ -903,6 +918,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     luaTick(dt);   // game.on("update", fn) in UI scripts
     updateAudio(dt);
     overlay_.newFrame(dt);
+    drawGamepadCursor();
     regionSwipe_.configure(manifest_);
     if (sim_ && regionSwipe_.enabled) {
         if(sim_->tick()<regionTick_){regionSwipe_.ratio=loadRegionRatio();regionSwipe_.cancel();regionSwipe_.arrows.clear();}
@@ -911,6 +927,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         regionTick_=sim_->tick();
     }
     updateUi();
+    spine_.render(float(dt));   // Spine views into their textures (outside the main pass)
     gfx::PassDesc pass;
     pass.colorTarget = hostColor_;
     pass.depthTarget = hostDepth_;

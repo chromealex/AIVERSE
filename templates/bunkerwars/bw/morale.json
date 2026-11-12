@@ -1,0 +1,70 @@
+// Bunker Wars morale levels (MoraleInfo + GameData Morale|LevelN|*).
+{
+ "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/Morale/MoraleInfo.asset",
+ "levels": [
+  {
+   "requiredPoints": 0,
+   "subtractPointsTime": 1,
+   "subtractPointsValue": 10,
+   "subtractCooldown": 10,
+   "damagePercent": 1,
+   "shieldPercent": 1,
+   "speedPercent": 1
+  },
+  {
+   "requiredPoints": 500,
+   "subtractPointsTime": 1,
+   "subtractPointsValue": 20,
+   "subtractCooldown": 9,
+   "damagePercent": 1.05,
+   "shieldPercent": 1.25,
+   "speedPercent": 1.1
+  },
+  {
+   "requiredPoints": 1000,
+   "subtractPointsTime": 1,
+   "subtractPointsValue": 25,
+   "subtractCooldown": 8,
+   "damagePercent": 1.1,
+   "shieldPercent": 1.5,
+   "speedPercent": 1.2
+  },
+  {
+   "requiredPoints": 2000,
+   "subtractPointsTime": 1,
+   "subtractPointsValue": 50,
+   "subtractCooldown": 7,
+   "damagePercent": 1.15,
+   "shieldPercent": 1.75,
+   "speedPercent": 1.3
+  },
+  {
+   "requiredPoints": 4000,
+   "subtractPointsTime": 1,
+   "subtractPointsValue": 100,
+   "subtractCooldown": 6,
+   "damagePercent": 1.2,
+   "shieldPercent": 2,
+   "speedPercent": 1.4
+  },
+  {
+   "requiredPoints": 8000,
+   "subtractPointsTime": 1,
+   "subtractPointsValue": 200,
+   "subtractCooldown": 5,
+   "damagePercent": 1.25,
+   "shieldPercent": 2.25,
+   "speedPercent": 1.5
+  }
+ ],
+ "battle": {
+  "minValue": 0,
+  "maxValue": 8000,
+  "toBattlePointsConvertFactor": 1,
+  "unitsToPointsCoefficient": 10,
+  "defaultPointsIncreaseMultiplier": 1,
+  "pointsIncreaseMultiplier": 1,
+  "defaultPointsDecreaseMultiplier": 1,
+  "pointsDecreaseMultiplier": 1
+ }
+}

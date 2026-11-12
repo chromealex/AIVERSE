@@ -1,0 +1,25 @@
+{
+  "rules": {"seats": 2, "startingHand": 4, "maxHand": 8, "startingHealth": 20, "energy": [1, 1, 8], "drawPerTurn": 1,
+            "boardLimit": 5, "turnLimit": 80, "deck": [20, 30], "mulligan": "partial", "firstPlayerSkipsDraw": true,
+            "fatigue": true, "separateCombat": false, "unitsAttackImmediately": false},
+  "cards": [
+    {"id": 1, "name": "card.ember_bolt", "kind": "instant", "cost": 1, "target": "character", "side": "enemy",
+     "effects": [{"op": "damage", "amount": 2, "to": "target"}]},
+    {"id": 2, "name": "card.squire", "kind": "unit", "cost": 1, "power": 1, "health": 2, "guard": true},
+    {"id": 3, "name": "card.knight", "kind": "unit", "cost": 3, "power": 3, "health": 4},
+    {"id": 4, "name": "card.wolf", "kind": "unit", "cost": 2, "power": 2, "health": 1, "rush": true},
+    {"id": 5, "name": "card.negate", "kind": "instant", "cost": 2, "target": "stackItem", "side": "enemy",
+     "effects": [{"op": "counter", "to": "target"}]},
+    {"id": 6, "name": "card.insight", "kind": "spell", "cost": 1, "effects": [{"op": "draw", "amount": 2, "to": "controller"}]},
+    {"id": 7, "name": "card.fireball", "kind": "spell", "cost": 4, "target": "character", "side": "enemy",
+     "effects": [{"op": "damage", "amount": 5, "to": "target"}]},
+    {"id": 8, "name": "card.rally", "kind": "spell", "cost": 2, "effects": [{"op": "buff", "amount": 1, "to": "friendlyUnits"}]},
+    {"id": 9, "name": "card.spyglass", "kind": "spell", "cost": 0,
+     "effects": [{"op": "reveal", "to": "opponents"}, {"op": "draw", "amount": 1, "to": "controller"}]},
+    {"id": 10, "name": "card.mend", "kind": "instant", "cost": 2, "effects": [{"op": "heal", "amount": 4, "to": "controller"}]}
+  ],
+  "decks": [
+    [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 7, 7, 8, 9, 10, 10],
+    [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 6, 6, 7, 7, 8, 8, 9, 10, 1]
+  ]
+}

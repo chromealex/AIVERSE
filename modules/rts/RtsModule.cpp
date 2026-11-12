@@ -1,5 +1,6 @@
 // Setup, commands, shared queries and state hashing for the generic RTS module.
 #include "RtsInternal.h"
+#include "RtsBwAI.h"   // agent-bw-ai
 #include "RtsInitialVars.h"
 #include "../../engine/core/FixedMath.h"
 #include "gen/MapGen.h"
@@ -26,15 +27,21 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
         if (!(gm == map)) generated_ = std::move(gm);
     }
     const Json& mapIn = generated_.isObject() ? generated_ : map;
+    if (rules_.bwAI) bwAI_ = loadBwAIConfig(rulesJson["ai"], mapIn, rules_);   // agent-bw-ai: rules ai.bw + map "ai"
     setupMap(sim, mapIn);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
+    raid_ = std::make_unique<Raid>();   // extraction raids (rules "raid"); nothing without them
+    raid_->setup(sim, *this, mapIn);
+    modesSetup(sim, rulesJson, mapIn);   // match modes (RtsModes.cpp; before the scripts read the victory rules)
     validateInitialVars(mapIn["initialVars"]);
     for (const auto& [key, value] : mapIn["initialVars"].members()) state(sim).trig.vars[key] = value.fx();
     fields_ = std::make_unique<GridFields>();   // grid fields (rules "fields", map "gridFields"); nothing without them
     fields_->setup(sim, *this, mapIn);
     topDown_ = std::make_unique<TopDown>();   // top-down heroes (rules "topDown"); nothing without the block
     topDown_->setup(sim, *this, rulesJson);
+    env_ = std::make_unique<Environment>();   // map environment (rules / map "environment"); nothing without it
+    env_->setup(sim, *this, rulesJson, mapIn);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
@@ -63,16 +70,21 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
+    if (env_->active()) sim.addSystem("environment", [this](Simulation& s) { env_->tick(s); });   // RtsEnv.cpp (games with an environment only)
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
     sim.addSystem("capture", [this](Simulation& s) { sysCapture(s); });
+    if (env_->active()) sim.addSystem("environment2", [this](Simulation& s) { env_->lateTick(s); });
     sim.addSystem("creep", [this](Simulation& s) { sysCreep(s); });
     if (fields_->active()) sim.addSystem("gridfields", [this](Simulation& s) { fields_->tick(s); });   // RtsGridFields.cpp
     sim.addSystem("vision", [this](Simulation& s) { sysVision(s); });
+    if (modes_.any) sim.addSystem("modes", [this](Simulation& s) { sysModes(s); });   // RtsModes.cpp: match modes decide before victory
     sim.addSystem("victory", [this](Simulation& s) { script_->callStd(s, StdFn::Victory); });   // lua/victory.lua
     sim.addSystem("triggers", [this](Simulation& s) {   // last: sees every event of the tick (lua/triggers.lua)
         if (!triggers_.defs.empty()) script_->callStd(s, StdFn::Triggers);
     });
     if (script_->hasUserScripts()) sim.addSystem("scripts", [this](Simulation& s) { script_->tick(s); }); // after triggers: same events
+    if (modes_.any && modes_.stats) sim.addSystem("matchstats", [this](Simulation& s) { sysMatchStats(s); });   // last: every event of the tick
     sysCreep(sim);
     sysEconomy(sim); // initial supply/tech counts
     // big maps: build the hierarchical pathing graph now (it is derived data, so this only moves the cost
@@ -335,6 +347,7 @@ void RtsModule::setupMap(Simulation& sim, const Json& map) {
         gs.roads.adj[size_t(ia)].push_back(uint16_t(ib));
         gs.roads.adj[size_t(ib)].push_back(uint16_t(ia));
     }
+    setupRoutes(sim, map, placed);   // map "routes" / "screen" (RtsRoutes.cpp)
 
     // starting regions: explicit list, else regions containing the player's structures/start
     if (gs.regionCount > 0) {
@@ -685,6 +698,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (mechOn(sim)) mechStatMod(sim, e, s, add, mul);   // agent-mech states (retreat speed, cargo arrows, veterancy)
     if (rules_.originals) add += playerModsStat(sim, owner, u.type, s, mul);   // forges, morale
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
+    if (s == Stat::Speed && env_ && env_->active()) env_->speed(sim, e, add, mul);   // environment: wind, zones, weather, traces, snow
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
     return (base + add) * mul;
 }
@@ -979,6 +993,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (!pi || !pi->alive) return;
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
+    if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
     if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
@@ -1296,11 +1311,22 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
             auto* g = w.tryGet<Garrison>(e);
             if (!g || !w.alive(cmd.target) || cmd.target == e || !w.has<Garrison>(cmd.target) || t.spawnUnit == kNoType) break;
             if (rules_.advancedEffects && (statusFlags(sim, e) & kStLock)) break;   // locked: can't send
-            int64_t pct = std::clamp<int64_t>(cmd.param, 1, 100);
+            if (env_ && env_->active() && !env_->sendAllowed(sim, e, cmd.target)) break;   // linked caves, graveyards
+            if (!canSend(sim, e, cmd.target)) break;   // authored routes: no route, no send (BW RoutesModule.FindUnlocked)
             const int sendable = std::max(0, g->count - t.garrisonKeep);   // State.io: one soldier stays home
-            int n = int(int64_t(sendable) * pct / 100);
+            // param < 0: exactly -param units (Bunker Wars MoveUnits counts, agent-bw-ai); else a percent
+            int n = cmd.param < 0 ? int(std::min<int64_t>(sendable, -cmd.param))
+                                  : int(int64_t(sendable) * std::clamp<int64_t>(cmd.param, 1, 100) / 100);
             if (n <= 0 && sendable > 0) n = 1;
             if (n <= 0 && t.garrisonKeep > 0) break;
+            if (rules_.routes.groups) {   // BW groups: units leave row by row and are paid when they leave (RtsRoutes.cpp)
+                if (n <= 0) break;
+                sendAlongRoute(sim, e, cmd.target, cmd.player, n);
+                uint8_t to = w.get<Owner>(cmd.target).player;
+                if (rules_.advancedEffects && to < gs.players.size() && to != cmd.player && (gs.players[to].statusFlags & kStAlert))
+                    sim.emit({kEvAlert, to, e, cmd.target, n, w.get<Transform>(cmd.target).pos});
+                break;
+            }
             g->count -= n;
             g->pendingOut += n;
             g->pendingTarget = cmd.target;
@@ -1389,6 +1415,7 @@ uint32_t RtsModule::ticksUntilWave(Simulation& sim) const {
 
 int RtsModule::result(Simulation& sim) {
     auto* gs = sim.world().resource<GameState>();
+    if (gs && gs->winnerTeam < 0 && raid_ && raid_->active()) return 0;   // extraction raids end the match themselves
     if (gs && gs->winnerTeam >= 0) return gs->winnerTeam == 0 ? -1 : gs->winnerTeam;
     if (gs && gs->victory.mode == VictoryMode::Survive) return 0; // decided by sysVictory
     int team = 0;
@@ -1414,10 +1441,12 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     for (auto t : gs.score) h.fx(t);
     for (auto& [k, v] : gs.trig.vars) { h.str(k); h.fx(v); }
     if (rules_.dungeon) hashDungeon(sim, h);
+    hashRoutes(sim, h);   // authored routes / BW groups / screen (only on maps / rules that use them)
     if (rules_.settlers) hashSettlers(sim, h);
     if (rules_.advancedEffects) hashEffects(sim, h);
     if (rules_.originals) hashOriginals(sim, h);
     if (rules_.fidelity) hashFidelity(sim, h);
+    if (modes_.any) hashModes(sim, h);   // match modes only (RtsModes.cpp)
     if (rules_.lanes.enabled) {
         h.u32(gs.laneSignature); h.u32(uint32_t(gs.lanes.size()));
         for (auto& l : gs.lanes) { h.u32(uint32_t(l.points.size())); if (!l.points.empty()) h.v3(l.points[l.points.size() / 2]); }
@@ -1479,8 +1508,10 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
         h.u32(uint32_t(s.remaining.size())); for (auto n : s.remaining) h.u32(n);
         h.u32(uint32_t(s.hit.size())); for (auto hit : s.hit) h.u64(hit.packed());
     });
+    if (raid_ && raid_->active()) raid_->hash(sim, h);   // extraction raids only
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
+    if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
 }
 

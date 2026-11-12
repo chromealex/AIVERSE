@@ -30,6 +30,7 @@ inline const std::vector<std::string>& netTextKeys() {
         "net.connected", "net.disconnected", "net.reconnecting", "net.chat_line", "net.desync", "net.rating_up", "net.rating_down",
         "net.player.back", "net.player.dropped", "net.player.left", "net.player.unnamed", "net.bot",
         "net.end.opponents_left", "net.end.everyone_left", "net.end.result_mismatch",
+        "net.end.no_show", "net.end.released", "net.end.time_limit", "net.error.ticket_required",   // hosted battles
         "net.error.version", "net.error.bad_request", "net.error.no_such_room", "net.error.data_mismatch",
         "net.error.in_game", "net.error.no_spectators", "net.error.not_host", "net.error.slot_taken",
         "net.error.not_ready", "net.error.no_such_queue", "net.error.no_maps_for_queue",

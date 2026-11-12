@@ -1,0 +1,12 @@
+{
+  "player": 1,
+  "techLevel": 5,
+  "enforceUnlocks": true,
+  "slots": [
+    {"slot": 0, "unit": 1, "level": 4},
+    {"slot": 1, "unit": 2, "level": 2},
+    {"slot": 2, "unit": 3, "level": 1},
+    {"slot": 3, "unit": 4, "opened": false},
+    {"slot": 4, "unit": 5, "inTeam": false}
+  ]
+}

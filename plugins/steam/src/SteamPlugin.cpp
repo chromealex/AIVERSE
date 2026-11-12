@@ -1,4 +1,5 @@
-// Steam (Steamworks SDK) → the engine's "store" protocol (docs/plugins.md), Windows / Linux / macOS.
+// Steam (Steamworks SDK) → the engine's "store" protocol (docs/plugins.md), Windows / Linux / macOS,
+// and "social" (achievements, stats, friends, rich presence, overlay, invites: SteamSocial.h).
 //
 // In-game purchases go through the Steam Inventory Service, the client-only way to sell on Steam
 // (MicroTxn needs your own server and a publisher Web API key):
@@ -16,6 +17,8 @@
 #include "engine/platform/Plugins.h"
 
 #include <steam/steam_api.h>
+
+#include "SteamSocial.h"
 
 #include <chrono>
 #include <cstdio>
@@ -316,7 +319,7 @@ private:
 class SteamPlugin final : public aiverse::plugins::NativePlugin {
 public:
     ~SteamPlugin() override {
-        if (session_) { session_.reset(); SteamAPI_Shutdown(); }
+        if (session_) { social_.reset(); session_.reset(); SteamAPI_Shutdown(); }
     }
 
     void call(const std::string& method, const std::string& argsJson, Reply reply) override {
@@ -324,7 +327,8 @@ public:
         if (method == "init") { init(args); reply.ok(); return; }
         if (method == "lifecycle") { reply.ok(); return; }
         if (!session_) { reply.fail("steam: " + (error_.empty() ? std::string("not initialized") : error_)); return; }
-        if (method == "products") session_->products(args, reply);
+        if (social_ && social_->handles(method)) social_->call(method, args, reply);
+        else if (method == "products") session_->products(args, reply);
         else if (method == "purchase") session_->purchase(args, reply);
         else if (method == "restore") session_->restore(reply);
         else if (method == "finish") session_->finish(args, reply);
@@ -333,6 +337,7 @@ public:
 
     void update() override {
         if (session_) session_->update();
+        if (social_) social_->update();
     }
 
 private:
@@ -352,9 +357,11 @@ private:
             return;
         }
         session_ = std::make_unique<Session>(config);
+        social_ = std::make_unique<steam_social::Social>(config);
     }
 
     std::unique_ptr<Session> session_;
+    std::unique_ptr<steam_social::Social> social_;   // protocol "social" (SteamSocial.h)
     std::string error_;
 };
 

@@ -26,7 +26,7 @@
   <a href="#작동-방식">작동 방식</a> ·
   <a href="#바로-쓸-수-있는-템플릿">템플릿</a> ·
   <a href="#빠른-시작">빠른 시작</a> ·
-  <a href="docs/overview.md">전체 개요(러시아어)</a>
+  <a href="docs/ko/overview.md">전체 개요</a>
 </p>
 
 ---
@@ -59,7 +59,7 @@
 | **멀티플레이는 끝없는 동기화 오류입니다.** `float` 하나만으로 iPhone과 Android의 경기가 어긋나기 시작합니다. | 시뮬레이션은 어디서나 비트 단위로 동일합니다. 부동소수점 대신 고정소수점, 자체 난수 생성기, 체크섬. CI가 푸시할 때마다 Linux x64/ARM64, Windows, macOS의 경기를 비교합니다. 네트워크로는 명령만 전송되며, 롤백 락스텝과 매치메이킹 및 리플레이 판정을 갖춘 서버가 있습니다. |
 | **모바일 GPU는 약하지만 게임은 아름다워야 합니다.** | 그림자, 파티클, 지형, 포스트 이펙트 등 비용이 큰 모든 기능에는 품질 단계가 있으며, 오래된 Mali와 Adreno부터 Apple Silicon까지 GPU에 맞춰 자동 조정됩니다. |
 | **모든 플랫폼 출시는 그 자체로 하나의 프로젝트입니다.** 서명, 아이콘, 스토어와 광고 SDK. | `aiversebuild` 명령 하나로 .app, Xcode 프로젝트, Gradle/APK, 웹, .exe를 만듭니다. 아이콘과 스플래시 화면은 자동 생성됩니다. App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin 등의 플러그인이 있으며, 빌드에는 게임이 선택한 것만 들어갑니다. |
-| **새 게임은 매번 처음부터 시작합니다.** | 30개 이상의 플레이 가능한 템플릿, 인수 체크리스트가 포함된 장르 키트, 에이전트용 스킬 118개. 새 게임은 이미 돌아가는 게임에서 출발합니다. |
+| **새 게임은 매번 처음부터 시작합니다.** | 30개 이상의 플레이 가능한 템플릿, 인수 체크리스트가 포함된 장르 키트, 에이전트용 스킬 126개. 새 게임은 이미 돌아가는 게임에서 출발합니다. |
 | **메타와 LiveOps는 프로젝트마다 다시 작성됩니다.** | `aiverse::meta`: 상점, 재화, 퀘스트, 패스, 일일 보상, 에너지, 클랜, 토너먼트, 천장이 있는 상자 — JSON으로 설정합니다. |
 
 ---
@@ -144,7 +144,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, 스토어와 광고 플러그인 |
 | Addressables / Asset Bundles | `.rpak` 팩, 빌드 분할과 콘텐츠 다운로드 |
 
-보고서는 각 항목을 정확히 이전, 근사 이전, 미이전으로 표시합니다. 다시 가져와도 수정한 내용은 유지됩니다. 에셋 직렬화는 **Force Text**여야 합니다. Godot 프로젝트도 같은 방식으로 가져옵니다. 자세히: [엔진 프로젝트 가져오기](docs/engine-import.md).
+보고서는 각 항목을 정확히 이전, 근사 이전, 미이전으로 표시합니다. 다시 가져와도 수정한 내용은 유지됩니다. 에셋 직렬화는 **Force Text**여야 합니다. Godot 프로젝트도 같은 방식으로 가져옵니다. 자세히: [엔진 프로젝트 가져오기](docs/ko/engine-import.md).
 
 ---
 
@@ -197,7 +197,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 - Unity 스타일 도킹 에디터: 씬, 인스펙터, 지형, 이펙트, 조명, UI, 테스트 플레이, 기기 시뮬레이터
 - `aiversemcp` — 에이전트용 MCP 서버
 - **"게임 만들기"** 마법사
-- 에이전트용 스킬 118개와 인수 체크리스트가 있는 장르 키트
+- 에이전트용 스킬 126개와 인수 체크리스트가 있는 장르 키트
 - 직접 소유한 사본에서 고전 게임 에셋을 가져오는 임포터
 
 </td>
@@ -229,7 +229,7 @@ open build/mac/AiverseEditor.app        # 에디터: 프로젝트 허브와 템�
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. 직접 컴파일하고 싶지 않다면
 `builds` 브랜치에 미리 빌드된 에디터와 도구가 있습니다
-([자세히, 러시아어](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([자세히](docs/ko/overview.md#미리-빌드된-엔진builds-브랜치과-컴파일러-없는-aiversemcp)).
 
 **2. 게임 만들기.** 허브에서 **"게임 만들기"**를 누르거나 템플릿으로 프로젝트를 만드세요. Game 창에서
 바로 봇과 플레이할 수 있습니다.
@@ -246,7 +246,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 **4. 출시:**
 
 ```bash
-./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS, iOS, Android, 웹, Windows
+./build/mac/aiversebuild --project "My Game.aiverse" --target all   # macOS, iOS, Android, 웹, Windows
 ```
 
 ---
@@ -262,27 +262,27 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS와 FPS 외 장르의 템플릿은 제작 중
 
 서브시스템별 자세한 내용은
-[검증됨 / 미검증](docs/overview.md#проверено--не-проверено)(러시아어)을 참고하세요.
+[검증됨 / 미검증](docs/ko/overview.md#검증됨--미검증)을 참고하세요.
 
 ---
 
 ## 문서
 
-대부분의 문서는 러시아어로 작성되어 있으며, `AGENTS.md`, 라이브러리 문서와 일부 기술 가이드는 영어입니다.
+참조 문서는 영어입니다. 개요, 게임 만들기 마법사, Unity에서 넘어오기, 장르 패키지는 한국어로도 제공됩니다.
 
 | | |
 |---|---|
-| [**전체 개요**](docs/overview.md) | 모든 서브시스템, 빌드, 플랫폼, CI, 릴리스 |
+| [**전체 개요**](docs/ko/overview.md) | 모든 서브시스템, 빌드, 플랫폼, CI, 릴리스 |
 | [게임 포맷](docs/game-format.md) | `game.json`, `rules.json`, 맵과 모든 데이터 블록 |
 | [장르 패키지](docs/genre-packages.md) · [라이브러리](docs/libraries.md) | 모든 장르를 위한 메커닉 |
-| ["게임 만들기" 마법사](docs/game-wizard.md) | 아이디어와 아트가 완성된 프로젝트가 되는 과정 |
+| ["게임 만들기" 마법사](docs/ko/game-wizard.md) | 아이디어와 아트가 완성된 프로젝트가 되는 과정 |
 | [스크립팅](docs/scripting.md) · [C++ 모듈](docs/native-modules.md) | 데이터로 부족할 때 |
 | [지형](docs/terrain.md) · [행성](docs/planets.md) · [길찾기](docs/pathfinding.md) | 월드와 이동 |
 | [파티클](docs/particles.md) · [모델](docs/models.md) · [Shader Graph](docs/shader-graph.md) | 비주얼 |
 | [메타 게임](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [플러그인](docs/plugins.md) | 수익화와 스토어 |
 | [FPS](docs/fps.md) · [대형 월드](docs/large-worlds.md) | FPS 모듈 |
 | [AGENTS.md](AGENTS.md) | 엔진 자체를 수정하는 에이전트를 위한 규칙 |
-| [Unity에서 넘어오기](docs/engine-import.md) | 씬, 프리팹, 에셋 가져오기와 에이전트를 통한 로직 이전 |
+| [Unity에서 넘어오기](docs/ko/engine-import.md) | 씬, 프리팹, 에셋 가져오기와 에이전트를 통한 로직 이전 |
 
 ## 라이선스
 

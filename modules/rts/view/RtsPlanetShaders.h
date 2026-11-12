@@ -122,15 +122,15 @@ void main() {
 #if PLANET_DETAIL
     albedoS = mix(albedoS, p_rock.rgb, smoothstep(p_detail.z, p_detail.w, 1.0 - dot(n, up)) * p_detail.y) * cav;
 #endif
-    vec3 base = albedoS * albedoS;
+    vec3 base = rtsDecodeScene(albedoS);
     vec3 L = normalize(p_sun.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
     float sh = ndl > 0.0 && p_sun.w > 0.5 ? shadowAt(v_wpos, n) : 1.0;
     sh *= cloudShade(v_wpos);
     float day = mix(p_atmo.w, 1.0, smoothstep(-0.25, 0.3, dot(up, L)));   // ambient fades on the night side
-    vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
-    vec3 amb = mix(u_groundColor.rgb * u_groundColor.rgb, u_skyColor.rgb * u_skyColor.rgb, dot(n, up) * 0.5 + 0.5) * day;
+    vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
+    vec3 amb = mix(rtsDecodeScene(u_groundColor.rgb), rtsDecodeScene(u_skyColor.rgb), dot(n, up) * 0.5 + 0.5) * day;
     vec3 H = normalize(L + V);
     float specK = ocean ? 0.9 : p_opts.x;
     float spec = pow(max(dot(n, H), 0.0), ocean ? 80.0 : 40.0) * specK;
@@ -138,10 +138,10 @@ void main() {
     vec3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
     col += base * dynamicLight(v_wpos, n, V, specK);
     float dist = length(u_camPos.xyz - v_wpos);
-    col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = mix(col, p_atmo.rgb * p_atmo.rgb * day, (1.0 - exp(-dist * p_opts.w)) * 0.6);   // aerial haze
-    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    vec3 outc = sqrt(col);
+    col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
+    col = mix(col, rtsDecodeScene(p_atmo.rgb) * day, (1.0 - exp(-dist * p_opts.w)) * 0.6);   // aerial haze
+    col = rtsToneScene(col, u_skyColor.w > 0.5);
+    vec3 outc = rtsEncodeScene(col);
     float alpha = ocean ? mix(p_water.a, 1.0, pow(1.0 - max(dot(n, V), 0.0), 4.0)) : 1.0;
     if (p_opts.z > 0.5) {
         vec2 uv = v_uv;
@@ -235,15 +235,15 @@ fragment float4 fs_main(VOut in [[stage_in]], constant PU0& u [[buffer(1)]], con
 #if PLANET_DETAIL
     albedoS = mix(albedoS, u.rock.rgb, smoothstep(u.detail.z, u.detail.w, 1.0 - dot(n, up)) * u.detail.y) * cav;
 #endif
-    float3 base = albedoS * albedoS;
+    float3 base = rtsDecodeScene(albedoS);
     float3 L = normalize(u.sun.xyz);
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
     float sh = ndl > 0.0 && u.sun.w > 0.5 ? shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0) : 1.0;
     sh *= cloudShade(l, in.wpos);
     float day = mix(u.atmo.w, 1.0, smoothstep(-0.25, 0.3, dot(up, L)));
-    float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
-    float3 amb = mix(f.groundColor.rgb * f.groundColor.rgb, f.skyColor.rgb * f.skyColor.rgb, dot(n, up) * 0.5 + 0.5) * day;
+    float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
+    float3 amb = mix(rtsDecodeScene(f.groundColor.rgb), rtsDecodeScene(f.skyColor.rgb), dot(n, up) * 0.5 + 0.5) * day;
     float3 H = normalize(L + V);
     float specK = ocean ? 0.9 : u.opts.x;
     float spec = pow(max(dot(n, H), 0.0), ocean ? 80.0 : 40.0) * specK;
@@ -251,10 +251,10 @@ fragment float4 fs_main(VOut in [[stage_in]], constant PU0& u [[buffer(1)]], con
     float3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
     col += base * dynamicLight(l, tex1, s1, in.wpos, n, V, specK);
     float dist = length(f.camPos.xyz - in.wpos);
-    col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = mix(col, u.atmo.rgb * u.atmo.rgb * day, (1.0 - exp(-dist * u.opts.w)) * 0.6);
-    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    float3 outc = sqrt(col);
+    col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
+    col = mix(col, rtsDecodeScene(u.atmo.rgb) * day, (1.0 - exp(-dist * u.opts.w)) * 0.6);
+    col = rtsToneScene(col, f.skyColor.w > 0.5);
+    float3 outc = rtsEncodeScene(col);
     float alpha = ocean ? mix(u.water.a, 1.0, pow(1.0 - max(dot(n, V), 0.0), 4.0)) : 1.0;
     if (u.opts.z > 0.5) {
         float2 uv = in.uv;
@@ -313,7 +313,7 @@ void main() {
     col += starLayer(d, 180.0, 0.05 * s_eye.w) * 0.7;
     float g = max(dot(d, normalize(s_star.xyz)), 0.0);
     col += s_starColor.rgb * s_starColor.w * (pow(g, s_star.w) * 0.6 + pow(g, s_star.w * 12.0) * 2.0);
-    o_color = vec4(sqrt(clamp(col, 0.0, 1.0)), 1.0);
+    o_color = vec4(rtsEncodeScene(AIVERSE_HDR != 0 ? col : clamp(col, 0.0, 1.0)), 1.0);
 }
 )";
 
@@ -349,7 +349,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant SU0& u [[buffer(1)]]) {
     col += starLayer(d, 180.0, 0.05 * u.eye.w) * 0.7;
     float g = max(dot(d, normalize(u.star.xyz)), 0.0);
     col += u.starColor.rgb * u.starColor.w * (pow(g, u.star.w) * 0.6 + pow(g, u.star.w * 12.0) * 2.0);
-    return float4(sqrt(clamp(col, 0.0, 1.0)), 1.0);
+    return float4(rtsEncodeScene(AIVERSE_HDR != 0 ? col : clamp(col, 0.0, 1.0)), 1.0);
 }
 )";
 

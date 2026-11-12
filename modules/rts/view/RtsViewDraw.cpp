@@ -134,6 +134,8 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
         d.outline = {c.x, c.y, c.z, 0.03f * std::max(1.0f, k)};
     }
     if (d.tint.w <= 0.0f) return;   // fully transparent (view.entity_fx opacity 0): nothing to draw, no anchors
+    // immobile, finished, plain placement: scenery the light baker captures / lightmaps (agent-lightbake)
+    if ((t.structure || t.speed <= Fixed{}) && !L.air && !st.dead && o.build >= 1 && !hasFx && !tintOverride && !placement) d.flags |= kDrawStatic;
     r.drawModel(d);
 
     // ---- attachments on sockets (weapons, cargo, banners)

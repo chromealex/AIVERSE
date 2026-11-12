@@ -1,0 +1,77 @@
+// Codec + transport coverage for aiverse_protoc / engine/grpc tests.
+syntax = "proto3";
+package aiverse_test;
+
+enum Color {
+  COLOR_UNSPECIFIED = 0;
+  COLOR_RED = 1;
+  COLOR_BLUE = 2;
+}
+
+message Scalars {
+  double d = 1;
+  float f = 2;
+  int32 i32 = 3;
+  int64 i64 = 4;
+  uint32 u32 = 5;
+  uint64 u64 = 6;
+  sint32 s32 = 7;
+  sint64 s64 = 8;
+  fixed32 fx32 = 9;
+  fixed64 fx64 = 10;
+  sfixed32 sfx32 = 11;
+  sfixed64 sfx64 = 12;
+  bool b = 13;
+  string s = 14;
+  bytes raw = 15;
+  Color color = 16;
+  optional int32 maybe = 17;
+  int32 class = 18; // C++ keyword
+}
+
+message Item {
+  string name = 1;
+  int32 count = 2;
+  message Tag { string key = 1; }
+  repeated Tag tags = 3;
+}
+
+message Bag {
+  repeated int32 ints = 1;           // packed
+  repeated string names = 2;
+  repeated Item items = 3;
+  map<string, int32> counts = 4;
+  map<int64, Item> by_id = 5;
+  repeated Color colors = 6;
+  repeated double ds = 7;
+  Item best = 8;
+  oneof choice {
+    string text = 9;
+    Item item = 10;
+    int64 number = 11;
+  }
+  repeated sint64 zz = 12;
+  Bag2 next = 13;
+}
+
+message Bag2 {
+  repeated Bag2 children = 1; // recursion through repeated is allowed
+  string label = 2;
+}
+
+message EchoRequest {
+  string text = 1;
+  int32 delay_ms = 2;
+  bytes payload = 3;
+}
+
+message EchoReply {
+  string text = 1;
+  bytes payload = 2;
+}
+
+service Echo {
+  rpc Say(EchoRequest) returns (EchoReply);
+  rpc Chat(stream EchoRequest) returns (stream EchoReply);
+  rpc Fan(EchoRequest) returns (stream EchoReply);
+}

@@ -103,12 +103,14 @@ void RollbackSession::rollback() {
     if (from >= target) return;
     const size_t slot = from % ring_.size();
     if (ringTick_[slot] != from) { broken_ = true; return; }
+    if (rollbackHook_) rollbackHook_(true);
     sim_.loadState(ring_[slot]);
     ++stats_.rollbacks;
     stats_.maxRollback = std::max(stats_.maxRollback, target - from);
     for (auto it = hashes_.begin(); it != hashes_.end();) it = it->first > from ? hashes_.erase(it) : std::next(it);
     if (candResult_ && candTick_ > from) candResult_ = 0;
     while (sim_.tick() < target) { stepTick(true); ++stats_.resimulatedTicks; }
+    if (rollbackHook_) rollbackHook_(false);
 }
 
 int RollbackSession::update(double seconds, uint64_t nowMs) {

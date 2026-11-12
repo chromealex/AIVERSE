@@ -1,0 +1,98 @@
+Static lights: max 1 per cell, 2048 x 1 atlas
+Static lights: max 1 per cell, 2048 x 1 atlas
+Static lights: max 1 per cell, 2048 x 4 atlas
+Static lights: max 1 per cell, 2048 x 4 atlas
+Static lights: max 1 per cell, 2048 x 4 atlas
+Static lights: max 1 per cell, 2048 x 4 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 4 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+Static lights: max 1 per cell, 2048 x 5 atlas
+GPU: GL33 Apple M3 Ultra / 4.1 Metal - 89.4; RGBA16F=1
+Scene shaders: 22 GLSL/MSL variants PASS
+HDR GPU probe 0: got 0.53725 expected 0.53710 PASS
+HDR GPU probe 1: got 0.90760 expected 0.90823 PASS
+HDR GPU probe 2: got 0.73529 expected 0.73536 PASS
+HDR GPU probe 3: got 0.50196 expected 0.50000 PASS
+HDR GPU probe 4: got 0.50196 expected 0.50000 PASS
+HDR GPU probe 5: got 0.53725 expected 0.53710 PASS
+HDR GPU probe 6: got 0.94387 expected 0.94375 PASS
+HDR GPU probe 7: got 0.57328 expected 0.57347 PASS
+HDR GPU probe 8: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 9: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 10: got 0.57328 expected 0.57347 PASS
+HDR GPU probe 11: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 12: got 0.56569 expected 0.56688 PASS
+HDR GPU probe 13: got 0.48456 expected 0.48453 PASS
+HDR GPU probe 14: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 15: got 0.48505 expected 0.48453 PASS
+HDR GPU probe 16: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 17: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 18: got 0.34902 expected 0.34919 PASS
+HDR GPU probe 19: got 0.70172 expected 0.70141 PASS
+HDR GPU probe 20: got 0.34926 expected 0.34919 PASS
+HDR GPU probe 21: got 0.48431 expected 0.48453 PASS
+HDR GPU probe 22: got 0.48431 expected 0.48453 PASS
+HDR GPU probe 23: got 0.48505 expected 0.48453 PASS
+HDR GPU probe 24: got 0.48456 expected 0.48453 PASS
+HDR GPU probe 25: got 0.48431 expected 0.48453 PASS
+HDR GPU probe 26: got 0.48431 expected 0.48453 PASS
+HDR GPU probe 27: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 28: got 0.48431 expected 0.48453 PASS
+HDR GPU probe 29: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 30: got 0.49975 expected 0.50000 PASS
+HDR GPU probe 31: got 0.25637 expected 0.25648 PASS
+HDR GPU probe 32: got 0.50049 expected 0.50000 PASS
+HDR GPU probe 33: got 0.49951 expected 0.50000 PASS
+HDR GPU probe 34: got 0.54779 expected 0.54806 PASS
+HDR GPU probe 35: got 0.48505 expected 0.48453 PASS
+HDR GPU probe 36: got 0.54877 expected 0.54806 PASS
+HDR GPU probe 37: got 0.54828 expected 0.54806 PASS
+HDR GPU probe 38: got 0.54804 expected 0.54806 PASS
+HDR GPU probe 39: got 0.53971 expected 0.53956 PASS
+HDR GPU probe 40: got 0.48676 expected 0.48769 PASS
+HDR GPU probe 41: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 42: got 0.48333 expected 0.48453 PASS
+HDR GPU probe 43: got 0.22083 expected 0.22092 PASS
+HDR GPU probe 44: got 0.70123 expected 0.70141 PASS
+HDR GPU probe 45: got 0.48480 expected 0.48453 PASS
+HDR GPU probe 46: got 0.00000 expected 0.00000 PASS
+HDR GPU probe 47: got 0.54020 expected 0.53956 PASS
+HDR GPU probe 48: got 0.48407 expected 0.48453 PASS
+HDR GPU probe 49: got 0.24779 expected 0.24829 PASS
+HDR GPU probe 50: got 0.58676 expected 0.58622 PASS
+HDR GPU probe 51: got 0.24828 expected 0.24829 PASS
