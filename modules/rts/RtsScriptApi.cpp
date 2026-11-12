@@ -1257,6 +1257,7 @@ void openGameApi(Vm& vm) {
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
     openCommerceApi(vm);   // premises, businesses, the bank (RtsCommerceApi.cpp)
+    openDrivingApi(vm);    // vehicles (RtsDrivingApi.cpp)
 }
 
 } // namespace script

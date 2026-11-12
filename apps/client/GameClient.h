@@ -210,6 +210,13 @@ private:
     void topDownDraw();              // screen canvas: sticks and buttons
     game::TopDownControls topDown_;
     bool tdMouseHeld_ = false, tdFireHeld_ = false;
+    // ClientCommerce.cpp: the city economy (rules "commerce"): the deals at the door in front of the hero
+    struct CommerceChoice { std::string label; game::CommerceOp op; int premise; int64_t value; };
+    int commerceDoor();
+    std::vector<CommerceChoice> commerceChoices(int premise, std::string& title);
+    bool commerceKey(platform::Key key);
+    void commerceTop(std::vector<UiItem>& top);
+    bool comMenu_ = false;
     float tdClock_ = 0;                                  // seconds of top-down frames (aim-assist taps, lock marker)
     std::vector<game::TopDown::AimCandidate> tdTargets_; // aim assist: what the hero could shoot this frame
     void drawToolPreview();

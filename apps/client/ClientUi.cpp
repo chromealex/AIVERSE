@@ -323,6 +323,7 @@ void GameClient::buildTopBar(UiState& s) {
             s.top.push_back({n < 0 ? name : fmt("%s: %d", name.c_str(), int(n)), "", "", n == 0});
         }
     }
+    commerceTop(s.top);   // the day, the debt, the deals at the door (rules "commerce", ClientCommerce.cpp)
     if (eco.supplyCap.raw > 0 || eco.supplyUsed.raw > 0)
         s.top.push_back({tr("hud.supply", Args().num("used", eco.supplyUsed.toInt()).num("cap", eco.supplyCap.toInt())), "", "", eco.supplyUsed >= eco.supplyCap});
     if (rules_.resources.empty()) {

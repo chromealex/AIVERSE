@@ -66,6 +66,7 @@ bool GameClient::topDownEvent(const Event& e, bool uiWants) {
         if (e.key == Key::Escape) return false;   // pause menu
         for (size_t i = 0; i < topDown_.config().buttons.size(); ++i)
             if (topDown_.config().buttons[i].key != 0 && int(e.key) == topDown_.config().buttons[i].key) { topDown_.pressAbility(int(i)); return true; }
+        if (commerceKey(e.key)) return true;   // deals at a door (rules "commerce"): E, then 1..9
         if (mod().arsenal() && mod().arsenal()->active()) {   // weapons (rules "arsenal"): Z / X cycle, 1..9 pick a slot
             int64_t pick = 0;
             if (e.key == Key::X || e.key == Key::Tab) pick = kWeaponNext;

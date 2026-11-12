@@ -102,59 +102,15 @@ def apply_rules(project, rules):
         if tid in vehicles:
             t['bounty'] = {money: BOUNTY_CARS.get(tid, BOUNTY_CAR)}
         elif tid == 'ped' or tid.startswith('ped_'):
-            t['bounty'] = {money: BOUNTY_PERSON}
+            t.pop('bounty', None)   # no pay for killing a passer-by: part of his money falls out instead
     return rules
 
 
 def apply_map(m, seed, spacing):
-    """Pickups on pavement cells: a starter row around the hero, then one about every `spacing` cells."""
-    ents = [e for e in m['entities'] if e['type'] not in PICKUPS]
-    tiles = m.get('tiles', {}).get('rows')
-    terrain = m.get('terrain', {}).get('rows')
-    if not tiles or not terrain:
-        m['entities'] = ents
-        return 0
-    H, W = len(tiles), len(tiles[0])
-    taken = {}
-    for e in ents:
-        taken.setdefault((int(e['pos'][0]), int(e['pos'][1])), []).append(e)
-
-    def free(x, z):
-        if not (1 <= x < W - 1 and 1 <= z < H - 1) or tiles[z][x] != 'p' or terrain[z][x] != '.':
-            return False
-        return not any((x + dx, z + dz) in taken for dx in (-1, 0, 1) for dz in (-1, 0, 1))
-
-    placed = []
-
-    def put(pid, x, z):
-        placed.append({'type': pid, 'owner': 0, 'pos': [x + 0.5, z + 0.5]})
-        taken[(x, z)] = placed[-1:]
-
-    hero = next((e for e in ents if e.get('owner') == 1), None)
-    if hero:
-        hx, hz = int(hero['pos'][0]), int(hero['pos'][1])
-        ring = sorted(((x, z) for x in range(hx - 12, hx + 13) for z in range(hz - 12, hz + 13)),
-                      key=lambda c: (max(abs(c[0] - hx), abs(c[1] - hz)), math.atan2(c[1] - hz, c[0] - hx)))
-        queue = list(START)
-        last = None
-        for x, z in ring:
-            if not queue:
-                break
-            if max(abs(x - hx), abs(z - hz)) < 2 or not free(x, z) or (last and abs(x - last[0]) + abs(z - last[1]) < 3):
-                continue
-            put(queue.pop(0), x, z)
-            last = (x, z)
-    rnd = random.Random(seed * 7919 + 17)
-    bag = [pid for pid, p in PICKUPS.items() for _ in range(p[4])]
-    for gz in range(0, H, spacing):
-        for gx in range(0, W, spacing):
-            cells = [(x, z) for z in range(gz, min(H, gz + spacing)) for x in range(gx, min(W, gx + spacing)) if free(x, z)]
-            if len(cells) < 8:
-                continue   # no real pavement here (water, countryside)
-            x, z = cells[rnd.randrange(len(cells))]
-            put(bag[rnd.randrange(len(bag))], x, z)
-    m['entities'] = ents + placed
-    return len(placed)
+    """Nothing is laid out on the streets (the user's rule): weapons come from gun shops and from the dead, money
+    falls out of the dead (project scripts/drops.lua), first aid lies at marked points (clinic, fire stations).
+    The map is left as it is."""
+    return 0
 
 
 def save(path, obj):
