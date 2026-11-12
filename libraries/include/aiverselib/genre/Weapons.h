@@ -13,7 +13,8 @@ inline bool stepRecoil(const RecoilConfig& c,RecoilState& s,bool fired){
     s.pitch=fxClamp(recover(s.pitch)+(fired?c.pitchImpulse:Fixed{}),-c.maximum,c.maximum);return true;
 }
 inline std::optional<Vec2> sampleSpread(Random& rng,Fixed halfAngle){
-    if(halfAngle<Fixed{}||halfAngle>Fixed::fromRatio(1,8))return {};if(!halfAngle.raw)return Vec2{};
+    if(halfAngle<Fixed{}||halfAngle>Fixed::fromRatio(1,8))return {};
+    if(!halfAngle.raw)return Vec2{};
     auto sample=[&]{return Fixed::fromRaw(int64_t(rng.below(uint32_t(halfAngle.raw*2+1)))-halfAngle.raw);};return Vec2{sample(),sample()};
 }
 struct ProjectileConfig {Fixed gravity=20_fx,radius=Fixed::fromRatio(1,20),retention=Fixed::fromRatio(3,4);uint32_t lifetime=600,maxBounces=0;};
