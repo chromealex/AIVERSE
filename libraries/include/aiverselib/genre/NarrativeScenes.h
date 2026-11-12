@@ -127,7 +127,8 @@ inline std::string cues(std::span<const SceneCue> list,const std::string& path){
 }
 inline std::string condition(const NarrativeWorld& w,const SceneCondition& c,const std::string& path,std::size_t depth,std::size_t& terms){
     using K=SceneConditionKind;
-    if(depth>kSceneMaxDepth)return path+": nested deeper than 16";if(++terms>kSceneMaxTerms)return path+": more than 256 condition terms";
+    if(depth>kSceneMaxDepth)return path+": nested deeper than 16";
+    if(++terms>kSceneMaxTerms)return path+": more than 256 condition terms";
     if(uint8_t(c.op)>uint8_t(SceneCompare::Between))return path+".op: unknown operator";
     bool group=c.kind==K::All||c.kind==K::Any||c.kind==K::Not;
     if(!group&&!c.children.empty())return path+": a leaf condition has no terms";
@@ -142,12 +143,15 @@ inline std::string condition(const NarrativeWorld& w,const SceneCondition& c,con
             if(!inDomain(f->second,c.value))return path+".value: outside the fact's values";
         }break;}
     case K::Meter:if(c.character<=0||!w.characters.contains(c.character))return path+".character: unknown character "+std::to_string(c.character);
-        if(uint8_t(c.meter)>=kSocialMeterCount)return path+".meter: unknown meter";break;
+        if(uint8_t(c.meter)>=kSocialMeterCount)return path+".meter: unknown meter";
+        break;
     case K::Knows:if(!w.facts.contains(c.subject))return path+".knows: unknown fact "+std::to_string(c.subject);
-        if(!knower(w,c.character))return path+".character: unknown character "+std::to_string(c.character);break;
+        if(!knower(w,c.character))return path+".character: unknown character "+std::to_string(c.character);
+        break;
     case K::Flag:if(!w.flags.contains(c.subject))return path+".flag: unknown flag "+std::to_string(c.subject);break;
     case K::Visited:if(!w.nodes.contains(c.subject))return path+".visited: unknown node "+std::to_string(c.subject);
-        if(c.value<0)return path+".value: visit counts are nonnegative";break;
+        if(c.value<0)return path+".value: visit counts are nonnegative";
+        break;
     case K::Chapter:case K::Act:break;
     case K::Chose:{
         auto n=w.nodes.find(c.subject);if(n==w.nodes.end())return path+".node: unknown node "+std::to_string(c.subject);
@@ -159,8 +163,10 @@ inline std::string condition(const NarrativeWorld& w,const SceneCondition& c,con
     return {};
 }
 inline std::string conditions(const NarrativeWorld& w,std::span<const SceneCondition> list,const std::string& path){
-    if(list.size()>kSceneMaxTerms)return path+": at most 256 conditions";std::size_t terms=0;
-    for(std::size_t i=0;i<list.size();++i)if(auto e=condition(w,list[i],idx(path,i),1,terms);!e.empty())return e;return {};
+    if(list.size()>kSceneMaxTerms)return path+": at most 256 conditions";
+    std::size_t terms=0;
+    for(std::size_t i=0;i<list.size();++i)if(auto e=condition(w,list[i],idx(path,i),1,terms);!e.empty())return e;
+    return {};
 }
 inline std::string effects(const NarrativeWorld& w,std::span<const SceneEffect> list,const std::string& path){
     using K=SceneEffectKind;if(list.size()>kSceneMaxList)return path+": at most 256 effects";
@@ -170,12 +176,15 @@ inline std::string effects(const NarrativeWorld& w,std::span<const SceneEffect> 
         case K::SetFact:case K::AddFact:{
             auto f=w.facts.find(e.subject);if(f==w.facts.end())return p+".fact: unknown fact "+std::to_string(e.subject);
             if(e.kind==K::SetFact&&!inDomain(f->second,e.value))return p+".value: outside the fact's domain";
-            if(e.kind==K::AddFact&&f->second.type!=SceneFactType::Int)return p+".add: only int facts can be added to";break;}
+            if(e.kind==K::AddFact&&f->second.type!=SceneFactType::Int)return p+".add: only int facts can be added to";
+            break;}
         case K::SetMeter:case K::AddMeter:{
             auto c=w.characters.find(e.character);if(e.character<=0||c==w.characters.end())return p+".character: unknown character "+std::to_string(e.character);
-            if(uint8_t(e.meter)>=kSocialMeterCount)return p+".meter: unknown meter";const auto& r=c->second.meters[uint8_t(e.meter)];
+            if(uint8_t(e.meter)>=kSocialMeterCount)return p+".meter: unknown meter";
+            const auto& r=c->second.meters[uint8_t(e.meter)];
             if(e.kind==K::SetMeter&&(e.value<r.minimum||e.value>r.maximum))return p+".value: outside the meter bounds";
-            if(e.kind==K::AddMeter&&(e.value< -2*kSceneMeterLimit||e.value>2*kSceneMeterLimit))return p+".value: change out of range";break;}
+            if(e.kind==K::AddMeter&&(e.value< -2*kSceneMeterLimit||e.value>2*kSceneMeterLimit))return p+".value: change out of range";
+            break;}
         case K::Reveal:case K::Forget:{
             if(!w.facts.contains(e.subject))return p+".fact: unknown fact "+std::to_string(e.subject);
             if(e.characters.empty()||e.characters.size()>kSceneMaxParticipants)return p+".characters: expected 1..32 characters";
@@ -186,7 +195,8 @@ inline std::string effects(const NarrativeWorld& w,std::span<const SceneEffect> 
         case K::SetFlag:if(!w.flags.contains(e.subject))return p+".flag: unknown flag "+std::to_string(e.subject);break;
         case K::SetChapter:if(!w.chapters.contains(e.subject))return p+".chapter: unknown chapter "+std::to_string(e.subject);break;
         case K::Schedule:if(!w.consequences.contains(e.subject))return p+".schedule: unknown consequence "+std::to_string(e.subject);
-            if(e.delay<1||e.delay>kSceneMaxTicks)return p+".delay: must be 1..10000000";break;
+            if(e.delay<1||e.delay>kSceneMaxTicks)return p+".delay: must be 1..10000000";
+            break;
         case K::Cancel:if(!w.consequences.contains(e.subject))return p+".cancel: unknown consequence "+std::to_string(e.subject);break;
         default:return p+": unknown effect kind";
         }
@@ -217,7 +227,8 @@ inline std::string narrativeWorldError(const NarrativeWorld& w){
     for(const auto& [id,f]:w.flags)if(id<=0||f.id!=id)return d::at("","flags",id)+".id: must be positive and match its key";
     for(const auto& [id,c]:w.chapters){
         auto p=d::at("","chapters",id);if(id<=0||c.id!=id)return p+".id: must be positive and match its key";
-        if(c.act<1||c.act>1000000)return p+".act: must be 1..1000000";if(auto e=d::key(c.titleKey,p+".titleKey");!e.empty())return e;
+        if(c.act<1||c.act>1000000)return p+".act: must be 1..1000000";
+        if(auto e=d::key(c.titleKey,p+".titleKey");!e.empty())return e;
     }
     if(w.initialChapter&&!w.chapters.contains(w.initialChapter))return "initialChapter: unknown chapter "+std::to_string(w.initialChapter);
     for(const auto& [id,s]:w.scenes){
@@ -235,7 +246,8 @@ inline std::string narrativeWorldError(const NarrativeWorld& w){
             if(std::count(n.participants.begin(),n.participants.end(),n.participants[i])>1)return d::idx(p+".participants",i)+": duplicate character";
         }
         if(n.autoTicks>kSceneMaxTicks)return p+".autoTicks: must be 0..10000000";
-        if(auto e=d::cues(n.cues,p+".cues");!e.empty())return e;if(auto e=d::effects(w,n.onEnter,p+".onEnter");!e.empty())return e;
+        if(auto e=d::cues(n.cues,p+".cues");!e.empty())return e;
+        if(auto e=d::effects(w,n.onEnter,p+".onEnter");!e.empty())return e;
         if(n.linear){
             if(!n.choices.empty())return p+": a linear line has no choices";
             if(n.next&&!w.nodes.contains(n.next))return p+".next: unknown node "+std::to_string(n.next);
@@ -256,15 +268,18 @@ inline std::string narrativeWorldError(const NarrativeWorld& w){
     for(const auto& [id,c]:w.consequences){
         auto p=d::at("","consequences",id);if(id<=0||c.id!=id)return p+".id: must be positive and match its key";
         if(auto e=d::conditions(w,c.conditions,p+".conditions");!e.empty())return e;
-        if(auto e=d::effects(w,c.effects,p+".effects");!e.empty())return e;if(auto e=d::cues(c.cues,p+".cues");!e.empty())return e;
+        if(auto e=d::effects(w,c.effects,p+".effects");!e.empty())return e;
+        if(auto e=d::cues(c.cues,p+".cues");!e.empty())return e;
     }
     for(const auto& [id,b]:w.barks){
         auto p=d::at("","barks",id);if(id<=0||b.id!=id)return p+".id: must be positive and match its key";
-        if(b.trigger<=0)return p+".trigger: must be positive";if(!d::knower(w,b.speaker))return p+".speaker: unknown character "+std::to_string(b.speaker);
+        if(b.trigger<=0)return p+".trigger: must be positive";
+        if(!d::knower(w,b.speaker))return p+".speaker: unknown character "+std::to_string(b.speaker);
         if(auto e=d::key(b.textKey,p+".textKey");!e.empty())return e;
         if(b.priority< -kScenePriorityLimit||b.priority>kScenePriorityLimit)return p+".priority: must be -1000000..1000000";
         if(b.cooldown< -1||b.cooldown>int64_t(kSceneMaxTicks))return p+".cooldown: must be 0..10000000 ticks";
-        if(auto e=d::conditions(w,b.conditions,p+".conditions");!e.empty())return e;if(auto e=d::cues(b.cues,p+".cues");!e.empty())return e;
+        if(auto e=d::conditions(w,b.conditions,p+".conditions");!e.empty())return e;
+        if(auto e=d::cues(b.cues,p+".cues");!e.empty())return e;
     }
     // Every line must be able to reach an ending (graph-wise, ignoring conditions): rejects cycles without exits.
     std::map<int64_t,std::vector<int64_t>> into;std::vector<int64_t> open;std::map<int64_t,bool> exits;
@@ -308,7 +323,9 @@ inline bool sceneChoiceAllowed(const NarrativeWorld& w,const NarrativeState& s,c
 // Available choice IDs of the current line, ascending; empty for a linear line or outside a scene.
 inline std::vector<int64_t> sceneChoices(const NarrativeWorld& w,const NarrativeState& s){
     std::vector<int64_t> out;auto n=w.nodes.find(s.node);if(!s.inScene||n==w.nodes.end())return out;
-    for(const auto& c:n->second.choices)if(sceneChoiceAllowed(w,s,c))out.push_back(c.id);std::sort(out.begin(),out.end());return out;
+    for(const auto& c:n->second.choices)if(sceneChoiceAllowed(w,s,c))out.push_back(c.id);
+    std::sort(out.begin(),out.end());
+    return out;
 }
 inline bool lineRead(const NarrativeState& s,int64_t node){auto it=s.read.find(node);return it!=s.read.end()&&it->second>0;}
 // Skip-read: the current line is linear and was already read before this visit.
@@ -322,7 +339,8 @@ inline std::optional<uint32_t> autoAdvanceTick(const NarrativeWorld& w,const Nar
 
 // Fresh state: every fact at its initial value (overrides must be in domain), every meter at its initial value.
 inline std::optional<NarrativeState> beginNarrative(const NarrativeWorld& w,const NarrativeConfig& c,const std::map<int64_t,int64_t>& overrides={}){
-    if(!valid(w)||!valid(c))return {};NarrativeState s;
+    if(!valid(w)||!valid(c))return {};
+    NarrativeState s;
     for(const auto& [id,f]:w.facts)s.facts[id]=f.initial;
     for(auto [id,v]:overrides){auto f=w.facts.find(id);if(f==w.facts.end()||!scene_detail::inDomain(f->second,v))return {};s.facts[id]=v;}
     for(const auto& [id,ch]:w.characters)for(std::size_t m=0;m<kSocialMeterCount;++m)s.meters[{id,int64_t(m)}]=ch.meters[m].initial;
@@ -348,7 +366,12 @@ inline bool apply(Step& st,std::span<const SceneEffect> list,int64_t source){
         case K::SetFact:case K::AddFact:{
             auto f=st.w.facts.find(e.subject);auto v=s.facts.find(e.subject);if(f==st.w.facts.end()||v==s.facts.end())return false;
             int64_t old=v->second,now=e.kind==K::SetFact?e.value:clampAdd(old,e.value,f->second.minimum,f->second.maximum);
-            if(!inDomain(f->second,now))return false;if(now!=old){v->second=now;event(st,NarrativeEventKind::FactChanged,e.subject,0,now,old);}break;}
+            if(!inDomain(f->second,now))return false;
+            if(now!=old){
+                v->second=now;
+                event(st,NarrativeEventKind::FactChanged,e.subject,0,now,old);
+            }
+            break;}
         case K::SetMeter:case K::AddMeter:{
             auto c=st.w.characters.find(e.character);auto v=s.meters.find({e.character,int64_t(e.meter)});if(c==st.w.characters.end()||v==s.meters.end())return false;
             const auto& r=c->second.meters[uint8_t(e.meter)];int64_t old=v->second,now=e.kind==K::SetMeter?std::clamp(e.value,r.minimum,r.maximum):clampAdd(old,e.value,r.minimum,r.maximum);
@@ -363,7 +386,8 @@ inline bool apply(Step& st,std::span<const SceneEffect> list,int64_t source){
             s.pending.push_back({e.subject,e.byScene,due,s.nextSeq++,source});event(st,NarrativeEventKind::ConsequenceScheduled,e.subject,0,due,e.byScene);break;}
         case K::Cancel:{
             auto before=s.pending.size();std::erase_if(s.pending,[&](const PendingConsequence& p){return p.consequence==e.subject;});
-            if(before!=s.pending.size())event(st,NarrativeEventKind::ConsequenceCancelled,e.subject,0,int64_t(before-s.pending.size()));break;}
+            if(before!=s.pending.size())event(st,NarrativeEventKind::ConsequenceCancelled,e.subject,0,int64_t(before-s.pending.size()));
+            break;}
         default:return false;
         }
     }return true;
@@ -411,12 +435,14 @@ inline bool command(Step& st,const NarrativeCommand& cmd){
         event(st,NarrativeEventKind::ChoiceTaken,c->id,n->second.speaker,s.node);cues(st,c->cues,CueSource::Choice,s.node,c->id,n->second.speaker);
         return apply(st,c->effects,s.node)&&go(st,c->next);}
     case C::SetAuto:case C::SetSkip:{
-        if(cmd.value!=0&&cmd.value!=1)return false;bool& mode=cmd.kind==C::SetAuto?s.autoMode:s.skipMode;
+        if(cmd.value!=0&&cmd.value!=1)return false;
+        bool& mode=cmd.kind==C::SetAuto?s.autoMode:s.skipMode;
         if(mode!=(cmd.value==1)){mode=cmd.value==1;event(st,NarrativeEventKind::ModeChanged,cmd.kind==C::SetAuto?0:1,0,cmd.value);}return true;}
     }return false;
 }
 inline bool better(const SceneBark& a,const BarkMemory& m,const SceneBark* b){
-    if(!b)return true;if(a.priority!=b->priority)return a.priority>b->priority;
+    if(!b)return true;
+    if(a.priority!=b->priority)return a.priority>b->priority;
     auto la=m.lastBark.find(a.id),lb=m.lastBark.find(b->id);
     if((la==m.lastBark.end())!=(lb==m.lastBark.end()))return la==m.lastBark.end();         // never spoken first
     if(la!=m.lastBark.end()&&la->second!=lb->second)return la->second<lb->second;         // then least recently spoken
@@ -432,7 +458,8 @@ inline void barks(Step& st,std::vector<BarkRequest> requests){
             auto last=s.barks.lastBark.find(id);uint32_t cooldown=b.cooldown<0?st.c.barkCooldownTicks:uint32_t(b.cooldown);
             if(last!=s.barks.lastBark.end()&&st.tick-last->second<cooldown)continue;
             auto spoke=s.barks.lastSpeaker.find(b.speaker);if(spoke!=s.barks.lastSpeaker.end()&&st.tick-spoke->second<st.c.speakerCooldownTicks)continue;
-            if(!sceneConditions(st.w,s,b.conditions)||!better(b,s.barks,best))continue;best=&b;
+            if(!sceneConditions(st.w,s,b.conditions)||!better(b,s.barks,best))continue;
+            best=&b;
         }
         if(!best){event(st,NarrativeEventKind::BarkNone,q.id,0,q.trigger);continue;}
         s.barks.lastBark[best->id]=st.tick;s.barks.lastSpeaker[best->speaker]=st.tick;auto& count=s.barks.counts[best->id];if(count<std::numeric_limits<int64_t>::max())++count;

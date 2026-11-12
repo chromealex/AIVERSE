@@ -21,7 +21,9 @@ inline void keys(const Json& j,const std::string& path,std::initializer_list<std
     for(const auto& [key,value]:j.members()){(void)value;if(std::find(names.begin(),names.end(),std::string_view(key))==names.end())fail(path,"unknown key '"+key+"'");}
 }
 inline int64_t integer(const Json& j,const std::string& path){
-    if(!j.isNumber())fail(path,"expected integer");const auto& text=j.numberLiteral();int64_t value=0;
+    if(!j.isNumber())fail(path,"expected integer");
+    const auto& text=j.numberLiteral();
+    int64_t value=0;
     auto parsed=std::from_chars(text.data(),text.data()+text.size(),value);if(parsed.ec!=std::errc{}||parsed.ptr!=text.data()+text.size())fail(path,"invalid integer");return value;
 }
 inline int64_t integer(const Json& parent,const char* key,const std::string& path,int64_t fallback){return parent.has(key)?integer(parent[key],sub(path,key)):fallback;}
@@ -30,7 +32,9 @@ inline uint32_t ticks(const Json& parent,const char* key,const std::string& path
     auto v=integer(parent,key,path,fallback);if(v<0||v>int64_t(kSceneMaxTicks))fail(sub(path,key),"expected 0..10000000 ticks");return uint32_t(v);
 }
 inline bool boolean(const Json& parent,const char* key,const std::string& path,bool fallback){
-    if(!parent.has(key))return fallback;if(parent[key].type()!=Json::Type::Bool)fail(sub(path,key),"expected bool");return parent[key].boolean();
+    if(!parent.has(key))return fallback;
+    if(parent[key].type()!=Json::Type::Bool)fail(sub(path,key),"expected bool");
+    return parent[key].boolean();
 }
 inline std::string text(const Json& parent,const char* key,const std::string& path,bool required=true){
     if(!parent.has(key)){if(required)fail(sub(path,key),"required localization key");return {};}
@@ -38,7 +42,8 @@ inline std::string text(const Json& parent,const char* key,const std::string& pa
 }
 inline const std::vector<Json>& array(const Json& parent,const char* key,const std::string& path,std::size_t maximum){
     static const std::vector<Json> none;if(!parent.has(key))return none;const auto& j=parent[key];
-    if(!j.isArray()||j.size()>maximum)fail(sub(path,key),"expected array of at most "+std::to_string(maximum));return j.items();
+    if(!j.isArray()||j.size()>maximum)fail(sub(path,key),"expected array of at most "+std::to_string(maximum));
+    return j.items();
 }
 inline std::vector<int64_t> ids(const Json& parent,const char* key,const std::string& path,bool allowZero){
     std::vector<int64_t> out;const auto& list=array(parent,key,path,kSceneMaxParticipants);
@@ -55,8 +60,10 @@ struct Reader {
     int64_t factValue(const SceneFactDef& f,const Json& j,const std::string& path){
         if(j.type()==Json::Type::Bool){if(f.type!=SceneFactType::Bool)fail(path,"bool value for a non-bool fact");return j.boolean()?1:0;}
         if(j.isString()){
-            if(f.type!=SceneFactType::Enum)fail(path,"named value for a non-enum fact");auto it=std::find(f.values.begin(),f.values.end(),j.str());
-            if(it==f.values.end())fail(path,"unknown enum value '"+j.str()+"'");return int64_t(it-f.values.begin());
+            if(f.type!=SceneFactType::Enum)fail(path,"named value for a non-enum fact");
+            auto it=std::find(f.values.begin(),f.values.end(),j.str());
+            if(it==f.values.end())fail(path,"unknown enum value '"+j.str()+"'");
+            return int64_t(it-f.values.begin());
         }
         auto v=integer(j,path);if(v<f.minimum||v>f.maximum)fail(path,"outside the fact's domain");return v;
     }
@@ -65,16 +72,21 @@ struct Reader {
         fail(path,"expected affinity, trust or fear");
     }
     static SceneCompare op(const Json& parent,const std::string& path,SceneCompare fallback){
-        if(!parent.has("op"))return fallback;const auto& j=parent["op"];
+        if(!parent.has("op"))return fallback;
+        const auto& j=parent["op"];
         static constexpr std::pair<std::string_view,SceneCompare> ops[]{{"eq",SceneCompare::Eq},{"ne",SceneCompare::Ne},{"lt",SceneCompare::Lt},{"le",SceneCompare::Le},
             {"gt",SceneCompare::Gt},{"ge",SceneCompare::Ge},{"between",SceneCompare::Between}};
-        if(j.isString())for(auto [name,value]:ops)if(name==j.str())return value;fail(sub(path,"op"),"expected eq, ne, lt, le, gt, ge or between");
+        if(j.isString())for(auto [name,value]:ops)if(name==j.str())return value;
+        fail(sub(path,"op"),"expected eq, ne, lt, le, gt, ge or between");
     }
     // value / min+max for a comparison; `read` parses one operand.
     template<class Read> void operands(const Json& j,const std::string& path,SceneCondition& c,std::optional<int64_t> fallback,Read read){
         if(c.op==SceneCompare::Between){
-            if(j.has("value")||!j.has("min")||!j.has("max"))fail(path,"between needs min and max");c.value=read(j["min"],sub(path,"min"));c.value2=read(j["max"],sub(path,"max"));
-            if(c.value>c.value2)fail(path,"min exceeds max");return;
+            if(j.has("value")||!j.has("min")||!j.has("max"))fail(path,"between needs min and max");
+            c.value=read(j["min"],sub(path,"min"));
+            c.value2=read(j["max"],sub(path,"max"));
+            if(c.value>c.value2)fail(path,"min exceeds max");
+            return;
         }
         if(j.has("min")||j.has("max"))fail(path,"min/max need op between");
         if(j.has("value"))c.value=read(j["value"],sub(path,"value"));else if(fallback)c.value=*fallback;else fail(sub(path,"value"),"required");
@@ -111,13 +123,15 @@ struct Reader {
     }
     std::vector<SceneCondition> conditions(const Json& parent,const std::string& path){
         std::vector<SceneCondition> out;const auto& list=array(parent,"conditions",path,kSceneMaxTerms);
-        for(std::size_t i=0;i<list.size();++i)out.push_back(condition(list[i],idx(sub(path,"conditions"),i),1));return out;
+        for(std::size_t i=0;i<list.size();++i)out.push_back(condition(list[i],idx(sub(path,"conditions"),i),1));
+        return out;
     }
     SceneEffect effect(const Json& j,const std::string& path){
         using K=SceneEffectKind;if(!j.isObject())fail(path,"expected effect object");SceneEffect e;
         if(j.has("meter")){
             keys(j,path,{"meter","character","add","set"});e.meter=meter(j["meter"],sub(path,"meter"));e.character=id(j,path,"character");
-            if(j.has("add")==j.has("set"))fail(path,"expected exactly one of add, set");e.kind=j.has("add")?K::AddMeter:K::SetMeter;
+            if(j.has("add")==j.has("set"))fail(path,"expected exactly one of add, set");
+            e.kind=j.has("add")?K::AddMeter:K::SetMeter;
             e.value=integer(j[j.has("add")?"add":"set"],sub(path,j.has("add")?"add":"set"));return e;
         }
         if(j.has("key")){
@@ -147,7 +161,8 @@ struct Reader {
     }
     std::vector<SceneEffect> effects(const Json& parent,const char* key,const std::string& path){
         std::vector<SceneEffect> out;const auto& list=array(parent,key,path,kSceneMaxList);
-        for(std::size_t i=0;i<list.size();++i)out.push_back(effect(list[i],idx(sub(path,key),i)));return out;
+        for(std::size_t i=0;i<list.size();++i)out.push_back(effect(list[i],idx(sub(path,key),i)));
+        return out;
     }
     static std::vector<SceneCue> cues(const Json& parent,const std::string& path){
         std::vector<SceneCue> out;const auto& list=array(parent,"cues",path,kNarrativeSceneMaxCues);
@@ -176,9 +191,14 @@ inline NarrativeWorld readNarrativeWorld(const Json& j,const NarrativeConfig& de
             f.minimum=integer(x,"min",p,0);f.maximum=integer(x,"max",p,1000000000);if(f.minimum>f.maximum)fail(p,"min exceeds max");
             f.initial=integer(x,"initial",p,f.minimum<=0&&f.maximum>=0?0:f.minimum);if(f.initial<f.minimum||f.initial>f.maximum)fail(sub(p,"initial"),"outside min..max");
         }else if(type=="bool"){
-            if(x.has("min")||x.has("max")||x.has("values"))fail(p,"bool facts have no min/max/values");f.type=SceneFactType::Bool;f.maximum=1;f.initial=boolean(x,"initial",p,false);
+            if(x.has("min")||x.has("max")||x.has("values"))fail(p,"bool facts have no min/max/values");
+            f.type=SceneFactType::Bool;
+            f.maximum=1;
+            f.initial=boolean(x,"initial",p,false);
         }else if(type=="enum"){
-            if(x.has("min")||x.has("max"))fail(p,"enum facts have no min/max");f.type=SceneFactType::Enum;const auto& values=array(x,"values",p,kSceneMaxEnumValues);
+            if(x.has("min")||x.has("max"))fail(p,"enum facts have no min/max");
+            f.type=SceneFactType::Enum;
+            const auto& values=array(x,"values",p,kSceneMaxEnumValues);
             if(values.empty())fail(sub(p,"values"),"expected 1..256 names");
             for(std::size_t k=0;k<values.size();++k){
                 if(!values[k].isString()||values[k].str().empty())fail(idx(sub(p,"values"),k),"expected nonempty name");
@@ -196,7 +216,11 @@ inline NarrativeWorld readNarrativeWorld(const Json& j,const NarrativeConfig& de
         if(x.has("meters")){
             keys(x["meters"],sub(p,"meters"),{"affinity","trust","fear"});
             for(auto [name,m]:{std::pair{"affinity",SocialMeter::Affinity},std::pair{"trust",SocialMeter::Trust},std::pair{"fear",SocialMeter::Fear}}){
-                if(!x["meters"].has(name))continue;auto q=sub(sub(p,"meters"),name);const auto& raw=x["meters"][name];keys(raw,q,{"min","max","initial"});auto& range=c.meters[uint8_t(m)];
+                if(!x["meters"].has(name))continue;
+                auto q=sub(sub(p,"meters"),name);
+                const auto& raw=x["meters"][name];
+                keys(raw,q,{"min","max","initial"});
+                auto& range=c.meters[uint8_t(m)];
                 range.minimum=integer(raw,"min",q,range.minimum);range.maximum=integer(raw,"max",q,range.maximum);range.initial=integer(raw,"initial",q,std::clamp(range.initial,range.minimum,std::max(range.minimum,range.maximum)));
                 if(!meterRangeOk(range))fail(q,"requires min <= initial <= max within +-1000000000");
             }
@@ -208,7 +232,8 @@ inline NarrativeWorld readNarrativeWorld(const Json& j,const NarrativeConfig& de
     const auto& chapters=array(j,"chapters","",kSceneMaxChapters);
     for(std::size_t i=0;i<chapters.size();++i){
         const auto& x=chapters[i];auto p=idx("chapters",i);keys(x,p,{"id","act","titleKey"});SceneChapter c{id(x,p),integer(x,"act",p,1),text(x,"titleKey",p)};
-        if(c.act<1||c.act>1000000)fail(sub(p,"act"),"must be 1..1000000");insertUnique(w.chapters,std::move(c),p,"chapter");
+        if(c.act<1||c.act>1000000)fail(sub(p,"act"),"must be 1..1000000");
+        insertUnique(w.chapters,std::move(c),p,"chapter");
     }
     if(j.has("initialChapter"))w.initialChapter=id(j,"","initialChapter");
     if(!j.has("nodes")&&!j.has("barks"))fail("nodes","required");
@@ -230,7 +255,8 @@ inline NarrativeWorld readNarrativeWorld(const Json& j,const NarrativeConfig& de
                 n.choices.push_back(std::move(c));
             }
         }
-        if(!first)first=n.id;insertUnique(w.nodes,std::move(n),p,"node");
+        if(!first)first=n.id;
+        insertUnique(w.nodes,std::move(n),p,"node");
     }
     const auto& scenes=array(j,"scenes","",kNarrativeMaxScenes);
     for(std::size_t i=0;i<scenes.size();++i){

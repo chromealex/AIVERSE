@@ -13,7 +13,9 @@ struct RopeDef {int64_t id=0;Fixed length=4_fx;uint32_t segments=8;Fixed particl
 using RopeDefs=std::map<int64_t,RopeDef>;
 inline bool valid(const RopeEnd& e){
     if(uint8_t(e.anchor)>uint8_t(RopeAnchor::Load)||!physBounded(e.point))return false;
-    if(e.anchor==RopeAnchor::Body&&e.body<=0)return false;if(e.anchor==RopeAnchor::Load&&(e.mass<=Fixed{}||e.mass>kPhysMaxMass))return false;return true;
+    if(e.anchor==RopeAnchor::Body&&e.body<=0)return false;
+    if(e.anchor==RopeAnchor::Load&&(e.mass<=Fixed{}||e.mass>kPhysMaxMass))return false;
+    return true;
 }
 inline bool valid(const RopeDef& d){
     return d.id>0&&d.length>Fixed{}&&d.length<=kPhysMaxExtent&&d.segments>=1&&d.segments<=kPhysMaxSegments&&d.particleMass>=Fixed::fromRatio(1,1000)&&d.particleMass<=kPhysMaxMass
@@ -35,16 +37,28 @@ struct RopeReport {std::vector<RopeStatus> ropes;std::vector<InteractionEvent> e
 inline bool ropePinned(const RopeEnd& e){return e.anchor==RopeAnchor::Point||e.anchor==RopeAnchor::Body;}
 // Points interpolated from a to b (the solver straightens or slackens them from the first tick).
 inline std::optional<RopeInstance> makeRope(const RopeDef& d,Vec3 a,Vec3 b){
-    if(!valid(d)||!physBounded(a)||!physBounded(b))return std::nullopt;RopeInstance r;r.a=d.a;r.b=d.b;
-    if(d.a.anchor==RopeAnchor::Point)a=d.a.point;if(d.b.anchor==RopeAnchor::Point)b=d.b.point;
-    for(uint32_t i=0;i<=d.segments;++i)r.points.push_back(a+(b-a)*Fixed::fromRatio(i,d.segments));r.velocities.assign(r.points.size(),Vec3{});return r;
+    if(!valid(d)||!physBounded(a)||!physBounded(b))return std::nullopt;
+    RopeInstance r;
+    r.a=d.a;
+    r.b=d.b;
+    if(d.a.anchor==RopeAnchor::Point)a=d.a.point;
+    if(d.b.anchor==RopeAnchor::Point)b=d.b.point;
+    for(uint32_t i=0;i<=d.segments;++i)r.points.push_back(a+(b-a)*Fixed::fromRatio(i,d.segments));
+    r.velocities.assign(r.points.size(),Vec3{});
+    return r;
 }
 inline bool valid(const RopeInstance& r,const RopeDef& d){
     if(r.points.size()!=d.segments+1||r.velocities.size()!=r.points.size()||!valid(r.a)||!valid(r.b)||r.tension<Fixed{})return false;
-    for(std::size_t i=0;i<r.points.size();++i)if(!physBounded(r.points[i])||!physBounded(r.velocities[i],kPhysMaxSpeed))return false;return true;
+    for(std::size_t i=0;i<r.points.size();++i)if(!physBounded(r.points[i])||!physBounded(r.velocities[i],kPhysMaxSpeed))return false;
+    return true;
 }
 inline bool valid(const RopeState& s,const RopeDefs& defs){
-    if(s.ropes.size()>kPhysMaxObjects)return false;for(const auto& [id,r]:s.ropes){auto d=defs.find(id);if(d==defs.end()||!valid(r,d->second))return false;}return true;
+    if(s.ropes.size()>kPhysMaxObjects)return false;
+    for(const auto& [id,r]:s.ropes){
+        auto d=defs.find(id);
+        if(d==defs.end()||!valid(r,d->second))return false;
+    }
+    return true;
 }
 inline Fixed ropeInverseMass(const RopeDef& d,const RopeEnd& e){
     switch(e.anchor){case RopeAnchor::Point:case RopeAnchor::Body:return {};case RopeAnchor::Load:return 1_fx/e.mass;default:return 1_fx/d.particleMass;}
