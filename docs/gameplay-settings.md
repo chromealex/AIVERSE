@@ -342,6 +342,104 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | cinematic | qteMashScaleMilli | integer | 1000 | 100..10000 |
 | cinematic | qteHoldScaleMilli | integer | 1000 | 100..10000 |
 | cinematic | qteAutoSucceed | boolean | false |  |
+| cardGame | startingHand | integer | 4 | 0..20 |
+| cardGame | maxHand | integer | 10 | 1..20 |
+| cardGame | startingHealth | integer | 20 | 1..1000000 |
+| cardGame | turnLimit | integer | 60 | 0..100000 |
+| cardGame | botNodeBudget | integer | 256 | 1..100000 |
+| cardGame | botDepth | integer | 2 | 1..4 |
+| tactics | roundLimit | integer | 30 | 0..100000 |
+| tactics | halfCoverMilli | integer | 200 | 0..1000 |
+| tactics | fullCoverMilli | integer | 400 | 0..1000 |
+| tactics | flankBonusMilli | integer | 150 | 0..1000 |
+| tactics | rangePenaltyMilli | integer | 40 | 0..1000 |
+| tactics | overwatchPenaltyMilli | integer | 150 | 0..1000 |
+| tactics | minHitMilli | integer | 50 | 0..1000 |
+| tactics | maxHitMilli | integer | 950 | 0..1000 |
+| tactics | coverCosMilli | integer | 707 | 0..1000 |
+| tactics | botSearchBudget | integer | 512 | 1..100000 |
+| vehicles | maxEnterSpeedMilli | integer | 2000 | 0..1000000 |
+| vehicles | maxExitSpeedMilli | integer | 3000 | 0..1000000 |
+| vehicles | raceLaps | integer | 3 | 1..1000 |
+| vehicles | wrongWayTicks | integer | 45 | 1..100000 |
+| vehicles | wrongWaySpeedMilli | integer | 2000 | 0..1000000 |
+| vehicles | respawnWrongWayTicks | integer | 240 | 0..100000 |
+| vehicles | stuckSpeedMilli | integer | 500 | 0..1000000 |
+| vehicles | stuckTicks | integer | 0 | 0..100000 |
+| vehicles | botLookaheadMilli | integer | 6000 | 0..1000000 |
+| vehicles | botLookaheadTimeMilli | integer | 350 | 0..10000 |
+| vehicles | botMaxSpeedMilli | integer | 60000 | 1..1000000 |
+| vehicles | botCornerAccelMilli | integer | 9000 | 1..1000000 |
+| vehicles | botBrakeDecelMilli | integer | 8000 | 1..1000000 |
+| vehicles | botBrakeHorizonMilli | integer | 90000 | 0..10000000 |
+| vehicles | botSteerGainMilli | integer | 1500 | 0..100000 |
+| vehicles | botLaneOffsetMilli | integer | 2500 | 0..100000 |
+| vehicles | botOvertakeDistanceMilli | integer | 14000 | 0..1000000 |
+| vehicles | botSkillMilli | integer | 1000 | 100..2000 |
+| vehicles | botRubberBandMilli | integer | 0 | 0..500 |
+| sports | periods | integer | 2 | 1..16 |
+| sports | periodTicks | integer | 2700 | 1..100000000 |
+| sports | overtimeTicks | integer | 0 | 0..100000000 |
+| sports | restartDelayTicks | integer | 45 | 0..100000 |
+| sports | maxStoppageTicks | integer | 600 | 0..100000000 |
+| sports | clockMode | integer | 0 | 0..2 |
+| sports | swapEnds | boolean | true |  |
+| sports | goldenGoal | boolean | true |  |
+| sports | pickupRadiusMilli | integer | 700 | 1..100000 |
+| sports | controlSpeedMilli | integer | 14000 | 0..200000 |
+| sports | frictionMilli | integer | 5000 | 0..1000000 |
+| sports | tackleRangeMilli | integer | 1400 | 0..100000 |
+| sports | tackleBaseMilli | integer | 450 | 0..1000 |
+| sports | interceptMilli | integer | 650 | 0..1000 |
+| sports | behindFoulMilli | integer | 500 | 0..1000 |
+| sports | failFoulMilli | integer | 120 | 0..1000 |
+| sports | tackleCooldownTicks | integer | 40 | 0..100000 |
+| sports | possessionLockTicks | integer | 20 | 0..100000 |
+| sports | kickLockTicks | integer | 12 | 0..100000 |
+| sports | passSpeedMinMilli | integer | 7000 | 1..200000 |
+| sports | passSpeedMaxMilli | integer | 18000 | 1..200000 |
+| sports | shotSpeedMinMilli | integer | 12000 | 1..200000 |
+| sports | shotSpeedMaxMilli | integer | 26000 | 1..200000 |
+| sports | passErrorMilli | integer | 30 | 0..250 |
+| sports | shotErrorMilli | integer | 40 | 0..250 |
+| sports | botShootRangeMilli | integer | 12000 | 0..1000000 |
+| sports | botTackleMilli | integer | 300 | 0..1000 |
+| sports | botReactionTicks | integer | 6 | 0..3600 |
+| sports | botDecisionTicks | integer | 6 | 1..3600 |
+| colony | ticksPerHour | integer | 60 | 1..1000000 |
+| colony | moodBase | integer | 0 | -100000..100000 |
+| colony | moodBreakAt | integer | -60000 | -100000..100000 |
+| colony | moodLowAt | integer | -20000 | -100000..100000 |
+| colony | moodHighAt | integer | 40000 | -100000..100000 |
+| colony | breakTicks | integer | 120 | 1..10000000 |
+| colony | lowSpeedMilli | integer | 700 | 0..100000 |
+| colony | contentSpeedMilli | integer | 1000 | 0..100000 |
+| colony | highSpeedMilli | integer | 1200 | 0..100000 |
+| colony | maxResponseJobs | integer | 64 | 1..1024 |
+| survival | coreNormalMilli | integer | 37000 | 30000..42000 |
+| survival | comfortLowMilli | integer | 16000 | -50000..60000 |
+| survival | comfortHighMilli | integer | 27000 | -50000..60000 |
+| survival | coolingMicro | integer | 40 | 0..1000000 |
+| survival | heatingMicro | integer | 30 | 0..1000000 |
+| survival | recoveryMicro | integer | 2000 | 0..1000000 |
+| survival | coldMilli | integer | 35500 | 20000..45000 |
+| survival | severeColdMilli | integer | 33000 | 20000..45000 |
+| survival | hotMilli | integer | 38500 | 30000..45000 |
+| survival | severeHotMilli | integer | 40000 | 30000..45000 |
+| survival | hungerPerTick | integer | 8 | 0..100000 |
+| survival | thirstPerTick | integer | 12 | 0..100000 |
+| survival | staminaDrain | integer | 600 | 0..100000 |
+| survival | staminaRegen | integer | 300 | 0..100000 |
+| survival | lowAt | integer | 25000 | 0..100000 |
+| survival | wetChillMilli | integer | 8000 | 0..100000 |
+| survival | dryPerTick | integer | 40 | 0..100000 |
+| survival | starveDamage | integer | 20 | 0..100000 |
+| survival | thirstDamage | integer | 30 | 0..100000 |
+| survival | coldDamage | integer | 30 | 0..100000 |
+| survival | heatDamage | integer | 30 | 0..100000 |
+| survival | conditionRegen | integer | 10 | 0..100000 |
+| survival | windChillMilli | integer | 600 | 0..10000 |
+| survival | wetPerTick | integer | 200 | 0..100000 |
 
 ## Cross-field constraints
 
@@ -380,3 +478,13 @@ Constraint: `narrative.meterMinimum <= narrative.meterInitial` (checked by loade
 Constraint: `narrative.meterInitial <= narrative.meterMaximum` (checked by loader and CLI).
 Constraint: `interaction.throwMinImpulseMilli <= interaction.throwMaxImpulseMilli` (checked by loader and CLI).
 Constraint: `cinematic.slowMotionNumerator <= cinematic.slowMotionDenominator` (checked by loader and CLI).
+Constraint: `cardGame.startingHand <= cardGame.maxHand` (checked by loader and CLI).
+Constraint: `tactics.halfCoverMilli <= tactics.fullCoverMilli` (checked by loader and CLI).
+Constraint: `tactics.minHitMilli <= tactics.maxHitMilli` (checked by loader and CLI).
+Constraint: `sports.passSpeedMinMilli <= sports.passSpeedMaxMilli` (checked by loader and CLI).
+Constraint: `sports.shotSpeedMinMilli <= sports.shotSpeedMaxMilli` (checked by loader and CLI).
+Constraint: `colony.moodBreakAt <= colony.moodLowAt` (checked by loader and CLI).
+Constraint: `colony.moodLowAt <= colony.moodHighAt` (checked by loader and CLI).
+Constraint: `survival.comfortLowMilli <= survival.comfortHighMilli` (checked by loader and CLI).
+Constraint: `survival.severeColdMilli <= survival.coldMilli` (checked by loader and CLI).
+Constraint: `survival.hotMilli <= survival.severeHotMilli` (checked by loader and CLI).

@@ -280,7 +280,7 @@ void Catalog::mergeObject(const Json& obj, const std::string& prefix) {
             entries_[key] = std::move(e);
         } else if (isPluralObject(v)) {
             Entry e; e.plural = true;
-            for (auto& [pk, pv] : v.members()) { Plural p; parsePlural(pk, p); e.forms[int(p)] = pv.str(); }
+            for (auto& [pk, pv] : v.members()) { Plural p = Plural::Other; if (!parsePlural(pk, p)) continue; e.forms[int(p)] = pv.str(); }
             e.text = e.forms[int(Plural::Other)];
             entries_[key] = std::move(e);
         } else if (v.isObject()) {

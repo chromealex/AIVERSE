@@ -1,19 +1,18 @@
-# Общие C++20 библиотеки AIVERSE
+# AIVERSE shared C++20 libraries
 
-Каталог: `libraries/catalog.json`. Репозиторные инструкции AI:
-`skills/*/SKILL.md`. Эти инструкции не являются установленными персональными
-скиллами ChatGPT. Пакеты не зависят от Lua.
+Catalog: `libraries/catalog.json`. Repository AI instructions: `skills/*/SKILL.md`. These instructions are not
+installed personal skills of any assistant. The packages do not depend on Lua.
 
-## Подключение из native конкретной игры
+## Using them from a game's native code
 
-В `<project>/native/CMakeLists.txt`:
+In `<project>/native/CMakeLists.txt`:
 
 ```cmake
 aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp)
 target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 ```
 
-В `<project>/native/MyGame.cpp`:
+In `<project>/native/MyGame.cpp`:
 
 ```cpp
 #include "modules/rts/RtsNative.h"
@@ -24,72 +23,66 @@ target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 // if (route) state.values["distance"] = static_cast<int64_t>(route->distance[2]);
 ```
 
-Target определён до чтения CMake игрового проекта. Он передаёт include directory
-и требование C++20. Не нужны относительные пути к внутренним папкам движка,
-изменение его исходников или подключение Lua. Библиотеки header-only; методы inline
-и шаблоны допускают несколько translation units. Сам target не связывает игровой
-проект с renderer, platform или sim. В NativeModule уже доступны API самого движка.
+The target is defined before the game project's CMake is read. It provides the include directory and the C++20
+requirement. No relative paths into the engine's internal folders, no changes to its sources and no Lua are needed.
+The libraries are header-only; inline methods and templates allow several translation units. The target itself does
+not link the game project with the renderer, platform or sim. The engine's own API is already available in a NativeModule.
 
-Готовый пример: скопировать **содержимое** `examples/native/libraries/` в `native/`
-своего проекта; добавить в rules.json:
+Ready example: copy the **contents** of `examples/native/libraries/` into your project's `native/` and add to rules.json:
 
 ```json
 "nativeModules": [{"id": "library_demo"}]
 ```
 
-Пример использует BFS, оплату рецепта и FSM, хранит состояние только в NativeState.
-После добавления C++ пересоберите проектный редактор/клиент/headless штатным механизмом.
+The example uses BFS, recipe payment and an FSM, and keeps its state only in NativeState. After adding C++, rebuild
+the project's editor/client/headless with the standard mechanism.
 
-При экспорте iOS/Android/Windows `aiversebuild` переносит `libraries/` вместе с остальными
-исходниками движка; native CMake работает и в перемещённой копии. Тест проверяет
-эту структуру на хосте, а не сборку всеми SDK целевых платформ.
+When exporting for iOS/Android/Windows, `aiversebuild` carries `libraries/` along with the rest of the engine sources;
+native CMake works in the relocated copy too. The test checks this layout on the host, not builds with every target
+platform SDK.
 
-Для отдельной утилиты вне движка:
+For a standalone tool outside the engine:
 
 ```cmake
 add_subdirectory(/path/to/AIVERSE/libraries rts-libraries)
 target_link_libraries(my_tool PRIVATE AIVERSE::libraries)
 ```
 
-В игровом native проекте повторно add_subdirectory вызывать не нужно.
+In a game's native project there is no need to call add_subdirectory again.
 
-## API версии 0.2.0
+## API version 0.2.0
 
-Namespace: `aiverse::lib`; визуальные функции: `aiverse::lib::presentation`.
-Индексы вершин, ресурсов и клеток — с нуля. Ссылки на сущности движка не являются
-этими индексами: преобразовывайте их явно. Worker ID должен быть положительным.
+Namespace: `aiverse::lib`; visual functions: `aiverse::lib::presentation`. Vertex, resource and cell indices start
+at zero. Engine entity references are not these indices: convert them explicitly. A worker ID must be positive.
 
-| Header | Реализовано | Контракт |
+| Header | Implemented | Contract |
 |---|---|---|
-| Collections.h | Queue, topIndices | FIFO; top возвращает индексы, равные оценки сохраняют порядок входа |
-| Graphs.h | bfs, topological | Недостижимое = kUnreachable; неверный граф/цикл = nullopt |
-| Grid.h | gridDistance | Четыре соседа, маска uint8_t, -1 недостижимо; не более 262144 клеток |
-| Behavior.h | transition, choose | FSM: первый переход по (from,event); utility tie-break по меньшему ID |
-| Tasks.h | claim, releaseWorker, finish | Уникальные task IDs; приоритет, затем ID; повторный claim того же worker идемпотентен |
-| Rules.h | all, any | Чистые предикаты, короткое замыкание; пустые all=true и any=false |
-| Progression.h | weighted, level | Целочисленные веса, проверка переполнения; draw(total) возвращает 1..total |
-| Logistics.h | consume | Атомарная оплата, повторные ингредиенты суммируются; неверные данные не меняют stock |
-| Objectives.h | objectiveEvent | progress параллелен goals; событие завершения только при пересечении порога |
-| Presentation.h | smoothstep, lerp, timeline | float, только представление; неверное время = nullopt |
+| Collections.h | Queue, topIndices | FIFO; top returns indices, equal scores keep input order |
+| Graphs.h | bfs, topological | Unreachable = kUnreachable; an invalid graph/cycle = nullopt |
+| Grid.h | gridDistance | Four neighbours, uint8_t mask, -1 unreachable; at most 262144 cells |
+| Behavior.h | transition, choose | FSM: first transition by (from,event); utility tie-break by the smaller ID |
+| Tasks.h | claim, releaseWorker, finish | Unique task IDs; priority, then ID; a repeated claim by the same worker is idempotent |
+| Rules.h | all, any | Pure predicates, short-circuit; empty all=true and any=false |
+| Progression.h | weighted, level | Integer weights, overflow check; draw(total) returns 1..total |
+| Logistics.h | consume | Atomic payment, repeated ingredients are summed; invalid data does not change the stock |
+| Objectives.h | objectiveEvent | progress parallels goals; the completion event fires only when the threshold is crossed |
+| Presentation.h | smoothstep, lerp, timeline | float, presentation only; invalid time = nullopt |
 
-Операции не бросают намеренных исключений для неверных входов; возвращают false/nullopt.
-STL-выделение памяти может отказать как обычно. Эти foundational-алгоритмы не обещают
-zero-allocation: BFS O(V+E), grid O(W×H), top O(N log N), topology O((V+E) log V),
-claim O(N), consume выделяет O(число ресурсов). Для горячих путей нужны отдельные
-benchmark и варианты с caller-provided scratch buffer.
+Operations do not throw intentional exceptions for invalid input; they return false/nullopt. STL allocation can fail
+as usual. These foundational algorithms do not promise zero allocation: BFS O(V+E), grid O(W×H), top O(N log N),
+topology O((V+E) log V), claim O(N), consume allocates O(number of resources). Hot paths need separate benchmarks and
+variants with a caller-provided scratch buffer.
 
-## Состояние native-модуля
+## Native module state
 
-Библиотека не регистрирует компоненты ECS и не сериализует свои C++ объекты автоматически.
-Долгоживущие значения записывайте в `NativeState::values/arrays`; временные очереди,
-спаны, графы и Task-структуры восстанавливайте из этих данных при необходимости.
-Хранить изменяемый Queue/FSM/Task vector в полях NativeModule нельзя: он выпадет из rollback/hash.
-Встроенные ресурсы экономики меняйте через штатный engine API; consume предназначен
-для собственного целочисленного склада, а не скрытого дубликата stock движка.
-RNG передаётся явно через адаптер sim.rng(); не использовать системный random.
-Presentation.h не должен влиять на симуляцию.
+The library does not register ECS components and does not serialize its C++ objects automatically. Write long-lived
+values to `NativeState::values/arrays`; rebuild temporary queues, spans, graphs and Task structures from that data when
+needed. Keeping a mutable Queue/FSM/Task vector in NativeModule fields is not allowed: it would fall out of rollback/hash.
+Change built-in economy resources through the standard engine API; consume is meant for your own integer storage, not
+a hidden duplicate of the engine's stock. The RNG is passed explicitly through the sim.rng() adapter; do not use the
+system random. Presentation.h must not affect the simulation.
 
-## Каталог и фиксация версий
+## Catalog and version pinning
 
 ```sh
 python3 tools/libraries/catalog.py list
@@ -101,75 +94,71 @@ python3 tests/libraries/run.py
 python3 tests/libraries/native_consumer.py
 ```
 
-Lock schema 2 фиксирует версию и SHA-256 header/CMake (CRLF нормализуется в LF). Несовпадающий pin не заменяется
-автоматически. Это явная проверка CLI; сборщик пока не проверяет lock автоматически.
-Старый Lua lock schema 1 требует явной миграции. Новая версия не устанавливает Lua-файлы.
+Lock schema 2 pins the version and SHA-256 of the header/CMake (CRLF is normalized to LF). A mismatching pin is not
+replaced automatically. This is an explicit CLI check; the packager does not verify the lock automatically yet. The old
+Lua lock schema 1 requires an explicit migration. The new version does not install Lua files.
 
-## Что остаётся из полного каталога
+## What remains of the full catalog
 
-Каталог содержит 16 групп: 10 C++ foundations выше и 6 ссылок на существующие engine API
-(math, spatial, navigation, generation, ui-patterns, verification). Группа не означает
-полную реализацию всех перечисленных в обсуждении алгоритмов.
+The catalog has 16 groups: the 10 C++ foundations above and 6 references to existing engine APIs (math, spatial,
+navigation, generation, ui-patterns, verification). A group does not mean every algorithm mentioned in the discussion
+is fully implemented.
 
-Следующие расширения: heaps/bitsets/union-find; weighted paths/MST/flows; пакетные
-пространственные запросы; контуры/морфология; назначение позиций/резервирование;
-HFSM/BT/GOAP; зависимости задач; логистические заявки; формулы/модификаторы;
-разблокировки/гарантированные награды; ветвящиеся задания/диалоги;
-Poisson sampling; визуальные последовательности/пружины; UI widgets; массовый баланс-тест.
+Next extensions: heaps/bitsets/union-find; weighted paths/MST/flows; batched spatial queries; contours/morphology;
+position assignment/reservation; HFSM/BT/GOAP; task dependencies; logistics requests; formulas/modifiers;
+unlocks/guaranteed rewards; branching quests/dialogues; Poisson sampling; visual sequences/springs; UI widgets;
+mass balance testing.
 
-Сторонние кандидаты HFSM2, nanoflann, Tweeny, FastNoiseLite, meshoptimizer пока не включены.
-Перед интеграцией нужны pinned revision, разрешённая лицензия, адаптер и проверки.
-MCP library_* и автоматическая проверка lock в aiversebuild остаются отдельными задачами.
+Third-party candidates HFSM2, nanoflann, Tweeny, FastNoiseLite and meshoptimizer are not included yet. Integration
+requires a pinned revision, an approved license, an adapter and checks. MCP library_* and automatic lock checking in
+aiversebuild remain separate tasks.
 
-## Проверено в этой версии
+## Verified in this version
 
-На macOS/AppleClang: самостоятельная компиляция всех headers с -Wall -Wextra -Werror,
-C++ unit tests (Release), ASan/UBSan, внешний native object target через настоящий
-engine CMake и переносимый source-export layout. CLI pin/verify проверяет несовпадение.
-Сборка headless исправлена: C++ headers и helpers вынесены из extern "C" в RtsScriptIeee.cpp.
-Native-пример прошёл snapshot, serialized и fresh-serialized восстановление по 200 тиков;
-штатный check_headless_restore.py также прошёл. Все 26 шаблонов seed=3 завершились
-без аварий: 25 с победителем, fourages по лимиту 1800 игровых секунд без победителя.
-Полный aiverse_tests: 5771 проверка, 0 ошибок; сборка AppleClang без предупреждений.
-Проверки Windows, Metal, iOS, Android и web ещё не выполнены.
+On macOS/AppleClang: standalone compilation of all headers with -Wall -Wextra -Werror, C++ unit tests (Release),
+ASan/UBSan, an external native object target through the real engine CMake and the relocatable source-export layout.
+CLI pin/verify detects mismatches. The headless build was fixed: C++ headers and helpers moved out of extern "C" in
+RtsScriptIeee.cpp. The native example passed snapshot, serialized and fresh-serialized restoration over 200 ticks; the
+standard check_headless_restore.py passed too. All 26 templates with seed=3 finished without crashes: 25 with a winner,
+fourages hit the 1800 game-second limit without a winner. Full aiverse_tests: 5771 checks, 0 failures; the AppleClang
+build has no warnings. Windows, Metal, iOS, Android and web checks have not been run yet.
 
-## Игровые подсистемы
+## Gameplay subsystems
 
-Дополнительно доступны 14 пакетов C++/tools для управления, камер, строительства,
-способностей, инвентаря, отрядов, feedback, обучения, миграций, диагностики, контентных
-пайплайнов, проверок, рецептов и генерируемой конфигурации. См. `docs/gameplay-packages.md`.
+There are also 14 C++/tool packages for controls, cameras, construction, abilities, inventory, squads, feedback,
+tutorials, migrations, diagnostics, content pipelines, checks, recipes and generated configuration. See
+[gameplay-packages.md](gameplay-packages.md).
 
-Application-level C++ packages (UI, lifecycle, sessions, content, test/balance tools and recipes)
-are documented in [application-packages.md](application-packages.md). Check that page for exact
-coverage and host integration requirements before generating new code.
+Application-level C++ packages (UI, lifecycle, sessions, content, test/balance tools and recipes) are documented in
+[application-packages.md](application-packages.md). Check that page for exact coverage and host integration requirements
+before generating new code.
 
-Native generators, reference validation, bounded runtime utilities, state diagnostics and the
-end-to-end integration host are documented in [native-toolkit.md](native-toolkit.md).
+Native generators, reference validation, bounded runtime utilities, state diagnostics and the end-to-end integration
+host are documented in [native-toolkit.md](native-toolkit.md).
 
-Gameplay systems and adapters for existing modifiers/statuses, reservations, sequences, loot,
-curves and AI memory are documented in [gameplay-systems.md](gameplay-systems.md).
+Gameplay systems and adapters for existing modifiers/statuses, reservations, sequences, loot, curves and AI memory are
+documented in [gameplay-systems.md](gameplay-systems.md).
 
 ## Genre bots and automatic navigation mesh
 
-See [bots.md](bots.md) for RTS/FPS profiles, command-based native/host adapters, versioned checkpoints,
-automatic layered collision navmesh, region/agent limits, the mesh exporter and actual-match runner.
-Use [genre-mechanics-roadmap.md](genre-mechanics-roadmap.md) for the proposed cross-genre expansion.
+See [bots.md](bots.md) for RTS/FPS profiles, command-based native/host adapters, versioned checkpoints, automatic
+layered collision navmesh, region/agent limits, the mesh exporter and actual-match runner. Use
+[genre-mechanics-roadmap.md](genre-mechanics-roadmap.md) for the proposed cross-genre expansion.
 
 ## First cross-genre action/narrative batch
 
-See [genre-packages.md](genre-packages.md) for locomotion policies, melee combos, recoil/projectiles,
-round/capture rules and narrative graphs, with validated settings and native state codecs.
+See [genre-packages.md](genre-packages.md) for locomotion policies, melee combos, recoil/projectiles, round/capture
+rules and narrative graphs, with validated settings and native state codecs.
 
 ## Strategy runtime batch
 
-See [strategy-libraries.md](strategy-libraries.md) for initiative/reactions, card zones/priority,
-Sokoban/undo/solver, exact big integers, affine offline progress and production networks.
-All six packages provide agent skills and share `AIVERSE::strategy`.
-`examples/native/strategy` and `tests/libraries/strategy_native.py` exercise real native
-commands, save/restore and a relocated source-export build.
-[genre-implementation.json](genre-implementation.json) tracks the remaining audit scope.
+See [strategy-libraries.md](strategy-libraries.md) for initiative/reactions, card zones/priority, Sokoban/undo/solver,
+exact big integers, affine offline progress and production networks. All six packages provide agent skills and share
+`AIVERSE::strategy`. `examples/native/strategy` and `tests/libraries/strategy_native.py` exercise real native commands,
+save/restore and a relocated source-export build. [genre-implementation.json](genre-implementation.json) tracks the
+remaining audit scope.
 
-The subsequent strategy extension adds zone softlock proofs, rhythm timing, seeded runs
-and a bounded puzzle machine, each with its catalog skill and native restore scenario.
-Host-only [session admission and local network acceptance](local-network.md) supplies
-`AIVERSE::session` / `aiverse_native_use_session` and real HTTP/UDP acceptance tests.
+The subsequent strategy extension adds zone softlock proofs, rhythm timing, seeded runs and a bounded puzzle machine,
+each with its catalog skill and native restore scenario. Host-only [session admission and local network
+acceptance](local-network.md) supplies `AIVERSE::session` / `aiverse_native_use_session` and real HTTP/UDP acceptance
+tests.

@@ -99,3 +99,10 @@ With an editor listening on a separate port and the graph window visible, run
 `python3 tests/shader_graph/editor_smoke.py --port PORT --screenshots /tmp/graph-shots`.
 It checks GPU diagnostics after every node/domain combination, not only CPU generation.
 `shader_graph_preview_status` reports readiness and the current GPU diagnostic.
+
+## Starter material library
+
+Nine editable PBR presets and a safe project installer are documented in
+[the material library](../examples/shader_graph/material_library/README.md).
+The HDR test scene accepts `AIVERSE_MATERIAL_LIBRARY` to render their actual
+material graphs as a gallery on GL and Metal.

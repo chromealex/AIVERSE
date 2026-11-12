@@ -56,9 +56,9 @@ void Renderer3D::renderReflection() {
             dev_->drawIndexed(it.mesh->indexCount);
             ++drawCalls_;
         }
-        geometryMainView_ = false;
+        auxiliaryModelPass_ = true; geometryMainView_ = false;
         renderModels(1);
-        geometryMainView_ = true;
+        auxiliaryModelPass_ = false; geometryMainView_ = true;
         lights.drawHalos(viewProj_, false);   // lights glitter in the water; no ground decals
         lights.endReflection();
     }
@@ -88,7 +88,7 @@ void Renderer3D::renderSpotShadow() {
         dev_->drawIndexed(it.mesh->indexCount);
         ++drawCalls_;
     }
-    renderModels(0);
+    auxiliaryModelPass_ = true; renderModels(0); auxiliaryModelPass_ = false;
     dev_->endPass();
     lightViewProj_ = savedLVP;
     geometryShadowSize_=shadowSize_;

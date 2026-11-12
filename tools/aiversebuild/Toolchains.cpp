@@ -441,7 +441,9 @@ fs::path androidSdkRoot(const ToolEnv& env) {
     std::vector<fs::path> c;
     for (const char* v : {"ANDROID_HOME", "ANDROID_SDK_ROOT"}) if (std::string e = env.var(v); !e.empty()) c.push_back(e);
     c.push_back(toolchainsDir(env) / "android-sdk");
-    if (!env.home.empty()) for (const char* rel : {"Library/Android/sdk", "Android/Sdk", "Android/sdk"}) c.push_back(env.home / rel);
+    // make_preferred: on Windows ANDROID_HOME is "C:\Users\me\Android\Sdk", not "...\Android/Sdk"
+    if (!env.home.empty())
+        for (const char* rel : {"Library/Android/sdk", "Android/Sdk", "Android/sdk"}) c.push_back((env.home / rel).make_preferred());
     if (std::string la = env.var("LOCALAPPDATA"); !la.empty()) c.push_back(fs::path(la) / "Android" / "Sdk");
     for (auto& p : c)
         if (there(p / "platforms") || there(p / "cmdline-tools") || there(p / "platform-tools") || there(p / "ndk")) return p;

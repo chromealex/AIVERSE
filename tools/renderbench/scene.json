@@ -1,0 +1,74 @@
+{
+  "id": "intel-sponza-2022-base-v1",
+  "model": "main_sponza/NewSponza_Main_glTF_003.gltf",
+  "width": 1280,
+  "height": 720,
+  "fovYDegrees": 60,
+  "near": 0.1,
+  "far": 200,
+  "sunDirection": [
+    0.35,
+    1,
+    0.55
+  ],
+  "sunColor": [
+    1,
+    0.96,
+    0.9
+  ],
+  "sunIntensity": 3,
+  "skyColor": [
+    0.45,
+    0.5,
+    0.6
+  ],
+  "groundColor": [
+    0.25,
+    0.23,
+    0.2
+  ],
+  "cameras": [
+    {
+      "name": "PhysCamera001",
+      "eye": [
+        -8.80743,
+        1.59221947,
+        -0.85825783
+      ],
+      "target": [
+        -3.00422025,
+        2.762083,
+        0.237373278
+      ],
+      "fovYDegrees": 58.5119763983259
+    },
+    {
+      "name": "PhysCamera002",
+      "eye": [
+        10.5311031,
+        7.352985,
+        1.52825129
+      ],
+      "target": [
+        -3.1591332,
+        7.66302967,
+        -0.19915539
+      ],
+      "fovYDegrees": 58.626778232862875
+    },
+    {
+      "name": "PhysCamera004",
+      "eye": [
+        -9.594356,
+        6.921101,
+        5.35278
+      ],
+      "target": [
+        -7.168819,
+        6.86902952,
+        4.48487568
+      ],
+      "fovYDegrees": 58.23932239939919
+    }
+  ]
+}

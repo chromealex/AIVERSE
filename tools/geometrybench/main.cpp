@@ -18,7 +18,7 @@ using namespace aiverse::render;
 namespace fs=std::filesystem;
 using Clock=std::chrono::steady_clock;
 static double ms(Clock::time_point a,Clock::time_point b){return std::chrono::duration<double,std::milli>(b-a).count();}
-static bool read(const std::string& path,std::string& out){std::ifstream f(path,std::ios::binary);if(!f)return false;std::ostringstream s;s<<f.rdbuf();out=s.str();return true;}
+static bool readBytes(const std::string& path,std::string& out){std::ifstream f(path,std::ios::binary);if(!f)return false;std::ostringstream s;s<<f.rdbuf();out=s.str();return true;}
 static Json number(double v){return Json::number(v,6);}
 static Json vector(float3 v){Json j=Json::array();for(float a:{v.x,v.y,v.z})j.push(number(a));return j;}
 struct Part{std::string proxyPath;std::unique_ptr<Model> compact;Model view;std::unique_ptr<Model> proxy;float3 lo,hi;uint64_t triangles=0,proxyTriangles=0;};
@@ -55,11 +55,11 @@ int aiverseMain(int argc,char** argv){try{
     if(useLod)throw std::runtime_error("configure AIVERSE_BUILD_AUTOLOD for LOD profile");
 #endif
     fs::create_directories(cache);std::vector<std::string> warnings;
-    auto start=Clock::now();auto source=loadModel(sourcePath,read,&warnings);std::cerr<<"Loaded "<<source->indices.size()/3<<" triangles; "<<source->nodes.size()<<" nodes, "<<warnings.size()<<" warnings\n";
+    auto start=Clock::now();auto source=loadModel(sourcePath,readBytes,&warnings);std::cerr<<"Loaded "<<source->indices.size()/3<<" triangles; "<<source->nodes.size()<<" nodes, "<<warnings.size()<<" warnings\n";
     // Bistro README defines Specular as ORM and Normal as DirectX. Adapt both workloads identically.
     std::map<std::string,int> loadedImages;size_t packedMaps=0,normalMaps=0;
     auto loadImage=[&](const fs::path& file){auto key=file.string();if(loadedImages.count(key))return loadedImages[key];std::string bytes;Image image;image.name=key;
-        if(!read(key,bytes)||!decodeImage(bytes,image))return -1;int id=int(source->images.size());source->images.push_back(std::move(image));loadedImages[key]=id;return id;};
+        if(!readBytes(key,bytes)||!decodeImage(bytes,image))return -1;int id=int(source->images.size());source->images.push_back(std::move(image));loadedImages[key]=id;return id;};
     std::set<int> flipped;
     for(auto& mat:source->materials){
         if(mat.baseTex>=0){auto name=fs::path(source->images[size_t(mat.baseTex)].name).filename().string();auto at=name.find("_BaseColor");
@@ -82,7 +82,7 @@ int aiverseMain(int argc,char** argv){try{
             const auto file=cache/(std::to_string(ni)+".glb");
             try{if(!fs::exists(file)){auto local=extract(*source,ni);auto baked=modeling::bakeSurfaceProxy(*local,Json::parse(R"({"mode":"box","resolution":64})"));
                     std::ofstream out(file,std::ios::binary);out<<modeling::exportGlb(*baked.model);if(!out)throw std::runtime_error("cache write failed");}
-                part.proxyPath=file.string();part.proxy=loadModel(file.string(),read);part.proxyTriangles=part.proxy->indices.size()/3;++candidates;candidateTris+=part.triangles;bakedTris+=part.proxy->indices.size()/3;
+                part.proxyPath=file.string();part.proxy=loadModel(file.string(),readBytes);part.proxyTriangles=part.proxy->indices.size()/3;++candidates;candidateTris+=part.triangles;bakedTris+=part.proxy->indices.size()/3;
             }catch(const std::exception& e){auto row=Json::object();row.set("node",Json::string(node.name));row.set("reason",Json::string(e.what()));skip.push(row);}
         }
         if(stack){part.compact=extract(*source,ni,false);
@@ -114,7 +114,7 @@ int aiverseMain(int argc,char** argv){try{
             for(auto& p:parts){auto name="part"+std::to_string(index++)+".glb";auto row=Json::object();row.set("id",Json::string(name));row.set("model",Json::string(name));
                 auto policy=Json::object();policy.set("clusters",Json::fromBool(useClusters));policy.set("shadowClusters",Json::fromBool(useShadows));policy.set("occlusion",Json::fromBool(useOcc));policy.set("occluder",Json::fromBool(useOcc&&p.triangles<=1024));row.set("geometry",policy);
                 for(auto& image:p.compact->images)for(auto& original:source->images)if(image.name==original.name){image.tex=original.tex;break;}
-                if(useSurfaces&&!p.proxyPath.empty()){auto proxyName="proxy"+name;auto proxy=Json::object();proxy.set("model",Json::string(proxyName));proxy.set("maxPixels",number(threshold));row.set("proxy",proxy);prepared[proxyName]=loadModel(p.proxyPath,read);}
+                if(useSurfaces&&!p.proxyPath.empty()){auto proxyName="proxy"+name;auto proxy=Json::object();proxy.set("model",Json::string(proxyName));proxy.set("maxPixels",number(threshold));row.set("proxy",proxy);prepared[proxyName]=loadModel(p.proxyPath,readBytes);}
                 manifest.member("instances").push(row);prepared[name]=std::move(p.compact);
             }
             scene.loadPrepared(dev,manifest,std::move(prepared),8000000);

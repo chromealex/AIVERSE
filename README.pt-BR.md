@@ -26,7 +26,7 @@
   <a href="#como-funciona">Como funciona</a> ·
   <a href="#templates-prontos">Templates</a> ·
   <a href="#início-rápido">Início rápido</a> ·
-  <a href="docs/overview.md">Visão completa (RU)</a>
+  <a href="docs/pt-BR/overview.md">Visão completa</a>
 </p>
 
 ---
@@ -62,7 +62,7 @@ A AIVERSE entrega as próprias mecânicas — e permite que um agente trabalhe n
 | **Multiplayer significa dessincronização sem fim.** Basta um `float` para uma partida entre um iPhone e um Android sair de sincronia. | A simulação é idêntica bit a bit em todo lugar: ponto fixo em vez de ponto flutuante, gerador aleatório próprio, checksums. A CI compara partidas em Linux x64/ARM64, Windows e macOS a cada push. Só comandos trafegam pela rede; há lockstep com rollback e um servidor com matchmaking e veredito por replay. |
 | **GPUs móveis são fracas, mas o jogo precisa ser bonito.** | Todo recurso caro — sombras, partículas, terreno, pós-processamento — tem níveis de qualidade e se adapta à GPU, das antigas Mali e Adreno ao Apple Silicon. |
 | **Lançar em todas as plataformas é um projeto à parte.** Assinaturas, ícones, SDKs de lojas e anúncios. | O `aiversebuild` gera .app, projeto Xcode, Gradle/APK, web e .exe com um único comando. Ícones e telas de abertura são gerados automaticamente. Plugins para App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin e outros — o build leva só os que o jogo escolher. |
-| **Todo jogo novo começa do zero.** | Mais de 30 templates jogáveis, kits de gênero com checklists de aceitação e 118 skills para agentes. Um jogo novo começa a partir de um que já funciona. |
+| **Todo jogo novo começa do zero.** | Mais de 30 templates jogáveis, kits de gênero com checklists de aceitação e 126 skills para agentes. Um jogo novo começa a partir de um que já funciona. |
 | **Meta e LiveOps são reescritos em cada projeto.** | `aiverse::meta`: loja, moedas, missões, passes, recompensas diárias, energia, clãs, torneios, baús com garantia — configurados em JSON. |
 
 ---
@@ -149,7 +149,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, plugins de lojas e anúncios |
 | Addressables / Asset Bundles | pacotes `.rpak`, builds divididos e download de conteúdo |
 
-O relatório marca cada item como migrado com exatidão, de forma aproximada ou não migrado. Reimportar preserva suas edições. O projeto precisa usar a serialização de assets **Force Text**. Projetos Godot são importados do mesmo jeito. Detalhes: [Importação de projeto de engine](docs/engine-import.md).
+O relatório marca cada item como migrado com exatidão, de forma aproximada ou não migrado. Reimportar preserva suas edições. O projeto precisa usar a serialização de assets **Force Text**. Projetos Godot são importados do mesmo jeito. Detalhes: [Importação de projeto de engine](docs/pt-BR/engine-import.md).
 
 ---
 
@@ -202,7 +202,7 @@ Cada template é um jogo totalmente jogável com bots. Abra no editor e comece a
 - Editor com janelas encaixáveis no estilo Unity: cena, inspetor, terreno, efeitos, iluminação, UI, teste de jogo e simulador de dispositivos
 - `aiversemcp` — servidor MCP para agentes
 - Assistente **Criar um jogo**
-- 118 skills para agentes e kits de gênero com checklists de aceitação
+- 126 skills para agentes e kits de gênero com checklists de aceitação
 - Importadores de assets de jogos clássicos a partir da sua própria cópia
 
 </td>
@@ -234,7 +234,7 @@ open build/mac/AiverseEditor.app        # editor: hub de projetos e templates
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Se preferir não compilar, a
 branch `builds` tem o editor e as ferramentas pré-compilados
-([detalhes, em russo](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([detalhes](docs/pt-BR/overview.md#engine-pré-compilada-branch-builds-e-aiversemcp-sem-compilador)).
 
 **2. Crie um jogo.** No hub, clique em **Criar um jogo** ou crie um projeto a partir de um template. Dá
 para jogar com bots na hora, na janela Game.
@@ -267,27 +267,27 @@ A engine está em desenvolvimento ativo. O que já foi verificado:
 - 🛠 Templates para gêneros além de RTS e FPS estão em produção
 
 Detalhes por subsistema em
-[Verificado / não verificado](docs/overview.md#проверено--не-проверено) (em russo).
+[Verificado / não verificado](docs/pt-BR/overview.md#verificado--não-verificado).
 
 ---
 
 ## Documentação
 
-A maior parte dos documentos está em russo; `AGENTS.md`, a documentação das bibliotecas e alguns guias técnicos estão em inglês.
+Os documentos de referência estão em inglês. A visão completa, o assistente de jogos, a migração do Unity e os pacotes de gênero também estão em português.
 
 | | |
 |---|---|
-| [**Visão completa**](docs/overview.md) | todos os subsistemas, build, plataformas, CI, releases |
+| [**Visão completa**](docs/pt-BR/overview.md) | todos os subsistemas, build, plataformas, CI, releases |
 | [Formato do jogo](docs/game-format.md) | `game.json`, `rules.json`, mapas e todos os blocos de dados |
 | [Pacotes de gênero](docs/genre-packages.md) · [Bibliotecas](docs/libraries.md) | mecânicas para qualquer gênero |
-| [Assistente Criar um jogo](docs/game-wizard.md) | como ideia e arte viram um projeto pronto |
+| [Assistente Criar um jogo](docs/pt-BR/game-wizard.md) | como ideia e arte viram um projeto pronto |
 | [Scripting](docs/scripting.md) · [Módulos C++](docs/native-modules.md) | quando os dados não bastam |
 | [Terreno](docs/terrain.md) · [Planetas](docs/planets.md) · [Pathfinding](docs/pathfinding.md) | mundo e movimento |
 | [Partículas](docs/particles.md) · [Modelos](docs/models.md) · [Shader Graph](docs/shader-graph.md) | visual |
 | [Meta](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monetização e lojas |
 | [FPS](docs/fps.md) · [Mundos grandes](docs/large-worlds.md) | módulo FPS |
 | [AGENTS.md](AGENTS.md) | regras para agentes que alteram a própria engine |
-| [Migrando do Unity](docs/engine-import.md) | importar cenas, prefabs e assets, e portar a lógica com um agente |
+| [Migrando do Unity](docs/pt-BR/engine-import.md) | importar cenas, prefabs e assets, e portar a lógica com um agente |
 
 ## Licença
 

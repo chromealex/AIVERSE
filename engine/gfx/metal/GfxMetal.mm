@@ -1,5 +1,6 @@
 // Metal backend (macOS, iOS). Compiled as Objective-C++ with ARC (-fobjc-arc).
 #include "../Gfx.h"
+#include "../ColorSpace.h"
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -9,6 +10,7 @@
 #include <atomic>
 #include <memory>
 #include <cstring>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -37,8 +39,8 @@ struct MTBuffer {
     uint64_t updatedFrame = UINT64_MAX;
 };
 struct MTTexture { id<MTLTexture> tex; id<MTLSamplerState> sampler; PixelFormat fmt = PixelFormat::RGBA8; bool mips = false; };
-struct MTShader { id<MTLFunction> vs; id<MTLFunction> fs; };
-struct MTPipeline { id<MTLRenderPipelineState> state; id<MTLDepthStencilState> depth; PipelineDesc desc; };
+struct MTShader { id<MTLFunction> vs; id<MTLFunction> fs; std::string source; bool linear = false; };
+struct MTPipeline { id<MTLRenderPipelineState> state; id<MTLDepthStencilState> depth; PipelineDesc desc; PipelineHandle hdr; ShaderHandle hdrShader; bool hdrFailed = false; };
 
 MTLVertexFormat toMTL(VertexFormat f) {
     switch (f) {
@@ -254,6 +256,7 @@ public:
             return {textures_.add(t)};
         }
         MTLPixelFormat pf = d.format == PixelFormat::R8 ? MTLPixelFormatR8Unorm
+                          : d.format == PixelFormat::RGBA16F ? MTLPixelFormatRGBA16Float
                           : d.format == PixelFormat::RGBA32F ? MTLPixelFormatRGBA32Float
                           : d.format == PixelFormat::Depth ? MTLPixelFormatDepth32Float
                           : d.format == PixelFormat::RGBA8_sRGB ? (d.renderTarget ? MTLPixelFormatBGRA8Unorm_sRGB : MTLPixelFormatRGBA8Unorm_sRGB)
@@ -269,7 +272,7 @@ public:
         t.tex = [device_ newTextureWithDescriptor:td];
         if(!t.tex){error_="texture allocation failed";return {};}
         if (d.data && d.format != PixelFormat::Depth) {
-            int bpp = d.format == PixelFormat::R8 ? 1 : d.format == PixelFormat::RGBA32F ? 16 : 4;
+            int bpp = d.format == PixelFormat::R8 ? 1 : d.format == PixelFormat::RGBA32F ? 16 : d.format == PixelFormat::RGBA16F ? 8 : 4;
             [t.tex replaceRegion:MTLRegionMake2D(0, 0, NSUInteger(d.width), NSUInteger(d.height)) mipmapLevel:0
                        withBytes:d.data bytesPerRow:NSUInteger(d.width * bpp)];
             if (mips) generateMips(t.tex);
@@ -304,9 +307,10 @@ public:
     ShaderHandle createShader(const ShaderDesc& d) override {
         if (!d.msl) { error_ = "shader has no MSL source"; return {}; }
         NSError* err = nil;
-        id<MTLLibrary> lib = [device_ newLibraryWithSource:[NSString stringWithUTF8String:d.msl] options:nil error:&err];
+        id<MTLLibrary> lib = [device_ newLibraryWithSource:[NSString stringWithUTF8String:(colorShaderPrefix(true, d.linearTarget) + d.msl).c_str()] options:nil error:&err];
         if (!lib) { error_ = std::string("MSL compile: ") + (err ? err.localizedDescription.UTF8String : "?"); return {}; }
         MTShader s;
+        s.source = d.msl; s.linear = d.linearTarget;
         s.vs = [lib newFunctionWithName:@"vs_main"];
         s.fs = [lib newFunctionWithName:@"fs_main"]; // optional for depth-only shaders
         if (!s.vs) { error_ = "MSL: vs_main not found"; return {}; }
@@ -331,6 +335,7 @@ public:
         pd.fragmentFunction = s->fs; // depth-only shaders without fs_main get nil (no fragment stage)
         pd.vertexDescriptor = vd;
         pd.colorAttachments[0].pixelFormat = d.depthOnly ? MTLPixelFormatInvalid
+                                           : d.colorFormat == PixelFormat::RGBA16F ? MTLPixelFormatRGBA16Float
                                            : d.colorFormat == PixelFormat::RGBA8_sRGB ? MTLPixelFormatBGRA8Unorm_sRGB   // sRGB render targets
                                            : layer_.pixelFormat;
         pd.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
@@ -370,7 +375,36 @@ public:
         p.depth = [device_ newDepthStencilStateWithDescriptor:dd];
         return {pipelines_.add(p)};
     }
-    void destroyPipeline(PipelineHandle h) override { pipelines_.remove(h.id); }
+    void destroyPipeline(PipelineHandle h) override {
+        if (auto* p = pipelines_.get(h.id)) {
+            const auto variant = p->hdr; const auto shader = p->hdrShader;
+            pipelines_.remove(h.id);
+            if (variant.valid()) destroyPipeline(variant);
+            if (shader.valid()) destroyShader(shader);
+        }
+    }
+    PipelineHandle hdrPipeline(PipelineHandle h) {
+        auto* p = pipelines_.get(h.id);
+        if (!p) return {};
+        if (p->hdr.valid()) return p->hdr;
+        if (p->hdrFailed) return {};
+        p->hdrFailed = true; // compile at most once; a broken variant must not stall every frame
+        PipelineDesc pd = p->desc;
+        auto* s = shaders_.get(pd.shader.id);
+        if (!s) return {};
+        ShaderDesc sd;
+        const std::string source = s->source;
+        sd.msl = source.c_str();
+        sd.linearTarget = true;
+        const auto shader = createShader(sd);
+        if (!shader.valid()) { std::fprintf(stderr, "[gfx] HDR shader: %s\n", error_.c_str()); return {}; }
+        pd.shader = shader; pd.colorFormat = PixelFormat::RGBA16F;
+        const auto variant = createPipeline(pd);
+        if (!variant.valid()) { std::fprintf(stderr, "[gfx] HDR pipeline: %s\n", error_.c_str()); destroyShader(shader); return {}; }
+        p = pipelines_.get(h.id); // pool may have reallocated
+        p->hdr = variant; p->hdrShader = shader; p->hdrFailed = false;
+        return variant;
+    }
 
     // ---------- frame ----------
     // ---------- capture (tools) ----------
@@ -381,7 +415,7 @@ public:
     void captureNextFrame(CaptureFn fn) override {
         capture_ = std::move(fn);
         layer_.framebufferOnly = NO; // drawables acquired from now on can be blitted
-        captureDelay_ = 1;
+        captureDelay_ = drawable_ && !drawable_.texture.framebufferOnly ? 0 : 1;
     }
     void deliverCapture() {
         if (captured_ && captured_->ready) {
@@ -497,6 +531,8 @@ public:
     void setBindingCacheEnabled(bool enabled) override {if(enabled!=bindingCacheEnabled_){bindingCacheEnabled_=enabled;clearBindings();}}
     void beginPass(const PassDesc& d) override {
         clearBindings();
+        const auto* color = textures_.get(d.colorTarget.id);
+        hdrPass_ = color && color->fmt == PixelFormat::RGBA16F;
         if (!cmd_) return;
         MTLRenderPassDescriptor* rp = [MTLRenderPassDescriptor renderPassDescriptor];
         const bool offscreen = d.colorTarget.valid() || d.depthTarget.valid();
@@ -553,6 +589,9 @@ public:
     void setPipeline(PipelineHandle h) override {
         auto* p = pipelines_.get(h.id);
         if (!enc_ || !p) return;
+        if (hdrPass_ && !p->desc.depthOnly && p->desc.colorFormat != PixelFormat::RGBA16F) {
+            h = hdrPipeline(h); p = pipelines_.get(h.id); if (!p) { pipelineId_ = 0; return; }
+        }
         pipelineId_ = h.id;
         [enc_ setRenderPipelineState:p->state];
         [enc_ setDepthStencilState:p->depth];
@@ -636,6 +675,7 @@ private:
     uint64_t frame_ = 0;
     bool firstPass_ = true;
     bool screenReadable_ = false;   // setScreenReadable: drawables stay copyable (copyColor)
+    bool hdrPass_ = false;
     DeviceInfo info_;
     std::string error_;
     Pool<MTBuffer> buffers_;

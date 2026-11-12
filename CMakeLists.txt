@@ -83,6 +83,18 @@ else()
     if(WIN32)
         add_compile_options(-Wno-cast-function-type) # GetProcAddress casts are intended
     endif()
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # GCC only (Linux gcc, MinGW). The compact one-line style used across the engine trips
+        # -Wmisleading-indentation, and -Wdangling-reference flags every `const Json& x = f(j[...], "path")`
+        # although Json::operator[] returns a reference into the document. Both are disabled.
+        add_compile_options(-Wno-misleading-indentation $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>)
+        # GCC 12+ -O3 reports these from inside libstdc++ (vector::assign, std::sort, memcpy); they stay visible
+        # as warnings but do not fail -DCMAKE_COMPILE_WARNING_AS_ERROR=ON builds.
+        add_compile_options(-Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=nonnull)
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-error=dangling-pointer>)
+        endif()
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -159,10 +171,29 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Resource packs (.rpak). The runtime links only the zstd decoder; host tools that write packs
-# link aiverse_pack_writer, which carries the full zstd library instead (never link both).
+# link aiverse_pack_writer, which carries the full zstd library (in host builds the decoder target
+# forwards to it, see below).
 # ---------------------------------------------------------------------------
 set(AIVERSE_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by aiversebuild)")
-add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+# Host builds (tools or tests on) also compile the full zstd for pack writers; there aiverse_zstd_dec
+# forwards to it, so a binary that mixes runtime and tool libraries carries one zstd copy instead of two
+# (GNU ld rejects the duplicate symbols). Packaged builds (aiversebuild: tools/tests OFF) keep the
+# small decoder-only library.
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    find_package(Threads REQUIRED)
+    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
+    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd PRIVATE -w)
+    endif()
+    add_library(aiverse_zstd_dec INTERFACE)
+    target_link_libraries(aiverse_zstd_dec INTERFACE aiverse_zstd)
+else()
+    add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd_dec PRIVATE -w)
+    endif()
+endif()
 # HTTP fetcher for chunk downloads, per platform (see engine/pack/Chunks.h).
 if(AIVERSE_PLATFORM STREQUAL "windows")
     set(AIVERSE_PACK_HTTP engine/pack/http/HttpWin.cpp)
@@ -193,16 +224,7 @@ elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT MSVC)
-    target_compile_options(aiverse_zstd_dec PRIVATE -w)
-endif()
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
-    find_package(Threads REQUIRED)
-    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
-    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
-    if(NOT MSVC)
-        target_compile_options(aiverse_zstd PRIVATE -w)
-    endif()
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
     target_link_libraries(aiverse_pack_writer PUBLIC aiverse_pack aiverse_engine aiverse_zstd)
 endif()
@@ -303,6 +325,7 @@ add_library(aiverse_models STATIC
     engine/render/GeometrySceneData.cpp
     engine/render/MeshBuilder.cpp
     engine/render/Model.cpp
+    engine/render/ModelMerge.cpp   # static batching of parts that share a material
     engine/render/ModelGltf.cpp
     engine/render/ModelObj.cpp
     engine/render/Animation.cpp
@@ -355,7 +378,7 @@ set(AIVERSE_RUNTIME_SRC
     engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
-list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp)
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp engine/render/ScreenLighting.cpp)
 add_library(aiverse_shader_graph STATIC engine/render/graph/ShaderGraph.cpp)
 target_link_libraries(aiverse_shader_graph PUBLIC aiverse_engine)
 
@@ -406,12 +429,14 @@ if(APPLE)
     if(AIVERSE_PLATFORM STREQUAL "macos")
         target_link_libraries(aiverse_runtime PUBLIC "-framework Cocoa")
     else()
-        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit")
+        # UIKit no longer re-exports CoreGraphics to the linker; PlatformIOS uses CGRect/CGPoint functions directly.
+        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit" "-framework CoreGraphics")
     endif()
 elseif(AIVERSE_PLATFORM STREQUAL "android")
     set(GLUE ${ANDROID_NDK}/sources/android/native_app_glue)
     add_library(native_app_glue STATIC ${GLUE}/android_native_app_glue.c)
     target_include_directories(native_app_glue PUBLIC ${GLUE})
+    target_compile_options(native_app_glue PRIVATE -w)   # NDK sample source (unused parameters under -Werror)
     target_link_libraries(aiverse_runtime PUBLIC native_app_glue android EGL GLESv3 log)
 elseif(AIVERSE_PLATFORM STREQUAL "web")
     # -lidbfs.js: userDataDir() is persisted in IndexedDB (engine/platform/web)
@@ -1251,6 +1276,21 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME shader_graph COMMAND aiverse_shader_graph_tests)
 endif()
 
+# Asset-free HDR visual regression fixture (opt-in, uses the actual backends).
+option(AIVERSE_BUILD_HDR_TESTS "Build HDR GPU validation scene" OFF)
+if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_hdr_policy tests/render/hdr_policy.cpp)
+    target_link_libraries(aiverse_hdr_policy PRIVATE aiverse_postfx_data)
+    add_test(NAME hdr_policy COMMAND aiverse_hdr_policy)
+    add_executable(aiverse_hdr_scene tests/render/hdr_scene.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_hdr_scene PRIVATE aiverse_runtime)
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_hdr_gl tests/render/hdr_gl.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_hdr_gl PRIVATE aiverse_runtime "-framework OpenGL")
+        set_source_files_properties(tests/render/hdr_gl.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
+endif()
+
 # Host authoring: shared by the editor, MCP and CPU tests.
 if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
     add_library(aiverse_modeling STATIC tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
@@ -1335,8 +1375,37 @@ if(AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP)
         third_party/meshoptimizer/src/simplifier.cpp
         third_party/meshoptimizer/src/vcacheoptimizer.cpp)
     target_include_directories(aiverse_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
+    add_executable(aiverse_model_visibility_test tests/render/ModelVisibility.cpp)
+    target_include_directories(aiverse_model_visibility_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_model_visibility_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
     add_executable(aiverse_lod_simplify tools/models/lod_simplify.cpp)
     target_link_libraries(aiverse_lod_simplify PRIVATE aiverse_meshoptimizer_lod)
+endif()
+
+option(AIVERSE_BUILD_RENDERBENCH "Build the Sponza rendering benchmark" OFF)
+if(AIVERSE_BUILD_RENDERBENCH AND AIVERSE_DESKTOP)
+    add_executable(aiverse_static_light_grid_test tests/render/StaticLightGrid.cpp)
+    target_include_directories(aiverse_static_light_grid_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_static_light_grid_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME static_light_grid COMMAND aiverse_static_light_grid_test)
+    add_executable(aiverse_camera_tour_test tests/render/CameraTour.cpp)
+    target_link_libraries(aiverse_camera_tour_test PRIVATE aiverse_engine)
+    target_compile_options(aiverse_camera_tour_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME camera_tour COMMAND aiverse_camera_tour_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/renderbench/sponza-tour-draft.json)
+    add_executable(aiverse_reinstance tools/renderbench/reinstance.cpp)
+    target_link_libraries(aiverse_reinstance PRIVATE aiverse_engine)
+    add_executable(aiverse_probe_visibility tools/renderbench/probe_visibility.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_probe_visibility PRIVATE aiverse_runtime)
+    execute_process(COMMAND git describe --always --dirty WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE BENCH_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
+    add_executable(aiverse_renderbench apps/renderbench/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_renderbench PRIVATE aiverse_runtime)
+    target_compile_definitions(aiverse_renderbench PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_renderbench_gl apps/renderbench/gl_mac.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_renderbench_gl PRIVATE aiverse_runtime "-framework OpenGL")
+        target_compile_definitions(aiverse_renderbench_gl PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
+        set_source_files_properties(apps/renderbench/gl_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
 endif()
 
 if(TARGET aiverse_geometry_bench AND TARGET aiverse_meshoptimizer_lod)
@@ -1358,4 +1427,34 @@ endif()
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME skill_library_isolation COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/isolation.py)
     set_tests_properties(skill_library_isolation PROPERTIES TIMEOUT 600)
+endif()
+
+# Windows: every executable gets platform/windows/utf8.manifest (activeCodePage UTF-8). Paths in the
+# engine are UTF-8 std::strings; without it the narrow CRT/STL file APIs use the legacy ANSI code page
+# and a project in a folder like "Моя стратегия" cannot be opened. MSVC merges .manifest sources into
+# its own manifest; MinGW links it as resource 1 of type RT_MANIFEST (24) via a generated .rc.
+if(WIN32)
+    set(AIVERSE_UTF8_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/utf8.manifest")
+    if(MSVC)
+        set(AIVERSE_UTF8_MANIFEST_SOURCE "${AIVERSE_UTF8_MANIFEST}")
+    else()
+        enable_language(RC)
+        set(AIVERSE_UTF8_MANIFEST_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/aiverse_utf8_manifest.rc")
+        file(CONFIGURE OUTPUT "${AIVERSE_UTF8_MANIFEST_SOURCE}" @ONLY
+             CONTENT "// Generated by CMakeLists.txt: UTF-8 code page manifest\n1 24 \"@AIVERSE_UTF8_MANIFEST@\"\n")
+    endif()
+    function(aiverse_utf8_manifest dir)
+        get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(t IN LISTS targets)
+            get_target_property(type ${t} TYPE)
+            if(type STREQUAL "EXECUTABLE")
+                target_sources(${t} PRIVATE "${AIVERSE_UTF8_MANIFEST_SOURCE}")
+            endif()
+        endforeach()
+        get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+        foreach(d IN LISTS subdirs)
+            aiverse_utf8_manifest("${d}")
+        endforeach()
+    endfunction()
+    aiverse_utf8_manifest("${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

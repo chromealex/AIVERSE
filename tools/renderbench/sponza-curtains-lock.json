@@ -1,0 +1,64 @@
+{
+  "source": "https://cdrdv2.intel.com/v1/dl/getContent/726650",
+  "archiveBytes": 786898766,
+  "archiveETag": "\"54ddb4cd3205adcb93c2115755a85753\"",
+  "model": "pkg_a_curtains/NewSponza_Curtains_glTF.gltf",
+  "files": [
+    {
+      "path": "pkg_a_curtains/NewSponza_Curtains_glTF.bin",
+      "bytes": 73479384,
+      "sha256": "c89c2876636a0baa9a506e3206d8336239d9a6b79e73c9e1dd53cd47f2caca0c"
+    },
+    {
+      "path": "pkg_a_curtains/NewSponza_Curtains_glTF.gltf",
+      "bytes": 37076,
+      "sha256": "b56968aeb691970b63027ae3ffbb0d77f1d736e7bdace5c70be106d6dcfbb516"
+    },
+    {
+      "path": "pkg_a_curtains/credits_license.txt",
+      "bytes": 15921,
+      "sha256": "3f981e31f8de04f3754e63d7c259a0a78f71db8f01b5155c58cac52fb79cc2b9"
+    },
+    {
+      "path": "pkg_a_curtains/textures/curtain_fabric_Normal.png",
+      "bytes": 45198462,
+      "sha256": "19195ec835958a053fd40c0fef593f5e11a87560d962f49ef3d2c61a9c359919"
+    },
+    {
+      "path": "pkg_a_curtains/textures/curtain_fabric_Roughnesscurtain_fabric_Metalness.png",
+      "bytes": 20018728,
+      "sha256": "4bcccb1e9d8b46da323b63acf6fa03a5a369bde0ac1dd22f0b2f0a1b40d35ba8"
+    },
+    {
+      "path": "pkg_a_curtains/textures/curtain_fabric_blue_BaseColor.png",
+      "bytes": 17869201,
+      "sha256": "f0d5ffa41776c87b244a1c9680a67cc6ec0f66de414d468ba37a155ce89255b4"
+    },
+    {
+      "path": "pkg_a_curtains/textures/curtain_fabric_green_BaseColor.png",
+      "bytes": 18734493,
+      "sha256": "6bdbc84c52e07dbee4a68afe608505e65b9b8cd27157c8b4f9e4f6238e260233"
+    },
+    {
+      "path": "pkg_a_curtains/textures/curtain_fabric_red_BaseColor.png",
+      "bytes": 18157344,
+      "sha256": "6a5a092f51f0a680341e5694c2409056dfb8b7d78af84839219600c4c1559910"
+    },
+    {
+      "path": "pkg_a_curtains/textures/metal_door_01_BaseColor.png",
+      "bytes": 11159561,
+      "sha256": "b87e0c482d153b7adb7b113b612cb7695c0f9f42a94bfaec7d533726094ba331"
+    },
+    {
+      "path": "pkg_a_curtains/textures/metal_door_01_Normal.png",
+      "bytes": 30755637,
+      "sha256": "05a9ba86641e1e8abb3b0ac8f8eeaf6e332734d0d7caa8ca2f0bd953aa8b91f9"
+    },
+    {
+      "path": "pkg_a_curtains/textures/metal_door_01_Roughnessmetal_door_01_Metalness.png",
+      "bytes": 27828983,
+      "sha256": "b5123a6db0ebc505adfd01372cf4ba31fb05f14e7f445232a1355e5e08868962"
+    }
+  ],
+  "fingerprint": "0f075c9c4f182d5fc7dfc841520cebd0eb5242683ee2733943df2ce1f8224e4e"
+}

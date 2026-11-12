@@ -1,0 +1,796 @@
+{
+  "materials": {
+    "sg_limestone": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0,
+      "roughness": 0.9,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.52,
+              0.46,
+              0.35,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.9,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 0,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_basalt": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0,
+      "roughness": 0.85,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.065,
+              0.075,
+              0.085,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.85,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 0,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_cloth_red": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0,
+      "roughness": 0.88,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.32,
+              0.012,
+              0.018,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.88,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 0,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_cloth_blue": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0,
+      "roughness": 0.82,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.012,
+              0.065,
+              0.19,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.82,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 0,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_steel": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 1,
+      "roughness": 0.22,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.56,
+              0.57,
+              0.58,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.22,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 1,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_brass": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 1,
+      "roughness": 0.28,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.88,
+              0.62,
+              0.24,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.28,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 1,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_copper": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 1,
+      "roughness": 0.32,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.95,
+              0.64,
+              0.54,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.32,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 1,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_wax": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0,
+      "roughness": 0.52,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.8,
+              0.58,
+              0.3,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.52,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 0,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    },
+    "sg_candle_glow": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallic": 0,
+      "roughness": 0.8,
+      "shaderGraph": {
+        "version": 1,
+        "domain": "material",
+        "nodes": [
+          {
+            "id": "surface",
+            "op": "input",
+            "position": [
+              20,
+              40
+            ]
+          },
+          {
+            "id": "tint",
+            "op": "constant",
+            "value": [
+              0.1,
+              0.05,
+              0.015,
+              1
+            ],
+            "position": [
+              20,
+              180
+            ]
+          },
+          {
+            "id": "color",
+            "op": "multiply",
+            "inputs": [
+              "surface",
+              "tint"
+            ],
+            "position": [
+              280,
+              80
+            ]
+          },
+          {
+            "id": "roughness",
+            "op": "constant",
+            "value": 0.8,
+            "position": [
+              280,
+              240
+            ]
+          },
+          {
+            "id": "metallic",
+            "op": "constant",
+            "value": 0,
+            "position": [
+              280,
+              380
+            ]
+          },
+          {
+            "id": "emission",
+            "op": "constant",
+            "value": [
+              12,
+              7.8,
+              3,
+              0
+            ],
+            "position": [
+              280,
+              520
+            ]
+          }
+        ],
+        "outputs": {
+          "color": "color",
+          "roughness": "roughness",
+          "metallic": "metallic",
+          "emission": "emission"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "id": "intel-sponza-2022-complete-v1",
+  "model": "main_sponza/NewSponza_Main_glTF_003.gltf",
+  "width": 1280,
+  "height": 720,
+  "fovYDegrees": 60,
+  "near": 0.1,
+  "far": 200,
+  "sunDirection": [
+    0.35,
+    1,
+    0.55
+  ],
+  "sunColor": [
+    1,
+    0.96,
+    0.9
+  ],
+  "sunIntensity": 3,
+  "skyColor": [
+    0.45,
+    0.5,
+    0.6
+  ],
+  "groundColor": [
+    0.25,
+    0.23,
+    0.2
+  ],
+  "cameras": [
+    {
+      "name": "PhysCamera001",
+      "eye": [
+        -8.80743,
+        1.59221947,
+        -0.85825783
+      ],
+      "target": [
+        -3.00422025,
+        2.762083,
+        0.237373278
+      ],
+      "fovYDegrees": 58.5119763983259
+    },
+    {
+      "name": "PhysCamera002",
+      "eye": [
+        10.5311031,
+        7.352985,
+        1.52825129
+      ],
+      "target": [
+        -3.1591332,
+        7.66302967,
+        -0.19915539
+      ],
+      "fovYDegrees": 58.626778232862875
+    },
+    {
+      "name": "PhysCamera004",
+      "eye": [
+        -9.594356,
+        6.921101,
+        5.35278
+      ],
+      "target": [
+        -7.168819,
+        6.86902952,
+        4.48487568
+      ],
+      "fovYDegrees": 58.23932239939919
+    }
+  ],
+  "models": [
+    {
+      "path": "pkg_a_curtains/NewSponza_Curtains_glTF.gltf"
+    },
+    {
+      "path": "pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf"
+    },
+    {
+      "path": "pkg_c_trees/NewSponza_CypressTree_glTF.gltf"
+    },
+    {
+      "path": "pkg_d_10k_candles/NewSponza_4_Combined_glTF.gltf",
+      "lights": true,
+      "lightRadius": 0.75,
+      "lightIntensityScale": 0.05
+    },
+    {
+      "path": "pkg_e_knight_anim/Exports/FBX/Knight_USD_002.fbx",
+      "textureRoot": "pkg_e_knight_anim/Textures",
+      "animation": "pkg_e_knight_anim/Exports/FBX/Knight_Animation_Data_Only_002.fbx",
+      "translation": [
+        -4,
+        0,
+        0
+      ],
+      "materials": {
+        "knight_rig:usdPreviewSurface_Armor": {
+          "baseColor": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "metallic": 1,
+          "roughness": 0.5,
+          "vertexColors": false,
+          "roughnessTexture": "pkg_e_knight_anim/Textures/brushed_metal_rough_F.png"
+        },
+        "knight_rig:usdPreviewSurface_Brass": {
+          "baseColor": [
+            1,
+            0.69856846,
+            0.37800002
+          ],
+          "metallic": 1,
+          "roughness": 0.25,
+          "vertexColors": false
+        },
+        "knight_rig:usdPreviewSurface_Chestplate": {
+          "baseColor": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "metallic": 1,
+          "roughness": 0.5,
+          "vertexColors": false,
+          "roughnessTexture": "pkg_e_knight_anim/Textures/brushed_metal_rough_D.png"
+        },
+        "knight_rig:usdPreviewSurface_Shoulder": {
+          "baseColor": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "metallic": 1,
+          "roughness": 0.5,
+          "vertexColors": false,
+          "roughnessTexture": "pkg_e_knight_anim/Textures/brushed_metal_rough_H.png"
+        },
+        "knight_rig:usdPreviewSurface_Cloth": {
+          "baseColor": [
+            1,
+            1,
+            1
+          ],
+          "metallic": 0,
+          "roughness": 0.693,
+          "vertexColors": false,
+          "baseTexture": "pkg_e_knight_anim/Textures/cloth_diffuse_D.png",
+          "normalTexture": "pkg_e_knight_anim/Textures/cloth_normal_D.png"
+        },
+        "knight_rig:usdPreviewSurface_Leather": {
+          "baseColor": [
+            1,
+            1,
+            1
+          ],
+          "metallic": 0,
+          "roughness": 0.6,
+          "vertexColors": false,
+          "baseTexture": "pkg_e_knight_anim/Textures/leather_diffuse_D.png"
+        },
+        "knight_rig:usdPreviewSurface_Shield": {
+          "baseColor": [
+            1,
+            1,
+            1
+          ],
+          "metallic": 1,
+          "roughness": 0.25,
+          "vertexColors": false,
+          "baseTexture": "pkg_e_knight_anim/Textures/shield_final_diffuse_A.png",
+          "normalTexture": "pkg_e_knight_anim/Textures/shield_final_normal_A.png"
+        },
+        "knight_rig:usdPreviewSurface_Sword": {
+          "baseColor": [
+            1,
+            1,
+            1
+          ],
+          "metallic": 1,
+          "roughness": 0.5,
+          "vertexColors": false,
+          "baseTexture": "pkg_e_knight_anim/Textures/sword_diffuse_C.png",
+          "roughnessTexture": "pkg_e_knight_anim/Textures/sword_rough_D.png"
+        }
+      },
+      "materialSource": "pkg_e_knight_anim/Scenes/knight_USD_PREVIEW_SURFACE_002.rnd.ma"
+    }
+  ],
+  "assetFingerprint": "ef33200bf94f37a2878db55947c324d6d3895c51281f0b3e2e65b8658c29053d",
+  "assetLock": "sponza-full-lock.json"
+}

@@ -1,0 +1,39 @@
+{
+  "source": "https://cdrdv2.intel.com/v1/dl/getContent/726656",
+  "archiveBytes": 1383921436,
+  "archiveETag": "\"52f8790e809ebec84be927ba0eb8625a\"",
+  "model": "pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
+  "files": [
+    {
+      "path": "pkg_b_ivy/NewSponza_IvyGrowth_glTF.bin",
+      "bytes": 269978952,
+      "sha256": "4e2d5ac1b3d63f269e2ea030860bc40f222a6e81b86aef0055a0cb37446268ad"
+    },
+    {
+      "path": "pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
+      "bytes": 3407,
+      "sha256": "22039080d6de24569f377210b8ebbe59194b5d44de777679d9d87b69ffda2c1e"
+    },
+    {
+      "path": "pkg_b_ivy/credits_license.txt",
+      "bytes": 15921,
+      "sha256": "3f981e31f8de04f3754e63d7c259a0a78f71db8f01b5155c58cac52fb79cc2b9"
+    },
+    {
+      "path": "pkg_b_ivy/textures/IvyLeaf_BaseColor.png",
+      "bytes": 11529446,
+      "sha256": "2fb74643b58fe426fea28f564152abfa63d274d6c5dc7bf5e8b8360fd80c0ba0"
+    },
+    {
+      "path": "pkg_b_ivy/textures/IvyLeaf_Normal.png",
+      "bytes": 11191941,
+      "sha256": "1ee03e6648630980d24808efef25fc4d9303a3a9ac00c1818ba0a2b35c806ee5"
+    },
+    {
+      "path": "pkg_b_ivy/textures/IvyLeaf_Roughness0.png",
+      "bytes": 6546780,
+      "sha256": "df43f05073854129b44ac1245acabf2ec47fac669faf9216e371234a02cf0dbe"
+    }
+  ],
+  "fingerprint": "ed8d57c4892ed4450b775c7e007e25fb2d166adca6b1db7386e54fcd12781906"
+}

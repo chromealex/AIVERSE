@@ -1,0 +1,7 @@
+environment probes: open sun, colored bounce, sealed room and cache validation PASS
+one-bounce color transfer, orientation, determinism and black/empty controls PASS
+static point shadow BVH, cube faces, atlas layout and validation PASS
+static light grid conservative coverage and validation PASS
+multibounce transport: dark receiver, albedo, bounce orders and wall visibility PASS
+local AO: open, covered, opposite hemisphere, radius and repeatability PASS
+mesh AO bake/cache: roundtrip, stale/corrupt rejection and alpha preservation PASS

@@ -57,7 +57,7 @@ void main() {
     vec3 col = mix(c, u_grid.rgb, g / max(a + g, 0.001));
     float alpha = max(a, g);
     if (alpha < 0.003) discard;
-    o_color = vec4(col, alpha);
+    o_color = rtsDisplay(vec4(col, alpha));
 }
 )";
 const char* kFogMSL = R"(
@@ -105,7 +105,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], text
     float3 col = mix(c, u.grid.rgb, g / max(a + g, 0.001));
     float alpha = max(a, g);
     if (alpha < 0.003) discard_fragment();
-    return float4(col, alpha);
+    return rtsDisplay(float4(col, alpha));
 }
 )";
 
