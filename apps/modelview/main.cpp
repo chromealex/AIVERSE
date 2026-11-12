@@ -45,6 +45,7 @@ struct Instance {
 struct Viewer {
     std::vector<std::pair<std::string, std::string>> files;   // path, clip
     std::string clipAll, variantName;
+    bool lodReport = false, noLod = false;
     bool native = false;
     bool merge = true;   // static batching of parts that share a material (--no-merge: as authored)
     float seek = -1, height = 0, spacing = 2.2f, distance = 0, yawDeg = 25, pitchDeg = 32;
@@ -79,6 +80,8 @@ struct Viewer {
     void init(gfx::Device& d) {
         dev = &d;
         r3d.init(d);
+        r3d.setProfiling(lodReport);
+        r3d.setModelLodEnabled(!noLod);
         r3d.setShadowQuality(ShadowQuality::High);
         r3d.setMaterialQuality(qualitySet ? quality : Renderer3D::defaultMaterialQualityFor(d, platform::isTouchDevice()));
         gui.init(d, "engine/fonts/ui.ttf", 15.0f);
@@ -261,6 +264,7 @@ struct Viewer {
         if (gallery) gallery->shutdown(*dev);
         dev->destroyBuffer(ground.vb); dev->destroyBuffer(ground.ib);
         gui.shutdown();
+        if(lodReport){const auto& p=r3d.profile();std::printf("LOD_REPORT nodes=%u mainTriangles=%u shadowTriangles=%u\n",p.lodNodes,p.triangles[1],p.triangles[0]);}
         r3d.shutdown();
     }
 };
@@ -288,6 +292,8 @@ int aiverseMain(int argc, char** argv) {
             for (std::string t; std::getline(ss, t, ',');) v.types.push_back(t);
         }
         else if (a == "--start") v.start = std::stof(next());
+        else if (a == "--lod-report") v.lodReport = true;
+        else if (a == "--no-lod") v.noLod = true;
         else if (a == "--baked") v.baked = true;
         else if (a == "--fixed-dt") v.fixedDt = std::stof(next());
         else if (a == "--time") v.seek = std::stof(next());
