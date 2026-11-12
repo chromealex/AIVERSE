@@ -122,6 +122,7 @@ void planetWrite(Ctx& c, PlanetGen& pg, Json& body);
 bool generatePlanet(Ctx& c, Json& body, std::string* err);
 // GenWorld.cpp: a whole planet map (players, objects, fairness) for planet presets used as the map's "generate"
 bool generateWorld(Ctx& c, const GenRequest& req, Json& map, std::string* err);
+bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err);   // GenCity.cpp: preset shape "city"
 
 // GenContent.cpp
 enum class Kind : uint8_t { Mine, Tree, Spot, Spawner, Creep, Wanderer, NeutralStruct, Other };

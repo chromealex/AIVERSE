@@ -121,6 +121,8 @@ void openGridApi(Vm& vm);           // pure integer-grid navigation queries
 void openRoutesApi(Vm& vm);         // routes / multiscreen (RtsScriptRoutes.cpp)
 void openStdApi(Vm& vm);            // `rts` table for the standard library (RtsScriptStd.cpp)
 void openFieldApi(Vm& vm);          // `field` table: grid fields (RtsGridFieldsApi.cpp)
+void openDrivingApi(Vm& vm);        // `driving` table: who drives what, how fast (RtsDrivingApi.cpp)
+void openCommerceApi(Vm& vm);       // `commerce` table: premises, businesses, the bank (RtsCommerceApi.cpp)
 void openRaidApi(Vm& vm);           // `raid` table: extraction raids (RtsRaidApi.cpp)
 void openProgressionApi(Vm& vm);    // `progression` table: in-match progression (RtsProgressionApi.cpp)
 void openEncounterApi(Vm& vm);      // `encounters` table: boss encounters (RtsEncountersApi.cpp)

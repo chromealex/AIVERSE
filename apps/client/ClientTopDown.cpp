@@ -80,6 +80,14 @@ bool GameClient::topDownEvent(const Event& e, bool uiWants) {
         if (e.key == Key::Escape) return false;   // pause menu
         for (size_t i = 0; i < topDown_.config().buttons.size(); ++i)
             if (topDown_.config().buttons[i].key != 0 && int(e.key) == topDown_.config().buttons[i].key) { topDown_.buttonDown(int(i)); return true; }
+        if (commerceKey(e.key)) return true;   // deals at a door (rules "commerce"): E, then 1..9
+        if (mod().arsenal() && mod().arsenal()->active()) {   // weapons (rules "arsenal"): Z / X cycle, 1..9 pick a slot
+            int64_t pick = 0;
+            if (e.key == Key::X || e.key == Key::Tab) pick = kWeaponNext;
+            else if (e.key == Key::Z) pick = kWeaponPrev;
+            else if (int(e.key) >= int(Key::Num1) && int(e.key) <= int(Key::Num9)) pick = kWeaponSlot + (int(e.key) - int(Key::Num1));
+            if (pick != 0) { Command c; c.type = kCmdTopDownWeapon; c.param = pick; issue(c); return true; }
+        }
         if (e.key == Key::F || e.key == Key::Enter) {   // get into the nearest vehicle / out of the car (rules "driving")
             if (mod().driving() && mod().driving()->active()) { Command c; c.type = kCmdTopDownEnter; issue(c); }
             return true;
@@ -99,6 +107,17 @@ void GameClient::topDownFrame(double dt) {
     World& w = sim_->world();
     const Entity hero = td->heroOf(*sim_, human_);
     TopDownFrameInput in;
+    tdClock_ += float(std::max(0.0, dt));
+    in.time = tdClock_;
+    // aim assist (game.json topDown "aimAssist"): the targets in reach, only for the sources it is on for
+    const TopDownAimAssistConfig& assist = topDown_.config().assist;
+    tdTargets_.clear();
+    if (hero.valid() && ((assist.touch && topDownTouchUi()) || assist.pad || assist.mouse)) {
+        tdTargets_ = td->aimCandidates(*sim_, human_, Fixed::fromRatio(int64_t(assist.range * 256), 256));
+        const Vec3 hp = w.get<Transform>(hero).pos;
+        for (auto& t : tdTargets_)
+            in.targets.push_back({t.e.packed(), float((t.pos.x - hp.x).toDouble()), float((t.pos.z - hp.z).toDouble())});
+    }
     if (!ui_.textInputFocused()) {
         auto key = [&](Key k) { return keys_[int(k)]; };
         in.up = key(Key::W) || key(Key::Up);
@@ -237,14 +256,25 @@ void GameClient::topDownCamera(double dt) {
     const Entity hero = mod().topDown()->heroOf(*sim_, human_);
     float3 pos{};
     bool have = false;
-    for (auto& o : scene_.objects) if (o.entity == hero && hero.valid()) { pos = o.pos; have = true; break; }   // interpolated + predicted
+    // at the wheel the hero is off the map (not in the scene): the camera follows his car
+    Entity follow = hero;
+    const game::DrivingCar* car = mod().driving() && mod().driving()->active() && hero.valid() ? mod().driving()->carOf(*sim_, hero) : nullptr;
+    if (car) follow = car->e;
+    for (auto& o : scene_.objects) if (o.entity == follow && follow.valid()) { pos = o.pos; have = true; break; }   // interpolated + predicted
+    if (!have && follow.valid() && sim_->world().alive(follow)) {   // not drawn this frame: the simulation position
+        const Vec3 p = sim_->world().get<Transform>(follow).pos;
+        pos = {float(p.x.toDouble()), 0, float(p.z.toDouble())}; have = true;
+    }
     if (topDown_.escape().active) { pos = {topDown_.escape().x, pos.y, topDown_.escape().z}; have = true; }   // escape preview
     auto& g = mod().state(*sim_).grid;
+    // the stick is pedals + steering there, not a direction: only the velocity look-ahead applies
+    topDown_.setStickLookAhead(!car);
     topDown_.updateCamera(cam_, pos, have, float(dt), float(g.w), float(g.h));
 }
 
 void GameClient::topDownDraw() {
-    if (!topDownActive() || !topDownTouchUi()) return;
+    if (!topDownActive()) return;
+    const bool touchUi = topDownTouchUi();
     std::vector<float> ready;
     const Entity hero = mod().topDown()->heroOf(*sim_, human_);
     World& w = sim_->world();
@@ -262,7 +292,18 @@ void GameClient::topDownDraw() {
         } else r = 0;
         ready.push_back(r);
     }
-    view_.drawCanvas(topDown_.draw(platform::windowWidth(), platform::windowHeight(), ready));
+    std::vector<ViewDrawBatch> batches;
+    if (touchUi) batches = topDown_.draw(platform::windowWidth(), platform::windowHeight(), ready);
+    if (const uint64_t lock = topDown_.assistTarget()) {   // aim assist: a lock marker on the target
+        for (auto& o : scene_.objects) {
+            if (!o.entity.valid() || o.entity.packed() != lock) continue;
+            float2 sp;
+            if (cam_.worldToScreen({o.pos.x, 0.3f, o.pos.z}, platform::windowWidth(), platform::windowHeight(), sp))
+                batches.push_back(TopDownControls::drawLock(sp.x, sp.y, 20, tdClock_));
+            break;
+        }
+    }
+    view_.drawCanvas(batches);
 }
 
 } // namespace aiverse::client

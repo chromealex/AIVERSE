@@ -100,6 +100,20 @@ TopDownControlConfig parseTopDownControls(const Json& g, const std::vector<std::
     aimDef.center[0] = 0.86f;
     c.aim = readStick(j["aimStick"], aimDef);
     c.padDeadzone = std::clamp(float(j["gamepad"]["deadzone"].toDouble(c.padDeadzone)), 0.0f, 0.9f);
+    const Json& aj = j["aimAssist"];
+    if (aj.isObject()) {
+        c.assist.touch = aj.getBool("touch", true);
+        c.assist.pad = aj.getBool("pad", false);
+        c.assist.mouse = aj.getBool("mouse", false);
+        c.assist.cone = std::clamp(float(aj["cone"].toDouble(c.assist.cone)), 1.0f, 90.0f);
+        c.assist.range = std::max(0.0f, float(aj["range"].toDouble(c.assist.range)));
+        c.assist.stickiness = std::clamp(float(aj["stickiness"].toDouble(c.assist.stickiness)), 1.0f, 3.0f);
+        c.assist.tapFire = aj.getBool("tapFire", c.assist.tapFire);
+        c.assist.tapTime = std::clamp(float(aj["tapTime"].toDouble(c.assist.tapTime)), 0.05f, 1.0f);
+        c.assist.tapFireTime = std::clamp(float(aj["tapFireTime"].toDouble(c.assist.tapFireTime)), 0.05f, 3.0f);
+    } else if (!aj.isNull() && aj.boolean(false)) {
+        c.assist.touch = c.assist.pad = true;
+    }
     for (auto& bj : j["buttons"].items()) {
         TopDownButtonConfig b;
         b.ability = bj.getStr("ability");
@@ -121,6 +135,15 @@ TopDownControlConfig parseTopDownControls(const Json& g, const std::vector<std::
     num("minDistance", c.camera.minDistance); num("maxDistance", c.camera.maxDistance);
     num("smoothing", c.camera.smoothing); num("lookAhead", c.camera.lookAhead); num("aimLookAhead", c.camera.aimLookAhead);
     num("lookAheadSmoothing", c.camera.lookAheadSmoothing); num("margin", c.camera.margin);
+    num("velocityLookAhead", c.camera.velocityLookAhead); num("maxLookAhead", c.camera.maxLookAhead);
+    if (const Json& sz = cj["speedZoom"]; sz.isObject()) {
+        c.camera.speedFrom = std::max(0.0f, float(sz["from"].toDouble(0)));
+        c.camera.speedTo = float(sz["to"].toDouble(0));
+        c.camera.speedDistance = float(sz["distance"].toDouble(c.camera.distance));
+        c.camera.speedSmoothing = std::max(0.0f, float(sz["smoothing"].toDouble(c.camera.speedSmoothing)));
+    }
+    c.camera.velocityLookAhead = std::max(0.0f, c.camera.velocityLookAhead);
+    c.camera.maxLookAhead = std::max(0.0f, c.camera.maxLookAhead);
     c.camera.lockOffsetIfNoInput = cj.getBool("lockOffsetIfNoInput", c.camera.lockOffsetIfNoInput);
     c.camera.bounds = cj.getBool("bounds", c.camera.bounds);
     c.camera.pitch = std::clamp(c.camera.pitch, 5.0f, 90.0f);
@@ -144,6 +167,9 @@ void TopDownControls::configure(const Json& gameJson, const TopDownRules& rules,
     escape_ = {};
     haveSent_ = false;
     camInit_ = false;
+    haveLast_ = false; stickLook_ = true;
+    velX_ = velZ_ = speed_ = vOffX_ = vOffZ_ = zoomAdd_ = 0;
+    tapPending_ = false; tapUntil_ = 0; lockId_ = tapId_ = 0;
     offX_ = offZ_ = 0;
 }
 
@@ -180,6 +206,10 @@ bool VirtualStick::end(int64_t id) {
     if (!active_ || id != pointer_) return false;
     cancel();
     return true;
+}
+
+float VirtualStick::rawDeflection() const {
+    return active_ && cfg_.radius > 0 ? std::hypot(vx_, vy_) / cfg_.radius : 0.0f;
 }
 
 void VirtualStick::value(float& x, float& y) const {
@@ -229,12 +259,16 @@ bool TopDownControls::pointerDown(int64_t id, float x, float y, float W, float H
         return true;
     }
     if (move_.begin(id, x, y, W, H)) return true;
-    return aim_.begin(id, x, y, W, H);
+    if (!aim_.begin(id, x, y, W, H)) return false;
+    aimDownAt_ = clock_;
+    aimMaxDefl_ = aim_.rawDeflection();
+    return true;
 }
 
 bool TopDownControls::pointerMove(int64_t id, float x, float y) {
     if (!active()) return false;
-    bool used = move_.move(id, x, y) || aim_.move(id, x, y);
+    bool used = move_.move(id, x, y);
+    if (!used && aim_.move(id, x, y)) { used = true; aimMaxDefl_ = std::max(aimMaxDefl_, aim_.rawDeflection()); }
     for (size_t i = 0; i < buttonPointers_.size(); ++i)
         if (buttonPointers_[i] == id) { dragX_[i] = x; dragY_[i] = y; used = true; }
     return used;
@@ -242,7 +276,12 @@ bool TopDownControls::pointerMove(int64_t id, float x, float y) {
 
 bool TopDownControls::pointerUp(int64_t id, float x, float y) {
     if (!active()) return false;
-    bool used = move_.end(id) || aim_.end(id);
+    bool used = move_.end(id);
+    if (!used && aim_.end(id)) {
+        used = true;
+        // a short tap that barely moved the stick: shoot at the nearest target (aim assist)
+        if (cfg_.assist.touch && cfg_.assist.tapFire && clock_ - aimDownAt_ <= cfg_.assist.tapTime && aimMaxDefl_ < 0.35f) tapPending_ = true;
+    }
     for (size_t i = 0; i < buttonPointers_.size(); ++i)
         if (buttonPointers_[i] == id) {
             dragX_[i] = x; dragY_[i] = y;
@@ -259,6 +298,7 @@ void TopDownControls::cancelAll() {
     for (size_t i = 0; i < buttonPointers_.size(); ++i)   // held aim / hold buttons: nothing is cast
         if ((buttonPointers_[i] >= 0 || keyHeld_[i]) && cfg_.buttons[i].mode != TopDownButtonConfig::Mode::Tap)
             events_.push_back({int(i), topdown::Phase::Cancel, false, 0, 0});
+    tapPending_ = false; tapUntil_ = 0;
     std::fill(buttonPointers_.begin(), buttonPointers_.end(), -1);
     std::fill(keyHeld_.begin(), keyHeld_.end(), 0);
 }
@@ -333,6 +373,7 @@ bool TopDownEscapePreview::update(float dt, float dirX, float dirZ, const std::f
 // ================================================================= input
 
 topdown::Input TopDownControls::compose(const TopDownFrameInput& in, float yaw) {
+    clock_ = in.time;
     // move: the touch stick, else the pad stick, else the keys (screen axes, +y down)
     float sx = 0, sy = 0;
     move_.value(sx, sy);
@@ -361,22 +402,58 @@ topdown::Input TopDownControls::compose(const TopDownFrameInput& in, float yaw) 
 
     // aim: the aim stick, else the pad's right stick, else the cursor
     float ax = 0, ay = 0, awx = 0, awz = 0;
-    bool aim = false;
+    bool aim = false, assisted = false;
     aim_.value(ax, ay);
-    if (ax == 0 && ay == 0) {
+    if (ax != 0 || ay != 0) assisted = cfg_.assist.touch;
+    else {
         const float alen = std::hypot(in.padAimX, in.padAimY);
-        if (alen > cfg_.padDeadzone) { ax = in.padAimX; ay = in.padAimY; }
+        if (alen > cfg_.padDeadzone) { ax = in.padAimX; ay = in.padAimY; assisted = cfg_.assist.pad; }
     }
     if (ax != 0 || ay != 0) { screenToWorld(ax, ay, yaw, awx, awz); aim = true; }
     else if (in.mouseAim && cfg_.mouseAim != TopDownControlConfig::MouseAim::Off && (in.mouseDirX != 0 || in.mouseDirZ != 0)) {
-        awx = in.mouseDirX; awz = in.mouseDirZ; aim = true;
+        awx = in.mouseDirX; awz = in.mouseDirZ; aim = true; assisted = cfg_.assist.mouse;
+    }
+    // aim assist: bend the aim to the target least off it (inside the cone; the locked one inside a wider cone),
+    // nearer targets winning ties; a tap on the aim stick shoots at the nearest target for tapFireTime
+    bool tapFire = false;
+    const uint64_t prevLock = lockId_;
+    lockId_ = 0;
+    if (aim && assisted && !in.targets.empty()) {
+        const float al0 = std::hypot(awx, awz);
+        float best = 1e9f, maxD = 1e-3f;
+        for (auto& t : in.targets) maxD = std::max(maxD, std::hypot(t.dx, t.dz));
+        const TopDownFrameInput::Target* pick = nullptr;
+        for (auto& t : in.targets) {
+            const float d = std::hypot(t.dx, t.dz);
+            if (d <= 1e-4f || al0 <= 0) continue;
+            const float cosA = std::clamp((t.dx * awx + t.dz * awz) / (d * al0), -1.0f, 1.0f);
+            const float deg = std::acos(cosA) * 180 / kPi;
+            const float limit = cfg_.assist.cone * (t.id == prevLock ? cfg_.assist.stickiness : 1.0f);
+            if (deg > limit) continue;
+            const float score = deg / cfg_.assist.cone + 0.5f * d / maxD - (t.id == prevLock ? 0.25f : 0.0f);
+            if (score < best) { best = score; pick = &t; }
+        }
+        if (pick) { awx = pick->dx; awz = pick->dz; lockId_ = pick->id; }
+        tapUntil_ = 0;   // a held stick ends a tap's burst
+    }
+    if (tapPending_) {
+        tapPending_ = false;
+        const TopDownFrameInput::Target* near = nullptr;
+        for (auto& t : in.targets) if (!near || std::hypot(t.dx, t.dz) < std::hypot(near->dx, near->dz)) near = &t;
+        if (near) { tapId_ = near->id; tapUntil_ = clock_ + cfg_.assist.tapFireTime; }
+    }
+    if (!aim && tapUntil_ > clock_) {
+        const TopDownFrameInput::Target* t = nullptr;
+        for (auto& c : in.targets) if (c.id == tapId_) t = &c;
+        if (t) { awx = t->dx; awz = t->dz; aim = true; tapFire = true; lockId_ = t->id; }
+        else tapUntil_ = 0;
     }
     q.aim = aim;
     if (aim) q.aimAngle = binaryAngle(awx, awz);
     const float al = std::hypot(awx, awz);
     aiming_ = aim;
     aimDirX_ = al > 0 ? awx / al : 0; aimDirZ_ = al > 0 ? awz / al : 0;
-    q.fire = in.fireKey || in.padFire;
+    q.fire = in.fireKey || in.padFire || tapFire;
     return TopDown::requantize(rules_, q);
 }
 
@@ -384,6 +461,8 @@ topdown::Input TopDownControls::compose(const TopDownFrameInput& in, float yaw) 
 
 void TopDownControls::snapCamera(render::RTSCamera& cam, render::float3 hero, float mapW, float mapH) {
     camInit_ = false;
+    haveLast_ = false;
+    velX_ = velZ_ = speed_ = vOffX_ = vOffZ_ = zoomAdd_ = 0;
     updateCamera(cam, hero, true, 0, mapW, mapH);
 }
 
@@ -395,26 +474,56 @@ void TopDownControls::updateCamera(render::RTSCamera& cam, render::float3 hero, 
         lim.minX = std::min(c.margin, mapW * 0.5f); lim.maxX = std::max(mapW - c.margin, mapW * 0.5f);
         lim.minZ = std::min(c.margin, mapH * 0.5f); lim.maxZ = std::max(mapH - c.margin, mapH * 0.5f);
     }
-    lim.minZoom = c.minDistance; lim.maxZoom = c.maxDistance;
+    // speed camera: the hero's velocity from its motion between frames (a jump = respawn / teleport: no speed)
+    const bool speedCam = c.speedTo > c.speedFrom || c.velocityLookAhead > 0;
+    if (speedCam && haveHero && dt > 0) {
+        if (haveLast_) {
+            float vx = (hero.x - lastX_) / dt, vz = (hero.z - lastZ_) / dt;
+            if (std::hypot(hero.x - lastX_, hero.z - lastZ_) > 8) vx = vz = 0;
+            const float k = 1 - std::exp(-10 * dt);   // frames are jittery: a short low-pass
+            velX_ += (vx - velX_) * k; velZ_ += (vz - velZ_) * k;
+        }
+        lastX_ = hero.x; lastZ_ = hero.z; haveLast_ = true;
+    } else if (!haveHero || !speedCam) { haveLast_ = false; velX_ = velZ_ = 0; }
+    speed_ = std::hypot(velX_, velZ_);
+    if (c.speedTo > c.speedFrom) {
+        float t = std::clamp((speed_ - c.speedFrom) / (c.speedTo - c.speedFrom), 0.0f, 1.0f);
+        t = t * t * (3 - 2 * t);
+        const float want = (c.speedDistance - c.distance) * t;
+        const float k = c.speedSmoothing > 0 ? 1 - std::exp(-c.speedSmoothing * std::max(0.0f, dt)) : 1;
+        zoomAdd_ += (want - zoomAdd_) * (camInit_ ? k : 1);
+    } else zoomAdd_ = 0;
+    const float addLo = std::min(0.0f, c.speedDistance - c.distance), addHi = std::max(0.0f, c.speedDistance - c.distance);
+    lim.minZoom = std::max(1.0f, c.minDistance + (c.speedTo > c.speedFrom ? addLo : 0));
+    lim.maxZoom = c.maxDistance + (c.speedTo > c.speedFrom ? addHi : 0);
     lim.minPitch = 5; lim.maxPitch = 90;
     // look-ahead: eases toward the stick (and the aim); a released stick keeps the offset (lockOffsetIfNoInput)
-    const bool input = moveDirX_ != 0 || moveDirZ_ != 0 || aiming_;
-    if (input || !c.lockOffsetIfNoInput) {
-        const float tx = moveDirX_ * c.lookAhead + (aiming_ ? aimDirX_ * c.aimLookAhead : 0);
-        const float tz = moveDirZ_ * c.lookAhead + (aiming_ ? aimDirZ_ * c.aimLookAhead : 0);
+    const bool input = (stickLook_ && (moveDirX_ != 0 || moveDirZ_ != 0)) || aiming_;
+    if (input || !c.lockOffsetIfNoInput || !stickLook_) {
+        const float mx = stickLook_ ? moveDirX_ : 0, mz = stickLook_ ? moveDirZ_ : 0;
+        const float tx = mx * c.lookAhead + (aiming_ ? aimDirX_ * c.aimLookAhead : 0);
+        const float tz = mz * c.lookAhead + (aiming_ ? aimDirZ_ * c.aimLookAhead : 0);
         const float t = c.lookAheadSmoothing > 0 ? 1 - std::exp(-c.lookAheadSmoothing * std::max(0.0f, dt)) : 1;
         offX_ += (tx - offX_) * t; offZ_ += (tz - offZ_) * t;
     }
     gc::Pose current{cam.target.x, cam.target.z, cam.distance, cam.yaw * 180 / kPi, cam.pitch * 180 / kPi};
     gc::Pose target = current;
-    if (haveHero) { target.x = hero.x + offX_; target.z = hero.z + offZ_; }
+    if (c.velocityLookAhead > 0) {   // ahead of the motion (never locked: it follows the speed down to zero)
+        const float t = c.lookAheadSmoothing > 0 ? 1 - std::exp(-c.lookAheadSmoothing * std::max(0.0f, dt)) : 1;
+        vOffX_ += (velX_ * c.velocityLookAhead - vOffX_) * t; vOffZ_ += (velZ_ * c.velocityLookAhead - vOffZ_) * t;
+    } else vOffX_ = vOffZ_ = 0;
+    float ox = offX_ + vOffX_, oz = offZ_ + vOffZ_;
+    if (const float ol = std::hypot(ox, oz); c.maxLookAhead > 0 && ol > c.maxLookAhead) { ox *= c.maxLookAhead / ol; oz *= c.maxLookAhead / ol; }
+    if (haveHero) { target.x = hero.x + ox; target.z = hero.z + oz; }
     target.yaw = c.yaw; target.pitch = c.pitch;
-    target.zoom = camInit_ ? std::clamp(cam.distance, c.minDistance, c.maxDistance) : c.distance;
+    // the player's own zoom (wheel / pinch) is what the camera has now minus the speed part; the speed part goes on top
+    baseZoom_ = camInit_ ? std::clamp(baseZoom_ + (cam.distance - appliedZoom_), c.minDistance, c.maxDistance) : c.distance;
+    target.zoom = baseZoom_ + zoomAdd_;
     if (!camInit_ || c.smoothing <= 0) { gc::constrain(target, lim); current = target; camInit_ = haveHero; }
     else if (!gc::advance(current, target, lim, std::max(0.0f, dt), c.smoothing)) { gc::constrain(target, lim); current = target; }
     cam.target = {current.x, 0, current.z};
-    cam.distance = current.zoom;
-    cam.minDistance = c.minDistance; cam.maxDistance = c.maxDistance;
+    cam.distance = appliedZoom_ = current.zoom;
+    cam.minDistance = c.minDistance + zoomAdd_; cam.maxDistance = c.maxDistance + zoomAdd_;
     cam.yaw = current.yaw * kPi / 180;
     cam.pitch = current.pitch * kPi / 180;
 }
@@ -465,6 +574,23 @@ std::vector<ViewDrawBatch> TopDownControls::draw(float W, float H, const std::ve
             }
     }
     return out;
+}
+
+ViewDrawBatch TopDownControls::drawLock(float x, float y, float r, float time) {
+    ViewDrawBatch b;
+    b.layer = 99;
+    const float pulse = 1 + 0.08f * std::sin(time * 8);
+    const float rr = r * pulse;
+    ring(b, x, y, rr, 2.5f, rgba(255, 70, 60, 220));
+    for (int k = 0; k < 4; ++k) {   // four ticks pointing in
+        const float a = float(k) * kPi / 2 + time * 1.5f;
+        const float cx = std::cos(a), cy = std::sin(a), px = -cy, py = cx;
+        const float o = rr + 9, i = rr + 1, w = 4;
+        b.verts.push_back({x + cx * o + px * w, y + cy * o + py * w, 0, 0, rgba(255, 70, 60, 230)});
+        b.verts.push_back({x + cx * o - px * w, y + cy * o - py * w, 0, 0, rgba(255, 70, 60, 230)});
+        b.verts.push_back({x + cx * i, y + cy * i, 0, 0, rgba(255, 70, 60, 230)});
+    }
+    return b;
 }
 
 } // namespace aiverse::game

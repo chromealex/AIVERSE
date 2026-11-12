@@ -153,6 +153,11 @@ public:
     static topdown::Input requantize(const TopDownRules& r, topdown::Input in);
     static Vec3 direction(int32_t angle);                // unit vector of a binary-turn angle
     static int32_t angleOf(Vec3 dir);                    // binary-turn angle of a ground direction (0 for a zero vector)
+    // Read-only (client aim assist, docs/topdown.md): what the hero of `player` could shoot now by the manual-aim
+    // rules (hostile, alive, visible, a layer its weapons hit, line of fire) within `range` (0: aim range, else the
+    // weapon range), sorted by handle. Empty without a hero on the map (dead, at the wheel).
+    struct AimCandidate { Entity e; Vec3 pos; Fixed dist; };
+    std::vector<AimCandidate> aimCandidates(Simulation& sim, uint8_t player, Fixed range = {}) const;
 
     // rules "topDown" with type names resolved against `typeIds` (throws readable errors)
     static TopDownRules parse(const Json& j, const std::vector<std::string>& typeIds);

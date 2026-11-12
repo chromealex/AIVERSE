@@ -48,6 +48,11 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     env_->setup(sim, *this, rulesJson, mapIn);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
+    commerce_ = std::make_unique<Commerce>();   // premises, businesses, the bank (rules "commerce"); nothing without the block
+    commerce_->setup(sim, *this, rulesJson, mapIn);
+    driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
+    arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
+    arsenal_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -75,6 +80,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
     if (encounters_->active()) sim.addSystem("encounters", [this](Simulation& s) { encounters_->tick(s); });   // RtsEncounters.cpp: bosses, mobs, telegraph strikes
+    if (commerce_->active()) sim.addSystem("commerce", [this](Simulation& s) { commerce_->tick(s); });   // RtsCommerce.cpp: days and weeks
     if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
     if (progression_->active()) sim.addSystem("progression", [this](Simulation& s) { progression_->tick(s); });   // RtsProgression.cpp: kills at 0 hp -> xp orbs
     if (env_->active()) sim.addSystem("environment", [this](Simulation& s) { env_->tick(s); });   // RtsEnv.cpp (games with an environment only)
@@ -1007,7 +1013,9 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }   // native modules (never the two hero ids)
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
     if (progression_ && progression_->command(sim, cmd)) return;   // kCmdProgression (RtsProgression.cpp)
+    if (commerce_ && commerce_->command(sim, cmd)) return;   // kCmdCommerce (RtsCommerce.cpp)
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
+    if (arsenal_ && arsenal_->command(sim, cmd)) return;   // kCmdTopDownWeapon (RtsArsenal.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
     if (cmd.type >= kCmdDig && cmd.type <= kCmdPlayerAbility) { applyDungeonCommand(sim, cmd); return; }
@@ -1570,6 +1578,8 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (encounters_ && encounters_->active()) encounters_->hash(sim, h);   // games with rules "encounters" only
     if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
+    if (commerce_ && commerce_->active()) commerce_->hash(sim, h);   // games with rules "commerce" only
+    if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
 }
 
 } // namespace aiverse::game

@@ -29,6 +29,7 @@
 #include "ClientSplash.h"
 #include "GameClient.h"
 #include "modules/rts/view/EncounterDecals.h"   // boss encounters: ground marks
+#include "engine/platform/ContentReader.h"
 #include "RegionSettings.h"
 #include "modules/rts/RtsLocalize.h"
 #include "modules/rts/RtsTiles.h"
@@ -217,6 +218,7 @@ void GameClient::shutdown() {
     fx_.shutdown();
     sound_.detach();
     audio_.shutdown();
+    if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
     view_.shutdown(*dev_);
     postFx_.shutdown();
     r3d_.setBakedLighting(nullptr);
@@ -250,6 +252,13 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         Json rules = rulesJson_;
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
+        if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
+        // static scenery streamed around the camera instead of being loaded whole. The key is "streamedWorld" here:
+        // in these maps "world" is the planet system (FPS maps keep the same block under "world")
+        if (const Json& sw = map["streamedWorld"]; sw.getBool("async")) {
+            worldScene_ = std::make_unique<world::WorldScene>(sw, platform::makeContentReader(platform::contentRoot()));
+            worldRadius_ = int(std::clamp<int64_t>(sw.getInt("viewRadius", 2), 0, 4));
+        }
         scriptUiReset();
         if (std::getenv("AIVERSE_SCRIPT_LOG"))   // view scripts' log lines too ("[view]" / "[view error]")
             viewScripts_.onLog = [](const ScriptLogEntry& e) {
@@ -929,7 +938,12 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             cam_ = view_.updatePlanetCamera(scene_.seconds, float(dt), fbH());
             pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0.0f;
         }
+        if (worldScene_ && !planet()) {   // load / unload chunks for where the camera looks (GPU uploads: before the scene pass)
+            const Vec3 focus{Fixed::fromInt(int64_t(cam_.target.x)), Fixed{}, Fixed::fromInt(int64_t(cam_.target.z))};
+            worldScene_->update(dev, {&focus, 1}, worldRadius_);
+        }
         r3d_.beginScene(cam_, fbW(), fbH());
+        if (worldScene_ && !planet()) worldScene_->draw(r3d_, world::Cell{0, 0, 0}, 1);
         auto& gs = mod().state(*sim_);
         {   // input state for the overlays (placement footprint / build grids, held keys, modes, cursor)
             static const char* kModes[] = {"normal", "attack", "patrol", "place", "rally", "ability", "claim"};
