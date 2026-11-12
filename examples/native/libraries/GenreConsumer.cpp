@@ -11,6 +11,9 @@
 #include <aiverselib/genre/SensesConfigured.h>
 #include <aiverselib/genre/SensesData.h>
 #include <aiverselib/genre/SensesPersistence.h>
+#include <aiverselib/genre/NarrativeConfigured.h>
+#include <aiverselib/genre/NarrativeSceneData.h>
+#include <aiverselib/genre/NarrativeScenePersistence.h>
 #include <aiverselib/bots/GenreBotConfig.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
@@ -137,6 +140,28 @@ static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aive
     state.values["bots.genre.objective"]=goal->id;
     return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
 }
+// Narrative scenes: settings-driven config, a tiny social scene (relationship-gated choice, reveal, deferred
+// consequence, cue requests, one bark) for one authoritative tick, then the state in NativeState. The legacy story
+// JSON loads through the same reader. Cinematic/UI owners consume report cues and bark lines; they never write state.
+static bool narrativeSceneConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings,const aiverse::Json& story){
+    using namespace aiverse::lib::genre;using C=NarrativeCommandKind;
+    if(!narrativeSettingsErrors(settings).empty())return false;const auto config=narrativeConfig(settings);
+    const auto legacy=readNarrativeWorld(story,config);
+    const auto world=readNarrativeWorld(aiverse::Json::parse(R"({"facts":[{"id":1,"type":"bool","persistent":true}],
+        "characters":[{"id":1,"nameKey":"character.guard"}],"consequences":[{"id":1,"effects":[{"meter":"trust","character":1,"add":-10}]}],
+        "nodes":[{"id":1,"textKey":"story.gate.halt","speaker":1,"cues":[1],"choices":[
+            {"id":1,"textKey":"story.gate.bribe","next":0,"conditions":[{"meter":"trust","character":1,"op":"ge","value":0}],
+             "effects":[{"reveal":1,"to":[0,1]},{"schedule":1,"afterScenes":1}],"cues":[2]}]}],
+        "scenes":[{"id":1,"entry":1}],"barks":[{"id":1,"trigger":1,"speaker":1,"textKey":"bark.guard.idle"}]})"),config);
+    auto scene=beginNarrative(world,config);auto old=beginNarrative(legacy,config);if(!scene||!old)return false;
+    NarrativeInput input{{{1,C::StartScene,1},{2,C::Choose,1}},{{1,1,{}}}};
+    auto report=stepNarrative(world,config,*scene,0,input);
+    if(!report||report->cues.size()!=2||report->barks.size()!=1||!knows(*scene,0,1)||scene->pending.size()!=1)return false;
+    state.values["genre.narrative.world"]=int64_t(narrativeWorldHash(world)&0x7fffffffffffffffull);
+    state.values["genre.narrative.config"]=int64_t(narrativeConfigHash(config)&0x7fffffffffffffffull);
+    state.values["genre.narrative.cue"]=int64_t(report->cues.back().sequence);
+    return storeBytes(state,"genre.narrative",save(*scene))&&storeBytes(state,"genre.narrative.legacy",save(*old));
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -153,5 +178,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
     if(!genreBotConsumerExample(state,*parsed.value))return false;
+    if(!narrativeSceneConsumerExample(state,*parsed.value,story))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

@@ -36,7 +36,7 @@ ALIASES = {
  'meta-ui':'screen interface экран интерфейс',
  'aiverse-card-runtime':'cards deck карточ колод', 'aiverse-turn-scheduler':'turn пошаг ход',
  'aiverse-grid-puzzles':'puzzle match3 головолом', 'aiverse-rhythm-timing':'rhythm ритм',
- 'aiverse-narrative-graphs':'story narrative сюжет диалог', 'rts-bots-rts':'rts bot ртс бот',
+ 'aiverse-narrative-graphs':'story narrative dialogue relationship knowledge bark visual novel backlog consequence сюжет диалог отношения реплик визуальная новелла', 'rts-bots-rts':'rts bot ртс бот',
  'aiverse-bots-fps':'fps bot фпс бот', 'aiverse-camera':'camera камер',
  'aiverse-orchestrator':'skill catalog orchestration скилл каталог оркестратор',
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',

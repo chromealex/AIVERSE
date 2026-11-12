@@ -12,7 +12,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | genre-bots | Melee bot (spacing band, phase-aware openings, hit-confirmed combos, telegraph dodge/parry timing, lock-on), shooter bot (turn-limited aim, seeded aim error, solveIntercept lead, recoil bursts, reload/overheat, cover choice), squad roles + formations, objective choice hook (see [Genre bots](#genre-bots-genre-bots-010)) | Returns player-equivalent inputs only; perception, cover, objectives and navigation come from owners. No pathfinding, match rules, senses or sports/racing/card bots. |
 | stealth-senses | Sight cones (near/focus/peripheral) with owner light/cover/stance/visibility multipliers and LOS callback, hearing with occlusion callback and noise/query budgets, decaying footprint/scent markers, per observer-target suspicion meters (Unaware/Suspicious/Searching/Alert), delayed ally alerts sharing last known positions, deterministic search points with give-up, disguises, hiding spots (see [Stealth and senses](#stealth-and-senses-stealth-senses-010)) | Perception records and events only. Owner supplies poses, multipliers, raycasts/occlusion and search candidates and moves agents. Not RTS fog of war. No sound propagation, navmesh routes or presentation. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points. MatchObjectives.h (0.2.0): capture/hold zones with contest rules and decay, king of the hill, payload, elimination with lives/respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock, spectator transitions (see [Match objectives](#match-objectives-match-rules-020)) | Native extension policies returning events/scores for the match owner; existing built-in victory modes stay owned by their modules. Presence, deaths, pickups and gate crossings come from the authoritative owner. No cart physics, bomb/HUD presentation or network spectating. |
-| narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
+| narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings; 0.2.0 social scenes: typed facts, relationship meters, knowledge, AND/OR/NOT conditions, flags, chapters/acts, deferred consequences, speakers, cue requests, barks, VN backlog/skip-read/auto-advance (see [Narrative scenes](#narrative-scenes-narrative-graphs-020)) | Project UI/cinematics consume committed nodes, CueRequest records and bark lines. No scene playback, audio, QTE or online reward grant. |
 
 ## Native/host integration
 
@@ -553,3 +553,81 @@ velocity, guard, telegraphed attack); a target at `rememberFrom` (default Search
 `lastKnown` position with `visible=false`, so bots approach but never shoot or lock it. Anonymous disturbances
 (target 0) are skipped; steer search with `genre::searchGoal`. Results are sorted by target id. `facts` returning
 nullopt drops a target. This makes `stealth-senses` a package dependency of `genre-bots`.
+
+## Narrative scenes (narrative-graphs 0.2.0)
+
+Headers `genre/NarrativeScenes.h` (policy), `genre/NarrativeCues.h` (the `CueRequest` record shared with cinematic owners),
+`genre/NarrativeSceneData.h` (JSON), `genre/NarrativeScenePersistence.h` (save/load, hashing) and `genre/NarrativeConfigured.h`
+(settings). Target `AIVERSE::lib_narrative_graphs` (now declares `aiverse_engine`). The legacy `Story` / `readStory` /
+`chooseStory` / `StoryState` API and record kind 7 are unchanged; `readNarrativeWorld` also loads the legacy
+`examples/libraries/genre/story.json` (without `facts`, referenced keys become persistent int facts over the full int64
+range starting at 0; without `scenes`, scene 1 enters the first node; legacy add changes clamp instead of rejecting overflow).
+Example: `examples/libraries/genre/story-social.json`.
+
+**Definitions.** All IDs are positive integers, all text is localization keys. `facts`: `int` (min/max/initial), `bool`
+or `enum` (`values` names; JSON uses the names, C++ the index), `persistent` (world state kept across scenes; others reset
+to `initial` at every StartScene). `characters`: `nameKey` and `meters` `affinity`/`trust`/`fear` with min/max/initial
+(defaults from `narrative.meter*`). Character 0 is the player/narrator (speaker and knower only). `flags`: one-shot flags
+(set once, never cleared by effects; `persistent:false` flags clear at StartScene). `chapters`: `act`, `titleKey`;
+`initialChapter`; a scene's `chapter` is entered at StartScene. `scenes`: `entry` node. `nodes`: `textKey`, `speaker`,
+`participants`, `cues`, `onEnter` effects and either `choices` or `next` (a linear line; `next:0` ends the scene) plus
+optional `autoTicks`. `choices`: `textKey`, `next` (0 ends the scene), `once`, `conditions`, `effects`, `cues`.
+`consequences`: `conditions` (checked when due), `effects`, `cues`. `barks`: `trigger`, `speaker`, `textKey`, `priority`,
+`cooldown` (default `narrative.barkCooldownTicks`), `once`, `conditions`, `cues`.
+
+**Conditions** (a list is AND): `{"all":[...]}`, `{"any":[...]}`, `{"not":{...}}`; `{"fact":id,"op":..,"value":..}` (int:
+eq/ne/lt/le/gt/ge/between with min/max; bool/enum: eq/ne; a bool fact without value means true);
+`{"meter":"trust","character":id,"op":"ge","value":n}` (default op ge: relationship thresholds); `{"knows":fact,"character":id}`
+(default 0 = player); `{"flag":id}`; `{"visited":node}` (default ge 1); `{"chapter":id}` / `{"act":n}` (with op);
+`{"chose":choice,"node":node}`; legacy `{"key","minimum","maximum"}`. Depth <= 16, <= 256 terms per list.
+**Effects:** `{"set":fact,"value":v}`, `{"add":fact,"value":d}` (int facts, clamped), `{"meter":m,"character":id,"add"|"set":n}`
+(clamped to the bounds), `{"reveal":fact,"to":[ids]}`, `{"forget":fact,"from":[ids]}`, `{"flag":id}`, `{"chapter":id}`,
+`{"schedule":consequence,"afterTicks":n | "afterScenes":n}` (n >= 1), `{"cancel":consequence}`; legacy `{"key","value","add"}`.
+**Validation:** unknown keys, wrong types, duplicate IDs, unknown characters/facts/flags/chapters/nodes/consequences, out-of-domain
+values, broken edges and every line that cannot reach an ending (cycles without exit, graph-wise ignoring conditions) throw
+`JsonError("narrative.<path>: reason")`. Parse errors use JSON array indexes (`narrative.nodes[0].choices[1]: unknown key 'nxt'`),
+definition checks use IDs (`narrative.nodes[id=4].choices[id=2].next: unknown node 99`); `narrativeWorldError` returns the same
+ID paths for C++-built worlds.
+
+**Tick.** `beginNarrative(world, config, overrides)` initializes every fact and meter. `stepNarrative(world, config, state,
+tick, input)` once per authoritative tick with strictly increasing ticks (repeated/backwards ticks, invalid config, duplicate
+or zero command/request IDs return nullopt and leave the state untouched). Order: tick-delayed consequences due at this tick
+(by due tick, then scheduling order), commands by ascending ID, skip-read / auto-advance, bark requests by ascending ID.
+Commands: `StartScene(scene)` (resets scene-local facts/flags, enters the scene chapter, fires scene-delayed consequences,
+enters the entry line), `Advance` (linear line), `Choose(choice)` (re-checks conditions and `once`), `SetAuto(0/1)`,
+`SetSkip(0/1)`. Each command is a transaction on a copy; an ID <= the last accepted one or an invalid command emits
+`CommandRejected` (extra 1 for duplicates) and changes nothing. Effects of a choice apply before its next line's onEnter.
+
+**Cues.** `CueRequest{sequence, cueId, nodeId, choiceId, sceneId, speaker, barkId, consequenceId, tick, delayTicks, source}`
+with `source` NodeEnter / Choice / Consequence / Bark. Order inside a tick: consequence cues, then per command the choice
+cues before the next line's enter cues, then bark cues. `sequence` is persistent and strictly increasing; the cinematic owner
+(playback, timing, skipping, QTE) deduplicates by it. This package never plays or waits for a cue.
+
+**Barks.** For each `BarkRequest{id, trigger, speakers}` the candidates are barks of that trigger whose speaker is listed
+(empty = any) and not already used by an earlier request this tick, not `once`-spent, past their own cooldown and the
+speaker cooldown (`speakerCooldownTicks`), with passing conditions. Highest priority wins, then never-spoken, then least
+recently spoken, then the smaller ID. Output `BarkLine{request, bark, speaker, textKey}` + `BarkSpoken`, or `BarkNone`.
+
+**Visual novel.** Every entered line is appended to `state.backlog` (`node, speaker, choice taken, tick, scene`, newest
+`backlogLimit` kept). `state.read` counts reads across scenes; `lineWasRead` / `canSkipLine` / `lineRead` expose skip-read
+detection. Skip mode advances up to `skipLinesPerTick` read linear lines per tick and stops (and turns off) at an unread
+line or a choice (`SkipStopped`, extra 1 for a choice). Auto mode advances a linear line `autoTicks` (or
+`autoAdvanceTicks`) after it was shown; `autoAdvanceTick` reports when.
+
+**Settings.** Optional `narrative` section (configuration 0.3.4): `autoAdvanceTicks`, `skipLinesPerTick`, `backlogLimit`,
+`barkCooldownTicks`, `speakerCooldownTicks`, `maxPendingConsequences` (beyond it `ConsequenceDropped`), `maxBarkRequests`,
+`meterMinimum <= meterInitial <= meterMaximum`. Example: `examples/libraries/genre/narrative-settings.json`.
+
+**State.** `NarrativeState` is record kind 64 (`BarkMemory` 65); kinds 64..71 are reserved for this package. The record
+body starts with format 1 for future migrations. `genre::load` checks structure and canonical bytes; then call
+`narrativeStateError(world, config, state)` to bind it to the definitions. `narrativeHash` hashes states and reports;
+bind `narrativeWorldHash` and `narrativeConfigHash` in the save envelope. `GenreConsumer.cpp`
+(`narrativeSceneConsumerExample`) runs one tick of a tiny social scene and stores `genre.narrative`, `genre.narrative.legacy`,
+`genre.narrative.world`, `genre.narrative.config` and `genre.narrative.cue`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks (`-Wall -Wextra -Werror -pedantic`), `genre_tests.cpp` built by
+hand (the narrative-scene tests also standalone under ASan/UBSan) covering legacy loading, relationship thresholds and clamping, knowledge-gated and once choices, scene- and
+tick-delayed consequences, scene-local reset vs persistent world state, chapter/act, cue ordering and sequences, bark
+priority/cooldowns/once/tie-break, backlog limits, skip-read and auto-advance, save/restore mid-scene with identical
+continuation, rejected ticks/commands and invalid data paths, and the GenreConsumer chain in a standalone driver.
+Not run: CMake/isolation, `aiverse_tests`, native module export, headless restore matches, clang/MSVC.

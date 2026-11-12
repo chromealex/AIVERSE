@@ -4,6 +4,9 @@
 #include <aiverselib/genre/LocomotionModes.h>
 #include <aiverselib/genre/CombatConfigured.h>
 #include <aiverselib/genre/CombatData.h>
+#include <aiverselib/genre/NarrativeConfigured.h>
+#include <aiverselib/genre/NarrativeSceneData.h>
+#include <aiverselib/genre/NarrativeScenePersistence.h>
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -1300,4 +1303,151 @@ void sensesBotBridge(){
     CHECK(all.size()==3&&all[1].id==7&&all[1].visible);
     seen[0].target=6;CHECK(sb::perceivedFromSenses(std::span<const sg::PerceivedTarget>(seen),1,facts).size()==1);
 }
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// ---- Narrative scenes (narrative-graphs 0.2.0): relationships, knowledge, consequences, cues, barks, VN helpers.
+namespace narr {
+using EK=NarrativeEventKind;using CK=NarrativeCommandKind;using Ids=std::vector<int64_t>;
+NarrativeWorld social(const std::string& root){return readNarrativeWorld(Json::parseFile(root+"/examples/libraries/genre/story-social.json"));}
+int eventAt(const NarrativeReport& r,EK k,int64_t subject=-1){for(std::size_t i=0;i<r.events.size();++i)if(r.events[i].kind==k&&(subject<0||r.events[i].subject==subject))return int(i);return -1;}
+bool has(const NarrativeReport& r,EK k,int64_t subject=-1){return eventAt(r,k,subject)>=0;}
+struct Driver {
+    const NarrativeWorld& w;NarrativeConfig c;NarrativeState s;uint32_t tick=0;uint64_t cmd=0;
+    NarrativeReport step(std::vector<NarrativeCommand> commands={},std::vector<BarkRequest> barks={}){auto r=stepNarrative(w,c,s,++tick,{std::move(commands),std::move(barks)});CHECK(r);return *r;}
+    NarrativeReport run(CK kind,int64_t value=0){return step({{++cmd,kind,value}});}
+};
+Driver drive(const NarrativeWorld& w,NarrativeConfig c={},const std::map<int64_t,int64_t>& facts={}){auto s=beginNarrative(w,c,facts);CHECK(s);return Driver{w,c,*s};}
+void legacy(const std::string& root){
+    auto file=Json::parseFile(root+"/examples/libraries/genre/story.json");CHECK(readStory(file).size()==2);
+    auto w=readNarrativeWorld(file);CHECK(w.scenes.size()==1&&w.scenes.at(1).entry==1&&w.facts.size()==2&&w.facts.at(1).persistent&&w.nodes.size()==2);
+    auto d=drive(w);d.run(CK::StartScene,1);CHECK(d.s.node==1&&sceneChoices(w,d.s)==Ids{2});auto r=d.run(CK::Choose,1);CHECK(has(r,EK::CommandRejected)&&d.s.node==1);
+    auto e=drive(w,{},{{1,1}});e.run(CK::StartScene,1);CHECK(sceneChoices(w,e.s)==(Ids{1,2}));e.run(CK::Choose,1);CHECK(e.s.node==2&&e.s.facts.at(2)==1);
+    r=e.run(CK::Choose,1);CHECK(!e.s.inScene&&has(r,EK::SceneEnded,1));roundtrip(e.s);
+}
+void relationships(const std::string& root){
+    auto w=social(root);auto d=drive(w);
+    CHECK(socialMeter(d.s,1,SocialMeter::Trust)==0&&socialMeter(d.s,2,SocialMeter::Fear)==10&&socialMeter(d.s,1,SocialMeter::Affinity)==0&&w.characters.at(1).meters[1].maximum==50);
+    d.run(CK::StartScene,1);CHECK(d.s.chapter==1&&d.s.node==1);d.run(CK::Advance);CHECK(d.s.node==2&&sceneChoices(w,d.s)==(Ids{2,4}));
+    d.s.facts[2]=3;CHECK(sceneChoices(w,d.s)==Ids{4});d.s.meters[{1,1}]=19;CHECK(sceneChoices(w,d.s)==Ids{4});d.s.meters[{1,1}]=20;CHECK(sceneChoices(w,d.s)==(Ids{2,4}));
+    d.s.facts[1]=1;d.s.meters[{1,1}]=45;auto r=d.run(CK::Choose,1);auto i=eventAt(r,EK::MeterChanged,1);
+    CHECK(i>=0&&r.events[i].character==1&&r.events[i].value==50&&r.events[i].extra==45&&socialMeter(d.s,1,SocialMeter::Trust)==50&&d.s.node==3);
+    SceneCondition low{SceneConditionKind::Meter,SceneCompare::Between,0,1,-50,49,SocialMeter::Trust,{}};CHECK(!sceneCondition(w,d.s,low));
+    SceneCondition notLow{SceneConditionKind::Not,SceneCompare::Eq,0,0,0,0,SocialMeter::Affinity,{low}};CHECK(sceneCondition(w,d.s,notLow));
+}
+void knowledgeAndConsequences(const std::string& root){
+    auto w=social(root);auto d=drive(w);d.run(CK::StartScene,1);d.run(CK::Advance);auto choices=sceneChoices(w,d.s);CHECK(std::find(choices.begin(),choices.end(),3)==choices.end());
+    auto r=d.run(CK::Choose,2);
+    CHECK(d.s.facts.at(2)==1&&d.s.facts.at(3)==1&&d.s.flags.contains(2)&&d.s.pending.size()==1&&d.s.pending[0].byScene&&d.s.pending[0].due==2&&d.s.node==3&&d.s.flags.contains(1));
+    CHECK(has(r,EK::ConsequenceScheduled,1)&&has(r,EK::FlagSet,1)&&has(r,EK::FlagSet,2));
+    d.run(CK::Advance);CHECK(!d.s.inScene);for(int k=0;k<5;++k)CHECK(!has(d.step(),EK::ConsequenceFired));CHECK(d.s.pending.size()==1);
+    r=d.run(CK::StartScene,2);
+    CHECK(has(r,EK::ConsequenceFired,1)&&knows(d.s,0,4)&&!knows(d.s,1,4)&&socialMeter(d.s,1,SocialMeter::Trust)==-15&&d.s.chapter==2&&d.s.pending.empty());
+    CHECK(d.s.facts.at(3)==0&&!d.s.flags.contains(2)&&d.s.flags.contains(1)&&d.s.facts.at(2)==1);                 // scene-local reset, world state kept
+    CHECK(eventAt(r,EK::ConsequenceFired,1)<eventAt(r,EK::LineShown,10)&&r.cues.size()==1&&r.cues[0].cueId==200&&r.cues[0].source==CueSource::Consequence&&r.cues[0].consequenceId==1);
+    d.run(CK::Advance);CHECK(d.s.node==11&&sceneChoices(w,d.s)==(Ids{1,2}));
+    d.run(CK::Choose,2);CHECK(!d.s.inScene&&d.s.pending.size()==1&&!d.s.pending[0].byScene&&d.s.pending[0].due==int64_t(d.tick)+600);
+    auto due=uint32_t(d.s.pending[0].due);while(d.tick+1<due)CHECK(!has(d.step(),EK::ConsequenceFired));
+    r=d.step();CHECK(has(r,EK::ConsequenceFired,2)&&socialMeter(d.s,2,SocialMeter::Affinity)==5);
+    d.run(CK::StartScene,1);d.run(CK::Advance);choices=sceneChoices(w,d.s);CHECK(std::find(choices.begin(),choices.end(),3)!=choices.end());
+    r=d.run(CK::Choose,3);CHECK(knows(d.s,1,4)&&has(r,EK::Revealed,4)&&socialMeter(d.s,2,SocialMeter::Fear)==40&&d.s.node==4);
+    SceneCondition chose{SceneConditionKind::Chose,SceneCompare::Eq,2,0,3,0,SocialMeter::Affinity,{}};CHECK(sceneCondition(w,d.s,chose));
+    d.run(CK::Advance);d.run(CK::StartScene,1);d.run(CK::Advance);choices=sceneChoices(w,d.s);CHECK(std::find(choices.begin(),choices.end(),3)==choices.end());
+    auto t=drive(w);t.s.knowledge[{0,4}]=0;t.run(CK::StartScene,2);t.run(CK::Advance);r=t.run(CK::Choose,1);
+    SceneCondition act{SceneConditionKind::Act,SceneCompare::Ge,0,0,2,0,SocialMeter::Affinity,{}};
+    CHECK(t.s.chapter==3&&has(r,EK::ChapterChanged,3)&&sceneCondition(w,t.s,act)&&socialMeter(t.s,2,SocialMeter::Affinity)==-40);
+}
+void cueOrdering(const std::string& root){
+    auto w=social(root);auto d=drive(w,{},{{1,1}});auto r=d.run(CK::StartScene,1);
+    CHECK(r.cues.size()==1&&r.cues[0].cueId==100&&r.cues[0].source==CueSource::NodeEnter&&r.cues[0].nodeId==1&&r.cues[0].sceneId==1&&r.cues[0].speaker==1&&r.cues[0].sequence==1&&r.cues[0].tick==d.tick);
+    d.run(CK::Advance);r=d.run(CK::Choose,1);
+    CHECK(r.cues.size()==2&&r.cues[0].cueId==101&&r.cues[0].source==CueSource::Choice&&r.cues[0].choiceId==1&&r.cues[0].nodeId==2&&r.cues[0].sequence==2);
+    CHECK(r.cues[1].cueId==102&&r.cues[1].source==CueSource::NodeEnter&&r.cues[1].nodeId==3&&r.cues[1].delayTicks==30&&r.cues[1].sequence==3);
+    CHECK(eventAt(r,EK::ChoiceTaken,1)<eventAt(r,EK::LineShown,3));
+    auto e=drive(w,{},{{1,1}});r=e.step({{3,CK::Choose,1},{1,CK::StartScene,1},{2,CK::Advance,0}});   // one tick, commands sorted by ID
+    CHECK(r.cues.size()==3&&r.cues[0].cueId==100&&r.cues[1].cueId==101&&r.cues[2].cueId==102&&r.cues[2].sequence==3&&e.s.lastCommand==3&&e.s.node==3);
+}
+void barks(const std::string& root){
+    auto w=social(root);NarrativeConfig c;c.speakerCooldownTicks=10;c.barkCooldownTicks=50;auto d=drive(w,c);
+    auto r=d.step({},{{1,1,{}}});CHECK(r.barks.size()==1&&r.barks[0].bark==1&&r.barks[0].speaker==1&&r.barks[0].textKey=="bark.guard.idle");
+    r=d.step({},{{1,1,{}}});CHECK(r.barks.empty()&&has(r,EK::BarkNone,1));
+    d.s.facts[3]=1;while(d.tick<10)d.step();r=d.step({},{{1,1,{}}});CHECK(r.barks.size()==1&&r.barks[0].bark==2);   // priority beats the idle line
+    d.s.knowledge[{0,4}]=d.tick;for(int k=0;k<60;++k)d.step();
+    r=d.step({},{{2,1,{}},{1,1,{}}});CHECK(r.barks.size()==2&&r.barks[0].request==1&&r.barks[0].bark==2&&r.barks[1].request==2&&r.barks[1].bark==3);
+    CHECK(r.cues.size()==1&&r.cues[0].cueId==300&&r.cues[0].source==CueSource::Bark&&r.cues[0].barkId==3&&r.cues[0].speaker==2);
+    for(int k=0;k<60;++k)d.step();r=d.step({},{{1,1,{2}}});CHECK(r.barks.empty());                                       // bark 3 is once
+    auto w2=w;w2.barks[5]=SceneBark{5,2,2,0,0,"bark.smuggler.sigh",false,{},{}};CHECK(valid(w2));auto e=drive(w2,c);
+    std::vector<int64_t> picked;for(int k=0;k<3;++k){r=e.step({},{{1,2,{}}});CHECK(r.barks.size()==1);picked.push_back(r.barks[0].bark);for(int m=0;m<9;++m)CHECK(e.step({},{{1,2,{}}}).barks.empty());}
+    CHECK(picked==(Ids{4,5,4}));                                                                                          // ID, never spoken, least recent
+}
+void backlogAndSkip(const std::string& root){
+    auto w=social(root);NarrativeConfig c;c.backlogLimit=3;c.autoAdvanceTicks=5;auto d=drive(w,c);
+    d.run(CK::StartScene,1);CHECK(!d.s.lineWasRead&&!canSkipLine(w,d.s));d.run(CK::Advance);d.run(CK::Choose,4);
+    CHECK(!d.s.inScene&&d.s.backlog.size()==2&&d.s.backlog[0].node==1&&d.s.backlog[0].speaker==1&&d.s.backlog[1].node==2&&d.s.backlog[1].choice==4&&lineRead(d.s,1)&&lineRead(d.s,2)&&!lineRead(d.s,3));
+    auto r=d.step({{++d.cmd,CK::SetSkip,1},{++d.cmd,CK::StartScene,1}});
+    CHECK(d.s.node==2&&!d.s.skipMode&&has(r,EK::AutoAdvanced,1)&&has(r,EK::SkipStopped,2)&&r.events[eventAt(r,EK::SkipStopped)].extra==1);
+    d.run(CK::Choose,2);CHECK(d.s.node==3&&!d.s.lineWasRead);r=d.run(CK::SetSkip,1);CHECK(d.s.node==3&&has(r,EK::SkipStopped,3)&&!d.s.skipMode);
+    CHECK(d.s.backlog.size()==3&&d.s.backlog[0].node==1&&d.s.backlog[1].node==2&&d.s.backlog[1].choice==2&&d.s.backlog[2].node==3);
+    d.run(CK::SetAuto,1);auto at=*autoAdvanceTick(w,c,d.s);CHECK(at==d.s.lineStart+5);
+    while(d.tick+1<at){d.step();CHECK(d.s.inScene&&d.s.node==3);}
+    r=d.step();CHECK(!d.s.inScene&&has(r,EK::AutoAdvanced,3)&&has(r,EK::SceneEnded,1));
+    d.run(CK::StartScene,2);CHECK(*autoAdvanceTick(w,c,d.s)==d.tick+60&&!autoAdvanceTick(w,c,NarrativeState{}));
+}
+void restore(const std::string& root){
+    auto w=social(root);NarrativeConfig c;c.speakerCooldownTicks=3;auto d=drive(w,c,{{1,1}});roundtrip(d.s);
+    d.run(CK::StartScene,1);d.run(CK::Advance);d.run(CK::Choose,2);d.step({},{{1,1,{}}});CHECK(d.s.pending.size()==1&&d.s.inScene);
+    roundtrip(d.s);roundtrip(d.s.barks);auto bytes=save(d.s);NarrativeState copy;
+    CHECK(load(bytes,copy)&&narrativeStateError(w,c,copy).empty()&&narrativeHash(copy)==narrativeHash(d.s));
+    Driver e{w,c,copy,d.tick,d.cmd};
+    for(int i=0;i<24;++i){
+        std::vector<NarrativeCommand> cmds;if(i==2)cmds={{d.cmd+1,CK::Advance,0}};if(i==4)cmds={{d.cmd+1,CK::StartScene,2}};if(i==6)cmds={{d.cmd+1,CK::Advance,0}};if(i==8)cmds={{d.cmd+1,CK::Choose,1}};
+        if(!cmds.empty()){++d.cmd;++e.cmd;}
+        auto a=d.step(cmds,{{1,1,{}},{2,2,{}}});auto b=e.step(cmds,{{1,1,{}},{2,2,{}}});CHECK(narrativeHash(a)==narrativeHash(b)&&narrativeHash(d.s)==narrativeHash(e.s));
+    }
+    CHECK(d.s.chapter==3&&knows(d.s,0,4));
+    auto bad=bytes;bad[6]=char(bad[6]^1);CHECK(!load(bad,copy));
+    NarrativeState other;CHECK(load(bytes,other));auto legacyWorld=readNarrativeWorld(Json::parseFile(root+"/examples/libraries/genre/story.json"));
+    CHECK(!narrativeStateError(legacyWorld,{},other).empty());
+    CHECK(narrativeWorldHash(w)==narrativeWorldHash(social(root))&&narrativeWorldHash(w)!=narrativeWorldHash(legacyWorld)&&narrativeConfigHash({})!=narrativeConfigHash(c));
+    CHECK(!d.s.inScene);auto broken=d.s;broken.inScene=true;CHECK(save(broken).empty());broken=d.s;broken.lineStart=d.tick+1;CHECK(save(broken).empty());
+}
+void rejection(const std::string& root){
+    auto w=social(root);auto d=drive(w);d.step();auto before=save(d.s);
+    CHECK(!stepNarrative(w,{},d.s,d.tick,{})&&!stepNarrative(w,{},d.s,0,{})&&save(d.s)==before);
+    CHECK(!stepNarrative(w,{},d.s,d.tick+1,{{{5,CK::Advance,0},{5,CK::Advance,0}},{}})&&!stepNarrative(w,{},d.s,d.tick+1,{{{0,CK::Advance,0}},{}}));
+    CHECK(!stepNarrative(w,{},d.s,d.tick+1,{{},{{1,0,{}}}})&&save(d.s)==before);
+    NarrativeConfig broken;broken.backlogLimit=0;CHECK(!stepNarrative(w,broken,d.s,d.tick+1,{})&&!beginNarrative(w,broken)&&!beginNarrative(w,{},{{3,7}}));
+    d.run(CK::StartScene,1);auto r=d.step({{d.cmd,CK::Advance,0}});CHECK(has(r,EK::CommandRejected)&&r.events[0].extra==1&&d.s.node==1);
+    r=d.run(CK::Choose,99);CHECK(r.events.size()==1&&r.events[0].kind==EK::CommandRejected&&r.events[0].extra==0&&d.s.lastCommand==d.cmd-1);
+    r=d.run(CK::StartScene,2);CHECK(has(r,EK::CommandRejected)&&d.s.scene==1);r=d.run(CK::SetAuto,2);CHECK(has(r,EK::CommandRejected)&&!d.s.autoMode);
+    auto err=[](const std::string& text){try{(void)readNarrativeWorld(Json::parse(text));}catch(const JsonError& e){return std::string(e.what());}return std::string();};
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":0,"color":1}]})")=="narrative.nodes[0]: unknown key 'color'");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":0}],"music":1})")=="narrative: unknown key 'music'");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":7}]})")=="narrative.nodes[id=1].next: unknown node 7");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","speaker":3,"next":0}]})")=="narrative.nodes[id=1].speaker: unknown character 3");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","choices":[{"id":1,"textKey":"b","next":0,"conditions":[{"fact":9}]}]}]})")=="narrative.nodes[0].choices[0].conditions[0].fact: unknown fact 9");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":2},{"id":2,"textKey":"b","choices":[{"id":1,"textKey":"c","next":1}]}]})")=="narrative.nodes[id=1]: cannot reach an ending (cycle without exit)");
+    CHECK(err(R"({"facts":[{"id":1,"type":"enum","values":["a"]}],"nodes":[{"id":1,"textKey":"a","next":0,"onEnter":[{"set":1,"value":"b"}]}]})")=="narrative.nodes[0].onEnter[0].value: unknown enum value 'b'");
+    CHECK(err(R"({"facts":[{"id":1,"type":"bool"}],"nodes":[{"id":1,"textKey":"a","choices":[{"id":1,"textKey":"b","next":0,"conditions":[{"fact":1,"op":"gt","value":true}]}]}]})")=="narrative.nodes[0].choices[0].conditions[0].op: bool and enum facts allow eq/ne only");
+    CHECK(err(R"({"facts":[{"id":1,"type":"bool"}],"nodes":[{"id":1,"textKey":"a","choices":[{"id":1,"textKey":"b","next":0,"conditions":[{"knows":1,"character":5}]}]}]})")=="narrative.nodes[id=1].choices[id=1].conditions[0].character: unknown character 5");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":0},{"id":1,"textKey":"b","next":0}]})")=="narrative.nodes[1].id: duplicate node 1");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a"}]})").starts_with("narrative.nodes[0]: expected exactly one of choices"));
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":0,"onEnter":[{"schedule":3,"afterTicks":5}]}]})")=="narrative.nodes[id=1].onEnter[0].schedule: unknown consequence 3");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":0,"onEnter":[{"schedule":3,"afterTicks":5,"afterScenes":1}]}]})")=="narrative.nodes[0].onEnter[0]: expected exactly one of afterTicks, afterScenes");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":0,"cues":[{"id":1,"track":2}]}]})")=="narrative.nodes[0].cues[0]: unknown key 'track'");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"","next":0}]})")=="narrative.nodes[0].textKey: expected nonempty localization key");
+    CHECK(err(R"({"facts":[],"characters":[{"id":1,"nameKey":"c","meters":{"trust":{"min":5,"max":1}}}],"nodes":[{"id":1,"textKey":"a","next":0}]})")=="narrative.characters[0].meters.trust: requires min <= initial <= max within +-1000000000");
+    auto w2=w;w2.nodes[2].choices[0].next=99;CHECK(narrativeWorldError(w2)=="nodes[id=2].choices[id=1].next: unknown node 99");
+    w2=w;w2.barks[1].speaker=9;CHECK(narrativeWorldError(w2)=="barks[id=1].speaker: unknown character 9");
+}
+void settings(const std::string& root){
+    auto read=[](const std::string& text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto s=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/narrative-settings.json"));CHECK(s.value&&narrativeSettingsErrors(*s.value).empty());
+    auto c=narrativeConfig(*s.value);CHECK(c.autoAdvanceTicks==120&&c.skipLinesPerTick==8&&c.backlogLimit==64&&c.maxPending==256&&c.maxBarkRequests==16&&c.speakerCooldownTicks==60&&valid(c));
+    auto defaults=read(R"({"schemaVersion":1})");CHECK(defaults.value&&narrativeConfigHash(narrativeConfig(*defaults.value))==narrativeConfigHash(NarrativeConfig{}));
+    auto r=read(R"({"schemaVersion":1,"narrative":{"meterInitial":200}})");CHECK(!r.value&&r.errors.at(0)=="narrative.meterInitial: must not exceed meterMaximum");
+    r=read(R"({"schemaVersion":1,"narrative":{"barkVolume":1}})");CHECK(!r.value&&r.errors.at(0)=="narrative.barkVolume: unknown field");
+    r=read(R"({"schemaVersion":1,"narrative":{"skipLinesPerTick":0}})");CHECK(!r.value&&r.errors.at(0)=="narrative.skipLinesPerTick: integer out of range");
+    NarrativeConfig custom;custom.meter={-5,5,1};auto w=readNarrativeWorld(Json::parse(R"({"facts":[],"characters":[{"id":1,"nameKey":"c"}],"nodes":[{"id":1,"textKey":"a","speaker":1,"next":0}]})"),custom);
+    CHECK(w.characters.at(1).meters[2].minimum==-5&&w.characters.at(1).meters[2].maximum==5&&w.characters.at(1).meters[2].initial==1);
+}
+}
+void narrativeScenes(const std::string& root){narr::legacy(root);narr::relationships(root);narr::knowledgeAndConsequences(root);narr::cueOrdering(root);narr::barks(root);narr::backlogAndSkip(root);narr::restore(root);narr::rejection(root);narr::settings(root);}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();narrativeScenes(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story, narrative scenes and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
