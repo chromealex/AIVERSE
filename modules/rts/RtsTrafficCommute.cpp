@@ -137,10 +137,28 @@ void Traffic::depart(Simulation& sim, TrafficStore& st, int32_t id, uint8_t stat
         travel(sim, c, kLegDrive, a.pos);
         return;
     }
-    if (c.commute == kCommuteBus && a.stop >= 0 && b.stop >= 0 && a.stop != b.stop) {
-        const Fixed onFoot = (stops_[size_t(a.stop)].kerb - a.pos).length() + (b.pos - stops_[size_t(b.stop)].kerb).length();
-        if (onFoot < (b.pos - a.pos).length()) {
-            c.stopA = a.stop; c.stopB = b.stop;
+    c.line = -1;
+    if (c.commute == kCommuteBus) {
+        // the line whose stops are nearest to both doors (no changes); without lines any bus between the nearest stops
+        const Fixed range2 = rules_.population.stopRange * rules_.population.stopRange;
+        int sa = lines_.empty() ? a.stop : -1, sb = lines_.empty() ? b.stop : -1;
+        Fixed best = (b.pos - a.pos).length();   // the walk he saves must be worth it
+        if (lines_.empty()) { if (sa < 0 || sb < 0 || sa == sb || (stops_[size_t(sa)].kerb - a.pos).length() + (b.pos - stops_[size_t(sb)].kerb).length() >= best) sa = sb = -1; }
+        for (size_t li = 0; li < lines_.size(); ++li) {
+            int na = -1, nb = -1;
+            Fixed da = range2, db = range2;
+            for (int32_t si : lines_[li].stops) {
+                if (stopCell_[size_t(si)] < 0) continue;
+                const Fixed qa = (stops_[size_t(si)].kerb - a.pos).lengthSq(), qb = (stops_[size_t(si)].kerb - b.pos).lengthSq();
+                if (qa < da) { da = qa; na = si; }
+                if (qb < db) { db = qb; nb = si; }
+            }
+            if (na < 0 || nb < 0 || na == nb) continue;
+            const Fixed onFoot = (stops_[size_t(na)].kerb - a.pos).length() + (b.pos - stops_[size_t(nb)].kerb).length();
+            if (onFoot < best) { best = onFoot; sa = na; sb = nb; c.line = int16_t(li); }
+        }
+        if (sa >= 0 && sb >= 0) {
+            c.stopA = sa; c.stopB = sb;
             travel(sim, c, kLegToStop, a.pos);
             return;
         }
@@ -235,9 +253,10 @@ void Traffic::citizenUnseen(Simulation& sim, TrafficStore& st, TrafficPerson& p,
 
 // ----------------------------------------------------------------- by bus
 
-// A bus stands at the stop. Citizens waiting here get on; those who ride to this stop and are due get off.
+// A bus stands at the stop. Citizens waiting here for its line get on (they are in that bus from now on); those who
+// ride it to this stop get off, and so do riders nobody saw who are due here on this line.
 // `p`: a person near the stop (boarding), nullptr: let the riders off.
-bool Traffic::busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPerson* p) {
+bool Traffic::busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPerson* p, const TrafficCar& bus) {
     World& w = sim.world();
     if (st.citizens.empty() || stop < 0 || size_t(stop) >= stopCell_.size()) return false;   // no population on this map
     const BusStop& bs = stops_[size_t(stop)];
@@ -245,9 +264,10 @@ bool Traffic::busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPer
         if (p->citizen < 0 || size_t(p->citizen) >= st.citizens.size()) return false;
         TrafficCitizen& c = st.citizens[size_t(p->citizen)];
         if (c.leg != kLegAtStop || c.stopA != stop || p->panic || !living(w, p->e)) return false;
+        if (c.line >= 0 && c.line != bus.line) return false;   // not his line
         if ((v2(w.get<Transform>(p->e).pos) - bs.kerb).lengthSq() > Fixed::fromInt(36)) return false;
-        c.e = kNullEntity;
         travel(sim, c, kLegRide, bs.kerb);
+        c.e = bus.line >= 0 ? bus.e : kNullEntity;   // a bus of a line takes him to his stop; one that roams only out of sight
         p->citizen = -1;
         silentRemove(sim, p->e);
         return true;
@@ -255,18 +275,104 @@ bool Traffic::busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPer
     const int cell = stopCell_[size_t(stop)];
     if (cell < 0) return false;
     int off = 0;
-    for (size_t id = 0; id < st.citizens.size() && off < 4; ++id) {
+    for (size_t id = 0; id < st.citizens.size() && off < 6; ++id) {
         TrafficCitizen& c = st.citizens[id];
-        if (c.leg != kLegRide || c.stopB != stop || c.e.valid() || (c.state != kCitizenToWork && c.state != kCitizenToHome)) continue;
-        if (uint64_t(sim.tick() - c.left) * 2 < uint64_t(c.eta - c.left)) continue;   // still far away on another bus
+        if (c.leg != kLegRide || c.stopB != stop || (c.state != kCitizenToWork && c.state != kCitizenToHome)) continue;
+        if (c.e != bus.e) {   // not in this bus: an unseen rider of the line who is nearly here
+            if (c.e.valid() || (c.line >= 0 && c.line != bus.line)) continue;
+            if (uint64_t(sim.tick() - c.left) * 2 < uint64_t(c.eta - c.left)) continue;
+        }
         const int to = c.state == kCitizenToWork ? c.work : c.home;
         const Vec3 spot{Fixed::fromInt(cell % net_.w) + Fixed::fromRatio(int(id % 7) + 2, 10), Fixed{}, Fixed::fromInt(cell / net_.w) + Fixed::fromRatio(int(id / 7 % 7) + 2, 10)};
-        const Entity e = citizenPerson(sim, st, int32_t(id), spot, places_[size_t(to)].cell);
-        if (!e.valid()) break;
+        c.e = kNullEntity;
+        if (!citizenPerson(sim, st, int32_t(id), spot, places_[size_t(to)].cell).valid()) { travel(sim, c, kLegWalk, bs.kerb); continue; }
         c.leg = kLegWalk;
         ++off;
     }
     return off > 0;
+}
+
+// The bus leaves the street (out of sight, taken, wrecked): its riders ride on unseen from where it was.
+void Traffic::busGone(Simulation& sim, TrafficStore& st, Entity bus) {
+    if (!bus.valid() || !sim.world().alive(bus)) return;
+    const Vec2 at = v2(sim.world().get<Transform>(bus).pos);
+    for (auto& c : st.citizens)
+        if (c.e == bus && c.leg == kLegRide) { c.e = kNullEntity; travel(sim, c, kLegRide, at); }
+}
+
+// ----------------------------------------------------------------- bus lines
+
+// The lines: given ones (through the road pieces nearest to their points) or laid out over the driven roads: nine
+// anchors on a 3 x 3 grid of the network's extent, then a ring through the corners, the middle row and column,
+// the diagonals, the top and the bottom row. A bus goes from point to point by the shortest roads and round again.
+void Traffic::setupLines() {
+    lines_.clear();
+    if (rules_.buses.empty() || rules_.maxBuses <= 0) return;
+    auto driven = [&](const tl::TrafficPiece& P) { return P.lanes > 0 && P.length() >= 5; };
+    if (!rules_.lineDefs.empty()) {
+        for (auto& d : rules_.lineDefs) {
+            BusLine L; L.id = d.id;
+            for (Vec2 q : d.via) { int32_t piece; Fixed along; if (roadSpot(q, 12, piece, along) && (L.via.empty() || L.via.back() != piece)) L.via.push_back(piece); }
+            if (L.via.size() >= 2) lines_.push_back(std::move(L));
+        }
+    } else if (rules_.autoLines > 0) {
+        int x0 = INT32_MAX, z0 = INT32_MAX, x1 = -1, z1 = -1;
+        auto mid = [&](const tl::TrafficPiece& P) { return tl::trafficDetail::at(P, Fixed::fromRatio(P.along0 + P.along1 + 1, 2), P.centre()); };
+        for (auto& P : net_.pieces) {
+            if (!driven(P)) continue;
+            const Vec2 m = mid(P);
+            x0 = std::min(x0, int(m.x.floorInt())); x1 = std::max(x1, int(m.x.floorInt()));
+            z0 = std::min(z0, int(m.y.floorInt())); z1 = std::max(z1, int(m.y.floorInt()));
+        }
+        if (x1 < 0) return;
+        int32_t anchor[9];
+        for (int g = 0; g < 9; ++g) {
+            const Vec2 at{Fixed::fromInt(x0) + Fixed::fromInt(x1 - x0) * Fixed::fromRatio(g % 3, 2), Fixed::fromInt(z0) + Fixed::fromInt(z1 - z0) * Fixed::fromRatio(g / 3, 2)};
+            anchor[g] = -1;
+            Fixed best{};
+            for (size_t pi = 0; pi < net_.pieces.size(); ++pi) {
+                if (!driven(net_.pieces[pi])) continue;
+                const Fixed d = (mid(net_.pieces[pi]) - at).lengthSq();
+                if (anchor[g] < 0 || d < best) { best = d; anchor[g] = int32_t(pi); }
+            }
+        }
+        static const int kShape[7][4] = {{0, 2, 8, 6}, {3, 4, 5, -1}, {1, 4, 7, -1}, {0, 4, 8, -1}, {2, 4, 6, -1}, {0, 1, 2, -1}, {6, 7, 8, -1}};
+        for (int li = 0; li < 7 && int(lines_.size()) < rules_.autoLines; ++li) {
+            BusLine L; L.id = std::to_string(lines_.size() + 1);
+            for (int k = 0; k < 4 && kShape[li][k] >= 0; ++k) {
+                const int32_t a = anchor[kShape[li][k]];
+                if (a >= 0 && std::find(L.via.begin(), L.via.end(), a) == L.via.end()) L.via.push_back(a);
+            }
+            bool same = false;   // a small network gives the same points again
+            for (auto& o : lines_) same = same || o.via == L.via;
+            if (L.via.size() >= 2 && !same) lines_.push_back(std::move(L));
+        }
+    }
+    // the loop each line drives (the same choices Traffic::extendRoute makes), and the stops on it
+    for (auto& L : lines_) {
+        std::vector<BusLine::Step> walk;
+        int32_t piece = L.via[0]; int dir = 1; size_t leg = 1 % L.via.size();
+        size_t loopFrom = 0;
+        for (size_t guard = 0; guard < net_.pieces.size() * 4 + 16; ++guard) {
+            for (size_t n = 0; n < L.via.size() && L.via[leg] == piece; ++n) leg = (leg + 1) % L.via.size();
+            bool seen = false;
+            for (size_t i = 0; i < walk.size() && !seen; ++i) if (walk[i].piece == piece && walk[i].dir == dir && walk[i].leg == leg) { seen = true; loopFrom = i; }
+            if (seen) break;
+            walk.push_back({piece, int8_t(dir), uint16_t(leg)});
+            const auto& P = net_.pieces[size_t(piece)];
+            const int J = P.junction[dir > 0 ? 1 : 0];
+            if (J < 0) { dir = -dir; continue; }   // dead end: back the way it came
+            const int inSide = tl::trafficSideOf(P, dir > 0 ? 1 : 0);
+            const int out = exitToward(J, inSide, piece, L.via[leg]);
+            if (out != inSide) piece = net_.junctions[size_t(J)].piece[size_t(out)];
+            dir = tl::trafficExitDir(out);
+        }
+        L.path.assign(walk.begin() + long(loopFrom), walk.end());
+        for (auto& stp : L.path)
+            for (size_t si = 0; si < stops_.size(); ++si)
+                if (stops_[si].piece == stp.piece && stops_[si].dir == stp.dir && std::find(L.stops.begin(), L.stops.end(), int32_t(si)) == L.stops.end()) L.stops.push_back(int32_t(si));
+    }
+    lines_.erase(std::remove_if(lines_.begin(), lines_.end(), [](const BusLine& L) { return L.path.empty() || L.stops.size() < 2; }), lines_.end());
 }
 
 // ----------------------------------------------------------------- by car

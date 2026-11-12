@@ -1297,6 +1297,7 @@ int gTrafficCitizen(lua_State* L, Vm& vm) {
     static const char* commutes[] = {"walk", "car", "bus"};
     static const char* legs[] = {"walk", "to_stop", "at_stop", "ride", "drive"};
     lua_pushstring(L, commutes[std::min<int>(c->commute, 2)]); lua_setfield(L, -2, "commute");
+    if (c->line >= 0 && (c->state == kCitizenToWork || c->state == kCitizenToHome)) { lua_pushstring(L, t->lineId(c->line).c_str()); lua_setfield(L, -2, "line"); }
     if (c->state == kCitizenToWork || c->state == kCitizenToHome) { lua_pushstring(L, legs[std::min<int>(c->leg, 4)]); lua_setfield(L, -2, "leg"); }
     auto place = [&](int i, const char* key) {
         if (i < 0) return;

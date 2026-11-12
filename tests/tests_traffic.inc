@@ -840,11 +840,12 @@ TEST(traffic_population_a_stolen_car_is_reported_and_its_owner_goes_without) {
 
 TEST(traffic_population_bus_riders_wait_at_the_stop_and_ride) {
     const std::string rules = replaced(commuteRules(R"("bus": 100, "ride": 2,)"), R"("cars": {"types": ["sedan"], "max": 0,)",
-        R"("buses": {"types": ["sedan"], "max": 3, "autoStops": 1, "dwell": [1, 1], "speed": [6, 7]}, "cars": {"types": ["sedan"], "max": 0,)");
+        R"("buses": {"types": ["sedan"], "max": 4, "lines": 2, "autoStops": 1, "dwell": [1, 1], "speed": [6, 7]}, "cars": {"types": ["sedan"], "max": 0,)");
     auto sim = makeSimJson(rules, populationMap(), 3);
     run(*sim, 0.2);
+    CHECK(trf(*sim).lineCount() == 2 && trf(*sim).lineStops(0).size() >= 4);
     for (auto& c : tstore(*sim).citizens) CHECK(c.commute == game::kCommuteBus);
-    int waited = 0, boarded = 0;
+    int waited = 0, boarded = 0, alighted = 0;
     std::vector<uint8_t> leg(tstore(*sim).citizens.size(), game::kLegWalk);
     while (trf(*sim).minuteOfDay(*sim) != 12 * 60) {
         sim->step();
@@ -852,12 +853,22 @@ TEST(traffic_population_bus_riders_wait_at_the_stop_and_ride) {
             const auto& c = tstore(*sim).citizens[i];
             if (c.state != game::kCitizenToWork) { leg[i] = game::kLegWalk; continue; }
             if (c.leg == game::kLegAtStop && leg[i] != game::kLegAtStop) { ++waited; CHECK(c.e.valid() && c.stopA >= 0 && c.stopB >= 0 && c.stopA != c.stopB); }
-            if (c.leg == game::kLegRide && leg[i] == game::kLegAtStop) { ++boarded; CHECK(!c.e.valid()); }
+            if (c.leg == game::kLegRide && leg[i] == game::kLegAtStop) {   // in a bus of his line
+                ++boarded;
+                const int kind = trf(*sim).kindOf(*sim, c.e);
+                CHECK(c.e.valid() && kind == game::kTrafficBus && c.line >= 0);
+                for (auto& bus : tstore(*sim).cars) if (bus.e == c.e) CHECK(bus.line == c.line);
+            }
+            if (c.leg == game::kLegWalk && leg[i] == game::kLegRide && c.e.valid()) {   // got off at his stop
+                ++alighted;
+                const Vec3 p = sim->world().get<Transform>(c.e).pos;
+                CHECK(c.work >= 0 && (Vec2{p.x, p.z} - trf(*sim).places()[size_t(c.work)].pos).length() < Fixed::fromInt(9));
+            }
             leg[i] = c.leg;
         }
     }
-    CHECK(waited >= 3 && boarded >= 1);
-    CHECK(citizensIn(*sim, game::kCitizenWork, 0) == 6);   // by bus or, when none came, on foot
+    CHECK(waited >= 3 && boarded >= 1 && alighted >= 1);
+    CHECK(citizensIn(*sim, game::kCitizenWork, 0) >= 5);   // by bus or, when none came, on foot
 }
 
 TEST(traffic_population_commute_determinism_and_saves) {

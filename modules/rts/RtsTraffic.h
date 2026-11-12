@@ -102,6 +102,7 @@ struct TrafficCitizen {
     uint16_t carType = UINT16_MAX;
     Entity car = kNullEntity;                // his car at the kerb where he is, as a real car (near a hero)
     int32_t stopA = -1, stopB = -1;          // this trip's bus stops: gets on / gets off
+    int16_t line = -1;                       // the bus line he takes (-1: any bus)
 };
 
 struct TrafficRules {
@@ -127,6 +128,10 @@ struct TrafficRules {
     Fixed busMin = Fixed::fromInt(6), busMax = Fixed::fromInt(8);        // m/s
     Fixed dwellMin = Fixed::fromInt(3), dwellMax = Fixed::fromInt(6);    // seconds at a stop
     int passengers = 2;                      // at most this many people get on / off at a stop
+    // lines: a bus keeps to its line (a loop through the `via` points by the shortest roads) and calls at its stops
+    struct LineDef { std::string id; std::vector<Vec2> via; };
+    std::vector<LineDef> lineDefs;           // "lines": [{"id", "via": [[x, z], ...]}]
+    int autoLines = 4;                       // "lines": N: that many lines laid out over the road network (0: buses roam)
     // emergency vehicles: fast, through red lights, the other traffic pulls over
     std::vector<TrafficWeighted> emergency;
     int maxEmergency = 0;
@@ -171,6 +176,8 @@ struct TrafficCar {
     uint8_t kind = kTrafficCar;
     int32_t lastStop = -1;                   // bus: the stop it called at last
     uint32_t dwellUntil = 0;                 // bus: standing at a stop until this tick
+    int16_t line = -1;                       // bus: its line (-1: roams)
+    uint16_t lineLeg = 0;                    // bus: the `via` point of the line it is heading for
     // on call (RtsTrafficCity.cpp)
     int8_t service = -1;                     // index into rules.services
     uint8_t task = 0;                        // TrafficTask
@@ -289,6 +296,9 @@ public:
         int32_t piece = -1; int8_t dir = 1; Fixed along{};   // the kerb his car stands at: road piece, side, where
     };
     const std::vector<Place>& places() const { return places_; }
+    size_t lineCount() const { return lines_.size(); }
+    const std::string& lineId(int line) const { static const std::string none; return line >= 0 && size_t(line) < lines_.size() ? lines_[size_t(line)].id : none; }
+    const std::vector<int32_t>& lineStops(int line) const { return lines_[size_t(line)].stops; }
     int minuteOfDay(Simulation& sim) const;  // 0..1439
     const TrafficCitizen* citizenOf(Simulation& sim, Entity person) const;   // a person on the street or the car he drives
     int present(Simulation& sim, int place) const;   // workers at work in the place now (a shop is open when > 0)
@@ -321,7 +331,17 @@ private:
     int exitToward(int junction, int inSide, int32_t fromPiece, int32_t destPiece) const;
     bool isCasualtyType(uint16_t t) const;
     bool stripAtEnd(const lib::genre::TrafficPiece& p, int end) const;   // a crossing strip on the last row before the junction
-    void passengers(Simulation& sim, TrafficStore& st, const BusStop& stop);
+    void passengers(Simulation& sim, TrafficStore& st, const BusStop& stop, const TrafficCar& bus);
+    // bus lines (RtsTrafficCommute.cpp)
+    struct BusLine {
+        std::string id;
+        std::vector<int32_t> via;            // road pieces the loop goes through, in order
+        struct Step { int32_t piece; int8_t dir; uint16_t leg; };
+        std::vector<Step> path;              // the loop: lane by lane, with the via point headed for
+        std::vector<int32_t> stops;          // its stops, in the order of the loop
+    };
+    void setupLines();
+    void busGone(Simulation& sim, TrafficStore& st, Entity bus);
     // cars
     void cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci);
     bool spawnCar(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci, Fixed minDist, uint8_t kind, int service = -1, Entity* out = nullptr);
@@ -358,7 +378,7 @@ private:
     void tripGone(Simulation& sim, TrafficStore& st, TrafficCar& c);                    // the car leaves the street
     Entity tripDriverOut(Simulation& sim, TrafficStore& st, TrafficCar& c, Vec3 spot, bool passable);
     Fixed tripShift(Simulation& sim, const TrafficCar& c, Vec2 pos, Vec2 fwd, Vec2 target) const;
-    bool busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPerson* p);
+    bool busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPerson* p, const TrafficCar& bus);
     void startLeg(Simulation& sim, TrafficPerson& p);
     void nextPoint(Simulation& sim, TrafficPerson& p);
     void panic(Simulation& sim, TrafficPerson& p, Vec2 threat);
@@ -386,6 +406,7 @@ private:
     Fixed mpc_ = Fixed::fromInt(4);          // metres per cell (rules driving)
     int32_t mainIsland_ = -1;                // the biggest one: doors and bus stops open onto it when they can
     std::vector<int32_t> island_;            // per cell: which connected part of the pedestrian graph it is in (-1: none)
+    std::vector<BusLine> lines_;
     std::vector<int32_t> stopCell_;          // per bus stop: the sidewalk cell people wait on (-1: none)
     mutable lib::genre::TrafficWalkSearch search_;   // work arrays of the long walks (derived)
 };

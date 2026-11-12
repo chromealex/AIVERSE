@@ -149,10 +149,16 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
   out on the kerb side and walks to the door. Unseen he moves at `drive` cells/s and drives into sight at the edge
   of it. A hero who takes the car while he drives puts him on the street (he goes on on foot); a parked car that is
   gone or has somebody in it when he comes for it is a crime report, and he walks from then on.
-- **By bus** (`bus` percent; needs `traffic.buses`). When the stops next to his door and his destination (within
-  `stopRange` cells) save walking, he walks to his stop and waits; a bus that calls there takes him (he gives up
-  after two minutes and walks). Buses have no lines: unseen he rides at `ride` cells/s, and a bus that calls at his
-  stop when he is due lets him off, else he appears at the stop when his ride is over.
+- **By bus** (`bus` percent; needs `traffic.buses`). He takes the line whose stops are nearest to both doors (within
+  `stopRange` cells, no changes) when that saves walking: walks to his stop, waits for a bus of that line (two
+  minutes, then he walks), rides in that very bus and gets off at his stop. Unseen he rides at `ride` cells/s; a
+  bus of his line that calls at his stop when he is due lets him off, else he appears at the stop when the ride is
+  over. When his bus leaves the street (out of sight, taken by a hero) he rides on unseen.
+- **Bus lines** (`buses.lines`). A line is a loop through its `via` points by the shortest roads; its buses keep
+  to it and call at the stops on its way (two stops within three cells on one side are one). `"lines": N` (default
+  4, at most 7) lays lines out over the road network: a ring through its corners, the middle row and column, the
+  diagonals, the top and bottom rows; `"lines": [{"id": "7", "via": [[x, z], ...]}]` gives them; `"lines": 0`
+  lets the buses roam as before. New buses go to the line that is shortest of them.
 - **Shops.** `Traffic::present(place)` / `work.open` in Lua: a workplace is open while one of its workers is in. A
   shop with one keeper opens when he arrives and shuts when he leaves.
 - **Hurt citizens** stay themselves: knocked down, the citizen is in hospital (the ambulance's, see above), then
@@ -171,7 +177,7 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
   "objects": {"b_townhouse": "house", "b_market": "shop"}}
 ```
 
-Not done yet: bus lines (a rider takes any bus), a driver walking from his door to a car parked further off (he
+Not done yet: changing between bus lines, a driver walking from his door to a car parked further off (he
 gets in at once), children and schools, lunch,
 shopping, money, the hero as a citizen.
 
