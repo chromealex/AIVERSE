@@ -26,7 +26,7 @@
   <a href="#仕組み">仕組み</a> ·
   <a href="#すぐに使えるテンプレート">テンプレート</a> ·
   <a href="#クイックスタート">クイックスタート</a> ·
-  <a href="docs/overview.md">詳細な概要（ロシア語）</a>
+  <a href="docs/overview.md">詳細な概要</a>
 </p>
 
 ---
@@ -232,7 +232,7 @@ open build/mac/AiverseEditor.app        # エディター：プロジェクト�
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。コンパイルしたくない場合は、
 `builds` ブランチにビルド済みのエディターとツールがあります
-（[詳細、ロシア語](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)）。
+（[詳細](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)）。
 
 **2. ゲームを作る。** ハブで**「ゲームを作る」**を押すか、テンプレートからプロジェクトを作成します。
 Game ウィンドウですぐにボットと遊べます。
@@ -265,13 +265,13 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS と FPS 以外のジャンルのテンプレートは制作中
 
 サブシステムごとの詳細は
-[検証済み / 未検証](docs/overview.md#проверено--не-проверено)（ロシア語）をご覧ください。
+[検証済み / 未検証](docs/overview.md#verified--not-verified)をご覧ください。
 
 ---
 
 ## ドキュメント
 
-ドキュメントの多くはロシア語です。`AGENTS.md`、ライブラリのドキュメント、一部の技術ガイドは英語です。
+リファレンス文書は英語です。概要、ゲーム作成ウィザード、Unity からの移行、ジャンルパッケージは日本語でも読めます。
 
 | | |
 |---|---|

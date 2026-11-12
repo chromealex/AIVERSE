@@ -26,7 +26,7 @@
   <a href="#funktionsweise">Funktionsweise</a> ·
   <a href="#fertige-vorlagen">Vorlagen</a> ·
   <a href="#schnellstart">Schnellstart</a> ·
-  <a href="docs/overview.md">Vollständige Übersicht (RU)</a>
+  <a href="docs/overview.md">Vollständige Übersicht</a>
 </p>
 
 ---
@@ -234,7 +234,7 @@ open build/mac/AiverseEditor.app        # Editor: Projekt-Hub und Vorlagen
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Wer nicht kompilieren möchte,
 findet im Branch `builds` vorgefertigte Editor- und Tool-Builds
-([Details, auf Russisch](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([Details](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
 
 **2. Spiel erstellen.** Im Hub auf **Spiel erstellen** klicken oder ein Projekt aus einer Vorlage anlegen.
 Im Game-Fenster lässt es sich sofort gegen Bots spielen.
@@ -267,13 +267,13 @@ Die Engine wird aktiv weiterentwickelt. Bereits geprüft:
 - 🛠 Fertige Vorlagen für Genres jenseits von RTS und FPS sind in Arbeit
 
 Details je Subsystem unter
-[Geprüft / nicht geprüft](docs/overview.md#проверено--не-проверено) (auf Russisch).
+[Geprüft / nicht geprüft](docs/overview.md#verified--not-verified).
 
 ---
 
 ## Dokumentation
 
-Die meisten Dokumente sind auf Russisch; `AGENTS.md`, die Bibliotheksdokumentation und einige technische Leitfäden sind auf Englisch.
+Die Referenzdokumente sind auf Englisch. Die Übersicht, der Spiel-Assistent, der Umstieg von Unity und die Genre-Pakete gibt es auch auf Deutsch.
 
 | | |
 |---|---|

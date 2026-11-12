@@ -26,7 +26,7 @@
   <a href="#fonctionnement">Fonctionnement</a> ·
   <a href="#modèles-prêts-à-lemploi">Modèles</a> ·
   <a href="#démarrage-rapide">Démarrage rapide</a> ·
-  <a href="docs/overview.md">Vue d’ensemble complète (RU)</a>
+  <a href="docs/overview.md">Vue d’ensemble complète</a>
 </p>
 
 ---
@@ -235,7 +235,7 @@ open build/mac/AiverseEditor.app        # éditeur : hub de projets et modèles
 
 Linux : `cmake --preset linux-release && cmake --build build/linux-release`. Si vous préférez ne pas
 compiler, la branche `builds` contient l’éditeur et les outils précompilés
-([détails, en russe](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([détails](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
 
 **2. Créer un jeu.** Dans le hub, cliquez sur **Créer un jeu** ou créez un projet à partir d’un modèle. Vous
 pouvez y jouer contre des bots tout de suite dans la fenêtre Game.
@@ -268,13 +268,13 @@ Le moteur est en développement actif. Ce qui a été vérifié :
 - 🛠 Des modèles pour les genres autres que RTS et FPS sont en préparation
 
 Détails par sous-système dans
-[Vérifié / non vérifié](docs/overview.md#проверено--не-проверено) (en russe).
+[Vérifié / non vérifié](docs/overview.md#verified--not-verified).
 
 ---
 
 ## Documentation
 
-La plupart des documents sont en russe ; `AGENTS.md`, la documentation des bibliothèques et quelques guides techniques sont en anglais.
+Les documents de référence sont en anglais. La vue d’ensemble, l’assistant de création, la migration depuis Unity et les paquets de genre existent aussi en français.
 
 | | |
 |---|---|

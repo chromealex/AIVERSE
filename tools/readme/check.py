@@ -30,7 +30,9 @@ def shape(text):
                         for b in re.findall(r"```(?:bash|sh)\n(.*?)```", text, re.S)],
         "images": [i for i in re.findall(r'<img[^>]+src="([^"]+)"', body) if "shields.io" not in i]
                   + re.findall(r"!\[[^\]]*\]\(([^)]+)\)", body),
-        "repo links": [l for l in re.findall(r'\]\(([^)#\s]+)', body) if not l.startswith("http")],
+        # docs/<lang>/x.md is the translation of docs/x.md: the same link for the structure check
+        "repo links": [re.sub(r"^docs/(?:%s)/" % "|".join(LANGS), "docs/", l)
+                       for l in re.findall(r'\]\(([^)#\s]+)', body) if not l.startswith("http")],
     }
 
 
