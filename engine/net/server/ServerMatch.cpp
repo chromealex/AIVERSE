@@ -314,6 +314,9 @@ std::vector<std::pair<uint8_t, int32_t>> Server::Impl::applyOutcome(const MatchR
         ExternalMatchEnd e;
         e.externalId = rec.externalId; e.started = true; e.result = result; e.endTick = endTick; e.endHash = endHash;
         e.startMs = rec.startMs; e.endMs = now; e.verified = verified; e.desync = rec.desync; e.replayFile = replayFile;
+        e.gameId = rec.gameId; e.mapFile = rec.map.file; e.seed = rec.seed; e.dataHash = rec.map.dataHash;
+        e.tickRate = rec.settings.tickRate; e.inputDelay = rec.settings.inputDelay;
+        for (auto& c : rec.history) if (c.tick < endTick) e.commands.push_back(c);
         for (auto& p : rec.players) {
             ExternalSeatResult s;
             s.slot = p.slot; s.team = p.team; s.bot = p.kind == SlotKind::Bot; s.joined = !s.bot;

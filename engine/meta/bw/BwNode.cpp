@@ -26,7 +26,14 @@ NodeConfig NodeConfig::parse(const Json& j) {
     c.settings.tickRate = uint32_t(jsonInt(j["tickRate"], c.settings.tickRate));
     c.settings.inputDelay = uint32_t(jsonInt(j["inputDelay"], c.settings.inputDelay));
     c.settings.rollbackWindow = uint32_t(jsonInt(j["rollbackWindow"], c.settings.rollbackWindow));
-    for (auto& [k, v] : j["maps"].members()) c.maps[std::atoi(k.c_str())] = v.str();
+    // "maps": {"2001": "maps/a.json"} or the path of a table made by tools/meta/bw_map_ids.py
+    // (templates/bunkerwars/bw/map_ids.json: {"maps": {...}}).
+    Json table = j["maps"];
+    if (table.isString()) {
+        Json file = Json::parseFile(table.str());
+        table = file.has("maps") ? file["maps"] : file;
+    }
+    for (auto& [k, v] : table.members()) c.maps[std::atoi(k.c_str())] = v.str();
     return c;
 }
 
@@ -60,7 +67,7 @@ std::optional<net::Reservation> reservationFromSpec(const Json& spec, const Node
     return r;
 }
 
-Json gameReport(const Json& spec, const net::ExternalMatchEnd& e, const std::string& replayBase64) {
+Json gameReport(const Json& spec, const net::ExternalMatchEnd& e, const std::string& replayBase64, const BattleStats& stats) {
     Json rep = Json::object();
     rep.set("gameId", Json::number(jsonInt(spec["gameId"])));
     rep.set("closedFrom", Json::string(e.started ? "RESULT" : "PROGRESS"));
@@ -68,7 +75,7 @@ Json gameReport(const Json& spec, const net::ExternalMatchEnd& e, const std::str
     if (e.started) rep.set("gameStartTime", Json::number(int64_t(e.startMs)));
     const bool decided = e.started && e.result != 0;
     Json players = Json::array();
-    Json stats = Json::array();
+    Json statsJson = Json::array();
     for (size_t i = 0; i < e.seats.size(); ++i) {
         const auto& s = e.seats[i];
         const Json& sp = spec["players"][i];
@@ -82,7 +89,7 @@ Json gameReport(const Json& spec, const net::ExternalMatchEnd& e, const std::str
         p.set("win", Json::fromBool(win));
         p.set("softDefeat", Json::fromBool(false));
         players.push(std::move(p));
-        Json st = Json::object();   // PlayerStatistic; BW's 70 per-player values are not produced by the engine sim
+        Json st = Json::object();   // PlayerStatistic {userId, playerInfo, winner, experience, values[71]}
         st.set("userId", Json::number(jsonInt(sp["user"]["id"])));
         Json info = Json::object();
         info.set("color", Json::number(jsonInt(sp["info"]["color"])));
@@ -90,14 +97,18 @@ Json gameReport(const Json& spec, const net::ExternalMatchEnd& e, const std::str
         st.set("playerInfo", info);
         st.set("winner", Json::fromBool(win));
         st.set("experience", Json::number(int64_t(0)));
-        st.set("values", Json::array());
-        stats.push(std::move(st));
+        Json values = Json::array();
+        const size_t slot = size_t(s.slot ? s.slot : i + 1);
+        if (slot < stats.size())
+            for (double x : stats[slot]) values.push(x == double(int64_t(x)) ? Json::number(int64_t(x)) : Json::number(x, 4));
+        st.set("values", values);
+        statsJson.push(std::move(st));
     }
     rep.set("players", players);
     if (e.started) {
         Json br = Json::object();
         br.set("localStatus", Json::string("None"));
-        br.set("matchStatistic", stats);
+        br.set("matchStatistic", statsJson);
         br.set("startBattleTime", Json::number(int64_t(e.startMs)));
         br.set("endBattleTime", Json::number(int64_t(e.endMs)));
         rep.set("battleResult", br);
@@ -138,11 +149,13 @@ BattleNode::BattleNode(NodeConfig cfg) : cfg_(std::move(cfg)), http_([this](cons
 }
 
 void BattleNode::install(net::ServerConfig& sc) {
-    sc.ticketCheck = [this](const std::string& ticket, std::string& externalId, uint64_t& userId) {
+    sc.ticketCheck = [this](const std::string& ticket, net::TicketInfo& info) {
         auto t = validateTicket(ticket, cfg_.ticketSecret, clockSec ? clockSec() : 0);
-        if (!t || t->role != 0 || t->userId <= 0) return false;
-        externalId = std::to_string(t->gameId);
-        userId = uint64_t(t->userId);
+        if (!t || (t->role != 0 && t->role != 1) || (t->role == 0 && t->userId <= 0)) return false;
+        info.externalId = std::to_string(t->gameId);
+        info.userId = uint64_t(t->userId > 0 ? t->userId : 0);
+        info.spectator = t->role == 1;   // BattleTicketRole.Spectator
+        info.name = t->name;
         return true;
     };
     sc.onExternalMatchStarted = [this](const std::string& id) {
@@ -172,7 +185,32 @@ void BattleNode::onEnd(const net::ExternalMatchEnd& e) {
     for (auto& s : e.seats) playersHosted_ -= !s.bot;
     if (playersHosted_ < 0) playersHosted_ = 0;
     const std::string replay = e.replayFile.empty() || !readReplay ? std::string() : readReplay(e.replayFile);
-    if (!cfg_.metaBaseUrl.empty()) post(cfg_.metaBaseUrl + "games/" + e.externalId + "/result", gameReport(spec, e, replay), 3);
+    if (e.started && battleStats) {
+        PendingReport r;
+        r.spec = spec;
+        r.end = e;
+        r.replay = replay;
+        auto fn = battleStats;
+        r.stats = std::async(std::launch::async, [fn, e]() {
+            std::string err;
+            BattleStats s = fn(e, err);
+            return std::make_pair(std::move(s), err);
+        });
+        reports_.push_back(std::move(r));
+    } else {
+        postReport(spec, e, replay, {}, {});
+    }
+}
+
+BattleNode::~BattleNode() {
+    for (auto& r : reports_) if (r.stats.valid()) r.stats.wait();
+}
+
+void BattleNode::postReport(const Json& spec, const net::ExternalMatchEnd& e, const std::string& replay, const BattleStats& stats,
+                            const std::string& err) {
+    Json rep = gameReport(spec, e, replay, stats);
+    if (!err.empty()) rep.set("strErrors", Json::string(rep.getStr("strErrors") + "stats " + err + "\n"));
+    if (!cfg_.metaBaseUrl.empty()) post(cfg_.metaBaseUrl + "games/" + e.externalId + "/result", rep, 3);
     if (!cfg_.matchmakerUrl.empty()) {
         Json ev = Json::object();
         ev.set("gameId", Json::number(jsonInt(spec["gameId"])));
@@ -247,6 +285,13 @@ bool BattleNode::listen(std::string* error) {
 void BattleNode::update(uint64_t now) {
     now_ = now;
     http_.update(now);
+    for (size_t i = 0; i < reports_.size();) {
+        auto& r = reports_[i];
+        if (r.stats.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { ++i; continue; }
+        auto [stats, err] = r.stats.get();
+        postReport(r.spec, r.end, r.replay, stats, err);
+        reports_.erase(reports_.begin() + long(i));
+    }
     if (!cfg_.matchmakerUrl.empty() && (lastHeartbeat_ == 0 || now - lastHeartbeat_ >= cfg_.heartbeatMs)) {
         lastHeartbeat_ = now ? now : 1;
         post(cfg_.matchmakerUrl + "nodes/heartbeat", nodeHeartbeat(cfg_, int(specs_.size()), playersHosted_, draining_), 1);

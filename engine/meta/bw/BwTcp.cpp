@@ -190,6 +190,15 @@ void ChatConnection::send(ChatType type, const std::string& json) {
     if (connected()) link_.send(encodeChatPacket(uint16_t(type), json));
 }
 
+void bindChat(BwBackend& backend, ChatConnection& chat) {
+    backend.chatSend = [&chat](uint16_t type, const std::string& json) {
+        if (!chat.connected()) return false;
+        chat.send(ChatType(type), json);
+        return true;
+    };
+    chat.onPacket = [&backend](const ChatPacket& p) { backend.onChatPacket(p.type, p.json); };
+}
+
 void ChatConnection::update(uint64_t now) {
     if (stopped_ || hosts_.empty()) return;
     const auto before = link_.state();
@@ -198,7 +207,10 @@ void ChatConnection::update(uint64_t now) {
         if (before == TcpLink::State::Connecting) { link_.send(encodeChatAuth(token_)); wasConnected_ = true; }
         reader_.feed(link_.takeReceived());
         ChatPacket p;
-        while (reader_.next(p)) packets_.push_back(std::move(p));
+        while (reader_.next(p)) {
+            if (onPacket) onPacket(p);
+            else packets_.push_back(std::move(p));
+        }
         link_.update(now);
         return;
     }

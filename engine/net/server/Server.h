@@ -133,9 +133,20 @@ struct ExternalMatchEnd {
     std::vector<ExternalSeatResult> seats;
     std::string replayFile;      // saved replay ("" if replays are off)
     std::string reason;          // why it was cancelled
+    // What re-simulating the match needs (battle statistics on the host): the confirmed input.
+    std::string gameId, mapFile;
+    uint64_t seed = 0, dataHash = 0;
+    uint32_t tickRate = 20, inputDelay = 2;
+    std::vector<Command> commands;
 };
 // ticket -> seat owner. Returns false for an invalid/expired ticket.
-using TicketCheck = std::function<bool(const std::string& ticket, std::string& externalId, uint64_t& userId)>;
+struct TicketInfo {
+    std::string externalId;      // the match it is for
+    uint64_t userId = 0;
+    bool spectator = false;      // watch only: joins before or after the start, never takes a seat
+    std::string name;            // spectator name shown to the others
+};
+using TicketCheck = std::function<bool(const std::string& ticket, TicketInfo& info)>;
 
 struct ServerConfig {
     std::string name = "AIVERSE server";
