@@ -66,7 +66,8 @@ inline bool friendlyInLine(const fps::Actor& self,const fps::State& world,const 
     auto start=eye(self,module.config().motor),delta=fps::direction(yaw,pitch)*distance;
     for(const auto& a:world.actors)if(a.slot!=self.slot&&a.team==self.team&&a.health>0){
         Fixed fraction;Vec3 normal;if(world::intersect(start,delta,fps::actorBounds(a,module.config().motor),fraction,normal))return true;
-    }return false;
+    }
+    return false;
 }
 // Run once before the authoritative simulation step; return one ordinary input Command.
 // State is explicit: save it alongside Simulation, or through a game-owned NativeState record.

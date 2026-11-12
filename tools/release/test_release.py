@@ -80,9 +80,9 @@ def test_index():
         assert by[order[2]]["arch"] == "arm64" and by[order[2]]["version"] == "0.1.9", by[order[2]]
         l = by[order[3]]
         assert l["arch"] == "x86_64" and l["editor"] is None and l["rtsmcp"] == "AIVERSE/bin/aiversemcp", l
-    for url, slug in [("https://github.com/chromealex/rts-engine", "chromealex/rts-engine"),
-                      ("https://github.com/chromealex/rts-engine.git", "chromealex/rts-engine"),
-                      ("git@github.com:chromealex/rts-engine.git", "chromealex/rts-engine")]:
+    for url, slug in [("https://github.com/chromealex/AIVERSE", "chromealex/AIVERSE"),
+                      ("https://github.com/chromealex/AIVERSE.git", "chromealex/AIVERSE"),
+                      ("git@github.com:chromealex/AIVERSE.git", "chromealex/AIVERSE")]:
         assert publish_builds.repo_slug(url) == slug, (url, publish_builds.repo_slug(url))
     print("index.json: ok")
 
