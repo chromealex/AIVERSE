@@ -464,6 +464,145 @@
         }
       }
     },
+    "combat": {
+      "type": "CombatSettings",
+      "fields": {
+        "dodgeTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "dodgeInvulnFrom": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "dodgeInvulnTo": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "dodgeCooldown": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "blockHalfArcMilli": {
+          "type": "integer",
+          "default": 125,
+          "minimum": 0,
+          "maximum": 500
+        },
+        "parryTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "parryRearmTicks": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "poiseMilli": {
+          "type": "integer",
+          "default": 100000,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "poiseRecoveryMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "poiseDelayTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "blockPoiseMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "hitStunTicks": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "blockStunTicks": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "breakStunTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "parryStunTicks": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "lockRangeMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "lockBreakMilli": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "lockHalfAngleMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 1,
+          "maximum": 500
+        },
+        "lockDistanceWeight": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "lockAngleWeight": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      },
+      "relations": [
+        [
+          "dodgeInvulnFrom",
+          "dodgeInvulnTo"
+        ],
+        [
+          "dodgeInvulnTo",
+          "dodgeTicks"
+        ],
+        [
+          "lockRangeMilli",
+          "lockBreakMilli"
+        ]
+      ]
+    },
     "projectile": {
       "type": "ProjectileSettings",
       "fields": {

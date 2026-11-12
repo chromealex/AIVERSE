@@ -68,6 +68,26 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | melee | active | integer | 4 | 1..3600 |
 | melee | recovery | integer | 12 | 0..3600 |
 | melee | bufferTicks | integer | 8 | 0..3600 |
+| combat | dodgeTicks | integer | 12 | 1..3600 |
+| combat | dodgeInvulnFrom | integer | 2 | 0..3600 |
+| combat | dodgeInvulnTo | integer | 8 | 0..3600 |
+| combat | dodgeCooldown | integer | 20 | 0..36000 |
+| combat | blockHalfArcMilli | integer | 125 | 0..500 |
+| combat | parryTicks | integer | 6 | 0..3600 |
+| combat | parryRearmTicks | integer | 20 | 0..36000 |
+| combat | poiseMilli | integer | 100000 | 1..1000000000 |
+| combat | poiseRecoveryMilli | integer | 1000 | 0..1000000000 |
+| combat | poiseDelayTicks | integer | 30 | 0..36000 |
+| combat | blockPoiseMilli | integer | 500 | 0..1000 |
+| combat | hitStunTicks | integer | 8 | 0..3600 |
+| combat | blockStunTicks | integer | 4 | 0..3600 |
+| combat | breakStunTicks | integer | 45 | 0..3600 |
+| combat | parryStunTicks | integer | 40 | 0..3600 |
+| combat | lockRangeMilli | integer | 15000 | 1..100000 |
+| combat | lockBreakMilli | integer | 20000 | 1..100000 |
+| combat | lockHalfAngleMilli | integer | 250 | 1..500 |
+| combat | lockDistanceWeight | integer | 1000 | 0..1000000 |
+| combat | lockAngleWeight | integer | 1000 | 0..1000000 |
 | projectile | gravityMilli | integer | 20000 | 0..1000000 |
 | projectile | radiusMilli | integer | 50 | 0..2000 |
 | projectile | retentionMilli | integer | 750 | 0..1000 |
@@ -86,4 +106,7 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 Constraint: `camera.minZoom <= camera.maxZoom` (checked by loader and CLI).
 Constraint: `camera.minPitch <= camera.maxPitch` (checked by loader and CLI).
 Constraint: `abilities.minRange <= abilities.maxRange` (checked by loader and CLI).
+Constraint: `combat.dodgeInvulnFrom <= combat.dodgeInvulnTo` (checked by loader and CLI).
+Constraint: `combat.dodgeInvulnTo <= combat.dodgeTicks` (checked by loader and CLI).
+Constraint: `combat.lockRangeMilli <= combat.lockBreakMilli` (checked by loader and CLI).
 Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).

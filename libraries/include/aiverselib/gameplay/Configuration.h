@@ -104,6 +104,28 @@ struct MeleeSettings {
     std::int64_t recovery=12;
     std::int64_t bufferTicks=8;
 };
+struct CombatSettings {
+    std::int64_t dodgeTicks=12;
+    std::int64_t dodgeInvulnFrom=2;
+    std::int64_t dodgeInvulnTo=8;
+    std::int64_t dodgeCooldown=20;
+    std::int64_t blockHalfArcMilli=125;
+    std::int64_t parryTicks=6;
+    std::int64_t parryRearmTicks=20;
+    std::int64_t poiseMilli=100000;
+    std::int64_t poiseRecoveryMilli=1000;
+    std::int64_t poiseDelayTicks=30;
+    std::int64_t blockPoiseMilli=500;
+    std::int64_t hitStunTicks=8;
+    std::int64_t blockStunTicks=4;
+    std::int64_t breakStunTicks=45;
+    std::int64_t parryStunTicks=40;
+    std::int64_t lockRangeMilli=15000;
+    std::int64_t lockBreakMilli=20000;
+    std::int64_t lockHalfAngleMilli=250;
+    std::int64_t lockDistanceWeight=1000;
+    std::int64_t lockAngleWeight=1000;
+};
 struct ProjectileSettings {
     std::int64_t gravityMilli=20000;
     std::int64_t radiusMilli=50;
@@ -138,6 +160,7 @@ struct GameplaySettings {
     DecisionReportSettings decisionReport;
     LocomotionSettings locomotion;
     MeleeSettings melee;
+    CombatSettings combat;
     ProjectileSettings projectile;
     MatchRuleSettings matchRules;
 };
@@ -156,7 +179,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="projectile" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -325,6 +348,35 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("recovery")) number(section["recovery"],settings.melee.recovery,0,3600,"melee.recovery");
             if(section.has("bufferTicks")) number(section["bufferTicks"],settings.melee.bufferTicks,0,3600,"melee.bufferTicks");
         }
+    }
+    if(root.has("combat")) { const auto& section=root["combat"];
+        if(!section.isObject()) result.errors.push_back("combat: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="dodgeTicks" && entry.first!="dodgeInvulnFrom" && entry.first!="dodgeInvulnTo" && entry.first!="dodgeCooldown" && entry.first!="blockHalfArcMilli" && entry.first!="parryTicks" && entry.first!="parryRearmTicks" && entry.first!="poiseMilli" && entry.first!="poiseRecoveryMilli" && entry.first!="poiseDelayTicks" && entry.first!="blockPoiseMilli" && entry.first!="hitStunTicks" && entry.first!="blockStunTicks" && entry.first!="breakStunTicks" && entry.first!="parryStunTicks" && entry.first!="lockRangeMilli" && entry.first!="lockBreakMilli" && entry.first!="lockHalfAngleMilli" && entry.first!="lockDistanceWeight" && entry.first!="lockAngleWeight") result.errors.push_back("combat."+entry.first+": unknown field");
+            if(section.has("dodgeTicks")) number(section["dodgeTicks"],settings.combat.dodgeTicks,1,3600,"combat.dodgeTicks");
+            if(section.has("dodgeInvulnFrom")) number(section["dodgeInvulnFrom"],settings.combat.dodgeInvulnFrom,0,3600,"combat.dodgeInvulnFrom");
+            if(section.has("dodgeInvulnTo")) number(section["dodgeInvulnTo"],settings.combat.dodgeInvulnTo,0,3600,"combat.dodgeInvulnTo");
+            if(section.has("dodgeCooldown")) number(section["dodgeCooldown"],settings.combat.dodgeCooldown,0,36000,"combat.dodgeCooldown");
+            if(section.has("blockHalfArcMilli")) number(section["blockHalfArcMilli"],settings.combat.blockHalfArcMilli,0,500,"combat.blockHalfArcMilli");
+            if(section.has("parryTicks")) number(section["parryTicks"],settings.combat.parryTicks,0,3600,"combat.parryTicks");
+            if(section.has("parryRearmTicks")) number(section["parryRearmTicks"],settings.combat.parryRearmTicks,0,36000,"combat.parryRearmTicks");
+            if(section.has("poiseMilli")) number(section["poiseMilli"],settings.combat.poiseMilli,1,1000000000,"combat.poiseMilli");
+            if(section.has("poiseRecoveryMilli")) number(section["poiseRecoveryMilli"],settings.combat.poiseRecoveryMilli,0,1000000000,"combat.poiseRecoveryMilli");
+            if(section.has("poiseDelayTicks")) number(section["poiseDelayTicks"],settings.combat.poiseDelayTicks,0,36000,"combat.poiseDelayTicks");
+            if(section.has("blockPoiseMilli")) number(section["blockPoiseMilli"],settings.combat.blockPoiseMilli,0,1000,"combat.blockPoiseMilli");
+            if(section.has("hitStunTicks")) number(section["hitStunTicks"],settings.combat.hitStunTicks,0,3600,"combat.hitStunTicks");
+            if(section.has("blockStunTicks")) number(section["blockStunTicks"],settings.combat.blockStunTicks,0,3600,"combat.blockStunTicks");
+            if(section.has("breakStunTicks")) number(section["breakStunTicks"],settings.combat.breakStunTicks,0,3600,"combat.breakStunTicks");
+            if(section.has("parryStunTicks")) number(section["parryStunTicks"],settings.combat.parryStunTicks,0,3600,"combat.parryStunTicks");
+            if(section.has("lockRangeMilli")) number(section["lockRangeMilli"],settings.combat.lockRangeMilli,1,100000,"combat.lockRangeMilli");
+            if(section.has("lockBreakMilli")) number(section["lockBreakMilli"],settings.combat.lockBreakMilli,1,100000,"combat.lockBreakMilli");
+            if(section.has("lockHalfAngleMilli")) number(section["lockHalfAngleMilli"],settings.combat.lockHalfAngleMilli,1,500,"combat.lockHalfAngleMilli");
+            if(section.has("lockDistanceWeight")) number(section["lockDistanceWeight"],settings.combat.lockDistanceWeight,0,1000000,"combat.lockDistanceWeight");
+            if(section.has("lockAngleWeight")) number(section["lockAngleWeight"],settings.combat.lockAngleWeight,0,1000000,"combat.lockAngleWeight");
+        }
+        if(settings.combat.dodgeInvulnFrom>settings.combat.dodgeInvulnTo)result.errors.push_back("combat.dodgeInvulnFrom: must not exceed dodgeInvulnTo");
+        if(settings.combat.dodgeInvulnTo>settings.combat.dodgeTicks)result.errors.push_back("combat.dodgeInvulnTo: must not exceed dodgeTicks");
+        if(settings.combat.lockRangeMilli>settings.combat.lockBreakMilli)result.errors.push_back("combat.lockRangeMilli: must not exceed lockBreakMilli");
     }
     if(root.has("projectile")) { const auto& section=root["projectile"];
         if(!section.isObject()) result.errors.push_back("projectile: expected object");

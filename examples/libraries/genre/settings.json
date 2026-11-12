@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "locomotion": {"coyoteTicks": 6, "bufferTicks": 8, "maxJumps": 2},
   "melee": {"windup": 5, "active": 3, "recovery": 10},
+  "combat": {"dodgeCooldown": 24, "parryTicks": 5, "lockRangeMilli": 12000},
   "projectile": {"gravityMilli": 0, "maxBounces": 2, "lifetime": 120},
   "matchRules": {"warmupTicks": 0, "roundTicks": 600, "scoreToWin": 3, "roundsToWin": 2, "maxRounds": 3}
 }
