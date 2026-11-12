@@ -119,6 +119,11 @@ struct App {
             if(keys.contains(K::LeftCtrl))input.buttons|=fps::Crouch;
             if(keys.contains(K::LeftShift))input.buttons|=fps::Sprint;
             if(keys.contains(K::R))input.buttons|=fps::Reload;
+            if(config.melee.enabled){
+                if(keys.contains(K::Z))input.buttons|=fps::Melee;
+                if(keys.contains(K::LeftAlt))input.buttons|=fps::Block;
+                if(keys.contains(K::T))input.buttons|=fps::LockOn;
+            }
             input.yaw=Fixed::fromRaw(int64_t(look.yaw*65536));input.pitch=Fixed::fromRaw(int64_t(look.pitch*65536));
             if(client->submit(input)){fireQueued=false;input.action=fps::Action::None;input.buttons&=~uint32_t(fps::Jump|fps::WeaponMask);}
             if(server){server->poll(now);if(!server->step()){accumulated=0;break;}client->poll(now);}
@@ -127,7 +132,8 @@ struct App {
         if(!platform::pointerLocked()){keys.clear();input.buttons=0;fireHeld=fireQueued=aimHeld=false;input.action=fps::Action::None;}
         device.beginFrame(platform::framebufferWidth(),platform::framebufferHeight());gui.newFrame(dt);
         auto actor=client->predicted();viewTime+=dt;
-        if(actor.reloadUntil&&!lastReload)audio.play("reload");lastReload=actor.reloadUntil;
+        if(actor.reloadUntil&&!lastReload)audio.play("reload");
+        lastReload=actor.reloadUntil;
         stepSound+=dt;
         if(actor.grounded&&actor.health>0&&!actor.prone&&!actor.vehicle&&actor.velocity.xz().lengthSq()>1_fx&&stepSound>0.38){audio.play("step");stepSound=0;}
         for(const auto& remote:client->snapshot().actors){

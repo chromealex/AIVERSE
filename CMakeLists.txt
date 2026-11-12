@@ -346,6 +346,8 @@ add_library(aiverse_models STATIC
     engine/render/ImageBlp.cpp
     engine/render/ImageDds.cpp
     engine/render/TextureGen.cpp)
+# baked lighting, CPU side (agent-lightbake): lightmap UVs of models (+ .lmuv sidecars), bake folder reader
+target_sources(aiverse_models PRIVATE engine/render/LightmapUv.cpp engine/bake/LightmapData.cpp)
 # ufbx (MIT / public domain): FBX parser, compiled as its own C library without warnings.
 # AIVERSE_FBX=OFF keeps it out of size-sensitive builds (FBX files then fail with a readable error).
 option(AIVERSE_FBX "FBX import in the runtime (ufbx, ~0.5 MB of code)" ON)
@@ -383,6 +385,8 @@ set(AIVERSE_RUNTIME_SRC
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
 list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp)
+# baked lighting on the GPU (agent-lightbake): lightmaps / probes in the model shaders
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/BakedLighting.cpp engine/render/Renderer3DBaked.cpp)
 add_library(aiverse_shader_graph STATIC engine/render/graph/ShaderGraph.cpp)
 target_link_libraries(aiverse_shader_graph PUBLIC aiverse_engine)
 
@@ -601,6 +605,29 @@ if(AIVERSE_BUILD_CLIENT)
     endif()
 endif()
 
+# ---------------------------------------------------------------------------
+# Light baker (agent-lightbake): offline CPU path tracer (BVH, threads) for lightmaps + light probes,
+# automatic lightmap UVs (xatlas, MIT), bake folder writer. Host only: editor, MCP, tests.
+# ---------------------------------------------------------------------------
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    find_package(Threads REQUIRED)
+    add_library(aiverse_xatlas STATIC third_party/xatlas/xatlas.cpp)
+    target_include_directories(aiverse_xatlas PUBLIC third_party/xatlas)
+    if(NOT MSVC)
+        target_compile_options(aiverse_xatlas PRIVATE -w)
+    endif()
+    add_library(aiverse_bake STATIC engine/bake/Bvh.cpp engine/bake/Baker.cpp engine/bake/BakerProbes.cpp
+        engine/bake/BakeScene.cpp engine/bake/LightmapUnwrap.cpp engine/bake/LightmapWrite.cpp engine/bake/Denoise.cpp)
+    target_link_libraries(aiverse_bake PUBLIC aiverse_models aiverse_xatlas Threads::Threads)
+    target_include_directories(aiverse_bake PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_bake_tests tests/bake/bake_tests.cpp)
+    target_link_libraries(aiverse_bake_tests PRIVATE aiverse_bake aiverse_models aiverse_zstd_dec)
+    target_compile_definitions(aiverse_bake_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME bake_tests COMMAND aiverse_bake_tests)
+endif()
+
 if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
     add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
@@ -610,6 +637,8 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_game)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightBakeOps.cpp)   # lightbake_* ops (agent-lightbake)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_bake)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_terrain_detail)
     target_include_directories(aiverse_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -782,6 +811,7 @@ if(AIVERSE_BUILD_TESTS)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
     target_sources(aiverse_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
         engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp engine/render/GeometryScene.cpp)
+    target_sources(aiverse_tests PRIVATE engine/render/BakedLighting.cpp engine/render/Renderer3DBaked.cpp)   # agent-lightbake
     target_sources(aiverse_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
     target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
@@ -1148,10 +1178,12 @@ endif()
 # main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
 set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
-    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp)
+    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
+    apps/client/ClientBaked.cpp)   # ClientBaked: the map's baked lighting (agent-lightbake)
 foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
+        target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # agent-lightbake
     endif()
 endforeach()
 # Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)

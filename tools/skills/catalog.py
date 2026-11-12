@@ -128,6 +128,8 @@ def plan(entries,roots,side):
         if any(entries[key]['domain']=='meta' for key in original):selected.append('meta-client')
     elif side=='server':
         selected=[key for key in selected if entries[key]['side']!='client']
+    elif side=='both' and any(entries[key]['domain']=='meta' and entries[key]['side'] in ('client','server') for key in selected):
+        selected.append('meta-client')
     if any(entries[key]['domain']=='meta' and entries[key]['side']=='server' for key in selected):selected.append('meta-server')
     order=closure(entries,selected)
     choices=[entries[key] for key in order]
@@ -139,7 +141,7 @@ def plan(entries,roots,side):
     if gameplay:commands.append('aiverse_native_use_libraries(aiverse_native_GAME '+' '.join(gameplay)+')')
     return dict(requested=original,side=side,read=[e['path'] for e in choices],
         selection=[{k:e.get(k) for k in ('id','side','runtime','target','dependencies','requiresOwner')} for e in choices],
-        cmake=commands,nativeCmake=(["aiverse_native_use_meta(aiverse_native_GAME game_meta)"] if policies else [])+(["aiverse_native_use_meta(aiverse_native_GAME CLIENT)"] if 'meta-client' in order else []),serverModules=policies,clientFeatures=[entries[key]['package'] for key in original if entries[key]['domain']=='meta'] if side=='client' else [])
+        cmake=commands,nativeCmake=(["aiverse_native_use_meta(aiverse_native_GAME game_meta)"] if policies else [])+(["aiverse_native_use_meta(aiverse_native_GAME CLIENT)"] if 'meta-client' in order else []),serverModules=policies,clientFeatures=[entries[key]['package'] for key in original if entries[key]['domain']=='meta'] if side in ('client','both') else [])
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)

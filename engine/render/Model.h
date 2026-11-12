@@ -75,6 +75,9 @@ struct Image {
 };
 
 // 60 bytes, one interleaved stream for every model (unskinned meshes leave joints/weights zero).
+// Lightmap UVs (second UV set, Primitive::lightmapUv): unskinned primitives keep them in `joints` as two
+// unorm16 values (u = joints[0] | joints[1] << 8, v = joints[2] | joints[3] << 8, range [0, 1] per mesh),
+// so the vertex layout stays the same for every shader (engine/render/LightmapUv.h).
 struct ModelVertex {
     float3 pos;
     float3 nrm;
@@ -99,6 +102,7 @@ struct Primitive {
     int morphTargets = 0;                // 0..kMaxMorphTargets
     uint32_t morphTexel = 0;             // first texel of its deltas in Model::morphTex
     std::vector<float> morphDeltas;      // CPU: [target][vertex] position xyz, normal xyz (released after upload)
+    bool lightmapUv = false;             // vertices carry lightmap UVs in `joints` (unskinned only, see ModelVertex)
 };
 
 struct ModelLod { int mesh = -1; float maxPixels = 0; };

@@ -759,7 +759,7 @@ gfx::PipelineHandle TerrainRenderer::pipeline(gfx::Device& dev, int variant) {
         const std::string vs = def + shaders::kTerrainVS, fs = def + shaders::kTerrainFS, msl = def + shaders::kTerrainMSL;
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = 3; sd.textureSlots = 19; sd.label = "terrain";   // tex18: height field (traced shadows)
+        sd.uniformSlots = 4; sd.textureSlots = 21; sd.label = "terrain";   // tex18: height field (traced shadows); U3 + tex19/20: baked lightmap
         shaders_[slot] = dev.createShader(sd);
         if (!shaders_[slot].valid()) {
             std::fprintf(stderr, "[terrain] tier %d%s shader: %s\n", tier, dbase ? " detail" : "", dev.lastError().c_str());
@@ -892,6 +892,7 @@ void TerrainRenderer::draw(Renderer3D& r, const MapGrid& g, const std::vector<ui
         d.setPipeline(pipe);
         r.bindLitFrame();
         r.bindTrace(18);
+        r.bindBakedTerrain(3, 19, 20);   // agent-lightbake
         d.setTexture(2, cellTex_); d.setTexture(3, dynTex_); d.setTexture(4, splatTex_);
         for (int i = 0; i < 4; ++i) {
             d.setTexture(5 + i, layerTex_[i].valid() ? layerTex_[i].tex : white_);

@@ -12,6 +12,7 @@
 // animation stacks baked to linear TRS channels. Not supported (warning, skipped): blend shapes,
 // vertex caches, extra UV / colour sets, more than 4 influences, cameras, lights.
 #include "Model.h"
+#include "LightmapUv.h"
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -274,7 +275,9 @@ private:
         const std::string where = "mesh '" + md.name + "'";
         if (mesh.blend_deformers.count) warn(where + ": blend shapes are ignored");
         if (mesh.cache_deformers.count) warn(where + ": vertex caches are ignored");
-        if (mesh.uv_sets.count > 1) warn(where + ": only the first UV set is used");
+        if (mesh.uv_sets.count > 2) warn(where + ": only the first two UV sets are used (the second is the lightmap set)");
+        // second UV set = lightmap UVs (Unity UV2) of unskinned meshes, packed into joints (LightmapUv.h)
+        uv2_ = !skin && mesh.uv_sets.count > 1 ? &mesh.uv_sets.data[1].vertex_uv : nullptr;
         if (mesh.color_sets.count > 1) warn(where + ": only the first vertex colour set is used");
         if (mesh.skin_deformers.count > 1) warn(where + ": only the first skin deformer is used");
         if (skin && skin->max_weights_per_vertex > 4) warn(where + ": more than 4 joint influences per vertex; the 4 strongest are kept");
@@ -301,6 +304,7 @@ private:
                 }
             }
             const bool needTangents = !hasTangents && model_->materials[size_t(prim.material)].normalTex >= 0;
+            prim.lightmapUv = uv2_ != nullptr;
             if (!skin) { appendChunk(md, prim, verts, idx, false, needTangents); continue; }
             // split into chunks whose joints fit one palette, the same way as the glTF loader
             std::vector<uint32_t> chunk;
@@ -337,6 +341,10 @@ private:
         if (mesh.vertex_uv.exists) {
             const ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh.vertex_uv, ix);
             v.uv = {float(uv.x), 1.0f - float(uv.y)};   // FBX UVs have the origin at the bottom left
+        }
+        if (uv2_ && uv2_->exists) {
+            const ufbx_vec2 uv = ufbx_get_vertex_vec2(uv2_, ix);
+            setLightmapUv(v, {float(uv.x), 1.0f - float(uv.y)});
         }
         if (hasTangents) {
             const float3 t = normalize(f3(ufbx_get_vertex_vec3(&mesh.vertex_tangent, ix)));
@@ -497,6 +505,7 @@ private:
     std::unique_ptr<Model> model_;
     std::vector<int> nodeMap_;               // ufbx node typed_id -> model node (-1 = root)
     std::map<uint32_t, int> texCache_;       // ufbx texture element_id -> image index
+    const ufbx_vertex_vec2* uv2_ = nullptr;   // current mesh: lightmap UV set (unskinned meshes with two UV sets)
     int defaultMat_ = -1;
     int meshNode_ = -1, rigidJoint_ = -1;   // current mesh: its node, extra joint for unweighted vertices
 };

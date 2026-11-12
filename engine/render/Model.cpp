@@ -1,5 +1,6 @@
 #include "Model.h"
 #include "Renderer3D.h"
+#include "LightmapUv.h"
 
 #include <algorithm>
 #include <cctype>
@@ -173,6 +174,11 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
     if (!read(path, bytes)) throw std::runtime_error(path + ": file not found");
     auto m = load(path, bytes, read, warnings);
     m->path = path;
+    // generated lightmap UVs next to the model (light baker, LightmapUv.h)
+    if (std::string uv; read(path + ".lmuv", uv)) {
+        std::string err;
+        if (!applyLightmapUvs(*m, uv, &err) && warnings) warnings->push_back(path + ".lmuv: " + err);
+    }
     return m;
 }
 

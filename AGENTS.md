@@ -1,7 +1,8 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
-Read this file completely before changing anything. It is short on purpose. `README.md` has the
-user-facing overview (in Russian); this file is the engineering contract.
+Read this file completely before changing anything. It is short on purpose. `README.md` is the
+short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
+`docs/overview.md` the detailed overview; this file is the engineering contract.
 
 ## 1. What this is
 
@@ -198,6 +199,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Extraction raids (Drone Fall port): rules / map `raid` block, match phases, extraction points (zones, cycles, called helicopters, channels, contest / interrupt rules), raid inventory over the item bags, hold-to-use interactables + loot tables, raid objectives, receipts for the meta, raid bot, Lua `raid` table, MCP `raid_*` + **Рейд** window, `templates/extraction` | `modules/rts/RtsRaid*.{h,cpp}`, `apps/editor/core/RaidOps.*`, `apps/editor/windows/RaidWindow.cpp`, `tests/tests_raid.inc`, `docs/raid.md`, `templates/extraction`, `extraction` lines in `tests/checksums/baseline.txt`; hooks: `RtsModule` (member, setup, "raid" system before "death", `kCmdRaid`, hash), `RtsSave` (append), `RtsData` (`Rules::raid`, loadRules call), `GameEvent` `kEvRaid*` + `kCmdRaid` (appended), `RtsAI::update` (raid players -> `raidBotThink`), `ScriptEngine::allowNamed`, `lua/victory.lua` (steps aside while a raid runs), Lua event names, headless `Raid receipt:` lines, `Workspace` registration | agent-extraction (MAIN merges) |
 | SDK plugins for analytics / attribution / privacy: `analytics` + `privacy` services (fan-out, consent, iOS ATT), their UI Lua tables, plugins `gameanalytics` (Android, iOS, web), `facebook`, `appmetrica`, `att`, mocks `mock-analytics` / `mock-att`, aiversebuild plist escaping + config SKAdNetwork ids | `engine/services/{Analytics,Privacy,ServicesLua}.*`, `plugins/{gameanalytics,facebook,appmetrica,att}`, `tests/tests_services*.inc`, `docs/plugins.md` § Analytics / Privacy; hooks: `MockPlugins.*`, `Plugins.cpp` mock list, `Ads.cpp` (`privacy::attach`), `tools/aiversebuild/Plugins.cpp`, `ClientScript.cpp` (`openServicesLua`), CMake `aiverse_plugins` sources, CI isolation cases | agent-sdk-plugins (MAIN merges) |
 | Boss encounters: telegraphed area attacks (circle/cone/line/ring, windup/active/recovery), slow/stun/burn statuses, boss phases / patterns / enrage / adds, encounter windows with personal bosses and rotation, mob wander/hunt/flee/leash/swarm (`boss-encounters` package, record kinds 112..119), headless reference fight `aiverse_encounter` | `libraries/include/aiverselib/genre/{Telegraphs,TelegraphDecals,StatusEffects,BossEncounter,BossSchedule,MobBehaviour,EncounterData,EncounterPersistence,EncounterScenario}.h`, `skills/aiverse-boss-encounters`, `examples/libraries/genre/boss-encounter.json`, `tests/libraries/encounter_tests.cpp`, `tools/libraries/encounter_main.cpp`, `examples/native/libraries/EncounterConsumer.cpp`, docs/genre-packages.md § Boss encounters; additive hooks: catalog entries, `tools/skills/catalog.py` alias, CMake test/tool blocks (root + tests/libraries), library_demo source list + setup call | agent-bosses (MAIN merges) |
+| Baked lighting: lightmap UV2 (glTF TEXCOORD_1 / FBX UV set 2, xatlas unwrap -> `.lmuv` sidecars), CPU path-traced lightmaps + light probes (BVH, threads, denoise, content hash), runtime lightmap / probe shader variants and mixed modes (indirect / shadowmask / subtractive), quality tiers, **Запекание света** window + MCP `lightbake_*`, `third_party/xatlas` | `engine/bake`, `engine/render/{BakedLighting,BakedShaders,LightmapUv,Renderer3DBaked}.*`, `apps/editor/core/LightBakeOps.*`, `apps/editor/windows/LightBakeWindow.cpp`, `apps/client/ClientBaked.cpp`, `tests/bake`, `docs/lightbake.md`; hooks: `Model.h` (`Primitive::lightmapUv`), glTF / FBX loaders + `loadModel` (sidecar), `Renderer3D.h` / `Renderer3DModels.cpp` (GI keys, `kDrawStatic`, capture), `ModelShaders.h` (`LIGHTMAP` / `PROBES`), `RtsTerrainShaders.h` / `RtsTerrainRender.cpp` (U3 + tex19/20), `RtsViewDraw.cpp` (static flag), `RtsLights*` (map light `bake`), `LightOps.cpp` (`bake` param), `GameClient` (load per map), `Workspace.cpp` registration | agent-lightbake (MAIN merges) |
 | Other areas | as assigned by the user | the agent the user assigned |
 
 If your task is not in this table, the user's first message to you defines your area: write it
@@ -209,7 +211,8 @@ Partial earlier attempts for models / UI / packs exist as branches `agent-models
 Shared touch points and how to use them:
 - `CMakeLists.txt`: add your sources in your own `add_library` block; don't reorder others.
 - `tests/tests.cpp`: append tests at the end (before `main`), don't edit others' tests.
-- `README.md`: add or edit only your own section.
+- `docs/overview.md` (detailed overview): add or edit only your own section.
+- `README.md` + translations: short landing page, update rules in §11.
 - Sim → presentation: use existing `SimEvent`s; if you need a new event, ask the sim owner (or add
   it at the end of `GameEvent` in `RtsModule.h` and mention it in the commit).
 
@@ -287,6 +290,51 @@ Native game projects consume individual `AIVERSE::lib_<package>` targets after
 native CMake code executes. Keep `libraries/` in aiversebuild source exports. No Lua dependency
 or engine-source edit is required for a game to consume these headers. Do not store mutable
 library objects as NativeModule members: persist their fields through NativeState instead.
+
+### Where library code goes (`libraries/include/aiverselib`)
+
+Pick the folder by what the code is, not by who wrote it or which game needs it first.
+
+| Folder | Holds | Examples |
+|---|---|---|
+| root `*.h` | `cpp-foundation`: small generic algorithms with no gameplay meaning | `Graphs.h`, `Grid.h`, `Collections.h` |
+| `runtime/` | Native-module infrastructure, not gameplay: memory bounds, work budgets, hot settings, traces, state diff, byte helpers | `Bounded.h`, `WorkBudget.h`, `NativeBytes.h` |
+| `systems/` | Cross-genre gameplay building blocks any game can use | attributes, tags, loot, curves, reservations |
+| `gameplay/` | Player-facing subsystems with native command adapters | abilities, camera, inventory, construction |
+| `genre/<package>/` | Rules that define a kind of game: one subfolder per catalog package | `genre/melee/`, `genre/weapons/`, `genre/cards/` |
+| `bots/` | Computer players and navigation, including genre bots | RTS/FPS controllers, navmesh |
+| `app/` | Application layer outside the simulation: screens, session, lifecycle, balance tooling | `Screens.h`, `Session.h` |
+| `net/` | Network admission and ticket policies | `Admission.h` |
+
+Rules:
+- **One package, one folder.** A new genre package gets `genre/<package>/` with all its files:
+  the policy, its JSON reader (`Data.h`), generated settings adapter (`Configured.h`) and save
+  records (`Persistence.h`). Name the folder after the catalog ID without the genre noun
+  (`stealth-senses` → `genre/senses/`). Never add another flat file to `genre/` or `strategy/`.
+- **No aggregate headers.** A shared `Persistence.h`, `Configured.h` or `Data.h` that includes
+  several packages is forbidden: it makes every user compile and link all of them and forces
+  fake catalog dependencies. Shared code may only live in `genre/common/` and must not include
+  any package (record framing, kind/version constants, byte helpers).
+- **Include only declared dependencies.** A package header may include another package only if
+  that package is in its `packageDependencies`; add the dependency because the code needs it,
+  never to make a check pass. Save record kinds stay unique across packages (see the area
+  table for the ranges already taken).
+- **Infrastructure is not a genre.** If code is about running native modules (budgets, memory,
+  hot reload, tracing, serialization bytes) it goes to `runtime/`, even when one genre needs it
+  first. If it is reusable by any game (tags, curves, loot), it goes to `systems/`.
+- Namespaces follow the folder (`aiverse::lib::genre`, `aiverse::lib::runtime`, ...); a package
+  subfolder does not add a namespace level.
+
+Current state (legacy, being migrated): `genre/` holds 11 packages as 49 flat files, and
+`strategy/` holds non-action genre kits (cards, turns, puzzles, rhythm, idle/offline
+production, run and zone graphs, puzzle VM) — these are genre packages too and move to
+`genre/<package>/`. The shared `genre/Persistence.h`, `genre/Configured.h`, `genre/Data.h`
+and `strategy/Persistence.h` are aggregates to be split per package. When migrating, move
+files with `git mv`, leave a one-line forwarding header at every old path so existing
+`#include <aiverselib/genre/X.h>` keeps compiling, keep package IDs, CMake targets and
+namespaces, then drop dependencies that only existed because of the aggregates and prove
+isolation with `tests/skills/isolation.py`. Do not migrate a package while its owner has an
+unmerged branch touching it.
 
 ## 10. Reuse meta-game policies before generating code
 
@@ -484,6 +532,8 @@ adapter. Validate kits, native linking, client retries and selected UI screens.
 - State when to use the skill, its responsibility, public API/header, exact CMake
   target, dependencies, minimal working example and required validation. Link to
   detailed references; do not require loading unrelated recipes or whole schemas.
+- Put the library code in the folder that matches what it is (§9 "Where library code goes");
+  genre packages get their own `genre/<package>/` subfolder and no aggregate headers.
 - Every new code-providing skill must have an independently selectable library
   target with only required dependencies. Header-only implementations may use
   INTERFACE targets; compiled optional libraries must not build by default.
@@ -531,3 +581,36 @@ GENERATED responsibility/index map, not a replacement for the source catalogs.
   Isolation checks cover default build, actual link commands and binary symbols;
   do not rely solely on dead stripping or a successful compile. Core engine libraries
   already required by a game remain its baseline, not optional skill packages.
+
+## 11. README: keep it current when you ship a feature
+
+`README.md` (English) is the project's front page and the source of truth; `README.ru.md`,
+`README.zh-CN.md`, `README.ja.md`, `README.ko.md`, `README.es.md`, `README.pt-BR.md`,
+`README.de.md` and `README.fr.md` are its translations. Detailed descriptions belong in
+`docs/overview.md` and `docs/*.md`, not in the README.
+
+**When to update.** In the same branch as the feature, if it changes what a user or an agent can do:
+a new genre package or genre module, a new template, a new platform or store/ads plugin, a new tool,
+editor window or MCP area, an importer (Unity, Godot, ...), or a change of counts quoted in the README
+(templates, libraries, skills, MCP tools). Bug fixes, refactors and internal changes do not touch it.
+
+**Where.** Find the matching place and change it there — never add a new section for one feature:
+- genre mechanics → the «Any genre» table (one row per genre; add the package name to the row);
+- templates → the «Ready-made templates» table; engine parts → the «What's inside» lists;
+- importers / porting → «Coming from Unity»; tools and setup → «Quick start»;
+- verified platforms → «Status» (only what was actually verified; never write "not run",
+  "not verified" or "untested" there — unverified details go to `docs/overview.md`);
+- a new document worth reading → one row in «Documentation».
+
+**How.**
+- Change `README.md` and **all eight translations in the same commit**. Translate the text
+  properly; keep code, commands, identifiers, file names and product names untranslated.
+  Translations keep exactly the structure of `README.md`: same sections, rows, order, links and images.
+- Every claim must be backed by the repository (code, tests, docs). No future plans as features,
+  no invented numbers. Prefer capabilities to raw timings ("armies of thousands of units" rather
+  than "13 ms per order"): a millisecond figure without context reads as a cost.
+- Keep it short: one line per item, no paragraphs about internals.
+- Screenshots live in `docs/images/readme/` (PNG/JPEG, ≤ 1 MB each, real engine renders only).
+- Run `python3 tools/readme/check.py` — it must report 0 problems (structure of every
+  translation, language bar, broken links and images).
+

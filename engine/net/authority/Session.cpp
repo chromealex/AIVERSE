@@ -41,7 +41,9 @@ bool decodeSnapshot(const Bytes& b,Snapshot& out) {
     for(const auto& p:v.projectiles)if(p.kind>4||p.weapon>=4||p.owner>200||p.piercedCount>8||!position(p.pos))return false;
     for(const auto& l:v.loot)if(!position(l.pos)||l.count<1||l.count>20)return false;
     for(const auto& vehicle:v.vehicles)if(!position(vehicle.pos)||vehicle.driver>200||vehicle.health<0||vehicle.health>500)return false;
-    if(!own||a.remaining()!=0)return false;out=std::move(v);return true;
+    if(!own||a.remaining()!=0)return false;
+    out=std::move(v);
+    return true;
 }
 Server::Server(const Json& rules,const Json& map,uint64_t seed,world::AssetReader reader):
     simulation_({seed,fps::readConfig(rules).tickRate,0,false},std::make_unique<fps::Module>()),content_(contentId(rules,map)) {simulation_.setup(rules,map);if(map["world"].getBool("async")){if(!reader)throw JsonError("world: server content reader required");module().setContentReader(std::move(reader));}}

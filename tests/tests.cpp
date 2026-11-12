@@ -13901,3 +13901,4 @@ TEST(world_tree_lua_peek_is_observation_only) {
     CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
 }
 #endif
+#include "bake/tests_baked_render.inc"   // baked lighting in the renderer (agent-lightbake)

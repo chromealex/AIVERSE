@@ -10,6 +10,7 @@
 // cameras, lights. Compressed geometry / textures (Draco, meshopt, KTX2, WebP) are an error when
 // required and skipped otherwise.
 #include "Model.h"
+#include "LightmapUv.h"
 #include "../data/Json.h"
 
 #include <algorithm>
@@ -478,7 +479,9 @@ private:
             fail(where + ": compressed geometry (Draco / meshopt) is not supported, export uncompressed");
         const Json& at = p["attributes"];
         if (!at.has("POSITION")) fail(where + ": primitive without POSITION");
-        if (at.has("TEXCOORD_1")) warn(where + ": TEXCOORD_1 is ignored");
+        // TEXCOORD_1 = lightmap UVs of static meshes (packed into joints, LightmapUv.h); skinned meshes use probes
+        const bool lightmapUv = at.has("TEXCOORD_1") && !(skinned && at.has("JOINTS_0"));
+        if (at.has("TEXCOORD_1") && !lightmapUv) warn(where + ": TEXCOORD_1 of a skinned mesh is ignored (lit by light probes)");
         size_t n = 0, c = 0;
         auto pos = accessorExpect(inum(at["POSITION"]), 3, n, "POSITION");
         std::vector<ModelVertex> verts(n);
@@ -491,6 +494,10 @@ private:
         if (at.has("TEXCOORD_0")) {
             auto v = accessorExpect(inum(at["TEXCOORD_0"]), 2, c, "TEXCOORD_0");
             for (size_t i = 0; i < std::min(n, c); ++i) verts[i].uv = {float(v[i * 2]), float(v[i * 2 + 1])};
+        }
+        if (lightmapUv) {
+            auto v = accessorExpect(inum(at["TEXCOORD_1"]), 2, c, "TEXCOORD_1");
+            for (size_t i = 0; i < std::min(n, c); ++i) setLightmapUv(verts[i], {float(v[i * 2]), float(v[i * 2 + 1])});
         }
         if (hasTangents) {
             auto v = accessorExpect(inum(at["TANGENT"]), 4, c, "TANGENT");
@@ -570,6 +577,7 @@ private:
         morph_ = nt ? &morph : nullptr;
         morphTargets_ = nt;
         Primitive prim;
+        prim.lightmapUv = lightmapUv;
         prim.material = std::clamp(inum(p["material"], -1), -1, int(model_->materials.size()) - 1);
         if (prim.material < 0) prim.material = defaultMaterial();
         for (const auto& mp : p["extensions"]["KHR_materials_variants"]["mappings"].items()) {
