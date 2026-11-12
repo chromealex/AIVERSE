@@ -4,6 +4,9 @@ ambersands 3 442dcee70c1a1bea
 borderrush 1 cdafc827fd84ddb0
 borderrush 2 ebed2231c3835756
 borderrush 3 e22aea63e52a9469
+boss_arena 1 73cc470fcfcabb41
+boss_arena 2 ba90e8298b8ab945
+boss_arena 3 6efcbe830f3513f3
 clanlands 1 a0e1eebc181f1da7
 clanlands 2 8f140eb52230d3f7
 clanlands 3 5eb7aa108d29943c

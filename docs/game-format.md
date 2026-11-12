@@ -2353,6 +2353,26 @@ aim snap cone, auto-fire policy, abilities along the aim, respawn) and game.json
 aim stick, ability buttons, keyboard / mouse / gamepad, follow camera). Keys, defaults and behaviour:
 [docs/topdown.md](topdown.md). Sample: `templates/topdown_arena`.
 
+## Boss encounters
+
+Rules block `encounters` (boss-encounters library on real units; reference [docs/encounters.md](encounters.md),
+sample `templates/boss_arena`). Map players with `"monsters": true` are driven by it (the computer player skips them).
+- `attacks.<id>`: `shape` (circle / cone / line / ring), `radius`, `inner`, `angle`, `length`, `width`, `anchor`
+  (source / aim), `offset`, `windup`, `active`, `recovery`, `interval`, `cooldown`, `damage`, `damageMin`, `falloff`,
+  `damageType`, `statuses` (rules status ids or `{"status", "duration"}`), `statusDuration`, `oncePerTarget`,
+  `trackAim`, `sweep`, `cancelOnDeath`, `friendlyFire`, `minRange`, `maxRange`, `ability` (a unit ability starts it).
+- `bosses.<unit type>`: `engageRange`, `loseRange`, `approach`, `immune`, `archetype`, `phases[]` (`hpBelow`, `after`,
+  `damage`, `speed`, `cooldown`, `globalCooldown`, `transition`, `mode` byRange / sequence / weighted, `pattern[]`
+  (`attack`, `alternate`, `minRange`, `maxRange`, `weight`), `adds[]` (`unit`, `count`, `every`, `maxAlive`,
+  `minRadius`, `maxRadius`)), `enrage` (`after`, `hpBelow`, `damage`, `speed`, `cooldown`).
+- `mobs.<unit type>`: `aggroRange`, `loseRange`, `stopDistance`, `switchMargin`, `wanderMin`, `wanderMax`,
+  `arriveRadius`, `leash`, `wanderDelay`, `wanderLeg`, `wanderAttempts`, `fleeBelow`, `fleeRecover`, `fleeRange`,
+  `fleeTime`, `wander`, `spacing`, `correction`, `lookAhead`, `neighbours`, `attack`, `think`, `flowDistance`.
+- `schedule`: `personal`, `rotation`, `archetypes`, `spawnDistance` [min, max], `windows[]` (`start`, `end`,
+  `breather`, `excludePrevious`, `pauseWaves`, `variants[]` (`boss`, `weight`, `archetype`)).
+Lua events `boss_engaged`, `boss_phase`, `boss_enraged`, `boss_adds`, `boss_defeated`, `boss_window`,
+`telegraph_start`, `telegraph_strike`, `telegraph_end` (statuses: `status_start`); table `encounters`.
+
 ## Ordered projectile flight programs
 
 Weapons and projectile deliveries accept an optional `flight` object with ordered Split, Ricochet,

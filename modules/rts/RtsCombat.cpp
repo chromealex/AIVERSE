@@ -313,6 +313,7 @@ void RtsModule::castAbility(Simulation& sim, Entity caster, int index, Entity ta
     if (a.target == TargetKind::Self || a.target == TargetKind::None) { target = caster; point = w.get<Transform>(caster).pos; }
     if (w.alive(target) && w.has<Transform>(target)) point = w.get<Transform>(target).pos;
     sim.emit({kEvAbility, owner, caster, target, index, point});
+    if (encounters_ && encounters_->active()) encounters_->onAbility(sim, caster, index, target, point);   // telegraphed attacks bound to the ability
     if (rules_.mech.toggles && mechToggle(sim, caster, index)) return;   // agent-mech: cloak / burrow / siege mode
     if (!rules_.advancedEffects) { applyEffects(sim, caster, owner, casterType, a.effects, target, point); return; }
     const AbilityDef& al = abilityFor(sim, caster, index);

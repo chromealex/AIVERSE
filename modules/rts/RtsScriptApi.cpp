@@ -1242,6 +1242,7 @@ void openGameApi(Vm& vm) {
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
+    openEncounterApi(vm);   // boss encounters (RtsEncountersApi.cpp)
 }
 
 } // namespace script
@@ -1371,6 +1372,13 @@ Json scriptApiReference() {
     rd.push(fn("raid_can_extract(player, point_id)", "global veto hook: return false (+ reason) to refuse an extraction or a call"));
     rd.push(fn("on(\"raid_phase\" | \"raid_point\" | \"raid_channel\" | \"raid_extracted\" | \"raid_loot\" | \"raid_interact\" | \"raid_objective\" | \"raid_player\", fn(e))", "raid events: e = {player, unit, other, value, x, z} (docs/raid.md: value encodings)"));
     r.set("raid", rd);
+    Json en = Json::array();   // boss encounters (RtsEncountersApi.cpp, docs/encounters.md)
+    en.push(fn("encounters.active() / encounters.bosses() / encounters.boss(unit)", "rules \"encounters\": living bosses; {phase (0 = first), enraged, engaged, defeated, participant, target}"));
+    en.push(fn("encounters.mob(unit) / encounters.telegraphs()", "mob mode (idle|wander|hunt|flee|return); running attacks {attack, caster, x, z, yaw, phase (windup|active|recovery), progress 0..1000}"));
+    en.push(fn("encounters.waves_allowed(player)", "schedule gate: false while the player's personal boss is pending / alive (pauseWaves) or during the breather"));
+    en.push(fn("encounters.cast(unit, attack, x, z [, target]) (simulation scripts)", "start a telegraphed attack of the unit toward (x, z); false when it cannot"));
+    en.push(fn("on(\"boss_engaged\" | \"boss_phase\" | \"boss_enraged\" | \"boss_adds\" | \"boss_defeated\" | \"boss_window\" | \"telegraph_start\" | \"telegraph_strike\" | \"telegraph_end\", fn(e))", "encounter events: e = {player, unit, other, value, x, z} (docs/encounters.md: value encodings); applied statuses: \"status_start\""));
+    r.set("encounters", en);
     return r;
 }
 

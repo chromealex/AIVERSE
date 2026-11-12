@@ -1,0 +1,96 @@
+// "Golem Pit": a top-down boss fight (Drone Fall style) built from data. One hero drone (rules "topDown") against
+// a three-phase golem with telegraphed attacks (rules "encounters": cone swipe, aimed slams and rocks, a shockwave
+// ring, a sweeping charge), status effects (chill / stun / burn / root are ordinary rules statuses), add waves and
+// wandering crawler packs that hunt the hero. The monster side is the map player with "monsters": true.
+// Lose the hero (no respawn) and the golem's side wins; kill the golem, its adds and the packs to win.
+// Reference: docs/encounters.md, docs/game-format.md § Boss encounters.
+{
+  "victory": "noUnits",
+  "resources": { "scrap": { "name": "Scrap", "kind": "stock", "start": 0 } },
+  "fogOfWar": { "mode": "none" },
+  "scripts": ["scripts/boss.lua"],
+
+  "statuses": {
+    "chilled":  { "name": "Chilled", "tags": ["debuff"], "mods": [ { "stat": "speed", "mul": 0.55 } ] },
+    "stunned":  { "name": "Stunned", "tags": ["debuff"], "flags": ["stun"] },
+    "burning":  { "name": "Burning", "tags": ["debuff"], "tick": { "damage": 5, "interval": 0.5 }, "stacking": "independent", "maxStacks": 3 },
+    "rooted":   { "name": "Rooted",  "tags": ["debuff"], "flags": ["root"] }
+  },
+
+  "topDown": {
+    "heroes": ["drone"],
+    "respawn": 0,
+    "move": { "accel": 36, "decel": 54, "turnRate": 720, "collideUnits": true },
+    "input": { "sectors": 45, "magnitudeSteps": 1, "deadzone": 0.05 },
+    "aim": { "snapCone": 15, "fires": true },
+    "autoFire": { "enabled": true, "whileMoving": true, "cone": 360, "lineOfFire": true,
+                  "retarget": "nearest", "interval": 0.2, "switchMargin": 0.5, "priority": ["golem"] }
+  },
+
+  "encounters": {
+    "attacks": {
+      "swipe":     { "shape": "cone", "radius": 3.2, "angle": 120, "windup": 0.7, "recovery": 0.5, "cooldown": 1.5,
+                     "damage": 55, "maxRange": 3 },
+      "slam":      { "shape": "circle", "anchor": "aim", "radius": 2.2, "maxRange": 7, "windup": 1.0, "recovery": 0.6, "cooldown": 3,
+                     "damage": 70, "damageMin": 35, "falloff": true, "statuses": [ { "status": "stunned", "duration": 0.6 } ] },
+      "rock":      { "shape": "circle", "anchor": "aim", "radius": 1.5, "minRange": 4, "maxRange": 15, "windup": 1.2, "recovery": 0.4,
+                     "cooldown": 2.5, "damage": 35, "statuses": [ { "status": "burning", "duration": 3 } ] },
+      "shockwave": { "shape": "ring", "radius": 6, "inner": 3.5, "windup": 1.3, "recovery": 0.8, "cooldown": 7,
+                     "damage": 45, "statuses": [ { "status": "chilled", "duration": 2.5 } ] },
+      "charge":    { "shape": "line", "length": 9, "width": 2.4, "windup": 1.1, "active": 0.5, "recovery": 0.9, "cooldown": 8,
+                     "damage": 60, "sweep": true, "minRange": 4, "maxRange": 10, "statuses": [ { "status": "rooted", "duration": 1 } ] },
+      "bite":      { "shape": "cone", "radius": 1.3, "angle": 90, "windup": 0.45, "recovery": 0.35, "cooldown": 1.2, "damage": 8 },
+      "missile_blast": { "shape": "circle", "anchor": "aim", "radius": 2, "maxRange": 8, "windup": 0.3, "recovery": 0.1,
+                     "damage": 60, "ability": "missile", "statuses": [ { "status": "chilled", "duration": 1.5 } ] }
+    },
+    "bosses": {
+      "golem": {
+        "engageRange": 13, "loseRange": 40, "approach": 2.4, "immune": ["stunned", "rooted"],
+        "phases": [
+          { "mode": "byRange", "globalCooldown": 0.6,
+            "pattern": [ { "attack": "swipe", "maxRange": 3 }, { "attack": "slam", "maxRange": 7 }, { "attack": "rock", "minRange": 4, "maxRange": 15 } ] },
+          { "hpBelow": 0.66, "transition": 1.5, "damage": 1.2, "speed": 1.1, "cooldown": 0.85, "globalCooldown": 0.5,
+            "pattern": [ { "attack": "shockwave", "maxRange": 6 }, { "attack": "swipe", "maxRange": 3 }, { "attack": "slam", "maxRange": 7 },
+                         { "attack": "rock", "minRange": 4, "maxRange": 15 } ],
+            "adds": [ { "unit": "crawler", "count": 3, "every": 15, "maxAlive": 6, "minRadius": 2, "maxRadius": 4 } ] },
+          { "hpBelow": 0.33, "transition": 2, "damage": 1.4, "speed": 1.25, "cooldown": 0.7, "globalCooldown": 0.4,
+            "pattern": [ { "attack": "charge", "minRange": 4, "maxRange": 10 }, { "attack": "shockwave", "maxRange": 6 },
+                         { "attack": "swipe", "maxRange": 3 }, { "attack": "rock", "minRange": 4, "maxRange": 15 } ],
+            "adds": [ { "unit": "crawler", "count": 2, "every": 10, "maxAlive": 4, "minRadius": 2, "maxRadius": 4 } ] }
+        ],
+        "enrage": { "after": 150, "damage": 2, "speed": 1.4, "cooldown": 0.6 }
+      }
+    },
+    "mobs": {
+      "crawler": { "aggroRange": 9, "loseRange": 14, "stopDistance": 1.1, "wanderMin": 1.5, "wanderMax": 4, "wanderDelay": 1.5,
+                   "leash": 0, "fleeBelow": 0.15, "fleeRecover": 0.5, "fleeRange": 5, "fleeTime": 2, "attack": "bite", "think": 0.2 }
+    }
+  },
+
+  "types": {
+    "drone": {
+      "name": "Drone",
+      "health": { "max": 1800, "regen": 9 },
+      "move": { "speed": 6, "radius": 0.45 },
+      "sight": 12,
+      "weapons": [ { "id": "blaster", "range": 6.5, "damage": 22, "cooldown": 0.3, "projectileSpeed": 24 } ],
+      "abilities": [ { "id": "missile", "name": "Missile", "target": "point", "range": 8, "cooldown": 6, "autocast": false, "effects": [] } ],
+      "view": { "shape": "flyer", "scale": 0.9 }
+    },
+    "golem": {
+      "name": "Golem",
+      "health": { "max": 2400, "armor": 1 },
+      "move": { "speed": 2.2, "radius": 1.1 },
+      "sight": 14,
+      "weapons": [ { "id": "stomp", "range": 1.2, "damage": 4, "cooldown": 1.5 } ],
+      "view": { "shape": "tank", "scale": 1.8 }
+    },
+    "crawler": {
+      "name": "Crawler",
+      "health": { "max": 90 },
+      "move": { "speed": 3.2, "radius": 0.35 },
+      "sight": 9,
+      "view": { "shape": "soldier", "scale": 0.8 }
+    }
+  }
+}
