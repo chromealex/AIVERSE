@@ -36,6 +36,7 @@ int kList(lua_State* L, Vm& vm) {
         lua_pushstring(L, t.id.c_str()); lua_setfield(L, -2, "id");
         lua_pushstring(L, t.name.c_str()); lua_setfield(L, -2, "name");
         lua_pushboolean(L, t.open); lua_setfield(L, -2, "open");
+        lua_pushstring(L, t.office.c_str()); lua_setfield(L, -2, "office");
         lua_newtable(L);
         for (size_t r = 0; r < t.ranks.size(); ++r) {
             lua_newtable(L);

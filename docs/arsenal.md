@@ -19,7 +19,8 @@ along his aim, collects pickups from the ground and earns money for kills, as in
   pays their `bounty` to the killer. A splash weapon fired this way goes off where its flight ends (a rocket into a
   wall), not only on a direct hit.
 - **Switching.** `kCmdTopDownWeapon` (Lua / MCP `topdown_weapon`): param `1` next, `-1` previous (slots without ammo
-  are skipped), `100 + slot` picks a slot. Client: X / Tab next, Z previous, 1..9 slots.
+  are skipped), `100 + slot` picks a slot. Client: X / Tab next, Z previous, 1..9 slots; touch: game.json
+  `topDown.buttons` entries `{"weapon": "next" | "prev", "anchor", "offset", "radius"}` (drawn with an arrow).
 - **Pickups** are units of the types in `arsenal.pickups`, placed by the map or spawned later. Walking over one (or
   driving: the car's length collects) gives `ammo` of a `weapon`, `money`, `heal` (hit points), or sells for `price`.
   A pickup that would give nothing (full ammo, full health) stays. A taken one is off the map until `respawn` seconds
@@ -69,4 +70,4 @@ fists, pistol, machine gun, shotgun and rocket launcher to the hero, six pickup 
 
 Thrown weapons (grenades, molotovs), flamethrower, vehicle weapons and drive-by fire, weapon shops as places,
 dropped weapons of the dead, armed people and police with a wanted level, explosions of wrecked cars, weapon and
-pickup sounds, weapon icons and a kill-frenzy style HUD, touch buttons for switching.
+pickup sounds, weapon icons and a kill-frenzy style HUD.

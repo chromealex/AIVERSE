@@ -36,6 +36,7 @@ struct TopDownButtonConfig {
     // hold: press starts, release stops (rules topDown.abilities.hold repeats it while held)
     enum class Mode { Tap, Aim, Hold } mode = Mode::Tap;
     float dragRadius = 90;           // logical points of drag for the full ability range (aim mode)
+    int weaponStep = 0;              // "weapon": "next" (+1) / "prev" (-1): switches the weapon in hand (rules "arsenal")
     int key = 0;                     // platform::Key (0: none)
     int padButton = -1;              // host gamepad button index (-1: none)
     float anchor[2] = {1, 1};        // normalized screen point the offset starts from

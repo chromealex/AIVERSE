@@ -636,7 +636,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter}, {"commerce", kCmdCommerce}, {"career", kCmdCareer}, {"topdown_weapon", kCmdTopDownWeapon},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter}, {"commerce", kCmdCommerce}, {"career", kCmdCareer}, {"prompt", kCmdPrompt}, {"topdown_weapon", kCmdTopDownWeapon},
     {"progression", kCmdProgression},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
@@ -1274,6 +1274,7 @@ void openGameApi(Vm& vm) {
     openCommerceApi(vm);   // premises, businesses, the bank (RtsCommerceApi.cpp)
     openDrivingApi(vm);    // vehicles (RtsDrivingApi.cpp)
     openCareerApi(vm);     // career ladders (RtsCareerApi.cpp)
+    openPromptApi(vm);     // script choice menus (RtsPrompt.cpp)
 }
 
 } // namespace script

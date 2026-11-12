@@ -155,6 +155,11 @@ void GameClient::topDownFrame(double dt) {
     }
     for (const TopDownButtonEvent& ev : topDown_.takeButtonEvents()) {
         const TopDownButtonConfig& bc = topDown_.config().buttons[size_t(ev.button)];
+        if (bc.weaponStep != 0) {   // weapon switch buttons (rules "arsenal")
+            const bool press = ev.phase == topdown::Phase::Tap || ev.phase == topdown::Phase::Press;
+            if (press && mod().arsenal() && mod().arsenal()->active()) { Command c; c.type = kCmdTopDownWeapon; c.param = bc.weaponStep > 0 ? kWeaponNext : kWeaponPrev; issue(c); }
+            continue;
+        }
         if (bc.abilityIndex < 0 || !hero.valid()) continue;
         if (bc.abilityIndex == topdown::kEscapeAbility) {   // starts the preview; the destination goes out when it ends
             if (ev.phase != topdown::Phase::Tap && ev.phase != topdown::Phase::Press) continue;
@@ -280,7 +285,8 @@ void GameClient::topDownDraw() {
     World& w = sim_->world();
     for (auto& b : topDown_.config().buttons) {
         float r = 1;
-        if (hero.valid() && b.abilityIndex >= 0) {
+        if (b.weaponStep != 0) r = 1;
+        else if (hero.valid() && b.abilityIndex >= 0) {
             const UnitType& t = rules_.types[w.get<Unit>(hero).type];
             auto* st = w.tryGet<AbilityState>(hero);
             if (st && size_t(b.abilityIndex) < t.abilities.size() && b.abilityIndex < 8) {

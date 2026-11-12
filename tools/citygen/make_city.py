@@ -562,7 +562,9 @@ def game_manifest():
         'topDown': {'touchControls': 'auto', 'mouseAim': 'hold',
                     'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
                     'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
-                    'buttons': [],
+                    'buttons': [{'weapon': 'prev', 'anchor': [1, 0.3], 'offset': [-126, -40], 'radius': 30},
+                                # weapon switch on phones, above the aim stick (keys: Z / X, 1..9)
+                                {'weapon': 'next', 'anchor': [1, 0.3], 'offset': [-50, -40], 'radius': 30}],
                     # phones: the aim stick bends to the nearest target, a tap on it shoots (docs/topdown.md)
                     'aimAssist': {'touch': True, 'pad': False, 'mouse': False, 'cone': 30, 'tapFire': True},
                     # GTA camera: close on foot, pulled back and shifted ahead at speed (world units = cells of 4 m)
@@ -839,6 +841,8 @@ def main():
     print('handling:', *vehicle_handling.apply(os.path.expanduser(a.out)))
     import minimap_png                                    # the radar picture of the new map (ui/minimap.png)
     print(*minimap_png.build(os.path.expanduser(a.out)))
+    import hud_atlas                                      # HUD sprites and distance digits (ui/hud.png, ui/hud_digits.png)
+    hud_atlas.build(os.path.expanduser(a.out), os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'engine', 'assets', 'fonts', 'ui.ttf'))
 
 
 if __name__ == '__main__':
