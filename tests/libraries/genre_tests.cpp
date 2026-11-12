@@ -482,4 +482,228 @@ void weaponData(const std::string& root){
     r=settings(R"({"schemaVersion":1,"charge":{"minTicks":10,"maxTicks":11,"tiers":5}})");CHECK(r.value&&weaponSettingsErrors(*r.value).at(0)=="charge.tiers: maxTicks - minTicks must be at least tiers - 1");
 }
 void weaponBallistics(const std::string& root){weaponPenetration(root);weaponExplosions();weaponFeeds();weaponCharge();weaponAttachments(root);weaponAiming();weaponRestore();weaponData(root);}
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, projectiles, rounds/capture, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// ---- Stealth and senses (stealth-senses package).
+#include <aiverselib/genre/SensesConfigured.h>
+#include <aiverselib/genre/SensesData.h>
+#include <aiverselib/genre/SensesPersistence.h>
+// Brace initializers contain commas, so the checks forward variadic arguments.
+#define SCHECK(...) CHECK((__VA_ARGS__))
+namespace senses {
+SenseAgent agent(int64_t id,int64_t team,Vec3 p,Fixed yaw={}){SenseAgent a;a.id=id;a.team=team;a.position=p;a.yaw=yaw;a.eyeHeight={};return a;}
+SenseTarget target(int64_t id,int64_t team,Vec3 p){SenseTarget t;t.id=id;t.team=team;t.position=p;return t;}
+NoiseEvent noise(int64_t id,int64_t source,Vec3 p,Fixed radius,int64_t loud){NoiseEvent n;n.id=id;n.source=source;n.position=p;n.radius=radius;n.loudnessMilli=loud;return n;}
+SensesReport run(const SensesConfig& c,const SenseDefinitions& d,SensesState& s,uint32_t tick,const SensesInput& in){auto r=stepSensesOpen(c,d,s,tick,in);SCHECK(r);return *r;}
+const PerceivedTarget* seen(const SensesReport& r,int64_t o,int64_t t){for(const auto& p:r.perceived)if(p.observer==o&&p.target==t)return &p;return nullptr;}
+std::size_t count(const SensesReport& r,SenseEventKind k){std::size_t n=0;for(const auto& e:r.events)n+=e.kind==k;return n;}
+const SenseEvent* first(const SensesReport& r,SenseEventKind k){for(const auto& e:r.events)if(e.kind==k)return &e;return nullptr;}
+void coneAndRange(){
+    SightConfig c;auto o=agent(1,1,{});
+    auto focus=sampleSight(c,o,target(2,2,{{},{},10_fx}));SCHECK(focus.zone==SightZone::Focus&&focus.strength>=665&&focus.strength<=668);
+    SCHECK(sampleSight(c,o,target(2,2,{{},{},25_fx})).strength==0);
+    auto side=sampleSight(c,o,target(2,2,{5_fx,{},1_fx}));SCHECK(side.zone==SightZone::Peripheral&&side.strength==400);
+    auto behind=sampleSight(c,o,target(2,2,{{},{},Fixed::fromRatio(-3,2)}));SCHECK(behind.zone==SightZone::Near&&behind.strength==1000);
+    SCHECK(sampleSight(c,o,target(2,2,{{},{},-3_fx})).zone==SightZone::None);
+    SCHECK(sampleSight(c,o,target(2,2,{6_fx,{},-1_fx})).strength==0); // beyond the peripheral cone
+    auto dim=target(2,2,{{},{},10_fx});dim.lightMilli=500;dim.coverMilli=500;auto s=sampleSight(c,o,dim);SCHECK(s.strength==focus.strength/2/2||s.strength==focus.strength/4+1||s.strength==focus.strength/4);
+    auto bright=target(2,2,{{},{},10_fx});bright.lightMilli=4000;SCHECK(sampleSight(c,o,bright).strength==1000);
+    auto blind=o;blind.sightMilli=0;SCHECK(sampleSight(c,blind,target(2,2,{})).strength==0);
+    auto turned=agent(1,1,{},Fixed::fromRatio(1,2));SCHECK(sampleSight(c,turned,target(2,2,{{},{},-10_fx})).zone==SightZone::Focus); // yaw 0.5 faces -Z
+    auto eye=agent(1,1,{});eye.eyeHeight=2_fx;SCHECK(sampleSight(c,eye,target(2,2,{{},2_fx,10_fx})).strength==focus.strength);
+}
+void losOrder(){
+    SensesConfig c;SenseDefinitions d;SensesState s;SensesInput in;
+    in.observers={agent(3,1,{}),agent(1,1,{})};in.targets={target(20,2,{{},{},1_fx}),target(10,2,{{},{},1_fx}),target(30,1,{{},{},1_fx}),target(40,2,{{},{},50_fx})};
+    std::vector<std::pair<int64_t,int64_t>> calls;
+    auto r=stepSenses(c,d,s,0,in,[&](const SenseAgent& o,const SenseTarget& t){calls.emplace_back(o.id,t.id);return t.id!=20;},[](const SenseAgent&,const NoiseEvent&){return 1000;});
+    SCHECK(r&&calls==(std::vector<std::pair<int64_t,int64_t>>{{1,10},{1,20},{3,10},{3,20}})&&r->losQueries==4&&r->losSkipped==0);
+    SCHECK(seen(*r,1,10)&&seen(*r,1,10)->visibleNow&&!seen(*r,1,20)&&!seen(*r,1,30)&&!seen(*r,1,40)); // LOS blocked, same team, out of range
+    SCHECK(r->perceived.size()==2&&r->perceived[0].observer==1&&r->perceived[1].observer==3);
+    c.sight.maxQueries=3;calls.clear();SensesState b;
+    auto limited=stepSenses(c,d,b,0,in,[&](const SenseAgent& o,const SenseTarget& t){calls.emplace_back(o.id,t.id);return true;},[](const SenseAgent&,const NoiseEvent&){return 1000;});
+    SCHECK(limited&&calls.size()==3&&calls.back()==std::make_pair<int64_t,int64_t>(3,10)&&limited->losSkipped==1&&!seen(*limited,3,20));
+}
+void hearing(){
+    SensesConfig c;SenseDefinitions d;SensesInput in;in.observers={agent(1,1,{}),agent(2,1,{{},{},-1_fx})};
+    in.observers[0].sightMilli=in.observers[1].sightMilli=0;
+    in.noises={noise(7,10,{5_fx,{},{}},10_fx,500),noise(8,11,{5_fx,{},{}},10_fx,900)};
+    std::vector<std::pair<int64_t,int64_t>> calls;SensesState s;
+    auto occl=[&](const SenseAgent& o,const NoiseEvent& n){calls.emplace_back(o.id,n.id);return o.id==1?500:0;};
+    c.hearing.maxNoises=1;auto r=stepSenses(c,d,s,0,in,[](const SenseAgent&,const SenseTarget&){return true;},occl);
+    SCHECK(r&&r->noisesDropped==1&&first(*r,SenseEventKind::NoiseDropped)->value==7&&calls==(std::vector<std::pair<int64_t,int64_t>>{{1,8},{2,8}}));
+    auto p=seen(*r,1,11);SCHECK(p&&p->strengthNow==225&&p->lastSense==SenseKind::Hearing&&p->lastKnown==Vec3{5_fx,{},{}}&&p->suspicion==67);
+    SCHECK(!seen(*r,2,11)&&!seen(*r,1,10)); // fully occluded; dropped noise
+    c.hearing.maxQueries=1;calls.clear();SensesState b;auto budget=stepSenses(c,d,b,0,in,[](const SenseAgent&,const SenseTarget&){return true;},occl);
+    SCHECK(budget&&budget->occlusionQueries==1&&budget->occlusionSkipped==1&&calls.size()==1);
+    // Attenuation, sensitivity and the threshold: 1000 * (10-5)/10 = 500 before occlusion.
+    SCHECK(noiseStrength(noise(1,0,{},10_fx,1000),{5_fx,{},{}})==500&&noiseStrength(noise(1,0,{},10_fx,1000),{10_fx,{},{}})==0);
+    SensesConfig open;SensesState q;SensesInput quiet;quiet.observers={agent(1,1,{})};quiet.noises={noise(1,9,{9_fx,{},{}},10_fx,100)};
+    SCHECK(!seen(run(open,d,q,0,quiet),1,9)); // 10 milli < threshold 20
+    quiet.noises={noise(1,9,{1_fx,{},{}},10_fx,1000)};quiet.observers[0].team=0;auto ally=quiet;ally.noises[0].team=1;ally.observers[0].team=1;
+    SCHECK(seen(run(open,d,q,1,quiet),1,9));SensesState q2;SCHECK(!seen(run(open,d,q2,0,ally),1,9)); // own team's noise ignored
+}
+void suspicionThresholds(){
+    SensesConfig c;SenseDefinitions d;SensesState s;SensesInput in;in.observers={agent(1,1,{})};in.targets={target(10,2,{{},{},1_fx})};
+    std::vector<std::pair<uint32_t,Awareness>> changes;
+    for(uint32_t t=0;t<=16;++t){
+        auto r=run(c,d,s,t,in);auto p=seen(r,1,10);SCHECK(p&&p->visibleNow&&p->suspicion==std::min<int64_t>(60*(t+1),1000));
+        for(const auto& e:r.events)if(e.kind==SenseEventKind::AwarenessChanged)changes.emplace_back(t,Awareness(e.value));
+        SCHECK(count(r,SenseEventKind::AlertSent)==0);
+    }
+    SCHECK(changes==(std::vector<std::pair<uint32_t,Awareness>>{{3,Awareness::Suspicious},{8,Awareness::Searching},{16,Awareness::Alert}}));
+    in.targets.clear();auto lost=run(c,d,s,17,in);SCHECK(count(lost,SenseEventKind::SearchStarted)==1&&seen(lost,1,10)->searching&&seen(lost,1,10)->level==Awareness::Alert);
+    // Decay starts decayDelay ticks after the last stimulus, exactly even across skipped ticks.
+    c.suspicion.decayDelay=5;c.suspicion.decayPerTick=10;SensesState q;SensesInput see;see.observers={agent(1,1,{})};see.targets={target(10,2,{{},{},1_fx})};
+    for(uint32_t t=0;t<4;++t)run(c,d,q,t,see);auto alone=see;alone.targets.clear();
+    SCHECK(seen(run(c,d,q,8,alone),1,10)->suspicion==240);SCHECK(seen(run(c,d,q,9,alone),1,10)->suspicion==230);
+    auto r=run(c,d,q,20,alone);SCHECK(seen(r,1,10)->suspicion==120&&seen(r,1,10)->level==Awareness::Unaware&&count(r,SenseEventKind::AwarenessChanged)==1);
+    SCHECK(run(c,d,q,40,alone).perceived.empty()&&q.observers.empty());
+    // Anonymous disturbances stop at Searching.
+    SensesState anon;SensesInput loud;loud.observers={agent(1,1,{})};loud.noises={noise(1,0,{},10_fx,1000)};
+    for(uint32_t t=0;t<5;++t)loud.noises[0].id=t+1,run(c,d,anon,t,loud);
+    SCHECK(awarenessRecord(anon,1,0)->meter==c.suspicion.searchingAt&&awarenessRecord(anon,1,0)->level==Awareness::Searching);
+}
+void propagation(){
+    SensesConfig c;c.suspicion.sightGain=1000;SenseDefinitions d;SensesState s;SensesInput in;
+    auto b=agent(2,1,{5_fx,{},{}});b.sightMilli=0;b.hearingMilli=0;
+    in.observers={agent(1,1,{}),b,agent(3,1,{100_fx,{},{}},Fixed::fromRatio(1,2)),agent(4,2,{3_fx,{},{}})};in.targets={target(10,2,{{},{},1_fx})};
+    auto r=run(c,d,s,0,in);SCHECK(seen(r,1,10)->level==Awareness::Alert&&count(r,SenseEventKind::AlertSent)==1&&first(r,SenseEventKind::AlertSent)->value==2);
+    SCHECK(s.alerts.size()==1&&s.alerts[0].deliverAt==30);
+    for(uint32_t t=1;t<30;++t){auto x=run(c,d,s,t,in);SCHECK(!seen(x,2,10)&&count(x,SenseEventKind::AlertSent)==0);}
+    auto got=run(c,d,s,30,in);auto p=seen(got,2,10);
+    SCHECK(count(got,SenseEventKind::AlertReceived)==1&&p&&p->level==Awareness::Searching&&p->suspicion==500&&p->lastSense==SenseKind::Alert&&p->lastKnown==Vec3{{},{},1_fx}&&p->lastKnownTick==0);
+    SCHECK(!p->sensedNow&&p->searching&&first(got,SenseEventKind::SearchStarted)->observer==2&&!seen(got,3,10)&&!seen(got,4,10));
+    // Receivers that are absent on the delivery tick lose the alert; relay=false receivers never re-broadcast.
+    SensesState z;auto gone=in;run(c,d,z,0,in);gone.observers.erase(gone.observers.begin()+1);auto miss=run(c,d,z,30,gone);
+    SCHECK(count(miss,SenseEventKind::AlertDropped)==1&&!awarenessRecord(z,2,10));
+    c.alert.receivedMilli=1000;c.alert.relay=true;SensesState chain;auto far=in;far.observers[2]=agent(3,1,{18_fx,{},{}});far.observers[2].sightMilli=0;
+    run(c,d,chain,0,far);auto hop=run(c,d,chain,30,far);SCHECK(seen(hop,2,10)->level==Awareness::Alert&&count(hop,SenseEventKind::AlertSent)==1&&first(hop,SenseEventKind::AlertSent)->value==3);
+    SCHECK(seen(run(c,d,chain,60,far),3,10)->lastKnown==Vec3{{},{},1_fx});
+}
+void searchGiveUp(){
+    SensesConfig c;c.search.maxPoints=3;c.search.giveUpTicks=20;SenseDefinitions d;SensesInput in;in.observers={agent(1,1,{})};
+    in.candidates={{5,{3_fx,{},{}},0},{4,{-3_fx,{},{}},0},{2,{1_fx,{},{}},0},{9,{50_fx,{},{}},0}};
+    auto plan=planSearch(c.search,{},std::vector<SearchCandidate>{{2,{1_fx,{},{}},0},{4,{-3_fx,{},{}},0},{5,{3_fx,{},{}},0}});
+    SCHECK(plan.size()==3&&plan[0].candidate==0&&plan[1].candidate==2&&plan[2].candidate==4);
+    auto start=[&](SensesState& s){
+        for(uint32_t t=0;t<2;++t){auto x=in;x.noises={noise(t+1,0,{},10_fx,1000)};run(c,d,s,t,x);}
+        auto r=run(c,d,s,2,in);SCHECK(first(r,SenseEventKind::SearchStarted)&&first(r,SenseEventKind::SearchStarted)->value==3);
+        SCHECK(searchGoal(s,1)->candidate==0);
+    };
+    SensesState s;start(s);
+    auto r=run(c,d,s,3,in);SCHECK(first(r,SenseEventKind::SearchPointReached)->value==0&&searchGoal(s,1)->candidate==2);
+    auto step=in;step.observers[0].position={1_fx,{},{}};r=run(c,d,s,4,step);SCHECK(first(r,SenseEventKind::SearchPointReached)->value==2&&searchGoal(s,1)->candidate==4);
+    for(uint32_t t=5;t<22;++t)SCHECK(count(run(c,d,s,t,step),SenseEventKind::SearchGaveUp)==0);
+    r=run(c,d,s,22,step);auto e=first(r,SenseEventKind::SearchGaveUp);SCHECK(e&&e->extra==2&&!s.observers.at(1).search.active&&!searchGoal(s,1));
+    SCHECK(seen(r,1,0)->level==Awareness::Suspicious&&seen(r,1,0)->suspicion==c.suspicion.suspiciousAt&&count(r,SenseEventKind::AwarenessChanged)==1);
+    SCHECK(count(run(c,d,s,23,step),SenseEventKind::SearchStarted)==0);
+    // Visiting every point ends the search early.
+    SensesState all;start(all);run(c,d,all,3,in);run(c,d,all,4,step);auto last=in;last.observers[0].position={-3_fx,{},{}};
+    r=run(c,d,all,5,last);SCHECK(first(r,SenseEventKind::SearchGaveUp)&&first(r,SenseEventKind::SearchGaveUp)->extra==3);
+    // A stimulus during the search re-plans around the new last known position and extends the deadline.
+    SensesState again;start(again);auto heard=in;heard.noises={noise(9,0,{2_fx,{},{}},10_fx,500)};r=run(c,d,again,10,heard);
+    SCHECK(count(r,SenseEventKind::SearchUpdated)==1&&again.observers.at(1).search.lastKnown==Vec3{2_fx,{},{}}&&again.observers.at(1).search.deadline==30);
+}
+void disguises(const std::string& root){
+    SensesConfig c;auto d=readSenseDefinitions(Json::parseFile(root+"/examples/libraries/genre/senses.json"));SCHECK(d.disguises.size()==1&&d.spots.size()==2);
+    SensesState s;SensesInput in;in.observers={agent(1,1,{}),agent(2,3,{})};auto t=target(10,2,{{},{},1_fx});t.zone=10;t.equipDisguise=1;in.targets={t};
+    auto meter=[&](uint32_t tick,int64_t zone,std::vector<int64_t> actions,int64_t equip=-1){auto x=in;x.targets[0].zone=zone;x.targets[0].actions=std::move(actions);x.targets[0].equipDisguise=equip;auto r=run(c,d,s,tick,x);return std::make_pair(seen(r,1,10)->suspicion,r);};
+    auto [m0,r0]=meter(0,10,{},1);SCHECK(m0==12&&seen(r0,2,10)->suspicion==60&&count(r0,SenseEventKind::DisguiseEquipped)==1);
+    SCHECK(meter(1,12,{}).first==72);            // outside the allowed zones: trespass scale
+    SCHECK(meter(2,11,{3}).first==84);           // harmless action
+    auto [m3,r3]=meter(3,10,{7});SCHECK(m3==144&&first(r3,SenseEventKind::DisguiseBlown)->value==7&&s.disguises.at(10).blown);
+    SCHECK(meter(4,10,{8}).first==204&&count(meter(5,10,{},1).second,SenseEventKind::DisguiseEquipped)==1&&awarenessRecord(s,1,10)->meter==216);
+    auto [m6,r6]=meter(6,10,{},0);SCHECK(m6==276&&first(r6,SenseEventKind::DisguiseEquipped)->value==0&&!s.disguises.contains(10));
+}
+void hiding(const std::string& root){
+    SensesConfig c;auto d=readSenseDefinitions(Json::parseFile(root+"/examples/libraries/genre/senses.json"));SensesState s;
+    std::vector<int64_t> checked;auto los=[&](const SenseAgent&,const SenseTarget& t){checked.push_back(t.id);return true;};auto open=[](const SenseAgent&,const NoiseEvent&){return 1000;};
+    SensesInput in;in.observers={agent(1,1,{})};auto a=target(10,2,{{},{},4_fx});auto b=target(11,2,{10_fx,{},10_fx});a.enterHiding=5;b.enterHiding=6;b.coverMilli=0;in.targets={a,b};
+    auto r=stepSenses(c,d,s,0,in,los,open);SCHECK(r&&count(*r,SenseEventKind::HidingEntered)==2&&s.hiding.at(10).revealedTo==std::vector<int64_t>{1}&&s.hiding.at(11).revealedTo.empty());
+    SCHECK(checked==std::vector<int64_t>{10}&&hidden(s,11));
+    auto stay=in;stay.targets[0].enterHiding=0;stay.targets[1].enterHiding=0;stay.targets[1].coverMilli=1000;auto c3=target(12,2,{{},{},4_fx});c3.enterHiding=5;stay.targets.push_back(c3);
+    checked.clear();r=stepSenses(c,d,s,1,stay,los,open);
+    SCHECK(r&&seen(*r,1,10)->visibleNow&&!seen(*r,1,11)&&checked==(std::vector<int64_t>{10,12})&&first(*r,SenseEventKind::HidingRefused)->target==12); // capacity 1
+    auto farAway=stay;farAway.targets[2]=target(12,2,{30_fx,{},30_fx});farAway.targets[2].enterHiding=6;r=stepSenses(c,d,s,2,farAway,los,open);
+    SCHECK(r&&first(*r,SenseEventKind::HidingRefused)->value==6&&!hidden(s,12));
+    auto leave=stay;leave.targets.pop_back();leave.targets[0].exitHiding=true;leave.targets[1].position={20_fx,{},20_fx};r=stepSenses(c,d,s,3,leave,los,open);
+    SCHECK(r&&count(*r,SenseEventKind::HidingExited)==2&&r->events[0].extra==0&&r->events[1].extra==1&&s.hiding.empty());
+    // Searching a hiding spot reveals an occupant that entered unseen.
+    SensesState q;SensesConfig sc=c;sc.search.maxPoints=2;auto g=agent(2,1,{10_fx,{},{}},Fixed::fromRatio(1,2));SensesInput base;base.observers={g};
+    auto hider=target(11,2,{10_fx,{},10_fx});hider.enterHiding=6;base.targets={hider};base.candidates={{30,{10_fx,{},10_fx},6}};
+    run(sc,d,q,0,base);base.targets[0].enterHiding=0;SCHECK(hidden(q,11)&&q.hiding.at(11).revealedTo.empty());
+    for(uint32_t t=1;t<4;++t){auto x=base;x.noises={noise(t,0,{10_fx,{},8_fx},20_fx,1000)};run(sc,d,q,t,x);}
+    SCHECK(first(run(sc,d,q,4,base),SenseEventKind::SearchStarted));
+    auto walk=base;walk.observers[0].position={10_fx,{},8_fx};walk.observers[0].yaw={};r=run(sc,d,q,5,walk);
+    SCHECK(first(*r,SenseEventKind::SearchPointReached)&&!seen(*r,2,11)); // next to the spot but concealed
+    walk.observers[0].position={10_fx,{},10_fx};r=run(sc,d,q,6,walk);auto found=first(*r,SenseEventKind::HidingRevealed);
+    SCHECK(found&&found->observer==2&&found->target==11&&found->value==6&&q.hiding.at(11).revealedTo==std::vector<int64_t>{2});
+    walk.observers[0].position={10_fx,{},9_fx};SCHECK(seen(run(sc,d,q,7,walk),2,11)->visibleNow);
+}
+void trails(){
+    SensesConfig c;SenseDefinitions d;SensesState s;SensesInput in;auto o=agent(1,1,{Fixed::fromRatio(3,2),{},{}});o.sightMilli=0;in.observers={o};
+    auto t=target(10,2,{});t.leaveTrail=true;in.targets={t};auto r=run(c,d,s,0,in);SCHECK(s.markers.size()==1&&!seen(r,1,10));
+    SCHECK(trailStrength(c.trail,s.markers[0],300)==500&&trailStrength(c.trail,s.markers[0],600)==0);
+    in.targets.clear();r=run(c,d,s,300,in);auto p=seen(r,1,10);SCHECK(p&&p->lastSense==SenseKind::Trail&&p->strengthNow==250&&p->lastKnown==Vec3{}&&!p->visibleNow);
+    run(c,d,s,600,in);SCHECK(s.markers.empty());
+    SensesState cap;c.trail.maxMarkers=2;in.targets={t};for(uint32_t k=0;k<3;++k)run(c,d,cap,k,in);SCHECK(cap.markers.size()==2&&cap.markers[0].id==2&&cap.nextMarker==4);
+    removeSenseAgent(cap,10);SCHECK(cap.markers.empty()&&!awarenessRecord(cap,1,10));
+}
+void restore(){
+    SensesConfig c;c.alert.delay=5;SenseDefinitions d;d.spots[5]={5,{{},{},4_fx},1};
+    auto input=[&](uint32_t t){
+        SensesInput in;in.observers={agent(1,1,{}),agent(2,1,{4_fx,{},{}},Fixed::fromRatio(1,2)),agent(3,2,{-6_fx,{},2_fx})};
+        auto x=target(10,2,{{},{},Fixed::fromInt(int64_t(t%7))});x.leaveTrail=t%3==0;x.enterHiding=t==12?5:0;x.position.x=t==12?Fixed{}:x.position.x;
+        auto y=target(11,1,{-4_fx,{},Fixed::fromInt(int64_t(t%5))});y.zone=t%2;in.targets={x,y};
+        if(t%4==0)in.noises={noise(t+1,t%8?10:0,{1_fx,{},Fixed::fromInt(int64_t(t%9))},12_fx,800)};
+        in.candidates={{7,{2_fx,{},2_fx},0},{8,{{},{},4_fx},5}};return in;
+    };
+    SensesState a;std::string mid;
+    for(uint32_t t=0;t<40;++t){run(c,d,a,t,input(t));if(t==19)mid=save(a);}
+    SensesState b;SCHECK(!mid.empty()&&load(mid,b));
+    SensesState again;for(uint32_t t=0;t<20;++t)run(c,d,again,t,input(t));
+    for(uint32_t t=20;t<40;++t){auto x=run(c,d,again,t,input(t)),y=run(c,d,b,t,input(t));SCHECK(sensesHash(x)==sensesHash(y));}
+    SCHECK(save(a)==save(b)&&sensesHash(a)==sensesHash(b)&&save(again)==save(a));
+    roundtrip(a);for(const auto& [id,o]:a.observers){(void)id;roundtrip(o);if(o.search.active)roundtrip(o.search);}
+    roundtrip(DisguiseState{1,3,true});roundtrip(HidingState{5,2,{1,4}});
+    ObserverState wrong;SCHECK(!load(mid,wrong));
+    auto broken=a;broken.nextMarker=0;SCHECK(save(broken).empty());
+    broken=a;broken.alerts={{9,1,2,1,10,{}},{8,1,2,1,10,{}}};SCHECK(save(broken).empty());
+    HidingState unsorted{5,0,{3,1}};SCHECK(save(unsorted).empty());
+    SCHECK(sensesConfigHash(c)!=sensesConfigHash(SensesConfig{}));
+}
+void rejection(const std::string& root){
+    SensesConfig c;SenseDefinitions d;SensesState s;SensesInput in;in.observers={agent(1,1,{})};in.targets={target(10,2,{{},{},1_fx})};
+    run(c,d,s,5,in);auto before=save(s);
+    SCHECK(!stepSensesOpen(c,d,s,5,in)&&!stepSensesOpen(c,d,s,4,in)&&save(s)==before);
+    auto dup=in;dup.observers.push_back(agent(1,1,{}));SCHECK(!stepSensesOpen(c,d,s,6,dup));
+    auto bad=in;bad.targets[0].equipDisguise=3;SCHECK(!stepSensesOpen(c,d,s,6,bad));
+    bad=in;bad.targets[0].enterHiding=9;SCHECK(!stepSensesOpen(c,d,s,6,bad));
+    bad=in;bad.targets[0].lightMilli=5000;SCHECK(!stepSensesOpen(c,d,s,6,bad));
+    bad=in;bad.noises={noise(1,0,{},{},500)};SCHECK(!stepSensesOpen(c,d,s,6,bad));
+    bad=in;bad.observers[0].id=0;SCHECK(!stepSensesOpen(c,d,s,6,bad));SCHECK(save(s)==before);
+    auto wrong=c;wrong.suspicion.searchingAt=wrong.suspicion.suspiciousAt;SCHECK(sensesConfigError(wrong).find("suspiciousAt")!=std::string::npos&&!stepSensesOpen(wrong,d,s,6,in));
+    wrong=c;wrong.sight.halfAngle=Fixed::fromRatio(1,2);SCHECK(sensesConfigError(wrong).find("halfAngle")!=std::string::npos);
+    wrong=c;wrong.alert.delay=0;SCHECK(sensesConfigError(wrong).find("alert.delay")!=std::string::npos);SCHECK(save(s)==before);
+    auto parse=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto defaults=parse("{\"schemaVersion\":1}");SCHECK(defaults.value&&sensesSettingsErrors(*defaults.value).empty()&&sensesConfigHash(sensesConfig(*defaults.value))==sensesConfigHash(c));
+    auto relation=parse("{\"schemaVersion\":1,\"senses\":{\"sightNearMilli\":30000}}");SCHECK(!relation.value&&relation.errors.at(0)=="senses.sightNearMilli: must not exceed sightRangeMilli");
+    auto unknown=parse("{\"schemaVersion\":1,\"senses\":{\"sightRange\":3}}");SCHECK(!unknown.value&&unknown.errors.at(0)=="senses.sightRange: unknown field");
+    auto range=parse("{\"schemaVersion\":1,\"senses\":{\"searchMaxPoints\":65}}");SCHECK(!range.value&&range.errors.at(0)=="senses.searchMaxPoints: integer out of range");
+    auto type=parse("{\"schemaVersion\":1,\"senses\":{\"alertRelay\":1}}");SCHECK(!type.value&&type.errors.at(0)=="senses.alertRelay: expected boolean");
+    auto strict=parse("{\"schemaVersion\":1,\"senses\":{\"suspiciousAtMilli\":500}}");SCHECK(strict.value&&sensesSettingsErrors(*strict.value).at(0)=="senses.suspiciousAtMilli: must be below searchingAtMilli");
+    auto example=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/senses-settings.json"));SCHECK(example.value&&sensesSettingsErrors(*example.value).empty());
+    auto configured=sensesConfig(*example.value);SCHECK(valid(configured)&&configured.sight.range==25_fx&&configured.sight.halfAngle==Fixed::fromRatio(1,10)&&configured.alert.relay&&configured.alert.delay==20&&configured.trail.lifetime==900);
+    auto rejects=[](const std::string& text,const std::string& expected){try{readSenseDefinitions(Json::parse(text));}catch(const JsonError& e){return std::string(e.what()).find(expected)!=std::string::npos;}return false;};
+    SCHECK(rejects(R"({"disguise":[]})","senses: unknown key 'disguise'"));
+    SCHECK(rejects(R"({"disguises":[{"id":1,"factions":[1]},{"id":1,"factions":[2]}]})","senses.disguise 1: duplicate id"));
+    SCHECK(rejects(R"({"disguises":[{"id":2,"factions":[]}]})","senses.disguise 2.factions: list at least one fooled team"));
+    SCHECK(rejects(R"({"disguises":[{"id":2,"factions":[1,1]}]})","senses.disguise 2.factions: duplicate id"));
+    SCHECK(rejects(R"({"disguises":[{"id":2,"factions":[1],"scaleMilli":5000}]})","senses.disguise 2.scaleMilli: must be in 0..4000"));
+    SCHECK(rejects(R"({"hidingSpots":[{"id":3,"position":[0,0]}]})","senses.hidingSpot 3.position: expected [x,y,z]"));
+    SCHECK(rejects(R"({"hidingSpots":[{"id":3,"position":[0,0,0],"capacity":0}]})","senses.hidingSpot 3.capacity: must be in 1..64"));
+    SCHECK(rejects(R"({"hidingSpots":[{"id":3,"position":[0,0,0],"size":1}]})","unknown key 'size'"));
+}
+}
+#undef SCHECK
+void stealthSenses(const std::string& root){senses::coneAndRange();senses::losOrder();senses::hearing();senses::suspicionThresholds();senses::propagation();senses::searchGiveUp();senses::disguises(root);senses::hiding(root);senses::trails();senses::restore();senses::rejection(root);}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);stealthSenses(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, projectiles, rounds/capture, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
