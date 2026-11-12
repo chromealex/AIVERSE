@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "aimSolver": {"maxIterations": 6, "toleranceMilli": 5},
+  "genreBots": {
+    "reactionTicks": 6,
+    "decisionTicks": 3,
+    "aimErrorMicro": 2000,
+    "misreadMilli": 100,
+    "meleeMinRangeMilli": 1300,
+    "meleeMaxRangeMilli": 2200,
+    "meleeAttackRangeMilli": 1900,
+    "dodgeMilli": 700,
+    "shooterPreferredRangeMilli": 18000,
+    "projectileSpeedMilli": 80000,
+    "projectileGravityMilli": 9800,
+    "heatStopMilli": 850,
+    "retreatHealthMilli": 350,
+    "offenseFlankerMilli": 300,
+    "attackShape": 0,
+    "objectiveStickiness": 250
+  }
+}

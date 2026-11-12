@@ -118,6 +118,7 @@ void weapons(Json rules,Json map) {
     step(fps::selectWeapon(2));step(0);step(fps::Fire);CHECK(state(*sim).actors[0].ammo==7);
 }
 #include "systems.inc"
+#include "projectiles.inc"
 void network(Json rules,Json map) {
     rules.member("fps").set("weapons",Json::parse(R"([{"magazine":12},{"magazine":30}])"));
     rules.member("fps").set("mode",Json::string("deathmatch"));
@@ -146,6 +147,6 @@ void network(Json rules,Json map) {
 }
 }
 int main(int argc,char** argv) {
-    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");spatial();cameraControls();latestChannel();chunks();deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
+    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");spatial();cameraControls();latestChannel();chunks();deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
     catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}
 }

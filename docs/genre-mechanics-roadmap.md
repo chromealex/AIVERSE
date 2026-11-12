@@ -2,6 +2,13 @@
 
 Status: roadmap. The first bounded C++ policy batch is implemented in [genre-packages.md](genre-packages.md);
 the full mechanics listed below remain proposed scope.
+Genre bot policies: a first slice (melee/shooter bots, squad roles, objective choice) is the `genre-bots` package
+([genre-packages.md](genre-packages.md#genre-bots-genre-bots-010)); race, sports, turn, card and puzzle bots remain proposed.
+Narrative and social scenes: relationships, knowledge, consequences, cue requests, barks and visual-novel helpers are in
+`narrative-graphs` 0.2.0 ([genre-packages.md](genre-packages.md#narrative-scenes-narrative-graphs-020)); cue playback belongs to cinematic owners.
+Physical interaction: kinematic carry/throw, push/pull, ropes, doors, moving platforms and breakables are the
+`physical-interactions` package ([genre-packages.md](genre-packages.md#physical-interactions-physical-interactions-010));
+those policies are authoritative and Box3D stays presentation-only for them.
 Audit each area against the current engine modules and libraries/catalog.json before implementing.
 The engine is expanding across genres; shared mechanics should have one owner and genre presets.
 Existing attributes, statuses, abilities, inventory, progression, interactions, meta economy,

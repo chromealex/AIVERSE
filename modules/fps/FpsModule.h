@@ -30,6 +30,7 @@ struct WeaponConfig {
     uint32_t pellets=1,switchTicks=15;
     bool automatic=true;
     std::string nameKey="fps.weapon.rifle";
+    projectile::ProjectileFlight flight;
 };
 struct Config {
     uint32_t tickRate=60,snapshotRate=20,maxPlayers=100,rewindTicks=12,inputTimeout=15;
@@ -100,6 +101,7 @@ private:
     void equipInitial(Actor&) const;
     void setupSystems(Simulation&,const Json&,State&);
     void tickSystems(Simulation&);
+    void tickProjectilePrograms(Simulation&);
     void actorSystems(Simulation&,Actor&,Input&);
     bool traceShot(Simulation&,uint8_t,Vec3,Vec3,int32_t,const WeaponConfig&,const std::vector<Actor>&,Projectile* projectile=nullptr);
     void damage(Simulation&,uint8_t,Actor&,int32_t,bool head=false);

@@ -97,6 +97,42 @@ struct LocomotionSettings {
     std::int64_t coyoteTicks=6;
     std::int64_t bufferTicks=6;
     std::int64_t maxJumps=1;
+    std::int64_t maxSlopeMilliDegrees=45000;
+    std::int64_t slideAccelerationMilli=15000;
+    std::int64_t slideSpeedMilli=12000;
+    std::int64_t ledgeMinHeightMilli=1200;
+    std::int64_t ledgeMaxHeightMilli=2200;
+    std::int64_t ledgeShimmySpeedMilli=1500;
+    std::int64_t ledgeClimbDepthMilli=500;
+    std::int64_t ledgeClimbTicks=24;
+    std::int64_t ledgeRegrabTicks=12;
+    bool autoLedgeGrab=true;
+    std::int64_t ladderSpeedMilli=3000;
+    std::int64_t ladderExitRiseMilli=1000;
+    std::int64_t ladderExitDepthMilli=600;
+    std::int64_t ladderExitTicks=16;
+    std::int64_t ladderJumpPushMilli=3000;
+    std::int64_t swimExitDepthMilli=1000;
+    std::int64_t swimEnterDepthMilli=1200;
+    std::int64_t swimFloatDepthMilli=1400;
+    std::int64_t swimDiveDepthMilli=1800;
+    std::int64_t swimSpeedMilli=3500;
+    std::int64_t swimVerticalSpeedMilli=2500;
+    std::int64_t swimAccelerationMilli=10000;
+    std::int64_t buoyancyMilli=4000;
+    std::int64_t waterJumpSpeedMilli=5000;
+    bool climbEnabled=true;
+    std::int64_t climbSpeedMilli=2000;
+    std::int64_t wallJumpPushMilli=4000;
+    std::int64_t climbStamina=300;
+    std::int64_t climbStaminaDrain=1;
+    std::int64_t climbStaminaRegen=2;
+    std::int64_t mantleMinHeightMilli=300;
+    std::int64_t vaultMaxHeightMilli=1000;
+    std::int64_t mantleMaxHeightMilli=1500;
+    std::int64_t vaultMinSpeedMilli=4000;
+    std::int64_t vaultTicks=14;
+    std::int64_t mantleTicks=30;
 };
 struct MeleeSettings {
     std::int64_t windup=6;
@@ -104,12 +140,136 @@ struct MeleeSettings {
     std::int64_t recovery=12;
     std::int64_t bufferTicks=8;
 };
+struct CombatSettings {
+    std::int64_t dodgeTicks=12;
+    std::int64_t dodgeInvulnFrom=2;
+    std::int64_t dodgeInvulnTo=8;
+    std::int64_t dodgeCooldown=20;
+    std::int64_t blockHalfArcMilli=125;
+    std::int64_t parryTicks=6;
+    std::int64_t parryRearmTicks=20;
+    std::int64_t poiseMilli=100000;
+    std::int64_t poiseRecoveryMilli=1000;
+    std::int64_t poiseDelayTicks=30;
+    std::int64_t blockPoiseMilli=500;
+    std::int64_t hitStunTicks=8;
+    std::int64_t blockStunTicks=4;
+    std::int64_t breakStunTicks=45;
+    std::int64_t parryStunTicks=40;
+    std::int64_t lockRangeMilli=15000;
+    std::int64_t lockBreakMilli=20000;
+    std::int64_t lockHalfAngleMilli=250;
+    std::int64_t lockDistanceWeight=1000;
+    std::int64_t lockAngleWeight=1000;
+};
 struct ProjectileSettings {
     std::int64_t gravityMilli=20000;
     std::int64_t radiusMilli=50;
     std::int64_t retentionMilli=750;
     std::int64_t lifetime=600;
     std::int64_t maxBounces=0;
+};
+struct PenetrationSettings {
+    std::int64_t powerMilli=1000;
+    std::int64_t maxLayers=4;
+    std::int64_t minDamageMilli=0;
+    std::int64_t minSpeedMilli=0;
+};
+struct ExplosionSettings {
+    std::int64_t innerRadiusMilli=1000;
+    std::int64_t outerRadiusMilli=5000;
+    std::int64_t damageMilli=100000;
+    std::int64_t edgeScaleMilli=0;
+    std::int64_t impulseMilli=0;
+    std::int64_t maxTargets=64;
+};
+struct AmmoFeedSettings {
+    std::int64_t kind=0;
+    std::int64_t capacity=30;
+    std::int64_t ammoPerShot=1;
+    std::int64_t intervalTicks=0;
+    std::int64_t reloadTicks=120;
+    std::int64_t emptyReloadTicks=0;
+    std::int64_t reloadStartTicks=0;
+    std::int64_t shellTicks=30;
+    std::int64_t spinupTicks=0;
+    std::int64_t heatPerShot=0;
+    std::int64_t heatCapacity=1000;
+    std::int64_t coolPerTick=10;
+    std::int64_t overheatTicks=60;
+    std::int64_t recoverHeat=0;
+    bool autoReload=true;
+    bool interruptible=true;
+};
+struct ChargeSettings {
+    std::int64_t minTicks=10;
+    std::int64_t maxTicks=60;
+    std::int64_t autoReleaseTicks=0;
+    std::int64_t tiers=3;
+    bool fireBelowMin=false;
+    std::int64_t minScaleMilli=1000;
+    std::int64_t maxScaleMilli=2000;
+};
+struct AimSolverSettings {
+    std::int64_t maxIterations=8;
+    std::int64_t toleranceMilli=10;
+    bool preferHigh=false;
+};
+struct GenreBotSettings {
+    std::int64_t reactionTicks=8;
+    std::int64_t decisionTicks=4;
+    std::int64_t aimErrorMicro=5000;
+    std::int64_t misreadMilli=0;
+    std::int64_t meleeMinRangeMilli=1200;
+    std::int64_t meleeMaxRangeMilli=2200;
+    std::int64_t meleeAttackRangeMilli=2000;
+    std::int64_t meleeOpener=1;
+    std::int64_t meleeStrafeTicks=30;
+    std::int64_t dodgeMilli=500;
+    bool useDodge=true;
+    bool useGuard=true;
+    bool useLockOn=true;
+    bool useCombos=true;
+    bool respectGuard=true;
+    std::int64_t shooterMinRangeMilli=5000;
+    std::int64_t shooterPreferredRangeMilli=15000;
+    std::int64_t shooterMaxRangeMilli=40000;
+    std::int64_t projectileSpeedMilli=0;
+    std::int64_t projectileGravityMilli=0;
+    std::int64_t turnPerTickMicro=15625;
+    std::int64_t fireToleranceMicro=5000;
+    std::int64_t recoilToleranceMicro=20000;
+    std::int64_t recoilCompensationMilli=500;
+    std::int64_t reloadIdleMilli=500;
+    std::int64_t heatResumeMilli=400;
+    std::int64_t heatStopMilli=900;
+    std::int64_t retreatHealthMilli=300;
+    std::int64_t coverDistanceWeight=100;
+    std::int64_t shooterStrafeTicks=40;
+    std::int64_t squadIntervalTicks=60;
+    std::int64_t offenseAttackerMilli=450;
+    std::int64_t offenseDefenderMilli=150;
+    std::int64_t offenseSupportMilli=200;
+    std::int64_t offenseFlankerMilli=200;
+    std::int64_t defenseAttackerMilli=200;
+    std::int64_t defenseDefenderMilli=500;
+    std::int64_t defenseSupportMilli=200;
+    std::int64_t defenseFlankerMilli=100;
+    std::int64_t formationSpacingMilli=2000;
+    std::int64_t supportDistanceMilli=6000;
+    std::int64_t flankDistanceMilli=10000;
+    std::int64_t defendRadiusMilli=4000;
+    std::int64_t attackShape=1;
+    std::int64_t objectiveValueWeight=1000;
+    std::int64_t objectiveDistanceWeight=20;
+    std::int64_t objectiveNeutralWeight=200;
+    std::int64_t objectiveEnemyWeight=300;
+    std::int64_t objectiveProgressWeight=300;
+    std::int64_t objectiveContestedWeight=300;
+    std::int64_t objectiveThreatenedWeight=400;
+    std::int64_t objectiveIdleWeight=-500;
+    std::int64_t objectiveEscortWeight=200;
+    std::int64_t objectiveStickiness=150;
 };
 struct MatchRuleSettings {
     std::int64_t warmupTicks=60;
@@ -119,6 +279,132 @@ struct MatchRuleSettings {
     std::int64_t roundsToWin=1;
     std::int64_t maxRounds=5;
     std::int64_t scoreToWin=10;
+};
+struct ObjectiveSettings {
+    std::int64_t zoneCaptureTicks=300;
+    std::int64_t zoneDecayPerTick=1;
+    std::int64_t zoneContestRule=0;
+    std::int64_t zoneMaxCapturers=1;
+    bool zoneNeutralizeFirst=false;
+    std::int64_t holdScoreInterval=0;
+    bool holdRequiresPresence=true;
+    std::int64_t hillRotateTicks=0;
+    std::int64_t hillCount=1;
+    std::int64_t payloadPushSpeedMilli=50;
+    std::int64_t payloadExtraPusherMilli=250;
+    std::int64_t payloadReverseSpeedMilli=25;
+    std::int64_t payloadMaxPushers=3;
+    std::int64_t payloadReverseDelayTicks=300;
+    std::int64_t payloadCheckpointBonusTicks=1800;
+    bool payloadContestBlocks=true;
+    bool payloadCheckpointLock=true;
+    std::int64_t eliminationLives=0;
+    std::int64_t respawnDelayTicks=300;
+    std::int64_t respawnWaveTicks=0;
+    bool wipeEliminates=false;
+    std::int64_t extractionHoldTicks=300;
+    std::int64_t extractionRequiredItems=0;
+    std::int64_t extractionOpensAtTicks=0;
+    bool extractionContestBlocks=true;
+    bool extractionResetOnLeave=true;
+    std::int64_t bombPlantTicks=180;
+    std::int64_t bombDefuseTicks=600;
+    std::int64_t bombKitDefuseTicks=300;
+    std::int64_t bombFuseTicks=2400;
+    bool bombPlantResets=true;
+    bool bombDefuseResets=true;
+    bool overtimeEnabled=true;
+    std::int64_t overtimeGraceTicks=120;
+    std::int64_t overtimeMaxTicks=1800;
+    std::int64_t clockMaxTicks=100000000;
+    std::int64_t spectatorKillCamTicks=180;
+    bool spectatorFollowKiller=true;
+    bool spectatorAllowEnemies=false;
+    std::int64_t routeLaps=1;
+};
+struct SensesSettings {
+    std::int64_t sightNearMilli=2000;
+    std::int64_t sightRangeMilli=20000;
+    std::int64_t sightHalfAngleMilli=125;
+    std::int64_t peripheralRangeMilli=8000;
+    std::int64_t peripheralHalfAngleMilli=250;
+    std::int64_t sightNearStrengthMilli=1000;
+    std::int64_t sightFarStrengthMilli=250;
+    std::int64_t peripheralStrengthMilli=400;
+    std::int64_t sightMinStrengthMilli=10;
+    std::int64_t sightQueryBudget=4096;
+    std::int64_t hearingThresholdMilli=20;
+    std::int64_t noiseBudget=32;
+    std::int64_t occlusionBudget=256;
+    std::int64_t noiseMaxRadiusMilli=200000;
+    std::int64_t trailLifetimeTicks=600;
+    std::int64_t trailRangeMilli=3000;
+    std::int64_t trailMaxMarkers=1024;
+    std::int64_t trailMinStrengthMilli=20;
+    std::int64_t suspicionMaxMilli=1000;
+    std::int64_t suspiciousAtMilli=200;
+    std::int64_t searchingAtMilli=500;
+    std::int64_t alertAtMilli=1000;
+    std::int64_t sightGainMilli=60;
+    std::int64_t hearingGainMilli=300;
+    std::int64_t trailGainMilli=15;
+    std::int64_t suspicionDecayMilli=2;
+    std::int64_t suspicionDecayDelayTicks=90;
+    std::int64_t alertRadiusMilli=15000;
+    std::int64_t alertDelayTicks=30;
+    std::int64_t alertReceivedMilli=500;
+    std::int64_t alertMaxPending=1024;
+    bool alertRelay=false;
+    std::int64_t searchGiveUpTicks=900;
+    std::int64_t searchPointRadiusMilli=1000;
+    std::int64_t searchCandidateRadiusMilli=12000;
+    std::int64_t searchMaxPoints=6;
+    std::int64_t hideEnterRangeMilli=1500;
+};
+struct NarrativeSettings {
+    std::int64_t autoAdvanceTicks=180;
+    std::int64_t skipLinesPerTick=4;
+    std::int64_t backlogLimit=200;
+    std::int64_t barkCooldownTicks=600;
+    std::int64_t speakerCooldownTicks=120;
+    std::int64_t maxPendingConsequences=1024;
+    std::int64_t maxBarkRequests=64;
+    std::int64_t meterMinimum=-100;
+    std::int64_t meterInitial=0;
+    std::int64_t meterMaximum=100;
+};
+struct InteractionSettings {
+    std::int64_t gravityMilli=9810;
+    std::int64_t skinMilli=16;
+    std::int64_t carryMaxMassMilli=30000;
+    std::int64_t carryReachMilli=2000;
+    std::int64_t carryHoldDistanceMilli=1200;
+    std::int64_t carryHoldHeightMilli=1200;
+    std::int64_t carryFollowSpeedMilli=12000;
+    std::int64_t carryBreakDistanceMilli=1000;
+    std::int64_t carrySpeedPenaltyMilli=15;
+    std::int64_t carryMinSpeedMilli=300;
+    std::int64_t throwMinImpulseMilli=20000;
+    std::int64_t throwMaxImpulseMilli=120000;
+    std::int64_t throwChargeTicks=45;
+    std::int64_t flightMaxTicks=600;
+    std::int64_t pushMaxSpeedMilli=1500;
+    std::int64_t pushGridMoveTicks=20;
+    std::int64_t ropeIterations=8;
+    std::int64_t ropeDampingMilli=10;
+};
+struct CinematicSettings {
+    std::int64_t hitStopTicks=6;
+    std::int64_t hitStopPriority=1000;
+    std::int64_t slowMotionNumerator=1;
+    std::int64_t slowMotionDenominator=4;
+    std::int64_t slowMotionTicks=90;
+    std::int64_t slowMotionPriority=500;
+    std::int64_t qteWindowScaleMilli=1000;
+    std::int64_t qteAccessibleWindowMilli=1000;
+    std::int64_t qteMashScaleMilli=1000;
+    std::int64_t qteHoldScaleMilli=1000;
+    bool qteAutoSucceed=false;
 };
 struct GameplaySettings {
     InputSettings input;
@@ -138,8 +424,20 @@ struct GameplaySettings {
     DecisionReportSettings decisionReport;
     LocomotionSettings locomotion;
     MeleeSettings melee;
+    CombatSettings combat;
     ProjectileSettings projectile;
+    PenetrationSettings penetration;
+    ExplosionSettings explosion;
+    AmmoFeedSettings ammoFeed;
+    ChargeSettings charge;
+    AimSolverSettings aimSolver;
+    GenreBotSettings genreBots;
     MatchRuleSettings matchRules;
+    ObjectiveSettings objectives;
+    SensesSettings senses;
+    NarrativeSettings narrative;
+    InteractionSettings interaction;
+    CinematicSettings cinematic;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -156,7 +454,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="projectile" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -304,7 +602,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
     if(root.has("locomotion")) { const auto& section=root["locomotion"];
         if(!section.isObject()) result.errors.push_back("locomotion: expected object");
         else {
-            for(const auto& entry:section.members()) if(entry.first!="groundSpeedMilli" && entry.first!="airSpeedMilli" && entry.first!="accelerationMilli" && entry.first!="brakingMilli" && entry.first!="gravityMilli" && entry.first!="jumpSpeedMilli" && entry.first!="coyoteTicks" && entry.first!="bufferTicks" && entry.first!="maxJumps") result.errors.push_back("locomotion."+entry.first+": unknown field");
+            for(const auto& entry:section.members()) if(entry.first!="groundSpeedMilli" && entry.first!="airSpeedMilli" && entry.first!="accelerationMilli" && entry.first!="brakingMilli" && entry.first!="gravityMilli" && entry.first!="jumpSpeedMilli" && entry.first!="coyoteTicks" && entry.first!="bufferTicks" && entry.first!="maxJumps" && entry.first!="maxSlopeMilliDegrees" && entry.first!="slideAccelerationMilli" && entry.first!="slideSpeedMilli" && entry.first!="ledgeMinHeightMilli" && entry.first!="ledgeMaxHeightMilli" && entry.first!="ledgeShimmySpeedMilli" && entry.first!="ledgeClimbDepthMilli" && entry.first!="ledgeClimbTicks" && entry.first!="ledgeRegrabTicks" && entry.first!="autoLedgeGrab" && entry.first!="ladderSpeedMilli" && entry.first!="ladderExitRiseMilli" && entry.first!="ladderExitDepthMilli" && entry.first!="ladderExitTicks" && entry.first!="ladderJumpPushMilli" && entry.first!="swimExitDepthMilli" && entry.first!="swimEnterDepthMilli" && entry.first!="swimFloatDepthMilli" && entry.first!="swimDiveDepthMilli" && entry.first!="swimSpeedMilli" && entry.first!="swimVerticalSpeedMilli" && entry.first!="swimAccelerationMilli" && entry.first!="buoyancyMilli" && entry.first!="waterJumpSpeedMilli" && entry.first!="climbEnabled" && entry.first!="climbSpeedMilli" && entry.first!="wallJumpPushMilli" && entry.first!="climbStamina" && entry.first!="climbStaminaDrain" && entry.first!="climbStaminaRegen" && entry.first!="mantleMinHeightMilli" && entry.first!="vaultMaxHeightMilli" && entry.first!="mantleMaxHeightMilli" && entry.first!="vaultMinSpeedMilli" && entry.first!="vaultTicks" && entry.first!="mantleTicks") result.errors.push_back("locomotion."+entry.first+": unknown field");
             if(section.has("groundSpeedMilli")) number(section["groundSpeedMilli"],settings.locomotion.groundSpeedMilli,0,100000,"locomotion.groundSpeedMilli");
             if(section.has("airSpeedMilli")) number(section["airSpeedMilli"],settings.locomotion.airSpeedMilli,0,100000,"locomotion.airSpeedMilli");
             if(section.has("accelerationMilli")) number(section["accelerationMilli"],settings.locomotion.accelerationMilli,1,1000000,"locomotion.accelerationMilli");
@@ -314,7 +612,49 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("coyoteTicks")) number(section["coyoteTicks"],settings.locomotion.coyoteTicks,0,3600,"locomotion.coyoteTicks");
             if(section.has("bufferTicks")) number(section["bufferTicks"],settings.locomotion.bufferTicks,0,3600,"locomotion.bufferTicks");
             if(section.has("maxJumps")) number(section["maxJumps"],settings.locomotion.maxJumps,1,16,"locomotion.maxJumps");
+            if(section.has("maxSlopeMilliDegrees")) number(section["maxSlopeMilliDegrees"],settings.locomotion.maxSlopeMilliDegrees,0,89000,"locomotion.maxSlopeMilliDegrees");
+            if(section.has("slideAccelerationMilli")) number(section["slideAccelerationMilli"],settings.locomotion.slideAccelerationMilli,0,1000000,"locomotion.slideAccelerationMilli");
+            if(section.has("slideSpeedMilli")) number(section["slideSpeedMilli"],settings.locomotion.slideSpeedMilli,0,100000,"locomotion.slideSpeedMilli");
+            if(section.has("ledgeMinHeightMilli")) number(section["ledgeMinHeightMilli"],settings.locomotion.ledgeMinHeightMilli,0,10000,"locomotion.ledgeMinHeightMilli");
+            if(section.has("ledgeMaxHeightMilli")) number(section["ledgeMaxHeightMilli"],settings.locomotion.ledgeMaxHeightMilli,0,10000,"locomotion.ledgeMaxHeightMilli");
+            if(section.has("ledgeShimmySpeedMilli")) number(section["ledgeShimmySpeedMilli"],settings.locomotion.ledgeShimmySpeedMilli,0,100000,"locomotion.ledgeShimmySpeedMilli");
+            if(section.has("ledgeClimbDepthMilli")) number(section["ledgeClimbDepthMilli"],settings.locomotion.ledgeClimbDepthMilli,0,10000,"locomotion.ledgeClimbDepthMilli");
+            if(section.has("ledgeClimbTicks")) number(section["ledgeClimbTicks"],settings.locomotion.ledgeClimbTicks,2,3600,"locomotion.ledgeClimbTicks");
+            if(section.has("ledgeRegrabTicks")) number(section["ledgeRegrabTicks"],settings.locomotion.ledgeRegrabTicks,0,3600,"locomotion.ledgeRegrabTicks");
+            if(section.has("autoLedgeGrab")) boolean(section["autoLedgeGrab"],settings.locomotion.autoLedgeGrab,"locomotion.autoLedgeGrab");
+            if(section.has("ladderSpeedMilli")) number(section["ladderSpeedMilli"],settings.locomotion.ladderSpeedMilli,0,100000,"locomotion.ladderSpeedMilli");
+            if(section.has("ladderExitRiseMilli")) number(section["ladderExitRiseMilli"],settings.locomotion.ladderExitRiseMilli,0,10000,"locomotion.ladderExitRiseMilli");
+            if(section.has("ladderExitDepthMilli")) number(section["ladderExitDepthMilli"],settings.locomotion.ladderExitDepthMilli,0,10000,"locomotion.ladderExitDepthMilli");
+            if(section.has("ladderExitTicks")) number(section["ladderExitTicks"],settings.locomotion.ladderExitTicks,2,3600,"locomotion.ladderExitTicks");
+            if(section.has("ladderJumpPushMilli")) number(section["ladderJumpPushMilli"],settings.locomotion.ladderJumpPushMilli,0,100000,"locomotion.ladderJumpPushMilli");
+            if(section.has("swimExitDepthMilli")) number(section["swimExitDepthMilli"],settings.locomotion.swimExitDepthMilli,0,10000,"locomotion.swimExitDepthMilli");
+            if(section.has("swimEnterDepthMilli")) number(section["swimEnterDepthMilli"],settings.locomotion.swimEnterDepthMilli,1,10000,"locomotion.swimEnterDepthMilli");
+            if(section.has("swimFloatDepthMilli")) number(section["swimFloatDepthMilli"],settings.locomotion.swimFloatDepthMilli,1,10000,"locomotion.swimFloatDepthMilli");
+            if(section.has("swimDiveDepthMilli")) number(section["swimDiveDepthMilli"],settings.locomotion.swimDiveDepthMilli,1,10000,"locomotion.swimDiveDepthMilli");
+            if(section.has("swimSpeedMilli")) number(section["swimSpeedMilli"],settings.locomotion.swimSpeedMilli,0,100000,"locomotion.swimSpeedMilli");
+            if(section.has("swimVerticalSpeedMilli")) number(section["swimVerticalSpeedMilli"],settings.locomotion.swimVerticalSpeedMilli,0,100000,"locomotion.swimVerticalSpeedMilli");
+            if(section.has("swimAccelerationMilli")) number(section["swimAccelerationMilli"],settings.locomotion.swimAccelerationMilli,1,1000000,"locomotion.swimAccelerationMilli");
+            if(section.has("buoyancyMilli")) number(section["buoyancyMilli"],settings.locomotion.buoyancyMilli,0,1000000,"locomotion.buoyancyMilli");
+            if(section.has("waterJumpSpeedMilli")) number(section["waterJumpSpeedMilli"],settings.locomotion.waterJumpSpeedMilli,0,100000,"locomotion.waterJumpSpeedMilli");
+            if(section.has("climbEnabled")) boolean(section["climbEnabled"],settings.locomotion.climbEnabled,"locomotion.climbEnabled");
+            if(section.has("climbSpeedMilli")) number(section["climbSpeedMilli"],settings.locomotion.climbSpeedMilli,0,100000,"locomotion.climbSpeedMilli");
+            if(section.has("wallJumpPushMilli")) number(section["wallJumpPushMilli"],settings.locomotion.wallJumpPushMilli,0,100000,"locomotion.wallJumpPushMilli");
+            if(section.has("climbStamina")) number(section["climbStamina"],settings.locomotion.climbStamina,0,1000000000,"locomotion.climbStamina");
+            if(section.has("climbStaminaDrain")) number(section["climbStaminaDrain"],settings.locomotion.climbStaminaDrain,0,1000000,"locomotion.climbStaminaDrain");
+            if(section.has("climbStaminaRegen")) number(section["climbStaminaRegen"],settings.locomotion.climbStaminaRegen,0,1000000,"locomotion.climbStaminaRegen");
+            if(section.has("mantleMinHeightMilli")) number(section["mantleMinHeightMilli"],settings.locomotion.mantleMinHeightMilli,0,10000,"locomotion.mantleMinHeightMilli");
+            if(section.has("vaultMaxHeightMilli")) number(section["vaultMaxHeightMilli"],settings.locomotion.vaultMaxHeightMilli,0,10000,"locomotion.vaultMaxHeightMilli");
+            if(section.has("mantleMaxHeightMilli")) number(section["mantleMaxHeightMilli"],settings.locomotion.mantleMaxHeightMilli,0,10000,"locomotion.mantleMaxHeightMilli");
+            if(section.has("vaultMinSpeedMilli")) number(section["vaultMinSpeedMilli"],settings.locomotion.vaultMinSpeedMilli,0,100000,"locomotion.vaultMinSpeedMilli");
+            if(section.has("vaultTicks")) number(section["vaultTicks"],settings.locomotion.vaultTicks,2,3600,"locomotion.vaultTicks");
+            if(section.has("mantleTicks")) number(section["mantleTicks"],settings.locomotion.mantleTicks,2,3600,"locomotion.mantleTicks");
         }
+        if(settings.locomotion.ledgeMinHeightMilli>settings.locomotion.ledgeMaxHeightMilli)result.errors.push_back("locomotion.ledgeMinHeightMilli: must not exceed ledgeMaxHeightMilli");
+        if(settings.locomotion.swimExitDepthMilli>settings.locomotion.swimEnterDepthMilli)result.errors.push_back("locomotion.swimExitDepthMilli: must not exceed swimEnterDepthMilli");
+        if(settings.locomotion.swimEnterDepthMilli>settings.locomotion.swimFloatDepthMilli)result.errors.push_back("locomotion.swimEnterDepthMilli: must not exceed swimFloatDepthMilli");
+        if(settings.locomotion.swimFloatDepthMilli>settings.locomotion.swimDiveDepthMilli)result.errors.push_back("locomotion.swimFloatDepthMilli: must not exceed swimDiveDepthMilli");
+        if(settings.locomotion.mantleMinHeightMilli>settings.locomotion.vaultMaxHeightMilli)result.errors.push_back("locomotion.mantleMinHeightMilli: must not exceed vaultMaxHeightMilli");
+        if(settings.locomotion.vaultMaxHeightMilli>settings.locomotion.mantleMaxHeightMilli)result.errors.push_back("locomotion.vaultMaxHeightMilli: must not exceed mantleMaxHeightMilli");
     }
     if(root.has("melee")) { const auto& section=root["melee"];
         if(!section.isObject()) result.errors.push_back("melee: expected object");
@@ -326,6 +666,35 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("bufferTicks")) number(section["bufferTicks"],settings.melee.bufferTicks,0,3600,"melee.bufferTicks");
         }
     }
+    if(root.has("combat")) { const auto& section=root["combat"];
+        if(!section.isObject()) result.errors.push_back("combat: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="dodgeTicks" && entry.first!="dodgeInvulnFrom" && entry.first!="dodgeInvulnTo" && entry.first!="dodgeCooldown" && entry.first!="blockHalfArcMilli" && entry.first!="parryTicks" && entry.first!="parryRearmTicks" && entry.first!="poiseMilli" && entry.first!="poiseRecoveryMilli" && entry.first!="poiseDelayTicks" && entry.first!="blockPoiseMilli" && entry.first!="hitStunTicks" && entry.first!="blockStunTicks" && entry.first!="breakStunTicks" && entry.first!="parryStunTicks" && entry.first!="lockRangeMilli" && entry.first!="lockBreakMilli" && entry.first!="lockHalfAngleMilli" && entry.first!="lockDistanceWeight" && entry.first!="lockAngleWeight") result.errors.push_back("combat."+entry.first+": unknown field");
+            if(section.has("dodgeTicks")) number(section["dodgeTicks"],settings.combat.dodgeTicks,1,3600,"combat.dodgeTicks");
+            if(section.has("dodgeInvulnFrom")) number(section["dodgeInvulnFrom"],settings.combat.dodgeInvulnFrom,0,3600,"combat.dodgeInvulnFrom");
+            if(section.has("dodgeInvulnTo")) number(section["dodgeInvulnTo"],settings.combat.dodgeInvulnTo,0,3600,"combat.dodgeInvulnTo");
+            if(section.has("dodgeCooldown")) number(section["dodgeCooldown"],settings.combat.dodgeCooldown,0,36000,"combat.dodgeCooldown");
+            if(section.has("blockHalfArcMilli")) number(section["blockHalfArcMilli"],settings.combat.blockHalfArcMilli,0,500,"combat.blockHalfArcMilli");
+            if(section.has("parryTicks")) number(section["parryTicks"],settings.combat.parryTicks,0,3600,"combat.parryTicks");
+            if(section.has("parryRearmTicks")) number(section["parryRearmTicks"],settings.combat.parryRearmTicks,0,36000,"combat.parryRearmTicks");
+            if(section.has("poiseMilli")) number(section["poiseMilli"],settings.combat.poiseMilli,1,1000000000,"combat.poiseMilli");
+            if(section.has("poiseRecoveryMilli")) number(section["poiseRecoveryMilli"],settings.combat.poiseRecoveryMilli,0,1000000000,"combat.poiseRecoveryMilli");
+            if(section.has("poiseDelayTicks")) number(section["poiseDelayTicks"],settings.combat.poiseDelayTicks,0,36000,"combat.poiseDelayTicks");
+            if(section.has("blockPoiseMilli")) number(section["blockPoiseMilli"],settings.combat.blockPoiseMilli,0,1000,"combat.blockPoiseMilli");
+            if(section.has("hitStunTicks")) number(section["hitStunTicks"],settings.combat.hitStunTicks,0,3600,"combat.hitStunTicks");
+            if(section.has("blockStunTicks")) number(section["blockStunTicks"],settings.combat.blockStunTicks,0,3600,"combat.blockStunTicks");
+            if(section.has("breakStunTicks")) number(section["breakStunTicks"],settings.combat.breakStunTicks,0,3600,"combat.breakStunTicks");
+            if(section.has("parryStunTicks")) number(section["parryStunTicks"],settings.combat.parryStunTicks,0,3600,"combat.parryStunTicks");
+            if(section.has("lockRangeMilli")) number(section["lockRangeMilli"],settings.combat.lockRangeMilli,1,100000,"combat.lockRangeMilli");
+            if(section.has("lockBreakMilli")) number(section["lockBreakMilli"],settings.combat.lockBreakMilli,1,100000,"combat.lockBreakMilli");
+            if(section.has("lockHalfAngleMilli")) number(section["lockHalfAngleMilli"],settings.combat.lockHalfAngleMilli,1,500,"combat.lockHalfAngleMilli");
+            if(section.has("lockDistanceWeight")) number(section["lockDistanceWeight"],settings.combat.lockDistanceWeight,0,1000000,"combat.lockDistanceWeight");
+            if(section.has("lockAngleWeight")) number(section["lockAngleWeight"],settings.combat.lockAngleWeight,0,1000000,"combat.lockAngleWeight");
+        }
+        if(settings.combat.dodgeInvulnFrom>settings.combat.dodgeInvulnTo)result.errors.push_back("combat.dodgeInvulnFrom: must not exceed dodgeInvulnTo");
+        if(settings.combat.dodgeInvulnTo>settings.combat.dodgeTicks)result.errors.push_back("combat.dodgeInvulnTo: must not exceed dodgeTicks");
+        if(settings.combat.lockRangeMilli>settings.combat.lockBreakMilli)result.errors.push_back("combat.lockRangeMilli: must not exceed lockBreakMilli");
+    }
     if(root.has("projectile")) { const auto& section=root["projectile"];
         if(!section.isObject()) result.errors.push_back("projectile: expected object");
         else {
@@ -336,6 +705,141 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("lifetime")) number(section["lifetime"],settings.projectile.lifetime,1,100000,"projectile.lifetime");
             if(section.has("maxBounces")) number(section["maxBounces"],settings.projectile.maxBounces,0,32,"projectile.maxBounces");
         }
+    }
+    if(root.has("penetration")) { const auto& section=root["penetration"];
+        if(!section.isObject()) result.errors.push_back("penetration: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="powerMilli" && entry.first!="maxLayers" && entry.first!="minDamageMilli" && entry.first!="minSpeedMilli") result.errors.push_back("penetration."+entry.first+": unknown field");
+            if(section.has("powerMilli")) number(section["powerMilli"],settings.penetration.powerMilli,0,1000000000000,"penetration.powerMilli");
+            if(section.has("maxLayers")) number(section["maxLayers"],settings.penetration.maxLayers,1,64,"penetration.maxLayers");
+            if(section.has("minDamageMilli")) number(section["minDamageMilli"],settings.penetration.minDamageMilli,0,1000000000000,"penetration.minDamageMilli");
+            if(section.has("minSpeedMilli")) number(section["minSpeedMilli"],settings.penetration.minSpeedMilli,0,1000000000,"penetration.minSpeedMilli");
+        }
+    }
+    if(root.has("explosion")) { const auto& section=root["explosion"];
+        if(!section.isObject()) result.errors.push_back("explosion: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="innerRadiusMilli" && entry.first!="outerRadiusMilli" && entry.first!="damageMilli" && entry.first!="edgeScaleMilli" && entry.first!="impulseMilli" && entry.first!="maxTargets") result.errors.push_back("explosion."+entry.first+": unknown field");
+            if(section.has("innerRadiusMilli")) number(section["innerRadiusMilli"],settings.explosion.innerRadiusMilli,0,10000000,"explosion.innerRadiusMilli");
+            if(section.has("outerRadiusMilli")) number(section["outerRadiusMilli"],settings.explosion.outerRadiusMilli,1,10000000,"explosion.outerRadiusMilli");
+            if(section.has("damageMilli")) number(section["damageMilli"],settings.explosion.damageMilli,0,1000000000000,"explosion.damageMilli");
+            if(section.has("edgeScaleMilli")) number(section["edgeScaleMilli"],settings.explosion.edgeScaleMilli,0,1000,"explosion.edgeScaleMilli");
+            if(section.has("impulseMilli")) number(section["impulseMilli"],settings.explosion.impulseMilli,0,1000000000,"explosion.impulseMilli");
+            if(section.has("maxTargets")) number(section["maxTargets"],settings.explosion.maxTargets,1,4096,"explosion.maxTargets");
+        }
+        if(settings.explosion.innerRadiusMilli>settings.explosion.outerRadiusMilli)result.errors.push_back("explosion.innerRadiusMilli: must not exceed outerRadiusMilli");
+    }
+    if(root.has("ammoFeed")) { const auto& section=root["ammoFeed"];
+        if(!section.isObject()) result.errors.push_back("ammoFeed: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="kind" && entry.first!="capacity" && entry.first!="ammoPerShot" && entry.first!="intervalTicks" && entry.first!="reloadTicks" && entry.first!="emptyReloadTicks" && entry.first!="reloadStartTicks" && entry.first!="shellTicks" && entry.first!="spinupTicks" && entry.first!="heatPerShot" && entry.first!="heatCapacity" && entry.first!="coolPerTick" && entry.first!="overheatTicks" && entry.first!="recoverHeat" && entry.first!="autoReload" && entry.first!="interruptible") result.errors.push_back("ammoFeed."+entry.first+": unknown field");
+            if(section.has("kind")) number(section["kind"],settings.ammoFeed.kind,0,3,"ammoFeed.kind");
+            if(section.has("capacity")) number(section["capacity"],settings.ammoFeed.capacity,0,100000,"ammoFeed.capacity");
+            if(section.has("ammoPerShot")) number(section["ammoPerShot"],settings.ammoFeed.ammoPerShot,0,100000,"ammoFeed.ammoPerShot");
+            if(section.has("intervalTicks")) number(section["intervalTicks"],settings.ammoFeed.intervalTicks,0,100000,"ammoFeed.intervalTicks");
+            if(section.has("reloadTicks")) number(section["reloadTicks"],settings.ammoFeed.reloadTicks,0,100000,"ammoFeed.reloadTicks");
+            if(section.has("emptyReloadTicks")) number(section["emptyReloadTicks"],settings.ammoFeed.emptyReloadTicks,0,100000,"ammoFeed.emptyReloadTicks");
+            if(section.has("reloadStartTicks")) number(section["reloadStartTicks"],settings.ammoFeed.reloadStartTicks,0,100000,"ammoFeed.reloadStartTicks");
+            if(section.has("shellTicks")) number(section["shellTicks"],settings.ammoFeed.shellTicks,0,100000,"ammoFeed.shellTicks");
+            if(section.has("spinupTicks")) number(section["spinupTicks"],settings.ammoFeed.spinupTicks,0,100000,"ammoFeed.spinupTicks");
+            if(section.has("heatPerShot")) number(section["heatPerShot"],settings.ammoFeed.heatPerShot,0,1000000000,"ammoFeed.heatPerShot");
+            if(section.has("heatCapacity")) number(section["heatCapacity"],settings.ammoFeed.heatCapacity,1,1000000000,"ammoFeed.heatCapacity");
+            if(section.has("coolPerTick")) number(section["coolPerTick"],settings.ammoFeed.coolPerTick,0,1000000000,"ammoFeed.coolPerTick");
+            if(section.has("overheatTicks")) number(section["overheatTicks"],settings.ammoFeed.overheatTicks,0,100000,"ammoFeed.overheatTicks");
+            if(section.has("recoverHeat")) number(section["recoverHeat"],settings.ammoFeed.recoverHeat,0,1000000000,"ammoFeed.recoverHeat");
+            if(section.has("autoReload")) boolean(section["autoReload"],settings.ammoFeed.autoReload,"ammoFeed.autoReload");
+            if(section.has("interruptible")) boolean(section["interruptible"],settings.ammoFeed.interruptible,"ammoFeed.interruptible");
+        }
+        if(settings.ammoFeed.heatPerShot>settings.ammoFeed.heatCapacity)result.errors.push_back("ammoFeed.heatPerShot: must not exceed heatCapacity");
+        if(settings.ammoFeed.coolPerTick>settings.ammoFeed.heatCapacity)result.errors.push_back("ammoFeed.coolPerTick: must not exceed heatCapacity");
+    }
+    if(root.has("charge")) { const auto& section=root["charge"];
+        if(!section.isObject()) result.errors.push_back("charge: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="minTicks" && entry.first!="maxTicks" && entry.first!="autoReleaseTicks" && entry.first!="tiers" && entry.first!="fireBelowMin" && entry.first!="minScaleMilli" && entry.first!="maxScaleMilli") result.errors.push_back("charge."+entry.first+": unknown field");
+            if(section.has("minTicks")) number(section["minTicks"],settings.charge.minTicks,0,100000,"charge.minTicks");
+            if(section.has("maxTicks")) number(section["maxTicks"],settings.charge.maxTicks,1,100000,"charge.maxTicks");
+            if(section.has("autoReleaseTicks")) number(section["autoReleaseTicks"],settings.charge.autoReleaseTicks,0,100000,"charge.autoReleaseTicks");
+            if(section.has("tiers")) number(section["tiers"],settings.charge.tiers,0,64,"charge.tiers");
+            if(section.has("fireBelowMin")) boolean(section["fireBelowMin"],settings.charge.fireBelowMin,"charge.fireBelowMin");
+            if(section.has("minScaleMilli")) number(section["minScaleMilli"],settings.charge.minScaleMilli,0,1000000,"charge.minScaleMilli");
+            if(section.has("maxScaleMilli")) number(section["maxScaleMilli"],settings.charge.maxScaleMilli,0,1000000,"charge.maxScaleMilli");
+        }
+        if(settings.charge.minTicks>settings.charge.maxTicks)result.errors.push_back("charge.minTicks: must not exceed maxTicks");
+        if(settings.charge.minScaleMilli>settings.charge.maxScaleMilli)result.errors.push_back("charge.minScaleMilli: must not exceed maxScaleMilli");
+    }
+    if(root.has("aimSolver")) { const auto& section=root["aimSolver"];
+        if(!section.isObject()) result.errors.push_back("aimSolver: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="maxIterations" && entry.first!="toleranceMilli" && entry.first!="preferHigh") result.errors.push_back("aimSolver."+entry.first+": unknown field");
+            if(section.has("maxIterations")) number(section["maxIterations"],settings.aimSolver.maxIterations,1,64,"aimSolver.maxIterations");
+            if(section.has("toleranceMilli")) number(section["toleranceMilli"],settings.aimSolver.toleranceMilli,0,10000,"aimSolver.toleranceMilli");
+            if(section.has("preferHigh")) boolean(section["preferHigh"],settings.aimSolver.preferHigh,"aimSolver.preferHigh");
+        }
+    }
+    if(root.has("genreBots")) { const auto& section=root["genreBots"];
+        if(!section.isObject()) result.errors.push_back("genreBots: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="reactionTicks" && entry.first!="decisionTicks" && entry.first!="aimErrorMicro" && entry.first!="misreadMilli" && entry.first!="meleeMinRangeMilli" && entry.first!="meleeMaxRangeMilli" && entry.first!="meleeAttackRangeMilli" && entry.first!="meleeOpener" && entry.first!="meleeStrafeTicks" && entry.first!="dodgeMilli" && entry.first!="useDodge" && entry.first!="useGuard" && entry.first!="useLockOn" && entry.first!="useCombos" && entry.first!="respectGuard" && entry.first!="shooterMinRangeMilli" && entry.first!="shooterPreferredRangeMilli" && entry.first!="shooterMaxRangeMilli" && entry.first!="projectileSpeedMilli" && entry.first!="projectileGravityMilli" && entry.first!="turnPerTickMicro" && entry.first!="fireToleranceMicro" && entry.first!="recoilToleranceMicro" && entry.first!="recoilCompensationMilli" && entry.first!="reloadIdleMilli" && entry.first!="heatResumeMilli" && entry.first!="heatStopMilli" && entry.first!="retreatHealthMilli" && entry.first!="coverDistanceWeight" && entry.first!="shooterStrafeTicks" && entry.first!="squadIntervalTicks" && entry.first!="offenseAttackerMilli" && entry.first!="offenseDefenderMilli" && entry.first!="offenseSupportMilli" && entry.first!="offenseFlankerMilli" && entry.first!="defenseAttackerMilli" && entry.first!="defenseDefenderMilli" && entry.first!="defenseSupportMilli" && entry.first!="defenseFlankerMilli" && entry.first!="formationSpacingMilli" && entry.first!="supportDistanceMilli" && entry.first!="flankDistanceMilli" && entry.first!="defendRadiusMilli" && entry.first!="attackShape" && entry.first!="objectiveValueWeight" && entry.first!="objectiveDistanceWeight" && entry.first!="objectiveNeutralWeight" && entry.first!="objectiveEnemyWeight" && entry.first!="objectiveProgressWeight" && entry.first!="objectiveContestedWeight" && entry.first!="objectiveThreatenedWeight" && entry.first!="objectiveIdleWeight" && entry.first!="objectiveEscortWeight" && entry.first!="objectiveStickiness") result.errors.push_back("genreBots."+entry.first+": unknown field");
+            if(section.has("reactionTicks")) number(section["reactionTicks"],settings.genreBots.reactionTicks,0,3600,"genreBots.reactionTicks");
+            if(section.has("decisionTicks")) number(section["decisionTicks"],settings.genreBots.decisionTicks,1,3600,"genreBots.decisionTicks");
+            if(section.has("aimErrorMicro")) number(section["aimErrorMicro"],settings.genreBots.aimErrorMicro,0,125000,"genreBots.aimErrorMicro");
+            if(section.has("misreadMilli")) number(section["misreadMilli"],settings.genreBots.misreadMilli,0,1000,"genreBots.misreadMilli");
+            if(section.has("meleeMinRangeMilli")) number(section["meleeMinRangeMilli"],settings.genreBots.meleeMinRangeMilli,0,100000,"genreBots.meleeMinRangeMilli");
+            if(section.has("meleeMaxRangeMilli")) number(section["meleeMaxRangeMilli"],settings.genreBots.meleeMaxRangeMilli,0,100000,"genreBots.meleeMaxRangeMilli");
+            if(section.has("meleeAttackRangeMilli")) number(section["meleeAttackRangeMilli"],settings.genreBots.meleeAttackRangeMilli,1,100000,"genreBots.meleeAttackRangeMilli");
+            if(section.has("meleeOpener")) number(section["meleeOpener"],settings.genreBots.meleeOpener,1,1000000000,"genreBots.meleeOpener");
+            if(section.has("meleeStrafeTicks")) number(section["meleeStrafeTicks"],settings.genreBots.meleeStrafeTicks,0,36000,"genreBots.meleeStrafeTicks");
+            if(section.has("dodgeMilli")) number(section["dodgeMilli"],settings.genreBots.dodgeMilli,0,1000,"genreBots.dodgeMilli");
+            if(section.has("useDodge")) boolean(section["useDodge"],settings.genreBots.useDodge,"genreBots.useDodge");
+            if(section.has("useGuard")) boolean(section["useGuard"],settings.genreBots.useGuard,"genreBots.useGuard");
+            if(section.has("useLockOn")) boolean(section["useLockOn"],settings.genreBots.useLockOn,"genreBots.useLockOn");
+            if(section.has("useCombos")) boolean(section["useCombos"],settings.genreBots.useCombos,"genreBots.useCombos");
+            if(section.has("respectGuard")) boolean(section["respectGuard"],settings.genreBots.respectGuard,"genreBots.respectGuard");
+            if(section.has("shooterMinRangeMilli")) number(section["shooterMinRangeMilli"],settings.genreBots.shooterMinRangeMilli,0,100000,"genreBots.shooterMinRangeMilli");
+            if(section.has("shooterPreferredRangeMilli")) number(section["shooterPreferredRangeMilli"],settings.genreBots.shooterPreferredRangeMilli,0,100000,"genreBots.shooterPreferredRangeMilli");
+            if(section.has("shooterMaxRangeMilli")) number(section["shooterMaxRangeMilli"],settings.genreBots.shooterMaxRangeMilli,0,100000,"genreBots.shooterMaxRangeMilli");
+            if(section.has("projectileSpeedMilli")) number(section["projectileSpeedMilli"],settings.genreBots.projectileSpeedMilli,0,1000000,"genreBots.projectileSpeedMilli");
+            if(section.has("projectileGravityMilli")) number(section["projectileGravityMilli"],settings.genreBots.projectileGravityMilli,0,1000000,"genreBots.projectileGravityMilli");
+            if(section.has("turnPerTickMicro")) number(section["turnPerTickMicro"],settings.genreBots.turnPerTickMicro,1,500000,"genreBots.turnPerTickMicro");
+            if(section.has("fireToleranceMicro")) number(section["fireToleranceMicro"],settings.genreBots.fireToleranceMicro,0,125000,"genreBots.fireToleranceMicro");
+            if(section.has("recoilToleranceMicro")) number(section["recoilToleranceMicro"],settings.genreBots.recoilToleranceMicro,0,250000,"genreBots.recoilToleranceMicro");
+            if(section.has("recoilCompensationMilli")) number(section["recoilCompensationMilli"],settings.genreBots.recoilCompensationMilli,0,1000,"genreBots.recoilCompensationMilli");
+            if(section.has("reloadIdleMilli")) number(section["reloadIdleMilli"],settings.genreBots.reloadIdleMilli,0,1000,"genreBots.reloadIdleMilli");
+            if(section.has("heatResumeMilli")) number(section["heatResumeMilli"],settings.genreBots.heatResumeMilli,0,1000,"genreBots.heatResumeMilli");
+            if(section.has("heatStopMilli")) number(section["heatStopMilli"],settings.genreBots.heatStopMilli,0,1000,"genreBots.heatStopMilli");
+            if(section.has("retreatHealthMilli")) number(section["retreatHealthMilli"],settings.genreBots.retreatHealthMilli,0,1000,"genreBots.retreatHealthMilli");
+            if(section.has("coverDistanceWeight")) number(section["coverDistanceWeight"],settings.genreBots.coverDistanceWeight,0,1000000,"genreBots.coverDistanceWeight");
+            if(section.has("shooterStrafeTicks")) number(section["shooterStrafeTicks"],settings.genreBots.shooterStrafeTicks,0,36000,"genreBots.shooterStrafeTicks");
+            if(section.has("squadIntervalTicks")) number(section["squadIntervalTicks"],settings.genreBots.squadIntervalTicks,1,36000,"genreBots.squadIntervalTicks");
+            if(section.has("offenseAttackerMilli")) number(section["offenseAttackerMilli"],settings.genreBots.offenseAttackerMilli,0,1000,"genreBots.offenseAttackerMilli");
+            if(section.has("offenseDefenderMilli")) number(section["offenseDefenderMilli"],settings.genreBots.offenseDefenderMilli,0,1000,"genreBots.offenseDefenderMilli");
+            if(section.has("offenseSupportMilli")) number(section["offenseSupportMilli"],settings.genreBots.offenseSupportMilli,0,1000,"genreBots.offenseSupportMilli");
+            if(section.has("offenseFlankerMilli")) number(section["offenseFlankerMilli"],settings.genreBots.offenseFlankerMilli,0,1000,"genreBots.offenseFlankerMilli");
+            if(section.has("defenseAttackerMilli")) number(section["defenseAttackerMilli"],settings.genreBots.defenseAttackerMilli,0,1000,"genreBots.defenseAttackerMilli");
+            if(section.has("defenseDefenderMilli")) number(section["defenseDefenderMilli"],settings.genreBots.defenseDefenderMilli,0,1000,"genreBots.defenseDefenderMilli");
+            if(section.has("defenseSupportMilli")) number(section["defenseSupportMilli"],settings.genreBots.defenseSupportMilli,0,1000,"genreBots.defenseSupportMilli");
+            if(section.has("defenseFlankerMilli")) number(section["defenseFlankerMilli"],settings.genreBots.defenseFlankerMilli,0,1000,"genreBots.defenseFlankerMilli");
+            if(section.has("formationSpacingMilli")) number(section["formationSpacingMilli"],settings.genreBots.formationSpacingMilli,1,1000000,"genreBots.formationSpacingMilli");
+            if(section.has("supportDistanceMilli")) number(section["supportDistanceMilli"],settings.genreBots.supportDistanceMilli,0,1000000,"genreBots.supportDistanceMilli");
+            if(section.has("flankDistanceMilli")) number(section["flankDistanceMilli"],settings.genreBots.flankDistanceMilli,0,1000000,"genreBots.flankDistanceMilli");
+            if(section.has("defendRadiusMilli")) number(section["defendRadiusMilli"],settings.genreBots.defendRadiusMilli,0,1000000,"genreBots.defendRadiusMilli");
+            if(section.has("attackShape")) number(section["attackShape"],settings.genreBots.attackShape,0,3,"genreBots.attackShape");
+            if(section.has("objectiveValueWeight")) number(section["objectiveValueWeight"],settings.genreBots.objectiveValueWeight,-1000000,1000000,"genreBots.objectiveValueWeight");
+            if(section.has("objectiveDistanceWeight")) number(section["objectiveDistanceWeight"],settings.genreBots.objectiveDistanceWeight,0,1000000,"genreBots.objectiveDistanceWeight");
+            if(section.has("objectiveNeutralWeight")) number(section["objectiveNeutralWeight"],settings.genreBots.objectiveNeutralWeight,-1000000,1000000,"genreBots.objectiveNeutralWeight");
+            if(section.has("objectiveEnemyWeight")) number(section["objectiveEnemyWeight"],settings.genreBots.objectiveEnemyWeight,-1000000,1000000,"genreBots.objectiveEnemyWeight");
+            if(section.has("objectiveProgressWeight")) number(section["objectiveProgressWeight"],settings.genreBots.objectiveProgressWeight,-1000000,1000000,"genreBots.objectiveProgressWeight");
+            if(section.has("objectiveContestedWeight")) number(section["objectiveContestedWeight"],settings.genreBots.objectiveContestedWeight,-1000000,1000000,"genreBots.objectiveContestedWeight");
+            if(section.has("objectiveThreatenedWeight")) number(section["objectiveThreatenedWeight"],settings.genreBots.objectiveThreatenedWeight,-1000000,1000000,"genreBots.objectiveThreatenedWeight");
+            if(section.has("objectiveIdleWeight")) number(section["objectiveIdleWeight"],settings.genreBots.objectiveIdleWeight,-1000000,1000000,"genreBots.objectiveIdleWeight");
+            if(section.has("objectiveEscortWeight")) number(section["objectiveEscortWeight"],settings.genreBots.objectiveEscortWeight,-1000000,1000000,"genreBots.objectiveEscortWeight");
+            if(section.has("objectiveStickiness")) number(section["objectiveStickiness"],settings.genreBots.objectiveStickiness,-1000000,1000000,"genreBots.objectiveStickiness");
+        }
+        if(settings.genreBots.meleeMinRangeMilli>settings.genreBots.meleeMaxRangeMilli)result.errors.push_back("genreBots.meleeMinRangeMilli: must not exceed meleeMaxRangeMilli");
+        if(settings.genreBots.shooterMinRangeMilli>settings.genreBots.shooterPreferredRangeMilli)result.errors.push_back("genreBots.shooterMinRangeMilli: must not exceed shooterPreferredRangeMilli");
+        if(settings.genreBots.shooterPreferredRangeMilli>settings.genreBots.shooterMaxRangeMilli)result.errors.push_back("genreBots.shooterPreferredRangeMilli: must not exceed shooterMaxRangeMilli");
+        if(settings.genreBots.heatResumeMilli>settings.genreBots.heatStopMilli)result.errors.push_back("genreBots.heatResumeMilli: must not exceed heatStopMilli");
     }
     if(root.has("matchRules")) { const auto& section=root["matchRules"];
         if(!section.isObject()) result.errors.push_back("matchRules: expected object");
@@ -350,6 +854,165 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("scoreToWin")) number(section["scoreToWin"],settings.matchRules.scoreToWin,1,1000000000,"matchRules.scoreToWin");
         }
         if(settings.matchRules.roundsToWin>settings.matchRules.maxRounds)result.errors.push_back("matchRules.roundsToWin: must not exceed maxRounds");
+    }
+    if(root.has("objectives")) { const auto& section=root["objectives"];
+        if(!section.isObject()) result.errors.push_back("objectives: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="zoneCaptureTicks" && entry.first!="zoneDecayPerTick" && entry.first!="zoneContestRule" && entry.first!="zoneMaxCapturers" && entry.first!="zoneNeutralizeFirst" && entry.first!="holdScoreInterval" && entry.first!="holdRequiresPresence" && entry.first!="hillRotateTicks" && entry.first!="hillCount" && entry.first!="payloadPushSpeedMilli" && entry.first!="payloadExtraPusherMilli" && entry.first!="payloadReverseSpeedMilli" && entry.first!="payloadMaxPushers" && entry.first!="payloadReverseDelayTicks" && entry.first!="payloadCheckpointBonusTicks" && entry.first!="payloadContestBlocks" && entry.first!="payloadCheckpointLock" && entry.first!="eliminationLives" && entry.first!="respawnDelayTicks" && entry.first!="respawnWaveTicks" && entry.first!="wipeEliminates" && entry.first!="extractionHoldTicks" && entry.first!="extractionRequiredItems" && entry.first!="extractionOpensAtTicks" && entry.first!="extractionContestBlocks" && entry.first!="extractionResetOnLeave" && entry.first!="bombPlantTicks" && entry.first!="bombDefuseTicks" && entry.first!="bombKitDefuseTicks" && entry.first!="bombFuseTicks" && entry.first!="bombPlantResets" && entry.first!="bombDefuseResets" && entry.first!="overtimeEnabled" && entry.first!="overtimeGraceTicks" && entry.first!="overtimeMaxTicks" && entry.first!="clockMaxTicks" && entry.first!="spectatorKillCamTicks" && entry.first!="spectatorFollowKiller" && entry.first!="spectatorAllowEnemies" && entry.first!="routeLaps") result.errors.push_back("objectives."+entry.first+": unknown field");
+            if(section.has("zoneCaptureTicks")) number(section["zoneCaptureTicks"],settings.objectives.zoneCaptureTicks,1,10000000,"objectives.zoneCaptureTicks");
+            if(section.has("zoneDecayPerTick")) number(section["zoneDecayPerTick"],settings.objectives.zoneDecayPerTick,0,10000000,"objectives.zoneDecayPerTick");
+            if(section.has("zoneContestRule")) number(section["zoneContestRule"],settings.objectives.zoneContestRule,0,1,"objectives.zoneContestRule");
+            if(section.has("zoneMaxCapturers")) number(section["zoneMaxCapturers"],settings.objectives.zoneMaxCapturers,1,64,"objectives.zoneMaxCapturers");
+            if(section.has("zoneNeutralizeFirst")) boolean(section["zoneNeutralizeFirst"],settings.objectives.zoneNeutralizeFirst,"objectives.zoneNeutralizeFirst");
+            if(section.has("holdScoreInterval")) number(section["holdScoreInterval"],settings.objectives.holdScoreInterval,0,10000000,"objectives.holdScoreInterval");
+            if(section.has("holdRequiresPresence")) boolean(section["holdRequiresPresence"],settings.objectives.holdRequiresPresence,"objectives.holdRequiresPresence");
+            if(section.has("hillRotateTicks")) number(section["hillRotateTicks"],settings.objectives.hillRotateTicks,0,10000000,"objectives.hillRotateTicks");
+            if(section.has("hillCount")) number(section["hillCount"],settings.objectives.hillCount,1,64,"objectives.hillCount");
+            if(section.has("payloadPushSpeedMilli")) number(section["payloadPushSpeedMilli"],settings.objectives.payloadPushSpeedMilli,1,100000,"objectives.payloadPushSpeedMilli");
+            if(section.has("payloadExtraPusherMilli")) number(section["payloadExtraPusherMilli"],settings.objectives.payloadExtraPusherMilli,0,10000,"objectives.payloadExtraPusherMilli");
+            if(section.has("payloadReverseSpeedMilli")) number(section["payloadReverseSpeedMilli"],settings.objectives.payloadReverseSpeedMilli,0,100000,"objectives.payloadReverseSpeedMilli");
+            if(section.has("payloadMaxPushers")) number(section["payloadMaxPushers"],settings.objectives.payloadMaxPushers,1,64,"objectives.payloadMaxPushers");
+            if(section.has("payloadReverseDelayTicks")) number(section["payloadReverseDelayTicks"],settings.objectives.payloadReverseDelayTicks,0,10000000,"objectives.payloadReverseDelayTicks");
+            if(section.has("payloadCheckpointBonusTicks")) number(section["payloadCheckpointBonusTicks"],settings.objectives.payloadCheckpointBonusTicks,0,10000000,"objectives.payloadCheckpointBonusTicks");
+            if(section.has("payloadContestBlocks")) boolean(section["payloadContestBlocks"],settings.objectives.payloadContestBlocks,"objectives.payloadContestBlocks");
+            if(section.has("payloadCheckpointLock")) boolean(section["payloadCheckpointLock"],settings.objectives.payloadCheckpointLock,"objectives.payloadCheckpointLock");
+            if(section.has("eliminationLives")) number(section["eliminationLives"],settings.objectives.eliminationLives,0,1000,"objectives.eliminationLives");
+            if(section.has("respawnDelayTicks")) number(section["respawnDelayTicks"],settings.objectives.respawnDelayTicks,0,10000000,"objectives.respawnDelayTicks");
+            if(section.has("respawnWaveTicks")) number(section["respawnWaveTicks"],settings.objectives.respawnWaveTicks,0,10000000,"objectives.respawnWaveTicks");
+            if(section.has("wipeEliminates")) boolean(section["wipeEliminates"],settings.objectives.wipeEliminates,"objectives.wipeEliminates");
+            if(section.has("extractionHoldTicks")) number(section["extractionHoldTicks"],settings.objectives.extractionHoldTicks,1,10000000,"objectives.extractionHoldTicks");
+            if(section.has("extractionRequiredItems")) number(section["extractionRequiredItems"],settings.objectives.extractionRequiredItems,0,1000,"objectives.extractionRequiredItems");
+            if(section.has("extractionOpensAtTicks")) number(section["extractionOpensAtTicks"],settings.objectives.extractionOpensAtTicks,0,10000000,"objectives.extractionOpensAtTicks");
+            if(section.has("extractionContestBlocks")) boolean(section["extractionContestBlocks"],settings.objectives.extractionContestBlocks,"objectives.extractionContestBlocks");
+            if(section.has("extractionResetOnLeave")) boolean(section["extractionResetOnLeave"],settings.objectives.extractionResetOnLeave,"objectives.extractionResetOnLeave");
+            if(section.has("bombPlantTicks")) number(section["bombPlantTicks"],settings.objectives.bombPlantTicks,1,10000000,"objectives.bombPlantTicks");
+            if(section.has("bombDefuseTicks")) number(section["bombDefuseTicks"],settings.objectives.bombDefuseTicks,1,10000000,"objectives.bombDefuseTicks");
+            if(section.has("bombKitDefuseTicks")) number(section["bombKitDefuseTicks"],settings.objectives.bombKitDefuseTicks,1,10000000,"objectives.bombKitDefuseTicks");
+            if(section.has("bombFuseTicks")) number(section["bombFuseTicks"],settings.objectives.bombFuseTicks,1,10000000,"objectives.bombFuseTicks");
+            if(section.has("bombPlantResets")) boolean(section["bombPlantResets"],settings.objectives.bombPlantResets,"objectives.bombPlantResets");
+            if(section.has("bombDefuseResets")) boolean(section["bombDefuseResets"],settings.objectives.bombDefuseResets,"objectives.bombDefuseResets");
+            if(section.has("overtimeEnabled")) boolean(section["overtimeEnabled"],settings.objectives.overtimeEnabled,"objectives.overtimeEnabled");
+            if(section.has("overtimeGraceTicks")) number(section["overtimeGraceTicks"],settings.objectives.overtimeGraceTicks,0,10000000,"objectives.overtimeGraceTicks");
+            if(section.has("overtimeMaxTicks")) number(section["overtimeMaxTicks"],settings.objectives.overtimeMaxTicks,0,10000000,"objectives.overtimeMaxTicks");
+            if(section.has("clockMaxTicks")) number(section["clockMaxTicks"],settings.objectives.clockMaxTicks,1,100000000,"objectives.clockMaxTicks");
+            if(section.has("spectatorKillCamTicks")) number(section["spectatorKillCamTicks"],settings.objectives.spectatorKillCamTicks,0,10000000,"objectives.spectatorKillCamTicks");
+            if(section.has("spectatorFollowKiller")) boolean(section["spectatorFollowKiller"],settings.objectives.spectatorFollowKiller,"objectives.spectatorFollowKiller");
+            if(section.has("spectatorAllowEnemies")) boolean(section["spectatorAllowEnemies"],settings.objectives.spectatorAllowEnemies,"objectives.spectatorAllowEnemies");
+            if(section.has("routeLaps")) number(section["routeLaps"],settings.objectives.routeLaps,1,1000,"objectives.routeLaps");
+        }
+        if(settings.objectives.zoneDecayPerTick>settings.objectives.zoneCaptureTicks)result.errors.push_back("objectives.zoneDecayPerTick: must not exceed zoneCaptureTicks");
+        if(settings.objectives.bombKitDefuseTicks>settings.objectives.bombDefuseTicks)result.errors.push_back("objectives.bombKitDefuseTicks: must not exceed bombDefuseTicks");
+    }
+    if(root.has("senses")) { const auto& section=root["senses"];
+        if(!section.isObject()) result.errors.push_back("senses: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="sightNearMilli" && entry.first!="sightRangeMilli" && entry.first!="sightHalfAngleMilli" && entry.first!="peripheralRangeMilli" && entry.first!="peripheralHalfAngleMilli" && entry.first!="sightNearStrengthMilli" && entry.first!="sightFarStrengthMilli" && entry.first!="peripheralStrengthMilli" && entry.first!="sightMinStrengthMilli" && entry.first!="sightQueryBudget" && entry.first!="hearingThresholdMilli" && entry.first!="noiseBudget" && entry.first!="occlusionBudget" && entry.first!="noiseMaxRadiusMilli" && entry.first!="trailLifetimeTicks" && entry.first!="trailRangeMilli" && entry.first!="trailMaxMarkers" && entry.first!="trailMinStrengthMilli" && entry.first!="suspicionMaxMilli" && entry.first!="suspiciousAtMilli" && entry.first!="searchingAtMilli" && entry.first!="alertAtMilli" && entry.first!="sightGainMilli" && entry.first!="hearingGainMilli" && entry.first!="trailGainMilli" && entry.first!="suspicionDecayMilli" && entry.first!="suspicionDecayDelayTicks" && entry.first!="alertRadiusMilli" && entry.first!="alertDelayTicks" && entry.first!="alertReceivedMilli" && entry.first!="alertMaxPending" && entry.first!="alertRelay" && entry.first!="searchGiveUpTicks" && entry.first!="searchPointRadiusMilli" && entry.first!="searchCandidateRadiusMilli" && entry.first!="searchMaxPoints" && entry.first!="hideEnterRangeMilli") result.errors.push_back("senses."+entry.first+": unknown field");
+            if(section.has("sightNearMilli")) number(section["sightNearMilli"],settings.senses.sightNearMilli,0,100000000,"senses.sightNearMilli");
+            if(section.has("sightRangeMilli")) number(section["sightRangeMilli"],settings.senses.sightRangeMilli,0,100000000,"senses.sightRangeMilli");
+            if(section.has("sightHalfAngleMilli")) number(section["sightHalfAngleMilli"],settings.senses.sightHalfAngleMilli,0,500,"senses.sightHalfAngleMilli");
+            if(section.has("peripheralRangeMilli")) number(section["peripheralRangeMilli"],settings.senses.peripheralRangeMilli,0,100000000,"senses.peripheralRangeMilli");
+            if(section.has("peripheralHalfAngleMilli")) number(section["peripheralHalfAngleMilli"],settings.senses.peripheralHalfAngleMilli,0,500,"senses.peripheralHalfAngleMilli");
+            if(section.has("sightNearStrengthMilli")) number(section["sightNearStrengthMilli"],settings.senses.sightNearStrengthMilli,0,1000,"senses.sightNearStrengthMilli");
+            if(section.has("sightFarStrengthMilli")) number(section["sightFarStrengthMilli"],settings.senses.sightFarStrengthMilli,0,1000,"senses.sightFarStrengthMilli");
+            if(section.has("peripheralStrengthMilli")) number(section["peripheralStrengthMilli"],settings.senses.peripheralStrengthMilli,0,1000,"senses.peripheralStrengthMilli");
+            if(section.has("sightMinStrengthMilli")) number(section["sightMinStrengthMilli"],settings.senses.sightMinStrengthMilli,1,1000,"senses.sightMinStrengthMilli");
+            if(section.has("sightQueryBudget")) number(section["sightQueryBudget"],settings.senses.sightQueryBudget,0,10000000,"senses.sightQueryBudget");
+            if(section.has("hearingThresholdMilli")) number(section["hearingThresholdMilli"],settings.senses.hearingThresholdMilli,1,1000,"senses.hearingThresholdMilli");
+            if(section.has("noiseBudget")) number(section["noiseBudget"],settings.senses.noiseBudget,0,4096,"senses.noiseBudget");
+            if(section.has("occlusionBudget")) number(section["occlusionBudget"],settings.senses.occlusionBudget,0,10000000,"senses.occlusionBudget");
+            if(section.has("noiseMaxRadiusMilli")) number(section["noiseMaxRadiusMilli"],settings.senses.noiseMaxRadiusMilli,1,100000000,"senses.noiseMaxRadiusMilli");
+            if(section.has("trailLifetimeTicks")) number(section["trailLifetimeTicks"],settings.senses.trailLifetimeTicks,1,10000000,"senses.trailLifetimeTicks");
+            if(section.has("trailRangeMilli")) number(section["trailRangeMilli"],settings.senses.trailRangeMilli,1,100000000,"senses.trailRangeMilli");
+            if(section.has("trailMaxMarkers")) number(section["trailMaxMarkers"],settings.senses.trailMaxMarkers,1,65536,"senses.trailMaxMarkers");
+            if(section.has("trailMinStrengthMilli")) number(section["trailMinStrengthMilli"],settings.senses.trailMinStrengthMilli,1,1000,"senses.trailMinStrengthMilli");
+            if(section.has("suspicionMaxMilli")) number(section["suspicionMaxMilli"],settings.senses.suspicionMaxMilli,3,1000000000,"senses.suspicionMaxMilli");
+            if(section.has("suspiciousAtMilli")) number(section["suspiciousAtMilli"],settings.senses.suspiciousAtMilli,1,1000000000,"senses.suspiciousAtMilli");
+            if(section.has("searchingAtMilli")) number(section["searchingAtMilli"],settings.senses.searchingAtMilli,2,1000000000,"senses.searchingAtMilli");
+            if(section.has("alertAtMilli")) number(section["alertAtMilli"],settings.senses.alertAtMilli,3,1000000000,"senses.alertAtMilli");
+            if(section.has("sightGainMilli")) number(section["sightGainMilli"],settings.senses.sightGainMilli,0,1000000,"senses.sightGainMilli");
+            if(section.has("hearingGainMilli")) number(section["hearingGainMilli"],settings.senses.hearingGainMilli,0,1000000,"senses.hearingGainMilli");
+            if(section.has("trailGainMilli")) number(section["trailGainMilli"],settings.senses.trailGainMilli,0,1000000,"senses.trailGainMilli");
+            if(section.has("suspicionDecayMilli")) number(section["suspicionDecayMilli"],settings.senses.suspicionDecayMilli,0,1000000000,"senses.suspicionDecayMilli");
+            if(section.has("suspicionDecayDelayTicks")) number(section["suspicionDecayDelayTicks"],settings.senses.suspicionDecayDelayTicks,0,10000000,"senses.suspicionDecayDelayTicks");
+            if(section.has("alertRadiusMilli")) number(section["alertRadiusMilli"],settings.senses.alertRadiusMilli,0,100000000,"senses.alertRadiusMilli");
+            if(section.has("alertDelayTicks")) number(section["alertDelayTicks"],settings.senses.alertDelayTicks,1,1000000,"senses.alertDelayTicks");
+            if(section.has("alertReceivedMilli")) number(section["alertReceivedMilli"],settings.senses.alertReceivedMilli,0,1000000000,"senses.alertReceivedMilli");
+            if(section.has("alertMaxPending")) number(section["alertMaxPending"],settings.senses.alertMaxPending,0,65536,"senses.alertMaxPending");
+            if(section.has("alertRelay")) boolean(section["alertRelay"],settings.senses.alertRelay,"senses.alertRelay");
+            if(section.has("searchGiveUpTicks")) number(section["searchGiveUpTicks"],settings.senses.searchGiveUpTicks,1,10000000,"senses.searchGiveUpTicks");
+            if(section.has("searchPointRadiusMilli")) number(section["searchPointRadiusMilli"],settings.senses.searchPointRadiusMilli,1,1000000,"senses.searchPointRadiusMilli");
+            if(section.has("searchCandidateRadiusMilli")) number(section["searchCandidateRadiusMilli"],settings.senses.searchCandidateRadiusMilli,0,100000000,"senses.searchCandidateRadiusMilli");
+            if(section.has("searchMaxPoints")) number(section["searchMaxPoints"],settings.senses.searchMaxPoints,1,64,"senses.searchMaxPoints");
+            if(section.has("hideEnterRangeMilli")) number(section["hideEnterRangeMilli"],settings.senses.hideEnterRangeMilli,0,1000000,"senses.hideEnterRangeMilli");
+        }
+        if(settings.senses.sightNearMilli>settings.senses.sightRangeMilli)result.errors.push_back("senses.sightNearMilli: must not exceed sightRangeMilli");
+        if(settings.senses.sightHalfAngleMilli>settings.senses.peripheralHalfAngleMilli)result.errors.push_back("senses.sightHalfAngleMilli: must not exceed peripheralHalfAngleMilli");
+        if(settings.senses.sightFarStrengthMilli>settings.senses.sightNearStrengthMilli)result.errors.push_back("senses.sightFarStrengthMilli: must not exceed sightNearStrengthMilli");
+        if(settings.senses.suspiciousAtMilli>settings.senses.searchingAtMilli)result.errors.push_back("senses.suspiciousAtMilli: must not exceed searchingAtMilli");
+        if(settings.senses.searchingAtMilli>settings.senses.alertAtMilli)result.errors.push_back("senses.searchingAtMilli: must not exceed alertAtMilli");
+        if(settings.senses.alertAtMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertAtMilli: must not exceed suspicionMaxMilli");
+        if(settings.senses.alertReceivedMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertReceivedMilli: must not exceed suspicionMaxMilli");
+    }
+    if(root.has("narrative")) { const auto& section=root["narrative"];
+        if(!section.isObject()) result.errors.push_back("narrative: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="autoAdvanceTicks" && entry.first!="skipLinesPerTick" && entry.first!="backlogLimit" && entry.first!="barkCooldownTicks" && entry.first!="speakerCooldownTicks" && entry.first!="maxPendingConsequences" && entry.first!="maxBarkRequests" && entry.first!="meterMinimum" && entry.first!="meterInitial" && entry.first!="meterMaximum") result.errors.push_back("narrative."+entry.first+": unknown field");
+            if(section.has("autoAdvanceTicks")) number(section["autoAdvanceTicks"],settings.narrative.autoAdvanceTicks,1,10000000,"narrative.autoAdvanceTicks");
+            if(section.has("skipLinesPerTick")) number(section["skipLinesPerTick"],settings.narrative.skipLinesPerTick,1,64,"narrative.skipLinesPerTick");
+            if(section.has("backlogLimit")) number(section["backlogLimit"],settings.narrative.backlogLimit,1,10000,"narrative.backlogLimit");
+            if(section.has("barkCooldownTicks")) number(section["barkCooldownTicks"],settings.narrative.barkCooldownTicks,0,10000000,"narrative.barkCooldownTicks");
+            if(section.has("speakerCooldownTicks")) number(section["speakerCooldownTicks"],settings.narrative.speakerCooldownTicks,0,10000000,"narrative.speakerCooldownTicks");
+            if(section.has("maxPendingConsequences")) number(section["maxPendingConsequences"],settings.narrative.maxPendingConsequences,1,65536,"narrative.maxPendingConsequences");
+            if(section.has("maxBarkRequests")) number(section["maxBarkRequests"],settings.narrative.maxBarkRequests,1,4096,"narrative.maxBarkRequests");
+            if(section.has("meterMinimum")) number(section["meterMinimum"],settings.narrative.meterMinimum,-1000000000,0,"narrative.meterMinimum");
+            if(section.has("meterInitial")) number(section["meterInitial"],settings.narrative.meterInitial,-1000000000,1000000000,"narrative.meterInitial");
+            if(section.has("meterMaximum")) number(section["meterMaximum"],settings.narrative.meterMaximum,0,1000000000,"narrative.meterMaximum");
+        }
+        if(settings.narrative.meterMinimum>settings.narrative.meterInitial)result.errors.push_back("narrative.meterMinimum: must not exceed meterInitial");
+        if(settings.narrative.meterInitial>settings.narrative.meterMaximum)result.errors.push_back("narrative.meterInitial: must not exceed meterMaximum");
+    }
+    if(root.has("interaction")) { const auto& section=root["interaction"];
+        if(!section.isObject()) result.errors.push_back("interaction: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="gravityMilli" && entry.first!="skinMilli" && entry.first!="carryMaxMassMilli" && entry.first!="carryReachMilli" && entry.first!="carryHoldDistanceMilli" && entry.first!="carryHoldHeightMilli" && entry.first!="carryFollowSpeedMilli" && entry.first!="carryBreakDistanceMilli" && entry.first!="carrySpeedPenaltyMilli" && entry.first!="carryMinSpeedMilli" && entry.first!="throwMinImpulseMilli" && entry.first!="throwMaxImpulseMilli" && entry.first!="throwChargeTicks" && entry.first!="flightMaxTicks" && entry.first!="pushMaxSpeedMilli" && entry.first!="pushGridMoveTicks" && entry.first!="ropeIterations" && entry.first!="ropeDampingMilli") result.errors.push_back("interaction."+entry.first+": unknown field");
+            if(section.has("gravityMilli")) number(section["gravityMilli"],settings.interaction.gravityMilli,0,1000000,"interaction.gravityMilli");
+            if(section.has("skinMilli")) number(section["skinMilli"],settings.interaction.skinMilli,1,250,"interaction.skinMilli");
+            if(section.has("carryMaxMassMilli")) number(section["carryMaxMassMilli"],settings.interaction.carryMaxMassMilli,1,100000000,"interaction.carryMaxMassMilli");
+            if(section.has("carryReachMilli")) number(section["carryReachMilli"],settings.interaction.carryReachMilli,0,100000,"interaction.carryReachMilli");
+            if(section.has("carryHoldDistanceMilli")) number(section["carryHoldDistanceMilli"],settings.interaction.carryHoldDistanceMilli,0,100000,"interaction.carryHoldDistanceMilli");
+            if(section.has("carryHoldHeightMilli")) number(section["carryHoldHeightMilli"],settings.interaction.carryHoldHeightMilli,0,100000,"interaction.carryHoldHeightMilli");
+            if(section.has("carryFollowSpeedMilli")) number(section["carryFollowSpeedMilli"],settings.interaction.carryFollowSpeedMilli,1,1000000,"interaction.carryFollowSpeedMilli");
+            if(section.has("carryBreakDistanceMilli")) number(section["carryBreakDistanceMilli"],settings.interaction.carryBreakDistanceMilli,0,100000,"interaction.carryBreakDistanceMilli");
+            if(section.has("carrySpeedPenaltyMilli")) number(section["carrySpeedPenaltyMilli"],settings.interaction.carrySpeedPenaltyMilli,0,1000,"interaction.carrySpeedPenaltyMilli");
+            if(section.has("carryMinSpeedMilli")) number(section["carryMinSpeedMilli"],settings.interaction.carryMinSpeedMilli,0,1000,"interaction.carryMinSpeedMilli");
+            if(section.has("throwMinImpulseMilli")) number(section["throwMinImpulseMilli"],settings.interaction.throwMinImpulseMilli,0,10000000000,"interaction.throwMinImpulseMilli");
+            if(section.has("throwMaxImpulseMilli")) number(section["throwMaxImpulseMilli"],settings.interaction.throwMaxImpulseMilli,0,10000000000,"interaction.throwMaxImpulseMilli");
+            if(section.has("throwChargeTicks")) number(section["throwChargeTicks"],settings.interaction.throwChargeTicks,1,3600,"interaction.throwChargeTicks");
+            if(section.has("flightMaxTicks")) number(section["flightMaxTicks"],settings.interaction.flightMaxTicks,1,1000000,"interaction.flightMaxTicks");
+            if(section.has("pushMaxSpeedMilli")) number(section["pushMaxSpeedMilli"],settings.interaction.pushMaxSpeedMilli,1,100000,"interaction.pushMaxSpeedMilli");
+            if(section.has("pushGridMoveTicks")) number(section["pushGridMoveTicks"],settings.interaction.pushGridMoveTicks,1,3600,"interaction.pushGridMoveTicks");
+            if(section.has("ropeIterations")) number(section["ropeIterations"],settings.interaction.ropeIterations,1,64,"interaction.ropeIterations");
+            if(section.has("ropeDampingMilli")) number(section["ropeDampingMilli"],settings.interaction.ropeDampingMilli,0,1000,"interaction.ropeDampingMilli");
+        }
+        if(settings.interaction.throwMinImpulseMilli>settings.interaction.throwMaxImpulseMilli)result.errors.push_back("interaction.throwMinImpulseMilli: must not exceed throwMaxImpulseMilli");
+    }
+    if(root.has("cinematic")) { const auto& section=root["cinematic"];
+        if(!section.isObject()) result.errors.push_back("cinematic: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="hitStopTicks" && entry.first!="hitStopPriority" && entry.first!="slowMotionNumerator" && entry.first!="slowMotionDenominator" && entry.first!="slowMotionTicks" && entry.first!="slowMotionPriority" && entry.first!="qteWindowScaleMilli" && entry.first!="qteAccessibleWindowMilli" && entry.first!="qteMashScaleMilli" && entry.first!="qteHoldScaleMilli" && entry.first!="qteAutoSucceed") result.errors.push_back("cinematic."+entry.first+": unknown field");
+            if(section.has("hitStopTicks")) number(section["hitStopTicks"],settings.cinematic.hitStopTicks,1,600,"cinematic.hitStopTicks");
+            if(section.has("hitStopPriority")) number(section["hitStopPriority"],settings.cinematic.hitStopPriority,-1000000,1000000,"cinematic.hitStopPriority");
+            if(section.has("slowMotionNumerator")) number(section["slowMotionNumerator"],settings.cinematic.slowMotionNumerator,0,16,"cinematic.slowMotionNumerator");
+            if(section.has("slowMotionDenominator")) number(section["slowMotionDenominator"],settings.cinematic.slowMotionDenominator,1,16,"cinematic.slowMotionDenominator");
+            if(section.has("slowMotionTicks")) number(section["slowMotionTicks"],settings.cinematic.slowMotionTicks,0,1000000,"cinematic.slowMotionTicks");
+            if(section.has("slowMotionPriority")) number(section["slowMotionPriority"],settings.cinematic.slowMotionPriority,-1000000,1000000,"cinematic.slowMotionPriority");
+            if(section.has("qteWindowScaleMilli")) number(section["qteWindowScaleMilli"],settings.cinematic.qteWindowScaleMilli,100,10000,"cinematic.qteWindowScaleMilli");
+            if(section.has("qteAccessibleWindowMilli")) number(section["qteAccessibleWindowMilli"],settings.cinematic.qteAccessibleWindowMilli,1000,10000,"cinematic.qteAccessibleWindowMilli");
+            if(section.has("qteMashScaleMilli")) number(section["qteMashScaleMilli"],settings.cinematic.qteMashScaleMilli,100,10000,"cinematic.qteMashScaleMilli");
+            if(section.has("qteHoldScaleMilli")) number(section["qteHoldScaleMilli"],settings.cinematic.qteHoldScaleMilli,100,10000,"cinematic.qteHoldScaleMilli");
+            if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
+        }
+        if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

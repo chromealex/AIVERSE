@@ -1,6 +1,6 @@
 ---
 name: aiverse-character-locomotion
-description: Reuse AIVERSE fixed character movement policy with ground/air acceleration, jump buffer and coyote time when building native C++ games across genres.
+description: Reuse AIVERSE fixed character movement policy (ground/air acceleration, jump buffer, coyote time) and its mode machine for slopes, ledges, ladders, swimming, wall climbing and mantle/vault when building native C++ games across genres.
 ---
 
 # character-locomotion
@@ -16,3 +16,27 @@ description: Reuse AIVERSE fixed character movement policy with ground/air accel
 Build selection: `AIVERSE::lib_character_locomotion`; native OBJECT modules call
 `aiverse_native_use_libraries(target character-locomotion)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
+
+## Mode machine (slopes, ledges, ladders, swimming, climbing, mantle)
+
+Include `<aiverselib/genre/LocomotionModes.h>` (plus `genre/Persistence.h` for save/load). Use it
+instead of writing per-game ladder/ledge/swim/climb code; `stepMotion` remains the ground/air core.
+
+- Load `locomotionModeConfig(settings)` from the optional `locomotion.*` keys (milli-units, ticks;
+  see docs/gameplay-settings.md). Check `locomotionModeError(config)` for a readable message.
+- Every tick the collision owner fills `LocomotionInput::env`: grounded/ceiling + ground normal,
+  ledge (height above feet, normal), ladder (+ top/bottom flags, normal), water immersion depth,
+  climbable wall normal, obstacle height/depth/normal. Normals point toward the character.
+  The library never raycasts; missing reports mean "not present". Do not fabricate support.
+- Call `stepLocomotion(config,state,input,tick,dt)` once per authoritative tick with constant dt;
+  apply `result.velocity` through the owner's swept collision. React to `result.events`
+  (LocoLedgeGrab, LocoVaultStart, LocoWaterEnter, ...) for effects/animation in presentation.
+- Edges (`jumpPressed`, `grabPressed`, `dropPressed`) come from validated Commands. `vertical`
+  drives ladders/walls/ledges/swim depth. Grab attaches ladders/walls; jump near a reported
+  obstacle mantles/vaults; falling past a ledge auto-grabs unless `autoLedgeGrab` is false.
+- Stamina: built-in counter (`climbStamina`, drain/regen per tick) or the owner's pool via
+  `stepLocomotionWithStamina(..., spend)` where `spend(cost)` debits atomically.
+- Persist with `genre::save/load` (state kind 20), hash with `locomotionHash`, and bind
+  `locomotionConfigHash(config)` in the save envelope. Presentation IK climbing
+  (docs/surface-locomotion.md) only reads this state; it is not the gameplay authority.
+- Verify with `aiverse_library_genre_tests` (each mode trajectory, restore, rejection).

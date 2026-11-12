@@ -199,6 +199,7 @@ void Module::finishRound(Simulation& sim,int32_t team) {
 void Module::tickSystems(Simulation& sim) {
     auto& s=state(sim);auto now=sim.tick();const auto& c=config_.systems;
     for(auto it=s.projectiles.begin();it!=s.projectiles.end();) {
+        if(it->program.enabled){++it;continue;}
         bool remove=false;
         if(it->kind==0) {
             auto delta=it->velocity*sim.dt();auto length=delta.length();if(length>it->remaining&&length>Fixed{})delta=delta*(it->remaining/length);

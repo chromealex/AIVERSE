@@ -240,7 +240,7 @@
       "package": "character-locomotion",
       "path": "skills/aiverse-character-locomotion/SKILL.md",
       "domain": "gameplay",
-      "summary": "Fixed character movement policy with ground/air acceleration, jump buffer and coyote time",
+      "summary": "Fixed character movement policy: ground/air acceleration, jump buffer, coyote time, slopes, ledges, ladders, swimming, climbing and mantle/vault modes",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_character_locomotion",
@@ -251,6 +251,41 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/genre/Locomotion.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-cinematic-gameplay",
+      "package": "cinematic-gameplay",
+      "path": "skills/aiverse-cinematic-gameplay/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Authoritative scene flow: integer-ratio time-scale domains (world/player/ui/cinematic) with stacked priority requests, exact accumulators, hit-stop/slow-motion presets; scene timelines of dialogue/animation/camera/sound/event cues with play/pause/skip/seek; sync waits on host-reported line/marker/in-position facts with timeouts; QTE press/mash/hold/sequence judged on input ticks with difficulty and accessibility; interaction staging with marks, teleport fallback and input locks; checkpoint requests and resume at sync points; narrative cue triggers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_cinematic_gameplay",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Cinematic.h",
+      "keywords": [
+        "cinematic",
+        "cutscene",
+        "timeline",
+        "qte",
+        "slowmo",
+        "hitstop",
+        "timescale",
+        "sync",
+        "staging",
+        "checkpoint",
+        "катсцен",
+        "ролик",
+        "таймлайн",
+        "замедлен",
+        "синхрон",
+        "постановк",
+        "чекпоинт"
+      ]
     },
     {
       "id": "aiverse-collections",
@@ -266,6 +301,38 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Collections.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-combat-actions",
+      "package": "combat-actions",
+      "path": "skills/aiverse-combat-actions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Frame-keyed hitboxes/hurtboxes (sphere/capsule/box), dodge invulnerability, directional guard and perfect parry, poise/stagger and lock-on targeting composed over melee-combat",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_combat_actions",
+      "dependencies": [
+        "aiverse-melee-combat"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/CombatActions.h",
+      "keywords": [
+        "hitbox",
+        "hurtbox",
+        "dodge",
+        "parry",
+        "stagger",
+        "poise",
+        "lockon",
+        "хитбокс",
+        "уклон",
+        "парир",
+        "стаггер",
+        "захват"
+      ]
     },
     {
       "id": "aiverse-configuration",
@@ -392,6 +459,44 @@
       "requiresOwner": null,
       "source": "tools/libraries/gameplay.py",
       "keywords": []
+    },
+    {
+      "id": "aiverse-genre-bots",
+      "package": "genre-bots",
+      "path": "skills/aiverse-genre-bots/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic genre bot policies: melee spacing/attack timing/dodge-parry/lock-on, shooter aim/lead/burst/reload/overheat/cover, squad roles with formations and an objective choice hook",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_genre_bots",
+      "dependencies": [
+        "aiverse-combat-actions",
+        "aiverse-weapon-policies",
+        "aiverse-configuration",
+        "aiverse-stealth-senses"
+      ],
+      "backendDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/GenreBots.h",
+      "keywords": [
+        "bot",
+        "opponent",
+        "squad",
+        "role",
+        "formation",
+        "objective",
+        "melee",
+        "shooter",
+        "бот",
+        "противник",
+        "отряд",
+        "роль",
+        "формаци",
+        "цел"
+      ]
     },
     {
       "id": "aiverse-genre-kits",
@@ -601,12 +706,14 @@
       "package": "match-rules",
       "path": "skills/aiverse-match-rules/SKILL.md",
       "domain": "gameplay",
-      "summary": "Team score events, rounds, overtime, draws and contested capture policies",
+      "summary": "Team score events, rounds, overtime, draws and objective modes: capture/hold zones and king of the hill, payload, elimination with lives and respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock and spectator transitions",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_match_rules",
       "dependencies": [],
-      "backendDependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/genre/Match.h",
       "keywords": []
@@ -646,21 +753,35 @@
       "package": "narrative-graphs",
       "path": "skills/aiverse-narrative-graphs/SKILL.md",
       "domain": "gameplay",
-      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
+      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions; 0.2.0 social scenes: typed int/bool/enum facts with persistent world state, per-character affinity/trust/fear meters, per-character knowledge and reveals, AND/OR/NOT conditions, one-shot flags, chapter/act state, deferred consequences (N ticks or scenes later), speakers/participants, cinematic CueRequest events, prioritized ambient barks with cooldowns and visual-novel backlog/skip-read/auto-advance",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_narrative_graphs",
       "dependencies": [
         "aiverse-tag-conditions"
       ],
-      "backendDependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/genre/Narrative.h",
       "keywords": [
         "story",
         "narrative",
+        "dialogue",
+        "relationship",
+        "knowledge",
+        "bark",
+        "visual",
+        "novel",
+        "backlog",
+        "consequence",
         "сюжет",
-        "диалог"
+        "диалог",
+        "отношения",
+        "реплик",
+        "визуальная",
+        "новелла"
       ]
     },
     {
@@ -797,6 +918,56 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Performance.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-physical-interactions",
+      "package": "physical-interactions",
+      "path": "skills/aiverse-physical-interactions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic kinematic physical interactions: pick up/carry (hold point, mass limit, speed penalty, drop when blocked), charged throws with arc preview from the same integrator and swept landing, push/pull on a grid or free with friction/mass resistance and blocking, XPBD ropes/joints with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors with locks, keys, one-way rules, timing and auto-reverse, waypoint moving platforms with per-rider carry deltas, breakable objects with damage types, thresholds, stages and debris requests",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_physical_interactions",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/PhysicalInteractions.h",
+      "keywords": [
+        "carry",
+        "pickup",
+        "throw",
+        "push",
+        "pull",
+        "rope",
+        "joint",
+        "door",
+        "lock",
+        "key",
+        "platform",
+        "elevator",
+        "breakable",
+        "debris",
+        "destructible",
+        "переноск",
+        "подня",
+        "брос",
+        "толка",
+        "тянут",
+        "верев",
+        "канат",
+        "двер",
+        "замок",
+        "ключ",
+        "платформ",
+        "лифт",
+        "разруш",
+        "обломк"
+      ]
     },
     {
       "id": "aiverse-play-scenarios",
@@ -1088,6 +1259,43 @@
       "keywords": []
     },
     {
+      "id": "aiverse-stealth-senses",
+      "package": "stealth-senses",
+      "path": "skills/aiverse-stealth-senses/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Per-agent stealth perception: sight cones with near/peripheral ranges and owner multipliers, hearing with occlusion and noise budgets, footprint/scent trails, suspicion meters with Unaware/Suspicious/Searching/Alert thresholds, delayed ally alerts with shared last known positions, deterministic search points, disguises and hiding spots",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_stealth_senses",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Senses.h",
+      "keywords": [
+        "stealth",
+        "sight",
+        "hearing",
+        "noise",
+        "footprint",
+        "scent",
+        "suspicion",
+        "alert",
+        "disguise",
+        "hiding",
+        "стелс",
+        "зрение",
+        "слух",
+        "шум",
+        "след",
+        "подозрен",
+        "тревог",
+        "маскиров",
+        "укрыт"
+      ]
+    },
+    {
       "id": "aiverse-tag-conditions",
       "package": "tag-conditions",
       "path": "skills/aiverse-tag-conditions/SKILL.md",
@@ -1248,7 +1456,7 @@
       "package": "weapon-policies",
       "path": "skills/aiverse-weapon-policies/SKILL.md",
       "domain": "gameplay",
-      "summary": "Seeded spread, recoil recovery and swept projectiles with bounded ricochets",
+      "summary": "Seeded spread, recoil, swept projectiles with ricochets, material penetration, radial explosions, ammo feeds/overheat, charge tiers, attachment stacking and ballistic aim/lead solving",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_weapon_policies",

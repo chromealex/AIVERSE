@@ -441,6 +441,218 @@
           "default": 1,
           "minimum": 1,
           "maximum": 16
+        },
+        "maxSlopeMilliDegrees": {
+          "type": "integer",
+          "default": 45000,
+          "minimum": 0,
+          "maximum": 89000
+        },
+        "slideAccelerationMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "slideSpeedMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ledgeMinHeightMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ledgeMaxHeightMilli": {
+          "type": "integer",
+          "default": 2200,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ledgeShimmySpeedMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ledgeClimbDepthMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ledgeClimbTicks": {
+          "type": "integer",
+          "default": 24,
+          "minimum": 2,
+          "maximum": 3600
+        },
+        "ledgeRegrabTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "autoLedgeGrab": {
+          "type": "boolean",
+          "default": true
+        },
+        "ladderSpeedMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ladderExitRiseMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ladderExitDepthMilli": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ladderExitTicks": {
+          "type": "integer",
+          "default": 16,
+          "minimum": 2,
+          "maximum": 3600
+        },
+        "ladderJumpPushMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "swimExitDepthMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "swimEnterDepthMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "swimFloatDepthMilli": {
+          "type": "integer",
+          "default": 1400,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "swimDiveDepthMilli": {
+          "type": "integer",
+          "default": 1800,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "swimSpeedMilli": {
+          "type": "integer",
+          "default": 3500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "swimVerticalSpeedMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "swimAccelerationMilli": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "buoyancyMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "waterJumpSpeedMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "climbEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "climbSpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wallJumpPushMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "climbStamina": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "climbStaminaDrain": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "climbStaminaRegen": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "mantleMinHeightMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "vaultMaxHeightMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "mantleMaxHeightMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "vaultMinSpeedMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "vaultTicks": {
+          "type": "integer",
+          "default": 14,
+          "minimum": 2,
+          "maximum": 3600
+        },
+        "mantleTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 2,
+          "maximum": 3600
         }
       }
     },
@@ -471,6 +683,132 @@
           "default": 8,
           "minimum": 0,
           "maximum": 3600
+        }
+      }
+    },
+    "combat": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dodgeTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "dodgeInvulnFrom": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "dodgeInvulnTo": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "dodgeCooldown": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "blockHalfArcMilli": {
+          "type": "integer",
+          "default": 125,
+          "minimum": 0,
+          "maximum": 500
+        },
+        "parryTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "parryRearmTicks": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "poiseMilli": {
+          "type": "integer",
+          "default": 100000,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "poiseRecoveryMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "poiseDelayTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "blockPoiseMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "hitStunTicks": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "blockStunTicks": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "breakStunTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "parryStunTicks": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "lockRangeMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "lockBreakMilli": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "lockHalfAngleMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 1,
+          "maximum": 500
+        },
+        "lockDistanceWeight": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "lockAngleWeight": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
         }
       }
     },
@@ -507,6 +845,564 @@
           "default": 0,
           "minimum": 0,
           "maximum": 32
+        }
+      }
+    },
+    "penetration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "powerMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "maxLayers": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "minDamageMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "minSpeedMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "explosion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "innerRadiusMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "outerRadiusMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "damageMilli": {
+          "type": "integer",
+          "default": 100000,
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "edgeScaleMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "impulseMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "maxTargets": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 4096
+        }
+      }
+    },
+    "ammoFeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 3
+        },
+        "capacity": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ammoPerShot": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "intervalTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "reloadTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "emptyReloadTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "reloadStartTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "shellTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "spinupTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "heatPerShot": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "heatCapacity": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "coolPerTick": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "overheatTicks": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "recoverHeat": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "autoReload": {
+          "type": "boolean",
+          "default": true
+        },
+        "interruptible": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "charge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minTicks": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "maxTicks": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "autoReleaseTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "tiers": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 64
+        },
+        "fireBelowMin": {
+          "type": "boolean",
+          "default": false
+        },
+        "minScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maxScaleMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "aimSolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxIterations": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "toleranceMilli": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "preferHigh": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "genreBots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reactionTicks": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "decisionTicks": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "aimErrorMicro": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 125000
+        },
+        "misreadMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "meleeMinRangeMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "meleeMaxRangeMilli": {
+          "type": "integer",
+          "default": 2200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "meleeAttackRangeMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "meleeOpener": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "meleeStrafeTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "dodgeMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "useDodge": {
+          "type": "boolean",
+          "default": true
+        },
+        "useGuard": {
+          "type": "boolean",
+          "default": true
+        },
+        "useLockOn": {
+          "type": "boolean",
+          "default": true
+        },
+        "useCombos": {
+          "type": "boolean",
+          "default": true
+        },
+        "respectGuard": {
+          "type": "boolean",
+          "default": true
+        },
+        "shooterMinRangeMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "shooterPreferredRangeMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "shooterMaxRangeMilli": {
+          "type": "integer",
+          "default": 40000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "projectileSpeedMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "projectileGravityMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "turnPerTickMicro": {
+          "type": "integer",
+          "default": 15625,
+          "minimum": 1,
+          "maximum": 500000
+        },
+        "fireToleranceMicro": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 125000
+        },
+        "recoilToleranceMicro": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 0,
+          "maximum": 250000
+        },
+        "recoilCompensationMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "reloadIdleMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "heatResumeMilli": {
+          "type": "integer",
+          "default": 400,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "heatStopMilli": {
+          "type": "integer",
+          "default": 900,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "retreatHealthMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "coverDistanceWeight": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "shooterStrafeTicks": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "squadIntervalTicks": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 36000
+        },
+        "offenseAttackerMilli": {
+          "type": "integer",
+          "default": 450,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "offenseDefenderMilli": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "offenseSupportMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "offenseFlankerMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseAttackerMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseDefenderMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseSupportMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseFlankerMilli": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "formationSpacingMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "supportDistanceMilli": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "flankDistanceMilli": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "defendRadiusMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "attackShape": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 3
+        },
+        "objectiveValueWeight": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveDistanceWeight": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "objectiveNeutralWeight": {
+          "type": "integer",
+          "default": 200,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveEnemyWeight": {
+          "type": "integer",
+          "default": 300,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveProgressWeight": {
+          "type": "integer",
+          "default": 300,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveContestedWeight": {
+          "type": "integer",
+          "default": 300,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveThreatenedWeight": {
+          "type": "integer",
+          "default": 400,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveIdleWeight": {
+          "type": "integer",
+          "default": -500,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveEscortWeight": {
+          "type": "integer",
+          "default": 200,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveStickiness": {
+          "type": "integer",
+          "default": 150,
+          "minimum": -1000000,
+          "maximum": 1000000
         }
       }
     },
@@ -555,6 +1451,704 @@
           "default": 10,
           "minimum": 1,
           "maximum": 1000000000
+        }
+      }
+    },
+    "objectives": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zoneCaptureTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "zoneDecayPerTick": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "zoneContestRule": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1
+        },
+        "zoneMaxCapturers": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "zoneNeutralizeFirst": {
+          "type": "boolean",
+          "default": false
+        },
+        "holdScoreInterval": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "holdRequiresPresence": {
+          "type": "boolean",
+          "default": true
+        },
+        "hillRotateTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "hillCount": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "payloadPushSpeedMilli": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "payloadExtraPusherMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "payloadReverseSpeedMilli": {
+          "type": "integer",
+          "default": 25,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "payloadMaxPushers": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "payloadReverseDelayTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "payloadCheckpointBonusTicks": {
+          "type": "integer",
+          "default": 1800,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "payloadContestBlocks": {
+          "type": "boolean",
+          "default": true
+        },
+        "payloadCheckpointLock": {
+          "type": "boolean",
+          "default": true
+        },
+        "eliminationLives": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "respawnDelayTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "respawnWaveTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "wipeEliminates": {
+          "type": "boolean",
+          "default": false
+        },
+        "extractionHoldTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "extractionRequiredItems": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "extractionOpensAtTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "extractionContestBlocks": {
+          "type": "boolean",
+          "default": true
+        },
+        "extractionResetOnLeave": {
+          "type": "boolean",
+          "default": true
+        },
+        "bombPlantTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombDefuseTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombKitDefuseTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombFuseTicks": {
+          "type": "integer",
+          "default": 2400,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombPlantResets": {
+          "type": "boolean",
+          "default": true
+        },
+        "bombDefuseResets": {
+          "type": "boolean",
+          "default": true
+        },
+        "overtimeEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "overtimeGraceTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "overtimeMaxTicks": {
+          "type": "integer",
+          "default": 1800,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "clockMaxTicks": {
+          "type": "integer",
+          "default": 100000000,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "spectatorKillCamTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "spectatorFollowKiller": {
+          "type": "boolean",
+          "default": true
+        },
+        "spectatorAllowEnemies": {
+          "type": "boolean",
+          "default": false
+        },
+        "routeLaps": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 1000
+        }
+      }
+    },
+    "senses": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sightNearMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "sightRangeMilli": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "sightHalfAngleMilli": {
+          "type": "integer",
+          "default": 125,
+          "minimum": 0,
+          "maximum": 500
+        },
+        "peripheralRangeMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "peripheralHalfAngleMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 500
+        },
+        "sightNearStrengthMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "sightFarStrengthMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "peripheralStrengthMilli": {
+          "type": "integer",
+          "default": 400,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "sightMinStrengthMilli": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "sightQueryBudget": {
+          "type": "integer",
+          "default": 4096,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "hearingThresholdMilli": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "noiseBudget": {
+          "type": "integer",
+          "default": 32,
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "occlusionBudget": {
+          "type": "integer",
+          "default": 256,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "noiseMaxRadiusMilli": {
+          "type": "integer",
+          "default": 200000,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "trailLifetimeTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "trailRangeMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "trailMaxMarkers": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "trailMinStrengthMilli": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "suspicionMaxMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 3,
+          "maximum": 1000000000
+        },
+        "suspiciousAtMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "searchingAtMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 2,
+          "maximum": 1000000000
+        },
+        "alertAtMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 3,
+          "maximum": 1000000000
+        },
+        "sightGainMilli": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "hearingGainMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "trailGainMilli": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "suspicionDecayMilli": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "suspicionDecayDelayTicks": {
+          "type": "integer",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "alertRadiusMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "alertDelayTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "alertReceivedMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "alertMaxPending": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "alertRelay": {
+          "type": "boolean",
+          "default": false
+        },
+        "searchGiveUpTicks": {
+          "type": "integer",
+          "default": 900,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "searchPointRadiusMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "searchCandidateRadiusMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "searchMaxPoints": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "hideEnterRangeMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "narrative": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "autoAdvanceTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "skipLinesPerTick": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "backlogLimit": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "barkCooldownTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "speakerCooldownTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "maxPendingConsequences": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "maxBarkRequests": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "meterMinimum": {
+          "type": "integer",
+          "default": -100,
+          "minimum": -1000000000,
+          "maximum": 0
+        },
+        "meterInitial": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        },
+        "meterMaximum": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gravityMilli": {
+          "type": "integer",
+          "default": 9810,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "skinMilli": {
+          "type": "integer",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 250
+        },
+        "carryMaxMassMilli": {
+          "type": "integer",
+          "default": 30000,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "carryReachMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carryHoldDistanceMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carryHoldHeightMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carryFollowSpeedMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "carryBreakDistanceMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carrySpeedPenaltyMilli": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "carryMinSpeedMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "throwMinImpulseMilli": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 0,
+          "maximum": 10000000000
+        },
+        "throwMaxImpulseMilli": {
+          "type": "integer",
+          "default": 120000,
+          "minimum": 0,
+          "maximum": 10000000000
+        },
+        "throwChargeTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "flightMaxTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "pushMaxSpeedMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "pushGridMoveTicks": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "ropeIterations": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "ropeDampingMilli": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
+    "cinematic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hitStopTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 600
+        },
+        "hitStopPriority": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "slowMotionNumerator": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 16
+        },
+        "slowMotionDenominator": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 16
+        },
+        "slowMotionTicks": {
+          "type": "integer",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "slowMotionPriority": {
+          "type": "integer",
+          "default": 500,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "qteWindowScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteAccessibleWindowMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1000,
+          "maximum": 10000
+        },
+        "qteMashScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteHoldScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteAutoSucceed": {
+          "type": "boolean",
+          "default": false
         }
       }
     }

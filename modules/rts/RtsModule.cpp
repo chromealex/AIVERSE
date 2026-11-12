@@ -1443,6 +1443,31 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (mechOn(sim)) hashMechGlobal(sim, h);
     h.u32(uint32_t(w.count<Projectile>()));
     w.each<Projectile, Transform>([&](Entity e, Projectile&, Transform& t) { h.u64(e.packed()); h.v3(t.pos); });
+    w.each<Projectile>([&](Entity e, Projectile& p) {
+        if (!p.program.enabled) return; // Legacy games retain their checksum stream.
+        const auto& s = p.program;
+        if (const auto* f = projectileFlight(p)) {
+            h.u32(f->enabled); h.u32(f->homing); h.u32(f->blockTerrain); h.fx(f->radius);
+            h.fx(f->maxDistance); h.fx(f->lifetime); h.u32(f->splitBudget); h.u32(uint32_t(f->modifiers.size()));
+            if(f->gravity.raw||f->verticalSpeed.raw){h.fx(f->gravity);h.fx(f->verticalSpeed);}
+            for (const auto& m : f->modifiers) {
+                h.u32(uint32_t(m.kind)); h.fx(m.factor); h.fx(m.radius); h.fx(m.angle); h.fx(m.after); h.u32(m.count); h.u32(m.timed);
+            }
+        }
+        if(p.effList>=0) {
+            const auto& d=rules_.payloads[size_t(p.effList)][size_t(p.effIndex)].delivery;
+            if(d.arc){h.u32(d.arc);h.fx(d.arcHeight);}
+        }
+        h.u64(e.packed()); h.u64(p.source.packed()); h.u64(p.target.packed()); h.v3(p.aim);
+        h.fx(p.speed); h.fx(p.damage); h.fx(p.splash); h.u32(p.damageType); h.u32(p.owner); h.u32(p.layers);
+        h.i32(p.effList); h.i32(p.effIndex); h.i32(p.onHit); h.fx(p.onHitChance); h.u32(p.sourceType);
+        h.v3(p.start); h.fx(p.travel); h.fx(p.total); h.fx(p.scale); h.i32(p.weapon);
+        if(s.ballistic||s.gravity.raw||s.verticalSpeed.raw){h.fx(s.gravity);h.fx(s.verticalSpeed);h.u32(s.ballistic);}
+        h.u32(s.enabled); h.v3(s.direction); h.fx(s.distanceLeft); h.fx(s.lifetimeLeft); h.fx(s.age);
+        h.fx(s.radius); h.fx(s.damageScale); h.u32(s.cursor); h.u32(s.consumed); h.u32(s.splitBudget);
+        h.u32(uint32_t(s.remaining.size())); for (auto n : s.remaining) h.u32(n);
+        h.u32(uint32_t(s.hit.size())); for (auto hit : s.hit) h.u64(hit.packed());
+    });
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
 }
 

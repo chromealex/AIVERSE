@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.1",
+      "version": "0.3.4",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -901,13 +901,13 @@
     },
     {
       "id": "object-interactions",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/systems/Interactions.h",
       "skill": "skills/aiverse-object-interactions/SKILL.md",
       "summary": "Stable action previews plus native built-in interaction commands",
-      "notes": "Use interactions for sorted preview options and disabled reasons. Build actual Smart/PickItem/UseItem/Load/ToggleLock Commands with EngineMechanics.interactionCommand, then submit through Simulation. For ToggleLock actor is the selected gate; PickItem uses point. Custom actions use generated native commands and revalidate at execution.",
+      "notes": "Use interactions for sorted preview options and disabled reasons. Build actual Smart/PickItem/UseItem/Load/ToggleLock Commands with EngineMechanics.interactionCommand, then submit through Simulation. For ToggleLock actor is the selected gate; PickItem uses point. Custom actions use generated native commands and revalidate at execution. Physical carry/throw/push/ropes/doors/platforms/breakables are the separate physical-interactions package; previews here must not authorize those mutations.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_object_interactions",
       "dependencies": [
@@ -1121,16 +1121,17 @@
     },
     {
       "id": "character-locomotion",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/genre/Locomotion.h",
       "skill": "skills/aiverse-character-locomotion/SKILL.md",
-      "summary": "Fixed character movement policy with ground/air acceleration, jump buffer and coyote time",
-      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Fixed character movement policy: ground/air acceleration, jump buffer, coyote time, slopes, ledges, ladders, swimming, climbing and mantle/vault modes",
+      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. 0.2.0 adds LocomotionModes.h: a Ground/Air/Ledge/Ladder/Swim/Climb/Mantle state machine driven by owner-reported environment queries (no physics inside), optional locomotion.* settings, versioned/hashable LocomotionState; stepMotion is unchanged. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_character_locomotion",
       "dependencies": [
+        "libraries/include/aiverselib/genre/LocomotionModes.h",
         "libraries/include/aiverselib/genre/Configured.h",
         "libraries/include/aiverselib/genre/Persistence.h",
         "libraries/include/aiverselib/genre/Data.h",
@@ -1164,20 +1165,108 @@
       "packageDependencies": []
     },
     {
+      "id": "combat-actions",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/CombatActions.h",
+      "skill": "skills/aiverse-combat-actions/SKILL.md",
+      "summary": "Frame-keyed hitboxes/hurtboxes (sphere/capsule/box), dodge invulnerability, directional guard and perfect parry, poise/stagger and lock-on targeting composed over melee-combat",
+      "notes": "Read docs/genre-packages.md (combat-actions) for exact coverage and authority boundaries. Produces contacts and outcomes only: damage, stamina, health and statuses stay with the existing combat owner. Fixed math and integer ticks; repeated/backwards ticks are rejected. Persist CombatActorState via genre::save/load (record kinds 32..36) and hash it with combatHash.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_combat_actions",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/CombatConfigured.h",
+        "libraries/include/aiverselib/genre/CombatData.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "melee-combat"
+      ]
+    },
+    {
+      "id": "stealth-senses",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Senses.h",
+      "skill": "skills/aiverse-stealth-senses/SKILL.md",
+      "summary": "Per-agent stealth perception: sight cones with near/peripheral ranges and owner multipliers, hearing with occlusion and noise budgets, footprint/scent trails, suspicion meters with Unaware/Suspicious/Searching/Alert thresholds, delayed ally alerts with shared last known positions, deterministic search points, disguises and hiding spots",
+      "notes": "Read docs/genre-packages.md (stealth-senses) for exact coverage and authority boundaries. Generic per-agent policy, not RTS fog of war (modules/rts vision stays authoritative there). The owner supplies poses, light/cover/stance/visibility multipliers, LOS and occlusion callbacks (called in observer-id then target/noise order under per-tick budgets) and search candidates; outputs are PerceivedTarget records and SenseEvents, never movement. Fixed math, integer ticks, repeated/backwards ticks rejected. Persist SensesState via genre::save/load (record kinds 48..55 reserved, 48..52 used) and hash with sensesHash; bind sensesConfigHash. Optional `senses` settings section.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_stealth_senses",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/SensesConfigured.h",
+        "libraries/include/aiverselib/genre/SensesData.h",
+        "libraries/include/aiverselib/genre/SensesPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/senses.json",
+        "examples/libraries/genre/senses-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "cinematic-gameplay",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Cinematic.h",
+      "skill": "skills/aiverse-cinematic-gameplay/SKILL.md",
+      "summary": "Authoritative scene flow: integer-ratio time-scale domains (world/player/ui/cinematic) with stacked priority requests, exact accumulators, hit-stop/slow-motion presets; scene timelines of dialogue/animation/camera/sound/event cues with play/pause/skip/seek; sync waits on host-reported line/marker/in-position facts with timeouts; QTE press/mash/hold/sequence judged on input ticks with difficulty and accessibility; interaction staging with marks, teleport fallback and input locks; checkpoint requests and resume at sync points; narrative cue triggers",
+      "notes": "Read docs/genre-packages.md (cinematic-gameplay) for the determinism model. Authoritative: time-scale requests/accumulators, timeline position, cue emission (essential cues once per run, presentation cues once per pass), wait/QTE outcomes, staging and input locks. Host: audio/animation/camera playback and navigation, reported back as tick-stamped SceneInput; every wait and staging move has a timeout so devices cannot stall the sim. stepTime/stepScene once per strictly increasing tick; invalid input returns nullopt with state untouched. Narrative CueRequest{cueId} bridges through cueTrigger/sceneForCue. Persist TimeState/SceneState via genre::save/load (record kinds 72..79 reserved, 72..75 used); hash with cinematicHash and bind sceneLibraryHash. Optional `cinematic` settings section. No rendering, audio, animation playback or cutscene editor. genre/NarrativeCinematicBridge.h (queueNarrativeCues/releaseNarrativeCues) schedules narrative-graphs CueRequest records (tick + delayTicks, deduped by sequence) into TriggerCue scene commands; its NarrativeCueQueue is record kind 76.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_cinematic_gameplay",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/NarrativeCinematicBridge.h",
+        "libraries/include/aiverselib/genre/CinematicTime.h",
+        "libraries/include/aiverselib/genre/CinematicQte.h",
+        "libraries/include/aiverselib/genre/CinematicScene.h",
+        "libraries/include/aiverselib/genre/CinematicRunner.h",
+        "libraries/include/aiverselib/genre/CinematicConfigured.h",
+        "libraries/include/aiverselib/genre/CinematicData.h",
+        "libraries/include/aiverselib/genre/CinematicPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/scene.json",
+        "examples/libraries/genre/cinematic-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
       "id": "weapon-policies",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/genre/Weapons.h",
       "skill": "skills/aiverse-weapon-policies/SKILL.md",
-      "summary": "Seeded spread, recoil recovery and swept projectiles with bounded ricochets",
-      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Seeded spread, recoil, swept projectiles with ricochets, material penetration, radial explosions, ammo feeds/overheat, charge tiers, attachment stacking and ballistic aim/lead solving",
+      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage. 0.2.0 adds genre/Ballistics.h (penetration, explosions, launch/intercept solver), genre/WeaponMods.h (ammo feeds, charge modes, attachments), genre/WeaponData.h (settings adapters and weapons JSON) and genre/WeaponPersistence.h (save/load kinds 16-18 and hashing); Weapons.h API is unchanged. Built-in FPS ammo/reload stays authoritative.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_weapon_policies",
       "dependencies": [
         "libraries/include/aiverselib/genre/Configured.h",
         "libraries/include/aiverselib/genre/Persistence.h",
         "libraries/include/aiverselib/genre/Data.h",
+        "libraries/include/aiverselib/genre/Ballistics.h",
+        "libraries/include/aiverselib/genre/WeaponMods.h",
+        "libraries/include/aiverselib/genre/WeaponData.h",
+        "libraries/include/aiverselib/genre/WeaponPersistence.h",
+        "examples/libraries/genre/weapons.json",
+        "examples/libraries/genre/weapon-settings.json",
         "docs/genre-packages.md"
       ],
       "runtime": "header",
@@ -1187,45 +1276,97 @@
       "packageDependencies": []
     },
     {
+      "id": "genre-bots",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/bots/GenreBots.h",
+      "skill": "skills/aiverse-genre-bots/SKILL.md",
+      "summary": "Deterministic genre bot policies: melee spacing/attack timing/dodge-parry/lock-on, shooter aim/lead/burst/reload/overheat/cover, squad roles with formations and an objective choice hook",
+      "notes": "Read docs/genre-packages.md (genre-bots) for exact coverage. Bots return player-equivalent inputs (MeleeInput, ShooterInput, role orders, objective choice) for the owner's ordinary command path and never write state. Perception is owner-supplied and must be visibility-authorized. Owner RNG only; repeated/backwards ticks rejected. Persist MeleeBotState/ShooterBotState/SquadState via genre::save/load (record kinds 56-58, 59-63 reserved) and hash them with genreBotHash. bots/SensesPerception.h (perceivedFromSenses) turns stealth-senses PerceivedTarget records into bot input: visible+Alert targets are engageable with owner facts, Searching targets are remembered at lastKnown.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_genre_bots",
+      "dependencies": [
+        "libraries/include/aiverselib/bots/GenreCommon.h",
+        "libraries/include/aiverselib/bots/MeleeBot.h",
+        "libraries/include/aiverselib/bots/ShooterBot.h",
+        "libraries/include/aiverselib/bots/SquadRoles.h",
+        "libraries/include/aiverselib/bots/ObjectivePolicy.h",
+        "libraries/include/aiverselib/bots/GenreBotPersistence.h",
+        "libraries/include/aiverselib/bots/GenreBotConfig.h",
+        "libraries/include/aiverselib/bots/SensesPerception.h",
+        "examples/libraries/genre/bot-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "packageDependencies": [
+        "combat-actions",
+        "weapon-policies",
+        "configuration",
+        "stealth-senses"
+      ]
+    },
+    {
       "id": "match-rules",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/genre/Match.h",
       "skill": "skills/aiverse-match-rules/SKILL.md",
-      "summary": "Team score events, rounds, overtime, draws and contested capture policies",
-      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Team score events, rounds, overtime, draws and objective modes: capture/hold zones and king of the hill, payload, elimination with lives and respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock and spectator transitions",
+      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage. 0.2.0 adds genre/MatchObjectives.h (objective policies returning ObjectiveEvents, awardObjectiveEvents/awardObjectiveWin through awardScore, save/load kinds 40-47 and hashObjective), genre/MatchObjectivesConfigured.h (objectives settings adapters and cross-field errors) and genre/MatchObjectivesData.h (zones/payload path/route gates JSON); Match.h API is unchanged. Presence, deaths, pickups and gate crossings come from the authoritative owner; built-in victory modes stay with their modules.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_match_rules",
       "dependencies": [
         "libraries/include/aiverselib/genre/Configured.h",
         "libraries/include/aiverselib/genre/Persistence.h",
         "libraries/include/aiverselib/genre/Data.h",
-        "docs/genre-packages.md"
+        "docs/genre-packages.md",
+        "libraries/include/aiverselib/genre/MatchObjectives.h",
+        "libraries/include/aiverselib/genre/MatchObjectivesConfigured.h",
+        "libraries/include/aiverselib/genre/MatchObjectivesData.h",
+        "examples/libraries/genre/objectives.json",
+        "examples/libraries/genre/objective-settings.json"
       ],
       "runtime": "header",
-      "linkDependencies": [],
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
       "packageDependencies": []
     },
     {
       "id": "narrative-graphs",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/genre/Narrative.h",
       "skill": "skills/aiverse-narrative-graphs/SKILL.md",
-      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
-      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions; 0.2.0 social scenes: typed int/bool/enum facts with persistent world state, per-character affinity/trust/fear meters, per-character knowledge and reveals, AND/OR/NOT conditions, one-shot flags, chapter/act state, deferred consequences (N ticks or scenes later), speakers/participants, cinematic CueRequest events, prioritized ambient barks with cooldowns and visual-novel backlog/skip-read/auto-advance",
+      "notes": "Read docs/genre-packages.md (Narrative scenes) for exact coverage and authority boundaries. Legacy Story/readStory/StoryState (record kind 7) are unchanged; readNarrativeWorld also loads the legacy story JSON. NarrativeScenes.h runs one stepNarrative per authoritative tick (strictly increasing ticks, commands deduplicated by increasing ID, invalid commands rejected atomically) and returns events, CueRequest records (NarrativeCues.h, consumed by a cinematic/UI owner; no playback here) and bark lines. Strict JSON validation with path-qualified errors (NarrativeSceneData.h). Persist NarrativeState via genre::save/load (record kinds 64..71 reserved, 64..65 used), check narrativeStateError after load and bind narrativeWorldHash/narrativeConfigHash. Optional `narrative` settings section (NarrativeConfigured.h). Text is localization keys only; rewards go through their transactional owner.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_narrative_graphs",
       "dependencies": [
         "libraries/include/aiverselib/genre/Configured.h",
         "libraries/include/aiverselib/genre/Persistence.h",
         "libraries/include/aiverselib/genre/Data.h",
+        "libraries/include/aiverselib/genre/NarrativeCues.h",
+        "libraries/include/aiverselib/genre/NarrativeScenes.h",
+        "libraries/include/aiverselib/genre/NarrativeSceneData.h",
+        "libraries/include/aiverselib/genre/NarrativeScenePersistence.h",
+        "libraries/include/aiverselib/genre/NarrativeConfigured.h",
+        "examples/libraries/genre/story.json",
+        "examples/libraries/genre/story-social.json",
+        "examples/libraries/genre/narrative-settings.json",
         "docs/genre-packages.md"
       ],
       "runtime": "header",
-      "linkDependencies": [],
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
       "packageDependencies": [
         "tag-conditions"
       ]
@@ -1476,6 +1617,43 @@
         "aiverse_net"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "physical-interactions",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/PhysicalInteractions.h",
+      "skill": "skills/aiverse-physical-interactions/SKILL.md",
+      "summary": "Deterministic kinematic physical interactions: pick up/carry (hold point, mass limit, speed penalty, drop when blocked), charged throws with arc preview from the same integrator and swept landing, push/pull on a grid or free with friction/mass resistance and blocking, XPBD ropes/joints with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors with locks, keys, one-way rules, timing and auto-reverse, waypoint moving platforms with per-rider carry deltas, breakable objects with damage types, thresholds, stages and debris requests",
+      "notes": "Read docs/genre-packages.md (physical-interactions) for exact coverage, the determinism/network model and authority boundaries. These Fixed/integer-tick policies are the authoritative state; collision comes from the owner (WorldCollision adapts engine/world SpatialWorld). Box3D (engine/physics) is presentation-only here: it may simulate debris from DebrisRequest but is never read back. Outputs are state + InteractionEvents/requests; no rendering. Repeated/backwards ticks and invalid input return nullopt with state untouched. Platform carry deltas feed the rider position before LocomotionModes runs. Persist CarryState/PushState/RopeState/DoorState/PlatformState/BreakableState via genre::save/load (record kinds 80..87 reserved, 80..85 used), hash with interactionHash, bind interactionConfigHash and interactionDefinitionsHash. Optional `interaction` settings section. Separate from object-interactions (action preview menus and built-in engine interaction commands).",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_physical_interactions",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/PhysicalCommon.h",
+        "libraries/include/aiverselib/genre/InteractionConfig.h",
+        "libraries/include/aiverselib/genre/Carry.h",
+        "libraries/include/aiverselib/genre/Push.h",
+        "libraries/include/aiverselib/genre/Ropes.h",
+        "libraries/include/aiverselib/genre/Doors.h",
+        "libraries/include/aiverselib/genre/Platforms.h",
+        "libraries/include/aiverselib/genre/Breakables.h",
+        "libraries/include/aiverselib/genre/InteractionConfigured.h",
+        "libraries/include/aiverselib/genre/InteractionData.h",
+        "libraries/include/aiverselib/genre/InteractionPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/interactables.json",
+        "examples/libraries/genre/interaction-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "packageDependencies": [
+        "configuration"
+      ]
     }
   ]
 }

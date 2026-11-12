@@ -147,7 +147,8 @@ void Simulation::loadState(const SimSnapshot& in) {
 // ---------------------------------------------------------------- save states
 namespace {
 constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
-constexpr uint32_t kSaveVersion = 4;   // 2: agent-mech MechShield / Abandoned pools merged into Shield / crews; 3: MapGrid wall + airSolid; 4: hero skills, heroes made / dead, resurfacing
+// Version 5 adds projectile programs/weapon identity; version 4 remains readable.
+constexpr uint32_t kSaveVersion = 6;
 } // namespace
 void io(Archive& a, Command& c) { a(c.tick, c.player, c.flags, c.type, c.seq, c.units, c.target, c.point, c.param, c.args); }   // found by ADL
 void io(Archive& a, PlayerInfo& p) { a(p.slot, p.name, p.team, p.alive); }
@@ -173,7 +174,8 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
     uint64_t seed = 0, st = 0, inc = 0;
     a(magic, version, seed, rate);
     if (!a.ok() || magic != kSaveMagic) return fail("not a save state");
-    if (version != kSaveVersion) return fail("save state version " + std::to_string(version) + ", this build reads " + std::to_string(kSaveVersion));
+    if (version != 4 && version != 5 && version != kSaveVersion) return fail("save state version " + std::to_string(version) + ", this build reads versions 4, 5 and " + std::to_string(kSaveVersion));
+    a.formatVersion = version;
     if (rate != tickRate_) return fail("tick rate differs");
     std::vector<PlayerInfo> players;
     std::map<uint32_t, std::vector<Command>> pending;
