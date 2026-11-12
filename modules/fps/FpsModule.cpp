@@ -18,12 +18,13 @@ Vec3 vector(const Json& j) {
     Vec3 v;Fixed* p[]={&v.x,&v.y,&v.z};
     for(int i=0;i<3;++i){if(!j[size_t(i)].isNumber())throw JsonError("fps: non-numeric coordinate");*p[i]=j[size_t(i)].fx();if(fxAbs(*p[i])>100000_fx)throw JsonError("fps: coordinate exceeds 100 km");}return v;
 }
-void stateIo(Archive& a,State& s) {
+void stateIo(Archive& a,State& s,bool programs=false) {
     a(s.round,s.winner,s.actors,s.nextObject,s.projectiles,s.loot,s.vehicles,s.match);
     uint32_t n=a.count(s.history.size());
     if(n>121){a.fail();return;}
     if(!a.writing())s.history.resize(n);
     for(auto& frame:s.history)a(frame.tick,frame.actors);
+    if(programs)for(auto& p:s.projectiles)a(p.program,p.programSpeed,p.programTarget);
 }
 }
 Config readConfig(const Json& root) {
@@ -66,6 +67,11 @@ Config readConfig(const Json& root) {
         v.recoil=number(w,"recoil",Fixed{},Fixed{},Fixed::fromRatio(1,50));
         v.bulletSpeed=number(w,"bulletSpeed",Fixed{},Fixed{},2000_fx);
         v.bulletGravity=number(w,"bulletGravity",10_fx,Fixed{},100_fx);
+        if(w.has("flight")){
+            v.flight=projectile::parseProjectileFlight(w["flight"],"fps.weapon.flight");
+            if(v.bulletSpeed<=Fixed{})throw JsonError("fps.weapon.flight requires bulletSpeed > 0");
+            if(!w["flight"].has("gravity"))v.flight.gravity=v.bulletGravity;
+        }
         v.penetration=number(w,"penetration",Fixed{},Fixed{},10_fx);
         v.headMultiplier=number(w,"headMultiplier",2_fx,1_fx,5_fx);
         v.limbMultiplier=number(w,"limbMultiplier",Fixed::fromRatio(3,4),Fixed::fromRatio(1,10),1_fx);
@@ -171,8 +177,17 @@ void Module::shoot(Simulation& sim,Actor& p) {
             yaw+=(sim.rng().unit()*2-1_fx)*spread;pitch+=(sim.rng().unit()*2-1_fx)*spread+p.recoil;
         }else if(weapon.pellets>1) {yaw+=weapon.spread*int32_t(int(pellet%3)-1);pitch+=weapon.spread*int32_t(int(pellet/3)-1);}
         pitch=fxClamp(pitch,-Fixed::fromRatio(24,100),Fixed::fromRatio(24,100));
-        if(config_.systems.enabled&&weapon.bulletSpeed>Fixed{}) {
-            if(s.projectiles.size()<256)s.projectiles.push_back({s.nextObject++,sim.tick()+config_.tickRate*20,p.slot,0,eye,direction(yaw,pitch)*weapon.bulletSpeed,weapon.damage,weapon.range,p.weaponIndex,weapon.penetration});
+        if((config_.systems.enabled||weapon.flight.enabled)&&weapon.bulletSpeed>Fixed{}) {
+            if(s.projectiles.size()<256){
+                Projectile shot{ s.nextObject++,sim.tick()+config_.tickRate*20,p.slot,0,eye,direction(yaw,pitch)*weapon.bulletSpeed,weapon.damage,weapon.range,p.weaponIndex,weapon.penetration };
+                if(weapon.flight.enabled){
+                    shot.programSpeed=weapon.bulletSpeed;
+                    projectile::initialize(shot.program,shot.programSpeed,weapon.flight,direction(yaw,pitch));
+                    shot.program.distanceLeft=fxMin(shot.program.distanceLeft,weapon.range);
+                    shot.velocity=shot.program.direction*shot.programSpeed+Vec3{{},shot.program.verticalSpeed,{}};
+                }
+                s.projectiles.push_back(std::move(shot));
+            }
         }else traceShot(sim,p.slot,eye,direction(yaw,pitch)*weapon.range,weapon.damage,weapon,*targets);
     }
     if(config_.systems.enabled)p.recoil=fxMin(Fixed::fromRatio(1,20),p.recoil+weapon.recoil*((p.attachments[p.weaponIndex]&2)?Fixed::fromRatio(3,4):1_fx));
@@ -180,6 +195,7 @@ void Module::shoot(Simulation& sim,Actor& p) {
 
 void Module::tick(Simulation& sim) {
     auto& s=state(sim);if(s.winner)return;
+    tickProjectilePrograms(sim);
     if(config_.systems.enabled)tickSystems(sim);
     if(s.winner)return;
     s.history.push_back({sim.tick(),s.actors});
@@ -255,11 +271,12 @@ void Module::tick(Simulation& sim) {
 }
 void Module::hashState(Simulation& sim,Hasher& hash) {
     hash.u64(contentHash_);std::string bytes;Archive a(&bytes);stateIo(a,state(sim));hash.str(bytes);
+    for(auto& p:state(sim).projectiles)if(p.program.enabled){std::string extra;Archive e(&extra);e(p.id,p.program,p.programSpeed,p.programTarget);hash.str(extra);}
 }
 bool Module::serializeState(Simulation& sim,Archive& archive) {
-    uint32_t version=3;uint64_t content=contentHash_;archive(version,content);
-    if(version!=3||content!=contentHash_)return false;
-    State copy=state(sim);stateIo(archive,copy);
+    uint32_t version=6;uint64_t content=contentHash_;archive(version,content);
+    if((version!=3&&version!=6)||content!=contentHash_)return false;
+    State copy=state(sim);stateIo(archive,copy,version>=6);
     if(!archive.ok()||copy.actors.size()!=spawns_.size())return false;
     auto valid=[&](const Actor& actor){
         if(actor.weaponIndex>=config_.weapons.size()||actor.slot==0||actor.slot>spawns_.size()||actor.bag.size()>12||actor.actionTarget>spawns_.size()||uint32_t(actor.activeAction)>uint32_t(Action::Vault)||actor.owned>15||actor.armor<0||actor.armor>100||actor.health<0||actor.health>100||actor.money<0||actor.money>16000)return false;
@@ -268,6 +285,7 @@ bool Module::serializeState(Simulation& sim,Archive& archive) {
     };
     if(copy.projectiles.size()>256||copy.loot.size()>256||copy.vehicles.size()>32)return false;
     for(const auto& p:copy.projectiles)if(p.kind>4||!p.owner||p.owner>spawns_.size()||p.weapon>=config_.weapons.size()||p.piercedCount>8)return false;
+    for(const auto& p:copy.projectiles)if(!projectile::valid(p.program,p.programSpeed,config_.weapons[p.weapon].flight))return false;
     for(const auto& v:copy.vehicles)if(v.driver>spawns_.size()||v.health<0||v.health>500)return false;
     for(const auto& actor:copy.actors)if(!valid(actor))return false;
     for(const auto& frame:copy.history)for(const auto& actor:frame.actors)if(!valid(actor))return false;
