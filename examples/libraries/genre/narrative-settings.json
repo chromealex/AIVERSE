@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "narrative": {
+    "autoAdvanceTicks": 120,
+    "skipLinesPerTick": 8,
+    "backlogLimit": 64,
+    "barkCooldownTicks": 300,
+    "speakerCooldownTicks": 60,
+    "maxPendingConsequences": 256,
+    "maxBarkRequests": 16,
+    "meterMinimum": -100,
+    "meterInitial": 0,
+    "meterMaximum": 100
+  }
+}

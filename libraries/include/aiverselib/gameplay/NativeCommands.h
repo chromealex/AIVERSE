@@ -8,7 +8,8 @@ namespace aiverse::lib::gameplay {
 inline Command nativeCommand(uint16_t type,uint32_t tick,uint8_t player,uint32_t sequence,
                              std::span<const Entity> entities,int64_t parameter=0,Vec3 point={},Entity target=kNullEntity,bool queue=false) {
     Command c;c.type=type;c.tick=tick;c.player=player;c.seq=sequence;c.param=parameter;c.point=point;c.target=target;
-    if(queue)c.flags|=kCmdQueue;c.units.assign(entities.begin(),entities.end());
+    if(queue)c.flags|=kCmdQueue;
+    c.units.assign(entities.begin(),entities.end());
     std::sort(c.units.begin(),c.units.end(),[](Entity a,Entity b){return a.index!=b.index?a.index<b.index:a.packed()<b.packed();});
     c.units.erase(std::unique(c.units.begin(),c.units.end()),c.units.end());return c;
 }
