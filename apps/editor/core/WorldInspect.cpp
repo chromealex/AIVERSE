@@ -222,6 +222,7 @@ const std::vector<Desc>& descs() {
             j.o.set("base", m);
         }),
         AIVERSE_C(Pulled, "Притягивается", j.f("target", x.target).f("way", x.way).f("dist", x.dist).f("vel", x.vel).f("done", x.done)),   // skill objects
+        AIVERSE_C(Transfer, "Телепорт гарнизона", j.f("from", x.from).f("to", x.to).f("collected", x.collected).f("toGrab", x.toGrab).f("wait", x.wait)),   // skill objects
     };
     return d;
 }

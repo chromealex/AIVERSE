@@ -79,6 +79,7 @@ bool RtsModule::filterOk(Simulation& sim, const TargetFilter& f, Entity e, uint8
         uint32_t fl = statusFlags(sim, e);
         if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, e, owner))) return false;
     }
+    if (rules_.advancedEffects && !self && !t.structure && (statusFlags(sim, e) & kStSkillImmune)) return false;   // BW ignoreSkillUnitsFilter
     if (!f.area.empty()) {
         int a = triggers_.findArea(f.area);
         if (a < 0 || !triggers_.areas[size_t(a)].contains(w.get<Transform>(e).pos)) return false;
@@ -100,7 +101,11 @@ std::vector<Entity> RtsModule::effectTargets(Simulation& sim, const EffectDef& e
     std::vector<Entity> out;
     const Vec3 casterPos = w.alive(ctx.caster) && w.has<Transform>(ctx.caster) ? w.get<Transform>(ctx.caster).pos : ctx.origin;
     const Vec3 center = e.fromCaster ? casterPos : ctx.point;
-    auto consider = [&](Entity c) { if (filterOk(sim, f, c, ctx.owner, ctx.caster)) out.push_back(c); };
+    auto consider = [&](Entity c) {
+        if (filterOk(sim, f, c, ctx.owner, ctx.caster) && (!f.route || routeFilterOk(sim, f.route, c, ctx))) out.push_back(c);
+    };
+    // BW skill filters are ellipses: z distances count 1 / aspect (filter "aspect", default 1 = circle)
+    auto fdist = [&](Vec3 p) { if (f.aspect == kOne) return dist2D(p, center); Vec3 d = flat(p - center); d.z = d.z / f.aspect; return d.length(); };
     switch (f.shape) {
     case Shape::Target:
         if (f.self && !f.enemies && !f.allies) { if (w.alive(ctx.caster) && w.has<Unit>(ctx.caster)) out.push_back(ctx.caster); }
@@ -118,9 +123,9 @@ std::vector<Entity> RtsModule::effectTargets(Simulation& sim, const EffectDef& e
         w.each<Unit, Owner, Transform>([&](Entity c, Unit&, Owner&, Transform&) { consider(c); });
         break;
     default: {
-        Fixed r = fxMax(e.radius, kHalf);
+        Fixed r = fxMax(e.areaRadius ? ctx.areaRadius : e.radius, kHalf);
         std::vector<Entity> cand;
-        if (r > Fixed::fromInt(24)) w.each<Unit, Owner, Transform>([&](Entity c, Unit&, Owner&, Transform&) { cand.push_back(c); });
+        if (r > Fixed::fromInt(24) || f.aspect > kOne) w.each<Unit, Owner, Transform>([&](Entity c, Unit&, Owner&, Transform&) { cand.push_back(c); });
         else {
             gs.hash.query(center, r + Fixed::fromInt(2), [&](Entity c) { cand.push_back(c); });
             if (f.shape == Shape::Line) gs.hash.query(casterPos, r + Fixed::fromInt(2), [&](Entity c) { cand.push_back(c); });
@@ -136,8 +141,8 @@ std::vector<Entity> RtsModule::effectTargets(Simulation& sim, const EffectDef& e
             Fixed body = rules_.types[w.get<Unit>(c).type].radius;
             bool in = false;
             switch (f.shape) {
-            case Shape::Circle: in = dist2D(p, center) <= r + body * 0; break;
-            case Shape::Ring: { Fixed d = dist2D(p, center); in = d <= r && d >= r - f.ring; break; }
+            case Shape::Circle: in = fdist(p) <= r + body * 0; break;
+            case Shape::Ring: { Fixed d = fdist(p); in = d <= r && d >= r - f.ring; break; }
             case Shape::Line: in = distToSegment(p, casterPos, casterPos + dir * r) <= f.width / 2 + body; break;
             case Shape::Cone: {
                 Vec3 rel = flat(p - casterPos);
@@ -210,6 +215,7 @@ void RtsModule::addStatus(Simulation& sim, Entity target, int def, Fixed duratio
     if (d.stacking != Stacking::Independent)
         for (auto& in : st->list) {
             if (in.def != def) continue;
+            if (d.stacking == Stacking::Keep) return;
             in.until = std::max(in.until, until);
             in.shield = fxMax(in.shield, d.shield * ctx.scale);
             if (d.stacking == Stacking::Stack && in.stacks < d.maxStacks) ++in.stacks;
@@ -291,7 +297,10 @@ void RtsModule::tickStatuses(Simulation& sim) {
             StatusInst& in = st.list[i];
             const StatusDef& d = rules_.statuses[in.def];
             // a tick that falls on the last tick still happens (duration 3, interval 1 = 3 ticks)
-            if (in.nextTick <= tick && in.nextTick <= in.until && (d.tickAmount.raw != 0 || d.tickPayload >= 0 || d.garrisonPerSecond.raw != 0 || in.def == uint16_t(rules_.stLink))) {
+            bool broke = false;
+            if (d.endWhenEmpty && in.nextTick <= tick && in.nextTick <= in.until)   // BW Invulnerability upkeep: no unit left to pay
+                if (auto* g = w.tryGet<Garrison>(e); g && g->count < 1) { in.until = tick; broke = true; }
+            if (!broke && in.nextTick <= tick && in.nextTick <= in.until && (d.tickAmount.raw != 0 || d.tickPayload >= 0 || d.garrisonPerSecond.raw != 0 || in.def == uint16_t(rules_.stLink))) {
                 in.nextTick = tick + std::max<uint32_t>(1, fxTicks(d.tickInterval, sim.tickRate()));
                 evs.push_back({e, in, false});
             }
@@ -306,6 +315,7 @@ void RtsModule::tickStatuses(Simulation& sim) {
         const Vec3 pos = w.get<Transform>(ev.holder).pos;
         EffectCtx ctx;
         ctx.caster = ev.holder; ctx.owner = ev.in.owner; ctx.sourceType = ev.in.sourceType; ctx.target = ev.holder; ctx.point = pos; ctx.origin = pos;
+        ctx.budgetEnt = ev.holder; ctx.budgetDef = int16_t(ev.in.def);
         if (auto* gt = w.tryGet<GroupTag>(ev.holder)) ctx.group = gt->id;
         if (ev.expired) {
             sim.emit({kEvStatusEnd, w.get<Owner>(ev.holder).player, ev.holder, ev.in.source, ev.in.def, pos});
@@ -397,10 +407,25 @@ void RtsModule::applyEffect(Simulation& sim, const EffectDef& e, int list, int i
     World& w = sim.world();
     GameState& gs = state(sim);
     if (e.chance < kOne && sim.rng().unit() >= e.chance) return;
+    if (e.every.raw > 0 && !everyDue(sim, e, ctx)) return;   // skill objects: an area payload effect every N s
     const uint32_t tick = sim.tick();
     ctx.depth++;
     const Vec3 casterPos = w.alive(ctx.caster) && w.has<Transform>(ctx.caster) ? w.get<Transform>(ctx.caster).pos : ctx.origin;
-    auto targets = [&]() { return effectTargets(sim, e, ctx); };
+    auto targets = [&]() {
+        auto t = effectTargets(sim, e, ctx);
+        if (e.budget > 0)   // at most `budget` targets over the life of the area / status it runs in
+            if (int* used = budgetCounter(sim, ctx)) {
+                const size_t left = size_t(std::max(0, e.budget - *used));
+                if (t.size() > left) t.resize(left);
+                *used += int(t.size());
+            }
+        if (e.targetChance < kOne) {   // per target (BW betrayal: each unit beyond the max dies with chanceToKill)
+            std::vector<Entity> kept;
+            for (Entity h : t) if (sim.rng().unit() < e.targetChance) kept.push_back(h);
+            t.swap(kept);
+        }
+        return t;
+    };
     const Fixed amount = rollAmount(sim, e) * ctx.scale;
     switch (e.kind) {
     case EffectKind::Damage: {
@@ -470,7 +495,8 @@ void RtsModule::applyEffect(Simulation& sim, const EffectDef& e, int list, int i
         break;
     }
     case EffectKind::Status:
-        for (Entity h : targets()) addStatus(sim, h, e.status, e.duration, ctx);
+        for (Entity h : targets())   // duration [min, max]: rolled per target (BW UnitsFreeze min / maxFreezeDuration)
+            addStatus(sim, h, e.status, e.durationMax > e.duration ? e.duration + (e.durationMax - e.duration) * sim.rng().unit() : e.duration, ctx);
         break;
     case EffectKind::Dispel:
         for (Entity h : targets()) dispel(sim, h, e.dispelTags, e.dispelFrom);
@@ -574,6 +600,16 @@ void RtsModule::applyEffect(Simulation& sim, const EffectDef& e, int list, int i
     case EffectKind::Pull:
         effectPull(sim, e, ctx, targets());
         break;
+    case EffectKind::GarrisonSend:
+        garrisonSend(sim, e, ctx, targets());
+        break;
+    case EffectKind::CloseGroups:
+        closeGroups(sim, targets());
+        break;
+    case EffectKind::Defeat:
+        for (uint8_t p : effectPlayers(sim, e, ctx))
+            if (auto* pi = sim.player(p); pi && pi->alive) { pi->alive = false; sim.emit({kEvPlayerDefeated, p, kNullEntity, kNullEntity, kDefeatMode, {}}); }
+        break;
     case EffectKind::Chain: {
         std::vector<Entity> hit;
         Entity cur = w.alive(ctx.target) && w.has<Unit>(ctx.target) && filterOk(sim, e.filter, ctx.target, ctx.owner, ctx.caster) ? ctx.target : kNullEntity;
@@ -605,9 +641,28 @@ void RtsModule::applyEffect(Simulation& sim, const EffectDef& e, int list, int i
         break;
     }
     case EffectKind::Cast: {
+        if (!e.delivery.offsets.empty() && list >= 0) {   // fixed points around the click, staggered (BW blizzard)
+            std::vector<size_t> order(e.delivery.offsets.size());
+            for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+            if (e.delivery.shuffle)   // BW: pick a random remaining position each time
+                for (size_t i = 0; i + 1 < order.size(); ++i) std::swap(order[i], order[i + sim.rng().below(uint32_t(order.size() - i))]);
+            const size_t shots = e.delivery.shots > 0 ? size_t(e.delivery.shots) : order.size();
+            for (size_t k = 0; k < shots; ++k) {
+                const Vec2 o = e.delivery.offsets[order[k % order.size()]];
+                const Vec3 at = flat(ctx.point) + Vec3{o.x, Fixed{}, o.y};
+                if (k == 0) { EffectCtx c2 = ctx; c2.point = at; c2.target = kNullEntity; applyPayload(sim, e.payload, c2); continue; }
+                staggerCastAt(sim, list, index, ctx, at, e.delivery.stagger * int64_t(k));
+            }
+            break;
+        }
         auto list2 = e.filter.explicitShape ? targets() : std::vector<Entity>{};
         if (list2.empty()) { applyPayload(sim, e.payload, ctx); break; }
-        for (Entity h : list2) { EffectCtx c2 = ctx; c2.target = h; c2.point = w.get<Transform>(h).pos; applyPayload(sim, e.payload, c2); }
+        int k = 0;
+        for (Entity h : list2) {
+            if (e.delivery.stagger.raw > 0 && k > 0 && list >= 0) { staggerCast(sim, list, index, ctx, h, e.delivery.stagger * k++); continue; }
+            ++k;
+            EffectCtx c2 = ctx; c2.target = h; c2.point = w.get<Transform>(h).pos; applyPayload(sim, e.payload, c2);
+        }
         break;
     }
     case EffectKind::GarrisonKill: case EffectKind::GarrisonAdd: case EffectKind::GarrisonConvert: case EffectKind::GarrisonPanic:
@@ -671,16 +726,24 @@ void RtsModule::tickAreas(Simulation& sim) {
                     if (ar.lanePos >= pts.size()) { ar.endAt = tick; ar.arrived = ar.goal.valid() || e.delivery.onArrive >= 0; }
                 }
                 break;
+            case AreaMotion::Orbit: areaOrbit(sim, a); break;   // skill objects (tornado)
             default: break;
             }
+            if (e.delivery.grow.raw > 0)   // BW units filter: range = inRange + rangeVelocity * time
+                ar.radius = e.radius + e.delivery.grow * int64_t(tick - ar.fireAt) / int64_t(sim.tickRate());
         }
         EffectCtx ctx;
         ctx.caster = ar.caster; ctx.owner = owner; ctx.sourceType = ar.sourceType; ctx.point = tr.pos; ctx.origin = tr.pos; ctx.scale = ar.scale;
+        ctx.budgetEnt = a; ctx.areaRadius = ar.radius;
+        if (w.alive(ar.goal)) ctx.target = ar.goal;   // skill objects: per-target delayed casts, goal structures
         if (tick >= ar.fireAt && tick <= ar.endAt) {
             if (e.delivery.trigger == AreaTrigger::Contact) {
                 std::vector<Entity> touch;
                 gs.hash.query(tr.pos, ar.radius + kOne, [&](Entity c) {
-                    if (!w.has<Unit>(c) || dist2D(w.get<Transform>(c).pos, tr.pos) > ar.radius) return;
+                    if (!w.has<Unit>(c)) return;
+                    Vec3 dd = flat(w.get<Transform>(c).pos - tr.pos);
+                    if (e.filter.aspect != kOne) dd.z = dd.z / e.filter.aspect;   // BW ellipses
+                    if (dd.length() > ar.radius) return;
                     if (std::find(ar.touched.begin(), ar.touched.end(), c.packed()) != ar.touched.end()) return;
                     if (filterOk(sim, e.filter, c, owner, ar.caster)) touch.push_back(c);
                 });

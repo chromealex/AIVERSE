@@ -342,6 +342,8 @@ struct StatusInst {
     uint8_t revertOwner = 0;        // Capture: owner to give it back to
     bool revertsOwner = false;
     uint8_t capturedBy = 0;
+    int spent = 0;                  // targets used of an effect `budget`; skill objects: commandable / transfer used
+    uint32_t group = 0;             // commandable: the group sent from the structure
 };
 struct Statuses { std::vector<StatusInst> list; uint32_t flags = 0; };   // flags: union of active StatusFlags
 // Ground effect: delayed strike, persistent field, moving hazard, mine, portal, reveal, soul trap.
@@ -360,8 +362,15 @@ struct Area {
     Entity goal = kNullEntity;            // skill objects: the structure it heads for (onArrive target)
     bool arrived = false;
     int deaths = 0;                       // onDeath payloads applied (capped by maxTriggers)
+    int spent = 0;                        // targets used of an effect `budget`
 };
 // A unit pulled straight into a structure by a magnet (`pull` effect, RtsSkillObjects.cpp).
+// A garrison teleport in progress (BW PointsTeleport): grab from `from`, travel, fill `to`.
+struct Transfer {
+    Entity from = kNullEntity, to = kNullEntity;
+    uint8_t owner = 0;
+    Fixed toGrab{}, collected{}, acc{}, grabLeft{}, grabVel{}, wait{}, fillLeft{}, fillVel{};
+};
 struct Pulled {
     Entity target = kNullEntity;
     Vec3 start{};
@@ -446,6 +455,7 @@ struct PlayerAbilityState {
     uint32_t pendingAt = 0;            // activation delay: fires at this tick
     Vec3 pendingPoint{}; Entity pendingTarget = kNullEntity;
     uint32_t nextAuto = 0;
+    int8_t slot = -1;                  // loadout slot (BW skill slot; per-slot silence)
 };
 
 // Who / where an effect payload is applied (see RtsEffects.cpp).
@@ -458,6 +468,9 @@ struct EffectCtx {
     Fixed scale = Fixed::fromInt(1);   // chain / splash falloff
     int depth = 0;
     uint32_t group = 0;
+    Entity budgetEnt = kNullEntity;    // the area / status holder whose `budget` counter effects use
+    int16_t budgetDef = -1;            // status def (-1: an area)
+    Fixed areaRadius{};                // radius of the area the payload runs in
 };
 
 struct GameState {
@@ -856,6 +869,24 @@ private:
     void noteDeathInAreas(Simulation& sim, Entity dead, Vec3 pos);
     void flushAreaDeaths(Simulation& sim);
     void hashSkillObjects(Simulation& sim, Hasher& h);
+    int* budgetCounter(Simulation& sim, const EffectCtx& ctx);
+    bool routeFilterOk(Simulation& sim, uint8_t route, Entity unit, const EffectCtx& ctx);
+    void onUnitReleased(Simulation& sim, Entity from, Entity unit);   // a garrison sent a unit out (onSpawn, hypnosis)
+    bool skillSend(Simulation& sim, Entity from, Entity to, uint8_t player, int n);   // teleport sends; true: handled
+    bool hypnoticSend(Simulation& sim, const Command& cmd);           // sends from a structure the player commands
+    bool silencedFor(Simulation& sim, uint8_t player, int index) const;
+    void endCaptureStatuses(Simulation& sim, Entity s);
+    Fixed levelOfStock(int16_t res, Fixed stock) const;   // resource levels (morale stars), fractional
+    Fixed stockOfLevel(int16_t res, Fixed level) const;
+    void tickTransfers(Simulation& sim);
+    bool everyDue(Simulation& sim, const EffectDef& e, const EffectCtx& ctx);
+    void garrisonSend(Simulation& sim, const EffectDef& e, const EffectCtx& ctx, const std::vector<Entity>& targets);
+    void payDeathGain(Simulation& sim, Entity unit, uint8_t owner);
+    void swapRandom(Simulation& sim, const EffectDef& e, const EffectCtx& ctx, Entity h);
+    void closeGroups(Simulation& sim, const std::vector<Entity>& structures);
+    void areaOrbit(Simulation& sim, Entity a);
+    void staggerCast(Simulation& sim, int list, int index, const EffectCtx& ctx, Entity target, Fixed delay);
+    void staggerCastAt(Simulation& sim, int list, int index, const EffectCtx& ctx, Vec3 at, Fixed delay);
     void setupSkills(Simulation& sim, const Json& map);
     void hashEffects(Simulation& sim, Hasher& h);
     void enterGarrison(Simulation& sim, Entity unit, Entity structure);   // assault / reinforce with statuses (advanced)

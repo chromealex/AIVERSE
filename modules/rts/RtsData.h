@@ -35,7 +35,9 @@ enum class Stat : uint8_t {
     Count };
 Stat parseStat(const std::string& s, bool* ok = nullptr);
 
-struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); };
+// lerp (statuses): the final value moves toward 1 by the summed lerp of all statuses (BW Lerp(totalDef, 1, suppress))
+// floor (statuses): the product of the holder's status multipliers on this stat stays >= floor (BW Slowdown2 1/3)
+struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); Fixed lerp{}; Fixed floor{}; };
 
 // What a modifier applies to: types with any of `tags`, or one `type`, or everything.
 struct ModTarget { uint64_t tags = 0; uint16_t type = kNoType; bool all = false; };
@@ -579,6 +581,9 @@ struct Rules {
     std::vector<std::string> statusTagNames;   // status tags (dispel), separate from type tags
     // built-in statuses used by effects that undo themselves (temporary capture, transform, links, illusions)
     int16_t stTemp = -1, stLink = -1, stRedirect = -1, stFake = -1;
+    bool anyCollect = false;
+    bool anyHitCap = false;
+    bool anyDeathGain = false; // a status has `deathGain`    // a status has `hitCap` (dealDamage checks the target's statuses)   // a status has `collect` (sysGarrison scans for receivers)
     size_t userStatuses = 0;                   // statuses defined by the game (built-ins come after)
     int loadoutSlots = 0;                      // >0: players pick at most this many player abilities (map "loadout")
     int findStatus(const std::string& id) const;

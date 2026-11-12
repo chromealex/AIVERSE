@@ -684,7 +684,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
         if (auto* ss = w.tryGet<ScriptStats>(e))
             for (auto& x : ss->list) if (x.stat == uint8_t(s)) base = x.base;
     uint8_t owner = w.get<Owner>(e).player;
-    Fixed add{}, mul = kOne;
+    Fixed add{}, mul = kOne, lerp{};
     if (auto* gs = w.resource<GameState>(); owner < gs->players.size() && !gs->players[owner].mods.empty()) {
         const TypeMods& m = gs->players[owner].mods[u.type];
         add += m.add[size_t(s)]; mul *= m.mul[size_t(s)];
@@ -694,10 +694,16 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
         for (auto& bf : b->list) if (bf.stat == s && bf.until > sim.tick()) { add += bf.add; mul *= bf.mul; }
     }
     if (rules_.advancedEffects) {
+        Fixed smul = kOne, floor{};
         if (auto* st = w.tryGet<Statuses>(e))
             for (auto& in : st->list)
                 for (auto& m : rules_.statuses[in.def].mods)
-                    if (m.stat == s) { add += m.add * in.stacks; for (int k = 0; k < in.stacks; ++k) mul *= m.mul; }
+                    if (m.stat == s) floor = fxMax(floor, m.floor);
+        if (auto* st = w.tryGet<Statuses>(e))
+            for (auto& in : st->list)
+                for (auto& m : rules_.statuses[in.def].mods)
+                    if (m.stat == s) { add += m.add * in.stacks; lerp += m.lerp * in.stacks; for (int k = 0; k < in.stacks; ++k) (floor.raw > 0 ? smul : mul) *= m.mul; }
+        if (floor.raw > 0) mul *= fxMax(smul, floor);
         if (auto* gs = w.resource<GameState>(); owner < gs->players.size())
             for (auto& in : gs->players[owner].statuses)
                 for (auto& m : rules_.statuses[in.def].mods)
@@ -708,6 +714,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
     if (s == Stat::Speed && env_ && env_->active()) env_->speed(sim, e, add, mul);   // environment: wind, zones, weather, traces, snow
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
+    if (lerp.raw > 0) { const Fixed v = (base + add) * mul; return v + (kOne - v) * fxMin(kOne, lerp); }
     return (base + add) * mul;
 }
 
@@ -1034,6 +1041,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (cmd.type == kCmdAutoBuild) { script_->callStd(sim, StdFn::AutoBuild, {cmd.player, cmd.param}); return; }   // lua/commands.lua
 
     std::vector<Entity> sel;
+    if (cmd.type == kCmdSend && rules_.advancedEffects && hypnoticSend(sim, cmd)) return;   // a hypnotised garrison (RtsSkillObjects.cpp)
     for (Entity e : cmd.units) {
         auto* o = w.tryGet<Owner>(e);
         auto* u = w.tryGet<Unit>(e);
@@ -1324,6 +1332,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
             if (rules_.advancedEffects && (statusFlags(sim, e) & kStLock)) break;   // locked: can't send
             if (env_ && env_->active() && !env_->sendAllowed(sim, e, cmd.target)) break;   // linked caves, graveyards
             if (!canSend(sim, e, cmd.target)) break;   // authored routes: no route, no send (BW RoutesModule.FindUnlocked)
+            if (rules_.advancedEffects && skillSend(sim, e, cmd.target, cmd.player, cmd.param)) break;   // teleport (RtsSkillObjects.cpp)
             const int sendable = std::max(0, g->count - t.garrisonKeep);   // State.io: one soldier stays home
             // param < 0: exactly -param units (Bunker Wars MoveUnits counts, agent-bw-ai); else a percent
             int n = cmd.param < 0 ? int(std::min<int64_t>(sendable, -cmd.param))

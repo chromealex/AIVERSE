@@ -39,13 +39,16 @@ void io(Archive& a, Buffs& x) { a(x.list, x.stunUntil); }
 void io(Archive& a, AbilityState& x) { a(x.readyAt, x.charges, x.chargeAt, x.init, x.busyUntil); }
 void io(Archive& a, StatusInst& x) {
     a(x.def, x.owner, x.source, x.sourceType, x.until, x.nextTick, x.stacks, x.shield, x.acc, x.link, x.revertType, x.revertOwner, x.revertsOwner, x.capturedBy);
+    if (a.formatVersion >= 8) a(x.spent, x.group);   // agent-bw-skills
 }
 void io(Archive& a, Statuses& x) { a(x.list, x.flags); }
 void io(Archive& a, Area& x) {
     a(x.caster, x.sourceType, x.effList, x.effIndex, x.fireAt, x.nextAt, x.endAt, x.radius, x.triggers, x.touched, x.dir, x.dest, x.lane, x.lanePos,
       x.laneReverse, x.follow, x.scale);
     if (a.formatVersion >= 7) a(x.goal, x.arrived, x.deaths);   // skill objects (agent-bw-skills)
+    if (a.formatVersion >= 8) a(x.spent);
 }
+void io(Archive& a, Transfer& x) { a(x.from, x.to, x.owner, x.toGrab, x.collected, x.acc, x.grabLeft, x.grabVel, x.wait, x.fillLeft, x.fillVel); }
 void io(Archive& a, Pulled& x) { a(x.target, x.start, x.dist, x.way, x.vel, x.accel, x.minVel, x.maxVel, x.done); }
 void io(Archive& a, Channel& x) { a(x.payload, x.target, x.point, x.startPos, x.nextAt, x.endAt, x.ability, x.interval); }
 void io(Archive& a, GroupTag& x) { a(x.id, x.from, x.to); }
@@ -109,7 +112,10 @@ void io(Archive& a, PlayerEconomy& x) {
 }
 void io(Archive& a, WaveDef& x) { a(x.tick, x.player, x.spawn, x.at, x.spread, x.every, x.growth, x.repeats, x.done, x.route); }
 void io(Archive& a, RoomZone& x) { a(x.type, x.owner, x.cells, x.center); }
-void io(Archive& a, PlayerAbilityState& x) { a(x.readyAt, x.charges, x.rearm, x.owned, x.level, x.stolenUntil, x.pendingAt, x.pendingPoint, x.pendingTarget, x.nextAuto); }
+void io(Archive& a, PlayerAbilityState& x) {
+    a(x.readyAt, x.charges, x.rearm, x.owned, x.level, x.stolenUntil, x.pendingAt, x.pendingPoint, x.pendingTarget, x.nextAuto);
+    if (a.formatVersion >= 8) a(x.slot);   // agent-bw-skills: loadout slot
+}
 void io(Archive& a, VictoryRules& x) { a(x.mode, x.tickets, x.ticketDrain, x.surviveSeconds, x.keyLoses, x.share); }
 void io(Archive& a, ScriptData& x) { a(x.blob, x.hash); x.serial = 0; }   // scripting: game.data (serial: VM-side only)
 void io(Archive& a, ScriptStats::Entry& x) { a(x.stat, x.base); }   // scripting: game.set_stat_base
@@ -207,8 +213,8 @@ using kPools = PoolList<Transform, Owner, Unit, Orders, Mobile, Combat, Cargo, P
                         Stance, Retreating, Transport, Boarded, Veteran, RallyPath, Shield, Eater, Formation, BridgeLaid, Ammo, Merging, Trader, ItemBag,
                         Suppression, Turret, GrowState, Morale,
                         Weathering, TrapState, TeleportBack, Belt, Crafter, TurnBudget, Altitude, ScriptData, ScriptStats,
-                        Pulled>;   // save version 7 appended Pulled (keep new pools at the end)
-constexpr size_t kPoolsBefore7 = kPools::count - 1;
+                        Pulled, Transfer>;   // save version 7 appended Pulled, 8 Transfer (keep new pools at the end)
+constexpr size_t kPoolsBefore7 = kPools::count - 2, kPoolsBefore8 = kPools::count - 1;
 } // namespace
 
 bool RtsModule::serializeState(Simulation& sim, Archive& a) {
@@ -227,7 +233,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     uint32_t pools = uint32_t(kPools::count);
     io(a, pools);
     if (a.writing() && w.poolCount() != kPools::count) return false;   // an unlisted component type exists
-    const size_t expect = !a.writing() && a.formatVersion < 7 ? kPoolsBefore7 : kPools::count;
+    const size_t expect = a.writing() ? kPools::count : a.formatVersion < 7 ? kPoolsBefore7 : a.formatVersion < 8 ? kPoolsBefore8 : kPools::count;
     if (!a.writing() && pools != expect) { a.fail(); return false; }
     kPools::run(a, w, expect);
     if (!a.writing()) {

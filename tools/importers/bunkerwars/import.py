@@ -852,9 +852,23 @@ def main():
     ap.add_argument('--source', required=True, help='Bunker Wars repository (or its Client / Client/Assets folder)')
     ap.add_argument('--out', required=True, help='output game folder')
     ap.add_argument('--json', action='store_true', help='one JSON report on stdout (MCP / editor)')
+    ap.add_argument('--no-skills', action='store_true', help='skip the energy skills converter (skills/convert.py)')
     a = ap.parse_args()
     try:
         rep = run(a.source, os.path.expanduser(a.out))
+        if not a.no_skills:   # agent-bw-skills: playerAbilities, helper types, morale levels and default loadouts
+            import contextlib
+            import io
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'skills'))
+            import convert as bw_skills
+            out = os.path.expanduser(a.out)
+            log = io.StringIO()
+            with contextlib.redirect_stdout(log):
+                rc = bw_skills.main(['--bw', a.source, '--out', os.path.join(out, 'bw', 'abilities.json'), '--template', out])
+            if rc:
+                rep['warnings'].append('skills converter failed: ' + log.getvalue().strip()[-300:])
+            else:
+                rep['abilities'] = log.getvalue().strip().splitlines()[-1]
     except SystemExit as ex:
         if a.json:
             print(json.dumps({'ok': False, 'error': str(ex)}, ensure_ascii=False))

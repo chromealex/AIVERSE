@@ -45,7 +45,7 @@ void RtsModule::sysTargeting(Simulation& sim) {
             const UnitType& ct = rules_.types[cu->type];
             if (ct.invulnerable || !layerHit(layers, ct.layer)) return;
             if (!hostile(sim, o.player, w.get<Owner>(cand).player)) return;
-            if (rules_.advancedEffects) { uint32_t fl = statusFlags(sim, cand); if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, cand, o.player))) return; }
+            if (rules_.advancedEffects) { uint32_t fl = statusFlags(sim, cand); if (fl & kStUntargetable) return; if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, cand, o.player))) return; }
             Vec3 cp = w.get<Transform>(cand).pos;
             Fixed d = dist2D(cp, tr.pos);
             if (d > sight) return;
@@ -76,6 +76,18 @@ void RtsModule::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t d
     if (rules_.advancedEffects) {
         uint32_t fl = statusFlags(sim, target);
         if (fl & kStInvulnerable) return;
+        if (wd && rules_.anyHitCap)
+            if (auto* st = w.tryGet<Statuses>(target)) {
+                bool absorbed = false;
+                for (auto& in : st->list) {
+                    const Fixed cap = rules_.statuses[in.def].hitCap;
+                    if (cap.raw <= 0 || in.until <= sim.tick()) continue;
+                    const uint32_t end = sim.tick() + std::max<uint32_t>(1, uint32_t((cap * int64_t(sim.tickRate())).toInt()));
+                    if (in.until > end) in.until = end;
+                    absorbed = true;
+                }
+                if (absorbed) return;
+            }
         if (fl & kStFake) { u->hp = Fixed{}; u->flags |= kUnitSilent; return; }  // illusions pop on any hit
         fin = fin * stat(sim, target, Stat::DamageTaken);
         if (auto* st = w.tryGet<Statuses>(target))
@@ -599,6 +611,7 @@ void RtsModule::sysDeath(Simulation& sim) {
                 break;
             }
             if (rules_.advancedEffects) noteDeathInAreas(sim, e, pos);   // onDeath areas (RtsSkillObjects.cpp)
+            if (rules_.anyDeathGain) payDeathGain(sim, e, owner);
             grantKill(sim, e, u.lastAttacker);
             if (!t.wreck.empty() && wreckType >= 0) leftovers.push_back({uint16_t(wreckType), pos, int16_t(t.wreck[0].res), t.wreck[0].value});
             sim.emit({kEvDied, owner, e, u.lastHitBy, u.type, pos});
