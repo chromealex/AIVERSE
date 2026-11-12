@@ -12,7 +12,7 @@ inline StaticDiffuseField makeDiffuseVolume(const StaticShadowGeometry& geometry
     StaticDiffuseField f;f.origin=lo;f.spacing=spacing;f.nx=int(std::ceil(e.x))+1;f.ny=int(std::ceil(e.y))+1;f.nz=int(std::ceil(e.z))+1;
     if(size_t(f.nx)*f.ny*f.nz>20000)throw std::runtime_error("probe count exceeds budget");
     for(int z=0;z<f.nz;++z)for(int y=0;y<f.ny;++y)for(int x=0;x<f.nx;++x){
-        StaticDiffuseProbe p;p.visibility=geometry.bake(lo+float3{x+.5f,y+.5f,z+.5f}*spacing,spacing*2.5f,4);f.probes.push_back(std::move(p));
+        StaticDiffuseProbe p;p.visibility=geometry.bakeMoments(lo+float3{x+.5f,y+.5f,z+.5f}*spacing,spacing*2.5f,4);f.probes.push_back(std::move(p));
     }
     return f;
 }

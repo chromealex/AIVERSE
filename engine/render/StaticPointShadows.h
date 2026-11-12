@@ -13,6 +13,7 @@ struct StaticPointShadow {
     float3 emitterNormal{}; // Nonzero: diffuse-only hemisphere emitter for a baked bounce.
     std::vector<float> distances;
     std::vector<float3> normals; // Hit-plane normals allow receiver-plane depth correction.
+    std::vector<float> squares;  // Nonempty: probe visibility moments (distances = mean, squares = mean square).
 };
 // Load-time acceleration structure for immutable opaque geometry. Two-sided occlusion.
 class StaticShadowGeometry {
@@ -39,6 +40,23 @@ public:
         out.normals.reserve(size_t(6*resolution*resolution));
         for(int face=0;face<6;++face)for(int y=0;y<resolution;++y)for(int x=0;x<resolution;++x){
             float3 normal;out.distances.push_back(distance(origin,cubeDirection(face,2*(x+.5f)/resolution-1,2*(y+.5f)/resolution-1),radius,&normal));out.normals.push_back(normal);
+        }
+        return out;
+    }
+    // Probe visibility as distance moments over sub x sub rays per cube texel (Chebyshev at runtime).
+    // A single centre ray per 22-degree texel turns finite blockers into infinite half-spaces and
+    // cuts sharp bands into nearby receivers; averaged moments give soft, filterable partial occlusion.
+    StaticPointShadow bakeMoments(float3 origin,float radius,int resolution,int sub=4) const {
+        if(resolution<4||resolution>64||sub<1||sub>8||!std::isfinite(radius)||radius<=0)throw std::runtime_error("invalid probe visibility bake");
+        StaticPointShadow out;out.resolution=resolution;const size_t texels=size_t(6*resolution*resolution);
+        out.distances.reserve(texels);out.squares.reserve(texels);
+        for(int face=0;face<6;++face)for(int y=0;y<resolution;++y)for(int x=0;x<resolution;++x){
+            double mean=0,square=0;
+            for(int j=0;j<sub*sub;++j){
+                float u=2*(x+(j%sub+.5f)/sub)/resolution-1,v=2*(y+(j/sub+.5f)/sub)/resolution-1;
+                double d=std::min(distance(origin,cubeDirection(face,u,v),radius),radius);mean+=d;square+=d*d;
+            }
+            out.distances.push_back(float(mean/(sub*sub)));out.squares.push_back(float(square/(sub*sub)));
         }
         return out;
     }

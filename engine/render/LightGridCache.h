@@ -33,7 +33,7 @@ inline StaticLightGrid decodeLightGrid(std::string_view bytes,uint64_t recipeKey
     Hasher hash;hash.bytes(bytes.data(),bytes.size()-8);if(u64()!=hash.value())throw std::runtime_error("light cache checksum mismatch");
     auto range=[&](float offset,size_t length){return offset>=float(cells)&&offset==std::floor(offset)&&offset<=float(count)&&length<=count-size_t(offset);};
     for(size_t i=0;i<cells;++i){auto cell=g.texels[i];
-        if(cell.w<0||cell.w>15||cell.w!=std::floor(cell.w)||cell.y<0||cell.y>512||cell.y!=std::floor(cell.y)||!range(cell.x,size_t(cell.y)*2)||(cell.z!=0&&!range(cell.z,107)))throw std::runtime_error("invalid light cache cell offsets");
+        if(cell.w<0||cell.w>31||cell.w!=std::floor(cell.w)||cell.y<0||cell.y>512||cell.y!=std::floor(cell.y)||!range(cell.x,size_t(cell.y)*2)||(cell.z!=0&&!range(cell.z,107)))throw std::runtime_error("invalid light cache cell offsets");
         for(size_t j=0;j<size_t(cell.y);++j){auto pos=g.texels[size_t(cell.x)+2*j],energy=g.texels[size_t(cell.x)+2*j+1];
             if(pos.w<=0||energy.x<0||energy.y<0||energy.z<0)throw std::runtime_error("invalid cached light");
             if(energy.w==0)continue;

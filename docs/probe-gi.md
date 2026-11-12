@@ -269,3 +269,64 @@ local visibility, not the material albedo used for its transport bake.
 CPU tests cover open/covered/opposite-facing receivers, radius cutoff,
 repeatability, alpha preservation and stale/corrupt cache rejection. GPU controls
 49–51 exercise vertex AO with indirect light, retained direct sun and Low materials.
+
+## Moment visibility (replaces hit planes in new bakes)
+
+The remaining Sponza bands (a sharp diagonal across the right arch soffit, triangular
+facets on the left colonnade) came from the plane visibility itself. Each 4x4 cube
+texel spans about 22 degrees but stored a single centre ray's hit plane. The runtime
+test treats that plane as an infinite half-space: a finite blocker such as a column or
+curtain edge hides every receiver behind the plane's extension, and a blocker the centre
+ray missed hides nothing. The plane-surface intersection line is the hard band.
+A CPU reproduction (`aiverse_probe_visibility`, below) shows the band with plane
+visibility and none with visibility disabled, matching the GPU capture.
+
+New bakes (`bakeProbeEnvironment` volumes and `bakeDiffuseField`) now store
+DDGI-style distance moments instead: `StaticShadowGeometry::bakeMoments` traces 4x4
+rays per texel (1,536 per probe instead of 96) and keeps the mean and mean square of
+the hit distance, clamped to the probe radius. The shader filters the moments
+bilinearly with the same four taps and applies a cubed Chebyshev bound, giving soft
+partial occlusion instead of a binary half-space. Three shading terms apply only to
+moment probes:
+
+- the receiver is offset along its normal by .24 x probe spacing (.3 m in Sponza),
+  which keeps grazing walls from being rejected by their own distance spread;
+- probes behind the surface are weighted by `((dot(toProbe, n)+1)/2)^2 + .2`, a
+  smooth falloff instead of an abrupt cut;
+- visibility is floored at .05 and weights below .2 are crushed (`v^3 / .04`), so a
+  fully hidden probe still cannot dominate.
+
+The atlas layout and size are unchanged (four floats per texel: mean, mean square, 0, 0).
+Cell mask bit 16 selects the moment path, so existing `AVGIC005` plane caches load and
+render exactly as before; the decoder now accepts masks up to 31. The sky-occlusion
+bit 8 is tested as a bit rather than `w >= 8`. Mobile and High both use the moment
+path; per probe it reads the same four texels as the plane test. No pass, history,
+blur or random sampling is added.
+
+Visibility can be rebaked into an existing cache without repeating the transport bake:
+
+```sh
+aiverse_probe_visibility --scene scene-day-high-local-ao.json --cache day-mobile-dense.avgic \
+  --moments 4 --write /abs/day-dense-moments.avgic      # never overwrites an existing file
+```
+
+The tool loads the recipe's opaque geometry (same `appendShadowGeometry` as the bake),
+keeps sun/sky/point transport, and only replaces the 96 visibility texels per probe.
+Without `--write` it is a diagnostic: it traces camera rays for `--rect x,y,w,h` of a
+`--size WxH` frame and writes the High eight-probe indirect term with plane, exact
+(BVH) and disabled visibility, plus the moment result when `--moments` is given.
+Sponza (10,710 probes, 10.8 M triangles) rebakes in about 18 s on two cores.
+
+Limits: Chebyshev moments still leak slightly through thin geometry at the offset
+distance and can over-darken receivers seen only through narrow gaps; probes inside
+geometry are not relocated or disabled. The fixed .24 x spacing offset is a tuning
+constant, not derived per scene.
+
+Verification (cloud Linux, llvmpipe GLES 3.2, Sponza textures downscaled to 1024 px for memory):
+the High capture with an upgraded cache removes the arch band; an unchanged plane cache
+renders bit-identically to the pre-change build (maximum channel difference 0); Mobile
+renders with the same cache. Comparisons:
+[full frame, plane above / moments below](benchmarks/sponza-2026-11-12/moments-high-before-after.png),
+[right arch crop](benchmarks/sponza-2026-11-12/moments-arch-before-after.png),
+[CPU indirect term: plane / no visibility / moments](benchmarks/sponza-2026-11-12/moments-cpu-plane-none-moments.png).
+HDR GPU controls 1–53 pass on Linux GL. MSL, Metal captures and Android are unverified.

@@ -37,7 +37,8 @@ inline StaticDiffuseField bakeDiffuseField(const StaticShadowGeometry& geometry,
     StaticDiffuseField field;field.spacing=spacing;if(direct.empty()||bounce.empty())return field;
     float3 lo{1e9f,1e9f,1e9f},hi{-1e9f,-1e9f,-1e9f};
     auto bounds=[&](const PointLight& l){lo={std::min(lo.x,l.pos.x-l.radius),std::min(lo.y,l.pos.y-l.radius),std::min(lo.z,l.pos.z-l.radius)};hi={std::max(hi.x,l.pos.x+l.radius),std::max(hi.y,l.pos.y+l.radius),std::max(hi.z,l.pos.z+l.radius)};};
-    for(const auto& light:direct)bounds(light);for(const auto& source:bounce)bounds(source.light);
+    for(const auto& light:direct)bounds(light);
+    for(const auto& source:bounce)bounds(source.light);
     auto extent=(hi-lo)*(1/spacing);
     if(extent.x>100||extent.y>100||extent.z>100)throw std::runtime_error("diffuse field extent exceeds budget");
     field.origin=lo;field.nx=int(std::ceil(extent.x))+1;field.ny=int(std::ceil(extent.y))+1;field.nz=int(std::ceil(extent.z))+1;
@@ -56,7 +57,7 @@ inline StaticDiffuseField bakeDiffuseField(const StaticShadowGeometry& geometry,
             float rgb[3]={decode(source.light.color.x)*energy,decode(source.light.color.y)*energy,decode(source.light.color.z)*energy};
             for(int c=0;c<3;++c){auto& sh=probe.irradiance[size_t(c)];sh.x+=rgb[c]*.25f;sh.y+=rgb[c]*.5f*direction.x;sh.z+=rgb[c]*.5f*direction.y;sh.w+=rgb[c]*.5f*direction.z;}
         }
-        probe.visibility=geometry.bake(position,spacing*2.5f,4);field.probes.push_back(std::move(probe));
+        probe.visibility=geometry.bakeMoments(position,spacing*2.5f,4);field.probes.push_back(std::move(probe));
     }
     return field;
 }

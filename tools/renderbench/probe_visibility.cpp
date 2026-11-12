@@ -1,0 +1,208 @@
+// Offline probe-visibility diagnostics for cached probe GI (.avgic).
+// Reproduces the High (eight-probe) interpolation of LightShaders.h on the CPU for camera-ray
+// receivers and compares the cached plane visibility with exact BVH visibility.
+#include "apps/renderbench/ShadowGeometry.h"
+#include "engine/core/Hash.h"
+#include "engine/data/Json.h"
+#include "engine/platform/Platform.h"
+#include "engine/render/LightGridCache.h"
+#include "engine/render/Model.h"
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <thread>
+
+using namespace aiverse;
+using namespace aiverse::render;
+
+namespace {
+float3 v3(const Json& j) {return {float(j[0].toDouble()),float(j[1].toDouble()),float(j[2].toDouble())};}
+
+uint64_t recipeKey(const Json& config) {
+    Json keyConfig=config;for(const char* k:{"cameras","postfx","id","sunStudy","meshOcclusion"})keyConfig.erase(k);
+    Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
+    Hasher h;h.str(keyConfig.dump());return h.value();
+}
+
+// Same math as probePlaneVisible / probeVisibility(highQuality) in LightShaders.h.
+float planeVisible(float4 plane,float3 q,float distance) {
+    float3 n{plane.y,plane.z,plane.w};float normal2=dot(n,n),ratio=dot(n,q);
+    if(ratio>0&&ratio*ratio>.0001f*normal2*distance*distance)return ratio<=1+.03f*std::sqrt(normal2)?1.0f:0.0f;
+    return distance-.03f<=plane.x?1.0f:0.0f;
+}
+void cubeTexel(float3 q,int& face,float2& texel) {
+    float3 a{std::abs(q.x),std::abs(q.y),std::abs(q.z)};float2 uv;
+    if(a.x>=a.y&&a.x>=a.z){face=q.x>0?0:1;uv={(q.x>0?-q.z:q.z)/a.x,q.y/a.x};}
+    else if(a.y>=a.z){face=q.y>0?2:3;uv={q.x/a.y,(q.y>0?-q.z:q.z)/a.y};}
+    else{face=q.z>0?4:5;uv={(q.z>0?q.x:-q.x)/a.z,q.y/a.z};}
+    texel={(uv.x*.5f+.5f)*4-.5f,(uv.y*.5f+.5f)*4-.5f};
+}
+float planeVisibility(const std::vector<float4>& t,int offset,float3 q,float distance) {
+    int face;float2 texel;cubeTexel(q,face,texel);
+    float fx=texel.x-std::floor(texel.x),fy=texel.y-std::floor(texel.y),visible=0;
+    for(int tap=0;tap<4;++tap){int cx=tap%2,cy=tap/2;
+        int px=std::clamp(int(std::floor(texel.x))+cx,0,3),py=std::clamp(int(std::floor(texel.y))+cy,0,3);
+        float w=(cx?fx:1-fx)*(cy?fy:1-fy);
+        visible+=w*planeVisible(t[size_t(offset+4+face*16+py*4+px)],q,distance);
+    }
+    return visible;
+}
+
+struct Scene {
+    Json config;StaticShadowGeometry geometry;StaticLightGrid grid;float3 giSun,giSky;
+    std::vector<float4> moments; // grid texels with moment visibility (rebaked)
+    float normalBias=-1;bool facing=true; // <0: shader default .24 x probe spacing
+};
+
+// Replace the hit-plane visibility of every cached probe with engine-baked distance moments
+// (StaticShadowGeometry::bakeMoments) and flag the cells (mask bit 16). Transport is untouched.
+std::vector<float4> rebakeMoments(const Scene& s,int sub) {
+    auto t=s.grid.texels;const auto o=s.grid.origin,sz=s.grid.size;const float radius=2.5f/o.w;
+    std::vector<std::pair<int,float3>> probes;
+    for(int z=0;z<int(sz.z);++z)for(int y=0;y<int(sz.y);++y)for(int x=0;x<int(sz.x);++x){
+        auto& header=t[size_t(x+sz.x*(y+sz.y*z))];int offset=int(header.z);if(offset<=0)continue;
+        header.w=float(int(header.w)|16);
+        probes.push_back({offset,float3{o.x,o.y,o.z}+float3{x+.5f,y+.5f,z+.5f}*(1/o.w)});
+    }
+    std::atomic<size_t> next{0};
+    auto work=[&](){for(size_t i;(i=next++)<probes.size();){auto [offset,position]=probes[i];
+        auto v=s.geometry.bakeMoments(position,radius,4,sub);
+        for(size_t texel=0;texel<96;++texel)t[size_t(offset+4)+texel]={v.distances[texel],v.squares[texel],0,0};
+    }};
+    std::vector<std::thread> pool;for(unsigned i=0;i<std::max(1u,std::thread::hardware_concurrency());++i)pool.emplace_back(work);for(auto& th:pool)th.join();
+    return t;
+}
+// Chebyshev visibility on bilinearly interpolated moments (four taps, as the plane path).
+float momentVisibility(const std::vector<float4>& t,int offset,float3 q,float distance) {
+    int face;float2 texel;cubeTexel(q,face,texel);
+    float fx=texel.x-std::floor(texel.x),fy=texel.y-std::floor(texel.y),m1=0,m2=0;
+    for(int tap=0;tap<4;++tap){int cx=tap%2,cy=tap/2;
+        int px=std::clamp(int(std::floor(texel.x))+cx,0,3),py=std::clamp(int(std::floor(texel.y))+cy,0,3);
+        float w=(cx?fx:1-fx)*(cy?fy:1-fy);auto m=t[size_t(offset+4+face*16+py*4+px)];m1+=w*m.x;m2+=w*m.y;
+    }
+    if(distance<=m1)return 1;
+    float variance=std::max(m2-m1*m1,1e-4f),delta=distance-m1,v=variance/(variance+delta*delta);
+    return v*v*v;
+}
+
+void loadScene(Scene& s,const std::string& sceneFile,const std::string& cache) {
+    std::string text;if(!platform::readContentFile(sceneFile,text))throw std::runtime_error("cannot read scene");
+    s.config=Json::parse(text);
+    std::vector<std::string> warnings;
+    auto model=loadModel(s.config.getStr("model"),platform::readContentFile,&warnings);
+    bench::appendShadowGeometry(s.geometry,*model);model.reset();
+    for(const auto& entry:s.config["models"].items()){
+        auto m=loadModel(entry.getStr("path"),platform::readContentFile,&warnings);
+        bench::appendShadowGeometry(s.geometry,*m,mat4::translate(entry["translation"].isArray()?v3(entry["translation"]):float3{}));
+    }
+    std::fprintf(stderr,"geometry: %zu triangles\n",s.geometry.triangles.size());
+    s.geometry.build();
+    std::string bytes;if(!platform::readContentFile(cache,bytes))throw std::runtime_error("cannot read cache");
+    s.grid=decodeLightGrid(bytes,recipeKey(s.config));
+    const auto& gi=s.config["probeGI"];
+    s.giSun=gi["sun"].isArray()?v3(gi["sun"]):float3{};s.giSky=gi["sky"].isArray()?v3(gi["sky"]):float3{};
+}
+
+enum Mode {Plane=0,Exact=1,None=2,Moments=3};
+// High-quality gridIndirect; returns radiance and total accepted weight.
+float3 indirect(const Scene& s,float3 p,float3 n,Mode mode,float& total) {
+    const auto& t=s.grid.texels;const auto o=s.grid.origin,sz=s.grid.size;
+    float3 c=(p-float3{o.x,o.y,o.z})*o.w-float3{.5f,.5f,.5f};
+    float3 base{std::floor(c.x),std::floor(c.y),std::floor(c.z)},f=c-base;
+    float3 result{};total=0;
+    for(int i=0;i<8;++i){
+        float3 corner{float(i%2),float((i/2)%2),float(i/4)},cell=base+corner;
+        if(cell.x<0||cell.y<0||cell.z<0||cell.x>=sz.x||cell.y>=sz.y||cell.z>=sz.z)continue;
+        int index=int(cell.x+sz.x*(cell.y+sz.y*cell.z));auto header=t[size_t(index)];int offset=int(header.z);if(offset<=0)continue;
+        float w=(corner.x>0?f.x:1-f.x)*(corner.y>0?f.y:1-f.y)*(corner.z>0?f.z:1-f.z);if(w<=1e-6f)continue;
+        float3 position=float3{o.x,o.y,o.z}+(cell+float3{.5f,.5f,.5f})*(1/o.w);
+        float3 q=p-position;float d=length(q);float vis=1;
+        if(mode==Moments){
+            float3 toProbe=d>1e-5f?q*(-1/d):n;float facing=(dot(toProbe,n)+1)*.5f;if(s.facing)w*=facing*facing+.2f;
+            float3 qb=q+n*(s.normalBias<0?.24f/o.w:s.normalBias);float db=length(qb);
+            vis=db>1e-5f?std::max(momentVisibility(s.moments,offset,qb,db),.05f):1;
+            float weight=w*vis;if(weight<.2f*w&&weight>0)vis*=(weight/w)*(weight/w)/.04f;
+        }else if(d>1e-5f){
+            if(mode==Plane)vis=planeVisibility(t,offset,q,d);
+            else if(mode==Exact)vis=s.geometry.distance(position,q*(1/d),d-.02f)>=d-.02f?1.0f:0.0f;
+        }
+        w*=vis;if(w<=0)continue;
+        float4 nn{1,n.x,n.y,n.z};auto dot4=[&](int k){auto v=t[size_t(offset+k)];return v.x*nn.x+v.y*nn.y+v.z*nn.z+v.w*nn.w;};
+        float3 value{};int mask=int(header.w);
+        if(mask&2)value=value+float3{dot4(100)*s.giSun.x,dot4(101)*s.giSun.y,dot4(102)*s.giSun.z};
+        if(mask&4)value=value+float3{dot4(103)*s.giSky.x,dot4(104)*s.giSky.y,dot4(105)*s.giSky.z};
+        value={std::max(value.x,0.0f),std::max(value.y,0.0f),std::max(value.z,0.0f)};
+        result=result+value*w;total+=w;
+    }
+    return total>1e-5f?result*(1/total):float3{};
+}
+
+void writePpm(const std::string& path,int w,int h,const std::vector<float3>& px) {
+    std::ofstream f(path,std::ios::binary);f<<"P6\n"<<w<<" "<<h<<"\n255\n";
+    for(auto c:px)for(float v:{c.x,c.y,c.z}){float x=v/(1+v);f.put(char(std::clamp(int(std::pow(x,1/2.2f)*255+.5f),0,255)));}
+}
+
+int diagnose(const Scene& s,int x0,int y0,int w,int h,int width,int height,const std::string& prefix) {
+    const auto& cam=s.config["cameras"][0];float3 eye=v3(cam["eye"]),target=v3(cam["target"]);
+    float fov=float(cam["fovYDegrees"].toDouble(s.config["fovYDegrees"].toDouble(60)))*3.14159265f/180;
+    float3 forward=normalize(target-eye),right=normalize(cross(forward,{0,1,0})),up=cross(right,forward);
+    float scale=std::tan(fov*.5f),aspect=float(width)/height;
+    std::vector<float3> img[4];for(auto& v:img)v.assign(size_t(w*h),{});
+    std::vector<float> totals[4];for(auto& v:totals)v.assign(size_t(w*h),0);
+    std::atomic<int> row{0};
+    auto work=[&](){for(int y;(y=row++)<h;)for(int x=0;x<w;++x){
+        float sx=(x0+x+.5f)/width,sy=(y0+y+.5f)/height;
+        auto ray=normalize(forward+right*((2*sx-1)*scale*aspect)+up*((1-2*sy)*scale));float3 n;
+        float d=s.geometry.distance(eye,ray,500,&n);if(d>=500)continue;
+        if(dot(n,ray)>0)n=n*-1.0f;
+        float3 p=eye+ray*d+n*.01f;
+        for(int m=0;m<(s.moments.empty()?3:4);++m){float t;img[m][size_t(y*w+x)]=indirect(s,p,n,Mode(m),t);totals[m][size_t(y*w+x)]=t;}
+    }};
+    std::vector<std::thread> pool;for(unsigned i=0;i<std::max(1u,std::thread::hardware_concurrency());++i)pool.emplace_back(work);for(auto& t:pool)t.join();
+    const char* names[4]={"plane","exact","none","moments"};
+    for(int m=0;m<(s.moments.empty()?3:4);++m)writePpm(prefix+names[m]+".ppm",w,h,img[m]);
+    // Error of plane vs exact visibility, relative to the unoccluded result.
+    double err=0,errExactNone=0;int falseHidden=0,falseVisible=0,count=0;std::vector<float3> diff(size_t(w*h));
+    for(size_t i=0;i<diff.size();++i){
+        auto a=img[0][i],b=img[1][i],c=img[2][i];float la=a.x+a.y+a.z,lb=b.x+b.y+b.z,lc=c.x+c.y+c.z;if(lc<=0)continue;++count;
+        err+=std::abs(la-lb)/std::max(lc,1e-3f);errExactNone+=std::abs(lb-lc)/std::max(lc,1e-3f);
+        float tp=totals[0][i],te=totals[1][i];if(tp+.25f<te)++falseHidden;if(te+.25f<tp)++falseVisible;
+        float r=(la-lb)/std::max(lc,1e-3f);diff[i]=r>0?float3{r*4,0,0}:float3{0,-r*4,0};
+    }
+    writePpm(prefix+"diff.ppm",w,h,diff);
+    std::printf("{\"pixels\":%d,\"meanRelErrPlaneVsExact\":%.4f,\"meanRelDiffExactVsNone\":%.4f,\"falseHiddenPixels\":%d,\"falseVisiblePixels\":%d}\n",
+        count,err/std::max(count,1),errExactNone/std::max(count,1),falseHidden,falseVisible);
+    return 0;
+}
+}
+
+int aiverseMain(int argc,char** argv) {
+    std::string scene,cache,prefix="/tmp/pv_";int sub=0;float bias=-1;bool facing=true;std::string write;int x0=0,y0=0,w=320,h=180,width=1280,height=720;
+    for(int i=1;i+1<argc;i+=2){std::string a=argv[i],v=argv[i+1];
+        if(a=="--scene")scene=v;else if(a=="--cache")cache=v;else if(a=="--prefix")prefix=v;
+        else if(a=="--rect"){std::sscanf(v.c_str(),"%d,%d,%d,%d",&x0,&y0,&w,&h);}
+        else if(a=="--moments")sub=std::atoi(v.c_str());
+        else if(a=="--write")write=v;
+        else if(a=="--facing")facing=std::atoi(v.c_str())!=0;
+        else if(a=="--bias")bias=float(std::atof(v.c_str()));
+        else if(a=="--size"){std::sscanf(v.c_str(),"%dx%d",&width,&height);}
+    }
+    if(scene.empty()||cache.empty()){std::fprintf(stderr,"usage: aiverse_probe_visibility --scene recipe.json --cache gi.avgic [--moments 4 [--write new.avgic]] [--rect x,y,w,h] [--size WxH] [--prefix out_] [--bias m] [--facing 0|1]\n");return 2;}
+    try{
+        auto dir=std::filesystem::path(scene).parent_path();if(!dir.empty())std::filesystem::current_path(dir);
+        Scene s;loadScene(s,std::filesystem::path(scene).filename().string(),cache);s.normalBias=bias;s.facing=facing;
+        if(sub>0){auto start=std::chrono::steady_clock::now();s.moments=rebakeMoments(s,sub);
+            std::fprintf(stderr,"moments rebake: %.1f s\n",std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());}
+        if(!write.empty()){
+            if(s.moments.empty())throw std::runtime_error("--write requires --moments N");
+            if(std::filesystem::exists(write))throw std::runtime_error("output already exists: "+write);
+            StaticLightGrid out=s.grid;out.texels=s.moments;
+            auto bytes=encodeLightGrid(out,recipeKey(s.config));decodeLightGrid(bytes,recipeKey(s.config));
+            std::ofstream f(write,std::ios::binary);f.write(bytes.data(),std::streamsize(bytes.size()));if(!f)throw std::runtime_error("cannot write cache");
+            std::fprintf(stderr,"wrote %s (%zu bytes)\n",write.c_str(),bytes.size());return 0;
+        }
+        return diagnose(s,x0,y0,w,h,width,height,prefix);
+    }catch(const std::exception& e){std::fprintf(stderr,"probe_visibility: %s\n",e.what());return 1;}
+}

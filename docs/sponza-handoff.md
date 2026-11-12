@@ -1,5 +1,44 @@
 # Sponza rendering handoff — 2026-11-12
 
+## Continuation: probe visibility bands fixed with distance moments
+
+The right-arch band and left-colonnade facets (the blocker below) are resolved by
+replacing per-texel hit planes with DDGI-style distance moments; see
+`docs/probe-gi.md` § Moment visibility. Root cause, confirmed on the CPU with the
+new `aiverse_probe_visibility` diagnostic: each 22-degree cube texel stored one centre
+ray's hit plane, and the runtime test turned that plane into an infinite half-space.
+
+- Bake: `StaticShadowGeometry::bakeMoments` (4x4 rays per texel, mean + mean square).
+  `bakeProbeEnvironment` / `bakeDiffuseField` use it for new caches.
+- Runtime (GLSL + MSL): cell mask bit 16 selects Chebyshev visibility, a .24 x spacing
+  normal offset, a smooth back-facing weight and weak-weight crush. Plane caches render
+  as before (all 51 existing HDR controls unchanged on GL).
+- Existing caches upgrade without a transport rebake:
+  `aiverse_probe_visibility --scene scene-day-high-local-ao.json --cache day-mobile-dense.avgic --moments 4 --write <new>.avgic`
+  (about 18 s for 10,710 probes). Point the recipes' `--read-light-cache` at the new file.
+- New HDR GPU controls 52 (High) and 53 (Mobile, fully blocked) exercise the moment path.
+
+Verified in the cloud on Linux (llvmpipe, GLES 3.2): CPU tests, all 53 HDR controls,
+an unchanged plane cache rendering bit-identically to the previous build, full Sponza High/Mobile captures with 1024 px copies of the textures (the 4K set does not
+fit 7 GB RAM with llvmpipe). **Not verified: MSL compilation and Metal captures, Android.**
+Run on the Mac: `AIVERSE_HDR_VERIFY=1 aiverse_hdr_scene` and `aiverse_hdr_gl`, then the
+reproduce commands below with the new cache.
+
+Open items:
+- `codex/sponza-full` is 41 commits behind `main`. A trial merge conflicts in 12 files,
+  mostly because `main` gained its own static-geometry LOD/culling/cache path
+  (geometry-visibility) overlapping this branch's model LOD/culling in `Renderer3DModels.cpp`,
+  `Renderer3D.{h,cpp}`, `Renderer3DReflect.cpp`, `Gfx.h`, `GfxMetal.mm`, `ModelGltf.cpp`, `PostFx.cpp`.
+  It needs a deliberate reconciliation with Metal verification, not a mechanical merge.
+- `day-local-ao.avao` was rejected ("does not match geometry/settings") by the Linux build
+  with downscaled textures. The key hashes loaded floats bit-exactly plus material flags;
+  whether compiler float differences or texture-derived flags cause it is not determined.
+  Check before relying on AO caches across platforms/compilers.
+- Visual gap to the reference that is not GI: the reference has visible sunlit haze in
+  the courtyard and a warmer, lower-contrast grade.
+
+## Previous checkpoint
+
 Branch: `codex/sponza-full`. Worktree on the author's machine:
 `/Users/aleksandrfeer/Projects/RTSEngine/.worktrees/linear-hdr`.
 The user requested that all work be pushed for another agent to continue.

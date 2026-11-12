@@ -61,13 +61,26 @@ namespace aiverse::render::shaders {
     "        return ratio<=1.0+0.03*sqrt(normal2)?1.0:0.0;\n" \
     "    return distance-0.03<=plane.x?1.0:0.0;\n" \
     "}\n" \
-    "float probeVisibility(int offset, vec3 q, float distance, bool highQuality) {\n" \
+    "float probeVisibility(int offset, vec3 q, float distance, bool highQuality, bool moments) {\n" \
     "    vec3 a=abs(q);vec2 uv;int face;\n" \
     "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=vec2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
     "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=vec2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
     "    else{face=q.z>0.0?4:5;uv=vec2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
     "    vec2 texel=(uv*0.5+0.5)*4.0-0.5;\n" \
     "    vec2 fraction=fract(texel);float visible=0.0;\n" \
+    "    if(moments){\n" \
+    "        // Chebyshev bound on bilinearly filtered distance moments: soft partial occlusion.\n" \
+    "        vec2 m=vec2(0.0);\n" \
+    "        for(int tap=0;tap<4;++tap){\n" \
+    "            vec2 corner=vec2(float(tap%2),float(tap/2));\n" \
+    "            ivec2 pixel=ivec2(clamp(floor(texel)+corner,vec2(0),vec2(3)));\n" \
+    "            vec2 w2=mix(vec2(1.0)-fraction,fraction,corner);\n" \
+    "            m+=gridFetch(offset+4+face*16+pixel.y*4+pixel.x).xy*(w2.x*w2.y);\n" \
+    "        }\n" \
+    "        if(distance<=m.x)return 1.0;\n" \
+    "        float variance=max(m.y-m.x*m.x,1e-4),excess=distance-m.x;\n" \
+    "        float chebyshev=variance/(variance+excess*excess);return chebyshev*chebyshev*chebyshev;\n" \
+    "    }\n" \
     "    if(!highQuality){\n" \
     "        // Four corners preserve narrow openings that a triangle footprint misses.\n" \
     "        vec2 base=floor(texel),inverse=vec2(1)-fraction;\n" \
@@ -130,14 +143,23 @@ namespace aiverse::render::shaders {
     "        if(max(weight,spatial)<=1e-6)continue;\n" \
     "        vec3 position=l_gridOrigin.xyz+(cell+0.5)/l_gridOrigin.w;\n" \
     "        vec3 delta=wpos-position;float distance=length(delta);\n" \
-    "        float visible=distance>1e-5?probeVisibility(offset,delta,distance,!mobile):1.0;weight*=visible;spatial*=visible;\n" \
+    "        float visible=1.0;\n" \
+    "        if(mod(floor(cellHeader.w*0.0625),2.0)>=1.0){\n" \
+    "            // Moment caches: receiver offset along the normal, smooth back-facing falloff, weak-weight crush.\n" \
+    "            vec3 toProbe=distance>1e-5?-delta/distance:n;float facing=0.5*dot(toProbe,n)+0.5;\n" \
+    "            vec3 biased=delta+n*(0.24/l_gridOrigin.w);float reach=length(biased);\n" \
+    "            float v=reach>1e-5?max(probeVisibility(offset,biased,reach,!mobile,true),0.05):1.0;\n" \
+    "            if(v<0.2)v*=v*v*25.0;\n" \
+    "            visible=(facing*facing+0.2)*v;\n" \
+    "        }else if(distance>1e-5)visible=probeVisibility(offset,delta,distance,!mobile,false);\n" \
+    "        weight*=visible;spatial*=visible;\n" \
     "        if(max(weight,spatial)<=0.0)continue;\n" \
     "        vec4 normal=vec4(1.0,n);\n" \
     "        vec3 value=vec3(0.0);if(mod(cellHeader.w,2.0)>=1.0)value=vec3(dot(gridFetch(offset),normal),dot(gridFetch(offset+1),normal),dot(gridFetch(offset+2),normal));\n" \
     "        value*= l_giPoint.rgb;\n" \
     "        if(mod(floor(cellHeader.w*0.5),2.0)>=1.0 && dot(l_giSun.rgb,l_giSun.rgb)>0.0)value+=vec3(dot(gridFetch(offset+100),normal),dot(gridFetch(offset+101),normal),dot(gridFetch(offset+102),normal))*l_giSun.rgb;\n" \
     "        if(mod(floor(cellHeader.w*0.25),2.0)>=1.0 && dot(l_giSky.rgb,l_giSky.rgb)>0.0)value+=vec3(dot(gridFetch(offset+103),normal),dot(gridFetch(offset+104),normal),dot(gridFetch(offset+105),normal))*l_giSky.rgb;\n" \
-    "        float sky=cellHeader.w>=8.0?clamp(dot(gridFetch(offset+106),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0):0.0;\n" \
+    "        float sky=mod(floor(cellHeader.w*0.125),2.0)>=1.0?clamp(dot(gridFetch(offset+106),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0):0.0;\n" \
     "        vec3 light=max(value,vec3(0.0));\n" \
     "        skyVisible+=sky*weight;result+=light*weight;total+=weight;\n" \
     "        if(mobile){fullResult+=light*spatial;fullSky+=sky*spatial;fullTotal+=spatial;}\n" \
@@ -150,7 +172,7 @@ namespace aiverse::render::shaders {
     "        ambient=mix(fullTotal>1e-5?fullSky/fullTotal:0.0,ambient,trust);\n" \
     "    }\n" \
     "    vec3 location=(wpos-l_gridOrigin.xyz)*l_gridOrigin.w;\n" \
-    "    if(gridFetch(0).w>=8.0 && all(greaterThanEqual(location,vec3(0.0))) && all(lessThan(location,l_gridSize.xyz)))ambientVisibility=ambient;\n" \
+    "    if(mod(floor(gridFetch(0).w*0.125),2.0)>=1.0 && all(greaterThanEqual(location,vec3(0.0))) && all(lessThan(location,l_gridSize.xyz)))ambientVisibility=ambient;\n" \
     "    return radiance;\n" \
     "}\n" \
     "void gridLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds, out float ambientVisibility, float indirectOcclusion) {\n" \
@@ -323,13 +345,25 @@ namespace aiverse::render::shaders {
     "        return ratio<=1.0+0.03*sqrt(normal2)?1.0:0.0;\n" \
     "    return distance-0.03<=plane.x?1.0:0.0;\n" \
     "}\n" \
-    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance, bool highQuality) {\n" \
+    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance, bool highQuality, bool moments) {\n" \
     "    float3 a=abs(q);float2 uv;int face;\n" \
     "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=float2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
     "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=float2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
     "    else{face=q.z>0.0?4:5;uv=float2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
     "    float2 texel=(uv*0.5+0.5)*4.0-0.5;\n" \
     "    float2 fraction=fract(texel);float visible=0.0;\n" \
+    "    if(moments){\n" \
+    "        float2 m=float2(0.0);\n" \
+    "        for(int tap=0;tap<4;++tap){\n" \
+    "            float2 corner=float2(float(tap%2),float(tap/2));\n" \
+    "            int2 pixel=int2(clamp(floor(texel)+corner,float2(0),float2(3)));\n" \
+    "            float2 w2=mix(float2(1.0)-fraction,fraction,corner);\n" \
+    "            m+=gridFetch(lm,offset+4+face*16+pixel.y*4+pixel.x,width).xy*(w2.x*w2.y);\n" \
+    "        }\n" \
+    "        if(distance<=m.x)return 1.0;\n" \
+    "        float variance=max(m.y-m.x*m.x,1e-4),excess=distance-m.x;\n" \
+    "        float chebyshev=variance/(variance+excess*excess);return chebyshev*chebyshev*chebyshev;\n" \
+    "    }\n" \
     "    if(!highQuality){\n" \
     "        // Four corners preserve narrow openings that a triangle footprint misses.\n" \
     "        float2 base=floor(texel),inverse=float2(1)-fraction;\n" \
@@ -392,14 +426,22 @@ namespace aiverse::render::shaders {
     "        if(max(weight,spatial)<=1e-6)continue;\n" \
     "        float3 position=l.gridOrigin.xyz+(cell+0.5)/l.gridOrigin.w;\n" \
     "        float3 delta=wpos-position;float distance=length(delta);\n" \
-    "        float visible=distance>1e-5?probeVisibility(lm,int(l.gridSize.w),offset,delta,distance,!mobile):1.0;weight*=visible;spatial*=visible;\n" \
+    "        float visible=1.0;\n" \
+    "        if(fmod(floor(cellHeader.w*0.0625),2.0)>=1.0){\n" \
+    "            float3 toProbe=distance>1e-5?-delta/distance:n;float facing=0.5*dot(toProbe,n)+0.5;\n" \
+    "            float3 biased=delta+n*(0.24/l.gridOrigin.w);float reach=length(biased);\n" \
+    "            float v=reach>1e-5?max(probeVisibility(lm,int(l.gridSize.w),offset,biased,reach,!mobile,true),0.05):1.0;\n" \
+    "            if(v<0.2)v*=v*v*25.0;\n" \
+    "            visible=(facing*facing+0.2)*v;\n" \
+    "        }else if(distance>1e-5)visible=probeVisibility(lm,int(l.gridSize.w),offset,delta,distance,!mobile,false);\n" \
+    "        weight*=visible;spatial*=visible;\n" \
     "        if(max(weight,spatial)<=0.0)continue;\n" \
     "        float4 normal=float4(1.0,n);\n" \
     "        float3 value=float3(0.0);if(fmod(cellHeader.w,2.0)>=1.0)value=float3(dot(gridFetch(lm,offset,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+1,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+2,int(l.gridSize.w)),normal));\n" \
     "        value*= l.giPoint.rgb;\n" \
     "        if(fmod(floor(cellHeader.w*0.5),2.0)>=1.0 && dot(l.giSun.rgb,l.giSun.rgb)>0.0)value+=float3(dot(gridFetch(lm,offset+100,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+101,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+102,int(l.gridSize.w)),normal))*l.giSun.rgb;\n" \
     "        if(fmod(floor(cellHeader.w*0.25),2.0)>=1.0 && dot(l.giSky.rgb,l.giSky.rgb)>0.0)value+=float3(dot(gridFetch(lm,offset+103,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+104,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+105,int(l.gridSize.w)),normal))*l.giSky.rgb;\n" \
-    "        float sky=cellHeader.w>=8.0?clamp(dot(gridFetch(lm,offset+106,int(l.gridSize.w)),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0):0.0;\n" \
+    "        float sky=fmod(floor(cellHeader.w*0.125),2.0)>=1.0?clamp(dot(gridFetch(lm,offset+106,int(l.gridSize.w)),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0):0.0;\n" \
     "        float3 light=max(value,float3(0.0));\n" \
     "        skyVisible+=sky*weight;result+=light*weight;total+=weight;\n" \
     "        if(mobile){fullResult+=light*spatial;fullSky+=sky*spatial;fullTotal+=spatial;}\n" \
@@ -412,7 +454,7 @@ namespace aiverse::render::shaders {
     "        ambient=mix(fullTotal>1e-5?fullSky/fullTotal:0.0,ambient,trust);\n" \
     "    }\n" \
     "    float3 location=(wpos-l.gridOrigin.xyz)*l.gridOrigin.w;\n" \
-    "    if(gridFetch(lm,0,int(l.gridSize.w)).w>=8.0 && all(location>=float3(0.0)) && all(location<l.gridSize.xyz))ambientVisibility=ambient;\n" \
+    "    if(fmod(floor(gridFetch(lm,0,int(l.gridSize.w)).w*0.125),2.0)>=1.0 && all(location>=float3(0.0)) && all(location<l.gridSize.xyz))ambientVisibility=ambient;\n" \
     "    return radiance;\n" \
     "}\n" \
     "static void gridLight(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds, thread float& ambientVisibility, float indirectOcclusion) {\n" \

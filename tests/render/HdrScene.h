@@ -119,7 +119,8 @@ struct HdrScene {
             if (readOutput) readOutput(receive); else d.captureNextFrame(receive);
         }
         d.endPass();
-        if(ownsFrame)d.endFrame(); ++frame;
+        if(ownsFrame)d.endFrame();
+        ++frame;
         if (!renderer.modelError().empty() || !post.lastError().empty() || !screen.lastError().empty()) {
             std::fprintf(stderr,"renderer: %s; post: %s\n",renderer.modelError().c_str(),post.lastError().c_str()); failed=true;
         }
@@ -182,7 +183,8 @@ struct HdrScene {
                     if(probeIndex>=21&&probeIndex<=26){const float origins[6][3]={{-1.1f,-1.3f,-1.7f},{-1.1f,-1.7f,-1.3f},{-1.3f,-1.1f,-1.7f},{-1.3f,-1.7f,-1.1f},{-1.7f,-1.1f,-1.3f},{-1.7f,-1.3f,-1.1f}};const auto& o=origins[probeIndex-21];diffuse.origin={o[0],o[1],o[2]};}
                     diffuse.probes.resize(27);
                     for(auto& probe:diffuse.probes){for(auto& coefficient:probe.irradiance)coefficient={.2f,0,0,0};
-                        for(auto& c:probe.sun)c={.1f,0,0,0};for(auto& c:probe.sky)c={.05f,0,0,0};
+                        for(auto& c:probe.sun)c={.1f,0,0,0};
+                        for(auto& c:probe.sky)c={.05f,0,0,0};
                         probe.visibility.resolution=4;probe.visibility.distances.assign(96,(probeIndex==14||probeIndex==16)?0.0f:5.0f);probe.visibility.normals.resize(96);}
                     if(probeIndex>=21&&probeIndex<=26)for(int z=0;z<3;++z)for(int y=0;y<3;++y)for(int x=0;x<3;++x){auto p=diffuse.origin+float3{x+.5f,y+.5f,z+.5f};float value=.2f+.01f*p.x+.02f*p.y+.03f*p.z;for(auto& c:diffuse.probes[size_t(x+3*(y+3*z))].irradiance)c={value,0,0,0};}
                 }
@@ -211,7 +213,10 @@ struct HdrScene {
                     // Only a corner outside the selected tetrahedron sees the receiver.
                     diffuse.probes[22].visibility.distances.assign(96,5);
                 }
-                renderer.lights.setIndirectQuality((probeIndex==17||probeIndex==32)?IndirectQuality::Off:((probeIndex>=15&&probeIndex<41)||probeIndex==43||probeIndex==45)?IndirectQuality::Mobile:IndirectQuality::High);
+                // Moment visibility: 52 open (High), 53 fully blocked (Mobile floor, crush and fallback).
+                if(probeIndex>=52)for(auto& p:diffuse.probes){float mean=probeIndex==52?5.0f:0.0f;
+                    p.visibility.distances.assign(96,mean);p.visibility.squares.assign(96,mean*mean);p.visibility.normals.clear();}
+                renderer.lights.setIndirectQuality((probeIndex==17||probeIndex==32)?IndirectQuality::Off:((probeIndex>=15&&probeIndex<41)||probeIndex==43||probeIndex==45||probeIndex==53)?IndirectQuality::Mobile:IndirectQuality::High);
                 renderer.lights.setStaticRadiance(probeIndex==18?float3{.5f,.5f,.5f}:float3{1,1,1},probeIndex==19?float3{2,2,2}:float3{},probeIndex==19?float3{1,1,1}:float3{});
                 if(probeIndex==20)renderer.lights.setStaticRadiance({0,0,0},{1,1,1},{0,0,0});
                 if(probeIndex==44){
@@ -243,7 +248,7 @@ struct HdrScene {
         if(probeIndex>=41){renderer.lighting.sunIntensity=0;renderer.lighting.skyColor={};renderer.lighting.groundColor={};probeBg->materials[0].normalTex=-1;renderer.setMaterialQuality(MaterialQuality::Low);}
         if(probeIndex>=46){probeBg->materials[0].occlusionTex=probeIndex>=48?-1:1;renderer.setMaterialQuality(MaterialQuality::High);}
         if(probeIndex==47||probeIndex==50)renderer.lighting.sunIntensity=.25f;
-        if(probeIndex>=49){probeBg->materials[0].vertexOcclusion=true;probeBg->materials[0].vertexColors=true;}
+        if(probeIndex>=49){const bool ao=probeIndex<52;probeBg->materials[0].vertexOcclusion=ao;probeBg->materials[0].vertexColors=ao;}
         if(probeIndex==51)renderer.setMaterialQuality(MaterialQuality::Low);
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
@@ -290,7 +295,8 @@ struct HdrScene {
             if(probeIndex==46)expected=0;
             if(probeIndex==47)expected=.25f*1.01f;
             if(probeIndex==48)expected=.2f;
-            if(probeIndex>=49)expected=.2f*(64.0f/255)+(probeIndex==50?.25f*1.01f:0);
+            if(probeIndex>=49&&probeIndex<52)expected=.2f*(64.0f/255)+(probeIndex==50?.25f*1.01f:0);
+            if(probeIndex>=52)expected=.2f;
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
                 if(cw<=0||ch<=0||px.size()!=size_t(cw*ch*4)) {failed=true;return;}
@@ -300,7 +306,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==52)captured=true;
+                if(probeIndex==54)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }

@@ -49,7 +49,8 @@ inline size_t bakeMeshOcclusion(Model& model,float radius=.75f,int samples=64) {
                 }
             }
         }
-        if(vertices.empty())continue;geometry.build();
+        if(vertices.empty())continue;
+        geometry.build();
         for(auto index:vertices){const auto& v=model.vertices[index];values[index]=localDiffuseVisibility(geometry,v.pos,v.nrm,radius,samples);++count;}
     }
     // Commit only after validation and tracing finish; failed bakes leave the model intact.

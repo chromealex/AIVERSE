@@ -147,7 +147,8 @@ int main(){
     std::cout<<"local AO: open, covered, opposite hemisphere, radius and repeatability PASS\n";
 
     Model aoModel;aoModel.vertices.resize(3);aoModel.vertices[0].pos={0,0,0};aoModel.vertices[1].pos={1,0,0};aoModel.vertices[2].pos={0,0,1};
-    for(auto& v:aoModel.vertices)v.nrm={0,1,0};aoModel.indices={0,1,2};aoModel.materials.resize(1);aoModel.meshes.resize(1);
+    for(auto& v:aoModel.vertices)v.nrm={0,1,0};
+    aoModel.indices={0,1,2};aoModel.materials.resize(1);aoModel.meshes.resize(1);
     Primitive aoPrimitive;aoPrimitive.indexCount=3;aoModel.meshes[0].primitives.push_back(aoPrimitive);
     auto sharedAo=aoModel;sharedAo.meshes.push_back(sharedAo.meshes[0]);
     rejected=false;try{bakeMeshOcclusion(sharedAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&sharedAo.vertices[0].color==0xffffffffu);
@@ -160,5 +161,28 @@ int main(){
     auto invalidAo=aoModel;invalidAo.materials[0].vertexOcclusion=false;invalidAo.vertices[0].color=0x80ffffff;
     rejected=false;try{bakeMeshOcclusion(invalidAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&invalidAo.vertices[0].color==0x80ffffff);
     std::cout<<"mesh AO bake/cache: roundtrip, stale/corrupt rejection and alpha preservation PASS\n";
+
+    // Probe visibility moments: open, blocked and partially blocked texels; grid flag and cache roundtrip.
+    StaticShadowGeometry halfWall;halfWall.albedos={{.5f,.5f,.5f}};
+    halfWall.triangles={{{1,-5,.25f},{1,5,.25f},{1,5,5}},{{1,-5,.25f},{1,5,5},{1,-5,5}}};halfWall.build();
+    auto moments=halfWall.bakeMoments({0,0,0},3,4,4);
+    assert(moments.distances.size()==96&&moments.squares.size()==96&&moments.normals.empty());
+    auto texel=[](int face,int x,int y){return size_t(face*16+y*4+x);};
+    for(size_t i=0;i<96;++i)assert(moments.squares[i]+1e-4f>=moments.distances[i]*moments.distances[i]);
+    float blocked=moments.distances[texel(0,0,1)],partial=moments.distances[texel(0,1,1)],free=moments.distances[texel(0,3,1)];
+    assert(blocked>1&&blocked<1.3f&&std::abs(free-3)<1e-5f&&moments.distances[texel(1,1,1)]==3);
+    assert(partial>blocked+.5f&&partial<free-.5f&&moments.squares[texel(0,1,1)]-partial*partial>.5f);
+    assert(halfWall.bakeMoments({0,0,0},3,4,4).squares==moments.squares);
+    auto halfField=makeDiffuseVolume(halfWall,{-.5f,-.5f,-.5f},{-.5f,-.5f,-.5f},1);
+    assert(!halfField.probes[0].visibility.squares.empty());
+    StaticLightGrid momentGrid;momentGrid.build(std::vector<PointLight>{},1,nullptr,&halfField);
+    auto momentHeader=momentGrid.texels[0];assert((int(momentHeader.w)&16)!=0);
+    auto firstMoment=momentGrid.texels[size_t(momentHeader.z)+4];
+    assert(firstMoment.x==halfField.probes[0].visibility.distances[0]&&firstMoment.y==halfField.probes[0].visibility.squares[0]&&firstMoment.z==0);
+    auto momentBytes=encodeLightGrid(momentGrid,77);auto decoded=decodeLightGrid(momentBytes,77);
+    assert(decoded.texels.size()==momentGrid.texels.size()&&decoded.texels[size_t(momentHeader.z)+4].y==firstMoment.y&&decoded.texels[0].w==momentHeader.w);
+    halfField.probes[0].visibility.normals.resize(96);rejected=false;
+    try{momentGrid.build(std::vector<PointLight>{},1,nullptr,&halfField);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    std::cout<<"probe visibility moments: open/blocked/partial texels, grid flag and cache roundtrip PASS\n";
 
 }
