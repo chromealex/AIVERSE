@@ -27,6 +27,14 @@ Tests: `aiverse_tests driving_`.
 - **State / determinism.** `DrivingStore` world resource: hashed, saved after the top-down heroes, copied by
   rollback snapshots. Fixed maths only. Games without the block keep their checksums and save layout.
 
+## Computer drivers
+
+`Driving::setAutopilot(sim, vehicle, VehicleInput)` gives a vehicle nobody drives its pedals (throttle, brake,
+steer, handbrake); `clearAutopilot` parks it again. It is simulation state (hashed, saved): call it from a system or
+a script effect, never from the view. A hero who gets in takes over, and the autopilot input applies again when he
+gets out. A parked car at rest is skipped by the controller, a car on autopilot never is. Traffic and traffic lights
+are built on this by their own module; the city planner's `"city"` block of the map has the road graph.
+
 ## rules.json
 
 ```json

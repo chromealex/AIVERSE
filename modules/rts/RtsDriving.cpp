@@ -111,6 +111,24 @@ const DrivingCar* Driving::car(Simulation& sim, Entity vehicle) const {
     return st ? findCar(*st, vehicle) : nullptr;
 }
 
+bool Driving::setAutopilot(Simulation& sim, Entity vehicle, const vl::VehicleInput& input) {
+    auto* st = store(sim);
+    DrivingCar* c = st ? findCar(*st, vehicle) : nullptr;
+    if (!c || !vl::valid(input)) return false;
+    c->autopilot = true;
+    c->pilot = input;
+    return true;
+}
+
+bool Driving::clearAutopilot(Simulation& sim, Entity vehicle) {
+    auto* st = store(sim);
+    DrivingCar* c = st ? findCar(*st, vehicle) : nullptr;
+    if (!c) return false;
+    c->autopilot = false;
+    c->pilot = {};
+    return true;
+}
+
 Fixed Driving::speed(Simulation& sim, Entity vehicle) const {
     const DrivingCar* c = car(sim, vehicle);
     return c ? vl::vehicleForwardSpeed(c->st) : Fixed{};
@@ -126,7 +144,9 @@ void Driving::hash(Simulation& sim, Hasher& h) const {
         h.v3(s.position); h.v3(s.velocity);
         for (Fixed f : {s.yaw, s.yawRate, s.pitch, s.roll, s.steer, s.rpm, s.airspeed, s.sink, s.longAccel, s.trackLeft, s.trackRight}) h.fx(f);
         h.i32(s.gear); h.u32(s.shiftUntil); h.u32(s.slipMask); h.u32(s.lastTick);
-        h.u32(uint32_t(s.grounded) | uint32_t(s.drifting) << 1 | uint32_t(s.stalled) << 2 | uint32_t(s.initialized) << 3);
+        h.u32(uint32_t(s.grounded) | uint32_t(s.drifting) << 1 | uint32_t(s.stalled) << 2 | uint32_t(s.initialized) << 3 | uint32_t(c.autopilot) << 4);
+        for (Fixed f : {c.pilot.throttle, c.pilot.brake, c.pilot.steer}) h.fx(f);
+        h.u32(uint32_t(c.pilot.handbrake) | uint32_t(c.pilot.shiftUp) << 1 | uint32_t(c.pilot.shiftDown) << 2);
     }
 }
 
@@ -141,6 +161,7 @@ void Driving::io(Simulation& sim, Archive& a) {
         a(c.e, c.driver, c.player, c.doorUntil, s.position, s.velocity, s.yaw, s.yawRate, s.pitch, s.roll, s.steer, s.rpm);
         a(s.airspeed, s.sink, s.longAccel, s.trackLeft, s.trackRight, s.gear, s.shiftUntil, s.slipMask, s.lastTick);
         a(s.grounded, s.drifting, s.stalled, s.initialized);
+        a(c.autopilot, c.pilot.throttle, c.pilot.brake, c.pilot.steer, c.pilot.handbrake, c.pilot.shiftUp, c.pilot.shiftDown);
     }
 }
 
@@ -250,7 +271,11 @@ bool Driving::command(Simulation& sim, const Command& cmd) {
 vl::VehicleInput Driving::inputOf(Simulation& sim, const DrivingCar& c) const {
     vl::VehicleInput in;
     auto* td = m_->topDown()->store(sim);
-    if (!c.driver.valid() || !td || c.player >= td->pilots.size()) { in.handbrake = true; return in; }   // parked
+    if (!c.driver.valid() || !td || c.player >= td->pilots.size()) {
+        if (c.autopilot) return c.pilot;                   // a computer driver (traffic)
+        in.handbrake = true;                               // parked
+        return in;
+    }
     const topdown::Input& s = td->pilots[c.player].input;
     const Fixed mag = Fixed::fromRatio(s.moveMag, topdown::kMagMax), ang = Fixed::fromRaw(s.moveAngle);
     in.handbrake = s.fire;
@@ -289,7 +314,7 @@ void Driving::drive(Simulation& sim, DrivingStore& st, size_t index) {
     const DrivingVehicleType& vt = *typeOf(u.type);
     const Fixed mpc = rules_.metersPerCell;
     // parked and at rest: nothing to integrate until somebody gets in or something hits it (a city has hundreds)
-    if (!c.driver.valid() && c.st.initialized && c.st.velocity.x.raw == 0 && c.st.velocity.z.raw == 0 && c.st.yawRate.raw == 0) return;
+    if (!c.driver.valid() && !c.autopilot && c.st.initialized && c.st.velocity.x.raw == 0 && c.st.velocity.z.raw == 0 && c.st.yawRate.raw == 0) return;
     auto res = vl::stepVehicle(vt.def, c.st, sim.tick(), sim.dt(), inputOf(sim, c), vl::VehicleContacts{});
     Transform& tr = w.get<Transform>(c.e);
     if (res) {

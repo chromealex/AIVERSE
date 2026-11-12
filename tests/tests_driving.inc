@@ -147,6 +147,33 @@ TEST(driving_immobile_units_are_solid) {
     CHECK(sim->world().get<game::Unit>(car).hp < Fixed::fromInt(400));
 }
 
+TEST(driving_autopilot_drives_a_car_nobody_sits_in) {
+    auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart, false));
+    Entity hero = mod(*sim).topDown()->heroOf(*sim, 1), car = firstOf(*sim, "sedan");
+    run(*sim, 0.5);
+    const Vec3 parked = tdPos(*sim, car);
+    aiverse::lib::genre::VehicleInput in;
+    in.throttle = Fixed::fromInt(1);
+    CHECK(drv(*sim).setAutopilot(*sim, car, in) && !drv(*sim).setAutopilot(*sim, hero, in));
+    in.throttle = Fixed::fromInt(5);
+    CHECK(!drv(*sim).setAutopilot(*sim, car, in));   // out of range: refused, the old input stays
+    run(*sim, 2.0);
+    CHECK(tdPos(*sim, car).x > parked.x + Fixed::fromInt(1) && drv(*sim).speed(*sim, car) > Fixed::fromInt(3));
+    // saved and restored with the autopilot on: both copies drive on identically
+    std::string save = sim->serialize();
+    auto copy = makeSimJson(kDrivingRules, topDownMap(kDriveStart, false));
+    std::string err;
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum());
+    run(*sim, 1.0); run(*copy, 1.0);
+    CHECK(copy->checksum() == sim->checksum());
+    // parked again: it brakes to a stop and stays
+    CHECK(drv(*sim).clearAutopilot(*sim, car));
+    run(*sim, 6.0);
+    const Vec3 rest = tdPos(*sim, car);
+    run(*sim, 1.0);
+    CHECK(tdPos(*sim, car) == rest && drv(*sim).speed(*sim, car).raw == 0);
+}
+
 TEST(driving_wreck_throws_the_driver_out) {
     auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
     auto& w = sim->world();

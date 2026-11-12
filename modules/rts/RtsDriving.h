@@ -55,6 +55,8 @@ struct DrivingCar {
     Entity driver = kNullEntity;
     uint8_t player = 0;                            // slot of the driver (0: nobody)
     uint32_t doorUntil = 0;                        // the driver's door is open until this tick
+    bool autopilot = false;                        // pedals come from `pilot` (traffic, scripts) while no hero drives
+    lib::genre::VehicleInput pilot;
     lib::genre::VehicleState st;
 };
 
@@ -77,6 +79,11 @@ public:
     const DrivingCar* car(Simulation& sim, Entity vehicle) const;       // the state of a vehicle unit, or null
     bool isDriving(Simulation& sim, Entity hero) const { return carOf(sim, hero) != nullptr; }
     Fixed speed(Simulation& sim, Entity vehicle) const;                 // forward speed, m/s (0: not a vehicle)
+    // Computer drivers (traffic): the pedals of a vehicle nobody drives. Call it from simulation code only (a system,
+    // a script effect), every tick or on change: it is state, hashed and saved. A hero who gets in takes over; when he
+    // gets out the autopilot input applies again. false: not a vehicle, or the input is out of range.
+    bool setAutopilot(Simulation& sim, Entity vehicle, const lib::genre::VehicleInput& input);
+    bool clearAutopilot(Simulation& sim, Entity vehicle);              // back to parked (handbrake)
 
 private:
     const DrivingVehicleType* typeOf(uint16_t unitType) const;
