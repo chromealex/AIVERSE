@@ -1,0 +1,61 @@
+{
+  "match3": {
+    "rows": ["#......#", "........", "........", "........", "........", "........", "........", "#......#"],
+    "colors": 5,
+    "specials": [
+      {"shape": "line5", "special": "colorBomb"},
+      {"shape": "corner", "special": "bomb"},
+      {"shape": "line4", "special": "stripe"}
+    ],
+    "tileScore": 10,
+    "goals": {"moves": 30, "score": 2500, "collect": [{"color": 1, "count": 20}, {"color": 3, "count": 20}]}
+  },
+  "sokoban": {
+    "rows": [
+      "#######",
+      "#.    #",
+      "# $#$ #",
+      "#  @  #",
+      "#    .#",
+      "#######"
+    ],
+    "undo": 256
+  },
+  "sudoku": {
+    "box": [3, 3],
+    "rows": [
+      "53..7....",
+      "6..195...",
+      ".98....6.",
+      "8...6...3",
+      "4..8.3..1",
+      "7...2...6",
+      ".6....28.",
+      "...419..5",
+      "....8..79"
+    ]
+  },
+  "nonogram": {"rows": [[1, 1], [5], [5], [3], [1]], "columns": [[2], [4], [4], [4], [2]]},
+  "csp": {
+    "width": 3, "height": 1, "values": [1, 3],
+    "constraints": [
+      {"kind": "allDifferent", "cells": [0, 1, 2]},
+      {"kind": "sum", "cells": [0, 1], "value": 3},
+      {"kind": "count", "cells": [0, 1, 2], "value": 1, "count": 1}
+    ],
+    "givens": [{"cell": 1, "value": 2}]
+  },
+  "flood": {"rows": ["123412", "341233", "412124", "233411", "124132", "311243"], "colors": 4, "moves": 12, "origin": 0},
+  "pipes": {"rows": ["290", "0c0", "061"], "kinds": ["S.#", "#.#", "#.T"], "rotation": ["010", "010", "020"], "noLeaks": true},
+  "tiles": {"width": 3, "height": 3, "tiles": [4, 1, 3, 7, 2, 6, 0, 5, 8]},
+  "blocks": {"rows": ["AAB.", "AAC.", "DE..", "...."], "target": "A", "goal": [2, 2]},
+  "packing": {
+    "rows": ["....", "....", "...."],
+    "pieces": [
+      {"rows": ["XX", "X."]},
+      {"rows": ["XXX"]},
+      {"rows": ["XX", "XX"]},
+      {"rows": ["XX"]}
+    ]
+  }
+}
