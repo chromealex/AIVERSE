@@ -2555,6 +2555,222 @@
           "maximum": 3600
         }
       }
+    },
+    "colony": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ticksPerHour": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "moodBase": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "moodBreakAt": {
+          "type": "integer",
+          "default": -60000,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "moodLowAt": {
+          "type": "integer",
+          "default": -20000,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "moodHighAt": {
+          "type": "integer",
+          "default": 40000,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "breakTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "lowSpeedMilli": {
+          "type": "integer",
+          "default": 700,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "contentSpeedMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "highSpeedMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "maxResponseJobs": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 1024
+        }
+      }
+    },
+    "survival": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "coreNormalMilli": {
+          "type": "integer",
+          "default": 37000,
+          "minimum": 30000,
+          "maximum": 42000
+        },
+        "comfortLowMilli": {
+          "type": "integer",
+          "default": 16000,
+          "minimum": -50000,
+          "maximum": 60000
+        },
+        "comfortHighMilli": {
+          "type": "integer",
+          "default": 27000,
+          "minimum": -50000,
+          "maximum": 60000
+        },
+        "coolingMicro": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "heatingMicro": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "recoveryMicro": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "coldMilli": {
+          "type": "integer",
+          "default": 35500,
+          "minimum": 20000,
+          "maximum": 45000
+        },
+        "severeColdMilli": {
+          "type": "integer",
+          "default": 33000,
+          "minimum": 20000,
+          "maximum": 45000
+        },
+        "hotMilli": {
+          "type": "integer",
+          "default": 38500,
+          "minimum": 30000,
+          "maximum": 45000
+        },
+        "severeHotMilli": {
+          "type": "integer",
+          "default": 40000,
+          "minimum": 30000,
+          "maximum": 45000
+        },
+        "hungerPerTick": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "thirstPerTick": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "staminaDrain": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "staminaRegen": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "lowAt": {
+          "type": "integer",
+          "default": 25000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wetChillMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "dryPerTick": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "starveDamage": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "thirstDamage": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "coldDamage": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "heatDamage": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "conditionRegen": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "windChillMilli": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "wetPerTick": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 100000
+        }
+      }
     }
   }
 }

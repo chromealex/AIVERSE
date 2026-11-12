@@ -226,6 +226,8 @@ bool libraryPuzzlesConsumerExample(aiverse::game::NativeState& state);   // Puzz
 bool libraryCardsTurnsConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings);
 // Vehicles + sports (vehicle-controllers, sports-rules): VehiclesSportsConsumer.cpp.
 bool vehiclesSportsConsumerExample(aiverse::game::NativeState&,const aiverse::lib::gameplay::GameplaySettings&);
+// settlement-production + survival-ecology: ProductionSurvivalConsumer.cpp.
+bool libraryProductionSurvivalConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings);
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -248,5 +250,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryPuzzlesConsumerExample(state))return false;
     if(!libraryCardsTurnsConsumerExample(state,*parsed.value))return false;
     if(!vehiclesSportsConsumerExample(state,*parsed.value))return false;
+    if(!libraryProductionSurvivalConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

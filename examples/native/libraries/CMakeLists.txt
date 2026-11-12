@@ -1,4 +1,4 @@
-aiverse_native_module(ID library_demo VERSION 6 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp CardsTurnsConsumer.cpp VehiclesSportsConsumer.cpp)
+aiverse_native_module(ID library_demo VERSION 7 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp CardsTurnsConsumer.cpp VehiclesSportsConsumer.cpp ProductionSurvivalConsumer.cpp)
 aiverse_native_use_libraries(aiverse_native_library_demo
     graphs behavior logistics configuration tutorial
     ui-binding screens themes app-lifecycle play-scenarios genre-kits change-planner
@@ -22,3 +22,6 @@ aiverse_native_use_libraries(aiverse_native_library_demo puzzle-solvers)
 aiverse_native_use_libraries(aiverse_native_library_demo card-games tactics-grid cards-turns-bots)
 # Vehicles + sports (wheeled/tracked/hover/flight controllers, seats, damage, race positions, ball rules, bots).
 aiverse_native_use_libraries(aiverse_native_library_demo vehicle-controllers sports-rules)
+# Settlement production (needs, jobs, recipes, hauling, power/fluid graphs, disasters, colony planner bot) and
+# survival/ecology (body model, weather, populations, animal behavior, resource renewal).
+aiverse_native_use_libraries(aiverse_native_library_demo settlement-production survival-ecology)
