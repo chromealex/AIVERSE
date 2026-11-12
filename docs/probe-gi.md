@@ -248,9 +248,15 @@ vertices to represent tiny cavities; normal-map-only relief is not traced.
 This is stable local AO, not dynamic GI, contact shadows, or a replacement for the
 probe visibility fix still needed in Sponza.
 
-`MeshOcclusionCache.h` serializes one byte per vertex plus material flags. The key
-covers source geometry/normals/vertex colors, topology, relevant material flags,
-radius, sample count and bake version; a separate checksum rejects damaged data.
+`MeshOcclusionCache.h` serializes one byte per vertex plus material flags (format `AVA2`).
+The exact key covers integer data only: topology, vertex colours, relevant material flags,
+radius, sample count and bake version. Loaded positions/normals are checked with a
+tolerance (per 4096-vertex block: position/normal sums and one sample vertex), because
+the glTF loader normalizes normals and compilers contract that arithmetic into FMA
+differently (clang arm64 vs gcc x86): the earlier bit-exact float key (`AVAO`) rejected
+the same asset on another platform. `AVAO` files are refused with a "rebake" message.
+The tolerant check catches replaced assets and block-scale edits, not sub-millimetre
+tweaks of single vertices. A separate checksum rejects damaged data.
 Prepare caches offline. Runtime loading only validates/applies cached values before
 GPU upload; it performs no ray tracing. Existing models default to AO disabled.
 

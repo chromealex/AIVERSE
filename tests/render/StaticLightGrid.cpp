@@ -152,11 +152,19 @@ int main(){
     Primitive aoPrimitive;aoPrimitive.indexCount=3;aoModel.meshes[0].primitives.push_back(aoPrimitive);
     auto sharedAo=aoModel;sharedAo.meshes.push_back(sharedAo.meshes[0]);
     rejected=false;try{bakeMeshOcclusion(sharedAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&sharedAo.vertices[0].color==0xffffffffu);
-    auto untouched=aoModel;auto aoKey=meshOcclusionKey(aoModel,1,64);
+    auto untouched=aoModel;auto pristine=aoModel;auto aoKey=meshOcclusionKey(aoModel,1,64);
     assert(bakeMeshOcclusion(aoModel,1,64)==3&&aoModel.materials[0].vertexOcclusion);
     auto aoBytes=encodeMeshOcclusion(aoModel,aoKey);decodeMeshOcclusion(untouched,aoBytes,aoKey);
     assert(untouched.materials[0].vertexOcclusion&&untouched.vertices[0].color==aoModel.vertices[0].color);
     rejected=false;try{decodeMeshOcclusion(untouched,aoBytes,aoKey+1);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    {   // Portable key: 1-ulp float noise (FMA contraction across compilers) is accepted, real edits are not.
+        const auto cleanBytes=encodeMeshOcclusion(aoModel,aoKey);auto noisy=pristine;noisy.vertices[1].nrm.y=std::nextafter(noisy.vertices[1].nrm.y,2.0f);noisy.vertices[2].pos.x=std::nextafter(noisy.vertices[2].pos.x,-1.0f);
+        decodeMeshOcclusion(noisy,cleanBytes,meshOcclusionKey(noisy,1,64));
+        auto moved=pristine;moved.vertices[0].pos.y+=.5f;rejected=false;
+        try{decodeMeshOcclusion(moved,cleanBytes,meshOcclusionKey(moved,1,64));}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+        auto legacy=cleanBytes;legacy[3]='O';rejected=false;
+        try{auto again=pristine;decodeMeshOcclusion(again,legacy,aoKey);}catch(const std::runtime_error& e){rejected=std::string(e.what()).find("v1")!=std::string::npos;}assert(rejected);
+    }
     aoBytes[28]^=1;rejected=false;try{decodeMeshOcclusion(untouched,aoBytes,aoKey);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
     auto invalidAo=aoModel;invalidAo.materials[0].vertexOcclusion=false;invalidAo.vertices[0].color=0x80ffffff;
     rejected=false;try{bakeMeshOcclusion(invalidAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&invalidAo.vertices[0].color==0x80ffffff);
