@@ -270,7 +270,7 @@ def build(assets, out, seed):
                     'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
                     'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
                     'buttons': [],
-                    'camera': {'pitch': 80, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
+                    'camera': {'pitch': 90, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
                                'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}})
     return {'size': [W, H], 'buildings': sum(1 for e in entities if e['type'][0] == 'b' and e['type'][1:].isdigit()),
             'cars': sum(1 for e in entities if e['type'] in cars), 'vehicleTypes': len(cars), 'buildingTypes': len(buildings)}
