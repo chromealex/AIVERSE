@@ -652,6 +652,12 @@ checksums for a replay and for a mid-match save/restore. Verified only with g++ 
 -Wall -Wextra -Werror -pedantic, tests and the headless run built by hand). Not verified: MSVC/clang, CMake isolation,
 native module export, platform runtimes, performance at bullet-heaven densities, UI/VFX integration.
 
+**Engine integration.** RTS games use the package without native code through the rules block `progression`
+([progression.md](progression.md), `modules/rts/RtsProgression*`): kills of real units drop orbs, offers are chosen by
+`kCmdProgression` (UI / bot / Lua), perk stats feed `RtsModule::stat`, `dealDamage` and the shot hooks, bullet perks
+extend projectile programs, summon circles spawn real allies, and the battle deck comes from the map's
+`players[i].deck` (match start payload). The library headers are unchanged.
+
 ## Narrative scenes (narrative-graphs 0.2.0)
 
 Headers `genre/NarrativeScenes.h` (policy), `genre/NarrativeCues.h` (the `CueRequest` record shared with cinematic owners),

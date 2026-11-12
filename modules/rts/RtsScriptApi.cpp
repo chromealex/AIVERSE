@@ -638,6 +638,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
     {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid},
     {"end_turn", kCmdEndTurn}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
+    {"progression", kCmdProgression},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
@@ -690,6 +691,18 @@ bool commandParam(lua_State* L, Vm& vm, int t, Command& c) {
         field("aim"); in.aim = lua_toboolean(L, -1);
         field("fire"); in.fire = lua_toboolean(L, -1);
         if (ok && !field("param")) c.param = topdown::pack(in);
+        break;
+    }
+    case kCmdProgression: {   // level-up offers (RtsProgression.h): op = "choose" | "reroll" | "close" | "open", card (1-based), revision
+        int64_t op = kProgChoose;
+        if (field("op")) {
+            const char* o = lua_tostring(L, -1);
+            const std::string n = o ? o : "";
+            op = n == "choose" ? kProgChoose : n == "reroll" ? kProgReroll : n == "close" ? kProgClose : n == "open" ? kProgOpen : 0;
+            if (!op) { vm.err = "command: progression op must be choose, reroll, close or open"; ok = false; }
+        }
+        ok = ok && num("card", a, 1) && num("revision", b, 0);
+        if (ok && !field("param")) c.param = progressionParam(op, int(a - 1), uint32_t(b));
         break;
     }
     case kCmdStance: case kCmdFormation:
@@ -1242,6 +1255,7 @@ void openGameApi(Vm& vm) {
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
+    openProgressionApi(vm);   // in-match progression (RtsProgressionApi.cpp)
 }
 
 } // namespace script
@@ -1371,6 +1385,15 @@ Json scriptApiReference() {
     rd.push(fn("raid_can_extract(player, point_id)", "global veto hook: return false (+ reason) to refuse an extraction or a call"));
     rd.push(fn("on(\"raid_phase\" | \"raid_point\" | \"raid_channel\" | \"raid_extracted\" | \"raid_loot\" | \"raid_interact\" | \"raid_objective\" | \"raid_player\", fn(e))", "raid events: e = {player, unit, other, value, x, z} (docs/raid.md: value encodings)"));
     r.set("raid", rd);
+    Json pg = Json::array();   // in-match progression (RtsProgressionApi.cpp, docs/progression.md)
+    pg.push(fn("progression.active() / progression.players() / progression.player(slot)", "rules \"progression\": {level, xp, xp_to_next, progress (0..1, the xp bar), levels (banked), kills, hero, offer_open, perks = {{id, key, slot, initial}}, recruits = {[slot] = n}}"));
+    pg.push(fn("progression.offer(slot)", "the open level-up offer or nil: {revision, level, rerolls, cards = {{kind = \"perk\"|\"recruit\", perk (key), id, slot, unit (type), hook, scope}}}"));
+    pg.push(fn("progression.orbs() / progression.points([slot]) / progression.unit(unit) / progression.stat(unit, stat [, base])", "xp orbs {id, x, z, value, owner, ready}; summon circles {id, x, z, radius, state, progress}; {player, slot, bearer}; perk pipeline value (milli)"));
+    pg.push(fn("progression.choose(slot, card [, revision]) / reroll(slot) / open(slot) / close(slot) (simulation scripts)", "act on the offer (cards are 1-based); view scripts: view.progression_choose(card) / view.progression_reroll(); commands: game.command(p, {type = \"progression\", op = \"choose\", card = 1, revision = r})"));
+    pg.push(fn("progression.grant_xp(slot, xp [, pickup]) / grant_perk(slot, perk [, deck slot]) / clear_perks(slot [, deck slot [, keep_initial]]) / magnet(slot) / spawn_orb(x, z, xp [, owner]) (simulation scripts)", "scripted rewards, magnets, orbs"));
+    pg.push(fn("progression_can_offer(player, perk_key | \"recruit:<type>\")", "global veto hook: return false to keep a card out of offers"));
+    pg.push(fn("on(\"progression_xp\" | \"progression_level\" | \"progression_offer\" | \"progression_perk\" | \"progression_recruit\" | \"progression_orb\" | \"progression_summon\", fn(e))", "progression events: e = {player, unit, other, value, x, z} (docs/progression.md: value encodings); a perk's \"hook\" global runs as hook({player, unit, x, z, args = {perk, id, slot, level}})"));
+    r.set("progression", pg);
     return r;
 }
 

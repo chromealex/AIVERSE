@@ -68,8 +68,26 @@ const ProjectileFlight* RtsModule::projectileFlight(const Projectile& p) const {
         if (size_t(p.effList)>=rules_.payloads.size() || p.effIndex<0 || size_t(p.effIndex)>=rules_.payloads[size_t(p.effList)].size()) return nullptr;
         return &rules_.payloads[size_t(p.effList)][size_t(p.effIndex)].delivery.flight;
     }
+    if (p.weapon <= -2) {   // bullet perks (rules "progression"): the weapon's program + the shooter's bullet modifiers
+        const auto* pg = rules_.progression.get();
+        const int v = -2 - p.weapon;
+        if (!pg || size_t(v) >= pg->variants.size() || pg->variants[size_t(v)].type != p.sourceType) return nullptr;
+        return &pg->variants[size_t(v)].flight;
+    }
     if (p.sourceType>=rules_.types.size() || p.weapon<0 || size_t(p.weapon)>=rules_.types[p.sourceType].weapons.size()) return nullptr;
     return &rules_.types[p.sourceType].weapons[size_t(p.weapon)].flight;
+}
+const WeaponDef* RtsModule::projectileWeapon(const Projectile& p) const {
+    if (p.sourceType >= rules_.types.size()) return nullptr;
+    int weapon = p.weapon;
+    if (weapon <= -2) {
+        const auto* pg = rules_.progression.get();
+        const int v = -2 - weapon;
+        if (!pg || size_t(v) >= pg->variants.size()) return nullptr;
+        weapon = pg->variants[size_t(v)].weapon;
+    }
+    const auto& ws = rules_.types[p.sourceType].weapons;
+    return weapon >= 0 && size_t(weapon) < ws.size() ? &ws[size_t(weapon)] : nullptr;
 }
 void RtsModule::bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) const {
     projectile::bake(p.program,p.speed,f);
@@ -192,8 +210,8 @@ void RtsModule::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>
                 sim.emit({kEvImpact,shot.owner,target,shot.source,e.payload,at});
                 applyPayload(sim,e.payload,ctx);
             } else {
-                const auto& wd=rules_.types[shot.sourceType].weapons[size_t(shot.weapon)];
-                dealDamage(sim,target,shot.damage*ps.damageScale,shot.damageType,shot.source,shot.owner,&wd);
+                const WeaponDef* wd=projectileWeapon(shot);
+                dealDamage(sim,target,shot.damage*ps.damageScale,shot.damageType,shot.source,shot.owner,wd);
                 if (shot.onHit>=0 && w.alive(target)) {
                     EffectCtx ctx; ctx.caster=shot.source; ctx.owner=shot.owner; ctx.sourceType=shot.sourceType;
                     ctx.target=target; ctx.point=flat(at); ctx.origin=shot.start; ctx.scale=ps.damageScale;
@@ -205,7 +223,7 @@ void RtsModule::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>
                         if (t!=target && eligible(t) && distance(at,w.get<Transform>(t).pos)<=shot.splash) splash.push_back(t);
                     });
                     std::sort(splash.begin(),splash.end(),[](Entity a,Entity b){return a.index<b.index;});
-                    for (Entity t:splash) dealDamage(sim,t,shot.damage*ps.damageScale,shot.damageType,shot.source,shot.owner,&wd);
+                    for (Entity t:splash) dealDamage(sim,t,shot.damage*ps.damageScale,shot.damageType,shot.source,shot.owner,wd);
                 }
             }
         };

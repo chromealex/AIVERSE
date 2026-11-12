@@ -6,6 +6,7 @@
 #include <iterator>
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/RtsScript.h"
+#include "modules/rts/RtsProgression.h"
 #include <stdexcept>
 
 namespace aiverse::editor {
@@ -46,7 +47,7 @@ const CmdName kCommands[] = {
     {"transit", kCmdTransit}, {"guard", kCmdGuard}, {"follow", kCmdFollow}, {"formation", kCmdFormation}, {"build_line", kCmdBuildLine},
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem}, {"pick_item", kCmdPickItem}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock}, {"end_turn", kCmdEndTurn},
-    {"script", kCmdScript}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
+    {"script", kCmdScript}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"progression", kCmdProgression},
 };
 
 Vec3 readPoint(const Json& p) {
@@ -189,7 +190,8 @@ const char* kCommandHelp =
     "to the current orders (Shift). script: a rules \"commands\" command: 'id' + 'args' {name: value} (int / enum name / "
     "bool / point [x, z] / unit reference), units = the selection. topdown (rules topDown heroes): 'move' [x, z] stick vector "
     "(length = magnitude, at most 1), 'aim' [x, z] aim direction, 'fire' true; sticky until the next topdown command. "
-    "topdown_ability: 'ability' id of the hero's type, optional point (default: along the aim / facing) or target.";
+    "topdown_ability: 'ability' id of the hero's type, optional point (default: along the aim / facing) or target. "
+    "progression (rules progression level-up offers): 'op' choose / reroll / close / open, 'card' (1-based) of the open offer.";
 
 const char* commandSchemaProps() {
     return R"("command": {"type": "string"}, "player": {"type": "integer"},
@@ -200,7 +202,8 @@ const char* commandSchemaProps() {
         "rect": {"type": "array", "items": {"type": "integer"}}, "extra": {"type": "integer"}, "queue": {"type": "boolean"},
         "id": {"type": "string", "description": "script: rules commands id"}, "args": {"type": "object", "description": "script: arguments by name"},
         "move": {"type": "array", "items": {"type": "number"}, "description": "topdown: stick vector [x, z]"},
-        "aim": {"type": "array", "items": {"type": "number"}, "description": "topdown: aim direction [x, z]"}, "fire": {"type": "boolean"})";
+        "aim": {"type": "array", "items": {"type": "number"}, "description": "topdown: aim direction [x, z]"}, "fire": {"type": "boolean"},
+        "op": {"type": "string", "description": "progression: choose / reroll / close / open"}, "card": {"type": "integer", "description": "progression: 1-based card of the open offer"})";
 }
 
 Command commandFromJson(const SimRefs& refs, const Json& p, uint8_t defPlayer) {
@@ -257,6 +260,14 @@ Command commandFromJson(const SimRefs& refs, const Json& p, uint8_t defPlayer) {
             in.fire = p.getBool("fire", false);
             c.param = topdown::pack(in);
         }
+    }
+    if (c.type == kCmdProgression && !p.has("param")) {   // level-up offers (RtsProgression.h): the open offer's revision
+        const std::string op = p.getStr("op", "choose");
+        const int64_t o = op == "choose" ? game::kProgChoose : op == "reroll" ? game::kProgReroll : op == "close" ? game::kProgClose : op == "open" ? game::kProgOpen : 0;
+        need(o ? 0 : -1, "progression op (choose, reroll, close, open)", op);
+        const game::Progression* pg = refs.mod.progression();
+        const auto* pr = pg && pg->active() ? pg->progress(refs.sim, c.player) : nullptr;
+        c.param = game::progressionParam(o, int(p.getInt("card", 1) - 1), pr ? pr->offer.revision : 0);
     }
     if (p.has("ability")) {
         const std::string id = p.getStr("ability");

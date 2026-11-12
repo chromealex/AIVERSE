@@ -2353,6 +2353,26 @@ aim snap cone, auto-fire policy, abilities along the aim, respawn) and game.json
 aim stick, ability buttons, keyboard / mouse / gamepad, follow camera). Keys, defaults and behaviour:
 [docs/topdown.md](topdown.md). Sample: `templates/topdown_arena`.
 
+## In-match progression (`progression`, agent-df-progression-glue)
+
+Optional rules block `progression`: the `match-progression` library format (`stats`, `perks`, `units`, `deck`, `xp`
+with `toNext` / `curve` / `kill`, `offers` with `default` / `levels` / `variants` / `preferNewRecruitAtLevel` /
+`recruitWeight` / `recruitAiPriority`, `summonPoints` with `id` / `team` / `position` / `radiusMilli` /
+`progressTicks` / `cooldownTicks` / `singleUse` / `action`; perks with `key`, `hook`, `scope`, `bearer`, `effects`
+(`stat`, `op`, `value`, `stage`), `maxSelections`, `minLevel`, `weight`, `requires`, `excludes`, `tags`, `upgrades`,
+`offerable`, `aiPriority`, `aiPriorityLowHealth`) on real units, plus engine keys: `units[].type`, `perks[].bullet`
+(`modifiers`: split / ricochet / flyThrough / damage / speed / radius appended to the bearer's projectile programs), `perks[].onHit` /
+`onHitChance` (effects payload on hit: burn, stun, ...), `players`, `killXp`, `orbs`, `orbOwner`, `autoOpen`,
+`offerChoices`, `offerRerolls`, `rerollAvoidsRepeat`, `maxLevel`, `xpGrowthPerLevel`, `maxRecruitsPerSlot`, `maxSquad`,
+`pickups` (`radius`, `magnetRadius`, `grabRadius`, `attractSpeed`, `attractAccel`, `maxSpeed`, `landing`, `lifetime`,
+`maxOrbs`), `summons` (`progress`, `cooldown`, `maxAllies`, `charges`, `chargeRecharge`, `resetOnExit`), `squad`
+(`follow`, `lifetime`), `critDamage`, `decks`, `defaultDeck` (battle deck payloads: `player`, `techLevel`, `choiceCount`,
+`enforceUnlocks`, `slots` with `slot`, `unit`, `level`, `opened`, `inTeam`, `perks`). Map: `progression.summonPoints`,
+`players[i].deck` (the match start payload). Hero xp from kills and xp orbs, seeded level-up offers chosen with
+`kCmdProgression` (UI, bot, Lua, MCP), perk stats on damage / incoming damage / speed / fire interval / range / max
+health / splash / crits / regen, summon circles and recruits as real units. Full reference:
+[progression.md](progression.md); sample: `templates/perk_arena`.
+
 ## Ordered projectile flight programs
 
 Weapons and projectile deliveries accept an optional `flight` object with ordered Split, Ricochet,
