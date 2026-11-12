@@ -159,10 +159,29 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Resource packs (.rpak). The runtime links only the zstd decoder; host tools that write packs
-# link aiverse_pack_writer, which carries the full zstd library instead (never link both).
+# link aiverse_pack_writer, which carries the full zstd library (in host builds the decoder target
+# forwards to it, see below).
 # ---------------------------------------------------------------------------
 set(AIVERSE_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by aiversebuild)")
-add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+# Host builds (tools or tests on) also compile the full zstd for pack writers; there aiverse_zstd_dec
+# forwards to it, so a binary that mixes runtime and tool libraries carries one zstd copy instead of two
+# (GNU ld rejects the duplicate symbols). Packaged builds (aiversebuild: tools/tests OFF) keep the
+# small decoder-only library.
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    find_package(Threads REQUIRED)
+    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
+    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd PRIVATE -w)
+    endif()
+    add_library(aiverse_zstd_dec INTERFACE)
+    target_link_libraries(aiverse_zstd_dec INTERFACE aiverse_zstd)
+else()
+    add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd_dec PRIVATE -w)
+    endif()
+endif()
 # HTTP fetcher for chunk downloads, per platform (see engine/pack/Chunks.h).
 if(AIVERSE_PLATFORM STREQUAL "windows")
     set(AIVERSE_PACK_HTTP engine/pack/http/HttpWin.cpp)
@@ -193,16 +212,7 @@ elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT MSVC)
-    target_compile_options(aiverse_zstd_dec PRIVATE -w)
-endif()
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
-    find_package(Threads REQUIRED)
-    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
-    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
-    if(NOT MSVC)
-        target_compile_options(aiverse_zstd PRIVATE -w)
-    endif()
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
     target_link_libraries(aiverse_pack_writer PUBLIC aiverse_pack aiverse_engine aiverse_zstd)
 endif()
