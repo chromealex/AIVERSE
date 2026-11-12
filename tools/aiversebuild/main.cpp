@@ -67,6 +67,7 @@
 #include "tools/audiopack/AudioPack.h"
 #include "tools/aiversebuild/Branding.h"
 #include "tools/aiversebuild/FileRules.h"
+#include "tools/aiversebuild/TextureCompress.h"
 #include "tools/aiversebuild/Plugins.h"
 #include "tools/aiversebuild/Toolchains.h"
 #include "tools/models/ModelConvert.h"
@@ -485,7 +486,11 @@ fs::path contentPack(Options& o) {
             if (image.rfind("engine/ui/", 0) == 0) fixedImages.push_back("ui/" + image.substr(10));
         }
     }
-    if (!aiverse::build::applyFileRules(w, fileRules, levelRules, fr, &err, fixedImages)) die(err);
+    aiverse::build::TextureCompressContext tcx;   // ASTC for "compress" rules (mobile targets)
+    tcx.encoder = aiverse::build::findAstcenc();
+    tcx.cacheDir = (tempDir(o) / "astc-cache").string();
+    tcx.tmpDir = (tempDir(o) / "astc-tmp").string();
+    if (!aiverse::build::applyFileRules(w, fileRules, levelRules, fr, &err, fixedImages, &tcx)) die(err);
     for (auto& m : fr.warnings) info("предупреждение: " + m);
     for (auto& it : fr.items) info("файл " + it.path + ": " + it.what + (it.after ? " (" + aiverse::pack::formatBytes(it.before) + " → " + aiverse::pack::formatBytes(it.after) + ")" : ""));
     aiverse::atlas::AtlasStats as;

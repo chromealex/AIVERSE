@@ -13896,3 +13896,57 @@ TEST(world_tree_lua_peek_is_observation_only) {
     CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
 }
 #endif
+
+// ---- agent-unity-materials: ASTC 6x6 runtime format and the packaging KTX2 writer (tools/aiversebuild/TextureCompress)
+#include "tools/aiversebuild/TextureCompress.h"
+TEST(ktx2_astc6x6_and_packaging_writer) {
+    using namespace aiverse::render;
+    CHECK(blockDim(BlockFormat::ASTC_6x6) == 6 && blockDim(BlockFormat::ASTC_4x4) == 4 && blockDim(BlockFormat::BC7) == 4);
+    CHECK(levelByteSize(BlockFormat::ASTC_6x6, 13, 7) == size_t(3 * 2 * 16));
+    CHECK(levelByteSize(BlockFormat::ASTC_4x4, 13, 7) == size_t(4 * 2 * 16));
+    CHECK(isAstc(BlockFormat::ASTC_6x6) && !isAstc(BlockFormat::BC7));
+    for (int block : {4, 6})
+        for (bool srgb : {false, true}) {
+            // 13x7 with a full chain: 13x7, 6x3, 3x1, 1x1
+            std::vector<std::string> levels;
+            for (int w = 13, h = 7, l = 0;; ++l) {
+                std::string data(levelByteSize(block == 6 ? BlockFormat::ASTC_6x6 : BlockFormat::ASTC_4x4, w, h), '\0');
+                for (size_t i = 0; i < data.size(); ++i) data[i] = char(i * 7 + size_t(l));
+                levels.push_back(data);
+                if (w == 1 && h == 1) break;
+                w = std::max(1, w / 2); h = std::max(1, h / 2);
+            }
+            const std::string file = aiverse::build::makeAstcKtx2(block, srgb, 13, 7, levels);
+            CompressedImage ci;
+            std::string err;
+            CHECK(parseKtx2(file, ci, err));
+            CHECK(ci.format == (block == 6 ? BlockFormat::ASTC_6x6 : BlockFormat::ASTC_4x4) && ci.srgb == srgb);
+            CHECK(ci.width == 13 && ci.height == 7 && ci.levels.size() == levels.size());
+            for (size_t l = 0; l < levels.size() && l < ci.levels.size(); ++l)
+                CHECK(std::string(ci.levels[l].begin(), ci.levels[l].end()) == levels[l]);
+            const uint32_t dfd = uint32_t(uint8_t(file[48])) | uint32_t(uint8_t(file[49])) << 8;
+            CHECK(dfd > 0 && dfd + 44 <= file.size() && uint8_t(file[dfd + 12]) == 162);   // KHR_DF_MODEL_ASTC
+            CHECK(uint8_t(file[dfd + 16]) == block - 1 && uint8_t(file[dfd + 14]) == (srgb ? 2 : 1));
+            Image img;
+            CHECK(decodeImage(file, img) && img.compressed && img.rgba.empty() && img.width == 13);   // GPU-only (no CPU decoder)
+        }
+    // .astc container (astcenc output)
+    std::string astc = {char(0x13), char(0xAB), char(0xA1), char(0x5C), 6, 6, 1, 13, 0, 0, 7, 0, 0, 1, 0, 0};
+    astc += std::string(3 * 2 * 16, 'x');
+    int bx = 0, by = 0, w = 0, h = 0;
+    std::string blocks;
+    CHECK(aiverse::build::readAstcFile(astc, bx, by, w, h, blocks) && bx == 6 && w == 13 && h == 7 && blocks.size() == 96);
+    CHECK(!aiverse::build::readAstcFile(astc.substr(0, 40), bx, by, w, h, blocks));
+    // with an encoder (AIVERSE_ASTCENC): a real 20x12 gradient through astcenc, 5 mips
+    if (std::getenv("AIVERSE_ASTCENC")) {
+        const std::string enc = aiverse::build::findAstcenc();
+        std::vector<unsigned char> px(20 * 12 * 4);
+        for (int i = 0; i < 20 * 12; ++i) { px[size_t(i) * 4] = uint8_t(i); px[size_t(i) * 4 + 1] = uint8_t(i * 3); px[size_t(i) * 4 + 2] = 90; px[size_t(i) * 4 + 3] = 255; }
+        aiverse::build::AstcOptions opt;
+        opt.quality = "fastest";
+        std::string ktx2, err;
+        CHECK(aiverse::build::encodeAstcKtx2(px.data(), 20, 12, opt, enc, (std::filesystem::temp_directory_path() / "aiverse-astc-test").string(), ktx2, err));
+        CompressedImage ci;
+        CHECK(parseKtx2(ktx2, ci, err) && ci.format == BlockFormat::ASTC_6x6 && ci.levels.size() == 5 && ci.srgb);
+    }
+}

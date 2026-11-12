@@ -101,6 +101,7 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
             raise ValueError('unsupported mapping target: '+spec[0])
     types = {}
     conversions = {}
+    used_materials = set()
     for a in model['assets']:
         src = safe(root, a['path'])
         if a['kind'] == 'script': continue
@@ -131,9 +132,13 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
         if entity.get('models'):
             ty['view'].update(model='content/'+entity['models'][0], scale=scale * entity.get('modelSettings',{}).get(entity['models'][0],{}).get('meshes',{}).get('globalScale',1), fit=False)
             if len(entity['models']) > 1: item(model, entity['source'], 'missing', 'Multiple meshes require composed model review.', key='meshes')
-        if entity.get('materials'):
+        slots = (entity.get('materialSlots') or {}).get(entity['models'][0]) if entity.get('models') else None
+        if slots and (slots['materials'] or slots['assign']):
+            if slots['materials']: ty['view']['materials'] = dict(slots['materials'])
+            if slots['assign']: ty['view']['assign'] = dict(slots['assign'])
+            used_materials.update(slots['materials'].values()); used_materials.update(slots['assign'].values())
+        elif entity.get('materials') and not model.get('materialLibrary'):
             ty['view']['materials'] = {'*':entity['materials'][0]}
-            if len(entity['materials'])>1: item(model, entity['source'], 'missing', 'Material slots require matching to mesh names.', key='slots')
         if entity.get('sprite'):
             result = sprite(model, writer, entity, scale)
             if result: ty['sprite'] = result
@@ -144,9 +149,9 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
         if entity.get('scale',[1,1,1]) != [1,1,1]:
             item(model, entity['source'], 'missing', 'Non-default transform scale retained in port.json; review model dimensions.', key='scale')
         for mat in ty['view'].get('materials',{}).values():
-            for key in ('texture','normalMap','emissiveMap'):
-                if mat.get(key) in conversions: mat[key] = conversions[mat[key]]
+            if isinstance(mat, dict): retarget_material(mat, conversions)
         types[entity['id']] = ty
+    material_report = emit_materials(model, writer, root, used_materials, conversions)
     music = sorted({'content/'+e['audio']['file'] for e in model['entities'] if e.get('audio',{}).get('music') and e['audio'].get('loop') and e['audio'].get('file')})
     if music:
         writer.json('audio.json', {'music': {'match': {'files':music, 'loop':True}}})
@@ -171,6 +176,7 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     writer.rules(dict(victory='noEntities',resources={'gold':{'name':'Gold','kind':'stock','start':0}},types=types))
     manifest = dict(name=model['name'],id='com.aiverse.'+ident(model['name']),version='0.1.0',module='rts',rules='rules.json',maps=map_list,external=True)
     if is2d: manifest['camera'] = dict(projection='ortho',pitch=90,yaw=0,rotate=False)
+    if material_report.get('packaging'): manifest['packaging'] = material_report.pop('packaging')
     writer.json('game.json',manifest)
     writer.json(ident(model['name'])+'.rtsproj',dict(format=1,name=model['name'],manifest='game.json'))
     # VFX runs into a staging folder so repeat imports cannot overwrite edited effects/textures.
@@ -186,14 +192,15 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
                     for p in sorted(Path(staging).rglob('*')):
                         if p.is_file(): writer.write(p.relative_to(staging).as_posix(),p.read_bytes())
                     item(model,source,'approx','Effects converted; event bindings require semantic review.',key='vfx',details=report)
-    writer.write('.rpakignore', b'# Import provenance and source code are editor-only.\nport.json\nport-report.json\nport-report.md\n.port-state.json\n*.rtsproj\n')
+    writer.write('.rpakignore', b'# Import provenance and source code are editor-only.\nport.json\nport-report.json\nport-report.md\nport-materials.json\n.port-state.json\n*.rtsproj\n')
     writer.json('port.json',neutral)
     report = dict(format=1,engine=model['engine'],sourceRoot=str(root),items=model['items'],scripts=model['scripts'],summary={s:sum(x['status']==s for x in model['items']) for s in ('exact','approx','missing','resolved')})
     context = {e['source']: e for e in model['entities']}
     context.update({s['path']: s for s in model['scripts']})
     for i in report['items']:
         i['fingerprint'] = digest(encoded({'item': i, 'context':context.get(i['source'])}))
-    report['counts'] = dict(assets=len(model['assets']),types=len(types),maps=len(map_list),scripts=len(model['scripts']))
+    report['counts'] = dict(assets=len(model['assets']),types=len(types),maps=len(map_list),scripts=len(model['scripts']),
+                            materials=material_report.get('materials',0),derivedTextures=material_report.get('derived',0))
     old_report = safe(out,'port-report.json')
     if old_report.exists():
         resolved = {i['id']:i for i in read_json(old_report)['items'] if i['status']=='resolved'}
@@ -214,3 +221,46 @@ def save_report(out, report):
         lines.append(f"- [{i['status']}] {i['source']}: {i['reason']} → {i['result']} (`{i['id']}`)")
         if i.get('resolution'): lines.append('  Resolution: '+str(i['resolution']))
     safe(out,'port-report.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
+
+
+def retarget_material(mat, conversions):
+    """Point texture keys (and Shader Graph samples) at converted PNGs of PSD/TIFF sources."""
+    for key in ('texture','normalMap','emissiveMap','metallicRoughnessMap','occlusionMap','teamMask'):
+        if mat.get(key) in conversions: mat[key] = conversions[mat[key]]
+    for node in (mat.get('shaderGraph') or {}).get('nodes', []):
+        if node.get('texture') in conversions: node['texture'] = conversions[node['texture']]
+
+
+def emit_materials(model, writer, root, used, conversions):
+    """materials.json library, derived (repacked) textures, texture packaging rules, port-materials.json."""
+    lib = model.get('materialLibrary') or {}
+    if not lib: return {}
+    from unity_materials import texops, textures
+    out, derived, failed = {}, {}, []
+    for key in sorted(used):
+        entry = lib.get(key)
+        if not entry: continue
+        mat = copy.deepcopy(entry['material'])
+        retarget_material(mat, conversions)
+        mat['description'] = 'Unity %s (%s)' % (entry['name'], entry['shader'])
+        out[key] = mat
+        for spec in entry.get('derived', []): derived[spec['out']] = spec
+    for dst, spec in sorted(derived.items()):
+        ok, note = texops.run(spec, root, writer.write)
+        if ok: item(model, spec['sources'][0], 'exact', 'Packed map repacked (%s).' % spec['op'], dst, key='derived:'+dst)
+        else:
+            failed.append(dst)
+            item(model, spec['sources'][0], 'missing', 'Packed map not repacked (%s): %s' % (spec['op'], note), dst, key='derived:'+dst)
+    if failed:   # drop references to textures that were not written
+        for mat in out.values():
+            for k in ('metallicRoughnessMap','occlusionMap'):
+                if mat.get(k) in failed: del mat[k]
+    writer.json('materials.json', {'materials': out})
+    plans = model.get('texturePlans') or []
+    pack = textures.packaging([dict(p, path=conversions.get('content/'+p['path'], 'content/'+p['path'])[len('content/'):]) for p in plans])
+    used_derived = {d for d in derived if d not in failed}
+    families = {}
+    for e in lib.values(): families[e['family']] = families.get(e['family'], 0) + 1
+    writer.json('port-materials.json', dict(format=1, materials={k: lib[k] for k in sorted(used) if k in lib},
+                                            families=families, textures=plans, shaderGraphs=model.get('shaderGraphs') or {}))
+    return dict(materials=len(out), derived=len(used_derived), packaging=pack if (pack.get('files') or pack.get('targets')) else None)

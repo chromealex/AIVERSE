@@ -1,0 +1,26 @@
+fileFormatVersion: 2
+guid: a1000000000000000000000000000001
+ModelImporter:
+  serializedVersion: 24200
+  internalIDToNameTable:
+  - first:
+      43: 4300000
+    second: Body
+  - first:
+      43: 4300002
+    second: Wheel
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Rubber
+    second: {fileID: 2100000, guid: b1000000000000000000000000000003, type: 2}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  meshes:
+    globalScale: 1
+  animations:
+    clipAnimations: []

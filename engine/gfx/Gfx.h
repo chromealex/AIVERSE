@@ -42,7 +42,7 @@ enum class Backend { Metal, GLES3, GL33 };
 enum class BufferType { Vertex, Index, Storage };
 enum class Usage { Immutable, Dynamic };          // Dynamic: updated (whole or partially) every frame
 enum class PixelFormat { RGBA8, R8, Depth, RGBA32F,
-                         ETC2_RGB8, ETC2_RGBA8, BC1, BC3, BC7, ASTC_4x4,   // block-compressed: upload levels, check supports()   // Depth: 24/32-bit depth render target; RGBA32F: data textures
+                         ETC2_RGB8, ETC2_RGBA8, BC1, BC3, BC7, ASTC_4x4, ASTC_6x6,   // block-compressed: upload levels, check supports()   // Depth: 24/32-bit depth render target; RGBA32F: data textures
                                                         // (bone matrices, morph deltas), nearest only, read with texelFetch / read()
                          RGBA8_sRGB };  // sRGB-encoded RGBA8 (check supports()): sampling decodes to linear (before filtering),
                                         // as a render target the GPU encodes on write and blends in linear; alpha stays linear
