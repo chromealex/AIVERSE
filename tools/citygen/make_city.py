@@ -325,7 +325,8 @@ def make_road_tileset(assets, out):
                                            terr('grass', 'Grass', 'g', [0.24, 0.38, 0.19], bases['grass']),
                                            terr('street', 'Street', 's', [0.23, 0.23, 0.24], bases['street']),
                                            terr('parking', 'Car park', 'k', [0.25, 0.25, 0.26], bases.get('parking', bases['street'])),
-                                           dict(terr('water', 'Water', 'w', [0.15, 0.27, 0.36], bases['water']), cell='~')]})
+                                           dict(terr('water', 'Water', 'w', [0.15, 0.27, 0.36], bases['water']), cell='~'),
+                                           dict(terr('built', 'Built over (blocked)', 'x', [0.36, 0.35, 0.34], bases['lot']), cell='#')]})
     return bases
 
 
@@ -431,7 +432,7 @@ def plan_with_engine(assets, out, seed, headless, size, rules, types, building_t
     wjson(os.path.join(out, 'maps', 'city.json'), {'name': 'Downtown', 'size': list(size),
           'players': [{'name': 'Player', 'team': 1}, {'name': 'City', 'team': 2}], 'victory': {'mode': 'survive', 'seconds': 360000}})
     wjson(os.path.join(out, 'game.json'), game_manifest())
-    params = {'size': list(size), 'tileset': 'tilesets/city.json', 'tileBases': bases, 'river': True, 'roundabouts': 0.3}
+    params = {'size': list(size), 'tileset': 'tilesets/city.json', 'tileBases': bases, 'chars': {'blocked': 'x'}, 'river': True, 'roundabouts': 0.3}
     if layout == 'organic':
         params.update({'layout': 'organic', 'relief': 0, 'treeBudget': 1200})   # flat for now: the ground is a tile layer
     baked = os.path.join(out, 'maps', 'city.baked.json')
@@ -517,7 +518,7 @@ def build(assets, out, seed, headless=None, size=(96, 72), layout='grid', max_bu
         zone = 'residential' if nb <= 6 or nb == 23 or 25 <= nb <= 31 else 'industrial' if 13 <= nb <= 18 or nb >= 44 else 'commercial'
         building_types[b['id']] = {'name': b['name'], 'tags': ['building', zone], 'structure': {'footprint': [b['nx'], b['nz']]}, 'health': {'max': 100000}, 'sight': 1,
                           'invulnerable': True,
-                          'view': {'model': b['file'], 'fit': False, 'center': False, 'scale': 1 / M,
+                          'view': {'model': b['file'], 'fit': False, 'center': False, 'forward': '+x', 'scale': 1 / M,   # no turn: +x east, +z south
                                    'offset': [round(-b['centre'][0] / M, 4), 0, round(-b['centre'][1] / M, 4)]}}
     trees, bushes, tree_types = load_trees(assets, out)
     types.update(tree_types)

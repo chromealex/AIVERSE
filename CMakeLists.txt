@@ -1107,6 +1107,7 @@ set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.
     apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
 foreach(t aiverse_client main)
     if(TARGET ${t})
+        target_link_libraries(${t} PRIVATE aiverse_content_reader)   # streamed world: worker-thread project reader
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
     endif()
 endforeach()

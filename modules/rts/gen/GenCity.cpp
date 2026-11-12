@@ -707,6 +707,8 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
         auto chr = [&](const char* key, char def) { const std::string s = ch[key].isString() ? ch[key].str() : ""; return s.empty() ? def : s[0]; };
         const char cRoad = chr("road", 'a'), cStreet = chr("street", 's'), cPave = chr("pavement", 'p'), cLot = chr("lot", 'l'),
                    cPark = chr("park", 'g'), cWater = chr("water", 'w'), cParking = chr("parking", 'k');
+        const char cBlocked = chr("blocked", cPark);          // roundabout islands: a tileset terrain whose cell is '#'
+
         const Json& tb = c.P["tileBases"];
         auto base = [&](const std::string& key) { return tb[key].isNumber() ? int(tb[key].integer(-1)) : -1; };
         Json trows = Json::array(), fixed = Json::array();
@@ -757,7 +759,7 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 const size_t i = size_t(p.ci(x, z));
                 const uint8_t k = p.kind[i];
                 const bool green = k == KPark || k == KIsland || k == KYard || (p.organic && k == KLot && !inDowntown(p, x, z));
-                s[size_t(x)] = k == KRoad ? cRoad : k == KStreet ? cStreet : k == KPave ? cPave : k == KWater ? cWater : green ? cPark :
+                s[size_t(x)] = k == KIsland ? cBlocked : k == KRoad ? cRoad : k == KStreet ? cStreet : k == KPave ? cPave : k == KWater ? cWater : green ? cPark :
                                k == KParking ? cParking : cLot;
                 if (!tb.isObject()) continue;
                 const Road* v = p.vr[i] >= 0 ? &p.roads[size_t(p.vr[i])] : nullptr;
