@@ -97,7 +97,9 @@ inline std::optional<SquadPlan> stepSquad(const SquadConfig& c,SquadState& state
                 for(std::size_t i=0;i<alive.size();++i)if(!taken[i])if(auto p=previous(alive[i]->id);p>=0)++holders[std::size_t(p)];
                 std::size_t pick=alive.size();std::tuple<bool,int,Fixed,int64_t> best{};
                 for(std::size_t i=0;i<alive.size();++i){
-                    if(taken[i])continue;const auto* m=alive[i];auto p=previous(m->id);
+                    if(taken[i])continue;
+                    const auto* m=alive[i];
+                    auto p=previous(m->id);
                     int keep=p==int(role)?0:(p<0||holders[std::size_t(p)]>int64_t(remaining[std::size_t(p)]))?1:2;
                     std::tuple<bool,int,Fixed,int64_t> key{!(m->roles&roleBit(role)),keep,(m->position-anchor[uint8_t(role)]).lengthSq(),m->id};
                     if(pick==alive.size()||key<best){pick=i;best=key;}

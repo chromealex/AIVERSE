@@ -77,7 +77,8 @@ inline InteractionDefinitions readInteractionDefinitions(const Json& root){
         interactionKeys(j,path,{"id","collider","massMilli","halfMilli","frictionMilli","grid","cellMilli","pullable"});interactionRequire(j,path,{"id","massMilli","halfMilli"});
         PushableDef d;d.id=interactionId(j,path,out.pushables);d.collider=interactionCollider(j,path);d.mass=interactionMilli(j["massMilli"],path+".massMilli",1,100000000);
         d.half=interactionVec(j["halfMilli"],path+".halfMilli",1,1000000);if(j.has("frictionMilli"))d.frictionMilli=interactionInteger(j["frictionMilli"],path+".frictionMilli",0,10000);
-        if(j.has("grid"))d.grid=interactionBool(j["grid"],path+".grid");if(j.has("pullable"))d.pullable=interactionBool(j["pullable"],path+".pullable");
+        if(j.has("grid"))d.grid=interactionBool(j["grid"],path+".grid");
+        if(j.has("pullable"))d.pullable=interactionBool(j["pullable"],path+".pullable");
         if(j.has("cellMilli")){if(!d.grid)throw JsonError(path+".cellMilli: only for grid pushables");d.cell=interactionMilli(j["cellMilli"],path+".cellMilli",1,1000000);}
         out.pushables.emplace(d.id,d);
     }
@@ -115,7 +116,8 @@ inline InteractionDefinitions readInteractionDefinitions(const Json& root){
         if(j.has("openTicks"))d.openTicks=uint32_t(interactionInteger(j["openTicks"],path+".openTicks",1,kPhysMaxPhaseTicks));
         if(j.has("closeTicks"))d.closeTicks=uint32_t(interactionInteger(j["closeTicks"],path+".closeTicks",1,kPhysMaxPhaseTicks));
         if(j.has("autoCloseTicks"))d.autoCloseTicks=uint32_t(interactionInteger(j["autoCloseTicks"],path+".autoCloseTicks",0,kPhysMaxTicks));
-        if(j.has("locked"))d.locked=interactionBool(j["locked"],path+".locked");if(j.has("autoReverse"))d.autoReverse=interactionBool(j["autoReverse"],path+".autoReverse");
+        if(j.has("locked"))d.locked=interactionBool(j["locked"],path+".locked");
+        if(j.has("autoReverse"))d.autoReverse=interactionBool(j["autoReverse"],path+".autoReverse");
         if(j.has("key"))d.key=interactionInteger(j["key"],path+".key",0,INT64_MAX);
         if(j.has("oneWay"))d.oneWay=int8_t(interactionInteger(j["oneWay"],path+".oneWay",-1,1));
         if(d.locked&&!d.key)throw JsonError(path+".key: a locked door needs a key id (or unlock it from script)");
@@ -128,7 +130,8 @@ inline InteractionDefinitions readInteractionDefinitions(const Json& root){
         PlatformDef d;d.id=interactionId(j,path,out.platforms);d.collider=interactionCollider(j,path);d.half=interactionVec(j["halfMilli"],path+".halfMilli",1,1000000);
         const auto& w=j["waypoints"];if(!w.isArray()||w.size()<2||w.size()>kPhysMaxWaypoints)throw JsonError(path+".waypoints: expected 2..256 points");
         for(std::size_t k=0;k<w.size();++k){auto p=interactionVec(w[k],path+".waypoints["+std::to_string(k)+"]");
-            if(k&&p==d.waypoints.back())throw JsonError(path+".waypoints["+std::to_string(k)+"]: repeats the previous waypoint");d.waypoints.push_back(p);}
+            if(k&&p==d.waypoints.back())throw JsonError(path+".waypoints["+std::to_string(k)+"]: repeats the previous waypoint");
+            d.waypoints.push_back(p);}
         if(j.has("mode")){auto m=j["mode"].str();if(m=="loop")d.mode=PlatformMode::Loop;else if(m=="pingpong")d.mode=PlatformMode::PingPong;else if(m=="once")d.mode=PlatformMode::Once;
             else throw JsonError(path+".mode: expected loop, pingpong or once");}
         if(d.mode==PlatformMode::Loop&&d.waypoints.front()==d.waypoints.back())throw JsonError(path+".waypoints: a loop must not repeat the first point at the end");
@@ -151,7 +154,8 @@ inline InteractionDefinitions readInteractionDefinitions(const Json& root){
             DamageRule r;r.type=interactionInteger(rules[k]["type"],p+".type",1,INT64_MAX);
             for(const auto& other:d.damage)if(other.type==r.type)throw JsonError(p+".type: duplicate damage type "+std::to_string(r.type));
             if(rules[k].has("scaleMilli"))r.scaleMilli=interactionInteger(rules[k]["scaleMilli"],p+".scaleMilli",0,1000000);
-            if(rules[k].has("threshold"))r.threshold=interactionInteger(rules[k]["threshold"],p+".threshold",0,kPhysMaxHealth);d.damage.push_back(r);}
+            if(rules[k].has("threshold"))r.threshold=interactionInteger(rules[k]["threshold"],p+".threshold",0,kPhysMaxHealth);
+            d.damage.push_back(r);}
         std::sort(d.damage.begin(),d.damage.end(),[](const auto& a,const auto& b){return a.type<b.type;});
         const auto& stages=j["stages"];if(!stages.isNull()&&(!stages.isArray()||stages.size()>kPhysMaxStages))throw JsonError(path+".stages: expected an array of at most 16 stages");
         for(std::size_t k=0;k<stages.size();++k){auto p=path+".stages["+std::to_string(k)+"]";interactionKeys(stages[k],p,{"stage","health","debris"});interactionRequire(stages[k],p,{"stage","health"});

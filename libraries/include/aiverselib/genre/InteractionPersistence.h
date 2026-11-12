@@ -32,7 +32,8 @@ inline uint16_t stateKind(const BreakableState&){return 85;}
 
 // Structural validation used by load (definition-independent).
 inline bool valid(const CarryState& s){
-    if(s.held.size()>kPhysMaxObjects||s.flights.size()>kPhysMaxObjects)return false;std::vector<int64_t> objects;
+    if(s.held.size()>kPhysMaxObjects||s.flights.size()>kPhysMaxObjects)return false;
+    std::vector<int64_t> objects;
     for(const auto& [carrier,h]:s.held){if(carrier<=0||h.object<=0||!physBounded(h.position)||h.since>s.lastTick||(h.charging&&h.chargeStart>s.lastTick))return false;objects.push_back(h.object);}
     for(const auto& [object,f]:s.flights){if(object<=0||f.thrower<0||!physBounded(f.position)||!physBounded(f.velocity,kPhysMaxSpeed))return false;objects.push_back(object);}
     std::sort(objects.begin(),objects.end());return std::adjacent_find(objects.begin(),objects.end())==objects.end();

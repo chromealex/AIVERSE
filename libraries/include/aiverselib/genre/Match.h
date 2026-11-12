@@ -11,7 +11,10 @@ struct TeamScore {int64_t score=0;uint32_t wins=0;uint64_t lastEvent=0;};
 struct MatchState {std::map<int64_t,TeamScore> teams;MatchPhase phase=MatchPhase::Warmup;uint32_t phaseStart=0,lastTick=0,round=1;int64_t winner=0;bool initialized=false;};
 inline bool valid(const MatchConfig& c){return c.warmupTicks<=10000000&&c.roundTicks>0&&c.roundTicks<=10000000&&c.overtimeTicks<=10000000&&c.intermissionTicks<=10000000&&c.roundsToWin>0&&c.roundsToWin<=100&&c.maxRounds>=c.roundsToWin&&c.maxRounds<=1000&&c.scoreToWin>0;}
 inline std::optional<MatchState> makeMatch(std::span<const int64_t> teams){
-    if(teams.size()<2||teams.size()>200)return {};MatchState s;for(auto team:teams)if(team<=0||!s.teams.emplace(team,TeamScore{}).second)return {};return s;
+    if(teams.size()<2||teams.size()>200)return {};
+    MatchState s;
+    for(auto team:teams)if(team<=0||!s.teams.emplace(team,TeamScore{}).second)return {};
+    return s;
 }
 inline bool awardScore(MatchState& s,int64_t team,uint64_t event,int64_t points){
     auto it=s.teams.find(team);if((s.phase!=MatchPhase::Live&&s.phase!=MatchPhase::Overtime)||it==s.teams.end()||event==0||event<=it->second.lastEvent||points<0||it->second.score>std::numeric_limits<int64_t>::max()-points)return false;
