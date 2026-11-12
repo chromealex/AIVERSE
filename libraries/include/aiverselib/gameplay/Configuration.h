@@ -224,6 +224,45 @@ struct MatchRuleSettings {
     std::int64_t maxRounds=5;
     std::int64_t scoreToWin=10;
 };
+struct SensesSettings {
+    std::int64_t sightNearMilli=2000;
+    std::int64_t sightRangeMilli=20000;
+    std::int64_t sightHalfAngleMilli=125;
+    std::int64_t peripheralRangeMilli=8000;
+    std::int64_t peripheralHalfAngleMilli=250;
+    std::int64_t sightNearStrengthMilli=1000;
+    std::int64_t sightFarStrengthMilli=250;
+    std::int64_t peripheralStrengthMilli=400;
+    std::int64_t sightMinStrengthMilli=10;
+    std::int64_t sightQueryBudget=4096;
+    std::int64_t hearingThresholdMilli=20;
+    std::int64_t noiseBudget=32;
+    std::int64_t occlusionBudget=256;
+    std::int64_t noiseMaxRadiusMilli=200000;
+    std::int64_t trailLifetimeTicks=600;
+    std::int64_t trailRangeMilli=3000;
+    std::int64_t trailMaxMarkers=1024;
+    std::int64_t trailMinStrengthMilli=20;
+    std::int64_t suspicionMaxMilli=1000;
+    std::int64_t suspiciousAtMilli=200;
+    std::int64_t searchingAtMilli=500;
+    std::int64_t alertAtMilli=1000;
+    std::int64_t sightGainMilli=60;
+    std::int64_t hearingGainMilli=300;
+    std::int64_t trailGainMilli=15;
+    std::int64_t suspicionDecayMilli=2;
+    std::int64_t suspicionDecayDelayTicks=90;
+    std::int64_t alertRadiusMilli=15000;
+    std::int64_t alertDelayTicks=30;
+    std::int64_t alertReceivedMilli=500;
+    std::int64_t alertMaxPending=1024;
+    bool alertRelay=false;
+    std::int64_t searchGiveUpTicks=900;
+    std::int64_t searchPointRadiusMilli=1000;
+    std::int64_t searchCandidateRadiusMilli=12000;
+    std::int64_t searchMaxPoints=6;
+    std::int64_t hideEnterRangeMilli=1500;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -250,6 +289,7 @@ struct GameplaySettings {
     ChargeSettings charge;
     AimSolverSettings aimSolver;
     MatchRuleSettings matchRules;
+    SensesSettings senses;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -266,7 +306,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="matchRules" && entry.first!="senses") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -602,6 +642,56 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("scoreToWin")) number(section["scoreToWin"],settings.matchRules.scoreToWin,1,1000000000,"matchRules.scoreToWin");
         }
         if(settings.matchRules.roundsToWin>settings.matchRules.maxRounds)result.errors.push_back("matchRules.roundsToWin: must not exceed maxRounds");
+    }
+    if(root.has("senses")) { const auto& section=root["senses"];
+        if(!section.isObject()) result.errors.push_back("senses: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="sightNearMilli" && entry.first!="sightRangeMilli" && entry.first!="sightHalfAngleMilli" && entry.first!="peripheralRangeMilli" && entry.first!="peripheralHalfAngleMilli" && entry.first!="sightNearStrengthMilli" && entry.first!="sightFarStrengthMilli" && entry.first!="peripheralStrengthMilli" && entry.first!="sightMinStrengthMilli" && entry.first!="sightQueryBudget" && entry.first!="hearingThresholdMilli" && entry.first!="noiseBudget" && entry.first!="occlusionBudget" && entry.first!="noiseMaxRadiusMilli" && entry.first!="trailLifetimeTicks" && entry.first!="trailRangeMilli" && entry.first!="trailMaxMarkers" && entry.first!="trailMinStrengthMilli" && entry.first!="suspicionMaxMilli" && entry.first!="suspiciousAtMilli" && entry.first!="searchingAtMilli" && entry.first!="alertAtMilli" && entry.first!="sightGainMilli" && entry.first!="hearingGainMilli" && entry.first!="trailGainMilli" && entry.first!="suspicionDecayMilli" && entry.first!="suspicionDecayDelayTicks" && entry.first!="alertRadiusMilli" && entry.first!="alertDelayTicks" && entry.first!="alertReceivedMilli" && entry.first!="alertMaxPending" && entry.first!="alertRelay" && entry.first!="searchGiveUpTicks" && entry.first!="searchPointRadiusMilli" && entry.first!="searchCandidateRadiusMilli" && entry.first!="searchMaxPoints" && entry.first!="hideEnterRangeMilli") result.errors.push_back("senses."+entry.first+": unknown field");
+            if(section.has("sightNearMilli")) number(section["sightNearMilli"],settings.senses.sightNearMilli,0,100000000,"senses.sightNearMilli");
+            if(section.has("sightRangeMilli")) number(section["sightRangeMilli"],settings.senses.sightRangeMilli,0,100000000,"senses.sightRangeMilli");
+            if(section.has("sightHalfAngleMilli")) number(section["sightHalfAngleMilli"],settings.senses.sightHalfAngleMilli,0,500,"senses.sightHalfAngleMilli");
+            if(section.has("peripheralRangeMilli")) number(section["peripheralRangeMilli"],settings.senses.peripheralRangeMilli,0,100000000,"senses.peripheralRangeMilli");
+            if(section.has("peripheralHalfAngleMilli")) number(section["peripheralHalfAngleMilli"],settings.senses.peripheralHalfAngleMilli,0,500,"senses.peripheralHalfAngleMilli");
+            if(section.has("sightNearStrengthMilli")) number(section["sightNearStrengthMilli"],settings.senses.sightNearStrengthMilli,0,1000,"senses.sightNearStrengthMilli");
+            if(section.has("sightFarStrengthMilli")) number(section["sightFarStrengthMilli"],settings.senses.sightFarStrengthMilli,0,1000,"senses.sightFarStrengthMilli");
+            if(section.has("peripheralStrengthMilli")) number(section["peripheralStrengthMilli"],settings.senses.peripheralStrengthMilli,0,1000,"senses.peripheralStrengthMilli");
+            if(section.has("sightMinStrengthMilli")) number(section["sightMinStrengthMilli"],settings.senses.sightMinStrengthMilli,1,1000,"senses.sightMinStrengthMilli");
+            if(section.has("sightQueryBudget")) number(section["sightQueryBudget"],settings.senses.sightQueryBudget,0,10000000,"senses.sightQueryBudget");
+            if(section.has("hearingThresholdMilli")) number(section["hearingThresholdMilli"],settings.senses.hearingThresholdMilli,1,1000,"senses.hearingThresholdMilli");
+            if(section.has("noiseBudget")) number(section["noiseBudget"],settings.senses.noiseBudget,0,4096,"senses.noiseBudget");
+            if(section.has("occlusionBudget")) number(section["occlusionBudget"],settings.senses.occlusionBudget,0,10000000,"senses.occlusionBudget");
+            if(section.has("noiseMaxRadiusMilli")) number(section["noiseMaxRadiusMilli"],settings.senses.noiseMaxRadiusMilli,1,100000000,"senses.noiseMaxRadiusMilli");
+            if(section.has("trailLifetimeTicks")) number(section["trailLifetimeTicks"],settings.senses.trailLifetimeTicks,1,10000000,"senses.trailLifetimeTicks");
+            if(section.has("trailRangeMilli")) number(section["trailRangeMilli"],settings.senses.trailRangeMilli,1,100000000,"senses.trailRangeMilli");
+            if(section.has("trailMaxMarkers")) number(section["trailMaxMarkers"],settings.senses.trailMaxMarkers,1,65536,"senses.trailMaxMarkers");
+            if(section.has("trailMinStrengthMilli")) number(section["trailMinStrengthMilli"],settings.senses.trailMinStrengthMilli,1,1000,"senses.trailMinStrengthMilli");
+            if(section.has("suspicionMaxMilli")) number(section["suspicionMaxMilli"],settings.senses.suspicionMaxMilli,3,1000000000,"senses.suspicionMaxMilli");
+            if(section.has("suspiciousAtMilli")) number(section["suspiciousAtMilli"],settings.senses.suspiciousAtMilli,1,1000000000,"senses.suspiciousAtMilli");
+            if(section.has("searchingAtMilli")) number(section["searchingAtMilli"],settings.senses.searchingAtMilli,2,1000000000,"senses.searchingAtMilli");
+            if(section.has("alertAtMilli")) number(section["alertAtMilli"],settings.senses.alertAtMilli,3,1000000000,"senses.alertAtMilli");
+            if(section.has("sightGainMilli")) number(section["sightGainMilli"],settings.senses.sightGainMilli,0,1000000,"senses.sightGainMilli");
+            if(section.has("hearingGainMilli")) number(section["hearingGainMilli"],settings.senses.hearingGainMilli,0,1000000,"senses.hearingGainMilli");
+            if(section.has("trailGainMilli")) number(section["trailGainMilli"],settings.senses.trailGainMilli,0,1000000,"senses.trailGainMilli");
+            if(section.has("suspicionDecayMilli")) number(section["suspicionDecayMilli"],settings.senses.suspicionDecayMilli,0,1000000000,"senses.suspicionDecayMilli");
+            if(section.has("suspicionDecayDelayTicks")) number(section["suspicionDecayDelayTicks"],settings.senses.suspicionDecayDelayTicks,0,10000000,"senses.suspicionDecayDelayTicks");
+            if(section.has("alertRadiusMilli")) number(section["alertRadiusMilli"],settings.senses.alertRadiusMilli,0,100000000,"senses.alertRadiusMilli");
+            if(section.has("alertDelayTicks")) number(section["alertDelayTicks"],settings.senses.alertDelayTicks,1,1000000,"senses.alertDelayTicks");
+            if(section.has("alertReceivedMilli")) number(section["alertReceivedMilli"],settings.senses.alertReceivedMilli,0,1000000000,"senses.alertReceivedMilli");
+            if(section.has("alertMaxPending")) number(section["alertMaxPending"],settings.senses.alertMaxPending,0,65536,"senses.alertMaxPending");
+            if(section.has("alertRelay")) boolean(section["alertRelay"],settings.senses.alertRelay,"senses.alertRelay");
+            if(section.has("searchGiveUpTicks")) number(section["searchGiveUpTicks"],settings.senses.searchGiveUpTicks,1,10000000,"senses.searchGiveUpTicks");
+            if(section.has("searchPointRadiusMilli")) number(section["searchPointRadiusMilli"],settings.senses.searchPointRadiusMilli,1,1000000,"senses.searchPointRadiusMilli");
+            if(section.has("searchCandidateRadiusMilli")) number(section["searchCandidateRadiusMilli"],settings.senses.searchCandidateRadiusMilli,0,100000000,"senses.searchCandidateRadiusMilli");
+            if(section.has("searchMaxPoints")) number(section["searchMaxPoints"],settings.senses.searchMaxPoints,1,64,"senses.searchMaxPoints");
+            if(section.has("hideEnterRangeMilli")) number(section["hideEnterRangeMilli"],settings.senses.hideEnterRangeMilli,0,1000000,"senses.hideEnterRangeMilli");
+        }
+        if(settings.senses.sightNearMilli>settings.senses.sightRangeMilli)result.errors.push_back("senses.sightNearMilli: must not exceed sightRangeMilli");
+        if(settings.senses.sightHalfAngleMilli>settings.senses.peripheralHalfAngleMilli)result.errors.push_back("senses.sightHalfAngleMilli: must not exceed peripheralHalfAngleMilli");
+        if(settings.senses.sightFarStrengthMilli>settings.senses.sightNearStrengthMilli)result.errors.push_back("senses.sightFarStrengthMilli: must not exceed sightNearStrengthMilli");
+        if(settings.senses.suspiciousAtMilli>settings.senses.searchingAtMilli)result.errors.push_back("senses.suspiciousAtMilli: must not exceed searchingAtMilli");
+        if(settings.senses.searchingAtMilli>settings.senses.alertAtMilli)result.errors.push_back("senses.searchingAtMilli: must not exceed alertAtMilli");
+        if(settings.senses.alertAtMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertAtMilli: must not exceed suspicionMaxMilli");
+        if(settings.senses.alertReceivedMilli>settings.senses.suspicionMaxMilli)result.errors.push_back("senses.alertReceivedMilli: must not exceed suspicionMaxMilli");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

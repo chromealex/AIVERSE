@@ -172,6 +172,43 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | matchRules | roundsToWin | integer | 1 | 1..100 |
 | matchRules | maxRounds | integer | 5 | 1..1000 |
 | matchRules | scoreToWin | integer | 10 | 1..1000000000 |
+| senses | sightNearMilli | integer | 2000 | 0..100000000 |
+| senses | sightRangeMilli | integer | 20000 | 0..100000000 |
+| senses | sightHalfAngleMilli | integer | 125 | 0..500 |
+| senses | peripheralRangeMilli | integer | 8000 | 0..100000000 |
+| senses | peripheralHalfAngleMilli | integer | 250 | 0..500 |
+| senses | sightNearStrengthMilli | integer | 1000 | 0..1000 |
+| senses | sightFarStrengthMilli | integer | 250 | 0..1000 |
+| senses | peripheralStrengthMilli | integer | 400 | 0..1000 |
+| senses | sightMinStrengthMilli | integer | 10 | 1..1000 |
+| senses | sightQueryBudget | integer | 4096 | 0..10000000 |
+| senses | hearingThresholdMilli | integer | 20 | 1..1000 |
+| senses | noiseBudget | integer | 32 | 0..4096 |
+| senses | occlusionBudget | integer | 256 | 0..10000000 |
+| senses | noiseMaxRadiusMilli | integer | 200000 | 1..100000000 |
+| senses | trailLifetimeTicks | integer | 600 | 1..10000000 |
+| senses | trailRangeMilli | integer | 3000 | 1..100000000 |
+| senses | trailMaxMarkers | integer | 1024 | 1..65536 |
+| senses | trailMinStrengthMilli | integer | 20 | 1..1000 |
+| senses | suspicionMaxMilli | integer | 1000 | 3..1000000000 |
+| senses | suspiciousAtMilli | integer | 200 | 1..1000000000 |
+| senses | searchingAtMilli | integer | 500 | 2..1000000000 |
+| senses | alertAtMilli | integer | 1000 | 3..1000000000 |
+| senses | sightGainMilli | integer | 60 | 0..1000000 |
+| senses | hearingGainMilli | integer | 300 | 0..1000000 |
+| senses | trailGainMilli | integer | 15 | 0..1000000 |
+| senses | suspicionDecayMilli | integer | 2 | 0..1000000000 |
+| senses | suspicionDecayDelayTicks | integer | 90 | 0..10000000 |
+| senses | alertRadiusMilli | integer | 15000 | 0..100000000 |
+| senses | alertDelayTicks | integer | 30 | 1..1000000 |
+| senses | alertReceivedMilli | integer | 500 | 0..1000000000 |
+| senses | alertMaxPending | integer | 1024 | 0..65536 |
+| senses | alertRelay | boolean | false |  |
+| senses | searchGiveUpTicks | integer | 900 | 1..10000000 |
+| senses | searchPointRadiusMilli | integer | 1000 | 1..1000000 |
+| senses | searchCandidateRadiusMilli | integer | 12000 | 0..100000000 |
+| senses | searchMaxPoints | integer | 6 | 1..64 |
+| senses | hideEnterRangeMilli | integer | 1500 | 0..1000000 |
 
 ## Cross-field constraints
 
@@ -193,3 +230,10 @@ Constraint: `ammoFeed.coolPerTick <= ammoFeed.heatCapacity` (checked by loader a
 Constraint: `charge.minTicks <= charge.maxTicks` (checked by loader and CLI).
 Constraint: `charge.minScaleMilli <= charge.maxScaleMilli` (checked by loader and CLI).
 Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).
+Constraint: `senses.sightNearMilli <= senses.sightRangeMilli` (checked by loader and CLI).
+Constraint: `senses.sightHalfAngleMilli <= senses.peripheralHalfAngleMilli` (checked by loader and CLI).
+Constraint: `senses.sightFarStrengthMilli <= senses.sightNearStrengthMilli` (checked by loader and CLI).
+Constraint: `senses.suspiciousAtMilli <= senses.searchingAtMilli` (checked by loader and CLI).
+Constraint: `senses.searchingAtMilli <= senses.alertAtMilli` (checked by loader and CLI).
+Constraint: `senses.alertAtMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
+Constraint: `senses.alertReceivedMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
