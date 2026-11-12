@@ -718,21 +718,35 @@
       "package": "narrative-graphs",
       "path": "skills/aiverse-narrative-graphs/SKILL.md",
       "domain": "gameplay",
-      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
+      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions; 0.2.0 social scenes: typed int/bool/enum facts with persistent world state, per-character affinity/trust/fear meters, per-character knowledge and reveals, AND/OR/NOT conditions, one-shot flags, chapter/act state, deferred consequences (N ticks or scenes later), speakers/participants, cinematic CueRequest events, prioritized ambient barks with cooldowns and visual-novel backlog/skip-read/auto-advance",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_narrative_graphs",
       "dependencies": [
         "aiverse-tag-conditions"
       ],
-      "backendDependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/genre/Narrative.h",
       "keywords": [
         "story",
         "narrative",
+        "dialogue",
+        "relationship",
+        "knowledge",
+        "bark",
+        "visual",
+        "novel",
+        "backlog",
+        "consequence",
         "сюжет",
-        "диалог"
+        "диалог",
+        "отношения",
+        "реплик",
+        "визуальная",
+        "новелла"
       ]
     },
     {

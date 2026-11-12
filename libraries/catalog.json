@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1307,23 +1307,33 @@
     },
     {
       "id": "narrative-graphs",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/genre/Narrative.h",
       "skill": "skills/aiverse-narrative-graphs/SKILL.md",
-      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
-      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions; 0.2.0 social scenes: typed int/bool/enum facts with persistent world state, per-character affinity/trust/fear meters, per-character knowledge and reveals, AND/OR/NOT conditions, one-shot flags, chapter/act state, deferred consequences (N ticks or scenes later), speakers/participants, cinematic CueRequest events, prioritized ambient barks with cooldowns and visual-novel backlog/skip-read/auto-advance",
+      "notes": "Read docs/genre-packages.md (Narrative scenes) for exact coverage and authority boundaries. Legacy Story/readStory/StoryState (record kind 7) are unchanged; readNarrativeWorld also loads the legacy story JSON. NarrativeScenes.h runs one stepNarrative per authoritative tick (strictly increasing ticks, commands deduplicated by increasing ID, invalid commands rejected atomically) and returns events, CueRequest records (NarrativeCues.h, consumed by a cinematic/UI owner; no playback here) and bark lines. Strict JSON validation with path-qualified errors (NarrativeSceneData.h). Persist NarrativeState via genre::save/load (record kinds 64..71 reserved, 64..65 used), check narrativeStateError after load and bind narrativeWorldHash/narrativeConfigHash. Optional `narrative` settings section (NarrativeConfigured.h). Text is localization keys only; rewards go through their transactional owner.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_narrative_graphs",
       "dependencies": [
         "libraries/include/aiverselib/genre/Configured.h",
         "libraries/include/aiverselib/genre/Persistence.h",
         "libraries/include/aiverselib/genre/Data.h",
+        "libraries/include/aiverselib/genre/NarrativeCues.h",
+        "libraries/include/aiverselib/genre/NarrativeScenes.h",
+        "libraries/include/aiverselib/genre/NarrativeSceneData.h",
+        "libraries/include/aiverselib/genre/NarrativeScenePersistence.h",
+        "libraries/include/aiverselib/genre/NarrativeConfigured.h",
+        "examples/libraries/genre/story.json",
+        "examples/libraries/genre/story-social.json",
+        "examples/libraries/genre/narrative-settings.json",
         "docs/genre-packages.md"
       ],
       "runtime": "header",
-      "linkDependencies": [],
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
       "packageDependencies": [
         "tag-conditions"
       ]
