@@ -1,6 +1,7 @@
 // Extraction raids (RtsRaid.h, docs/raid.md): the sample's bot extracts, points / channels / contest / interrupts,
 // interactables and loot, death drops, Lua API and veto, receipts, saves and rollback, rule errors.
 #include "modules/rts/RtsRaid.h"
+#include "modules/rts/RtsTopDown.h"
 
 namespace {
 const std::string kRaidDir = std::string(AIVERSE_SOURCE_DIR) + "/templates/extraction";
@@ -232,4 +233,38 @@ TEST(raid_rules_errors_and_untouched_games) {
     bool hasRaidSystem = false;
     for (size_t i = 0; i < sim->systemCount(); ++i) hasRaidSystem |= sim->systemName(i) == "raid";
     CHECK(!hasRaidSystem);
+}
+
+// A top-down hero as the raider (agent-df-hero-net): it ignores move orders, so the raid bot steers its stick
+// (TopDown::steerCommand -> kCmdTopDown) around the wall to the extraction point and channels there.
+TEST(raid_bot_steers_a_topdown_hero_to_extraction) {
+    const std::string rules = R"J({
+      "resources": {"coins": {"start": 0}},
+      "topDown": {"heroes": ["runner"], "move": {"accel": 0, "decel": 0}},
+      "types": {
+        "runner": {"health": {"max": 100}, "move": {"speed": 3, "radius": 0.4}, "weapons": [{"range": 3, "damage": 10, "cooldown": 1}]}
+      },
+      "raid": {
+        "mode": "pve", "duration": 120, "raiders": ["runner"],
+        "extraction": {"radius": 2, "channel": 2},
+        "points": [{"id": "a", "pos": [24.5, 8.5], "opensAt": 1, "open": 60, "sleep": 4, "departure": 1}]
+      }
+    })J";
+    // a wall at x = 14 (rows 3..15) between the hero and the point: the straight line is blocked
+    std::string rows;
+    for (int y = 0; y < 16; ++y) {
+        std::string r(32, '.');
+        if (y >= 3) r[14] = '#';
+        rows += std::string(y ? "," : "") + "\"" + r + "\"";
+    }
+    const std::string map = R"({"size":[32,16],"players":[{"name":"A","team":1}],"terrain":{"rows":[)" + rows +
+                            R"(]},"entities":[{"type":"runner","owner":1,"pos":[4.5,8.5]}]})";
+    auto sim = makeSimJson(rules, map, 2);
+    auto* td = mod(*sim).topDown();
+    CHECK(td && td->active() && td->heroOf(*sim, 1).valid());
+    runBots(*sim, 60);
+    auto& st = raidStore(*sim);
+    CHECK(!st.players.empty() && st.players[0].status == uint8_t(game::RaidStatus::Extracted));
+    // it walked (stick input), not teleported: the hero's pilot saw kCmdTopDown commands
+    CHECK(td->store(*sim)->pilots[1].inputTick > 0);
 }

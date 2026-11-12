@@ -534,6 +534,35 @@ void Progression::stepUnits(Simulation& sim, ProgressionStore& st) {
     }
 }
 
+bool Progression::botGoal(Simulation& sim, uint8_t player, Vec3& goal, Fixed& stand, Fixed orbRange) const {
+    const ProgressionStore* st = store(sim);
+    const Entity h = heroOf(sim, player);
+    if (!st || !h.valid()) return false;
+    const Vec3 at = sim.world().get<Transform>(h).pos;
+    const lg::PlayerProgress* p = lg::progressOf(st->perks, player);
+    auto d2 = [&](Vec3 q) { const Fixed dx = q.x - at.x, dz = q.z - at.z; return dx * dx + dz * dz; };
+    if (p && R_->offerAtCircles && (p->offer.open || lg::availableLevels(R_->defs, R_->perk, *p))) {
+        if (atCircle(sim, player)) { goal = at; stand = Fixed::fromInt(1000); return true; }   // stay: the cards are (about to be) open
+        const int64_t team = m_->teamOf(sim, player);
+        const lib::genre::SummonPointDef* best = nullptr;
+        for (auto& d : points_) {
+            if (d.team && d.team != team) continue;
+            if (!best || d2(d.position) < d2(best->position)) best = &d;
+        }
+        if (best) { goal = best->position; stand = fxMax(best->radius - Fixed::fromRatio(1, 2), Fixed::fromRatio(1, 4)); return true; }
+    }
+    const lib::genre::XpOrb* orb = nullptr;
+    for (auto& o : st->pickups.orbs) {   // orbs are kept in id order: ties go to the older one
+        if (o.owner != 0 && o.owner != player) continue;
+        if (d2(o.position) > orbRange * orbRange) continue;
+        if (!orb || d2(o.position) < d2(orb->position)) orb = &o;
+    }
+    if (!orb) return false;
+    goal = orb->position;
+    stand = Fixed::fromRatio(1, 4);
+    return true;
+}
+
 bool Progression::atCircle(Simulation& sim, uint8_t player) const {
     Entity h = heroOf(sim, player);
     if (!h.valid()) return false;

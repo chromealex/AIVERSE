@@ -13,7 +13,7 @@ Fixed dist(Vec3 a, Vec3 b) { return Surface::onSphere(a) ? (a - b).length() : (a
 bool isCombat(const UnitType& t) { return !t.structure && (!t.weapons.empty() || !t.abilities.empty()) && !t.worker; }
 // Units the player controls by hand (possessed, picked up) or that are leaving are not the AI's.
 bool controllable(World& w, Entity e, const Unit& u) {
-    if (u.flags & (kUnitOffMap | kUnitPossessed)) return false;
+    if (u.flags & (kUnitOffMap | kUnitPossessed | kUnitFollower)) return false;   // followers: top-down squads
     auto* n = w.tryGet<Needs>(e);
     return !n || !n->leaving;
 }
@@ -37,7 +37,10 @@ void RtsAI::update(Simulation& sim) {
     if (!m || m->rules().scriptedAI) return;
     auto* pi = sim.player(player_);
     if (!pi || !pi->alive || sim.result() != 0 || sim.tick() < next_) return;
-    next_ = sim.tick() + cfg_.thinkTicks + rng_.below(cfg_.thinkTicks / 2 + 1);
+    uint32_t think = cfg_.thinkTicks;
+    if (Raid* raid = m->raid(); raid && raid->active())   // a raid hero dodges: it re-steers every few ticks
+        if (TopDown* td = m->topDown(); td && td->active() && td->heroOf(sim, player_).valid()) think = std::min<uint32_t>(think, 3);
+    next_ = sim.tick() + think + rng_.below(think / 2 + 1);
     applyRulesConfig(*m);
     auto* gs = sim.world().resource<GameState>();
     if (m->rules().mech.turns && !mechTurnAI(sim, *m)) return;   // agent-mech TB: act only on its own turn
@@ -56,7 +59,13 @@ void RtsAI::update(Simulation& sim) {
     if (m->rules().fidelity && hasOther) fidelity(sim, *m);
     if (hasGarrisons) garrisonPlay(sim, *m);
     if (hasOther) {
-        if (auto* td = m->topDown(); td && td->active()) { Command c; if (td->botCommand(sim, player_, c)) send(sim, c); }   // hero stick (RtsTopDown.cpp)
+        if (auto* td = m->topDown(); td && td->active()) {   // hero stick (RtsTopDown.cpp); opt-in: progression goals first
+            Command c;
+            Vec3 g; Fixed s;
+            Progression* pg = td->rules().botProgression ? m->progression() : nullptr;   // rules topDown.bot.progression
+            if (pg && pg->active() && td->heroOf(sim, player_).valid() && pg->botGoal(sim, player_, g, s)) { if (td->steerCommand(sim, player_, g, s, c)) send(sim, c); }
+            else if (td->botCommand(sim, player_, c)) send(sim, c);
+        }
         special(sim, *m);
         if (!m->rules().diggables.empty() || !m->rules().rooms.empty()) dungeon(sim, *m);
         if (m->rules().settlers) settlers(sim, *m);

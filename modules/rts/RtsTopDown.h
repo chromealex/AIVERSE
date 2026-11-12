@@ -18,6 +18,7 @@
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
+#include "../../engine/net/HeroInput.h"
 
 namespace aiverse { class Simulation; class Hasher; class Archive; struct Command; }
 
@@ -25,51 +26,10 @@ namespace aiverse::game {
 
 class RtsModule;
 
-// ---- command payload (kCmdTopDown param). Angles are binary turns: 0 = +Z, 16384 = +X (clockwise seen from above).
-namespace topdown {
-constexpr int64_t kAngleSteps = 65536;
-constexpr int64_t kMagMax = 1000;                  // per mille
-constexpr int64_t kAim = int64_t(1) << 42;          // aim direction present (aim stick / mouse held)
-constexpr int64_t kFire = int64_t(1) << 43;         // fire button held (fires without aiming, or when aiming does not fire)
-struct Input {
-    int32_t moveAngle = 0, moveMag = 0;             // [0, 65536), [0, 1000]
-    int32_t aimAngle = 0;
-    bool aim = false, fire = false;
-    bool operator==(const Input&) const = default;
-};
-inline int64_t pack(const Input& in) {
-    int64_t p = int64_t(in.moveAngle & 0xFFFF) | (int64_t(in.moveMag < 0 ? 0 : in.moveMag > kMagMax ? kMagMax : in.moveMag) << 16) |
-                (int64_t(in.aimAngle & 0xFFFF) << 26);
-    if (in.aim) p |= kAim;
-    if (in.fire) p |= kFire;
-    return p;
-}
-inline Input unpack(int64_t p) {
-    Input in;
-    in.moveAngle = int32_t(p & 0xFFFF);
-    in.moveMag = int32_t((p >> 16) & 0x3FF);
-    if (in.moveMag > kMagMax) in.moveMag = int32_t(kMagMax);
-    in.aimAngle = int32_t((p >> 26) & 0xFFFF);
-    in.aim = (p & kAim) != 0;
-    in.fire = (p & kFire) != 0;
-    return in;
-}
-// Nearest of `sectors` evenly spaced directions (sectors <= 0: full binary-turn resolution).
-inline int32_t quantizeAngle(int64_t angle, int sectors) {
-    angle = ((angle % kAngleSteps) + kAngleSteps) % kAngleSteps;
-    if (sectors <= 0 || sectors >= kAngleSteps) return int32_t(angle);
-    int64_t s = (angle * sectors * 2 + kAngleSteps) / (kAngleSteps * 2);   // round to the nearest sector
-    return int32_t((s % sectors) * kAngleSteps / sectors);
-}
-// Magnitude rounded up to `steps` levels (Drone Fall: ceil(m / step) * step); at or below the dead zone: 0.
-inline int32_t quantizeMag(int64_t mag, int steps, int64_t deadzone) {
-    if (mag <= deadzone || mag <= 0) return 0;
-    if (mag > kMagMax) mag = kMagMax;
-    if (steps <= 0) return int32_t(mag);
-    int64_t s = (mag * steps + kMagMax - 1) / kMagMax;
-    return int32_t(s * kMagMax / steps);
-}
-} // namespace topdown
+// ---- command payloads: the engine's hero wire format (engine/net/HeroInput.h). kCmdTopDown = net::kCmdHeroInput
+// carries topdown::pack(Input) (binary-turn angles: 0 = +Z, 16384 = +X), kCmdTopDownAbility = net::kCmdHeroAbility
+// carries topdown::abilityParam(Ability) (index, tap / press / release / cancel, optional stick direction).
+namespace topdown = ::aiverse::topdown;
 
 // ---- rules "topDown"
 enum class RetargetMode : uint8_t { Nearest, Keep };
@@ -99,6 +59,35 @@ struct TopDownRules {
     Fixed switchMargin{};
     std::vector<uint16_t> priority;       // types preferred over everything else in range (first = highest)
     Fixed movingSpeed = Fixed::fromRatio(1, 10);   // |velocity| above this counts as moving (fireWhileMoving)
+    // free fire (aim.freeFire): aiming / fire held with no target fires the weapon along the aim; the shot flies the
+    // weapon range and stops on the first hostile body or wall (Drone Fall). Off: the hero only shoots at targets.
+    bool freeFire = false;
+    // abilities: "hold" abilities repeat while their button is held; windups (castTime) run in the sim
+    std::vector<std::string> holdIds;     // "abilities.hold": ability ids (of any hero type)
+    bool rootWhileCasting = false;        // "abilities.rootWhileCasting": no movement during a windup
+    // squad ("squad"): own units of these types follow the hero in a ring (Drone Fall Wander + unit group)
+    struct Squad {
+        bool enabled = false;
+        std::vector<uint16_t> types;
+        int size = 0;                     // members per hero (0: every own unit of the types)
+        Fixed radius = Fixed::fromInt(2); // ring radius around the hero
+        Fixed tolerance = Fixed::fromRatio(1, 2);   // closer than this to its slot: a member stops
+        bool rotate = true;               // the ring turns with the hero's facing
+        bool fireWhileMoving = false;     // Drone Fall SupressFireOnMove: members hold fire while the hero moves
+        uint32_t repathTicks = 5;         // "repath" seconds -> ticks: slot refresh period per member
+        Fixed repathSeconds = Fixed::fromRatio(1, 4);
+    } squad;
+    // escape ("escape"): the player picks a point within speed * duration (client preview, Drone Fall HeroEscape);
+    // the sim validates it and moves the hero and its squad there, then the ability cools down
+    struct Escape {
+        bool enabled = false;
+        Fixed duration = Fixed::fromInt(5);   // seconds of preview movement (the budget = hero speed * duration)
+        Fixed cooldown = Fixed::fromInt(30);
+        bool pause = true;                // client: a single-player match pauses while the point is chosen
+    } escape;
+    bool botProgression = false;          // "bot": {"progression": true}: skirmish bots walk to xp orbs / summon circles
+                                          // first (raid bots always do)
+    bool extended = false;                // any of the blocks above: extra pilot state is hashed / saved
 };
 
 struct TopDownPilot {
@@ -111,7 +100,20 @@ struct TopDownPilot {
     Vec3 vel{};
     Entity target = kNullEntity;
     uint32_t retargetAt = 0;
+    // extended state (rules.extended only: hashed and saved then)
+    int8_t held = -1;                     // ability whose button is held (press .. release)
+    int32_t heldAngle = 0;                // the button's stick direction (binary turns), heldDir: present
+    bool heldDir = false;
+    int8_t casting = -1;                  // ability in its windup
+    uint32_t castAt = 0;                  // tick the windup ends
+    Entity castTarget = kNullEntity;
+    Vec3 castPoint{};
+    uint32_t escapeReadyAt = 0;           // escape cooldown (per player: survives hero replacement)
+    std::vector<Entity> squad;            // followers in slot order (alive ones first)
 };
+
+// Ability button event in sim terms (kCmdTopDownAbility after decoding / clamping)
+struct TopDownCast { int index = -1; Entity target = kNullEntity; Vec3 point{}; bool havePoint = false; bool haveDir = false; int32_t angle = 0; int32_t distance = 0; };
 
 struct TopDownStore {
     std::vector<TopDownPilot> pilots;     // by player slot (0 unused)
@@ -133,6 +135,19 @@ public:
     bool heroVelocity(Simulation& sim, Entity e, Vec3& vel) const;   // local avoidance: heroes are moving obstacles
     // Computer player: the steering command a bot of `player` would send now (false: nothing to change)
     bool botCommand(Simulation& sim, uint8_t player, Command& out);
+    // Computer pilot toward a goal (raid bot, any AI that would give the hero a move order): walk the path to `goal`
+    // until within `stand` (then stop, so channels / interactions work), and give ground to armed foes that come
+    // closer than `kite` (0: 35% of the weapon range) on the way. false: the input would not change.
+    bool steerCommand(Simulation& sim, uint8_t player, Vec3 goal, Fixed stand, Command& out, Fixed kite = Fixed{});
+    // squad followers of a player's hero (alive, slot order); isFollower: a squad member of anyone
+    std::vector<Entity> squadOf(Simulation& sim, uint8_t player) const;
+    bool isFollower(Simulation& sim, Entity e) const;
+    // escape: the furthest a player may go now (0: not available) and whether `to` is a valid destination
+    Fixed escapeBudget(Simulation& sim, uint8_t player) const;
+    bool escapeAllowed(Simulation& sim, uint8_t player, Vec3 to, std::string* why = nullptr) const;
+    uint32_t escapeReadyAt(Simulation& sim, uint8_t player) const;
+    // ring slot of member i of n around `centre` (facing `facingAngle`), pulled in front of walls (the view previews it)
+    Vec3 squadSlot(Simulation& sim, Vec3 centre, int32_t facingAngle, int i, int n, Fixed memberRadius) const;
     // what the sim makes of raw input (clients use it to avoid sending commands that change nothing)
     topdown::Input requantize(topdown::Input in) const { return requantize(rules_, in); }
     static topdown::Input requantize(const TopDownRules& r, topdown::Input in);
@@ -146,6 +161,16 @@ private:
     void adopt(Simulation& sim, TopDownPilot& p, Entity e);
     void respawnAndAdopt(Simulation& sim, TopDownStore& st);
     void moveHero(Simulation& sim, TopDownPilot& p);
+    void tickSquad(Simulation& sim, TopDownPilot& p, uint8_t player);
+    void adoptSquad(Simulation& sim, TopDownStore& st);
+    void tickCasts(Simulation& sim, TopDownPilot& p);
+    bool requestCast(Simulation& sim, TopDownPilot& p, const TopDownCast& c);   // windup or cast now
+    void castNow(Simulation& sim, TopDownPilot& p, const TopDownCast& c);
+    void doEscape(Simulation& sim, TopDownPilot& p, uint8_t player, Vec3 to);
+    void freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner);
+    Vec3 walkDir(Simulation& sim, Entity hero, Vec3 to) const;   // straight when walkable, else the next path waypoint
+    bool holds(Simulation& sim, Entity hero, int index) const;   // a hold ability (repeats while pressed)
+    bool walkable(Simulation& sim, Vec3 from, Vec3 to, Fixed radius, uint8_t layer, Vec3* stop) const;   // straight walk; stop: before the first block
     void aimHero(Simulation& sim, TopDownPilot& p, uint8_t player);
     bool validTarget(Simulation& sim, Entity hero, uint8_t owner, Entity cand, Fixed range, Vec3 coneDir, Fixed coneCos, Fixed* dist) const;
     bool lineOfFire(Simulation& sim, Vec3 from, Entity target) const;

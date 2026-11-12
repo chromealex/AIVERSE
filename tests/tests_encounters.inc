@@ -325,3 +325,23 @@ TEST(encounters_hostile_creeps_are_monsters) {
     CHECK(sim->world().get<game::Unit>(dummy).hp < Fixed::fromInt(100000));
     CHECK(!sim->world().alive(crawler) || sim->world().get<game::Unit>(crawler).hp == Fixed::fromInt(80));
 }
+
+// A computer-steered top-down hero (agent-df-hero-net) steps out of a hostile telegraph in its windup.
+TEST(encounters_bot_hero_dodges_a_telegraph) {
+    std::string rules = kEncRules;
+    rules.replace(rules.find("\"victory\": \"noUnits\","), 21, "\"victory\": \"noUnits\", \"topDown\": {\"heroes\": [\"hero\"], \"move\": {\"accel\": 0, \"decel\": 0}},");
+    auto sim = makeSimJson(rules, encMap(R"({"type":"hero","owner":1,"pos":[10.5,10.5]},{"type":"mage","owner":2,"pos":[16.5,10.5]})"));
+    auto* td = mod(*sim).topDown();
+    auto* en = mod(*sim).encounters();
+    Entity hero = td->heroOf(*sim, 1);
+    CHECK(hero.valid());
+    Command c;
+    CHECK(!td->steerCommand(*sim, 1, sim->world().get<Transform>(hero).pos, Fixed::fromInt(1000), c));   // nothing to do: stand
+    Entity mage = findType(*sim, "mage", 2);
+    CHECK(en->cast(*sim, mage, en->rules().findAttack("slam"), sim->world().get<Transform>(hero).pos, hero));   // a circle on the hero
+    sim->step();
+    CHECK(td->steerCommand(*sim, 1, sim->world().get<Transform>(hero).pos, Fixed::fromInt(1000), c));
+    sim->submit(c);
+    for (int i = 0; i < 12; ++i) sim->step();   // the windup is 0.6 s
+    CHECK(encDist(sim->world().get<Transform>(hero).pos, {Fixed::fromRatio(105, 10), Fixed{}, Fixed::fromRatio(105, 10)}) > Fixed::fromRatio(15, 10));
+}

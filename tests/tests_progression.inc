@@ -310,3 +310,25 @@ TEST(progression_offers_at_summon_circles) {
     run(*sim, 0.2);
     CHECK(!pp(*sim, 1).offer.open && pp(*sim, 1).xp == 3 && pp(*sim, 1).level == 0);   // walking away keeps the xp
 }
+
+// A computer-steered top-down hero (agent-df-hero-net) walks over xp orbs nearby and, with a level banked, to a summon
+// circle (offerAt "summonPoints"), where the cards open and the bot picks one.
+TEST(progression_bot_hero_collects_orbs_and_walks_to_a_circle) {
+    std::string rules = kProgRules;
+    rules.replace(rules.find("\"players\": [1],"), 15, "\"players\": [1], \"offerAt\": \"summonPoints\",");
+    rules.replace(rules.find("\"victory\": \"noStructures\","), 26, "\"victory\": \"noStructures\", \"topDown\": {\"heroes\": [\"drone\"], \"bot\": {\"progression\": true}},");
+    auto sim = makeSimJson(rules, progMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]})"));
+    CHECK(mod(*sim).topDown()->active() && mod(*sim).topDown()->heroOf(*sim, 1).valid());
+    game::RtsAI bot(1, 3);
+    auto play = [&](double s) { for (int i = 0; i < int(s * 20); ++i) { bot.update(*sim); sim->step(); } };
+    // an orb 6 units away: the hero walks over it
+    prog(*sim).store(*sim)->orbQueue.push_back({1, 2, {Fixed::fromRatio(105, 10), Fixed{}, Fixed::fromRatio(85, 10)}});
+    play(4.0);
+    CHECK(pp(*sim, 1).xp + int64_t(pp(*sim, 1).level) * 3 >= 2);
+    // a level banked: off to the circle at (20, 8); the cards open there and the bot chooses
+    CHECK(prog(*sim).grantXp(*sim, 1, 3, false));
+    for (int i = 0; i < 20 * 8 && pp(*sim, 1).level < 1; ++i) { bot.update(*sim); sim->step(); }
+    CHECK(pp(*sim, 1).level >= 1);
+    const Vec3 at = sim->world().get<Transform>(prog(*sim).heroOf(*sim, 1)).pos;   // where the card was picked
+    CHECK((at - Vec3{Fixed::fromInt(20), Fixed{}, Fixed::fromInt(8)}).xz().length() < Fixed::fromInt(3));
+}

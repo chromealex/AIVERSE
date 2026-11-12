@@ -63,6 +63,10 @@ public:
     ProgressionStore* store(Simulation& sim) const;
     // Computer player: the offer choice a bot of `player` sends now (false: nothing to choose)
     bool botCommand(Simulation& sim, uint8_t player, Command& out) const;
+    // Computer player (steering a top-down hero, agent-df-hero-net): where progression wants the hero now. A banked
+    // level with offers at circles: the nearest own-team summon circle (or stay while the offer is open there);
+    // else the nearest collectable xp orb within `orbRange`. false: nothing (objectives / extraction decide).
+    bool botGoal(Simulation& sim, uint8_t player, Vec3& goal, Fixed& stand, Fixed orbRange = Fixed::fromInt(14)) const;
 
     // ---- hooks of the unit pipelines (RtsModule): no effect on units outside the table
     void modStat(Simulation& sim, Entity e, Stat s, Fixed& value) const;              // RtsModule::stat

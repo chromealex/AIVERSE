@@ -7,6 +7,7 @@
 #include "UiModel.h"
 #include "modules/rts/view/EntityActionControls.h"
 #include "modules/rts/view/TopDownControls.h"
+#include "modules/rts/view/TopDownPrediction.h"
 #include <array>
 #include <functional>
 #include <map>
@@ -204,7 +205,14 @@ private:
     void topDownFrame(double dt);    // input -> kCmdTopDown / kCmdTopDownAbility
     void topDownCamera(double dt);   // after the scene is built (interpolated hero position)
     void topDownDraw();              // screen canvas: sticks and buttons
+    void topDownPresent(double dt, float alpha);   // after sceneFromSim: local hero prediction + rollback smoothing
+    bool topDownPaused() const;      // single player: the escape preview pauses the match (rules topDown.escape.pause)
+    bool topDownPassable(Entity hero, float x, float z);
+    game::TopDownPrediction::Positions topDownPositions();   // heroes + squads (rollback hook)
     game::TopDownControls topDown_;
+    game::TopDownPrediction tdPredict_;
+    topdown::Input tdInput_;         // the input composed this frame (prediction)
+    net::RollbackSession* tdHooked_ = nullptr;
     bool tdMouseHeld_ = false, tdFireHeld_ = false;
     void drawToolPreview();
     // localization (presentation only: rules_ is the display copy, the sim loads its own rules)

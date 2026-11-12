@@ -58,6 +58,8 @@ void NativeModules::load(RtsModule& rts, Simulation& sim, const Json& rules,
         if (item.has("command") && (!item["command"].isNumber() || command < 32768 || command > 65535 ||
                                     item["command"].fx() != Fixed::fromInt(command)))
             throw std::runtime_error("native module '" + id + "': command must be an integer in [32768, 65535]");
+        if (command == 0xF100 || command == 0xF101)   // engine/net/HeroInput.h: kCmdTopDown / kCmdTopDownAbility
+            throw std::runtime_error("native module '" + id + "': commands 61696 and 61697 (0xF100, 0xF101) are the top-down hero commands");
         if (command && !commands.insert(uint16_t(command)).second)
             throw std::runtime_error("native module '" + id + "': duplicate command");
         auto instance = def->create();
