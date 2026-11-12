@@ -253,3 +253,174 @@ TEST(env_save_load_continues_identically) {
     CHECK(b->checksum() == a->checksum());
     CHECK(a->serialize() == b->serialize());
 }
+
+// ---------------------------------------------------------------- stage 2 (1:1 gaps)
+
+TEST(env_multi_spline_auto_skill_walks_its_splines) {
+    auto sim = makeSimJson(kEnvRules, envMap(R"({
+        "splines": [{"id": "a", "points": [[4, 4], [12, 4]], "velocity": 8}, {"id": "b", "points": [[14, 6], [14, 14]], "velocity": 8},
+                    {"id": "c", "points": [[30, 14], [36, 14]], "velocity": 8}],
+        "multiSplineSkills": [{"skill": "bless", "order": [0, 1, 2], "randomJump": false, "shouldBuildTransferSpline": true}]})"));
+    World& w = sim->world();
+    auto* st = w.resource<game::EnvState>();
+    int casts = 0;
+    for (int t = 0; t < 6; ++t) { sim->step(); for (auto& ev : sim->events()) if (ev.type == game::kEvPlayerAbility && ev.player == 0) ++casts; }
+    CHECK(casts == 1);                         // no emit period: once, at the start of the first spline
+    CHECK(st->multis.size() == 1 && st->multis[0].created);
+    if (!st->multis[0].moving.empty()) {       // the area rides spline a, then the transfer curve towards b
+        Entity a = st->multis[0].moving[0].area;
+        bool transferred = false;
+        Fixed maxZ{};
+        for (int t = 0; t < 40 && w.alive(a); ++t) {
+            sim->step();
+            if (!st->multis[0].moving.empty() && st->multis[0].moving[0].transfer) transferred = true;
+            maxZ = fxMax(maxZ, w.get<Transform>(a).pos.z);
+        }
+        CHECK(transferred);
+        CHECK(maxZ > Fixed::fromInt(4));
+    }
+}
+
+TEST(env_rain_lowers_the_grass_fire_spread) {
+    std::string rules = kEnvRules;
+    rules.replace(rules.find("\"types\": {"), 10, R"("fields": {
+        "grass": {"type": "fixed", "min": 0, "max": 1, "default": 1},
+        "fire": {"type": "int", "min": 0, "max": 100, "kernels": [{"type": "spread", "period": 2, "above": 1, "set": 100, "fuel": {"field": "grass", "min": 0.1}}]}},
+      "types": {)");
+    auto burning = [&](bool rain) {
+        const std::string env = std::string(R"({"weather": [)") + (rain ? "\"rain\"" : "") + R"(], "trample": [{"field": "grass", "killField": "fire"}]})";
+        std::string map = envMap(env);
+        map.insert(map.size() - 1, R"(,"gridFields": {"fire": {"fill": [{"rect": [20, 10, 1, 1], "value": 100}]}})");
+        auto sim = makeSimJson(rules, map, 5);
+        run(*sim, 1);
+        auto* gf = mod(*sim).gridFields();
+        int n = 0, fi = gf->find("fire");
+        for (int z = 0; z < 20; ++z) for (int x = 0; x < 40; ++x) n += gf->get(*sim, fi, x, z) > 0;
+        return n;
+    };
+    const int dry = burning(false), wet = burning(true);
+    CHECK(dry > 40);
+    CHECK(wet < dry);   // grassRainBurnRandomFactor 0.5: half the neighbours catch per run
+}
+
+TEST(env_set_invincible_blocks_defeat) {
+    std::string rules = kEnvRules;
+    rules.insert(1, R"("victory": "noEntities",)");
+    auto alive2 = [&](bool inv) {
+        const std::string env = std::string(R"({"mapScroller": {"actions": [{"type": "setInvincible", "player": "bot", "invincible": )") + (inv ? "true" : "false") + "}]}}";
+        auto sim = makeSimJson(rules, flatMap(20, 10, R"(,"entities":[{"type":"village","owner":1,"pos":[5,5],"garrison":5}],"environment":)" + env));
+        run(*sim, 2);
+        return sim->player(2)->alive;
+    };
+    CHECK(!alive2(false));
+    CHECK(alive2(true));
+}
+
+TEST(env_blizzard_sets_the_ai_var_and_mouro_refills_energy) {
+    std::string rules = kEnvRules;
+    rules.replace(rules.find("\"morale\": {\"start\": 0}"), 22, R"("morale": {"start": 0}, "energy": {"start": 10, "capped": true, "storage": 300})");
+    auto sim = makeSimJson(rules, envMap(R"({"weather": ["blizzard"], "weatherParams": {"blizzardFillTime": 1, "blizzardWaitTime": 1},
+        "mouro": {"castPos": [20, 10], "actionHolders": [{"actions": [{"name": "boom", "type": "castAt", "skill": "boom", "duration": 1, "castAt": 0.1}]}]}})"));
+    auto& gs = mod(*sim).state(*sim);
+    bool on = false, off = false;
+    Fixed energy{};
+    for (int t = 0; t < 20 * 3; ++t) {
+        sim->step();
+        auto it = gs.trig.vars.find("blizzard");
+        if (it != gs.trig.vars.end()) { if (it->second.raw) on = true; else off = true; }
+        energy = fxMax(energy, stockOf(*sim, 2, "energy"));
+    }
+    CHECK(on && off);                          // 1 while it blows, 0 while it waits
+    CHECK(energy == Fixed::fromInt(300));      // ResetCastSkillValues: the bot's energy is full before each cast
+}
+
+TEST(env_mouro_skeletons_use_the_skill_filter) {
+    std::string rules = kEnvRules;
+    rules.replace(rules.find("\"playerAbilities\": ["), 20, R"("playerAbilities": [
+    {"id": "skel", "target": "point", "effects": [{"type": "garrisonAdd", "amount": 1, "radius": 1, "kind": "structure", "affects": "allies"}]},)");
+    auto sim = makeSimJson(rules, envMap(R"({"mouro": {"actionHolders": [{"actions": [
+        {"name": "skeletons", "type": "skeletonAttack", "skill": "skel", "targetPointsCount": 3, "duration": 1, "castAt": 0.1}]}]}})"));
+    World& w = sim->world();
+    std::vector<Vec3> hits;
+    for (int t = 0; t < 20 * 2; ++t) {
+        sim->step();
+        for (auto& ev : sim->events()) if (ev.type == game::kEvPlayerAbility && ev.player == 2) hits.push_back(ev.pos);
+    }
+    CHECK(!hits.empty());
+    const Vec3 bot = w.get<Transform>(envPoint(*sim, 1)).pos;
+    for (auto& p : hits) CHECK((p - bot).xz().length() < Fixed::fromInt(1));   // "allies" of the bot: only its own point
+}
+
+TEST(env_bombs_fall_in_bw_screen_space) {
+    auto sim = makeSimJson(kEnvRules, envMap(R"({"flyBomb": {"rallyPoints": [{"start": [2, 10], "end": [38, 10]}], "flyVelocity": 4, "amplitude": [0, 0],
+        "minIdleDuration": 0.05, "maxIdleDuration": 0.05, "minDropBombPeriod": 0.5, "maxDropBombPeriod": 0.5, "maxBombsByPass": 1,
+        "minDropBombHeight": 3, "maxDropBombHeight": 3, "gravity": -20, "explosionSkill": "boom"}})"));
+    Vec3 drop{}, boom{};
+    bool dropped = false, exploded = false;
+    for (int t = 0; t < 20 * 3 && !exploded; ++t) {
+        sim->step();
+        for (auto& ev : sim->events()) if (ev.type == game::kEvEnv && (ev.value >> 16) == game::kEnvBomb) {
+            if ((ev.value & 0xFFFF) == 0) { drop = ev.pos; dropped = true; } else { boom = ev.pos; exploded = true; }
+        }
+    }
+    CHECK(dropped && exploded);
+    // lift = height = 3: the screen drop of 3 ends on the bomber's ground track (z 10), drifted along x by its speed
+    CHECK(fxAbs(boom.z - drop.z) < Fixed::fromRatio(1, 4));
+    CHECK(boom.x > drop.x);
+}
+
+TEST(env_bw_fog_ellipse_start_reveal_and_no_memory) {
+    std::string rules = kEnvRules;
+    rules.insert(1, R"("fogOfWar": {"mode": "full", "ellipse": 2},)");
+    rules.replace(rules.find("\"shroom\": {\"move\": {\"speed\": 2}"), 31, R"("shroom": {"move": {"speed": 2}, "sight": 6)");
+    auto sim = makeSimJson(rules, envMap(R"({"fog": {"memory": false, "startFowSize": 60, "startDuration": 1}})", 40, 20,
+        R"(,{"type":"shroom","owner":1,"pos":[20.5,10.5]})"));
+    auto& gs = mod(*sim).state(*sim);
+    const auto& g = gs.grid;
+    run(*sim, 0.3);
+    CHECK(gs.vision[1][size_t(g.index(36, 10))] == 2);      // start reveal around the first building (x 5): far east still lit
+    run(*sim, 1.5);
+    CHECK(gs.vision[1][size_t(g.index(36, 10))] == 0);      // over: no explored memory, back to unexplored
+    CHECK(gs.vision[1][size_t(g.index(25, 10))] == 2);      // ellipse: 5 cells along x ...
+    CHECK(gs.vision[1][size_t(g.index(20, 14))] == 0);      // ... but not 4 along z (4 x 2 > 6)
+}
+
+TEST(env_scroller_moves_the_routes_screen) {
+    std::string map = envMap(R"({"mapScroller": {"actions": [{"type": "moveScreen", "position": [30, 10], "duration": 1}]}})");
+    map.insert(map.size() - 1, R"(,"screen": {"size": [20, 20], "center": [10, 10], "bounds": [0, 30, 0, 0]})");
+    auto sim = makeSimJson(kEnvRules, map);
+    auto& m = mod(*sim);
+    CHECK(!m.environment()->insideScreen(*sim, Vec3{Fixed::fromInt(35), Fixed{}, Fixed::fromInt(10)}));
+    run(*sim, 1.5);
+    CHECK(m.screenCenter(*sim).x == Fixed::fromInt(30));
+    CHECK(m.environment()->insideScreen(*sim, Vec3{Fixed::fromInt(35), Fixed{}, Fixed::fromInt(10)}));
+    CHECK(m.onScreen(*sim, Vec3{Fixed::fromInt(35), Fixed{}, Fixed::fromInt(10)}));
+}
+
+TEST(env_worm_army_is_removed_like_bw) {
+    auto sim = makeSimJson(kEnvRules, envMap(R"({
+        "splines": [{"id": "path", "points": [[6, 6], [34, 6], [34, 14], [6, 14]], "loop": true}],
+        "worms": [{"paths": ["path"], "onTheGroundCycles": [[1, 1]], "undergroundCycles": [[0.2, 0.2]], "spawnArmyCycles": [[4, 4]],
+                   "info": {"speed": 3, "minDistanceToBuilding": 4, "headAppearDuration": 0.2, "headDisappearDuration": 0.3}}]})"));
+    World& w = sim->world();
+    auto* st = w.resource<game::EnvState>();
+    uint32_t group = 0;
+    bool sawPost = false, cleared = false, minion = false;
+    for (int t = 0; t < 20 * 20 && !cleared; ++t) {
+        sim->step();
+        auto& ws = st->worms[0];
+        if (ws.armyGroup) {
+            group = ws.armyGroup;
+            for (uint32_t g : st->minionGroups) if (g == group) minion = true;
+        }
+        if (ws.state == 7) sawPost = true;   // BW OnGroupClosed: every unit left -> PostSpawnArmy
+        if (group && !ws.armyGroup) {        // BW OnGroupRemoving: the last unit entered a building or died
+            bool alive = false;
+            w.each<game::GroupTag>([&](Entity, game::GroupTag& g) { if (g.id == group) alive = true; });
+            CHECK(!alive);
+            for (uint32_t g : st->minionGroups) CHECK(g != group);
+            cleared = true;
+        }
+    }
+    CHECK(group != 0 && minion && sawPost && cleared);
+}

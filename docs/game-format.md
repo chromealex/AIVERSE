@@ -2395,13 +2395,42 @@ attacks / explosions, bombs, Mouro actions / emotions, graveyard, souls (also th
 graveyard), scroller steps, walls. `kEvCaptured` for caves / scroller conversions, `kEvGarrisonChanged` for
 lightning and souls.
 
-Fog of war in BW is presentation only: no explored memory, sight ellipses (y x 2) with lifetimes, a growing
-start reveal. Map it on the existing keys: rules `fogOfWar.mode` "full" + look `"explored"` = `"unexplored"`
-and `"fade": 1`.
+Stage 2 keys (1:1 with BW):
 
-Not ported yet: multi-spline auto skills (`multiSplineSkills`), rain lowering grass-fire spread,
-`setInvincible` effects (stored only), Mouro skill filters (skeleton attacks pick random player points),
-BW bombs fall in screen space (here: ground drift + fall time), visual Mouro/worm animations and dust.
+```jsonc
+"environment": {
+  "screenYAxis": -1,                                      // BW screen y (up) along world z: -1 = up is -z (bomb arcs)
+  "weatherParams": {"grassRainBurnRandomFactor": 0.5,     // rain: burning grass lights a neighbour with this chance
+                    "blizzardVar": "blizzard"},           // trigger var = 1 while the blizzard blows (agent-bw-ai)
+  "multiSplineSkills": [{"skill": "flame", "order": [0, 1, 2], "randomJump": false, "shouldBuildTransferSpline": true}],
+  "mouro": {"energyResource": "energy"},                  // refilled to its cap before every Mouro cast
+  "fog": {"memory": false, "startFowSize": 3000, "startDuration": 3}
+}
+// rules.json
+"fogOfWar": {"ellipse": 2}                                // sight discs dx^2 + (2 dz)^2 <= r^2 (BW iso fog)
+```
+
+- **Multi-spline auto skills** (BW `MultiSplineSkill`): emitted once at the start of spline 0 (or a random one with
+  `randomJump`) when it lies on the screen; the area rides spline k, then (with `shouldBuildTransferSpline`) the
+  Catmull-Rom transfer curve from the end of k to the start of the next, after which BW advances the index once
+  more. Splines are the first `order` entries of `splines`, velocities per spline.
+- **Rain and grass fire**: with `"rain"`, spread kernels of every trample `killField` succeed with
+  `grassRainBurnRandomFactor` (`GridFields::setSpreadScale`).
+- **setInvincible** (map scroller): match modes and the victory script never defeat that player (BW
+  `ModBase.TestPlayer`).
+- **Mouro**: skeleton attacks target the buildings the skill's own effect filter accepts for the bot (BW
+  `GetFilteredPoints`); every cast first resets the bot's cooldowns and refills `energyResource` to its cap.
+- **Bombs** fall in BW screen space: `dy = v_y t + g t^2 / 2` until `|dy| >= height`, landing at
+  `z = start + screenYAxis * (lift + dy)` (lift = the bomber's height), x drifting with the bomber's speed.
+- **Fog** (BW FogOfWar): `fogOfWar.ellipse` squashes every sight disc (sim vision, fast and reference passes);
+  `fog.memory: false` turns cells that leave sight back into unexplored; `startFowSize` reveals a disc around each
+  player's first building that shrinks to nothing over `startDuration` (BW SetInitialFow during the countdown).
+- **One screen**: with a map `"screen"` (routes multiscreen) every environment screen check uses `onScreen`, and
+  `moveScreen` drives `setScreenCenter`; `mapScroller.screen` is only for maps without one.
+- **Sends**: graveyards and linked caves are refused by `RtsModule::canSend` too, so every computer player skips them.
+
+Remaining differences: Mouro / worm animations, dust and slime sprites are view work (events are emitted); the
+BW pre-start countdown does not exist, so the start reveal runs over the first seconds of the match.
 
 ## Fog of war look
 
