@@ -26,3 +26,8 @@ Backend callbacks and `pump()` run on the same owning thread, never directly on 
 
 See `examples/meta/native/Main.cpp`; test `meta_client` covers lost replies, restored
 requests, storage failure, duplicate callbacks and destruction before completion.
+
+Link `AIVERSE::meta_client` (native OBJECT modules: `aiverse_native_use_meta(target CLIENT)`).
+Only protocol, transport and outbox belong on the client. Server policy/configuration and SQL
+remain on the host; see `skills/meta-server/SKILL.md` and `skills/meta-database/SKILL.md`.
+The standalone client example is `examples/meta/client`.

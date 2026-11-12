@@ -1,6 +1,7 @@
 // Reusable meta-game policies. No GPU, platform, clock, network or simulation globals.
 #pragma once
 #include "engine/data/Json.h"
+#include "Types.h"
 #include <functional>
 #include <map>
 #include <set>
@@ -9,16 +10,6 @@
 #include <cstdint>
 
 namespace aiverse::meta {
-using Amount = int64_t;
-using Time = int64_t; // nonnegative UTC seconds, supplied by the authority
-using Bundle = std::map<std::string, Amount>;
-constexpr Amount kMaxAmount = 1000000000000LL;
-enum class Code { Ok, Duplicate, Invalid, Missing, Unavailable, Insufficient, Limit, Conflict, Denied, Unsupported };
-struct Result {
-    Code code = Code::Ok;
-    std::string detail;
-    explicit operator bool() const { return code == Code::Ok || code == Code::Duplicate; }
-};
 struct Context {
     Time now = 0;
     std::string player;

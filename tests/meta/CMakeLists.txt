@@ -57,3 +57,7 @@ add_test(NAME meta_client COMMAND aiverse_meta_client_tests)
 if(Python3_Interpreter_FOUND)
     add_test(NAME meta_kits COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/kits.py $<TARGET_FILE:aiverse_meta_validate>)
 endif()
+
+if(Python3_Interpreter_FOUND)
+    add_test(NAME meta_database COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/database_test.py)
+endif()

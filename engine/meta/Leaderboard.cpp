@@ -102,9 +102,4 @@ Result Leaderboard::restore(const Json& j) {
         seasons_=std::move(ss); receipts_=std::move(rs); revision_=rev; return {};
     } catch(const std::exception& e) { return {Code::Invalid,e.what()}; }
 }
-void OfflineBackend::request(ServiceRequest r,Callback cb) { pending_.emplace_back(std::move(r),std::move(cb)); }
-void OfflineBackend::pump() {
-    auto pending=std::move(pending_); pending_.clear();
-    for(auto& [r,cb]:pending) if(cb) cb({{Code::Unsupported,"online service unavailable: "+r.service},Json::object()});
-}
 } // namespace aiverse::meta

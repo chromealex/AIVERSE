@@ -453,3 +453,37 @@ Native UI/network hosts reuse `engine/meta/Client.h` with a durable per-account 
 read `skills/meta-client/SKILL.md`. The same operation survives a lost reply/restart.
 Browser UI is selectable through `metadata.metaScreens`; it is not a native RmlUi
 adapter. Validate kits, native linking, client retries and selected UI screens.
+
+
+## Adding and updating repository skills
+
+- Store each recipe in `skills/<name>/SKILL.md`; match the frontmatter name to the
+  directory. Use `aiverse-*` for shared gameplay, `rts-*` only for RTS-specific
+  behavior, and `meta-*` for meta-game policies. Do not add recipes under `docs/`.
+- Before adding a recipe, search the existing catalogs. Extend the existing owner
+  instead of creating a duplicate algorithm or overlapping skill. Register gameplay
+  packages in `libraries/catalog.json`, meta packages in `tools/meta/catalog.py`,
+  and meta composition dependencies in `tools/meta/kits.py`. Keep IDs stable.
+- State when to use the skill, its responsibility, public API/header, exact CMake
+  target, dependencies, minimal working example and required validation. Link to
+  detailed references; do not require loading unrelated recipes or whole schemas.
+- Every new code-providing skill must have an independently selectable library
+  target with only required dependencies. Header-only implementations may use
+  INTERFACE targets; compiled optional libraries must not build by default.
+  Workflow-only skills declare that they have no runtime library. An alias to an
+  all-features library does not satisfy per-skill isolation. Existing aggregate
+  targets are compatibility paths, not a pattern for new packages.
+- Explicitly separate client, server and database work. Client builds link
+  `AIVERSE::meta_client`; authoritative hosts link `AIVERSE::meta_server`. Native
+  OBJECT modules use `aiverse_native_use_meta(target CLIENT|SERVER)`. The legacy
+  `aiverse::meta` includes both sides. The server target still aggregates policies;
+  do not claim per-policy build isolation until it has been implemented and tested.
+- Keep credentials, trusted grants, policy configuration, sessions and SQL on the
+  server. Document schemas, migration ownership, compatibility, atomicity and
+  restart behavior when persistence is involved. Never ship private DB contents.
+- Change API, catalog/version, dependencies, recipe and examples together. Verify
+  frontmatter and catalog links, run affected tests, build a standalone consumer
+  and a real native consumer/export when linking changes. Verify that selecting
+  one library does not build/link unrelated libraries (including transitive deps).
+  Report actual coverage and unverified platforms; do not describe routing or
+  isolation requirements as completed implementations without evidence.

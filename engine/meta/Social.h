@@ -1,5 +1,6 @@
 #pragma once
 #include "Meta.h"
+#include "Protocol.h"
 
 namespace aiverse::meta {
 enum class ScoreUpdate { Best, Latest, Sum };
@@ -76,33 +77,5 @@ private:
     std::map<std::string,int64_t> read_;
     std::map<std::string,std::set<std::string>> blocked_;
     std::map<int64_t,std::set<std::string>> reports_;
-};
-// Transport adapter contract: callbacks are dispatched on the owning thread by pump().
-// Backends implement authentication, authorization, server policies and durable storage.
-// JSON operation names are application protocol, not trusted executable code.
-struct ServiceRequest { std::string service, action, operation; Json arguments = Json::object(); };
-struct ServiceReply {
-    Result result;
-    Json data = Json::object();
-    // Local transport signal, never accepted from an untrusted response body.
-    // A server Code::Unavailable (e.g. closed event) is a definitive policy reply.
-    bool transportUncertain = false;
-};
-inline ServiceReply transportFailure(const std::string& detail) {
-    return {{Code::Unavailable,detail},Json::object(),true};
-}
-class Backend {
-public:
-    using Callback = std::function<void(ServiceReply)>;
-    virtual ~Backend() = default;
-    virtual void request(ServiceRequest request,Callback callback) = 0;
-    virtual void pump() = 0;
-};
-class OfflineBackend final : public Backend {
-public:
-    void request(ServiceRequest request,Callback callback) override;
-    void pump() override;
-private:
-    std::vector<std::pair<ServiceRequest,Callback>> pending_;
 };
 } // namespace aiverse::meta

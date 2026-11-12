@@ -6,8 +6,10 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 PACKAGES = [
+    ('server', 'authoritative server policies permissions transactions service modules', 'meta-server', 'engine/meta/Service.h'),
+    ('database', 'server SQLite schema migrations sessions atomic snapshot CAS', 'meta-database', 'tools/meta/db/001_initial.sql'),
     ('client', 'native host UI durable outbox retry restart backend requests', 'meta-client', 'engine/meta/Client.h'),
     ('economy', 'shop offers currencies crafting rewards payments', 'meta-economy', 'engine/meta/Meta.h'),
     ('progression', 'quests achievements pass daily energy inbox', 'meta-progression', 'engine/meta/Meta.h'),
@@ -66,7 +68,7 @@ def main():
             elif args.query in ('clans','items','tournaments'): example=config['extensions'][args.query]
             elif args.query=='ui': example=config['economy']['metadata']
             else: example={'service':'meta','action':'view','arguments':{}}
-            result=dict(package,example=example,cmakeTarget='aiverse::meta',nativeHelper='aiverse_native_use_meta')
+            result=dict(package,example=example,cmakeTarget=('AIVERSE::meta_client' if args.query=='client' else None if args.query in ('ui','database') else 'AIVERSE::meta_server'),nativeHelper='aiverse_native_use_meta')
         if args.section:
             try:
                 value=result['example']

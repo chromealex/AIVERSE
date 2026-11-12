@@ -29,17 +29,4 @@ private:
     Commit commit_;
     RewardDraw draw_;
 };
-// Native networking adapter. Transport completion is queued by the host on the owning thread.
-// Host implements HTTPS/auth and retries with the same operation ID.
-class RemoteBackend final : public Backend {
-public:
-    using Transport = std::function<void(const ServiceRequest&, Callback)>;
-    explicit RemoteBackend(Transport send):send_(std::move(send)) {}
-    void request(ServiceRequest, Callback) override;
-    void pump() override;
-private:
-    Transport send_;
-    struct Pending { Callback callback; ServiceReply reply; };
-    std::shared_ptr<std::vector<Pending>> pending_ = std::make_shared<std::vector<Pending>>();
-};
 } // namespace aiverse::meta

@@ -1,5 +1,5 @@
 #pragma once
-#include "Service.h"
+#include "Protocol.h"
 
 namespace aiverse::meta {
 // Host/UI request lifecycle. Persist the outbox BEFORE sending a mutation. The host

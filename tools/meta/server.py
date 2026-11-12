@@ -18,9 +18,27 @@ ROOT = Path(__file__).resolve().parents[2]
 def database(path):
     db = sqlite3.connect(path, timeout=10)
     db.execute('PRAGMA journal_mode=WAL')
-    db.execute('CREATE TABLE IF NOT EXISTS snapshot (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL)')
-    db.execute('CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, player TEXT NOT NULL, authority INTEGER NOT NULL, expires INTEGER NOT NULL)')
-    db.commit()
+    try:
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('CREATE TABLE IF NOT EXISTS meta_schema (version INTEGER PRIMARY KEY)')
+        version = db.execute('SELECT COALESCE(MAX(version),0) FROM meta_schema').fetchone()[0]
+        if version > 1:
+            raise ValueError('meta database schema is newer than this host')
+        if version < 1:
+            statement = ''
+            for line in (ROOT/'tools/meta/db/001_initial.sql').read_text().splitlines():
+                statement += line+'\n'
+                if sqlite3.complete_statement(statement):
+                    db.execute(statement)
+                    statement = ''
+            if statement.strip():
+                raise ValueError('incomplete database migration')
+            db.execute('INSERT INTO meta_schema VALUES(1)')
+        db.commit()
+    except Exception:
+        db.rollback()
+        db.close()
+        raise
     return db
 
 

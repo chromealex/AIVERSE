@@ -16,7 +16,7 @@ LIVE = {'loot':'loot','albums':'albums','jobs':'jobs','research':'research','que
         'notifications':'notifications','offline':'offline'}
 DEPENDENCIES = {'economy':[], 'progression':['economy'], 'social':['economy'],
                 'clans':['social'], 'items':['economy'], 'tournaments':['social'],
-                'backend':['economy'], 'client':['backend'], 'ui':['backend']}
+                'backend':['economy'], 'server':['backend'], 'database':['server'], 'client':[], 'ui':['client']}
 DEPENDENCIES.update({key:['economy'] for key in LIVE})
 DEPENDENCIES.update({'wars':['clans'], 'albums':['loot'], 'offer-chains':['economy'],
                      'matchmaking':['social','ratings'], 'ratings':['social'], 'quests':['progression']})

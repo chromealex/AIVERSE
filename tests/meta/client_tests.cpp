@@ -1,4 +1,5 @@
 #include "engine/meta/Client.h"
+#include "engine/meta/Service.h"
 #include <iostream>
 #include <stdexcept>
 using namespace aiverse;using namespace aiverse::meta;

@@ -1,22 +1,50 @@
-# Can be consumed directly by any project's native C++ target.
-add_library(aiverse_meta STATIC Client.cpp Meta.cpp MetaData.cpp Leaderboard.cpp Chat.cpp Service.cpp ServiceData.cpp
+# Protocol/data are shared; game clients never link server rules or storage.
+if(TARGET aiverse_engine)
+    add_library(aiverse_meta_data INTERFACE)
+    target_link_libraries(aiverse_meta_data INTERFACE aiverse_engine)
+else()
+    add_library(aiverse_meta_data STATIC EXCLUDE_FROM_ALL ../data/Json.cpp ../core/Fixed.cpp)
+    set_target_properties(aiverse_meta_data PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+target_include_directories(aiverse_meta_data INTERFACE "${CMAKE_CURRENT_LIST_DIR}/../..")
+target_compile_features(aiverse_meta_data INTERFACE cxx_std_20)
+if(NOT TARGET aiverse_engine)
+    target_compile_features(aiverse_meta_data PRIVATE cxx_std_20)
+endif()
+add_library(AIVERSE::meta_protocol ALIAS aiverse_meta_data)
+
+add_library(aiverse_meta_client STATIC EXCLUDE_FROM_ALL Client.cpp Backend.cpp)
+target_link_libraries(aiverse_meta_client PUBLIC aiverse_meta_data)
+set_target_properties(aiverse_meta_client PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(AIVERSE::meta_client ALIAS aiverse_meta_client)
+
+add_library(aiverse_meta STATIC EXCLUDE_FROM_ALL Meta.cpp MetaData.cpp Leaderboard.cpp Chat.cpp Service.cpp ServiceData.cpp
     LiveOps.cpp LiveOpsData.cpp LiveOpsRewards.cpp LiveOpsActivities.cpp LiveOpsRetention.cpp
     LiveOpsCompetition.cpp LiveOpsMatchmaking.cpp LiveOpsRatings.cpp Rating.cpp)
-add_library(aiverse::meta ALIAS aiverse_meta)
-target_include_directories(aiverse_meta PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../..")
-target_compile_features(aiverse_meta PUBLIC cxx_std_20)
+target_link_libraries(aiverse_meta PUBLIC aiverse_meta_data)
 set_target_properties(aiverse_meta PROPERTIES POSITION_INDEPENDENT_CODE ON)
-if(TARGET aiverse_engine)
-    target_link_libraries(aiverse_meta PUBLIC aiverse_engine)
-else()
-    target_sources(aiverse_meta PRIVATE ../data/Json.cpp ../core/Fixed.cpp)
-endif()
+add_library(AIVERSE::meta_server ALIAS aiverse_meta)
 
-# aiverse_native_module uses TARGET_OBJECTS, so propagate its link dependency explicitly.
+# Compatibility umbrella for existing hosts that used both sides in one executable.
+add_library(aiverse_meta_legacy INTERFACE)
+target_link_libraries(aiverse_meta_legacy INTERFACE AIVERSE::meta_server AIVERSE::meta_client)
+add_library(aiverse::meta ALIAS aiverse_meta_legacy)
+
+# Native OBJECT modules are inserted with TARGET_OBJECTS: propagate dependencies to owner.
 function(aiverse_native_use_meta native_target)
     if(NOT TARGET ${native_target} OR NOT TARGET aiverse_game)
-        message(FATAL_ERROR "aiverse_native_use_meta expects a registered native target in AIVERSE")
+        message(FATAL_ERROR "aiverse_native_use_meta expects a registered native target")
     endif()
-    target_link_libraries(${native_target} PRIVATE aiverse::meta)
-    target_link_libraries(aiverse_game PUBLIC aiverse::meta)
+    set(side "${ARGV1}")
+    if(side STREQUAL "CLIENT")
+        set(dependency AIVERSE::meta_client)
+    elseif(side STREQUAL "SERVER")
+        set(dependency AIVERSE::meta_server)
+    elseif(side STREQUAL "")
+        set(dependency aiverse::meta)
+    else()
+        message(FATAL_ERROR "meta side must be CLIENT or SERVER")
+    endif()
+    target_link_libraries(${native_target} PRIVATE ${dependency})
+    target_link_libraries(aiverse_game PUBLIC ${dependency})
 endfunction()

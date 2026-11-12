@@ -45,9 +45,4 @@ ServiceConfig ServiceConfig::parse(const Json& j) {
     if(x.has("liveops")) validateLiveOps(x["liveops"],c.economy);
     return c;
 }
-void RemoteBackend::request(ServiceRequest r,Callback cb) {
-    if(!send_) { pending_->push_back({std::move(cb),{{Code::Unsupported,"transport"},Json::object()}}); return; }
-    send_(r,[queue=pending_,cb=std::move(cb)](ServiceReply reply) mutable { queue->push_back({std::move(cb),std::move(reply)}); });
-}
-void RemoteBackend::pump() { auto ready=std::move(*pending_); pending_->clear(); for(auto& p:ready) if(p.callback) p.callback(std::move(p.reply)); }
 } // namespace aiverse::meta
