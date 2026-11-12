@@ -83,6 +83,14 @@ struct Room {
     std::vector<uint32_t> spectators;
     std::unique_ptr<Match> match;
     std::shared_ptr<Hosted> hosted;      // battle server mode (ServerHosted.cpp); null for lobby rooms
+    std::string externalId;               // placed by an external matchmaker (Server::reserve)
+};
+
+struct ReservedMatch {                     // waiting for its players
+    Reservation spec;
+    uint64_t createdAt = 0;
+    std::map<size_t, uint32_t> seated;    // seat index -> client id
+    MapInfo map;                          // from the first player (file + data hash + teams)
 };
 
 // A hosted battle: what the orchestrator allocated plus its lifecycle.
@@ -110,6 +118,8 @@ struct MatchRecord {
     std::vector<Command> history;
     std::map<uint32_t, uint64_t> agreed;
     uint32_t confirmedNext = 0;
+    std::string externalId;
+    uint64_t startMs = 0;
 };
 
 struct PendingVerdict {
@@ -129,6 +139,7 @@ struct Server::Impl {
     std::map<uint32_t, std::unique_ptr<Room>> rooms;
     std::map<std::string, Rating> ratings;
     std::vector<PendingVerdict> verdicts;
+    std::map<std::string, ReservedMatch> reserved;
     uint32_t nextClientId = 1, nextRoomId = 1;
     uint64_t now = 0, lastMatchmake = 0, lastQueueStatus = 0;
     std::mt19937_64 rng{std::random_device{}()};
@@ -189,7 +200,7 @@ struct Server::Impl {
     void confirmNextTick(Match& M);
     MatchRecord record(Room& r);
     std::vector<std::pair<uint8_t, int32_t>> applyOutcome(const MatchRecord& rec, int32_t result, uint32_t endTick, uint64_t endHash, bool verified);
-    void saveReplay(const MatchRecord& rec, uint32_t endTick, uint64_t endHash);
+    std::string saveReplay(const MatchRecord& rec, uint32_t endTick, uint64_t endHash);
     Member* member(Room& r, uint32_t clientId);
 
     // hosted battles (ServerHosted.cpp)
@@ -210,6 +221,13 @@ struct Server::Impl {
     Rating& rating(const std::string& queueId, uint64_t key);
     void loadRatings();
     void saveRatings();
+
+    // external matchmaking (ServerReserved.cpp)
+    void onTicketJoin(Client& c, const std::string& ticket, const std::vector<MapInfo>& maps);
+    void updateReservations();
+    void releaseSeat(uint32_t clientId);
+    void startReserved(const std::string& externalId);
+    void cancelReserved(const std::string& externalId, const std::string& reason);
 };
 
 } // namespace aiverse::net
