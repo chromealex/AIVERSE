@@ -64,6 +64,42 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | locomotion | coyoteTicks | integer | 6 | 0..3600 |
 | locomotion | bufferTicks | integer | 6 | 0..3600 |
 | locomotion | maxJumps | integer | 1 | 1..16 |
+| locomotion | maxSlopeMilliDegrees | integer | 45000 | 0..89000 |
+| locomotion | slideAccelerationMilli | integer | 15000 | 0..1000000 |
+| locomotion | slideSpeedMilli | integer | 12000 | 0..100000 |
+| locomotion | ledgeMinHeightMilli | integer | 1200 | 0..10000 |
+| locomotion | ledgeMaxHeightMilli | integer | 2200 | 0..10000 |
+| locomotion | ledgeShimmySpeedMilli | integer | 1500 | 0..100000 |
+| locomotion | ledgeClimbDepthMilli | integer | 500 | 0..10000 |
+| locomotion | ledgeClimbTicks | integer | 24 | 2..3600 |
+| locomotion | ledgeRegrabTicks | integer | 12 | 0..3600 |
+| locomotion | autoLedgeGrab | boolean | true |  |
+| locomotion | ladderSpeedMilli | integer | 3000 | 0..100000 |
+| locomotion | ladderExitRiseMilli | integer | 1000 | 0..10000 |
+| locomotion | ladderExitDepthMilli | integer | 600 | 0..10000 |
+| locomotion | ladderExitTicks | integer | 16 | 2..3600 |
+| locomotion | ladderJumpPushMilli | integer | 3000 | 0..100000 |
+| locomotion | swimExitDepthMilli | integer | 1000 | 0..10000 |
+| locomotion | swimEnterDepthMilli | integer | 1200 | 1..10000 |
+| locomotion | swimFloatDepthMilli | integer | 1400 | 1..10000 |
+| locomotion | swimDiveDepthMilli | integer | 1800 | 1..10000 |
+| locomotion | swimSpeedMilli | integer | 3500 | 0..100000 |
+| locomotion | swimVerticalSpeedMilli | integer | 2500 | 0..100000 |
+| locomotion | swimAccelerationMilli | integer | 10000 | 1..1000000 |
+| locomotion | buoyancyMilli | integer | 4000 | 0..1000000 |
+| locomotion | waterJumpSpeedMilli | integer | 5000 | 0..100000 |
+| locomotion | climbEnabled | boolean | true |  |
+| locomotion | climbSpeedMilli | integer | 2000 | 0..100000 |
+| locomotion | wallJumpPushMilli | integer | 4000 | 0..100000 |
+| locomotion | climbStamina | integer | 300 | 0..1000000000 |
+| locomotion | climbStaminaDrain | integer | 1 | 0..1000000 |
+| locomotion | climbStaminaRegen | integer | 2 | 0..1000000 |
+| locomotion | mantleMinHeightMilli | integer | 300 | 0..10000 |
+| locomotion | vaultMaxHeightMilli | integer | 1000 | 0..10000 |
+| locomotion | mantleMaxHeightMilli | integer | 1500 | 0..10000 |
+| locomotion | vaultMinSpeedMilli | integer | 4000 | 0..100000 |
+| locomotion | vaultTicks | integer | 14 | 2..3600 |
+| locomotion | mantleTicks | integer | 30 | 2..3600 |
 | melee | windup | integer | 6 | 0..3600 |
 | melee | active | integer | 4 | 1..3600 |
 | melee | recovery | integer | 12 | 0..3600 |
@@ -86,4 +122,10 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 Constraint: `camera.minZoom <= camera.maxZoom` (checked by loader and CLI).
 Constraint: `camera.minPitch <= camera.maxPitch` (checked by loader and CLI).
 Constraint: `abilities.minRange <= abilities.maxRange` (checked by loader and CLI).
+Constraint: `locomotion.ledgeMinHeightMilli <= locomotion.ledgeMaxHeightMilli` (checked by loader and CLI).
+Constraint: `locomotion.swimExitDepthMilli <= locomotion.swimEnterDepthMilli` (checked by loader and CLI).
+Constraint: `locomotion.swimEnterDepthMilli <= locomotion.swimFloatDepthMilli` (checked by loader and CLI).
+Constraint: `locomotion.swimFloatDepthMilli <= locomotion.swimDiveDepthMilli` (checked by loader and CLI).
+Constraint: `locomotion.mantleMinHeightMilli <= locomotion.vaultMaxHeightMilli` (checked by loader and CLI).
+Constraint: `locomotion.vaultMaxHeightMilli <= locomotion.mantleMaxHeightMilli` (checked by loader and CLI).
 Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).
