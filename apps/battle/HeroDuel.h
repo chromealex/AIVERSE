@@ -1,8 +1,10 @@
 // HeroDuel: a minimal direct-control top-down shooter used to test and load-test battle
 // networking (rollback with sticky hero input, desync checks, reconnect, hosted battles).
-// It is a stand-in for the real hero controller (agent-topdown-control), not a game: heroes move
-// with kCmdHeroInput, shoot projectiles while fire is held and aiming, dash with action 0; first team
-// to `killsToWin` kills or the most kills after `ticks` wins. Map JSON:
+// It is a stand-in shooter, not a game. It speaks the same hero commands as the RTS module's top-down heroes
+// (engine/net/HeroInput.h: net::kCmdHeroInput = kCmdTopDown with topdown::Input, net::kCmdHeroAbility =
+// kCmdTopDownAbility): heroes move with the stick, shoot while aiming with fire held, dash with ability 0;
+// first team to `killsToWin` kills or the most kills after `ticks` wins. RTS-module battles (templates/
+// topdown_arena, extraction) run through the same server with apps/battle/RtsBattle.h. Map JSON:
 //   {"players":[{"team":1},{"team":2}], "heroDuel":{"size":30,"hp":100,"killsToWin":10,"ticks":2400}}
 // Loadouts from the hosted start payload set per-slot hp / damage (2 bytes: hp, damage).
 #pragma once
@@ -20,13 +22,12 @@ struct Hero {
     Vec2 pos{}, spawn{};
     int32_t hp = 100, maxHp = 100, damage = 12, cooldown = 0, respawn = 0, dashCooldown = 0;
     int32_t kills = 0, deaths = 0;
-    net::HeroInputState input;
+    topdown::Input input;
 };
 struct Bullet { uint8_t owner = 0, team = 0; Vec2 pos{}, vel{}; int32_t ttl = 0; };
 
 class HeroDuelModule final : public GameModule {
 public:
-    static constexpr uint16_t kSectors = 32;
     explicit HeroDuelModule(std::map<uint8_t, std::pair<int32_t, int32_t>> loadouts = {}) : loadouts_(std::move(loadouts)) {}
     std::string name() const override { return "heroduel"; }
 
@@ -53,9 +54,14 @@ public:
     void applyCommand(Simulation& sim, const Command& c) override {
         Hero* h = hero(sim, c.player);
         if (!h) return;
-        if (c.type == net::kCmdHeroInput) h->input = net::unpackHeroInput(c.param);
-        else if (c.type == net::kCmdHeroAction && net::heroActionIndex(c) == 0 && h->respawn == 0 && h->dashCooldown == 0) {
-            const Vec2 d = net::heroMoveVector(h->input, kSectors);
+        if (c.type == net::kCmdHeroInput) {
+            h->input = topdown::unpack(c.param);
+            h->input.moveMag = topdown::quantizeMag(h->input.moveMag, 1, 50);   // Drone Fall: full speed or nothing
+            h->input.moveAngle = h->input.moveMag ? topdown::quantizeAngle(h->input.moveAngle, 45) : 0;
+        } else if (c.type == net::kCmdHeroAbility) {
+            const topdown::Ability ab = topdown::unpackAbility(c.param);
+            if (ab.index != 0 || (ab.phase != topdown::Phase::Tap && ab.phase != topdown::Phase::Release) || h->respawn || h->dashCooldown) return;
+            const Vec2 d = ab.hasAngle ? topdown::directionXZ(ab.angle) : topdown::moveVector(h->input);
             h->pos = clamp(h->pos + Vec2{d.x * 3, d.y * 3});
             h->dashCooldown = int32_t(sim.tickRate());
         }
@@ -64,7 +70,7 @@ public:
     void hashState(Simulation& sim, Hasher& hs) override {
         sim.world().each<Hero>([&](Entity, Hero& h) {
             hs.u32(h.slot); hs.fx(h.pos.x); hs.fx(h.pos.y); hs.i32(h.hp); hs.i32(h.cooldown); hs.i32(h.respawn);
-            hs.i32(h.dashCooldown); hs.i32(h.kills); hs.i32(h.deaths); hs.i64(net::packHeroInput(h.input));
+            hs.i32(h.dashCooldown); hs.i32(h.kills); hs.i32(h.deaths); hs.i64(topdown::pack(h.input));
         });
         sim.world().each<Bullet>([&](Entity, Bullet& b) { hs.u32(b.owner); hs.fx(b.pos.x); hs.fx(b.pos.y); hs.fx(b.vel.x); hs.fx(b.vel.y); hs.i32(b.ttl); });
     }
@@ -108,10 +114,10 @@ private:
             if (h.dashCooldown) --h.dashCooldown;
             if (h.cooldown) --h.cooldown;
             if (h.respawn) { if (--h.respawn == 0) { h.pos = h.spawn; h.hp = h.maxHp; } return; }
-            const Vec2 m = net::heroMoveVector(h.input, kSectors);
+            const Vec2 m = topdown::moveVector(h.input);
             h.pos = clamp(h.pos + Vec2{m.x * speed, m.y * speed});
-            if ((h.input.held & 1) && net::heroAiming(h.input) && !h.cooldown) {
-                const Vec2 a = net::heroAimVector(h.input);
+            if (h.input.fire && h.input.aim && !h.cooldown) {
+                const Vec2 a = topdown::aimVector(h.input);
                 spawn.push_back({h.slot, h.team, h.pos, {a.x * bulletSpeed, a.y * bulletSpeed}, int32_t(sim.tickRate())});
                 h.cooldown = int32_t(sim.tickRate() / 5);
             }

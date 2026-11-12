@@ -442,7 +442,7 @@ void Environment::flyers(Simulation& sim, EnvState& st) {
                 fs.drop -= dt;
                 if (fs.drop.raw <= 0) {
                     EnvBomb b;
-                    b.start = b.pos = fs.pos; b.vel = vel;
+                    b.start = b.pos = fs.pos; b.vel = vel; b.lift = fs.height;
                     b.height = d.heightMin + (d.heightMax - d.heightMin) * sim.rng().unit();
                     fs.bombs.push_back(b);
                     ++fs.dropped;
@@ -456,13 +456,20 @@ void Environment::flyers(Simulation& sim, EnvState& st) {
                 removeBody();
             }
         }
-        // bombs fall (BW Bomb: start + v t + g t^2 / 2 until they dropped `height`)
+        // bombs fall in BW screen space (Bomb: start + v t + g t^2 / 2 until |dy| >= height). The bomb leaves the bomber
+        // `lift` above its ground point; screen y runs along world z (screenYAxis), so the screen drop lands on the ground
+        // at z = start + axis * (lift + dy).
+        const int ax = def_.screenY;
         for (size_t k = 0; k < fs.bombs.size();) {
             EnvBomb& b = fs.bombs[k];
             b.t += dt;
-            const Fixed fall = -d.gravity * b.t * b.t / 2;
-            b.pos = b.start + b.vel * b.t;
-            if (fall < b.height) { ++k; continue; }
+            const Fixed vs = b.vel.z * ax;                                  // screen velocity (y up)
+            const Fixed dy = vs * b.t + d.gravity * b.t * b.t / 2;
+            b.pos.x = b.start.x + b.vel.x * b.t;
+            b.pos.z = b.start.z + (b.lift + dy) * ax;
+            b.pos.y = fxMax(Fixed{}, b.lift + d.gravity * b.t * b.t / 2);   // view: the drop height left
+            if (fxAbs(dy) < b.height) { ++k; continue; }
+            b.pos.y = Fixed{};
             if (d.skill >= 0) cast(sim, 0, d.skill, b.pos);
             sim.emit({kEvEnv, 0, kNullEntity, kNullEntity, kEnvBomb << 16 | 1, b.pos});
             fs.bombs.erase(fs.bombs.begin() + long(k));

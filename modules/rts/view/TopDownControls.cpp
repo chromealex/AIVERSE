@@ -118,6 +118,10 @@ TopDownControlConfig parseTopDownControls(const Json& g, const std::vector<std::
         TopDownButtonConfig b;
         b.ability = bj.getStr("ability");
         for (size_t i = 0; i < heroAbilities.size(); ++i) if (heroAbilities[i] == b.ability) b.abilityIndex = int(i);
+        if (b.ability == "escape" && b.abilityIndex < 0) b.abilityIndex = topdown::kEscapeAbility;
+        const std::string mode = bj.getStr("mode", "tap");
+        b.mode = mode == "aim" ? TopDownButtonConfig::Mode::Aim : mode == "hold" ? TopDownButtonConfig::Mode::Hold : TopDownButtonConfig::Mode::Tap;
+        b.dragRadius = std::max(16.0f, float(bj["dragRadius"].toDouble(b.dragRadius)));
         b.key = parseKey(bj.getStr("key"));
         b.padButton = int(bj.getInt("gamepad", -1));
         readPair(bj["anchor"], b.anchor);
@@ -157,7 +161,10 @@ void TopDownControls::configure(const Json& gameJson, const TopDownRules& rules,
     move_.configure(cfg_.move);
     aim_.configure(cfg_.aim);
     buttonPointers_.assign(cfg_.buttons.size(), -1);
-    presses_.clear();
+    dragX_.assign(cfg_.buttons.size(), 0); dragY_ = downX_ = downY_ = dragX_;
+    keyHeld_.assign(cfg_.buttons.size(), 0);
+    events_.clear();
+    escape_ = {};
     haveSent_ = false;
     camInit_ = false;
     haveLast_ = false; stickLook_ = true;
@@ -245,8 +252,10 @@ int TopDownControls::buttonAt(float x, float y, float W, float H) const {
 bool TopDownControls::pointerDown(int64_t id, float x, float y, float W, float H, bool touchUi) {
     if (!active() || !touchUi) return false;
     if (int b = buttonAt(x, y, W, H); b >= 0) {   // buttons first: they sit inside the aim stick's area
+        if (buttonPointers_[size_t(b)] >= 0) return true;   // a second finger on a held button
         buttonPointers_[size_t(b)] = id;
-        pressAbility(b);
+        downX_[size_t(b)] = dragX_[size_t(b)] = x; downY_[size_t(b)] = dragY_[size_t(b)] = y;
+        buttonDown(b);
         return true;
     }
     if (move_.begin(id, x, y, W, H)) return true;
@@ -260,11 +269,12 @@ bool TopDownControls::pointerMove(int64_t id, float x, float y) {
     if (!active()) return false;
     bool used = move_.move(id, x, y);
     if (!used && aim_.move(id, x, y)) { used = true; aimMaxDefl_ = std::max(aimMaxDefl_, aim_.rawDeflection()); }
-    for (auto p : buttonPointers_) if (p == id) used = true;
+    for (size_t i = 0; i < buttonPointers_.size(); ++i)
+        if (buttonPointers_[i] == id) { dragX_[i] = x; dragY_[i] = y; used = true; }
     return used;
 }
 
-bool TopDownControls::pointerUp(int64_t id, float, float) {
+bool TopDownControls::pointerUp(int64_t id, float x, float y) {
     if (!active()) return false;
     bool used = move_.end(id);
     if (!used && aim_.end(id)) {
@@ -272,15 +282,92 @@ bool TopDownControls::pointerUp(int64_t id, float, float) {
         // a short tap that barely moved the stick: shoot at the nearest target (aim assist)
         if (cfg_.assist.touch && cfg_.assist.tapFire && clock_ - aimDownAt_ <= cfg_.assist.tapTime && aimMaxDefl_ < 0.35f) tapPending_ = true;
     }
-    for (auto& p : buttonPointers_) if (p == id) { p = -1; used = true; }
+    for (size_t i = 0; i < buttonPointers_.size(); ++i)
+        if (buttonPointers_[i] == id) {
+            dragX_[i] = x; dragY_[i] = y;
+            buttonUp(int(i));
+            buttonPointers_[i] = -1;
+            used = true;
+        }
     return used;
 }
 
 void TopDownControls::cancelAll() {
     move_.cancel();
     aim_.cancel();
+    for (size_t i = 0; i < buttonPointers_.size(); ++i)   // held aim / hold buttons: nothing is cast
+        if ((buttonPointers_[i] >= 0 || keyHeld_[i]) && cfg_.buttons[i].mode != TopDownButtonConfig::Mode::Tap)
+            events_.push_back({int(i), topdown::Phase::Cancel, false, 0, 0});
     tapPending_ = false; tapUntil_ = 0;
     std::fill(buttonPointers_.begin(), buttonPointers_.end(), -1);
+    std::fill(keyHeld_.begin(), keyHeld_.end(), 0);
+}
+
+void TopDownControls::buttonDown(int b) {
+    if (b < 0 || size_t(b) >= cfg_.buttons.size()) return;
+    const auto& bc = cfg_.buttons[size_t(b)];
+    if (buttonPointers_[size_t(b)] < 0) keyHeld_[size_t(b)] = 1;
+    if (bc.mode == TopDownButtonConfig::Mode::Tap) events_.push_back({b, topdown::Phase::Tap, false, 0, 0});
+    else events_.push_back({b, topdown::Phase::Press, false, 0, 0});
+}
+
+void TopDownControls::buttonUp(int b) {
+    if (b < 0 || size_t(b) >= cfg_.buttons.size()) return;
+    const auto& bc = cfg_.buttons[size_t(b)];
+    const bool touch = buttonPointers_[size_t(b)] >= 0;
+    if (!touch && !keyHeld_[size_t(b)]) return;
+    keyHeld_[size_t(b)] = 0;
+    if (bc.mode == TopDownButtonConfig::Mode::Tap) return;
+    TopDownButtonEvent e{b, topdown::Phase::Release, false, 0, 0};
+    if (touch && bc.mode == TopDownButtonConfig::Mode::Aim) {   // the drag aims: direction + share of the range
+        const float dx = dragX_[size_t(b)] - downX_[size_t(b)], dy = dragY_[size_t(b)] - downY_[size_t(b)];
+        const float len = std::hypot(dx, dy);
+        if (len > bc.radius * 0.35f) {
+            const float k = std::min(1.0f, len / bc.dragRadius) / len;
+            e.hasDir = true; e.dirX = dx * k; e.dirY = dy * k;
+        }
+    }
+    events_.push_back(e);
+}
+
+void TopDownControls::screenToWorldDir(float sx, float sy, float yaw, float& wx, float& wz) { screenToWorld(sx, sy, yaw, wx, wz); }
+
+topdown::Ability TopDownControls::abilityEvent(const TopDownButtonEvent& e, int abilityIndex, float yaw) {
+    topdown::Ability a;
+    a.index = abilityIndex;
+    a.phase = e.phase;
+    if (e.hasDir) {
+        float wx, wz;
+        screenToWorld(e.dirX, e.dirY, yaw, wx, wz);
+        const float len = std::hypot(wx, wz);
+        if (len > 1e-4f) {
+            a.hasAngle = true;
+            a.angle = binaryAngle(wx, wz);
+            a.distance = int32_t(std::lround(std::clamp(len, 0.0f, 1.0f) * 1000.0f));
+        }
+    }
+    return a;
+}
+
+bool TopDownEscapePreview::update(float dt, float dirX, float dirZ, const std::function<bool(float, float)>& passable) {
+    if (!active) return false;
+    const float len = std::hypot(dirX, dirZ);
+    float step = std::min(speed * std::min(len, 1.0f) * dt, std::max(0.0f, budget - travelled));
+    if (step > 0 && len > 0) {   // walls are kept: try the full step, then each axis (slide), in small pieces
+        const float ux = dirX / len, uz = dirZ / len;
+        const int n = std::max(1, int(std::ceil(step / 0.2f)));
+        for (int i = 0; i < n; ++i) {
+            const float s = step / float(n);
+            if (!passable || passable(x + ux * s, z + uz * s)) { x += ux * s; z += uz * s; travelled += s; }
+            else if (passable(x + ux * s, z)) { x += ux * s; travelled += std::fabs(ux * s); }
+            else if (passable(x, z + uz * s)) { z += uz * s; travelled += std::fabs(uz * s); }
+            else break;
+        }
+    }
+    timeLeft -= dt;
+    if (timeLeft > 0) return false;
+    active = false;
+    return true;
 }
 
 // ================================================================= input
@@ -468,6 +555,23 @@ std::vector<ViewDrawBatch> TopDownControls::draw(float W, float H, const std::ve
         if (charge < 1) disc(b, x, y, r * 0.86f, rgba(120, 190, 255, 120), 0, charge);   // recharging: a pie
         else disc(b, x, y, r * 0.86f, rgba(120, 200, 255, held ? 250 : 200));
         ring(b, x, y, r, 3, rgba(235, 240, 255, 200));
+        if (held && cfg_.buttons[i].mode == TopDownButtonConfig::Mode::Aim) {   // the aim drag: a knob off the button
+            float dx = dragX_[i] - downX_[i], dy = dragY_[i] - downY_[i];
+            const float len = std::hypot(dx, dy), maxLen = cfg_.buttons[i].dragRadius;
+            if (len > maxLen) { dx *= maxLen / len; dy *= maxLen / len; }
+            if (len > r * 0.35f) {
+                ring(b, x, y, maxLen + r * 0.3f, 2, rgba(235, 240, 255, 90));
+                disc(b, x + dx, y + dy, r * 0.45f, rgba(255, 220, 120, 230));
+            }
+        }
+    }
+    if (escape_.active) {   // escape preview: the time left fills the escape button
+        for (size_t i = 0; i < cfg_.buttons.size(); ++i)
+            if (cfg_.buttons[i].abilityIndex == topdown::kEscapeAbility) {
+                float x, y;
+                buttonCenter(i, W, H, x, y);
+                disc(b, x, y, cfg_.buttons[i].radius * 0.86f, rgba(255, 200, 90, 220), 0, std::clamp(escape_.progress(), 0.0f, 1.0f));
+            }
     }
     return out;
 }

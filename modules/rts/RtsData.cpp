@@ -1,5 +1,6 @@
 #include "RtsData.h"
 #include "RtsEffectsData.h"
+#include "RtsProgressionData.h"
 #include "RtsBwAI.h"   // agent-bw-ai
 #include <algorithm>
 #include <stdexcept>
@@ -158,6 +159,8 @@ Rules loadRules(const Json& j) {
         r.fog.shareAllies = f.getBool("shareAllies", true);
         r.fog.lineOfSight = f.getBool("lineOfSight", false);
         r.fog.rockHeight = f.getFx("rockHeight", r.fog.rockHeight);
+        r.fog.ellipse = int(f.getInt("ellipse", 1));
+        if (r.fog.ellipse < 1 || r.fog.ellipse > 8) throw std::runtime_error("fogOfWar.ellipse: 1..8");
     }
     if (const Json& h = j["heights"]; h.isObject()) {
         r.heights.blockVision = h.getBool("blockVision", true);
@@ -773,6 +776,7 @@ Rules loadRules(const Json& j) {
     }
     loadOriginals(r, j, ep);   // fidelity mechanics (RtsOriginalsData.cpp)
     loadFidelity(r, j, ep);    // foundations, traps (RtsFidelityData.cpp)
+    loadProgressionRules(r, j, ep);   // RtsProgressionData.cpp: rules "progression" (on-hit payloads count for the effect engine)
     loadModes(r, j);           // match modes, timed rules, resource levels (RtsModesData.cpp)
     // built-in statuses (internal ids start with '_')
     r.userStatuses = r.statuses.size();

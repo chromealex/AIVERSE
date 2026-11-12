@@ -465,7 +465,7 @@ void RtsModule::applyDungeonCommand(Simulation& sim, const Command& cmd) {
         Entity cur = gs.possessed[pl];
         gs.possessed[pl] = kNullEntity;
         if (w.alive(cur)) {
-            if (auto* u = w.tryGet<Unit>(cur)) u->flags &= uint8_t(~kUnitPossessed);
+            if (auto* u = w.tryGet<Unit>(cur)) u->flags &= kKeepFlags(~kUnitPossessed);
             w.remove<Possessed>(cur);
             if (auto* c = w.tryGet<Combat>(cur)) c->target = kNullEntity;
             stopMoving(sim, cur);
@@ -560,7 +560,7 @@ void RtsModule::applyDungeonCommand(Simulation& sim, const Command& cmd) {
         for (Entity e : drop) {
             hand.erase(std::find(hand.begin(), hand.end(), e));
             Unit& u = w.get<Unit>(e);
-            u.flags &= uint8_t(~kUnitInHand);
+            u.flags &= kKeepFlags(~kUnitInHand);
             Vec3 p = flat(cmd.point) + Vec3{Fixed::fromRatio(k % 3 - 1, 4), Fixed{}, Fixed::fromRatio((k / 3) % 3 - 1, 4)};
             Transform& tr = w.get<Transform>(e);
             tr.pos = p; tr.prevPos = p;
@@ -707,7 +707,7 @@ void RtsModule::sysDungeon(Simulation& sim) {
             if (!pay(sim, uint8_t(p), c, {}, false)) drop = true;
         }
         if (drop) {
-            if (w.alive(e)) { w.get<Unit>(e).flags &= uint8_t(~kUnitPossessed); w.remove<Possessed>(e); }
+            if (w.alive(e)) { w.get<Unit>(e).flags &= kKeepFlags(~kUnitPossessed); w.remove<Possessed>(e); }
             gs.possessed[p] = kNullEntity;
             sim.emit({kEvPossessed, uint8_t(p), kNullEntity, e, 0, {}});
         }

@@ -2434,13 +2434,42 @@ attacks / explosions, bombs, Mouro actions / emotions, graveyard, souls (also th
 graveyard), scroller steps, walls. `kEvCaptured` for caves / scroller conversions, `kEvGarrisonChanged` for
 lightning and souls.
 
-Fog of war in BW is presentation only: no explored memory, sight ellipses (y x 2) with lifetimes, a growing
-start reveal. Map it on the existing keys: rules `fogOfWar.mode` "full" + look `"explored"` = `"unexplored"`
-and `"fade": 1`.
+Stage 2 keys (1:1 with BW):
 
-Not ported yet: multi-spline auto skills (`multiSplineSkills`), rain lowering grass-fire spread,
-`setInvincible` effects (stored only), Mouro skill filters (skeleton attacks pick random player points),
-BW bombs fall in screen space (here: ground drift + fall time), visual Mouro/worm animations and dust.
+```jsonc
+"environment": {
+  "screenYAxis": -1,                                      // BW screen y (up) along world z: -1 = up is -z (bomb arcs)
+  "weatherParams": {"grassRainBurnRandomFactor": 0.5,     // rain: burning grass lights a neighbour with this chance
+                    "blizzardVar": "blizzard"},           // trigger var = 1 while the blizzard blows (agent-bw-ai)
+  "multiSplineSkills": [{"skill": "flame", "order": [0, 1, 2], "randomJump": false, "shouldBuildTransferSpline": true}],
+  "mouro": {"energyResource": "energy"},                  // refilled to its cap before every Mouro cast
+  "fog": {"memory": false, "startFowSize": 3000, "startDuration": 3}
+}
+// rules.json
+"fogOfWar": {"ellipse": 2}                                // sight discs dx^2 + (2 dz)^2 <= r^2 (BW iso fog)
+```
+
+- **Multi-spline auto skills** (BW `MultiSplineSkill`): emitted once at the start of spline 0 (or a random one with
+  `randomJump`) when it lies on the screen; the area rides spline k, then (with `shouldBuildTransferSpline`) the
+  Catmull-Rom transfer curve from the end of k to the start of the next, after which BW advances the index once
+  more. Splines are the first `order` entries of `splines`, velocities per spline.
+- **Rain and grass fire**: with `"rain"`, spread kernels of every trample `killField` succeed with
+  `grassRainBurnRandomFactor` (`GridFields::setSpreadScale`).
+- **setInvincible** (map scroller): match modes and the victory script never defeat that player (BW
+  `ModBase.TestPlayer`).
+- **Mouro**: skeleton attacks target the buildings the skill's own effect filter accepts for the bot (BW
+  `GetFilteredPoints`); every cast first resets the bot's cooldowns and refills `energyResource` to its cap.
+- **Bombs** fall in BW screen space: `dy = v_y t + g t^2 / 2` until `|dy| >= height`, landing at
+  `z = start + screenYAxis * (lift + dy)` (lift = the bomber's height), x drifting with the bomber's speed.
+- **Fog** (BW FogOfWar): `fogOfWar.ellipse` squashes every sight disc (sim vision, fast and reference passes);
+  `fog.memory: false` turns cells that leave sight back into unexplored; `startFowSize` reveals a disc around each
+  player's first building that shrinks to nothing over `startDuration` (BW SetInitialFow during the countdown).
+- **One screen**: with a map `"screen"` (routes multiscreen) every environment screen check uses `onScreen`, and
+  `moveScreen` drives `setScreenCenter`; `mapScroller.screen` is only for maps without one.
+- **Sends**: graveyards and linked caves are refused by `RtsModule::canSend` too, so every computer player skips them.
+
+Remaining differences: Mouro / worm animations, dust and slime sprites are view work (events are emitted); the
+BW pre-start countdown does not exist, so the start reveal runs over the first seconds of the match.
 
 ## Fog of war look
 
@@ -2743,6 +2772,46 @@ Rules block `topDown` (one directly controlled hero per player: stick movement w
 aim snap cone, auto-fire policy, abilities along the aim, respawn) and game.json block `topDown` (virtual joystick,
 aim stick, ability buttons, keyboard / mouse / gamepad, follow camera). Keys, defaults and behaviour:
 [docs/topdown.md](topdown.md). Sample: `templates/topdown_arena`.
+
+## In-match progression (`progression`, agent-df-progression-glue)
+
+Optional rules block `progression`: the `match-progression` library format (`stats`, `perks`, `units`, `deck`, `xp`
+with `toNext` / `curve` / `kill`, `offers` with `default` / `levels` / `variants` / `preferNewRecruitAtLevel` /
+`recruitWeight` / `recruitAiPriority`, `summonPoints` with `id` / `team` / `position` / `radiusMilli` /
+`progressTicks` / `cooldownTicks` / `singleUse` / `action`; perks with `key`, `hook`, `scope`, `bearer`, `effects`
+(`stat`, `op`, `value`, `stage`), `maxSelections`, `minLevel`, `weight`, `requires`, `excludes`, `tags`, `upgrades`,
+`offerable`, `aiPriority`, `aiPriorityLowHealth`) on real units, plus engine keys: `units[].type`, `perks[].bullet`
+(`modifiers`: split / ricochet / flyThrough / damage / speed / radius appended to the bearer's projectile programs), `perks[].onHit` /
+`onHitChance` (effects payload on hit: burn, stun, ...), `players`, `killXp`, `orbs`, `orbOwner`, `autoOpen`,
+`offerAt`, `offerChoices`, `offerRerolls`, `rerollAvoidsRepeat`, `maxLevel`, `xpGrowthPerLevel`, `maxRecruitsPerSlot`, `maxSquad`,
+`pickups` (`radius`, `magnetRadius`, `grabRadius`, `attractSpeed`, `attractAccel`, `maxSpeed`, `landing`, `lifetime`,
+`maxOrbs`), `summons` (`progress`, `cooldown`, `maxAllies`, `charges`, `chargeRecharge`, `resetOnExit`), `squad`
+(`follow`, `lifetime`), `critDamage`, `decks`, `defaultDeck` (battle deck payloads: `player`, `techLevel`, `choiceCount`,
+`enforceUnlocks`, `slots` with `slot`, `unit`, `level`, `opened`, `inTeam`, `perks`). Map: `progression.summonPoints`,
+`players[i].deck` (the match start payload). Hero xp from kills and xp orbs, seeded level-up offers chosen with
+`kCmdProgression` (UI, bot, Lua, MCP), perk stats on damage / incoming damage / speed / fire interval / range / max
+health / splash / crits / regen, summon circles and recruits as real units. Full reference:
+[progression.md](progression.md); sample: `templates/perk_arena`.
+## Boss encounters
+
+Rules block `encounters` (boss-encounters library on real units; reference [docs/encounters.md](encounters.md),
+sample `templates/boss_arena`). Map players with `"monsters": true` and hostile creeps (owner 255) are driven by it
+(the computer player skips them).
+- `attacks.<id>`: `shape` (circle / cone / line / ring), `radius`, `inner`, `angle`, `length`, `width`, `anchor`
+  (source / aim), `offset`, `windup`, `active`, `recovery`, `interval`, `cooldown`, `damage`, `damageMin`, `falloff`,
+  `damageType`, `statuses` (rules status ids or `{"status", "duration"}`), `statusDuration`, `oncePerTarget`,
+  `trackAim`, `sweep`, `cancelOnDeath`, `friendlyFire`, `minRange`, `maxRange`, `ability` (a unit ability starts it).
+- `bosses.<unit type>`: `engageRange`, `loseRange`, `approach`, `immune`, `archetype`, `phases[]` (`hpBelow`, `after`,
+  `damage`, `speed`, `cooldown`, `globalCooldown`, `transition`, `mode` byRange / sequence / weighted, `pattern[]`
+  (`attack`, `alternate`, `minRange`, `maxRange`, `weight`), `adds[]` (`unit`, `count`, `every`, `maxAlive`,
+  `minRadius`, `maxRadius`)), `enrage` (`after`, `hpBelow`, `damage`, `speed`, `cooldown`).
+- `mobs.<unit type>`: `aggroRange`, `loseRange`, `stopDistance`, `switchMargin`, `wanderMin`, `wanderMax`,
+  `arriveRadius`, `leash`, `wanderDelay`, `wanderLeg`, `wanderAttempts`, `fleeBelow`, `fleeRecover`, `fleeRange`,
+  `fleeTime`, `wander`, `spacing`, `correction`, `lookAhead`, `neighbours`, `attack`, `think`, `flowDistance`.
+- `schedule`: `personal`, `rotation`, `archetypes`, `spawnDistance` [min, max], `windows[]` (`start`, `end`,
+  `breather`, `excludePrevious`, `pauseWaves`, `variants[]` (`boss`, `weight`, `archetype`)).
+Lua events `boss_engaged`, `boss_phase`, `boss_enraged`, `boss_adds`, `boss_defeated`, `boss_window`,
+`telegraph_start`, `telegraph_strike`, `telegraph_end` (statuses: `status_start`); table `encounters`.
 
 ## Ordered projectile flight programs
 

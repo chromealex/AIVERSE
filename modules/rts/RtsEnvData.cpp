@@ -60,6 +60,12 @@ void loadEnvironment(EnvDef& d, const Rules& r, const Json& rulesJ, const Json& 
     d.scale = s["scale"].fx(Fixed::fromInt(1));
     if (d.scale.raw <= 0) fail("scale", "must be > 0");
     d.complexity = mapJ.getStr("complexity", s["complexity"].str());
+    d.screenY = s["screenYAxis"].isNumber() ? (s["screenYAxis"].integer() >= 0 ? 1 : -1) : -1;
+    if (const Json& fg = s["fog"]; fg.isObject()) {   // BW FogOfWar (presentation in BW, sim vision here)
+        d.fog.memory = fg.getBool("memory", true);
+        d.fog.startSize = fg.getFx("startFowSize") / d.scale;
+        d.fog.startTime = fg.getFx("startDuration", d.fog.startSize.raw > 0 ? Fixed::fromInt(3) : Fixed{});
+    }
     auto D = [&](Fixed v) { return v / d.scale; };   // BW distance -> world
     auto skillRef = [&](const Json& j, const std::string& where) -> int16_t {
         if (j.isNull()) return -1;
@@ -109,6 +115,8 @@ void loadEnvironment(EnvDef& d, const Rules& r, const Json& rulesJ, const Json& 
         W.burnValue = int32_t(b.getInt("value", 100));
         W.burnRadius = D(b.getFx("radius", Fixed{}));
     }
+    W.rainSpread = fxClamp(wt.getFx("grassRainBurnRandomFactor", W.rainSpread), Fixed{}, Fixed::fromInt(1));
+    W.blizzardVar = wt.getStr("blizzardVar", W.blizzardVar);
     if (W.blizzardKillSpeed.raw <= 0 || W.puddlesFill.raw <= 0 || W.puddlesDry.raw <= 0) fail("weatherParams", "speeds and times must be > 0");
 
     // ---- wind
@@ -159,6 +167,17 @@ void loadEnvironment(EnvDef& d, const Rules& r, const Json& rulesJ, const Json& 
         for (size_t i = 0; i < d.splines.size(); ++i) if (d.splines[i].id == j.str()) return int(i);
         fail(where, "unknown spline '" + j.str() + "'");
     };
+
+    // ---- multi-spline auto skills (BW AutoSkills.MultiSplineSkill: the first `order` splines, in turn or at random)
+    for (auto& mj : s["multiSplineSkills"].items()) {
+        EnvMultiDef md;
+        md.skill = skillRef(mj["skill"], "multiSplineSkills.skill");
+        md.count = mj["order"].isArray() ? int(mj["order"].size()) : int(mj.getInt("count", 0));
+        md.random = mj.getBool("randomJump", false);
+        md.transfer = mj.getBool("shouldBuildTransferSpline", true);
+        if (md.skill < 0 || md.count <= 0 || size_t(md.count) > d.splines.size()) fail("multiSplineSkills", "needs \"skill\" and 1..splines \"order\" entries");
+        d.multis.push_back(md);
+    }
 
     // ---- trample fields (grass / winter); fields are resolved by the runtime (GridFields), ids kept in fieldIndex keys
     for (auto& tj : s["trample"].items()) {
@@ -263,6 +282,7 @@ void loadEnvironment(EnvDef& d, const Rules& r, const Json& rulesJ, const Json& 
         M.emotionsCooldown = mo.getFx("emotionsCooldown");
         if (mo.has("castPos")) M.castPos = pos(mo["castPos"]);
         M.morale = int16_t(r.findResource(mo.getStr("moraleResource", "morale")));
+        M.energy = int16_t(r.findResource(mo.getStr("energyResource", "energy")));
         static const char* kActs[] = {"castAt", "castRing", "caldron", "skeletonAttack", "averageMorale", "addUnits", "animation", "death"};
         for (auto& hj : mo["actionHolders"].items()) {
             if (!hj.getBool("active", true)) continue;

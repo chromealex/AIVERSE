@@ -124,6 +124,7 @@ void RtsModule::sysRoutes(Simulation& sim) {
 }
 
 bool RtsModule::canSend(Simulation& sim, Entity from, Entity to) const {
+    if (env_ && env_->active() && !env_->sendAllowed(sim, from, to)) return false;   // environment: graveyards, linked caves
     if (routeDefs_.empty()) return true;
     return !lanesBetween(sim, from, to).empty();
 }

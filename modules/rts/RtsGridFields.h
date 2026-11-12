@@ -13,6 +13,7 @@
 // fixed order.
 #pragma once
 #include <cstdint>
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <vector>
@@ -62,6 +63,13 @@ public:
     void hash(Simulation& sim, Hasher& h) const;
     void io(Simulation& sim, Archive& a);                         // save states (after RtsSave's own data)
     int addHook(int field, int32_t value, bool fall);             // Lua registration (while scripts load)
+    // spread kernels of `field` succeed with chance x scale (0..1; setup only, e.g. rain over a grass fire). Not state:
+    // set from the match data by every peer before the first tick.
+    void setSpreadScale(int field, Fixed scale) {
+        if (field < 0) return;
+        if (spreadScale_.size() <= size_t(field)) spreadScale_.resize(size_t(field) + 1, 65536);
+        spreadScale_[size_t(field)] = std::clamp<int64_t>(scale.raw, 0, 65536);
+    }
     const std::vector<Hook>& hooks() const { return hooks_; }
 
     // ---- cell access (field cells; layer 0 for plain fields, the player slot for per-player fields)
@@ -118,6 +126,7 @@ private:
     std::vector<int> layerCount_;                        // [field]: layers (1, or player slots + 1)
     std::vector<int> blockEffect_;                       // [field]: index of the blockMove effect, -1 none
     std::vector<Hook> hooks_;
+    std::vector<int64_t> spreadScale_;                   // [field]: Q16 chance scale of spread kernels (default 1)
     std::vector<std::vector<int>> hooksOf_;              // [field] -> hook indices
     bool blocksVision_ = false, hasSpeed_ = false;
     int mapW_ = 0, mapH_ = 0;
