@@ -687,7 +687,9 @@
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_navmesh",
-      "dependencies": [],
+      "dependencies": [
+        "aiverse-graphs"
+      ],
       "backendDependencies": [
         "aiverse_world"
       ],

@@ -14,7 +14,8 @@ inline Decision validateTutorial(std::span<const TutorialStep> steps) {
     return {};
 }
 inline Decision tutorialEvent(std::span<const TutorialStep> steps,TutorialState& state,std::int64_t event,bool skip=false) {
-    if(state.complete)return {};auto s=findStep(steps,state.step);
+    if(state.complete)return {};
+    auto s=findStep(steps,state.step);
     if(!s||s->target<1||state.progress<0||(s->next!=-1&&!findStep(steps,s->next)))return {Reason::Invalid,state.step};
     if(skip&&!s->allowSkip)return {Reason::Blocked,s->id};
     if(!skip&&s->event!=event)return {};
@@ -23,7 +24,9 @@ inline Decision tutorialEvent(std::span<const TutorialStep> steps,TutorialState&
     state=next;return {};
 }
 inline bool tutorialAllows(std::span<const TutorialStep> steps,const TutorialState& state,std::int64_t action,bool hard) {
-    if(!hard||state.complete)return true;auto s=findStep(steps,state.step);if(!s)return false;
+    if(!hard||state.complete)return true;
+    auto s=findStep(steps,state.step);
+    if(!s)return false;
     return std::find(s->blockedActions.begin(),s->blockedActions.end(),action)==s->blockedActions.end();
 }
 }
