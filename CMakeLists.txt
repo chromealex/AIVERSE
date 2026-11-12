@@ -722,6 +722,7 @@ endif()
 
 if(AIVERSE_BUILD_TOOLS)
     add_executable(aiversebuild tools/aiversebuild/main.cpp tools/aiversebuild/FileRules.cpp tools/aiversebuild/Plugins.cpp)
+    target_sources(aiversebuild PRIVATE tools/aiversebuild/TextureCompress.cpp)   # agent-unity-materials: ASTC packaging
     target_sources(aiversebuild PRIVATE tools/aiversebuild/Toolchains.cpp tools/aiversebuild/ToolchainInstall.cpp)   # toolchains agent
     target_link_libraries(aiversebuild PRIVATE aiverse_engine aiverse_pack_writer aiverse_audiopack aiverse_plugins)
     add_executable(assetpipe tools/assetpipe/main.cpp)
@@ -1194,6 +1195,18 @@ if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME world_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_world.py)
     if(TARGET aiverse_headless)
         set_tests_properties(world_importer PROPERTIES ENVIRONMENT "AIVERSE_PORT_HEADLESS=$<TARGET_FILE:aiverse_headless>")
+    endif()
+endif()
+
+# Unity URP materials, Shader Graph conversion and texture importer settings (agent-unity-materials):
+# Python importer tests, aiverse_graphcheck (engine Shader Graph compiler on converted graphs), KTX2/ASTC writer tests.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_graphcheck tools/importers/unity_materials/graphcheck.cpp)
+    target_link_libraries(aiverse_graphcheck PRIVATE aiverse_shader_graph)
+    target_sources(aiverse_tests PRIVATE tools/aiversebuild/TextureCompress.cpp)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME unity_materials COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/unity_materials/test_materials.py)
+        set_tests_properties(unity_materials PROPERTIES ENVIRONMENT "AIVERSE_GRAPHCHECK=$<TARGET_FILE:aiverse_graphcheck>")
     endif()
 endif()
 

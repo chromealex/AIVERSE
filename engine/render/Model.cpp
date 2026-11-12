@@ -191,7 +191,7 @@ bool decodeImage(const std::string& bytes, Image& out) {
         std::vector<uint8_t> rgba;
         if (!parseKtx2(bytes, *ci, err)) return false;
         // no CPU decoder (ASTC): usable only where the GPU samples it natively (uploadModel)
-        if (!decodeBlocks(*ci, 0, rgba) && ci->format != BlockFormat::ASTC_4x4) return false;
+        if (!decodeBlocks(*ci, 0, rgba) && !isAstc(ci->format)) return false;
         out.width = ci->width; out.height = ci->height;
         out.rgba = std::move(rgba);
         out.compressed = std::move(ci);
@@ -281,6 +281,7 @@ gfx::PixelFormat gpuFormat(const CompressedImage& c) {
         case BlockFormat::BC3: return gfx::PixelFormat::BC3;
         case BlockFormat::BC7: return gfx::PixelFormat::BC7;
         case BlockFormat::ASTC_4x4: return gfx::PixelFormat::ASTC_4x4;
+        case BlockFormat::ASTC_6x6: return gfx::PixelFormat::ASTC_6x6;
         default: return gfx::PixelFormat::RGBA8; // EAC R11 / BC4 / RGBA8: the decoded copy
     }
 }

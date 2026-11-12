@@ -137,7 +137,13 @@ void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Mater
         mt.normalTex = loadTexture(dev, t, m, o.getStr("normalMap")); // tangents: from the file or generated for its own normal maps
     }
     if (o.has("emissiveMap")) { mt.emissiveTex = loadTexture(dev, t, m, o.getStr("emissiveMap")); if (!o.has("emissive")) mt.emissive = {1, 1, 1}; }
+    // glTF channel layout (G roughness, B metallic; occlusion in R): the Unity importer repacks URP maps into it
+    if (o.has("metallicRoughnessMap")) mt.mrTex = loadTexture(dev, t, m, o.getStr("metallicRoughnessMap"));
+    if (o.has("occlusionMap")) mt.occlusionTex = loadTexture(dev, t, m, o.getStr("occlusionMap"));
+    mt.occlusionStrength = num(o["occlusionStrength"], mt.occlusionStrength);
+    mt.normalScale = num(o["normalScale"], mt.normalScale);
     if (const Json& uv = o["uvScale"]; uv.size() == 2) mt.uvScale = {num(uv[0], 1), num(uv[1], 1)};
+    if (const Json& uv = o["uvOffset"]; uv.size() == 2) mt.uvOffset = {num(uv[0], 0), num(uv[1], 0)};
 }
 
 const char* RtsView::animName(int k) {

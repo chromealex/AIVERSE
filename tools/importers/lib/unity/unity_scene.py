@@ -325,6 +325,8 @@ class Prefab:
         # class 1001 is also the legacy (pre-2018.3) "Prefab" asset document of the file itself: not an instance
         self.nested = [d for d in own if d.class_id == CLASS_PREFAB_INSTANCE and get(d.data, 'm_SourcePrefab', 'guid')]
         self.nested_notes, self.nested_failed = [], []
+        # model (FBX/OBJ) prefab instances, also those of nested prefabs: (instance doc, parent transform id here)
+        self.model_instances = []
         self.origin = {}  # (asset guid, file id in that asset) -> id here
         docs = [d for d in own if d.class_id != CLASS_PREFAB_INSTANCE]
         for d in docs:
@@ -353,6 +355,7 @@ class Prefab:
             return docs
         if not src.lower().endswith(PREFAB_EXT):
             self.nested_failed.append('%s: model instance %s (meshes in the scene are not particles)' % (rel, label))
+            self.model_instances.append((inst, get(inst.data, 'm_Modification', 'm_TransformParent', 'fileID') or 0))
             return docs
         if depth >= MAX_NESTING or os.path.abspath(src) in stack:
             self.nested_failed.append('%s: nested prefab %s: nesting deeper than %d levels or recursive (skipped)' % (rel, label, MAX_NESTING))
@@ -363,6 +366,9 @@ class Prefab:
 
         def idmap(f):
             return (iid ^ f) & MASK64
+
+        for d, parent in sub.model_instances:
+            self.model_instances.append((d, idmap(parent) if parent else 0))
 
         clones = {}
         for d in sub.docs:

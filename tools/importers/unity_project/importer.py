@@ -8,6 +8,7 @@ from . import world
 from lib.unity.unity_scene import Assets, Prefab, Report
 from lib.unity.unity_yaml import get
 from lib.port.common import inventory, item, new_model, ident, safe, script_index
+from unity_materials.project import Collector, MODEL_EXT
 
 TEXT = {'.unity', '.prefab', '.mat', '.asset'}
 
@@ -53,6 +54,8 @@ def extract(root, include=None):
         item(model, path, 'missing', 'Opaque Unity native asset (baked lighting, navigation or terrain); export from Unity Editor.', key='opaque')
     rep = Report()
     assets = Assets([str(root / 'Assets')], rep)
+    mats = Collector(root, assets, model)
+    instances = {}
     script_assets = {a['path']: a for a in model['assets'] if a['kind']=='script'}
     # a subset import (include) indexes only the scripts its objects use; reading every source is slow on big projects
     scripts = {} if include else {p: script_index(model, root, a) for p, a in script_assets.items()}
@@ -70,6 +73,7 @@ def extract(root, include=None):
             source = path + '#' + str(go)
             entity = dict(id=ident(source), source=source, name=prefab.name(go), fields={}, components=[], models=[], materials=[], scripts=[],
                           position=[pos[0], pos[1], -pos[2]], rotation=math.degrees(math.atan2(2*(rot[3]*rot[1]+rot[0]*rot[2]), 1-2*(rot[1]**2+rot[2]**2))), scale=list(scale))
+            mesh_ref = None
             for c in comps:
                 entity['components'].append(dict(type=c.type, data=c.data))
                 if c.class_id == 195:
@@ -90,6 +94,7 @@ def extract(root, include=None):
                         item(model, source, 'approx', 'Road spline imported as road cells; baked road meshes are separate entities.', key='road')
                 elif c.class_id in (33, 137):
                     mesh = reference(c.data.get('m_Mesh'))
+                    mesh_ref = (mesh, get(c.data, 'm_Mesh', 'fileID')) if mesh else None
                     if mesh:
                         entity['models'].append(mesh)
                         meta = assets.meta(str(root / mesh)).get('ModelImporter', {})
@@ -103,11 +108,7 @@ def extract(root, include=None):
                             entity['baked'] = baked['bounds']
                         else: item(model, source, 'missing', 'Mesh reference is built-in or unresolved.', key='mesh')
                 if c.class_id in (23, 137):
-                    for ref in c.data.get('m_Materials', []):
-                        doc, matpath = assets.object(ref)
-                        if doc:
-                            entity['materials'].append(material(doc.data, reference))
-                            item(model, source, 'approx', 'PBR material factors mapped; shader and packed textures require review.', key='material'+str(ref))
+                    renderer = c
                 elif c.class_id == 212:
                     sprite = reference(c.data.get('m_Sprite'))
                     if sprite:
@@ -133,6 +134,14 @@ def extract(root, include=None):
                     entity['audio'] = dict(file=reference(c.data.get('m_audioClip')), loop=bool(c.data.get('Loop', 0)), music=any(x.class_id == 20 for x in comps) or 'manager' in entity['name'].lower())
                 elif c.class_id not in (4, 224, 195, 114, 33, 137, 23, 212, 198, 199, world.CLASS_TERRAIN, world.CLASS_TERRAIN_COLLIDER):
                     item(model, source, 'missing', c.type + ' component requires review; serialized data retained.', key='component'+str(c.file_id))
+            renderer = next((c for c in comps if c.class_id in (23, 137)), None)
+            if renderer is not None:
+                if mesh_ref is None and renderer.class_id == 23:
+                    item(model, source, 'missing', 'MeshRenderer without a MeshFilter mesh.', key='mesh')
+                elif mesh_ref is not None:
+                    mesh, fid = mesh_ref
+                    mats.add_renderer(entity, mesh, prefab.name(go), renderer.data.get('m_Materials') or [], source,
+                                      meta=assets.meta(str(root / mesh)), mesh_file_id=fid, cast=str(renderer.data.get('m_CastShadows', 1)) != '0')
             owner = entity['fields'].get('owner')
             if isinstance(owner,int) and not isinstance(owner,bool) and -1 <= owner <= 8:
                 entity['owner'] = owner
@@ -147,7 +156,45 @@ def extract(root, include=None):
             if meaningful:
                 model['entities'].append(entity)
                 scene['objects'].append(dict(entity=entity['id'], position=entity['position'], rotation=entity['rotation']))
+        by_go = {e['source']: e for e in model['entities'] if e['source'].startswith(path + '#')}
+        for inst, parent in prefab.model_instances:
+            src = reference(inst.data.get('m_SourcePrefab'))
+            if not src.lower().endswith(MODEL_EXT):
+                continue
+            mod = inst.data.get('m_Modification') or {}
+            go = None
+            tr = prefab.transforms.get(parent)
+            while tr is not None and go is None:   # nearest ancestor that became an entity
+                g = get(tr.data, 'm_GameObject', 'fileID')
+                go = g if (path + '#' + str(g)) in by_go else None
+                tr = prefab.transforms.get(get(tr.data, 'm_Father', 'fileID'))
+            source = path + '#' + str(inst.file_id)
+            entity = by_go.get(path + '#' + str(go)) if go else None
+            # free-standing instances of one model with the same materials share a type
+            sig = sorted((str(get(m, 'target', 'fileID')), str(m.get('propertyPath')), str(get(m, 'objectReference', 'guid')), str(get(m, 'objectReference', 'fileID')))
+                         for m in mod.get('m_Modifications') or [] if isinstance(m, dict) and str(m.get('propertyPath', '')).startswith('m_Materials'))
+            shared = src + '|' + repr(sig)
+            if entity is None and shared in instances:
+                e = instances[shared]
+                pos = _instance_position(prefab, mod, parent)
+                scene['objects'].append(dict(entity=e['id'], position=[pos[0], pos[1], -pos[2]], rotation=0))
+                continue
+            if entity is None:
+                pos = _instance_position(prefab, mod, parent)
+                entity = dict(id=ident(shared), source=source, name=Path(src).stem, fields={}, components=[], models=[], materials=[], scripts=[],
+                              position=[pos[0], pos[1], -pos[2]], rotation=0, scale=[1, 1, 1], candidate=True)
+                entity.setdefault('modelSettings', {})[src] = assets.meta(str(root / src)).get('ModelImporter', {})
+                model['entities'].append(entity)
+                by_go[source] = entity
+                instances[shared] = entity
+                scene['objects'].append(dict(entity=entity['id'], position=entity['position'], rotation=0))
+                item(model, source, 'approx', 'Model prefab instance placed from its own position; rotation and scale require review.', key='model-instance')
+            else:
+                entity.setdefault('modelSettings', {}).setdefault(src, assets.meta(str(root / src)).get('ModelImporter', {}))
+            mats.add_instance(entity, src, mod.get('m_Modifications'), source)
         for reason in prefab.nested_failed:
+            if 'model instance' in reason:
+                continue
             item(model, path, 'missing', reason)
         if path.endswith('.unity'):
             model['scenes'].append(scene)
@@ -166,7 +213,7 @@ def extract(root, include=None):
                 item(model, a['path'], 'missing', (d.type or 'Class %d' % d.class_id) + ' asset retained in source; specialized conversion required.')
     for asset in info['assets']:
         suffix=Path(asset['path']).suffix.lower()
-        if asset['kind']=='other' and suffix not in ('.meta','.unity','.prefab','.asset','.mat'):
+        if asset['kind']=='other' and suffix not in ('.meta','.unity','.prefab','.asset','.mat','.shadergraph','.shadersubgraph','.shader','.hlsl','.cginc'):
             item(model,asset['path'],'missing','Unsupported source asset; original remains in source project.',key='unsupported-asset')
     build = root / 'ProjectSettings/EditorBuildSettings.asset'
     if build.exists():
@@ -183,24 +230,21 @@ def extract(root, include=None):
         scripts_used = {sp for e in model['entities'] for sp in e.get('scripts', [])}
         model['scripts'] = [x for x in model['scripts'] if x['path'] in scripts_used]
         model['items'] = [i for i in model['items'] if not i['source'].endswith('.cs') or i['source'] in scripts_used]
+    mats.finish()   # after the include filter so derived material textures are kept
     return world.finite(model)
 
 
-def material(data, reference):
-    saved = data.get('m_SavedProperties', {})
-    def pairs(key):
-        return {k:v for e in saved.get(key, []) if isinstance(e,dict) for k,v in e.items()}
-    colors, floats, textures = pairs('m_Colors'), pairs('m_Floats'), pairs('m_TexEnvs')
-    out = {}
-    for key in ('_BaseColor','_Color'):
-        if key in colors:
-            out['color'] = [colors[key].get(c,1) for c in 'rgba']; break
-    if '_Metallic' in floats: out['metallic'] = floats['_Metallic']
-    out['roughness'] = 1 - float(floats.get('_Smoothness', floats.get('_Glossiness',0.5)))
-    if '_EmissionColor' in colors: out['emissive'] = [colors['_EmissionColor'].get(c,0) for c in 'rgb']
-    for src, dst in [('_MainTex','texture'),('_BaseMap','texture'),('_BumpMap','normalMap'),('_EmissionMap','emissiveMap')]:
-        if src in textures:
-            path = reference(textures[src].get('m_Texture'))
-            if path and Path(path).suffix.lower() in ('.png','.tga','.jpg','.jpeg','.psd','.tif','.tiff'):
-                out[dst] = 'content/' + path
-    return out
+def _instance_position(prefab, mod, parent):
+    """Unity-space position of a model prefab instance: its root m_LocalPosition modifications under the parent."""
+    pos = [0.0, 0.0, 0.0]
+    for m in mod.get('m_Modifications') or []:
+        pp = str(m.get('propertyPath', '')) if isinstance(m, dict) else ''
+        if pp.startswith('m_LocalPosition.') and pp[-1] in 'xyz':
+            try:
+                pos['xyz'.index(pp[-1])] = float(m.get('value'))
+            except (TypeError, ValueError):
+                pass
+    if parent and parent in prefab.transforms:
+        ppos = prefab.world_of(prefab.transforms[parent])[0]
+        pos = [a + b for a, b in zip(pos, ppos)]
+    return pos
