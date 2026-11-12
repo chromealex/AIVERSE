@@ -371,6 +371,26 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
             (m->statusFlags(sim, e) & kStInvisible) && !(m->statusFlags(sim, e) & kStRevealed)) so.visible = false;   // hidden trap
         out.objects.push_back(so);
     });
+    // map environment bodies (worm segments, toads, falling bombs, souls): drawn as their look types (RtsEnv.h)
+    if (Environment* env = m->environment()) {
+        std::vector<Environment::Body> bodies;
+        env->bodies(sim, bodies);
+        for (auto& b : bodies) {
+            if (b.type >= R.types.size()) continue;
+            SceneObject so;
+            so.type = b.type; so.owner = 0;
+            so.pos = toF(b.pos);
+            const float3 f = toF(b.facing);
+            const float fl = std::sqrt(f.x * f.x + f.z * f.z);
+            if (fl > 1e-4f) so.facing = {f.x / fl, 0, f.z / fl};
+            so.moving = b.kind == 1 && fl > 1e-4f;
+            if (viewer != 0) {
+                int x = int(b.pos.x.floorInt()), y = int(b.pos.z.floorInt());
+                so.visible = gs.grid.inside(x, y) && gs.vision[viewer][size_t(gs.grid.index(x, y))] == 2;
+            }
+            out.objects.push_back(so);
+        }
+    }
     w.each<Projectile, Transform>([&](Entity e, Projectile& pr, Transform& t) {
         SceneObject so;
         so.entity = e; so.isProjectile = true; so.source = pr.source;
