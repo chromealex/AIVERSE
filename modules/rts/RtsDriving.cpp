@@ -408,13 +408,19 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
             hit = true;
             continue;
         }
+        const UnitType& ot = m_->rules().types[w.get<Unit>(o.e).type];
+        if (ot.speed.raw <= 0) {   // things that never move (trees, lamp posts, hydrants) are solid
+            pos += normal * deepest;
+            crash = fxMax(crash, vl::vehicleResolveCollision(c.st, c.st.position, normal, rules_.restitution));
+            hit = true;
+            continue;
+        }
         const Fixed closing = -c.st.velocity.dot(normal);
         if (closing > rules_.runOverMinSpeed) {   // run over: the car barely notices
             hurt.push_back({o.e, (closing - rules_.runOverMinSpeed) * rules_.runOverDamage, c.e, c.player});
             c.st.velocity = c.st.velocity * Fixed::fromRatio(98, 100);
             continue;
         }
-        const UnitType& ot = m_->rules().types[w.get<Unit>(o.e).type];
         const Vec3 np = o.p - normal * deepest;
         if (g.passableAt(np, ot.pathLayer)) {   // slow: people step aside
             Transform& otr = w.get<Transform>(o.e);

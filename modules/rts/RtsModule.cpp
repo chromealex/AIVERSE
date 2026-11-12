@@ -2,6 +2,7 @@
 #include "RtsInternal.h"
 #include "RtsBwAI.h"   // agent-bw-ai
 #include "RtsInitialVars.h"
+#include "../../engine/core/FixedMath.h"
 #include "gen/MapGen.h"
 #include <algorithm>
 #include <cstdlib>
@@ -328,6 +329,10 @@ void RtsModule::setupMap(Simulation& sim, const Json& map) {
         if ((owner < 0 || owner > int(np)) && owner != kHostileNeutral) throw std::runtime_error("map entity: owner out of range");
         Entity e = spawn(sim, uint16_t(t), uint8_t(owner), mapPos(sim, ej.has("at") ? ej["at"] : ej["pos"]));
         placed.push_back(e);
+        if (ej.has("facing")) {   // degrees, clockwise on screen from north (-z): 0 north, 90 east, 180 south, 270 west
+            const Fixed turns = ej.getFx("facing") / 360;
+            w.get<Unit>(e).facing = {fxSinTurns(turns), Fixed{}, -fxCosTurns(turns)};
+        }
         if (auto* gg = w.tryGet<Garrison>(e)) gg->count = int(ej.getInt("garrison", 0));
         if (auto* rs = w.tryGet<ResourceStock>(e); rs && ej.has("amount")) rs->amount = ej.getFx("amount");
         if (ej.has("id")) ids.emplace_back(ej.getStr("id"), e);

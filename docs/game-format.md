@@ -305,6 +305,7 @@ Map players choose a faction and a `start` point; start objects spawn there.
   },
   "fields": [{"resource": "ore", "rows": ["0000999000", "..."]}],   // density digits 1..9 of cellMax (or {"center": [x,z], "radius": 3})
   "regions": {"rows": ["AAAABBBB", "..."], "names": {"A": "Долина", "B": "Холмы"}},
+  // entity keys: "facing": degrees clockwise on screen from north (0 north, 90 east = default, 180 south, 270 west)
   "entities": [{"type": "townhall", "owner": 1, "pos": [9, 24]}, {"type": "goldmine", "owner": 0, "pos": [6, 16], "amount": 8000},
                {"type": "ogre", "owner": -1, "pos": [32, 10]}],     // owner: 0 neutral, 1..N players, -1 hostile creeps
   "roads": [["base_a", "village_1"]],                                 // by entity id (Mushroom Wars)
