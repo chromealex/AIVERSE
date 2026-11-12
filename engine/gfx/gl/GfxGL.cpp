@@ -599,7 +599,9 @@ private:
     DeviceInfo info_;
     std::string error_;
     GLuint vao_ = 0, ubo_ = 0, currentProgram_ = 0;
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)   // same guard as every use (Android: unused private field)
     GLuint slotUbos_[kMaxUniformSlots] = {};
+#endif
     size_t uboAlign_ = 256, uboOffset_ = 0;
     bool etc2_ = false, s3tc_ = false, bptc_ = false, astc_ = false;
     bool srgbWrite_ = false;   // GL33: GL_FRAMEBUFFER_SRGB enabled for the current pass
