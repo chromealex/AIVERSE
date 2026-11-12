@@ -76,6 +76,10 @@ the last two cells of the street at that end, with the pedestrian crossing and t
 columns along x. Arterial crossings (`x1`..`x15`) are whole 4 x 4 drawings, so crossings and stop lines on every arm
 are the tileset's business.
 
+A base may be a list of tile indices instead of one: looks of the same piece (worn paint, cracked, patched). The
+planner picks one per segment of a road (per four cells of an arterial, per two cells of a street or of plain
+ground), by a hash of the place and the seed.
+
 ## The plan in the map: `"city"`
 
 ```json

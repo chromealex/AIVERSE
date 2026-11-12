@@ -710,7 +710,12 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
         const char cBlocked = chr("blocked", cPark);          // roundabout islands: a tileset terrain whose cell is '#'
 
         const Json& tb = c.P["tileBases"];
-        auto base = [&](const std::string& key) { return tb[key].isNumber() ? int(tb[key].integer(-1)) : -1; };
+        // a base is a tile index, or a list of them: looks of the same piece (clean, cracked, patched), one per segment
+        auto base = [&](const std::string& key, int salt = 0) {
+            const Json& v = tb[key];
+            if (v.isArray() && v.size()) return int(v[size_t(hashCoords(salt, 7, 3, c.seed) % uint32_t(v.size()))].integer(-1));
+            return v.isNumber() ? int(v.integer(-1)) : -1;
+        };
         Json trows = Json::array(), fixed = Json::array();
         auto fix = [&](int x, int z, int t) { Json f = Json::array(); f.push(num(x)); f.push(num(z)); f.push(num(t)); fixed.push(f); };
         // T-junctions of the grid: where a street ends at a road, the road's edge line opens over the mouth (one cell
@@ -769,14 +774,14 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 if (k == KRoad && v && h && v->cls == 0 && h->cls == 0) {          // arterial crossing: arms that exist
                     const int mask = (h->pos > p.dz0 ? 1 : 0) | (v->pos + v->w < p.dx0 + p.dW ? 2 : 0) | (h->pos + h->w < p.dz0 + p.dH ? 4 : 0) | (v->pos > p.dx0 ? 8 : 0);
                     if (int b = base("x" + std::to_string(mask)); b >= 0) t = b + (z - h->pos) * 4 + (x - v->pos);
-                } else if (k == KRoad && v && v->cls == 0) { if (int b = base("ns"); b >= 0) t = b + (z % 4) * 4 + (x - v->pos); }
-                else if (k == KRoad && h && h->cls == 0) { if (int b = base("ew"); b >= 0) t = b + (z - h->pos) * 4 + (x % 4); }
-                else if (k == KStreet && v && !h) { if (int b = base("ns2"); b >= 0) t = b + (z % 2) * 2 + (x - v->pos); }
-                else if (k == KStreet && h && !v) { if (int b = base("ew2"); b >= 0) t = b + (z - h->pos) * 2 + (x % 2); }
+                } else if (k == KRoad && v && v->cls == 0) { if (int b = base("ns", v->pos * 131 + z / 4); b >= 0) t = b + (z % 4) * 4 + (x - v->pos); }
+                else if (k == KRoad && h && h->cls == 0) { if (int b = base("ew", h->pos * 131 + x / 4 + 7919); b >= 0) t = b + (z - h->pos) * 4 + (x % 4); }
+                else if (k == KStreet && v && !h) { if (int b = base("ns2", v->pos * 131 + z / 2 + 104729); b >= 0) t = b + (z % 2) * 2 + (x - v->pos); }
+                else if (k == KStreet && h && !v) { if (int b = base("ew2", h->pos * 131 + x / 2 + 1299709); b >= 0) t = b + (z - h->pos) * 2 + (x % 2); }
                 else {
                     const char* key = k == KStreet || k == KRoad ? "street" : k == KPave ? "walk" : k == KWater ? "water" : green ? "grass" :
                                       k == KParking ? "parking" : "lot";
-                    if (int b = base(key); b >= 0) t = b + (z % 2) * 2 + (x % 2);
+                    if (int b = base(key, (x / 2) * 977 + z / 2); b >= 0) t = b + (z % 2) * 2 + (x % 2);
                 }
                 if (t >= 0) fix(x, z, t);
             }

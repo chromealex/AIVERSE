@@ -205,6 +205,60 @@ def make_tileset(out):
 
 # ------------------------------------------------------------------ the city
 
+def weather(im, plain, seed, strength=1.0):
+    """Worn paint: markings (anything much brighter than asphalt) fade towards the asphalt in blotches and specks."""
+    try:
+        import numpy as np
+    except ImportError:
+        return im
+    rs = np.random.RandomState(seed)
+    w, h = im.size
+    a = np.asarray(im.convert('RGB')).astype(np.float32)
+    p = np.asarray(plain.resize((w, h)).convert('RGB')).astype(np.float32) if plain.size != (w, h) else np.asarray(plain.convert('RGB')).astype(np.float32)
+    paint = (a.max(axis=2) > 118).astype(np.float32)
+    def noise(cell):
+        small = Image.fromarray((rs.rand(max(2, h // cell), max(2, w // cell)) * 255).astype('uint8'))
+        return np.asarray(small.resize((w, h), Image.BICUBIC)).astype(np.float32) / 255
+    blot = np.clip((noise(RT // 2) * 0.6 + noise(RT // 8) * 0.4 - 0.42) * 2.4, 0, 1)      # big worn areas
+    speck = (rs.rand(h, w) < 0.10).astype(np.float32) * 0.7                                  # chipped paint
+    k = np.clip((0.12 + blot * 0.62 + speck) * strength, 0, 0.92) * paint
+    out = a * (1 - k[..., None]) + p * k[..., None]
+    return Image.fromarray(out.astype('uint8'))
+
+
+def damage(im, seed, cracks, patches):
+    """Cracks (thin dark jagged lines with branches) and repaired patches (fresh or faded asphalt with a tar seam)."""
+    rnd = random.Random(seed)
+    w, h = im.size
+    im = im.copy()
+    d = ImageDraw.Draw(im, 'RGBA')
+    for _ in range(patches):
+        pw, ph = rnd.randint(RT // 2, RT * 3 // 2), rnd.randint(RT // 3, RT)
+        x, y = rnd.randint(0, max(1, w - pw)), rnd.randint(0, max(1, h - ph))
+        tone = rnd.choice([(38, 38, 41, 235), (44, 44, 46, 225), (74, 74, 76, 205)])
+        d.rectangle((x, y, x + pw, y + ph), fill=tone, outline=(20, 20, 22, 255), width=max(1, RT // 64))
+    for _ in range(cracks):
+        x, y = rnd.uniform(0, w), rnd.uniform(0, h)
+        ang = rnd.uniform(0, 6.283)
+        pts = [(x, y)]
+        for k in range(rnd.randint(8, 26)):
+            ang += rnd.uniform(-0.6, 0.6)
+            x += RT * 0.09 * __import__('math').cos(ang)
+            y += RT * 0.09 * __import__('math').sin(ang)
+            pts.append((x, y))
+            if rnd.random() < 0.12:                              # a branch
+                bx, by, ba = x, y, ang + rnd.choice([-1, 1]) * rnd.uniform(0.7, 1.3)
+                br = [(bx, by)]
+                for _ in range(rnd.randint(3, 8)):
+                    ba += rnd.uniform(-0.5, 0.5)
+                    bx += RT * 0.07 * __import__('math').cos(ba)
+                    by += RT * 0.07 * __import__('math').sin(ba)
+                    br.append((bx, by))
+                d.line(br, fill=(22, 22, 24, 220), width=1)
+        d.line(pts, fill=(18, 18, 20, 235), width=max(1, RT // 80))
+    return im
+
+
 def make_road_tileset(assets, out):
     """Ground from the user's road / pavement textures. -> tile bases, or None when the pack is missing."""
     tex = os.path.join(assets, 'roads-sidewalks', 'textures')
@@ -214,11 +268,29 @@ def make_road_tileset(assets, out):
     def load(n, cells):
         return Image.open(os.path.join(tex, n, 'basecolor.png')).convert('RGB').resize((RT * cells, RT * cells), Image.LANCZOS)
     ns = load('road_four_lane_ns', 4)
-    parts = [('ns', ns, 4), ('ew', ns.rotate(90), 4), ('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2),
-             ('street', load('road_plain_asphalt', 2), 2)]
-    for key, name in (('ns2', 'road_two_lane_ns'), ('ew2', 'road_two_lane_ew'), ('parking', 'road_parking')):
+    plain4 = load('road_plain_asphalt', 4)
+    plain_s = load('road_plain_asphalt', 2)
+    variants = {}                                          # key -> names of its variants (the planner picks per segment)
+
+    def add_variants(key, im, cells, plain_ref, seed):
+        """Three looks of one road piece: worn paint; + cracks; + cracks and repaired patches."""
+        looks = [weather(im, plain_ref, seed), damage(weather(im, plain_ref, seed + 1, 1.2), seed + 2, 7 * cells, 0),
+                 weather(damage(weather(im, plain_ref, seed + 3), seed + 4, 4 * cells, cells), plain_ref, seed + 5, 0.4)]
+        variants[key] = []
+        for k, look in enumerate(looks):
+            name = key if k == 0 else '%s~%d' % (key, k)
+            variants[key].append(name)
+            parts.append((name, look, cells))
+
+    parts = [('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2)]
+    add_variants('ns', ns, 4, plain4, 11)
+    add_variants('ew', ns.rotate(90), 4, plain4, 21)
+    add_variants('street', plain_s, 2, plain_s, 31)
+    for key, name, seed in (('ns2', 'road_two_lane_ns', 41), ('ew2', 'road_two_lane_ew', 51)):
         if os.path.exists(os.path.join(tex, name, 'basecolor.png')):
-            parts.append((key, load(name, 2), 2))
+            add_variants(key, load(name, 2), 2, plain_s, seed)
+    if os.path.exists(os.path.join(tex, 'road_parking', 'basecolor.png')):
+        parts.append(('parking', weather(load('road_parking', 2), plain_s, 61), 2))
     water = Image.new('RGB', (RT * 2, RT * 2), (38, 70, 92))
     dw = ImageDraw.Draw(water)
     wr = random.Random(9)
@@ -239,11 +311,16 @@ def make_road_tileset(assets, out):
         da.rectangle((k * zstep + zstep // 4, int(S * 0.055), k * zstep + zstep // 4 + zstep // 2, int(S * 0.19)), fill=(198, 196, 184, 255))
     closed = Image.new('RGBA', (S, S), (0, 0, 0, 0))       # no arm on this side: the edge line runs on
     ImageDraw.Draw(closed).rectangle((int(S * 0.045), int(S * 0.045) - max(2, S // 170), S - int(S * 0.045), int(S * 0.045) + max(2, S // 170)), fill=(198, 196, 184, 255))
+    corner = Image.new('RGBA', (S, S), (0, 0, 0, 0))       # the kerb line turns the north-west corner between two arms
+    rc = int(S * 0.045)
+    ImageDraw.Draw(corner).arc((-rc, -rc, rc, rc), 0, 90, fill=(198, 196, 184, 255), width=max(2, S // 170) * 2)
     for mask in range(1, 16):
         im = plain.convert('RGBA')
         for bit in range(4):
             im = Image.alpha_composite(im, (arm if mask & (1 << bit) else closed).rotate(-90 * bit))
-        parts.append(('x%d' % mask, im.convert('RGB'), 4))
+            if mask & (1 << bit) and mask & (1 << ((bit + 3) % 4)):       # this arm and the one before it (anticlockwise)
+                im = Image.alpha_composite(im, corner.rotate(-90 * bit))
+        parts.append(('x%d' % mask, weather(im.convert('RGB'), plain, 70 + mask), 4))
     rnd = random.Random(5)
     grass = Image.new('RGB', (RT * 2, RT * 2), (58, 92, 46))
     d = ImageDraw.Draw(grass)
@@ -291,7 +368,7 @@ def make_road_tileset(assets, out):
     groups += [('nsOpenE', a_e, 4, 4), ('nsOpenW', a_e.transpose(Image.FLIP_LEFT_RIGHT), 4, 4),
                ('ewOpenN', a_e.rotate(90, expand=True), 4, 4), ('ewOpenS', a_e.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True), 4, 4)]
     if ns2 is not None:
-        s_e = open_east(ns2, 2, 0.085, 0.085, False)
+        s_e = open_east(ns2, 2, 0.085, 0.085, True)
         groups += [('ns2OpenE', s_e, 2, 4), ('ns2OpenW', s_e.transpose(Image.FLIP_LEFT_RIGHT), 2, 4),
                    ('ew2OpenN', s_e.rotate(90, expand=True), 4, 2), ('ew2OpenS', s_e.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True), 4, 2)]
         e_n = street_end_north(ns2)
@@ -306,7 +383,8 @@ def make_road_tileset(assets, out):
             for tx in range(c):
                 sheet.paste(im.crop((tx * RT, ty * RT, (tx + 1) * RT, (ty + 1) * RT)), ((i % cols) * RT, (i // cols) * RT))
                 i += 1
-    for name, im, gw, gh in groups:                        # rows along z, columns along x
+    for gi, (name, im, gw, gh) in enumerate(groups):       # rows along z, columns along x
+        im = weather(im, plain2, 100 + gi)
         bases[name] = i
         for ty in range(gh):
             for tx in range(gw):
@@ -314,17 +392,23 @@ def make_road_tileset(assets, out):
                 i += 1
     os.makedirs(os.path.join(out, 'tilesets'), exist_ok=True)
     sheet.save(os.path.join(out, 'tilesets', 'city.png'))
+    first = {k: bases[k] for k in variants}                # terrains show the first look
+    for k, names in variants.items():                      # the planner gets every look and picks one per segment
+        bases[k] = [bases[n] for n in names]
+        for n in names[1:]:
+            del bases[n]
     def terr(tid, name, ch, col, base):
+        base = first.get(base, base) if isinstance(base, str) else base
         return {'id': tid, 'name': name, 'char': ch, 'cell': '.', 'color': col, 'tiles': [base]}
     wjson(os.path.join(out, 'tilesets', 'city.json'), {'name': 'City', 'atlas': 'tilesets/city.png', 'tileSize': [RT, RT], 'columns': cols,
-          'filter': 'linear', 'terrains': [terr('asphalt', 'Asphalt', 'a', [0.23, 0.23, 0.24], bases['ns']),
-                                           terr('line_h', 'Road (east-west)', 'h', [0.23, 0.23, 0.24], bases['ew']),
-                                           terr('line_v', 'Road (north-south)', 'v', [0.23, 0.23, 0.24], bases['ns']),
+          'filter': 'linear', 'terrains': [terr('asphalt', 'Asphalt', 'a', [0.23, 0.23, 0.24], first['ns']),
+                                           terr('line_h', 'Road (east-west)', 'h', [0.23, 0.23, 0.24], first['ew']),
+                                           terr('line_v', 'Road (north-south)', 'v', [0.23, 0.23, 0.24], first['ns']),
                                            terr('pavement', 'Pavement', 'p', [0.5, 0.48, 0.45], bases['walk']),
                                            terr('lot', 'Lot', 'l', [0.36, 0.35, 0.34], bases['lot']),
                                            terr('grass', 'Grass', 'g', [0.24, 0.38, 0.19], bases['grass']),
-                                           terr('street', 'Street', 's', [0.23, 0.23, 0.24], bases['street']),
-                                           terr('parking', 'Car park', 'k', [0.25, 0.25, 0.26], bases.get('parking', bases['street'])),
+                                           terr('street', 'Street', 's', [0.23, 0.23, 0.24], first['street']),
+                                           terr('parking', 'Car park', 'k', [0.25, 0.25, 0.26], bases.get('parking', first['street'])),
                                            dict(terr('water', 'Water', 'w', [0.15, 0.27, 0.36], bases['water']), cell='~'),
                                            dict(terr('built', 'Built over (blocked)', 'x', [0.36, 0.35, 0.34], bases['lot']), cell='#')]})
     return bases
@@ -414,7 +498,8 @@ def game_manifest():
         'name': 'Kingston Streets', 'id': 'com.aiverse.kingstonstreets', 'version': '0.1.0', 'build': 1, 'module': 'rts',
         'sourceLanguage': 'en', 'languages': ['en'], 'rules': 'rules.json',
         'maps': [{'file': 'maps/city.json', 'title': 'Downtown'}],
-        'lighting': {'time': 0.42, 'clouds': 0.2}, 'orientation': 'landscape',
+        'lighting': {'time': 0.42, 'clouds': 0.2, 'sunDir': [-0.8, 1.0, 0.5]},   # a slanted sun: shadows are visible from straight above
+        'orientation': 'landscape',
         'topDown': {'touchControls': 'auto', 'mouseAim': 'hold',
                     'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
                     'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
@@ -533,6 +618,7 @@ def build(assets, out, seed, headless=None, size=(96, 72), layout='grid', max_bu
         'victory': 'noUnits',
         'resources': {'cash': {'name': 'Cash', 'kind': 'stock', 'start': 0}},
         'fogOfWar': {'mode': 'none'},
+        'sprites': {'shadow': 'cast', 'lit': True},        # the ground and the cars take the scene light and shadows
         'topDown': {'heroes': ['player'], 'respawn': 5, 'move': {'accel': 12, 'decel': 18, 'turnRate': 720, 'collideUnits': True},
                     'input': {'sectors': 0, 'magnitudeSteps': 0, 'deadzone': 0.05},
                     'aim': {'snapCone': 12, 'fires': True}, 'autoFire': False},
