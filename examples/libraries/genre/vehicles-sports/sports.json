@@ -1,0 +1,42 @@
+{
+  "field": {
+    "halfLengthMilli": 20000,
+    "halfWidthMilli": 12000,
+    "goalHalfWidthMilli": 3000,
+    "penaltyDepthMilli": 6000,
+    "penaltyHalfWidthMilli": 7000,
+    "penaltySpotMilli": 5000,
+    "goalKickDepthMilli": 3000,
+    "boundary": "lines"
+  },
+  "formations": [
+    {
+      "id": 1,
+      "slots": [
+        {
+          "id": 1,
+          "role": "keeper",
+          "baseMilli": [-900, 0],
+          "attackMilli": [200, 0],
+          "ballPullMilli": 100
+        },
+        {
+          "id": 2,
+          "role": "defender",
+          "baseMilli": [-300, 400],
+          "attackMilli": [400, 0],
+          "defendMilli": [-200, 0],
+          "ballPullMilli": 300
+        },
+        {
+          "id": 3,
+          "role": "forward",
+          "baseMilli": [100, -300],
+          "attackMilli": [500, 0],
+          "defendMilli": [-300, 0],
+          "ballPullMilli": 300
+        }
+      ]
+    }
+  ]
+}

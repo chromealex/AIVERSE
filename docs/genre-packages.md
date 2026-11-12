@@ -23,6 +23,9 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | tactics-grid | Square/hex grids, weighted reachable sets and paths, half/full cover with flank angle, line of fire and hit-chance previews, AP, initiative with speed modifiers and delay, overwatch reaction fire, per-team views, WeGo simultaneous resolution | turn-scheduler stays the fixed-order reaction queue. Units do not block fire; no elevation, destructible cover or campaign. |
 | cards-turns-bots | Card evaluator (real-rules simulation on a view-rebuilt state, bounded lookahead) and tactics turn planner (bounded deterministic destination/attack/overwatch scoring), both from the player's own view | Player-equivalent actions only; no RNG; stateless. |
 
+| vehicle-controllers | Wheeled arcade-sim (torque curve, auto/manual gears, per-wheel traction with slip/grip curves, handbrake, drift), tracked, hover and flight controllers; damage zones with performance penalties; driver/passenger/gunner seats with enter/exit validation and exit-point search; ordered checkpoints, laps, race positions, wrong-way and respawn; race bot (see [Vehicles](#vehicles-vehicle-controllers-010)) | Kinematic Fixed controllers over owner-reported contacts; the owner resolves collisions and teleports. No rigid-body/suspension simulation, Box3D authority, rendering or audio. |
+| sports-rules | Ball possession with possession lock, seeded tackle contests, passes/shots with leading and seeded accuracy error, interception at the closest approach, goals, out of bounds and generic restarts, periods with stoppage and golden goal, fouls/penalties, role formations, positioning bot (see [Sports](#sports-sports-rules-010)) | Rules and bot decisions only; player bodies and movement are the owner's. No ball height/spin, offside, referee UI or animation. |
+
 ## Native/host integration
 
 Include `<aiverselib/genre/Configured.h>`, the needed policy header and `genre/Persistence.h`.
@@ -1031,3 +1034,145 @@ Verified only with g++ 11 (Linux VM): header syntax checks, all genre/bots heade
 example built by hand (tests also under ASan/UBSan), GenreConsumer/CardsTurnsConsumer syntax checks and the consumer
 function in a standalone driver. Not run: CMake/CTest registration, isolation, native module export, headless
 restore matches, clang/MSVC.
+
+## Vehicles (vehicle-controllers 0.1.0)
+
+Headers `genre/VehicleControllers.h` (controllers), `genre/VehicleDamage.h` (damage zones), `genre/VehicleSeats.h`
+(seats), `genre/RaceCourse.h` (checkpoints, laps, positions), `bots/RaceBot.h` (race bot), umbrella `genre/Vehicles.h`,
+`genre/VehicleData.h` (JSON), `genre/VehicleConfigured.h` (settings adapters), `genre/VehiclePersistence.h` (records,
+hashing). Target `AIVERSE::lib_vehicle_controllers` (depends on `match-rules`, `configuration`, `aiverse_engine`); native
+OBJECT modules call `aiverse_native_use_libraries(target vehicle-controllers)`. Skill: `skills/aiverse-vehicle-controllers`.
+
+**Determinism and network model.** The controllers are kinematic, authoritative gameplay state: Fixed math, integer
+ticks, ascending-id order, no floating point and no physics backend in the loop. The collision owner reports contacts
+(`VehicleContacts{grounded, groundHeight, groundNormal, grip, wheels[]}`) before the step and resolves collisions after it
+(`vehicleResolveCollision(state, position, normal, restitution)` removes the approaching velocity and returns the
+impulse per unit mass, the input for damage rules). `VehicleState` holds the pose too, so prediction is: run the same
+step with the same inputs; rollback restores the record and replays. A Box3D world (docs/physics.md) is not deterministic
+across builds and may only mirror poses for presentation; nothing is read back from it. Every stepper validates config,
+state and input first; invalid data, dt outside (0,1] or a repeated/backwards tick return nullopt with the state untouched.
+
+**Wheeled (arcade-sim).** Axes X/Z ground, Y up, yaw in turns (0 faces +Z, positive yaw turns right). Steering
+approaches `steer * maxSteer` at `steerRate`, reduced with speed (`steerFalloffSpeed`). Engine rpm follows the driven
+wheels (`speed / radius * gear * finalDrive`), clamped to idle..redline; torque comes from the piecewise-linear `torque`
+curve (rpm -> Nm), zero at the limiter. Gearbox: automatic upshifts at `shiftUpRpm`, downshifts at `shiftDownRpm`, braking
+at a standstill engages reverse (brake drives backward, throttle brakes); manual uses `shiftUp`/`shiftDown` edges down to
+neutral (0) and reverse (-1). A shift cuts drive for `shiftTicks`. Tyres: static load plus longitudinal weight transfer
+(`cgHeight`, last tick's acceleration), drive/brake demand above `friction * load * grip` slides along the
+`longitudinalGrip` curve (demand ratio -> grip), lateral force follows the `lateralGrip` curve over the slip angle
+(turns), both clipped by the friction circle; brakes and lateral forces never reverse a wheel's velocity within a tick.
+The handbrake locks the handbrake wheels and scales their lateral grip by `handbrakeGrip`: rear slip above `driftEnter`
+at `driftMinSpeed` starts a drift (`DriftStarted` / `DriftEnded` below `driftExit`). Yaw uses the summed tyre torque
+over an inertia from the wheel layout. Slopes add gravity along the ground normal; without ground the body falls
+(`Airborne` / `Landed` with the vertical speed in milli-m/s).
+
+**Tracked, hover, flight.** Tracked: each track approaches `throttle*maxSpeed +- steer*pivotSpeed` (pivot turns at zero
+throttle), yaw rate = track difference / trackWidth, sideways sliding damped by `lateralGrip`. Hover: altitude hold
+`(groundHeight + height - y) * stiffness - vy * damping` while the owner reports ground below (else gravity), thrust
+along the heading, quadratic drag, lateral drift damped by `lateralDamping`, yaw rate eased by `yawResponse`. Flight:
+airspeed from thrust, quadratic drag and the pitch component of gravity; pitch/roll/yaw rates with roll limits and
+auto-levelling, banked turns scale with lift; lift = min(1, (airspeed/stallSpeed)^2) and missing lift accumulates a
+sink; below `stallSpeed` the plane stalls (`Stalled`, reduced authority, nose drops) until `recoverSpeed`. On the ground
+it rolls with `groundFriction` braking and takes off once the climb leaves the reported ground.
+
+**Damage zones.** `VehicleZoneDef{id, local box, health, armor, critical, penalties{stat, atZero}}`. Damage inputs are
+applied in ascending id (an id <= the last accepted one is `DamageIgnored`), scaled by armor; zone 0 locates the zone by
+local point (`vehicleZoneAt`: containing box, else nearest). Each penalty scales its stat (engine, grip, steering,
+brakes, lift) linearly from 1 at full health to `atZero`; multiple zones multiply. A critical zone at 0 disables the
+vehicle (engine 0) until repaired (negative amounts). `vehiclePerformance(def, state)` feeds `stepVehicle`.
+
+**Seats.** Roles driver/passenger/gunner; requests in ascending id: Enter (speed <= maxEnterSpeed, actor within
+`enterRadius` of the seat entry, seat free, same team as the occupants or unlocked; seat 0 = first free seat of the
+preferred role, then any), Exit (speed <= maxExitSpeed, first exit point the owner's `clear(point, actor)` accepts: the
+seat's exits, then the other seats' exits by id; none -> `ExitBlocked`), Eject (ignores speed), Switch, Lock/Unlock
+(occupants). `vehicleDriver` names the occupant whose input drives the vehicle; exits return world positions.
+
+**Races.** `RaceCourse{checkpoints (RouteGate + respawn pose), laps, grid}` reuses match-rules route gates: the racer's
+segment from its last reported position crossing its next gate plane in the normal direction (`crossesGate`) feeds
+`stepRoute` (out-of-order gates ignored). The last checkpoint is the finish line; the grid lies just after it.
+Standings: finished by place, then lap, checkpoint, planar distance to the next checkpoint, earlier last checkpoint,
+id. Wrong way: velocity along (previous -> next checkpoint) below `-wrongWaySpeed` for `wrongWayTicks`; auto respawn
+after `respawnWrongWayTicks` wrong-way ticks or `stuckTicks` below `stuckSpeed`, plus owner requests. Respawns go to the
+last passed checkpoint (finish line after a lap, grid slot before the first) and reset the tracked position so the
+teleport never counts as a crossing.
+
+**Race bot.** `makeRaceLine(points)` (closed loop; curvature per point), `stepRaceBot(config, line, state, tick, view)`
+returns a `VehicleInput`: pure-pursuit steering toward a lookahead point (`lookahead + speed * lookaheadTime`) offset by
+the current lane; target speed = min over corners within `brakeHorizon` of sqrt(vCorner^2 + 2 * brakeDecel * distance)
+with vCorner = sqrt(cornerAccel / curvature) (braking points); traffic: an opponent alongside pushes to the other lane,
+the nearest slower opponent ahead inside `overtakeDistance` is passed on the side away from it, a car right in front
+within `followDistance` caps the speed. Difficulty: `skillMilli` scales pace; `rubberBandMilli` adds pace for the last
+place and removes it from the leader, on straights only (cornering never exceeds the authored grip). No randomness.
+
+**Configuration.** Optional generated `vehicles` section (configuration 0.3.5): seat speed limits, `raceLaps`,
+wrong-way/stuck/respawn rules and race-bot knobs (`bot*`). `vehicleSettingsErrors` rejects a respawn delay shorter
+than the wrong-way delay and stuck ticks without a stuck speed. Data: `readVehicleDefinitions`; errors such as
+`vehicles.vehicles[0].wheeled.gearsMilli[1]: ratios must be strictly descending`.
+
+**State.** Record kinds 88..95 are reserved for vehicle-controllers and sports-rules: `VehicleState` 88,
+`VehicleDamageState` 89, `VehicleSeatState` 90, `RaceState` 91 (embeds the match-rules `RouteState`), `SportsState` 92,
+93 reserved, `bots::RaceBotState` 94, `bots::SportsBotState` 95. Canonical, validated on load. `vehicleHash` hashes
+states and per-tick reports; bind `vehicleDefinitionHash`, `raceCourseHash` and `bots::raceLineHash`.
+
+## Sports (sports-rules 0.1.0)
+
+Headers `genre/SportsRules.h` (rules), `genre/SportsFormation.h` (formations), `bots/SportsBot.h` (positioning bot),
+umbrella `genre/Sports.h`, `genre/SportsData.h`, `genre/SportsConfigured.h`, `genre/SportsPersistence.h`. Target
+`AIVERSE::lib_sports_rules` (depends on `configuration`, `aiverse_engine`). Skill: `skills/aiverse-sports-rules`.
+
+**Contract.** `stepSports(rules, field, state, tick, dt, players, actions, rng)` once per strictly increasing tick. The
+owner moves the bodies and reports every `SportsPlayer{id, team, position, velocity, tackle/control/accuracy skills,
+active}`; actions (`Pass` with a target point or a receiver, `Shoot` at a point, `Tackle`) come from player commands or
+the bot through the same struct, at most one per player. Randomness only from the passed engine `Random` (tackle,
+foul, interception and face-off rolls, kick error); invalid input leaves state and RNG untouched. Order per tick:
+restart taking, actions by player id, ball motion (dribble offset along the holder's velocity, or free roll with
+friction), pickups and interceptions, goals and boundaries, clock.
+
+**Possession and contests.** A free ball is taken by the player whose closest approach to this tick's ball path lies
+within `pickupRadius` (earliest along the path, then nearest, then id); the kicker cannot retake it for
+`kickLockTicks`; above `controlSpeed` control needs an `interceptMilli` roll adjusted by the control skill. A new
+holder cannot be tackled for `possessionLockTicks`. Tackles need `tackleRange` and no stun; the chance is
+`tackleBase + (tackle - control)/2` (5..95%); a failed tackle stuns for `tackleCooldownTicks`. Fouls: a tackle from
+behind the holder's running direction rolls `behindFoulMilli`, a failed one `failFoulMilli` -> free kick at the spot,
+or a penalty from the penalty spot when the spot lies in the fouling team's penalty area.
+
+**Kicks.** Pass speed `passSpeedMin..Max` and shot speed `shotSpeedMin..Max` by `powerMilli`; passes to a receiver lead
+it (two iterations of distance/speed); the direction is rotated by a seeded error up to `passError`/`shotError` turns
+scaled by `(1000 - accuracy)/1000`. `sportsInterceptPoint` predicts the earliest reachable ball position for a runner.
+
+**Field and restarts.** Goals at x = +-halfLength inside `goalHalfWidth`; team index 0 attacks +x in odd periods.
+`Lines`: sidelines -> throw-in to the other team, goal lines -> corner (last touch by the defenders) or goal kick;
+`Walls`: the ball rebounds with `restitution` (a dribbled ball is clamped); `FaceOff`: any exit -> face-off at the
+nearest spot, contested by the nearest player of each team (`faceoffBiasMilli`). A goal restarts with a kickoff for the
+conceding team. Restarts wait `restartDelayTicks`, then the nearest available player of the awarded team takes them.
+
+**Clock.** `periods` of `periodTicks`; `clockMode` Running (dead ball counts), Stopped (only live ticks count) or Added
+(dead ticks add stoppage time, capped by `maxStoppageTicks`). Ends swap each period (`swapEnds`), each period starts with
+a kickoff alternating teams. A tie after regulation goes to overtime when `overtimeTicks > 0` or `goldenGoal`
+(`goldenGoal` with `overtimeTicks == 0` plays until the next goal); the first overtime goal ends a golden-goal match.
+`MatchEnded` carries the winner (-1 for a draw).
+
+**Formations and bot.** `SportsFormation` slots: role, base/attack/defend fractions of the half field in the attacking
+frame, `ballPull`. `sportsSlotTarget` mirrors by attack direction; `sportsAssignSlots` keeps previous assignments and
+fills free slots by role, then distance, then id. `bots::stepSportsBot` per team per tick: phase from the perceived
+holder (after `reactionTicks`), slot targets for everyone, keeper on the ball-goal line, holder shoots inside
+`shootRange` with an open lane (`laneWidth`, seeded side choice), passes to the best progress-minus-pressure teammate
+along an open lane or dribbles away from pressure (re-decided every `decisionTicks`); defending: nearest player presses
+and tackles (`tackleMilli` roll), the next non-keeper marks the opponent nearest to its goal; a free ball is chased by
+the player with the earliest interception. Output: move target, sprint flag and `SportsAction` per player.
+
+**Configuration and state.** Optional generated `sports` section (configuration 0.3.5) with relations
+`passSpeedMin <= passSpeedMax`, `shotSpeedMin <= shotSpeedMax`; `sportsSettingsErrors` adds cross-field checks.
+Data: `readSportsDefinitions` (`sports.field.goalHalfWidthMilli: must not exceed halfWidthMilli`, ...). Records:
+`SportsState` 92, `bots::SportsBotState` 95 (93 reserved); save the RNG state with them. `sportsHash` hashes states and
+reports; bind `sportsDefinitionsHash(field, rules, formations)`.
+
+**Executable example and verification.** `examples/libraries/genre/vehicles-sports/VehiclesSportsExample.cpp` loads
+`vehicles.json`, `sports.json` and `settings.json`, runs a 3-lap race of four bot-driven cars (seats, damage from
+car-to-car contacts, positions, respawns) and a 3v3 golden-goal football match between two bot teams, saves and reloads
+every record mid-run and prints the results and a final hash. CTest `library_vehicles_sports_example` runs it twice
+(`tests/libraries/vehicles_sports_example.cmake`) and requires a race winner, a match winner and equal hashes;
+`library_vehicles_sports` runs `tests/libraries/genre_vehicles_sports_tests.cpp`. `VehiclesSportsConsumer.cpp` is the
+library_demo native consumer. Verified only with g++ (Linux): header syntax checks, all genre/bots headers in one TU,
+the tests and the example built by hand (also ASan/UBSan). Not verified: CMake/isolation, `aiverse_tests`, native
+module export, headless restore matches, MSVC/clang, platform runtimes.

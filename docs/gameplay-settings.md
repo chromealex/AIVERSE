@@ -358,6 +358,54 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | tactics | maxHitMilli | integer | 950 | 0..1000 |
 | tactics | coverCosMilli | integer | 707 | 0..1000 |
 | tactics | botSearchBudget | integer | 512 | 1..100000 |
+| vehicles | maxEnterSpeedMilli | integer | 2000 | 0..1000000 |
+| vehicles | maxExitSpeedMilli | integer | 3000 | 0..1000000 |
+| vehicles | raceLaps | integer | 3 | 1..1000 |
+| vehicles | wrongWayTicks | integer | 45 | 1..100000 |
+| vehicles | wrongWaySpeedMilli | integer | 2000 | 0..1000000 |
+| vehicles | respawnWrongWayTicks | integer | 240 | 0..100000 |
+| vehicles | stuckSpeedMilli | integer | 500 | 0..1000000 |
+| vehicles | stuckTicks | integer | 0 | 0..100000 |
+| vehicles | botLookaheadMilli | integer | 6000 | 0..1000000 |
+| vehicles | botLookaheadTimeMilli | integer | 350 | 0..10000 |
+| vehicles | botMaxSpeedMilli | integer | 60000 | 1..1000000 |
+| vehicles | botCornerAccelMilli | integer | 9000 | 1..1000000 |
+| vehicles | botBrakeDecelMilli | integer | 8000 | 1..1000000 |
+| vehicles | botBrakeHorizonMilli | integer | 90000 | 0..10000000 |
+| vehicles | botSteerGainMilli | integer | 1500 | 0..100000 |
+| vehicles | botLaneOffsetMilli | integer | 2500 | 0..100000 |
+| vehicles | botOvertakeDistanceMilli | integer | 14000 | 0..1000000 |
+| vehicles | botSkillMilli | integer | 1000 | 100..2000 |
+| vehicles | botRubberBandMilli | integer | 0 | 0..500 |
+| sports | periods | integer | 2 | 1..16 |
+| sports | periodTicks | integer | 2700 | 1..100000000 |
+| sports | overtimeTicks | integer | 0 | 0..100000000 |
+| sports | restartDelayTicks | integer | 45 | 0..100000 |
+| sports | maxStoppageTicks | integer | 600 | 0..100000000 |
+| sports | clockMode | integer | 0 | 0..2 |
+| sports | swapEnds | boolean | true |  |
+| sports | goldenGoal | boolean | true |  |
+| sports | pickupRadiusMilli | integer | 700 | 1..100000 |
+| sports | controlSpeedMilli | integer | 14000 | 0..200000 |
+| sports | frictionMilli | integer | 5000 | 0..1000000 |
+| sports | tackleRangeMilli | integer | 1400 | 0..100000 |
+| sports | tackleBaseMilli | integer | 450 | 0..1000 |
+| sports | interceptMilli | integer | 650 | 0..1000 |
+| sports | behindFoulMilli | integer | 500 | 0..1000 |
+| sports | failFoulMilli | integer | 120 | 0..1000 |
+| sports | tackleCooldownTicks | integer | 40 | 0..100000 |
+| sports | possessionLockTicks | integer | 20 | 0..100000 |
+| sports | kickLockTicks | integer | 12 | 0..100000 |
+| sports | passSpeedMinMilli | integer | 7000 | 1..200000 |
+| sports | passSpeedMaxMilli | integer | 18000 | 1..200000 |
+| sports | shotSpeedMinMilli | integer | 12000 | 1..200000 |
+| sports | shotSpeedMaxMilli | integer | 26000 | 1..200000 |
+| sports | passErrorMilli | integer | 30 | 0..250 |
+| sports | shotErrorMilli | integer | 40 | 0..250 |
+| sports | botShootRangeMilli | integer | 12000 | 0..1000000 |
+| sports | botTackleMilli | integer | 300 | 0..1000 |
+| sports | botReactionTicks | integer | 6 | 0..3600 |
+| sports | botDecisionTicks | integer | 6 | 1..3600 |
 
 ## Cross-field constraints
 
@@ -399,3 +447,5 @@ Constraint: `cinematic.slowMotionNumerator <= cinematic.slowMotionDenominator` (
 Constraint: `cardGame.startingHand <= cardGame.maxHand` (checked by loader and CLI).
 Constraint: `tactics.halfCoverMilli <= tactics.fullCoverMilli` (checked by loader and CLI).
 Constraint: `tactics.minHitMilli <= tactics.maxHitMilli` (checked by loader and CLI).
+Constraint: `sports.passSpeedMinMilli <= sports.passSpeedMaxMilli` (checked by loader and CLI).
+Constraint: `sports.shotSpeedMinMilli <= sports.shotSpeedMaxMilli` (checked by loader and CLI).

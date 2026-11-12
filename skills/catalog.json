@@ -1332,6 +1332,50 @@
       "keywords": []
     },
     {
+      "id": "aiverse-sports-rules",
+      "package": "sports-rules",
+      "path": "skills/aiverse-sports-rules/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic ball-sport rules: possession with pickup radius and possession lock, tackles contested with the passed RNG, passes with receiver leading and shots with power and seeded accuracy error, interception at the closest approach along the ball path, goals, out of bounds and generic restarts (kickoff, throw-in, corner, goal kick, free kick, penalty, face-off), walls/rebound fields, periods with running/stopped/added-stoppage clocks and golden-goal overtime, fouls from contact rules; role-based formations with stable slot assignment; positioning bot (formation slots, press/mark/chase, keeper line, pass/shot choice)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_sports_rules",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Sports.h",
+      "keywords": [
+        "sport",
+        "football",
+        "soccer",
+        "hockey",
+        "basketball",
+        "ball",
+        "goal",
+        "pass",
+        "shot",
+        "tackle",
+        "foul",
+        "penalty",
+        "formation",
+        "спорт",
+        "футбол",
+        "хоккей",
+        "мяч",
+        "гол",
+        "пас",
+        "удар",
+        "отбор",
+        "фол",
+        "пенальти",
+        "расстановк"
+      ]
+    },
+    {
       "id": "aiverse-squads",
       "package": "squads",
       "path": "skills/aiverse-squads/SKILL.md",
@@ -1603,6 +1647,53 @@
       "requiresOwner": null,
       "source": "engine/ui/templates/README.md",
       "keywords": []
+    },
+    {
+      "id": "aiverse-vehicle-controllers",
+      "package": "vehicle-controllers",
+      "path": "skills/aiverse-vehicle-controllers/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic kinematic vehicle controllers: wheeled arcade-sim (torque curve, auto/manual gears with shift time, per-wheel traction with slip/grip curves, weight transfer, handbrake, drift), tracked differential steering, hover altitude hold with drift damping, arcade flight with banked turns and stall; damage zones with per-zone performance penalties and critical disable; driver/passenger/gunner seats with validated enter/exit/switch/eject and owner-checked exit points; ordered checkpoints, laps, race positions, wrong-way detection and respawn at the last checkpoint; race bot (racing line, corner braking, overtaking lanes, rubber band)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_vehicle_controllers",
+      "dependencies": [
+        "aiverse-match-rules",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Vehicles.h",
+      "keywords": [
+        "vehicle",
+        "car",
+        "kart",
+        "truck",
+        "tank",
+        "hover",
+        "plane",
+        "flight",
+        "drive",
+        "gear",
+        "drift",
+        "traction",
+        "seat",
+        "race",
+        "lap",
+        "checkpoint",
+        "racing",
+        "машин",
+        "авто",
+        "танк",
+        "самолет",
+        "гонк",
+        "круг",
+        "чекпоинт",
+        "сиден",
+        "дрифт"
+      ]
     },
     {
       "id": "aiverse-verification",

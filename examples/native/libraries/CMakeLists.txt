@@ -1,4 +1,4 @@
-aiverse_native_module(ID library_demo VERSION 6 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp CardsTurnsConsumer.cpp)
+aiverse_native_module(ID library_demo VERSION 6 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp CardsTurnsConsumer.cpp VehiclesSportsConsumer.cpp)
 aiverse_native_use_libraries(aiverse_native_library_demo
     graphs behavior logistics configuration tutorial
     ui-binding screens themes app-lifecycle play-scenarios genre-kits change-planner
@@ -20,3 +20,5 @@ aiverse_native_use_libraries(aiverse_native_library_demo cinematic-gameplay)
 aiverse_native_use_libraries(aiverse_native_library_demo puzzle-solvers)
 # Cards + turn strategy: card-games (composes card-runtime), tactics-grid, cards-turns-bots (CardBot, TacticsBot).
 aiverse_native_use_libraries(aiverse_native_library_demo card-games tactics-grid cards-turns-bots)
+# Vehicles + sports (wheeled/tracked/hover/flight controllers, seats, damage, race positions, ball rules, bots).
+aiverse_native_use_libraries(aiverse_native_library_demo vehicle-controllers sports-rules)

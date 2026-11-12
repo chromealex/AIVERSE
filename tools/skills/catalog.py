@@ -47,6 +47,8 @@ ALIASES = {
  'aiverse-tactics-grid':'tactics tactical turn hex grid cover flank overwatch initiative action points wego line of fire тактик пошагов гекс сетк укрыт фланг дозор инициатив очки действ',
  'aiverse-cards-turns-bots':'card bot turn planner tactics ai opponent evaluator lookahead бот карт планировщ ход тактик противник',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
+ 'aiverse-vehicle-controllers':'vehicle car kart truck tank hover plane flight drive gear drift traction seat race lap checkpoint racing машин авто танк самолет гонк круг чекпоинт сиден дрифт',
+ 'aiverse-sports-rules':'sport football soccer hockey basketball ball goal pass shot tackle foul penalty formation спорт футбол хоккей мяч гол пас удар отбор фол пенальти расстановк',
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
 }
 
