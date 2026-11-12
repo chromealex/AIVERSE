@@ -21,6 +21,7 @@
 #include "RtsRaid.h"
 #include "RtsNative.h"
 #include "RtsTopDown.h"
+#include "RtsEncounters.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -183,6 +184,16 @@ enum GameEvent : uint16_t {
     kEvProgRecruit,     // player, a = new ally, value = deck slot, pos
     kEvProgOrb,         // player = collector (0: none), value = xp | ProgOrbEv << 40 (0 spawned, 1 collected, 2 expired, 3 merged), pos
     kEvProgSummon,      // player, a = ally (confirmed / died / expired), value = point id | SummonEventKind << 32, pos = circle centre
+    // boss encounters (rules "encounters", RtsEncounters.h, docs/encounters.md)
+    kEvBossEngaged,     // a = boss, b = its target, value = boss type, player = boss owner
+    kEvBossPhase,       // a = boss, b = target, value = phase index (0 = first)
+    kEvBossEnraged,     // a = boss, b = target, value = boss type
+    kEvBossAdds,        // a = boss, value = unit type | count << 16, pos = boss
+    kEvBossDefeated,    // a = boss, value = boss type, player = owner slot of the last damage source
+    kEvBossWindow,      // schedule: value = window index | state << 16 (0 opened, 1 boss spawned, 2 expired), player = participant, a = boss
+    kEvTelegraphStart,  // a = caster, b = aimed unit, value = attack index, pos = area origin, player = caster owner
+    kEvTelegraphStrike, // a = caster, b = unit struck, value = attack index | damage (whole units) << 16, pos = unit struck
+    kEvTelegraphEnd,    // a = caster, value = attack index | 1 << 16 when cancelled (caster died in the windup)
 };
 
 // ---------------------------------------------------------------- components
@@ -544,6 +555,7 @@ public:
     Raid* raid() const { return raid_.get(); }                // extraction raids (RtsRaid.h); inactive without rules "raid"
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     Progression* progression() const { return progression_.get(); }   // in-match progression (RtsProgression.h); inactive without rules "progression"
+    Encounters* encounters() const { return encounters_.get(); }   // boss encounters (RtsEncounters.h); null before setup
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
     const Json* generatedMap() const { return generated_.isObject() ? &generated_ : nullptr; }
@@ -861,6 +873,7 @@ private:
     friend class TopDown;                  // free fire launches weapon projectiles (initProjectileProgram)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::unique_ptr<Progression> progression_;   // rules "progression" (state: ProgressionStore resource)
+    std::unique_ptr<Encounters> encounters_;   // rules "encounters" (state: EncounterStore resource)
     std::vector<NativeDefinition> nativeDefinitions_;
     NativeModules native_;
     std::unique_ptr<ScriptEngine> script_; // Lua VM (RtsScript.h); its persistent state is the ScriptStore resource

@@ -46,6 +46,7 @@ void RtsAI::update(Simulation& sim) {
     if (m->rules().mech.turns && !mechTurnAI(sim, *m)) return;   // agent-mech TB: act only on its own turn
     if (std::find(gs->wavePlayers.begin(), gs->wavePlayers.end(), player_) != gs->wavePlayers.end()) return; // scripted side
     if (Progression* pg = m->progression(); pg && pg->active()) { Command c; if (pg->botCommand(sim, player_, c)) send(sim, c); }   // level-up offers (RtsProgression.cpp)
+    if (auto* enc = m->encounters(); enc && enc->active() && enc->monsterPlayer(player_)) return;   // monsters: driven by RtsEncounters.cpp
     if (Raid* raid = m->raid(); raid && raid->active() && raid->store(sim)->find(player_)) { raidBotThink(sim, *m, player_); return; }   // RtsRaidBot.cpp
     bool hasGarrisons = false, hasOther = false;
     sim.world().each<Unit, Owner>([&](Entity e, Unit& u, Owner& o) {

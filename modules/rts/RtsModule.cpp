@@ -38,6 +38,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     topDown_->setup(sim, *this, rulesJson);
     progression_ = std::make_unique<Progression>();   // in-match progression (rules "progression"); nothing without the block
     progression_->setup(sim, *this, mapIn);
+    encounters_ = std::make_unique<Encounters>();   // boss encounters (rules "encounters"); nothing without the block
+    encounters_->setup(sim, *this, rulesJson, mapIn);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -64,6 +66,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (encounters_->active()) sim.addSystem("encounters", [this](Simulation& s) { encounters_->tick(s); });   // RtsEncounters.cpp: bosses, mobs, telegraph strikes
     if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
     if (progression_->active()) sim.addSystem("progression", [this](Simulation& s) { progression_->tick(s); });   // RtsProgression.cpp: kills at 0 hp -> xp orbs
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
@@ -686,6 +689,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (mechOn(sim)) mechStatMod(sim, e, s, add, mul);   // agent-mech states (retreat speed, cargo arrows, veterancy)
     if (rules_.originals) add += playerModsStat(sim, owner, u.type, s, mul);   // forges, morale
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
+    if (s == Stat::Speed && encounters_ && encounters_->hasSpeed()) mul *= encounters_->speedMul(sim, e);   // boss phase / enrage speed
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
     Fixed v = (base + add) * mul;
     if (progression_ && progression_->active()) progression_->modStat(sim, e, s, v);   // perk pipeline (RtsProgression.cpp)
@@ -1531,6 +1535,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
     if (progression_ && progression_->active()) progression_->hash(sim, h);   // games with rules "progression" only
+    if (encounters_ && encounters_->active()) encounters_->hash(sim, h);   // games with rules "encounters" only
 }
 
 } // namespace aiverse::game

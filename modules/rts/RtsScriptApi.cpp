@@ -1256,6 +1256,7 @@ void openGameApi(Vm& vm) {
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
     openProgressionApi(vm);   // in-match progression (RtsProgressionApi.cpp)
+    openEncounterApi(vm);   // boss encounters (RtsEncountersApi.cpp)
 }
 
 } // namespace script
@@ -1394,6 +1395,13 @@ Json scriptApiReference() {
     pg.push(fn("progression_can_offer(player, perk_key | \"recruit:<type>\")", "global veto hook: return false to keep a card out of offers"));
     pg.push(fn("on(\"progression_xp\" | \"progression_level\" | \"progression_offer\" | \"progression_perk\" | \"progression_recruit\" | \"progression_orb\" | \"progression_summon\", fn(e))", "progression events: e = {player, unit, other, value, x, z} (docs/progression.md: value encodings); a perk's \"hook\" global runs as hook({player, unit, x, z, args = {perk, id, slot, level}})"));
     r.set("progression", pg);
+    Json en = Json::array();   // boss encounters (RtsEncountersApi.cpp, docs/encounters.md)
+    en.push(fn("encounters.active() / encounters.bosses() / encounters.boss(unit)", "rules \"encounters\": living bosses; {phase (0 = first), enraged, engaged, defeated, participant, target}"));
+    en.push(fn("encounters.mob(unit) / encounters.telegraphs()", "mob mode (idle|wander|hunt|flee|return); running attacks {attack, caster, x, z, yaw, phase (windup|active|recovery), progress 0..1000}"));
+    en.push(fn("encounters.waves_allowed(player)", "schedule gate: false while the player's personal boss is pending / alive (pauseWaves) or during the breather"));
+    en.push(fn("encounters.cast(unit, attack, x, z [, target]) (simulation scripts)", "start a telegraphed attack of the unit toward (x, z); false when it cannot"));
+    en.push(fn("on(\"boss_engaged\" | \"boss_phase\" | \"boss_enraged\" | \"boss_adds\" | \"boss_defeated\" | \"boss_window\" | \"telegraph_start\" | \"telegraph_strike\" | \"telegraph_end\", fn(e))", "encounter events: e = {player, unit, other, value, x, z} (docs/encounters.md: value encodings); applied statuses: \"status_start\""));
+    r.set("encounters", en);
     return r;
 }
 
