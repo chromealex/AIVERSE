@@ -510,3 +510,22 @@ See [geometry.md](geometry.md) for the schema, `geometry_*` agent tools, budgets
 Для статических glTF доступен офлайн-генератор на meshoptimizer (MIT),
 выбор LOD по экранному размеру, инстансинг и отсечение узлов по frustum.
 Сборка, формат, ограничения и результаты Sponza: [autolod.md](autolod.md).
+
+## Static batching of parts (`mergeStaticPrimitives`)
+
+`engine/render/ModelMerge.h`: after loading and before `uploadModel`, parts (node × primitive)
+that share a material are moved into model space (bind pose) and merged into one primitive, so a
+model draws once per material and pass. A car of 31 meshes / 47 parts in 14 used materials goes
+from 47 to 14 draws per pass (95 → 29 draw calls with the shadow pass and the ground in
+`aiverse_modelview`). Mirrored nodes keep their front faces.
+
+The model is left untouched when it is skinned, morphing or animated, has material variants or
+mesh LODs, already has built geometry data, is larger than `maxExtent` (default 20 units: big
+scenes keep per-part culling and occlusion) or merging would not reduce draws. Blended /
+transparent parts and nodes listed in `keepNodes` (anything addressed by name: attachments,
+muzzles, procedural animation) keep their own primitives. Only parts with the same material index
+are merged, so material overrides by name still apply.
+
+`aiverse_modelview` merges by default and shows `parts N -> M`; `--no-merge` draws the model as
+authored. The RTS view does not merge yet: its model cache is shared between unit types that may
+address nodes by name.
