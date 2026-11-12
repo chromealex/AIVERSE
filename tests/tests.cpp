@@ -12646,22 +12646,24 @@ TEST(native_editor_build_helpers) {
 
     // plan: build dir, configure + build arguments
     NativeBuildPlan p = planNativeBuild("/eng", "/games/My Game", "linux", "/usr/bin/cmake", "/usr/bin/ninja", false, 3);
-    CHECK(p.buildDir == "/games/My Game/Builds/.temp/editor-linux");
-    CHECK(nativeBuildDir("/games/x", "macos") == "/games/x/Builds/.temp/editor-macos");
+    // paths come out in the native form (fs::path::lexically_normal: '\' on Windows): compare as paths
+    CHECK(fs::path(p.buildDir) == fs::path("/games/My Game/Builds/.temp/editor-linux"));
+    CHECK(fs::path(nativeBuildDir("/games/x", "macos")) == fs::path("/games/x/Builds/.temp/editor-macos"));
     auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
     CHECK(has(p.configureArgs, "-DAIVERSE_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
     CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DAIVERSE_NATIVE_DIR="));
     CHECK(has(p.buildArgs, "aiverse_editor") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
-    CHECK(p.editorBinary == "/games/My Game/Builds/.temp/editor-linux/aiverse_editor" && p.launchTarget == p.editorBinary);
+    CHECK(fs::path(p.editorBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/aiverse_editor") && p.launchTarget == p.editorBinary);
     const std::string cmd = nativeBuildCommand(p);
-    CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '/games/My Game/Builds/.temp/editor-linux'", 0) == 0);
+    CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '" + p.buildDir + "'", 0) == 0);
     CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
     CHECK(!has(planNativeBuild("/eng", "/g", "linux", "cmake", "/usr/bin/ninja", true, 0).configureArgs, "-G"));   // keeps the cached generator
     NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
-    CHECK(mac.launchTarget == "/g/Builds/.temp/editor-macos/AiverseEditor.app" && mac.editorBinary == "/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor");
+    CHECK(fs::path(mac.launchTarget) == fs::path("/g/Builds/.temp/editor-macos/AiverseEditor.app") &&
+          fs::path(mac.editorBinary) == fs::path("/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
     CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
     CHECK(has(mac.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project") && !has(p.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project"));
-    CHECK(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary == fs::path("/g/Builds/.temp/editor-windows/Release/aiverse_editor.exe").string());
+    CHECK(fs::path(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary) == fs::path("/g/Builds/.temp/editor-windows/Release/aiverse_editor.exe"));
     CHECK(nativeRestartCommand("macos", "/g/B/AiverseEditor.app", "/g/G.rtsproj", "/eng/build") ==
           "open -n '/g/B/AiverseEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
     CHECK(nativeRestartCommand("linux", "/g/aiverse_editor", "/g", "").find("AIVERSE_NATIVE_EDITOR=1 '/g/aiverse_editor' '/g' --native-editor") != std::string::npos);
@@ -12677,7 +12679,12 @@ TEST(native_editor_build_helpers) {
     CHECK(!nativeBuildDirProblem(eng, eng + "/templates/skirmish/out").empty());
     CHECK(!nativeBuildDirProblem(eng, eng).empty());
     // and git agrees (.gitignore "Builds/" at any depth); skipped without git
-    if (std::system(("git -C '" + eng + "' rev-parse --is-inside-work-tree >/dev/null 2>&1").c_str()) == 0) {
+#if defined(_WIN32)
+    const std::string gitProbe = "git -C \"" + eng + "\" rev-parse --is-inside-work-tree >NUL 2>&1";
+#else
+    const std::string gitProbe = "git -C '" + eng + "' rev-parse --is-inside-work-tree >/dev/null 2>&1";
+#endif
+    if (std::system(gitProbe.c_str()) == 0) {
         CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/skirmish", "linux")).empty());
         CHECK(nativeBuildGitProblem(nativeBuildDir(eng + "/templates/new_game/deeper", "macos")).empty());
         CHECK(!nativeBuildGitProblem(eng + "/templates/skirmish/out").empty());
