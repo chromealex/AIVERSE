@@ -10,9 +10,11 @@
 //   "abilities": { "heal": "heal_glow" }                                      // by ability id
 //
 // A binding is an effect name (fx/<name>.json), null (none), or
-//   { "effect": "name", "height": 0.8, "scale": 1.2, "teamColor": true, "below": 0.5 }
+//   { "effect": "name", "height": 0.8, "scale": 1.2, "teamColor": true, "below": 0.5, "upright": true, "clear": true }
 // height: metres above the ground (air units also get the flying height); teamColor: tint with the
-// owner's colour; below: "damaged" plays while hp is under this fraction (default 0.5).
+// owner's colour; below: "damaged" plays while hp is under this fraction (default 0.5); upright: play along
+// +Y instead of the attack direction (explosions); clear: a trail disappears with its projectile (default:
+// it stops emitting and its particles fade out).
 // Lookup: type entry -> weapon/ability by id -> "events.<cue>.<structure|air|unit>" -> "events.<cue>".
 // Cues: attack, hit, miss, died, spawned, ready, buildPlaced, buildDone, gathered, captured, levelUp,
 // ability, upgraded, sold, regionClaimed, wave, trail (projectiles), damaged (looping on hurt objects).
@@ -43,6 +45,8 @@ public:
         int effect = -1;
         float height = 0, scale = 1, below = 0.5f;
         bool teamColor = false;
+        bool upright = false;   // plays along +Y whatever the event direction (Unity AlignExplosionToWorldUp)
+        bool clear = false;     // trail: its particles vanish with the projectile instead of fading out
         bool set = false;   // given in fx.json (an explicit null switches a fallback off)
         bool valid() const { return effect >= 0; }
     };
@@ -83,7 +87,7 @@ private:
         std::vector<Binding> abilities;
     };
     struct Collector;
-    struct Attached { fx::FxHandle h; uint32_t frame; };
+    struct Attached { fx::FxHandle h; uint32_t frame; bool clear = false; };
 
     Binding resolve(const Json& v, const std::string& where);
     const Binding& lookup(int type, FxCue c) const;

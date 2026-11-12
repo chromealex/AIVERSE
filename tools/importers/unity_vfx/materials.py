@@ -117,6 +117,10 @@ def blend_from_floats(f):
     return None, None
 
 
+MAIN_TEXTURE_KEYS = ('_MainTex', '_BaseMap', '_BaseColorMap', '_UnlitColorMap', '_MainTexture', '_Texture', '_Tex', 'MainTex_', 'MainTex',
+                     '_MainTex_', 'BaseMap', 'BaseColorMap', '_ColorMap', '_AlbedoMap', '_Albedo', '_BaseTexture', '_ParticleTexture')
+
+
 def read_material(ref, assets, log, slot, mesh=False):
     info = MaterialInfo()
     if not isinstance(ref, dict) or not get(ref, 'fileID'):
@@ -179,9 +183,20 @@ def read_material(ref, assets, log, slot, mesh=False):
         log.approx(slot, why)
     info.blend = blend
     # main texture
-    for key in ('_MainTex', '_BaseMap', '_BaseColorMap', '_UnlitColorMap', '_MainTexture', '_Texture', '_Tex'):
+    keys = [k for k in MAIN_TEXTURE_KEYS if isinstance(get(tex, k, 'm_Texture'), dict) and get(tex, k, 'm_Texture', 'fileID')]
+    if not keys:   # Shader Graph / custom shaders name their main texture freely ("MainTex_", "_Texture2D_A1B2")
+        assigned = [k for k in tex if isinstance(get(tex, k, 'm_Texture'), dict) and get(tex, k, 'm_Texture', 'fileID')]
+        hinted = [k for k in assigned if any(h in k.lower() for h in ('main', 'base', 'albedo', 'color', 'diffuse', 'particle'))
+                  and not any(h in k.lower() for h in ('normal', 'bump', 'noise', 'mask', 'dissolve', 'distort', 'height', 'emiss'))]
+        pick = hinted[:1] or (assigned if len(assigned) == 1 else [])
+        if pick:
+            keys = pick
+            log.approx(slot, 'main texture taken from the shader property %s' % pick[0])
+    used_key = None
+    for key in keys:
         t = get(tex, key, 'm_Texture')
         if isinstance(t, dict) and get(t, 'fileID'):
+            used_key = key
             info.texture_guid = str(t.get('guid', '')).lower()
             sc, of = get(tex, key, 'm_Scale'), get(tex, key, 'm_Offset')
             if uy.vec3(sc, (1, 1, 1))[:2] != (1.0, 1.0) or uy.vec3(of)[:2] != (0.0, 0.0):
@@ -197,7 +212,7 @@ def read_material(ref, assets, log, slot, mesh=False):
     else:
         info.builtin_texture = True
         log.approx(slot, 'material %s has no main texture: builtin:soft' % info.name)
-    other = [k for k in tex if k not in ('_MainTex', '_BaseMap', '_BaseColorMap', '_UnlitColorMap') and isinstance(get(tex, k, 'm_Texture'), dict) and get(tex, k, 'm_Texture', 'fileID')]
+    other = [k for k in tex if k not in ('_MainTex', '_BaseMap', '_BaseColorMap', '_UnlitColorMap') and k != used_key and isinstance(get(tex, k, 'm_Texture'), dict) and get(tex, k, 'm_Texture', 'fileID')]
     if other:
         log.drop(slot, 'extra material textures (%s): distortion/normal/mask maps have no equivalent' % ', '.join(sorted(other)))
     # tint: legacy particle shaders double _TintColor
