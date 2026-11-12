@@ -1,7 +1,7 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
-Read this file completely before changing anything. It is short on purpose. `README.md` has the
-user-facing overview (in Russian); this file is the engineering contract.
+Read this file completely before changing anything. It is short on purpose. `README.md` is the
+short user-facing introduction (in Russian), `docs/overview.md` the detailed overview; this file is the engineering contract.
 
 ## 1. What this is
 
@@ -203,7 +203,8 @@ Partial earlier attempts for models / UI / packs exist as branches `agent-models
 Shared touch points and how to use them:
 - `CMakeLists.txt`: add your sources in your own `add_library` block; don't reorder others.
 - `tests/tests.cpp`: append tests at the end (before `main`), don't edit others' tests.
-- `README.md`: add or edit only your own section.
+- `docs/overview.md` (detailed overview): add or edit only your own section. `README.md` is a short
+  landing page — don't add subsystem sections there.
 - Sim → presentation: use existing `SimEvent`s; if you need a new event, ask the sim owner (or add
   it at the end of `GameEvent` in `RtsModule.h` and mention it in the commit).
 

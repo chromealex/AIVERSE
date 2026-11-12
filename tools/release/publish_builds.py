@@ -5,7 +5,7 @@
 
 The `builds` branch is an orphan branch (no shared history with main) with <platform>/<zip> files and a
 README listing them, plus index.json — the same list for programs that download a build (format:
-README.md § Готовые сборки движка). It always is ONE commit that is force-pushed: the newest --keep versions per
+docs/overview.md § Готовые сборки движка). It always is ONE commit that is force-pushed: the newest --keep versions per
 platform stay in it, older ones disappear from the branch, so the repository does not grow with every
 build. Work happens in build/.temp/builds (git-ignored). Authorship as the repo's git config.
 """
