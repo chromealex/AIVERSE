@@ -246,6 +246,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     }
     if (fields_ && fields_->active()) fields_->io(sim, a);   // grid fields (games with rules / map fields only)
     if (topDown_ && topDown_->active()) topDown_->io(sim, a);   // top-down heroes (games with rules "topDown" only)
+    if (driving_ && driving_->active()) driving_->io(sim, a);   // vehicles (games with rules "driving" only)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

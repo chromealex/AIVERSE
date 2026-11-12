@@ -34,6 +34,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     fields_->setup(sim, *this, mapIn);
     topDown_ = std::make_unique<TopDown>();   // top-down heroes (rules "topDown"); nothing without the block
     topDown_->setup(sim, *this, rulesJson);
+    driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
+    driving_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -972,6 +974,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (!pi || !pi->alive) return;
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
+    if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
     if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
@@ -1473,6 +1476,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     });
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
+    if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
 }
 
 } // namespace aiverse::game
