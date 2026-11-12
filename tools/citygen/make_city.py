@@ -214,6 +214,8 @@ def load_props(assets, out):
 
 
 def load_buildings(assets, out):
+    if os.path.isdir(os.path.join(assets, 'buildings-hd', 'layouts')):      # the current version of all buildings
+        return load_building_pack(os.path.join(assets, 'buildings-hd'), out)
     res = []
     for pack in ('detailed-buildings', 'buildings-pack03'):
         if os.path.isdir(os.path.join(assets, pack, 'layouts')):
@@ -233,15 +235,11 @@ def load_building_pack(src, out):
         glb = os.path.join(src, 'buildings', d['id'] + '.glb')
         if not os.path.exists(glb):
             continue
-        dst = os.path.join(out, 'models', 'buildings', d['id'] + '.glb')
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(glb):
-            shutil.copyfile(glb, dst)
         ox, oz = d.get('originOffset', [0, 0])
         cx = ox + (min(xs) + max(xs)) * M / 2      # footprint centre in model space, metres
         cz = oz + (min(zs) + max(zs)) * M / 2
         res.append({'id': 'b' + d['id'][:2], 'file': 'models/buildings/' + d['id'] + '.glb', 'nx': nx, 'nz': nz,
-                    'centre': (cx, cz), 'storeys': d['storeys'], 'name': d['id'][3:].replace('_', ' ').capitalize()})
+                    'centre': (cx, cz), 'storeys': d['storeys'], 'src': glb, 'name': d['id'][3:].replace('_', ' ').capitalize()})
     return res
 
 
@@ -286,8 +284,9 @@ def build(assets, out, seed):
                                   'size': [round(fw / ppm / M, 4), round(fh / ppm / M, 4)], 'team': 'none', 'filter': 'linear', 'shadow': 'none'}}
         driving[name] = {'length': round(length, 3), 'width': round(width, 3), 'wheeled': {'massMilli': MASS.get(name, 1300) * 1000}}
     buildings = load_buildings(assets, out)
+    building_types = {}
     for b in buildings:
-        types[b['id']] = {'name': b['name'], 'structure': {'footprint': [b['nx'], b['nz']]}, 'health': {'max': 100000}, 'sight': 1,
+        building_types[b['id']] = {'name': b['name'], 'structure': {'footprint': [b['nx'], b['nz']]}, 'health': {'max': 100000}, 'sight': 1,
                           'invulnerable': True,
                           'view': {'model': b['file'], 'fit': False, 'center': False, 'scale': 1 / M,
                                    'offset': [round(-b['centre'][0] / M, 4), 0, round(-b['centre'][1] / M, 4)]}}
@@ -312,7 +311,6 @@ def build(assets, out, seed):
                     'vehicles': driving},
         'types': types,
     }
-    wjson(os.path.join(out, 'rules.json'), rules)
 
     # street grid: roads ROAD cells wide around BLOCKS_X x BLOCKS_Z blocks; a pavement ring inside every block
     W, H = ROAD + BLOCKS_X * (BLOCK_W + ROAD), ROAD + BLOCKS_Z * (BLOCK_H + ROAD)
@@ -411,6 +409,43 @@ def build(assets, out, seed):
             else:
                 t = bases[{'p': 'walk', 'l': 'lot', 'g': 'grass'}[tiles[z][x]]] + (z % 2) * 2 + (x % 2)
             fixed.append([x, z, t])
+    # only the buildings that stand on the map become types and get their (large) model copied
+    by_id = {b['id']: b for b in buildings}
+    for bid in sorted({e['type'] for e in entities if e['type'] in by_id}):
+        types[bid] = building_types[bid]
+        dst = os.path.join(out, by_id[bid]['file'])
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(by_id[bid]['src']):
+            shutil.copyfile(by_id[bid]['src'], dst)
+    # people: the characters pack's types and gait profiles when it is there (characters-3d/source/crowd-types.json)
+    crowd = os.path.join(assets, 'characters-3d', 'source', 'crowd-types.json')
+    if os.path.exists(crowd):
+        patch = json.load(open(crowd))
+        for k in ('health', 'move', 'weapons', 'sight'):          # the generator's own numbers for the hero stay
+            if k in types['player'] and k in patch.get('player', {}):
+                patch['player'][k] = types['player'][k]
+        types.update(patch)
+        profiles = [k for k in ('ped_commuter', 'ped_office', 'ped_runner', 'ped_worker', 'ped_citizen') if k in patch]
+        i = 0
+        for e in entities:
+            if e['type'] == 'ped' and profiles:
+                e['type'] = profiles[(i * 3 + i // 5) % len(profiles)]
+                i += 1
+    if os.path.exists(os.path.join(out, 'scripts', 'crowd.lua')):
+        rules['scripts'] = ['scripts/crowd.lua']
+    if os.path.exists(os.path.join(out, 'scripts', 'view', 'crowd.lua')):
+        rules['viewScripts'] = ['scripts/view/crowd.lua']
+    # hand edits and other tools: rules.overrides.json in the project is merged over the generated rules
+    over = os.path.join(out, 'rules.overrides.json')
+    if os.path.exists(over):
+        def merge(a, b):
+            for k, v in b.items():
+                if isinstance(v, dict) and isinstance(a.get(k), dict):
+                    merge(a[k], v)
+                else:
+                    a[k] = v
+        merge(rules, json.load(open(over)))
+    wjson(os.path.join(out, 'rules.json'), rules)
     start = [ROAD + 3.5, ROAD + 0.5]
     entities.insert(0, {'type': 'player', 'owner': 1, 'pos': start})
     entities.insert(1, {'type': 'sedan', 'owner': 0, 'pos': [start[0], ROAD - 1.5], 'facing': 90})
