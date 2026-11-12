@@ -22,7 +22,7 @@ Tests: `aiverse_tests driving_`.
   and take the speed into the wall (`crash.restitution`); impact speed above `crash.minSpeed` (m/s) damages the car
   by `crash.damage` per m/s. Car against car shares the push and exchanges the closing speed, both are damaged.
   Other ground units are run over above `runOver.minSpeed` (`runOver.damage` per m/s, credited to the driver);
-  slower, they are pushed aside. Sub-steps of a quarter cell, so nothing tunnels.
+  slower, they are pushed aside. Units that never move (`move.speed` 0: trees, posts) are solid like walls. Sub-steps of a quarter cell, so nothing tunnels.
 - **Wrecks.** A destroyed vehicle throws its driver out on the spot with `wreckDamage`.
 - **State / determinism.** `DrivingStore` world resource: hashed, saved after the top-down heroes, copied by
   rollback snapshots. Fixed maths only. Games without the block keep their checksums and save layout.

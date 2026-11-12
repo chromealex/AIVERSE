@@ -23,7 +23,8 @@ from PIL import Image, ImageDraw
 M = 4.0                      # metres per cell
 ROAD, BLOCK_W, BLOCK_H = 4, 12, 10
 BLOCKS_X, BLOCKS_Z = 4, 3
-TILE = 128
+TILE = 128                   # placeholder tiles
+RT = 256                     # tiles cut from the road / pavement textures (1024 px = 16 m)
 PAINTS = {'sedan': (0.10, 0.28, 0.64), 'taxi': (0.95, 0.72, 0.08), 'police': (0.92, 0.92, 0.95), 'hatchback': (0.72, 0.12, 0.10),
           'wagon': (0.20, 0.42, 0.30), 'muscle': (0.85, 0.35, 0.05), 'limousine': (0.06, 0.06, 0.07), 'pickup': (0.45, 0.10, 0.10),
           'van': (0.80, 0.80, 0.78), 'classic': (0.35, 0.08, 0.12), 'armored': (0.30, 0.34, 0.30)}
@@ -136,8 +137,79 @@ def make_tileset(out):
 
 # ------------------------------------------------------------------ the city
 
+def make_road_tileset(assets, out):
+    """Ground from the user's road / pavement textures. -> tile bases, or None when the pack is missing."""
+    tex = os.path.join(assets, 'roads-sidewalks', 'textures')
+    need = ['road_four_lane_ns', 'road_four_lane_crossroads', 'walk_concrete', 'road_fine_asphalt']
+    if not all(os.path.exists(os.path.join(tex, n, 'basecolor.png')) for n in need):
+        return None
+    def load(n, cells):
+        return Image.open(os.path.join(tex, n, 'basecolor.png')).convert('RGB').resize((RT * cells, RT * cells), Image.LANCZOS)
+    ns = load('road_four_lane_ns', 4)
+    parts = [('ns', ns, 4), ('ew', ns.rotate(90), 4), ('x', load('road_four_lane_crossroads', 4), 4),
+             ('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2)]
+    rnd = random.Random(5)
+    grass = Image.new('RGB', (RT * 2, RT * 2), (58, 92, 46))
+    d = ImageDraw.Draw(grass)
+    for _ in range(26000):
+        k = rnd.randint(-18, 18)
+        d.point((rnd.randrange(RT * 2), rnd.randrange(RT * 2)), (58 + k // 2, 92 + k, 46 + k // 2))
+    parts.append(('grass', grass, 2))
+    cols = 8
+    count = sum(c * c for _, _, c in parts)
+    sheet = Image.new('RGB', (cols * RT, ((count + cols - 1) // cols) * RT))
+    bases, i = {}, 0
+    for name, im, c in parts:
+        bases[name] = i
+        for ty in range(c):
+            for tx in range(c):
+                sheet.paste(im.crop((tx * RT, ty * RT, (tx + 1) * RT, (ty + 1) * RT)), ((i % cols) * RT, (i // cols) * RT))
+                i += 1
+    os.makedirs(os.path.join(out, 'tilesets'), exist_ok=True)
+    sheet.save(os.path.join(out, 'tilesets', 'city.png'))
+    def terr(tid, name, ch, col, base):
+        return {'id': tid, 'name': name, 'char': ch, 'cell': '.', 'color': col, 'tiles': [base]}
+    wjson(os.path.join(out, 'tilesets', 'city.json'), {'name': 'City', 'atlas': 'tilesets/city.png', 'tileSize': [RT, RT], 'columns': cols,
+          'filter': 'linear', 'terrains': [terr('asphalt', 'Asphalt', 'a', [0.23, 0.23, 0.24], bases['ns']),
+                                           terr('line_h', 'Road (east-west)', 'h', [0.23, 0.23, 0.24], bases['ew']),
+                                           terr('line_v', 'Road (north-south)', 'v', [0.23, 0.23, 0.24], bases['ns']),
+                                           terr('pavement', 'Pavement', 'p', [0.5, 0.48, 0.45], bases['walk']),
+                                           terr('lot', 'Lot', 'l', [0.36, 0.35, 0.34], bases['lot']),
+                                           terr('grass', 'Grass', 'g', [0.24, 0.38, 0.19], bases['grass'])]})
+    return bases
+
+
+def load_props(assets, out):
+    """Street furniture: solid decor units. -> {id: type}, names by id."""
+    src = os.path.join(assets, 'city-props')
+    types = {}
+    if not os.path.exists(os.path.join(src, 'catalog.json')):
+        return types
+    cat = json.load(open(os.path.join(src, 'catalog.json')))
+    for it in (cat if isinstance(cat, list) else cat.get('props', [])):
+        glb = os.path.join(src, 'models', it['id'] + '.glb')
+        if not os.path.exists(glb):
+            continue
+        dst = os.path.join(out, 'models', 'props', it['id'] + '.glb')
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(glb):
+            shutil.copyfile(glb, dst)
+        (x0, _, z0), (x1, _, z1) = it['bounds']
+        types['p' + it['id'][:2]] = {'name': it['id'][3:].replace('_', ' ').capitalize(), 'health': {'max': 100000}, 'invulnerable': True,
+                                     'move': {'speed': 0, 'radius': round(max(0.03, min(x1 - x0, z1 - z0) / 2 / M), 3)}, 'sight': 0,
+                                     'view': {'model': 'models/props/' + it['id'] + '.glb', 'fit': False, 'center': False, 'scale': 1 / M}}
+    return types
+
+
 def load_buildings(assets, out):
-    src = os.path.join(assets, 'detailed-buildings')
+    res = []
+    for pack in ('detailed-buildings', 'buildings-pack03'):
+        if os.path.isdir(os.path.join(assets, pack, 'layouts')):
+            res += load_building_pack(os.path.join(assets, pack), out)
+    return res
+
+
+def load_building_pack(src, out):
     res = []
     for f in sorted(os.listdir(os.path.join(src, 'layouts'))):
         if not f.endswith('.json'):
@@ -161,10 +233,34 @@ def load_buildings(assets, out):
     return res
 
 
+def load_trees(assets, out):
+    """Trees and bushes (light LOD files) as solid, non-blocking decor units. -> (tree ids, bush ids, types)."""
+    src = os.path.join(assets, 'trees-3d', 'lod')
+    trees, bushes, types = [], [], {}
+    if not os.path.isdir(src):
+        return trees, bushes, types
+    for f in sorted(os.listdir(src)):
+        n = int(f[:2]) if f[:2].isdigit() else 0
+        if not f.endswith('.glb') or not 1 <= n <= 12:      # 01-06 trees, 07-12 bushes; hedges and grass later
+            continue
+        dst = os.path.join(out, 'models', 'trees', 'lod', f)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(os.path.join(src, f)):
+            shutil.copyfile(os.path.join(src, f), dst)
+        tid = 't%02d' % n
+        (trees if n <= 6 else bushes).append(tid)
+        types[tid] = {'name': f[3:-4].replace('_lod1', '').replace('_', ' ').capitalize(), 'health': {'max': 100000}, 'invulnerable': True,
+                      'move': {'speed': 0, 'radius': 0.1 if n <= 6 else 0.15}, 'sight': 0,
+                      'view': {'model': 'models/trees/lod/' + f, 'fit': False, 'center': False, 'scale': 1 / M}}
+    return trees, bushes, types
+
+
 def build(assets, out, seed):
     rnd = random.Random(seed)
     os.makedirs(out, exist_ok=True)
-    make_tileset(out)
+    bases = make_road_tileset(assets, out)
+    if bases is None:
+        make_tileset(out)
     kit = os.path.join(assets, 'fleet11-4096')
     atlas = json.load(open(os.path.join(kit, 'atlas.json')))
     types, driving = {}, {}
@@ -183,6 +279,10 @@ def build(assets, out, seed):
                           'invulnerable': True,
                           'view': {'model': b['file'], 'fit': False, 'center': False, 'scale': 1 / M,
                                    'offset': [round(-b['centre'][0] / M, 4), 0, round(-b['centre'][1] / M, 4)]}}
+    trees, bushes, tree_types = load_trees(assets, out)
+    types.update(tree_types)
+    props = load_props(assets, out)
+    types.update(props)
     types['player'] = {'name': 'Player', 'health': {'max': 100, 'regen': 1}, 'move': {'speed': 1.6, 'radius': 0.09}, 'sight': 14,
                        'weapons': [{'id': 'pistol', 'range': 5, 'damage': 12, 'cooldown': 0.35, 'projectileSpeed': 30}],
                        'view': {'shape': 'soldier', 'scale': 0.22}}
@@ -223,10 +323,20 @@ def build(assets, out, seed):
                 for x in range(x0, x0 + BLOCK_W):
                     edge = x in (x0, x0 + BLOCK_W - 1) or z in (z0, z0 + BLOCK_H - 1)
                     tiles[z][x] = 'p' if edge else 'l'
-            if rnd.random() < 0.15:                      # a park instead of buildings
+            if trees:                                    # street trees by the kerb, north and south sides
+                for k in range(3):
+                    for zz in (z0 + 0.3, z0 + BLOCK_H - 0.3):
+                        entities.append({'type': rnd.choice(trees), 'owner': 0, 'pos': [x0 + 2 + k * 4, zz]})
+            if rnd.random() < 0.15 or (bx, bz) == (1, 0):  # a park instead of buildings
                 for z in range(z0 + 1, z0 + BLOCK_H - 1):
                     for x in range(x0 + 1, x0 + BLOCK_W - 1):
                         tiles[z][x] = 'g'
+                for _ in range(10 if trees else 0):
+                    entities.append({'type': rnd.choice(trees), 'owner': 0, 'pos': [round(x0 + 1.5 + rnd.random() * (BLOCK_W - 3), 2),
+                                                                                    round(z0 + 1.5 + rnd.random() * (BLOCK_H - 3), 2)]})
+                for _ in range(8 if bushes else 0):
+                    entities.append({'type': rnd.choice(bushes), 'owner': 0, 'pos': [round(x0 + 1.3 + rnd.random() * (BLOCK_W - 2.6), 2),
+                                                                                     round(z0 + 1.3 + rnd.random() * (BLOCK_H - 2.6), 2)]})
                 continue
             lot_w, lot_h = BLOCK_W - 2, BLOCK_H - 2      # buildings left to right on the lot, one cell apart
             x = x0 + 1
@@ -238,28 +348,64 @@ def build(assets, out, seed):
                 zc = z0 + 1 + (lot_h - b['nz']) // 2
                 entities.append({'type': b['id'], 'owner': 0, 'pos': [x + b['nx'] / 2, zc + b['nz'] / 2]})
                 x += b['nx'] + 1
-    # parked cars along the east-west streets (kerb lane, facing east), people on the pavements
+    # parked cars in the kerb lanes: east-west streets (facing east) and north-south streets (facing north)
     for bz in range(BLOCKS_Z + 1):
         z = bz * (BLOCK_H + ROAD) + ROAD - 0.5
         for bx in range(BLOCKS_X):
             x0 = ROAD + bx * (BLOCK_W + ROAD)
             for k in range(2):
                 if rnd.random() < 0.75:
-                    entities.append({'type': rnd.choice(cars), 'owner': 0, 'pos': [round(x0 + 2.5 + k * 5 + rnd.random(), 2), z]})
+                    entities.append({'type': rnd.choice(cars), 'owner': 0, 'pos': [round(x0 + 2.5 + k * 5 + rnd.random(), 2), z], 'facing': 90})
+    for bx in range(BLOCKS_X + 1):
+        x = bx * (BLOCK_W + ROAD) + ROAD - 0.5
+        for bz in range(BLOCKS_Z):
+            z0 = ROAD + bz * (BLOCK_H + ROAD)
+            if rnd.random() < 0.7:
+                entities.append({'type': rnd.choice(cars), 'owner': 0, 'pos': [x, round(z0 + 3 + rnd.random() * 4, 2)], 'facing': 0})
+    # street furniture on the pavements: lamps by the kerb (arm over the road), a few things per block
+    def prop(pid, x, z, facing=90):
+        if pid in props:
+            entities.append({'type': pid, 'owner': 0, 'pos': [round(x, 2), round(z, 2)], 'facing': facing})
+    small = [p for p in ('p01', 'p02', 'p09', 'p10', 'p11', 'p16', 'p17', 'p27', 'p03', 'p04', 'p18') if p in props]
+    for bz in range(BLOCKS_Z):
+        for bx in range(BLOCKS_X):
+            x0, z0 = ROAD + bx * (BLOCK_W + ROAD), ROAD + bz * (BLOCK_H + ROAD)
+            for k in range(3):
+                prop('p05', x0 + 0.5 + k * 4 + 3.4, z0 + 0.12, 90)
+                prop('p05', x0 + 0.5 + k * 4 + 1.4, z0 + BLOCK_H - 0.12, 270)
+            for _ in range(5 if small else 0):
+                side = rnd.random() < 0.5
+                prop(rnd.choice(small), x0 + 0.6 + rnd.random() * (BLOCK_W - 1.2), z0 + 0.72 if side else z0 + BLOCK_H - 0.72, 0 if side else 180)
+            if 'p15' in props and rnd.random() < 0.4:
+                prop('p15', x0 + BLOCK_W / 2, z0 + 0.6, 0)
     for bz in range(BLOCKS_Z):
         for bx in range(BLOCKS_X):
             x0, z0 = ROAD + bx * (BLOCK_W + ROAD), ROAD + bz * (BLOCK_H + ROAD)
             for _ in range(3):
                 entities.append({'type': 'ped', 'owner': 2, 'pos': [round(x0 + 0.5 + rnd.random() * (BLOCK_W - 1), 2), z0 + 0.5]})
+    fixed = []                                         # exact tiles of the road / pavement textures
+    PX, PZ = BLOCK_W + ROAD, BLOCK_H + ROAD
+    for z in range(H if bases else 0):
+        for x in range(W):
+            on_x, on_z = (x % PX) < ROAD, (z % PZ) < ROAD
+            if on_x and on_z:
+                t = bases['x'] + (z % PZ) * 4 + (x % PX)
+            elif on_x:
+                t = bases['ns'] + (z % 4) * 4 + (x % PX)
+            elif on_z:
+                t = bases['ew'] + (z % PZ) * 4 + (x % 4)
+            else:
+                t = bases[{'p': 'walk', 'l': 'lot', 'g': 'grass'}[tiles[z][x]]] + (z % 2) * 2 + (x % 2)
+            fixed.append([x, z, t])
     start = [ROAD + 3.5, ROAD + 0.5]
     entities.insert(0, {'type': 'player', 'owner': 1, 'pos': start})
-    entities.insert(1, {'type': 'sedan', 'owner': 0, 'pos': [start[0], ROAD - 1.5]})
+    entities.insert(1, {'type': 'sedan', 'owner': 0, 'pos': [start[0], ROAD - 1.5], 'facing': 90})
     wjson(os.path.join(out, 'maps', 'city.json'), {
         'name': 'Downtown', 'size': [W, H],
         'players': [{'name': 'Player', 'team': 1}, {'name': 'City', 'team': 2}],
         'victory': {'mode': 'survive', 'seconds': 360000},
         'terrain': {'rows': ['.' * W for _ in range(H)]},
-        'tiles': {'tileset': 'tilesets/city.json', 'rows': [''.join(r) for r in tiles], 'seed': seed},
+        'tiles': {'tileset': 'tilesets/city.json', 'rows': [''.join(r) for r in tiles], 'fixed': fixed, 'seed': seed},
         'entities': entities})
     wjson(os.path.join(out, 'game.json'), {
         'name': 'Kingston Streets', 'id': 'com.aiverse.kingstonstreets', 'version': '0.1.0', 'build': 1, 'module': 'rts',
@@ -273,7 +419,7 @@ def build(assets, out, seed):
                     'camera': {'pitch': 90, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
                                'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}})
     return {'size': [W, H], 'buildings': sum(1 for e in entities if e['type'][0] == 'b' and e['type'][1:].isdigit()),
-            'cars': sum(1 for e in entities if e['type'] in cars), 'vehicleTypes': len(cars), 'buildingTypes': len(buildings)}
+            'cars': sum(1 for e in entities if e['type'] in cars), 'trees': sum(1 for e in entities if e['type'] in tree_types), 'props': sum(1 for e in entities if e['type'] in props), 'vehicleTypes': len(cars), 'buildingTypes': len(buildings)}
 
 
 def main():

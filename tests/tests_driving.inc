@@ -132,6 +132,21 @@ TEST(driving_runs_people_over_and_shoves_parked_cars) {
     CHECK(tdPos(*sim, car).x < tdPos(*sim, other).x);                  // no tunnelling through it
 }
 
+TEST(driving_immobile_units_are_solid) {
+    // a dummy (speed 0) on the road: the car stops against it instead of pushing it or running it over
+    auto sim = makeSimJson(kDrivingRules, topDownMap(R"({"type":"guy","owner":1,"pos":[4.5,7.4]},{"type":"sedan","owner":0,"pos":[4.5,8.5]},
+        {"type":"dummy","owner":2,"pos":[10.5,8.5]})", false));
+    Entity car = firstOf(*sim, "sedan"), post = firstOf(*sim, "dummy");
+    const Vec3 at = tdPos(*sim, post);
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    steer(*sim, 1, kNorth);
+    run(*sim, 6.0);
+    CHECK(tdPos(*sim, post) == at && sim->world().get<game::Unit>(post).hp == Fixed::fromInt(100000));
+    CHECK(tdPos(*sim, car).x < at.x - Fixed::fromRatio(9, 10) && tdPos(*sim, car).x > Fixed::fromInt(8));
+    CHECK(sim->world().get<game::Unit>(car).hp < Fixed::fromInt(400));
+}
+
 TEST(driving_wreck_throws_the_driver_out) {
     auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
     auto& w = sim->world();
