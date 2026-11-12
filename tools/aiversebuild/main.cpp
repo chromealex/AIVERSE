@@ -743,7 +743,9 @@ void buildIOS(const Game& g, Options& o) {
         writeText(xc / "Podfile", pods);
         if (!findTool("pod").empty()) {
             step("iOS: CocoaPods (SDK плагинов)");
-            mustRun("cd " + quote(xc) + " && pod install --repo-update");
+            // CocoaPods (Ruby) aborts with Encoding::CompatibilityError when no UTF-8 locale is set, which is the
+            // case when the build is started from the editor or Finder rather than a terminal.
+            mustRun("cd " + quote(xc) + " && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install --repo-update");
             xcodeTarget = "-workspace " + quote(xc / "AIVERSE.xcworkspace");
             info("Открывайте AIVERSE.xcworkspace (не .xcodeproj): в нём SDK плагинов.");
         } else {
