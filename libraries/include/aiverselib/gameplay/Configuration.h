@@ -373,6 +373,26 @@ struct NarrativeSettings {
     std::int64_t meterInitial=0;
     std::int64_t meterMaximum=100;
 };
+struct InteractionSettings {
+    std::int64_t gravityMilli=9810;
+    std::int64_t skinMilli=16;
+    std::int64_t carryMaxMassMilli=30000;
+    std::int64_t carryReachMilli=2000;
+    std::int64_t carryHoldDistanceMilli=1200;
+    std::int64_t carryHoldHeightMilli=1200;
+    std::int64_t carryFollowSpeedMilli=12000;
+    std::int64_t carryBreakDistanceMilli=1000;
+    std::int64_t carrySpeedPenaltyMilli=15;
+    std::int64_t carryMinSpeedMilli=300;
+    std::int64_t throwMinImpulseMilli=20000;
+    std::int64_t throwMaxImpulseMilli=120000;
+    std::int64_t throwChargeTicks=45;
+    std::int64_t flightMaxTicks=600;
+    std::int64_t pushMaxSpeedMilli=1500;
+    std::int64_t pushGridMoveTicks=20;
+    std::int64_t ropeIterations=8;
+    std::int64_t ropeDampingMilli=10;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -403,6 +423,7 @@ struct GameplaySettings {
     ObjectiveSettings objectives;
     SensesSettings senses;
     NarrativeSettings narrative;
+    InteractionSettings interaction;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -419,7 +440,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -935,6 +956,31 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         }
         if(settings.narrative.meterMinimum>settings.narrative.meterInitial)result.errors.push_back("narrative.meterMinimum: must not exceed meterInitial");
         if(settings.narrative.meterInitial>settings.narrative.meterMaximum)result.errors.push_back("narrative.meterInitial: must not exceed meterMaximum");
+    }
+    if(root.has("interaction")) { const auto& section=root["interaction"];
+        if(!section.isObject()) result.errors.push_back("interaction: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="gravityMilli" && entry.first!="skinMilli" && entry.first!="carryMaxMassMilli" && entry.first!="carryReachMilli" && entry.first!="carryHoldDistanceMilli" && entry.first!="carryHoldHeightMilli" && entry.first!="carryFollowSpeedMilli" && entry.first!="carryBreakDistanceMilli" && entry.first!="carrySpeedPenaltyMilli" && entry.first!="carryMinSpeedMilli" && entry.first!="throwMinImpulseMilli" && entry.first!="throwMaxImpulseMilli" && entry.first!="throwChargeTicks" && entry.first!="flightMaxTicks" && entry.first!="pushMaxSpeedMilli" && entry.first!="pushGridMoveTicks" && entry.first!="ropeIterations" && entry.first!="ropeDampingMilli") result.errors.push_back("interaction."+entry.first+": unknown field");
+            if(section.has("gravityMilli")) number(section["gravityMilli"],settings.interaction.gravityMilli,0,1000000,"interaction.gravityMilli");
+            if(section.has("skinMilli")) number(section["skinMilli"],settings.interaction.skinMilli,1,250,"interaction.skinMilli");
+            if(section.has("carryMaxMassMilli")) number(section["carryMaxMassMilli"],settings.interaction.carryMaxMassMilli,1,100000000,"interaction.carryMaxMassMilli");
+            if(section.has("carryReachMilli")) number(section["carryReachMilli"],settings.interaction.carryReachMilli,0,100000,"interaction.carryReachMilli");
+            if(section.has("carryHoldDistanceMilli")) number(section["carryHoldDistanceMilli"],settings.interaction.carryHoldDistanceMilli,0,100000,"interaction.carryHoldDistanceMilli");
+            if(section.has("carryHoldHeightMilli")) number(section["carryHoldHeightMilli"],settings.interaction.carryHoldHeightMilli,0,100000,"interaction.carryHoldHeightMilli");
+            if(section.has("carryFollowSpeedMilli")) number(section["carryFollowSpeedMilli"],settings.interaction.carryFollowSpeedMilli,1,1000000,"interaction.carryFollowSpeedMilli");
+            if(section.has("carryBreakDistanceMilli")) number(section["carryBreakDistanceMilli"],settings.interaction.carryBreakDistanceMilli,0,100000,"interaction.carryBreakDistanceMilli");
+            if(section.has("carrySpeedPenaltyMilli")) number(section["carrySpeedPenaltyMilli"],settings.interaction.carrySpeedPenaltyMilli,0,1000,"interaction.carrySpeedPenaltyMilli");
+            if(section.has("carryMinSpeedMilli")) number(section["carryMinSpeedMilli"],settings.interaction.carryMinSpeedMilli,0,1000,"interaction.carryMinSpeedMilli");
+            if(section.has("throwMinImpulseMilli")) number(section["throwMinImpulseMilli"],settings.interaction.throwMinImpulseMilli,0,10000000000,"interaction.throwMinImpulseMilli");
+            if(section.has("throwMaxImpulseMilli")) number(section["throwMaxImpulseMilli"],settings.interaction.throwMaxImpulseMilli,0,10000000000,"interaction.throwMaxImpulseMilli");
+            if(section.has("throwChargeTicks")) number(section["throwChargeTicks"],settings.interaction.throwChargeTicks,1,3600,"interaction.throwChargeTicks");
+            if(section.has("flightMaxTicks")) number(section["flightMaxTicks"],settings.interaction.flightMaxTicks,1,1000000,"interaction.flightMaxTicks");
+            if(section.has("pushMaxSpeedMilli")) number(section["pushMaxSpeedMilli"],settings.interaction.pushMaxSpeedMilli,1,100000,"interaction.pushMaxSpeedMilli");
+            if(section.has("pushGridMoveTicks")) number(section["pushGridMoveTicks"],settings.interaction.pushGridMoveTicks,1,3600,"interaction.pushGridMoveTicks");
+            if(section.has("ropeIterations")) number(section["ropeIterations"],settings.interaction.ropeIterations,1,64,"interaction.ropeIterations");
+            if(section.has("ropeDampingMilli")) number(section["ropeDampingMilli"],settings.interaction.ropeDampingMilli,0,1000,"interaction.ropeDampingMilli");
+        }
+        if(settings.interaction.throwMinImpulseMilli>settings.interaction.throwMaxImpulseMilli)result.errors.push_back("interaction.throwMinImpulseMilli: must not exceed throwMaxImpulseMilli");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

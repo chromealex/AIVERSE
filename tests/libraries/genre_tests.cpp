@@ -1450,4 +1450,223 @@ void settings(const std::string& root){
 }
 }
 void narrativeScenes(const std::string& root){narr::legacy(root);narr::relationships(root);narr::knowledgeAndConsequences(root);narr::cueOrdering(root);narr::barks(root);narr::backlogAndSkip(root);narr::restore(root);narr::rejection(root);narr::settings(root);}
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();narrativeScenes(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story, narrative scenes and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// Physical interactions (physical-interactions): carry/throw arc vs simulation, push/pull blocking, rope
+// convergence and breaking, door locks and auto-reverse, platform rider deltas through LocomotionModes,
+// breakable stages/debris, mid-interaction save/restore and invalid data.
+#include <aiverselib/genre/InteractionConfigured.h>
+#include <aiverselib/genre/InteractionData.h>
+#include <aiverselib/genre/InteractionPersistence.h>
+namespace physical {
+using K=InteractionEventKind;
+const Fixed dt=Fixed::fromRatio(1,60);
+Fixed milli(int64_t v){return Fixed::fromRatio(v,1000);}
+bool near(Fixed a,Fixed b,Fixed eps){return fxAbs(a-b)<=eps;}
+bool nearV(Vec3 a,Vec3 b,Fixed eps){return near(a.x,b.x,eps)&&near(a.y,b.y,eps)&&near(a.z,b.z,eps);}
+const InteractionEvent* find(const std::vector<InteractionEvent>& ev,K kind){for(const auto& e:ev)if(e.kind==kind)return &e;return nullptr;}
+const InteractionEvent* findFor(const std::vector<InteractionEvent>& ev,K kind,int64_t object){for(const auto& e:ev)if(e.kind==kind&&e.object==object)return &e;return nullptr;}
+bool has(const std::vector<InteractionEvent>& ev,K kind,int64_t value=-1){for(const auto& e:ev)if(e.kind==kind&&(value<0||e.value==value))return true;return false;}
+world::SpatialWorld floorWorld(){world::SpatialWorld w;CHECK(w.add({1,{{-50_fx,-1_fx,-50_fx},{50_fx,Fixed{},50_fx}}}));return w;}
+template<class State> State restored(const State& s){State copy;CHECK(load(save(s),copy));CHECK(interactionHash(copy)==interactionHash(s));roundtrip(s);return copy;}
+
+void carryThrow(const InteractionDefinitions& all){
+    InteractionConfig c;CHECK(valid(c));auto w=floorWorld();WorldCollision col(w);const auto& items=all.carryables;const auto& crate=items.at(1);
+    CarryState s;CarrierInput me;me.carrier=1;CarryInput in;in.carriers={me};
+    in.objects={{1,{Fixed{},Fixed::fromRatio(1,4),1_fx}},{2,{1_fx,milli(400),Fixed{}}}};
+    in.carriers[0].pickUp=2;auto r=stepCarry(c,items,s,0,dt,in,col);CHECK(r&&has(r->events,K::PickupRefused,ReasonTooHeavy)&&s.held.empty());
+    auto before=save(s);CHECK(!stepCarry(c,items,s,0,dt,in,col)&&save(s)==before);                      // repeated tick
+    in.carriers[0].pickUp=99;CHECK(!stepCarry(c,items,s,1,dt,in,col)&&save(s)==before);                 // unknown object
+    auto far=in;far.objects[0].position={20_fx,Fixed::fromRatio(1,4),Fixed{}};far.carriers[0].pickUp=1;
+    auto probe=s;r=stepCarry(c,items,probe,1,dt,far,col);CHECK(r&&has(r->events,K::PickupRefused,ReasonOutOfReach));
+    in.carriers[0].pickUp=1;r=stepCarry(c,items,s,1,dt,in,col);CHECK(r&&has(r->events,K::PickedUp)&&s.held.at(1).object==1);
+    CHECK(r->carriers.size()==1&&r->carriers[0].speedMilli==1000-8*15);
+    in.carriers[0].pickUp=0;in.objects.erase(in.objects.begin());uint32_t t=2;
+    for(;t<12;++t)CHECK(stepCarry(c,items,s,t,dt,in,col));
+    CHECK(nearV(s.held.at(1).position,carryHoldPoint(c,in.carriers[0]),Fixed::fromRatio(1,100)));
+    in.carriers[0].charge=true;in.carriers[0].pitch=Fixed::fromRatio(1,16);
+    for(;t<33;++t)CHECK(stepCarry(c,items,s,t,dt,in,col));
+    in.carriers[0].charge=false;auto charge=carryChargeMilli(c,s.held.at(1),t);CHECK(charge==int64_t(t-12)*1000/45);
+    auto start=s.held.at(1).position;auto v=throwVelocity(c,crate,in.carriers[0],charge);
+    auto preview=previewThrow(c,crate,start,v,in.carriers[0].collider,col,dt,600);CHECK(preview.landed&&preview.landing.id==1&&preview.points.size()>10);
+    r=stepCarry(c,items,s,t,dt,in,col);CHECK(r&&has(r->events,K::Thrown)&&s.held.empty()&&s.flights.at(1).position==start&&s.flights.at(1).velocity==v);
+    const uint32_t thrown=t++;std::optional<CarryState> twin;uint32_t twinFrom=0;
+    for(std::size_t k=0;k<preview.points.size();++k,++t){
+        if(k==3){twin=restored(s);twinFrom=t;}
+        r=stepCarry(c,items,s,t,dt,in,col);CHECK(r);
+        if(k+1<preview.points.size())CHECK(s.flights.at(1).position==preview.points[k]);
+        else{auto e=find(r->events,K::Landed);CHECK(e&&e->position==preview.landingPosition&&e->collider==1&&!s.flights.contains(1));}
+    }
+    CHECK(t-1==thrown+preview.ticks&&preview.landingPosition.y>=Fixed::fromRatio(1,4)-c.skin&&preview.landingPosition.y<Fixed::fromRatio(3,10));
+    for(uint32_t k=twinFrom;k<t;++k)CHECK(stepCarry(c,items,*twin,k,dt,in,col));CHECK(interactionHash(*twin)==interactionHash(s));
+    // Carrying into a wall: the held object is stopped by the swept move and dropped once too far from the hold point.
+    CHECK(w.add({2,{{-5_fx,Fixed{},3_fx},{5_fx,5_fx,4_fx}}}));CarryState walk;CarryInput go;go.carriers={me};go.carriers[0].pickUp=1;
+    go.objects={{1,{Fixed{},Fixed::fromRatio(1,4),1_fx}}};CHECK(stepCarry(c,items,walk,0,dt,go,col));go.objects.clear();go.carriers[0].pickUp=0;
+    bool dropped=false;for(uint32_t k=1;k<60&&!dropped;++k){
+        go.carriers[0].position.z+=Fixed::fromRatio(1,10);r=stepCarry(c,items,walk,k,dt,go,col);CHECK(r);
+        if(auto e=find(r->events,K::DroppedBlocked)){dropped=true;CHECK(e->collider==2&&e->position.z<=3_fx-Fixed::fromRatio(1,4)+milli(1)&&go.carriers[0].position.z>2_fx);}
+        else CHECK(walk.held.at(1).position.z<=3_fx-Fixed::fromRatio(1,4)+milli(1));
+    }
+    CHECK(dropped&&walk.held.empty());
+}
+void pushPull(){
+    InteractionConfig c;auto w=floorWorld();CHECK(w.add({3,{{5_fx,Fixed{},-2_fx},{6_fx,2_fx,2_fx}}}));CHECK(w.add({4,{{2_fx,Fixed{},9_fx},{3_fx,2_fx,11_fx}}}));WorldCollision col(w);
+    PushableDef crate;crate.id=10;crate.mass=120_fx;crate.frictionMilli=600;PushableDef block;block.id=11;block.mass=80_fx;block.grid=true;block.pullable=false;block.half={milli(480),milli(480),milli(480)};
+    Pushables defs{{10,crate},{11,block}};PushState s;CHECK(addPushable(s,crate,{Fixed{},Fixed::fromRatio(1,2),Fixed{}}));CHECK(addPushable(s,block,{Fixed{},milli(480),10_fx}));
+    CHECK(near(pushResistance(c,crate),Fixed::fromRatio(706,1),1_fx));
+    std::vector<PushCommand> cmd{{1,10,{1_fx,{},{}},500_fx,false}};
+    auto r=stepPush(c,defs,s,0,dt,cmd,col);CHECK(r&&has(r->events,K::PushResisted,ReasonTooWeak)&&s.bodies.at(10).velocity==Vec3{});
+    cmd={{2,10,{1_fx,{},{}},400_fx,false},{1,10,{1_fx,{},{}},400_fx,false}};                          // 800 N together beat 706 N
+    r=stepPush(c,defs,s,1,dt,cmd,col);CHECK(r&&has(r->events,K::PushStarted)&&s.bodies.at(10).velocity.x>Fixed{});
+    cmd={{1,10,{1_fx,{},{}},1200_fx,false}};bool blocked=false;uint32_t t=2;
+    for(;t<600&&!blocked;++t){r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&s.bodies.at(10).velocity.length()<=c.pushMaxSpeed);
+        if(auto e=find(r->events,K::PushBlocked)){CHECK(e->collider==3);blocked=true;}}
+    auto x=s.bodies.at(10).position.x;CHECK(blocked&&x<=Fixed::fromRatio(9,2)+milli(1)&&x>=Fixed::fromRatio(9,2)-Fixed::fromRatio(1,20)&&s.bodies.at(10).blocked);
+    r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r&&!has(r->events,K::PushBlocked)&&near(s.bodies.at(10).position.x,x,milli(1)));
+    cmd={};bool stopped=false;for(uint32_t k=0;k<5;++k){r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r);stopped|=s.bodies.at(10).velocity==Vec3{};}CHECK(stopped);
+    cmd={{1,11,{1_fx,{},{}},1000_fx,false}};r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&has(r->events,K::PushStarted)&&s.bodies.at(11).moving);
+    const uint32_t moveStart=t++;std::optional<PushState> twin;
+    for(;t<moveStart+c.gridMoveTicks;++t){if(t==moveStart+5)twin=restored(s);r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&!has(r->events,K::PushArrived));}
+    r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&has(r->events,K::PushArrived)&&s.bodies.at(11).position==(Vec3{1_fx,milli(480),10_fx}));
+    for(uint32_t k=moveStart+5;k<=t;++k)CHECK(stepPush(c,defs,*twin,k,dt,cmd,col));CHECK(interactionHash(*twin)==interactionHash(s));++t;
+    r=stepPush(c,defs,s,t++,dt,cmd,col);auto e=r?find(r->events,K::PushBlocked):nullptr;CHECK(e&&e->collider==4&&!s.bodies.at(11).moving);
+    cmd={{1,11,{-1_fx,{},{}},1000_fx,true}};r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r&&has(r->events,K::PushResisted,ReasonNotPullable));
+    cmd={{1,10,{1_fx,{},{}},-1_fx,false}};CHECK(!stepPush(c,defs,s,t,dt,cmd,col));
+}
+void ropes(){
+    InteractionConfig c;RopeDef d;d.id=1;d.length=4_fx;d.segments=8;d.particleMass=Fixed::fromRatio(1,5);d.a={RopeAnchor::Point,{Fixed{},10_fx,Fixed{}},0,{}};d.b={RopeAnchor::Load,{},0,10_fx};
+    RopeDef weak=d;weak.id=2;weak.breakForce=50_fx;RopeDef swing=d;swing.id=3;RopeDefs defs{{1,d},{2,weak},{3,swing}};
+    RopeState s;s.ropes[1]=*makeRope(d,d.a.point,{Fixed{},6_fx,Fixed{}});s.ropes[2]=*makeRope(weak,d.a.point,{Fixed{},6_fx,Fixed{}});s.ropes[3]=*makeRope(swing,d.a.point,{4_fx,10_fx,Fixed{}});
+    auto fine=s;auto c16=c;c16.ropeIterations=32;bool broke=false;std::optional<RopeState> twin;uint32_t t=0;
+    for(;t<900;++t){if(t==300)twin=restored(s);auto r=stepRopes(c,defs,s,t,dt,{});CHECK(r&&r->ropes.size()==3);if(auto e=find(r->events,K::RopeBroken)){CHECK(e->object==2&&e->value>50000);broke=true;}
+        CHECK(stepRopes(c16,defs,fine,t,dt,{}));}
+    for(uint32_t k=300;k<t;++k)CHECK(stepRopes(c,defs,*twin,k,dt,{}));CHECK(interactionHash(*twin)==interactionHash(s));
+    const auto& rope=s.ropes.at(1);auto expected=(10_fx+Fixed::fromRatio(7,5))*c.gravity;
+    CHECK(broke&&s.ropes.at(2).broken&&!rope.broken);CHECK(near(rope.tension,expected,expected/10));
+    auto span=(rope.points.back()-rope.points.front()).length(),fineSpan=(fine.ropes.at(1).points.back()-fine.ropes.at(1).points.front()).length();
+    CHECK(span>=d.length&&span<=d.length*Fixed::fromRatio(11,10)&&fineSpan>=d.length&&fineSpan<=span);              // more iterations: less stretch
+    CHECK(rope.velocities.back().length()<Fixed::fromRatio(1,20));
+    CHECK(s.ropes.at(3).points.back().y<10_fx);                                                                       // the pendulum swung down
+    RopeInput detach;detach.commands={{1,0,RopeAction::Detach,{}}};auto r=stepRopes(c,defs,s,t++,dt,detach);CHECK(r&&has(r->events,K::RopeDetached)&&s.ropes.at(1).a.anchor==RopeAnchor::Free);
+    for(uint32_t k=0;k<10;++k){r=stepRopes(c,defs,s,t++,dt,{});CHECK(r);}CHECK(s.ropes.at(1).tension<1_fx);           // free fall: slack
+    RopeInput attach;attach.bodies={{7,s.ropes.at(1).points.front()}};attach.commands={{1,0,RopeAction::Attach,{RopeAnchor::Body,{},7,{}}}};
+    r=stepRopes(c,defs,s,t++,dt,attach);CHECK(r&&has(r->events,K::RopeAttached)&&s.ropes.at(1).a.body==7);
+    attach.commands.clear();for(uint32_t k=0;k<400;++k){attach.bodies[0].position=s.ropes.at(1).points.front();r=stepRopes(c,defs,s,t++,dt,attach);CHECK(r);}
+    const auto& status=r->ropes[0];CHECK(status.rope==1&&status.pullA.y<Fixed{}&&near(status.pullA.length(),status.tension,status.tension/50+Fixed::fromRatio(1,10)));
+    CHECK(!stepRopes(c,defs,s,t,Fixed{},{}));RopeInput bad;bad.commands={{9,0,RopeAction::Detach,{}}};CHECK(!stepRopes(c,defs,s,t,dt,bad));
+}
+void doors(const InteractionDefinitions& all){
+    InteractionConfig c;world::SpatialWorld w;WorldCollision col(w);auto defs=all.doors;DoorState s;for(const auto& [id,d]:defs)CHECK(addDoor(s,d));
+    uint32_t t=0;
+    auto step=[&](std::vector<DoorCommand> cmd){auto r=stepDoors(c,defs,s,t++,cmd,col);CHECK(r);
+        for(const auto& st:r->doors){auto id=defs.at(st.door).collider;w.remove(id);CHECK(w.add({id,st.bounds}));}return *r;};
+    auto until=[&](K kind,uint32_t limit,int64_t door=30)->std::optional<InteractionEvent>{for(uint32_t k=0;k<limit;++k){auto r=step({});if(auto e=findFor(r.events,kind,door))return *e;}return std::nullopt;};
+    // Sliding door 30: locked with key 7, opens in 10 ticks, auto-closes 20 ticks after opening.
+    DoorCommand open{1,30,DoorAction::Open,{},{Fixed{},1_fx,-1_fx},false};
+    auto r=step({open});CHECK(has(r.events,K::DoorRefused,ReasonLocked)&&s.doors.at(30).phase==DoorPhase::Closed&&s.doors.at(30).locked);
+    open.keys={3,7};r=step({open});CHECK(has(r.events,K::DoorUnlocked)&&has(r.events,K::DoorOpening)&&!s.doors.at(30).locked);
+    const uint32_t opening=t-1;CHECK(until(K::DoorOpened,20)&&t-1==opening+9&&s.doors.at(30).phase==DoorPhase::Open);
+    CHECK(near(doorBounds(defs.at(30),s.doors.at(30)).min.x,1_fx,Fixed::fromRaw(2)));
+    CHECK(w.add({20,{{milli(-300),Fixed{},milli(-300)},{milli(300),milli(1800),milli(300)}}}));                    // a body steps into the doorway
+    CHECK(until(K::DoorClosing,30));auto reversed=until(K::DoorReversed,20);CHECK(reversed&&reversed->collider==20&&s.doors.at(30).phase==DoorPhase::Opening);
+    CHECK(s.doors.at(30).openness>0&&doorBounds(defs.at(30),s.doors.at(30)).min.x>=milli(300)-c.skin);
+    auto twin=restored(s);auto twinTick=t;
+    CHECK(until(K::DoorOpened,20));w.remove(20);CHECK(until(K::DoorClosing,30));CHECK(until(K::DoorClosed,20)&&s.doors.at(30).openness==0);
+    auto saved=t;t=twinTick;std::swap(s,twin);CHECK(until(K::DoorOpened,20));CHECK(until(K::DoorClosing,30));CHECK(until(K::DoorClosed,20));
+    CHECK(t==saved&&interactionHash(s)==interactionHash(twin));
+    // Locking needs the key (or a scripted command); scripted open bypasses the lock.
+    r=step({{1,30,DoorAction::Lock,{},{},false}});CHECK(has(r.events,K::DoorRefused,ReasonNoKey)&&!s.doors.at(30).locked);
+    r=step({{1,30,DoorAction::Lock,{7},{},false}});CHECK(has(r.events,K::DoorLocked)&&s.doors.at(30).locked);
+    r=step({{2,30,DoorAction::Toggle,{},{},false}});CHECK(has(r.events,K::DoorRefused,ReasonLocked));
+    r=step({{0,30,DoorAction::Open,{},{},true}});CHECK(has(r.events,K::DoorUnlocked)&&s.doors.at(30).phase==DoorPhase::Opening);
+    // Hinged one-way door 31 (opens from +z only), no auto-reverse: a body holds it while closing.
+    r=step({{1,31,DoorAction::Open,{},{10_fx,1_fx,-1_fx},false}});CHECK(has(r.events,K::DoorRefused,ReasonWrongSide));
+    r=step({{1,31,DoorAction::Open,{},{10_fx,1_fx,1_fx},false}});CHECK(has(r.events,K::DoorOpening));
+    CHECK(until(K::DoorOpened,30,31));auto b=doorBounds(defs.at(31),s.doors.at(31));
+    CHECK(nearV(b.min,{milli(9950),Fixed{},-1_fx},milli(2))&&nearV(b.max,{milli(10050),2_fx,Fixed{}},milli(2)));
+    CHECK(w.add({21,{{milli(10400),Fixed{},milli(-600)},{milli(10600),milli(1800),milli(-400)}}}));
+    r=step({{1,31,DoorAction::Close,{},{},false}});auto held=until(K::DoorBlocked,40,31);CHECK(held&&held->collider==21&&s.doors.at(31).phase==DoorPhase::Closing&&s.doors.at(31).blocked);
+    auto frozen=s.doors.at(31).openness;step({});CHECK(s.doors.at(31).openness==frozen);
+    w.remove(21);CHECK(until(K::DoorClosed,40,31)&&s.doors.at(31).phase==DoorPhase::Closed);
+    std::vector<DoorCommand> unknown{{1,99,DoorAction::Open,{},{},false}};CHECK(!stepDoors(c,defs,s,t,unknown,col));CHECK(!stepDoors(c,defs,s,t-1,{},col));
+}
+void platforms(const InteractionDefinitions& all){
+    InteractionConfig c;auto defs=all.platforms;PlatformState s;for(const auto& [id,d]:defs)CHECK(addPlatform(s,d));
+    LocomotionModeConfig lc;LocomotionState body;Vec3 rider{Fixed::fromRatio(1,2),Fixed::fromRatio(1,4),Fixed{}};const auto offset=rider-s.platforms.at(40).position;
+    auto ride=[&](uint32_t t,Vec2 wish,std::vector<RiderContact> contacts){
+        auto r=stepPlatforms(c,defs,s,t,dt,{},contacts);CHECK(r);
+        Vec3 carry{};for(const auto& x:r->carry)if(x.rider==1){carry=x.delta;CHECK(x.platform==40&&x.velocity==s.platforms.at(40).velocity);}
+        rider+=carry;                                                    // owner applies the carry delta (open platform: no sweep needed)
+        LocomotionInput in;in.wish=wish;in.env.grounded=true;auto m=stepLocomotion(lc,body,in,t,dt);CHECK(m&&m->mode==LocomotionMode::Ground);
+        rider+=m->velocity*dt;rider.y=s.platforms.at(40).position.y+Fixed::fromRatio(1,4);return *r;
+    };
+    for(uint32_t t=0;t<60;++t){
+        auto r=ride(t,{},{{3,41},{1,40},{2,0}});                         // shuffled; rider 2 stands on the ground
+        CHECK(r.carry.size()==2&&r.carry[0].rider==1&&r.carry[1].rider==3&&r.carry[1].platform==41);
+        if(t==0)CHECK(has(r.events,K::RiderBoarded)&&s.platforms.at(40).riders==std::vector<int64_t>{1});
+        CHECK(rider-s.platforms.at(40).position==offset);
+    }
+    CHECK(near(s.platforms.at(40).position.x,2_fx,Fixed::fromRatio(1,20))&&s.platforms.at(40).velocity.x>Fixed{});
+    for(uint32_t t=60;t<90;++t)ride(t,{1_fx,{}},{{1,40}});CHECK((rider-s.platforms.at(40).position).x>offset.x+1_fx);
+    auto r=ride(90,{},{});CHECK(has(r.events,K::RiderLeft)&&s.platforms.at(40).riders.empty()&&has(r.events,K::RiderLeft));
+    uint32_t t=91,arrived=0,still=0;std::optional<PlatformState> twin;uint32_t twinFrom=0;
+    for(;t<400;++t){
+        auto x=stepPlatforms(c,defs,s,t,dt,{},{});CHECK(x);
+        if(auto e=findFor(x->events,K::PlatformArrived,40);e&&!arrived){arrived=t;CHECK(e->value==1&&s.platforms.at(40).position==(Vec3{4_fx,{},{}}));}
+        else if(arrived&&!findFor(x->events,K::PlatformDeparted,40)&&s.platforms.at(40).delta==Vec3{})++still;
+        if(arrived&&t==arrived+4){twin=restored(s);twinFrom=t+1;}
+        if(findFor(x->events,K::PlatformDeparted,40)){CHECK(t==arrived+11&&s.platforms.at(40).velocity.x<Fixed{});break;}
+    }
+    CHECK(arrived&&still==10);
+    for(uint32_t k=twinFrom;k<=t;++k)CHECK(stepPlatforms(c,defs,*twin,k,dt,{},{}));CHECK(interactionHash(*twin)==interactionHash(s));
+    std::vector<PlatformCommand> stop{{40,false}};auto before=s.platforms.at(40).position;CHECK(stepPlatforms(c,defs,s,++t,dt,stop,{}));CHECK(s.platforms.at(40).position==before);
+    std::vector<RiderContact> twice{{1,40},{1,41}};CHECK(!stepPlatforms(c,defs,s,++t,dt,{},twice));
+}
+void breakables(const InteractionDefinitions& all){
+    const auto& defs=all.breakables;BreakableState s;CHECK(addBreakable(s,defs.at(50)));
+    std::vector<DamageInput> hits{{3,50,1,45,9,{1_fx,{},{}}},{2,50,2,50,9,{}},{1,50,1,5,9,{}}};       // out of order: processed by id
+    auto r=stepBreakables(defs,s,0,hits);CHECK(r);
+    CHECK(has(r->events,K::DamageIgnored,ReasonBelowThreshold)&&has(r->events,K::DamageIgnored,ReasonImmune)&&has(r->events,K::Damaged,45)&&has(r->events,K::StageReached,1));
+    CHECK(s.objects.at(50).health==55&&s.objects.at(50).stage==1&&r->debris.size()==1&&r->debris[0].kind==1&&r->debris[0].count==2&&r->debris[0].position==(Vec3{1_fx,{},{}}));
+    auto twin=restored(s);
+    std::vector<DamageInput> more{{3,50,1,45,9,{}},{4,50,3,20,9,{}}};r=stepBreakables(defs,s,1,more);CHECK(r&&has(r->events,K::DamageIgnored,ReasonDuplicate)&&has(r->events,K::Damaged,40)&&has(r->events,K::StageReached,2));
+    CHECK(s.objects.at(50).health==15);
+    std::vector<DamageInput> finish{{5,50,1,100,9,{}},{6,50,1,100,9,{}}};r=stepBreakables(defs,s,2,finish);CHECK(r&&has(r->events,K::Broken)&&has(r->events,K::Damaged,15)&&has(r->events,K::DamageIgnored,ReasonAlreadyBroken));
+    CHECK(s.objects.at(50).broken&&r->debris.size()==1&&r->debris[0].stage==0&&r->debris[0].kind==3&&r->debris[0].count==5);
+    auto seed=r->debris[0].seed;CHECK(stepBreakables(defs,twin,1,more)&&stepBreakables(defs,twin,2,finish)->debris[0].seed==seed&&interactionHash(twin)==interactionHash(s));
+    std::vector<DamageInput> unknown{{7,99,1,1,0,{}}};CHECK(!stepBreakables(defs,s,3,unknown));CHECK(!stepBreakables(defs,s,2,{}));
+    auto bytes=save(s);BreakableState copy;CHECK(!load(bytes.substr(0,bytes.size()-1),copy));CarryState wrong;CHECK(!load(bytes,wrong));
+}
+void invalidData(const std::string& root){
+    auto fails=[](const char* text,const std::string& message){
+        try{readInteractionDefinitions(Json::parse(text));}catch(const JsonError& e){if(e.what()!=message)std::cerr<<"got: "<<e.what()<<'\n';return e.what()==message;}return false;};
+    CHECK(fails(R"({"levers":[]})","interaction: unknown key 'levers'"));
+    CHECK(fails(R"({"carryables":[{"id":1,"massMilli":1000,"halfMilli":[1,1,1]},{"id":1,"massMilli":1000,"halfMilli":[1,1,1]}]})","interaction.carryables[1].id: duplicate id 1"));
+    CHECK(fails(R"({"carryables":[{"id":1,"massMilli":-5,"halfMilli":[1,1,1]}]})","interaction.carryables[0].massMilli: must be in 1..100000000"));
+    CHECK(fails(R"({"pushables":[{"id":1,"massMilli":1000,"halfMilli":[1,1,1],"spin":1}]})","interaction.pushables[0]: unknown key 'spin'"));
+    CHECK(fails(R"({"pushables":[{"id":1,"massMilli":1000,"halfMilli":[1,1]}]})","interaction.pushables[0].halfMilli: expected [x,y,z] in milli-units"));
+    CHECK(fails(R"({"ropes":[{"id":1,"lengthMilli":1000,"a":{"anchor":"hook"},"b":{"anchor":"free"}}]})","interaction.ropes[0].a.anchor: expected free, point, body or load"));
+    CHECK(fails(R"({"ropes":[{"id":1,"lengthMilli":1000,"a":{"anchor":"load"},"b":{"anchor":"free"}}]})","interaction.ropes[0].a.massMilli: required"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"hinged","panelMin":[0,0,0],"panelMax":[1000,2000,0],"pivot":[0,0,0]}]})","interaction.doors[0].panelMax: must exceed panelMin on every axis"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"sliding","panelMin":[0,0,0],"panelMax":[1,1,1],"slideMilli":[1,0,0],"openTicks":0}]})","interaction.doors[0].openTicks: must be in 1..3600"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"sliding","panelMin":[0,0,0],"panelMax":[1,1,1],"slideMilli":[1,0,0],"locked":true}]})","interaction.doors[0].key: a locked door needs a key id (or unlock it from script)"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"revolving","panelMin":[0,0,0],"panelMax":[1,1,1]}]})","interaction.doors[0].kind: expected hinged or sliding"));
+    CHECK(fails(R"({"platforms":[{"id":1,"halfMilli":[1,1,1],"speedMilli":10,"waypoints":[[0,0,0],[1,0,0]],"waitTicks":[1,2,3]}]})","interaction.platforms[0].waitTicks: expected one value or one per waypoint"));
+    CHECK(fails(R"({"platforms":[{"id":1,"halfMilli":[1,1,1],"speedMilli":10,"waypoints":[[0,0,0],[0,0,0]]}]})","interaction.platforms[0].waypoints[1]: repeats the previous waypoint"));
+    CHECK(fails(R"({"breakables":[{"id":1,"health":100,"stages":[{"stage":1,"health":50},{"stage":2,"health":70}]}]})","interaction.breakables[0].stages[1].health: must decrease from stage to stage"));
+    CHECK(fails(R"({"breakables":[{"id":1,"health":100,"damage":[{"type":1},{"type":1}]}]})","interaction.breakables[0].damage[1].type: duplicate damage type 1"));
+    auto settings=lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/interaction-settings.json"));
+    CHECK(settings.value&&interactionSettingsErrors(*settings.value).empty());auto c=interactionConfig(*settings.value);
+    CHECK(valid(c)&&c.maxMass==25_fx&&c.ropeIterations==12&&c.gridMoveTicks==16&&c.throwMaxImpulse==90_fx&&interactionConfigHash(c)!=interactionConfigHash(InteractionConfig{}));
+    auto bad=lib::gameplay::readGameplaySettings(Json::parse(R"({"schemaVersion":1,"interaction":{"throwMinImpulseMilli":5000,"throwMaxImpulseMilli":1000,"spin":1}})"));
+    CHECK(!bad.value&&std::find(bad.errors.begin(),bad.errors.end(),"interaction.throwMinImpulseMilli: must not exceed throwMaxImpulseMilli")!=bad.errors.end()
+        &&std::find(bad.errors.begin(),bad.errors.end(),"interaction.spin: unknown field")!=bad.errors.end());
+    InteractionConfig broken;broken.ropeIterations=0;CHECK(interactionConfigError(broken)=="ropeIterations: must be 1..64");
+    CarryState s;CarryInput none;world::SpatialWorld w;CHECK(!stepCarry(broken,Carryables{},s,0,dt,none,WorldCollision(w)));
+}
+}
+void physicalInteractions(const std::string& root){
+    auto defs=readInteractionDefinitions(Json::parseFile(root+"/examples/libraries/genre/interactables.json"));
+    CHECK(defs.carryables.size()==2&&defs.doors.size()==2&&defs.platforms.size()==2&&defs.breakables.size()==1&&defs.ropes.at(20).b.anchor==RopeAnchor::Load);
+    CHECK(interactionDefinitionsHash(defs)==interactionDefinitionsHash(readInteractionDefinitions(Json::parseFile(root+"/examples/libraries/genre/interactables.json"))));
+    physical::carryThrow(defs);physical::pushPull();physical::ropes();physical::doors(defs);physical::platforms(defs);physical::breakables(defs);physical::invalidData(root);
+}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();narrativeScenes(argv[1]);physicalInteractions(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story, narrative scenes and save/restore, physical interactions: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
