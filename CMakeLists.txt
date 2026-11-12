@@ -1089,6 +1089,10 @@ if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     if(TARGET aiverse_headless)
         set_tests_properties(project_importer PROPERTIES ENVIRONMENT "AIVERSE_PORT_HEADLESS=$<TARGET_FILE:aiverse_headless>")
     endif()
+    add_test(NAME world_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_world.py)
+    if(TARGET aiverse_headless)
+        set_tests_properties(world_importer PROPERTIES ENVIRONMENT "AIVERSE_PORT_HEADLESS=$<TARGET_FILE:aiverse_headless>")
+    endif()
 endif()
 
 # The game client's core (GameClient: menus, script UI, view scripts, input, audio): AiverseGame's
