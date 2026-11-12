@@ -175,6 +175,9 @@ public:
     void setShadowBounds(float3 lo, float3 hi) { shadowBoundsMin_=lo; shadowBoundsMax_=hi; hasShadowBounds_=true; }
     void clearShadowBounds() { hasShadowBounds_=false; }
     void setShadowQuality(ShadowQuality q);
+    // Desktop/benchmark override of the High-tier map size (2048 default). Low/Medium keep their sizes.
+    int shadowMapSize() const { return shadowSize_; }
+    bool setShadowMapSize(int size) { highShadowSize_=size; setShadowQuality(quality_); return quality_!=ShadowQuality::High||shadowMap_.valid(); }
     ShadowQuality shadowQuality() const { return quality_; }
     static ShadowQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
 
@@ -291,6 +294,7 @@ private:
     gfx::BufferHandle lineVB_, triVB_;
     gfx::TextureHandle shadowMap_;
     int shadowSize_ = 0;
+    int highShadowSize_ = 2048;
     float shadowTexelWorld_ = 0.05f;   // world size of one shadow-map texel
     float shadowExtent_ = 50.0f;       // world size covered by the shadow map
     bool hasShadowBounds_ = false;

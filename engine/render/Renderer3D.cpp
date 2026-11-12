@@ -102,7 +102,7 @@ bool Renderer3D::init(gfx::Device& dev) {
 void Renderer3D::setShadowQuality(ShadowQuality q) {
     quality_ = q;
     if (!dev_) return;
-    int size = q == ShadowQuality::High ? 2048 : q == ShadowQuality::Medium ? 1536 : 1024;
+    int size = q == ShadowQuality::High ? highShadowSize_ : q == ShadowQuality::Medium ? 1536 : 1024;
     if (q == ShadowQuality::Off) size = 0;
     if (size == shadowSize_ && shadowMap_.valid()) return;
     if (shadowMap_.valid()) dev_->destroyTexture(shadowMap_);

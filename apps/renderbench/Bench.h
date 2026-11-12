@@ -1,6 +1,7 @@
 // Fixed-workload rendering benchmark. No simulation, adaptive quality, or asset normalization.
 #pragma once
 #include "engine/render/MeshOcclusionCache.h"
+#include "LightCacheKey.h"
 #include "engine/render/ProbeEnvironment.h"
 #include "engine/render/LightGridCache.h"
 #include "engine/platform/Platform.h"
@@ -184,18 +185,16 @@ struct Bench {
             }
             additions.shadowGeometry=StaticShadowGeometry{};
             if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"){
-                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");keyConfig.erase("sunStudy");keyConfig.erase("meshOcclusion");keyConfig.erase("volumetricLight");keyConfig.erase("look");
-                Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
-                Hasher keyHash;keyHash.str(keyConfig.dump());
+                const uint64_t lightKey=lightCacheKey(config);
                 StaticLightGrid grid;
                 if(!options.readLightCache.empty()){
                     std::string bytes;if(!platform::readContentFile(options.readLightCache,bytes))throw std::runtime_error("cannot read light cache");
-                    grid=decodeLightGrid(bytes,keyHash.value());report.set("lightCacheLoaded",Json::fromBool(true));
+                    grid=decodeLightGrid(bytes,lightKey);report.set("lightCacheLoaded",Json::fromBool(true));
                 }else grid.build(additions.lights,float(config["staticLightCellSize"].toDouble(2)),pointShadows.empty()?nullptr:&pointShadows,diffuseField.probes.empty()?nullptr:&diffuseField);
                 report.set("lightAtlasBytes",Json::number(int64_t(grid.texels.size()*sizeof(float4))));
                 if(!options.writeLightCache.empty()){
                     if(std::filesystem::exists(options.writeLightCache))throw std::runtime_error("light cache output already exists");
-                    auto bytes=encodeLightGrid(grid,keyHash.value());std::ofstream file(options.writeLightCache,std::ios::binary);file.write(bytes.data(),std::streamsize(bytes.size()));if(!file)throw std::runtime_error("cannot write light cache");
+                    auto bytes=encodeLightGrid(grid,lightKey);std::ofstream file(options.writeLightCache,std::ios::binary);file.write(bytes.data(),std::streamsize(bytes.size()));if(!file)throw std::runtime_error("cannot write light cache");
                 }
                 if(config["probeGI"].getStr("quality","high")=="mobile"){
                     const auto& gi=config["probeGI"];grid.combineEnvironment(SceneAssets::vector3(gi["sun"],{}),SceneAssets::vector3(gi["sky"],{}));
@@ -216,30 +215,14 @@ struct Bench {
             auto bounds=[](float3 v){Json j=Json::array();j.push(Json::number(double(v.x)));j.push(Json::number(double(v.y)));j.push(Json::number(double(v.z)));return j;};
             report.set("boundsMin",bounds(model->boundsMin));report.set("boundsMax",bounds(model->boundsMax));
             if(config.has("meshOcclusion")){
-                const auto& settings=config["meshOcclusion"];const auto begin=Clock::now();
-                const double samples=settings["samples"].toDouble(64);
-                if(samples!=std::floor(samples)||samples<16||samples>256)throw std::runtime_error("meshOcclusion samples must be 16..256");
-                const float radius=float(settings["radius"].toDouble(.75));
-                if(!std::isfinite(radius)||radius<=.01f||radius>100)throw std::runtime_error("invalid meshOcclusion radius");
-                const auto key=meshOcclusionKey(*model,radius,int(samples));size_t count=0;
-                if(settings.has("read")){
-                    std::string bytes;if(!platform::readContentFile(settings.getStr("read"),bytes))throw std::runtime_error("cannot read mesh occlusion cache");
-                    decodeMeshOcclusion(*model,bytes,key);report.set("meshOcclusionCacheLoaded",Json::fromBool(true));
-                }else count=bakeMeshOcclusion(*model,radius,int(samples));
-                if(settings.has("write")){
-                    const auto path=settings.getStr("write");if(std::filesystem::exists(path))throw std::runtime_error("mesh occlusion cache already exists");
-                    auto bytes=encodeMeshOcclusion(*model,key);std::ofstream file(path,std::ios::binary);file.write(bytes.data(),std::streamsize(bytes.size()));
-                    if(!file)throw std::runtime_error("cannot write mesh occlusion cache");
-                }
-                report.set("meshOcclusionVertices",Json::number(int64_t(count)));
-                report.set("meshOcclusionBakeMs",Json::number(ms(begin,Clock::now())));
-                std::fprintf(stderr,"Local mesh occlusion: %zu vertices\n",count);
+                const auto result=SceneAssets::meshOcclusion(*model,config["meshOcclusion"]);
+                for(const auto& [key,value]:result.members())report.set(key,value);
             }
             if(!uploadModel(d,*model))throw std::runtime_error("model upload failed: "+d.lastError());
             report.set("loadAndUploadMs",Json::number(ms(start,Clock::now())));
             const auto& optim=config["modelOptimization"];
-            renderer.setModelLodEnabled(optim.getBool("lod",true));
-            renderer.setModelCullingEnabled(optim.getBool("culling",true));
+            renderer.setModelLodEnabled(config["look"].getBool("lod",optim.getBool("lod",true)));   // look.lod/culling: draw-only
+            renderer.setModelCullingEnabled(config["look"].getBool("culling",optim.getBool("culling",true)));
             renderer.setModelInstancingEnabled(optim.getBool("instancing",true));
             renderer.setShadowQuality(options.profile=="low"?ShadowQuality::Low:ShadowQuality::High);
             renderer.setMaterialQuality(options.profile=="low"?MaterialQuality::Medium:MaterialQuality::High);
@@ -253,7 +236,8 @@ struct Bench {
                         if(k!="sun"&&k!="sky"&&k!="points")throw std::runtime_error("look.probeGI accepts sun, sky, points");
                         gi.set(k,v);}
                     view.set("probeGI",gi);}
-                else if(key=="sunColor"||key=="sunIntensity"||key=="skyColor"||key=="groundColor"||key=="fogDensity"||key=="fogColor"||key=="screenBounce")view.set(key,value);
+                else if(key=="sunColor"||key=="sunIntensity"||key=="skyColor"||key=="groundColor"||key=="fogDensity"||key=="fogColor"||key=="screenBounce"||key=="shadowSoftness"||key=="shadowMapSize"||key=="sunDirection")view.set(key,value);
+                else if(key=="lod"||key=="culling"){if(value.type()!=Json::Type::Bool)throw std::runtime_error("look "+key+" must be a boolean");}
                 else throw std::runtime_error("look: unknown key "+key);
             }
             const auto& gi=view["probeGI"];
@@ -263,11 +247,17 @@ struct Bench {
             if(!renderer.lights.setStaticRadiance(SceneAssets::vector3(gi["points"],{1,1,1}),SceneAssets::vector3(gi["sun"],{}),SceneAssets::vector3(gi["sky"],{})))throw std::runtime_error("invalid probeGI radiance");
             if(report.getBool("probeEnvironmentPrecombined",false))renderer.lights.setStaticRadiance(SceneAssets::vector3(gi["points"],{1,1,1}),{1,1,1},{});
             renderer.setShadowBounds(model->boundsMin,model->boundsMax);
-            renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(view["sunColor"]);
+            renderer.lighting.sunDir=v3(view.has("sunDirection")?view["sunDirection"]:config["sunDirection"]);   // look.sunDirection: direct light only; baked GI keeps the recipe sunrenderer.lighting.sunColor=v3(view["sunColor"]);
             renderer.lighting.sunIntensity=float(view["sunIntensity"].toDouble());
             renderer.lighting.skyColor=v3(view["skyColor"]);renderer.lighting.groundColor=v3(view["groundColor"]);
             renderer.lighting.fogDensity=float(view["fogDensity"].toDouble(0));
             if(view.has("fogColor"))renderer.lighting.fogColor=v3(view["fogColor"]);
+            if(view.has("shadowSoftness")){const float soft=float(view["shadowSoftness"].toDouble());
+                if(!std::isfinite(soft)||soft<0||soft>2)throw std::runtime_error("look shadowSoftness must be 0..2");
+                renderer.lighting.shadowSoftness=soft;}
+            if(view.has("shadowMapSize")&&options.profile!="low"){const double size=view["shadowMapSize"].toDouble();
+                if(size!=2048&&size!=4096&&size!=8192)throw std::runtime_error("look shadowMapSize must be 2048, 4096 or 8192");
+                if(!renderer.setShadowMapSize(int(size)))throw std::runtime_error("shadow map allocation failed");}
             PostFxSettings s;s.hdr=options.profile=="low"?HdrMode::Off:HdrMode::On;
             if(options.profile=="hdr"||options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
             if(options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25}]})"),Json());
@@ -347,7 +337,7 @@ struct Bench {
         if(!report.has("renderSettings")) {
             Json settings=Json::object();settings.set("linearHdr",Json::fromBool(post.linearScene()));
             settings.set("shadows",Json::string(options.profile=="low"?"low":"high"));
-            settings.set("shadowResolution",Json::number(int64_t(options.profile=="low"?1024:2048)));
+            settings.set("shadowResolution",Json::number(int64_t(renderer.shadowMapSize())));
             settings.set("shadowPcfSamples",Json::number(int64_t(options.profile=="low"?4:16)));
             settings.set("materials",Json::string(options.profile=="low"?"medium":"high"));
             settings.set("bloomFxaa",Json::fromBool(options.profile=="hdr"));

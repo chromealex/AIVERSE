@@ -178,6 +178,30 @@ int main(){
     auto invalidAo=aoModel;invalidAo.materials[0].vertexOcclusion=false;invalidAo.vertices[0].color=0x80ffffff;
     rejected=false;try{bakeMeshOcclusion(invalidAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&invalidAo.vertices[0].color==0x80ffffff);
     std::cout<<"mesh AO bake/cache: roundtrip, stale/corrupt rejection and alpha preservation PASS\n";
+    {   // Double-sided cloth: front AO in alpha, back AO in red; coloured double-sided stays untouched.
+        Model cloth;cloth.vertices.resize(6);
+        const float3 p[6]={{0,0,0},{1,0,0},{0,0,1},{-20,.1f,-20},{20,.1f,20},{20,.1f,-20}};
+        for(int i=0;i<6;++i){cloth.vertices[size_t(i)].pos=p[i];cloth.vertices[size_t(i)].nrm={0,i<3?1.0f:-1.0f,0};}
+        cloth.indices={0,1,2,3,4,5};cloth.materials.resize(1);cloth.materials[0].doubleSided=true;cloth.meshes.resize(1);
+        Primitive floorP;floorP.indexCount=3;Primitive lidP;lidP.firstIndex=3;lidP.indexCount=3;
+        cloth.meshes[0].primitives={floorP,lidP};
+        auto coloured=cloth;coloured.vertices[0].color=0xff8080ffu;
+        auto pristineCloth=cloth;const auto clothKey=meshOcclusionKey(cloth,1,64);
+        assert(bakeMeshOcclusion(cloth,1,64)==6&&cloth.materials[0].vertexOcclusion&&cloth.materials[0].backOcclusion&&!cloth.materials[0].vertexColors);
+        const auto front=cloth.vertices[1].color>>24,back=cloth.vertices[1].color&0xffu;
+        assert(front<64&&back==255&&(cloth.vertices[1].color&0xffff00u)==0xffff00u);
+        auto clothBytes=encodeMeshOcclusion(cloth,clothKey);assert(clothBytes.substr(0,4)=="AVA3");
+        decodeMeshOcclusion(pristineCloth,clothBytes,clothKey);
+        assert(pristineCloth.vertices[0].color==cloth.vertices[0].color&&pristineCloth.materials[0].backOcclusion&&!pristineCloth.materials[0].vertexColors);
+        assert(bakeMeshOcclusion(coloured,1,64)==0&&!coloured.materials[0].vertexOcclusion&&coloured.vertices[0].color==0xff8080ffu);
+        // AVA2 files (no back-face byte) stay readable.
+        auto single=pristine;const auto singleKey=meshOcclusionKey(single,1,64);auto baked=single;bakeMeshOcclusion(baked,1,64);
+        auto v3=encodeMeshOcclusion(baked,singleKey);std::string v2="AVA2"+v3.substr(4,v3.size()-4-8-baked.materials.size()-baked.vertices.size());
+        v2+=v3.substr(v3.size()-8-baked.materials.size(),baked.materials.size());aiverse::Hasher h;h.bytes(v2.data(),v2.size());
+        for(int i=0;i<8;++i)v2.push_back(char(h.value()>>(8*i)));
+        decodeMeshOcclusion(single,v2,singleKey);assert(single.vertices[0].color==baked.vertices[0].color&&single.materials[0].vertexOcclusion);
+    }
+    std::cout<<"two-sided mesh AO: front/back channels, AVA3 roundtrip, AVA2 compatibility PASS\n";
 
     // Probe visibility moments: open, blocked and partially blocked texels; grid flag and cache roundtrip.
     StaticShadowGeometry halfWall;halfWall.albedos={{.5f,.5f,.5f}};

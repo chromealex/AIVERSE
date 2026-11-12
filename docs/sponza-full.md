@@ -613,3 +613,36 @@ error (160×90) 29.3 → 23.8 ([comparison](benchmarks/sponza-2026-11-12/lut-mat
 The LUT is specific to this scene, camera and recipe; refit after changing the lighting.
 It cannot separate surfaces that render the same colour but differ in the reference
 (the remaining vault/pillar difference is lighting).
+
+### Cloth folds and the far door (2026-11-12)
+
+Recipe `scene-day-high-reference-cloth.json` (on top of the LUT recipe). Findings and changes:
+
+- **Haze is what flattens the folds.** With `volumetricLight` off the far curtains show the
+  reference's saturated colour and fold stripes; the sun in-scatter + sky-lit aerial
+  perspective add a uniform veil (~0.25 linear) that halves fold contrast. Weaker haze with a
+  refitted LUT did not help: the LUT tone curve compresses the same range again (fold
+  luminance std stays 15 vs 32 in the reference). Remaining difference: our sun is almost
+  frontal to the far curtains (az 182°), so pleat sides differ little in N·L; ±25° azimuth
+  puts the curtains in column shadow, unlike the reference. Not solved.
+- **Two-sided mesh AO for cloth.** `bakeMeshOcclusion` now also bakes double-sided opaque PBR
+  materials whose vertex colours are white and unshared: front-face AO in COLOR_0 alpha,
+  back-face AO in red, material `backOcclusion` (shader flag +4 in `misc.w`, both GLSL and
+  MSL pick red on back faces) and `vertexColors` off. Cache format `AVA3` (adds the red byte
+  per vertex and material flag bit 2); `AVA2` is still read. Renderbench accepts
+  `meshOcclusion` per entry of `models` (curtains: radius 0.5, 64 samples, `curtains-ao.avao`,
+  1.06 M vertices). AO only scales indirect light, so on these sunlit curtains the gain is small.
+- **Sharper sun shadows.** `look.shadowSoftness` (default renderer penumbra 0.22 m was wider
+  than a fold) → 0.05; `look.shadowMapSize` 2048/4096/8192 overrides the High map (4096 gave
+  no visible gain here). Region error 12.4 → ~11.7 (mostly floor shadow edges).
+- **Light through the door.** The bright dash under the far door and the dots/lines on it are
+  not a shader leak: behind the door the main model ends (x ≈ 20, outside the building), so
+  gaps around the door leaf show sky-lit stone outside. Fixed in the scene with a black,
+  single-sided card behind the door (`props/door-backing.gltf`) marked `"bake": false`: drawn
+  only, not a light-cache input, so `day-sun52.avgic` stays valid.
+- Light-cache key: one implementation (`apps/renderbench/LightCacheKey.h`) for renderbench and
+  `aiverse_probe_visibility` (the tool had drifted: it did not ignore `look`/`volumetricLight`).
+  Per-model `meshOcclusion`, roughness overrides and `"bake": false` models are excluded.
+  `look` also takes `sunDirection` (direct light only; diagnostics), `lod` and `culling`.
+- `aiverse_probe_visibility --pixel` prints every probe's facing, visibility, weight and sky
+  term and reads distance moments straight from moment caches.

@@ -1,6 +1,7 @@
 // Offline probe-visibility diagnostics for cached probe GI (.avgic).
 // Reproduces the High (eight-probe) interpolation of LightShaders.h on the CPU for camera-ray
 // receivers and compares the cached plane visibility with exact BVH visibility.
+#include "apps/renderbench/LightCacheKey.h"
 #include "apps/renderbench/ShadowGeometry.h"
 #include "engine/core/Hash.h"
 #include "engine/data/Json.h"
@@ -20,11 +21,7 @@ using namespace aiverse::render;
 namespace {
 float3 v3(const Json& j) {return {float(j[0].toDouble()),float(j[1].toDouble()),float(j[2].toDouble())};}
 
-uint64_t recipeKey(const Json& config) {
-    Json keyConfig=config;for(const char* k:{"cameras","postfx","id","sunStudy","meshOcclusion"})keyConfig.erase(k);
-    Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
-    Hasher h;h.str(keyConfig.dump());return h.value();
-}
+uint64_t recipeKey(const Json& config) {return bench::lightCacheKey(config);}
 
 // Same math as probePlaneVisible / probeVisibility(highQuality) in LightShaders.h.
 float planeVisible(float4 plane,float3 q,float distance) {
@@ -107,6 +104,7 @@ void loadScene(Scene& s,const std::string& sceneFile,const std::string& cache) {
 
 enum Mode {Plane=0,Exact=1,None=2,Moments=3};
 // High-quality gridIndirect; returns radiance and total accepted weight.
+bool verboseProbes=false;
 float3 indirect(const Scene& s,float3 p,float3 n,Mode mode,float& total) {
     const auto& t=s.grid.texels;const auto o=s.grid.origin,sz=s.grid.size;
     float3 c=(p-float3{o.x,o.y,o.z})*o.w-float3{.5f,.5f,.5f};
@@ -135,6 +133,8 @@ float3 indirect(const Scene& s,float3 p,float3 n,Mode mode,float& total) {
         if(mask&4)value=value+float3{dot4(103)*s.giSky.x,dot4(104)*s.giSky.y,dot4(105)*s.giSky.z};
         value={std::max(value.x,0.0f),std::max(value.y,0.0f),std::max(value.z,0.0f)};
         result=result+value*w;total+=w;
+        if(verboseProbes){float sky=(mask&8)?dot4(106):-1;
+            std::printf("  probe (%.2f %.2f %.2f) facing %.2f vis %.3f weight %.4f sky %.3f\n",position.x,position.y,position.z,(dot(d>1e-5f?q*(-1/d):n,n)+1)*.5f,vis,w,sky);}
     }
     return total>1e-5f?result*(1/total):float3{};
 }
@@ -218,7 +218,7 @@ int pixelProbe(const Scene& s,int px,int py,int width,int height) {
         E[0]+=alb.x*ndl;E[1]+=alb.y*ndl;E[2]+=alb.z*ndl;}
     // cosine-weighted estimator: E = pi * mean(L) in physical units; engine display convention divides by pi.
     for(double& e:E)e/=N;
-    float tot;auto cache=indirect(s,p,n,s.moments.empty()?Plane:Moments,tot);
+    verboseProbes=true;float tot;auto cache=indirect(s,p,n,s.moments.empty()?Plane:Moments,tot);verboseProbes=false;
     std::printf("pixel %d,%d pos (%.2f %.2f %.2f) n (%.2f %.2f %.2f)\n reference one-bounce sun (per unit sun): %.4f %.4f %.4f\n probe cache sun term: %.4f %.4f %.4f (weight %.3f)\n",
         px,py,p.x,p.y,p.z,n.x,n.y,n.z,E[0],E[1],E[2],cache.x,cache.y,cache.z,tot);
     std::printf(" reference sky view (cosine-weighted): %.3f\n",skyView/N);
@@ -276,6 +276,7 @@ int aiverseMain(int argc,char** argv) {
     try{
         auto dir=std::filesystem::path(scene).parent_path();if(!dir.empty())std::filesystem::current_path(dir);
         Scene s;loadScene(s,std::filesystem::path(scene).filename().string(),cache);s.normalBias=bias;s.facing=facing;
+        if(int(s.grid.texels.at(0).w)&16)s.moments=s.grid.texels;   // cache already stores distance moments
         if(sub>0){auto start=std::chrono::steady_clock::now();s.moments=rebakeMoments(s,sub);
             std::fprintf(stderr,"moments rebake: %.1f s\n",std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());}
         if(!write.empty()){

@@ -5,6 +5,9 @@
 #include "engine/render/graph/ShaderGraph.h"
 #include <map>
 #include "ShadowGeometry.h"
+#include "engine/render/MeshOcclusionCache.h"
+#include <chrono>
+#include <fstream>
 #include <filesystem>
 #include <stdexcept>
 
@@ -33,6 +36,28 @@ struct SceneAssets {
         }
         if(j.isArray())for(const auto& value:j.items())if(secondaryUv(value))return true;
         return false;
+    }
+    // Baked (or cached) local mesh AO: {radius, samples, read|write}. Returns report fields.
+    static Json meshOcclusion(Model& model,const Json& settings) {
+        const auto begin=std::chrono::steady_clock::now();
+        const double samples=settings["samples"].toDouble(64);
+        if(samples!=std::floor(samples)||samples<16||samples>256)throw std::runtime_error("meshOcclusion samples must be 16..256");
+        const float radius=float(settings["radius"].toDouble(.75));
+        if(!std::isfinite(radius)||radius<=.01f||radius>100)throw std::runtime_error("invalid meshOcclusion radius");
+        const auto key=meshOcclusionKey(model,radius,int(samples));size_t count=0;Json report=Json::object();
+        if(settings.has("read")){
+            std::string bytes;if(!platform::readContentFile(settings.getStr("read"),bytes))throw std::runtime_error("cannot read mesh occlusion cache");
+            decodeMeshOcclusion(model,bytes,key);report.set("meshOcclusionCacheLoaded",Json::fromBool(true));
+        }else count=bakeMeshOcclusion(model,radius,int(samples));
+        if(settings.has("write")){
+            const auto path=settings.getStr("write");if(std::filesystem::exists(path))throw std::runtime_error("mesh occlusion cache already exists");
+            auto bytes=encodeMeshOcclusion(model,key);std::ofstream file(path,std::ios::binary);file.write(bytes.data(),std::streamsize(bytes.size()));
+            if(!file)throw std::runtime_error("cannot write mesh occlusion cache");
+        }
+        report.set("meshOcclusionVertices",Json::number(int64_t(count)));
+        report.set("meshOcclusionBakeMs",Json::number(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()));
+        std::fprintf(stderr,"Local mesh occlusion: %zu vertices\n",count);
+        return report;
     }
     std::map<std::string,std::shared_ptr<const graph::Program>> materialGraphs;
     void applyGraphs(Model& model,const Json& bindings) {
@@ -135,7 +160,12 @@ struct SceneAssets {
             auto xyz=[](float3 v){Json j=Json::array();for(float x:{v.x,v.y,v.z})j.push(Json::number(double(x)));return j;};
             item.set("boundsMin",xyz(a.model->boundsMin));item.set("boundsMax",xyz(a.model->boundsMax));
             std::fprintf(stderr,"loaded %s: %llu triangles, %zu clips, bounds %s .. %s\n",path.c_str(),(unsigned long long)triangles,a.model->clips.size(),item["boundsMin"].dump().c_str(),item["boundsMax"].dump().c_str());
-            if(bakeShadows&&!a.animated)appendShadowGeometry(shadowGeometry,*a.model,a.transform);
+            if(entry.has("meshOcclusion")){
+                if(a.animated)throw std::runtime_error("meshOcclusion needs a static model: "+path);
+                item.set("meshOcclusion",meshOcclusion(*a.model,entry["meshOcclusion"]));
+            }
+            // "bake": false — drawn only (e.g. a dark card closing a gap in the asset); not a light-cache input.
+            if(bakeShadows&&!a.animated&&entry.getBool("bake",true))appendShadowGeometry(shadowGeometry,*a.model,a.transform);
             if(!uploadModel(d,*a.model))throw std::runtime_error("addon upload failed: "+d.lastError());
             audit.push(item);assets.push_back(std::move(a));
         }

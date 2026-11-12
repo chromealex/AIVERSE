@@ -241,7 +241,7 @@ void main() {
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
 #endif
     // SG_SURFACE
-    ao *= m_misc.w > 1.5 ? v_col.a : 1.0;
+    ao *= m_misc.w > 1.5 ? (m_misc.w > 3.5 && !gl_FrontFacing ? v_col.r : v_col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -530,7 +530,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
 #endif
     // SG_SURFACE
-    ao *= m.misc.w > 1.5 ? in.col.a : 1.0;
+    ao *= m.misc.w > 1.5 ? (m.misc.w > 3.5 && !frontFacing ? in.col.r : in.col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
