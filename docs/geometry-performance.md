@@ -34,9 +34,8 @@ MIT, pinned source/hash manifest in third_party/meshoptimizer/UPSTREAM.json. Bui
 `-DAIVERSE_BUILD_AUTOLOD=ON`, target `aiverse_lod_simplify`, then run
 `tools/models/autolod.py source.gltf destination.gltf --worker /path/aiverse_lod_simplify`.
 The existing Python generator accepts unpacked external-buffer glTF; it preserves source
-resources and skips skin/morph sources. Include referenced resources when distributing output.
-`meshes[].extras.rtsLods` persists descending pixel thresholds and target meshes. Nested/cyclic
-and deformable target chains are rejected. The renderer chooses using both main-camera and
+resources. With `--skinned`, four-influence skins use canonical per-joint weight attributes (weight 8) in the simplification metric; joint IDs are never treated as continuous values. Without the flag skins are skipped. Morph targets remain unsupported. Retained vertices keep their original position, UVs, joints and weights byte-for-byte. Up to 32 total simplification attribute components are supported; larger joint regions require splitting. This is an attribute-aware error estimate, not a guarantee for arbitrary unbounded bone transformations; inspect extreme animation poses. Include referenced resources when distributing output.
+`meshes[].extras.rtsLods` persists descending pixel thresholds and target meshes. Nested/cyclic chains, morph targets and mismatched skin targets are rejected. Skinned target meshes inherit the source skin even though they have no scene node. The renderer chooses using both main-camera and
 sun-shadow projected extent; reflection/spot views currently reuse that mesh choice. Do not
 claim per-pass AutoLOD for those auxiliary views. `setModelLodEnabled(false)` forces LOD0.
 
@@ -83,3 +82,9 @@ Throughput confirmation uses 180/600 to avoid shortening the sample window when 
 
 Measured benefits and regressions are retained in
 [the native Bistro report](benchmarks/bistro-geometry-stack-2026-11-12.md).
+
+### Skinned AutoLOD runtime
+
+Palette-skinned draws with a current pose and node-world matrices select embedded AutoLODs, retaining animation graphs, per-instance shoulder edits and sockets. Selection bounds conservatively enclose transformed source primitive boxes for every influencing joint; main-camera and sun-shadow size both constrain detail. Original LOD0 remains available. Baked-only draws without current pose bounds retain LOD0 (no claim of skeletal AutoLOD in that mode). Material overrides stay on the shared material indices. Morph LODs remain unsupported.
+
+`aiverse_modelview model.glb@Run --time 0.16 --distance 20 --lod-report` prints actual selected LOD-node count and main/shadow submitted triangles. `--no-lod` supplies a LOD0 A/B reference.

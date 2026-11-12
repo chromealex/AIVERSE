@@ -91,4 +91,41 @@ class AutoLodTests(unittest.TestCase):
         self.run_tool()
         with self.assertRaises(ValueError):autolod.generate(self.output,self.root/'twice.gltf',WORKER)
 
+
+
+@unittest.skipUnless(WORKER.is_file(),'set AUTOLOD_WORKER')
+class SkinnedAutoLodTests(AutoLodTests):
+    def add_skin(self, invalid=False):
+        pos=autolod.Asset(self.source).values(0);raw=bytearray((self.root/'source.bin').read_bytes())
+        for key,ctype,values,fmt in [('JOINTS_0',5121,[(0,1,0,0) for p in pos],'B'),('WEIGHTS_0',5126,[(1-p[0],p[0],0,0) for p in pos],'f')]:
+            packed=struct.pack('<'+str(len(pos)*4)+fmt,*(v for row in values for v in row))
+            vi=len(self.doc['bufferViews']);self.doc['bufferViews'].append({'buffer':0,'byteOffset':len(raw),'byteLength':len(packed)})
+            ai=len(self.doc['accessors']);self.doc['accessors'].append({'bufferView':vi,'componentType':ctype,'count':len(pos),'type':'VEC4'})
+            self.doc['meshes'][0]['primitives'][0]['attributes'][key]=ai;raw.extend(packed)
+        self.doc['nodes']=[{'mesh':0,'skin':0},{'name':'hip'},{'name':'knee'}];self.doc['skins']=[{'joints':[1] if invalid else [1,2]}]
+        self.doc['buffers'][0]['byteLength']=len(raw);(self.root/'source.bin').write_bytes(raw);self.save()
+    def test_skin_reduction_keeps_weights_and_pose(self):
+        self.add_skin();report=autolod.generate(self.source,self.output,WORKER,skinned=True)
+        self.assertGreater(len(report['meshes'][0]['levels']),0)
+        source=autolod.Asset(self.source);out=autolod.Asset(self.output)
+        self.assertEqual(out.doc['skins'],source.doc['skins']);self.assertEqual(out.doc['nodes'],source.doc['nodes'])
+        attrs=source.doc['meshes'][0]['primitives'][0]['attributes']
+        original={p:(j,w) for p,j,w in zip(source.values(attrs['POSITION']),source.values(attrs['JOINTS_0']),source.values(attrs['WEIGHTS_0']))}
+        for mesh in out.doc['meshes'][1:]:
+            a=mesh['primitives'][0]['attributes']
+            for p,j,w in zip(out.values(a['POSITION']),out.values(a['JOINTS_0']),out.values(a['WEIGHTS_0'])):
+                self.assertEqual((j,w),original[p])
+                # Two independently moving joints: exact retained-vertex deformation.
+                for angle in (-1.2,0,.9):
+                    import math
+                    def deform(weights):
+                        return (p[0]*weights[0]+(math.cos(angle)*p[0]+math.sin(angle)*p[2])*weights[1],p[1],p[2]*weights[0]+(-math.sin(angle)*p[0]+math.cos(angle)*p[2])*weights[1])
+                    self.assertEqual(deform(w),deform(original[p][1]))
+    def test_invalid_joint_rejected(self):
+        self.add_skin(True)
+        with self.assertRaisesRegex(ValueError,'joint index'):autolod.generate(self.source,self.output,WORKER,skinned=True)
+    def test_skinned_morph_stays_unsupported(self):
+        self.add_skin();self.doc['meshes'][0]['primitives'][0]['targets']=[{'POSITION':0}];self.save()
+        self.assertIn('skipped',autolod.generate(self.source,self.output,WORKER,skinned=True)['meshes'][0])
+
 if __name__=='__main__':unittest.main()

@@ -466,6 +466,13 @@ private:
         // skin used with each mesh (a skinned mesh needs its palette built against that skin)
         std::map<int, int> skinOfMesh;
         for (auto& n : model_->nodes) if (n.mesh >= 0 && n.skin >= 0) skinOfMesh[n.mesh] = n.skin;
+        // LOD meshes are not scene nodes; inherit the base skin so they retain palettes.
+        for (const auto& n : model_->nodes) if (n.mesh >= 0 && n.mesh < int(meshes.size()) && n.skin >= 0) {
+            for (const auto& level : meshes[size_t(n.mesh)]["extras"]["rtsLods"].items()) {
+                const int target = inum(level["mesh"], -1);
+                if (target >= 0 && target < int(meshes.size())) skinOfMesh[target] = n.skin;
+            }
+        }
         for (size_t mi = 0; mi < meshes.size(); ++mi) {
             const Json& jm = meshes[mi];
             MeshDef md;
@@ -486,7 +493,18 @@ private:
         for (const auto& mesh : model_->meshes) for (const auto& lod : mesh.lods) {
             const auto& target = model_->meshes[size_t(lod.mesh)];
             if (!target.lods.empty()) fail("nested or cyclic LOD chains are unsupported");
-            for (const auto& p : target.primitives) if (p.morphTargets || !p.jointPalette.empty()) fail("LOD targets must be static");
+            const bool sourceSkin = std::any_of(mesh.primitives.begin(), mesh.primitives.end(), [](const Primitive& p){return !p.jointPalette.empty();});
+            for (const auto& p : mesh.primitives) if (p.morphTargets) fail("morph LOD sources are unsupported");
+            for (const auto& p : target.primitives) {
+                if (p.morphTargets) fail("morph LOD targets are unsupported");
+                if (sourceSkin != !p.jointPalette.empty()) fail("LOD skin binding must match its source");
+            }
+        }
+        for (const auto& n : model_->nodes) if(n.skin>=0 && n.mesh>=0 && n.mesh<int(model_->meshes.size())) {
+            for(const auto& lod:model_->meshes[size_t(n.mesh)].lods)
+                for(const auto& p:model_->meshes[size_t(lod.mesh)].primitives)
+                    for(uint16_t joint:p.jointPalette)
+                        if(size_t(joint)>=model_->skins[size_t(n.skin)].joints.size())fail("LOD joint exceeds source skin");
         }
         for (size_t i = 0; i < model_->nodes.size(); ++i) {
             Node& n = model_->nodes[i];

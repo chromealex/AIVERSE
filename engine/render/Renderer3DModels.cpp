@@ -294,11 +294,30 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (!nodeView && !nodeShadow) ++modelStats_.culledNodes; // retained for later mirror/spot frusta
         }
         int meshIndex = node.mesh; size_t level = 0;
-        if (modelLodEnabled_ && rigid && !baseMesh.lods.empty() && d.variant < 0 && !d.nodeMaterial) {
-            const float error = length(baseMesh.boundsMax - baseMesh.boundsMin);
+        // Palette poses provide conservative current skin bounds. Baked-only draws keep
+        // LOD0 until they supply pose bounds; bind bounds can underestimate a bent limb.
+        const bool skinLod = node.skin >= 0 && !displaced && usePose && !canBake && d.nodeWorld && d.nodeWorld->size() == m->nodes.size();
+        if (modelLodEnabled_ && (rigid || skinLod) && !baseMesh.lods.empty() && d.variant < 0 && !d.nodeMaterial) {
+            mat4 lodWorld = nodeWorld;
+            float3 lodMin = baseMesh.boundsMin, lodMax = baseMesh.boundsMax;
+            if (skinLod) {
+                lodMin = {1e30f, 1e30f, 1e30f}; lodMax = {-1e30f, -1e30f, -1e30f};
+                const Skin& skin = m->skins[size_t(node.skin)];
+                for (const auto& prim : baseMesh.primitives) for (uint16_t joint : prim.jointPalette) {
+                    if (size_t(joint) >= skin.joints.size()) continue;
+                    const mat4 bone = world[size_t(skin.joints[joint])] * skin.inverseBind[joint];
+                    for (int corner = 0; corner < 8; ++corner) {
+                        const float3 v = bone.transformPoint({corner & 1 ? prim.boundsMax.x : prim.boundsMin.x, corner & 2 ? prim.boundsMax.y : prim.boundsMin.y, corner & 4 ? prim.boundsMax.z : prim.boundsMin.z});
+                        lodMin = {std::min(lodMin.x, v.x), std::min(lodMin.y, v.y), std::min(lodMin.z, v.z)};
+                        lodMax = {std::max(lodMax.x, v.x), std::max(lodMax.y, v.y), std::max(lodMax.z, v.z)};
+                    }
+                }
+                lodWorld = d.world;
+            }
+            const float error = length(lodMax - lodMin);
             const bool zeroToOne = dev_->info().clipDepthZeroToOne;
-            float pixels = nodeView ? geometryErrorPixels(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, error, sceneW_, sceneH_, zeroToOne) : 0;
-            if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, error, shadowSize_, shadowSize_, zeroToOne));
+            float pixels = nodeView ? geometryErrorPixels(viewProj_ * lodWorld, lodMin, lodMax, error, sceneW_, sceneH_, zeroToOne) : 0;
+            if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(lightViewProj_ * lodWorld, lodMin, lodMax, error, shadowSize_, shadowSize_, zeroToOne));
             if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity(); // full detail for later mirror/spot frusta
             for (size_t i = 0; i < baseMesh.lods.size(); ++i) {
                 const auto& lod = baseMesh.lods[i];

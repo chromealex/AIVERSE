@@ -12988,6 +12988,27 @@ TEST(models_gltf_lod_metadata) {
 #include "tests_projectiles.inc"
 #include "tests_vfx_tools.inc"   // agent-vfxgraph
 
+TEST(models_skinned_autolod_inherits_palette) {
+    using namespace modeltest;
+    Json doc=Json::parse(skinnedGltf());
+    Json coarse=doc["meshes"][0];
+    doc.member("meshes").push(coarse);
+    doc.member("meshes").at(0).set("extras",Json::parse(R"({"rtsLods":[{"mesh":1,"maxPixels":128}]})"));
+    auto m=loadGltf("lod.gltf",doc.dump(),mapReader({}),nullptr);
+    CHECK(m->meshes[0].lods.size()==1);
+    const auto& fine=m->meshes[0].primitives[0];const auto& lod=m->meshes[1].primitives[0];
+    CHECK(!lod.jointPalette.empty() && lod.jointPalette==fine.jointPalette);
+    Pose pose;bindPose(*m,pose);sampleClip(m->clips[0],.5f,pose);
+    std::vector<mat4> world;worldMatrices(*m,pose,world);
+    std::vector<mat4> a,b;paletteMatrices(*m,m->skins[0],fine,world,a);paletteMatrices(*m,m->skins[0],lod,world,b);
+    CHECK(a.size()==b.size());
+    for(size_t i=0;i<a.size();++i)for(int j=0;j<16;++j)CHECK(near(a[i].m[j],b[i].m[j]));
+    // A missing weight stream must not silently produce an unanimated lower LOD.
+    doc.member("meshes").at(1).member("primitives").at(0).member("attributes").erase("WEIGHTS_0");
+    bool rejected=false;try{loadGltf("bad.gltf",doc.dump(),mapReader({}),nullptr);}catch(const std::exception&){rejected=true;}
+    CHECK(rejected);
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // aiverse_tests [name filter]
