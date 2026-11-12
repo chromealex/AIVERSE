@@ -117,6 +117,9 @@ inline const char* scatter = R"(
         float d=px.w>1.5?q.z*0.5+0.5:q.z;
         lit+=(uv.x<=0.0||uv.x>=1.0||uv.y<=0.0||uv.y>=1.0||d>=1.0)?1.0:SHADOW(uv,d);
     }
-    RETURN(vec4(center.rgb+sunColor.rgb*(sunColor.w*phase*lit*stepLen),center.a));
+    // Sky-lit aerial perspective beyond ambient start (volume.w); sun in-scatter on top.
+    float transmit=exp(-ambient.w*max(reach-volume.w,0.0));
+    vec3 hazed=center.rgb*transmit+ambient.rgb*(1.0-transmit);
+    RETURN(vec4(hazed+sunColor.rgb*(sunColor.w*phase*lit*stepLen),center.a));
 )";
 }

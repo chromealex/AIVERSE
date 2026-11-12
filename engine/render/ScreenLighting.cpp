@@ -5,7 +5,7 @@
 
 namespace aiverse::render {
 namespace {
-struct Uniforms { mat4 invVP, prevVP; float4 eye, prevEye, px, params, jitter; mat4 lightVP; float4 sun, sunColor, volume; };
+struct Uniforms { mat4 invVP, prevVP; float4 eye, prevEye, px, params, jitter; mat4 lightVP; float4 sun, sunColor, volume, ambient; };
 float halton(int index, int base) {
     float value=0, fraction=1;
     while(index>0){fraction/=float(base);value+=fraction*float(index%base);index/=base;}
@@ -13,7 +13,7 @@ float halton(int index, int base) {
 }
 struct Source { std::string glslVertex,glslFragment,msl; };
 Source shader(const char* body,bool sunShadow) {
-    const std::string fields="mat4 invVP; mat4 prevVP; vec4 eye; vec4 prevEye; vec4 px; vec4 params; vec4 jitter; mat4 lightVP; vec4 sun; vec4 sunColor; vec4 volume;";
+    const std::string fields="mat4 invVP; mat4 prevVP; vec4 eye; vec4 prevEye; vec4 px; vec4 params; vec4 jitter; mat4 lightVP; vec4 sun; vec4 sunColor; vec4 volume; vec4 ambient;";
     const std::string common=screenlighting::common;
     Source s;
     s.glslVertex="layout(location=0) in vec2 a_pos; out vec2 v_screen; void main(){v_screen=a_pos*0.5+0.5;gl_Position=vec4(a_pos,0.0,1.0);}";
@@ -25,7 +25,7 @@ Source shader(const char* body,bool sunShadow) {
         "vertex VOut vs_main(VIn in [[stage_in]]){VOut o;o.pos=float4(in.pos,0.0,1.0);o.screen=in.pos*0.5+0.5;return o;}\n"
         "#define COLOR(p) tex0.sample(s0,p)\n#define DEPTH(p) tex1.sample(s1,p)\n#define HISTORY(p) tex2.sample(s2,p)\n#define RETURN(c) return (c)\n#define SHADOW(uv,d) tex3.sample_compare(s3,uv,d)\n"+common+
         "fragment float4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]],texture2d<float> tex0 [[texture(0)]],sampler s0 [[sampler(0)]],depth2d<float> tex1 [[texture(1)]],sampler s1 [[sampler(1)]],texture2d<float> tex2 [[texture(2)]],sampler s2 [[sampler(2)]]"+(sunShadow?",depth2d<float> tex3 [[texture(3)]],sampler s3 [[sampler(3)]]":"")+"){\n"
-        "const mat4 invVP=u.invVP,prevVP=u.prevVP,lightVP=u.lightVP;const vec4 eye=u.eye,prevEye=u.prevEye,px=u.px,params=u.params,jitter=u.jitter,sun=u.sun,sunColor=u.sunColor,volume=u.volume;vec2 s=in.screen;\n"+body+"}\n";
+        "const mat4 invVP=u.invVP,prevVP=u.prevVP,lightVP=u.lightVP;const vec4 eye=u.eye,prevEye=u.prevEye,px=u.px,params=u.params,jitter=u.jitter,sun=u.sun,sunColor=u.sunColor,volume=u.volume,ambient=u.ambient;vec2 s=in.screen;\n"+body+"}\n";
     return s;
 }
 }
@@ -86,12 +86,13 @@ void ScreenLighting::resolve(gfx::Device& d,const gfx::PassDesc& out,const PostF
         Uniforms u{f.viewProj.inverse(),previous_,{f.cameraPos.x,f.cameraPos.y,f.cameraPos.z,0},
             {previousEye_.x,previousEye_.y,previousEye_.z,0},
             {1.0f/float(w_),1.0f/float(h_),d.info().renderTargetFlipY?1.0f:0.0f,d.info().clipDepthZeroToOne?1.0f:2.0f},
-            {valid_?1.0f:0.0f,0,0,0},{jitter_.x,jitter_.y,previousJitter_.x,previousJitter_.y},f.lightViewProj,{},{},{}};
+            {valid_?1.0f:0.0f,0,0,0},{jitter_.x,jitter_.y,previousJitter_.x,previousJitter_.y},f.lightViewProj,{},{},{},{}};
         const auto& L=f.lighting;const float3 toSun=normalize(L.sunDir);
         u.sun={toSun.x,toSun.y,toSun.z,std::clamp(volume_.anisotropy,-.95f,.95f)};
         u.sunColor={L.sunColor.x*L.sunIntensity*volume_.tint.x,L.sunColor.y*L.sunIntensity*volume_.tint.y,L.sunColor.z*L.sunIntensity*volume_.tint.z,std::max(volume_.density,0.0f)};
         // Golden-ratio frame offset decorrelates the per-pixel march jitter for temporal accumulation.
-        u.volume={std::max(volume_.maxDistance,.1f),float(volume_.steps),float(frame_++%64)*.618034f,0};
+        u.volume={std::max(volume_.maxDistance,.1f),float(volume_.steps),float(frame_++%64)*.618034f,volume_.ambientStart};
+        u.ambient={std::max(volume_.ambient.x,0.0f),std::max(volume_.ambient.y,0.0f),std::max(volume_.ambient.z,0.0f),std::max(volume_.ambientDensity,0.0f)};
         volumeRan_=volume_.enabled&&volume_.density>0&&f.sunShadow.valid()&&L.sunIntensity>0;
         auto draw=[&](int program,gfx::TextureHandle target,gfx::TextureHandle source){
             gfx::PassDesc p;p.colorTarget=target;p.depthTarget=depth_;p.clearColorEnabled=false;p.clearDepthEnabled=false;

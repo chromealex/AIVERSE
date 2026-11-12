@@ -43,7 +43,7 @@ struct Options {
         if(!o.tourPath.empty())o.camera=0;
         if(!std::isfinite(o.tourStart)||o.tourStart<0)throw std::runtime_error("invalid tour start");
         if(!o.tourPath.empty()&&(!o.captureSequence.empty()||o.motionYaw!=0))throw std::runtime_error("tour cannot use frame-step validation motion or sequence capture");
-        if(o.scene.empty()||o.warmup<1||o.samples<30||o.samples>100000||o.warmup>10000||o.camera < -1)throw std::runtime_error("require --scene; warmup 1..10000; samples 30..100000; camera >= 0 (or omit)");
+        if(o.scene.empty()||o.warmup<1||o.samples<(std::getenv("AIVERSE_BENCH_QUICK")?1:30)||o.samples>100000||o.warmup>10000||o.camera < -1)throw std::runtime_error("require --scene; warmup 1..10000; samples 30..100000; camera >= 0 (or omit)");
         if(o.profile!="baseline"&&o.profile!="hdr"&&o.profile!="low"&&o.profile!="full")throw std::runtime_error("profile: baseline, hdr, full or low");
         if(!std::isfinite(o.motionYaw)||!std::isfinite(o.freezeTime)||std::abs(o.motionYaw)>0.1f||o.freezeTime < -1)throw std::runtime_error("invalid validation motion/time");
         if(!o.captureSequence.empty()&&o.camera<0)throw std::runtime_error("sequence capture requires one --camera");
@@ -179,7 +179,7 @@ struct Bench {
             }
             additions.shadowGeometry=StaticShadowGeometry{};
             if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"){
-                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");keyConfig.erase("sunStudy");keyConfig.erase("meshOcclusion");keyConfig.erase("volumetricLight");
+                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");keyConfig.erase("sunStudy");keyConfig.erase("meshOcclusion");keyConfig.erase("volumetricLight");keyConfig.erase("look");
                 Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
                 Hasher keyHash;keyHash.str(keyConfig.dump());
                 StaticLightGrid grid;
@@ -240,29 +240,45 @@ struct Bench {
             renderer.setMaterialQuality(options.profile=="low"?MaterialQuality::Medium:MaterialQuality::High);
             renderer.setTraceEnabled(options.profile=="full");renderer.setModelReflectionsEnabled(options.profile=="full");
             renderer.lights.setQuality(options.profile=="low"||(additions.lights.empty()&&!config.has("probeGI"))?LightQuality::Off:LightQuality::High);
-            const auto& gi=config["probeGI"];
+            // "look": presentation-only overrides applied after the light-cache key (sun/sky colours,
+            // fog and runtime GI radiance are not bake inputs), so caches survive look tuning.
+            Json view=config;
+            for(const auto& [key,value]:config["look"].members()){
+                if(key=="probeGI"){Json gi=view["probeGI"];for(const auto& [k,v]:value.members()){
+                        if(k!="sun"&&k!="sky"&&k!="points")throw std::runtime_error("look.probeGI accepts sun, sky, points");
+                        gi.set(k,v);}
+                    view.set("probeGI",gi);}
+                else if(key=="sunColor"||key=="sunIntensity"||key=="skyColor"||key=="groundColor"||key=="fogDensity"||key=="fogColor"||key=="screenBounce")view.set(key,value);
+                else throw std::runtime_error("look: unknown key "+key);
+            }
+            const auto& gi=view["probeGI"];
             const auto giQuality=gi.getStr("quality","high");
             if(giQuality!="off"&&giQuality!="mobile"&&giQuality!="high")throw std::runtime_error("probeGI quality must be off, mobile or high");
             renderer.lights.setIndirectQuality(giQuality=="off"?IndirectQuality::Off:giQuality=="mobile"?IndirectQuality::Mobile:IndirectQuality::High);
             if(!renderer.lights.setStaticRadiance(SceneAssets::vector3(gi["points"],{1,1,1}),SceneAssets::vector3(gi["sun"],{}),SceneAssets::vector3(gi["sky"],{})))throw std::runtime_error("invalid probeGI radiance");
             if(report.getBool("probeEnvironmentPrecombined",false))renderer.lights.setStaticRadiance(SceneAssets::vector3(gi["points"],{1,1,1}),{1,1,1},{});
             renderer.setShadowBounds(model->boundsMin,model->boundsMax);
-            renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(config["sunColor"]);
-            renderer.lighting.sunIntensity=float(config["sunIntensity"].toDouble());
-            renderer.lighting.skyColor=v3(config["skyColor"]);renderer.lighting.groundColor=v3(config["groundColor"]);
-            renderer.lighting.fogDensity=float(config["fogDensity"].toDouble(0));
-            if(config.has("fogColor"))renderer.lighting.fogColor=v3(config["fogColor"]);
+            renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(view["sunColor"]);
+            renderer.lighting.sunIntensity=float(view["sunIntensity"].toDouble());
+            renderer.lighting.skyColor=v3(view["skyColor"]);renderer.lighting.groundColor=v3(view["groundColor"]);
+            renderer.lighting.fogDensity=float(view["fogDensity"].toDouble(0));
+            if(view.has("fogColor"))renderer.lighting.fogColor=v3(view["fogColor"]);
             PostFxSettings s;s.hdr=options.profile=="low"?HdrMode::Off:HdrMode::On;
             if(options.profile=="hdr"||options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25},{"type":"fxaa"}]})"),Json());
             if(options.profile=="full")s=parsePostFx(Json::parse(R"({"hdr":"on","effects":[{"type":"bloom","threshold":1.5,"intensity":0.25}]})"),Json());
             if(options.profile!="low"&&config.has("postfx"))s=parsePostFx(config["postfx"],Json());
-            screen.setDiffuseBounceEnabled(!(bakePointShadows&&(config.has("staticPointBounce")||config.has("probeGI"))));
+            // Screen bounce adds near-field light from visible surfaces; probe GI scenes opt in via look.screenBounce.
+            screen.setDiffuseBounceEnabled(config["look"].getBool("screenBounce",!(bakePointShadows&&(config.has("staticPointBounce")||config.has("probeGI")))));
             screen.setEnabled(options.profile=="full");
             if(config.has("volumetricLight")){
                 const auto& v=config["volumetricLight"];VolumetricLight light;light.enabled=v.getBool("enabled",true);
                 light.density=float(v["density"].toDouble(light.density));light.anisotropy=float(v["anisotropy"].toDouble(light.anisotropy));
                 light.maxDistance=float(v["maxDistance"].toDouble(light.maxDistance));light.steps=int(v["steps"].toDouble(light.steps));
                 light.tint=SceneAssets::vector3(v["tint"],light.tint);
+                light.ambient=SceneAssets::vector3(v["ambient"],light.ambient);
+                light.ambientDensity=float(v["ambientDensity"].toDouble(0));light.ambientStart=float(v["ambientStart"].toDouble(0));
+                if(!std::isfinite(light.ambientDensity)||light.ambientDensity<0||light.ambientDensity>1||!std::isfinite(light.ambientStart)||light.ambientStart<0||
+                   light.ambient.x<0||light.ambient.y<0||light.ambient.z<0)throw std::runtime_error("volumetricLight: ambient >= 0, ambientDensity 0..1, ambientStart >= 0");
                 if(!std::isfinite(light.density)||light.density<0||light.density>1||!std::isfinite(light.anisotropy)||std::abs(light.anisotropy)>.95f||
                    !std::isfinite(light.maxDistance)||light.maxDistance<=0||light.maxDistance>1000||light.steps<4||light.steps>32||light.tint.x<0||light.tint.y<0||light.tint.z<0)
                     throw std::runtime_error("volumetricLight: density 0..1, anisotropy -.95...95, maxDistance 0..1000, steps 4..32, tint >= 0");

@@ -12,6 +12,11 @@ struct VolumetricLight {
     float maxDistance = 40;    // march length cap (world units); sky pixels march this far
     int steps = 16;            // 4..32, jittered per pixel and frame; temporal AA resolves the noise
     float3 tint{1, 1, 1};      // multiplies the sun radiance
+    // Sky-lit aerial perspective: beyond `ambientStart` the scene fades towards `ambient` (linear HDR
+    // radiance) with coefficient `ambientDensity`. Nearby shade stays clear, distant air turns hazy.
+    float3 ambient{0, 0, 0};
+    float ambientDensity = 0;
+    float ambientStart = 0;
 };
 class ScreenLighting : public PostProcess {
 public:
@@ -19,7 +24,7 @@ public:
     void shutdown();
     void setEnabled(bool on) { if (enabled_ != on) reset(); enabled_ = on; }
     void setDiffuseBounceEnabled(bool on) { if(diffuseBounce_!=on){diffuseBounce_=on;reset();} }
-    void setVolumetricLight(const VolumetricLight& v) { volume_=v; volume_.steps=std::clamp(v.steps,4,32); }
+    void setVolumetricLight(const VolumetricLight& v) { volume_=v; volume_.steps=std::clamp(v.steps,4,32); volume_.ambientStart=std::max(v.ambientStart,0.0f); }
     const VolumetricLight& volumetricLight() const { return volume_; }
     void reset() { valid_ = false; sequence_ = 0; }
     RTSCamera jittered(RTSCamera camera, int w, int h);

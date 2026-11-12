@@ -523,3 +523,43 @@ haze above, plus a warmer grade closer to the reference (saturation .75 → .9, 
 slightly cool lift, vignette .25). Limits: single scattering from the sun only, uniform
 density (no height falloff or noise), shafts only where the sun shadow map has texels;
 point lights do not scatter. Checked on Linux GL (llvmpipe); Metal is unverified.
+
+### Matching the reference frame (2026-11-12)
+
+The camera already matched the reference (a 50/50 overlay aligns within a few pixels), so the
+remaining gap was lighting and grading. Fourteen measured regions of the reference (vault,
+foreground pillar, facade, far arches/curtains, sunlit/shaded floor, arcades) were compared
+with each capture. Findings that drove the changes:
+
+- the reference is white-balanced to neutral highlights with blue shade; the earlier warm grade
+  and warm GI sky (`[30,25,18]`) pushed everything orange;
+- the shaded courtyard floor is bright (~130/255) while the arcade framing stays near black.
+  A brute-force one-bounce estimate (`aiverse_probe_visibility --pixel x,y`) agrees with the
+  probe cache: sun bounce there is genuinely ~0.4 % of direct sun and the cosine-weighted sky
+  view is ~8 %, so this brightness has to come from a much brighter sky term (occluded by the
+  baked sky visibility, which keeps the arcade dark), not from GI scaling;
+- the exponential material fog lifts dark nearby shade uniformly; the reference keeps the near
+  arcade clear and hazes only distant air (pink far curtains = red cloth + bright haze).
+
+Engine/tooling changes:
+
+- `VolumetricLight` gains sky-lit aerial perspective: `ambient` (linear radiance),
+  `ambientDensity` and `ambientStart` (no haze closer than this distance, like a fog start
+  distance). Analytic, in the same pass as sun in-scattering; no extra samples.
+- Renderbench recipe `look` block: presentation-only overrides (`sunColor`, `sunIntensity`,
+  `skyColor`, `groundColor`, `fogDensity`, `fogColor`, runtime `probeGI` `sun`/`sky`/`points`,
+  `screenBounce`) applied after the light-cache key, so looks can be tuned without rebaking.
+  `look.probeGI` does not affect Mobile's precombined environment copy.
+- `AIVERSE_BENCH_QUICK=1` allows fewer than 30 samples for look iteration (e.g. `--warmup 10
+  --samples 2`); timing statistics from such runs are not benchmarks.
+- `aiverse_probe_visibility --pixel x,y` prints the receiver, a 4096-ray one-bounce sun reference,
+  the probe-cache sun term and the cosine-weighted sky view.
+
+Result: `docs/benchmarks/sponza-2026-11-12/scene-day-high-reference.json`
+([comparison: reference / start of day / now](benchmarks/sponza-2026-11-12/reference-match.png)).
+Mean region error against the reference fell from 26.9 to 17.5 (8-bit RGB). Remaining gaps:
+the reference's warm, visible vault under the foreground arch (our probes give it little
+bounce; raising GI sky enough to light it over-brightens the arcade curtains), less vivid
+arcade curtains, and stronger glow at the far end. Closing these needs better near-field
+indirect light (denser probes near the camera, or longer-range screen tracing), not grading.
+`skyColor` (2–3) and `probeGI.sky` (~30) are artistic values chosen against this frame.

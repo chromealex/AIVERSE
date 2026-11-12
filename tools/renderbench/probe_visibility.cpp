@@ -144,6 +144,34 @@ void writePpm(const std::string& path,int w,int h,const std::vector<float3>& px)
     for(auto c:px)for(float v:{c.x,c.y,c.z}){float x=v/(1+v);f.put(char(std::clamp(int(std::pow(x,1/2.2f)*255+.5f),0,255)));}
 }
 
+int pixelProbe(const Scene& s,int px,int py,int width,int height) {
+    const auto& cam=s.config["cameras"][0];float3 eye=v3(cam["eye"]),target=v3(cam["target"]);
+    float fov=float(cam["fovYDegrees"].toDouble(s.config["fovYDegrees"].toDouble(60)))*3.14159265f/180;
+    float3 forward=normalize(target-eye),right=normalize(cross(forward,{0,1,0})),up=cross(right,forward);
+    float scale=std::tan(fov*.5f),aspect=float(width)/height;
+    auto ray=normalize(forward+right*((2*(px+.5f)/width-1)*scale*aspect)+up*((1-2*(py+.5f)/height)*scale));float3 n;
+    float d=s.geometry.distance(eye,ray,500,&n);if(d>=500){std::printf("sky\n");return 1;}
+    if(dot(n,ray)>0)n=n*-1.0f;
+    float3 p=eye+ray*d+n*.02f;
+    const float3 sun=normalize(v3(s.config["sunDirection"]));
+    // Reference: cosine-weighted hemisphere, one bounce of unit sun with display radiance albedo*ndl.
+    float3 t=std::abs(n.y)<.9f?normalize(cross(n,{0,1,0})):normalize(cross(n,{1,0,0}));float3 b=cross(n,t);
+    double E[3]={0,0,0},skyView=0;const int N=4096;
+    for(int i=0;i<N;++i){float u=(i+.5f)/N,phi=i*2.39996323f,r=std::sqrt(u);
+        float3 dir=normalize(t*(r*std::cos(phi))+b*(r*std::sin(phi))+n*std::sqrt(1-u));float3 hn,alb;
+        float h=s.geometry.distance(p,dir,60,&hn,&alb);if(h>=60){if(dir.y>0)skyView+=1;continue;}
+        if(dot(hn,dir)>0)hn=hn*-1.0f;
+        float3 q=p+dir*h+hn*.04f;float ndl=std::max(0.0f,dot(hn,sun));
+        if(ndl<=0||s.geometry.distance(q,sun,60)<60)continue;
+        E[0]+=alb.x*ndl;E[1]+=alb.y*ndl;E[2]+=alb.z*ndl;}
+    // cosine-weighted estimator: E = pi * mean(L) in physical units; engine display convention divides by pi.
+    for(double& e:E)e/=N;
+    float tot;auto cache=indirect(s,p,n,s.moments.empty()?Plane:Moments,tot);
+    std::printf("pixel %d,%d pos (%.2f %.2f %.2f) n (%.2f %.2f %.2f)\n reference one-bounce sun (per unit sun): %.4f %.4f %.4f\n probe cache sun term: %.4f %.4f %.4f (weight %.3f)\n",
+        px,py,p.x,p.y,p.z,n.x,n.y,n.z,E[0],E[1],E[2],cache.x,cache.y,cache.z,tot);
+    std::printf(" reference sky view (cosine-weighted): %.3f\n",skyView/N);
+    return 0;
+}
 int diagnose(const Scene& s,int x0,int y0,int w,int h,int width,int height,const std::string& prefix) {
     const auto& cam=s.config["cameras"][0];float3 eye=v3(cam["eye"]),target=v3(cam["target"]);
     float fov=float(cam["fovYDegrees"].toDouble(s.config["fovYDegrees"].toDouble(60)))*3.14159265f/180;
@@ -179,7 +207,7 @@ int diagnose(const Scene& s,int x0,int y0,int w,int h,int width,int height,const
 }
 
 int aiverseMain(int argc,char** argv) {
-    std::string scene,cache,prefix="/tmp/pv_";int sub=0;float bias=-1;bool facing=true;std::string write;int x0=0,y0=0,w=320,h=180,width=1280,height=720;
+    std::string scene,cache,prefix="/tmp/pv_";int sub=0,pixelX=-1,pixelY=-1;float bias=-1;bool facing=true;std::string write;int x0=0,y0=0,w=320,h=180,width=1280,height=720;
     for(int i=1;i+1<argc;i+=2){std::string a=argv[i],v=argv[i+1];
         if(a=="--scene")scene=v;else if(a=="--cache")cache=v;else if(a=="--prefix")prefix=v;
         else if(a=="--rect"){std::sscanf(v.c_str(),"%d,%d,%d,%d",&x0,&y0,&w,&h);}
@@ -187,6 +215,7 @@ int aiverseMain(int argc,char** argv) {
         else if(a=="--write")write=v;
         else if(a=="--facing")facing=std::atoi(v.c_str())!=0;
         else if(a=="--bias")bias=float(std::atof(v.c_str()));
+        else if(a=="--pixel")std::sscanf(v.c_str(),"%d,%d",&pixelX,&pixelY);
         else if(a=="--size"){std::sscanf(v.c_str(),"%dx%d",&width,&height);}
     }
     if(scene.empty()||cache.empty()){std::fprintf(stderr,"usage: aiverse_probe_visibility --scene recipe.json --cache gi.avgic [--moments 4 [--write new.avgic]] [--rect x,y,w,h] [--size WxH] [--prefix out_] [--bias m] [--facing 0|1]\n");return 2;}
@@ -203,6 +232,7 @@ int aiverseMain(int argc,char** argv) {
             std::ofstream f(write,std::ios::binary);f.write(bytes.data(),std::streamsize(bytes.size()));if(!f)throw std::runtime_error("cannot write cache");
             std::fprintf(stderr,"wrote %s (%zu bytes)\n",write.c_str(),bytes.size());return 0;
         }
+        if(pixelX>=0)return pixelProbe(s,pixelX,pixelY,width,height);
         return diagnose(s,x0,y0,w,h,width,height,prefix);
     }catch(const std::exception& e){std::fprintf(stderr,"probe_visibility: %s\n",e.what());return 1;}
 }
