@@ -29,7 +29,8 @@ struct AsyncChunkStream::Impl {
 #ifndef __EMSCRIPTEN__
         worker=std::thread([this]{for(;;){std::shared_ptr<Job> job;{
             std::unique_lock lock(mutex);wake.wait(lock,[&]{return stopping||!jobs.empty();});
-            if(stopping)return;job=jobs.front();jobs.pop_front();
+            if(stopping)return;
+            job=jobs.front();jobs.pop_front();
         }run(job);}});
 #endif
     }

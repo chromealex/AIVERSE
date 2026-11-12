@@ -48,7 +48,8 @@ bool SpatialWorld::addTriangle(uint32_t id,Triangle triangle) {
     if(bounds.min.x==bounds.max.x)bounds.max.x+=epsilon;
     if(bounds.min.y==bounds.max.y)bounds.max.y+=epsilon;
     if(bounds.min.z==bounds.max.z)bounds.max.z+=epsilon;
-    if(!add({id,bounds}))return false;triangles_[id]=triangle;return true;
+    if(!add({id,bounds}))return false;
+    triangles_[id]=triangle;return true;
 }
 bool SpatialWorld::blocked(Bounds bounds)const {
     const auto center=(bounds.min+bounds.max)*Fixed::fromRatio(1,2);

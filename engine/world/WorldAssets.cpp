@@ -7,12 +7,14 @@
 namespace aiverse::world {
 bool safeAssetPath(const std::string& s){return !s.empty()&&s.front()!='/'&&s.find("..") == std::string::npos&&s.find('\\')==std::string::npos&&s.find(':')==std::string::npos&&s.find('\0')==std::string::npos;}
 int64_t worldInteger(const Json& j,const char* key,int64_t fallback,int64_t low,int64_t high) {
-    if(!j.has(key))return fallback;const auto& v=j[key];
+    if(!j.has(key))return fallback;
+    const auto& v=j[key];
     if(!v.isNumber()||v.fx().raw%Fixed::kOne||v.integer()<low||v.integer()>high)throw JsonError(std::string("world.")+key+": invalid integer");
     return v.integer();
 }
 Vec3 worldVector(const Json& j,Fixed limit) {
-    if(!j.isArray()||j.size()!=3)throw JsonError("world: expected vector");Vec3 v;Fixed* a[]={&v.x,&v.y,&v.z};
+    if(!j.isArray()||j.size()!=3)throw JsonError("world: expected vector");
+    Vec3 v;Fixed* a[]={&v.x,&v.y,&v.z};
     for(size_t i=0;i<3;++i){if(!j[i].isNumber()||j[i].fx()< -limit||j[i].fx()>limit)throw JsonError("world: coordinate out of range");*a[i]=j[i].fx();}return v;
 }
 WorldAssets WorldAssets::parse(const Json& j) {
