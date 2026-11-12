@@ -301,8 +301,8 @@ TEST(topdown_controls_sticks_keys_quantize_and_camera) {
             {"weapon": "next", "anchor": [1, 0.3], "offset": [-50, -40], "radius": 30}]}})"), r, rts);
         CHECK(wc.config().buttons.size() == 2 && wc.config().buttons[0].weaponStep == -1 && wc.config().buttons[1].weaponStep == 1);
         CHECK(wc.pointerDown(7, 800 - 50, 480 * 0.3f - 40, 800, 480, true));
-        const std::vector<int> pressed = wc.takeAbilityPresses();
-        CHECK(pressed.size() == 1 && pressed[0] == 1);
+        const auto pressed = wc.takeButtonEvents();
+        CHECK(pressed.size() == 1 && pressed[0].button == 1);
         CHECK(!wc.draw(800, 480, {1, 1}).empty());
     }
     const float W = 1000, H = 600;
