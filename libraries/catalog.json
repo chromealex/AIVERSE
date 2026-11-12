@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1243,6 +1243,82 @@
         "aiverse_engine"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "settlement-production",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/Colony.h",
+      "skill": "skills/aiverse-settlement-production/SKILL.md",
+      "summary": "Colony simulation policies: colonist needs with decay, thresholds and mood bands (breaks, work speed), hour-block schedules (work/sleep/leisure), job preferences 1..4 with deterministic assignment (lib::claim, stable tie-break, stock reservations per stockpile), production recipes at workstations with bills and power requirements, haul jobs between stockpiles, construction and gathering orders, disaster alerts (fire/flood/raid) with response jobs and priority overrides/preemption, power and fluid graphs (producers/consumers/storage per connected component, deterministic brownout shedding by priority with hysteresis), and a colony planner bot that issues player-equivalent commands",
+      "notes": "Read docs/genre-packages.md (settlement-production) for the tick order and authority split. stepColony/stepPower once per strictly increasing tick; malformed input returns nullopt with state untouched, invalid or stale commands are ignored with CommandIgnored. Players and bots::planColony (bots/ColonyPlanner.h) use the same ColonyCommand path. Composes tasks (claim), reservations (one book per stockpile, ticket = job id) and graphs (lib::Graph components); production-networks/offline-production remain the owners of instant factory links and fast-forward. Owner supplies unpowered structures (PowerReport), gather availability (renewal/ecology), mood modifiers (survivalMood) and alerts (e.g. grid-field fire). Persist ColonyState 104, PowerGridState 105 and ColonyPlannerState 110 via genre::save/load (kinds 104..111 shared with survival-ecology); hash with colonyHash/powerHash/colonyPlannerHash and bind colonyDefsHash. Optional `colony` settings section. Executable example: examples/libraries/genre/production-survival.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_settlement_production",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/ColonyTypes.h",
+        "libraries/include/aiverselib/genre/ColonyRunner.h",
+        "libraries/include/aiverselib/genre/ColonyPower.h",
+        "libraries/include/aiverselib/genre/ColonyData.h",
+        "libraries/include/aiverselib/genre/ColonyConfigured.h",
+        "libraries/include/aiverselib/genre/ColonyPersistence.h",
+        "libraries/include/aiverselib/genre/SettlementJson.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "libraries/include/aiverselib/bots/ColonyPlanner.h",
+        "libraries/include/aiverselib/bots/ColonyPlannerData.h",
+        "examples/libraries/genre/production-survival/colony.json",
+        "examples/libraries/genre/production-survival/power.json",
+        "examples/libraries/genre/production-survival/planner.json",
+        "examples/libraries/genre/production-survival/settings.json",
+        "examples/libraries/genre/production-survival/production_survival.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "tasks",
+        "reservations",
+        "graphs",
+        "configuration"
+      ]
+    },
+    {
+      "id": "survival-ecology",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/SurvivalEcology.h",
+      "skill": "skills/aiverse-survival-ecology/SKILL.md",
+      "summary": "Survival and ecology policies: body model (core temperature from owner environment, clothing insulation/windproofing/waterproofing, shelter and heat sources, wetness, hunger/thirst/stamina interplay, condition and death) with weather modifiers for bodies, solar/wind power, growth and animal activity; population ecosystems per species per region (logistic growth, carrying capacity, saturating predation, starvation, migration, integer accumulators); animal behavior states wander/graze/flee/hunt/sleep from stealth-senses PerceivedTarget records; renewable resource nodes with depletion and regrowth timers",
+      "notes": "Read docs/genre-packages.md (survival-ecology). stepSurvival/stepEcology/stepEcologyAnimals/stepEcologyResources once per strictly increasing tick; malformed input returns nullopt with state untouched. Randomness only through the passed engine Random (ecology birth noise, wander goals). Animal decisions consume genre::PerceivedTarget (genre/Senses.h) plus owner target facts; kills/grazing/harvests are events the owner routes to populations and renewal nodes. Inventory, health owners and terrain/grid fields stay authoritative: food/drink actually consumed and shelter come from the owner. Persist SurvivalState 106, EcologyState 107, EcologyAnimalState 108, EcologyResourceState 109 via genre::save/load (kinds 104..111 shared with settlement-production); hash with survivalHash and bind survivalConfigHash/ecologyDefsHash/ecologyAnimalDefsHash. Optional `survival` settings section.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_survival_ecology",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/Survival.h",
+        "libraries/include/aiverselib/genre/Ecology.h",
+        "libraries/include/aiverselib/genre/EcologyAnimals.h",
+        "libraries/include/aiverselib/genre/EcologyResources.h",
+        "libraries/include/aiverselib/genre/EcologyData.h",
+        "libraries/include/aiverselib/genre/SurvivalConfigured.h",
+        "libraries/include/aiverselib/genre/SurvivalPersistence.h",
+        "libraries/include/aiverselib/genre/SettlementJson.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "libraries/include/aiverselib/genre/Senses.h",
+        "examples/libraries/genre/production-survival/ecology.json",
+        "examples/libraries/genre/production-survival/settings.json",
+        "examples/libraries/genre/production-survival/production_survival.cpp",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "stealth-senses",
+        "configuration"
+      ]
     },
     {
       "id": "weapon-policies",

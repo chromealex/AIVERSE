@@ -41,6 +41,8 @@ ALIASES = {
  'aiverse-orchestrator':'skill catalog orchestration скилл каталог оркестратор',
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
+ 'aiverse-settlement-production':'colony settlement city factory production recipe workstation haul logistics job schedule needs mood power grid electricity fluid water brownout disaster колони поселен город фабрик производств рецепт верстак перенос работ расписан потребност настроен электросет энерг вода авари бедстви',
+ 'aiverse-survival-ecology':'survival temperature cold hypothermia wet hunger thirst stamina shelter clothing weather ecosystem population predator prey animal deer wolf regrowth renewable выживан температур холод мокр голод жажд выносливост укрыти одежд погод экосистем популяц хищник жертв животн олен волк восстановлен ресурс',
  'aiverse-cinematic-gameplay':'cinematic cutscene timeline qte slowmo hitstop timescale sync staging checkpoint катсцен ролик таймлайн замедлен синхрон постановк чекпоинт',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
