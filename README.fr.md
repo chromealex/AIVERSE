@@ -26,7 +26,7 @@
   <a href="#fonctionnement">Fonctionnement</a> ·
   <a href="#modèles-prêts-à-lemploi">Modèles</a> ·
   <a href="#démarrage-rapide">Démarrage rapide</a> ·
-  <a href="docs/overview.md">Vue d’ensemble complète</a>
+  <a href="docs/fr/overview.md">Vue d’ensemble complète</a>
 </p>
 
 ---
@@ -150,7 +150,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, plugins de stores et de publicité |
 | Addressables / Asset Bundles | paquets `.rpak`, builds fractionnés et téléchargement de contenu |
 
-Le rapport marque chaque élément comme transféré exactement, approximativement ou non transféré. Une réimportation conserve vos modifications. Le projet doit utiliser la sérialisation des ressources **Force Text**. Les projets Godot s’importent de la même façon. Détails : [Import d’un projet de moteur](docs/engine-import.md).
+Le rapport marque chaque élément comme transféré exactement, approximativement ou non transféré. Une réimportation conserve vos modifications. Le projet doit utiliser la sérialisation des ressources **Force Text**. Les projets Godot s’importent de la même façon. Détails : [Import d’un projet de moteur](docs/fr/engine-import.md).
 
 ---
 
@@ -235,7 +235,7 @@ open build/mac/AiverseEditor.app        # éditeur : hub de projets et modèles
 
 Linux : `cmake --preset linux-release && cmake --build build/linux-release`. Si vous préférez ne pas
 compiler, la branche `builds` contient l’éditeur et les outils précompilés
-([détails](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
+([détails](docs/fr/overview.md#moteur-précompilé-branche-builds-et-aiversemcp-sans-compilateur)).
 
 **2. Créer un jeu.** Dans le hub, cliquez sur **Créer un jeu** ou créez un projet à partir d’un modèle. Vous
 pouvez y jouer contre des bots tout de suite dans la fenêtre Game.
@@ -268,7 +268,7 @@ Le moteur est en développement actif. Ce qui a été vérifié :
 - 🛠 Des modèles pour les genres autres que RTS et FPS sont en préparation
 
 Détails par sous-système dans
-[Vérifié / non vérifié](docs/overview.md#verified--not-verified).
+[Vérifié / non vérifié](docs/fr/overview.md#vérifié--non-vérifié).
 
 ---
 
@@ -278,17 +278,17 @@ Les documents de référence sont en anglais. La vue d’ensemble, l’assistant
 
 | | |
 |---|---|
-| [**Vue d’ensemble complète**](docs/overview.md) | tous les sous-systèmes, compilation, plateformes, CI, versions |
+| [**Vue d’ensemble complète**](docs/fr/overview.md) | tous les sous-systèmes, compilation, plateformes, CI, versions |
 | [Format de jeu](docs/game-format.md) | `game.json`, `rules.json`, cartes et tous les blocs de données |
 | [Paquets de genre](docs/genre-packages.md) · [Bibliothèques](docs/libraries.md) | des mécaniques pour tous les genres |
-| [Assistant Créer un jeu](docs/game-wizard.md) | comment une idée et des illustrations deviennent un projet fini |
+| [Assistant Créer un jeu](docs/fr/game-wizard.md) | comment une idée et des illustrations deviennent un projet fini |
 | [Scripts](docs/scripting.md) · [Modules C++](docs/native-modules.md) | quand les données ne suffisent pas |
 | [Terrain](docs/terrain.md) · [Planètes](docs/planets.md) · [Recherche de chemin](docs/pathfinding.md) | monde et déplacement |
 | [Particules](docs/particles.md) · [Modèles 3D](docs/models.md) · [Shader Graph](docs/shader-graph.md) | visuel |
 | [Méta-jeu](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monétisation et stores |
 | [FPS](docs/fps.md) · [Grands mondes](docs/large-worlds.md) | module FPS |
 | [AGENTS.md](AGENTS.md) | règles pour les agents qui modifient le moteur lui-même |
-| [Venir d’Unity](docs/engine-import.md) | importer scènes, prefabs et ressources, puis porter la logique avec un agent |
+| [Venir d’Unity](docs/fr/engine-import.md) | importer scènes, prefabs et ressources, puis porter la logique avec un agent |
 
 ## Licence
 
