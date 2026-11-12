@@ -24,6 +24,7 @@
 #include "RtsEnv.h"
 #include "RtsDriving.h"
 #include "RtsCommerce.h"
+#include "RtsCareer.h"
 #include "RtsRoutes.h"
 #include "RtsArsenal.h"
 #include <memory>
@@ -98,6 +99,7 @@ enum CommandType : uint16_t {
     kCmdTopDownEnter,   // no units (rules "driving", RtsDriving.h): the hero gets into the nearest free vehicle / out of his car
     kCmdCommerce,       // no units (rules "commerce", RtsCommerce.h): param = commercePack(op, premises, value)
     kCmdTopDownWeapon,  // no units (rules "arsenal", RtsArsenal.h): param kWeaponNext / kWeaponPrev, or kWeaponSlot + slot
+    kCmdCareer,         // no units (rules "careers", RtsCareer.h): param = careerPack(op, career); open careers only
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -546,6 +548,7 @@ public:
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
     Raid* raid() const { return raid_.get(); }                // extraction raids (RtsRaid.h); inactive without rules "raid"
+    Career* career() const { return career_.get(); }           // career ladders and perks (RtsCareer.h); null before setup
     Commerce* commerce() const { return commerce_.get(); }     // premises, businesses, the bank (RtsCommerce.h); null before setup
     Arsenal* arsenal() const { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (RtsArsenal.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
@@ -921,6 +924,7 @@ private:
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
     std::unique_ptr<Raid> raid_;           // extraction raids (state: RaidStore resource)
+    std::unique_ptr<Career> career_;       // rules "careers" (state: CareerStore resource)
     std::unique_ptr<Commerce> commerce_;   // rules "commerce" (state: CommerceStore resource)
     std::unique_ptr<Arsenal> arsenal_;     // rules "arsenal" (state: ArsenalStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)

@@ -213,6 +213,8 @@ void Commerce::pay(Simulation& sim, uint8_t player, Fixed amount) {
     st->accounts[player].debt += need - taken;   // what he could not cover is owed to the bank
 }
 
+void Commerce::fine(Simulation& sim, uint8_t player, Fixed amount) { if (amount.raw > 0) pay(sim, player, Fixed{} - amount); }
+
 void Commerce::closeBusiness(Premise& p) { p.business = -1; p.lastNet = {}; p.total = {}; p.staff = 0; p.manager = false; p.served = {}; }
 
 void Commerce::vacate(Simulation& sim, Premise& p, uint8_t who) {

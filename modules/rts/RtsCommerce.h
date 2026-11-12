@@ -112,6 +112,8 @@ public:
     // The same checks the command runs. nullptr: allowed; otherwise a short reason ("too far", "not enough money"...).
     const char* refusal(Simulation& sim, uint8_t player, CommerceOp op, int premise, int64_t value) const;
     bool act(Simulation& sim, uint8_t player, CommerceOp op, int premise, int64_t value);   // simulation code only
+    // A fine (caught by the police, a hospital bill): taken from the pocket, what is missing becomes bank debt.
+    void fine(Simulation& sim, uint8_t player, Fixed amount);   // simulation code only
     Fixed cash(Simulation& sim, uint8_t player) const;
     Fixed creditLimit(Simulation& sim, uint8_t player) const;   // the most the bank lets the debt grow to
     int findPremise(Simulation& sim, const std::string& id) const;

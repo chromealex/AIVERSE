@@ -14133,6 +14133,7 @@ TEST(bw_player_mods_by_count_table) {
 #include "tests_arsenal.inc"   // the hero's weapons, ammo, crates and money (agent-gta2)
 #include "tests_city.inc"      // city planner (agent-gta2)
 #include "tests_commerce.inc"  // premises, businesses, the bank (agent-gta2)
+#include "tests_career.inc"    // career ladders and perks (agent-gta2)
 
 #include "tests_bwai.inc"   // agent-bw-ai: Bunker Wars computer player
 

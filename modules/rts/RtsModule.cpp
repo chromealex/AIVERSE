@@ -46,6 +46,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     driving_->setup(sim, *this, rulesJson);
     commerce_ = std::make_unique<Commerce>();   // premises, businesses, the bank (rules "commerce"); nothing without the block
     commerce_->setup(sim, *this, rulesJson, mapIn);
+    career_ = std::make_unique<Career>();   // career ladders (rules "careers"); nothing without the block
+    career_->setup(sim, *this, rulesJson);
     driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
     arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
     arsenal_->setup(sim, *this, rulesJson);
@@ -1000,6 +1002,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (career_ && career_->command(sim, cmd)) return;       // kCmdCareer (RtsCareer.cpp)
     if (commerce_ && commerce_->command(sim, cmd)) return;   // kCmdCommerce (RtsCommerce.cpp)
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
     if (arsenal_ && arsenal_->command(sim, cmd)) return;   // kCmdTopDownWeapon (RtsArsenal.cpp)
@@ -1522,6 +1525,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
     if (commerce_ && commerce_->active()) commerce_->hash(sim, h);   // games with rules "commerce" only
+    if (career_ && career_->active()) career_->hash(sim, h);         // games with rules "careers" only
     if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
 }
 

@@ -172,6 +172,13 @@ int cVisit(lua_State* L, Vm& vm) {
     lua_pushboolean(L, c->visit(*vm.sim, i));
     return 1;
 }
+// commerce.fine(player, amount): taken from the pocket, the rest becomes debt (simulation scripts)
+int cFine(lua_State* L, Vm& vm) {
+    Commerce* c; int64_t s; Fixed amount;
+    if (!need(vm, c) || !argInt(L, vm, 1, s, "player") || !argFx(L, vm, 2, amount, "amount")) return -1;
+    c->fine(*vm.sim, uint8_t(std::clamp<int64_t>(s, 0, 255)), amount);
+    return 0;
+}
 // commerce.can(player, deal, ...) -> true | false, reason
 int cCan(lua_State* L, Vm& vm) {
     Commerce* c; int64_t s; CommerceOp op; int premise; int64_t value;
@@ -203,7 +210,7 @@ void openCommerceApi(Vm& vm) {
     static const luaL_Reg queries[] = {
         {"active", bindQ<cActive>}, {"clock", bindQ<cClock>}, {"count", bindQ<cCount>}, {"premise", bindQ<cPremise>},
         {"account", bindQ<cAccount>}, {"businesses", bindQ<cBusinesses>}, {"can", bindQ<cCan>}, {"param", bindQ<cParam>}, {"offers", bindQ<cOffers>}, {nullptr, nullptr}};
-    static const luaL_Reg actions[] = {{"act", bind<cAct>}, {"visit", bind<cVisit>}, {nullptr, nullptr}};
+    static const luaL_Reg actions[] = {{"act", bind<cAct>}, {"visit", bind<cVisit>}, {"fine", bind<cFine>}, {nullptr, nullptr}};
     luaL_newlib(L, queries);
     if (vm.mode == Mode::Sim) luaL_setfuncs(L, actions, 0);
     lua_setglobal(L, "commerce");

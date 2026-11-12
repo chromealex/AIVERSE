@@ -130,6 +130,10 @@ void GameClient::commerceTop(std::vector<UiItem>& top) {
     const game::CommerceAccount& acc = st.accounts[human_];
     top.push_back({fmt("Day %u", unsigned(c->day(*sim_) + 1)), "", "", false});
     if (acc.debt.raw > 0) top.push_back({fmt("Debt: %lld", whole(acc.debt)), "", "", acc.missed > 0});
+    if (game::Career* cr = mod().career(); cr && cr->active())   // the ranks on the paths the player follows
+        for (size_t k = 0; k < cr->rules().careers.size(); ++k)
+            if (const int r = cr->rank(*sim_, human_, int(k)); r >= 0)
+                top.push_back({cr->rules().careers[k].name + ": " + cr->rules().careers[k].ranks[size_t(r)].name, "", "", false});
     const int door = commerceDoor();
     if (door < 0) { comMenu_ = false; return; }
     std::string title;
