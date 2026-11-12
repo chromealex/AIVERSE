@@ -70,3 +70,26 @@ TEST(fx_external_import_dir_loads) {
     std::printf("    %d effects loaded, %d failed, %d texture messages\n", loaded, failed, missingTex);
     CHECK(failed == 0);
 }
+
+TEST(fx_many_projectile_ribbons_stay_in_budget) {
+    // Drone Fall fires hundreds of projectiles with TrailRenderer ribbons: per tier the particle budget holds,
+    // low drops the ribbons (trails start at medium) and the simulation cost stays small.
+    const char* json = R"({ "emitters": [{ "hidden": true, "loop": true, "duration": 1, "perMeter": 10, "life": 0.18, "speed": 0,
+        "spread": 0, "size": 2, "maxParticles": 11, "trail": { "mode": "ribbon", "time": 0.18, "width": [[0, 1], [1, 0.06]] } },
+        { "texture": "builtin:spark", "loop": true, "duration": 1, "rate": 30, "life": 0.3, "speed": 0.5, "size": 0.3, "maxParticles": 12 }] })";
+    for (fx::FxQuality q : {fx::FxQuality::Low, fx::FxQuality::Medium, fx::FxQuality::High}) {
+        FxRun r(json, q);
+        std::vector<fx::FxHandle> hs;
+        for (int i = 0; i < 300; ++i) hs.push_back(r.ps.play(r.id, {float(i % 20), 1, float(i / 20)}));
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int f = 0; f < 60; ++f) {
+            for (size_t i = 0; i < hs.size(); ++i) r.ps.move(hs[i], {float(i % 20) + f * 0.3f, 1, float(i / 20)});
+            r.ps.update(1 / 60.0f);
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 60;
+        const auto lim = fx::limitsFor(q);
+        std::printf("    %s: %d particles (budget %d), %.3f ms / frame for 300 trails\n", fx::qualityName(q), r.ps.stats().particles,
+                    lim.maxParticles, ms);
+        CHECK(r.ps.stats().particles <= lim.maxParticles);
+    }
+}
