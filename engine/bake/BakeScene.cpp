@@ -175,7 +175,7 @@ int SceneBuilder::material(Loaded& l, const render::Material& mt, int) {
 }
 
 bool SceneBuilder::addModel(const std::string& path, const std::vector<mat4>& nodeWorld, const std::vector<render::Material>* overrides,
-                            bool receive, float scale, std::string& error) {
+                            bool receive, float scale, std::string& error, const std::vector<uint8_t>* nodeMask) {
     Loaded* l = load(path, error);
     if (!l) return false;
     const render::Model& m = *l->model;
@@ -185,6 +185,7 @@ bool SceneBuilder::addModel(const std::string& path, const std::vector<mat4>& no
     for (size_t n = 0; n < m.nodes.size() && n < nodeWorld.size(); ++n) {
         const int mesh = m.nodes[n].mesh;
         if (mesh < 0 || size_t(mesh) >= l->meshIndex.size() || l->meshIndex[size_t(mesh)] < 0) continue;
+        if (nodeMask && (n >= nodeMask->size() || !(*nodeMask)[n])) continue;
         BakeInstance in;
         in.mesh = l->meshIndex[size_t(mesh)];
         in.materials = map;

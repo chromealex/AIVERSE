@@ -7,9 +7,13 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 #include <mutex>
+#include <set>
+#include <stdexcept>
 #include <thread>
 #include "../Editor.h"
 #include "../EditorUtil.h"
@@ -29,8 +33,8 @@ float3 sq(float3 c) { return {c.x * c.x, c.y * c.y, c.z * c.z}; }
 
 // Everything a bake needs, copied on the main thread (the job never touches the editor).
 struct BakeInput {
-    struct Draw { std::string path; std::vector<mat4> nodeWorld; std::vector<Material> materials; };
-    std::vector<Draw> draws;
+    struct Draw { std::string path; std::vector<mat4> nodeWorld; std::vector<Material> materials; std::vector<uint8_t> still; };
+    std::vector<Draw> draws, first;   // two Scene frames: nodes that moved between them (animation) are left out
     std::vector<float> heights;   // terrain samples, (nx x nz) at `step`
     int nx = 0, nz = 0;
     float step = 0.5f, ex = 0, ez = 0;
@@ -62,10 +66,19 @@ public:
         if (!registered_) { registerOps(ed); registered_ = true; }
         syncLoaded(ed);
         // capture: the callback was installed last frame and the Scene view has drawn since
-        // exactly one Scene frame between two updates is kept (the first update drops what came before)
+        // two Scene frames between updates are kept (the first update drops what came before); a node is static when it
+        // is drawn with the same matrix in both (windmill sails, idle animations are not)
+        // (waits while the map's world preview is rebuilt after an edit: the Scene shows no objects then)
         if (state_ == kCapture) {
-            if (captureFrames_++ == 0) input_.draws.clear();
-            else if (!input_.draws.empty() || captureFrames_ > 30) finishCapture(ed);   // > 30: nothing static (or no Scene view): terrain only
+            if (ed.worldPending() && waitFrames_++ < 1200) {   // start over once the preview is current
+                captureFrames_ = 0;
+                input_.first.clear();
+                return;
+            }
+            const int f = captureFrames_++;
+            if (f == 0) input_.draws.clear();
+            else if (input_.first.empty() && !input_.draws.empty() && f < 120) { input_.first.swap(input_.draws); input_.draws.clear(); }
+            else if (!input_.draws.empty() || f >= 120) finishCapture(ed);   // >= 120: nothing static (or no Scene view): terrain only
         }
         if (state_ == kFinished) {
             thread_.join();
@@ -73,6 +86,7 @@ public:
             std::lock_guard<std::mutex> lk(m_);
             ed.ws().log("lightbake", message_, failed_);
             loadedStamp_ = {};   // reload the folder
+            if (reloadModels_.exchange(false)) ed.reloadRules();   // new .lmuv sidecars: the view's models get their lightmap UVs
         }
     }
 
@@ -80,6 +94,7 @@ public:
         Workspace& ws = ed.ws();
         if (ws.project.dir.empty() || lightBakeMapRel(ws).empty()) { ui::callout(ui::Tone::Warn, "Сначала откройте и сохраните карту."); return; }
         bake::BakeSettings s = lightBakeSettings(ws);
+        if (std::string e; !pending_.empty()) bake::settingsFromJson(pending_, s, e);   // still dragging
         bool changed = false;
         const char* modes[] = {"Только непрямой (солнце в реальном времени)", "Shadowmask (запечённые тени солнца)", "Subtractive (всё запечено, дешевле всего)"};
         int mode = int(s.mode);
@@ -91,7 +106,8 @@ public:
         changed |= ImGui::Checkbox("Шумоподавление", &s.denoise);
         changed |= ImGui::SliderFloat("Шаг световых проб", &s.probeSpacing, 0, 8, "%.1f");
         ui::help("Пробы освещают движущиеся объекты (юниты); 0 — без проб.");
-        if (changed) ws.call("lightbake_set", Json::parse(bake::settingsToJson(s)));
+        if (changed) pending_ = bake::settingsToJson(s);
+        if (!pending_.empty() && !ImGui::IsAnyItemActive()) { ws.call("lightbake_set", Json::parse(pending_)); pending_.clear(); }
         ImGui::Separator();
         if (state_ == kIdle) {
             if (ImGui::Button("Запечь")) start(ed, false);
@@ -167,7 +183,8 @@ private:
             if (d.materials) dr.materials = *d.materials;
             input_.draws.push_back(std::move(dr));
         });
-        captureFrames_ = 0;
+        captureFrames_ = 0; waitFrames_ = 0;
+        ed.focusWindow("scene");   // the capture is what the Scene view draws: bring it to the front
         state_ = kCapture;
         { std::lock_guard<std::mutex> lk(m_); message_.clear(); failed_ = false; stage_ = "capture"; }
         progress_ = 0;
@@ -177,6 +194,18 @@ private:
 
     void finishCapture(Editor& ed) {
         ed.renderer().setModelCapture({});
+        // procedural shapes ("shape:...") have no file to load: they are not part of the bake
+        std::erase_if(input_.draws, [](const BakeInput::Draw& d) { return d.path.rfind("shape:", 0) == 0; });
+        std::erase_if(input_.first, [](const BakeInput::Draw& d) { return d.path.rfind("shape:", 0) == 0; });
+        const bool compare = input_.first.size() == input_.draws.size();
+        for (size_t i = 0; i < input_.draws.size(); ++i) {
+            auto& d = input_.draws[i];
+            d.still.assign(d.nodeWorld.size(), 1);
+            if (!compare || input_.first[i].path != d.path || input_.first[i].nodeWorld.size() != d.nodeWorld.size()) continue;
+            for (size_t n = 0; n < d.nodeWorld.size(); ++n)
+                d.still[n] = std::memcmp(d.nodeWorld[n].m, input_.first[i].nodeWorld[n].m, sizeof d.nodeWorld[n].m) == 0;
+        }
+        input_.first.clear();
         // lighting as the Scene shows it now (time of day preview included)
         const Lighting& l = ed.renderer().lighting;
         input_.sun.dir = l.sunDir;
@@ -231,8 +260,12 @@ private:
         bake::BakeScene scene;
         bake::SceneBuilder sb(scene, read, write, in.settings.texelsPerUnit);
         std::string err, warnings;
+        std::set<std::string> failed;
         for (const auto& d : in.draws)
-            if (!sb.addModel(d.path, d.nodeWorld, d.materials.empty() ? nullptr : &d.materials, true, 1, err)) warnings += d.path + ": " + err + "\n";
+            if (!failed.count(d.path) && !sb.addModel(d.path, d.nodeWorld, d.materials.empty() ? nullptr : &d.materials, true, 1, err, &d.still)) {
+                warnings += err + "\n";   // once per model
+                failed.insert(d.path);
+            }
         const int nx = in.nx, nz = in.nz;
         auto height = [&in, nx, nz](float x, float z) {
             const float fx = std::clamp(x / in.step, 0.0f, float(nx - 1)), fz = std::clamp(z / in.step, 0.0f, float(nz - 1));
@@ -243,6 +276,7 @@ private:
         };
         if (nx >= 2 && nz >= 2) sb.addTerrain(height, 0, 0, in.ex, in.ez, in.step, {0.30f, 0.28f, 0.24f});
         scene.sun = in.sun; scene.sky = in.sky; scene.lights = in.lights;
+        if (sb.unwrapped) reloadModels_ = true;
         for (const auto& w : sb.warnings) warnings += w + "\n";
         const uint64_t hash = bake::hashBakeInput(scene, in.settings);
         if (!in.force && hash == in.oldHash) { finish("Без изменений: запечённый свет актуален (хеш " + bake::hex64(hash) + ").", false); return; }
@@ -296,11 +330,14 @@ private:
                 r.set("failed", Json::fromBool(failed_));
                 r.set("bake", lightBakeInfo(e->ws()));
                 r.set("loaded", Json::fromBool(e->renderer().bakedLighting() != nullptr));
+                r.set("lightmappedPrimitives", Json::number(int64_t(e->renderer().bakedLightmapped())));   // last drawn view
+                r.set("probePrimitives", Json::number(int64_t(e->renderer().bakedProbed())));
                 return r;
             }, true});
     }
 
     bool registered_ = false;
+    std::string pending_;   // settings edited in the UI, written when the widget is released
     render::BakedLighting baked_;
     std::string loadedFolder_;
     fs::file_time_type loadedStamp_{};
@@ -308,11 +345,11 @@ private:
     int checkTick_ = 0;
     std::atomic<int> state_{kIdle};
     std::atomic<float> progress_{0};
-    std::atomic<bool> cancel_{false};
+    std::atomic<bool> cancel_{false}, reloadModels_{false};
     std::mutex m_;
     std::string stage_, message_;
     bool failed_ = false;
-    int captureFrames_ = 0;
+    int captureFrames_ = 0, waitFrames_ = 0;
     BakeInput input_;
     std::thread thread_;
 };

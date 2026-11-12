@@ -31,12 +31,13 @@ void Renderer3D::bakedItem(ModelItem& it, const ModelDraw& d, int node) {
     if (it.joints < 0 && !it.baked && it.morph < 0 && it.prim->lightmapUv && !it.model->path.empty()) {
         if (const auto* r = baked_->find(it.model->path, node, it.world)) {
             it.gi = 1; it.lmPage = int16_t(r->page);
+            ++bakedCountLm_;
             it.anim = {r->st[0], r->st[1], r->st[2], r->st[3]};
             return;
         }
     }
     (void)d;
-    if (it.morph < 0 && baked_->probeTexture().valid()) it.gi = 2;
+    if (it.morph < 0 && baked_->probeTexture().valid()) { it.gi = 2; ++bakedCountPr_; }
 }
 
 void Renderer3D::bindBakedGI(const ModelItem& it) {

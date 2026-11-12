@@ -88,7 +88,7 @@ public:
     // (night = max(night, dusk)); deterministic in (t, phase).
     static float glowLevel(const Glow& g, float t, float phase, float hp, bool powered, float night);
     // "bake": "mixed" (realtime light, its bounce goes into the baked lightmap) | "baked" (only in the lightmap and
-    // the light probes: its realtime light is off while a bake is loaded, the halo stays). agent-lightbake
+    // the light probes: its realtime light and halo are off while a bake is loaded). agent-lightbake
     struct MapLight : Glow { float x = 0, z = 0; uint8_t bake = 0; };
     static Glow parseGlow(const Json& j);
     // The renderer light of a Glow standing on `ground`, facing `yaw` (radians, 0 = +X) at time t

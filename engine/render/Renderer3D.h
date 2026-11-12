@@ -251,6 +251,9 @@ public:
     BakedQuality bakedQuality() const { return bakedQuality_; }
     static BakedQuality defaultBakedQualityFor(const gfx::Device& dev, bool mobile);
     bool bakedActive() const { return baked_ && bakedQuality_ != BakedQuality::Off; }
+    // model primitives of the last scene that took a lightmap / the probes (diagnostics, lightbake_status)
+    uint32_t bakedLightmapped() const { return bakedLightmapped_; }
+    uint32_t bakedProbed() const { return bakedProbed_; }
     // Light baker capture: every drawModel with kDrawStatic is reported (world matrix per node) until reset.
     using ModelCapture = std::function<void(const ModelDraw& d, const std::vector<mat4>& nodeWorld)>;
     void setModelCapture(ModelCapture fn) { capture_ = std::move(fn); }
@@ -365,6 +368,7 @@ private:
     // baked lighting (Renderer3DBaked.cpp)
     const BakedLighting* baked_ = nullptr;
     BakedQuality bakedQuality_ = BakedQuality::High;
+    uint32_t bakedLightmapped_ = 0, bakedProbed_ = 0, bakedCountLm_ = 0, bakedCountPr_ = 0;
     ModelCapture capture_;
     void bakedItem(ModelItem& it, const ModelDraw& d, int node);
     void bindBakedGI(const ModelItem& it);

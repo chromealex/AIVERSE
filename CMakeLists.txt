@@ -922,7 +922,6 @@ target_link_libraries(aiverse_splash PUBLIC aiverse_engine aiverse_atlas)
 set(AIVERSE_SPLASH_BACKGROUND "" CACHE STRING "Window background before the first frame, 0xRRGGBB (set by aiversebuild)")
 foreach(t aiverse_client main)
     if(TARGET ${t})
-        target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # baked lighting of the map (agent-lightbake)
         target_sources(${t} PRIVATE apps/client/ClientSplash.cpp)
         target_link_libraries(${t} PRIVATE aiverse_splash)
         if(AIVERSE_SPLASH_BACKGROUND)
@@ -1128,10 +1127,12 @@ endif()
 # main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
 set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
-    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp)
+    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
+    apps/client/ClientBaked.cpp)   # ClientBaked: the map's baked lighting (agent-lightbake)
 foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
+        target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # agent-lightbake
     endif()
 endforeach()
 # Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)

@@ -18,8 +18,9 @@ public:
         : scene_(scene), read_(std::move(read)), write_(std::move(write)), tpu_(texelsPerUnit) {}
     // nodeWorld: world matrix of every node (as drawn); overrides: per-instance materials (null = the model's).
     // False with a message when the model can't be loaded.
+    // nodeMask: nodes to use (0 = skip, e.g. animated); null = all.
     bool addModel(const std::string& path, const std::vector<mat4>& nodeWorld, const std::vector<render::Material>* overrides,
-                  bool receive, float scale, std::string& error);
+                  bool receive, float scale, std::string& error, const std::vector<uint8_t>* nodeMask = nullptr);
     // Terrain over [x0, x0 + ex] x [z0, z0 + ez], one vertex every `step` world units.
     void addTerrain(const std::function<float(float, float)>& heightAt, float x0, float z0, float ex, float ez, float step, float3 albedo);
     std::vector<std::string> warnings;

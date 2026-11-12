@@ -8,8 +8,8 @@ Owner: agent-lightbake.
 ## Quick start
 
 1. Mark map lights that should be baked: `"bake": "mixed"` (stays realtime, its bounce is baked) or
-   `"bake": "baked"` (only in the lightmap / probes; its realtime light switches off once a bake is loaded,
-   the halo sprite stays). MCP: `light_add` / `light_update` with `bake`.
+   `"bake": "baked"` (only in the lightmap / probes; its realtime light and halo sprite switch off once a bake
+   is loaded). MCP: `light_add` / `light_update` with `bake`.
 2. Editor → **Графика → Запекание света**: mode, density, samples, bounces, probes → **Запечь**.
    MCP: `lightbake_set {quality: "preview"|"medium"|"high", mode, ...}`, `lightbake_bake {force?}`, poll
    `lightbake_status`, `lightbake_get`, `lightbake_clear`.
@@ -97,12 +97,25 @@ other file). Settings live in the map's `"bake"` block.
   lightmapSlot, maskSlot)`; the flat terrain (`RtsTerrainShaders.h`) uses U3 + tex19 / tex20. The baker's
   terrain covers [0, w] × [0, h] of the map.
 
+## Example (templates/showcase, valley)
+
+Before (realtime only) / after (shadowmask bake, AO 1 m, two `"bake": "baked"` lamps) / the decoded lightmap
+page (terrain region left, crystal tower and windmill regions top right):
+
+![realtime](images/lightbake_before_realtime.png) ![baked](images/lightbake_after_baked.png)
+
+![lightmap page](images/lightbake_lightmap.png)
+
+Bake: 0.5 s on 4 VM cores (medium: 64 samples, 2 bounces, 52k texels, 2475 probes); a second
+`lightbake_bake` reports "up to date" (hash unchanged).
+
 ## Limits / not yet
 
 - No directional lightmaps (normal maps use the lightmap irradiance only), no baked specular.
 - Albedo of the terrain in the bake is a constant (bounce colour from splat materials is not sampled);
   vertex colours are ignored in bounces.
-- Planet terrain, sprites and procedural `drawMesh` shapes are not lightmapped (shapes get no probes).
+- Planet terrain, sprites and procedural shapes (`shape:*` models of types without a model file, `drawMesh`) are
+  not part of the bake: they neither receive lightmaps nor occlude; shape models are lit by the probes.
 - A day/night cycle keeps baked indirect light fixed (use `indirect` mode).
 - Importing Bakery / Unity lightmaps is not implemented (rebake with the engine's baker; UV2 is read).
 - Metal (MSL) variants are written but compiled only on macOS/iOS builds.
