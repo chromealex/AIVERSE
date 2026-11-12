@@ -19,6 +19,7 @@
 #include "RtsMech.h"
 #include "RtsGridFields.h"
 #include "RtsNative.h"
+#include "RtsRoutes.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -470,6 +471,7 @@ struct GameState {
     bool lanesDirty = true;
     uint32_t laneSignature = 0;              // garrisons/obstacles the lanes were built for
     std::vector<uint32_t> laneRoundRobin;    // per garrison entity index: next lane slot
+    RouteState routes;                       // authored routes, BW groups, multiscreen (RtsRoutes.cpp)
     // planets (map `world` block): bodies, cube-sphere layout of the grid rows (RtsSurface.h); null on flat maps
     std::shared_ptr<const Surface> surface;
     // fidelity mechanics: eaters (sandworms) that submerged and come back later
@@ -519,6 +521,18 @@ public:
     // AIVERSE_VISION=ref does the same, AIVERSE_VISION=check runs both and aborts on a difference).
     void setVisionReference(bool on);
     bool hostile(Simulation& sim, uint8_t a, uint8_t b) const;
+    // Authored routes (map "routes", BW RoutesModule): true when the map has them. Then units are sent only between
+    // garrisons with an open route (canSend); routeLength = BW Route.GetLength (line 0), -1 when there is none.
+    bool routesAuthored() const { return !routeDefs_.empty(); }
+    bool canSend(Simulation& sim, Entity from, Entity to) const;
+    Fixed routeLength(Simulation& sim, Entity from, Entity to) const;
+    const std::vector<RouteDef>& routeDefs() const { return routeDefs_; }
+    // Multiscreen (map "screen", BW MultiscreenModule): the current screen and whether a point is on it (always true
+    // without a screen). Garrisons off the screen do not grow. setScreenCenter clamps to the screen bounds.
+    const ScreenDef& screen() const { return screen_; }
+    bool onScreen(Simulation& sim, Vec3 p) const;
+    Vec3 screenCenter(Simulation& sim) const;
+    void setScreenCenter(Simulation& sim, Vec3 c);
     Fixed stat(Simulation& sim, Entity e, Stat s) const;          // effective stat with techs/levels/buffs
     Fixed typeStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, Fixed base) const;
     int membersAlive(Simulation& sim, Entity e) const;
@@ -773,6 +787,20 @@ private:
     void rebuildLanes(Simulation& sim);
     void rebuildLanesSphere(Simulation& sim, const std::vector<Entity>& nodes);   // planets: same-body pairs, on the surface
     bool runLaneWalk(Simulation& sim, Entity e, Order& o);
+    // authored routes / BW groups / multiscreen (RtsRoutes.cpp)
+    void setupRoutes(Simulation& sim, const Json& map, const std::vector<Entity>& placed);
+    void rebuildRoutes(Simulation& sim);
+    void sysRoutes(Simulation& sim);
+    void sysSendGroups(Simulation& sim);
+    bool sendAlongRoute(Simulation& sim, Entity from, Entity to, uint8_t player, int n);
+    void tagReleased(Simulation& sim, Entity unit, uint32_t group, Entity from, Entity to);   // RtsEconomy.cpp
+    void ioRoutes(Archive& a, GameState& gs);
+    void hashRoutes(Simulation& sim, Hasher& h);
+    std::vector<RouteDef> routeDefs_;                 // map "routes" (static after setup)
+    std::vector<std::vector<std::vector<Vec2>>> routeLines_;   // per route: its sub-splines (buildRouteLines)
+    std::vector<Vec3> routeAnchors_;                  // 2 per route: the end positions (first / last control point)
+    std::vector<std::vector<Entity>> routeBlockers_;  // per route: entities that close it while alive
+    ScreenDef screen_;                                // map "screen"
     bool attackSlot(Simulation& sim, Entity e, Entity target, Fixed range, Vec3& out); // melee surround
     void moveToVia(Simulation& sim, Entity e, Vec3 goal, Fixed radius, bool aroundAllies);
 

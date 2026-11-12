@@ -2,6 +2,7 @@
 // Window contents live in apps/editor/windows/*.cpp; the agent link in EditorAgent.cpp.
 #include "Editor.h"
 #include "core/SimTools.h"
+#include "core/RouteOps.h"
 #include "engine/fx/FxModelMesh.h"
 #include "imgui.h"
 #include "imgui_internal.h" // DockBuilder
@@ -578,6 +579,14 @@ void Editor::drawEditOverlays3D() {
         float sx = d.players[p].startX, sz = d.players[p].startZ, gy = view_.heightAt(grid_, sx, sz);
         r3d_.circleXZ({sx, 0, sz}, 1.2f, rgbaf({c.x, c.y, c.z, 1}), 24, gy + 0.15f);
         r3d_.line({sx, gy, sz}, {sx, gy + 2.5f, sz}, rgbaf({c.x, c.y, c.z, 1}));
+    }
+    // authored routes (map "routes", docs/game-format.md § Routes): every line, line 0 brighter
+    for (const auto& rl : routePreviewLines(rules(), doc())) {
+        const uint32_t c = rl.line == 0 ? rgba(255, 240, 160, 230) : rgba(220, 190, 110, 120);
+        for (size_t i = 1; i < rl.pts.size(); ++i) {
+            const auto& a = rl.pts[i - 1]; const auto& b = rl.pts[i];
+            r3d_.line({a[0], view_.heightAt(grid_, a[0], a[1]) + 0.12f, a[1]}, {b[0], view_.heightAt(grid_, b[0], b[1]) + 0.12f, b[1]}, c);
+        }
     }
     for (auto& f : flashes_) {
         float k = float(std::clamp((f.until - time_) / f.length, 0.0, 1.0));

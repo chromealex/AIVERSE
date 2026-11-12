@@ -12903,6 +12903,7 @@ TEST(world_tree_script_blob_decoding) {
 }
 #endif
 
+#include "tests_routes.inc"   // Bunker Wars routes, groups, multiscreen
 #include "animation/view.inc"
 #include "animation/editor.inc"
 #include "geometry/runtime.inc"

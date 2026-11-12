@@ -1229,6 +1229,7 @@ void openGameApi(Vm& vm) {
     }
     openTerritoryApi(vm);
     openGridApi(vm);
+    openRoutesApi(vm);
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
 }

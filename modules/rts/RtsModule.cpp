@@ -326,6 +326,7 @@ void RtsModule::setupMap(Simulation& sim, const Json& map) {
         gs.roads.adj[size_t(ia)].push_back(uint16_t(ib));
         gs.roads.adj[size_t(ib)].push_back(uint16_t(ia));
     }
+    setupRoutes(sim, map, placed);   // map "routes" / "screen" (RtsRoutes.cpp)
 
     // starting regions: explicit list, else regions containing the player's structures/start
     if (gs.regionCount > 0) {
@@ -1285,11 +1286,20 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
             auto* g = w.tryGet<Garrison>(e);
             if (!g || !w.alive(cmd.target) || cmd.target == e || !w.has<Garrison>(cmd.target) || t.spawnUnit == kNoType) break;
             if (rules_.advancedEffects && (statusFlags(sim, e) & kStLock)) break;   // locked: can't send
+            if (!canSend(sim, e, cmd.target)) break;   // authored routes: no route, no send (BW RoutesModule.FindUnlocked)
             int64_t pct = std::clamp<int64_t>(cmd.param, 1, 100);
             const int sendable = std::max(0, g->count - t.garrisonKeep);   // State.io: one soldier stays home
             int n = int(int64_t(sendable) * pct / 100);
             if (n <= 0 && sendable > 0) n = 1;
             if (n <= 0 && t.garrisonKeep > 0) break;
+            if (rules_.routes.groups) {   // BW groups: units leave row by row and are paid when they leave (RtsRoutes.cpp)
+                if (n <= 0) break;
+                sendAlongRoute(sim, e, cmd.target, cmd.player, n);
+                uint8_t to = w.get<Owner>(cmd.target).player;
+                if (rules_.advancedEffects && to < gs.players.size() && to != cmd.player && (gs.players[to].statusFlags & kStAlert))
+                    sim.emit({kEvAlert, to, e, cmd.target, n, w.get<Transform>(cmd.target).pos});
+                break;
+            }
             g->count -= n;
             g->pendingOut += n;
             g->pendingTarget = cmd.target;
@@ -1403,6 +1413,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     for (auto t : gs.score) h.fx(t);
     for (auto& [k, v] : gs.trig.vars) { h.str(k); h.fx(v); }
     if (rules_.dungeon) hashDungeon(sim, h);
+    hashRoutes(sim, h);   // authored routes / BW groups / screen (only on maps / rules that use them)
     if (rules_.settlers) hashSettlers(sim, h);
     if (rules_.advancedEffects) hashEffects(sim, h);
     if (rules_.originals) hashOriginals(sim, h);

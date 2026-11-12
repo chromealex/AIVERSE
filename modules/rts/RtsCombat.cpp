@@ -36,6 +36,8 @@ void RtsModule::sysTargeting(Simulation& sim) {
         const bool hf = gs.grid.hf;
         Entity best;
         Fixed bestD{};
+        // elliptical range (weapon rangeAspect, Bunker Wars towers): the sight ellipse squashed along z
+        const Fixed aspect = t.weapons.empty() ? kOne : t.weapons[0].rangeAspect;
         gs.hash.query(tr.pos, sight, [&](Entity cand) {
             if (cand == e) return;
             auto* cu = w.tryGet<Unit>(cand);
@@ -47,6 +49,7 @@ void RtsModule::sysTargeting(Simulation& sim) {
             Vec3 cp = w.get<Transform>(cand).pos;
             Fixed d = dist2D(cp, tr.pos);
             if (d > sight) return;
+            if (aspect != kOne && !inRangeEllipse(tr.pos, cp, sight, aspect)) return;
             // high ground hides units from those below unless revealed (any ally vision of that cell)
             // (heightfield: vision already follows line of sight, so the target must simply be in sight)
             if (rules_.heights.blockVision && !(ct.layer & kLayerAir) && (hf || levelAt(sim, cp) > myLevel) && !isVisible(sim, o.player, cp)) return;
@@ -148,6 +151,7 @@ void RtsModule::sysWeapons(Simulation& sim) {
         for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
             const WeaponDef& wd = t.weapons[i];
             if (!canHit(wd, tt.layer) || c.cooldown[i].raw > 0 || dist > wd.range + rangeBonus || dist < wd.minRange) continue;
+            if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, tp, wd.range + rangeBonus, wd.rangeAspect)) continue;
             if (m && m->moving && ord && !ord->queue.empty() && ord->queue.front().type == OrderType::Move) continue;
             if (wd.chargeTime.raw > 0) {
                 // charging shot: the weapon has to stay on the same target for chargeTime

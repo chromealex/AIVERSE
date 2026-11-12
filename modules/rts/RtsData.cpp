@@ -432,6 +432,8 @@ Rules loadRules(const Json& j) {
             w.splash = wj.getFx("splash");
             w.damageType = damageIdx(wj.getStr("damageType", "normal"));
             w.chargeTime = wj.getFx("chargeTime");
+            w.rangeAspect = wj.getFx("rangeAspect", w.rangeAspect);
+            if (w.rangeAspect.raw <= 0) fail(where + " weapon " + w.id + " rangeAspect", "must be > 0");
             if (wj.has("onHit")) {
                 const Json& oh = wj["onHit"];
                 w.onHit = int16_t(ep.payload(where + " weapon " + w.id + " onHit", oh.isObject() && oh.has("effects") ? oh["effects"] : oh));
@@ -719,6 +721,7 @@ Rules loadRules(const Json& j) {
         r.lanes.left = std::clamp<int>(int(ln.getInt("left", 0)), 0, 8);
         r.lanes.right = std::clamp<int>(int(ln.getInt("right", 0)), 0, 8);
         r.lanes.spacing = ln.getFx("spacing", r.lanes.spacing);
+        loadRouteRules(ln, r.routes);   // RtsRoutesData.cpp
     }
     if (const Json& mv = j["movement"]; mv.isObject()) {
         std::string av = mv.getStr("avoidance", "rvo");
