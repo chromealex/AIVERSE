@@ -48,6 +48,7 @@ void Traffic::parsePopulation(const Json& j, TrafficRules& r, const std::vector<
     if (p.has("walk")) pr.walk = p.getFx("walk");
     if (pr.walk.raw <= 0) throw std::runtime_error(where + ".walk: must be positive");
     pr.live = int(std::clamp<int64_t>(p.getInt("live", pr.live), 0, 2000));
+    pr.parents = int(std::clamp<int64_t>(p.getInt("parents", 0), 0, 100));
     pr.carShare = int(p.getInt("car", 0));
     pr.busShare = int(p.getInt("bus", 0));
     if (pr.carShare < 0 || pr.busShare < 0 || pr.carShare + pr.busShare > 100) throw std::runtime_error(where + ": car + bus are percent of the citizens (0..100 together)");
@@ -70,6 +71,7 @@ void Traffic::parsePopulation(const Json& j, TrafficRules& r, const std::vector<
             k.id = id;
             k.lives = int(std::clamp<int64_t>(v.getInt("lives", 0), 0, 100000));
             k.jobs = int(std::clamp<int64_t>(v.getInt("jobs", 0), 0, 100000));
+            k.children = int(std::clamp<int64_t>(v.getInt("children", 0), 0, 100000));
             if (const Json& sh = v["shifts"]; sh.isArray())
                 for (size_t i = 0; i < sh.size(); ++i) {
                     const std::string at = where + ".kinds." + id + ".shifts[" + std::to_string(i) + "]";
@@ -164,6 +166,23 @@ void Traffic::populate(Simulation& sim, TrafficStore& st) {
         c.commute = roll < pr.carShare ? kCommuteCar : roll < pr.carShare + pr.busShare ? kCommuteBus : kCommuteWalk;
         if (c.commute == kCommuteCar) c.carType = pick(sim, pr.carTypes);
     }
+    // children: a working parent with a day shift who walks or drives takes his to the nearest school with room
+    std::vector<int32_t> room(places_.size(), 0);
+    bool schools = false;
+    for (size_t i = 0; i < places_.size(); ++i) { room[i] = pr.kinds[places_[i].kind].children; schools = schools || room[i] > 0; }
+    if (schools && pr.parents > 0)
+        for (auto& c : st.citizens) {
+            if (c.work < 0 || c.commute == kCommuteBus) continue;
+            const int from = pr.kinds[places_[size_t(c.work)].kind].shifts[c.shift].first;
+            if (from < 5 * 60 || from > 12 * 60 || int(sim.rng().below(100)) >= pr.parents) continue;
+            Fixed best{};
+            for (size_t i = 0; i < places_.size(); ++i) {
+                if (room[i] <= 0) continue;
+                const Fixed d = (places_[i].pos - places_[size_t(c.home)].pos).lengthSq();
+                if (c.school < 0 || d < best) { best = d; c.school = int32_t(i); }
+            }
+            if (c.school >= 0) room[size_t(c.school)]--;
+        }
     // whoever is on shift at the start is at work already
     const int minute = minuteOfDay(sim);
     for (auto& c : st.citizens) if (onShift(c, minute, 0)) c.state = kCitizenWork;
@@ -226,7 +245,8 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
         if (c.state == kCitizenHome) {
             if (c.work < 0) continue;
             // leave early enough to get there, and not all at the same minute
-            const int lead = int(std::min<int64_t>(600, tripTicks(c, c.home, c.work, rate) / minuteTicks)) + int(id * 2654435761u % 20);
+            const int64_t way = c.school >= 0 ? int64_t(tripTicks(c, c.home, c.school, rate)) + tripTicks(c, c.school, c.work, rate) : int64_t(tripTicks(c, c.home, c.work, rate));
+            const int lead = int(std::min<int64_t>(600, way / minuteTicks)) + int(id * 2654435761u % 20);
             if (onShift(c, minute, lead)) depart(sim, st, int32_t(id), kCitizenToWork);
             continue;
         }
@@ -236,10 +256,11 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
         }
         // on his way
         if (c.e.valid()) continue;   // as a real person or in his real car: Traffic::people / Traffic::cars move him
-        const int to = c.state == kCitizenToWork ? c.work : c.home;
+        const int to = destOf(c);
         if (sim.tick() >= c.eta) {   // the end of the leg
             if ((c.leg == kLegToStop || c.leg == kLegAtStop) && c.stopA >= 0) travel(sim, c, kLegRide, stops_[size_t(c.stopA)].kerb);
             else if (c.leg == kLegRide && c.stopB >= 0) travel(sim, c, kLegWalk, stops_[size_t(c.stopB)].kerb);
+            else if (c.via) { const Vec2 school = legTarget(c); c.via = 0; travel(sim, c, c.leg, school); }   // by the school, then on
             else arrive(c);
             continue;
         }

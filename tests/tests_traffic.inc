@@ -931,3 +931,36 @@ TEST(traffic_people_jump_out_of_the_way_of_a_car) {
     CHECK(w.alive(man) && w.get<game::Unit>(man).hp == hp);   // not touched
     CHECK(passed && aside > Fixed::fromRatio(3, 5));           // he was beside the car when it passed
 }
+
+TEST(traffic_population_parents_go_by_the_school) {
+    // one working parent: the school is in the north-east block, the job in the south-east one
+    std::string rules = commuteRules(R"("parents": 100,)");
+    rules = replaced(rules, R"("house": {"lives": 12})", R"("house": {"lives": 1}, "school": {"children": 5})");
+    rules = replaced(rules, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
+    std::string map = trafficMap(R"({"type":"guy","owner":1,"pos":[14.5,13.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]})");
+    map.insert(map.size() - 1, R"(,"places":[{"kind":"house","pos":[6.5,6.5]},{"kind":"school","pos":[20.5,6.5]},{"kind":"port","pos":[20.5,20.5]}])");
+    auto sim = makeSimJson(rules, map, 3);
+    auto& w = sim->world();
+    run(*sim, 0.2);
+    CHECK(tstore(*sim).citizens.size() == 1);
+    const auto& c = tstore(*sim).citizens[0];
+    CHECK(c.work == 2 && c.school == 1);
+    const Vec2 school = trf(*sim).places()[1].pos, work = trf(*sim).places()[2].pos;
+    Fixed nearSchool = Fixed::fromInt(100);
+    bool wasVia = false, atSchoolFirst = false;
+    while (trf(*sim).minuteOfDay(*sim) != 12 * 60 && c.state != game::kCitizenWork) {
+        sim->step();
+        if (c.state != game::kCitizenToWork) continue;
+        wasVia = wasVia || c.via;
+        if (!c.e.valid()) continue;
+        const Vec3 p = w.get<Transform>(c.e).pos;
+        nearSchool = fxMin(nearSchool, (Vec2{p.x, p.z} - school).length());
+        if (!c.via && !atSchoolFirst) { atSchoolFirst = true; CHECK((Vec2{p.x, p.z} - school).length() < Fixed::fromInt(5) && (Vec2{p.x, p.z} - work).length() > Fixed::fromInt(8)); }
+    }
+    CHECK(wasVia && atSchoolFirst && nearSchool < Fixed::fromInt(5));
+    CHECK(c.state == game::kCitizenWork && !c.via);
+    // the way home goes by the school again
+    bool viaHome = false;
+    while (trf(*sim).minuteOfDay(*sim) != 16 * 60) { sim->step(); viaHome = viaHome || (c.state == game::kCitizenToHome && c.via); }
+    CHECK(viaHome && c.state == game::kCitizenHome);
+}

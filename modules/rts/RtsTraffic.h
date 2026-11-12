@@ -66,6 +66,7 @@ struct TrafficPlaceKind {
     std::string id;
     int lives = 0;                           // residents per place
     int jobs = 0;                            // workers per shift
+    int children = 0;                        // a school / kindergarten: children it takes
     std::vector<std::pair<int, int>> shifts; // minutes of the day [from, to); to < from: over midnight
 };
 struct TrafficPopulationRules {
@@ -79,6 +80,7 @@ struct TrafficPopulationRules {
     int live = 60;                           // citizens on the street as real people at a time, on top of pedestrians.max
     // how they get to work (RtsTrafficCommute.cpp): by their own car, by bus, the rest on foot
     int carShare = 0, busShare = 0;          // percent of the citizens
+    int parents = 0;                         // percent of the working citizens who take a child to school on the way
     std::vector<TrafficWeighted> carTypes;   // their cars (default: cars.types)
     Fixed drive = Fixed::fromRatio(5, 2), ride = Fixed::fromRatio(3, 2);   // cells / s unseen: driving, on the bus
     int parked = 16;                         // their cars standing at the kerb as real cars at a time (near the heroes)
@@ -103,6 +105,8 @@ struct TrafficCitizen {
     Entity car = kNullEntity;                // his car at the kerb where he is, as a real car (near a hero)
     int32_t stopA = -1, stopB = -1;          // this trip's bus stops: gets on / gets off
     int16_t line = -1;                       // the bus line he takes (-1: any bus)
+    int32_t school = -1;                     // the place his child goes to (-1: no child)
+    uint8_t via = 0;                         // this trip goes by the school first, and it is still ahead
 };
 
 struct TrafficRules {
@@ -364,6 +368,7 @@ private:
     uint32_t tripTicks(const TrafficCitizen& c, int from, int to, uint32_t rate) const;
     void depart(Simulation& sim, TrafficStore& st, int32_t id, uint8_t state);
     void arrive(TrafficCitizen& c) const;
+    int destOf(const TrafficCitizen& c) const { return c.via && c.school >= 0 ? c.school : c.state == kCitizenToWork ? c.work : c.home; }   // where this stretch ends
     bool citizenStep(Simulation& sim, TrafficStore& st, TrafficPerson& p, Vec2 pos);   // true: a walk was planned
     void citizenUnseen(Simulation& sim, TrafficStore& st, TrafficPerson& p, Vec2 pos); // his body leaves the street
     Entity citizenPerson(Simulation& sim, TrafficStore& st, int32_t id, Vec3 spot, int goalCell);

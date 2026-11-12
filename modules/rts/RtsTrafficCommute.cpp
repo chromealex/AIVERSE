@@ -78,7 +78,7 @@ void Traffic::setupCommute() {
 Vec2 Traffic::legTarget(const TrafficCitizen& c) const {
     if ((c.leg == kLegToStop || c.leg == kLegAtStop) && c.stopA >= 0) return stops_[size_t(c.stopA)].kerb;
     if (c.leg == kLegRide && c.stopB >= 0) return stops_[size_t(c.stopB)].kerb;
-    const int to = c.state == kCitizenToWork ? c.work : c.home;
+    const int to = destOf(c);
     return to >= 0 ? places_[size_t(to)].pos : c.from;
 }
 
@@ -107,6 +107,7 @@ void Traffic::arrive(TrafficCitizen& c) const {
     c.state = c.state == kCitizenToWork ? kCitizenWork : kCitizenHome;
     c.e = kNullEntity;
     c.leg = kLegWalk;
+    c.via = 0;
     c.stopA = c.stopB = -1;
 }
 
@@ -117,7 +118,8 @@ void Traffic::depart(Simulation& sim, TrafficStore& st, int32_t id, uint8_t stat
     c.state = state;
     c.e = kNullEntity;
     c.stopA = c.stopB = -1;
-    const int from = state == kCitizenToWork ? c.home : c.work, to = state == kCitizenToWork ? c.work : c.home;
+    c.via = c.school >= 0 ? 1 : 0;   // the child first: to school in the morning, from it on the way home
+    const int from = state == kCitizenToWork ? c.home : c.work, to = destOf(c);
     const Place& a = places_[size_t(from)], & b = places_[size_t(to)];
     if (c.commute == kCommuteCar) {
         const Entity car = c.car;
@@ -214,7 +216,7 @@ bool Traffic::walkTo(Simulation& sim, TrafficPerson& p, int goalCell) {
 bool Traffic::citizenStep(Simulation& sim, TrafficStore& st, TrafficPerson& p, Vec2 pos) {
     TrafficCitizen& c = st.citizens[size_t(p.citizen)];
     const uint32_t rate = sim.tickRate();
-    const int to = c.state == kCitizenToWork ? c.work : c.home;
+    const int to = destOf(c);
     auto onFoot = [&] {   // no bus for him today
         c.leg = kLegWalk; c.stopA = c.stopB = -1;
         p.goal = to >= 0 ? places_[size_t(to)].cell : -1;
@@ -235,6 +237,13 @@ bool Traffic::citizenStep(Simulation& sim, TrafficStore& st, TrafficPerson& p, V
         return false;
     }
     // there: through the door. Or the sidewalks lead no nearer (an island of them): the rest of the way unseen
+    if (d2 <= Fixed::fromInt(16) && c.via) {   // at the school door: the child goes in (comes out), he goes on
+        c.via = 0;
+        const int next = destOf(c);
+        p.goal = next >= 0 ? places_[size_t(next)].cell : -1;
+        p.until = sim.tick() + rate * 3;
+        return false;
+    }
     if (d2 <= Fixed::fromInt(16)) arrive(c);
     else { c.e = kNullEntity; travel(sim, c, kLegWalk, pos); }
     p.citizen = -1;
@@ -282,7 +291,7 @@ bool Traffic::busCitizen(Simulation& sim, TrafficStore& st, int stop, TrafficPer
             if (c.e.valid() || (c.line >= 0 && c.line != bus.line)) continue;
             if (uint64_t(sim.tick() - c.left) * 2 < uint64_t(c.eta - c.left)) continue;
         }
-        const int to = c.state == kCitizenToWork ? c.work : c.home;
+        const int to = destOf(c);
         const Vec3 spot{Fixed::fromInt(cell % net_.w) + Fixed::fromRatio(int(id % 7) + 2, 10), Fixed{}, Fixed::fromInt(cell / net_.w) + Fixed::fromRatio(int(id / 7 % 7) + 2, 10)};
         c.e = kNullEntity;
         if (!citizenPerson(sim, st, int32_t(id), spot, places_[size_t(to)].cell).valid()) { travel(sim, c, kLegWalk, bs.kerb); continue; }
@@ -439,7 +448,7 @@ void Traffic::keepCar(Simulation& sim, TrafficStore& st, TrafficCitizen& c, cons
 bool Traffic::startTrip(Simulation& sim, TrafficStore& st, int32_t id, Entity car) {
     World& w = sim.world();
     const TrafficCitizen& c = st.citizens[size_t(id)];
-    const int to = c.state == kCitizenToWork ? c.work : c.home;
+    const int to = destOf(c);
     Driving* drv = m_->driving();
     if (to < 0 || places_[size_t(to)].piece < 0 || !drv || !drv->active()) return false;
     for (auto& o : st.cars) if (o.e == car) return false;
@@ -461,7 +470,7 @@ bool Traffic::spawnTrip(Simulation& sim, TrafficStore& st, int32_t id, Vec2 at) 
     World& w = sim.world();
     GameState& gs = m_->state(sim);
     TrafficCitizen& c = st.citizens[size_t(id)];
-    const int to = c.state == kCitizenToWork ? c.work : c.home;
+    const int to = destOf(c);
     Driving* drv = m_->driving();
     int32_t pi; Fixed along;
     if (to < 0 || places_[size_t(to)].piece < 0 || c.carType == UINT16_MAX || !drv || !drv->active() || !roadSpot(at, 6, pi, along)) return false;
@@ -504,6 +513,7 @@ bool Traffic::spawnTrip(Simulation& sim, TrafficStore& st, int32_t id, Vec2 at) 
 // spot is free).
 Fixed Traffic::tripShift(Simulation& sim, const TrafficCar& c, Vec2 pos, Vec2 fwd, Vec2 target) const {
     if (c.task != kTaskTrip || c.destPiece < 0 || rules_.net.parkingLanes <= 0) return Fixed{};
+    if (const auto* stq = store(sim); stq && c.citizen >= 0 && size_t(c.citizen) < stq->citizens.size() && stq->citizens[size_t(c.citizen)].via) return Fixed{};   // only a stop at the school
     GameState& gs = m_->state(sim);
     const int cell = gs.grid.cellOf(v3(pos));
     if (cell < 0 || size_t(cell) >= net_.pieceAt.size() || net_.pieceAt[size_t(cell)] != c.destPiece) return Fixed{};
@@ -538,7 +548,7 @@ void Traffic::trips(Simulation& sim, TrafficStore& st) {
         const int s = tl::trafficDetail::axisDir(P.axis, 1).dot(Vec2{f.x, f.z}).raw >= 0 ? 1 : -1;
         if (sim.tick() % 10 == 0) {   // on his street: the free spot of the kerb nearest to the door that is still ahead
             const TrafficCitizen& who = st.citizens[size_t(id)];
-            const int dest = who.state == kCitizenToWork ? who.work : who.home;
+            const int dest = destOf(who);
             const Fixed at = tl::trafficAlongOf(P, pos);
             Fixed spotAlong;
             if (dest >= 0 && places_[size_t(dest)].piece == c.destPiece && (c.destAlong - at) * s > Fixed::fromInt(5) &&
@@ -550,13 +560,20 @@ void Traffic::trips(Simulation& sim, TrafficStore& st) {
         if (c.dwellUntil == 0) c.dwellUntil = std::max<uint32_t>(sim.tick(), 1);   // slow near the address since
         if (d > Fixed::fromRatio(7, 10) && sim.tick() - c.dwellUntil < sim.tickRate() * 2) continue;
         // there
+        if (st.citizens[size_t(id)].via) {   // the school: the child gets out (in), the car goes on to his own address
+            TrafficCitizen& parent = st.citizens[size_t(id)];
+            parent.via = 0;
+            const int next = destOf(parent);
+            c.dwellUntil = 0;
+            if (next >= 0 && places_[size_t(next)].piece >= 0) { c.destPiece = places_[size_t(next)].piece; c.destAlong = places_[size_t(next)].along; continue; }
+        }
         const Fixed kerbAcross = tl::trafficLaneAcross(net_, P, s, P.lanes);
         // beside the car, clear of its body
         const Fixed out = (kerbAcross >= P.centre() ? kOne : -kOne) * (m_->rules().types[w.get<Unit>(c.e).type].radius + Fixed::fromRatio(1, 4));
         Vec3 spot = v3(tl::trafficDetail::at(P, tl::trafficAlongOf(P, pos), tl::trafficAcrossOf(P, pos) + out));
         if (!gs.grid.passableAt(spot, kLayerGround)) spot = v3(tl::trafficDetail::at(P, tl::trafficAlongOf(P, pos), tl::trafficAcrossOf(P, pos) - out));
         TrafficCitizen& ct = st.citizens[size_t(id)];
-        const int to = ct.state == kCitizenToWork ? ct.work : ct.home;
+        const int to = destOf(ct);
         const bool atKerb = rules_.net.parkingLanes > 0 && fxAbs(tl::trafficAcrossOf(P, pos) - kerbAcross) < Fixed::fromRatio(9, 20);
         const Entity car = c.e;   // citizenPerson grows st.people only; `c` stays valid
         ct.e = kNullEntity;
@@ -585,7 +602,7 @@ Entity Traffic::tripDriverOut(Simulation& sim, TrafficStore& st, TrafficCar& c, 
     const int32_t id = c.citizen;
     c.citizen = -1;
     TrafficCitizen& ct = st.citizens[size_t(id)];
-    const int to = ct.state == kCitizenToWork ? ct.work : ct.home;
+    const int to = destOf(ct);
     ct.e = kNullEntity;
     const Entity e = passable && to >= 0 ? citizenPerson(sim, st, id, spot, places_[size_t(to)].cell) : kNullEntity;
     if (e.valid()) ct.leg = kLegWalk;

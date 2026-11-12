@@ -154,6 +154,11 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
   minutes, then he walks), rides in that very bus and gets off at his stop. Unseen he rides at `ride` cells/s; a
   bus of his line that calls at his stop when he is due lets him off, else he appears at the stop when the ride is
   over. When his bus leaves the street (out of sight, taken by a hero) he rides on unseen.
+- **Children** (`parents` percent; a place kind with `"children": N` is a school or a kindergarten with that many
+  places). A working parent with a day shift who walks or drives takes his child to the nearest school with room:
+  in the morning home, school, work; after work the school again, then home. On foot he stops at its door for a
+  moment, by car at its kerb. `game.traffic_citizen(h).school` is the place, `.via_school` true while it is ahead.
+  The child itself is not a unit yet.
 - **Bus lines** (`buses.lines`). A line is a loop through its `via` points by the shortest roads; its buses keep
   to it and call at the stops on its way (two stops within three cells on one side are one). `"lines": N` (default
   4, at most 7) lays lines out over the road network: a ring through its corners, the middle row and column, the
@@ -178,8 +183,8 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
 ```
 
 Not done yet: changing between bus lines, a driver walking from his door to a car parked further off (he
-gets in at once), children and schools, lunch,
-shopping, money, the hero as a citizen.
+gets in at once), children as units and children of bus riders,
+lunch, shopping, money, the hero as a citizen.
 
 ## rules.json
 

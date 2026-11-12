@@ -1311,6 +1311,8 @@ int gTrafficCitizen(lua_State* L, Vm& vm) {
     };
     place(c->home, "home");
     place(c->work, "work");
+    place(c->school, "school");   // where his child goes
+    if (c->via) { lua_pushboolean(L, 1); lua_setfield(L, -2, "via_school"); }
     if (c->work >= 0) {
         const auto& sh = t->rules().population.kinds[t->places()[size_t(c->work)].kind].shifts[c->shift];
         lua_createtable(L, 0, 2);

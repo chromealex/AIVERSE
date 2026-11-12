@@ -521,7 +521,7 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     for (auto& c : st->citizens) {
         h.u32(uint32_t(c.type) | uint32_t(c.shift) << 16 | uint32_t(c.state) << 24); h.i32(c.home); h.i32(c.work); h.u64(c.e.packed());
         h.fx(c.from.x); h.fx(c.from.y); h.u32(c.left); h.u32(c.eta);
-        h.u32(uint32_t(c.commute) | uint32_t(c.leg) << 8 | uint32_t(c.carType) << 16); h.u64(c.car.packed()); h.i32(c.stopA); h.i32(c.stopB); h.i32(c.line);
+        h.u32(uint32_t(c.commute) | uint32_t(c.leg) << 8 | uint32_t(c.carType) << 16); h.u64(c.car.packed()); h.i32(c.stopA); h.i32(c.stopB); h.i32(c.line); h.i32(c.school); h.u32(c.via);
     }
     h.u32(uint32_t(st->blows.size()));
     for (auto& b : st->blows) { h.u64(b.e.packed()); h.fx(b.damage); h.u32(b.tick); }
@@ -540,7 +540,7 @@ void io(Archive& a, TrafficCar& c) {
     a(c.e, c.kind, c.lastStop, c.dwellUntil, c.route, c.wp, c.tailPiece, c.tailDir, c.tailLane, c.cruise, c.stopped, c.blocker, c.ignore, c.ignoreUntil, c.reverseUntil, c.lostSince);
 }
 void io(Archive& a, TrafficPerson& p) { a(p.e, p.state, p.path, p.idx, p.legEnd, p.leg, p.legPt, p.until, p.moved, p.side, p.hp, p.lastPos, p.panic, p.citizen, p.goal); }
-void io(Archive& a, TrafficCitizen& c) { a(c.type, c.home, c.work, c.shift, c.state, c.e, c.from.x, c.from.y, c.left, c.eta, c.commute, c.leg, c.carType, c.car, c.stopA, c.stopB, c.line); }
+void io(Archive& a, TrafficCitizen& c) { a(c.type, c.home, c.work, c.shift, c.state, c.e, c.from.x, c.from.y, c.left, c.eta, c.commute, c.leg, c.carType, c.car, c.stopA, c.stopB, c.line, c.school, c.via); }
 void io(Archive& a, TrafficIncident& i) { a(i.id, i.kind, i.state, i.pos.x, i.pos.y, i.subject, i.offender, i.born, i.assigned, i.responder, i.victim, i.fatal, i.citizen); }
 void io(Archive& a, TrafficPatient& q) { a(q.type, q.at.x, q.at.y, q.release, q.citizen); }
 void io(Archive& a, TrafficBlow& b) { a(b.e, b.damage, b.tick); }
