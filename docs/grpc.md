@@ -142,7 +142,7 @@ version mismatch, reconnect from a callback).
 
 | Server | Transports | Result |
 |---|---|---|
-| grpc-core (Python grpcio 1.7x) | h2c, h2 + TLS (OpenSSL, SChannel under Wine, JNI SSLEngine on OpenJDK) | unary 200 KB + auth, bidi, host-name rejection |
+| grpc-core (Python grpcio 1.85) | h2c, h2 + TLS (OpenSSL, SChannel under Wine, JNI SSLEngine on OpenJDK) | unary 200 KB + auth, bidi, host-name rejection |
 | ASP.NET Core 8 + Grpc.AspNetCore(.Web) 2.70 + GrpcWebSocketBridge.AspNetCore 1.4.1 | gRPC-Web, `cs-grpc-bridge-v1` bridge, h2c, h2 + TLS | all pass |
 | same stack with the `extraction_rts` protos (stand-in for the Drone Fall backend) | `aiverse_grpc_probe --find square --assume-ping 33` | GetServiceMap (+ version mismatch), device Token, GetBattleServers over the WebSocket bridge with `Bearer`, FindMatch -> Queued / QueueUpdate / MatchFound ticket, stream closed after the match |
 
