@@ -1329,7 +1329,8 @@ void writeFile(const tfs::path& p, const std::string& s) {
 }
 bool havePython() {
 #if defined(_WIN32)
-    return std::system("py -3 --version >NUL 2>&1") == 0;
+    // the tests and the unpacker plugins run "python3", not the "py" launcher: probe what is actually run
+    return std::system("python3 --version >NUL 2>&1") == 0;
 #else
     return std::system("python3 --version >/dev/null 2>&1") == 0;
 #endif
@@ -1505,7 +1506,14 @@ TEST(unpacker_westwood_pak) {
 
 TEST(importer_dune2_rules_and_synthetic_scenario) {
     if (!havePython()) return;
-    CHECK(std::system("python3 " AIVERSE_SOURCE_DIR "/tools/importers/lib/selftest.py >/dev/null") == 0);
+#if defined(_WIN32)
+    auto q = [](const std::string& s) { return "\"" + s + "\""; };   // cmd.exe: no single quotes
+    const std::string devnull = " >NUL";
+#else
+    auto q = [](const std::string& s) { return "'" + s + "'"; };
+    const std::string devnull = " >/dev/null";
+#endif
+    CHECK(std::system(("python3 " + q(AIVERSE_SOURCE_DIR "/tools/importers/lib/selftest.py") + devnull).c_str()) == 0);
     tfs::path d = testDir("dune2");
     // A made-up scenario in the Dune II INI layout (no game data): two houses, a base, units, spice.
     std::string ini = "[BASIC]\nMapScale=1\nWinFlags=6\n[MAP]\nField=1300\nBloom=2409\nSeed=353\n"
@@ -1515,8 +1523,8 @@ TEST(importer_dune2_rules_and_synthetic_scenario) {
                       "[STRUCTURES]\nID000=Atreides,Const Yard,256,1630\nID001=Ordos,Windtrap,256,2660\nGEN2662=Ordos,Wall\nGEN2663=Ordos,Concrete\n";
     std::string pak = le32(4 + 13 + 4) + std::string("SCENA001.INI\0", 13) + le32(0) + ini;
     writeFile(d / "src" / "SCENARIO.PAK", pak);
-    std::string cmd = "python3 " AIVERSE_SOURCE_DIR "/tools/importers/dune2/import.py --maps-only --json --source '" + (d / "src").string() +
-                      "' --out '" + (d / "out").string() + "' > '" + (d / "report.json").string() + "'";
+    std::string cmd = "python3 " + q(AIVERSE_SOURCE_DIR "/tools/importers/dune2/import.py") + " --maps-only --json --source " + q((d / "src").string()) +
+                      " --out " + q((d / "out").string()) + " > " + q((d / "report.json").string());
     CHECK(std::system(cmd.c_str()) == 0);
     Json rep = Json::parseFile((d / "report.json").string());
     CHECK(rep.getBool("ok") && rep.getInt("maps") == 1 && rep["skipped"].getInt("Frigate") == 1);
@@ -12612,7 +12620,12 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
 #ifdef AIVERSE_TESTS_EDITOR_CORE
 TEST(project_import_mcp_bridge) {
     // the bridge runs tools/importers/port/aiverse_port.py: needs Python (not in Wine on CI)
-    if (!havePython()) { std::printf("  (python not found: project import bridge skipped)\n"); return; }
+#if defined(_WIN32)
+    const bool python = std::system("python --version >NUL 2>&1") == 0;   // PortOps.cpp runs "python" on Windows
+#else
+    const bool python = havePython();
+#endif
+    if (!python) { std::printf("  (python not found: project import bridge skipped)\n"); return; }
     aiverse::editor::Workspace ws;
     ws.engineDir = AIVERSE_SOURCE_DIR;
     Json p = Json::object();
