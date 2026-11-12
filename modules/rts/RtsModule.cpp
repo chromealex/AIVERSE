@@ -47,6 +47,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     commerce_ = std::make_unique<Commerce>();   // premises, businesses, the bank (rules "commerce"); nothing without the block
     commerce_->setup(sim, *this, rulesJson, mapIn);
     driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
+    arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
+    arsenal_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -1000,6 +1002,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
     if (commerce_ && commerce_->command(sim, cmd)) return;   // kCmdCommerce (RtsCommerce.cpp)
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
+    if (arsenal_ && arsenal_->command(sim, cmd)) return;   // kCmdTopDownWeapon (RtsArsenal.cpp)
     if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
@@ -1519,6 +1522,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
     if (commerce_ && commerce_->active()) commerce_->hash(sim, h);   // games with rules "commerce" only
+    if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
 }
 
 } // namespace aiverse::game

@@ -521,6 +521,7 @@ void RtsModule::grantKill(Simulation& sim, Entity victim, uint8_t killer) {
     const UnitType& vt = rules_.types[vu.type];
     const Vec3 vp = w.get<Transform>(victim).pos;
     const uint8_t victimOwner = w.get<Owner>(victim).player;
+    if (victimOwner == 0 && arsenal_ && arsenal_->active()) { arsenal_->neutralKill(sim, victim, killer); return; }   // parked cars (rules arsenal.payNeutral)
     if (killer == 0 || killer == kHostileNeutral || !hostile(sim, killer, victimOwner)) return;
     // bounty
     for (auto& b : vt.bounty) addResource(sim, killer, b.res, b.value);

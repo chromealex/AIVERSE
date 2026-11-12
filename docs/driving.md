@@ -81,8 +81,21 @@ them, a tunnel and a bridge over a road do not), and the view does not lift a ca
 
 `wheeled` takes the library's keys (torque curve, gears, grip curves, wheels, ...); omitted ones keep its defaults.
 
+## Client and handling data
+
+- **Camera.** At the wheel the hero is off the map, so the top-down camera follows his car (`ClientTopDown.cpp`);
+  speed zoom and velocity look-ahead are in docs/topdown.md.
+- **Wheels.** View `procedural` type `"steer"` turns a node about its `axis` (default y) by the vehicle's steering
+  angle (`VehicleState::steer`, `SceneObject::steer`), clamped to `limit` degrees; list it before the node's `"wheel"`
+  entry so the wheel rolls in its turned frame. Mirrored (left) wheel nodes need the opposite spin axis.
+  Test: `driving_steer_procedural_turns_front_wheels`.
+- **Per-vehicle handling.** `tools/citygen/vehicle_handling.py <project>` writes `wheeled` for every vehicle from a
+  table (mass, torque, top speed, grip, steering, brakes, drive layout, reverse speed) and takes the wheel positions
+  from the model's `wheel_<axle>_<side>` nodes, plus the `steer` / `wheel` procedurals. The library defaults are a
+  road car: 20 degrees/s of turn at 100 km/h, 75 km/h in reverse, 0.6 s without drive per gear change at 20 ticks/s.
+  Headless bots steer the player's hero too: measure handling with rules `"ai": {"controller": "scripted"}`.
+
 ## Not done yet
 
-Client: the enter key / button, a camera that pulls back with speed, layered car sprites (body, doors, wheels,
-paint mask, reflection). Sim: passengers, computer drivers, per-surface grip, skid marks and crash events for
+Client: an on-screen enter button, doors, reverse wheel spin (wheels roll forward when backing up). Sim: passengers, computer drivers, per-surface grip, skid marks and crash events for
 effects and sound.

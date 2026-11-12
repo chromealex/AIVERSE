@@ -210,6 +210,8 @@ private:
     void topDownDraw();              // screen canvas: sticks and buttons
     game::TopDownControls topDown_;
     bool tdMouseHeld_ = false, tdFireHeld_ = false;
+    float tdClock_ = 0;                                  // seconds of top-down frames (aim-assist taps, lock marker)
+    std::vector<game::TopDown::AimCandidate> tdTargets_; // aim assist: what the hero could shoot this frame
     void drawToolPreview();
     // localization (presentation only: rules_ is the display copy, the sim loads its own rules)
     void applyLanguage(const std::string& tag, bool save);

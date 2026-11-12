@@ -662,7 +662,7 @@ def build(assets, out, seed, headless=None, size=(96, 72), layout='grid', max_bu
                        'sight': 2,
                        'sprite': {'sheet': 'sprites/cars/%s.png' % name, 'frame': [fw, fh], 'facings': 1, 'mode': 'ground', 'rotate': True,
                                   'size': [round(fw / ppm / M, 4), round(fh / ppm / M, 4)], 'team': 'none', 'filter': 'linear', 'shadow': 'none'}}
-        driving[name] = {'length': round(length, 3), 'width': round(width, 3), 'wheeled': {'massMilli': MASS.get(name, 1300) * 1000}}
+        driving[name] = {'length': round(length, 3), 'width': round(width, 3), 'wheeled': {'massMilli': MASS.get(name, 1300) * 1000}}   # the real numbers: vehicle_handling.py
     buildings = load_buildings(assets, out)
     if max_buildings and len(buildings) > max_buildings:      # a memory knob: every k-th building of the catalogue
         buildings = [buildings[i * len(buildings) // max_buildings] for i in range(max_buildings)]
@@ -833,6 +833,10 @@ def main():
     a = ap.parse_args()
     w, h = [int(v) for v in a.size.lower().split('x')]
     print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed, a.headless, (w, h), a.layout, a.max_building_types)))
+    import add_arsenal                                    # weapons, money, pickups on the pavements (rules "arsenal")
+    print(json.dumps(add_arsenal.apply(os.path.expanduser(a.out), a.seed)))
+    import vehicle_handling                               # every vehicle drives differently; wheels turn and roll
+    print('handling:', *vehicle_handling.apply(os.path.expanduser(a.out)))
     import minimap_png                                    # the radar picture of the new map (ui/minimap.png)
     print(*minimap_png.build(os.path.expanduser(a.out)))
 

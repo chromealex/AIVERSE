@@ -98,6 +98,7 @@ struct ProcInputs {
     float accel = 0;          // units / s^2 along forward
     float aimYaw = 0;         // target direction relative to the body (rad), when hasTarget
     float aimPitch = 0;
+    float steer = 0;          // steering angle of a vehicle's front wheels (rad, + = left), Steer
     bool hasTarget = false;
     float3 groundNormal{0, 1, 0}; // terrain normal in object space (Align)
     float phase = 0;          // 0..1 per instance (desynchronizes identical units)
@@ -109,7 +110,7 @@ struct ProcAnim {
     enum Channel : uint8_t { Translate, Rotate, Scale };
     enum Wave : uint8_t { Sine, Abs, Saw, Triangle, Square, Const };
     enum Driver : uint8_t { ByTime, ByDistance };
-    enum Special : uint8_t { None, Lean, Aim, AimPitch, Fall, Align };
+    enum Special : uint8_t { None, Lean, Aim, AimPitch, Fall, Align, Steer };
     std::string nodeName;     // resolved against a model with resolve()
     int node = -1;            // -1: whole object
     Channel channel = Translate;
