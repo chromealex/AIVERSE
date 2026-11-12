@@ -1,5 +1,6 @@
 #pragma once
 #include "StaticDiffuseField.h"
+#include "ProbeTransport.h"
 namespace aiverse::render {
 // Offline transport for a fixed sun direction and uniform hemispherical sky.
 // Runtime color/intensity changes only modify uniforms; geometry/direction changes need a rebake.
@@ -15,11 +16,12 @@ inline StaticDiffuseField makeDiffuseVolume(const StaticShadowGeometry& geometry
     }
     return f;
 }
-inline void bakeProbeEnvironment(const StaticShadowGeometry& geometry,StaticDiffuseField& f,float3 sunDirection,int samples=32,float distance=50) {
-    if(samples<16||samples>128||!std::isfinite(distance)||distance<=0||distance>1000)throw std::runtime_error("invalid environment probe settings");
+inline void bakeProbeEnvironment(const StaticShadowGeometry& geometry,StaticDiffuseField& f,float3 sunDirection,int samples=32,float distance=50,int bounces=1) {
+    if(bounces<1||bounces>4||samples<16||samples>128||!std::isfinite(distance)||distance<=0||distance>1000)throw std::runtime_error("invalid environment probe settings");
     float length2=dot(sunDirection,sunDirection);
     if(!std::isfinite(length2)||length2<1e-6f)throw std::runtime_error("invalid probe sun direction");
     sunDirection=normalize(sunDirection);f.occludeAmbient=true;
+    std::vector<ProbeTransportLink> transport;
     for(int z=0;z<f.nz;++z)for(int y=0;y<f.ny;++y)for(int x=0;x<f.nx;++x){
         auto& probe=f.probes.at(size_t(x+f.nx*(y+f.ny*z)));probe.sun={};probe.sky={};probe.skyVisibility={};
         const auto origin=f.origin+float3{x+.5f,y+.5f,z+.5f}*f.spacing;
@@ -34,12 +36,14 @@ inline void bakeProbeEnvironment(const StaticShadowGeometry& geometry,StaticDiff
             if(hit<.05f||dot(n,n)<.5f)continue;
             if(dot(n,dir)>0)n=n*-1.0f;
             auto surface=origin+dir*hit+n*.04f;
+            if(bounces>1)appendProbeTransport(transport,geometry,f,uint32_t(x+f.nx*(y+f.ny*z)),surface,n,dir,albedo);
             float sun=std::max(0.0f,dot(n,sunDirection));
             if(sun>0&&geometry.distance(surface,sunDirection,distance)<distance)sun=0;
-            // Four deterministic upper-hemisphere visibility rays. Only diffuse low frequencies.
+            // Resolve narrow sky openings before propagating energy into covered areas.
             float sky=0;
-            for(int j=0;j<4;++j){float yy=(j+.5f)/4,angle=j*2.39996323f,rr=std::sqrt(1-yy*yy);float3 d{rr*std::cos(angle),yy,rr*std::sin(angle)};
-                if(geometry.distance(surface,d,distance)>=distance)sky+=std::max(0.0f,dot(n,d))*.5f;
+            const int skySamples=bounces>1?32:4;
+            for(int j=0;j<skySamples;++j){float yy=(j+.5f)/skySamples,angle=j*2.39996323f,rr=std::sqrt(1-yy*yy);float3 d{rr*std::cos(angle),yy,rr*std::sin(angle)};
+                if(geometry.distance(surface,d,distance)>=distance)sky+=std::max(0.0f,dot(n,d))*(2.0f/skySamples);
             }
             float colors[3]={albedo.x,albedo.y,albedo.z};
             for(int c=0;c<3;++c){auto add=[&](float4& sh,float energy){sh.x+=energy;sh.y+=2*energy*dir.x;sh.z+=2*energy*dir.y;sh.w+=2*energy*dir.z;};
@@ -47,5 +51,6 @@ inline void bakeProbeEnvironment(const StaticShadowGeometry& geometry,StaticDiff
             }
         }
     }
+    if(bounces>1)propagateProbeTransport(f,transport,samples,bounces);
 }
 }

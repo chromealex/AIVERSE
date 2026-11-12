@@ -373,3 +373,44 @@ A sunlit close-up of the red fabric was also inspected on GL: the source normal-
 weave remains visible rather than being replaced by a flat normal. A 16-capture GL
 camera-motion smoke sequence completed; selected frames retained the corrected
 banner appearance. This short sequence is not a general no-flicker guarantee.
+
+
+### Reflected daylight under the arch (2026-11-12)
+
+`reference_refinement.py --mode day-bounce` is an opt-in refinement of
+`day-occlusion`. It retains direct sun, exposure, camera and material textures.
+It uses three baked sun/sky bounce orders and 32 sky-visibility rays per surface
+instead of four; narrow courtyard openings were missed by the earlier estimator.
+Transport links reject wall crossings using the bake BVH. Runtime sky radiance
+`[30,25,18]` is an artistic reference calibration, not measured Unreal illumination.
+The default bake remains one bounce and existing caches are unchanged; this recipe
+requires a new cache because bounce count participates in the recipe key.
+
+The reference preset selects High GI (eight probes, four plane-visibility taps
+per probe). Bilinear visibility reduces abrupt dark patches on cloth and masonry;
+there is no screen-space blur or new temporal history. Mobile retains four probes
+and one visibility tap; its quality is not equivalent. Low retains GI-off fallback.
+The atlas remains 11,468,800 bytes for 6630 probes. One desktop bake took 86.2 seconds.
+Multi-bounce work happens only during baking; High filtering has a runtime cost.
+A diagnostic Metal run measured 24.30 ms median GPU frame versus 16.88 ms for the
+Mobile run with different sky settings; these are not controlled speed comparisons
+or Android results.
+
+Compared with the preceding normal-filtered daylight capture, a fixed foreground
+vault ROI's median display luma rises from approximately 2.86 to 24.91/255;
+the column rises from 2.07 to 6.14. Approximate matching reference regions measure
+37.5 and 6.9. The vault is warmer/readable while the column remains dark. These
+are display-space diagnostics, not physical radiance or pixel-aligned measurements.
+The reference is still not a 1:1 match: camera framing, floor illumination and
+interior light distribution differ. Coarse probe visibility remains approximate.
+
+CPU transport tests cover bounce order, colored/black albedo, wall-blocked links,
+sealed rooms and invalid settings. All 43 HDR GPU controls pass on GL and Metal,
+including High visibility on blocked/open tilted planes. Android/web remain
+unverified; a mid-range Android 30 FPS target is not established by these captures.
+
+The final GL and Metal screenshots were inspected. A GL camera-motion smoke run
+completed all 16 captures; selected start/end frames were inspected. This is not
+a general no-flicker guarantee.
+GL Low also completed with GI Off and linear HDR disabled; its fallback screenshot
+was inspected.

@@ -2,9 +2,8 @@
 
 Target: a mid-range Android device at 30 FPS (33.3 ms for the entire frame).
 This is a **target, not a measured mobile result**. The implementation is a fixed-scene
-single-bounce diffuse transport cache with runtime relighting. It is not Lumen:
-there is no dynamic geometry tracing, arbitrary moving light support, multiple
-bounces or ray-traced reflections. Existing SSR is separate. Epic's mobile Lumen
+diffuse transport cache (one to four baked sun/sky bounces) with runtime relighting. It is not Lumen:
+there is no dynamic geometry tracing, arbitrary moving light support or ray-traced reflections. Existing SSR is separate. Epic's mobile Lumen
 path uses the desktop renderer and has a significant performance cost:
 https://dev.epicgames.com/documentation/unreal-engine/using-lumen-global-illumination-on-mobile-in-unreal-engine
 
@@ -14,7 +13,9 @@ https://dev.epicgames.com/documentation/unreal-engine/using-lumen-global-illumin
 
 - Off: no indirect probe reads. Direct grid lights remain active.
 - Mobile: continuous tetrahedral interpolation over four neighboring probes.
-- High: trilinear interpolation over eight neighbors.
+- High: trilinear interpolation over eight neighbors, with four bilinear
+  plane-visibility taps per probe (Mobile keeps one). This reduces blocky visibility
+  boundaries when indirect light is strong; it costs additional texture reads.
 
 Both use the same world-space cache, directional RGB coefficients and visibility
 checks; no random samples, extra render passes, image blur, history accumulation or
@@ -47,12 +48,17 @@ The caller must also update the renderer's direct sun/ambient settings when chan
 those sources. Sun direction, point positions/radii/relative intensities, material
 albedo and geometry stay fixed. Change them only with a rebake. Individual moving
 lamps, animated shadow casters, emissive materials as sources, reflection GI and
-multi-bounce transport are not included. Skinned, deformable, transparent and
+multi-bounce point-light transport are not included. Skinned, deformable, transparent and
 alpha-tested geometry is excluded from baking. Imported average texture albedo is
 used, not arbitrary Shader Graph evaluation or per-hit texture UVs.
 
 The environment baker traces deterministic rays from each probe to opaque surfaces;
-it evaluates sun occlusion and four upper-hemisphere sky visibility rays there.
+it evaluates sun occlusion and four upper-hemisphere sky visibility rays there (32 in multi-bounce mode).
+Additional sun/sky bounces interpolate the previous order at each hit surface,
+using BVH-tested links to neighboring probes. Each order is accumulated exactly
+once. This is an offline low-frequency approximation; rejected/absent links lose
+energy rather than transmitting it through walls. Runtime coefficients and atlas size remain the same. Bounce count itself does
+not change runtime sampling cost; High visibility filtering is a separate cost.
 Miss rays are excluded because the renderer already supplies hemisphere ambient.
 This is a low-frequency approximation, not unbiased path tracing. The sun direction
 is baked even though its RGB radiance can change instantly.
@@ -68,7 +74,7 @@ aiverse_renderbench --scene /assets/scene-reference-day-balanced-gi-mobile.json 
 ```
 
 A `probeGI` block has `quality`, `spacing` (.5..4), `samples` (16..128),
-`distance` (0..1000), and optional RGB `points` (default 1), `sun` and `sky`
+`distance` (0..1000), `bounces` (integer 1..4, default 1), and optional RGB `points` (default 1), `sun` and `sky`
 (default 0). Environment probes require `staticPointLightGrid: true`.
 The default volume covers the main model bounds. Existing `staticPointBounce`
 adds the point-light transport and supplies the volume when present.
@@ -92,8 +98,8 @@ cache roundtrip, wrong recipe key, truncation and checksum damage. macOS GL/Meta
 compile 22 production shader variants and pass 36 GPU probes, including visibility,
 GI off, runtime relighting without replacing the atlas, and affine interpolation
 across all six tetrahedral orderings, plus blocked/open tilted visibility planes.
-Visibility planes are prepared in the cache; probe lookup uses one depth/plane
-fetch and does not reconstruct a cube ray or PCF basis per fragment. Full Sponza captures and timing are additional
+Visibility planes are prepared in the cache; Mobile lookup uses one depth/plane
+fetch and High uses four bilinear taps. Neither reconstructs a cube ray per tap. Full Sponza captures and timing are additional
 integration checks. Android/GLES hardware, iOS, Windows and WebGL remain unverified.
 
 ## Fixed-camera diagnostic (Mac, 1280x720)

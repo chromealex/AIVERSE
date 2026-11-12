@@ -86,6 +86,9 @@ int main(){
     auto sealed=makeDiffuseVolume(room,{-.5f,-.5f,-.5f},{-.5f,-.5f,-.5f},1);
     bakeProbeEnvironment(room,sealed,{0,1,0},64,20);
     for(const auto& probe:sealed.probes)for(int c=0;c<3;++c)assert(probe.sun[size_t(c)].x==0&&probe.sky[size_t(c)].x==0&&probe.skyVisibility.x==0);
+    bakeProbeEnvironment(room,sealed,{0,1,0},64,20,3);
+    for(const auto& probe:sealed.probes)for(int c=0;c<3;++c)assert(probe.sun[size_t(c)].x==0&&probe.sky[size_t(c)].x==0);
+    rejected=false;try{bakeProbeEnvironment(room,sealed,{0,1,0},64,20,5);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
     StaticShadowGeometry floor;floor.albedos={{.8f,0,0}};
     floor.triangles={{{-20,0,-20},{20,0,-20},{20,0,20}},{{-20,0,-20},{20,0,20},{-20,0,20}}};floor.build();
     auto sunny=makeDiffuseVolume(floor,{-.5f,.5f,-.5f},{-.5f,.5f,-.5f},1);
@@ -102,4 +105,22 @@ int main(){
     std::cout<<"one-bounce color transfer, orientation, determinism and black/empty controls PASS\n";
     std::cout<<"static point shadow BVH, cube faces, atlas layout and validation PASS\n";
     std::cout<<"static light grid conservative coverage and validation PASS\n";
+    // Transport must move energy into an initially dark receiver without recounting old orders.
+    StaticDiffuseField transportField;transportField.nx=2;transportField.ny=transportField.nz=1;transportField.spacing=1;transportField.probes.resize(2);
+    for(auto& c:transportField.probes[0].sun)c={1,0,0,0};
+    ProbeTransportLink forward;forward.receiver=1;forward.normal={0,1,0};forward.direction={0,0,1};forward.albedo={.5f,.25f,.1f};forward.count=1;forward.sources[0]=0;forward.weights[0]=1;
+    std::vector<ProbeTransportLink> links(16,forward);
+    auto once=transportField;propagateProbeTransport(once,links,16,1);assert(once.probes[1].sun[0].x==0);
+    auto bounced=transportField;propagateProbeTransport(bounced,links,16,3);
+    assert(std::abs(bounced.probes[1].sun[0].x-.5f)<1e-6f&&std::abs(bounced.probes[1].sun[1].x-.25f)<1e-6f);
+    assert(bounced.probes[0].sun[0].x==1&&bounced.probes[1].sky[0].x==0);
+    for(auto& link:links)link.albedo={};
+    auto blackTransport=transportField;propagateProbeTransport(blackTransport,links,16,4);assert(blackTransport.probes[1].sun[0].x==0);
+    StaticDiffuseField linkField;linkField.spacing=1;linkField.nx=linkField.ny=linkField.nz=1;
+    StaticShadowGeometry barrier;barrier.build();links.clear();
+    appendProbeTransport(links,barrier,linkField,0,{.25f,.5f,.5f},{1,0,0},{1,0,0},{1,1,1});assert(links.size()==1);
+    barrier.triangles={{{.4f,-2,-2},{.4f,2,-2},{.4f,2,2}},{{.4f,-2,-2},{.4f,2,2},{.4f,-2,2}}};barrier.build();links.clear();
+    appendProbeTransport(links,barrier,linkField,0,{.25f,.5f,.5f},{1,0,0},{1,0,0},{1,1,1});assert(links.empty());
+    std::cout<<"multibounce transport: dark receiver, albedo, bounce orders and wall visibility PASS\n";
+
 }

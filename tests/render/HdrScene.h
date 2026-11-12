@@ -155,15 +155,17 @@ struct HdrScene {
                         probe.visibility.resolution=4;probe.visibility.distances.assign(96,(probeIndex==14||probeIndex==16)?0.0f:5.0f);probe.visibility.normals.resize(96);}
                     if(probeIndex>=21&&probeIndex<=26)for(int z=0;z<3;++z)for(int y=0;y<3;++y)for(int x=0;x<3;++x){auto p=diffuse.origin+float3{x+.5f,y+.5f,z+.5f};float value=.2f+.01f*p.x+.02f*p.y+.03f*p.z;for(auto& c:diffuse.probes[size_t(x+3*(y+3*z))].irradiance)c={value,0,0,0};}
                 }
-                if(probeIndex>=27&&probeIndex<=28)for(int z=0;z<3;++z)for(int y=0;y<3;++y)for(int x=0;x<3;++x){
-                    auto p=diffuse.origin+float3{x+.5f,y+.5f,z+.5f};auto n=normalize(p*-1.0f);float plane=length(p)*(probeIndex==27?.5f:1.5f);
+                const int planeProbe=probeIndex==41?27:probeIndex==42?28:probeIndex;
+                if(planeProbe>=27&&planeProbe<=28)for(int z=0;z<3;++z)for(int y=0;y<3;++y)for(int x=0;x<3;++x){
+                    auto p=diffuse.origin+float3{x+.5f,y+.5f,z+.5f};auto n=normalize(p*-1.0f);float plane=length(p)*(planeProbe==27?.5f:1.5f);
                     auto& vis=diffuse.probes[size_t(x+3*(y+3*z))].visibility;
                     for(int face=0;face<6;++face)for(int py=0;py<4;++py)for(int px=0;px<4;++px){auto ray=StaticShadowGeometry::cubeDirection(face,2*(px+.5f)/4-1,2*(py+.5f)/4-1);float denom=dot(n,ray);size_t i=size_t(face*16+py*4+px);vis.distances[i]=denom>0?plane/denom:100;vis.normals[i]=denom>0?n:float3{};}
                 }
                 if(probeIndex>=29){diffuse.occludeAmbient=probeIndex!=33;
                     for(auto& p:diffuse.probes){p.irradiance={};if(probeIndex==35)for(auto& c:p.irradiance)c={.2f,0,0,0};p.sun={};p.sky={};p.skyVisibility=probeIndex==30?float4{.5f,0,.5f,0}:probeIndex==31?float4{.125f,0,.125f,0}:float4{};}
                 }
-                renderer.lights.setIndirectQuality((probeIndex==17||probeIndex==32)?IndirectQuality::Off:probeIndex>=15?IndirectQuality::Mobile:IndirectQuality::High);
+                if(probeIndex>=41){diffuse.occludeAmbient=false;for(auto& p:diffuse.probes)for(auto& c:p.irradiance)c={.2f,0,0,0};}
+                renderer.lights.setIndirectQuality((probeIndex==17||probeIndex==32)?IndirectQuality::Off:probeIndex>=15&&probeIndex<41?IndirectQuality::Mobile:IndirectQuality::High);
                 renderer.lights.setStaticRadiance(probeIndex==18?float3{.5f,.5f,.5f}:float3{1,1,1},probeIndex==19?float3{2,2,2}:float3{},probeIndex==19?float3{1,1,1}:float3{});
                 if(probeIndex==20)renderer.lights.setStaticRadiance({0,0,0},{1,1,1},{0,0,0});
                 if(probeIndex!=20&&!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows,diffuse.probes.empty()?nullptr:&diffuse)){failed=true;return;}}
@@ -176,6 +178,7 @@ struct HdrScene {
             m.uvScale=probeIndex==40?float2{.0001f,.0001f}:float2{1,1};m.uvOffset={65.5f/256,.25f};
             renderer.setMaterialQuality(MaterialQuality::Medium);
         }
+        if(probeIndex>=41){renderer.lighting.sunIntensity=0;renderer.lighting.skyColor={};renderer.lighting.groundColor={};probeBg->materials[0].normalTex=-1;renderer.setMaterialQuality(MaterialQuality::Low);}
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
             renderer.beginScene(camera,w/2,h/2);
@@ -214,6 +217,7 @@ struct HdrScene {
                 float vis=.25f/((nz*.5f+.5f)*(nz*.5f+.5f));
                 expected=.25f*nz*(1+.04f*vis);
             }
+            if(probeIndex>=41)expected=probeIndex==41?0:.2f;
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
                 if(cw<=0||ch<=0||px.size()!=size_t(cw*ch*4)) {failed=true;return;}
@@ -223,7 +227,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==41)captured=true;
+                if(probeIndex==43)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }

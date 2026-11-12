@@ -53,17 +53,27 @@ namespace aiverse::render::shaders {
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
-    "float probeVisibility(int offset, vec3 q, float distance) {\n" \
+    "float probeVisibility(int offset, vec3 q, float distance, bool filtered) {\n" \
     "    vec3 a=abs(q);vec2 uv;int face;\n" \
     "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=vec2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
     "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=vec2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
     "    else{face=q.z>0.0?4:5;uv=vec2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
-    "    ivec2 pixel=ivec2(clamp(floor((uv*0.5+0.5)*4.0),vec2(0),vec2(3)));\n" \
-    "    vec4 plane=gridFetch(offset+4+face*16+pixel.y*4+pixel.x);\n" \
-    "    float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
-    "    if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
-    "        depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
-    "    return distance-0.03<=depth?1.0:0.0;\n" \
+    "    vec2 texel=(uv*0.5+0.5)*4.0-0.5;\n" \
+    "    vec2 fraction=fract(texel);float visible=0.0;\n" \
+    "    for(int tap=0;tap<4;++tap){\n" \
+    "        if(!filtered && tap>0)break;\n" \
+    "        vec2 corner=vec2(float(tap%2),float(tap/2));\n" \
+    "        ivec2 pixel=ivec2(clamp(floor(texel)+corner,vec2(0),vec2(3)));\n" \
+    "        if(!filtered)pixel=ivec2(clamp(floor(texel+0.5),vec2(0),vec2(3)));\n" \
+    "        vec4 plane=gridFetch(offset+4+face*16+pixel.y*4+pixel.x);\n" \
+    "        float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
+    "        if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
+    "            depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
+    "        vec2 weights=mix(vec2(1.0)-fraction,fraction,corner);\n" \
+    "        float weight=filtered?weights.x*weights.y:1.0;\n" \
+    "        visible+=(distance-0.03<=depth?1.0:0.0)*weight;\n" \
+    "    }\n" \
+    "    return visible;\n" \
     "}\n" \
     "vec3 gridIndirect(vec3 wpos, vec3 n, out float ambientVisibility) {\n" \
     "    ambientVisibility=1.0;\n" \
@@ -97,7 +107,7 @@ namespace aiverse::render::shaders {
     "        if(weight<=1e-6)continue;\n" \
     "        vec3 position=l_gridOrigin.xyz+(cell+0.5)/l_gridOrigin.w;\n" \
     "        vec3 delta=wpos-position;float distance=length(delta);\n" \
-    "        if(distance>1e-5)weight*=probeVisibility(offset,delta,distance);\n" \
+    "        if(distance>1e-5)weight*=probeVisibility(offset,delta,distance,!mobile);\n" \
     "        if(weight<=0.0)continue;\n" \
     "        vec4 normal=vec4(1.0,n);\n" \
     "        vec3 value=vec3(0.0);if(mod(cellHeader.w,2.0)>=1.0)value=vec3(dot(gridFetch(offset),normal),dot(gridFetch(offset+1),normal),dot(gridFetch(offset+2),normal));\n" \
@@ -272,17 +282,27 @@ namespace aiverse::render::shaders {
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
-    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance) {\n" \
+    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance, bool filtered) {\n" \
     "    float3 a=abs(q);float2 uv;int face;\n" \
     "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=float2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
     "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=float2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
     "    else{face=q.z>0.0?4:5;uv=float2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
-    "    int2 pixel=int2(clamp(floor((uv*0.5+0.5)*4.0),float2(0),float2(3)));\n" \
-    "    float4 plane=gridFetch(lm,offset+4+face*16+pixel.y*4+pixel.x,width);\n" \
-    "    float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
-    "    if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
-    "        depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
-    "    return distance-0.03<=depth?1.0:0.0;\n" \
+    "    float2 texel=(uv*0.5+0.5)*4.0-0.5;\n" \
+    "    float2 fraction=fract(texel);float visible=0.0;\n" \
+    "    for(int tap=0;tap<4;++tap){\n" \
+    "        if(!filtered && tap>0)break;\n" \
+    "        float2 corner=float2(float(tap%2),float(tap/2));\n" \
+    "        int2 pixel=int2(clamp(floor(texel)+corner,float2(0),float2(3)));\n" \
+    "        if(!filtered)pixel=int2(clamp(floor(texel+0.5),float2(0),float2(3)));\n" \
+    "        float4 plane=gridFetch(lm,offset+4+face*16+pixel.y*4+pixel.x,width);\n" \
+    "        float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
+    "        if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
+    "            depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
+    "        float2 weights=mix(float2(1.0)-fraction,fraction,corner);\n" \
+    "        float weight=filtered?weights.x*weights.y:1.0;\n" \
+    "        visible+=(distance-0.03<=depth?1.0:0.0)*weight;\n" \
+    "    }\n" \
+    "    return visible;\n" \
     "}\n" \
     "static float3 gridIndirect(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n, thread float& ambientVisibility) {\n" \
     "    ambientVisibility=1.0;\n" \
@@ -316,7 +336,7 @@ namespace aiverse::render::shaders {
     "        if(weight<=1e-6)continue;\n" \
     "        float3 position=l.gridOrigin.xyz+(cell+0.5)/l.gridOrigin.w;\n" \
     "        float3 delta=wpos-position;float distance=length(delta);\n" \
-    "        if(distance>1e-5)weight*=probeVisibility(lm,int(l.gridSize.w),offset,delta,distance);\n" \
+    "        if(distance>1e-5)weight*=probeVisibility(lm,int(l.gridSize.w),offset,delta,distance,!mobile);\n" \
     "        if(weight<=0.0)continue;\n" \
     "        float4 normal=float4(1.0,n);\n" \
     "        float3 value=float3(0.0);if(fmod(cellHeader.w,2.0)>=1.0)value=float3(dot(gridFetch(lm,offset,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+1,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+2,int(l.gridSize.w)),normal));\n" \

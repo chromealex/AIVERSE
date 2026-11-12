@@ -168,7 +168,9 @@ struct Bench {
                     if(diffuseField.probes.empty())diffuseField=makeDiffuseVolume(additions.shadowGeometry,model->boundsMin,model->boundsMax,float(gi["spacing"].toDouble(3)));
                     double samples=gi["samples"].toDouble(32);
                     if(samples!=std::floor(samples)||samples<16||samples>128)throw std::runtime_error("probeGI samples must be 16..128");
-                    bakeProbeEnvironment(additions.shadowGeometry,diffuseField,v3(config["sunDirection"]),int(samples),float(gi["distance"].toDouble(50)));
+                    double bounces=gi["bounces"].toDouble(1);
+                    if(bounces!=std::floor(bounces)||bounces<1||bounces>4)throw std::runtime_error("probeGI bounces must be 1..4");
+                    bakeProbeEnvironment(additions.shadowGeometry,diffuseField,v3(config["sunDirection"]),int(samples),float(gi["distance"].toDouble(50)),int(bounces));
                     report.set("environmentProbeBakeMs",Json::number(ms(bakeStart,Clock::now())));
                     report.set("staticDiffuseProbes",Json::number(int64_t(diffuseField.probes.size())));
                 }
@@ -296,6 +298,7 @@ struct Bench {
             const auto indirectMode=config["probeGI"].getStr("quality","high");
             const bool indirectEnabled=options.profile!="low"&&indirectMode!="off"&&(config.has("probeGI")||config.has("staticPointBounce"));
             settings.set("probeGIQuality",Json::string(indirectEnabled?indirectMode:"off"));
+            settings.set("probeGIBounces",Json::number(int64_t(indirectEnabled?config["probeGI"]["bounces"].toDouble(1):0)));
             settings.set("probeGIProbesPerPixel",Json::number(int64_t(indirectEnabled?(indirectMode=="mobile"?4:8):0)));
             if(config.has("probeGI")&&!indirectEnabled)settings.set("gi",Json::string("probe GI disabled"));
             settings.set("taa",Json::fromBool(screen.running()));
