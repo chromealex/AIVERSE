@@ -341,7 +341,9 @@ void RtsModule::sysGarrison(Simulation& sim) {
     w.each<Garrison, Unit, Owner>([&](Entity e, Garrison& g, Unit& u, Owner& o) {
         const UnitType& t = rules_.types[u.type];
         if (u.flags & kUnitUnderConstruction) return;
-        if (adv && o.player != 0 && t.spawnInterval.raw > 0) {
+        const bool grows = !env_ || !env_->active() || env_->producing(sim, e);   // environment: off-screen buildings stop growing
+        if (!grows) {}
+        else if (adv && o.player != 0 && t.spawnInterval.raw > 0) {
             // effects: lock stops production, production speed / cap stats, redirect sends the growth elsewhere
             if (statusFlags(sim, e) & kStLock) return;
             int cap = int(stat(sim, e, Stat::GarrisonCap).floorInt());
@@ -376,7 +378,15 @@ void RtsModule::sysGarrison(Simulation& sim) {
             releases.push_back({e, g.pendingTarget, t.spawnUnit, o.player, t.radius, g.pendingGroup});
         }
     });
+    for (auto& r : releases) releaseUnit(sim, r.from, r.target, r.unit, r.owner, r.group);
+}
+
+Entity RtsModule::releaseUnit(Simulation& sim, Entity from, Entity target, uint16_t unit, uint8_t owner, uint32_t group) {
+    World& w = sim.world();
     GameState& gs = state(sim);
+    const bool adv = rules_.advancedEffects;
+    struct Release { Entity from, target; uint16_t unit; uint8_t owner; Fixed radius; uint32_t group = 0; };
+    const Release r{from, target, unit, owner, rules_.types[w.get<Unit>(from).type].radius, group};
     auto tagGroup = [&](Entity n, const Release& r) {
         if (!adv) return;
         w.add<GroupTag>(n, GroupTag{r.group, r.from, r.target});
@@ -391,7 +401,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
             }
         }
     };
-    for (auto& r : releases) {
+    {
         Vec3 from = w.get<Transform>(r.from).pos, to = w.get<Transform>(r.target).pos;
         if (rules_.lanes.enabled) {
             // Mushroom Wars 2: spread over the generated lanes round-robin, follow the lane strictly
@@ -414,13 +424,13 @@ void RtsModule::sysGarrison(Simulation& sim) {
                 }
                 Vec3 start = L.points[reverse ? L.points.size() - 1 - pos : pos];
                 Entity n = spawn(sim, r.unit, r.owner, start);
-                if (!w.has<Orders>(n)) continue;
+                if (!w.has<Orders>(n)) return n;
                 w.add<LaneWalker>(n, LaneWalker{lane, pos, reverse});
                 tagGroup(n, r);
                 Order ord;
                 ord.type = OrderType::Enter; ord.target = r.target; ord.point = flat(to); ord.state = 3; // 3 = lane walk
                 issue(sim, n, ord, false);
-                continue;
+                return n;
             }
         }
         Vec3 d = flat(to - from);
@@ -429,7 +439,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
         Entity n = spawn(sim, r.unit, r.owner, start);
         tagGroup(n, r);
         auto* m = w.tryGet<Mobile>(n);
-        if (!m) continue;
+        if (!m) return n;
         int a = gs.roads.nodeOf(r.from), b = gs.roads.nodeOf(r.target);
         if (a >= 0 && b >= 0) m->roadPath = gs.roads.path(w, a, b);
         Order ord;
@@ -437,6 +447,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
         ord.state = m->roadPath.empty() ? 0 : 2; // 2 = road route prepared
         issue(sim, n, ord, false);
         w.get<Orders>(n).queue.front().state = ord.state;
+        return n;
     }
 }
 

@@ -2043,6 +2043,97 @@ Editor: window **Тайлы** (palette, brush, autotile on/off, atlas picker; pa
 Agents: `tileset_list`, `tiles_init {tileset, fill | fromTerrain}`, `tile_paint {terrain, x, y, radius | rect, tile?}`,
 `tile_info {x, y}`, `tiles_remove`.
 
+## Map environment (Bunker Wars / Mushroom Wars 2 "Environment")
+
+Optional block `"environment"` in rules.json (defaults) and in the map (map keys win, key by key). Code:
+`modules/rts/RtsEnv*.cpp` (agent-bw-env). A game without the block has no environment state and keeps its
+checksums and saves. State: the `EnvState` world resource (hashed, saved after the grid fields, rolled back
+with the world). Two systems run only with an environment: `environment` (before `death`) and
+`environment2` (after `capture`). Flat maps only (planets are not supported).
+
+Units: **positions are world coordinates**; every distance / speed key (`speed`, `killZoneEnd`,
+`flyVelocity`, `lightningKillRange`, ...) is divided by `"scale"` (BW distance units per world unit, default
+1), so a BW importer copies BW values verbatim and sets `scale`. Times are seconds. Map points (BW
+`PointInfo.index`) are referenced by the index into the map's `"entities"` or by their `"id"`. Skills are
+rules `playerAbilities` ids cast without cost (BW `StartSkillForPlayer`). Look types (`look`, `bombLook`,
+`souls.look`) are unit types the view draws (`Environment::bodies`).
+
+```jsonc
+"environment": {
+  "scale": 30, "complexity": "hard",                   // match AI complexity (worms, outmap, Mouro holders)
+  "season": "winter", "weather": ["rain", "snow", "lightning", "blizzard"],
+  "weatherParams": {"puddlesFillSpeed": 20, "puddlesDrySpeed": 20, "rainWaitTime": 60, "noRainWaitTime": 30,
+    "snowRestoringSpeed": 0.005, "snowWaitTime": 30, "snowFillRandomFactor": 0.6, "snowFillTimeRange": [40, 60],
+    "blizzardWaitTime": 30, "blizzardFillTime": 40, "blizzardUnitKillSpeed": 5, "blizzardUnitSpeedFactor": 0.5,
+    "blizzardUnitKillFactor": [1, 2], "lightningKillTime": 2, "lightningKillFactor": 70, "lightningKillRange": 80,
+    "lightningPointKillValue": 10, "lightningTime": 30, "lightningWaitTime": 30,
+    "lightningBurn": {"field": "fire", "value": 100, "radius": 40}},
+  "wind": {"minIdleDuration": 5, "maxIdleDuration": 10, "minBlowDuration": 5, "maxBlowDuration": 10, "minForce": 40, "maxForce": 80},
+  "zones": [{"id": "pond", "kind": "water", "poly": [[x, z], ...], "slowdown": 2},   // water | road | toad | other; "rect" / "circle"
+  "splines": [{"id": "lava", "points": [[x, z], ...], "loop": false,
+               "skill": "moving_flame", "velocity": 100, "emitPeriod": 10, "firstEmissionCooldown": -1}],
+  "trample": [{"field": "snow", "perSecond": 0.1, "speed": [[1, 1], [0.9, 1], [0.7, 0.9], [0.4, 0.75], [0.1, 0.5]], "snowRestore": true},
+              {"field": "grass", "perSecond": -0.2, "lerpSpeed": 0.6, "killField": "fire", "hideStatus": "in_grass", "hideAbove": 0.3}],
+  "worms": [{"complexity": "hard", "paths": ["lava"], "onTheGroundCycles": [[10, 15]], "undergroundCycles": [[10, 15]],
+             "spawnArmyCycles": [[10, 20]], "targetPlayers": [1], "armyUnit": "shroom", "reverseSkill": "reverse",
+             "look": "worm_head", "lookTail": "worm_tail",
+             "info": {"speed": 100, "onTheGroundNoUnitsCoefficient": 1, "onTheGroundCatchingUnitsCoefficient": 2,
+                      "onTheGroundFullOfUnitsCoefficient": 1.1, "undergroundCoefficient": 0.5, "testUnitsPeriod": 0.2,
+                      "killZoneBegin": 0, "killZoneEnd": 20, "killZoneWidth": 80, "visionDistance": 200, "traceWidth": 80,
+                      "traceEmitPeriod": 0.5, "traceDecayDuration": 2, "traceSlowdownCoefficient": 0.5, "minDistanceToBuilding": 160,
+                      "appearDistance": 80, "reverseSkillOffset": 50, "armySpeedCoefficient": 2, "headAppearDuration": 1,
+                      "headDisappearDuration": 1, "tailData": [{"shift": 0}, {"shift": 30}, ...]}}],
+  "toad": {"pos": [x, z], "zone": "swamp", "attackDuration": 0.3, "postAttackDuration": 0.2, "maxUnits": 30, "explodeDelay": 0, "explosionDuration": 0.5, "look": "toad"},
+  "flyBomb": {"rallyPoints": [{"start": [x, z], "end": [x, z]}], "flyVelocity": 300, "minDropBombPeriod": 1, "maxDropBombPeriod": 5,
+              "maxBombsByPass": -1, "minIdleDuration": 3, "maxIdleDuration": 7, "minDropBombHeight": 170, "maxDropBombHeight": 230,
+              "gravity": -500, "health": 15, "amplitude": [40, 80], "frequency": [0.5, 0.5], "explosionSkill": "bomb", "type": "bomber", "bombLook": "bomb"},
+  "mouro": {"player": 1, "bot": 2, "castPos": [x, z], "dominationType": "domination", "moraleResource": "morale", "emotionsCooldown": 5,
+            "actionHolders": [{"complexities": ["hard"], "startsFrom": 30, "activationDelay": 5, "actions": [
+              {"name": "ring", "type": "castRing", "skill": "fire_ring", "duration": 3, "castAt": 1.2, "nextActionTimeout": 10, "minimumDominationPointsCount": 1},
+              {"name": "army", "type": "addUnits", "sourcePoints": [12], "targetPoints": [], "targetPointsCount": 3, "unitsPerPoint": 24, "moveToPlayer": true, "moveToBot": false}]}],
+            "emotions": [{"emotion": "laugh", "conditions": [{"type": "cooldown"}, {"type": "botPointCaptured"}, {"type": "probability", "percent": 50}]}]},
+  "mapScroller": {"screen": [w, h], "start": [x, z], "actions": [{"type": "waitPointsCaptured", "owner": "player", "points": [3, 4]},
+            {"type": "moveScreen", "position": [x, z], "duration": 2}, {"type": "convertOutside", "from": "bot", "to": "neutral"}]},
+  "outmapUnits": {"sources": [20, 21], "timerRepeatDuration": -1, "moveActions": [{"time": 5, "from": 20, "to": 3, "count": 10}],
+                  "items": [{"complexity": "easy", "moveActions": [...]}]},
+  "graveyard": {"type": "graveyard", "networkGame": {"graveyardLimit": 200, "awaitDuration": 2}, "localGame": {...}},
+  "souls": {"flyVelocity": 200, "jumpHeight": 500, "attackerSoulDivider": 2, "defenderSoulDivider": 2, "look": "soul"},
+  "pointFire": {"fireDuration": 5},
+  "caves": [[5, 6, 7]], "noSendTargets": [9],
+  "walls": [{"point": "gate_wall", "hp": 10, "destroyDuration": 1, "ignoreTowersDamage": false, "destructIfCatched": [[2, 3]]}]
+}
+```
+
+| block | BW source | behaviour |
+|---|---|---|
+| weather | Environment.Module | rain: puddles fill / wait / dry / wait; water zones slow by `lerp(slowdown, 1, 1 - puddles)` (no rain: full slowdown; winter: never). Snow (winter): wait, then with `snowFillRandomFactor` a restore phase that lowers every `snowRestore` trample field. Blizzard: walkers on lanes lose blizzard health `dt / killSpeed / resist` (resist random per unit) and die (no soul); speed `lerp(blizzardUnitSpeedFactor, 1, health)`. Lightning: every `lightningKillTime` with `lightningKillFactor` % a random walker (dies with every walker in the ellipse range x range/2) or garrison (loses `lightningPointKillValue`) |
+| wind | Wind | idle, then blows in the next of 8 directions (angle = dir * 45 degrees from +z toward +x) with a random force: speed + dot(facing, force) |
+| zones | ZonesModule | speed / `slowdown` in the first zone containing a ground unit; road zones skip winter speeds; toad zones feed the toad |
+| trample | GrassModule / WinterModule | moving ground units add `perSecond` to a grid field (`docs/fields.md`); winter `speed` table (last row with value <= first wins), grass `lerpSpeed`, `killField` (burning grass), `hideStatus` |
+| worms | Worm / WormTrace | underground / on the ground on a random path spline; segments follow the head at their shift; kill zone in front of the head (catching / full speeds), slime traces (kill until the tail passes, then slow by the coefficient); every other dig-up an army of neutral units leaves a lane toward a target player's building (x `armySpeedCoefficient`, ignored by worms) |
+| toad | Toad | eats a random unit in its zone that will not reach its building before the tongue; after `maxUnits` explodes: every building above level 1 goes back to level 1 |
+| flyBomb | FlyBomb / Bomb | crosses between rally points (sine wobble), drops bombs that cast `explosionSkill` (neutral) where they land; an air body of `type` towers shoot: one hit = one `health` |
+| mouro | MouroBoss / MouroAction / MouroCondition / MouroEmotions | holders start in `startsFrom` order; one action runs at a time (`duration`, effect at `castAt`, then `nextActionTimeout`); conditions: domination points, morale difference, a caldron target; ends with the match (`kEvPlayerDefeated`). Emotions are `kEvEnv` events for the view |
+| mapScroller | MapScroller(Actions) | one action at a time: waitPointsCaptured, waitTime, waitKingOfTheHillScore (team score), waitNoUnits, moveScreen, convertAll, convertOutside, setInvincible, moveUnits, gotoStep. Buildings outside the screen do not grow, auto skills wait until their spline is on screen |
+| outmapUnits | OutmapUnitsHandler | timed sends from off-map points without taking their garrison; afterwards the sources become neutral |
+| graveyard + souls | GraveyardModule / UnitSoul | every non-neutral death (not lightning / toad / blizzard) and assault losses (/ divider, fractions kept per point) fly to the graveyard (+1 on arrival); at `limit - 1` it waits `awaitDuration` and sends to each player's last action building as many units as that building holds. Nobody can send to a graveyard |
+| pointFire | PointFire | an assaulted building burns for `fireDuration` (percent = units now / units at the start); presentation state |
+| caves | CaveGroup | linked points share owner and garrison; sends inside a group are refused |
+| walls | DestructibleObjectInfo | owned by hostile neutral so every tower shoots them; each hit = 1 hp; rubble keeps the cells (lanes) for `destroyDuration`; a team owning every point of a `destructIfCatched` set breaks it |
+
+Events: `kEvEnv` (value = `EnvEventKind << 16 | data`): weather phases, lightning, wind, worm states, toad
+attacks / explosions, bombs, Mouro actions / emotions, graveyard, souls (also the visual-only ones without a
+graveyard), scroller steps, walls. `kEvCaptured` for caves / scroller conversions, `kEvGarrisonChanged` for
+lightning and souls.
+
+Fog of war in BW is presentation only: no explored memory, sight ellipses (y x 2) with lifetimes, a growing
+start reveal. Map it on the existing keys: rules `fogOfWar.mode` "full" + look `"explored"` = `"unexplored"`
+and `"fade": 1`.
+
+Not ported yet: multi-spline auto skills (`multiSplineSkills`), rain lowering grass-fire spread,
+`setInvincible` effects (stored only), Mouro skill filters (skeleton attacks pick random player points),
+BW bombs fall in screen space (here: ground drift + fall time), visual Mouro/worm animations and dust.
+
 ## Fog of war look
 
 Visual keys of rules.json `"fogOfWar"` (game.json `"fogOfWar"` overrides key by key; editor window

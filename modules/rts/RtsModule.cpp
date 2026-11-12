@@ -32,6 +32,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     for (const auto& [key, value] : mapIn["initialVars"].members()) state(sim).trig.vars[key] = value.fx();
     fields_ = std::make_unique<GridFields>();   // grid fields (rules "fields", map "gridFields"); nothing without them
     fields_->setup(sim, *this, mapIn);
+    env_ = std::make_unique<Environment>();   // map environment (rules / map "environment"); nothing without it
+    env_->setup(sim, *this, rulesJson, mapIn);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -58,8 +60,10 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (env_->active()) sim.addSystem("environment", [this](Simulation& s) { env_->tick(s); });   // RtsEnv.cpp (games with an environment only)
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
     sim.addSystem("capture", [this](Simulation& s) { sysCapture(s); });
+    if (env_->active()) sim.addSystem("environment2", [this](Simulation& s) { env_->lateTick(s); });
     sim.addSystem("creep", [this](Simulation& s) { sysCreep(s); });
     if (fields_->active()) sim.addSystem("gridfields", [this](Simulation& s) { fields_->tick(s); });   // RtsGridFields.cpp
     sim.addSystem("vision", [this](Simulation& s) { sysVision(s); });
@@ -676,6 +680,7 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (mechOn(sim)) mechStatMod(sim, e, s, add, mul);   // agent-mech states (retreat speed, cargo arrows, veterancy)
     if (rules_.originals) add += playerModsStat(sim, owner, u.type, s, mul);   // forges, morale
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
+    if (s == Stat::Speed && env_ && env_->active()) env_->speed(sim, e, add, mul);   // environment: wind, zones, weather, traces, snow
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
     return (base + add) * mul;
 }
@@ -1285,6 +1290,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
             auto* g = w.tryGet<Garrison>(e);
             if (!g || !w.alive(cmd.target) || cmd.target == e || !w.has<Garrison>(cmd.target) || t.spawnUnit == kNoType) break;
             if (rules_.advancedEffects && (statusFlags(sim, e) & kStLock)) break;   // locked: can't send
+            if (env_ && env_->active() && !env_->sendAllowed(sim, e, cmd.target)) break;   // linked caves, graveyards
             int64_t pct = std::clamp<int64_t>(cmd.param, 1, 100);
             const int sendable = std::max(0, g->count - t.garrisonKeep);   // State.io: one soldier stays home
             int n = int(int64_t(sendable) * pct / 100);
@@ -1469,6 +1475,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
         h.u32(uint32_t(s.hit.size())); for (auto hit : s.hit) h.u64(hit.packed());
     });
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
+    if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
 }
 
 } // namespace aiverse::game

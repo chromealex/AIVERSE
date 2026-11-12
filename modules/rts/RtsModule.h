@@ -19,6 +19,7 @@
 #include "RtsMech.h"
 #include "RtsGridFields.h"
 #include "RtsNative.h"
+#include "RtsEnv.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -155,6 +156,7 @@ enum GameEvent : uint16_t {
     kEvMorale,          // a = unit, value = 0 steady / 1 wavering / 2 routing (stage 4)
     kEvTurn,            // turn-based mode: player = whose turn starts, value = turn number
     kEvFortified,       // dungeon walls: value = cell, player = new wall owner (0: the wall fell back to plain rock), a = worker
+    kEvEnv,             // map environment (RtsEnv.h): value = EnvEventKind << 16 | data, a / b / pos per kind (weather, wind, worm, toad, bombs, Mouro, souls, walls)
 };
 
 // ---------------------------------------------------------------- components
@@ -498,6 +500,7 @@ public:
     const TriggerSet& triggers() const { return triggers_; }
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
+    Environment* environment() const { return env_ && env_->active() ? env_.get() : nullptr; }   // map environment (RtsEnv.h); null without one
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
     const Json* generatedMap() const { return generated_.isObject() ? &generated_ : nullptr; }
@@ -597,6 +600,12 @@ public:
     std::vector<Amount> upfrontCost(const std::vector<Amount>& cost) const; // the part paid at once (goods are delivered)
     // lanes between garrison buildings a -> b (main lane first), empty when none
     std::vector<int> lanesBetween(Simulation& sim, Entity a, Entity b) const;
+    // one unit of `unit` leaves garrison `from` for `target` (lanes / roads / straight, like sysGarrison releases)
+    Entity releaseUnit(Simulation& sim, Entity from, Entity target, uint16_t unit, uint8_t owner, uint32_t group);
+    // assault results for the environment (souls, burning buildings, last action buildings)
+    void envAssault(Simulation& sim, Entity structure, uint8_t attacker, uint8_t defender, int attackerLost, int defenderLost) {
+        if (env_ && env_->active()) env_->onAssault(sim, structure, attacker, defender, attackerLost, defenderLost);
+    }
     // ---- fidelity mechanics (RtsOriginals.cpp)
     std::vector<Amount> trainCost(Simulation& sim, uint8_t player, uint16_t type, Fixed* timeMult = nullptr) const; // growth, free hero, revive
     bool heroAllowed(Simulation& sim, uint8_t player, uint16_t type) const;   // limit and tiers
@@ -808,6 +817,7 @@ private:
     void captureOriginals(Simulation& sim, Entity structure, uint8_t from, uint8_t to);
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
+    std::unique_ptr<Environment> env_;     // map environment (RtsEnv.h; state: EnvState resource)
     std::vector<NativeDefinition> nativeDefinitions_;
     NativeModules native_;
     std::unique_ptr<ScriptEngine> script_; // Lua VM (RtsScript.h); its persistent state is the ScriptStore resource

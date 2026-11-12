@@ -990,6 +990,8 @@ if(NOT MSVC)
 endif()
 # grid fields (G5): data, kernels, Lua `field` table (docs/fields.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
+# map environment (Bunker Wars port: weather, wind, bosses, Mouro, scroller, caves, graveyards, souls, walls)
+target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvData.cpp modules/rts/RtsEnvBoss.cpp modules/rts/RtsEnvScript.cpp modules/rts/RtsEnvPoints.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)

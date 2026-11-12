@@ -13339,6 +13339,7 @@ TEST(file_assoc_linux_registration_temp_home) {
 #endif
 #endif
 #include "tests_fields.inc"   // grid fields (G5)
+#include "tests_env.inc"      // map environment (Bunker Wars port)
 
 // ------------------------------------------------------------------ planet detail grids (agent-terrain)
 
