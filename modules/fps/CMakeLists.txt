@@ -16,7 +16,7 @@ target_link_libraries(aiverse_authority PUBLIC aiverse_fps aiverse_net aiverse_c
 add_library(AIVERSE::authority ALIAS aiverse_authority)
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_fps_tests ../../tests/fps/tests.cpp)
-    target_link_libraries(aiverse_fps_tests PRIVATE aiverse_authority)
+    target_link_libraries(aiverse_fps_tests PRIVATE aiverse_authority aiverse_audio)
     add_test(NAME fps COMMAND aiverse_fps_tests ${PROJECT_SOURCE_DIR}/examples/fps/arena)
 endif()
 if(AIVERSE_BUILD_SERVER AND NOT EMSCRIPTEN)

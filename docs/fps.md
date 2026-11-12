@@ -43,7 +43,7 @@ can add the array in the FPS panel's advanced rules editor and Apply.
 The client displays a procedural placeholder weapon, flash, cosmetic shot streak,
 magazine/reserve, reload state and a hit marker. Flash and hit markers follow accepted
 server shot/hit counters (they may be delayed by network latency). They are not a
-complete animated weapon asset or audio system. Damage and ammo are server-owned.
+complete animated weapon asset. Extended mode adds synthesized audio. Damage and ammo are server-owned.
 
 ## Runtime and verification
 
@@ -60,8 +60,8 @@ The first three binaries are under `<build>/modules/fps/`.
 ```
 
 Client and server require identical content and protocol. Weapon support uses FPS
-protocol/save version 2; earlier experimental FPS saves and version-1 peers are
-rejected. RTS save/protocol versions are unchanged.
+save version 6 (version-3 saves still load); earlier experimental FPS saves and older peers
+are rejected. RTS save/protocol versions are unchanged.
 
 ## Scope
 
@@ -82,11 +82,6 @@ Legacy maps retain resident collision. Dynamic-world persistence and streamed na
 are separate work.
 Bots aim and strafe; they do not have production navigation/tactics.
 
-Next useful mechanics: ADS/scopes; recoil and movement-dependent accuracy; head/body/limb
-hitboxes and armor; bullet penetration and ballistic projectiles; frag/smoke/flash grenades;
-pickups, dropped weapons, attachments and loot; interaction/revive; buy/freeze/bomb rounds;
-spectator/death camera; sound propagation/footsteps; vaulting, prone and vehicles.
-
 ### Projectile modifier chains
 
 Weapons with positive `bulletSpeed` can opt into the shared `flight` block: ordered Split,
@@ -94,3 +89,74 @@ Ricochet, Fly Through and scalar modifiers. This works independently of `mechani
 `flight.gravity` defaults to `bulletGravity`. Authoritative 3D sweeps, actor-life hit history,
 material penetration, save/rollback and existing snapshot presentation are supported.
 See [projectile programs](projectile-programs.md) for the JSON schema and trajectory semantics.
+
+## Extended mechanics (opt-in)
+
+`fps.mechanics.enabled: true` enables the extended authoritative systems. Existing
+rules without this block retain their single-round behavior. The bundled training,
+arena, survival and tactical templates enable this block.
+
+| System | Implemented behavior | Current limits |
+|---|---|---|
+| Aiming and recoil | RMB zoom/sensitivity, reduced ADS spread, movement spread, server recoil and recovery | Procedural viewmodel, no skinned arms or authored animations |
+| Damage | Height-based head/body/leg regions, head and limb multipliers, consumable armor | Regions of the actor AABB, not skeletal hitboxes |
+| Penetration | Opt-in collider penetration cost, decreasing damage and a bounded per-projectile penetrated-collider list | Material cost, not thickness/ricochet simulation |
+| Ballistics | Swept bullet segments, speed, gravity, range and lifetime | Projectile hits use current state, not hitscan rewind |
+| Grenades | Frag radial damage with cover; bouncing smoke and flash grenades; smoke lifetime; view-direction-dependent flash duration | Smoke is a box volume placeholder; no fluid simulation |
+| Inventory | Bounded stacks using the shared inventory library, pickups, weapon drop/pickup retaining ammo and attachments | Fixed item catalog; no drag-and-drop inventory UI |
+| Attachments | Scope, suppressor, extended magazine, with actual accuracy/audio/capacity effects | Three fixed attachment types |
+| Medical | Delayed consumable healing, movement/fire/damage cancellation, teammate knockdown, bleeding and revive | Knockdown requires a living teammate |
+| Tactical rounds | Freeze/buy phase, spawn buy zone, money, plant/defuse timers, dropped bomb recovery, score, round restart | Team 1 attacks; team 2 defends; no halftime or overtime; loadout resets each round |
+| Movement | Prone with ceiling clearance, explicit ladder regions, checked short-obstacle vault | Axis-aligned collision; vault is a discrete move, not a root-motion animation |
+| Vehicles | Driver admission, exclusive control, steering, swept static collision, safe exit and weapon damage | Single-seat arcade vehicle on flat ground; no suspension, passengers or dynamic vehicle collisions |
+| Audio | Synthesized original shot/reload/footstep sounds through the engine audio service; remote shot attenuation and simple cover volume reduction | Placeholder sound design; own-player footsteps only |
+
+`fps_tactical` / **Breach Protocol** is a separate bomb-mode example. Existing copied
+projects are not upgraded automatically. The default standalone FPS client opens
+`fps_training` and resolves engine assets independently of its launch directory.
+
+### Extended controls
+
+| Input | Action |
+|---|---|
+| RMB | Aim / scope |
+| G / X / C | Frag / smoke / flash grenade |
+| H | Heal |
+| E | Nearby pickup, revive, enter/exit vehicle, ladder, or defuse |
+| Q | Drop equipped weapon |
+| V / F | Toggle prone / vault |
+| P | Plant bomb while carrying it inside a site |
+| 1–4 then B | Buy the selected weapon in the buy zone and equip it |
+| F1 / F2 / F3 | Install carried scope / suppressor / magazine |
+| Hold Tab | Inventory list |
+
+### Data
+
+Weapon entries additionally accept `hipSpread`, `moveSpread`, `recoil` (turns),
+`bulletSpeed` (zero = hitscan), `bulletGravity`, `penetration`, `headMultiplier`,
+`limbMultiplier`, and `price`. Defaults preserve legacy accuracy and hitscan behavior.
+
+`fps.mechanics` accepts `knockdown`, `startArmor`, `startMoney`, `killReward`,
+`winReward`, `lossReward`, `healTicks`, `reviveTicks`, `bleedTicks`, `freezeTicks`,
+`buyTicks`, `plantTicks`, `defuseTicks`, `bombTicks`, `roundsToWin`, `grenadeFuse`,
+`smokeTicks`, `flashTicks`, `interactRange`, `blastRadius`, `smokeRadius`, `flashRadius`.
+Timing defaults scale with tick rate. Distances use world units.
+
+Map arrays: `loot` (`pos`, `type`, `count`), `vehicles` (`pos`, optional `speed`),
+`ladders` and `bombSites` (`min`, `max`). Collider `penetration` is an optional
+positive cost; absent means impenetrable. Item IDs: 1 medkit, 2 armor, 3 frag,
+4 smoke, 5 flash, 6 scope, 7 suppressor, 8 magazine, 9 ammo; 100–103 are weapons.
+Bounds: 256 projectiles, 256 loot objects, 32 vehicles, 12 inventory stacks.
+Snapshots carry at most 128 nearby projectiles and loot objects, plus 32 vehicles;
+latest-message transport is bounded to 128 KiB. This is still full snapshots, not
+production bandwidth optimization.
+
+All new outcome-affecting fields, objects and timers are saved and hashed.
+`tests/fps/systems.inc` covers inventory, attachments, cancellation, vehicles,
+ladders, prone, grenade effects, hit regions, penetration, ballistics, revival,
+restoration, buying, planting/defusing, round reset and vaulting.
+
+The current client HUD/viewmodel/smoke and audio changes require a successful live
+visual/audio check. The automated GUI launch was interrupted; do not treat a compiled
+client or the headless scenarios as proof of visual quality. Windows, web and mobile
+integration of these new controls has not been verified.

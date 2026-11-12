@@ -64,12 +64,12 @@ void Module::damage(Simulation& sim,uint8_t source,Actor& target,int32_t amount,
     if(attacker)++attacker->hits;
     if(config_.systems.enabled&&config_.systems.knockdown&&!target.downed&&amount>=target.health) {
         bool teammate=false;for(const auto& a:s.actors)if(a.slot!=target.slot&&a.team==target.team&&a.health>0&&!a.downed)teammate=true;
-        if(teammate){target.downed=true;target.health=30;target.bleedUntil=sim.tick()+config_.systems.bleedTicks;return;}
+        if(teammate){for(auto& v:s.vehicles)if(v.driver==target.slot)v.driver=0;target.vehicle=0;target.downed=true;target.health=30;target.bleedUntil=sim.tick()+config_.systems.bleedTicks;return;}
     }
     target.health=std::max(0,target.health-amount);
     if(target.health)return;
     target.downed=false;target.respawnAt=sim.tick()+config_.respawnTicks;
-    if(attacker&&source!=target.slot){++attacker->kills;attacker->money=std::min(16000,attacker->money+config_.systems.killReward);}
+    if(attacker&&source!=target.slot&&attacker->team!=target.team){++attacker->kills;attacker->money=std::min(16000,attacker->money+config_.systems.killReward);}
     if(config_.systems.enabled){
         if(s.match.carrier==target.slot){s.match.carrier=0;s.match.bombPos=target.pos;}
         if(s.loot.size()<256&&(target.owned&(1u<<target.weaponIndex)))s.loot.push_back({s.nextObject++,target.pos,100+target.weaponIndex,1,target.ammo,target.reserve,target.attachments[target.weaponIndex]});
@@ -107,9 +107,9 @@ bool Module::traceShot(Simulation& sim,uint8_t source,Vec3 eye,Vec3 delta,int32_
 }
 void Module::action(Simulation& sim,Actor& a,Action kind,uint32_t argument) {
     auto& s=state(sim);const auto& c=config_.systems;auto now=sim.tick();
-    if(a.health<=0||a.downed)return;
+    if(a.health<=0||a.downed||a.activeAction!=Action::None)return;
     if(kind==Action::Buy) {
-        if(config_.mode!="bomb"||now-s.match.start>c.buyTicks||s.match.planted||argument>=config_.weapons.size()||!near(a.pos,spawns_[a.slot-1],6_fx))return;
+        if(config_.mode!="bomb"||s.match.end||now-s.match.start>c.buyTicks||s.match.planted||argument>=config_.weapons.size()||!near(a.pos,spawns_[a.slot-1],6_fx))return;
         const auto& w=config_.weapons[argument];if(a.money<w.price)return;
         a.money-=w.price;a.owned|=uint8_t(1u<<argument);a.storedAmmo[argument]=w.magazine;a.storedReserve[argument]=w.reserve;
         if(a.weaponIndex==argument){a.ammo=w.magazine;a.reserve=w.reserve;}return;
