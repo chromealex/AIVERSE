@@ -140,14 +140,26 @@ def make_tileset(out):
 def make_road_tileset(assets, out):
     """Ground from the user's road / pavement textures. -> tile bases, or None when the pack is missing."""
     tex = os.path.join(assets, 'roads-sidewalks', 'textures')
-    need = ['road_four_lane_ns', 'road_four_lane_crossroads', 'walk_concrete', 'road_fine_asphalt']
+    need = ['road_four_lane_ns', 'road_plain_asphalt', 'walk_concrete', 'road_fine_asphalt']
     if not all(os.path.exists(os.path.join(tex, n, 'basecolor.png')) for n in need):
         return None
     def load(n, cells):
         return Image.open(os.path.join(tex, n, 'basecolor.png')).convert('RGB').resize((RT * cells, RT * cells), Image.LANCZOS)
     ns = load('road_four_lane_ns', 4)
-    parts = [('ns', ns, 4), ('ew', ns.rotate(90), 4), ('x', load('road_four_lane_crossroads', 4), 4),
-             ('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2)]
+    parts = [('ns', ns, 4), ('ew', ns.rotate(90), 4), ('walk', load('walk_concrete', 2), 2), ('lot', load('road_fine_asphalt', 2), 2)]
+    # Junctions are drawn here: the pack's four-lane crossroads has narrower lanes than its straight road, so the
+    # markings would jump at every corner. Plain asphalt + a stop line on each arm that exists (right-hand traffic);
+    # bit 1 = north arm, 2 = east, 4 = south, 8 = west. Arms that would lead off the map get nothing.
+    plain = load('road_plain_asphalt', 4)
+    S = RT * 4
+    arm = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    ImageDraw.Draw(arm).rectangle((int(S * 0.045), int(S * 0.02), int(S * 0.485), int(S * 0.02) + max(3, S // 60)), fill=(198, 196, 184, 255))
+    for mask in range(1, 16):
+        im = plain.convert('RGBA')
+        for bit in range(4):
+            if mask & (1 << bit):
+                im = Image.alpha_composite(im, arm.rotate(-90 * bit))
+        parts.append(('x%d' % mask, im.convert('RGB'), 4))
     rnd = random.Random(5)
     grass = Image.new('RGB', (RT * 2, RT * 2), (58, 92, 46))
     d = ImageDraw.Draw(grass)
@@ -155,7 +167,7 @@ def make_road_tileset(assets, out):
         k = rnd.randint(-18, 18)
         d.point((rnd.randrange(RT * 2), rnd.randrange(RT * 2)), (58 + k // 2, 92 + k, 46 + k // 2))
     parts.append(('grass', grass, 2))
-    cols = 8
+    cols = 16
     count = sum(c * c for _, _, c in parts)
     sheet = Image.new('RGB', (cols * RT, ((count + cols - 1) // cols) * RT))
     bases, i = {}, 0
@@ -389,7 +401,9 @@ def build(assets, out, seed):
         for x in range(W):
             on_x, on_z = (x % PX) < ROAD, (z % PZ) < ROAD
             if on_x and on_z:
-                t = bases['x'] + (z % PZ) * 4 + (x % PX)
+                ix, iz = x // PX, z // PZ
+                mask = (1 if iz > 0 else 0) | (2 if ix < BLOCKS_X else 0) | (4 if iz < BLOCKS_Z else 0) | (8 if ix > 0 else 0)
+                t = bases['x%d' % mask] + (z % PZ) * 4 + (x % PX)
             elif on_x:
                 t = bases['ns'] + (z % 4) * 4 + (x % PX)
             elif on_z:
