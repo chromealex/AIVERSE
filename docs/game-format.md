@@ -2372,6 +2372,26 @@ with `toNext` / `curve` / `kill`, `offers` with `default` / `levels` / `variants
 `kCmdProgression` (UI, bot, Lua, MCP), perk stats on damage / incoming damage / speed / fire interval / range / max
 health / splash / crits / regen, summon circles and recruits as real units. Full reference:
 [progression.md](progression.md); sample: `templates/perk_arena`.
+## Boss encounters
+
+Rules block `encounters` (boss-encounters library on real units; reference [docs/encounters.md](encounters.md),
+sample `templates/boss_arena`). Map players with `"monsters": true` and hostile creeps (owner 255) are driven by it
+(the computer player skips them).
+- `attacks.<id>`: `shape` (circle / cone / line / ring), `radius`, `inner`, `angle`, `length`, `width`, `anchor`
+  (source / aim), `offset`, `windup`, `active`, `recovery`, `interval`, `cooldown`, `damage`, `damageMin`, `falloff`,
+  `damageType`, `statuses` (rules status ids or `{"status", "duration"}`), `statusDuration`, `oncePerTarget`,
+  `trackAim`, `sweep`, `cancelOnDeath`, `friendlyFire`, `minRange`, `maxRange`, `ability` (a unit ability starts it).
+- `bosses.<unit type>`: `engageRange`, `loseRange`, `approach`, `immune`, `archetype`, `phases[]` (`hpBelow`, `after`,
+  `damage`, `speed`, `cooldown`, `globalCooldown`, `transition`, `mode` byRange / sequence / weighted, `pattern[]`
+  (`attack`, `alternate`, `minRange`, `maxRange`, `weight`), `adds[]` (`unit`, `count`, `every`, `maxAlive`,
+  `minRadius`, `maxRadius`)), `enrage` (`after`, `hpBelow`, `damage`, `speed`, `cooldown`).
+- `mobs.<unit type>`: `aggroRange`, `loseRange`, `stopDistance`, `switchMargin`, `wanderMin`, `wanderMax`,
+  `arriveRadius`, `leash`, `wanderDelay`, `wanderLeg`, `wanderAttempts`, `fleeBelow`, `fleeRecover`, `fleeRange`,
+  `fleeTime`, `wander`, `spacing`, `correction`, `lookAhead`, `neighbours`, `attack`, `think`, `flowDistance`.
+- `schedule`: `personal`, `rotation`, `archetypes`, `spawnDistance` [min, max], `windows[]` (`start`, `end`,
+  `breather`, `excludePrevious`, `pauseWaves`, `variants[]` (`boss`, `weight`, `archetype`)).
+Lua events `boss_engaged`, `boss_phase`, `boss_enraged`, `boss_adds`, `boss_defeated`, `boss_window`,
+`telegraph_start`, `telegraph_strike`, `telegraph_end` (statuses: `status_start`); table `encounters`.
 
 ## Ordered projectile flight programs
 

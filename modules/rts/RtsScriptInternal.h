@@ -122,6 +122,7 @@ void openStdApi(Vm& vm);            // `rts` table for the standard library (Rts
 void openFieldApi(Vm& vm);          // `field` table: grid fields (RtsGridFieldsApi.cpp)
 void openRaidApi(Vm& vm);           // `raid` table: extraction raids (RtsRaidApi.cpp)
 void openProgressionApi(Vm& vm);    // `progression` table: in-match progression (RtsProgressionApi.cpp)
+void openEncounterApi(Vm& vm);      // `encounters` table: boss encounters (RtsEncountersApi.cpp)
 void pushEntity(lua_State* L, Entity e);
 bool argEntity(lua_State* L, int idx, Entity& out); // integer handle (no liveness check)
 
