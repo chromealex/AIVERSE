@@ -171,7 +171,9 @@ struct Bench {
                     if(samples!=std::floor(samples)||samples<16||samples>128)throw std::runtime_error("probeGI samples must be 16..128");
                     double bounces=gi["bounces"].toDouble(1);
                     if(bounces!=std::floor(bounces)||bounces<1||bounces>4)throw std::runtime_error("probeGI bounces must be 1..4");
-                    bakeProbeEnvironment(additions.shadowGeometry,diffuseField,v3(config["sunDirection"]),int(samples),float(gi["distance"].toDouble(50)),int(bounces));
+                    const auto skyBounce=gi.getStr("skyBounce","bake");
+                    if(skyBounce!="bake"&&skyBounce!="runtime")throw std::runtime_error("probeGI skyBounce must be bake or runtime");
+                    bakeProbeEnvironment(additions.shadowGeometry,diffuseField,v3(config["sunDirection"]),int(samples),float(gi["distance"].toDouble(50)),int(bounces),skyBounce=="runtime");
                     report.set("environmentProbeBakeMs",Json::number(ms(bakeStart,Clock::now())));
                     report.set("staticDiffuseProbes",Json::number(int64_t(diffuseField.probes.size())));
                 }

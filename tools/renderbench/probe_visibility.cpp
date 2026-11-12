@@ -144,6 +144,58 @@ void writePpm(const std::string& path,int w,int h,const std::vector<float3>& px)
     for(auto c:px)for(float v:{c.x,c.y,c.z}){float x=v/(1+v);f.put(char(std::clamp(int(std::pow(x,1/2.2f)*255+.5f),0,255)));}
 }
 
+// Rank sun directions by agreement with a lit/shadow mask of a reference frame (binary PGM, any size:
+// 255 lit, 0 shadow, other values ignored). Score = balanced accuracy over lit and shadow pixels.
+int sunFit(const Scene& s,const std::string& maskPath,int width,int height) {
+    std::ifstream f(maskPath,std::ios::binary);std::string magic;int w=0,h=0,maxv=0;f>>magic>>w>>h>>maxv;f.get();
+    if(magic!="P5"||w<=0||h<=0||maxv!=255)throw std::runtime_error("mask must be a binary 8-bit PGM");
+    std::vector<uint8_t> mask(size_t(w*h));f.read(reinterpret_cast<char*>(mask.data()),std::streamsize(mask.size()));
+    const auto& cam=s.config["cameras"][0];float3 eye=v3(cam["eye"]),target=v3(cam["target"]);
+    float fov=float(cam["fovYDegrees"].toDouble(s.config["fovYDegrees"].toDouble(60)))*3.14159265f/180;
+    float3 forward=normalize(target-eye),right=normalize(cross(forward,{0,1,0})),up=cross(right,forward);
+    float scale=std::tan(fov*.5f),aspect=float(width)/height;
+    struct Px{float3 p,n;bool lit;};std::vector<Px> px;
+    for(int y=0;y<h;++y)for(int x=0;x<w;++x){uint8_t m=mask[size_t(y*w+x)];if(m!=0&&m!=255)continue;
+        auto ray=normalize(forward+right*((2*(x+.5f)/w-1)*scale*aspect)+up*((1-2*(y+.5f)/h)*scale));float3 n;
+        float d=s.geometry.distance(eye,ray,500,&n);if(d>=500)continue;if(dot(n,ray)>0)n=n*-1.0f;
+        px.push_back({eye+ray*d+n*.03f,n,m==255});}
+    struct Cand{float elevation,azimuth,score;};std::vector<Cand> cands;
+    for(int e=15;e<=85;e+=5)for(int a=0;a<360;a+=10)cands.push_back({float(e),float(a),0});
+    std::atomic<size_t> next{0};
+    auto evaluate=[&](){next=0;auto work=[&](){for(size_t i;(i=next++)<cands.size();){auto& c=cands[i];float er=c.elevation*.0174533f,ar=c.azimuth*.0174533f;
+        float3 sun{std::cos(er)*std::cos(ar),std::sin(er),std::cos(er)*std::sin(ar)};double litHit=0,litN=0,darkHit=0,darkN=0;
+        for(const auto& q:px){bool on=dot(q.n,sun)>0&&s.geometry.distance(q.p,sun,200)>=200;
+            if(q.lit){litN+=1;litHit+=on;}else{darkN+=1;darkHit+=!on;}}
+        c.score=float(.5*(litHit/std::max(litN,1.0)+darkHit/std::max(darkN,1.0)));}};
+        std::vector<std::thread> pool;for(unsigned i=0;i<std::max(1u,std::thread::hardware_concurrency());++i)pool.emplace_back(work);for(auto& t:pool)t.join();
+        std::sort(cands.begin(),cands.end(),[](const Cand& a,const Cand& b){return a.score>b.score;});};
+    evaluate();
+    // Refine around the coarse optimum: 1 degree elevation, 1.5 degree azimuth.
+    const Cand best=cands.front();cands.clear();
+    for(float e=best.elevation-6;e<=best.elevation+6.01f;e+=1)for(float a=best.azimuth-12;a<=best.azimuth+12.01f;a+=1.5f)
+        if(e>2&&e<89)cands.push_back({e,std::fmod(a+360.0f,360.0f),0});
+    evaluate();
+    for(size_t i=0;i<std::min<size_t>(10,cands.size());++i){const auto& c=cands[i];float er=c.elevation*.0174533f,ar=c.azimuth*.0174533f;
+        std::printf("elevation %2.0f azimuth %3.0f score %.3f dir [%.4f, %.4f, %.4f]\n",c.elevation,c.azimuth,c.score,std::cos(er)*std::cos(ar),std::sin(er),std::cos(er)*std::sin(ar));}
+    return 0;
+}
+// Lit/shadow image of the first camera for one sun (elevation, azimuth in degrees): 255 lit, 0 shadow.
+int sunImage(const Scene& s,float elevation,float azimuth,int w,int h,const std::string& out) {
+    const auto& cam=s.config["cameras"][0];float3 eye=v3(cam["eye"]),target=v3(cam["target"]);
+    float fov=float(cam["fovYDegrees"].toDouble(s.config["fovYDegrees"].toDouble(60)))*3.14159265f/180;
+    float3 forward=normalize(target-eye),right=normalize(cross(forward,{0,1,0})),up=cross(right,forward);
+    float scale=std::tan(fov*.5f),aspect=float(w)/h,er=elevation*.0174533f,ar=azimuth*.0174533f;
+    float3 sun{std::cos(er)*std::cos(ar),std::sin(er),std::cos(er)*std::sin(ar)};
+    std::vector<uint8_t> img(size_t(w*h),0);std::atomic<int> row{0};
+    auto work=[&](){for(int y;(y=row++)<h;)for(int x=0;x<w;++x){
+        auto ray=normalize(forward+right*((2*(x+.5f)/w-1)*scale*aspect)+up*((1-2*(y+.5f)/h)*scale));float3 n;
+        float d=s.geometry.distance(eye,ray,500,&n);if(d>=500){img[size_t(y*w+x)]=128;continue;}
+        if(dot(n,ray)>0)n=n*-1.0f;
+        float ndl=dot(n,sun);img[size_t(y*w+x)]=ndl>0&&s.geometry.distance(eye+ray*d+n*.03f,sun,200)>=200?uint8_t(60+195*ndl):0;}};
+    std::vector<std::thread> pool;for(unsigned i=0;i<std::max(1u,std::thread::hardware_concurrency());++i)pool.emplace_back(work);for(auto& t:pool)t.join();
+    std::ofstream f(out,std::ios::binary);f<<"P5\n"<<w<<" "<<h<<"\n255\n";f.write(reinterpret_cast<const char*>(img.data()),std::streamsize(img.size()));
+    return 0;
+}
 int pixelProbe(const Scene& s,int px,int py,int width,int height) {
     const auto& cam=s.config["cameras"][0];float3 eye=v3(cam["eye"]),target=v3(cam["target"]);
     float fov=float(cam["fovYDegrees"].toDouble(s.config["fovYDegrees"].toDouble(60)))*3.14159265f/180;
@@ -207,7 +259,7 @@ int diagnose(const Scene& s,int x0,int y0,int w,int h,int width,int height,const
 }
 
 int aiverseMain(int argc,char** argv) {
-    std::string scene,cache,prefix="/tmp/pv_";int sub=0,pixelX=-1,pixelY=-1;float bias=-1;bool facing=true;std::string write;int x0=0,y0=0,w=320,h=180,width=1280,height=720;
+    std::string scene,cache,prefix="/tmp/pv_";std::string sunMask;float sunElevation=-1,sunAzimuth=0;int sub=0,pixelX=-1,pixelY=-1;float bias=-1;bool facing=true;std::string write;int x0=0,y0=0,w=320,h=180,width=1280,height=720;
     for(int i=1;i+1<argc;i+=2){std::string a=argv[i],v=argv[i+1];
         if(a=="--scene")scene=v;else if(a=="--cache")cache=v;else if(a=="--prefix")prefix=v;
         else if(a=="--rect"){std::sscanf(v.c_str(),"%d,%d,%d,%d",&x0,&y0,&w,&h);}
@@ -216,6 +268,8 @@ int aiverseMain(int argc,char** argv) {
         else if(a=="--facing")facing=std::atoi(v.c_str())!=0;
         else if(a=="--bias")bias=float(std::atof(v.c_str()));
         else if(a=="--pixel")std::sscanf(v.c_str(),"%d,%d",&pixelX,&pixelY);
+        else if(a=="--sun-image")std::sscanf(v.c_str(),"%f,%f",&sunElevation,&sunAzimuth);
+        else if(a=="--sun-fit")sunMask=v;
         else if(a=="--size"){std::sscanf(v.c_str(),"%dx%d",&width,&height);}
     }
     if(scene.empty()||cache.empty()){std::fprintf(stderr,"usage: aiverse_probe_visibility --scene recipe.json --cache gi.avgic [--moments 4 [--write new.avgic]] [--rect x,y,w,h] [--size WxH] [--prefix out_] [--bias m] [--facing 0|1]\n");return 2;}
@@ -232,6 +286,8 @@ int aiverseMain(int argc,char** argv) {
             std::ofstream f(write,std::ios::binary);f.write(bytes.data(),std::streamsize(bytes.size()));if(!f)throw std::runtime_error("cannot write cache");
             std::fprintf(stderr,"wrote %s (%zu bytes)\n",write.c_str(),bytes.size());return 0;
         }
+        if(sunElevation>=0)return sunImage(s,sunElevation,sunAzimuth,width,height,prefix+"sun.pgm");
+        if(!sunMask.empty())return sunFit(s,sunMask,width,height);
         if(pixelX>=0)return pixelProbe(s,pixelX,pixelY,width,height);
         return diagnose(s,x0,y0,w,h,width,height,prefix);
     }catch(const std::exception& e){std::fprintf(stderr,"probe_visibility: %s\n",e.what());return 1;}

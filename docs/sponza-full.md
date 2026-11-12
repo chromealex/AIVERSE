@@ -563,3 +563,31 @@ bounce; raising GI sky enough to light it over-brightens the arcade curtains), l
 arcade curtains, and stronger glow at the far end. Closing these needs better near-field
 indirect light (denser probes near the camera, or longer-range screen tracing), not grading.
 `skyColor` (2–3) and `probeGI.sky` (~30) are artistic values chosen against this frame.
+
+### Sun direction from the reference, runtime-consistent sky bounce (2026-11-12)
+
+The sun was fitted to the reference instead of chosen by hand. `aiverse_probe_visibility`
+gained `--sun-fit mask.pgm` (balanced accuracy of BVH sun visibility against a lit/shadow
+mask of the reference, coarse 5°/10° grid then 1°/1.5° refinement) and `--sun-image elev,az`
+(lit/shadow image of the camera). The sharp sunlit floor band at the far wall is the reliable
+cue: it fixes azimuth ~182° (straight edge across the courtyard) and elevation 50–53°
+(band depth). The recipe sun moves from 60°/190° `[-0.4924,0.8660,-0.0868]` to 52°/182°
+`[-0.6153,0.7880,-0.0215]`; the far curtains become sunlit as in the reference.
+
+Probe baking gains `probeGI.skyBounce: "runtime"` (part of the cache key). The legacy
+estimator traced 32 sky rays from each hit and multiplied by pi, so the runtime sky scale had
+no physical meaning (30 in the agent's recipe, 20–85 in tuning). Runtime mode transports
+exactly the sky light the lit shaders display (probe sky visibility, clamped SH / hemisphere
+normalization, times the sky half of the hemisphere mix; points outside the volume trace the
+sky), in the same no-1/pi convention as the sun term. Then `probeGI.sky` = linear sky colour
+and `probeGI.sun` = `sunIntensity × linear sunColor` reproduce single-bounce consistency;
+any extra factor is an explicit indirect-intensity multiplier (like Unreal's Indirect Lighting
+Intensity). The reference needs more bounce than one consistent bounce gives: the tuned recipe
+`scene-day-high-reference-sun52.json` uses ×3 on bounced sky and ×6 on bounced sun with
+`skyColor [3.2,3.35,3.75]`. Rebake: 144 s for 10,710 probes on two cores (sky rays per hit are
+replaced by a probe lookup). Cache `day-sun52.avgic` sits beside the assets.
+
+Mean region error vs the reference: 26.9 (start of day) → 17.5 (previous look) → 13.1;
+[comparison](benchmarks/sponza-2026-11-12/sun-match.png). Remaining: the warm, visible vault
+over the foreground arch and warm upper-gallery interiors (Lumen's multi-bounce), and less
+vivid arcade curtains.

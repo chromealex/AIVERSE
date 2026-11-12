@@ -100,6 +100,15 @@ int main(){
     auto visibility=open.probes[0].skyVisibility;
     assert(std::abs(visibility.x-.5f)<.001f&&std::abs(visibility.z-.5f)<.001f);
     g.build(std::vector<PointLight>{},1,nullptr,&sunny);assert(!g.texels.empty());
+    {   // Runtime-consistent sky bounce: a lit floor reflects albedo * (probe sky visibility); sealed rooms stay black.
+        auto runtimeSun=makeDiffuseVolume(floor,{-.5f,.5f,-.5f},{-.5f,.5f,-.5f},1);bakeProbeEnvironment(floor,runtimeSun,{0,1,0},64,20,1,true);
+        const float vis=runtimeSkyIrradiance(floor,runtimeSun,{-.5f,.01f,-.5f},{0,1,0});
+        assert(vis>.4f&&vis<=1.0f&&runtimeSun.probes[0].sky[0].x>0&&runtimeSun.probes[0].sky[1].x==0);
+        // Below the probe the floor fills the lower hemisphere: about half the rays return albedo * vis.
+        assert(std::abs(runtimeSun.probes[0].sky[0].x-.8f*vis*.5f)<.08f);
+        auto runtimeRoom=makeDiffuseVolume(room,{-.5f,-.5f,-.5f},{-.5f,-.5f,-.5f},1);bakeProbeEnvironment(room,runtimeRoom,{0,1,0},64,20,3,true);
+        for(const auto& probe:runtimeRoom.probes)for(int c=0;c<3;++c)assert(probe.sky[size_t(c)].x==0&&probe.skyVisibility.x==0);
+    }
     std::cout<<"environment probes: open sun, colored bounce, sealed room and cache validation PASS\n";
     field.probes[0].visibility.distances.clear();rejected=false;
     try{g.build(std::vector<PointLight>{white},2,nullptr,&field);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
