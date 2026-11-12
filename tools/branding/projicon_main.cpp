@@ -1,4 +1,4 @@
-// aiverse_projicon <out dir> [logo.png]: the .rtsproj document icon (+ editor launcher icon) drawn from
+// aiverse_projicon <out dir> [logo.png]: the .aiverse document icon (+ editor launcher icon) drawn from
 // the editor logo (ProjectIcon.h). Used by the macOS editor bundle build (Resources/rtsproj.icns).
 #include <cstdio>
 #include <string>

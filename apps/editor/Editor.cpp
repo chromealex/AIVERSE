@@ -828,7 +828,7 @@ void Editor::event(const platform::Event& e) {
     ui_.handleEvent(e);
     clientHost_.event(e);   // the hosted game client: pointer inside its screen, keys while the Game window has focus
     if (e.type == platform::EventType::QuitRequested) quit_ = true;
-    if (e.type == platform::EventType::OpenFile) requestOpenProject(e.path);   // double-clicked .rtsproj (macOS)
+    if (e.type == platform::EventType::OpenFile) requestOpenProject(e.path);   // double-clicked .aiverse (macOS)
 }
 
 void Editor::handleShortcuts() {

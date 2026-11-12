@@ -1,5 +1,5 @@
 // AIVERSE editor entry point.
-//   aiverse_editor [<project.rtsproj | project dir>] [--game <id> | --project <.rtsproj | dir with game.json>] [--map <file.json>] [--engine <engine dir>]
+//   aiverse_editor [<project.aiverse | project dir>] [--game <id> | --project <.aiverse | dir with game.json>] [--map <file.json>] [--engine <engine dir>]
 //              [--listen <port>|0] [--play]
 //              [--native-editor] [--tools-from <dir>]   (set by the switch to a per-project build: EditorNativeBuild.cpp)
 // Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
@@ -54,12 +54,12 @@ int aiverseMain(int argc, char** argv) {
     if (const char* e = std::getenv("AIVERSE_NATIVE_EDITOR"); e && *e && std::string(e) != "0") opt.nativeChild = true;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        // a bare argument is a project to open: "<editor> path/My Game.rtsproj" (Windows / Linux
+        // a bare argument is a project to open: "<editor> path/My Game.aiverse" (Windows / Linux
         // double-click, file managers' "Open with") or a project folder; -psn_* is macOS Finder noise
         if (!a.empty() && a[0] != '-') { opt.projectDir = a; continue; }
         if (a == "--native-editor") { opt.nativeChild = true; continue; }
         if (i + 1 >= argc) break;
-        if (a == "--project") opt.projectDir = argv[++i];   // folder, .rtsproj or game.json
+        if (a == "--project") opt.projectDir = argv[++i];   // folder, .aiverse / legacy .rtsproj or game.json
         else if (a == "--game") game = argv[++i];
         else if (a == "--listen") opt.listenPort = std::atoi(argv[++i]);
         else if (a == "--map") opt.openMap = argv[++i];

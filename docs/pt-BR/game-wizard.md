@@ -1,7 +1,7 @@
 # Assistente «Criar um jogo»
 
 Uma janela (hub de projetos → **Criar um jogo**, ou **Projeto → Criar um jogo…**) ou uma chamada MCP (`game_make`) cria um
-projeto de jogo inteiro com seu `.rtsproj`: o jogo de um template escolhido pela ideia, a arte / modelos / música / sons do
+projeto de jogo inteiro com seu `.aiverse`: o jogo de um template escolhido pela ideia, a arte / modelos / música / sons do
 usuário, um mapa de tutorial guiado, dicas discretas nas partidas, fases geradas, o meta-jogo (menus, melhorias, loja,
 recompensa diária, perfil, configurações, resultado), compras e anúncios quando pedidos, idiomas, identidade visual e uma
 verificação com bots. Tudo o que ele escreve são dados de jogo comuns, que podem ser editados depois.

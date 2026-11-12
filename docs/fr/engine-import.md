@@ -23,7 +23,7 @@ python3 tools/importers/port/aiverse_port.py resolve /path/to/Imported --id ITEM
 Chaque commande affiche du JSON ; en cas d’échec elle sort avec le statut 2. `scan` n’écrit rien. Les dossiers d’entrée et de
 sortie ne doivent pas se chevaucher. Ne lancez pas d’imports simultanés vers la même destination. `extract` enregistre les
 chemins source, les composants sérialisés complets, les champs, le code source des scripts et leur utilisation. `emit` écrit
-un manifeste de jeu, des règles, des cartes, un `.rtsproj`, les ressources copiées, éventuellement sprites/tuiles/audio/effets,
+un manifeste de jeu, des règles, des cartes, un `.aiverse`, les ressources copiées, éventuellement sprites/tuiles/audio/effets,
 `port.json` et des rapports JSON/Markdown. `sourceRoot` doit encore exister lors de l’écriture des ressources copiées. Le
 `.rpakignore` généré exclut des paquets d’exécution l’index intermédiaire des scripts et les rapports. Le manifeste marque le
 contenu importé `external: true`, ce qu’aiversebuild propage dans les paquets de ressources.

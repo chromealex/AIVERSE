@@ -251,7 +251,7 @@ Winterkarte, prüfe das Balancing von drei Fraktionen mit Bots und baue eine Web
 **4. Veröffentlichen:**
 
 ```bash
-./build/mac/aiversebuild --project "Mein Spiel.rtsproj" --target all   # macOS, iOS, Android, Web, Windows
+./build/mac/aiversebuild --project "Mein Spiel.aiverse" --target all   # macOS, iOS, Android, Web, Windows
 ```
 
 ---

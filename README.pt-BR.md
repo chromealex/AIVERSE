@@ -251,7 +251,7 @@ inverno, confira com bots o balanceamento de três facções e gere uma versão 
 **4. Lance:**
 
 ```bash
-./build/mac/aiversebuild --project "Meu Jogo.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "Meu Jogo.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---

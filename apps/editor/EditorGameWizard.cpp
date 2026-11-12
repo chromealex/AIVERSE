@@ -399,7 +399,7 @@ void Editor::drawGameWizard() {
 
     // ---------------------------------------------------------------- header
     bigTitle(ICON_ZAP "  Сделать игру");
-    hint("Арт и идея → готовый проект .rtsproj: обучение, мета, уровни и сама игра. Любой шаг можно пропустить — мастер решит сам.");
+    hint("Арт и идея → готовый проект .aiverse: обучение, мета, уровни и сама игра. Любой шаг можно пропустить — мастер решит сам.");
     ImGui::Spacing();
 
     const float avail = ImGui::GetContentRegionAvail().x, height = ImGui::GetContentRegionAvail().y - 10;   // no page scrollbar

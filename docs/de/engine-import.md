@@ -23,7 +23,7 @@ python3 tools/importers/port/aiverse_port.py resolve /path/to/Imported --id ITEM
 Jeder Befehl gibt JSON aus; bei einem Fehler endet er mit Status 2. `scan` schreibt nichts. Eingabe- und Ausgabeordner
 dürfen sich nicht überschneiden. Keine gleichzeitigen Importe in dasselbe Ziel. `extract` zeichnet Quellpfade, vollständig
 serialisierte Komponenten, Felder, Skriptquellcode und deren Verwendung auf. `emit` schreibt ein Spielmanifest, Regeln,
-Karten, `.rtsproj`, kopierte Assets, optional Sprites/Tiles/Audio/Effekte, `port.json` sowie JSON-/Markdown-Berichte.
+Karten, `.aiverse`, kopierte Assets, optional Sprites/Tiles/Audio/Effekte, `port.json` sowie JSON-/Markdown-Berichte.
 `sourceRoot` muss beim Schreiben kopierter Assets noch existieren. Die erzeugte `.rpakignore` schließt den Zwischenindex der
 Skripte und die Berichte aus den Laufzeit-Paketen aus. Das Manifest markiert importierte Inhalte mit `external: true`, und
 aiversebuild überträgt das in die Ressourcenpakete.

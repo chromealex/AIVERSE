@@ -20,7 +20,7 @@ python3 tools/importers/port/aiverse_port.py resolve /path/to/Imported --id ITEM
 
 모든 명령은 JSON을 출력하며, 실패하면 상태 코드 2로 종료합니다. `scan`은 아무 파일도 쓰지 않습니다. 입력 폴더와 출력 폴더는 겹치면 안 됩니다.
 같은 대상에 여러 가져오기를 동시에 실행하지 마세요. `extract`는 원본 경로, 직렬화된 컴포넌트 전체, 필드, 스크립트 소스와 사용처를 기록합니다.
-`emit`은 게임 매니페스트, 규칙, 맵, `.rtsproj`, 복사된 에셋, 선택적인 스프라이트/타일/오디오/이펙트, `port.json`, JSON/Markdown 보고서를
+`emit`은 게임 매니페스트, 규칙, 맵, `.aiverse`, 복사된 에셋, 선택적인 스프라이트/타일/오디오/이펙트, `port.json`, JSON/Markdown 보고서를
 씁니다. 복사된 에셋을 쓸 때는 `sourceRoot`가 여전히 존재해야 합니다. 생성된 `.rpakignore`는 스크립트 중간 인덱스와 보고서를 런타임 팩에서
 제외합니다. 매니페스트는 가져온 콘텐츠를 `external: true`로 표시하며, aiversebuild가 이를 팩에 전달합니다.
 

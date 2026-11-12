@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- AIVERSE Editor bundle (CMake target aiverse_editor). Games use Info.plist.in. Declares the project file
-     type: <Title>.rtsproj (UTI com.aiverse.project) opens in the editor by double-click / Open With
+     type: <Title>.aiverse, legacy <Title>.rtsproj (UTI com.aiverse.project) opens in the editor by double-click / Open With
      (PlatformMac.mm application:openURLs: -> EventType::OpenFile). Icons: aiverse_projicon. -->
 <plist version="1.0">
 <dict>
@@ -47,7 +47,7 @@
             <array><string>public.data</string><string>public.content</string></array>
             <key>UTTypeTagSpecification</key>
             <dict>
-                <key>public.filename-extension</key><array><string>rtsproj</string></array>
+                <key>public.filename-extension</key><array><string>aiverse</string><string>rtsproj</string></array>
                 <key>public.mime-type</key><array><string>application/x-aiverse-project</string></array>
             </dict>
         </dict>

@@ -252,7 +252,7 @@ carte hivernale, vérifie l’équilibrage de trois factions avec des bots et co
 **4. Publier :**
 
 ```bash
-./build/mac/aiversebuild --project "Mon jeu.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "Mon jeu.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---

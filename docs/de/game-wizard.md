@@ -1,7 +1,7 @@
 # Spiel-Assistent („Spiel erstellen“)
 
 Ein Fenster (Projekt-Hub → **Spiel erstellen** oder **Projekt → Spiel erstellen…**) oder ein MCP-Aufruf (`game_make`) erzeugt
-ein ganzes Spielprojekt mit eigener `.rtsproj`: das Spiel einer Vorlage, die nach der Idee ausgewählt wird, die Grafiken /
+ein ganzes Spielprojekt mit eigener `.aiverse`: das Spiel einer Vorlage, die nach der Idee ausgewählt wird, die Grafiken /
 Modelle / Musik / Sounds des Nutzers, eine Karte mit hartem Tutorial, weiche Hinweise in Matches, generierte Level, das
 Meta-Spiel (Menüs, Upgrades, Shop, Tagesbelohnung, Profil, Einstellungen, Ergebnis), Käufe und Werbung auf Wunsch, Sprachen,
 Branding und eine Prüfung mit Bots. Alles, was er schreibt, sind gewöhnliche Spieldaten, die sich danach bearbeiten lassen.

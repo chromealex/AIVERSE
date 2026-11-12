@@ -251,7 +251,7 @@ invernal, comprueba con bots el equilibrio de tres facciones y genera una versi√
 **4. Publica:**
 
 ```bash
-./build/mac/aiversebuild --project "Mi juego.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "Mi juego.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---

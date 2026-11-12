@@ -1,7 +1,7 @@
 # Assistant « Créer un jeu »
 
 Une fenêtre (hub de projets → **Créer un jeu**, ou **Projet → Créer un jeu…**) ou un appel MCP (`game_make`) produit un projet
-de jeu complet avec son `.rtsproj` : le jeu d’un modèle choisi d’après l’idée, les illustrations / modèles / musiques / sons de
+de jeu complet avec son `.aiverse` : le jeu d’un modèle choisi d’après l’idée, les illustrations / modèles / musiques / sons de
 l’utilisateur, une carte de tutoriel guidé, des conseils discrets en partie, des niveaux générés, le méta-jeu (menus,
 améliorations, boutique, récompense quotidienne, profil, réglages, résultat), achats et publicité sur demande, langues,
 identité visuelle et une vérification par des bots. Tout ce qu’il écrit, ce sont des données de jeu ordinaires, modifiables

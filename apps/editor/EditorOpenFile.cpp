@@ -1,6 +1,6 @@
-// Opening projects by .rtsproj: requests from the OS (double-click / Open With, macOS openURLs ->
+// Opening projects by .aiverse: requests from the OS (double-click / Open With, macOS openURLs ->
 // EventType::OpenFile), the hub and the menus go through requestOpenProject, which asks to save
-// unsaved map / rules changes before switching. Also the .rtsproj file association (FileAssoc.h).
+// unsaved map / rules changes before switching. Also the .aiverse file association (FileAssoc.h).
 #include <filesystem>
 #include "Editor.h"
 #include "EditorIcons.h"
@@ -13,8 +13,8 @@ namespace aiverse::editor {
 
 void Editor::initFileAssoc() {
     setFileAssocLogo((fs::path(opt_.engineDir) / "apps" / "editor" / "branding" / "icon_1024.png").string());
-    // a per-project build with the project's C++ modules (EditorNativeBuild.cpp) never takes over .rtsproj
-    if (projectBuild()) { assoc_ = {}; assoc_.detail = "редактор собран для одного проекта: .rtsproj открывает основной редактор"; return; }
+    // a per-project build with the project's C++ modules (EditorNativeBuild.cpp) never takes over .aiverse
+    if (projectBuild()) { assoc_ = {}; assoc_.detail = "редактор собран для одного проекта: .aiverse открывает основной редактор"; return; }
     const std::string done = ensureFileAssociation(opt_.editorExe);
     if (!done.empty()) ws_.log("editor", done);
     assoc_ = fileAssociationStatus(opt_.editorExe);
@@ -22,7 +22,7 @@ void Editor::initFileAssoc() {
 
 void Editor::registerFileAssoc() {
     if (projectBuild()) {
-        status = "Это редактор, собранный для одного проекта: файлы .rtsproj остаются за основным редактором";
+        status = "Это редактор, собранный для одного проекта: файлы .aiverse остаются за основным редактором";
         ws_.log("editor", status, true);
         return;
     }

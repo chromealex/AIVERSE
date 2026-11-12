@@ -518,8 +518,8 @@ target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 
 # Helper: package content + platform metadata around an executable.
 function(aiverse_package_app target)
-    # the editor's project file (<Title>.rtsproj) is not game content: dropped from loose dev bundles
-    file(GLOB _aiverse_projfiles RELATIVE "${AIVERSE_CONTENT_DIR}" "${AIVERSE_CONTENT_DIR}/*.rtsproj")
+    # the editor's project file (<Title>.aiverse, legacy .aiverse) is not game content: dropped from loose dev bundles
+    file(GLOB _aiverse_projfiles RELATIVE "${AIVERSE_CONTENT_DIR}" "${AIVERSE_CONTENT_DIR}/*.aiverse" "${AIVERSE_CONTENT_DIR}/*.aiverse")
     set(_aiverse_rm_exe "")
     foreach(f ${_aiverse_projfiles})
         list(APPEND _aiverse_rm_exe "$<TARGET_FILE_DIR:${target}>/content/${f}")
@@ -568,7 +568,7 @@ function(aiverse_package_app target)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}"
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "${res_dir}/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, .rtsproj
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, project file
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "${res_dir}/content/engine"
                 COMMENT "Bundling content")
         endif()
@@ -595,7 +595,7 @@ function(aiverse_package_app target)
         else()
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "$<TARGET_FILE_DIR:${target}>/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_aiverse_rm_exe}   # project outputs, .rtsproj
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_aiverse_rm_exe}   # project outputs, .aiverse
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "$<TARGET_FILE_DIR:${target}>/content/engine"
                 COMMENT "Copying content next to the executable")
         endif()
@@ -710,7 +710,7 @@ if(AIVERSE_BUILD_EDITOR)
         target_sources(aiverse_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
     endif()
     if(APPLE)
-        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .rtsproj default
+        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .aiverse default
         # handler (chosen by bundle id) stays the regular editor
         set(AIVERSE_EDITOR_BUNDLE_ID "com.aiverse.editor" CACHE STRING "Bundle identifier of AiverseEditor.app")
         set_target_properties(aiverse_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "AiverseEditor"
@@ -1170,7 +1170,7 @@ if(AIVERSE_BUILD_TESTS)
 endif()
 
 # ---------------------------------------------------------------------------
-# Project files `<Title>.rtsproj` and opening them from the OS (project-file agent): ProjectFile /
+# Project files `<Title>.aiverse` (legacy `.aiverse`) and opening them from the OS (project-file agent): ProjectFile /
 # FileAssoc in the editor core (Linux mime + .desktop, Windows HKCU registry, macOS LaunchServices),
 # the editor's own Info.plist (document type com.aiverse.project) and the document icon drawn by
 # aiverse_projicon (tools/branding/ProjectIcon.*).
@@ -1203,7 +1203,7 @@ if(TARGET aiverse_editor)
             add_custom_command(TARGET aiverse_editor POST_BUILD
                 COMMAND $<TARGET_FILE:aiverse_projicon> "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_editor>/Resources"
                         "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/icon_1024.png"
-                COMMENT ".rtsproj document icon")
+                COMMENT ".aiverse document icon")
         endif()
     endif()
 endif()

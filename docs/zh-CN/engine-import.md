@@ -18,7 +18,7 @@ python3 tools/importers/port/aiverse_port.py resolve /path/to/Imported --id ITEM
 ```
 
 每个命令都输出 JSON；失败时以状态码 2 退出。`scan` 不写任何文件。输入和输出目录不能重叠。不要同时向同一目标运行多个导入。
-`extract` 记录源路径、完整的序列化组件、字段、脚本源码及其使用情况。`emit` 写出游戏清单、规则、地图、`.rtsproj`、复制的资源、
+`extract` 记录源路径、完整的序列化组件、字段、脚本源码及其使用情况。`emit` 写出游戏清单、规则、地图、`.aiverse`、复制的资源、
 可选的精灵/瓦片/音频/特效、`port.json` 以及 JSON/Markdown 报告。写出复制的资源时 `sourceRoot` 必须仍然存在。生成的
 `.rpakignore` 会把脚本中间索引和报告排除在运行时资源包之外。清单将导入的内容标记为 `external: true`，aiversebuild 会把它传递到
 资源包中。

@@ -210,11 +210,11 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 近似です：オリジナルの地形生成は使わず、基地は岩の上、スパイスは `Field=` から、ミッションのノルマはトリガーで実装。歩兵、オーニソプター、
 キャリーオールはまだ 3D 形状で描かれます。フォルダには `"external": true` が付いており、コミットや配布はできません。
 
-## プロジェクトファイル .rtsproj
+## プロジェクトファイル .aiverse
 
 プロジェクトはディスク上の任意の場所にあるフォルダです（`game.json`、`rules.json`、`maps/` など）。そのルートにプロジェクトファイル
-**`<名前>.rtsproj`** があり、Unreal の `.uproject` や `project.godot` と同じくダブルクリックで開けます。`game.json` は引き続きゲームの
-マニフェスト（クライアント、aiversebuild、パックが読む）で、`.rtsproj` はフォルダをプロジェクトとしてマークし、エディターの情報を保存する
+**`<名前>.aiverse`** があり、Unreal の `.uproject` や `project.godot` と同じくダブルクリックで開けます。`game.json` は引き続きゲームの
+マニフェスト（クライアント、aiversebuild、パックが読む）で、`.aiverse` はフォルダをプロジェクトとしてマークし、エディターの情報を保存する
 だけです：
 
 ```json
@@ -223,18 +223,20 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 
 - プロジェクトと一緒に作られます（ハブの「新しいプロジェクト」、MCP `create_project`）。これがない古いプロジェクトは、エディターで初めて開いた
   ときに作られます。`templates/*/` のテンプレートには既にあります（新しいプロジェクトにはコピーされず、新しいプロジェクトは自分のものを持ちます）。
-- エディターがプロジェクトのパスを受け付けるところでは、`.rtsproj` とフォルダのどちらも使えます：`aiverse_editor "My Strategy.rtsproj"`、
-  `--project`、ハブの「開く…」（`.rtsproj` とプロジェクトフォルダを表示）、最近使ったもの、MCP `open_game`、
-  `aiversebuild --project x.rtsproj`。`.rtsproj` はビルドに含まれません。
-- **ダブルクリック。** 起動時、関連付けがない場合や別のエディターインスタンスに関連付けられている場合、エディターは `.rtsproj` を自分に
-  関連付けます（ユーザー単位、管理者権限不要）。あなたが選んだ別のプログラムは上書きしません。手動では「プロジェクト → エディターを .rtsproj の
+- エディターがプロジェクトのパスを受け付けるところでは、`.aiverse` とフォルダのどちらも使えます：`aiverse_editor "My Strategy.aiverse"`、
+  `--project`、ハブの「開く…」（`.aiverse` とプロジェクトフォルダを表示）、最近使ったもの、MCP `open_game`、
+  `aiversebuild --project x.aiverse`。`.aiverse` はビルドに含まれません。
+- AIVERSE への改名前に作られたプロジェクトは `<名前>.rtsproj` をそのまま使います。どこでも同じように開け、その場で
+  上書きされ、名前は変わりません。フォルダーに両方ある場合は `.aiverse` が優先されます。
+- **ダブルクリック。** 起動時、関連付けがない場合や別のエディターインスタンスに関連付けられている場合、エディターは `.aiverse` を自分に
+  関連付けます（ユーザー単位、管理者権限不要）。あなたが選んだ別のプログラムは上書きしません。手動では「プロジェクト → エディターを .aiverse の
   既定アプリにする」。状態はハブの左下に表示されます。無効にするには `AIVERSE_FILE_ASSOC=off`。
   - **macOS：** 型 `com.aiverse.project` は `AiverseEditor.app` の Info.plist で宣言されています（`platform/macos/EditorInfo.plist.in`。
     ドキュメントアイコン `rtsproj.icns` は `aiverse_projicon` がエディターのロゴ `apps/editor/branding/icon_1024.png` から描画）。エディターは
-    バンドルを LaunchServices に登録し（`lsregister -f`）、既定のハンドラーになります。ダブルクリックや `open -a AiverseEditor x.rtsproj` で
+    バンドルを LaunchServices に登録し（`lsregister -f`）、既定のハンドラーになります。ダブルクリックや `open -a AiverseEditor x.aiverse` で
     起動中のエディターにプロジェクトが開きます（マップが未保存なら保存するか尋ねます）。
-  - **Windows：** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project`（アイコン `%USERPROFILE%\.aiverse\icons\rtsproj.ico`、コマンド
-    `"<aiverse_editor.exe>" "%1"`）。Windows で既に `.rtsproj` に別のプログラムが選ばれていれば、ハブが「プログラムから開く → 常に」を案内します。
+  - **Windows：** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project`（アイコン `%USERPROFILE%\.aiverse\icons\rtsproj.ico`、コマンド
+    `"<aiverse_editor.exe>" "%1"`）。Windows で既に `.aiverse` に別のプログラムが選ばれていれば、ハブが「プログラムから開く → 常に」を案内します。
   - **Linux：** 型 `application/x-aiverse-project`（`~/.local/share/mime/packages/aiverse-project.xml`）、
     `~/.local/share/applications/aiverse-editor.desktop`（`Exec=<エディター> %f`）、アイコンは `~/.local/share/icons/hicolor`、既定アプリは
     `~/.config/mimeapps.list`。`update-mime-database`、`update-desktop-database`、`xdg-mime` がインストールされていれば呼び出します。
@@ -242,7 +244,7 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 ## ゲームを作る（ウィザード）
 
 プロジェクトウィンドウの **ゲームを作る** ボタン（および **プロジェクト → ゲームを作る…**）：アート、音楽、テキストのフォルダかリンクを
-渡し、アイデアを書けば（何も書かなくてもウィザードが自分で選びます）、完成した `.rtsproj` プロジェクトができあがります。適したテンプレートに
+渡し、アイデアを書けば（何も書かなくてもウィザードが自分で選びます）、完成した `.aiverse` プロジェクトができあがります。適したテンプレートに
 基づくゲーム、段階的なチュートリアル（強制）と戦闘中のヒント（さりげない）、星と報酬のあるレベル、メタ（メニュー、アップグレード、ショップ、
 デイリー報酬、プロフィール、設定）、必要なら広告と課金、言語、アートから作るアイコンとスプラッシュ画面。ウィザードはボットでチュートリアルを
 自らクリアし、レベルを検証します。何が割り当てられ、何を確認すべきかはプロジェクトの `WIZARD.md` にあります。エージェント向け：MCP

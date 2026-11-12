@@ -249,7 +249,7 @@ the balance of three factions with bots and build a web version."*
 **4. Ship:**
 
 ```bash
-./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "My Game.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---

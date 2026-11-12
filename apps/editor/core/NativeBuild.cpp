@@ -118,7 +118,7 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
         "-DAIVERSE_CONTENT_DIR=" + projectDir,
         "-DAIVERSE_NATIVE_DIR=",            // a stale override must not pick another project's modules
         "-DAIVERSE_BUILD_TESTS=OFF", "-DAIVERSE_BUILD_SERVER=OFF"});
-    // macOS picks the .rtsproj handler by bundle id: the project's AiverseEditor.app must not share the regular one's
+    // macOS picks the .aiverse handler by bundle id: the project's AiverseEditor.app must not share the regular one's
     if (host == "macos") p.configureArgs.push_back("-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project");
     p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "aiverse_editor", "aiverse_headless"};
     if (jobs > 0) p.buildArgs.insert(p.buildArgs.end(), {"--parallel", std::to_string(jobs)});

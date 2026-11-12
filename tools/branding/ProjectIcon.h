@@ -1,4 +1,4 @@
-// Icons of the editor and of its project files (.rtsproj), drawn from the editor logo
+// Icons of the editor and of its project files (.aiverse), drawn from the editor logo
 // (apps/editor/branding/icon_1024.png; the engine's built-in icon when it's missing), so every OS gets
 // them from the same code — the macOS bundle at build time (aiverse_projicon), Windows / Linux when the
 // editor registers the file type.
