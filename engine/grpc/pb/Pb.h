@@ -101,15 +101,16 @@ class Writer {
         out_.append(5, '\0'); // max varint32 length
         const size_t start = out_.size();
         fn(*this);
-        const size_t n = out_.size() - start;
+        // Nested messages are < 4 GiB (Reader rejects larger lengths anyway): a uint32 fits 5 bytes.
+        const uint32_t n = uint32_t(out_.size() - start);
         char buf[5];
         int len = 0;
-        uint64_t v = n;
+        uint32_t v = n;
         do {
             uint8_t b = uint8_t(v & 0x7f);
             v >>= 7;
             buf[len++] = char(v ? (b | 0x80) : b);
-        } while (v);
+        } while (v && len < 5);
         std::memcpy(&out_[lenPos], buf, size_t(len));
         if (len < 5)
             out_.erase(lenPos + size_t(len), size_t(5 - len));

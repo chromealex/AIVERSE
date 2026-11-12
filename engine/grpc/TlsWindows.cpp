@@ -7,6 +7,8 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <wincrypt.h>
+#include <winternl.h>
+#define SCHANNEL_USE_BLACKLISTS // SCH_CREDENTIALS (TLS 1.3 capable)
 #include <schannel.h>
 #include <security.h>
 #include <sspi.h>

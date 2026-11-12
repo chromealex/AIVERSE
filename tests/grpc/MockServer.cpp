@@ -343,7 +343,7 @@ struct MockServer::Conn : h2::Connection::Handler {
         head += "Transfer-Encoding: chunked\r\n\r\n";
         const size_t half = body.size() / 2;
         auto chunk = [&](std::string_view p) {
-            char hex[16];
+            char hex[32];
             std::snprintf(hex, sizeof hex, "%zx\r\n", p.size());
             head += hex;
             head.append(p.data(), p.size());

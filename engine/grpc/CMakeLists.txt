@@ -47,6 +47,8 @@ endif()
 add_library(AIVERSE::grpc_ext ALIAS aiverse_grpc_ext)
 
 if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    enable_testing() # this directory is added before the top level enables testing
+    find_package(Python3 COMPONENTS Interpreter QUIET)
     add_executable(aiverse_grpc_tests ${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc/grpc_tests.cpp
                    ${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc/MockServer.cpp)
     aiverse_protobuf_generate(TARGET aiverse_grpc_tests GRPC IMPORT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc"
@@ -56,7 +58,9 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
         target_compile_options(aiverse_grpc_tests PRIVATE -Wall -Wextra)
     endif()
     add_test(NAME aiverse_grpc_tests COMMAND aiverse_grpc_tests)
-    add_test(NAME aiverse_protoc COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc/protoc_test.py)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME aiverse_protoc COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc/protoc_test.py)
+    endif()
 endif()
 
 if(AIVERSE_BUILD_TOOLS AND NOT EMSCRIPTEN AND NOT IOS AND NOT ANDROID)
