@@ -288,6 +288,8 @@ void Driving::drive(Simulation& sim, DrivingStore& st, size_t index) {
     if (u.hp.raw <= 0) return;
     const DrivingVehicleType& vt = *typeOf(u.type);
     const Fixed mpc = rules_.metersPerCell;
+    // parked and at rest: nothing to integrate until somebody gets in or something hits it (a city has hundreds)
+    if (!c.driver.valid() && c.st.initialized && c.st.velocity.x.raw == 0 && c.st.velocity.z.raw == 0 && c.st.yawRate.raw == 0) return;
     auto res = vl::stepVehicle(vt.def, c.st, sim.tick(), sim.dt(), inputOf(sim, c), vl::VehicleContacts{});
     Transform& tr = w.get<Transform>(c.e);
     if (res) {

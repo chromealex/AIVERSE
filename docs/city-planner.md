@@ -23,6 +23,30 @@ request gives the same map on every platform. Tests: `aiverse_tests city_plan`, 
    (`trees`, `props`, `people`), parked cars in the kerb lanes of arterials facing the way traffic goes (right-hand)
    and in car parks (`cars`). The hero starts on the pavement cell nearest to the centre.
 
+## Organic layout (`"layout": "organic"`, preset `metropolis`)
+
+For big cities (128..1024 cells per side; the preset is 384 x 384 = 1.5 km at 4 m per cell):
+
+- **Centre**: the street grid above, in a square in the middle (`downtown`: share of the smaller side, default 0.38).
+- **Avenues**: from the ends of the centre's arterials to the map edges, wandering around their direction; an
+  avenue that runs into another arterial ends there (`radials`: chance per arterial end).
+- **Ring roads**: wobbly circles around the centre at 1.72 and 2.75 of its half size, when they fit.
+- **River**: from edge to edge past the centre; avenues and rings cross it on bridges, suburban streets stop at it.
+- **Suburbs** (`suburbs`: reach as a share of the half size): curved two-cell streets grow from the avenues and
+  rings, seed side streets, join the first road they come near or end in a turning circle. Houses (the smaller
+  residential buildings) stand along them with a yard and sometimes a car by the kerb; shops along the avenues,
+  works in the eastern sector. Roads outside the centre have grass verges instead of pavements.
+- **Countryside**: trees in clumps, `treeBudget` in total.
+- **Relief** (`relief`: height of the hills in units, 0 = flat): `terrain.corners`, flat in the centre, rising
+  outside, the river bed below its banks, roads graded and the ground under every building flat. The simulation
+  uses it only with rules `terrain.model: "heightfield"`; otherwise it is visual.
+- **Ground materials**: with terrain layers named `asphalt` / `road`, `pavement` / `concrete`, `grass`, `lot` /
+  `gravel` the map gets `terrainMaterial`.
+
+Curved roads are in `city.paths`: `{"id", "class", "kind": "avenue" | "ring" | "street", "width", "points": [[x, z], ...]}`
+(centre line in cells), `city.downtown` is the grid square, bridges on paths are `{"road", "from": [x, z], "to": [x, z]}`.
+Exact road tiles (`tileBases`) apply to the grid; curved roads get the plain `street` tile.
+
 ## What it takes from the rules
 
 | Thing | How it is found |
@@ -64,5 +88,6 @@ built on this block.
 ## Limits
 
 One level only: bridges cross water, junctions are at grade. Overpasses, multi-level interchanges and tunnels need
-a second driving level in the simulation, which does not exist yet. Roads are axis-aligned (no diagonals or curves);
-buildings are not rotated; a building's footprint is its bounding rectangle.
+a second driving level in the simulation, which does not exist yet. Buildings are not rotated; a building's footprint is
+its bounding rectangle. Curved roads have no lane markings and their junctions are not listed in `city.junctions` yet.
+Public transport, trams, metro and railways are not planned yet.

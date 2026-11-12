@@ -49,7 +49,7 @@ TEST(city_plan_is_deterministic_and_seeded) {
     gen::GenRequest req; req.preset = "city"; req.params = Json::parse(R"({"size": [20, 20]})");
     Json map = Json::object();
     std::string err;
-    CHECK(!gen::generateMap(req, rules, rj, map, &err) && err.find("32..512") != std::string::npos);
+    CHECK(!gen::generateMap(req, rules, rj, map, &err) && err.find("32..1024") != std::string::npos);
 }
 
 TEST(city_streets_connect_bridges_cross_the_river_and_buildings_fit) {
@@ -150,4 +150,93 @@ TEST(city_tiles_follow_the_tileset_bases_and_the_simulation_starts) {
     Json m2 = Json::object();
     std::string err;
     CHECK(gen::generateMap(req, rules, bare, m2, &err) && m2["generated"]["warnings"].size() == 3 && m2["city"]["roads"].size() > 8);
+}
+
+TEST(city_organic_layout_has_curved_streets_suburbs_and_hills) {
+    const char* params = R"({"layout": "organic", "size": [256, 256], "relief": 8, "tileset": "t.json"})";
+    uint64_t a = 0, b = 0;
+    Json map = cityMap(11, params, &a);
+    cityMap(11, params, &b);
+    CHECK(a != 0 && a == b);
+    const int W = 256, H = 256;
+    const Json& city = map["city"];
+    const Json& gen = map["generated"];
+    int avenues = 0, rings = 0, streets = 0;
+    bool curved = false;
+    for (auto& pth : city["paths"].items()) {
+        const std::string kind = pth.getStr("kind");
+        avenues += kind == "avenue"; rings += kind == "ring"; streets += kind == "street";
+        const Json& pts = pth["points"];
+        if (pts.size() < 4) continue;
+        // not a straight line: the middle point is off the chord
+        const double x0 = pts[size_t(0)][size_t(0)].toDouble(), z0 = pts[size_t(0)][size_t(1)].toDouble();
+        const double x1 = pts[pts.size() - 1][size_t(0)].toDouble(), z1 = pts[pts.size() - 1][size_t(1)].toDouble();
+        const double xm = pts[pts.size() / 2][size_t(0)].toDouble(), zm = pts[pts.size() / 2][size_t(1)].toDouble();
+        curved = curved || std::fabs((x1 - x0) * (zm - z0) - (z1 - z0) * (xm - x0)) > 2.0 * std::hypot(x1 - x0, z1 - z0);
+    }
+    CHECK(avenues >= 4 && rings >= 1 && streets >= 30 && curved);
+    CHECK(city["downtown"].getInt("w") >= 40 && city["downtown"].getInt("w") < W - 40);
+    CHECK(gen.getInt("houses") >= 60 && gen.getInt("buildings") > gen.getInt("houses") && gen.getInt("bridges") >= 1);
+    // every road cell (tile characters a / s) belongs to one network (diagonal steps count)
+    std::vector<std::string> rows, tiles;
+    for (auto& r : map["terrain"]["rows"].items()) rows.push_back(r.str());
+    for (auto& r : map["tiles"]["rows"].items()) tiles.push_back(r.str());
+    int roads = 0, start = -1;
+    for (int i = 0; i < W * H; ++i) {
+        const char t = tiles[size_t(i / W)][size_t(i % W)];
+        if (t != 'a' && t != 's') continue;
+        if (rows[size_t(i / W)][size_t(i % W)] == '#') { tiles[size_t(i / W)][size_t(i % W)] = 'g'; continue; }
+        ++roads; if (start < 0) start = i;
+        CHECK(rows[size_t(i / W)][size_t(i % W)] == '.');
+    }
+    std::vector<int> stack{start};
+    std::vector<char> seen(size_t(W * H), 0);
+    seen[size_t(start)] = 1;
+    int reached = 0;
+    while (!stack.empty()) {
+        const int i = stack.back(); stack.pop_back(); ++reached;
+        for (int dz = -1; dz <= 1; ++dz)
+            for (int dx = -1; dx <= 1; ++dx) {
+                const int x = i % W + dx, z = i / W + dz;
+                if (x < 0 || z < 0 || x >= W || z >= H || seen[size_t(z * W + x)]) continue;
+                const char t = tiles[size_t(z)][size_t(x)];
+                if (t == 'a' || t == 's') { seen[size_t(z * W + x)] = 1; stack.push_back(z * W + x); }
+            }
+    }
+    CHECK(roads > 4000 && reached == roads);
+    // buildings stand on free ground: not on roads, not in the water, not on each other
+    Json rj = Json::parse(kCityRules);
+    game::Rules rules = game::loadRules(rj);
+    std::vector<char> used(size_t(W * H), 0);
+    bool clean = true;
+    for (auto& e : map["entities"].items()) {
+        const game::UnitType& t = rules.types[size_t(rules.findType(e.getStr("type")))];
+        if (!t.structure) continue;
+        const double px = e["pos"][size_t(0)].toDouble(), pz = e["pos"][size_t(1)].toDouble();
+        const int x0 = int(px - t.footprintW / 2.0 + 0.01), z0 = int(pz - t.footprintH / 2.0 + 0.01);
+        for (int z = z0; z < z0 + t.footprintH; ++z)
+            for (int x = x0; x < x0 + t.footprintW; ++x) {
+                const bool in = x >= 0 && z >= 0 && x < W && z < H;
+                clean = clean && in && tiles[size_t(z)][size_t(x)] != 'a' && tiles[size_t(z)][size_t(x)] != 's' && rows[size_t(z)][size_t(x)] == '.' && !used[size_t(z * W + x)];
+                if (in) used[size_t(z * W + x)] = 1;
+            }
+    }
+    CHECK(clean);
+    // hills: flat in the centre, higher ground outside, the river bed below zero
+    const Json& cs = map["terrain"]["corners"];
+    CHECK(cs.size() == size_t((W + 1) * (H + 1)));
+    int64_t hi = 0, lo = 0;
+    for (auto& v : cs.items()) { hi = std::max<int64_t>(hi, v.integer()); lo = std::min<int64_t>(lo, v.integer()); }
+    CHECK(cs[size_t(128 * (W + 1) + 128)].integer() == 0 && hi >= 24 && lo < 0);
+    // an ordinary map: the simulation starts on it
+    map.erase("tiles");
+    auto sim = makeSimJson(kCityRules, map.dump(0), 5);
+    CHECK(mod(*sim).topDown()->heroOf(*sim, 1).valid());
+    run(*sim, 1.0);
+    // too small for the organic layout
+    game::Rules r2 = game::loadRules(rj);
+    gen::GenRequest req; req.preset = "city"; req.params = Json::parse(R"({"layout": "organic", "size": [96, 96]})");
+    Json m2 = Json::object();
+    std::string err;
+    CHECK(!gen::generateMap(req, r2, rj, m2, &err) && err.find("at least 128") != std::string::npos);
 }

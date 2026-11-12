@@ -298,7 +298,7 @@ def game_manifest():
                                'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}}
 
 
-def plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props):
+def plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props, layout='grid'):
     """The layout comes from the engine's city planner (map generator preset "city"), baked into maps/city.json."""
     import subprocess
     types.update(building_types)                         # the planner chooses among all of them; unused ones are dropped after
@@ -308,6 +308,8 @@ def plan_with_engine(assets, out, seed, headless, size, rules, types, building_t
           'players': [{'name': 'Player', 'team': 1}, {'name': 'City', 'team': 2}], 'victory': {'mode': 'survive', 'seconds': 360000}})
     wjson(os.path.join(out, 'game.json'), game_manifest())
     params = {'size': list(size), 'tileset': 'tilesets/city.json', 'tileBases': bases, 'river': True, 'roundabouts': 0.3}
+    if layout == 'organic':
+        params.update({'layout': 'organic', 'relief': 0, 'treeBudget': 1200})   # flat for now: the ground is a tile layer
     baked = os.path.join(out, 'maps', 'city.baked.json')
     res = subprocess.run([headless, '--project', out, '--generate', 'city', '--seed', str(seed), '--gen-params', json.dumps(params),
                           '--gen-out', baked, '--max-seconds', '1', '--quiet'], capture_output=True, text=True)
@@ -331,7 +333,7 @@ def plan_with_engine(assets, out, seed, headless, size, rules, types, building_t
     g = m.get('generated', {})
     return {'size': m['size'], 'planner': 'engine', 'buildings': g.get('buildings'), 'cars': g.get('cars'), 'people': g.get('people'),
             'roads': g.get('roads'), 'junctions': g.get('junctions'), 'bridges': g.get('bridges'), 'roundabouts': g.get('roundabouts'),
-            'blocks': g.get('blocks'), 'parks': g.get('parks'), 'entities': len(m['entities']), 'warnings': g.get('warnings')}
+            'blocks': g.get('blocks'), 'parks': g.get('parks'), 'houses': g.get('houses'), 'paths': g.get('paths'), 'entities': len(m['entities']), 'warnings': g.get('warnings')}
 
 
 def people_scripts_overrides(assets, out, rules, types, entities):
@@ -365,7 +367,7 @@ def people_scripts_overrides(assets, out, rules, types, entities):
         merge(rules, json.load(open(over)))
 
 
-def build(assets, out, seed, headless=None, size=(96, 72)):
+def build(assets, out, seed, headless=None, size=(96, 72), layout='grid', max_buildings=0):
     rnd = random.Random(seed)
     os.makedirs(out, exist_ok=True)
     bases = make_road_tileset(assets, out)
@@ -384,6 +386,8 @@ def build(assets, out, seed, headless=None, size=(96, 72)):
                                   'size': [round(fw / ppm / M, 4), round(fh / ppm / M, 4)], 'team': 'none', 'filter': 'linear', 'shadow': 'none'}}
         driving[name] = {'length': round(length, 3), 'width': round(width, 3), 'wheeled': {'massMilli': MASS.get(name, 1300) * 1000}}
     buildings = load_buildings(assets, out)
+    if max_buildings and len(buildings) > max_buildings:      # a memory knob: every k-th building of the catalogue
+        buildings = [buildings[i * len(buildings) // max_buildings] for i in range(max_buildings)]
     building_types = {}
     for b in buildings:
         nb = int(b['id'][1:])
@@ -415,7 +419,7 @@ def build(assets, out, seed, headless=None, size=(96, 72)):
     }
 
     if headless and bases:
-        return plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props)
+        return plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props, layout)
 
     # street grid: roads ROAD cells wide around BLOCKS_X x BLOCKS_Z blocks; a pavement ring inside every block
     W, H = ROAD + BLOCKS_X * (BLOCK_W + ROAD), ROAD + BLOCKS_Z * (BLOCK_H + ROAD)
@@ -546,9 +550,11 @@ def main():
     ap.add_argument('--seed', type=int, default=7)
     ap.add_argument('--headless', help='aiverse_headless: lay the city out with the engine planner (preset "city")')
     ap.add_argument('--size', default='96x72', help='map size in cells for the planner, WxH')
+    ap.add_argument('--max-building-types', type=int, default=0, help='use at most this many building models (0: all); the HD pack is ~20 MB per model')
+    ap.add_argument('--layout', default='grid', choices=['grid', 'organic'], help='organic: grid centre, curved avenues, rings, suburbs')
     a = ap.parse_args()
     w, h = [int(v) for v in a.size.lower().split('x')]
-    print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed, a.headless, (w, h))))
+    print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed, a.headless, (w, h), a.layout, a.max_building_types)))
 
 
 if __name__ == '__main__':

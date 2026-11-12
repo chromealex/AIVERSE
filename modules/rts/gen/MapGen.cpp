@@ -9,6 +9,7 @@ namespace {
 // Built-in presets (data). "shape" picks the terrain pipeline; every other key is a param documented in
 // docs/game-format.md "Map generation". Games add or override presets with rules "mapgen": {"presets": {...}}.
 const char* kPresets = R"JSON({
+  "metropolis": {"title": "Большой город: центр, кольца, пригород, холмы", "genre": "top-down city", "params": {"shape": "city", "layout": "organic", "size": [384, 384], "arterialSpacing": 26, "blockWidth": 14, "blockDepth": 12, "downtown": 0.38, "suburbs": 0.88, "river": true, "relief": 8, "roundabouts": 0.2, "parks": 0.15, "parking": 0.08, "trees": 0.18, "props": 0.06, "people": 0.04, "cars": 0.22, "treeBudget": 1500}},
   "city":       {"title": "Город (вид сверху)", "genre": "top-down city", "params": {"shape": "city", "size": [96, 72], "arterialSpacing": 26, "blockWidth": 14, "blockDepth": 12, "river": true, "roundabouts": 0.25, "parks": 0.15, "parking": 0.08, "trees": 0.18, "props": 0.06, "people": 0.04, "cars": 0.22}},
   "continents": {"title": "Континенты", "genre": "any", "params": {"shape": "continents", "size": [96, 96], "water": 0.4, "rivers": 0.5, "levels": 1, "connect": "shallows", "shallows": 0.6}},
   "islands":    {"title": "Архипелаг", "genre": "naval / any", "params": {"shape": "islands", "size": [96, 96], "water": 0.62, "islands": 4, "levels": 1, "connect": "shallows", "shallows": 0.8}},
