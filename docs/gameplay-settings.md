@@ -342,6 +342,40 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | cinematic | qteMashScaleMilli | integer | 1000 | 100..10000 |
 | cinematic | qteHoldScaleMilli | integer | 1000 | 100..10000 |
 | cinematic | qteAutoSucceed | boolean | false |  |
+| colony | ticksPerHour | integer | 60 | 1..1000000 |
+| colony | moodBase | integer | 0 | -100000..100000 |
+| colony | moodBreakAt | integer | -60000 | -100000..100000 |
+| colony | moodLowAt | integer | -20000 | -100000..100000 |
+| colony | moodHighAt | integer | 40000 | -100000..100000 |
+| colony | breakTicks | integer | 120 | 1..10000000 |
+| colony | lowSpeedMilli | integer | 700 | 0..100000 |
+| colony | contentSpeedMilli | integer | 1000 | 0..100000 |
+| colony | highSpeedMilli | integer | 1200 | 0..100000 |
+| colony | maxResponseJobs | integer | 64 | 1..1024 |
+| survival | coreNormalMilli | integer | 37000 | 30000..42000 |
+| survival | comfortLowMilli | integer | 16000 | -50000..60000 |
+| survival | comfortHighMilli | integer | 27000 | -50000..60000 |
+| survival | coolingMicro | integer | 40 | 0..1000000 |
+| survival | heatingMicro | integer | 30 | 0..1000000 |
+| survival | recoveryMicro | integer | 2000 | 0..1000000 |
+| survival | coldMilli | integer | 35500 | 20000..45000 |
+| survival | severeColdMilli | integer | 33000 | 20000..45000 |
+| survival | hotMilli | integer | 38500 | 30000..45000 |
+| survival | severeHotMilli | integer | 40000 | 30000..45000 |
+| survival | hungerPerTick | integer | 8 | 0..100000 |
+| survival | thirstPerTick | integer | 12 | 0..100000 |
+| survival | staminaDrain | integer | 600 | 0..100000 |
+| survival | staminaRegen | integer | 300 | 0..100000 |
+| survival | lowAt | integer | 25000 | 0..100000 |
+| survival | wetChillMilli | integer | 8000 | 0..100000 |
+| survival | dryPerTick | integer | 40 | 0..100000 |
+| survival | starveDamage | integer | 20 | 0..100000 |
+| survival | thirstDamage | integer | 30 | 0..100000 |
+| survival | coldDamage | integer | 30 | 0..100000 |
+| survival | heatDamage | integer | 30 | 0..100000 |
+| survival | conditionRegen | integer | 10 | 0..100000 |
+| survival | windChillMilli | integer | 600 | 0..10000 |
+| survival | wetPerTick | integer | 200 | 0..100000 |
 
 ## Cross-field constraints
 
@@ -380,3 +414,8 @@ Constraint: `narrative.meterMinimum <= narrative.meterInitial` (checked by loade
 Constraint: `narrative.meterInitial <= narrative.meterMaximum` (checked by loader and CLI).
 Constraint: `interaction.throwMinImpulseMilli <= interaction.throwMaxImpulseMilli` (checked by loader and CLI).
 Constraint: `cinematic.slowMotionNumerator <= cinematic.slowMotionDenominator` (checked by loader and CLI).
+Constraint: `colony.moodBreakAt <= colony.moodLowAt` (checked by loader and CLI).
+Constraint: `colony.moodLowAt <= colony.moodHighAt` (checked by loader and CLI).
+Constraint: `survival.comfortLowMilli <= survival.comfortHighMilli` (checked by loader and CLI).
+Constraint: `survival.severeColdMilli <= survival.coldMilli` (checked by loader and CLI).
+Constraint: `survival.hotMilli <= survival.severeHotMilli` (checked by loader and CLI).

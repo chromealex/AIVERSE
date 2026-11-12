@@ -406,6 +406,44 @@ struct CinematicSettings {
     std::int64_t qteHoldScaleMilli=1000;
     bool qteAutoSucceed=false;
 };
+struct ColonySettings {
+    std::int64_t ticksPerHour=60;
+    std::int64_t moodBase=0;
+    std::int64_t moodBreakAt=-60000;
+    std::int64_t moodLowAt=-20000;
+    std::int64_t moodHighAt=40000;
+    std::int64_t breakTicks=120;
+    std::int64_t lowSpeedMilli=700;
+    std::int64_t contentSpeedMilli=1000;
+    std::int64_t highSpeedMilli=1200;
+    std::int64_t maxResponseJobs=64;
+};
+struct SurvivalSettings {
+    std::int64_t coreNormalMilli=37000;
+    std::int64_t comfortLowMilli=16000;
+    std::int64_t comfortHighMilli=27000;
+    std::int64_t coolingMicro=40;
+    std::int64_t heatingMicro=30;
+    std::int64_t recoveryMicro=2000;
+    std::int64_t coldMilli=35500;
+    std::int64_t severeColdMilli=33000;
+    std::int64_t hotMilli=38500;
+    std::int64_t severeHotMilli=40000;
+    std::int64_t hungerPerTick=8;
+    std::int64_t thirstPerTick=12;
+    std::int64_t staminaDrain=600;
+    std::int64_t staminaRegen=300;
+    std::int64_t lowAt=25000;
+    std::int64_t wetChillMilli=8000;
+    std::int64_t dryPerTick=40;
+    std::int64_t starveDamage=20;
+    std::int64_t thirstDamage=30;
+    std::int64_t coldDamage=30;
+    std::int64_t heatDamage=30;
+    std::int64_t conditionRegen=10;
+    std::int64_t windChillMilli=600;
+    std::int64_t wetPerTick=200;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -438,6 +476,8 @@ struct GameplaySettings {
     NarrativeSettings narrative;
     InteractionSettings interaction;
     CinematicSettings cinematic;
+    ColonySettings colony;
+    SurvivalSettings survival;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -454,7 +494,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="colony" && entry.first!="survival") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -1013,6 +1053,57 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
         }
         if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
+    }
+    if(root.has("colony")) { const auto& section=root["colony"];
+        if(!section.isObject()) result.errors.push_back("colony: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="ticksPerHour" && entry.first!="moodBase" && entry.first!="moodBreakAt" && entry.first!="moodLowAt" && entry.first!="moodHighAt" && entry.first!="breakTicks" && entry.first!="lowSpeedMilli" && entry.first!="contentSpeedMilli" && entry.first!="highSpeedMilli" && entry.first!="maxResponseJobs") result.errors.push_back("colony."+entry.first+": unknown field");
+            if(section.has("ticksPerHour")) number(section["ticksPerHour"],settings.colony.ticksPerHour,1,1000000,"colony.ticksPerHour");
+            if(section.has("moodBase")) number(section["moodBase"],settings.colony.moodBase,-100000,100000,"colony.moodBase");
+            if(section.has("moodBreakAt")) number(section["moodBreakAt"],settings.colony.moodBreakAt,-100000,100000,"colony.moodBreakAt");
+            if(section.has("moodLowAt")) number(section["moodLowAt"],settings.colony.moodLowAt,-100000,100000,"colony.moodLowAt");
+            if(section.has("moodHighAt")) number(section["moodHighAt"],settings.colony.moodHighAt,-100000,100000,"colony.moodHighAt");
+            if(section.has("breakTicks")) number(section["breakTicks"],settings.colony.breakTicks,1,10000000,"colony.breakTicks");
+            if(section.has("lowSpeedMilli")) number(section["lowSpeedMilli"],settings.colony.lowSpeedMilli,0,100000,"colony.lowSpeedMilli");
+            if(section.has("contentSpeedMilli")) number(section["contentSpeedMilli"],settings.colony.contentSpeedMilli,0,100000,"colony.contentSpeedMilli");
+            if(section.has("highSpeedMilli")) number(section["highSpeedMilli"],settings.colony.highSpeedMilli,0,100000,"colony.highSpeedMilli");
+            if(section.has("maxResponseJobs")) number(section["maxResponseJobs"],settings.colony.maxResponseJobs,1,1024,"colony.maxResponseJobs");
+        }
+        if(settings.colony.moodBreakAt>settings.colony.moodLowAt)result.errors.push_back("colony.moodBreakAt: must not exceed moodLowAt");
+        if(settings.colony.moodLowAt>settings.colony.moodHighAt)result.errors.push_back("colony.moodLowAt: must not exceed moodHighAt");
+    }
+    if(root.has("survival")) { const auto& section=root["survival"];
+        if(!section.isObject()) result.errors.push_back("survival: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="coreNormalMilli" && entry.first!="comfortLowMilli" && entry.first!="comfortHighMilli" && entry.first!="coolingMicro" && entry.first!="heatingMicro" && entry.first!="recoveryMicro" && entry.first!="coldMilli" && entry.first!="severeColdMilli" && entry.first!="hotMilli" && entry.first!="severeHotMilli" && entry.first!="hungerPerTick" && entry.first!="thirstPerTick" && entry.first!="staminaDrain" && entry.first!="staminaRegen" && entry.first!="lowAt" && entry.first!="wetChillMilli" && entry.first!="dryPerTick" && entry.first!="starveDamage" && entry.first!="thirstDamage" && entry.first!="coldDamage" && entry.first!="heatDamage" && entry.first!="conditionRegen" && entry.first!="windChillMilli" && entry.first!="wetPerTick") result.errors.push_back("survival."+entry.first+": unknown field");
+            if(section.has("coreNormalMilli")) number(section["coreNormalMilli"],settings.survival.coreNormalMilli,30000,42000,"survival.coreNormalMilli");
+            if(section.has("comfortLowMilli")) number(section["comfortLowMilli"],settings.survival.comfortLowMilli,-50000,60000,"survival.comfortLowMilli");
+            if(section.has("comfortHighMilli")) number(section["comfortHighMilli"],settings.survival.comfortHighMilli,-50000,60000,"survival.comfortHighMilli");
+            if(section.has("coolingMicro")) number(section["coolingMicro"],settings.survival.coolingMicro,0,1000000,"survival.coolingMicro");
+            if(section.has("heatingMicro")) number(section["heatingMicro"],settings.survival.heatingMicro,0,1000000,"survival.heatingMicro");
+            if(section.has("recoveryMicro")) number(section["recoveryMicro"],settings.survival.recoveryMicro,0,1000000,"survival.recoveryMicro");
+            if(section.has("coldMilli")) number(section["coldMilli"],settings.survival.coldMilli,20000,45000,"survival.coldMilli");
+            if(section.has("severeColdMilli")) number(section["severeColdMilli"],settings.survival.severeColdMilli,20000,45000,"survival.severeColdMilli");
+            if(section.has("hotMilli")) number(section["hotMilli"],settings.survival.hotMilli,30000,45000,"survival.hotMilli");
+            if(section.has("severeHotMilli")) number(section["severeHotMilli"],settings.survival.severeHotMilli,30000,45000,"survival.severeHotMilli");
+            if(section.has("hungerPerTick")) number(section["hungerPerTick"],settings.survival.hungerPerTick,0,100000,"survival.hungerPerTick");
+            if(section.has("thirstPerTick")) number(section["thirstPerTick"],settings.survival.thirstPerTick,0,100000,"survival.thirstPerTick");
+            if(section.has("staminaDrain")) number(section["staminaDrain"],settings.survival.staminaDrain,0,100000,"survival.staminaDrain");
+            if(section.has("staminaRegen")) number(section["staminaRegen"],settings.survival.staminaRegen,0,100000,"survival.staminaRegen");
+            if(section.has("lowAt")) number(section["lowAt"],settings.survival.lowAt,0,100000,"survival.lowAt");
+            if(section.has("wetChillMilli")) number(section["wetChillMilli"],settings.survival.wetChillMilli,0,100000,"survival.wetChillMilli");
+            if(section.has("dryPerTick")) number(section["dryPerTick"],settings.survival.dryPerTick,0,100000,"survival.dryPerTick");
+            if(section.has("starveDamage")) number(section["starveDamage"],settings.survival.starveDamage,0,100000,"survival.starveDamage");
+            if(section.has("thirstDamage")) number(section["thirstDamage"],settings.survival.thirstDamage,0,100000,"survival.thirstDamage");
+            if(section.has("coldDamage")) number(section["coldDamage"],settings.survival.coldDamage,0,100000,"survival.coldDamage");
+            if(section.has("heatDamage")) number(section["heatDamage"],settings.survival.heatDamage,0,100000,"survival.heatDamage");
+            if(section.has("conditionRegen")) number(section["conditionRegen"],settings.survival.conditionRegen,0,100000,"survival.conditionRegen");
+            if(section.has("windChillMilli")) number(section["windChillMilli"],settings.survival.windChillMilli,0,10000,"survival.windChillMilli");
+            if(section.has("wetPerTick")) number(section["wetPerTick"],settings.survival.wetPerTick,0,100000,"survival.wetPerTick");
+        }
+        if(settings.survival.comfortLowMilli>settings.survival.comfortHighMilli)result.errors.push_back("survival.comfortLowMilli: must not exceed comfortHighMilli");
+        if(settings.survival.severeColdMilli>settings.survival.coldMilli)result.errors.push_back("survival.severeColdMilli: must not exceed coldMilli");
+        if(settings.survival.hotMilli>settings.survival.severeHotMilli)result.errors.push_back("survival.hotMilli: must not exceed severeHotMilli");
     }
     if(result.errors.empty()) result.value=settings;
     return result;
