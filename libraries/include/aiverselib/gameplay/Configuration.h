@@ -111,6 +111,52 @@ struct ProjectileSettings {
     std::int64_t lifetime=600;
     std::int64_t maxBounces=0;
 };
+struct PenetrationSettings {
+    std::int64_t powerMilli=1000;
+    std::int64_t maxLayers=4;
+    std::int64_t minDamageMilli=0;
+    std::int64_t minSpeedMilli=0;
+};
+struct ExplosionSettings {
+    std::int64_t innerRadiusMilli=1000;
+    std::int64_t outerRadiusMilli=5000;
+    std::int64_t damageMilli=100000;
+    std::int64_t edgeScaleMilli=0;
+    std::int64_t impulseMilli=0;
+    std::int64_t maxTargets=64;
+};
+struct AmmoFeedSettings {
+    std::int64_t kind=0;
+    std::int64_t capacity=30;
+    std::int64_t ammoPerShot=1;
+    std::int64_t intervalTicks=0;
+    std::int64_t reloadTicks=120;
+    std::int64_t emptyReloadTicks=0;
+    std::int64_t reloadStartTicks=0;
+    std::int64_t shellTicks=30;
+    std::int64_t spinupTicks=0;
+    std::int64_t heatPerShot=0;
+    std::int64_t heatCapacity=1000;
+    std::int64_t coolPerTick=10;
+    std::int64_t overheatTicks=60;
+    std::int64_t recoverHeat=0;
+    bool autoReload=true;
+    bool interruptible=true;
+};
+struct ChargeSettings {
+    std::int64_t minTicks=10;
+    std::int64_t maxTicks=60;
+    std::int64_t autoReleaseTicks=0;
+    std::int64_t tiers=3;
+    bool fireBelowMin=false;
+    std::int64_t minScaleMilli=1000;
+    std::int64_t maxScaleMilli=2000;
+};
+struct AimSolverSettings {
+    std::int64_t maxIterations=8;
+    std::int64_t toleranceMilli=10;
+    bool preferHigh=false;
+};
 struct MatchRuleSettings {
     std::int64_t warmupTicks=60;
     std::int64_t roundTicks=3600;
@@ -139,6 +185,11 @@ struct GameplaySettings {
     LocomotionSettings locomotion;
     MeleeSettings melee;
     ProjectileSettings projectile;
+    PenetrationSettings penetration;
+    ExplosionSettings explosion;
+    AmmoFeedSettings ammoFeed;
+    ChargeSettings charge;
+    AimSolverSettings aimSolver;
     MatchRuleSettings matchRules;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
@@ -156,7 +207,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="projectile" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -335,6 +386,77 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("retentionMilli")) number(section["retentionMilli"],settings.projectile.retentionMilli,0,1000,"projectile.retentionMilli");
             if(section.has("lifetime")) number(section["lifetime"],settings.projectile.lifetime,1,100000,"projectile.lifetime");
             if(section.has("maxBounces")) number(section["maxBounces"],settings.projectile.maxBounces,0,32,"projectile.maxBounces");
+        }
+    }
+    if(root.has("penetration")) { const auto& section=root["penetration"];
+        if(!section.isObject()) result.errors.push_back("penetration: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="powerMilli" && entry.first!="maxLayers" && entry.first!="minDamageMilli" && entry.first!="minSpeedMilli") result.errors.push_back("penetration."+entry.first+": unknown field");
+            if(section.has("powerMilli")) number(section["powerMilli"],settings.penetration.powerMilli,0,1000000000000,"penetration.powerMilli");
+            if(section.has("maxLayers")) number(section["maxLayers"],settings.penetration.maxLayers,1,64,"penetration.maxLayers");
+            if(section.has("minDamageMilli")) number(section["minDamageMilli"],settings.penetration.minDamageMilli,0,1000000000000,"penetration.minDamageMilli");
+            if(section.has("minSpeedMilli")) number(section["minSpeedMilli"],settings.penetration.minSpeedMilli,0,1000000000,"penetration.minSpeedMilli");
+        }
+    }
+    if(root.has("explosion")) { const auto& section=root["explosion"];
+        if(!section.isObject()) result.errors.push_back("explosion: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="innerRadiusMilli" && entry.first!="outerRadiusMilli" && entry.first!="damageMilli" && entry.first!="edgeScaleMilli" && entry.first!="impulseMilli" && entry.first!="maxTargets") result.errors.push_back("explosion."+entry.first+": unknown field");
+            if(section.has("innerRadiusMilli")) number(section["innerRadiusMilli"],settings.explosion.innerRadiusMilli,0,10000000,"explosion.innerRadiusMilli");
+            if(section.has("outerRadiusMilli")) number(section["outerRadiusMilli"],settings.explosion.outerRadiusMilli,1,10000000,"explosion.outerRadiusMilli");
+            if(section.has("damageMilli")) number(section["damageMilli"],settings.explosion.damageMilli,0,1000000000000,"explosion.damageMilli");
+            if(section.has("edgeScaleMilli")) number(section["edgeScaleMilli"],settings.explosion.edgeScaleMilli,0,1000,"explosion.edgeScaleMilli");
+            if(section.has("impulseMilli")) number(section["impulseMilli"],settings.explosion.impulseMilli,0,1000000000,"explosion.impulseMilli");
+            if(section.has("maxTargets")) number(section["maxTargets"],settings.explosion.maxTargets,1,4096,"explosion.maxTargets");
+        }
+        if(settings.explosion.innerRadiusMilli>settings.explosion.outerRadiusMilli)result.errors.push_back("explosion.innerRadiusMilli: must not exceed outerRadiusMilli");
+    }
+    if(root.has("ammoFeed")) { const auto& section=root["ammoFeed"];
+        if(!section.isObject()) result.errors.push_back("ammoFeed: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="kind" && entry.first!="capacity" && entry.first!="ammoPerShot" && entry.first!="intervalTicks" && entry.first!="reloadTicks" && entry.first!="emptyReloadTicks" && entry.first!="reloadStartTicks" && entry.first!="shellTicks" && entry.first!="spinupTicks" && entry.first!="heatPerShot" && entry.first!="heatCapacity" && entry.first!="coolPerTick" && entry.first!="overheatTicks" && entry.first!="recoverHeat" && entry.first!="autoReload" && entry.first!="interruptible") result.errors.push_back("ammoFeed."+entry.first+": unknown field");
+            if(section.has("kind")) number(section["kind"],settings.ammoFeed.kind,0,3,"ammoFeed.kind");
+            if(section.has("capacity")) number(section["capacity"],settings.ammoFeed.capacity,0,100000,"ammoFeed.capacity");
+            if(section.has("ammoPerShot")) number(section["ammoPerShot"],settings.ammoFeed.ammoPerShot,0,100000,"ammoFeed.ammoPerShot");
+            if(section.has("intervalTicks")) number(section["intervalTicks"],settings.ammoFeed.intervalTicks,0,100000,"ammoFeed.intervalTicks");
+            if(section.has("reloadTicks")) number(section["reloadTicks"],settings.ammoFeed.reloadTicks,0,100000,"ammoFeed.reloadTicks");
+            if(section.has("emptyReloadTicks")) number(section["emptyReloadTicks"],settings.ammoFeed.emptyReloadTicks,0,100000,"ammoFeed.emptyReloadTicks");
+            if(section.has("reloadStartTicks")) number(section["reloadStartTicks"],settings.ammoFeed.reloadStartTicks,0,100000,"ammoFeed.reloadStartTicks");
+            if(section.has("shellTicks")) number(section["shellTicks"],settings.ammoFeed.shellTicks,0,100000,"ammoFeed.shellTicks");
+            if(section.has("spinupTicks")) number(section["spinupTicks"],settings.ammoFeed.spinupTicks,0,100000,"ammoFeed.spinupTicks");
+            if(section.has("heatPerShot")) number(section["heatPerShot"],settings.ammoFeed.heatPerShot,0,1000000000,"ammoFeed.heatPerShot");
+            if(section.has("heatCapacity")) number(section["heatCapacity"],settings.ammoFeed.heatCapacity,1,1000000000,"ammoFeed.heatCapacity");
+            if(section.has("coolPerTick")) number(section["coolPerTick"],settings.ammoFeed.coolPerTick,0,1000000000,"ammoFeed.coolPerTick");
+            if(section.has("overheatTicks")) number(section["overheatTicks"],settings.ammoFeed.overheatTicks,0,100000,"ammoFeed.overheatTicks");
+            if(section.has("recoverHeat")) number(section["recoverHeat"],settings.ammoFeed.recoverHeat,0,1000000000,"ammoFeed.recoverHeat");
+            if(section.has("autoReload")) boolean(section["autoReload"],settings.ammoFeed.autoReload,"ammoFeed.autoReload");
+            if(section.has("interruptible")) boolean(section["interruptible"],settings.ammoFeed.interruptible,"ammoFeed.interruptible");
+        }
+        if(settings.ammoFeed.heatPerShot>settings.ammoFeed.heatCapacity)result.errors.push_back("ammoFeed.heatPerShot: must not exceed heatCapacity");
+        if(settings.ammoFeed.coolPerTick>settings.ammoFeed.heatCapacity)result.errors.push_back("ammoFeed.coolPerTick: must not exceed heatCapacity");
+    }
+    if(root.has("charge")) { const auto& section=root["charge"];
+        if(!section.isObject()) result.errors.push_back("charge: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="minTicks" && entry.first!="maxTicks" && entry.first!="autoReleaseTicks" && entry.first!="tiers" && entry.first!="fireBelowMin" && entry.first!="minScaleMilli" && entry.first!="maxScaleMilli") result.errors.push_back("charge."+entry.first+": unknown field");
+            if(section.has("minTicks")) number(section["minTicks"],settings.charge.minTicks,0,100000,"charge.minTicks");
+            if(section.has("maxTicks")) number(section["maxTicks"],settings.charge.maxTicks,1,100000,"charge.maxTicks");
+            if(section.has("autoReleaseTicks")) number(section["autoReleaseTicks"],settings.charge.autoReleaseTicks,0,100000,"charge.autoReleaseTicks");
+            if(section.has("tiers")) number(section["tiers"],settings.charge.tiers,0,64,"charge.tiers");
+            if(section.has("fireBelowMin")) boolean(section["fireBelowMin"],settings.charge.fireBelowMin,"charge.fireBelowMin");
+            if(section.has("minScaleMilli")) number(section["minScaleMilli"],settings.charge.minScaleMilli,0,1000000,"charge.minScaleMilli");
+            if(section.has("maxScaleMilli")) number(section["maxScaleMilli"],settings.charge.maxScaleMilli,0,1000000,"charge.maxScaleMilli");
+        }
+        if(settings.charge.minTicks>settings.charge.maxTicks)result.errors.push_back("charge.minTicks: must not exceed maxTicks");
+        if(settings.charge.minScaleMilli>settings.charge.maxScaleMilli)result.errors.push_back("charge.minScaleMilli: must not exceed maxScaleMilli");
+    }
+    if(root.has("aimSolver")) { const auto& section=root["aimSolver"];
+        if(!section.isObject()) result.errors.push_back("aimSolver: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="maxIterations" && entry.first!="toleranceMilli" && entry.first!="preferHigh") result.errors.push_back("aimSolver."+entry.first+": unknown field");
+            if(section.has("maxIterations")) number(section["maxIterations"],settings.aimSolver.maxIterations,1,64,"aimSolver.maxIterations");
+            if(section.has("toleranceMilli")) number(section["toleranceMilli"],settings.aimSolver.toleranceMilli,0,10000,"aimSolver.toleranceMilli");
+            if(section.has("preferHigh")) boolean(section["preferHigh"],settings.aimSolver.preferHigh,"aimSolver.preferHigh");
         }
     }
     if(root.has("matchRules")) { const auto& section=root["matchRules"];
