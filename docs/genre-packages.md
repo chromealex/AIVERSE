@@ -856,6 +856,7 @@ nextCommandSeq, bindings)` once before `stepScene`. Cues become due at `tick + d
 Sequences at or below the last accepted one are ignored, so re-feeding a report after a restore never starts a scene
 twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
 (within this package's 72..79).
+
 ## Boss encounters (boss-encounters 0.1.0)
 
 Headers under `genre/`: `Telegraphs.h` (ground areas + telegraphed attacks), `StatusEffects.h`, `BossEncounter.h`,
