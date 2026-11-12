@@ -123,7 +123,7 @@ bool RtsModule::canUsePlayerAbility(Simulation& sim, uint8_t player, int index) 
     const PlayerAbilityDef& a = rules_.advancedEffects ? playerAbilityFor(sim, player, index) : rules_.playerAbilities[size_t(index)];
     if (rules_.advancedEffects) {
         if (!st.owned || a.passive || st.pendingAt) return false;
-        if (player < gs->players.size() && (gs->players[player].statusFlags & kStSilence)) return false;
+        if (player < gs->players.size() && (gs->players[player].statusFlags & kStSilence) && silencedFor(sim, player, index)) return false;
         for (int rq : a.requires_) if (!requirementsMet(sim, player, {Requirement{(rq & 0x8000) != 0, uint16_t(rq & 0x7FFF)}})) return false;
     }
     if (st.readyAt > sim.tick()) return false;

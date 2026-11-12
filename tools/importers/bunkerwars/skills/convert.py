@@ -29,7 +29,11 @@ SCAN_SCRIPTS = ['MW2Data/Gameplay/Database']
 
 
 def open_project(bw):
-    assets = os.path.join(bw, 'Client', 'Assets') if os.path.isdir(os.path.join(bw, 'Client', 'Assets')) else bw
+    assets = bw
+    for sub in (('Client', 'Assets'), ('Assets',)):   # the repository, its Client folder or Client/Assets itself
+        if os.path.isdir(os.path.join(bw, *sub)):
+            assets = os.path.join(bw, *sub)
+            break
     p = bwproject.Project(assets)
     p.index_assets(*[d for d in SCAN_ASSETS if os.path.isdir(os.path.join(assets, d))])
     p.index_scripts(*SCAN_SCRIPTS)
@@ -61,6 +65,8 @@ def filter_keys(proj, skill, flt, px, notes):
             keys.update(shape='map', sort='random')
         elif rng >= 0:
             keys['radius'] = round(rng / px, 3)
+            if not num(f.get('oneNearest')):
+                keys['aspect'] = ASPECT[0]   # SkillPointsFilter.GetPoints: IsInEllipse(range, range x aspectRatio)
         else:
             keys['shape'] = 'map'
         if num(f.get('oneNearest')):
@@ -83,6 +89,7 @@ def filter_keys(proj, skill, flt, px, notes):
         keys.update(MP.owner_keys(f.get('ownerFilter'), unit=True))
         if rng >= 0:
             keys['radius'] = round(rng / px, 3)
+            keys['aspect'] = ASPECT[0]       # SkillUnitsFilter: IsInEllipse(range, range x aspectRatio)
         else:
             keys['shape'] = 'map'
         rw = num(f.get('ringWidth'), -1)
@@ -91,8 +98,6 @@ def filter_keys(proj, skill, flt, px, notes):
         mc = int(num(f.get('maxCount'), -1))
         if mc >= 0:
             keys['maxTargets'] = mc
-        if num(f.get('rangeVelocity'), -1) > 0:
-            notes.append('rangeVelocity: the BW filter range grows with time (wave); converted as its start range')
         return keys, 'units'
     if c == 'SkillPlayersFilter':
         keys.update(MP.owner_keys(f.get('playerFilter')))
@@ -103,6 +108,59 @@ def filter_keys(proj, skill, flt, px, notes):
         notes.append('zone filter: named map area bw_zone_<type> (map areas from the environment importer)')
         return keys, 'zone'
     return keys, 'point'
+
+
+ASPECT = [0.5]   # BW world.aspectRatio (BattleParametersInfo); --aspect
+
+
+def intersect_keys(a, b):
+    """Both filters must pass (BW modificator executeFilter): the narrower of each key."""
+    if a.get('kind') and b.get('kind') and a['kind'] != b['kind']:
+        return None
+    out = dict(a)
+    for k, v in b.items():
+        if k not in out:
+            out[k] = v
+        elif k == 'radius':
+            out[k] = min(out[k], v)
+        elif k == 'maxTargets':
+            out[k] = min(out[k], v)
+        elif k == 'tags':
+            t = [x for x in out[k] if x in v]
+            if not t:
+                return None
+            out[k] = t
+        elif k == 'affects' and out[k] != v:
+            out[k] = v if out[k] in ('all', 'any') else out[k] if v in ('all', 'any') else v
+        elif k == 'level':
+            out[k] = [max(out[k][0], v[0]), min(out[k][1], v[1])]
+        elif k == 'shape' and 'target' in (out[k], v):
+            out[k] = 'target'
+    if out.get('shape') == 'map' and 'radius' in out and not (a.get('shape') == 'map' and b.get('shape') == 'map'):
+        out.pop('shape')   # one of them has a range: the intersection is that circle
+    return out
+
+
+def modificator_filter(proj, skill, e, m, ekeys, dur, px, notes):
+    """The filter a modificator uses (SkillModificatorInfoBase.GetObjects): the element filter, its intersection with
+    an enabled executeFilter, or with ignoreSkillFilter the executeFilter alone (filter copiers copy the element range)."""
+    xf = skill.comps.get(ref_id(m.f.get('executeFilter'))) if num(m.f.get('executeFilterEnabled')) else None
+    if xf is None:
+        return ekeys
+    xkeys, _ = filter_keys(proj, skill, xf, px, notes)
+    cp = skill.comps.get(ref_id(m.f.get('skillCopier'))) if num(m.f.get('useSkillCopier')) else None
+    if cp is not None and e.filter is not None:
+        er = num(e.filter.f.get('inRange'), -1)
+        if cp.cls == 'SkillFilterVelocityToRangeCopier':   # range + timeout x rangeVelocity of a units filter
+            rv = num(e.filter.f.get('rangeVelocity'), -1)
+            if e.filter.cls == 'SkillUnitsFilter' and dur > 0 and er >= 0 and rv > 0:
+                er = er + dur * rv
+        if er >= 0:
+            xkeys['radius'] = round(er / px, 3)
+            xkeys.pop('shape', None) if xkeys.get('shape') == 'map' else None
+    if num(m.f.get('ignoreSkillFilter')):
+        return xkeys
+    return intersect_keys(ekeys, xkeys)
 
 
 def cond_time(conds, cls):
@@ -143,9 +201,16 @@ def make_ability(proj, skill, px, opts):
         delay = cond_time(e.activate, 'SkillModificatorConditionTimeout')
         el_effects = []
         for m in e.mods:
-            ctx = MP.Ctx(proj, skill, e, ekeys, dur, px)
+            mkeys = modificator_filter(proj, skill, e, m, ekeys, dur, px, notes)
+            if mkeys is None:   # the two filters exclude each other: nothing is affected
+                rows.append((m.cls, 'exact', ''))
+                continue
+            ctx = MP.Ctx(proj, skill, e, mkeys, dur, px)
             ctx.star = opts.morale_star_points
-            ctx.el_notes = 'growing' if e.filter is not None and num(e.filter.f.get('rangeVelocity'), -1) > 0 else ''
+            ctx.aspect = ASPECT[0]
+            rv = num(e.filter.f.get('rangeVelocity'), -1) if e.filter is not None and e.filter.cls == 'SkillUnitsFilter' else -1
+            ctx.grow = rv / px if rv > 0 else 0.0
+            ctx.el_notes = 'growing' if rv > 0 else ''
             out = MP.convert_modificator(m, ctx)
             el_effects += out
             rows.append((m.cls, ctx.fidelity, '; '.join(ctx.notes)))
@@ -226,7 +291,7 @@ def convert(proj, opts):
             report.append(f'{hid}: no SkillData in {base_path}')
             continue
         seen_bases.add(os.path.abspath(base_path))
-        aid = 'bw_' + slug(hid)
+        aid = slug(hid)
         per_level = []
         for lv, lp in levels:
             sk = SD.apply_level(proj, base, lp)
@@ -262,7 +327,7 @@ def convert(proj, opts):
             sk = SD.load_skill(proj, p)
             if not sk:
                 continue
-            aid = 'bw_' + ('legacy_' if 'Heroes_DELETE' in p else 'map_' if 'MapsEnvironment' in p else '') + slug(os.path.basename(p)[:-7])
+            aid = ('legacy_' if 'Heroes_DELETE' in p else 'map_' if 'MapsEnvironment' in p else 'extra_') + slug(os.path.basename(p)[:-7])
             a, rows, notes = make_ability(proj, sk, opts.px_per_cell, opts)
             ab = {'id': aid, 'name': sk.name.strip('_'), 'bw': {'clientId': sk.client_id, 'source': os.path.relpath(p, proj.assets)}}
             ab.update(a)
@@ -282,6 +347,104 @@ def convert(proj, opts):
     return abilities, coverage, report
 
 
+def referenced(obj, key, out):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == key and isinstance(v, str):
+                out.add(v)
+            referenced(v, key, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            referenced(v, key, out)
+
+
+def helper_types(abilities, opts):
+    """Types the skills spawn that the building importer does not make (BW objects of skills)."""
+    names, out = set(), {}
+    referenced(abilities, 'unit', names)
+    px = opts.px_per_cell
+    if 'bw_barrier' in names:   # PointsBarrier wall: blocks the lanes, worn down by the walkers that hit it
+        out['bw_barrier'] = {'name': 'Barrier', 'health': {'max': 20}, 'move': {'speed': 0, 'radius': 0.6}, 'blocksLanes': True, 'view': {'shape': 'wall'}}
+    if 'ufo' in names:          # PositionFlyingTower (agent-bw-routes): range 600 px, aspect, 3.5 shots / s, bullet 300 px / s
+        out['ufo'] = {'name': 'UFO', 'structure': {'footprint': [1, 1]}, 'invulnerable': True, 'sight': round(600 / px, 3), 'tags': ['tower'],
+                      'weapons': [{'range': round(600 / px, 3), 'rangeAspect': opts.aspect, 'damage': 1, 'cooldown': 0.2857, 'projectileSpeed': round(300 / px, 3)}],
+                      'view': {'shape': 'tower', 'scale': 0.8}}
+    return out
+
+
+def strip_comments(text):
+    head = []
+    for ln in text.split('\n'):
+        if ln.lstrip().startswith('//'):
+            head.append(ln)
+        else:
+            break
+    return head, json.loads('\n'.join(l for l in text.split('\n') if not l.lstrip().startswith('//')))
+
+
+def default_loadout(skills_meta, slot_cards, talent, ability_ids):
+    """Four cards (first common card allowed in each BW slot) + the hero talent in slot 4."""
+    lo = []
+    for k in range(4):
+        for sid, allowed, rarity in slot_cards:
+            if allowed is not None and (int(allowed) >> k) & 1 and sid in ability_ids and sid not in [x['id'] for x in lo]:
+                lo.append({'id': sid, 'slot': k})
+                break
+    if talent in ability_ids:
+        lo.append({'id': talent, 'slot': 4})
+    return lo
+
+
+def merge_template(folder, out):
+    """Write the abilities into <folder>/rules.json (helper types too) and give map players a default loadout."""
+    rp = os.path.join(folder, 'rules.json')
+    with open(rp, encoding='utf-8') as f:
+        head, rules = strip_comments(f.read())
+    rules['playerAbilities'] = out['playerAbilities']
+    for k, v in out['types'].items():
+        rules.setdefault('types', {}).setdefault(k, v)
+    rules.setdefault('loadoutSlots', 5)
+    # the skills read / write `morale` (stars = resource levels); the morale core (decay, level bonuses) is the modes
+    # agent's: only make sure the resource and its level thresholds exist
+    mor_p = os.path.join(folder, 'bw', 'morale.json')
+    if 'morale' not in rules.setdefault('resources', {}) and os.path.exists(mor_p):
+        with open(mor_p, encoding='utf-8') as f:
+            lv = strip_comments(f.read())[1].get('levels', [])
+        pts = [x.get('requiredPoints', 0) for x in lv]
+        if pts:
+            rules['resources']['morale'] = {'start': 0, 'capped': True, 'storage': max(pts), 'levels': [{'at': p} for p in pts]}
+    with open(rp, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(head + ['// playerAbilities: tools/importers/bunkerwars/skills/convert.py (every BW skill card, talent, campaign / map skill)']) + '\n')
+        json.dump(rules, f, ensure_ascii=False, indent=1)
+        f.write('\n')
+    meta_p = os.path.join(folder, 'bw', 'skills.json')
+    heroes_p = os.path.join(folder, 'bw', 'heroes.json')
+    cards, talents = [], []
+    if os.path.exists(meta_p):
+        with open(meta_p, encoding='utf-8') as f:
+            meta = strip_comments(f.read())[1].get('skills', [])
+        cards = [(x['id'], x.get('allowedSlot'), x.get('rarity')) for x in meta if x.get('kind') == 'card' and x.get('rarity') == 0]
+    if os.path.exists(heroes_p):
+        with open(heroes_p, encoding='utf-8') as f:
+            talents = [slug(h['talent']) for h in strip_comments(f.read())[1].get('heroes', []) if h.get('talent')]
+    ids = {a['id'] for a in out['playerAbilities']}
+    md = os.path.join(folder, 'maps')
+    for name in sorted(os.listdir(md)) if os.path.isdir(md) else []:
+        mp = os.path.join(md, name)
+        if not name.endswith('.json'):
+            continue
+        with open(mp, encoding='utf-8') as f:
+            mhead, m = strip_comments(f.read())
+        for i, pl in enumerate(m.get('players', [])):
+            if 'loadout' not in pl:
+                pl['loadout'] = default_loadout(None, cards, talents[i % len(talents)] if talents else '', ids)
+        with open(mp, 'w', encoding='utf-8') as f:
+            if mhead:
+                f.write('\n'.join(mhead) + '\n')
+            json.dump(m, f, ensure_ascii=False, indent=1)   # as tools/importers/bunkerwars/import.py write_json
+            f.write('\n')
+
+
 def all_modificator_classes(proj):
     out = []
     for name, c in proj.classes.items():
@@ -298,7 +461,7 @@ def write_report(path, proj, coverage, report, abilities):
     for cls in all_modificator_classes(proj):
         cov = coverage.get(cls)
         if cov:
-            live = sum(1 for s in cov['skills'] if not s.startswith('bw_legacy_'))
+            live = sum(1 for s in cov['skills'] if not s.startswith('legacy_'))
             used = f"{live} + {len(cov['skills']) - live} legacy" if live < len(cov['skills']) else str(live)
             rows.append(f"| {cls} | {cov['fidelity']} | {used} | {'; '.join(sorted(cov['notes']))[:300]} |")
         else:
@@ -316,15 +479,20 @@ def main(argv=None):
     ap.add_argument('--bw', required=True, help='Bunker Wars client checkout (folder with Client/Assets)')
     ap.add_argument('--out', required=True)
     ap.add_argument('--report')
-    ap.add_argument('--px-per-cell', type=float, default=50.0, help='BW world pixels per engine cell (default 50)')
-    ap.add_argument('--energy-resource', default='skillEnergy')
+    ap.add_argument('--px-per-cell', type=float, default=40.0, help='BW world pixels per engine cell (default 40, templates/bunkerwars)')
+    ap.add_argument('--energy-resource', default='energy')
+    ap.add_argument('--aspect', type=float, default=0.5, help='BW world.aspectRatio: skill ranges are ellipses (default 0.5)')
+    ap.add_argument('--template', help='merge the abilities, helper types and default loadouts into this game folder (templates/bunkerwars)')
     ap.add_argument('--morale-star-points', type=float, default=1.0)
     ap.add_argument('--legacy', action='store_true', help='also convert the deleted hero skills (Heroes_DELETE)')
     opts = ap.parse_args(argv)
+    ASPECT[0] = opts.aspect
     proj = open_project(os.path.expanduser(opts.bw))
     abilities, coverage, report = convert(proj, opts)
-    out = {'playerAbilities': abilities,
-           'bwSkills': {'pxPerCell': opts.px_per_cell, 'energyResource': opts.energy_resource, 'count': len(abilities)}}
+    out = {'playerAbilities': abilities, 'types': helper_types(abilities, opts),
+           'bwSkills': {'pxPerCell': opts.px_per_cell, 'energyResource': opts.energy_resource, 'aspect': opts.aspect, 'count': len(abilities)}}
+    if opts.template:
+        merge_template(opts.template, out)
     with open(opts.out, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     if opts.report:

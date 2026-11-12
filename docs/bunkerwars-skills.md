@@ -107,69 +107,69 @@ Regenerate: `convert.py --legacy --report coverage.md`.
 | modificator | fidelity | skills (live + legacy) | notes |
 |---|---|---|---|
 | HeroSpecial1 | unused | 0 | mapped, not used by the converted data |
-| PlayersAllMorale | approx | 1 | morale set to the cap for the duration (BW restores the saved points afterwards) |
+| PlayersAllMorale | approx | 1 | the previous morale is not restored when it ends |
 | PlayersAverageMorale | exact | 1 + 1 legacy |  |
 | PlayersCooldownChange | unused | 0 | mapped, not used by the converted data |
 | PlayersDespell | mapped | 0 + 1 legacy |  |
 | PlayersFreezeMana | mapped | 0 + 1 legacy |  |
 | PlayersFreezeMorale | exact | 1 |  |
-| PlayersIncreaseMorale | approx | 1 | morale stars as resource points (--morale-star-points per star) |
+| PlayersIncreaseMorale | approx | 1 | moraleCooldown (decay timer shift) not converted |
 | PlayersLowerCaughtDefense | unused | 0 | mapped, not used by the converted data |
 | PlayersNotifyAttacks | unused | 0 | mapped, not used by the converted data |
 | PlayersOwnerResetSkillStat | none | 2 | statistics / HUD only |
 | PlayersShowAmountCaught | unused | 0 | mapped, not used by the converted data |
-| PlayersSilence | approx | 1 | silences every slot (BW: only listed slots) |
+| PlayersSilence | exact | 1 |  |
 | PlayersStealSkill | exact | 1 + 1 legacy |  |
 | PlayersTemporaryIncreaseMorale | unused | 0 | mapped, not used by the converted data |
-| PointsAmulet | approx | 4 + 1 legacy | reverses walkers within reverseDistance of the structure (BW: only those heading for it; speed factor kept) |
+| PointsAmulet | approx | 4 + 1 legacy | reverseDistance is measured straight (BW: along the route) |
 | PointsAverageUnits | approx | 1 | per-player amount coefficients after averaging not applied |
 | PointsBarrier | approx | 0 + 1 legacy | wall across the lanes at the click: a "bw_barrier" unit with blocksLanes and hp = unitsCount |
 | PointsBomb | exact | 1 + 1 legacy |  |
-| PointsCastBuilding | approx | 1 + 2 legacy | transform to type "bw_same" (type names from the bunker wars data importer); transform to type "bw_tower1" (type names from the bunker wars data importer); transform to type "bw_tower2" (type names from the bunker wars data importer); transform to type "bw_tower3" (type names from the bunker wars da |
+| PointsCastBuilding | approx | 1 + 2 legacy | cast keeps the target level only (BW castToMaxInsteadMin / forceCastLevel / maxCastLevel); cast to the same kind at targetCastLevel as a +1 level for the duration |
 | PointsChargeTower | approx | 0 + 1 legacy | tower weapon range / damage up for the duration |
-| PointsChickenCoop | missing | 0 + 1 legacy | PointsChickenCoop: no generic primitive yet |
+| PointsChickenCoop | exact | 0 + 1 legacy |  |
 | PointsCloseRows | approx | 1 | BW closes rows of the next group sent from the structure; here: own groups in transit form up and speed up |
-| PointsDeadLock | mapped | 0 + 2 legacy |  |
+| PointsDeadLock | approx | 0 + 2 legacy | DeadLock as closing the groups of the point |
 | PointsDefector | mapped | 0 + 1 legacy |  |
 | PointsDefector2 | approx | 1 | production of the structure walks to the caster: redirect (sendUnitsPerSecond for towers/smithies ignored) |
 | PointsDefenseCalculation | none | 0 + 1 legacy | defense recalculation bookkeeping |
 | PointsDefenseCoefficient | exact | 3 |  |
 | PointsDisable | exact | 1 |  |
 | PointsDisableForPlayer | unused | 0 | mapped, not used by the converted data |
-| PointsEndGameOnCatch | missing | 0 + 1 legacy | PointsEndGameOnCatch: no generic primitive yet |
-| PointsEnhanceWeapon | approx | 1 | extra smithy (weapon) levels of produced units as a damage bonus per level |
+| PointsEndGameOnCatch | approx | 0 + 1 legacy | BW defeats the enemies of the local player; here the enemies of the skill owner |
+| PointsEnhanceWeapon | approx | 1 | extra smithy levels as the armory attack factor of that many levels without armories (BW adds them to the owned ones) |
 | PointsEvilSouls | approx | 0 + 1 legacy | souls variants converted as a souls collector |
 | PointsFastCapture | exact | 1 |  |
 | PointsFastConvert | approx | 1 | upgrade / conversion cost and time multipliers; chanceToUpgrade of neighbours not converted |
-| PointsFlyingUnits | mapped | 0 + 2 legacy |  |
+| PointsFlyingUnits | approx | 0 + 2 legacy | ignoredByTowers / ignoredBySkills not converted |
 | PointsFreeze | unused | 0 | mapped, not used by the converted data |
 | PointsFreezeWave | mapped | 0 + 1 legacy |  |
 | PointsGhostArmy | unused | 0 | mapped, not used by the converted data |
 | PointsGiveUnits | unused | 0 | mapped, not used by the converted data |
 | PointsHauntedHouse | unused | 0 | mapped, not used by the converted data |
-| PointsHypnosis | approx | 1 | the caster commands the structure for the duration (temporary capture) |
+| PointsHypnosis | exact | 1 |  |
 | PointsIllusionUnits | mapped | 0 + 1 legacy |  |
 | PointsIncreaseLevel | exact | 1 |  |
 | PointsIncreaseProduction | mapped | 0 + 1 legacy |  |
-| PointsInvulnerability | approx | 2 | BW keeps it while units arrive slower than unitsPerSecond; here: for the duration |
+| PointsInvulnerability | exact | 2 |  |
 | PointsKillContinuous | mapped | 0 + 1 legacy |  |
-| PointsKillLeavingUnits | approx | 1 | units leaving the structure die near it (BW: after delayToKill seconds, at most maximumUnitsToKill) |
+| PointsKillLeavingUnits | exact | 1 |  |
 | PointsKillUnitsPercent | unused | 0 | mapped, not used by the converted data |
 | PointsLanding | exact | 1 |  |
 | PointsMagnet | exact | 0 + 1 legacy |  |
 | PointsMakeStonedUnits | unused | 0 | mapped, not used by the converted data |
-| PointsManyBombs | approx | 2 | one bomb per chosen structure, dropped together (BW staggers drops over the duration) |
+| PointsManyBombs | exact | 2 |  |
 | PointsMapWind | mapped | 0 + 1 legacy |  |
-| PointsMoraleThief | approx | 1 | steals morale stars as resource points from the owner of the structure |
-| PointsPanic | mapped | 1 + 1 legacy |  |
-| PointsPlague | approx | 1 | infection chance of the carried plague not converted |
+| PointsMoraleThief | approx | 1 | the caster gets the stars together with the loss (BW: starFlyDuration s later, after the flight) |
+| PointsPanic | approx | 1 + 1 legacy | group attackCoefficient not converted |
+| PointsPlague | approx | 1 | BW lets a point be infected again only waveTimeout s after the last carrier entered |
 | PointsPossession | unused | 0 | mapped, not used by the converted data |
 | PointsProductionLimit | approx | 0 + 3 legacy | tutorial production cap: production stops for the duration |
 | PointsProductionSpeedCoefficient | exact | 5 + 2 legacy |  |
 | PointsReaver | approx | 0 + 1 legacy | tower weapon range / damage up for the duration |
 | PointsRecoverUnits | approx | 1 | refill toward a share of the maximum as a percent of the garrison |
 | PointsRecoverUnitsVisual | none | 1 | presentation of PointsRecoverUnits |
-| PointsRedirectProduction | mapped | 1 |  |
+| PointsRedirectProduction | exact | 1 |  |
 | PointsReplenishUnits | unused | 0 | mapped, not used by the converted data |
 | PointsResurrection | exact | 0 + 1 legacy |  |
 | PointsRevenge | mapped | 0 + 1 legacy |  |
@@ -177,16 +177,16 @@ Regenerate: `convert.py --legacy --report coverage.md`.
 | PointsShareUnits | mapped | 0 + 1 legacy |  |
 | PointsShortWay | approx | 0 + 1 legacy | portal at the click; the exit (BW: next to the chosen structure) is not resolved: units stay |
 | PointsShowAmount | unused | 0 | mapped, not used by the converted data |
-| PointsSkeletonArmy | approx | 1 + 1 legacy | army spawns next to the structure as "bw_skeleton" units of the caster and assaults it |
+| PointsSkeletonArmy | approx | 1 + 1 legacy | army as soldiers of the caster next to the point (BW skeleton skins, appear animation) |
 | PointsSoulsCollector | mapped | 0 + 1 legacy |  |
 | PointsSpeedArea | mapped | 0 + 1 legacy |  |
 | PointsSpiritedAway | unused | 0 | mapped, not used by the converted data |
-| PointsSpy | mapped | 1 |  |
+| PointsSpy | exact | 1 |  |
 | PointsStoneUnits | unused | 0 | mapped, not used by the converted data |
 | PointsStopTower | unused | 0 | mapped, not used by the converted data |
-| PointsSuppressDefense | approx | 1 | Lerp(defense, 1, s) as defense x (1 - s) |
-| PointsSwap | mapped | 1 |  |
-| PointsTeleport | approx | 1 | garrison units moved from the chosen structure to the caster's nearest structure (BW digs them along a route) |
+| PointsSuppressDefense | exact | 1 |  |
+| PointsSwap | approx | 1 | skills of the swapped points with deactivateOnSwap are not cancelled; lastCatchTick not swapped |
+| PointsTeleport | exact | 1 |  |
 | PointsTutorialLimitMoveFrom | unused | 0 | mapped, not used by the converted data |
 | PointsTutorialWaitCaught | unused | 0 | mapped, not used by the converted data |
 | PointsTutorialWaitConvertFinished | unused | 0 | mapped, not used by the converted data |
@@ -197,56 +197,76 @@ Regenerate: `convert.py --legacy --report coverage.md`.
 | PointsUnitsKill | unused | 0 | mapped, not used by the converted data |
 | PointsUpgrade | unused | 0 | mapped, not used by the converted data |
 | PointsVictim | mapped | 0 + 1 legacy |  |
-| PointsWarChains | mapped | 1 |  |
+| PointsWarChains | exact | 1 |  |
 | PointsWorm | approx | 0 + 1 legacy | worm: pulls walkers into the structure, then eats a share of its garrison |
-| PositionBlindTowers | mapped | 1 |  |
-| PositionFlyingTower | ref | 1 | flying tower: agent-bw-routes owns the mobile garrison; spawned as "bw_flying_tower" |
+| PositionBlindTowers | exact | 1 |  |
+| PositionFlyingTower | ref | 1 | flying tower type "ufo" (agent-bw-routes); its defense aura additionalDefenseCoefficient as a defense status |
 | PositionMines | mapped | 0 + 1 legacy |  |
 | PositionPlaceholder | unused | 0 | mapped, not used by the converted data |
 | UnitsAddSmithyLevel | mapped | 0 + 1 legacy |  |
 | UnitsAttackCoefficient | mapped | 0 + 1 legacy |  |
 | UnitsBetrayalGarden | mapped | 0 + 1 legacy |  |
-| UnitsBetrayalGarden2 | mapped | 1 |  |
+| UnitsBetrayalGarden2 | exact | 1 |  |
 | UnitsBlast | mapped | 0 + 2 legacy |  |
-| UnitsBlizzardRain | mapped | 2 |  |
+| UnitsBlizzardRain | exact | 2 |  |
 | UnitsChainLightning | mapped | 0 + 6 legacy |  |
 | UnitsCharge | approx | 0 + 1 legacy | charging units: speed burst |
 | UnitsClone | mapped | 0 + 1 legacy |  |
 | UnitsDeposit | mapped | 0 + 1 legacy |  |
 | UnitsDespell2 | mapped | 0 + 1 legacy |  |
 | UnitsDisarm | mapped | 0 + 1 legacy |  |
-| UnitsExploring | mapped | 1 |  |
-| UnitsFreeze | approx | 14 + 3 legacy | freeze duration 10.0..14.0 s as the mean |
+| UnitsExploring | exact | 1 |  |
+| UnitsFreeze | exact | 14 + 3 legacy |  |
 | UnitsGoHome | mapped | 0 + 1 legacy |  |
 | UnitsGravity | mapped | 0 + 1 legacy |  |
-| UnitsInvisibility | mapped | 1 |  |
+| UnitsInvisibility | exact | 1 |  |
 | UnitsJumpingHeads | exact | 0 + 1 legacy |  |
-| UnitsKill | mapped | 29 + 3 legacy |  |
-| UnitsKillAura | mapped | 1 |  |
+| UnitsKill | exact | 29 + 3 legacy |  |
+| UnitsKillAura | exact | 1 |  |
 | UnitsKillTrain | approx | 9 | train runs from the click along its direction killing on contact (environment object: agent-bw-env) |
 | UnitsMines | exact | 1 |  |
 | UnitsPetrify | exact | 0 + 1 legacy |  |
 | UnitsRage | exact | 1 |  |
-| UnitsReverse | mapped | 4 |  |
-| UnitsSacrifice | approx | 1 | own units in range die; the morale gained per unit is not converted |
+| UnitsReverse | exact | 4 |  |
+| UnitsSacrifice | approx | 1 | BW towers also skip their usual morale transfer for these units |
 | UnitsSandStorm | mapped | 0 + 1 legacy |  |
 | UnitsSlowdown | mapped | 0 + 1 legacy |  |
-| UnitsSlowdown2 | approx | 1 + 1 legacy | slowdown grows toward maxSlowdownCoefficient in BW; constant here |
-| UnitsSpeedCoefficient | mapped | 1 + 1 legacy |  |
+| UnitsSlowdown2 | exact | 1 + 1 legacy |  |
+| UnitsSpeedCoefficient | exact | 1 + 1 legacy |  |
 | UnitsSpeedInAreaCoefficient | mapped | 0 + 2 legacy |  |
 | UnitsThrowBack | mapped | 0 + 1 legacy |  |
-| UnitsTornado | approx | 2 + 1 legacy | tornado circles the point (BW: an expanding ellipse) |
+| UnitsTornado | exact | 2 + 1 legacy |  |
 | UnitsWormReverse | unused | 0 | mapped, not used by the converted data |
+
+## Skill notes
+
+- skill8: upgrade SkillSkinSound: presentation only (not converted)
+- campaignskill9001: upgrade SkillCameraShakePattern: presentation only (not converted)
+- campaignskill9002: upgrade SkillCameraShakePattern: presentation only (not converted)
+- campaignskill9003: upgrade SkillCameraShakePattern: presentation only (not converted)
+- campaignskill9005: upgrade SkillCameraShakePattern: presentation only (not converted)
+- hero1_talent: affectsOnlyFirstPlayerPoints: structures of the first matched player only (not converted)
+- hero2_talent: affectsOnlyFirstPlayerPoints: structures of the first matched player only (not converted)
 
 ## Gaps for 1:1
 
-- "mapped" rows still need a line-by-line check against the BW modificator code and a play test.
-- Approx rows need engine support: per-slot silence, plague infection chance, staggered bomb drops, BW morale
-  stars (levels with thresholds), Amulet / KillLeaving filters on units heading for / leaving a structure,
-  expanding tornado ellipse, filter range growing with `rangeVelocity`, Teleport's dig route, hypnosis as BW does it
-  (the hypnotised point's next group), chicken coop, end-game-on-catch, haunted house.
-- Modificator-level `executeFilter` (intersection with the element filter), `ignoreSkillFilter` and the filter
-  copiers are not applied; their filters are used only inside mappings that read them (bomb wave, blizzard, mines).
+Every modificator used by the live game is **exact** or **approx** (stage 2); "mapped" rows are legacy
+(Heroes_DELETE) skills only. Remaining approx rows of the live game and what they lack:
+
+- PlayersAllMorale: the saved morale is not restored when it ends. PlayersIncreaseMorale: `moraleCooldown`
+  (decay timer shift) not converted.
+- PointsAmulet: reverseDistance is measured straight (BW: along the route).
+- PointsAverageUnits, PointsCastBuilding (castToMaxInsteadMin / forceCastLevel / maxCastLevel), PointsCloseRows,
+  PointsDefector2 (tower / smithy sendUnitsPerSecond), PointsEnhanceWeapon (extra smithy levels on top of owned
+  armories), PointsFastConvert (chanceToUpgrade of neighbours), PointsRecoverUnits, PointsSabotage (neutral attackers
+  as direct loss), PointsSkeletonArmy (skins / appear animation): see the notes in the table.
+- PointsMoraleThief: the caster gets the stars together with the loss (BW: starFlyDuration s later).
+- PointsPanic: the group attackCoefficient and chanceToNeutral are not converted.
+- PointsPlague: re-infection after `waveTimeout` is not modelled.
+- PointsSwap: skills with `deactivateOnSwap` on the swapped points are not cancelled; lastCatchTick not swapped.
+- UnitsSacrifice: towers still transfer morale for sacrificed units (BW skips it).
+- UnitsKillTrain: environment object (agent-bw-env); UnitsAttack (units on routes fight) needs a weapon API for
+  route walkers from agent-bw-routes and is converted as a range bonus.
+- Points filter `affectsOnlyFirstPlayerPoints` (hero1 / hero2 talents) is not converted.
 - BW float arithmetic is reproduced in Q47.16; per-modificator RNG (C5Random seeded by tick) becomes the sim RNG.
-- AI use of skills (`AISkillAssistant` per skill type): agent-bw-ai; flying tower: agent-bw-routes;
-  environment skills (moving fire, trains, zones): agent-bw-env.
+- AI use of skills (`AISkillAssistant`): agent-bw-ai; flying tower: agent-bw-routes; environment skills: agent-bw-env.

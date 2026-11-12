@@ -149,7 +149,8 @@ namespace {
 constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
 // Version 5 adds projectile programs/weapon identity; version 4 remains readable.
 // Version 7 (agent-bw-skills): skill objects (Area goal / arrived / deaths, Pulled pool); 4..6 remain readable.
-constexpr uint32_t kSaveVersion = 7;
+// Version 8 (agent-bw-skills): effect budgets, transfers (Transfer pool), status groups, loadout slots.
+constexpr uint32_t kSaveVersion = 8;
 } // namespace
 void io(Archive& a, Command& c) { a(c.tick, c.player, c.flags, c.type, c.seq, c.units, c.target, c.point, c.param, c.args); }   // found by ADL
 void io(Archive& a, PlayerInfo& p) { a(p.slot, p.name, p.team, p.alive); }
