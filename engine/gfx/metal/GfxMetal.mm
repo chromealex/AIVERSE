@@ -33,6 +33,7 @@ struct MTBuffer {
     id<MTLBuffer> bufs[kFramesInFlight];
     int count = 1;          // 1 for immutable, kFramesInFlight for dynamic (one copy per frame in flight)
     size_t size = 0;
+    bool storage = false,snapshot = false;
     uint64_t updatedFrame = UINT64_MAX;
 };
 struct MTTexture { id<MTLTexture> tex; id<MTLSamplerState> sampler; PixelFormat fmt = PixelFormat::RGBA8; bool mips = false; };
@@ -100,21 +101,43 @@ public:
     BufferHandle createBuffer(const BufferDesc& d) override {
         MTBuffer b;
         b.size = d.size ? d.size : 16;
-        b.count = d.usage == Usage::Dynamic ? kFramesInFlight : 1;
+        b.snapshot = d.snapshotUpdates;
+        b.storage = d.type == BufferType::Storage;
+        b.count = !b.storage && d.usage == Usage::Dynamic ? kFramesInFlight : 1;
         for (int i = 0; i < b.count; ++i) {
             b.bufs[i] = d.data ? [device_ newBufferWithBytes:d.data length:b.size options:MTLResourceStorageModeShared]
                                : [device_ newBufferWithLength:b.size options:MTLResourceStorageModeShared];
         }
+        for(int i=0;i<b.count;++i)if(!b.bufs[i]){error_="buffer allocation failed";return {};}
         return {buffers_.add(b)};
     }
     id<MTLBuffer> current(MTBuffer& b) { return b.bufs[b.count == 1 ? 0 : int(frame_ % kFramesInFlight)]; }
     void updateBuffer(BufferHandle h, const void* data, size_t size, size_t offset) override {
         auto* b = buffers_.get(h.id);
         if (!b) return;
+        if (b->storage) {
+            if (!data || offset > b->size || size > b->size-offset || enc_ || compute_) return;
+            id<MTLBuffer> upload = [device_ newBufferWithBytes:data length:size options:MTLResourceStorageModeShared];
+            if(!upload){error_="storage upload allocation failed";gpuHealthy_->store(false);return;}
+            id<MTLCommandBuffer> cb = cmd_ ? cmd_ : [queue_ commandBuffer];
+            id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+            [blit copyFromBuffer:upload sourceOffset:0 toBuffer:b->bufs[0] destinationOffset:offset size:size];
+            [blit endEncoding];
+            if (!cmd_) [cb commit];
+            return;
+        }
         if (offset + size > b->size) {
             b->size = (offset + size) * 3 / 2;
             for (int i = 0; i < b->count; ++i) b->bufs[i] = [device_ newBufferWithLength:b->size options:MTLResourceStorageModeShared];
         }
+        if(b->snapshot && b->count>1 && b->updatedFrame==frame_){
+            // Multiple simulation ticks can be encoded before the GPU consumes the first.
+            int slot=int(frame_%kFramesInFlight);id<MTLBuffer> old=b->bufs[slot];
+            id<MTLBuffer> fresh=[device_ newBufferWithBytes:old.contents length:b->size options:MTLResourceStorageModeShared];
+            if(!fresh){error_="dynamic snapshot allocation failed";gpuHealthy_->store(false);return;}
+            b->bufs[slot]=fresh;
+        }
+        b->updatedFrame=frame_;
         if (b->count == 1 && frame_ > 0) {
             // Immutable buffer updated after creation: safest is a fresh allocation (GPU may still read the old one).
             id<MTLBuffer> nb = [device_ newBufferWithLength:b->size options:MTLResourceStorageModeShared];
@@ -124,6 +147,85 @@ public:
         memcpy(static_cast<uint8_t*>(current(*b).contents) + offset, data, size);
     }
     void destroyBuffer(BufferHandle h) override { buffers_.remove(h.id); }
+
+    bool supportsCompute() const override {
+        if (@available(macOS 10.14, iOS 12.0, *)) return true;
+        return false;
+    }
+    ComputeHandle createCompute(const ComputeDesc& d) override {
+        if (!supportsCompute() || !d.msl) return {};
+        NSError* err=nil; MTLCompileOptions* options=[MTLCompileOptions new];
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000
+        if (@available(macOS 15.0, iOS 18.0, *)) options.mathMode=MTLMathModeSafe;
+        else
+#endif
+        {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            options.fastMathEnabled=NO;
+#pragma clang diagnostic pop
+        }
+        id<MTLLibrary> lib=[device_ newLibraryWithSource:[NSString stringWithUTF8String:d.msl] options:options error:&err];
+        if (!lib) { error_=err.localizedDescription.UTF8String;return {}; }
+        id<MTLFunction> fn=[lib newFunctionWithName:@"cs_main"];
+        if(!fn){error_="compute entry cs_main is missing";return {};}
+        id<MTLComputePipelineState> state=[device_ newComputePipelineStateWithFunction:fn error:&err];
+        if (!state || state.maxTotalThreadsPerThreadgroup<64) { error_=err ? err.localizedDescription.UTF8String : "compute group size unsupported";return {}; }
+        return {computes_.add(state)};
+    }
+    void destroyCompute(ComputeHandle h) override { computes_.remove(h.id); }
+    bool beginCompute(ComputeHandle h) override {
+        auto* state=computes_.get(h.id);
+        if (!cmd_ || enc_ || compute_ || !state) return false;
+        compute_=[cmd_ computeCommandEncoder];[compute_ setComputePipelineState:*state];return compute_!=nil;
+    }
+    void setComputeBuffer(int slot,BufferHandle h) override {
+        if (auto* b=buffers_.get(h.id)) [compute_ setBuffer:current(*b) offset:0 atIndex:NSUInteger(slot)];
+    }
+    void setComputeTexture(int slot,TextureHandle h) override {
+        if (auto* t=textures_.get(h.id)) [compute_ setTexture:t->tex atIndex:NSUInteger(slot)];
+    }
+    void setComputeUniforms(const void* data,size_t size) override { if(size<=4096)[compute_ setBytes:data length:size atIndex:8]; }
+    void dispatch(uint32_t x,uint32_t y) override {
+        if (!compute_ || !x || !y) return;
+        [compute_ dispatchThreadgroups:MTLSizeMake((x+63)/64,y,1) threadsPerThreadgroup:MTLSizeMake(64,1,1)];
+        if (@available(macOS 10.14, iOS 12.0, *)) [compute_ memoryBarrierWithScope:MTLBarrierScopeBuffers|MTLBarrierScopeTextures];
+    }
+    void endCompute() override { if(compute_){[compute_ endEncoding];compute_=nil;} }
+    bool readBuffer(BufferHandle h,void* data,size_t size) override {
+        auto* b=buffers_.get(h.id);if(cmd_||!b||!data||size>b->size)return false;
+        id<MTLBuffer> dst=[device_ newBufferWithLength:size options:MTLResourceStorageModeShared];
+        if(!dst)return false;
+        id<MTLCommandBuffer> cb=[queue_ commandBuffer];id<MTLBlitCommandEncoder> blit=[cb blitCommandEncoder];
+        [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];
+        [cb commit];[cb waitUntilCompleted];if(cb.status==MTLCommandBufferStatusError)return false;
+        memcpy(data,dst.contents,size);return true;
+    }
+    struct BufferRead {std::vector<uint8_t> bytes;BufferReadFn callback;std::atomic<bool> ready{false};};
+    std::vector<std::shared_ptr<BufferRead>> bufferReads_;
+    bool readBufferAsync(BufferHandle h,size_t size,BufferReadFn callback) override {
+        auto* b=buffers_.get(h.id);
+        if(!cmd_||enc_||compute_||!b||!size||size>b->size||size>65536||!callback||bufferReads_.size()>=32)return false;
+        id<MTLBuffer> dst=[device_ newBufferWithLength:size options:MTLResourceStorageModeShared];if(!dst)return false;
+        auto read=std::make_shared<BufferRead>();read->bytes.resize(size);read->callback=std::move(callback);
+        id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];
+        [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> cb){
+            if(cb.status==MTLCommandBufferStatusError)read->bytes.clear();else memcpy(read->bytes.data(),dst.contents,size);
+            read->ready.store(true,std::memory_order_release);
+        }];
+        bufferReads_.push_back(std::move(read));return true;
+    }
+    void deliverBufferReads(){
+        // Move ready entries before callbacks, allowing callbacks to enqueue other work.
+        std::vector<std::shared_ptr<BufferRead>> ready;
+        for(auto it=bufferReads_.begin();it!=bufferReads_.end();){
+            if((*it)->ready.load(std::memory_order_acquire)){ready.push_back(*it);it=bufferReads_.erase(it);}else ++it;
+        }
+        for(auto& read:ready)read->callback(std::move(read->bytes));
+    }
+    bool gpuHealthy() const override { return gpuHealthy_->load(); }
+    double gpuFrameMs() const override { return gpuMs_->load(); }
 
     // ---------- textures ----------
     TextureHandle createTexture(const TextureDesc& d) override {
@@ -160,11 +262,12 @@ public:
         const bool mips = d.mipmaps && d.format != PixelFormat::Depth && d.format != PixelFormat::RGBA32F && !d.renderTarget;
         MTLTextureDescriptor* td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pf
             width:NSUInteger(d.width) height:NSUInteger(d.height) mipmapped:mips ? YES : NO];
-        td.usage = MTLTextureUsageShaderRead | (d.renderTarget || d.format == PixelFormat::Depth ? MTLTextureUsageRenderTarget : 0);
+        td.usage = MTLTextureUsageShaderRead | (d.storage ? MTLTextureUsageShaderWrite : 0) | (d.renderTarget || d.format == PixelFormat::Depth ? MTLTextureUsageRenderTarget : 0);
         if (d.format == PixelFormat::Depth) td.storageMode = MTLStorageModePrivate;
         MTTexture t;
         t.fmt = d.format;
         t.tex = [device_ newTextureWithDescriptor:td];
+        if(!t.tex){error_="texture allocation failed";return {};}
         if (d.data && d.format != PixelFormat::Depth) {
             int bpp = d.format == PixelFormat::R8 ? 1 : d.format == PixelFormat::RGBA32F ? 16 : 4;
             [t.tex replaceRegion:MTLRegionMake2D(0, 0, NSUInteger(d.width), NSUInteger(d.height)) mipmapLevel:0
@@ -312,6 +415,7 @@ public:
     void beginFrame(int w, int h) override {
         fbW_ = w; fbH_ = h;
         dispatch_semaphore_wait(frameSemaphore_, DISPATCH_TIME_FOREVER);
+        deliverBufferReads();
         deliverCapture(); // the previous frame's GPU work is done here
         ++frame_;
         layer_.drawableSize = CGSizeMake(w, h);
@@ -326,6 +430,11 @@ public:
         cmd_ = [queue_ commandBuffer];
         __block dispatch_semaphore_t sem = frameSemaphore_;
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer>) { dispatch_semaphore_signal(sem); }];
+        auto timing=gpuMs_;auto health=gpuHealthy_;
+        [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> completed) {
+            if(completed.status==MTLCommandBufferStatusError)health->store(false);
+            if(completed.status==MTLCommandBufferStatusCompleted)timing->store((completed.GPUEndTime-completed.GPUStartTime)*1000);
+        }];
         firstPass_ = true;
     }
     struct TimedCommand { uint64_t tag; id<MTLCommandBuffer> command; };
@@ -348,6 +457,7 @@ public:
         return out;
     }
     void endFrame() override {
+        endCompute();
         if (enc_) { [enc_ endEncoding]; enc_ = nil; }
         if (capture_ && drawable_ && captureDelay_-- <= 0 && !drawable_.texture.framebufferOnly) {
             // copy the finished frame into a shared buffer before presenting it
@@ -484,6 +594,10 @@ private:
     id<MTLCommandQueue> queue_;
     id<MTLCommandBuffer> cmd_;
     id<MTLRenderCommandEncoder> enc_;
+    id<MTLComputeCommandEncoder> compute_;
+    Pool<id<MTLComputePipelineState>> computes_;
+    std::shared_ptr<std::atomic<bool>> gpuHealthy_=std::make_shared<std::atomic<bool>>(true);
+    std::shared_ptr<std::atomic<double>> gpuMs_=std::make_shared<std::atomic<double>>(0);
     id<CAMetalDrawable> drawable_;
     id<MTLTexture> depth_;
     dispatch_semaphore_t frameSemaphore_;

@@ -18,8 +18,11 @@ void TemporalLod::step(std::span<Cloth> cloths,Batch& batch,Vec camera,const Env
     for(auto hint:hints)if(hint.level < -1||hint.level>3)return;
     ++tick_;
     states_.resize(cloths.size());steps_.resize(cloths.size());groupLevels_.assign(cloths.size(),3);groupForced_.assign(cloths.size(),0);counts_={};
+    for(size_t i=0;i<cloths.size();++i)if(states_[i].force)cloths[i].wake();
+    batch.prepareSleep(cloths,env,inputs);
     for(size_t i=0;i<cloths.size();++i){auto& state=states_[i];auto& cloth=cloths[i];steps_[i]=0;
-        if(!cloth.active||(enabled_&&!hints.empty()&&!hints[i].visible)){state.elapsed=0;state.force=false;continue;}
+        state.force=state.force||cloth.forceNext_;
+        if(cloth.sleeping_||!cloth.active||(enabled_&&!hints.empty()&&!hints[i].visible)){state.elapsed=0;state.force=false;continue;}
         auto& s=cloth.grid().settings;float distance=render::length(cloth.origin()+Vec{s.width/2,-s.height/2,0}-camera);
         if(!enabled_)state.level=0;
         else if(!hints.empty()&&hints[i].level>=0)state.level=unsigned(hints[i].level);
@@ -32,7 +35,7 @@ void TemporalLod::step(std::span<Cloth> cloths,Batch& batch,Vec camera,const Env
         steps_[i]=std::min(0.1f,float(state.elapsed)/60.0f);
     }
     if(!enabled_){
-        for(size_t i=0;i<cloths.size();++i)if(cloths[i].active){states_[i].elapsed=0;states_[i].force=false;++counts_[0];}
+        for(size_t i=0;i<cloths.size();++i)if(cloths[i].active&&!cloths[i].sleeping_){states_[i].elapsed=0;states_[i].force=false;++counts_[0];}
         batch.stepScheduled(cloths,steps_,env,inputs);return;
     }
     // Plan by exact state, current inputs and elapsed time before selecting the group's rate.

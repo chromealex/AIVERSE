@@ -13,13 +13,20 @@ public:
     ~Renderer(){shutdown();}
     bool init(gfx::Device& device,int objects,int physicalCells,int renderCells=71);
     void upload(std::span<const Cloth> cloths,std::span<const size_t> representatives={}); // once per frame, after beginFrame, before pass
+    void uploadGpu(std::span<const Cloth>,std::span<const size_t> representatives,gfx::TextureHandle positions);
     void draw(const render::mat4& viewProjection); // inside the render pass
     void shutdown(); // before device destruction
     size_t uploadBytes()const{return uploadBytes_;}
     uint32_t triangles()const{return indices_/3*uint32_t(objects_);}
 private:
+    bool reusable(std::span<const Cloth>,std::span<const size_t>,gfx::TextureHandle)const;
+    void remember(std::span<const Cloth>,std::span<const size_t>);
+    const Cloth* cachedCloths_=nullptr;
+    std::vector<size_t> cachedSources_;
+    std::vector<uint64_t> cachedStates_;
     gfx::Device* device_=nullptr;
     gfx::ShaderHandle shader_;
+    gfx::TextureHandle externalTexture_;
     gfx::PipelineHandle pipeline_;
     // Metal RHI allows at most three frames in flight; never overwrite a texture still in use.
     std::array<gfx::TextureHandle,3> textures_{},instances_{};

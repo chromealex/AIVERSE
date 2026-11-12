@@ -29,10 +29,24 @@ bool Renderer::init(gfx::Device& d,int objects,int physicalCells,int renderCells
     for(size_t i=0;i<textures_.size();++i)if(!textures_[i].valid()||!instances_[i].valid()){shutdown();return false;}
     return true;
 }
+bool Renderer::reusable(std::span<const Cloth> cloths,std::span<const size_t> sources,gfx::TextureHandle texture)const{
+    if(cachedCloths_!=cloths.data()||cachedSources_.size()!=cloths.size()||texture.id!=externalTexture_.id)return false;
+    for(size_t i=0;i<cloths.size();++i){auto& c=cloths[i];auto origin=c.origin();auto old=instanceData_[i];
+        if(cachedSources_[i]!=(sources.empty()?i:sources[i])||origin.x!=old.x||origin.y!=old.y||origin.z!=old.z)return false;
+        if(!texture.valid()&&(!c.sleeping()||!c.fingerprintValid_||cachedStates_[i]!=c.fingerprint_))return false;
+    }
+    return true;
+}
+void Renderer::remember(std::span<const Cloth> cloths,std::span<const size_t> sources){
+    cachedCloths_=cloths.data();cachedSources_.resize(cloths.size());cachedStates_.resize(cloths.size());
+    for(size_t i=0;i<cloths.size();++i){cachedSources_[i]=sources.empty()?i:sources[i];cachedStates_[i]=cloths[i].fingerprint_;}
+}
 void Renderer::upload(std::span<const Cloth> cloths,std::span<const size_t> representatives){
     if(!device_||cloths.size()!=size_t(objects_)||(!representatives.empty()&&representatives.size()!=cloths.size()))return;
     auto source=[&](size_t i){return representatives.empty()?i:representatives[i];};
     for(size_t i=0;i<cloths.size();++i)if(cloths[i].positions().size()!=size_t(n_*n_)||source(i)>=cloths.size()||source(source(i))!=source(i))return;
+    uploadBytes_=0;if(reusable(cloths,representatives,{}))return;
+    externalTexture_={};
     size_t groups=0;
     for(size_t i=0;i<cloths.size();++i)if(source(i)==i)tileFor_[i]=groups++;
     int rows=int((groups+size_t(columns_)-1)/size_t(columns_))*n_;
@@ -50,11 +64,20 @@ void Renderer::upload(std::span<const Cloth> cloths,std::span<const size_t> repr
     int uploadWidth=std::min(columns_,int(groups))*n_;
     device_->updateTexture(textures_[size_t(slot_)],0,0,uploadWidth,rows,pixels_.data(),width_*int(sizeof(pixels_[0])));
     device_->updateTexture(instances_[size_t(slot_)],0,0,objects_,1,instanceData_.data(),objects_*int(sizeof(instanceData_[0])));
-    uploadBytes_=size_t(uploadWidth*rows+objects_)*sizeof(render::float4);
+    uploadBytes_=size_t(uploadWidth*rows+objects_)*sizeof(render::float4);remember(cloths,representatives);
+}
+void Renderer::uploadGpu(std::span<const Cloth> cloths,std::span<const size_t> sources,gfx::TextureHandle positions){
+    if(!device_||!positions.valid()||cloths.size()!=size_t(objects_)||sources.size()!=cloths.size())return;
+    for(size_t i=0;i<cloths.size();++i)if(sources[i]>=cloths.size()||sources[sources[i]]!=sources[i])return;
+    uploadBytes_=0;if(reusable(cloths,sources,positions))return;
+    externalTexture_=positions;slot_=(slot_+1)%int(instances_.size());
+    for(size_t i=0;i<cloths.size();++i){auto origin=cloths[i].origin();instanceData_[i]={origin.x,origin.y,origin.z,float(sources[i])};}
+    device_->updateTexture(instances_[size_t(slot_)],0,0,objects_,1,instanceData_.data(),objects_*int(sizeof(instanceData_[0])));
+    uploadBytes_=instanceData_.size()*sizeof(instanceData_[0]);remember(cloths,sources);
 }
 void Renderer::draw(const render::mat4& vp){if(!device_)return;
     struct Uniforms {render::mat4 vp;render::float4 config;}u{vp,{float(n_),float(columns_),0,0}};
-    device_->setPipeline(pipeline_);device_->setVertexBuffer(vb_);device_->setIndexBuffer(ib_);device_->setTexture(0,textures_[size_t(slot_)]);device_->setTexture(1,instances_[size_t(slot_)]);device_->setUniforms(0,&u,sizeof(u));device_->drawIndexed(indices_,0,0,uint32_t(objects_));
+    device_->setPipeline(pipeline_);device_->setVertexBuffer(vb_);device_->setIndexBuffer(ib_);device_->setTexture(0,externalTexture_.valid()?externalTexture_:textures_[size_t(slot_)]);device_->setTexture(1,instances_[size_t(slot_)]);device_->setUniforms(0,&u,sizeof(u));device_->drawIndexed(indices_,0,0,uint32_t(objects_));
 }
 void Renderer::shutdown(){
     if(!device_)return;
@@ -62,7 +85,8 @@ void Renderer::shutdown(){
     for(auto t:textures_)device_->destroyTexture(t);
     for(auto t:instances_)device_->destroyTexture(t);
     device_->destroyBuffer(vb_);device_->destroyBuffer(ib_);device_=nullptr;
-    pipeline_={};shader_={};textures_={};instances_={};textureHeights_={};vb_={};ib_={};slot_=0;uploadBytes_=0;
+    pipeline_={};shader_={};externalTexture_={};textures_={};instances_={};textureHeights_={};vb_={};ib_={};slot_=0;uploadBytes_=0;
+    cachedCloths_=nullptr;cachedSources_.clear();cachedStates_.clear();
     pixels_.clear();instanceData_.clear();tileFor_.clear();
 }
 }

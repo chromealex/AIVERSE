@@ -982,6 +982,114 @@
         "libraries/include/aiverselib/genre/Data.h",
         "docs/genre-packages.md"
       ]
+    },
+    {
+      "id": "turn-scheduler",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/Turns.h",
+      "skill": "docs/ai-skills/rts-turn-scheduler/SKILL.md",
+      "summary": "Initiative, AP and nested reaction scheduling",
+      "notes": "Bounded runtime implementation; see docs/strategy-libraries.md for limits. Audit areas T1 are only partially addressed. Persist through strategy/Persistence.h in NativeState. Do not duplicate built-in owners.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "card-runtime",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/Cards.h",
+      "skill": "docs/ai-skills/rts-card-runtime/SKILL.md",
+      "summary": "Card zones, priority stack and private views",
+      "notes": "Bounded runtime implementation; see docs/strategy-libraries.md for limits. Audit areas K1,K2 are only partially addressed. Persist through strategy/Persistence.h in NativeState. Do not duplicate built-in owners.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "grid-puzzles",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/Puzzles.h",
+      "skill": "docs/ai-skills/rts-grid-puzzles/SKILL.md",
+      "summary": "Sokoban moves, undo/redo and bounded solver",
+      "notes": "Bounded runtime implementation; see docs/strategy-libraries.md for limits. Audit areas Q1,Q2 are only partially addressed. Persist through strategy/Persistence.h in NativeState. Do not duplicate built-in owners.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "big-numbers",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/BigNumber.h",
+      "skill": "docs/ai-skills/rts-big-numbers/SKILL.md",
+      "summary": "Exact bounded arbitrary-precision nonnegative integers",
+      "notes": "Bounded runtime implementation; see docs/strategy-libraries.md for limits. Audit areas I2 are only partially addressed. Persist through strategy/Persistence.h in NativeState. Do not duplicate built-in owners.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "offline-production",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/Offline.h",
+      "skill": "docs/ai-skills/rts-offline-production/SKILL.md",
+      "summary": "Exact fast-forward for affine production chains",
+      "notes": "Bounded runtime implementation; see docs/strategy-libraries.md for limits. Audit areas I1 are only partially addressed. Persist through strategy/Persistence.h in NativeState. Do not duplicate built-in owners.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "production-networks",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/Production.h",
+      "skill": "docs/ai-skills/rts-production-networks/SKILL.md",
+      "summary": "Atomic recipes and bounded one-hop transport",
+      "notes": "Bounded runtime implementation; see docs/strategy-libraries.md for limits. Audit areas C2 are only partially addressed. Persist through strategy/Persistence.h in NativeState. Do not duplicate built-in owners.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
     }
   ]
 }

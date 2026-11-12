@@ -1,6 +1,12 @@
 # Public header-only algorithms: usable by native project modules and standalone hosts.
 add_library(aiverse_libraries INTERFACE)
 add_library(AIVERSE::libraries ALIAS aiverse_libraries)
+
+# Pure policies use libraries; persistence additionally needs engine public headers only.
+add_library(aiverse_strategy_library INTERFACE)
+add_library(AIVERSE::strategy ALIAS aiverse_strategy_library)
+target_link_libraries(aiverse_strategy_library INTERFACE aiverse_libraries)
+target_include_directories(aiverse_strategy_library INTERFACE "${CMAKE_CURRENT_LIST_DIR}/..")
 target_compile_features(aiverse_libraries INTERFACE cxx_std_20)
 target_include_directories(aiverse_libraries INTERFACE "${CMAKE_CURRENT_LIST_DIR}/include")
 # Optional engine adapter includes native Command types. Pure gameplay headers remain standalone.

@@ -26,7 +26,7 @@ for count,share,groups in [(256,0,1),(256,1,1),(256,1,16),(256,1,256),(512,1,1),
         else:
             with tempfile.TemporaryDirectory(prefix='aiverse-cloth-sharing-') as tmp:
                 path=Path(tmp)/'report.json'
-                cmd=[str(a.binary),'--objects',str(count),'--cells','71','--workers','8','--frames',str(a.frames),'--warmup',str(a.warmup),'--share',str(share),'--wind-groups',str(groups),'--report',str(path),'--lod','0','--auto-lod','0']
+                cmd=[str(a.binary),'--objects',str(count),'--cells','71','--workers','8','--frames',str(a.frames),'--warmup',str(a.warmup),'--share',str(share),'--wind-groups',str(groups),'--report',str(path),'--lod','0','--auto-lod','0','--gpu','0']
                 result=subprocess.run(cmd,text=True,capture_output=True,env=env,timeout=300)
                 if result.returncode or not path.exists():raise RuntimeError(result.stdout+result.stderr)
                 row=json.loads(path.read_text())
