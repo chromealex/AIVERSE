@@ -35,14 +35,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
 from unity import unity_yaml as uy  # noqa: E402
 
-CACHE_VERSION = 's2.3'           # bump when the map / skills conversion changes (--cache)
+CACHE_VERSION = 's2.5'           # bump when the map / skills conversion changes (--cache)
 SCALE = 50                      # BW world units per cell (the routes, skills and AI ports use the same)
 DEFAULT_MAP = (2720, 1520)      # MultiscreenModule.mapSize
 TYPE_HOUSE, TYPE_TOWER, TYPE_SMITHY = 1, 2, 4
 POINT_TYPES = {1: 'house', 2: 'tower', 4: 'smithy', 8: 'special1', 16: 'domination', 32: 'kingofthehill', 64: 'cave',
                128: 'graveyard', 256: 'special2', 512: 'special3', 1024: 'special4', 2048: 'special5'}
 LEVELLED = ('house', 'tower', 'smithy')
-KIND_TAGS = {'kingofthehill': 'kingOfTheHill'}   # PointInfo.Type names the skills converter filters on
+KIND_TAGS = {'house': 'bunker'}   # structure tags the skills converter filters on (mapping.py POINT_TYPES)
 MODES = {1: 'conquest', 2: 'domination', 4: 'kingOfTheHill', 8: 'timeMod'}
 COMPLEXITY = ['easy', 'normal', 'hard', 'expert']   # MapPointsModule.complexityTypes (values[] index)
 
@@ -367,19 +367,25 @@ def kind_of(b):
     return POINT_TYPES.get(b.get('type'), 'type%s' % b.get('type'))
 
 
+LEVELLED_IDS = {'house': 'bunker', 'tower': 'tower', 'smithy': 'armory'}
+SPECIAL_IDS = {'domination': 'domination', 'kingofthehill': 'koh', 'cave': 'cave', 'graveyard': 'graveyard',
+               'special1': 'hospital', 'special2': 'storage', 'special3': 'megatower', 'special4': 'prison',
+               'special5': 'snowbunker'}
+
+
 def type_id(b):
-    """bw_<kind><level> for the levelled buildings (the names the BW skills converter writes: transform to
-    bw_tower2), bw_<kind> for the one-level special buildings."""
+    """bunker1..5, tower1..4, armory1 and the one-level special buildings: the names the skills converter
+    (tools/importers/bunkerwars/skills/mapping.py KIND_TYPE) transforms into."""
     kind = kind_of(b)
     if kind in LEVELLED:
-        return 'bw_%s%d' % (kind, int(b.get('level') or 1))
-    return 'bw_' + kind
+        return '%s%d' % (LEVELLED_IDS[kind], int(b.get('level') or 1))
+    return SPECIAL_IDS.get(kind, kind)
 
 
 def point_type(kind, level):
     if kind in LEVELLED:
-        return 'bw_%s%d' % (kind, level if kind != 'smithy' else 1)
-    return 'bw_' + kind
+        return '%s%d' % (LEVELLED_IDS[kind], level if kind != 'smithy' else 1)
+    return SPECIAL_IDS.get(kind, kind)
 
 
 def tag_of(kind):
@@ -405,9 +411,9 @@ def build_rules(src, races, race, battle, heroes, morale, lang):
         'view': {'shape': 'infantry', 'scale': 0.5}}
     types['soldier'] = soldier
     # SkeletonArmy (Skill30) spawns these at a structure: soldiers of the caster that never enter the soul cycle
-    types['bw_skeleton'] = dict(soldier, name='Скелет', tags=['soldier', 'skeleton'], view={'shape': 'infantry', 'scale': 0.5})
+    types['skeleton'] = dict(soldier, name='Скелет', tags=['soldier', 'skeleton'], view={'shape': 'infantry', 'scale': 0.5})
     lang['ru']['type.soldier'], lang['en']['type.soldier'] = 'Солдат', 'Soldier'
-    lang['ru']['type.bw_skeleton'], lang['en']['type.bw_skeleton'] = 'Скелет', 'Skeleton'
+    lang['ru']['type.skeleton'], lang['en']['type.skeleton'] = 'Скелет', 'Skeleton'
     smithies = sorted((b for b in blist if b.get('type') == TYPE_SMITHY), key=lambda b: b.get('level', 0))
     names = {'house': ('HUDScreen|BuildingMenu|Bunker|Description', 'Бункер', 'Bunker'),
              'tower': ('HUDScreen|BuildingMenu|Tower|Description', 'Вышка', 'Tower'),
@@ -795,8 +801,8 @@ def build_map(src, hp, header, players, ctx, warnings):
         if (p.get('caveGroup') if p.get('caveGroup') is not None else -1) >= 0:
             caves.setdefault(int(p['caveGroup']), []).append(i)
         if tid not in ctx['types']:
-            warnings.append('%s: point %d type %s has no engine type: placed as bw_house1' % (mname, i, tid))
-            e['type'] = 'bw_house1'
+            warnings.append('%s: point %d type %s has no engine type: placed as bunker1' % (mname, i, tid))
+            e['type'] = 'bunker1'
         ents.append(e)
         bwpoints.append({'index': i, 'type': kind, 'level': lvl, 'owner': owner, 'pos': e['pos'],
                          'linkedId': p.get('linkedId'), 'botPriority': p.get('botPriority'),
@@ -914,12 +920,21 @@ def build_map(src, hp, header, players, ctx, warnings):
         environment['weatherParams'] = ctx['weatherParams']
     if zones_env:
         environment['zones'] = zones_env
+    if environment.get('season') == 'winter':
+        # WinterModule: a snow grid from 0 (fresh) to 1 (trampled), + unitMoveForce per second under walkers; speed by
+        # the last row whose health >= the cell; snow restore lowers it (field resolution: one cell, BW gridSize 30 px)
+        environment['trample'] = [{'field': 'snow', 'perSecond': ctx['winter']['perSecond'], 'speed': ctx['winter']['speed'],
+                                   'snowRestore': True}]
+    if header.get('fogOfWar'):
+        fow = ctx['fow']
+        environment['fog'] = {'memory': False, 'startFowSize': fow.get('startFowSize', 3000)}
     if caves:
         environment['caves'] = [caves[k] for k in sorted(caves) if len(caves[k]) > 1]
         if not environment['caves']:
             environment.pop('caves')
     if environment:
         environment['scale'] = SCALE
+        environment['screenYAxis'] = -1          # BW screen y (up) is -z here
         m['environment'] = environment
     # computer player (agent-bw-ai): per-slot difficulty, per-map profiles, recorded debuts
     debuts = []
@@ -1147,11 +1162,11 @@ def run(source, out, cache_dir=None, skills=True):
     rules['matchModes'] = {
         'conquest': {},
         'domination': {'modes': {'domination': {'hold': num(common.get('dominationTimeout', 1.5)), 'rule': 'auto',
-                                                'type': type_id(domi) if domi else 'bw_domination',
+                                                'type': type_id(domi) if domi else 'domination',
                                                 'garrison': int(domi.get('maxValue') or 50)}}},
         'kingOfTheHill': {'modes': {'kingOfTheHill': {'score': 300, 'teamScore': 600,
                                                       'rate': num(common.get('kingOfTheHillScoreVelocity', 1)), 'alarm': 100,
-                                                      'type': type_id(koh) if koh else 'bw_kingofthehill',
+                                                      'type': type_id(koh) if koh else 'koh',
                                                       'garrison': int(koh.get('maxValue') or 50)}}},
         'timeMod': {'modes': {'timeLimit': {'seconds': num(common.get('timeModTimeout', 240)),
                                             'win': 'compare' if common.get('timeModWinCondition') else 'maxPoints',
@@ -1159,8 +1174,8 @@ def run(source, out, cache_dir=None, skills=True):
     rules['matchStats'] = True
     rules['ai'] = {'controller': 'bw', 'bw': {
         'difficulty': 'normal', 'mode': 'auto', 'pxPerCell': SCALE,
-        'roles': {'house': ['house'], 'tower': ['tower'], 'smithy': ['smithy']},
-        'objectives': {'domination': ['domination'], 'kingOfTheHill': ['kingOfTheHill']}}}
+        'roles': {'house': ['bunker'], 'tower': ['tower'], 'smithy': ['smithy']},
+        'objectives': {'domination': ['domination'], 'kingOfTheHill': ['kingofthehill']}}}
     wp = clean(battle.get('weather') or {})
     weather_params = {k: v for k, v in wp.items() if isinstance(v, (int, float)) and k not in
                       ('rainDropsTextureScale', 'maxRainParticles', 'grassRainBurnRandomFactor', 'maxSnowParticles',
@@ -1169,7 +1184,15 @@ def run(source, out, cache_dir=None, skills=True):
         r = wp.get(k)
         if isinstance(r, dict):
             weather_params[k] = [r.get('x', 0), r.get('y', 0)]
-    ctx = {'types': types, 'cards': cards, 'talents': talents, 'weatherParams': weather_params}
+    weather_params['blizzardVar'] = 'blizzard'       # read by the BW computer player (canMoveInBlizzard)
+    wn = battle.get('winter') or {}
+    ctx = {'types': types, 'cards': cards, 'talents': talents, 'weatherParams': weather_params,
+           'winter': {'perSecond': num(wn.get('unitMoveForce', 0.1)),
+                      'speed': [[num(r.get('health', 1)), num(r.get('speed', 1))] for r in wn.get('speed') or []]},
+           'fow': clean(battle.get('fow') or {})}
+    if True:
+        rules['fields'] = {'snow': {'type': 'fixed', 'default': 0, 'min': 0, 'max': 1, 'view': {'show': False}}}
+        rules['fogOfWar']['ellipse'] = 2           # BW sight ellipses (y x 2)
 
     log('rules + skills')
     data_paths = []
