@@ -17,6 +17,8 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 | cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
+| settlement-production | Colonist needs/mood bands/breaks, hour-block schedules, work preferences 1..4 with deterministic job assignment (lib::claim + per-stockpile reservations), recipes/bills at powered workstations, hauling, build/gather orders, disaster alerts with response jobs and preemption, power/fluid graphs with priority shedding + hysteresis, colony planner bot (see [Settlement and production](#settlement-and-production-settlement-production-010)) | Owner supplies alerts, gather availability, mood modifiers and positions/navigation; buildings/rendering/pathfinding stay with their owners. Instant factory links: production-networks. |
+| survival-ecology | Body model (core temperature from environment, clothing, shelter, heat; wetness; hunger/thirst/stamina; condition), weather modifiers, population ecosystems (logistic growth, K, predation, starvation, migration), animal wander/graze/flee/hunt/sleep from PerceivedTarget records, renewable resource nodes (see [Survival and ecology](#survival-and-ecology-survival-ecology-010)) | Owner supplies weather, shelter, clothing, eaten food/drink and perception; health/damage, inventory, grid fields (fire/heat) and navigation stay with their owners. |
 
 ## Native/host integration
 
@@ -856,3 +858,140 @@ nextCommandSeq, bindings)` once before `stepScene`. Cues become due at `tick + d
 Sequences at or below the last accepted one are ignored, so re-feeding a report after a restore never starts a scene
 twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
 (within this package's 72..79).
+
+## Settlement and production (settlement-production 0.1.0)
+
+Headers `genre/ColonyTypes.h` (definitions, state, commands, validation), `genre/ColonyRunner.h` (`stepColony`, setup
+helpers `colonyAddColonist/Stockpile/Workstation`, `colonySchedule`), `genre/ColonyPower.h` (`stepPower`, `powerAddNode`,
+`powerLink`, `powerComponents`), `genre/ColonyData.h` (JSON), `genre/ColonyConfigured.h` (`colony` settings),
+`genre/ColonyPersistence.h`, umbrella `genre/Colony.h`; bot `bots/ColonyPlanner.h` + `bots/ColonyPlannerData.h`.
+Target `AIVERSE::lib_settlement_production` (tasks, reservations, graphs, configuration, `aiverse_engine`); native OBJECT
+modules call `aiverse_native_use_libraries(target settlement-production)`. Skill: `skills/aiverse-settlement-production`.
+
+**Authority split.** Authoritative, saved and hashed: colonists (needs, mood, band, activity, job, schedule, priorities,
+skills), stockpiles with their reservation books, workstations and bills, jobs (lib::Task + progress), alerts, id
+counters and the last command sequence (`ColonyState`); the power/fluid graph with storage charge, powered flags and
+reconnect ticks (`PowerGridState`); the planner's cooldowns and command counter (`ColonyPlannerState`). Owner/host: positions,
+navigation and walking time (work amounts include it), building placement, rendering, the hazard simulation (fire in grid
+fields, floods, raiders), inventory of individual items. Integer only: needs and mood 0..100000 (mood ±100000), work in
+"ticks at 1000 speed", speeds in milli. Strictly increasing ticks; malformed owner input returns nullopt with the state
+untouched; invalid or stale player/bot commands are ignored and reported (`CommandIgnored`), never asserted.
+
+**Tick order (`stepColony`).** 1 commands in ascending seq (`SetPriority`, `SetSchedule`, `SetBill`, `ClearBill`,
+`OrderBuild`, `OrderGather`, `CancelJob`); 2 owner facts (incapacitation, alerts cleared then raised: a raise creates
+min(severity, maxResponseJobs) response jobs); 3 needs decay and restore by the current activity (`restores`: sleeping,
+leisure, working), NeedLow/NeedCritical/NeedRecovered events; mood = base + first matching mood step per need + active alert
+moods + owner modifiers, bands Breaking/Low/Content/High (MoodBand events); 4 activity per colonist in id order: eat when a
+meal need is at or below `lowAt` (one unit from the lowest-id stockpile with an unreserved unit, busy `ticks`; responders only
+when critical), mental break (Breaking, not before `calmUntil`), rest critical -> sleep anywhere, keep sleeping until
+`recoveredAt` outside work blocks, Sleep/Leisure blocks unless an `ignoreSchedule` alert applies to the colonist, otherwise
+work; 5 job generation: one open recipe job per billed workstation while the first output is below the target (0 = repeat),
+one open haul job per haul rule while `to` holds less than `keep`; 6 assignment: preemption by `preempt` alerts (response jobs
+only), then `lib::claim` per preference tier 1..4 over pending jobs with effective priority = base + sum of active alert
+priorities for the work type, ties by lowest job id; recipe/build inputs are reserved on claim (`systems::reserve`, ticket =
+job id, owner = colonist), haul jobs shrink to the unreserved stock; 7 work: progress += skill * band speed / 1000, recipe jobs
+at unpowered workstations (`input.unpowered`) and outputs that do not fit the stockpile capacity block (`JobBlocked`);
+completion commits the reservation and emits Produced / Hauled / Built (new structure id, workstation created when the
+blueprint has a workstation type) / Gathered (clamped to `gatherAvailable[node]` minus what this tick already took) /
+AlertWorked; an alert whose response jobs are all done is resolved (AlertResolved).
+
+**Power and fluids (`stepPower`).** Nodes have a medium (1 power, 2 water, ...); links only join equal media; each connected
+component (breadth-first over a `lib::Graph`, components ordered by lowest node id) balances alone. Supply = producer
+output scaled by `PowerInput::outputMilli` (weather: `SurvivalWeatherEffects::windPowerMilli/solarMilli`, fuel); storage adds
+up to `min(charge, rate)`; consumers are kept in (priority desc, id asc) order while they fit, later smaller consumers still
+fit (skip-fit); a consumer that loses power stays off for `restoreDelayTicks` (hysteresis; Shed/Restored events). Shortage is
+drawn from storage in id order, surplus charges it in id order (StorageEmpty/StorageFull). `PowerReport::unpowered` feeds
+`ColonyInput::unpowered`; cross-medium coupling (a pump consuming power to produce water) is owner wiring through
+`outputMilli`, as the example shows.
+
+**Planner bot.** `bots::planColony(config, defs, colony, facts, state, tick)` runs once per `intervalTicks`, evaluates rules
+in (priority desc, id asc), each with AND-ed conditions over metrics (`stockPerColonist`, `stock`, `powerDeficit`,
+`coldColonists`, `needLow`, `structures`, `openJobs`, `alerts`, `colonists`, `custom`) and an action: `build` (affordable,
+at most `maxOpen` open), `bill` (lowest idle workstation of the recipe's type), `gather` (owner gather option with most
+available, lowest node id), `priority` (all colonists that differ). At most `maxCommands` commands, per-rule cooldowns, no RNG.
+Output = `ColonyCommand`s with the bot's own increasing seq, passed to `stepColony` exactly like player input.
+
+**Data and settings.** `readColonyDefinitions(json, colonyConfig(settings))`, `readPowerGrid(json)`,
+`bots::readColonyPlanner(json, defs)`: unknown keys, fractions, out-of-range integers, duplicate ids and unknown references
+throw `JsonError` with index paths (`colony.recipes[0].outputs[1][0]: duplicate id 1`) or id paths
+(`colony.recipe 5.workType: unknown work type 9`, `planner.rule 1: unknown blueprint or missing stockpile`). Optional `colony`
+settings section (configuration 0.3.5): `ticksPerHour`, `moodBase`, `moodBreakAt` < `moodLowAt` < `moodHighAt`
+(`colonySettingsErrors`), `breakTicks`, `lowSpeedMilli`, `contentSpeedMilli`, `highSpeedMilli`, `maxResponseJobs`.
+
+**State.** Record kinds 104..111 are reserved for settlement-production + survival-ecology: `ColonyState` 104,
+`PowerGridState` 105, `bots::ColonyPlannerState` 110 (survival-ecology uses 106..109, 111 is free). Records are canonical and
+validated on load (references between jobs, colonists, reservations and stockpiles included). Hash with `colonyHash`,
+`powerHash`, `bots::colonyPlannerHash`; bind `colonyDefsHash(defs)` in the save envelope.
+
+## Survival and ecology (survival-ecology 0.1.0)
+
+Headers `genre/Survival.h` (body model, `survivalWeatherEffects`, `survivalMood`), `genre/Ecology.h` (populations),
+`genre/EcologyAnimals.h` (behavior), `genre/EcologyResources.h` (renewal), `genre/EcologyData.h` (JSON),
+`genre/SurvivalConfigured.h` (`survival` settings), `genre/SurvivalPersistence.h`, umbrella `genre/SurvivalEcology.h`.
+Target `AIVERSE::lib_survival_ecology` (stealth-senses for `PerceivedTarget`, configuration, `aiverse_engine`); native OBJECT
+modules call `aiverse_native_use_libraries(target survival-ecology)`. Skill: `skills/aiverse-survival-ecology`.
+
+**Body model (`stepSurvival`).** Per body and tick: wetness (water sets it to full; precipitation on exposed bodies times
+(1 - waterproof); drying by `dryPerTick` plus warmth above comfort); felt temperature = air, shelter pulls it toward
+`shelterMilli` by `shelterInsulationMilli` (no wind/rain inside), wind chill times (1 - windproof) outside, wetness chill,
+plus heat sources; the core (micro-degrees) cools by `coolingMicro` per milli-degree below the comfort band times
+(1 - insulation), heats above it (insulation makes heat worse) and drifts back to normal inside it (half speed when unfed);
+exertion adds heat. Hunger decays faster with exertion and shivering, thirst with heat; stamina drains with exertion,
+regenerates idle (double resting, halved when hungry/thirsty, zero when starving) and is capped by hunger. Condition takes
+starvation/dehydration/severe cold/heat damage and regenerates when fine; 0 -> Died (body frozen). Status bits Cold,
+Freezing, Hot, Overheating, Hungry, Starving, Thirsty, Dehydrated, Exhausted, Wet, Soaked emit StatusOn/StatusOff.
+`survivalMood(body)` converts discomfort into a colony mood modifier. Projects whose colony/inventory owns hunger set
+`survival.hungerPerTick` 0 (the example does). Food/drink actually consumed comes from the inventory owner as `eatHunger` /
+`eatThirst`; the health/damage owner may mirror condition instead of using it directly.
+
+**Weather.** `survivalWeatherEffects(config, SurvivalWeather{temperature, wind, precipitation, sun})` returns ambient, wind
+chill, wetting rate, `solarMilli`/`windPowerMilli` (power producer factors), `growthMilli` (0 outside the growth band,
+peak at `growBestMilli`, rain bonus) and `activityMilli` (storms/rain slow animals). Weather state itself is the owner's.
+
+**Ecosystems (`stepEcology`).** Populations per (region, species). Harvests apply on arrival (clamped). On ticks divisible by
+`periodTicks`: births/deaths from logistic growth r*N*(K-N)/K (ratio clamped to ±1, herbivore growth scaled by
+`growthMilli`, K scaled per region by `capacityMilli`), base mortality, predation attack*Npred*Nprey/(Nprey+half) with prey
+shared in predator id order, predator births = eaten * conversion, starvation when eaten < need, then migration of
+`migrateMilli` of the excess over K to neighbours (even split, remainder to lower ids, Arrived events). Fractions are carried
+in per-population milli accumulators; optional `noiseMilli` birth noise draws from the passed `Random`. Extinct events.
+
+**Animals (`stepEcologyAnimals`).** Per animal (id order) from this tick's `PerceivedTarget` records (observer = animal) and
+owner facts (`species` 0 = humans): flee the nearest feared target within `fleeDistance` (keep running `fleeCalmTicks`), sleep
+in the hour window or when exhausted, hunt the nearest visible prey when hungry (gives up after `huntGiveUpTicks`, cooldown),
+graze while hungry and the region has vegetation, else wander to RNG goals around home. Kinematic XZ movement clamped to
+bounds; `poses` let the collision owner correct positions. Events Behavior, Killed (prey removed if it is an animal of this
+state), Grazed, Starved; the owner routes kills/grazing to `EcologyInput::harvests` / renewal nodes.
+
+**Renewal (`stepEcologyResources`).** Harvests sorted by (node, requester) and clamped; depletion starts `regrowDelayTicks`;
+regrowth every `periodTicks` by `regrowPerPeriod` times weather/region growth (milli carry). Events Harvested, Depleted,
+Regrowing, Full.
+
+**Data and settings.** `readEcologyDefinitions`, `readEcologyAnimals` (speeds/distances in milli-metres),
+`readEcologyResources`; errors `ecology.species 1.diet: ...`, `ecology.species[0]: unknown key 'speed'`,
+`resources[0].amount: must be in 0..5`. Optional `survival` settings section (configuration 0.3.5): core/comfort/cold/hot
+thresholds (cross-checked by `survivalSettingsErrors`), cooling/heating/recovery rates, hunger/thirst/stamina rates,
+`lowAt`, wetness chill/drying, damage/regeneration, `windChillMilli`, `wetPerTick`.
+
+**State.** `SurvivalState` 106, `EcologyState` 107, `EcologyAnimalState` 108, `EcologyResourceState` 109 via
+`genre::save/load`; `survivalHash`; bind `survivalConfigHash`, `ecologyDefsHash`, `ecologyAnimalDefsHash`. Save the RNG
+(`Random::state/inc`) with the simulation.
+
+**Executable example.** `examples/libraries/genre/production-survival` (`colony.json`, `power.json`, `ecology.json`,
+`planner.json`, `settings.json`, `production_survival.cpp`, CTest `library_production_survival_example`): 10 colonists with two
+sleep shifts and individual work preferences survive 20 days (24000 ticks at 50 ticks/hour) of cooling autumn weather with
+rain and wind; the planner sets cooking bills, gathers berries and wood, enables hunting when raw food runs low, builds two
+wood generators after night-time brownouts and a second kitchen; a fire on day 8 knocks out the heater until responders
+put it out; a pump couples the power grid to the water graph the colonists drink from; deer and wolves live in two regions
+(population model) and as individual animals that flee colonists and wolves or hunt deer. The run checks: all 10 alive,
+average condition >= 50%, fire resolved, >= 60 meals cooked, deer and wolves extant, a generator built, planner active; it is
+then repeated and rerun with a save/load of every record at day 10, all three must give the same hash. Reference output
+(g++ 11, Linux VM): alive 10, 144 meals, fire 10100 -> resolved 10159 (6 response jobs), 2 generators, 2 kitchens, 171 shed
+events, deer 56 / wolves 14 (25 hunted by colonists, 9 killed by wolf agents), 128 planner commands, final hash
+`f94e6eee34f3619f` (identical across both runs and the restored run). The native consumer
+`examples/native/libraries/ProductionSurvivalConsumer.cpp` runs two ticks of the same owner order and stores the records.
+
+Verified only with g++ 11 (Linux VM): all headers individually (`-Wall -Wextra -Werror -pedantic`; the new headers are also
+clean without `-Wno-misleading-indentation`) and all genre/bots headers together; `genre_production_survival_tests.cpp` and the
+example built by hand and run, also under ASan/UBSan; the native consumer function in a standalone driver; GenreConsumer.cpp
+syntax. Not run: CMake/ctest (no cmake in the VM), isolation tests, native module export, headless restore matches,
+clang/MSVC.

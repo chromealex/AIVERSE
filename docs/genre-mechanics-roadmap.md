@@ -9,6 +9,10 @@ Narrative and social scenes: relationships, knowledge, consequences, cue request
 Physical interaction: kinematic carry/throw, push/pull, ropes, doors, moving platforms and breakables are the
 `physical-interactions` package ([genre-packages.md](genre-packages.md#physical-interactions-physical-interactions-010));
 those policies are authoritative and Box3D stays presentation-only for them.
+Settlement/production and survival/ecology: needs, schedules, jobs, recipes, hauling, power/fluid graphs, disasters and a colony
+planner bot are `settlement-production`; body model, weather modifiers, ecosystems, animal behavior and resource renewal are
+`survival-ecology` ([genre-packages.md](genre-packages.md#settlement-and-production-settlement-production-010)), with the executable
+20-day example `examples/libraries/genre/production-survival`.
 Audit each area against the current engine modules and libraries/catalog.json before implementing.
 The engine is expanding across genres; shared mechanics should have one owner and genre presets.
 Existing attributes, statuses, abilities, inventory, progression, interactions, meta economy,
