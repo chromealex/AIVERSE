@@ -218,7 +218,8 @@ void GameClient::topDownPresent(double dt, float alpha) {
     for (auto& o : scene_.objects) {
         if (!o.entity.valid() || !w.alive(o.entity)) continue;
         const bool local = o.entity == hero;
-        if (!local && !(w.get<Unit>(o.entity).flags & kUnitPossessed) && !td->isFollower(*sim_, o.entity)) continue;
+        const Unit* ou = w.tryGet<Unit>(o.entity);   // scene objects also hold projectiles / pickups
+        if (!local && !(ou && (ou->flags & kUnitPossessed)) && !(ou && td->isFollower(*sim_, o.entity))) continue;
         float dx, dz;
         tdPredict_.offset(o.entity.packed(), local, dx, dz);
         o.pos.x += dx; o.pos.z += dz;
