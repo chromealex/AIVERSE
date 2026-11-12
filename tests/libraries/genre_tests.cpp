@@ -482,4 +482,218 @@ void weaponData(const std::string& root){
     r=settings(R"({"schemaVersion":1,"charge":{"minTicks":10,"maxTicks":11,"tiers":5}})");CHECK(r.value&&weaponSettingsErrors(*r.value).at(0)=="charge.tiers: maxTicks - minTicks must be at least tiers - 1");
 }
 void weaponBallistics(const std::string& root){weaponPenetration(root);weaponExplosions();weaponFeeds();weaponCharge();weaponAttachments(root);weaponAiming();weaponRestore();weaponData(root);}
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, projectiles, rounds/capture, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// Match objective modes: zones/KotH, payload, elimination, extraction, bomb, route, clock, spectator,
+// scoring through the match owner, save/restore mid-match and invalid data.
+#include <aiverselib/genre/MatchObjectivesConfigured.h>
+#include <aiverselib/genre/MatchObjectivesData.h>
+namespace objectives {
+using K=ObjectiveEventKind;
+template<class F> ObjectiveEvents ok(F&& f){auto r=f();CHECK(r);return *r;}
+bool has(const ObjectiveEvents& e,K kind,int64_t team=-1,int64_t subject=-1){for(const auto& x:e)if(x.kind==kind&&(team<0||x.team==team)&&(subject<0||x.subject==subject))return true;return false;}
+void zones(){
+    ZoneConfig c;c.captureTicks=3;ZoneState s;
+    auto step=[&](const ZoneConfig& cfg,ZoneState& st,Occupants o,uint32_t t){return ok([&]{return stepZone(cfg,st,7,o,t);});};
+    CHECK(step(c,s,{{1,1}},0).empty()&&s.capturer==1&&s.progress==1);
+    auto e=step(c,s,{{1,1},{2,1}},1);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::ZoneContested,0,7,2})&&s.progress==1&&s.contested);
+    CHECK(step(c,s,{},2).empty()&&s.progress==0&&s.capturer==0&&!s.contested);
+    step(c,s,{{1,1}},3);step(c,s,{{1,1}},4);e=step(c,s,{{1,1}},5);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::ZoneCaptured,1,7,0})&&s.owner==1&&!s.progress);
+    step(c,s,{{2,2}},6);CHECK(s.capturer==2&&s.progress==1);step(c,s,{{1,1}},7);CHECK(s.capturer==0&&s.progress==0&&s.owner==1);  // owner reverts
+    auto before=save(s);CHECK(!stepZone(c,s,7,{{1,1}},7)&&!stepZone(c,s,7,{{0,1}},8)&&save(s)==before);roundtrip(s);
+    // Neutralize first, then capture.
+    ZoneConfig n;n.captureTicks=2;n.neutralizeFirst=true;ZoneState owned;owned.owner=1;
+    step(n,owned,{{2,1}},0);e=step(n,owned,{{2,1}},1);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::ZoneNeutralized,2,7,1})&&owned.owner==0);
+    step(n,owned,{{2,1}},2);e=step(n,owned,{{2,1}},3);CHECK(has(e,K::ZoneCaptured,2)&&owned.owner==2);
+    // Majority contest with a capture-rate cap.
+    ZoneConfig m;m.captureTicks=6;m.maxCapturers=4;m.contest=ContestRule::Majority;ZoneState ms;
+    step(m,ms,{{1,3},{2,1}},0);CHECK(ms.progress==2&&ms.contested);step(m,ms,{{1,2},{2,2}},1);CHECK(ms.progress==2);
+    e=step(m,ms,{{1,4}},2);CHECK(has(e,K::ZoneCaptured,1)&&ms.owner==1);
+    // Another team drains existing progress before building its own.
+    ZoneConfig d;d.captureTicks=10;d.maxCapturers=2;ZoneState ds;step(d,ds,{{1,2}},0);CHECK(ds.progress==2);
+    step(d,ds,{{2,1}},1);CHECK(ds.capturer==1&&ds.progress==1);step(d,ds,{{2,1}},2);CHECK(!ds.capturer&&!ds.progress);step(d,ds,{{2,1}},3);CHECK(ds.capturer==2&&ds.progress==1);
+    // King of the hill: score every 3 controlled ticks; contested or empty ticks do not count.
+    auto koth=kingOfTheHill(2,3);ZoneState h;int holds=0;
+    const Occupants plan[]={{{1,1}},{{1,1}},{{1,1}},{{1,1}},{{1,1},{2,1}},{},{{1,1}},{{1,1}}};
+    for(uint32_t t=0;t<8;++t){e=step(koth,h,plan[t],t);if(has(e,K::ZoneHoldTick,1))++holds;}
+    CHECK(h.owner==1&&holds==1&&h.holdTicks==2);  // capture tick + 2, then contested/empty, then 2 more
+    koth.holdRequiresPresence=false;ZoneState own;own.owner=1;holds=0;for(uint32_t t=0;t<6;++t)holds+=has(step(koth,own,{},t),K::ZoneHoldTick);CHECK(holds==2);
+    HillRotation r{100,3};CHECK(activeHill(r,10,10)==0u&&activeHill(r,10,109)==0u&&activeHill(r,10,110)==1u&&activeHill(r,10,310)==0u&&!activeHill(r,10,9)&&!activeHill({0,0},0,0));
+    ZoneConfig bad=c;bad.decayPerTick=4;CHECK(!valid(bad)&&!stepZone(bad,s,7,{},50));
+}
+PayloadTrack track(){auto t=makePayloadTrack({{},{10_fx,{},{}},{10_fx,{},10_fx}},{10_fx});CHECK(t);return *t;}
+PayloadConfig payloadRules(){PayloadConfig c;c.pushSpeed=1_fx;c.extraPusher=Fixed::fromRatio(1,2);c.reverseSpeed=Fixed::fromRatio(1,4);c.maxPushers=2;c.reverseDelayTicks=2;c.checkpointBonusTicks=100;return c;}
+void payload(){
+    auto t=track();auto c=payloadRules();auto s=makePayload(1);CHECK(t.length==20_fx&&*payloadPoint(t,15_fx)==(Vec3{10_fx,{},5_fx}));
+    auto step=[&](PayloadState& st,uint32_t a,uint32_t d,uint32_t tick){return ok([&]{return stepPayload(c,t,st,a,d,tick);});};
+    step(s,1,0,0);CHECK(s.progress==1_fx);step(s,3,0,1);CHECK(s.progress==Fixed::fromRatio(5,2));
+    step(s,1,1,2);CHECK(s.contested&&s.progress==Fixed::fromRatio(5,2));step(s,0,0,3);CHECK(s.progress==Fixed::fromRatio(5,2));
+    step(s,0,0,4);CHECK(s.progress==Fixed::fromRatio(9,4));
+    ObjectiveEvents e;for(uint32_t tick=5;tick<=10;++tick)e=step(s,2,0,tick);
+    CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::PayloadCheckpoint,1,1,100})&&s.reached==1&&s.progress==Fixed::fromRatio(45,4));
+    auto mid=save(s);
+    for(uint32_t tick=11;tick<=30;++tick)step(s,0,0,tick);CHECK(s.progress==10_fx);  // locked at the checkpoint
+    for(uint32_t tick=31;tick<=37;++tick)e=step(s,2,0,tick);CHECK(s.delivered&&s.progress==20_fx&&has(e,K::PayloadDelivered,1));
+    CHECK(step(s,2,0,38).empty());roundtrip(s);
+    PayloadState restored;CHECK(load(mid,restored)&&restored.progress==Fixed::fromRatio(45,4));
+    c.checkpointLock=false;for(uint32_t tick=11;tick<=80;++tick)step(restored,0,0,tick);CHECK(restored.progress==Fixed{});
+    CHECK(!stepPayload(c,t,restored,1,0,80)&&!makePayloadTrack({{},{}},{})&&!makePayloadTrack({{},{1_fx,{},{}}},{1_fx}));
+    auto broken=t;broken.length=19_fx;CHECK(!valid(broken)&&!stepPayload(c,broken,restored,1,0,81));
+}
+void elimination(){
+    EliminationConfig c{2,5,10,false};const std::array<std::pair<int64_t,int64_t>,3> roster{{{1,1},{2,1},{3,2}}};
+    auto s=makeElimination(c,roster);CHECK(s);
+    auto step=[&](std::vector<int64_t> d,uint32_t t){return ok([&]{return stepElimination(c,*s,t,d);});};
+    CHECK(step({},0).empty());auto e=step({1},3);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::PlayerDied,1,1,1})&&s->players.at(1).respawnAt==10);
+    CHECK(step({},9).empty());e=step({},10);CHECK(e.size()==1&&e[0].kind==K::PlayerRespawned&&s->players.at(1).alive);
+    e=step({1},12);CHECK(has(e,K::PlayerOutOfLives,1,1)&&s->players.at(1).out);
+    step({3},13);step({2},14);CHECK(s->players.at(3).respawnAt==20&&s->players.at(2).respawnAt==20&&s->eliminated.empty());
+    auto before=save(*s);CHECK(!stepElimination(c,*s,15,std::vector<int64_t>{1})&&!stepElimination(c,*s,15,std::vector<int64_t>{4})&&!stepElimination(c,*s,14,std::vector<int64_t>{})&&save(*s)==before);
+    e=step({},20);CHECK(e.size()==2&&e[0].subject==2&&e[1].subject==3);roundtrip(*s);
+    e=step({3,2},21);CHECK(has(e,K::TeamEliminated,1)&&has(e,K::TeamEliminated,2)&&has(e,K::LastTeamStanding,0)&&s->lastStanding==-1);
+    EliminationConfig once{1,0,0,false};auto classic=makeElimination(once,roster);e=*stepElimination(once,*classic,0,std::vector<int64_t>{3});
+    CHECK(has(e,K::TeamEliminated,2)&&has(e,K::LastTeamStanding,1)&&classic->lastStanding==1);
+    CHECK(stepElimination(once,*classic,1,std::vector<int64_t>{1})->size()==2);  // died + out; team 1 still has player 2
+    EliminationConfig wipe{0,300,0,true};const std::array<std::pair<int64_t,int64_t>,3> r2{{{1,1},{2,2},{3,2}}};auto w=makeElimination(wipe,r2);
+    e=*stepElimination(wipe,*w,0,std::vector<int64_t>{3,2,});CHECK(has(e,K::TeamEliminated,2)&&w->lastStanding==1&&w->players.at(2).out);
+    CHECK(!stepElimination(wipe,*w,1,std::vector<int64_t>{1,1}));
+    const std::array<std::pair<int64_t,int64_t>,2> oneTeam{{{1,1},{2,1}}};CHECK(!makeElimination(c,oneTeam));
+}
+void extraction(){
+    ExtractionConfig c{3,1,2,true,true};ExtractionState s;
+    auto step=[&](std::vector<Extractor> in,uint32_t t){return ok([&]{return stepExtraction(c,s,t,in);});};
+    const Extractor a{10,1,1},b{11,1,0},enemy{20,2,0};
+    step({a},0);step({a},1);CHECK(s.progress.empty());  // zone opens at tick 2
+    step({a,b},2);CHECK(s.progress.size()==1&&s.progress.at(10)==1);
+    step({a,enemy},3);CHECK(s.progress.at(10)==1);step({a},4);CHECK(s.progress.at(10)==2);step({},5);CHECK(s.progress.empty());
+    step({a},6);auto mid=save(s);step({a},7);auto e=step({a},8);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::Extracted,1,10,1})&&s.extracted==std::vector<int64_t>{10});
+    CHECK(step({a},9).empty());roundtrip(s);
+    ExtractionState r;CHECK(load(mid,r));c.resetOnLeave=false;CHECK(stepExtraction(c,r,7,std::vector<Extractor>{})&&r.progress.at(10)==1);
+    CHECK(!stepExtraction(c,r,8,std::vector<Extractor>{a,a})&&!stepExtraction(c,r,8,std::vector<Extractor>{{0,1,1}})&&!stepExtraction(c,r,7,std::vector<Extractor>{}));
+}
+void bomb(){
+    BombConfig c{3,4,2,10,true,true};auto s=makeBomb(1,2,5);CHECK(s&&s->phase==BombPhase::Carried);
+    auto step=[&](BombState& st,uint32_t t,BombInput in){return ok([&]{return stepBomb(c,st,t,in);});};
+    step(*s,0,{7,{},{},false});step(*s,1,{7,{},{},false});CHECK(s->plantProgress==2);
+    auto e=step(*s,2,{});CHECK(has(e,K::BombPlantInterrupted,1,5)&&!s->plantProgress&&!s->site);
+    e=step(*s,3,{0,{},{},true});CHECK(has(e,K::BombDropped,1,5)&&s->phase==BombPhase::Dropped&&!s->carrier);
+    const std::array<BombActor,3> touching{{{9,2,false},{8,1,false},{6,1,false}}};
+    e=step(*s,4,{0,{},touching,false});CHECK(has(e,K::BombPickedUp,1,6)&&s->carrier==6);
+    for(uint32_t t=5;t<=7;++t)e=step(*s,t,{8,{},{},false});CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::BombPlanted,1,8,17})&&bombPending(*s));
+    auto planted=*s;roundtrip(planted);
+    const std::array<BombActor,2> both{{{30,2,false},{31,2,true}}};const std::array<BombActor,1> kit{{{31,2,true}}};
+    step(*s,8,{0,both,{},false});CHECK(s->defuser==30&&s->defuseProgress==1);
+    e=step(*s,9,{0,kit,{},false});CHECK(has(e,K::BombDefuseInterrupted,2,30)&&s->defuser==31&&s->defuseProgress==1);
+    e=step(*s,10,{0,both,{},false});CHECK(has(e,K::BombDefused,2,31)&&s->phase==BombPhase::Defused);roundtrip(*s);
+    // The fuse wins a tie with a finishing defuse.
+    const std::array<BombActor,1> slow{{{30,2,false}}};for(uint32_t t=14;t<=16;++t)step(planted,t,{0,slow,{},false});CHECK(planted.defuseProgress==3);
+    e=step(planted,17,{0,slow,{},false});CHECK(e.size()==1&&e[0].kind==K::BombExploded&&planted.phase==BombPhase::Exploded);
+    auto again=makeBomb(1,2,5);const std::array<BombActor,2> dup{{{30,2,false},{30,2,false}}};
+    CHECK(!stepBomb(c,*again,0,{0,dup,{},false})&&!stepBomb(c,*again,0,{-1,{},{},false})&&stepBomb(c,*again,0,{})&&!stepBomb(c,*again,0,{}));
+    CHECK(!makeBomb(1,1,5)&&!valid(BombConfig{3,4,5,10,true,true}));
+}
+void route(){
+    RouteGate g{1,{{},{},10_fx},{{},{},1_fx},2_fx};CHECK(crossesGate(g,{{},{},9_fx},{{},{},11_fx})&&!crossesGate(g,{{},{},11_fx},{{},{},9_fx})&&!crossesGate(g,{5_fx,{},9_fx},{5_fx,{},11_fx}));
+    RouteConfig c{3,2};const std::array<std::pair<int64_t,int64_t>,2> racers{{{1,1},{2,2}}};auto s=makeRoute(racers);CHECK(s);
+    auto step=[&](std::vector<GateCrossing> x,uint32_t t){return ok([&]{return stepRoute(c,*s,t,x);});};
+    auto e=step({{1,0},{2,1}},1);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::GatePassed,1,1,0}));
+    e=step({{2,0},{1,1},{1,2}},2);CHECK(has(e,K::LapCompleted,1,1)&&s->racers.at(1).lap==1&&s->racers.at(2).nextGate==1);
+    CHECK((routeStandings(*s)==std::vector<int64_t>{1,2}));auto mid=save(*s);
+    e=step({{1,0},{1,1},{1,2}},3);CHECK(has(e,K::RouteFinished,1,1)&&s->racers.at(1).place==1&&s->finishers==1);
+    CHECK(step({{1,0}},4).empty());roundtrip(*s);
+    RouteState r;CHECK(load(mid,r)&&!stepRoute(c,r,3,std::vector<GateCrossing>{{3,0}})&&!stepRoute(c,r,3,std::vector<GateCrossing>{{1,3}})&&!stepRoute(c,r,2,std::vector<GateCrossing>{}));
+}
+void clock(){
+    ObjectiveClockConfig c{10,2,5,100,true};auto s=startClock(c,0);CHECK(s&&s->deadline==10);
+    auto step=[&](ObjectiveClockState& st,uint32_t t,bool contested){return ok([&]{return stepClock(c,st,t,contested);});};
+    for(uint32_t t=0;t<10;++t)CHECK(step(*s,t,false).empty());CHECK(extendClock(c,*s,5)&&s->deadline==15&&clockRemaining(*s,10)==5);
+    auto base=*s;auto e=step(*s,15,true);CHECK(e.size()==1&&e[0].kind==K::OvertimeStarted&&s->overtime);
+    step(*s,16,false);CHECK(s->overtime);e=step(*s,17,false);CHECK(e.size()==2&&e[0]==(ObjectiveEvent{K::OvertimeEnded,0,0,2})&&e[1].kind==K::TimeExpired&&s->expired);
+    CHECK(step(*s,18,true).empty()&&!extendClock(c,*s,5));roundtrip(*s);
+    auto capped=base;step(capped,15,true);for(uint32_t t=16;t<20;++t)CHECK(step(capped,t,true).empty());CHECK(has(step(capped,20,true),K::TimeExpired)&&capped.expired);
+    auto rescued=base;step(rescued,15,true);CHECK(extendClock(c,rescued,10)&&!rescued.overtime);CHECK(step(rescued,16,true).empty());
+    auto quiet=base;CHECK(has(step(quiet,15,false),K::TimeExpired));
+    CHECK(!extendClock(c,quiet,1)&&!stepClock(c,base,9,false)&&!startClock({0,2,5,100,true},0));
+    auto limit=base;CHECK(!extendClock(c,limit,90)&&limit.deadline==15);
+}
+void spectator(){
+    SpectatorConfig c{3,true,false};auto s=makeSpectator(1,1);CHECK(s);
+    std::vector<SpectatorCandidate> people{{2,1,true},{3,1,true},{4,2,true},{5,2,true},{1,1,false}};
+    auto step=[&](uint32_t t,int cycle=0){return ok([&]{return stepSpectator(c,*s,t,people,cycle);});};
+    CHECK(step(9).empty());CHECK(spectatorDied(c,*s,4,10)&&s->mode==SpectatorMode::KillCam);
+    auto e=step(10);CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::SpectatorChanged,1,1,4}));CHECK(step(11).empty());
+    e=step(13);CHECK(s->mode==SpectatorMode::Follow&&s->target==2&&e.size()==1);
+    people[0].alive=false;step(14);CHECK(s->target==3);CHECK(step(15,1).empty()&&s->target==3);
+    people[0].alive=true;step(16,1);CHECK(s->target==2);step(17,-1);CHECK(s->target==3);roundtrip(*s);
+    people[0].alive=people[1].alive=false;step(18);CHECK(s->mode==SpectatorMode::Free&&!s->target);
+    c.allowEnemies=true;step(19);CHECK(s->mode==SpectatorMode::Follow&&s->target==4);
+    CHECK(spectatorRespawned(*s)&&s->mode==SpectatorMode::Alive&&!s->target);
+    people[2].alive=false;CHECK(spectatorDied(c,*s,4,20));step(20);CHECK(s->mode==SpectatorMode::Follow&&s->target==5);  // dead killer: no kill cam
+    auto dup=people;dup.push_back({2,2,true});CHECK(!stepSpectator(c,*s,21,dup)&&!stepSpectator(c,*s,21,people,2)&&!stepSpectator(c,*s,20,people));
+}
+void scoring(){
+    const std::array<int64_t,2> teams{1,2};auto m=makeMatch(teams);MatchConfig mc;mc.warmupTicks=0;mc.scoreToWin=5;CHECK(stepMatch(mc,*m,0));
+    ObjectiveScoring points{{K::ZoneCaptured,2},{K::ZoneHoldTick,1}};uint64_t next=0;
+    const ObjectiveEvents events{{K::ZoneContested,0,7,2},{K::ZoneCaptured,1,7,0},{K::ZoneHoldTick,1,7,3},{K::GatePassed,2,1,0}};
+    CHECK(awardObjectiveEvents(*m,points,events,next)==2u&&next==2&&m->teams.at(1).score==3);
+    const ObjectiveEvents bad{{K::ZoneHoldTick,1,7,3},{K::ZoneHoldTick,9,7,3}};CHECK(!awardObjectiveEvents(*m,points,bad,next)&&next==2&&m->teams.at(1).score==3);
+    CHECK(awardObjectiveWin(mc,*m,2,next)&&next==3&&m->teams.at(2).score==5);CHECK(stepMatch(mc,*m,1)&&m->phase==MatchPhase::Finished&&m->winner==2);
+}
+// Several modes stepped together; a mid-match restore continues bit-identically.
+void restore(){
+    auto t=track();auto pc=payloadRules();ZoneConfig zc;zc.captureTicks=5;zc.holdScoreInterval=4;ObjectiveClockConfig cc{40,3,10,200,true};
+    struct World{ZoneState zone;PayloadState cart;ObjectiveClockState clock;MatchState match;uint64_t next=0;};
+    const std::array<int64_t,2> teams{1,2};MatchConfig mc;mc.warmupTicks=0;mc.roundTicks=1000;mc.scoreToWin=1000;
+    World a{{},makePayload(1),*startClock(cc,0),*makeMatch(teams),0};CHECK(stepMatch(mc,a.match,0));World b=a;
+    ObjectiveScoring points{{K::ZoneCaptured,5},{K::ZoneHoldTick,1},{K::PayloadCheckpoint,3},{K::PayloadDelivered,10}};
+    auto tick=[&](World& w,uint32_t n,Hasher& h){
+        Occupants o;if(n%7<4)o[1]=1+n%3;if(n%11<3)o[2]=1;
+        auto z=stepZone(zc,w.zone,1,o,n);auto p=stepPayload(pc,t,w.cart,n%5<3?2:0,n%13==0?1:0,n);CHECK(z&&p);
+        for(const auto& e:*p)if(e.kind==K::PayloadCheckpoint&&!w.clock.expired)CHECK(extendClock(cc,w.clock,uint32_t(e.value)%20));
+        auto k=stepClock(cc,w.clock,n,w.zone.contested||w.cart.contested);CHECK(k);
+        ObjectiveEvents all=*z;all.insert(all.end(),p->begin(),p->end());all.insert(all.end(),k->begin(),k->end());
+        CHECK(awardObjectiveEvents(w.match,points,all,w.next));CHECK(stepMatch(mc,w.match,n+1));
+        hashObjective(h,all);hashObjective(h,w.zone);hashObjective(h,w.cart);hashObjective(h,w.clock);
+    };
+    Hasher ha,hb;std::string zone,cart,clockBytes,match;
+    for(uint32_t n=1;n<=80;++n){
+        tick(a,n,ha);
+        if(n==40){zone=save(a.zone);cart=save(a.cart);clockBytes=save(a.clock);match=save(a.match);CHECK(load(zone,b.zone)&&load(cart,b.cart)&&load(clockBytes,b.clock)&&load(match,b.match));b.next=a.next;hb=ha;}
+        if(n>40){tick(b,n,hb);CHECK(save(a.zone)==save(b.zone)&&save(a.cart)==save(b.cart)&&save(a.clock)==save(b.clock)&&save(a.match)==save(b.match));}
+    }
+    CHECK(ha.value()==hb.value()&&objectiveHash(a.zone)==objectiveHash(b.zone)&&a.cart.delivered&&a.match.teams.at(1).score>0);
+    // Records are typed, canonical and validated.
+    PayloadState wrong;CHECK(!load(zone,wrong));ZoneState z;auto bytes=zone;bytes.back()=char(2);CHECK(!load(bytes,z));
+    ZoneState broken;broken.capturer=1;CHECK(save(broken).empty());BombState bomb=*makeBomb(1,2,0);bomb.carrier=3;CHECK(save(bomb).empty());
+    SpectatorState spec=*makeSpectator(1,1);spec.target=1;CHECK(save(spec).empty());
+}
+void data(const std::string& root){
+    auto layout=readObjectiveLayout(Json::parseFile(root+"/examples/libraries/genre/objectives.json"));
+    CHECK(layout.zones.size()==4&&layout.zones[2].kind==ObjectiveZoneKind::Extraction&&layout.payload&&layout.payload->checkpoints.size()==2&&layout.gates.size()==3);
+    CHECK(insideZone(layout.zones[0],layout.zones[0].center)&&!insideZone(layout.zones[0],layout.zones[0].center+Vec3{100_fx,{},{}}));
+    auto expectError=[](const char* text,const std::string& message){
+        try{readObjectiveLayout(Json::parse(text));}catch(const JsonError& e){if(std::string(e.what()).find(message)!=std::string::npos)return;throw std::runtime_error(std::string("unexpected error: ")+e.what());}
+        throw std::runtime_error("expected error: "+message);
+    };
+    expectError(R"({"arena":1})","objectives: unknown key 'arena'");
+    expectError(R"({"zones":[{"id":1,"kind":"capture","center":[0,0,0],"radiusMilli":5},{"id":1,"kind":"hill","center":[0,0,0],"radiusMilli":5}]})","objectives.zones[1].id: duplicate zone id 1");
+    expectError(R"({"zones":[{"id":1,"kind":"flag","center":[0,0,0],"radiusMilli":5}]})","objectives.zones[0].kind: expected");
+    expectError(R"({"zones":[{"id":1,"kind":"hill","center":[0,0],"radiusMilli":5}]})","objectives.zones[0].center: expected [x,y,z]");
+    expectError(R"({"zones":[{"id":1,"kind":"hill","center":[0,0,0],"radiusMilli":0}]})","objectives.zones[0].radiusMilli: must be in 1..");
+    expectError(R"({"payload":{"path":[[0,0,0]]}})","objectives.payload.path: needs at least 2 points");
+    expectError(R"({"payload":{"path":[[0,0,0],[0,0,0]]}})","objectives.payload.path[1]: repeats the previous point");
+    expectError(R"({"payload":{"path":[[0,0,0],[5000,0,0]],"checkpointsMilli":[6000]}})","checkpoints must ascend strictly inside the path length");
+    expectError(R"({"route":{"gates":[{"id":2,"center":[0,0,0],"normal":[0,0,1000],"radiusMilli":5},{"id":1,"center":[0,0,0],"normal":[0,0,1000],"radiusMilli":5}]}})","objectives.route.gates[1].id: gate ids must ascend");
+    expectError(R"({"route":{"gates":[{"id":1,"center":[0,0,0],"normal":[0,0,0],"radiusMilli":5}]}})","objectives.route.gates[0].normal: needs a length of at least 100 milli-units");
+    auto parsed=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/objective-settings.json"));CHECK(parsed.value&&objectiveSettingsErrors(*parsed.value).empty());
+    const auto& v=*parsed.value;auto zc=zoneConfig(v);auto pc=payloadConfig(v);auto bc=bombConfig(v);auto cc=objectiveClockConfig(v);
+    CHECK(valid(zc)&&zc.contest==ContestRule::Majority&&zc.holdScoreInterval==60&&valid(pc)&&pc.pushSpeed==Fixed::fromRatio(80,1000)&&valid(bc)&&bc.kitDefuseTicks==150);
+    CHECK(valid(cc)&&cc.limitTicks==v.matchRules.roundTicks&&valid(eliminationConfig(v))&&eliminationConfig(v).respawnWaveTicks==600&&valid(extractionConfig(v))&&valid(spectatorConfig(v))&&valid(routeConfig(v,3))&&hillRotation(v).count==3);
+    auto settings=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto r=settings(R"({"schemaVersion":1,"objectives":{"bombKitDefuseTicks":700}})");CHECK(!r.value&&r.errors.at(0)=="objectives.bombKitDefuseTicks: must not exceed bombDefuseTicks");
+    r=settings(R"({"schemaVersion":1,"objectives":{"flagTicks":1}})");CHECK(!r.value&&r.errors.at(0)=="objectives.flagTicks: unknown field");
+    r=settings(R"({"schemaVersion":1,"objectives":{"zoneContestRule":2}})");CHECK(!r.value&&r.errors.at(0)=="objectives.zoneContestRule: integer out of range");
+    r=settings(R"({"schemaVersion":1,"objectives":{"hillCount":3,"eliminationLives":1,"respawnWaveTicks":10}})");CHECK(r.value);
+    auto errors=objectiveSettingsErrors(*r.value);CHECK(errors.size()==2&&errors[0]=="objectives.hillRotateTicks: rotating between hillCount > 1 hills needs at least 1 tick"&&errors[1]=="objectives.respawnWaveTicks: eliminationLives 1 never respawns; set 0");
+}
+}
+void matchObjectives(const std::string& root){objectives::zones();objectives::payload();objectives::elimination();objectives::extraction();objectives::bomb();objectives::route();objectives::clock();objectives::spectator();objectives::scoring();objectives::restore();objectives::data(root);}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
