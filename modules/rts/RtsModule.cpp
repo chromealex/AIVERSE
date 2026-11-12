@@ -70,6 +70,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     sim.addSystem("creep", [this](Simulation& s) { sysCreep(s); });
     if (fields_->active()) sim.addSystem("gridfields", [this](Simulation& s) { fields_->tick(s); });   // RtsGridFields.cpp
     sim.addSystem("vision", [this](Simulation& s) { sysVision(s); });
+    if (traffic_->active()) sim.addSystem("traffic", [this](Simulation& s) { traffic_->collect(s); });   // keeps the tick's shots / hits / deaths for its next tick
     sim.addSystem("victory", [this](Simulation& s) { script_->callStd(s, StdFn::Victory); });   // lua/victory.lua
     sim.addSystem("triggers", [this](Simulation& s) {   // last: sees every event of the tick (lua/triggers.lua)
         if (!triggers_.defs.empty()) script_->callStd(s, StdFn::Triggers);

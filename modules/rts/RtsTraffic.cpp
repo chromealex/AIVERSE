@@ -203,6 +203,7 @@ TrafficRules Traffic::parse(const Json& j, const std::vector<std::string>& ids, 
         r.panicSeconds = number(pn, "seconds", r.panicSeconds, "traffic.pedestrians.panic", false);
         r.panicSpeed = number(pn, "speed", r.panicSpeed, "traffic.pedestrians.panic", true);
     }
+    parseCity(j, r, ids, tickRate);
     if (p.has("driver")) r.driverPerson = typeOf(p.getStr("driver"), "traffic.pedestrians.driver");
     return r;
 }
@@ -218,14 +219,15 @@ void Traffic::setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const 
     rules_ = parse(rulesJson["traffic"], ids, sim.tickRate());
     if (!active()) return;
     Driving* drv = m.driving();
-    const std::pair<const char*, const std::vector<TrafficWeighted>*> fleets[3] = {{"cars", &rules_.cars}, {"buses", &rules_.buses}, {"emergency", &rules_.emergency}};
+    std::vector<std::pair<std::string, const std::vector<TrafficWeighted>*>> fleets = {{"cars", &rules_.cars}, {"buses", &rules_.buses}, {"emergency", &rules_.emergency}};
+    for (auto& sv : rules_.services) fleets.push_back({"services." + sv.id, &sv.types});
     for (auto& [name, list] : fleets) {
         if (list->empty()) continue;
-        if (!drv || !drv->active()) throw std::runtime_error(std::string("traffic.") + name + ": needs the 'driving' block (traffic cars are its vehicles)");
+        if (!drv || !drv->active()) throw std::runtime_error("traffic." + name + ": needs the 'driving' block (traffic cars are its vehicles)");
         for (auto& t : *list) {
             bool found = false;
             for (auto& v : drv->rules().vehicles) found = found || v.type == t.type;
-            if (!found) throw std::runtime_error(std::string("traffic.") + name + ".types: '" + ids[t.type] + "' is not in driving.vehicles");
+            if (!found) throw std::runtime_error("traffic." + name + ".types: '" + ids[t.type] + "' is not in driving.vehicles");
         }
     }
     if (drv && drv->active()) mpc_ = drv->rules().metersPerCell;
@@ -295,6 +297,7 @@ void Traffic::setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const 
         r.z0 = Fixed::fromRatio(jn.z0 + iz0, 2); r.z1 = Fixed::fromRatio(iz1 + 1 + jn.z1 + 1, 2);
     }
     findStops(sim);
+    setupCity(sim);
     sim.world().setResource<TrafficStore>();
 }
 
@@ -435,7 +438,10 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     if (!st) return;
     h.u32(uint32_t(st->cars.size()));
     for (auto& c : st->cars) {
-        h.u64(c.e.packed()); h.u32(c.kind); h.i32(c.lastStop); h.u32(c.dwellUntil); h.u32(c.wp); h.i32(c.tailPiece); h.i32(c.tailDir); h.u32(c.tailLane); h.fx(c.cruise);
+        h.u64(c.e.packed()); h.u32(c.kind); h.i32(c.lastStop); h.u32(c.dwellUntil);
+        h.i32(c.service); h.u32(c.task); h.u32(c.call); h.u32(c.taskUntil); h.i32(c.destPiece); h.i32(c.homePiece); h.fx(c.destAlong); h.fx(c.homeAlong);
+        h.u32(uint32_t(c.crew.size()));
+        for (Entity m : c.crew) h.u64(m.packed()); h.u32(c.wp); h.i32(c.tailPiece); h.i32(c.tailDir); h.u32(c.tailLane); h.fx(c.cruise);
         h.u32(c.stopped); h.u64(c.blocker.packed()); h.u64(c.ignore.packed()); h.u32(c.ignoreUntil); h.u32(c.reverseUntil); h.u32(c.lostSince);
         h.u32(uint32_t(c.route.size()));
         for (auto& p : c.route) { h.fx(p.p.x); h.fx(p.p.y); h.i32(p.junction); h.u32(uint32_t(p.axis) | uint32_t(p.turn) << 8); }
@@ -450,6 +456,17 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     }
     h.u32(uint32_t(st->lights.size()));
     for (auto& l : st->lights) { h.u64(l.e.packed()); h.i32(l.junction); h.u32(uint32_t(l.axis) | uint32_t(l.shown) << 8); }
+    h.u32(uint32_t(st->incidents.size()));
+    for (auto& i : st->incidents) {
+        h.u32(i.id); h.u32(uint32_t(i.kind) | uint32_t(i.state) << 8); h.fx(i.pos.x); h.fx(i.pos.y); h.u64(i.subject.packed()); h.u64(i.offender.packed());
+        h.u32(i.born); h.u32(i.assigned); h.u64(i.responder.packed()); h.u32(i.victim);
+    }
+    h.u32(uint32_t(st->patients.size()));
+    for (auto& q : st->patients) { h.u32(q.type); h.fx(q.at.x); h.fx(q.at.y); h.u32(q.release); }
+    h.u32(uint32_t(st->happened.size()));
+    for (auto& e : st->happened) { h.u32(uint32_t(e.type) | uint32_t(e.unitType) << 16); h.v3(e.pos); h.u64(e.a.packed()); h.u64(e.b.packed()); }
+    h.u32(st->nextIncident); h.u32(st->towed); h.u32(uint32_t(st->used.size()));
+    for (auto& u : st->used) { h.u64(u.e.packed()); h.u32(u.since); }
     h.u32(uint32_t(st->lit.size()));
     for (int32_t j : st->lit) h.i32(j);
     h.u32(uint32_t(st->placed)); h.u32(st->nextAdopt); h.u32(st->nextEmergency);
@@ -457,15 +474,21 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
 
 void io(Archive& a, TrafficWaypoint& p) { a(p.p.x, p.p.y, p.junction, p.axis, p.turn); }
 void io(Archive& a, TrafficCar& c) {
+    a(c.service, c.task, c.call, c.taskUntil, c.destPiece, c.homePiece, c.destAlong, c.homeAlong, c.crew);
     a(c.e, c.kind, c.lastStop, c.dwellUntil, c.route, c.wp, c.tailPiece, c.tailDir, c.tailLane, c.cruise, c.stopped, c.blocker, c.ignore, c.ignoreUntil, c.reverseUntil, c.lostSince);
 }
 void io(Archive& a, TrafficPerson& p) { a(p.e, p.state, p.path, p.idx, p.legEnd, p.leg, p.legPt, p.until, p.moved, p.side, p.hp, p.lastPos, p.panic); }
+void io(Archive& a, TrafficIncident& i) { a(i.id, i.kind, i.state, i.pos.x, i.pos.y, i.subject, i.offender, i.born, i.assigned, i.responder, i.victim); }
+void io(Archive& a, TrafficPatient& q) { a(q.type, q.at.x, q.at.y, q.release); }
+void io(Archive& a, TrafficEvent& e) { a(e.type, e.unitType, e.pos, e.a, e.b); }
+void io(Archive& a, TrafficUsedCar& u) { a(u.e, u.since); }
 void io(Archive& a, TrafficLightProp& l) { a(l.e, l.junction, l.axis, l.shown); }
 
 void Traffic::io(Simulation& sim, Archive& a) {
     auto* st = store(sim);
     if (!st) return;
     a(st->cars, st->people, st->lights, st->lit, st->placed, st->nextAdopt, st->nextEmergency);
+    a(st->incidents, st->nextIncident, st->used, st->towed, st->patients, st->happened);
     if (!a.writing()) for (auto& c : st->cars) c.input = {};
 }
 
@@ -478,9 +501,19 @@ void Traffic::tick(Simulation& sim) {
     focus(sim, foci);
     if (!st->placed || sim.tick() % 10 == 0) syncLights(sim, *st, foci);
     updateLights(sim, *st);
+    incidents(sim, *st);
     cars(sim, *st, foci);
     people(sim, *st, foci);
+    st->happened.clear();
     st->placed = true;
+}
+
+void Traffic::collect(Simulation& sim) {
+    auto* st = store(sim);
+    if (!st) return;
+    for (const SimEvent& ev : sim.events())
+        if ((ev.type == kEvAttack || ev.type == kEvHit || ev.type == kEvDied) && st->happened.size() < 4096)
+            st->happened.push_back({ev.type, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b});
 }
 
 // ----------------------------------------------------------------- lights
@@ -590,7 +623,9 @@ void Traffic::extendRoute(Simulation& sim, TrafficCar& c) {
             total += wgt[sd];
         }
         int exitSide = inSide;
-        if (total > 0) {
+        if (c.destPiece >= 0 && (c.task == kTaskGoing || c.task == kTaskHome)) {   // on call: the way to the address
+            exitSide = exitToward(J, inSide, c.tailPiece, c.destPiece);
+        } else if (total > 0) {
             int r = int(sim.rng().below(uint32_t(total)));
             for (int sd = 0; sd < 4; ++sd) { if (cand[sd] < 0) continue; if (r < wgt[sd]) { exitSide = sd; break; } r -= wgt[sd]; }
         }
@@ -682,8 +717,8 @@ bool Traffic::reroute(Simulation& sim, TrafficCar& c, Vec2 pos, Vec2 fwd) {
 
 // A random cell of the square around a hero that is a lane of a driven road, in the spawn ring: the cost does not
 // depend on the size of the city.
-bool Traffic::spawnCar(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci, Fixed minDist, uint8_t kind) {
-    const auto& fleet = kind == kTrafficBus ? rules_.buses : kind == kTrafficEmergency ? rules_.emergency : rules_.cars;
+bool Traffic::spawnCar(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci, Fixed minDist, uint8_t kind, int service, Entity* out) {
+    const auto& fleet = service >= 0 ? rules_.services[size_t(service)].types : kind == kTrafficBus ? rules_.buses : kind == kTrafficEmergency ? rules_.emergency : rules_.cars;
     if (fleet.empty()) return false;
     World& w = sim.world();
     GameState& gs = m_->state(sim);
@@ -732,14 +767,16 @@ bool Traffic::spawnCar(Simulation& sim, TrafficStore& st, const std::vector<Vec2
                 fxAbs(rel.dot(dir)) < Fixed::fromInt(3) + body + m_->rules().types[ou->type].radius) clear = false;
         });
         if (!clear) continue;
-        const Entity e = m_->spawn(sim, type, rules_.carOwner, v3(pos));
+        const Entity e = m_->spawn(sim, type, service >= 0 ? rules_.services[size_t(service)].owner : rules_.carOwner, v3(pos));
         if (!e.valid()) return false;
         w.get<Unit>(e).facing = v3(dir);
         TrafficCar c;
         c.e = e;
         c.kind = kind;
-        const Fixed lo = kind == kTrafficBus ? rules_.busMin : kind == kTrafficEmergency ? rules_.emMin : rules_.speedMin;
-        const Fixed hi = kind == kTrafficBus ? rules_.busMax : kind == kTrafficEmergency ? rules_.emMax : rules_.speedMax;
+        const Fixed lo = service >= 0 ? rules_.services[size_t(service)].speedMin : kind == kTrafficBus ? rules_.busMin : kind == kTrafficEmergency ? rules_.emMin : rules_.speedMin;
+        const Fixed hi = service >= 0 ? rules_.services[size_t(service)].speedMax : kind == kTrafficBus ? rules_.busMax : kind == kTrafficEmergency ? rules_.emMax : rules_.speedMax;
+        c.service = int8_t(service);
+        if (out) *out = e;
         c.cruise = lo + (hi - lo) * sim.rng().unit();
         c.tailPiece = int32_t(pi); c.tailDir = int8_t(s); c.tailLane = uint8_t(k);
         c.route.push_back({pos, -1, 0, 0});
@@ -778,11 +815,13 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
                 }
             }
         }
+        dropCall(sim, st, c);
         st.cars.erase(st.cars.begin() + long(i));
     }
     // too far from every hero: gone (when nobody watches)
     if (!foci.empty())
         for (auto& c : st.cars) {
+            if (c.task != kTaskNone) continue;   // on call: it gets there wherever the heroes are
             const Vec2 p = v2(w.get<Transform>(c.e).pos);
             const Fixed d2 = nearestSq(foci, p);
             const bool stuckAway = c.stopped > sim.tickRate() * 30 && d2 > rules_.spawnMin * rules_.spawnMin;
@@ -790,13 +829,18 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
             if (d2 > rules_.despawn * rules_.despawn || stuckAway || lostAway) silentRemove(sim, c.e);
         }
     for (size_t i = 0; i < st.cars.size();) {
+        if (w.get<Unit>(st.cars[i].e).hp.raw <= 0) { dropCall(sim, st, st.cars[i]); st.cars.erase(st.cars.begin() + long(i)); continue; }
+        ++i;
+    }
+    responders(sim, st);
+    for (size_t i = 0; i < st.cars.size();) {   // drove into its station
         if (w.get<Unit>(st.cars[i].e).hp.raw <= 0) { st.cars.erase(st.cars.begin() + long(i)); continue; }
         ++i;
     }
     // top up: the first tick fills the whole area, later ones only out of sight; a couple per tick at most
     const Fixed minDist = st.placed ? rules_.spawnMin : Fixed::fromInt(4);
     int count[3] = {0, 0, 0};
-    for (auto& c : st.cars) count[c.kind]++;
+    for (auto& c : st.cars) if (c.service < 0) count[c.kind]++;
     int budget = st.placed ? 1 : rules_.maxCars * 3;   // the first tick fills the streets
     if (!st.placed || sim.tick() % 5 == 0)
         while (budget-- > 0 && count[kTrafficCar] < rules_.maxCars)
@@ -823,7 +867,7 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
     }
     sirens_.clear();
     for (auto& c : st.cars)
-        if (c.kind == kTrafficEmergency)
+        if (c.kind == kTrafficEmergency && (c.task == kTaskNone || c.task == kTaskGoing))   // standing at the scene it is in nobody's way
             if (const DrivingCar* dc = drv->car(sim, c.e)) sirens_.push_back({v2(w.get<Transform>(c.e).pos), Vec2{fxSinTurns(dc->st.yaw), fxCosTurns(dc->st.yaw)}});
     for (auto& c : st.cars) plan(sim, st, c);
 }
@@ -834,6 +878,10 @@ void Traffic::plan(Simulation& sim, TrafficStore& st, TrafficCar& c) {
     Driving* drv = m_->driving();
     const DrivingCar* dc = drv->car(sim, c.e);
     if (!dc) { c.input = {}; c.input.handbrake = true; return; }
+    if (c.task == kTaskCrewOut || c.task == kTaskWorking || c.task == kTaskCrewBack) {   // at the scene
+        c.input = {}; c.input.handbrake = true; c.stopped = 0; c.blocker = kNullEntity;
+        return;
+    }
     const Vec2 pos = v2(w.get<Transform>(c.e).pos);
     const Fixed yaw = dc->st.yaw;
     const Vec2 fwd{fxSinTurns(yaw), fxCosTurns(yaw)};
@@ -931,6 +979,12 @@ void Traffic::plan(Simulation& sim, TrafficStore& st, TrafficCar& c) {
     GameState& gs = m_->state(sim);
     const int hereCell = gs.grid.cellOf(v3(pos));
     const bool inMap = hereCell >= 0 && size_t(hereCell) < net_.pieceAt.size();
+    if ((c.task == kTaskGoing || c.task == kTaskHome) && inMap && net_.pieceAt[size_t(hereCell)] == c.destPiece && c.destPiece >= 0) {
+        const auto& P = net_.pieces[size_t(c.destPiece)];   // pull up at the address
+        const int s = tl::trafficDetail::axisDir(P.axis, 1).dot(fwd).raw >= 0 ? 1 : -1;
+        const Fixed d = (c.destAlong - tl::trafficAlongOf(P, pos)) * s;
+        if (d > -kHalf) { want = fxMin(want, tl::trafficStopSpeed(fxMax(d - Fixed::fromRatio(1, 10), Fixed{}) * mpc_, rules_.decel)); if (d < Fixed::fromInt(3)) heldBySignal = true; }
+    }
     if (c.kind == kTrafficBus) {
         if (sim.tick() < c.dwellUntil) { want = Fixed{}; heldBySignal = true; }
         else if (const int pi = inMap ? net_.pieceAt[size_t(hereCell)] : -1; pi >= 0) {
@@ -1273,8 +1327,7 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
 
     // threats this tick: shots, hits, deaths; fast cars driven by heroes
     std::vector<Vec2> threats;
-    for (const SimEvent& ev : sim.events())
-        if (ev.type == kEvAttack || ev.type == kEvHit || ev.type == kEvDied) threats.push_back(v2(ev.pos));
+    for (const TrafficEvent& ev : st.happened) threats.push_back(v2(ev.pos));
     struct Fast { Vec2 p, v; };
     std::vector<Fast> fast;
     if (Driving* drv = m_->driving(); drv && drv->active())

@@ -74,6 +74,52 @@ by a game's native module without the RTS module. Tests: `aiverse_tests traffic_
   snapshots. Fixed maths, entity-index order, randomness from the simulation RNG only. Games without the block keep
   their checksums and save layout.
 
+## The living city: incidents and services
+
+`modules/rts/RtsTrafficCity.cpp`. Things happen, and the service that answers that kind of thing sends a vehicle.
+Tests: `aiverse_tests traffic_city`.
+
+| incident | raised when | answered by (`answers`) | what the service does |
+|---|---|---|---|
+| `injured` | a person (pedestrian type, thrown-out driver, crew member) is killed: a `body` object is left | ambulance | the crew walks to the body, works, takes it along; the person is treated for `treat` seconds in the hospital the ambulance came from and then walks out of it and goes on |
+| `crime` | a hero shoots, kills a person or blows up a car **and somebody within `witness` cells saw it**; scripts report robberies with `game.traffic_report` | police | officers get out and attack-move to the scene; while the offender is within 15 cells they go for him (up to `maxWork` seconds) |
+| `fire` | a vehicle is destroyed: a `fire` object burns at the wreck for `burn` seconds and hurts what stands within `fireRadius` (`fireDamage` per second; a burning car next to another one can set it off too) | fire service | stands at the fire for `work` seconds and puts it out |
+| `wreck` | a destroyed vehicle leaves a `wreck` object; a car a hero left on a driving lane or in a junction for `abandon` seconds | tow truck | waits until no fire burns within 3 cells, then loads it; it is put next to the nearest `lots` object (rows of four) or simply taken away |
+
+- **Dispatch.** Every half second each open incident gets a free vehicle of a service that answers it (`max` on
+  call per service). It drives out of the nearest station object (`stations` types within `range` cells of the
+  incident, on the station's side of the road); with no station near it arrives from out of sight. It is a traffic
+  car with an address: at every junction it takes the exit on the shortest way (in road pieces) to it, with a siren
+  (`"siren": true`: the emergency rules above) or as ordinary traffic (tow trucks). Vehicles on call are not removed
+  with the distance to the heroes. A call that takes longer than `timeout` goes back to the queue.
+- **At the scene.** The vehicle stands (no siren any more, traffic passes). With a `crew` type, `crewCount` people
+  get out on the kerb side and walk to the spot; the work starts when one of them is there. Afterwards the crew
+  walks back and the vehicle returns to its station and drives in (or leaves as ordinary traffic). A vehicle that is
+  wrecked or stolen on call loses its crew and the call is given to the next one.
+- **One thing leads to another.** A thrown-out driver's car theft, shots and killings bring the police only when
+  there was a witness; officers and medics who die become `injured` incidents themselves; fires damage people (who
+  panic) and cars (which may blow up in turn); wrecks block lanes until the tow truck comes, and traffic drives
+  round them; a body nobody collects disappears after `bodyTime`, a wreck after `wreckTime`.
+- Scripts: `game.traffic_report(kind, x, z [, offender])` (a robbery, a grenade fire: `"fire"` places the fire
+  object) and `game.traffic_incidents()` (HUD markers, missions).
+
+```json
+"services": {
+  "ambulance": {"answers": "injured", "types": ["ambulance"], "stations": ["hospital"], "crew": "medic", "crewCount": 2, "work": 4},
+  "police":    {"answers": "crime", "types": ["police"], "stations": ["precinct"], "crew": "cop", "work": 8, "maxWork": 60, "owner": 2, "max": 2},
+  "fire":      {"answers": "fire", "types": ["fire_engine"], "stations": ["fire_station"], "work": 6},
+  "tow":       {"answers": "wreck", "types": ["tow_truck"], "work": 4, "speed": [7, 9], "siren": false}
+},
+"incidents": {"body": "ped_down", "bodyTime": 90, "treat": 60, "wreck": "car_wreck", "wreckTime": 300,
+              "fire": "fire", "burn": 45, "fireDamage": 6, "fireRadius": 1.2, "abandon": 40, "witness": 7,
+              "lots": ["tow_lot"], "crimeTime": 60, "timeout": 150}
+```
+
+`body`, `wreck`, `fire` and the station / lot objects are ordinary prop types (`move.speed` 0, `invulnerable`); give
+the fire a `view.light` and particles. Crew types are ordinary units: officers need `weapons` and an `owner` whose
+team is hostile to the heroes' to fight them. Service keys default to `range` 90, `crewCount` 2, `work` 5,
+`maxWork` 60, `max` 1, `speed` [12, 15].
+
 ## rules.json
 
 ```json
@@ -128,6 +174,9 @@ to the point (within 3 cells) for traffic along that axis (default: the axis of 
 
 ## Not done yet
 
+A persistent population (homes, jobs, shifts, schools, shops that open with their keeper), money, gangs and
+robberies, wanted levels with arrest and jail, the hero as a casualty (hospital) — planned on top of the incidents.
+A knocked-down person is a death for the engine (`unit_died` fires) and comes back as a new unit of the same type.
 Lane changes and overtaking on multi-lane roads (cars keep their lane; only blocked cars swerve), bus lines with fixed
 routes and people waiting at the stops, emergency call-outs that answer events (police after shots, an ambulance for
 the wounded) and chases, protected left-turn phases, pedestrians entering buildings, crossings in the middle of a

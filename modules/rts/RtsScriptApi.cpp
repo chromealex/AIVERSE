@@ -1218,6 +1218,47 @@ int gTrafficLight(lua_State* L, Vm& vm) {
     return 1;
 }
 
+// game.traffic_report(kind, x, z [, offender]): something happened ("injured" | "crime" | "fire" | "wreck"); the
+// city services answer it. Returns the incident id or nil (ignored: no witness for a crime, traffic off)
+int gTrafficReport(lua_State* L, Vm& vm) {
+    CTX;
+    std::string kind;
+    Fixed x, z;
+    if (!nameArg(L, vm, 1, kind, "kind") || !argFx(L, vm, 2, x, "x") || !argFx(L, vm, 3, z, "z")) return -1;
+    static const char* names[kIncidentKinds] = {"injured", "crime", "fire", "wreck"};
+    int k = -1;
+    for (int i = 0; i < kIncidentKinds; ++i) if (kind == names[i]) k = i;
+    if (k < 0) return fail(vm, "traffic_report: injured, crime, fire or wreck");
+    Entity who = kNullEntity;
+    if (!lua_isnoneornil(L, 4)) unitArg(L, vm, 4, who);
+    Traffic* t = m.traffic();
+    Entity subject = kNullEntity;
+    if (t && t->active() && k == kIncidentFire && t->rules().incidents.fire != UINT16_MAX) subject = m.spawn(sim, t->rules().incidents.fire, 0, Vec3{x, Fixed{}, z});
+    const uint32_t id = t && t->active() ? t->report(sim, uint8_t(k), Vec2{x, z}, subject, who) : 0;
+    if (id) lua_pushinteger(L, lua_Integer(id)); else lua_pushnil(L);
+    return 1;
+}
+// game.traffic_incidents(): {{id, kind, x, z, state = "open"|"coming"|"working"}, ...} (HUD, minimap, missions)
+int gTrafficIncidents(lua_State* L, Vm& vm) {
+    CTX;
+    lua_newtable(L);
+    Traffic* t = m.traffic();
+    auto* st = t && t->active() ? t->store(sim) : nullptr;
+    if (!st) return 1;
+    static const char* names[kIncidentKinds] = {"injured", "crime", "fire", "wreck"};
+    static const char* states[3] = {"open", "coming", "working"};
+    int n = 0;
+    for (auto& i : st->incidents) {
+        lua_createtable(L, 0, 5);
+        lua_pushinteger(L, lua_Integer(i.id)); lua_setfield(L, -2, "id");
+        lua_pushstring(L, names[i.kind]); lua_setfield(L, -2, "kind");
+        pushFx(L, i.pos.x); lua_setfield(L, -2, "x");
+        pushFx(L, i.pos.y); lua_setfield(L, -2, "z");
+        lua_pushstring(L, states[std::min<int>(i.state, 2)]); lua_setfield(L, -2, "state");
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
 // game.traffic_kind(h): "car" | "bus" | "emergency" for a vehicle the traffic drives, else nil
 int gTrafficKind(lua_State* L, Vm& vm) {
     CTX;
@@ -1249,7 +1290,7 @@ void openGameApi(Vm& vm) {
         {"var", bindQ<gVar>}, {"log", bindQ<gLog>}, {"data", bindQ<gData>}, {"has_data", bindQ<gHasData>},
         {"orders", bindQ<gOrders>}, {"current_order", bindQ<gCurrentOrder>}, {"target", bindQ<gTarget>}, {"idle", bindQ<gIdle>},
         {"facing", bindQ<gFacing>}, {"velocity", bindQ<gVelocity>}, {"path", bindQ<gPath>}, {"energy", bindQ<gEnergy>},
-        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {"traffic_light", bindQ<gTrafficLight>}, {"traffic_kind", bindQ<gTrafficKind>}, {nullptr, nullptr}};
+        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {"traffic_light", bindQ<gTrafficLight>}, {"traffic_kind", bindQ<gTrafficKind>}, {"traffic_incidents", bindQ<gTrafficIncidents>}, {nullptr, nullptr}};
     static const luaL_Reg actions[] = {
         {"give", bind<gGive>}, {"take", bind<gTake>}, {"spawn", bind<gSpawn>}, {"kill", bind<gKill>}, {"damage", bind<gDamage>},
         {"attack_event", bind<gAttackEvent>},
@@ -1260,7 +1301,7 @@ void openGameApi(Vm& vm) {
         {"add_score", bind<gAddScore>}, {"enable_trigger", bind<gEnableTrigger>}, {"clear_data", bind<gClearData>},
         {"set_pos", bind<gSetPos>}, {"teleport", bind<gSetPos>}, {"set_facing", bind<gSetFacing>}, {"impulse", bind<gImpulse>},
         {"knockback", bind<gKnockback>}, {"set_hp", bind<gSetHp>}, {"set_energy", bind<gSetEnergy>},
-        {"set_stat_base", bind<gSetStatBase>}, {"transform", bind<gTransform>}, {nullptr, nullptr}};
+        {"set_stat_base", bind<gSetStatBase>}, {"transform", bind<gTransform>}, {"traffic_report", bind<gTrafficReport>}, {nullptr, nullptr}};
     luaL_newlib(L, queries);
     if (vm.mode == Mode::Sim) {
         luaL_setfuncs(L, actions, 0);
@@ -1321,6 +1362,7 @@ Json scriptApiReference() {
     q.push(fn("game.grid_path(width,height,cells,start,goal[,label])", "pure four-neighbour shortest grid path; zero-based cells, boolean true mask or exact integer labels; returns a one-based path excluding start, or nil; max 262144 cells"));
     q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
     q.push(fn("game.traffic_light(x, z [, \"x\"|\"z\"])", "signal of the junction at / next to the point for traffic along that axis (default: the road there): \"green\"|\"yellow\"|\"red\", nil without a signalised junction (rules traffic, docs/traffic.md)"));
+    q.push(fn("game.traffic_incidents()", "{{id, kind = \"injured\"|\"crime\"|\"fire\"|\"wreck\", x, z, state = \"open\"|\"coming\"|\"working\"}, ...}: what the city services are dealing with (docs/traffic.md)"));
     q.push(fn("game.traffic_kind(h)", "\"car\"|\"bus\"|\"emergency\" for a vehicle the traffic drives (sirens, HUD), nil otherwise"));
     q.push(fn("game.var(name)", "trigger variable (fx)"));
     q.push(fn("game.territory_at(x,z) / game.territory_count(player)", "owner at flat-map ground point (nil outside ground), or owned cell count"));

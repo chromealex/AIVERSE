@@ -259,6 +259,7 @@ Queries (simulation and view scripts):
 | `game.type_info("footman")`, `game.types()` | `{id, name, structure, max_hp, speed, armor, cost, tags}` |
 | `game.map_size()` → w, h, `game.passable(x, z [, "ground"\|"air"\|"naval"])`, `game.level(x, z)`, `game.height(x, z)`, `game.area(name)` | map |
 | `game.traffic_light(x, z [, "x"\|"z"])` → `"green"`\|`"yellow"`\|`"red"`\|nil | signal of the junction at / next to the point (rules `traffic`, docs/traffic.md) |
+| `game.traffic_report(kind, x, z [, offender])` → id\|nil, `game.traffic_incidents()` → `{{id, kind, x, z, state}, ...}` | city incidents (`"injured"`, `"crime"`, `"fire"`, `"wreck"`) and what the services are doing about them (docs/traffic.md) |
 | `game.traffic_kind(h)` → `"car"`\|`"bus"`\|`"emergency"`\|nil | a vehicle the traffic drives (sirens, HUD) |
 | `game.var(name)` | trigger variable (fx) |
 | `game.data(h)`, `game.has_data(h, key)` | the entity's own persistent table (view: read-only copy) / does it have the key |

@@ -382,3 +382,173 @@ TEST(traffic_goes_round_an_island_in_a_junction) {
     for (auto& [e, d] : travelled) moving += d > Fixed::fromInt(30);
     CHECK(moving >= 4);
 }
+
+// ------------------------------------------------------------------ the living city: incidents and services
+namespace {
+const char* kCityRules = R"J({
+  "victory": "noUnits",
+  "resources": {"gold": {"start": 0}},
+  "topDown": {"heroes": ["guy"], "move": {"accel": 40, "decel": 60}, "autoFire": false},
+  "driving": {"metersPerCell": 4, "enterRange": 1.5, "vehicles": {"sedan": {"length": 1.1, "width": 0.45, "wheeled": {"massMilli": 1200000}}}},
+  "traffic": {
+    "roads": {"tiles": "a"},
+    "cars": {"types": ["sedan"], "max": 0, "spawnMin": 4, "spawnMax": 40, "despawn": 60},
+    "signals": {"green": 6, "yellow": 2, "allRed": 1, "walk": 4},
+    "pedestrians": {"walk": "p", "types": {"ped": 1}, "max": 0, "owner": 2, "spawnMin": 2, "spawnMax": 40, "despawn": 60},
+    "services": {
+      "ambulance": {"answers": "injured", "types": ["sedan"], "stations": ["hospital"], "crew": "medic", "crewCount": 2, "work": 2, "speed": [10, 11]},
+      "fire": {"answers": "fire", "types": ["sedan"], "stations": ["hospital"], "work": 3, "speed": [10, 11]},
+      "tow": {"answers": "wreck", "types": ["sedan"], "work": 2, "speed": [8, 9]},
+      "police": {"answers": "crime", "types": ["sedan"], "stations": ["hospital"], "crew": "cop", "crewCount": 2, "work": 4, "maxWork": 20, "owner": 2, "speed": [10, 11]}
+    },
+    "incidents": {"body": "body", "wreck": "wreck", "fire": "fire", "burn": 200, "fireDamage": 0, "treat": 5, "witness": 6, "lots": ["lot"], "abandon": 0}
+  },
+  "types": {
+    "guy":   {"health": {"max": 500}, "move": {"speed": 4, "radius": 0.2}, "sight": 10},
+    "sedan": {"health": {"max": 400}, "move": {"speed": 0, "radius": 0.5}, "sight": 2},
+    "ped":   {"health": {"max": 40}, "move": {"speed": 0.5, "radius": 0.1}, "sight": 4},
+    "medic": {"health": {"max": 40}, "move": {"speed": 1.5, "radius": 0.1}, "sight": 4},
+    "cop":   {"health": {"max": 80}, "move": {"speed": 1.5, "radius": 0.1}, "sight": 8,
+              "weapons": [{"id": "gun", "range": 4, "damage": 5, "cooldown": 0.5, "projectileSpeed": 30}]},
+    "body":  {"health": {"max": 1000}, "invulnerable": true, "move": {"speed": 0, "radius": 0.05}, "sight": 0},
+    "wreck": {"health": {"max": 1000}, "invulnerable": true, "move": {"speed": 0, "radius": 0.4}, "sight": 0},
+    "fire":  {"health": {"max": 1000}, "invulnerable": true, "move": {"speed": 0, "radius": 0.05}, "sight": 0},
+    "hospital": {"health": {"max": 1000}, "invulnerable": true, "move": {"speed": 0, "radius": 0.1}, "sight": 0},
+    "lot":   {"health": {"max": 1000}, "invulnerable": true, "move": {"speed": 0, "radius": 0.1}, "sight": 0},
+    "dummy": {"health": {"max": 100000}, "invulnerable": true, "move": {"speed": 0, "radius": 0.3}, "sight": 2}
+  }
+})J";
+// the hero on the north sidewalk, a station object on the same road two blocks east, a lot inside the south-east block
+const char* kCityStart = R"({"type":"guy","owner":1,"pos":[8.5,4.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]},
+    {"type":"hospital","owner":0,"pos":[20.5,4.4]},{"type":"lot","owner":0,"pos":[20.5,18.5]})";
+int countOfType(Simulation& sim, const char* id) {
+    int n = 0;
+    auto& types = mod(sim).rules().types;
+    sim.world().each<game::Unit, Transform>([&](Entity, game::Unit& u, Transform&) { if (u.hp.raw > 0 && types[u.type].id == id) ++n; });
+    return n;
+}
+const game::TrafficIncident* incidentKind(Simulation& sim, uint8_t kind) {
+    for (auto& i : tstore(sim).incidents) if (i.kind == kind) return &i;
+    return nullptr;
+}
+} // namespace
+
+TEST(traffic_city_ambulance_takes_the_injured_to_hospital_and_he_walks_out) {
+    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]})"), 2);
+    auto& w = sim->world();
+    run(*sim, 0.5);
+    const Entity ped = firstOf(*sim, "ped");
+    CHECK(ped.valid() && tstore(*sim).incidents.empty());
+    mod(*sim).dealDamage(*sim, ped, Fixed::fromInt(1000), 0, kNullEntity, 0);   // knocked down
+    run(*sim, 0.5);
+    CHECK(countOfType(*sim, "ped") == 0 && countOfType(*sim, "body") == 1);
+    const game::TrafficIncident* inc = incidentKind(*sim, game::kIncidentInjured);
+    CHECK(inc && inc->victim == uint16_t(mod(*sim).rules().findType("ped")));
+    bool coming = false, medics = false, worked = false;
+    int taken = -1, out = -1;
+    Fixed far{};
+    for (int i = 0; i < 200 * int(sim->tickRate()); ++i) {
+        sim->step();
+        for (auto& c : tstore(*sim).cars) {
+            if (c.task == game::kTaskGoing) { coming = true; CHECK(c.kind == game::kTrafficEmergency && c.homePiece >= 0); far = fxMax(far, (w.get<Transform>(c.e).pos - Vec3{Fixed::fromRatio(41, 2), Fixed{}, Fixed::fromRatio(5, 2)}).length()); }
+            if (c.task == game::kTaskCrewOut) { medics = true; CHECK(c.crew.size() == 2 && countOfType(*sim, "medic") == 2); }
+            if (c.task == game::kTaskWorking) worked = true;
+        }
+        if (taken < 0 && countOfType(*sim, "body") == 0) { taken = i; CHECK(tstore(*sim).patients.size() == 1 && !incidentKind(*sim, game::kIncidentInjured)); }
+        if (taken >= 0 && out < 0 && countOfType(*sim, "ped") == 1) out = i;
+        if (out >= 0 && tstore(*sim).cars.empty()) break;
+    }
+    CHECK(coming && medics && worked && far > Fixed::fromInt(8));
+    CHECK(taken > 0 && out > taken + 4 * int(sim->tickRate()));   // treated for 5 s first
+    CHECK(countOfType(*sim, "medic") == 0 && tstore(*sim).cars.empty());   // crew back in, the ambulance drove into its station
+    CHECK(tstore(*sim).patients.empty() && tstore(*sim).people.size() == 1);
+    // he walks out next to the hospital
+    if (!tstore(*sim).people.empty()) {
+        const Vec3 p = w.get<Transform>(tstore(*sim).people[0].e).pos;
+        CHECK((p - Vec3{Fixed::fromRatio(41, 2), Fixed{}, Fixed::fromRatio(22, 5)}).length() < Fixed::fromInt(12));
+    }
+}
+
+TEST(traffic_city_fire_engine_first_then_the_tow_truck_takes_the_wreck_to_the_lot) {
+    // a parked car on the north road blows up
+    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"sedan","owner":0,"pos":[9.5,2.5],"facing":90})"), 2);
+    run(*sim, 0.5);
+    const Entity car = firstOf(*sim, "sedan");
+    mod(*sim).dealDamage(*sim, car, Fixed::fromInt(100000), 0, kNullEntity, 0);
+    run(*sim, 0.5);
+    CHECK(countOfType(*sim, "wreck") == 1 && countOfType(*sim, "fire") == 1);
+    CHECK(incidentKind(*sim, game::kIncidentFire) && incidentKind(*sim, game::kIncidentWreck));
+    int fireOut = -1, towCalled = -1, towed = -1;
+    for (int i = 0; i < 240 * int(sim->tickRate()); ++i) {
+        sim->step();
+        const game::TrafficIncident* wr = incidentKind(*sim, game::kIncidentWreck);
+        if (fireOut < 0 && countOfType(*sim, "fire") == 0) fireOut = i;
+        if (fireOut < 0) CHECK(wr && wr->state == 0);   // nobody tows a burning wreck
+        if (towCalled < 0 && wr && wr->state > 0) towCalled = i;
+        if (towed < 0 && !wr) { towed = i; break; }
+    }
+    CHECK(fireOut > 0 && towCalled > fireOut && towed > towCalled);
+    // the wreck stands on the lot now
+    CHECK(countOfType(*sim, "wreck") == 1);
+    Vec3 at{};
+    auto& types = mod(*sim).rules().types;
+    sim->world().each<game::Unit, Transform>([&](Entity, game::Unit& u, Transform& t) { if (u.hp.raw > 0 && types[u.type].id == "wreck") at = t.pos; });
+    CHECK((at - Vec3{Fixed::fromRatio(41, 2), Fixed{}, Fixed::fromRatio(37, 2)}).length() < Fixed::fromInt(5));
+    CHECK(tstore(*sim).towed == 1);
+}
+
+TEST(traffic_city_police_come_when_somebody_saw_it_and_fight) {
+    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[10.5,4.6]})"), 2);
+    auto& w = sim->world();
+    run(*sim, 0.5);
+    const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    // no witness within 6 cells: nobody calls
+    CHECK(trf(*sim).report(*sim, game::kIncidentCrime, {Fixed::fromInt(22), Fixed::fromInt(22)}, kNullEntity, hero) == 0);
+    const uint32_t id = trf(*sim).report(*sim, game::kIncidentCrime, {Fixed::fromRatio(17, 2), Fixed::fromRatio(9, 2)}, kNullEntity, hero);
+    CHECK(id != 0 && trf(*sim).report(*sim, game::kIncidentCrime, {Fixed::fromInt(9), Fixed::fromRatio(9, 2)}, kNullEntity, hero) == id);   // the same call
+    bool cops = false;
+    const Fixed hp0 = w.get<game::Unit>(hero).hp;
+    for (int i = 0; i < 120 * int(sim->tickRate()); ++i) {
+        sim->step();
+        if (countOfType(*sim, "cop") == 2) cops = true;
+        if (cops && w.get<game::Unit>(hero).hp < hp0) break;
+    }
+    CHECK(cops);
+    CHECK(w.get<game::Unit>(hero).hp < hp0);   // they opened fire on the offender
+}
+
+TEST(traffic_city_determinism_and_saves_with_services_on_call) {
+    const std::string map = trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]},{"type":"ped","owner":2,"pos":[10.5,4.6]},
+        {"type":"sedan","owner":0,"pos":[18.5,14.5],"facing":90})");
+    auto play = [&](Simulation& sim, int from, int to, std::vector<uint64_t>* sums) {
+        for (int i = from; i < to; ++i) {
+            if (i == 10) mod(sim).dealDamage(sim, firstOf(sim, "ped"), Fixed::fromInt(1000), 0, mod(sim).topDown()->heroOf(sim, 1), 1);
+            if (i == 30) mod(sim).dealDamage(sim, firstOf(sim, "sedan"), Fixed::fromInt(100000), 0, kNullEntity, 0);
+            sim.step();
+            if (sums && i % 50 == 0) sums->push_back(sim.checksum());
+        }
+    };
+    auto s1 = makeSimJson(kCityRules, map, 6), s2 = makeSimJson(kCityRules, map, 6);
+    std::vector<uint64_t> c1, c2;
+    play(*s1, 0, 500, &c1);
+    play(*s2, 0, 500, &c2);
+    CHECK(c1 == c2);
+    CHECK(tstore(*s1).incidents.size() >= 2);   // the injured (and the crime the other one saw), the fire, the wreck
+    bool onCall = false;
+    for (auto& c : tstore(*s1).cars) onCall = onCall || c.task != game::kTaskNone;
+    CHECK(onCall);
+    std::string save = s1->serialize();
+    auto s3 = makeSimJson(kCityRules, map, 6);
+    std::string err;
+    CHECK(s3->deserialize(save, &err));
+    CHECK(s3->checksum() == s1->checksum());
+    play(*s1, 500, 1500, nullptr); play(*s3, 500, 1500, nullptr);
+    CHECK(s3->checksum() == s1->checksum());
+    SimSnapshot snap;
+    s1->saveState(snap);
+    run(*s1, 5);
+    const uint64_t after = s1->checksum();
+    s1->loadState(snap);
+    run(*s1, 5);
+    CHECK(s1->checksum() == after);
+}
