@@ -271,7 +271,7 @@ void Server::Impl::hostedReport(Room& r, int32_t result, const NetText& reason, 
     rep.verified = verified; rep.aborted = aborted || H.aborted;
     rep.desync = r.match && r.match->desync;
     rep.durationMs = H.startedMs ? now - H.startedMs : 0;
-    std::set<Bytes> distinct;
+    std::set<std::string> distinct;   // (a set of byte vectors trips a gcc 13 -Wstringop-overread false positive)
     size_t reported = 0;
     for (auto& ap : H.alloc.players) {
         if (ap.info.kind != SlotKind::Human) continue;
@@ -286,11 +286,11 @@ void Server::Impl::hostedReport(Room& r, int32_t result, const NetText& reason, 
             p.report = m.report;
             p.droppedCommands = m.droppedCommands;
         }
-        if (!p.report.empty()) { distinct.insert(p.report); ++reported; }
+        if (!p.report.empty()) { distinct.insert(std::string(p.report.begin(), p.report.end())); ++reported; }
         rep.players.push_back(std::move(p));
     }
     rep.consensus = reported > 0 && distinct.size() == 1;
-    if (rep.consensus) rep.report = *distinct.begin();
+    if (rep.consensus) rep.report.assign(distinct.begin()->begin(), distinct.begin()->end());
     rep.replayPath = lastReplayPath;
     lastReplayPath.clear();
     log("hosted %llu: report result %d%s%s, %zu player reports%s", (unsigned long long)rep.matchId, result, rep.aborted ? " (aborted)" : "",
