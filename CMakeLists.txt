@@ -286,6 +286,9 @@ if(NOT EMSCRIPTEN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/battle/BattleLoad
     add_library(aiverse_battle_load STATIC apps/battle/BattleLoad.cpp)
     target_link_libraries(aiverse_battle_load PUBLIC aiverse_net_server)
     target_include_directories(aiverse_battle_load PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    # RTS-module battles (top-down projects: topdown_arena, extraction, Drone Fall) on the same harness (agent-df-hero-net)
+    add_library(aiverse_battle_rts STATIC apps/battle/RtsBattle.cpp)
+    target_link_libraries(aiverse_battle_rts PUBLIC aiverse_battle_load aiverse_game)
 endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
     add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
@@ -512,6 +515,7 @@ add_library(aiverse_game_view STATIC modules/rts/view/RtsView.cpp modules/rts/vi
     modules/rts/view/RtsLights.cpp modules/rts/view/RtsLightsData.cpp modules/rts/view/RtsGroundFx.cpp modules/rts/view/RtsTerrainRender.cpp modules/rts/view/RtsTerrainDetailMesh.cpp
     modules/rts/view/RtsFog.cpp modules/rts/view/RtsFieldView.cpp
     modules/rts/view/TopDownControls.cpp   # top-down hero sticks / buttons / follow camera (agent-topdown-control)
+    modules/rts/view/EncounterDecals.cpp   # boss encounters: telegraph decals, status rings (agent-df-encounters-glue)
     modules/rts/view/RtsPlanetRender.cpp modules/rts/view/RtsPlanetView.cpp modules/rts/view/RtsPlanetGroundFx.cpp)
 # visual terrain detail surface (agent-terrain): shared by the view and the editor core (sculpt, validate)
 # + the planet surface maths (RtsPlanet*: float cube-sphere surface, detail grid synthesis; editor planet detail ops)
@@ -838,7 +842,7 @@ endif()
 # Hosted battles (agent-net-mobile): battle tool (the load harness library is defined next to aiverse_net_server).
 if(AIVERSE_BUILD_SERVER AND TARGET aiverse_battle_load)
     add_executable(aiverse_battle apps/battle/main.cpp)
-    target_link_libraries(aiverse_battle PRIVATE aiverse_battle_load)
+    target_link_libraries(aiverse_battle PRIVATE aiverse_battle_load aiverse_battle_rts)
 endif()
 
 if(AIVERSE_BUILD_TESTS)
@@ -849,7 +853,8 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME aiverse_net_tests COMMAND aiverse_net_tests)
     if(TARGET aiverse_battle_load)
         add_executable(aiverse_battle_tests tests/net_mobile/battle_tests.cpp)
-        target_link_libraries(aiverse_battle_tests PRIVATE aiverse_battle_load)
+        target_link_libraries(aiverse_battle_tests PRIVATE aiverse_battle_load aiverse_battle_rts)
+        target_compile_definitions(aiverse_battle_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
         add_test(NAME aiverse_battle_tests COMMAND aiverse_battle_tests)
     endif()
     add_executable(aiverse_bw_meta_tests tests/bw_meta_tests.cpp)   # agent-bw-meta: BW backend adapter
@@ -931,7 +936,7 @@ endif()
 target_sources(aiverse_game PRIVATE modules/rts/RtsTiles.cpp)
 # terrain / map generator (agent-terrain-gen): integer noise, erosion, biomes, fair starts, presets, planets
 target_sources(aiverse_game PRIVATE modules/rts/gen/GenNoise.cpp modules/rts/gen/GenField.cpp modules/rts/gen/GenTerrain.cpp
-    modules/rts/gen/GenContent.cpp modules/rts/gen/GenPlanet.cpp modules/rts/gen/GenWorld.cpp modules/rts/gen/MapGen.cpp)
+    modules/rts/gen/GenContent.cpp modules/rts/gen/GenCity.cpp modules/rts/gen/GenPlanet.cpp modules/rts/gen/GenWorld.cpp modules/rts/gen/MapGen.cpp)
 add_library(aiverse_render2d STATIC engine/render/SpriteBatch.cpp engine/render/TextureCache.cpp)
 target_include_directories(aiverse_render2d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE third_party/stb)
 target_sources(aiverse_game_view PRIVATE modules/rts/view/RtsSprites.cpp modules/rts/view/RtsTileView.cpp modules/rts/view/RtsSpriteShadow.cpp)
@@ -1127,14 +1132,21 @@ endif()
 target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
 # extraction raids (agent-extraction): match loop, extraction points, raid inventory, interactables, receipts, bot, Lua `raid`
 target_sources(aiverse_game PRIVATE modules/rts/RtsRaid.cpp modules/rts/RtsRaidData.cpp modules/rts/RtsRaidBot.cpp modules/rts/RtsRaidApi.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsCommerce.cpp modules/rts/RtsCommerceApi.cpp modules/rts/RtsDrivingApi.cpp modules/rts/RtsCareer.cpp modules/rts/RtsCareerApi.cpp)   # agent-gta2: city economy
 # top-down heroes (agent-topdown-control): rules "topDown", stick input commands, aim / auto-fire (docs/topdown.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
+# in-match progression (agent-df-progression-glue): match-progression package on real units, rules "progression" (docs/progression.md)
+target_sources(aiverse_game PRIVATE modules/rts/RtsProgression.cpp modules/rts/RtsProgressionData.cpp modules/rts/RtsProgressionApi.cpp)
+# boss encounters (agent-df-encounters-glue): rules "encounters" over the boss-encounters library package (docs/encounters.md)
+target_sources(aiverse_game PRIVATE modules/rts/RtsEncounters.cpp modules/rts/RtsEncountersApi.cpp)
+target_link_libraries(aiverse_game PUBLIC AIVERSE::lib_boss_encounters)
 # map environment (Bunker Wars port: weather, wind, bosses, Mouro, scroller, caves, graveyards, souls, walls)
 target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvData.cpp modules/rts/RtsEnvBoss.cpp modules/rts/RtsEnvScript.cpp modules/rts/RtsEnvPoints.cpp)
 # driving (agent-gta2): the top-down hero drives vehicles of the vehicle-controllers library (docs/driving.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsDriving.cpp)
 # Bunker Wars routes, groups, multiscreen (docs/game-format.md § Routes)
 target_sources(aiverse_game PRIVATE modules/rts/RtsRoutes.cpp modules/rts/RtsRoutesData.cpp modules/rts/RtsScriptRoutes.cpp)
+target_sources(aiverse_game PRIVATE modules/rts/RtsArsenal.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
@@ -1157,6 +1169,7 @@ foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/ClientRegionInput.cpp)
         target_sources(${t} PRIVATE apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
+        target_sources(${t} PRIVATE apps/client/ClientCommerce.cpp)   # city economy (agent-gta2)
     endif()
 endforeach()
 
@@ -1263,9 +1276,10 @@ set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
     apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
     apps/client/ClientBaked.cpp   # ClientBaked: the map's baked lighting (agent-lightbake)
-    apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
+    apps/client/ClientTopDown.cpp apps/client/ClientCommerce.cpp)   # top-down heroes (agent-topdown-control), city economy (agent-gta2)
 foreach(t aiverse_client main)
     if(TARGET ${t})
+        target_link_libraries(${t} PRIVATE aiverse_content_reader)   # streamed world: worker-thread project reader
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
         target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # agent-lightbake
     endif()

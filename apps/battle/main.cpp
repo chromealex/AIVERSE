@@ -5,6 +5,7 @@
 //   aiverse_battle ping host:port                           unconnected battle ping (server selection)
 //   aiverse_battle load [--matches N] [--players N] [--seconds S] [--profile lan|wifi|4g|3g|bad] [--loss P]
 //                       [--rtt MS] [--jitter MS] [--tick-rate N] [--suspend] [--rebind] [--seed N] [--json]
+//                       [--project DIR [--map FILE] [--rules-patch JSON]]   RTS top-down project instead of HeroDuel
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 #include <thread>
 #include <vector>
 #include "BattleLoad.h"
+#include "RtsBattle.h"
 #include "engine/data/Json.h"
 #include "engine/net/MatchTicket.h"
 #include "engine/net/SecureUdp.h"
@@ -154,6 +156,12 @@ int main(int argc, char** argv) {
         if (!value("--jitter").empty()) cfg.link.jitterMs = uint32_t(std::atoi(value("--jitter").c_str()));
         cfg.suspendOne = flag("--suspend");
         cfg.rebindOne = flag("--rebind");
+        if (!value("--project").empty()) {   // an RTS top-down project (rules "topDown") instead of the HeroDuel stand-in
+            battle::RtsBattleOptions o;
+            o.project = value("--project"); o.map = value("--map"); o.rulesPatch = value("--rules-patch");
+            try { cfg.game = battle::rtsBattleGame(o); }
+            catch (const std::exception& e) { std::fprintf(stderr, "error: %s\n", e.what()); return 1; }
+        }
         auto r = battle::runBattleLoad(cfg);
         if (flag("--json")) {
             Json j = Json::object();
@@ -163,6 +171,8 @@ int main(int argc, char** argv) {
             j.set("aheadAvg", Json::number(r.aheadAvg, 2)); j.set("aheadMax", Json::number(int64_t(r.aheadMax)));
             j.set("serverUpdateP99Ms", Json::number(r.serverUpdateP99Ms, 3)); j.set("serverCpuShare", Json::number(r.serverCpuShare, 4));
             j.set("upBytesPerSec", Json::number(r.upBytesPerSec, 0)); j.set("downBytesPerSec", Json::number(r.downBytesPerSec, 0));
+            j.set("corrections", Json::number(int64_t(r.corrections))); j.set("maxCorrection", Json::number(double(r.maxCorrection), 3));
+            j.set("maxRawJump", Json::number(double(r.maxRawJump), 3)); j.set("maxDrawnJump", Json::number(double(r.maxDrawnJump), 3));
             j.set("summary", Json::string(r.summary()));
             std::printf("%s\n", j.dump(2).c_str());
         } else std::printf("%s\n", r.summary().c_str());

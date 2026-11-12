@@ -7,6 +7,7 @@
 #include <algorithm>
 #include "../RtsModule.h"
 #include "../RtsScriptInternal.h"
+#include "../RtsProgression.h"
 
 namespace aiverse::game {
 using namespace script;
@@ -751,6 +752,25 @@ int vSend(lua_State* L, Vm& vm) {
     lua_pushboolean(L, 1);
     return 1;
 }
+// view.progression_choose(card) / view.progression_reroll(): the local player's level-up card (rules "progression",
+// RtsProgression.h) as a kCmdProgression command for the open offer's revision; a stale click is ignored by the sim.
+int vProgressionCmd(lua_State* L, Vm& vm, int64_t op) {
+    auto& im = viewOf(vm);
+    Progression* pg = vm.module ? vm.module->progression() : nullptr;
+    const auto* p = pg && pg->active() ? pg->progress(*vm.sim, im.player) : nullptr;
+    if (!p || !p->offer.open) { lua_pushboolean(L, 0); return 1; }
+    int64_t card = 1;
+    if (op == kProgChoose && !argInt(L, vm, 1, card, "card")) return -1;
+    if (card < 1 || size_t(card) > p->offer.items.size()) { lua_pushboolean(L, 0); return 1; }
+    Command c;
+    c.type = kCmdProgression;
+    c.param = progressionParam(op, int(card - 1), p->offer.revision);
+    if (im.commands.size() < 64) im.commands.push_back(c);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+int vProgressionChoose(lua_State* L, Vm& vm) { return vProgressionCmd(L, vm, kProgChoose); }
+int vProgressionReroll(lua_State* L, Vm& vm) { return vProgressionCmd(L, vm, kProgReroll); }
 } // namespace
 
 ViewScripts::ViewScripts() : impl_(std::make_unique<Impl>(*this)) {}
@@ -801,6 +821,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>},
                                      {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>}, {"screen", bind<vScreen>},
                                      {"send", bind<vSend>}, {"state", bind<vState>}, {"ui_call", bind<vUiCall>},
+                                     {"progression_choose", bind<vProgressionChoose>}, {"progression_reroll", bind<vProgressionReroll>},
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {"set_map_drag_offset", bind<vSetMapDragOffset>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},

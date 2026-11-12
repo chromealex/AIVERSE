@@ -9,6 +9,8 @@ namespace {
 // Built-in presets (data). "shape" picks the terrain pipeline; every other key is a param documented in
 // docs/game-format.md "Map generation". Games add or override presets with rules "mapgen": {"presets": {...}}.
 const char* kPresets = R"JSON({
+  "metropolis": {"title": "Большой город: центр, кольца, пригород, холмы", "genre": "top-down city", "params": {"shape": "city", "layout": "organic", "size": [384, 384], "arterialSpacing": 26, "blockWidth": 14, "blockDepth": 12, "downtown": 0.38, "suburbs": 0.88, "river": true, "relief": 8, "roundabouts": 0.2, "parks": 0.15, "parking": 0.08, "trees": 0.18, "props": 0.06, "people": 0.04, "cars": 0.22, "treeBudget": 1500}},
+  "city":       {"title": "Город (вид сверху)", "genre": "top-down city", "params": {"shape": "city", "size": [96, 72], "arterialSpacing": 26, "blockWidth": 14, "blockDepth": 12, "river": true, "roundabouts": 0.25, "parks": 0.15, "parking": 0.08, "trees": 0.18, "props": 0.06, "people": 0.04, "cars": 0.22}},
   "continents": {"title": "Континенты", "genre": "any", "params": {"shape": "continents", "size": [96, 96], "water": 0.4, "rivers": 0.5, "levels": 1, "connect": "shallows", "shallows": 0.6}},
   "islands":    {"title": "Архипелаг", "genre": "naval / any", "params": {"shape": "islands", "size": [96, 96], "water": 0.62, "islands": 4, "levels": 1, "connect": "shallows", "shallows": 0.8}},
   "highlands":  {"title": "Нагорье", "genre": "any", "params": {"shape": "highlands", "size": [80, 80], "water": 0.08, "ridged": 0.7, "levels": 2, "peaks": 0.9, "relief": 10}},
@@ -114,6 +116,7 @@ bool generateMap(const GenRequest& req, const game::Rules& rules, const Json& ru
         if (c.layerIds.empty()) for (auto& l : rulesJson["terrain"]["layers"].items()) c.layerIds.push_back(l.getStr("id"));
         return generateWorld(c, req, map, err);
     }
+    if (c.shape == "city") return generateCity(c, req, map, err);   // street network, blocks, buildings (GenCity.cpp)
     const Json& sz = c.P["size"];
     c.w = int(sz.isArray() ? sz[size_t(0)].integer(64) : map["size"][size_t(0)].integer(64));
     c.h = int(sz.isArray() ? sz[size_t(1)].integer(64) : map["size"][size_t(1)].integer(64));

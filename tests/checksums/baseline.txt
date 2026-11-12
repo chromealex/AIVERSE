@@ -4,6 +4,9 @@ ambersands 3 442dcee70c1a1bea
 borderrush 1 cdafc827fd84ddb0
 borderrush 2 ebed2231c3835756
 borderrush 3 e22aea63e52a9469
+boss_arena 1 836eee10a8c757a1
+boss_arena 2 a51dde24dba483be
+boss_arena 3 6a094fb974abbc3f
 bunkerwars 1 a4af5e90d4940cfe
 bunkerwars 2 71b6775c97c2b019
 bunkerwars 3 ed800c21f5816a7d
@@ -49,6 +52,9 @@ metaltide 3 16faea5911a0c70f
 mushrooms 1 b414ca20fff98526
 mushrooms 2 412966f2db05793f
 mushrooms 3 a06caad4f1d88f10
+perk_arena 1 107ba194c405c6bf
+perk_arena 2 b47bb51037b96420
+perk_arena 3 29ca9f0591eeb31f
 planets 1 124c8c10bb9bbdf4
 planets 2 eb381e9e20d5222c
 planets 3 b72f846e5d219199

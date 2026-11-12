@@ -40,10 +40,21 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     fields_->setup(sim, *this, mapIn);
     topDown_ = std::make_unique<TopDown>();   // top-down heroes (rules "topDown"); nothing without the block
     topDown_->setup(sim, *this, rulesJson);
+    progression_ = std::make_unique<Progression>();   // in-match progression (rules "progression"); nothing without the block
+    progression_->setup(sim, *this, mapIn);
+    encounters_ = std::make_unique<Encounters>();   // boss encounters (rules "encounters"); nothing without the block
+    encounters_->setup(sim, *this, rulesJson, mapIn);
     env_ = std::make_unique<Environment>();   // map environment (rules / map "environment"); nothing without it
     env_->setup(sim, *this, rulesJson, mapIn);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
+    commerce_ = std::make_unique<Commerce>();   // premises, businesses, the bank (rules "commerce"); nothing without the block
+    commerce_->setup(sim, *this, rulesJson, mapIn);
+    career_ = std::make_unique<Career>();   // career ladders (rules "careers"); nothing without the block
+    career_->setup(sim, *this, rulesJson);
+    driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
+    arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
+    arsenal_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -70,7 +81,10 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (encounters_->active()) sim.addSystem("encounters", [this](Simulation& s) { encounters_->tick(s); });   // RtsEncounters.cpp: bosses, mobs, telegraph strikes
+    if (commerce_->active()) sim.addSystem("commerce", [this](Simulation& s) { commerce_->tick(s); });   // RtsCommerce.cpp: days and weeks
     if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
+    if (progression_->active()) sim.addSystem("progression", [this](Simulation& s) { progression_->tick(s); });   // RtsProgression.cpp: kills at 0 hp -> xp orbs
     if (env_->active()) sim.addSystem("environment", [this](Simulation& s) { env_->tick(s); });   // RtsEnv.cpp (games with an environment only)
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
     sim.addSystem("capture", [this](Simulation& s) { sysCapture(s); });
@@ -85,11 +99,13 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     });
     if (script_->hasUserScripts()) sim.addSystem("scripts", [this](Simulation& s) { script_->tick(s); }); // after triggers: same events
     if (modes_.any && modes_.stats) sim.addSystem("matchstats", [this](Simulation& s) { sysMatchStats(s); });   // last: every event of the tick
+    sim.world().setResource<MatchOutcome>();
+    sim.addSystem("outcome", [this](Simulation& s) { freezeOutcome(s); });   // last: the result of the whole tick
     // Gameplay time scale (Bunker Wars SetGameplayTimescale: tutorial windows freeze the battle): with the trigger
     // variable "gameplay_scale" in [0, 1) the gameplay systems run on that share of the ticks; commands, vision,
-    // victory, triggers and scripts keep running. Without the variable nothing changes.
+    // victory, triggers, scripts and the outcome keep running. Without the variable nothing changes.
     sim.wrapSystems([this](const std::string& n, Simulation::SystemFn f) -> Simulation::SystemFn {
-        if (n == "vision" || n == "victory" || n == "triggers" || n == "scripts" || n == "matchstats") return f;
+        if (n == "vision" || n == "victory" || n == "triggers" || n == "scripts" || n == "matchstats" || n == "outcome") return f;
         return [this, f = std::move(f)](Simulation& s) { if (gameplayRun_) f(s); };
     });
     sim.insertSystem(0, "gameplayClock", [this](Simulation& s) { gameplayClock(s); });
@@ -706,9 +722,12 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (mechOn(sim)) mechStatMod(sim, e, s, add, mul);   // agent-mech states (retreat speed, cargo arrows, veterancy)
     if (rules_.originals) add += playerModsStat(sim, owner, u.type, s, mul);   // forges, morale
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
+    if (s == Stat::Speed && encounters_ && encounters_->hasSpeed()) mul *= encounters_->speedMul(sim, e);   // boss phase / enrage speed
     if (s == Stat::Speed && env_ && env_->active()) env_->speed(sim, e, add, mul);   // environment: wind, zones, weather, traces, snow
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
-    return (base + add) * mul;
+    Fixed v = (base + add) * mul;
+    if (progression_ && progression_->active()) progression_->modStat(sim, e, s, v);   // perk pipeline (RtsProgression.cpp)
+    return v;
 }
 
 int RtsModule::membersAlive(Simulation& sim, Entity e) const {
@@ -989,7 +1008,7 @@ void RtsModule::issue(Simulation& sim, Entity e, const Order& o, bool queue) {
         stopMoving(sim, e);
         if (auto* m = w.tryGet<Mobile>(e)) { m->flowGoalCell = -1; m->flowArrived = -1; }   // leaves its flow crowd
         if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
-        if (auto* u = w.tryGet<Unit>(e)) u->flags &= uint8_t(~kUnitHold);
+        if (auto* u = w.tryGet<Unit>(e)) u->flags &= kKeepFlags(~kUnitHold);
     }
     ord->queue.push_back(o);
 }
@@ -1000,10 +1019,14 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     auto* pi = sim.player(cmd.player);
     if (!pi || !pi->alive) return;
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
-    if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
+    if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility = 0xF100 / 0xF101 (RtsTopDown.cpp)
+    if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }   // native modules (never the two hero ids)
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (progression_ && progression_->command(sim, cmd)) return;   // kCmdProgression (RtsProgression.cpp)
+    if (career_ && career_->command(sim, cmd)) return;       // kCmdCareer (RtsCareer.cpp)
+    if (commerce_ && commerce_->command(sim, cmd)) return;   // kCmdCommerce (RtsCommerce.cpp)
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
-    if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
+    if (arsenal_ && arsenal_->command(sim, cmd)) return;   // kCmdTopDownWeapon (RtsArsenal.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
     if (cmd.type >= kCmdDig && cmd.type <= kCmdPlayerAbility) { applyDungeonCommand(sim, cmd); return; }
@@ -1035,7 +1058,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
         auto* o = w.tryGet<Owner>(e);
         auto* u = w.tryGet<Unit>(e);
         if (!o || !u || o->player != cmd.player || u->hp.raw <= 0) continue;
-        if (u->flags & (kUnitOffMap | kUnitPossessed)) continue; // off the map / directly controlled
+        if (u->flags & (kUnitOffMap | kUnitPossessed | kUnitFollower)) continue; // off the map / directly controlled / squad
         if (auto* nd = w.tryGet<Needs>(e); nd && nd->leaving) continue;
         if ((u->flags & kUnitUnderConstruction) && cmd.type != kCmdCancelTrain) continue;
         if (std::find(sel.begin(), sel.end(), e) != sel.end()) continue;
@@ -1109,7 +1132,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
         case kCmdHold:
             if (auto* ord = w.tryGet<Orders>(e)) { ord->queue.clear(); stopMoving(sim, e); }
             if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
-            if (cmd.type == kCmdHold) w.get<Unit>(e).flags |= kUnitHold; else w.get<Unit>(e).flags &= uint8_t(~kUnitHold);
+            if (cmd.type == kCmdHold) w.get<Unit>(e).flags |= kUnitHold; else w.get<Unit>(e).flags &= kKeepFlags(~kUnitHold);
             break;
         case kCmdGather:
             if (t.gathers.empty()) break;
@@ -1422,6 +1445,49 @@ uint32_t RtsModule::ticksUntilWave(Simulation& sim) const {
 // ================================================================= hashing / result
 
 int RtsModule::result(Simulation& sim) {
+    if (auto* o = sim.world().resource<MatchOutcome>(); o && o->result) return o->result;   // frozen (freezeOutcome)
+    return liveResult(sim);
+}
+
+const MatchOutcome* RtsModule::outcome(Simulation& sim) const {
+    auto* o = sim.world().resource<MatchOutcome>();
+    return o && o->result ? o : nullptr;
+}
+
+std::vector<uint8_t> RtsModule::outcomeBlob(Simulation& sim) const {
+    const MatchOutcome* o = outcome(sim);
+    return o ? o->blob : std::vector<uint8_t>{};
+}
+
+void RtsModule::freezeOutcome(Simulation& sim) {
+    auto* o = sim.world().resource<MatchOutcome>();
+    if (!o || o->result) return;
+    const int r = liveResult(sim);
+    if (!r) return;
+    o->result = r;
+    o->tick = sim.tick();
+    std::vector<uint8_t>& b = o->blob;
+    auto u16 = [&](uint32_t v) { b.push_back(uint8_t(v)); b.push_back(uint8_t(v >> 8)); };
+    auto u32 = [&](uint32_t v) { u16(v & 0xFFFF); u16(v >> 16); };
+    b = {'O', 1, uint8_t(int8_t(r))};
+    u32(o->tick);
+    World& w = sim.world();
+    GameState& gs = state(sim);
+    b.push_back(uint8_t(sim.players().size()));
+    for (auto& p : sim.players()) {
+        uint32_t units = 0, structures = 0;
+        w.each<Unit, Owner>([&](Entity, Unit& u, Owner& ow) {
+            if (ow.player != p.slot || u.hp.raw <= 0) return;
+            (rules_.types[u.type].structure ? structures : units) += 1;
+        });
+        b.push_back(p.slot); b.push_back(p.team); b.push_back(p.alive ? 1 : 0);
+        u16(std::min<uint32_t>(units, 0xFFFF)); u16(std::min<uint32_t>(structures, 0xFFFF));
+        const int64_t score = p.team < gs.score.size() ? gs.score[p.team].raw : 0;
+        u32(uint32_t(uint64_t(score))); u32(uint32_t(uint64_t(score) >> 32));
+    }
+}
+
+int RtsModule::liveResult(Simulation& sim) {
     auto* gs = sim.world().resource<GameState>();
     if (gs && gs->winnerTeam < 0 && raid_ && raid_->active()) return 0;   // extraction raids end the match themselves
     if (gs && gs->winnerTeam >= 0) return gs->winnerTeam == 0 ? -1 : gs->winnerTeam;
@@ -1519,8 +1585,13 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (raid_ && raid_->active()) raid_->hash(sim, h);   // extraction raids only
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
+    if (progression_ && progression_->active()) progression_->hash(sim, h);   // games with rules "progression" only
+    if (encounters_ && encounters_->active()) encounters_->hash(sim, h);   // games with rules "encounters" only
     if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
+    if (commerce_ && commerce_->active()) commerce_->hash(sim, h);   // games with rules "commerce" only
+    if (career_ && career_->active()) career_->hash(sim, h);         // games with rules "careers" only
+    if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
 }
 
 } // namespace aiverse::game

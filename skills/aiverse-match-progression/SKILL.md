@@ -10,6 +10,10 @@ offer N choices (recruit a deck unit, a perk for one deck slot, a player-wide pe
 modifiers, allies are summoned/restored at circles, and the loadout comes from a pre-match battle deck. Not for
 meta progression between matches (talent trees, shops, unlocks): use `engine/meta`. Not for built-in RTS hero xp
 (`xpLevels`/`perLevel` in RtsData) or RtsModule stat mods: those stay authoritative in RTS games.
+RTS games built from JSON + Lua get the whole package on real units through the rules block `progression`
+(`docs/progression.md`: orbs from kills, `kCmdProgression` choices, perk stats on unit pipelines, bullet perks,
+on-hit payloads, summon circles, battle deck from the map's `players[i].deck`, Lua `progression`); do not rewire it
+in game scripts.
 
 1. Read `docs/genre-packages.md` (match-progression) and the catalog entry; inspect `genre/Perks.h`,
    `genre/XpPickups.h`, `genre/Summons.h`, `genre/BattleDeck.h` for exact behaviour.
