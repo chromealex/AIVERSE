@@ -50,11 +50,23 @@ struct DrivingRules {
     std::vector<DrivingVehicleType> vehicles;      // sorted by type
 };
 
+// A deck is a second level of the map: a bridge over a road, a tunnel under houses (map "decks", docs/driving.md).
+// A car gets on at either end and stays between the walls until it leaves through an end; while it is on the
+// deck the map grid under it does not stop it and it does not touch what is on the ground or on another deck.
+struct DrivingDeck {
+    std::string id;
+    Fixed width = Fixed::fromInt(2);               // cells, wall to wall
+    std::vector<Vec3> pts;                         // centre line: x, z in cells; y is the roadway height in metres
+    std::vector<Fixed> at;                         // distance along the centre line at each point, cells
+    Fixed length() const { return at.empty() ? Fixed{} : at.back(); }
+};
+
 struct DrivingCar {
     Entity e = kNullEntity;
     Entity driver = kNullEntity;
     uint8_t player = 0;                            // slot of the driver (0: nobody)
     uint32_t doorUntil = 0;                        // the driver's door is open until this tick
+    int16_t deck = -1;                             // index into DrivingStore::decks while on a bridge / in a tunnel
     bool autopilot = false;                        // pedals come from `pilot` (traffic, scripts) while no hero drives
     lib::genre::VehicleInput pilot;
     lib::genre::VehicleState st;
@@ -62,6 +74,7 @@ struct DrivingCar {
 
 struct DrivingStore {
     std::vector<DrivingCar> cars;                  // ascending entity index
+    std::vector<DrivingDeck> decks;                // from the map, in map order
 };
 
 class Driving {
@@ -70,6 +83,7 @@ public:
     const DrivingRules& rules() const { return rules_; }
     static DrivingRules parse(const Json& j, const std::vector<std::string>& typeIds);   // throws readable errors
     void setup(Simulation& sim, RtsModule& m, const Json& rulesJson);
+    void loadMap(Simulation& sim, const Json& map);      // map "decks"; throws readable errors
     bool command(Simulation& sim, const Command& cmd);   // true: kCmdTopDownEnter handled
     void tick(Simulation& sim);                          // after the top-down heroes moved
     void hash(Simulation& sim, Hasher& h) const;
@@ -84,6 +98,13 @@ public:
     // gets out the autopilot input applies again. false: not a vehicle, or the input is out of range.
     bool setAutopilot(Simulation& sim, Entity vehicle, const lib::genre::VehicleInput& input);
     bool clearAutopilot(Simulation& sim, Entity vehicle);              // back to parked (handbrake)
+    // Levels. deckOf: index of the deck the vehicle is on, -1 on the ground. deckIndex: by map id, -1 unknown.
+    // height: metres above the ground at the vehicle (0 on the ground), for the view. setDeck puts a vehicle on a
+    // deck it already stands inside (traffic spawning a car in a tunnel) or back on the ground (-1); simulation code only.
+    int deckOf(Simulation& sim, Entity vehicle) const;
+    int deckIndex(Simulation& sim, const std::string& id) const;
+    Fixed height(Simulation& sim, Entity vehicle) const;
+    bool setDeck(Simulation& sim, Entity vehicle, int deck);
 
 private:
     const DrivingVehicleType* typeOf(uint16_t unitType) const;

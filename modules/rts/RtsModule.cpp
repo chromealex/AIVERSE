@@ -44,6 +44,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     env_->setup(sim, *this, rulesJson, mapIn);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
+    driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);

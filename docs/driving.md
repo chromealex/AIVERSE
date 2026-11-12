@@ -35,6 +35,36 @@ a script effect, never from the view. A hero who gets in takes over, and the aut
 gets out. A parked car at rest is skipped by the controller, a car on autopilot never is. Traffic and traffic lights
 are built on this by their own module; the city planner's `"city"` block of the map has the road graph.
 
+## Levels: bridges over roads and tunnels
+
+The map grid is one floor. A second floor is described on the map as a list of decks:
+
+```json
+"decks": [
+  {"id": "ring_over_avenue", "width": 2, "path": [[40.5, 60], [40.5, 63, 5], [40.5, 71, 5], [40.5, 74]]},
+  {"id": "hill_tunnel", "width": 2, "path": [[80, 20.5], [83, 20.5, -4], [95, 20.5, -4], [98, 20.5]]}
+]
+```
+
+`path` is the centre line in cells (`[x, z]` or `[x, z, height in metres]`), `width` is the room between the
+walls in cells. Both ends are open mouths at ground height.
+
+- A car gets on when any part of it enters a mouth (the last 1.5 cells at either end) and gets off when the whole
+  body has left through an end.
+- On a deck the car is held between the deck's walls (railings, tunnel walls) and the grid is ignored: a tunnel
+  runs under blocked cells, a bridge over water or over another road.
+- A car deep on a deck (further than 1.5 cells from both ends) does not touch cars, people and posts on the
+  ground or on another deck, and they do not touch it. Near the mouths everybody collides as usual.
+- The hero cannot get out deep on a deck and cannot take a car that stands there.
+- `Driving::deckOf`, `deckIndex(id)`, `height` (metres above the ground, for the view) and `setDeck` (a traffic
+  system spawning a car inside a tunnel) are the code API. The deck of every car is part of the checksum and of saves.
+
+What the map has to respect: the ground at both mouths is passable, and no other road crosses a deck closer than
+two cells to its ends (a car crossing a mouth sideways would be taken onto the deck).
+
+Not done yet for levels: people on foot (they still walk on the one-floor grid, so a bridge over a river works for
+them, a tunnel and a bridge over a road do not), and the view does not lift a car to the deck height yet.
+
 ## rules.json
 
 ```json

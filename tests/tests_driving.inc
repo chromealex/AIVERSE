@@ -174,6 +174,101 @@ TEST(driving_autopilot_drives_a_car_nobody_sits_in) {
     CHECK(tdPos(*sim, car) == rest && drv(*sim).speed(*sim, car).raw == 0);
 }
 
+TEST(driving_decks_tunnel_through_a_wall_and_bridge_over_a_parked_car) {
+    aiverse::lib::genre::VehicleInput go;
+    go.throttle = Fixed::fromRatio(1, 2);
+    // the map has a wall at x = 12; a tunnel crosses it
+    const std::string cars = kDriveStart;
+    auto withDecks = [&](const std::string& entities, const char* decks, bool wall) {
+        std::string map = topDownMap(entities, wall);
+        map.pop_back();
+        return map + ",\"decks\":" + decks + "}";
+    };
+    const char* tunnel = R"([{"id":"tunnel","width":1.2,"path":[[9.5,8.5,0],[11.5,8.5,-4],[13.5,8.5,-4],[15.5,8.5,0]]}])";
+    {
+        auto blocked = makeSimJson(kDrivingRules, topDownMap(cars));
+        Entity car = firstOf(*blocked, "sedan");
+        CHECK(drv(*blocked).setAutopilot(*blocked, car, go));
+        run(*blocked, 6.0);
+        CHECK(tdPos(*blocked, car).x < Fixed::fromInt(12) && drv(*blocked).deckOf(*blocked, car) == -1);
+    }
+    auto sim = makeSimJson(kDrivingRules, withDecks(cars, tunnel, true));
+    auto& d = drv(*sim);
+    Entity hero = mod(*sim).topDown()->heroOf(*sim, 1), car = firstOf(*sim, "sedan");
+    CHECK(d.deckIndex(*sim, "tunnel") == 0 && d.deckIndex(*sim, "nope") == -1 && d.deckOf(*sim, car) == -1);
+    CHECK(d.setAutopilot(*sim, car, go));
+    bool inside = false, low = false;
+    Fixed zMin = Fixed::fromInt(100), zMax{};
+    std::string save;
+    uint64_t sumInside = 0;
+    for (int i = 0; i < 20 * 8 && tdPos(*sim, car).x < Fixed::fromInt(18); ++i) {
+        sim->step();
+        if (d.deckOf(*sim, car) == 0) {
+            inside = true;
+            low = low || d.height(*sim, car) <= Fixed::fromInt(-4);
+            zMin = fxMin(zMin, tdPos(*sim, car).z); zMax = fxMax(zMax, tdPos(*sim, car).z);
+            if (save.empty() && tdPos(*sim, car).x > Fixed::fromInt(12)) { save = sim->serialize(); sumInside = sim->checksum(); }
+        }
+    }
+    CHECK(inside && low && tdPos(*sim, car).x >= Fixed::fromInt(18));        // it came out on the other side
+    CHECK(d.deckOf(*sim, car) == -1 && d.height(*sim, car).raw == 0);
+    CHECK(zMin > Fixed::fromInt(8) && zMax < Fixed::fromInt(9));
+    // a save taken in the middle of the tunnel: the copy is on the deck too and drives out
+    CHECK(!save.empty());
+    auto copy = makeSimJson(kDrivingRules, withDecks(cars, tunnel, true));
+    std::string err;
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sumInside);
+    CHECK(drv(*copy).deckOf(*copy, firstOf(*copy, "sedan")) == 0);
+    run(*copy, 4.0);
+    CHECK(tdPos(*copy, firstOf(*copy, "sedan")).x > Fixed::fromInt(16));
+    (void)hero;
+
+    // the tunnel walls: steering inside does not take the car through the map wall
+    {
+        auto s2 = makeSimJson(kDrivingRules, withDecks(cars, tunnel, true));
+        Entity c2 = firstOf(*s2, "sedan");
+        aiverse::lib::genre::VehicleInput turn = go;
+        turn.steer = Fixed::fromInt(1);
+        drv(*s2).setAutopilot(*s2, c2, go);
+        for (int i = 0; i < 20 * 10; ++i) {
+            s2->step();
+            if (drv(*s2).deckOf(*s2, c2) == 0) drv(*s2).setAutopilot(*s2, c2, turn);
+            const Vec3 p = tdPos(*s2, c2);
+            if (p.x > Fixed::fromInt(11) && p.x < Fixed::fromInt(14)) CHECK(p.z > Fixed::fromInt(8) && p.z < Fixed::fromInt(9));
+        }
+    }
+
+    // a bridge over open ground: the car on it passes over a parked car and a hero cannot get into a car up there
+    const char* bridge = R"([{"id":"bridge","width":1.2,"path":[[8.5,8.5,0],[10.5,8.5,5],[16.5,8.5,5],[18.5,8.5,0]]}])";
+    const std::string two = std::string(kDriveStart) + R"(,{"type":"sedan","owner":0,"pos":[13.5,8.5],"facing":0},{"type":"dummy","owner":2,"pos":[15.5,8.5]})";
+    auto over = makeSimJson(kDrivingRules, withDecks(two, bridge, false));
+    Entity mover = firstOf(*over, "sedan"), parked = kNullEntity;
+    over->world().each<game::Unit, Transform>([&](Entity e, game::Unit& u, Transform& t) {
+        if (mod(*over).rules().types[u.type].id == "sedan" && t.pos.x > Fixed::fromInt(13)) parked = e;
+    });
+    CHECK(parked.valid() && parked != mover);
+    const Vec3 parkedAt = tdPos(*over, parked);
+    drv(*over).setAutopilot(*over, mover, go);
+    bool up = false;
+    for (int i = 0; i < 20 * 10 && tdPos(*over, mover).x < Fixed::fromInt(21); ++i) {
+        over->step();
+        up = up || drv(*over).height(*over, mover) == Fixed::fromInt(5);
+    }
+    CHECK(up && tdPos(*over, mover).x >= Fixed::fromInt(21) && tdPos(*over, parked) == parkedAt);
+    CHECK(over->world().get<game::Unit>(parked).hp == Fixed::fromInt(400) && over->world().get<game::Unit>(mover).hp == Fixed::fromInt(400));
+    CHECK(drv(*over).deckOf(*over, parked) == -1);
+
+    // bad maps are refused with a readable message
+    auto bad = [&](const char* decks, const char* what) {
+        try { makeSimJson(kDrivingRules, withDecks(cars, decks, false)); CHECK(false); }
+        catch (const std::exception& e) { CHECK(std::string(e.what()).find(what) != std::string::npos); }
+    };
+    bad(R"([{"id":"a","path":[[1,1]]}])", "at least two points");
+    bad(R"([{"id":"a","path":[[1,1],[1,1]]}])", "same place");
+    bad(R"([{"id":"a","width":0,"path":[[1,1],[3,1]]}])", "width");
+    bad(R"({"a":1})", "expected a list");
+}
+
 TEST(driving_wreck_throws_the_driver_out) {
     auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
     auto& w = sim->world();
