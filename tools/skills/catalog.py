@@ -43,7 +43,7 @@ ALIASES = {
 
 def generate():
     entries=[]
-    packages=json.loads((ROOT/'libraries/catalog.json').read_text())['packages']
+    packages=json.loads((ROOT/'libraries/catalog.json').read_text(encoding='utf-8'))['packages']
     ids={p['id']:Path(p['skill']).parent.name for p in packages}
     for p in packages:
         entries.append(dict(id=ids[p['id']],package=p['id'],path=p['skill'],domain='gameplay',
@@ -51,7 +51,7 @@ def generate():
             dependencies=[ids[x] for x in p.get('packageDependencies',[])],
             backendDependencies=p.get('linkDependencies',[]),requiresOwner=p.get('requiresOwner'),
             source=p['source']))
-    modules={p['id']:p for p in json.loads((ROOT/'engine/meta/modules.json').read_text())['modules']}
+    modules={p['id']:p for p in json.loads((ROOT/'engine/meta/modules.json').read_text(encoding='utf-8'))['modules']}
     for key,summary,skill,source in load_meta().PACKAGES:
         definition=modules.get(key)
         deps=['meta-'+d for d in definition['dependencies']] if definition else {'database':['meta-server'],'ui':['meta-client'],'server':['meta-economy']}.get(key,[])
@@ -76,12 +76,12 @@ def validate(data):
     for e in entries:
         path=ROOT/e['path']
         if path.resolve().parent.parent!=(ROOT/'skills').resolve():raise ValueError('skill path escapes catalog')
-        if f"\nname: {e['id']}\n" not in path.read_text():raise ValueError('frontmatter id: '+e['id'])
+        if f"\nname: {e['id']}\n" not in path.read_text(encoding='utf-8'):raise ValueError('frontmatter id: '+e['id'])
         if not (ROOT/e['source']).is_file():raise ValueError('missing source: '+e['source'])
         if e['runtime'] in ('static','header'):
             if not e['target'] or e['target'] in targets:raise ValueError('missing or shared library target: '+e['id'])
             targets.add(e['target'])
-            if e['target'] not in path.read_text():raise ValueError('skill missing library contract: '+e['id'])
+            if e['target'] not in path.read_text(encoding='utf-8'):raise ValueError('skill missing library contract: '+e['id'])
             if any(d in ('aiverse::meta','AIVERSE::libraries','AIVERSE::genre') for d in e['backendDependencies']):raise ValueError('aggregate dependency: '+e['id'])
         elif e['target'] is not None:raise ValueError('non-code skill has C++ target')
         for dep in e['dependencies']:
@@ -145,8 +145,8 @@ def main():
     try:
         expected=generate()
         if args.command=='generate':
-            validate(expected);CATALOG.write_text(json.dumps(expected,ensure_ascii=False,indent=2)+'\n');print('Generated skill catalog');return
-        data=json.loads(CATALOG.read_text());entries=validate(data)
+            validate(expected);CATALOG.write_text(json.dumps(expected,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print('Generated skill catalog');return
+        data=json.loads(CATALOG.read_text(encoding='utf-8'));entries=validate(data)
         if args.command=='check':
             if data!=expected:raise ValueError('stale skill catalog; run generate')
             print(f'Validated {len(entries)} skills and isolated library mappings');return
