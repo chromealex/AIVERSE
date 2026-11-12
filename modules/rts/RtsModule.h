@@ -327,6 +327,16 @@ struct Area {
     int lane = -1; uint16_t lanePos = 0; bool laneReverse = false;
     Entity follow = kNullEntity;
     Fixed scale = Fixed::fromInt(1);
+    Entity goal = kNullEntity;            // skill objects: the structure it heads for (onArrive target)
+    bool arrived = false;
+    int deaths = 0;                       // onDeath payloads applied (capped by maxTriggers)
+};
+// A unit pulled straight into a structure by a magnet (`pull` effect, RtsSkillObjects.cpp).
+struct Pulled {
+    Entity target = kNullEntity;
+    Vec3 start{};
+    Fixed dist{}, way{}, vel{}, accel{}, minVel{}, maxVel{};
+    bool done = false;
 };
 struct Channel { int16_t payload = -1; Entity target = kNullEntity; Vec3 point{}, startPos{}; uint32_t nextAt = 0, endAt = 0; int ability = 0; Fixed interval{}; };
 struct GroupTag { uint32_t id = 0; Entity from = kNullEntity, to = kNullEntity; };
@@ -757,6 +767,19 @@ private:
     void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
     void bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) const;
     void sysProjectilePrograms(Simulation& sim, const std::vector<Entity>& projectiles);
+    // skill objects (RtsSkillObjects.cpp): objects spawned from units, goals, magnets, death payloads
+    bool spawnSkillObjects(Simulation& sim, const EffectDef& e, int list, int index, const EffectCtx& ctx);
+    void spawnArea(Simulation& sim, const EffectDef& e, int list, int index, const EffectCtx& ctx, Vec3 at, Entity source);
+    void spawnProjectile(Simulation& sim, const EffectDef& e, int list, int index, const EffectCtx& ctx, Vec3 start, Entity source);
+    Entity resolveGoal(Simulation& sim, uint8_t goal, const EffectCtx& ctx, Entity source, Vec3 from);
+    bool areaArrival(Simulation& sim, Entity a, Fixed step);   // goal motion; true when arrived
+    void areaFinished(Simulation& sim, Entity a, bool usedUp);
+    void effectPull(Simulation& sim, const EffectDef& e, const EffectCtx& ctx, const std::vector<Entity>& targets);
+    bool runPull(Simulation& sim, Entity e, Order& o);          // Enter orders of pulled units; true when inside
+    void tickSkillObjects(Simulation& sim);
+    void noteDeathInAreas(Simulation& sim, Entity dead, Vec3 pos);
+    void flushAreaDeaths(Simulation& sim);
+    void hashSkillObjects(Simulation& sim, Hasher& h);
     void setupSkills(Simulation& sim, const Json& map);
     void hashEffects(Simulation& sim, Hasher& h);
     void enterGarrison(Simulation& sim, Entity unit, Entity structure);   // assault / reinforce with statuses (advanced)
@@ -802,6 +825,8 @@ private:
     std::vector<SlotClaim> slotClaims_;   // rebuilt every tick from Combat slots (derived, not state)
     struct DeathSpawn { uint16_t type; uint8_t owner; Vec3 pos; int count; };
     std::vector<DeathSpawn> deathSpawns_; // filled and emptied inside sysDeath (infection)
+    struct AreaDeath { Entity area; Vec3 pos; };
+    std::vector<AreaDeath> areaDeaths_;   // filled and emptied inside sysDeath (onDeath areas: souls)
     mutable std::vector<uint16_t> gatherCount_;   // derived per tick: workers harvesting at each node (by entity index)
     mutable uint32_t gatherCountTick_ = UINT32_MAX;
     void assaultOriginals(Simulation& sim, Entity unit, Entity structure);   // gains for units lost in an assault

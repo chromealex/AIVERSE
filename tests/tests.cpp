@@ -13898,3 +13898,4 @@ TEST(world_tree_lua_peek_is_observation_only) {
     CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
 }
 #endif
+#include "tests_skillobjects.inc"   // agent-bw-skills: skill objects

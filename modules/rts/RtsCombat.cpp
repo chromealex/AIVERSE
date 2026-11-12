@@ -591,6 +591,7 @@ void RtsModule::sysDeath(Simulation& sim) {
                 leftovers.push_back({rules_.payloads[size_t(ar.effList)][size_t(ar.effIndex)].delivery.deathSpawn, pos, -1, Fixed{}, ao});
                 break;
             }
+            if (rules_.advancedEffects) noteDeathInAreas(sim, e, pos);   // onDeath areas (RtsSkillObjects.cpp)
             grantKill(sim, e, u.lastAttacker);
             if (!t.wreck.empty() && wreckType >= 0) leftovers.push_back({uint16_t(wreckType), pos, int16_t(t.wreck[0].res), t.wreck[0].value});
             sim.emit({kEvDied, owner, e, u.lastHitBy, u.type, pos});
@@ -605,6 +606,7 @@ void RtsModule::sysDeath(Simulation& sim) {
         if (auto* rs = w.tryGet<ResourceStock>(n); rs && l.res >= 0) { rs->res = l.res; rs->amount = l.amount; rs->infinite = l.amount.raw < 0; }
     }
     if (rules_.originals) flushDeathSpawns(sim);
+    flushAreaDeaths(sim);
 }
 
 } // namespace aiverse::game

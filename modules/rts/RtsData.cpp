@@ -704,7 +704,7 @@ Rules loadRules(const Json& j) {
         ep.playerAbility("playerAbility", pj, a);
         r.playerAbilities.push_back(std::move(a));
     }
-    if (r.playerAbilities.size() > 64) fail("playerAbilities", "at most 64");
+    if (r.playerAbilities.size() > 256) fail("playerAbilities", "at most 256");   // per-player state is a vector (Bunker Wars: 119 skills)
     std::string storage = j.getStr("storage", "player");
     if (storage != "player" && storage != "buildings") fail("storage", "expected 'player' or 'buildings', got '" + storage + "'");
     r.buildingStorage = storage == "buildings";
