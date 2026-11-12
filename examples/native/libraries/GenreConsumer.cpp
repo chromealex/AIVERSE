@@ -221,6 +221,7 @@ static bool libraryCinematicConsumerExample(aiverse::game::NativeState& state,co
     state.values["genre.cinematic.library"]=int64_t(sceneLibraryHash(lib)&0x7fffffffffffffffull);
     return storeBytes(state,"genre.cinematic.time",save(time))&&storeBytes(state,"genre.cinematic.scene",save(scene));
 }
+bool libraryPuzzlesConsumerExample(aiverse::game::NativeState& state);   // PuzzlesConsumer.cpp (puzzle-solvers)
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -240,5 +241,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!narrativeSceneConsumerExample(state,*parsed.value,story))return false;
     if(!physicalInteractionConsumerExample(state,*parsed.value))return false;
     if(!libraryCinematicConsumerExample(state,*parsed.value))return false;
+    if(!libraryPuzzlesConsumerExample(state))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

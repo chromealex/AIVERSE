@@ -1,4 +1,4 @@
-aiverse_native_module(ID library_demo VERSION 6 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp)
+aiverse_native_module(ID library_demo VERSION 6 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp)
 aiverse_native_use_libraries(aiverse_native_library_demo
     graphs behavior logistics configuration tutorial
     ui-binding screens themes app-lifecycle play-scenarios genre-kits change-planner
@@ -16,3 +16,5 @@ aiverse_native_use_libraries(aiverse_native_library_demo genre-bots)
 aiverse_native_use_libraries(aiverse_native_library_demo physical-interactions)
 # Cinematic gameplay (time-scale domains, scene timelines, sync waits, QTE, staging, checkpoints).
 aiverse_native_use_libraries(aiverse_native_library_demo cinematic-gameplay)
+# Puzzle solvers (match-3, flood/pipes, sliding/packing, Sokoban sessions, CSP) and the puzzle bot.
+aiverse_native_use_libraries(aiverse_native_library_demo puzzle-solvers)
