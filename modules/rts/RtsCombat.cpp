@@ -66,6 +66,7 @@ void RtsModule::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t d
     if (!u || u->hp.raw <= 0) return;
     const UnitType& t = rules_.types[u->type];
     if (t.invulnerable) return;
+    if (env_ && env_->active() && env_->damageOverride(sim, target, dmg)) { if (dmg.raw <= 0) return; }   // walls / bombers count hits
     const Fixed raw = dmgType == kDamagePure ? dmg : dmg * rules_.damageMult(dmgType, t.armorType);
     Fixed fin = mitigate(sim, target, raw, wd, dmgType);   // bonuses, shields, armor model (RtsOriginals.cpp)
     if (mechOn(sim)) fin = fin * mechDamageTaken(sim, target, source);   // agent-mech (retreat, cover, armor arcs)
@@ -573,6 +574,7 @@ void RtsModule::sysDeath(Simulation& sim) {
         const bool silent = u.flags & kUnitSilent;
         if (auto* f = w.tryGet<Footprint>(e)) gs.grid.block(f->x, f->y, f->w, f->h, -1);
         if (mechOn(sim)) mechOnDeath(sim, e);   // agent-mech: passengers, veterancy
+        if (env_ && env_->active()) env_->onDeath(sim, e, owner, pos, silent);   // souls fly to the graveyard
         if (owner < gs.players.size() && !gs.players[owner].typeCountAll.empty() && gs.players[owner].typeCountAll[u.type] > 0)
             gs.players[owner].typeCountAll[u.type]--;
         if (auto* ex = w.tryGet<Extractor>(e)) {
