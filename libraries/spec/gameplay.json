@@ -2011,6 +2011,275 @@
         ]
       ]
     },
+    "narrative": {
+      "type": "NarrativeSettings",
+      "fields": {
+        "autoAdvanceTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "skipLinesPerTick": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "backlogLimit": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "barkCooldownTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "speakerCooldownTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "maxPendingConsequences": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "maxBarkRequests": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "meterMinimum": {
+          "type": "integer",
+          "default": -100,
+          "minimum": -1000000000,
+          "maximum": 0
+        },
+        "meterInitial": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        },
+        "meterMaximum": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      },
+      "relations": [
+        [
+          "meterMinimum",
+          "meterInitial"
+        ],
+        [
+          "meterInitial",
+          "meterMaximum"
+        ]
+      ]
+    },
+    "interaction": {
+      "type": "InteractionSettings",
+      "fields": {
+        "gravityMilli": {
+          "type": "integer",
+          "default": 9810,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "skinMilli": {
+          "type": "integer",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 250
+        },
+        "carryMaxMassMilli": {
+          "type": "integer",
+          "default": 30000,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "carryReachMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carryHoldDistanceMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carryHoldHeightMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carryFollowSpeedMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "carryBreakDistanceMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "carrySpeedPenaltyMilli": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "carryMinSpeedMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "throwMinImpulseMilli": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 0,
+          "maximum": 10000000000
+        },
+        "throwMaxImpulseMilli": {
+          "type": "integer",
+          "default": 120000,
+          "minimum": 0,
+          "maximum": 10000000000
+        },
+        "throwChargeTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "flightMaxTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "pushMaxSpeedMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "pushGridMoveTicks": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "ropeIterations": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "ropeDampingMilli": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "relations": [
+        [
+          "throwMinImpulseMilli",
+          "throwMaxImpulseMilli"
+        ]
+      ]
+    },
+    "cinematic": {
+      "type": "CinematicSettings",
+      "fields": {
+        "hitStopTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 600
+        },
+        "hitStopPriority": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "slowMotionNumerator": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 16
+        },
+        "slowMotionDenominator": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 16
+        },
+        "slowMotionTicks": {
+          "type": "integer",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "slowMotionPriority": {
+          "type": "integer",
+          "default": 500,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "qteWindowScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteAccessibleWindowMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 1000,
+          "maximum": 10000
+        },
+        "qteMashScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteHoldScaleMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "qteAutoSucceed": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "relations": [
+        [
+          "slowMotionNumerator",
+          "slowMotionDenominator"
+        ]
+      ]
+    },
     "perks": {
       "type": "PerkSettings",
       "fields": {

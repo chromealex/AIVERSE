@@ -11,7 +11,16 @@
 #include <aiverselib/genre/SensesConfigured.h>
 #include <aiverselib/genre/SensesData.h>
 #include <aiverselib/genre/SensesPersistence.h>
+#include <aiverselib/genre/NarrativeConfigured.h>
+#include <aiverselib/genre/NarrativeSceneData.h>
+#include <aiverselib/genre/NarrativeScenePersistence.h>
+#include <aiverselib/genre/CinematicConfigured.h>
+#include <aiverselib/genre/CinematicData.h>
+#include <aiverselib/genre/CinematicPersistence.h>
 #include <aiverselib/bots/GenreBotConfig.h>
+#include <aiverselib/genre/InteractionConfigured.h>
+#include <aiverselib/genre/InteractionData.h>
+#include <aiverselib/genre/InteractionPersistence.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
 #include <span>
@@ -138,6 +147,81 @@ static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aive
     return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
 }
 bool libraryProgressionConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings); // ProgressionConsumer.cpp
+// Narrative scenes: settings-driven config, a tiny social scene (relationship-gated choice, reveal, deferred
+// consequence, cue requests, one bark) for one authoritative tick, then the state in NativeState. The legacy story
+// JSON loads through the same reader. Cinematic/UI owners consume report cues and bark lines; they never write state.
+static bool narrativeSceneConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings,const aiverse::Json& story){
+    using namespace aiverse::lib::genre;using C=NarrativeCommandKind;
+    if(!narrativeSettingsErrors(settings).empty())return false;const auto config=narrativeConfig(settings);
+    const auto legacy=readNarrativeWorld(story,config);
+    const auto world=readNarrativeWorld(aiverse::Json::parse(R"({"facts":[{"id":1,"type":"bool","persistent":true}],
+        "characters":[{"id":1,"nameKey":"character.guard"}],"consequences":[{"id":1,"effects":[{"meter":"trust","character":1,"add":-10}]}],
+        "nodes":[{"id":1,"textKey":"story.gate.halt","speaker":1,"cues":[1],"choices":[
+            {"id":1,"textKey":"story.gate.bribe","next":0,"conditions":[{"meter":"trust","character":1,"op":"ge","value":0}],
+             "effects":[{"reveal":1,"to":[0,1]},{"schedule":1,"afterScenes":1}],"cues":[2]}]}],
+        "scenes":[{"id":1,"entry":1}],"barks":[{"id":1,"trigger":1,"speaker":1,"textKey":"bark.guard.idle"}]})"),config);
+    auto scene=beginNarrative(world,config);auto old=beginNarrative(legacy,config);if(!scene||!old)return false;
+    NarrativeInput input{{{1,C::StartScene,1},{2,C::Choose,1}},{{1,1,{}}}};
+    auto report=stepNarrative(world,config,*scene,0,input);
+    if(!report||report->cues.size()!=2||report->barks.size()!=1||!knows(*scene,0,1)||scene->pending.size()!=1)return false;
+    state.values["genre.narrative.world"]=int64_t(narrativeWorldHash(world)&0x7fffffffffffffffull);
+    state.values["genre.narrative.config"]=int64_t(narrativeConfigHash(config)&0x7fffffffffffffffull);
+    state.values["genre.narrative.cue"]=int64_t(report->cues.back().sequence);
+    return storeBytes(state,"genre.narrative",save(*scene))&&storeBytes(state,"genre.narrative.legacy",save(*old));
+}
+// Physical interactions: validated `interaction` settings + interactable definitions, one authoritative tick of
+// carry, door, platform and breakable policies against engine/world collision, states in NativeState. These
+// kinematic policies are authoritative; a Box3D world may only render the DebrisRequest output.
+static bool physicalInteractionConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::genre;using aiverse::Fixed;using aiverse::Vec3;
+    if(!interactionSettingsErrors(settings).empty())return false;
+    const auto config=interactionConfig(settings);
+    const auto defs=readInteractionDefinitions(aiverse::Json::parse(R"({"carryables":[{"id":1,"massMilli":6000,"halfMilli":[200,200,200]}],
+        "doors":[{"id":2,"kind":"sliding","panelMin":[3000,0,-100],"panelMax":[5000,2000,100],"slideMilli":[2000,0,0],"openTicks":12,"closeTicks":12}],
+        "platforms":[{"id":3,"halfMilli":[1000,250,1000],"speedMilli":1500,"waitTicks":20,"waypoints":[[0,0,8000],[0,4000,8000]]}],
+        "breakables":[{"id":4,"health":50,"stages":[{"stage":1,"health":20,"debris":[{"kind":1,"count":2}]}],"brokenDebris":[{"kind":2,"count":4}]}]})"));
+    aiverse::world::SpatialWorld world;if(!world.add({1,{{Fixed::fromInt(-20),Fixed::fromInt(-1),Fixed::fromInt(-20)},{Fixed::fromInt(20),Fixed{},Fixed::fromInt(20)}}}))return false;
+    const WorldCollision collision(world);const uint32_t tick=0;const auto dt=Fixed::fromRatio(1,60);
+    CarryState hands;CarryInput carry;CarrierInput carrier;carrier.carrier=10;carrier.pickUp=1;carry.carriers={carrier};carry.objects={{1,{{},Fixed::fromRatio(1,5),Fixed::fromInt(1)}}};
+    DoorState doors;PlatformState platforms;BreakableState breakables;
+    if(!addDoor(doors,defs.doors.at(2))||!addPlatform(platforms,defs.platforms.at(3))||!addBreakable(breakables,defs.breakables.at(4)))return false;
+    const std::array<DoorCommand,1> open{{{10,2,DoorAction::Open,{},{},false}}};
+    const std::array<RiderContact,1> riders{{{10,3}}};
+    const std::array<DamageInput,1> hit{{{1,4,1,35,10,{}}}};
+    auto held=stepCarry(config,defs.carryables,hands,tick,dt,carry,collision);auto door=stepDoors(config,defs.doors,doors,tick,open,collision);
+    auto ride=stepPlatforms(config,defs.platforms,platforms,tick,dt,{},riders);auto broken=stepBreakables(defs.breakables,breakables,tick,hit);
+    if(!held||!door||!ride||!broken||hands.held.size()!=1||ride->carry.size()!=1||broken->debris.size()!=1)return false;
+    // ride->carry[0].delta goes onto the rider before its stepLocomotion move; debris requests go to presentation.
+    aiverse::Hasher hash;hashInteraction(hash,hands);hashInteraction(hash,doors);hashInteraction(hash,platforms);hashInteraction(hash,breakables);
+    state.values["genre.interaction.hash"]=int64_t(hash.value()&0x7fffffffffffffffull);
+    state.values["genre.interaction.config"]=int64_t(interactionConfigHash(config)&0x7fffffffffffffffull);
+    state.values["genre.interaction.defs"]=int64_t(interactionDefinitionsHash(defs)&0x7fffffffffffffffull);
+    return storeBytes(state,"genre.interaction.carry",save(hands))&&storeBytes(state,"genre.interaction.doors",save(doors))
+        &&storeBytes(state,"genre.interaction.platforms",save(platforms))&&storeBytes(state,"genre.interaction.breakables",save(breakables));
+}
+// Cinematic gameplay: validated settings + scene JSON, a narrative cue id that starts the scene, two authoritative
+// ticks of time domains feeding the scene runner (hit-stop preset on the world domain), versioned state in NativeState.
+// Presentation plays SceneEvents and reports line/marker progress back as tick-stamped SceneInput.
+static bool libraryCinematicConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::genre;
+    if(!cinematicSettingsErrors(settings).empty())return false;
+    auto lib=readSceneLibrary(aiverse::Json::parse(R"({"scenes":[{"id":1,"trigger":42,"length":120,"checkpointBefore":true,
+        "participants":[{"id":1,"lockInput":true}],
+        "cues":[{"id":1,"at":0,"kind":"dialogue","ref":100,"actor":1},{"id":2,"at":30,"kind":"event","ref":7}],
+        "syncs":[{"id":1,"at":60,"timeout":240,"wait":[{"kind":"lineFinished","cue":1}]}],
+        "qtes":[{"id":1,"at":90,"kind":"press","button":1,"close":45}]}]})"));
+    TimeState time;SceneState scene;TimeInput timeIn;timeIn.add={hitStopRequest(settings)};
+    SceneInput in;in.options=qteOptions(settings);in.commands={cueTrigger(1,42,{{1,1001}})}; // narrative CueRequest{cueId=42}
+    for(uint32_t tick=0;tick<2;++tick){
+        auto t=stepTime(lib.time,time,tick,timeIn);if(!t)return false;in.domainSteps=sceneDomainSteps(*t);
+        auto r=stepScene(lib,scene,tick,in);if(!r)return false;
+        timeIn={};timeIn.add=r->timeAdd;timeIn.cancelTags=r->timeCancelTags;in={};
+    }
+    if(scene.phase!=ScenePhase::Playing||!inputLocked(scene,1))return false;
+    state.values["genre.cinematic_hash"]=int64_t((cinematicHash(scene)^cinematicHash(time))&0x7fffffffffffffffull);
+    state.values["genre.cinematic.library"]=int64_t(sceneLibraryHash(lib)&0x7fffffffffffffffull);
+    return storeBytes(state,"genre.cinematic.time",save(time))&&storeBytes(state,"genre.cinematic.scene",save(scene));
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -155,5 +239,8 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
     if(!genreBotConsumerExample(state,*parsed.value))return false;
     if(!libraryProgressionConsumerExample(state,*parsed.value))return false;
+    if(!narrativeSceneConsumerExample(state,*parsed.value,story))return false;
+    if(!physicalInteractionConsumerExample(state,*parsed.value))return false;
+    if(!libraryCinematicConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

@@ -1,9 +1,13 @@
+#include <aiverselib/genre/NarrativeCinematicBridge.h>
 #include <aiverselib/genre/Configured.h>
 #include <aiverselib/genre/Persistence.h>
 #include <aiverselib/genre/Data.h>
 #include <aiverselib/genre/LocomotionModes.h>
 #include <aiverselib/genre/CombatConfigured.h>
 #include <aiverselib/genre/CombatData.h>
+#include <aiverselib/genre/NarrativeConfigured.h>
+#include <aiverselib/genre/NarrativeSceneData.h>
+#include <aiverselib/genre/NarrativeScenePersistence.h>
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -1300,4 +1304,739 @@ void sensesBotBridge(){
     CHECK(all.size()==3&&all[1].id==7&&all[1].visible);
     seen[0].target=6;CHECK(sb::perceivedFromSenses(std::span<const sg::PerceivedTarget>(seen),1,facts).size()==1);
 }
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// ---- Narrative scenes (narrative-graphs 0.2.0): relationships, knowledge, consequences, cues, barks, VN helpers.
+namespace narr {
+using EK=NarrativeEventKind;using CK=NarrativeCommandKind;using Ids=std::vector<int64_t>;
+NarrativeWorld social(const std::string& root){return readNarrativeWorld(Json::parseFile(root+"/examples/libraries/genre/story-social.json"));}
+int eventAt(const NarrativeReport& r,EK k,int64_t subject=-1){for(std::size_t i=0;i<r.events.size();++i)if(r.events[i].kind==k&&(subject<0||r.events[i].subject==subject))return int(i);return -1;}
+bool has(const NarrativeReport& r,EK k,int64_t subject=-1){return eventAt(r,k,subject)>=0;}
+struct Driver {
+    const NarrativeWorld& w;NarrativeConfig c;NarrativeState s;uint32_t tick=0;uint64_t cmd=0;
+    NarrativeReport step(std::vector<NarrativeCommand> commands={},std::vector<BarkRequest> barks={}){auto r=stepNarrative(w,c,s,++tick,{std::move(commands),std::move(barks)});CHECK(r);return *r;}
+    NarrativeReport run(CK kind,int64_t value=0){return step({{++cmd,kind,value}});}
+};
+Driver drive(const NarrativeWorld& w,NarrativeConfig c={},const std::map<int64_t,int64_t>& facts={}){auto s=beginNarrative(w,c,facts);CHECK(s);return Driver{w,c,*s};}
+void legacy(const std::string& root){
+    auto file=Json::parseFile(root+"/examples/libraries/genre/story.json");CHECK(readStory(file).size()==2);
+    auto w=readNarrativeWorld(file);CHECK(w.scenes.size()==1&&w.scenes.at(1).entry==1&&w.facts.size()==2&&w.facts.at(1).persistent&&w.nodes.size()==2);
+    auto d=drive(w);d.run(CK::StartScene,1);CHECK(d.s.node==1&&sceneChoices(w,d.s)==Ids{2});auto r=d.run(CK::Choose,1);CHECK(has(r,EK::CommandRejected)&&d.s.node==1);
+    auto e=drive(w,{},{{1,1}});e.run(CK::StartScene,1);CHECK(sceneChoices(w,e.s)==(Ids{1,2}));e.run(CK::Choose,1);CHECK(e.s.node==2&&e.s.facts.at(2)==1);
+    r=e.run(CK::Choose,1);CHECK(!e.s.inScene&&has(r,EK::SceneEnded,1));roundtrip(e.s);
+}
+void relationships(const std::string& root){
+    auto w=social(root);auto d=drive(w);
+    CHECK(socialMeter(d.s,1,SocialMeter::Trust)==0&&socialMeter(d.s,2,SocialMeter::Fear)==10&&socialMeter(d.s,1,SocialMeter::Affinity)==0&&w.characters.at(1).meters[1].maximum==50);
+    d.run(CK::StartScene,1);CHECK(d.s.chapter==1&&d.s.node==1);d.run(CK::Advance);CHECK(d.s.node==2&&sceneChoices(w,d.s)==(Ids{2,4}));
+    d.s.facts[2]=3;CHECK(sceneChoices(w,d.s)==Ids{4});d.s.meters[{1,1}]=19;CHECK(sceneChoices(w,d.s)==Ids{4});d.s.meters[{1,1}]=20;CHECK(sceneChoices(w,d.s)==(Ids{2,4}));
+    d.s.facts[1]=1;d.s.meters[{1,1}]=45;auto r=d.run(CK::Choose,1);auto i=eventAt(r,EK::MeterChanged,1);
+    CHECK(i>=0&&r.events[i].character==1&&r.events[i].value==50&&r.events[i].extra==45&&socialMeter(d.s,1,SocialMeter::Trust)==50&&d.s.node==3);
+    SceneCondition low{SceneConditionKind::Meter,SceneCompare::Between,0,1,-50,49,SocialMeter::Trust,{}};CHECK(!sceneCondition(w,d.s,low));
+    SceneCondition notLow{SceneConditionKind::Not,SceneCompare::Eq,0,0,0,0,SocialMeter::Affinity,{low}};CHECK(sceneCondition(w,d.s,notLow));
+}
+void knowledgeAndConsequences(const std::string& root){
+    auto w=social(root);auto d=drive(w);d.run(CK::StartScene,1);d.run(CK::Advance);auto choices=sceneChoices(w,d.s);CHECK(std::find(choices.begin(),choices.end(),3)==choices.end());
+    auto r=d.run(CK::Choose,2);
+    CHECK(d.s.facts.at(2)==1&&d.s.facts.at(3)==1&&d.s.flags.contains(2)&&d.s.pending.size()==1&&d.s.pending[0].byScene&&d.s.pending[0].due==2&&d.s.node==3&&d.s.flags.contains(1));
+    CHECK(has(r,EK::ConsequenceScheduled,1)&&has(r,EK::FlagSet,1)&&has(r,EK::FlagSet,2));
+    d.run(CK::Advance);CHECK(!d.s.inScene);for(int k=0;k<5;++k)CHECK(!has(d.step(),EK::ConsequenceFired));CHECK(d.s.pending.size()==1);
+    r=d.run(CK::StartScene,2);
+    CHECK(has(r,EK::ConsequenceFired,1)&&knows(d.s,0,4)&&!knows(d.s,1,4)&&socialMeter(d.s,1,SocialMeter::Trust)==-15&&d.s.chapter==2&&d.s.pending.empty());
+    CHECK(d.s.facts.at(3)==0&&!d.s.flags.contains(2)&&d.s.flags.contains(1)&&d.s.facts.at(2)==1);                 // scene-local reset, world state kept
+    CHECK(eventAt(r,EK::ConsequenceFired,1)<eventAt(r,EK::LineShown,10)&&r.cues.size()==1&&r.cues[0].cueId==200&&r.cues[0].source==CueSource::Consequence&&r.cues[0].consequenceId==1);
+    d.run(CK::Advance);CHECK(d.s.node==11&&sceneChoices(w,d.s)==(Ids{1,2}));
+    d.run(CK::Choose,2);CHECK(!d.s.inScene&&d.s.pending.size()==1&&!d.s.pending[0].byScene&&d.s.pending[0].due==int64_t(d.tick)+600);
+    auto due=uint32_t(d.s.pending[0].due);while(d.tick+1<due)CHECK(!has(d.step(),EK::ConsequenceFired));
+    r=d.step();CHECK(has(r,EK::ConsequenceFired,2)&&socialMeter(d.s,2,SocialMeter::Affinity)==5);
+    d.run(CK::StartScene,1);d.run(CK::Advance);choices=sceneChoices(w,d.s);CHECK(std::find(choices.begin(),choices.end(),3)!=choices.end());
+    r=d.run(CK::Choose,3);CHECK(knows(d.s,1,4)&&has(r,EK::Revealed,4)&&socialMeter(d.s,2,SocialMeter::Fear)==40&&d.s.node==4);
+    SceneCondition chose{SceneConditionKind::Chose,SceneCompare::Eq,2,0,3,0,SocialMeter::Affinity,{}};CHECK(sceneCondition(w,d.s,chose));
+    d.run(CK::Advance);d.run(CK::StartScene,1);d.run(CK::Advance);choices=sceneChoices(w,d.s);CHECK(std::find(choices.begin(),choices.end(),3)==choices.end());
+    auto t=drive(w);t.s.knowledge[{0,4}]=0;t.run(CK::StartScene,2);t.run(CK::Advance);r=t.run(CK::Choose,1);
+    SceneCondition act{SceneConditionKind::Act,SceneCompare::Ge,0,0,2,0,SocialMeter::Affinity,{}};
+    CHECK(t.s.chapter==3&&has(r,EK::ChapterChanged,3)&&sceneCondition(w,t.s,act)&&socialMeter(t.s,2,SocialMeter::Affinity)==-40);
+}
+void cueOrdering(const std::string& root){
+    auto w=social(root);auto d=drive(w,{},{{1,1}});auto r=d.run(CK::StartScene,1);
+    CHECK(r.cues.size()==1&&r.cues[0].cueId==100&&r.cues[0].source==CueSource::NodeEnter&&r.cues[0].nodeId==1&&r.cues[0].sceneId==1&&r.cues[0].speaker==1&&r.cues[0].sequence==1&&r.cues[0].tick==d.tick);
+    d.run(CK::Advance);r=d.run(CK::Choose,1);
+    CHECK(r.cues.size()==2&&r.cues[0].cueId==101&&r.cues[0].source==CueSource::Choice&&r.cues[0].choiceId==1&&r.cues[0].nodeId==2&&r.cues[0].sequence==2);
+    CHECK(r.cues[1].cueId==102&&r.cues[1].source==CueSource::NodeEnter&&r.cues[1].nodeId==3&&r.cues[1].delayTicks==30&&r.cues[1].sequence==3);
+    CHECK(eventAt(r,EK::ChoiceTaken,1)<eventAt(r,EK::LineShown,3));
+    auto e=drive(w,{},{{1,1}});r=e.step({{3,CK::Choose,1},{1,CK::StartScene,1},{2,CK::Advance,0}});   // one tick, commands sorted by ID
+    CHECK(r.cues.size()==3&&r.cues[0].cueId==100&&r.cues[1].cueId==101&&r.cues[2].cueId==102&&r.cues[2].sequence==3&&e.s.lastCommand==3&&e.s.node==3);
+}
+void barks(const std::string& root){
+    auto w=social(root);NarrativeConfig c;c.speakerCooldownTicks=10;c.barkCooldownTicks=50;auto d=drive(w,c);
+    auto r=d.step({},{{1,1,{}}});CHECK(r.barks.size()==1&&r.barks[0].bark==1&&r.barks[0].speaker==1&&r.barks[0].textKey=="bark.guard.idle");
+    r=d.step({},{{1,1,{}}});CHECK(r.barks.empty()&&has(r,EK::BarkNone,1));
+    d.s.facts[3]=1;while(d.tick<10)d.step();r=d.step({},{{1,1,{}}});CHECK(r.barks.size()==1&&r.barks[0].bark==2);   // priority beats the idle line
+    d.s.knowledge[{0,4}]=d.tick;for(int k=0;k<60;++k)d.step();
+    r=d.step({},{{2,1,{}},{1,1,{}}});CHECK(r.barks.size()==2&&r.barks[0].request==1&&r.barks[0].bark==2&&r.barks[1].request==2&&r.barks[1].bark==3);
+    CHECK(r.cues.size()==1&&r.cues[0].cueId==300&&r.cues[0].source==CueSource::Bark&&r.cues[0].barkId==3&&r.cues[0].speaker==2);
+    for(int k=0;k<60;++k)d.step();r=d.step({},{{1,1,{2}}});CHECK(r.barks.empty());                                       // bark 3 is once
+    auto w2=w;w2.barks[5]=SceneBark{5,2,2,0,0,"bark.smuggler.sigh",false,{},{}};CHECK(valid(w2));auto e=drive(w2,c);
+    std::vector<int64_t> picked;for(int k=0;k<3;++k){r=e.step({},{{1,2,{}}});CHECK(r.barks.size()==1);picked.push_back(r.barks[0].bark);for(int m=0;m<9;++m)CHECK(e.step({},{{1,2,{}}}).barks.empty());}
+    CHECK(picked==(Ids{4,5,4}));                                                                                          // ID, never spoken, least recent
+}
+void backlogAndSkip(const std::string& root){
+    auto w=social(root);NarrativeConfig c;c.backlogLimit=3;c.autoAdvanceTicks=5;auto d=drive(w,c);
+    d.run(CK::StartScene,1);CHECK(!d.s.lineWasRead&&!canSkipLine(w,d.s));d.run(CK::Advance);d.run(CK::Choose,4);
+    CHECK(!d.s.inScene&&d.s.backlog.size()==2&&d.s.backlog[0].node==1&&d.s.backlog[0].speaker==1&&d.s.backlog[1].node==2&&d.s.backlog[1].choice==4&&lineRead(d.s,1)&&lineRead(d.s,2)&&!lineRead(d.s,3));
+    auto r=d.step({{++d.cmd,CK::SetSkip,1},{++d.cmd,CK::StartScene,1}});
+    CHECK(d.s.node==2&&!d.s.skipMode&&has(r,EK::AutoAdvanced,1)&&has(r,EK::SkipStopped,2)&&r.events[eventAt(r,EK::SkipStopped)].extra==1);
+    d.run(CK::Choose,2);CHECK(d.s.node==3&&!d.s.lineWasRead);r=d.run(CK::SetSkip,1);CHECK(d.s.node==3&&has(r,EK::SkipStopped,3)&&!d.s.skipMode);
+    CHECK(d.s.backlog.size()==3&&d.s.backlog[0].node==1&&d.s.backlog[1].node==2&&d.s.backlog[1].choice==2&&d.s.backlog[2].node==3);
+    d.run(CK::SetAuto,1);auto at=*autoAdvanceTick(w,c,d.s);CHECK(at==d.s.lineStart+5);
+    while(d.tick+1<at){d.step();CHECK(d.s.inScene&&d.s.node==3);}
+    r=d.step();CHECK(!d.s.inScene&&has(r,EK::AutoAdvanced,3)&&has(r,EK::SceneEnded,1));
+    d.run(CK::StartScene,2);CHECK(*autoAdvanceTick(w,c,d.s)==d.tick+60&&!autoAdvanceTick(w,c,NarrativeState{}));
+}
+void restore(const std::string& root){
+    auto w=social(root);NarrativeConfig c;c.speakerCooldownTicks=3;auto d=drive(w,c,{{1,1}});roundtrip(d.s);
+    d.run(CK::StartScene,1);d.run(CK::Advance);d.run(CK::Choose,2);d.step({},{{1,1,{}}});CHECK(d.s.pending.size()==1&&d.s.inScene);
+    roundtrip(d.s);roundtrip(d.s.barks);auto bytes=save(d.s);NarrativeState copy;
+    CHECK(load(bytes,copy)&&narrativeStateError(w,c,copy).empty()&&narrativeHash(copy)==narrativeHash(d.s));
+    Driver e{w,c,copy,d.tick,d.cmd};
+    for(int i=0;i<24;++i){
+        std::vector<NarrativeCommand> cmds;if(i==2)cmds={{d.cmd+1,CK::Advance,0}};if(i==4)cmds={{d.cmd+1,CK::StartScene,2}};if(i==6)cmds={{d.cmd+1,CK::Advance,0}};if(i==8)cmds={{d.cmd+1,CK::Choose,1}};
+        if(!cmds.empty()){++d.cmd;++e.cmd;}
+        auto a=d.step(cmds,{{1,1,{}},{2,2,{}}});auto b=e.step(cmds,{{1,1,{}},{2,2,{}}});CHECK(narrativeHash(a)==narrativeHash(b)&&narrativeHash(d.s)==narrativeHash(e.s));
+    }
+    CHECK(d.s.chapter==3&&knows(d.s,0,4));
+    auto bad=bytes;bad[6]=char(bad[6]^1);CHECK(!load(bad,copy));
+    NarrativeState other;CHECK(load(bytes,other));auto legacyWorld=readNarrativeWorld(Json::parseFile(root+"/examples/libraries/genre/story.json"));
+    CHECK(!narrativeStateError(legacyWorld,{},other).empty());
+    CHECK(narrativeWorldHash(w)==narrativeWorldHash(social(root))&&narrativeWorldHash(w)!=narrativeWorldHash(legacyWorld)&&narrativeConfigHash({})!=narrativeConfigHash(c));
+    CHECK(!d.s.inScene);auto broken=d.s;broken.inScene=true;CHECK(save(broken).empty());broken=d.s;broken.lineStart=d.tick+1;CHECK(save(broken).empty());
+}
+void rejection(const std::string& root){
+    auto w=social(root);auto d=drive(w);d.step();auto before=save(d.s);
+    CHECK(!stepNarrative(w,{},d.s,d.tick,{})&&!stepNarrative(w,{},d.s,0,{})&&save(d.s)==before);
+    CHECK(!stepNarrative(w,{},d.s,d.tick+1,{{{5,CK::Advance,0},{5,CK::Advance,0}},{}})&&!stepNarrative(w,{},d.s,d.tick+1,{{{0,CK::Advance,0}},{}}));
+    CHECK(!stepNarrative(w,{},d.s,d.tick+1,{{},{{1,0,{}}}})&&save(d.s)==before);
+    NarrativeConfig broken;broken.backlogLimit=0;CHECK(!stepNarrative(w,broken,d.s,d.tick+1,{})&&!beginNarrative(w,broken)&&!beginNarrative(w,{},{{3,7}}));
+    d.run(CK::StartScene,1);auto r=d.step({{d.cmd,CK::Advance,0}});CHECK(has(r,EK::CommandRejected)&&r.events[0].extra==1&&d.s.node==1);
+    r=d.run(CK::Choose,99);CHECK(r.events.size()==1&&r.events[0].kind==EK::CommandRejected&&r.events[0].extra==0&&d.s.lastCommand==d.cmd-1);
+    r=d.run(CK::StartScene,2);CHECK(has(r,EK::CommandRejected)&&d.s.scene==1);r=d.run(CK::SetAuto,2);CHECK(has(r,EK::CommandRejected)&&!d.s.autoMode);
+    auto err=[](const std::string& text){try{(void)readNarrativeWorld(Json::parse(text));}catch(const JsonError& e){return std::string(e.what());}return std::string();};
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":0,"color":1}]})")=="narrative.nodes[0]: unknown key 'color'");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":0}],"music":1})")=="narrative: unknown key 'music'");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":7}]})")=="narrative.nodes[id=1].next: unknown node 7");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","speaker":3,"next":0}]})")=="narrative.nodes[id=1].speaker: unknown character 3");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","choices":[{"id":1,"textKey":"b","next":0,"conditions":[{"fact":9}]}]}]})")=="narrative.nodes[0].choices[0].conditions[0].fact: unknown fact 9");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":2},{"id":2,"textKey":"b","choices":[{"id":1,"textKey":"c","next":1}]}]})")=="narrative.nodes[id=1]: cannot reach an ending (cycle without exit)");
+    CHECK(err(R"({"facts":[{"id":1,"type":"enum","values":["a"]}],"nodes":[{"id":1,"textKey":"a","next":0,"onEnter":[{"set":1,"value":"b"}]}]})")=="narrative.nodes[0].onEnter[0].value: unknown enum value 'b'");
+    CHECK(err(R"({"facts":[{"id":1,"type":"bool"}],"nodes":[{"id":1,"textKey":"a","choices":[{"id":1,"textKey":"b","next":0,"conditions":[{"fact":1,"op":"gt","value":true}]}]}]})")=="narrative.nodes[0].choices[0].conditions[0].op: bool and enum facts allow eq/ne only");
+    CHECK(err(R"({"facts":[{"id":1,"type":"bool"}],"nodes":[{"id":1,"textKey":"a","choices":[{"id":1,"textKey":"b","next":0,"conditions":[{"knows":1,"character":5}]}]}]})")=="narrative.nodes[id=1].choices[id=1].conditions[0].character: unknown character 5");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a","next":0},{"id":1,"textKey":"b","next":0}]})")=="narrative.nodes[1].id: duplicate node 1");
+    CHECK(err(R"({"nodes":[{"id":1,"textKey":"a"}]})").starts_with("narrative.nodes[0]: expected exactly one of choices"));
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":0,"onEnter":[{"schedule":3,"afterTicks":5}]}]})")=="narrative.nodes[id=1].onEnter[0].schedule: unknown consequence 3");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":0,"onEnter":[{"schedule":3,"afterTicks":5,"afterScenes":1}]}]})")=="narrative.nodes[0].onEnter[0]: expected exactly one of afterTicks, afterScenes");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"a","next":0,"cues":[{"id":1,"track":2}]}]})")=="narrative.nodes[0].cues[0]: unknown key 'track'");
+    CHECK(err(R"({"facts":[],"nodes":[{"id":1,"textKey":"","next":0}]})")=="narrative.nodes[0].textKey: expected nonempty localization key");
+    CHECK(err(R"({"facts":[],"characters":[{"id":1,"nameKey":"c","meters":{"trust":{"min":5,"max":1}}}],"nodes":[{"id":1,"textKey":"a","next":0}]})")=="narrative.characters[0].meters.trust: requires min <= initial <= max within +-1000000000");
+    auto w2=w;w2.nodes[2].choices[0].next=99;CHECK(narrativeWorldError(w2)=="nodes[id=2].choices[id=1].next: unknown node 99");
+    w2=w;w2.barks[1].speaker=9;CHECK(narrativeWorldError(w2)=="barks[id=1].speaker: unknown character 9");
+}
+void settings(const std::string& root){
+    auto read=[](const std::string& text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto s=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/narrative-settings.json"));CHECK(s.value&&narrativeSettingsErrors(*s.value).empty());
+    auto c=narrativeConfig(*s.value);CHECK(c.autoAdvanceTicks==120&&c.skipLinesPerTick==8&&c.backlogLimit==64&&c.maxPending==256&&c.maxBarkRequests==16&&c.speakerCooldownTicks==60&&valid(c));
+    auto defaults=read(R"({"schemaVersion":1})");CHECK(defaults.value&&narrativeConfigHash(narrativeConfig(*defaults.value))==narrativeConfigHash(NarrativeConfig{}));
+    auto r=read(R"({"schemaVersion":1,"narrative":{"meterInitial":200}})");CHECK(!r.value&&r.errors.at(0)=="narrative.meterInitial: must not exceed meterMaximum");
+    r=read(R"({"schemaVersion":1,"narrative":{"barkVolume":1}})");CHECK(!r.value&&r.errors.at(0)=="narrative.barkVolume: unknown field");
+    r=read(R"({"schemaVersion":1,"narrative":{"skipLinesPerTick":0}})");CHECK(!r.value&&r.errors.at(0)=="narrative.skipLinesPerTick: integer out of range");
+    NarrativeConfig custom;custom.meter={-5,5,1};auto w=readNarrativeWorld(Json::parse(R"({"facts":[],"characters":[{"id":1,"nameKey":"c"}],"nodes":[{"id":1,"textKey":"a","speaker":1,"next":0}]})"),custom);
+    CHECK(w.characters.at(1).meters[2].minimum==-5&&w.characters.at(1).meters[2].maximum==5&&w.characters.at(1).meters[2].initial==1);
+}
+}
+void narrativeScenes(const std::string& root){narr::legacy(root);narr::relationships(root);narr::knowledgeAndConsequences(root);narr::cueOrdering(root);narr::barks(root);narr::backlogAndSkip(root);narr::restore(root);narr::rejection(root);narr::settings(root);}
+// Physical interactions (physical-interactions): carry/throw arc vs simulation, push/pull blocking, rope
+// convergence and breaking, door locks and auto-reverse, platform rider deltas through LocomotionModes,
+// breakable stages/debris, mid-interaction save/restore and invalid data.
+#include <aiverselib/genre/InteractionConfigured.h>
+#include <aiverselib/genre/InteractionData.h>
+#include <aiverselib/genre/InteractionPersistence.h>
+namespace physical {
+using K=InteractionEventKind;
+const Fixed dt=Fixed::fromRatio(1,60);
+Fixed milli(int64_t v){return Fixed::fromRatio(v,1000);}
+bool near(Fixed a,Fixed b,Fixed eps){return fxAbs(a-b)<=eps;}
+bool nearV(Vec3 a,Vec3 b,Fixed eps){return near(a.x,b.x,eps)&&near(a.y,b.y,eps)&&near(a.z,b.z,eps);}
+const InteractionEvent* find(const std::vector<InteractionEvent>& ev,K kind){for(const auto& e:ev)if(e.kind==kind)return &e;return nullptr;}
+const InteractionEvent* findFor(const std::vector<InteractionEvent>& ev,K kind,int64_t object){for(const auto& e:ev)if(e.kind==kind&&e.object==object)return &e;return nullptr;}
+bool has(const std::vector<InteractionEvent>& ev,K kind,int64_t value=-1){for(const auto& e:ev)if(e.kind==kind&&(value<0||e.value==value))return true;return false;}
+world::SpatialWorld floorWorld(){world::SpatialWorld w;CHECK(w.add({1,{{-50_fx,-1_fx,-50_fx},{50_fx,Fixed{},50_fx}}}));return w;}
+template<class State> State restored(const State& s){State copy;CHECK(load(save(s),copy));CHECK(interactionHash(copy)==interactionHash(s));roundtrip(s);return copy;}
+
+void carryThrow(const InteractionDefinitions& all){
+    InteractionConfig c;CHECK(valid(c));auto w=floorWorld();WorldCollision col(w);const auto& items=all.carryables;const auto& crate=items.at(1);
+    CarryState s;CarrierInput me;me.carrier=1;CarryInput in;in.carriers={me};
+    in.objects={{1,{Fixed{},Fixed::fromRatio(1,4),1_fx}},{2,{1_fx,milli(400),Fixed{}}}};
+    in.carriers[0].pickUp=2;auto r=stepCarry(c,items,s,0,dt,in,col);CHECK(r&&has(r->events,K::PickupRefused,ReasonTooHeavy)&&s.held.empty());
+    auto before=save(s);CHECK(!stepCarry(c,items,s,0,dt,in,col)&&save(s)==before);                      // repeated tick
+    in.carriers[0].pickUp=99;CHECK(!stepCarry(c,items,s,1,dt,in,col)&&save(s)==before);                 // unknown object
+    auto far=in;far.objects[0].position={20_fx,Fixed::fromRatio(1,4),Fixed{}};far.carriers[0].pickUp=1;
+    auto probe=s;r=stepCarry(c,items,probe,1,dt,far,col);CHECK(r&&has(r->events,K::PickupRefused,ReasonOutOfReach));
+    in.carriers[0].pickUp=1;r=stepCarry(c,items,s,1,dt,in,col);CHECK(r&&has(r->events,K::PickedUp)&&s.held.at(1).object==1);
+    CHECK(r->carriers.size()==1&&r->carriers[0].speedMilli==1000-8*15);
+    in.carriers[0].pickUp=0;in.objects.erase(in.objects.begin());uint32_t t=2;
+    for(;t<12;++t)CHECK(stepCarry(c,items,s,t,dt,in,col));
+    CHECK(nearV(s.held.at(1).position,carryHoldPoint(c,in.carriers[0]),Fixed::fromRatio(1,100)));
+    in.carriers[0].charge=true;in.carriers[0].pitch=Fixed::fromRatio(1,16);
+    for(;t<33;++t)CHECK(stepCarry(c,items,s,t,dt,in,col));
+    in.carriers[0].charge=false;auto charge=carryChargeMilli(c,s.held.at(1),t);CHECK(charge==int64_t(t-12)*1000/45);
+    auto start=s.held.at(1).position;auto v=throwVelocity(c,crate,in.carriers[0],charge);
+    auto preview=previewThrow(c,crate,start,v,in.carriers[0].collider,col,dt,600);CHECK(preview.landed&&preview.landing.id==1&&preview.points.size()>10);
+    r=stepCarry(c,items,s,t,dt,in,col);CHECK(r&&has(r->events,K::Thrown)&&s.held.empty()&&s.flights.at(1).position==start&&s.flights.at(1).velocity==v);
+    const uint32_t thrown=t++;std::optional<CarryState> twin;uint32_t twinFrom=0;
+    for(std::size_t k=0;k<preview.points.size();++k,++t){
+        if(k==3){twin=restored(s);twinFrom=t;}
+        r=stepCarry(c,items,s,t,dt,in,col);CHECK(r);
+        if(k+1<preview.points.size())CHECK(s.flights.at(1).position==preview.points[k]);
+        else{auto e=find(r->events,K::Landed);CHECK(e&&e->position==preview.landingPosition&&e->collider==1&&!s.flights.contains(1));}
+    }
+    CHECK(t-1==thrown+preview.ticks&&preview.landingPosition.y>=Fixed::fromRatio(1,4)-c.skin&&preview.landingPosition.y<Fixed::fromRatio(3,10));
+    for(uint32_t k=twinFrom;k<t;++k)CHECK(stepCarry(c,items,*twin,k,dt,in,col));CHECK(interactionHash(*twin)==interactionHash(s));
+    // Carrying into a wall: the held object is stopped by the swept move and dropped once too far from the hold point.
+    CHECK(w.add({2,{{-5_fx,Fixed{},3_fx},{5_fx,5_fx,4_fx}}}));CarryState walk;CarryInput go;go.carriers={me};go.carriers[0].pickUp=1;
+    go.objects={{1,{Fixed{},Fixed::fromRatio(1,4),1_fx}}};CHECK(stepCarry(c,items,walk,0,dt,go,col));go.objects.clear();go.carriers[0].pickUp=0;
+    bool dropped=false;for(uint32_t k=1;k<60&&!dropped;++k){
+        go.carriers[0].position.z+=Fixed::fromRatio(1,10);r=stepCarry(c,items,walk,k,dt,go,col);CHECK(r);
+        if(auto e=find(r->events,K::DroppedBlocked)){dropped=true;CHECK(e->collider==2&&e->position.z<=3_fx-Fixed::fromRatio(1,4)+milli(1)&&go.carriers[0].position.z>2_fx);}
+        else CHECK(walk.held.at(1).position.z<=3_fx-Fixed::fromRatio(1,4)+milli(1));
+    }
+    CHECK(dropped&&walk.held.empty());
+}
+void pushPull(){
+    InteractionConfig c;auto w=floorWorld();CHECK(w.add({3,{{5_fx,Fixed{},-2_fx},{6_fx,2_fx,2_fx}}}));CHECK(w.add({4,{{2_fx,Fixed{},9_fx},{3_fx,2_fx,11_fx}}}));WorldCollision col(w);
+    PushableDef crate;crate.id=10;crate.mass=120_fx;crate.frictionMilli=600;PushableDef block;block.id=11;block.mass=80_fx;block.grid=true;block.pullable=false;block.half={milli(480),milli(480),milli(480)};
+    Pushables defs{{10,crate},{11,block}};PushState s;CHECK(addPushable(s,crate,{Fixed{},Fixed::fromRatio(1,2),Fixed{}}));CHECK(addPushable(s,block,{Fixed{},milli(480),10_fx}));
+    CHECK(near(pushResistance(c,crate),Fixed::fromRatio(706,1),1_fx));
+    std::vector<PushCommand> cmd{{1,10,{1_fx,{},{}},500_fx,false}};
+    auto r=stepPush(c,defs,s,0,dt,cmd,col);CHECK(r&&has(r->events,K::PushResisted,ReasonTooWeak)&&s.bodies.at(10).velocity==Vec3{});
+    cmd={{2,10,{1_fx,{},{}},400_fx,false},{1,10,{1_fx,{},{}},400_fx,false}};                          // 800 N together beat 706 N
+    r=stepPush(c,defs,s,1,dt,cmd,col);CHECK(r&&has(r->events,K::PushStarted)&&s.bodies.at(10).velocity.x>Fixed{});
+    cmd={{1,10,{1_fx,{},{}},1200_fx,false}};bool blocked=false;uint32_t t=2;
+    for(;t<600&&!blocked;++t){r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&s.bodies.at(10).velocity.length()<=c.pushMaxSpeed);
+        if(auto e=find(r->events,K::PushBlocked)){CHECK(e->collider==3);blocked=true;}}
+    auto x=s.bodies.at(10).position.x;CHECK(blocked&&x<=Fixed::fromRatio(9,2)+milli(1)&&x>=Fixed::fromRatio(9,2)-Fixed::fromRatio(1,20)&&s.bodies.at(10).blocked);
+    r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r&&!has(r->events,K::PushBlocked)&&near(s.bodies.at(10).position.x,x,milli(1)));
+    cmd={};bool stopped=false;for(uint32_t k=0;k<5;++k){r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r);stopped|=s.bodies.at(10).velocity==Vec3{};}CHECK(stopped);
+    cmd={{1,11,{1_fx,{},{}},1000_fx,false}};r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&has(r->events,K::PushStarted)&&s.bodies.at(11).moving);
+    const uint32_t moveStart=t++;std::optional<PushState> twin;
+    for(;t<moveStart+c.gridMoveTicks;++t){if(t==moveStart+5)twin=restored(s);r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&!has(r->events,K::PushArrived));}
+    r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&has(r->events,K::PushArrived)&&s.bodies.at(11).position==(Vec3{1_fx,milli(480),10_fx}));
+    for(uint32_t k=moveStart+5;k<=t;++k)CHECK(stepPush(c,defs,*twin,k,dt,cmd,col));CHECK(interactionHash(*twin)==interactionHash(s));++t;
+    r=stepPush(c,defs,s,t++,dt,cmd,col);auto e=r?find(r->events,K::PushBlocked):nullptr;CHECK(e&&e->collider==4&&!s.bodies.at(11).moving);
+    cmd={{1,11,{-1_fx,{},{}},1000_fx,true}};r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r&&has(r->events,K::PushResisted,ReasonNotPullable));
+    cmd={{1,10,{1_fx,{},{}},-1_fx,false}};CHECK(!stepPush(c,defs,s,t,dt,cmd,col));
+}
+void ropes(){
+    InteractionConfig c;RopeDef d;d.id=1;d.length=4_fx;d.segments=8;d.particleMass=Fixed::fromRatio(1,5);d.a={RopeAnchor::Point,{Fixed{},10_fx,Fixed{}},0,{}};d.b={RopeAnchor::Load,{},0,10_fx};
+    RopeDef weak=d;weak.id=2;weak.breakForce=50_fx;RopeDef swing=d;swing.id=3;RopeDefs defs{{1,d},{2,weak},{3,swing}};
+    RopeState s;s.ropes[1]=*makeRope(d,d.a.point,{Fixed{},6_fx,Fixed{}});s.ropes[2]=*makeRope(weak,d.a.point,{Fixed{},6_fx,Fixed{}});s.ropes[3]=*makeRope(swing,d.a.point,{4_fx,10_fx,Fixed{}});
+    auto fine=s;auto c16=c;c16.ropeIterations=32;bool broke=false;std::optional<RopeState> twin;uint32_t t=0;
+    for(;t<900;++t){if(t==300)twin=restored(s);auto r=stepRopes(c,defs,s,t,dt,{});CHECK(r&&r->ropes.size()==3);if(auto e=find(r->events,K::RopeBroken)){CHECK(e->object==2&&e->value>50000);broke=true;}
+        CHECK(stepRopes(c16,defs,fine,t,dt,{}));}
+    for(uint32_t k=300;k<t;++k)CHECK(stepRopes(c,defs,*twin,k,dt,{}));CHECK(interactionHash(*twin)==interactionHash(s));
+    const auto& rope=s.ropes.at(1);auto expected=(10_fx+Fixed::fromRatio(7,5))*c.gravity;
+    CHECK(broke&&s.ropes.at(2).broken&&!rope.broken);CHECK(near(rope.tension,expected,expected/10));
+    auto span=(rope.points.back()-rope.points.front()).length(),fineSpan=(fine.ropes.at(1).points.back()-fine.ropes.at(1).points.front()).length();
+    CHECK(span>=d.length&&span<=d.length*Fixed::fromRatio(11,10)&&fineSpan>=d.length&&fineSpan<=span);              // more iterations: less stretch
+    CHECK(rope.velocities.back().length()<Fixed::fromRatio(1,20));
+    CHECK(s.ropes.at(3).points.back().y<10_fx);                                                                       // the pendulum swung down
+    RopeInput detach;detach.commands={{1,0,RopeAction::Detach,{}}};auto r=stepRopes(c,defs,s,t++,dt,detach);CHECK(r&&has(r->events,K::RopeDetached)&&s.ropes.at(1).a.anchor==RopeAnchor::Free);
+    for(uint32_t k=0;k<10;++k){r=stepRopes(c,defs,s,t++,dt,{});CHECK(r);}CHECK(s.ropes.at(1).tension<1_fx);           // free fall: slack
+    RopeInput attach;attach.bodies={{7,s.ropes.at(1).points.front()}};attach.commands={{1,0,RopeAction::Attach,{RopeAnchor::Body,{},7,{}}}};
+    r=stepRopes(c,defs,s,t++,dt,attach);CHECK(r&&has(r->events,K::RopeAttached)&&s.ropes.at(1).a.body==7);
+    attach.commands.clear();for(uint32_t k=0;k<400;++k){attach.bodies[0].position=s.ropes.at(1).points.front();r=stepRopes(c,defs,s,t++,dt,attach);CHECK(r);}
+    const auto& status=r->ropes[0];CHECK(status.rope==1&&status.pullA.y<Fixed{}&&near(status.pullA.length(),status.tension,status.tension/50+Fixed::fromRatio(1,10)));
+    CHECK(!stepRopes(c,defs,s,t,Fixed{},{}));RopeInput bad;bad.commands={{9,0,RopeAction::Detach,{}}};CHECK(!stepRopes(c,defs,s,t,dt,bad));
+}
+void doors(const InteractionDefinitions& all){
+    InteractionConfig c;world::SpatialWorld w;WorldCollision col(w);auto defs=all.doors;DoorState s;for(const auto& [id,d]:defs)CHECK(addDoor(s,d));
+    uint32_t t=0;
+    auto step=[&](std::vector<DoorCommand> cmd){auto r=stepDoors(c,defs,s,t++,cmd,col);CHECK(r);
+        for(const auto& st:r->doors){auto id=defs.at(st.door).collider;w.remove(id);CHECK(w.add({id,st.bounds}));}return *r;};
+    auto until=[&](K kind,uint32_t limit,int64_t door=30)->std::optional<InteractionEvent>{for(uint32_t k=0;k<limit;++k){auto r=step({});if(auto e=findFor(r.events,kind,door))return *e;}return std::nullopt;};
+    // Sliding door 30: locked with key 7, opens in 10 ticks, auto-closes 20 ticks after opening.
+    DoorCommand open{1,30,DoorAction::Open,{},{Fixed{},1_fx,-1_fx},false};
+    auto r=step({open});CHECK(has(r.events,K::DoorRefused,ReasonLocked)&&s.doors.at(30).phase==DoorPhase::Closed&&s.doors.at(30).locked);
+    open.keys={3,7};r=step({open});CHECK(has(r.events,K::DoorUnlocked)&&has(r.events,K::DoorOpening)&&!s.doors.at(30).locked);
+    const uint32_t opening=t-1;CHECK(until(K::DoorOpened,20)&&t-1==opening+9&&s.doors.at(30).phase==DoorPhase::Open);
+    CHECK(near(doorBounds(defs.at(30),s.doors.at(30)).min.x,1_fx,Fixed::fromRaw(2)));
+    CHECK(w.add({20,{{milli(-300),Fixed{},milli(-300)},{milli(300),milli(1800),milli(300)}}}));                    // a body steps into the doorway
+    CHECK(until(K::DoorClosing,30));auto reversed=until(K::DoorReversed,20);CHECK(reversed&&reversed->collider==20&&s.doors.at(30).phase==DoorPhase::Opening);
+    CHECK(s.doors.at(30).openness>0&&doorBounds(defs.at(30),s.doors.at(30)).min.x>=milli(300)-c.skin);
+    auto twin=restored(s);auto twinTick=t;
+    CHECK(until(K::DoorOpened,20));w.remove(20);CHECK(until(K::DoorClosing,30));CHECK(until(K::DoorClosed,20)&&s.doors.at(30).openness==0);
+    auto saved=t;t=twinTick;std::swap(s,twin);CHECK(until(K::DoorOpened,20));CHECK(until(K::DoorClosing,30));CHECK(until(K::DoorClosed,20));
+    CHECK(t==saved&&interactionHash(s)==interactionHash(twin));
+    // Locking needs the key (or a scripted command); scripted open bypasses the lock.
+    r=step({{1,30,DoorAction::Lock,{},{},false}});CHECK(has(r.events,K::DoorRefused,ReasonNoKey)&&!s.doors.at(30).locked);
+    r=step({{1,30,DoorAction::Lock,{7},{},false}});CHECK(has(r.events,K::DoorLocked)&&s.doors.at(30).locked);
+    r=step({{2,30,DoorAction::Toggle,{},{},false}});CHECK(has(r.events,K::DoorRefused,ReasonLocked));
+    r=step({{0,30,DoorAction::Open,{},{},true}});CHECK(has(r.events,K::DoorUnlocked)&&s.doors.at(30).phase==DoorPhase::Opening);
+    // Hinged one-way door 31 (opens from +z only), no auto-reverse: a body holds it while closing.
+    r=step({{1,31,DoorAction::Open,{},{10_fx,1_fx,-1_fx},false}});CHECK(has(r.events,K::DoorRefused,ReasonWrongSide));
+    r=step({{1,31,DoorAction::Open,{},{10_fx,1_fx,1_fx},false}});CHECK(has(r.events,K::DoorOpening));
+    CHECK(until(K::DoorOpened,30,31));auto b=doorBounds(defs.at(31),s.doors.at(31));
+    CHECK(nearV(b.min,{milli(9950),Fixed{},-1_fx},milli(2))&&nearV(b.max,{milli(10050),2_fx,Fixed{}},milli(2)));
+    CHECK(w.add({21,{{milli(10400),Fixed{},milli(-600)},{milli(10600),milli(1800),milli(-400)}}}));
+    r=step({{1,31,DoorAction::Close,{},{},false}});auto held=until(K::DoorBlocked,40,31);CHECK(held&&held->collider==21&&s.doors.at(31).phase==DoorPhase::Closing&&s.doors.at(31).blocked);
+    auto frozen=s.doors.at(31).openness;step({});CHECK(s.doors.at(31).openness==frozen);
+    w.remove(21);CHECK(until(K::DoorClosed,40,31)&&s.doors.at(31).phase==DoorPhase::Closed);
+    std::vector<DoorCommand> unknown{{1,99,DoorAction::Open,{},{},false}};CHECK(!stepDoors(c,defs,s,t,unknown,col));CHECK(!stepDoors(c,defs,s,t-1,{},col));
+}
+void platforms(const InteractionDefinitions& all){
+    InteractionConfig c;auto defs=all.platforms;PlatformState s;for(const auto& [id,d]:defs)CHECK(addPlatform(s,d));
+    LocomotionModeConfig lc;LocomotionState body;Vec3 rider{Fixed::fromRatio(1,2),Fixed::fromRatio(1,4),Fixed{}};const auto offset=rider-s.platforms.at(40).position;
+    auto ride=[&](uint32_t t,Vec2 wish,std::vector<RiderContact> contacts){
+        auto r=stepPlatforms(c,defs,s,t,dt,{},contacts);CHECK(r);
+        Vec3 carry{};for(const auto& x:r->carry)if(x.rider==1){carry=x.delta;CHECK(x.platform==40&&x.velocity==s.platforms.at(40).velocity);}
+        rider+=carry;                                                    // owner applies the carry delta (open platform: no sweep needed)
+        LocomotionInput in;in.wish=wish;in.env.grounded=true;auto m=stepLocomotion(lc,body,in,t,dt);CHECK(m&&m->mode==LocomotionMode::Ground);
+        rider+=m->velocity*dt;rider.y=s.platforms.at(40).position.y+Fixed::fromRatio(1,4);return *r;
+    };
+    for(uint32_t t=0;t<60;++t){
+        auto r=ride(t,{},{{3,41},{1,40},{2,0}});                         // shuffled; rider 2 stands on the ground
+        CHECK(r.carry.size()==2&&r.carry[0].rider==1&&r.carry[1].rider==3&&r.carry[1].platform==41);
+        if(t==0)CHECK(has(r.events,K::RiderBoarded)&&s.platforms.at(40).riders==std::vector<int64_t>{1});
+        CHECK(rider-s.platforms.at(40).position==offset);
+    }
+    CHECK(near(s.platforms.at(40).position.x,2_fx,Fixed::fromRatio(1,20))&&s.platforms.at(40).velocity.x>Fixed{});
+    for(uint32_t t=60;t<90;++t)ride(t,{1_fx,{}},{{1,40}});CHECK((rider-s.platforms.at(40).position).x>offset.x+1_fx);
+    auto r=ride(90,{},{});CHECK(has(r.events,K::RiderLeft)&&s.platforms.at(40).riders.empty()&&has(r.events,K::RiderLeft));
+    uint32_t t=91,arrived=0,still=0;std::optional<PlatformState> twin;uint32_t twinFrom=0;
+    for(;t<400;++t){
+        auto x=stepPlatforms(c,defs,s,t,dt,{},{});CHECK(x);
+        if(auto e=findFor(x->events,K::PlatformArrived,40);e&&!arrived){arrived=t;CHECK(e->value==1&&s.platforms.at(40).position==(Vec3{4_fx,{},{}}));}
+        else if(arrived&&!findFor(x->events,K::PlatformDeparted,40)&&s.platforms.at(40).delta==Vec3{})++still;
+        if(arrived&&t==arrived+4){twin=restored(s);twinFrom=t+1;}
+        if(findFor(x->events,K::PlatformDeparted,40)){CHECK(t==arrived+11&&s.platforms.at(40).velocity.x<Fixed{});break;}
+    }
+    CHECK(arrived&&still==10);
+    for(uint32_t k=twinFrom;k<=t;++k)CHECK(stepPlatforms(c,defs,*twin,k,dt,{},{}));CHECK(interactionHash(*twin)==interactionHash(s));
+    std::vector<PlatformCommand> stop{{40,false}};auto before=s.platforms.at(40).position;CHECK(stepPlatforms(c,defs,s,++t,dt,stop,{}));CHECK(s.platforms.at(40).position==before);
+    std::vector<RiderContact> twice{{1,40},{1,41}};CHECK(!stepPlatforms(c,defs,s,++t,dt,{},twice));
+}
+void breakables(const InteractionDefinitions& all){
+    const auto& defs=all.breakables;BreakableState s;CHECK(addBreakable(s,defs.at(50)));
+    std::vector<DamageInput> hits{{3,50,1,45,9,{1_fx,{},{}}},{2,50,2,50,9,{}},{1,50,1,5,9,{}}};       // out of order: processed by id
+    auto r=stepBreakables(defs,s,0,hits);CHECK(r);
+    CHECK(has(r->events,K::DamageIgnored,ReasonBelowThreshold)&&has(r->events,K::DamageIgnored,ReasonImmune)&&has(r->events,K::Damaged,45)&&has(r->events,K::StageReached,1));
+    CHECK(s.objects.at(50).health==55&&s.objects.at(50).stage==1&&r->debris.size()==1&&r->debris[0].kind==1&&r->debris[0].count==2&&r->debris[0].position==(Vec3{1_fx,{},{}}));
+    auto twin=restored(s);
+    std::vector<DamageInput> more{{3,50,1,45,9,{}},{4,50,3,20,9,{}}};r=stepBreakables(defs,s,1,more);CHECK(r&&has(r->events,K::DamageIgnored,ReasonDuplicate)&&has(r->events,K::Damaged,40)&&has(r->events,K::StageReached,2));
+    CHECK(s.objects.at(50).health==15);
+    std::vector<DamageInput> finish{{5,50,1,100,9,{}},{6,50,1,100,9,{}}};r=stepBreakables(defs,s,2,finish);CHECK(r&&has(r->events,K::Broken)&&has(r->events,K::Damaged,15)&&has(r->events,K::DamageIgnored,ReasonAlreadyBroken));
+    CHECK(s.objects.at(50).broken&&r->debris.size()==1&&r->debris[0].stage==0&&r->debris[0].kind==3&&r->debris[0].count==5);
+    auto seed=r->debris[0].seed;CHECK(stepBreakables(defs,twin,1,more)&&stepBreakables(defs,twin,2,finish)->debris[0].seed==seed&&interactionHash(twin)==interactionHash(s));
+    std::vector<DamageInput> unknown{{7,99,1,1,0,{}}};CHECK(!stepBreakables(defs,s,3,unknown));CHECK(!stepBreakables(defs,s,2,{}));
+    auto bytes=save(s);BreakableState copy;CHECK(!load(bytes.substr(0,bytes.size()-1),copy));CarryState wrong;CHECK(!load(bytes,wrong));
+}
+void invalidData(const std::string& root){
+    auto fails=[](const char* text,const std::string& message){
+        try{readInteractionDefinitions(Json::parse(text));}catch(const JsonError& e){if(e.what()!=message)std::cerr<<"got: "<<e.what()<<'\n';return e.what()==message;}return false;};
+    CHECK(fails(R"({"levers":[]})","interaction: unknown key 'levers'"));
+    CHECK(fails(R"({"carryables":[{"id":1,"massMilli":1000,"halfMilli":[1,1,1]},{"id":1,"massMilli":1000,"halfMilli":[1,1,1]}]})","interaction.carryables[1].id: duplicate id 1"));
+    CHECK(fails(R"({"carryables":[{"id":1,"massMilli":-5,"halfMilli":[1,1,1]}]})","interaction.carryables[0].massMilli: must be in 1..100000000"));
+    CHECK(fails(R"({"pushables":[{"id":1,"massMilli":1000,"halfMilli":[1,1,1],"spin":1}]})","interaction.pushables[0]: unknown key 'spin'"));
+    CHECK(fails(R"({"pushables":[{"id":1,"massMilli":1000,"halfMilli":[1,1]}]})","interaction.pushables[0].halfMilli: expected [x,y,z] in milli-units"));
+    CHECK(fails(R"({"ropes":[{"id":1,"lengthMilli":1000,"a":{"anchor":"hook"},"b":{"anchor":"free"}}]})","interaction.ropes[0].a.anchor: expected free, point, body or load"));
+    CHECK(fails(R"({"ropes":[{"id":1,"lengthMilli":1000,"a":{"anchor":"load"},"b":{"anchor":"free"}}]})","interaction.ropes[0].a.massMilli: required"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"hinged","panelMin":[0,0,0],"panelMax":[1000,2000,0],"pivot":[0,0,0]}]})","interaction.doors[0].panelMax: must exceed panelMin on every axis"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"sliding","panelMin":[0,0,0],"panelMax":[1,1,1],"slideMilli":[1,0,0],"openTicks":0}]})","interaction.doors[0].openTicks: must be in 1..3600"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"sliding","panelMin":[0,0,0],"panelMax":[1,1,1],"slideMilli":[1,0,0],"locked":true}]})","interaction.doors[0].key: a locked door needs a key id (or unlock it from script)"));
+    CHECK(fails(R"({"doors":[{"id":1,"kind":"revolving","panelMin":[0,0,0],"panelMax":[1,1,1]}]})","interaction.doors[0].kind: expected hinged or sliding"));
+    CHECK(fails(R"({"platforms":[{"id":1,"halfMilli":[1,1,1],"speedMilli":10,"waypoints":[[0,0,0],[1,0,0]],"waitTicks":[1,2,3]}]})","interaction.platforms[0].waitTicks: expected one value or one per waypoint"));
+    CHECK(fails(R"({"platforms":[{"id":1,"halfMilli":[1,1,1],"speedMilli":10,"waypoints":[[0,0,0],[0,0,0]]}]})","interaction.platforms[0].waypoints[1]: repeats the previous waypoint"));
+    CHECK(fails(R"({"breakables":[{"id":1,"health":100,"stages":[{"stage":1,"health":50},{"stage":2,"health":70}]}]})","interaction.breakables[0].stages[1].health: must decrease from stage to stage"));
+    CHECK(fails(R"({"breakables":[{"id":1,"health":100,"damage":[{"type":1},{"type":1}]}]})","interaction.breakables[0].damage[1].type: duplicate damage type 1"));
+    auto settings=lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/interaction-settings.json"));
+    CHECK(settings.value&&interactionSettingsErrors(*settings.value).empty());auto c=interactionConfig(*settings.value);
+    CHECK(valid(c)&&c.maxMass==25_fx&&c.ropeIterations==12&&c.gridMoveTicks==16&&c.throwMaxImpulse==90_fx&&interactionConfigHash(c)!=interactionConfigHash(InteractionConfig{}));
+    auto bad=lib::gameplay::readGameplaySettings(Json::parse(R"({"schemaVersion":1,"interaction":{"throwMinImpulseMilli":5000,"throwMaxImpulseMilli":1000,"spin":1}})"));
+    CHECK(!bad.value&&std::find(bad.errors.begin(),bad.errors.end(),"interaction.throwMinImpulseMilli: must not exceed throwMaxImpulseMilli")!=bad.errors.end()
+        &&std::find(bad.errors.begin(),bad.errors.end(),"interaction.spin: unknown field")!=bad.errors.end());
+    InteractionConfig broken;broken.ropeIterations=0;CHECK(interactionConfigError(broken)=="ropeIterations: must be 1..64");
+    CarryState s;CarryInput none;world::SpatialWorld w;CHECK(!stepCarry(broken,Carryables{},s,0,dt,none,WorldCollision(w)));
+}
+}
+void physicalInteractions(const std::string& root){
+    auto defs=readInteractionDefinitions(Json::parseFile(root+"/examples/libraries/genre/interactables.json"));
+    CHECK(defs.carryables.size()==2&&defs.doors.size()==2&&defs.platforms.size()==2&&defs.breakables.size()==1&&defs.ropes.at(20).b.anchor==RopeAnchor::Load);
+    CHECK(interactionDefinitionsHash(defs)==interactionDefinitionsHash(readInteractionDefinitions(Json::parseFile(root+"/examples/libraries/genre/interactables.json"))));
+    physical::carryThrow(defs);physical::pushPull();physical::ropes();physical::doors(defs);physical::platforms(defs);physical::breakables(defs);physical::invalidData(root);
+}
+// ---- cinematic-gameplay: time-scale domains, scene timelines, sync waits, QTE, staging, checkpoints (kinds 72..75) ----
+#include <aiverselib/genre/Cinematic.h>
+#include <aiverselib/genre/CinematicData.h>
+#include <aiverselib/genre/CinematicConfigured.h>
+#include <aiverselib/genre/CinematicPersistence.h>
+#define CCHECK(...) CHECK((__VA_ARGS__))
+namespace cine {
+using K=SceneEventKind;using C=SceneCommandKind;using Ids=std::vector<int64_t>;
+TimeReport tstep(const TimeConfig& c,TimeState& s,uint32_t t,const TimeInput& in={}){auto r=stepTime(c,s,t,in);CCHECK(r);return *r;}
+SceneReport run(const SceneLibrary& l,SceneState& s,uint32_t t,const SceneInput& in={}){auto r=stepScene(l,s,t,in);CCHECK(r);return *r;}
+std::size_t count(const SceneReport& r,K k){std::size_t n=0;for(const auto& e:r.events)n+=e.kind==k;return n;}
+std::size_t count(const TimeReport& r,TimeEventKind k){std::size_t n=0;for(const auto& e:r.events)n+=e.kind==k;return n;}
+const SceneEvent* first(const SceneReport& r,K k){for(const auto& e:r.events)if(e.kind==k)return &e;return nullptr;}
+Ids cues(const SceneReport& r){Ids out;for(const auto& e:r.events)if(e.kind==K::Cue)out.push_back(e.id);return out;}
+void append(Ids& a,const Ids& b){a.insert(a.end(),b.begin(),b.end());}
+SceneCommand cmd(uint64_t seq,C k,int64_t v=0,SceneBindings b={}){return {seq,k,v,std::move(b)};}
+SceneInput commands(std::vector<SceneCommand> c){SceneInput in;in.commands=std::move(c);return in;}
+CueDef cue(int64_t id,uint32_t at,CueKind k,int64_t ref=1,int64_t actor=0,int64_t track=1){CueDef c;c.id=id;c.at=at;c.kind=k;c.ref=ref;c.actor=actor;c.track=track;c.essential=k==CueKind::Event;return c;}
+WaitDef line(int64_t c){WaitDef w;w.kind=WaitKind::LineFinished;w.cue=c;return w;}
+WaitDef marker(int64_t c,int64_t m){WaitDef w;w.kind=WaitKind::Marker;w.cue=c;w.marker=m;return w;}
+WaitDef inPosition(Ids p={}){WaitDef w;w.kind=WaitKind::InPosition;w.participants=std::move(p);return w;}
+SyncDef sync(int64_t id,uint32_t at,uint32_t timeout,std::vector<WaitDef> w={},bool checkpoint=false){SyncDef s;s.id=id;s.at=at;s.timeout=timeout;s.waits=std::move(w);s.checkpoint=checkpoint;return s;}
+QteDef press(int64_t id,uint32_t at,uint32_t open,uint32_t close,int64_t onSuccess=0,int64_t onFail=0){QteDef q;q.id=id;q.at=at;q.button=1;q.open=open;q.close=close;q.onSuccess=onSuccess;q.onFail=onFail;return q;}
+SceneDef scene(int64_t id,uint32_t length,int64_t domain=0){SceneDef d;d.id=id;d.length=length;d.domain=domain;return d;}
+SceneLibrary library(std::vector<SceneDef> scenes){
+    SceneLibrary l;l.presets[1]={1,hitStop(kDomainWorld,6)};l.presets[2]={2,slowMotion(kDomainCinematic,{1,2},10)};
+    for(auto& d:scenes){std::sort(d.cues.begin(),d.cues.end(),[](const auto& a,const auto& b){return std::tuple(a.at,a.track,a.id)<std::tuple(b.at,b.track,b.id);});l.scenes[d.id]=d;}
+    indexTriggers(l);if(auto e=sceneLibraryError(l);!e.empty())throw std::runtime_error(e);return l;
+}
+void timeExact(){
+    auto c=defaultTimeConfig();TimeState s;TimeInput in;
+    in.add={slowMotion(kDomainWorld,{1,2},0),slowMotion(kDomainCinematic,{1,3},0),slowMotion(kDomainUi,{7,16},0)};
+    auto r=tstep(c,s,0,in);uint64_t world=domainSteps(r,kDomainWorld),player=domainSteps(r,kDomainPlayer),cinematic=domainSteps(r,kDomainCinematic),ui=domainSteps(r,kDomainUi);
+    const uint32_t N=300000;
+    for(uint32_t t=1;t<N;++t){auto x=tstep(c,s,t);world+=domainSteps(x,kDomainWorld);player+=domainSteps(x,kDomainPlayer);cinematic+=domainSteps(x,kDomainCinematic);ui+=domainSteps(x,kDomainUi);}
+    CCHECK(world==N/2&&player==N/2&&cinematic==N/3&&ui==uint64_t(N)*7/16);
+    CCHECK(s.clocks[kDomainWorld].local==N/2&&s.clocks[kDomainCinematic].local==N/3&&s.clocks[kDomainWorld].units==kTimeUnit/2);
+    // A tick gap integrates exactly like stepping every tick.
+    auto a=s,b=s;uint64_t perTick=0;for(uint32_t t=N;t<N+1000;++t)perTick+=domainSteps(tstep(c,a,t),kDomainCinematic);
+    auto gap=tstep(c,b,N+999);CCHECK(perTick==domainSteps(gap,kDomainCinematic)&&save(a)==save(b)&&cinematicHash(a)==cinematicHash(b));
+    // Nested: player (child of world) multiplies its own 1/2 by the world's 1/2.
+    TimeState n;TimeInput m;m.add={slowMotion(kDomainWorld,{1,2},0),{0,kDomainPlayer,{1,2},0,0,TimeBlend::Multiply}};uint64_t quarter=0;
+    for(uint32_t t=0;t<1000;++t)quarter+=domainSteps(tstep(c,n,t,t?TimeInput{}:m),kDomainPlayer);CCHECK(quarter==250);
+    // Fast forward 3x and a non-unit denominator stay exact.
+    TimeState f;TimeInput fast;fast.add={slowMotion(kDomainUi,{3,1},0),slowMotion(kDomainWorld,{5,7},0)};uint64_t ff=0,sevenths=0;
+    for(uint32_t t=0;t<7000;++t){auto x=tstep(c,f,t,t?TimeInput{}:fast);ff+=domainSteps(x,kDomainUi);sevenths+=domainSteps(x,kDomainWorld);}
+    CCHECK(ff==21000&&sevenths==5000);
+    roundtrip(s);roundtrip(f);
+}
+void timeStack(){
+    auto c=defaultTimeConfig();TimeState s;TimeInput a;a.add={{7,kDomainWorld,{1,2},10,0,TimeBlend::Override}};
+    auto r=tstep(c,s,10,a);CCHECK(count(r,TimeEventKind::Started)==1&&r.events[0].request==1&&domainSteps(r,kDomainWorld)==0);
+    TimeInput h;h.add={hitStop(kDomainWorld,6)};r=tstep(c,s,11,h);CCHECK(domainSteps(r,kDomainWorld)==0&&domainSteps(r,kDomainUi)==1);
+    uint64_t frozen=0;for(uint32_t t=12;t<=16;++t)frozen+=domainSteps(tstep(c,s,t),kDomainWorld);CCHECK(frozen==0);
+    r=tstep(c,s,17);CCHECK(count(r,TimeEventKind::Expired)==1&&r.events[0].request==2&&domainSteps(r,kDomainWorld)==1); // 1/2 resumes, remainder kept
+    TimeInput m;m.add={{7,kDomainWorld,{1,2},20,0,TimeBlend::Multiply},{0,kDomainWorld,{2,1},5,0,TimeBlend::Override}};
+    uint64_t quarter=0;for(uint32_t t=18;t<=25;++t)quarter+=domainSteps(tstep(c,s,t,t==18?m:TimeInput{}),kDomainWorld);
+    CCHECK(quarter==2&&domainUnits(s,kDomainWorld)==kTimeUnit/4); // priority 5 override loses to priority 10, priority 20 multiplies
+    TimeInput x;x.cancelTags={7};r=tstep(c,s,26,x);CCHECK(count(r,TimeEventKind::Cancelled)==2&&domainSteps(r,kDomainWorld)==2);
+    x={};x.cancel={4};r=tstep(c,s,27,x);CCHECK(count(r,TimeEventKind::Cancelled)==1&&domainSteps(r,kDomainWorld)==1&&s.requests.empty());
+    // Expiry inside a gap: hit-stop active for ticks 5..14, the jump to 20 counts only 15..20.
+    TimeState g;tstep(c,g,0);TimeInput hs;hs.add={hitStop(kDomainWorld,10)};tstep(c,g,5,hs);
+    r=tstep(c,g,20);CCHECK(domainSteps(r,kDomainWorld)==6&&count(r,TimeEventKind::Expired)==1&&domainSteps(r,kDomainUi)==15);
+    auto before=save(g);TimeInput bad;bad.add={{0,kDomainWorld,{1,17},0,0,TimeBlend::Override}};
+    CCHECK(!stepTime(c,g,21,bad)&&!stepTime(c,g,20,{})&&!stepTime(c,g,19,{}));bad.add={{0,9,{1,2},0,0,TimeBlend::Override}};CCHECK(!stepTime(c,g,21,bad));
+    bad.add={{-1,kDomainWorld,{1,2},0,0,TimeBlend::Override}};CCHECK(!stepTime(c,g,21,bad)&&save(g)==before);
+    TimeInput flood;for(int i=0;i<300;++i)flood.add.push_back(slowMotion(kDomainUi,{1,1},0));CCHECK(!stepTime(c,g,21,flood));
+    flood.add.resize(256);r=tstep(c,g,21,flood);flood.add.resize(1);r=tstep(c,g,22,flood);CCHECK(count(r,TimeEventKind::Rejected)==1&&g.requests.size()==256);
+    auto wrong=c;wrong.domains[kDomainPlayer].parent=kDomainCinematic;CCHECK(timeConfigError(wrong).find("domain 2.parent")!=std::string::npos&&!stepTime(wrong,s,30,{}));
+    wrong=c;wrong.domains[kDomainUi].base={1,17};CCHECK(timeConfigError(wrong).find("domain 3.base")!=std::string::npos);
+    auto other=c;other.domains[9]={9,0,{1,1},"extra"};CCHECK(!stepTime(other,s,30,{})); // saved clocks must match the domains
+    roundtrip(g);SceneState wrongKind;CCHECK(!load(save(g),wrongKind));
+}
+void cueOrder(){
+    auto d=scene(10,50);
+    d.cues={cue(1,0,CueKind::Camera,300,0,2),cue(2,0,CueKind::Dialogue,9001),cue(3,5,CueKind::Sound,1),cue(4,10,CueKind::Event,5),
+        cue(5,20,CueKind::Dialogue,9002),cue(6,30,CueKind::Event,6),cue(7,40,CueKind::Sound,2)};
+    d.syncs={sync(1,10,100,{line(2)}),sync(2,30,100,{line(5)})};
+    auto l=library({d});SceneState s;Ids order;
+    auto r=run(l,s,1,commands({cmd(1,C::TriggerScene,10)}));CCHECK(s.phase==ScenePhase::Pending&&count(r,K::Triggered)==1&&cues(r).empty());
+    r=run(l,s,2);CCHECK(s.phase==ScenePhase::Playing&&count(r,K::Started)==1&&cues(r)==Ids{2,1});append(order,cues(r));
+    for(uint32_t t=3;t<=12;++t){r=run(l,s,t);append(order,cues(r));}
+    CCHECK(s.phase==ScenePhase::Waiting&&s.position==10&&first(r,K::SyncReached)->id==1&&order==Ids({2,1,3}));
+    SceneInput done;done.finished={{2,13}};r=run(l,s,13,done);append(order,cues(r));
+    CCHECK(first(r,K::SyncReleased)->value==0&&cues(r)==Ids{4}&&s.position==11);
+    r=run(l,s,14,commands({cmd(2,C::Skip)}));append(order,cues(r)); // skip to sync 2: dialogue 5 is skipped, its wait is satisfied
+    CCHECK(first(r,K::Skipped)->id==2&&r.cuesSkipped==1&&first(r,K::SyncReleased)->id==2&&cues(r)==Ids{6}&&s.position==31);
+    CCHECK(r.timeCancelTags==Ids{10});
+    r=run(l,s,15,commands({cmd(2,C::Pause),cmd(3,C::Seek,999)}));CCHECK(count(r,K::CommandIgnored)==2&&!s.paused);
+    for(uint32_t t=16;t<=40&&s.phase!=ScenePhase::Idle;++t){r=run(l,s,t);append(order,cues(r));if(t==33)CCHECK(count(r,K::Finished)==1);}
+    CCHECK(order==Ids({2,1,3,4,6,7})&&s.phase==ScenePhase::Idle&&s.lastOutcome==SceneOutcome::Completed&&s.lastScene==10);
+    // Backward seek replays presentation cues once more; essential cues never fire twice.
+    SceneState b;run(l,b,1,commands({cmd(1,C::TriggerScene,10)}));
+    for(uint32_t t=2;t<=36;++t){SceneInput in;if(t==5)in.finished={{2,5}};if(t==30)in.finished={{5,30}};run(l,b,t,in);}
+    CCHECK(b.position==34&&b.essentialDone==Ids({4,6}));
+    r=run(l,b,37,commands({cmd(2,C::Seek,0)}));Ids replay=cues(r);CCHECK(first(r,K::Seeked)->value==0&&replay==Ids({2,1})&&b.position==1);
+    for(uint32_t t=38;b.phase!=ScenePhase::Idle&&t<200;++t){SceneInput in;if(t==38)in.finished={{2,38}};if(t==57)in.finished={{5,57}};r=run(l,b,t,in);append(replay,cues(r));}
+    CCHECK(replay==Ids({2,1,3,5,7})&&b.lastOutcome==SceneOutcome::Completed);
+    // Unskippable scenes ignore skip and forward seeks but still allow backward seeks.
+    d.skippable=false;auto locked=library({d});SceneState u;run(locked,u,1,commands({cmd(1,C::TriggerScene,10)}));run(locked,u,2);run(locked,u,5);
+    r=run(locked,u,6,commands({cmd(2,C::Skip),cmd(3,C::SkipScene),cmd(4,C::Seek,40),cmd(5,C::Seek,0)}));CCHECK(count(r,K::CommandIgnored)==3&&count(r,K::Seeked)==1&&u.position==1);
+}
+void syncTimeouts(){
+    auto d=scene(20,20);d.cues={cue(1,0,CueKind::Dialogue,9001),cue(2,0,CueKind::Animation,40,0,2)};d.syncs={sync(1,5,10,{line(1),marker(2,7)})};
+    auto l=library({d});
+    auto begin=[&](SceneState& s){run(l,s,1,commands({cmd(1,C::TriggerScene,20)}));for(uint32_t t=2;t<=7;++t)run(l,s,t);CCHECK(s.phase==ScenePhase::Waiting&&s.deadline==17);};
+    SceneState s;begin(s);
+    SceneInput bad;bad.finished={{1,9},{1,1}};bad.markers={{1,7,8},{2,3,8}};auto r=run(l,s,8,bad);
+    CCHECK(count(r,K::ReportIgnored)==3&&s.cues[2].markers==Ids{3}&&s.cues[1].finishedAt<0); // future tick, before emission, marker on a dialogue cue
+    SceneInput fin;fin.finished={{1,9}};r=run(l,s,9,fin);CCHECK(s.phase==ScenePhase::Waiting&&s.cues[1].finishedAt==9);
+    for(uint32_t t=10;t<17;++t){r=run(l,s,t);CCHECK(count(r,K::SyncReleased)==0);}
+    r=run(l,s,17);CCHECK(first(r,K::SyncReleased)->value==1&&s.position==6); // host never reported marker 7: timeout releases
+    SceneState m;begin(m);SceneInput both;both.finished={{1,8}};both.markers={{2,7,12}};run(l,m,8,both);for(uint32_t t=9;t<12;++t)run(l,m,t);r=run(l,m,12,both);
+    CCHECK(first(r,K::SyncReleased)->value==0&&m.position==6);
+    // Pausing shifts the deadline by the paused ticks.
+    SceneState p;begin(p);run(l,p,8);run(l,p,9);run(l,p,10,commands({cmd(2,C::Pause)}));for(uint32_t t=11;t<20;++t)run(l,p,t);
+    r=run(l,p,20,commands({cmd(3,C::Unpause)}));CCHECK(count(r,K::Unpaused)==1&&p.deadline==27);
+    for(uint32_t t=21;t<27;++t)CCHECK(count(run(l,p,t),K::SyncReleased)==0);CCHECK(first(run(l,p,27),K::SyncReleased)->value==1);
+    // A frozen domain (hit-stop) cannot stall a wait: timeouts are authoritative ticks.
+    auto f=scene(21,10,kDomainCinematic);f.cues={cue(1,0,CueKind::Dialogue,7)};f.syncs={sync(1,1,5,{line(1)})};auto fl=library({f});SceneState z;
+    SceneInput frozen;frozen.domainSteps[kDomainCinematic]=0;frozen.commands={cmd(1,C::TriggerScene,21)};run(fl,z,1,frozen);frozen.commands.clear();
+    r=run(fl,z,2,frozen);CCHECK(z.phase==ScenePhase::Playing&&cues(r)==Ids{1}&&z.position==0);
+    frozen.domainSteps[kDomainCinematic]=1;run(fl,z,3,frozen);CCHECK(z.phase==ScenePhase::Waiting&&z.deadline==8);
+    frozen.domainSteps[kDomainCinematic]=0;for(uint32_t t=4;t<8;++t)CCHECK(count(run(fl,z,t,frozen),K::SyncReleased)==0);
+    r=run(fl,z,8,frozen);CCHECK(first(r,K::SyncReleased)->value==1&&z.position==1);
+    frozen.domainSteps[kDomainCinematic]=3;run(fl,z,9,frozen);CCHECK(z.position==4);
+}
+void qteJudging(){
+    QteDef p=press(1,0,5,10);p.perfectOpen=7;p.perfectClose=8;QteOptions o;
+    auto judge=[&](const QteDef& q,const QteOptions& opt,std::vector<QteInput> in,uint32_t tick){auto g=startQte(q,opt,100);return judgeQte(q,g,in,tick);};
+    CCHECK(judge(p,o,{{104,1,true}},104)==QteOutcome::Fail&&judge(p,o,{{105,1,true}},105)==QteOutcome::Success&&judge(p,o,{{107,1,true}},107)==QteOutcome::Perfect);
+    CCHECK(judge(p,o,{},109)==QteOutcome::None&&judge(p,o,{},110)==QteOutcome::Fail&&judge(p,o,{{110,1,true}},110)==QteOutcome::Success);
+    CCHECK(judge(p,o,{{100,1,true}},101)==QteOutcome::None&&judge(p,o,{{105,2,true}},105)==QteOutcome::None&&judge(p,o,{{106,1,false}},106)==QteOutcome::None);
+    auto strict=p;strict.strict=true;CCHECK(judge(strict,o,{{105,2,true}},105)==QteOutcome::Fail);
+    QteOptions easy;easy.windowScaleMilli=2000;auto g=startQte(p,easy,0);CCHECK(g.open==2&&g.close==13&&g.perfectOpen==6&&g.perfectClose==9);
+    QteOptions hard;hard.windowScaleMilli=500;g=startQte(p,hard,0);CCHECK(g.open==6&&g.close==8);
+    QteOptions access;access.windowScaleMilli=500;access.accessibleWindowMilli=2000;g=startQte(p,access,0);CCHECK(g.open==5&&g.close==10); // extension undoes hard
+    QteDef mash;mash.id=2;mash.kind=QteKind::Mash;mash.button=2;mash.count=5;mash.close=20;
+    CCHECK(judge(mash,o,{{101,2,true},{102,2,true},{103,2,true},{104,2,true}},104)==QteOutcome::None);
+    CCHECK(judge(mash,o,{{101,2,true},{102,2,true},{103,2,true},{104,2,true},{105,2,true}},105)==QteOutcome::Success);
+    CCHECK(judge(mash,o,{{101,2,true},{102,2,true}},120)==QteOutcome::Fail);
+    QteOptions half;half.mashScaleMilli=500;half.holdScaleMilli=500;CCHECK(startQte(mash,half,0).count==3&&judge(mash,half,{{101,2,true},{102,2,true},{103,2,true}},103)==QteOutcome::Success);
+    QteDef hold;hold.id=3;hold.kind=QteKind::Hold;hold.button=3;hold.hold=10;hold.close=5;
+    CCHECK(judge(hold,o,{{103,3,true}},112)==QteOutcome::None&&judge(hold,o,{{103,3,true}},113)==QteOutcome::Success);
+    CCHECK(judge(hold,o,{{103,3,true},{108,3,false}},108)==QteOutcome::Fail&&judge(hold,o,{{106,3,true}},106)==QteOutcome::Fail&&judge(hold,o,{},105)==QteOutcome::Fail);
+    CCHECK(judge(hold,o,{{103,3,true},{113,3,false}},113)==QteOutcome::Success&&judge(hold,half,{{103,3,true}},108)==QteOutcome::Success);
+    QteDef seq;seq.id=4;seq.kind=QteKind::Sequence;seq.steps={{1,10},{2,10},{3,10}};
+    CCHECK(judge(seq,o,{{105,1,true},{112,2,true},{125,3,true}},125)==QteOutcome::Fail&&judge(seq,o,{{105,1,true},{112,2,true},{120,3,true}},120)==QteOutcome::Success);
+    CCHECK(judge(seq,o,{{105,1,true},{106,3,true}},106)==QteOutcome::None&&judge(seq,o,{{105,1,true}},115)==QteOutcome::Fail);
+    // In a scene: fail branches back to sync 1 (retry), success on the second QTE branches forward over cues.
+    auto d=scene(30,40);d.syncs={sync(1,5,1),sync(2,30,1)};d.qtes={press(1,10,1,5,0,1),press(2,20,1,5,2,0)};
+    d.cues={cue(1,25,CueKind::Sound,5),cue(2,25,CueKind::Event,9,0,2),cue(3,35,CueKind::Sound,6)};auto l=library({d});
+    SceneState s;run(l,s,1,commands({cmd(1,C::TriggerScene,30)}));SceneReport r;
+    for(uint32_t t=2;t<=12;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&first(r,K::QtePrompt)->id==1&&s.qte.start==12);
+    for(uint32_t t=13;t<17;++t)run(l,s,t);
+    r=run(l,s,17);CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail)&&first(r,K::Branch)->id==1&&count(r,K::SyncReached)==1&&s.position==6);
+    for(uint32_t t=18;t<=21;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&s.qte.start==21);
+    SceneInput hit;hit.qte={{23,1,true}};run(l,s,22);r=run(l,s,23,hit);CCHECK(qteResult(s,1)==QteOutcome::Success&&count(r,K::Branch)==0&&s.position==11);
+    for(uint32_t t=24;t<=32;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&s.qte.qte==2);
+    hit.qte={{34,1,true}};run(l,s,33);r=run(l,s,34,hit);
+    CCHECK(first(r,K::Branch)->id==2&&r.cuesSkipped==1&&cues(r)==Ids{2}&&first(r,K::Cue)->flags==1&&s.position==31&&qteResult(s,2)==QteOutcome::Success);
+    // Accessibility: auto-succeed resolves every prompt immediately (the forward branch still applies).
+    SceneState a;SceneInput opt=commands({cmd(1,C::TriggerScene,30)});QteOptions autoWin;autoWin.autoSucceed=true;opt.options=autoWin;run(l,a,1,opt);
+    std::size_t prompts=0,auto_=0;for(uint32_t t=2;a.phase!=ScenePhase::Idle&&t<100;++t){r=run(l,a,t);prompts+=count(r,K::QtePrompt);for(const auto& e:r.events)auto_+=e.kind==K::QteResolved&&e.value==int64_t(QteOutcome::AutoSuccess);}
+    CCHECK(prompts==2&&auto_==2&&a.lastOutcome==SceneOutcome::Completed&&a.results.at(2)==QteOutcome::AutoSuccess);
+    // Extended windows: the scene stores the scaled window at the prompt.
+    SceneState e;opt.options=access;opt.options->windowScaleMilli=1000;run(l,e,1,opt);for(uint32_t t=2;t<=12;++t)run(l,e,t);CCHECK(e.phase==ScenePhase::Qte&&e.qte.close==10&&e.qte.open==1);
+    for(uint32_t t=13;t<22;++t)run(l,e,t);CCHECK(e.phase==ScenePhase::Qte);r=run(l,e,22);CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail));
+}
+SceneDef stagedScene(){
+    auto d=scene(40,10);d.marks[1]={1,{{},{},2_fx},Fixed::fromRatio(1,2)};d.marks[2]={2,{3_fx,{},{}},Fixed::fromRatio(1,2)};
+    d.participants[1]={1,1,true,5,StagingFallback::Teleport};d.participants[2]={2,2,false,5,StagingFallback::Proceed};d.participants[3]={3,0,true,6,StagingFallback::Teleport};
+    d.cues={cue(1,4,CueKind::Move,1,3),cue(2,6,CueKind::InputRelease,0,1)};d.syncs={sync(1,8,20,{inPosition({3})})};return d;
+}
+void staging(){
+    auto l=library({stagedScene()});SceneState s;
+    run(l,s,1,commands({cmd(1,C::TriggerScene,40,{{1,100},{2,200}})}));
+    auto r=run(l,s,2);CCHECK(s.phase==ScenePhase::Staging&&count(r,K::InputLocked)==2&&count(r,K::MoveToMark)==2&&first(r,K::InputLocked)->entity==100);
+    CCHECK(inputLocked(s,1)&&inputLocked(s,3)&&!inputLocked(s,2)&&lockedEntities(s)==Ids({3,100}));
+    SceneInput near;near.poses={{1,{{},{},Fixed::fromRatio(7,4)}},{2,{{},{},{}}}};r=run(l,s,3,near);
+    CCHECK(first(r,K::InPosition)->id==1&&s.participants[1].status==StageStatus::InPosition&&s.participants[2].status==StageStatus::Moving);
+    for(uint32_t t=4;t<7;++t)run(l,s,t);
+    r=run(l,s,7);CCHECK(first(r,K::StagingLate)->id==2&&s.phase==ScenePhase::Playing&&s.position==0); // proceed fallback, staging done
+    for(uint32_t t=8;t<=11;++t)r=run(l,s,t);CCHECK(first(r,K::MoveToMark)->id==3&&first(r,K::MoveToMark)->ref==1&&s.participants[3].deadline==17);
+    run(l,s,12);r=run(l,s,13);CCHECK(first(r,K::InputReleased)->id==1&&!inputLocked(s,1));
+    run(l,s,14);r=run(l,s,15);CCHECK(s.phase==ScenePhase::Waiting);run(l,s,16);
+    r=run(l,s,17);CCHECK(first(r,K::TeleportRequested)->id==3&&first(r,K::SyncReleased)->value==0&&s.participants[3].status==StageStatus::Teleported);
+    r=run(l,s,18);CCHECK(count(r,K::Finished)==1&&count(r,K::InputReleased)==1&&lockedEntities(s).empty());
+    // Teleport fallback at the staging timeout and the arrived shortcut.
+    SceneState t;run(l,t,1,commands({cmd(1,C::TriggerScene,40)}));run(l,t,2);SceneInput arrived;arrived.arrived={2};run(l,t,3,arrived);
+    for(uint32_t k=4;k<7;++k)run(l,t,k);r=run(l,t,7);CCHECK(first(r,K::TeleportRequested)->id==1&&t.phase==ScenePhase::Playing&&t.participants[2].status==StageStatus::InPosition);
+    // Abort fallback releases every lock.
+    auto d=stagedScene();d.participants[1].fallback=StagingFallback::Abort;auto la=library({d});SceneState a;run(la,a,1,commands({cmd(1,C::TriggerScene,40)}));run(la,a,2);
+    for(uint32_t k=3;k<7;++k)run(la,a,k);r=run(la,a,7);CCHECK(count(r,K::Aborted)==1&&count(r,K::InputReleased)==2&&a.phase==ScenePhase::Idle&&a.lastOutcome==SceneOutcome::Aborted);
+    // Skipping staging teleports everyone still moving.
+    SceneState k;run(l,k,1,commands({cmd(1,C::TriggerScene,40)}));run(l,k,2);r=run(l,k,3,commands({cmd(2,C::Skip)}));
+    CCHECK(count(r,K::TeleportRequested)==2&&k.phase==ScenePhase::Playing&&count(r,K::Skipped)==1);
+    SceneState q;run(l,q,1,commands({cmd(1,C::TriggerScene,40)}));run(l,q,2);r=run(l,q,3,commands({cmd(2,C::SkipScene)}));
+    CCHECK(count(r,K::Finished)==1&&first(r,K::Finished)->value==int64_t(SceneOutcome::Skipped)&&count(r,K::Cue)==2&&lockedEntities(q).empty());
+}
+void checkpoints(){
+    auto d=scene(50,30);d.checkpointBefore=d.checkpointAfter=true;
+    d.cues={cue(1,0,CueKind::Dialogue,9001),cue(2,12,CueKind::Event,3),cue(3,14,CueKind::Sound,8),cue(4,20,CueKind::Camera,4)};
+    d.syncs={sync(1,10,50,{line(1)},true)};auto l=library({d});SceneState s;
+    auto r=run(l,s,1,commands({cmd(1,C::TriggerScene,50)}));CCHECK(first(r,K::SnapshotRequested)->value==0&&s.phase==ScenePhase::Pending);
+    auto pending=save(s);
+    for(uint32_t t=2;t<=12;++t){SceneInput in;if(t==5)in.finished={{1,5}};r=run(l,s,t,in);}
+    CCHECK(first(r,K::SnapshotRequested)->value==1&&first(r,K::SnapshotRequested)->id==1&&s.lastSync==1);
+    for(uint32_t t=13;t<=18;++t)run(l,s,t);CCHECK(s.position==16&&s.essentialDone==Ids{2});
+    auto mid=save(s);
+    // Load after a crash: resume at the last sync point; presentation cues replay, the essential event does not.
+    SceneState back;CCHECK(load(mid,back));r=run(l,back,19,commands({cmd(2,C::ResumeCheckpoint)}));
+    CCHECK(first(r,K::Resumed)->id==1&&count(r,K::SyncReached)==1&&count(r,K::SyncReleased)==1&&back.position==11);
+    Ids replay;std::vector<int64_t> snapshots;
+    for(uint32_t t=20;back.phase!=ScenePhase::Idle&&t<100;++t){r=run(l,back,t);append(replay,cues(r));for(const auto& e:r.events)if(e.kind==K::SnapshotRequested)snapshots.push_back(e.value);}
+    CCHECK(replay==Ids({3,4})&&snapshots==std::vector<int64_t>{2}&&back.lastOutcome==SceneOutcome::Completed);
+    // A save taken at the before-snapshot starts the scene normally after load.
+    SceneState p;CCHECK(load(pending,p));r=run(l,p,2);CCHECK(count(r,K::Started)==1&&cues(r)==Ids{1});
+    roundtrip(s);roundtrip(s.participants.empty()?ParticipantState{7,1,StageStatus::Moving,4,true}:s.participants.begin()->second);
+    SceneState waiting;CCHECK(load(pending,waiting));run(l,waiting,2);run(l,waiting,3);
+    for(uint32_t t=4;t<=12;++t)run(l,waiting,t);CCHECK(waiting.phase==ScenePhase::Waiting);roundtrip(waiting);
+}
+void triggersAndQueue(){
+    auto a=scene(60,5);a.trigger=7001;a.cues={cue(1,0,CueKind::Event,1)};auto b=scene(61,3);b.trigger=7002;b.cues={cue(1,0,CueKind::Event,2)};
+    auto l=library({a,b});CCHECK(sceneForCue(l,7001)==60&&sceneForCue(l,7002)==61&&sceneForCue(l,5)==0);
+    SceneState s;auto r=run(l,s,1,commands({cueTrigger(1,7001),cueTrigger(2,7002),cueTrigger(3,99),cmd(4,C::TriggerScene,60,{{9,1}})}));
+    CCHECK(count(r,K::Triggered)==1&&count(r,K::Queued)==1&&count(r,K::TriggerIgnored)==2&&s.queue.size()==1);
+    std::vector<int64_t> finished,started;
+    for(uint32_t t=2;t<30&&(s.phase!=ScenePhase::Idle||!s.queue.empty());++t){r=run(l,s,t);for(const auto& e:r.events){if(e.kind==K::Finished)finished.push_back(e.scene);if(e.kind==K::Started)started.push_back(e.scene);}}
+    CCHECK(finished==std::vector<int64_t>({60,61})&&started==finished&&s.lastScene==61);
+    SceneState full;run(l,full,1,commands({cueTrigger(1,7001)}));std::vector<SceneCommand> many;for(uint64_t i=2;i<12;++i)many.push_back(cueTrigger(i,7002));
+    r=run(l,full,2,commands(many));CCHECK(full.queue.size()==kSceneMaxQueue&&count(r,K::TriggerIgnored)==2);
+}
+// Full host loop on the example library: time domains feed the scene, scene time requests feed the next tick.
+struct Host {TimeState time;SceneState scene;TimeInput pending;};
+uint64_t hostTick(const SceneLibrary& l,Host& h,uint32_t t){
+    auto tr=stepTime(l.time,h.time,t,h.pending);CCHECK(tr);
+    SceneInput in;in.domainSteps=sceneDomainSteps(*tr);
+    if(t==1)in.commands={cueTrigger(1,5001,{{1,100},{2,200}})};
+    in.poses={{1,{{},{},Fixed::fromRatio(std::min<int64_t>(2000,int64_t(t)*100),1000)}}};
+    for(const auto& [id,rec]:h.scene.cues)if(!rec.skipped&&rec.finishedAt<0){
+        if(t>=rec.emittedAt+40)in.finished.push_back({id,t});
+        else if(t>=rec.emittedAt+30)in.markers.push_back({id,7,t});
+    }
+    // The player reacts to the authoritative prompt; button 3 is noise that non-strict QTEs ignore.
+    if(t%11==0)in.qte.push_back({t,3,true});
+    if(h.scene.phase==ScenePhase::Qte&&h.scene.qte.qte==1&&t==h.scene.qte.start+6)in.qte.push_back({t,1,true});
+    if(h.scene.phase==ScenePhase::Qte&&h.scene.qte.qte==2&&t>h.scene.qte.start)in.qte.push_back({t,2,true});
+    auto r=stepScene(l,h.scene,t,in);CCHECK(r);
+    h.pending={};h.pending.add=r->timeAdd;h.pending.cancelTags=r->timeCancelTags;
+    return cinematicHash(*r)^(cinematicHash(*tr)*31);
+}
+void saveRestore(const std::string& root){
+    auto l=readSceneLibrary(Json::parseFile(root+"/examples/libraries/genre/scene.json"));
+    Host a;std::vector<uint64_t> hashes;std::string timeMid,sceneMid;TimeInput pendingMid;std::size_t qtes=0;uint64_t slow=0;
+    for(uint32_t t=1;t<=600;++t){
+        hashes.push_back(hostTick(l,a,t));
+        for(const auto& r:a.time.requests)slow+=r.request.domain==kDomainCinematic;
+        if(t==150){timeMid=save(a.time);sceneMid=save(a.scene);pendingMid=a.pending;CCHECK(a.scene.phase!=ScenePhase::Idle);}
+    }
+    qtes=a.scene.results.size();
+    CCHECK(a.scene.phase==ScenePhase::Idle&&a.scene.lastScene==10&&a.scene.lastOutcome==SceneOutcome::Completed&&qtes==2&&slow>0);
+    Host b;CCHECK(load(timeMid,b.time)&&load(sceneMid,b.scene));b.pending=pendingMid;
+    for(uint32_t t=151;t<=600;++t)CCHECK(hostTick(l,b,t)==hashes[t-1]);
+    CCHECK(save(a.scene)==save(b.scene)&&save(a.time)==save(b.time)&&cinematicHash(a.scene)==cinematicHash(b.scene));
+    Host c;for(uint32_t t=1;t<=600;++t)CCHECK(hostTick(l,c,t)==hashes[t-1]);
+    CCHECK(sceneLibraryHash(l)==sceneLibraryHash(readSceneLibrary(Json::parseFile(root+"/examples/libraries/genre/scene.json"))));
+    auto changed=l;changed.scenes[10].version=2;CCHECK(sceneLibraryHash(changed)!=sceneLibraryHash(l));
+    SceneState mid;CCHECK(load(sceneMid,mid));CCHECK(!stepScene(changed,mid,151,{})); // saved against version 1
+}
+void invalidData(const std::string& root){
+    auto l=readSceneLibrary(Json::parseFile(root+"/examples/libraries/genre/scene.json"));
+    CCHECK(l.scenes.size()==2&&sceneForCue(l,5001)==10&&sceneForCue(l,5002)==11&&l.presets.at(3).request.blend==TimeBlend::Multiply&&l.time.domains.size()==4);
+    const auto& s10=l.scenes.at(10);CCHECK(s10.cues.front().id==1&&s10.cues[1].id==2&&s10.cues[4].essential&&!s10.cues[0].essential&&s10.qtes[0].perfectClose==18);
+    CCHECK(s10.marks.at(2).tolerance==Fixed::fromRatio(3,4)&&s10.participants.at(2).fallback==StagingFallback::Proceed&&s10.syncs[0].waits.size()==3);
+    auto rejects=[](const std::string& text,const std::string& expected){
+        try{readSceneLibrary(Json::parse(text));}catch(const JsonError& e){if(std::string(e.what()).find(expected)!=std::string::npos)return true;std::cerr<<"got: "<<e.what()<<'\n';return false;}
+        std::cerr<<"accepted: "<<text<<'\n';return false;
+    };
+    auto sc=[](const std::string& body){return R"({"scenes":[{"id":1,"length":10,)"+body+"}]}";};
+    CCHECK(rejects(R"({"scene":[]})","cinematic: unknown key 'scene'"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":0,"kind":"explode"}])"),"cinematic.scenes[0].cues[0].kind: unknown value 'explode'"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":11,"kind":"event","ref":1}])"),"cinematic.scene 1.cue 1.at: must be 0..length 10"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"event","ref":1},{"id":1,"at":2,"kind":"event","ref":1}])"),"cinematic.scenes[0].cues[1].id: duplicate id 1"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"move","ref":1}])"),"cinematic.scene 1.cue 1.actor: unknown participant 0"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"timeScale","ref":4}])"),"cinematic.scene 1.cue 1.ref: unknown time preset 4"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"event","ref":1,"essential":1}])"),"cinematic.scenes[0].cues[0].essential: expected boolean"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"timeout":0}])"),"cinematic.scenes[0].syncs[0].timeout: must be in 1..1000000"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"wait":[{"kind":"lineFinished","cue":9}]}])"),"cinematic.scene 1.sync 1.wait[0].cue: unknown dialogue/animation cue 9"));
+    CCHECK(rejects(sc(R"("cues":[{"id":2,"at":6,"kind":"dialogue","ref":3}],"syncs":[{"id":1,"at":5,"wait":[{"kind":"lineFinished","cue":2}]}])"),"must start before the sync point"));
+    CCHECK(rejects(sc(R"("cues":[{"id":2,"at":1,"kind":"dialogue","ref":3}],"syncs":[{"id":1,"at":5,"wait":[{"kind":"marker","cue":2,"marker":1}]}])"),"wait[0].cue: unknown animation cue 2"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"wait":[{"kind":"inPosition"}]}])"),"cinematic.scene 1.sync 1.wait[0]: scene has no participants"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"wait":[{"kind":"lineFinished","cue":1,"participants":[1]}]}])"),"wait[0].participants: only for inPosition"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":2}],"qtes":[{"id":1,"at":5,"kind":"press","button":1,"onSuccess":1}])"),"cinematic.scene 1.qte 1.onSuccess: must branch forward"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"press","button":1,"onFail":4}])"),"cinematic.scene 1.qte 1.onFail: unknown sync point 4"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"press","button":1,"open":3,"close":9,"perfect":[1,2]}])"),"cinematic.scenes[0].qtes[0].perfect: must lie inside [open, close]"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"mash","button":1,"count":3,"hold":2}])"),"cinematic.scenes[0].qtes[0].hold: not used by kind 'mash'"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"sequence","steps":[]}])"),"cinematic.scenes[0].qtes[0].steps: expected at least one step"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"hold","button":1,"hold":0}])"),"cinematic.scenes[0].qtes[0].hold: must be in 1..100000"));
+    CCHECK(rejects(sc(R"("participants":[{"id":1,"mark":3}])"),"cinematic.scenes[0].participants[0].mark: unknown mark 3"));
+    CCHECK(rejects(sc(R"("participants":[{"id":1,"fallback":"wait"}])"),"cinematic.scenes[0].participants[0].fallback: unknown value 'wait' (expected teleport, proceed, abort)"));
+    CCHECK(rejects(sc(R"("marks":[{"id":1,"position":[0,0]}])"),"cinematic.scenes[0].marks[0].position: expected [x,y,z]"));
+    CCHECK(rejects(sc(R"("domain":9)"),"cinematic.scene 1.domain: unknown time domain 9"));
+    CCHECK(rejects(R"({"scenes":[{"id":1,"length":1,"trigger":5},{"id":2,"length":1,"trigger":5}]})","cinematic.scene 2.trigger: cue 5 already starts another scene"));
+    CCHECK(rejects(R"({"scenes":[{"id":1,"length":1},{"id":1,"length":2}]})","cinematic.scenes[1].id: duplicate scene"));
+    CCHECK(rejects(R"({"timePresets":[{"id":1,"domain":1,"scale":[1,17]}]})","cinematic.timePresets[0].scale: ratio must be 0..16 with a denominator dividing 720720"));
+    CCHECK(rejects(R"({"timePresets":[{"id":1,"domain":8,"scale":[1,2]}]})","cinematic.timePresets[0].domain: unknown time domain 8"));
+    CCHECK(rejects(R"({"domains":[{"id":1,"parent":2},{"id":2}]})","cinematic.time.domain 1.parent: must be 0 or a declared domain with a smaller id"));
+    CCHECK(rejects(R"({"scenes":[{"id":1}]})","cinematic.scenes[0].length: expected integer"));
+    // Settings section.
+    auto parse=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto defaults=parse("{\"schemaVersion\":1}");CCHECK(defaults.value&&cinematicSettingsErrors(*defaults.value).empty());
+    auto o=qteOptions(*defaults.value);CCHECK(o.windowScaleMilli==1000&&!o.autoSucceed&&hitStopRequest(*defaults.value).duration==6&&slowMotionRequest(*defaults.value).scale.den==4);
+    auto relation=parse("{\"schemaVersion\":1,\"cinematic\":{\"slowMotionNumerator\":5}}");CCHECK(!relation.value&&relation.errors.at(0)=="cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
+    auto unknown=parse("{\"schemaVersion\":1,\"cinematic\":{\"hitStop\":3}}");CCHECK(!unknown.value&&unknown.errors.at(0)=="cinematic.hitStop: unknown field");
+    auto range=parse("{\"schemaVersion\":1,\"cinematic\":{\"hitStopTicks\":0}}");CCHECK(!range.value&&range.errors.at(0)=="cinematic.hitStopTicks: integer out of range");
+    auto type=parse("{\"schemaVersion\":1,\"cinematic\":{\"qteAutoSucceed\":1}}");CCHECK(!type.value&&type.errors.at(0)=="cinematic.qteAutoSucceed: expected boolean");
+    auto example=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/cinematic-settings.json"));
+    CCHECK(example.value&&cinematicSettingsErrors(*example.value).empty());
+    auto slow=slowMotionRequest(*example.value,kDomainCinematic);o=qteOptions(*example.value);
+    CCHECK(hitStopRequest(*example.value).duration==4&&slow.scale.num==1&&slow.scale.den==3&&slow.duration==120&&slow.domain==kDomainCinematic&&o.accessibleWindowMilli==2000&&o.mashScaleMilli==500);
+    // Runtime rejection leaves state untouched.
+    auto lib=library({stagedScene()});SceneState s;run(lib,s,1,commands({cmd(1,C::TriggerScene,40)}));run(lib,s,2);auto before=save(s);
+    SceneInput bad;bad.qte={{5,1,true},{4,1,true}};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.qte={{2,1,true}};CCHECK(!stepScene(lib,s,5,bad)); // input tick not after the last step
+    bad={};bad.commands={cmd(5,C::Pause),cmd(5,C::Unpause)};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.poses={{1,{}},{1,{}}};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.poses={{1,{Fixed::fromInt(200000),{},{}}}};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};QteOptions wrong;wrong.windowScaleMilli=50;bad.options=wrong;CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.commands={cmd(5,C::TriggerScene,40,{{1,0}})};CCHECK(!stepScene(lib,s,5,bad));
+    CCHECK(!stepScene(lib,s,2,{})&&!stepScene(lib,s,1,{})&&save(s)==before);
+    auto broken=s;broken.phase=ScenePhase(9);CCHECK(save(broken).empty());
+    broken=s;broken.essentialDone={3,1};CCHECK(save(broken).empty());
+    broken=s;broken.qte.qte=1;CCHECK(save(broken).empty()); // a QTE id outside the Qte phase
+    auto other=lib;other.scenes.erase(40);indexTriggers(other);CCHECK(!stepScene(other,s,5,{}));
+    auto stale=lib;stale.triggers[77]=40;CCHECK(sceneLibraryError(stale)=="cinematic.triggers: out of date (call indexTriggers)");
+    TimeState ts;CCHECK(!load(before,ts));QteProgress qp;CCHECK(!load(before,qp));
+    auto unsorted=stagedScene();std::swap(unsorted.cues[0],unsorted.cues[1]);SceneLibrary raw;raw.scenes[40]=unsorted;CCHECK(sceneLibraryError(raw).find("must be sorted")!=std::string::npos);
+}
+}
+#undef CCHECK
+void cinematicGameplay(const std::string& root){cine::timeExact();cine::timeStack();cine::cueOrder();cine::syncTimeouts();cine::qteJudging();cine::staging();cine::checkpoints();cine::triggersAndQueue();cine::saveRestore(root);cine::invalidData(root);}
+// ---- narrative -> cinematic bridge: delayed cue scheduling, dedupe after replay, scene trigger, persistence.
+void narrativeCinematicBridge(){
+    using namespace cine;
+    auto a=scene(60,5);a.trigger=7001;a.cues={cue(1,0,CueKind::Event,1)};auto b=scene(61,3);b.trigger=7002;b.cues={cue(1,0,CueKind::Event,2)};
+    const auto lib=library({a,b});
+    NarrativeCueQueue q;std::vector<CueRequest> cues(3);
+    cues[0].sequence=1;cues[0].cueId=7002;cues[0].tick=10;cues[0].delayTicks=3;cues[0].speaker=5;
+    cues[1].sequence=2;cues[1].cueId=7001;cues[1].tick=10;
+    cues[2].sequence=3;cues[2].cueId=9999;cues[2].tick=10;cues[2].delayTicks=1;   // no scene: runner ignores it
+    CHECK(queueNarrativeCues(q,std::span<const CueRequest>(cues))==3);
+    CHECK(queueNarrativeCues(q,std::span<const CueRequest>(cues))==0);            // replayed report: deduped
+    CHECK((q.pending.size()==3&&q.pending[0].cueId==7001&&q.pending[1].cueId==9999&&q.pending[2].cueId==7002));
+    std::vector<int64_t> speakers;auto bind=[&](const PendingNarrativeCue& p){speakers.push_back(p.speaker);return SceneBindings{};}; // scenes here have no participants
+    uint64_t seq=1;SceneState st;std::vector<SceneEventKind> seen;std::vector<int64_t> started;
+    for(uint32_t t=10;t<=20;++t){
+        auto cmds=releaseNarrativeCues(q,t,seq,bind);CHECK(cmds);
+        if(t==10)CHECK(cmds->size()==1&&cmds->front().value==7001&&cmds->front().seq==1);
+        if(t==11)CHECK(cmds->size()==1&&cmds->front().value==9999);
+        if(t==13){CHECK(cmds->size()==1&&cmds->front().value==7002&&(speakers==std::vector<int64_t>{0,0,5}));roundtrip(q);}
+        SceneInput in;in.commands=*cmds;auto r=stepScene(lib,st,t,in);CHECK(r);
+        for(const auto& e:r->events){seen.push_back(e.kind);if(e.kind==SceneEventKind::Started)started.push_back(e.scene);}
+    }
+    CHECK(!releaseNarrativeCues(q,20,seq,bind)&&q.pending.empty()&&seq==4);
+    CHECK(std::find(seen.begin(),seen.end(),SceneEventKind::TriggerIgnored)!=seen.end());
+    CHECK((started==std::vector<int64_t>{60,61}));
+    NarrativeCueQueue bad;bad.pending={{1,5,7001,0}};bad.lastSequence=2;CHECK(save(bad).empty());
+}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();narrativeScenes(argv[1]);physicalInteractions(argv[1]);cinematicGameplay(argv[1]);narrativeCinematicBridge();std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story, narrative scenes and save/restore, physical interactions, cinematic gameplay: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -11,9 +11,13 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets; 0.2.0: material-layer penetration, radial explosions with owner LOS, ammo feeds (magazine/belt/per-shell/energy + overheat), charge tiers, attachment stat stacking, ballistic launch and lead solving (see [Weapons and ballistics](#weapons-and-ballistics-weapon-policies-020)) | Existing FPS ammo/reload/fire cadence remain authoritative for built-in FPS weapons. No automatic replacement of hitscan, no damage/health owner, no presentation. |
 | genre-bots | Melee bot (spacing band, phase-aware openings, hit-confirmed combos, telegraph dodge/parry timing, lock-on), shooter bot (turn-limited aim, seeded aim error, solveIntercept lead, recoil bursts, reload/overheat, cover choice), squad roles + formations, objective choice hook (see [Genre bots](#genre-bots-genre-bots-010)) | Returns player-equivalent inputs only; perception, cover, objectives and navigation come from owners. No pathfinding, match rules, senses or sports/racing/card bots. |
 | stealth-senses | Sight cones (near/focus/peripheral) with owner light/cover/stance/visibility multipliers and LOS callback, hearing with occlusion callback and noise/query budgets, decaying footprint/scent markers, per observer-target suspicion meters (Unaware/Suspicious/Searching/Alert), delayed ally alerts sharing last known positions, deterministic search points with give-up, disguises, hiding spots (see [Stealth and senses](#stealth-and-senses-stealth-senses-010)) | Perception records and events only. Owner supplies poses, multipliers, raycasts/occlusion and search candidates and moves agents. Not RTS fog of war. No sound propagation, navmesh routes or presentation. |
+| physical-interactions | Pick up/carry (hold point, mass limit, carry speed penalty, drop when blocked), charged throws with an arc preview from the same integrator and swept landing, push/pull (free or grid, friction/mass resistance, cooperative pushing, blocking), XPBD ropes with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors (locks/keys, one-way, timing, auto-reverse), waypoint moving platforms with per-rider carry deltas, breakables (damage types, thresholds, stages, debris requests) (see [Physical interactions](#physical-interactions-physical-interactions-010)) | Authoritative kinematic policies over owner collision (engine/world). Box3D stays presentation-only (debris). No rigid-body stacking, rotation of props/platforms, rope-world collision or rendering. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points. MatchObjectives.h (0.2.0): capture/hold zones with contest rules and decay, king of the hill, payload, elimination with lives/respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock, spectator transitions (see [Match objectives](#match-objectives-match-rules-020)) | Native extension policies returning events/scores for the match owner; existing built-in victory modes stay owned by their modules. Presence, deaths, pickups and gate crossings come from the authoritative owner. No cart physics, bomb/HUD presentation or network spectating. |
+| narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings; 0.2.0 social scenes: typed facts, relationship meters, knowledge, AND/OR/NOT conditions, flags, chapters/acts, deferred consequences, speakers, cue requests, barks, VN backlog/skip-read/auto-advance (see [Narrative scenes](#narrative-scenes-narrative-graphs-020)) | Project UI/cinematics consume committed nodes, CueRequest records and bark lines. No scene playback, audio, QTE or online reward grant. |
+
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 | match-progression | Perk/modifier packages with an ordered stat pipeline, hero xp + level table/curve, seeded level-up offers (recruit / slot perk / player perk, explicit picks, rerolls, revisions), stacking/prerequisite/exclusion/upgrade rules, xp orb pickups (radius, magnet, attraction, budget), summon circles + charges + summoned ally lifecycle, pre-match battle deck limits (see [Match progression](#match-progression-match-progression-010)) | Values, events and requests only: the owner applies stats to units, spawns recruits/summons, moves units and renders cards/rings. Not meta progression (engine/meta) and not RTS hero xp/StatMods. |
+| cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
 
 ## Native/host integration
 
@@ -24,7 +28,7 @@ backend dependencies on the owning aiverse_game target, avoiding object-library 
 For header-only policies without projectile collision, `AIVERSE::gameplay_native` is sufficient.
 
 See `examples/native/libraries/GenreConsumer.cpp` for validated settings and NativeState storage.
-The library_demo native module now initializes these records in setup (module VERSION 5: adds locomotion modes, combat-actions, weapons, match objectives, senses and genre-bot records).
+The library_demo native module now initializes these records in setup (module VERSION 6: adds locomotion modes, combat-actions, weapons, match objectives, senses, genre-bot, narrative scene, physical interaction and cinematic records).
 `tests/libraries/genre_tests.cpp` runs trajectories, combos, world collision, round transitions,
 choice transactions and restoration checks. No engine source edit is required in a consuming project.
 
@@ -648,3 +652,301 @@ checksums for a replay and for a mid-match save/restore. Verified only with g++ 
 -Wall -Wextra -Werror -pedantic, tests and the headless run built by hand). Not verified: MSVC/clang, CMake isolation,
 native module export, platform runtimes, performance at bullet-heaven densities, UI/VFX integration.
 
+## Narrative scenes (narrative-graphs 0.2.0)
+
+Headers `genre/NarrativeScenes.h` (policy), `genre/NarrativeCues.h` (the `CueRequest` record shared with cinematic owners),
+`genre/NarrativeSceneData.h` (JSON), `genre/NarrativeScenePersistence.h` (save/load, hashing) and `genre/NarrativeConfigured.h`
+(settings). Target `AIVERSE::lib_narrative_graphs` (now declares `aiverse_engine`). The legacy `Story` / `readStory` /
+`chooseStory` / `StoryState` API and record kind 7 are unchanged; `readNarrativeWorld` also loads the legacy
+`examples/libraries/genre/story.json` (without `facts`, referenced keys become persistent int facts over the full int64
+range starting at 0; without `scenes`, scene 1 enters the first node; legacy add changes clamp instead of rejecting overflow).
+Example: `examples/libraries/genre/story-social.json`.
+
+**Definitions.** All IDs are positive integers, all text is localization keys. `facts`: `int` (min/max/initial), `bool`
+or `enum` (`values` names; JSON uses the names, C++ the index), `persistent` (world state kept across scenes; others reset
+to `initial` at every StartScene). `characters`: `nameKey` and `meters` `affinity`/`trust`/`fear` with min/max/initial
+(defaults from `narrative.meter*`). Character 0 is the player/narrator (speaker and knower only). `flags`: one-shot flags
+(set once, never cleared by effects; `persistent:false` flags clear at StartScene). `chapters`: `act`, `titleKey`;
+`initialChapter`; a scene's `chapter` is entered at StartScene. `scenes`: `entry` node. `nodes`: `textKey`, `speaker`,
+`participants`, `cues`, `onEnter` effects and either `choices` or `next` (a linear line; `next:0` ends the scene) plus
+optional `autoTicks`. `choices`: `textKey`, `next` (0 ends the scene), `once`, `conditions`, `effects`, `cues`.
+`consequences`: `conditions` (checked when due), `effects`, `cues`. `barks`: `trigger`, `speaker`, `textKey`, `priority`,
+`cooldown` (default `narrative.barkCooldownTicks`), `once`, `conditions`, `cues`.
+
+**Conditions** (a list is AND): `{"all":[...]}`, `{"any":[...]}`, `{"not":{...}}`; `{"fact":id,"op":..,"value":..}` (int:
+eq/ne/lt/le/gt/ge/between with min/max; bool/enum: eq/ne; a bool fact without value means true);
+`{"meter":"trust","character":id,"op":"ge","value":n}` (default op ge: relationship thresholds); `{"knows":fact,"character":id}`
+(default 0 = player); `{"flag":id}`; `{"visited":node}` (default ge 1); `{"chapter":id}` / `{"act":n}` (with op);
+`{"chose":choice,"node":node}`; legacy `{"key","minimum","maximum"}`. Depth <= 16, <= 256 terms per list.
+**Effects:** `{"set":fact,"value":v}`, `{"add":fact,"value":d}` (int facts, clamped), `{"meter":m,"character":id,"add"|"set":n}`
+(clamped to the bounds), `{"reveal":fact,"to":[ids]}`, `{"forget":fact,"from":[ids]}`, `{"flag":id}`, `{"chapter":id}`,
+`{"schedule":consequence,"afterTicks":n | "afterScenes":n}` (n >= 1), `{"cancel":consequence}`; legacy `{"key","value","add"}`.
+**Validation:** unknown keys, wrong types, duplicate IDs, unknown characters/facts/flags/chapters/nodes/consequences, out-of-domain
+values, broken edges and every line that cannot reach an ending (cycles without exit, graph-wise ignoring conditions) throw
+`JsonError("narrative.<path>: reason")`. Parse errors use JSON array indexes (`narrative.nodes[0].choices[1]: unknown key 'nxt'`),
+definition checks use IDs (`narrative.nodes[id=4].choices[id=2].next: unknown node 99`); `narrativeWorldError` returns the same
+ID paths for C++-built worlds.
+
+**Tick.** `beginNarrative(world, config, overrides)` initializes every fact and meter. `stepNarrative(world, config, state,
+tick, input)` once per authoritative tick with strictly increasing ticks (repeated/backwards ticks, invalid config, duplicate
+or zero command/request IDs return nullopt and leave the state untouched). Order: tick-delayed consequences due at this tick
+(by due tick, then scheduling order), commands by ascending ID, skip-read / auto-advance, bark requests by ascending ID.
+Commands: `StartScene(scene)` (resets scene-local facts/flags, enters the scene chapter, fires scene-delayed consequences,
+enters the entry line), `Advance` (linear line), `Choose(choice)` (re-checks conditions and `once`), `SetAuto(0/1)`,
+`SetSkip(0/1)`. Each command is a transaction on a copy; an ID <= the last accepted one or an invalid command emits
+`CommandRejected` (extra 1 for duplicates) and changes nothing. Effects of a choice apply before its next line's onEnter.
+
+**Cues.** `CueRequest{sequence, cueId, nodeId, choiceId, sceneId, speaker, barkId, consequenceId, tick, delayTicks, source}`
+with `source` NodeEnter / Choice / Consequence / Bark. Order inside a tick: consequence cues, then per command the choice
+cues before the next line's enter cues, then bark cues. `sequence` is persistent and strictly increasing; the cinematic owner
+(playback, timing, skipping, QTE) deduplicates by it. This package never plays or waits for a cue.
+
+**Barks.** For each `BarkRequest{id, trigger, speakers}` the candidates are barks of that trigger whose speaker is listed
+(empty = any) and not already used by an earlier request this tick, not `once`-spent, past their own cooldown and the
+speaker cooldown (`speakerCooldownTicks`), with passing conditions. Highest priority wins, then never-spoken, then least
+recently spoken, then the smaller ID. Output `BarkLine{request, bark, speaker, textKey}` + `BarkSpoken`, or `BarkNone`.
+
+**Visual novel.** Every entered line is appended to `state.backlog` (`node, speaker, choice taken, tick, scene`, newest
+`backlogLimit` kept). `state.read` counts reads across scenes; `lineWasRead` / `canSkipLine` / `lineRead` expose skip-read
+detection. Skip mode advances up to `skipLinesPerTick` read linear lines per tick and stops (and turns off) at an unread
+line or a choice (`SkipStopped`, extra 1 for a choice). Auto mode advances a linear line `autoTicks` (or
+`autoAdvanceTicks`) after it was shown; `autoAdvanceTick` reports when.
+
+**Settings.** Optional `narrative` section (configuration 0.3.4): `autoAdvanceTicks`, `skipLinesPerTick`, `backlogLimit`,
+`barkCooldownTicks`, `speakerCooldownTicks`, `maxPendingConsequences` (beyond it `ConsequenceDropped`), `maxBarkRequests`,
+`meterMinimum <= meterInitial <= meterMaximum`. Example: `examples/libraries/genre/narrative-settings.json`.
+
+**State.** `NarrativeState` is record kind 64 (`BarkMemory` 65); kinds 64..71 are reserved for this package. The record
+body starts with format 1 for future migrations. `genre::load` checks structure and canonical bytes; then call
+`narrativeStateError(world, config, state)` to bind it to the definitions. `narrativeHash` hashes states and reports;
+bind `narrativeWorldHash` and `narrativeConfigHash` in the save envelope. `GenreConsumer.cpp`
+(`narrativeSceneConsumerExample`) runs one tick of a tiny social scene and stores `genre.narrative`, `genre.narrative.legacy`,
+`genre.narrative.world`, `genre.narrative.config` and `genre.narrative.cue`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks (`-Wall -Wextra -Werror -pedantic`), `genre_tests.cpp` built by
+hand (the narrative-scene tests also standalone under ASan/UBSan) covering legacy loading, relationship thresholds and clamping, knowledge-gated and once choices, scene- and
+tick-delayed consequences, scene-local reset vs persistent world state, chapter/act, cue ordering and sequences, bark
+priority/cooldowns/once/tie-break, backlog limits, skip-read and auto-advance, save/restore mid-scene with identical
+continuation, rejected ticks/commands and invalid data paths, and the GenreConsumer chain in a standalone driver.
+Not run: CMake/isolation, `aiverse_tests`, native module export, headless restore matches, clang/MSVC.
+
+## Physical interactions (physical-interactions 0.1.0)
+
+Headers under `genre/`: `PhysicalInteractions.h` (umbrella + `InteractionDefinitions`), `Carry.h`, `Push.h`, `Ropes.h`,
+`Doors.h`, `Platforms.h`, `Breakables.h`, shared `PhysicalCommon.h` (events, `WorldCollision`, swept move) and
+`InteractionConfig.h`, settings adapter `InteractionConfigured.h`, JSON `InteractionData.h`, records
+`InteractionPersistence.h`. Target `AIVERSE::lib_physical_interactions` (depends on `configuration`, `aiverse_engine`,
+`aiverse_world`); native OBJECT modules call `aiverse_native_use_libraries(target physical-interactions)`. Skill:
+`skills/aiverse-physical-interactions`. Separate from `object-interactions` (action menus and built-in engine
+interaction commands): a preview there never authorizes these mutations.
+
+**Determinism and network model.** These policies are the authoritative gameplay state for interactions. They use
+Fixed math, integer ticks and ascending-ID order, call only owner-supplied pure collision queries and keep every
+outcome-affecting value in versioned records. Run them on the authority (server or lockstep peers) from validated
+Commands, once per tick each; clients predict by running the same steps and roll back by restoring the records and
+replaying inputs. The optional Box3D module (`docs/physics.md`) is not deterministic across builds/CPUs and is
+**non-authoritative** here: it may simulate debris from `DebrisRequest` (seeded) or cosmetic motion, but nothing is
+read back from it. If a game makes Box3D authoritative instead, it needs its own command/save/network integration.
+
+**Collision.** Any object with `sweep(start,delta,half,ignore) -> InteractionHit` and
+`overlapping(box,ignore) -> ascending ids` works; `WorldCollision(spatialWorld)` adapts `engine/world::SpatialWorld`
+(sorted candidates, ties by smaller id). Moves use `physSweep`: the box shrunk by `skin` is swept over the move extended
+by `skin` and stops so the real box touches the contact. Touching bodies can slide or separate; pressing into a
+surface reports a hit without creeping; starting inside blocks. Overlap tests are strict (touching faces do not block).
+
+**Common contract.** Each step validates config, definitions, state and input first; invalid data, dt outside (0,1]
+or a repeated/backwards tick return nullopt with the state untouched. Inputs may arrive in any order; they are
+processed by ascending ids. Outputs are the updated state plus `InteractionEvent{kind, object, actor, value, collider,
+position}` (value = reason code, impulse/tension in milli-units, stage id, ...) and per-mechanic status lists. No
+rendering, audio or animation. Units: metres, kilograms, seconds, newtons; yaw/pitch in turns (yaw 0 faces +Z).
+
+**Carry/throw.** `stepCarry` processes flights first (ascending object), then carriers (ascending id): drop, throw
+when the `charge` level falls, pickup, hold update. Pickup is refused (`PickupRefused`: TooHeavy above `maxMass`,
+OutOfReach beyond `reach` from the hold anchor = feet + `holdHeight`, Busy when held/flying). The held object follows
+`carryHoldPoint` (anchor + forward*`holdDistance`) at most `followSpeed` per second with a swept move ignoring itself
+and the carrier; blocked and farther than `breakDistance` from the hold point -> `DroppedBlocked` (collider set).
+`CarrierStatus::speedMilli = max(minSpeedMilli, 1000 - mass*speedPenaltyMilli)` is the carrier speed multiplier for
+the movement owner. Throws: impulse grows linearly from `throwMinImpulse` to `throwMaxImpulse` over `chargeTicks`;
+velocity = forward*impulse/mass + carrier velocity. `stepFlight` (v.y -= g*dt, swept move by v*dt) runs once per tick
+from the tick after the throw; `previewThrow` runs the identical step, so `points[k]` equals the flight position k+1
+ticks after the throw and the landing (`Landed`, collider/normal) matches exactly. `maxFlightTicks` ends with
+`FlightExpired`. Free objects are the owner's (it reports their poses for pickup); `releaseCarried` forgets a prop.
+
+**Push/pull.** `addPushable` registers a body. Per object the forces of all commands add up (horizontal part only);
+motion needs |F| > friction*mass*g (`PushResisted` TooWeak on the rising edge; pulling a non-pullable object ->
+NotPullable). Free mode: a = (|F| - resistance)/m along F, capped at `pushMaxSpeed`; without enough force kinetic
+friction (friction*g) slows it; the swept move slides along walls (`PushBlocked` on the rising edge, `PushStarted` /
+`PushStopped`). Grid mode: one cell along the dominant axis after a swept clearance test, linear over `gridMoveTicks`,
+`PushArrived` exactly on the cell; commands during a move are ignored. Pushables never fall: the owner keeps them on
+the ground. Pull = the actor gives the direction toward itself; its own collider is not ignored, so step it back first.
+
+**Ropes.** `makeRope(def, a, b)` creates `segments+1` particles. Ends: Free, Point (world point), Body (follows the
+owner pose in `RopeInput::bodies`, keeps the last pose when missing) and Load (a hanging mass simulated by the rope).
+Each tick: attach/detach commands (`RopeAttached`/`RopeDetached`), gravity + damping prediction, then
+`ropeIterations` Gauss-Seidel XPBD passes over the distance constraints (stretch only, `compliance` in m/N, 0 = rigid).
+Tension = max segment force (lambda/dt^2); with a fixed iteration count a heavier load stretches the rope slightly
+more, and more iterations converge closer to the rest length. Above `breakForce` (0 = unbreakable) the rope breaks
+(`RopeBroken`, value = tension in milli-newtons) and stops simulating. `RopeStatus::pullA/pullB` is the force on a Body
+end for its own controller. dt must be >= 1/1000 s. No rope-vs-world or self collision.
+
+**Doors.** `addDoor` from `DoorDef` (closed panel box, Hinged: vertical pivot + `openAngle` in turns, Sliding:
+`slide` offset). Opening takes `openTicks`, closing `closeTicks` (exact integer progress), `autoCloseTicks` after
+`DoorOpened` start closing. Each tick the next pose (conservative AABB for hinged doors) is tested with `overlapping`
+ignoring the door's collider: a blocked closing door reverses (`DoorReversed`, autoReverse) or holds (`DoorBlocked`),
+a blocked opening door holds. Locked doors refuse opening (`DoorRefused` Locked) unless the actor's `keys` contain
+`key` (then `DoorUnlocked` + opening); Lock/Unlock need the key (NoKey); one-way doors open only from `oneWay` side of
+the panel's thinner axis (WrongSide); `scripted` commands bypass keys and sides. Update the door collider from
+`DoorStatus::bounds` after every tick; give the door query the bodies (characters, props), not its static frame.
+
+**Moving platforms.** `addPlatform`; constant `speed` along `waypoints` (Loop, PingPong, Once), stationary for exactly
+`waits[i]` ticks after arriving at waypoint i (`PlatformArrived`/`PlatformDeparted`, value = waypoint index); the rest
+of the travel in an arrival tick is discarded; `PlatformCommand` starts/stops. Translation only. The collision owner
+reports `RiderContact{rider, platform}` from its ground test (the same contact that sets `LocomotionEnvironment::
+grounded`); the report lists `RiderCarry{rider, platform, delta, velocity}` in ascending rider id
+(`RiderBoarded`/`RiderLeft`). Owner order per tick: contacts -> `stepPlatforms` -> add `delta` to the rider (swept) ->
+`stepLocomotion` with `env.grounded` -> move by the locomotion velocity -> update the platform collider. The
+locomotion velocity stays relative to the platform; add `velocity` once on leaving for momentum inheritance.
+Platforms never stop for obstacles; crushing is the owner's rule.
+
+**Breakables.** `addBreakable`; `DamageInput{id, object, type, amount, source, position}` in ascending (object, id).
+Scaled damage = amount * scaleMilli/1000 for the type (`defaultScaleMilli` otherwise; 0 = immune), ignored below the
+type's `threshold`, repeated/older ids and broken objects (`DamageIgnored` with reason). Stages (ascending ids,
+decreasing health) fire `StageReached` once when health drops to them; health 0 -> `Broken`. Each stage / the break
+emits `DebrisRequest{object, stage (0 = break), kind, count, position, seed}`; seeds hash (object, stage, damage id).
+
+**Settings.** Optional `interaction` section (configuration 0.3.3): gravity, skin, carry* (mass, reach, hold
+distance/height, follow speed, break distance, speed penalty/minimum), throw impulses/charge, flight ticks, push
+speed / grid ticks, rope iterations/damping (milli-units). The loader enforces throwMin <= throwMax;
+`interactionSettingsErrors` adds `interactionConfigError`. Example `examples/libraries/genre/interaction-settings.json`.
+Definitions: `readInteractionDefinitions` (`examples/libraries/genre/interactables.json`), errors such as
+`interaction.platforms[0].waitTicks: expected one value or one per waypoint`.
+
+**State.** Records (version 1): `CarryState` 80, `PushState` 81, `RopeState` 82, `DoorState` 83, `PlatformState` 84,
+`BreakableState` 85; kinds 80..87 are reserved for this package (narrative takes 64..71, cinematic 72..79). Load checks
+structure; each step re-checks the records against the definitions. `interactionHash` folds canonical bytes into the
+checksum, `interactionConfigHash` / `interactionDefinitionsHash` bind the immutable data in the save envelope.
+`GenreConsumer.cpp` (`physicalInteractionConsumerExample`) runs one tick of carry, door, platform and breakable steps
+and stores `genre.interaction.{carry,doors,platforms,breakables}` plus hashes.
+
+**Verification.** `tests/libraries/genre_tests.cpp` (`physicalInteractions`): throw preview points/landing equal the
+simulated flight tick by tick, mid-flight restore continues bit-identically, mass/reach refusals and carry speed
+penalty, drop when carried into a wall; cooperative push, friction refusal, blocked free push without creeping, grid
+move/arrival/blocking and restore; hanging rope tension within 10% of the weight, less stretch with more iterations,
+breaking, detach/attach to a body with pull output, restore; door key/lock/scripted rules, auto-reverse on a body,
+hold without auto-reverse, one-way side, hinged bounds, restore; platform rider deltas fed through `stepLocomotion`
+for 90 ticks (exact offset when idle, relative walking), ascending rider order, waits, restore; breakable thresholds,
+immunity, duplicates, stages, debris seeds; invalid JSON/settings/inputs. Verified only with g++ 11 (Linux VM): header
+syntax checks, the genre tests built by hand, the physical tests also under ASan/UBSan, and the full GenreConsumer
+chain in a standalone driver. Not verified: CMake/isolation, `aiverse_tests`, native module export, headless restore
+matches, MSVC/clang, platform runtimes, any Box3D debris presentation.
+
+## Cinematic gameplay (cinematic-gameplay 0.1.0)
+
+Headers `genre/CinematicTime.h` (time-scale domains), `genre/CinematicQte.h` (QTE judging),
+`genre/CinematicScene.h` (definitions, state, validation), `genre/CinematicRunner.h` (`stepScene`), umbrella
+`genre/Cinematic.h`, `genre/CinematicData.h` (scene JSON), `genre/CinematicConfigured.h` (settings adapters) and
+`genre/CinematicPersistence.h` (save/load, hashing). Target `AIVERSE::lib_cinematic_gameplay` (depends on
+`aiverse_engine`); native OBJECT modules call `aiverse_native_use_libraries(target cinematic-gameplay)`. Skill:
+`skills/aiverse-cinematic-gameplay`. Composes with the animation system (clips/markers are referenced by ID and
+reported back; `docs/animation-graphs.md` stays the playback owner) and with `narrative-graphs` (cue triggers).
+
+**Determinism model.** Authoritative, saved and hashed: time-scale requests and per-domain accumulators
+(`TimeState`), timeline position, cue emission bookkeeping, wait and QTE outcomes, staging status, input locks,
+queued triggers and QTE options (`SceneState`). Host/presentation, never authoritative: audio and animation
+playback progress, camera, navigation, teleport execution. Host facts enter only as `SceneInput` stamped with an
+authoritative tick (`LineReport`, `MarkerReport`, `ParticipantPose`/`arrived`, `QteInput`), validated against the
+cue's emission tick and the current tick, so replays and peers see the same inputs and outcomes. Every sync point
+and staging move has a timeout in authoritative ticks (never domain steps), so a slow device, a missing report or
+a frozen domain cannot stall the simulation. Integer math only (Fixed for mark positions), strictly increasing
+ticks; invalid input or repeated/backwards ticks return nullopt with state untouched; stale command sequence
+numbers are ignored (`CommandIgnored`). Presentation reads `SceneEvent`s; it never writes into either state.
+
+**Time-scale domains.** `TimeConfig` lists domains (default world 1, player 2 with parent world, ui 3,
+cinematic 4; custom ids allowed, parent id < child id). Scales are `TimeRatio{num,den}` with 0 <= num/den <= 16
+and den dividing 720720 (all denominators 1..16 are exact); values are held in 1/720720 step units and each domain
+keeps an integer accumulator, so a domain advances exactly floor(N*num/den) whole steps over N ticks (tested over
+300000 ticks). Requests (`TimeRequest{tag, domain, scale, priority, duration, blend}`) are applied per domain in
+(priority, id) order: `Override` replaces the running value, `Multiply` scales it (rounded down in step units when
+not exact); a child domain is multiplied by its parent. `duration` is authoritative ticks from the start tick
+(0 = until cancelled), so a hit-stop (scale 0) always ends. `stepTime` order at a tick: cancel ids, cancel tags,
+expire, add (ids assigned in input order), evaluate, accumulate; tick gaps are integrated exactly with expiries
+inside the gap. `DomainTick{steps, units, local}` per domain; at most 256 active requests (`Rejected` beyond).
+Presets: `hitStop(domain, ticks)`, `slowMotion(domain, ratio, ticks)`, library `timePresets` used by `timeScale`
+cues (tagged with the scene id and cancelled on skip/seek/resume/end).
+
+**Scene timelines.** A scene advances by the steps of its time domain (`domain` 0 = one step per tick). Cues
+(`dialogue`, `animation`, `camera`, `sound`, `event`, `timeScale`, `move`, `inputLock`, `inputRelease`) are sorted
+by (at, track, id) and emitted in that order when the position reaches `at`. Essential cues (events by default,
+always move/input) fire exactly once per scene run, also while skipping (`flags` 1); presentation cues fire once
+per pass and are recorded as skipped when skipped. Sync points and QTEs ("stops") hold the timeline at their
+position before cues at that position; held time is not banked. Commands (`SceneCommand{seq, kind, value,
+bindings}`): `TriggerScene`, `TriggerCue`, `Pause`/`Unpause` (all deadlines shift by paused ticks), `Skip` (to the
+next sync point, or the end), `SkipScene`, `Seek` (forward = skip semantics and requires `skippable`; backward
+re-arms stops and presentation cues), `Abort`, `ResumeCheckpoint`. Skipping teleports movers and resolves QTEs in
+between as `Skipped` without branching. Order in a tick: options, commands by seq, reports, then unless paused:
+start a scene triggered on an earlier tick, staging, QTE judging, sync waits, timeline advance. Call every tick:
+with tick gaps a released hold consumes the whole gap's steps.
+
+**Sync waits.** `SyncDef{id, at, timeout, checkpoint, waits}`; waits: `lineFinished{cue}` (dialogue/animation cue
+reported finished), `marker{cue, marker}` (animation marker reported, or the clip finished), `inPosition{participants}`
+(empty = all; InPosition or Teleported). Waited cues must start before the sync point. A wait on a skipped cue is
+satisfied. Release when all are met or at `timeout` ticks (`SyncReleased` value 1 = timed out; play continues).
+
+**QTE.** `QteDef` kinds: `press` (window [open, close] ticks after the prompt, optional `perfect` sub-window, early
+press fails), `mash` (`count` presses before close), `hold` (press before close, keep down `hold` ticks, early
+release fails), `sequence` (ordered `steps`, each window from the previous success). Wrong buttons are ignored
+unless `strict`. Judged on `QteInput.tick` in (prompt tick, current tick]. `QteOptions{windowScaleMilli
+(difficulty), accessibleWindowMilli (extended windows, 1000 = off), mashScaleMilli, holdScaleMilli, autoSucceed}`
+scale windows symmetrically around their centre (>= 1 tick, opening at >= 1) and are applied at the prompt;
+`autoSucceed` resolves `AutoSuccess` at the prompt. Outcomes (Success, Perfect, Fail, AutoSuccess, Skipped) are
+stored in `SceneState::results` and emitted as `QteResolved`. Branches: `onSuccess` must jump forward to a sync
+point (skip semantics), `onFail` may jump back to retry; `failAborts` aborts the scene.
+
+**Staging.** `MarkDef{id, position (milli-metres in JSON), toleranceMilli}`, `ParticipantDef{id, mark, lockInput,
+timeout, fallback teleport|proceed|abort}`. On start, locked participants get `InputLocked`, participants with a
+mark get `MoveToMark` and stay `Moving` until a pose within tolerance or an `arrived` report (`InPosition`), or
+their timeout: `TeleportRequested` (the host teleports; counted as in position), `StagingLate`, or abort. `move`
+cues re-stage mid-scene. Play starts when nobody is moving. `inputLocked(state, participant)` /
+`lockedEntities(state)` gate player commands; every end path (finish, skip, abort) releases all locks. Trigger
+bindings map participants to entities (events carry both).
+
+**Checkpoints and narrative.** `checkpointBefore` emits `SnapshotRequested` value 0 on the trigger tick while the
+scene is `Pending` (it starts on the next tick), checkpoint sync points emit value 1 when reached, `checkpointAfter`
+value 2 on completion. After loading any save, send `ResumeCheckpoint`: the timeline rewinds to the last sync point
+reached (or the start), re-arms its wait and replays presentation cues from there; essential cues never repeat.
+A narrative `CueRequest{cueId,...}` maps to `cueTrigger(seq, cueId, bindings)`; a scene's `trigger` cue id is
+indexed in `SceneLibrary::triggers` (`indexTriggers`, `sceneForCue`), unknown cues give `TriggerIgnored`, triggers
+during a scene are queued (8). This package does not include the narrative header; MAIN bridges the event type.
+
+**Data and settings.** `readSceneLibrary(json)` (`examples/libraries/genre/scene.json`): unknown keys, wrong types,
+out-of-range integers, unsorted/duplicate IDs, unknown marks/participants/presets/domains/cues, waits on later cues,
+backward `onSuccess`, timeouts of 0 and duplicate triggers throw `JsonError("cinematic.<path>: ...")` with index
+paths for syntax (`cinematic.scenes[0].cues[2].kind: unknown value 'x' ...`) and id paths for references
+(`cinematic.scene 10.sync 1.wait[0].cue: unknown dialogue/animation cue 9`). Optional `cinematic` settings section
+(configuration 0.3.4): `hitStopTicks` (>= 1), `hitStopPriority`, `slowMotionNumerator`/`Denominator` (<= 1),
+`slowMotionTicks`, `slowMotionPriority`, `qteWindowScaleMilli`, `qteAccessibleWindowMilli`, `qteMashScaleMilli`,
+`qteHoldScaleMilli`, `qteAutoSucceed`; adapters `qteOptions`, `hitStopRequest`, `slowMotionRequest`,
+`cinematicSettingsErrors`. Example `examples/libraries/genre/cinematic-settings.json`.
+
+**State.** `TimeState` kind 72, `SceneState` 73, `QteProgress` 74, `ParticipantState` 75; kinds 72..79 are reserved
+for this package (narrative uses 64..71). Records are canonical and validated on load; `stepScene` rejects a state
+whose scene id/version, cursor or stop indices do not match the library. `cinematicHash` hashes states, reports and
+definitions; bind `sceneLibraryHash(lib)` in the save envelope. `GenreConsumer.cpp`
+(`libraryCinematicConsumerExample`) starts a scene from narrative cue 42 through two ticks of time domains and stores
+`genre.cinematic.time`, `genre.cinematic.scene`, `genre.cinematic_hash` and `genre.cinematic.library`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks (`-Wall -Wextra -Werror -pedantic`), `genre_tests.cpp`
+built by hand covering time-scale exactness over 300000 ticks, gaps, nesting, stacked/cancelled/expiring requests,
+cue order with skip/seek, sync timeouts/pause/frozen domains, QTE judging per kind with difficulty and
+accessibility, in-scene branches, staging fallbacks and input locks, checkpoint resume, queued narrative triggers,
+save/restore mid-scene on the example library and invalid data; the cinematic tests also under ASan/UBSan, and the
+GenreConsumer function in a standalone driver. Not run: CMake/isolation, `aiverse_tests`, native module export,
+headless restore matches, clang/MSVC.
+
+**Narrative cues.** `genre/NarrativeCinematicBridge.h` connects narrative-graphs to scenes. Each tick the owner passes
+the narrative report's `CueRequest`s to `queueNarrativeCues(queue, cues)` and calls `releaseNarrativeCues(queue, tick,
+nextCommandSeq, bindings)` once before `stepScene`. Cues become due at `tick + delayTicks` and are released as
+`TriggerCue` commands ordered by (due tick, narrative sequence), using the owner's monotonic `SceneCommand` counter.
+Sequences at or below the last accepted one are ignored, so re-feeding a report after a restore never starts a scene
+twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
+(within this package's 72..79).
