@@ -1133,6 +1133,228 @@
           "maximum": 1000000000
         }
       }
+    },
+    "objectives": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zoneCaptureTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "zoneDecayPerTick": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "zoneContestRule": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1
+        },
+        "zoneMaxCapturers": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "zoneNeutralizeFirst": {
+          "type": "boolean",
+          "default": false
+        },
+        "holdScoreInterval": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "holdRequiresPresence": {
+          "type": "boolean",
+          "default": true
+        },
+        "hillRotateTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "hillCount": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "payloadPushSpeedMilli": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "payloadExtraPusherMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "payloadReverseSpeedMilli": {
+          "type": "integer",
+          "default": 25,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "payloadMaxPushers": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 64
+        },
+        "payloadReverseDelayTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "payloadCheckpointBonusTicks": {
+          "type": "integer",
+          "default": 1800,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "payloadContestBlocks": {
+          "type": "boolean",
+          "default": true
+        },
+        "payloadCheckpointLock": {
+          "type": "boolean",
+          "default": true
+        },
+        "eliminationLives": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "respawnDelayTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "respawnWaveTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "wipeEliminates": {
+          "type": "boolean",
+          "default": false
+        },
+        "extractionHoldTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "extractionRequiredItems": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "extractionOpensAtTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "extractionContestBlocks": {
+          "type": "boolean",
+          "default": true
+        },
+        "extractionResetOnLeave": {
+          "type": "boolean",
+          "default": true
+        },
+        "bombPlantTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombDefuseTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombKitDefuseTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombFuseTicks": {
+          "type": "integer",
+          "default": 2400,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "bombPlantResets": {
+          "type": "boolean",
+          "default": true
+        },
+        "bombDefuseResets": {
+          "type": "boolean",
+          "default": true
+        },
+        "overtimeEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "overtimeGraceTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "overtimeMaxTicks": {
+          "type": "integer",
+          "default": 1800,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "clockMaxTicks": {
+          "type": "integer",
+          "default": 100000000,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "spectatorKillCamTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "spectatorFollowKiller": {
+          "type": "boolean",
+          "default": true
+        },
+        "spectatorAllowEnemies": {
+          "type": "boolean",
+          "default": false
+        },
+        "routeLaps": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 1000
+        }
+      }
     }
   }
 }
