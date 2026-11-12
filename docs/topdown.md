@@ -65,6 +65,15 @@ Sample: `templates/topdown_arena` ("Scrapyard Arena").
 - **Bots.** `RtsAI` steers its hero with the same commands (`TopDown::botCommand`): walk (path around walls) to
   the nearest hostile, preferring armed ones, stop inside 85% of the weapon range so auto-fire works, give ground
   to armed foes closer than 35%.
+- **Raid bots and other AI** never give a hero move / attack orders (it ignores them): `TopDown::steerCommand(goal,
+  stand)` walks the hero there with the stick (straight when walkable, else the next path waypoint; stops inside
+  `stand` so channels work) and kites: foes whose single hit is at least 5% of the hero's health (Drone Fall
+  guardians' clubs), or, below 60% health, a swarm of 6+, push it away once they are within their weapon range
+  + 2.5, with wall probes at 45 / 90 / 135 degrees. Otherwise the hero stands and auto-fires. The raid bot
+  (`RtsRaidBot.cpp`) uses it for objectives, kills, loot and extraction, keeps kiting before the raid starts and while
+  it waits for a called point, and re-steers every 3 ticks. With rules `progression` it first walks over xp orbs
+  within 14 units and, with a level banked and offers at circles, to the nearest summon circle
+  (`Progression::botGoal`). Skirmish bots (`botCommand`) do the same only with `"bot": {"progression": true}`.
 - **State / determinism.** `TopDownStore` world resource (rollback snapshots copy it), hashed, saved after the grid
   fields in `RtsSave`. Games without the block keep their checksums and save layout; so do top-down games that use
   none of squad / escape / hold / windups / free fire (`rules.extended`: only then is the extra pilot state — held
@@ -100,6 +109,7 @@ Sample: `templates/topdown_arena` ("Scrapyard Arena").
   "abilities": {"hold": ["laser"], "rootWhileCasting": false},
   "squad": {"types": ["guard"], "size": 4, "radius": 2.5, "tolerance": 0.5, "rotate": true, "fireWhileMoving": false, "repath": 0.25},
   "escape": {"duration": 5, "cooldown": 30, "pause": true},
+  "bot": {"progression": false},
   "autoFire": {"enabled": true, "whileMoving": false, "cone": 360, "range": 0, "lineOfFire": true,
                "retarget": "nearest", "interval": 0.2, "switchMargin": 0.5, "preferArmed": true,
                "priority": ["drone"], "movingSpeed": 0.1}
@@ -153,4 +163,5 @@ wheel / pinch zoom stays inside min / max. `AIVERSE_TOUCH_CONTROLS=1` draws the 
 Platform gamepad polling (pads feed `TopDownFrameInput` only), an aim-drag indicator drawn in the world (on screen a
 knob off the button shows the drag), escape preview effects beyond the move marker (Drone Fall's grayscale camera / telegraph
 circle: game view work), squad members walking as one rigid group (they path to their slots individually),
-mode rules for escape (PvE only is the game's data decision: leave `escape` out of PvP rules), planets.
+mode rules for escape (PvE only is the game's data decision: leave `escape` out of PvP rules), telegraph dodging by
+the bot (it only kites by weapon range), planets.

@@ -58,7 +58,13 @@ void RtsAI::update(Simulation& sim) {
     if (m->rules().fidelity && hasOther) fidelity(sim, *m);
     if (hasGarrisons) garrisonPlay(sim, *m);
     if (hasOther) {
-        if (auto* td = m->topDown(); td && td->active()) { Command c; if (td->botCommand(sim, player_, c)) send(sim, c); }   // hero stick (RtsTopDown.cpp)
+        if (auto* td = m->topDown(); td && td->active()) {   // hero stick (RtsTopDown.cpp); opt-in: progression goals first
+            Command c;
+            Vec3 g; Fixed s;
+            Progression* pg = td->rules().botProgression ? m->progression() : nullptr;   // rules topDown.bot.progression
+            if (pg && pg->active() && td->heroOf(sim, player_).valid() && pg->botGoal(sim, player_, g, s)) { if (td->steerCommand(sim, player_, g, s, c)) send(sim, c); }
+            else if (td->botCommand(sim, player_, c)) send(sim, c);
+        }
         special(sim, *m);
         if (!m->rules().diggables.empty() || !m->rules().rooms.empty()) dungeon(sim, *m);
         if (m->rules().settlers) settlers(sim, *m);

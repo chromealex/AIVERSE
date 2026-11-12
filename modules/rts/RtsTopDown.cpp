@@ -118,6 +118,7 @@ TopDownRules TopDown::parse(const Json& j, const std::vector<std::string>& ids) 
             r.movingSpeed = nonNegative(af, "movingSpeed", r.movingSpeed, "topDown.autoFire");
         }
     }
+    r.botProgression = j["bot"].getBool("progression", false);
     r.extended = r.freeFire || !r.holdIds.empty() || r.rootWhileCasting || r.squad.enabled || r.escape.enabled;
     return r;
 }
@@ -971,8 +972,8 @@ bool TopDown::steerCommand(Simulation& sim, uint8_t player, Vec3 goal, Fixed sta
     if (dist2D(pos, flat(goal)) > fxMax(stand, Fixed::fromRatio(1, 4))) dir = walkDir(sim, e, flat(goal));
     // kite: dangerous foes about to reach the hero push the way out (away from all of them, nearer ones weigh more,
     // still drifting toward the goal); a wall ahead turns the escape by 45 / 90 / 135 degrees to the open side.
-    // Dangerous = a single hit of at least 5% of the hero's health (Drone Fall guardians' telegraphed clubs), or a
-    // swarm (6+ armed foes in reach). A foe is "about to reach" inside its weapon range + 1.5 (kite > 0: inside
+    // Dangerous = a single hit of at least 5% of the hero's health (Drone Fall guardians' telegraphed clubs), or,
+    // below 60% health, a swarm (6+ armed foes in reach). A foe is "about to reach" inside its weapon range + 2.5 (kite > 0: inside
     // `kite`). Otherwise the hero stands and shoots (Drone Fall heroes only fire standing still) or walks on.
     const Fixed maxHp = m_->stat(sim, e, Stat::MaxHp);
     Vec3 away{}, swarmAway{};
@@ -995,7 +996,8 @@ bool TopDown::steerCommand(Simulation& sim, uint8_t player, Vec3 goal, Fixed sta
         swarmAway += push; ++swarm;
         if (kite.raw > 0 || hit * 20 >= maxHp) { away += push; ++threats; }
     });
-    if (!threats && swarm >= 6) { away = swarmAway; threats = swarm; }
+    const bool hurt = w.get<Unit>(e).hp * 10 < maxHp * 6;   // below 60%: a swarm is a threat too
+    if (!threats && swarm >= 6 && hurt) { away = swarmAway; threats = swarm; }
     if (threats) {
         const Fixed al = away.length();
         const Fixed dl = dir.length();

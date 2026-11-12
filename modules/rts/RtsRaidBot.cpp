@@ -33,6 +33,11 @@ void raidBotThink(Simulation& sim, RtsModule& m, uint8_t player) {
     if (raiders.empty()) return;
     const Vec3 at = w.get<Transform>(raiders[0]).pos;
     const bool hero = myHero.valid() && td->isHero(sim, raiders[0]);
+    // progression first (rules "progression"): a banked level -> a summon circle, else xp orbs close by
+    if (Progression* pg = m.progression(); hero && pg && pg->active()) {
+        Vec3 g; Fixed s;
+        if (pg->botGoal(sim, player, g, s)) { steer(g, s); return; }
+    }
     bool have = false;
     Vec3 goal{};
     Fixed stand = Fixed::fromRatio(1, 2);   // close enough

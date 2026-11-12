@@ -85,6 +85,8 @@ struct TopDownRules {
         Fixed cooldown = Fixed::fromInt(30);
         bool pause = true;                // client: a single-player match pauses while the point is chosen
     } escape;
+    bool botProgression = false;          // "bot": {"progression": true}: skirmish bots walk to xp orbs / summon circles
+                                          // first (raid bots always do)
     bool extended = false;                // any of the blocks above: extra pilot state is hashed / saved
 };
 
