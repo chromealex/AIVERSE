@@ -141,6 +141,15 @@ class Collector:
             plans.append(p)
             for n in p['notes']:
                 item(self.model, rel, 'approx', n, key='texture-settings')
+        # hand-written shaders: manual work, listed with the materials that use them
+        shaders = {}
+        for a in self.model.get('assets', []) + [dict(path=p) for p in _shader_files(self.root)]:
+            if a['path'].endswith(('.shader', '.hlsl', '.cginc')):
+                shaders.setdefault(a['path'], [])
+        for k, res in self.results.items():
+            if res.family == 'custom' and res.shader_path:
+                shaders.setdefault(res.shader_path, []).append(k)
+        self.model['handWrittenShaders'] = {p: dict(materials=sorted(ms), used=bool(set(ms) & used)) for p, ms in sorted(shaders.items())}
         self.model['materialLibrary'] = lib
         self.model['texturePlans'] = plans
         self.model['shaderGraphs'] = self.ctx.graphs.report
@@ -171,3 +180,12 @@ def _image_size(path):
     if str(path).lower().endswith('.tga') and len(head) >= 18:
         return struct.unpack('<HH', head[12:16])
     return None
+
+
+def _shader_files(root):
+    out = []
+    base = Path(root) / 'Assets'
+    for p in sorted(base.rglob('*')):
+        if p.suffix in ('.shader', '.hlsl', '.cginc') and p.is_file():
+            out.append(p.relative_to(root).as_posix())
+    return out

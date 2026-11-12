@@ -262,5 +262,6 @@ def emit_materials(model, writer, root, used, conversions):
     families = {}
     for e in lib.values(): families[e['family']] = families.get(e['family'], 0) + 1
     writer.json('port-materials.json', dict(format=1, materials={k: lib[k] for k in sorted(used) if k in lib},
-                                            families=families, textures=plans, shaderGraphs=model.get('shaderGraphs') or {}))
+                                            families=families, textures=plans, shaderGraphs=model.get('shaderGraphs') or {},
+                                            handWrittenShaders=model.get('handWrittenShaders') or {}))
     return dict(materials=len(out), derived=len(used_derived), packaging=pack if (pack.get('files') or pack.get('targets')) else None)

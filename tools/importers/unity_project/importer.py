@@ -181,7 +181,7 @@ def extract(root):
                 item(model, a['path'], 'missing', d.type + ' asset retained in source; specialized conversion required.')
     for asset in info['assets']:
         suffix=Path(asset['path']).suffix.lower()
-        if asset['kind']=='other' and suffix not in ('.meta','.unity','.prefab','.asset','.mat'):
+        if asset['kind']=='other' and suffix not in ('.meta','.unity','.prefab','.asset','.mat','.shadergraph','.shadersubgraph','.shader','.hlsl','.cginc'):
             item(model,asset['path'],'missing','Unsupported source asset; original remains in source project.',key='unsupported-asset')
     build = root / 'ProjectSettings/EditorBuildSettings.asset'
     if build.exists():
