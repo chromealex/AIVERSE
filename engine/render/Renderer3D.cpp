@@ -277,7 +277,8 @@ void Renderer3D::resolvePostFx() {
     PostProcess* post = post_;
     post_ = nullptr;
     dev_->endPass();
-    PostFrame f{viewProj_, camPos_, lighting, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight()};
+    PostFrame f{viewProj_, camPos_, lighting, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight(),
+                quality_ != ShadowQuality::Off ? shadowMap_ : gfx::TextureHandle{}, lightViewProj_};
     post->resolve(*dev_, postOut_, f);
     hdrFrame_ = false;
 }

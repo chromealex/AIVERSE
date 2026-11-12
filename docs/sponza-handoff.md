@@ -24,18 +24,39 @@ fit 7 GB RAM with llvmpipe). **Not verified: MSL compilation and Metal captures,
 Run on the Mac: `AIVERSE_HDR_VERIFY=1 aiverse_hdr_scene` and `aiverse_hdr_gl`, then the
 reproduce commands below with the new cache.
 
+Follow-up the same day (all on `codex/sponza-full`):
+
+- **main merged** (41 commits). main's static-geometry path (caches, occlusion, geometry-error
+  LOD, profiling, compute RHI, Metal binding cache) is reconciled with this branch's model
+  culling/LOD, HDR pipelines and SSR. Shader Graph textures moved to tex13+ (tex11/12 are the
+  SSR scene textures); Metal graph slots >= 16 use a constexpr sampler. Sponza High matches
+  the pre-merge capture (max 5/255). Metal compilation of the merged `GfxMetal.mm` is unverified.
+- **Portable AO cache (`AVA2`)**: the old key hashed loaded floats bit-exactly; normal
+  normalization compiles to FMA on clang/arm64 and not on gcc/x86, so the Mac cache was
+  rejected elsewhere (confirmed on the real Sponza data: plain vs `-mfma -ffp-contract=fast`
+  builds give different float hashes). Integer data stays in the exact key; positions/normals
+  are checked with a tolerance. `AVAO` caches are refused with a "rebake" message.
+- **Sunlit haze**: `VolumetricLight` in `ScreenLighting` (High post path), shadowed sun
+  in-scattering through the sun shadow map, resolved by TAA. Tuned recipe:
+  `docs/benchmarks/sponza-2026-11-12/scene-day-high-haze.json` (haze + warmer grade).
+
+New files beside the assets (copied to `/Volumes/KINGSTON/AIVERSE/Sponza`, nothing overwritten):
+`day-dense-moments.avgic` (moment visibility, same transport), `day-local-ao-v2.avao`,
+`scene-day-high-haze.json`. Run on the Mac:
+
+```sh
+aiverse_renderbench --scene /Volumes/KINGSTON/AIVERSE/Sponza/scene-day-high-haze.json \
+  --read-light-cache day-dense-moments.avgic --profile full --camera 0 --warmup 60 --samples 120 \
+  --capture /tmp/haze.ppm --output /tmp/haze.json
+AIVERSE_HDR_VERIFY=1 aiverse_hdr_scene; AIVERSE_HDR_VERIFY=1 aiverse_hdr_gl
+```
+
 Open items:
-- `codex/sponza-full` is 41 commits behind `main`. A trial merge conflicts in 12 files,
-  mostly because `main` gained its own static-geometry LOD/culling/cache path
-  (geometry-visibility) overlapping this branch's model LOD/culling in `Renderer3DModels.cpp`,
-  `Renderer3D.{h,cpp}`, `Renderer3DReflect.cpp`, `Gfx.h`, `GfxMetal.mm`, `ModelGltf.cpp`, `PostFx.cpp`.
-  It needs a deliberate reconciliation with Metal verification, not a mechanical merge.
-- `day-local-ao.avao` was rejected ("does not match geometry/settings") by the Linux build
-  with downscaled textures. The key hashes loaded floats bit-exactly plus material flags;
-  whether compiler float differences or texture-derived flags cause it is not determined.
-  Check before relying on AO caches across platforms/compilers.
-- Visual gap to the reference that is not GI: the reference has visible sunlit haze in
-  the courtyard and a warmer, lower-contrast grade.
+- Metal: build and run the commands above; the merged Metal backend, the moment-visibility
+  MSL, the graph-texture slot move and the volumetric MSL were not compiled here.
+- Camera framing still differs from the reference (narrower view, lower eye height there).
+- Volumetric light is sun-only single scattering with uniform density; no height falloff.
+- Android/web and timing on real devices are not measured.
 
 ## Previous checkpoint
 

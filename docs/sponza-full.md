@@ -492,3 +492,34 @@ Artifacts: `build/bench-results/local-occlusion/` contains actual before/after,
 High/Mobile and GL screenshots plus per-frame timing JSON. The ignored preview
 launchers `build/preview-sponza-day-lit.command` (High) and
 `build/preview-sponza-probe-gi.command` (Mobile) now use the cached AO recipes.
+
+### Sunlit haze: volumetric light (2026-11-12)
+
+The reference frame shows sunlit air in the courtyard and soft shafts under the arches.
+`ScreenLighting` now has an optional in-scattering pass, `VolumetricLight`
+(`setVolumetricLight`), run before temporal accumulation in the High post path:
+
+- each pixel marches 4..32 jittered steps from the camera to its depth (sky pixels to
+  `maxDistance`) and tests the existing sun shadow map at every step;
+- lit path length × `density` × Henyey-Greenstein phase (`anisotropy`) × sun radiance
+  (`sunColor * sunIntensity * tint`) is added to the HDR colour before TAA, bloom and tone
+  mapping; TAA resolves the per-frame golden-ratio jitter, so there is no blur pass;
+- only in-scattering is added: the materials' exponential fog (`fogDensity`) already
+  provides extinction and ambient haze, so extinction is not applied twice.
+
+`PostFrame` carries the sun shadow map and `lightViewProj` (empty when shadows are off,
+which disables the pass). Cost: one full-screen pass of `steps` shadow compares; Low and
+Medium post quality never run `ScreenLighting`, so weak devices pay nothing. GLSL and MSL
+share one body; MSL uses `depth2d::sample_compare` with the shadow map's compare sampler.
+
+Renderbench recipe block (not part of the GI cache key):
+
+```json
+"volumetricLight": {"density": 0.04, "anisotropy": 0.6, "maxDistance": 40, "steps": 16, "tint": [1, 0.95, 0.85]}
+```
+
+`docs/benchmarks/sponza-2026-11-12/scene-day-high-haze.json` is the tuned daylight recipe:
+haze above, plus a warmer grade closer to the reference (saturation .75 → .9, warm gain,
+slightly cool lift, vignette .25). Limits: single scattering from the sun only, uniform
+density (no height falloff or noise), shafts only where the sun shadow map has texels;
+point lights do not scatter. Checked on Linux GL (llvmpipe); Metal is unverified.

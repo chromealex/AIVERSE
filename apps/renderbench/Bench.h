@@ -179,7 +179,7 @@ struct Bench {
             }
             additions.shadowGeometry=StaticShadowGeometry{};
             if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"){
-                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");keyConfig.erase("sunStudy");keyConfig.erase("meshOcclusion");
+                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");keyConfig.erase("sunStudy");keyConfig.erase("meshOcclusion");keyConfig.erase("volumetricLight");
                 Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
                 Hasher keyHash;keyHash.str(keyConfig.dump());
                 StaticLightGrid grid;
@@ -258,6 +258,16 @@ struct Bench {
             if(options.profile!="low"&&config.has("postfx"))s=parsePostFx(config["postfx"],Json());
             screen.setDiffuseBounceEnabled(!(bakePointShadows&&(config.has("staticPointBounce")||config.has("probeGI"))));
             screen.setEnabled(options.profile=="full");
+            if(config.has("volumetricLight")){
+                const auto& v=config["volumetricLight"];VolumetricLight light;light.enabled=v.getBool("enabled",true);
+                light.density=float(v["density"].toDouble(light.density));light.anisotropy=float(v["anisotropy"].toDouble(light.anisotropy));
+                light.maxDistance=float(v["maxDistance"].toDouble(light.maxDistance));light.steps=int(v["steps"].toDouble(light.steps));
+                light.tint=SceneAssets::vector3(v["tint"],light.tint);
+                if(!std::isfinite(light.density)||light.density<0||light.density>1||!std::isfinite(light.anisotropy)||std::abs(light.anisotropy)>.95f||
+                   !std::isfinite(light.maxDistance)||light.maxDistance<=0||light.maxDistance>1000||light.steps<4||light.steps>32||light.tint.x<0||light.tint.y<0||light.tint.z<0)
+                    throw std::runtime_error("volumetricLight: density 0..1, anisotropy -.95...95, maxDistance 0..1000, steps 4..32, tint >= 0");
+                screen.setVolumetricLight(light);
+            }
             post.setSettings(s);post.setQuality(options.profile=="low"?PostFxQuality::Low:PostFxQuality::High);
             report.set("schema",Json::number(int64_t(1)));report.set("engine",Json::string("AIVERSE"));
 #if defined(__aarch64__) || defined(__arm64__)
@@ -330,6 +340,7 @@ struct Bench {
             settings.set("probeGIMaxProbeEvaluations",Json::number(int64_t(indirectEnabled?8:0)));
             if(config.has("probeGI")&&!indirectEnabled)settings.set("gi",Json::string("probe GI disabled"));
             settings.set("taa",Json::fromBool(screen.running()));
+            settings.set("volumetricLight",Json::fromBool(screen.running()&&screen.volumetricLight().enabled));
             settings.set("bloom",Json::fromBool(options.profile=="hdr"||options.profile=="full"));
             settings.set("animationStepSeconds",Json::number(1.0/60.0));
             settings.set("lightAttenuation",Json::string(renderer.lights.staticPointLightsActive()?"3D finite-radius attenuation / (1 + distance squared); linear RGB; unshadowed":"RTS finite-radius approximation; not photometric glTF"));

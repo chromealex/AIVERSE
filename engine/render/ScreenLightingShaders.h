@@ -95,4 +95,28 @@ inline const char* temporal = R"(
     RETURN(vec4(taaExpand(mix(now,old,weight)),distance));
 )";
 inline const char* copy = R"( RETURN(vec4(COLOR(UV(s)).rgb,1.0)); )";
+// Sun in-scattering along the view ray, shadowed by the sun shadow map. volume: x march length cap,
+// y steps, z frame noise offset; sunColor.w scattering coefficient; sun.w Henyey-Greenstein g.
+inline const char* scatter = R"(
+    vec4 center=COLOR(UV(s));
+    float zd=DEPTH(UV(s));
+    vec4 hp=WORLD(s,min(zd,0.9999)); vec3 p=hp.xyz/hp.w;
+    vec3 ray=p-eye.xyz; float len=length(ray); vec3 dir=ray/max(len,0.0001);
+    float reach=zd<0.99999?min(len,volume.x):volume.x;
+    float steps=volume.y, stepLen=reach/steps;
+    vec2 pixel=s/px.xy;
+    float noise=fract(52.9829189*fract(dot(pixel,vec2(0.06711056,0.00583715)))+volume.z);
+    float g=sun.w, mu=dot(dir,sun.xyz);
+    float phase=(1.0-g*g)/(12.5663706*pow(max(1.0+g*g-2.0*g*mu,0.0001),1.5));
+    float lit=0.0;
+    for(int i=0;i<32;++i){
+        if(float(i)>=steps)break;
+        vec3 x=eye.xyz+dir*((float(i)+noise)*stepLen);
+        vec4 lp=lightVP*vec4(x,1.0); vec3 q=lp.xyz/lp.w;
+        vec2 uv=q.xy*0.5+0.5; if(px.z>0.5)uv.y=1.0-uv.y;
+        float d=px.w>1.5?q.z*0.5+0.5:q.z;
+        lit+=(uv.x<=0.0||uv.x>=1.0||uv.y<=0.0||uv.y>=1.0||d>=1.0)?1.0:SHADOW(uv,d);
+    }
+    RETURN(vec4(center.rgb+sunColor.rgb*(sunColor.w*phase*lit*stepLen),center.a));
+)";
 }
