@@ -13898,3 +13898,27 @@ TEST(world_tree_lua_peek_is_observation_only) {
     CHECK(d["n"].integer() >= 59 && d.getStr("label") == "n" + std::to_string(d["n"].integer()));
 }
 #endif
+
+// agent-bw-data: Bunker Wars armories — the bonus is a table by the number owned (1.5, 1.75, 1.9, 2), not mul^n
+TEST(bw_player_mods_by_count_table) {
+    const char* rules = R"({"victory": "noEntities",
+      "types": {
+        "soldier": {"move": {"speed": 2, "radius": 0.15}, "health": {"max": 1}, "entersGarrison": true},
+        "bunker": {"structure": {"footprint": [2, 2]}, "invulnerable": true, "garrison": {"max": 20, "unit": "soldier", "interval": 3}},
+        "armory": {"structure": {"footprint": [2, 2]}, "invulnerable": true, "garrison": {"max": 0, "unit": "soldier"},
+                   "playerMods": {"max": 4, "mods": [{"type": "soldier", "stat": "damage", "byCount": [1.5, 1.75, 1.9, 2]},
+                                                     {"type": "bunker", "stat": "defense", "mul": 1.25}]}}
+      }})";
+    auto sim = makeSimJson(rules, flatMap(40, 16, R"(,"entities":[{"type":"bunker","owner":1,"pos":[3,8]},{"type":"bunker","owner":2,"pos":[36,8]}])"));
+    auto& m = mod(*sim);
+    Entity s = spawnAt(*sim, "soldier", 1, 6, 4);
+    Entity b = findType(*sim, "bunker", 1);
+    const double want[] = {1.0, 1.5, 1.75, 1.9, 2.0, 2.0};   // the fifth armory adds nothing
+    for (int n = 0; n <= 5; ++n) {
+        if (n > 0) spawnAt(*sim, "armory", 1, 4 + 4 * n, 13);
+        run(*sim, 0.1);
+        CHECK(std::fabs(m.stat(*sim, s, game::Stat::Damage).toDouble() - want[n]) < 1e-4);
+    }
+    // entries without byCount keep mul^n (capped by max): 1.25^4
+    CHECK(std::fabs(m.stat(*sim, b, game::Stat::Defense).toDouble() - 2.44140625) < 1e-3);
+}

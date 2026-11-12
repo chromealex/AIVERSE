@@ -311,6 +311,7 @@ struct UnitType {
     bool clash = false;                        // units in transit fight hostile units they meet
     std::vector<std::pair<ModTarget, StatMod>> playerMods; // every completed one modifies the owner's types
     int playerModsMax = 0;                     // count at most this many (0 = all)
+    std::vector<std::vector<Fixed>> playerModsByCount;   // per playerMods entry: `byCount` mul for 1..N owned (empty = mul^n)
     std::vector<std::vector<int>> learnAt;     // per ability: hero levels for skill levels 1, 2, ... (WC3)
     Fixed costGrowth{};                        // cost * (1 + growth * owned) (Dungeon Keeper imps)
     uint64_t crushTags = 0;                    // moving over units with these tags kills them (Dune / C&C tanks)
