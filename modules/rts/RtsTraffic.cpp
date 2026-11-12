@@ -297,6 +297,31 @@ void Traffic::setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const 
         r.x0 = Fixed::fromRatio(jn.x0 + ix0, 2); r.x1 = Fixed::fromRatio(ix1 + 1 + jn.x1 + 1, 2);
         r.z0 = Fixed::fromRatio(jn.z0 + iz0, 2); r.z1 = Fixed::fromRatio(iz1 + 1 + jn.z1 + 1, 2);
     }
+    // sidewalk islands: cells that can reach each other on foot share a number (a goal on another island is known at once)
+    island_.assign(walk_.size(), -1);
+    {
+        int32_t next = 0;
+        std::vector<int32_t> stack;
+        for (size_t i = 0; i < walk_.size(); ++i) {
+            if (!walk_[i] || island_[i] >= 0) continue;
+            island_[i] = next; stack.assign(1, int32_t(i));
+            while (!stack.empty()) {
+                const int c = stack.back(); stack.pop_back();
+                const int cx = c % w, cz = c / w;
+                const int nx[4] = {cx - 1, cx + 1, cx, cx}, nz[4] = {cz, cz, cz - 1, cz + 1};
+                for (int d = 0; d < 4; ++d) {
+                    if (nx[d] < 0 || nz[d] < 0 || nx[d] >= w || nz[d] >= h) continue;
+                    const int ni = nz[d] * w + nx[d];
+                    if (walk_[size_t(ni)] && island_[size_t(ni)] < 0) { island_[size_t(ni)] = next; stack.push_back(ni); }
+                }
+            }
+            ++next;
+        }
+        std::vector<int32_t> size(size_t(next), 0);
+        for (int32_t v : island_) if (v >= 0) size[size_t(v)]++;
+        mainIsland_ = -1;
+        for (int32_t v = 0; v < next; ++v) if (mainIsland_ < 0 || size[size_t(v)] > size[size_t(mainIsland_)]) mainIsland_ = v;   // the city's sidewalks (ties: the first)
+    }
     findStops(sim);
     setupCity(sim);
     setupPopulation(sim, map);

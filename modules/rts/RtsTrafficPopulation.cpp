@@ -103,17 +103,7 @@ void Traffic::setupPopulation(Simulation& sim, const Json& map) {
     places_.clear();
     const TrafficPopulationRules& pr = rules_.population;
     if (pr.count <= 0) return;
-    auto door = [&](Vec2 p) {
-        const int cx = int(p.x.floorInt()), cz = int(p.y.floorInt());
-        for (int r = 0; r <= 6; ++r)
-            for (int dz = -r; dz <= r; ++dz)
-                for (int dx = -r; dx <= r; ++dx) {
-                    if (std::max(dx < 0 ? -dx : dx, dz < 0 ? -dz : dz) != r) continue;
-                    const int x = cx + dx, z = cz + dz;
-                    if (x >= 0 && z >= 0 && x < net_.w && z < net_.h && side_[size_t(z * net_.w + x)]) return z * net_.w + x;
-                }
-        return -1;
-    };
+    auto door = [&](Vec2 p) { return sidewalkNear(p, 6, true); };
     struct Found { Entity e; uint16_t kind; Vec2 p; };
     std::vector<Found> found;
     if (!pr.objects.empty())
@@ -266,7 +256,7 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
         // into sight from the edge of it; out of a door he may come right in front of the hero
         const bool atDoor = sim.tick() - c.left <= rate * 3;
         if (d2 > rules_.peopleMax * rules_.peopleMax || (!atDoor && d2 < rules_.peopleMin * rules_.peopleMin)) continue;
-        const int cell = atDoor ? sidewalkNear(c.from, 6) : sidewalkNear(at, 5);
+        const int cell = atDoor ? sidewalkNear(c.from, 6, true) : sidewalkNear(at, 5, true);
         const int goal = c.leg == kLegToStop && c.stopA >= 0 ? stopCell_[size_t(c.stopA)] : places_[size_t(to)].cell;
         if (cell < 0) continue;
         const Vec3 spot{Fixed::fromInt(cell % net_.w) + kHalf, Fixed{}, Fixed::fromInt(cell / net_.w) + kHalf};

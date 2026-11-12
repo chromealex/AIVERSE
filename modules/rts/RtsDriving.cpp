@@ -81,7 +81,8 @@ DrivingRules Driving::parse(const Json& j, const std::vector<std::string>& ids) 
 }
 
 const DrivingVehicleType* Driving::typeOf(uint16_t unitType) const {
-    for (auto& v : rules_.vehicles) if (v.type == unitType) return &v;
+    if (unitType < vehicleOf_.size()) return vehicleOf_[unitType] >= 0 ? &rules_.vehicles[size_t(vehicleOf_[unitType])] : nullptr;
+    for (auto& v : rules_.vehicles) if (v.type == unitType) return &v;   // before setup
     return nullptr;
 }
 
@@ -95,6 +96,12 @@ void Driving::setup(Simulation& sim, RtsModule& m, const Json& rulesJson) {
     if (!active()) return;
     if (!m.topDown() || !m.topDown()->active()) throw std::runtime_error("driving: needs the 'topDown' block (the hero is the driver)");
     rules_.doorTicks = uint32_t((rules_.doorSeconds * int64_t(sim.tickRate())).toInt());
+    // how far a body of each type reaches from its centre (cars: half their length): the sweep's cheap first test
+    vehicleOf_.assign(m.rules().types.size(), -1);   // unit type -> vehicle (the first one, as the list is searched)
+    for (size_t i = rules_.vehicles.size(); i-- > 0;) if (rules_.vehicles[i].type < vehicleOf_.size()) vehicleOf_[rules_.vehicles[i].type] = int32_t(i);
+    reach_.assign(m.rules().types.size(), Fixed{});
+    for (size_t i = 0; i < reach_.size(); ++i) reach_[i] = m.rules().types[i].radius;
+    for (auto& v : rules_.vehicles) if (v.type < reach_.size()) reach_[v.type] = fxMax(v.length / 2, v.width / 2);
     auto& st = sim.world().setResource<DrivingStore>();
     adoptAndDrop(sim, st);
 }
@@ -400,7 +407,11 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
         if (!ou || ou->hp.raw <= 0 || (ou->flags & kUnitOffMap)) return;
         const UnitType& ot = m_->rules().types[ou->type];
         if (ot.structure || (ot.layer & kLayerAir)) return;
-        near.push_back({o, w.get<Transform>(o).pos, ot.radius});
+        // too far to touch whatever the headings (no square root; a city block has dozens of bodies in the query)
+        const Vec3 op = w.get<Transform>(o).pos;
+        const Fixed touch = half + r + reach_[ou->type] + Fixed::fromRatio(1, 32);   // (a little over: the exact test follows)
+        if (flat(pos - op).lengthSq() >= touch * touch) return;
+        near.push_back({o, op, ot.radius});
     });
     std::sort(near.begin(), near.end(), [](const Near& a, const Near& b) { return a.e.index < b.e.index; });
     struct Hurt { Entity e; Fixed dmg; Entity by; uint8_t owner; };

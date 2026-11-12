@@ -39,14 +39,19 @@ Fixed nearestSq(const std::vector<Vec2>& foci, Vec2 p) {
 }
 } // namespace
 
-int Traffic::sidewalkNear(Vec2 p, int radius) const {
+// The nearest sidewalk cell; with `mainFirst` one of the city's connected sidewalks when there is one in range (a
+// door onto a park path or a fenced yard nobody could walk to).
+int Traffic::sidewalkNear(Vec2 p, int radius, bool mainFirst) const {
     const int cx = int(p.x.floorInt()), cz = int(p.y.floorInt());
+    for (int pass = mainFirst ? 0 : 1; pass < 2; ++pass)
     for (int r = 0; r <= radius; ++r)
         for (int dz = -r; dz <= r; ++dz)
             for (int dx = -r; dx <= r; ++dx) {
                 if (std::max(dx < 0 ? -dx : dx, dz < 0 ? -dz : dz) != r) continue;   // the ring only
                 const int x = cx + dx, z = cz + dz;
-                if (x >= 0 && z >= 0 && x < net_.w && z < net_.h && side_[size_t(z * net_.w + x)]) return z * net_.w + x;
+                if (x < 0 || z < 0 || x >= net_.w || z >= net_.h || !side_[size_t(z * net_.w + x)]) continue;
+                if (pass == 0 && island_[size_t(z * net_.w + x)] != mainIsland_) continue;
+                return z * net_.w + x;
             }
     return -1;
 }
@@ -54,7 +59,7 @@ int Traffic::sidewalkNear(Vec2 p, int radius) const {
 // Per stop the sidewalk cell people wait on; per place its bus stop and the kerb its cars stand at.
 void Traffic::setupCommute() {
     stopCell_.assign(stops_.size(), -1);
-    for (size_t i = 0; i < stops_.size(); ++i) stopCell_[i] = sidewalkNear(stops_[i].kerb, 3);
+    for (size_t i = 0; i < stops_.size(); ++i) stopCell_[i] = sidewalkNear(stops_[i].kerb, 3, true);
     const TrafficPopulationRules& pr = rules_.population;
     for (auto& pl : places_) {
         Fixed best = pr.stopRange * pr.stopRange;
@@ -164,7 +169,7 @@ Entity Traffic::citizenPerson(Simulation& sim, TrafficStore& st, int32_t id, Vec
 bool Traffic::walkTo(Simulation& sim, TrafficPerson& p, int goalCell) {
     const MapGrid& g = m_->state(sim).grid;
     const int here = g.cellOf(sim.world().get<Transform>(p.e).pos);
-    if (here < 0 || size_t(here) >= walk_.size() || goalCell < 0) return false;
+    if (here < 0 || size_t(here) >= walk_.size() || goalCell < 0 || size_t(goalCell) >= walk_.size()) return false;
     int start = here;
     if (!walk_[size_t(start)]) {   // off the sidewalk (out of a car, pushed): from the nearest walk cell
         const int W = net_.w, cx = start % W, cz = start / W;
@@ -179,7 +184,9 @@ bool Traffic::walkTo(Simulation& sim, TrafficPerson& p, int goalCell) {
         if (best < 0) return false;
         start = best;
     }
-    if (!tl::trafficWalkRoute(net_.w, net_.h, walk_, start, goalCell, search_, p.path) || p.path.size() > 60000) { p.path.clear(); return false; }
+    if (island_[size_t(start)] != island_[size_t(goalCell)]) return false;   // no way on foot: known without a search
+    const bool okRoute = tl::trafficWalkRoute(net_.w, net_.h, walk_, start, goalCell, search_, p.path);
+    if (!okRoute || p.path.size() > 60000) { p.path.clear(); return false; }
     if (start != here) p.path.insert(p.path.begin(), start);
     p.idx = 0; p.legEnd = 0;
     return !p.path.empty();
@@ -202,7 +209,8 @@ bool Traffic::citizenStep(Simulation& sim, TrafficStore& st, TrafficPerson& p, V
     }
     const Vec2 goal{Fixed::fromInt(p.goal % net_.w) + kHalf, Fixed::fromInt(p.goal / net_.w) + kHalf};
     const Fixed d2 = p.goal >= 0 ? (pos - goal).lengthSq() : Fixed{};
-    if (d2 > Fixed::fromRatio(9, 4) && walkTo(sim, p, p.goal)) return true;
+    // the whole way when the sidewalks connect; else as near as they get (then the rest unseen)
+    if (d2 > Fixed::fromRatio(9, 4) && (walkTo(sim, p, p.goal) || newWalk(sim, p, nullptr, p.goal))) return true;
     if (c.leg == kLegToStop) {
         if (d2 <= Fixed::fromInt(16)) { c.leg = kLegAtStop; c.eta = sim.tick() + rate * 120; p.until = sim.tick() + rate; }
         else onFoot();   // no way to the stop

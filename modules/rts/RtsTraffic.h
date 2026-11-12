@@ -348,7 +348,7 @@ private:
     void citizenUnseen(Simulation& sim, TrafficStore& st, TrafficPerson& p, Vec2 pos); // his body leaves the street
     Entity citizenPerson(Simulation& sim, TrafficStore& st, int32_t id, Vec3 spot, int goalCell);
     bool walkTo(Simulation& sim, TrafficPerson& p, int goalCell);
-    int sidewalkNear(Vec2 p, int radius) const;
+    int sidewalkNear(Vec2 p, int radius, bool mainFirst = false) const;
     bool kerbFree(Simulation& sim, int32_t piece, int dir, Fixed along, Entity self) const;
     bool kerbSpot(Simulation& sim, const Place& pl, int dir, Fixed& along, Entity self, const Fixed* from, Fixed ahead) const;
     void keepCar(Simulation& sim, TrafficStore& st, TrafficCitizen& c, const std::vector<Vec2>& foci, int& parked);
@@ -384,6 +384,8 @@ private:
     std::vector<Occupied> occupied_;         // island junctions with traffic inside this tick, ascending (derived)
     std::vector<Siren> sirens_;              // emergency vehicles this tick (derived)
     Fixed mpc_ = Fixed::fromInt(4);          // metres per cell (rules driving)
+    int32_t mainIsland_ = -1;                // the biggest one: doors and bus stops open onto it when they can
+    std::vector<int32_t> island_;            // per cell: which connected part of the pedestrian graph it is in (-1: none)
     std::vector<int32_t> stopCell_;          // per bus stop: the sidewalk cell people wait on (-1: none)
     mutable lib::genre::TrafficWalkSearch search_;   // work arrays of the long walks (derived)
 };

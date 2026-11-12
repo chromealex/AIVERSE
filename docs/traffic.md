@@ -157,6 +157,9 @@ team is hostile to the heroes' to fight them. Service keys default to `range` 90
   shop with one keeper opens when he arrives and shuts when he leaves.
 - **Hurt citizens** stay themselves: knocked down, the citizen is in hospital (the ambulance's, see above), then
   walks home from its door and his days go on; a fatal blow removes him from the population for good.
+- **Sidewalk islands.** Park paths and fenced yards are not connected to the city's sidewalks. Doors and bus stops
+  open onto the city's connected sidewalks when one is within reach; a goal on another island is known without a
+  search (the walker goes as near as his sidewalks get, then on unseen).
 - **Cost.** Per tick `count / (2 x tick rate)` records are looked at; 5000 citizens on a 384 x 384 city add
   0.02 ms per tick. `game.traffic_clock()` is the hour of the day.
 

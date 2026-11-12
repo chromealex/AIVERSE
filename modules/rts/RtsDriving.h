@@ -92,6 +92,8 @@ private:
 
     RtsModule* m_ = nullptr;
     DrivingRules rules_;
+    std::vector<int32_t> vehicleOf_;                // per unit type: index into rules_.vehicles, -1: not a vehicle (derived)
+    std::vector<Fixed> reach_;                      // per unit type: the farthest its body gets from its centre (derived)
 };
 
 } // namespace aiverse::game
