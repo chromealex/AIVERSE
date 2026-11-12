@@ -13154,6 +13154,13 @@ TEST(ai_invades_separate_planets) {
 namespace {
 // HOME (and XDG_*) pointed at a fresh temp folder for the scope of a test: nothing reaches the real ~/.aiverse
 struct TempHome {
+    static void putEnv(const char* k, const char* v) {   // v == nullptr: remove the variable
+#if defined(_WIN32)
+        _putenv_s(k, v ? v : "");   // an empty value removes it on Windows
+#else
+        if (v) setenv(k, v, 1); else unsetenv(k);
+#endif
+    }
     std::filesystem::path dir;
     std::string oldHome, oldData, oldConfig;
     bool hadHome = false, hadData = false, hadConfig = false;
@@ -13162,17 +13169,14 @@ struct TempHome {
         std::filesystem::create_directories(dir);
         auto save = [](const char* k, std::string& v, bool& had) { if (const char* e = std::getenv(k)) { v = e; had = true; } };
         save("HOME", oldHome, hadHome); save("XDG_DATA_HOME", oldData, hadData); save("XDG_CONFIG_HOME", oldConfig, hadConfig);
-#if !defined(_WIN32)
-        setenv("HOME", dir.string().c_str(), 1);
-        unsetenv("XDG_DATA_HOME");
-        unsetenv("XDG_CONFIG_HOME");
-#endif
+        // Windows too: the editor's home() (Projects.cpp, FileAssoc.cpp, McpInstall.cpp) takes HOME before USERPROFILE
+        putEnv("HOME", dir.string().c_str());
+        putEnv("XDG_DATA_HOME", nullptr);
+        putEnv("XDG_CONFIG_HOME", nullptr);
     }
     ~TempHome() {
-#if !defined(_WIN32)
-        auto restore = [](const char* k, const std::string& v, bool had) { if (had) setenv(k, v.c_str(), 1); else unsetenv(k); };
+        auto restore = [](const char* k, const std::string& v, bool had) { putEnv(k, had ? v.c_str() : nullptr); };
         restore("HOME", oldHome, hadHome); restore("XDG_DATA_HOME", oldData, hadData); restore("XDG_CONFIG_HOME", oldConfig, hadConfig);
-#endif
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);
     }
