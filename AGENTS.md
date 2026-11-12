@@ -615,3 +615,11 @@ editor window or MCP area, an importer (Unity, Godot, ...), or a change of count
 - Run `python3 tools/readme/check.py` — it must report 0 problems (structure of every
   translation, language bar, broken links and images).
 
+**Documentation languages.** `docs/<name>.md` is English and canonical. Translations live in
+`docs/<lang>/<name>.md` (`ru`, `zh-CN`, `ja`, `ko`, `es`, `pt-BR`, `de`, `fr`) for the documents the
+README points readers to: `overview`, `game-wizard`, `engine-import`, `genre-packages`. A README in a
+language links to `docs/<lang>/<name>.md` when that translation exists, otherwise to the English file.
+When you change one of these four English documents, update its translations in the same commit
+(same sections in the same order; code, keys and identifiers untranslated). Other documents are
+written and kept in English only.
+

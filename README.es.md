@@ -26,7 +26,7 @@
   <a href="#cómo-funciona">Cómo funciona</a> ·
   <a href="#plantillas-listas">Plantillas</a> ·
   <a href="#inicio-rápido">Inicio rápido</a> ·
-  <a href="docs/overview.md">Visión completa (RU)</a>
+  <a href="docs/es/overview.md">Visión completa</a>
 </p>
 
 ---
@@ -149,7 +149,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, plugins de tiendas y anuncios |
 | Addressables / Asset Bundles | paquetes `.rpak`, builds divididos y descarga de contenido |
 
-El informe marca cada elemento como trasladado exactamente, de forma aproximada o no trasladado. Reimportar conserva tus cambios. El proyecto necesita la serialización de recursos **Force Text**. Los proyectos de Godot se importan de la misma manera. Detalles: [Importar un proyecto de motor](docs/engine-import.md).
+El informe marca cada elemento como trasladado exactamente, de forma aproximada o no trasladado. Reimportar conserva tus cambios. El proyecto necesita la serialización de recursos **Force Text**. Los proyectos de Godot se importan de la misma manera. Detalles: [Importar un proyecto de motor](docs/es/engine-import.md).
 
 ---
 
@@ -234,7 +234,7 @@ open build/mac/AiverseEditor.app        # editor: centro de proyectos y plantill
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Si prefieres no compilar, la
 rama `builds` tiene el editor y las herramientas precompilados
-([detalles, en ruso](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([detalles](docs/es/overview.md#motor-precompilado-rama-builds-y-aiversemcp-sin-compilador)).
 
 **2. Crea un juego.** En el centro de proyectos, pulsa **Crear un juego** o crea un proyecto desde una
 plantilla. Puedes jugarlo con bots enseguida en la ventana Game.
@@ -267,27 +267,27 @@ El motor está en desarrollo activo. Lo que se ha verificado:
 - 🛠 Las plantillas para géneros distintos de RTS y FPS están en preparación
 
 Los detalles de cada subsistema están en
-[Verificado / no verificado](docs/overview.md#проверено--не-проверено) (en ruso).
+[Verificado / no verificado](docs/es/overview.md#verificado--no-verificado).
 
 ---
 
 ## Documentación
 
-La mayoría de los documentos están en ruso; `AGENTS.md`, la documentación de bibliotecas y algunas guías técnicas están en inglés.
+Los documentos de referencia están en inglés. La visión completa, el asistente de juegos, la migración desde Unity y los paquetes de género también están en español.
 
 | | |
 |---|---|
-| [**Visión completa**](docs/overview.md) | todos los subsistemas, compilación, plataformas, CI, versiones |
+| [**Visión completa**](docs/es/overview.md) | todos los subsistemas, compilación, plataformas, CI, versiones |
 | [Formato del juego](docs/game-format.md) | `game.json`, `rules.json`, mapas y todos los bloques de datos |
 | [Paquetes de género](docs/genre-packages.md) · [Bibliotecas](docs/libraries.md) | mecánicas para cualquier género |
-| [Asistente Crear un juego](docs/game-wizard.md) | cómo una idea y arte se convierten en un proyecto terminado |
+| [Asistente Crear un juego](docs/es/game-wizard.md) | cómo una idea y arte se convierten en un proyecto terminado |
 | [Scripting](docs/scripting.md) · [Módulos C++](docs/native-modules.md) | cuando los datos no bastan |
 | [Terreno](docs/terrain.md) · [Planetas](docs/planets.md) · [Búsqueda de rutas](docs/pathfinding.md) | mundo y movimiento |
 | [Partículas](docs/particles.md) · [Modelos](docs/models.md) · [Shader Graph](docs/shader-graph.md) | apartado visual |
 | [Meta](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monetización y tiendas |
 | [FPS](docs/fps.md) · [Mundos grandes](docs/large-worlds.md) | módulo FPS |
 | [AGENTS.md](AGENTS.md) | reglas para agentes que modifican el propio motor |
-| [Migrar desde Unity](docs/engine-import.md) | importar escenas, prefabs y recursos, y portar la lógica con un agente |
+| [Migrar desde Unity](docs/es/engine-import.md) | importar escenas, prefabs y recursos, y portar la lógica con un agente |
 
 ## Licencia
 

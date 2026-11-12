@@ -57,7 +57,8 @@ std::optional<VehicleSeatReport> stepVehicleSeats(const VehicleSeatsDef& d,Vehic
     for(auto [seat,actor]:s.occupants){(void)actor;if(std::none_of(d.seats.begin(),d.seats.end(),[&](const auto& x){return x.id==seat;}))return {};}
     std::vector<const VehicleSeatRequest*> order;
     for(const auto& r:requests){if(r.id<=0||r.actor<=0||r.seat<0||r.team<0||uint8_t(r.action)>uint8_t(VehicleSeatAction::Unlock)||uint8_t(r.preferred)>uint8_t(VehicleSeatRole::Gunner)
-        ||!vehicleDetail::vehicleBounded(r.actorPosition,kVehicleCoordLimit))return {};order.push_back(&r);}
+        ||!vehicleDetail::vehicleBounded(r.actorPosition,kVehicleCoordLimit))return {};
+        order.push_back(&r);}
     std::sort(order.begin(),order.end(),[](auto a,auto b){return a->id<b->id;});
     for(std::size_t i=1;i<order.size();++i)if(order[i]->id==order[i-1]->id)return {};
     auto next=s;VehicleSeatReport report;using K=VehicleEventKind;using A=VehicleSeatAction;

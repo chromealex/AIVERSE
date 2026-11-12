@@ -26,7 +26,7 @@
   <a href="#как-это-устроено">Как устроено</a> ·
   <a href="#готовые-шаблоны">Шаблоны</a> ·
   <a href="#быстрый-старт">Быстрый старт</a> ·
-  <a href="docs/overview.md">Полный обзор</a>
+  <a href="docs/ru/overview.md">Полный обзор</a>
 </p>
 
 ---
@@ -147,7 +147,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, плагины сторов и рекламы |
 | Addressables / Asset Bundles | паки `.rpak`, разбиение сборки и докачка контента |
 
-В отчёте каждый элемент помечен: перенесён точно, приближённо или не перенесён. Повторный импорт сохраняет ваши правки. Нужна сериализация ассетов **Force Text**. Так же импортируются проекты Godot. Подробно — [импорт проекта другого движка](docs/engine-import.md).
+В отчёте каждый элемент помечен: перенесён точно, приближённо или не перенесён. Повторный импорт сохраняет ваши правки. Нужна сериализация ассетов **Force Text**. Так же импортируются проекты Godot. Подробно — [импорт проекта другого движка](docs/ru/engine-import.md).
 
 ---
 
@@ -232,7 +232,7 @@ open build/mac/AiverseEditor.app        # редактор: хаб проект�
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Если компилировать не хочется,
 в ветке `builds` есть готовые сборки редактора и инструментов
-([подробнее](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([подробнее](docs/ru/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
 
 **2. Сделать игру.** В хабе нажмите **«Сделать игру»** или создайте проект из шаблона. Игру можно
 сразу запустить с ботами в окне Game.
@@ -265,7 +265,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 Готовые шаблоны для жанров кроме RTS и FPS — в работе
 
 Подробности по каждой подсистеме — в разделе
-[«Проверено / не проверено»](docs/overview.md#проверено--не-проверено).
+[«Проверено / не проверено»](docs/ru/overview.md#проверено--не-проверено).
 
 ---
 
@@ -273,17 +273,17 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 
 | | |
 |---|---|
-| [**Подробный обзор**](docs/overview.md) | все подсистемы, сборка, платформы, CI, релизы |
+| [**Подробный обзор**](docs/ru/overview.md) | все подсистемы, сборка, платформы, CI, релизы |
 | [Формат игры](docs/game-format.md) | `game.json`, `rules.json`, карты и все блоки данных |
 | [Жанровые пакеты](docs/genre-packages.md) · [Библиотеки](docs/libraries.md) | механики для любого жанра |
-| [Мастер «Сделать игру»](docs/game-wizard.md) | как из идеи и арта получается готовый проект |
+| [Мастер «Сделать игру»](docs/ru/game-wizard.md) | как из идеи и арта получается готовый проект |
 | [Скриптинг](docs/scripting.md) · [C++-модули](docs/native-modules.md) | когда данных не хватает |
 | [Ландшафт](docs/terrain.md) · [Планеты](docs/planets.md) · [Поиск пути](docs/pathfinding.md) | мир и движение |
 | [Частицы](docs/particles.md) · [Модели](docs/models.md) · [Shader Graph](docs/shader-graph.md) | картинка |
 | [Мета-игра](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Плагины](docs/plugins.md) | монетизация и сторы |
 | [FPS](docs/fps.md) · [Большие миры](docs/large-worlds.md) | FPS-модуль |
 | [AGENTS.md](AGENTS.md) | правила для агентов, которые меняют сам движок |
-| [Переход с Unity](docs/engine-import.md) | импорт сцен, префабов и ассетов, перенос логики агентом |
+| [Переход с Unity](docs/ru/engine-import.md) | импорт сцен, префабов и ассетов, перенос логики агентом |
 
 ## Лицензия
 

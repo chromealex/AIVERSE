@@ -1,296 +1,296 @@
-# AIVERSE — подробный обзор
+# AIVERSE — detailed overview
 
-Справочник по всем частям движка: состав, сборка, форматы, подсистемы, платформы и статус проверки.
-Короткое введение — зачем движок и какие задачи он решает — в [README](../README.ru.md) ([English](../README.md)).
-Правила для агентов, которые меняют движок, — в [AGENTS.md](../AGENTS.md).
+A reference for every part of the engine: layout, building, formats, subsystems, platforms and verification status.
+The short introduction — why the engine exists and what problems it solves — is in the [README](../README.md).
+Rules for agents that change the engine are in [AGENTS.md](../AGENTS.md).
 
-## Состав
+## Layout
 
 ```
 engine/
   core/      Fixed (Q47.16), Vec3, Random (PCG32), Hash, ECS
-  data/      JSON без float (числа сразу в fixed-point)
-  sim/       детерминированная симуляция, команды, реплеи
-  net/authority/ авторитетные сетевые сессии для FPS
-  world/     пространственные структуры и загрузка мира по чанкам
-  gfx/       RHI + бэкенды Metal и GL (ES3/WebGL2/GL3.3), рендер в текстуру
-  render/    3D-рендер: свет, тени (shadow map + PCF), туман, тонмаппинг; Dear ImGui через RHI;
-             модели glTF/OBJ, материалы PBR, скелетная и процедурная анимация
-  platform/  окно/ввод/цикл: macos, ios, android, web, windows, linux
-  assets/    общие ресурсы движка (шрифт Noto Sans с кириллицей, OFL)
-modules/rts/ универсальный RTS-слой: типы из данных, приказы, A*, бой, экономика, стройка,
-             производство, гарнизоны (Mushroom Wars), дороги, туман войны, ИИ
-             view/ — отрисовка любых типов по блоку "view" в rules.json
-modules/fps/ FPS-модуль (в разработке): движение, бой и состояние матча
+  data/      JSON without floats (numbers go straight to fixed-point)
+  sim/       deterministic simulation, commands, replays
+  net/authority/ authoritative network sessions for FPS
+  world/     spatial structures and chunked world streaming
+  gfx/       RHI + Metal and GL (ES3/WebGL2/GL3.3) backends, render to texture
+  render/    3D rendering: lighting, shadows (shadow map + PCF), fog, tone mapping; Dear ImGui over the RHI;
+             glTF/OBJ models, PBR materials, skeletal and procedural animation
+  platform/  window/input/loop: macos, ios, android, web, windows, linux
+  assets/    shared engine assets (Noto Sans font with Cyrillic, OFL)
+modules/rts/ generic RTS layer: types from data, orders, A*, combat, economy, construction,
+             production, garrisons (Mushroom Wars), roads, fog of war, AI
+             view/ — draws any type from the "view" block in rules.json
+modules/fps/ FPS module (in development): movement, combat and match state
 apps/
-  fps/       отдельные FPS-клиент и сервер
-  client/    игра (меню, матч с ботами, HUD, мини-карта, мышь и тач)
-  editor/    редактор карт (рельеф, объекты, дороги, игроки, проверка, тест с ботами, меню «Сборка»)
-  headless/  матчи ботов и проверка реплеев без графики
-  modelview/ просмотр моделей, клипов, материалов и всех типов игры
-tools/mcp/      MCP-сервер для работы AI-агентов с редактором
-tools/aiversebuild/  сборщик: exe / app / проект Xcode / проект Gradle / web
+  fps/       standalone FPS client and server
+  client/    the game (menu, match with bots, HUD, minimap, mouse and touch)
+  editor/    map editor (terrain, objects, roads, players, validation, bot test, Build menu)
+  headless/  bot matches and replay checks without graphics
+  modelview/ viewer for models, clips, materials and every type of a game
+tools/mcp/      MCP server through which AI agents work with the editor
+tools/aiversebuild/  packager: exe / app / Xcode project / Gradle project / web
 templates/
-  skirmish/  «Iron and Gold» — пример в духе Warcraft/Red Alert
-  mushrooms/ «Mushroom Clash» — пример в духе Mushroom Wars
-  showcase/  правила Iron and Gold с импортированными моделями (glTF, OBJ, анимации)
-platform/    шаблоны упаковки (Info.plist, Gradle-проект, HTML-оболочка)
+  skirmish/  "Iron and Gold" — a Warcraft/Red Alert-style sample
+  mushrooms/ "Mushroom Clash" — a Mushroom Wars-style sample
+  showcase/  Iron and Gold rules with imported models (glTF, OBJ, animations)
+platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ```
 
-## Быстрый старт (macOS)
+## Quick start (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # нужны Xcode и CMake
+cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # редактор (проект templates/skirmish)
-open build/mac/AiverseGame.app                                # игра
+open build/mac/AiverseEditor.app                              # editor (project templates/skirmish)
+open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Другую игру в редакторе: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
-Чтобы игра запускалась с другим набором данных, задайте `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
+Another game in the editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
+To make the game start with a different data set, pass `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
 
-### Несколько редакторов одновременно
+### Several editors at once
 
-Каждый процесс редактора может открыть свой проект через `--project <папка>`.
-Без `--listen` первый экземпляр занимает MCP-порт `47321`, а при занятом порте
-ОС автоматически выделяет свободный. Фактический порт показан в строке состояния;
-окно **Agent** добавляет его в конфигурацию подключения (`aiversemcp --port <порт>`).
-Автоматически выделенный порт может измениться после перезапуска редактора.
-`--listen <порт>` закрепляет точный порт (при конфликте MCP не запускается),
-`--listen 0` отключает MCP. Существующие MCP-клиенты сами между окнами не переключаются.
+Each editor process can open its own project with `--project <folder>`.
+Without `--listen` the first instance takes MCP port `47321`; if the port is busy, the OS assigns
+a free one. The actual port is shown in the status bar; the **Agent** window adds it to the connection
+config (`aiversemcp --port <port>`). An automatically assigned port may change after the editor restarts.
+`--listen <port>` pins an exact port (on conflict MCP does not start), `--listen 0` disables MCP.
+Existing MCP clients do not switch between windows on their own.
 
-## Сборка под платформы — aiversebuild
+## Building for platforms — aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (подписан ad-hoc)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + сборка для симулятора
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk, если есть SDK/NDK и gradle
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (нужен emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe через mingw-w64 (brew install mingw-w64) или исходники + build.bat
+./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
+./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
+./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
+./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (requires emsdk)
+./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
 ./build/mac/aiversebuild --project templates/skirmish --target all
 ```
 
-Результат кладётся в `<проект>/Builds/<платформа>/` — там только готовые сборки и отчёт о размере.
-Всё промежуточное (деревья CMake, паки, перекодированный звук, Gradle-проект, данные xcodebuild, оценка
-размера из редактора) лежит в скрытой `Builds/.temp/`; её можно удалить в любой момент. С `--generate-only`
-Gradle-проект для Android Studio кладётся в `Builds/android/<Name>`. Старые видимые `_build`, `_pack`,
-`_audio`, `_estimate` сборщик убирает сам.
+Output goes to `<project>/Builds/<platform>/` — only finished builds and the size report. Everything
+intermediate (CMake trees, packs, re-encoded audio, the Gradle project, xcodebuild data, the editor's
+size estimate) lives in the hidden `Builds/.temp/`, which can be deleted at any time. With `--generate-only`
+the Gradle project for Android Studio goes to `Builds/android/<Name>`. The packager removes the old visible
+`_build`, `_pack`, `_audio`, `_estimate` folders itself.
 
-То же самое доступно в редакторе: меню **Сборка**. Сгенерированные проекты iOS и Android самодостаточны
-(в них скопированы исходники движка и контент), их можно отдавать дальше. Для iOS на устройство:
-откройте проект в Xcode и выберите команду в Signing (или `--team <TeamID>`, или `"appleTeamId"` в game.json).
+The same is available in the editor: the **Build** menu. Generated iOS and Android projects are self-contained
+(engine sources and content are copied into them), so they can be handed over. For iOS on a device: open the
+project in Xcode and choose a team under Signing (or `--team <TeamID>`, or `"appleTeamId"` in game.json).
 
-Идентификатор, название, версия, ориентация и иконка (`icon.png`, 1024×1024; если нет — генерируется) — в `game.json`.
+Identifier, name, version, orientation and icon (`icon.png`, 1024×1024; generated if missing) are in `game.json`.
 
-### Инструменты сборки: проверка и автоустановка
+### Build toolchains: check and automatic install
 
-Перед сборкой `aiversebuild` проверяет, что нужно платформе, и ищет это не только в `PATH` (редактор,
-запущенный из Finder, видит лишь `/usr/bin:/bin:/usr/sbin:/sbin`): Homebrew (`/opt/homebrew/bin`,
+Before building, `aiversebuild` checks what the platform needs and looks for it beyond `PATH` (an editor
+launched from Finder only sees `/usr/bin:/bin:/usr/sbin:/sbin`): Homebrew (`/opt/homebrew/bin`,
 `/usr/local/bin`), `~/.local/bin`, `~/Library/Python/*/bin`, `~/emsdk`, `$EMSDK`, `ANDROID_HOME` /
 `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, `~/Android/Sdk`, `%LOCALAPPDATA%\Android\Sdk`, `JAVA_HOME`,
-`/usr/libexec/java_home`, Visual Studio (vswhere) и свою папку `~/.aiverse/toolchains`. Найденные папки
-добавляются в `PATH` дочерних процессов.
+`/usr/libexec/java_home`, Visual Studio (vswhere) and its own folder `~/.aiverse/toolchains`. Found folders
+are added to `PATH` for child processes.
 
-| Платформа | Нужно | Ставится автоматически |
+| Platform | Needs | Installed automatically |
 |---|---|---|
-| web | CMake, Python 3, Emscripten (emsdk), Ninja — по желанию | emsdk (≈ 400 МБ загрузки, ≈ 1.5 ГБ на диске), CMake + Ninja (≈ 50 МБ) |
-| android | JDK 17–23, Android SDK (platform 35, build-tools, platform-tools), NDK, CMake из SDK, Gradle | всё: Temurin JDK 17, command line tools + `sdkmanager` (лицензии принимаются), NDK ≈ 700 МБ, Gradle 8.10.2 |
-| macos | Xcode Command Line Tools, CMake | CLT — через установщик Apple (`xcode-select --install`), CMake |
+| web | CMake, Python 3, Emscripten (emsdk), Ninja — optional | emsdk (≈ 400 MB download, ≈ 1.5 GB on disk), CMake + Ninja (≈ 50 MB) |
+| android | JDK 17–23, Android SDK (platform 35, build-tools, platform-tools), NDK, CMake from the SDK, Gradle | everything: Temurin JDK 17, command line tools + `sdkmanager` (licenses accepted), NDK ≈ 700 MB, Gradle 8.10.2 |
+| macos | Xcode Command Line Tools, CMake | CLT — through Apple's installer (`xcode-select --install`), CMake |
 | ios | Xcode (App Store), CMake | CMake |
-| windows (на Windows) | Visual Studio 2022 / Build Tools (C++), CMake | CMake; VS — подсказка с командой `winget` |
-| linux | компилятор C++, CMake | CMake |
+| windows (on Windows) | Visual Studio 2022 / Build Tools (C++), CMake | CMake; VS — a hint with a `winget` command |
+| linux | C++ compiler, CMake | CMake |
 
 ```bash
-aiversebuild --check-toolchain web            # что есть, чего нет (--json — для редактора и MCP)
-aiversebuild --install-toolchain web          # поставить недостающее (или один id: emsdk, cmake, jdk, android-ndk, gradle, ...)
-aiversebuild --project ... --target web --install-missing   # поставить и сразу собрать
+aiversebuild --check-toolchain web            # what is present and what is missing (--json for the editor and MCP)
+aiversebuild --install-toolchain web          # install what is missing (or one id: emsdk, cmake, jdk, android-ndk, gradle, ...)
+aiversebuild --project ... --target web --install-missing   # install and build right away
 ```
 
-Без `--install-missing` нехватка инструментов останавливает сборку с кодом выхода 3 и строкой
-`AIVERSE_MISSING_TOOLCHAIN web: emsdk` (её распознаёт редактор). В редакторе окно **Сборка** показывает для
-выбранной платформы, что найдено (пути, версии) и чего не хватает, с кнопкой **Установить автоматически**
-и галочкой «Устанавливать недостающее автоматически»; ход установки — в **Консоли** (текст можно выделять и
-копировать, «Открыть папку логов» — `<движок>/logs`). Агенты делают то же через MCP: `toolchain_check`,
+Without `--install-missing`, missing tools stop the build with exit code 3 and the line
+`AIVERSE_MISSING_TOOLCHAIN web: emsdk` (the editor recognizes it). In the editor, the **Build** window shows for
+the selected platform what was found (paths, versions) and what is missing, with an **Install automatically**
+button and an "Install missing tools automatically" checkbox; progress is in the **Console** (text can be selected
+and copied; "Open logs folder" opens `<engine>/logs`). Agents do the same over MCP: `toolchain_check`,
 `toolchain_install`, `build_start {"installMissing": true}`.
 
-Всё ставится в `~/.aiverse/toolchains` (Windows: `%USERPROFILE%\.aiverse\toolchains`; другая папка —
-переменная `AIVERSE_TOOLCHAINS_DIR`) без `sudo` и изменений в системе: `emsdk/`, `py/` (venv с cmake и ninja),
-`cmake/`, `ninja/`, `jdk-17/`, `android-sdk/`, `gradle-8.10.2/`. Повторный запуск безопасен (готовое
-пропускается). Удалить всё установленное — удалить эту папку. Исключения: Command Line Tools ставит
-установщик Apple, а если найден Android SDK пользователя, недостающие пакеты `sdkmanager` ставит в него.
+Everything is installed into `~/.aiverse/toolchains` (Windows: `%USERPROFILE%\.aiverse\toolchains`; another folder —
+the `AIVERSE_TOOLCHAINS_DIR` variable) without `sudo` and without system changes: `emsdk/`, `py/` (a venv with cmake and
+ninja), `cmake/`, `ninja/`, `jdk-17/`, `android-sdk/`, `gradle-8.10.2/`. Re-running is safe (finished parts are
+skipped). To remove everything installed, delete that folder. Exceptions: Command Line Tools are installed by
+Apple's installer, and if the user's Android SDK is found, `sdkmanager` installs the missing packages into it.
 
-### Ресурс-паки (.rpak) и размер сборки
+### Resource packs (.rpak) and build size
 
-Контент игры (папка игры + `engine/assets`) попадает в сборку одним файлом `content/content.rpak`:
-каждый файл сжат zstd отдельно, одинаковые файлы хранятся один раз, уже сжатые форматы (png, ogg, mp3, …)
-кладутся как есть. Движок монтирует `content.rpak` автоматически; файлы из пака важнее файлов в папке,
-так что без пака (при разработке) всё работает по-старому. `platform::mountPack("patch.rpak")` подключает
-пак поверх (патч, DLC). Каждая сборка печатает отчёт о размере и пишет его в `dist/<платформа>/size-report.txt`.
+Game content (the game folder + `engine/assets`) goes into a build as a single file `content/content.rpak`:
+each file is zstd-compressed separately, identical files are stored once, already compressed formats (png, ogg,
+mp3, …) are stored as is. The engine mounts `content.rpak` automatically; files in the pack take precedence over
+files in the folder, so without a pack (during development) everything works as before. `platform::mountPack("patch.rpak")`
+mounts a pack on top (patch, DLC). Every build prints a size report and writes it to `dist/<platform>/size-report.txt`.
 
 ```bash
-aiversebuild ... --no-pack          # класть папки как есть (отладка)
-aiversebuild ... --pack-level 9     # уровень zstd (по умолчанию 19 для Release, 3 для Debug)
+aiversebuild ... --no-pack          # ship folders as is (debugging)
+aiversebuild ... --pack-level 9     # zstd level (default 19 for Release, 3 for Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # собрать пак вручную
-assetpipe list content.rpak       # файлы, размеры, сжатие
-assetpipe verify content.rpak     # распаковать всё и проверить хеши
+assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # build a pack by hand
+assetpipe list content.rpak       # files, sizes, compression
+assetpipe verify content.rpak     # unpack everything and check hashes
 assetpipe extract content.rpak out/
-assetpipe diff old.rpak new.rpak  # что изменилось между версиями (для патчей)
+assetpipe diff old.rpak new.rpak  # what changed between versions (for patches)
 ```
 
-Что не нужно в сборке, перечисляется в `.rpakignore` в папке игры (маски `*`, `?`; `папка/` — только каталоги).
-Скрытые файлы (`.git`, `.DS_Store`), реплеи `*.rpl` и вложенные `*.rpak` пропускаются всегда. Сборка пака
-воспроизводима: одинаковый контент даёт байт-в-байт одинаковый файл; «хеш контента» пака идентифицирует набор данных.
+What the build does not need is listed in `.rpakignore` in the game folder (masks `*`, `?`; `folder/` — directories only).
+Hidden files (`.git`, `.DS_Store`), `*.rpl` replays and nested `*.rpak` are always skipped. Pack builds are
+reproducible: identical content gives a byte-identical file; the pack's "content hash" identifies the data set.
 
-### Разбиение сборки и докачка контента
+### Split builds and content download
 
-По желанию сборку можно разбить: в приложение попадает только базовый пак с тем, что нужно для запуска,
-остальное — в части (`content.001.rpkc`, …) заданного размера, которые игра докачивает из любого источника.
-Всё решает автор игры, в `game.json` (общие настройки и отдельно для каждой платформы) или флагами `aiversebuild`:
+Optionally a build can be split: the app carries only a base pack with what is needed to start, the rest goes into
+parts (`content.001.rpkc`, …) of a given size that the game downloads from any source. The game author decides
+everything, in `game.json` (shared settings and per platform) or with `aiversebuild` flags:
 
 ```json
 "packaging": {
-  "split": true,                 // разбивать ли
-  "chunkSize": "8MB",            // размер одной части
-  "baseSize": "40MB",            // предел того, что едет внутри приложения
-  "totalSize": "1GB",            // предел всего контента
-  "fillBase": false,             // true: добить базу до baseSize (меньше докачки)
-  "base": ["maps/intro.json"],   // что обязательно в базе (кроме стандартного: game.json, rules, lang, ui, атласы, первая карта)
-  "order": ["maps/scena00*"],    // порядок докачки
-  "sources": ["https://cdn.example.com/mygame/{hash}/", "file:///Volumes/DLC/"],   // зеркала по порядку
-  "autoDownload": true,          // докачивать всё в фоне сразу после старта
+  "split": true,                 // whether to split
+  "chunkSize": "8MB",            // size of one part
+  "baseSize": "40MB",            // limit for what ships inside the app
+  "totalSize": "1GB",            // limit for all content
+  "fillBase": false,             // true: fill the base up to baseSize (less to download)
+  "base": ["maps/intro.json"],   // what must be in the base (besides the default: game.json, rules, lang, ui, atlases, first map)
+  "order": ["maps/scena00*"],    // download order
+  "sources": ["https://cdn.example.com/mygame/{hash}/", "file:///Volumes/DLC/"],   // mirrors in order
+  "autoDownload": true,          // download everything in the background right after start
   "targets": {"web": {"baseSize": "15MB"}, "windows": {"split": false}}
 }
 ```
 
 ```bash
-aiversebuild --project templates/x --target web --split --chunk-size 4MB --base-size 15MB   # флаги важнее game.json
+aiversebuild --project templates/x --target web --split --chunk-size 4MB --base-size 15MB   # flags override game.json
 ```
 
-Части кладутся рядом со сборкой (`dist/<платформа>/chunks/`) — их выкладывают по адресу из `sources`
-(`{hash}` — хеш контента сборки, разные версии не путаются). В игре: файл из нескачанной части запрашивается
-автоматически (на десктопе и мобильных `readContentFile` ждёт его, в вебе — возвращает false), прогресс —
-`platform::contentProgress()`, явный запрос — `platform::requestContent(paths)`. Каждая часть проверяется по
-SHA-256 (подменённую с зеркала не примет и возьмёт со следующего), хранится в кэше и при следующем запуске не
-качается. Протоколы: https/http (libcurl на Linux, WinHTTP, NSURLSession, HttpURLConnection на Android,
-fetch в вебе), `file://` и папки, а игра может зарегистрировать свою схему (Steam, Play Asset Delivery, P2P).
-`assetpipe pack --chunk-size 8MB ...` делает то же вручную, `assetpipe verify` проверяет и части.
+Parts are placed next to the build (`dist/<platform>/chunks/`) and published at the address from `sources`
+(`{hash}` is the build's content hash, so versions don't get mixed up). In the game, a file from a part that is
+not downloaded yet is requested automatically (on desktop and mobile `readContentFile` waits for it, on the web it
+returns false); progress is `platform::contentProgress()`, an explicit request is `platform::requestContent(paths)`.
+Every part is checked by SHA-256 (a tampered part from a mirror is rejected and taken from the next one), kept in a
+cache and not downloaded again on the next start. Protocols: https/http (libcurl on Linux, WinHTTP, NSURLSession,
+HttpURLConnection on Android, fetch on the web), `file://` and folders, and a game can register its own scheme
+(Steam, Play Asset Delivery, P2P). `assetpipe pack --chunk-size 8MB ...` does the same by hand, and `assetpipe verify`
+checks the parts too.
 
-### Импорт чужих архивов (распаковщики)
+### Importing foreign archives (unpackers)
 
-Форматы, которых движок не знает (zip, tar, dmg, архивы других игр), подключаются плагинами-распаковщиками
-без пересборки движка: папка с `unpacker.json` и программой на любом языке (протокол —
-[`tools/unpackers/PROTOCOL.md`](../tools/unpackers/PROTOCOL.md)). Распаковщики работают только в инструментах сборки:
-чужой архив превращается в файлы внутри `.rpak`, игра по-прежнему читает только `.rpak`.
+Formats the engine does not know (zip, tar, dmg, archives of other games) are added as unpacker plugins without
+rebuilding the engine: a folder with `unpacker.json` and a program in any language (protocol:
+[`tools/unpackers/PROTOCOL.md`](../tools/unpackers/PROTOCOL.md)). Unpackers run only in build tools: a foreign
+archive becomes files inside an `.rpak`, and the game still reads only `.rpak`.
 
-Из коробки: zip (и `.oramap`), tar, dmg, архивы Warcraft I/II (`.WAR/.SUD/.INS`), Westwood `.PAK` (Dune II, Lands of Lore,
-Kyrandia), Z от Bitmap Brothers (`.PAC`, `.RSC`).
+Out of the box: zip (and `.oramap`), tar, dmg, Warcraft I/II archives (`.WAR/.SUD/.INS`), Westwood `.PAK` (Dune II,
+Lands of Lore, Kyrandia), Z by the Bitmap Brothers (`.PAC`, `.RSC`).
 
 ```bash
-assetpipe formats                                   # какие форматы известны
-assetpipe probe ~/Downloads/Warcraft2/war2/DATA/*   # что это за файлы
-assetpipe list MAINDAT.WAR                          # что внутри
+assetpipe formats                                   # which formats are known
+assetpipe probe ~/Downloads/Warcraft2/war2/DATA/*   # what these files are
+assetpipe list MAINDAT.WAR                          # what is inside
 assetpipe import -o war2.rpak MAINDAT.WAR=imported/war2 SFXDAT.SUD=imported/war2/sfx
-assetpipe unpackers new tools/unpackers myformat    # заготовка нового распаковщика
-assetpipe unpackers check                           # проверить все плагины
+assetpipe unpackers new tools/unpackers myformat    # scaffold for a new unpacker
+assetpipe unpackers check                           # check all plugins
 ```
 
-У всех команд есть `--json` — так их вызывает MCP-сервер. В `game.json` можно перечислить `"imports"`, и `aiversebuild`
-сам распакует их в пак при сборке (`"optional": true` — если файла нет на этой машине, сборка идёт без него).
-Пак с импортированным сторонним контентом помечается флагом «external»: такие сборки только для личного
-использования, их нельзя коммитить и распространять.
+Every command has `--json` — that is how the MCP server calls them. `game.json` can list `"imports"`, and
+`aiversebuild` unpacks them into the pack during the build (`"optional": true` — if the file is missing on this
+machine, the build goes on without it). A pack with imported third-party content is flagged "external": such
+builds are for personal use only and must not be committed or distributed.
 
-### Импорт игр (importers)
+### Importing games (importers)
 
-Импортёр превращает вашу копию старой игры в папку игры для движка. Сейчас есть Dune II:
+An importer turns your copy of a classic game into a game folder for the engine. Dune II is available now:
 
 ```bash
 python3 tools/importers/dune2/import.py --source "~/Downloads/Dune II" --out ~/AiverseGames/dune2
 aiversebuild --project ~/AiverseGames/dune2 --target macos
 ```
 
-Получается 2D-игра в формате движка (`docs/game-format.md`, «2D games»): камера сверху, 66 миссий кампании
-с тайловым слоем (`tilesets/dune.json` из ICON.ICN: песок, скалы, дюны, горы, спайс с автотайлингом), спрайты
-юнитов из SHP (5 направлений с отражением, башни танков наложены на корпус) и зданий из тайлов ICN (стройка,
-руины, анимация), цвет дома — оттенки маджента. Плюс `rules.json` (наш баланс Dune II на блоках движка),
-картинки CPS и анимации WSA в PNG, звуки VOC → WAV + `audio.json`, названия на английском и русском.
-Рельеф приближённый: оригинальный генератор ландшафта не используется, базы стоят на скалах, спайс из
-`Field=`, квоты миссий — триггерами. Пехота, орнитоптер и транспортник пока рисуются 3D-фигурами.
-Папка помечена `"external": true` — её нельзя коммитить и распространять.
+The result is a 2D game in the engine's format (`docs/game-format.md`, "2D games"): a top-down camera, 66 campaign
+missions with a tile layer (`tilesets/dune.json` from ICON.ICN: sand, rock, dunes, mountains, spice with autotiling),
+unit sprites from SHP (5 directions with mirroring, tank turrets layered over the hull) and buildings from ICN tiles
+(construction, ruins, animation), house colour from magenta shades. Plus `rules.json` (our Dune II balance on engine
+blocks), CPS images and WSA animations as PNG, VOC sounds → WAV + `audio.json`, names in English and Russian.
+Terrain is approximate: the original landscape generator is not used, bases stand on rock, spice comes from
+`Field=`, mission quotas are triggers. Infantry, the ornithopter and the carryall are still drawn as 3D shapes.
+The folder is marked `"external": true` — it must not be committed or distributed.
 
-## Файл проекта .rtsproj
+## Project file .rtsproj
 
-Проект — папка где угодно на диске (`game.json`, `rules.json`, `maps/`, ...). В её корне лежит
-файл проекта **`<Название>.rtsproj`** — его открывают двойным кликом, как `.uproject` в Unity/Unreal
-или `project.godot`. `game.json` остаётся манифестом игры (его читают клиент, aiversebuild, паки);
-`.rtsproj` только помечает папку как проект и хранит сведения редактора:
+A project is a folder anywhere on disk (`game.json`, `rules.json`, `maps/`, ...). Its root holds the project file
+**`<Name>.rtsproj`** — opened with a double click, like `.uproject` in Unreal or `project.godot`. `game.json`
+stays the game manifest (read by the client, aiversebuild, packs); `.rtsproj` only marks the folder as a project
+and stores editor information:
 
 ```json
-{"format": 1, "name": "Моя стратегия", "engine": "0.2.0", "manifest": "game.json", "created": "2026-10-28"}
+{"format": 1, "name": "My Strategy", "engine": "0.2.0", "manifest": "game.json", "created": "2026-10-28"}
 ```
 
-- Создаётся вместе с проектом (хаб «Новый проект», MCP `create_project`); у старого проекта без
-  него — при первом открытии в редакторе. У шаблонов в `templates/*/` он уже есть (и в новый проект
-  не копируется: тот получает свой).
-- Везде, где редактор принимает путь проекта, подходит и `.rtsproj`, и папка: `aiverse_editor "Моя
-  стратегия.rtsproj"`, `--project`, «Открыть…» в хабе (показывает `.rtsproj` и папки проектов),
-  недавние, MCP `open_game`, `aiversebuild --project x.rtsproj`. В сборку `.rtsproj` не попадает.
-- **Двойной клик.** Редактор при запуске сам связывает `.rtsproj` с собой (для пользователя, без прав
-  администратора), если связи нет или она ведёт к другому экземпляру редактора; выбранную вами другую
-  программу не перебивает. Вручную: «Проект → Сделать редактор программой по умолчанию для .rtsproj»;
-  состояние — внизу слева в хабе. Отключить: `AIVERSE_FILE_ASSOC=off`.
-  - **macOS:** тип `com.aiverse.project` объявлен в Info.plist `AiverseEditor.app`
-    (`platform/macos/EditorInfo.plist.in`; иконку документа `rtsproj.icns` рисует `aiverse_projicon` из логотипа
-    редактора `apps/editor/branding/icon_1024.png`); редактор регистрирует бандл
-    в LaunchServices (`lsregister -f`) и становится обработчиком по умолчанию. Двойной клик и
-    `open -a AiverseEditor x.rtsproj` открывают проект в уже запущенном редакторе (при несохранённой
-    карте он спросит, сохранить ли её).
-  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (иконка
-    `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, команда `"<aiverse_editor.exe>" "%1"`). Если в
-    Windows для `.rtsproj` уже выбрана другая программа, хаб подскажет «Открыть с помощью → Всегда».
-  - **Linux:** тип `application/x-aiverse-project` (`~/.local/share/mime/packages/aiverse-project.xml`),
-    `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<редактор> %f`), иконки в
-    `~/.local/share/icons/hicolor`, программа по умолчанию в `~/.config/mimeapps.list`;
-    `update-mime-database`, `update-desktop-database`, `xdg-mime` вызываются, если установлены.
+- It is created with the project (hub "New project", MCP `create_project`); an older project without it gets one
+  on first open in the editor. Templates in `templates/*/` already have one (it is not copied into a new project:
+  that gets its own).
+- Everywhere the editor accepts a project path, both `.rtsproj` and the folder work: `aiverse_editor "My
+  Strategy.rtsproj"`, `--project`, "Open…" in the hub (shows `.rtsproj` and project folders), recent projects,
+  MCP `open_game`, `aiversebuild --project x.rtsproj`. `.rtsproj` does not go into a build.
+- **Double click.** On start the editor associates `.rtsproj` with itself (per user, without admin rights) if there
+  is no association or it points to another editor instance; it does not override another program you chose.
+  Manually: "Project → Make the editor the default app for .rtsproj"; the state is shown at the bottom left of the hub.
+  Disable with `AIVERSE_FILE_ASSOC=off`.
+  - **macOS:** the `com.aiverse.project` type is declared in the Info.plist of `AiverseEditor.app`
+    (`platform/macos/EditorInfo.plist.in`; the `rtsproj.icns` document icon is drawn by `aiverse_projicon` from the
+    editor logo `apps/editor/branding/icon_1024.png`); the editor registers the bundle in LaunchServices
+    (`lsregister -f`) and becomes the default handler. A double click and `open -a AiverseEditor x.rtsproj` open the
+    project in the running editor (if the map has unsaved changes, it asks whether to save).
+  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (icon
+    `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, command `"<aiverse_editor.exe>" "%1"`). If Windows already has
+    another program chosen for `.rtsproj`, the hub suggests "Open with → Always".
+  - **Linux:** the `application/x-aiverse-project` type (`~/.local/share/mime/packages/aiverse-project.xml`),
+    `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<editor> %f`), icons in
+    `~/.local/share/icons/hicolor`, the default app in `~/.config/mimeapps.list`;
+    `update-mime-database`, `update-desktop-database`, `xdg-mime` are called if installed.
 
-## Сделать игру (мастер)
+## Make a game (wizard)
 
-Кнопка **«Сделать игру»** в окне проектов (и **Проект → Сделать игру…**): дайте папку или ссылку с артом, музыкой и
-текстами, опишите идею (или ничего — мастер выберет сам) и получите готовый проект `.rtsproj`: игру на подходящем
-шаблоне, пошаговое обучение (хард) и подсказки в бою (софт), уровни со звёздами и наградами, мету (меню, улучшения,
-магазин, награда дня, профиль, настройки), рекламу и покупки по желанию, языки, иконку и заставку из арта. Мастер сам
-проходит обучение ботом и проверяет уровни; что назначено и что проверить — в `WIZARD.md` проекта. Агентам — MCP
-`game_make_options` / `game_make_plan` / `game_make`. Подробно — `docs/game-wizard.md`.
+The **Make a game** button in the projects window (and **Project → Make a game…**): give a folder or a link with art,
+music and texts, describe the idea (or nothing — the wizard chooses itself) and get a finished `.rtsproj` project:
+a game on a suitable template, a step-by-step tutorial (hard) and in-battle hints (soft), levels with stars and
+rewards, meta (menu, upgrades, shop, daily reward, profile, settings), ads and purchases if wanted, languages, an icon
+and a splash screen from the art. The wizard plays through the tutorial with a bot and checks the levels itself; what
+was assigned and what to check is in the project's `WIZARD.md`. For agents: MCP `game_make_options` /
+`game_make_plan` / `game_make`. Details: [game-wizard.md](game-wizard.md).
 
-## Как описывается игра
+## How a game is described
 
-Тип объекта — набор необязательных блоков; что задано, то объект и умеет:
+An object type is a set of optional blocks; whatever is set, the object can do:
 
-| Блок | Смысл |
+| Block | Meaning |
 |---|---|
-| `health` | здоровье, броня, тип брони, регенерация |
-| `move` | скорость, слой (`ground`/`air`/`naval`), радиус |
-| `structure` | здание с размером `footprint` на сетке |
-| `weapons` | дальность, урон, тип урона, перезарядка, снаряд, сплэш, по каким слоям бьёт |
-| `cost` | ресурсы, время, лимит |
-| `produces` / `builds` | кого обучает / что строит |
-| `gather` / `resourceNode` / `dropoff` | добыча ресурсов (Warcraft/StarCraft) |
-| `income` / `storage` + ресурс `"kind": "flow"` | поточная экономика (Total Annihilation) |
-| `supply` | даёт лимит |
-| `requires` | дерево технологий |
-| `garrison` + `entersGarrison` | здания-гарнизоны, отправка процента войск, захват (Mushroom Wars) |
-| `view` | внешний вид: `shape`, `scale`, `color` |
+| `health` | health, armor, armor type, regeneration |
+| `move` | speed, layer (`ground`/`air`/`naval`), radius |
+| `structure` | a building with a `footprint` size on the grid |
+| `weapons` | range, damage, damage type, cooldown, projectile, splash, which layers it hits |
+| `cost` | resources, time, supply |
+| `produces` / `builds` | what it trains / what it builds |
+| `gather` / `resourceNode` / `dropoff` | resource gathering (Warcraft/StarCraft) |
+| `income` / `storage` + resource `"kind": "flow"` | flow economy (Total Annihilation) |
+| `supply` | provides supply |
+| `requires` | tech tree |
+| `garrison` + `entersGarrison` | garrison buildings, sending a percentage of troops, capture (Mushroom Wars) |
+| `view` | appearance: `shape`, `scale`, `color` |
 
-Глобально: `resources`, `damageTable` (тип урона × тип брони), `supplyCap`, `victory`.
-Карта: размер, рельеф (`rows`: `.` земля, `~` вода, `#` скалы, `,` без стройки, `=` брод; `heights`),
-игроки и команды, стартовые ресурсы, объекты, дороги, `roadsOnly`.
+Global: `resources`, `damageTable` (damage type × armor type), `supplyCap`, `victory`.
+Map: size, terrain (`rows`: `.` ground, `~` water, `#` rock, `,` no building, `=` ford; `heights`),
+players and teams, starting resources, objects, roads, `roadsOnly`.
 
-## Локализация
+## Localization
 
-Игра переводится без изменения `rules.json`: имена в данных — текст на исходном языке игры, переводы
-лежат в `<project>/lang/<язык>.json` под ключами `type.footman`, `resource.gold`, `map.valley.title`…
-Строки меню и HUD — в `engine/assets/lang/` (сейчас English и Русский), игра может переопределить любую.
+A game is translated without changing `rules.json`: names in the data are text in the game's source language,
+translations live in `<project>/lang/<language>.json` under keys like `type.footman`, `resource.gold`, `map.valley.title`…
+Menu and HUD strings are in `engine/assets/lang/` (currently English and Russian); a game can override any of them.
 
 ```jsonc
 // game.json
@@ -299,107 +299,105 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # заготовка lang/de.json, новые строки помечены // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # плейсхолдеры, формы мн. числа, непереведённое
+./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
+./build/mac/aiverse_i18n check   --project templates/skirmish                     # placeholders, plural forms, untranslated strings
 ```
 
-Язык выбирается так: выбор игрока в меню (запоминается) → язык системы → исходный язык игры.
-Для проверки: `--lang ru`, `AIVERSE_LANG=ru`, псевдоязык `--lang qps` (все строки искажены и длиннее —
-сразу видно непереведённое и то, что не влезает). Формы множественного числа — по CLDR
-(«1 секунду / 2 секунды / 5 секунд»). Подробнее: `engine/i18n/README.md`.
+The language is chosen as follows: the player's choice in the menu (remembered) → the system language → the game's
+source language. For testing: `--lang ru`, `AIVERSE_LANG=ru`, the pseudo-language `--lang qps` (all strings distorted
+and longer — untranslated text and overflow are obvious). Plural forms follow CLDR
+("1 second / 2 seconds / 5 seconds"). More: `engine/i18n/README.md`.
 
-## Интерфейс игры (RmlUi, HTML/CSS)
+## Game UI (RmlUi, HTML/CSS)
 
-Меню, HUD, командная карточка, миникарта и пауза клиента — это документы RmlUi
-(`.rml` — разметка, `.rcss` — стили), а не код. Движок рисует их через свой RHI
-(GL/Metal), шрифты — через stb_truetype (латиница + кириллица).
+The client's menu, HUD, command card, minimap and pause are RmlUi documents (`.rml` markup, `.rcss` styles),
+not code. The engine draws them through its RHI (GL/Metal); fonts go through stb_truetype (Latin + Cyrillic).
 
-- Стандартные документы: `engine/assets/ui/` (`menu.rml`, `hud.rml`, `theme.rcss`).
-- Игра переопределяет любой файл, положив `ui/<то же имя>` в свою папку: например,
-  только `ui/theme.rcss` — свои цвета при стандартной разметке. Шрифт игры — `fonts/ui.ttf`.
-- Данные приходят из модели `game` (список полей — в комментарии в `hud.rml`),
-  нажатия кнопок превращаются в команды симуляции (`apps/client/ClientUi.cpp`).
-- Размеры в `dp` — интерфейс масштабируется под плотность экрана; на сенсорных
-  устройствах у корня есть класс `touch` (крупнее кнопки).
-- F8 в клиенте — отладчик RmlUi (дерево элементов, стили, журнал).
-- Скин игры — `ui/skin.rcss` (подключается после `theme.rcss` во всех документах: цвета, рамки,
-  кнопки, раскладка) и шрифт заголовков `fonts/title.ttf` (семейство `title`). У каждого прототипа
-  в `templates/` есть свой скин. Портретная раскладка (`@media (orientation: portrait)`) — в теме движка;
-  на ПК проверяется флагом `--size 540x960`.
-- Тексты в документах пишутся ключами `@menu.play`: перевод берётся из `engine/assets/lang` (и `lang/`
-  игры) при загрузке документа, смена языка в меню перезагружает документы.
-- Экранная клавиатура (`engine/ui/UiKeyboard.*`): своя, на RmlUi, открывается при фокусе в поле
-  ввода на сенсорных устройствах (на ПК — `AIVERSE_OSK=1`). Раскладки (en, ru, символы; Shift, Caps по
-  двойному нажатию, смена языка) — в `keyboard.json`, вид — `keyboard.rml` / `keyboard.rcss`; игра
-  заменяет любой из файлов в своей `ui/`. Если курсор внизу экрана, клавиатура встаёт сверху.
-- Сетевая игра (`lobby.rml`, `apps/client/Lobby.cpp`): адрес сервера и имя, быстрая игра по очередям
-  сервера, список комнат (войти / смотреть), своя комната (слоты, боты, готовность, старт, чат).
-  Матч ведёт `NetClient`: `attach(sim)`, `advance(dt)` вместо `sim.advance(dt)`, команды — от слота
-  `match().localSlot` (0 — зритель); боты, которых сервер поручил этому клиенту, считаются здесь же.
+- Default documents: `engine/assets/ui/` (`menu.rml`, `hud.rml`, `theme.rcss`).
+- A game overrides any file by putting `ui/<same name>` into its folder: for example, only `ui/theme.rcss` —
+  its own colours with the default markup. The game font is `fonts/ui.ttf`.
+- Data comes from the `game` model (the field list is in a comment in `hud.rml`); button presses become
+  simulation commands (`apps/client/ClientUi.cpp`).
+- Sizes are in `dp` — the UI scales with screen density; on touch devices the root has the `touch` class
+  (bigger buttons).
+- F8 in the client opens the RmlUi debugger (element tree, styles, log).
+- The game skin is `ui/skin.rcss` (loaded after `theme.rcss` in every document: colours, borders, buttons,
+  layout) and the heading font `fonts/title.ttf` (family `title`). Each prototype in `templates/` has its own skin.
+  The portrait layout (`@media (orientation: portrait)`) is in the engine theme; on a PC, check it with
+  `--size 540x960`.
+- Texts in documents are written as keys `@menu.play`: the translation is taken from `engine/assets/lang` (and the
+  game's `lang/`) when the document loads; changing the language in the menu reloads the documents.
+- On-screen keyboard (`engine/ui/UiKeyboard.*`): built on RmlUi, opens when an input field gets focus on touch
+  devices (on a PC — `AIVERSE_OSK=1`). Layouts (en, ru, symbols; Shift, Caps on double tap, language switch) are in
+  `keyboard.json`, the look in `keyboard.rml` / `keyboard.rcss`; a game replaces any of these files in its `ui/`.
+  If the cursor is at the bottom of the screen, the keyboard moves to the top.
+- Multiplayer (`lobby.rml`, `apps/client/Lobby.cpp`): server address and name, quick play through server queues,
+  the room list (join / watch), your own room (slots, bots, ready state, start, chat). The match is run by `NetClient`:
+  `attach(sim)`, `advance(dt)` instead of `sim.advance(dt)`, commands come from slot `match().localSlot`
+  (0 — spectator); bots the server assigned to this client are computed here too.
 
-## Детерминизм
+## Determinism
 
-Симуляция побитово одинакова на всех платформах: только fixed-point, свой RNG, команды в
-каноническом порядке, контрольные суммы в реплеях. Проверено: Linux x86-64 (GCC, Clang, MinGW),
-Linux ARM64 (GCC), macOS ARM64 (AppleClang) — одинаковые контрольные суммы матчей.
+The simulation is bit-identical on every platform: fixed-point only, its own RNG, commands in canonical order,
+checksums in replays. Verified: Linux x86-64 (GCC, Clang, MinGW), Linux ARM64 (GCC), macOS ARM64 (AppleClang) —
+identical match checksums.
 
-## Графика и мобильные
+## Graphics and mobile
 
-Один проход forward-рендера: солнце (Ламберт + блик), карта теней с подгонкой под видимую часть
-карты и привязкой к текселям, аппаратный PCF (1/4/9 выборок), полусферный эмбиент, туман по
-дальности, ACES. Качество теней выбирается по GPU (для старых Mali/Adreno/PowerVR — низкое) и
-меняется в меню паузы.
+A single forward pass: sun (Lambert + specular), a shadow map fitted to the visible part of the map and snapped
+to texels, hardware PCF (1/4/9 taps), hemispheric ambient, distance fog, ACES. Shadow quality is chosen by GPU
+(low for old Mali/Adreno/PowerVR) and can be changed in the pause menu.
 
-## Сетевая игра
+## Multiplayer
 
-`engine/net` — мультиплеер для любой игры на движке, без кода игры. По сети идут только команды:
-симуляция детерминирована, поэтому у всех одинаковое состояние.
+`engine/net` is multiplayer for any game on the engine, with no game code. Only commands travel over the network:
+the simulation is deterministic, so everyone has the same state.
 
-- **Транспорт:** UDP со своим слоем надёжности (iOS, Android, ПК) и WebSocket (HTML5; на нативе —
-  запасной вариант, если UDP закрыт). Адрес: `host[:27015]`, `udp://…`, `ws://host:27016`.
-- **Lockstep с откатами.** Сервер подтверждает ввод каждого тика: когда пришли команды всех игроков
-  или вышел дедлайн (`lagToleranceMs`); опоздавшие команды переносятся на следующий тик — один
-  лагающий игрок не останавливает остальных. Клиент не ждёт подтверждения: играет вперёд со своими
-  командами, а при расхождении восстанавливает снимок и пересчитывает (снимок ~10 мкс).
-  `rollbackWindow: 0` — классический lockstep для слабых устройств.
-- **Сервер `aiverse_server`** не нужен контент игры: комнаты (слоты, боты, зрители, готовность, проверка
-  версии данных), автоматический матчмейкинг по очередям из `server.json` (рейтинг Elo с расширением
-  окна, общая карта, баланс команд, добор ботами), сверка контрольных сумм (рассинхрон), реплеи
-  (`aiverse_headless --replay` их проигрывает), переподключение, зрители с задержкой.
-- **Выход = сдача.** Ушедший игрок (или не вернувшийся за `reconnectGraceSec`) сдаётся командой в общем
-  потоке ввода: исход решает симуляция у всех одинаково, и это видно в реплее. Рейтинг при этом списывается.
-- **Вердикт сервера.** Если исход никто не подтвердил (все ушли, результаты расходятся), сервер в фоновом
-  потоке прогоняет реплей на своих данных игры (`"games"` в `server.json`) и сам определяет победителя.
-- **Переподключение:** после обрыва сети клиент переподключается сам (`NetClient(address, …)` или
-  `setReconnect`), симуляция продолжает жить — сервер досылает только ввод после последнего подтверждённого
-  тика. Если игра была перезапущена, клиент получает всю историю и пересчитывает матч с начала.
-- **В игре:** `NetClient` (`engine/net/NetClient.h`) — лобби и матч. Игра строит `Simulation` по
-  `match()` и вызывает `attach(sim)`, затем `advance(dt)` вместо `sim.advance(dt)`; интерфейс
-  по-прежнему отдаёт команды через `sim.submit()`.
-- **Тексты:** сервер не шлёт готовых фраз — только ключи локализации с аргументами (`NetText`):
-  у игроков в одном матче могут быть разные языки. Клиент переводит их через
-  `net::translate(loc, event.text)` и `net::displayName(...)` из `engine/net/NetLocalize.h`; строки
-  лежат в `engine/assets/lang/*.json` под `net.*`. Названия очередей в `server.json` — тоже ключи (`"@net.queue.1v1"`).
+- **Transport:** UDP with its own reliability layer (iOS, Android, PC) and WebSocket (HTML5; on native — a fallback
+  when UDP is blocked). Address: `host[:27015]`, `udp://…`, `ws://host:27016`.
+- **Rollback lockstep.** The server confirms each tick's input: when commands from all players have arrived or the
+  deadline (`lagToleranceMs`) has passed; late commands move to the next tick — one lagging player does not stop the
+  others. The client does not wait for confirmation: it plays ahead with its own commands and, on divergence, restores
+  a snapshot and re-simulates (a snapshot takes ~10 µs). `rollbackWindow: 0` is classic lockstep for weak devices.
+- **The `aiverse_server`** does not need the game content: rooms (slots, bots, spectators, ready state, data version
+  check), automatic matchmaking through queues from `server.json` (Elo rating with a widening window, a shared map,
+  team balance, filling with bots), checksum comparison (desync), replays (`aiverse_headless --replay` plays them),
+  reconnection, delayed spectators.
+- **Leaving = surrender.** A player who left (or did not return within `reconnectGraceSec`) surrenders with a command
+  in the shared input stream: the outcome is decided by the simulation, identically for everyone, and is visible in
+  the replay. Rating is deducted.
+- **Server verdict.** If nobody confirmed the outcome (everyone left, results disagree), the server replays the match
+  in a background thread on its own game data (`"games"` in `server.json`) and decides the winner itself.
+- **Reconnection:** after a network drop the client reconnects on its own (`NetClient(address, …)` or `setReconnect`),
+  the simulation keeps running — the server sends only the input after the last confirmed tick. If the game was
+  restarted, the client receives the whole history and re-simulates the match from the start.
+- **In the game:** `NetClient` (`engine/net/NetClient.h`) handles the lobby and the match. The game builds a
+  `Simulation` from `match()` and calls `attach(sim)`, then `advance(dt)` instead of `sim.advance(dt)`; the UI still
+  submits commands through `sim.submit()`.
+- **Texts:** the server sends no ready-made phrases — only localization keys with arguments (`NetText`): players in
+  one match may use different languages. The client translates them with `net::translate(loc, event.text)` and
+  `net::displayName(...)` from `engine/net/NetLocalize.h`; strings live in `engine/assets/lang/*.json` under `net.*`.
+  Queue names in `server.json` are keys too (`"@net.queue.1v1"`).
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # бот в очередь
+./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # a bot in the queue
 ./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
-./build/mac/aiverse_net_tests                                          # сетевые тесты
-docker build -f apps/server/Dockerfile -t aiverse-server .             # сервер в контейнере
+./build/mac/aiverse_net_tests                                          # network tests
+docker build -f apps/server/Dockerfile -t aiverse-server .             # server in a container
 ```
 
-Для `wss://` (страница игры по HTTPS) поставьте перед сервером TLS-прокси (nginx, Caddy).
+For `wss://` (a game page served over HTTPS), put a TLS proxy (nginx, Caddy) in front of the server.
 
-## Звук
+## Audio
 
-`engine/audio` — микшер, банки звуков из данных, процедурный синтез, музыка; вывод через
+`engine/audio` is a mixer, sound banks from data, procedural synthesis and music; output goes through
 [miniaudio](../third_party/miniaudio) (CoreAudio, AAudio/OpenSL ES, Web Audio, WASAPI, ALSA/PulseAudio).
-`modules/rts/audio` превращает события симуляции в звуки; в симуляцию ничего не пишет.
-Нет устройства — игра идёт молча. Нет `audio.json` — игра просто без звука.
+`modules/rts/audio` turns simulation events into sounds; it writes nothing into the simulation.
+No device — the game runs silently. No `audio.json` — the game simply has no sound.
 
-Звук игры — файл `audio.json` рядом с `game.json` (другое имя: `"audio"` в game.json). Полное описание
-формата — `docs/game-format.md`, раздел audio.json; коротко:
+A game's audio is the `audio.json` file next to `game.json` (another name: `"audio"` in game.json). The full format
+is in `docs/game-format.md`, section audio.json; in short:
 
 ```jsonc
 {
@@ -417,241 +415,233 @@ docker build -f apps/server/Dockerfile -t aiverse-server .             # сер�
 }
 ```
 
-| Что | Смысл |
+| What | Meaning |
 |---|---|
-| форматы | WAV, OGG Vorbis, MP3, FLAC; `"synth"` — звук из параметров (`sine/square/saw/triangle/noise`, свип частоты, огибающая, вибрато, фильтр, слои) |
-| шины | `sfx` и `ambient` — позиционные (3D: затухание, панорама, высота), `voice`, `ui`, `music` — нет |
-| расстояние | `spatial`: модель затухания, дальности, «воздух» (вдали пропадают верха), реверберация растёт с расстоянием, скорость звука; у звука — свои дальности и `far` — дальний вариант с кроссфейдом |
-| `maxInstances`, `cooldown`, `priority` | прореживание в больших боях: 40 лучников не дают 40 одинаковых выстрелов |
-| `groups` | общие лимиты для нескольких звуков (вся рубка, все взрывы, целая шина): `max`, `cooldown`, кого гасить — `farthest` (по умолчанию: дальний бой не обрывает тот, что на экране), `oldest`, `quietest`, `none` |
-| события (cues) | `attack hit miss died spawned trainStarted ready buildPlaced buildDone gathered captured lost playerDefeated victory defeat notEnough notEnoughSupply noRoom researched levelUp ability readyToPlace sold regionClaimed wave lowPower upgraded message underAttack baseUnderAttack select move attackOrder buildOrder click error` |
-| поиск звука | тип → оружие/способность по id → `events` |
-| музыка | плейлисты `menu`, `match`, `battle`, `victory`, `defeat` (и `match.<карта>`); кроссфейд, интро + бесшовные петли, слои по интенсивности боя, переходы по долям/тактам, стингеры, приглушение под голос |
-| сжатие при сборке | `aiversebuild` перекодирует звук под платформу: ADPCM для эффектов, Vorbis для музыки, понижение частоты, моно; профили `desktop`/`mobile`/`web` в `audio.json` → `build`; `--audio off` — без перекодирования |
+| formats | WAV, OGG Vorbis, MP3, FLAC; `"synth"` — a sound from parameters (`sine/square/saw/triangle/noise`, frequency sweep, envelope, vibrato, filter, layers) |
+| buses | `sfx` and `ambient` are positional (3D: attenuation, panning, height); `voice`, `ui`, `music` are not |
+| distance | `spatial`: attenuation model, ranges, "air" (highs fade with distance), reverb grows with distance, speed of sound; a sound can have its own ranges and `far` — a distant variant with a crossfade |
+| `maxInstances`, `cooldown`, `priority` | thinning out in big battles: 40 archers don't produce 40 identical shots |
+| `groups` | shared limits for several sounds (all melee, all explosions, a whole bus): `max`, `cooldown`, which to drop — `farthest` (default: distant combat does not cut off what is on screen), `oldest`, `quietest`, `none` |
+| events (cues) | `attack hit miss died spawned trainStarted ready buildPlaced buildDone gathered captured lost playerDefeated victory defeat notEnough notEnoughSupply noRoom researched levelUp ability readyToPlace sold regionClaimed wave lowPower upgraded message underAttack baseUnderAttack select move attackOrder buildOrder click error` |
+| sound lookup | type → weapon/ability by id → `events` |
+| music | playlists `menu`, `match`, `battle`, `victory`, `defeat` (and `match.<map>`); crossfade, intro + seamless loops, layers by combat intensity, transitions on beats/bars, stingers, ducking under voice |
+| compression at build time | `aiversebuild` re-encodes audio per platform: ADPCM for effects, Vorbis for music, lower sample rate, mono; `desktop`/`mobile`/`web` profiles in `audio.json` → `build`; `--audio off` — no re-encoding |
 
-Звуки боя слышны только там, где нет тумана войны; «нас атакуют» — с паузой, и только если камера
-смотрит в другое место. Громкость (общая и музыка) — в меню паузы, хранится в `userDataDir/audio.cfg`.
-На телефоне при сворачивании звук ставится на паузу.
+Combat sounds are heard only where there is no fog of war; "we are under attack" comes with a pause and only if the
+camera is looking elsewhere. Volume (master and music) is in the pause menu and stored in `userDataDir/audio.cfg`.
+On a phone, audio pauses when the app goes to the background.
 
-Отладка без звуковой карты: `AIVERSE_AUDIO=null` (настоящий аудиопоток без железа), `AIVERSE_AUDIO=off`,
-`AIVERSE_AUDIO_CAPTURE=/tmp/mix.wav` — записать всё, что прозвучало, в WAV.
+Debugging without a sound card: `AIVERSE_AUDIO=null` (a real audio thread without hardware), `AIVERSE_AUDIO=off`,
+`AIVERSE_AUDIO_CAPTURE=/tmp/mix.wav` — record everything that played into a WAV.
 
-## Модели, материалы, анимация
+## Models, materials, animation
 
-Тип рисуется по блоку `"view"`: встроенная фигура (`"shape"`) или файл модели (`"model"`) —
-**glTF 2.0** (`.glb`, `.gltf` + `.bin` + картинки) и **OBJ + MTL**. Всё идёт через один конвейер:
+A type is drawn from its `"view"` block: a built-in shape (`"shape"`) or a model file (`"model"`) —
+**glTF 2.0** (`.glb`, `.gltf` + `.bin` + images) and **OBJ + MTL**. Everything goes through one pipeline:
 
-- **Материалы PBR** (metallic-roughness): базовый цвет, normal, metallic-roughness, occlusion,
-  emissive; режимы прозрачности opaque / mask / blend, двусторонние, unlit, варианты материалов
-  (`KHR_materials_variants`), переопределения в `"materials"`. Цвет игрока: на весь материал,
-  по маске-текстуре, по альфе текстуры (как в Warcraft III) или по альфе вершин.
-- **Скелетная анимация** на GPU (4 влияния, любое число костей), клипы по состояниям юнита
-  (`idle`, `move`, `attack`, `gather`, `build`, `die`, `spawn`, `hit`, `cast`…), плавные переходы,
-  слои с маской по костям (атака верхней частью тела на ходу), скорость шага по реальной скорости.
-- **Процедурная анимация** на любом узле модели или фигуре: покачивание, вращение (мельницы,
-  винты), колёса по пройденному пути, наведение башни на цель, отдача, наклон в повороте,
-  падение и погружение при смерти и т.д.; срабатывает по состояниям и событиям боя.
-- **Уровни качества** материалов (`low` / `medium` / `high`) выбираются по GPU, как тени;
-  `AIVERSE_MATERIALS=low|medium|high` — переопределение для проверки.
-- **Толпы**: клипы запекаются в текстуру, одинаковые юниты рисуются инстансингом (300 анимированных
-  юнитов — 61 draw call вместо 1801); LOD моделей по дистанции, анимация вне экрана и вдали
-  обновляется реже.
-- **Сложная анимация**: blend space ходьба/бег, аддитивные клипы (дыхание, отдача), IK ног по
-  рельефу, поворот головы к цели, наклон техники по склону, morph targets (blend shapes) на GPU.
-- **Сокеты**: оружие в руке, груз на спине (по переносимому ресурсу), точки вылета снарядов,
-  точки эффектов (дым, огонь, выхлоп); события клипов и `RtsView::events()/effects()` для звука и
-  частиц.
-- **Стадии**: строительные леса и стадии постройки, повреждённый вариант по здоровью, появление и
-  смерть растворением, обводка выделения, полупрозрачный призрак при постановке здания, портреты.
-- **Форматы**: ещё **FBX** (ufbx) и сжатые текстуры **KTX2** (ETC2/BC/ASTC, остаются сжатыми на GPU);
-  **Collada**, **3DS**, **PLY**, **STL**; воксели **MagicaVoxel .vox** и **.vxl/.hva** (Tiberian Sun,
-  Red Alert 2); модели классических RTS из копии игры пользователя: **Warcraft III .mdx/.mdl** (+ BLP),
-  **Total Annihilation .3do**, **C&C Generals .w3d** (+ DDS). Остальное, что читает assimp (.blend,
-  .lwo, .x, .ms3d, .md2/.md3, .smd, .b3d…), переводит в glTF утилита **modelconv**: редактор делает
-  это сам при открытии и сохранении, сборщик кладёт в пакет только результат.
-- **Материалы по запросу**: общая библиотека `materials.json` (наследование через `base`),
-  назначение материала узлу модели (`"assign": {"Turret": "steel"}`), процедурные бесшовные
-  текстуры с картами нормалей и масками цвета игрока; окно **Материалы** с превью и MCP-операции
-  `material_*` / `texture_generate` для агентов.
+- **PBR materials** (metallic-roughness): base colour, normal, metallic-roughness, occlusion, emissive; opaque / mask /
+  blend transparency, double-sided, unlit, material variants (`KHR_materials_variants`), overrides in `"materials"`.
+  Player colour: on the whole material, by a mask texture, by texture alpha (as in Warcraft III) or by vertex alpha.
+- **Skeletal animation** on the GPU (4 influences, any number of bones), clips per unit state (`idle`, `move`,
+  `attack`, `gather`, `build`, `die`, `spawn`, `hit`, `cast`…), smooth transitions, layers with a bone mask (attacking
+  with the upper body while walking), stride speed from the actual speed.
+- **Procedural animation** on any model node or shape: bobbing, spinning (mills, propellers), wheels by distance
+  travelled, turret aiming at the target, recoil, leaning into turns, falling and sinking on death and more; driven by
+  states and combat events.
+- **Quality tiers** for materials (`low` / `medium` / `high`) are chosen by GPU, like shadows;
+  `AIVERSE_MATERIALS=low|medium|high` overrides it for testing.
+- **Crowds**: clips are baked into a texture, identical units are drawn with instancing (300 animated units —
+  61 draw calls instead of 1801); model LODs by distance; animation off screen and far away updates less often.
+- **Advanced animation**: walk/run blend space, additive clips (breathing, recoil), foot IK on terrain, head turning
+  towards the target, vehicles tilting on slopes, morph targets (blend shapes) on the GPU.
+- **Sockets**: a weapon in the hand, cargo on the back (by the carried resource), projectile launch points, effect
+  points (smoke, fire, exhaust); clip events and `RtsView::events()/effects()` for sound and particles.
+- **Stages**: scaffolding and construction stages, a damaged variant by health, dissolve on spawn and death, selection
+  outline, a translucent ghost while placing a building, portraits.
+- **Formats**: also **FBX** (ufbx) and compressed **KTX2** textures (ETC2/BC/ASTC, staying compressed on the GPU);
+  **Collada**, **3DS**, **PLY**, **STL**; **MagicaVoxel .vox** and **.vxl/.hva** voxels (Tiberian Sun, Red Alert 2);
+  classic RTS models from the user's copy of the game: **Warcraft III .mdx/.mdl** (+ BLP), **Total Annihilation .3do**,
+  **C&C Generals .w3d** (+ DDS). Everything else assimp reads (.blend, .lwo, .x, .ms3d, .md2/.md3, .smd, .b3d…) is
+  converted to glTF by the **modelconv** utility: the editor does it itself on open and save, and the packager puts
+  only the result into the package.
+- **Materials on request**: a shared `materials.json` library (inheritance via `base`), assigning a material to a
+  model node (`"assign": {"Turret": "steel"}`), procedural seamless textures with normal maps and player-colour masks;
+  the **Materials** window with a preview and the MCP operations `material_*` / `texture_generate` for agents.
 
-Сломанная модель не ломает игру: тип рисуется фигурой, причина пишется в консоль редактора.
-Просмотр: `aiverse_modelview модель.glb@Walk` или `aiverse_modelview --game templates/showcase` (все типы игры
-так, как их рисует игра); в редакторе — окно **Models** (клипы, узлы, материалы, портрет,
-перезагрузка при сохранении файла модели). Пример — `templates/showcase`, полный формат — `docs/models.md`.
+A broken model does not break the game: the type is drawn as a shape and the reason goes to the editor console.
+Viewing: `aiverse_modelview model.glb@Walk` or `aiverse_modelview --game templates/showcase` (every type of a game, as
+the game draws it); in the editor — the **Models** window (clips, nodes, materials, portrait, reload when the model file
+is saved). Example: `templates/showcase`; full format: [models.md](models.md).
 
-## Освещение
+## Lighting
 
-Динамический свет рассчитан на старые Android (Mali-T, Adreno 3xx/4xx): все источники рисуются в
-маленькую световую карту над видимой землёй, шейдер берёт свет одной выборкой текстуры, сколько бы
-источников ни было. Уровни: `off`, `low` (карта 128², обновление через кадр), `medium` (256²),
-`high` (+ 8 источников попиксельно с бликом). Выбирается по GPU, как тени; вручную: `AIVERSE_LIGHTS=…`.
-Если во время матча кадры стабильно не успевают, клиент сам понижает свет и тени по ступеням
-(сначала самое дорогое и наименее заметное) и после тяжёлого боя возвращает одну ступень; ручной
-выбор теней в меню это отключает (`AIVERSE_ADAPTIVE=off`).
+Dynamic lights are designed for old Android devices (Mali-T, Adreno 3xx/4xx): all lights are drawn into a small light
+map above the visible ground, and the shader takes light with a single texture sample however many lights there are.
+Tiers: `off`, `low` (128² map, updated every other frame), `medium` (256²), `high` (+ 8 per-pixel lights with
+specular). Chosen by GPU, like shadows; manually: `AIVERSE_LIGHTS=…`. If frames keep missing the budget during a match,
+the client lowers lights and shadows step by step (the most expensive and least noticeable first) and restores one step
+after a heavy battle; choosing shadows manually in the menu turns this off (`AIVERSE_ADAPTIVE=off`).
 
-- **Свет типов и боя** — `view.light` (костры, кузницы, светящиеся грибы), вспышки выстрелов,
-  попаданий, взрывов, свет снарядов (`attackLight`, `projectileLight`, `hitLight`, `deathLight`),
-  способностей (`abilityLights`; по умолчанию цвет по действию: урон — оранжевый, лечение — зелёный),
-  ореолы `halo` вместо дорогого bloom. Туман войны скрывает вспышки.
-- **День и ночь, погода** — блок `lighting` в `game.json` или в карте: `time`, `dayLength`,
-  `nightLevel`, `clouds`, `wind`, `storm` (тени облаков и молнии, одинаковые в реплеях), `preset`:
-  `desert`, `snow`, `volcanic`, `overcast`, `cave` (подземелье: вечная ночь, свет только от
-  источников). Ночью эмиссивные материалы светятся ярче, огни бликуют на воде.
-- **Свет на карте** — массив `lights` в карте (фонари, костры, лава).
-- **Контактные тени и AO** — мягкие пятна под юнитами и вокруг зданий, на всех уровнях
-  (`contactShadow`, `contactShape` у типа).
-- **Редактор** — окно «Lighting»: предпросмотр времени суток и грозы, уровень качества света,
-  список источников. Для агентов: `light_add`, `light_update`, `light_delete`, `light_list`,
-  `lighting_set`, `view_lighting`.
+- **Type and combat lights** — `view.light` (campfires, forges, glowing mushrooms), flashes from shots, hits and
+  explosions, projectile lights (`attackLight`, `projectileLight`, `hitLight`, `deathLight`), ability lights
+  (`abilityLights`; by default the colour follows the effect: damage — orange, healing — green), `halo` glows instead
+  of expensive bloom. Fog of war hides the flashes.
+- **Day and night, weather** — the `lighting` block in `game.json` or in a map: `time`, `dayLength`, `nightLevel`,
+  `clouds`, `wind`, `storm` (cloud shadows and lightning, identical in replays), `preset`: `desert`, `snow`, `volcanic`,
+  `overcast`, `cave` (underground: eternal night, light only from sources). At night emissive materials glow brighter
+  and lights reflect on water.
+- **Map lights** — the `lights` array in a map (lanterns, campfires, lava).
+- **Contact shadows and AO** — soft spots under units and around buildings, on every tier (`contactShadow`,
+  `contactShape` on the type).
+- **Editor** — the "Lighting" window: preview of the time of day and storms, light quality tier, list of lights.
+  For agents: `light_add`, `light_update`, `light_delete`, `light_list`, `lighting_set`, `view_lighting`.
 
-Формат полей — в шапке `modules/rts/view/RtsLights.h`. Тестовые переменные: `AIVERSE_TIME_OF_DAY`,
+The field format is in the header of `modules/rts/view/RtsLights.h`. Test variables: `AIVERSE_TIME_OF_DAY`,
 `AIVERSE_NIGHT`, `AIVERSE_CLOUDS`, `AIVERSE_STORM`.
 
-## Проверка механик через MCP
+## Checking mechanics over MCP
 
-Агент, который делает игру без кода, проверяет механику точечно, а не только матчем ботов.
-- **`scenario_run`** — сценарий на копии открытой карты (ничего не сохраняется): `clear` (пустая карта без
-  объектов, волн и стартовых юнитов), `spawn` с именами (`"id": "foot", "count": 3` → `foot#1..3`, `"foot"` — все),
-  команды по секундам (те же ключи, что у `play_command`), `bots` для части слотов, `checks` с результатом
-  pass/fail (`alive`, `dead`, `count`, `hp`, `resource`, `event`, `trigger`, `variable`, `distance`, `status`,
-  `result` + сравнение), `watch` + `every` (состояние объектов во времени), `events` (журнал событий).
-- **`play_units` / `play_command`** — команды в живой тест в окне Game (раньше были только внутри редактора, теперь
-  видны MCP-клиентам). Ссылки на объекты: id из `play_units`, имена `id` из карты или фильтр
-  `{type, owner, tags, kind, area, near + radius}`; `queue: true` — очередь (Shift), `ability` по id.
-- **`match_run`** — плюс журнал срабатывания триггеров и `events` (журнал событий по именам).
-- **`rules_lint`** — ключи `rules.json` и карты, которые загрузчик не читает (опечатки, блок не на месте), с
-  подсказкой («did you mean 'armor'?»). Работает на настоящем загрузчике (`JsonAccessLog` в `engine/data/Json.h`);
-  `rules_set`, `rules_merge` и `map_validate` сообщают о таких ключах сразу.
-- **`rules_schema`** — `part: "keys"`: все ключи, которые загрузчик спрашивает в каждом блоке (`types.*.weapons[]`),
-  собранные по всем играм, и ключи, которых нет в `docs/game-format.md`; `part: "doc"` — сам документ.
-- Событие симуляции `kEvTriggerFired` (только для инструментов и представления, не входит в контрольную сумму).
-- Ветка `agent-mech-tools`.
+An agent building a game without code checks mechanics precisely, not only with a bot match.
+- **`scenario_run`** — a scenario on a copy of the open map (nothing is saved): `clear` (an empty map without objects,
+  waves and starting units), `spawn` with names (`"id": "foot", "count": 3` → `foot#1..3`, `"foot"` — all), commands
+  by second (the same keys as `play_command`), `bots` for some slots, `checks` with a pass/fail result (`alive`, `dead`,
+  `count`, `hp`, `resource`, `event`, `trigger`, `variable`, `distance`, `status`, `result` + comparison), `watch` +
+  `every` (object state over time), `events` (event log).
+- **`play_units` / `play_command`** — commands in a live test in the Game window (previously only inside the editor,
+  now visible to MCP clients). Object references: ids from `play_units`, `id` names from the map or a filter
+  `{type, owner, tags, kind, area, near + radius}`; `queue: true` — queue (Shift), `ability` by id.
+- **`match_run`** — plus a log of fired triggers and `events` (event log by name).
+- **`rules_lint`** — keys in `rules.json` and the map that the loader does not read (typos, a block in the wrong place),
+  with a hint ("did you mean 'armor'?"). It runs on the real loader (`JsonAccessLog` in `engine/data/Json.h`);
+  `rules_set`, `rules_merge` and `map_validate` report such keys immediately.
+- **`rules_schema`** — `part: "keys"`: every key the loader asks for in each block (`types.*.weapons[]`), collected
+  across all games, and keys missing from `docs/game-format.md`; `part: "doc"` — the document itself.
+- The simulation event `kEvTriggerFired` (for tools and presentation only, not part of the checksum).
+- Branch `agent-mech-tools`.
 
-## Постэффекты
+## Post effects
 
-Полноэкранные эффекты поверх 3D-сцены задаются данными: блок `"postfx"` в `game.json` (карта может
-его переопределить). Есть свечение (bloom), цветокоррекция, LUT, виньетка, тилт-шифт, лучи солнца,
-FXAA, зерно, аберрация, резкость, пикселизация, постеризация, заливка и кинорамка, плюс готовые
-наборы (кино, сочный, нуар, ретро, миниатюра, закат, зима, ночное видение). У каждого эффекта
-`minQuality`. Уровень выбирается по GPU: слабые Android получают «низкое», телефоны «среднее», ПК
-«высокое»; `AIVERSE_POSTFX` переопределяет уровень. Без эффектов постобработка ничего не стоит. Лёгкие
-эффекты собраны в один проход, тяжёлые (bloom, FXAA, лучи) добавляют свои.
+Full-screen effects on top of the 3D scene are set with data: the `"postfx"` block in `game.json` (a map can override
+it). There is bloom, colour grading, LUT, vignette, tilt-shift, sun rays, FXAA, grain, aberration, sharpening,
+pixelation, posterization, tint and letterbox, plus ready-made sets (cinematic, vivid, noir, retro, miniature, sunset,
+winter, night vision). Each effect has `minQuality`. The tier is chosen by GPU: weak Android devices get "low", phones
+"medium", PCs "high"; `AIVERSE_POSTFX` overrides it. Without effects, post-processing costs nothing. Light effects are
+combined into one pass; heavy ones (bloom, FXAA, rays) add their own.
 
-Редактор: окно **Постэффекты** (предпросмотр уровней, таблица стоимости кадра по классам устройств).
-MCP: `postfx_catalog/get/add/set/remove/preset/enable/estimate/lut_neutral`, `view_postfx`. Ответы
-на изменения содержат оценку мс/кадр и предупреждения о тяжёлых эффектах. Подробности — `docs/postfx.md`.
+Editor: the **Post effects** window (preview of tiers, a table of frame cost per device class).
+MCP: `postfx_catalog/get/add/set/remove/preset/enable/estimate/lut_neutral`, `view_postfx`. Responses to changes include
+an ms/frame estimate and warnings about heavy effects. Details: `docs/postfx.md`.
 
-## Проверено / не проверено
+## Verified / not verified
 
-- ✅ Linux: клиент, редактор, тесты; Windows .exe (кросс-сборка MinGW, запуск под Wine).
-- ✅ macOS: сборка, тесты, запуск игры на Metal; aiversebuild → .app и проект iOS (+ сборка для симулятора).
-- ✅ Web: собирается (Emscripten 3.1.50), матч запускается в headless Chromium (WebGL2/SwiftShader).
-- ⏳ Android: проект Gradle генерируется; APK и запуск в эмуляторе — в CI (job `android`), локально не собирался.
-- ⏳ Windows на реальном железе и iOS на устройстве — не запускались (в CI: MSVC-сборка и сборка iOS для симулятора).
+- ✅ Linux: client, editor, tests; Windows .exe (MinGW cross-build, run under Wine).
+- ✅ macOS: build, tests, running the game on Metal; aiversebuild → .app and an iOS project (+ simulator build).
+- ✅ Web: builds (Emscripten 3.1.50), a match runs in headless Chromium (WebGL2/SwiftShader).
+- ⏳ Android: the Gradle project is generated; the APK and an emulator run are in CI (job `android`), not built locally.
+- ⏳ Windows on real hardware and iOS on a device — not run (in CI: MSVC build and iOS simulator build).
 
-## Платформы и CI
+## Platforms and CI
 
-`.github/workflows/ci.yml` на каждый push в `master`/`agent-*` и на pull request:
+`.github/workflows/ci.yml` on every push to `master`/`agent-*` and on pull requests:
 
-| Job | Что делает |
+| Job | What it does |
 |---|---|
-| `linux` | gcc и clang (x64) + gcc (ARM64), предупреждения = ошибки, тесты, матчи ботов, скриншоты под Xvfb |
-| `windows-msvc` | Visual Studio 2022, тесты, матчи, `aiversebuild --target windows` |
-| `windows-mingw` | кросс-сборка MinGW-w64, тесты и матчи под Wine |
-| `macos` | universal-сборка Xcode, тесты, матчи, `aiversebuild` → .app и проект iOS со сборкой для симулятора |
-| `android` | `.so` через NDK, APK через `aiversebuild`, в эмуляторе: запуск → касание → фон → возврат → «назад» → повторный запуск, проверка logcat на падения |
-| `web` | Emscripten, запуск матча в headless Chromium, проверка консоли и кадра |
-| `determinism` | сравнивает контрольные суммы матчей (обе игры × 3 сида) со всех платформ — должны совпасть побитово |
+| `linux` | gcc and clang (x64) + gcc (ARM64), warnings as errors, tests, bot matches, screenshots under Xvfb |
+| `windows-msvc` | Visual Studio 2022, tests, matches, `aiversebuild --target windows` |
+| `windows-mingw` | MinGW-w64 cross-build, tests and matches under Wine |
+| `macos` | universal Xcode build, tests, matches, `aiversebuild` → .app and an iOS project with a simulator build |
+| `android` | `.so` via the NDK, APK via `aiversebuild`; in the emulator: launch → tap → background → return → "back" → relaunch, logcat checked for crashes |
+| `web` | Emscripten, a match in headless Chromium, console and frame checks |
+| `determinism` | compares match checksums (both games × 3 seeds) from all platforms — they must match bit for bit |
 
-Скриншоты, APK, web-сборка и .app сохраняются как артефакты прогона.
+Screenshots, the APK, the web build and the .app are kept as run artifacts.
 
-Локально:
+Locally:
 
 ```bash
-# Windows .exe с Linux/macOS
+# Windows .exe from Linux/macOS
 cmake -S . -B build/mingw -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=platform/cmake/mingw-w64.cmake
-# матчи ботов на всех играх → файл контрольных сумм (сравнить между машинами через diff)
+# bot matches on every game → a checksum file (compare between machines with diff)
 .github/scripts/headless-checksums.sh build/linux-release/aiverse_headless sums.txt
-# смоук-тест web-сборки
+# smoke test of the web build
 node platform/web/smoke.mjs build/web
 ```
 
-Параметры командной строки в web-сборке задаются через URL: `index.html?map=0&spectate` = `--map 0 --spectate`.
+Command-line parameters in the web build are passed through the URL: `index.html?map=0&spectate` = `--map 0 --spectate`.
 
-Экранная клавиатура: `platform::startTextInput(area)` / `stopTextInput()` открывают и закрывают её на iOS,
-Android и в мобильных браузерах (на десктопе — ничего не делают). Текст приходит событиями `Char`
-на любом языке, Backspace/Enter — как `KeyDown`/`KeyUp`; `softKeyboardHeight()` и событие `KeyboardChanged`
-сообщают, сколько экрана закрыто снизу, `TextInputEnded` — что пользователь сам закрыл клавиатуру.
-UI (`UiLayer`) вызывает это сам при фокусе на `<input type="text|password|search|email|number">` и `<textarea>`.
+On-screen keyboard: `platform::startTextInput(area)` / `stopTextInput()` open and close it on iOS, Android and in
+mobile browsers (on desktop they do nothing). Text arrives as `Char` events in any language, Backspace/Enter as
+`KeyDown`/`KeyUp`; `softKeyboardHeight()` and the `KeyboardChanged` event report how much of the screen is covered
+at the bottom, and `TextInputEnded` reports that the user closed the keyboard. The UI (`UiLayer`) calls this itself on
+focus in `<input type="text|password|search|email|number">` and `<textarea>`.
 
-Остальное в `Platform.h` для мобильных и браузера:
-- `safeAreaInsets()` — отступы от выреза камеры, скруглённых углов, полоски «домой» и системных панелей
-  (iOS, Android, мобильный Safari/Chrome; на десктопе 0, на MacBook с вырезом — в полноэкранном режиме).
-- `setFullscreen()` / `isFullscreen()`; встроенные переключатели — F11 (Windows, Linux, web), Alt+Enter (Windows).
-  В браузере вместе с полноэкранным режимом фиксируется ориентация (`AppConfig::orientation`).
-- Android: кнопка «Назад» приходит игре как `Key::Escape`; полноэкранный режим с прячущимися панелями;
-  физическая клавиатура и мышь (Chromebook, DeX) — обычные события клавиш и мыши.
-- iPad: клавиатура Magic Keyboard / Bluetooth, мышь и трекпад (правая кнопка, наведение, прокрутка).
-- Буфер обмена работает везде; в браузере Ctrl/Cmd+V доходит до игры после того, как браузер отдал текст.
-- Web: `userDataDir()` хранится в IndexedDB — настройки и сохранения переживают перезагрузку страницы.
+Other mobile and browser features in `Platform.h`:
+- `safeAreaInsets()` — insets for the camera notch, rounded corners, the home indicator and system bars
+  (iOS, Android, mobile Safari/Chrome; 0 on desktop, on a MacBook with a notch — in full screen).
+- `setFullscreen()` / `isFullscreen()`; built-in toggles — F11 (Windows, Linux, web), Alt+Enter (Windows).
+  In the browser, full screen also locks the orientation (`AppConfig::orientation`).
+- Android: the Back button reaches the game as `Key::Escape`; full screen with auto-hiding bars; a physical keyboard
+  and mouse (Chromebook, DeX) produce ordinary key and mouse events.
+- iPad: Magic Keyboard / Bluetooth keyboard, mouse and trackpad (right click, hover, scrolling).
+- The clipboard works everywhere; in the browser Ctrl/Cmd+V reaches the game after the browser hands over the text.
+- Web: `userDataDir()` is stored in IndexedDB — settings and saves survive a page reload.
 
-### Нативные плагины: платежи и реклама
+### Native plugins: payments and ads
 
-Любой SDK платформы подключается плагином на её родном языке — Java (Android), Objective-C (iOS/macOS),
-JavaScript (web) или C++ — через один асинхронный мост `engine/platform/Plugins.h`. Игра пользуется
-общими API `aiverse::store` (покупки) и `aiverse::ads` (реклама) из `engine/services`, а провайдер выбирается
-по платформе в `game.json`. Готовые плагины в `plugins/`: **App Store**, **Google Play**, **RuStore**,
-**Яндекс Игры** (web: покупки и реклама), **Steam** (покупки через Inventory Service и DLC, Windows/
-Linux/macOS), **Yandex Mobile Ads**, **AdMob**, **AppLovin MAX**, **ironSource (Unity LevelPlay)**. В билд попадают только выбранные игрой плагины (`"plugins"` в
-game.json или `--plugins`): чужих SDK, зависимостей, записей манифеста и ключей Info.plist в нём нет,
-CI это проверяет. Для отладки на десктопе есть заглушки магазина и рекламы (`mock-store`, `mock-ads`;
-`AIVERSE_MOCK_STORE`, `AIVERSE_MOCK_ADS`): весь сценарий покупки проходит без телефона, а в релизные сборки
-заглушки не компилируются. aiversebuild сам вписывает плагины в Gradle/манифест, Info.plist/Podfile и
-HTML; для Google Play и RuStore собирайте отдельно: `--plugins googleplay,admob` и
-`--plugins rustore,yandex-ads`. Подробно — `docs/plugins.md`.
+Any platform SDK is connected as a plugin in its native language — Java (Android), Objective-C (iOS/macOS),
+JavaScript (web) or C++ — through one asynchronous bridge, `engine/platform/Plugins.h`. A game uses the shared APIs
+`aiverse::store` (purchases) and `aiverse::ads` (ads) from `engine/services`, and the provider is chosen per platform in
+`game.json`. Ready plugins in `plugins/`: **App Store**, **Google Play**, **RuStore**, **Yandex Games** (web: purchases
+and ads), **Steam** (purchases through the Inventory Service and DLC, Windows/Linux/macOS), **Yandex Mobile Ads**,
+**AdMob**, **AppLovin MAX**, **ironSource (Unity LevelPlay)**. A build contains only the plugins the game selects
+(`"plugins"` in game.json or `--plugins`): no foreign SDKs, dependencies, manifest entries or Info.plist keys — CI checks
+this. For desktop debugging there are store and ads stubs (`mock-store`, `mock-ads`; `AIVERSE_MOCK_STORE`,
+`AIVERSE_MOCK_ADS`): the whole purchase flow runs without a phone, and the stubs are not compiled into release builds.
+aiversebuild writes the plugins into Gradle/the manifest, Info.plist/Podfile and HTML itself; build Google Play and
+RuStore separately: `--plugins googleplay,admob` and `--plugins rustore,yandex-ads`. Details: [plugins.md](plugins.md).
 
-### Релизы
+### Releases
 
-`.github/workflows/release.yml`: тег `v1.2.3` (или ручной запуск с выбором папки игры) собирает все
-платформы через `aiversebuild` и публикует GitHub Release:
+`.github/workflows/release.yml`: a `v1.2.3` tag (or a manual run with a game folder of your choice) builds every
+platform with `aiversebuild` and publishes a GitHub Release:
 
-| Платформа | Что выходит | Подпись (секреты репозитория) |
+| Platform | Output | Signing (repository secrets) |
 |---|---|---|
-| Windows | установщик (Inno Setup, без прав администратора) + portable .zip | `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD` |
-| Android | .apk и .aab для Google Play | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` |
-| macOS | .app в .zip, с нотаризацией | `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD` (Developer ID) + ключ App Store Connect |
-| iOS | проект Xcode; с ключом — сборка в TestFlight | `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64` |
+| Windows | installer (Inno Setup, no admin rights) + portable .zip | `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD` |
+| Android | .apk and .aab for Google Play | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` |
+| macOS | .app in a .zip, notarized | `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD` (Developer ID) + an App Store Connect key |
+| iOS | Xcode project; with a key — a TestFlight build | `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64` |
 | Linux | .tar.gz | — |
-| Web | .zip; при `DEPLOY_WEB_PAGES=true` (переменная репозитория) — публикация на GitHub Pages | — |
+| Web | .zip; with `DEPLOY_WEB_PAGES=true` (repository variable) — published to GitHub Pages | — |
 
-Без секретов релиз всё равно выходит: APK подписан отладочным ключом, .app — ad-hoc, Windows без подписи.
+Without secrets the release still comes out: the APK is signed with a debug key, the .app ad-hoc, Windows unsigned.
 
-### Готовые сборки движка (ветка `builds`) и aiversemcp без компилятора
+### Prebuilt engine (the `builds` branch) and aiversemcp without a compiler
 
-Готовые редактор и инструменты публикуются в ветке
-**`builds`**: `<platform>/AIVERSE-<version>-<commit>-<platform>.zip` (сейчас `windows` x86_64 и `macos`
-arm64; `linux` x86_64 — когда интегратор опубликует). Внутри — папка `AIVERSE/` с исходниками движка на
-этом коммите (шаблоны `templates/`, `engine/assets`, `docs/` — их читает MCP-сервер) и `AIVERSE/bin/` с
-программами. Собирает `tools/release/package_engine.py`, публикует `tools/release/publish_builds.py`
-(AGENTS.md §8); Linux-пакет может быть без редактора — только `aiversemcp` и `aiverse_headless`.
+The prebuilt editor and tools are published on the **`builds`** branch:
+`<platform>/AIVERSE-<version>-<commit>-<platform>.zip` (currently `windows` x86_64 and `macos` arm64; `linux` x86_64
+when the integrator publishes it). Inside is an `AIVERSE/` folder with the engine sources at that commit (templates
+`templates/`, `engine/assets`, `docs/` — the MCP server reads them) and `AIVERSE/bin/` with the programs. Packaged by
+`tools/release/package_engine.py`, published by `tools/release/publish_builds.py` (AGENTS.md §8); the Linux package may
+come without the editor — only `aiversemcp` and `aiverse_headless`.
 
-MCP-сервер из распакованной папки (матчи ботов и `balance_*` идут внутри aiversemcp, отдельный
-`aiverse_headless` ему не нужен; редактор — по желанию, без него `--no-editor`):
+The MCP server from the unpacked folder (bot matches and `balance_*` run inside aiversemcp, it does not need a separate
+`aiverse_headless`; the editor is optional, without it use `--no-editor`):
 
 ```bash
-# ARCHIVE — путь к скачанному архиву AIVERSE из index.json.
-unzip "$ARCHIVE" -d ~/aiverse      # unzip сохраняет флаг исполняемого файла
+# ARCHIVE is the path to the AIVERSE archive downloaded from index.json.
+unzip "$ARCHIVE" -d ~/aiverse      # unzip keeps the executable bit
 ~/aiverse/AIVERSE/bin/aiversemcp --no-editor --engine ~/aiverse/AIVERSE
 ```
 
-`--engine` можно не указывать в сборках с коммита, где aiversemcp ищет движок рядом с собой
-(`engine/platform/EngineDir.h`, как редактор); в опубликованных раньше он обязателен. Распаковщики, которые
-не восстанавливают права (Python `zipfile`), — `chmod +x` для файлов из `bin/`. На macOS скачанный
-браузером файл может получить карантин: `xattr -dr com.apple.quarantine ~/aiverse/AIVERSE`.
+`--engine` can be omitted in builds from commits where aiversemcp looks for the engine next to itself
+(`engine/platform/EngineDir.h`, like the editor); in earlier published builds it is required. With unpackers that do not
+restore permissions (Python `zipfile`), run `chmod +x` on the files in `bin/`. On macOS a file downloaded by a browser
+may get quarantined: `xattr -dr com.apple.quarantine ~/aiverse/AIVERSE`.
 
-Программы, которые скачивают движок сами, читают **`index.json`** в корне ветки
-(`https://raw.githubusercontent.com/chromealex/AIVERSE/builds/index.json`), а не README. Ниже — пример исторической записи RTSEngine;
-в новых сборках пути содержат AIVERSE, ключ `rtsmcp` сохраняется:
+Programs that download the engine themselves read **`index.json`** at the root of the branch
+(`https://raw.githubusercontent.com/chromealex/AIVERSE/builds/index.json`), not the README. Below is an example of a
+historical RTSEngine entry; in new builds the paths contain AIVERSE, and the `rtsmcp` key is kept:
 
 ```json
 {
@@ -677,69 +667,63 @@ unzip "$ARCHIVE" -d ~/aiverse      # unzip сохраняет флаг испо�
 }
 ```
 
-- `packages` — от новых к старым; первая запись с нужными `platform` + `arch` — самая свежая сборка.
+- `packages` go from newest to oldest; the first entry with the needed `platform` + `arch` is the latest build.
 - `platform`: `windows` | `macos` | `linux`; `arch`: `x86_64` | `arm64` | `universal` (macOS fat) | `null`
-  (не распознан) — определяется по заголовку `aiversemcp` внутри zip.
-- `rtsmcp`, `editor`, `headless` — пути внутри архива или `null`, если программы в пакете нет; `--engine` —
-  папка `root`. `editor` на macOS — бандл `.app`.
-- `url` указывает на ветку, которая перезаписывается при каждой публикации (хранятся 5 версий на
-  платформу): старые записи исчезают, поэтому скачивайте по свежему `index.json` и сверяйте `sha256`.
-- Новые поля могут добавляться; несовместимое изменение формата увеличит `schema`.
+  (not recognized) — determined from the `aiversemcp` header inside the zip.
+- `rtsmcp`, `editor`, `headless` are paths inside the archive, or `null` if the program is not in the package;
+  `--engine` is the `root` folder. On macOS, `editor` is an `.app` bundle.
+- `url` points to a branch that is rewritten on every publish (5 versions per platform are kept): old entries disappear,
+  so download from a fresh `index.json` and check `sha256`.
+- New fields may be added; an incompatible format change will increase `schema`.
 
-Проверка: `python3 tools/release/test_release.py [build/linux-release/aiversemcp]` (CTest `release_tools`) —
-формат `index.json`, а с путём к aiversemcp — упаковка Linux-пакета, распаковка во временную папку и MCP-вызовы
-из неё без `--engine` (`tools/list`, `create_project`, `map_generate`, `map_validate`, `map_ascii`).
+Check: `python3 tools/release/test_release.py [build/linux-release/aiversemcp]` (CTest `release_tools`) —
+the `index.json` format, and with a path to aiversemcp — packaging a Linux package, unpacking it into a temporary folder
+and MCP calls from there without `--engine` (`tools/list`, `create_project`, `map_generate`, `map_validate`, `map_ascii`).
 
-Режим скриншота (`AIVERSE_SCREENSHOT`, `AIVERSE_EXIT_AFTER_FRAMES`) шагает ровно по 1/60 с на кадр, поэтому
-кадр N одинаков на любой машине.
+Screenshot mode (`AIVERSE_SCREENSHOT`, `AIVERSE_EXIT_AFTER_FRAMES`) steps exactly 1/60 s per frame, so frame N is the
+same on any machine.
 
-## Дальше
+## Next
 
-Модели glTF и анимация, звук, сеть (lockstep), способности и баффы из данных, flow fields и
-RVO для больших армий, улучшения ИИ, скриптинг на C# (AOT для iOS).
+glTF models and animation, audio, networking (lockstep), abilities and buffs from data, flow fields and RVO for large
+armies, AI improvements, C# scripting (AOT for iOS).
 
-## Модули игры на C++
+## C++ game modules
 
-Помимо Lua, проект может содержать `native/CMakeLists.txt` и C++20-модули.
-Они подключаются через `aiverse_native_module(...)` при сборке и включаются массивом
-`nativeModules` в `rules.json`. Поддержаны тики, команды, rollback и сохранение
-состояния; Lua и C++ работают вместе. После изменения C++ нужна пересборка игры
-и редактора. [API, пример и инструкция сборки](native-modules.md).
+Besides Lua, a project can contain `native/CMakeLists.txt` and C++20 modules. They are added with
+`aiverse_native_module(...)` at build time and enabled by the `nativeModules` array in `rules.json`. Ticks, commands,
+rollback and state saving are supported; Lua and C++ work together. After changing C++ the game and the editor must be
+rebuilt. [API, example and build instructions](native-modules.md).
 
-## Переиспользуемая мета-библиотека C++
+## Reusable C++ meta library
 
-`aiverse::meta` — настраиваемые магазин/офферы/крафт, валюты и предметы, задания и пассы,
-ежедневные награды, энергия, почта, рейтинги, чаты и сегменты. Доступна native-коду
-проекта без Lua/GPU; определения — JSON, алгоритмы не нужно генерировать заново.
-Старт: `python3 tools/meta/scaffold.py --preset mobile --out <project>`.
-Документация: [docs/meta-game.md](meta-game.md); агентам — `skills/meta-game/SKILL.md`.
-Локальные политики работают без сервера; для общения между устройствами и глобальных
-рейтингов подключается реальный backend. Готовый облачный сервис в пакет не входит.
+`aiverse::meta` — configurable shop/offers/crafting, currencies and items, quests and passes, daily rewards, energy,
+mail, leaderboards, chats and segments. Available to the project's native code without Lua/GPU; definitions are JSON,
+so the algorithms don't need to be generated again. Start: `python3 tools/meta/scaffold.py --preset mobile --out <project>`.
+Documentation: [meta-game.md](meta-game.md); for agents — `skills/meta-game/SKILL.md`. Local policies work without a
+server; communication between devices and global leaderboards need a real backend. A ready cloud service is not part
+of the package.
 
-Пресет `full --with-ui` добавляет друзей/кланы, коллекцию экземпляров, экипировку,
-слияние, подписки и турнирные лиги. `aiverse::meta::Service` выполняет операции атомарно;
-`tools/meta/server.py` — локальный HTTP/SQLite-хост с проверкой сессий. В комплекте
-браузерные экраны меты и каталог коротких рецептов для агентов.
-[Сборка, запуск и ограничения](meta-service.md).
+The `full --with-ui` preset adds friends/clans, an instance collection, equipment, merging, subscriptions and tournament
+leagues. `aiverse::meta::Service` executes operations atomically; `tools/meta/server.py` is a local HTTP/SQLite host with
+session checks. Included are browser meta screens and a catalog of short recipes for agents.
+[Building, running and limits](meta-service.md).
 
-В `full` также входят 15 групп LiveOps: сундуки с pity, альбомы/обмены, очереди работ,
-исследования/престиж, составные задания, события, войны кланов, асинхронное PvP,
-матчмейкинг партий, Elo/Glicko-2, рефералы/промокоды, rewarded ads, цепочки офферов,
-уведомления и офлайн-доход. Все параметры — `extensions.liveops`; новые отдельные
-UI-экраны и внешние SDK этим пресетом не устанавливаются.
-`python3 tools/meta/catalog.py describe matchmaking` выдаёт только нужную схему и пример.
-[API, политики и ограничения](meta-liveops.md).
+`full` also includes 15 LiveOps groups: chests with pity, albums/trades, job queues, research/prestige, compound quests,
+events, clan wars, async PvP, party matchmaking, Elo/Glicko-2, referrals/promo codes, rewarded ads, offer chains,
+notifications and offline income. All parameters live in `extensions.liveops`; this preset does not install new separate
+UI screens or external SDKs. `python3 tools/meta/catalog.py describe matchmaking` prints only the needed schema and example.
+[API, policies and limits](meta-liveops.md).
 
-### Опциональная 3D-физика
+### Optional 3D physics
 
-Box3D подключается флагом `AIVERSE_ENABLE_PHYSICS=ON`; обычным RTS-проектам он не нужен.
-Отдельный пример `aiverse_physics_demo` показывает тела, столкновения, маятник и
-сохранение состояния. [Сборка, API и ограничения интеграции](physics.md).
+Box3D is enabled with the `AIVERSE_ENABLE_PHYSICS=ON` flag; ordinary RTS projects don't need it. A separate example,
+`aiverse_physics_demo`, shows bodies, collisions, a pendulum and state saving.
+[Building, API and integration limits](physics.md).
 
-### Визуальная ткань XPBD
+### Visual XPBD cloth
 
-Опциональный модуль `AIVERSE_ENABLE_CLOTH=ON`: собственный XPBD-решатель ткани
-на CPU или Metal compute, общие батчи, временной LOD, автоматический сон и отрисовка плотных сеток
-одним instanced draw. На GPU позиции остаются в видеопамяти; неподдерживаемые
-backend’ы используют CPU. Пример поддерживает сравнение GPU с CPU-эталоном и проверку сна/пробуждения.
-[Отдельный пример, ограничения и замеры](cloth.md).
+The optional `AIVERSE_ENABLE_CLOTH=ON` module: its own XPBD cloth solver on the CPU or Metal compute, shared batches,
+temporal LOD, automatic sleeping and drawing dense meshes with one instanced draw. On the GPU, positions stay in video
+memory; unsupported backends use the CPU. The example can compare the GPU with a CPU reference and check sleep/wake.
+[Standalone example, limits and measurements](cloth.md).
