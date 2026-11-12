@@ -35,3 +35,38 @@ TEST(fx_ribbon_trail_renderer_follows_the_effect) {
     r.step(1.0f);
     CHECK(r.parts.empty());
 }
+
+TEST(fx_external_import_dir_loads) {
+    // Checks a whole imported effect folder (Unity import dry runs kept outside the repo):
+    //   AIVERSE_FX_CHECK_DIR=<project> aiverse_tests fx_external_import_dir_loads
+    // Without the variable there is nothing to check.
+    const char* dir = std::getenv("AIVERSE_FX_CHECK_DIR");
+    if (!dir || !*dir) return;
+    const std::string root = dir;
+    fx::ParticleSystem ps;
+    ps.setQuality(fx::FxQuality::High);
+    ps.init(nullptr);
+    ps.setFileReader([&](const std::string& p, std::string& text) {
+        std::ifstream f(root + "/" + p, std::ios::binary);
+        if (!f) return false;
+        text.assign(std::istreambuf_iterator<char>(f), {});
+        return true;
+    });
+    int loaded = 0, failed = 0;
+    for (auto& e : std::filesystem::directory_iterator(root + "/fx")) {
+        if (e.path().extension() != ".json" || e.path().stem() == "fx") continue;
+        const int id = ps.effect(e.path().stem().string());
+        if (id < 0) { ++failed; continue; }
+        ++loaded;
+        ps.play(id, {0, 0, 0});
+        for (int i = 0; i < 30; ++i) ps.update(1 / 30.0f);
+        ps.clear();
+    }
+    int missingTex = 0;
+    for (auto& er : ps.errors()) {
+        if (er.find("texture") != std::string::npos) { ++missingTex; continue; }   // dry runs write no images
+        std::printf("    %s\n", er.c_str());
+    }
+    std::printf("    %d effects loaded, %d failed, %d texture messages\n", loaded, failed, missingTex);
+    CHECK(failed == 0);
+}
