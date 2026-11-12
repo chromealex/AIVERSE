@@ -59,6 +59,8 @@ struct EnvWeatherDef {
     Fixed lightningKillTime = Fixed::fromInt(2), lightningRange = Fixed::fromInt(80), lightningTime = Fixed::fromInt(30), lightningWait = Fixed::fromInt(30);
     int lightningKillChance = 70, lightningStructureKill = 10;
     std::string burnId;
+    Fixed rainSpread = Fixed::fromRatio(1, 2);   // grassRainBurnRandomFactor: rain scales the fire spread of trample killFields
+    std::string blizzardVar = "blizzard";      // trigger var set to 1 while the blizzard blows (agent-bw-ai: canMoveInBlizzard)
     int16_t burnField = -1; int32_t burnValue = 100; Fixed burnRadius{};   // lightning sets a grid field (fire / snow)
 };
 struct EnvWindDef {
@@ -138,6 +140,7 @@ struct EnvMouroDef {
     uint16_t dominationType = 0xFFFF;   // structure type counted as a domination point
     Vec3 castPos{};               // where castAt / castRing skills land (BW: the Mouro cast object)
     int16_t morale = -1;          // resource counted as morale stars (AverageMoral)
+    int16_t energy = -1;          // skill energy of the bot, refilled before every Mouro cast (BW ResetCastSkillValues)
 };
 struct EnvScrollAction {
     uint8_t kind = 0;            // EnvScrollKind
@@ -156,8 +159,12 @@ struct EnvFireDef { bool enabled = false; Fixed duration = Fixed::fromInt(5); };
 struct EnvWallDef { int point = -1; int hits = 10; Fixed destroyTime{}; std::vector<std::vector<int>> destructIf; bool ignoreTowers = false; };
 struct EnvScreenDef { bool enabled = false; Vec3 size{}; Vec3 start{}; };
 
+struct EnvMultiDef { int16_t skill = -1; int count = 0; bool random = false, transfer = true; };   // BW AutoSkills.MultiSplineSkill
+struct EnvFogDef { bool memory = true; Fixed startSize{}, startTime{}; };   // BW FogOfWar: explored memory, start reveal
+
 struct EnvDef {
     bool active = false;
+    int screenY = -1;                        // BW screen y (up) along world z: -1 = up is -z (bomb fall arcs)
     Fixed scale = Fixed::fromInt(1);        // BW distance units per world unit (distances / speeds divide by it)
     std::string complexity;                  // match AI complexity ("" = any)
     EnvWeatherDef weather;
@@ -176,6 +183,8 @@ struct EnvDef {
     EnvSoulsDef souls;
     EnvFireDef fire;
     std::vector<EnvWallDef> walls;
+    std::vector<EnvMultiDef> multis;
+    EnvFogDef fog;
     std::vector<std::vector<int>> caves;     // linked caves: groups of map point indices sharing owner + garrison
     std::vector<int> noSendTargets;          // map point indices that never accept sends (graveyards)
     uint16_t graveyardType = 0xFFFF;         // structure type of graveyards (souls fly there)
@@ -220,7 +229,7 @@ struct EnvWormState {
     Entity reverseArea = kNullEntity;
 };
 struct EnvToadState { Fixed idle{}, attack = Fixed::fromInt(-1), explode{}, explodeDelay{}; int units = 0; Entity target = kNullEntity; Vec3 lastTarget{}; uint8_t post = 0; };
-struct EnvBomb { Vec3 start{}, vel{}, pos{}; Fixed t{}, height{}; };
+struct EnvBomb { Vec3 start{}, vel{}, pos{}; Fixed t{}, height{}, lift{}; };   // lift: the bomber's height (BW towerShift)
 struct EnvFlyerState { uint8_t state = 0; Fixed idle{}, fly{}, drop{}, length{}, height{}; int rally = 0, dropped = 0, health = 0; Vec3 from{}, to{}, pos{}; Entity body = kNullEntity; std::vector<EnvBomb> bombs; };
 struct EnvActionState { uint8_t state = 0; Fixed timer{}, await{}; bool executed = false; };
 struct EnvHolderState { Fixed time{}, delay{}, suspend{}; std::vector<uint16_t> order; std::vector<EnvActionState> actions; };
@@ -237,6 +246,7 @@ struct EnvSend { Entity from = kNullEntity, to = kNullEntity; int left = 0; uint
                  int lane = -1; uint16_t lanePos = 0; bool reverse = false; Fixed speedMul = Fixed::fromInt(1); };   // lane >= 0: spawned on the lane (worm army)
 struct EnvAuto { Fixed timer{}; bool late = false; struct Moving { Entity area = kNullEntity; Fixed dist{}; }; std::vector<Moving> moving; };
 struct EnvCave { uint8_t owner = 0; int count = 0; };
+struct EnvMulti { bool created = false; struct Moving { Entity area = kNullEntity; Fixed dist{}; int cur = 0, from = -1; bool transfer = false; }; std::vector<Moving> moving; };
 struct EnvWall { Entity e = kNullEntity; int hits = 0; Fixed timer{}; uint8_t state = 0; };   // 0 standing, 1 destroyed (timer), 2 gone
 struct EnvFire { Entity e = kNullEntity; Fixed timer{}, start{}, percent{}; };
 struct EnvUnit { uint32_t gen = 0; Fixed blizzard = Fixed::fromInt(1), resist = Fixed::fromInt(1); bool init = false; };
@@ -273,6 +283,8 @@ struct EnvState {
     std::vector<EnvUnit> units;           // per entity index: blizzard health
     std::vector<uint64_t> noSoul;         // units killed this tick without a soul (lightning, toad, blizzard)
     std::vector<uint8_t> skillCast;       // per player: player abilities cast (Mouro emotions), cleared each tick
+    std::vector<EnvMulti> multis;         // per multi-spline auto skill
+    std::vector<std::vector<int32_t>> fogSeen;   // per player: cells visible after the last vision pass (fog without memory)
 };
 
 // ---------------------------------------------------------------- runtime
@@ -284,6 +296,11 @@ public:
     void setup(Simulation& sim, RtsModule& m, const Json& rules, const Json& map);
     void tick(Simulation& sim);              // the "environment" system (before death)
     void lateTick(Simulation& sim);          // after death / capture: souls of the dead, caves, walls
+    void fogTick(Simulation& sim);           // after vision: fog without explored memory, start reveal
+    bool hasFog() const { return !def_.fog.memory || def_.fog.startTime.raw > 0; }
+    bool invincible(Simulation& sim, uint8_t slot) const;   // map scroller setInvincible: never defeated
+    // the bot's / player's slot of the scripted boss and scroller (0 player, 1 bot, 2 neutral)
+    uint8_t slot(Simulation& sim, uint8_t who) const { return slotOf(sim, who); }
     void hash(Simulation& sim, Hasher& h) const;
     void io(Simulation& sim, Archive& a);
     EnvState* state(Simulation& sim) const;
@@ -324,6 +341,7 @@ private:
     void scroller(Simulation& sim, EnvState& st);
     void outmap(Simulation& sim, EnvState& st);
     void autos(Simulation& sim, EnvState& st);
+    void multiAutos(Simulation& sim, EnvState& st);
     void soulsTick(Simulation& sim, EnvState& st);
     void sendsTick(Simulation& sim, EnvState& st);
     void caves(Simulation& sim, EnvState& st);

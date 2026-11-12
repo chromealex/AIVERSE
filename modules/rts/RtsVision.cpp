@@ -49,7 +49,8 @@ struct VisionCache {
     std::vector<uint8_t> centerOk;
     // flat line-of-sight rays per radius: targets in the reference's order, sample offsets (sdy * W + sdx)
     struct Ray { int16_t dx, dy; int32_t k; uint32_t first; };
-    struct Table { int W = 0; bool built = false; std::vector<Ray> rays; std::vector<int32_t> off; };
+    struct Table { int W = 0, e2 = 1; bool built = false; std::vector<Ray> rays; std::vector<int32_t> off; };
+    int e2 = 1;   // fogOfWar.ellipse squared: sight discs are ellipses dx^2 + (e dz)^2 <= r^2 (BW iso fog)
     std::vector<Table> tables;
     struct Entry {
         uint32_t gen = UINT32_MAX;
@@ -78,11 +79,11 @@ struct VisionCache {
     const Table& table(int r) {
         if (tables.size() <= size_t(r)) tables.resize(size_t(r) + 1);
         Table& t = tables[size_t(r)];
-        if (t.built && t.W == W) return t;
-        t = Table{}; t.W = W; t.built = true;
+        if (t.built && t.W == W && t.e2 == e2) return t;
+        t = Table{}; t.W = W; t.e2 = e2; t.built = true;
         for (int dy = -r; dy <= r; ++dy)
             for (int dx = -r; dx <= r; ++dx) {
-                if (dx * dx + dy * dy > r * r) continue;
+                if (dx * dx + dy * dy * e2 > r * r) continue;
                 const int k = std::max(std::abs(dx), std::abs(dy));
                 t.rays.push_back({int16_t(dx), int16_t(dy), k, uint32_t(t.off.size())});
                 for (int st = 1; st < k; ++st) {   // the reference's sample cells, relative to the eye
@@ -215,6 +216,8 @@ void RtsModule::visionFlatFast(Simulation& sim) {
     const bool losAll = los || rules_.fog.lineOfSight || (fields_ && fields_->blocksVision());   // grid fields can block sight
     if (!vcache_) vcache_ = std::make_shared<VisionCache>();
     VisionCache& vc = *vcache_;
+    const int e2 = rules_.fog.ellipse * rules_.fog.ellipse;
+    vc.e2 = e2;
     std::vector<int64_t>& base = gs.visionBase;
     std::vector<int64_t>& occ = gs.visionOcc;
     const int64_t rock = sumUnits(rules_.fog.rockHeight);
@@ -359,7 +362,7 @@ void RtsModule::visionFlatFast(Simulation& sim) {
                     for (int y = std::max(0, cy - r); y <= std::min(H - 1, cy + r); ++y)
                         for (int x = std::max(0, cx - r); x <= std::min(W - 1, cx + r); ++x) {
                             int dx = x - cx, dy = y - cy;
-                            if (dx * dx + dy * dy > r * r) continue;
+                            if (dx * dx + dy * dy * e2 > r * r) continue;
                             const int k = std::max(std::abs(dx), std::abs(dy));
                             const int64_t tgt = base[size_t(y * W + x)] + targetUp;
                             bool visible = true;
@@ -376,7 +379,7 @@ void RtsModule::visionFlatFast(Simulation& sim) {
                 for (int y = std::max(0, cy - r); y <= std::min(H - 1, cy + r); ++y)
                     for (int x = std::max(0, cx - r); x <= std::min(W - 1, cx + r); ++x) {
                         int dx = x - cx, dy = y - cy;
-                        if (dx * dx + dy * dy > r * r) continue;
+                        if (dx * dx + dy * dy * e2 > r * r) continue;
                         const size_t i = size_t(y * W + x);
                         if (g.level[i] > eye) continue;
                         en.cells.push_back(int32_t(i));
@@ -570,6 +573,7 @@ void RtsModule::visionSphereFast(Simulation& sim) {
 
 // Reference (brute force, the pre-cache algorithm): every unit recomputes its whole disk every pass.
 void RtsModule::visionFlatRef(Simulation& sim) {
+    const int e2 = rules_.fog.ellipse * rules_.fog.ellipse;   // fogOfWar.ellipse (1: circles)
     World& w = sim.world();
     GameState& gs = state(sim);
     const MapGrid& g = gs.grid;
@@ -652,7 +656,7 @@ void RtsModule::visionFlatRef(Simulation& sim) {
             for (int y = std::max(0, cy - r); y <= std::min(H - 1, cy + r); ++y)
                 for (int x = std::max(0, cx - r); x <= std::min(W - 1, cx + r); ++x) {
                     int dx = x - cx, dy = y - cy;
-                    if (dx * dx + dy * dy > r * r) continue;
+                    if (dx * dx + dy * dy * e2 > r * r) continue;
                     // march the cells between eye and target: hidden if ground or a blocker rises above the sight line
                     const int k = std::max(std::abs(dx), std::abs(dy));
                     const int64_t tgt = base[size_t(y * W + x)] + targetUp;
@@ -670,7 +674,7 @@ void RtsModule::visionFlatRef(Simulation& sim) {
         for (int y = std::max(0, cy - r); y <= std::min(H - 1, cy + r); ++y)
             for (int x = std::max(0, cx - r); x <= std::min(W - 1, cx + r); ++x) {
                 int dx = x - cx, dy = y - cy;
-                if (dx * dx + dy * dy > r * r) continue;
+                if (dx * dx + dy * dy * e2 > r * r) continue;
                 size_t i = size_t(y * W + x);
                 if (g.level[i] > eye) continue;
                 see(o.player, i);

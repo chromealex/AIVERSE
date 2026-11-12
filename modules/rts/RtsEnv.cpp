@@ -89,7 +89,11 @@ void Environment::setup(Simulation& sim, RtsModule& m, const Json& rules, const 
         return int16_t(f);
     };
     def_.weather.burnField = fieldRef(def_.weather.burnId, "weatherParams.lightningBurn");
-    for (auto& t : def_.trample) { t.field = fieldRef(t.fieldId, "trample"); t.killField = fieldRef(t.killId, "trample.killField"); }
+    for (auto& t : def_.trample) {
+        t.field = fieldRef(t.fieldId, "trample"); t.killField = fieldRef(t.killId, "trample.killField");
+        // BW GrassModule: in rain a burning tile lights a neighbour only with grassRainBurnRandomFactor
+        if (def_.weather.rain && t.killField >= 0) gf->setSpreadScale(t.killField, def_.weather.rainSpread);
+    }
     // only the worm configs of this match's complexity (BW WormConfigs.GetByComplexity: the first match)
     std::vector<EnvWormDef> worms;
     for (auto& w : def_.worms) if (complexityOk(w.complexity)) { worms.push_back(w); break; }
@@ -154,6 +158,8 @@ void Environment::setup(Simulation& sim, RtsModule& m, const Json& rules, const 
     st.scrollerState.assign(def_.scroller.size(), 0);
     st.scrollerTimer.assign(def_.scroller.size(), Fixed{});
     st.screenPos = def_.screen.start;
+    st.multis.assign(def_.multis.size(), {});
+    st.fogSeen.assign(np, {});
     st.autos.assign(def_.splines.size(), {});
     for (size_t i = 0; i < def_.splines.size(); ++i) {
         const EnvSpline& sp = def_.splines[i];
@@ -237,14 +243,20 @@ Entity Environment::point(Simulation& sim, int i) const {
 }
 
 bool Environment::insideScreen(Simulation& sim, Vec3 p) const {
+    if (m_->screen().enabled) return m_->onScreen(sim, p);   // one screen: the routes multiscreen (map "screen")
     if (!def_.screen.enabled) return true;
     EnvState* st = state(sim);
     if (!st) return true;
     return p.x >= st->screenPos.x && p.z >= st->screenPos.z && p.x <= st->screenPos.x + def_.screen.size.x && p.z <= st->screenPos.z + def_.screen.size.z;
 }
 
+bool Environment::invincible(Simulation& sim, uint8_t slot) const {
+    EnvState* st = state(sim);
+    return st && slot < st->invincible.size() && st->invincible[slot];
+}
+
 bool Environment::producing(Simulation& sim, Entity s) const {
-    if (!def_.screen.enabled) return true;
+    if (!def_.screen.enabled || m_->screen().enabled) return true;   // routes gate growth on their own screen
     return insideScreen(sim, sim.world().get<Transform>(s).pos);
 }
 
@@ -264,6 +276,7 @@ void Environment::tick(Simulation& sim) {
     flyers(sim, st);
     outmap(sim, st);
     autos(sim, st);
+    multiAutos(sim, st);
     mouro(sim, st);
     scroller(sim, st);
     soulsTick(sim, st);
@@ -325,6 +338,12 @@ void Environment::weather(Simulation& sim, EnvState& st) {
         if (st.blizzardState == 0) { st.blizzardTimer += dt / W.blizzardFill; if (st.blizzardTimer >= one) { st.blizzardTimer = Fixed{}; st.blizzardState = 1; sim.emit({kEvEnv, 0, kNullEntity, kNullEntity, (kEnvWeather << 16) | 4 | (1 << 8), {}}); } }
         else { st.blizzardTimer += dt / W.blizzardWait; if (st.blizzardTimer >= one) { st.blizzardTimer = Fixed{}; st.blizzardState = 0; sim.emit({kEvEnv, 0, kNullEntity, kNullEntity, (kEnvWeather << 16) | 4, {}}); } }
     } else st.blizzardState = 1;
+    if (W.blizzard) {   // BW Environment.IsBlizzard for the computer player (agent-bw-ai reads vars.blizzard)
+        const Fixed v = Fixed::fromInt(st.blizzardState == 0 ? 1 : 0);
+        auto& vars = m_->state(sim).trig.vars;
+        auto it = vars.find(W.blizzardVar);
+        if (it == vars.end() || it->second != v) vars[W.blizzardVar] = v;
+    }
     if (W.lightning) {
         if (st.lightningState == 0) {
             st.lightningKill += dt / W.lightningKillTime;
@@ -542,6 +561,8 @@ void Environment::hash(Simulation& sim, Hasher& h) const {
     for (auto& f : st->fires) { h.u64(f.e.packed()); h.fx(f.timer); }
     for (auto& w : st->walls) { h.i32(w.hits); h.u32(w.state); h.fx(w.timer); }
     for (auto& u : st->units) h.fx(u.blizzard);
+    for (auto& mu : st->multis) { h.u32(mu.created); for (auto& mv : mu.moving) { h.fx(mv.dist); h.i32(mv.cur); h.u32(mv.transfer); } }
+    for (auto& v : st->invincible) h.u32(v);
 }
 
 // save io of the environment state (found by ADL from Archive)
@@ -552,7 +573,7 @@ static void io(Archive& a, EnvWormState& x) {
       x.armyGroup, x.armyFrom, x.armyTo, x.armyLane, x.armyDist, x.armyPos, x.seg, x.traces, x.reverseArea);
 }
 static void io(Archive& a, EnvToadState& x) { a(x.idle, x.attack, x.explode, x.explodeDelay, x.units, x.target, x.lastTarget, x.post); }
-static void io(Archive& a, EnvBomb& x) { a(x.start, x.vel, x.pos, x.t, x.height); }
+static void io(Archive& a, EnvBomb& x) { a(x.start, x.vel, x.pos, x.t, x.height, x.lift); }
 static void io(Archive& a, EnvFlyerState& x) { a(x.state, x.idle, x.fly, x.drop, x.length, x.height, x.rally, x.dropped, x.health, x.from, x.to, x.pos, x.body, x.bombs); }
 static void io(Archive& a, EnvActionState& x) { a(x.state, x.timer, x.await, x.executed); }
 static void io(Archive& a, EnvHolderState& x) { a(x.time, x.delay, x.suspend, x.order, x.actions); }
@@ -565,6 +586,8 @@ static void io(Archive& a, EnvCave& x) { a(x.owner, x.count); }
 static void io(Archive& a, EnvWall& x) { a(x.e, x.hits, x.timer, x.state); }
 static void io(Archive& a, EnvFire& x) { a(x.e, x.timer, x.start, x.percent); }
 static void io(Archive& a, EnvUnit& x) { a(x.gen, x.blizzard, x.resist, x.init); }
+static void io(Archive& a, EnvMulti::Moving& x) { a(x.area, x.dist, x.cur, x.from, x.transfer); }
+static void io(Archive& a, EnvMulti& x) { a(x.created, x.moving); }
 
 void Environment::io(Simulation& sim, Archive& a) {
     EnvState* st = state(sim);
@@ -574,6 +597,46 @@ void Environment::io(Simulation& sim, Archive& a) {
     a(st->worms, st->toads, st->flyers, st->mouro, st->scrollerState, st->scrollerTimer, st->screenPos, st->screenFrom, st->invincible, st->outmapTimer,
       st->outmapIndex, st->outmapDone, st->autos, st->souls, st->sends, st->caves, st->graveyardTimer, st->graveyards, st->lastAction, st->soulAcc,
       st->fires, st->walls, st->points, st->minionGroups, st->minionSpeed, st->units);
+    a(st->multis, st->fogSeen);
+}
+
+// ================================================================= fog of war (BW FogOfWar)
+
+// Runs after the vision system. Without explored memory, cells that went out of sight become unexplored again (BW
+// draws only live observers); during the first startDuration seconds every player also sees a disc around its first
+// building that shrinks from startFowSize to nothing (BW SetInitialFow during the countdown).
+void Environment::fogTick(Simulation& sim) {
+    EnvState* st = state(sim);
+    if (!st || sim.tick() % 5 != 0) return;   // the vision system runs every 5 ticks
+    GameState& gs = m_->state(sim);
+    if (gs.fogMode == uint8_t(FogMode::None)) return;
+    const size_t np = std::min(gs.vision.size(), gs.visibleCells.size());
+    if (st->fogSeen.size() < np) st->fogSeen.resize(np);
+    const Fixed t = Fixed::fromInt(int64_t(sim.tick())) / int64_t(std::max<uint32_t>(sim.tickRate(), 1));
+    if (def_.fog.startTime.raw > 0 && t < def_.fog.startTime) {
+        World& w = sim.world();
+        const MapGrid& g = gs.grid;
+        const Fixed r = def_.fog.startSize * (Fixed::fromInt(1) - t / def_.fog.startTime);
+        const int ri = int(r.floorInt()), e = m_->rules().fog.ellipse;
+        for (size_t p = 1; p < np; ++p) {
+            Entity first;
+            w.each<Garrison, Owner>([&](Entity en, Garrison&, Owner& o) { if (!first.valid() && o.player == p) first = en; });
+            if (!first.valid()) continue;
+            int cx, cy; g.cellXY(w.get<Transform>(first).pos, cx, cy);
+            for (int y = std::max(0, cy - ri); y <= std::min(g.h - 1, cy + ri); ++y)
+                for (int x = std::max(0, cx - ri); x <= std::min(g.w - 1, cx + ri); ++x) {
+                    const int dx = x - cx, dy = (y - cy) * e;
+                    if (dx * dx + dy * dy > ri * ri) continue;
+                    const size_t i = size_t(g.index(x, y));
+                    if (gs.vision[p][i] != 2) { gs.vision[p][i] = 2; gs.visibleCells[p].push_back(int32_t(i)); }
+                }
+        }
+    }
+    if (!def_.fog.memory)
+        for (size_t p = 1; p < np; ++p) {
+            for (int32_t i : st->fogSeen[p]) if (gs.vision[p][size_t(i)] == 1) gs.vision[p][size_t(i)] = 0;
+            st->fogSeen[p] = gs.visibleCells[p];
+        }
 }
 
 } // namespace aiverse::game

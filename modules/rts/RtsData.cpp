@@ -159,6 +159,8 @@ Rules loadRules(const Json& j) {
         r.fog.shareAllies = f.getBool("shareAllies", true);
         r.fog.lineOfSight = f.getBool("lineOfSight", false);
         r.fog.rockHeight = f.getFx("rockHeight", r.fog.rockHeight);
+        r.fog.ellipse = int(f.getInt("ellipse", 1));
+        if (r.fog.ellipse < 1 || r.fog.ellipse > 8) throw std::runtime_error("fogOfWar.ellipse: 1..8");
     }
     if (const Json& h = j["heights"]; h.isObject()) {
         r.heights.blockVision = h.getBool("blockVision", true);
