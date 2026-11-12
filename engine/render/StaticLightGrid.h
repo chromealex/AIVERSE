@@ -67,21 +67,22 @@ struct StaticLightGrid {
         if(diffuse){
             for(const auto& probe:diffuse->probes){
                 if(probe.visibility.resolution!=4||probe.visibility.distances.size()!=96||probe.visibility.normals.size()!=96)throw std::runtime_error("invalid diffuse visibility map");
+                for(float c:{probe.skyVisibility.x,probe.skyVisibility.y,probe.skyVisibility.z,probe.skyVisibility.w})if(!std::isfinite(c))throw std::runtime_error("invalid sky visibility");
                 for(float distance:probe.visibility.distances)if(!std::isfinite(distance)||distance<0)throw std::runtime_error("invalid probe visibility");
                 for(auto n:probe.visibility.normals)for(float c:{n.x,n.y,n.z})if(!std::isfinite(c))throw std::runtime_error("invalid probe plane");
                 for(const auto* basis:{&probe.irradiance,&probe.sun,&probe.sky})for(const auto& coefficient:*basis)for(float c:{coefficient.x,coefficient.y,coefficient.z,coefficient.w})if(!std::isfinite(c))throw std::runtime_error("invalid diffuse coefficient");
             }
-            end+=size_t(cells)*106;
+            end+=size_t(cells)*107;
         }
         if(end>4194304)throw std::runtime_error("static shadow atlas budget exceeded");
         texels.reserve(end);texels.resize(size_t(cells));
         auto decode=[](float c){return c<=.04045f?c/12.92f:std::pow((c+.055f)/1.055f,2.4f);};
         for(int c=0;c<cells;++c){auto& bin=bins[size_t(c)];maxCellLights=std::max(maxCellLights,int(bin.size()));
             if(bin.size()>512||texels.size()+2*bin.size()>4194304)throw std::runtime_error("static light grid budget exceeded: cell="+std::to_string(bin.size())+", texels="+std::to_string(texels.size()));
-            int basisMask=0;
+            int basisMask=diffuse&&diffuse->occludeAmbient?8:0;
             if(diffuse){const auto& p=diffuse->probes[size_t(c)];int bit=1;
                 for(const auto* basis:{&p.irradiance,&p.sun,&p.sky}){bool nonzero=false;for(auto v:*basis)nonzero|=v.x!=0||v.y!=0||v.z!=0||v.w!=0;if(nonzero)basisMask|=bit;bit*=2;}}
-            texels[size_t(c)]={float(texels.size()),float(bin.size()),diffuse?float(diffuseOffset+size_t(c)*106):0,float(basisMask)};
+            texels[size_t(c)]={float(texels.size()),float(bin.size()),diffuse?float(diffuseOffset+size_t(c)*107):0,float(basisMask)};
             for(auto i:bin){const auto& l=lights[i];texels.push_back({l.pos.x,l.pos.y,l.pos.z,l.radius});texels.push_back({decode(l.color.x)*l.intensity,decode(l.color.y)*l.intensity,decode(l.color.z)*l.intensity,float(shadowOffsets[i])});}
         }
         if(shadows)for(size_t i=0;i<shadows->size();++i)if(shadowOffsets[i]){
@@ -99,6 +100,7 @@ struct StaticLightGrid {
                 texels.push_back({depth,n.x,n.y,n.z});}
             for(const auto& c:probe.sun)texels.push_back(c);
             for(const auto& c:probe.sky)texels.push_back(c);
+            texels.push_back(probe.skyVisibility);
         }
         constexpr int width=2048;texels.resize((texels.size()+width-1)/width*width);
         origin={lo.x,lo.y,lo.z,1*(1.0f/cellSize)};size={float(nx),float(ny),float(nz),float(width)};

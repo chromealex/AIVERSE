@@ -245,6 +245,8 @@ void main() {
     sh *= cloudShade(v_wpos);
     vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
     vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
+    vec3 dd,ds;float ambientVisibility;dynLight(v_wpos,n,V,rough,dd,ds,ambientVisibility);
+    sky*=ambientVisibility;ground*=ambientVisibility;
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     vec3 diff = base.rgb * (1.0 - metallic);
     vec3 F0 = mix(vec3(0.04), base.rgb, metallic);
@@ -280,7 +282,7 @@ void main() {
     }
 #endif
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
-    { vec3 dd, ds; dynLight(v_wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
+    { col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
     if (m_uv1.y > 0.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
     float dist = length(u_camPos.xyz - v_wpos);
@@ -520,6 +522,8 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     sh *= cloudShade(lu, in.wpos);
     float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
     float3 sky = rtsDecodeScene(f.skyColor.rgb), ground = rtsDecodeScene(f.groundColor.rgb);
+    float3 dd,ds;float ambientVisibility;dynLight(lu,tex9,s9,in.wpos,n,V,rough,dd,ds,ambientVisibility);
+    sky*=ambientVisibility;ground*=ambientVisibility;
     float3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     float3 diff = base.rgb * (1.0 - metallic);
     float3 F0 = mix(float3(0.04), base.rgb, metallic);
@@ -555,7 +559,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     }
 #endif
     col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
-    { float3 dd, ds; dynLight(lu, tex9, s9, in.wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
+    { col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
     if (m.uv1.y > 0.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);
     float dist = length(f.camPos.xyz - in.wpos);

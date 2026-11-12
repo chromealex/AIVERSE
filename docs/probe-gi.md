@@ -23,11 +23,11 @@ and is not pixel-identical to eight-probe interpolation. Visibility transitions 
 coarse geometry can still produce spatial artifacts. Existing TAA/SSR have their own
 motion behavior. Do not infer motion stability from a static capture.
 
-Each probe uses 106 RGBA32F texels (1,696 bytes): three point-bounce coefficients,
-4x4 cube visibility/plane data, and three coefficients each for unit sun and sky.
+Each probe uses 107 RGBA32F texels (1,712 bytes): three point-bounce coefficients,
+4x4 cube visibility/plane data, and three coefficients each for unit sun and sky, and directional sky visibility.
 Empty coefficient groups are masked out before fetching. Up to 20,000 probes and
 64 MiB combined light atlas are allowed. Sponza daylight uses 1,008 probes and a
-1,736,704-byte padded atlas. No additional texture sampler is needed. Nearest
+1,769,472-byte padded atlas. No additional texture sampler is needed. Nearest
 RGBA32F reads are used rather than unsupported float filtering on GLES.
 
 Mobile GI can operate with `LightQuality::Medium`; High also supports it. Low/Off
@@ -89,7 +89,7 @@ Do not ship the benchmark's desktop bake fallback as a mobile loading workflow.
 
 CPU tests cover colored bounce, visible sun, a sealed room, an empty-light scene,
 cache roundtrip, wrong recipe key, truncation and checksum damage. macOS GL/Metal
-compile 22 production shader variants and pass 29 GPU probes, including visibility,
+compile 22 production shader variants and pass 36 GPU probes, including visibility,
 GI off, runtime relighting without replacing the atlas, and affine interpolation
 across all six tetrahedral orderings, plus blocked/open tilted visibility planes.
 Visibility planes are prepared in the cache; probe lookup uses one depth/plane
@@ -117,3 +117,27 @@ This checks that optimization, not equivalence of four- and eight-probe interpol
 A 16-frame GL camera-motion smoke check completed; selected frames were inspected.
 This short sequence is not a general no-flicker guarantee. The Low profile completed
 without loading the GI atlas or constructing/baking geometry, and reports GI off.
+
+
+## Ambient occlusion from sky visibility
+
+Environment baking now records cosine-weighted upper-hemisphere visibility from
+miss rays already traced for the probes. The shader interpolates this with the same
+four/eight visibility-tested probes, requiring one additional texel read per accepted
+probe, without another rendering pass or image-space blur. It attenuates legacy
+sky/ground ambient, approximate ambient specular and the artistic ambient rim on
+models and basic lit meshes. Direct sun, point lights and baked bounce are unchanged.
+A sealed area has zero ambient; exposed sky preserves the existing hemisphere fill.
+This removes the uniform fill that previously lit the foreground Sponza column
+through its covering arch. It is coarse directional sky occlusion, not contact AO.
+
+Cache format is now `AVGIC005`; older caches must be rebaked. Point-bounce-only
+fields, GI Off, Low and locations outside the volume retain the legacy ambient
+fallback. GPU controls cover closed/open/partial sky, GI-off and legacy behavior,
+and preservation of direct sunlight and bounced light under ambient occlusion.
+
+The corrected daylight reference capture measured 13.22 ms median GPU frame time
+on Metal (same 1280x720 full scene; one diagnostic run). In a fixed foreground-column
+ROI, mean display-space luminance fell from 47.78 to 19.16 (8-bit scale); the sunlit
+facade ROI changed from 226.87 to 226.53. Exposure and sun parameters were unchanged.
+GL and Metal captures were both visually inspected. Android remains unverified.

@@ -85,12 +85,16 @@ int main(){
     room.albedos={{.5f,.5f,.5f}};
     auto sealed=makeDiffuseVolume(room,{-.5f,-.5f,-.5f},{-.5f,-.5f,-.5f},1);
     bakeProbeEnvironment(room,sealed,{0,1,0},64,20);
-    for(const auto& probe:sealed.probes)for(int c=0;c<3;++c)assert(probe.sun[size_t(c)].x==0&&probe.sky[size_t(c)].x==0);
+    for(const auto& probe:sealed.probes)for(int c=0;c<3;++c)assert(probe.sun[size_t(c)].x==0&&probe.sky[size_t(c)].x==0&&probe.skyVisibility.x==0);
     StaticShadowGeometry floor;floor.albedos={{.8f,0,0}};
     floor.triangles={{{-20,0,-20},{20,0,-20},{20,0,20}},{{-20,0,-20},{20,0,20},{-20,0,20}}};floor.build();
     auto sunny=makeDiffuseVolume(floor,{-.5f,.5f,-.5f},{-.5f,.5f,-.5f},1);
     bakeProbeEnvironment(floor,sunny,{0,1,0},64,20);
     assert(sunny.probes[0].sun[0].x>0&&sunny.probes[0].sky[0].x>0&&sunny.probes[0].sun[1].x==0);
+    assert(sunny.occludeAmbient&&sunny.probes[0].skyVisibility.x>0);
+    auto open=makeDiffuseVolume(empty,{0,0,0},{0,0,0},1);bakeProbeEnvironment(empty,open,{0,1,0},128,20);
+    auto visibility=open.probes[0].skyVisibility;
+    assert(std::abs(visibility.x-.5f)<.001f&&std::abs(visibility.z-.5f)<.001f);
     g.build(std::vector<PointLight>{},1,nullptr,&sunny);assert(!g.texels.empty());
     std::cout<<"environment probes: open sun, colored bounce, sealed room and cache validation PASS\n";
     field.probes[0].visibility.distances.clear();rejected=false;

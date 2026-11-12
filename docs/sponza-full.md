@@ -290,4 +290,4 @@ retains the previous inexpensive lighting and performs no diffuse bake.
 
 The next opt-in path adds mobile four-probe interpolation, sun/sky transport, runtime
 radiance controls and a portable baked cache: [Scalable probe GI](probe-gi.md).
-The extended atlas uses 106 texels per probe (the original format above used 100).
+The extended atlas uses 107 texels per probe (the original format above used 100).

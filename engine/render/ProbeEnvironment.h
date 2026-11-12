@@ -19,15 +19,19 @@ inline void bakeProbeEnvironment(const StaticShadowGeometry& geometry,StaticDiff
     if(samples<16||samples>128||!std::isfinite(distance)||distance<=0||distance>1000)throw std::runtime_error("invalid environment probe settings");
     float length2=dot(sunDirection,sunDirection);
     if(!std::isfinite(length2)||length2<1e-6f)throw std::runtime_error("invalid probe sun direction");
-    sunDirection=normalize(sunDirection);
+    sunDirection=normalize(sunDirection);f.occludeAmbient=true;
     for(int z=0;z<f.nz;++z)for(int y=0;y<f.ny;++y)for(int x=0;x<f.nx;++x){
-        auto& probe=f.probes.at(size_t(x+f.nx*(y+f.ny*z)));probe.sun={};probe.sky={};
+        auto& probe=f.probes.at(size_t(x+f.nx*(y+f.ny*z)));probe.sun={};probe.sky={};probe.skyVisibility={};
         const auto origin=f.origin+float3{x+.5f,y+.5f,z+.5f}*f.spacing;
         for(int i=0;i<samples;++i){
             float sy=1-2*(i+.5f)/samples,phi=i*2.39996323f,r=std::sqrt(std::max(0.0f,1-sy*sy));
             float3 dir{r*std::cos(phi),sy,r*std::sin(phi)},n,albedo;
             float hit=geometry.distance(origin,dir,distance,&n,&albedo);
-            if(hit>=distance||hit<.05f||dot(n,n)<.5f)continue;
+            if(hit>=distance){
+                if(dir.y>0){auto& sh=probe.skyVisibility;float energy=1.0f/samples;sh.x+=energy;sh.y+=2*energy*dir.x;sh.z+=2*energy*dir.y;sh.w+=2*energy*dir.z;}
+                continue;
+            }
+            if(hit<.05f||dot(n,n)<.5f)continue;
             if(dot(n,dir)>0)n=n*-1.0f;
             auto surface=origin+dir*hit+n*.04f;
             float sun=std::max(0.0f,dot(n,sunDirection));
