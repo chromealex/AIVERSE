@@ -268,6 +268,38 @@
       "keywords": []
     },
     {
+      "id": "aiverse-combat-actions",
+      "package": "combat-actions",
+      "path": "skills/aiverse-combat-actions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Frame-keyed hitboxes/hurtboxes (sphere/capsule/box), dodge invulnerability, directional guard and perfect parry, poise/stagger and lock-on targeting composed over melee-combat",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_combat_actions",
+      "dependencies": [
+        "aiverse-melee-combat"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/CombatActions.h",
+      "keywords": [
+        "hitbox",
+        "hurtbox",
+        "dodge",
+        "parry",
+        "stagger",
+        "poise",
+        "lockon",
+        "хитбокс",
+        "уклон",
+        "парир",
+        "стаггер",
+        "захват"
+      ]
+    },
+    {
       "id": "aiverse-configuration",
       "package": "configuration",
       "path": "skills/aiverse-configuration/SKILL.md",

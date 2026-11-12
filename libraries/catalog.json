@@ -498,7 +498,7 @@
     },
     {
       "id": "configuration",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "layer": "tools",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Configuration.h",
@@ -1160,6 +1160,31 @@
       "runtime": "header",
       "linkDependencies": [],
       "packageDependencies": []
+    },
+    {
+      "id": "combat-actions",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/CombatActions.h",
+      "skill": "skills/aiverse-combat-actions/SKILL.md",
+      "summary": "Frame-keyed hitboxes/hurtboxes (sphere/capsule/box), dodge invulnerability, directional guard and perfect parry, poise/stagger and lock-on targeting composed over melee-combat",
+      "notes": "Read docs/genre-packages.md (combat-actions) for exact coverage and authority boundaries. Produces contacts and outcomes only: damage, stamina, health and statuses stay with the existing combat owner. Fixed math and integer ticks; repeated/backwards ticks are rejected. Persist CombatActorState via genre::save/load (record kinds 32..36) and hash it with combatHash.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_combat_actions",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/CombatConfigured.h",
+        "libraries/include/aiverselib/genre/CombatData.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "melee-combat"
+      ]
     },
     {
       "id": "weapon-policies",

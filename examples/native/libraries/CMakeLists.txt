@@ -6,3 +6,5 @@ aiverse_native_use_libraries(aiverse_native_library_demo
     tag-conditions object-interactions progression-curves reservations action-sequences
     loot-tables ai-perception decision-explanations bots-rts bots-fps navmesh
     character-locomotion melee-combat weapon-policies match-rules narrative-graphs)
+# Combat actions (hitboxes, dodge, parry, poise, lock-on) compose melee-combat.
+aiverse_native_use_libraries(aiverse_native_library_demo combat-actions)
