@@ -75,6 +75,10 @@ set(AIVERSE_LIBRARY_WORLD_SOURCES
     ../../engine/pack/Sha256.cpp)
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/FpsModule.cpp")
     file(GLOB AIVERSE_LIBRARY_FPS_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/Fps*.cpp")
+    # FpsModule parses projectile flight programs shared with the RTS module (engine/sim/ProjectileData).
+    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/sim/ProjectileData.cpp")
+        list(APPEND AIVERSE_LIBRARY_FPS_SOURCES "${CMAKE_CURRENT_LIST_DIR}/../../engine/sim/ProjectileData.cpp")
+    endif()
     add_executable(aiverse_library_fps_bot_tests bots/fps_tests.cpp
         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
         ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
