@@ -12,7 +12,9 @@ struct Lifecycle {
         if (event==AppEvent::Quit) next=AppPhase::Stopped;
         else if (event==AppEvent::Fail) next=AppPhase::Error;
         else switch (phase) {
-            case AppPhase::Boot: if(event==AppEvent::Ready) next=AppPhase::Menu; break;
+            case AppPhase::Boot:
+                if(event==AppEvent::Ready) next=AppPhase::Menu;
+                break;
             case AppPhase::Menu: if(event==AppEvent::Start) next=AppPhase::Loading; break;
             case AppPhase::Loading: if(event==AppEvent::Loaded) next=AppPhase::Playing; else if(event==AppEvent::Back) next=AppPhase::Menu; break;
             case AppPhase::Playing: if(event==AppEvent::Pause) next=AppPhase::Paused; else if(event==AppEvent::Finish) next=AppPhase::Results; break;
