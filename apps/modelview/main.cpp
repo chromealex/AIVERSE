@@ -112,7 +112,8 @@ struct Viewer {
                     for (auto& w : warn) log.push_back(w);
                     if (merge) {
                         const auto mr = mergeStaticPrimitives(*m);
-                        mergeInfo[path] = mr.merged ? "parts " + std::to_string(mr.primitivesBefore) + " -> " + std::to_string(mr.primitivesAfter)
+                        mergeInfo[path] = mr.merged ? "parts " + std::to_string(mr.primitivesBefore) + " -> " + std::to_string(mr.primitivesAfter) +
+                                                          (mr.shadowBatched ? ", shadow 1 draw for " + std::to_string(mr.shadowBatched) : "")
                                                     : "parts not merged: " + mr.reason;
                         log.push_back(path + ": " + mergeInfo[path]);
                     }

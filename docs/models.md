@@ -526,6 +526,12 @@ transparent parts and nodes listed in `keepNodes` (anything addressed by name: a
 muzzles, procedural animation) keep their own primitives. Only parts with the same material index
 are merged, so material overrides by name still apply.
 
-`aiverse_modelview` merges by default and shows `parts N -> M`; `--no-merge` draws the model as
+Shadows of the merged opaque parts are one draw: the opaque, shadow-casting materials without a
+shader graph (and with the same face culling) are laid out contiguously, and `MeshDef::shadowBatch`
+covers their index range; those primitives are marked `shadowBatched` and skipped in shadow passes
+(sun and spot). Material overrides (`ModelDraw::materials`, `nodeMaterial`, variants) fall back to
+per-part shadow draws. The car: 98 → 16 draw calls (14 materials + 1 shadow + ground), same image.
+
+`aiverse_modelview` merges by default and shows `parts N -> M, shadow 1 draw for K`; `--no-merge` draws the model as
 authored. The RTS view does not merge yet: its model cache is shared between unit types that may
 address nodes by name.

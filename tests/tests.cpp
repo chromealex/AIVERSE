@@ -14102,6 +14102,12 @@ TEST(model_merge_static_primitives) {
     };
     CHECK(faceUp(paint.firstIndex) * faceUp(paint.firstIndex + 6) > 0);
     CHECK(std::abs(m.boundsMax.x - 4) < 1e-5f && std::abs(m.boundsMin.x - 0) < 1e-5f);
+    // both materials are opaque casters: one shadow batch covers both merged primitives
+    const auto& mergedMesh = m.meshes[size_t(m.nodes.back().mesh)];
+    CHECK(r.shadowBatched == 2 && mergedMesh.shadowBatch.indexCount == 18 && mergedMesh.primitives[0].shadowBatched && mergedMesh.primitives[1].shadowBatched);
+    Model masked = make();masked.materials[1].alpha = AlphaMode::Mask;
+    const auto rm = mergeStaticPrimitives(masked);
+    CHECK(rm.merged && rm.shadowBatched == 0 && masked.meshes[size_t(masked.nodes.back().mesh)].shadowBatch.indexCount == 0);
     Model keep = make();ModelMergeOptions o;o.keepNodes = {"part1"};
     const auto rk = mergeStaticPrimitives(keep, o);
     CHECK(rk.merged && rk.primitivesAfter == 4 && keep.nodes[2].mesh >= 0);

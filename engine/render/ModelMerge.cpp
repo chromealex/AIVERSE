@@ -86,10 +86,23 @@ ModelMergeResult mergeStaticPrimitives(Model& m, const ModelMergeOptions& o) {
         meshRemap[size_t(src)] = int(meshes.size());
         meshes.push_back(std::move(mesh));
     }
-    // 2) one merged primitive per material, in model space (bind pose).
+    // 2) one merged primitive per material, in model space (bind pose). Opaque shadow casters that
+    // share the face culling come first, so one contiguous index range can draw all their shadows.
+    auto casts = [&](int material) { const auto& mt = m.materials.at(size_t(material));
+        return mt.alpha == AlphaMode::Opaque && mt.castShadow && !mt.shaderGraph; };
+    std::vector<int> orderMaterials;
+    int batchSided = -1;
+    for (const auto& [material, items] : groups) if (!items.empty() && casts(material)) {
+        const int sided = m.materials[size_t(material)].doubleSided ? 1 : 0;
+        if (batchSided < 0) batchSided = sided;
+        if (sided == batchSided) orderMaterials.push_back(material);
+    }
+    const size_t batchCount = orderMaterials.size();
+    for (const auto& [material, items] : groups)
+        if (!items.empty() && std::find(orderMaterials.begin(), orderMaterials.end(), material) == orderMaterials.end()) orderMaterials.push_back(material);
     MeshDef merged; merged.name = "merged";
-    for (const auto& [material, items] : groups) {
-        if (items.empty()) continue;
+    for (const int material : orderMaterials) {
+        const auto& items = groups[material];
         Primitive out; out.material = material; out.firstIndex = uint32_t(indices.size()); out.firstVertex = uint32_t(vertices.size());
         for (const auto& [n, pi] : items) {
             const mat4& w = m.bindWorld.at(size_t(n));
@@ -120,6 +133,13 @@ ModelMergeResult mergeStaticPrimitives(Model& m, const ModelMergeOptions& o) {
         out.indexCount = uint32_t(indices.size()) - out.firstIndex;
         out.vertexCount = uint32_t(vertices.size()) - out.firstVertex;
         merged.primitives.push_back(std::move(out));
+    }
+    if (batchCount >= 2) {
+        auto& sb = merged.shadowBatch;
+        sb.material = merged.primitives[0].material;
+        sb.firstIndex = merged.primitives[0].firstIndex;
+        for (size_t i = 0; i < batchCount; ++i) { sb.indexCount += merged.primitives[i].indexCount; merged.primitives[i].shadowBatched = true; }
+        r.shadowBatched = batchCount;
     }
     const int mergedMesh = int(meshes.size());
     meshes.push_back(std::move(merged));

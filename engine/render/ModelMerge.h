@@ -19,12 +19,15 @@ struct ModelMergeOptions {
 struct ModelMergeResult {
     bool merged = false;
     size_t primitivesBefore = 0, primitivesAfter = 0;  // drawn primitive instances (node x primitive)
+    size_t shadowBatched = 0;   // merged primitives whose shadows are drawn by one MeshDef::shadowBatch call
     std::string reason;                                   // why nothing was merged
 };
 
 // Call after loading, before uploadModel (needs the CPU vertices). Skipped (model untouched) for
 // skinned, morphing or animated models, material variants, mesh LODs, built geometry data, models
 // larger than maxExtent and when merging would not reduce the draw count.
+// Opaque, shadow-casting materials without a shader graph (same face culling) also get one shadow
+// draw for all of them (MeshDef::shadowBatch): their shadows need no material.
 ModelMergeResult mergeStaticPrimitives(Model& model, const ModelMergeOptions& options = {});
 
 }

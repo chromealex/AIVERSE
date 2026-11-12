@@ -220,6 +220,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Bunker Wars port: map environment (weather, wind, worms, toads, bombers, Mouro director, map scroller, off-map senders, auto skills, caves, graveyards + souls, burning buildings, walls, grass / winter trample) | `modules/rts/RtsEnv*.{h,cpp}`, `tests/tests_env.inc`, `docs/game-format.md` § Map environment; hooks: `RtsModule` (setup, systems, speed stat, hash, send check, `kEvEnv`, `releaseUnit` from `sysGarrison`), `RtsSave`, `RtsCombat` (death, damage override), `RtsSkills` / `RtsUnits` (assault) | agent-bw-env (MAIN merges) |
 | Bunker Wars content: importer of the BW Unity client (buildings, battle parameters, maps, heroes, skills, lang) and the generated `templates/bunkerwars` (+ `bw/*.json` sidecars, `PORT_TODO.md`); `playerMods.byCount` | `tools/importers/bunkerwars`, `templates/bunkerwars`; hooks: `playerModsByCount` in `RtsData.h` / `RtsOriginalsData.cpp` / `RtsOriginals.cpp`, `playerMods` row of `docs/game-format.md`, test `bw_player_mods_by_count_table` | agent-bw-data (MAIN merges) |
 | Bunker Wars computer player: AI6 / Bishop / Ashley, per-skill casters, debuts, map bot triggers, difficulty profiles (rules `ai.controller: "bw"`) | `modules/rts/RtsBwAI*`, `tests/tests_bwai.inc`, `docs/game-format.md` § Bunker Wars computer player; hooks: `RtsAI` (holder, update hand-off, save state v4), `RtsData` (controller `bw`, validation), `RtsModule` (`bwAI_`, `bwTypeStat`, `kCmdSend` exact count param < 0) | agent-bw-ai (MAIN merges) |
+| Box3D agent reference and physics workflow | `skills/aiverse-physics`, physics catalog routing | codex/physics-skill (user assigned) |
 | Other areas | as assigned by the user | the agent the user assigned |
 | Bunker Wars energy skills: skill objects (`origins`/`consume`, `goal`, `onArrive`/`onExpire`/`onDeath`, `pull`), BW skill converter + modificator table | `modules/rts/RtsSkillObjects.cpp`, `tools/importers/bunkerwars/skills/`, `docs/bunkerwars-skills.md`, `tests/tests_skillobjects.inc`; hooks: `RtsEffects.cpp` (area / projectile spawn), `RtsUnits.cpp` (Enter), `RtsCombat.cpp` (deaths), `RtsSave.cpp` | agent-bw-skills (MAIN merges) |
 
@@ -643,3 +644,13 @@ When you change one of these four English documents, update its translations in 
 (same sections in the same order; code, keys and identifiers untranslated). Other documents are
 written and kept in English only.
 
+
+## Rigid-body physics
+
+For Box3D collisions, sensors, queries, joints, motors or detachable assemblies, read
+`skills/aiverse-physics/SKILL.md` before writing an adapter. Reuse the optional
+`AIVERSE::physics` target; distinguish its fixed-manifest JSON wrapper from the direct
+C API. Copy transient events before mutations, wake reactivated joints, and validate
+real contacts. Physics needs an explicit host and never feeds float state into RTS
+Fixed lockstep implicitly. Deterministic vehicle/interaction policies retain their
+own authority. A standalone test or a model animation is not an in-client integration.

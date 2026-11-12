@@ -1987,6 +1987,19 @@
         "progression-curves",
         "configuration"
       ]
+    },
+    {
+      "id": "physics",
+      "version": "0.1.0",
+      "layer": "presentation",
+      "status": "engine-reference",
+      "source": "engine/physics/World.h",
+      "skill": "skills/aiverse-physics/SKILL.md",
+      "summary": "Optional Box3D rigid-body physics: scene wrapper, native collisions, sensors, queries, joints, motors and snapshots",
+      "notes": "Existing-engine reference; no new runtime library. Enable AIVERSE_ENABLE_PHYSICS and link AIVERSE::physics in an explicit host. Direct C API supports dynamic assemblies. No automatic RTS/FPS/Lua integration or Fixed lockstep readback. See the skill for authoritative host boundaries and snapshot restrictions.",
+      "verifiedPlatforms": [],
+      "runtime": "none",
+      "cmakeTarget": null
     }
   ]
 }
