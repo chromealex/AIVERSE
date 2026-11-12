@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "ModelClips.h"
 #include "Renderer3D.h"
 
 #include <algorithm>
@@ -173,6 +174,7 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
     if (!read(path, bytes)) throw std::runtime_error(path + ": file not found");
     auto m = load(path, bytes, read, warnings);
     m->path = path;
+    applyClipSidecar(*m, path, read, warnings);   // "<model>.clips.json": splits, external clips (ModelClips.h)
     return m;
 }
 

@@ -454,6 +454,8 @@ private:
                 for (size_t p = 0; p < baked.a->elements.data[e].props.count; ++p)
                     if (!baked.a->elements.data[e].props.data[p].constant_value)
                         warn("animation '" + clip.name + "': property animation (" + str(baked.a->elements.data[e].props.data[p].name) + ") is ignored");
+            clip.sourceStart = float(st->time_begin);
+            clip.sourceFps = float(scene_->settings.frames_per_second);
             if (!clip.channels.empty()) model_->clips.push_back(std::move(clip));
         }
     }
