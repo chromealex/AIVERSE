@@ -756,9 +756,14 @@ void buildIOS(const Game& g, Options& o) {
     info("Проект: " + proj.string());
     if (o.generateOnly) return;
     step("iOS: проверочная сборка для симулятора (без подписи)");
-    int rc = run("xcodebuild " + xcodeTarget + " -scheme aiverse_client -configuration " + o.config +
-                 " -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath " + quote(tempDir(o) / "build" / "ios-derived") +
-                 " CODE_SIGNING_ALLOWED=NO -quiet build");
+    const std::string simArgs = " -configuration " + o.config +
+        " -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath " + quote(tempDir(o) / "build" / "ios-derived") +
+        " CODE_SIGNING_ALLOWED=NO -quiet build";
+    // The CMake-generated aiverse_client scheme does not build the CocoaPods aggregate target, so the link
+    // step could not find Pods_aiverse_client.framework. Build the pods first into the same derived data.
+    if (xcodeTarget.rfind("-workspace", 0) == 0 && run("xcodebuild " + xcodeTarget + " -scheme Pods-aiverse_client" + simArgs) != 0)
+        die("сборка CocoaPods для симулятора не прошла");
+    int rc = run("xcodebuild " + xcodeTarget + " -scheme aiverse_client" + simArgs);
     if (rc != 0) die("сборка для симулятора не прошла");
     info("Симулятор: OK. Для устройства откройте проект в Xcode, выберите Team в Signing & Capabilities и запустите.");
 }
