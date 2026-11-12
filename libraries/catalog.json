@@ -901,13 +901,13 @@
     },
     {
       "id": "object-interactions",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/systems/Interactions.h",
       "skill": "skills/aiverse-object-interactions/SKILL.md",
       "summary": "Stable action previews plus native built-in interaction commands",
-      "notes": "Use interactions for sorted preview options and disabled reasons. Build actual Smart/PickItem/UseItem/Load/ToggleLock Commands with EngineMechanics.interactionCommand, then submit through Simulation. For ToggleLock actor is the selected gate; PickItem uses point. Custom actions use generated native commands and revalidate at execution.",
+      "notes": "Use interactions for sorted preview options and disabled reasons. Build actual Smart/PickItem/UseItem/Load/ToggleLock Commands with EngineMechanics.interactionCommand, then submit through Simulation. For ToggleLock actor is the selected gate; PickItem uses point. Custom actions use generated native commands and revalidate at execution. Physical carry/throw/push/ropes/doors/platforms/breakables are the separate physical-interactions package; previews here must not authorize those mutations.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_object_interactions",
       "dependencies": [
@@ -1574,6 +1574,43 @@
         "aiverse_net"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "physical-interactions",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/genre/PhysicalInteractions.h",
+      "skill": "skills/aiverse-physical-interactions/SKILL.md",
+      "summary": "Deterministic kinematic physical interactions: pick up/carry (hold point, mass limit, speed penalty, drop when blocked), charged throws with arc preview from the same integrator and swept landing, push/pull on a grid or free with friction/mass resistance and blocking, XPBD ropes/joints with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors with locks, keys, one-way rules, timing and auto-reverse, waypoint moving platforms with per-rider carry deltas, breakable objects with damage types, thresholds, stages and debris requests",
+      "notes": "Read docs/genre-packages.md (physical-interactions) for exact coverage, the determinism/network model and authority boundaries. These Fixed/integer-tick policies are the authoritative state; collision comes from the owner (WorldCollision adapts engine/world SpatialWorld). Box3D (engine/physics) is presentation-only here: it may simulate debris from DebrisRequest but is never read back. Outputs are state + InteractionEvents/requests; no rendering. Repeated/backwards ticks and invalid input return nullopt with state untouched. Platform carry deltas feed the rider position before LocomotionModes runs. Persist CarryState/PushState/RopeState/DoorState/PlatformState/BreakableState via genre::save/load (record kinds 80..87 reserved, 80..85 used), hash with interactionHash, bind interactionConfigHash and interactionDefinitionsHash. Optional `interaction` settings section. Separate from object-interactions (action preview menus and built-in engine interaction commands).",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_physical_interactions",
+      "dependencies": [
+        "libraries/include/aiverselib/genre/PhysicalCommon.h",
+        "libraries/include/aiverselib/genre/InteractionConfig.h",
+        "libraries/include/aiverselib/genre/Carry.h",
+        "libraries/include/aiverselib/genre/Push.h",
+        "libraries/include/aiverselib/genre/Ropes.h",
+        "libraries/include/aiverselib/genre/Doors.h",
+        "libraries/include/aiverselib/genre/Platforms.h",
+        "libraries/include/aiverselib/genre/Breakables.h",
+        "libraries/include/aiverselib/genre/InteractionConfigured.h",
+        "libraries/include/aiverselib/genre/InteractionData.h",
+        "libraries/include/aiverselib/genre/InteractionPersistence.h",
+        "libraries/include/aiverselib/genre/Persistence.h",
+        "examples/libraries/genre/interactables.json",
+        "examples/libraries/genre/interaction-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "packageDependencies": [
+        "configuration"
+      ]
     }
   ]
 }

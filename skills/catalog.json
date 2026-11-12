@@ -869,6 +869,56 @@
       "keywords": []
     },
     {
+      "id": "aiverse-physical-interactions",
+      "package": "physical-interactions",
+      "path": "skills/aiverse-physical-interactions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic kinematic physical interactions: pick up/carry (hold point, mass limit, speed penalty, drop when blocked), charged throws with arc preview from the same integrator and swept landing, push/pull on a grid or free with friction/mass resistance and blocking, XPBD ropes/joints with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors with locks, keys, one-way rules, timing and auto-reverse, waypoint moving platforms with per-rider carry deltas, breakable objects with damage types, thresholds, stages and debris requests",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_physical_interactions",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/PhysicalInteractions.h",
+      "keywords": [
+        "carry",
+        "pickup",
+        "throw",
+        "push",
+        "pull",
+        "rope",
+        "joint",
+        "door",
+        "lock",
+        "key",
+        "platform",
+        "elevator",
+        "breakable",
+        "debris",
+        "destructible",
+        "переноск",
+        "подня",
+        "брос",
+        "толка",
+        "тянут",
+        "верев",
+        "канат",
+        "двер",
+        "замок",
+        "ключ",
+        "платформ",
+        "лифт",
+        "разруш",
+        "обломк"
+      ]
+    },
+    {
       "id": "aiverse-play-scenarios",
       "package": "play-scenarios",
       "path": "skills/aiverse-play-scenarios/SKILL.md",

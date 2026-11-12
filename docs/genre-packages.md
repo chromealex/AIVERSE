@@ -11,6 +11,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets; 0.2.0: material-layer penetration, radial explosions with owner LOS, ammo feeds (magazine/belt/per-shell/energy + overheat), charge tiers, attachment stat stacking, ballistic launch and lead solving (see [Weapons and ballistics](#weapons-and-ballistics-weapon-policies-020)) | Existing FPS ammo/reload/fire cadence remain authoritative for built-in FPS weapons. No automatic replacement of hitscan, no damage/health owner, no presentation. |
 | genre-bots | Melee bot (spacing band, phase-aware openings, hit-confirmed combos, telegraph dodge/parry timing, lock-on), shooter bot (turn-limited aim, seeded aim error, solveIntercept lead, recoil bursts, reload/overheat, cover choice), squad roles + formations, objective choice hook (see [Genre bots](#genre-bots-genre-bots-010)) | Returns player-equivalent inputs only; perception, cover, objectives and navigation come from owners. No pathfinding, match rules, senses or sports/racing/card bots. |
 | stealth-senses | Sight cones (near/focus/peripheral) with owner light/cover/stance/visibility multipliers and LOS callback, hearing with occlusion callback and noise/query budgets, decaying footprint/scent markers, per observer-target suspicion meters (Unaware/Suspicious/Searching/Alert), delayed ally alerts sharing last known positions, deterministic search points with give-up, disguises, hiding spots (see [Stealth and senses](#stealth-and-senses-stealth-senses-010)) | Perception records and events only. Owner supplies poses, multipliers, raycasts/occlusion and search candidates and moves agents. Not RTS fog of war. No sound propagation, navmesh routes or presentation. |
+| physical-interactions | Pick up/carry (hold point, mass limit, carry speed penalty, drop when blocked), charged throws with an arc preview from the same integrator and swept landing, push/pull (free or grid, friction/mass resistance, cooperative pushing, blocking), XPBD ropes with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors (locks/keys, one-way, timing, auto-reverse), waypoint moving platforms with per-rider carry deltas, breakables (damage types, thresholds, stages, debris requests) (see [Physical interactions](#physical-interactions-physical-interactions-010)) | Authoritative kinematic policies over owner collision (engine/world). Box3D stays presentation-only (debris). No rigid-body stacking, rotation of props/platforms, rope-world collision or rendering. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points. MatchObjectives.h (0.2.0): capture/hold zones with contest rules and decay, king of the hill, payload, elimination with lives/respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock, spectator transitions (see [Match objectives](#match-objectives-match-rules-020)) | Native extension policies returning events/scores for the match owner; existing built-in victory modes stay owned by their modules. Presence, deaths, pickups and gate crossings come from the authoritative owner. No cart physics, bomb/HUD presentation or network spectating. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 
@@ -553,3 +554,113 @@ velocity, guard, telegraphed attack); a target at `rememberFrom` (default Search
 `lastKnown` position with `visible=false`, so bots approach but never shoot or lock it. Anonymous disturbances
 (target 0) are skipped; steer search with `genre::searchGoal`. Results are sorted by target id. `facts` returning
 nullopt drops a target. This makes `stealth-senses` a package dependency of `genre-bots`.
+
+## Physical interactions (physical-interactions 0.1.0)
+
+Headers under `genre/`: `PhysicalInteractions.h` (umbrella + `InteractionDefinitions`), `Carry.h`, `Push.h`, `Ropes.h`,
+`Doors.h`, `Platforms.h`, `Breakables.h`, shared `PhysicalCommon.h` (events, `WorldCollision`, swept move) and
+`InteractionConfig.h`, settings adapter `InteractionConfigured.h`, JSON `InteractionData.h`, records
+`InteractionPersistence.h`. Target `AIVERSE::lib_physical_interactions` (depends on `configuration`, `aiverse_engine`,
+`aiverse_world`); native OBJECT modules call `aiverse_native_use_libraries(target physical-interactions)`. Skill:
+`skills/aiverse-physical-interactions`. Separate from `object-interactions` (action menus and built-in engine
+interaction commands): a preview there never authorizes these mutations.
+
+**Determinism and network model.** These policies are the authoritative gameplay state for interactions. They use
+Fixed math, integer ticks and ascending-ID order, call only owner-supplied pure collision queries and keep every
+outcome-affecting value in versioned records. Run them on the authority (server or lockstep peers) from validated
+Commands, once per tick each; clients predict by running the same steps and roll back by restoring the records and
+replaying inputs. The optional Box3D module (`docs/physics.md`) is not deterministic across builds/CPUs and is
+**non-authoritative** here: it may simulate debris from `DebrisRequest` (seeded) or cosmetic motion, but nothing is
+read back from it. If a game makes Box3D authoritative instead, it needs its own command/save/network integration.
+
+**Collision.** Any object with `sweep(start,delta,half,ignore) -> InteractionHit` and
+`overlapping(box,ignore) -> ascending ids` works; `WorldCollision(spatialWorld)` adapts `engine/world::SpatialWorld`
+(sorted candidates, ties by smaller id). Moves use `physSweep`: the box shrunk by `skin` is swept over the move extended
+by `skin` and stops so the real box touches the contact. Touching bodies can slide or separate; pressing into a
+surface reports a hit without creeping; starting inside blocks. Overlap tests are strict (touching faces do not block).
+
+**Common contract.** Each step validates config, definitions, state and input first; invalid data, dt outside (0,1]
+or a repeated/backwards tick return nullopt with the state untouched. Inputs may arrive in any order; they are
+processed by ascending ids. Outputs are the updated state plus `InteractionEvent{kind, object, actor, value, collider,
+position}` (value = reason code, impulse/tension in milli-units, stage id, ...) and per-mechanic status lists. No
+rendering, audio or animation. Units: metres, kilograms, seconds, newtons; yaw/pitch in turns (yaw 0 faces +Z).
+
+**Carry/throw.** `stepCarry` processes flights first (ascending object), then carriers (ascending id): drop, throw
+when the `charge` level falls, pickup, hold update. Pickup is refused (`PickupRefused`: TooHeavy above `maxMass`,
+OutOfReach beyond `reach` from the hold anchor = feet + `holdHeight`, Busy when held/flying). The held object follows
+`carryHoldPoint` (anchor + forward*`holdDistance`) at most `followSpeed` per second with a swept move ignoring itself
+and the carrier; blocked and farther than `breakDistance` from the hold point -> `DroppedBlocked` (collider set).
+`CarrierStatus::speedMilli = max(minSpeedMilli, 1000 - mass*speedPenaltyMilli)` is the carrier speed multiplier for
+the movement owner. Throws: impulse grows linearly from `throwMinImpulse` to `throwMaxImpulse` over `chargeTicks`;
+velocity = forward*impulse/mass + carrier velocity. `stepFlight` (v.y -= g*dt, swept move by v*dt) runs once per tick
+from the tick after the throw; `previewThrow` runs the identical step, so `points[k]` equals the flight position k+1
+ticks after the throw and the landing (`Landed`, collider/normal) matches exactly. `maxFlightTicks` ends with
+`FlightExpired`. Free objects are the owner's (it reports their poses for pickup); `releaseCarried` forgets a prop.
+
+**Push/pull.** `addPushable` registers a body. Per object the forces of all commands add up (horizontal part only);
+motion needs |F| > friction*mass*g (`PushResisted` TooWeak on the rising edge; pulling a non-pullable object ->
+NotPullable). Free mode: a = (|F| - resistance)/m along F, capped at `pushMaxSpeed`; without enough force kinetic
+friction (friction*g) slows it; the swept move slides along walls (`PushBlocked` on the rising edge, `PushStarted` /
+`PushStopped`). Grid mode: one cell along the dominant axis after a swept clearance test, linear over `gridMoveTicks`,
+`PushArrived` exactly on the cell; commands during a move are ignored. Pushables never fall: the owner keeps them on
+the ground. Pull = the actor gives the direction toward itself; its own collider is not ignored, so step it back first.
+
+**Ropes.** `makeRope(def, a, b)` creates `segments+1` particles. Ends: Free, Point (world point), Body (follows the
+owner pose in `RopeInput::bodies`, keeps the last pose when missing) and Load (a hanging mass simulated by the rope).
+Each tick: attach/detach commands (`RopeAttached`/`RopeDetached`), gravity + damping prediction, then
+`ropeIterations` Gauss-Seidel XPBD passes over the distance constraints (stretch only, `compliance` in m/N, 0 = rigid).
+Tension = max segment force (lambda/dt^2); with a fixed iteration count a heavier load stretches the rope slightly
+more, and more iterations converge closer to the rest length. Above `breakForce` (0 = unbreakable) the rope breaks
+(`RopeBroken`, value = tension in milli-newtons) and stops simulating. `RopeStatus::pullA/pullB` is the force on a Body
+end for its own controller. dt must be >= 1/1000 s. No rope-vs-world or self collision.
+
+**Doors.** `addDoor` from `DoorDef` (closed panel box, Hinged: vertical pivot + `openAngle` in turns, Sliding:
+`slide` offset). Opening takes `openTicks`, closing `closeTicks` (exact integer progress), `autoCloseTicks` after
+`DoorOpened` start closing. Each tick the next pose (conservative AABB for hinged doors) is tested with `overlapping`
+ignoring the door's collider: a blocked closing door reverses (`DoorReversed`, autoReverse) or holds (`DoorBlocked`),
+a blocked opening door holds. Locked doors refuse opening (`DoorRefused` Locked) unless the actor's `keys` contain
+`key` (then `DoorUnlocked` + opening); Lock/Unlock need the key (NoKey); one-way doors open only from `oneWay` side of
+the panel's thinner axis (WrongSide); `scripted` commands bypass keys and sides. Update the door collider from
+`DoorStatus::bounds` after every tick; give the door query the bodies (characters, props), not its static frame.
+
+**Moving platforms.** `addPlatform`; constant `speed` along `waypoints` (Loop, PingPong, Once), stationary for exactly
+`waits[i]` ticks after arriving at waypoint i (`PlatformArrived`/`PlatformDeparted`, value = waypoint index); the rest
+of the travel in an arrival tick is discarded; `PlatformCommand` starts/stops. Translation only. The collision owner
+reports `RiderContact{rider, platform}` from its ground test (the same contact that sets `LocomotionEnvironment::
+grounded`); the report lists `RiderCarry{rider, platform, delta, velocity}` in ascending rider id
+(`RiderBoarded`/`RiderLeft`). Owner order per tick: contacts -> `stepPlatforms` -> add `delta` to the rider (swept) ->
+`stepLocomotion` with `env.grounded` -> move by the locomotion velocity -> update the platform collider. The
+locomotion velocity stays relative to the platform; add `velocity` once on leaving for momentum inheritance.
+Platforms never stop for obstacles; crushing is the owner's rule.
+
+**Breakables.** `addBreakable`; `DamageInput{id, object, type, amount, source, position}` in ascending (object, id).
+Scaled damage = amount * scaleMilli/1000 for the type (`defaultScaleMilli` otherwise; 0 = immune), ignored below the
+type's `threshold`, repeated/older ids and broken objects (`DamageIgnored` with reason). Stages (ascending ids,
+decreasing health) fire `StageReached` once when health drops to them; health 0 -> `Broken`. Each stage / the break
+emits `DebrisRequest{object, stage (0 = break), kind, count, position, seed}`; seeds hash (object, stage, damage id).
+
+**Settings.** Optional `interaction` section (configuration 0.3.3): gravity, skin, carry* (mass, reach, hold
+distance/height, follow speed, break distance, speed penalty/minimum), throw impulses/charge, flight ticks, push
+speed / grid ticks, rope iterations/damping (milli-units). The loader enforces throwMin <= throwMax;
+`interactionSettingsErrors` adds `interactionConfigError`. Example `examples/libraries/genre/interaction-settings.json`.
+Definitions: `readInteractionDefinitions` (`examples/libraries/genre/interactables.json`), errors such as
+`interaction.platforms[0].waitTicks: expected one value or one per waypoint`.
+
+**State.** Records (version 1): `CarryState` 80, `PushState` 81, `RopeState` 82, `DoorState` 83, `PlatformState` 84,
+`BreakableState` 85; kinds 80..87 are reserved for this package (narrative takes 64..71, cinematic 72..79). Load checks
+structure; each step re-checks the records against the definitions. `interactionHash` folds canonical bytes into the
+checksum, `interactionConfigHash` / `interactionDefinitionsHash` bind the immutable data in the save envelope.
+`GenreConsumer.cpp` (`physicalInteractionConsumerExample`) runs one tick of carry, door, platform and breakable steps
+and stores `genre.interaction.{carry,doors,platforms,breakables}` plus hashes.
+
+**Verification.** `tests/libraries/genre_tests.cpp` (`physicalInteractions`): throw preview points/landing equal the
+simulated flight tick by tick, mid-flight restore continues bit-identically, mass/reach refusals and carry speed
+penalty, drop when carried into a wall; cooperative push, friction refusal, blocked free push without creeping, grid
+move/arrival/blocking and restore; hanging rope tension within 10% of the weight, less stretch with more iterations,
+breaking, detach/attach to a body with pull output, restore; door key/lock/scripted rules, auto-reverse on a body,
+hold without auto-reverse, one-way side, hinged bounds, restore; platform rider deltas fed through `stepLocomotion`
+for 90 ticks (exact offset when idle, relative walking), ascending rider order, waits, restore; breakable thresholds,
+immunity, duplicates, stages, debris seeds; invalid JSON/settings/inputs. Verified only with g++ 11 (Linux VM): header
+syntax checks, the genre tests built by hand, the physical tests also under ASan/UBSan, and the full GenreConsumer
+chain in a standalone driver. Not verified: CMake/isolation, `aiverse_tests`, native module export, headless restore
+matches, MSVC/clang, platform runtimes, any Box3D debris presentation.
