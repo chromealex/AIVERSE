@@ -866,7 +866,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
 
         steerPossessed();
         topDownFrame(dt);
-        if (!netMatch_) {
+        if (!netMatch_ && !topDownPaused()) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
             static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
             if (simSpeed == 1.0) sim_->advance(dt);
@@ -892,7 +892,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         scene_.moveMarkers.clear();
         for (auto& [p, until] : markers_) if (until > time_) scene_.moveMarkers.push_back(p);
         markers_.erase(std::remove_if(markers_.begin(), markers_.end(), [&](auto& m) { return m.second < time_; }), markers_.end());
-        if (screen_ == Screen::Playing) topDownCamera(dt);
+        if (screen_ == Screen::Playing) { topDownPresent(dt, alpha); topDownCamera(dt); }
     }
 
     luaTick(dt);   // game.on("update", fn) in UI scripts

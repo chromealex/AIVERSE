@@ -42,7 +42,7 @@ bool RtsModule::applyMechCommand(Simulation& sim, const Command& cmd) {
             st->homeSet = true;
             Unit& u = w.get<Unit>(e);
             if (mode == uint8_t(StanceMode::Hold)) { u.flags |= kUnitHold; stopMoving(sim, e); }
-            else u.flags &= uint8_t(~kUnitHold);
+            else u.flags &= kKeepFlags(~kUnitHold);
             auto* ord = w.tryGet<Orders>(e);
             if (mode == uint8_t(StanceMode::Passive)) if (auto* c = w.tryGet<Combat>(e); c && c->autoTarget) {
                 c->target = kNullEntity;
@@ -181,7 +181,7 @@ bool RtsModule::board(Simulation& sim, Entity p, Entity carrier) {
     if (auto* ord = w.tryGet<Orders>(p)) ord->queue.clear();
     if (auto* c = w.tryGet<Combat>(p)) c->target = kNullEntity;
     Unit& u = w.get<Unit>(p);
-    u.flags = uint8_t((u.flags | kUnitInCargo) & ~kUnitHold);
+    u.flags = uint16_t((u.flags | kUnitInCargo) & kKeepFlags(~kUnitHold));
     Transport& tp = w.get<Transport>(carrier);
     tp.cargo.push_back(p);
     tp.used += rules_.types[u.type].mech.cargoSize;
@@ -202,7 +202,7 @@ void RtsModule::unloadOne(Simulation& sim, Entity carrier, size_t index) {
     Unit& u = w.get<Unit>(p);
     const UnitType& t = rules_.types[u.type];
     tp.used = std::max(0, tp.used - t.mech.cargoSize);
-    u.flags &= uint8_t(~kUnitInCargo);
+    u.flags &= kKeepFlags(~kUnitInCargo);
     if (w.has<Boarded>(p)) w.remove<Boarded>(p);
     Vec3 at;
     if (rules_.types[w.get<Unit>(carrier).type].structure) at = freeSpotNear(sim, carrier, t.layer);
