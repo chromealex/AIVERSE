@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "colony": {"ticksPerHour": 50, "breakTicks": 100, "maxResponseJobs": 16},
+  "survival": {"hungerPerTick": 0, "thirstPerTick": 10, "comfortLowMilli": 15000, "coolingMicro": 35}
+}

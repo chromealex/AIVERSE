@@ -102,3 +102,23 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/world/SpatialWorld.cpp")
     endif()
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
 endif()
+
+# settlement-production + survival-ecology (+ colony planner bot): unit tests and the executable 20-day example
+# (examples/libraries/genre/production-survival: survival criteria, identical hashes across two runs and a restore).
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/data/Json.cpp")
+    set(AIVERSE_LIBRARY_PRODUCTION_SURVIVAL_SOURCES
+        ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+    add_executable(aiverse_library_genre_production_survival_tests genre_production_survival_tests.cpp
+        ${AIVERSE_LIBRARY_PRODUCTION_SURVIVAL_SOURCES})
+    add_executable(aiverse_library_production_survival_example
+        ../../examples/libraries/genre/production-survival/production_survival.cpp ${AIVERSE_LIBRARY_PRODUCTION_SURVIVAL_SOURCES})
+    foreach(_aiverse_ps aiverse_library_genre_production_survival_tests aiverse_library_production_survival_example)
+        target_link_libraries(${_aiverse_ps} PRIVATE AIVERSE::gameplay_native)
+        if(NOT MSVC)
+            target_compile_options(${_aiverse_ps} PRIVATE -Wall -Wextra -Werror -pedantic $<$<CXX_COMPILER_ID:GNU>:-Wno-misleading-indentation>)
+        endif()
+    endforeach()
+    add_test(NAME library_genre_production_survival COMMAND aiverse_library_genre_production_survival_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
+    add_test(NAME library_production_survival_example COMMAND aiverse_library_production_survival_example
+        ${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/production-survival --quiet)
+endif()
