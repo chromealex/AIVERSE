@@ -52,6 +52,7 @@ void RtsAI::update(Simulation& sim) {
     if (m->rules().fidelity && hasOther) fidelity(sim, *m);
     if (hasGarrisons) garrisonPlay(sim, *m);
     if (hasOther) {
+        if (auto* td = m->topDown(); td && td->active()) { Command c; if (td->botCommand(sim, player_, c)) send(sim, c); }   // hero stick (RtsTopDown.cpp)
         special(sim, *m);
         if (!m->rules().diggables.empty() || !m->rules().rooms.empty()) dungeon(sim, *m);
         if (m->rules().settlers) settlers(sim, *m);

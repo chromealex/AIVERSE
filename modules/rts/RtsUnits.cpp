@@ -751,6 +751,7 @@ void RtsModule::sysMovement(Simulation& sim) {
     });
 
     if (rules_.dungeon) movePossessed(sim);
+    if (topDown_ && topDown_->active()) topDown_->tick(sim);   // top-down heroes: stick movement, aim, auto-fire (RtsTopDown.cpp)
 
     if (rules_.movement.separation) {
     // 2) separation between overlapping mobile units on the same layer. Bodies are move.radius; who yields
