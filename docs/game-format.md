@@ -1269,6 +1269,14 @@ Trigger actions for missions: `{"type": "objective", "id": "raze", "text": "..."
 hp, rank, hero level; resources) -> `applyCarry` (into the next map, players[0] = campaign player) -> `restoreCarry`
 after setup. MCP: `campaign_get`, `campaign_set` (validated), `campaign_run` (bots, mission chain, outcomes, carry).
 
+## Extraction raids (`raid`, agent-extraction)
+
+Optional rules block `raid` (+ map `raid` overrides): the match loop of extraction shooters — raiders (types in
+`raiders`, carrying loot in their `inventory` item bags), hold-to-use objects (`interact` per type, `loot` tables),
+`objectives` (collect / reach / kill / interact / script), extraction `points` (zones with open / sleep cycles,
+called helicopters with `arrival`, `channel`, `contest`, `leave`, `interruptOnDamage`, `requires`), match phases and
+per-player receipts for the meta. Full reference: [raid.md](raid.md); sample: `templates/extraction`.
+
 ## Commands (for tools and network code)
 
 Besides the unit commands (`RtsModule.h`): `kCmdSurrender` (the issuing player is defeated, event value 1),

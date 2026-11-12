@@ -182,6 +182,9 @@ public:
     bool allowBuild(Simulation& sim, uint8_t player, uint16_t type, Vec3 at, Entity builder);   // can_build
     bool allowTrain(Simulation& sim, uint8_t player, uint16_t type, Entity producer);           // can_train
     bool allowCast(Simulation& sim, Entity caster, int index, Entity target, Vec3 at);          // can_cast
+    // Named veto hook of a mechanic (raid_can_extract, a point's "fn"): fn(player, arg) returning false refuses.
+    // True when the game's scripts do not define fn (no cost for games without it).
+    bool allowNamed(Simulation& sim, const std::string& fn, uint8_t player, const std::string& arg);
 
     bool hasFunction(const std::string& name) const;
     const std::vector<ScriptLogEntry>& log() const { return log_; }

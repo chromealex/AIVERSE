@@ -1,0 +1,79 @@
+// Extraction Raid: one drone (the raider) per player, hostile swarm creeps (owner -1), crates and a vault
+// (hold to open: loot tables), a robot to rescue (hold to free: objective), a landing zone that opens in
+// cycles once the robot is free, and a helicopter that can be called late in the raid (follows the caller).
+{
+  "victory": "noUnits",
+  "fogOfWar": {"mode": "explored"},
+  "resources": {
+    "coins": {"name": "Coins", "kind": "stock", "start": 0}
+  },
+  "items": {
+    "scrap":     {"name": "Scrap", "cost": {"coins": 5}},
+    "battery":   {"name": "Battery", "cost": {"coins": 20}},
+    "data_core": {"name": "Data core", "cost": {"coins": 60}},
+    "medkit":    {"name": "Medkit", "use": {"heal": 80}, "charges": 1, "cost": {"coins": 10}}
+  },
+  "types": {
+    "drone": {
+      "name": "Drone", "tags": ["raider"],
+      "health": {"max": 260}, "move": {"speed": 3.2, "radius": 0.4}, "sight": 9,
+      "weapons": [{"id": "rifle", "range": 5, "damage": 14, "cooldown": 0.5}],
+      "inventory": {"slots": 6}
+    },
+    "thin": {
+      "name": "Thin", "health": {"max": 45}, "move": {"speed": 2.2, "radius": 0.35}, "sight": 6,
+      "weapons": [{"id": "bite", "range": 0.6, "damage": 5, "cooldown": 1.0}],
+      "neutral": {"leash": 9}
+    },
+    "crate": {
+      "name": "Supply crate", "structure": {"footprint": [1, 1]}, "health": {"max": 100}, "invulnerable": true,
+      "countsForVictory": false
+    },
+    "vault": {
+      "name": "Data vault", "structure": {"footprint": [2, 2]}, "health": {"max": 100}, "invulnerable": true,
+      "countsForVictory": false
+    },
+    "robot": {
+      "name": "Captive robot", "health": {"max": 100}, "invulnerable": true, "move": {"speed": 0, "radius": 0.5},
+      "countsForVictory": false
+    }
+  },
+  "raid": {
+    "mode": "pve",
+    "duration": 300,
+    "startDelay": 1,
+    "raiders": ["drone"],
+    "loseOnDeath": "drop",
+    "pickupRadius": 1.5,
+    "items": {
+      "scrap": {"value": 5, "asset": "scrap"},
+      "battery": {"value": 20, "asset": "battery"},
+      "data_core": {"value": 60, "asset": "data_core"}
+    },
+    "loot": {
+      "crate": {"rolls": [1, 2], "entries": [
+        {"item": "scrap", "weight": 5, "count": [1, 2]},
+        {"item": "battery", "weight": 2},
+        {"item": "medkit", "weight": 1},
+        {"resource": "coins", "amount": 10, "weight": 3},
+        {"none": true, "weight": 1}
+      ]},
+      "vault": {"entries": [{"item": "data_core"}]}
+    },
+    "interact": {
+      "crate": {"hold": 2, "range": 1.2, "loot": "crate"},
+      "vault": {"hold": 4, "range": 1.2, "loot": "vault", "interruptOnDamage": true},
+      "robot": {"hold": 3, "range": 1.2, "objective": "rescue", "fn": "on_robot_freed", "leave": "pause"}
+    },
+    "extraction": {"radius": 3, "channel": 4, "departure": 2.5},
+    "objectives": [
+      {"id": "rescue", "text": "Free the captive robot", "kind": "interact", "shared": true, "reward": {"robot_parts": 1}},
+      {"id": "core", "text": "Bring out a data core", "kind": "collect", "item": "data_core", "required": true, "reward": {"coins": 50}},
+      {"id": "hunter", "text": "Destroy 5 swarm creatures", "kind": "kill", "type": "thin", "count": 5}
+    ],
+    "points": [
+      {"id": "heli", "call": true, "follow": true, "arrival": 4, "channel": 0, "opensAt": 200, "capacity": 1}
+    ]
+  },
+  "scripts": ["scripts/raid.lua"]
+}

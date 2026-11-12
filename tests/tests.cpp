@@ -13337,6 +13337,7 @@ TEST(file_assoc_linux_registration_temp_home) {
 #endif
 #endif
 #include "tests_fields.inc"   // grid fields (G5)
+#include "tests_raid.inc"     // extraction raids (agent-extraction)
 
 // ------------------------------------------------------------------ planet detail grids (agent-terrain)
 

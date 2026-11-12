@@ -636,7 +636,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
@@ -1231,6 +1231,7 @@ void openGameApi(Vm& vm) {
     openGridApi(vm);
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
+    openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
 }
 
 } // namespace script
@@ -1350,6 +1351,16 @@ Json scriptApiReference() {
     fl.push(fn("field.fill_rect(id, x0, z0, x1, z1, v [, \"set\"|\"add\"|\"max\" [, player]]) / field.fill_circle(id, x, z, r, v [, mode [, player]])", "write many cells; returns cells changed"));
     fl.push(fn("on_field_threshold(id, value, fn(e) [, \"rise\"|\"fall\"])", "a cell crosses the value: e = {field, x, z, cx, cz, value, player} (in the scripts phase of the next tick at the latest)"));
     r.set("fields", fl);
+    Json rd = Json::array();   // extraction raids (RtsRaidApi.cpp, docs/raid.md)
+    rd.push(fn("raid.active() / raid.phase() / raid.time_left()", "rules \"raid\": \"briefing\" | \"running\" | \"over\"; seconds left (fx, nil without a clock)"));
+    rd.push(fn("raid.players() / raid.player(slot)", "raid players; {slot, team, status, value, kills, carried, secured, lost, objectives = {id = {done, progress}}}"));
+    rd.push(fn("raid.points() / raid.point(id) / raid.can_use(slot, id)", "extraction points {id, phase (locked|sleep|inbound|open|departing), x, z, radius, fill, channel, used, caller}"));
+    rd.push(fn("raid.receipt(slot)", "the player's receipt (JSON text; final once the raid is over): id = meta operation id"));
+    rd.push(fn("raid.extract(slot [, point]) / raid.fail(slot [, \"dead\"|\"timeout\"|\"abandoned\"]) (simulation scripts)", "resolve a raider now"));
+    rd.push(fn("raid.progress(slot, objective [, n]) / raid.complete(slot, objective) / raid.give(slot, item [, n [, secured]]) / raid.spawn_loot(table, x, z [, slot])", "objectives, items, loot tables"));
+    rd.push(fn("raid_can_extract(player, point_id)", "global veto hook: return false (+ reason) to refuse an extraction or a call"));
+    rd.push(fn("on(\"raid_phase\" | \"raid_point\" | \"raid_channel\" | \"raid_extracted\" | \"raid_loot\" | \"raid_interact\" | \"raid_objective\" | \"raid_player\", fn(e))", "raid events: e = {player, unit, other, value, x, z} (docs/raid.md: value encodings)"));
+    r.set("raid", rd);
     return r;
 }
 
