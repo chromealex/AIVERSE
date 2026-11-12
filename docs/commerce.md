@@ -72,6 +72,12 @@ Deals: simulation scripts call `commerce.act(player, deal, ...)`; the UI sends
 `game.command(player, {type = "commerce", param = commerce.param(deal, ...)})`. Arguments after the deal name:
 premises (index from 1 or id), then the business id for `open`; just the amount for `borrow` / `repay`.
 
+## Adding it to a city project
+
+`tools/citygen/add_commerce.py <project>` turns the buildings already on the map into premises (a door on the
+nearest pavement, a price by kind and by how central the spot is) and adds the `commerce` block with business
+types to the rules. It is additive and repeatable: existing entries are kept.
+
 ## Not done yet
 
 Income is a fixed figure per day scaled by `traffic`: real customers (residents who walk in and pay) and the
