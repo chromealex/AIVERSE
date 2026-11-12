@@ -87,7 +87,7 @@ void loadProgressionRules(Rules& r, const Json& j0, EffectParser& ep) {
     keysOnly(j, "", {"stats", "perks", "units", "deck", "xp", "offers", "summonPoints",   // library format (PerksData.h)
                      "players", "killXp", "orbs", "orbOwner", "autoOpen", "offerChoices", "offerRerolls", "rerollAvoidsRepeat",
                      "maxLevel", "xpGrowthPerLevel", "maxRecruitsPerSlot", "maxSquad", "pickups", "summons", "squad", "critDamage",
-                     "decks", "defaultDeck"});
+                     "decks", "defaultDeck", "offerAt"});
     // ---- library definitions (a copy without the engine keys of units[] and perks[])
     Json lib = Json::object();
     for (const char* k : {"stats", "perks", "units", "deck", "xp", "offers", "summonPoints"}) if (j.has(k)) lib.set(k, j[k]);
@@ -222,6 +222,9 @@ void loadProgressionRules(Rules& r, const Json& j0, EffectParser& ep) {
     if (owner != "anyone" && owner != "killer") bad("orbOwner", "expected 'anyone' or 'killer'");
     p.orbsForKiller = owner == "killer";
     p.autoOpen = j.getBool("autoOpen", true);
+    const std::string at = j.getStr("offerAt", "anywhere");
+    if (at != "anywhere" && at != "summonPoints") bad("offerAt", "expected 'anywhere' or 'summonPoints'");
+    p.offerAtCircles = at == "summonPoints";
     if (j.has("decks") && !j["decks"].isObject() && !j["decks"].isArray()) bad("decks", "expected payloads by player ({\"1\": {...}}) or a list with \"player\"");
     p.decks = j["decks"];
     p.defaultDeck = j["defaultDeck"];

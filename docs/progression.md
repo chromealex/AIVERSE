@@ -52,6 +52,8 @@ integers, multiply values are milli: 1250 = x1.25) plus engine keys:
   "orbs": true,                           // false: kill xp goes straight to the killer
   "orbOwner": "anyone",                   // "killer": only the killer can pick its orbs up
   "autoOpen": true,                       // false: offers wait for an "open" command (stations)
+  "offerAt": "anywhere",                  // "summonPoints": cards open only while the hero stands in a circle
+                                          // (Drone Fall stations); leaving closes them, xp stays banked
   "pickups": {"radius": 2.5, "magnetRadius": 40, "grabRadius": 0.5, "attractSpeed": 0, "attractAccel": 0, "maxSpeed": 40,
               "landing": 0.3, "lifetime": 40, "maxOrbs": 1024},       // seconds, units, units / s
   "summons": {"progress": 2, "cooldown": 0, "maxAllies": 4, "charges": 0, "chargeRecharge": 0, "resetOnExit": true},
@@ -156,7 +158,7 @@ are removed silently when it runs out. Idle allies (no orders, no live target) w
 Queries (simulation and view scripts): `progression.active()`, `players()`, `player(slot)` -> `{level, xp, xp_to_next,
 progress (0..1, the xp bar), levels (banked), kills, hero, offer_open, perks = {{id, key, slot, initial}}, recruits}`,
 `offer(slot)` -> nil or `{revision, level, rerolls, cards = {{kind = "perk" | "recruit", perk, id, slot, unit, hook,
-scope}}}`, `orbs()`, `points([slot])` (circle state for visuals: ready / progress / used / cooldown / squad_full /
+scope, letter (R / H / P / G)}}}`, `orbs()`, `points([slot])` (circle state for visuals: ready / progress / used / cooldown / squad_full /
 blocked / pending), `unit(u)`, `stat(u, stat [, base])`. Actions (simulation scripts): `grant_xp(slot, xp [, pickup])`,
 `grant_perk(slot, perk [, deck slot])`, `clear_perks(slot [, deck slot [, keep_initial]])`, `choose(slot, card [, rev])`,
 `reroll`, `open`, `close`, `magnet(slot)`, `spawn_orb(x, z, xp [, owner])`.
@@ -197,11 +199,23 @@ system runs right before `death`. The `progression_can_offer` and perk hooks are
 | Split (contact / time, children count, fan angle), Ricochet (fresh nearest target, count), Fly Through with falloff | perk `bullet.modifiers` over the projectile programs |
 | `levelUpRevision`, stale clicks rejected | offer `revision` in `kCmdProgression` |
 | console `levelup` / `modifiers give` / `clear` / `clearproto` | Lua `grant_xp`, `grant_perk`, `clear_perks(slot, -2)`, `clear_perks(slot, deck slot)` |
-| stations (two / three alternatives, keep EXP, heal the squad) | `autoOpen: false` + `open` / `close` commands from the station's Lua; healing in Lua |
+| level-ups taken at summon circles / stations (two / three alternatives, keep EXP, heal the squad) | `"offerAt": "summonPoints"` (cards open in a circle, close when the hero leaves; xp stays banked); healing in Lua on `progression_offer` |
+| card letters R / P / H / G per level (`experienceLevelingConfig`) | `offers.levels[].variants`: R `recruit`, P / H `slotPerk` (hero perks: `units: [hero]`, robot perks: robot units), G `playerPerk`; each card has `letter` in `progression.offer()` |
+| script command `df_pick {index}` | keep it: `function df_on_pick(player, id, args) return progression.choose(player, args.index) end`, or send `kCmdProgression` directly |
 
 Differences: crits roll on every damage instance of the unit (Drone Fall: direct hits only); "every second / third
 bullet" perks (Universal, Sniper), Double-Shot `fireCount`, Push and rocket ground effects need Lua (`hook` + effects);
 level-up VFX is the game's view script on `progression_perk`.
+
+## Verification (2026-11-12, container gcc 13 Release)
+
+`aiverse_tests` 9663 checks / 0 failed (7 `progression_` tests); `tests/checksums/check.sh`: every existing line
+identical, `perk_arena` added (Pilot wins seeds 1..3); `perk_arena --verify-restore-at 20`: snapshot / serialized /
+fresh restore OK. Drone Fall project (KINGSTON game main, converter draft `tools/out/progression.draft.json` + circles
+from the `summon_N` areas, a few perks): Bridge loads and plays to a result; with a 30 m pickup radius the bot hero
+reaches level 3, recruits 2 robots, takes a perk, restore verification OK; with `offerAt: summonPoints` xp banks
+(770) because the standing bot hero never walks to a circle. Draft fix needed: `preferNewRecruitAtLevel` belongs in
+`offers`.
 
 ## Not done
 

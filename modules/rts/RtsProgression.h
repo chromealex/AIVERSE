@@ -95,6 +95,9 @@ private:
     void stepSummons(Simulation& sim, ProgressionStore& st, const std::vector<int64_t>& alliesDied);
     void stepUnits(Simulation& sim, ProgressionStore& st);
     void openReady(Simulation& sim, ProgressionStore& st);
+public:
+    bool atCircle(Simulation& sim, uint8_t player) const;   // the hero stands in a summon circle of its team
+private:
     void dispatch(Simulation& sim, uint8_t player, const std::vector<lib::genre::PerkEvent>& ev);
     lib::genre::PerkHooks hooks(Simulation& sim) const;
     int64_t slotOfUnit(const lib::genre::PlayerProgress& p, int64_t unit) const;

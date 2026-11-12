@@ -698,7 +698,7 @@ bool commandParam(lua_State* L, Vm& vm, int t, Command& c) {
         if (field("op")) {
             const char* o = lua_tostring(L, -1);
             const std::string n = o ? o : "";
-            op = n == "choose" ? kProgChoose : n == "reroll" ? kProgReroll : n == "close" ? kProgClose : n == "open" ? kProgOpen : 0;
+            op = n == "choose" ? int64_t(kProgChoose) : n == "reroll" ? int64_t(kProgReroll) : n == "close" ? int64_t(kProgClose) : n == "open" ? int64_t(kProgOpen) : int64_t(0);
             if (!op) { vm.err = "command: progression op must be choose, reroll, close or open"; ok = false; }
         }
         ok = ok && num("card", a, 1) && num("revision", b, 0);

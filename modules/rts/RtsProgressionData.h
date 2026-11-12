@@ -64,6 +64,7 @@ struct ProgressionRules {
     bool orbs = true;                          // kills drop xp orbs (false: xp straight to the killer)
     bool orbsForKiller = false;                // "orbOwner": "killer" (else anyone may collect)
     bool autoOpen = true;                      // offers open as soon as a level is banked
+    bool offerAtCircles = false;               // "offerAt": "summonPoints": offers open only while the hero stands in a circle (Drone Fall stations)
     Fixed allyFollow = Fixed::fromInt(5);      // "squad.follow": idle allies walk back when farther from the hero
     uint32_t allyLifetime = 0;                 // "squad.lifetime" (ticks at load: seconds * tick rate later)
     Fixed allyLifetimeSeconds{};

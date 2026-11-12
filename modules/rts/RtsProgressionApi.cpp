@@ -109,6 +109,8 @@ int pOffer(lua_State* L, Vm& vm) {
         lua_createtable(L, 0, 7);
         const bool recruit = it.type == lg::OfferVariant::Recruit;
         lua_pushstring(L, recruit ? "recruit" : "perk"); lua_setfield(L, -2, "kind");
+        // Drone Fall card letter: R recruit, H hero perk (slot 0), P robot perk (other slots), G player-wide perk
+        lua_pushstring(L, recruit ? "R" : it.slot < 0 ? "G" : it.slot == 0 ? "H" : "P"); lua_setfield(L, -2, "letter");
         lua_pushinteger(L, it.slot); lua_setfield(L, -2, "slot");
         if (const auto* ds = lg::deckSlot(*p, it.slot)) { lua_pushstring(L, typeName(vm, R, ds->unit)); lua_setfield(L, -2, "unit"); }
         if (!recruit) {

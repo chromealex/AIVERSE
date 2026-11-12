@@ -371,7 +371,7 @@ bool Progression::command(Simulation& sim, const Command& cmd) {
         case kProgChoose: choose(sim, cmd.player, revision, index); break;
         case kProgReroll: reroll(sim, cmd.player, revision); break;
         case kProgClose: close(sim, cmd.player); break;
-        case kProgOpen: open(sim, cmd.player); break;
+        case kProgOpen: if (!R_->offerAtCircles || atCircle(sim, cmd.player)) open(sim, cmd.player); break;
         default: break;   // invalid commands are ignored silently
     }
     return true;
@@ -534,11 +534,28 @@ void Progression::stepUnits(Simulation& sim, ProgressionStore& st) {
     }
 }
 
+bool Progression::atCircle(Simulation& sim, uint8_t player) const {
+    Entity h = heroOf(sim, player);
+    if (!h.valid()) return false;
+    const Vec3 at = sim.world().get<Transform>(h).pos;
+    const int64_t team = m_->teamOf(sim, player);
+    for (auto& d : points_) {
+        if (d.team && d.team != team) continue;
+        const Fixed dx = at.x - d.position.x, dz = at.z - d.position.z;
+        if (dx * dx + dz * dz <= d.radius * d.radius) return true;
+    }
+    return false;
+}
+
 void Progression::openReady(Simulation& sim, ProgressionStore& st) {
     if (!R_->autoOpen) return;
-    std::vector<uint8_t> ready;
-    for (auto& [player, p] : st.perks.players)
-        if (!p.offer.open && lg::availableLevels(R_->defs, R_->perk, p)) ready.push_back(uint8_t(player));
+    std::vector<uint8_t> ready, leave;
+    for (auto& [player, p] : st.perks.players) {
+        const bool here = !R_->offerAtCircles || atCircle(sim, uint8_t(player));
+        if (p.offer.open && !here) leave.push_back(uint8_t(player));   // stations: walking away closes the cards, xp stays banked
+        else if (!p.offer.open && here && lg::availableLevels(R_->defs, R_->perk, p)) ready.push_back(uint8_t(player));
+    }
+    for (uint8_t p : leave) close(sim, p);
     for (uint8_t p : ready) open(sim, p);
 }
 

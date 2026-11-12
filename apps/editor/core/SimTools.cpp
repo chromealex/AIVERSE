@@ -263,7 +263,7 @@ Command commandFromJson(const SimRefs& refs, const Json& p, uint8_t defPlayer) {
     }
     if (c.type == kCmdProgression && !p.has("param")) {   // level-up offers (RtsProgression.h): the open offer's revision
         const std::string op = p.getStr("op", "choose");
-        const int64_t o = op == "choose" ? game::kProgChoose : op == "reroll" ? game::kProgReroll : op == "close" ? game::kProgClose : op == "open" ? game::kProgOpen : 0;
+        const int64_t o = op == "choose" ? int64_t(game::kProgChoose) : op == "reroll" ? int64_t(game::kProgReroll) : op == "close" ? int64_t(game::kProgClose) : op == "open" ? int64_t(game::kProgOpen) : int64_t(0);
         need(o ? 0 : -1, "progression op (choose, reroll, close, open)", op);
         const game::Progression* pg = refs.mod.progression();
         const auto* pr = pg && pg->active() ? pg->progress(refs.sim, c.player) : nullptr;

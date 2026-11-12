@@ -2363,7 +2363,7 @@ with `toNext` / `curve` / `kill`, `offers` with `default` / `levels` / `variants
 `offerable`, `aiPriority`, `aiPriorityLowHealth`) on real units, plus engine keys: `units[].type`, `perks[].bullet`
 (`modifiers`: split / ricochet / flyThrough / damage / speed / radius appended to the bearer's projectile programs), `perks[].onHit` /
 `onHitChance` (effects payload on hit: burn, stun, ...), `players`, `killXp`, `orbs`, `orbOwner`, `autoOpen`,
-`offerChoices`, `offerRerolls`, `rerollAvoidsRepeat`, `maxLevel`, `xpGrowthPerLevel`, `maxRecruitsPerSlot`, `maxSquad`,
+`offerAt`, `offerChoices`, `offerRerolls`, `rerollAvoidsRepeat`, `maxLevel`, `xpGrowthPerLevel`, `maxRecruitsPerSlot`, `maxSquad`,
 `pickups` (`radius`, `magnetRadius`, `grabRadius`, `attractSpeed`, `attractAccel`, `maxSpeed`, `landing`, `lifetime`,
 `maxOrbs`), `summons` (`progress`, `cooldown`, `maxAllies`, `charges`, `chargeRecharge`, `resetOnExit`), `squad`
 (`follow`, `lifetime`), `critDamage`, `decks`, `defaultDeck` (battle deck payloads: `player`, `techLevel`, `choiceCount`,

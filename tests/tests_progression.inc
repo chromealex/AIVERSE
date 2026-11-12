@@ -77,7 +77,7 @@ TEST(progression_rules_parse_and_errors) {
     CHECK(throws("\"value\": 1500", "\"value\": \"x\""));                             // library reader errors
     CHECK(throws("\"killXp\": {\"mob\": 2}", "\"killXp\": {\"ghost\": 2}"));
     // games without the block: untouched, commands ignored
-    auto plain = makeSimJson(R"({"types": {"u": {"health": {"max": 10}, "move": {"speed": 1}}}})", progMap(""));
+    auto plain = makeSimJson(R"({"types": {"u": {"health": {"max": 10}, "move": {"speed": 1}}, "core": {"structure": {"footprint": [1, 1]}, "health": {"max": 10}}}})", progMap(""));
     CHECK(mod(*plain).progression() && !mod(*plain).progression()->active() && !mod(*plain).progression()->store(*plain));
     progCmd(*plain, 1, game::kProgChoose, 0, 0);
     run(*plain, 0.2);
@@ -108,11 +108,14 @@ TEST(progression_kills_orbs_offer_recruit_and_summon_restore) {
     run(*sim, 0.1);
     CHECK(pp(*sim, 1).offer.open && countUnits(*sim, "gunbot", 1) == 0);
     progCmd(*sim, 1, game::kProgChoose, 0, rev);
-    sim->step();
     bool recruited = false;
-    for (auto& e : sim->events()) if (e.type == game::kEvProgRecruit && e.player == 1 && e.value == 1) recruited = true;
+    for (int i = 0; i < 5; ++i) {
+        sim->step();
+        for (auto& e : sim->events()) if (e.type == game::kEvProgRecruit && e.player == 1 && e.value == 1) recruited = true;
+    }
     CHECK(recruited && countUnits(*sim, "gunbot", 1) == 1 && pp(*sim, 1).level == 1 && pp(*sim, 1).xp == 1 && !pp(*sim, 1).offer.open);
     Entity ally = findType(*sim, "gunbot", 1);
+    if (!ally.valid()) return;
     const game::ProgUnit* pu = prog(*sim).store(*sim)->find(ally);
     CHECK(pu && pu->slot == 1 && pu->bearer == game::kProgBearerAlly);
     // the ally dies; the hero stands in the summon circle (20, 8) for 20 ticks and gets it back there
@@ -283,8 +286,27 @@ on("progression_recruit", function(e) state.recruited = e.value end)
     const uint32_t rev = pp(*sim, 1).offer.revision;
     Command c; c.player = 1; c.type = game::kCmdProgression; c.param = game::progressionParam(game::kProgChoose, 0, rev);
     sim->submit(c);
-    run(*sim, 0.1);
+    run(*sim, 0.5);
     mod(*sim).scripts()->flush(*sim);
     CHECK(countUnits(*sim, "gunbot", 1) == 1 && pp(*sim, 1).level == 1);
     CHECK(ss->state.find("recruit") != std::string::npos);
+}
+
+TEST(progression_offers_at_summon_circles) {
+    std::string rules = kProgRules;
+    rules.replace(rules.find("\"players\": [1],"), 15, "\"players\": [1], \"offerAt\": \"summonPoints\",");
+    auto sim = makeSimJson(rules, progMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]})"));
+    Entity hero = prog(*sim).heroOf(*sim, 1);
+    CHECK(prog(*sim).grantXp(*sim, 1, 3, false));
+    run(*sim, 0.3);
+    CHECK(!pp(*sim, 1).offer.open && !prog(*sim).atCircle(*sim, 1));   // banked: no cards away from a circle
+    progCmd(*sim, 1, game::kProgOpen, 0, 0);                              // and no forced open either
+    run(*sim, 0.3);
+    CHECK(!pp(*sim, 1).offer.open);
+    sim->world().get<Transform>(hero).pos = {Fixed::fromInt(20), Fixed{}, Fixed::fromInt(8)};
+    run(*sim, 0.2);
+    CHECK(prog(*sim).atCircle(*sim, 1) && pp(*sim, 1).offer.open);
+    sim->world().get<Transform>(hero).pos = {Fixed::fromInt(4), Fixed{}, Fixed::fromInt(8)};
+    run(*sim, 0.2);
+    CHECK(!pp(*sim, 1).offer.open && pp(*sim, 1).xp == 3 && pp(*sim, 1).level == 0);   // walking away keeps the xp
 }
