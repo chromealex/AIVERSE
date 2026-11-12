@@ -487,6 +487,9 @@ void applyProcedural(const std::vector<ProcAnim>& mods, const ProcInputs& in, st
             case ProcAnim::Lean:
                 v = angle = std::clamp(in.turnRate * a.amp, -a.limit, a.limit) * r.weight;
                 break;
+            case ProcAnim::Steer:   // steered wheels: the host's steering angle (list it before the wheel's spin)
+                v = angle = std::clamp(in.steer * a.amp, -a.limit, a.limit);
+                break;
             case ProcAnim::Fall:
                 v = angle = a.amp * env * env * r.weight;
                 break;

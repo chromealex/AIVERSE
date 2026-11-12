@@ -21,6 +21,7 @@
 #include "RtsNative.h"
 #include "RtsTopDown.h"
 #include "RtsDriving.h"
+#include "RtsArsenal.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -90,6 +91,7 @@ enum CommandType : uint16_t {
     kCmdTopDown,      // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
     kCmdTopDownAbility, // no units; param = ability index of the hero; target / point optional (default: along the aim)
     kCmdTopDownEnter,   // no units (rules "driving", RtsDriving.h): the hero gets into the nearest free vehicle / out of his car
+    kCmdTopDownWeapon,  // no units (rules "arsenal", RtsArsenal.h): param kWeaponNext / kWeaponPrev, or kWeaponSlot + slot
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -504,6 +506,7 @@ public:
     const TriggerSet& triggers() const { return triggers_; }
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
+    Arsenal* arsenal() const { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (RtsArsenal.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
@@ -763,6 +766,7 @@ private:
     void impactProjectile(Simulation& sim, Entity p);
     const ProjectileFlight* projectileFlight(const Projectile& p) const;
     void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
+    friend class Arsenal;   // free fire launches weapon projectile programs at a point (RtsArsenal.cpp)
     void bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) const;
     void sysProjectilePrograms(Simulation& sim, const std::vector<Entity>& projectiles);
     void setupSkills(Simulation& sim, const Json& map);
@@ -816,6 +820,7 @@ private:
     void captureOriginals(Simulation& sim, Entity structure, uint8_t from, uint8_t to);
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
+    std::unique_ptr<Arsenal> arsenal_;     // rules "arsenal" (state: ArsenalStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::vector<NativeDefinition> nativeDefinitions_;

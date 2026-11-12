@@ -233,3 +233,22 @@ TEST(driving_games_without_the_block_are_untouched) {
     run(*sim, 0.2);
     CHECK(sim->world().alive(mod(*sim).topDown()->heroOf(*sim, 1)));
 }
+
+TEST(driving_steer_procedural_turns_front_wheels) {
+    // "steer": the node turns about its axis by the host's steering angle, clamped to the limit; listed before the
+    // wheel's spin the wheel rolls in its turned frame
+    render::ProcAnim steer;
+    steer.channel = render::ProcAnim::Rotate; steer.axis = {0, 1, 0}; steer.special = render::ProcAnim::Steer; steer.amp = 1; steer.limit = 0.5f; steer.node = 0;
+    std::vector<render::ProcAnim> mods{steer};
+    std::vector<render::ProcRuntime> rt;
+    render::Pose pose(1);
+    render::mat4 xf = render::mat4::identity();
+    render::ProcInputs in;
+    in.dt = 0.016f; in.steer = 0.3f;
+    render::applyProcedural(mods, in, rt, pose, xf);
+    CHECK(std::abs(pose[0].r.y - std::sin(0.15f)) < 1e-3f && std::abs(pose[0].r.w - std::cos(0.15f)) < 1e-3f);
+    pose[0] = {};
+    in.steer = -2;   // past the limit
+    render::applyProcedural(mods, in, rt, pose, xf);
+    CHECK(std::abs(pose[0].r.y + std::sin(0.25f)) < 1e-3f);
+}

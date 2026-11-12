@@ -753,6 +753,7 @@ void RtsModule::sysMovement(Simulation& sim) {
     if (rules_.dungeon) movePossessed(sim);
     if (topDown_ && topDown_->active()) topDown_->tick(sim);   // top-down heroes: stick movement, aim, auto-fire (RtsTopDown.cpp)
     if (driving_ && driving_->active()) driving_->tick(sim);   // vehicles: controller step, collisions, damage (RtsDriving.cpp)
+    if (arsenal_ && arsenal_->active()) arsenal_->tick(sim);   // the hero's weapons: crates, free fire along the aim (RtsArsenal.cpp)
 
     if (rules_.movement.separation) {
     // 2) separation between overlapping mobile units on the same layer. Bodies are move.radius; who yields
