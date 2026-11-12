@@ -7,6 +7,9 @@
 #include "ScenarioOps.h"
 #include "SchemaOps.h"
 namespace aiverse::editor { void registerFpsOps(Workspace& ws); }
+#ifdef AIVERSE_BATTLE_OPS
+namespace aiverse::editor { void registerBattleNetOps(Workspace& ws); }   // agent-net-mobile
+#endif
 namespace aiverse::editor { void registerCampaignOps(Workspace& ws); }   // CampaignOps.cpp
 namespace aiverse::editor { void registerStrategicOps(Workspace& ws); }   // StrategicOps.cpp
 namespace aiverse::editor { void registerUiOps(Workspace& ws); }         // UiOps.cpp (screens, ui_preview)
@@ -193,7 +196,11 @@ bool Project::saveManifest(std::string* err) {
 
 // ================================================================= workspace
 
-Workspace::Workspace() { registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerWizardOps(*this); }
+Workspace::Workspace() { registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerWizardOps(*this);
+#ifdef AIVERSE_BATTLE_OPS
+    registerBattleNetOps(*this);
+#endif
+}
 Workspace::~Workspace() { if (buildThread_.joinable()) buildThread_.join(); }
 
 namespace {

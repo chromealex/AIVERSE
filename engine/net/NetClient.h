@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "BattleProtocol.h"
 #include "Conn.h"
 #include "Protocol.h"
 #include "Rollback.h"
@@ -101,6 +102,21 @@ public:
     // SimConfig matching the match (seed, tick rate, input delay).
     SimConfig simConfig() const;
 
+    // ---- hosted battles (docs/battle-net.md)
+    // Start payload of a hosted battle (players, loadouts, game data); null for lobby matches.
+    // Arrives right before MatchStart, so it is there when matchReady() turns true.
+    const MatchPayloadMsg* matchPayload() const { return payload_ ? &*payload_ : nullptr; }
+    // Called when the match result is confirmed, right before it is reported: the game's
+    // deterministic outcome bytes (same on every client), which the server hands to meta.
+    void setResultReporter(std::function<Bytes()> reporter) { reporter_ = std::move(reporter); }
+    // Mobile app lifecycle (platform FocusLost / FocusGained). suspend(): tell the server we are
+    // away so nobody waits for our input. resume(): after a long absence (the OS has likely killed
+    // the socket or the NAT mapping) reconnect right away; the match then resumes with a delta and
+    // the session fast-forwards within its catch-up budget per frame.
+    void suspend(uint64_t now);
+    void resume(uint64_t now, uint32_t reconnectAfterMs = 3000);
+    bool suspended() const { return suspendedAt_ != 0; }
+
 private:
     void handle(const Bytes& msg);
     void send(const Bytes& b) { if (conn_) conn_->send(b); }
@@ -129,6 +145,9 @@ private:
     std::unique_ptr<RollbackSession> session_;
     bool resultSent_ = false;
     uint64_t now_ = 0, lastPing_ = 0;
+    std::optional<MatchPayloadMsg> payload_;
+    std::function<Bytes()> reporter_;
+    uint64_t suspendedAt_ = 0;
 };
 
 } // namespace aiverse::net
