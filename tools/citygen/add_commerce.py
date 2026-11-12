@@ -15,14 +15,14 @@ KINDS = [
     ("covered_market", "shop"), ("corner_diner", "cafe"), ("barrel_diner", "cafe"), ("roadhouse", "cafe"),
     ("office_tower", "office"), ("business_centre", "office"), ("twin_towers", "office"), ("telephone_exchange", "office"),
     ("loading_warehouse", "warehouse"), ("rooflight_warehouse", "warehouse"), ("small_hangar", "warehouse"),
-    ("service_depot", "dealer"), ("column_bank", "bank"), ("maintenance_depot", "garage"), ("workshop_yard", "garage"),
+    ("service_depot", "dealer"), ("column_bank", "bank"), ("precinct", "precinct"), ("clinic", "clinic"), ("fire_station", "fire_station"), ("maintenance_depot", "garage"), ("workshop_yard", "garage"),
     ("apartments", "flat"), ("brownstone", "flat"), ("townhouses", "flat"), ("mansard_house", "flat"),
     ("residence", "flat"), ("tenement", "flat"), ("garden_court", "flat"), ("lofts", "flat"), ("plaster_courtyard", "flat"),
 ]
 BASE_PRICE = {"shop": 18000, "cafe": 24000, "office": 40000, "warehouse": 30000, "garage": 22000, "flat": 9000,
-              "dealer": 1, "bank": 1, "gunshop": 1}
+              "dealer": 1, "bank": 1, "gunshop": 1, "precinct": 1, "clinic": 1, "fire_station": 1}
 RENT_SHARE = 0.0175          # weekly rent as a share of the price
-PUBLIC = {"dealer", "bank", "gunshop"}   # run by the city: not for rent or sale
+PUBLIC = {"dealer", "bank", "gunshop", "precinct", "clinic", "fire_station"}   # run by the city: not for rent or sale
 GUNSHOP_FROM, GUNSHOP_SPACING = "corner_shops", 70   # every so many cells one corner shop sells guns
 COMMERCE = {
     "currency": "cash", "dayMinutes": 24, "weekDays": 7, "range": 3, "sellShare": 0.8,

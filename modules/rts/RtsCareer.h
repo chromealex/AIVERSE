@@ -31,6 +31,7 @@ struct CareerRank {
 struct CareerType {
     std::string id, name;
     bool open = false;                   // the player may join and leave by command
+    std::string office;                  // kind of premises (rules "commerce") where one signs up; "" anywhere
     std::vector<CareerRank> ranks;       // ascending points, the first at 0
 };
 

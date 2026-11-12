@@ -18,6 +18,7 @@ CareerRules Career::parse(const Json& j) {
         if (!cj.isObject()) throw std::runtime_error(where + ": expected an object");
         c.name = cj.getStr("name", id);
         c.open = cj.getBool("open", false);
+        c.office = cj.getStr("office");
         for (auto& rj : cj["ranks"].items()) {
             CareerRank rk;
             rk.name = rj.getStr("name");

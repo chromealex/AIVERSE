@@ -50,6 +50,14 @@ std::vector<GameClient::CommerceChoice> GameClient::commerceChoices(int premise,
     const bool mine = p.runBy() == human_;
     title = p.kind;
     if (!title.empty()) title[0] = char(std::toupper(static_cast<unsigned char>(title[0])));
+    if (game::Career* cr = mod().career(); cr && cr->active())   // the place where one signs up for a service
+        for (size_t k = 0; k < cr->rules().careers.size(); ++k) {
+            const game::CareerType& ct = cr->rules().careers[k];
+            if (!ct.open || ct.office.empty() || ct.office != p.kind) continue;
+            const int r = cr->rank(*sim_, human_, int(k));
+            title = ct.name + (r >= 0 ? ": " + ct.ranks[size_t(r)].name : std::string());
+            out.push_back({r >= 0 ? "Quit the service" : "Join: " + ct.name, CommerceOp::None, premise, r >= 0 ? 2 : 1, int(k)});
+        }
     if (p.isPublic) {
         if (p.kind == "bank") {
             title = fmt("Bank: debt %lld of %lld", whole(acc.debt), whole(c->creditLimit(*sim_, human_)));
@@ -113,6 +121,13 @@ bool GameClient::commerceKey(Key key) {
     const size_t pick = size_t(int(key) - int(Key::Num1));
     if (pick >= choices.size()) return true;
     const CommerceChoice& ch = choices[pick];
+    if (ch.career >= 0) {   // signing up / quitting (rules "careers")
+        Command c;
+        c.type = game::kCmdCareer;
+        c.param = game::careerPack(game::CareerOp(ch.value), ch.career);
+        issue(c);
+        return true;
+    }
     if (const char* why = mod().commerce()->refusal(*sim_, human_, ch.op, ch.premise, ch.value)) { notice(why); return true; }
     Command c;
     c.type = game::kCmdCommerce;
@@ -142,7 +157,8 @@ void GameClient::commerceTop(std::vector<UiItem>& top) {
     top.push_back({title + (comMenu_ ? "" : "  [E]"), "", "", false});
     if (!comMenu_) return;
     for (size_t i = 0; i < choices.size() && i < 9; ++i)
-        top.push_back({fmt("%d %s", int(i + 1), choices[i].label.c_str()), "", "", c->refusal(*sim_, human_, choices[i].op, choices[i].premise, choices[i].value) != nullptr});
+        top.push_back({fmt("%d %s", int(i + 1), choices[i].label.c_str()), "", "",
+                       choices[i].career < 0 && c->refusal(*sim_, human_, choices[i].op, choices[i].premise, choices[i].value) != nullptr});
 }
 
 } // namespace aiverse::client

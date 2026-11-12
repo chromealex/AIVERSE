@@ -14,16 +14,16 @@ CAREERS = {
         {"name": "Shop owner", "points": 30, "perks": ["company_name", "bank_trust"]},
         {"name": "Chain owner", "points": 120, "perks": ["bulk_supply"]},
         {"name": "Magnate", "points": 400, "perks": ["city_tenders"]}]},
-    "police": {"name": "Police", "open": True, "ranks": [
+    "police": {"name": "Police", "open": True, "office": "precinct", "ranks": [
         {"name": "Cadet", "points": 0},
         {"name": "Patrol officer", "points": 20, "perks": ["siren"]},
         {"name": "Sergeant", "points": 80, "perks": ["service_weapon"]},
         {"name": "Detective", "points": 250, "perks": ["records"]}]},
-    "medic": {"name": "Ambulance", "open": True, "ranks": [
+    "medic": {"name": "Ambulance", "open": True, "office": "clinic", "ranks": [
         {"name": "Orderly", "points": 0},
         {"name": "Paramedic", "points": 20, "perks": ["free_treatment"]},
         {"name": "Doctor", "points": 120, "perks": ["field_surgery"]}]},
-    "fire": {"name": "Fire brigade", "open": True, "ranks": [
+    "fire": {"name": "Fire brigade", "open": True, "office": "fire_station", "ranks": [
         {"name": "Recruit", "points": 0},
         {"name": "Firefighter", "points": 20, "perks": ["fireproof"]},
         {"name": "Captain", "points": 120, "perks": ["brigade"]}]},
