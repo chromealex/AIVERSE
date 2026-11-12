@@ -235,8 +235,15 @@ target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 ## Мета-библиотека из native-кода
 
 Для магазина, офферов, наград, заданий, рейтингов и чатов используйте `aiverse::meta`.
-После `aiverse_native_module(...)` вызовите `aiverse_native_use_meta(aiverse_native_<id>)`:
+После `aiverse_native_module(...)` вызовите `aiverse_native_use_meta(aiverse_native_<id> CLIENT)` для клиентских запросов
+или передайте выбранный серверный kit-target вместо CLIENT:
 helper связывает object target и итоговую библиотеку, поэтому зависимости не теряются.
 Мета-сервисы живут вне simulation tick; доступность из native-кода не разрешает ввод
 недетерминированных данных в матч. Полный контракт и внешний пример: `docs/meta-game.md`,
 `examples/meta/`. Нужные определения можно генерировать без изменения движка.
+
+Модули `NativeModule` — детерминированные механики, а не сетевой/UI lifecycle.
+Для мета-клиента в AiverseGame используйте проектный `plugins::NativePlugin`
+(`engine/platform/Plugins.h`, `docs/plugins.md`) или существующий UI-host проекта;
+Client::pump вызывается вне sim. Подключение CMake само по себе не устанавливает UI.
+Вызов helper без стороны сохраняет старое поведение и подключает все мета-политики.

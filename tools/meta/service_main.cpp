@@ -1,4 +1,7 @@
 #include "engine/meta/Service.h"
+#ifdef AIVERSE_META_SELECTED_HEADER
+#include AIVERSE_META_SELECTED_HEADER
+#endif
 #include <iostream>
 #include <random>
 // Trusted subprocess protocol. The HTTP host constructs identity/authority/time from its session.
@@ -10,7 +13,11 @@ int main(int argc,char** argv) {
         while(std::getline(std::cin,line)) {
             try {
                 auto input=aiverse::Json::parse(line); std::random_device entropy;
-                aiverse::meta::Service service(config,input["state"],{},[&](int64_t total) {
+                aiverse::meta::Service service(
+#ifdef AIVERSE_META_SELECTED_FACTORY
+                    AIVERSE_META_SELECTED_FACTORY(),
+#endif
+                    config,input["state"],{},[&](int64_t total) {
                     return std::uniform_int_distribution<int64_t>(1,total)(entropy);
                 });
                 auto req=input["request"];
