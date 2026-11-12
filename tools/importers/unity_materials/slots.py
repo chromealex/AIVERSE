@@ -89,6 +89,7 @@ def resolve(info, renderers):
             items.append((status, 'Material slots not matched (%s): every material of the model gets %s.' % (why, keys[0])))
         return materials, assign, items
     meshes = [m for m in info['models'] if m.get('mesh') and m.get('materials')]
+    pending = {}   # slot -> [(where, key, candidate names)] of renderers without a known node
     for r in renderers:
         node = None
         if r.get('node'):
@@ -119,8 +120,7 @@ def resolve(info, renderers):
                     if len(named) == 1:
                         target, how = named[0], 'name'
                     else:
-                        items.append(('missing', '%s: slot %d (%s) is ambiguous between model materials %s; assign it by hand.'
-                                      % (r['where'], i, key, ', '.join(names) or 'none')))
+                        pending.setdefault(i, []).append((r['where'], key, names))
                         continue
             prev = materials.get(target)
             if prev and prev != key:
@@ -132,4 +132,19 @@ def resolve(info, renderers):
                 continue
             materials[target] = key
             items.append(('exact', '%s: %s -> %s (%s).' % (r['where'], target, key, how)))
+    for i, entries in sorted(pending.items()):
+        keys = {k for _, k, _ in entries}
+        names = entries[0][2]
+        free = [n for n in names if n not in materials]
+        # as many hashed renderers as candidate meshes, all with the same material: every candidate gets it
+        if len(keys) == 1 and len(entries) >= len(names) and free:
+            key = keys.pop()
+            for n in free:
+                materials[n] = key
+            items.append(('exact', '%s: slot %d of %d renderers -> %s on %s (same material on every candidate).'
+                          % (entries[0][0], i, len(entries), key, ', '.join(free))))
+            continue
+        for where, key, cands in entries:
+            items.append(('missing', '%s: slot %d (%s) is ambiguous between model materials %s; assign it by hand.'
+                          % (where, i, key, ', '.join(cands) or 'none')))
     return materials, assign, items
