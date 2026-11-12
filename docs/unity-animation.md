@@ -150,7 +150,7 @@ no vertex-animation-texture content to port.
 ## Drone Fall dry run (2026-11-12)
 
 `importer.py ExtClient/Assets/ExtData --scripts ExtClient/Assets/ExtGameplay --clipinfo …` into
-`build/.temp/ext-anim` (not committed): 14 character models, 35 controllers (21 bound to a model
+the Drone Fall drive (`/Volumes/KINGSTON/DroneFall/imports/anim`, not in the repo): 14 character models, 35 controllers (21 bound to a model
 through prefabs; all 21 compile and run against the real FBX), 122 clips (115 transform, 5 empty, 2 UI),
 14 713 channels cubic and 484 resampled, 0 failures. Hero rifle: base `Move` (1D speed tree over two
 2D freeform directional trees) + masked `Rifle Upper Body` layer; with `Attack1Progress=0.5` the upper
