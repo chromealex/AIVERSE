@@ -1300,4 +1300,346 @@ void sensesBotBridge(){
     CHECK(all.size()==3&&all[1].id==7&&all[1].visible);
     seen[0].target=6;CHECK(sb::perceivedFromSenses(std::span<const sg::PerceivedTarget>(seen),1,facts).size()==1);
 }
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// ---- cinematic-gameplay: time-scale domains, scene timelines, sync waits, QTE, staging, checkpoints (kinds 72..75) ----
+#include <aiverselib/genre/Cinematic.h>
+#include <aiverselib/genre/CinematicData.h>
+#include <aiverselib/genre/CinematicConfigured.h>
+#include <aiverselib/genre/CinematicPersistence.h>
+#define CCHECK(...) CHECK((__VA_ARGS__))
+namespace cine {
+using K=SceneEventKind;using C=SceneCommandKind;using Ids=std::vector<int64_t>;
+TimeReport tstep(const TimeConfig& c,TimeState& s,uint32_t t,const TimeInput& in={}){auto r=stepTime(c,s,t,in);CCHECK(r);return *r;}
+SceneReport run(const SceneLibrary& l,SceneState& s,uint32_t t,const SceneInput& in={}){auto r=stepScene(l,s,t,in);CCHECK(r);return *r;}
+std::size_t count(const SceneReport& r,K k){std::size_t n=0;for(const auto& e:r.events)n+=e.kind==k;return n;}
+std::size_t count(const TimeReport& r,TimeEventKind k){std::size_t n=0;for(const auto& e:r.events)n+=e.kind==k;return n;}
+const SceneEvent* first(const SceneReport& r,K k){for(const auto& e:r.events)if(e.kind==k)return &e;return nullptr;}
+Ids cues(const SceneReport& r){Ids out;for(const auto& e:r.events)if(e.kind==K::Cue)out.push_back(e.id);return out;}
+void append(Ids& a,const Ids& b){a.insert(a.end(),b.begin(),b.end());}
+SceneCommand cmd(uint64_t seq,C k,int64_t v=0,SceneBindings b={}){return {seq,k,v,std::move(b)};}
+SceneInput commands(std::vector<SceneCommand> c){SceneInput in;in.commands=std::move(c);return in;}
+CueDef cue(int64_t id,uint32_t at,CueKind k,int64_t ref=1,int64_t actor=0,int64_t track=1){CueDef c;c.id=id;c.at=at;c.kind=k;c.ref=ref;c.actor=actor;c.track=track;c.essential=k==CueKind::Event;return c;}
+WaitDef line(int64_t c){WaitDef w;w.kind=WaitKind::LineFinished;w.cue=c;return w;}
+WaitDef marker(int64_t c,int64_t m){WaitDef w;w.kind=WaitKind::Marker;w.cue=c;w.marker=m;return w;}
+WaitDef inPosition(Ids p={}){WaitDef w;w.kind=WaitKind::InPosition;w.participants=std::move(p);return w;}
+SyncDef sync(int64_t id,uint32_t at,uint32_t timeout,std::vector<WaitDef> w={},bool checkpoint=false){SyncDef s;s.id=id;s.at=at;s.timeout=timeout;s.waits=std::move(w);s.checkpoint=checkpoint;return s;}
+QteDef press(int64_t id,uint32_t at,uint32_t open,uint32_t close,int64_t onSuccess=0,int64_t onFail=0){QteDef q;q.id=id;q.at=at;q.button=1;q.open=open;q.close=close;q.onSuccess=onSuccess;q.onFail=onFail;return q;}
+SceneDef scene(int64_t id,uint32_t length,int64_t domain=0){SceneDef d;d.id=id;d.length=length;d.domain=domain;return d;}
+SceneLibrary library(std::vector<SceneDef> scenes){
+    SceneLibrary l;l.presets[1]={1,hitStop(kDomainWorld,6)};l.presets[2]={2,slowMotion(kDomainCinematic,{1,2},10)};
+    for(auto& d:scenes){std::sort(d.cues.begin(),d.cues.end(),[](const auto& a,const auto& b){return std::tuple(a.at,a.track,a.id)<std::tuple(b.at,b.track,b.id);});l.scenes[d.id]=d;}
+    indexTriggers(l);if(auto e=sceneLibraryError(l);!e.empty())throw std::runtime_error(e);return l;
+}
+void timeExact(){
+    auto c=defaultTimeConfig();TimeState s;TimeInput in;
+    in.add={slowMotion(kDomainWorld,{1,2},0),slowMotion(kDomainCinematic,{1,3},0),slowMotion(kDomainUi,{7,16},0)};
+    auto r=tstep(c,s,0,in);uint64_t world=domainSteps(r,kDomainWorld),player=domainSteps(r,kDomainPlayer),cinematic=domainSteps(r,kDomainCinematic),ui=domainSteps(r,kDomainUi);
+    const uint32_t N=300000;
+    for(uint32_t t=1;t<N;++t){auto x=tstep(c,s,t);world+=domainSteps(x,kDomainWorld);player+=domainSteps(x,kDomainPlayer);cinematic+=domainSteps(x,kDomainCinematic);ui+=domainSteps(x,kDomainUi);}
+    CCHECK(world==N/2&&player==N/2&&cinematic==N/3&&ui==uint64_t(N)*7/16);
+    CCHECK(s.clocks[kDomainWorld].local==N/2&&s.clocks[kDomainCinematic].local==N/3&&s.clocks[kDomainWorld].units==kTimeUnit/2);
+    // A tick gap integrates exactly like stepping every tick.
+    auto a=s,b=s;uint64_t perTick=0;for(uint32_t t=N;t<N+1000;++t)perTick+=domainSteps(tstep(c,a,t),kDomainCinematic);
+    auto gap=tstep(c,b,N+999);CCHECK(perTick==domainSteps(gap,kDomainCinematic)&&save(a)==save(b)&&cinematicHash(a)==cinematicHash(b));
+    // Nested: player (child of world) multiplies its own 1/2 by the world's 1/2.
+    TimeState n;TimeInput m;m.add={slowMotion(kDomainWorld,{1,2},0),{0,kDomainPlayer,{1,2},0,0,TimeBlend::Multiply}};uint64_t quarter=0;
+    for(uint32_t t=0;t<1000;++t)quarter+=domainSteps(tstep(c,n,t,t?TimeInput{}:m),kDomainPlayer);CCHECK(quarter==250);
+    // Fast forward 3x and a non-unit denominator stay exact.
+    TimeState f;TimeInput fast;fast.add={slowMotion(kDomainUi,{3,1},0),slowMotion(kDomainWorld,{5,7},0)};uint64_t ff=0,sevenths=0;
+    for(uint32_t t=0;t<7000;++t){auto x=tstep(c,f,t,t?TimeInput{}:fast);ff+=domainSteps(x,kDomainUi);sevenths+=domainSteps(x,kDomainWorld);}
+    CCHECK(ff==21000&&sevenths==5000);
+    roundtrip(s);roundtrip(f);
+}
+void timeStack(){
+    auto c=defaultTimeConfig();TimeState s;TimeInput a;a.add={{7,kDomainWorld,{1,2},10,0,TimeBlend::Override}};
+    auto r=tstep(c,s,10,a);CCHECK(count(r,TimeEventKind::Started)==1&&r.events[0].request==1&&domainSteps(r,kDomainWorld)==0);
+    TimeInput h;h.add={hitStop(kDomainWorld,6)};r=tstep(c,s,11,h);CCHECK(domainSteps(r,kDomainWorld)==0&&domainSteps(r,kDomainUi)==1);
+    uint64_t frozen=0;for(uint32_t t=12;t<=16;++t)frozen+=domainSteps(tstep(c,s,t),kDomainWorld);CCHECK(frozen==0);
+    r=tstep(c,s,17);CCHECK(count(r,TimeEventKind::Expired)==1&&r.events[0].request==2&&domainSteps(r,kDomainWorld)==1); // 1/2 resumes, remainder kept
+    TimeInput m;m.add={{7,kDomainWorld,{1,2},20,0,TimeBlend::Multiply},{0,kDomainWorld,{2,1},5,0,TimeBlend::Override}};
+    uint64_t quarter=0;for(uint32_t t=18;t<=25;++t)quarter+=domainSteps(tstep(c,s,t,t==18?m:TimeInput{}),kDomainWorld);
+    CCHECK(quarter==2&&domainUnits(s,kDomainWorld)==kTimeUnit/4); // priority 5 override loses to priority 10, priority 20 multiplies
+    TimeInput x;x.cancelTags={7};r=tstep(c,s,26,x);CCHECK(count(r,TimeEventKind::Cancelled)==2&&domainSteps(r,kDomainWorld)==2);
+    x={};x.cancel={4};r=tstep(c,s,27,x);CCHECK(count(r,TimeEventKind::Cancelled)==1&&domainSteps(r,kDomainWorld)==1&&s.requests.empty());
+    // Expiry inside a gap: hit-stop active for ticks 5..14, the jump to 20 counts only 15..20.
+    TimeState g;tstep(c,g,0);TimeInput hs;hs.add={hitStop(kDomainWorld,10)};tstep(c,g,5,hs);
+    r=tstep(c,g,20);CCHECK(domainSteps(r,kDomainWorld)==6&&count(r,TimeEventKind::Expired)==1&&domainSteps(r,kDomainUi)==15);
+    auto before=save(g);TimeInput bad;bad.add={{0,kDomainWorld,{1,17},0,0,TimeBlend::Override}};
+    CCHECK(!stepTime(c,g,21,bad)&&!stepTime(c,g,20,{})&&!stepTime(c,g,19,{}));bad.add={{0,9,{1,2},0,0,TimeBlend::Override}};CCHECK(!stepTime(c,g,21,bad));
+    bad.add={{-1,kDomainWorld,{1,2},0,0,TimeBlend::Override}};CCHECK(!stepTime(c,g,21,bad)&&save(g)==before);
+    TimeInput flood;for(int i=0;i<300;++i)flood.add.push_back(slowMotion(kDomainUi,{1,1},0));CCHECK(!stepTime(c,g,21,flood));
+    flood.add.resize(256);r=tstep(c,g,21,flood);flood.add.resize(1);r=tstep(c,g,22,flood);CCHECK(count(r,TimeEventKind::Rejected)==1&&g.requests.size()==256);
+    auto wrong=c;wrong.domains[kDomainPlayer].parent=kDomainCinematic;CCHECK(timeConfigError(wrong).find("domain 2.parent")!=std::string::npos&&!stepTime(wrong,s,30,{}));
+    wrong=c;wrong.domains[kDomainUi].base={1,17};CCHECK(timeConfigError(wrong).find("domain 3.base")!=std::string::npos);
+    auto other=c;other.domains[9]={9,0,{1,1},"extra"};CCHECK(!stepTime(other,s,30,{})); // saved clocks must match the domains
+    roundtrip(g);SceneState wrongKind;CCHECK(!load(save(g),wrongKind));
+}
+void cueOrder(){
+    auto d=scene(10,50);
+    d.cues={cue(1,0,CueKind::Camera,300,0,2),cue(2,0,CueKind::Dialogue,9001),cue(3,5,CueKind::Sound,1),cue(4,10,CueKind::Event,5),
+        cue(5,20,CueKind::Dialogue,9002),cue(6,30,CueKind::Event,6),cue(7,40,CueKind::Sound,2)};
+    d.syncs={sync(1,10,100,{line(2)}),sync(2,30,100,{line(5)})};
+    auto l=library({d});SceneState s;Ids order;
+    auto r=run(l,s,1,commands({cmd(1,C::TriggerScene,10)}));CCHECK(s.phase==ScenePhase::Pending&&count(r,K::Triggered)==1&&cues(r).empty());
+    r=run(l,s,2);CCHECK(s.phase==ScenePhase::Playing&&count(r,K::Started)==1&&cues(r)==Ids{2,1});append(order,cues(r));
+    for(uint32_t t=3;t<=12;++t){r=run(l,s,t);append(order,cues(r));}
+    CCHECK(s.phase==ScenePhase::Waiting&&s.position==10&&first(r,K::SyncReached)->id==1&&order==Ids({2,1,3}));
+    SceneInput done;done.finished={{2,13}};r=run(l,s,13,done);append(order,cues(r));
+    CCHECK(first(r,K::SyncReleased)->value==0&&cues(r)==Ids{4}&&s.position==11);
+    r=run(l,s,14,commands({cmd(2,C::Skip)}));append(order,cues(r)); // skip to sync 2: dialogue 5 is skipped, its wait is satisfied
+    CCHECK(first(r,K::Skipped)->id==2&&r.cuesSkipped==1&&first(r,K::SyncReleased)->id==2&&cues(r)==Ids{6}&&s.position==31);
+    CCHECK(r.timeCancelTags==Ids{10});
+    r=run(l,s,15,commands({cmd(2,C::Pause),cmd(3,C::Seek,999)}));CCHECK(count(r,K::CommandIgnored)==2&&!s.paused);
+    for(uint32_t t=16;t<=40&&s.phase!=ScenePhase::Idle;++t){r=run(l,s,t);append(order,cues(r));if(t==33)CCHECK(count(r,K::Finished)==1);}
+    CCHECK(order==Ids({2,1,3,4,6,7})&&s.phase==ScenePhase::Idle&&s.lastOutcome==SceneOutcome::Completed&&s.lastScene==10);
+    // Backward seek replays presentation cues once more; essential cues never fire twice.
+    SceneState b;run(l,b,1,commands({cmd(1,C::TriggerScene,10)}));
+    for(uint32_t t=2;t<=36;++t){SceneInput in;if(t==5)in.finished={{2,5}};if(t==30)in.finished={{5,30}};run(l,b,t,in);}
+    CCHECK(b.position==34&&b.essentialDone==Ids({4,6}));
+    r=run(l,b,37,commands({cmd(2,C::Seek,0)}));Ids replay=cues(r);CCHECK(first(r,K::Seeked)->value==0&&replay==Ids({2,1})&&b.position==1);
+    for(uint32_t t=38;b.phase!=ScenePhase::Idle&&t<200;++t){SceneInput in;if(t==38)in.finished={{2,38}};if(t==57)in.finished={{5,57}};r=run(l,b,t,in);append(replay,cues(r));}
+    CCHECK(replay==Ids({2,1,3,5,7})&&b.lastOutcome==SceneOutcome::Completed);
+    // Unskippable scenes ignore skip and forward seeks but still allow backward seeks.
+    d.skippable=false;auto locked=library({d});SceneState u;run(locked,u,1,commands({cmd(1,C::TriggerScene,10)}));run(locked,u,2);run(locked,u,5);
+    r=run(locked,u,6,commands({cmd(2,C::Skip),cmd(3,C::SkipScene),cmd(4,C::Seek,40),cmd(5,C::Seek,0)}));CCHECK(count(r,K::CommandIgnored)==3&&count(r,K::Seeked)==1&&u.position==1);
+}
+void syncTimeouts(){
+    auto d=scene(20,20);d.cues={cue(1,0,CueKind::Dialogue,9001),cue(2,0,CueKind::Animation,40,0,2)};d.syncs={sync(1,5,10,{line(1),marker(2,7)})};
+    auto l=library({d});
+    auto begin=[&](SceneState& s){run(l,s,1,commands({cmd(1,C::TriggerScene,20)}));for(uint32_t t=2;t<=7;++t)run(l,s,t);CCHECK(s.phase==ScenePhase::Waiting&&s.deadline==17);};
+    SceneState s;begin(s);
+    SceneInput bad;bad.finished={{1,9},{1,1}};bad.markers={{1,7,8},{2,3,8}};auto r=run(l,s,8,bad);
+    CCHECK(count(r,K::ReportIgnored)==3&&s.cues[2].markers==Ids{3}&&s.cues[1].finishedAt<0); // future tick, before emission, marker on a dialogue cue
+    SceneInput fin;fin.finished={{1,9}};r=run(l,s,9,fin);CCHECK(s.phase==ScenePhase::Waiting&&s.cues[1].finishedAt==9);
+    for(uint32_t t=10;t<17;++t){r=run(l,s,t);CCHECK(count(r,K::SyncReleased)==0);}
+    r=run(l,s,17);CCHECK(first(r,K::SyncReleased)->value==1&&s.position==6); // host never reported marker 7: timeout releases
+    SceneState m;begin(m);SceneInput both;both.finished={{1,8}};both.markers={{2,7,12}};run(l,m,8,both);for(uint32_t t=9;t<12;++t)run(l,m,t);r=run(l,m,12,both);
+    CCHECK(first(r,K::SyncReleased)->value==0&&m.position==6);
+    // Pausing shifts the deadline by the paused ticks.
+    SceneState p;begin(p);run(l,p,8);run(l,p,9);run(l,p,10,commands({cmd(2,C::Pause)}));for(uint32_t t=11;t<20;++t)run(l,p,t);
+    r=run(l,p,20,commands({cmd(3,C::Unpause)}));CCHECK(count(r,K::Unpaused)==1&&p.deadline==27);
+    for(uint32_t t=21;t<27;++t)CCHECK(count(run(l,p,t),K::SyncReleased)==0);CCHECK(first(run(l,p,27),K::SyncReleased)->value==1);
+    // A frozen domain (hit-stop) cannot stall a wait: timeouts are authoritative ticks.
+    auto f=scene(21,10,kDomainCinematic);f.cues={cue(1,0,CueKind::Dialogue,7)};f.syncs={sync(1,1,5,{line(1)})};auto fl=library({f});SceneState z;
+    SceneInput frozen;frozen.domainSteps[kDomainCinematic]=0;frozen.commands={cmd(1,C::TriggerScene,21)};run(fl,z,1,frozen);frozen.commands.clear();
+    r=run(fl,z,2,frozen);CCHECK(z.phase==ScenePhase::Playing&&cues(r)==Ids{1}&&z.position==0);
+    frozen.domainSteps[kDomainCinematic]=1;run(fl,z,3,frozen);CCHECK(z.phase==ScenePhase::Waiting&&z.deadline==8);
+    frozen.domainSteps[kDomainCinematic]=0;for(uint32_t t=4;t<8;++t)CCHECK(count(run(fl,z,t,frozen),K::SyncReleased)==0);
+    r=run(fl,z,8,frozen);CCHECK(first(r,K::SyncReleased)->value==1&&z.position==1);
+    frozen.domainSteps[kDomainCinematic]=3;run(fl,z,9,frozen);CCHECK(z.position==4);
+}
+void qteJudging(){
+    QteDef p=press(1,0,5,10);p.perfectOpen=7;p.perfectClose=8;QteOptions o;
+    auto judge=[&](const QteDef& q,const QteOptions& opt,std::vector<QteInput> in,uint32_t tick){auto g=startQte(q,opt,100);return judgeQte(q,g,in,tick);};
+    CCHECK(judge(p,o,{{104,1,true}},104)==QteOutcome::Fail&&judge(p,o,{{105,1,true}},105)==QteOutcome::Success&&judge(p,o,{{107,1,true}},107)==QteOutcome::Perfect);
+    CCHECK(judge(p,o,{},109)==QteOutcome::None&&judge(p,o,{},110)==QteOutcome::Fail&&judge(p,o,{{110,1,true}},110)==QteOutcome::Success);
+    CCHECK(judge(p,o,{{100,1,true}},101)==QteOutcome::None&&judge(p,o,{{105,2,true}},105)==QteOutcome::None&&judge(p,o,{{106,1,false}},106)==QteOutcome::None);
+    auto strict=p;strict.strict=true;CCHECK(judge(strict,o,{{105,2,true}},105)==QteOutcome::Fail);
+    QteOptions easy;easy.windowScaleMilli=2000;auto g=startQte(p,easy,0);CCHECK(g.open==2&&g.close==13&&g.perfectOpen==6&&g.perfectClose==9);
+    QteOptions hard;hard.windowScaleMilli=500;g=startQte(p,hard,0);CCHECK(g.open==6&&g.close==8);
+    QteOptions access;access.windowScaleMilli=500;access.accessibleWindowMilli=2000;g=startQte(p,access,0);CCHECK(g.open==5&&g.close==10); // extension undoes hard
+    QteDef mash;mash.id=2;mash.kind=QteKind::Mash;mash.button=2;mash.count=5;mash.close=20;
+    CCHECK(judge(mash,o,{{101,2,true},{102,2,true},{103,2,true},{104,2,true}},104)==QteOutcome::None);
+    CCHECK(judge(mash,o,{{101,2,true},{102,2,true},{103,2,true},{104,2,true},{105,2,true}},105)==QteOutcome::Success);
+    CCHECK(judge(mash,o,{{101,2,true},{102,2,true}},120)==QteOutcome::Fail);
+    QteOptions half;half.mashScaleMilli=500;half.holdScaleMilli=500;CCHECK(startQte(mash,half,0).count==3&&judge(mash,half,{{101,2,true},{102,2,true},{103,2,true}},103)==QteOutcome::Success);
+    QteDef hold;hold.id=3;hold.kind=QteKind::Hold;hold.button=3;hold.hold=10;hold.close=5;
+    CCHECK(judge(hold,o,{{103,3,true}},112)==QteOutcome::None&&judge(hold,o,{{103,3,true}},113)==QteOutcome::Success);
+    CCHECK(judge(hold,o,{{103,3,true},{108,3,false}},108)==QteOutcome::Fail&&judge(hold,o,{{106,3,true}},106)==QteOutcome::Fail&&judge(hold,o,{},105)==QteOutcome::Fail);
+    CCHECK(judge(hold,o,{{103,3,true},{113,3,false}},113)==QteOutcome::Success&&judge(hold,half,{{103,3,true}},108)==QteOutcome::Success);
+    QteDef seq;seq.id=4;seq.kind=QteKind::Sequence;seq.steps={{1,10},{2,10},{3,10}};
+    CCHECK(judge(seq,o,{{105,1,true},{112,2,true},{125,3,true}},125)==QteOutcome::Fail&&judge(seq,o,{{105,1,true},{112,2,true},{120,3,true}},120)==QteOutcome::Success);
+    CCHECK(judge(seq,o,{{105,1,true},{106,3,true}},106)==QteOutcome::None&&judge(seq,o,{{105,1,true}},115)==QteOutcome::Fail);
+    // In a scene: fail branches back to sync 1 (retry), success on the second QTE branches forward over cues.
+    auto d=scene(30,40);d.syncs={sync(1,5,1),sync(2,30,1)};d.qtes={press(1,10,1,5,0,1),press(2,20,1,5,2,0)};
+    d.cues={cue(1,25,CueKind::Sound,5),cue(2,25,CueKind::Event,9,0,2),cue(3,35,CueKind::Sound,6)};auto l=library({d});
+    SceneState s;run(l,s,1,commands({cmd(1,C::TriggerScene,30)}));SceneReport r;
+    for(uint32_t t=2;t<=12;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&first(r,K::QtePrompt)->id==1&&s.qte.start==12);
+    for(uint32_t t=13;t<17;++t)run(l,s,t);
+    r=run(l,s,17);CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail)&&first(r,K::Branch)->id==1&&count(r,K::SyncReached)==1&&s.position==6);
+    for(uint32_t t=18;t<=21;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&s.qte.start==21);
+    SceneInput hit;hit.qte={{23,1,true}};run(l,s,22);r=run(l,s,23,hit);CCHECK(qteResult(s,1)==QteOutcome::Success&&count(r,K::Branch)==0&&s.position==11);
+    for(uint32_t t=24;t<=32;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&s.qte.qte==2);
+    hit.qte={{34,1,true}};run(l,s,33);r=run(l,s,34,hit);
+    CCHECK(first(r,K::Branch)->id==2&&r.cuesSkipped==1&&cues(r)==Ids{2}&&first(r,K::Cue)->flags==1&&s.position==31&&qteResult(s,2)==QteOutcome::Success);
+    // Accessibility: auto-succeed resolves every prompt immediately (the forward branch still applies).
+    SceneState a;SceneInput opt=commands({cmd(1,C::TriggerScene,30)});QteOptions autoWin;autoWin.autoSucceed=true;opt.options=autoWin;run(l,a,1,opt);
+    std::size_t prompts=0,auto_=0;for(uint32_t t=2;a.phase!=ScenePhase::Idle&&t<100;++t){r=run(l,a,t);prompts+=count(r,K::QtePrompt);for(const auto& e:r.events)auto_+=e.kind==K::QteResolved&&e.value==int64_t(QteOutcome::AutoSuccess);}
+    CCHECK(prompts==2&&auto_==2&&a.lastOutcome==SceneOutcome::Completed&&a.results.at(2)==QteOutcome::AutoSuccess);
+    // Extended windows: the scene stores the scaled window at the prompt.
+    SceneState e;opt.options=access;opt.options->windowScaleMilli=1000;run(l,e,1,opt);for(uint32_t t=2;t<=12;++t)run(l,e,t);CCHECK(e.phase==ScenePhase::Qte&&e.qte.close==10&&e.qte.open==1);
+    for(uint32_t t=13;t<22;++t)run(l,e,t);CCHECK(e.phase==ScenePhase::Qte);r=run(l,e,22);CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail));
+}
+SceneDef stagedScene(){
+    auto d=scene(40,10);d.marks[1]={1,{{},{},2_fx},Fixed::fromRatio(1,2)};d.marks[2]={2,{3_fx,{},{}},Fixed::fromRatio(1,2)};
+    d.participants[1]={1,1,true,5,StagingFallback::Teleport};d.participants[2]={2,2,false,5,StagingFallback::Proceed};d.participants[3]={3,0,true,6,StagingFallback::Teleport};
+    d.cues={cue(1,4,CueKind::Move,1,3),cue(2,6,CueKind::InputRelease,0,1)};d.syncs={sync(1,8,20,{inPosition({3})})};return d;
+}
+void staging(){
+    auto l=library({stagedScene()});SceneState s;
+    run(l,s,1,commands({cmd(1,C::TriggerScene,40,{{1,100},{2,200}})}));
+    auto r=run(l,s,2);CCHECK(s.phase==ScenePhase::Staging&&count(r,K::InputLocked)==2&&count(r,K::MoveToMark)==2&&first(r,K::InputLocked)->entity==100);
+    CCHECK(inputLocked(s,1)&&inputLocked(s,3)&&!inputLocked(s,2)&&lockedEntities(s)==Ids({3,100}));
+    SceneInput near;near.poses={{1,{{},{},Fixed::fromRatio(7,4)}},{2,{{},{},{}}}};r=run(l,s,3,near);
+    CCHECK(first(r,K::InPosition)->id==1&&s.participants[1].status==StageStatus::InPosition&&s.participants[2].status==StageStatus::Moving);
+    for(uint32_t t=4;t<7;++t)run(l,s,t);
+    r=run(l,s,7);CCHECK(first(r,K::StagingLate)->id==2&&s.phase==ScenePhase::Playing&&s.position==0); // proceed fallback, staging done
+    for(uint32_t t=8;t<=11;++t)r=run(l,s,t);CCHECK(first(r,K::MoveToMark)->id==3&&first(r,K::MoveToMark)->ref==1&&s.participants[3].deadline==17);
+    run(l,s,12);r=run(l,s,13);CCHECK(first(r,K::InputReleased)->id==1&&!inputLocked(s,1));
+    run(l,s,14);r=run(l,s,15);CCHECK(s.phase==ScenePhase::Waiting);run(l,s,16);
+    r=run(l,s,17);CCHECK(first(r,K::TeleportRequested)->id==3&&first(r,K::SyncReleased)->value==0&&s.participants[3].status==StageStatus::Teleported);
+    r=run(l,s,18);CCHECK(count(r,K::Finished)==1&&count(r,K::InputReleased)==1&&lockedEntities(s).empty());
+    // Teleport fallback at the staging timeout and the arrived shortcut.
+    SceneState t;run(l,t,1,commands({cmd(1,C::TriggerScene,40)}));run(l,t,2);SceneInput arrived;arrived.arrived={2};run(l,t,3,arrived);
+    for(uint32_t k=4;k<7;++k)run(l,t,k);r=run(l,t,7);CCHECK(first(r,K::TeleportRequested)->id==1&&t.phase==ScenePhase::Playing&&t.participants[2].status==StageStatus::InPosition);
+    // Abort fallback releases every lock.
+    auto d=stagedScene();d.participants[1].fallback=StagingFallback::Abort;auto la=library({d});SceneState a;run(la,a,1,commands({cmd(1,C::TriggerScene,40)}));run(la,a,2);
+    for(uint32_t k=3;k<7;++k)run(la,a,k);r=run(la,a,7);CCHECK(count(r,K::Aborted)==1&&count(r,K::InputReleased)==2&&a.phase==ScenePhase::Idle&&a.lastOutcome==SceneOutcome::Aborted);
+    // Skipping staging teleports everyone still moving.
+    SceneState k;run(l,k,1,commands({cmd(1,C::TriggerScene,40)}));run(l,k,2);r=run(l,k,3,commands({cmd(2,C::Skip)}));
+    CCHECK(count(r,K::TeleportRequested)==2&&k.phase==ScenePhase::Playing&&count(r,K::Skipped)==1);
+    SceneState q;run(l,q,1,commands({cmd(1,C::TriggerScene,40)}));run(l,q,2);r=run(l,q,3,commands({cmd(2,C::SkipScene)}));
+    CCHECK(count(r,K::Finished)==1&&first(r,K::Finished)->value==int64_t(SceneOutcome::Skipped)&&count(r,K::Cue)==2&&lockedEntities(q).empty());
+}
+void checkpoints(){
+    auto d=scene(50,30);d.checkpointBefore=d.checkpointAfter=true;
+    d.cues={cue(1,0,CueKind::Dialogue,9001),cue(2,12,CueKind::Event,3),cue(3,14,CueKind::Sound,8),cue(4,20,CueKind::Camera,4)};
+    d.syncs={sync(1,10,50,{line(1)},true)};auto l=library({d});SceneState s;
+    auto r=run(l,s,1,commands({cmd(1,C::TriggerScene,50)}));CCHECK(first(r,K::SnapshotRequested)->value==0&&s.phase==ScenePhase::Pending);
+    auto pending=save(s);
+    for(uint32_t t=2;t<=12;++t){SceneInput in;if(t==5)in.finished={{1,5}};r=run(l,s,t,in);}
+    CCHECK(first(r,K::SnapshotRequested)->value==1&&first(r,K::SnapshotRequested)->id==1&&s.lastSync==1);
+    for(uint32_t t=13;t<=18;++t)run(l,s,t);CCHECK(s.position==16&&s.essentialDone==Ids{2});
+    auto mid=save(s);
+    // Load after a crash: resume at the last sync point; presentation cues replay, the essential event does not.
+    SceneState back;CCHECK(load(mid,back));r=run(l,back,19,commands({cmd(2,C::ResumeCheckpoint)}));
+    CCHECK(first(r,K::Resumed)->id==1&&count(r,K::SyncReached)==1&&count(r,K::SyncReleased)==1&&back.position==11);
+    Ids replay;std::vector<int64_t> snapshots;
+    for(uint32_t t=20;back.phase!=ScenePhase::Idle&&t<100;++t){r=run(l,back,t);append(replay,cues(r));for(const auto& e:r.events)if(e.kind==K::SnapshotRequested)snapshots.push_back(e.value);}
+    CCHECK(replay==Ids({3,4})&&snapshots==std::vector<int64_t>{2}&&back.lastOutcome==SceneOutcome::Completed);
+    // A save taken at the before-snapshot starts the scene normally after load.
+    SceneState p;CCHECK(load(pending,p));r=run(l,p,2);CCHECK(count(r,K::Started)==1&&cues(r)==Ids{1});
+    roundtrip(s);roundtrip(s.participants.empty()?ParticipantState{7,1,StageStatus::Moving,4,true}:s.participants.begin()->second);
+    SceneState waiting;CCHECK(load(pending,waiting));run(l,waiting,2);run(l,waiting,3);
+    for(uint32_t t=4;t<=12;++t)run(l,waiting,t);CCHECK(waiting.phase==ScenePhase::Waiting);roundtrip(waiting);
+}
+void triggersAndQueue(){
+    auto a=scene(60,5);a.trigger=7001;a.cues={cue(1,0,CueKind::Event,1)};auto b=scene(61,3);b.trigger=7002;b.cues={cue(1,0,CueKind::Event,2)};
+    auto l=library({a,b});CCHECK(sceneForCue(l,7001)==60&&sceneForCue(l,7002)==61&&sceneForCue(l,5)==0);
+    SceneState s;auto r=run(l,s,1,commands({cueTrigger(1,7001),cueTrigger(2,7002),cueTrigger(3,99),cmd(4,C::TriggerScene,60,{{9,1}})}));
+    CCHECK(count(r,K::Triggered)==1&&count(r,K::Queued)==1&&count(r,K::TriggerIgnored)==2&&s.queue.size()==1);
+    std::vector<int64_t> finished,started;
+    for(uint32_t t=2;t<30&&(s.phase!=ScenePhase::Idle||!s.queue.empty());++t){r=run(l,s,t);for(const auto& e:r.events){if(e.kind==K::Finished)finished.push_back(e.scene);if(e.kind==K::Started)started.push_back(e.scene);}}
+    CCHECK(finished==std::vector<int64_t>({60,61})&&started==finished&&s.lastScene==61);
+    SceneState full;run(l,full,1,commands({cueTrigger(1,7001)}));std::vector<SceneCommand> many;for(uint64_t i=2;i<12;++i)many.push_back(cueTrigger(i,7002));
+    r=run(l,full,2,commands(many));CCHECK(full.queue.size()==kSceneMaxQueue&&count(r,K::TriggerIgnored)==2);
+}
+// Full host loop on the example library: time domains feed the scene, scene time requests feed the next tick.
+struct Host {TimeState time;SceneState scene;TimeInput pending;};
+uint64_t hostTick(const SceneLibrary& l,Host& h,uint32_t t){
+    auto tr=stepTime(l.time,h.time,t,h.pending);CCHECK(tr);
+    SceneInput in;in.domainSteps=sceneDomainSteps(*tr);
+    if(t==1)in.commands={cueTrigger(1,5001,{{1,100},{2,200}})};
+    in.poses={{1,{{},{},Fixed::fromRatio(std::min<int64_t>(2000,int64_t(t)*100),1000)}}};
+    for(const auto& [id,rec]:h.scene.cues)if(!rec.skipped&&rec.finishedAt<0){
+        if(t>=rec.emittedAt+40)in.finished.push_back({id,t});
+        else if(t>=rec.emittedAt+30)in.markers.push_back({id,7,t});
+    }
+    // The player reacts to the authoritative prompt; button 3 is noise that non-strict QTEs ignore.
+    if(t%11==0)in.qte.push_back({t,3,true});
+    if(h.scene.phase==ScenePhase::Qte&&h.scene.qte.qte==1&&t==h.scene.qte.start+6)in.qte.push_back({t,1,true});
+    if(h.scene.phase==ScenePhase::Qte&&h.scene.qte.qte==2&&t>h.scene.qte.start)in.qte.push_back({t,2,true});
+    auto r=stepScene(l,h.scene,t,in);CCHECK(r);
+    h.pending={};h.pending.add=r->timeAdd;h.pending.cancelTags=r->timeCancelTags;
+    return cinematicHash(*r)^(cinematicHash(*tr)*31);
+}
+void saveRestore(const std::string& root){
+    auto l=readSceneLibrary(Json::parseFile(root+"/examples/libraries/genre/scene.json"));
+    Host a;std::vector<uint64_t> hashes;std::string timeMid,sceneMid;TimeInput pendingMid;std::size_t qtes=0;uint64_t slow=0;
+    for(uint32_t t=1;t<=600;++t){
+        hashes.push_back(hostTick(l,a,t));
+        for(const auto& r:a.time.requests)slow+=r.request.domain==kDomainCinematic;
+        if(t==150){timeMid=save(a.time);sceneMid=save(a.scene);pendingMid=a.pending;CCHECK(a.scene.phase!=ScenePhase::Idle);}
+    }
+    qtes=a.scene.results.size();
+    CCHECK(a.scene.phase==ScenePhase::Idle&&a.scene.lastScene==10&&a.scene.lastOutcome==SceneOutcome::Completed&&qtes==2&&slow>0);
+    Host b;CCHECK(load(timeMid,b.time)&&load(sceneMid,b.scene));b.pending=pendingMid;
+    for(uint32_t t=151;t<=600;++t)CCHECK(hostTick(l,b,t)==hashes[t-1]);
+    CCHECK(save(a.scene)==save(b.scene)&&save(a.time)==save(b.time)&&cinematicHash(a.scene)==cinematicHash(b.scene));
+    Host c;for(uint32_t t=1;t<=600;++t)CCHECK(hostTick(l,c,t)==hashes[t-1]);
+    CCHECK(sceneLibraryHash(l)==sceneLibraryHash(readSceneLibrary(Json::parseFile(root+"/examples/libraries/genre/scene.json"))));
+    auto changed=l;changed.scenes[10].version=2;CCHECK(sceneLibraryHash(changed)!=sceneLibraryHash(l));
+    SceneState mid;CCHECK(load(sceneMid,mid));CCHECK(!stepScene(changed,mid,151,{})); // saved against version 1
+}
+void invalidData(const std::string& root){
+    auto l=readSceneLibrary(Json::parseFile(root+"/examples/libraries/genre/scene.json"));
+    CCHECK(l.scenes.size()==2&&sceneForCue(l,5001)==10&&sceneForCue(l,5002)==11&&l.presets.at(3).request.blend==TimeBlend::Multiply&&l.time.domains.size()==4);
+    const auto& s10=l.scenes.at(10);CCHECK(s10.cues.front().id==1&&s10.cues[1].id==2&&s10.cues[4].essential&&!s10.cues[0].essential&&s10.qtes[0].perfectClose==18);
+    CCHECK(s10.marks.at(2).tolerance==Fixed::fromRatio(3,4)&&s10.participants.at(2).fallback==StagingFallback::Proceed&&s10.syncs[0].waits.size()==3);
+    auto rejects=[](const std::string& text,const std::string& expected){
+        try{readSceneLibrary(Json::parse(text));}catch(const JsonError& e){if(std::string(e.what()).find(expected)!=std::string::npos)return true;std::cerr<<"got: "<<e.what()<<'\n';return false;}
+        std::cerr<<"accepted: "<<text<<'\n';return false;
+    };
+    auto sc=[](const std::string& body){return R"({"scenes":[{"id":1,"length":10,)"+body+"}]}";};
+    CCHECK(rejects(R"({"scene":[]})","cinematic: unknown key 'scene'"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":0,"kind":"explode"}])"),"cinematic.scenes[0].cues[0].kind: unknown value 'explode'"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":11,"kind":"event","ref":1}])"),"cinematic.scene 1.cue 1.at: must be 0..length 10"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"event","ref":1},{"id":1,"at":2,"kind":"event","ref":1}])"),"cinematic.scenes[0].cues[1].id: duplicate id 1"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"move","ref":1}])"),"cinematic.scene 1.cue 1.actor: unknown participant 0"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"timeScale","ref":4}])"),"cinematic.scene 1.cue 1.ref: unknown time preset 4"));
+    CCHECK(rejects(sc(R"("cues":[{"id":1,"at":1,"kind":"event","ref":1,"essential":1}])"),"cinematic.scenes[0].cues[0].essential: expected boolean"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"timeout":0}])"),"cinematic.scenes[0].syncs[0].timeout: must be in 1..1000000"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"wait":[{"kind":"lineFinished","cue":9}]}])"),"cinematic.scene 1.sync 1.wait[0].cue: unknown dialogue/animation cue 9"));
+    CCHECK(rejects(sc(R"("cues":[{"id":2,"at":6,"kind":"dialogue","ref":3}],"syncs":[{"id":1,"at":5,"wait":[{"kind":"lineFinished","cue":2}]}])"),"must start before the sync point"));
+    CCHECK(rejects(sc(R"("cues":[{"id":2,"at":1,"kind":"dialogue","ref":3}],"syncs":[{"id":1,"at":5,"wait":[{"kind":"marker","cue":2,"marker":1}]}])"),"wait[0].cue: unknown animation cue 2"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"wait":[{"kind":"inPosition"}]}])"),"cinematic.scene 1.sync 1.wait[0]: scene has no participants"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":5,"wait":[{"kind":"lineFinished","cue":1,"participants":[1]}]}])"),"wait[0].participants: only for inPosition"));
+    CCHECK(rejects(sc(R"("syncs":[{"id":1,"at":2}],"qtes":[{"id":1,"at":5,"kind":"press","button":1,"onSuccess":1}])"),"cinematic.scene 1.qte 1.onSuccess: must branch forward"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"press","button":1,"onFail":4}])"),"cinematic.scene 1.qte 1.onFail: unknown sync point 4"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"press","button":1,"open":3,"close":9,"perfect":[1,2]}])"),"cinematic.scenes[0].qtes[0].perfect: must lie inside [open, close]"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"mash","button":1,"count":3,"hold":2}])"),"cinematic.scenes[0].qtes[0].hold: not used by kind 'mash'"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"sequence","steps":[]}])"),"cinematic.scenes[0].qtes[0].steps: expected at least one step"));
+    CCHECK(rejects(sc(R"("qtes":[{"id":1,"at":5,"kind":"hold","button":1,"hold":0}])"),"cinematic.scenes[0].qtes[0].hold: must be in 1..100000"));
+    CCHECK(rejects(sc(R"("participants":[{"id":1,"mark":3}])"),"cinematic.scenes[0].participants[0].mark: unknown mark 3"));
+    CCHECK(rejects(sc(R"("participants":[{"id":1,"fallback":"wait"}])"),"cinematic.scenes[0].participants[0].fallback: unknown value 'wait' (expected teleport, proceed, abort)"));
+    CCHECK(rejects(sc(R"("marks":[{"id":1,"position":[0,0]}])"),"cinematic.scenes[0].marks[0].position: expected [x,y,z]"));
+    CCHECK(rejects(sc(R"("domain":9)"),"cinematic.scene 1.domain: unknown time domain 9"));
+    CCHECK(rejects(R"({"scenes":[{"id":1,"length":1,"trigger":5},{"id":2,"length":1,"trigger":5}]})","cinematic.scene 2.trigger: cue 5 already starts another scene"));
+    CCHECK(rejects(R"({"scenes":[{"id":1,"length":1},{"id":1,"length":2}]})","cinematic.scenes[1].id: duplicate scene"));
+    CCHECK(rejects(R"({"timePresets":[{"id":1,"domain":1,"scale":[1,17]}]})","cinematic.timePresets[0].scale: ratio must be 0..16 with a denominator dividing 720720"));
+    CCHECK(rejects(R"({"timePresets":[{"id":1,"domain":8,"scale":[1,2]}]})","cinematic.timePresets[0].domain: unknown time domain 8"));
+    CCHECK(rejects(R"({"domains":[{"id":1,"parent":2},{"id":2}]})","cinematic.time.domain 1.parent: must be 0 or a declared domain with a smaller id"));
+    CCHECK(rejects(R"({"scenes":[{"id":1}]})","cinematic.scenes[0].length: expected integer"));
+    // Settings section.
+    auto parse=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto defaults=parse("{\"schemaVersion\":1}");CCHECK(defaults.value&&cinematicSettingsErrors(*defaults.value).empty());
+    auto o=qteOptions(*defaults.value);CCHECK(o.windowScaleMilli==1000&&!o.autoSucceed&&hitStopRequest(*defaults.value).duration==6&&slowMotionRequest(*defaults.value).scale.den==4);
+    auto relation=parse("{\"schemaVersion\":1,\"cinematic\":{\"slowMotionNumerator\":5}}");CCHECK(!relation.value&&relation.errors.at(0)=="cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
+    auto unknown=parse("{\"schemaVersion\":1,\"cinematic\":{\"hitStop\":3}}");CCHECK(!unknown.value&&unknown.errors.at(0)=="cinematic.hitStop: unknown field");
+    auto range=parse("{\"schemaVersion\":1,\"cinematic\":{\"hitStopTicks\":0}}");CCHECK(!range.value&&range.errors.at(0)=="cinematic.hitStopTicks: integer out of range");
+    auto type=parse("{\"schemaVersion\":1,\"cinematic\":{\"qteAutoSucceed\":1}}");CCHECK(!type.value&&type.errors.at(0)=="cinematic.qteAutoSucceed: expected boolean");
+    auto example=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/cinematic-settings.json"));
+    CCHECK(example.value&&cinematicSettingsErrors(*example.value).empty());
+    auto slow=slowMotionRequest(*example.value,kDomainCinematic);o=qteOptions(*example.value);
+    CCHECK(hitStopRequest(*example.value).duration==4&&slow.scale.num==1&&slow.scale.den==3&&slow.duration==120&&slow.domain==kDomainCinematic&&o.accessibleWindowMilli==2000&&o.mashScaleMilli==500);
+    // Runtime rejection leaves state untouched.
+    auto lib=library({stagedScene()});SceneState s;run(lib,s,1,commands({cmd(1,C::TriggerScene,40)}));run(lib,s,2);auto before=save(s);
+    SceneInput bad;bad.qte={{5,1,true},{4,1,true}};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.qte={{2,1,true}};CCHECK(!stepScene(lib,s,5,bad)); // input tick not after the last step
+    bad={};bad.commands={cmd(5,C::Pause),cmd(5,C::Unpause)};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.poses={{1,{}},{1,{}}};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.poses={{1,{Fixed::fromInt(200000),{},{}}}};CCHECK(!stepScene(lib,s,5,bad));
+    bad={};QteOptions wrong;wrong.windowScaleMilli=50;bad.options=wrong;CCHECK(!stepScene(lib,s,5,bad));
+    bad={};bad.commands={cmd(5,C::TriggerScene,40,{{1,0}})};CCHECK(!stepScene(lib,s,5,bad));
+    CCHECK(!stepScene(lib,s,2,{})&&!stepScene(lib,s,1,{})&&save(s)==before);
+    auto broken=s;broken.phase=ScenePhase(9);CCHECK(save(broken).empty());
+    broken=s;broken.essentialDone={3,1};CCHECK(save(broken).empty());
+    broken=s;broken.qte.qte=1;CCHECK(save(broken).empty()); // a QTE id outside the Qte phase
+    auto other=lib;other.scenes.erase(40);indexTriggers(other);CCHECK(!stepScene(other,s,5,{}));
+    auto stale=lib;stale.triggers[77]=40;CCHECK(sceneLibraryError(stale)=="cinematic.triggers: out of date (call indexTriggers)");
+    TimeState ts;CCHECK(!load(before,ts));QteProgress qp;CCHECK(!load(before,qp));
+    auto unsorted=stagedScene();std::swap(unsorted.cues[0],unsorted.cues[1]);SceneLibrary raw;raw.scenes[40]=unsorted;CCHECK(sceneLibraryError(raw).find("must be sorted")!=std::string::npos);
+}
+}
+#undef CCHECK
+void cinematicGameplay(const std::string& root){cine::timeExact();cine::timeStack();cine::cueOrder();cine::syncTimeouts();cine::qteJudging();cine::staging();cine::checkpoints();cine::triggersAndQueue();cine::saveRestore(root);cine::invalidData(root);}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();cinematicGameplay(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
