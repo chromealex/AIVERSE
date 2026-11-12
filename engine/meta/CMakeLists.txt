@@ -169,3 +169,18 @@ function(aiverse_native_use_meta native_target)
     target_link_libraries(${native_target} PRIVATE ${dependency})
     target_link_libraries(aiverse_game PUBLIC ${dependency})
 endfunction()
+
+# Reference subprocess host with an explicit policy selection; protocol/auth stay unchanged.
+function(aiverse_add_meta_service target)
+    cmake_parse_arguments(SERVICE "" "" "MODULES" ${ARGN})
+    if(SERVICE_UNPARSED_ARGUMENTS OR NOT SERVICE_MODULES)
+        message(FATAL_ERROR "aiverse_add_meta_service requires MODULES")
+    endif()
+    set(kit "${target}_kit")
+    aiverse_add_meta_server(${kit} MODULES ${SERVICE_MODULES})
+    add_executable(${target} EXCLUDE_FROM_ALL "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../tools/meta/service_main.cpp")
+    target_link_libraries(${target} PRIVATE ${kit})
+    target_compile_definitions(${target} PRIVATE
+        AIVERSE_META_SELECTED_HEADER="${kit}.h"
+        AIVERSE_META_SELECTED_FACTORY=aiverse::meta::kits::${kit})
+endfunction()

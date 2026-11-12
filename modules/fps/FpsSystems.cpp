@@ -14,7 +14,10 @@ std::optional<lib::gameplay::ItemType> item(int64_t id){if(id<1||id>9)return {};
 bool bag(Actor& actor,int32_t type,int32_t count) {
     std::vector<lib::gameplay::ItemStack> items;for(auto i:actor.bag)items.push_back({i.type,i.count});
     auto result=count>0?lib::gameplay::addItem(items,{12,100},{type,count},item):lib::gameplay::removeItem(items,{type,-count});
-    if(!result)return false;actor.bag.clear();for(auto i:items)actor.bag.push_back({int32_t(i.type),int32_t(i.count)});return true;
+    if(!result)return false;
+    actor.bag.clear();
+    for(auto i:items)actor.bag.push_back({int32_t(i.type),int32_t(i.count)});
+    return true;
 }
 bool has(const Actor& actor,int32_t type){for(auto i:actor.bag)if(i.type==type&&i.count>0)return true;return false;}
 uint32_t ticks(const Simulation& sim){return sim.tick();}
@@ -73,7 +76,8 @@ void Module::damage(Simulation& sim,uint8_t source,Actor& target,int32_t amount,
     if(config_.systems.enabled){
         if(s.match.carrier==target.slot){s.match.carrier=0;s.match.bombPos=target.pos;}
         if(s.loot.size()<256&&(target.owned&(1u<<target.weaponIndex)))s.loot.push_back({s.nextObject++,target.pos,100+target.weaponIndex,1,target.ammo,target.reserve,target.attachments[target.weaponIndex]});
-        for(auto& v:s.vehicles)if(v.driver==target.slot)v.driver=0;target.vehicle=0;
+        for(auto& v:s.vehicles)if(v.driver==target.slot)v.driver=0;
+        target.vehicle=0;
     }
     sim.emit({2,source,{}, {},target.slot,target.pos});
 }
@@ -129,7 +133,9 @@ void Module::action(Simulation& sim,Actor& a,Action kind,uint32_t argument) {
     if(kind==Action::Vault) {
         if(!a.grounded||a.prone)return;
         auto dir=direction(a.yaw,{})*2_fx;auto wall=collision_.cast(a.pos+Vec3{{},Fixed::fromRatio(1,2),{}},dir);
-        if(!wall.hit)return;auto top=collision_.colliders().at(wall.id).bounds.max.y;auto up=top-a.pos.y+Fixed::fromRatio(1,10);
+        if(!wall.hit)return;
+        auto top=collision_.colliders().at(wall.id).bounds.max.y;
+        auto up=top-a.pos.y+Fixed::fromRatio(1,10);
         if(up<=Fixed{}||up>Fixed::fromRatio(15,10))return;
         auto height=stanceHeight(a,config_.motor);Vec3 center=a.pos+Vec3{{},height/2,{}},half{config_.motor.radius,height/2,config_.motor.radius};
         if(collision_.cast(center,{{},up,{}},half).hit||collision_.cast(center+Vec3{{},up,{}},dir,half).hit)return;
@@ -140,7 +146,13 @@ void Module::action(Simulation& sim,Actor& a,Action kind,uint32_t argument) {
     if(kind==Action::Heal){if(a.health<100&&has(a,1))begin(kind,c.healTicks,0);return;}
     if(kind==Action::Plant) {
         if(config_.mode!="bomb"||a.team!=1||s.match.carrier!=a.slot||s.match.planted||now<s.match.start+c.freezeTicks)return;
-        for(auto site:sites_)if(inside(a.pos,site)){begin(kind,c.plantTicks,0);return;}return;
+        for(auto site:sites_){
+            if(inside(a.pos,site)){
+                begin(kind,c.plantTicks,0);
+                return;
+            }
+        }
+        return;
     }
     if(kind!=Action::Interact)return;
     if(a.vehicle){for(auto& v:s.vehicles)if(v.id==a.vehicle){Actor exit=a;exit.pos=v.pos+Vec3{2_fx,Fixed::fromRatio(1,10),{}};exit.vehicle=0;auto box=actorBounds(exit,config_.motor);box.min.y+=Fixed::fromRatio(1,100);if(collision_.blocked(box))return;a.pos=exit.pos;v.driver=0;a.vehicle=0;}return;}

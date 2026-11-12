@@ -24,10 +24,28 @@ Backend callbacks and `pump()` run on the same owning thread, never directly on 
 - Save/persist data contains request arguments, potentially chat text. Keep it private and
   per-account. Credentials are supplied by transport and must not be put in arguments.
 
-See `examples/meta/native/Main.cpp`; test `meta_client` covers lost replies, restored
+The in-process `examples/meta/native/Main.cpp` is a unit/host example, not an AiverseGame lifecycle integration. Test `meta_client` covers lost replies, restored
 requests, storage failure, duplicate callbacks and destruction before completion.
 
 Link `AIVERSE::meta_client` (native OBJECT modules: `aiverse_native_use_meta(target CLIENT)`).
 Only protocol, transport and outbox belong on the client. Server policy/configuration and SQL
 remain on the host; see `skills/meta-server/SKILL.md` and `skills/meta-database/SKILL.md`.
 The standalone client example is `examples/meta/client`.
+
+For a real AiverseGame host, use the existing `plugins::NativePlugin` lifecycle from
+`engine/platform/Plugins.h` and `docs/plugins.md`: initialize account/transport/outbox
+in `call("init", ...)`, pump Client from `update()`, and begin operations from host/UI
+calls. `NativeModule::setup/tick/command/openLua` belong to simulation and are not a
+network lifecycle. Keep the plugin in the game project and register with AIVERSE_PLUGIN;
+plugin sources must reach the executable directly so registration is not dead-stripped.
+Link only AIVERSE::meta_client. This lifecycle does not automatically expose a custom
+Lua/RmlUi API: wire actual UI actions separately, or explicitly report headless/automatic
+acceptance coverage. Never label an automatic RPC probe as interactive shop/chat screens.
+
+Do not block `init`, `update` or UI handlers on sockets. Use an asynchronous transport
+with bounded timeouts; workers return plain reply data, then the owning thread delivers
+Backend callbacks before `Client::pump()`. Keep credentials in host-private storage.
+For a combined client/server project, stage an explicit public content directory and set
+`AIVERSE_CONTENT_DIR` to it. The content copier does not automatically exclude arbitrary
+`server/`, SQL, token or service-configuration files. Inspect the final content pack as
+well as link commands and symbols; see `skills/meta-compose/SKILL.md` for selection.

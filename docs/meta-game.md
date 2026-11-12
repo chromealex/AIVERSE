@@ -52,11 +52,11 @@ aiverse_meta_validate chats /path/to/project/meta/chats.json
 
 ## Подключение из native C++ проекта
 
-Внутри сборки AIVERSE цель `aiverse::meta` доступна **до** обработки `native/CMakeLists.txt`:
+Клиентский target `AIVERSE::meta_client` доступен **до** обработки `native/CMakeLists.txt`. Старый `aiverse::meta` явно подключает все политики и используется только для совместимости:
 
 ```cmake
 aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp)
-aiverse_native_use_meta(aiverse_native_my_game)
+aiverse_native_use_meta(aiverse_native_my_game CLIENT)
 ```
 
 Helper линкует object target и конечную `aiverse_game` (простое PRIVATE-связывание object
@@ -71,10 +71,16 @@ library не распространяет зависимости через `$<T
 
 ```cmake
 add_subdirectory("${AIVERSE_ENGINE_ROOT}/engine/meta" meta-library)
-target_link_libraries(my_native_target PRIVATE aiverse::meta)
+target_link_libraries(my_native_target PRIVATE AIVERSE::meta_client)
 ```
 
-Проверяемый внешний потребитель: `examples/meta/`.
+Для сервера используйте `aiverse_add_meta_server(game_meta MODULES economy social)` и
+`Service(kits::game_meta(), config, state, commit, draw)`. Готовый subprocess-хост:
+`aiverse_add_meta_service(game_meta_rpc MODULES economy social)`; HTTP/SQLite адаптер
+`tools/meta/server.py` получает его через `--binary`.
+
+Проверяемый внешний потребитель: `examples/meta/` (полный compatibility-пример);
+раздельные минимальные потребители: `examples/meta/client` и `examples/meta/server`.
 
 ```sh
 cmake -S examples/meta -B build/.temp/meta-consumer

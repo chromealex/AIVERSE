@@ -18,3 +18,9 @@ description: Implement the server side of AIVERSE meta — authenticated command
   for the policy you change; client callers only need `skills/meta-client/SKILL.md`.
 - Run server policy tests, real authenticated request checks, storage restart/retry checks
   and the server-only example. A local reference host is not a deployed production service.
+
+For the existing HTTP/SQLite reference host, build its subprocess without copying C++:
+`aiverse_add_meta_service(game_meta_rpc MODULES economy social)` and build `game_meta_rpc`.
+Pass that executable via `tools/meta/server.py --binary` with the selected service JSON.
+The default `aiverse_meta_service` intentionally uses all policies; do not use it to
+claim selection isolation. The subprocess protocol is trusted IPC, never a public RPC endpoint.
