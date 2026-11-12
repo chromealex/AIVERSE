@@ -663,6 +663,10 @@ public:
     // one unit of `unit` leaves garrison `from` for `target` (lanes / roads / straight, like sysGarrison releases)
     Entity releaseUnit(Simulation& sim, Entity from, Entity target, uint16_t unit, uint8_t owner, uint32_t group);
     // assault results for the environment (souls, burning buildings, last action buildings)
+    // map scroller setInvincible (BW Player.isInvincible): match modes and the victory script never defeat the player
+    bool envInvincible(Simulation& sim, uint8_t slot) const { return env_ && env_->active() && env_->invincible(sim, slot); }
+    // the first effect filter of a payload (through area / projectile delivery) accepts `e` for `owner` (BW skill filters)
+    bool envFilterAccepts(Simulation& sim, int payload, Entity e, uint8_t owner) const;
     void envAssault(Simulation& sim, Entity structure, uint8_t attacker, uint8_t defender, int attackerLost, int defenderLost) {
         if (env_ && env_->active()) env_->onAssault(sim, structure, attacker, defender, attackerLost, defenderLost);
     }

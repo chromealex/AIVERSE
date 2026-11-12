@@ -405,6 +405,7 @@ struct FogRules {
     // Heightfield maps with heights.blockVision use line of sight anyway.
     bool lineOfSight = false;
     Fixed rockHeight = Fixed::fromInt(2);     // undug diggable rock as a blocker (0 = transparent)
+    int ellipse = 1;                          // sight discs squashed along z: dx^2 + (ellipse dz)^2 <= r^2 (BW iso fog: 2)
 };
 
 struct HeightRules {
