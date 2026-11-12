@@ -282,6 +282,51 @@ native CMake code executes. Keep `libraries/` in aiversebuild source exports. No
 or engine-source edit is required for a game to consume these headers. Do not store mutable
 library objects as NativeModule members: persist their fields through NativeState instead.
 
+### Where library code goes (`libraries/include/aiverselib`)
+
+Pick the folder by what the code is, not by who wrote it or which game needs it first.
+
+| Folder | Holds | Examples |
+|---|---|---|
+| root `*.h` | `cpp-foundation`: small generic algorithms with no gameplay meaning | `Graphs.h`, `Grid.h`, `Collections.h` |
+| `runtime/` | Native-module infrastructure, not gameplay: memory bounds, work budgets, hot settings, traces, state diff, byte helpers | `Bounded.h`, `WorkBudget.h`, `NativeBytes.h` |
+| `systems/` | Cross-genre gameplay building blocks any game can use | attributes, tags, loot, curves, reservations |
+| `gameplay/` | Player-facing subsystems with native command adapters | abilities, camera, inventory, construction |
+| `genre/<package>/` | Rules that define a kind of game: one subfolder per catalog package | `genre/melee/`, `genre/weapons/`, `genre/cards/` |
+| `bots/` | Computer players and navigation, including genre bots | RTS/FPS controllers, navmesh |
+| `app/` | Application layer outside the simulation: screens, session, lifecycle, balance tooling | `Screens.h`, `Session.h` |
+| `net/` | Network admission and ticket policies | `Admission.h` |
+
+Rules:
+- **One package, one folder.** A new genre package gets `genre/<package>/` with all its files:
+  the policy, its JSON reader (`Data.h`), generated settings adapter (`Configured.h`) and save
+  records (`Persistence.h`). Name the folder after the catalog ID without the genre noun
+  (`stealth-senses` → `genre/senses/`). Never add another flat file to `genre/` or `strategy/`.
+- **No aggregate headers.** A shared `Persistence.h`, `Configured.h` or `Data.h` that includes
+  several packages is forbidden: it makes every user compile and link all of them and forces
+  fake catalog dependencies. Shared code may only live in `genre/common/` and must not include
+  any package (record framing, kind/version constants, byte helpers).
+- **Include only declared dependencies.** A package header may include another package only if
+  that package is in its `packageDependencies`; add the dependency because the code needs it,
+  never to make a check pass. Save record kinds stay unique across packages (see the area
+  table for the ranges already taken).
+- **Infrastructure is not a genre.** If code is about running native modules (budgets, memory,
+  hot reload, tracing, serialization bytes) it goes to `runtime/`, even when one genre needs it
+  first. If it is reusable by any game (tags, curves, loot), it goes to `systems/`.
+- Namespaces follow the folder (`aiverse::lib::genre`, `aiverse::lib::runtime`, ...); a package
+  subfolder does not add a namespace level.
+
+Current state (legacy, being migrated): `genre/` holds 11 packages as 49 flat files, and
+`strategy/` holds non-action genre kits (cards, turns, puzzles, rhythm, idle/offline
+production, run and zone graphs, puzzle VM) — these are genre packages too and move to
+`genre/<package>/`. The shared `genre/Persistence.h`, `genre/Configured.h`, `genre/Data.h`
+and `strategy/Persistence.h` are aggregates to be split per package. When migrating, move
+files with `git mv`, leave a one-line forwarding header at every old path so existing
+`#include <aiverselib/genre/X.h>` keeps compiling, keep package IDs, CMake targets and
+namespaces, then drop dependencies that only existed because of the aggregates and prove
+isolation with `tests/skills/isolation.py`. Do not migrate a package while its owner has an
+unmerged branch touching it.
+
 ## 10. Reuse meta-game policies before generating code
 
 For shops, offers, crafting, currencies/inventory, quests, passes, daily rewards, energy,
@@ -478,6 +523,8 @@ adapter. Validate kits, native linking, client retries and selected UI screens.
 - State when to use the skill, its responsibility, public API/header, exact CMake
   target, dependencies, minimal working example and required validation. Link to
   detailed references; do not require loading unrelated recipes or whole schemas.
+- Put the library code in the folder that matches what it is (§9 "Where library code goes");
+  genre packages get their own `genre/<package>/` subfolder and no aggregate headers.
 - Every new code-providing skill must have an independently selectable library
   target with only required dependencies. Header-only implementations may use
   INTERFACE targets; compiled optional libraries must not build by default.
