@@ -711,6 +711,46 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
         auto base = [&](const std::string& key) { return tb[key].isNumber() ? int(tb[key].integer(-1)) : -1; };
         Json trows = Json::array(), fixed = Json::array();
         auto fix = [&](int x, int z, int t) { Json f = Json::array(); f.push(num(x)); f.push(num(z)); f.push(num(t)); fixed.push(f); };
+        // T-junctions of the grid: where a street ends at a road, the road's edge line opens over the mouth (one cell
+        // before and after it too: the corner curves) and the street ends with a crossing and a stop line.
+        // Tile groups: <ns|ew>Open<side> 4 x 4 for arterials, <ns2|ew2>Open<side> 2 x 4 / 4 x 2 for streets,
+        // <ns2|ew2>End<side> 2 x 2; rows run along z, columns along x.
+        std::vector<int> over(n, -1);
+        if (tb.isObject())
+            for (size_t r = arterials; r < p.roads.size(); ++r) {
+                const Road& st = p.roads[r];
+                for (int end = 0; end < 2; ++end) {
+                    const int edge = end ? st.b : st.a - 1;             // the cell row / column just past this end
+                    const int bx = st.vert ? st.pos : edge, bz = st.vert ? edge : st.pos;
+                    if (!p.in(bx, bz)) continue;
+                    const int16_t bi = (st.vert ? p.hr : p.vr)[size_t(p.ci(bx, bz))];
+                    if (bi < 0) continue;
+                    const Road& bound = p.roads[size_t(bi)];
+                    if (bound.vert == st.vert || (end ? bound.pos != st.b : bound.pos + bound.w != st.a)) continue;
+                    // the bounding road: its side that faces the street
+                    const std::string open = std::string(bound.vert ? (bound.cls ? "ns2Open" : "nsOpen") : (bound.cls ? "ew2Open" : "ewOpen")) +
+                                             (bound.vert ? (end ? "W" : "E") : (end ? "N" : "S"));
+                    if (const int ob = base(open); ob >= 0)
+                        for (int along = -1; along <= 2; ++along)
+                            for (int across = 0; across < bound.w; ++across) {
+                                const int x = bound.vert ? bound.pos + across : st.pos + along, z = bound.vert ? st.pos + along : bound.pos + across;
+                                if (!p.in(x, z)) continue;
+                                const size_t i = size_t(p.ci(x, z));
+                                if ((bound.vert ? p.vr : p.hr)[i] != bi || (bound.vert ? p.hr : p.vr)[i] >= 0 || p.kind[i] == KIsland) continue;
+                                over[i] = bound.vert ? ob + (along + 1) * bound.w + across : ob + across * 4 + (along + 1);
+                            }
+                    const std::string fin = std::string(st.vert ? "ns2End" : "ew2End") + (st.vert ? (end ? "S" : "N") : (end ? "E" : "W"));
+                    if (const int eb = base(fin); eb >= 0)
+                        for (int k = 0; k < 2; ++k)
+                            for (int across = 0; across < st.w; ++across) {
+                                const int t0 = end ? st.b - 2 : st.a;
+                                const int x = st.vert ? st.pos + across : t0 + k, z = st.vert ? t0 + k : st.pos + across;
+                                const size_t i = size_t(p.ci(x, z));
+                                if (p.kind[i] != KStreet || (st.vert ? p.hr : p.vr)[i] >= 0) continue;
+                                over[i] = st.vert ? eb + k * 2 + across : eb + across * 2 + k;
+                            }
+                }
+            }
         for (int z = 0; z < H; ++z) {
             std::string s(size_t(W), cLot);
             for (int x = 0; x < W; ++x) {
@@ -722,7 +762,8 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 if (!tb.isObject()) continue;
                 const Road* v = p.vr[i] >= 0 ? &p.roads[size_t(p.vr[i])] : nullptr;
                 const Road* h = p.hr[i] >= 0 ? &p.roads[size_t(p.hr[i])] : nullptr;
-                int t = -1;
+                int t = over[i];
+                if (t >= 0) { fix(x, z, t); continue; }
                 if (k == KRoad && v && h && v->cls == 0 && h->cls == 0) {          // arterial crossing: arms that exist
                     const int mask = (h->pos > p.dz0 ? 1 : 0) | (v->pos + v->w < p.dx0 + p.dW ? 2 : 0) | (h->pos + h->w < p.dz0 + p.dH ? 4 : 0) | (v->pos > p.dx0 ? 8 : 0);
                     if (int b = base("x" + std::to_string(mask)); b >= 0) t = b + (z - h->pos) * 4 + (x - v->pos);

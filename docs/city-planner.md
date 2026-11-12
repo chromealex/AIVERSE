@@ -68,6 +68,14 @@ tile index of exact artwork and fills `tiles.fixed`: `ns`, `ew` (4 x 4 tiles of 
 (4 x 4 tiles of an arterial crossing; bits: 1 north arm, 2 east, 4 south, 8 west), `ns2`, `ew2` (2 x 2, local
 streets), `walk`, `lot`, `grass`, `water`, `street`, `parking` (2 x 2 each).
 
+T-junctions of the grid (a street always ends at the road that bounds its block) use extra groups when they are given:
+`nsOpenE`, `nsOpenW`, `ewOpenN`, `ewOpenS` (4 x 4: an arterial whose edge line opens on that side over the two-cell
+mouth, with one cell before and after it for the corner curves), `ns2OpenE`, `ns2OpenW` (2 wide x 4 long), `ew2OpenN`,
+`ew2OpenS` (4 wide x 2) for a street that bounds another street, and `ns2EndN`, `ns2EndS`, `ew2EndW`, `ew2EndE` (2 x 2:
+the last two cells of the street at that end, with the pedestrian crossing and the stop line). Rows run along z,
+columns along x. Arterial crossings (`x1`..`x15`) are whole 4 x 4 drawings, so crossings and stop lines on every arm
+are the tileset's business.
+
 ## The plan in the map: `"city"`
 
 ```json

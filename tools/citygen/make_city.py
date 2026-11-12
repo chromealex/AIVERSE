@@ -13,10 +13,12 @@ sprites/cars/*.png (body + closed doors + wheels, painted through the paint mask
 One map cell = 4 m (rules driving.metersPerCell). Needs Pillow.
 """
 import argparse
+import hashlib
 import json
 import os
 import random
 import shutil
+import struct
 
 from PIL import Image, ImageDraw
 
@@ -24,12 +26,78 @@ M = 4.0                      # metres per cell
 ROAD, BLOCK_W, BLOCK_H = 4, 12, 10
 BLOCKS_X, BLOCKS_Z = 4, 3
 TILE = 128                   # placeholder tiles
-RT = 256                     # tiles cut from the road / pavement textures (1024 px = 16 m)
+MODEL_TEXTURE = 512          # largest side of a building texture in the project
+RT = 128                     # tiles cut from the road / pavement textures: 32 px per metre, enough for 4K at the game's zoom
 PAINTS = {'sedan': (0.10, 0.28, 0.64), 'taxi': (0.95, 0.72, 0.08), 'police': (0.92, 0.92, 0.95), 'hatchback': (0.72, 0.12, 0.10),
           'wagon': (0.20, 0.42, 0.30), 'muscle': (0.85, 0.35, 0.05), 'limousine': (0.06, 0.06, 0.07), 'pickup': (0.45, 0.10, 0.10),
           'van': (0.80, 0.80, 0.78), 'classic': (0.35, 0.08, 0.12), 'armored': (0.30, 0.34, 0.30)}
 HEALTH = {'limousine': 380, 'pickup': 400, 'van': 420, 'armored': 900, 'police': 380}
 MASS = {'limousine': 1900, 'pickup': 1800, 'van': 2100, 'armored': 4200, 'muscle': 1500, 'hatchback': 1000}
+
+
+def copy_model(src, dst):
+    """Copies a .glb, moving its embedded images to shared files next to it (tex/<md5>.<ext>).
+
+    The building packs embed the same eight wall / roof textures in every file: 955 MB of the 1 GB pack are
+    copies. With shared files the engine loads each texture once."""
+    if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
+        return
+    d = open(src, 'rb').read()
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if d[:4] != b'glTF':
+        shutil.copyfile(src, dst)
+        return
+    jlen = struct.unpack_from('<I', d, 12)[0]
+    j = json.loads(d[20:20 + jlen])
+    blen = struct.unpack_from('<I', d, 20 + jlen)[0]
+    blob = d[28 + jlen:28 + jlen + blen]
+    views = j.get('bufferViews', [])
+    drop = set()
+    for im in j.get('images', []):
+        if 'bufferView' not in im:
+            continue
+        bv = views[im['bufferView']]
+        data = blob[bv.get('byteOffset', 0):bv.get('byteOffset', 0) + bv['byteLength']]
+        ext = {'image/png': 'png', 'image/jpeg': 'jpg'}.get(im.get('mimeType'), 'png')
+        name = 'tex/%s.%s' % (hashlib.md5(data).hexdigest()[:16], ext)
+        tex = os.path.join(os.path.dirname(dst), name)
+        if not os.path.exists(tex):
+            os.makedirs(os.path.dirname(tex), exist_ok=True)
+            open(tex, 'wb').write(data)
+            pic = Image.open(tex)                          # wall textures repeat every metre or so: 1254 px each is
+            if max(pic.size) > MODEL_TEXTURE:              # far more than any zoom of the game shows
+                pic.thumbnail((MODEL_TEXTURE, MODEL_TEXTURE), Image.LANCZOS)
+                pic.save(tex)
+        drop.add(im.pop('bufferView'))
+        im.pop('mimeType', None)
+        im['uri'] = name
+    out, remap, kept = bytearray(), {}, []
+    for i, bv in enumerate(views):
+        if i in drop:
+            continue
+        while len(out) % 4:
+            out.append(0)
+        data = blob[bv.get('byteOffset', 0):bv.get('byteOffset', 0) + bv['byteLength']]
+        bv = dict(bv, byteOffset=len(out))
+        out += data
+        remap[i] = len(kept)
+        kept.append(bv)
+    for a in j.get('accessors', []):
+        if 'bufferView' in a:
+            a['bufferView'] = remap[a['bufferView']]
+        for k in ('indices', 'values'):
+            if 'sparse' in a and 'bufferView' in a['sparse'].get(k, {}):
+                a['sparse'][k]['bufferView'] = remap[a['sparse'][k]['bufferView']]
+    j['bufferViews'] = kept
+    while len(out) % 4:
+        out.append(0)
+    j['buffers'] = [{'byteLength': len(out)}]
+    js = json.dumps(j, separators=(',', ':')).encode()
+    js += b' ' * (-len(js) % 4)
+    with open(dst, 'wb') as f:
+        f.write(b'glTF' + struct.pack('<II', 2, 12 + 8 + len(js) + 8 + len(out)))
+        f.write(struct.pack('<I', len(js)) + b'JSON' + js)
+        f.write(struct.pack('<I', len(out)) + b'BIN\0' + bytes(out))
 
 
 def wjson(path, obj):
@@ -164,12 +232,17 @@ def make_road_tileset(assets, out):
     plain = load('road_plain_asphalt', 4)
     S = RT * 4
     arm = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-    ImageDraw.Draw(arm).rectangle((int(S * 0.045), int(S * 0.02), int(S * 0.485), int(S * 0.02) + max(3, S // 60)), fill=(198, 196, 184, 255))
+    da = ImageDraw.Draw(arm)
+    da.rectangle((int(S * 0.045), int(S * 0.012), int(S * 0.485), int(S * 0.012) + max(3, S // 70)), fill=(198, 196, 184, 255))   # stop line
+    zstep = S // 13
+    for k in range(13):                                    # pedestrian crossing behind it
+        da.rectangle((k * zstep + zstep // 4, int(S * 0.055), k * zstep + zstep // 4 + zstep // 2, int(S * 0.19)), fill=(198, 196, 184, 255))
+    closed = Image.new('RGBA', (S, S), (0, 0, 0, 0))       # no arm on this side: the edge line runs on
+    ImageDraw.Draw(closed).rectangle((int(S * 0.045), int(S * 0.045) - max(2, S // 170), S - int(S * 0.045), int(S * 0.045) + max(2, S // 170)), fill=(198, 196, 184, 255))
     for mask in range(1, 16):
         im = plain.convert('RGBA')
         for bit in range(4):
-            if mask & (1 << bit):
-                im = Image.alpha_composite(im, arm.rotate(-90 * bit))
+            im = Image.alpha_composite(im, (arm if mask & (1 << bit) else closed).rotate(-90 * bit))
         parts.append(('x%d' % mask, im.convert('RGB'), 4))
     rnd = random.Random(5)
     grass = Image.new('RGB', (RT * 2, RT * 2), (58, 92, 46))
@@ -178,14 +251,65 @@ def make_road_tileset(assets, out):
         k = rnd.randint(-18, 18)
         d.point((rnd.randrange(RT * 2), rnd.randrange(RT * 2)), (58 + k // 2, 92 + k, 46 + k // 2))
     parts.append(('grass', grass, 2))
+    # T-junctions: the road's edge line opens over the street mouth with rounded corners; the street ends with a
+    # pedestrian crossing and a stop line. Groups for the planner (docs/city-planner.md "Tiles").
+    plain2 = load('road_plain_asphalt', 4)
+    white = (198, 196, 184)
+    lw = max(2, RT // 24)
+
+    def open_east(road, cells_w, inset, street_inset, arcs):
+        """`road`: a north-south strip cells_w wide; -> 4 cells long, the east edge line open over rows 1..2."""
+        im = Image.new('RGB', (cells_w * RT, 4 * RT))
+        for k in range(0, 4 * RT, road.height):
+            im.paste(road, (0, k))
+        x_line = cells_w * RT - int(inset * RT)
+        rad = int(inset * RT) if arcs else 0
+        z0, z1 = int((1 + street_inset) * RT) - rad, int((3 - street_inset) * RT) + rad
+        patch = plain2.crop((0, 0, int(inset * RT) + lw * 2, z1 - z0))
+        im.paste(patch, (x_line - lw * 2, z0))
+        if arcs:
+            d = ImageDraw.Draw(im)
+            xr = cells_w * RT
+            d.arc((xr - rad, z0 - rad, xr + rad, z0 + rad), 90, 180, fill=white, width=lw)
+            d.arc((xr - rad, z1 - rad, xr + rad, z1 + rad), 180, 270, fill=white, width=lw)
+        return im
+
+    def street_end_north(road):
+        """A north-south two-cell street, its north end: zebra, then the stop line on the lane that arrives."""
+        im = road.copy()
+        d = ImageDraw.Draw(im)
+        step = RT * 2 // 7
+        for k in range(7):
+            x = k * step + step // 4
+            d.rectangle((x, int(0.22 * RT), x + step // 2, int(0.82 * RT)), fill=white)
+        d.rectangle((RT + lw, int(1.0 * RT), 2 * RT - int(0.09 * RT), int(1.0 * RT) + lw * 2), fill=white)
+        return im
+
+    ns2 = load('road_two_lane_ns', 2) if os.path.exists(os.path.join(tex, 'road_two_lane_ns', 'basecolor.png')) else None
+    groups = []
+    a_e = open_east(ns, 4, 0.18, 0.085, True)
+    groups += [('nsOpenE', a_e, 4, 4), ('nsOpenW', a_e.transpose(Image.FLIP_LEFT_RIGHT), 4, 4),
+               ('ewOpenN', a_e.rotate(90, expand=True), 4, 4), ('ewOpenS', a_e.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True), 4, 4)]
+    if ns2 is not None:
+        s_e = open_east(ns2, 2, 0.085, 0.085, False)
+        groups += [('ns2OpenE', s_e, 2, 4), ('ns2OpenW', s_e.transpose(Image.FLIP_LEFT_RIGHT), 2, 4),
+                   ('ew2OpenN', s_e.rotate(90, expand=True), 4, 2), ('ew2OpenS', s_e.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True), 4, 2)]
+        e_n = street_end_north(ns2)
+        groups += [('ns2EndN', e_n, 2, 2), ('ns2EndS', e_n.rotate(180), 2, 2), ('ew2EndW', e_n.rotate(90), 2, 2), ('ew2EndE', e_n.rotate(270), 2, 2)]
     cols = 16
-    count = sum(c * c for _, _, c in parts)
+    count = sum(c * c for _, _, c in parts) + sum(w * h for _, _, w, h in groups)
     sheet = Image.new('RGB', (cols * RT, ((count + cols - 1) // cols) * RT))
     bases, i = {}, 0
     for name, im, c in parts:
         bases[name] = i
         for ty in range(c):
             for tx in range(c):
+                sheet.paste(im.crop((tx * RT, ty * RT, (tx + 1) * RT, (ty + 1) * RT)), ((i % cols) * RT, (i // cols) * RT))
+                i += 1
+    for name, im, gw, gh in groups:                        # rows along z, columns along x
+        bases[name] = i
+        for ty in range(gh):
+            for tx in range(gw):
                 sheet.paste(im.crop((tx * RT, ty * RT, (tx + 1) * RT, (ty + 1) * RT)), ((i % cols) * RT, (i // cols) * RT))
                 i += 1
     os.makedirs(os.path.join(out, 'tilesets'), exist_ok=True)
@@ -326,8 +450,7 @@ def plan_with_engine(assets, out, seed, headless, size, rules, types, building_t
             continue
         dst = os.path.join(out, by_id[bid]['file'])
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(by_id[bid]['src']):
-            shutil.copyfile(by_id[bid]['src'], dst)
+        copy_model(by_id[bid]['src'], dst)
     wjson(os.path.join(out, 'rules.json'), rules)
     wjson(os.path.join(out, 'maps', 'city.json'), m)
     g = m.get('generated', {})
@@ -524,8 +647,7 @@ def build(assets, out, seed, headless=None, size=(96, 72), layout='grid', max_bu
         types[bid] = building_types[bid]
         dst = os.path.join(out, by_id[bid]['file'])
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(by_id[bid]['src']):
-            shutil.copyfile(by_id[bid]['src'], dst)
+        copy_model(by_id[bid]['src'], dst)
     people_scripts_overrides(assets, out, rules, types, entities)
     wjson(os.path.join(out, 'rules.json'), rules)
     start = [ROAD + 3.5, ROAD + 0.5]
