@@ -1218,23 +1218,30 @@
     },
     {
       "id": "match-rules",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/genre/Match.h",
       "skill": "skills/aiverse-match-rules/SKILL.md",
-      "summary": "Team score events, rounds, overtime, draws and contested capture policies",
-      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Team score events, rounds, overtime, draws and objective modes: capture/hold zones and king of the hill, payload, elimination with lives and respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock and spectator transitions",
+      "notes": "Read docs/genre-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage. 0.2.0 adds genre/MatchObjectives.h (objective policies returning ObjectiveEvents, awardObjectiveEvents/awardObjectiveWin through awardScore, save/load kinds 40-47 and hashObjective), genre/MatchObjectivesConfigured.h (objectives settings adapters and cross-field errors) and genre/MatchObjectivesData.h (zones/payload path/route gates JSON); Match.h API is unchanged. Presence, deaths, pickups and gate crossings come from the authoritative owner; built-in victory modes stay with their modules.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_match_rules",
       "dependencies": [
         "libraries/include/aiverselib/genre/Configured.h",
         "libraries/include/aiverselib/genre/Persistence.h",
         "libraries/include/aiverselib/genre/Data.h",
-        "docs/genre-packages.md"
+        "docs/genre-packages.md",
+        "libraries/include/aiverselib/genre/MatchObjectives.h",
+        "libraries/include/aiverselib/genre/MatchObjectivesConfigured.h",
+        "libraries/include/aiverselib/genre/MatchObjectivesData.h",
+        "examples/libraries/genre/objectives.json",
+        "examples/libraries/genre/objective-settings.json"
       ],
       "runtime": "header",
-      "linkDependencies": [],
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
       "packageDependencies": []
     },
     {

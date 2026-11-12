@@ -9,7 +9,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
 | combat-actions | Frame-keyed hitboxes + hurtboxes (sphere/capsule/yaw box) with overlap tests, self/team filtering and once-per-swing hits; dodge i-frames + cooldown; directional guard arc + perfect-parry window with re-arm; poise damage/break/recovery and hit/block/parry stun; deterministic lock-on acquire/switch/break | Composes melee-combat. Returns contacts/outcomes; damage, stamina, health and statuses stay with the existing combat owner. No per-tick sweep, animation-driven boxes, ragdoll or camera presentation. |
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets; 0.2.0: material-layer penetration, radial explosions with owner LOS, ammo feeds (magazine/belt/per-shell/energy + overheat), charge tiers, attachment stat stacking, ballistic launch and lead solving (see [Weapons and ballistics](#weapons-and-ballistics-weapon-policies-020)) | Existing FPS ammo/reload/fire cadence remain authoritative for built-in FPS weapons. No automatic replacement of hitscan, no damage/health owner, no presentation. |
-| match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
+| match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points. MatchObjectives.h (0.2.0): capture/hold zones with contest rules and decay, king of the hill, payload, elimination with lives/respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock, spectator transitions (see [Match objectives](#match-objectives-match-rules-020)) | Native extension policies returning events/scores for the match owner; existing built-in victory modes stay owned by their modules. Presence, deaths, pickups and gate crossings come from the authoritative owner. No cart physics, bomb/HUD presentation or network spectating. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 
 ## Native/host integration
@@ -274,3 +274,87 @@ Verified: header syntax checks (g++ 11, `-Wall -Wextra -Werror -pedantic`), `gen
 overheat sequences, charge tiers, attachment stacking, aim accuracy, save/restore and invalid data, and a
 standalone run of the GenreConsumer function. Not verified in that change: CMake/full engine build,
 `aiverse_tests`, headless matches, MSVC/clang, platform runtimes.
+
+## Match objectives (match-rules 0.2.0)
+
+New headers compose `Match.h` without changing it: `genre/MatchObjectives.h` (policies, scoring bridge,
+persistence), `genre/MatchObjectivesConfigured.h` (settings adapters) and `genre/MatchObjectivesData.h`
+(layout JSON). Every stepper takes integer ticks, rejects repeated/backwards ticks and invalid config/state/
+input with `std::nullopt` without mutating state, and returns `ObjectiveEvents` (`kind`, `team`, `subject`,
+`value`; team 0 is informational, e.g. a draw). Distances are Fixed metres. The owner supplies only
+validated facts: `Occupants` (team -> bodies present, e.g. counted with `insideZone`), cart pushers/defenders,
+deaths, bodies inside an extraction zone, bomb carrier/defusers/pickups and gate crossings (`crossesGate`).
+
+- **Zones / KotH.** `stepZone`: one present team captures at `min(bodies, maxCapturers)` per tick; another
+  team first drains existing progress; empty zones decay by `decayPerTick`; the owner's presence reverts enemy
+  progress at its own rate. `ContestRule::Freeze` freezes on any second team, `Majority` advances the strict
+  majority by the body difference (ties freeze). `neutralizeFirst` makes an owned zone neutral at the threshold
+  before it can be captured. `ZoneContested` fires when contest starts; `state.contested` is the current flag.
+  Hold scoring: `ZoneHoldTick` every `holdScoreInterval` ticks while the owner controls the zone (or merely owns
+  it with `holdRequiresPresence=false`); the capture tick counts. `kingOfTheHill(captureTicks, interval)` is the
+  preset; `activeHill(HillRotation, start, tick)` gives the rotating hill index (reset the zone on rotation).
+  Match.h `stepCapture` is unchanged (simple variant: resets instead of drains).
+- **Payload.** `makePayloadTrack(points, checkpoints)` (polyline, strictly ascending checkpoints inside the
+  length), `payloadPoint` maps progress to a position. `stepPayload(config, track, state, attackers, defenders,
+  tick)`: pushers move the cart at `pushSpeed * (1 + extraPusher * (n - 1))`, n capped by `maxPushers`;
+  defenders block when `contestBlocks`; after `reverseDelayTicks` without attackers it rolls back at
+  `reverseSpeed`, never behind a reached checkpoint with `checkpointLock`. `PayloadCheckpoint` carries
+  `checkpointBonusTicks` for `extendClock`; `PayloadDelivered` is terminal.
+- **Elimination.** `makeElimination(config, roster)`; `stepElimination(config, state, tick, deaths)` (unique
+  living players only). `lives` counts the first life (0 = unlimited). Respawn at the first wave
+  (`start + k * respawnWaveTicks`) not earlier than death + `respawnDelayTicks` (wave 0: individual timer).
+  A team with no lives left (or every member dead at once with `wipeEliminates`) emits `TeamEliminated`; when
+  at most one team remains, `LastTeamStanding` (team 0 and `lastStanding = -1` for a mutual wipe).
+- **Extraction.** `stepExtraction(config, state, tick, inside)`: from `opensAtTicks` after the first step,
+  each body carrying `requiredItems` progresses one tick, frozen while another team is inside
+  (`contestBlocks`); leaving resets (`resetOnLeave`) or freezes progress. `Extracted` once per player.
+- **Bomb / defuse.** `makeBomb(attackers, defenders, carrier)`; `stepBomb` with `BombInput{plantSite,
+  defusers, pickups, carrierDown}`. Only the carrier plants (switching site restarts); releasing interrupts
+  (`plantResets`); a downed carrier drops the bomb; the lowest attacker ID among pickups takes it. Once
+  planted (`BombPlanted.value` = explosion tick) the current defuser keeps priority, else the lowest defender
+  ID; a kit uses `kitDefuseTicks`; switching/releasing interrupts (`defuseResets`). The fuse is checked first,
+  so a defuse finishing on the explosion tick loses. `bombPending` reports a planted bomb for overtime.
+- **Route gates.** `makeRoute(racers)`; `stepRoute(config{gates, laps}, state, tick, crossings)` applies
+  crossings per racer in given order and ignores out-of-order gates: `GatePassed`, `LapCompleted`,
+  `RouteFinished` (value = place). `routeStandings`: place, then lap/gate progress, earlier last gate, ID.
+- **Clock and overtime.** `startClock(config, tick)` (limit = `matchRules.roundTicks` via
+  `objectiveClockConfig`), `extendClock` (bounded by `maxDeadlineTicks` from the start; leaves overtime),
+  `stepClock(config, state, tick, contested)`: at the deadline a contested objective (owner-defined:
+  `zone.contested`, attackers on the cart, `bombPending`, ...) starts overtime, which ends `graceTicks` after
+  the last contested tick or at `maxOvertimeTicks` (0 = uncapped) with `OvertimeEnded` + `TimeExpired`.
+- **Spectators.** `spectatorDied(config, state, killer, tick)` then `stepSpectator(config, state, tick,
+  candidates, cycle)`: kill cam on a living killer for `killCamTicks` (cycling ends it), then follow: keep the
+  current target while eligible, else the first eligible after it in the order teammates by ascending ID then
+  enemies by ascending ID (`allowEnemies`), wrapping; nobody eligible -> `Free`. `cycle` +1/-1 walks the order.
+- **Scores.** `awardObjectiveEvents(match, scoring, events, nextEvent)` awards points per event kind through
+  `awardScore` with the owner's strictly increasing event counter; all awards commit or none. 
+  `awardObjectiveWin(config, match, team, nextEvent)` makes the team the sole leader with at least
+  `scoreToWin`, so the next `stepMatch` closes the round. Built-in victory modes keep their own owners.
+
+**Configuration.** Optional generated section `objectives` (configuration package 0.3.2 spec): zone*,
+holdScoreInterval/holdRequiresPresence, hillRotateTicks/hillCount, payload* (milli-metres per tick),
+eliminationLives/respawnDelayTicks/respawnWaveTicks/wipeEliminates, extraction*, bomb*, overtimeEnabled/
+overtimeGraceTicks/overtimeMaxTicks/clockMaxTicks, spectator*, routeLaps. The loader rejects
+`zoneDecayPerTick > zoneCaptureTicks` and `bombKitDefuseTicks > bombDefuseTicks`; `objectiveSettingsErrors`
+reports hill rotation without a period, clockMaxTicks below roundTicks, waves with a single life, grace
+beyond the overtime cap and kit defuses that cannot beat the fuse. Adapters: `zoneConfig`, `hillRotation`,
+`payloadConfig`, `eliminationConfig`, `extractionConfig`, `bombConfig`, `objectiveClockConfig`,
+`spectatorConfig`, `routeConfig(settings, gates)`. Layouts: `readObjectiveLayout` (zones with kind
+capture/hill/extraction/bombSite, payload path + checkpoints, route gates); unknown keys, duplicate IDs, bad
+kinds, short/repeating paths, checkpoints outside the path, non-ascending gate IDs and short normals throw
+`JsonError("objectives.<path>: ...")`. Examples: `examples/libraries/genre/objectives.json`,
+`examples/libraries/genre/objective-settings.json`.
+
+**State.** `ZoneState` 40, `PayloadState` 41, `EliminationState` 42, `ExtractionState` 43, `BombState` 44,
+`RouteState` 45, `ObjectiveClockState` 46, `SpectatorState` 47 (kinds 40..47 reserved for this package;
+version 1, canonical, validated on load). Store each in its own NativeState key; bind settings and layout
+versions in the save envelope. `hashObjective(hasher, state)` / `objectiveHash` fold the kind + canonical
+bytes into the checksum; `hashObjective(hasher, events)` hashes per-tick outcomes. `GenreConsumer.cpp`
+(`libraryMatchObjectivesConsumerExample`) validates settings and a layout, steps a zone, cart and clock
+once, awards events through the match and stores six records.
+
+Verified with g++ 11 only (Linux VM): header syntax checks (`-Wall -Wextra -Werror -pedantic`),
+`genre_tests.cpp` built by hand and run (also under ASan/UBSan) covering every mode, contest/decay/
+interruption edge cases, a multi-mode 80-tick match restored mid-way with identical hashes, invalid
+records/settings/layouts, and the GenreConsumer chain in a standalone driver. Not verified: CMake/full engine
+build, `aiverse_tests`, native module export, headless matches, clang/MSVC, platform runtimes.

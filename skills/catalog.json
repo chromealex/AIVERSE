@@ -633,12 +633,14 @@
       "package": "match-rules",
       "path": "skills/aiverse-match-rules/SKILL.md",
       "domain": "gameplay",
-      "summary": "Team score events, rounds, overtime, draws and contested capture policies",
+      "summary": "Team score events, rounds, overtime, draws and objective modes: capture/hold zones and king of the hill, payload, elimination with lives and respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock and spectator transitions",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_match_rules",
       "dependencies": [],
-      "backendDependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/genre/Match.h",
       "keywords": []
