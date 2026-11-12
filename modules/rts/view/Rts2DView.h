@@ -37,6 +37,7 @@ struct SpriteLook {
     int frameW = 32, frameH = 32, facings = 1;
     bool mirror = false, team = true, nearest = true;
     Mode mode = Billboard;
+    bool rotate = false;                    // ground mode: the quad turns with the object (image top = its facing)
     float anchorX = 0.5f, anchorY = 1.0f;   // pivot in the frame (0..1 from the top-left)
     float width = 1, height = 1;            // world size (cells)
     float offsetRight = 0, offsetFront = 0; // anchor point relative to the object centre (screen right / towards the camera)

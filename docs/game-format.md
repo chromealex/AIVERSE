@@ -1949,6 +1949,7 @@ The editor uses the projection and angle for its Scene and Game views.
 | `facings` | 1, 4, 8, 16, 32... rows; `mirror: true` stores only north → east → south (`facings/2 + 1` rows) and flips them for the west side |
 | `actions` | column ranges `[start, count, fps]` or `{"start", "count", "fps", "loop"}`. `idle`, `move`, `attack`, `work` (gathering/building workers), `build` (structure under construction; non-looping = frame follows the progress), `die` (played where the object disappeared, then the last frame stays `corpseTime` s). Missing actions fall back to `idle` (`work` → `attack` → `idle`) |
 | `mode` | `billboard` (faces the camera; default), `upright` (vertical quad), `ground` (lies on the terrain; top-down games) |
+| `rotate` | ground mode with one facing: the quad turns with the object, the top of the image is its front (cars seen from above) |
 | `size` / `pixelsPerCell` / `scale` | world size: `[w, h]` cells, or frame pixels / `pixelsPerCell`; default width = footprint width (structures) or 1 |
 | `anchor` | pivot in the frame, 0..1 from the top-left (default `[0.5, 1]`, ground mode `[0.5, 0.5]`) |
 | `offset` | `[right, front]` cells from the object centre; default for standing structures: the front edge of the footprint, so a 3/4-view drawing stands on its footprint |

@@ -92,6 +92,7 @@ void Rts2DView::loadLook(SpriteLook& L, const UnitType& t, const Json& s) {
     std::string mode = s.getStr("mode", "billboard");
     L.mode = mode == "ground" ? SpriteLook::Ground : mode == "upright" ? SpriteLook::Upright : SpriteLook::Billboard;
     const bool flat = L.mode == SpriteLook::Ground;
+    L.rotate = flat && s.getBool("rotate", false);   // vehicles seen from above: one drawing, any heading
     L.anchorX = f(s["anchor"][0], 0.5f);
     L.anchorY = f(s["anchor"][1], flat ? 0.5f : 1.0f);
     float aspect = float(L.frameH) / float(std::max(1, L.frameW));
@@ -236,7 +237,14 @@ void Rts2DView::emit(const SpriteLook& L, float3 ground, float3 facing, int act,
     int layer = corpse ? 1 : L.mode == SpriteLook::Ground ? 1 : L.lift > 0 ? 3 : 2;
     const uint32_t litFlag = L.shadow.lit ? uint32_t(kSpriteLit) : 0u;
     const ShadowDraw sd = shadowDrawFor(L.shadow.mode, quality_, L.structure);
-    if (L.mode == SpriteLook::Ground) {
+    if (L.mode == SpriteLook::Ground && L.rotate && L.facings <= 1 && (facing.x != 0 || facing.z != 0)) {
+        // the image's top edge points where the object faces; its right edge is the object's right on screen
+        const float fl = std::sqrt(facing.x * facing.x + facing.z * facing.z);
+        const float3 aV{-facing.x / fl, 0, -facing.z / fl}, aU{-facing.z / fl, 0, facing.x / fl};
+        float3 o = ground - aU * (L.anchorX * L.width) - aV * (L.anchorY * L.height);
+        o.y += 0.02f;
+        decal(L.tex, uv, o, aU, L.width, aV, L.height, tint, team, layer, key, litFlag);
+    } else if (L.mode == SpriteLook::Ground) {
         decal(L.tex, uv, c[0], groundRight_, L.width, groundFront_, L.height, tint, team, layer, key, litFlag);
     } else {
         // upright caster quad: foot on the ground, facing the camera yaw (turned to the sun if needed);

@@ -66,6 +66,10 @@ bool GameClient::topDownEvent(const Event& e, bool uiWants) {
         if (e.key == Key::Escape) return false;   // pause menu
         for (size_t i = 0; i < topDown_.config().buttons.size(); ++i)
             if (topDown_.config().buttons[i].key != 0 && int(e.key) == topDown_.config().buttons[i].key) { topDown_.pressAbility(int(i)); return true; }
+        if (e.key == Key::F || e.key == Key::Enter) {   // get into the nearest vehicle / out of the car (rules "driving")
+            if (mod().driving() && mod().driving()->active()) { Command c; c.type = kCmdTopDownEnter; issue(c); }
+            return true;
+        }
         return true;   // WASD etc. steer the hero, not RTS hotkeys
     case EventType::KeyUp: return !uiWants;
     default: return false;
