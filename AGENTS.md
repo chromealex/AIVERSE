@@ -119,6 +119,20 @@ A change is done when: it builds without warnings on gcc/clang (`-Wall -Wextra`)
 headless matches still finish, visual changes were checked on a screenshot, Metal code paths that
 couldn't be compiled are listed in the commit message as unverified.
 
+### Where build output goes (all agents)
+
+**Never create builds in the shared engine checkout's `build/` folder** (the user's main
+checkout, `<repo>/build`). It is reserved for the user's own Mac build (`build/mac`), the
+integrator's release steps in §8 and the verify launchers. Everything else goes elsewhere:
+
+- Engine work: build inside your own worktree (`.worktrees/<branch>/build/...` or the
+  presets' `build/<preset>` relative to *that* worktree), or a temp dir outside the repo.
+- Game / project work (packaging, native modules, test runs of a game): the project's own
+  folder, `<project>/Builds/` with intermediates in `<project>/Builds/.temp/` (the editor
+  and `aiversebuild` already use this layout).
+- Logs, bundles, patches and scratch archives belong with the build that produced them,
+  not loose in `build/` or `build/.temp/`. Delete your build trees when the task is merged.
+
 ## 5. Working in parallel
 
 Several agents work at the same time. **Each agent works in its own branch/worktree** and only in
