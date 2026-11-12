@@ -44,6 +44,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     env_->setup(sim, *this, rulesJson, mapIn);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
+    commerce_ = std::make_unique<Commerce>();   // premises, businesses, the bank (rules "commerce"); nothing without the block
+    commerce_->setup(sim, *this, rulesJson, mapIn);
     driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
@@ -71,6 +73,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (commerce_->active()) sim.addSystem("commerce", [this](Simulation& s) { commerce_->tick(s); });   // RtsCommerce.cpp: days and weeks
     if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
     if (env_->active()) sim.addSystem("environment", [this](Simulation& s) { env_->tick(s); });   // RtsEnv.cpp (games with an environment only)
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
@@ -995,6 +998,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (commerce_ && commerce_->command(sim, cmd)) return;   // kCmdCommerce (RtsCommerce.cpp)
     if (driving_ && driving_->command(sim, cmd)) return;   // kCmdTopDownEnter (RtsDriving.cpp)
     if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
@@ -1514,6 +1518,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
     if (env_ && env_->active()) env_->hash(sim, h);            // games with an environment only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
+    if (commerce_ && commerce_->active()) commerce_->hash(sim, h);   // games with rules "commerce" only
 }
 
 } // namespace aiverse::game

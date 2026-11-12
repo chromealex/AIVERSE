@@ -23,6 +23,7 @@
 #include "RtsTopDown.h"
 #include "RtsEnv.h"
 #include "RtsDriving.h"
+#include "RtsCommerce.h"
 #include "RtsRoutes.h"
 #include <memory>
 
@@ -94,6 +95,7 @@ enum CommandType : uint16_t {
     kCmdTopDown,      // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
     kCmdTopDownAbility, // no units; param = ability index of the hero; target / point optional (default: along the aim)
     kCmdTopDownEnter,   // no units (rules "driving", RtsDriving.h): the hero gets into the nearest free vehicle / out of his car
+    kCmdCommerce,       // no units (rules "commerce", RtsCommerce.h): param = commercePack(op, premises, value)
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -542,6 +544,7 @@ public:
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
     Raid* raid() const { return raid_.get(); }                // extraction raids (RtsRaid.h); inactive without rules "raid"
+    Commerce* commerce() const { return commerce_.get(); }     // premises, businesses, the bank (RtsCommerce.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     Environment* environment() const { return env_ && env_->active() ? env_.get() : nullptr; }   // map environment (RtsEnv.h); null without one
@@ -914,6 +917,7 @@ private:
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
     std::unique_ptr<Raid> raid_;           // extraction raids (state: RaidStore resource)
+    std::unique_ptr<Commerce> commerce_;   // rules "commerce" (state: CommerceStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::unique_ptr<Environment> env_;     // map environment (RtsEnv.h; state: EnvState resource)

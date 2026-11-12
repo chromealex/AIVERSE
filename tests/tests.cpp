@@ -14131,6 +14131,7 @@ TEST(bw_player_mods_by_count_table) {
 }
 #include "tests_driving.inc"   // vehicles the hero drives (agent-gta2)
 #include "tests_city.inc"      // city planner (agent-gta2)
+#include "tests_commerce.inc"  // premises, businesses, the bank (agent-gta2)
 
 #include "tests_bwai.inc"   // agent-bw-ai: Bunker Wars computer player
 

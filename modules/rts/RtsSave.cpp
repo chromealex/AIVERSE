@@ -255,6 +255,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (topDown_ && topDown_->active()) topDown_->io(sim, a);   // top-down heroes (games with rules "topDown" only)
     if (env_ && env_->active()) env_->io(sim, a);            // map environment (games with one only)
     if (driving_ && driving_->active()) driving_->io(sim, a);   // vehicles (games with rules "driving" only)
+    if (commerce_ && commerce_->active()) commerce_->io(sim, a);   // premises and accounts (games with rules "commerce" only)
     if (!ioModesState(*this, sim, a)) return false;           // match modes (games with modes only, RtsModes.cpp)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
