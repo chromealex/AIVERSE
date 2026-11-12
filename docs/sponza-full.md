@@ -646,3 +646,8 @@ Recipe `scene-day-high-reference-cloth.json` (on top of the LUT recipe). Finding
   `look` also takes `sunDirection` (direct light only; diagnostics), `lod` and `culling`.
 - `aiverse_probe_visibility --pixel` prints every probe's facing, visibility, weight and sky
   term and reads distance moments straight from moment caches.
+
+Full 30-sample render: region error 12.4, frame 23.7 (LUT recipe: 12.4 / 23.8), i.e. the
+metrics barely move; the visible changes are the closed door and slightly deeper shade in
+the lower folds ([comparison](benchmarks/sponza-2026-11-12/cloth-door.png): reference /
+before / after).
