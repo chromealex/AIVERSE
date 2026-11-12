@@ -273,10 +273,28 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         if (node.mesh < 0) continue;
         int meshIndex=node.mesh;
         const auto& base=m->meshes[size_t(meshIndex)];
-        if(modelLodEnabled_&&!displaced&&node.skin<0&&!base.deformable&&!base.lods.empty()&&d.variant<0&&!d.nodeMaterial){
-            const mat4 xf=cache?cache->transforms[size_t(n)]:d.world*world[size_t(n)];
-            float pixels=geometryErrorPixels(viewProj_*xf,base.boundsMin,base.boundsMax,length(base.boundsMax-base.boundsMin),sceneW_,sceneH_,dev_->info().clipDepthZeroToOne);
-            if(inShadow)pixels=std::max(pixels,geometryErrorPixels(lightViewProj_*xf,base.boundsMin,base.boundsMax,length(base.boundsMax-base.boundsMin),shadowSize_,shadowSize_,dev_->info().clipDepthZeroToOne));
+        // Palette poses provide conservative current skin bounds. Baked-only draws keep
+        // LOD0 until they supply pose bounds; bind bounds can underestimate a bent limb.
+        const bool skinLod = node.skin >= 0 && usePose && !canBake && d.nodeWorld && d.nodeWorld->size()==m->nodes.size();
+        if(modelLodEnabled_&&!displaced&&(skinLod||(node.skin<0&&!base.deformable))&&!base.lods.empty()&&d.variant<0&&!d.nodeMaterial){
+            mat4 xf=cache?cache->transforms[size_t(n)]:d.world*world[size_t(n)];
+            float3 lodMin=base.boundsMin, lodMax=base.boundsMax;
+            if(skinLod){
+                lodMin={1e30f,1e30f,1e30f};lodMax={-1e30f,-1e30f,-1e30f};
+                const Skin& skin=m->skins[size_t(node.skin)];
+                for(const auto& prim:base.primitives)for(uint16_t joint:prim.jointPalette){
+                    if(size_t(joint)>=skin.joints.size())continue;
+                    const mat4 bone=world[size_t(skin.joints[joint])]*skin.inverseBind[joint];
+                    for(int corner=0;corner<8;++corner){
+                        const float3 v=bone.transformPoint({corner&1?prim.boundsMax.x:prim.boundsMin.x,corner&2?prim.boundsMax.y:prim.boundsMin.y,corner&4?prim.boundsMax.z:prim.boundsMin.z});
+                        lodMin={std::min(lodMin.x,v.x),std::min(lodMin.y,v.y),std::min(lodMin.z,v.z)};
+                        lodMax={std::max(lodMax.x,v.x),std::max(lodMax.y,v.y),std::max(lodMax.z,v.z)};
+                    }
+                }
+                xf=d.world;
+            }
+            float pixels=geometryErrorPixels(viewProj_*xf,lodMin,lodMax,length(lodMax-lodMin),sceneW_,sceneH_,dev_->info().clipDepthZeroToOne);
+            if(inShadow)pixels=std::max(pixels,geometryErrorPixels(lightViewProj_*xf,lodMin,lodMax,length(lodMax-lodMin),shadowSize_,shadowSize_,dev_->info().clipDepthZeroToOne));
             for(auto lod:base.lods)if(pixels<lod.maxPixels&&lod.mesh>=0&&size_t(lod.mesh)<m->meshes.size())meshIndex=lod.mesh;
             if(meshIndex!=node.mesh)++profile_.lodNodes;
         }
