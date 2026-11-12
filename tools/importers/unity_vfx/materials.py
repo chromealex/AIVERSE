@@ -183,7 +183,7 @@ def read_material(ref, assets, log, slot, mesh=False):
         log.approx(slot, why)
     info.blend = blend
     # main texture
-    keys = [k for k in MAIN_TEXTURE_KEYS if k in tex]
+    keys = [k for k in MAIN_TEXTURE_KEYS if isinstance(get(tex, k, 'm_Texture'), dict) and get(tex, k, 'm_Texture', 'fileID')]
     if not keys:   # Shader Graph / custom shaders name their main texture freely ("MainTex_", "_Texture2D_A1B2")
         assigned = [k for k in tex if isinstance(get(tex, k, 'm_Texture'), dict) and get(tex, k, 'm_Texture', 'fileID')]
         hinted = [k for k in assigned if any(h in k.lower() for h in ('main', 'base', 'albedo', 'color', 'diffuse', 'particle'))
