@@ -1,7 +1,8 @@
 // OpenSSL backend loaded at runtime: no headers or import libraries are needed to build, and a
 // machine without libssl simply reports TLS as unavailable (plain http:// keeps working).
 // Used on Linux and other POSIX systems that are not Apple / Android.
-#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__) && !defined(__ANDROID__) && !defined(_WIN32)
+#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__) && !defined(__ANDROID__) && !defined(_WIN32) && \
+    !defined(AIVERSE_GRPC_JNI_TLS)
 #include "Tls.h"
 #include <dlfcn.h>
 #include <cstring>

@@ -937,7 +937,28 @@ static int remote(const std::string &mode, const std::string &url) {
     return g_failed ? 1 : 0;
 }
 
+#ifdef AIVERSE_GRPC_JNI_TLS
+#include <jni.h>
+// Desktop JVM for the JNI SSLEngine backend (the Android TLS path) in --remote mode.
+static bool startJvm() {
+    JavaVM *vm = nullptr;
+    JNIEnv *env = nullptr;
+    JavaVMInitArgs args{};
+    args.version = JNI_VERSION_1_8;
+    if (JNI_CreateJavaVM(&vm, reinterpret_cast<void **>(&env), &args) != JNI_OK)
+        return false;
+    setAndroidJavaVM(vm);
+    return true;
+}
+#endif
+
 int main(int argc, char **argv) {
+#ifdef AIVERSE_GRPC_JNI_TLS
+    if (!startJvm()) {
+        std::printf("cannot start a JVM\n");
+        return 1;
+    }
+#endif
     if (argc == 4 && std::string(argv[1]) == "--serve")
         return serve(argv[2], std::atoi(argv[3]));
     if (argc == 4 && std::string(argv[1]) == "--remote")

@@ -5,7 +5,7 @@
 
 namespace aiverse::grpc {
 
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined(AIVERSE_GRPC_JNI_TLS)
 void setAndroidJavaVM(void *) {}
 #endif
 

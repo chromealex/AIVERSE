@@ -1,13 +1,15 @@
 // Android TLS: javax.net.ssl.SSLEngine through JNI (the platform's Conscrypt, system trust store,
 // hostname verification, ALPN from API 29). Runs on the owning thread, which is attached to the VM
-// on first use. [unverified: compiled against desktop JNI headers only, never run on a device]
-#if defined(__ANDROID__)
+// on first use. AIVERSE_GRPC_JNI_TLS builds the same backend on a desktop JVM (OpenJDK SunJSSE) so
+// the JNI flow can be tested off-device; it has not been run on an Android device.
+#if defined(__ANDROID__) || defined(AIVERSE_GRPC_JNI_TLS)
 #include "Tls.h"
 #include <dlfcn.h>
 #include <jni.h>
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 namespace aiverse::grpc {
 namespace {
@@ -35,6 +37,14 @@ JavaVM *javaVm() {
     return nullptr;
 }
 
+// The NDK declares AttachCurrentThread(JNIEnv **, void *); desktop JDKs use void **.
+template <class VM> jint attachThread(VM *vm, JNIEnv **e) {
+    if constexpr (std::is_invocable_v<decltype(&VM::AttachCurrentThread), VM *, JNIEnv **, void *>)
+        return vm->AttachCurrentThread(e, nullptr);
+    else
+        return vm->AttachCurrentThread(reinterpret_cast<void **>(e), nullptr);
+}
+
 JNIEnv *env() {
     JavaVM *vm = javaVm();
     if (!vm)
@@ -42,7 +52,7 @@ JNIEnv *env() {
     JNIEnv *e = nullptr;
     if (vm->GetEnv(reinterpret_cast<void **>(&e), JNI_VERSION_1_6) == JNI_OK)
         return e;
-    return vm->AttachCurrentThread(&e, nullptr) == JNI_OK ? e : nullptr;
+    return attachThread(vm, &e) == JNI_OK ? e : nullptr;
 }
 
 // Pending Java exception -> message (cleared).
