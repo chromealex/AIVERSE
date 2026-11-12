@@ -4,15 +4,19 @@
 //
 //   AIVERSE_MOCK_STORE = purchased (default) | pending | cancelled | failed   — outcome of purchase()
 //   AIVERSE_MOCK_ADS   = ok (default) | noreward | fail                        — outcome of show()
+//   AIVERSE_MOCK_ATT   = authorized (default) | denied | restricted           — answer to the ATT prompt
+//   AIVERSE_MOCK_ANALYTICS_LOG = file                                         — mock-analytics appends every call
 #include "MockPlugins.h"
 
 #include "engine/platform/PluginJson.h"
 #include "engine/platform/Plugins.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <mutex>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace aiverse::services {
 namespace {
@@ -121,17 +125,87 @@ public:
         reply.fail("mock-ads: unknown method " + method);
     }
 };
+
+std::mutex& analyticsMutex() { static std::mutex m; return m; }
+std::vector<std::string>& analyticsLog() { static std::vector<std::string> v; return v; }
+
+// Records every analytics call as "method {args}" (mockAnalyticsLog), and appends it to the file named
+// by AIVERSE_MOCK_ANALYTICS_LOG, so a desktop run shows exactly what a phone build would send.
+class MockAnalytics : public plugins::NativePlugin {
+public:
+    void call(const std::string& method, const std::string& args, plugins::Reply reply) override {
+        if (method == "lifecycle") { reply.ok(); return; }
+        const std::string line = method + " " + args;
+        {
+            std::lock_guard<std::mutex> l(analyticsMutex());
+            analyticsLog().push_back(line);
+        }
+        if (const char* path = std::getenv("AIVERSE_MOCK_ANALYTICS_LOG"); path && *path) {
+            if (FILE* f = std::fopen(path, "a")) { std::fprintf(f, "%s\n", line.c_str()); std::fclose(f); }
+        }
+        if (method == "deferredLink") { // AIVERSE_MOCK_DEFERRED_LINK: pretend the install came from this ad link
+            json::Value o = json::Value::object();
+            if (const char* url = std::getenv("AIVERSE_MOCK_DEFERRED_LINK"); url && *url) o.set("url", json::Value::string(url));
+            reply.ok(json::dump(o));
+            return;
+        }
+        reply.ok();
+    }
+};
+
+// iOS App Tracking Transparency stand-in: the status starts "notDetermined"; the prompt answers
+// AIVERSE_MOCK_ATT (authorized by default, or denied / restricted). Config "prompt": "ready" asks by
+// itself on the first interactive frame and sends the answer as a "status" event, like the real plugin.
+class MockAtt : public plugins::NativePlugin {
+public:
+    void call(const std::string& method, const std::string& args, plugins::Reply reply) override {
+        json::Value a = json::parseOr(args);
+        if (method == "init") { prompt_ = a["prompt"].str("manual"); reply.ok(); return; }
+        if (method == "lifecycle") {
+            reply.ok();
+            if (a["event"].str() == "ready" && prompt_ == "ready") { ask(); plugins::emit("mock-att", "status", statusJson()); }
+            return;
+        }
+        if (method == "status") { reply.ok(statusJson()); return; }
+        if (method == "request") { ask(); reply.ok(statusJson()); return; }
+        reply.fail("mock-att: unknown method " + method);
+    }
+private:
+    void ask() {
+        std::lock_guard<std::mutex> l(m_);
+        if (status_ != "notDetermined") return; // iOS shows the prompt once per install
+        status_ = env("AIVERSE_MOCK_ATT", "authorized");
+        ++prompts_;
+    }
+    std::string statusJson() {
+        std::lock_guard<std::mutex> l(m_);
+        json::Value o = json::Value::object();
+        o.set("status", json::Value::string(status_)).set("prompts", json::Value::number(int64_t(prompts_)));
+        return json::dump(o);
+    }
+    std::mutex m_;
+    std::string status_ = "notDetermined", prompt_ = "manual";
+    int prompts_ = 0;
+};
 } // namespace
+
+std::vector<std::string> mockAnalyticsLog(bool clear) {
+    std::lock_guard<std::mutex> l(analyticsMutex());
+    std::vector<std::string> out = analyticsLog();
+    if (clear) analyticsLog().clear();
+    return out;
+}
 
 void registerMockPlugin(const std::string& name) {
     if (plugins::available(name)) return; // keep an already registered instance (and its state)
     if (name == "mock-store") plugins::registerPlugin(name, std::make_shared<MockStore>());
     else if (name == "mock-ads") plugins::registerPlugin(name, std::make_shared<MockAds>());
+    else if (name == "mock-analytics") plugins::registerPlugin(name, std::make_shared<MockAnalytics>());
+    else if (name == "mock-att") plugins::registerPlugin(name, std::make_shared<MockAtt>());
 }
 
 void registerMockPlugins() {
-    registerMockPlugin("mock-store");
-    registerMockPlugin("mock-ads");
+    for (const char* n : kMockPlugins) registerMockPlugin(n);
 }
 
 } // namespace aiverse::services

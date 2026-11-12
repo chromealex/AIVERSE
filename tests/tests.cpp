@@ -12906,6 +12906,8 @@ TEST(world_tree_script_blob_decoding) {
 #include "animation/view.inc"
 #include "animation/editor.inc"
 #include "geometry/runtime.inc"
+#include "tests_services.inc"   // analytics / privacy services (agent-sdk-plugins)
+#include "tests_services_build.inc"   // aiversebuild iOS plugin step (agent-sdk-plugins)
 
 #include "tests_projectiles.inc"
 

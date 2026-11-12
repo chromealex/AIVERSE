@@ -212,6 +212,8 @@ jobs:
         run: python3 .github/scripts/check-plugin-isolation.py build/host/aiversebuild build/isolation
       - name: Yandex Games plugin protocol
         run: node plugins/yandex-games/web/test.mjs
+      - name: GameAnalytics web plugin protocol
+        run: node plugins/gameanalytics/web/test.mjs
 
   # Steamworks SDK is behind a partner login; CI takes the same SDK headers and redistributables
   # from the steamworks-sys crate (crates.io) to compile, link and test the steam plugin.
@@ -246,7 +248,7 @@ jobs:
           cmake -S . -B build/host -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF
           cmake --build build/host --target aiversebuild
           python3 .github/scripts/plugins-testgame.py build/plugins-game
-          build/host/aiversebuild --project build/plugins-game --target ios --out build/plugins-dist --plugins appstore,admob,yandex-ads,applovin,ironsource
+          build/host/aiversebuild --project build/plugins-game --target ios --out build/plugins-dist --plugins appstore,admob,yandex-ads,applovin,ironsource,gameanalytics,facebook,appmetrica,att
 
   # ---------------------------------------------------------------- Cross-platform determinism
   determinism:

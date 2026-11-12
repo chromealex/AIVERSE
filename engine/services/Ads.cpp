@@ -1,4 +1,5 @@
 #include "Ads.h"
+#include "Privacy.h"
 
 #include "engine/platform/PluginJson.h"
 #include "engine/platform/Plugins.h"
@@ -32,6 +33,7 @@ void load() {
     if (order.empty()) order = {"yandex-ads", "admob", "applovin", "ironsource", "yandex-games", "mock-ads"};
     for (auto& n : order) if (plugins::available(n)) { s.provider = n; break; }
     if (s.provider.empty()) return;
+    privacy::attach(); // the ATT answer (asked at launch by the "att" plugin) sets personalised ads
     s.listener = plugins::addListener(s.provider, [](const std::string& ev, const std::string& data) {
         json::Value v = json::parseOr(data);
         std::string f = v["format"].str();

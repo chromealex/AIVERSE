@@ -5,6 +5,7 @@
 #include "engine/platform/Plugins.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -42,8 +43,24 @@ json::Value section(const Loaded& l, const std::string& platform) { // copy: sma
 }
 
 // ${key} / ${a.b} from the plugin's config, else from plugin.json "defaults"; ${env.NAME} is an
-// environment variable. Unknown keys stay visible so the mistake is obvious.
-std::string expand(const std::string& s, const Loaded& l, int depth = 0) {
+// environment variable. Unknown keys stay visible so the mistake is obvious. xml: the values are
+// escaped (Info.plist / manifest entries carry user text such as the ATT usage description).
+std::string xmlEscape(const std::string& s) {
+    std::string o;
+    for (char c : s) {
+        switch (c) {
+        case '&': o += "&amp;"; break;
+        case '<': o += "&lt;"; break;
+        case '>': o += "&gt;"; break;
+        case '"': o += "&quot;"; break;
+        case '\'': o += "&apos;"; break;
+        default: o += c;
+        }
+    }
+    return o;
+}
+
+std::string expand(const std::string& s, const Loaded& l, int depth = 0, bool xml = false) {
     std::string out;
     for (size_t i = 0; i < s.size();) {
         size_t a = s.find("${", i);
@@ -62,10 +79,11 @@ std::string expand(const std::string& s, const Loaded& l, int depth = 0) {
         if (!v && depth < 4) v = lookup(l.manifest["defaults"]);
         if (key.rfind("env.", 0) == 0) {
             const char* e = std::getenv(key.c_str() + 4);
-            if (e && *e) out += e;
+            if (e && *e) out += xml ? xmlEscape(e) : std::string(e);
             else std::cerr << "    [plugins] " << l.name << ": environment variable " << key.substr(4) << " is not set\n";
         } else if (v) {
-            out += depth < 4 ? expand(v->str(), l, depth + 1) : v->str();
+            const std::string value = depth < 4 ? expand(v->str(), l, depth + 1) : v->str();
+            out += xml ? xmlEscape(value) : value;
         } else {
             std::cerr << "    [plugins] " << l.name << ": ${" << key << "} is not set in game.json \"plugins\" → \"" << l.name << "\"\n";
             out += "${" + key + "}";
@@ -109,6 +127,14 @@ std::vector<fs::path> globFiles(const fs::path& base, const std::string& pattern
 std::string cmakeQuote(const std::string& s) {
     std::string o = "\"";
     for (char c : s) { if (c == '"' || c == '\\' || c == '$' || c == ';') o += '\\'; o += c; }
+    return o + "\"";
+}
+
+// A quoted CMake string that is pasted into a file as text (Info.plist XML): ';' must stay as it is —
+// inside quotes "\;" would be kept literally and break XML entities such as &amp;.
+std::string cmakeQuoteText(const std::string& s) {
+    std::string o = "\"";
+    for (char c : s) { if (c == '"' || c == '\\' || c == '$') o += '\\'; o += c; }
     return o + "\"";
 }
 } // namespace
@@ -168,9 +194,20 @@ fs::path writePluginsCMake(const PluginSet& set, const fs::path& dir) {
         }
         if (set.platform == "ios" || set.platform == "macos") {
             for (auto& f : strings(native["frameworks"])) frameworks.push_back(f);
-            for (auto& p : strings(native["plist"])) plist.push_back(expand(p, l));
-            for (auto& id : strings(native["skAdNetworks"]))
+            for (auto& p : strings(native["plist"])) plist.push_back(expand(p, l, 0, true));
+            // the plugin's own ids plus "skAdNetworks" from its game.json config (ad networks / attribution
+            // partners of this game), merged and deduplicated into one SKAdNetworkItems list
+            std::vector<std::string> ids = strings(native["skAdNetworks"]);
+            for (auto& id : strings(l.config["skAdNetworks"])) ids.push_back(id);
+            for (auto id : ids) {
+                std::transform(id.begin(), id.end(), id.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+                if (id.size() > 12 && id.compare(id.size() - 12, 12, ".skadnetwork") == 0) id.resize(id.size() - 12);
+                if (id.empty() || id.find_first_of("<>&\"' ") != std::string::npos) {
+                    std::cerr << "    [plugins] " << l.name << ": bad SKAdNetwork id \"" << id << "\" skipped\n";
+                    continue;
+                }
                 if (std::find(skAdNetworks.begin(), skAdNetworks.end(), id) == skAdNetworks.end()) skAdNetworks.push_back(id);
+            }
             for (auto& [k, v] : native["classes"].obj) classes += "<key>" + k + "</key><string>" + v.str() + "</string>";
         }
         for (auto& pat : patterns)
@@ -212,7 +249,7 @@ fs::path writePluginsCMake(const PluginSet& set, const fs::path& dir) {
     for (auto& d : libraries) text += " " + cmakeQuote(d);
     text += ")\nset(AIVERSE_PLUGIN_RUNTIME_FILES";
     for (auto& f : runtimeFiles(set)) text += " " + cmakeQuote(f.generic_string());
-    text += ")\nset(AIVERSE_PLUGIN_PLIST_XML " + cmakeQuote(plistXml) + ")\n";
+    text += ")\nset(AIVERSE_PLUGIN_PLIST_XML " + cmakeQuoteText(plistXml) + ")\n";
     // desktop mocks only when the game asked for them: otherwise not even compiled into the app
     text += std::string("set(AIVERSE_MOCK_PLUGINS ") + (set.mocks ? "ON" : "OFF") + ")\n";
     fs::path file = dir / "plugins.cmake";
@@ -236,9 +273,9 @@ std::map<std::string, std::string> androidPlaceholders(const PluginSet& set) {
         for (auto& d : strings(a["platformDependencies"])) deps += "    implementation platform('" + expand(d, l) + "')\n";
         for (auto& d : strings(a["dependencies"])) deps += "    implementation '" + expand(d, l) + "'\n";
         for (auto& r : strings(a["repositories"])) if (seenRepo.insert(r).second) repos += "        maven { url '" + expand(r, l) + "' }\n";
-        for (auto& m : strings(a["manifest"]["root"])) root += "    " + expand(m, l) + "\n";
-        for (auto& m : strings(a["manifest"]["application"])) app += "        " + expand(m, l) + "\n";
-        for (auto& m : strings(a["manifest"]["activity"])) activity += "            " + expand(m, l) + "\n";
+        for (auto& m : strings(a["manifest"]["root"])) root += "    " + expand(m, l, 0, true) + "\n";
+        for (auto& m : strings(a["manifest"]["application"])) app += "        " + expand(m, l, 0, true) + "\n";
+        for (auto& m : strings(a["manifest"]["activity"])) activity += "            " + expand(m, l, 0, true) + "\n";
         for (auto& [name, cls] : a["classes"].obj)
             app += "        <meta-data android:name=\"aiverse.plugin." + name + "\" android:value=\"" + cls.str() + "\" />\n";
     }
