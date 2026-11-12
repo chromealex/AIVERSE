@@ -4,11 +4,19 @@
 #include <charconv>
 namespace aiverse::lib::genre {
 inline int64_t storyInteger(const Json& j,const char* label){
-    if(!j.isNumber())throw JsonError(std::string("story.")+label+": expected integer");auto text=j.numberLiteral();int64_t value=0;
+    if(!j.isNumber())throw JsonError(std::string("story.")+label+": expected integer");
+    auto text=j.numberLiteral();
+    int64_t value=0;
     auto parsed=std::from_chars(text.data(),text.data()+text.size(),value);if(parsed.ec!=std::errc{}||parsed.ptr!=text.data()+text.size())throw JsonError(std::string("story.")+label+": invalid integer");return value;
 }
 inline void storyKeys(const Json& j,std::initializer_list<std::string_view> names){
-    if(!j.isObject())throw JsonError("story: expected object");for(const auto& [key,value]:j.members()){(void)value;bool found=false;for(auto name:names)if(name==key)found=true;if(!found)throw JsonError("story: unknown key '"+key+"'");}
+    if(!j.isObject())throw JsonError("story: expected object");
+    for(const auto& [key,value]:j.members()){
+        (void)value;
+        bool found=false;
+        for(auto name:names)if(name==key)found=true;
+        if(!found)throw JsonError("story: unknown key '"+key+"'");
+    }
 }
 inline std::string storyText(const Json& j){if(!j.isString()||j.str().empty())throw JsonError("story: expected nonempty localization key");return j.str();}
 inline Story readStory(const Json& j){

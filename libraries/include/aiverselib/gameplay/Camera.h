@@ -28,7 +28,9 @@ inline bool updateTarget(Pose& target,Mode mode,const Input& input,const Limits&
     if(mode==Mode::Follow){next.x=input.followX;next.z=input.followZ;}
     else {next.x+=input.panX;next.z+=input.panZ;}
     next.yaw+=input.yaw;next.pitch+=input.pitch;next.zoom+=input.zoom;
-    if(!constrain(next,limits))return false;target=next;return true;
+    if(!constrain(next,limits))return false;
+    target=next;
+    return true;
 }
 inline bool strategicIcons(const Pose& p,float threshold){return p.zoom>=threshold;}
 }

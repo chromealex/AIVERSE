@@ -1,0 +1,31 @@
+{
+  "carryables": [
+    {"id": 1, "collider": 101, "massMilli": 8000, "halfMilli": [250, 250, 250], "throwable": true},
+    {"id": 2, "collider": 102, "massMilli": 50000, "halfMilli": [400, 400, 400], "throwable": false}
+  ],
+  "pushables": [
+    {"id": 10, "collider": 110, "massMilli": 120000, "halfMilli": [500, 500, 500], "frictionMilli": 600},
+    {"id": 11, "collider": 111, "massMilli": 80000, "halfMilli": [480, 480, 480], "grid": true, "cellMilli": 1000, "pullable": false}
+  ],
+  "ropes": [
+    {"id": 20, "lengthMilli": 4000, "segments": 8, "particleMassMilli": 200, "breakForceMilli": 400000,
+     "a": {"anchor": "point", "position": [0, 10000, 0]}, "b": {"anchor": "load", "massMilli": 10000}}
+  ],
+  "doors": [
+    {"id": 30, "collider": 130, "kind": "sliding", "panelMin": [-1000, 0, -100], "panelMax": [1000, 2000, 100], "slideMilli": [2000, 0, 0],
+     "openTicks": 10, "closeTicks": 10, "autoCloseTicks": 20, "locked": true, "key": 7},
+    {"id": 31, "collider": 131, "kind": "hinged", "panelMin": [10000, 0, -50], "panelMax": [11000, 2000, 50], "pivot": [10000, 0, 0],
+     "openAngleMilli": 250, "openTicks": 20, "closeTicks": 30, "oneWay": 1, "autoReverse": false}
+  ],
+  "platforms": [
+    {"id": 40, "collider": 140, "halfMilli": [1500, 250, 1500], "mode": "pingpong", "speedMilli": 2000, "waitTicks": 10,
+     "waypoints": [[0, 0, 0], [4000, 0, 0]]},
+    {"id": 41, "collider": 141, "halfMilli": [1000, 250, 1000], "mode": "loop", "speedMilli": 1500, "waitTicks": [0, 30, 0],
+     "waypoints": [[0, 0, 20000], [0, 3000, 20000], [3000, 3000, 20000]]}
+  ],
+  "breakables": [
+    {"id": 50, "health": 100, "damage": [{"type": 1, "threshold": 10}, {"type": 2, "scaleMilli": 0}, {"type": 3, "scaleMilli": 2000}],
+     "stages": [{"stage": 1, "health": 60, "debris": [{"kind": 1, "count": 2}]}, {"stage": 2, "health": 30, "debris": [{"kind": 2, "count": 3}]}],
+     "brokenDebris": [{"kind": 3, "count": 5}]}
+  ]
+}

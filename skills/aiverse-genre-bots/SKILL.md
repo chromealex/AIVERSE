@@ -40,5 +40,6 @@ objective selection. RTS economy/tactics stay with `rts-bots-rts` (RtsAI); the b
    senses/LOS, sports/racing/card/turn bots, learning or Elo-rated strength.
 
 Build selection: `AIVERSE::lib_genre_bots` (depends on `AIVERSE::lib_combat_actions`, `AIVERSE::lib_weapon_policies`,
-`AIVERSE::lib_configuration`, `aiverse_engine`, `aiverse_world`); native OBJECT modules call
+`AIVERSE::lib_configuration`, `AIVERSE::lib_stealth_senses`, `AIVERSE::lib_character_locomotion`,
+`AIVERSE::lib_match_rules`, `AIVERSE::lib_narrative_graphs` (shared genre save records), `aiverse_engine`, `aiverse_world`); native OBJECT modules call
 `aiverse_native_use_libraries(target genre-bots)`. Only this header library and its declared dependencies are selected.

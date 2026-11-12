@@ -21,8 +21,12 @@ bool Module::readyToStep(Simulation& sim) {
     for(auto p:spawns_)region(p,radius);
     for(const auto& actor:s.actors)region(actor.pos,radius);
     for(const auto& vehicle:s.vehicles)region(vehicle.pos,radius);
-    for(const auto& p:s.projectiles){auto travel=fxMax(fxAbs(p.velocity.x),fxAbs(p.velocity.z))*sim.dt();
-        region(p.pos,travel+fxMax(config_.systems.blastRadius,config_.systems.flashRadius)+16_fx);}
+    for(const auto& p:s.projectiles){auto travel=fxMax(fxAbs(p.velocity.y),fxMax(fxAbs(p.velocity.x),fxAbs(p.velocity.z)))*sim.dt();
+        if(p.program.enabled)travel=fxMax(travel,(p.programSpeed+fxAbs(p.program.verticalSpeed))*sim.dt()+p.program.radius);
+        Fixed reach=fxMax(config_.systems.blastRadius,config_.systems.flashRadius);
+        if(p.program.enabled)for(const auto& m:config_.weapons[p.weapon].flight.modifiers)
+            if(m.kind==projectile::ProjectileModKind::Ricochet)reach=fxMax(reach,m.radius+p.program.radius);
+        region(p.pos,travel+reach+16_fx);}
     return streamedCollision_->prepareRegions(regions);
 }
 }

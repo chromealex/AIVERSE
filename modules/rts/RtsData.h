@@ -7,6 +7,7 @@
 // the same code run Warcraft, StarCraft, Red Alert, Dune, Total Annihilation, Age of Empires,
 // Company of Heroes, They Are Billions, Northgard or Mushroom Wars style games.
 #pragma once
+#include "RtsProjectileData.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -79,6 +80,7 @@ constexpr uint16_t kDamagePure = 0xFFFF;   // damage type: no damage table; in t
 struct ClassAttack { uint16_t cls = 0; Fixed amount{}; };
 
 struct WeaponDef {
+    ProjectileFlight flight;
     std::string id;
     Fixed range = Fixed::fromInt(1);
     Fixed minRange{};
