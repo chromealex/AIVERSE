@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/world/SpatialWorld.h"
 #include "engine/core/Archive.h"
+#include "engine/sim/ProjectileProgram.h"
 namespace aiverse::fps {
 enum class Action:uint8_t { None, Frag, Smoke, Flash, Heal, Interact, Drop, Buy, Plant, Attach, Vault };
 enum class ItemKind:int32_t { Medkit=1,Armor,Frag,Smoke,Flash,Scope,Suppressor,Magazine,Ammo };
@@ -16,6 +17,8 @@ struct SystemsConfig {
 struct Projectile {
     uint32_t id=0,expires=0;uint8_t owner=0,kind=0; // 0 bullet, 1 frag, 2 smoke, 3 flash, 4 smoke cloud
     Vec3 pos{},velocity{};int32_t damage=0;Fixed remaining{};uint8_t weapon=0;Fixed penetration{};uint32_t pierced[8]{};uint8_t piercedCount=0;
+    // Authoritative simulation only. Snapshots keep their compact position/velocity wire layout.
+    projectile::State program{};Fixed programSpeed{};Entity programTarget{};
 };
 inline void io(Archive& ar,Projectile& v){ar(v.id,v.expires,v.owner,v.kind,v.pos,v.velocity,v.damage,v.remaining,v.weapon,v.penetration,v.pierced,v.piercedCount);}
 struct Loot {uint32_t id=0;Vec3 pos{};int32_t type=0,count=1,ammo=0,reserve=0;uint8_t attachments=0;};

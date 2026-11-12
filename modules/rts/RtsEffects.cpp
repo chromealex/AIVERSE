@@ -598,13 +598,16 @@ void RtsModule::applyEffect(Simulation& sim, const EffectDef& e, int list, int i
         Vec3 aim = flat(ctx.point);
         if (e.delivery.scatter.raw > 0) aim = aim + Vec3{(sim.rng().unit() * 2 - kOne) * e.delivery.scatter, Fixed{}, (sim.rng().unit() * 2 - kOne) * e.delivery.scatter};
         Vec3 start = w.alive(ctx.caster) ? casterPos : aim + Vec3{-Fixed::fromInt(3), Fixed{}, -Fixed::fromInt(3)}; // no caster: from the sky
-        start.y = w.alive(ctx.caster) ? Fixed::fromRatio(6, 10) : Fixed::fromInt(6);
+        const Fixed launchHeight=w.alive(ctx.caster) ? Fixed::fromRatio(6, 10) : Fixed::fromInt(6);
+        if(e.delivery.flight.enabled)start=lift(sim,start,launchHeight);
+        else start.y=launchHeight; // preserve legacy delivery coordinates/checksum streams
         Projectile pr;
-        pr.target = e.delivery.homing && w.alive(ctx.target) ? ctx.target : kNullEntity;
+        pr.target = (e.delivery.flight.enabled ? e.delivery.flight.homing : e.delivery.homing) && w.alive(ctx.target) ? ctx.target : kNullEntity;
         pr.source = ctx.caster; pr.aim = aim; pr.speed = fxMax(e.delivery.speed, Fixed::fromRatio(1, 10));
         pr.owner = ctx.owner; pr.layers = 0xFF; pr.effList = int16_t(list); pr.effIndex = int16_t(index);
         pr.sourceType = ctx.sourceType; pr.start = start; pr.total = (aim - start).length(); pr.scale = ctx.scale;
         w.add<Transform>(p, Transform{start, start, Fixed{}});
+        initProjectileProgram(sim, pr, start);
         w.add<Projectile>(p, pr);
         w.add<Owner>(p, Owner{ctx.owner});
         sim.emit({kEvProjectileLaunch, ctx.owner, p, ctx.caster, list, start});
