@@ -86,3 +86,11 @@ Next useful mechanics: ADS/scopes; recoil and movement-dependent accuracy; head/
 hitboxes and armor; bullet penetration and ballistic projectiles; frag/smoke/flash grenades;
 pickups, dropped weapons, attachments and loot; interaction/revive; buy/freeze/bomb rounds;
 spectator/death camera; sound propagation/footsteps; vaulting, prone and vehicles.
+
+### Projectile modifier chains
+
+Weapons with positive `bulletSpeed` can opt into the shared `flight` block: ordered Split,
+Ricochet, Fly Through and scalar modifiers. This works independently of `mechanics.enabled`;
+`flight.gravity` defaults to `bulletGravity`. Authoritative 3D sweeps, actor-life hit history,
+material penetration, save/rollback and existing snapshot presentation are supported.
+See [projectile programs](projectile-programs.md) for the JSON schema and trajectory semantics.
