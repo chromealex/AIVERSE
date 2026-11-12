@@ -16,11 +16,13 @@ Writes into the game folder:
                                   merged into an existing file (other keys kept, imported names replaced)
   audio_events.json               the event map: FMODEventReference guid / name -> {play, volume, haptic},
                                   every bank key -> {kind, sound | playlist}, extras the engine format has
-                                  no key for (play chance, channel, fades, mute / stop other channels)
+                                  no key for (channel, fades, mute / stop other channels; play chance is
+                                  also kept here, the sound gets "chance")
 
 Mapping (docs/game-format.md § audio.json):
   SFX item    -> sounds[key]: files, volume, maxInstances = maxCount (steal "none": BW skips the play),
-                 bus "ui" for menu groups, "sfx" otherwise; not positional (BW plays them 2D)
+                 bus "ui" for menu groups, "sfx" otherwise; not positional (BW plays them 2D);
+                 playChance < 1 -> "chance"
   Music item  -> music[key]: files, loop, volume. A triggerOnBegin chain (map-background ->
                  map-ambient -> war theme -> rain) plays on several channels at once: it becomes one
                  adaptive playlist with "layers"; a layer that volume events fade in gets an intensity.
@@ -219,6 +221,8 @@ def convert(items, refs, events, assets, out_dir, copy=True, log=print):
                 s["steal"] = "none"
             if it["loop"]:
                 s["loop"] = True
+            if 0.0 <= it["chance"] < 1.0:
+                s["chance"] = round(it["chance"], 4)
             sounds[key] = s
             keymap[key] = dict({"kind": "sound", "sound": key}, **extra)
         else:

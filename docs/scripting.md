@@ -256,7 +256,7 @@ Queries (simulation and view scripts):
 | `game.unit(h)` | `{id, type, name, owner, x, y, z, hp, max_hp, energy, structure, under_construction, level, garrison, tags, statuses}` |
 | `game.alive(h)`, `game.owner(h)`, `game.type_of(h)`, `game.pos(h)` → x, z, `game.hp(h)` → hp, max | |
 | `game.stat(h, "damage")`, `game.has_status(h, "slow")` | effective stat (techs, buffs, statuses) |
-| `game.type_info("footman")`, `game.types()` | `{id, name, structure, max_hp, speed, armor, cost, tags}` |
+| `game.type_info("footman")`, `game.types()` | `{id, name, structure, max_hp, speed, armor, cost, tags, upgrades}` (upgrades: type ids of its in-place upgrades) |
 | `game.map_size()` → w, h, `game.passable(x, z [, "ground"\|"air"\|"naval"])`, `game.level(x, z)`, `game.height(x, z)`, `game.area(name)` | map |
 | `game.var(name)` | trigger variable (fx) |
 | `game.data(h)`, `game.has_data(h, key)` | the entity's own persistent table (view: read-only copy) / does it have the key |
@@ -284,6 +284,9 @@ Actions (simulation scripts only):
 | `game.set_facing(h, dx, dz)`, `game.impulse(h, dx, dz)`, `game.knockback(h, x, z, distance)` | turn; push by a vector / away from a point (negative: towards), stopped by terrain in 8 steps |
 | `game.set_hp(h, hp)`, `game.set_energy(h, e)` | clamped to [0, max]; hp 0 = a normal death |
 | `game.set_garrison(h, n)` | units inside a garrison structure (>= 0, may exceed its growth max: scripted reinforcements, tutorials); false without a garrison |
+| `game.set_ability_cooldown(p, id, seconds)` | restarts a player ability's cooldown (0 = ready now; tutorials, scripted events); false for an unknown ability |
+| `game.player_abilities(p)` | the player's skill cards (rules `playerAbilities`, read-only): `{id, index (0-based), owned, automatic (passive / timer), level, charges, cooldown, ready_in (seconds), usable, cost = {resource = n}}` per ability |
+| `game.modes()` | read-only snapshot of the match modes (docs/game-format.md § Match modes), nil without a `modes` block: `real_time`, `speed`, `time_left` (time limit), `sudden_death` (0 before, 1 preview, 2 on, 3 decided) + `sudden_death_at` + `sd_counter`, `koh[team]` scores, `points` (`{unit, kind = "domination" \| "koh", hold}`), `levels[resource][slot]` (resource `levels`: morale stars), `outcome[slot]` (0 playing, 1 won, 2 lost, 3 draw) |
 | `game.set_stat_base(h, stat, value \| nil)` | replaces the type's base value of a stat (`maxHp speed armor sight range ...`) for this unit; techs, levels, buffs apply on top; `maxHp` keeps the hp fraction; nil restores |
 | `game.transform(h, type)` | the unit becomes another type in place (same handle, `game.data`, hp fraction); unit ↔ structure is refused |
 | `game.add_status(h, "status" [, seconds [, caster]])`, `game.buff(h, stat, add, mul [, seconds])` | statuses of rules `"statuses"`; stat modifiers |
@@ -291,6 +294,7 @@ Actions (simulation scripts only):
 | `game.command(p, {type = "train", units = {h}, param = "footman", x =, z =, target =, queue =})` | any player command, validated like network input (see below) |
 | `game.cast(h, ability, target \| x, z)`, `game.player_ability(p, id, x, z [, free])` | abilities |
 | `game.set_var(name, v)`, `game.add_var(name, v)` | trigger variables, shared with rules triggers |
+| variable `gameplay_scale` | gameplay time scale in [0, 1] (unset / >= 1: normal): 0 freezes every gameplay system (economy, production, movement, weapons, abilities, modes, environment, ...) while commands, vision, victory, triggers and scripts keep running; 0.5 runs them on every second tick (Bunker Wars tutorial windows, `SetGameplayTimescale`). The engine keeps its accumulator in `gameplay_scale_acc` |
 | `game.message(p, text [, x, z])` | a notice (p = 0: everyone) |
 | `game.victory(p)`, `game.defeat(p)`, `game.draw()` | end conditions |
 | `game.clear_data(h)` | forget the entity's `game.data` table |

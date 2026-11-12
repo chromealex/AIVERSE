@@ -166,6 +166,7 @@ TEST(spine_bad_data_is_reported) {
 // ---------------- client services: social (Steam), push, deep links through the desktop mocks ----------------
 #include "engine/platform/Plugins.h"
 #include "engine/services/Consent.h"
+#include "engine/services/Privacy.h"
 #include "engine/services/Links.h"
 #include "engine/services/Push.h"
 #include "engine/services/Social.h"
@@ -252,10 +253,14 @@ TEST(client_services_social_push_links_through_mocks) {
     plugins::configureGame(R"({"plugins": {"mock-consent": {}}})");
     consent::reset();
     setEnvVar("AIVERSE_MOCK_CONSENT", "denied");
+    privacy::reset();
     consent::Result cr;
     consent::request([&](const consent::Result& r) { cr = r; }, true);
     plugins::pump();
     CHECK(consent::provider() == "mock-consent" && cr.status == consent::Status::Obtained && cr.canRequestAds && !cr.personalized && cr.privacyOptionsRequired);
+    // the CMP answer reaches the privacy service (ads / analytics) without game code
+    CHECK(privacy::consentSet() && !privacy::consent().personalizedAds && privacy::consent().analytics);
+    privacy::reset();
     setEnvVar("AIVERSE_MOCK_CONSENT", "");
     consent::reset();
     social::reset(); push::reset(); links::reset();
@@ -356,4 +361,93 @@ TEST(gamepad_cursor_clicks_flicks_and_bindings) {
     p.buttons[int(PadButton::Y)] = true;   // any input wakes the pad cursor
     for (int i = 0; i < 60; i++) { f = g.update(p, 0.016f, 800, 600, targets); std::memcpy(p.prev, p.buttons, sizeof p.buttons); }
     CHECK(bwc::near(g.cursorX(), tx, 0.5f) && bwc::near(g.cursorY(), ty, 0.5f));
+}
+
+// Bunker Wars pad layout: R1 + face = send percent from the origin to the cursor, L1 + face = upgrade / convert,
+// A twice = upgrade, d-pad = skill slots, L2 + face = emotions (events), chords swallow the face button's own binding
+TEST(gamepad_bunkerwars_chords) {
+    using platform::PadAxis;
+    using platform::PadButton;
+    client::ClientGamepad g;
+    g.configure(Json::parse(R"({"gamepad": {"scheme": "bunkerwars", "chords": {"rb+y": "send:90"}}})"));
+    platform::GamepadState p;
+    p.connected = true;
+    std::vector<client::ClientGamepad::Target> none;
+    auto step = [&](float dt = 0.016f) { auto f = g.update(p, dt, 800, 600, none); std::memcpy(p.prev, p.buttons, sizeof p.buttons); return f; };
+    auto press = [&](PadButton b, bool on) { p.buttons[int(b)] = on; };
+    step();
+    press(PadButton::RB, true);
+    auto f = step();
+    CHECK(f.aiming && f.events.empty() && f.actions.empty());
+    const float ox = f.originX;
+    p.axes[int(PadAxis::LX)] = 0.7f;
+    for (int i = 0; i < 20; i++) step(0.02f);   // aim at the target
+    p.axes[int(PadAxis::LX)] = 0;
+    press(PadButton::B, true);
+    f = step();
+    CHECK(f.actions.size() == 1 && f.actions[0].what == "send:25" && bwc::near(f.actions[0].originX, ox) && f.actions[0].x > ox + 50);
+    CHECK(f.events.empty());   // B's right click is swallowed by the chord
+    press(PadButton::B, false);
+    f = step();
+    CHECK(f.events.empty());   // ... and so is its release
+    press(PadButton::Y, true);
+    f = step();
+    CHECK(f.actions.size() == 1 && f.actions[0].what == "send:90");   // game.json chords override the scheme
+    press(PadButton::Y, false); press(PadButton::RB, false);
+    f = step();
+    CHECK(!f.aiming);
+    press(PadButton::LB, true); step();
+    press(PadButton::X, true);
+    f = step();
+    CHECK(f.actions.size() == 1 && f.actions[0].what == "convert:bunker");
+    press(PadButton::X, false); press(PadButton::LB, false); step();
+    press(PadButton::Down, true);
+    f = step();
+    CHECK(f.actions.size() == 1 && f.actions[0].what == "ability:2" && f.panY == 0);   // d-pad = skill slots, no pan
+    press(PadButton::Down, false); step();
+    // A twice within 0.3 s: two clicks and an upgrade on the second press
+    press(PadButton::A, true); f = step();
+    CHECK(f.actions.empty() && !f.events.empty());
+    press(PadButton::A, false); step(0.1f);
+    press(PadButton::A, true); f = step();
+    CHECK(f.actions.size() == 1 && f.actions[0].what == "upgrade");
+    press(PadButton::A, false); step();
+    // L2 is a modifier now: emotions, no zoom
+    p.axes[int(PadAxis::LT)] = 1; step();
+    press(PadButton::Y, true);
+    f = step();
+    CHECK(f.actions.size() == 1 && f.actions[0].what == "event:emotion4" && f.zoom == 0);
+    CHECK(client::ClientGamepad::slotFromName("rt") == client::ClientGamepad::kRT && client::ClientGamepad::slotFromName("zz") == -1);
+}
+
+// ---------------- audio.json "chance" (Bunker Wars FMOD playChance) ----------------
+TEST(audio_play_chance) {
+    auto a = offlineAudio(64);
+    std::string err;
+    CHECK(!loadBank(*a, R"({"sounds":{"x":{"synth":{"wave":"sine","duration":0.1},"chance":1.5}}})", &err) && err.find("chance must be in [0, 1]") != std::string::npos);
+    CHECK(loadBank(*a, R"({"sounds":{
+        "never":  {"synth":{"wave":"sine","duration":0.1}, "chance":0, "maxInstances":0},
+        "always": {"synth":{"wave":"sine","duration":0.1}, "maxInstances":0},
+        "half":   {"synth":{"wave":"sine","duration":0.1}, "chance":0.5, "maxInstances":0, "cooldown":0}}})"));
+    CHECK(a->play("never") == audio::kNoVoice && a->play("always") != audio::kNoVoice);
+    int started = 0;
+    for (int i = 0; i < 400; ++i) started += a->play("half") != audio::kNoVoice;
+    CHECK(started > 140 && started < 260);
+    a->stopAll(0.0f);
+}
+
+// ---------------- gameplay time scale (trigger variable "gameplay_scale": BW tutorial windows freeze the battle) ----------------
+TEST(gameplay_scale_freezes_gameplay_systems) {
+    using namespace modes_t;
+    const std::string r = rules(R"("resources": {"energy": {"start": 0, "regen": 1}})");
+    auto income = [&](int pct) {   // pct < 0: no variable
+        auto sim = makeSimJson(r, map({1, 2}, ent("village", 1, 10, 5) + "," + ent("village", 2, 30, 15)));
+        auto& gs = mod(*sim).state(*sim);
+        if (pct >= 0) gs.trig.vars["gameplay_scale"] = Fixed::fromRatio(pct, 100);
+        run(*sim, 20);
+        return gs.players[1].stock[0].toInt();
+    };
+    const int64_t normal = income(-1), frozen = income(0), half = income(50), full = income(100);
+    CHECK(normal >= 19 && frozen == 0 && full == normal);
+    CHECK(std::abs(half * 2 - normal) <= 1);   // every second tick runs the gameplay systems
 }
