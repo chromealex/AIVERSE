@@ -9,6 +9,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
 | combat-actions | Frame-keyed hitboxes + hurtboxes (sphere/capsule/yaw box) with overlap tests, self/team filtering and once-per-swing hits; dodge i-frames + cooldown; directional guard arc + perfect-parry window with re-arm; poise damage/break/recovery and hit/block/parry stun; deterministic lock-on acquire/switch/break | Composes melee-combat. Returns contacts/outcomes; damage, stamina, health and statuses stay with the existing combat owner. No per-tick sweep, animation-driven boxes, ragdoll or camera presentation. |
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets; 0.2.0: material-layer penetration, radial explosions with owner LOS, ammo feeds (magazine/belt/per-shell/energy + overheat), charge tiers, attachment stat stacking, ballistic launch and lead solving (see [Weapons and ballistics](#weapons-and-ballistics-weapon-policies-020)) | Existing FPS ammo/reload/fire cadence remain authoritative for built-in FPS weapons. No automatic replacement of hitscan, no damage/health owner, no presentation. |
+| stealth-senses | Sight cones (near/focus/peripheral) with owner light/cover/stance/visibility multipliers and LOS callback, hearing with occlusion callback and noise/query budgets, decaying footprint/scent markers, per observer-target suspicion meters (Unaware/Suspicious/Searching/Alert), delayed ally alerts sharing last known positions, deterministic search points with give-up, disguises, hiding spots (see [Stealth and senses](#stealth-and-senses-stealth-senses-010)) | Perception records and events only. Owner supplies poses, multipliers, raycasts/occlusion and search candidates and moves agents. Not RTS fog of war. No sound propagation, navmesh routes or presentation. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 
@@ -33,7 +34,7 @@ steppers are per-step primitives; their owner is responsible for exactly one upd
 
 ## Configuration
 
-Scalar defaults are in `libraries/spec/gameplay.json` (configuration package 0.3.2): sections
+Scalar defaults are in `libraries/spec/gameplay.json` (configuration package 0.3.3): sections
 `locomotion`, `melee`, `projectile`, `matchRules`. Run generate_gameplay.py after spec changes.
 Load through `readGameplaySettings`, then `motionConfig`, `locomotionModeConfig`, `attackConfig`, `projectileConfig`,
 `matchConfig`. The locomotion mode keys are optional (`maxSlopeMilliDegrees`, `ledge*`, `ladder*`, `swim*`,
@@ -274,3 +275,96 @@ Verified: header syntax checks (g++ 11, `-Wall -Wextra -Werror -pedantic`), `gen
 overheat sequences, charge tiers, attachment stacking, aim accuracy, save/restore and invalid data, and a
 standalone run of the GenreConsumer function. Not verified in that change: CMake/full engine build,
 `aiverse_tests`, headless matches, MSVC/clang, platform runtimes.
+
+## Stealth and senses (stealth-senses 0.1.0)
+
+Headers `genre/Senses.h` (policy), `genre/SensesConfigured.h` (settings adapters), `genre/SensesData.h`
+(disguise/hiding JSON) and `genre/SensesPersistence.h` (save/load, hashing). Target `AIVERSE::lib_stealth_senses`
+(depends on `aiverse_engine`); native OBJECT modules call `aiverse_native_use_libraries(target stealth-senses)`.
+Skill: `skills/aiverse-stealth-senses`. This is a generic per-agent perception policy for guards, monsters and
+bots; RTS fog of war stays in `modules/rts` (RtsVision). Long-term memory/threat ranking can compose `ai-perception`.
+
+**Tick.** `stepSenses(config, defs, state, tick, input, los, occlusion)` once per authoritative tick, strictly
+increasing ticks; invalid config/definitions/state/input (duplicate or non-positive IDs, out-of-range
+multipliers 0..4000, unknown disguise/spot IDs, bad noise radius) or a repeated/backwards tick return nullopt and
+leave the state untouched. Input lists may arrive in any order; they are processed by ascending ID. Order inside a
+tick: expire markers, deliver due alerts, disguise equip/blow, hiding exits, sight, hiding entries, hearing,
+trail detection, marker deposits, suspicion, alert broadcasts, search, records. Observers absent from the input
+are frozen (no decay, no search progress); alerts addressed to them are dropped (`AlertDropped`).
+`stepSensesOpen` uses always-visible / unoccluded callbacks (tests, open fields).
+
+**Sight.** Fixed metres; yaw in turns around +Y (yaw 0 faces +Z). Eye = position + eyeHeight. Zones: Focus
+(|bearing| <= halfAngle, distance <= range; strength nearMilli inside nearRange falling linearly to farMilli at
+range), Near (any bearing within nearRange, nearMilli) and Peripheral (|bearing| <= peripheralHalfAngle,
+distance <= peripheralRange, peripheralMilli); the strongest applies. Strength is then multiplied by the
+target's light/cover/stance/visibility and the observer's sightMilli (milli, capped at 1000). Only samples
+>= `sight.minMilli` reach `los(agent, target)`, called in (observer id, target id) order, at most
+`sight.maxQueries` per tick (`losSkipped` counts the rest). Self and same nonzero team are never sensed.
+
+**Hearing.** `NoiseEvent{id, source, team, position, radius, loudnessMilli}`; source 0 = anonymous disturbance
+(capped at Searching). Strength = loudness * (radius - distance)/radius * occlusion/1000 * hearingMilli/1000.
+At most `hearing.maxNoises` events per tick are processed, loudest first then smaller ID (`NoiseDropped`
+events for the rest). `occlusion(agent, noise)` (milli 0..1000, clamped) runs in that noise order then listener
+ID, only for listeners whose unoccluded strength reaches `thresholdMilli`, at most `hearing.maxQueries` per tick.
+Same-team noises are ignored; hidden targets still make noise.
+
+**Trails.** `SenseTarget::leaveTrail` deposits a marker (strength trailMilli) after this tick's detection.
+Markers decay linearly to zero over `trail.lifetime` and are removed then; beyond `maxMarkers` the oldest goes.
+Observers sense the strongest marker per owner within `trail.range` (scaled by distance and trailMilli,
+>= minMilli; ties by smaller marker ID) without LOS.
+
+**Suspicion.** One `AwarenessRecord` per (observer, target): gain per tick = (sight*sightGain + hearing*hearingGain
++ trail*trailGain)/1000, scaled by an active disguise. Levels: >= alertAt Alert, >= searchingAt Searching,
+>= suspiciousAt Suspicious (1 <= suspiciousAt < searchingAt < alertAt <= maximum). Without stimulus the meter
+decays by decayPerTick per tick starting decayDelay ticks after the last stimulus (exact across skipped ticks),
+never below searchingAt for the active search target; records at 0 are dropped. The last known position follows
+sight > hearing > trail; alerts update it when newer.
+
+**Alerts.** A sensed transition into Alert (or any transition with `alert.relay`) schedules `PendingAlert`s to
+allies of the same nonzero team within `alert.radius` of the sender that are not already Alert about that
+target, delivered `alert.delay` ticks later (bounded by `maxPending`). Receipt raises the receiver's meter to
+`receivedMilli` and shares the sender's last known position and its tick.
+
+**Search.** When the strongest Searching/Alert record is not sensed this tick, the observer starts one search:
+points = last known position, then owner `SearchCandidate`s within `candidateRadius` by (distance, ID), up to
+`maxPoints`. `searchGoal(state, observer)` is the current point; reaching it (horizontal distance <=
+pointRadius, one point per tick) emits `SearchPointReached`. A new stimulus (or a newer shared position)
+re-plans and extends the deadline; seeing the target at Alert ends with `SearchFound`. Visiting every point or
+`giveUpTicks` without contact ends with `SearchGaveUp` and drops the meter to `suspiciousAt`.
+
+**Disguises.** `DisguiseDef{id, factions, zones, blownBy, scaleMilli, trespassScaleMilli}`: observers of the
+listed teams scale gains from the wearer by scaleMilli inside the zones (empty = everywhere), by
+trespassScaleMilli elsewhere. Any action in blownBy blows it (`DisguiseBlown`) for everyone until the owner
+equips again (`equipDisguise` > 0; 0 removes).
+
+**Hiding.** `enterHiding` succeeds within `hiding.enterRange` of the spot and below its capacity, otherwise
+`HidingRefused`. Observers whose LOS succeeded on the entry tick keep seeing the target (`revealedTo`); all other
+observers cannot see it (no LOS call) until their search reaches a candidate carrying that spot
+(`HidingRevealed`). `exitHiding` or moving beyond enterRange exits (`HidingExited`, extra 1 when automatic).
+
+**Outputs for bots.** `PerceivedTarget{observer, target, level, suspicion, lastKnown, lastKnownTick, lastSense,
+sensedNow, visibleNow, strengthNow, searching}` sorted by (observer, target), one per record of present
+observers. This is the contract for genre bot policies: chase/engage on `visibleNow && level==Alert`, investigate
+`lastKnown` or `searchGoal` when Searching, idle otherwise. `SenseEvent{kind, observer, target, value, extra}`
+lists transitions in tick order. Callers convert records to `ai-perception` observations if they need TTL memory.
+
+**Settings.** Optional `senses` section (configuration 0.3.3): sight* / peripheral* (milli-metres, milli-turns,
+milli strengths, sightQueryBudget), hearingThresholdMilli, noiseBudget, occlusionBudget, noiseMaxRadiusMilli,
+trail*, suspicion thresholds/gains/decay, alert*, alertRelay, search*, hideEnterRangeMilli. The generated loader
+rejects relation violations (`senses.sightNearMilli: must not exceed sightRangeMilli`, ...);
+`sensesSettingsErrors` adds strict threshold order. Example: `examples/libraries/genre/senses-settings.json`.
+Definitions: `readSenseDefinitions` (`examples/libraries/genre/senses.json`); unknown keys, duplicate IDs,
+empty factions, bad positions/capacities/scales throw `JsonError("senses.<path>: ...")`.
+
+**State.** `SensesState` (kind 48) holds observers (records + search), markers, pending alerts, disguises and
+hiding; `ObserverState` 49, `SearchState` 50, `DisguiseState` 51, `HidingState` 52 are also records. Kinds 48..55
+are reserved for this package. Records are canonical and validated on load. `sensesHash` hashes states and
+reports; `sensesConfigHash` binds the config. `removeSenseAgent` drops a destroyed entity everywhere.
+`GenreConsumer.cpp` (`librarySensesConsumerExample`) runs one tick for a guard pair and an intruder and stores
+`genre.senses`, `genre.senses_hash` and `genre.senses.config`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks (`-Wall -Wextra -Werror -pedantic`),
+`genre_tests.cpp` built by hand (also under ASan/UBSan) covering cones/ranges, LOS order and budget, noise
+occlusion/budget, suspicion thresholds/decay, alert delay/relay, search planning/give-up/re-plan, disguises,
+hiding/reveal, trails, save/restore determinism and invalid data, and the GenreConsumer chain in a standalone
+driver. Not run: CMake/isolation, `aiverse_tests`, native module export, headless restore matches, clang/MSVC.
