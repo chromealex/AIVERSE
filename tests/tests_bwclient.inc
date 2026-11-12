@@ -261,3 +261,99 @@ TEST(client_services_social_push_links_through_mocks) {
     social::reset(); push::reset(); links::reset();
     plugins::configureGame("{}");
 }
+
+// ---------------- gamepads: platform state + the client's pad cursor ----------------
+#include "apps/client/ClientGamepad.h"
+#include "engine/platform/Gamepad.h"
+
+namespace bwc {
+static platform::GamepadState g_fakePad;
+static void fakePads(platform::GamepadState (&pads)[platform::kMaxGamepads]) {
+    pads[1] = g_fakePad;   // keep prev from the common layer: copy only the live fields
+}
+} // namespace bwc
+
+TEST(gamepad_state_edges_dead_zone_and_names) {
+    using platform::PadButton;
+    platform::detail::setGamepadBackend([](platform::GamepadState (&pads)[platform::kMaxGamepads]) {
+        bool prev[int(PadButton::Count)];
+        std::memcpy(prev, pads[1].prev, sizeof prev);
+        bwc::fakePads(pads);
+        std::memcpy(pads[1].prev, prev, sizeof prev);
+    });
+    bwc::g_fakePad = {};
+    bwc::g_fakePad.connected = true;
+    bwc::g_fakePad.buttons[int(PadButton::A)] = true;
+    CHECK(platform::pollGamepads() == 1 && platform::gamepad(1).pressed(PadButton::A) && !platform::gamepad(0).connected);
+    platform::pollGamepads();
+    CHECK(platform::gamepad(1).down(PadButton::A) && !platform::gamepad(1).pressed(PadButton::A));
+    bwc::g_fakePad.buttons[int(PadButton::A)] = false;
+    platform::pollGamepads();
+    CHECK(platform::gamepad(1).released(PadButton::A));
+    bwc::g_fakePad.connected = false;
+    bwc::g_fakePad.buttons[int(PadButton::B)] = true;
+    CHECK(platform::pollGamepads() == 0 && !platform::gamepad(1).down(PadButton::B));   // gone: all released
+    platform::detail::setGamepadBackend(nullptr);
+    float x = 0.1f, y = 0.1f;
+    platform::applyDeadZone(x, y, 0.2f);
+    CHECK(x == 0 && y == 0);
+    x = 1; y = 0;
+    platform::applyDeadZone(x, y, 0.2f);
+    CHECK(bwc::near(x, 1) && y == 0);
+    x = 0.6f; y = 0;
+    platform::applyDeadZone(x, y, 0.2f);
+    CHECK(bwc::near(x, 0.5f));
+    CHECK(platform::padButtonFromName("lb") == PadButton::LB && std::string(platform::padButtonName(PadButton::Start)) == "start");
+    CHECK(platform::padButtonFromName("nope") == PadButton::Count);
+}
+
+TEST(gamepad_cursor_clicks_flicks_and_bindings) {
+    using platform::EventType;
+    using platform::PadAxis;
+    using platform::PadButton;
+    client::ClientGamepad g;
+    g.configure(Json::parse(R"({"gamepad": {"cursorSpeed": 1000, "buttons": {"x": "key:Q", "y": "key:Num4", "lb": "nonsense"}}})"));
+    CHECK(client::ClientGamepad::keyFromName("Escape") == platform::Key::Escape && client::ClientGamepad::keyFromName("7") == platform::Key::Num7);
+    platform::GamepadState p;
+    p.connected = true;
+    std::vector<client::ClientGamepad::Target> none;
+    auto f = g.update(p, 0.016f, 800, 600, none);
+    CHECK(!g.active() && f.events.empty());   // untouched pad: the mouse keeps the pointer
+    // half tilt right for 0.5 s: quadratic speed, starts at the centre
+    p.axes[int(PadAxis::LX)] = 0.6f;
+    for (int i = 0; i < 50; i++) f = g.update(p, 0.01f, 800, 600, none);
+    CHECK(g.active() && g.cursorX() > 400 + 60 && g.cursorX() < 400 + 200 && bwc::near(g.cursorY(), 300));
+    CHECK(!f.events.empty() && f.events[0].type == EventType::MouseMove);
+    // A press / release = left mouse button at the cursor; X = key Q; d-pad and right stick pan; triggers zoom
+    p.axes[int(PadAxis::LX)] = 0;
+    p.buttons[int(PadButton::A)] = true;
+    p.buttons[int(PadButton::X)] = true;
+    p.buttons[int(PadButton::Left)] = true;
+    p.axes[int(PadAxis::RT)] = 1;
+    f = g.update(p, 0.1f, 800, 600, none);
+    bool down = false, q = false, wheel = false;
+    for (auto& e : f.events) {
+        down |= e.type == EventType::MouseDown && e.button == 0 && bwc::near(e.x, g.cursorX());
+        q |= e.type == EventType::KeyDown && e.key == platform::Key::Q;
+        wheel |= e.type == EventType::MouseWheel && e.wheelY > 0;
+    }
+    CHECK(down && q && wheel && f.panX < 0);
+    std::memcpy(p.prev, p.buttons, sizeof p.buttons);
+    p.buttons[int(PadButton::A)] = false;
+    p.axes[int(PadAxis::RT)] = 0;
+    f = g.update(p, 0.1f, 800, 600, none);
+    CHECK(f.events.size() == 1 && f.events[0].type == EventType::MouseUp && f.events[0].button == 0);
+    // flick: a full push jumps onto the nearest target in that direction, holding it doesn't drift
+    std::memcpy(p.prev, p.buttons, sizeof p.buttons);
+    std::vector<client::ClientGamepad::Target> targets{{g.cursorX() + 200, g.cursorY() + 10}, {g.cursorX() - 150, g.cursorY()}, {g.cursorX() + 400, g.cursorY()}};
+    float tx = targets[0].x, ty = targets[0].y;
+    p.axes[int(PadAxis::LX)] = 1;
+    for (int i = 0; i < 5; i++) f = g.update(p, 0.016f, 800, 600, targets);
+    CHECK(bwc::near(g.cursorX(), tx) && bwc::near(g.cursorY(), ty));
+    // released near a target: the magnet settles the cursor on it
+    p.axes[int(PadAxis::LX)] = 0;
+    g.mouseUsed(tx + 30, ty - 20);
+    p.buttons[int(PadButton::Y)] = true;   // any input wakes the pad cursor
+    for (int i = 0; i < 60; i++) { f = g.update(p, 0.016f, 800, 600, targets); std::memcpy(p.prev, p.buttons, sizeof p.buttons); }
+    CHECK(bwc::near(g.cursorX(), tx, 0.5f) && bwc::near(g.cursorY(), ty, 0.5f));
+}
