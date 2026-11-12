@@ -310,6 +310,13 @@ be given by field instead: rect commands (`dig paint_room build_road`) `w, h, ex
 
 Not available yet: fog reveal from scripts (use a `reveal` effect in an ability).
 
+### Routes and the screen (Bunker Wars)
+
+Maps with `routes` / `screen` (docs/game-format.md § Routes): `game.can_send(a, b)` (an open route joins the two
+garrisons; always true without routes), `game.route_length(a, b)` (line 0, nil without a route), `game.screen()` ->
+x, z, w, h of the current screen (nil without one), `game.on_screen(x, z)`, and in simulation scripts
+`game.set_screen(x, z)` (moves the screen centre, clamped to its bounds; BW MapScroller actions).
+
 ### Grid fields: the `field` table
 
 Per-cell layers (fire, water, creep, influence...) defined in rules `"fields"` run as C++ kernels; scripts

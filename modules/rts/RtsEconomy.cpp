@@ -341,7 +341,8 @@ void RtsModule::sysGarrison(Simulation& sim) {
     w.each<Garrison, Unit, Owner>([&](Entity e, Garrison& g, Unit& u, Owner& o) {
         const UnitType& t = rules_.types[u.type];
         if (u.flags & kUnitUnderConstruction) return;
-        const bool grows = !env_ || !env_->active() || env_->producing(sim, e);   // environment: off-screen buildings stop growing
+        // environment (off-screen production) and multiscreen (BW HouseModule.GetIncreaseRate): points off the screen do not grow
+        const bool grows = (!env_ || !env_->active() || env_->producing(sim, e)) && (!screen_.enabled || onScreen(sim, w.get<Transform>(e).pos));
         if (!grows) {}
         else if (adv && o.player != 0 && t.spawnInterval.raw > 0) {
             // effects: lock stops production, production speed / cap stats, redirect sends the growth elsewhere
@@ -379,28 +380,15 @@ void RtsModule::sysGarrison(Simulation& sim) {
         }
     });
     for (auto& r : releases) releaseUnit(sim, r.from, r.target, r.unit, r.owner, r.group);
+    if (rules_.routes.groups) sysSendGroups(sim);   // BW groups (RtsRoutes.cpp)
 }
 
 Entity RtsModule::releaseUnit(Simulation& sim, Entity from, Entity target, uint16_t unit, uint8_t owner, uint32_t group) {
     World& w = sim.world();
     GameState& gs = state(sim);
-    const bool adv = rules_.advancedEffects;
     struct Release { Entity from, target; uint16_t unit; uint8_t owner; Fixed radius; uint32_t group = 0; };
     const Release r{from, target, unit, owner, rules_.types[w.get<Unit>(from).type].radius, group};
-    auto tagGroup = [&](Entity n, const Release& r) {
-        if (!adv) return;
-        w.add<GroupTag>(n, GroupTag{r.group, r.from, r.target});
-        // contagious statuses (plague) travel with the units sent from an infected structure
-        if (auto* st = w.tryGet<Statuses>(r.from)) {
-            std::vector<StatusInst> carry;
-            for (auto& in : st->list) if (rules_.statuses[in.def].flags & kStSpreads) carry.push_back(in);
-            for (auto& in : carry) {
-                EffectCtx ctx; ctx.owner = in.owner; ctx.caster = in.source; ctx.sourceType = in.sourceType;
-                Fixed left = in.until == UINT32_MAX ? Fixed{} : Fixed::fromInt(int64_t(in.until - sim.tick())) / int64_t(sim.tickRate());
-                addStatus(sim, n, in.def, left, ctx);
-            }
-        }
-    };
+    auto tagGroup = [&](Entity n, const Release& r) { tagReleased(sim, n, r.group, r.from, r.target); };
     {
         Vec3 from = w.get<Transform>(r.from).pos, to = w.get<Transform>(r.target).pos;
         if (rules_.lanes.enabled) {
@@ -448,6 +436,22 @@ Entity RtsModule::releaseUnit(Simulation& sim, Entity from, Entity target, uint1
         issue(sim, n, ord, false);
         w.get<Orders>(n).queue.front().state = ord.state;
         return n;
+    }
+}
+
+// Group tag of a unit sent from a garrison; contagious statuses (plague) travel with it.
+void RtsModule::tagReleased(Simulation& sim, Entity n, uint32_t group, Entity from, Entity to) {
+    if (!rules_.advancedEffects) return;
+    World& w = sim.world();
+    w.add<GroupTag>(n, GroupTag{group, from, to});
+    if (auto* st = w.tryGet<Statuses>(from)) {
+        std::vector<StatusInst> carry;
+        for (auto& in : st->list) if (rules_.statuses[in.def].flags & kStSpreads) carry.push_back(in);
+        for (auto& in : carry) {
+            EffectCtx ctx; ctx.owner = in.owner; ctx.caster = in.source; ctx.sourceType = in.sourceType;
+            Fixed left = in.until == UINT32_MAX ? Fixed{} : Fixed::fromInt(int64_t(in.until - sim.tick())) / int64_t(sim.tickRate());
+            addStatus(sim, n, in.def, left, ctx);
+        }
     }
 }
 

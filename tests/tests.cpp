@@ -12979,6 +12979,7 @@ TEST(models_gltf_lod_metadata) {
     CHECK(rejected);
 }
 #include "tests_modes.inc"   // match modes (agent-bw-modes)
+#include "tests_routes.inc"   // Bunker Wars routes, groups, multiscreen
 #include "animation/view.inc"
 #include "animation/editor.inc"
 #include "geometry/runtime.inc"

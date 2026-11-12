@@ -185,6 +185,7 @@ void RtsModule::rebuildLanesSphere(Simulation& sim, const std::vector<Entity>& n
 }
 
 void RtsModule::sysLanes(Simulation& sim) {
+    if (!routeDefs_.empty()) { sysRoutes(sim); return; }   // authored routes (RtsRoutes.cpp)
     if (sim.tick() % 20 != 0) return;
     World& w = sim.world();
     GameState& gs = state(sim);
@@ -207,6 +208,8 @@ bool RtsModule::runLaneWalk(Simulation& sim, Entity e, Order&) {
     Transform& tr = w.get<Transform>(e);
     Unit& u = w.get<Unit>(e);
     Fixed step = stat(sim, e, Stat::Speed) * sim.dt();
+    // authored routes: every line is walked at the progress of line 0 (BW Spline.InterpolateByDistance fast path)
+    if (size_t(lw->lane) < gs.routes.laneScale.size()) step = step * gs.routes.laneScale[size_t(lw->lane)];
     if (rules_.advancedEffects) {
         // flying units leave the lane and go straight for the end of it
         if (statusFlags(sim, e) & kStFlying) {

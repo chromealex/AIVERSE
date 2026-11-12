@@ -994,6 +994,7 @@ endif()
 if(TARGET aiverse_editor_core)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/FieldOps.cpp)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/RaidOps.cpp)   # extraction raids (agent-extraction)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/RouteOps.cpp)   # Bunker Wars routes / screen
 endif()
 
 # VFX tools (vfx tools agent): Unity particle importer tests (Python, stdlib only) and the fx_* editor
@@ -1132,6 +1133,8 @@ target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
 target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvData.cpp modules/rts/RtsEnvBoss.cpp modules/rts/RtsEnvScript.cpp modules/rts/RtsEnvPoints.cpp)
 # driving (agent-gta2): the top-down hero drives vehicles of the vehicle-controllers library (docs/driving.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsDriving.cpp)
+# Bunker Wars routes, groups, multiscreen (docs/game-format.md § Routes)
+target_sources(aiverse_game PRIVATE modules/rts/RtsRoutes.cpp modules/rts/RtsRoutesData.cpp modules/rts/RtsScriptRoutes.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)

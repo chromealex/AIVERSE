@@ -243,6 +243,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
         });
     }
     ioState(a, gs);
+    ioRoutes(a, gs);   // RtsRoutes.cpp: only when the map / rules use routes, groups or a screen
     if (!native_.serialize(sim, a)) return false;
     // Lua state of games with their own scripts (the standard library keeps its state in GameState)
     if (auto* ss = w.resource<ScriptStore>(); ss && ss->userScripts) {

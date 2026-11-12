@@ -94,6 +94,7 @@ struct WeaponDef {
     int16_t onHit = -1;                 // payload applied to the target on hit (poison, frost)
     Fixed onHitChance = Fixed::fromInt(1);
     Fixed chargeTime{};                 // >0: the weapon has to stay on one target this long before each shot
+    Fixed rangeAspect = Fixed::fromInt(1); // elliptical range: z radius = range x this (Bunker Wars towers, world.aspectRatio)
     uint8_t armorClass = 0;             // 0: armor, 1: armor2 (pierce)
     std::vector<std::pair<uint64_t, Fixed>> bonus; // extra damage vs targets with any of these tags (AoE / SC2 bonuses)
     Fixed killsCrew{};                  // chance per hit to kill the crew of a crewed target (Z snipers)
@@ -106,6 +107,7 @@ struct Amount { uint16_t res = 0; Fixed value{}; };
 #include "RtsAbilityData.h"
 #include "RtsGridFieldData.h"
 #include "RtsRaidData.h"
+#include "RtsRoutesData.h"
 namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
 struct GatherDef { uint16_t res = 0; Fixed carry = Fixed::fromInt(10); Fixed time = Fixed::fromInt(2); };
@@ -584,6 +586,7 @@ struct Rules {
     bool buildingStorage = false;              // "storage": "buildings": goods live in building inventories
     RoadNetworkRules roadNetwork;
     LaneRules lanes;
+    RouteRules routes;                         // lanes.routes / lanes.groups (RtsRoutesData.h, BW routes and groups)
     MovementRules movement;
     bool settlers = false;                     // any settlers-economy mechanic present
     bool advancedEffects = false;              // statuses / delivery / skills beyond the original instant effects

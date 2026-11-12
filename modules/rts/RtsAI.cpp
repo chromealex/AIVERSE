@@ -1171,7 +1171,7 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
         const G& t = all[ti];
         if (t.owner == player_ || (t.owner != 0 && t.owner != kHostileNeutral && sim.allied(t.owner, player_))) continue;
         std::vector<size_t> mine;
-        for (size_t i = 0; i < all.size(); ++i) if (all[i].owner == player_ && all[i].count > 3) mine.push_back(i);
+        for (size_t i = 0; i < all.size(); ++i) if (all[i].owner == player_ && all[i].count > 3 && m.canSend(sim, all[i].e, t.e)) mine.push_back(i);   // authored routes: neighbours only
         std::sort(mine.begin(), mine.end(), [&](size_t a, size_t b) {
             if (mass && full(all[a]) != full(all[b])) return full(all[a]);
             Fixed da = dist(all[a].pos, t.pos), db = dist(all[b].pos, t.pos);
@@ -1217,7 +1217,7 @@ void RtsAI::garrisonPlay(Simulation& sim, RtsModule& m) {
         }
         if (front < 0) return;
         for (auto& g : all) {
-            if (g.owner != player_ || !full(g) || toEnemy(g) <= fd) continue;   // only from behind the front
+            if (g.owner != player_ || !full(g) || toEnemy(g) <= fd || !m.canSend(sim, g.e, all[size_t(front)].e)) continue;   // only from behind the front
             Command c; c.type = kCmdSend; c.units = {g.e}; c.target = all[size_t(front)].e; c.param = 50;
             send(sim, c);
         }

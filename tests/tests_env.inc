@@ -33,7 +33,7 @@ void envUpgrades(std::string& rules) {   // village -> village2 upgrade chain fo
     const std::string k = "\"village\": {\"structure\"";
     rules.replace(rules.find(k), k.size(), "\"village\": {\"upgrades\": [\"village2\"], \"structure\"");
 }
-void sendCmd(Simulation& sim, uint8_t p, Entity from, Entity to, int pct) {
+void envSendCmd(Simulation& sim, uint8_t p, Entity from, Entity to, int pct) {
     Command c; c.player = p; c.type = game::kCmdSend; c.units = {from}; c.target = to; c.param = pct; sim.submit(c);
 }
 int envEvents(Simulation& sim, int64_t kind, int64_t data = -1) {
@@ -89,7 +89,7 @@ TEST(env_water_zone_slows_and_blizzard_kills_walkers) {
     auto& m = mod(*sim);
     Entity home = envPoint(*sim, 0), enemy = envPoint(*sim, 1);
     run(*sim, 0.2);
-    sendCmd(*sim, 1, home, enemy, 50);
+    envSendCmd(*sim, 1, home, enemy, 50);
     Fixed slowSeen{}; int walkersMax = 0;
     for (int t = 0; t < 20 * 3; ++t) {
         sim->step();
@@ -117,7 +117,7 @@ TEST(env_caves_share_owner_and_garrison) {
     Entity ca = envPoint(*sim, 2), cb = envPoint(*sim, 3), home = envPoint(*sim, 0);
     CHECK(ca.valid() && cb.valid());
     CHECK(!env->sendAllowed(*sim, ca, cb));
-    sendCmd(*sim, 1, home, ca, 100);
+    envSendCmd(*sim, 1, home, ca, 100);
     run(*sim, 12);
     CHECK(w.get<Owner>(ca).player == 1);
     CHECK(w.get<Owner>(cb).player == 1);   // caught one cave = caught all
@@ -135,7 +135,7 @@ TEST(env_graveyard_collects_souls_and_sends_them) {
     World& w = sim->world();
     Entity home = envPoint(*sim, 0), enemy = envPoint(*sim, 1), gy = envPoint(*sim, 4);
     CHECK(gy.valid() && !env->sendAllowed(*sim, home, gy));
-    sendCmd(*sim, 1, home, enemy, 50);
+    envSendCmd(*sim, 1, home, enemy, 50);
     bool sentOut = false, fire = false;
     auto* st = w.resource<game::EnvState>();
     for (int t = 0; t < 20 * 25; ++t) {
@@ -168,7 +168,7 @@ TEST(env_worm_toad_and_bomber) {
     Entity home = envPoint(*sim, 0), enemy = envPoint(*sim, 1), big = envPoint(*sim, 4);
     int toadAttacks = 0, toadExplosions = 0, bombs = 0, wormArmy = 0, wormUp = 0;
     for (int t = 0; t < 20 * 20; ++t) {
-        if (t % 20 == 0) sendCmd(*sim, 1, home, enemy, 30);
+        if (t % 20 == 0) envSendCmd(*sim, 1, home, enemy, 30);
         sim->step();
         toadAttacks += envEvents(*sim, game::kEnvToadAttack);
         toadExplosions += envEvents(*sim, game::kEnvToadExplode);
@@ -239,8 +239,8 @@ TEST(env_save_load_continues_identically) {
     const std::string map = envMap(env, 40, 20, R"(,{"type":"grave","owner":0,"pos":[20,10],"garrison":0})");
     auto a = makeSimJson(kEnvRules, map, 9);
     for (int t = 0; t < 20 * 6; ++t) {
-        if (t % 30 == 0) sendCmd(*a, 1, envPoint(*a, 0), envPoint(*a, 1), 40);
-        if (t % 30 == 15) sendCmd(*a, 2, envPoint(*a, 1), envPoint(*a, 0), 40);
+        if (t % 30 == 0) envSendCmd(*a, 1, envPoint(*a, 0), envPoint(*a, 1), 40);
+        if (t % 30 == 15) envSendCmd(*a, 2, envPoint(*a, 1), envPoint(*a, 0), 40);
         a->step();
     }
     const std::string bytes = a->serialize();

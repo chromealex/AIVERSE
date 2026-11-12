@@ -860,6 +860,12 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         cam_.target.x = std::clamp(cam_.target.x, 0.0f, float(g.w));
         cam_.target.z = std::clamp(cam_.target.z, 0.0f, float(g.h));
         }
+        if (const auto& scr = mod().screen(); scr.enabled && !planet()) {   // map "screen" (BW MultiscreenModule): follow its centre
+            const auto c = mod().screenCenter(*sim_);
+            const float k = std::min(1.0f, float(dt) * float(scr.smooth.toDouble()));
+            cam_.target.x += (float(c.x.toDouble()) - cam_.target.x) * k;
+            cam_.target.z += (float(c.z.toDouble()) - cam_.target.z) * k;
+        }
         if (quality_.update(dt)) { // too slow for these tiers: step down (keeps the pause menu in sync)
             r3d_.setShadowQuality(ShadowQuality(quality_.shadows()));
             r3d_.lights.setQuality(aiverse::render::LightQuality(quality_.lights()));
