@@ -561,58 +561,19 @@ void RtsModule::applyEffect(Simulation& sim, const EffectDef& e, int list, int i
     case EffectKind::Area:
     case EffectKind::Reveal: {
         if (list < 0) break;
-        Entity a = w.create();
-        Vec3 at = flat(e.fromCaster || e.delivery.motion == AreaMotion::Toward ? casterPos : ctx.point);
-        w.add<Transform>(a, Transform{at, at, Fixed{}});
-        w.add<Owner>(a, Owner{ctx.owner});
-        Area ar;
-        ar.caster = ctx.caster; ar.sourceType = ctx.sourceType; ar.effList = int16_t(list); ar.effIndex = int16_t(index);
-        ar.radius = fxMax(e.radius, kHalf);
-        ar.scale = ctx.scale;
-        ar.fireAt = tick + fxTicks(e.delivery.delay, sim.tickRate());
-        ar.nextAt = ar.fireAt;
-        Fixed life = e.kind == EffectKind::Reveal ? fxMax(e.duration, e.delivery.lifetime) : e.delivery.lifetime;
-        ar.endAt = life.raw > 0 ? ar.fireAt + fxTicks(life, sim.tickRate()) : (e.delivery.trigger == AreaTrigger::Contact ? UINT32_MAX : ar.fireAt);
-        ar.dest = flat(ctx.point) + e.delivery.teleportOffset;
-        Vec3 d = flat(ctx.point - casterPos);
-        if (d.length().raw > 0) ar.dir = d / d.length();
-        if (e.delivery.motion == AreaMotion::Follow) ar.follow = w.alive(ctx.target) ? ctx.target : ctx.caster;
-        if (e.delivery.motion == AreaMotion::Lane) {
-            // along the lane of the targeted group, from its start
-            Entity m = ctx.target;
-            if (!w.alive(m) || !w.has<LaneWalker>(m)) { auto mem = groupMembers(sim, ctx.group); m = mem.empty() ? kNullEntity : mem[0]; }
-            if (auto* lw = w.alive(m) ? w.tryGet<LaneWalker>(m) : nullptr; lw && lw->lane >= 0 && size_t(lw->lane) < gs.lanes.size()) {
-                ar.lane = lw->lane; ar.laneReverse = lw->reverse; ar.lanePos = 0;
-                const auto& pts = gs.lanes[size_t(lw->lane)].points;
-                Vec3 p0 = pts[lw->reverse ? pts.size() - 1 : 0];
-                w.get<Transform>(a).pos = p0; w.get<Transform>(a).prevPos = p0;
-            }
-        }
-        w.add<Area>(a, ar);
-        sim.emit({kEvAreaStart, ctx.owner, a, ctx.caster, list, at});
+        if (spawnSkillObjects(sim, e, list, index, ctx)) break;   // one per origin unit (RtsSkillObjects.cpp)
+        spawnArea(sim, e, list, index, ctx, flat(e.fromCaster || e.delivery.motion == AreaMotion::Toward ? casterPos : ctx.point), kNullEntity);
         break;
     }
     case EffectKind::Projectile: {
         if (list < 0) break;
-        Entity p = w.create();
-        Vec3 aim = flat(ctx.point);
-        if (e.delivery.scatter.raw > 0) aim = aim + Vec3{(sim.rng().unit() * 2 - kOne) * e.delivery.scatter, Fixed{}, (sim.rng().unit() * 2 - kOne) * e.delivery.scatter};
-        Vec3 start = w.alive(ctx.caster) ? casterPos : aim + Vec3{-Fixed::fromInt(3), Fixed{}, -Fixed::fromInt(3)}; // no caster: from the sky
-        const Fixed launchHeight=w.alive(ctx.caster) ? Fixed::fromRatio(6, 10) : Fixed::fromInt(6);
-        if(e.delivery.flight.enabled)start=lift(sim,start,launchHeight);
-        else start.y=launchHeight; // preserve legacy delivery coordinates/checksum streams
-        Projectile pr;
-        pr.target = (e.delivery.flight.enabled ? e.delivery.flight.homing : e.delivery.homing) && w.alive(ctx.target) ? ctx.target : kNullEntity;
-        pr.source = ctx.caster; pr.aim = aim; pr.speed = fxMax(e.delivery.speed, Fixed::fromRatio(1, 10));
-        pr.owner = ctx.owner; pr.layers = 0xFF; pr.effList = int16_t(list); pr.effIndex = int16_t(index);
-        pr.sourceType = ctx.sourceType; pr.start = start; pr.total = (aim - start).length(); pr.scale = ctx.scale;
-        w.add<Transform>(p, Transform{start, start, Fixed{}});
-        initProjectileProgram(sim, pr, start);
-        w.add<Projectile>(p, pr);
-        w.add<Owner>(p, Owner{ctx.owner});
-        sim.emit({kEvProjectileLaunch, ctx.owner, p, ctx.caster, list, start});
+        if (spawnSkillObjects(sim, e, list, index, ctx)) break;   // one per origin unit (RtsSkillObjects.cpp)
+        spawnProjectile(sim, e, list, index, ctx, e.delivery.fromPoint ? flat(ctx.point) : casterPos, kNullEntity);
         break;
     }
+    case EffectKind::Pull:
+        effectPull(sim, e, ctx, targets());
+        break;
     case EffectKind::Chain: {
         std::vector<Entity> hit;
         Entity cur = w.alive(ctx.target) && w.has<Unit>(ctx.target) && filterOk(sim, e.filter, ctx.target, ctx.owner, ctx.caster) ? ctx.target : kNullEntity;
@@ -688,7 +649,10 @@ void RtsModule::tickAreas(Simulation& sim) {
         if (tick >= ar.fireAt) {
             Fixed step = e.delivery.speed * dt;
             switch (e.delivery.motion) {
-            case AreaMotion::Toward: tr.pos = tr.pos + ar.dir * step; break;
+            case AreaMotion::Toward:
+                if (e.delivery.goal == kGoalNone) tr.pos = tr.pos + ar.dir * step;
+                else if (!ar.arrived && areaArrival(sim, a, step)) { ar.arrived = true; ar.endAt = tick; }   // skill objects
+                break;
             case AreaMotion::Follow: if (w.alive(ar.follow) && w.has<Transform>(ar.follow)) tr.pos = flat(w.get<Transform>(ar.follow).pos); else ar.endAt = tick; break;
             case AreaMotion::Wander:
                 if ((tick - ar.fireAt) % (2 * sim.tickRate()) == 0) { ar.dir = {sim.rng().unit() * 2 - kOne, Fixed{}, sim.rng().unit() * 2 - kOne}; if (ar.dir.length().raw > 0) ar.dir = ar.dir / ar.dir.length(); }
@@ -704,7 +668,7 @@ void RtsModule::tickAreas(Simulation& sim) {
                         if (len <= step) { tr.pos = wp; step -= len; ++ar.lanePos; }
                         else { tr.pos = tr.pos + d * (step / len); step = Fixed{}; }
                     }
-                    if (ar.lanePos >= pts.size()) ar.endAt = tick;
+                    if (ar.lanePos >= pts.size()) { ar.endAt = tick; ar.arrived = ar.goal.valid() || e.delivery.onArrive >= 0; }
                 }
                 break;
             default: break;
@@ -748,6 +712,9 @@ void RtsModule::tickAreas(Simulation& sim) {
         }
         if (!w.alive(a)) continue;
         if (tick >= w.get<Area>(a).endAt && tick >= w.get<Area>(a).fireAt) {
+            if (e.delivery.onArrive >= 0 || e.delivery.onExpire >= 0)
+                areaFinished(sim, a, e.delivery.maxTriggers > 0 && w.get<Area>(a).triggers >= e.delivery.maxTriggers);
+            if (!w.alive(a)) continue;
             sim.emit({kEvAreaEnd, owner, a, kNullEntity, w.get<Area>(a).effList, w.get<Transform>(a).pos});
             w.destroyLater(a);
         }
@@ -777,6 +744,7 @@ void RtsModule::sysEffects(Simulation& sim) {
     const uint32_t tick = sim.tick();
     tickStatuses(sim);
     tickAreas(sim);
+    tickSkillObjects(sim);
     // channels: repeat the payload while the caster keeps still and isn't stunned or silenced
     std::vector<Entity> chans;
     w.each<Channel>([&](Entity e, Channel&) { chans.push_back(e); });
@@ -814,6 +782,7 @@ void RtsModule::hashEffects(Simulation& sim, Hasher& h) {
     for (auto& p : gs.players) for (auto& in : p.statuses) { h.u32(in.def); h.u32(in.until); h.u32(in.stacks); }
     for (auto& pl : gs.playerAbilities) for (auto& st : pl) { h.u32(st.owned); h.u32(st.level); h.u32(st.pendingAt); h.u32(st.stolenUntil); h.u32(st.nextAuto); }
     h.u32(gs.nextGroupId);
+    hashSkillObjects(sim, h);
 }
 
 } // namespace aiverse::game

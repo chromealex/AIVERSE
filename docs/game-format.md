@@ -753,6 +753,37 @@ Triggers can cast them: `{"type": "castAbility", "ability": "storm", "at": [20, 
 The same keys work inside effects of type `projectile`, `area` and `chain`, which is how skills nest
 (a projectile that leaves a burning area, an area that drops projectiles every second, ...).
 
+#### Skill objects (objects spawned from units, goals, magnets, souls)
+
+Optional delivery keys of `area` / `projectile` effects and the `pull` effect (`modules/rts/RtsSkillObjects.cpp`):
+
+| key | meaning |
+|---|---|
+| `origins` | a target filter (`shape`, `radius`, `affects`, `kind`, `inTransit`, `maxTargets`, `sort`, ...): one area / projectile **per chosen unit**, starting where it stands. A `motion: "lane"` area continues that unit's own lane from its position and direction (rolling stones) |
+| `origins.consume` | the chosen unit turns into the object: it dies silently (no death effects, no souls) |
+| `goal` | `point`, `target` (the clicked / followed structure, else the nearest structure), `groupTarget` / `groupSource` (where the origin unit was walking to / came from), `ownStructure` / `enemyStructure` (nearest), `caster`. Areas move there (`motion` becomes `toward`), stop and end; projectiles home in on it. Areas with a goal (or a lane and `onArrive`) live until they arrive |
+| `onArrive` | payload when the area reaches its goal or the end of its lane (target = the goal structure / the structure at the lane end) |
+| `onExpire` | payload when the area's lifetime runs out before it arrived or was used up (`maxTriggers`): mines that self-destruct |
+| `onDeath` | payload for every unit dying inside the area (point = where it died, target = the followed object); `maxTriggers` caps it (souls collector) |
+| `lifetime: [min, max]` | rolled with the sim RNG |
+| `start: "point"` | a projectile starts at the effect point instead of the caster (souls flying from where a unit died) |
+
+| `type` | keys | what it does |
+|---|---|---|
+| `pull` | `goal` (default `target`), `speed` (start velocity), `accel`, `minSpeed`, `maxSpeed` + filter | units fly straight into the goal structure: velocity += accel x dt, clamped; on arrival they enter it (assault / reinforce). One special move at a time. Magnet: a structure status with `tick.effects` [`pull` with a `radius`] |
+
+```json
+{"id": "petrify", "target": "group", "effects": [{"type": "area", "motion": "lane", "speed": 3, "radius": 0.3,
+  "origins": {"shape": "group", "consume": true}, "onArrive": [{"type": "garrisonKill", "amount": 2, "affects": "any"}]}]},
+{"id": "mines", "target": "point", "effects": [{"type": "area", "trigger": "contact", "maxTriggers": 1, "radius": 0.6, "lifetime": [9, 11],
+  "origins": {"radius": 4, "inTransit": true, "consume": true}, "effects": [{"type": "kill", "shape": "target"}]}]},
+{"id": "souls", "target": "structure", "effects": [{"type": "area", "motion": "follow", "radius": 4, "lifetime": 30, "trigger": "periodic", "interval": 1000,
+  "maxTriggers": 100, "affects": "any", "onDeath": [{"type": "projectile", "start": "point", "goal": "target", "speed": 3,
+  "effects": [{"type": "garrisonAdd", "amount": 1, "affects": "own"}]}]}]}
+```
+
+For the view: `Area::goal` / `Area::arrived`, `Pulled` (target, way, vel) on pulled units; events as for areas / projectiles.
+
 ### Effects
 
 Common keys: `amount` (number or `[min, max]` rolled with the sim RNG), `percent`, `radius`, `duration`,
@@ -919,9 +950,18 @@ Garrison structures, groups and lanes come from `garrison`, `kCmdSend` and `lane
 | Random N structures | `shape: map`, `kind: structure`, `sort: random`, `maxTargets: N` |
 | Auto / map skills | `autoEvery`, or a trigger action `castAbility` |
 | Passive skills | `passive: true` + `status` (in the loadout), or `requires` a tech |
+| RollingStone (Petrify) | group: `area` `motion: lane` + `origins` {`shape: group`, `consume`} + `onArrive` `garrisonKill` |
+| JumpingHeads | own group: `area` `goal: groupTarget` + `origins` {`consume`} + `onArrive` `garrisonKill` |
+| UnitMine (units leave mines) | `area` `trigger: contact`, `maxTriggers: 1`, `lifetime: [t-f, t+f]` + `origins` {`consume`}, `onExpire` (self-destruction) |
+| Magnet / Worm | structure status with `tick.effects` [`pull` `radius` `goal: target` `speed` `accel` `maxSpeed`] |
+| Souls collector | `area` `motion: follow` + `onDeath` [`projectile` `start: point` `goal: target` -> `garrisonAdd 1`] |
 
-Still needs code: **flying towers moving between points** (garrisons are fixed structures; a mobile
-garrison would need garrisons on units).
+Every Bunker Wars skill (44 cards with 10 levels, talents, campaign / map skills, the deleted hero skills)
+is converted from the client data by `tools/importers/bunkerwars/skills/convert.py`; the modificator ->
+primitive table with the fidelity of each mapping is in [Bunker Wars skills](bunkerwars-skills.md).
+
+Flying towers moving between points (mobile garrisons) belong to agent-bw-routes; the converter spawns
+them as `bw_flying_tower`.
 
 ## Army control (agent-mech): stances, retreat, transports
 
