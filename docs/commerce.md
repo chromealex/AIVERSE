@@ -21,6 +21,29 @@ inside, borrows from the bank against what he owns. Code: `modules/rts/RtsCommer
   leans on is refused.
 - Charges the player cannot cover (a losing business) take what he has; the rest is added to the debt.
 
+## Staff, managers, customers, counters, homes
+
+- **Staff.** A business type may need `staff` employees (`wageWeek` each, charged at the week's end before rent
+  and the bank). With fewer hired the income shrinks in proportion; with none it earns nothing.
+- **Manager.** Without one (`managerWageWeek`) a business earns only `unmanagedShare` of its income on a day its
+  owner did not come by the door. With one it runs at full income on its own: this is what makes a chain possible.
+- **Walk-in customers.** `commerce.visit(premises)` makes one customer pay the type's `ticket` at once. What real
+  customers paid during a day is taken off the day's statistical income, so near the player money arrives
+  person by person and far away as one booking, with the same total; a busy day can exceed it by half.
+- **Counters.** `offers` are things sold at premises of given kinds: a weapon with ammo (rules `arsenal`) or a
+  vehicle (it appears at the kerb and is listed in the buyer's account). Map premises with `"public": true`
+  belong to the city: a gun shop, a car dealer, a bank; they are not for rent or sale.
+- **Homes.** Premises of the kinds in `storage` (default `flat`) have a stash for money and ammo. Only the one
+  who lives there reaches it (`commerce.premise(id, player)` shows its contents to him alone); death does not
+  touch it. A lease cannot be ended or a home sold with things in the stash; an evicted tenant gets the money back.
+
+More deals: `hire`, `fire`, `manager` (toggle), `purchase` + offer id, `stash` / `unstash` + amount,
+`stash_weapons`, `take_weapons`.
+
+In the client (rules `topDown`): at a door the top bar names the place, **E** opens the list of deals, **1..9**
+make them. The day and the debt are shown next to the money. Lua for missions: `driving.car_of(player)`,
+`driving.speed(vehicle)`, `driving.driver(vehicle)`, `driving.is_vehicle(unit)`.
+
 ## Deals
 
 Everything goes through one command, `kCmdCommerce`, with `param = commercePack(op, premises, value)`, so the UI,
@@ -80,6 +103,6 @@ types to the rules. It is additive and repeatable: existing entries are kept.
 
 ## Not done yet
 
-Income is a fixed figure per day scaled by `traffic`: real customers (residents who walk in and pay) and the
-statistical demand of far districts are the next step. Staff and wages, managers, renting from another player,
-supplies, taxes, car dealers and garages, events for sounds and messages, any UI.
+Residents with wallets, homes and jobs (customers are whoever walks by; staff are numbers, not people), district
+demand, renting premises out to others, supplies, taxes, insurance, garages for bought cars, furniture, touch
+buttons for the deals, sounds and messages for the weekly settlement.
