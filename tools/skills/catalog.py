@@ -18,6 +18,7 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-physics':'box3d physics rigid collider collision hinge weld sensor raycast физик коллайдер столкнов шарнир датчик',
  'meta-economy':'shop store offer currency wallet магазин оффер валют кошелек покупк',
  'meta-social':'leaderboard ranking chat лидeрборд лидерборд рейтинг таблица чат',
  'meta-progression':'daily energy battlepass achievement ежеднев энерг достижен боевой пропуск',
@@ -35,15 +36,25 @@ ALIASES = {
  'meta-client':'client outbox retry клиент повтор', 'meta-server':'server сервер сервак',
  'meta-ui':'screen interface экран интерфейс',
  'aiverse-card-runtime':'cards deck карточ колод', 'aiverse-turn-scheduler':'turn пошаг ход',
- 'aiverse-grid-puzzles':'puzzle match3 головолом', 'aiverse-rhythm-timing':'rhythm ритм',
+ 'aiverse-grid-puzzles':'sokoban deadlock сокобан',
+ 'aiverse-puzzle-solvers':'puzzle match3 match-3 cascade shuffle hint flood pipes connectivity sliding 15-puzzle klotski packing polyomino sudoku nonogram constraint csp solver головолом три-в-ряд пятнашки судоку японский кроссворд', 'aiverse-rhythm-timing':'rhythm ритм',
  'aiverse-narrative-graphs':'story narrative dialogue relationship knowledge bark visual novel backlog consequence сюжет диалог отношения реплик визуальная новелла', 'rts-bots-rts':'rts bot ртс бот',
  'aiverse-bots-fps':'fps bot фпс бот', 'aiverse-camera':'camera камер',
  'aiverse-orchestrator':'skill catalog orchestration скилл каталог оркестратор',
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
+ 'aiverse-settlement-production':'colony settlement city factory production recipe workstation haul logistics job schedule needs mood power grid electricity fluid water brownout disaster колони поселен город фабрик производств рецепт верстак перенос работ расписан потребност настроен электросет энерг вода авари бедстви',
+ 'aiverse-survival-ecology':'survival temperature cold hypothermia wet hunger thirst stamina shelter clothing weather ecosystem population predator prey animal deer wolf regrowth renewable выживан температур холод мокр голод жажд выносливост укрыти одежд погод экосистем популяц хищник жертв животн олен волк восстановлен ресурс',
  'aiverse-cinematic-gameplay':'cinematic cutscene timeline qte slowmo hitstop timescale sync staging checkpoint катсцен ролик таймлайн замедлен синхрон постановк чекпоинт',
+ 'aiverse-card-games':'card deck hand mulligan stack priority counter ccg deckbuilder board game hidden reveal карт колод рука муллиган стек приоритет контр настольн скрыт',
+ 'aiverse-tactics-grid':'tactics tactical turn hex grid cover flank overwatch initiative action points wego line of fire тактик пошагов гекс сетк укрыт фланг дозор инициатив очки действ',
+ 'aiverse-cards-turns-bots':'card bot turn planner tactics ai opponent evaluator lookahead бот карт планировщ ход тактик противник',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
+ 'aiverse-vehicle-controllers':'vehicle car kart truck tank hover plane flight drive gear drift traction seat race lap checkpoint racing машин авто танк самолет гонк круг чекпоинт сиден дрифт',
+ 'aiverse-sports-rules':'sport football soccer hockey basketball ball goal pass shot tackle foul penalty formation спорт футбол хоккей мяч гол пас удар отбор фол пенальти расстановк',
+ 'aiverse-match-progression':'perk modifier xp experience level levelup offer reroll summon ally deck loadout pickup magnet перк модификатор опыт уровень прокачк призыв союзник колод лут магнит',
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
+ 'aiverse-boss-encounters':'boss telegraph windup cone slam phase enrage adds rotation status stun burn slow mob wander hunt flee swarm босс телеграф замах конус фаз ярост призыв ротаци статус оглушен горен замедлен моб блужд охот бегств рой',
 }
 
 def generate():
@@ -126,6 +137,8 @@ def plan(entries,roots,side):
         if any(entries[key]['domain']=='meta' for key in original):selected.append('meta-client')
     elif side=='server':
         selected=[key for key in selected if entries[key]['side']!='client']
+    elif side=='both' and any(entries[key]['domain']=='meta' and entries[key]['side'] in ('client','server') for key in selected):
+        selected.append('meta-client')
     if any(entries[key]['domain']=='meta' and entries[key]['side']=='server' for key in selected):selected.append('meta-server')
     order=closure(entries,selected)
     choices=[entries[key] for key in order]
@@ -137,7 +150,7 @@ def plan(entries,roots,side):
     if gameplay:commands.append('aiverse_native_use_libraries(aiverse_native_GAME '+' '.join(gameplay)+')')
     return dict(requested=original,side=side,read=[e['path'] for e in choices],
         selection=[{k:e.get(k) for k in ('id','side','runtime','target','dependencies','requiresOwner')} for e in choices],
-        cmake=commands,nativeCmake=(["aiverse_native_use_meta(aiverse_native_GAME game_meta)"] if policies else [])+(["aiverse_native_use_meta(aiverse_native_GAME CLIENT)"] if 'meta-client' in order else []),serverModules=policies,clientFeatures=[entries[key]['package'] for key in original if entries[key]['domain']=='meta'] if side=='client' else [])
+        cmake=commands,nativeCmake=(["aiverse_native_use_meta(aiverse_native_GAME game_meta)"] if policies else [])+(["aiverse_native_use_meta(aiverse_native_GAME CLIENT)"] if 'meta-client' in order else []),serverModules=policies,clientFeatures=[entries[key]['package'] for key in original if entries[key]['domain']=='meta'] if side in ('client','both') else [])
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)

@@ -56,6 +56,10 @@ public:
     int update(double seconds, uint64_t nowMs);
 
     void setControlled(std::vector<uint8_t> slots) { controlled_ = std::move(slots); }
+    // Presentation hook: called with true right before a rollback restores an older state and with
+    // false right after the re-simulation caught up again; both times the sim is at the same tick,
+    // so positions read in the two calls differ exactly by the correction (see Smoothing.h).
+    void setRollbackHook(std::function<void(bool before)> hook) { rollbackHook_ = std::move(hook); }
     // After a reconnect: frames sent on the dead connection may never have arrived.
     void resendUnconfirmed() { for (auto& [tick, cmds] : local_) sendFrame_(tick, cmds); }
     const std::vector<uint8_t>& controlled() const { return controlled_; }
@@ -105,6 +109,7 @@ private:
     uint64_t candHash_ = 0;
     SessionStats stats_;
     bool broken_ = false;
+    std::function<void(bool)> rollbackHook_;
 };
 
 } // namespace aiverse::net

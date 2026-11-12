@@ -41,7 +41,15 @@ uniform lowp sampler2D tex0;
 in mediump vec2 v_uv;
 in lowp vec4 v_col;
 out lowp vec4 o_color;
-void main() { o_color = texture(tex0, v_uv) * v_col; }
+layout(std140) uniform U0 { mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params; };
+void main() {
+    vec4 c = texture(tex0, v_uv) * v_col;
+#if AIVERSE_HDR
+    if (u_params.y > 0.5) c.rgb = rtsSrgbDecode(c.rgb / max(c.a, 0.0001)) * c.a;
+    else c = rtsDisplay(c);
+#endif
+    o_color = c;
+}
 )";
 
 // Multiply blend: transparent texels must leave the background unchanged (colour -> white by alpha).
@@ -51,7 +59,7 @@ uniform lowp sampler2D tex0;
 in mediump vec2 v_uv;
 in lowp vec4 v_col;
 out lowp vec4 o_color;
-void main() { lowp vec4 c = texture(tex0, v_uv) * v_col; o_color = vec4(mix(vec3(1.0), c.rgb, c.a), c.a); }
+void main() { lowp vec4 c = texture(tex0, v_uv) * v_col; o_color = vec4(mix(vec3(1.0), rtsDisplay(c).rgb, c.a), c.a); }
 )";
 
 inline const char* kParticleMSL = R"(
@@ -71,8 +79,13 @@ vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
     o.uv = in.uv;
     return o;
 }
-fragment half4 fs_main(VOut in [[stage_in]], texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
-    return tex0.sample(s0, in.uv) * in.col;
+fragment half4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
+    float4 c = float4(tex0.sample(s0, in.uv) * in.col);
+#if AIVERSE_HDR
+    if (u.params.y > 0.5) c.rgb = rtsSrgbDecode(c.rgb / max(c.a, 0.0001)) * c.a;
+    else c = rtsDisplay(c);
+#endif
+    return half4(c);
 }
 )";
 
@@ -94,9 +107,9 @@ vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
     o.uv = in.uv;
     return o;
 }
-fragment half4 fs_main(VOut in [[stage_in]], texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
+fragment half4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
     half4 c = tex0.sample(s0, in.uv) * in.col;
-    return half4(mix(half3(1.0h), c.rgb, c.a), c.a);
+    return half4(mix(half3(1.0h), half3(rtsDisplay(float4(c)).rgb), c.a), c.a);
 }
 )";
 

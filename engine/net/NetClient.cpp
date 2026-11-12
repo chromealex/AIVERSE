@@ -116,6 +116,11 @@ void NetClient::handle(const Bytes& b) {
         break;
     }
     case Msg::QueueStatus: decode(r, queue_); event(NetEvent::Kind::QueueChanged); break;
+    case Msg::MatchPayload: {
+        MatchPayloadMsg m;
+        if (decode(r, m)) payload_ = std::move(m);
+        break;
+    }
     case Msg::MatchStart: {
         MatchStartMsg m;
         if (!decode(r, m)) return;
@@ -237,6 +242,7 @@ int NetClient::advance(double seconds) {
     if (!session_) return 0;
     int n = session_->update(seconds, now_);
     if (!resultSent_ && session_->confirmedResult() && match_ && match_->localSlot) {
+        if (reporter_) { ResultReportMsg rr; rr.tick = session_->resultTick(); rr.blob = reporter_(); send(encode(rr)); }
         MatchResultMsg m; m.tick = session_->resultTick(); m.result = session_->confirmedResult(); m.hash = session_->resultHash();
         send(encode(m));
         resultSent_ = true;
@@ -245,7 +251,30 @@ int NetClient::advance(double seconds) {
     return n;
 }
 
+void NetClient::suspend(uint64_t now) {
+    if (suspendedAt_) return;
+    suspendedAt_ = now ? now : 1;
+    if (conn_ && conn_->state() == ConnState::Connected && match_) { send(encodeAway(true)); conn_->update(now); }
+}
+
+void NetClient::resume(uint64_t now, uint32_t reconnectAfterMs) {
+    if (!suspendedAt_) return;
+    const uint64_t away = now > suspendedAt_ ? now - suspendedAt_ : 0;
+    suspendedAt_ = 0;
+    if (away >= reconnectAfterMs && reconnect_ && reconnectToken_ && conn_) {
+        // The old link is most likely dead (socket reclaimed, NAT mapping expired): do not wait for
+        // its silence timeout, reconnect now. update() then resumes the match with a delta.
+        conn_->close();
+        conn_.reset();
+        if (phase_ == Phase::Online) phase_ = Phase::Reconnecting;
+        nextRetry_ = 0;
+    } else if (conn_ && conn_->state() == ConnState::Connected && match_) {
+        send(encodeAway(false));
+    }
+}
+
 void NetClient::leaveMatch() {
+    payload_.reset();
     session_.reset();
     sim_ = nullptr;
     match_.reset();

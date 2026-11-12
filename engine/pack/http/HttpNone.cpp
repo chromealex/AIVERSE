@@ -11,3 +11,8 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string&, 
 void setAndroidJavaVm(void*) {}
 
 } // namespace aiverse::pack
+
+#include "HttpRequest.h"
+namespace aiverse::pack {
+bool httpRequest(const HttpCall&, std::function<void(HttpReply)>) { return false; }
+} // namespace aiverse::pack

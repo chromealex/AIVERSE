@@ -38,6 +38,9 @@ public:
     void heard(uint64_t now) { lastHeard_ = now; }
     size_t unacked() const { return out_.size(); }
     bool failed() const { return failed_; }
+    // Lossy mobile links: repeat small unacknowledged messages (input frames, tick batches) in the
+    // first datagram of every flush at most this often, instead of waiting a full RTO. 0 = off (default).
+    void setRedundancy(uint32_t ms) { redundancyMs_ = ms; }
 
 private:
     struct Out { uint32_t seq; Bytes data; bool more; uint64_t firstSent = 0, lastSent = 0; uint32_t sends = 0; };
@@ -51,6 +54,7 @@ private:
     uint64_t lastSend_ = 0, lastHeard_ = 0;
     uint32_t srtt_ = 100, rttvar_ = 50;
     bool failed_ = false;
+    uint32_t redundancyMs_ = 0;
 };
 
 } // namespace aiverse::net

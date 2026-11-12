@@ -485,11 +485,12 @@ void registerFxOps(Workspace& ws) {
         "apply). cue: attack, hit, miss, died, spawned, ready, buildPlaced, buildDone, gathered, captured, levelUp, ability, upgraded, sold, "
         "regionClaimed, wave, trail (projectile), damaged (loop while hp < below). Scope (most specific wins in the game): type + weapon / "
         "ability, type, weapon (any type), ability (any type), category (structure | air | unit), or all. Options: height, scale, "
-        "teamColor, below. Returns the binding warnings of the whole file.",
+        "teamColor, below, upright (play along +Y: explosions), clear (trail vanishes with its projectile). Returns the binding warnings "
+        "of the whole file.",
         R"({"properties": {"effect": {"type": ["string", "null"]}, "cue": {"type": "string"}, "type": {"type": "string"},
             "weapon": {"type": "string"}, "ability": {"type": "string"}, "category": {"type": "string", "enum": ["structure", "air", "unit"]},
             "height": {"type": "number"}, "scale": {"type": "number"}, "teamColor": {"type": "boolean"}, "below": {"type": "number"},
-            "remove": {"type": "boolean"}}})", [&ws](const Json& p) {
+            "upright": {"type": "boolean"}, "clear": {"type": "boolean"}, "remove": {"type": "boolean"}}})", [&ws](const Json& p) {
         needGame(ws);
         const auto& R = ws.project.rules;
         const bool remove = p.getBool("remove");
@@ -517,7 +518,7 @@ void registerFxOps(Workspace& ws) {
         Json value;
         if (none) value = Json();
         else if (!remove) {
-            const bool obj = p.has("height") || p.has("scale") || p.has("teamColor") || p.has("below");
+            const bool obj = p.has("height") || p.has("scale") || p.has("teamColor") || p.has("below") || p.has("upright") || p.has("clear");
             if (!obj) value = str(eff);
             else {
                 value = Json::object();
@@ -526,6 +527,11 @@ void registerFxOps(Workspace& ws) {
                 if (p.has("scale")) value.set("scale", Json::number(p["scale"].toDouble(1), 3));
                 if (p.has("teamColor")) value.set("teamColor", Json::fromBool(p.getBool("teamColor")));
                 if (p.has("below")) value.set("below", Json::number(p["below"].toDouble(0.5), 3));
+                if (p.getBool("upright")) value.set("upright", Json::fromBool(true));
+                if (p.getBool("clear")) {
+                    if (cue != "trail") throw std::runtime_error("'clear' applies to trail bindings");
+                    value.set("clear", Json::fromBool(true));
+                }
             }
         }
         std::string bankText;

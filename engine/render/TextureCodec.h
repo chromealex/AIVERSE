@@ -16,7 +16,7 @@
 namespace aiverse::render {
 
 // None = uncompressed RGBA8 (levels hold width*height*4 bytes each).
-enum class BlockFormat : uint8_t { None, ETC2_RGB8, ETC2_RGBA8, EAC_R11, BC1, BC3, BC4, BC7, ASTC_4x4 };
+enum class BlockFormat : uint8_t { None, ETC2_RGB8, ETC2_RGBA8, EAC_R11, BC1, BC3, BC4, BC7, ASTC_4x4, ASTC_6x6 };
 
 struct CompressedImage {
     BlockFormat format = BlockFormat::None;
@@ -26,12 +26,16 @@ struct CompressedImage {
     std::vector<std::vector<uint8_t>> levels;   // mip 0..n (0 = largest), raw blocks, rows of blocks top to bottom
 };
 
-// Bytes per 4x4 block (BC1/ETC2_RGB8/EAC_R11/BC4: 8; ETC2_RGBA8/BC3/BC7/ASTC_4x4: 16); 4 for None (per pixel).
+// Bytes per block (BC1/ETC2_RGB8/EAC_R11/BC4: 8; ETC2_RGBA8/BC3/BC7/ASTC: 16); 4 for None (per pixel).
 int blockBytes(BlockFormat f);
+// Block edge in pixels: 6 for ASTC_6x6, 4 for the other block formats, 1 for None.
+int blockDim(BlockFormat f);
+// ASTC: no CPU decoder, usable only where the GPU samples it natively.
+bool isAstc(BlockFormat f);
 const char* blockFormatName(BlockFormat f);
 int levelWidth(const CompressedImage& img, int level);    // max(1, width >> level)
 int levelHeight(const CompressedImage& img, int level);
-// Expected byte size of one level: ceil(w/4) * ceil(h/4) * blockBytes, or w*h*4 for None.
+// Expected byte size of one level: ceil(w/dim) * ceil(h/dim) * blockBytes, or w*h*4 for None.
 size_t levelByteSize(BlockFormat f, int width, int height);
 
 // True when bytes start with the KTX 2.0 identifier.
@@ -43,7 +47,7 @@ bool isKtx2(const std::string& bytes);
 bool parseKtx2(const std::string& bytes, CompressedImage& out, std::string& err);
 
 // Decodes one level to tightly packed RGBA8 (levelWidth x levelHeight). Supported: None, ETC2_RGB8,
-// ETC2_RGBA8, EAC_R11 (-> r,0,0,255), BC1, BC3, BC4 (-> r,0,0,255), BC7. ASTC_4x4 returns false.
+// ETC2_RGBA8, EAC_R11 (-> r,0,0,255), BC1, BC3, BC4 (-> r,0,0,255), BC7. ASTC returns false.
 // BC1 three-colour blocks decode index 3 as transparent black, or opaque black when vkFormat is
 // BC1_RGB_* (131/132). BC3 colour is always four-colour (S3TC spec).
 bool decodeBlocks(const CompressedImage& in, int level, std::vector<uint8_t>& rgba);

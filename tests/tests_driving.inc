@@ -1,0 +1,208 @@
+// Driving (rules "driving", RtsDriving.h): getting in / out, pedals from the hero's stick, walls, crash damage,
+// running people over, car against car, wrecks, determinism, saves and rollback snapshots.
+#include "modules/rts/RtsDriving.h"
+
+namespace {
+const char* kDrivingRules = R"J({
+  "victory": "noUnits",
+  "resources": {"gold": {"start": 0}},
+  "topDown": {"heroes": ["guy"], "move": {"accel": 40, "decel": 60}, "autoFire": false},
+  "driving": {
+    "metersPerCell": 4, "enterRange": 1, "exitSpeed": 3, "controls": "tank", "wreckDamage": 30,
+    "crash": {"minSpeed": 4, "damage": 5, "restitution": 0.2},
+    "runOver": {"minSpeed": 3, "damage": 20},
+    "vehicles": {"sedan": {"length": 1.1, "width": 0.5, "wheeled": {"massMilli": 1200000}}}
+  },
+  "types": {
+    "guy":   {"health": {"max": 100}, "move": {"speed": 4, "radius": 0.3}, "sight": 10},
+    "sedan": {"health": {"max": 400}, "move": {"speed": 0, "radius": 0.5}, "sight": 2},
+    "ped":   {"health": {"max": 40}, "move": {"speed": 1, "radius": 0.3}, "sight": 4},
+    "dummy": {"health": {"max": 100000}, "move": {"speed": 0, "radius": 0.4}, "sight": 2}
+  }
+})J";
+
+void enterKey(Simulation& sim, uint8_t p) { Command c; c.player = p; c.type = game::kCmdTopDownEnter; sim.submit(c); }
+game::Driving& drv(Simulation& sim) { return *mod(sim).driving(); }
+Entity firstOf(Simulation& sim, const char* id) {
+    Entity out = kNullEntity;
+    auto& types = mod(sim).rules().types;
+    sim.world().each<game::Unit, Transform>([&](Entity e, game::Unit& u, Transform&) {
+        if (types[u.type].id == id && (!out.valid() || e.index < out.index)) out = e;
+    });
+    return out;
+}
+const char* kDriveStart = R"({"type":"guy","owner":1,"pos":[4.5,7.4]},{"type":"sedan","owner":0,"pos":[4.5,8.5]},{"type":"dummy","owner":2,"pos":[30.5,1.5]})";
+} // namespace
+
+TEST(driving_rules_parse_and_errors) {
+    std::vector<std::string> ids = {"guy", "sedan"};
+    auto r = game::Driving::parse(Json::parse(R"({"controls": "stick", "vehicles": {"sedan": {"length": 1.2, "width": 0.6}}})"), ids);
+    CHECK(r.enabled && r.controls == game::DriveControls::Stick && r.vehicles.size() == 1 && r.vehicles[0].type == 1);
+    CHECK(!game::Driving::parse(Json(), ids).enabled);
+    auto fails = [&](const char* json, const char* what) {
+        try { game::Driving::parse(Json::parse(json), ids); } catch (const std::exception& e) { return std::string(e.what()).find(what) != std::string::npos; }
+        return false;
+    };
+    CHECK(fails(R"({"vehicles": {}})", "driving.vehicles: list at least one"));
+    CHECK(fails(R"({"vehicles": {"bus": {}}})", "unknown type 'bus'"));
+    CHECK(fails(R"({"vehicles": {"sedan": {"length": 0.4, "width": 0.6}}})", "width must not exceed length"));
+    CHECK(fails(R"({"controls": "wheel", "vehicles": {"sedan": {}}})", "'tank' or 'stick'"));
+    CHECK(fails(R"({"metersPerCell": 0, "vehicles": {"sedan": {}}})", "metersPerCell: must be positive"));
+    // the block needs a hero to drive
+    bool threw = false;
+    try { makeSimJson(R"({"driving": {"vehicles": {"u": {}}}, "types": {"u": {"health": {"max": 10}, "move": {"speed": 0}}}})", topDownMap("")); }
+    catch (const std::exception& e) { threw = std::string(e.what()).find("needs the 'topDown' block") != std::string::npos; }
+    CHECK(threw);
+}
+
+TEST(driving_enter_drive_crash_into_a_wall_and_get_out) {
+    auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
+    auto& w = sim->world();
+    Entity hero = mod(*sim).topDown()->heroOf(*sim, 1), car = firstOf(*sim, "sedan");
+    CHECK(hero.valid() && car.valid() && drv(*sim).active() && drv(*sim).car(*sim, car) && !drv(*sim).isDriving(*sim, hero));
+    CHECK(w.get<game::Unit>(car).flags & game::kUnitPossessed);
+    // a parked car stays where it is
+    const Vec3 parked = tdPos(*sim, car);
+    run(*sim, 1.0);
+    CHECK(tdPos(*sim, car) == parked);
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    CHECK(drv(*sim).isDriving(*sim, hero) && (w.get<game::Unit>(hero).flags & game::kUnitInCargo));
+    CHECK(drv(*sim).carOf(*sim, hero)->e == car && drv(*sim).carOf(*sim, hero)->player == 1);
+    // stick up = throttle: the car (facing east) pulls away and takes the hero along
+    steer(*sim, 1, kNorth);
+    run(*sim, 2.0);
+    CHECK(drv(*sim).speed(*sim, car) > Fixed::fromInt(3));
+    CHECK(tdPos(*sim, car).x > parked.x + Fixed::fromInt(1) && tdPos(*sim, hero) == tdPos(*sim, car));
+    CHECK(fxAbs(tdPos(*sim, car).z - parked.z) < Fixed::fromRatio(1, 10));
+    // too fast to get out
+    enterKey(*sim, 1);
+    run(*sim, 0.2);
+    CHECK(drv(*sim).isDriving(*sim, hero));
+    // the wall at x = 12 stops it and dents it
+    run(*sim, 6.0);
+    const Vec3 p = tdPos(*sim, car);
+    CHECK(p.x < Fixed::fromInt(12) - Fixed::fromRatio(1, 2) && p.x > Fixed::fromInt(10));   // nose (0.55 from the centre) at the wall
+    CHECK(w.get<game::Unit>(car).hp < Fixed::fromInt(400) && w.get<game::Unit>(car).hp.raw > 0);
+    // release, get out next to the driver's door (north of a car that faces east), walk away
+    steer(*sim, 1, {}, 0);
+    run(*sim, 1.0);
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    CHECK(!drv(*sim).isDriving(*sim, hero) && !(w.get<game::Unit>(hero).flags & game::kUnitInCargo));
+    const Vec3 out = tdPos(*sim, hero);
+    CHECK(out.z < tdPos(*sim, car).z - Fixed::fromRatio(4, 10) && fxAbs(out.x - tdPos(*sim, car).x) < Fixed::fromRatio(3, 10));
+    steer(*sim, 1, kNorth);
+    run(*sim, 1.0);
+    CHECK(tdPos(*sim, hero).z < out.z - Fixed::fromInt(1));
+    CHECK(fxAbs(tdPos(*sim, car).x - p.x) < Fixed::fromRatio(2, 10));   // the empty car stays (handbrake)
+}
+
+TEST(driving_steering_turns_the_way_the_screen_shows) {
+    auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart, false));
+    Entity car = firstOf(*sim, "sedan");
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    steer(*sim, 1, kNorth);
+    run(*sim, 2.0);
+    // facing east, stick up + right: a right turn on screen bends the path south (+z)
+    steer(*sim, 1, Vec3{Fixed::fromInt(1), Fixed{}, Fixed::fromInt(-1)});
+    run(*sim, 1.5);
+    CHECK(tdPos(*sim, car).z > Fixed::fromRatio(87, 10));
+    CHECK(sim->world().get<game::Unit>(car).facing.z > Fixed::fromRatio(1, 10));
+}
+
+TEST(driving_runs_people_over_and_shoves_parked_cars) {
+    auto sim = makeSimJson(kDrivingRules, topDownMap(R"({"type":"guy","owner":1,"pos":[4.5,7.4]},{"type":"sedan","owner":0,"pos":[4.5,8.5]},
+        {"type":"ped","owner":2,"pos":[11.5,8.5]},{"type":"sedan","owner":0,"pos":[20.5,8.5]},{"type":"dummy","owner":2,"pos":[30.5,1.5]})", false));
+    auto& w = sim->world();
+    Entity car = firstOf(*sim, "sedan"), ped = firstOf(*sim, "ped");
+    Entity other = kNullEntity;
+    w.each<game::Unit, Transform>([&](Entity e, game::Unit& u, Transform&) { if (mod(*sim).rules().types[u.type].id == "sedan" && e != car) other = e; });
+    CHECK(ped.valid() && other.valid());
+    const Vec3 otherStart = tdPos(*sim, other);
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    steer(*sim, 1, kNorth);
+    run(*sim, 4.0);
+    CHECK(!w.alive(ped) || w.get<game::Unit>(ped).hp.raw <= 0);      // run over at speed
+    run(*sim, 4.0);
+    CHECK(tdPos(*sim, other).x > otherStart.x + Fixed::fromRatio(1, 4));   // the parked car was hit and pushed
+    CHECK(w.get<game::Unit>(other).hp < Fixed::fromInt(400) && w.get<game::Unit>(car).hp < Fixed::fromInt(400));
+    CHECK(tdPos(*sim, car).x < tdPos(*sim, other).x);                  // no tunnelling through it
+}
+
+TEST(driving_immobile_units_are_solid) {
+    // a dummy (speed 0) on the road: the car stops against it instead of pushing it or running it over
+    auto sim = makeSimJson(kDrivingRules, topDownMap(R"({"type":"guy","owner":1,"pos":[4.5,7.4]},{"type":"sedan","owner":0,"pos":[4.5,8.5]},
+        {"type":"dummy","owner":2,"pos":[10.5,8.5]})", false));
+    Entity car = firstOf(*sim, "sedan"), post = firstOf(*sim, "dummy");
+    const Vec3 at = tdPos(*sim, post);
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    steer(*sim, 1, kNorth);
+    run(*sim, 6.0);
+    CHECK(tdPos(*sim, post) == at && sim->world().get<game::Unit>(post).hp == Fixed::fromInt(100000));
+    CHECK(tdPos(*sim, car).x < at.x - Fixed::fromRatio(9, 10) && tdPos(*sim, car).x > Fixed::fromInt(8));
+    CHECK(sim->world().get<game::Unit>(car).hp < Fixed::fromInt(400));
+}
+
+TEST(driving_wreck_throws_the_driver_out) {
+    auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
+    auto& w = sim->world();
+    Entity hero = mod(*sim).topDown()->heroOf(*sim, 1), car = firstOf(*sim, "sedan");
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    CHECK(drv(*sim).isDriving(*sim, hero));
+    w.get<game::Unit>(car).hp = Fixed{};
+    run(*sim, 0.3);
+    CHECK(!drv(*sim).isDriving(*sim, hero) && !drv(*sim).car(*sim, car));
+    CHECK(w.alive(hero) && !(w.get<game::Unit>(hero).flags & game::kUnitInCargo));
+    CHECK(w.get<game::Unit>(hero).hp == Fixed::fromInt(70));           // wreckDamage 30
+}
+
+TEST(driving_determinism_save_and_rollback) {
+    const std::string map = topDownMap(R"({"type":"guy","owner":1,"pos":[4.5,7.4]},{"type":"sedan","owner":0,"pos":[4.5,8.5]},
+        {"type":"ped","owner":2,"pos":[9.5,8.7]},{"type":"sedan","owner":0,"pos":[8.5,4.5]},{"type":"dummy","owner":2,"pos":[30.5,1.5]})");
+    auto play = [&](Simulation& sim, std::vector<uint64_t>* sums) {
+        enterKey(sim, 1);
+        for (int i = 0; i < 400; ++i) {
+            if (i == 10) steer(sim, 1, kNorth);
+            if (i == 90) steer(sim, 1, Vec3{Fixed::fromInt(-1), Fixed{}, Fixed::fromInt(-1)}, 1000, false, {});
+            if (i == 200) steer(sim, 1, kSouth);
+            if (i == 320) steer(sim, 1, {}, 0);
+            sim.step();
+            if (sums && i % 40 == 0) sums->push_back(sim.checksum());
+        }
+    };
+    auto s1 = makeSimJson(kDrivingRules, map, 3), s2 = makeSimJson(kDrivingRules, map, 3);
+    std::vector<uint64_t> c1, c2;
+    play(*s1, &c1);
+    play(*s2, &c2);
+    CHECK(c1 == c2 && c1.front() != c1.back());
+    std::string save = s1->serialize();
+    auto s3 = makeSimJson(kDrivingRules, map, 3);
+    std::string err;
+    CHECK(s3->deserialize(save, &err));
+    CHECK(s3->checksum() == s1->checksum());
+    steer(*s1, 1, kNorth); steer(*s3, 1, kNorth);
+    run(*s1, 1.5); run(*s3, 1.5);
+    CHECK(s3->checksum() == s1->checksum());
+    SimSnapshot snap;
+    s1->saveState(snap);
+    steer(*s1, 1, kEast);
+    run(*s1, 1.0);
+    const uint64_t after = s1->checksum();
+    s1->loadState(snap);
+    steer(*s1, 1, kEast);
+    run(*s1, 1.0);
+    CHECK(s1->checksum() == after);
+}
+
+TEST(driving_games_without_the_block_are_untouched) {
+    auto sim = makeSimJson(kTopDownRules, topDownMap(R"({"type":"drone","owner":1,"pos":[6.5,8.5]},{"type":"dummy","owner":2,"pos":[30.5,1.5]})"));
+    CHECK(mod(*sim).driving() && !mod(*sim).driving()->active() && !mod(*sim).driving()->store(*sim));
+    enterKey(*sim, 1);   // ignored
+    run(*sim, 0.2);
+    CHECK(sim->world().alive(mod(*sim).topDown()->heroOf(*sim, 1)));
+}

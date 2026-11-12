@@ -118,8 +118,10 @@ void pushScriptArgs(lua_State* L, const ScriptCommandDef& d, const Command& c);
 void openGameApi(Vm& vm);           // `game` table: queries always, actions in Sim mode
 void openTerritoryApi(Vm& vm);      // extends the game table at the stack top
 void openGridApi(Vm& vm);           // pure integer-grid navigation queries
+void openRoutesApi(Vm& vm);         // routes / multiscreen (RtsScriptRoutes.cpp)
 void openStdApi(Vm& vm);            // `rts` table for the standard library (RtsScriptStd.cpp)
 void openFieldApi(Vm& vm);          // `field` table: grid fields (RtsGridFieldsApi.cpp)
+void openRaidApi(Vm& vm);           // `raid` table: extraction raids (RtsRaidApi.cpp)
 void pushEntity(lua_State* L, Entity e);
 bool argEntity(lua_State* L, int idx, Entity& out); // integer handle (no liveness check)
 

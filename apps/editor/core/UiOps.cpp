@@ -438,8 +438,7 @@ void registerUiOps(Workspace& ws) {
                     if (auto err = luaSyntax(text, "@" + rel); !err.empty()) issue(rel, "Lua: " + err);
                     scan(rel, text);
                 } else if (ext == ".rml") {
-                    int n = 0;
-                    for (std::sregex_iterator it(text.begin(), text.end(), reScript), end; it != end; ++it, ++n) {
+                    for (std::sregex_iterator it(text.begin(), text.end(), reScript), end; it != end; ++it) {
                         // line of the script for readable errors
                         const int line = int(std::count(text.begin(), text.begin() + it->position(1), '\n'));
                         if (auto err = luaSyntax(std::string(size_t(line), '\n') + (*it)[1].str(), "@" + rel); !err.empty()) issue(rel, "Lua <script>: " + err);

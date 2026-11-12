@@ -4,9 +4,15 @@ ambersands 3 442dcee70c1a1bea
 borderrush 1 cdafc827fd84ddb0
 borderrush 2 ebed2231c3835756
 borderrush 3 e22aea63e52a9469
+bunkerwars 1 a4af5e90d4940cfe
+bunkerwars 2 71b6775c97c2b019
+bunkerwars 3 ed800c21f5816a7d
 clanlands 1 a0e1eebc181f1da7
 clanlands 2 8f140eb52230d3f7
 clanlands 3 5eb7aa108d29943c
+extraction 1 de188eceb5eb7046
+extraction 2 21b2cbd7546084f1
+extraction 3 a450fe5812bdfe69
 flagsectors 1 1f8023a8fc5c9c78
 flagsectors 2 a590511cc9f07337
 flagsectors 3 f2f54676f3d01140
@@ -70,6 +76,9 @@ starfall 3 f5c217359cb1ee11
 tiles2d 1 33182cf0a43093d6
 tiles2d 2 64f322996ba555f5
 tiles2d 3 c51279d87b206e11
+topdown_arena 1 719b8c5e9bf8900d
+topdown_arena 2 983cda0480cb8dd9
+topdown_arena 3 2414bfafd6c3e4aa
 underlord 1 08393d7e71bad99d
 underlord 2 0652e45ecd7e32f8
 underlord 3 b7f648e64eafd49a

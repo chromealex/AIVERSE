@@ -3,6 +3,9 @@
 //   "packaging": {"files": [{"match": "sprites/big_*.png", "maxSize": 1024},
 //                            {"match": "music/*", "level": 0}, {"match": "dev/*", "exclude": true}],
 //                 "targets": {"android": {"files": [{"match": "textures/*.png", "scale": 0.5}]}}}
+// Images can also be compressed for the target: {"match": "content/*_color.png", "compress": "astc6x6",
+// "colorSpace": "srgb", "mipmaps": true, "alpha": true, "normalMap": false} -> KTX2 under the same name
+// (read by the model / material texture loader; sprites, UI and particles keep their PNG).
 // Target rules come first, then the common ones; the first rule that matches decides each key.
 #pragma once
 #include <string>
@@ -18,6 +21,15 @@ struct FileRule {
     int level = -1;        // -1 = keep the pack default; 0 = store
     int maxSize = 0;       // images: longest side in pixels (0 = keep)
     double scale = 0;      // images: factor (0 = keep)
+    // images: GPU compression for the target ("compress": "astc4x4" | "astc6x6" | "none"), see TextureCompress.h
+    int compress = -1;     // -1 = not set, 0 = none, 4 / 6 = ASTC block size
+    bool srgb = true;      // "colorSpace": "srgb" | "linear"
+    bool mipmaps = true, alpha = true, normalMap = false;
+};
+
+// Texture compression context: encoder (findAstcenc()), cache of encoded files keyed by content + settings.
+struct TextureCompressContext {
+    std::string encoder, cacheDir, tmpDir, quality = "medium";
 };
 
 struct FileRulesReport {
@@ -33,6 +45,7 @@ std::vector<FileRule> readFileRules(const Json& gameJson, const std::string& tar
 // `fixedImages`: sprite sheets and tile atlases, whose frames are addressed in pixels; they are
 // never resized (a warning says so).
 bool applyFileRules(pack::PackWriter& w, const std::vector<FileRule>& rules, std::vector<std::pair<std::string, int>>& levelRules,
-                    FileRulesReport& report, std::string* error, const std::vector<std::string>& fixedImages = {});
+                    FileRulesReport& report, std::string* error, const std::vector<std::string>& fixedImages = {},
+                    const TextureCompressContext* compress = nullptr);
 
 } // namespace aiverse::build

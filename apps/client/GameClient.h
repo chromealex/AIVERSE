@@ -6,6 +6,7 @@
 #pragma once
 #include "UiModel.h"
 #include "modules/rts/view/EntityActionControls.h"
+#include "modules/rts/view/TopDownControls.h"
 #include <array>
 #include <functional>
 #include <map>
@@ -23,6 +24,7 @@
 #include "engine/platform/Platform.h"
 #include "engine/render/ImGuiLayer.h"
 #include "engine/render/PostFx.h"
+#include "engine/render/BakedLighting.h"
 #include "engine/render/QualityGovernor.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/services/Store.h"
@@ -35,6 +37,9 @@
 #include "modules/rts/audio/AudioScriptSound.h"
 #include "modules/rts/view/RtsView.h"
 #include "ClientFx.h"
+#include "ClientSpine.h"
+#include "ClientServices.h"
+#include "ClientGamepad.h"
 #include "modules/rts/view/RtsViewScript.h"
 #include "modules/rts/view/RegionSwipe.h"
 
@@ -194,6 +199,16 @@ private:
     bool toolMouseDown(const platform::Event& e);
     bool toolMouseUp(const platform::Event& e);
     void steerPossessed();
+    // ClientTopDown.cpp: top-down heroes (rules / game.json "topDown"): sticks, buttons, keys / mouse, follow camera
+    bool topDownActive() const;
+    bool topDownTouchUi() const;
+    void topDownConfigure();
+    bool topDownEvent(const platform::Event& e, bool uiWants);   // true: consumed
+    void topDownFrame(double dt);    // input -> kCmdTopDown / kCmdTopDownAbility
+    void topDownCamera(double dt);   // after the scene is built (interpolated hero position)
+    void topDownDraw();              // screen canvas: sticks and buttons
+    game::TopDownControls topDown_;
+    bool tdMouseHeld_ = false, tdFireHeld_ = false;
     void drawToolPreview();
     // localization (presentation only: rules_ is the display copy, the sim loads its own rules)
     void applyLanguage(const std::string& tag, bool save);
@@ -253,7 +268,16 @@ private:
     render::PostFx postFx_;               // post-processing: game.json / map "postfx" (engine/render/PostFx.h)
     render::PostFxQuality postFxBase_ = render::PostFxQuality::Medium;   // tier before the governor stepped down
     void configurePostFx(const Json& map);
+    render::BakedLighting baked_;         // the map's baked lightmaps / probes, "<map>.bake" (ClientBaked.cpp, agent-lightbake)
+    void configureBakedLighting(const std::string& mapFile);
     RtsView view_;
+    ClientSpine spine_;
+    ClientServices services_;
+    ClientGamepad gamepad_;               // pad cursor / pan / zoom / bindings (ClientGamepad.cpp, agent-bw-client)
+    bool padInjecting_ = false;
+    float padPanX_ = 0, padPanY_ = 0;
+    void updateGamepad(float dt);
+    void drawGamepadCursor();             // social / push / links Lua tables (ClientServices.cpp, agent-bw-client)                   // Spine skeletons in UI documents (ClientSpine.cpp, agent-bw-client)
     ClientFx fx_;                         // particle effects (ClientFx.cpp)
     game::ViewScripts viewScripts_;       // rules "viewScripts" (docs/scripting.md): notices / effects / sounds
     std::vector<game::ViewGroundBatch> groundCanvas_;   // view.draw_ground triangles of the last view-script update

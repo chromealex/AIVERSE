@@ -283,6 +283,7 @@ Actions (simulation scripts only):
 | `game.set_pos(h, x, z [, exact])` (alias `game.teleport`) | mobile units only: the nearest passable cell (unless `exact` or flying), path dropped; false when it can't be placed |
 | `game.set_facing(h, dx, dz)`, `game.impulse(h, dx, dz)`, `game.knockback(h, x, z, distance)` | turn; push by a vector / away from a point (negative: towards), stopped by terrain in 8 steps |
 | `game.set_hp(h, hp)`, `game.set_energy(h, e)` | clamped to [0, max]; hp 0 = a normal death |
+| `game.set_garrison(h, n)` | units inside a garrison structure (>= 0, may exceed its growth max: scripted reinforcements, tutorials); false without a garrison |
 | `game.set_stat_base(h, stat, value \| nil)` | replaces the type's base value of a stat (`maxHp speed armor sight range ...`) for this unit; techs, levels, buffs apply on top; `maxHp` keeps the hp fraction; nil restores |
 | `game.transform(h, type)` | the unit becomes another type in place (same handle, `game.data`, hp fraction); unit ↔ structure is refused |
 | `game.add_status(h, "status" [, seconds [, caster]])`, `game.buff(h, stat, add, mul [, seconds])` | statuses of rules `"statuses"`; stat modifiers |
@@ -308,6 +309,13 @@ be given by field instead: rect commands (`dig paint_room build_road`) `w, h, ex
 `other, ally`; `bounty` `resource, reward`.
 
 Not available yet: fog reveal from scripts (use a `reveal` effect in an ability).
+
+### Routes and the screen (Bunker Wars)
+
+Maps with `routes` / `screen` (docs/game-format.md § Routes): `game.can_send(a, b)` (an open route joins the two
+garrisons; always true without routes), `game.route_length(a, b)` (line 0, nil without a route), `game.screen()` ->
+x, z, w, h of the current screen (nil without one), `game.on_screen(x, z)`, and in simulation scripts
+`game.set_screen(x, z)` (moves the screen centre, clamped to its bounds; BW MapScroller actions).
 
 ### Grid fields: the `field` table
 

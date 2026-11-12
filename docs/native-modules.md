@@ -1,15 +1,14 @@
-# Модули игры на C++
+# C++ game modules
 
-Lua и C++ можно использовать в одном проекте. C++-модули статически входят в
-исполняемый файл игры, редактора, headless runner и сервера. Исходники движка для
-добавления модуля менять не нужно. После изменения C++ нужна пересборка и перезапуск;
-DLL/dylib и hot reload не используются. Механизм не зависит от динамического
-загрузчика и предназначен также для iOS, Android и web.
+Lua and C++ can be used in the same project. C++ modules are statically linked into the game, editor, headless runner
+and server executables. Adding a module does not require changing the engine sources. After changing C++ a rebuild and
+restart are needed; DLL/dylib and hot reload are not used. The mechanism does not depend on a dynamic loader and is
+meant for iOS, Android and web as well.
 
-## Быстрый старт
+## Quick start
 
-1. Скопируйте `examples/native/income/` в `<project>/native/`.
-2. Добавьте в `rules.json`:
+1. Copy `examples/native/income/` into `<project>/native/`.
+2. Add to `rules.json`:
 
 ```json
 "nativeModules": [
@@ -17,7 +16,7 @@ DLL/dylib и hot reload не используются. Механизм не з�
 ]
 ```
 
-3. Соберите движок для проекта:
+3. Build the engine for the project:
 
 ```sh
 cmake -S /path/to/AIVERSE -B build/my-game -DCMAKE_BUILD_TYPE=Release \
@@ -26,51 +25,48 @@ cmake --build build/my-game --target aiverse_client aiverse_editor aiverse_headl
 build/my-game/aiverse_headless --project /path/to/project --seed 3
 ```
 
-`aiversebuild --target <target> --project /path/to/project` тоже подхватывает `native/`.
-При экспорте исходников C++ переносится вместе с проектом, даже если данные
-упакованы в `.rpak`: исходники находятся в `native/` рядом с корневым CMakeLists.
-C++ не включается в ресурс-пак.
-Для разработки нескольких игр можно собрать общий набор модулей через
-`-DAIVERSE_NATIVE_DIR=/path/to/modules`. Пустое значение возвращает выбор `native/`
-из `AIVERSE_CONTENT_DIR`. В редакторе нужно открывать именно пересобранную версию; обычный редактор
-предлагает собрать её сам (см. «Редактор с модулями проекта»).
+`aiversebuild --target <target> --project /path/to/project` picks up `native/` too. When sources are exported, the C++
+travels with the project even if the data is packed into `.rpak`: the sources sit in `native/` next to the root
+CMakeLists. C++ is not included in the resource pack. To develop several games you can build a shared set of modules with
+`-DAIVERSE_NATIVE_DIR=/path/to/modules`. An empty value restores picking `native/` from `AIVERSE_CONTENT_DIR`. In the
+editor you must open the rebuilt version; the regular editor offers to build it itself (see "Editor with project modules").
 
-## Редактор с модулями проекта
+## Editor with project modules
 
-Обычный редактор не содержит C++ проекта. Если при открытии проекта (хаб, недавние, аргумент
-командной строки, двойной клик по `.rtsproj`) или по кнопке «Играть» в нём нет модулей из
-`nativeModules`, редактор поступает так:
+The regular editor does not contain the project's C++. If, when a project is opened (hub, recent projects, command-line
+argument, double click on `.aiverse`) or when Play is pressed, it lacks modules from `nativeModules`, the editor does the
+following:
 
-- в `<project>/Builds/.temp/editor-<платформа>` уже есть собранный редактор, он новее исходников
-  `native/` и самого движка и содержит все нужные модули — редактор без вопросов перезапускается
-  в нём на том же проекте (о несохранённых изменениях спросит, как при открытии другого проекта);
-  в Console и `logs/editor.log` пишется строка о переключении;
-- иначе показывает баннер «Модули C++ проекта» со списком недостающих модулей и кнопкой
-  «Собрать редактор с модулями проекта». Сборка идёт в фоне, вывод — в окне Console и в
-  `logs/native-editor-*.log`; после успешной сборки редактор сам перезапускается в собранном.
+- if `<project>/Builds/.temp/editor-<platform>` already holds a built editor that is newer than the `native/` sources and
+  the engine itself and contains all the needed modules, the editor restarts into it on the same project without asking
+  (it asks about unsaved changes, as when opening another project); a line about the switch goes to the Console and
+  `logs/editor.log`;
+- otherwise it shows a "Project C++ modules" banner listing the missing modules with a "Build the editor with project
+  modules" button. The build runs in the background, output goes to the Console window and `logs/native-editor-*.log`;
+  after a successful build the editor restarts into the built one by itself.
 
-Собирается `cmake -S <движок> -B <project>/Builds/.temp/editor-<платформа> -DAIVERSE_CONTENT_DIR=<project>
--DCMAKE_BUILD_TYPE=Release` и цели `aiverse_editor` + `aiverse_headless` (`AIVERSE_NATIVE_BUILD_JOBS` задаёт число
-потоков). CMake и Ninja ищутся так же, как для окна «Сборка» (`aiversebuild --check-toolchain`: Homebrew,
-`~/.aiverse/toolchains` и т. п.); если CMake нет, баннер предлагает его установить.
+The build runs `cmake -S <engine> -B <project>/Builds/.temp/editor-<platform> -DAIVERSE_CONTENT_DIR=<project>
+-DCMAKE_BUILD_TYPE=Release` and the `aiverse_editor` + `aiverse_headless` targets (`AIVERSE_NATIVE_BUILD_JOBS` sets the
+number of jobs). CMake and Ninja are found the same way as for the Build window (`aiversebuild --check-toolchain`:
+Homebrew, `~/.aiverse/toolchains`, etc.); if CMake is missing, the banner offers to install it.
 
-Вся папка сборки CMake лежит в скрытой `Builds/.temp/` (там же промежуточные файлы `aiversebuild`):
-в самой `Builds/` остаются только готовые сборки.
+The whole CMake build folder lives in the hidden `Builds/.temp/` (together with `aiversebuild`'s intermediate files):
+only finished builds remain in `Builds/` itself.
 
-Движок и его репозиторий при этом не меняются. Папка `Builds/` игнорируется git движка на любой
-глубине (и для проектов внутри `templates/`), а в саму папку сборки кладётся `.gitignore` с `*` —
-на случай, если проект лежит в собственном репозитории. Реестр модулей генерируется в папку сборки;
-папки `build/` движка и обычный редактор не трогаются. Собранный редактор — инструмент одного
-проекта: он не регистрируется обработчиком `.rtsproj` (файлы по-прежнему открывает основной
-редактор; на macOS у его `AiverseEditor.app` свой bundle id `com.aiverse.editor.project`), запускается только переключением и получает `--native-editor`
-(`AIVERSE_NATIVE_EDITOR=1`), поэтому сам дальше не переключается. `aiversebuild`, `aiversemcp` и `AiverseGame`
-он берёт из обычной сборки (`--tools-from`).
+The engine and its repository are not changed. The `Builds/` folder is ignored by the engine's git at any depth (including
+projects inside `templates/`), and a `.gitignore` with `*` is put into the build folder itself in case the project lives
+in its own repository. The module registry is generated into the build folder; the engine's `build/` folders and the
+regular editor are not touched. The built editor is a single-project tool: it does not register itself as the `.aiverse`
+handler (files are still opened by the main editor; on macOS its `AiverseEditor.app` has its own bundle id
+`com.aiverse.editor.project`), it is started only by switching and receives `--native-editor` (`AIVERSE_NATIVE_EDITOR=1`),
+so it does not switch further itself. It takes `aiversebuild`, `aiversemcp` and `AiverseGame` from the regular build
+(`--tools-from`).
 
-Агенты делают то же через MCP: `native_status` (чего не хватает, где сборка, актуальна ли она) и
-`native_build` (`{"wait": true}` — дождаться конца и получить путь к бинарнику; без него — следить через
-`build_status`). Перезапуск в собранном редакторе — только из окна редактора.
+Agents do the same over MCP: `native_status` (what is missing, where the build is, whether it is up to date) and
+`native_build` (`{"wait": true}` waits for the end and returns the binary path; without it, follow through
+`build_status`). Restarting into the built editor is possible only from the editor window.
 
-## Регистрация
+## Registration
 
 `native/CMakeLists.txt`:
 
@@ -78,44 +74,39 @@ C++ не включается в ресурс-пак.
 aiverse_native_module(ID income VERSION 1 ENTRY createIncomeModule SOURCES Income.cpp)
 ```
 
-ID — уникальный идентификатор из строчных латинских букв, цифр и `_`, начиная
-с буквы. VERSION — положительный uint32; меняйте её при изменении поведения
-или схемы состояния. ENTRY — уникальная фабрика в глобальном namespace:
+ID is a unique identifier of lowercase Latin letters, digits and `_`, starting with a letter. VERSION is a positive
+uint32; change it when behaviour or the state schema changes. ENTRY is a unique factory in the global namespace:
 
 ```cpp
 std::unique_ptr<aiverse::game::NativeModule> createIncomeModule();
 ```
 
-В одном CMakeLists можно зарегистрировать несколько модулей; SOURCES принимает
-несколько файлов. Создаётся object target `aiverse_native_<id>`: к нему можно добавить
-include directories и compile definitions. Реестр генерируется с прямыми ссылками
-на фабрики: оптимизация линковщика не удалит регистрацию. Настройки и исходники
-должны быть самодостаточными внутри `native/`, чтобы экспорт работал на другой машине.
-Порядок регистрации не влияет на порядок исполнения: его задаёт массив в rules.json.
-Скомпилированные, но не перечисленные в rules.json модули не запускаются.
+One CMakeLists can register several modules; SOURCES accepts several files. An object target `aiverse_native_<id>` is
+created: you can add include directories and compile definitions to it. The registry is generated with direct references
+to the factories, so linker optimization will not remove the registration. Settings and sources must be self-contained
+inside `native/` so that the export works on another machine. Registration order does not affect execution order: that
+is set by the array in rules.json. Modules that are compiled but not listed in rules.json do not run.
 
-## API и порядок исполнения
+## API and execution order
 
-`modules/rts/RtsNative.h` содержит интерфейс `NativeModule`:
+`modules/rts/RtsNative.h` contains the `NativeModule` interface:
 
-- `setup(game, sim, state, config)` — после создания карты, Lua и встроенных систем.
-  Здесь проверяются настройки; ошибка загрузки — `std::runtime_error` с ID модуля.
-- `tick(game, sim, state)` — каждый фиксированный тик после встроенных систем,
-  триггеров и пользовательского Lua. Видны события текущего тика.
-- `command(game, sim, state, cmd)` — при выполнении команды, до систем тика.
+- `setup(game, sim, state, config)` — after the map, Lua and built-in systems are created. Settings are validated here;
+  a load error is a `std::runtime_error` with the module ID.
+- `tick(game, sim, state)` — every fixed tick after built-in systems, triggers and user Lua. Events of the current tick
+  are visible.
+- `command(game, sim, state, cmd)` — when a command executes, before the tick systems.
 
-Между модулями движок выполняет `world.flush()`. Модуль может пользоваться
-публичным API `RtsModule` (например, `spawn`), существующими компонентами, `sim.rng()`
-и `sim.emit()`. Lua продолжает работать через существующий API и видит изменения
-общего мира.
+Between modules the engine runs `world.flush()`. A module may use the public `RtsModule` API (for example, `spawn`),
+existing components, `sim.rng()` and `sim.emit()`. Lua keeps working through the existing API and sees the changes in the
+shared world.
 
-### Lua-функции модуля
+### Module Lua functions
 
-`openLua(lua_State* L)` регистрирует C++-функции модуля в Lua-состоянии симуляции.
-Движок вызывает его на временном экземпляре (из фабрики) сразу после установки своих
-библиотек и до выполнения любого скрипта игры, для модулей из `nativeModules` в порядке
-массива — в headless, клиенте, сервере и редакторе одинаково. Обычно модуль создаёт
-таблицу-библиотеку:
+`openLua(lua_State* L)` registers the module's C++ functions in the simulation's Lua state. The engine calls it on a
+temporary instance (from the factory) right after installing its own libraries and before running any game script, for
+modules from `nativeModules` in array order — identically in headless, the client, the server and the editor. Usually the
+module creates a library table:
 
 ```cpp
 void openLua(lua_State* L) const override {
@@ -125,61 +116,48 @@ void openLua(lua_State* L) const override {
 }
 ```
 
-Так тяжёлые операции над состоянием, которое хранится в Lua-таблицах (обходы сетки,
-пространственные запросы), выполняются в C++, а скрипты остаются владельцами состояния.
-Функции не должны хранить указатели на экземпляр модуля, мир или симуляцию: это чистые
-функции своих аргументов, детерминированные по тем же правилам, что и скрипты
-(без системного времени, адресов, глобального изменяемого состояния). Ошибки — через
-`luaL_error`; в момент ошибки на стеке C++ не должно быть объектов с деструкторами.
-Работа внутри функции не учитывается в бюджете инструкций Lua: вызывающий код
-сам ограничивает частоту вызовов. Скомпилированный, но не перечисленный в rules.json
-модуль функций не регистрирует.
+This way heavy operations on state stored in Lua tables (grid traversals, spatial queries) run in C++, while scripts
+remain the owners of the state. The functions must not keep pointers to the module instance, the world or the
+simulation: they are pure functions of their arguments, deterministic under the same rules as scripts (no system time,
+addresses or global mutable state). Errors go through `luaL_error`; at the moment of an error there must be no C++
+objects with destructors on the stack. Work inside the function is not counted in the Lua instruction budget: the caller
+limits how often it is called. A module that is compiled but not listed in rules.json does not register its functions.
 
-Для пользовательских команд укажите уникальный `"command": 32768` в элементе
-`nativeModules` (диапазон 32768–65535). Используйте `Command.param`, `flags`, `units`,
-`target`, `point` для аргументов и подтипов. Отправляйте через `Simulation::submit`,
-чтобы команды попадали в сеть и replay. Движок отбрасывает команды несуществующих
-и выбывших игроков. Модуль обязан дополнительно проверять права на юнит, цель,
-параметры и ресурсы; неверные команды игнорируются без assert/исключений.
-Неизвестные команды в этом диапазоне игнорируются. Один тип команды принадлежит
-одному модулю; повторение ID или command — ошибка загрузки.
+For custom commands, set a unique `"command": 32768` in the `nativeModules` element (range 32768–65535). Use
+`Command.param`, `flags`, `units`, `target`, `point` for arguments and subtypes. Submit them through
+`Simulation::submit` so they reach the network and the replay. The engine drops commands from non-existent and
+eliminated players. The module must additionally check rights to the unit, the target, parameters and resources;
+invalid commands are ignored without asserts/exceptions. Unknown commands in this range are ignored. One command type
+belongs to one module; a repeated ID or command is a load error.
 
-## Состояние, rollback, сохранения и детерминизм
+## State, rollback, saves and determinism
 
-Все методы const: поля объекта модуля предназначены для неизменяемой конфигурации.
-Изменяемое состояние храните в переданном `NativeState`: `values` — map строка →
-int64, `arrays` — map строка → vector<int64>. Это отдельное пространство каждого
-модуля. Для дробных значений используйте `Fixed::raw` / `Fixed::fromRaw`, для ссылок
-на сущности — `Entity::packed()` / `Entity::fromPacked()` с сохранением 64 бит.
-Не удерживайте указатели на state, ресурсы или компоненты между вызовами: rollback
-заменяет World. Типизированную логику можно оформить собственными функциями и
-структурами, считывающими и записывающими этот контейнер.
+All methods are const: the module object's fields are for immutable configuration. Keep mutable state in the passed
+`NativeState`: `values` is a string → int64 map, `arrays` is a string → vector<int64> map. It is a separate space for each
+module. For fractional values use `Fixed::raw` / `Fixed::fromRaw`, for entity references `Entity::packed()` /
+`Entity::fromPacked()` keeping all 64 bits. Do not hold pointers to state, resources or components between calls: rollback
+replaces the World. Typed logic can be written as your own functions and structures that read and write this container.
 
-Движок автоматически копирует состояние при rollback, сохраняет его и хеширует
-вместе с ID, VERSION, config и номером команды. Существующие компоненты мира
-сохраняются штатным механизмом. Добавление собственных ECS-пулов или отдельных
-изменяемых World resources этим API не поддерживается: они не имеют автоматической
-сериализации/хеширования. Сохранение с неизвестным пулом отклоняется.
+The engine automatically copies the state on rollback, saves it and hashes it together with the ID, VERSION, config and
+command number. Existing world components are saved by the standard mechanism. Adding your own ECS pools or separate
+mutable World resources is not supported by this API: they have no automatic serialization/hashing. A save with an
+unknown pool is rejected.
 
-В симуляции разрешены только Fixed и целочисленная математика, случайность через
-`sim.rng()`, устойчивый порядок обхода. Нельзя менять состав ECS внутри `world.each`:
-собирайте операции и применяйте после обхода. C++ исполняется как доверенный код
-проекта, без Lua sandbox; соблюдение этих правил — ответственность автора.
-Не используйте системное время, адреса, глобальное изменяемое состояние или I/O
-для определения исхода игры. Все участники сетевой игры, сервер и просмотрщик
-replay должны иметь одинаковые модули, версии и настройки. VERSION не является
-автоматическим хешем исходников — её обновляет автор.
+The simulation allows only Fixed and integer math, randomness through `sim.rng()`, and a stable iteration order. Do not
+change the ECS composition inside `world.each`: collect the operations and apply them after the loop. C++ runs as trusted
+project code without the Lua sandbox; following these rules is the author's responsibility. Do not use system time,
+addresses, global mutable state or I/O to decide the game outcome. All participants of a network game, the server and the
+replay viewer must have the same modules, versions and settings. VERSION is not an automatic hash of the sources — the
+author updates it.
 
-При отсутствии `nativeModules` старые контрольные суммы и формат сохранений
-сохраняются. Чужой набор модулей/версий/config отклоняется при загрузке сохранения.
-Как и у обычного `Simulation::deserialize`, неудачная загрузка может частично
-изменить симуляцию: для проверки загружайте в новый экземпляр.
+Without `nativeModules`, old checksums and the save format stay the same. A different set of modules/versions/config is
+rejected when a save is loaded. As with a regular `Simulation::deserialize`, a failed load may partially change the
+simulation: load into a new instance to check.
 
-## Модули конкретного проекта
+## Modules of a specific project
 
-Модуль может реализовывать механику только одной игры: её фракции, задания,
-особые юниты или экономику. Добавлять такую логику в исходники движка не нужно.
-Пример структуры проекта с двумя модулями:
+A module may implement mechanics of just one game: its factions, quests, special units or economy. There is no need to
+add such logic to the engine sources. An example project structure with two modules:
 
 ```text
 MyGame/
@@ -196,7 +174,7 @@ aiverse_native_module(ID quests VERSION 1 ENTRY createQuests SOURCES Quests.cpp)
 aiverse_native_module(ID factions VERSION 1 ENTRY createFactions SOURCES Factions.cpp)
 ```
 
-В `rules.json` именно этой игры:
+In the `rules.json` of that game:
 
 ```json
 "nativeModules": [
@@ -205,38 +183,39 @@ aiverse_native_module(ID factions VERSION 1 ENTRY createFactions SOURCES Faction
 ]
 ```
 
-Каждая фабрика возвращает свою реализацию `NativeModule`. Значения config
-определяет сам модуль; пример не требует универсальной схемы заданий или фракций.
-Другие проекты эти исходники не компилируют и модули не запускают. В разных
-проектах можно использовать одинаковые ID: они принадлежат отдельным сборкам.
-`aiversebuild --project ...` сбрасывает сохранённый `AIVERSE_NATIVE_DIR` и выбирает
-`native/` текущей игры. Общую библиотеку можно явно подключить через
-`add_subdirectory` из CMakeLists проекта. Для ручной CMake-сборки при смене проекта
-также сбросьте прежний override через `-DAIVERSE_NATIVE_DIR=` либо используйте отдельную
-папку сборки. Готовый исполняемый файл не может подгрузить C++ другой игры без
-пересборки; это относится и к редактору.
+Each factory returns its own `NativeModule` implementation. The config values are defined by the module itself; the
+example does not require a universal schema for quests or factions. Other projects do not compile these sources and do
+not run the modules. Different projects may use the same IDs: they belong to separate builds. `aiversebuild --project ...`
+resets a stored `AIVERSE_NATIVE_DIR` and picks the current game's `native/`. A shared library can be added explicitly
+through `add_subdirectory` in the project's CMakeLists. For a manual CMake build, when switching projects also reset the
+previous override with `-DAIVERSE_NATIVE_DIR=` or use a separate build folder. A finished executable cannot load another
+game's C++ without a rebuild; this applies to the editor too.
 
-## Общие библиотеки алгоритмов из native проекта
+## Shared algorithm libraries from a project's native code
 
-C++20 пакеты доступны внешним играм через публичный target:
+C++20 packages are available to external games through a public target:
 
 ```cmake
 aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp)
 target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 ```
 
-Используйте `#include <aiverselib/Graphs.h>` (и другие headers из `libraries/include/aiverselib`).
-Не копируйте алгоритмы и не правьте engine CMake ради конкретной игры: target уже
-объявлен до загрузки native проекта. `aiversebuild` переносит библиотеки в source exports.
-Полный пример: `examples/native/libraries`; API и ограничения: `docs/libraries.md`.
-Контейнеры библиотеки не входят в сохранение автоматически: persistent state хранится
-в NativeState, а временные структуры восстанавливаются локально.
+Use `#include <aiverselib/Graphs.h>` (and other headers from `libraries/include/aiverselib`). Do not copy algorithms and do
+not edit the engine CMake for a specific game: the target is already declared before the native project is loaded.
+`aiversebuild` carries the libraries into source exports. Full example: `examples/native/libraries`; API and limits:
+[libraries.md](libraries.md). Library containers are not saved automatically: persistent state lives in NativeState, and
+temporary structures are rebuilt locally.
 
-## Мета-библиотека из native-кода
+## Meta library from native code
 
-Для магазина, офферов, наград, заданий, рейтингов и чатов используйте `aiverse::meta`.
-После `aiverse_native_module(...)` вызовите `aiverse_native_use_meta(aiverse_native_<id>)`:
-helper связывает object target и итоговую библиотеку, поэтому зависимости не теряются.
-Мета-сервисы живут вне simulation tick; доступность из native-кода не разрешает ввод
-недетерминированных данных в матч. Полный контракт и внешний пример: `docs/meta-game.md`,
-`examples/meta/`. Нужные определения можно генерировать без изменения движка.
+For a shop, offers, rewards, quests, leaderboards and chats, use `aiverse::meta`. After `aiverse_native_module(...)` call
+`aiverse_native_use_meta(aiverse_native_<id> CLIENT)` for client requests, or pass the selected server kit target instead
+of CLIENT: the helper links the object target and the final library, so dependencies
+are not lost. Meta services live outside the simulation tick; being available from native code does not allow feeding
+non-deterministic data into a match. Full contract and an external example: [meta-game.md](meta-game.md),
+`examples/meta/`. The needed definitions can be generated without changing the engine.
+
+`NativeModule` modules are deterministic mechanics, not a network/UI lifecycle. For a meta client in AiverseGame use the
+project's `plugins::NativePlugin` (`engine/platform/Plugins.h`, [plugins.md](plugins.md)) or the project's existing UI host;
+Client::pump is called outside the sim. Linking through CMake alone does not install any UI. Calling the helper without a
+side keeps the old behaviour and links every meta policy.

@@ -1,0 +1,6 @@
+{"gameId":900001,"customId":0,"matcher":0,"mapId":101,"mode":1,"winMode":1,"conditions":0,
+ "players":[
+  {"user":{"id":4242,"name":"Commander","leagueId":3,"eloRating":1490},"info":{"color":0,"team":1},"isBot":false,"botConfigId":0},
+  {"user":{"id":5151,"name":"Rival","leagueId":3,"eloRating":1502},"info":{"color":1,"team":2},"isBot":false,"botConfigId":0}],
+ "potentialCheaters":[],"fake":false,"botsAllow":false,"customRoom":false,"winter":false,
+ "clientVersion":"1.18.9","matchContext":{"mapResult":{"leagueRating":1520}}}

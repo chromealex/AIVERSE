@@ -1,0 +1,117 @@
+// Bunker Wars destructible objects.
+{
+ "parameters": [
+  {
+   "m_Name": "DestructibleWall1",
+   "id": 2262552873,
+   "viewResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/DestructibleWall1.asset"
+  },
+  {
+   "m_Name": "DestructibleWall2",
+   "id": 3150056554,
+   "viewResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/DestructibleWall2.asset"
+  },
+  {
+   "m_Name": "DestructibleWall3",
+   "id": 4037560235,
+   "viewResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/DestructibleWall3.asset"
+  },
+  {
+   "m_Name": "DestructibleWall4AntsLeft",
+   "id": 867814495,
+   "viewResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/DestructibleWall4AntsLeft.asset"
+  },
+  {
+   "m_Name": "DestructibleWall5AntsRight",
+   "id": 1211727655,
+   "viewResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/DestructibleWall5AntsRight.asset"
+  }
+ ],
+ "buildings": [
+  {
+   "m_Name": "DestructibleWall1",
+   "id": 2779709567,
+   "parameters": {
+    "fileID": 11400000,
+    "guid": "a368aa691b376a0419575e4716f20157",
+    "type": 2
+   },
+   "type": 0,
+   "width": 400,
+   "height": 50,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/Infos/DestructibleWall1.asset"
+  },
+  {
+   "m_Name": "DestructibleWall2",
+   "id": 3667213248,
+   "parameters": {
+    "fileID": 11400000,
+    "guid": "f3fa43c0650bfe74398ada48cdca25b4",
+    "type": 2
+   },
+   "type": 1,
+   "width": 100,
+   "height": 300,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/Infos/DestructibleWall2.asset"
+  },
+  {
+   "m_Name": "DestructibleWall3",
+   "id": 259749633,
+   "parameters": {
+    "fileID": 11400000,
+    "guid": "0458e1fbf10dbee4d980d1b7f575067b",
+    "type": 2
+   },
+   "type": 2,
+   "width": 200,
+   "height": 30,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/Infos/DestructibleWall3.asset"
+  },
+  {
+   "m_Name": "DestructibleWall4AntsLeft",
+   "id": 787170741,
+   "parameters": {
+    "fileID": 11400000,
+    "guid": "01191b95a715b5c439b443a69d8d2621",
+    "type": 2
+   },
+   "type": 3,
+   "width": 1000,
+   "height": 30,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/Infos/DestructibleWall4AntsLeft.asset"
+  },
+  {
+   "m_Name": "DestructibleWall5AntsRight",
+   "id": 3006738577,
+   "parameters": {
+    "fileID": 11400000,
+    "guid": "5504a642cd01e85499f5c0b74dcef998",
+    "type": 2
+   },
+   "type": 4,
+   "width": 1000,
+   "height": 30,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Res/DestructibleObjects/Infos/DestructibleWall5AntsRight.asset"
+  }
+ ]
+}

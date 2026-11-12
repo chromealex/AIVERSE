@@ -1,0 +1,212 @@
+{
+ "id": "sponza-day-reference-v1-shader-graphs-architectural-day-balanced",
+ "model": "main_sponza/NewSponza_Main_glTF_003.gltf",
+ "width": 1280,
+ "height": 720,
+ "fovYDegrees": 60,
+ "near": 0.1,
+ "far": 200,
+ "sunDirection": [
+  -0.615316,
+  0.788011,
+  -0.021487
+ ],
+ "sunColor": [
+  1,
+  0.96,
+  0.88
+ ],
+ "sunIntensity": 9,
+ "skyColor": [
+  0.32,
+  0.34,
+  0.4
+ ],
+ "groundColor": [
+  0.14,
+  0.1,
+  0.06
+ ],
+ "cameras": [
+  {
+   "name": "reference",
+   "eye": [
+    -11.5,
+    2.1,
+    -1.5
+   ],
+   "target": [
+    9,
+    6.2,
+    -1.6
+   ],
+   "fovYDegrees": 49
+  }
+ ],
+ "models": [
+  {
+   "path": "pkg_a_curtains/NewSponza_Curtains_glTF.gltf",
+   "materialGraphs": {
+    "curtain_01": "shaders-sponza/sg_cloth_red-textured.json",
+    "curtain_03": "shaders-sponza/sg_cloth_red-textured.json",
+    "curtain_02": "shaders-sponza/sg_cloth_red-textured.json"
+   },
+   "meshOcclusion": {
+    "radius": 0.5,
+    "samples": 64,
+    "read": "curtains-ao.avao"
+   }
+  },
+  {
+   "path": "pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
+   "materialGraphs": {}
+  },
+  {
+   "path": "props/door-backing.gltf",
+   "bake": false
+  }
+ ],
+ "sourceAssetFingerprint": "ef33200bf94f37a2878db55947c324d6d3895c51281f0b3e2e65b8658c29053d",
+ "derivedAssetFingerprint": "f30159e9190f413ce042e3b66d3c9a8b10c7bdd7cca2c2b8b04789bd3ecb9f78",
+ "assetVerificationNote": "experimental derived workload; source and derived manifests must both be checked",
+ "modelOptimization": {
+  "lod": true,
+  "culling": true,
+  "instancing": true
+ },
+ "staticPointLightGrid": true,
+ "staticLightCellSize": 1.0,
+ "lightingNote": "Architectural reference study, no candle geometry or candle lights. Night uses 14 finite-radius point lights without point-shadow occlusion; not a recreation of Unreal GI.",
+ "fogDensity": 0.0035,
+ "fogColor": [
+  0.46,
+  0.5,
+  0.58
+ ],
+ "mainNormalScale": 0.45,
+ "postfx": {
+  "hdr": "on",
+  "effects": [
+   {
+    "type": "bloom",
+    "threshold": 1.5,
+    "intensity": 0.25
+   },
+   {
+    "type": "colorGrade",
+    "saturation": 0.9,
+    "exposure": -0.15,
+    "temperature": -0.01,
+    "contrast": 1.04,
+    "gamma": [
+     0.88,
+     0.88,
+     0.88
+    ]
+   },
+   {
+    "type": "lut",
+    "texture": "luts/sponza-reference.png",
+    "intensity": 1.0
+   },
+   {
+    "type": "vignette",
+    "intensity": 0.3
+   }
+  ]
+ },
+ "referenceNote": "Manual match to supplied daylight frame; original camera, exposure and GI settings unavailable. Not a pixel-identical recreation.",
+ "materialGraphs": {
+  "arch_stone_wall_01": "shaders-sponza/sg_limestone-textured.json",
+  "stone_trims_01": "shaders-sponza/sg_limestone-textured.json",
+  "brickwall_02": "shaders-sponza/sg_limestone-textured.json",
+  "stones_2ndfloor": "shaders-sponza/sg_limestone-textured.json",
+  "stone_trims_02": "shaders-sponza/sg_limestone-textured.json",
+  "stones_01_tile": "shaders-sponza/sg_limestone-textured.json",
+  "column_1stfloor": "shaders-sponza/sg_limestone-textured.json",
+  "column_head_1stfloor": "shaders-sponza/sg_limestone-textured.json",
+  "door_stoneframe_02": "shaders-sponza/sg_limestone-textured.json",
+  "door_stoneframe_01": "shaders-sponza/sg_limestone-textured.json",
+  "brickwall_01": "shaders-sponza/sg_limestone-textured.json",
+  "floor_01": "shaders-sponza/sg_limestone-textured.json",
+  "ornament_lion": "shaders-sponza/sg_limestone-textured.json",
+  "column_head_2ndfloor_02": "shaders-sponza/sg_limestone-textured.json",
+  "column_brickwall_01": "shaders-sponza/sg_limestone-textured.json",
+  "column_head_2ndfloor_03": "shaders-sponza/sg_limestone-textured.json",
+  "ornament_01": "shaders-sponza/sg_limestone-textured.json"
+ },
+ "materialGraphNote": "Library variants preserve imported textures, alpha, normal, roughness and metal maps. Wax and flame use constant surface outputs. Emission does not create light.",
+ "pointLights": [],
+ "probeGI": {
+  "quality": "high",
+  "spacing": 1.25,
+  "samples": 128,
+  "distance": 60,
+  "sun": [
+   6,
+   5.76,
+   5.28
+  ],
+  "sky": [
+   30,
+   25,
+   18
+  ],
+  "bounces": 3,
+  "skyBounce": "runtime"
+ },
+ "meshOcclusion": {
+  "radius": 0.75,
+  "samples": 64,
+  "read": "day-local-ao-v2.avao"
+ },
+ "volumetricLight": {
+  "density": 0.04,
+  "anisotropy": 0.6,
+  "maxDistance": 60,
+  "steps": 16,
+  "tint": [
+   1,
+   0.97,
+   0.92
+  ],
+  "ambient": [
+   0.42,
+   0.44,
+   0.5
+  ],
+  "ambientDensity": 0.012,
+  "ambientStart": 10
+ },
+ "look": {
+  "sunColor": [
+   1,
+   0.97,
+   0.92
+  ],
+  "skyColor": [
+   3.2,
+   3.35,
+   3.75
+  ],
+  "groundColor": [
+   0.3,
+   0.26,
+   0.2
+  ],
+  "fogDensity": 0.0,
+  "probeGI": {
+   "sky": [
+    44.82,
+    49.94,
+    65.19
+   ],
+   "sun": [
+    54.0,
+    50.39,
+    44.69
+   ]
+  },
+  "shadowSoftness": 0.05
+ }
+}

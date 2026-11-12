@@ -117,7 +117,20 @@ struct DeliveryDef {
     int jumps = 0;
     Fixed jumpRadius = Fixed::fromInt(4);
     Fixed jumpFalloff = Fixed::fromInt(1); // amount multiplier per jump
+    // skill objects (RtsSkillObjects.cpp): rolling stones, jumping heads, mines, souls, magnets
+    int16_t origins = -1;               // payload with one Cast effect: its filter picks the units each object starts from
+    bool consume = false;               // the origin unit turns into the object (dies silently)
+    uint8_t goal = 0;                   // DeliveryGoal: where a moving area / projectile heads (and stops)
+    int16_t onArrive = -1;              // payload when a moving area reaches its goal / the end of its lane (target = goal structure)
+    int16_t onExpire = -1;              // payload when an area's lifetime runs out before it arrived or was used up
+    int16_t onDeath = -1;               // payload for every unit dying inside the area (point = where it died, target = followed object)
+    Fixed lifetimeMax{};                // lifetime: [min, max] rolled with the sim RNG
+    Fixed accel{}, minSpeed{}, maxSpeed{}; // pull: velocity profile (speed = start velocity)
+    bool fromPoint = false;             // projectile starts at the effect point instead of the caster
 };
+
+// DeliveryDef::goal
+enum DeliveryGoal : uint8_t { kGoalNone = 0, kGoalPoint, kGoalTarget, kGoalGroupTarget, kGoalGroupSource, kGoalOwnStructure, kGoalEnemyStructure, kGoalCaster };
 
 enum class EffectKind : uint8_t {
     // original kinds (unchanged)
@@ -137,6 +150,7 @@ enum class EffectKind : uint8_t {
     TeleportGroup,  // units around one end moved to the other, keeping formation; may come back after `duration`
     Script,     // {"type": "script", "fn": "name", ...}: a Lua function (RtsScript.h), runs in the tick's scripts phase
     Field,      // {"type": "field", "field": id, "add" | "set" | "max": n, "radius": r}: grid field cells (RtsGridFields.h)
+    Pull,       // magnet (RtsSkillObjects.cpp): units fly straight into the goal structure with a velocity profile
 };
 
 struct EffectDef {

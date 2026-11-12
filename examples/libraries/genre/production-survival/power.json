@@ -1,0 +1,17 @@
+{
+  "restoreDelayTicks": 50,
+  "nodes": [
+    {"id": 1, "kind": "producer", "output": 60},
+    {"id": 2, "kind": "producer", "output": 80},
+    {"id": 3, "kind": "storage", "capacity": 4000, "rate": 60, "charge": 2000},
+    {"id": 4, "kind": "conduit"},
+    {"id": 10, "kind": "consumer", "demand": 70, "priority": 10},
+    {"id": 11, "kind": "consumer", "demand": 25, "priority": 9},
+    {"id": 12, "kind": "consumer", "demand": 20, "priority": 1},
+    {"id": 50, "kind": "consumer", "demand": 40, "priority": 8},
+    {"id": 20, "medium": 2, "kind": "producer", "output": 30},
+    {"id": 21, "medium": 2, "kind": "storage", "capacity": 3000, "rate": 30, "charge": 1500},
+    {"id": 22, "medium": 2, "kind": "consumer", "demand": 12, "priority": 5}
+  ],
+  "links": [[1, 4], [2, 4], [3, 4], [4, 10], [4, 11], [4, 12], [4, 50], [20, 21], [21, 22]]
+}

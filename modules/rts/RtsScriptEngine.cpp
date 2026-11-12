@@ -886,6 +886,15 @@ bool ScriptEngine::allowTrain(Simulation& sim, uint8_t player, uint16_t type, En
     return im.hookAllows(sim, "can_train", 3, player);
 }
 
+bool ScriptEngine::allowNamed(Simulation& sim, const std::string& fn, uint8_t player, const std::string& arg) {
+    Impl& im = *impl_;
+    if (!im.vm.L || !userScripts_ || im.hookDepth > 0 || !hasFunction(fn)) return true;
+    lua_State* L = im.vm.L;
+    lua_pushinteger(L, player);
+    lua_pushlstring(L, arg.data(), arg.size());
+    return im.hookAllows(sim, fn.c_str(), 2, player);
+}
+
 bool ScriptEngine::allowCast(Simulation& sim, Entity caster, int index, Entity target, Vec3 at) {
     Impl& im = *impl_;
     if (!im.vm.L || im.hookDepth > 0) return true;

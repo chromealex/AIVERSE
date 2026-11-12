@@ -1,0 +1,21 @@
+{
+  "_doc": "Scene marker rules, docs/engine-import.md section 'World: terrain, roads, meshes and map markers'. First matching rule wins. Match: 'class' (script class, namespace suffix), 'match' (GameObject name regex), 'refType' (ScriptableObject managed-reference class), 'when' {field: value}. kind: start | area | block | region | bounds | grid. 'area' names the map area prefix; 'radius' is a number (metres) or a field; 'bounds' a Unity Bounds field; 'points' polygon field(s). entity: keep | drop (drop = map data only). Field paths are dotted and may go through links ('fowArea.points'). Prepend rules with --mapping FILE {\"markers\": [...]}.",
+  "markers": [
+    {"class": "GraphMaskSceneEntityExt", "when": {"type": 0}, "kind": "block", "bounds": "bounds", "entity": "keep"},
+    {"class": "GraphMaskSceneEntityExt", "kind": "area", "area": "wall", "bounds": "bounds", "entity": "keep"},
+    {"class": "ExtractionPointSceneEntityExt", "kind": "area", "area": "extraction", "radius": 3, "entity": "drop"},
+    {"class": "SummonPointSceneEntityExt", "kind": "area", "area": "summon", "radius": 2, "entity": "drop"},
+    {"class": "MobsPointSceneEntityExt", "kind": "area", "area": "mobs", "radius": "range", "entity": "drop"},
+    {"class": "CratePointSceneEntityExt", "kind": "area", "area": "crates", "radius": "range", "entity": "drop"},
+    {"class": "KillingAreaCircleEntityExt", "kind": "area", "area": "killing", "radius": 5, "entity": "drop"},
+    {"class": "KillingAreaEntityExt", "kind": "area", "area": "killing", "radius": 5, "entity": "drop"},
+    {"class": "FOWSceneEntityExt", "kind": "region", "area": "fow", "points": ["fowArea.points", "points"], "entity": "drop"},
+    {"class": "SceneEntityExt", "match": "^SpawnFlag", "kind": "start", "entity": "drop"},
+    {"class": "SceneEntityExt", "match": "^ExtractionFlag", "kind": "area", "area": "extraction", "radius": 3, "entity": "drop"},
+    {"class": "SceneEntityExt", "match": "^SummonFlag", "kind": "area", "area": "summon", "radius": 2, "entity": "drop"},
+    {"class": "SceneEntityExt", "match": "^MobsSpawnPoint", "kind": "area", "area": "mobs", "radius": 3, "entity": "drop"},
+    {"class": "SceneEntityExt", "match": "Crate", "kind": "area", "area": "crates", "radius": 1, "entity": "drop"},
+    {"class": "ExtPathfindingGrid", "kind": "grid", "config": "config", "properties": "graphProperties", "entity": "drop"},
+    {"refType": "GDCMapData", "kind": "bounds", "mapName": "mapName", "size": "mapSize", "position": "mapPos"}
+  ]
+}

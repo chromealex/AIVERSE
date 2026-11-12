@@ -29,6 +29,11 @@ struct Client {
     std::string queueId;
     uint64_t queuedAt = 0;
     std::vector<MapInfo> queueMaps;
+    // hosted battles: identity from a verified ticket
+    bool trusted = false;
+    std::string playerId;
+    uint64_t hostedMatch = 0;
+    uint64_t endedAt = 0;                 // its hosted match ended: closed a little later
 };
 
 struct Member {                            // a client taking part in a running match
@@ -43,6 +48,8 @@ struct Member {                            // a client taking part in a running 
     uint32_t resultTick = 0;
     uint64_t resultHash = 0;
     bool reported = false;
+    Bytes report;                         // hosted: ResultReport blob
+    uint32_t droppedCommands = 0;
 };
 
 struct Match {
@@ -61,6 +68,8 @@ struct Match {
     uint64_t lastBroadcast = 0;
 };
 
+struct Hosted;
+
 struct Room {
     uint32_t id = 0;
     std::string name, gameId;
@@ -73,7 +82,26 @@ struct Room {
     std::vector<SlotEntry> slots;
     std::vector<uint32_t> spectators;
     std::unique_ptr<Match> match;
+    std::shared_ptr<Hosted> hosted;      // battle server mode (ServerHosted.cpp); null for lobby rooms
+    std::string externalId;               // placed by an external matchmaker (Server::reserve)
 };
+
+struct ReservedMatch {                     // waiting for its players
+    Reservation spec;
+    uint64_t createdAt = 0;
+    std::map<size_t, uint32_t> seated;    // seat index -> client id
+    MapInfo map;                          // from the first player (file + data hash + teams)
+};
+
+// A hosted battle: what the orchestrator allocated plus its lifecycle.
+struct Hosted {
+    MatchAllocation alloc;
+    uint64_t createdMs = 0, startedMs = 0;
+    bool done = false;                    // finished / released: the room may be swept
+    bool aborted = false;                 // released by the orchestrator
+    std::map<uint8_t, bool> joined;       // slot -> a player with that ticket said Hello at least once
+};
+constexpr const char* kHostedQueue = "@hosted";   // queue id of hosted rooms (no Elo: meta owns ratings)
 
 struct Rating { int value = 1000; int games = 0; };
 
@@ -90,6 +118,8 @@ struct MatchRecord {
     std::vector<Command> history;
     std::map<uint32_t, uint64_t> agreed;
     uint32_t confirmedNext = 0;
+    std::string externalId;
+    uint64_t startMs = 0;
 };
 
 struct PendingVerdict {
@@ -109,10 +139,18 @@ struct Server::Impl {
     std::map<uint32_t, std::unique_ptr<Room>> rooms;
     std::map<std::string, Rating> ratings;
     std::vector<PendingVerdict> verdicts;
+    std::map<std::string, ReservedMatch> reserved;
     uint32_t nextClientId = 1, nextRoomId = 1;
     uint64_t now = 0, lastMatchmake = 0, lastQueueStatus = 0;
     std::mt19937_64 rng{std::random_device{}()};
     ServerStats counters;
+    std::map<uint64_t, uint32_t> hostedRooms;      // match id -> room id
+    std::vector<MatchReport> reports;
+    std::string lastReplayPath;
+#ifndef __EMSCRIPTEN__
+    std::unique_ptr<SecureListener> secure;
+    std::function<uint64_t()> ticketClock = unixMs;
+#endif
 
     // log
     void log(const char* fmt, ...) {
@@ -162,8 +200,16 @@ struct Server::Impl {
     void confirmNextTick(Match& M);
     MatchRecord record(Room& r);
     std::vector<std::pair<uint8_t, int32_t>> applyOutcome(const MatchRecord& rec, int32_t result, uint32_t endTick, uint64_t endHash, bool verified);
-    void saveReplay(const MatchRecord& rec, uint32_t endTick, uint64_t endHash);
+    std::string saveReplay(const MatchRecord& rec, uint32_t endTick, uint64_t endHash);
     Member* member(Room& r, uint32_t clientId);
+
+    // hosted battles (ServerHosted.cpp)
+    Room* hostedRoom(uint64_t matchId);
+    bool onHostedHello(Client& c, const HelloMsg& h);   // true: handled (c may be gone)
+    void hostedUpdate();
+    void hostedReport(Room& r, int32_t result, const NetText& reason, uint32_t endTick, uint64_t endHash, bool verified, bool aborted);
+    void sendPayload(Room& r, Client& c);
+    bool filterHostedCommand(Room& r, Member& m, const Command& c, size_t acceptedThisTick);
 
     // matchmaking (Matchmaker.cpp)
     const QueueConfig* queue(const std::string& id) const;
@@ -175,6 +221,13 @@ struct Server::Impl {
     Rating& rating(const std::string& queueId, uint64_t key);
     void loadRatings();
     void saveRatings();
+
+    // external matchmaking (ServerReserved.cpp)
+    void onTicketJoin(Client& c, const std::string& ticket, const std::vector<MapInfo>& maps);
+    void updateReservations();
+    void releaseSeat(uint32_t clientId);
+    void startReserved(const std::string& externalId);
+    void cancelReserved(const std::string& externalId, const std::string& reason);
 };
 
 } // namespace aiverse::net

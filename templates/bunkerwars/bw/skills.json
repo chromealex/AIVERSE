@@ -1,0 +1,4133 @@
+// Bunker Wars skill cards and talents: per-level GameData numbers + the level prefab with the modificators.
+{
+ "skills": [
+  {
+   "id": "skill1",
+   "kind": "card",
+   "clientId": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill1.asset",
+   "allowedSlot": 1,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill1/Skill1_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     40,
+     37.5,
+     35,
+     32.5,
+     30,
+     27.5,
+     25,
+     22.5,
+     20,
+     18
+    ],
+    "duration": [
+     5,
+     5.5,
+     6,
+     6.5,
+     7,
+     7.5,
+     7.5,
+     8,
+     8.5,
+     8.5
+    ],
+    "maxtower": [
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     4
+    ]
+   },
+   "name": {
+    "ru": "Больше вышек!",
+    "en": "More towers!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на союзное здание</color>. Временно перестраивает его в вышку указанного уровня, но не ниже уровня здания.",
+    "en": "Affects <color=#F5BC0D> an allied building</color>. Temporarily rebuilds it into a tower of the speicfied level, but no lower than the initial level of the building."
+   }
+  },
+  {
+   "id": "skill2",
+   "kind": "card",
+   "clientId": 2,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill2.asset",
+   "allowedSlot": 1,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill2/Skill2_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     40,
+     37.5,
+     35,
+     32.5,
+     30,
+     27.5,
+     25,
+     22.5,
+     20,
+     18
+    ],
+    "defence": [
+     125,
+     125,
+     130,
+     130,
+     135,
+     135,
+     140,
+     140,
+     145,
+     150
+    ],
+    "duration": [
+     5,
+     6,
+     6,
+     7,
+     7,
+     8,
+     8,
+     9,
+     9,
+     10
+    ]
+   },
+   "name": {
+    "ru": "Крепитесь!",
+    "en": "Hold tight!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на союзное здание</color>. Временно увеличивает его защиту.",
+    "en": "Affects <color=#F5BC0D> an allied building</color>. Temporarily boosts its defense stats."
+   }
+  },
+  {
+   "id": "skill3",
+   "kind": "card",
+   "clientId": 3,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill3.asset",
+   "allowedSlot": 4,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill3/Skill3_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ],
+    "duration": [
+     6,
+     6.5,
+     7,
+     7.5,
+     8,
+     8,
+     8.5,
+     9,
+     9.5,
+     10
+    ]
+   },
+   "name": {
+    "ru": "Пропаганда",
+    "en": "Propaganda"
+   },
+   "description": {
+    "ru": "Во время действия приказа солдаты врага, призванные в бункер, становятся солдатами игрока и перебегают в его ближайшее здание. Применяется <color=#F5BC0D>на бункер врага или нейтрального игрока</color>.",
+    "en": "While the order is in effect, enemy soldiers drafted into the bunker become your soldiers and run across to their nearest building. Affects <color=#F5BC0D>enemy or neutral player's bunker</color>."
+   }
+  },
+  {
+   "id": "skill4",
+   "kind": "card",
+   "clientId": 4,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill4.asset",
+   "allowedSlot": 8,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill4/Skill4_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ],
+    "duration": [
+     6,
+     6,
+     7,
+     7,
+     8,
+     8,
+     9,
+     9,
+     10,
+     10
+    ],
+    "productionspeed": [
+     165,
+     170,
+     175,
+     180,
+     185,
+     195,
+     200,
+     205,
+     210,
+     220
+    ]
+   },
+   "name": {
+    "ru": "Ускорить вербовку!",
+    "en": "Fast recruit!"
+   },
+   "description": {
+    "ru": "Временно ускоряет пополнение солдат. Применяется <color=#F5BC0D>на союзный бункер</color>.",
+    "en": "Temporarily speeds up the replenishment of soldiers. Affects <color=#F5BC0D>to an allied bunker</color>."
+   }
+  },
+  {
+   "id": "skill5",
+   "kind": "card",
+   "clientId": 5,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill5.asset",
+   "allowedSlot": 1,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill5/Skill5_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     84,
+     80,
+     75,
+     70,
+     66,
+     62,
+     57,
+     52,
+     47,
+     42
+    ],
+    "duration": [
+     10,
+     12,
+     12,
+     14,
+     14,
+     16,
+     16,
+     18,
+     18,
+     20
+    ],
+    "raduis": [
+     350,
+     375,
+     400,
+     425,
+     450,
+     475,
+     500,
+     525,
+     550,
+     575
+    ]
+   },
+   "name": {
+    "ru": "Маскировка",
+    "en": "Camouflage"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на солдат в области</color>. Делает их незаметными на некоторое время.",
+    "en": "Affects <color=#F5BC0D>soldiers in the area</color>. Makes them invisible for a short time."
+   }
+  },
+  {
+   "id": "skill6",
+   "kind": "card",
+   "clientId": 6,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill6.asset",
+   "allowedSlot": 8,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill6/Skill6_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ],
+    "raduis": [
+     250,
+     260,
+     270,
+     280,
+     290,
+     310,
+     320,
+     330,
+     340,
+     350
+    ],
+    "speed": [
+     150,
+     155,
+     155,
+     160,
+     160,
+     165,
+     165,
+     170,
+     170,
+     175
+    ]
+   },
+   "name": {
+    "ru": "Адреналин",
+    "en": "Adrenaline"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на солдат в области</color> и ускоряет их.",
+    "en": "Affects <color=#F5BC0D>soldiers in the area</color> and boosts their speed."
+   }
+  },
+  {
+   "id": "skill7",
+   "kind": "card",
+   "clientId": 7,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill7.asset",
+   "allowedSlot": 2,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill7/Skill7_Level10.prefab"
+    }
+   ],
+   "params": {
+    "attack": [
+     150,
+     155,
+     155,
+     160,
+     160,
+     165,
+     165,
+     170,
+     170,
+     175
+    ],
+    "cooldown": [
+     144,
+     138,
+     126,
+     120,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72
+    ],
+    "raduis": [
+     250,
+     260,
+     270,
+     280,
+     290,
+     310,
+     320,
+     330,
+     340,
+     350
+    ],
+    "speed": [
+     110,
+     110,
+     115,
+     115,
+     120,
+     120,
+     125,
+     125,
+     130,
+     130
+    ]
+   },
+   "name": {
+    "ru": "За Родину!",
+    "en": "Motherland!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на солдат всех игроков в области</color>. Увеличивает их атаку и скорость.",
+    "en": "Affects <color=#F5BC0D> to soldiers of all players in the area</color>. Increases their attack and speed."
+   }
+  },
+  {
+   "id": "skill8",
+   "kind": "card",
+   "clientId": 8,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill8.asset",
+   "allowedSlot": 4,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill8/Skill8_Level10.prefab"
+    }
+   ],
+   "params": {
+    "controlpercent": [
+     70,
+     72,
+     74,
+     77,
+     79,
+     81,
+     83,
+     86,
+     88,
+     90
+    ],
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Путаница",
+    "en": "Confusion"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на здание врага или нейтрального игрока</color>. Дает временный контроль над частью солдат в здании, позволяя отправить их в любое другое здание на карте.",
+    "en": "Applied <color=#F5BC0D>to an enemy or neutral building</color>. Grants temporary control over some of the soldiers inside, allowing you to send them to any other building on the map."
+   }
+  },
+  {
+   "id": "skill9",
+   "kind": "card",
+   "clientId": 9,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill9.asset",
+   "allowedSlot": 8,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill9/Skill9_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     120,
+     114,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72,
+     66,
+     60
+    ],
+    "moralecd": [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    "moralecooldown": [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ]
+   },
+   "name": {
+    "ru": "Смелее!",
+    "en": "Courage!"
+   },
+   "description": {
+    "ru": "Увеличивает боевой дух на 1 звезду.\nПрименяется <color=#F5BC0D>на всю карту</color>.",
+    "en": "Increases morale by 1 star.\nApplies <color=#F5BC0D>to the entire map</color>."
+   }
+  },
+  {
+   "id": "skill10",
+   "kind": "card",
+   "clientId": 10,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill10.asset",
+   "allowedSlot": 2,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill10/Skill10_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     120,
+     114,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72,
+     66,
+     60
+    ],
+    "radius": [
+     350,
+     370,
+     390,
+     410,
+     430,
+     450,
+     475,
+     500,
+     525,
+     550
+    ],
+    "unitsmaxtokill": [
+     100,
+     150,
+     200,
+     250,
+     300,
+     350,
+     400,
+     450,
+     500,
+     550
+    ]
+   },
+   "name": {
+    "ru": "Малыш Вилли",
+    "en": "Little Boy"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на солдат в области</color>. С самолета на них падает зажигательная бомба и убивает их. При наличии в зоне поражения травы поджигает и ее.",
+    "en": "Affects <color=#F5BC0D>soldiers in the area</color>. An incendiary bomb falls on them from a plane and kills them. It also sets any grass in the target area on fire."
+   }
+  },
+  {
+   "id": "skill11",
+   "kind": "card",
+   "clientId": 11,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill11.asset",
+   "allowedSlot": 1,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ],
+    "timetoend": [
+     9,
+     8.6,
+     8.2,
+     7.8,
+     7.4,
+     7,
+     6.5,
+     6,
+     5.5,
+     5
+    ],
+    "unitscount": [
+     50,
+     53,
+     55,
+     58,
+     61,
+     64,
+     66,
+     69,
+     72,
+     75
+    ]
+   },
+   "name": {
+    "ru": "Десант",
+    "en": "Landing Party"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на союзное здание</color>, в которое десантируется подкрепление.",
+    "en": "Affects <color=#F5BC0D> an Allied building</color> where reinforcements are being dropped in."
+   }
+  },
+  {
+   "id": "skill12",
+   "kind": "card",
+   "clientId": 12,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill12.asset",
+   "allowedSlot": 4,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill12/Skill12_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ],
+    "radius": [
+     200,
+     205,
+     210,
+     215,
+     220,
+     225,
+     235,
+     240,
+     245,
+     250
+    ],
+    "unitscount": [
+     25,
+     28,
+     30,
+     32,
+     34,
+     36,
+     38,
+     40,
+     42,
+     45
+    ]
+   },
+   "name": {
+    "ru": "Измена",
+    "en": "Treason"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеских солдат в области</color>. Часть из них переходит под ваше командование.",
+    "en": "Affects <color=#F5BC0D> enemy soldiers in the area</color>. Some of them come under your command."
+   }
+  },
+  {
+   "id": "skill13",
+   "kind": "card",
+   "clientId": 13,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill13.asset",
+   "allowedSlot": 1,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill13/Skill13_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     48,
+     45,
+     42,
+     40,
+     38,
+     35,
+     32,
+     29,
+     26,
+     24
+    ],
+    "unitspercent": [
+     50,
+     53,
+     55,
+     58,
+     61,
+     64,
+     66,
+     69,
+     72,
+     75
+    ]
+   },
+   "name": {
+    "ru": "Передислокация",
+    "en": "Redeployment"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на союзное здание</color>. Из него часть вашего отряда за несколько секунд переходит в другое здание через подкоп.",
+    "en": "Affects <color=#F5BC0D> an allied building</color>. A part of your squad will move to another building through a tunnel in a few seconds."
+   }
+  },
+  {
+   "id": "skill14",
+   "kind": "card",
+   "clientId": 14,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill14.asset",
+   "allowedSlot": 4,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill14/Skill14_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ],
+    "duration": [
+     6,
+     6.5,
+     7,
+     7.5,
+     8,
+     8,
+     8.5,
+     9,
+     9.5,
+     10
+    ]
+   },
+   "name": {
+    "ru": "Тесните их!",
+    "en": "Squeeze Them!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеское здание</color> и временно блокирует вывод войск из него.",
+    "en": "Affects <color=#F5BC0D> an enemy building</color> and temporarily blocks the removal of troops from it."
+   }
+  },
+  {
+   "id": "skill15",
+   "kind": "card",
+   "clientId": 15,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill15.asset",
+   "allowedSlot": 4,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill15/Skill15_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ]
+   },
+   "name": {
+    "ru": "Понизить уровень",
+    "en": "Downgrader"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеское здание</color> и понижает его на 1 уровень. Также отменяет его текущее улучшение, если оно сейчас проводится.",
+    "en": "Affects <color=#F5BC0D> an enemy building</color> and downgrades it by 1 level. Also cancels any current upgrades, if currently in progress."
+   }
+  },
+  {
+   "id": "skill16",
+   "kind": "card",
+   "clientId": 16,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill16.asset",
+   "allowedSlot": 2,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill16/Skill16_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ],
+    "range": [
+     200,
+     210,
+     220,
+     230,
+     250,
+     260,
+     270,
+     280,
+     290,
+     300
+    ],
+    "unitscount": [
+     15,
+     17,
+     18,
+     20,
+     21,
+     23,
+     25,
+     27,
+     28,
+     30
+    ]
+   },
+   "name": {
+    "ru": "Мины",
+    "en": "Mines"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеских солдат в области</color>. Часть из них превращается в мины. Вражеский солдат, наступивший на мину, погибает. Мины самоуничтожаются через 10 секунд.",
+    "en": "Affects <color=#F5BC0D>enemy soldiers in the area</color>. Some of them will turn into land mines. Enemy soldiers who step on the mines are killed. Mines self-destruct after 10 seconds."
+   }
+  },
+  {
+   "id": "skill17",
+   "kind": "card",
+   "clientId": 17,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill17.asset",
+   "allowedSlot": 8,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill17/Skill17_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     72,
+     69,
+     66,
+     63,
+     60,
+     58,
+     55,
+     52,
+     50,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Плечом к плечу",
+    "en": "Side by Side"
+   },
+   "description": {
+    "ru": "Усредняет боевой дух всех игроков. Применяется <color=#F5BC0D>на карту</color>.",
+    "en": "Averages the morale of all players. Applies <color=#F5BC0D>to the entire map</color>."
+   }
+  },
+  {
+   "id": "skill18",
+   "kind": "card",
+   "clientId": 18,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill18.asset",
+   "allowedSlot": 1,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill18/Skill18_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ],
+    "duration": [
+     8,
+     8.5,
+     9,
+     9.5,
+     10,
+     10,
+     10.5,
+     11,
+     11.5,
+     12
+    ],
+    "radius": [
+     550,
+     560,
+     580,
+     590,
+     600,
+     610,
+     620,
+     630,
+     640,
+     650
+    ],
+    "speed": [
+     -10,
+     -13,
+     -16,
+     -19,
+     -21,
+     -24,
+     -27,
+     -30,
+     -32,
+     -35
+    ]
+   },
+   "name": {
+    "ru": "Туман войны",
+    "en": "Fog of War"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на область</color> и скрывает ее в тумане войны, блокирует стрельбу всех вышек и замедляет перемещение вражеских солдат.",
+    "en": "Applies <color=#F5BC0D> to a specific area</color> and hides it in a fog of war, stops all towers in the area from firing and slows the movement of enemy soldiers."
+   }
+  },
+  {
+   "id": "skill19",
+   "kind": "card",
+   "clientId": 19,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill19.asset",
+   "allowedSlot": 8,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill19/Skill19_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ],
+    "duration": [
+     8,
+     9,
+     9,
+     10,
+     11,
+     12,
+     12,
+     13,
+     14,
+     15
+    ]
+   },
+   "name": {
+    "ru": "Отставить панику!",
+    "en": "Calm Down!"
+   },
+   "description": {
+    "ru": "Замораживает боевой дух всех игроков на текущем уровне. Применяется <color=#F5BC0D>на карту</color>.",
+    "en": "Freezes the morale of all players at the current level. Applies <color=#F5BC0D>to the entire map</color>."
+   }
+  },
+  {
+   "id": "skill20",
+   "kind": "card",
+   "clientId": 20,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill20.asset",
+   "allowedSlot": 2,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill20/Skill20_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ],
+    "killunitsinhouse": [
+     10,
+     10,
+     11,
+     11,
+     11,
+     12,
+     12,
+     12,
+     13,
+     13
+    ],
+    "range": [
+     400,
+     410,
+     430,
+     440,
+     450,
+     460,
+     470,
+     480,
+     490,
+     500
+    ],
+    "rangeboom": [
+     130,
+     130,
+     135,
+     135,
+     140,
+     140,
+     145,
+     145,
+     150,
+     150
+    ],
+    "shellscount": [
+     10,
+     11,
+     11,
+     12,
+     12,
+     13,
+     13,
+     14,
+     14,
+     15
+    ]
+   },
+   "name": {
+    "ru": "Артобстрел",
+    "en": "Artillery fire"
+   },
+   "description": {
+    "ru": "Вызывает артиллерийский огонь. Попавшие под огонь солдаты на поле и в зданиях погибают. Применяется <color=#F5BC0D>на область</color>.",
+    "en": "Calls in artillery fire. Soldiers and buildings caught in the blast radius are destroyed. Applies <color=#F5BC0D> to a specific area</color>."
+   }
+  },
+  {
+   "id": "skill21",
+   "kind": "card",
+   "clientId": 21,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill21.asset",
+   "allowedSlot": 4,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill21/Skill21_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     144,
+     138,
+     126,
+     120,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72
+    ],
+    "defence": [
+     -75,
+     -75,
+     -80,
+     -80,
+     -85,
+     -85,
+     -90,
+     -95,
+     -95,
+     -100
+    ],
+    "duration": [
+     2,
+     2.3,
+     2.7,
+     3,
+     3.4,
+     3.8,
+     4.1,
+     4.4,
+     4.7,
+     5
+    ]
+   },
+   "name": {
+    "ru": "Напролом!",
+    "en": "Breakthrough!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеское здание</color> и временно понижает его защиту.",
+    "en": "Affects <color=#F5BC0D> an enemy building</color> and temporarily lowers its defense."
+   }
+  },
+  {
+   "id": "skill22",
+   "kind": "card",
+   "clientId": 22,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill22.asset",
+   "allowedSlot": 4,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill22/Skill22_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ],
+    "duration": [
+     1.5,
+     1.8,
+     2.1,
+     2.4,
+     2.6,
+     2.9,
+     3.2,
+     3.4,
+     3.7,
+     4
+    ],
+    "radius": [
+     200,
+     210,
+     230,
+     240,
+     250,
+     260,
+     270,
+     280,
+     290,
+     300
+    ]
+   },
+   "name": {
+    "ru": "Кругом!",
+    "en": "About Turn!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеских солдат в области</color>. Все они временно разворачиваются обратно.",
+    "en": "Affects <color=#F5BC0D> enemy soldiers in the area</color>. All of them temporarily fall back."
+   }
+  },
+  {
+   "id": "skill23",
+   "kind": "card",
+   "clientId": 23,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill23.asset",
+   "allowedSlot": 8,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill23/Skill23_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     144,
+     138,
+     126,
+     120,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72
+    ],
+    "duration": [
+     5,
+     5.5,
+     6,
+     6.5,
+     7,
+     8,
+     8.5,
+     9,
+     9.5,
+     10
+    ]
+   },
+   "name": {
+    "ru": "Второе дыхание",
+    "en": "Second Wind"
+   },
+   "description": {
+    "ru": "На некоторое время дает игроку 5 звезд боевого духа. По завершению возвращает его на прежний уровень. Применяется <color=#F5BC0D>на карту</color>.",
+    "en": "Gives the player a temporary 5-star morale boost. Returns them to the previous level upon cooldown. Applies <color=#F5BC0D>to the entire map</color>."
+   }
+  },
+  {
+   "id": "skill24",
+   "kind": "card",
+   "clientId": 24,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill24.asset",
+   "allowedSlot": 2,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill24/Skill24_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ],
+    "deathpersecond": [
+     2,
+     2.2,
+     2.4,
+     2.7,
+     3,
+     3.2,
+     3.4,
+     3.6,
+     3.8,
+     4
+    ],
+    "defence": [
+     105,
+     101,
+     102,
+     103,
+     104,
+     106,
+     107,
+     108,
+     109,
+     110
+    ],
+    "duration": [
+     7,
+     7.4,
+     7.7,
+     8,
+     8.3,
+     8.7,
+     9,
+     9.4,
+     9.7,
+     10
+    ],
+    "radius": [
+     300,
+     315,
+     335,
+     350,
+     370,
+     385,
+     400,
+     420,
+     435,
+     450
+    ]
+   },
+   "name": {
+    "ru": "Дирижабль",
+    "en": "Zeppelin"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на вражеских солдат в области</color>. Все они временно подвергаются обстрелу с дирижабля.",
+    "en": "Affects <color=#F5BC0D> enemy soldiers in the area</color>. All of them are temporarily bombarded by the airship."
+   }
+  },
+  {
+   "id": "skill25",
+   "kind": "card",
+   "clientId": 25,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill25.asset",
+   "allowedSlot": 4,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill25/Skill25_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     108,
+     103,
+     97,
+     92,
+     86,
+     80,
+     75,
+     70,
+     65,
+     60
+    ],
+    "radius": [
+     225,
+     235,
+     245,
+     260,
+     270,
+     280,
+     290,
+     300,
+     315,
+     325
+    ],
+    "speed": [
+     -50,
+     -52,
+     -54,
+     -55,
+     -57,
+     -59,
+     -61,
+     -63,
+     -65,
+     -67
+    ]
+   },
+   "name": {
+    "ru": "Ложись!",
+    "en": "Get Down!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на солдат всех игроков в области</color>. Солдаты замедляются и двигаются ползком до момента, пока не достигнут здания.",
+    "en": "Affects <color=#F5BC0D> the soldiers of all players in the area</color>. The soldiers slow down and crawl until they reach their target building."
+   }
+  },
+  {
+   "id": "skill26",
+   "kind": "card",
+   "clientId": 26,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill26.asset",
+   "allowedSlot": 4,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill26/Skill26_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     144,
+     138,
+     126,
+     120,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72
+    ],
+    "deathpersecond": [
+     2,
+     2.5,
+     3,
+     3.5,
+     4,
+     4.4,
+     4.8,
+     5.2,
+     5.6,
+     6
+    ]
+   },
+   "name": {
+    "ru": "Заражение",
+    "en": "Contamination"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на здание противника</color>. Здание поражается чумой и войска в нем постепенно умирают.",
+    "en": "Applies <color=#F5BC0D>to an enemy building</color>. The building is hit by a plague and the troops inside will die gradually."
+   }
+  },
+  {
+   "id": "skill27",
+   "kind": "card",
+   "clientId": 27,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill27.asset",
+   "allowedSlot": 8,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill27/Skill27_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Инженер",
+    "en": "Engineer"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на свое здание</color>. Позволяет бесплатно улучшить или перестроить его.",
+    "en": "Applies <color=#F5BC0D>to one of your buildings</color>. Allows you to improve or rebuild a building for free."
+   }
+  },
+  {
+   "id": "skill28",
+   "kind": "card",
+   "clientId": 28,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill28.asset",
+   "allowedSlot": 8,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill28/Skill28_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ],
+    "speed": [
+     150,
+     155,
+     155,
+     160,
+     160,
+     165,
+     165,
+     170,
+     170,
+     175
+    ],
+    "units": [
+     60,
+     80,
+     95,
+     110,
+     125,
+     140,
+     155,
+     170,
+     185,
+     200
+    ]
+   },
+   "name": {
+    "ru": "Держать строй!",
+    "en": "Hold formation!"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на свое здание</color>. Увеличивает плотность и скорость передвижения следующей волны войск, отправленных из него.",
+    "en": "Applies <color=#F5BC0D>to one of your buildings</color>. Increases the number and movement speed of the next wave of troops dispatched from it."
+   }
+  },
+  {
+   "id": "skill29",
+   "kind": "card",
+   "clientId": 29,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill29.asset",
+   "allowedSlot": 1,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill29/Skill29_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     84,
+     80,
+     76,
+     72,
+     68,
+     64,
+     60,
+     56,
+     52,
+     48
+    ],
+    "duaration": [
+     8,
+     8.5,
+     9,
+     9.5,
+     10,
+     10,
+     10.5,
+     11,
+     11.5,
+     12
+    ],
+    "units": [
+     30,
+     35,
+     40,
+     45,
+     50,
+     55,
+     60,
+     65,
+     70,
+     75
+    ]
+   },
+   "name": {
+    "ru": "Психологическая атака",
+    "en": "PsyOps"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на свое здание</color>. Пока действует приказ, противник не сможет атаковать здание. Если атака началась до использования приказа, часть войск противника развернется при подходе к зданию.",
+    "en": "Applies <color=#F5BC0D>to one of your buildings</color>. While the order is in effect, the enemy will not be able to attack the building. If an attack is launched before the order is used, some of the enemy troops will start to retreat as they approach the building."
+   }
+  },
+  {
+   "id": "skill30",
+   "kind": "card",
+   "clientId": 30,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill30.asset",
+   "allowedSlot": 2,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill30/Skill30_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     120,
+     114,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72,
+     66,
+     60
+    ],
+    "units": [
+     30,
+     32,
+     34,
+     37,
+     39,
+     41,
+     43,
+     46,
+     48,
+     50
+    ]
+   },
+   "name": {
+    "ru": "Повстанцы",
+    "en": "Insurgents"
+   },
+   "description": {
+    "ru": "Применяется <color=#F5BC0D>на здание противника</color>. Отправляет на здание волну нейтральных повстанцев.",
+    "en": "Applies <color=#F5BC0D>to an enemy building</color>. Sends a wave of neutral rebels to attack an enemy building."
+   }
+  },
+  {
+   "id": "skill31",
+   "kind": "card",
+   "clientId": 31,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill31.asset",
+   "allowedSlot": 1,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill31/Skill31_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     66,
+     62,
+     58,
+     54,
+     50,
+     46,
+     42,
+     38,
+     34,
+     30
+    ]
+   },
+   "name": {
+    "ru": "Самолет-разведчик",
+    "en": "Spy plane"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на карту</color>. Показывает количество войск во всех вражеских зданиях и замедляет в них пополнение солдат.",
+    "en": "<color=#F5BC0D>Used on the map</color>. Reveals the number of soldiers in all enemy buildings and slows down reinforcements."
+   }
+  },
+  {
+   "id": "skill32",
+   "kind": "card",
+   "clientId": 32,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill32.asset",
+   "allowedSlot": 2,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill32/Skill32_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ]
+   },
+   "name": {
+    "ru": "Взвести курок!",
+    "en": "Squeeze the trigger!"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на своих солдат </color>. Эти солдаты получают винтовки и стреляют в проходящих мимо противников.",
+    "en": "<color=#F5BC0D>Used on your soldiers</color>. The soldiers receive rifles and shoot at the nearby enemies."
+   }
+  },
+  {
+   "id": "skill33",
+   "kind": "card",
+   "clientId": 33,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill33.asset",
+   "allowedSlot": 4,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill33/Skill33_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     40,
+     37.5,
+     35,
+     32.5,
+     30,
+     27.5,
+     25,
+     22.5,
+     20,
+     18
+    ]
+   },
+   "name": {
+    "ru": "Стачка",
+    "en": "Strike"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на здание противника</color> и блокирует его эффекты: бункер перестает пополнять солдат, вышка - стрелять, арсенал - увеличивать атаку, защиту и скорость.",
+    "en": "<color=#F5BC0D>Used on an enemy structure</color>. Disables the building: bunkers stop getting reinforcements, towers stop shooting, armories stop boosting speed, attack and defense."
+   }
+  },
+  {
+   "id": "skill34",
+   "kind": "card",
+   "clientId": 34,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill34.asset",
+   "allowedSlot": 2,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill34/Skill34_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ],
+    "initialcooldown": [
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60
+    ],
+    "startcooldown": [
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60
+    ],
+    "units": [
+     20,
+     23,
+     26,
+     29,
+     32,
+     35,
+     38,
+     41,
+     44,
+     47
+    ]
+   },
+   "name": {
+    "ru": "Парашютные войска",
+    "en": "Paratroopers"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на здания в области</color>. Группа солдат равномерно атакует выбранные вражеские здания.",
+    "en": "<color=#F5BC0D>Used on buildings in an area</color>. A group of soldiers evenly attacks selected enemy buildings."
+   }
+  },
+  {
+   "id": "skill35",
+   "kind": "card",
+   "clientId": 35,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill35.asset",
+   "allowedSlot": 4,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill35/Skill35_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Шулер",
+    "en": "Swindler"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на карту</color>. Похищает последний примененный особый приказ противника.",
+    "en": "<color=#F5BC0D>Used on the map</color>. Steals the last Special Order used by the enemy."
+   }
+  },
+  {
+   "id": "skill36",
+   "kind": "card",
+   "clientId": 36,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill36.asset",
+   "allowedSlot": 1,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill36/Skill36_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     40,
+     37.5,
+     35,
+     32.5,
+     30,
+     27.5,
+     25,
+     22.5,
+     20,
+     18
+    ]
+   },
+   "name": {
+    "ru": "Следопыт",
+    "en": "Tracker"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на вражеских солдат</color> в указанной области. Показывает количество солдат и ваши здания, в которые они направляются.",
+    "en": "<color=#F5BC0D>Used on enemy soldiers</color> in an area. Reveals the number of soldiers and which of your buildings they are heading to."
+   }
+  },
+  {
+   "id": "skill37",
+   "kind": "card",
+   "clientId": 37,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill37.asset",
+   "allowedSlot": 8,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill37/Skill37_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ],
+    "effectforce": [
+     20,
+     23,
+     26,
+     29,
+     32,
+     35,
+     39,
+     43,
+     47,
+     50
+    ],
+    "units": [
+     40,
+     42,
+     45,
+     47,
+     50,
+     52,
+     54,
+     56,
+     58,
+     60
+    ]
+   },
+   "name": {
+    "ru": "Приступ героизма",
+    "en": "Heroism"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на своих солдат</color>. Каждый погибший солдат, находящийся под действием особого приказа, добавит Боевой дух.",
+    "en": "<color=#F5BC0D>Used on your soldiers</color>. Each soldier that dies under the effect of the Special Order boosts morale."
+   }
+  },
+  {
+   "id": "skill38",
+   "kind": "card",
+   "clientId": 38,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill38.asset",
+   "allowedSlot": 4,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill38/Skill38_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     120,
+     114,
+     108,
+     102,
+     96,
+     84,
+     78,
+     72,
+     66,
+     60
+    ]
+   },
+   "name": {
+    "ru": "Насмешка",
+    "en": "Mockery"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на вражеское здание</color>. Похищает не более 1 звезды Боевого духа у противника.",
+    "en": "<color=#F5BC0D>Used on an enemy structure</color>. Steals 1 Morale from the enemy."
+   }
+  },
+  {
+   "id": "skill39",
+   "kind": "card",
+   "clientId": 39,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill39.asset",
+   "allowedSlot": 8,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill39/Skill39_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     96,
+     90,
+     84,
+     78,
+     72,
+     67,
+     62,
+     58,
+     53,
+     48
+    ],
+    "deathpersecond": [
+     6,
+     5.7,
+     5.4,
+     5.1,
+     4.8,
+     4.5,
+     4.1,
+     3.7,
+     3.3,
+     3
+    ]
+   },
+   "name": {
+    "ru": "Стоять насмерть!",
+    "en": "Hold the line!"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на свое здание</color>. Делает здание неуязвимым, но постепенно убивает в нем солдат.",
+    "en": "<color=#F5BC0D>Used on your structure</color>. Renders the building invulnerable but slowly kills the soldiers inside."
+   }
+  },
+  {
+   "id": "skill40",
+   "kind": "card",
+   "clientId": 40,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill40.asset",
+   "allowedSlot": 2,
+   "rarity": 0,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill40/Skill40_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     40,
+     37.5,
+     35,
+     32.5,
+     30,
+     27.5,
+     25,
+     22.5,
+     20,
+     18
+    ]
+   },
+   "name": {
+    "ru": "Боеприпасы",
+    "en": "Ammo"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на свое здание</color>. Солдаты, отправленные из этого здания, получат усиление дополнительного арсенала.",
+    "en": "<color=#F5BC0D>Used on your building</color>. The soldiers sent from this building receive the boost of the additional armory."
+   }
+  },
+  {
+   "id": "skill41",
+   "kind": "card",
+   "clientId": 41,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill41.asset",
+   "allowedSlot": 4,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill41/Skill41_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     72,
+     69,
+     66,
+     63,
+     60,
+     58,
+     55,
+     52,
+     50,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Тишина",
+    "en": "Silence"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на карту</color>. Блокирует применение приказов для противников на несколько секунд.",
+    "en": "<color=#F5BC0D>Used on the map</color>. Blocks the use of orders for opponents for a few seconds."
+   }
+  },
+  {
+   "id": "skill42",
+   "kind": "card",
+   "clientId": 42,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill42.asset",
+   "allowedSlot": 8,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill42/Skill42_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     72,
+     69,
+     66,
+     63,
+     60,
+     58,
+     55,
+     52,
+     50,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Централизация",
+    "en": "Centralization"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на свое здание</color>. Временно переносит производство всех ваших бункеров в указанное здание",
+    "en": "<color=#F5BC0D>Applies to your building</color>. Temporarily transfers production from all your bunkers to the selected building"
+   }
+  },
+  {
+   "id": "skill43",
+   "kind": "card",
+   "clientId": 43,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill43.asset",
+   "allowedSlot": 1,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill43/Skill43_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     72,
+     69,
+     66,
+     63,
+     60,
+     58,
+     55,
+     52,
+     50,
+     48
+    ]
+   },
+   "name": {
+    "ru": "Перераспределение",
+    "en": "Redistribution"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на любое здание</color>. Уравнивает количество солдат во всех зданиях выбранного игрока",
+    "en": "<color=#F5BC0D>Applies to any building</color>. Equalizes the number of soldiers across all buildings of the selected player"
+   }
+  },
+  {
+   "id": "skill44",
+   "kind": "card",
+   "clientId": 44,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/Skill44.asset",
+   "allowedSlot": 1,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level5.prefab"
+    },
+    {
+     "level": 6,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level6.prefab"
+    },
+    {
+     "level": 7,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level7.prefab"
+    },
+    {
+     "level": 8,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level8.prefab"
+    },
+    {
+     "level": 9,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level9.prefab"
+    },
+    {
+     "level": 10,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill44/Skill44_Level10.prefab"
+    }
+   ],
+   "params": {
+    "cooldown": [
+     138,
+     132,
+     126,
+     120,
+     114,
+     108,
+     102,
+     96,
+     90,
+     84
+    ]
+   },
+   "name": {
+    "ru": "Рокировка",
+    "en": "Swap"
+   },
+   "description": {
+    "ru": "<color=#F5BC0D>Применяется на вражеское или нейтральное здание</color>. Меняет местами указанное здание со случайным своим",
+    "en": "<color=#F5BC0D>Applies to an enemy or neutral building</color>. Swaps the selected building with a random one of yours"
+   }
+  },
+  {
+   "id": "campaignskill9001",
+   "kind": "card",
+   "clientId": 9001,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/CampaignSkill9001.asset",
+   "allowedSlot": 0,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level5.prefab"
+    }
+   ]
+  },
+  {
+   "id": "campaignskill9002",
+   "kind": "card",
+   "clientId": 9002,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/CampaignSkill9002.asset",
+   "allowedSlot": 0,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/AirBomb/CampaignSkill9001_Level5.prefab"
+    }
+   ]
+  },
+  {
+   "id": "campaignskill9003",
+   "kind": "card",
+   "clientId": 9003,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/CampaignSkill9003.asset",
+   "allowedSlot": 0,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/MegaTowerAttack/CampaignSkill9003_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/MegaTowerAttack/CampaignSkill9003_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/MegaTowerAttack/CampaignSkill9003_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/MegaTowerAttack/CampaignSkill9003_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/MegaTowerAttack/CampaignSkill9003_Level5.prefab"
+    }
+   ]
+  },
+  {
+   "id": "campaignskill9004",
+   "kind": "card",
+   "clientId": 9004,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/CampaignSkill9004.asset",
+   "allowedSlot": 0,
+   "rarity": 2,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9004_ArtAttack/CampaignSkill9004_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9004_ArtAttack/CampaignSkill9004_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9004_ArtAttack/CampaignSkill9004_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9004_ArtAttack/CampaignSkill9004_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9004_ArtAttack/CampaignSkill9004_Level5.prefab"
+    }
+   ]
+  },
+  {
+   "id": "campaignskill9005",
+   "kind": "card",
+   "clientId": 9005,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/CampaignSkill9005.asset",
+   "allowedSlot": 0,
+   "rarity": 1,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9005/CampaignSkill9005_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9005/CampaignSkill9005_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9005/CampaignSkill9005_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9005/CampaignSkill9005_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_CampaignSkills/_CampaignSkills/9005/CampaignSkill9005_Level5.prefab"
+    }
+   ]
+  },
+  {
+   "id": "talent2",
+   "kind": "talent",
+   "clientId": -20000,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/_Talents/Talent2.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level1.prefab"
+    },
+    {
+     "level": 2,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level2.prefab"
+    },
+    {
+     "level": 3,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level3.prefab"
+    },
+    {
+     "level": 4,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level4.prefab"
+    },
+    {
+     "level": 5,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/Skill11/Skill11_Level5.prefab"
+    }
+   ]
+  },
+  {
+   "id": "hero1_talent",
+   "kind": "talent",
+   "clientId": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero1/Hero1-Talent.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/_Talents/Talent1/Talent1_Level1.prefab"
+    }
+   ]
+  },
+  {
+   "id": "hero2_talent",
+   "kind": "talent",
+   "clientId": 2,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero2/Hero2-Talent.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/_Talents/Talent2/Talent2_Level1.prefab"
+    }
+   ]
+  },
+  {
+   "id": "hero3_talent",
+   "kind": "talent",
+   "clientId": 3,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero3/Hero3-Talent.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/_Talents/Talent3/Talent3_Level1.prefab"
+    }
+   ]
+  },
+  {
+   "id": "hero4_talent",
+   "kind": "talent",
+   "clientId": 4,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero4/Hero4-Talent.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/_Talents/Talent4/Talent4_Level1.prefab"
+    }
+   ]
+  },
+  {
+   "id": "hero5_talent",
+   "kind": "talent",
+   "clientId": 5,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero5/Hero5-Talent.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/_Talents/Talent5/Talent5_Level1.prefab"
+    }
+   ]
+  },
+  {
+   "id": "hero6_talent",
+   "kind": "talent",
+   "clientId": 6,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero6/Hero6-Talent.asset",
+   "allowedSlot": null,
+   "rarity": null,
+   "levels": [
+    {
+     "level": 1,
+     "prefab": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/SkillsHeaders/SkillsData/_Talents/Talent6/Talent6_Level1.prefab"
+    }
+   ]
+  }
+ ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "steam",
-  "description": "Steam in-game purchases (Steam Inventory Service; DLC as non-consumables) for Windows, Linux and macOS. Protocol: store (docs/plugins.md). Config: appId, items {product: item definition id}, dlc {product: DLC app id}, restartIfNecessary, sdk (path to the Steamworks SDK; default $STEAMWORKS_SDK).",
-  "provides": ["store"],
+  "description": "Steam for Windows, Linux and macOS: in-game purchases (Steam Inventory Service; DLC as non-consumables; protocol store) and achievements, stats, friends, rich presence, overlay, invites (protocol social). Config: appId, achievements {id: API name}, stats {id: API name}, floatStats [ids], items {product: item definition id}, dlc {product: DLC app id}, restartIfNecessary, sdk (path to the Steamworks SDK; default $STEAMWORKS_SDK).",
+  "provides": ["store", "social"],
   "defaults": { "sdk": "${env.STEAMWORKS_SDK}" },
   "sdkHint": "Steamworks SDK: download from https://partner.steamgames.com/downloads (unzip; the folder that has public/ and redistributable_bin/), then set STEAMWORKS_SDK=<that folder> or game.json plugins → steam → \"sdk\".",
   "windows": {

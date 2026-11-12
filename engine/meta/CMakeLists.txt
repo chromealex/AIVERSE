@@ -19,6 +19,17 @@ target_link_libraries(aiverse_meta_client PUBLIC aiverse_meta_data)
 set_target_properties(aiverse_meta_client PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(AIVERSE::meta_client ALIAS aiverse_meta_client)
 
+# Bunker Wars backend adapter (docs/meta-bunkerwars.md): MessagePack, wire formats, HTTP API client,
+# meta::Backend over it, matchmaking handoff session. Pure host code: no sockets, no threads.
+add_library(aiverse_meta_bw STATIC EXCLUDE_FROM_ALL MsgPack.cpp Encoding.cpp bw/BwWire.cpp bw/BwApi.cpp bw/BwRoutes.cpp
+    bw/BwBackend.cpp bw/BwMatch.cpp)
+target_link_libraries(aiverse_meta_bw PUBLIC aiverse_meta_client)
+set_target_properties(aiverse_meta_bw PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(aiverse_meta_bw PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_library(AIVERSE::meta_bw ALIAS aiverse_meta_bw)
+
 # All implementation archives are opt-in. Merely adding this directory builds none.
 function(aiverse_meta_component name)
     add_library(aiverse_meta_${name} STATIC EXCLUDE_FROM_ALL ${ARGN})
@@ -168,4 +179,19 @@ function(aiverse_native_use_meta native_target)
     endif()
     target_link_libraries(${native_target} PRIVATE ${dependency})
     target_link_libraries(aiverse_game PUBLIC ${dependency})
+endfunction()
+
+# Reference subprocess host with an explicit policy selection; protocol/auth stay unchanged.
+function(aiverse_add_meta_service target)
+    cmake_parse_arguments(SERVICE "" "" "MODULES" ${ARGN})
+    if(SERVICE_UNPARSED_ARGUMENTS OR NOT SERVICE_MODULES)
+        message(FATAL_ERROR "aiverse_add_meta_service requires MODULES")
+    endif()
+    set(kit "${target}_kit")
+    aiverse_add_meta_server(${kit} MODULES ${SERVICE_MODULES})
+    add_executable(${target} EXCLUDE_FROM_ALL "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../tools/meta/service_main.cpp")
+    target_link_libraries(${target} PRIVATE ${kit})
+    target_compile_definitions(${target} PRIVATE
+        AIVERSE_META_SELECTED_HEADER="${kit}.h"
+        AIVERSE_META_SELECTED_FACTORY=aiverse::meta::kits::${kit})
 endfunction()

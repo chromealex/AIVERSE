@@ -49,13 +49,13 @@ void main() {
         albedo.rgb *= mix(vec3(1.0), t.rgb, u_params2.z);
         albedo.a *= mix(1.0, t.a, u_params2.z);
     }
-    vec3 base = albedo.rgb * albedo.rgb;
+    vec3 base = rtsDecodeScene(albedo.rgb);
     vec3 L = normalize(u_sunDir.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
     float sh = (ndl > 0.0 && u_params2.w > 0.5) ? shadowAt(v_wpos, n) : 1.0;
-    vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
-    vec3 amb = mix(u_groundColor.rgb * u_groundColor.rgb, u_skyColor.rgb * u_skyColor.rgb, n.y * 0.5 + 0.5);
+    vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
+    vec3 amb = mix(rtsDecodeScene(u_groundColor.rgb), rtsDecodeScene(u_skyColor.rgb), n.y * 0.5 + 0.5);
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u_params2.y;
     vec3 col = base * (amb + sun * ndl * sh) + sun * spec * sh;
@@ -63,9 +63,9 @@ void main() {
     float pulse = 1.0 + u_params.w * sin(u_params.z * 2.6 - (v_wpos.x + v_wpos.z) * 0.7);
     col += base * (u_params2.x * pulse);
     float dist = length(u_camPos.xyz - v_wpos);
-    col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    o_color = vec4(sqrt(col), albedo.a);
+    col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
+    col = rtsToneScene(col, u_skyColor.w > 0.5);
+    o_color = vec4(rtsEncodeScene(col), albedo.a);
 }
 )";
 
@@ -97,13 +97,13 @@ fragment float4 fs_main(VOut in [[stage_in]], constant GU0& u [[buffer(1)]], con
         albedo.rgb *= mix(float3(1.0), t.rgb, u.params2.z);
         albedo.a *= mix(1.0, t.a, u.params2.z);
     }
-    float3 base = albedo.rgb * albedo.rgb;
+    float3 base = rtsDecodeScene(albedo.rgb);
     float3 L = normalize(f.sunDir.xyz);
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
     float sh = (ndl > 0.0 && u.params2.w > 0.5) ? shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0) : 1.0;
-    float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
-    float3 amb = mix(f.groundColor.rgb * f.groundColor.rgb, f.skyColor.rgb * f.skyColor.rgb, n.y * 0.5 + 0.5);
+    float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
+    float3 amb = mix(rtsDecodeScene(f.groundColor.rgb), rtsDecodeScene(f.skyColor.rgb), n.y * 0.5 + 0.5);
     float3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u.params2.y;
     float3 col = base * (amb + sun * ndl * sh) + sun * spec * sh;
@@ -111,9 +111,9 @@ fragment float4 fs_main(VOut in [[stage_in]], constant GU0& u [[buffer(1)]], con
     float pulse = 1.0 + u.params.w * sin(u.params.z * 2.6 - (in.wpos.x + in.wpos.z) * 0.7);
     col += base * (u.params2.x * pulse);
     float dist = length(f.camPos.xyz - in.wpos);
-    col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    return float4(sqrt(col), albedo.a);
+    col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
+    col = rtsToneScene(col, f.skyColor.w > 0.5);
+    return float4(rtsEncodeScene(col), albedo.a);
 }
 )";
 

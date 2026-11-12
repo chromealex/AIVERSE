@@ -1,0 +1,16 @@
+# Runs the vehicles + sports gameplay example twice: both runs must succeed, report a race winner and a match
+# winner, and print the same final hash (deterministic simulation, mid-run save/restore included).
+foreach(run 1 2)
+    execute_process(COMMAND "${EXAMPLE}" "${DATA}" RESULT_VARIABLE code OUTPUT_VARIABLE out_${run} ERROR_VARIABLE err)
+    if(NOT code EQUAL 0)
+        message(FATAL_ERROR "run ${run} failed (${code}): ${err}\n${out_${run}}")
+    endif()
+    if(NOT out_${run} MATCHES "race winner=[1-9]" OR NOT out_${run} MATCHES "match winner=[1-9]")
+        message(FATAL_ERROR "run ${run} has no winner:\n${out_${run}}")
+    endif()
+    string(REGEX MATCH "hash=[0-9a-f]+" hash_${run} "${out_${run}}")
+endforeach()
+if(NOT hash_1 OR NOT hash_1 STREQUAL hash_2)
+    message(FATAL_ERROR "nondeterministic example: '${hash_1}' vs '${hash_2}'")
+endif()
+message(STATUS "vehicles-sports example: ${hash_1}")

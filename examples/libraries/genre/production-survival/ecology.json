@@ -1,0 +1,31 @@
+{
+  "ecology": {
+    "periodTicks": 600, "noiseMilli": 100,
+    "species": [
+      {"id": 1, "growthMilli": 160, "mortalityMilli": 8, "migrateMilli": 300},
+      {"id": 2, "growthMilli": 30, "mortalityMilli": 25, "foodNeedMilli": 350, "starvationMilli": 120, "migrateMilli": 250,
+       "diet": [{"prey": 1, "attackMilli": 500, "halfSaturation": 25, "conversionMilli": 120}]}
+    ],
+    "regions": [
+      {"id": 1, "capacity": [[1, 90], [2, 8]], "neighbors": [2]},
+      {"id": 2, "capacity": [[1, 120], [2, 10]], "neighbors": [1]}
+    ]
+  },
+  "animals": {
+    "ticksPerHour": 50, "bounds": [[-150000, -150000], [150000, 150000]],
+    "species": [
+      {"species": 1, "fears": [0, 2], "walkMilli": 40, "runMilli": 220, "fleeMilli": 18000, "wanderMilli": 25000,
+       "hungerPerTick": 1, "grazeGain": 6, "grazeBelow": 600, "fullAt": 950, "sleepFrom": 23, "sleepTo": 4, "fleeCalmTicks": 120},
+      {"species": 2, "prey": [1], "walkMilli": 50, "runMilli": 280, "huntRangeMilli": 40000, "catchMilli": 1500, "wanderMilli": 40000,
+       "hungerPerTick": 1, "huntGain": 700, "huntBelow": 450, "huntGiveUpTicks": 400, "huntCooldownTicks": 300,
+       "sleepFrom": 9, "sleepTo": 14, "fleeFrom": "alert", "huntFrom": "suspicious", "fears": [0]}
+    ]
+  },
+  "resources": [
+    {"id": 1, "resource": 1, "region": 1, "capacity": 40, "regrowPerPeriod": 4, "periodTicks": 300, "regrowDelayTicks": 600},
+    {"id": 2, "resource": 1, "region": 1, "capacity": 40, "regrowPerPeriod": 4, "periodTicks": 300, "regrowDelayTicks": 600},
+    {"id": 3, "resource": 1, "region": 2, "capacity": 60, "regrowPerPeriod": 5, "periodTicks": 300, "regrowDelayTicks": 600},
+    {"id": 4, "resource": 2, "region": 1, "capacity": 300, "regrowPerPeriod": 6, "periodTicks": 600, "regrowDelayTicks": 1200},
+    {"id": 5, "resource": 2, "region": 2, "capacity": 500, "regrowPerPeriod": 8, "periodTicks": 600, "regrowDelayTicks": 1200}
+  ]
+}

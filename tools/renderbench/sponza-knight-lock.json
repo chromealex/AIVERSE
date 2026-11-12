@@ -1,0 +1,94 @@
+{
+  "source": "https://cdrdv2.intel.com/v1/dl/getContent/763175",
+  "archiveBytes": 1202508298,
+  "archiveETag": "\"da4452b75969d03ad5e9954ab85f70e5\"",
+  "model": "pkg_e_knight_anim/Exports/FBX/Knight_USD_002.fbx",
+  "files": [
+    {
+      "path": "pkg_e_knight_anim/Exports/FBX/Knight_Animation_Data_Only_002.fbx",
+      "bytes": 4630016,
+      "sha256": "fd2e2147c3162d7459c711e9d6ff80505bdec58791b96e444f24071b63eaf2d4"
+    },
+    {
+      "path": "pkg_e_knight_anim/Exports/FBX/Knight_USD_002.fbx",
+      "bytes": 7684560,
+      "sha256": "bac1b6f1ccc872eee3ff4f2c3e0803c358acbec72a34f1996be30d4b4c9d06b3"
+    },
+    {
+      "path": "pkg_e_knight_anim/README.txt",
+      "bytes": 387,
+      "sha256": "bfdad49d43deb3f9c01f7ae5e877441473170b7e6c3aec54d1a7df409d0d3d57"
+    },
+    {
+      "path": "pkg_e_knight_anim/Scenes/knight_USD_PREVIEW_SURFACE_002.rnd.ma",
+      "bytes": 41679103,
+      "sha256": "4ce42c7e71b49c33dadd928e1486c6dc67ae8be9066c1bb9101b862b686c4283"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/brushed_metal_rough_D.png",
+      "bytes": 18425237,
+      "sha256": "9655b77f218c45a6994f66e846db97ee6dee2e00509a406bf6aec62b418f8c6d"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/brushed_metal_rough_F.png",
+      "bytes": 3078942,
+      "sha256": "deb7d777c051df557aaad682ce4ff929fc12ea729f5c47b5b55decf07b4bdac8"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/brushed_metal_rough_H.png",
+      "bytes": 3548256,
+      "sha256": "dc9e56bed206c7dab1553fb58ad5a580d4b15f6aa0cd88a8230025c08a57eece"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/cloth_diffuse_D.png",
+      "bytes": 16880038,
+      "sha256": "adbf6d264c0a7851e8590bf16020bcfa650870ba573be7f55cbe1539d564f1b7"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/cloth_normal_D.png",
+      "bytes": 31434914,
+      "sha256": "a7d39ebc5f33b0200f2cc20daf834f949d313a162882ba426e1b851c9d33fdc3"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/leather_diffuse_D.png",
+      "bytes": 20740591,
+      "sha256": "945bf0e46af73a31bcb0c5b05f67093c1571a13ba2f523f66799cbc03599148b"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/shield_final_diffuse_A.png",
+      "bytes": 12338942,
+      "sha256": "32b643cf35d8f74c6630027d84cd529d8f48deb507f3e6ea7c463392adea3b47"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/shield_final_normal_A.png",
+      "bytes": 5197439,
+      "sha256": "0fe6956d33e819e656abfd73a0581c81b964d9144dec967fa826b1337b33343b"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/sword_diffuse_C.png",
+      "bytes": 3190663,
+      "sha256": "384c570d55cd457e5d00185624ca7c531449b278884c08d9ebea58fa9a295153"
+    },
+    {
+      "path": "pkg_e_knight_anim/Textures/sword_rough_D.png",
+      "bytes": 225897,
+      "sha256": "e6eed4c951e30f3ac76b79380af0cfcbb92192dff951c038b4cdad8168446fd9"
+    },
+    {
+      "path": "pkg_e_knight_anim/credits_license.txt",
+      "bytes": 15921,
+      "sha256": "3f981e31f8de04f3754e63d7c259a0a78f71db8f01b5155c58cac52fb79cc2b9"
+    },
+    {
+      "path": "pkg_e_knight_anim/images/knight_002.png",
+      "bytes": 3197100,
+      "sha256": "843cd926c410a02979f0bf7c8570f13d969a715d790806acfce6c5b1a52288fe"
+    },
+    {
+      "path": "pkg_e_knight_anim/images/knight_004.png",
+      "bytes": 3600176,
+      "sha256": "e5513eee83802824bc4786c1a2ad3522384eb6d1d0a517dcc47b735506ce81a7"
+    }
+  ],
+  "fingerprint": "56462979ed96f52084ee78949a6a14db6d7733b3407f80971631e30ceee01318"
+}

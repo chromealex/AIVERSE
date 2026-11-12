@@ -1,0 +1,36 @@
+syntax = "proto3";
+package extraction_rts.entrypoint;
+option csharp_namespace = "ExtractionRTS.Interop.Entrypoint";
+
+service EntrypointService {
+  // Returns service discovery map with server URLs
+  rpc GetServiceMap(GetServiceMapRequest) returns (GetServiceMapResponse);
+}
+
+enum Platform {
+  PLATFORM_UNSPECIFIED = 0;
+  PLATFORM_IOS = 1;
+  PLATFORM_ANDROID = 2;
+  PLATFORM_STEAM = 3;
+}
+
+message GetServiceMapRequest {
+  string client_version = 1;
+  Platform platform = 2;
+}
+
+message GetServiceMapResponse {
+  oneof result {
+    Success success = 1;
+    IncompatibleVersion incompatible_version = 2;
+  }
+
+  message Success {
+    string identity_url = 1;
+    string matchmaking_url = 2;
+  }
+
+  message IncompatibleVersion {
+    string error_message = 1;
+  }
+}

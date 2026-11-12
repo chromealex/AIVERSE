@@ -114,7 +114,7 @@ void Simulation::step() {
 
 int Simulation::advance(double realSeconds, int maxTicks) {
     const double tickLen = 1.0 / tickRate_;
-    accumulator_ += realSeconds;
+    accumulator_ += realSeconds * module_->speedScale(*this);   // match modes speed (1 for every other game)
     int n = 0;
     while (accumulator_ >= tickLen && n < maxTicks) { const auto before=tick_;step();if(tick_==before){accumulator_=tickLen;break;}accumulator_ -= tickLen; ++n; }
     if (n == maxTicks && accumulator_ > tickLen) accumulator_ = tickLen; // spiral-of-death guard
@@ -148,7 +148,8 @@ void Simulation::loadState(const SimSnapshot& in) {
 namespace {
 constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
 // Version 5 adds projectile programs/weapon identity; version 4 remains readable.
-constexpr uint32_t kSaveVersion = 6;
+// Version 7 (agent-bw-skills): skill objects (Area goal / arrived / deaths, Pulled pool); 4..6 remain readable.
+constexpr uint32_t kSaveVersion = 7;
 } // namespace
 void io(Archive& a, Command& c) { a(c.tick, c.player, c.flags, c.type, c.seq, c.units, c.target, c.point, c.param, c.args); }   // found by ADL
 void io(Archive& a, PlayerInfo& p) { a(p.slot, p.name, p.team, p.alive); }
@@ -174,7 +175,7 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
     uint64_t seed = 0, st = 0, inc = 0;
     a(magic, version, seed, rate);
     if (!a.ok() || magic != kSaveMagic) return fail("not a save state");
-    if (version != 4 && version != 5 && version != kSaveVersion) return fail("save state version " + std::to_string(version) + ", this build reads versions 4, 5 and " + std::to_string(kSaveVersion));
+    if (version < 4 || version > kSaveVersion) return fail("save state version " + std::to_string(version) + ", this build reads versions 4.." + std::to_string(kSaveVersion));
     a.formatVersion = version;
     if (rate != tickRate_) return fail("tick rate differs");
     std::vector<PlayerInfo> players;

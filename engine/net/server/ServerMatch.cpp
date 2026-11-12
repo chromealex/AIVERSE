@@ -23,7 +23,7 @@ Member* Server::Impl::member(Room& r, uint32_t clientId) {
 
 void Server::Impl::startMatch(Room& r) {
     auto m = std::make_unique<Match>();
-    m->seed = rng() >> 1;
+    m->seed = r.hosted && r.hosted->alloc.seed ? r.hosted->alloc.seed : rng() >> 1;
     m->startMs = now;
     Member* host = nullptr;
     for (size_t i = 0; i < r.slots.size(); ++i) {
@@ -37,14 +37,15 @@ void Server::Impl::startMatch(Room& r) {
         if (s.kind == SlotKind::Human) {
             Member mb;
             mb.clientId = s.clientId; mb.slot = p.slot; mb.slots.push_back(p.slot); mb.nextFrame = r.settings.inputDelay;
+            if (r.hosted && !s.clientId) mb.connected = false;   // allocated but not here yet: may join late
             m->members.push_back(std::move(mb));
         }
     }
     for (uint32_t id : r.spectators) { Member mb; mb.clientId = id; m->members.push_back(std::move(mb)); }
     r.match = std::move(m);
     r.phase = RoomPhase::InMatch;
-    for (auto& mb : r.match->members) if (mb.clientId == r.hostId && mb.slot) host = &mb;
-    if (!host) for (auto& mb : r.match->members) if (mb.slot) { host = &mb; break; }
+    for (auto& mb : r.match->members) if (mb.clientId == r.hostId && mb.slot && mb.connected) host = &mb;
+    if (!host) for (auto& mb : r.match->members) if (mb.slot && mb.connected) { host = &mb; break; }
     for (auto& p : r.match->players) if (p.kind == SlotKind::Bot && host) host->slots.push_back(p.slot);
     ++counters.matchesStarted;
     log("match in room #%u: %zu players, seed %llu", r.id, r.match->players.size(), (unsigned long long)r.match->seed);
@@ -55,6 +56,7 @@ void Server::Impl::startMatch(Room& r) {
 void Server::Impl::sendMatchStart(Room& r, Member& m, bool resumed) {
     Client* c = client(m.clientId);
     if (!c) return;
+    sendPayload(r, *c);
     MatchStartMsg s;
     s.roomId = r.id; s.seed = r.match->seed; s.settings = r.settings; s.map = r.map; s.gameId = r.gameId;
     s.players = r.match->players; s.localSlot = m.slot; s.controlled = m.slots; s.resumed = resumed;
@@ -172,6 +174,7 @@ void Server::Impl::onInputFrame(Client& c, Room& r, ByteReader& rd) {
     for (auto& cmd : f.commands) {
         if (ok.size() >= 64) break;   // flood guard: nobody issues more per tick
         if (std::find(m->slots.begin(), m->slots.end(), cmd.player) == m->slots.end()) continue; // not theirs
+        if (r.hosted && !filterHostedCommand(r, *m, cmd, ok.size())) continue;
         if (cmd.units.size() > 2000) cmd.units.resize(2000);
         cmd.tick = f.tick;
         ok.push_back(std::move(cmd));
@@ -299,15 +302,29 @@ MatchRecord Server::Impl::record(Room& r) {
     rec.map = r.map; rec.settings = r.settings; rec.seed = M.seed; rec.players = M.players;
     rec.keyBySlot = M.keyBySlot;
     rec.history = M.history; rec.agreed = M.agreed; rec.confirmedNext = M.confirmedNext;
+    rec.externalId = r.externalId; rec.startMs = M.startMs;
     return rec;
 }
 
 // Ratings and the replay: everything about the outcome that does not need the room.
 std::vector<std::pair<uint8_t, int32_t>> Server::Impl::applyOutcome(const MatchRecord& rec, int32_t result, uint32_t endTick, uint64_t endHash,
                                                                    bool verified) {
-    saveReplay(rec, endTick, endHash);
+    const std::string replayFile = saveReplay(rec, endTick, endHash);
+    if (!rec.externalId.empty() && cfg.onExternalMatchEnd) {
+        ExternalMatchEnd e;
+        e.externalId = rec.externalId; e.started = true; e.result = result; e.endTick = endTick; e.endHash = endHash;
+        e.startMs = rec.startMs; e.endMs = now; e.verified = verified; e.desync = rec.desync; e.replayFile = replayFile;
+        for (auto& p : rec.players) {
+            ExternalSeatResult s;
+            s.slot = p.slot; s.team = p.team; s.bot = p.kind == SlotKind::Bot; s.joined = !s.bot;
+            auto k = rec.keyBySlot.find(p.slot);
+            s.userId = k != rec.keyBySlot.end() ? k->second : 0;   // external matches key humans by backend user id
+            e.seats.push_back(s);
+        }
+        cfg.onExternalMatchEnd(e);
+    }
     std::vector<std::pair<uint8_t, int32_t>> deltas;
-    if (rec.matchmade && result > 0 && (verified || !rec.desync)) {
+    if (rec.matchmade && rec.queueId != kHostedQueue && rec.externalId.empty() && result > 0 && (verified || !rec.desync)) {   // hosted / external: meta rates
         // Elo against the average rating of the other teams' humans (bots count as 1000).
         std::map<uint8_t, std::vector<int>> teamRatings;
         for (auto& p : rec.players) {
@@ -378,6 +395,7 @@ void Server::Impl::endMatch(Room& r, int32_t result, const NetText& reason, uint
     end.result = result;
     end.reason = reason;
     end.ratingDelta = applyOutcome(record(r), result, endTick, endHash, verified);
+    if (r.hosted) hostedReport(r, result, reason, endTick, endHash, verified, false);
     // Spectators lag behind: give them the rest so they can watch the ending.
     for (auto& m : M.members) {
         Client* c = client(m.clientId);
@@ -406,8 +424,8 @@ void Server::Impl::endMatch(Room& r, int32_t result, const NetText& reason, uint
     if (Room* still = room(roomId)) broadcastRoom(*still);
 }
 
-void Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t endHash) {
-    if (cfg.replayDir.empty()) return;
+std::string Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t endHash) {
+    if (cfg.replayDir.empty()) return {};
     Replay rep;
     std::string dir;
     if (auto it = cfg.gameDirs.find(M.gameId); it != cfg.gameDirs.end()) dir = it->second + "/";
@@ -437,7 +455,10 @@ void Server::Impl::saveReplay(const MatchRecord& M, uint32_t endTick, uint64_t e
     char stamp[32];
     std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::gmtime(&t));
     const std::string path = cfg.replayDir + "/" + stamp + "-room" + std::to_string(M.roomId) + (M.desync ? "-desync" : "") + ".rpl";
-    if (rep.save(path)) log("replay %s", path.c_str());
+    if (!rep.save(path)) return {};
+    log("replay %s", path.c_str());
+    lastReplayPath = path;
+    return path;
 }
 
 } // namespace aiverse::net

@@ -160,7 +160,7 @@ class ImportTests(unittest.TestCase):
     def test_effects_and_textures_written(self):
         self.assertEqual(self.code, 0)
         self.assertTrue(self.rep['ok'])
-        self.assertEqual(sorted(self.fx), ['explosion', 'explosion_sparkpop', 'magicaura'])
+        self.assertEqual(sorted(self.fx), ['explosion', 'explosion_sparkpop', 'magicaura', 'ribbons', 'vfxholder', 'vfxholder_sparks'])
         for t in ('fire_sheet', 'smoke', 'spark', 'ring'):
             self.assertTrue(os.path.exists(os.path.join(self.tmp, 'fx', 'textures', t + '.png')), t)
         with open(os.path.join(self.tmp, 'fx', 'textures', 'smoke.png'), 'rb') as f:
@@ -233,11 +233,37 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(motes['perMeter'], 5)
         self.assertEqual(motes['blend'], 'additive')         # Shader Graph: alpha mode additive
 
+    def test_vfx_graph_through_its_prefab(self):
+        # FireGraph.vfx (tests/data/unity_vfx/make_vfxgraph.py), played by VfxHolder.prefab which overrides EmberRate
+        em = self.fx['vfxholder']['emitters'][0]
+        self.assertEqual((em['rate'], em['burst'], em['loop']), (20, 5, True))
+        self.assertEqual((em['life'], em['speed'], em['size']), ([0.8, 1.4], [1, 2.5], [0.1, 0.25]))
+        self.assertEqual((em['shape'], em['radius'], em['emitFrom'], em['radial'], em['spread']), ('sphere', 0.25, 'shell', 1, 0))
+        self.assertEqual((em['offset'], em['gravity'], em['align']), ([0, 0.5, 0], [0, -2, 0], 'velocity'))
+        self.assertEqual(em['startColor'], '#ff8020ff')
+        self.assertEqual(em['color'], [[0, '#ffffff00'], [0.1, '#ffece6ff'], [1, '#ff400000']])
+        self.assertEqual(em['sizeOverLife'][0], [0, 0.5])
+        self.assertEqual(em['texture'], 'fx/textures/spark.png')
+        self.assertEqual(em['subEmitters'], [{'on': 'death', 'effect': 'vfxholder_sparks'}])
+        self.assertEqual(em['noise']['octaves'], 2)
+        sp = self.fx['vfxholder_sparks']['emitters'][0]
+        self.assertEqual((sp['burst'], sp['life'], sp['size'], sp['direction']), (1, 0.4, 0.05, [0, 1, 0]))
+
+    def test_trail_and_line_renderers(self):
+        trail, line = self.fx['ribbons']['emitters']
+        # TrailRenderer: hidden particles per metre moved, living the trail time, joined into one ribbon
+        self.assertEqual((trail['hidden'], trail['perMeter'], trail['life'], trail['size'], trail['loop']), (True, 4, 0.5, 0.5, True))
+        self.assertEqual((trail['trail']['mode'], trail['trail']['time'], trail['trail']['textureMode']), ('ribbon', 0.5, 'tile'))
+        self.assertEqual((trail['trail']['width'][0], trail['trail']['width'][-1]), ([0, 1], [1, 0]))
+        self.assertEqual(trail['sortOrder'], 2)
+        # LineRenderer circle of 12 points: a ring spread evenly, unrotated
+        self.assertEqual((line['shape'], line['radius'], line['arcMode'], line['bursts'][0]['count']), ('ring', 2, 'spread', 12))
+        self.assertNotIn('shapeRotation', line)
+
     def test_report_lists_what_could_not_be_mapped(self):
         dropped = '\n'.join(self.rep['dropped'])
         approx = '\n'.join(self.rep['approximate'])
-        self.assertIn('FireGraph.vfx: VFX Graph', dropped)
-        self.assertIn('VisualEffect (VFX Graph)', dropped)
+        self.assertIn('FireGraph.vfx: embers: output: soft particles', dropped)   # VFX Graph: what it could not map
         self.assertIn('script ExplosionShake.cs', dropped)
         self.assertIn('AudioSource', dropped)
         self.assertNotIn('orbital', dropped)

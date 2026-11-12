@@ -7,9 +7,10 @@
 // KHR_materials_unlit, KHR_materials_emissive_strength, KHR_materials_pbrSpecularGlossiness
 // (converted), KHR_materials_variants, morph targets (position / normal deltas, up to 8 per primitive,
 // animated weights). Not supported (warning, skipped): TEXCOORD_1,
-// cameras, lights. Compressed geometry / textures (Draco, meshopt, KTX2, WebP) are an error when
+// cameras. Light descriptions (KHR_lights_punctual) are preserved for scene consumers. Compressed geometry / textures (Draco, meshopt, KTX2, WebP) are an error when
 // required and skipped otherwise.
 #include "Model.h"
+#include "LightmapUv.h"
 #include "../data/Json.h"
 
 #include <algorithm>
@@ -112,6 +113,7 @@ public:
         loadVariants();
         loadTextures();
         loadMaterials();
+        loadLights();
         loadNodes();
         loadSkins();
         loadMeshes();
@@ -143,7 +145,7 @@ private:
     void checkExtensions() {
         static const std::set<std::string> supported = {
             "KHR_mesh_quantization", "KHR_texture_transform", "KHR_materials_unlit", "KHR_materials_emissive_strength",
-            "KHR_materials_pbrSpecularGlossiness", "KHR_materials_variants"};
+            "KHR_materials_pbrSpecularGlossiness", "KHR_materials_variants", "KHR_lights_punctual"};
         for (const auto& e : doc_["extensionsRequired"].items())
             if (!supported.count(e.str())) fail("required extension " + e.str() + " is not supported (re-export without it)");
         // optional refinements that don't change how a model reads in an RTS view (assimp's exporter
@@ -363,6 +365,28 @@ private:
         }
     }
 
+    void loadLights() {
+        for (const auto& j : doc_["extensions"]["KHR_lights_punctual"]["lights"].items()) {
+            ModelLight l; l.name = j.getStr("name");
+            const auto type = j.getStr("type");
+            if (type == "point") l.type = ModelLight::Type::Point;
+            else if (type == "spot") l.type = ModelLight::Type::Spot;
+            else if (type == "directional") l.type = ModelLight::Type::Directional;
+            else fail("light '" + l.name + "': invalid type");
+            if (j.has("color")) {
+                if (j["color"].size() != 3) fail("light '" + l.name + "': expected RGB color");
+                l.color = {float(num(j["color"][0], -1)), float(num(j["color"][1], -1)), float(num(j["color"][2], -1))};
+                if (l.color.x < 0 || l.color.y < 0 || l.color.z < 0 || l.color.x > 1 || l.color.y > 1 || l.color.z > 1) fail("light color outside [0, 1]");
+            }
+            l.intensity = float(num(j["intensity"], 1)); l.range = float(num(j["range"], 0));
+            if (l.intensity < 0 || (j.has("range") && l.range <= 0)) fail("invalid light intensity/range");
+            l.innerCone = float(num(j["spot"]["innerConeAngle"], 0));
+            l.outerCone = float(num(j["spot"]["outerConeAngle"], 0.785398163));
+            if (l.type == ModelLight::Type::Spot && (l.innerCone < 0 || l.innerCone >= l.outerCone || l.outerCone > 1.570796327f)) fail("invalid spot light cone");
+            model_->lights.push_back(std::move(l));
+        }
+    }
+
     void loadNodes() {
         const auto& nodes = doc_["nodes"].items();
         model_->nodes.resize(nodes.size());
@@ -390,7 +414,11 @@ private:
                 for (size_t k = 0; k < std::min<size_t>(w.size(), kMaxMorphTargets); ++k) n.weights[k] = float(num(w[k], 0));
                 nodeWeights_.insert(int(i));
             }
-            if (j.has("camera") || j["extensions"].has("KHR_lights_punctual")) warn("node '" + n.name + "': cameras and lights are ignored");
+            if (j.has("camera")) warn("node '" + n.name + "': cameras are ignored");
+            if (j["extensions"].has("KHR_lights_punctual")) {
+                n.light = inum(j["extensions"]["KHR_lights_punctual"]["light"]);
+                if (n.light < 0 || n.light >= int(model_->lights.size())) fail("node '" + n.name + "': light out of range");
+            }
         }
         for (auto& [c, p] : parentOf_) model_->nodes[size_t(c)].parent = p;
         // only the default scene is visible: hide meshes of nodes outside it
@@ -406,7 +434,7 @@ private:
                 in[size_t(n)] = 1;
                 for (const auto& c : nodes[size_t(n)]["children"].items()) stack.push_back(inum(c));
             }
-            for (size_t i = 0; i < nodes.size(); ++i) if (!in[i]) model_->nodes[i].mesh = -1;
+            for (size_t i = 0; i < nodes.size(); ++i) if (!in[i]) { model_->nodes[i].mesh = -1; model_->nodes[i].light = -1; }
         }
     }
 
@@ -438,6 +466,13 @@ private:
         // skin used with each mesh (a skinned mesh needs its palette built against that skin)
         std::map<int, int> skinOfMesh;
         for (auto& n : model_->nodes) if (n.mesh >= 0 && n.skin >= 0) skinOfMesh[n.mesh] = n.skin;
+        // LOD meshes are not scene nodes; inherit the base skin so they retain palettes.
+        for (const auto& n : model_->nodes) if (n.mesh >= 0 && n.mesh < int(meshes.size()) && n.skin >= 0) {
+            for (const auto& level : meshes[size_t(n.mesh)]["extras"]["rtsLods"].items()) {
+                const int target = inum(level["mesh"], -1);
+                if (target >= 0 && target < int(meshes.size())) skinOfMesh[target] = n.skin;
+            }
+        }
         for (size_t mi = 0; mi < meshes.size(); ++mi) {
             const Json& jm = meshes[mi];
             MeshDef md;
@@ -458,7 +493,18 @@ private:
         for (const auto& mesh : model_->meshes) for (const auto& lod : mesh.lods) {
             const auto& target = model_->meshes[size_t(lod.mesh)];
             if (!target.lods.empty()) fail("nested or cyclic LOD chains are unsupported");
-            for (const auto& p : target.primitives) if (p.morphTargets || !p.jointPalette.empty()) fail("LOD targets must be static");
+            const bool sourceSkin = std::any_of(mesh.primitives.begin(), mesh.primitives.end(), [](const Primitive& p){return !p.jointPalette.empty();});
+            for (const auto& p : mesh.primitives) if (p.morphTargets) fail("morph LOD sources are unsupported");
+            for (const auto& p : target.primitives) {
+                if (p.morphTargets) fail("morph LOD targets are unsupported");
+                if (sourceSkin != !p.jointPalette.empty()) fail("LOD skin binding must match its source");
+            }
+        }
+        for (const auto& n : model_->nodes) if(n.skin>=0 && n.mesh>=0 && n.mesh<int(model_->meshes.size())) {
+            for(const auto& lod:model_->meshes[size_t(n.mesh)].lods)
+                for(const auto& p:model_->meshes[size_t(lod.mesh)].primitives)
+                    for(uint16_t joint:p.jointPalette)
+                        if(size_t(joint)>=model_->skins[size_t(n.skin)].joints.size())fail("LOD joint exceeds source skin");
         }
         for (size_t i = 0; i < model_->nodes.size(); ++i) {
             Node& n = model_->nodes[i];
@@ -478,7 +524,9 @@ private:
             fail(where + ": compressed geometry (Draco / meshopt) is not supported, export uncompressed");
         const Json& at = p["attributes"];
         if (!at.has("POSITION")) fail(where + ": primitive without POSITION");
-        if (at.has("TEXCOORD_1")) warn(where + ": TEXCOORD_1 is ignored");
+        // TEXCOORD_1 = lightmap UVs of static meshes (packed into joints, LightmapUv.h); skinned meshes use probes
+        const bool lightmapUv = at.has("TEXCOORD_1") && !(skinned && at.has("JOINTS_0"));
+        if (at.has("TEXCOORD_1") && !lightmapUv) warn(where + ": TEXCOORD_1 of a skinned mesh is ignored (lit by light probes)");
         size_t n = 0, c = 0;
         auto pos = accessorExpect(inum(at["POSITION"]), 3, n, "POSITION");
         std::vector<ModelVertex> verts(n);
@@ -491,6 +539,10 @@ private:
         if (at.has("TEXCOORD_0")) {
             auto v = accessorExpect(inum(at["TEXCOORD_0"]), 2, c, "TEXCOORD_0");
             for (size_t i = 0; i < std::min(n, c); ++i) verts[i].uv = {float(v[i * 2]), float(v[i * 2 + 1])};
+        }
+        if (lightmapUv) {
+            auto v = accessorExpect(inum(at["TEXCOORD_1"]), 2, c, "TEXCOORD_1");
+            for (size_t i = 0; i < std::min(n, c); ++i) setLightmapUv(verts[i], {float(v[i * 2]), float(v[i * 2 + 1])});
         }
         if (hasTangents) {
             auto v = accessorExpect(inum(at["TANGENT"]), 4, c, "TANGENT");
@@ -570,6 +622,7 @@ private:
         morph_ = nt ? &morph : nullptr;
         morphTargets_ = nt;
         Primitive prim;
+        prim.lightmapUv = lightmapUv;
         prim.material = std::clamp(inum(p["material"], -1), -1, int(model_->materials.size()) - 1);
         if (prim.material < 0) prim.material = defaultMaterial();
         for (const auto& mp : p["extensions"]["KHR_materials_variants"]["mappings"].items()) {

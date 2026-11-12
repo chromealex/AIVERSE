@@ -4,6 +4,6 @@
 #include <string>
 
 namespace aiverse::editor {
-// Folder browser as a modal: true when a folder was chosen (in `out`). needProject: pick a project (.rtsproj / game.json).
+// Folder browser as a modal: true when a folder was chosen (in `out`). needProject: pick a project (.aiverse / game.json).
 bool hubFolderBrowser(bool& open, std::string& dir, char* newFolder, size_t newFolderSize, bool needProject, std::string& out);
 }

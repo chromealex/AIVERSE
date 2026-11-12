@@ -15,7 +15,7 @@ namespace aiverse::editor {
 
 namespace {
 const char* kSpecSchema = R"J({"properties": {
-  "title": {"type": "string", "description": "game title (also the project folder and the .rtsproj name)"},
+  "title": {"type": "string", "description": "game title (also the project folder and the .aiverse name)"},
   "location": {"type": "string", "description": "parent folder of the project (default ~/AiverseProjects)"},
   "artDir": {"type": "string", "description": "folder with art, models, music, sounds, fonts and .md/.txt texts (a GDD is read as the idea)"},
   "artUrl": {"type": "string", "description": "link to an image / archive (.zip, .tar.gz) with the content; downloaded with curl"},
@@ -80,7 +80,7 @@ void registerWizardOps(Workspace& ws) {
         "the key art into the splash, an icon, UI colours), a step-by-step hard tutorial map built from the rules (only the needed "
         "commands pass, the enemy waits), one-time hints in matches, generated levels with stars and rewards, the meta screens "
         "(home, levels, upgrades that buff the match, shop, daily reward, profile, settings, result), purchases / ads when asked, "
-        "language files, a check with bots, WIZARD.md and the .rtsproj. Takes up to a minute (bot checks); verifyLevels false is faster.",
+        "language files, a check with bots, WIZARD.md and the .aiverse. Takes up to a minute (bot checks); verifyLevels false is faster.",
         Json::parse(kSpecSchema),
         [w](const Json& p) {
             WizardSpec s = WizardSpec::fromJson(p);

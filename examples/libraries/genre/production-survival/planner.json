@@ -1,0 +1,21 @@
+{
+  "intervalTicks": 50, "maxCommands": 6,
+  "rules": [
+    {"id": 1, "priority": 100, "action": "priority", "ref": 6, "value": 1, "when": [{"metric": "alerts", "below": false, "threshold": 1}]},
+    {"id": 2, "priority": 99, "action": "priority", "ref": 6, "value": 4, "when": [{"metric": "alerts", "below": true, "threshold": 1}]},
+    {"id": 3, "priority": 90, "action": "build", "ref": 2, "stockpile": 2, "cooldownTicks": 1200,
+     "when": [{"metric": "powerDeficit", "below": false, "threshold": 1}, {"metric": "custom", "ref": 1, "below": true, "threshold": 2}]},
+    {"id": 4, "priority": 80, "action": "bill", "ref": 1, "value": 40},
+    {"id": 5, "priority": 75, "action": "gather", "ref": 1, "stockpile": 1, "maxOpen": 3,
+     "when": [{"metric": "stockPerColonist", "ref": 1, "below": true, "threshold": 4000}]},
+    {"id": 6, "priority": 74, "action": "priority", "ref": 5, "value": 3,
+     "when": [{"metric": "stockPerColonist", "ref": 1, "below": true, "threshold": 5000}]},
+    {"id": 7, "priority": 73, "action": "gather", "ref": 3, "stockpile": 1, "maxOpen": 1, "cooldownTicks": 600,
+     "when": [{"metric": "stockPerColonist", "ref": 1, "below": true, "threshold": 5000}]},
+    {"id": 8, "priority": 60, "action": "gather", "ref": 2, "stockpile": 1, "maxOpen": 2,
+     "when": [{"metric": "stock", "ref": 2, "below": true, "threshold": 80}]},
+    {"id": 9, "priority": 50, "action": "build", "ref": 1, "stockpile": 2, "cooldownTicks": 2400,
+     "when": [{"metric": "structures", "ref": 1, "below": true, "threshold": 2}, {"metric": "colonists", "below": false, "threshold": 8},
+              {"metric": "stock", "ref": 2, "below": false, "threshold": 40}]}
+  ]
+}

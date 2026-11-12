@@ -25,3 +25,10 @@ for bad in ('missing','cycle','client'):
     except ValueError:pass
     else:raise AssertionError('invalid dependency accepted: '+bad)
 print('Skill routing, ownership and dependency validation passed')
+
+both=m.plan(entries,roots,'both')
+assert {e['id'] for e in both['selection']}=={'meta-economy','meta-social','meta-server','meta-client'}
+assert both['serverModules']==server['serverModules']
+assert both['clientFeatures']==['economy','social']
+assert any('CLIENT)' in call for call in both['nativeCmake'])
+assert m.plan(entries,['aiverse-card-runtime'],'both')['clientFeatures']==[]

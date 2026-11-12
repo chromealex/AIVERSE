@@ -23,8 +23,10 @@
 //   tex4 splat weights (RGBA8 per cell, linear)     tex5..8 layer albedo   tex9..12 layer normals
 //   tex13 cliff albedo  tex14 cliff normal          tex15 vision (R8 per cell: 0 unexplored, .5 explored, 1 visible)
 //   tex18 height field of the drawn surface (16-bit, traced terrain shadows; Renderer3D::bindTrace)
+//   U3 + tex19 / tex20: baked terrain lightmap + shadow mask (Renderer3D::bindBakedTerrain, BakedShaders.h; agent-lightbake)
 #pragma once
 #include "../../../engine/render/Shaders.h"
+#include "../../../engine/render/BakedShaders.h"
 
 namespace aiverse::game::shaders {
 
@@ -81,6 +83,7 @@ void main() {
 
 inline const char* kTerrainFS =
     AIVERSE_TERRAIN_GLSL_U0 AIVERSE_GLSL_FRAME AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS AIVERSE_GLSL_TRACE_AT("tex18")
+    AIVERSE_GLSL_BAKED_TERRAIN("U3", "tex19", "tex20")
     R"(
 uniform sampler2D tex4;
 uniform sampler2D tex5;
@@ -265,18 +268,19 @@ void main() {
     float ndl = max(dot(n, L), 0.0);
     float sh = ndl > 0.0 ? min(shadowAt(v_wpos, n), terrainShadow(v_wpos)) : 1.0;
     sh *= cloudShade(v_wpos);
-    vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
-    vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
+    vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
+    vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+    { vec3 bl; if (bakedTerrain(v_wpos, sun * ndl, sh, bl)) amb = bl; }   // baked lightmap (agent-lightbake)
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * t_mode.x;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
     vec3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
     col += base * dynamicLight(v_wpos, n, V, t_mode.x);
     float dist = length(u_camPos.xyz - v_wpos);
-    col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0); // ACES fit
-    vec3 outc = sqrt(col);
+    col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
+    col = rtsToneScene(col, u_skyColor.w > 0.5); // ACES fit
+    vec3 outc = rtsEncodeScene(col);
     if (t_mode.w > 0.5) { // fog of war of heightfield maps (the flat fog sheet would cut the relief)
         vec2 uv = v_wpos.xz / t_lod.zw;
         if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) {
@@ -289,7 +293,7 @@ void main() {
                 float g = t_fogGrid.a * (1.0 - smoothstep(0.015, 0.05, min(min(fw.x, 1.0 - fw.x), min(fw.y, 1.0 - fw.y))));
                 fc = mix(fc, t_fogGrid.rgb, g / max(a + g, 0.001)); a = max(a, g);
             }
-            outc = mix(outc, fc, a);
+            outc = mix(outc, AIVERSE_HDR != 0 ? rtsSrgbDecode(fc) : fc, a);
         }
     }
     o_color = vec4(outc, 1.0);
@@ -299,7 +303,7 @@ void main() {
 inline const char* kTerrainMSL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "struct TU0 { float4 lod; float4 mode; float4 scale; float4 cliff; float4 fog; float4 tint[4]; float4 cliffTint; float4 fogColor; float4 fogGrid; float4 detail; float4 rock; float4 blend; };\n"
-    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE
+    AIVERSE_MSL_FRAME AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_BAKED_TERRAIN
     R"(
 
 #if TERRAIN_TIER >= 1
@@ -390,6 +394,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
                         , texture2d<float> tex16 [[texture(16)]], texture2d<float> tex17 [[texture(17)]]
 #endif
                         , texture2d<float> tex18 [[texture(18)]]
+                        , constant BakedTerrainU& bt [[buffer(4)]], texture2d<float> tex19 [[texture(19)]], texture2d<float> tex20 [[texture(20)]]
                         ) {
 #if TERRAIN_DETAIL
     // Metal has sampler slots 0..15 per stage: the detail textures use constant samplers
@@ -514,17 +519,22 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
     float ndl = max(dot(n, L), 0.0);
     float sh = ndl > 0.0 ? min(shadowAt(f, in.wpos, n, in.pos.xy, tex0, s0), terrainShadow(f, tex18, s18, in.wpos)) : 1.0;
     sh *= cloudShade(l, in.wpos);
-    float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
-    float3 amb = mix(f.groundColor.rgb * f.groundColor.rgb, f.skyColor.rgb * f.skyColor.rgb, n.y * 0.5 + 0.5);
+    float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
+    float3 amb = mix(rtsDecodeScene(f.groundColor.rgb), rtsDecodeScene(f.skyColor.rgb), n.y * 0.5 + 0.5);
+    {   // baked lightmap (agent-lightbake); Metal has 16 sampler slots: a constant sampler
+        constexpr sampler sb(filter::linear, address::clamp_to_edge);
+        float3 bl;
+        if (bakedTerrain(bt, tex19, sb, tex20, sb, in.wpos, sun * ndl, sh, bl)) amb = bl;
+    }
     float3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u.mode.x;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
     float3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
     col += base * dynamicLight(l, tex1, s1, in.wpos, n, V, u.mode.x);
     float dist = length(f.camPos.xyz - in.wpos);
-    col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    float3 outc = sqrt(col);
+    col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
+    col = rtsToneScene(col, f.skyColor.w > 0.5);
+    float3 outc = rtsEncodeScene(col);
     if (u.mode.w > 0.5) {
         float2 uv = in.wpos.xz / u.lod.zw;
         if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) {
@@ -537,7 +547,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant TU0& u [[buffer(1)]], con
                 float g = u.fogGrid.a * (1.0 - smoothstep(0.015, 0.05, min(min(fw.x, 1.0 - fw.x), min(fw.y, 1.0 - fw.y))));
                 fc = mix(fc, u.fogGrid.rgb, g / max(a + g, 0.001)); a = max(a, g);
             }
-            outc = mix(outc, fc, a);
+            outc = mix(outc, AIVERSE_HDR != 0 ? rtsSrgbDecode(fc) : fc, a);
         }
     }
     return float4(outc, 1.0);

@@ -13,7 +13,8 @@ void systems() {
     step(1,0,fps::Action::Interact);CHECK(state(*sim).actors[0].ammo==7);CHECK(state(*sim).actors[0].attachments[0]==1);
     // Healing is delayed, consumes one kit, and moving cancels without consuming a kit.
     state(*sim).actors[0].health=20;step(1,0,fps::Action::Heal);CHECK(state(*sim).actors[0].health==20);
-    for(int i=0;i<3;++i)step(1);CHECK(state(*sim).actors[0].health==80);
+    for(int i=0;i<3;++i)step(1);
+    CHECK(state(*sim).actors[0].health==80);
     step(1,0,fps::Action::Heal);step(1,0,fps::Action::None,0,{},1000);CHECK(state(*sim).actors[0].activeAction==fps::Action::None);
     // Vehicle admission/exit is exclusive and the authoritative position follows driving.
     state(*sim).actors[0].pos={-3_fx,Fixed::fromRatio(1,100),{}};step(1,0,fps::Action::Interact);CHECK(state(*sim).actors[0].vehicle!=0);
@@ -25,7 +26,8 @@ void systems() {
     step(1,0,fps::Action::Interact);step(1,fps::Prone);CHECK(state(*sim).actors[0].prone);
     // Grenades create bounded persistent objects; smoke becomes a timed cloud.
     sim=simulation(rules,map);step(1,0,fps::Action::Smoke);CHECK(state(*sim).projectiles.size()==1);
-    for(int i=0;i<4;++i)step(1);CHECK(state(*sim).projectiles[0].kind==4);
+    for(int i=0;i<4;++i)step(1);
+    CHECK(state(*sim).projectiles[0].kind==4);
     step(1,0,fps::Action::Flash);auto& flash=state(*sim).projectiles.back();flash.pos=state(*sim).actors[1].pos+Vec3{{},1_fx,1_fx};flash.expires=sim->tick();step(1);CHECK(state(*sim).actors[1].blindUntil>sim->tick());
     step(1,0,fps::Action::Frag);auto& frag=state(*sim).projectiles.back();frag.pos=state(*sim).actors[1].pos+Vec3{{},1_fx,{}};frag.expires=sim->tick();step(1);CHECK(state(*sim).actors[1].health<100);
     // Body armor and head hit multipliers use the hit position.
@@ -50,7 +52,9 @@ void systems() {
     step(1,0,fps::Action::Buy,1);CHECK(state(*sim).actors[0].money==300);
     step(1,0,fps::Action::Plant);for(int i=0;i<3;++i)step(1);CHECK(state(*sim).match.planted);
     state(*sim).actors[1].pos=state(*sim).actors[0].pos+Vec3{1_fx,{}, {}};step(2,0,fps::Action::Interact);for(int i=0;i<3;++i)step(2);CHECK(state(*sim).match.scoreB==1);
-    for(int i=0;i<65;++i)step(1);CHECK(state(*sim).round==2);CHECK(!state(*sim).match.planted);
+    for(int i=0;i<65;++i)step(1);
+    CHECK(state(*sim).round==2);
+    CHECK(!state(*sim).match.planted);
     // Vault checks overhead clearance and requires a short obstacle.
     auto vaultMap=map;vaultMap.member("colliders").push(Json::parse(R"({"id":2,"min":[-1,0,0.7],"max":[1,1,1.2]})"));sim=simulation(rules,vaultMap);step(1);step(1,fps::Buttons(0),fps::Action::Vault);CHECK(state(*sim).actors[0].pos.z>1_fx);
 }

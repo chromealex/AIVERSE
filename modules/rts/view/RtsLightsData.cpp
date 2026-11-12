@@ -201,6 +201,8 @@ std::vector<RtsLights::MapLight> RtsLights::parseMapLights(const Json& lights) {
         const Json& p = j["pos"];
         m.x = p.size() >= 2 ? float(p[0].fx().toDouble()) : num(j, "x", 0);
         m.z = p.size() >= 2 ? float(p[1].fx().toDouble()) : num(j, "z", 0);
+        const std::string bake = j.getStr("bake");
+        m.bake = bake == "mixed" ? 1 : bake == "baked" ? 2 : 0;
         out.push_back(m);
     }
     return out;

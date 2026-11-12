@@ -1,9 +1,11 @@
 // OpenGL ES 3.0 / WebGL2 / OpenGL 3.3 core backend.
 #include "../Gfx.h"
+#include "../ColorSpace.h"
 #include "GLApi.h"
 
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -30,7 +32,7 @@ constexpr GLenum kGL_FRAMEBUFFER_SRGB = 0x8DB9;
 
 // compressed formats (may be missing from older headers)
 constexpr GLenum kGL_ETC2_RGB8 = 0x9274, kGL_ETC2_RGBA8 = 0x9278, kGL_DXT1_RGBA = 0x83F1, kGL_DXT5 = 0x83F3,
-                 kGL_BPTC_UNORM = 0x8E8C, kGL_ASTC_4x4 = 0x93B0;
+                 kGL_BPTC_UNORM = 0x8E8C, kGL_ASTC_4x4 = 0x93B0, kGL_ASTC_6x6 = 0x93B4;
 GLenum compressedEnum(PixelFormat f) {
     switch (f) {
         case PixelFormat::ETC2_RGB8: return kGL_ETC2_RGB8;
@@ -39,6 +41,7 @@ GLenum compressedEnum(PixelFormat f) {
         case PixelFormat::BC3: return kGL_DXT5;
         case PixelFormat::BC7: return kGL_BPTC_UNORM;
         case PixelFormat::ASTC_4x4: return kGL_ASTC_4x4;
+        case PixelFormat::ASTC_6x6: return kGL_ASTC_6x6;
         default: return 0;
     }
 }
@@ -58,8 +61,8 @@ private:
 struct GLBuffer { GLuint id = 0; GLenum target = 0; size_t size = 0; Usage usage = Usage::Immutable; };
 struct GLTexture { GLuint id = 0; PixelFormat fmt = PixelFormat::RGBA8; int w = 0, h = 0; bool mips = false; };
 struct GLFramebuffer { uint32_t color = 0, depth = 0; GLuint fbo = 0; };
-struct GLShader { GLuint program = 0; };
-struct GLPipeline { PipelineDesc desc; GLuint program = 0; };
+struct GLShader { GLuint program = 0; std::string vs, fs; int textures = 0, uniforms = 0; bool linear = false; };
+struct GLPipeline { PipelineDesc desc; GLuint program = 0; PipelineHandle hdr; ShaderHandle hdrShader; bool hdrFailed = false; };
 
 constexpr size_t kUniformRingSize = 1 << 20;
 constexpr int kMaxUniformSlots = 8;
@@ -77,8 +80,8 @@ public:
         GLint align = 256;
         glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
         uboAlign_ = align > 0 ? size_t(align) : 256;
-#if defined(__EMSCRIPTEN__)
-        glGenBuffers(kMaxUniformSlots, webUbos_);
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+        glGenBuffers(kMaxUniformSlots, slotUbos_);
 #else
         glGenBuffers(1, &ubo_);
         glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
@@ -86,7 +89,12 @@ public:
 #endif
         // compressed formats: ETC2 is core in ES 3.0 (not in desktop GL 3.3, not guaranteed on WebGL2)
         std::string ext;
-        if (const char* e = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS))) ext = e;
+        if (flavor == Backend::GL33) {
+            GLint count = 0; glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+            for (GLint i = 0; i < count; ++i) {
+                if (const char* e = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, GLuint(i)))) { ext += e; ext += ' '; }
+            }
+        } else if (const char* e = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS))) ext = e;
         auto has = [&](const char* name) { return ext.find(name) != std::string::npos; };
 #if defined(__EMSCRIPTEN__)
         etc2_ = has("compressed_texture_etc");
@@ -97,19 +105,25 @@ public:
         bptc_ = has("texture_compression_bptc");
         if (ext.empty() && flavor == Backend::GL33) s3tc_ = true; // core profiles hide the list; every desktop GPU has DXT
         astc_ = has("texture_compression_astc");
+        hdr_ = flavor == Backend::GL33 || has("EXT_color_buffer_float") || has("EXT_color_buffer_half_float");
     }
     bool supports(PixelFormat f) const override {
         switch (f) {
             case PixelFormat::ETC2_RGB8: case PixelFormat::ETC2_RGBA8: return etc2_;
             case PixelFormat::BC1: case PixelFormat::BC3: return s3tc_;
             case PixelFormat::BC7: return bptc_;
-            case PixelFormat::ASTC_4x4: return astc_;
+            case PixelFormat::ASTC_4x4: case PixelFormat::ASTC_6x6: return astc_;
+            case PixelFormat::RGBA16F: return hdr_;
             default: return true;
         }
     }
     ~GLDevice() override {
-#if defined(__EMSCRIPTEN__)
-        glDeleteBuffers(kMaxUniformSlots, webUbos_);
+#if defined(__APPLE__) || defined(_WIN32)
+        if (queryActive_) glEndQuery(GL_TIME_ELAPSED);
+        for (const auto& t:timedQueries_) glDeleteQueries(1,&t.query);
+#endif
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+        glDeleteBuffers(kMaxUniformSlots, slotUbos_);
 #else
         glDeleteBuffers(1, &ubo_);
 #endif
@@ -149,6 +163,7 @@ public:
 
     // ---------- textures ----------
     TextureHandle createTexture(const TextureDesc& d) override {
+        if (d.format == PixelFormat::RGBA16F && !hdr_) { error_ = "RGBA16F rendering unsupported"; return {}; }
         GLTexture t; t.fmt = d.format; t.w = d.width; t.h = d.height;
         t.mips = d.mipmaps && d.format != PixelFormat::Depth && !d.renderTarget;
         glGenTextures(1, &t.id);
@@ -175,6 +190,7 @@ public:
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
             }
         } else if (d.format == PixelFormat::R8) glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, d.width, d.height, 0, GL_RED, GL_UNSIGNED_BYTE, d.data);
+        else if (d.format == PixelFormat::RGBA16F) { t.mips = false; glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, d.width, d.height, 0, GL_RGBA, GL_HALF_FLOAT, d.data); }
         else if (d.format == PixelFormat::RGBA32F) { t.mips = false; glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, d.width, d.height, 0, GL_RGBA, GL_FLOAT, d.data); }
         else if (d.format == PixelFormat::RGBA8_sRGB) glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, d.width, d.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, d.data);
         else glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, d.width, d.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, d.data);
@@ -184,6 +200,15 @@ public:
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, d.filter == Filter::Linear ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST);
         } else glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
+        if (d.format == PixelFormat::RGBA16F && d.renderTarget) {
+            GLint oldDraw=0, oldRead=0;
+            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &oldDraw); glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &oldRead);
+            GLuint probe=0; glGenFramebuffers(1,&probe); glBindFramebuffer(GL_FRAMEBUFFER,probe);
+            glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,t.id,0);
+            const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE;
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER,GLuint(oldDraw)); glBindFramebuffer(GL_READ_FRAMEBUFFER,GLuint(oldRead)); glDeleteFramebuffers(1,&probe);
+            if (!complete) { glDeleteTextures(1,&t.id); error_="RGBA16F framebuffer allocation failed"; return {}; }
+        }
         GLint wrap = d.repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
@@ -194,9 +219,9 @@ public:
         if (!t) return;
         glBindTexture(GL_TEXTURE_2D, t->id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        const int bpp = t->fmt == PixelFormat::R8 ? 1 : t->fmt == PixelFormat::RGBA32F ? 16 : 4;
+        const int bpp = t->fmt == PixelFormat::R8 ? 1 : t->fmt == PixelFormat::RGBA32F ? 16 : t->fmt == PixelFormat::RGBA16F ? 8 : 4;
         const GLenum fmt = t->fmt == PixelFormat::R8 ? GL_RED : GL_RGBA;
-        const GLenum type = t->fmt == PixelFormat::RGBA32F ? GL_FLOAT : GL_UNSIGNED_BYTE;
+        const GLenum type = t->fmt == PixelFormat::RGBA32F ? GL_FLOAT : t->fmt == PixelFormat::RGBA16F ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
         if (rowPitch == w * bpp) {
             glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, hh, fmt, type, pixels);
         } else { // GL_UNPACK_ROW_LENGTH exists in ES3 but upload row by row for maximum portability
@@ -248,9 +273,10 @@ public:
     }
     ShaderHandle createShader(const ShaderDesc& d) override {
         if (!d.glslVertex || !d.glslFragment) { error_ = "shader has no GLSL source"; return {}; }
-        GLuint vs = compile(GL_VERTEX_SHADER, d.glslVertex);
+        const std::string hdr = colorShaderPrefix(false, d.linearTarget);
+        GLuint vs = compile(GL_VERTEX_SHADER, (hdr + d.glslVertex).c_str());
         if (!vs) return {};
-        GLuint fs = compile(GL_FRAGMENT_SHADER, d.glslFragment);
+        GLuint fs = compile(GL_FRAGMENT_SHADER, (hdr + d.glslFragment).c_str());
         if (!fs) { glDeleteShader(vs); return {}; }
         GLuint p = glCreateProgram();
         glAttachShader(p, vs); glAttachShader(p, fs);
@@ -277,7 +303,7 @@ public:
             if (loc >= 0) glUniform1i(loc, i);
         }
         currentProgram_ = p;
-        return {shaders_.add(GLShader{p})};
+        return {shaders_.add(GLShader{p, d.glslVertex, d.glslFragment, d.textureSlots, d.uniformSlots, d.linearTarget})};
     }
     void destroyShader(ShaderHandle h) override {
         if (auto* s = shaders_.get(h.id)) { glDeleteProgram(s->program); shaders_.remove(h.id); }
@@ -286,23 +312,78 @@ public:
     PipelineHandle createPipeline(const PipelineDesc& d) override {
         auto* s = shaders_.get(d.shader.id);
         if (!s) { error_ = "pipeline: invalid shader"; return {}; }
-        return {pipelines_.add(GLPipeline{d, s->program})};
+        return {pipelines_.add(GLPipeline{d, s->program, {}, {}, false})};
     }
-    void destroyPipeline(PipelineHandle h) override { pipelines_.remove(h.id); }
+    void destroyPipeline(PipelineHandle h) override {
+        if (auto* p = pipelines_.get(h.id)) {
+            const auto variant = p->hdr; const auto shader = p->hdrShader;
+            pipelines_.remove(h.id);
+            if (variant.valid()) destroyPipeline(variant);
+            if (shader.valid()) destroyShader(shader);
+        }
+    }
+    PipelineHandle hdrPipeline(PipelineHandle h) {
+        auto* p = pipelines_.get(h.id);
+        if (!p) return {};
+        if (p->hdr.valid()) return p->hdr;
+        if (p->hdrFailed) return {};
+        p->hdrFailed = true; // compile at most once; a broken variant must not stall every frame
+        PipelineDesc pd = p->desc;
+        auto* s = shaders_.get(pd.shader.id);
+        if (!s) return {};
+        ShaderDesc sd;
+        const std::string vs = s->vs, fs = s->fs;
+        sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str();
+        sd.textureSlots = s->textures; sd.uniformSlots = s->uniforms;
+        sd.linearTarget = true;
+        const auto shader = createShader(sd);
+        if (!shader.valid()) { std::fprintf(stderr, "[gfx] HDR shader: %s\n", error_.c_str()); return {}; }
+        pd.shader = shader; pd.colorFormat = PixelFormat::RGBA16F;
+        const auto variant = createPipeline(pd);
+        if (!variant.valid()) { std::fprintf(stderr, "[gfx] HDR pipeline: %s\n", error_.c_str()); destroyShader(shader); return {}; }
+        p = pipelines_.get(h.id); // pool may have reallocated
+        p->hdr = variant; p->hdrShader = shader; p->hdrFailed = false;
+        return variant;
+    }
 
     // ---------- frame ----------
     CaptureFn capture_;
+#if defined(__APPLE__) || defined(_WIN32)
+    struct TimedQuery { uint64_t tag; GLuint query; };
+    std::vector<TimedQuery> timedQueries_;
+    bool queryActive_ = false;
+    bool timeGpuFrame(uint64_t tag) override {
+        if (info_.backend != Backend::GL33 || queryActive_ || timedQueries_.size() >= 64) return false;
+        GLuint q=0; glGenQueries(1,&q); glBeginQuery(GL_TIME_ELAPSED,q);
+        timedQueries_.push_back({tag,q}); queryActive_=true; return true;
+    }
+    std::vector<GpuTiming> takeGpuTimings() override {
+        std::vector<GpuTiming> out;
+        for (size_t i=0;i<timedQueries_.size();) {
+            auto t=timedQueries_[i]; GLuint ready=0;
+            glGetQueryObjectuiv(t.query,GL_QUERY_RESULT_AVAILABLE,&ready);
+            if (!ready) {++i;continue;}
+            GLuint64 ns=0; glGetQueryObjectui64v(t.query,GL_QUERY_RESULT,&ns);
+            out.push_back({t.tag,double(ns)/1000000.0,true}); glDeleteQueries(1,&t.query);
+            timedQueries_.erase(timedQueries_.begin()+i);
+        }
+        return out;
+    }
+#endif
     void beginFrame(int w, int h) override {
         fbW_ = w; fbH_ = h;
         uboOffset_ = 0;
         for (auto& d : slotData_) d.clear();
-#if !defined(__EMSCRIPTEN__)
+#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
         glBindBuffer(GL_UNIFORM_BUFFER, ubo_);
         glBufferData(GL_UNIFORM_BUFFER, kUniformRingSize, nullptr, GL_STREAM_DRAW); // orphan the ring
 #endif
         glBindVertexArray(vao_);
     }
     void endFrame() override { // swap is done by the platform layer (EGL/WGL/browser)
+#if defined(__APPLE__) || defined(_WIN32)
+        if (queryActive_) {glEndQuery(GL_TIME_ELAPSED);queryActive_=false;glFlush();}
+#endif
         if (!capture_) return;
         std::vector<uint8_t> px(size_t(fbW_) * size_t(fbH_) * 4);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -322,6 +403,8 @@ public:
     void captureNextFrame(CaptureFn fn) override { capture_ = std::move(fn); }
 
     void beginPass(const PassDesc& d) override {
+        const auto* color = textures_.get(d.colorTarget.id);
+        hdrPass_ = color && color->fmt == PixelFormat::RGBA16F;
         glBindVertexArray(vao_);
         glDisable(GL_SCISSOR_TEST);
         passW_ = fbW_; passH_ = fbH_;
@@ -389,6 +472,9 @@ public:
 
     void setPipeline(PipelineHandle h) override {
         auto* p = pipelines_.get(h.id);
+        if (p && hdrPass_ && !p->desc.depthOnly && p->desc.colorFormat != PixelFormat::RGBA16F) {
+            h = hdrPipeline(h); p = pipelines_.get(h.id);
+        }
         pipelineId_ = p ? h.id : 0;
         if (!p) return;
         const auto& d = p->desc;
@@ -435,12 +521,12 @@ public:
     }
     void setUniforms(int slot, const void* data, size_t size) override {
         if (slot < 0 || slot >= kMaxUniformSlots || size == 0) return;
-#if defined(__EMSCRIPTEN__)
-        // ANGLE/Metal copies a busy buffer on subData, even for disjoint ring ranges.
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+        // Metal-backed GL/ANGLE can copy a busy buffer on subData, even for disjoint ring ranges.
         // Orphan only this slot's small block instead of cloning the 1 MB ring per draw.
-        glBindBuffer(GL_UNIFORM_BUFFER, webUbos_[slot]);
+        glBindBuffer(GL_UNIFORM_BUFFER, slotUbos_[slot]);
         glBufferData(GL_UNIFORM_BUFFER, GLsizeiptr(size), data, GL_STREAM_DRAW);
-        glBindBufferRange(GL_UNIFORM_BUFFER, GLuint(slot), webUbos_[slot], 0, GLsizeiptr(size));
+        glBindBufferRange(GL_UNIFORM_BUFFER, GLuint(slot), slotUbos_[slot], 0, GLsizeiptr(size));
         return;
 #endif
         size_t off = (uboOffset_ + uboAlign_ - 1) / uboAlign_ * uboAlign_;
@@ -509,10 +595,14 @@ public:
     }
 
 private:
+    bool hdr_ = false;
+    bool hdrPass_ = false;
     DeviceInfo info_;
     std::string error_;
     GLuint vao_ = 0, ubo_ = 0, currentProgram_ = 0;
-    GLuint webUbos_[kMaxUniformSlots] = {};
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)   // same guard as every use (Android: unused private field)
+    GLuint slotUbos_[kMaxUniformSlots] = {};
+#endif
     size_t uboAlign_ = 256, uboOffset_ = 0;
     bool etc2_ = false, s3tc_ = false, bptc_ = false, astc_ = false;
     bool srgbWrite_ = false;   // GL33: GL_FRAMEBUFFER_SRGB enabled for the current pass

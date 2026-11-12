@@ -2151,6 +2151,760 @@
           "default": false
         }
       }
+    },
+    "cardGame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startingHand": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 0,
+          "maximum": 20
+        },
+        "maxHand": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 20
+        },
+        "startingHealth": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "turnLimit": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botNodeBudget": {
+          "type": "integer",
+          "default": 256,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "botDepth": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 4
+        }
+      }
+    },
+    "tactics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roundLimit": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "halfCoverMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "fullCoverMilli": {
+          "type": "integer",
+          "default": 400,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "flankBonusMilli": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "rangePenaltyMilli": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "overwatchPenaltyMilli": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "minHitMilli": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "maxHitMilli": {
+          "type": "integer",
+          "default": 950,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "coverCosMilli": {
+          "type": "integer",
+          "default": 707,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "botSearchBudget": {
+          "type": "integer",
+          "default": 512,
+          "minimum": 1,
+          "maximum": 100000
+        }
+      }
+    },
+    "vehicles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxEnterSpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maxExitSpeedMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "raceLaps": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "wrongWayTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "wrongWaySpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "respawnWrongWayTicks": {
+          "type": "integer",
+          "default": 240,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "stuckSpeedMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "stuckTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botLookaheadMilli": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "botLookaheadTimeMilli": {
+          "type": "integer",
+          "default": 350,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "botMaxSpeedMilli": {
+          "type": "integer",
+          "default": 60000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "botCornerAccelMilli": {
+          "type": "integer",
+          "default": 9000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "botBrakeDecelMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "botBrakeHorizonMilli": {
+          "type": "integer",
+          "default": 90000,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "botSteerGainMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botLaneOffsetMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "botOvertakeDistanceMilli": {
+          "type": "integer",
+          "default": 14000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "botSkillMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 2000
+        },
+        "botRubberBandMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 500
+        }
+      }
+    },
+    "sports": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "periods": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 16
+        },
+        "periodTicks": {
+          "type": "integer",
+          "default": 2700,
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "overtimeTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "restartDelayTicks": {
+          "type": "integer",
+          "default": 45,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "maxStoppageTicks": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "clockMode": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 2
+        },
+        "swapEnds": {
+          "type": "boolean",
+          "default": true
+        },
+        "goldenGoal": {
+          "type": "boolean",
+          "default": true
+        },
+        "pickupRadiusMilli": {
+          "type": "integer",
+          "default": 700,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "controlSpeedMilli": {
+          "type": "integer",
+          "default": 14000,
+          "minimum": 0,
+          "maximum": 200000
+        },
+        "frictionMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "tackleRangeMilli": {
+          "type": "integer",
+          "default": 1400,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "tackleBaseMilli": {
+          "type": "integer",
+          "default": 450,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "interceptMilli": {
+          "type": "integer",
+          "default": 650,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "behindFoulMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "failFoulMilli": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "tackleCooldownTicks": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "possessionLockTicks": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "kickLockTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "passSpeedMinMilli": {
+          "type": "integer",
+          "default": 7000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "passSpeedMaxMilli": {
+          "type": "integer",
+          "default": 18000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "shotSpeedMinMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "shotSpeedMaxMilli": {
+          "type": "integer",
+          "default": 26000,
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "passErrorMilli": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 250
+        },
+        "shotErrorMilli": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 250
+        },
+        "botShootRangeMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "botTackleMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "botReactionTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "botDecisionTicks": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 3600
+        }
+      }
+    },
+    "colony": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ticksPerHour": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "moodBase": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "moodBreakAt": {
+          "type": "integer",
+          "default": -60000,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "moodLowAt": {
+          "type": "integer",
+          "default": -20000,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "moodHighAt": {
+          "type": "integer",
+          "default": 40000,
+          "minimum": -100000,
+          "maximum": 100000
+        },
+        "breakTicks": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "lowSpeedMilli": {
+          "type": "integer",
+          "default": 700,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "contentSpeedMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "highSpeedMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "maxResponseJobs": {
+          "type": "integer",
+          "default": 64,
+          "minimum": 1,
+          "maximum": 1024
+        }
+      }
+    },
+    "survival": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "coreNormalMilli": {
+          "type": "integer",
+          "default": 37000,
+          "minimum": 30000,
+          "maximum": 42000
+        },
+        "comfortLowMilli": {
+          "type": "integer",
+          "default": 16000,
+          "minimum": -50000,
+          "maximum": 60000
+        },
+        "comfortHighMilli": {
+          "type": "integer",
+          "default": 27000,
+          "minimum": -50000,
+          "maximum": 60000
+        },
+        "coolingMicro": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "heatingMicro": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "recoveryMicro": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "coldMilli": {
+          "type": "integer",
+          "default": 35500,
+          "minimum": 20000,
+          "maximum": 45000
+        },
+        "severeColdMilli": {
+          "type": "integer",
+          "default": 33000,
+          "minimum": 20000,
+          "maximum": 45000
+        },
+        "hotMilli": {
+          "type": "integer",
+          "default": 38500,
+          "minimum": 30000,
+          "maximum": 45000
+        },
+        "severeHotMilli": {
+          "type": "integer",
+          "default": 40000,
+          "minimum": 30000,
+          "maximum": 45000
+        },
+        "hungerPerTick": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "thirstPerTick": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "staminaDrain": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "staminaRegen": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "lowAt": {
+          "type": "integer",
+          "default": 25000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wetChillMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "dryPerTick": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "starveDamage": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "thirstDamage": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "coldDamage": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "heatDamage": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "conditionRegen": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "windChillMilli": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "wetPerTick": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 100000
+        }
+      }
+    },
+    "perks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offerChoices": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 8
+        },
+        "offerRerolls": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100
+        },
+        "rerollAvoidsRepeat": {
+          "type": "boolean",
+          "default": true
+        },
+        "maxLevel": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "xpGrowthPerLevel": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "maxRecruitsPerSlot": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "maxSquad": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "pickupRadiusMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "pickupMagnetRadiusMilli": {
+          "type": "integer",
+          "default": 30000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "pickupGrabRadiusMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "pickupAttractSpeedMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "pickupAttractAccelMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "pickupMaxSpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "pickupLifetimeTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "pickupLandingTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "pickupMaxOrbs": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "summonProgressTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "summonCooldownTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "summonResetOnExit": {
+          "type": "boolean",
+          "default": true
+        },
+        "summonMaxAllies": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "summonCharges": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "summonChargeRechargeTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
     }
   }
 }

@@ -97,16 +97,20 @@ enum class ShadowQuality { Off, Low, Medium, High };
 enum class MaterialQuality { Low, Medium, High };
 
 struct NodePose;
+class BakedLighting;   // baked lightmaps + light probes of a map (BakedLighting.h, agent-lightbake)
+enum class BakedQuality { Off, Low, High };
 
 // Post-processing hook (engine/render/PostFx.h implements it). With an active hook, render() draws
 // the scene into the hook's offscreen target instead of `screenPass`; resolvePostFx() then runs the
 // effect chain into `screenPass` and leaves that pass open (UI and overlays drawn after it are not
 // post-processed). Without a hook, or with no active effect, nothing changes and it costs nothing.
-struct PostFrame { mat4 viewProj; float3 cameraPos; Lighting lighting; int width = 0, height = 0; };
+struct PostFrame { mat4 viewProj; float3 cameraPos; Lighting lighting; int width = 0, height = 0;
+                   gfx::TextureHandle sunShadow; mat4 lightViewProj; }; // sunShadow: empty when shadows are off
 class PostProcess {
 public:
     virtual ~PostProcess() = default;
     virtual bool active() const = 0;
+    virtual bool linearScene() const { return false; }
     virtual gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) = 0;
     virtual void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) = 0;
 };
@@ -158,13 +162,27 @@ enum DrawFlags : uint32_t {
     // part drawn earlier is painted over by a farther part drawn later; casts no shadow. Its depth is written afterwards
     // (colour mask off), so ground layers drawn after the translucent pass stay under it. Also per material: "transparent"
     kDrawTransparent = 16,
+    // static scenery (does not move for the whole map): receives a baked lightmap and is part of the scene
+    // the light baker captures (Renderer3D::setModelCapture). Dynamic objects get light probes instead.
+    kDrawStatic = 32,
+};
+
+struct ModelRenderStats {
+    uint64_t nodes = 0, culledNodes = 0, lodNodes[4] = {};
+    uint64_t triangles = 0, instancedDraws = 0, drawnInstances = 0;
 };
 
 class Renderer3D {
 public:
     bool init(gfx::Device& dev);
     void shutdown();
+    // Optional fixed scene bounds for interior/model viewers; clear to use RTS ground fitting.
+    void setShadowBounds(float3 lo, float3 hi) { shadowBoundsMin_=lo; shadowBoundsMax_=hi; hasShadowBounds_=true; }
+    void clearShadowBounds() { hasShadowBounds_=false; }
     void setShadowQuality(ShadowQuality q);
+    // Desktop/benchmark override of the High-tier map size (2048 default). Low/Medium keep their sizes.
+    int shadowMapSize() const { return shadowSize_; }
+    bool setShadowMapSize(int size) { highShadowSize_=size; setShadowQuality(quality_); return quality_!=ShadowQuality::High||shadowMap_.valid(); }
     ShadowQuality shadowQuality() const { return quality_; }
     static ShadowQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
 
@@ -200,6 +218,7 @@ public:
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
     // reflections on water. On by default with High shadows; AIVERSE_TRACE=off|on overrides.
     void setTraceEnabled(bool on) { traceWanted_ = on; }
+    void setModelReflectionsEnabled(bool on) { modelReflections_ = on; }
     bool traceEnabled() const { return traceWanted_; }
     bool traceActive() const;                              // this frame: wanted, High shadows, height field bound
     static bool defaultTraceFor(const gfx::Device& dev, bool mobile);
@@ -224,6 +243,9 @@ public:
     int sceneWidth() const { return sceneW_; }
     int sceneHeight() const { return sceneH_; }
     uint32_t drawCalls() const { return drawCalls_; }
+    void setModelCullingEnabled(bool on) { modelCullingEnabled_ = on; }
+    void setModelInstancingEnabled(bool on) { modelInstancingEnabled_ = on; }
+    const ModelRenderStats& modelStats() const { return modelStats_; }
     struct RenderProfile {
         double submitMs=0,occlusionMs=0;
         std::array<double,5> selectMs{},sortMs{},drawMs{};
@@ -237,10 +259,30 @@ public:
     uint32_t instanceLimit() const { return instanceLimit_; }
     void setModelLodEnabled(bool enabled) { modelLodEnabled_=enabled; }
 
+    // Baked global illumination (agent-lightbake): lightmaps for static models (matched by model path,
+    // node and world transform), light probes for everything else, mixed with the realtime sun by the
+    // set's mode (indirect / shadowmask / subtractive). Null = realtime only. The set must outlive its use.
+    void setBakedLighting(const BakedLighting* b) { baked_ = b; }
+    const BakedLighting* bakedLighting() const { return baked_; }
+    void setBakedQuality(BakedQuality q);
+    BakedQuality bakedQuality() const { return bakedQuality_; }
+    static BakedQuality defaultBakedQualityFor(const gfx::Device& dev, bool mobile);
+    bool bakedActive() const { return baked_ && bakedQuality_ != BakedQuality::Off; }
+    // model primitives of the last scene that took a lightmap / the probes (diagnostics, lightbake_status)
+    uint32_t bakedLightmapped() const { return bakedLightmapped_; }
+    uint32_t bakedProbed() const { return bakedProbed_; }
+    // Light baker capture: every drawModel with kDrawStatic is reported (world matrix per node) until reset.
+    using ModelCapture = std::function<void(const ModelDraw& d, const std::vector<mat4>& nodeWorld)>;
+    void setModelCapture(ModelCapture fn) { capture_ = std::move(fn); }
+    // Inside a custom lit draw (terrain): bind the terrain lightmap for AIVERSE_*_BAKED_TERRAIN (BakedShaders.h):
+    // uniform block `uniformSlot`, RGBM page at `lightmapSlot`, shadow mask at `maskSlot` (placeholders when none).
+    void bindBakedTerrain(int uniformSlot, int lightmapSlot, int maskSlot);
+
 private:
     struct DrawItem { const Mesh* mesh; mat4 model; float4 color; uint32_t flags; float specular, emissive; };
     struct ModelItem {
         const Model* model; const Primitive* prim; const Material* mat;
+        bool rigid = false, castShadow = false;
         GeometryPolicy geometry;
         size_t geometryPrimitive = 0;
         uint32_t firstIndex = 0, indexCount = 0;
@@ -251,6 +293,9 @@ private:
         float dissolve, teamGlow;
         float4 outline;
         int32_t morph;      // offset into morphData_ (8 weights), -1 = none
+        int16_t lmPage = -1;  // baked lightmap page (anim = uv2 scale / offset), -1 = none
+        uint8_t gi = 0;       // 0 realtime ambient, 1 lightmap, 2 light probes
+        uint8_t shadowRole = 0;   // 0 normal, 1 part covered by its mesh's shadow batch, 2 the shadow batch
         bool inView, inShadow; float depth;
     };
     void initModels();
@@ -276,8 +321,11 @@ private:
     gfx::BufferHandle lineVB_, triVB_;
     gfx::TextureHandle shadowMap_;
     int shadowSize_ = 0;
+    int highShadowSize_ = 2048;
     float shadowTexelWorld_ = 0.05f;   // world size of one shadow-map texel
     float shadowExtent_ = 50.0f;       // world size covered by the shadow map
+    bool hasShadowBounds_ = false;
+    float3 shadowBoundsMin_{}, shadowBoundsMax_{};
     ShadowQuality quality_ = ShadowQuality::Medium;
     std::vector<DrawItem> items_;
     std::vector<ColorVertex> lines_, tris_;
@@ -293,8 +341,10 @@ private:
     // trace tier
     bool traceWanted_ = true;
     bool ssrThisFrame_ = false;
+    bool modelReflections_ = false; // opt-in opaque PBR SSR; High trace + HDR only
+    bool hdrFrame_ = false;
     HeightField heightField_;
-    struct SceneTarget { int w = 0, h = 0; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
+    struct SceneTarget { int w = 0, h = 0; bool hdr = false; gfx::TextureHandle color, depth; uint64_t lastUse = 0; };
     std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)
     gfx::TextureHandle sceneColor_, sceneDepth_;   // this frame's capture
     gfx::TextureHandle dummyDepth_, dummyHeight_;
@@ -308,6 +358,9 @@ private:
     float3 camFwd_;
 
     // models
+    ModelRenderStats modelStats_;
+    bool modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
+    bool auxiliaryModelPass_ = false;
     bool profiling_=false,modelLodEnabled_=true;
     RenderProfile profile_;
     uint32_t instanceLimit_=32;
@@ -339,6 +392,13 @@ private:
     gfx::TextureHandle white_, black_, flatNormal_;
     gfx::PipelineHandle currentPipe_;
     std::string modelError_;
+    // baked lighting (Renderer3DBaked.cpp)
+    const BakedLighting* baked_ = nullptr;
+    BakedQuality bakedQuality_ = BakedQuality::High;
+    uint32_t bakedLightmapped_ = 0, bakedProbed_ = 0, bakedCountLm_ = 0, bakedCountPr_ = 0;
+    ModelCapture capture_;
+    void bakedItem(ModelItem& it, const ModelDraw& d, int node);
+    void bindBakedGI(const ModelItem& it);
 };
 
 } // namespace aiverse::render

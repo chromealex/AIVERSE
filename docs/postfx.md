@@ -1,5 +1,9 @@
 # Post effects (`postfx`)
 
+The scene can now use a linear RGBA16F HDR pipeline; see [HDR rendering](hdr.md)
+for `postfx.hdr`, quality fallback, colour contracts and GPU validation. Descriptions
+of RGBA8-only targets below refer to the compatibility path.
+
 Full-screen effects over the 3D scene: bloom, colour grading, LUTs, vignette, tilt-shift, sun
 shafts, FXAA, film grain and a few stylistic ones. They are data (`game.json`, overridable per map),
 edited in the editor window **Постэффекты** or over MCP (`postfx_*`). HUD, overlays and the game UI

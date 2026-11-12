@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "provenance": "Original AIVERSE presets; no external textures or code.",
+  "materials": [
+    {
+      "id": "sg_limestone",
+      "name": "Известняк",
+      "graph": "shaders/sg_limestone.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_basalt",
+      "name": "Базальт",
+      "graph": "shaders/sg_basalt.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_cloth_red",
+      "name": "Красная ткань",
+      "graph": "shaders/sg_cloth_red.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_cloth_blue",
+      "name": "Синяя ткань",
+      "graph": "shaders/sg_cloth_blue.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_steel",
+      "name": "Сталь",
+      "graph": "shaders/sg_steel.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_brass",
+      "name": "Латунь",
+      "graph": "shaders/sg_brass.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_copper",
+      "name": "Медь",
+      "graph": "shaders/sg_copper.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_wax",
+      "name": "Воск",
+      "graph": "shaders/sg_wax.json",
+      "textureSamples": 0,
+      "nodes": 6
+    },
+    {
+      "id": "sg_candle_glow",
+      "name": "Свечение свечи",
+      "graph": "shaders/sg_candle_glow.json",
+      "textureSamples": 0,
+      "nodes": 6
+    }
+  ]
+}

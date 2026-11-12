@@ -84,7 +84,7 @@ bool decodeInput(const Command& c,Input& out) {
     if(c.type!=kInputCommand||c.args.size()!=8||!c.units.empty()||c.target.valid())return false;
     const auto& a=c.args;
     if(a[0]<-1000||a[0]>1000||a[1]<-1000||a[1]>1000||a[2]<0||a[2]>=Fixed::kOne ||
-       a[3]<-Fixed::kOne/4+64||a[3]>Fixed::kOne/4-64||a[4]<0||(a[4]&~int64_t(1023))!=0||((a[4]&224)>>5)>4||a[5]<0||a[5]>UINT32_MAX||a[6]<0||a[6]>int64_t(Action::Vault)||a[7]<0||a[7]>UINT32_MAX)return false;
+       a[3]<-Fixed::kOne/4+64||a[3]>Fixed::kOne/4-64||a[4]<0||(a[4]&~int64_t(kButtonBits))!=0||((a[4]&224)>>5)>4||a[5]<0||a[5]>UINT32_MAX||a[6]<0||a[6]>int64_t(Action::Vault)||a[7]<0||a[7]>UINT32_MAX)return false;
     out={int32_t(a[0]),int32_t(a[1]),Fixed::fromRaw(a[2]),Fixed::fromRaw(a[3]),uint32_t(a[4]),uint32_t(a[5]),c.seq,Action(a[6]),uint32_t(a[7])};return true;
 }
 void io(Archive& a,Input& i){a(i.forward,i.right,i.yaw,i.pitch,i.buttons,i.viewTick,i.sequence,i.action,i.argument);}

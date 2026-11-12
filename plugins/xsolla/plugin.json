@@ -1,0 +1,6 @@
+{
+  "name": "xsolla",
+  "description": "Xsolla web shop (Pay Station) for HTML5 builds: catalog prices from the Xsolla Store API, checkout in a Pay Station window opened with a token the game's backend creates (Bunker Wars: v/market/initXsolla), grants confirmed by the backend (Xsolla webhook). Protocol: store (docs/plugins.md); extra method token {token} or session {headers}. Config: projectId, sandbox, items {product id: Xsolla SKU}, tokenUrl (backend endpoint: POST {productId} -> {token}), statusUrl (optional: POST {productId, token} -> {paid}), headers {name: value} sent to the backend.",
+  "provides": ["store"],
+  "web": { "js": ["web/xsolla.js"] }
+}

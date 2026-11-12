@@ -96,7 +96,7 @@ std::vector<std::string> writeEditorIcons(const std::string& dir, const std::str
     fs::create_directories(dir, ec);
     Image logo;
     const Image* lp = !logoPath.empty() && loadImageFile(logoPath, logo) ? &logo : nullptr;
-    // .rtsproj files carry the engine icon itself (the same tile as the editor)
+    // .aiverse files carry the engine icon itself (the same tile as the editor)
     auto doc = [&](int px) { return editorAppIcon(px, lp); };
     auto app = [&](int px) { return editorAppIcon(px, lp); };
     auto icns = [](auto&& draw) {

@@ -435,6 +435,8 @@ Rules loadRules(const Json& j) {
             w.splash = wj.getFx("splash");
             w.damageType = damageIdx(wj.getStr("damageType", "normal"));
             w.chargeTime = wj.getFx("chargeTime");
+            w.rangeAspect = wj.getFx("rangeAspect", w.rangeAspect);
+            if (w.rangeAspect.raw <= 0) fail(where + " weapon " + w.id + " rangeAspect", "must be > 0");
             if (wj.has("onHit")) {
                 const Json& oh = wj["onHit"];
                 w.onHit = int16_t(ep.payload(where + " weapon " + w.id + " onHit", oh.isObject() && oh.has("effects") ? oh["effects"] : oh));
@@ -707,7 +709,7 @@ Rules loadRules(const Json& j) {
         ep.playerAbility("playerAbility", pj, a);
         r.playerAbilities.push_back(std::move(a));
     }
-    if (r.playerAbilities.size() > 64) fail("playerAbilities", "at most 64");
+    if (r.playerAbilities.size() > 256) fail("playerAbilities", "at most 256");   // per-player state is a vector (Bunker Wars: 119 skills)
     std::string storage = j.getStr("storage", "player");
     if (storage != "player" && storage != "buildings") fail("storage", "expected 'player' or 'buildings', got '" + storage + "'");
     r.buildingStorage = storage == "buildings";
@@ -722,6 +724,7 @@ Rules loadRules(const Json& j) {
         r.lanes.left = std::clamp<int>(int(ln.getInt("left", 0)), 0, 8);
         r.lanes.right = std::clamp<int>(int(ln.getInt("right", 0)), 0, 8);
         r.lanes.spacing = ln.getFx("spacing", r.lanes.spacing);
+        loadRouteRules(ln, r.routes);   // RtsRoutesData.cpp
     }
     if (const Json& mv = j["movement"]; mv.isObject()) {
         std::string av = mv.getStr("avoidance", "rvo");
@@ -768,6 +771,7 @@ Rules loadRules(const Json& j) {
     }
     loadOriginals(r, j, ep);   // fidelity mechanics (RtsOriginalsData.cpp)
     loadFidelity(r, j, ep);    // foundations, traps (RtsFidelityData.cpp)
+    loadModes(r, j);           // match modes, timed rules, resource levels (RtsModesData.cpp)
     // built-in statuses (internal ids start with '_')
     r.userStatuses = r.statuses.size();
     auto builtin = [&](const char* id, uint32_t flags) {
@@ -802,6 +806,7 @@ Rules loadRules(const Json& j) {
     loadMechRules(r, j);
     r.armor.plainFloor = !r.originals && !r.mech.any && !j.has("armor") && !j.has("armorModel");   // old games: damage - armor, at least raw / 5
     loadGridFieldRules(r, j);   // RtsGridFieldData.cpp: rules "fields", type "field" emitters, "field" effects
+    loadRaidRules(r, j);        // RtsRaidData.cpp: rules "raid" (extraction raids)
     if (r.bwAI) loadBwAIConfig(j["ai"], Json(), r);   // agent-bw-ai: validate ai.bw now (map part at setup)
     return r;
 }

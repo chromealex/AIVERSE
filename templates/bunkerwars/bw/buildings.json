@@ -1,0 +1,2951 @@
+// Bunker Wars buildings, every number as in the client (BW units: divide ranges by scale for cells).
+{
+ "scale": 40,
+ "usedRace": "Race1",
+ "races": {
+  "Race1": {
+   "clientId": 1,
+   "raceType": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race1.asset",
+   "buildings": [
+    {
+     "name": "House1",
+     "fowRange": 300,
+     "type": 1,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 40,
+     "moraleCatchEnemyPoints": 100,
+     "moraleLostPoints": 50,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 3.0303,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 20,
+       "delta": 0
+      },
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "bunker1"
+    },
+    {
+     "name": "House2",
+     "fowRange": 325,
+     "type": 1,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 70,
+     "moraleCatchNeutralPoints": 100,
+     "moraleCatchEnemyPoints": 250,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 100,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1.5151,
+     "maxValue": 40,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 5,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 40,
+       "delta": 20
+      },
+      {
+       "value": 110,
+       "delta": 10
+      }
+     ],
+     "id": "bunker2"
+    },
+    {
+     "name": "House3",
+     "fowRange": 350,
+     "type": 1,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 160,
+     "moraleCatchEnemyPoints": 400,
+     "moraleLostPoints": 200,
+     "moraleUpgradePoints": 150,
+     "shieldCoefficient": 1.2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1,
+     "maxValue": 60,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 10,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 60,
+       "delta": 20
+      },
+      {
+       "value": 120,
+       "delta": 10
+      }
+     ],
+     "id": "bunker3"
+    },
+    {
+     "name": "House4",
+     "fowRange": 375,
+     "type": 1,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 220,
+     "moraleCatchEnemyPoints": 550,
+     "moraleLostPoints": 280,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.7518,
+     "maxValue": 80,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 80,
+       "delta": 20
+      },
+      {
+       "value": 130,
+       "delta": 10
+      }
+     ],
+     "id": "bunker4"
+    },
+    {
+     "name": "House5",
+     "fowRange": 400,
+     "type": 1,
+     "level": 5,
+     "buildingTime": 20,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 300,
+     "moraleCatchEnemyPoints": 750,
+     "moraleLostPoints": 380,
+     "moraleUpgradePoints": 250,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.6,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 999,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 96,
+       "delta": 20
+      },
+      {
+       "value": 140,
+       "delta": 10
+      }
+     ],
+     "id": "bunker5"
+    },
+    {
+     "name": "Smithy1",
+     "fowRange": 300,
+     "type": 4,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.25,
+     "damageGlobalPercent": 1.5,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory1"
+    },
+    {
+     "name": "Smithy2",
+     "fowRange": 300,
+     "type": 4,
+     "level": 2,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.35,
+     "damageGlobalPercent": 1.75,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory2"
+    },
+    {
+     "name": "Smithy3",
+     "fowRange": 300,
+     "type": 4,
+     "level": 3,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.45,
+     "damageGlobalPercent": 1.9,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory3"
+    },
+    {
+     "name": "Smithy4",
+     "fowRange": 300,
+     "type": 4,
+     "level": 4,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.5,
+     "damageGlobalPercent": 2,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory4"
+    },
+    {
+     "name": "Tower1",
+     "fowRange": 410,
+     "type": 2,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 80,
+     "moraleCatchEnemyPoints": 200,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.35,
+     "fireRange": 360,
+     "fireMetersPerSecond": 1500,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 90,
+       "delta": 0
+      },
+      {
+       "value": 140,
+       "delta": 0
+      }
+     ],
+     "id": "tower1"
+    },
+    {
+     "name": "Tower2",
+     "fowRange": 455,
+     "type": 2,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 500,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.7,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.8,
+     "fireRange": 405,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 30
+      },
+      {
+       "value": 170,
+       "delta": 30
+      }
+     ],
+     "id": "tower2"
+    },
+    {
+     "name": "Tower3",
+     "fowRange": 500,
+     "type": 2,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 320,
+     "moraleCatchEnemyPoints": 800,
+     "moraleLostPoints": 400,
+     "moraleUpgradePoints": 300,
+     "shieldCoefficient": 1.9,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.25,
+     "fireRange": 450,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower3"
+    },
+    {
+     "name": "Tower4",
+     "fowRange": 545,
+     "type": 2,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 440,
+     "moraleCatchEnemyPoints": 1100,
+     "moraleLostPoints": 550,
+     "moraleUpgradePoints": 400,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.7,
+     "fireRange": 495,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 180,
+       "delta": 30
+      },
+      {
+       "value": 200,
+       "delta": 10
+      }
+     ],
+     "id": "tower4"
+    }
+   ],
+   "special": [
+    {
+     "name": "DominationPointInfo",
+     "fowRange": 350,
+     "type": 16,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 2,
+      "buildingType": 0
+     },
+     "id": "domination"
+    },
+    {
+     "name": "KOHPointInfo",
+     "fowRange": 400,
+     "type": 32,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 4,
+      "buildingType": 0
+     },
+     "id": "koh"
+    },
+    {
+     "name": "CavePointInfo",
+     "fowRange": 350,
+     "type": 64,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 64
+     },
+     "id": "cave"
+    },
+    {
+     "name": "GraveyardPointInfo",
+     "fowRange": 350,
+     "type": 128,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 128
+     },
+     "id": "graveyard"
+    },
+    {
+     "name": "Campaign_HospitalPointInfo",
+     "fowRange": 350,
+     "type": 8,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 5,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 8
+     },
+     "id": "hospital"
+    },
+    {
+     "name": "Campaign_StoragePointInfo",
+     "fowRange": 350,
+     "type": 256,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 200,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 256
+     },
+     "id": "storage"
+    },
+    {
+     "name": "Campaign_MegaTowerPointInfo",
+     "fowRange": 350,
+     "type": 512,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 1000,
+     "moraleLostPoints": 1000,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 512
+     },
+     "id": "megatower"
+    },
+    {
+     "name": "Campaign_PrisonPointInfo",
+     "fowRange": 350,
+     "type": 1024,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 5,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 1024
+     },
+     "id": "prison"
+    },
+    {
+     "name": "Campaign_SnowBunkerPointInfo",
+     "fowRange": 350,
+     "type": 2048,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 255,
+      "buildingType": 2048
+     },
+     "id": "snowbunker"
+    }
+   ]
+  },
+  "Race2": {
+   "clientId": 2,
+   "raceType": 2,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race2.asset",
+   "buildings": [
+    {
+     "name": "House1",
+     "fowRange": 300,
+     "type": 1,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 40,
+     "moraleCatchEnemyPoints": 100,
+     "moraleLostPoints": 50,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 3.0303,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 20,
+       "delta": 0
+      },
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "bunker1"
+    },
+    {
+     "name": "House2",
+     "fowRange": 325,
+     "type": 1,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 70,
+     "moraleCatchNeutralPoints": 100,
+     "moraleCatchEnemyPoints": 250,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 100,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1.5151,
+     "maxValue": 40,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 5,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 40,
+       "delta": 20
+      },
+      {
+       "value": 110,
+       "delta": 10
+      }
+     ],
+     "id": "bunker2"
+    },
+    {
+     "name": "House3",
+     "fowRange": 350,
+     "type": 1,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 160,
+     "moraleCatchEnemyPoints": 400,
+     "moraleLostPoints": 200,
+     "moraleUpgradePoints": 150,
+     "shieldCoefficient": 1.2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1,
+     "maxValue": 60,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 10,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 60,
+       "delta": 20
+      },
+      {
+       "value": 120,
+       "delta": 10
+      }
+     ],
+     "id": "bunker3"
+    },
+    {
+     "name": "House4",
+     "fowRange": 375,
+     "type": 1,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 220,
+     "moraleCatchEnemyPoints": 550,
+     "moraleLostPoints": 280,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.7518,
+     "maxValue": 80,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 80,
+       "delta": 20
+      },
+      {
+       "value": 130,
+       "delta": 10
+      }
+     ],
+     "id": "bunker4"
+    },
+    {
+     "name": "House5",
+     "fowRange": 400,
+     "type": 1,
+     "level": 5,
+     "buildingTime": 20,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 300,
+     "moraleCatchEnemyPoints": 750,
+     "moraleLostPoints": 380,
+     "moraleUpgradePoints": 250,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.6,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 999,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 96,
+       "delta": 20
+      },
+      {
+       "value": 140,
+       "delta": 10
+      }
+     ],
+     "id": "bunker5"
+    },
+    {
+     "name": "Smithy1",
+     "fowRange": 300,
+     "type": 4,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.25,
+     "damageGlobalPercent": 1.5,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory1"
+    },
+    {
+     "name": "Smithy2",
+     "fowRange": 300,
+     "type": 4,
+     "level": 2,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.35,
+     "damageGlobalPercent": 1.75,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory2"
+    },
+    {
+     "name": "Smithy3",
+     "fowRange": 300,
+     "type": 4,
+     "level": 3,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.45,
+     "damageGlobalPercent": 1.9,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory3"
+    },
+    {
+     "name": "Smithy4",
+     "fowRange": 300,
+     "type": 4,
+     "level": 4,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.5,
+     "damageGlobalPercent": 2,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory4"
+    },
+    {
+     "name": "Tower1",
+     "fowRange": 410,
+     "type": 2,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 80,
+     "moraleCatchEnemyPoints": 200,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.35,
+     "fireRange": 360,
+     "fireMetersPerSecond": 1500,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower1"
+    },
+    {
+     "name": "Tower2",
+     "fowRange": 455,
+     "type": 2,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 500,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.7,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.8,
+     "fireRange": 405,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 30
+      },
+      {
+       "value": 170,
+       "delta": 30
+      }
+     ],
+     "id": "tower2"
+    },
+    {
+     "name": "Tower3",
+     "fowRange": 500,
+     "type": 2,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 320,
+     "moraleCatchEnemyPoints": 800,
+     "moraleLostPoints": 400,
+     "moraleUpgradePoints": 300,
+     "shieldCoefficient": 1.9,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.25,
+     "fireRange": 450,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower3"
+    },
+    {
+     "name": "Tower4",
+     "fowRange": 545,
+     "type": 2,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 440,
+     "moraleCatchEnemyPoints": 1100,
+     "moraleLostPoints": 550,
+     "moraleUpgradePoints": 400,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.7,
+     "fireRange": 495,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 180,
+       "delta": 30
+      },
+      {
+       "value": 200,
+       "delta": 10
+      }
+     ],
+     "id": "tower4"
+    }
+   ],
+   "special": [
+    {
+     "name": "DominationPointInfo",
+     "fowRange": 350,
+     "type": 16,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 2,
+      "buildingType": 0
+     },
+     "id": "domination"
+    },
+    {
+     "name": "KOHPointInfo",
+     "fowRange": 400,
+     "type": 32,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 4,
+      "buildingType": 0
+     },
+     "id": "koh"
+    },
+    {
+     "name": "CavePointInfo",
+     "fowRange": 350,
+     "type": 64,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 64
+     },
+     "id": "cave"
+    },
+    {
+     "name": "GraveyardPointInfo",
+     "fowRange": 350,
+     "type": 128,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 128
+     },
+     "id": "graveyard"
+    },
+    {
+     "name": "Campaign_HospitalPointInfo",
+     "fowRange": 350,
+     "type": 8,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 5,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 8
+     },
+     "id": "hospital"
+    },
+    {
+     "name": "Campaign_StoragePointInfo",
+     "fowRange": 350,
+     "type": 256,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 200,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 256
+     },
+     "id": "storage"
+    },
+    {
+     "name": "Campaign_MegaTowerPointInfo",
+     "fowRange": 350,
+     "type": 512,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 1000,
+     "moraleLostPoints": 1000,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 512
+     },
+     "id": "megatower"
+    },
+    {
+     "name": "Campaign_PrisonPointInfo",
+     "fowRange": 350,
+     "type": 1024,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 5,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 1024
+     },
+     "id": "prison"
+    },
+    {
+     "name": "Campaign_SnowBunkerPointInfo",
+     "fowRange": 350,
+     "type": 2048,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 2048
+     },
+     "id": "snowbunker"
+    }
+   ]
+  },
+  "Race3": {
+   "clientId": 3,
+   "raceType": 4,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race3.asset",
+   "buildings": [
+    {
+     "name": "House1",
+     "fowRange": 300,
+     "type": 1,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 40,
+     "moraleCatchEnemyPoints": 100,
+     "moraleLostPoints": 50,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 3.0303,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 20,
+       "delta": 0
+      },
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "bunker1"
+    },
+    {
+     "name": "House2",
+     "fowRange": 325,
+     "type": 1,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 70,
+     "moraleCatchNeutralPoints": 100,
+     "moraleCatchEnemyPoints": 250,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 100,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1.5151,
+     "maxValue": 40,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 5,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 40,
+       "delta": 20
+      },
+      {
+       "value": 110,
+       "delta": 10
+      }
+     ],
+     "id": "bunker2"
+    },
+    {
+     "name": "House3",
+     "fowRange": 350,
+     "type": 1,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 160,
+     "moraleCatchEnemyPoints": 400,
+     "moraleLostPoints": 200,
+     "moraleUpgradePoints": 150,
+     "shieldCoefficient": 1.2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1,
+     "maxValue": 60,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 10,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 60,
+       "delta": 20
+      },
+      {
+       "value": 120,
+       "delta": 10
+      }
+     ],
+     "id": "bunker3"
+    },
+    {
+     "name": "House4",
+     "fowRange": 375,
+     "type": 1,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 220,
+     "moraleCatchEnemyPoints": 550,
+     "moraleLostPoints": 280,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.7518,
+     "maxValue": 80,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 80,
+       "delta": 20
+      },
+      {
+       "value": 130,
+       "delta": 10
+      }
+     ],
+     "id": "bunker4"
+    },
+    {
+     "name": "House5",
+     "fowRange": 400,
+     "type": 1,
+     "level": 5,
+     "buildingTime": 20,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 300,
+     "moraleCatchEnemyPoints": 750,
+     "moraleLostPoints": 380,
+     "moraleUpgradePoints": 250,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.6,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 999,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 96,
+       "delta": 20
+      },
+      {
+       "value": 140,
+       "delta": 10
+      }
+     ],
+     "id": "bunker5"
+    },
+    {
+     "name": "Smithy1",
+     "fowRange": 300,
+     "type": 4,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.25,
+     "damageGlobalPercent": 1.5,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory1"
+    },
+    {
+     "name": "Smithy2",
+     "fowRange": 300,
+     "type": 4,
+     "level": 2,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.35,
+     "damageGlobalPercent": 1.75,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory2"
+    },
+    {
+     "name": "Smithy3",
+     "fowRange": 300,
+     "type": 4,
+     "level": 3,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.45,
+     "damageGlobalPercent": 1.9,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory3"
+    },
+    {
+     "name": "Smithy4",
+     "fowRange": 300,
+     "type": 4,
+     "level": 4,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.5,
+     "damageGlobalPercent": 2,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory4"
+    },
+    {
+     "name": "Tower1",
+     "fowRange": 410,
+     "type": 2,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 80,
+     "moraleCatchEnemyPoints": 200,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.35,
+     "fireRange": 360,
+     "fireMetersPerSecond": 1500,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower1"
+    },
+    {
+     "name": "Tower2",
+     "fowRange": 455,
+     "type": 2,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 500,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.7,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.8,
+     "fireRange": 405,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 30
+      },
+      {
+       "value": 170,
+       "delta": 30
+      }
+     ],
+     "id": "tower2"
+    },
+    {
+     "name": "Tower3",
+     "fowRange": 500,
+     "type": 2,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 320,
+     "moraleCatchEnemyPoints": 800,
+     "moraleLostPoints": 400,
+     "moraleUpgradePoints": 300,
+     "shieldCoefficient": 1.9,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.25,
+     "fireRange": 450,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower3"
+    },
+    {
+     "name": "Tower4",
+     "fowRange": 545,
+     "type": 2,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 440,
+     "moraleCatchEnemyPoints": 1100,
+     "moraleLostPoints": 550,
+     "moraleUpgradePoints": 400,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.7,
+     "fireRange": 495,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 180,
+       "delta": 30
+      },
+      {
+       "value": 200,
+       "delta": 10
+      }
+     ],
+     "id": "tower4"
+    }
+   ],
+   "special": [
+    {
+     "name": "DominationPointInfo",
+     "fowRange": 350,
+     "type": 16,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 2,
+      "buildingType": 0
+     },
+     "id": "domination"
+    },
+    {
+     "name": "KOHPointInfo",
+     "fowRange": 400,
+     "type": 32,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 4,
+      "buildingType": 0
+     },
+     "id": "koh"
+    },
+    {
+     "name": "CavePointInfo",
+     "fowRange": 350,
+     "type": 64,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 64
+     },
+     "id": "cave"
+    },
+    {
+     "name": "GraveyardPointInfo",
+     "fowRange": 350,
+     "type": 128,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 128
+     },
+     "id": "graveyard"
+    },
+    {
+     "name": "Campaign_HospitalPointInfo",
+     "fowRange": 350,
+     "type": 8,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 5,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 8
+     },
+     "id": "hospital"
+    },
+    {
+     "name": "Campaign_StoragePointInfo",
+     "fowRange": 350,
+     "type": 256,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 200,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 256
+     },
+     "id": "storage"
+    },
+    {
+     "name": "Campaign_MegaTowerPointInfo",
+     "fowRange": 350,
+     "type": 512,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 1000,
+     "moraleLostPoints": 1000,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 512
+     },
+     "id": "megatower"
+    },
+    {
+     "name": "Campaign_PrisonPointInfo",
+     "fowRange": 350,
+     "type": 1024,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 5,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 1024
+     },
+     "id": "prison"
+    },
+    {
+     "name": "Campaign_SnowBunkerPointInfo",
+     "fowRange": 350,
+     "type": 2048,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 2048
+     },
+     "id": "snowbunker"
+    }
+   ]
+  },
+  "Race4": {
+   "clientId": 4,
+   "raceType": 8,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Races/Race4.asset",
+   "buildings": [
+    {
+     "name": "House1",
+     "fowRange": 300,
+     "type": 1,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 40,
+     "moraleCatchEnemyPoints": 100,
+     "moraleLostPoints": 50,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 3.0303,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 20,
+       "delta": 0
+      },
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "bunker1"
+    },
+    {
+     "name": "House2",
+     "fowRange": 325,
+     "type": 1,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 70,
+     "moraleCatchNeutralPoints": 100,
+     "moraleCatchEnemyPoints": 250,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 100,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1.5151,
+     "maxValue": 40,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 5,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 40,
+       "delta": 20
+      },
+      {
+       "value": 110,
+       "delta": 10
+      }
+     ],
+     "id": "bunker2"
+    },
+    {
+     "name": "House3",
+     "fowRange": 350,
+     "type": 1,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 160,
+     "moraleCatchEnemyPoints": 400,
+     "moraleLostPoints": 200,
+     "moraleUpgradePoints": 150,
+     "shieldCoefficient": 1.2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 1,
+     "maxValue": 60,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 10,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 60,
+       "delta": 20
+      },
+      {
+       "value": 120,
+       "delta": 10
+      }
+     ],
+     "id": "bunker3"
+    },
+    {
+     "name": "House4",
+     "fowRange": 375,
+     "type": 1,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 220,
+     "moraleCatchEnemyPoints": 550,
+     "moraleLostPoints": 280,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.7518,
+     "maxValue": 80,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 80,
+       "delta": 20
+      },
+      {
+       "value": 130,
+       "delta": 10
+      }
+     ],
+     "id": "bunker4"
+    },
+    {
+     "name": "House5",
+     "fowRange": 400,
+     "type": 1,
+     "level": 5,
+     "buildingTime": 20,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 300,
+     "moraleCatchEnemyPoints": 750,
+     "moraleLostPoints": 380,
+     "moraleUpgradePoints": 250,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.6,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 999,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 96,
+       "delta": 20
+      },
+      {
+       "value": 140,
+       "delta": 10
+      }
+     ],
+     "id": "bunker5"
+    },
+    {
+     "name": "Smithy1",
+     "fowRange": 300,
+     "type": 4,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.25,
+     "damageGlobalPercent": 1.5,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory1"
+    },
+    {
+     "name": "Smithy2",
+     "fowRange": 300,
+     "type": 4,
+     "level": 2,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.35,
+     "damageGlobalPercent": 1.75,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory2"
+    },
+    {
+     "name": "Smithy3",
+     "fowRange": 300,
+     "type": 4,
+     "level": 3,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.45,
+     "damageGlobalPercent": 1.9,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory3"
+    },
+    {
+     "name": "Smithy4",
+     "fowRange": 300,
+     "type": 4,
+     "level": 4,
+     "buildingTime": 0,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 300,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 1.5,
+     "damageGlobalPercent": 2,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 100,
+       "delta": 0
+      }
+     ],
+     "id": "armory4"
+    },
+    {
+     "name": "Tower1",
+     "fowRange": 410,
+     "type": 2,
+     "level": 1,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 80,
+     "moraleCatchEnemyPoints": 200,
+     "moraleLostPoints": 100,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.4,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.35,
+     "fireRange": 360,
+     "fireMetersPerSecond": 1500,
+     "cost": 30,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower1"
+    },
+    {
+     "name": "Tower2",
+     "fowRange": 455,
+     "type": 2,
+     "level": 2,
+     "buildingTime": 5,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 200,
+     "moraleCatchEnemyPoints": 500,
+     "moraleLostPoints": 120,
+     "moraleUpgradePoints": 200,
+     "shieldCoefficient": 1.7,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 1.8,
+     "fireRange": 405,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 30
+      },
+      {
+       "value": 170,
+       "delta": 30
+      }
+     ],
+     "id": "tower2"
+    },
+    {
+     "name": "Tower3",
+     "fowRange": 500,
+     "type": 2,
+     "level": 3,
+     "buildingTime": 10,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 320,
+     "moraleCatchEnemyPoints": 800,
+     "moraleLostPoints": 400,
+     "moraleUpgradePoints": 300,
+     "shieldCoefficient": 1.9,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.25,
+     "fireRange": 450,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 150,
+       "delta": 30
+      },
+      {
+       "value": 190,
+       "delta": 20
+      }
+     ],
+     "id": "tower3"
+    },
+    {
+     "name": "Tower4",
+     "fowRange": 545,
+     "type": 2,
+     "level": 4,
+     "buildingTime": 15,
+     "costGift": 5,
+     "radius": 80,
+     "soulsRadius": 80,
+     "moraleCatchNeutralPoints": 440,
+     "moraleCatchEnemyPoints": 1100,
+     "moraleLostPoints": 550,
+     "moraleUpgradePoints": 400,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 2.7,
+     "fireRange": 495,
+     "fireMetersPerSecond": 1500,
+     "cost": 20,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 180,
+       "delta": 30
+      },
+      {
+       "value": 200,
+       "delta": 10
+      }
+     ],
+     "id": "tower4"
+    }
+   ],
+   "special": [
+    {
+     "name": "DominationPointInfo",
+     "fowRange": 350,
+     "type": 16,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 2,
+      "buildingType": 0
+     },
+     "id": "domination"
+    },
+    {
+     "name": "KOHPointInfo",
+     "fowRange": 400,
+     "type": 32,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0.5,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [
+      {
+       "value": 120,
+       "delta": 0
+      },
+      {
+       "value": 110,
+       "delta": 0
+      }
+     ],
+     "filter": {
+      "modType": 4,
+      "buildingType": 0
+     },
+     "id": "koh"
+    },
+    {
+     "name": "CavePointInfo",
+     "fowRange": 350,
+     "type": 64,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 64
+     },
+     "id": "cave"
+    },
+    {
+     "name": "GraveyardPointInfo",
+     "fowRange": 350,
+     "type": 128,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 0,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1.1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 50,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 128
+     },
+     "id": "graveyard"
+    },
+    {
+     "name": "Campaign_HospitalPointInfo",
+     "fowRange": 350,
+     "type": 8,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 5,
+     "maxValue": 100,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 8
+     },
+     "id": "hospital"
+    },
+    {
+     "name": "Campaign_StoragePointInfo",
+     "fowRange": 350,
+     "type": 256,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 2,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 200,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 256
+     },
+     "id": "storage"
+    },
+    {
+     "name": "Campaign_MegaTowerPointInfo",
+     "fowRange": 350,
+     "type": 512,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 1000,
+     "moraleLostPoints": 1000,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 3,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 512
+     },
+     "id": "megatower"
+    },
+    {
+     "name": "Campaign_PrisonPointInfo",
+     "fowRange": 350,
+     "type": 1024,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 5,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 0,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 1024
+     },
+     "id": "prison"
+    },
+    {
+     "name": "Campaign_SnowBunkerPointInfo",
+     "fowRange": 350,
+     "type": 2048,
+     "level": 1,
+     "buildingTime": 0,
+     "costGift": 0,
+     "radius": 80,
+     "soulsRadius": 50,
+     "moraleCatchNeutralPoints": 0,
+     "moraleCatchEnemyPoints": 0,
+     "moraleLostPoints": 500,
+     "moraleUpgradePoints": 0,
+     "shieldCoefficient": 1,
+     "shieldGlobalPercent": 0,
+     "damageGlobalPercent": 0,
+     "increaseTime": 0,
+     "maxValue": 20,
+     "firePerSecond": 0,
+     "fireRange": 0,
+     "fireMetersPerSecond": 1,
+     "cost": 0,
+     "maxCount": -1,
+     "tips": [],
+     "filter": {
+      "modType": 0,
+      "buildingType": 2048
+     },
+     "id": "snowbunker"
+    }
+   ]
+  }
+ }
+}

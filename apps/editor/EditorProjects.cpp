@@ -67,7 +67,7 @@ ImU32 tint(const std::string& id) {   // stable colour per template for the card
 void Editor::showProjectHub(int tab) { showPicker_ = true; g_hub.tab = tab; g_hub.error.clear(); }
 
 // Folder browser as a modal: returns true when a folder was chosen (in `out`). Opening a project, it
-// also lists .rtsproj files (a click on one opens it, like a double-click in the OS file manager).
+// also lists .aiverse files (a click on one opens it, like a double-click in the OS file manager).
 bool hubFolderBrowser(bool& open, std::string& dir, char* newFolder, size_t newFolderSize, bool needProject, std::string& out) {
     bool chosen = false;
     if (open) ImGui::OpenPopup("Выбор папки");
@@ -131,7 +131,7 @@ bool hubFolderBrowser(bool& open, std::string& dir, char* newFolder, size_t newF
         ImGui::BeginDisabled(!here);
         if (ImGui::Button(needProject ? "Открыть этот проект" : "Выбрать эту папку", ImVec2(180, 0))) { out = dir; chosen = true; }
         ImGui::EndDisabled();
-        if (needProject && !here) { ImGui::SameLine(); ImGui::TextDisabled("Выберите файл .rtsproj или папку с game.json"); }
+        if (needProject && !here) { ImGui::SameLine(); ImGui::TextDisabled("Выберите файл проекта (.aiverse, .rtsproj) или папку с game.json"); }
         ImGui::SameLine(ImGui::GetWindowWidth() - 110);
         if (ImGui::Button("Отмена", ImVec2(90, 0))) open = false;
         if (chosen) { open = false; ImGui::CloseCurrentPopup(); }
@@ -157,13 +157,13 @@ void Editor::drawGamePicker() {
     if (ImGui::Selectable(ICON_PROJECT "  Проекты", H.tab == 0, 0, ImVec2(0, 30))) H.tab = 0;
     if (ImGui::Selectable(ICON_ZAP "  Сделать игру", H.tab == 2, 0, ImVec2(0, 30))) H.tab = 2;
     if (ImGui::Selectable(ICON_PLUS "  Новый проект", H.tab == 1, 0, ImVec2(0, 30))) H.tab = 1;
-    {   // .rtsproj double-click: does the OS know this editor?
+    {   // .aiverse double-click: does the OS know this editor?
         const AssocStatus& fa = fileAssoc();
         ImGui::SetCursorPosY(ImGui::GetWindowHeight() - (ws_.project.dir.empty() ? 40 : 80) - (fa.registered || !fa.supported ? 0 : 50));
-        if (fa.registered) ImGui::TextDisabled(ICON_CHECK " .rtsproj открываются здесь");
-        else if (fa.supported) { ImGui::PushTextWrapPos(0); ImGui::TextDisabled("Открывать .rtsproj двойным кликом в этом редакторе"); ImGui::PopTextWrapPos(); }
-        else ImGui::TextDisabled(".rtsproj: связь недоступна");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Двойной клик по файлу проекта .rtsproj открывает его в редакторе.\n%s", fa.detail.c_str());
+        if (fa.registered) ImGui::TextDisabled(ICON_CHECK " .aiverse открываются здесь");
+        else if (fa.supported) { ImGui::PushTextWrapPos(0); ImGui::TextDisabled("Открывать .aiverse двойным кликом в этом редакторе"); ImGui::PopTextWrapPos(); }
+        else ImGui::TextDisabled(".aiverse: связь недоступна");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Двойной клик по файлу проекта .aiverse открывает его в редакторе.\n%s", fa.detail.c_str());
         if (!fa.registered && fa.supported && ImGui::Button(ICON_LINK " Связать", ImVec2(-1, 0))) registerFileAssoc();
     }
     if (!ws_.project.dir.empty()) {
@@ -190,7 +190,7 @@ void Editor::drawGamePicker() {
             ImGui::SameLine();
         } else ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - openW);
         if (ui::button(ICON_FOLDER_OPEN, "Открыть…")) { H.browsing = true; H.browseFor = 1; H.browseDir = defaultProjectsDir(); }
-        ImGui::SetItemTooltip("Открыть папку проекта (с game.json) или файл .rtsproj");
+        ImGui::SetItemTooltip("Открыть папку проекта (с game.json) или файл проекта (.aiverse, .rtsproj)");
         ImGui::Separator();
         ImGui::BeginChild("##list");
         int shown = 0;

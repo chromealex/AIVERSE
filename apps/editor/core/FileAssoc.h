@@ -1,9 +1,9 @@
-// Opening .rtsproj project files with the editor by double-click / "Open with", per user (no
+// Opening .aiverse project files (and legacy .rtsproj ones) with the editor by double-click / "Open with", per user (no
 // admin rights):
-//   Linux:   shared-mime-info type application/x-aiverse-project (*.rtsproj) + a .desktop entry
+//   Linux:   shared-mime-info type application/x-aiverse-project (*.aiverse, *.rtsproj) + a .desktop entry
 //            (Exec=<editor> %f) + icons in ~/.local/share, default handler in ~/.config/mimeapps.list
 //            (xdg-mime when installed); update-mime-database / update-desktop-database when present.
-//   Windows: HKCU\Software\Classes\.rtsproj -> AIVERSE.Project (DefaultIcon, shell\open\command).
+//   Windows: HKCU\Software\Classes\.aiverse and .rtsproj -> AIVERSE.Project (DefaultIcon, shell\open\command).
 //   macOS:   the bundle's Info.plist declares the type (com.aiverse.project); the editor re-registers
 //            its bundle with LaunchServices (lsregister -f) when it moved and claims the default role.
 // The editor calls ensureFileAssociation() at startup (cheap file / registry check, registers only
@@ -20,9 +20,9 @@ inline constexpr const char* kEditorDesktopId = "aiverse-editor.desktop";
 
 struct AssocStatus {
     bool supported = false;      // this OS / way of running can register (macOS: only from AiverseEditor.app)
-    bool registered = false;     // .rtsproj opens with this editor (as far as we can tell)
-    bool otherDefault = false;   // installed, but the user picked another program for .rtsproj (not overridden at startup)
-    std::string detail;          // readable state (Russian), e.g. who handles .rtsproj instead
+    bool registered = false;     // .aiverse opens with this editor (as far as we can tell)
+    bool otherDefault = false;   // installed, but the user picked another program for project files (not overridden at startup)
+    std::string detail;          // readable state (Russian), e.g. who handles .aiverse instead
 };
 
 // Master image for the icons registration writes (editor logo, apps/editor/branding/icon_1024.png);
@@ -30,7 +30,7 @@ struct AssocStatus {
 void setFileAssocLogo(const std::string& pngPath);
 
 AssocStatus fileAssociationStatus(const std::string& editorExe);
-// Registers this editor (exe path; macOS: the binary inside AiverseEditor.app) as the handler of .rtsproj.
+// Registers this editor (exe path; macOS: the binary inside AiverseEditor.app) as the handler of .aiverse and legacy .rtsproj.
 bool registerFileAssociation(const std::string& editorExe, std::string* message);
 // Startup: registers silently when needed. Off with AIVERSE_FILE_ASSOC=off and in automated runs
 // (AIVERSE_SCREENSHOT / AIVERSE_EXIT_AFTER_FRAMES); never overrides a program the user picked. Returns a log line when something was done.

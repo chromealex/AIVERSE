@@ -2,6 +2,7 @@
 #include "AnimationRig.h"
 #include "FullBodyIK.h"
 #include "AnimationMotion.h"
+#include "AnimationController.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -117,6 +118,8 @@ std::shared_ptr<const AnimationGraph> AnimationGraph::compileImpl(const Model& m
         } else if(kind=="motionMatching") {
             n.kind=Kind::MotionMatching;n.motion=MotionDatabase::compile(m,v["database"],g->defaults_);
             context.frames+=n.motion->frames.size();if(context.frames>16384)bad("expanded graph exceeds 16384 motion frames");
+        } else if(kind=="controller") {
+            n.kind=Kind::Controller;n.controller=AnimationController::compile(m,v["controller"],g->defaults_);
         } else if(kind=="subgraph") {
             n.kind=Kind::Subgraph;auto name=v.getStr("graph");auto it=context.graphs.find(name);
             if(it==context.graphs.end())bad("unknown subgraph '"+name+"'");
@@ -206,7 +209,7 @@ std::shared_ptr<const AnimationGraph> AnimationGraph::compileImpl(const Model& m
 void AnimationGraphInstance::reset(std::shared_ptr<const AnimationGraph> g) {
     graph_=std::move(g); parameters_={}; healthy_=true; error_.clear(); state_=0; time_=fadeTime_=fadeDuration_=0;
     source_.clear();last_.clear();bind_.clear();poses_.clear();nativeState_.clear();world_.clear();clocks_.clear();
-    children_.clear();motions_.clear();traitState_.clear();rigs_.clear();
+    children_.clear();motions_.clear();controllers_.clear();traitState_.clear();rigs_.clear();
     if(!graph_) return;
     parameters_=graph_->defaults(); state_=graph_->initial(); bindPose(*graph_->model(),bind_);
     poses_.resize(graph_->nodes().size(),bind_); nativeState_.resize(poses_.size()); clocks_.resize(poses_.size()); last_=bind_;
@@ -216,11 +219,12 @@ void AnimationGraphInstance::reset(std::shared_ptr<const AnimationGraph> g) {
 }
 void AnimationGraphInstance::resetNodes() {
     rigs_.assign(graph_->nodes().size(),{});
-    children_.resize(graph_->nodes().size());motions_.resize(children_.size());traitState_.resize(children_.size());
+    children_.resize(graph_->nodes().size());motions_.resize(children_.size());controllers_.resize(children_.size());traitState_.resize(children_.size());
     for(size_t i=0;i<children_.size();++i){const auto& n=graph_->nodes()[i];
         if(n.rig)rigs_[i]=std::make_shared<AnimationRigState>();
         if(n.subgraph){if(!children_[i])children_[i]=std::make_shared<AnimationGraphInstance>();children_[i]->reset(n.subgraph);}
         if(n.motion){if(!motions_[i])motions_[i]=std::make_shared<MotionPlayer>();motions_[i]->reset(n.motion);}
+        if(n.controller){if(!controllers_[i])controllers_[i]=std::make_shared<AnimationControllerPlayer>();controllers_[i]->reset(n.controller);}
         traitState_[i].clear();for(const auto& t:n.traits)traitState_[i].push_back({std::vector<float>(t.implementation?t.implementation->stateFloats:0),true,t.rig?std::make_shared<AnimationRigState>():nullptr});
     }
 }
@@ -232,6 +236,7 @@ void AnimationGraphInstance::bindChild(size_t i){
     }
 }
 AnimationGraphInstance* AnimationGraphInstance::child(const std::string& name){if(graph_)for(size_t i=0;i<children_.size();++i)if(graph_->nodes()[i].id==name)return children_[i].get();return nullptr;}
+const AnimationControllerPlayer* AnimationGraphInstance::controller(const std::string& name)const{if(graph_)for(size_t i=0;i<controllers_.size();++i)if(graph_->nodes()[i].id==name)return controllers_[i].get();return nullptr;}
 const MotionPlayer* AnimationGraphInstance::motion(const std::string& name)const{if(graph_)for(size_t i=0;i<motions_.size();++i)if(graph_->nodes()[i].id==name)return motions_[i].get();return nullptr;}
 bool AnimationGraph::hasContacts() const {
     for(const auto& n:nodes()){if(n.subgraph&&n.subgraph->hasContacts())return true;if(n.rig)for(auto& u:n.rig->units())if(u.locomotion||(u.fullBody&&u.fullBody->contacts()))return true;for(auto& t:n.traits)if(t.rig)for(auto& u:t.rig->units())if(u.locomotion||(u.fullBody&&u.fullBody->contacts()))return true;}return false;
@@ -266,6 +271,7 @@ void AnimationGraphInstance::update(float dt) {
         }
         if(children_[i]){bindChild(i);children_[i]->update(dt);if(!children_[i]->healthy()){healthy_=false;error_=children_[i]->error();}}
         if(motions_[i])motions_[i]->update(dt,parameters_);
+        if(controllers_[i])controllers_[i]->update(dt,parameters_);
         if(n.operation&&n.operation->update) n.operation->update(n.config,parameters_,dt,nativeState_[i]);
         for(size_t t=0;t<n.traits.size();++t){auto& st=traitState_[i][t];const auto& op=n.traits[t].implementation;
             if(st.enabled&&op&&op->postUpdate&&!op->postUpdate(n.traits[t].config,parameters_,dt,st.data))traitFailure(i,t);
@@ -294,6 +300,7 @@ void AnimationGraphInstance::evaluateCurrent(Pose& result) {
         float w=std::clamp(value(parameters_,n.parameter,n.weight),0.f,1.f);
         if(n.kind==AnimationGraph::Kind::Subgraph){bindChild(i);children_[i]->evaluate(p);if(!children_[i]->healthy()){healthy_=false;error_=children_[i]->error();}}
         else if(n.kind==AnimationGraph::Kind::MotionMatching)motions_[i]->evaluate(p);
+        else if(n.kind==AnimationGraph::Kind::Controller)controllers_[i]->evaluate(p,parameters_);
         else if(n.kind==AnimationGraph::Kind::Bind) p=bind_;
         else if(n.kind==AnimationGraph::Kind::Clip) {
             p=bind_; const auto& clip=model.clips[size_t(n.clip)];

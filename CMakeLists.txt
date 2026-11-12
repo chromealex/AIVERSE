@@ -83,6 +83,18 @@ else()
     if(WIN32)
         add_compile_options(-Wno-cast-function-type) # GetProcAddress casts are intended
     endif()
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # GCC only (Linux gcc, MinGW). The compact one-line style used across the engine trips
+        # -Wmisleading-indentation, and -Wdangling-reference flags every `const Json& x = f(j[...], "path")`
+        # although Json::operator[] returns a reference into the document. Both are disabled.
+        add_compile_options(-Wno-misleading-indentation $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>)
+        # GCC 12+ -O3 reports these from inside libstdc++ (vector::assign, std::sort, memcpy); they stay visible
+        # as warnings but do not fail -DCMAKE_COMPILE_WARNING_AS_ERROR=ON builds.
+        add_compile_options(-Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=nonnull)
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
+            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-error=dangling-pointer>)
+        endif()
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -127,12 +139,15 @@ add_library(aiverse_game STATIC
     modules/rts/RtsAvoidance.cpp
     modules/rts/RtsEffectsData.cpp
     modules/rts/RtsEffects.cpp
+    modules/rts/RtsSkillObjects.cpp
     modules/rts/RtsSkills.cpp
     modules/rts/RtsAI.cpp
     modules/rts/RtsOriginalsData.cpp
     modules/rts/RtsOriginals.cpp
     modules/rts/RtsFidelityData.cpp
     modules/rts/RtsFidelity.cpp
+    modules/rts/RtsModesData.cpp
+    modules/rts/RtsModes.cpp
     modules/rts/RtsAIOriginals.cpp
     modules/rts/RtsAIFidelity.cpp
     modules/rts/RtsAITerrain.cpp
@@ -162,10 +177,29 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Resource packs (.rpak). The runtime links only the zstd decoder; host tools that write packs
-# link aiverse_pack_writer, which carries the full zstd library instead (never link both).
+# link aiverse_pack_writer, which carries the full zstd library (in host builds the decoder target
+# forwards to it, see below).
 # ---------------------------------------------------------------------------
 set(AIVERSE_CONTENT_PACK "" CACHE FILEPATH "Prebuilt content.rpak to ship instead of loose content (set by aiversebuild)")
-add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+# Host builds (tools or tests on) also compile the full zstd for pack writers; there aiverse_zstd_dec
+# forwards to it, so a binary that mixes runtime and tool libraries carries one zstd copy instead of two
+# (GNU ld rejects the duplicate symbols). Packaged builds (aiversebuild: tools/tests OFF) keep the
+# small decoder-only library.
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    find_package(Threads REQUIRED)
+    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
+    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd PRIVATE -w)
+    endif()
+    add_library(aiverse_zstd_dec INTERFACE)
+    target_link_libraries(aiverse_zstd_dec INTERFACE aiverse_zstd)
+else()
+    add_library(aiverse_zstd_dec STATIC third_party/zstd/zstddeclib.c)
+    if(NOT MSVC)
+        target_compile_options(aiverse_zstd_dec PRIVATE -w)
+    endif()
+endif()
 # HTTP fetcher for chunk downloads, per platform (see engine/pack/Chunks.h).
 if(AIVERSE_PLATFORM STREQUAL "windows")
     set(AIVERSE_PACK_HTTP engine/pack/http/HttpWin.cpp)
@@ -196,16 +230,7 @@ elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT MSVC)
-    target_compile_options(aiverse_zstd_dec PRIVATE -w)
-endif()
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
-    find_package(Threads REQUIRED)
-    add_library(aiverse_zstd STATIC third_party/zstd/zstd.c)
-    target_link_libraries(aiverse_zstd PUBLIC Threads::Threads)
-    if(NOT MSVC)
-        target_compile_options(aiverse_zstd PRIVATE -w)
-    endif()
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
     target_link_libraries(aiverse_pack_writer PUBLIC aiverse_pack aiverse_engine aiverse_zstd)
 endif()
@@ -222,25 +247,58 @@ add_library(aiverse_net STATIC
     engine/net/WebSocket.cpp
     engine/net/Protocol.cpp
     engine/net/Rollback.cpp
-    engine/net/NetClient.cpp)
+    engine/net/NetClient.cpp
+    # secure battle transport + hosted battles (agent-net-mobile, docs/battle-net.md)
+    engine/net/Crypto.cpp
+    engine/net/MatchTicket.cpp
+    engine/net/BattleProtocol.cpp
+    engine/net/SimNet.cpp
+    engine/net/SecureUdp.cpp
+    third_party/monocypher/monocypher.c)
+set_source_files_properties(third_party/monocypher/monocypher.c PROPERTIES COMPILE_OPTIONS "$<IF:$<BOOL:${MSVC}>,/w,-w>")
 target_link_libraries(aiverse_net PUBLIC aiverse_engine)
 if(WIN32)
-    target_link_libraries(aiverse_net PUBLIC ws2_32)
+    target_link_libraries(aiverse_net PUBLIC ws2_32 bcrypt)
 elseif(EMSCRIPTEN)
     target_link_options(aiverse_net PUBLIC -lwebsocket.js)
+endif()
+
+# gRPC client + protobuf codegen (agent-grpc, docs/grpc.md). Libraries are opt-in (EXCLUDE_FROM_ALL);
+# tests / probe build on desktop.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/engine/grpc/CMakeLists.txt")
+    add_subdirectory(engine/grpc)
 endif()
 
 add_library(aiverse_net_server STATIC
     engine/net/server/Server.cpp
     engine/net/server/ServerMatch.cpp
-    engine/net/server/Matchmaker.cpp)
+    engine/net/server/Matchmaker.cpp
+    engine/net/server/ServerHosted.cpp
+    engine/net/server/BattleControl.cpp
+    engine/net/server/ServerReserved.cpp)
 target_link_libraries(aiverse_net_server PUBLIC aiverse_net)
 # Game data on the network side: match loading like the game (tile maps) and the server's verdict
 # (re-simulating a match nobody settled). Server, bot client and net tests share it.
 # Not part of the game client: exported source trees (aiversebuild iOS / Android / web) don't ship apps/server.
+# Hosted battles (agent-net-mobile, docs/battle-net.md): headless load harness with the HeroDuel stand-in
+# module; used by aiverse_battle, aiverse_battle_tests and the editor's battle_net_simulate op.
+if(NOT EMSCRIPTEN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/battle/BattleLoad.cpp")
+    add_library(aiverse_battle_load STATIC apps/battle/BattleLoad.cpp)
+    target_link_libraries(aiverse_battle_load PUBLIC aiverse_net_server)
+    target_include_directories(aiverse_battle_load PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
     add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
     target_link_libraries(aiverse_net_game PUBLIC aiverse_net_server aiverse_game)
+endif()
+# Bunker Wars adapter (agent-bw-meta, docs/meta-bunkerwars.md): default HTTPS transport on the
+# per-platform pack HTTP stack (all platforms); TCP matchmaker/chat links, host probes, battle node
+# bridge and plain internal HTTP (native only).
+add_library(aiverse_bw_http STATIC engine/meta/bw/BwPlatformHttp.cpp)
+target_link_libraries(aiverse_bw_http PUBLIC aiverse_meta_bw aiverse_pack)
+if(NOT EMSCRIPTEN)
+    add_library(aiverse_bw_node STATIC engine/meta/bw/BwHttp.cpp engine/meta/bw/BwNode.cpp engine/meta/bw/BwTcp.cpp)
+    target_link_libraries(aiverse_bw_node PUBLIC aiverse_meta_bw aiverse_net_server)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -306,6 +364,7 @@ add_library(aiverse_models STATIC
     engine/render/GeometrySceneData.cpp
     engine/render/MeshBuilder.cpp
     engine/render/Model.cpp
+    engine/render/ModelMerge.cpp   # static batching of parts that share a material
     engine/render/ModelGltf.cpp
     engine/render/ModelObj.cpp
     engine/render/Animation.cpp
@@ -322,6 +381,8 @@ add_library(aiverse_models STATIC
     engine/render/ImageBlp.cpp
     engine/render/ImageDds.cpp
     engine/render/TextureGen.cpp)
+# baked lighting, CPU side (agent-lightbake): lightmap UVs of models (+ .lmuv sidecars), bake folder reader
+target_sources(aiverse_models PRIVATE engine/render/LightmapUv.cpp engine/bake/LightmapData.cpp)
 # ufbx (MIT / public domain): FBX parser, compiled as its own C library without warnings.
 # AIVERSE_FBX=OFF keeps it out of size-sensitive builds (FBX files then fail with a readable error).
 option(AIVERSE_FBX "FBX import in the runtime (ufbx, ~0.5 MB of code)" ON)
@@ -341,6 +402,17 @@ target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 
 # Programmable presentation animation graphs reuse the existing model sampler and IK.
 target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
+# Unity animation import (agent-unity-anim): clip sidecars and the Mecanim-style controller node.
+target_sources(aiverse_models PRIVATE engine/render/ModelClips.cpp engine/render/AnimationController.cpp)
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
+    add_executable(aiverse_clipinfo tools/unity_anim/clipinfo.cpp)
+    target_link_libraries(aiverse_clipinfo PRIVATE aiverse_models aiverse_zstd_dec)
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_unity_anim_tests tests/unity_anim/controller.cpp)
+    target_link_libraries(aiverse_unity_anim_tests PRIVATE aiverse_models aiverse_zstd_dec)
+    add_test(NAME unity_anim_controller COMMAND aiverse_unity_anim_tests)
+endif()
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_animation_tests tests/animation/graphs.cpp apps/editor/core/AnimationDocument.cpp)
     target_link_libraries(aiverse_animation_tests PRIVATE aiverse_models aiverse_zstd_dec)
@@ -358,7 +430,9 @@ set(AIVERSE_RUNTIME_SRC
     engine/render/Renderer3DTrace.cpp
     engine/render/ImGuiLayer.cpp)
 # post-processing (postfx agent): GPU part in the runtime, data / cost model GPU-free (editor core, aiversemcp, tests)
-list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp)
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/PostFx.cpp engine/render/ScreenLighting.cpp)
+# baked lighting on the GPU (agent-lightbake): lightmaps / probes in the model shaders
+list(APPEND AIVERSE_RUNTIME_SRC engine/render/BakedLighting.cpp engine/render/Renderer3DBaked.cpp)
 add_library(aiverse_shader_graph STATIC engine/render/graph/ShaderGraph.cpp)
 target_link_libraries(aiverse_shader_graph PUBLIC aiverse_engine)
 
@@ -381,7 +455,7 @@ endif()
 
 # The platform files define main(); they are compiled into each executable through an OBJECT
 # library so that the entry point lands in the final binary on every toolchain.
-# Native plugins bridge + store/ads services (engine/platform/Plugins.h, engine/services). No window
+# Native plugins bridge + store/ads/analytics/privacy services (engine/platform/Plugins.h, engine/services). No window
 # needed, so tests link it directly; platform backends live in the runtime sources.
 # Desktop mock store/ads: on for development builds; aiversebuild turns it off in packaged games unless
 # game.json lists a mock (plugins.cmake sets AIVERSE_MOCK_PLUGINS), so they are not even compiled in.
@@ -392,10 +466,15 @@ add_library(aiverse_plugins STATIC
     engine/platform/Plugins.cpp
     engine/platform/PluginJson.cpp
     engine/services/Store.cpp
-    engine/services/Ads.cpp)
+    engine/services/Ads.cpp
+    engine/services/Analytics.cpp      # analytics / privacy (ATT, consent) services + their Lua tables
+    engine/services/Privacy.cpp
+    engine/services/ServicesLua.cpp
+    engine/services/Social.cpp engine/services/Push.cpp engine/services/Links.cpp engine/services/Consent.cpp)   # agent-bw-client
 target_include_directories(aiverse_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(aiverse_plugins PUBLIC aiverse_lua)   # ServicesLua (analytics.* / privacy.* for the UI Lua)
 if(AIVERSE_MOCK_PLUGINS)
-    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp)
+    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp engine/services/MockClientPlugins.cpp)
     target_compile_definitions(aiverse_plugins PUBLIC AIVERSE_WITH_MOCK_PLUGINS=1)
 endif()
 
@@ -409,12 +488,14 @@ if(APPLE)
     if(AIVERSE_PLATFORM STREQUAL "macos")
         target_link_libraries(aiverse_runtime PUBLIC "-framework Cocoa")
     else()
-        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit")
+        # UIKit no longer re-exports CoreGraphics to the linker; PlatformIOS uses CGRect/CGPoint functions directly.
+        target_link_libraries(aiverse_runtime PUBLIC "-framework UIKit" "-framework CoreGraphics")
     endif()
 elseif(AIVERSE_PLATFORM STREQUAL "android")
     set(GLUE ${ANDROID_NDK}/sources/android/native_app_glue)
     add_library(native_app_glue STATIC ${GLUE}/android_native_app_glue.c)
     target_include_directories(native_app_glue PUBLIC ${GLUE})
+    target_compile_options(native_app_glue PRIVATE -w)   # NDK sample source (unused parameters under -Werror)
     target_link_libraries(aiverse_runtime PUBLIC native_app_glue android EGL GLESv3 log)
 elseif(AIVERSE_PLATFORM STREQUAL "web")
     # -lidbfs.js: userDataDir() is persisted in IndexedDB (engine/platform/web)
@@ -430,6 +511,7 @@ add_library(aiverse_game_view STATIC modules/rts/view/RtsView.cpp modules/rts/vi
     modules/rts/view/RtsViewDraw.cpp modules/rts/view/RtsPortrait.cpp
     modules/rts/view/RtsLights.cpp modules/rts/view/RtsLightsData.cpp modules/rts/view/RtsGroundFx.cpp modules/rts/view/RtsTerrainRender.cpp modules/rts/view/RtsTerrainDetailMesh.cpp
     modules/rts/view/RtsFog.cpp modules/rts/view/RtsFieldView.cpp
+    modules/rts/view/TopDownControls.cpp   # top-down hero sticks / buttons / follow camera (agent-topdown-control)
     modules/rts/view/RtsPlanetRender.cpp modules/rts/view/RtsPlanetView.cpp modules/rts/view/RtsPlanetGroundFx.cpp)
 # visual terrain detail surface (agent-terrain): shared by the view and the editor core (sculpt, validate)
 # + the planet surface maths (RtsPlanet*: float cube-sphere surface, detail grid synthesis; editor planet detail ops)
@@ -440,8 +522,8 @@ target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 
 # Helper: package content + platform metadata around an executable.
 function(aiverse_package_app target)
-    # the editor's project file (<Title>.rtsproj) is not game content: dropped from loose dev bundles
-    file(GLOB _aiverse_projfiles RELATIVE "${AIVERSE_CONTENT_DIR}" "${AIVERSE_CONTENT_DIR}/*.rtsproj")
+    # the editor's project file (<Title>.aiverse, legacy .aiverse) is not game content: dropped from loose dev bundles
+    file(GLOB _aiverse_projfiles RELATIVE "${AIVERSE_CONTENT_DIR}" "${AIVERSE_CONTENT_DIR}/*.aiverse" "${AIVERSE_CONTENT_DIR}/*.aiverse")
     set(_aiverse_rm_exe "")
     foreach(f ${_aiverse_projfiles})
         list(APPEND _aiverse_rm_exe "$<TARGET_FILE_DIR:${target}>/content/${f}")
@@ -490,7 +572,7 @@ function(aiverse_package_app target)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}"
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "${res_dir}/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, .rtsproj
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, project file
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "${res_dir}/content/engine"
                 COMMENT "Bundling content")
         endif()
@@ -517,7 +599,7 @@ function(aiverse_package_app target)
         else()
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "$<TARGET_FILE_DIR:${target}>/content"
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_aiverse_rm_exe}   # project outputs, .rtsproj
+                COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/content/Builds" "$<TARGET_FILE_DIR:${target}>/content/logs" ${_aiverse_rm_exe}   # project outputs, .aiverse
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "$<TARGET_FILE_DIR:${target}>/content/engine"
                 COMMENT "Copying content next to the executable")
         endif()
@@ -573,6 +655,29 @@ if(AIVERSE_BUILD_CLIENT)
     endif()
 endif()
 
+# ---------------------------------------------------------------------------
+# Light baker (agent-lightbake): offline CPU path tracer (BVH, threads) for lightmaps + light probes,
+# automatic lightmap UVs (xatlas, MIT), bake folder writer. Host only: editor, MCP, tests.
+# ---------------------------------------------------------------------------
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+    find_package(Threads REQUIRED)
+    add_library(aiverse_xatlas STATIC third_party/xatlas/xatlas.cpp)
+    target_include_directories(aiverse_xatlas PUBLIC third_party/xatlas)
+    if(NOT MSVC)
+        target_compile_options(aiverse_xatlas PRIVATE -w)
+    endif()
+    add_library(aiverse_bake STATIC engine/bake/Bvh.cpp engine/bake/Baker.cpp engine/bake/BakerProbes.cpp
+        engine/bake/BakeScene.cpp engine/bake/LightmapUnwrap.cpp engine/bake/LightmapWrite.cpp engine/bake/Denoise.cpp)
+    target_link_libraries(aiverse_bake PUBLIC aiverse_models aiverse_xatlas Threads::Threads)
+    target_include_directories(aiverse_bake PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_bake_tests tests/bake/bake_tests.cpp)
+    target_link_libraries(aiverse_bake_tests PRIVATE aiverse_bake aiverse_models aiverse_zstd_dec)
+    target_compile_definitions(aiverse_bake_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME bake_tests COMMAND aiverse_bake_tests)
+endif()
+
 if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
     add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
@@ -582,9 +687,16 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_game)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_postfx_data)   # postfx_* ops (postfx agent)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/PostFxOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightBakeOps.cpp)   # lightbake_* ops (agent-lightbake)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_bake)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/NativeBuild.cpp apps/editor/core/NativeBuildOps.cpp)   # per-project editor build with the project's C++ modules
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_terrain_detail)
     target_include_directories(aiverse_editor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    if(TARGET aiverse_battle_load)   # battle_net_simulate (agent-net-mobile)
+        target_sources(aiverse_editor_core PRIVATE apps/editor/core/BattleNetOps.cpp)
+        target_link_libraries(aiverse_editor_core PUBLIC aiverse_battle_load)
+        target_compile_definitions(aiverse_editor_core PRIVATE AIVERSE_BATTLE_OPS=1)
+    endif()
     if(WIN32)
         target_link_libraries(aiverse_editor_core PUBLIC ws2_32)
     endif()
@@ -602,7 +714,7 @@ if(AIVERSE_BUILD_EDITOR)
         target_sources(aiverse_editor PRIVATE apps/editor/branding/editor.rc)   # exe + window icon
     endif()
     if(APPLE)
-        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .rtsproj default
+        # per-project editor builds (apps/editor/core/NativeBuild.cpp) pass another id: the .aiverse default
         # handler (chosen by bundle id) stays the regular editor
         set(AIVERSE_EDITOR_BUNDLE_ID "com.aiverse.editor" CACHE STRING "Bundle identifier of AiverseEditor.app")
         set_target_properties(aiverse_editor PROPERTIES MACOSX_BUNDLE TRUE OUTPUT_NAME "AiverseEditor"
@@ -643,6 +755,7 @@ endif()
 
 if(AIVERSE_BUILD_TOOLS)
     add_executable(aiversebuild tools/aiversebuild/main.cpp tools/aiversebuild/FileRules.cpp tools/aiversebuild/Plugins.cpp)
+    target_sources(aiversebuild PRIVATE tools/aiversebuild/TextureCompress.cpp)   # agent-unity-materials: ASTC packaging
     target_sources(aiversebuild PRIVATE tools/aiversebuild/Toolchains.cpp tools/aiversebuild/ToolchainInstall.cpp)   # toolchains agent
     target_link_libraries(aiversebuild PRIVATE aiverse_engine aiverse_pack_writer aiverse_audiopack aiverse_plugins)
     add_executable(assetpipe tools/assetpipe/main.cpp)
@@ -718,9 +831,14 @@ endif()
 
 if(AIVERSE_BUILD_SERVER)
     add_executable(aiverse_server apps/server/main.cpp)
-    target_link_libraries(aiverse_server PRIVATE aiverse_net_game)
+    target_link_libraries(aiverse_server PRIVATE aiverse_net_game $<TARGET_NAME_IF_EXISTS:aiverse_bw_node>)
     add_executable(aiverse_netbot apps/netbot/main.cpp)
     target_link_libraries(aiverse_netbot PRIVATE aiverse_net_game aiverse_i18n)
+endif()
+# Hosted battles (agent-net-mobile): battle tool (the load harness library is defined next to aiverse_net_server).
+if(AIVERSE_BUILD_SERVER AND TARGET aiverse_battle_load)
+    add_executable(aiverse_battle apps/battle/main.cpp)
+    target_link_libraries(aiverse_battle PRIVATE aiverse_battle_load)
 endif()
 
 if(AIVERSE_BUILD_TESTS)
@@ -729,6 +847,15 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_net_tests PRIVATE aiverse_net_game aiverse_i18n)
     target_compile_definitions(aiverse_net_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_net_tests COMMAND aiverse_net_tests)
+    if(TARGET aiverse_battle_load)
+        add_executable(aiverse_battle_tests tests/net_mobile/battle_tests.cpp)
+        target_link_libraries(aiverse_battle_tests PRIVATE aiverse_battle_load)
+        add_test(NAME aiverse_battle_tests COMMAND aiverse_battle_tests)
+    endif()
+    add_executable(aiverse_bw_meta_tests tests/bw_meta_tests.cpp)   # agent-bw-meta: BW backend adapter
+    target_link_libraries(aiverse_bw_meta_tests PRIVATE aiverse_bw_node aiverse_bw_http aiverse_net_game)
+    target_compile_definitions(aiverse_bw_meta_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME aiverse_bw_meta_tests COMMAND aiverse_bw_meta_tests)
     add_executable(aiverse_tests tests/tests.cpp)
     target_link_libraries(aiverse_tests PRIVATE aiverse_game aiverse_i18n aiverse_pack_writer aiverse_models)
     target_link_libraries(aiverse_tests PRIVATE aiverse_postfx_data)   # postfx agent
@@ -739,10 +866,12 @@ if(AIVERSE_BUILD_TESTS)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
     target_sources(aiverse_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
         engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp engine/render/GeometryScene.cpp)
+    target_sources(aiverse_tests PRIVATE engine/render/BakedLighting.cpp engine/render/Renderer3DBaked.cpp)   # agent-lightbake
     target_sources(aiverse_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
     target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
     target_sources(aiverse_tests PRIVATE tools/aiversebuild/Toolchains.cpp)   # toolchain detection (fake HOME)
+    target_sources(aiverse_tests PRIVATE tools/aiversebuild/Plugins.cpp)   # plugin step: Info.plist / SKAdNetwork / Podfile (agent-sdk-plugins)
     if(TARGET aiverse_modelconv)   # model conversion step of packs (models agent)
         target_link_libraries(aiverse_tests PRIVATE aiverse_modelconv)
         target_compile_definitions(aiverse_tests PRIVATE AIVERSE_TEST_MODELCONV=1)
@@ -864,6 +993,8 @@ endif()
 # grid fields in the editor (field_* MCP ops, Scene preview)
 if(TARGET aiverse_editor_core)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/FieldOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/RaidOps.cpp)   # extraction raids (agent-extraction)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/RouteOps.cpp)   # Bunker Wars routes / screen
 endif()
 
 # VFX tools (vfx tools agent): Unity particle importer tests (Python, stdlib only) and the fx_* editor
@@ -873,6 +1004,8 @@ if(AIVERSE_BUILD_TESTS)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME unity_vfx_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/unity_vfx/test_import.py)
+        add_test(NAME unity_anim_importer COMMAND ${CMAKE_COMMAND} -E env AIVERSE_CLIPINFO=$<TARGET_FILE:aiverse_clipinfo>
+                 ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/unity_anim/test_unity_anim.py)
     endif()
 endif()
 if(TARGET aiverse_editor_core)
@@ -992,6 +1125,16 @@ if(NOT MSVC)
 endif()
 # grid fields (G5): data, kernels, Lua `field` table (docs/fields.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/RtsGridFieldData.cpp modules/rts/RtsGridFieldsApi.cpp)
+# extraction raids (agent-extraction): match loop, extraction points, raid inventory, interactables, receipts, bot, Lua `raid`
+target_sources(aiverse_game PRIVATE modules/rts/RtsRaid.cpp modules/rts/RtsRaidData.cpp modules/rts/RtsRaidBot.cpp modules/rts/RtsRaidApi.cpp)
+# top-down heroes (agent-topdown-control): rules "topDown", stick input commands, aim / auto-fire (docs/topdown.md)
+target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
+# map environment (Bunker Wars port: weather, wind, bosses, Mouro, scroller, caves, graveyards, souls, walls)
+target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvData.cpp modules/rts/RtsEnvBoss.cpp modules/rts/RtsEnvScript.cpp modules/rts/RtsEnvPoints.cpp)
+# driving (agent-gta2): the top-down hero drives vehicles of the vehicle-controllers library (docs/driving.md)
+target_sources(aiverse_game PRIVATE modules/rts/RtsDriving.cpp)
+# Bunker Wars routes, groups, multiscreen (docs/game-format.md § Routes)
+target_sources(aiverse_game PRIVATE modules/rts/RtsRoutes.cpp modules/rts/RtsRoutesData.cpp modules/rts/RtsScriptRoutes.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
@@ -1013,6 +1156,7 @@ target_sources(aiverse_game_view PRIVATE engine/render/RenderTexture.cpp modules
 foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/ClientRegionInput.cpp)
+        target_sources(${t} PRIVATE apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
     endif()
 endforeach()
 
@@ -1033,7 +1177,7 @@ if(AIVERSE_BUILD_TESTS)
 endif()
 
 # ---------------------------------------------------------------------------
-# Project files `<Title>.rtsproj` and opening them from the OS (project-file agent): ProjectFile /
+# Project files `<Title>.aiverse` (legacy `.aiverse`) and opening them from the OS (project-file agent): ProjectFile /
 # FileAssoc in the editor core (Linux mime + .desktop, Windows HKCU registry, macOS LaunchServices),
 # the editor's own Info.plist (document type com.aiverse.project) and the document icon drawn by
 # aiverse_projicon (tools/branding/ProjectIcon.*).
@@ -1066,7 +1210,7 @@ if(TARGET aiverse_editor)
             add_custom_command(TARGET aiverse_editor POST_BUILD
                 COMMAND $<TARGET_FILE:aiverse_projicon> "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_editor>/Resources"
                         "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/branding/icon_1024.png"
-                COMMENT ".rtsproj document icon")
+                COMMENT ".aiverse document icon")
         endif()
     endif()
 endif()
@@ -1091,8 +1235,25 @@ if(TARGET aiverse_editor_core)
 endif()
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     add_test(NAME project_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_port.py)
+    add_test(NAME unity_ui_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/unity_ui/test_import.py)
     if(TARGET aiverse_headless)
         set_tests_properties(project_importer PROPERTIES ENVIRONMENT "AIVERSE_PORT_HEADLESS=$<TARGET_FILE:aiverse_headless>")
+    endif()
+    add_test(NAME world_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/port/test_world.py)
+    if(TARGET aiverse_headless)
+        set_tests_properties(world_importer PROPERTIES ENVIRONMENT "AIVERSE_PORT_HEADLESS=$<TARGET_FILE:aiverse_headless>")
+    endif()
+endif()
+
+# Unity URP materials, Shader Graph conversion and texture importer settings (agent-unity-materials):
+# Python importer tests, aiverse_graphcheck (engine Shader Graph compiler on converted graphs), KTX2/ASTC writer tests.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_graphcheck tools/importers/unity_materials/graphcheck.cpp)
+    target_link_libraries(aiverse_graphcheck PRIVATE aiverse_shader_graph)
+    target_sources(aiverse_tests PRIVATE tools/aiversebuild/TextureCompress.cpp)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME unity_materials COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/unity_materials/test_materials.py)
+        set_tests_properties(unity_materials PROPERTIES ENVIRONMENT "AIVERSE_GRAPHCHECK=$<TARGET_FILE:aiverse_graphcheck>")
     endif()
 endif()
 
@@ -1100,10 +1261,13 @@ endif()
 # main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
 set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
-    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp)
+    apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
+    apps/client/ClientBaked.cpp   # ClientBaked: the map's baked lighting (agent-lightbake)
+    apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
 foreach(t aiverse_client main)
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
+        target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # agent-lightbake
     endif()
 endforeach()
 # Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)
@@ -1248,10 +1412,49 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_world)
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${PROJECT_SOURCE_DIR})
 endif()
 
+# boss-encounters (telegraphs, statuses, boss brain, schedule, mob behaviour): tests + headless reference fight.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_library_encounter_tests tests/libraries/encounter_tests.cpp)
+    target_link_libraries(aiverse_library_encounter_tests PRIVATE AIVERSE::lib_boss_encounters)
+    add_test(NAME library_encounters COMMAND aiverse_library_encounter_tests ${PROJECT_SOURCE_DIR})
+endif()
+if(AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_encounter tools/libraries/encounter_main.cpp)
+    target_link_libraries(aiverse_encounter PRIVATE AIVERSE::lib_boss_encounters)
+endif()
+# match-progression (perks, xp, offers, pickups, summons, battle deck): tests + headless run.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_world)
+    add_executable(aiverse_library_progression_tests tests/libraries/perks_tests.cpp)
+    target_link_libraries(aiverse_library_progression_tests PRIVATE AIVERSE::genre)
+    add_test(NAME library_progression COMMAND aiverse_library_progression_tests ${PROJECT_SOURCE_DIR})
+endif()
+if(TARGET aiverse_world AND (AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_TOOLS))
+    add_executable(aiverse_progression tools/libraries/progression_main.cpp)
+    target_link_libraries(aiverse_progression PRIVATE AIVERSE::genre)
+    if(AIVERSE_BUILD_TESTS)
+        add_test(NAME progression_headless COMMAND aiverse_progression --root ${PROJECT_SOURCE_DIR} --verify)
+    endif()
+endif()
+
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_shader_graph_tests tests/shader_graph/compiler.cpp)
     target_link_libraries(aiverse_shader_graph_tests PRIVATE aiverse_shader_graph aiverse_postfx_data aiverse_fx)
     add_test(NAME shader_graph COMMAND aiverse_shader_graph_tests)
+endif()
+
+# Asset-free HDR visual regression fixture (opt-in, uses the actual backends).
+option(AIVERSE_BUILD_HDR_TESTS "Build HDR GPU validation scene" OFF)
+if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_hdr_policy tests/render/hdr_policy.cpp)
+    target_link_libraries(aiverse_hdr_policy PRIVATE aiverse_postfx_data)
+    add_test(NAME hdr_policy COMMAND aiverse_hdr_policy)
+    add_executable(aiverse_hdr_scene tests/render/hdr_scene.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_hdr_scene PRIVATE aiverse_runtime)
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_hdr_gl tests/render/hdr_gl.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_hdr_gl PRIVATE aiverse_runtime "-framework OpenGL")
+        set_source_files_properties(tests/render/hdr_gl.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
 endif()
 
 # Host authoring: shared by the editor, MCP and CPU tests.
@@ -1338,8 +1541,37 @@ if(AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP)
         third_party/meshoptimizer/src/simplifier.cpp
         third_party/meshoptimizer/src/vcacheoptimizer.cpp)
     target_include_directories(aiverse_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
+    add_executable(aiverse_model_visibility_test tests/render/ModelVisibility.cpp)
+    target_include_directories(aiverse_model_visibility_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_model_visibility_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
     add_executable(aiverse_lod_simplify tools/models/lod_simplify.cpp)
     target_link_libraries(aiverse_lod_simplify PRIVATE aiverse_meshoptimizer_lod)
+endif()
+
+option(AIVERSE_BUILD_RENDERBENCH "Build the Sponza rendering benchmark" OFF)
+if(AIVERSE_BUILD_RENDERBENCH AND AIVERSE_DESKTOP)
+    add_executable(aiverse_static_light_grid_test tests/render/StaticLightGrid.cpp)
+    target_include_directories(aiverse_static_light_grid_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_static_light_grid_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME static_light_grid COMMAND aiverse_static_light_grid_test)
+    add_executable(aiverse_camera_tour_test tests/render/CameraTour.cpp)
+    target_link_libraries(aiverse_camera_tour_test PRIVATE aiverse_engine)
+    target_compile_options(aiverse_camera_tour_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
+    add_test(NAME camera_tour COMMAND aiverse_camera_tour_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/renderbench/sponza-tour-draft.json)
+    add_executable(aiverse_reinstance tools/renderbench/reinstance.cpp)
+    target_link_libraries(aiverse_reinstance PRIVATE aiverse_engine)
+    add_executable(aiverse_probe_visibility tools/renderbench/probe_visibility.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_probe_visibility PRIVATE aiverse_runtime)
+    execute_process(COMMAND git describe --always --dirty WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE BENCH_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
+    add_executable(aiverse_renderbench apps/renderbench/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_renderbench PRIVATE aiverse_runtime)
+    target_compile_definitions(aiverse_renderbench PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_renderbench_gl apps/renderbench/gl_mac.mm engine/gfx/gl/GfxGL.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_renderbench_gl PRIVATE aiverse_runtime "-framework OpenGL")
+        target_compile_definitions(aiverse_renderbench_gl PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
+        set_source_files_properties(apps/renderbench/gl_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
+    endif()
 endif()
 
 if(TARGET aiverse_geometry_bench AND TARGET aiverse_meshoptimizer_lod)
@@ -1361,4 +1593,79 @@ endif()
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME skill_library_isolation COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/isolation.py)
     set_tests_properties(skill_library_isolation PROPERTIES TIMEOUT 600)
+endif()
+
+# ---------------------------------------------------------------------------
+# agent-bw-client: Spine 2D skeletal animation (engine/spine). aiverse_spine is GPU-free (data, pose,
+# animation state, draw lists: tests and tools link it); the RHI renderer and the client's UI views
+# (apps/client/ClientSpine.cpp, <img src="#spine:NAME"/>) go into every target that hosts GameClient.
+# ---------------------------------------------------------------------------
+add_library(aiverse_spine STATIC engine/spine/SpineData.cpp engine/spine/SpineSkeleton.cpp)
+target_include_directories(aiverse_spine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(aiverse_spine PUBLIC aiverse_engine)
+foreach(t aiverse_client main aiverse_editor)
+    if(TARGET ${t})
+        target_sources(${t} PRIVATE engine/spine/SpineRender.cpp apps/client/ClientSpine.cpp apps/client/ClientServices.cpp apps/client/ClientGamepad.cpp apps/client/ClientGamepadHost.cpp)
+        target_link_libraries(${t} PRIVATE aiverse_spine aiverse_render2d)
+    endif()
+endforeach()
+if(TARGET aiverse_tests)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_spine)
+endif()
+# agent-bw-client: gamepads (engine/platform/Gamepad.h): common state + one backend per platform.
+if(TARGET aiverse_runtime)
+    target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadCommon.cpp)
+    if(AIVERSE_PLATFORM STREQUAL "macos" OR AIVERSE_PLATFORM STREQUAL "ios")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadApple.mm)
+        target_link_libraries(aiverse_runtime PUBLIC "-framework GameController")
+    elseif(AIVERSE_PLATFORM STREQUAL "android")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadAndroid.cpp)
+    elseif(AIVERSE_PLATFORM STREQUAL "web")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadWeb.cpp)
+    elseif(AIVERSE_PLATFORM STREQUAL "windows")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadWin.cpp)
+    elseif(AIVERSE_PLATFORM STREQUAL "linux")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadLinux.cpp)
+    else()
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadNone.cpp)
+    endif()
+endif()
+if(TARGET aiverse_tests)
+    target_sources(aiverse_tests PRIVATE engine/platform/gamepad/GamepadCommon.cpp engine/platform/gamepad/GamepadNone.cpp apps/client/ClientGamepad.cpp)
+endif()
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)   # agent-bw-client: BW importers (synthetic data, no game files)
+    add_test(NAME bw_tutorial_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/bunkerwars/test_tutorial.py)
+    if(TARGET aiverse_headless)
+        set_tests_properties(bw_tutorial_importer PROPERTIES ENVIRONMENT "AIVERSE_HEADLESS=$<TARGET_FILE:aiverse_headless>")
+    endif()
+    add_test(NAME fmod_audio_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/fmod/test_import_audio.py)
+endif()
+# Windows: every executable gets platform/windows/utf8.manifest (activeCodePage UTF-8). Paths in the
+# engine are UTF-8 std::strings; without it the narrow CRT/STL file APIs use the legacy ANSI code page
+# and a project in a folder like "Моя стратегия" cannot be opened. MSVC merges .manifest sources into
+# its own manifest; MinGW links it as resource 1 of type RT_MANIFEST (24) via a generated .rc.
+if(WIN32)
+    set(AIVERSE_UTF8_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/utf8.manifest")
+    if(MSVC)
+        set(AIVERSE_UTF8_MANIFEST_SOURCE "${AIVERSE_UTF8_MANIFEST}")
+    else()
+        enable_language(RC)
+        set(AIVERSE_UTF8_MANIFEST_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/aiverse_utf8_manifest.rc")
+        file(CONFIGURE OUTPUT "${AIVERSE_UTF8_MANIFEST_SOURCE}" @ONLY
+             CONTENT "// Generated by CMakeLists.txt: UTF-8 code page manifest\n1 24 \"@AIVERSE_UTF8_MANIFEST@\"\n")
+    endif()
+    function(aiverse_utf8_manifest dir)
+        get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(t IN LISTS targets)
+            get_target_property(type ${t} TYPE)
+            if(type STREQUAL "EXECUTABLE")
+                target_sources(${t} PRIVATE "${AIVERSE_UTF8_MANIFEST_SOURCE}")
+            endif()
+        endforeach()
+        get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+        foreach(d IN LISTS subdirs)
+            aiverse_utf8_manifest("${d}")
+        endforeach()
+    endfunction()
+    aiverse_utf8_manifest("${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

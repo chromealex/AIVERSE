@@ -1,0 +1,113 @@
+// Bunker Wars heroes (HeroInfo level 1 + GameData HeroN|*).
+{
+ "heroes": [
+  {
+   "id": "hero1",
+   "clientId": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero1/Levels/Hero1_Level 1.asset",
+   "race": "Race1",
+   "maxSkillEnergy": 500,
+   "energyPerUnit": 0.45,
+   "passiveEnergyPerSecond": 2.5,
+   "talent": "Hero1-Talent",
+   "talentClientId": 1,
+   "trainingMapId": 2001,
+   "levels": 50,
+   "name": {
+    "ru": "Авиатор Шелби",
+    "en": "Aviator Shelby"
+   },
+   "energyPerLostUnitAtMorale0": 2.25
+  },
+  {
+   "id": "hero2",
+   "clientId": 2,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero2/Levels/Hero2_Level 1.asset",
+   "race": "Race2",
+   "maxSkillEnergy": 500,
+   "energyPerUnit": 0.45,
+   "passiveEnergyPerSecond": 2.5,
+   "talent": "Hero2-Talent",
+   "talentClientId": 2,
+   "trainingMapId": 2001,
+   "levels": 50,
+   "name": {
+    "ru": "Снайпер Бахрушина",
+    "en": "Sniper Bakhrushina"
+   },
+   "energyPerLostUnitAtMorale0": 2.25
+  },
+  {
+   "id": "hero3",
+   "clientId": 3,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero3/Levels/Hero3_Level 1.asset",
+   "race": "Race3",
+   "maxSkillEnergy": 500,
+   "energyPerUnit": 0.45,
+   "passiveEnergyPerSecond": 2.5,
+   "talent": "Hero3-Talent",
+   "talentClientId": 3,
+   "trainingMapId": 2001,
+   "levels": 50,
+   "name": {
+    "ru": "Генерал фон Шваб",
+    "en": "General von Schwab"
+   },
+   "energyPerLostUnitAtMorale0": 2.25
+  },
+  {
+   "id": "hero4",
+   "clientId": 4,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero4/Levels/Hero4_Level 1.asset",
+   "race": "Race3",
+   "maxSkillEnergy": 500,
+   "energyPerUnit": 0.45,
+   "passiveEnergyPerSecond": 2.5,
+   "talent": "Hero4-Talent",
+   "talentClientId": 4,
+   "trainingMapId": 2001,
+   "levels": 50,
+   "name": {
+    "ru": "Диверсант Ланда",
+    "en": "Saboteur Landa"
+   },
+   "energyPerLostUnitAtMorale0": 2.25
+  },
+  {
+   "id": "hero5",
+   "clientId": 5,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero5/Levels/Hero5_Level 1.asset",
+   "race": "Race4",
+   "maxSkillEnergy": 500,
+   "energyPerUnit": 0.45,
+   "passiveEnergyPerSecond": 2.5,
+   "talent": "Hero5-Talent",
+   "talentClientId": 5,
+   "trainingMapId": 2001,
+   "levels": 50,
+   "name": {
+    "ru": "Медик Луиза",
+    "en": "Medic Louise"
+   },
+   "energyPerLostUnitAtMorale0": 2.25
+  },
+  {
+   "id": "hero6",
+   "clientId": 6,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_Heroes/Hero6/Levels/Hero6_Level 1.asset",
+   "race": "Race3",
+   "maxSkillEnergy": 500,
+   "energyPerUnit": 0.45,
+   "passiveEnergyPerSecond": 2.5,
+   "talent": "Hero6-Talent",
+   "talentClientId": 6,
+   "trainingMapId": 2001,
+   "levels": 50,
+   "name": {
+    "ru": "Легионер Вито",
+    "en": "Vito the Legionary"
+   },
+   "energyPerLostUnitAtMorale0": 2.25
+  }
+ ]
+}
