@@ -21,6 +21,12 @@ def importer(root):
     return module
 
 
+def extract(root, include=None):
+    module=importer(root)
+    if include and module.__name__!='unity_project.importer': raise ValueError('--include is supported for Unity projects only')
+    return module.extract(root,include) if include else module.extract(root)
+
+
 def run(argv=None):
     argv=list(sys.argv[1:] if argv is None else argv)
     commands=('scan','extract','emit','import','report','item','resolve')
@@ -29,16 +35,18 @@ def run(argv=None):
     ap.add_argument('command',choices=commands); ap.add_argument('path',type=Path)
     ap.add_argument('--out',type=Path); ap.add_argument('--scale',type=float,default=1)
     ap.add_argument('--mode',choices=('auto','2d','3d'),default='auto'); ap.add_argument('--mapping',type=Path); ap.add_argument('--id'); ap.add_argument('--how',choices=('rules','lua','native','dropped'))
-    ap.add_argument('--reason'); args=ap.parse_args(argv)
+    ap.add_argument('--reason')
+    ap.add_argument('--include',action='append',help='Unity: glob of scenes/prefabs to walk (repeatable); assets are limited to what they use')
+    args=ap.parse_args(argv)
     try:
         root=args.path.expanduser().resolve()
         if args.command=='scan': result=importer(root).scan(root)
         elif args.command=='extract':
-            result=importer(root).extract(root)
+            result=extract(root,args.include)
             if args.out: args.out.write_bytes(encoded(result))
         elif args.command in ('import','emit'):
             if not args.out: raise ValueError('--out is required')
-            model=read_json(root) if args.command=='emit' else importer(root).extract(root)
+            model=read_json(root) if args.command=='emit' else extract(root,args.include)
             result=emit(model,args.out.expanduser(),args.scale,args.mapping,args.mode)
         else:
             result=read_json(root/'port-report.json')

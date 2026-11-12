@@ -9,6 +9,7 @@ from .validate import validate
 from .tiles import bake
 from .presentation import convert_texture, sprite
 from .common import digest, encoded, ident, item, read_json, safe, is_within
+from . import world
 
 
 def set_field(obj, path, value):
@@ -58,6 +59,8 @@ class Writer:
                 else:
                     existing.setdefault('types',{})[key] = value
                     self.state['types'][key] = digest(encoded(value))
+            if 'terrain' in rules and 'terrain' not in existing:
+                existing['terrain'] = rules['terrain']  # rules-level settings already present are user-owned
             rules = existing
             # Rules are merged by type, unlike binary assets and maps.
             self.old['files']['rules.json'] = digest(path.read_bytes())
@@ -85,7 +88,10 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     out = out.resolve()
     if out == root or is_within(out, root) or is_within(root, out):
         raise ValueError('source and destination must be separate directories')
+    markers = world.load_rules(mapping)
+    bounds = world.bounds_markers(model, markers, report=False)
     for scene in model['scenes']:
+        if scene.get('terrains') or world.scene_bounds(bounds, scene['name']): continue  # cut to terrain / map bounds below
         for axis in (0,2):
             values = [o['position'][axis]*scale for o in scene['objects']] + [0]
             if max(values)-min(values)+5 > 2048: raise ValueError('scene exceeds 2048 cells; reduce --scale')
@@ -94,7 +100,9 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     writer = Writer(out, model)
     mappings = read_json(Path(__file__).with_name('mapping.json'))
     if mapping: mappings.update(read_json(mapping))
+    mappings.pop('markers', None)
     for key, spec in mappings.items():
+        if key.startswith('_'): continue
         if not isinstance(spec,list) or len(spec)!=2 or not isinstance(spec[0],str) or spec[1] not in ('number','seconds','distance','reciprocal'):
             raise ValueError('invalid mapping for '+str(key))
         if spec[0] not in ('health.max','move.speed','weapons.0.damage','weapons.0.range','weapons.0.cooldown','cost.gold','cost.time'):
@@ -153,22 +161,45 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
         item(model,'AudioSource','approx','Looping camera/manager audio mapped to match playlist.','audio.json',key='music')
     scenes = model['scenes'] or [dict(id='imported', name='Imported scene',source='',objects=[])]
     map_list = []
+    for mid, text in sorted(model.get('meshes', {}).items()):
+        writer.write('content/_meshes/'+mid+'.obj', text.encode())
+    terrains = world.Terrains(model, root)
+    palette = terrains.choose_palette(scenes) if any(s.get('terrains') for s in scenes) else []
+    terrain_rules = {}
+    if palette: terrain_rules['layers'] = world.palette_rules(model, writer, palette, scale)
+    if any(s.get('roads') for s in scenes): terrain_rules['roads'] = False  # baked road meshes are drawn instead
+    bounds = world.bounds_markers(model, markers)
+    by_id = {e['id']:e for e in model['entities']}
     for scene in scenes:
         objects = scene['objects']
+        sw = world.SceneWorld(model, terrains, scene, scale, markers, by_id, bounds)
+        objects = [o for o in objects if o['entity'] not in sw.drop]
         xs = [o['position'][0]*scale for o in objects] + [t['x']*scale for t in scene.get('tiles',[])]; zs = [o['position'][2]*scale for o in objects] + [t['y']*scale for t in scene.get('tiles',[])]
-        ox, oz = min(xs+[0])-2, min(zs+[0])-2
-        width, height = max(16,math.ceil(max(xs+[0])-ox+3)), max(16,math.ceil(max(zs+[0])-oz+3))
+        ext = sw.extents()
+        if ext:
+            ox, oz = math.floor(ext[0]*scale), math.floor(ext[1]*scale)
+            width, height = max(16,math.ceil(ext[2]*scale)-ox), max(16,math.ceil(ext[3]*scale)-oz)
+        else:
+            ox, oz = min(xs+[0])-2, min(zs+[0])-2
+            width, height = max(16,math.ceil(max(xs+[0])-ox+3)), max(16,math.ceil(max(zs+[0])-oz+3))
         if max(width,height)>2048: raise ValueError('scene exceeds 2048 cells; reduce --scale')
-        by_id = {e['id']:e for e in model['entities']}
         ents = [dict(type=o['entity'],owner=by_id[o['entity']].get('owner',0),pos=[round(o['position'][0]*scale-ox,4),round(o['position'][2]*scale-oz,4)]) for o in objects if o['entity'] in types]
+        if ext:
+            inside = [e for e in ents if 0 <= e['pos'][0] < width and 0 <= e['pos'][1] < height]
+            if len(inside) < len(ents):
+                item(model,scene['source'],'approx','%d objects outside the terrain / map bounds dropped.' % (len(ents)-len(inside)),key='outside')
+            ents = inside
         data = dict(name=scene['name'],ported=True,size=[width,height],players=[dict(name='Player '+str(i),team=i) for i in range(1,max([2]+[e['owner'] for e in ents])+1)],entities=ents)
         layer = bake(model,writer,scene,width,height,ox,oz,scale)
         if layer: data['tiles'] = layer
         rel = 'maps/'+scene['id']+'.json'
+        sw.apply(data, writer, 'maps/'+scene['id'], ox, oz, width, height, len(palette), types)
         writer.json(rel,data)
         map_list.append(dict(file=rel,title=scene['name']))
         item(model,scene['source'],'approx','Scene placed with translated origin; ownership, starts, rotation and victory require review.',rel,key='scene')
-    writer.rules(dict(victory='noEntities',resources={'gold':{'name':'Gold','kind':'stock','start':0}},types=types))
+    rules = dict(victory='noEntities',resources={'gold':{'name':'Gold','kind':'stock','start':0}},types=types)
+    if terrain_rules: rules['terrain'] = terrain_rules
+    writer.rules(rules)
     manifest = dict(name=model['name'],id='com.aiverse.'+ident(model['name']),version='0.1.0',module='rts',rules='rules.json',maps=map_list,external=True)
     if is2d: manifest['camera'] = dict(projection='ortho',pitch=90,yaw=0,rotate=False)
     writer.json('game.json',manifest)
@@ -191,8 +222,10 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     report = dict(format=1,engine=model['engine'],sourceRoot=str(root),items=model['items'],scripts=model['scripts'],summary={s:sum(x['status']==s for x in model['items']) for s in ('exact','approx','missing','resolved')})
     context = {e['source']: e for e in model['entities']}
     context.update({s['path']: s for s in model['scripts']})
+    # one context digest per source: entities can carry large serialized components and many items
+    ctx = {k: digest(encoded(v)) for k, v in context.items()}
     for i in report['items']:
-        i['fingerprint'] = digest(encoded({'item': i, 'context':context.get(i['source'])}))
+        i['fingerprint'] = digest(encoded({'item': i, 'context': ctx.get(i['source'])}))
     report['counts'] = dict(assets=len(model['assets']),types=len(types),maps=len(map_list),scripts=len(model['scripts']))
     old_report = safe(out,'port-report.json')
     if old_report.exists():
