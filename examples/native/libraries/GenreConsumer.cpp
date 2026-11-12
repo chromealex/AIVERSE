@@ -11,6 +11,9 @@
 #include <aiverselib/genre/SensesConfigured.h>
 #include <aiverselib/genre/SensesData.h>
 #include <aiverselib/genre/SensesPersistence.h>
+#include <aiverselib/genre/CinematicConfigured.h>
+#include <aiverselib/genre/CinematicData.h>
+#include <aiverselib/genre/CinematicPersistence.h>
 #include <aiverselib/bots/GenreBotConfig.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
@@ -137,6 +140,29 @@ static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aive
     state.values["bots.genre.objective"]=goal->id;
     return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
 }
+// Cinematic gameplay: validated settings + scene JSON, a narrative cue id that starts the scene, two authoritative
+// ticks of time domains feeding the scene runner (hit-stop preset on the world domain), versioned state in NativeState.
+// Presentation plays SceneEvents and reports line/marker progress back as tick-stamped SceneInput.
+static bool libraryCinematicConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::genre;
+    if(!cinematicSettingsErrors(settings).empty())return false;
+    auto lib=readSceneLibrary(aiverse::Json::parse(R"({"scenes":[{"id":1,"trigger":42,"length":120,"checkpointBefore":true,
+        "participants":[{"id":1,"lockInput":true}],
+        "cues":[{"id":1,"at":0,"kind":"dialogue","ref":100,"actor":1},{"id":2,"at":30,"kind":"event","ref":7}],
+        "syncs":[{"id":1,"at":60,"timeout":240,"wait":[{"kind":"lineFinished","cue":1}]}],
+        "qtes":[{"id":1,"at":90,"kind":"press","button":1,"close":45}]}]})"));
+    TimeState time;SceneState scene;TimeInput timeIn;timeIn.add={hitStopRequest(settings)};
+    SceneInput in;in.options=qteOptions(settings);in.commands={cueTrigger(1,42,{{1,1001}})}; // narrative CueRequest{cueId=42}
+    for(uint32_t tick=0;tick<2;++tick){
+        auto t=stepTime(lib.time,time,tick,timeIn);if(!t)return false;in.domainSteps=sceneDomainSteps(*t);
+        auto r=stepScene(lib,scene,tick,in);if(!r)return false;
+        timeIn={};timeIn.add=r->timeAdd;timeIn.cancelTags=r->timeCancelTags;in={};
+    }
+    if(scene.phase!=ScenePhase::Playing||!inputLocked(scene,1))return false;
+    state.values["genre.cinematic_hash"]=int64_t((cinematicHash(scene)^cinematicHash(time))&0x7fffffffffffffffull);
+    state.values["genre.cinematic.library"]=int64_t(sceneLibraryHash(lib)&0x7fffffffffffffffull);
+    return storeBytes(state,"genre.cinematic.time",save(time))&&storeBytes(state,"genre.cinematic.scene",save(scene));
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -153,5 +179,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
     if(!genreBotConsumerExample(state,*parsed.value))return false;
+    if(!libraryCinematicConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

@@ -253,6 +253,41 @@
       "keywords": []
     },
     {
+      "id": "aiverse-cinematic-gameplay",
+      "package": "cinematic-gameplay",
+      "path": "skills/aiverse-cinematic-gameplay/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Authoritative scene flow: integer-ratio time-scale domains (world/player/ui/cinematic) with stacked priority requests, exact accumulators, hit-stop/slow-motion presets; scene timelines of dialogue/animation/camera/sound/event cues with play/pause/skip/seek; sync waits on host-reported line/marker/in-position facts with timeouts; QTE press/mash/hold/sequence judged on input ticks with difficulty and accessibility; interaction staging with marks, teleport fallback and input locks; checkpoint requests and resume at sync points; narrative cue triggers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_cinematic_gameplay",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Cinematic.h",
+      "keywords": [
+        "cinematic",
+        "cutscene",
+        "timeline",
+        "qte",
+        "slowmo",
+        "hitstop",
+        "timescale",
+        "sync",
+        "staging",
+        "checkpoint",
+        "катсцен",
+        "ролик",
+        "таймлайн",
+        "замедлен",
+        "синхрон",
+        "постановк",
+        "чекпоинт"
+      ]
+    },
+    {
       "id": "aiverse-collections",
       "package": "collections",
       "path": "skills/aiverse-collections/SKILL.md",
