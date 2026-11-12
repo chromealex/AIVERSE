@@ -43,6 +43,8 @@ ALIASES = {
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
  'aiverse-cinematic-gameplay':'cinematic cutscene timeline qte slowmo hitstop timescale sync staging checkpoint катсцен ролик таймлайн замедлен синхрон постановк чекпоинт',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
+ 'aiverse-vehicle-controllers':'vehicle car kart truck tank hover plane flight drive gear drift traction seat race lap checkpoint racing машин авто танк самолет гонк круг чекпоинт сиден дрифт',
+ 'aiverse-sports-rules':'sport football soccer hockey basketball ball goal pass shot tackle foul penalty formation спорт футбол хоккей мяч гол пас удар отбор фол пенальти расстановк',
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
 }
 
