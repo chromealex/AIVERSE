@@ -26,7 +26,7 @@
   <a href="#작동-방식">작동 방식</a> ·
   <a href="#바로-쓸-수-있는-템플릿">템플릿</a> ·
   <a href="#빠른-시작">빠른 시작</a> ·
-  <a href="docs/overview.md">전체 개요(러시아어)</a>
+  <a href="docs/overview.md">전체 개요</a>
 </p>
 
 ---
@@ -229,7 +229,7 @@ open build/mac/AiverseEditor.app        # 에디터: 프로젝트 허브와 템�
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. 직접 컴파일하고 싶지 않다면
 `builds` 브랜치에 미리 빌드된 에디터와 도구가 있습니다
-([자세히, 러시아어](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([자세히](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
 
 **2. 게임 만들기.** 허브에서 **"게임 만들기"**를 누르거나 템플릿으로 프로젝트를 만드세요. Game 창에서
 바로 봇과 플레이할 수 있습니다.
@@ -262,13 +262,13 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS와 FPS 외 장르의 템플릿은 제작 중
 
 서브시스템별 자세한 내용은
-[검증됨 / 미검증](docs/overview.md#проверено--не-проверено)(러시아어)을 참고하세요.
+[검증됨 / 미검증](docs/overview.md#verified--not-verified)을 참고하세요.
 
 ---
 
 ## 문서
 
-대부분의 문서는 러시아어로 작성되어 있으며, `AGENTS.md`, 라이브러리 문서와 일부 기술 가이드는 영어입니다.
+참조 문서는 영어입니다. 개요, 게임 만들기 마법사, Unity에서 넘어오기, 장르 패키지는 한국어로도 제공됩니다.
 
 | | |
 |---|---|

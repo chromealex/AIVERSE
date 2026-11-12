@@ -26,7 +26,7 @@
   <a href="#como-funciona">Como funciona</a> ·
   <a href="#templates-prontos">Templates</a> ·
   <a href="#início-rápido">Início rápido</a> ·
-  <a href="docs/overview.md">Visão completa (RU)</a>
+  <a href="docs/overview.md">Visão completa</a>
 </p>
 
 ---
@@ -234,7 +234,7 @@ open build/mac/AiverseEditor.app        # editor: hub de projetos e templates
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Se preferir não compilar, a
 branch `builds` tem o editor e as ferramentas pré-compilados
-([detalhes, em russo](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([detalhes](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
 
 **2. Crie um jogo.** No hub, clique em **Criar um jogo** ou crie um projeto a partir de um template. Dá
 para jogar com bots na hora, na janela Game.
@@ -267,13 +267,13 @@ A engine está em desenvolvimento ativo. O que já foi verificado:
 - 🛠 Templates para gêneros além de RTS e FPS estão em produção
 
 Detalhes por subsistema em
-[Verificado / não verificado](docs/overview.md#проверено--не-проверено) (em russo).
+[Verificado / não verificado](docs/overview.md#verified--not-verified).
 
 ---
 
 ## Documentação
 
-A maior parte dos documentos está em russo; `AGENTS.md`, a documentação das bibliotecas e alguns guias técnicos estão em inglês.
+Os documentos de referência estão em inglês. A visão completa, o assistente de jogos, a migração do Unity e os pacotes de gênero também estão em português.
 
 | | |
 |---|---|

@@ -26,7 +26,7 @@
   <a href="#工作原理">工作原理</a> ·
   <a href="#现成模板">模板</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="docs/overview.md">完整概览（俄语）</a>
+  <a href="docs/overview.md">完整概览</a>
 </p>
 
 ---
@@ -227,7 +227,7 @@ open build/mac/AiverseEditor.app        # 编辑器：项目中心和模板
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。如果不想编译，
 `builds` 分支提供预构建的编辑器和工具
-（[详情，俄语](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)）。
+（[详情](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)）。
 
 **2. 制作游戏。** 在项目中心点击**“制作游戏”**，或从模板创建项目。可以立即在 Game 窗口中与机器人对战。
 
@@ -259,13 +259,13 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS 和 FPS 以外类型的现成模板正在制作中
 
 各子系统的详细情况见
-[已验证 / 未验证](docs/overview.md#проверено--не-проверено)（俄语）。
+[已验证 / 未验证](docs/overview.md#verified--not-verified)。
 
 ---
 
 ## 文档
 
-大部分文档为俄语；`AGENTS.md`、库文档和部分技术指南为英语。
+参考文档为英文。概览、“制作游戏”向导、从 Unity 迁移和类型包也提供中文版。
 
 | | |
 |---|---|

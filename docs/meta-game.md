@@ -1,86 +1,81 @@
-# Мета-библиотека C++ (`aiverse::meta`)
+# C++ meta library (`aiverse::meta`)
 
-Библиотека для переиспользования мета-механик между играми. Работает без RTS-матча,
-Lua, GPU, потока, глобального профиля или сетевого SDK. Подключайте только нужные
-объекты. Реализация: `engine/meta/`; API: `Meta.h`, `Social.h`.
+A library for reusing meta mechanics across games. It works without an RTS match, Lua, GPU, threads, a global profile
+or a network SDK. Link only the objects you need. Implementation: `engine/meta/`; API: `Meta.h`, `Social.h`.
 
-## Что есть
+## What is included
 
-| Задача | Готовое решение | Настройки |
+| Task | Ready solution | Settings |
 |---|---|---|
-| Валюты, предметы, инвентарь | `Economy::transact`, `Profile::balances` | произвольные ID, cap, целые количества, составные цены/награды |
-| Магазин, обмен, крафт, подарки | `offers`, `buy` | cost/reward, лимит, cooldown, группа, приоритет, metadata |
-| Платёжный магазин | `product`, `reserveOrder`, `fulfillOrder` | связь с продуктом существующего `aiverse::store`, подтверждённый токен |
-| Персональные офферы | `Condition`, `visibleOffers` | all/any/none, min/max метрик, обязательные/исключённые теги |
-| LiveOps | `Schedule` | UTC start/end, период, активная часть периода |
-| Задания, достижения, пропуски, награды за уровни | `tracks`, `recordEvent`, `claim` | метрика, пороги, награды, сезон, premiumTag, условия |
-| Ежедневный вход | `claimDaily` | цепочка наград, период/начало, сброс при пропуске, цикл |
-| Энергия | `regenerate` | актив, cap, количество за интервал, остаток времени |
-| Почта | `deliver`, `claimMail` | ID, награда, срок, произвольные данные письма |
-| Лидерборды | `Leaderboard` | best/latest/sum; по возрастанию/убыванию; ordinal/competition/dense; сезон; лимиты |
-| Социальные рейтинги | `page`, `around` | отдельный instance на scope; фильтр друзей; страница и окружение игрока |
-| Чаты | `Chat` | канал, разрешения, виды сообщений, UTF-8, лимит байт, cooldown, история, retention |
-| Модерация | `remove`, `report`, `mute`, `block` | callback проверки текста, роли через authorization callback, read cursor |
-| A/B, сегменты, remote settings | `cohort`, `resolveSettings` | стабильные веса, приоритеты, рекурсивное объединение JSON, null удаляет ключ |
-| Сохранения | `save/load`, `Commit` | версия формата, операция+payload, revision/CAS; полное сохранение состояния |
-| Backend-интеграция | `Backend` | async request/pump, собственный провайдер; OfflineBackend возвращает Unsupported |
+| Currencies, items, inventory | `Economy::transact`, `Profile::balances` | arbitrary IDs, cap, integer amounts, compound prices/rewards |
+| Shop, exchange, crafting, gifts | `offers`, `buy` | cost/reward, limit, cooldown, group, priority, metadata |
+| Real-money shop | `product`, `reserveOrder`, `fulfillOrder` | link to a product of the existing `aiverse::store`, verified token |
+| Personal offers | `Condition`, `visibleOffers` | all/any/none, min/max of metrics, required/excluded tags |
+| LiveOps | `Schedule` | UTC start/end, period, active part of the period |
+| Quests, achievements, passes, level rewards | `tracks`, `recordEvent`, `claim` | metric, thresholds, rewards, season, premiumTag, conditions |
+| Daily login | `claimDaily` | reward chain, period/start, reset on a missed day, cycle |
+| Energy | `regenerate` | asset, cap, amount per interval, remaining time |
+| Mail | `deliver`, `claimMail` | ID, reward, expiry, arbitrary message data |
+| Leaderboards | `Leaderboard` | best/latest/sum; ascending/descending; ordinal/competition/dense; season; limits |
+| Social rankings | `page`, `around` | a separate instance per scope; friends filter; page and the player's neighbourhood |
+| Chats | `Chat` | channel, permissions, message kinds, UTF-8, byte limit, cooldown, history, retention |
+| Moderation | `remove`, `report`, `mute`, `block` | text check callback, roles through an authorization callback, read cursor |
+| A/B, segments, remote settings | `cohort`, `resolveSettings` | stable weights, priorities, recursive JSON merge, null removes a key |
+| Saves | `save/load`, `Commit` | format version, operation+payload, revision/CAS; full state saving |
+| Backend integration | `Backend` | async request/pump, your own provider; OfflineBackend returns Unsupported |
 
-Сетевая инфраструктура не подменяется локальной имитацией: `Leaderboard` и `Chat`
-содержат локальные алгоритмы и состояние, пригодные для offline-тестов или исполнения
-на сервере. Глобальный рейтинг и чат между устройствами требуют backend, его
-аутентификации и хранилища. HTTP/WebSocket SDK, сервер авторизации, облачный деплой,
-готовые RmlUi-экраны, социальный граф/кланы и админ-панель в этот пакет не входят.
-`metadata` — данные для UI, а не автоматически создаваемые экраны.
+Network infrastructure is not replaced by a local imitation: `Leaderboard` and `Chat` contain local algorithms and
+state, suitable for offline tests or for running on a server. A global leaderboard and chat between devices require a
+backend with its authentication and storage. HTTP/WebSocket SDKs, an authorization server, cloud deployment, ready RmlUi
+screens, a social graph/clans and an admin panel are not part of this package. `metadata` is data for the UI, not
+automatically created screens.
 
-## Быстрый старт для генерации игры
+## Quick start for generating a game
 
 ```sh
 python3 tools/meta/scaffold.py --preset mobile --out /path/to/project
-# minimal: валюта и достижение; mobile: магазин, энергия, пасс; competitive: без энергии.
-# Генератор не перезаписывает существующие определения.
+# minimal: a currency and an achievement; mobile: shop, energy, pass; competitive: no energy.
+# The generator does not overwrite existing definitions.
 aiverse_meta_validate economy /path/to/project/meta/economy.json
 aiverse_meta_validate boards /path/to/project/meta/boards.json
 aiverse_meta_validate chats /path/to/project/meta/chats.json
 ```
 
-Меняйте определения, не копируйте реализацию. Начальные готовые конфиги:
-`examples/meta/meta.json`, `boards.json`, `chats.json`. Отсутствующие секции отключены.
-Схема версии 1 строгая: опечатки/неизвестные поля, дробные числа, неизвестные активы,
-некорректные интервалы и ссылки отвергаются. Произвольные UI-данные помещайте в
-`metadata`; пользовательские поля профиля — в `attributes`. Все текстовые UI-поля
-задавайте ключами `@...` и добавляйте переводы в проект.
+Change the definitions, do not copy the implementation. Ready starting configs: `examples/meta/meta.json`,
+`boards.json`, `chats.json`. Missing sections are disabled. Schema version 1 is strict: typos/unknown fields,
+fractional numbers, unknown assets, invalid intervals and references are rejected. Put arbitrary UI data into
+`metadata`; custom profile fields go into `attributes`. Set all UI text fields as `@...` keys and add translations to the
+project.
 
-## Подключение из native C++ проекта
+## Using it from a project's native C++
 
-Клиентский target `AIVERSE::meta_client` доступен **до** обработки `native/CMakeLists.txt`. Старый `aiverse::meta` явно подключает все политики и используется только для совместимости:
+The client target `AIVERSE::meta_client` is available **before** `native/CMakeLists.txt` is processed. The old `aiverse::meta` explicitly links every policy and is kept only for compatibility:
 
 ```cmake
 aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp)
 aiverse_native_use_meta(aiverse_native_my_game CLIENT)
 ```
 
-Helper линкует object target и конечную `aiverse_game` (простое PRIVATE-связывание object
-library не распространяет зависимости через `$<TARGET_OBJECTS:...>`).
-Мета не должна получать сетевые ответы или текущее время внутри `NativeModule::tick`.
-Её обычный владелец — native-хост UI/сервиса проекта. Чистые политики можно использовать
-из симуляции, если все входы детерминированы и состояние входит в hash/save.
-Метапрогресс, влияющий на матч, передавайте проверенным снимком в настройку матча или
-через разрешённые `Command`; не меняйте симуляцию из callback.
+The helper links the object target and the final `aiverse_game` (a plain PRIVATE link of an object library does not
+propagate dependencies through `$<TARGET_OBJECTS:...>`). Meta must not receive network responses or the current time
+inside `NativeModule::tick`. Its usual owner is the project's native UI/service host. Pure policies can be used from the
+simulation if all inputs are deterministic and the state is part of hash/save. Pass meta progress that affects a match as
+a verified snapshot in the match setup or through allowed `Command`s; do not change the simulation from a callback.
 
-Для отдельного native executable/library:
+For a standalone native executable/library:
 
 ```cmake
 add_subdirectory("${AIVERSE_ENGINE_ROOT}/engine/meta" meta-library)
 target_link_libraries(my_native_target PRIVATE AIVERSE::meta_client)
 ```
 
-Для сервера используйте `aiverse_add_meta_server(game_meta MODULES economy social)` и
-`Service(kits::game_meta(), config, state, commit, draw)`. Готовый subprocess-хост:
-`aiverse_add_meta_service(game_meta_rpc MODULES economy social)`; HTTP/SQLite адаптер
-`tools/meta/server.py` получает его через `--binary`.
+For a server use `aiverse_add_meta_server(game_meta MODULES economy social)` and
+`Service(kits::game_meta(), config, state, commit, draw)`. A ready subprocess host:
+`aiverse_add_meta_service(game_meta_rpc MODULES economy social)`; the HTTP/SQLite adapter
+`tools/meta/server.py` receives it through `--binary`.
 
-Проверяемый внешний потребитель: `examples/meta/` (полный compatibility-пример);
-раздельные минимальные потребители: `examples/meta/client` и `examples/meta/server`.
+A tested external consumer: `examples/meta/` (the full compatibility example); separate minimal
+consumers: `examples/meta/client` and `examples/meta/server`.
 
 ```sh
 cmake -S examples/meta -B build/.temp/meta-consumer
@@ -88,9 +83,8 @@ cmake --build build/.temp/meta-consumer
 build/.temp/meta-consumer/meta_consumer
 ```
 
-При запуске игры загружайте определения через `platform::readContentFile`, затем
-`Json::parse` → `Config::parse`. `parseFile` в валидаторе предназначен для host CLI.
-Библиотека сама не читает файлы и не выбирает пути хранения.
+When the game starts, load the definitions with `platform::readContentFile`, then `Json::parse` → `Config::parse`.
+`parseFile` in the validator is meant for the host CLI. The library itself does not read files or choose storage paths.
 
 ```cpp
 using namespace aiverse::meta;
@@ -103,126 +97,110 @@ context.now = trustedUtcSeconds;
 context.values = {{"level", 5}, {"accountAge", 3600}};
 context.tags = {"platform_android", "season_premium"};
 auto result = meta.buy("daily_exchange", context, "request-unique-id");
-// Один идентификатор для одной операции: сохраняется при retry.
+// One identifier per operation: it is kept on retry.
 ```
 
-Контекст/теги предоставляет доверенный хост. `Condition` отвергает отсутствующие
-метрики даже для minimum=0. Пустое any не ограничивает условие, пустые all/none
-истинны. Префикс метрики `@meta/` зарезервирован для внутренних счётчиков. Числа/количества/время: целые, максимум 10^12; цены реальных денег берите
-из `aiverse::store::products`, не вычисляйте из валют меты. Балансы неотрицательны;
-превышение cap отвергает **всю** транзакцию, без скрытого обрезания наград.
+The context/tags are provided by a trusted host. `Condition` rejects missing metrics even for minimum=0. An empty any does
+not restrict the condition, empty all/none are true. The `@meta/` metric prefix is reserved for internal counters.
+Numbers/amounts/time are integers, at most 10^12; take real-money prices from `aiverse::store::products`, do not compute
+them from meta currencies. Balances are non-negative; exceeding a cap rejects the **whole** transaction, without silently
+trimming rewards.
 
-## Экономика и устойчивость к повторам
+## Economy and retry safety
 
-`transact` — доверенный низкоуровневый API. Не выставляйте клиенту произвольные
-cost/reward. Сервер получает offer ID и сам выбирает цену и награду.
+`transact` is a trusted low-level API. Do not expose arbitrary cost/reward to the client. The server receives an offer ID
+and chooses the price and reward itself.
 
-Перед публикацией нового профиля `Commit(expectedRevision, nextJson)` должен
-атомарно сохранить **весь** снимок с проверкой текущей revision. Возврат false
-оставляет память Economy без изменений. При конфликте загрузите актуальный
-снимок и повторите ту же операцию. Без Commit данные остаются только в памяти.
-Callback не должен реентерабельно вызывать методы того же Economy; все объекты
-используются на одном потоке. Исключения хранилища обрабатывает хост.
+Before a new profile is published, `Commit(expectedRevision, nextJson)` must atomically save the **whole** snapshot with a
+check of the current revision. Returning false leaves the Economy memory unchanged. On a conflict, load the current
+snapshot and retry the same operation. Without Commit the data stays only in memory. The callback must not re-enter
+methods of the same Economy; all objects are used on one thread. Storage exceptions are handled by the host.
 
-Receipt хранит ID и payload. Повтор той же операции возвращает Duplicate,
-повтор ID с другим payload — Conflict. `Result` true для Ok и Duplicate;
-побочные эффекты/анимацию выдачи запускайте лишь на Ok. Не удаляйте receipts
-произвольно: это открывает повторное начисление. Для больших онлайн-проектов
-перенесите журнал в транзакционную БД и задайте явный протокол срока retry.
-Снимок библиотеки предназначен для умеренного профиля, не миллионов транзакций.
+A receipt stores the ID and payload. Repeating the same operation returns Duplicate, repeating the ID with a different
+payload returns Conflict. `Result` is true for Ok and Duplicate; trigger side effects/reward animations only on Ok. Do not
+delete receipts arbitrarily: that opens double granting. For large online projects move the log to a transactional DB and
+define an explicit retry-expiry protocol. The library snapshot is meant for a moderate profile, not millions of
+transactions.
 
-`Profile::load` читает только version=1 и не выполняет неявных миграций.
-Удаление актива, уменьшение cap ниже баланса или изменение ID требуют явной миграции.
-Сохраняйте версию каталога отдельно и закрепляйте её за операцией/заказом.
-Старый Lua shop в `engine/assets/ui/lib/meta.lua` автоматически не переключается:
-используйте одного владельца баланса, не выполняйте старую и новую выдачу одновременно.
+`Profile::load` reads only version=1 and performs no implicit migrations. Removing an asset, lowering a cap below a
+balance or changing an ID requires an explicit migration. Store the catalog version separately and pin it to an
+operation/order. The old Lua shop in `engine/assets/ui/lib/meta.lua` does not switch over automatically: use one owner of
+the balance, do not run the old and the new granting at the same time.
 
-### Реальные платежи
+### Real payments
 
-Используйте существующий `engine/services/Store.h`; не создавайте вторую платёжную
-интеграцию. Порядок: сервер вызывает `reserveOrder(offer, context, orderId)`
-→ `aiverse::store::purchase` → сервер проверяет receipt, product, player и order (и уникальность транзакции между аккаунтами)
-→ `fulfillOrder(orderId, provider + ":" + transactionId)` → durable commit
-→ `aiverse::store::finish`. Pending не выдаёт награды. Restore идёт тем же путём.
+Use the existing `engine/services/Store.h`; do not create a second payment integration. Order: the server calls
+`reserveOrder(offer, context, orderId)` → `aiverse::store::purchase` → the server verifies the receipt, product, player
+and order (and transaction uniqueness across accounts) → `fulfillOrder(orderId, provider + ":" + transactionId)` →
+durable commit → `aiverse::store::finish`. Pending grants no rewards. Restore goes the same way.
 
-`reserveOrder` сохраняет product и снимок reward, резервирует лимит оффера и проходит
-тот же Commit/CAS. Два одновременных заказа с лимитом 1 не смогут оба завершить
-резервирование в одном хранилище. После конфликта обязательно перечитайте профиль.
-`fulfillOrder` выдаёт сохранённую награду даже после изменения/удаления оффера; сами
-активы должны оставаться в схеме. Платёжные офферы не могут содержать виртуальный cost (валидатор отвергает такую смесь). Если cap мешает выдаче, возвращается Limit, заказ остаётся Pending; сервер должен решить вопрос вместимости/компенсации и повторить выдачу до finish. Повтор токена не выдаёт ничего снова. Другой токен
-для уже оплаченного заказа — Conflict. Не показывайте оплату снова на Duplicate:
-верните существующий заказ и его статус. `cancelOrder` освобождает лимит, сохраняя
-cooldown; вызывайте только после подтверждённого окончательного отсутствия оплаты,
-не по локальному таймауту. Платёж после подтверждённой отмены требует обработки на
-backend, а не автоматического открытия нового заказа.
+`reserveOrder` stores the product and a snapshot of the reward, reserves the offer limit and goes through the same
+Commit/CAS. Two concurrent orders with a limit of 1 cannot both finish the reservation in one storage. After a conflict,
+always re-read the profile. `fulfillOrder` grants the stored reward even after the offer was changed/removed; the assets
+themselves must stay in the schema. Real-money offers cannot contain a virtual cost (the validator rejects such a mix).
+If a cap prevents granting, Limit is returned and the order stays Pending; the server must resolve capacity/compensation
+and retry granting before finish. Repeating a token grants nothing again. A different token for an already paid order is
+Conflict. Do not show payment again on Duplicate: return the existing order and its status. `cancelOrder` releases the
+limit while keeping the cooldown; call it only after a confirmed final absence of payment, not on a local timeout. A
+payment after a confirmed cancellation must be handled by the backend, not by automatically opening a new order.
 
-Низкоуровневый `fulfill(offer, context, token)` остаётся для интеграции с внешней
-системой заказов. Не смешивайте его с `reserveOrder` для одной покупки.
-`fulfill` — **только для уже проверенного оплаченного заказа**, не receipt validator.
-Он намеренно не повторяет проверки срока/сегмента/лимита: уже принятый платёж
-нужно исполнить, даже если оффер закончился. Ограничения и резервирование заказов
-обязан обеспечить сервер до оплаты. Исполняйте заказ на закреплённой версии
-каталога; не удаляйте её до закрытия pending-заказов. Удалённый offer возвращает
-Missing и требует восстановления заказа сервером. Refund/revoke/subscription
-renewal требуют авторитетного backend-события; их нельзя вывести из локального таймера.
+The low-level `fulfill(offer, context, token)` remains for integration with an external order system. Do not mix it with
+`reserveOrder` for one purchase. `fulfill` is **only for an already verified paid order**, not a receipt validator. It
+intentionally does not repeat expiry/segment/limit checks: an accepted payment must be honoured even if the offer has
+ended. The server must enforce restrictions and order reservation before payment. Fulfil an order on the pinned catalog
+version; do not delete it until pending orders are closed. A removed offer returns Missing and requires the server to
+restore the order. Refund/revoke/subscription renewal require an authoritative backend event; they cannot be derived from a
+local timer.
 
-## Периоды и прогресс
+## Periods and progress
 
-Все интервалы полуоткрытые: `[start,end)`, end=0 — без конца. period=0 — один период;
-duration=0 — весь период активен. bucket вычисляется от start, поэтому недельный
-сброс можно закрепить на любой день/час. Лимит/cooldown оффера действуют в его bucket.
-`group` — категория для UI, не автоматическое исключение других офферов.
+All intervals are half-open: `[start,end)`, end=0 — no end. period=0 — a single period; duration=0 — the whole period is
+active. The bucket is computed from start, so a weekly reset can be pinned to any day/hour. An offer's limit/cooldown apply
+within its bucket. `group` is a UI category, not an automatic exclusion of other offers.
 
-`record(metric, delta, op)` записывает накопительный прогресс.
-`recordEvent(metric, delta, context, op)` также обновляет отдельный прогресс каждого
-периодического трека этой метрики. Время события неизменно при retry. Для ежедневных
-заданий и сезонных пассов используйте **recordEvent**, иначе их прогресс не растёт.
-Условия/премиум проверяются при claim, прогресс может копиться до разблокировки.
-Награды по tier независимы: можно забрать достигнутые уровни в любом порядке.
-Повтор claim защищён и operation ID, и ключом track/season/tier.
+`record(metric, delta, op)` records cumulative progress. `recordEvent(metric, delta, context, op)` also updates the
+separate progress of each periodic track of that metric. The event time does not change on retry. For daily quests and
+season passes use **recordEvent**, otherwise their progress does not grow. Conditions/premium are checked at claim time;
+progress can accumulate before unlocking. Tier rewards are independent: reached tiers can be claimed in any order. A
+repeated claim is protected both by the operation ID and by the track/season/tier key.
 
-Перед расходованием энергии вызывайте `regenerate(now)`, затем расход через transact.
-При полном запасе таймер обновляется, чтобы время «на cap» не превращалось в скрытый запас.
-Первый вызов только запускает отсчёт; начальный запас задайте в Profile. При rollback
-времени regenerate выдаёт Conflict; надёжное онлайн-время поступает от сервера.
+Before spending energy call `regenerate(now)`, then spend through transact. When the reserve is full, the timer is
+refreshed so that time "at cap" does not turn into a hidden reserve. The first call only starts the countdown; set the
+initial reserve in the Profile. If time goes backwards, regenerate returns Conflict; reliable online time comes from the
+server.
 
-## Рейтинги
+## Leaderboards
 
-Создайте экземпляр на board + scope (например, region:eu). `submit` вызывается после
-проверки результата матча, а не с произвольным счётом клиента. Best сравнивает с учётом
-ascending. Sum складывает проверенные дельты, Latest заменяет. Равные значения сортируются
-по player ID. Competition: 1,1,3; Dense: 1,1,2; Ordinal: 1,2,3.
-Фильтр players в page/around пересчитывает места внутри выборки друзей. Пустой фильтр = все игроки; для пустого списка друзей передайте набор только с текущим игроком.
-Страницы содержат revision: при её изменении между запросами обновляйте список.
-История сезонов сохраняется; `page` принимает время нужного сезона.
+Create an instance per board + scope (for example, region:eu). `submit` is called after the match result is verified, not
+with an arbitrary client score. Best compares taking ascending into account. Sum adds verified deltas, Latest replaces.
+Equal values are sorted by player ID. Competition: 1,1,3; Dense: 1,1,2; Ordinal: 1,2,3. The players filter in
+page/around recomputes places within the friends selection. An empty filter = all players; for an empty friends list pass
+a set with only the current player. Pages carry a revision: if it changes between requests, refresh the list. Season
+history is kept; `page` accepts the time of the needed season.
 
-Это локальный O(N log N) запрос, а не распределённый индекс. Для миллионов игроков
-провайдер должен хранить отсортированный индекс/снимок на сервере; API политики и
-правила tie-break сохраняются. `save/restore` сохраняет scores и dedupe вместе.
+This is a local O(N log N) query, not a distributed index. For millions of players the provider must keep a sorted
+index/snapshot on the server; the policy API and tie-break rules stay the same. `save/restore` keeps scores and dedupe
+together.
 
-## Чаты
+## Chats
 
-Один Chat на канал. Хост связывает аутентифицированного пользователя с player,
-callback разрешает `read/send/delete/report`, определяя членство и роли. Global,
-clan, direct отличаются callback и конфигом. `mute` — административная команда,
-`block/markRead` — команда текущего пользователя, не произвольного viewer из сети.
+One Chat per channel. The host binds an authenticated user to a player; a callback allows `read/send/delete/report`,
+defining membership and roles. Global, clan and direct chats differ by callback and config. `mute` is an administrative
+command; `block/markRead` are commands of the current user, not of an arbitrary viewer from the network.
 
-Передавайте текст UI как plain text, не как HTML/RML. Библиотека проверяет UTF-8,
-длину в **байтах** и управляющие символы; фильтр спама/лексики задаётся ModerateChat.
-`history(before, limit)` возвращает сообщения по возрастанию sequence, before
-исключается. before=0 — последняя страница. Unread учитывает только сохранённую,
-видимую, не удалённую историю и не считает свои сообщения. Удаление сохраняет
-tombstone, но стирает текст. Retention=0 отключает фильтр возраста.
+Pass text to the UI as plain text, not as HTML/RML. The library checks UTF-8, the length in **bytes** and control
+characters; spam/profanity filtering is set with ModerateChat. `history(before, limit)` returns messages in ascending
+sequence, before is excluded. before=0 is the last page. Unread counts only stored, visible, non-deleted history and does
+not count your own messages. Deletion keeps a tombstone but erases the text. Retention=0 disables the age filter.
 
-maxHistory ограничивает сообщения в памяти, maxMessages — журнал dedupe за жизнь
-канала. При исчерпании возвращается Limit: архивируйте/ротируйте канал явным новым ID.
-Retention скрывает историю по времени, но не обещает физическое удаление журнала:
-receipts содержат payload. Политику удаления персональных данных реализует хост.
-`save/restore` включает историю, блокировки, mute, read cursor, reports, cooldown и receipts.
-Для атомарной записи чата/рейтинга применяйте команду к копии объекта, сохраняйте снимок
-с CAS и только после успеха публикуйте копию/сетевое событие.
+maxHistory limits messages in memory, maxMessages limits the dedupe log over the channel's lifetime. When it is exhausted,
+Limit is returned: archive/rotate the channel with an explicit new ID. Retention hides history by time but does not
+promise physical deletion of the log: receipts contain the payload. The host implements the personal data deletion
+policy. `save/restore` includes history, blocks, mutes, read cursors, reports, cooldowns and receipts. For an atomic
+chat/leaderboard write, apply the command to a copy of the object, save the snapshot with CAS, and only after success
+publish the copy/network event.
 
-## Проверки
+## Checks
 
 ```sh
 cmake -S tests/meta -B build/.temp/meta -DCMAKE_BUILD_TYPE=Debug
@@ -230,35 +208,33 @@ cmake --build build/.temp/meta
 ctest --test-dir build/.temp/meta --output-on-failure
 ```
 
-Проверяются повторная выдача, несовпадающий payload, частичный расход при неудаче,
-CAS failure, периоды, premium, ежедневные цепочки, энергия, почта, save/load,
-рейтинги/ничьи/сезоны, чат/UTF-8/доступ/пагинация/модерация и определения примеров.
-Существующие игровые правила и визуальный слой библиотека не меняет.
+Checked: repeated granting, mismatching payload, partial spending on failure, CAS failure, periods, premium, daily chains,
+energy, mail, save/load, leaderboards/ties/seasons, chat/UTF-8/access/pagination/moderation and the example definitions.
+The library does not change existing game rules or the visual layer.
 
-### Проверка реализации (macOS, AppleClang 17)
+### Implementation check (macOS, AppleClang 17)
 
-- 6 CTest-проверок отдельной библиотеки прошли, включая сборку внешнего native-модуля
-  через настоящий `aiverse_native_module` и генерацию/валидацию всех трёх пресетов.
-- Те же 6 проверок прошли в конфигурации AddressSanitizer + UndefinedBehaviorSanitizer
-  (вложенная проверка native_link строит отдельный обычный consumer).
-- `aiverse_meta_tests` собран и запущен также из корневого CMake проекта.
-- Объединённое состояние с параллельной foundation-библиотекой и исправлением
-  include/linkage в `RtsScriptIeee.cpp`: 393 общих теста движка прошли.
-- Бот-матчи seed=3: skirmish — Blue, 405 игровых секунд, checksum ae6a5687d79765c2;
-  mushrooms — Red, 92 секунды, checksum a06caad4f1d88f10.
-- Общий каталог библиотек, его тесты и внешний native consumer тоже прошли.
-- GCC, Windows, Android, iOS, web и Metal runtime не проверены. GPU-кода в библиотеке нет.
-- После интеграции в main интегратору нужно переиздать редактор/инструменты по AGENTS §8.
+- 6 CTest checks of the standalone library passed, including building an external native module through the real
+  `aiverse_native_module` and generating/validating all three presets.
+- The same 6 checks passed with AddressSanitizer + UndefinedBehaviorSanitizer (the nested native_link check builds a
+  separate regular consumer).
+- `aiverse_meta_tests` was also built and run from the project's root CMake.
+- The combined state with the parallel foundation library and the include/linkage fix in `RtsScriptIeee.cpp`: 393 shared
+  engine tests passed.
+- Bot matches seed=3: skirmish — Blue, 405 game seconds, checksum ae6a5687d79765c2; mushrooms — Red, 92 seconds, checksum
+  a06caad4f1d88f10.
+- The shared library catalog, its tests and the external native consumer passed too.
+- GCC, Windows, Android, iOS, web and the Metal runtime were not checked. The library has no GPU code.
+- After integration into main, the integrator needs to republish the editor/tools per AGENTS §8.
 
 ## Extended package
 
-The additional Service layer, reference HTTP/SQLite host, browser screens, full preset,
-friends/clans, instance items, verified entitlements and ranked tournament groups are
-specified in [meta-service.md](meta-service.md). The earlier exclusions above describe
-the original policy-only layer. The extended host remains a local reference deployment;
-RmlUi embedding, public hosting and platform receipt verification are not automatic.
+The additional Service layer, reference HTTP/SQLite host, browser screens, full preset, friends/clans, instance items,
+verified entitlements and ranked tournament groups are specified in [meta-service.md](meta-service.md). The earlier
+exclusions above describe the original policy-only layer. The extended host remains a local reference deployment; RmlUi
+embedding, public hosting and platform receipt verification are not automatic.
 
 ## Selected module composition
 
-See [meta-composition.md](meta-composition.md) for validated kits, compact per-project
-agent instructions and the native Client outbox/retry API. Skills live in `skills/`.
+See [meta-composition.md](meta-composition.md) for validated kits, compact per-project agent instructions and the native
+Client outbox/retry API. Skills live in `skills/`.

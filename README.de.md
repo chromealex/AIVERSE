@@ -26,7 +26,7 @@
   <a href="#funktionsweise">Funktionsweise</a> ·
   <a href="#fertige-vorlagen">Vorlagen</a> ·
   <a href="#schnellstart">Schnellstart</a> ·
-  <a href="docs/overview.md">Vollständige Übersicht (RU)</a>
+  <a href="docs/de/overview.md">Vollständige Übersicht</a>
 </p>
 
 ---
@@ -149,7 +149,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings, Unity IAP, Unity Ads | `aiversebuild`, Store- und Werbe-Plugins |
 | Addressables / Asset Bundles | `.rpak`-Pakete, geteilte Builds und Nachladen von Inhalten |
 
-Der Bericht markiert jedes Element als exakt, näherungsweise oder nicht übernommen. Ein erneuter Import behält Ihre Änderungen. Das Projekt braucht die Asset-Serialisierung **Force Text**. Godot-Projekte werden auf dieselbe Weise importiert. Details: [Import von Engine-Projekten](docs/engine-import.md).
+Der Bericht markiert jedes Element als exakt, näherungsweise oder nicht übernommen. Ein erneuter Import behält Ihre Änderungen. Das Projekt braucht die Asset-Serialisierung **Force Text**. Godot-Projekte werden auf dieselbe Weise importiert. Details: [Import von Engine-Projekten](docs/de/engine-import.md).
 
 ---
 
@@ -234,7 +234,7 @@ open build/mac/AiverseEditor.app        # Editor: Projekt-Hub und Vorlagen
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Wer nicht kompilieren möchte,
 findet im Branch `builds` vorgefertigte Editor- und Tool-Builds
-([Details, auf Russisch](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([Details](docs/de/overview.md#fertige-engine-branch-builds-und-aiversemcp-ohne-compiler)).
 
 **2. Spiel erstellen.** Im Hub auf **Spiel erstellen** klicken oder ein Projekt aus einer Vorlage anlegen.
 Im Game-Fenster lässt es sich sofort gegen Bots spielen.
@@ -267,27 +267,27 @@ Die Engine wird aktiv weiterentwickelt. Bereits geprüft:
 - 🛠 Fertige Vorlagen für Genres jenseits von RTS und FPS sind in Arbeit
 
 Details je Subsystem unter
-[Geprüft / nicht geprüft](docs/overview.md#проверено--не-проверено) (auf Russisch).
+[Geprüft / nicht geprüft](docs/de/overview.md#geprüft--nicht-geprüft).
 
 ---
 
 ## Dokumentation
 
-Die meisten Dokumente sind auf Russisch; `AGENTS.md`, die Bibliotheksdokumentation und einige technische Leitfäden sind auf Englisch.
+Die Referenzdokumente sind auf Englisch. Die Übersicht, der Spiel-Assistent, der Umstieg von Unity und die Genre-Pakete gibt es auch auf Deutsch.
 
 | | |
 |---|---|
-| [**Vollständige Übersicht**](docs/overview.md) | alle Subsysteme, Build, Plattformen, CI, Releases |
+| [**Vollständige Übersicht**](docs/de/overview.md) | alle Subsysteme, Build, Plattformen, CI, Releases |
 | [Spielformat](docs/game-format.md) | `game.json`, `rules.json`, Karten und alle Datenblöcke |
 | [Genre-Pakete](docs/genre-packages.md) · [Bibliotheken](docs/libraries.md) | Mechaniken für jedes Genre |
-| [Assistent Spiel erstellen](docs/game-wizard.md) | wie aus Idee und Grafik ein fertiges Projekt wird |
+| [Assistent Spiel erstellen](docs/de/game-wizard.md) | wie aus Idee und Grafik ein fertiges Projekt wird |
 | [Scripting](docs/scripting.md) · [C++-Module](docs/native-modules.md) | wenn Daten nicht ausreichen |
 | [Terrain](docs/terrain.md) · [Planeten](docs/planets.md) · [Wegfindung](docs/pathfinding.md) | Welt und Bewegung |
 | [Partikel](docs/particles.md) · [Modelle](docs/models.md) · [Shader Graph](docs/shader-graph.md) | Grafik |
 | [Meta-Spiel](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | Monetarisierung und Stores |
 | [FPS](docs/fps.md) · [Große Welten](docs/large-worlds.md) | FPS-Modul |
 | [AGENTS.md](AGENTS.md) | Regeln für Agenten, die die Engine selbst ändern |
-| [Umstieg von Unity](docs/engine-import.md) | Szenen, Prefabs und Assets importieren, Logik mit einem Agenten portieren |
+| [Umstieg von Unity](docs/de/engine-import.md) | Szenen, Prefabs und Assets importieren, Logik mit einem Agenten portieren |
 
 ## Lizenz
 
