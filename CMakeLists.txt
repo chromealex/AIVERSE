@@ -452,11 +452,12 @@ add_library(aiverse_plugins STATIC
     engine/services/Ads.cpp
     engine/services/Analytics.cpp      # analytics / privacy (ATT, consent) services + their Lua tables
     engine/services/Privacy.cpp
-    engine/services/ServicesLua.cpp)
+    engine/services/ServicesLua.cpp
+    engine/services/Social.cpp engine/services/Push.cpp engine/services/Links.cpp engine/services/Consent.cpp)   # agent-bw-client
 target_include_directories(aiverse_plugins PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(aiverse_plugins PUBLIC aiverse_lua)   # ServicesLua (analytics.* / privacy.* for the UI Lua)
 if(AIVERSE_MOCK_PLUGINS)
-    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp)
+    target_sources(aiverse_plugins PRIVATE engine/services/MockPlugins.cpp engine/services/MockClientPlugins.cpp)
     target_compile_definitions(aiverse_plugins PUBLIC AIVERSE_WITH_MOCK_PLUGINS=1)
 endif()
 
@@ -1106,6 +1107,8 @@ target_sources(aiverse_game PRIVATE modules/rts/RtsGridFields.cpp modules/rts/Rt
 target_sources(aiverse_game PRIVATE modules/rts/RtsRaid.cpp modules/rts/RtsRaidData.cpp modules/rts/RtsRaidBot.cpp modules/rts/RtsRaidApi.cpp)
 # top-down heroes (agent-topdown-control): rules "topDown", stick input commands, aim / auto-fire (docs/topdown.md)
 target_sources(aiverse_game PRIVATE modules/rts/RtsTopDown.cpp)
+# map environment (Bunker Wars port: weather, wind, bosses, Mouro, scroller, caves, graveyards, souls, walls)
+target_sources(aiverse_game PRIVATE modules/rts/RtsEnv.cpp modules/rts/RtsEnvData.cpp modules/rts/RtsEnvBoss.cpp modules/rts/RtsEnvScript.cpp modules/rts/RtsEnvPoints.cpp)
 # the engine's standard Lua library (rule-level mechanics) is compiled in: modules/rts/lua/*.lua
 file(GLOB AIVERSE_STD_LUA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/modules/rts/lua/*.lua)
 set(AIVERSE_STD_LUA_H ${CMAKE_CURRENT_BINARY_DIR}/gen/RtsStdLua.h)
@@ -1564,4 +1567,50 @@ endif()
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME skill_library_isolation COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/isolation.py)
     set_tests_properties(skill_library_isolation PROPERTIES TIMEOUT 600)
+endif()
+
+# ---------------------------------------------------------------------------
+# agent-bw-client: Spine 2D skeletal animation (engine/spine). aiverse_spine is GPU-free (data, pose,
+# animation state, draw lists: tests and tools link it); the RHI renderer and the client's UI views
+# (apps/client/ClientSpine.cpp, <img src="#spine:NAME"/>) go into every target that hosts GameClient.
+# ---------------------------------------------------------------------------
+add_library(aiverse_spine STATIC engine/spine/SpineData.cpp engine/spine/SpineSkeleton.cpp)
+target_include_directories(aiverse_spine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(aiverse_spine PUBLIC aiverse_engine)
+foreach(t aiverse_client main aiverse_editor)
+    if(TARGET ${t})
+        target_sources(${t} PRIVATE engine/spine/SpineRender.cpp apps/client/ClientSpine.cpp apps/client/ClientServices.cpp apps/client/ClientGamepad.cpp apps/client/ClientGamepadHost.cpp)
+        target_link_libraries(${t} PRIVATE aiverse_spine aiverse_render2d)
+    endif()
+endforeach()
+if(TARGET aiverse_tests)
+    target_link_libraries(aiverse_tests PRIVATE aiverse_spine)
+endif()
+# agent-bw-client: gamepads (engine/platform/Gamepad.h): common state + one backend per platform.
+if(TARGET aiverse_runtime)
+    target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadCommon.cpp)
+    if(AIVERSE_PLATFORM STREQUAL "macos" OR AIVERSE_PLATFORM STREQUAL "ios")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadApple.mm)
+        target_link_libraries(aiverse_runtime PUBLIC "-framework GameController")
+    elseif(AIVERSE_PLATFORM STREQUAL "android")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadAndroid.cpp)
+    elseif(AIVERSE_PLATFORM STREQUAL "web")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadWeb.cpp)
+    elseif(AIVERSE_PLATFORM STREQUAL "windows")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadWin.cpp)
+    elseif(AIVERSE_PLATFORM STREQUAL "linux")
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadLinux.cpp)
+    else()
+        target_sources(aiverse_runtime PRIVATE engine/platform/gamepad/GamepadNone.cpp)
+    endif()
+endif()
+if(TARGET aiverse_tests)
+    target_sources(aiverse_tests PRIVATE engine/platform/gamepad/GamepadCommon.cpp engine/platform/gamepad/GamepadNone.cpp apps/client/ClientGamepad.cpp)
+endif()
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)   # agent-bw-client: BW importers (synthetic data, no game files)
+    add_test(NAME bw_tutorial_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/bunkerwars/test_tutorial.py)
+    if(TARGET aiverse_headless)
+        set_tests_properties(bw_tutorial_importer PROPERTIES ENVIRONMENT "AIVERSE_HEADLESS=$<TARGET_FILE:aiverse_headless>")
+    endif()
+    add_test(NAME fmod_audio_importer COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/importers/fmod/test_import_audio.py)
 endif()

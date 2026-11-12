@@ -71,6 +71,7 @@ void GameClient::initUi() {
         if (!err.empty()) std::fprintf(stderr, "[ui] %s\n", err.c_str());
     }
     initLua();   // before any document: <script> and onclick="..." need the plugin
+    spine_.init(*dev_, ui_, manifest_);   // game.json "spine" views (<img src="#spine:NAME"/>)
     ui_.setKeyboardLanguage(loc_.language());
     // UI images the build packed into texture atlases are no longer plain files.
     auto atlasImages = std::make_shared<atlas::ImageSource>([](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, atlas::decodeImageFile);

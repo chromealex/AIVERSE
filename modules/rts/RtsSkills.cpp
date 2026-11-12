@@ -599,8 +599,10 @@ void RtsModule::enterGarrison(Simulation& sim, Entity e, Entity s) {
     if (g->count > 0) {
         Fixed def = (uf & kStIgnoreDefense) ? kOne : tt.garrisonDefense * stat(sim, s, Stat::Defense);
         g->damageAcc += (rules_.originals ? stat(sim, e, Stat::Damage) : kOne) / fxMax(def, Fixed::fromRatio(1, 10));
+        const int before = g->count;
         while (g->damageAcc >= kOne && g->count > 0) { --g->count; ++g->lost; g->damageAcc -= kOne; }
         if (rules_.originals) assaultOriginals(sim, e, s);
+        envAssault(sim, s, me, owner, 1, before - g->count);
     } else if (tt.capturable) {
         // revenge payloads of the defender and recapture of a temporarily captured structure
         std::vector<std::pair<int16_t, uint8_t>> revenge;

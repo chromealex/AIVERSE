@@ -13389,6 +13389,7 @@ TEST(file_assoc_linux_registration_temp_home) {
 #endif
 #include "tests_fields.inc"   // grid fields (G5)
 #include "tests_raid.inc"     // extraction raids (agent-extraction)
+#include "tests_env.inc"      // map environment (Bunker Wars port)
 
 // ------------------------------------------------------------------ planet detail grids (agent-terrain)
 
@@ -14004,3 +14005,4 @@ TEST(ktx2_astc6x6_and_packaging_writer) {
     }
 }
 #include "tests_topdown.inc"   // top-down heroes (agent-topdown-control)
+#include "tests_bwclient.inc"   // agent-bw-client: Spine, gamepad, client services

@@ -23,6 +23,7 @@
 
 namespace aiverse::platform {
 using detail::state;
+namespace detail { bool androidGamepadEvent(const AInputEvent* ev); }   // gamepad/GamepadAndroid.cpp
 
 namespace {
 android_app* g_app = nullptr;
@@ -265,6 +266,7 @@ int32_t onMouse(AInputEvent* ev) {
 }
 
 int32_t onInput(android_app*, AInputEvent* ev) {
+    if (detail::androidGamepadEvent(ev)) return 1;   // engine/platform/gamepad/GamepadAndroid.cpp
     if (AInputEvent_getType(ev) == AINPUT_EVENT_TYPE_KEY) return onKey(ev);
     if (AInputEvent_getType(ev) != AINPUT_EVENT_TYPE_MOTION) return 0;
     if (AMotionEvent_getToolType(ev, 0) == AMOTION_EVENT_TOOL_TYPE_MOUSE) return onMouse(ev);

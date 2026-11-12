@@ -1,0 +1,22 @@
+{
+  "name": "deeplinks",
+  "description": "Deep links for Android, iOS and the web: custom URL schemes, Android App Links / iOS universal links, the link the app was launched with and every link while it runs. Protocol: links (docs/plugins.md, engine/services/Links.h). Config: scheme (custom URL scheme, e.g. \"bunkerwars\"), host (verified https host for App Links / universal links, optional), path (optional path prefix).",
+  "provides": ["links"],
+  "android": {
+    "java": "android/java",
+    "classes": { "deeplinks": "com.aiverse.plugins.DeepLinksPlugin" },
+    "manifest": {
+      "activity": [
+        "<intent-filter><action android:name=\"android.intent.action.VIEW\"/><category android:name=\"android.intent.category.DEFAULT\"/><category android:name=\"android.intent.category.BROWSABLE\"/><data android:scheme=\"${scheme}\"/></intent-filter>",
+        "<intent-filter android:autoVerify=\"true\"><action android:name=\"android.intent.action.VIEW\"/><category android:name=\"android.intent.category.DEFAULT\"/><category android:name=\"android.intent.category.BROWSABLE\"/><data android:scheme=\"https\" android:host=\"${host}\" android:pathPrefix=\"${path}\"/></intent-filter>"
+      ]
+    }
+  },
+  "ios": {
+    "sources": ["ios/*.mm"],
+    "classes": { "deeplinks": "AiverseDeepLinksPlugin" },
+    "plist": ["<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>${scheme}</string><key>CFBundleURLSchemes</key><array><string>${scheme}</string></array></dict></array>"]
+  },
+  "web": { "js": ["web/deeplinks.js"] },
+  "defaults": { "host": "example.invalid", "path": "/" }
+}

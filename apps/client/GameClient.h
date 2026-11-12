@@ -37,6 +37,9 @@
 #include "modules/rts/audio/AudioScriptSound.h"
 #include "modules/rts/view/RtsView.h"
 #include "ClientFx.h"
+#include "ClientSpine.h"
+#include "ClientServices.h"
+#include "ClientGamepad.h"
 #include "modules/rts/view/RtsViewScript.h"
 #include "modules/rts/view/RegionSwipe.h"
 
@@ -268,6 +271,13 @@ private:
     render::BakedLighting baked_;         // the map's baked lightmaps / probes, "<map>.bake" (ClientBaked.cpp, agent-lightbake)
     void configureBakedLighting(const std::string& mapFile);
     RtsView view_;
+    ClientSpine spine_;
+    ClientServices services_;
+    ClientGamepad gamepad_;               // pad cursor / pan / zoom / bindings (ClientGamepad.cpp, agent-bw-client)
+    bool padInjecting_ = false;
+    float padPanX_ = 0, padPanY_ = 0;
+    void updateGamepad(float dt);
+    void drawGamepadCursor();             // social / push / links Lua tables (ClientServices.cpp, agent-bw-client)                   // Spine skeletons in UI documents (ClientSpine.cpp, agent-bw-client)
     ClientFx fx_;                         // particle effects (ClientFx.cpp)
     game::ViewScripts viewScripts_;       // rules "viewScripts" (docs/scripting.md): notices / effects / sounds
     std::vector<game::ViewGroundBatch> groundCanvas_;   // view.draw_ground triangles of the last view-script update
