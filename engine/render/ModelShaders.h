@@ -213,6 +213,7 @@ void main() {
 #endif
     vec3 n = normalize(v_nrm);
     if (!gl_FrontFacing) n = -n;
+    vec3 shadowNormal = n;
 #if defined(NORMALMAP) && AIVERSE_Q >= 1
     {
         vec3 t = normalize(v_tan.xyz - n * dot(n, v_tan.xyz));
@@ -241,7 +242,7 @@ void main() {
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
-    float sh = (ndl > 0.0 && v_draw.x > 0.5) ? min(shadowAt(v_wpos, normalize(v_nrm)), terrainShadow(v_wpos)) : 1.0;
+    float sh = (ndl > 0.0 && v_draw.x > 0.5) ? min(shadowAt(v_wpos, shadowNormal), terrainShadow(v_wpos)) : 1.0;
     sh *= cloudShade(v_wpos);
     vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
     vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
@@ -490,6 +491,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
     float3 n = normalize(in.nrm);
     if (!frontFacing) n = -n;
+    float3 shadowNormal = n;
 #if defined(NORMALMAP) && AIVERSE_Q >= 1
     {
         float3 t = normalize(in.tan.xyz - n * dot(n, in.tan.xyz));
@@ -518,7 +520,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
-    float sh = (ndl > 0.0 && in.draw.x > 0.5) ? min(shadowAt(f, in.wpos, normalize(in.nrm), in.pos.xy, tex0, s0), terrainShadow(f, tex10, s10, in.wpos)) : 1.0;
+    float sh = (ndl > 0.0 && in.draw.x > 0.5) ? min(shadowAt(f, in.wpos, shadowNormal, in.pos.xy, tex0, s0), terrainShadow(f, tex10, s10, in.wpos)) : 1.0;
     sh *= cloudShade(lu, in.wpos);
     float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
     float3 sky = rtsDecodeScene(f.skyColor.rgb), ground = rtsDecodeScene(f.groundColor.rgb);

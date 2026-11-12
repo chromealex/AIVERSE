@@ -327,3 +327,23 @@ on desktop GL; these are not Android measurements or a controlled speed comparis
 The fix adds one texture rebind, no shading pass. All 37 HDR GPU controls passed on
 both backends; control 36 fails when the texture restoration is removed. Static
 light-grid CPU tests also passed. Android/web remain unverified.
+
+### Thin cloth shadow bias (2026-11-12)
+
+GLSL and MSL now use the face-oriented geometric normal for sun-shadow receiver
+bias, saved before normal mapping. Previously lighting flipped back-face normals
+but shadow lookup did not, displacing double-sided curtain receivers into the
+sheet and causing false self-shadowing. Receiver offset now stays at 1.5 world
+shadow texels instead of increasing to 90% of the PCF radius (about 20 cm with the
+default .22 m softness). Filter radius, tap counts, exposure and GI are unchanged.
+No extra texture reads, passes or temporal filtering are introduced.
+
+HDR GPU controls 37/38 check back/front faces of a sunlit, shadow-casting sheet
+through the SSR redraw. All 39 controls passed on GL and Metal. Restoring the old
+GL lookup normal makes control 37 return black instead of expected 0.54806.
+The Sponza frontal curtain comparison is subtle: the deep fold shading remains;
+this fix does not add cloth transmission, multi-bounce GI or erase real shadows.
+Android/web hardware remain unverified.
+Static GL/Metal captures were inspected, along with selected frames of a completed
+16-capture Metal camera-motion smoke check. This short check is not a general
+no-flicker guarantee; the existing temporal AA and PCF kernels were not changed.

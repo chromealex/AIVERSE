@@ -248,8 +248,8 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
         // Low (4 fixed taps): a wide radius would show 4 offset copies, keep it around two texels
         if (quality_ == ShadowQuality::Low) radiusWorld = std::min(radiusWorld, shadowTexelWorld_ * 2.0f);
         f.quality[2] = radiusWorld / std::max(shadowExtent_, 1.0f);
-        // normal offset grows with the kernel: wide filters otherwise compare against the receiver itself (acne)
-        f.quality[3] = std::max(shadowTexelWorld_ * 1.5f, radiusWorld * 0.9f);
+        // Keep receiver displacement tied to resolution, not penumbra width: thin folds must not detach.
+        f.quality[3] = shadowTexelWorld_ * 1.5f;
     }
     f.quality[1] = quality_ == ShadowQuality::Off || forShadow ? 0.0f : 1.0f;
     dev_->setUniforms(1, &f, sizeof f);

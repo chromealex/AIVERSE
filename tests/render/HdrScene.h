@@ -132,7 +132,7 @@ struct HdrScene {
             auto& material=probeBg->materials[0];material.shading=ShadingModel::Pbr;material.baseColor={1,1,1,1};material.roughness=1;material.metallic=0;
             renderer.lights.setQuality(probeIndex==15?LightQuality::Medium:LightQuality::High);
             if(probeIndex>=29){renderer.setMaterialQuality(probeIndex==29?MaterialQuality::High:MaterialQuality::Low);renderer.lighting.skyColor={.5f,.5f,.5f};renderer.lighting.groundColor={.5f,.5f,.5f};}
-            if(probeIndex==34||probeIndex==36){renderer.lighting.sunDir={0,0,1};renderer.lighting.sunColor={1,1,1};renderer.lighting.sunIntensity=.25f;}
+            if(probeIndex==34||probeIndex>=36){renderer.lighting.sunDir={0,0,1};renderer.lighting.sunColor={1,1,1};renderer.lighting.sunIntensity=.25f;}
             if(gridProbe!=probeIndex){gridProbe=probeIndex;PointLight light;light.pos={0,0,probeIndex==8?3.0f:1.0f};light.radius=2;light.color={1,1,1};light.intensity=1;
                 std::vector<StaticPointShadow> shadows;
                 if(probeIndex>=9){
@@ -166,7 +166,8 @@ struct HdrScene {
                 if(probeIndex!=20&&!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows,diffuse.probes.empty()?nullptr:&diffuse)){failed=true;return;}}
         }
         // Rough receiver has no SSR contribution: the opaque redraw must preserve sun visibility.
-        if(probeIndex==36){renderer.setShadowQuality(ShadowQuality::High);renderer.setShadowBounds({-2,-2,-2},{2,2,2});renderer.setModelReflectionsEnabled(true);}
+        if(probeIndex>=36){renderer.setShadowQuality(ShadowQuality::High);renderer.setShadowBounds({-2,-2,-2},{2,2,2});renderer.setModelReflectionsEnabled(true);}
+        if(probeIndex>=37){probeBg->materials[0].castShadow=true;probeBg->materials[0].doubleSided=true;}
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
             renderer.beginScene(camera,w/2,h/2);
@@ -174,7 +175,9 @@ struct HdrScene {
             renderer.render(output,pipeline());renderer.resolvePostFx();d.endPass();
         }
         renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
-        ModelDraw bg;bg.model=probeBg.get();renderer.drawModel(bg);
+        ModelDraw bg;bg.model=probeBg.get();
+        if(probeIndex==37)bg.world=mat4::rotate(quat::axisAngle({0,1,0},3.14159265f));
+        renderer.drawModel(bg);
         if(probeIndex==2) {ModelDraw fg;fg.model=probeFg.get();fg.world=mat4::translate({0,0,1});renderer.drawModel(fg);}
         renderer.render(output,pipeline());renderer.resolvePostFx();
         if(frame==5) {
@@ -195,7 +198,7 @@ struct HdrScene {
             if(probeIndex==27||probeIndex==29)expected=0;
             if(probeIndex==30||probeIndex==32||probeIndex==33)expected=.21404114f;
             if(probeIndex==31)expected=.21404114f*.25f;
-            if(probeIndex==34||probeIndex==36)expected=.25f*(1+.04f*9*.125f);
+            if(probeIndex==34||probeIndex>=36)expected=.25f*(1+.04f*9*.125f);
             if(probeIndex==35)expected=.2f;
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
@@ -206,7 +209,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==37)captured=true;
+                if(probeIndex==39)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }
