@@ -45,6 +45,8 @@ inline const char* bounce = R"(
     RETURN(vec4(center.rgb+indirect*tint*(2.0/16.0),center.a));
 )";
 inline const char* temporal = R"(
+    // Write history in stable, unjittered output coordinates.
+    s+=jitter.xy;
     vec3 now=taaCompress(COLOR(UV(s)).rgb);
     float zd=DEPTH(UV(s)); vec4 hp=WORLD(s,zd); vec3 p=hp.xyz/hp.w;
     float distance=zd<0.99999 ? min(length(p-eye.xyz),65000.0) : 0.0;
@@ -65,7 +67,7 @@ inline const char* temporal = R"(
     // A center-depth-only test resets accumulation whenever a subpixel object disappears.
     vec3 previousPoint=distance>0.0?p:p-eye.xyz+prevEye.xyz;
     vec4 oldClip=prevVP*vec4(previousPoint,1.0);
-    vec2 oldUv=oldClip.xy/max(oldClip.w,0.00001)*0.5+0.5;
+    vec2 oldUv=oldClip.xy/max(oldClip.w,0.00001)*0.5+0.5-jitter.zw;
     float weight=0.0;
     vec3 old=now;
     if(params.x>0.5 && oldClip.w>0.0 && min(oldUv.x,oldUv.y)>0.0 && max(oldUv.x,oldUv.y)<1.0) {

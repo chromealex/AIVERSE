@@ -53,25 +53,40 @@ namespace aiverse::render::shaders {
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
-    "float probeVisibility(int offset, vec3 q, float distance, bool filtered) {\n" \
+    "float probePlaneVisible(vec4 plane, vec3 q, float distance) {\n" \
+    "    float normal2=dot(plane.yzw,plane.yzw),ratio=dot(plane.yzw,q);\n" \
+    "    // Coplanar receivers remain visible even far from the stored cube-ray hit.\n" \
+    "    // Clamping projected depth to twice radial depth creates false grazing-angle shadows.\n" \
+    "    if(ratio>0.0 && ratio*ratio>0.0001*normal2*distance*distance)\n" \
+    "        return ratio<=1.0+0.03*sqrt(normal2)?1.0:0.0;\n" \
+    "    return distance-0.03<=plane.x?1.0:0.0;\n" \
+    "}\n" \
+    "float probeVisibility(int offset, vec3 q, float distance, bool highQuality) {\n" \
     "    vec3 a=abs(q);vec2 uv;int face;\n" \
     "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=vec2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
     "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=vec2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
     "    else{face=q.z>0.0?4:5;uv=vec2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
     "    vec2 texel=(uv*0.5+0.5)*4.0-0.5;\n" \
     "    vec2 fraction=fract(texel);float visible=0.0;\n" \
+    "    if(!highQuality){\n" \
+    "        // Four corners preserve narrow openings that a triangle footprint misses.\n" \
+    "        vec2 base=floor(texel),inverse=vec2(1)-fraction;\n" \
+    "        ivec2 p0=ivec2(clamp(base,vec2(0),vec2(3)));\n" \
+    "        ivec2 p1=ivec2(clamp(base+vec2(1,0),vec2(0),vec2(3)));\n" \
+    "        ivec2 p2=ivec2(clamp(base+vec2(0,1),vec2(0),vec2(3)));\n" \
+    "        ivec2 p3=ivec2(clamp(base+vec2(1),vec2(0),vec2(3)));\n" \
+    "        return inverse.x*inverse.y*probePlaneVisible(gridFetch(offset+4+face*16+p0.y*4+p0.x),q,distance)\n" \
+    "             +fraction.x*inverse.y*probePlaneVisible(gridFetch(offset+4+face*16+p1.y*4+p1.x),q,distance)\n" \
+    "             +inverse.x*fraction.y*probePlaneVisible(gridFetch(offset+4+face*16+p2.y*4+p2.x),q,distance)\n" \
+    "             +fraction.x*fraction.y*probePlaneVisible(gridFetch(offset+4+face*16+p3.y*4+p3.x),q,distance);\n" \
+    "    }\n" \
     "    for(int tap=0;tap<4;++tap){\n" \
-    "        if(!filtered && tap>0)break;\n" \
     "        vec2 corner=vec2(float(tap%2),float(tap/2));\n" \
     "        ivec2 pixel=ivec2(clamp(floor(texel)+corner,vec2(0),vec2(3)));\n" \
-    "        if(!filtered)pixel=ivec2(clamp(floor(texel+0.5),vec2(0),vec2(3)));\n" \
     "        vec4 plane=gridFetch(offset+4+face*16+pixel.y*4+pixel.x);\n" \
-    "        float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
-    "        if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
-    "            depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
     "        vec2 weights=mix(vec2(1.0)-fraction,fraction,corner);\n" \
-    "        float weight=filtered?weights.x*weights.y:1.0;\n" \
-    "        visible+=(distance-0.03<=depth?1.0:0.0)*weight;\n" \
+    "        float weight=weights.x*weights.y;\n" \
+    "        visible+=probePlaneVisible(plane,q,distance)*weight;\n" \
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
@@ -83,12 +98,13 @@ namespace aiverse::render::shaders {
     "    vec3 base=floor(coordinate),fraction=coordinate-base;\n" \
     "    vec3 result=vec3(0.0);float total=0.0,skyVisible=0.0;\n" \
     "    bool mobile=l_giPoint.w<1.5;\n" \
+    "    vec3 fullResult=vec3(0.0);float fullTotal=0.0,fullSky=0.0;\n" \
     "    int first=fraction.x>=fraction.y?(fraction.x>=fraction.z?0:2):(fraction.y>=fraction.z?1:2);\n" \
     "    int last=fraction.x<=fraction.y?(fraction.x<=fraction.z?0:2):(fraction.y<=fraction.z?1:2);\n" \
     "    if(first==last)last=(first+2)%3;\n" \
     "    int middle=3-first-last;\n" \
     "    for(int i=0;i<8;++i){\n" \
-    "        if(mobile && i>=4)break;\n" \
+    "        if(mobile && i==4 && total>=0.05)break;\n" \
     "        vec3 corner=vec3(float(i%2),float((i/2)%2),float(i/4));\n" \
     "        float tetraWeight=0.0;\n" \
     "        if(mobile){\n" \
@@ -98,31 +114,47 @@ namespace aiverse::render::shaders {
     "            if(i>=3)corner[last]=1.0;\n" \
     "            tetraWeight=i==0?1.0-fraction[first]:i==1?fraction[first]-fraction[middle]:i==2?fraction[middle]-fraction[last]:fraction[last];\n" \
     "        }\n" \
+    "        if(mobile && i>=4){\n" \
+    "            corner=vec3(0.0);corner[last]=1.0;\n" \
+    "            if(i==5){corner[last]=0.0;corner[middle]=1.0;}\n" \
+    "            if(i==6)corner[first]=1.0;\n" \
+    "            if(i==7)corner[middle]=1.0;\n" \
+    "            tetraWeight=0.0;\n" \
+    "        }\n" \
     "        vec3 cell=base+corner;\n" \
     "        if(cell.x<0.0||cell.y<0.0||cell.z<0.0||cell.x>=l_gridSize.x||cell.y>=l_gridSize.y||cell.z>=l_gridSize.z)continue;\n" \
     "        int index=int(cell.x+l_gridSize.x*(cell.y+l_gridSize.y*cell.z));\n" \
     "        vec4 cellHeader=gridFetch(index);int offset=int(cellHeader.z);if(offset<=0)continue;\n" \
     "        vec3 weights=mix(vec3(1.0)-fraction,fraction,corner);\n" \
-    "        float weight=mobile?tetraWeight:weights.x*weights.y*weights.z;\n" \
-    "        if(weight<=1e-6)continue;\n" \
+    "        float spatial=weights.x*weights.y*weights.z;float weight=mobile?tetraWeight:spatial;\n" \
+    "        if(max(weight,spatial)<=1e-6)continue;\n" \
     "        vec3 position=l_gridOrigin.xyz+(cell+0.5)/l_gridOrigin.w;\n" \
     "        vec3 delta=wpos-position;float distance=length(delta);\n" \
-    "        if(distance>1e-5)weight*=probeVisibility(offset,delta,distance,!mobile);\n" \
-    "        if(weight<=0.0)continue;\n" \
+    "        float visible=distance>1e-5?probeVisibility(offset,delta,distance,!mobile):1.0;weight*=visible;spatial*=visible;\n" \
+    "        if(max(weight,spatial)<=0.0)continue;\n" \
     "        vec4 normal=vec4(1.0,n);\n" \
     "        vec3 value=vec3(0.0);if(mod(cellHeader.w,2.0)>=1.0)value=vec3(dot(gridFetch(offset),normal),dot(gridFetch(offset+1),normal),dot(gridFetch(offset+2),normal));\n" \
     "        value*= l_giPoint.rgb;\n" \
     "        if(mod(floor(cellHeader.w*0.5),2.0)>=1.0 && dot(l_giSun.rgb,l_giSun.rgb)>0.0)value+=vec3(dot(gridFetch(offset+100),normal),dot(gridFetch(offset+101),normal),dot(gridFetch(offset+102),normal))*l_giSun.rgb;\n" \
     "        if(mod(floor(cellHeader.w*0.25),2.0)>=1.0 && dot(l_giSky.rgb,l_giSky.rgb)>0.0)value+=vec3(dot(gridFetch(offset+103),normal),dot(gridFetch(offset+104),normal),dot(gridFetch(offset+105),normal))*l_giSky.rgb;\n" \
-    "        if(cellHeader.w>=8.0)skyVisible+=clamp(dot(gridFetch(offset+106),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0)*weight;\n" \
-    "        result+=max(value,vec3(0.0))*weight;total+=weight;\n" \
+    "        float sky=cellHeader.w>=8.0?clamp(dot(gridFetch(offset+106),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0):0.0;\n" \
+    "        vec3 light=max(value,vec3(0.0));\n" \
+    "        skyVisible+=sky*weight;result+=light*weight;total+=weight;\n" \
+    "        if(mobile){fullResult+=light*spatial;fullSky+=sky*spatial;fullTotal+=spatial;}\n" \
+    "    }\n" \
+    "    vec3 radiance=total>1e-5?result/total:vec3(0.0);\n" \
+    "    float ambient=total>1e-5?skyVisible/total:0.0;\n" \
+    "    if(mobile && total<0.05){\n" \
+    "        float trust=smoothstep(0.005,0.05,total);\n" \
+    "        radiance=mix(fullTotal>1e-5?fullResult/fullTotal:vec3(0.0),radiance,trust);\n" \
+    "        ambient=mix(fullTotal>1e-5?fullSky/fullTotal:0.0,ambient,trust);\n" \
     "    }\n" \
     "    vec3 location=(wpos-l_gridOrigin.xyz)*l_gridOrigin.w;\n" \
-    "    if(gridFetch(0).w>=8.0 && all(greaterThanEqual(location,vec3(0.0))) && all(lessThan(location,l_gridSize.xyz)))ambientVisibility=total>1e-5?skyVisible/total:0.0;\n" \
-    "    return total>1e-5?result/total:vec3(0.0);\n" \
+    "    if(gridFetch(0).w>=8.0 && all(greaterThanEqual(location,vec3(0.0))) && all(lessThan(location,l_gridSize.xyz)))ambientVisibility=ambient;\n" \
+    "    return radiance;\n" \
     "}\n" \
-    "void gridLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds, out float ambientVisibility) {\n" \
-    "    dd = gridIndirect(wpos,n,ambientVisibility); ds = vec3(0.0);\n" \
+    "void gridLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds, out float ambientVisibility, float indirectOcclusion) {\n" \
+    "    dd = gridIndirect(wpos,n,ambientVisibility)*indirectOcclusion; ds = vec3(0.0);\n" \
     "    vec3 cell = floor((wpos - l_gridOrigin.xyz) * l_gridOrigin.w);\n" \
     "    if (cell.x < 0.0 || cell.y < 0.0 || cell.z < 0.0 || cell.x >= l_gridSize.x || cell.y >= l_gridSize.y || cell.z >= l_gridSize.z) return;\n" \
     "    int index = int(cell.x + l_gridSize.x * (cell.y + l_gridSize.y * cell.z));\n" \
@@ -153,6 +185,7 @@ namespace aiverse::render::shaders {
     "        ds += radiance * (ndl * pow(max(dot(n,H),0.0),shin) * (shin+8.0)*0.04) * (1.0-diffuseOnly);\n" \
     "    }\n" \
     "}\n" \
+    "void gridLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds, out float ambientVisibility){gridLight(wpos,n,V,rough,dd,ds,ambientVisibility,1.0);}\n" \
     "void gridLight(vec3 wpos,vec3 n,vec3 V,float rough,out vec3 dd,out vec3 ds){float visibility;gridLight(wpos,n,V,rough,dd,ds,visibility);}\n" \
     "float nightGlow() { return l_info.w; }\n" \
     "/* unlit (2D) shaders: day/night tint and the light map at a world point; a block that was never */\n" \
@@ -206,8 +239,8 @@ namespace aiverse::render::shaders {
     "}\n" \
     "vec3 dynamicLightAmbient(vec3 wpos,vec3 n,vec3 V,float specK,out float visibility){visibility=1.0;if(l_gridSize.x>0.0){vec3 dd,ds;gridLight(wpos,n,V,0.5,dd,ds,visibility);return dd+ds*specK;}return dynamicLight(wpos,n,V,specK);}\n" \
     "/* PBR materials: diffuse and specular apart, so metals reflect light (F0 tints dd/ds outside). */\n" \
-    "void dynLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds, out float ambientVisibility) {\n" \
-    "    ambientVisibility=1.0; if (l_gridSize.x > 0.0) { gridLight(wpos,n,V,rough,dd,ds,ambientVisibility); return; }\n" \
+    "void dynLight(vec3 wpos, vec3 n, vec3 V, float rough, out vec3 dd, out vec3 ds, out float ambientVisibility, float indirectOcclusion) {\n" \
+    "    ambientVisibility=1.0; if (l_gridSize.x > 0.0) { gridLight(wpos,n,V,rough,dd,ds,ambientVisibility,indirectOcclusion); return; }\n" \
     "    dd = vec3(0.0); ds = vec3(0.0);\n" \
     "    float gloss = 1.0 - rough;\n" \
     "    if (l_map.w > 0.5) {\n" \
@@ -282,25 +315,40 @@ namespace aiverse::render::shaders {
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
-    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance, bool filtered) {\n" \
+    "static float probePlaneVisible(float4 plane, float3 q, float distance) {\n" \
+    "    float normal2=dot(plane.yzw,plane.yzw),ratio=dot(plane.yzw,q);\n" \
+    "    // Coplanar receivers remain visible even far from the stored cube-ray hit.\n" \
+    "    // Clamping projected depth to twice radial depth creates false grazing-angle shadows.\n" \
+    "    if(ratio>0.0 && ratio*ratio>0.0001*normal2*distance*distance)\n" \
+    "        return ratio<=1.0+0.03*sqrt(normal2)?1.0:0.0;\n" \
+    "    return distance-0.03<=plane.x?1.0:0.0;\n" \
+    "}\n" \
+    "static float probeVisibility(texture2d<float> lm, int width, int offset, float3 q, float distance, bool highQuality) {\n" \
     "    float3 a=abs(q);float2 uv;int face;\n" \
     "    if(a.x>=a.y && a.x>=a.z){face=q.x>0.0?0:1;uv=float2(q.x>0.0?-q.z:q.z,q.y)/a.x;}\n" \
     "    else if(a.y>=a.z){face=q.y>0.0?2:3;uv=float2(q.x,q.y>0.0?-q.z:q.z)/a.y;}\n" \
     "    else{face=q.z>0.0?4:5;uv=float2(q.z>0.0?q.x:-q.x,q.y)/a.z;}\n" \
     "    float2 texel=(uv*0.5+0.5)*4.0-0.5;\n" \
     "    float2 fraction=fract(texel);float visible=0.0;\n" \
+    "    if(!highQuality){\n" \
+    "        // Four corners preserve narrow openings that a triangle footprint misses.\n" \
+    "        float2 base=floor(texel),inverse=float2(1)-fraction;\n" \
+    "        int2 p0=int2(clamp(base,float2(0),float2(3)));\n" \
+    "        int2 p1=int2(clamp(base+float2(1,0),float2(0),float2(3)));\n" \
+    "        int2 p2=int2(clamp(base+float2(0,1),float2(0),float2(3)));\n" \
+    "        int2 p3=int2(clamp(base+float2(1),float2(0),float2(3)));\n" \
+    "        return inverse.x*inverse.y*probePlaneVisible(gridFetch(lm,offset+4+face*16+p0.y*4+p0.x,width),q,distance)\n" \
+    "             +fraction.x*inverse.y*probePlaneVisible(gridFetch(lm,offset+4+face*16+p1.y*4+p1.x,width),q,distance)\n" \
+    "             +inverse.x*fraction.y*probePlaneVisible(gridFetch(lm,offset+4+face*16+p2.y*4+p2.x,width),q,distance)\n" \
+    "             +fraction.x*fraction.y*probePlaneVisible(gridFetch(lm,offset+4+face*16+p3.y*4+p3.x,width),q,distance);\n" \
+    "    }\n" \
     "    for(int tap=0;tap<4;++tap){\n" \
-    "        if(!filtered && tap>0)break;\n" \
     "        float2 corner=float2(float(tap%2),float(tap/2));\n" \
     "        int2 pixel=int2(clamp(floor(texel)+corner,float2(0),float2(3)));\n" \
-    "        if(!filtered)pixel=int2(clamp(floor(texel+0.5),float2(0),float2(3)));\n" \
     "        float4 plane=gridFetch(lm,offset+4+face*16+pixel.y*4+pixel.x,width);\n" \
-    "        float depth=plane.x,ratio=dot(plane.yzw,q);\n" \
-    "        if(ratio>0.0 && ratio*ratio>0.0001*dot(plane.yzw,plane.yzw)*distance*distance)\n" \
-    "            depth=clamp(distance/ratio,depth*0.5,depth*2.0);\n" \
     "        float2 weights=mix(float2(1.0)-fraction,fraction,corner);\n" \
-    "        float weight=filtered?weights.x*weights.y:1.0;\n" \
-    "        visible+=(distance-0.03<=depth?1.0:0.0)*weight;\n" \
+    "        float weight=weights.x*weights.y;\n" \
+    "        visible+=probePlaneVisible(plane,q,distance)*weight;\n" \
     "    }\n" \
     "    return visible;\n" \
     "}\n" \
@@ -312,12 +360,13 @@ namespace aiverse::render::shaders {
     "    float3 base=floor(coordinate),fraction=coordinate-base;\n" \
     "    float3 result=float3(0.0);float total=0.0,skyVisible=0.0;\n" \
     "    bool mobile=l.giPoint.w<1.5;\n" \
+    "    float3 fullResult=float3(0.0);float fullTotal=0.0,fullSky=0.0;\n" \
     "    int first=fraction.x>=fraction.y?(fraction.x>=fraction.z?0:2):(fraction.y>=fraction.z?1:2);\n" \
     "    int last=fraction.x<=fraction.y?(fraction.x<=fraction.z?0:2):(fraction.y<=fraction.z?1:2);\n" \
     "    if(first==last)last=(first+2)%3;\n" \
     "    int middle=3-first-last;\n" \
     "    for(int i=0;i<8;++i){\n" \
-    "        if(mobile && i>=4)break;\n" \
+    "        if(mobile && i==4 && total>=0.05)break;\n" \
     "        float3 corner=float3(float(i%2),float((i/2)%2),float(i/4));\n" \
     "        float tetraWeight=0.0;\n" \
     "        if(mobile){\n" \
@@ -327,31 +376,47 @@ namespace aiverse::render::shaders {
     "            if(i>=3)corner[last]=1.0;\n" \
     "            tetraWeight=i==0?1.0-fraction[first]:i==1?fraction[first]-fraction[middle]:i==2?fraction[middle]-fraction[last]:fraction[last];\n" \
     "        }\n" \
+    "        if(mobile && i>=4){\n" \
+    "            corner=float3(0.0);corner[last]=1.0;\n" \
+    "            if(i==5){corner[last]=0.0;corner[middle]=1.0;}\n" \
+    "            if(i==6)corner[first]=1.0;\n" \
+    "            if(i==7)corner[middle]=1.0;\n" \
+    "            tetraWeight=0.0;\n" \
+    "        }\n" \
     "        float3 cell=base+corner;\n" \
     "        if(cell.x<0.0||cell.y<0.0||cell.z<0.0||cell.x>=l.gridSize.x||cell.y>=l.gridSize.y||cell.z>=l.gridSize.z)continue;\n" \
     "        int index=int(cell.x+l.gridSize.x*(cell.y+l.gridSize.y*cell.z));\n" \
     "        float4 cellHeader=gridFetch(lm,index,int(l.gridSize.w));int offset=int(cellHeader.z);if(offset<=0)continue;\n" \
     "        float3 weights=mix(float3(1.0)-fraction,fraction,corner);\n" \
-    "        float weight=mobile?tetraWeight:weights.x*weights.y*weights.z;\n" \
-    "        if(weight<=1e-6)continue;\n" \
+    "        float spatial=weights.x*weights.y*weights.z;float weight=mobile?tetraWeight:spatial;\n" \
+    "        if(max(weight,spatial)<=1e-6)continue;\n" \
     "        float3 position=l.gridOrigin.xyz+(cell+0.5)/l.gridOrigin.w;\n" \
     "        float3 delta=wpos-position;float distance=length(delta);\n" \
-    "        if(distance>1e-5)weight*=probeVisibility(lm,int(l.gridSize.w),offset,delta,distance,!mobile);\n" \
-    "        if(weight<=0.0)continue;\n" \
+    "        float visible=distance>1e-5?probeVisibility(lm,int(l.gridSize.w),offset,delta,distance,!mobile):1.0;weight*=visible;spatial*=visible;\n" \
+    "        if(max(weight,spatial)<=0.0)continue;\n" \
     "        float4 normal=float4(1.0,n);\n" \
     "        float3 value=float3(0.0);if(fmod(cellHeader.w,2.0)>=1.0)value=float3(dot(gridFetch(lm,offset,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+1,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+2,int(l.gridSize.w)),normal));\n" \
     "        value*= l.giPoint.rgb;\n" \
     "        if(fmod(floor(cellHeader.w*0.5),2.0)>=1.0 && dot(l.giSun.rgb,l.giSun.rgb)>0.0)value+=float3(dot(gridFetch(lm,offset+100,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+101,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+102,int(l.gridSize.w)),normal))*l.giSun.rgb;\n" \
     "        if(fmod(floor(cellHeader.w*0.25),2.0)>=1.0 && dot(l.giSky.rgb,l.giSky.rgb)>0.0)value+=float3(dot(gridFetch(lm,offset+103,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+104,int(l.gridSize.w)),normal),dot(gridFetch(lm,offset+105,int(l.gridSize.w)),normal))*l.giSky.rgb;\n" \
-    "        if(cellHeader.w>=8.0)skyVisible+=clamp(dot(gridFetch(lm,offset+106,int(l.gridSize.w)),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0)*weight;\n" \
-    "        result+=max(value,float3(0.0))*weight;total+=weight;\n" \
+    "        float sky=cellHeader.w>=8.0?clamp(dot(gridFetch(lm,offset+106,int(l.gridSize.w)),normal)/max(0.1,0.5+0.5*n.y),0.0,1.0):0.0;\n" \
+    "        float3 light=max(value,float3(0.0));\n" \
+    "        skyVisible+=sky*weight;result+=light*weight;total+=weight;\n" \
+    "        if(mobile){fullResult+=light*spatial;fullSky+=sky*spatial;fullTotal+=spatial;}\n" \
+    "    }\n" \
+    "    float3 radiance=total>1e-5?result/total:float3(0.0);\n" \
+    "    float ambient=total>1e-5?skyVisible/total:0.0;\n" \
+    "    if(mobile && total<0.05){\n" \
+    "        float trust=smoothstep(0.005,0.05,total);\n" \
+    "        radiance=mix(fullTotal>1e-5?fullResult/fullTotal:float3(0.0),radiance,trust);\n" \
+    "        ambient=mix(fullTotal>1e-5?fullSky/fullTotal:0.0,ambient,trust);\n" \
     "    }\n" \
     "    float3 location=(wpos-l.gridOrigin.xyz)*l.gridOrigin.w;\n" \
-    "    if(gridFetch(lm,0,int(l.gridSize.w)).w>=8.0 && all(location>=float3(0.0)) && all(location<l.gridSize.xyz))ambientVisibility=total>1e-5?skyVisible/total:0.0;\n" \
-    "    return total>1e-5?result/total:float3(0.0);\n" \
+    "    if(gridFetch(lm,0,int(l.gridSize.w)).w>=8.0 && all(location>=float3(0.0)) && all(location<l.gridSize.xyz))ambientVisibility=ambient;\n" \
+    "    return radiance;\n" \
     "}\n" \
-    "static void gridLight(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds, thread float& ambientVisibility) {\n" \
-    "    dd = gridIndirect(l,lm,wpos,n,ambientVisibility); ds = float3(0.0);\n" \
+    "static void gridLight(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds, thread float& ambientVisibility, float indirectOcclusion) {\n" \
+    "    dd = gridIndirect(l,lm,wpos,n,ambientVisibility)*indirectOcclusion; ds = float3(0.0);\n" \
     "    float3 cell = floor((wpos - l.gridOrigin.xyz) * l.gridOrigin.w);\n" \
     "    if (cell.x < 0.0 || cell.y < 0.0 || cell.z < 0.0 || cell.x >= l.gridSize.x || cell.y >= l.gridSize.y || cell.z >= l.gridSize.z) return;\n" \
     "    int index = int(cell.x + l.gridSize.x * (cell.y + l.gridSize.y * cell.z));\n" \
@@ -384,6 +449,7 @@ namespace aiverse::render::shaders {
     "}\n" \
     "static bool lightsBound(constant LightU& l) { return abs(l.info.y - 4.0) < 0.01; }\n" \
     "static float3 unlitTint(constant LightU& l) { return lightsBound(l) ? l.env.yzw : float3(1.0); }\n" \
+    "static void gridLight(constant LightU& l, texture2d<float> lm, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds, thread float& ambientVisibility){gridLight(l,lm,wpos,n,V,rough,dd,ds,ambientVisibility,1.0);}\n" \
     "static void gridLight(constant LightU& l,texture2d<float> lm,float3 wpos,float3 n,float3 V,float rough,thread float3& dd,thread float3& ds){float visibility;gridLight(l,lm,wpos,n,V,rough,dd,ds,visibility);}\n" \
     "static float3 mapLight(constant LightU& l, texture2d<float> lm, sampler ls, float3 wpos) {\n" \
     "    if (!lightsBound(l) || l.map.w < 0.5) return float3(0.0);\n" \
@@ -431,8 +497,8 @@ namespace aiverse::render::shaders {
     "    return max(c, float3(0.0));\n" \
     "}\n" \
     "static float3 dynamicLightAmbient(constant LightU& l,texture2d<float> lm,sampler ls,float3 wpos,float3 n,float3 V,float specK,thread float& visibility){visibility=1.0;if(l.gridSize.x>0.0){float3 dd,ds;gridLight(l,lm,wpos,n,V,0.5,dd,ds,visibility);return dd+ds*specK;}return dynamicLight(l,lm,ls,wpos,n,V,specK);}\n" \
-    "static void dynLight(constant LightU& l, texture2d<float> lm, sampler ls, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds, thread float& ambientVisibility) {\n" \
-    "    ambientVisibility=1.0; if (l.gridSize.x > 0.0) { gridLight(l,lm,wpos,n,V,rough,dd,ds,ambientVisibility); return; }\n" \
+    "static void dynLight(constant LightU& l, texture2d<float> lm, sampler ls, float3 wpos, float3 n, float3 V, float rough, thread float3& dd, thread float3& ds, thread float& ambientVisibility, float indirectOcclusion) {\n" \
+    "    ambientVisibility=1.0; if (l.gridSize.x > 0.0) { gridLight(l,lm,wpos,n,V,rough,dd,ds,ambientVisibility,indirectOcclusion); return; }\n" \
     "    dd = float3(0.0); ds = float3(0.0);\n" \
     "    float gloss = 1.0 - rough;\n" \
     "    if (l.map.w > 0.5) {\n" \

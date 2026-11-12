@@ -2,6 +2,7 @@
 #include "engine/render/StaticPointBounce.h"
 #include "engine/render/ProbeEnvironment.h"
 #include "engine/render/LightGridCache.h"
+#include "engine/render/MeshOcclusionCache.h"
 #include <cassert>
 #include <iostream>
 using namespace aiverse::render;
@@ -121,6 +122,43 @@ int main(){
     appendProbeTransport(links,barrier,linkField,0,{.25f,.5f,.5f},{1,0,0},{1,0,0},{1,1,1});assert(links.size()==1);
     barrier.triangles={{{.4f,-2,-2},{.4f,2,-2},{.4f,2,2}},{{.4f,-2,-2},{.4f,2,2},{.4f,-2,2}}};barrier.build();links.clear();
     appendProbeTransport(links,barrier,linkField,0,{.25f,.5f,.5f},{1,0,0},{1,0,0},{1,1,1});assert(links.empty());
+    // Combining fixed sky/sun must preserve directional RGB and point-light data.
+    StaticLightGrid separate;separate.build(std::vector<PointLight>{},1,nullptr,&sunny);
+    separate.texels[size_t(separate.texels[0].z)]={.2f,.1f,.3f,.4f};
+    auto combined=separate;combined.combineEnvironment({2,3,4},{5,6,7});
+    size_t combinedOffset=size_t(combined.texels[0].z);
+    for(size_t c=0;c<3;++c){auto a=separate.texels[combinedOffset+100+c],b=separate.texels[combinedOffset+103+c],v=combined.texels[combinedOffset+100+c];
+        float x=float(c+2),y=float(c+5);assert(v.x==a.x*x+b.x*y&&v.y==a.y*x+b.y*y&&v.z==a.z*x+b.z*y&&v.w==a.w*x+b.w*y);
+    }
+    assert((int(combined.texels[0].w)&6)==2);
+    rejected=false;try{combined.combineEnvironment({-1,0,0},{});}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    assert(combined.texels[combinedOffset].x==separate.texels[combinedOffset].x);
     std::cout<<"multibounce transport: dark receiver, albedo, bounce orders and wall visibility PASS\n";
+
+    StaticShadowGeometry openAo;
+    assert(localDiffuseVisibility(openAo,{0,0,0},{0,1,0},1,64)==1);
+    StaticShadowGeometry lidAo;
+    lidAo.triangles={{{-10,.1f,-10},{10,.1f,10},{10,.1f,-10}},{{-10,.1f,-10},{-10,.1f,10},{10,.1f,10}}};lidAo.build();
+    float covered=localDiffuseVisibility(lidAo,{0,0,0},{0,1,0},1,64);
+    assert(covered<.15f&&covered>=0);
+    assert(localDiffuseVisibility(lidAo,{0,0,0},{0,-1,0},1,64)==1);
+    assert(localDiffuseVisibility(lidAo,{0,0,0},{0,1,0},.05f,64)==1);
+    assert(covered==localDiffuseVisibility(lidAo,{0,0,0},{0,1,0},1,64));
+    std::cout<<"local AO: open, covered, opposite hemisphere, radius and repeatability PASS\n";
+
+    Model aoModel;aoModel.vertices.resize(3);aoModel.vertices[0].pos={0,0,0};aoModel.vertices[1].pos={1,0,0};aoModel.vertices[2].pos={0,0,1};
+    for(auto& v:aoModel.vertices)v.nrm={0,1,0};aoModel.indices={0,1,2};aoModel.materials.resize(1);aoModel.meshes.resize(1);
+    Primitive aoPrimitive;aoPrimitive.indexCount=3;aoModel.meshes[0].primitives.push_back(aoPrimitive);
+    auto sharedAo=aoModel;sharedAo.meshes.push_back(sharedAo.meshes[0]);
+    rejected=false;try{bakeMeshOcclusion(sharedAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&sharedAo.vertices[0].color==0xffffffffu);
+    auto untouched=aoModel;auto aoKey=meshOcclusionKey(aoModel,1,64);
+    assert(bakeMeshOcclusion(aoModel,1,64)==3&&aoModel.materials[0].vertexOcclusion);
+    auto aoBytes=encodeMeshOcclusion(aoModel,aoKey);decodeMeshOcclusion(untouched,aoBytes,aoKey);
+    assert(untouched.materials[0].vertexOcclusion&&untouched.vertices[0].color==aoModel.vertices[0].color);
+    rejected=false;try{decodeMeshOcclusion(untouched,aoBytes,aoKey+1);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    aoBytes[28]^=1;rejected=false;try{decodeMeshOcclusion(untouched,aoBytes,aoKey);}catch(const std::runtime_error&){rejected=true;}assert(rejected);
+    auto invalidAo=aoModel;invalidAo.materials[0].vertexOcclusion=false;invalidAo.vertices[0].color=0x80ffffff;
+    rejected=false;try{bakeMeshOcclusion(invalidAo,1,64);}catch(const std::runtime_error&){rejected=true;}assert(rejected&&invalidAo.vertices[0].color==0x80ffffff);
+    std::cout<<"mesh AO bake/cache: roundtrip, stale/corrupt rejection and alpha preservation PASS\n";
 
 }

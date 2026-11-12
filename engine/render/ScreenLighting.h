@@ -31,6 +31,7 @@ private:
     bool enabled_ = false, valid_ = false, running_ = false;
     mat4 previous_;
     float3 previousEye_;
+    float2 jitter_{},previousJitter_{};
     std::string error_;
 };
 }

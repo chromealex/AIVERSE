@@ -22,14 +22,16 @@ struct HdrScene {
     int frame = 0, probeIndex = 0, gridProbe = -1;
     bool verify = false;
     std::unique_ptr<Model> probeBg, probeFg;
-    bool captured = false, failed = false;
+    bool captured = false, failed = false, temporalVerify = false;
+    float temporalMinX=1e9f,temporalMaxX=-1e9f,temporalMinY=1e9f,temporalMaxY=-1e9f;
     std::string path;
     gfx::PassDesc output;
     std::function<void(gfx::Device::CaptureFn)> readOutput;
     void init(gfx::Device& d) {
         std::printf("GPU: %s; RGBA16F=%d\n", d.info().name.c_str(), d.supports(gfx::PixelFormat::RGBA16F));
         if (!renderer.init(d) || !post.init(d)) { failed = true; return; }
-        advanced = std::getenv("AIVERSE_SCREEN_LIGHTING") != nullptr;
+        temporalVerify=std::getenv("AIVERSE_TAA_VERIFY")!=nullptr;
+        advanced = temporalVerify || std::getenv("AIVERSE_SCREEN_LIGHTING") != nullptr;
         if (advanced && !screen.init(d,post)) { failed=true; return; }
         screen.setEnabled(advanced);renderer.setModelReflectionsEnabled(advanced);
         renderer.setShadowQuality(ShadowQuality::High);
@@ -63,7 +65,7 @@ struct HdrScene {
         post.configure(Json::parse(R"({"hdr":"auto","effects":[{"type":"bloom","threshold":0.9,"intensity":0.35},{"type":"fxaa"},{"type":"colorGrade","exposure":-1}]})"),Json());
         post.setQuality(PostFx::defaultQualityFor(d,false));
         verify = std::getenv("AIVERSE_HDR_VERIFY") != nullptr;
-        if (verify) {
+        if (verify || temporalVerify) {
             if (!checkHdrShaders(d)) { failed=true; return; }
 #ifdef _WIN32
             _putenv_s("AIVERSE_HDR", "");
@@ -78,6 +80,8 @@ struct HdrScene {
             Image normals;normals.width=normals.height=256;normals.repeat=true;normals.rgba.resize(256*256*4);
             for(int y=0;y<256;++y)for(int x=0;x<256;++x){size_t i=size_t(y*256+x)*4;normals.rgba[i]=x%2?204:51;normals.rgba[i+1]=128;normals.rgba[i+2]=230;normals.rgba[i+3]=255;}
             probeBg->images.push_back(std::move(normals));
+            Image occlusion;occlusion.width=occlusion.height=1;occlusion.rgba={0,0,0,255};probeBg->images.push_back(std::move(occlusion));
+            for(auto& v:probeBg->vertices)v.color=(v.color&0xffffffu)|(64u<<24);
             uploadModel(d,*probeBg);uploadModel(d,*probeFg);
             renderer.setShadowQuality(ShadowQuality::Off);renderer.lights.setQuality(LightQuality::Off);
             camera.target={0,0,0};camera.pitch=0;camera.yaw=0;camera.distance=10;
@@ -86,6 +90,7 @@ struct HdrScene {
     }
     void draw(gfx::Device& d, int w, int h) {
         if (failed) return;
+        if (temporalVerify) { drawTemporal(d,w,h); return; }
         if (verify) { drawProbe(d,w,h); return; }
         if(ownsFrame)d.beginFrame(w,h);
         renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
@@ -118,6 +123,32 @@ struct HdrScene {
         if (!renderer.modelError().empty() || !post.lastError().empty() || !screen.lastError().empty()) {
             std::fprintf(stderr,"renderer: %s; post: %s\n",renderer.modelError().c_str(),post.lastError().c_str()); failed=true;
         }
+    }
+    void drawTemporal(gfx::Device& d,int w,int h) {
+        PostFxSettings settings;settings.hdr=HdrMode::On;post.setSettings(settings);post.setQuality(PostFxQuality::High);
+        screen.setDiffuseBounceEnabled(false);renderer.lighting.tonemap=false;
+        probeBg->materials[0].baseColor={1,1,1,1};
+        if(ownsFrame)d.beginFrame(w,h);
+        renderer.beginScene(screen.jittered(camera,w,h),w,h);
+        ModelDraw bar;bar.model=probeBg.get();bar.world=mat4::translate({.123f,.057f,0})*mat4::scale({.01f,.02f,.01f});renderer.drawModel(bar);
+        auto pass=output;pass.clearColor[0]=pass.clearColor[1]=pass.clearColor[2]=0;
+        renderer.render(pass,pipeline());renderer.resolvePostFx();
+        if(frame>=40&&frame<56){
+            const int sample=frame;
+            auto receive=[this,sample](int cw,int ch,std::vector<uint8_t> px){
+                auto linear=[](float c){return c<=.04045f?c/12.92f:std::pow((c+.055f)/1.055f,2.4f);};
+                double sx=0,wx=0,sy=0,wy=0;int transition=0;
+                for(int x=0;x<cw;++x){float v=linear(px[size_t((ch/2)*cw+x)*4]/255.0f);sx+=(x+.5)*v;wx+=v;if(v>.05f&&v<.95f)++transition;}
+                for(int y=0;y<ch;++y){float v=linear(px[size_t(y*cw+cw/2)*4]/255.0f);sy+=(y+.5)*v;wy+=v;}
+                if(wx<=0||wy<=0){failed=true;return;}
+                float x=float(sx/wx),y=float(sy/wy);temporalMinX=std::min(temporalMinX,x);temporalMaxX=std::max(temporalMaxX,x);temporalMinY=std::min(temporalMinY,y);temporalMaxY=std::max(temporalMaxY,y);
+                if(transition>8)failed=true;
+                if(sample==55){float dx=temporalMaxX-temporalMinX,dy=temporalMaxY-temporalMinY;
+                    bool ok=dx<.25f&&dy<.25f&&!failed;std::printf("TAA stationary centroid drift: x=%.4f y=%.4f pixels, edge transition=%d: %s\n",dx,dy,transition,ok?"PASS":"FAIL");failed=!ok;captured=true;}
+            };
+            if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
+        }
+        d.endPass();if(ownsFrame)d.endFrame();++frame;
     }
     void drawProbe(gfx::Device& d, int w, int h) {
         const bool legacy = probeIndex==3 || probeIndex==4;
@@ -165,10 +196,41 @@ struct HdrScene {
                     for(auto& p:diffuse.probes){p.irradiance={};if(probeIndex==35)for(auto& c:p.irradiance)c={.2f,0,0,0};p.sun={};p.sky={};p.skyVisibility=probeIndex==30?float4{.5f,0,.5f,0}:probeIndex==31?float4{.125f,0,.125f,0}:float4{};}
                 }
                 if(probeIndex>=41){diffuse.occludeAmbient=false;for(auto& p:diffuse.probes)for(auto& c:p.irradiance)c={.2f,0,0,0};}
-                renderer.lights.setIndirectQuality((probeIndex==17||probeIndex==32)?IndirectQuality::Off:probeIndex>=15&&probeIndex<41?IndirectQuality::Mobile:IndirectQuality::High);
+                // The nearest visibility texel is blocked, but one corner of the footprint is open.
+                // A second, dark unoccluded probe makes the fractional weight observable.
+                if(probeIndex==43){
+                    diffuse.origin={-1,-.5f,-.5f};diffuse.spacing=1;diffuse.nx=2;diffuse.ny=diffuse.nz=1;diffuse.probes.resize(2);
+                    for(size_t i=0;i<2;++i){auto& p=diffuse.probes[i];p.irradiance={};p.sun={};p.sky={};p.skyVisibility={};
+                        if(i==0)for(auto& c:p.irradiance)c={.2f,0,0,0};
+                        p.visibility.resolution=4;p.visibility.distances.assign(96,i==0?0.0f:5.0f);p.visibility.normals.assign(96,{});
+                        if(i==0)for(int face=0;face<6;++face)p.visibility.distances[size_t(face*16+5)]=5;
+                    }
+                }
+                if(probeIndex==45){
+                    for(auto& p:diffuse.probes)p.visibility.distances.assign(96,0);
+                    // Only a corner outside the selected tetrahedron sees the receiver.
+                    diffuse.probes[22].visibility.distances.assign(96,5);
+                }
+                renderer.lights.setIndirectQuality((probeIndex==17||probeIndex==32)?IndirectQuality::Off:((probeIndex>=15&&probeIndex<41)||probeIndex==43||probeIndex==45)?IndirectQuality::Mobile:IndirectQuality::High);
                 renderer.lights.setStaticRadiance(probeIndex==18?float3{.5f,.5f,.5f}:float3{1,1,1},probeIndex==19?float3{2,2,2}:float3{},probeIndex==19?float3{1,1,1}:float3{});
                 if(probeIndex==20)renderer.lights.setStaticRadiance({0,0,0},{1,1,1},{0,0,0});
-                if(probeIndex!=20&&!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows,diffuse.probes.empty()?nullptr:&diffuse)){failed=true;return;}}
+                if(probeIndex==44){
+                    for(auto& p:diffuse.probes){for(auto& c:p.sun)c={.1f,0,0,0};for(auto& c:p.sky)c={.05f,0,0,0};}
+                    StaticLightGrid combined;combined.build(std::vector<PointLight>{light},1,shadows.empty()?nullptr:&shadows,&diffuse);
+                    combined.combineEnvironment({2,2,2},{1,1,1});renderer.lights.setIndirectQuality(IndirectQuality::Mobile);
+                    renderer.lights.setStaticRadiance({1,1,1},{1,1,1},{});
+                    if(!renderer.lights.setStaticLightGrid(combined)){failed=true;return;}
+                }
+                if(probeIndex==48){
+                    StaticLightGrid grazing;grazing.build(std::vector<PointLight>{light},1,shadows.empty()?nullptr:&shadows,&diffuse);
+                    for(int z=0;z<3;++z)for(int y=0;y<3;++y)for(int x=0;x<3;++x){
+                        auto delta=(diffuse.origin+float3{x+.5f,y+.5f,z+.5f})*-1.0f;
+                        auto normal=delta*(1/dot(delta,delta));size_t offset=size_t(grazing.texels[size_t(x+3*(y+3*z))].z);
+                        for(size_t t=4;t<100;++t)grazing.texels[offset+t]={.01f,normal.x,normal.y,normal.z};
+                    }
+                    if(!renderer.lights.setStaticLightGrid(grazing)){failed=true;return;}
+                }
+                if(probeIndex!=20&&probeIndex!=44&&probeIndex!=48&&!renderer.lights.setStaticPointLights({light},1,shadows.empty()?nullptr:&shadows,diffuse.probes.empty()?nullptr:&diffuse)){failed=true;return;}}
         }
         // Rough receiver has no SSR contribution: the opaque redraw must preserve sun visibility.
         if(probeIndex>=36){renderer.setShadowQuality(ShadowQuality::High);renderer.setShadowBounds({-2,-2,-2},{2,2,2});renderer.setModelReflectionsEnabled(true);}
@@ -179,6 +241,10 @@ struct HdrScene {
             renderer.setMaterialQuality(MaterialQuality::Medium);
         }
         if(probeIndex>=41){renderer.lighting.sunIntensity=0;renderer.lighting.skyColor={};renderer.lighting.groundColor={};probeBg->materials[0].normalTex=-1;renderer.setMaterialQuality(MaterialQuality::Low);}
+        if(probeIndex>=46){probeBg->materials[0].occlusionTex=probeIndex>=48?-1:1;renderer.setMaterialQuality(MaterialQuality::High);}
+        if(probeIndex==47||probeIndex==50)renderer.lighting.sunIntensity=.25f;
+        if(probeIndex>=49){probeBg->materials[0].vertexOcclusion=true;probeBg->materials[0].vertexColors=true;}
+        if(probeIndex==51)renderer.setMaterialQuality(MaterialQuality::Low);
         if(ownsFrame)d.beginFrame(w,h);
         if(probeIndex==5) { // alternate view sizes in the same frame, as the editor does
             renderer.beginScene(camera,w/2,h/2);
@@ -218,6 +284,13 @@ struct HdrScene {
                 expected=.25f*nz*(1+.04f*vis);
             }
             if(probeIndex>=41)expected=probeIndex==41?0:.2f;
+            if(probeIndex==43)expected=.04f;
+            if(probeIndex==44)expected=.45f;
+            if(probeIndex==45)expected=.2f;
+            if(probeIndex==46)expected=0;
+            if(probeIndex==47)expected=.25f*1.01f;
+            if(probeIndex==48)expected=.2f;
+            if(probeIndex>=49)expected=.2f*(64.0f/255)+(probeIndex==50?.25f*1.01f:0);
             expected=legacy?std::sqrt(expected):(expected<=0.0031308f?12.92f*expected:1.055f*std::pow(expected,1/2.4f)-0.055f);
             auto receive=[this,test,expected](int cw,int ch,std::vector<uint8_t> px) {
                 if(cw<=0||ch<=0||px.size()!=size_t(cw*ch*4)) {failed=true;return;}
@@ -227,7 +300,7 @@ struct HdrScene {
                 std::printf("HDR GPU probe %d: got %.5f expected %.5f %s\n",test,avg,expected,ok?"PASS":"FAIL");
                 if(!ok)failed=true;
                 ++probeIndex;frame=0;
-                if(probeIndex==43)captured=true;
+                if(probeIndex==52)captured=true;
             };
             if(readOutput)readOutput(receive);else d.captureNextFrame(receive);
         }

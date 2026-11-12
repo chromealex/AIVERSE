@@ -414,3 +414,81 @@ completed all 16 captures; selected start/end frames were inspected. This is not
 a general no-flicker guarantee.
 GL Low also completed with GI Off and linear HDR disabled; its fallback screenshot
 was inspected.
+
+
+### Mobile GI and stationary-camera reconstruction (2026-11-12)
+
+The opt-in `reference_refinement.py --mode day-bounce-mobile` uses 1.25 m probe
+spacing, the same sun/sky radiance and exposure as High, and fixed-radiance
+precombination at upload. It uses 10,710 probes and 17.66 MiB of padded atlas
+(previously 6630 and 10.94 MiB). Mobile normally uses four irradiance probes;
+low visible coverage extends the same loop to the remaining four corners.
+Four bilinear visibility taps and corrected coplanar plane tests fix the
+synthetic regression cases and the large foreground-capital hole. Some black
+wedges remain on the left columns in the real Sponza capture; this is not yet
+a complete visual fix. Material AO now applies to probe irradiance without
+darkening direct sunlight, but the imported Sponza column materials have no
+occlusionTexture, so this alone cannot restore their cavity shading. See docs/probe-gi.md for costs
+and snapshot-relighting restrictions. The denser bake is an authoring tradeoff;
+it does not make the full desktop Sponza profile an Android preset.
+
+TAA previously accumulated and displayed a jittered image grid, so a stationary
+camera still visibly shifted each frame. The temporal resolve now reconstructs
+current samples at the current projection offset and subtracts the previous offset
+when sampling history. History/output coordinates stay stable. Shader bodies are
+shared between GLSL and MSL; no extra render pass or history texture is added.
+
+`AIVERSE_TAA_VERIFY=1 aiverse_hdr_gl|aiverse_hdr_scene` renders an unmoving bar over
+a full jitter cycle, checks its centroid, and bounds edge width. Before the fix
+GL drifted .869/.760 pixels (X/Y), Metal .313/.623; both failed the .25 pixel limit.
+Afterwards GL measured .036/.048 and Metal .034/.037, with two edge-transition
+pixels instead of four in the fixture. This is a targeted stability/sharpness
+check, not a guarantee against every possible TAA artifact.
+
+The supplied daylight reference has stronger local occlusion under capitals and
+in column recesses. The current 1.25 m first-order probe field cannot resolve
+that geometric detail, and the model path has no screen-space ambient occlusion.
+A larger visibility tolerance (3–15 cm smooth transition) was tested and rejected:
+it brightened the scene without removing all wedges. It is not in the shader.
+Local geometric occlusion was subsequently added below; the remaining probe
+visibility artifacts are still outstanding. Do not describe this comparison as a reference match.
+
+
+### Local self-occlusion on columns (2026-11-12)
+
+The main Sponza model now has an opt-in mesh-local AO bake (`meshOcclusion`,
+64 sphere directions, radius .75 in mesh units). 2,027,431 vertices were traced;
+the bake took 43.8–44.3 s on the test Mac. The reusable cache is 2,035,098 bytes;
+GL validated/applied it in about 132 ms. Preview recipes on KINGSTON use `read`,
+so normal launches do not retrace. No extra GPU buffers, textures or passes.
+
+Matched 1280x720 daylight captures retain the same exposure, sun, sky and GI field.
+On Metal, mean displayed luminance in the foreground-capital rectangle
+(x60–400, y270–385) decreased 7.5%; the right capital (x1040–1130, y370–460)
+decreased 10.4%, while the arch interior (x150–300, y40–190) changed only .3%.
+These are screenshot-region observations, not physical irradiance measurements.
+GL and Metal captures were visually inspected; the effect is local and preserves
+sunlit surfaces. Self-occlusion is limited to each mesh, not inter-mesh contact.
+
+M3 Ultra, full desktop profile, 60 warmup + 120 measured frames, median GPU time:
+
+| Backend / GI | Local AO off | Local AO on |
+|---|---:|---:|
+| Metal / Mobile | 20.10 ms | 19.21 ms |
+| GL / Mobile | 19.16 ms | 18.76 ms |
+| Metal / High | — | 28.38 ms |
+
+These separate runs have substantial GPU-clock/presentation variability; the
+numbers do not imply AO improves performance. No measurable slowdown was observed
+in this sample. Mobile here is the GI tier, **not an Android device measurement**.
+Android/web remain unverified. Both High and Mobile use the same cached AO.
+
+CPU occlusion/cache tests and all 52 HDR GPU controls passed on GL and Metal.
+Stationary TAA drift remained below .052 pixels with two edge-transition pixels.
+The old left-column black wedges are still visible: local AO does not solve the
+separate coarse-probe visibility issue. The result is not a 1:1 Unreal match.
+
+Artifacts: `build/bench-results/local-occlusion/` contains actual before/after,
+High/Mobile and GL screenshots plus per-frame timing JSON. The ignored preview
+launchers `build/preview-sponza-day-lit.command` (High) and
+`build/preview-sponza-probe-gi.command` (Mobile) now use the cached AO recipes.

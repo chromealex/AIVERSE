@@ -18,7 +18,7 @@
 //   U1 per frame: as the lit shader (Shaders.h)
 //   U2 material:  vec4 base; vec4 emissive (rgb, linear, premultiplied by strength);
 //                 vec4 pbr (metallic, roughness, normalScale, occlusionStrength);
-//                 vec4 misc (alphaCutoff, teamMode, teamStrength, useVertexColor);
+//                 vec4 misc (alphaCutoff, teamMode, teamStrength, flags: bit0 vertex RGB/alpha, bit1 alpha is local AO);
 //                 vec4 uv0 (offset.xy, scale.xy); vec4 uv1 (rotation, unlit, fixed shade ambient, diffuse);
 //                 vec4 light (fixed light direction xyz, w 1 = on: unlit * (ambient + diffuse * saturate(N.L)))
 //   U3 skin:      SKINNED vec4 joints[240] (3 rows of a 3x4 matrix per joint);
@@ -191,7 +191,7 @@ void main() {
     }
     vec4 tb = texture(tex1, v_uv);
     vec4 base = m_base * vec4(toLinear(tb.rgb), tb.a);
-    if (m_misc.w > 0.5) base *= v_col;
+    if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, m_misc.w > 1.5 ? 1.0 : v_col.a);
     int teamMode = int(m_misc.y + 0.5);
     float teamW = 0.0;   // how much of the team colour this point shows (team glow)
     if (teamMode == 1) {
@@ -240,6 +240,7 @@ void main() {
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
 #endif
     // SG_SURFACE
+    ao *= m_misc.w > 1.5 ? v_col.a : 1.0;
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -251,7 +252,7 @@ void main() {
     sh *= cloudShade(v_wpos);
     vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
     vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
-    vec3 dd,ds;float ambientVisibility;dynLight(v_wpos,n,V,rough,dd,ds,ambientVisibility);
+    vec3 dd,ds;float ambientVisibility;dynLight(v_wpos,n,V,rough,dd,ds,ambientVisibility,ao);
     sky*=ambientVisibility;ground*=ambientVisibility;
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     vec3 diff = base.rgb * (1.0 - metallic);
@@ -287,7 +288,7 @@ void main() {
         col += (reflected * fresnel - ambSpec * ao) * hit * (1.0 - rough) * (1.0 - rough);
     }
 #endif
-    col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
+    col += amb * ao * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
     { col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
     if (m_uv1.y > 0.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
@@ -474,7 +475,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     }
     float4 tb = tex1.sample(s1, in.uv);
     float4 base = m.base * float4(toLinear(tb.rgb), tb.a);
-    if (m.misc.w > 0.5) base *= in.col;
+    if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, m.misc.w > 1.5 ? 1.0 : in.col.a);
     int teamMode = int(m.misc.y + 0.5);
     float teamW = 0.0;
     if (teamMode == 1) {
@@ -521,6 +522,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
 #endif
     // SG_SURFACE
+    ao *= m.misc.w > 1.5 ? in.col.a : 1.0;
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -532,7 +534,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     sh *= cloudShade(lu, in.wpos);
     float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
     float3 sky = rtsDecodeScene(f.skyColor.rgb), ground = rtsDecodeScene(f.groundColor.rgb);
-    float3 dd,ds;float ambientVisibility;dynLight(lu,tex9,s9,in.wpos,n,V,rough,dd,ds,ambientVisibility);
+    float3 dd,ds;float ambientVisibility;dynLight(lu,tex9,s9,in.wpos,n,V,rough,dd,ds,ambientVisibility,ao);
     sky*=ambientVisibility;ground*=ambientVisibility;
     float3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     float3 diff = base.rgb * (1.0 - metallic);
@@ -568,7 +570,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
         col += (reflected * fresnel - ambSpec * ao) * hit * (1.0 - rough) * (1.0 - rough);
     }
 #endif
-    col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
+    col += amb * ao * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
     { col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
     if (m.uv1.y > 0.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);

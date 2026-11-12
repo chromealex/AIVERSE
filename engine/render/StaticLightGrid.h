@@ -13,6 +13,25 @@ struct StaticLightGrid {
     std::vector<float4> texels;
     float4 origin{}, size{};
     int maxCellLights=0;
+    // Prepare a fixed-radiance upload copy. Keep the original for later relighting;
+    // bind sun=(1,1,1), sky=(0,0,0) afterwards. Point lights remain independently scaled.
+    void combineEnvironment(float3 sun,float3 sky) {
+        for(auto v:{sun,sky})for(float c:{v.x,v.y,v.z})if(!std::isfinite(c)||c<0||c>10000)throw std::runtime_error("invalid environment radiance");
+        if(texels.empty())return;
+        const size_t cells=size_t(size.x)*size_t(size.y)*size_t(size.z);
+        std::vector<std::pair<size_t,int>> probes;probes.reserve(cells);
+        for(size_t i=0;i<cells;++i){auto& header=texels.at(i);int mask=int(header.w);
+            if(header.z<=0||(mask&6)==0)continue;
+            probes.emplace_back(size_t(header.z),mask);header.w=float((mask&~6)|2);
+        }
+        std::sort(probes.begin(),probes.end());probes.erase(std::unique(probes.begin(),probes.end()),probes.end());
+        const float sunlight[3]={sun.x,sun.y,sun.z},skylight[3]={sky.x,sky.y,sky.z};
+        for(auto [offset,mask]:probes)for(size_t c=0;c<3;++c){
+            auto a=(mask&2)?texels.at(offset+100+c):float4{};
+            auto b=(mask&4)?texels.at(offset+103+c):float4{};
+            texels.at(offset+100+c)={a.x*sunlight[c]+b.x*skylight[c],a.y*sunlight[c]+b.y*skylight[c],a.z*sunlight[c]+b.z*skylight[c],a.w*sunlight[c]+b.w*skylight[c]};
+        }
+    }
     template<class Lights> void build(const Lights& lights,float cellSize,const std::vector<StaticPointShadow>* shadows=nullptr,const StaticDiffuseField* diffuse=nullptr) {
         texels.clear();maxCellLights=0;origin={};size={};
         if(lights.empty()&&!diffuse)return;

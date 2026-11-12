@@ -12,9 +12,10 @@ https://dev.epicgames.com/documentation/unreal-engine/using-lumen-global-illumin
 `LightSystem::setIndirectQuality(IndirectQuality::Off|Mobile|High)` selects:
 
 - Off: no indirect probe reads. Direct grid lights remain active.
-- Mobile: continuous tetrahedral interpolation over four neighboring probes.
+- Mobile: continuous tetrahedral interpolation over four neighboring probes,
+  with four bilinear visibility taps per probe and a low-coverage fallback.
 - High: trilinear interpolation over eight neighbors, with four bilinear
-  plane-visibility taps per probe (Mobile keeps one). This reduces blocky visibility
+  plane-visibility taps per probe. This reduces blocky visibility
   boundaries when indirect light is strong; it costs additional texture reads.
 
 Both use the same world-space cache, directional RGB coefficients and visibility
@@ -98,8 +99,7 @@ cache roundtrip, wrong recipe key, truncation and checksum damage. macOS GL/Meta
 compile 22 production shader variants and pass 36 GPU probes, including visibility,
 GI off, runtime relighting without replacing the atlas, and affine interpolation
 across all six tetrahedral orderings, plus blocked/open tilted visibility planes.
-Visibility planes are prepared in the cache; Mobile lookup uses one depth/plane
-fetch and High uses four bilinear taps. Neither reconstructs a cube ray per tap. Full Sponza captures and timing are additional
+Visibility planes are prepared in the cache; Both modes use four bilinear depth/plane taps. Neither reconstructs a cube ray per tap. Full Sponza captures and timing are additional
 integration checks. Android/GLES hardware, iOS, Windows and WebGL remain unverified.
 
 ## Fixed-camera diagnostic (Mac, 1280x720)
@@ -174,3 +174,98 @@ return 0.29020 instead of expected 0.54806; with the fix GL/Metal pass.
 world bounds. This is useful for enclosed model-viewer scenes with tall roofs;
 `clearShadowBounds` restores the existing RTS ground-camera fitting. Renderbench
 uses the primary model's bounds, which must include its intended shadow casters.
+
+## Mobile visibility and fixed radiance
+
+Mobile normally evaluates four irradiance probes, with four bilinear visibility
+texels per probe. A three-texel triangle footprint was rejected: it can miss an
+open corner and form black triangular patches. Four probe corners can themselves
+all be occluded while a different cube corner is visible. When accumulated visible
+weight falls below .05, Mobile blends toward the eight-probe result; the transition
+is smooth between .005 and .05. The same loop retains the trilinear contribution of the first four corners and
+only reads the other four when necessary. Each corner is evaluated at most once,
+so the worst case is eight evaluations, not a fixed four-probe cost everywhere.
+High evaluates eight probes directly. Both retain coarse visibility limitations.
+There is no random sampling, new pass or image-space blur in this GI change.
+
+`StaticLightGrid::combineEnvironment(sun, sky)` prepares a fixed-radiance upload
+copy, combining the two directional coefficient groups. Afterwards bind unit sun
+and zero sky scales; the point-light scale and entries stay unchanged. Keep the
+original grid/cache to change sky/sun color independently later. This is an explicit
+snapshot preparation operation, not a transparent replacement for uniform-only
+animated relighting. Renderbench uses it for Mobile, after writing the original
+cache; serialized transport remains reusable. The GPU skips the unused sky group.
+
+`reference_refinement.py --mode day-bounce-mobile` keeps the daylight camera,
+exposure and light settings, using a 1.25 m bake spacing instead of 1.5 m. Sponza
+uses 10,710 probes and an 18,513,920-byte atlas (17.66 MiB), versus 11,468,800 bytes
+(10.94 MiB) previously. Preparing the denser field costs offline time and memory,
+not a larger base probe count per shaded pixel. Low remains GI Off.
+
+GPU control 43 checks a partly open visibility footprint against a dark neighbor;
+44 checks combined sun/sky plus independent point bounce; 45 checks an illuminated
+corner outside the selected tetrahedron. The closed-room and tilted-plane controls
+remain in the suite.
+
+### Surface visibility and material occlusion
+
+The prepared cube-hit plane is compared using signed plane distance with a 3 cm
+tolerance. Its projected distance is no longer capped to twice the original radial
+hit distance: that cap falsely occluded coplanar receivers at grazing angles,
+creating black wedges on columns. This does not disable visibility or sun shadows.
+No enlarged receiver-normal offset is used to conceal the artifact.
+
+PBR material AO now multiplies the probe contribution before direct point lights
+are added. It previously affected hemisphere ambient but bypassed the baked GI,
+which washed out cavities when bounce intensity was raised. Direct sun and direct
+point lights remain independent of this material occlusion. This uses the existing
+AO texture sample and adds no pass. GPU controls 46/47 verify that AO blocks indirect
+light while retaining direct sun; 48 covers a coplanar receiver far beyond the
+original radial cube hit.
+
+
+## Baked local mesh occlusion
+
+`MeshOcclusion.h` provides opt-in static mesh self-occlusion for geometry details
+below the probe spacing. `bakeMeshOcclusion(model, radius, samples)` uses the
+existing triangle BVH and fixed cosine-weighted sphere directions. The finite
+radius fades blocker influence continuously; radius is in **mesh-local units**,
+so scaling an instance also scales the baked occlusion footprint. No scene-specific
+column names or hand-painted darkening are used.
+
+The bake writes visibility into unused `COLOR_0.a` and enables
+`Material::vertexOcclusion`. Vertex RGB/alpha color use and vertex AO are separate
+material flags. GLSL and MSL apply visibility to indirect diffuse, ambient specular
+and the ambient rim, preserving direct sun/point light and opacity. All material
+quality tiers support it with the existing vertex stream, no added texture fetch,
+render pass, history, random per-frame rotation, or increased vertex stride.
+
+The baker rejects occupied vertex alpha, vertex-alpha team color and shared vertex
+ranges between meshes. It skips deformable/skinned/morph primitives, transparent,
+masked and double-sided surfaces. It includes opaque primitive boundaries within
+each mesh, **not adjacent meshes or other scene instances**. Sparse meshes may lack
+vertices to represent tiny cavities; normal-map-only relief is not traced.
+This is stable local AO, not dynamic GI, contact shadows, or a replacement for the
+probe visibility fix still needed in Sponza.
+
+`MeshOcclusionCache.h` serializes one byte per vertex plus material flags. The key
+covers source geometry/normals/vertex colors, topology, relevant material flags,
+radius, sample count and bake version; a separate checksum rejects damaged data.
+Prepare caches offline. Runtime loading only validates/applies cached values before
+GPU upload; it performs no ray tracing. Existing models default to AO disabled.
+
+Renderbench's optional main-model block:
+
+```json
+"meshOcclusion": {"radius": 0.75, "samples": 64, "read": "day-local-ao.avao"}
+```
+
+For one-time authoring, omit `read` and optionally specify an absolute `write` path;
+existing outputs are not overwritten. Without either key, the benchmark bakes at
+load time. `reference_refinement.py --local-occlusion` adds that authoring block.
+AO settings do not invalidate the separate GI transport cache: AO changes runtime
+local visibility, not the material albedo used for its transport bake.
+
+CPU tests cover open/covered/opposite-facing receivers, radius cutoff,
+repeatability, alpha preservation and stale/corrupt cache rejection. GPU controls
+49–51 exercise vertex AO with indirect light, retained direct sun and Low materials.

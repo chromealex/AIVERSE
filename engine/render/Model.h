@@ -43,6 +43,7 @@ struct Material {
     AlphaMode alpha = AlphaMode::Opaque;
     float alphaCutoff = 0.5f;
     bool doubleSided = false;
+    bool vertexOcclusion = false;          // COLOR_0 alpha stores baked local AO, not opacity
     bool vertexColors = true;              // multiply by COLOR_0
     bool castShadow = true, receiveShadow = true;
     bool transparent = false;              // drawn like DrawFlags kDrawTransparent (sorted, no depth write, depth after)
