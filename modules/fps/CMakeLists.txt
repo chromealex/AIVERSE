@@ -1,4 +1,4 @@
-add_library(aiverse_world STATIC ../../engine/world/SpatialWorld.cpp ../../engine/world/ChunkScene.cpp)
+add_library(aiverse_world STATIC ../../engine/world/SpatialWorld.cpp ../../engine/world/ChunkScene.cpp ../../engine/world/ChunkStreamer.cpp)
 target_link_libraries(aiverse_world PUBLIC aiverse_engine)
 add_library(AIVERSE::world ALIAS aiverse_world)
 add_library(aiverse_fps STATIC FpsModule.cpp FpsMotor.cpp FpsSystems.cpp)
@@ -44,4 +44,10 @@ endif()
 
 if(TARGET aiverse_headless)
     target_link_libraries(aiverse_headless PRIVATE aiverse_fps)
+endif()
+
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_world_tests ../../tests/world/streaming.cpp)
+    target_link_libraries(aiverse_world_tests PRIVATE AIVERSE::world)
+    add_test(NAME world_streaming COMMAND aiverse_world_tests)
 endif()

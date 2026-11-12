@@ -73,7 +73,9 @@ reconnect, anti-cheat operations, snapshot deltas and WAN capacity qualification
 separate work. A 100-client loopback test is not evidence of production PUBG capacity.
 
 Large-world support uses sparse static AABB collision, relative render origins and
-bounded loading of presentation box chunks. Collision remains resident. This is not yet
+budgeted loading of presentation box chunks through the generic
+[large-world streamer](large-worlds.md) (multiple observers, local chunk coordinates,
+load priorities, retry delays and resident resource reservations). Collision remains resident. This is not yet
 streamed terrain/physics, a complete character controller, vehicles or a populated world.
 Bots aim and strafe; they do not have production navigation/tactics.
 
