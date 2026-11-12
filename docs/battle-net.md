@@ -152,7 +152,9 @@ for (;;) srv.update(net::nowMs());
 
 `MatchPayloadMsg` gives every client the same bytes: match id, compatibility key, map id, game data,
 and each slot's team, kind, name and loadout. These replace Drone Fall's `SpawnWanderData` startup
-packets. Build the simulation from them in setup, not through commands. `releaseMatch(id)` aborts
+packets. Build the simulation from them in setup, not through commands. In-match progression (rules `progression`, [progression.md](progression.md)) reads each seat's battle deck
+(units per slot, unlock flags, initial perks, tech level) from the map's `players[i].deck`: decode the seat's loadout
+into that entry when building the match map, so every client builds the same decks. `releaseMatch(id)` aborts
 a match. `hostedMatches()` lists matches. Hosted matches skip the server's Elo, because ratings
 belong to meta. Lobby rooms, queues, the RTS relay and their protocol are unchanged
 (`kProtocolVersion` is still 3). The new messages are additive: `Away` and `ResultReport` from the

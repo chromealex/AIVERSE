@@ -1,6 +1,7 @@
 // Small helpers shared by the RTS module implementation files (not part of the public API).
 #pragma once
 #include "RtsModule.h"
+#include "RtsProgression.h"   // in-match progression hooks (rules "progression")
 
 namespace aiverse::game::detail {
 

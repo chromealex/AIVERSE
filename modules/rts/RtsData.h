@@ -105,6 +105,7 @@ struct Amount { uint16_t res = 0; Fixed value{}; };
 #include "RtsAbilityData.h"
 #include "RtsGridFieldData.h"
 #include "RtsRaidData.h"
+#include <memory>
 namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
 struct GatherDef { uint16_t res = 0; Fixed carry = Fixed::fromInt(10); Fixed time = Fixed::fromInt(2); };
@@ -536,6 +537,7 @@ struct TrapDef {
     bool removeWhenEmpty = true;               // destroyed when the last charge is used
 };
 
+struct ProgressionRules;   // RtsProgressionData.h
 struct Rules {
     bool scriptedAI = false;                  // external RtsAI must yield to the game's controller
     MechRules mech;                           // agent-mech rules (RtsMechData.h)
@@ -597,6 +599,7 @@ struct Rules {
     int16_t stTrapHidden = -1, stTrapSeen = -1; // built-in statuses of hidden / exposed traps
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
     RaidRules raid;                            // rules "raid" (RtsRaidData.h): extraction raids
+    std::shared_ptr<const ProgressionRules> progression;   // rules "progression" (RtsProgressionData.h); null without the block
 
     int findRoom(const std::string& id) const;
     int findDiggable(char c) const;
