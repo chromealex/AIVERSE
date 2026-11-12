@@ -1246,7 +1246,7 @@
       "package": "weapon-policies",
       "path": "skills/aiverse-weapon-policies/SKILL.md",
       "domain": "gameplay",
-      "summary": "Seeded spread, recoil recovery and swept projectiles with bounded ricochets",
+      "summary": "Seeded spread, recoil, swept projectiles with ricochets, material penetration, radial explosions, ammo feeds/overheat, charge tiers, attachment stacking and ballistic aim/lead solving",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_weapon_policies",
