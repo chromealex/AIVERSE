@@ -393,7 +393,10 @@ Entity RtsModule::releaseUnit(Simulation& sim, Entity from, Entity target, uint1
         Vec3 from = w.get<Transform>(r.from).pos, to = w.get<Transform>(r.target).pos;
         if (rules_.lanes.enabled) {
             // Mushroom Wars 2: spread over the generated lanes round-robin, follow the lane strictly
-            std::vector<int> lanes = lanesBetween(sim, r.from, r.target);
+            // authored routes: the open route's lines, or a flying route from a flying garrison (RtsRoutes.cpp)
+            const bool authored = routesAuthored();
+            std::vector<int> lanes = !authored ? lanesBetween(sim, r.from, r.target)
+                                   : (rules_.advancedEffects && (statusFlags(sim, r.from) & kStFlying)) ? flyingLanes(sim, r.from, r.target) : routeLanes(sim, r.from, r.target, false);
             if (!lanes.empty()) {
                 if (gs.laneRoundRobin.size() <= r.from.index) gs.laneRoundRobin.resize(r.from.index + 1, 0);
                 uint32_t& rr = gs.laneRoundRobin[r.from.index];
@@ -404,7 +407,7 @@ Entity RtsModule::releaseUnit(Simulation& sim, Entity from, Entity target, uint1
                 // start at the first lane point outside the source footprint
                 uint16_t pos = 0;
                 auto& f = w.get<Footprint>(r.from);
-                while (pos + 1u < L.points.size()) {
+                while (!authored && pos + 1u < L.points.size()) {   // BW routes start at the point itself
                     Vec3 p = L.points[reverse ? L.points.size() - 1 - pos : pos];
                     int cx, cy; gs.grid.cellXY(p, cx, cy);
                     if (cx < f.x || cy < f.y || cx >= f.x + f.w || cy >= f.y + f.h) break;
@@ -414,6 +417,7 @@ Entity RtsModule::releaseUnit(Simulation& sim, Entity from, Entity target, uint1
                 Entity n = spawn(sim, r.unit, r.owner, start);
                 if (!w.has<Orders>(n)) return n;
                 w.add<LaneWalker>(n, LaneWalker{lane, pos, reverse});
+                startRouteWalk(sim, n, lane);
                 tagGroup(n, r);
                 Order ord;
                 ord.type = OrderType::Enter; ord.target = r.target; ord.point = flat(to); ord.state = 3; // 3 = lane walk

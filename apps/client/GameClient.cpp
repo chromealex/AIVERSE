@@ -860,11 +860,19 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         cam_.target.x = std::clamp(cam_.target.x, 0.0f, float(g.w));
         cam_.target.z = std::clamp(cam_.target.z, 0.0f, float(g.h));
         }
-        if (const auto& scr = mod().screen(); scr.enabled && !planet()) {   // map "screen" (BW MultiscreenModule): follow its centre
-            const auto c = mod().screenCenter(*sim_);
-            const float k = std::min(1.0f, float(dt) * float(scr.smooth.toDouble()));
-            cam_.target.x += (float(c.x.toDouble()) - cam_.target.x) * k;
-            cam_.target.z += (float(c.z.toDouble()) - cam_.target.z) * k;
+        if (aiverse::Vec3 sc{}; !planet() && mod().screenView(*sim_, sc, screenSize_)) {
+            // map "screen" / map scroller (BW MultiscreenModule): the camera follows the centre and frames the screen
+            const float smooth = mod().screen().enabled ? float(mod().screen().smooth.toDouble()) : 10.0f;
+            const float k = screenFramed_ ? std::min(1.0f, float(dt) * smooth) : 1.0f;   // the first frame jumps
+            cam_.target.x += (float(sc.x.toDouble()) - cam_.target.x) * k;
+            cam_.target.z += (float(sc.z.toDouble()) - cam_.target.z) * k;
+            const float sw = float(screenSize_.x.toDouble()), sh = float(screenSize_.y.toDouble());
+            const float t = std::tan(cam_.fovY * 0.5f), aspect = H > 0 ? W / H : 1.0f;
+            const float s = std::max(0.2f, std::sin(cam_.pitch));
+            const float d = std::max(sh * s / (2 * t), sw / (2 * t * std::max(aspect, 0.1f)));   // whole screen visible
+            cam_.minDistance = std::min(cam_.minDistance, d); cam_.maxDistance = std::max(cam_.maxDistance, d);
+            cam_.distance += (d - cam_.distance) * k;
+            screenFramed_ = true;
         }
         if (quality_.update(dt)) { // too slow for these tiers: step down (keeps the pause menu in sync)
             r3d_.setShadowQuality(ShadowQuality(quality_.shadows()));

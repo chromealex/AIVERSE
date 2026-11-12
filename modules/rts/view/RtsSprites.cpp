@@ -316,7 +316,7 @@ void Rts2DView::addObject(const SceneObject& o, float groundY, const EntityFxVal
                     ? time_ - double(std::clamp(o.build, 0.0f, 1.0f)) * L.anims[kActBuild].count / std::max(0.01f, L.anims[kActBuild].fps)
                     : -double(o.entity.index % 97) * 0.37;   // desynchronise identical units
     if (fx) {   // view.entity_fx: width (x) / height (y) scale, opacity
-        const float a = std::clamp(fx->opacity(), 0.0f, 1.0f);
+        const float a = std::clamp(fx->opacity(), 0.0f, 1.0f) * std::clamp(o.fade, 0.0f, 1.0f);
         if (a <= 0 || fx->scale(0) <= 0 || fx->scale(1) <= 0) return;
         if (fx->scale(0) != 1 || fx->scale(1) != 1) {
             SpriteLook S = L;
@@ -327,7 +327,7 @@ void Rts2DView::addObject(const SceneObject& o, float groundY, const EntityFxVal
         emit(L, ground, o.facing, act, t0, team, tint, false, a);
         return;
     }
-    emit(L, ground, o.facing, act, t0, team, tint, false, 1);
+    emit(L, ground, o.facing, act, t0, team, tint, false, std::clamp(o.fade, 0.0f, 1.0f));   // route end fade
 }
 
 void Rts2DView::endFrame(const MapGrid&) {

@@ -52,6 +52,7 @@ struct SceneObject {
     float carry = 0;             // > 0: carrying resources
     int16_t carryRes = -1;       // resource index of the cargo
     bool selected = false, hovered = false, visible = true, isProjectile = false;
+    float fade = 1;              // 0..1 opacity from the sim (route walkers fade at the route ends, BW SubSpline.GetAlpha)
     bool unpowered = false;      // disabled by a power deficit / owner in low power (electric lights dim)
     uint8_t action = 0;          // SpriteAction (sprite animations): idle, move, attack, work
     // animation hints (sceneFromSim fills them; editor placements leave the defaults)

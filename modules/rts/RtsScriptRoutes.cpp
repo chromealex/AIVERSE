@@ -6,10 +6,9 @@
 namespace aiverse::game::script {
 namespace {
 int screen(lua_State* L, Vm& vm) {
-    const ScreenDef& s = vm.module->screen();
-    if (!s.enabled) { lua_pushnil(L); return 1; }
-    const Vec3 c = vm.module->screenCenter(*vm.sim);
-    pushFx(L, c.x); pushFx(L, c.z); pushFx(L, s.size.x); pushFx(L, s.size.y);
+    Vec3 c{}; Vec2 sz{};
+    if (!vm.module->screenView(*vm.sim, c, sz)) { lua_pushnil(L); return 1; }
+    pushFx(L, c.x); pushFx(L, c.z); pushFx(L, sz.x); pushFx(L, sz.y);
     return 4;
 }
 int onScreen(lua_State* L, Vm& vm) {
@@ -21,7 +20,8 @@ int onScreen(lua_State* L, Vm& vm) {
 int setScreen(lua_State* L, Vm& vm) {
     Vec3 p{};
     if (!argFx(L, vm, 1, p.x, "x") || !argFx(L, vm, 2, p.z, "z")) return -1;
-    if (!vm.module->screen().enabled) return fail(vm, "set_screen: the map has no \"screen\"");
+    Vec3 c{}; Vec2 sz{};
+    if (!vm.module->screenView(*vm.sim, c, sz)) return fail(vm, "set_screen: the map has no \"screen\" or map scroller");
     vm.module->setScreenCenter(*vm.sim, p);
     return 0;
 }

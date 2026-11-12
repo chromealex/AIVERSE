@@ -229,7 +229,8 @@ void RtsModule::sysModes(Simulation& sim) {
         return M.garrisonPoints ? w.has<Garrison>(e) : (rules_.types[u.type].structure && rules_.types[u.type].countsForVictory);
     };
     auto inZone = [&](uint8_t owner, Vec3 pos) {   // MultiscreenModule.IsPointInsideScreen with battle royal
-        if (!M.zones || owner >= ms.zone.size() || !ms.zone[owner].on) return true;
+        if (!M.zones) return onScreen(sim, pos);   // multiscreen / map scroller (RtsRoutes.cpp)
+        if (owner >= ms.zone.size() || !ms.zone[owner].on) return true;
         return inRect(ms.zone[owner].rect, pos);
     };
     // sides still playing (non-wave players), ascending team id

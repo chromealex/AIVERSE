@@ -210,9 +210,27 @@ bool RtsModule::runLaneWalk(Simulation& sim, Entity e, Order&) {
     Fixed step = stat(sim, e, Stat::Speed) * sim.dt();
     // authored routes: every line is walked at the progress of line 0 (BW Spline.InterpolateByDistance fast path)
     if (size_t(lw->lane) < gs.routes.laneScale.size()) step = step * gs.routes.laneScale[size_t(lw->lane)];
+    // route walkers (RtsRoutes.cpp): walk from the lane position, then add the random offset faded at the route ends
+    // (BW Unit.Move: pos += spawnOffsetRandom * GetMoraleOffsetFactor(alpha); morale level 0 -> factor = alpha)
+    struct Offset {
+        RouteWalk* rw; Transform& tr; const std::vector<Vec3>& pts; Fixed fade;
+        ~Offset() {
+            if (!rw) return;
+            rw->base = tr.pos;
+            const Fixed d = fxMin(dist2D(tr.pos, pts.front()), dist2D(tr.pos, pts.back()));
+            rw->alpha = fade.raw > 0 ? fxMin(kOne, d / fade) : kOne;
+            tr.pos.x += rw->jitter * rw->alpha;
+            tr.pos.z -= rw->jitter * rw->alpha;   // BW (r, r) with z = -y
+        }
+    };
+    auto wit = gs.routes.walks.find(e.packed());
+    RouteWalk* rw = wit == gs.routes.walks.end() ? nullptr : &wit->second;
+    if (rw) { tr.pos.x = rw->base.x; tr.pos.z = rw->base.z; }
+    const Offset offset{rw, tr, pts, rules_.routes.fade};
+    const bool flyRoute = size_t(lw->lane) < gs.routes.laneFlying.size() && gs.routes.laneFlying[size_t(lw->lane)];
     if (rules_.advancedEffects) {
-        // flying units leave the lane and go straight for the end of it
-        if (statusFlags(sim, e) & kStFlying) {
+        // flying units leave the lane and go straight for the end of it (not on a flying route: that is their lane)
+        if (!flyRoute && (statusFlags(sim, e) & kStFlying)) {
             Vec3 goal = pts[lw->reverse ? 0 : pts.size() - 1];
             Vec3 d = flat(goal - tr.pos);
             Fixed len = d.length();

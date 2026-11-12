@@ -664,7 +664,7 @@ rebuilt when garrison buildings or obstacles change (`GameState::lanes`, `lanesD
 
 A 1:1 fixed-point port of Bunker Wars `RoutesModule` (Spline / Route), the group behaviour of `UnitsModule`
 (Group) and `MultiscreenModule` (`modules/rts/RtsRoutes*.cpp`). Units are in map cells: the BW importer uses
-**50 BW pixels per cell** and **z = -BW y**; the defaults below are the BW `BattleParametersInfo` values at that scale.
+**40 BW units per cell**, the map origin at the BW (0, 0) map centre and **z = -BW y**; the defaults below are the BW `BattleParametersInfo` values at that scale.
 
 **Map `routes`** (authored routes; when a map has them they replace the generated lanes and turn `lanes` on):
 
@@ -674,6 +674,7 @@ A 1:1 fixed-point port of Bunker Wars `RoutesModule` (Spline / Route), the group
    "points": [[13.98, -2.62], [12.44, -2.2], {"at": [-12.2, 4.58], "offsets": [0,0,0,0.2,0,0,0,0], "zone": 2, "slowdown": 1.5}, [-13.74, 5]],
    "lines": [[[13.98, -2.62], [11.47, -1.92], ...], ...], // optional raw nodes per line (BW rawSplineLines)
    "blockers": ["rock_3"],                               // the route is closed while any of them is alive (BW closedRoutes)
+   "towersCoverage": [{"point": "p7", "distances": [0.5, 1.2, 3.4]}],   // BW towersCoverage (cells, tail-aligned)
    "flying": false}                                      // flying route: fly column padding
 ]
 ```
@@ -690,7 +691,25 @@ A 1:1 fixed-point port of Bunker Wars `RoutesModule` (Spline / Route), the group
   length 0), so a row stays abreast through bends.
 - A route between entities whose `screenGroups` (map entity key, list of ints) do not match does not exist (BW
   `CompareScreenGroups`: both empty match, one empty does not, else any shared group).
-- `zone` / `slowdown` per point only feed `routeAiLength` (BW `aiLength`); the speed of walkers comes from map zones.
+- `zone` / `slowdown` per point only feed `routeAiLength` (BW `aiLength`, `RtsModule::routeAiLength`); BW's own unit
+  movement ignores them too (`Unit.Move` discards the interpolated zone), walker speed comes from map zones.
+- `towersCoverage` (BW `SplineRouteInfo.towersCoverage`, AI only): per tower point the covered route length for tower
+  ranges 0, step, ... 20 steps (`routes.coverageStep`, BW 50 = 1.25 cells), stored without leading zeros like BW.
+  `RtsModule::towerCoverage` (BW `GetTowerCoverageDistance`, linear between steps, 0 without data),
+  `towerUnitsDamage` / `towerDamageBySpline` (BW `TowerModule.GetUnitsDamageForSpline` / `GetDamageBySpline`).
+- Every route keeps its lanes for the whole match (stable indices); a closed route only refuses new sends, groups
+  already sent keep walking it (BW locks only affect `FindUnlocked`).
+- Walkers get BW's random diagonal offset (`Unit.spawnOffsetRandom` = random(-1, 1) x `routes.jitter` on x and -z, one
+  draw of `sim.rng()` per unit) multiplied by the end fade (`SubSpline.GetAlpha`: 0 at the route ends, 1 after
+  `routes.fade`); the fade is the walker's opacity in the view (`SceneObject::fade`, `RtsModule::routeAlpha`). BW also
+  scales the offset by (1 - morale factor); without a morale level (level 0) the factor is 0.
+- **Flying sends** (BW `PointsFlyingUnits` + `RoutesModule.FindFlyingRoute`): a garrison with a status carrying the
+  `flying` flag sends along a straight flying route (`flyingRoute`: in / out points `routes.inOut`, columns
+  `flyColumnPadding`), made on first use for that pair and kept (`GameState::routes.laneFlying`), even where no ground
+  route exists and through locks. With `groups` the fly group takes the whole garrison, rows `flyRowSpacing` apart, one
+  fly group per garrison at a time (BW `flyGroup`); its walkers follow the flying lines (they don't cut straight).
+  Skills: give the structure a status with `"flags": ["flying"]` (+ `mods` speed for BW `speedCoefficient`);
+  `RtsModule::sendsFlying(from)` tells.
 - As in BW, groups on crossing or shared routes do not fight each other: units pass through and the fight happens
   at the target point. Units on routes shoot each other only when a skill gives them weapons (BW `UnitsAttack` /
   `unitsAttack` config).
@@ -701,11 +720,14 @@ A 1:1 fixed-point port of Bunker Wars `RoutesModule` (Spline / Route), the group
 | key | default | BW |
 |---|---|---|
 | `routes.lines` | 6 | `common.unitsInRow` (1..8) |
-| `routes.columnPadding` / `flyColumnPadding` | 0.4 / 0.9 | `units.columnsPadding` / `flyColumnsPadding` |
-| `routes.trim` | 0.2 | `routeVisualizer.pathPointOffset` |
+| `routes.columnPadding` / `flyColumnPadding` | 0.5 / 1.125 | `units.columnsPadding` / `flyColumnsPadding` |
+| `routes.trim` | 0.25 | `routeVisualizer.pathPointOffset` |
 | `routes.smooth` | 10 | `Spline.BETWEEN_NODE_COUNT` |
-| `routes.inOut` | 2 | `MapRoutesModule.defaultInOutLength` (flying routes) |
-| `groups` | off | `true` or `{"rowSpacing": 1.4, "flyRowSpacing": 2.4}` (`units.rowsOffset` / `flyingRowsOffset`) |
+| `routes.inOut` | 2.5 | `MapRoutesModule.defaultInOutLength` (flying routes) |
+| `routes.jitter` | 0.125 | `units.positionRandomOffset` (5) |
+| `routes.fade` | 0.5 | `units.alphaFadeThreshold` (20) |
+| `routes.coverageStep` | 1.25 | `Spline.towerCoverageRangeStep` (50) |
+| `groups` | off | `true` or `{"rowSpacing": 1.75, "flyRowSpacing": 3}` (`units.rowsOffset` / `flyingRowsOffset`) |
 
 **Groups** (`lanes.groups`, BW `UnitGroup`): a send creates a group (`GameState::routes.groups`, id = `GroupTag`)
 that spawns a row of up to `lines` units, one per line, whenever the row in front has walked `rowSpacing` (the first
@@ -717,14 +739,16 @@ source changes owner (the rest stay home). Without `groups` sends work as before
 **Map `screen`** (BW `MultiscreenModule`):
 
 ```json
-"screen": {"size": [54.4, 30.4], "center": [27.2, 15.2], "bounds": [0, 20, 0, 0], "smooth": 10}
+"screen": {"size": [68, 38], "center": [34, 19], "bounds": [0, 20, 0, 0], "smooth": 10}
 ```
 
-The playable window over a larger map: `size` (BW 2720 x 1520 px), start `center` (BW -offset; default the map
+The playable window over a larger map: `size` (BW 2720 x 1520), start `center` (BW -offset; default the map
 centre), `bounds` = [left, right, top, bottom] how far the centre may move from its start (BW
 `gameplayRectOffset`; top = towards -z). Garrisons off the screen do not grow (BW `HouseModule`); `onScreen` is public
-for modes / AI. Scripts move it: `game.set_screen(x, z)` (clamped), `game.screen()` -> x, z, w, h,
-`game.on_screen(x, z)`. The client camera follows the centre (`smooth` per second) and does not scroll by itself.
+for modes / AI: King of the Hill and Domination use it when there is no battle royal zone (BW `IsPointInsideScreen`).
+A map without `screen` but with an environment `mapScroller.screen` (RtsEnv) uses that screen for the same checks
+(`onScreen`, `screenView`, `setScreenCenter`, Lua); with both, the scroller moves the map `screen`. Scripts move it: `game.set_screen(x, z)` (clamped), `game.screen()` -> x, z, w, h,
+`game.on_screen(x, z)`. The client camera follows the centre (`smooth` per second) and zooms so the whole screen is visible.
 Screen centre, groups and route ends are saved and hashed.
 
 **Editor / MCP**: `route_list`, `route_set` (add / replace a route; points, offsets, lines, blockers), `route_delete`,
@@ -1176,9 +1200,9 @@ such command), Downgrade ranks by units produced / tower kills (not counted by t
 
 
 Flying tower (BW `PositionFlyingTower`, Hero14 "UFO"): a temporary tower at the clicked point, as BW does it:
-point skill `{"type": "spawn", "unit": "ufo", "duration": 10}` of a static type with `sight` 12 and a weapon
-`{"range": 12, "rangeAspect": 0.5, "cooldown": 0.2857, "projectileSpeed": 6}` (BW range 600 px, `world.aspectRatio`
-0.5, 3.5 shots / s, bullet 300 px / s at 50 px per cell). Weapon `rangeAspect` (default 1) makes the range an ellipse
+point skill `{"type": "spawn", "unit": "ufo", "duration": 10}` of a static type with `sight` 15 and a weapon
+`{"range": 15, "rangeAspect": 0.5, "cooldown": 0.2857, "projectileSpeed": 7.5}` (BW range 600, `world.aspectRatio`
+0.5, 3.5 shots / s, bullet 300 / s at 40 BW units per cell). Weapon `rangeAspect` (default 1) makes the range an ellipse
 with z radius `range x rangeAspect` for target acquisition and firing (BW towers' rangeX / rangeY). Its
 `additionalDefenseCoefficient` is a Defense-aura area around the point (`status` `mods` `defense`; 0 in the shipped
 skill).

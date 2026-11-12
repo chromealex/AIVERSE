@@ -115,6 +115,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
         d.dissolve = std::max(d.dissolve, std::clamp((st.deathAge - (L.corpse - 1.2f)) / 1.1f, 0.0f, 1.0f));
         d.tint.w = 1;
     }
+    if (o.fade < 0.999f) { d.tint.w *= std::max(0.0f, o.fade); d.flags |= kDrawFadeDepth; }   // route end fade
     if (hasFx) {
         using V = EntityFxValues;
         d.tint = {d.tint.x * fx.v[V::kTint], d.tint.y * fx.v[V::kTint + 1], d.tint.z * fx.v[V::kTint + 2], d.tint.w * fx.opacity()};

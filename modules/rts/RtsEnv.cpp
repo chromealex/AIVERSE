@@ -237,6 +237,7 @@ Entity Environment::point(Simulation& sim, int i) const {
 }
 
 bool Environment::insideScreen(Simulation& sim, Vec3 p) const {
+    if (m_ && m_->screen().enabled) return m_->onScreen(sim, p);   // the map "screen" (RtsRoutes.cpp) wins
     if (!def_.screen.enabled) return true;
     EnvState* st = state(sim);
     if (!st) return true;
@@ -244,7 +245,7 @@ bool Environment::insideScreen(Simulation& sim, Vec3 p) const {
 }
 
 bool Environment::producing(Simulation& sim, Entity s) const {
-    if (!def_.screen.enabled) return true;
+    if (!def_.screen.enabled || (m_ && m_->screen().enabled)) return true;   // the map "screen" gates growth itself
     return insideScreen(sim, sim.world().get<Transform>(s).pos);
 }
 
