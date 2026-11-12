@@ -1,0 +1,23 @@
+// In-match progression sample: rules "progression" (simulation) + a view script that hands the level-up cards to the
+// game's UI Lua (docs/progression.md § UI) and the top-down controls of topdown_arena.
+{
+  "name": "Perk Arena",
+  "id": "com.rtsengine.perkarena",
+  "version": "0.1.0",
+  "build": 1,
+  "module": "rts",
+  "sourceLanguage": "en",
+  "languages": ["en"],
+  "rules": "rules.json",
+  "maps": [ { "file": "maps/arena.json", "title": "Perk Arena (PvE)" } ],
+  "lighting": { "time": 0.4, "clouds": 0.3 },
+  "orientation": "landscape",
+  "topDown": {
+    "touchControls": "auto",
+    "mouseAim": "hold",
+    "joystick": { "mode": "floating", "radius": 64, "deadzone": 0.12, "area": [0, 0.3, 0.5, 1], "center": [0.14, 0.78] },
+    "aimStick": { "enabled": true, "mode": "floating", "radius": 56, "deadzone": 0.2, "area": [0.5, 0.3, 1, 1], "center": [0.8, 0.78] },
+    "camera": { "pitch": 59, "yaw": 0, "distance": 22, "minDistance": 14, "maxDistance": 34, "smoothing": 6,
+                "lookAhead": 2.5, "aimLookAhead": 1.5, "lookAheadSmoothing": 3, "lockOffsetIfNoInput": true, "bounds": true, "margin": 4 }
+  }
+}

@@ -58,7 +58,7 @@ void RtsModule::sysEconomy(Simulation& sim) {
         p.typeCount[u.type]++;
         // power deficits switch off tagged objects (defences, radar, factories)
         const bool off = (t.tags & p.disabledTags) != 0 || (mechOn(sim) && mechSwitchedOff(sim, e));   // + agent-mech: unpowered / unstaffed
-        if (off) u.flags |= kUnitDisabled; else u.flags &= uint8_t(~kUnitDisabled);
+        if (off) u.flags |= kUnitDisabled; else u.flags &= kKeepFlags(~kUnitDisabled);
         p.supplyCap += t.supplyProvided;
         for (auto& a : t.storage) p.cap[a.res] += a.value;
         for (auto& a : t.provides) p.capProvided[a.res] += a.value;
@@ -318,7 +318,7 @@ void RtsModule::sysConstruction(Simulation& sim) {
     });
     for (Entity e : finished) {
         Unit& u = w.get<Unit>(e);
-        u.flags &= uint8_t(~kUnitUnderConstruction);
+        u.flags &= kKeepFlags(~kUnitUnderConstruction);
         w.remove<Construction>(e);
         if (auto* inv = w.tryGet<Inventory>(e)) { // materials are used up
             const UnitType& t = rules_.types[u.type];

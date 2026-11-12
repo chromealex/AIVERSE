@@ -16,12 +16,28 @@ void raidBotThink(Simulation& sim, RtsModule& m, uint8_t player) {
     if (!raid || !raid->active()) return;
     RaidStore* st = raid->store(sim);
     RaidPlayer* p = st ? st->find(player) : nullptr;
-    if (!p || p->status != uint8_t(RaidStatus::InRaid) || st->phase != uint8_t(RaidPhase::Running)) return;
-    const RaidRules& R = raid->rules();
     World& w = sim.world();
+    // a top-down hero ignores move / attack orders: steer its stick instead (kCmdTopDown, RtsTopDown.cpp)
+    TopDown* td = m.topDown();
+    const Entity myHero = td && td->active() ? td->heroOf(sim, player) : kNullEntity;
+    auto steer = [&](Vec3 goal, Fixed stand) {
+        Command c;
+        if (td->steerCommand(sim, player, goal, stand, c)) sim.submit(c);
+    };
+    if (!p || p->status != uint8_t(RaidStatus::InRaid) || st->phase != uint8_t(RaidPhase::Running)) {
+        if (myHero.valid()) steer(w.get<Transform>(myHero).pos, Fixed::fromInt(1000));   // before the start / between phases: keep alive (kite)
+        return;
+    }
+    const RaidRules& R = raid->rules();
     std::vector<Entity> raiders = raid->raidersOf(sim, player);
     if (raiders.empty()) return;
     const Vec3 at = w.get<Transform>(raiders[0]).pos;
+    const bool hero = myHero.valid() && td->isHero(sim, raiders[0]);
+    // progression first (rules "progression"): a banked level -> a summon circle, else xp orbs close by
+    if (Progression* pg = m.progression(); hero && pg && pg->active()) {
+        Vec3 g; Fixed s;
+        if (pg->botGoal(sim, player, g, s)) { steer(g, s); return; }
+    }
     bool have = false;
     Vec3 goal{};
     Fixed stand = Fixed::fromRatio(1, 2);   // close enough
@@ -61,6 +77,10 @@ void raidBotThink(Simulation& sim, RtsModule& m, uint8_t player) {
                 const Fixed d = d2(at, t.pos.x, t.pos.z);
                 if (!best.valid() || d < bd) { best = e; bd = d; }
             });
+            if (best.valid() && hero) {   // walk into weapon range; auto-fire does the rest
+                steer(w.get<Transform>(best).pos, td->rules().autoRange.raw > 0 ? td->rules().autoRange : Fixed::fromInt(4));
+                return;
+            }
             if (best.valid()) {
                 Command c; c.type = kCmdAttack; c.player = player; c.units = raiders; c.target = best;
                 sim.submit(c);
@@ -92,10 +112,11 @@ void raidBotThink(Simulation& sim, RtsModule& m, uint8_t player) {
         if (!have && callable >= 0) {
             Command c; c.type = kCmdRaid; c.player = player; c.param = kRaidCall | int64_t(callable) << 8;
             sim.submit(c);
-            return;
+            if (!hero) return;   // a hero keeps steering (kiting) while it waits for the call
         }
     }
-    if (!have) return;
+    if (!have) { if (hero) steer(at, Fixed::fromInt(1000)); return; }   // nothing to do: stand (kiting only)
+    if (hero) { steer(goal, fxMax(stand, Fixed::fromRatio(1, 4))); return; }
     if (dist2D(at, {goal.x, at.y, goal.z}) <= fxMax(stand, Fixed::fromRatio(1, 4))) {
         // arrived: stand still (a channel needs the raider inside)
         if (auto* mob = w.tryGet<Mobile>(raiders[0]); mob && mob->moving) { Command c; c.type = kCmdStop; c.player = player; c.units = raiders; sim.submit(c); }

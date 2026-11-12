@@ -22,7 +22,7 @@ namespace aiverse::game {
 namespace {
 Fixed dist(Vec3 a, Vec3 b) { return Surface::onSphere(a) ? (a - b).length() : (a - b).xz().length(); }
 bool controllable(World& w, Entity e, const Unit& u) {
-    if (u.flags & (kUnitOffMap | kUnitPossessed)) return false;
+    if (u.flags & (kUnitOffMap | kUnitPossessed | kUnitFollower)) return false;   // followers: top-down squads
     auto* n = w.tryGet<Needs>(e);
     return !n || !n->leaving;
 }

@@ -21,6 +21,7 @@
 #include "modules/rts/RtsModule.h"
 #include "modules/rts/RtsTiles.h"
 #include "modules/rts/RtsScript.h"
+#include "modules/rts/RtsProgression.h"
 #include "modules/rts/gen/MapGen.h"
 
 using namespace aiverse;
@@ -488,6 +489,19 @@ static int play(const Args& a) {
         if (auto* rs = rm->raid()->store(sim))
             for (size_t i = 0; i < rs->players.size(); ++i)
                 std::printf("Raid receipt: %s\n", rs->receipts[i].empty() ? rm->raid()->receiptJson(sim, rs->players[i]).c_str() : rs->receipts[i].c_str());
+    if (auto* rm = dynamic_cast<game::RtsModule*>(&sim.module()); rm && rm->progression() && rm->progression()->active())   // in-match progression
+        if (auto* ps = rm->progression()->store(sim))
+            for (auto& [player, p] : ps->perks.players) {
+                std::string perks;
+                for (auto& o : p.mods) {
+                    auto d = rm->progression()->rules().defs.perks.find(o.perk);
+                    perks += (perks.empty() ? "" : ",") + (d != rm->progression()->rules().defs.perks.end() && !d->second.key.empty() ? d->second.key : std::to_string(o.perk));
+                }
+                uint32_t recruits = 0;
+                for (auto [slot, n] : p.recruits) if (slot > 0) recruits += n;
+                std::printf("Progression: player=%lld level=%u xp=%lld kills=%lld perks=[%s] recruits=%u orbs=%zu\n", (long long)player, p.level, (long long)p.xp,
+                            (long long)(size_t(player) < ps->kills.size() ? ps->kills[size_t(player)] : 0), perks.c_str(), recruits, ps->pickups.orbs.size());
+            }
     if (a.dump) dumpTypes(sim);
     if (a.profile) printProfile(sim);
     game::luaProfileWrite();

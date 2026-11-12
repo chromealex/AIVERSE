@@ -109,6 +109,7 @@ struct Amount { uint16_t res = 0; Fixed value{}; };
 #include "RtsAbilityData.h"
 #include "RtsGridFieldData.h"
 #include "RtsRaidData.h"
+#include <memory>
 #include "RtsRoutesData.h"
 namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
@@ -542,6 +543,7 @@ struct TrapDef {
     bool removeWhenEmpty = true;               // destroyed when the last charge is used
 };
 
+struct ProgressionRules;   // RtsProgressionData.h
 struct Rules {
     bool scriptedAI = false;                  // external RtsAI must yield to the game's controller
     bool bwAI = false;                        // ai.controller "bw": Bunker Wars bots (RtsBwAI.h, agent-bw-ai)
@@ -608,6 +610,7 @@ struct Rules {
     int16_t stTrapHidden = -1, stTrapSeen = -1; // built-in statuses of hidden / exposed traps
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
     RaidRules raid;                            // rules "raid" (RtsRaidData.h): extraction raids
+    std::shared_ptr<const ProgressionRules> progression;   // rules "progression" (RtsProgressionData.h); null without the block
     ModesRules modes;                          // match modes, timed rules, resource levels, match stats (RtsModes.h)
 
     int findRoom(const std::string& id) const;
