@@ -19,7 +19,7 @@ class WsListener {
 public:
     WsListener();
     ~WsListener();
-    bool open(uint16_t port);
+    bool open(uint16_t port, bool loopbackOnly = false);
     uint16_t port() const;
     // Accepted sockets finishing the HTTP upgrade are returned once the handshake completes.
     std::vector<std::unique_ptr<Conn>> poll(uint64_t now);

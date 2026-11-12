@@ -124,9 +124,11 @@
       "area": "Генератор забегов и режиссёр",
       "scope": "Граф комнат/событий/награды, ограничения достижимости, бюджет столкновений и адаптивный режиссёр; существующие генераторы рельефа переиспользовать",
       "acceptance": "Пакет seed-проверок достижимости и бюджета сложности; воспроизводимый забег с save/restore",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Граф комнат/событий/награды, ограничения достижимости, бюджет столкновений и адаптивный режиссёр; существующие генераторы рельефа переиспользовать"
+      "status": "partial",
+      "libraries": [
+        "run-graph"
+      ],
+      "remaining": "Связный seeded граф комнат, бюджеты встреч, фиксированные предложения наград и lifecycle реализованы. Остались геометрия комнат, адаптивный режиссёр, фактические встречи и интерфейс маршрута."
     },
     {
       "id": "D2",
@@ -290,9 +292,11 @@
       "area": "Связанный мир metroidvania",
       "scope": "Граф зон/дверей/способностей, карта посещений, checkpoints и валидатор достижимости; сами замки и секреты — данные",
       "acceptance": "Можно доказать достижимость финала и отсутствие softlock после каждого открытия способности",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Граф зон/дверей/способностей, карта посещений, checkpoints и валидатор достижимости; сами замки и секреты — данные"
+      "status": "partial",
+      "libraries": [
+        "zone-graph"
+      ],
+      "remaining": "Граф зон/способностей, карта посещений, checkpoints, доказательство достижимости и softlock с witness реализованы и проверены через native restore. Остались привязка физических дверей, загрузка регионов и UI карты."
     },
     {
       "id": "V1",
@@ -348,9 +352,12 @@
       "area": "Карточный roguelite",
       "scope": "Маршрут забега, rewards/removal/upgrade, relic hooks и намерения противника; баланс и события — контент",
       "acceptance": "Полный seeded run с сохранением в событии/бою и воспроизводимыми наградами",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Маршрут забега, rewards/removal/upgrade, relic hooks и намерения противника; баланс и события — контент"
+      "status": "partial",
+      "libraries": [
+        "run-graph",
+        "card-runtime"
+      ],
+      "remaining": "Есть маршрут, сохранение выбора награды, завершение seeded run и базовый карточный runtime. Остались операции удаления/улучшения карт, relic hooks, намерения противника и игровой UI."
     },
     {
       "id": "Q1",
@@ -370,9 +377,10 @@
       "acceptance": "Известные решаемые/нерешаемые позиции определяются верно; подсказка использует легальные действия",
       "status": "partial",
       "libraries": [
-        "grid-puzzles"
+        "grid-puzzles",
+        "puzzle-machine"
       ],
-      "remaining": "Есть ограниченный BFS с различением неразрешимости и исчерпания бюджета. Остались генератор, оценка сложности, другие правила и интеграция подсказок."
+      "remaining": "Есть Sokoban BFS с явным исчерпанием бюджета и bounded integer VM с сохранением PC/памяти/IO. Остались другие модели ограничений, генераторы, UI подсказок и редактор программ."
     },
     {
       "id": "Q3",
@@ -397,9 +405,11 @@
       "area": "Игровой тайминг под музыку",
       "scope": "Input timestamps, окна judgement, калибровка задержки и tempo map; beat-grid музыки не проверяет попадание игрока",
       "acceptance": "Одинаковая запись входов даёт одинаковую оценку на разных частотах кадров/аудиобуферах",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Input timestamps, окна judgement, калибровка задержки и tempo map; beat-grid музыки не проверяет попадание игрока"
+      "status": "partial",
+      "libraries": [
+        "rhythm-timing"
+      ],
+      "remaining": "Tempo map, целочисленный timestamp judgement, calibration и tap/hold проверены на разбиении времени и native restore. Остались настоящий audio/input clock bridge, UI калибровки и испытания на устройствах."
     },
     {
       "id": "I1",
@@ -428,9 +438,12 @@
       "area": "Эксплуатация сетевой игры",
       "scope": "Production identity/admission/reconnect, связь матчей с профилем, скрытые данные, наблюдение/операции и WAN-нагрузка; не называть весь backend отсутствующим",
       "acceptance": "Матчи с потерями пакетов, reconnect и рестартом сервиса; проверка доступа и измеренная ёмкость на целевом хостинге",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Production identity/admission/reconnect, связь матчей с профилем, скрытые данные, наблюдение/операции и WAN-нагрузка; не называть весь backend отсутствующим"
+      "status": "partial",
+      "libraries": [
+        "session-admission",
+        "network-session"
+      ],
+      "remaining": "Локальный HTTP/SQLite стенд проверен на сессии, доступ, retry, restart и нагрузку; FPS admission/reconnect/server restore проверены по UDP с 10% потерь. Profile-to-match через приватную локальную таблицу проверен с настоящим dedicated server, reconnect и отзывом активного соединения. Остались защищённый WAN transport, распределённая оркестрация матчей и игровые правила видимости/anti-cheat."
     },
     {
       "id": "U1",
@@ -443,14 +456,34 @@
     }
   ],
   "verification": {
-    "strategy_packages": 6,
-    "catalog_entries": 78,
+    "strategy_packages": 10,
+    "catalog_entries": 83,
     "library_tests": "10/10 passed on macOS arm64",
     "native_consumer": "real simulation, save/load, 200 checksums; repeated from relocated source export",
     "sanitizers": "ASan/UBSan passed",
     "windows": "MinGW C++20 compile/link with warnings as errors passed; runtime not tested",
     "full_engine": "7741 checks: only sandbox socket listen failed; the isolated socket test passed outside sandbox (27 checks). Build with editor core enabled.",
     "headless": "81/81 RTS checksums match normalized baseline (CRLF checkout); four FPS templates exit 0",
-    "restore": "snapshot, serialization, initial tick, fresh restore, replay, invalid ranges and deliberate divergence passed"
+    "restore": "snapshot, serialization, initial tick, fresh restore, replay, invalid ranges and deliberate divergence passed",
+    "extension": {
+      "packages": [
+        "zone-graph",
+        "rhythm-timing",
+        "run-graph",
+        "puzzle-machine"
+      ],
+      "native": "ten libraries: original and relocated source-export passed with 200-tick restore",
+      "windows": "Ten-package strategy tests compiled/linked with MinGW warnings-as-errors; execution unverified"
+    },
+    "local_network": {
+      "requests": 100,
+      "concurrency": 4,
+      "requests_per_second": 26.851691829443016,
+      "p95_ms": 146.04229199999975,
+      "fps": "UDP with 10% outgoing loss: admission/reconnect/server restore/private fields/revocation passed",
+      "meta_tests": "11/11 passed",
+      "browser": "login page inspected; authenticated screens not inspected",
+      "profile_to_match": "Dedicated FPS: issued profile token, slot 1, acknowledged inputs, reconnect and live revocation passed; UDP/WS bound to IPv4 loopback"
+    }
   }
 }

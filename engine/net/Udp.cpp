@@ -143,7 +143,7 @@ UdpListener::~UdpListener() {
     for (auto& w : peers_) if (auto p = w.lock()) p->sock = nullptr;
 }
 
-bool UdpListener::open(uint16_t port) { return sock_.open(port); }
+bool UdpListener::open(uint16_t port, bool loopbackOnly) { return sock_.open(port, 0, loopbackOnly); }
 
 std::vector<std::unique_ptr<Conn>> UdpListener::poll(uint64_t now) {
     std::vector<std::unique_ptr<Conn>> fresh;
