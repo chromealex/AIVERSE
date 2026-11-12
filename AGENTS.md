@@ -201,6 +201,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Static model auto-LOD, instancing and frustum culling | `tools/models/autolod.py`, `tools/models/lod_simplify.cpp`, `third_party/meshoptimizer`, model LOD hooks in `engine/render`, `tools/renderbench/reinstance.cpp`, `docs/autolod.md` | codex/sponza-full (user assigned) |
 | Sponza full scene, model SSR, screen diffuse GI and temporal AA | `apps/renderbench`, `tools/renderbench`, `engine/render/ScreenLighting*`, model SSR hooks, glTF light metadata, `docs/sponza-full.md` | codex/sponza-full (user assigned) |
 | Sponza rendering benchmark | `apps/renderbench`, `tools/renderbench`, `docs/render-benchmarks.md`; optional RHI GPU timings | sponza-benchmark (user assigned) |
+| Box3D agent reference and physics workflow | `skills/aiverse-physics`, physics catalog routing | codex/physics-skill (user assigned) |
 | Other areas | as assigned by the user | the agent the user assigned |
 
 If your task is not in this table, the user's first message to you defines your area: write it
@@ -623,3 +624,13 @@ When you change one of these four English documents, update its translations in 
 (same sections in the same order; code, keys and identifiers untranslated). Other documents are
 written and kept in English only.
 
+
+## Rigid-body physics
+
+For Box3D collisions, sensors, queries, joints, motors or detachable assemblies, read
+`skills/aiverse-physics/SKILL.md` before writing an adapter. Reuse the optional
+`AIVERSE::physics` target; distinguish its fixed-manifest JSON wrapper from the direct
+C API. Copy transient events before mutations, wake reactivated joints, and validate
+real contacts. Physics needs an explicit host and never feeds float state into RTS
+Fixed lockstep implicitly. Deterministic vehicle/interaction policies retain their
+own authority. A standalone test or a model animation is not an in-client integration.

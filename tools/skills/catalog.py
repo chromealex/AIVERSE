@@ -18,6 +18,7 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-physics':'box3d physics rigid collider collision hinge weld sensor raycast физик коллайдер столкнов шарнир датчик',
  'meta-economy':'shop store offer currency wallet магазин оффер валют кошелек покупк',
  'meta-social':'leaderboard ranking chat лидeрборд лидерборд рейтинг таблица чат',
  'meta-progression':'daily energy battlepass achievement ежеднев энерг достижен боевой пропуск',

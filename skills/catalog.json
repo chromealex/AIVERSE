@@ -1053,6 +1053,36 @@
       ]
     },
     {
+      "id": "aiverse-physics",
+      "package": "physics",
+      "path": "skills/aiverse-physics/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Optional Box3D rigid-body physics: scene wrapper, native collisions, sensors, queries, joints, motors and snapshots",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/physics/World.h",
+      "keywords": [
+        "box3d",
+        "physics",
+        "rigid",
+        "collider",
+        "collision",
+        "hinge",
+        "weld",
+        "sensor",
+        "raycast",
+        "физик",
+        "коллайдер",
+        "столкнов",
+        "шарнир",
+        "датчик"
+      ]
+    },
+    {
       "id": "aiverse-play-scenarios",
       "package": "play-scenarios",
       "path": "skills/aiverse-play-scenarios/SKILL.md",

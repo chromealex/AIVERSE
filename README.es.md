@@ -62,7 +62,7 @@ AIVERSE ofrece las mecánicas en sí y hace que un agente pueda trabajar en el j
 | **El multijugador implica desincronizaciones sin fin.** Basta un `float` para que una partida entre un iPhone y un Android se desvíe. | La simulación es idéntica bit a bit en todas partes: punto fijo en lugar de flotantes, generador aleatorio propio, sumas de verificación. La CI compara partidas en Linux x64/ARM64, Windows y macOS en cada push. Por la red solo viajan comandos; hay lockstep con rollback y un servidor con emparejamiento y veredictos basados en repeticiones. |
 | **Las GPU móviles son débiles, pero el juego debe verse bien.** | Cada función costosa —sombras, partículas, terreno, posprocesado— tiene niveles de calidad y se adapta a la GPU, desde viejas Mali y Adreno hasta Apple Silicon. |
 | **Publicar en todas las plataformas es un proyecto en sí mismo.** Firmas, iconos, SDK de tiendas y anuncios. | `aiversebuild` genera con un solo comando un .app, un proyecto de Xcode, Gradle/APK, web y .exe. Los iconos y pantallas de carga se generan solos. Plugins para App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin y más; cada build incluye solo los que el juego elige. |
-| **Cada juego nuevo empieza de cero.** | Más de 30 plantillas jugables, kits de género con listas de aceptación y 118 habilidades para agentes. Un juego nuevo parte de uno que ya funciona. |
+| **Cada juego nuevo empieza de cero.** | Más de 30 plantillas jugables, kits de género con listas de aceptación y 126 habilidades para agentes. Un juego nuevo parte de uno que ya funciona. |
 | **La meta y el LiveOps se reescriben en cada proyecto.** | `aiverse::meta`: tienda, monedas, misiones, pases, recompensas diarias, energía, clanes, torneos, cofres con garantía, todo configurado en JSON. |
 
 ---
@@ -202,7 +202,7 @@ Cada plantilla es un juego totalmente jugable con bots. Ábrela en el editor y e
 - Editor acoplable al estilo de Unity: escena, inspector, terreno, efectos, iluminación, UI, prueba de juego y simulador de dispositivos
 - `aiversemcp`: servidor MCP para agentes
 - Asistente **Crear un juego**
-- 118 habilidades para agentes y kits de género con listas de aceptación
+- 126 habilidades para agentes y kits de género con listas de aceptación
 - Importadores de recursos de juegos clásicos desde tu propia copia
 
 </td>
