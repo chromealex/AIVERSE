@@ -1243,6 +1243,41 @@
       "packageDependencies": []
     },
     {
+      "id": "genre-bots",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/bots/GenreBots.h",
+      "skill": "skills/aiverse-genre-bots/SKILL.md",
+      "summary": "Deterministic genre bot policies: melee spacing/attack timing/dodge-parry/lock-on, shooter aim/lead/burst/reload/overheat/cover, squad roles with formations and an objective choice hook",
+      "notes": "Read docs/genre-packages.md (genre-bots) for exact coverage. Bots return player-equivalent inputs (MeleeInput, ShooterInput, role orders, objective choice) for the owner's ordinary command path and never write state. Perception is owner-supplied and must be visibility-authorized. Owner RNG only; repeated/backwards ticks rejected. Persist MeleeBotState/ShooterBotState/SquadState via genre::save/load (record kinds 56-58, 59-63 reserved) and hash them with genreBotHash. bots/SensesPerception.h (perceivedFromSenses) turns stealth-senses PerceivedTarget records into bot input: visible+Alert targets are engageable with owner facts, Searching targets are remembered at lastKnown.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_genre_bots",
+      "dependencies": [
+        "libraries/include/aiverselib/bots/GenreCommon.h",
+        "libraries/include/aiverselib/bots/MeleeBot.h",
+        "libraries/include/aiverselib/bots/ShooterBot.h",
+        "libraries/include/aiverselib/bots/SquadRoles.h",
+        "libraries/include/aiverselib/bots/ObjectivePolicy.h",
+        "libraries/include/aiverselib/bots/GenreBotPersistence.h",
+        "libraries/include/aiverselib/bots/GenreBotConfig.h",
+        "libraries/include/aiverselib/bots/SensesPerception.h",
+        "examples/libraries/genre/bot-settings.json",
+        "docs/genre-packages.md"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "packageDependencies": [
+        "combat-actions",
+        "weapon-policies",
+        "configuration",
+        "stealth-senses"
+      ]
+    },
+    {
       "id": "match-rules",
       "version": "0.2.0",
       "layer": "simulation",

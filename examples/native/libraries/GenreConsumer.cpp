@@ -11,6 +11,7 @@
 #include <aiverselib/genre/SensesConfigured.h>
 #include <aiverselib/genre/SensesData.h>
 #include <aiverselib/genre/SensesPersistence.h>
+#include <aiverselib/bots/GenreBotConfig.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
 #include <span>
@@ -111,6 +112,31 @@ static bool libraryMatchObjectivesConsumerExample(aiverse::game::NativeState& st
     return storeBytes(state,"genre.objective.zone",save(zone))&&storeBytes(state,"genre.objective.payload",save(cart))&&storeBytes(state,"genre.objective.clock",save(*clock))
         &&storeBytes(state,"genre.objective.bomb",save(*bomb))&&storeBytes(state,"genre.objective.spectator",save(*viewer))&&storeBytes(state,"genre.objective.match",save(*match));
 }
+// Genre bots: validated settings, one tick of each policy against owner-built perception, bot memory in NativeState.
+// A real authoritative handler passes sim.rng() and applies the returned inputs through the same stepMelee/
+// stepDodge/stepGuard/stepLockOn/stepFeed path as player commands; bots never write combat or body state.
+static bool genreBotConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::bots;using aiverse::Fixed;using aiverse::operator""_fx;namespace g=aiverse::lib::genre;
+    if(!genreBotSettingsErrors(settings).empty())return false;
+    auto melee=meleeBotConfig(settings);auto shooter=shooterBotConfig(settings);auto squad=squadConfig(settings);auto weights=objectiveWeights(settings);
+    aiverse::Random rng(0x9e3779b9u);uint32_t tick=0;
+    g::AttackSet attacks{{melee.opener,g::attackConfig(settings,melee.opener)}};
+    PerceivedTarget foe;foe.id=2;foe.team=2;foe.position={{},{},Fixed::fromRatio(3,2)};
+    MeleeBotState fighter;MeleeBotSelf self{1,1,{},{},{}};
+    auto action=stepMeleeBot(melee,attacks,g::dodgeConfig(settings),g::guardConfig(settings),fighter,tick,self,std::span<const PerceivedTarget>(&foe,1),rng);
+    auto feed=g::feedConfig(settings);ShooterBotState gunner;foe.position={{},Fixed::fromRatio(8,5),20_fx};
+    ShooterBotSelf shooterSelf{1,1,{},{{},Fixed::fromRatio(8,5),{}},{},{},{},g::makeFeed(feed),30,1000};
+    auto shot=stepShooterBot(shooter,feed,gunner,tick,shooterSelf,std::span<const PerceivedTarget>(&foe,1),{},rng);
+    const std::array<ObjectiveInfo,2> points{{{1,ObjectiveKind::Capture,{{},{},30_fx},0},{2,ObjectiveKind::Hold,{10_fx,{},{}},1}}};
+    auto goal=chooseObjective(weights,1,{},points);
+    const std::array<SquadMember,3> members{{{11,{}},{12,{1_fx,{},{}}},{13,{2_fx,{},{}}}}};SquadState team;
+    std::optional<SquadPlan> plan;
+    if(goal&&goal->id)for(const auto& p:points)if(p.id==goal->id)plan=stepSquad(squad,team,tick,p.position,goal->stance,members);
+    if(!action||!shot||!goal||!plan||plan->orders.size()!=members.size())return false;
+    state.values["bots.genre.hash"]=int64_t((genreBotHash(fighter)^genreBotHash(gunner)^genreBotHash(team))&0x7fffffffffffffffull);
+    state.values["bots.genre.objective"]=goal->id;
+    return storeBytes(state,"bots.genre.melee",save(fighter))&&storeBytes(state,"bots.genre.shooter",save(gunner))&&storeBytes(state,"bots.genre.squad",save(team));
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -126,5 +152,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!libraryCombatConsumerExample(state,*parsed.value))return false;
     if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     if(!librarySensesConsumerExample(state,*parsed.value))return false;
+    if(!genreBotConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

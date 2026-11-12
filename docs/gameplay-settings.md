@@ -165,6 +165,60 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | aimSolver | maxIterations | integer | 8 | 1..64 |
 | aimSolver | toleranceMilli | integer | 10 | 0..10000 |
 | aimSolver | preferHigh | boolean | false |  |
+| genreBots | reactionTicks | integer | 8 | 0..3600 |
+| genreBots | decisionTicks | integer | 4 | 1..3600 |
+| genreBots | aimErrorMicro | integer | 5000 | 0..125000 |
+| genreBots | misreadMilli | integer | 0 | 0..1000 |
+| genreBots | meleeMinRangeMilli | integer | 1200 | 0..100000 |
+| genreBots | meleeMaxRangeMilli | integer | 2200 | 0..100000 |
+| genreBots | meleeAttackRangeMilli | integer | 2000 | 1..100000 |
+| genreBots | meleeOpener | integer | 1 | 1..1000000000 |
+| genreBots | meleeStrafeTicks | integer | 30 | 0..36000 |
+| genreBots | dodgeMilli | integer | 500 | 0..1000 |
+| genreBots | useDodge | boolean | true |  |
+| genreBots | useGuard | boolean | true |  |
+| genreBots | useLockOn | boolean | true |  |
+| genreBots | useCombos | boolean | true |  |
+| genreBots | respectGuard | boolean | true |  |
+| genreBots | shooterMinRangeMilli | integer | 5000 | 0..100000 |
+| genreBots | shooterPreferredRangeMilli | integer | 15000 | 0..100000 |
+| genreBots | shooterMaxRangeMilli | integer | 40000 | 0..100000 |
+| genreBots | projectileSpeedMilli | integer | 0 | 0..1000000 |
+| genreBots | projectileGravityMilli | integer | 0 | 0..1000000 |
+| genreBots | turnPerTickMicro | integer | 15625 | 1..500000 |
+| genreBots | fireToleranceMicro | integer | 5000 | 0..125000 |
+| genreBots | recoilToleranceMicro | integer | 20000 | 0..250000 |
+| genreBots | recoilCompensationMilli | integer | 500 | 0..1000 |
+| genreBots | reloadIdleMilli | integer | 500 | 0..1000 |
+| genreBots | heatResumeMilli | integer | 400 | 0..1000 |
+| genreBots | heatStopMilli | integer | 900 | 0..1000 |
+| genreBots | retreatHealthMilli | integer | 300 | 0..1000 |
+| genreBots | coverDistanceWeight | integer | 100 | 0..1000000 |
+| genreBots | shooterStrafeTicks | integer | 40 | 0..36000 |
+| genreBots | squadIntervalTicks | integer | 60 | 1..36000 |
+| genreBots | offenseAttackerMilli | integer | 450 | 0..1000 |
+| genreBots | offenseDefenderMilli | integer | 150 | 0..1000 |
+| genreBots | offenseSupportMilli | integer | 200 | 0..1000 |
+| genreBots | offenseFlankerMilli | integer | 200 | 0..1000 |
+| genreBots | defenseAttackerMilli | integer | 200 | 0..1000 |
+| genreBots | defenseDefenderMilli | integer | 500 | 0..1000 |
+| genreBots | defenseSupportMilli | integer | 200 | 0..1000 |
+| genreBots | defenseFlankerMilli | integer | 100 | 0..1000 |
+| genreBots | formationSpacingMilli | integer | 2000 | 1..1000000 |
+| genreBots | supportDistanceMilli | integer | 6000 | 0..1000000 |
+| genreBots | flankDistanceMilli | integer | 10000 | 0..1000000 |
+| genreBots | defendRadiusMilli | integer | 4000 | 0..1000000 |
+| genreBots | attackShape | integer | 1 | 0..3 |
+| genreBots | objectiveValueWeight | integer | 1000 | -1000000..1000000 |
+| genreBots | objectiveDistanceWeight | integer | 20 | 0..1000000 |
+| genreBots | objectiveNeutralWeight | integer | 200 | -1000000..1000000 |
+| genreBots | objectiveEnemyWeight | integer | 300 | -1000000..1000000 |
+| genreBots | objectiveProgressWeight | integer | 300 | -1000000..1000000 |
+| genreBots | objectiveContestedWeight | integer | 300 | -1000000..1000000 |
+| genreBots | objectiveThreatenedWeight | integer | 400 | -1000000..1000000 |
+| genreBots | objectiveIdleWeight | integer | -500 | -1000000..1000000 |
+| genreBots | objectiveEscortWeight | integer | 200 | -1000000..1000000 |
+| genreBots | objectiveStickiness | integer | 150 | -1000000..1000000 |
 | matchRules | warmupTicks | integer | 60 | 0..10000000 |
 | matchRules | roundTicks | integer | 3600 | 1..10000000 |
 | matchRules | overtimeTicks | integer | 600 | 0..10000000 |
@@ -269,6 +323,10 @@ Constraint: `ammoFeed.heatPerShot <= ammoFeed.heatCapacity` (checked by loader a
 Constraint: `ammoFeed.coolPerTick <= ammoFeed.heatCapacity` (checked by loader and CLI).
 Constraint: `charge.minTicks <= charge.maxTicks` (checked by loader and CLI).
 Constraint: `charge.minScaleMilli <= charge.maxScaleMilli` (checked by loader and CLI).
+Constraint: `genreBots.meleeMinRangeMilli <= genreBots.meleeMaxRangeMilli` (checked by loader and CLI).
+Constraint: `genreBots.shooterMinRangeMilli <= genreBots.shooterPreferredRangeMilli` (checked by loader and CLI).
+Constraint: `genreBots.shooterPreferredRangeMilli <= genreBots.shooterMaxRangeMilli` (checked by loader and CLI).
+Constraint: `genreBots.heatResumeMilli <= genreBots.heatStopMilli` (checked by loader and CLI).
 Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).
 Constraint: `objectives.zoneDecayPerTick <= objectives.zoneCaptureTicks` (checked by loader and CLI).
 Constraint: `objectives.bombKitDefuseTicks <= objectives.bombDefuseTicks` (checked by loader and CLI).

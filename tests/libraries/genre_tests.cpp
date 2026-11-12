@@ -920,4 +920,384 @@ void rejection(const std::string& root){
 }
 #undef SCHECK
 void stealthSenses(const std::string& root){senses::coneAndRange();senses::losOrder();senses::hearing();senses::suspicionThresholds();senses::propagation();senses::searchGiveUp();senses::disguises(root);senses::hiding(root);senses::trails();senses::restore();senses::rejection(root);}
-int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+// ---- genre-bots: melee/shooter bot policies, squad roles, objective choice (record kinds 56..58) ----
+#include <aiverselib/bots/SensesPerception.h>
+#include <aiverselib/bots/GenreBotConfig.h>
+namespace gbots {
+using namespace aiverse::lib::bots;using aiverse::lib::bots::PerceivedTarget; // genre::PerceivedTarget (stealth-senses) is a different record
+uint64_t mix(uint64_t running,uint64_t value){Hasher h;h.u64(running);h.u64(value);return h.value();}
+const AttackSet& duelAttacks(){static const AttackSet defs{{1,{1,8,4,10,14,6,{2}}},{2,{2,6,4,12,22,6,{}}}};return defs;}
+const HitboxSet& duelBoxes(){
+    static const HitboxSet boxes=[]{CombatShape blade;blade.kind=ShapeKind::Sphere;blade.a={{},1_fx,Fixed::fromRatio(6,5)};blade.radius=Fixed::fromRatio(3,5);
+        auto thrust=blade;thrust.a.z=Fixed::fromRatio(7,5);return HitboxSet{{1,{{1,8,12,blade}}},{2,{{1,6,10,thrust}}}};}();
+    return boxes;
+}
+const DodgeConfig kDodge{12,2,8,20};const GuardConfig kGuard{Fixed::fromRatio(1,8),6,20};const PoiseConfig kPoise{};const LockOnConfig kLock{};
+Fixed reachOf(int64_t attack){return attack==2?Fixed::fromRatio(12,5):Fixed::fromRatio(11,5);}
+CombatShape torso(){CombatShape s;s.kind=ShapeKind::Capsule;s.a={{},Fixed::fromRatio(1,5),{}};s.b={{},Fixed::fromRatio(9,5),{}};s.radius=Fixed::fromRatio(2,5);return s;}
+Fixed clampArena(Fixed v,Fixed m){return fxClamp(v,-m,m);}
+
+// ---- Owner simulation for a melee duel: bots only produce MeleeInput; the owner authorizes and applies it.
+struct Fighter {int64_t id=0,team=0;CombatPose pose{};MeleeState melee{};CombatActorState combat{};MeleeBotState bot{};int64_t health=1000;Vec2 dodgeDir{};};
+struct MeleeDuel {std::array<Fighter,2> f;std::array<MeleeBotConfig,2> cfg;uint32_t tick=0;Random rng{1};uint64_t hash=0;uint32_t hits=0,blocks=0,parries=0,evades=0;std::array<int64_t,2> dealt{};};
+MeleeDuel makeMeleeDuel(uint64_t seed,BotDifficulty a,BotDifficulty b){
+    MeleeDuel d;d.rng=Random(seed);d.f[0].id=1;d.f[0].team=1;d.f[0].pose={{{},{},-3_fx},{}};d.f[1].id=2;d.f[1].team=2;d.f[1].pose={{{},{},3_fx},Fixed::fromRatio(1,2)};
+    d.cfg[0].difficulty=a;d.cfg[1].difficulty=b;for(auto& c:d.cfg){c.minRange=Fixed::fromRatio(7,5);c.maxRange=Fixed::fromRatio(11,5);c.attackRange=2_fx;}d.cfg[1].strafeTicks=23;d.f[1].pose.position.x=Fixed::fromRatio(1,2);return d;
+}
+bool stepMeleeDuel(MeleeDuel& d){
+    const auto& defs=duelAttacks();const auto& boxes=duelBoxes();uint32_t tick=d.tick;std::array<MeleeInput,2> in{};
+    for(std::size_t i=0;i<2;++i){
+        const auto& me=d.f[i];const auto& other=d.f[1-i];
+        PerceivedTarget seen;seen.id=other.id;seen.team=other.team;seen.position=other.pose.position;seen.yaw=other.pose.yaw;seen.guarding=other.combat.guard.raised;
+        seen.vulnerable=attackPhase(defs,other.melee,tick)==AttackPhase::Recovery||staggered(other.combat.poise,tick);seen.healthMilli=std::clamp<int64_t>(other.health,0,1000);
+        seen.threat=meleeThreat(defs,other.melee,tick,reachOf(other.melee.attack));
+        auto r=stepMeleeBot(d.cfg[i],defs,kDodge,kGuard,d.f[i].bot,tick,{me.id,me.team,me.pose,me.melee,me.combat},std::span<const PerceivedTarget>(&seen,1),d.rng);
+        if(!r)return false;in[i]=*r;
+    }
+    for(std::size_t i=0;i<2;++i){
+        auto& me=d.f[i];const auto& other=d.f[1-i];const auto& x=in[i];
+        if(!stepPoise(kPoise,me.combat.poise,tick))return false;
+        bool stun=staggered(me.combat.poise,tick);auto phase=attackPhase(defs,me.melee,tick);
+        if(!stepGuard(kGuard,me.combat.guard,tick,x.guard&&!stun&&phase==AttackPhase::Idle))return false;
+        auto dodged=stepDodge(kDodge,me.combat.dodge,tick,x.dodge,[&]{return !stun&&phase==AttackPhase::Idle;});if(!dodged)return false;if(*dodged)me.dodgeDir=x.dodgeDirection;
+        bool canAttack=!stun&&!dodging(kDodge,me.combat.dodge,tick)&&!me.combat.guard.raised;
+        if(!stepMelee(defs,me.melee,tick,x.attack,[&](int64_t){return canAttack;}))return false;
+        const std::array<LockCandidate,1> seen{{{other.id,other.pose.position,true}}};
+        if(!stepLockOn(kLock,me.combat.lock,tick,me.pose,seen,x.lock))return false;
+        auto now=attackPhase(defs,me.melee,tick);
+        if(stun){}
+        else if(dodging(kDodge,me.combat.dodge,tick)){me.pose.position.x+=me.dodgeDir.x*Fixed::fromRatio(9,60);me.pose.position.z+=me.dodgeDir.y*Fixed::fromRatio(9,60);}
+        else{
+            if(now==AttackPhase::Idle){auto speed=me.combat.guard.raised?Fixed::fromRatio(2,60):Fixed::fromRatio(4,60);me.pose.position.x+=x.move.x*speed;me.pose.position.z+=x.move.y*speed;}
+            if(now==AttackPhase::Idle||now==AttackPhase::Windup)me.pose.yaw=x.face;
+        }
+        me.pose.position.x=clampArena(me.pose.position.x,8_fx);me.pose.position.z=clampArena(me.pose.position.z,8_fx);
+    }
+    std::array<std::vector<HitContact>,2> contacts;std::array<int64_t,2> swing{};
+    for(std::size_t i=0;i<2;++i){
+        auto& att=d.f[i];const auto& def=d.f[1-i];swing[i]=att.melee.attack;
+        CombatBody a{att.id,att.team,att.pose,{{1,torso()}}},b{def.id,def.team,def.pose,{{1,torso()}}};
+        auto hits=collectMeleeHits(defs,boxes,att.melee,tick,a,std::span<const CombatBody>(&b,1));if(!hits)return false;contacts[i]=*hits;
+    }
+    for(std::size_t i=0;i<2;++i)for(const auto& hit:contacts[i]){
+        (void)hit;auto& att=d.f[i];auto& def=d.f[1-i];int64_t damage=swing[i]==2?140:90;
+        auto contact=resolveCombatContact(kDodge,def.combat.dodge,kGuard,def.combat.guard,def.pose,att.pose.position,tick);
+        if(contact==MeleeContact::Hit){def.health-=damage;d.dealt[i]+=damage;++d.hits;}
+        else if(contact==MeleeContact::Blocked)++d.blocks;else if(contact==MeleeContact::Evaded)++d.evades;
+        else{++d.parries;if(!applyParryStagger(kPoise,att.combat.poise,tick))return false;interruptMelee(att.melee);}
+        auto r=applyPoiseHit(kPoise,def.combat.poise,tick,damage*250,contact);if(!r)return false;
+        if(contact==MeleeContact::Hit&&r->stunUntil>tick)interruptMelee(def.melee);
+    }
+    for(const auto& f:d.f){
+        Hasher h;h.v3(f.pose.position);h.fx(f.pose.yaw);h.i64(f.health);h.u64(combatHash(f.combat));h.str(save(f.melee));h.u64(genreBotHash(f.bot));d.hash=mix(d.hash,h.value());
+    }
+    d.hash=mix(d.hash,d.rng.state());++d.tick;return true;
+}
+bool meleeOver(const MeleeDuel& d){return d.f[0].health<=0||d.f[1].health<=0;}
+void runMelee(MeleeDuel& d,uint32_t until){while(d.tick<until&&!meleeOver(d))CHECK(stepMeleeDuel(d));}
+std::string snapshotMelee(const MeleeDuel& d){
+    std::string out;Archive a(&out);auto c=d;uint64_t state=c.rng.state(),inc=c.rng.increment();
+    a(c.tick,state,inc,c.hash,c.hits,c.blocks,c.parries,c.evades,c.dealt[0],c.dealt[1]);
+    for(auto& f:c.f){auto m=save(f.melee),k=save(f.combat),b=save(f.bot);CHECK(!m.empty()&&!k.empty()&&!b.empty());a(f.pose.position,f.pose.yaw,f.health,f.dodgeDir.x,f.dodgeDir.y,m,k,b);}
+    return out;
+}
+MeleeDuel restoreMelee(const std::string& bytes,const std::array<MeleeBotConfig,2>& cfg){
+    MeleeDuel d=makeMeleeDuel(0,{},{});d.cfg=cfg;Archive a(bytes);uint64_t state=0,inc=0;
+    a(d.tick,state,inc,d.hash,d.hits,d.blocks,d.parries,d.evades,d.dealt[0],d.dealt[1]);d.rng.restore(state,inc);
+    for(auto& f:d.f){std::string m,k,b;a(f.pose.position,f.pose.yaw,f.health,f.dodgeDir.x,f.dodgeDir.y,m,k,b);CHECK(load(m,f.melee)&&load(k,f.combat)&&load(b,f.bot));}
+    CHECK(a.ok()&&!a.remaining());return d;
+}
+
+// ---- Owner simulation for a hitscan duel: recoil, spread, ammo feed with heat, cover damage reduction.
+const FeedConfig& duelFeed(){static const FeedConfig c=[]{FeedConfig f;f.capacity=10;f.intervalTicks=5;f.reloadTicks=90;f.heatPerShot=80;f.heatCapacity=1000;f.coolPerTick=4;f.overheatTicks=30;f.recoverHeat=300;return f;}();return c;}
+const RecoilConfig kRecoil{Fixed::fromRatio(1,600),Fixed::fromRatio(1,150),Fixed::fromRatio(1,1500),Fixed::fromRatio(1,16)};
+const std::array<CoverCandidate,2>& duelCover(){static const std::array<CoverCandidate,2> c{{{1,{-4_fx,{},{}},700,true},{2,{4_fx,{},{}},700,true}}};return c;}
+struct Gunner {int64_t id=0,team=0;Vec3 pos{};Fixed yaw{},pitch{};RecoilState recoil{};FeedState feed{};uint32_t reserve=200;int64_t health=1000;ShooterBotState bot{};Vec2 velocity{};};
+struct GunDuel {std::array<Gunner,2> g;std::array<ShooterBotConfig,2> cfg;uint32_t tick=0;Random rng{1};uint64_t hash=0;uint32_t shots=0,hits=0,covered=0;std::array<int64_t,2> dealt{};};
+GunDuel makeGunDuel(uint64_t seed,BotDifficulty a,BotDifficulty b){
+    GunDuel d;d.rng=Random(seed);d.g[0].id=1;d.g[0].team=1;d.g[0].pos={{},{},-12_fx};d.g[1].id=2;d.g[1].team=2;d.g[1].pos={{},{},12_fx};d.g[1].yaw=Fixed::fromRatio(1,2);
+    for(auto& g:d.g)g.feed=makeFeed(duelFeed());d.cfg[0].difficulty=a;d.cfg[1].difficulty=b;return d;
+}
+Vec3 eyeOf(Vec3 p){return {p.x,p.y+Fixed::fromRatio(8,5),p.z};}
+Vec3 chestOf(Vec3 p){return {p.x,p.y+Fixed::fromRatio(13,10),p.z};}
+bool stepGunDuel(GunDuel& d){
+    uint32_t tick=d.tick;std::array<ShooterInput,2> in{};const auto& feed=duelFeed();
+    for(std::size_t i=0;i<2;++i){
+        const auto& me=d.g[i];const auto& other=d.g[1-i];
+        PerceivedTarget seen;seen.id=other.id;seen.team=other.team;seen.position=chestOf(other.pos);seen.velocity={other.velocity.x,{},other.velocity.y};seen.healthMilli=std::clamp<int64_t>(other.health,0,1000);
+        ShooterBotSelf self{me.id,me.team,me.pos,eyeOf(me.pos),me.yaw,me.pitch,me.recoil,me.feed,me.reserve,std::clamp<int64_t>(me.health,0,1000)};
+        auto r=stepShooterBot(d.cfg[i],feed,d.g[i].bot,tick,self,std::span<const PerceivedTarget>(&seen,1),duelCover(),d.rng);if(!r)return false;in[i]=*r;
+    }
+    for(std::size_t i=0;i<2;++i){
+        auto& me=d.g[i];const auto& x=in[i];auto turn=Fixed::fromRatio(1,16);
+        me.yaw=wrapBotTurns(me.yaw+fxClamp(wrapBotTurns(x.yaw-me.yaw),-turn,turn));me.pitch=fxClamp(x.pitch,-Fixed::fromRatio(1,4),Fixed::fromRatio(1,4));
+        me.velocity=x.move*4_fx;me.pos.x=clampArena(me.pos.x+x.move.x*Fixed::fromRatio(4,60),15_fx);me.pos.z=clampArena(me.pos.z+x.move.y*Fixed::fromRatio(4,60),15_fx);
+    }
+    for(std::size_t i=0;i<2;++i){
+        auto& me=d.g[i];auto& other=d.g[1-i];
+        auto step=stepFeed(feed,me.feed,tick,in[i].feed,[&](uint32_t n){auto k=std::min(n,me.reserve);me.reserve-=k;return k;});if(!step)return false;
+        if(step->fired){
+            ++d.shots;auto spread=sampleSpread(d.rng,Fixed::fromRatio(1,800));if(!spread)return false;
+            auto shotYaw=me.yaw+me.recoil.yaw+spread->x,shotPitch=me.pitch+me.recoil.pitch+spread->y;
+            auto eye=eyeOf(me.pos),chest=chestOf(other.pos);auto dist=(chest-eye).length();auto arc=dist*Fixed::fromRatio(6283,1000);
+            auto lateral=fxAbs(wrapBotTurns(shotYaw-yawToward(eye,chest,me.yaw)))*arc,vertical=fxAbs(shotPitch-pitchToward(eye,chest))*arc;
+            if(lateral<=Fixed::fromRatio(2,5)&&vertical<=Fixed::fromRatio(1,2)){
+                bool inCover=false;for(const auto& c:duelCover())if(Vec2{other.pos.x-c.position.x,other.pos.z-c.position.z}.length()<=Fixed::fromRatio(6,5))inCover=true;
+                int64_t damage=inCover?18:60;other.health-=damage;d.dealt[i]+=damage;++d.hits;if(inCover)++d.covered;
+            }
+        }
+        if(!stepRecoil(kRecoil,me.recoil,step->fired))return false;
+    }
+    for(const auto& g:d.g){
+        Hasher h;h.v3(g.pos);h.fx(g.yaw);h.fx(g.pitch);h.i64(g.health);h.u32(g.reserve);h.str(save(g.recoil));h.str(save(g.feed));h.u64(genreBotHash(g.bot));d.hash=mix(d.hash,h.value());
+    }
+    d.hash=mix(d.hash,d.rng.state());++d.tick;return true;
+}
+bool gunOver(const GunDuel& d){return d.g[0].health<=0||d.g[1].health<=0;}
+void runGun(GunDuel& d,uint32_t until){while(d.tick<until&&!gunOver(d))CHECK(stepGunDuel(d));}
+std::string snapshotGun(const GunDuel& d){
+    std::string out;Archive a(&out);auto c=d;uint64_t state=c.rng.state(),inc=c.rng.increment();
+    a(c.tick,state,inc,c.hash,c.shots,c.hits,c.covered,c.dealt[0],c.dealt[1]);
+    for(auto& g:c.g){auto r=save(g.recoil),f=save(g.feed),b=save(g.bot);CHECK(!r.empty()&&!f.empty()&&!b.empty());a(g.pos,g.yaw,g.pitch,g.reserve,g.health,g.velocity.x,g.velocity.y,r,f,b);}
+    return out;
+}
+GunDuel restoreGun(const std::string& bytes,const std::array<ShooterBotConfig,2>& cfg){
+    GunDuel d=makeGunDuel(0,{},{});d.cfg=cfg;Archive a(bytes);uint64_t state=0,inc=0;
+    a(d.tick,state,inc,d.hash,d.shots,d.hits,d.covered,d.dealt[0],d.dealt[1]);d.rng.restore(state,inc);
+    for(auto& g:d.g){std::string r,f,b;a(g.pos,g.yaw,g.pitch,g.reserve,g.health,g.velocity.x,g.velocity.y,r,f,b);CHECK(load(r,g.recoil)&&load(f,g.feed)&&load(b,g.bot));}
+    CHECK(a.ok()&&!a.remaining());return d;
+}
+
+void meleeDuels(){
+    auto normal=*difficultyPreset(1);
+    auto a=makeMeleeDuel(7,normal,normal),b=a;runMelee(a,2400);runMelee(b,2400);
+    CHECK(a.hash==b.hash&&a.tick==b.tick&&a.f[0].health==b.f[0].health&&a.f[1].health==b.f[1].health);
+    CHECK(a.hits>0&&a.blocks+a.parries+a.evades>0);
+    // Save mid-fight, continue the original, restore into a fresh duel and continue: identical results.
+    auto c=makeMeleeDuel(7,normal,normal);runMelee(c,90);CHECK(!meleeOver(c)&&c.tick==90);auto bytes=snapshotMelee(c);
+    runMelee(c,2400);auto r=restoreMelee(bytes,c.cfg);CHECK(r.tick==90);runMelee(r,2400);
+    CHECK(r.hash==a.hash&&c.hash==a.hash&&r.f[0].health==a.f[0].health&&r.f[1].health==a.f[1].health&&r.hits==a.hits&&r.parries==a.parries);
+    CHECK(!snapshotMelee(r).empty());
+    // Difficulty changes outcomes (never stats): hard beats easy over several seeds with swapped sides.
+    int hardWins=0,easyWins=0;int64_t hardDealt=0,easyDealt=0;auto hard=*difficultyPreset(2),easy=*difficultyPreset(0);
+    for(uint64_t seed=1;seed<=6;++seed){
+        bool hardFirst=seed%2;auto d=hardFirst?makeMeleeDuel(seed,hard,easy):makeMeleeDuel(seed,easy,hard);runMelee(d,3600);
+        std::size_t h=hardFirst?0:1;hardDealt+=d.dealt[h];easyDealt+=d.dealt[1-h];
+        if(d.f[1-h].health<=0)++hardWins;else if(d.f[h].health<=0)++easyWins;
+    }
+    CHECK(hardWins>easyWins&&hardDealt>easyDealt*2);
+}
+void gunDuels(){
+    auto normal=*difficultyPreset(1);
+    auto a=makeGunDuel(11,normal,normal),b=a;runGun(a,3600);runGun(b,3600);
+    CHECK(a.hash==b.hash&&a.tick==b.tick&&a.g[0].health==b.g[0].health&&a.g[1].health==b.g[1].health&&a.shots>0&&a.hits>0);
+    auto c=makeGunDuel(11,normal,normal);runGun(c,150);CHECK(!gunOver(c));auto bytes=snapshotGun(c);
+    runGun(c,3600);auto r=restoreGun(bytes,c.cfg);runGun(r,3600);
+    CHECK(r.hash==a.hash&&c.hash==a.hash&&r.shots==a.shots&&r.hits==a.hits&&r.g[0].health==a.g[0].health);
+    int hardWins=0,easyWins=0;int64_t hardDealt=0,easyDealt=0;auto hard=*difficultyPreset(2),easy=*difficultyPreset(0);
+    for(uint64_t seed=1;seed<=4;++seed){
+        bool hardFirst=seed%2;auto d=hardFirst?makeGunDuel(seed,hard,easy):makeGunDuel(seed,easy,hard);runGun(d,3600);
+        std::size_t h=hardFirst?0:1;hardDealt+=d.dealt[h];easyDealt+=d.dealt[1-h];
+        if(d.g[1-h].health<=0)++hardWins;else if(d.g[h].health<=0)++easyWins;
+    }
+    CHECK(hardWins>easyWins&&hardDealt>easyDealt*2);
+}
+void meleePolicy(){
+    const auto& defs=duelAttacks();MeleeBotConfig c;c.difficulty={5,1,{},0};c.openMilli=1000;Random rng(3);
+    MeleeBotSelf self{1,1,{{},{}},{},{}};PerceivedTarget foe;foe.id=2;foe.team=2;foe.position={{},{},6_fx};
+    auto one=[&](const PerceivedTarget& t){return std::span<const PerceivedTarget>(&t,1);};
+    MeleeBotState s;auto out=stepMeleeBot(c,defs,kDodge,kGuard,s,0,self,one(foe),rng);
+    CHECK(out&&out->move==Vec2{}&&s.target==2&&s.noticedAt==0);                       // reaction delay: hold
+    for(uint32_t t=1;t<5;++t)CHECK(stepMeleeBot(c,defs,kDodge,kGuard,s,t,self,one(foe),rng));
+    out=stepMeleeBot(c,defs,kDodge,kGuard,s,5,self,one(foe),rng);
+    CHECK(out&&out->move.y>Fixed::fromRatio(9,10)&&out->lock.toggle&&out->attack==0);   // approach + lock-on
+    auto before=s;CHECK(!stepMeleeBot(c,defs,kDodge,kGuard,s,5,self,one(foe),rng)&&!stepMeleeBot(c,defs,kDodge,kGuard,s,4,self,one(foe),rng));
+    CHECK(save(s)==save(before));
+    foe.position={{},{},Fixed::fromRatio(9,5)};out=stepMeleeBot(c,defs,kDodge,kGuard,s,6,self,one(foe),rng);CHECK(out&&out->attack==1&&out->move==Vec2{});
+    foe.guarding=true;out=stepMeleeBot(c,defs,kDodge,kGuard,s,7,self,one(foe),rng);CHECK(out&&out->attack==0);   // respect a raised guard
+    foe.vulnerable=true;out=stepMeleeBot(c,defs,kDodge,kGuard,s,8,self,one(foe),rng);CHECK(out&&out->attack==1); // ...unless punishable
+    foe.guarding=foe.vulnerable=false;
+    // Combo only on hit confirm, buffered so stepMelee starts it at the cancel frame (cancelFrom 14, buffer 6).
+    MeleeBotSelf swinging=self;swinging.melee.attack=1;swinging.melee.started=10;swinging.melee.lastTick=17;swinging.melee.initialized=true;
+    out=stepMeleeBot(c,defs,kDodge,kGuard,s,18,swinging,one(foe),rng);CHECK(out&&out->attack==0);
+    swinging.melee.hitTargets={2};out=stepMeleeBot(c,defs,kDodge,kGuard,s,19,swinging,one(foe),rng);CHECK(out&&out->attack==2);
+    // Telegraph answers: dodge timed so invulnerability covers the first active frame, guard so the parry window straddles it.
+    auto threatAt=[&](uint32_t started){PerceivedTarget t=foe;t.threat={1,started,8,4,reachOf(1),false};return t;};
+    {MeleeBotConfig d=c;d.dodgeMilli=1000;MeleeBotState m;auto t=threatAt(100);uint32_t fired=0;
+     for(uint32_t tick=100;tick<112;++tick){auto o=stepMeleeBot(d,defs,kDodge,kGuard,m,tick,self,one(t),rng);CHECK(o&&!o->attack&&!o->guard);if(o->dodge&&!fired)fired=tick;}
+     CHECK(fired==106&&m.defense==MeleeDefense::Dodge&&m.threatRead);}                 // active at 108, invulnFrom 2
+    {MeleeBotConfig d=c;d.dodgeMilli=0;MeleeBotState m;auto t=threatAt(100);uint32_t raised=0;
+     for(uint32_t tick=100;tick<112;++tick){auto o=stepMeleeBot(d,defs,kDodge,kGuard,m,tick,self,one(t),rng);CHECK(o&&!o->dodge);if(o->guard&&!raised)raised=tick;}
+     CHECK(raised==105&&m.defense==MeleeDefense::Guard);}                              // parryTicks 6 -> raise 3 early
+    {MeleeBotConfig d=c;d.difficulty.misreadMilli=1000;MeleeBotState m;auto t=threatAt(100);
+     for(uint32_t tick=100;tick<112;++tick){auto o=stepMeleeBot(d,defs,kDodge,kGuard,m,tick,self,one(t),rng);CHECK(o&&!o->dodge&&!o->guard);}
+     CHECK(m.defense==MeleeDefense::Ignore);}
+    {MeleeBotState m;auto t=threatAt(100);t.threat.unblockable=true;MeleeBotSelf tired=self;tired.combat.dodge={90,200,99,true,true};
+     for(uint32_t tick=100;tick<108;++tick){auto o=stepMeleeBot(c,defs,kDodge,kGuard,m,tick,tired,one(t),rng);CHECK(o&&!o->guard&&!o->dodge);if(tick>=105)CHECK(o->move.y< -Fixed::fromRatio(9,10));}
+     CHECK(m.defense==MeleeDefense::Retreat);}
+    {MeleeBotState m;auto t=threatAt(100);t.position={{},{},5_fx};                    // out of reach: never read, approach instead
+     for(uint32_t tick=100;tick<112;++tick){auto o=stepMeleeBot(c,defs,kDodge,kGuard,m,tick,self,one(t),rng);CHECK(o&&!o->dodge&&!o->guard);}CHECK(!m.threatRead);}
+    // Invalid input is rejected without touching state.
+    MeleeBotState fresh;auto bad=c;bad.minRange=3_fx;CHECK(!stepMeleeBot(bad,defs,kDodge,kGuard,fresh,0,self,one(foe),rng));
+    bad=c;bad.opener=9;CHECK(!stepMeleeBot(bad,defs,kDodge,kGuard,fresh,0,self,one(foe),rng));
+    bad=c;bad.difficulty.decisionTicks=0;CHECK(!stepMeleeBot(bad,defs,kDodge,kGuard,fresh,0,self,one(foe),rng));
+    const std::array<PerceivedTarget,2> twins{foe,foe};CHECK(!stepMeleeBot(c,defs,kDodge,kGuard,fresh,0,self,twins,rng));
+    auto future=threatAt(50);CHECK(!stepMeleeBot(c,defs,kDodge,kGuard,fresh,10,self,one(future),rng));
+    auto selfBad=self;selfBad.melee.attack=7;CHECK(!stepMeleeBot(c,defs,kDodge,kGuard,fresh,0,selfBad,one(foe),rng));
+    CHECK(!fresh.initialized);
+    // Teammates and the bot itself are never targets.
+    PerceivedTarget mate=foe;mate.team=1;CHECK(stepMeleeBot(c,defs,kDodge,kGuard,fresh,0,self,one(mate),rng)&&fresh.target==0);
+}
+void shooterPolicy(){
+    FeedConfig feed=duelFeed();ShooterBotConfig c;c.difficulty={0,2,{},0};c.strafeTicks=0;Random rng(5);auto rngBefore=rng.state();
+    ShooterBotSelf self{1,1,{},{{},Fixed::fromRatio(8,5),{}},Fixed::fromRatio(1,4),{},{},makeFeed(feed),50,1000};
+    PerceivedTarget foe;foe.id=2;foe.team=2;foe.position={{},Fixed::fromRatio(8,5),20_fx};
+    auto one=[&](const PerceivedTarget& t){return std::span<const PerceivedTarget>(&t,1);};std::span<const CoverCandidate> none;
+    ShooterBotState s;uint32_t firstFire=0;
+    for(uint32_t t=0;t<40;++t){
+        auto o=stepShooterBot(c,feed,s,t,self,one(foe),none,rng);CHECK(o);
+        CHECK(fxAbs(wrapBotTurns(o->yaw-self.yaw))<=c.turnPerTick);                     // bounded turn rate
+        if(o->feed.fire&&!firstFire)firstFire=t;self.yaw=o->yaw;self.pitch=o->pitch;
+    }
+    CHECK(firstFire>=15&&fxAbs(self.yaw)<=c.fireTolerance&&rng.state()==rngBefore);   // a quarter turn at 1/64 per tick; no error -> no RNG
+    CHECK(s.decision==ShooterDecision::Engage);
+    // Lead: a projectile weapon aims ahead of a target crossing to +X; hitscan aims at the body.
+    {auto lead=c;lead.projectileSpeed=50_fx;lead.turnPerTick=Fixed::fromRatio(1,2);ShooterBotState m;auto moving=foe;moving.velocity={5_fx,{},{}};
+     auto o=stepShooterBot(lead,feed,m,0,self,one(moving),none,rng);CHECK(o);
+     auto solution=solveIntercept(lead.aim,self.eye,moving.position,moving.velocity,50_fx,{});CHECK(solution&&solution->found);
+     CHECK(o->yaw>Fixed::fromRatio(1,100)&&fxAbs(o->yaw-fxAtan2Turns(solution->launch.velocity.x,solution->launch.velocity.z))<=Fixed::fromRatio(1,1000));
+     lead.projectileSpeed={};ShooterBotState h;auto direct=stepShooterBot(lead,feed,h,0,self,one(moving),none,rng);CHECK(direct&&fxAbs(direct->yaw)<=Fixed::fromRatio(1,1000));}
+    // Reload decisions from the feed state.
+    {ShooterBotState m;auto dry=self;dry.feed.loaded=0;auto o=stepShooterBot(c,feed,m,0,dry,one(foe),none,rng);CHECK(o&&o->feed.reload&&!o->feed.fire&&o->decision==ShooterDecision::Reload);
+     dry.reserve=0;ShooterBotState n;o=stepShooterBot(c,feed,n,0,dry,one(foe),none,rng);CHECK(o&&!o->feed.reload&&!o->feed.fire);
+     auto low=self;low.feed.loaded=3;ShooterBotState idle;o=stepShooterBot(c,feed,idle,0,low,{},none,rng);CHECK(o&&o->feed.reload);   // top up with no target
+     ShooterBotState busy;o=stepShooterBot(c,feed,busy,0,low,one(foe),none,rng);CHECK(o&&!o->feed.reload&&o->feed.fire);}         // keep shooting under fire
+    // Heat hysteresis: stop at 900/1000, resume only at or below 400.
+    {ShooterBotState m;auto hot=self;hot.feed.heat=950;uint32_t t=0;
+     for(auto [heat,expect]:std::array<std::pair<uint32_t,bool>,4>{{{950,false},{600,false},{400,true},{700,true}}}){hot.feed.heat=heat;auto o=stepShooterBot(c,feed,m,t++,hot,one(foe),none,rng);CHECK(o&&o->feed.fire==expect);}}
+    // Burst control: hold fire until recoil settles under the tolerance.
+    {ShooterBotState m;auto kicked=self;kicked.recoil.pitch=Fixed::fromRatio(1,20);auto o=stepShooterBot(c,feed,m,0,kicked,one(foe),none,rng);CHECK(o&&!o->feed.fire);
+     kicked.recoil.pitch=Fixed::fromRatio(1,100);o=stepShooterBot(c,feed,m,1,kicked,one(foe),none,rng);CHECK(o&&o->feed.fire);}
+    // Cover: hurt bots choose the best reachable candidate (protection minus travel, ties by id) and move there.
+    {const std::array<CoverCandidate,4> spots{{{4,{3_fx,{},{}},900,false},{3,{-4_fx,{},{}},600,true},{1,{4_fx,{},{}},700,true},{2,{-4_fx,{},{}},700,true}}};
+     ShooterBotState m;auto hurt=self;hurt.healthMilli=100;auto o=stepShooterBot(c,feed,m,0,hurt,one(foe),spots,rng);
+     CHECK(o&&o->cover==1&&o->decision==ShooterDecision::Cover&&o->move.x>Fixed::fromRatio(9,10)&&o->feed.fire);
+     CHECK((chooseCover(c,{},spots)==1&&chooseCover(c,{-1_fx,{},{}},spots)==2));
+     ShooterBotState healthy;o=stepShooterBot(c,feed,healthy,0,self,one(foe),spots,rng);CHECK(o&&o->cover==0);}
+    // Aim error is seeded: same seed -> same samples; larger error -> larger misses.
+    {auto noisy=c;noisy.difficulty.aimError=Fixed::fromRatio(1,40);Random x(9),y(9);ShooterBotState a,b;
+     auto oa=stepShooterBot(noisy,feed,a,0,self,one(foe),none,x),ob=stepShooterBot(noisy,feed,b,0,self,one(foe),none,y);
+     CHECK(oa&&ob&&oa->yaw==ob->yaw&&a.errorYaw==b.errorYaw&&x.state()==y.state()&&save(a)==save(b));}
+    // Invalid input.
+    ShooterBotState fresh;auto bad=c;bad.minRange=20_fx;CHECK(!stepShooterBot(bad,feed,fresh,0,self,one(foe),none,rng));
+    bad=c;bad.heatResumeMilli=950;CHECK(!stepShooterBot(bad,feed,fresh,0,self,one(foe),none,rng));
+    bad=c;bad.projectileSpeed=Fixed::fromRatio(1,100);CHECK(!stepShooterBot(bad,feed,fresh,0,self,one(foe),none,rng));
+    auto over=self;over.feed.loaded=11;CHECK(!stepShooterBot(c,feed,fresh,0,over,one(foe),none,rng));
+    const std::array<CoverCandidate,2> dup{{{1,{},500,true},{1,{},500,true}}};CHECK(!stepShooterBot(c,feed,fresh,0,self,one(foe),dup,rng));
+    CHECK(!fresh.initialized);
+}
+void squadRoles(){
+    SquadConfig c;std::vector<SquadMember> team;for(int64_t id=1;id<=5;++id)team.push_back({id*10,{Fixed::fromInt(id),{},{}},kAllRoles,true});
+    auto counts=roleCounts(c.offense,5);CHECK(counts&&(*counts==std::array<uint32_t,4>{2,1,1,1}));
+    CHECK((*roleCounts(c.defense,5)==std::array<uint32_t,4>{1,3,1,0}));CHECK(!roleCounts({0,0,0,0},3)&&!roleCounts({-1,1,1,1},3));
+    Vec3 objective{{},{},30_fx};SquadState s;auto plan=stepSquad(c,s,0,objective,SquadStance::Offense,team);
+    CHECK(plan&&plan->reassigned&&plan->orders.size()==5&&(plan->counts==std::array<uint32_t,4>{2,1,1,1}));
+    for(std::size_t i=1;i<plan->orders.size();++i)CHECK(plan->orders[i-1].id<plan->orders[i].id);
+    // Input order does not matter.
+    auto shuffled=team;std::reverse(shuffled.begin(),shuffled.end());SquadState t;auto other=stepSquad(c,t,0,objective,SquadStance::Offense,shuffled);
+    CHECK(other&&save(t)==save(s));for(std::size_t i=0;i<5;++i)CHECK(other->orders[i].role==plan->orders[i].role&&other->orders[i].goal==plan->orders[i].goal);
+    // Hysteresis: jittered positions inside the interval keep roles and goals.
+    auto moved=team;for(auto& m:moved)m.position.z+=3_fx;auto kept=stepSquad(c,s,1,objective,SquadStance::Offense,moved);
+    CHECK(kept&&!kept->reassigned);for(std::size_t i=0;i<5;++i)CHECK(kept->orders[i].role==plan->orders[i].role&&kept->orders[i].goal==plan->orders[i].goal);
+    CHECK(!stepSquad(c,s,1,objective,SquadStance::Offense,moved));                     // repeated tick
+    // A death reassigns at once; survivors keep their previous roles where the counts allow.
+    auto roleOf=[](const SquadPlan& p,int64_t id){for(const auto& o:p.orders)if(o.id==id)return o.role;return SquadRole::Attacker;};
+    auto lost=moved;lost[4].alive=false;auto after=stepSquad(c,s,2,objective,SquadStance::Offense,lost);
+    CHECK(after&&after->reassigned&&after->orders.size()==4&&(after->counts==std::array<uint32_t,4>{2,0,1,1}));
+    for(const auto& o:after->orders)if(roleOf(*plan,o.id)!=SquadRole::Defender)CHECK(o.role==roleOf(*plan,o.id));
+    // Capability masks: a support-only member takes the support slot; defense stance shifts the mix.
+    auto medic=team;medic[0].roles=roleBit(SquadRole::Support);SquadState m;auto mp=stepSquad(c,m,0,objective,SquadStance::Defense,medic);
+    CHECK(mp&&roleOf(*mp,10)==SquadRole::Support&&(mp->counts==std::array<uint32_t,4>{1,3,1,0}));
+    for(const auto& o:mp->orders)if(o.role==SquadRole::Defender)CHECK(fxAbs((o.goal-objective).length()-c.defendRadius)<=Fixed::fromRatio(1,100));
+    // Formation offsets.
+    auto line=formationOffsets(FormationShape::Line,3,2_fx);CHECK((line[0]==Vec2{-2_fx,{}}&&line[1]==Vec2{}&&line[2]==Vec2{2_fx,{}}));
+    auto wedge=formationOffsets(FormationShape::Wedge,3,2_fx);CHECK((wedge[0]==Vec2{}&&wedge[1]==Vec2{-2_fx,-2_fx}&&wedge[2]==Vec2{2_fx,-2_fx}));
+    auto column=formationOffsets(FormationShape::Column,2,2_fx);CHECK((column[1]==Vec2{{},-2_fx}));
+    // Invalid input.
+    SquadState fresh;auto dup=team;dup[1].id=10;CHECK(!stepSquad(c,fresh,0,objective,SquadStance::Offense,dup));
+    auto noRole=team;noRole[0].roles=0;CHECK(!stepSquad(c,fresh,0,objective,SquadStance::Offense,noRole));
+    auto bad=c;bad.offense={0,0,0,0};CHECK(!stepSquad(bad,fresh,0,objective,SquadStance::Offense,team));CHECK(!fresh.initialized);
+    roundtrip(s);
+}
+void objectives(){
+    ObjectiveWeights w;std::vector<ObjectiveInfo> list{
+        {1,ObjectiveKind::Capture,{{},{},10_fx},0,1000,0,0,0,true},     // neutral, near
+        {2,ObjectiveKind::Capture,{{},{},40_fx},2,1000,0,0,0,true},     // enemy-owned, far
+        {3,ObjectiveKind::Hold,{{},{},5_fx},1,1000,0,0,0,true},         // ours, uncontested
+        {4,ObjectiveKind::Capture,{{},{},12_fx},0,1000,0,0,0,false}};   // locked
+    auto pick=chooseObjective(w,1,{},list);CHECK(pick&&pick->id==1&&pick->stance==SquadStance::Offense);
+    list[2].enemies=3;pick=chooseObjective(w,1,{},list);CHECK(pick&&pick->id==3&&pick->stance==SquadStance::Defense); // our point under threat
+    list[2].enemies=0;list[1].progressMilli=1000;list[1].position.z=10_fx;pick=chooseObjective(w,1,{},list);CHECK(pick&&pick->id==2); // nearly taken
+    // Stickiness keeps the current choice against a marginally better one; equal scores tie by smaller id.
+    std::vector<ObjectiveInfo> twins{{7,ObjectiveKind::Capture,{{},{},10_fx},0,1000,0,0,0,true},{5,ObjectiveKind::Capture,{{},{},10_fx},0,1000,0,0,0,true}};
+    CHECK(chooseObjective(w,1,{},twins)->id==5&&chooseObjective(w,1,{},twins,7)->id==7);
+    std::vector<ObjectiveInfo> escort{{9,ObjectiveKind::Escort,{{},{},20_fx},1,1000,500,2,1,true}};pick=chooseObjective(w,1,{},escort);
+    CHECK(pick&&pick->id==9&&pick->stance==SquadStance::Defense&&pick->score==objectiveScore(w,1,{},escort[0],0));
+    CHECK(chooseObjective(w,1,{},std::span<const ObjectiveInfo>{})->id==0);
+    auto dup=list;dup[1].id=1;CHECK(!chooseObjective(w,1,{},dup));auto badProgress=list;badProgress[0].progressMilli=1001;CHECK(!chooseObjective(w,1,{},badProgress));
+    CHECK(!chooseObjective(w,0,{},list));auto badW=w;badW.distancePerMetre=-1;CHECK(!chooseObjective(badW,1,{},list));
+}
+void persistence(){
+    MeleeBotState m;m.initialized=true;m.target=2;m.threatAttack=1;m.threatStarted=4;m.lastTick=9;m.threatRead=true;m.defense=MeleeDefense::Guard;m.move=MeleeMove::Strafe;roundtrip(m);
+    ShooterBotState sh;sh.initialized=true;sh.target=3;sh.cover=1;sh.lastTick=5;sh.errorYaw=Fixed::fromRatio(1,300);sh.decision=ShooterDecision::Cover;sh.cooling=true;roundtrip(sh);
+    auto bytes=save(m);ShooterBotState wrong;CHECK(!load(bytes,wrong));                // kinds differ (56 vs 57)
+    auto corrupt=bytes;corrupt[4]=char(57);MeleeBotState into;CHECK(!load(corrupt,into));
+    MeleeBotState invalid=m;invalid.noticedAt=99;CHECK(save(invalid).empty());
+    ShooterBotState badErr=sh;badErr.errorYaw=1_fx;CHECK(save(badErr).empty());
+    SquadState q;q.initialized=true;q.lastTick=3;q.roles={{2,SquadRole::Support},{1,SquadRole::Attacker}};CHECK(save(q).empty()); // unsorted roles
+    std::swap(q.roles[0],q.roles[1]);roundtrip(q);
+    CHECK(genreBotHash(m)==genreBotHash(m)&&genreBotHash(m)!=genreBotHash(MeleeBotState{}));
+}
+void settings(const std::string& root){
+    auto parsed=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/genre/bot-settings.json"));
+    CHECK(parsed.value&&genreBotSettingsErrors(*parsed.value).empty());
+    auto melee=meleeBotConfig(*parsed.value);auto shooter=shooterBotConfig(*parsed.value);auto squad=squadConfig(*parsed.value);auto weights=objectiveWeights(*parsed.value);
+    CHECK(valid(melee)&&valid(shooter)&&valid(squad)&&valid(weights));
+    CHECK(melee.difficulty.reactionTicks==6&&melee.attackRange==Fixed::fromRatio(19,10)&&melee.dodgeMilli==700&&shooter.projectileSpeed==80_fx&&shooter.aim.maxIterations==6);
+    CHECK(squad.attackShape==FormationShape::Line&&squad.offense[3]==300&&weights.stickiness==250&&shooter.difficulty.aimError==Fixed::fromRatio(2000,1000000));
+    auto defaults=aiverse::lib::gameplay::readGameplaySettings(Json::parse(R"({"schemaVersion":1})"));CHECK(defaults.value&&genreBotSettingsErrors(*defaults.value).empty());
+    auto m=meleeBotConfig(*defaults.value);MeleeBotConfig d;CHECK(m.minRange==d.minRange&&m.maxRange==d.maxRange&&m.attackRange==d.attackRange&&m.strafeTicks==d.strafeTicks);
+    auto sd=shooterBotConfig(*defaults.value);ShooterBotConfig sdef;CHECK(sd.turnPerTick==sdef.turnPerTick&&sd.fireTolerance==sdef.fireTolerance&&sd.recoilTolerance==sdef.recoilTolerance&&sd.maxRange==sdef.maxRange);
+    auto read=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto r=read(R"({"schemaVersion":1,"genreBots":{"meleeMinRangeMilli":3000}})");CHECK(!r.value&&r.errors.at(0)=="genreBots.meleeMinRangeMilli: must not exceed meleeMaxRangeMilli");
+    r=read(R"({"schemaVersion":1,"genreBots":{"heatResumeMilli":950}})");CHECK(!r.value&&r.errors.at(0)=="genreBots.heatResumeMilli: must not exceed heatStopMilli");
+    r=read(R"({"schemaVersion":1,"genreBots":{"aimbot":1}})");CHECK(!r.value&&r.errors.at(0)=="genreBots.aimbot: unknown field");
+    r=read(R"({"schemaVersion":1,"genreBots":{"decisionTicks":0}})");CHECK(!r.value&&r.errors.at(0)=="genreBots.decisionTicks: integer out of range");
+    r=read(R"({"schemaVersion":1,"genreBots":{"useDodge":1}})");CHECK(!r.value&&r.errors.at(0)=="genreBots.useDodge: expected boolean");
+    r=read(R"({"schemaVersion":1,"genreBots":{"projectileSpeedMilli":10,"meleeAttackRangeMilli":500,"offenseAttackerMilli":0,"offenseDefenderMilli":0,"offenseSupportMilli":0,"offenseFlankerMilli":0}})");
+    CHECK(r.value);auto errors=genreBotSettingsErrors(*r.value);
+    CHECK(errors.size()==3&&errors[0]=="genreBots.meleeAttackRangeMilli: must be at least meleeMinRangeMilli"&&errors[1]=="genreBots.projectileSpeedMilli: must be 0 (hitscan) or 63..1000000"
+        &&errors[2]=="genreBots.offense*Milli: at least one role weight must be positive");
+    r=read(R"({"schemaVersion":1,"genreBots":{"projectileGravityMilli":9800}})");CHECK(r.value&&genreBotSettingsErrors(*r.value).at(0)=="genreBots.projectileGravityMilli: requires projectileSpeedMilli");
+}
+}
+void genreBots(const std::string& root){gbots::meleePolicy();gbots::shooterPolicy();gbots::squadRoles();gbots::objectives();gbots::persistence();gbots::settings(root);gbots::meleeDuels();gbots::gunDuels();}
+// ---- senses -> bots bridge: awareness gating, remembered vs visible, owner facts, ordering.
+void sensesBotBridge(){
+    using A=aiverse::lib::genre::Awareness;namespace sb=aiverse::lib::bots;namespace sg=aiverse::lib::genre;
+    std::vector<sg::PerceivedTarget> seen(5);
+    seen[0].observer=1;seen[0].target=9;seen[0].level=A::Alert;seen[0].visibleNow=true;seen[0].lastKnown={1_fx,{},{}};
+    seen[1].observer=1;seen[1].target=4;seen[1].level=A::Searching;seen[1].lastKnown={{},{},3_fx};
+    seen[2].observer=1;seen[2].target=7;seen[2].level=A::Suspicious;seen[2].visibleNow=true;
+    seen[3].observer=2;seen[3].target=5;seen[3].level=A::Alert;seen[3].visibleNow=true;
+    seen[4].observer=1;seen[4].target=0;seen[4].level=A::Searching;
+    auto facts=[](int64_t id)->std::optional<sb::TargetFacts>{if(id==6)return std::nullopt;sb::TargetFacts f;f.team=2;f.position={Fixed::fromInt(id),{},{}};f.velocity={1_fx,{},{}};f.guarding=true;return f;};
+    auto out=sb::perceivedFromSenses(std::span<const sg::PerceivedTarget>(seen),1,facts);
+    CHECK(out.size()==2&&out[0].id==4&&out[1].id==9);
+    CHECK(!out[0].visible&&out[0].position==(Vec3{{},{},3_fx})&&out[0].velocity==Vec3{}&&!out[0].guarding&&out[0].team==2);
+    CHECK(out[1].visible&&out[1].position==(Vec3{9_fx,{},{}})&&out[1].guarding&&out[1].velocity==(Vec3{1_fx,{},{}}));
+    sb::PerceptionFilter loose{A::Suspicious,A::Suspicious};auto all=sb::perceivedFromSenses(std::span<const sg::PerceivedTarget>(seen),1,facts,loose);
+    CHECK(all.size()==3&&all[1].id==7&&all[1].visible);
+    seen[0].target=6;CHECK(sb::perceivedFromSenses(std::span<const sg::PerceivedTarget>(seen),1,facts).size()==1);
+}
+int main(int argc,char** argv){try{CHECK(argc==2);movement();combat();weapons();matches();narrative(argv[1]);locomotionModes(argv[1]);combatActions(argv[1]);weaponBallistics(argv[1]);matchObjectives(argv[1]);stealthSenses(argv[1]);genreBots(argv[1]);sensesBotBridge();std::cout<<"Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story and save/restore: OK\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

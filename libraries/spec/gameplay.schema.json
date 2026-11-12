@@ -1086,6 +1086,326 @@
         }
       }
     },
+    "genreBots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reactionTicks": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "decisionTicks": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "aimErrorMicro": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 125000
+        },
+        "misreadMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "meleeMinRangeMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "meleeMaxRangeMilli": {
+          "type": "integer",
+          "default": 2200,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "meleeAttackRangeMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "meleeOpener": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "meleeStrafeTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "dodgeMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "useDodge": {
+          "type": "boolean",
+          "default": true
+        },
+        "useGuard": {
+          "type": "boolean",
+          "default": true
+        },
+        "useLockOn": {
+          "type": "boolean",
+          "default": true
+        },
+        "useCombos": {
+          "type": "boolean",
+          "default": true
+        },
+        "respectGuard": {
+          "type": "boolean",
+          "default": true
+        },
+        "shooterMinRangeMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "shooterPreferredRangeMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "shooterMaxRangeMilli": {
+          "type": "integer",
+          "default": 40000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "projectileSpeedMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "projectileGravityMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "turnPerTickMicro": {
+          "type": "integer",
+          "default": 15625,
+          "minimum": 1,
+          "maximum": 500000
+        },
+        "fireToleranceMicro": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 125000
+        },
+        "recoilToleranceMicro": {
+          "type": "integer",
+          "default": 20000,
+          "minimum": 0,
+          "maximum": 250000
+        },
+        "recoilCompensationMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "reloadIdleMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "heatResumeMilli": {
+          "type": "integer",
+          "default": 400,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "heatStopMilli": {
+          "type": "integer",
+          "default": 900,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "retreatHealthMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "coverDistanceWeight": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "shooterStrafeTicks": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 36000
+        },
+        "squadIntervalTicks": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 36000
+        },
+        "offenseAttackerMilli": {
+          "type": "integer",
+          "default": 450,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "offenseDefenderMilli": {
+          "type": "integer",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "offenseSupportMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "offenseFlankerMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseAttackerMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseDefenderMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseSupportMilli": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "defenseFlankerMilli": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "formationSpacingMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "supportDistanceMilli": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "flankDistanceMilli": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "defendRadiusMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "attackShape": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 3
+        },
+        "objectiveValueWeight": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveDistanceWeight": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "objectiveNeutralWeight": {
+          "type": "integer",
+          "default": 200,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveEnemyWeight": {
+          "type": "integer",
+          "default": 300,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveProgressWeight": {
+          "type": "integer",
+          "default": 300,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveContestedWeight": {
+          "type": "integer",
+          "default": 300,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveThreatenedWeight": {
+          "type": "integer",
+          "default": 400,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveIdleWeight": {
+          "type": "integer",
+          "default": -500,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveEscortWeight": {
+          "type": "integer",
+          "default": 200,
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "objectiveStickiness": {
+          "type": "integer",
+          "default": 150,
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      }
+    },
     "matchRules": {
       "type": "object",
       "additionalProperties": false,

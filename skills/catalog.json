@@ -426,6 +426,44 @@
       "keywords": []
     },
     {
+      "id": "aiverse-genre-bots",
+      "package": "genre-bots",
+      "path": "skills/aiverse-genre-bots/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic genre bot policies: melee spacing/attack timing/dodge-parry/lock-on, shooter aim/lead/burst/reload/overheat/cover, squad roles with formations and an objective choice hook",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_genre_bots",
+      "dependencies": [
+        "aiverse-combat-actions",
+        "aiverse-weapon-policies",
+        "aiverse-configuration",
+        "aiverse-stealth-senses"
+      ],
+      "backendDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/GenreBots.h",
+      "keywords": [
+        "bot",
+        "opponent",
+        "squad",
+        "role",
+        "formation",
+        "objective",
+        "melee",
+        "shooter",
+        "бот",
+        "противник",
+        "отряд",
+        "роль",
+        "формаци",
+        "цел"
+      ]
+    },
+    {
       "id": "aiverse-genre-kits",
       "package": "genre-kits",
       "path": "skills/aiverse-genre-kits/SKILL.md",
