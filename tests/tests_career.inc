@@ -85,3 +85,54 @@ TEST(career_lua_table) {
     for (auto& e : mod(*sim).scripts()->log()) if (e.error) std::printf("  log: %s\n", e.text.c_str());
     CHECK(mod(*sim).scripts()->errorCount() == 0 && mod(*sim).career()->rank(*sim, 1, mod(*sim).career()->find("police")) == 1);
 }
+
+TEST(prompts_show_pick_and_interact) {
+    Json rules = Json::parse(kCareerRules);
+    rules.set("prompts", Json::parse("true"));
+    Json list = Json::array(), src = Json::object();
+    list.push(Json::string("scripts/a.lua"));
+    src.set("scripts/a.lua", Json::string(R"(
+        function on_interact(player)
+          prompt.show(player, "hello", "Stranger", {"Nice day."}, {"Ask about work", "Bye"})
+        end
+        function on_prompt(player, what)
+          state.picked = what
+          if what == "hello:1" then prompt.show(player, "work", "Stranger", {"They hire at the docks."}, {"Thanks"}) end
+        end
+        function on_start()
+          assert(prompt.get(1) == nil)
+          assert(not prompt.show(1, "bad:id", "t", {}, {"x"}) and not prompt.show(1, "none", "t", {}, {}))
+        end
+    )"));
+    rules.set("scripts", list);
+    rules.set("$scriptSources", src);
+    SimConfig cfg;
+    auto sim = std::make_unique<Simulation>(cfg, std::make_unique<game::RtsModule>());
+    sim->setup(rules, Json::parse(flatMap(32, 16, kCareerMap)));
+    auto& pr = *mod(*sim).prompts();
+    auto send = [&](uint8_t player, int64_t param) {
+        Command c; c.player = player; c.type = game::kCmdPrompt; c.param = param; sim->submit(c);
+        for (int i = 0; i < 4; ++i) sim->step();
+    };
+    for (int i = 0; i < 3; ++i) sim->step();
+    CHECK(pr.active() && !pr.of(*sim, 1));
+    send(1, 0);                                   // nothing open: ignored
+    CHECK(!pr.of(*sim, 1));
+    send(1, game::kPromptInteract);
+    CHECK(pr.of(*sim, 1) && pr.of(*sim, 1)->id == "hello" && pr.of(*sim, 1)->options.size() == 2 && !pr.of(*sim, 2));
+    send(1, 5);                                   // no such option: stays open
+    send(2, 0);                                   // somebody else's prompt: ignored
+    CHECK(pr.of(*sim, 1) && pr.of(*sim, 1)->id == "hello");
+    std::string save = sim->serialize(), err;
+    auto copy = std::make_unique<Simulation>(cfg, std::make_unique<game::RtsModule>());
+    copy->setup(rules, Json::parse(flatMap(32, 16, kCareerMap)));
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum() && mod(*copy).prompts()->of(*copy, 1));
+    send(1, 0);                                   // "Ask about work": the script opens the next one
+    CHECK(pr.of(*sim, 1) && pr.of(*sim, 1)->id == "work" && pr.of(*sim, 1)->lines[0] == "They hire at the docks.");
+    send(1, 0);
+    CHECK(!pr.of(*sim, 1));
+    for (auto& e : mod(*sim).scripts()->log()) if (e.error) std::printf("  log: %s\n", e.text.c_str());
+    CHECK(mod(*sim).scripts()->errorCount() == 0);
+    auto plain = makeSimJson(kCareerRules, flatMap(32, 16, kCareerMap));
+    CHECK(!mod(*plain).prompts()->active() && !mod(*plain).prompts()->store(*plain));
+}
