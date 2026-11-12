@@ -1,4 +1,5 @@
 #pragma once
+#include <string_view>
 // JSON encounter data (boss-encounters). Integers only: lengths in milli-metres ("radiusMilli"), angles in
 // milli-turns ("halfAngleMilli": 167 = 60 degrees each side), times in ticks, multipliers in milli (1000 = x1).
 // {"ticksPerSecond":20,"statuses":[...],"attacks":[...],"bosses":[...],"schedule":{...},"mob":{...}}; see
@@ -40,8 +41,9 @@ inline std::vector<int64_t> encIds(const Json& j,const std::string& key,const st
     for(std::size_t i=0;i<a.size();++i)out.push_back(hitboxInteger(a[i],path+"."+key+"["+std::to_string(i)+"]",1,INT64_MAX));
     return out;
 }
-inline const Json& encArray(const Json& j,const std::string& key,const std::string& path,std::size_t max){
-    const auto& a=j[key];if(!a.isArray()||a.size()>max)throw JsonError(path+"."+key+": expected an array of at most "+std::to_string(max)+" entries");return a;
+// string_view by value: GCC 13 -Wdangling-reference flags reference-returning helpers given temporary strings
+inline const Json& encArray(const Json& j,std::string_view key,std::string_view path,std::size_t max){
+    const auto& a=j[std::string(key)];if(!a.isArray()||a.size()>max)throw JsonError(std::string(path)+"."+std::string(key)+": expected an array of at most "+std::to_string(max)+" entries");return a;
 }
 constexpr int64_t kMm=100000000;   // 100 km in milli-metres
 }

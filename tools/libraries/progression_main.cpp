@@ -42,7 +42,8 @@ bool step(Run& r,uint32_t tick){
     auto sr=stepSummons(r.summon,r.points,r.allies,tick,si);if(!sr)return false;
     for(const auto& q:sr->requests){
         auto slot=q.restore?q.slot:1;auto unit=q.restore?q.unit:p.deck.slots[1].unit;
-        if(!confirmSummon(r.summon,r.points,r.allies,q,r.nextEntity++,unit,slot,tick))return false;++r.summons;
+        if(!confirmSummon(r.summon,r.points,r.allies,q,r.nextEntity++,unit,slot,tick))return false;
+        ++r.summons;
     }
     return true;
 }

@@ -36,8 +36,9 @@ inline std::vector<int64_t> perksIds(const Json& j,const std::string& path){
     std::sort(out.begin(),out.end());if(std::adjacent_find(out.begin(),out.end())!=out.end())throw JsonError(path+": duplicate id");
     return out;
 }
-inline const Json& perksArray(const Json& j,const std::string& path,std::size_t limit){
-    if(!j.isNull()&&(!j.isArray()||j.size()>limit))throw JsonError(path+": expected an array of at most "+std::to_string(limit)+" entries");
+// string_view by value: GCC 13 -Wdangling-reference flags reference-returning helpers given temporary strings
+inline const Json& perksArray(const Json& j,std::string_view path,std::size_t limit){
+    if(!j.isNull()&&(!j.isArray()||j.size()>limit))throw JsonError(std::string(path)+": expected an array of at most "+std::to_string(limit)+" entries");
     return j;
 }
 inline int64_t statId(const Json& j,const std::string& path){
