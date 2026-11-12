@@ -328,6 +328,25 @@ public:
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer>) { dispatch_semaphore_signal(sem); }];
         firstPass_ = true;
     }
+    struct TimedCommand { uint64_t tag; id<MTLCommandBuffer> command; };
+    std::vector<TimedCommand> timedCommands_;
+    bool timeGpuFrame(uint64_t tag) override {
+        if (!cmd_ || timedCommands_.size() >= 64) return false;
+        timedCommands_.push_back({tag, cmd_});
+        return true;
+    }
+    std::vector<GpuTiming> takeGpuTimings() override {
+        std::vector<GpuTiming> out;
+        for (size_t i = 0; i < timedCommands_.size();) {
+            auto& t = timedCommands_[i];
+            const auto status = t.command.status;
+            if (status != MTLCommandBufferStatusCompleted && status != MTLCommandBufferStatusError) { ++i; continue; }
+            const double start = t.command.GPUStartTime, end = t.command.GPUEndTime;
+            out.push_back({t.tag, (end - start) * 1000.0, status == MTLCommandBufferStatusCompleted && start > 0 && end >= start});
+            timedCommands_.erase(timedCommands_.begin() + i);
+        }
+        return out;
+    }
     void endFrame() override {
         if (enc_) { [enc_ endEncoding]; enc_ = nil; }
         if (capture_ && drawable_ && captureDelay_-- <= 0 && !drawable_.texture.framebufferOnly) {

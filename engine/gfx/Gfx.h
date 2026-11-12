@@ -159,6 +159,13 @@ public:
     // The screen may be a copyColor source (Metal: drawables stop being framebuffer-only from the next frame).
     virtual void setScreenReadable(bool readable) { (void)readable; }
 
+    // Opt-in diagnostic samples. Call after beginFrame and before endFrame; poll later without stalling.
+    // GPU timeline interval, not busy-time: GL may include idle gaps waiting for CPU submission.
+    // Unsupported backends return false.
+    struct GpuTiming { uint64_t tag = 0; double milliseconds = 0; bool valid = false; };
+    virtual bool timeGpuFrame(uint64_t tag) { (void)tag; return false; }
+    virtual std::vector<GpuTiming> takeGpuTimings() { return {}; }
+
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;
     virtual void endFrame() = 0; // presents
