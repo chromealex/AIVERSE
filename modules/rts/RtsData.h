@@ -35,7 +35,9 @@ enum class Stat : uint8_t {
     Count };
 Stat parseStat(const std::string& s, bool* ok = nullptr);
 
-struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); };
+// lerp (statuses): the final value moves toward 1 by the summed lerp of all statuses (BW Lerp(totalDef, 1, suppress))
+// floor (statuses): the product of the holder's status multipliers on this stat stays >= floor (BW Slowdown2 1/3)
+struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); Fixed lerp{}; Fixed floor{}; };
 
 // What a modifier applies to: types with any of `tags`, or one `type`, or everything.
 struct ModTarget { uint64_t tags = 0; uint16_t type = kNoType; bool all = false; };
@@ -107,6 +109,7 @@ struct Amount { uint16_t res = 0; Fixed value{}; };
 #include "RtsAbilityData.h"
 #include "RtsGridFieldData.h"
 #include "RtsRaidData.h"
+#include <memory>
 #include "RtsRoutesData.h"
 namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
@@ -405,6 +408,7 @@ struct FogRules {
     // Heightfield maps with heights.blockVision use line of sight anyway.
     bool lineOfSight = false;
     Fixed rockHeight = Fixed::fromInt(2);     // undug diggable rock as a blocker (0 = transparent)
+    int ellipse = 1;                          // sight discs squashed along z: dx^2 + (ellipse dz)^2 <= r^2 (BW iso fog: 2)
 };
 
 struct HeightRules {
@@ -540,6 +544,7 @@ struct TrapDef {
     bool removeWhenEmpty = true;               // destroyed when the last charge is used
 };
 
+struct ProgressionRules;   // RtsProgressionData.h
 struct Rules {
     bool scriptedAI = false;                  // external RtsAI must yield to the game's controller
     bool bwAI = false;                        // ai.controller "bw": Bunker Wars bots (RtsBwAI.h, agent-bw-ai)
@@ -579,6 +584,9 @@ struct Rules {
     std::vector<std::string> statusTagNames;   // status tags (dispel), separate from type tags
     // built-in statuses used by effects that undo themselves (temporary capture, transform, links, illusions)
     int16_t stTemp = -1, stLink = -1, stRedirect = -1, stFake = -1;
+    bool anyCollect = false;
+    bool anyHitCap = false;
+    bool anyDeathGain = false; // a status has `deathGain`    // a status has `hitCap` (dealDamage checks the target's statuses)   // a status has `collect` (sysGarrison scans for receivers)
     size_t userStatuses = 0;                   // statuses defined by the game (built-ins come after)
     int loadoutSlots = 0;                      // >0: players pick at most this many player abilities (map "loadout")
     int findStatus(const std::string& id) const;
@@ -604,6 +612,7 @@ struct Rules {
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
     RaidRules raid;                            // rules "raid" (RtsRaidData.h): extraction raids
     CoreRules core;                            // battle core (rules "battleCore", RtsCore.cpp)
+    std::shared_ptr<const ProgressionRules> progression;   // rules "progression" (RtsProgressionData.h); null without the block
     ModesRules modes;                          // match modes, timed rules, resource levels, match stats (RtsModes.h)
 
     int findRoom(const std::string& id) const;

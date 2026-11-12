@@ -175,25 +175,26 @@ class ConverterTest(unittest.TestCase):
 
     def test_levels_filters_and_effects(self):
         A, rep = self.run_convert()
-        rage = A['bw_skill7']
+        rage = A['skill7']
         self.assertEqual(rage['target'], 'point')
         self.assertEqual(rage['cooldown'], 70)                       # GameData value of hero2|skill3|cooldown
-        self.assertEqual(rage['cost'], {'skillEnergy': 350})
+        self.assertEqual(rage['cost'], {'energy': 350})
         e = rage['effects'][0]
         self.assertEqual(e['type'], 'status')
         self.assertEqual(e['radius'], 5)                             # 250 px / 50
         self.assertEqual(e['affects'], 'own')
         self.assertEqual(e['duration'], 8)
+        self.assertEqual(e['aspect'], 0.5)                           # BW skill ranges are ellipses (world.aspectRatio)
         self.assertEqual(e['status']['mods'][0], {'stat': 'damage', 'mul': 1.5})
         lv2 = rage['levels'][0]
         self.assertEqual(lv2['cooldown'], 108)
         self.assertEqual(lv2['effects'][0]['radius'], 5.8)           # range + 40 px
         self.assertEqual(lv2['effects'][0]['status']['mods'][1], {'stat': 'speed', 'mul': 1.6})   # effectForce -> speedCoefficient (as in BW)
-        bomb = A['bw_skill9']
+        bomb = A['skill9']
         self.assertEqual(bomb['target'], 'structure')                # oneNearest points filter on a click
         self.assertEqual(bomb['effects'][0], {'type': 'garrisonKill', 'percent': 0.9, 'kind': 'structure', 'affects': 'enemies', 'shape': 'target'})
         self.assertEqual(bomb['effects'][1]['delay'], 1.5)
-        mines = A['bw_skill16']['effects'][0]
+        mines = A['skill16']['effects'][0]
         self.assertEqual(mines['lifetime'], [5, 7])                  # duration upgrade -> selfDestructionTimeout 6 +- 1
         self.assertTrue(mines['origins']['consume'])
         self.assertEqual(mines['origins']['maxTargets'], 15)

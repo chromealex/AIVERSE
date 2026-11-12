@@ -1,5 +1,6 @@
 #include "RtsData.h"
 #include "RtsEffectsData.h"
+#include "RtsProgressionData.h"
 #include "RtsBwAI.h"   // agent-bw-ai
 #include <algorithm>
 #include <stdexcept>
@@ -158,6 +159,8 @@ Rules loadRules(const Json& j) {
         r.fog.shareAllies = f.getBool("shareAllies", true);
         r.fog.lineOfSight = f.getBool("lineOfSight", false);
         r.fog.rockHeight = f.getFx("rockHeight", r.fog.rockHeight);
+        r.fog.ellipse = int(f.getInt("ellipse", 1));
+        if (r.fog.ellipse < 1 || r.fog.ellipse > 8) throw std::runtime_error("fogOfWar.ellipse: 1..8");
     }
     if (const Json& h = j["heights"]; h.isObject()) {
         r.heights.blockVision = h.getBool("blockVision", true);
@@ -320,6 +323,8 @@ Rules loadRules(const Json& j) {
         if (!ok) fail(where, "unknown stat '" + e.getStr("stat") + "'");
         m.add = e.getFx("add");
         m.mul = e.getFx("mul", Fixed::fromInt(1));
+        m.lerp = e.getFx("lerp");
+        m.floor = e.getFx("floor");
         return m;
     };
     auto tagsOf = [&](const Json& arr) {
@@ -771,6 +776,7 @@ Rules loadRules(const Json& j) {
     }
     loadOriginals(r, j, ep);   // fidelity mechanics (RtsOriginalsData.cpp)
     loadFidelity(r, j, ep);    // foundations, traps (RtsFidelityData.cpp)
+    loadProgressionRules(r, j, ep);   // RtsProgressionData.cpp: rules "progression" (on-hit payloads count for the effect engine)
     loadModes(r, j);           // match modes, timed rules, resource levels (RtsModesData.cpp)
     // built-in statuses (internal ids start with '_')
     r.userStatuses = r.statuses.size();
@@ -788,7 +794,7 @@ Rules loadRules(const Json& j) {
     // anything beyond the original instant effects switches the effect engine on (old games stay bit-identical)
     bool adv = r.userStatuses > 0 || r.loadoutSlots > 0 || !r.traps.empty();
     for (auto& t : r.types) if (t.onDeath >= 0) adv = true;
-    for (auto& pl : r.payloads) for (auto& e : pl) if (e.kind > EffectKind::Blink || e.chance < Fixed::fromInt(1) || e.randomAmount || e.limit > 0 || e.filter.explicitShape) adv = true;
+    for (auto& pl : r.payloads) for (auto& e : pl) if (e.kind > EffectKind::Blink || e.chance < Fixed::fromInt(1) || e.targetChance < Fixed::fromInt(1) || e.randomAmount || e.limit > 0 || e.filter.explicitShape) adv = true;
     for (auto& rs : r.resources) if (rs.regen.raw != 0) adv = true;
     for (auto& t : r.types) {
         if (!t.statuses.empty() || t.blocksLanes || t.level != 1) adv = true;

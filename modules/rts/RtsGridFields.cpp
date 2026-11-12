@@ -355,7 +355,9 @@ void GridFields::spread(GridFieldStore::Field& f, const GridFieldDef& d, const F
         });
     }
     const int nb = k.eight ? 8 : 4;
-    const bool random = k.chance > 0 || k.fuelChance > 0;
+    // spread chance scale (map environment: rain lowers the grass fire spread, BW grassRainBurnRandomFactor)
+    const int64_t scale = size_t(fi) < spreadScale_.size() ? spreadScale_[size_t(fi)] : 65536;
+    const bool random = k.chance > 0 || k.fuelChance > 0 || scale < 65536;
     std::vector<std::pair<size_t, int32_t>> ignite;
     for (int l = 0; l < f.layers; ++l) {
         const size_t base = size_t(l) * f.cells();
@@ -370,7 +372,8 @@ void GridFields::spread(GridFieldStore::Field& f, const GridFieldDef& d, const F
                 int32_t fuel = 0;
                 if (!fuelOk(sim, fi, k, kIndex, n, fuel)) continue;
                 if (random) {
-                    const int64_t p = std::min<int64_t>(65536, k.chance + int64_t(k.fuelChance) * fuel);
+                    int64_t p = (k.chance > 0 || k.fuelChance > 0) ? std::min<int64_t>(65536, k.chance + int64_t(k.fuelChance) * fuel) : 65536;
+                    p = p * scale >> 16;
                     if (int64_t(sim.rng().below(65536)) >= p) continue;
                 }
                 ignite.push_back({n, k.set});

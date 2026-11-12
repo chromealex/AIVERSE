@@ -42,9 +42,11 @@ enum StatusFlag : uint32_t {
     kStFreezeRegen = 1u << 13, // player: resource regeneration stops
     kStAlert = 1u << 14,       // player: alerts about groups sent at own structures
     kStRevealed = 1u << 15,    // visible to everyone (cancels invisibility)
+    kStUntargetable = 1u << 16, // weapons don't pick it as a target; effects still reach it (BW blind spot)
+    kStSkillImmune = 1u << 17, // effect filters skip it (BW ignoreSkillUnitsFilter)
 };
 
-enum class Stacking : uint8_t { Refresh, Stack, Independent };
+enum class Stacking : uint8_t { Refresh, Stack, Independent, Keep };   // Keep: a running one is left as it is (BW freeze)
 
 struct StatusDef {
     std::string id, name;
@@ -64,6 +66,26 @@ struct StatusDef {
     std::vector<Amount> incomeMult;     // player: multiplier per resource on income / regen
     Fixed garrisonPerSecond{};          // structure: +/- garrison units per second (plague, reinforcements)
     Json view;
+    // skill objects (RtsSkillObjects.cpp)
+    Fixed spreadChance = Fixed::fromInt(1); // `spreads`: chance a carrier infects the structure it enters
+    uint32_t slots = 0;                 // player silence: only these loadout slots (bit i = slot i; 0 = all)
+    int16_t onSpawn = -1;               // structure: payload on every unit it sends out (target = the unit)
+    bool endOnCapture = false;          // removed without onExpire when the structure changes owner
+    bool commandable = false;           // structure: the status owner may send from it once (hypnosis)
+    bool commandCapture = false;        // ... and the units sent become the status owner's
+    Fixed commandPercent{};             // ... share of the garrison sent (0 = as the send command says)
+    // `transfer`: the holder's owner's next send from it teleports the units (BW Teleport dig): grab over
+    // transferGrab s, travel route length / transferSpeed, fill the target over transferFill s
+    bool transfer = false;
+    Fixed transferGrab{}, transferFill{}, transferSpeed = Fixed::fromInt(1), transferPercent = Fixed::fromInt(1);
+    // `collect` (BW RedirectProduction): the production of the holder's owner's other structures goes into the holder;
+    // those structures grow collectAdd units / s instead (a newer collect of the same player takes over the pool)
+    bool collect = false;
+    Fixed collectAdd{};
+    // `hitCap` (BW KillAura.AttemptToKill): weapon hits on the holder are absorbed and cut the time left to hitCap s
+    Fixed hitCap{};
+    bool endWhenEmpty = false;          // structure: ends at a due tick when its garrison is empty (upkeep paid by the tick)
+    std::vector<Amount> deathGain;      // unit: its owner gains this when it is killed or spent assaulting (BW UnitsSacrifice)
 };
 
 enum class Shape : uint8_t { Target, Circle, Line, Cone, Ring, Map, Group };
@@ -88,10 +110,12 @@ struct TargetFilter {
     bool ownFirst = false;
     std::string area;                   // map area name (triggers' "areas")
     bool explicitShape = false;
+    uint8_t route = 0;                  // 1: only units walking to ctx.target, 2: only units that left ctx.target
+    Fixed aspect = Fixed::fromInt(1);   // ellipse: z radius = radius x aspect (BW world.aspectRatio)
 };
 
 enum class AreaTrigger : uint8_t { Once, Periodic, Contact };
-enum class AreaMotion : uint8_t { Static, Toward, Lane, Wander, Follow };
+enum class AreaMotion : uint8_t { Static, Toward, Lane, Wander, Follow, Orbit };
 
 // How an effect's payload travels (projectiles, areas, chains).
 struct DeliveryDef {
@@ -127,6 +151,12 @@ struct DeliveryDef {
     Fixed lifetimeMax{};                // lifetime: [min, max] rolled with the sim RNG
     Fixed accel{}, minSpeed{}, maxSpeed{}; // pull: velocity profile (speed = start velocity)
     bool fromPoint = false;             // projectile starts at the effect point instead of the caster
+    Fixed grow{};                       // area radius = grow x seconds since it fired (BW filter rangeVelocity)
+    Fixed orbitA{}, orbitB{}, orbitSpeed{}, orbitExpand{}; // orbit: ellipse half axes, degrees / s, seconds to full size
+    Fixed stagger{};                    // cast: the k-th target gets the payload k x stagger s later
+    std::vector<Vec2> offsets;          // cast: the payload runs at these points around ctx.point (cells; x, z), k-th after k x stagger
+    bool shuffle = false;               // ... in a random order (BW UnitsBlizzardRain explosionPositions)
+    int shots = 0;                      // ... this many, cycling through the (shuffled) offsets (0: each offset once)
 };
 
 // DeliveryDef::goal
@@ -151,6 +181,9 @@ enum class EffectKind : uint8_t {
     Script,     // {"type": "script", "fn": "name", ...}: a Lua function (RtsScript.h), runs in the tick's scripts phase
     Field,      // {"type": "field", "field": id, "add" | "set" | "max": n, "radius": r}: grid field cells (RtsGridFields.h)
     Pull,       // magnet (RtsSkillObjects.cpp): units fly straight into the goal structure with a velocity profile
+    Defeat,     // the players chosen by the filter lose (BW PointsEndGameOnCatch: DefeatEnemies)
+    GarrisonSend, // a share of the garrison walks out as the owner's sends to the nearest structures of `runTo` (BW Panic)
+    CloseGroups,  // groups still leaving the structure stop (the rest stays home; BW WarChains)
 };
 
 struct EffectDef {
@@ -195,6 +228,18 @@ struct EffectDef {
     uint8_t fieldOp = 0;       // 0 add, 1 set, 2 max
     Fixed fieldAmount{};
     int32_t fieldValue = 0;    // fieldAmount in the field's raw units
+    // skill objects (RtsSkillObjects.cpp)
+    int budget = 0;            // > 0: at most this many targets over the life of the area / status it runs in
+    bool areaRadius = false;   // radius "area": the radius of the area it runs in (growing areas)
+    Fixed levels{};            // Resource: change by this many resource levels (morale stars), fractional
+    bool levelsMax = false;    // Resource: to the top level
+    uint32_t slotMask = 0;     // Cooldown: only these loadout slots (bit i = slot i; 0 = all)
+    Fixed durationMax{};       // duration: [min, max] rolled per target
+    Fixed every{};             // inside an area / status tick: applied only every N s of its life
+    int16_t runTo = -1;        // GarrisonSend: payload with one Cast effect whose filter (relative to the structure owner) picks destinations
+    int maxPoints = 1;         // GarrisonSend: destinations
+    Fixed targetChance = Fixed::fromInt(1); // each target is kept with this chance (rolled per target)
+    bool swapType = false;     // Swap with `with`: the structures exchange types (level) too; `effects` then run on both
 };
 
 // What autocast / the AI aims a skill at.

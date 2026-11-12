@@ -58,6 +58,11 @@ bool Environment::mouroExecute(Simulation& sim, EnvState& st, const EnvActionDef
     // BW ResetCastSkillValues: the bot's skills are ready again (cooldowns); the cast itself is free
     GameState& gs = m_->state(sim);
     if (bot < gs.playerAbilities.size()) for (auto& ps : gs.playerAbilities[bot]) ps.readyAt = 0;
+    if (def_.mouro.energy >= 0 && bot < gs.players.size()) {   // skillEnergy = maxSkillEnergy
+        auto& pe = gs.players[bot];
+        const size_t r = size_t(def_.mouro.energy);
+        if (r < pe.stock.size() && r < pe.cap.size() && pe.cap[r].raw > 0) pe.stock[r] = pe.cap[r];
+    }
     switch (a.kind) {
     case kActCastAt: case kActCastRing:
         cast(sim, bot, a.skill, def_.mouro.castPos);
@@ -78,8 +83,10 @@ bool Environment::mouroExecute(Simulation& sim, EnvState& st, const EnvActionDef
         return true;
     }
     case kActSkeletons: {
+        // BW GetFilteredPoints: the points the skill's own filter accepts for the bot
         std::vector<Entity> pts;
-        w.each<Garrison, Owner>([&](Entity e, Garrison&, Owner& o) { if (o.player == player) pts.push_back(e); });
+        const int payload = R.playerAbilities[size_t(a.skill)].payload;
+        w.each<Garrison, Owner>([&](Entity e, Garrison&, Owner&) { if (m_->envFilterAccepts(sim, payload, e, bot)) pts.push_back(e); });
         int casted = 0;
         for (int k = 0; k < a.targetCount && !pts.empty(); ++k) {
             const size_t idx = sim.rng().below(uint32_t(pts.size()));
@@ -224,7 +231,10 @@ void Environment::scroller(Simulation& sim, EnvState& st) {
             state = 1;
             switch (a.kind) {
             case kScrWaitTime: st.scrollerTimer[i] = a.seconds; break;
-            case kScrMove: st.screenFrom = st.screenPos; st.scrollerTimer[i] = Fixed{}; break;
+            case kScrMove:
+                st.screenFrom = m_->screen().enabled ? m_->screenCenter(sim) : st.screenPos;
+                st.scrollerTimer[i] = Fixed{};
+                break;
             case kScrConvertAll: {
                 w.each<Garrison, Owner>([&](Entity e, Garrison&, Owner& o) {
                     if (o.player == who) return;
@@ -291,6 +301,7 @@ void Environment::scroller(Simulation& sim, EnvState& st) {
                 Fixed k = a.seconds.raw > 0 ? fxMin(st.scrollerTimer[i] / a.seconds, Fixed::fromInt(1)) : Fixed::fromInt(1);
                 st.screenPos = st.screenFrom + (a.pos - st.screenFrom) * k;
             }
+            if (m_->screen().enabled) m_->setScreenCenter(sim, st.screenPos);   // one screen: routes' multiscreen
             break;
         case kScrGoto:
             done();
@@ -363,6 +374,85 @@ void Environment::autos(Simulation& sim, EnvState& st) {
             ++k;
         }
     }
+}
+
+// ================================================================= multi-spline auto skills
+
+namespace {
+// BW AutoSkill.GetTransferSpline: Catmull-Rom over [from: last two points (loop: last, first)] + [to: first two],
+// with the head and tail point cut: the curve from the end of one spline to the start of the next.
+EnvSpline transferSpline(const EnvSpline& a, const EnvSpline& b) {
+    const auto& pa = a.points; const auto& pb = b.points;
+    std::vector<Vec3> p;
+    if (!a.loop) { p.push_back(pa[pa.size() - 2]); p.push_back(pa.back()); } else { p.push_back(pa.back()); p.push_back(pa.front()); }
+    p.push_back(pb[0]); p.push_back(pb[1]);
+    EnvSpline full; full.build(p, false);
+    EnvSpline t;   // keep the middle segment (nodes 10..20 of 3 segments x 10)
+    for (size_t k = 10; k <= 20 && k < full.nodes.size(); ++k) t.nodes.push_back(full.nodes[k]);
+    t.points = {p[1], p[2]};
+    t.cum.assign(t.nodes.size(), Fixed{});
+    for (size_t k = 1; k < t.nodes.size(); ++k) t.cum[k] = t.cum[k - 1] + (t.nodes[k] - t.nodes[k - 1]).xz().length();
+    t.length = t.cum.empty() ? Fixed{} : t.cum.back();
+    return t;
+}
+}
+
+void Environment::multiAutos(Simulation& sim, EnvState& st) {
+    World& w = sim.world();
+    const Fixed dt = sim.dt();
+    for (size_t i = 0; i < def_.multis.size() && i < st.multis.size(); ++i) {
+        const EnvMultiDef& md = def_.multis[i];
+        EnvMulti& mu = st.multis[i];
+        // BW MultiSplineSkill.GetSplineIndex: next in order, or a random one with randomJump
+        auto next = [&](int prev) { return md.random ? int(sim.rng().below(uint32_t(md.count))) : (prev < 0 ? 0 : (prev + 1) % md.count); };
+        if (!mu.created) {
+            // emitted once (no emit period), when the first spline lies on the screen
+            const int idx = next(-1);
+            bool onScreen = true;
+            for (auto& p : def_.splines[size_t(idx)].points) if (!insideScreen(sim, p)) onScreen = false;
+            if (!onScreen) continue;
+            mu.created = true;
+            std::vector<Entity> areas;
+            cast(sim, 0, md.skill, def_.splines[size_t(idx)].points.front(), kNullEntity, &areas);
+            for (Entity a : areas) mu.moving.push_back({a, Fixed{}, idx, -1, false});
+        }
+        for (size_t k = 0; k < mu.moving.size();) {
+            auto& mv = mu.moving[k];
+            if (!w.alive(mv.area)) { mu.moving.erase(mu.moving.begin() + long(k)); continue; }
+            const Fixed vel = def_.splines[size_t(mv.cur)].velocity;
+            mv.dist += dt * vel;
+            EnvSpline tr;
+            auto current = [&]() -> const EnvSpline& {
+                if (mv.transfer && mv.from >= 0) { tr = transferSpline(def_.splines[size_t(mv.from)], def_.splines[size_t(mv.cur)]); return tr; }
+                return def_.splines[size_t(mv.cur)];
+            };
+            const EnvSpline* sp = &current();
+            if (mv.dist >= sp->length) {
+                mv.dist -= sp->length;
+                const int from = mv.cur, to = next(from);
+                const bool wasTransfer = mv.transfer;
+                mv.cur = to;
+                mv.transfer = md.transfer && !wasTransfer;
+                mv.from = mv.transfer ? from : -1;
+                // BW: the end of a transfer advances the spline index once more (transferSpline = null, next index)
+                sp = &current();
+            }
+            Transform& t = w.get<Transform>(mv.area);
+            Vec3 cur{t.pos.x, Fixed{}, t.pos.z};
+            moveTowards(cur, sp->at(mv.dist), dt * vel);
+            t.pos.x = cur.x; t.pos.z = cur.z;
+            ++k;
+        }
+    }
+}
+
+bool RtsModule::envFilterAccepts(Simulation& sim, int payload, Entity e, uint8_t owner) const {
+    for (int depth = 0; depth < 4 && payload >= 0 && size_t(payload) < rules_.payloads.size() && !rules_.payloads[size_t(payload)].empty(); ++depth) {
+        const EffectDef& ef = rules_.payloads[size_t(payload)][0];
+        if ((ef.kind == EffectKind::Area || ef.kind == EffectKind::Projectile || ef.kind == EffectKind::Chain) && ef.payload >= 0) { payload = ef.payload; continue; }
+        return filterOk(sim, ef.filter, e, owner, kNullEntity);
+    }
+    return sim.world().has<Owner>(e) && hostile(sim, owner, sim.world().get<Owner>(e).player);
 }
 
 } // namespace aiverse::game

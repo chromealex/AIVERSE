@@ -15,10 +15,16 @@ public:
 private:
     struct Instance { size_t model=0;render::mat4 transform; };
     struct Prepared final:AsyncChunkStream::Resource {
-        std::vector<std::unique_ptr<render::Model>> models;
+        std::vector<std::shared_ptr<render::Model>> models;
+        std::vector<std::string> sharedKeys;                  // cache key per model, empty: owned by this chunk
         std::vector<Instance> instances;
     };
+    struct ModelCache;
     WorldAssets assets_;
+    std::shared_ptr<ModelCache> cache_;                       // "shareModels": one decoded / uploaded model per file
+    bool shareModels_=false;
+    float overhang_=0;                                        // "meshOverhang": units a mesh may reach past its chunk
+    void releaseChunk(gfx::Device&,Prepared&);
     size_t uploadBytes_=16*1024*1024;
     std::map<Cell,std::shared_ptr<Prepared>> resident_;
     std::unique_ptr<AsyncChunkStream> stream_;

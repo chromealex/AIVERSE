@@ -45,7 +45,7 @@ void RtsModule::sysTargeting(Simulation& sim) {
             const UnitType& ct = rules_.types[cu->type];
             if (ct.invulnerable || !layerHit(layers, ct.layer)) return;
             if (!hostile(sim, o.player, w.get<Owner>(cand).player)) return;
-            if (rules_.advancedEffects) { uint32_t fl = statusFlags(sim, cand); if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, cand, o.player))) return; }
+            if (rules_.advancedEffects) { uint32_t fl = statusFlags(sim, cand); if (fl & kStUntargetable) return; if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, cand, o.player))) return; }
             Vec3 cp = w.get<Transform>(cand).pos;
             Fixed d = dist2D(cp, tr.pos);
             if (d > sight) return;
@@ -76,6 +76,18 @@ void RtsModule::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t d
     if (rules_.advancedEffects) {
         uint32_t fl = statusFlags(sim, target);
         if (fl & kStInvulnerable) return;
+        if (wd && rules_.anyHitCap)
+            if (auto* st = w.tryGet<Statuses>(target)) {
+                bool absorbed = false;
+                for (auto& in : st->list) {
+                    const Fixed cap = rules_.statuses[in.def].hitCap;
+                    if (cap.raw <= 0 || in.until <= sim.tick()) continue;
+                    const uint32_t end = sim.tick() + std::max<uint32_t>(1, uint32_t((cap * int64_t(sim.tickRate())).toInt()));
+                    if (in.until > end) in.until = end;
+                    absorbed = true;
+                }
+                if (absorbed) return;
+            }
         if (fl & kStFake) { u->hp = Fixed{}; u->flags |= kUnitSilent; return; }  // illusions pop on any hit
         fin = fin * stat(sim, target, Stat::DamageTaken);
         if (auto* st = w.tryGet<Statuses>(target))
@@ -90,6 +102,7 @@ void RtsModule::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t d
             if (ls.raw > 0) { Unit& su = w.get<Unit>(source); su.hp = fxMin(stat(sim, source, Stat::MaxHp), su.hp + fin * ls); }
         }
     }
+    if (progression_ && progression_->active()) fin = progression_->damage(sim, target, source, fin);   // perks: crits, incoming damage (RtsProgression.cpp)
     if (script_ && (script_->hooks() & ScriptEngine::kHookDamage)) fin = script_->beforeDamage(sim, target, source, sourceOwner, fin, dmgType);   // before_damage (G12)
     u->hp -= fin;
     if (sourceOwner != 0) u->lastAttacker = sourceOwner;
@@ -177,6 +190,7 @@ void RtsModule::sysWeapons(Simulation& sim) {
             if (wd.projectileSpeed.raw <= 0) {
                 dealDamage(sim, c.target, dmg, dtype, e, o.player, &wd);
                 if (proc) onHits.push_back({wd.onHit, e, c.target, o.player, u.type, tp});
+                if (progression_ && progression_->active()) if (int16_t ph = progression_->hitPayload(sim, e); ph >= 0) onHits.push_back({ph, e, c.target, o.player, u.type, tp});   // perk on-hit (burn, stun)
                 if (enchant >= 0) onHits.push_back({enchant, e, c.target, o.player, u.type, tp});
                 if (wd.splash.raw > 0) {
                     gs.hash.query(tp, wd.splash, [&](Entity s) {
@@ -199,7 +213,10 @@ void RtsModule::sysWeapons(Simulation& sim) {
     for (auto& s : shots) { // created after the loop: adding components may reallocate pools
         Entity p = w.create();
         w.add<Transform>(p, Transform{s.start, s.start, Fixed{}});
+        const bool perks = progression_ && progression_->active();
+        if (perks) progression_->beforeShot(sim, s.pr);   // bullet perks (split / ricochet / fly-through), splash, on-hit
         initProjectileProgram(sim, s.pr, s.start);
+        if (perks) progression_->afterShot(sim, s.pr);
         w.add<Projectile>(p, s.pr);
         w.add<Owner>(p, Owner{s.pr.owner});
     }
@@ -249,8 +266,7 @@ void RtsModule::sysProjectiles(Simulation& sim) {
         }
         if (w.alive(pr.target) && w.has<Unit>(pr.target)) { pr.aim = lift(sim, w.get<Transform>(pr.target).pos, Fixed::fromRatio(4, 10)); }
         if (!moveTowards(tr.pos, pr.aim, pr.speed * dt)) return;
-        const WeaponDef* pwd = pr.weapon >= 0 && pr.sourceType < rules_.types.size() && size_t(pr.weapon) < rules_.types[pr.sourceType].weapons.size()
-                               ? &rules_.types[pr.sourceType].weapons[size_t(pr.weapon)] : nullptr;
+        const WeaponDef* pwd = projectileWeapon(pr);
         if (w.alive(pr.target) && w.has<Unit>(pr.target)) dealDamage(sim, pr.target, pr.damage, pr.damageType, pr.source, pr.owner, pwd);
         if (pr.onHit >= 0 && w.alive(pr.target)) onHits.push_back({pr.onHit, pr.source, pr.target, pr.owner, pr.sourceType, pr.aim});
         if (pr.splash.raw > 0) {
@@ -318,6 +334,7 @@ void RtsModule::castAbility(Simulation& sim, Entity caster, int index, Entity ta
     if (a.target == TargetKind::Self || a.target == TargetKind::None) { target = caster; point = w.get<Transform>(caster).pos; }
     if (w.alive(target) && w.has<Transform>(target)) point = w.get<Transform>(target).pos;
     sim.emit({kEvAbility, owner, caster, target, index, point});
+    if (encounters_ && encounters_->active()) encounters_->onAbility(sim, caster, index, target, point);   // telegraphed attacks bound to the ability
     if (rules_.mech.toggles && mechToggle(sim, caster, index)) return;   // agent-mech: cloak / burrow / siege mode
     if (!rules_.advancedEffects) { applyEffects(sim, caster, owner, casterType, a.effects, target, point); return; }
     const AbilityDef& al = abilityFor(sim, caster, index);
@@ -521,6 +538,7 @@ void RtsModule::grantKill(Simulation& sim, Entity victim, uint8_t killer) {
     const UnitType& vt = rules_.types[vu.type];
     const Vec3 vp = w.get<Transform>(victim).pos;
     const uint8_t victimOwner = w.get<Owner>(victim).player;
+    if (victimOwner == 0 && arsenal_ && arsenal_->active()) { arsenal_->neutralKill(sim, victim, killer); return; }   // parked cars (rules arsenal.payNeutral)
     if (killer == 0 || killer == kHostileNeutral || !hostile(sim, killer, victimOwner)) return;
     // bounty
     for (auto& b : vt.bounty) addResource(sim, killer, b.res, b.value);
@@ -598,6 +616,7 @@ void RtsModule::sysDeath(Simulation& sim) {
                 break;
             }
             if (rules_.advancedEffects) noteDeathInAreas(sim, e, pos);   // onDeath areas (RtsSkillObjects.cpp)
+            if (rules_.anyDeathGain) payDeathGain(sim, e, owner);
             grantKill(sim, e, u.lastAttacker);
             if (!t.wreck.empty() && wreckType >= 0) leftovers.push_back({uint16_t(wreckType), pos, int16_t(t.wreck[0].res), t.wreck[0].value});
             sim.emit({kEvDied, owner, e, u.lastHitBy, u.type, pos});

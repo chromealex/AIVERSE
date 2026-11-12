@@ -13,12 +13,13 @@ payload per player (SpawnWanderData) and a compatibility key that splits incompa
 | Secure transport | `engine/net/SecureUdp.*`, `Datagram.h` | encrypted UDP with handshake, replay window, NAT rebinding, battle ping |
 | Mobile link simulator | `engine/net/SimNet.*` | loss, bursts, latency, jitter, duplicates, rebinding, app suspend on a virtual clock |
 | Loss tolerance | `ReliableChannel::setRedundancy` (`engine/net/Reliable.*`) | repeats small unacked messages at a growing interval |
-| Hero input | `engine/net/HeroInput.h` | sticky quantized stick / aim / buttons commands, one-shot actions |
+| Hero input | `engine/net/HeroInput.h` | the one hero wire format: `kCmdHeroInput` = RTS `kCmdTopDown`, `kCmdHeroAbility` = `kCmdTopDownAbility` |
 | Correction smoothing | `engine/net/Smoothing.h`, `RollbackSession::setRollbackHook` | blends rollback corrections in presentation |
 | Hosted battles | `engine/net/server/ServerHosted.cpp`, `BattleProtocol.*` | allocation, seating by ticket, start payload, result consensus, reports |
 | Control plane | `engine/net/server/BattleControl.*` | signed JSON over TCP: allocate / release / status / reports |
 | Client lifecycle | `NetClient::suspend / resume / matchPayload / setResultReporter` | background / foreground, payload, result blob |
 | Tools | `apps/battle` (`aiverse_battle`), `aiverse_server --battle-port ...` | keys, tickets, control client, ping, headless load test |
+| RTS battles | `apps/battle/RtsBattle.*` | a top-down RtsModule project (topdown_arena, extraction, Drone Fall) on the load harness |
 | Tests | `tests/net_mobile/battle_tests.cpp` (`aiverse_battle_tests`) | everything above |
 
 ## Flow of one battle
@@ -93,22 +94,25 @@ jitter. Plain `connectUdp` keeps the old behaviour (redundancy off).
 ## Rollback and prediction for a direct-control hero
 
 The existing `RollbackSession` (server-confirmed input, client prediction, snapshots, re-simulation)
-drives the battle. Hero input travels as **sticky state** (`HeroInput.h`):
+drives the battle. Hero input travels as **sticky state** (`HeroInput.h`). There is one scheme: the RTS
+module's top-down heroes (docs/topdown.md) use the engine-reserved ids, so games, the server's command filter, the
+load test and the tools all speak it.
 
-- `kCmdHeroInput` (0xF100) carries the full quantized state in `Command::param`: a move sector
-  (default 32 sectors) and magnitude, aim in millidegrees (`kAimReleased` = released), and held
-  buttons (bit 0 = fire). The simulation keeps it until the next one. `HeroInputQuantizer` sends a
-  command only when the quantized state changes, as Drone Fall's `HandleMovement` does.
+- `kCmdHeroInput` (0xF100) = `kCmdTopDown`: `topdown::pack(Input)` in `Command::param`: move angle in binary
+  turns (0 = +z, 16384 = +x) and magnitude (per mille), aim angle and the aim / fire bits. The simulation keeps it
+  until the next one and re-quantizes it to its rules (Drone Fall: 45 sectors, full speed or nothing).
+  `HeroInputQuantizer` (or the client's `TopDownControls`) sends a command only when the quantized state
+  changes, as Drone Fall's `HandleMovement` does.
 - When a remote player sends nothing, the session predicts "no command". With sticky state, that
   means "same input as before", so remote heroes keep moving and shooting. A misprediction only
   happens when a remote player changes input, and costs a short rollback.
-- `kCmdHeroAction` (0xF101) is for one-shot actions: ability or perk press, release or tap, with an
-  optional target point (`heroActionCommand`).
-- The simulation decodes with `unpackHeroInput`, `heroMoveVector(state, sectors)` and
-  `heroAimVector(state)`. These are fixed-point and turn-based (`FixedMath.h`). Hostile bit patterns
-  are clamped.
-- The hero controller module (agent-topdown-control) applies these in `GameModule::applyCommand`.
-  Hosted allocations can restrict a match to these types (`allowedCommands`) and to
+- `kCmdHeroAbility` (0xF101) = `kCmdTopDownAbility`: one button event, `topdown::abilityParam(Ability)`: ability
+  index (255 = escape), phase (tap, press, release, cancel), optionally the button's stick direction and distance;
+  `Command::point` for a cursor / preview point. A bare index (stage-1 clients) is a tap. `net::kCmdHeroAction` is
+  kept as an alias of `kCmdHeroAbility`.
+- The simulation decodes with `topdown::unpack` / `unpackAbility` and the fixed-point `moveVector`, `aimVector`,
+  `directionXZ`. Hostile bit patterns are clamped or rejected.
+- Hosted allocations restrict a match to these types (`allowedCommands = {kCmdHeroInput, kCmdHeroAbility}`) and to
   `maxCommandsPerTick` per player. Anything else is dropped on the server and counted in the report.
 - `battleSettings(tickRate)` gives the mobile room settings: input delay 1, rollback window
   `max(8, 0.6 s)` (12 at 20 Hz), lag tolerance 250 ms, a checksum every second, no spectators.
@@ -118,11 +122,17 @@ drives the battle. Hero input travels as **sticky state** (`HeroInput.h`):
   `fn(false)` after the re-simulation, both at the same tick. Read hero positions in both calls and
   pass the difference to `CorrectionSmoother::correct()`. Draw at the interpolated sim position plus
   `offset()`, and call `advance(dtMs)` once per frame. The offset halves every 50 ms. Corrections
-  over 4 units snap.
+  over 4 units snap. The game client does this for heroes and squad members (`TopDownPrediction`,
+  `ClientTopDown.cpp`), and the load test does it for every bot client, reporting corrections and the largest
+  per-frame jump of the sim position versus the drawn position.
+- Local visual prediction: the client draws its own hero where the input already in flight takes it (input delay
+  plus interpolation lag), render only (docs/topdown.md § Network).
 - Desync: checksums every `checksumInterval` ticks are compared on the server. `Desync` reaches
   every client (`NetEvent::Kind::Desync`), and the report has `desync = true` and no consensus.
 - The game must freeze outcome state once `result()` is non-zero, as HeroDuel does. Every client's
-  result blob is then the same, however far past the result tick it has predicted.
+  result blob is then the same, however far past the result tick it has predicted. `RtsModule` does this for
+  every RTS game: the `outcome` system latches the first result and its blob (`outcomeBlob()`); see
+  docs/topdown.md § Outcome.
 
 ### Reconnect, late join and app suspend
 
@@ -152,7 +162,9 @@ for (;;) srv.update(net::nowMs());
 
 `MatchPayloadMsg` gives every client the same bytes: match id, compatibility key, map id, game data,
 and each slot's team, kind, name and loadout. These replace Drone Fall's `SpawnWanderData` startup
-packets. Build the simulation from them in setup, not through commands. `releaseMatch(id)` aborts
+packets. Build the simulation from them in setup, not through commands. In-match progression (rules `progression`, [progression.md](progression.md)) reads each seat's battle deck
+(units per slot, unlock flags, initial perks, tech level) from the map's `players[i].deck`: decode the seat's loadout
+into that entry when building the match map, so every client builds the same decks. `releaseMatch(id)` aborts
 a match. `hostedMatches()` lists matches. Hosted matches skip the server's Elo, because ratings
 belong to meta. Lobby rooms, queues, the RTS relay and their protocol are unchanged
 (`kProtocolVersion` is still 3). The new messages are additive: `Away` and `ResultReport` from the
@@ -185,7 +197,9 @@ aiverse_battle load --matches 50 --players 2 --seconds 30 --profile bad [--suspe
 ```
 
 This runs one hosted battle server with N HeroDuel matches (`apps/battle/HeroDuel.h`, a stand-in
-top-down shooter with heroes, projectiles, dashes and loadouts). Every player is a bot client with
+top-down shooter with heroes, projectiles, dashes and loadouts, speaking the same hero commands), or with
+`--project DIR [--map FILE] [--rules-patch JSON]` N matches of an RTS top-down project (`apps/battle/RtsBattle.h`:
+RtsModule simulations, heroes steered by the computer pilot, ability taps, the frozen outcome blob as the report). Every player is a bot client with
 its own simulation, connected over the secure transport through the simulated mobile network, all
 on a virtual clock in one process. It reports finished matches, agreed results, desyncs, rollbacks,
 how far clients run ahead of confirmation, server update time (p50 / p99 / max), server CPU share and

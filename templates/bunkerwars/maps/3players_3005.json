@@ -7,15 +7,81 @@
  "players": [
   {
    "name": "Игрок 1",
-   "team": 1
+   "team": 1,
+   "loadout": [
+    {
+     "id": "skill1",
+     "slot": 0
+    },
+    {
+     "id": "skill24",
+     "slot": 1
+    },
+    {
+     "id": "skill8",
+     "slot": 2
+    },
+    {
+     "id": "skill4",
+     "slot": 3
+    },
+    {
+     "id": "hero1_talent",
+     "slot": 4
+    }
+   ]
   },
   {
    "name": "Игрок 2",
-   "team": 2
+   "team": 2,
+   "loadout": [
+    {
+     "id": "skill1",
+     "slot": 0
+    },
+    {
+     "id": "skill24",
+     "slot": 1
+    },
+    {
+     "id": "skill8",
+     "slot": 2
+    },
+    {
+     "id": "skill4",
+     "slot": 3
+    },
+    {
+     "id": "hero2_talent",
+     "slot": 4
+    }
+   ]
   },
   {
    "name": "Игрок 3",
-   "team": 3
+   "team": 3,
+   "loadout": [
+    {
+     "id": "skill1",
+     "slot": 0
+    },
+    {
+     "id": "skill24",
+     "slot": 1
+    },
+    {
+     "id": "skill8",
+     "slot": 2
+    },
+    {
+     "id": "skill4",
+     "slot": 3
+    },
+    {
+     "id": "hero3_talent",
+     "slot": 4
+    }
+   ]
   }
  ],
  "terrain": {

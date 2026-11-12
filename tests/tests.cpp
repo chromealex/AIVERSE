@@ -14103,6 +14103,8 @@ TEST(ktx2_astc6x6_and_packaging_writer) {
     }
 }
 #include "tests_topdown.inc"   // top-down heroes (agent-topdown-control)
+#include "tests_progression.inc"   // in-match progression on real units (agent-df-progression-glue)
+#include "tests_encounters.inc"   // boss encounters (agent-df-encounters-glue)
 #include "tests_bwclient.inc"   // agent-bw-client: Spine, gamepad, client services
 #include "tests_skillobjects.inc"   // agent-bw-skills: skill objects
 
@@ -14130,6 +14132,10 @@ TEST(bw_player_mods_by_count_table) {
     CHECK(std::fabs(m.stat(*sim, b, game::Stat::Defense).toDouble() - 2.44140625) < 1e-3);
 }
 #include "tests_driving.inc"   // vehicles the hero drives (agent-gta2)
+#include "tests_arsenal.inc"   // the hero's weapons, ammo, crates and money (agent-gta2)
+#include "tests_city.inc"      // city planner (agent-gta2)
+#include "tests_commerce.inc"  // premises, businesses, the bank (agent-gta2)
+#include "tests_career.inc"    // career ladders and perks (agent-gta2)
 
 #include "tests_bwai.inc"   // agent-bw-ai: Bunker Wars computer player
 

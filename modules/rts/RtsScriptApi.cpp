@@ -636,7 +636,8 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter}, {"commerce", kCmdCommerce}, {"career", kCmdCareer}, {"prompt", kCmdPrompt}, {"topdown_weapon", kCmdTopDownWeapon},
+    {"progression", kCmdProgression},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
@@ -689,6 +690,18 @@ bool commandParam(lua_State* L, Vm& vm, int t, Command& c) {
         field("aim"); in.aim = lua_toboolean(L, -1);
         field("fire"); in.fire = lua_toboolean(L, -1);
         if (ok && !field("param")) c.param = topdown::pack(in);
+        break;
+    }
+    case kCmdProgression: {   // level-up offers (RtsProgression.h): op = "choose" | "reroll" | "close" | "open", card (1-based), revision
+        int64_t op = kProgChoose;
+        if (field("op")) {
+            const char* o = lua_tostring(L, -1);
+            const std::string n = o ? o : "";
+            op = n == "choose" ? int64_t(kProgChoose) : n == "reroll" ? int64_t(kProgReroll) : n == "close" ? int64_t(kProgClose) : n == "open" ? int64_t(kProgOpen) : int64_t(0);
+            if (!op) { vm.err = "command: progression op must be choose, reroll, close or open"; ok = false; }
+        }
+        ok = ok && num("card", a, 1) && num("revision", b, 0);
+        if (ok && !field("param")) c.param = progressionParam(op, int(a - 1), uint32_t(b));
         break;
     }
     case kCmdStance: case kCmdFormation:
@@ -1256,6 +1269,12 @@ void openGameApi(Vm& vm) {
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
+    openProgressionApi(vm);   // in-match progression (RtsProgressionApi.cpp)
+    openEncounterApi(vm);   // boss encounters (RtsEncountersApi.cpp)
+    openCommerceApi(vm);   // premises, businesses, the bank (RtsCommerceApi.cpp)
+    openDrivingApi(vm);    // vehicles (RtsDrivingApi.cpp)
+    openCareerApi(vm);     // career ladders (RtsCareerApi.cpp)
+    openPromptApi(vm);     // script choice menus (RtsPrompt.cpp)
 }
 
 } // namespace script
@@ -1330,7 +1349,7 @@ Json scriptApiReference() {
     a.push(fn("game.transform(h, type)", "change the type in place (same handle and data, hp fraction kept)"));
     a.push(fn("game.add_status(h, status [, seconds [, caster]]) / game.buff(h, stat, add, mul [, seconds])", "statuses (rules \"statuses\") and stat modifiers"));
     a.push(fn("game.order(units, \"move\"|\"attack\"|\"patrol\"|\"stop\"|\"hold\", x, z | target)", "orders (through the normal command path)"));
-    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
+    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability topdown_enter topdown_weapon; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
     a.push(fn("game.cast(h, ability, target | x, z) / game.player_ability(p, id, x, z [, free])", "abilities"));
     a.push(fn("game.set_var(name, v) / game.add_var(name, v)", "trigger variables (shared with rules triggers)"));
     a.push(fn("game.message(p, text [, x, z])", "notice for player p (0 = everyone)"));
@@ -1386,6 +1405,22 @@ Json scriptApiReference() {
     rd.push(fn("raid_can_extract(player, point_id)", "global veto hook: return false (+ reason) to refuse an extraction or a call"));
     rd.push(fn("on(\"raid_phase\" | \"raid_point\" | \"raid_channel\" | \"raid_extracted\" | \"raid_loot\" | \"raid_interact\" | \"raid_objective\" | \"raid_player\", fn(e))", "raid events: e = {player, unit, other, value, x, z} (docs/raid.md: value encodings)"));
     r.set("raid", rd);
+    Json pg = Json::array();   // in-match progression (RtsProgressionApi.cpp, docs/progression.md)
+    pg.push(fn("progression.active() / progression.players() / progression.player(slot)", "rules \"progression\": {level, xp, xp_to_next, progress (0..1, the xp bar), levels (banked), kills, hero, offer_open, perks = {{id, key, slot, initial}}, recruits = {[slot] = n}}"));
+    pg.push(fn("progression.offer(slot)", "the open level-up offer or nil: {revision, level, rerolls, cards = {{kind = \"perk\"|\"recruit\", perk (key), id, slot, unit (type), hook, scope}}}"));
+    pg.push(fn("progression.orbs() / progression.points([slot]) / progression.unit(unit) / progression.stat(unit, stat [, base])", "xp orbs {id, x, z, value, owner, ready}; summon circles {id, x, z, radius, state, progress}; {player, slot, bearer}; perk pipeline value (milli)"));
+    pg.push(fn("progression.choose(slot, card [, revision]) / reroll(slot) / open(slot) / close(slot) (simulation scripts)", "act on the offer (cards are 1-based); view scripts: view.progression_choose(card) / view.progression_reroll(); commands: game.command(p, {type = \"progression\", op = \"choose\", card = 1, revision = r})"));
+    pg.push(fn("progression.grant_xp(slot, xp [, pickup]) / grant_perk(slot, perk [, deck slot]) / clear_perks(slot [, deck slot [, keep_initial]]) / magnet(slot) / spawn_orb(x, z, xp [, owner]) (simulation scripts)", "scripted rewards, magnets, orbs"));
+    pg.push(fn("progression_can_offer(player, perk_key | \"recruit:<type>\")", "global veto hook: return false to keep a card out of offers"));
+    pg.push(fn("on(\"progression_xp\" | \"progression_level\" | \"progression_offer\" | \"progression_perk\" | \"progression_recruit\" | \"progression_orb\" | \"progression_summon\", fn(e))", "progression events: e = {player, unit, other, value, x, z} (docs/progression.md: value encodings); a perk's \"hook\" global runs as hook({player, unit, x, z, args = {perk, id, slot, level}})"));
+    r.set("progression", pg);
+    Json en = Json::array();   // boss encounters (RtsEncountersApi.cpp, docs/encounters.md)
+    en.push(fn("encounters.active() / encounters.bosses() / encounters.boss(unit)", "rules \"encounters\": living bosses; {phase (0 = first), enraged, engaged, defeated, participant, target}"));
+    en.push(fn("encounters.mob(unit) / encounters.telegraphs()", "mob mode (idle|wander|hunt|flee|return); running attacks {attack, caster, x, z, yaw, phase (windup|active|recovery), progress 0..1000}"));
+    en.push(fn("encounters.waves_allowed(player)", "schedule gate: false while the player's personal boss is pending / alive (pauseWaves) or during the breather"));
+    en.push(fn("encounters.cast(unit, attack, x, z [, target]) (simulation scripts)", "start a telegraphed attack of the unit toward (x, z); false when it cannot"));
+    en.push(fn("on(\"boss_engaged\" | \"boss_phase\" | \"boss_enraged\" | \"boss_adds\" | \"boss_defeated\" | \"boss_window\" | \"telegraph_start\" | \"telegraph_strike\" | \"telegraph_end\", fn(e))", "encounter events: e = {player, unit, other, value, x, z} (docs/encounters.md: value encodings); applied statuses: \"status_start\""));
+    r.set("encounters", en);
     return r;
 }
 

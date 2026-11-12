@@ -30,6 +30,43 @@ Fixed number(const Json& j, const char* key, Fixed def, const std::string& where
         throw std::runtime_error(where + "." + key + (positive ? ": must be positive" : ": must not be negative"));
     return v;
 }
+// Where a point is relative to a deck: distance along the centre line, distance from it, the way back to it.
+struct DeckSpot {
+    Fixed along, side;
+    Vec3 toAxis;
+    bool outside = true;   // past either end (the open mouths), or the deck has no line
+};
+const Fixed kMouth = Fixed::fromRatio(3, 2);   // cells from an end where the deck is still at ground height
+
+DeckSpot deckSpot(const DrivingDeck& d, Vec3 p) {
+    DeckSpot best;
+    bool have = false;
+    for (size_t i = 0; i + 1 < d.pts.size(); ++i) {
+        const Vec3 a = flat(d.pts[i]);
+        const Fixed len = d.at[i + 1] - d.at[i];
+        const Vec3 dir = flat(d.pts[i + 1] - d.pts[i]) / len;
+        const Fixed t = flat(p - a).dot(dir), tc = fxClamp(t, Fixed{}, len);
+        const Vec3 dv = flat(a + dir * tc - p);
+        const Fixed dist = dv.length();
+        if (have && dist >= best.side) continue;
+        best = {d.at[i] + tc, dist, dv, (i == 0 && t.raw < 0) || (i + 2 == d.pts.size() && t > len)};
+        have = true;
+    }
+    return best;
+}
+Fixed deckMouth(const DrivingDeck& d) { return fxMin(kMouth, d.length() / 2); }
+// deep: far enough from both ends to be above / below the ground level
+bool deckDeep(const DrivingDeck& d, Vec3 p) {
+    const DeckSpot s = deckSpot(d, p);
+    const Fixed m = deckMouth(d);
+    return !s.outside && s.along > m && s.along < d.length() - m;
+}
+// Two bodies on different levels pass each other; near a mouth everybody is on the ground.
+bool levelsApart(const DrivingStore& st, int deckA, Vec3 a, int deckB, Vec3 b) {
+    if (deckA == deckB) return false;
+    return (deckA < 0 || deckDeep(st.decks[size_t(deckA)], a)) && (deckB < 0 || deckDeep(st.decks[size_t(deckB)], b));
+}
+
 DrivingCar* findCar(DrivingStore& st, Entity e) {
     auto it = std::lower_bound(st.cars.begin(), st.cars.end(), e.index, [](const DrivingCar& c, uint32_t i) { return c.e.index < i; });
     return it != st.cars.end() && it->e == e ? &*it : nullptr;
@@ -111,6 +148,24 @@ const DrivingCar* Driving::car(Simulation& sim, Entity vehicle) const {
     return st ? findCar(*st, vehicle) : nullptr;
 }
 
+bool Driving::setAutopilot(Simulation& sim, Entity vehicle, const vl::VehicleInput& input) {
+    auto* st = store(sim);
+    DrivingCar* c = st ? findCar(*st, vehicle) : nullptr;
+    if (!c || !vl::valid(input)) return false;
+    c->autopilot = true;
+    c->pilot = input;
+    return true;
+}
+
+bool Driving::clearAutopilot(Simulation& sim, Entity vehicle) {
+    auto* st = store(sim);
+    DrivingCar* c = st ? findCar(*st, vehicle) : nullptr;
+    if (!c) return false;
+    c->autopilot = false;
+    c->pilot = {};
+    return true;
+}
+
 Fixed Driving::speed(Simulation& sim, Entity vehicle) const {
     const DrivingCar* c = car(sim, vehicle);
     return c ? vl::vehicleForwardSpeed(c->st) : Fixed{};
@@ -123,10 +178,13 @@ void Driving::hash(Simulation& sim, Hasher& h) const {
     for (auto& c : st->cars) {
         const auto& s = c.st;
         h.u64(c.e.packed()); h.u64(c.driver.packed()); h.u32(c.player); h.u32(c.doorUntil);
+        if (!st->decks.empty()) h.i32(c.deck);   // maps without decks keep their checksums
         h.v3(s.position); h.v3(s.velocity);
         for (Fixed f : {s.yaw, s.yawRate, s.pitch, s.roll, s.steer, s.rpm, s.airspeed, s.sink, s.longAccel, s.trackLeft, s.trackRight}) h.fx(f);
         h.i32(s.gear); h.u32(s.shiftUntil); h.u32(s.slipMask); h.u32(s.lastTick);
-        h.u32(uint32_t(s.grounded) | uint32_t(s.drifting) << 1 | uint32_t(s.stalled) << 2 | uint32_t(s.initialized) << 3);
+        h.u32(uint32_t(s.grounded) | uint32_t(s.drifting) << 1 | uint32_t(s.stalled) << 2 | uint32_t(s.initialized) << 3 | uint32_t(c.autopilot) << 4);
+        for (Fixed f : {c.pilot.throttle, c.pilot.brake, c.pilot.steer}) h.fx(f);
+        h.u32(uint32_t(c.pilot.handbrake) | uint32_t(c.pilot.shiftUp) << 1 | uint32_t(c.pilot.shiftDown) << 2);
     }
 }
 
@@ -141,7 +199,86 @@ void Driving::io(Simulation& sim, Archive& a) {
         a(c.e, c.driver, c.player, c.doorUntil, s.position, s.velocity, s.yaw, s.yawRate, s.pitch, s.roll, s.steer, s.rpm);
         a(s.airspeed, s.sink, s.longAccel, s.trackLeft, s.trackRight, s.gear, s.shiftUntil, s.slipMask, s.lastTick);
         a(s.grounded, s.drifting, s.stalled, s.initialized);
+        a(c.autopilot, c.pilot.throttle, c.pilot.brake, c.pilot.steer, c.pilot.handbrake, c.pilot.shiftUp, c.pilot.shiftDown);
+        a(c.deck);
     }
+    uint32_t nd = uint32_t(st->decks.size());
+    aiverse::io(a, nd);
+    if (!a.writing()) { if (nd > 100000) { a.fail(); return; } st->decks.assign(nd, {}); }
+    for (auto& d : st->decks) a(d.id, d.width, d.pts, d.at);
+    if (!a.writing())
+        for (auto& c : st->cars) if (c.deck >= int(nd)) { a.fail(); return; }
+}
+
+// ================================================================= levels
+
+void Driving::loadMap(Simulation& sim, const Json& map) {
+    auto* st = store(sim);
+    if (!st) return;
+    st->decks.clear();
+    const Json& list = map["decks"];
+    if (list.isNull()) return;
+    if (!list.isArray()) throw std::runtime_error("map decks: expected a list");
+    for (auto& dj : list.items()) {
+        DrivingDeck d;
+        d.id = dj.getStr("id");
+        const std::string where = "map decks" + (d.id.empty() ? std::string() : " '" + d.id + "'");
+        d.width = number(dj, "width", Fixed::fromInt(2), where, true);
+        const Json& path = dj["path"];
+        if (!path.isArray() || path.size() < 2) throw std::runtime_error(where + ".path: needs at least two points [x, z] or [x, z, height]");
+        for (auto& pj : path.items()) {
+            if (!pj.isArray() || pj.size() < 2 || pj.size() > 3) throw std::runtime_error(where + ".path: a point is [x, z] or [x, z, height]");
+            const Vec3 p{pj[size_t(0)].fx(), pj.size() > 2 ? pj[size_t(2)].fx() : Fixed{}, pj[size_t(1)].fx()};
+            Fixed at{};
+            if (!d.pts.empty()) {
+                const Fixed len = flat(p - d.pts.back()).length();
+                if (len < Fixed::fromRatio(1, 16)) throw std::runtime_error(where + ".path: two points in the same place");
+                at = d.at.back() + len;
+            }
+            d.pts.push_back(p);
+            d.at.push_back(at);
+        }
+        if (st->decks.size() >= 32000) throw std::runtime_error("map decks: too many");
+        st->decks.push_back(std::move(d));
+    }
+}
+
+int Driving::deckOf(Simulation& sim, Entity vehicle) const {
+    const DrivingCar* c = car(sim, vehicle);
+    return c ? c->deck : -1;
+}
+
+int Driving::deckIndex(Simulation& sim, const std::string& id) const {
+    auto* st = store(sim);
+    if (st)
+        for (size_t i = 0; i < st->decks.size(); ++i) if (st->decks[i].id == id) return int(i);
+    return -1;
+}
+
+Fixed Driving::height(Simulation& sim, Entity vehicle) const {
+    auto* st = store(sim);
+    const DrivingCar* c = car(sim, vehicle);
+    if (!st || !c || c->deck < 0) return {};
+    const DrivingDeck& d = st->decks[size_t(c->deck)];
+    const Fixed mpc = rules_.metersPerCell;
+    const DeckSpot s = deckSpot(d, Vec3{c->st.position.x / mpc, Fixed{}, c->st.position.z / mpc});
+    for (size_t i = 0; i + 1 < d.pts.size(); ++i)
+        if (s.along <= d.at[i + 1] || i + 2 == d.pts.size())
+            return d.pts[i].y + (d.pts[i + 1].y - d.pts[i].y) * fxClamp((s.along - d.at[i]) / (d.at[i + 1] - d.at[i]), Fixed{}, kUnit);
+    return {};
+}
+
+bool Driving::setDeck(Simulation& sim, Entity vehicle, int deck) {
+    auto* st = store(sim);
+    DrivingCar* c = st ? findCar(*st, vehicle) : nullptr;
+    if (!c || deck < -1 || deck >= int(st->decks.size())) return false;
+    if (deck >= 0) {
+        const DrivingDeck& d = st->decks[size_t(deck)];
+        const DeckSpot s = deckSpot(d, sim.world().get<Transform>(vehicle).pos);
+        if (s.outside || s.side > d.width / 2) return false;
+    }
+    c->deck = int16_t(deck);
+    return true;
 }
 
 // ================================================================= getting in and out
@@ -192,6 +329,7 @@ void Driving::enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity he
         if (cu.hp.raw <= 0) continue;
         const Fixed d = flat(w.get<Transform>(c.e).pos - hp).length() - typeOf(cu.type)->length / 2 - hr;
         if (d > rules_.enterRange) continue;
+        if (c.deck >= 0 && deckDeep(st.decks[size_t(c.deck)], w.get<Transform>(c.e).pos)) continue;   // above / below the hero
         if (!best || d < bestD) { best = &c; bestD = d; }   // cars are in entity order: ties keep the lower index
     }
     if (!best) return;
@@ -213,6 +351,7 @@ bool Driving::leave(Simulation& sim, DrivingCar& c, bool forced) {
     const UnitType& ht = m_->rules().types[hu.type];
     const MapGrid& g = m_->state(sim).grid;
     const Vec3 pos{c.st.position.x / rules_.metersPerCell, w.get<Transform>(hero).pos.y, c.st.position.z / rules_.metersPerCell};
+    if (auto* st = store(sim); st && c.deck >= 0 && !forced && deckDeep(st->decks[size_t(c.deck)], pos)) return false;   // no way down from a bridge, no door room in a tunnel
     const Vec3 f = forwardOf(c.st.yaw), r = rightOf(f);
     Fixed len = kUnit, wid = kHalf;
     if (w.alive(c.e)) if (auto* vt = typeOf(w.get<Unit>(c.e).type)) { len = vt->length; wid = vt->width; }
@@ -250,7 +389,11 @@ bool Driving::command(Simulation& sim, const Command& cmd) {
 vl::VehicleInput Driving::inputOf(Simulation& sim, const DrivingCar& c) const {
     vl::VehicleInput in;
     auto* td = m_->topDown()->store(sim);
-    if (!c.driver.valid() || !td || c.player >= td->pilots.size()) { in.handbrake = true; return in; }   // parked
+    if (!c.driver.valid() || !td || c.player >= td->pilots.size()) {
+        if (c.autopilot) return c.pilot;                   // a computer driver (traffic)
+        in.handbrake = true;                               // parked
+        return in;
+    }
     const topdown::Input& s = td->pilots[c.player].input;
     const Fixed mag = Fixed::fromRatio(s.moveMag, topdown::kMagMax), ang = Fixed::fromRaw(s.moveAngle);
     in.handbrake = s.fire;
@@ -288,6 +431,8 @@ void Driving::drive(Simulation& sim, DrivingStore& st, size_t index) {
     if (u.hp.raw <= 0) return;
     const DrivingVehicleType& vt = *typeOf(u.type);
     const Fixed mpc = rules_.metersPerCell;
+    // parked and at rest: nothing to integrate until somebody gets in or something hits it (a city has hundreds)
+    if (!c.driver.valid() && !c.autopilot && c.st.initialized && c.st.velocity.x.raw == 0 && c.st.velocity.z.raw == 0 && c.st.yawRate.raw == 0) return;
     auto res = vl::stepVehicle(vt.def, c.st, sim.tick(), sim.dt(), inputOf(sim, c), vl::VehicleContacts{});
     Transform& tr = w.get<Transform>(c.e);
     if (res) {
@@ -325,12 +470,35 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
     bool hit = false;
     Fixed crash{};
 
+    // levels: any part of the body inside a mouth puts the car on that deck; the whole body past an end takes it off
+    if (c.deck >= 0) {
+        bool allOut = true;
+        for (Fixed off : offs) if (!deckSpot(st.decks[size_t(c.deck)], pos + f * off).outside) allOut = false;
+        if (allOut) c.deck = -1;
+    }
+    for (size_t i = 0; i < st.decks.size() && c.deck < 0; ++i) {
+        const DrivingDeck& d = st.decks[i];
+        const Fixed m = deckMouth(d);
+        for (Fixed off : offs) {
+            const DeckSpot s = deckSpot(d, pos + f * off);
+            if (!s.outside && s.side <= d.width / 2 && (s.along <= m || s.along >= d.length() - m)) { c.deck = int16_t(i); break; }
+        }
+    }
+
     // walls: push out of the deepest overlap, a few times
     for (int pass = 0; pass < 4; ++pass) {
         Fixed deepest{};
         Vec3 normal{};
         for (Fixed off : offs) {
             const Vec3 cp = pos + f * off;
+            if (c.deck >= 0) {   // on a deck its own walls count, not the map under / around it; the mouths are open
+                const DrivingDeck& d = st.decks[size_t(c.deck)];
+                const DeckSpot s = deckSpot(d, cp);
+                const Fixed room = fxMax(d.width / 2 - r, Fixed{});
+                if (s.outside || s.side <= room) continue;
+                if (s.side - room + kGap > deepest) { deepest = s.side - room + kGap; normal = s.toAxis / s.side; }
+                continue;
+            }
             const int x0 = g.cellX(cp.x - r), x1 = g.cellX(cp.x + r), y0 = g.cellY(cp.z - r), y1 = g.cellY(cp.z + r);
             for (int y = y0; y <= y1; ++y)
                 for (int x = x0; x <= x1; ++x) {
@@ -376,6 +544,7 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
     std::vector<Hurt> hurt;
     for (auto& o : near) {
         DrivingCar* oc = findCar(st, o.e);
+        if (levelsApart(st, c.deck, pos, oc ? oc->deck : -1, o.p)) continue;   // one of them is on a bridge or in a tunnel
         const DrivingVehicleType* ovt = oc ? typeOf(w.get<Unit>(o.e).type) : nullptr;
         const Fixed orad = ovt ? ovt->width / 2 : o.r;
         const Fixed ohalf = ovt ? fxMax(ovt->length / 2 - orad, Fixed{}) : Fixed{};

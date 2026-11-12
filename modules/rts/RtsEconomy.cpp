@@ -58,7 +58,7 @@ void RtsModule::sysEconomy(Simulation& sim) {
         p.typeCount[u.type]++;
         // power deficits switch off tagged objects (defences, radar, factories)
         const bool off = (t.tags & p.disabledTags) != 0 || (mechOn(sim) && mechSwitchedOff(sim, e));   // + agent-mech: unpowered / unstaffed
-        if (off) u.flags |= kUnitDisabled; else u.flags &= uint8_t(~kUnitDisabled);
+        if (off) u.flags |= kUnitDisabled; else u.flags &= kKeepFlags(~kUnitDisabled);
         p.supplyCap += t.supplyProvided;
         for (auto& a : t.storage) p.cap[a.res] += a.value;
         for (auto& a : t.provides) p.capProvided[a.res] += a.value;
@@ -319,7 +319,7 @@ void RtsModule::sysConstruction(Simulation& sim) {
     });
     for (Entity e : finished) {
         Unit& u = w.get<Unit>(e);
-        u.flags &= uint8_t(~kUnitUnderConstruction);
+        u.flags &= kKeepFlags(~kUnitUnderConstruction);
         w.remove<Construction>(e);
         if (auto* inv = w.tryGet<Inventory>(e)) { // materials are used up
             const UnitType& t = rules_.types[u.type];
@@ -340,6 +340,21 @@ void RtsModule::sysGarrison(Simulation& sim) {
     std::vector<Release> releases;
     const bool adv = rules_.advancedEffects;
     const std::vector<Fixed> coreRate = coreGrowthRates(sim);   // battle core: production slows with the army (empty: off)
+    // `collect` statuses (BW PointsRedirectProduction): one receiver per player, the newest; the others hand their pool over
+    std::vector<std::pair<Entity, StatusInst*>> collector(256, {kNullEntity, nullptr});
+    if (adv && rules_.anyCollect) {
+        std::vector<std::pair<Entity, StatusInst*>> all;
+        w.each<Statuses, Garrison, Owner>([&](Entity e, Statuses& st, Garrison&, Owner& o) {
+            for (auto& in : st.list)
+                if (rules_.statuses[in.def].collect && in.owner == o.player && in.owner < collector.size()) all.push_back({e, &in});
+        });
+        for (auto& c : all) {   // entity order is deterministic; the newest (latest `until`, then highest id) wins
+            auto& best = collector[c.second->owner];
+            if (!best.second || c.second->until > best.second->until || (c.second->until == best.second->until && c.first.index > best.first.index)) best = c;
+        }
+        for (auto& c : all)
+            if (collector[c.second->owner].second != c.second) { collector[c.second->owner].second->acc += c.second->acc; c.second->acc = Fixed{}; c.second->until = sim.tick(); }
+    }
     w.each<Garrison, Unit, Owner>([&](Entity e, Garrison& g, Unit& u, Owner& o) {
         const UnitType& t = rules_.types[u.type];
         if (u.flags & kUnitUnderConstruction) return;
@@ -359,6 +374,27 @@ void RtsModule::sysGarrison(Simulation& sim) {
             // effects: lock stops production, production speed / cap stats, redirect sends the growth elsewhere
             if (statusFlags(sim, e) & kStLock) return;
             int cap = int(stat(sim, e, Stat::GarrisonCap).floorInt());
+            if (o.player < collector.size() && collector[o.player].second && collector[o.player].first != e) {
+                // BW RedirectProduction.SendUnits: the normal delta goes to the pool; a growing house adds addUnitsPerSecond instead
+                StatusInst& pool = *collector[o.player].second;
+                Fixed rate = stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) rate = rate * coreRate[o.player];   // battle core: Player.GetIncreaseRate
+                const Fixed delta = g.count < cap ? dt * rate : Fixed{};   // HouseModule: 0 when it cannot grow
+                pool.acc += delta;
+                if (delta.raw > 0) {
+                    g.growth += dt * rules_.statuses[pool.def].collectAdd;
+                    while (g.growth >= kOne) { ++g.count; g.growth -= kOne; }
+                } else if (g.count > cap) {
+                    g.growth -= dt * t.garrisonDecay;
+                    while (g.growth <= -kOne && g.count > cap) { --g.count; g.growth += kOne; }
+                }
+            } else {
+            if (o.player < collector.size() && collector[o.player].first == e) {
+                // ReceiveUnits: the pool joins the receiver's own production (no cap, as BW adds the delta)
+                StatusInst& pool = *collector[o.player].second;
+                g.growth += pool.acc; pool.acc = Fixed{};
+                while (g.growth >= kOne) { ++g.count; g.growth -= kOne; }
+            }
             Garrison* into = &g;
             if (auto* st = w.tryGet<Statuses>(e))
                 for (auto& in : st->list)
@@ -372,6 +408,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
                 g.growth -= dt * t.garrisonDecay;
                 while (g.growth <= -kOne && g.count > cap) { --g.count; g.growth += kOne; }
             } else g.growth = Fixed{};
+            }
         } else if (o.player != 0 && t.spawnInterval.raw > 0) {
             if (g.count < t.garrisonMax) {
                 g.growth += dt / t.spawnInterval;
@@ -466,6 +503,7 @@ void RtsModule::tagReleased(Simulation& sim, Entity n, uint32_t group, Entity fr
             addStatus(sim, n, in.def, left, ctx);
         }
     }
+    onUnitReleased(sim, from, n);   // onSpawn payloads, hypnosis (RtsSkillObjects.cpp)
 }
 
 } // namespace aiverse::game
