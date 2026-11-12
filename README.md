@@ -2,81 +2,109 @@
   <img src="docs/images/aiverse-logo-original.png" alt="AIVERSE" width="480">
 </p>
 
-<h3 align="center">Игровой движок, в котором игру собирает AI-агент — из данных, а не из кода</h3>
+<h3 align="center">A game engine for any genre, where an AI agent builds the game from data, not code</h3>
 
 <p align="center">
-  RTS любого поджанра и FPS · детерминированная симуляция · ~190 MCP-инструментов · сборка под 6 платформ одной командой
+  any genre · full RTS and FPS modules · 88 mechanics libraries · deterministic simulation · ~190 MCP tools · 6 platforms
 </p>
 
 <p align="center">
   <img alt="C++20" src="https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white">
-  <img alt="Платформы" src="https://img.shields.io/badge/платформы-iOS%20·%20Android%20·%20Web%20·%20Windows%20·%20macOS%20·%20Linux-444">
-  <img alt="Рендер" src="https://img.shields.io/badge/рендер-Metal%20·%20GLES3%20·%20WebGL2-6a3de8">
-  <img alt="MCP" src="https://img.shields.io/badge/AI--агенты-MCP-d97757">
-  <img alt="Лицензия MIT" src="https://img.shields.io/badge/лицензия-MIT-2ea44f">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-iOS%20·%20Android%20·%20Web%20·%20Windows%20·%20macOS%20·%20Linux-444">
+  <img alt="Rendering" src="https://img.shields.io/badge/rendering-Metal%20·%20GLES3%20·%20WebGL2-6a3de8">
+  <img alt="MCP" src="https://img.shields.io/badge/AI%20agents-MCP-d97757">
+  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-2ea44f">
 </p>
 
 <p align="center">
-  <a href="README.en.md">English</a> · <b>Русский</b>
+  <b>English</b> · <a href="README.ru.md">Русский</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a>
 </p>
 
 <p align="center">
-  <a href="#зачем-он-нужен">Зачем</a> ·
-  <a href="#как-это-устроено">Как устроено</a> ·
-  <a href="#что-уже-можно-сделать">Шаблоны</a> ·
-  <a href="#быстрый-старт">Быстрый старт</a> ·
-  <a href="docs/overview.md">Полный обзор</a>
+  <a href="#why-it-exists">Why</a> ·
+  <a href="#any-genre">Genres</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#ready-made-templates">Templates</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/overview.md">Full overview (RU)</a>
 </p>
 
 ---
 
-## Коротко
+## In short
 
-**AIVERSE** — движок на C++20, написанный с нуля под одну задачу: чтобы стратегию (а теперь и шутер)
-можно было сделать, **описав её**, а не запрограммировав.
+**AIVERSE** is a C++20 engine written from scratch for one goal: a game **of any genre** should be
+something you **describe**, not something you program from scratch.
 
-Игра — это папка с JSON: юниты, здания, ресурсы, карты, интерфейс, звук, эффекты. Движок — это
-фиксированная библиотека механик, которая умеет оживить любой такой набор данных. Между ними —
-редактор и MCP-сервер, через которые с проектом работает человек или AI-агент: создаёт игру,
-правит баланс, гоняет матчи ботов, смотрит скриншоты и собирает билды под сторы.
+A game is a folder of data: objects, rules, levels, UI, audio, effects. The engine is a library of
+ready-made, deterministic mechanics that brings that data to life — from base building and armies of
+thousands to platforming, melee combat, dialogue, card rules and puzzles. In between sit the editor and
+an MCP server, through which a person or an AI agent works on the project: creates the game, tunes the
+balance, runs bot matches, looks at screenshots and ships store builds.
 
-> Опишите идею и дайте папку с артом — мастер «Сделать игру» соберёт проект с уровнями, обучением,
-> метой, магазином, иконкой и заставкой, сам пройдёт обучение ботом и проверит уровни.
+> Describe the idea and point at a folder of art — the **Make a game** wizard produces a project with
+> levels, a tutorial, meta, a shop, an icon and a splash screen, then plays through the tutorial with a
+> bot and checks every level itself.
 
 ---
 
-## Зачем он нужен
+## Why it exists
 
-Сделать RTS тяжело не из-за графики. Тяжело то, что под капотом: тысячи юнитов, поиск пути,
-синхронная сеть, ИИ, баланс. Универсальные движки всё это оставляют вам. AIVERSE даёт это из коробки
-и делает так, чтобы с игрой мог работать агент.
+Graphics are not what makes a game hard. The hard part is under the hood: movement, combat, AI,
+networking, balance, progression. General-purpose engines give you a renderer and leave all of that to
+you. AIVERSE ships the mechanics themselves — and makes the game something an agent can work on.
 
-| Проблема | Как её решает AIVERSE |
+| Problem | How AIVERSE solves it |
 |---|---|
-| **Unity, Unreal и Godot не знают, что такое RTS.** Поиск пути для толп, экономика, стройка, туман войны, ИИ противника — каждая студия месяцами пишет это сама. | Всё это уже в движке и настраивается данными. Тип объекта — набор блоков (`health`, `move`, `weapons`, `gather`, `garrison`, …): что задано, то юнит и умеет. A\*, HPA\* и flow fields: приказ 2000 юнитам на карте 1024² — за 13 мс. |
-| **AI-агенту неудобно в классических движках.** Бинарные сцены, всё через GUI, нет быстрой обратной связи — агент работает вслепую. | Проект — читаемые текстовые файлы. ~190 MCP-инструментов: карты, правила, рельеф, UI, эффекты, свет, сборка. Агент сам проверяет результат: матчи ботов, сценарии с pass/fail, матрицы баланса, линтер правил с подсказками «did you mean…», скриншоты. |
-| **Сетевая RTS = вечные рассинхроны.** Достаточно одного `float`, чтобы матч на iPhone и Android разошёлся. | Симуляция побитово одинакова везде: fixed-point вместо float, свой RNG, контрольные суммы. CI на каждом push сверяет матчи на Linux x64/ARM64, Windows и macOS. По сети идут только команды, есть lockstep с откатами, сервер с матчмейкингом и вердиктом по реплею. |
-| **Мобильные GPU слабые, а игра должна быть красивой.** | Каждая дорогая функция — тени, частицы, рельеф, постэффекты — имеет уровни качества и сама подстраивается под GPU: от старых Mali и Adreno до Apple Silicon. |
-| **Выпустить игру на все платформы — отдельный проект.** Подписи, иконки, SDK сторов и рекламы. | `aiversebuild` одной командой делает .app, проект Xcode, Gradle/APK, web и .exe. Иконки и заставки генерируются. Плагины App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin и других — в билд попадают только выбранные. |
-| **Каждый клон жанра пишется с нуля.** | 30+ готовых шаблонов — от Warcraft и Red Alert до Mushroom Wars, Northgard и They Are Billions. Новая игра начинается с работающей. |
-| **Мета и LiveOps переписываются в каждом проекте.** | `aiverse::meta`: магазин, валюты, задания, пассы, ежедневные награды, энергия, кланы, турниры, сундуки с pity — настраивается JSON-ом. |
+| **General-purpose engines don't ship gameplay.** Unity, Unreal and Godot give you a renderer and physics; pathfinding for crowds, combat with combos and parries, enemy AI, turn order, card rules, economy — every studio spends months writing them. | Mechanics are the engine's building blocks: full RTS and FPS modules plus 88 deterministic libraries for other genres. They are configured with data, and when that's not enough, extended with Lua or the project's own C++. |
+| **Classic engines are awkward for AI agents.** Binary scenes, everything through a GUI, no fast feedback — the agent works blind. | A project is readable text files. ~190 MCP tools cover maps, rules, terrain, UI, effects, lighting and builds. The agent checks its own work: bot matches, scenarios with pass/fail checks, balance matrices, a rules linter with "did you mean…" hints, screenshots. |
+| **Multiplayer means endless desyncs.** One `float` is enough for a match on an iPhone and an Android phone to drift apart. | The simulation is bit-identical everywhere: fixed-point instead of floats, its own RNG, checksums. CI compares matches across Linux x64/ARM64, Windows and macOS on every push. Only commands go over the network; there is rollback lockstep and a server with matchmaking and replay-based verdicts. |
+| **Mobile GPUs are weak, yet the game must look good.** | Every expensive feature — shadows, particles, terrain, post-effects — has quality tiers and adapts to the GPU, from old Mali and Adreno to Apple Silicon. |
+| **Shipping on every platform is a project of its own.** Signing, icons, store and ads SDKs. | `aiversebuild` makes an .app, an Xcode project, Gradle/APK, web and .exe in one command. Icons and splash screens are generated. Plugins for the App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin and more — a build carries only the ones the game selects. |
+| **Every new game starts from zero.** | 30+ playable templates, genre kits with acceptance checklists, 118 skills for agents. A new game starts from a working one. |
+| **Meta and LiveOps get rewritten in every project.** | `aiverse::meta`: shop, currencies, quests, passes, daily rewards, energy, clans, tournaments, chests with pity — configured in JSON. |
 
 ---
 
-## Как это устроено
+## Any genre
+
+Two genres have full engine modules with an editor, bots and templates. Everything else is assembled
+from the mechanics libraries — each one deterministic, tested, with save/restore and a validated config.
+
+| Genre | What the engine provides |
+|---|---|
+| **RTS, tower defense, capture games** | Full `rts` module: units and buildings from data, A\* / HPA\* / flow fields for armies of thousands of units on maps up to 2048², economy, construction, fog of war, AI, terrain and planets, 26 templates |
+| **FPS and TPS** | Full `fps` module: client and authoritative server, large streamed worlds up to 100 players, bots, 4 templates; `weapon-policies` (recoil, ballistics, penetration), `match-rules` (rounds, payload, bomb/defuse, extraction) |
+| **Action, fighting, soulslike** | `combat-actions`, `melee-combat`: hitboxes and hurtboxes, combos and cancel windows, dodge i-frames, parry, poise, lock-on; `genre-bots` for opponents |
+| **Platformer, metroidvania** | `character-locomotion`: coyote time, jump buffer, ledges, ladders, swimming, climbing, mantling; `zone-graph`: ability gates, checkpoints and softlock proofs |
+| **Stealth, immersive sim** | `stealth-senses`: sight cones, hearing, suspicion and alerts, searches, disguises; `physical-interactions`: carrying, throwing, ropes, doors, platforms, breakables |
+| **Story games, visual novels** | `narrative-graphs`: dialogue with conditions, relationships, consequences, VN backlog and auto-advance; `cinematic-gameplay`: timelines, QTE, slow motion |
+| **Turn-based tactics, cards, board games** | `turn-scheduler`: initiative, action points, reactions; `card-runtime`: zones, priority stack, hidden information |
+| **Puzzles** | `grid-puzzles`: Sokoban rules, undo/redo and a solver; `puzzle-machine`: a VM for programming puzzles |
+| **Roguelikes** | `run-graph`: seeded runs and encounter budgets; `loot-tables` with a guaranteed rare drop |
+| **Idle, factory, colony** | `big-numbers`, `offline-production` (exact offline progress), `production-networks`, `logistics`, `tasks` |
+| **Rhythm games** | `rhythm-timing`: tempo maps and frame-independent hit judgement |
+| **Any mobile game** | `aiverse::meta` and LiveOps, tutorials, UI screens, store and ads plugins |
+
+Racing, sports and vehicles are still on the [roadmap](docs/genre-mechanics-roadmap.md). Full list of
+libraries: [`libraries/catalog.json`](libraries/catalog.json) and [genre packages](docs/genre-packages.md).
+
+---
+
+## How it works
 
 ```mermaid
 flowchart LR
-    A["Идея, арт, музыка"] --> B["Мастер «Сделать игру»<br/>или AI-агент через MCP"]
-    B --> C["Проект = данные<br/>game.json · rules.json<br/>maps · ui · fx · audio"]
-    C --> D["Движок AIVERSE<br/>симуляция · рендер · сеть<br/>звук · ИИ · UI"]
-    D --> E["Проверка<br/>боты · сценарии · баланс<br/>скриншоты · реплеи"]
-    E -- "правки" --> C
+    A["Idea, art, music"] --> B["Make a game wizard<br/>or an AI agent via MCP"]
+    B --> C["Project = data<br/>game.json · rules.json<br/>levels · ui · fx · audio"]
+    C --> D["AIVERSE engine<br/>genre modules · libraries<br/>rendering · network · audio"]
+    D --> E["Verification<br/>bots · scenarios · balance<br/>screenshots · replays"]
+    E -- "fixes" --> C
     D --> F["aiversebuild<br/>iOS · Android · Web<br/>Windows · macOS"]
 ```
 
-Юнит — это просто описание. Вот рабочий из шаблона `skirmish`: он добывает золото и дерево,
-строит пять зданий и умеет драться киркой.
+An object is just a description. Here is the worker from the RTS template `skirmish`: it gathers gold
+and wood, builds five structures and fights with a pick.
 
 ```jsonc
 "peasant": {
@@ -91,74 +119,100 @@ flowchart LR
 }
 ```
 
-Если данных не хватает, есть три ступени: **триггеры** в JSON → **Lua** (песочница с детерминированной
-математикой, горячая перезагрузка) → **нативные C++-модули** проекта. Движок при этом не меняется:
-механики добавляются в него только в общем виде, а не под конкретную игру.
+When data isn't enough, there are three steps up: **triggers** in JSON → **Lua** (a sandbox with
+deterministic math and hot reload) → the project's own **native C++ modules**, which plug in the
+libraries above. The engine itself stays untouched: mechanics are added to it only in a general form,
+never for one specific game.
 
 ---
 
-## Что уже можно сделать
+## Coming from Unity
 
-Каждый шаблон — полностью играбельная игра с ботами. Её можно открыть в редакторе и сразу менять.
+Point the importer at a Unity project and get an AIVERSE project. Assets, scenes and parameters move over automatically; everything else lands in a report that an agent works through via MCP. Also available as **Project → Import engine project** in the editor and as MCP `port_scan` / `port_import` / `port_report` / `port_resolve`.
 
-| Жанр | Шаблоны |
+```bash
+python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/to/MyGame --mode auto
+```
+
+| In Unity | In AIVERSE |
 |---|---|
-| Классическая RTS с базой | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert: MCV, руда, сайдбар) · **Starfall Sectors** (StarCraft: три расы) · **Frost Crown** (Warcraft III: герои, крипы, рельеф) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation: потоковая экономика) |
-| Захват и гарнизоны | **Mushroom Clash** и **Shroom Wars** (Mushroom Wars 1–2) · **Spore Lanes** · **Spell Bunkers** (Bunker Wars) · **Border Rush** (State.io) · **Clan Lands** (Northgard) · **Flag Sectors** (Z) |
-| Отряды, волны, выживание | **Hold the Line** (Company of Heroes) · **Last Colony** (They Are Billions) · **Lane Clash** (лайн-баттлер) |
-| Экономика и стройка | **Hearth and Haul** (Knights and Merchants) · **Underlord** (Dungeon Keeper) |
-| 2D и эксперименты | **Crystal Dunes** (тайлы, Dune II) · **Green Hills** (2D-спрайты на 3D-рельефе) · **Planets** (сферические планеты и орбиты) · **Wildfire** (поля: пожары и крип) |
-| FPS | **Crossfire Arena** (5×5) · **Breach Protocol** (тактические раунды) · **Last Survivor** (королевская битва на 100 игроков) · **Aim Lab** (тир) |
+| Scene | map `maps/*.json`: object placement, camera, 2D or 3D mode |
+| Prefab, nested prefabs and variants | object type in `rules.json`; serialized fields (`hp`, `speed`, `damage`, `fireRate`, …) become data blocks |
+| ScriptableObject | rules data |
+| MonoBehaviour logic in C# | ported by the agent: data blocks → Lua → native C++ module |
+| Models, textures, materials, audio | copied as is; PBR materials, glTF/FBX/OBJ load directly |
+| Sprites and Tilemap | atlas sprites and tile maps |
+| ParticleSystem | `fx/*.json`, nearly every module is supported |
+| Inspector, Hierarchy, Scene, Game | the same windows in the AIVERSE editor |
+| Build Settings, Unity IAP, Unity Ads | `aiversebuild`, store and ads plugins |
+| Addressables / Asset Bundles | `.rpak` packs, split builds and content download |
+
+The report marks every item as exact, approximate or not transferred. Re-importing keeps your edits. The project needs **Force Text** asset serialization. Godot projects are imported the same way. Details: [Engine project import](docs/engine-import.md).
 
 ---
 
-## Что внутри
+## Ready-made templates
+
+Every template is a fully playable game with bots. Open it in the editor and start changing it.
+
+| Genre | Templates |
+|---|---|
+| Classic base-building RTS | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert: MCV, ore, sidebar) · **Starfall Sectors** (StarCraft: three races) · **Frost Crown** (Warcraft III: heroes, creeps, terrain) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation: flow economy) |
+| Capture and garrisons | **Mushroom Clash** and **Shroom Wars** (Mushroom Wars 1–2) · **Spore Lanes** · **Spell Bunkers** (Bunker Wars) · **Border Rush** (State.io) · **Clan Lands** (Northgard) · **Flag Sectors** (Z) |
+| Squads, waves, survival | **Hold the Line** (Company of Heroes) · **Last Colony** (They Are Billions) · **Lane Clash** (lane battler) |
+| Economy and building | **Hearth and Haul** (Knights and Merchants) · **Underlord** (Dungeon Keeper) |
+| 2D and experiments | **Crystal Dunes** (tiles, Dune II) · **Green Hills** (2D sprites on 3D terrain) · **Planets** (spherical planets and orbits) · **Wildfire** (fields: wildfires and creep) |
+| FPS | **Crossfire Arena** (5v5) · **Breach Protocol** (tactical rounds) · **Last Survivor** (100-player battle royale) · **Aim Lab** (shooting range) |
+
+---
+
+## What's inside
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-**Геймплей**
-- ECS-симуляция на fixed-point, реплеи, снимки для откатов
-- Поиск пути: A\*, HPA\*, flow fields, ORCA/RVO2
-- Экономика (добыча и потоки), стройка, производство, технологии, гарнизоны, дороги, территории
-- Рельеф с уклонами и линией видимости, карты до 2048², сферические планеты
-- ИИ противника, детерминированный генератор карт
-- Триггеры, Lua 5.4, нативные C++-модули
+**Gameplay**
+- Fixed-point ECS simulation, replays, snapshots for rollback
+- Genre modules: RTS (economy, construction, armies, AI) and FPS (authoritative server, large worlds)
+- 88 libraries: movement, combat, weapons, senses, dialogue, turns, cards, puzzles, runs, rhythm, production
+- Pathfinding: A\*, HPA\*, flow fields, navmesh, ORCA/RVO2
+- Terrain with slopes and line of sight, maps up to 2048², spherical planets
+- Triggers, Lua 5.4, native C++ modules
 
 </td>
 <td width="50%" valign="top">
 
-**Картинка и звук**
-- Свой RHI: Metal, GLES3 / WebGL2, GL 3.3
-- PBR, glTF/OBJ, скелетная и процедурная анимация
-- Тени, динамический свет, ночь, постэффекты, Shader Graph
-- Частицы с модулями Unity ParticleSystem и импорт из Unity
-- Рельеф: чанки, CDLOD, splat-материалы, вода
-- Звук: 3D, адаптивная музыка, сжатие под платформу
+**Graphics and audio**
+- Own RHI: Metal, GLES3 / WebGL2, GL 3.3
+- PBR, glTF/OBJ, skeletal and procedural animation
+- Shadows, dynamic lights, night, post-effects, Shader Graph
+- Particles with Unity ParticleSystem modules and an importer from Unity
+- 2D: sprites, tile maps with autotiling
+- Audio: 3D, adaptive music, per-platform compression
 
 </td>
 </tr>
 <tr>
 <td valign="top">
 
-**Инструменты**
-- Редактор с окнами, как в Unity: сцена, инспектор, рельеф, эффекты, свет, UI, тест с ботами и симулятор устройств
-- `aiversemcp` — MCP-сервер для агентов
-- Мастер «Сделать игру»
-- 118 навыков (skills) и каталог переиспользуемых библиотек механик
-- Импорт ресурсов старых игр из вашей собственной копии
+**Tools**
+- Unity-style docking editor: scene, inspector, terrain, effects, lighting, UI, play test and device simulator
+- `aiversemcp` — MCP server for agents
+- **Make a game** wizard
+- 118 skills for agents and genre kits with acceptance checklists
+- Importers for assets of classic games from your own copy
 
 </td>
 <td valign="top">
 
-**Выпуск**
+**Shipping**
 - `aiversebuild`: .app, Xcode, Gradle/APK, web, .exe
-- Ресурс-паки `.rpak` (zstd), разбиение и докачка контента
-- Плагины сторов и рекламы
-- UI игры на HTML/CSS (RmlUi), локализация
-- Сетевая игра: UDP и WebSocket, выделенный сервер, Elo-матчмейкинг
-- Мета-библиотека и LiveOps
+- `.rpak` resource packs (zstd), split builds and content download
+- Store and ads plugins
+- In-game UI in HTML/CSS (RmlUi), localization
+- Multiplayer: UDP and WebSocket, dedicated server, Elo matchmaking
+- Meta library and LiveOps
 
 </td>
 </tr>
@@ -166,73 +220,75 @@ flowchart LR
 
 ---
 
-## Быстрый старт
+## Quick start
 
-**1. Собрать движок** (macOS; нужны Xcode и CMake):
+**1. Build the engine** (macOS; requires Xcode and CMake):
 
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app        # редактор: хаб проектов и шаблоны
+open build/mac/AiverseEditor.app        # editor: project hub and templates
 ```
 
-Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Если компилировать не хочется,
-в ветке `builds` есть готовые сборки редактора и инструментов
-([подробнее](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+Linux: `cmake --preset linux-release && cmake --build build/linux-release`. If you'd rather not compile,
+the `builds` branch has a prebuilt editor and tools
+([details, in Russian](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
 
-**2. Сделать игру.** В хабе нажмите **«Сделать игру»** или создайте проект из шаблона. Игру можно
-сразу запустить с ботами в окне Game.
+**2. Make a game.** In the hub, click **Make a game** or create a project from a template. You can
+play it with bots right away in the Game window.
 
-**3. Подключить AI-агента.** Окно **Agent** в редакторе показывает готовую конфигурацию. Для Claude Code:
+**3. Connect an AI agent.** The **Agent** window in the editor shows a ready-made config. For Claude Code:
 
 ```bash
 claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 ```
 
-После этого агенту можно сказать, например: *«Сделай стратегию в духе Northgard на зимней карте,
-проверь баланс трёх фракций ботами и собери web-версию»*.
+Then you can tell the agent something like: *"Make a Northgard-style strategy on a winter map, check
+the balance of three factions with bots and build a web version."*
 
-**4. Выпустить:**
+**4. Ship:**
 
 ```bash
-./build/mac/aiversebuild --project "Моя игра.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---
 
-## Статус
+## Status
 
-Движок активно развивается. Что проверено:
+The engine is under active development. What has been verified:
 
-- ✅ **Linux**: клиент, редактор, тесты, матчи ботов; одинаковые контрольные суммы на x64 и ARM64
-- ✅ **macOS / Metal**: сборка, тесты, игра; `aiversebuild` → .app и проект iOS со сборкой для симулятора
-- ✅ **Web**: матч запускается в headless Chromium (WebGL2)
-- ✅ **Windows**: .exe кросс-сборкой MinGW, запуск под Wine
-- ⏳ **Android** (APK собирается только в CI), **iOS на устройстве** и **Windows на реальном железе** — ещё не запускались
-- ⏳ Часть Metal-шейдеров новых подсистем ещё не компилировалась
+- ✅ **Linux**: client, editor, tests, bot matches; identical checksums on x64 and ARM64
+- ✅ **macOS / Metal**: build, tests, game; `aiversebuild` → .app and an iOS project with a simulator build
+- ✅ **Web**: a match runs in headless Chromium (WebGL2)
+- ✅ **Windows**: .exe cross-built with MinGW, run under Wine
+- 🛠 Ready-made templates for genres beyond RTS and FPS are in progress
 
-Подробности по каждой подсистеме — в разделе
-[«Проверено / не проверено»](docs/overview.md#проверено--не-проверено).
+Per-subsystem details are in
+[Verified / not verified](docs/overview.md#проверено--не-проверено) (in Russian).
 
 ---
 
-## Документация
+## Documentation
+
+Most documents are written in Russian; `AGENTS.md`, the library docs and a few technical guides are in English.
 
 | | |
 |---|---|
-| [**Подробный обзор**](docs/overview.md) | все подсистемы, сборка, платформы, CI, релизы |
-| [Формат игры](docs/game-format.md) | `game.json`, `rules.json`, карты и все блоки данных |
-| [Мастер «Сделать игру»](docs/game-wizard.md) | как из идеи и арта получается готовый проект |
-| [Скриптинг](docs/scripting.md) · [C++-модули](docs/native-modules.md) | когда данных не хватает |
-| [Ландшафт](docs/terrain.md) · [Планеты](docs/planets.md) · [Поиск пути](docs/pathfinding.md) | мир и движение |
-| [Частицы](docs/particles.md) · [Модели](docs/models.md) · [Shader Graph](docs/shader-graph.md) | картинка |
-| [Мета-игра](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Плагины](docs/plugins.md) | монетизация и сторы |
-| [FPS](docs/fps.md) · [Большие миры](docs/large-worlds.md) | FPS-модуль |
-| [AGENTS.md](AGENTS.md) | правила для агентов, которые меняют сам движок |
-| [Миграция с RTSEngine](docs/aiverse-migration.md) | старые имена, проекты и параметры сборки |
+| [**Full overview**](docs/overview.md) | every subsystem, building, platforms, CI, releases |
+| [Game format](docs/game-format.md) | `game.json`, `rules.json`, maps and all data blocks |
+| [Genre packages](docs/genre-packages.md) · [Libraries](docs/libraries.md) | mechanics for any genre |
+| [Make a game wizard](docs/game-wizard.md) | how an idea plus art becomes a finished project |
+| [Scripting](docs/scripting.md) · [C++ modules](docs/native-modules.md) | when data isn't enough |
+| [Terrain](docs/terrain.md) · [Planets](docs/planets.md) · [Pathfinding](docs/pathfinding.md) | world and movement |
+| [Particles](docs/particles.md) · [Models](docs/models.md) · [Shader Graph](docs/shader-graph.md) | visuals |
+| [Meta game](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monetization and stores |
+| [FPS](docs/fps.md) · [Large worlds](docs/large-worlds.md) | FPS module |
+| [AGENTS.md](AGENTS.md) | rules for agents that change the engine itself |
+| [Migrating from Unity](docs/engine-import.md) | importing scenes, prefabs and assets, then porting the logic with an agent |
 
-## Лицензия
+## License
 
-[MIT](LICENSE). Сторонние библиотеки лежат в `third_party/` со своими лицензиями (только MIT, BSD, zlib,
-OFL, CC0, CC-BY). Оригинальные ресурсы коммерческих игр в репозиторий не входят: импортёры читают
-их из вашей собственной копии.
+[MIT](LICENSE). Third-party libraries live in `third_party/` with their own licenses (MIT, BSD, zlib,
+OFL, CC0 and CC-BY only). Original assets of commercial games are not included: importers read them
+from your own copy.

@@ -1,7 +1,8 @@
 # AGENTS.md — rules for coding agents working on AIVERSE
 
 Read this file completely before changing anything. It is short on purpose. `README.md` is the
-short user-facing introduction (in Russian), `docs/overview.md` the detailed overview; this file is the engineering contract.
+short user-facing introduction (English, with translations `README.<lang>.md`, see §11),
+`docs/overview.md` the detailed overview; this file is the engineering contract.
 
 ## 1. What this is
 
@@ -203,8 +204,8 @@ Partial earlier attempts for models / UI / packs exist as branches `agent-models
 Shared touch points and how to use them:
 - `CMakeLists.txt`: add your sources in your own `add_library` block; don't reorder others.
 - `tests/tests.cpp`: append tests at the end (before `main`), don't edit others' tests.
-- `docs/overview.md` (detailed overview): add or edit only your own section. `README.md` is a short
-  landing page — don't add subsystem sections there.
+- `docs/overview.md` (detailed overview): add or edit only your own section.
+- `README.md` + translations: short landing page, update rules in §11.
 - Sim → presentation: use existing `SimEvent`s; if you need a new event, ask the sim owner (or add
   it at the end of `GameEvent` in `RtsModule.h` and mention it in the commit).
 
@@ -573,3 +574,36 @@ GENERATED responsibility/index map, not a replacement for the source catalogs.
   Isolation checks cover default build, actual link commands and binary symbols;
   do not rely solely on dead stripping or a successful compile. Core engine libraries
   already required by a game remain its baseline, not optional skill packages.
+
+## 11. README: keep it current when you ship a feature
+
+`README.md` (English) is the project's front page and the source of truth; `README.ru.md`,
+`README.zh-CN.md`, `README.ja.md`, `README.ko.md`, `README.es.md`, `README.pt-BR.md`,
+`README.de.md` and `README.fr.md` are its translations. Detailed descriptions belong in
+`docs/overview.md` and `docs/*.md`, not in the README.
+
+**When to update.** In the same branch as the feature, if it changes what a user or an agent can do:
+a new genre package or genre module, a new template, a new platform or store/ads plugin, a new tool,
+editor window or MCP area, an importer (Unity, Godot, ...), or a change of counts quoted in the README
+(templates, libraries, skills, MCP tools). Bug fixes, refactors and internal changes do not touch it.
+
+**Where.** Find the matching place and change it there — never add a new section for one feature:
+- genre mechanics → the «Any genre» table (one row per genre; add the package name to the row);
+- templates → the «Ready-made templates» table; engine parts → the «What's inside» lists;
+- importers / porting → «Coming from Unity»; tools and setup → «Quick start»;
+- verified platforms → «Status» (only what was actually verified; never write "not run",
+  "not verified" or "untested" there — unverified details go to `docs/overview.md`);
+- a new document worth reading → one row in «Documentation».
+
+**How.**
+- Change `README.md` and **all eight translations in the same commit**. Translate the text
+  properly; keep code, commands, identifiers, file names and product names untranslated.
+  Translations keep exactly the structure of `README.md`: same sections, rows, order, links and images.
+- Every claim must be backed by the repository (code, tests, docs). No future plans as features,
+  no invented numbers. Prefer capabilities to raw timings ("armies of thousands of units" rather
+  than "13 ms per order"): a millisecond figure without context reads as a cost.
+- Keep it short: one line per item, no paragraphs about internals.
+- Screenshots live in `docs/images/readme/` (PNG/JPEG, ≤ 1 MB each, real engine renders only).
+- Run `python3 tools/readme/check.py` — it must report 0 problems (structure of every
+  translation, language bar, broken links and images).
+
