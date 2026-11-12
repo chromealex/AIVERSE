@@ -119,7 +119,7 @@ def rv(v):
     if not math.isfinite(v):
         return 0
     f = float('%.5g' % v)
-    if f == 0:
+    if abs(f) < 1e-4:   # JSON would write an exponent (7e-05), which game data does not allow; such values are noise
         return 0
     return int(f) if f.is_integer() and abs(f) < 1e9 else f
 
