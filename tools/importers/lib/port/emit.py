@@ -209,7 +209,7 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
     if is2d: manifest['camera'] = dict(projection='ortho',pitch=90,yaw=0,rotate=False)
     if material_report.get('packaging'): manifest['packaging'] = material_report.pop('packaging')
     writer.json('game.json',manifest)
-    writer.json(ident(model['name'])+'.rtsproj',dict(format=1,name=model['name'],manifest='game.json'))
+    writer.json(ident(model['name'])+'.aiverse',dict(format=1,name=model['name'],manifest='game.json'))
     # VFX runs into a staging folder so repeat imports cannot overwrite edited effects/textures.
     if model['engine']=='unity':
         importer = Path(__file__).resolve().parents[2]/'unity_vfx/import.py'
@@ -223,7 +223,7 @@ def emit(model, out, scale=1, mapping=None, mode='auto'):
                     for p in sorted(Path(staging).rglob('*')):
                         if p.is_file(): writer.write(p.relative_to(staging).as_posix(),p.read_bytes())
                     item(model,source,'approx','Effects converted; event bindings require semantic review.',key='vfx',details=report)
-    writer.write('.rpakignore', b'# Import provenance and source code are editor-only.\nport.json\nport-report.json\nport-report.md\nport-materials.json\n.port-state.json\n*.rtsproj\n')
+    writer.write('.rpakignore', b'# Import provenance and source code are editor-only.\nport.json\nport-report.json\nport-report.md\nport-materials.json\n.port-state.json\n*.aiverse\n*.rtsproj\n')
     writer.json('port.json',neutral)
     report = dict(format=1,engine=model['engine'],sourceRoot=str(root),items=model['items'],scripts=model['scripts'],summary={s:sum(x['status']==s for x in model['items']) for s in ('exact','approx','missing','resolved')})
     context = {e['source']: e for e in model['entities']}

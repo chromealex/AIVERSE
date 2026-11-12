@@ -1,0 +1,40 @@
+{
+"skeleton": {"spine": "4.0.64", "x": -10, "y": -10, "width": 40, "height": 30},
+"bones": [
+  {"name": "root"},
+  {"name": "body", "parent": "root", "length": 10, "x": 5, "y": 2},
+  {"name": "arm", "parent": "body", "length": 8, "x": 10, "rotation": 90},
+  {"name": "hand", "parent": "arm", "x": 8},
+  {"name": "target", "parent": "root", "x": 15, "y": 12},
+  {"name": "follow", "parent": "root"}
+],
+"slots": [
+  {"name": "body", "bone": "body", "attachment": "box"},
+  {"name": "arm", "bone": "arm", "attachment": "arm", "blend": "additive"},
+  {"name": "skin", "bone": "body", "attachment": "skin", "color": "ff000080"}
+],
+"ik": [{"name": "reach", "order": 0, "bones": ["arm"], "target": "target", "mix": 0}],
+"transform": [{"name": "glue", "order": 1, "bones": ["follow"], "target": "hand", "mixRotate": 0, "mixScaleX": 0, "mixShearY": 0}],
+"skins": [{"name": "default", "attachments": {
+  "body": {"box": {"width": 16, "height": 8}},
+  "arm": {"arm": {"width": 10, "height": 20}},
+  "skin": {"skin": {"type": "mesh", "path": "box", "uvs": [0, 0, 1, 0, 1, 1], "triangles": [0, 1, 2],
+            "vertices": [1, 1, 0, 0, 1,  2, 1, 4, 0, 0.5, 2, 4, 0.5, 0.5,  1, 2, 0, 0, 1], "hull": 3}}
+}}],
+"events": {"step": {"int": 3}},
+"animations": {
+  "wave": {
+    "bones": {"body": {"rotate": [{"value": 0}, {"time": 1, "value": 90}],
+                       "translate": [{"x": 0, "curve": "stepped"}, {"time": 0.5, "x": 4, "y": 2}]}},
+    "slots": {"body": {"rgba": [{"color": "ffffffff"}, {"time": 1, "color": "00000000"}]},
+              "arm": {"attachment": [{"time": 0.5, "name": null}]}},
+    "ik": {"reach": [{"mix": 0}, {"time": 1, "mix": 1}]},
+    "deform": {"default": {"skin": {"skin": [{"time": 0}, {"time": 1, "offset": 0, "vertices": [2, 0]}]}}},
+    "drawOrder": [{"time": 0.5, "offsets": [{"slot": "body", "offset": 2}]}],
+    "events": [{"time": 0.25, "name": "step"}, {"time": 0.75, "name": "step", "int": 7}]
+  },
+  "ease": {
+    "bones": {"body": {"rotate": [{"value": 0, "curve": [0.25, 0, 0.5, 100]}, {"time": 1, "value": 100}]}}
+  }
+}
+}

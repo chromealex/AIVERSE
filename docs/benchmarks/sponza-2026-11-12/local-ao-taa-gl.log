@@ -1,0 +1,3 @@
+GPU: GL33 Apple M3 Ultra / 4.1 Metal - 89.4; RGBA16F=1
+Scene shaders: 22 GLSL/MSL variants PASS
+TAA stationary centroid drift: x=0.0361 y=0.0478 pixels, edge transition=2: PASS

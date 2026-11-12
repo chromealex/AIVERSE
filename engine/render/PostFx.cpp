@@ -143,8 +143,20 @@ void PostFx::configure(const Json& game, const Json& map, std::vector<std::strin
 
 void PostFx::setSettings(PostFxSettings s) { settings_ = std::move(s); error_.clear(); }
 
+bool PostFx::hdrRequested() const {
+    if (!dev_ || hdrFailed_ || !enabled_ || !settings_.enabled || quality_ <= PostFxQuality::Low || !dev_->supports(gfx::PixelFormat::RGBA16F)) return false;
+    HdrMode mode = settings_.hdr;
+    if (const char* e = std::getenv("AIVERSE_HDR")) {
+        const std::string v = e;
+        if (v == "off" || v == "0") mode = HdrMode::Off;
+        else if (v == "on" || v == "1") mode = HdrMode::On;
+        else if (v == "auto") mode = HdrMode::Auto;
+    }
+    return hdrAtQuality(mode, quality_, dev_->supports(gfx::PixelFormat::RGBA16F));
+}
+
 bool PostFx::active() const {
-    return dev_ && triangle_.valid() && enabled_ && settings_.anyActive(quality_);
+    return dev_ && triangle_.valid() && enabled_ && (hdrRequested() || settings_.anyActive(quality_));
 }
 
 PostFx::Sized& PostFx::sized(int w, int h) {
@@ -166,13 +178,15 @@ PostFx::Sized& PostFx::sized(int w, int h) {
 PostFx::Target& PostFx::target(Sized& s, int role, int w, int h) {
     w = std::max(w, 1); h = std::max(h, 1);
     Target& t = s.targets[role];
-    if (t.tex.valid() && t.w == w && t.h == h) return t;
+    const auto format = hdrFrame_ ? gfx::PixelFormat::RGBA16F : gfx::PixelFormat::RGBA8;
+    if (t.tex.valid() && t.w == w && t.h == h && t.format == format) return t;
     release(t.tex);
     gfx::TextureDesc td;
     td.width = w; td.height = h;
     td.renderTarget = true;
     td.filter = gfx::Filter::Linear;
     td.label = "postfx target";
+    td.format = format; t.format = format;
     t.tex = dev_->createTexture(td);
     t.w = w; t.h = h;
     return t;
@@ -324,10 +338,22 @@ gfx::TextureHandle PostFx::graphTexture(const std::string& path) {
 }
 
 gfx::PassDesc PostFx::scenePass(const gfx::PassDesc& out, int w, int h) {
+    hdrFrame_ = hdrRequested();
     Sized& s = sized(w, h);
     gfx::PassDesc p = out;
     p.colorTarget = target(s, kScene, w, h).tex;
     p.depthTarget = depthFor(s, w, h);
+    sceneReady_ = p.colorTarget.valid() && p.depthTarget.valid();
+    if (!sceneReady_ && hdrFrame_) {
+        hdrFailed_ = true; hdrFrame_ = false;
+        std::fprintf(stderr, "[postfx] HDR allocation failed; falling back to RGBA8: %s\n", dev_->lastError().c_str());
+        return scenePass(out, w, h);
+    }
+    if (!sceneReady_) return out;
+    if (hdrFrame_) for (int i = 0; i < 3; ++i) {
+        const float c = std::max(p.clearColor[i], 0.0f);
+        p.clearColor[i] = c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    }
     p.clearColorEnabled = true;     // the composite covers every pixel; clearing is cheaper than loading on tilers
     p.clearDepthEnabled = true;
     return p;
@@ -335,6 +361,7 @@ gfx::PassDesc PostFx::scenePass(const gfx::PassDesc& out, int w, int h) {
 
 void PostFx::draw(Sized& s, const Target& dst, gfx::PipelineHandle pipe, const void* u, size_t size,
                   std::initializer_list<std::pair<int, gfx::TextureHandle>> tex) {
+    if (!dst.tex.valid() || !pipe.valid()) return; // never redirect a failed effect to the screen
     gfx::PassDesc p;
     p.colorTarget = dst.tex;
     p.depthTarget = depthFor(s, dst.w, dst.h);
@@ -352,6 +379,7 @@ void PostFx::draw(Sized& s, const Target& dst, gfx::PipelineHandle pipe, const v
 
 void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& f) {
     stats_ = {};
+    if (!sceneReady_) { auto p = out; p.clearColorEnabled = p.clearDepthEnabled = false; dev.beginPass(p); return; }
     const int w = std::max(f.width, 1), h = std::max(f.height, 1);
     stats_.width = w; stats_.height = h;
     Sized& set = sized(w, h);
@@ -367,7 +395,7 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
 
     // ---- FXAA: the composite reads the anti-aliased image instead of the scene
     Target src = scene;
-    if (const PostFxEffect* e = find(PostFxType::Fxaa); e && program(kFxaa).valid()) {
+    if (const PostFxEffect* e = find(PostFxType::Fxaa); !hdrFrame_ && e && program(kFxaa).valid()) {
         SimpleU u{};
         put(u.px, 1.0f / float(w), 1.0f / float(h), flip, 0);
         put(u.p0, e->get("subpixel"), 0, 0, 0);
@@ -487,7 +515,7 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
     put(u.gamma, 1, 1, 1, 0.5f);
     put(u.gain, 1, 1, 1, 0);
     put(u.grade0, 0, 1, 1, 8);
-    put(u.filt, 0, 0, 0, 1);
+    put(u.filt, hdrFrame_ ? 1.0f : 0.0f, f.lighting.tonemap ? 1.0f : 0.0f, 1, 1);
     for (auto* e : active) {
         switch (e->type) {
         case PostFxType::Pixelate: mask |= kPfPixelate; u.grade1[3] = std::max(1.0f, e->get("size")); break;
@@ -509,7 +537,9 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
             break;
         case PostFxType::ColorGrade: {
             mask |= kPfGrade;
-            const float ex = std::exp2(e->get("exposure"));
+            const float exposure = std::exp2(e->get("exposure"));
+            const float ex = hdrFrame_ ? 1.0f : exposure;
+            if (hdrFrame_) u.filt[2] = exposure;
             const float t = e->get("temperature"), ti = e->get("tint");
             const float* fl = e->color("filter");
             const float wb[3] = {1.0f + 0.25f * t + 0.1f * ti, 1.0f - 0.2f * ti, 1.0f - 0.25f * t + 0.1f * ti};
@@ -553,7 +583,17 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
         const auto it=graphPaths_.find(graphEffect->shaderGraph.dump(-1));
         if(it!=graphPaths_.end())for(const auto& path:it->second)graphImages.push_back(graphTexture(path));
     }
-    dev.beginPass(out);
+    const PostFxEffect* finalAa = hdrFrame_ ? find(PostFxType::Fxaa) : nullptr;
+    bool aaAfter = finalAa && program(kFxaa).valid();
+    gfx::PassDesc compositeOut = out;
+    Target aaTarget;
+    if (aaAfter) {
+        hdrFrame_ = false; aaTarget = target(set, kAa, w, h); hdrFrame_ = true;
+        const auto aaDepth = depthFor(set, w, h);
+        aaAfter = aaTarget.tex.valid() && aaDepth.valid();
+        if (aaAfter) { compositeOut.colorTarget = aaTarget.tex; compositeOut.depthTarget = aaDepth; }
+    }
+    dev.beginPass(compositeOut);
     dev.setViewport({0, 0, w, h});
     if (pipe.valid()) {
         dev.setPipeline(pipe);
@@ -569,6 +609,12 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
         dev.draw(3);
     }
     ++stats_.passes;
+    if (aaAfter) {
+        dev.endPass(); dev.beginPass(out); dev.setViewport({0, 0, w, h});
+        SimpleU au{}; put(au.px, 1.0f / w, 1.0f / h, flip, 0); put(au.p0, finalAa->get("subpixel"), 0, 0, 0);
+        dev.setPipeline(pipes_[kFxaa]); dev.setVertexBuffer(triangle_); dev.setUniforms(0, &au, sizeof au);
+        dev.setTexture(0, aaTarget.tex); dev.draw(3); ++stats_.passes;
+    }
 }
 
 } // namespace aiverse::render

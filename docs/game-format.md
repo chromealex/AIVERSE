@@ -83,6 +83,7 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | key | meaning |
 |---|---|
 | `supplyCap` | max supply/population (default 200) |
+| `modes`, `matchModes`, `timedRules`, `matchStats` | match modes (domination, king of the hill, time limit, sudden death, battle-royal zones), presets picked by map `matchMode`, player statuses by time slots, match statistics: see "Match modes" |
 | `ai` | `{"controller":"builtin"}` (default) or `{"controller":"scripted"}`. Scripted control makes the generic RtsAI submit no commands in client, editor and headless. The game must provide its own controller; Lua handlers, human/network commands, combat, production and victory remain enabled. This is not the `waves` player flag and does not exempt players from defeat. |
 | `maxQueue` | production queue length (5) |
 | `costModel` | `"upfront"` (pay when ordering) or `"progressive"` (Total Annihilation: pay while building; stalls when short) |
@@ -304,6 +305,7 @@ Map players choose a faction and a `start` point; start objects spawn there.
   },
   "fields": [{"resource": "ore", "rows": ["0000999000", "..."]}],   // density digits 1..9 of cellMax (or {"center": [x,z], "radius": 3})
   "regions": {"rows": ["AAAABBBB", "..."], "names": {"A": "Долина", "B": "Холмы"}},
+  // entity keys: "facing": degrees clockwise on screen from north (0 north, 90 east = default, 180 south, 270 west)
   "entities": [{"type": "townhall", "owner": 1, "pos": [9, 24]}, {"type": "goldmine", "owner": 0, "pos": [6, 16], "amount": 8000},
                {"type": "ogre", "owner": -1, "pos": [32, 10]}],     // owner: 0 neutral, 1..N players, -1 hostile creeps
   "roads": [["base_a", "village_1"]],                                 // by entity id (Mushroom Wars)
@@ -658,6 +660,78 @@ cell) and adds `left` + `right` parallel lanes `spacing` cells apart (pulled bac
 would hit an obstacle). Sent units are spread over the lanes round-robin and follow their lane exactly. Lanes are
 rebuilt when garrison buildings or obstacles change (`GameState::lanes`, `lanesDirty`, event `kEvLanesChanged`).
 
+## Routes, groups, multiscreen (Bunker Wars)
+
+A 1:1 fixed-point port of Bunker Wars `RoutesModule` (Spline / Route), the group behaviour of `UnitsModule`
+(Group) and `MultiscreenModule` (`modules/rts/RtsRoutes*.cpp`). Units are in map cells: the BW importer uses
+**50 BW pixels per cell** and **z = -BW y**; the defaults below are the BW `BattleParametersInfo` values at that scale.
+
+**Map `routes`** (authored routes; when a map has them they replace the generated lanes and turn `lanes` on):
+
+```json
+"routes": [
+  {"from": "village_1", "to": "base_a",                  // entity ids (or "#<index>" into "entities"), both garrisons
+   "points": [[13.98, -2.62], [12.44, -2.2], {"at": [-12.2, 4.58], "offsets": [0,0,0,0.2,0,0,0,0], "zone": 2, "slowdown": 1.5}, [-13.74, 5]],
+   "lines": [[[13.98, -2.62], [11.47, -1.92], ...], ...], // optional raw nodes per line (BW rawSplineLines)
+   "blockers": ["rock_3"],                               // the route is closed while any of them is alive (BW closedRoutes)
+   "flying": false}                                      // flying route: fly column padding
+]
+```
+
+- Each route becomes `lanes.routes.lines` lanes (BW sub-splines, `unitsInRow`): line k follows its raw nodes when it
+  has at least two, else the control points with the column offset of k on the inner points (even lines left, odd
+  right; 0.5, 1.5, 2.5 columns of `columnPadding`, plus the per-point `offsets[k]`); a Catmull-Rom with `smooth`
+  nodes between points, trimmed by `trim` at both ends exactly as BW does. Lanes keep the route direction
+  (`Lane::a` = `from`), offsets are -1, +1, -2, +2... in line order (`lanesBetween` returns line 0 first).
+- Sends need a route (BW `FindUnlocked`): `kCmdSend` between garrisons without an open route is ignored;
+  `RtsModule::canSend` / `routeLength` (BW `Route.GetLength`, line 0) and Lua `game.can_send(a, b)` /
+  `game.route_length(a, b)` tell. The built-in AI only sends along routes.
+- Every line is walked at the progress of line 0 (BW `InterpolateByDistance` fast path: lane speed x length k /
+  length 0), so a row stays abreast through bends.
+- A route between entities whose `screenGroups` (map entity key, list of ints) do not match does not exist (BW
+  `CompareScreenGroups`: both empty match, one empty does not, else any shared group).
+- `zone` / `slowdown` per point only feed `routeAiLength` (BW `aiLength`); the speed of walkers comes from map zones.
+- As in BW, groups on crossing or shared routes do not fight each other: units pass through and the fight happens
+  at the target point. Units on routes shoot each other only when a skill gives them weapons (BW `UnitsAttack` /
+  `unitsAttack` config).
+- A garrison replaced in place (transform) keeps its routes; routes rebuild when an end or a blocker changes.
+
+**Rules** (all optional, inside `"lanes"`):
+
+| key | default | BW |
+|---|---|---|
+| `routes.lines` | 6 | `common.unitsInRow` (1..8) |
+| `routes.columnPadding` / `flyColumnPadding` | 0.4 / 0.9 | `units.columnsPadding` / `flyColumnsPadding` |
+| `routes.trim` | 0.2 | `routeVisualizer.pathPointOffset` |
+| `routes.smooth` | 10 | `Spline.BETWEEN_NODE_COUNT` |
+| `routes.inOut` | 2 | `MapRoutesModule.defaultInOutLength` (flying routes) |
+| `groups` | off | `true` or `{"rowSpacing": 1.4, "flyRowSpacing": 2.4}` (`units.rowsOffset` / `flyingRowsOffset`) |
+
+**Groups** (`lanes.groups`, BW `UnitGroup`): a send creates a group (`GameState::routes.groups`, id = `GroupTag`)
+that spawns a row of up to `lines` units, one per line, whenever the row in front has walked `rowSpacing` (the first
+row leaves at once). The garrison pays per row (units stay home, and defend, until they leave). A second send on the
+same route and side while the group is open merges into it (BW `AddNeedCount`: need = min(need + n - spawned,
+garrison) + spawned). The group closes when it is complete, when the garrison runs short of a full row, or when the
+source changes owner (the rest stay home). Without `groups` sends work as before (`pendingOut`, two per tick).
+
+**Map `screen`** (BW `MultiscreenModule`):
+
+```json
+"screen": {"size": [54.4, 30.4], "center": [27.2, 15.2], "bounds": [0, 20, 0, 0], "smooth": 10}
+```
+
+The playable window over a larger map: `size` (BW 2720 x 1520 px), start `center` (BW -offset; default the map
+centre), `bounds` = [left, right, top, bottom] how far the centre may move from its start (BW
+`gameplayRectOffset`; top = towards -z). Garrisons off the screen do not grow (BW `HouseModule`); `onScreen` is public
+for modes / AI. Scripts move it: `game.set_screen(x, z)` (clamped), `game.screen()` -> x, z, w, h,
+`game.on_screen(x, z)`. The client camera follows the centre (`smooth` per second) and does not scroll by itself.
+Screen centre, groups and route ends are saved and hashed.
+
+**Editor / MCP**: `route_list`, `route_set` (add / replace a route; points, offsets, lines, blockers), `route_delete`,
+`route_generate` (straight routes between every pair of garrisons, or within `maxDistance`, as the BW map editor's
+`MapRoutesModule.Setup`; `route_set` without points makes one), `screen_set`; the Scene view draws the lines of every
+route (line 0 brighter) while editing.
+
 ## Terrain overlays (visual `terrain` block)
 
 Presentation only (`modules/rts/view/RtsGroundFx.*`): the view reads the territory, dig, room and road layers and
@@ -752,6 +826,37 @@ Triggers can cast them: `{"type": "castAbility", "ability": "storm", "at": [20, 
 
 The same keys work inside effects of type `projectile`, `area` and `chain`, which is how skills nest
 (a projectile that leaves a burning area, an area that drops projectiles every second, ...).
+
+#### Skill objects (objects spawned from units, goals, magnets, souls)
+
+Optional delivery keys of `area` / `projectile` effects and the `pull` effect (`modules/rts/RtsSkillObjects.cpp`):
+
+| key | meaning |
+|---|---|
+| `origins` | a target filter (`shape`, `radius`, `affects`, `kind`, `inTransit`, `maxTargets`, `sort`, ...): one area / projectile **per chosen unit**, starting where it stands. A `motion: "lane"` area continues that unit's own lane from its position and direction (rolling stones) |
+| `origins.consume` | the chosen unit turns into the object: it dies silently (no death effects, no souls) |
+| `goal` | `point`, `target` (the clicked / followed structure, else the nearest structure), `groupTarget` / `groupSource` (where the origin unit was walking to / came from), `ownStructure` / `enemyStructure` (nearest), `caster`. Areas move there (`motion` becomes `toward`), stop and end; projectiles home in on it. Areas with a goal (or a lane and `onArrive`) live until they arrive |
+| `onArrive` | payload when the area reaches its goal or the end of its lane (target = the goal structure / the structure at the lane end) |
+| `onExpire` | payload when the area's lifetime runs out before it arrived or was used up (`maxTriggers`): mines that self-destruct |
+| `onDeath` | payload for every unit dying inside the area (point = where it died, target = the followed object); `maxTriggers` caps it (souls collector) |
+| `lifetime: [min, max]` | rolled with the sim RNG |
+| `start: "point"` | a projectile starts at the effect point instead of the caster (souls flying from where a unit died) |
+
+| `type` | keys | what it does |
+|---|---|---|
+| `pull` | `goal` (default `target`), `speed` (start velocity), `accel`, `minSpeed`, `maxSpeed` + filter | units fly straight into the goal structure: velocity += accel x dt, clamped; on arrival they enter it (assault / reinforce). One special move at a time. Magnet: a structure status with `tick.effects` [`pull` with a `radius`] |
+
+```json
+{"id": "petrify", "target": "group", "effects": [{"type": "area", "motion": "lane", "speed": 3, "radius": 0.3,
+  "origins": {"shape": "group", "consume": true}, "onArrive": [{"type": "garrisonKill", "amount": 2, "affects": "any"}]}]},
+{"id": "mines", "target": "point", "effects": [{"type": "area", "trigger": "contact", "maxTriggers": 1, "radius": 0.6, "lifetime": [9, 11],
+  "origins": {"radius": 4, "inTransit": true, "consume": true}, "effects": [{"type": "kill", "shape": "target"}]}]},
+{"id": "souls", "target": "structure", "effects": [{"type": "area", "motion": "follow", "radius": 4, "lifetime": 30, "trigger": "periodic", "interval": 1000,
+  "maxTriggers": 100, "affects": "any", "onDeath": [{"type": "projectile", "start": "point", "goal": "target", "speed": 3,
+  "effects": [{"type": "garrisonAdd", "amount": 1, "affects": "own"}]}]}]}
+```
+
+For the view: `Area::goal` / `Area::arrived`, `Pulled` (target, way, vel) on pulled units; events as for areas / projectiles.
 
 ### Effects
 
@@ -919,9 +1024,164 @@ Garrison structures, groups and lanes come from `garrison`, `kCmdSend` and `lane
 | Random N structures | `shape: map`, `kind: structure`, `sort: random`, `maxTargets: N` |
 | Auto / map skills | `autoEvery`, or a trigger action `castAbility` |
 | Passive skills | `passive: true` + `status` (in the loadout), or `requires` a tech |
+| RollingStone (Petrify) | group: `area` `motion: lane` + `origins` {`shape: group`, `consume`} + `onArrive` `garrisonKill` |
+| JumpingHeads | own group: `area` `goal: groupTarget` + `origins` {`consume`} + `onArrive` `garrisonKill` |
+| UnitMine (units leave mines) | `area` `trigger: contact`, `maxTriggers: 1`, `lifetime: [t-f, t+f]` + `origins` {`consume`}, `onExpire` (self-destruction) |
+| Magnet / Worm | structure status with `tick.effects` [`pull` `radius` `goal: target` `speed` `accel` `maxSpeed`] |
+| Souls collector | `area` `motion: follow` + `onDeath` [`projectile` `start: point` `goal: target` -> `garrisonAdd 1`] |
 
-Still needs code: **flying towers moving between points** (garrisons are fixed structures; a mobile
-garrison would need garrisons on units).
+Every Bunker Wars skill (44 cards with 10 levels, talents, campaign / map skills, the deleted hero skills)
+is converted from the client data by `tools/importers/bunkerwars/skills/convert.py`; the modificator ->
+primitive table with the fidelity of each mapping is in [Bunker Wars skills](bunkerwars-skills.md).
+
+Flying towers moving between points (mobile garrisons) belong to agent-bw-routes; the converter spawns
+them as `bw_flying_tower`.
+
+## Match modes (Bunker Wars: domination, king of the hill, time limit, sudden death, zones)
+
+Rule-level modes of Bunker Wars / Mushroom Wars 2 (`ModsModule`, `BattleRoyalModule`, `SuddenDeathModule`,
+`CustomRules`, `MoraleInfo`, `PlayerStatistic`), ported 1:1 in fixed point as generic data (`RtsModes.cpp`).
+Every block is optional; games without them keep their exact checksums and save format.
+
+```json
+"modes": {
+  "points": "garrison",                                     // what a "point" is: structures with a garrison (default) or "structures"
+  "domination": {"hold": 1.5, "rule": "auto", "type": "dom_tower", "garrison": 10},
+  "kingOfTheHill": {"score": 300, "teamScore": 300, "rate": 1, "alarm": 100, "type": "koh_tower", "garrison": 10},
+  "timeLimit": {"seconds": 120, "win": "maxPoints", "coefficient": 1, "speed": [{"remaining": 30, "speed": 1.5}, {"remaining": 10, "speed": 2}]},
+  "suddenDeath": {"at": 300, "preview": 3, "previewSpeed": 0.5, "end": 60, "counter": 5, "status": "sudden_death",
+                  "ruleSets": [[{"status": "fast_skills", "when": [{"from": 330, "to": 360}]}], [{"status": "double_income"}]]},
+  "zones": {"start": [{"rect": [0, 0, 40, 30], "stay": 60, "move": 20, "next": 0}], "steps": [{"rect": [5, 5, 30, 20], "stay": 9999}],
+            "neutralType": "village", "suddenDeathDelay": 30}
+},
+"matchModes": {"domination": {"modes": {"domination": {"hold": 1.5}}}, "koh": {"modes": {"kingOfTheHill": {}}, "victory": "noEntities"}},
+"timedRules": [{"status": "rush", "when": [{"from": 60, "to": 90}, {"every": 30, "duration": 5}]},
+               {"status": "underdog", "resource": "morale", "when": [{"levelBehind": 2}]}],
+"matchStats": true
+```
+
+Map keys: `"modes"` (replaces rules keys one by one, `false` switches a mode off), `"matchMode": "<preset>"` (a
+`matchModes` entry merged over rules `modes`; its `victory` applies unless the map has its own), entity
+`"modePoint": "domination" | "kingOfTheHill"` (a type can carry `"modePoint"` too). A lobby picks the mode by
+setting the map's `matchMode` (BW `BattleModesManager` / `WinModeInfo` -> preset ids). Sides are teams (BW FFA = one
+player per team, BW COOP = teams; the KotH score is shared by the team).
+
+| block | BW source | behaviour |
+|---|---|---|
+| (default) | `Conquest` | the normal `victory` (BW: a player with no units and no buildings is out = `noEntities`) |
+| `domination` | `Domination`, `BaseModule.dominationTimer` | a point's `hold` timer restarts on every owner change and runs while it is owned. When every domination point is owned (timers out, none neutral; points outside their owner's zone are skipped): `holdAny` (BW FFA) — sides owning none are out; `holdAll` (BW COOP) — one side owning them all wins. `auto`: `holdAny` when every team has one player. `type` / `garrison`: what the marked points become while the mode is on (BW domination building info and start value) |
+| `kingOfTheHill` | `KingOfTheHill`, `BaseModule.UpdateKingOfTheHillScore` | each side starts with `score` (`teamScore` when a team has several players) and loses `rate` per second per king point it owns (inside its zone); the first side at zero wins (lowest score, then lowest team id). Event at `alarm` (BW sound at 100) |
+| `timeLimit` | `TimeMod`, `BattleParametersInfo.timeModParameters` | counts `seconds` of game time down; at `remaining` the game speed becomes `speed` (BW gameplay time scale). At zero, by points per side: `maxPoints` — most wins, a tie of the best is a draw; `compare` — the only side with points x `coefficient` > best wins, else a draw. Sides without points take no part (as in BW) |
+| `suddenDeath` | `SuddenDeathModule`, `SuddenDeathInfo` | at `at` real seconds: preview (`preview` s, game speed `previewSpeed`), then every player gets `status` (BW `factor`: energy income / cooldowns — give the status `incomeMult` and `cooldownRate` mods). With `end` > 0 the side with most points wins `end` s later (all equal: draw; a tie of some: they win, the others draw — the match result is a draw); without `end` (BW `defaultTimeCount`) nothing ends. `counter` s before the start / the end `ModesState::sdCounter` is on (the counter screen). One of `ruleSets` (BW custom configs by league) is picked with the match RNG and joins `timedRules` (time slots shifted by `zones.suddenDeathDelay`) |
+| `zones` | `BattleRoyalModule`, `MapEnvironmentModule.BattleRoyal` | each player's zone is the `start` rect holding its first structure; a rect stays `stay` s, then morphs linearly into `steps[next]` over `move` s (real time). A point outside its owner's current rect turns neutral (and into `neutralType`; garrison kept). Rects are `[x, z, w, h]` in cells, half-open (BW rects are centred on their min corner: x = xMin - w / 2) |
+
+Clocks: BW scales the delta time of gameplay modules while zones, sudden death and time slots count unscaled
+ticks. Here a tick stays one tick: `RtsModule::speedScale()` (= time limit speed x preview speed) makes
+`Simulation::advance` run that many ticks per real tick; game timers (hold, KotH, time limit) use game time,
+zones / sudden death / `timedRules` use `ModesState::realTime` (sum of dt / speed). Network play steps ticks
+through the net session and does not apply the speed yet.
+
+`timedRules` (BW `CustomRulesInfo` rules + `TimeSlots`): every player has `status` (a player status: its `mods`,
+`incomeMult`, `flags`) while one of its `when` slots holds (no slots: always). A slot: `from` / `to` (real seconds,
+inclusive; `inverse`: keeps BW's semantics — outside the window it fails, inside only `every` can enable it),
+`every` / `duration` (t % every <= duration), `levelBehind` N (with `resource`: the player's level is exactly N
+below the best player's), `everyAbilities` N (the player's skill uses are a positive multiple of N). Custom rule
+kinds map to status mods: UnitsSpeed `speed`, UnitsAttack `damage`, VillageDefense `defense`, Production
+`productionSpeed`, PlayerSkillsCooldown / FastSkillRecharge `cooldownRate`, PlayerEnergy `incomeMult`, Upgrade
+`upgradeCost`, MaxMorale / MinMorale: resource `storage` / `min`.
+
+Resource `levels` (BW `MoraleInfo`: morale stars):
+
+```json
+"morale": {"start": 0, "min": 0, "capped": true, "storage": 8000, "levels": [
+  {"at": 0},
+  {"at": 1000, "mods": [{"stat": "damage", "mul": 1.1}, {"tags": ["village"], "stat": "defense", "mul": 1.1}, {"stat": "speed", "mul": 1.05}],
+   "decay": {"every": 5, "amount": 50, "after": 3}}]}
+```
+
+The player's level is the last one whose `at` the stock reached (none below the first); its `mods` apply to the
+player's objects (BW damagePercent / shieldPercent / speedPercent). `decay`: every `every` seconds of the current
+level the stock drops by `amount` if nothing was gained for more than `after` seconds (BW subtractPointsTime /
+Value / Cooldown). Gains come from the resource `gain` block / effects as before.
+
+`matchStats` (on with any mode): per player counters `ModesState::stats` (`MatchStat`: kills, lost, produced,
+captured, capturedNeutral, structuresLost, upgrades, abilities, maxUnits, maxPoints, points, levelUps, levelDowns,
+maxLevel, modeScore) and `abilityUses` per player ability — BW `PlayerStatistic` keys UnitsKilledByPlayer*,
+UnitsDeadBy*, UnitsProduceCount, PointsCatched*, PointsLost, PointsUpgraded, SkillSlot1..5, MaxUnitsOnTheField,
+PointsCount, MoraleAddStar / MoraleLostStar, MaxMoraleStars, KingOfTheHillPoints (fixed raw). `ModesState::outcome`
+per player: 1 won, 2 lost, 3 draw. Read with `RtsModule::matchStat`, `modeZone` (camera of a zone map),
+`speedScale`; events `kEvModePhase` (`ModePhaseEvent`: counter, preview, start, end, time step, time up, KotH alarm,
+domination held, zone lost / changed); defeats by a mode carry `kDefeatMode`.
+
+Not covered yet: BW `HeroCustomRules` meta flow (league configs come from their backend), custom rule kinds that
+are not stat mods (MoveUnits, AllowedTypes, Clouds, UseSkill, RandomUpgrade, CatchLevelDecreaseTo ...),
+`GameplayConditions` (HUD attack hints: use trigger conditions), multiscreen maps without zones, per-player
+morale gain multipliers (`moraleIncreaseCoefficient`, AI complexity coefficients), a team member without units
+staying in COOP conquest until the whole team is out.
+
+#### Bunker Wars computer player (agent-bw-ai)
+
+`"ai": {"controller": "bw"}` hands every bot slot to the Bunker Wars / Mushroom Wars 2 bots ported as code
+(`modules/rts/RtsBwAI*`): **AI6** (map state, ranker, worker; Domination and King of the Hill modes; the
+`map17005` / `map11001` custom factories), **Bishop** (task queue), **Ashley**, the per-skill casters
+(`AISkill*`), debuts and map bot triggers. They only submit commands (sends with exact counts: `kCmdSend`
+param < 0 = that many units, upgrades / conversions, player abilities, surrender); all maths is Fixed. Points
+are the garrison structures in map order (point index n = n-th garrison entity of the map file); a point's BW
+role comes from `roles` tags, else from the type: weapons = tower, `playerMods` = smithy, breeds = house. Levels
+are the type `level`; upgrades / conversions are its `upgrades` (next level of the same role / lowest level of
+another role, paid with `cost.garrison`).
+
+```json
+"ai": {"controller": "bw", "bw": {
+  "difficulty": "normal",                 // default profile: easy | normal | hard | expert | bishop | ashley | own
+  "players": {"2": "expert"},             // per slot
+  "bots": [2],                            // slots played by bots (the action detector times only the others)
+  "mode": "auto",                         // auto | standard | domination | kingOfTheHill
+  "roles": {"house": ["village"], "tower": ["tower"], "smithy": ["forge"]},
+  "objectives": {"domination": ["flag"], "kingOfTheHill": ["throne"]},   // tags of objective points
+  "skills": {"freeze": "Freeze"},         // player ability -> BW caster (else inferred from its effects)
+  "pxPerCell": 40,                        // BW pixel constants (200 px "on the way", 2400 px max distance) in cells
+  "vars": {"blizzard": "blizzard", "kothScore": "koth_{player}", "kothMax": "koth_max"},
+  "profiles": {"boss": {"base": "expert", "minGroupSize": 10}}
+}}
+```
+
+Profile keys (BW AI6ComplexityInfo / AI6SharedComplexityInfo / AIBishopComplexityInfo): `algorithm` (ai6,
+bishop, ashley, none), `complexity`, `useSkills`, `canMoveInBlizzard`, `skillSlotAwait` [4 s], `minDelay`,
+`maxDelay`, `ignoreAverageActionTime`, `attackLimitPerUpdate`, `defenseLimitPerUpdate`, `limitOneUpgrade`,
+`structuredAttacks`, `attackDistanceSafety` (0..1), `reserveUnitsForCounterAttackFactor`, `minGroupSize`,
+`minGroupSizeOverride`, `attackTimeouts` {"point": s}, `pointRankFactors` {"point": [[s, factor], ...]},
+`counterAttackScanRadiusFactor`, `canDefendPointMinTimeFactor`, `towerRankFactor`, `smithyRankFactor`,
+`attackDistanceFactor`, `upgradeTimeout`, `allowConvert`, `defeat` [{timeToCheck, chance %, conditions:
+[{type: points | units | morale | time, cmp, delta}]}] (all hold: the bot surrenders), `custom` (map17005 +
+`freezeWave` {ability | interval, attacks, defenses, refresh}; map11001 + `testAttack` {target, playerSide,
+developTimeout}); Bishop: `analyzePeriod`, `attack` / `defense` {delay, minPercent, minCount, maxBuildings},
+`additionalAttackCount`, `increaseUnitsCoefficient`, `maxAttackTargets`, `upgradePeriod`,
+`disablePointsConvertation`, `errorPercentPerSecond`, `firstActionDelay`, `deniedConvert` [roles],
+`awaitForPlayerAction`. The built-ins carry the BW asset values.
+
+Map `"ai"` block: `profiles` (per-map overrides, as BW Maps/*/Bot assets), `difficulty`, `players`,
+`debuts` [{difficulty, slot, mode, actions: [{tick, send: [from, to, units]} | {tick, upgrade: point, to: type}
+| {tick, skill: id, at: [x, z]}], states: [{tick, point, type}]}] (played from the first tick; a recorded own
+point of another type or taken by someone else ends it), `triggers` [{name, enabled, elements: [{when: all | any,
+conditions: [instant | timer {name} | value {name, cmp, value} | pointCaptured {point} | unitsMove {who, from, to,
+minCount, minSpawned, progress} | time {cmp, value}], actions: [setTimer {name, seconds} | setValue | botAttack
+{sources, targets, count, useAllUnits, testing} | botIgnore {points} | botDisable {disabled} | botReset |
+botMoveUnits {from, to, percent} | groupSetState {groups, enabled} | botSet {attack, relocation, defense,
+upgrade}]}]}]. Map players: `"bot": "hard"` picks the slot's profile and marks it a bot. Morale / energy /
+production / time-scale trigger actions of BW belong to rules triggers. Hooks for other modes: the King of the
+Hill score is the trigger variable `kothScore` (else the team score), blizzard is the variable `blizzard` != 0.
+Engine gaps noted in the code: BW Hypnosis sends units out of the hypnotised enemy garrison (the engine has no
+such command), Downgrade ranks by units produced / tower kills (not counted by the engine yet).
+
+
+Flying tower (BW `PositionFlyingTower`, Hero14 "UFO"): a temporary tower at the clicked point, as BW does it:
+point skill `{"type": "spawn", "unit": "ufo", "duration": 10}` of a static type with `sight` 12 and a weapon
+`{"range": 12, "rangeAspect": 0.5, "cooldown": 0.2857, "projectileSpeed": 6}` (BW range 600 px, `world.aspectRatio`
+0.5, 3.5 shots / s, bullet 300 px / s at 50 px per cell). Weapon `rangeAspect` (default 1) makes the range an ellipse
+with z radius `range x rangeAspect` for target acquisition and firing (BW towers' rangeX / rangeY). Its
+`additionalDefenseCoefficient` is a Defense-aura area around the point (`status` `mods` `defense`; 0 in the shipped
+skill).
 
 ## Army control (agent-mech): stances, retreat, transports
 
@@ -1835,7 +2095,7 @@ agent-mech spellings of the same mechanics (`armorModel`, type `shields`, `upkee
 | `cost.garrison` (alias `upgradeGarrison`) | type | upgrading / converting into this type costs units of the garrison (Mushroom Wars 2) |
 | `garrison.onCapture`, `garrison.keep` | type | type it drops to when captured (loses a level); units that always stay home when sending (State.io) |
 | `clash` | type | units in transit fight hostile units they meet |
-| `playerMods` | type | `{"max": 4, "mods": [{"tags": [...], "stat": "damage", "mul": 1.08}]}` — every completed one modifies the owner's types (forges) |
+| `playerMods` | type | `{"max": 4, "mods": [{"tags": [...], "stat": "damage", "mul": 1.08}]}` — every completed one modifies the owner's types (forges); a mod with `"byCount": [1.5, 1.75, 1.9, 2]` multiplies by the entry for the number owned (capped by the list) instead of `mul`^n (Bunker Wars armories) |
 | resource `gain`, `perUnit`, `min` | rules | `"gain": {"kill": 1, "capture": 0.3, "captured": -0.4, "upgrade": 0.2, "lost": 0.45, "defended": 0.01}`; `"perUnit": [{"tags": [...], "stat": "damage", "mul": 1.06}]` per whole unit held (morale suns) |
 | `crew` / `crews` / weapon `killsCrew` | type | `"crew": "grunt"` (or `{"unit": "grunt"}`): vehicles and guns with a driver; `killsCrew` (chance per non-lethal hit) empties them (owner 0); units with `crews` man any empty one (Z). `"crew": {"accepts": [tags]}` / `true` (agent-mech alias): units with one of the tags (any mobile unit) may man it too |
 | `infect` | type | `{"by": ["infected"], "spawn": "walker", "count": 3}` — killed by a unit with the tag: rises as the spawn type for the killer (They Are Billions) |
@@ -1957,6 +2217,7 @@ The editor uses the projection and angle for its Scene and Game views.
 | `facings` | 1, 4, 8, 16, 32... rows; `mirror: true` stores only north → east → south (`facings/2 + 1` rows) and flips them for the west side |
 | `actions` | column ranges `[start, count, fps]` or `{"start", "count", "fps", "loop"}`. `idle`, `move`, `attack`, `work` (gathering/building workers), `build` (structure under construction; non-looping = frame follows the progress), `die` (played where the object disappeared, then the last frame stays `corpseTime` s). Missing actions fall back to `idle` (`work` → `attack` → `idle`) |
 | `mode` | `billboard` (faces the camera; default), `upright` (vertical quad), `ground` (lies on the terrain; top-down games) |
+| `rotate` | ground mode with one facing: the quad turns with the object, the top of the image is its front (cars seen from above) |
 | `size` / `pixelsPerCell` / `scale` | world size: `[w, h]` cells, or frame pixels / `pixelsPerCell`; default width = footprint width (structures) or 1 |
 | `anchor` | pivot in the frame, 0..1 from the top-left (default `[0.5, 1]`, ground mode `[0.5, 0.5]`) |
 | `offset` | `[right, front]` cells from the object centre; default for standing structures: the front edge of the footprint, so a 3/4-view drawing stands on its footprint |
@@ -2050,6 +2311,97 @@ the tile), one static mesh.
 Editor: window **Тайлы** (palette, brush, autotile on/off, atlas picker; paints in the Scene view).
 Agents: `tileset_list`, `tiles_init {tileset, fill | fromTerrain}`, `tile_paint {terrain, x, y, radius | rect, tile?}`,
 `tile_info {x, y}`, `tiles_remove`.
+
+## Map environment (Bunker Wars / Mushroom Wars 2 "Environment")
+
+Optional block `"environment"` in rules.json (defaults) and in the map (map keys win, key by key). Code:
+`modules/rts/RtsEnv*.cpp` (agent-bw-env). A game without the block has no environment state and keeps its
+checksums and saves. State: the `EnvState` world resource (hashed, saved after the grid fields, rolled back
+with the world). Two systems run only with an environment: `environment` (before `death`) and
+`environment2` (after `capture`). Flat maps only (planets are not supported).
+
+Units: **positions are world coordinates**; every distance / speed key (`speed`, `killZoneEnd`,
+`flyVelocity`, `lightningKillRange`, ...) is divided by `"scale"` (BW distance units per world unit, default
+1), so a BW importer copies BW values verbatim and sets `scale`. Times are seconds. Map points (BW
+`PointInfo.index`) are referenced by the index into the map's `"entities"` or by their `"id"`. Skills are
+rules `playerAbilities` ids cast without cost (BW `StartSkillForPlayer`). Look types (`look`, `bombLook`,
+`souls.look`) are unit types the view draws (`Environment::bodies`).
+
+```jsonc
+"environment": {
+  "scale": 30, "complexity": "hard",                   // match AI complexity (worms, outmap, Mouro holders)
+  "season": "winter", "weather": ["rain", "snow", "lightning", "blizzard"],
+  "weatherParams": {"puddlesFillSpeed": 20, "puddlesDrySpeed": 20, "rainWaitTime": 60, "noRainWaitTime": 30,
+    "snowRestoringSpeed": 0.005, "snowWaitTime": 30, "snowFillRandomFactor": 0.6, "snowFillTimeRange": [40, 60],
+    "blizzardWaitTime": 30, "blizzardFillTime": 40, "blizzardUnitKillSpeed": 5, "blizzardUnitSpeedFactor": 0.5,
+    "blizzardUnitKillFactor": [1, 2], "lightningKillTime": 2, "lightningKillFactor": 70, "lightningKillRange": 80,
+    "lightningPointKillValue": 10, "lightningTime": 30, "lightningWaitTime": 30,
+    "lightningBurn": {"field": "fire", "value": 100, "radius": 40}},
+  "wind": {"minIdleDuration": 5, "maxIdleDuration": 10, "minBlowDuration": 5, "maxBlowDuration": 10, "minForce": 40, "maxForce": 80},
+  "zones": [{"id": "pond", "kind": "water", "poly": [[x, z], ...], "slowdown": 2},   // water | road | toad | other; "rect" / "circle"
+  "splines": [{"id": "lava", "points": [[x, z], ...], "loop": false,
+               "skill": "moving_flame", "velocity": 100, "emitPeriod": 10, "firstEmissionCooldown": -1}],
+  "trample": [{"field": "snow", "perSecond": 0.1, "speed": [[1, 1], [0.9, 1], [0.7, 0.9], [0.4, 0.75], [0.1, 0.5]], "snowRestore": true},
+              {"field": "grass", "perSecond": -0.2, "lerpSpeed": 0.6, "killField": "fire", "hideStatus": "in_grass", "hideAbove": 0.3}],
+  "worms": [{"complexity": "hard", "paths": ["lava"], "onTheGroundCycles": [[10, 15]], "undergroundCycles": [[10, 15]],
+             "spawnArmyCycles": [[10, 20]], "targetPlayers": [1], "armyUnit": "shroom", "reverseSkill": "reverse",
+             "look": "worm_head", "lookTail": "worm_tail",
+             "info": {"speed": 100, "onTheGroundNoUnitsCoefficient": 1, "onTheGroundCatchingUnitsCoefficient": 2,
+                      "onTheGroundFullOfUnitsCoefficient": 1.1, "undergroundCoefficient": 0.5, "testUnitsPeriod": 0.2,
+                      "killZoneBegin": 0, "killZoneEnd": 20, "killZoneWidth": 80, "visionDistance": 200, "traceWidth": 80,
+                      "traceEmitPeriod": 0.5, "traceDecayDuration": 2, "traceSlowdownCoefficient": 0.5, "minDistanceToBuilding": 160,
+                      "appearDistance": 80, "reverseSkillOffset": 50, "armySpeedCoefficient": 2, "headAppearDuration": 1,
+                      "headDisappearDuration": 1, "tailData": [{"shift": 0}, {"shift": 30}, ...]}}],
+  "toad": {"pos": [x, z], "zone": "swamp", "attackDuration": 0.3, "postAttackDuration": 0.2, "maxUnits": 30, "explodeDelay": 0, "explosionDuration": 0.5, "look": "toad"},
+  "flyBomb": {"rallyPoints": [{"start": [x, z], "end": [x, z]}], "flyVelocity": 300, "minDropBombPeriod": 1, "maxDropBombPeriod": 5,
+              "maxBombsByPass": -1, "minIdleDuration": 3, "maxIdleDuration": 7, "minDropBombHeight": 170, "maxDropBombHeight": 230,
+              "gravity": -500, "health": 15, "amplitude": [40, 80], "frequency": [0.5, 0.5], "explosionSkill": "bomb", "type": "bomber", "bombLook": "bomb"},
+  "mouro": {"player": 1, "bot": 2, "castPos": [x, z], "dominationType": "domination", "moraleResource": "morale", "emotionsCooldown": 5,
+            "actionHolders": [{"complexities": ["hard"], "startsFrom": 30, "activationDelay": 5, "actions": [
+              {"name": "ring", "type": "castRing", "skill": "fire_ring", "duration": 3, "castAt": 1.2, "nextActionTimeout": 10, "minimumDominationPointsCount": 1},
+              {"name": "army", "type": "addUnits", "sourcePoints": [12], "targetPoints": [], "targetPointsCount": 3, "unitsPerPoint": 24, "moveToPlayer": true, "moveToBot": false}]}],
+            "emotions": [{"emotion": "laugh", "conditions": [{"type": "cooldown"}, {"type": "botPointCaptured"}, {"type": "probability", "percent": 50}]}]},
+  "mapScroller": {"screen": [w, h], "start": [x, z], "actions": [{"type": "waitPointsCaptured", "owner": "player", "points": [3, 4]},
+            {"type": "moveScreen", "position": [x, z], "duration": 2}, {"type": "convertOutside", "from": "bot", "to": "neutral"}]},
+  "outmapUnits": {"sources": [20, 21], "timerRepeatDuration": -1, "moveActions": [{"time": 5, "from": 20, "to": 3, "count": 10}],
+                  "items": [{"complexity": "easy", "moveActions": [...]}]},
+  "graveyard": {"type": "graveyard", "networkGame": {"graveyardLimit": 200, "awaitDuration": 2}, "localGame": {...}},
+  "souls": {"flyVelocity": 200, "jumpHeight": 500, "attackerSoulDivider": 2, "defenderSoulDivider": 2, "look": "soul"},
+  "pointFire": {"fireDuration": 5},
+  "caves": [[5, 6, 7]], "noSendTargets": [9],
+  "walls": [{"point": "gate_wall", "hp": 10, "destroyDuration": 1, "ignoreTowersDamage": false, "destructIfCatched": [[2, 3]]}]
+}
+```
+
+| block | BW source | behaviour |
+|---|---|---|
+| weather | Environment.Module | rain: puddles fill / wait / dry / wait; water zones slow by `lerp(slowdown, 1, 1 - puddles)` (no rain: full slowdown; winter: never). Snow (winter): wait, then with `snowFillRandomFactor` a restore phase that lowers every `snowRestore` trample field. Blizzard: walkers on lanes lose blizzard health `dt / killSpeed / resist` (resist random per unit) and die (no soul); speed `lerp(blizzardUnitSpeedFactor, 1, health)`. Lightning: every `lightningKillTime` with `lightningKillFactor` % a random walker (dies with every walker in the ellipse range x range/2) or garrison (loses `lightningPointKillValue`) |
+| wind | Wind | idle, then blows in the next of 8 directions (angle = dir * 45 degrees from +z toward +x) with a random force: speed + dot(facing, force) |
+| zones | ZonesModule | speed / `slowdown` in the first zone containing a ground unit; road zones skip winter speeds; toad zones feed the toad |
+| trample | GrassModule / WinterModule | moving ground units add `perSecond` to a grid field (`docs/fields.md`); winter `speed` table (last row with value <= first wins), grass `lerpSpeed`, `killField` (burning grass), `hideStatus` |
+| worms | Worm / WormTrace | underground / on the ground on a random path spline; segments follow the head at their shift; kill zone in front of the head (catching / full speeds), slime traces (kill until the tail passes, then slow by the coefficient); every other dig-up an army of neutral units leaves a lane toward a target player's building (x `armySpeedCoefficient`, ignored by worms) |
+| toad | Toad | eats a random unit in its zone that will not reach its building before the tongue; after `maxUnits` explodes: every building above level 1 goes back to level 1 |
+| flyBomb | FlyBomb / Bomb | crosses between rally points (sine wobble), drops bombs that cast `explosionSkill` (neutral) where they land; an air body of `type` towers shoot: one hit = one `health` |
+| mouro | MouroBoss / MouroAction / MouroCondition / MouroEmotions | holders start in `startsFrom` order; one action runs at a time (`duration`, effect at `castAt`, then `nextActionTimeout`); conditions: domination points, morale difference, a caldron target; ends with the match (`kEvPlayerDefeated`). Emotions are `kEvEnv` events for the view |
+| mapScroller | MapScroller(Actions) | one action at a time: waitPointsCaptured, waitTime, waitKingOfTheHillScore (team score), waitNoUnits, moveScreen, convertAll, convertOutside, setInvincible, moveUnits, gotoStep. Buildings outside the screen do not grow, auto skills wait until their spline is on screen |
+| outmapUnits | OutmapUnitsHandler | timed sends from off-map points without taking their garrison; afterwards the sources become neutral |
+| graveyard + souls | GraveyardModule / UnitSoul | every non-neutral death (not lightning / toad / blizzard) and assault losses (/ divider, fractions kept per point) fly to the graveyard (+1 on arrival); at `limit - 1` it waits `awaitDuration` and sends to each player's last action building as many units as that building holds. Nobody can send to a graveyard |
+| pointFire | PointFire | an assaulted building burns for `fireDuration` (percent = units now / units at the start); presentation state |
+| caves | CaveGroup | linked points share owner and garrison; sends inside a group are refused |
+| walls | DestructibleObjectInfo | owned by hostile neutral so every tower shoots them; each hit = 1 hp; rubble keeps the cells (lanes) for `destroyDuration`; a team owning every point of a `destructIfCatched` set breaks it |
+
+Events: `kEvEnv` (value = `EnvEventKind << 16 | data`): weather phases, lightning, wind, worm states, toad
+attacks / explosions, bombs, Mouro actions / emotions, graveyard, souls (also the visual-only ones without a
+graveyard), scroller steps, walls. `kEvCaptured` for caves / scroller conversions, `kEvGarrisonChanged` for
+lightning and souls.
+
+Fog of war in BW is presentation only: no explored memory, sight ellipses (y x 2) with lifetimes, a growing
+start reveal. Map it on the existing keys: rules `fogOfWar.mode` "full" + look `"explored"` = `"unexplored"`
+and `"fade": 1`.
+
+Not ported yet: multi-spline auto skills (`multiSplineSkills`), rain lowering grass-fire spread,
+`setInvincible` effects (stored only), Mouro skill filters (skeleton attacks pick random player points),
+BW bombs fall in screen space (here: ground drift + fall time), visual Mouro/worm animations and dust.
 
 ## Fog of war look
 

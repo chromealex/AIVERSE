@@ -18,6 +18,41 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 | match-progression | Perk/modifier packages with an ordered stat pipeline, hero xp + level table/curve, seeded level-up offers (recruit / slot perk / player perk, explicit picks, rerolls, revisions), stacking/prerequisite/exclusion/upgrade rules, xp orb pickups (radius, magnet, attraction, budget), summon circles + charges + summoned ally lifecycle, pre-match battle deck limits (see [Match progression](#match-progression-match-progression-010)) | Values, events and requests only: the owner applies stats to units, spawns recruits/summons, moves units and renders cards/rings. Not meta progression (engine/meta) and not RTS hero xp/StatMods. |
 | cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
+| puzzle-solvers | Match-3 (swap validation, line/L/T matches, data-driven specials, seeded gravity/refill, ordered cascades, no-move detection, always-solvable shuffles, goals, hints), flood fill/regions, color flood with IDA*, pipe connectivity with leak checks, N-puzzle parity/shuffle/IDA*, sliding blocks (BFS), polyomino packing (exact cover, solution counting), Sokoban sessions over grid-puzzles (deadlocks, A*, undo), small-grid CSP (AllDifferent/Sum/Count/Runs: sudoku, nonogram) with propagation and uniqueness, puzzle bot (see [Puzzle solvers](#puzzle-solvers-puzzle-solvers-010)) | Rules, solvers and commands only; every search has a node budget and reports Unknown when it runs out. No rendering, input mapping, level generator/editor or meta progression. |
+
+| card-games | Data-defined cards and rule variants, seeded shuffles, draw/mulligan, phases, legal action generation, LIFO effect stack with priority passing, counters and fizzling, guard, per-seat hidden information (`cardViewFor`, redacted/reveal events) (see [Cards and turn strategy](#cards-and-turn-strategy-card-games-010-tactics-grid-010-cards-turns-bots-010)) | Composes card-runtime zones. No deck builder, trigger/replacement language, collection or confidential transport. |
+| tactics-grid | Square/hex grids, weighted reachable sets and paths, half/full cover with flank angle, line of fire and hit-chance previews, AP, initiative with speed modifiers and delay, overwatch reaction fire, per-team views, WeGo simultaneous resolution | turn-scheduler stays the fixed-order reaction queue. Units do not block fire; no elevation, destructible cover or campaign. |
+| cards-turns-bots | Card evaluator (real-rules simulation on a view-rebuilt state, bounded lookahead) and tactics turn planner (bounded deterministic destination/attack/overwatch scoring), both from the player's own view | Player-equivalent actions only; no RNG; stateless. |
+
+| vehicle-controllers | Wheeled arcade-sim (torque curve, auto/manual gears, per-wheel traction with slip/grip curves, handbrake, drift), tracked, hover and flight controllers; damage zones with performance penalties; driver/passenger/gunner seats with enter/exit validation and exit-point search; ordered checkpoints, laps, race positions, wrong-way and respawn; race bot (see [Vehicles](#vehicles-vehicle-controllers-010)) | Kinematic Fixed controllers over owner-reported contacts; the owner resolves collisions and teleports. No rigid-body/suspension simulation, Box3D authority, rendering or audio. |
+| sports-rules | Ball possession with possession lock, seeded tackle contests, passes/shots with leading and seeded accuracy error, interception at the closest approach, goals, out of bounds and generic restarts, periods with stoppage and golden goal, fouls/penalties, role formations, positioning bot (see [Sports](#sports-sports-rules-010)) | Rules and bot decisions only; player bodies and movement are the owner's. No ball height/spin, offside, referee UI or animation. |
+
+| settlement-production | Colonist needs/mood bands/breaks, hour-block schedules, work preferences 1..4 with deterministic job assignment (lib::claim + per-stockpile reservations), recipes/bills at powered workstations, hauling, build/gather orders, disaster alerts with response jobs and preemption, power/fluid graphs with priority shedding + hysteresis, colony planner bot (see [Settlement and production](#settlement-and-production-settlement-production-010)) | Owner supplies alerts, gather availability, mood modifiers and positions/navigation; buildings/rendering/pathfinding stay with their owners. Instant factory links: production-networks. |
+| survival-ecology | Body model (core temperature from environment, clothing, shelter, heat; wetness; hunger/thirst/stamina; condition), weather modifiers, population ecosystems (logistic growth, K, predation, starvation, migration), animal wander/graze/flee/hunt/sleep from PerceivedTarget records, renewable resource nodes (see [Survival and ecology](#survival-and-ecology-survival-ecology-010)) | Owner supplies weather, shelter, clothing, eaten food/drink and perception; health/damage, inventory, grid fields (fire/heat) and navigation stay with their owners. |
+
+
+## Save record kinds (genre::save/load)
+
+One registry for every package that stores state through `genre/Persistence.h`; a new package reserves the next free
+block of eight here before using it.
+
+| Kinds | Owner |
+|---|---|
+| 1..7 | genre core (motion, melee, recoil, projectile, match, capture, story) |
+| 16..18 | weapon-policies (feed, charge, loadout) |
+| 20 | character-locomotion (locomotion modes) |
+| 32..36 | combat-actions |
+| 40..47 | match-rules objectives |
+| 48..55 | stealth-senses |
+| 56..63 | genre-bots |
+| 64..71 | narrative-graphs scenes |
+| 72..79 | cinematic-gameplay (76 = NarrativeCueQueue bridge) |
+| 80..87 | physical-interactions |
+| 88..95 | vehicle-controllers, sports-rules and their bots |
+| 96..103 | card-games, tactics-grid, cards-turns-bots |
+| 104..111 | settlement-production, survival-ecology |
+| 112..119 | puzzle-solvers |
+| 120+ | free |
 
 ## Native/host integration
 
@@ -28,7 +63,7 @@ backend dependencies on the owning aiverse_game target, avoiding object-library 
 For header-only policies without projectile collision, `AIVERSE::gameplay_native` is sufficient.
 
 See `examples/native/libraries/GenreConsumer.cpp` for validated settings and NativeState storage.
-The library_demo native module now initializes these records in setup (module VERSION 6: adds locomotion modes, combat-actions, weapons, match objectives, senses, genre-bot, narrative scene, physical interaction and cinematic records).
+The library_demo native module now initializes these records in setup (module VERSION 7: adds the stage 1-4 genre records, including puzzles, cards/tactics, vehicles/sports and settlement/survival).
 `tests/libraries/genre_tests.cpp` runs trajectories, combos, world collision, round transitions,
 choice transactions and restoration checks. No engine source edit is required in a consuming project.
 
@@ -957,6 +992,454 @@ Sequences at or below the last accepted one are ignored, so re-feeding a report 
 twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
 (within this package's 72..79).
 
+## Puzzle solvers (puzzle-solvers 0.1.0)
+
+`genre/PuzzleSolvers.h` (headers `Puzzle{Common,Match3,Flood,Sliding,Constraints,Sokoban,Data,Persistence}.h`) and the
+bot policy `bots/PuzzleBot.h`; target `AIVERSE::lib_puzzle_solvers` (depends on `grid-puzzles`, whose
+`strategy/Puzzles.h` 0.2.0 adds `pushDeadCells`, `pushDeadlocked`, `solvePushAStar` and `pushHint`). Executable
+example: `examples/libraries/genre/puzzles` (CTest `library_genre_puzzles_example`).
+
+**Determinism model.** Integer-only; cells are row-major; neighbours are visited left, right, up, down; candidate
+moves, colors, pieces and values are tried in ascending order; ties always go to the earlier candidate. Randomness
+only through the caller's `aiverse::Random&` (match-3 generation/refill/shuffles, `puzzleTilesShuffle`, bot
+mistakes). Every stateful puzzle takes one command struct with a `move` number strictly greater than
+`state.lastMove`; `*Apply` re-validates the command against the level and leaves the state untouched on rejection,
+so player input and bot output share one authoritative path.
+
+**Budgets.** Every solver and hint takes `PuzzleBudget{nodes}` (at most 2,000,000) and returns `PuzzleSearch`:
+`Solved`, `Unsolvable` (exhaustive: a proof), `Unknown` (budget exhausted: no claim either way) or `Invalid`.
+Search is iterative where depth is unbounded; nothing loops without consuming budget.
+
+| Family | API | Notes |
+|---|---|---|
+| Match-3 | `match3Begin`, `match3Apply(Match3Swap)`, `match3Legal`, `match3Moves`, `match3HasMove`, `match3Groups`, `match3Shuffle`, `match3Generate`, `match3Hint(First/Best)` | Specials are rules `{shape: line4/line5/corner, special: stripe/stripeRow/stripeColumn/bomb/colorBomb}`; `stripe` clears across the run that made it. A ColorBomb may swap with any tile (`colorBombSwap`). Cascade steps: groups by lowest cell, specials spawn at crossing / swap destination / swap source / lowest cell, cleared specials activate in discovery order, score `tileScore * chain`, gravity past holes, refill column by column top to bottom. At most 64 cascade steps per move. Shuffles try `shuffleAttempts` permutations (multiset kept), then a three-color pattern that `valid(Match3Rules)` proves has a move. Goals: move limit, score, per-color collection. |
+| Flood / connectivity | `puzzleFloodFill`, `puzzleRegions`, `puzzleFloodSolve` (IDA*, bound = colors left), `puzzleFloodApply`, `puzzleFloodHint`; `puzzlePipeReach`, `puzzlePipeSolved`, `puzzlePipeSolve`, `puzzlePipeApply`, `puzzlePipeHint` | Flood `Unsolvable` = no solution within the move limit. Pipe masks are bits `1<<direction`, rotation is clockwise; `noLeaks` requires every opening on the grid to meet a partner and the solver checks it edge by edge. |
+| Sliding / packing | `puzzleTilesSolvable`, `puzzleTilesShuffle`, `puzzleTilesSolve` (IDA*, Manhattan), `puzzleTilesApply`, `puzzleTilesHint`; `puzzleBlocksShift`, `puzzleBlocksSolve` (BFS), `puzzleBlocksApply`; `puzzlePieceOrientations`, `puzzlePackSolve(fixed, limit)`, `puzzlePackApply`, `puzzlePackHint` | N-puzzle parity: odd width -> inversions even; even width -> inversions + blank row from the bottom odd. Shuffles are uniform permutations with a parity fix (always solvable). Same-size interchangeable blocks share visited states. Packing anchors the first uncovered cell (row-major) and counts solutions up to `limit` (2 = uniqueness). |
+| Sokoban | `PuzzleSokobanLevel/Session`, `puzzleSokobanApply(Move/Undo/Redo)`, `puzzleSokobanDeadlocked`, `puzzleSokobanSolve`, `puzzleSokobanHint` | Movement, history and search are grid-puzzles; deadlock checks are sound (simple dead cells by reverse pushes, freeze deadlocks of box clusters) but not complete. A deadlocked hint is `Undo`. |
+| Constraints | `PuzzleCsp{domains, constraints}`, `puzzleCspSolve(values, limit)`, `puzzleCspUnique`, `puzzleCspViolations`, `puzzleCspApply`, `puzzleCspHint`, `puzzleSudokuCsp`, `puzzleNonogramCsp` | Domains are bit masks of values 0..31. Constraints: AllDifferent (naked + hidden singles, pigeonhole), Sum (bounds), Count (exactly k cells take v), Runs (nonogram line DP). Propagation runs to a fixpoint in constraint order (one budget node per revision); search picks the smallest domain, lowest cell, values ascending. Hints repair the first wrong cell, else fill the most constrained empty cell. |
+
+**Data.** `genre/PuzzleData.h`: `readMatch3Level`, `readSokobanLevel`, `readSudoku`, `readNonogram`, `readCsp`,
+`readFloodLevel`, `readPipeLevel`, `readTilesLevel`, `readBlocksLevel`, `readPackLevel` (formats in the header;
+example `examples/libraries/genre/puzzles/levels.json`). Errors are path-qualified `JsonError`s such as
+`puzzle.match3.rows[2][4]: expected '#', '.' or a color digit` or `puzzle.csp.constraints[0].cells[1]: must be in 0..8`.
+No generated settings section: everything tunable is level data.
+
+**Bot.** `bots::puzzleBotMatch3 / Flood / Pipes / Tiles / Blocks / Pack / Csp / Sokoban(level, state, skill, rng)`
+return the next player command (`lastMove + 1`). `PuzzleBotSkill{budget, mistakeMilli, match3}`; presets 0..2.
+With probability `mistakeMilli` the bot plays a random legal move instead (CSP: the hinted cell with a guessed value,
+repaired later; Sokoban: a random step, undone once it is a proven deadlock or no solution is found). A perfect bot
+never draws from the RNG. The bot is stateless.
+
+**State.** Record kinds 112..119 (all used): `Match3State` 112, `PuzzleFloodState` 113, `PuzzlePipeState` 114,
+`PuzzleTilesState` 115, `PuzzleBlocksState` 116, `PuzzlePackState` 117, `PuzzleCspState` 118,
+`PuzzleSokobanSession` 119 (grid-puzzles `PushHistory` keeps strategy record 5). `genre::save/load` checks shape-free
+invariants; after loading re-check against the level (`match3Compatible`, `puzzleFloodCompatible`,
+`puzzlePipeCompatible`, `puzzleSokobanCompatible`, ...). Hash with `puzzleHash(state)`; bind the level data revision
+in the save envelope. `examples/native/libraries/PuzzlesConsumer.cpp` plays match-3 and Sokoban through bot
+commands, proves a 4x4 sudoku unique, applies a hint and stores `genre.puzzles.*` plus `genre.puzzles_hash`.
+
+**Example results** (`aiverse_puzzles_example levels.json`, both runs identical): match-3 won after 20 moves (score
+2520, 4 specials, 14 cascading moves), Sokoban solved by A* in 14 moves / 9 pushes (165 nodes) and replayed through
+commands including undo/redo, sudoku unique (30 givens) and filled by the bot in 51 moves; final hash
+`0b6d45dc43315a37`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks, all genre/bots headers in one TU, the
+`library_genre_puzzles` and `library_genre_puzzles_example` CTests (also under ASan/UBSan), `strategy_libraries`,
+and the consumer in a standalone driver. Not run: the full `tests/libraries/run.py`, native module export,
+`aiverse_tests`, headless matches, clang/MSVC.
+
+## Cards and turn strategy (card-games 0.1.0, tactics-grid 0.1.0, cards-turns-bots 0.1.0)
+
+Headers `genre/CardGame.h` (definitions, rule variants, state, views, legal actions), `genre/CardGameRunner.h`
+(`cardGameSetup`, `stepCardGame`), `genre/CardGameData.h`, `genre/CardGameConfigured.h`, `genre/CardGamePersistence.h`;
+`genre/TacticsGrid.h` (grids, movement, cover, line of fire), `genre/TacticsTurns.h` (AP/initiative turns, views),
+`genre/TacticsWeGo.h`, `genre/TacticsData.h`, `genre/TacticsConfigured.h`, `genre/TacticsPersistence.h`; bots
+`bots/CardBot.h`, `bots/TacticsBot.h`. Targets `AIVERSE::lib_card_games` (depends on `lib_card_runtime`),
+`AIVERSE::lib_tactics_grid`, `AIVERSE::lib_cards_turns_bots` (depends on both); skills `aiverse-card-games`,
+`aiverse-tactics-grid`, `aiverse-cards-turns-bots`.
+
+**Relation to the strategy runtimes.** `card-runtime` (`strategy/Cards.h`) and `turn-scheduler` (`strategy/Turns.h`)
+are unchanged, including their `strategy/Persistence.h` records (kinds 3 and 4). card-games reuses card-runtime's zone
+vocabulary (Deck, Hand, Board, Discard, Exile; `cardRuntimeZone`) and adds the Stack, data-defined effects, targets,
+rule variants and hidden information that the bounded duel deliberately leaves out. turn-scheduler keeps its fixed
+initiative order with host-applied nested reactions; tactics-grid owns a per-round dynamic order (speed modifiers,
+delay) and resolves movement, cover and shots itself, so extending the scheduler in place would have changed its
+saved format and contract.
+
+**Determinism model.** All state is integer; randomness only from the passed-in `aiverse::Random` (card shuffles at
+setup and mulligan, one draw per shot). Every mutation goes through one function that takes a command with a
+strictly increasing sequence number (`CardCommand`, `TacticsCommand`, the WeGo `seq`) and validates it against the
+legal action list; an invalid, repeated or out-of-turn command returns nullopt with the state and RNG untouched.
+Iteration is by stable id (card instance ids, unit ids, stack ids); ties break by id. Player and bot inputs share
+the same path.
+
+**Cards.** `CardDef` kinds unit/spell/instant, `cost`, unit `power`/`health`/`guard`/`rush`, `target`
+(none/player/unit/character/stackItem) with `side` (any/enemy/friendly), ordered `effects` (damage, heal, draw, energy,
+buff, counter, reveal, mill) applied to the chosen target, the controller, opponents, enemy or friendly units.
+`CardRules` variants: seats 2..4, starting hand, max hand (overdraw burns), starting health, energy start/gain/max,
+draw per turn, first-player skips draw, fatigue (growing damage from an empty deck), board limit, turn limit (then
+highest health wins, ties draw), deck size, mulligan none/partial (choose cards by hand position, shuffle back,
+redraw)/full (with penalty), separate combat phase, units attack immediately. Turn flow: start (energy, untap,
+draws) -> Main -> (Combat) -> next living seat. Playing a card or declaring an attack puts an item on the stack and
+passes priority; instants may respond while holding priority; all living seats passing in a row resolves the top
+item (LIFO) and returns priority to the active seat. At resolution an item whose target left (unit gone, player
+eliminated, stack item countered) fizzles; an attack whose attacker died fizzles. Guard units must be attacked
+before their player. Dead units, eliminations and the winner are checked after every change.
+
+**Hidden information.** `CardGameCard::known` is a per-seat mask: decks are known to nobody (counts only), hands to
+their owner plus seats a reveal showed them (cleared when the card returns to the deck), public zones and the stack
+to everybody. `cardViewFor(lib, state, seat)` (seat -1 = spectator) never contains hidden cards, and legal actions
+are computed from that view (`cardLegalActions(lib, view)`), so neither can depend on hidden cards (tested by
+altering the opponent's hidden cards: the view and the bot choice are unchanged). `cardEventsFor(events, seat)`
+strips card identities from draws and reveals the seat may not see. RTS lockstep replicates the full state; only an
+authoritative server that sends projections keeps hands confidential.
+
+**Tactics grids.** Square boards move in 8 directions (orthogonal 2 half-units x cell cost, diagonal 3, no corner
+cutting); hex boards use axial coordinates in a parallelogram (2 per step). `tacticsReachable` is Dijkstra settling
+in (cost, cell) order and replacing a parent only on a strictly cheaper route, so paths are identical everywhere.
+Occupancy: allies pass through, enemies block, nobody stops on an occupied cell. Lines of fire sample one cell per
+grid step with a fixed nudge; intermediate `blocksSight` cells block (units never do). Cover: an adjacent cover cell
+protects against attackers within `coverCosMilli` (cosine of the half-angle, default 707 = 45 degrees, inclusive) of
+its direction; a target next to cover but outside every arc is flanked (+`flankBonusMilli`, +`flankDamage`), with no
+adjacent cover it is exposed. `tacticsPreviewShot` hit chance = aim - half/full cover - range penalty beyond optimal
+range - overwatch penalty (+ flank), clamped to [min, max]; 0 when blocked or out of range.
+
+**Turns.** Round order: effective initiative (base + active `tacticsSetSpeedModifier` deltas, applied from the next
+round) descending, ties by ascending unit id. The active unit gets full AP; Move costs ceil(path cost / (mobility x 2))
+AP; Attack rolls one RNG draw and ends the turn (`attackEndsTurn`); Overwatch ends the turn and arms a reservation
+that fires once at the first enemy entering a visible cell within range (reservations in unit-id order; a killed
+mover stops); Delay (with full AP, once per round) re-queues the unit at the end of the round; EndTurn. Overwatch
+expires at the reserving unit's next turn. Win: last team standing; at the round limit the team with more total
+health (ties draw, winner 0).
+
+**WeGo.** `tacticsSubmitOrders` (once per team per round; own living units; move within 1 AP; attack a target the team
+sees now; overwatch alone), then `tacticsResolveWeGo` when every living team has submitted: (1) overwatch armed;
+(2) lockstep movement, a contested cell goes to the higher effective initiative then lower id, head-on swaps and
+moves into a cell whose occupant does not leave stop (`Bumped`), reaction fire after each step in mover-id order;
+(3) shots rolled in unit-id order from post-movement positions, all damage applied together (mutual kills),
+shots without line/range `Fizzled`; (4) deaths, winner, next round. Pending `TacticsOrders` are saved (kind 99).
+
+**Visibility.** `tacticsViewFor(scenario, state, team)`: own units (dead with hp 0) and enemies some living own unit
+sees (sight range + clear line); order and active unit only when visible. `tacticsEventsFor(view, events)` drops
+movement of unseen units and blanks cells of unseen targets.
+
+**Bots.** `cardBotChoose(lib, view, config)`: legal actions from the view, each simulated with the real rules on
+`cardStateFromView` (others pass until the stack is empty; fatigue off since unknown decks are empty), scored by
+health/board/hand weights, then a bounded follow-up ply split evenly over candidates (`nodeBudget`, `depth`);
+mulligan replaces cards above a cost. `tacticsBotChoose(scenario, view, objectiveCell, config)`: destinations from a
+reachable set where only seen units block, in (cost, cell) order, scored by expected damage and kill chance of shots
+it enables, seen threats on the cell, cover, distance to the nearest seen enemy or to the objective cell (map data,
+never an unseen enemy position); overwatch only when a seen enemy could walk into range; `searchBudget` bounds
+evaluations. Both consume no RNG and keep the earlier candidate on ties. A move into a cell held by an unseen unit
+is rejected by `stepTactics`; the owner then ends the turn.
+
+**Data and settings.** `readCardLibrary(json, defaults)` / `readCardDecks` and `readTacticsScenario(json, defaults)`
+validate strictly with path-qualified `JsonError`s (`cards.cards[0]: unknown key 'foo'`,
+`cards.card 1.effects[0]: counter needs a stackItem target`, `tactics.grid.rows[1][0]: unknown cell 'x'`,
+`tactics.units[0].at: cell is impassable`). Optional generated settings sections (configuration 0.3.5): `cardGame`
+(`startingHand` <= `maxHand`, `startingHealth`, `turnLimit`, `botNodeBudget`, `botDepth`) and `tactics`
+(`roundLimit`, `halfCoverMilli` <= `fullCoverMilli`, `flankBonusMilli`, `rangePenaltyMilli`, `overwatchPenaltyMilli`,
+`minHitMilli` <= `maxHitMilli`, `coverCosMilli`, `botSearchBudget`); adapters `cardRulesFromSettings`,
+`tacticsRulesFromSettings`, `cardBotConfig`, `tacticsBotConfig`.
+
+**State.** Record kinds 96..103 are reserved for this batch: `CardGameState` 96, `TacticsState` 98, `TacticsOrders` 99
+(97 and 100..103 reserved). Hash with `cardGameHash` / `tacticsHash` (states, events, views, definitions) and bind
+`cardLibraryHash` / `tacticsScenarioHash` in the save envelope. Bots are stateless.
+
+**Example and tests.** `examples/libraries/genre/cards-turns/` (`duel.json`, `skirmish.json`, `main.cpp`): a two-seat
+duel with hidden hands, responses and guard, and a hex skirmish of two three-unit squads with AP, initiative, cover
+and overwatch, both bot-vs-bot, each played twice; CTest `library_cards_turns_example` passes only with winners and
+identical hashes. Seed 7 (g++ 11): duel won by seat 1 on turn 9, skirmish won by team 2 in round 3, final hash
+`4f6976405a5c23b1`. `tests/libraries/genre_cards_turns_tests.cpp` (CTest `library_cards_turns`) covers data errors,
+stack order/counter/fizzle, guard, separate combat, mulligans, fatigue/burn/turn limit, effects, hidden information
+and reveal, bot games across seeds with restore, grid costs/paths/lines/cover/hit chance, initiative/delay/speed
+modifiers/AP/overwatch, rejected commands, views and event filtering, WeGo conflicts/simultaneous fire/overwatch and
+persistence. `examples/native/libraries/CardsTurnsConsumer.cpp` stores `genre.cards.state`, `genre.tactics.state`,
+`genre.cards_turns_hash`, `genre.cards.library` and `genre.tactics.scenario` (module VERSION unchanged).
+
+Verified only with g++ 11 (Linux VM): header syntax checks, all genre/bots headers in one TU, the test file and the
+example built by hand (tests also under ASan/UBSan), GenreConsumer/CardsTurnsConsumer syntax checks and the consumer
+function in a standalone driver. Not run: CMake/CTest registration, isolation, native module export, headless
+restore matches, clang/MSVC.
+
+## Vehicles (vehicle-controllers 0.1.0)
+
+Headers `genre/VehicleControllers.h` (controllers), `genre/VehicleDamage.h` (damage zones), `genre/VehicleSeats.h`
+(seats), `genre/RaceCourse.h` (checkpoints, laps, positions), `bots/RaceBot.h` (race bot), umbrella `genre/Vehicles.h`,
+`genre/VehicleData.h` (JSON), `genre/VehicleConfigured.h` (settings adapters), `genre/VehiclePersistence.h` (records,
+hashing). Target `AIVERSE::lib_vehicle_controllers` (depends on `match-rules`, `configuration`, `aiverse_engine`); native
+OBJECT modules call `aiverse_native_use_libraries(target vehicle-controllers)`. Skill: `skills/aiverse-vehicle-controllers`.
+
+**Determinism and network model.** The controllers are kinematic, authoritative gameplay state: Fixed math, integer
+ticks, ascending-id order, no floating point and no physics backend in the loop. The collision owner reports contacts
+(`VehicleContacts{grounded, groundHeight, groundNormal, grip, wheels[]}`) before the step and resolves collisions after it
+(`vehicleResolveCollision(state, position, normal, restitution)` removes the approaching velocity and returns the
+impulse per unit mass, the input for damage rules). `VehicleState` holds the pose too, so prediction is: run the same
+step with the same inputs; rollback restores the record and replays. A Box3D world (docs/physics.md) is not deterministic
+across builds and may only mirror poses for presentation; nothing is read back from it. Every stepper validates config,
+state and input first; invalid data, dt outside (0,1] or a repeated/backwards tick return nullopt with the state untouched.
+
+**Wheeled (arcade-sim).** Axes X/Z ground, Y up, yaw in turns (0 faces +Z, positive yaw turns right). Steering
+approaches `steer * maxSteer` at `steerRate`, reduced with speed (`steerFalloffSpeed`). Engine rpm follows the driven
+wheels (`speed / radius * gear * finalDrive`), clamped to idle..redline; torque comes from the piecewise-linear `torque`
+curve (rpm -> Nm), zero at the limiter. Gearbox: automatic upshifts at `shiftUpRpm`, downshifts at `shiftDownRpm`, braking
+at a standstill engages reverse (brake drives backward, throttle brakes); manual uses `shiftUp`/`shiftDown` edges down to
+neutral (0) and reverse (-1). A shift cuts drive for `shiftTicks`. Tyres: static load plus longitudinal weight transfer
+(`cgHeight`, last tick's acceleration), drive/brake demand above `friction * load * grip` slides along the
+`longitudinalGrip` curve (demand ratio -> grip), lateral force follows the `lateralGrip` curve over the slip angle
+(turns), both clipped by the friction circle; brakes and lateral forces never reverse a wheel's velocity within a tick.
+The handbrake locks the handbrake wheels and scales their lateral grip by `handbrakeGrip`: rear slip above `driftEnter`
+at `driftMinSpeed` starts a drift (`DriftStarted` / `DriftEnded` below `driftExit`). Yaw uses the summed tyre torque
+over an inertia from the wheel layout. Slopes add gravity along the ground normal; without ground the body falls
+(`Airborne` / `Landed` with the vertical speed in milli-m/s).
+
+**Tracked, hover, flight.** Tracked: each track approaches `throttle*maxSpeed +- steer*pivotSpeed` (pivot turns at zero
+throttle), yaw rate = track difference / trackWidth, sideways sliding damped by `lateralGrip`. Hover: altitude hold
+`(groundHeight + height - y) * stiffness - vy * damping` while the owner reports ground below (else gravity), thrust
+along the heading, quadratic drag, lateral drift damped by `lateralDamping`, yaw rate eased by `yawResponse`. Flight:
+airspeed from thrust, quadratic drag and the pitch component of gravity; pitch/roll/yaw rates with roll limits and
+auto-levelling, banked turns scale with lift; lift = min(1, (airspeed/stallSpeed)^2) and missing lift accumulates a
+sink; below `stallSpeed` the plane stalls (`Stalled`, reduced authority, nose drops) until `recoverSpeed`. On the ground
+it rolls with `groundFriction` braking and takes off once the climb leaves the reported ground.
+
+**Damage zones.** `VehicleZoneDef{id, local box, health, armor, critical, penalties{stat, atZero}}`. Damage inputs are
+applied in ascending id (an id <= the last accepted one is `DamageIgnored`), scaled by armor; zone 0 locates the zone by
+local point (`vehicleZoneAt`: containing box, else nearest). Each penalty scales its stat (engine, grip, steering,
+brakes, lift) linearly from 1 at full health to `atZero`; multiple zones multiply. A critical zone at 0 disables the
+vehicle (engine 0) until repaired (negative amounts). `vehiclePerformance(def, state)` feeds `stepVehicle`.
+
+**Seats.** Roles driver/passenger/gunner; requests in ascending id: Enter (speed <= maxEnterSpeed, actor within
+`enterRadius` of the seat entry, seat free, same team as the occupants or unlocked; seat 0 = first free seat of the
+preferred role, then any), Exit (speed <= maxExitSpeed, first exit point the owner's `clear(point, actor)` accepts: the
+seat's exits, then the other seats' exits by id; none -> `ExitBlocked`), Eject (ignores speed), Switch, Lock/Unlock
+(occupants). `vehicleDriver` names the occupant whose input drives the vehicle; exits return world positions.
+
+**Races.** `RaceCourse{checkpoints (RouteGate + respawn pose), laps, grid}` reuses match-rules route gates: the racer's
+segment from its last reported position crossing its next gate plane in the normal direction (`crossesGate`) feeds
+`stepRoute` (out-of-order gates ignored). The last checkpoint is the finish line; the grid lies just after it.
+Standings: finished by place, then lap, checkpoint, planar distance to the next checkpoint, earlier last checkpoint,
+id. Wrong way: velocity along (previous -> next checkpoint) below `-wrongWaySpeed` for `wrongWayTicks`; auto respawn
+after `respawnWrongWayTicks` wrong-way ticks or `stuckTicks` below `stuckSpeed`, plus owner requests. Respawns go to the
+last passed checkpoint (finish line after a lap, grid slot before the first) and reset the tracked position so the
+teleport never counts as a crossing.
+
+**Race bot.** `makeRaceLine(points)` (closed loop; curvature per point), `stepRaceBot(config, line, state, tick, view)`
+returns a `VehicleInput`: pure-pursuit steering toward a lookahead point (`lookahead + speed * lookaheadTime`) offset by
+the current lane; target speed = min over corners within `brakeHorizon` of sqrt(vCorner^2 + 2 * brakeDecel * distance)
+with vCorner = sqrt(cornerAccel / curvature) (braking points); traffic: an opponent alongside pushes to the other lane,
+the nearest slower opponent ahead inside `overtakeDistance` is passed on the side away from it, a car right in front
+within `followDistance` caps the speed. Difficulty: `skillMilli` scales pace; `rubberBandMilli` adds pace for the last
+place and removes it from the leader, on straights only (cornering never exceeds the authored grip). No randomness.
+
+**Configuration.** Optional generated `vehicles` section (configuration 0.3.5): seat speed limits, `raceLaps`,
+wrong-way/stuck/respawn rules and race-bot knobs (`bot*`). `vehicleSettingsErrors` rejects a respawn delay shorter
+than the wrong-way delay and stuck ticks without a stuck speed. Data: `readVehicleDefinitions`; errors such as
+`vehicles.vehicles[0].wheeled.gearsMilli[1]: ratios must be strictly descending`.
+
+**State.** Record kinds 88..95 are reserved for vehicle-controllers and sports-rules: `VehicleState` 88,
+`VehicleDamageState` 89, `VehicleSeatState` 90, `RaceState` 91 (embeds the match-rules `RouteState`), `SportsState` 92,
+93 reserved, `bots::RaceBotState` 94, `bots::SportsBotState` 95. Canonical, validated on load. `vehicleHash` hashes
+states and per-tick reports; bind `vehicleDefinitionHash`, `raceCourseHash` and `bots::raceLineHash`.
+
+## Sports (sports-rules 0.1.0)
+
+Headers `genre/SportsRules.h` (rules), `genre/SportsFormation.h` (formations), `bots/SportsBot.h` (positioning bot),
+umbrella `genre/Sports.h`, `genre/SportsData.h`, `genre/SportsConfigured.h`, `genre/SportsPersistence.h`. Target
+`AIVERSE::lib_sports_rules` (depends on `configuration`, `aiverse_engine`). Skill: `skills/aiverse-sports-rules`.
+
+**Contract.** `stepSports(rules, field, state, tick, dt, players, actions, rng)` once per strictly increasing tick. The
+owner moves the bodies and reports every `SportsPlayer{id, team, position, velocity, tackle/control/accuracy skills,
+active}`; actions (`Pass` with a target point or a receiver, `Shoot` at a point, `Tackle`) come from player commands or
+the bot through the same struct, at most one per player. Randomness only from the passed engine `Random` (tackle,
+foul, interception and face-off rolls, kick error); invalid input leaves state and RNG untouched. Order per tick:
+restart taking, actions by player id, ball motion (dribble offset along the holder's velocity, or free roll with
+friction), pickups and interceptions, goals and boundaries, clock.
+
+**Possession and contests.** A free ball is taken by the player whose closest approach to this tick's ball path lies
+within `pickupRadius` (earliest along the path, then nearest, then id); the kicker cannot retake it for
+`kickLockTicks`; above `controlSpeed` control needs an `interceptMilli` roll adjusted by the control skill. A new
+holder cannot be tackled for `possessionLockTicks`. Tackles need `tackleRange` and no stun; the chance is
+`tackleBase + (tackle - control)/2` (5..95%); a failed tackle stuns for `tackleCooldownTicks`. Fouls: a tackle from
+behind the holder's running direction rolls `behindFoulMilli`, a failed one `failFoulMilli` -> free kick at the spot,
+or a penalty from the penalty spot when the spot lies in the fouling team's penalty area.
+
+**Kicks.** Pass speed `passSpeedMin..Max` and shot speed `shotSpeedMin..Max` by `powerMilli`; passes to a receiver lead
+it (two iterations of distance/speed); the direction is rotated by a seeded error up to `passError`/`shotError` turns
+scaled by `(1000 - accuracy)/1000`. `sportsInterceptPoint` predicts the earliest reachable ball position for a runner.
+
+**Field and restarts.** Goals at x = +-halfLength inside `goalHalfWidth`; team index 0 attacks +x in odd periods.
+`Lines`: sidelines -> throw-in to the other team, goal lines -> corner (last touch by the defenders) or goal kick;
+`Walls`: the ball rebounds with `restitution` (a dribbled ball is clamped); `FaceOff`: any exit -> face-off at the
+nearest spot, contested by the nearest player of each team (`faceoffBiasMilli`). A goal restarts with a kickoff for the
+conceding team. Restarts wait `restartDelayTicks`, then the nearest available player of the awarded team takes them.
+
+**Clock.** `periods` of `periodTicks`; `clockMode` Running (dead ball counts), Stopped (only live ticks count) or Added
+(dead ticks add stoppage time, capped by `maxStoppageTicks`). Ends swap each period (`swapEnds`), each period starts with
+a kickoff alternating teams. A tie after regulation goes to overtime when `overtimeTicks > 0` or `goldenGoal`
+(`goldenGoal` with `overtimeTicks == 0` plays until the next goal); the first overtime goal ends a golden-goal match.
+`MatchEnded` carries the winner (-1 for a draw).
+
+**Formations and bot.** `SportsFormation` slots: role, base/attack/defend fractions of the half field in the attacking
+frame, `ballPull`. `sportsSlotTarget` mirrors by attack direction; `sportsAssignSlots` keeps previous assignments and
+fills free slots by role, then distance, then id. `bots::stepSportsBot` per team per tick: phase from the perceived
+holder (after `reactionTicks`), slot targets for everyone, keeper on the ball-goal line, holder shoots inside
+`shootRange` with an open lane (`laneWidth`, seeded side choice), passes to the best progress-minus-pressure teammate
+along an open lane or dribbles away from pressure (re-decided every `decisionTicks`); defending: nearest player presses
+and tackles (`tackleMilli` roll), the next non-keeper marks the opponent nearest to its goal; a free ball is chased by
+the player with the earliest interception. Output: move target, sprint flag and `SportsAction` per player.
+
+**Configuration and state.** Optional generated `sports` section (configuration 0.3.5) with relations
+`passSpeedMin <= passSpeedMax`, `shotSpeedMin <= shotSpeedMax`; `sportsSettingsErrors` adds cross-field checks.
+Data: `readSportsDefinitions` (`sports.field.goalHalfWidthMilli: must not exceed halfWidthMilli`, ...). Records:
+`SportsState` 92, `bots::SportsBotState` 95 (93 reserved); save the RNG state with them. `sportsHash` hashes states and
+reports; bind `sportsDefinitionsHash(field, rules, formations)`.
+
+**Executable example and verification.** `examples/libraries/genre/vehicles-sports/VehiclesSportsExample.cpp` loads
+`vehicles.json`, `sports.json` and `settings.json`, runs a 3-lap race of four bot-driven cars (seats, damage from
+car-to-car contacts, positions, respawns) and a 3v3 golden-goal football match between two bot teams, saves and reloads
+every record mid-run and prints the results and a final hash. CTest `library_vehicles_sports_example` runs it twice
+(`tests/libraries/vehicles_sports_example.cmake`) and requires a race winner, a match winner and equal hashes;
+`library_vehicles_sports` runs `tests/libraries/genre_vehicles_sports_tests.cpp`. `VehiclesSportsConsumer.cpp` is the
+library_demo native consumer. Verified only with g++ (Linux): header syntax checks, all genre/bots headers in one TU,
+the tests and the example built by hand (also ASan/UBSan). Not verified: CMake/isolation, `aiverse_tests`, native
+module export, headless restore matches, MSVC/clang, platform runtimes.
+
+## Settlement and production (settlement-production 0.1.0)
+
+Headers `genre/ColonyTypes.h` (definitions, state, commands, validation), `genre/ColonyRunner.h` (`stepColony`, setup
+helpers `colonyAddColonist/Stockpile/Workstation`, `colonySchedule`), `genre/ColonyPower.h` (`stepPower`, `powerAddNode`,
+`powerLink`, `powerComponents`), `genre/ColonyData.h` (JSON), `genre/ColonyConfigured.h` (`colony` settings),
+`genre/ColonyPersistence.h`, umbrella `genre/Colony.h`; bot `bots/ColonyPlanner.h` + `bots/ColonyPlannerData.h`.
+Target `AIVERSE::lib_settlement_production` (tasks, reservations, graphs, configuration, `aiverse_engine`); native OBJECT
+modules call `aiverse_native_use_libraries(target settlement-production)`. Skill: `skills/aiverse-settlement-production`.
+
+**Authority split.** Authoritative, saved and hashed: colonists (needs, mood, band, activity, job, schedule, priorities,
+skills), stockpiles with their reservation books, workstations and bills, jobs (lib::Task + progress), alerts, id
+counters and the last command sequence (`ColonyState`); the power/fluid graph with storage charge, powered flags and
+reconnect ticks (`PowerGridState`); the planner's cooldowns and command counter (`ColonyPlannerState`). Owner/host: positions,
+navigation and walking time (work amounts include it), building placement, rendering, the hazard simulation (fire in grid
+fields, floods, raiders), inventory of individual items. Integer only: needs and mood 0..100000 (mood ±100000), work in
+"ticks at 1000 speed", speeds in milli. Strictly increasing ticks; malformed owner input returns nullopt with the state
+untouched; invalid or stale player/bot commands are ignored and reported (`CommandIgnored`), never asserted.
+
+**Tick order (`stepColony`).** 1 commands in ascending seq (`SetPriority`, `SetSchedule`, `SetBill`, `ClearBill`,
+`OrderBuild`, `OrderGather`, `CancelJob`); 2 owner facts (incapacitation, alerts cleared then raised: a raise creates
+min(severity, maxResponseJobs) response jobs); 3 needs decay and restore by the current activity (`restores`: sleeping,
+leisure, working), NeedLow/NeedCritical/NeedRecovered events; mood = base + first matching mood step per need + active alert
+moods + owner modifiers, bands Breaking/Low/Content/High (MoodBand events); 4 activity per colonist in id order: eat when a
+meal need is at or below `lowAt` (one unit from the lowest-id stockpile with an unreserved unit, busy `ticks`; responders only
+when critical), mental break (Breaking, not before `calmUntil`), rest critical -> sleep anywhere, keep sleeping until
+`recoveredAt` outside work blocks, Sleep/Leisure blocks unless an `ignoreSchedule` alert applies to the colonist, otherwise
+work; 5 job generation: one open recipe job per billed workstation while the first output is below the target (0 = repeat),
+one open haul job per haul rule while `to` holds less than `keep`; 6 assignment: preemption by `preempt` alerts (response jobs
+only), then `lib::claim` per preference tier 1..4 over pending jobs with effective priority = base + sum of active alert
+priorities for the work type, ties by lowest job id; recipe/build inputs are reserved on claim (`systems::reserve`, ticket =
+job id, owner = colonist), haul jobs shrink to the unreserved stock; 7 work: progress += skill * band speed / 1000, recipe jobs
+at unpowered workstations (`input.unpowered`) and outputs that do not fit the stockpile capacity block (`JobBlocked`);
+completion commits the reservation and emits Produced / Hauled / Built (new structure id, workstation created when the
+blueprint has a workstation type) / Gathered (clamped to `gatherAvailable[node]` minus what this tick already took) /
+AlertWorked; an alert whose response jobs are all done is resolved (AlertResolved).
+
+**Power and fluids (`stepPower`).** Nodes have a medium (1 power, 2 water, ...); links only join equal media; each connected
+component (breadth-first over a `lib::Graph`, components ordered by lowest node id) balances alone. Supply = producer
+output scaled by `PowerInput::outputMilli` (weather: `SurvivalWeatherEffects::windPowerMilli/solarMilli`, fuel); storage adds
+up to `min(charge, rate)`; consumers are kept in (priority desc, id asc) order while they fit, later smaller consumers still
+fit (skip-fit); a consumer that loses power stays off for `restoreDelayTicks` (hysteresis; Shed/Restored events). Shortage is
+drawn from storage in id order, surplus charges it in id order (StorageEmpty/StorageFull). `PowerReport::unpowered` feeds
+`ColonyInput::unpowered`; cross-medium coupling (a pump consuming power to produce water) is owner wiring through
+`outputMilli`, as the example shows.
+
+**Planner bot.** `bots::planColony(config, defs, colony, facts, state, tick)` runs once per `intervalTicks`, evaluates rules
+in (priority desc, id asc), each with AND-ed conditions over metrics (`stockPerColonist`, `stock`, `powerDeficit`,
+`coldColonists`, `needLow`, `structures`, `openJobs`, `alerts`, `colonists`, `custom`) and an action: `build` (affordable,
+at most `maxOpen` open), `bill` (lowest idle workstation of the recipe's type), `gather` (owner gather option with most
+available, lowest node id), `priority` (all colonists that differ). At most `maxCommands` commands, per-rule cooldowns, no RNG.
+Output = `ColonyCommand`s with the bot's own increasing seq, passed to `stepColony` exactly like player input.
+
+**Data and settings.** `readColonyDefinitions(json, colonyConfig(settings))`, `readPowerGrid(json)`,
+`bots::readColonyPlanner(json, defs)`: unknown keys, fractions, out-of-range integers, duplicate ids and unknown references
+throw `JsonError` with index paths (`colony.recipes[0].outputs[1][0]: duplicate id 1`) or id paths
+(`colony.recipe 5.workType: unknown work type 9`, `planner.rule 1: unknown blueprint or missing stockpile`). Optional `colony`
+settings section (configuration 0.3.5): `ticksPerHour`, `moodBase`, `moodBreakAt` < `moodLowAt` < `moodHighAt`
+(`colonySettingsErrors`), `breakTicks`, `lowSpeedMilli`, `contentSpeedMilli`, `highSpeedMilli`, `maxResponseJobs`.
+
+**State.** Record kinds 104..111 are reserved for settlement-production + survival-ecology: `ColonyState` 104,
+`PowerGridState` 105, `bots::ColonyPlannerState` 110 (survival-ecology uses 106..109, 111 is free). Records are canonical and
+validated on load (references between jobs, colonists, reservations and stockpiles included). Hash with `colonyHash`,
+`powerHash`, `bots::colonyPlannerHash`; bind `colonyDefsHash(defs)` in the save envelope.
+
+## Survival and ecology (survival-ecology 0.1.0)
+
+Headers `genre/Survival.h` (body model, `survivalWeatherEffects`, `survivalMood`), `genre/Ecology.h` (populations),
+`genre/EcologyAnimals.h` (behavior), `genre/EcologyResources.h` (renewal), `genre/EcologyData.h` (JSON),
+`genre/SurvivalConfigured.h` (`survival` settings), `genre/SurvivalPersistence.h`, umbrella `genre/SurvivalEcology.h`.
+Target `AIVERSE::lib_survival_ecology` (stealth-senses for `PerceivedTarget`, configuration, `aiverse_engine`); native OBJECT
+modules call `aiverse_native_use_libraries(target survival-ecology)`. Skill: `skills/aiverse-survival-ecology`.
+
+**Body model (`stepSurvival`).** Per body and tick: wetness (water sets it to full; precipitation on exposed bodies times
+(1 - waterproof); drying by `dryPerTick` plus warmth above comfort); felt temperature = air, shelter pulls it toward
+`shelterMilli` by `shelterInsulationMilli` (no wind/rain inside), wind chill times (1 - windproof) outside, wetness chill,
+plus heat sources; the core (micro-degrees) cools by `coolingMicro` per milli-degree below the comfort band times
+(1 - insulation), heats above it (insulation makes heat worse) and drifts back to normal inside it (half speed when unfed);
+exertion adds heat. Hunger decays faster with exertion and shivering, thirst with heat; stamina drains with exertion,
+regenerates idle (double resting, halved when hungry/thirsty, zero when starving) and is capped by hunger. Condition takes
+starvation/dehydration/severe cold/heat damage and regenerates when fine; 0 -> Died (body frozen). Status bits Cold,
+Freezing, Hot, Overheating, Hungry, Starving, Thirsty, Dehydrated, Exhausted, Wet, Soaked emit StatusOn/StatusOff.
+`survivalMood(body)` converts discomfort into a colony mood modifier. Projects whose colony/inventory owns hunger set
+`survival.hungerPerTick` 0 (the example does). Food/drink actually consumed comes from the inventory owner as `eatHunger` /
+`eatThirst`; the health/damage owner may mirror condition instead of using it directly.
+
+**Weather.** `survivalWeatherEffects(config, SurvivalWeather{temperature, wind, precipitation, sun})` returns ambient, wind
+chill, wetting rate, `solarMilli`/`windPowerMilli` (power producer factors), `growthMilli` (0 outside the growth band,
+peak at `growBestMilli`, rain bonus) and `activityMilli` (storms/rain slow animals). Weather state itself is the owner's.
+
+**Ecosystems (`stepEcology`).** Populations per (region, species). Harvests apply on arrival (clamped). On ticks divisible by
+`periodTicks`: births/deaths from logistic growth r*N*(K-N)/K (ratio clamped to ±1, herbivore growth scaled by
+`growthMilli`, K scaled per region by `capacityMilli`), base mortality, predation attack*Npred*Nprey/(Nprey+half) with prey
+shared in predator id order, predator births = eaten * conversion, starvation when eaten < need, then migration of
+`migrateMilli` of the excess over K to neighbours (even split, remainder to lower ids, Arrived events). Fractions are carried
+in per-population milli accumulators; optional `noiseMilli` birth noise draws from the passed `Random`. Extinct events.
+
+**Animals (`stepEcologyAnimals`).** Per animal (id order) from this tick's `PerceivedTarget` records (observer = animal) and
+owner facts (`species` 0 = humans): flee the nearest feared target within `fleeDistance` (keep running `fleeCalmTicks`), sleep
+in the hour window or when exhausted, hunt the nearest visible prey when hungry (gives up after `huntGiveUpTicks`, cooldown),
+graze while hungry and the region has vegetation, else wander to RNG goals around home. Kinematic XZ movement clamped to
+bounds; `poses` let the collision owner correct positions. Events Behavior, Killed (prey removed if it is an animal of this
+state), Grazed, Starved; the owner routes kills/grazing to `EcologyInput::harvests` / renewal nodes.
+
+**Renewal (`stepEcologyResources`).** Harvests sorted by (node, requester) and clamped; depletion starts `regrowDelayTicks`;
+regrowth every `periodTicks` by `regrowPerPeriod` times weather/region growth (milli carry). Events Harvested, Depleted,
+Regrowing, Full.
+
+**Data and settings.** `readEcologyDefinitions`, `readEcologyAnimals` (speeds/distances in milli-metres),
+`readEcologyResources`; errors `ecology.species 1.diet: ...`, `ecology.species[0]: unknown key 'speed'`,
+`resources[0].amount: must be in 0..5`. Optional `survival` settings section (configuration 0.3.5): core/comfort/cold/hot
+thresholds (cross-checked by `survivalSettingsErrors`), cooling/heating/recovery rates, hunger/thirst/stamina rates,
+`lowAt`, wetness chill/drying, damage/regeneration, `windChillMilli`, `wetPerTick`.
+
+**State.** `SurvivalState` 106, `EcologyState` 107, `EcologyAnimalState` 108, `EcologyResourceState` 109 via
+`genre::save/load`; `survivalHash`; bind `survivalConfigHash`, `ecologyDefsHash`, `ecologyAnimalDefsHash`. Save the RNG
+(`Random::state/inc`) with the simulation.
+
+**Executable example.** `examples/libraries/genre/production-survival` (`colony.json`, `power.json`, `ecology.json`,
+`planner.json`, `settings.json`, `production_survival.cpp`, CTest `library_production_survival_example`): 10 colonists with two
+sleep shifts and individual work preferences survive 20 days (24000 ticks at 50 ticks/hour) of cooling autumn weather with
+rain and wind; the planner sets cooking bills, gathers berries and wood, enables hunting when raw food runs low, builds two
+wood generators after night-time brownouts and a second kitchen; a fire on day 8 knocks out the heater until responders
+put it out; a pump couples the power grid to the water graph the colonists drink from; deer and wolves live in two regions
+(population model) and as individual animals that flee colonists and wolves or hunt deer. The run checks: all 10 alive,
+average condition >= 50%, fire resolved, >= 60 meals cooked, deer and wolves extant, a generator built, planner active; it is
+then repeated and rerun with a save/load of every record at day 10, all three must give the same hash. Reference output
+(g++ 11, Linux VM): alive 10, 144 meals, fire 10100 -> resolved 10159 (6 response jobs), 2 generators, 2 kitchens, 171 shed
+events, deer 56 / wolves 14 (25 hunted by colonists, 9 killed by wolf agents), 128 planner commands, final hash
+`f94e6eee34f3619f` (identical across both runs and the restored run). The native consumer
+`examples/native/libraries/ProductionSurvivalConsumer.cpp` runs two ticks of the same owner order and stores the records.
+
+Verified only with g++ 11 (Linux VM): all headers individually (`-Wall -Wextra -Werror -pedantic`; the new headers are also
+clean without `-Wno-misleading-indentation`) and all genre/bots headers together; `genre_production_survival_tests.cpp` and the
+example built by hand and run, also under ASan/UBSan; the native consumer function in a standalone driver; GenreConsumer.cpp
+syntax. Not run: CMake/ctest (no cmake in the VM), isolation tests, native module export, headless restore matches,
+clang/MSVC.
 ## Boss encounters (boss-encounters 0.1.0)
 
 Headers under `genre/`: `Telegraphs.h` (ground areas + telegraphed attacks), `StatusEffects.h`, `BossEncounter.h`,

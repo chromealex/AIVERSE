@@ -1,0 +1,17 @@
+{
+  "name": "appsflyer",
+  "description": "AppsFlyer for Android and iOS: install attribution, in-app events and revenue, GDPR consent, OneLink deep links and deferred deep links. Protocols: analytics (events, purchases, progression, user id, consent) and links (deep links). Config: devKey, appId (iOS App Store id, digits only), debug, waitForATT (seconds the iOS SDK waits for the tracking prompt, default 60), oneLinkDomains [hosts].",
+  "provides": ["analytics", "links"],
+  "android": {
+    "java": "android/java",
+    "classes": { "appsflyer": "com.aiverse.plugins.AppsFlyerPlugin" },
+    "dependencies": ["com.appsflyer:af-android-sdk:6.15.2", "com.android.installreferrer:installreferrer:2.2"],
+    "manifest": { "root": ["<uses-permission android:name=\"com.google.android.gms.permission.AD_ID\"/>"] }
+  },
+  "ios": {
+    "sources": ["ios/*.mm"],
+    "classes": { "appsflyer": "AiverseAppsFlyerPlugin" },
+    "pods": ["pod 'AppsFlyerFramework', '6.15.2'"],
+    "frameworks": ["AdServices", "AppTrackingTransparency"]
+  }
+}

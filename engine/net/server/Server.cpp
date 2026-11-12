@@ -150,7 +150,7 @@ void Server::update(uint64_t now) {
             i.dropClient(id);
         }
     }
-    if (now - i.lastMatchmake >= 250) { i.lastMatchmake = now; i.matchmake(); }
+    if (now - i.lastMatchmake >= 250) { i.lastMatchmake = now; i.matchmake(); i.updateReservations(); }
     i.hostedUpdate();
     i.pollVerdicts();
     std::vector<uint32_t> roomIds;
@@ -335,6 +335,7 @@ void Server::Impl::onDisconnect(Client& c) {
     log("client #%u '%s' disconnected", c.id, c.name.c_str());
     c.conn.reset();
     leaveQueue(c);
+    releaseSeat(c.id);
     Room* r = room(c.roomId);
     if (r && r->match) {
         Member* m = member(*r, c.id);

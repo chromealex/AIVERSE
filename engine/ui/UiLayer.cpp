@@ -24,7 +24,10 @@ public:
     }
     bool LogMessage(Rml::Log::Type type, const Rml::String& message) override {
         static const char* names[] = {"always", "error", "assert", "warning", "info", "debug"};
-        if (type <= Rml::Log::LT_INFO) std::fprintf(stderr, "[ui %s] %s\n", type < 6 ? names[type] : "?", message.c_str());
+        if (type > Rml::Log::LT_INFO) return true;
+        // Only problems go to stderr: the web build shows stderr as console errors (and the smoke test fails on them).
+        const bool problem = type == Rml::Log::LT_ERROR || type == Rml::Log::LT_ASSERT || type == Rml::Log::LT_WARNING;
+        std::fprintf(problem ? stderr : stdout, "[ui %s] %s\n", type < 6 ? names[type] : "?", message.c_str());
         return true;
     }
     void JoinPath(Rml::String& out, const Rml::String& documentPath, const Rml::String& path) override {

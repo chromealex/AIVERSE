@@ -429,7 +429,10 @@ void GameClient::initLua() {
     lua_pushlightuserdata(lua_, this);
     lua_pushcclosure(lua_, LuaApi::log, 1);
     lua_setglobal(lua_, "print");   // print -> the client log
-    game::openScriptSound(lua_, &scriptSound_);   // `sound`: voice handles, music (modules/rts/view/ScriptSound.h)
+    game::openScriptSound(lua_, &scriptSound_);
+    openSpineLua(lua_, &spine_);   // `spine`: skeleton views (ClientSpine.h)
+    spine_.onEvent = [this](const Json& e) { luaEmit("spine", e); };
+    services_.attach(lua_, luaAlive_, [this](const char* name, const Json& e) { luaEmit(name, e); });   // `sound`: voice handles, music (modules/rts/view/ScriptSound.h)
     ui_.attachLua(lua_);
     // purchases that complete outside store.buy (pending -> purchased, after a restart)
     auto alive = luaAlive_;
@@ -487,6 +490,7 @@ void GameClient::runGameScript() {
 
 void GameClient::shutdownLua() {   // after the UI: RmlUi's documents hold references into the state
     if (luaAlive_) *luaAlive_ = false;
+    services_.detach();
     purchases_.clear();
     if (lua_) lua_close(lua_);
     lua_ = nullptr;

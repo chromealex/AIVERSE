@@ -673,6 +673,7 @@ void TopDown::tick(Simulation& sim) {
     for (size_t pl = 1; pl < st->pilots.size(); ++pl) {
         TopDownPilot& p = st->pilots[pl];
         if (!w.alive(p.hero) || w.get<Unit>(p.hero).hp.raw <= 0) { p.casting = -1; p.held = -1; continue; }
+        if (m_->driving() && m_->driving()->isDriving(sim, p.hero)) continue;   // at the wheel: RtsDriving.cpp reads the stick
         if (rules_.extended) tickCasts(sim, p);
         moveHero(sim, p);
         aimHero(sim, p, uint8_t(pl));

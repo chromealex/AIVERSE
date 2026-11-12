@@ -22,7 +22,7 @@
 //   U1 per frame: as the lit shader (Shaders.h)
 //   U2 material:  vec4 base; vec4 emissive (rgb, linear, premultiplied by strength);
 //                 vec4 pbr (metallic, roughness, normalScale, occlusionStrength);
-//                 vec4 misc (alphaCutoff, teamMode, teamStrength, useVertexColor);
+//                 vec4 misc (alphaCutoff, teamMode, teamStrength, flags: bit0 vertex RGB/alpha, bit1 alpha is local AO);
 //                 vec4 uv0 (offset.xy, scale.xy); vec4 uv1 (rotation, unlit, fixed shade ambient, diffuse);
 //                 vec4 light (fixed light direction xyz, w 1 = on: unlit * (ambient + diffuse * saturate(N.L)))
 //   U3 skin:      SKINNED vec4 joints[240] (3 rows of a 3x4 matrix per joint);
@@ -172,7 +172,7 @@ void main() {
 )";
 
 inline const char* kModelFS =
-    AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS_AT("U5", "tex9") AIVERSE_GLSL_TRACE_AT("tex10")
+    "#define AIVERSE_MODEL_SSR 1\n" AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_SHADOW AIVERSE_GLSL_LIGHTS_AT("U5", "tex9") AIVERSE_GLSL_TRACE_AT("tex10") AIVERSE_GLSL_SSR_AT("tex11", "tex12")
     R"(
 uniform mediump sampler2D tex1;
 uniform mediump sampler2D tex2;
@@ -199,11 +199,11 @@ flat in vec4 v_team;
 flat in vec4 v_draw;
 out vec4 o_color;
 
-vec3 toLinear(vec3 c) { return c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
+vec3 toLinear(vec3 c) { return AIVERSE_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
 vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-float noise3(vec3 x) {
+float modelNoise3(vec3 x) {
     vec3 i = floor(x), f = fract(x);
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
@@ -212,17 +212,17 @@ float noise3(vec3 x) {
 
 void main() {
 #if defined(OUTLINE)
-    o_color = vec4(sqrt(v_team.rgb), v_tint.a);
+    o_color = vec4(rtsEncodeScene(v_team.rgb), v_tint.a);
 #else
     float edge = 0.0;
     if (v_draw.y > 0.0) { // dissolve (spawn / death / construction), noise fixed to the object
-        float nz = noise3(v_opos * 7.0) * 0.7 + noise3(v_opos * 19.0) * 0.3;
+        float nz = modelNoise3(v_opos * 7.0) * 0.7 + modelNoise3(v_opos * 19.0) * 0.3;
         if (nz < v_draw.y) discard;
         edge = 1.0 - smoothstep(0.0, 0.06, nz - v_draw.y);
     }
     vec4 tb = texture(tex1, v_uv);
     vec4 base = m_base * vec4(toLinear(tb.rgb), tb.a);
-    if (m_misc.w > 0.5) base *= v_col;
+    if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, m_misc.w > 1.5 ? 1.0 : v_col.a);
     int teamMode = int(m_misc.y + 0.5);
     float teamW = 0.0;   // how much of the team colour this point shows (team glow)
     if (teamMode == 1) {
@@ -244,11 +244,17 @@ void main() {
 #endif
     vec3 n = normalize(v_nrm);
     if (!gl_FrontFacing) n = -n;
+    vec3 shadowNormal = n;
 #if defined(NORMALMAP) && AIVERSE_Q >= 1
     {
         vec3 t = normalize(v_tan.xyz - n * dot(n, v_tan.xyz));
         vec3 b = cross(n, t) * v_tan.w;
-        vec3 tn = texture(tex3, v_uv).xyz * 2.0 - 1.0;
+        // Subpixel normal weave needs a wider footprint before nonlinear lighting.
+        // Magnified texels retain the original gradients and detail.
+        vec2 dx = dFdx(v_uv), dy = dFdy(v_uv), size = vec2(textureSize(tex3, 0));
+        float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
+        float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
+        vec3 tn = textureGrad(tex3, v_uv, dx * normalFilter, dy * normalFilter).xyz * 2.0 - 1.0;
         tn.xy *= m_pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
@@ -265,6 +271,7 @@ void main() {
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
 #endif
     // SG_SURFACE
+    ao *= m_misc.w > 1.5 ? (m_misc.w > 3.5 && !gl_FrontFacing ? v_col.r : v_col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -272,10 +279,12 @@ void main() {
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
-    float sh = (ndl > 0.0 && v_draw.x > 0.5) ? min(shadowAt(v_wpos, normalize(v_nrm)), terrainShadow(v_wpos)) : 1.0;
+    float sh = (ndl > 0.0 && v_draw.x > 0.5) ? min(shadowAt(v_wpos, shadowNormal), terrainShadow(v_wpos)) : 1.0;
     sh *= cloudShade(v_wpos);
-    vec3 sun = u_sunColor.rgb * u_sunColor.rgb * u_sunDir.w;
-    vec3 sky = u_skyColor.rgb * u_skyColor.rgb, ground = u_groundColor.rgb * u_groundColor.rgb;
+    vec3 sun = rtsDecodeScene(u_sunColor.rgb) * u_sunDir.w;
+    vec3 sky = rtsDecodeScene(u_skyColor.rgb), ground = rtsDecodeScene(u_groundColor.rgb);
+    vec3 dd,ds;float ambientVisibility;dynLight(v_wpos,n,V,rough,dd,ds,ambientVisibility,ao);
+    sky*=ambientVisibility;ground*=ambientVisibility;
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     float giOcc = 1.0;   // specular occlusion from the baked light
     int giMode = 0;
@@ -325,14 +334,21 @@ void main() {
 #endif
     ambSpec *= giOcc;
     vec3 col = diff * (amb * ao + direct) + sun * spec * sh + ambSpec * ao;
-    col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
-    { vec3 dd, ds; dynLight(v_wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
+#if AIVERSE_HDR && AIVERSE_Q > 0
+    if (u_trace2.w > 1.5 && m_uv1.y < 0.5 && rough < 0.8) {
+        float hit; vec3 reflected = ssrWater(v_wpos + n * 0.02, n, V, hit);
+        vec3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndv, 5.0);
+        col += (reflected * fresnel - ambSpec * ao) * hit * (1.0 - rough) * (1.0 - rough);
+    }
+#endif
+    col += amb * ao * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;   // rim, keeps silhouettes readable from the RTS camera
+    { col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }   // point lights + light reflections (Lights.h)
     if (m_uv1.y > 0.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
     float dist = length(u_camPos.xyz - v_wpos);
-    col = mix(col, u_fog.rgb * u_fog.rgb, 1.0 - exp(-dist * u_fog.w));
-    col = u_skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    o_color = vec4(u_groundColor.w > 1.5 ? toSrgb(col) : sqrt(col), base.a * v_tint.a);
+    col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
+    col = rtsToneScene(col, u_skyColor.w > 0.5);
+    o_color = vec4(AIVERSE_HDR != 0 ? col : (u_groundColor.w > 1.5 ? toSrgb(col) : sqrt(col)), base.a * v_tint.a);
 #endif
 }
 )";
@@ -460,7 +476,7 @@ void main() {
     "#if AIVERSE_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n"
 
 inline const char* kModelMSL =
-    AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_MODEL_VERTEX
+    "#define AIVERSE_MODEL_SSR 1\n" AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_SSR AIVERSE_MSL_MODEL_VERTEX
     "#if defined(PROBES)\n" AIVERSE_MSL_PROBES "#endif\n"
     R"(
 struct VOut {
@@ -504,11 +520,11 @@ vertex VOut vs_main(VERTEX_ARGS) {
     return o;
 }
 
-static float3 toLinear(float3 c) { return c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
+static float3 toLinear(float3 c) { return AIVERSE_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
 static float3 toSrgb(float3 c) { return mix(c * 12.92, 1.055 * pow(c, float3(1.0 / 2.4)) - 0.055, step(float3(0.0031308), c)); }
 static float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 static float hash3(float3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-static float noise3(float3 x) {
+static float modelNoise3(float3 x) {
     float3 i = floor(x), fr = fract(x);
     fr = fr * fr * (3.0 - 2.0 * fr);
     return mix(mix(mix(hash3(i), hash3(i + float3(1, 0, 0)), fr.x), mix(hash3(i + float3(0, 1, 0)), hash3(i + float3(1, 1, 0)), fr.x), fr.y),
@@ -525,19 +541,21 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         texture2d<float> tex5 [[texture(5)]], sampler s5 [[sampler(5)]],
                         texture2d<float> tex6 [[texture(6)]], sampler s6 [[sampler(6)]],
                         constant LightU& lu [[buffer(6)]], texture2d<float> tex9 [[texture(9)]], sampler s9 [[sampler(9)]],
-                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]] GI_FARGS) {
+                        texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]],
+                        texture2d<float> tex11 [[texture(11)]], sampler s11 [[sampler(11)]],
+                        depth2d<float> tex12 [[texture(12)]], sampler s12 [[sampler(12)]] GI_FARGS) {
 #if defined(OUTLINE)
-    return float4(sqrt(in.team.rgb), in.tint.a);
+    return float4(rtsEncodeScene(in.team.rgb), in.tint.a);
 #else
     float edge = 0.0;
     if (in.draw.y > 0.0) {
-        float nz = noise3(in.opos * 7.0) * 0.7 + noise3(in.opos * 19.0) * 0.3;
+        float nz = modelNoise3(in.opos * 7.0) * 0.7 + modelNoise3(in.opos * 19.0) * 0.3;
         if (nz < in.draw.y) discard_fragment();
         edge = 1.0 - smoothstep(0.0, 0.06, nz - in.draw.y);
     }
     float4 tb = tex1.sample(s1, in.uv);
     float4 base = m.base * float4(toLinear(tb.rgb), tb.a);
-    if (m.misc.w > 0.5) base *= in.col;
+    if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, m.misc.w > 1.5 ? 1.0 : in.col.a);
     int teamMode = int(m.misc.y + 0.5);
     float teamW = 0.0;
     if (teamMode == 1) {
@@ -559,11 +577,15 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
     float3 n = normalize(in.nrm);
     if (!frontFacing) n = -n;
+    float3 shadowNormal = n;
 #if defined(NORMALMAP) && AIVERSE_Q >= 1
     {
         float3 t = normalize(in.tan.xyz - n * dot(n, in.tan.xyz));
         float3 b = cross(n, t) * in.tan.w;
-        float3 tn = tex3.sample(s3, in.uv).xyz * 2.0 - 1.0;
+        float2 dx = dfdx(in.uv), dy = dfdy(in.uv), size = float2(tex3.get_width(), tex3.get_height());
+        float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
+        float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
+        float3 tn = tex3.sample(s3, in.uv, gradient2d(dx * normalFilter, dy * normalFilter)).xyz * 2.0 - 1.0;
         tn.xy *= m.pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
@@ -580,6 +602,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
 #endif
     // SG_SURFACE
+    ao *= m.misc.w > 1.5 ? (m.misc.w > 3.5 && !frontFacing ? in.col.r : in.col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -587,10 +610,12 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
-    float sh = (ndl > 0.0 && in.draw.x > 0.5) ? min(shadowAt(f, in.wpos, normalize(in.nrm), in.pos.xy, tex0, s0), terrainShadow(f, tex10, s10, in.wpos)) : 1.0;
+    float sh = (ndl > 0.0 && in.draw.x > 0.5) ? min(shadowAt(f, in.wpos, shadowNormal, in.pos.xy, tex0, s0), terrainShadow(f, tex10, s10, in.wpos)) : 1.0;
     sh *= cloudShade(lu, in.wpos);
-    float3 sun = f.sunColor.rgb * f.sunColor.rgb * f.sunDir.w;
-    float3 sky = f.skyColor.rgb * f.skyColor.rgb, ground = f.groundColor.rgb * f.groundColor.rgb;
+    float3 sun = rtsDecodeScene(f.sunColor.rgb) * f.sunDir.w;
+    float3 sky = rtsDecodeScene(f.skyColor.rgb), ground = rtsDecodeScene(f.groundColor.rgb);
+    float3 dd,ds;float ambientVisibility;dynLight(lu,tex9,s9,in.wpos,n,V,rough,dd,ds,ambientVisibility,ao);
+    sky*=ambientVisibility;ground*=ambientVisibility;
     float3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
     float giOcc = 1.0;
     int giMode = 0;
@@ -640,14 +665,21 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
     ambSpec *= giOcc;
     float3 col = diff * (amb * ao + direct) + sun * spec * sh + ambSpec * ao;
-    col += amb * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
-    { float3 dd, ds; dynLight(lu, tex9, s9, in.wpos, n, V, rough, dd, ds); col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
+#if AIVERSE_HDR && AIVERSE_Q > 0
+    if (f.trace2.w > 1.5 && m.uv1.y < 0.5 && rough < 0.8) {
+        float hit; float3 reflected = ssrWater(f, tex11, s11, tex12, s12, in.wpos + n * 0.02, n, V, hit);
+        float3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndv, 5.0);
+        col += (reflected * fresnel - ambSpec * ao) * hit * (1.0 - rough) * (1.0 - rough);
+    }
+#endif
+    col += amb * ao * base.rgb * pow(1.0 - ndv, 3.0) * 0.25;
+    { col += diff * dd + (F0 + 0.15 * (1.0 - rough) * (1.0 - metallic)) * ds; }
     if (m.uv1.y > 0.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;
     col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);
     float dist = length(f.camPos.xyz - in.wpos);
-    col = mix(col, f.fog.rgb * f.fog.rgb, 1.0 - exp(-dist * f.fog.w));
-    col = f.skyColor.w > 0.5 ? clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0) : clamp(col, 0.0, 1.0);
-    return float4(f.groundColor.w > 1.5 ? toSrgb(col) : sqrt(col), base.a * in.tint.a);
+    col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
+    col = rtsToneScene(col, f.skyColor.w > 0.5);
+    return float4(AIVERSE_HDR != 0 ? col : (f.groundColor.w > 1.5 ? toSrgb(col) : sqrt(col)), base.a * in.tint.a);
 #endif
 }
 )";

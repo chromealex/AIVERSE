@@ -31,6 +31,7 @@ void Server::Impl::onQueueJoin(Client& c, ByteReader& rd) {
     std::vector<MapInfo> maps;
     uint32_t n = rd.u32();
     for (uint32_t i = 0; i < n && i < 256 && rd.ok(); ++i) { MapInfo m; if (!read(rd, m)) break; maps.push_back(m); }
+    if (rd.ok() && id.rfind("ticket:", 0) == 0) { onTicketJoin(c, id.substr(7), maps); return; }
     const QueueConfig* q = queue(id);
     if (!rd.ok() || !q) { sendError(c, ErrorCode::NoSuchQueue, NetText("net.error.no_such_queue")); return; }
     std::vector<MapInfo> usable;

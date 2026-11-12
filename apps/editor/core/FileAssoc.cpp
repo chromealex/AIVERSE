@@ -146,6 +146,7 @@ std::string mimeXml() {
     <sub-class-of type="application/json"/>
     <icon name=")" + kIconName + R"("/>
     <generic-icon name=")" + kIconName + R"("/>
+    <glob pattern="*.aiverse" weight="80"/>
     <glob pattern="*.rtsproj" weight="80"/>
   </mime-type>
 </mime-info>
@@ -171,7 +172,8 @@ std::string desktopEntry(const std::string& exe) {
 }
 
 bool globsKnow() {   // update-mime-database ran over our package
-    return readText(fs::path(xdgDataHome()) / "mime" / "globs2").find("rtsproj") != std::string::npos;
+    const std::string g = readText(fs::path(xdgDataHome()) / "mime" / "globs2");   // both extensions of the type
+    return g.find("*.aiverse") != std::string::npos && g.find("*.rtsproj") != std::string::npos;
 }
 
 AssocStatus statusLinux(const std::string& exe) {
@@ -180,18 +182,18 @@ AssocStatus statusLinux(const std::string& exe) {
     if (!s.supported) { s.detail = "нет домашней папки (HOME)"; return s; }
     std::error_code ec;
     const bool desk = readText(desktopFile()).find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos;
-    const bool mime = fs::exists(mimeXmlFile(), ec);
+    const bool mime = readText(mimeXmlFile()).find("*.aiverse") != std::string::npos;   // installs before .aiverse re-register
     const std::string def = defaultHandler();
-    if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .rtsproj не зарегистрирован";
-    else if (!desk) s.detail = ".rtsproj открывает другой редактор: " + desktopFile().string();
+    if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .aiverse не зарегистрирован";
+    else if (!desk) s.detail = ".aiverse открывает другой редактор: " + desktopFile().string();
     else if (def != kEditorDesktopId) {
-        s.detail = def.empty() ? "редактор не выбран программой по умолчанию" : "по умолчанию .rtsproj открывает " + def;
+        s.detail = def.empty() ? "редактор не выбран программой по умолчанию" : "по умолчанию .aiverse открывает " + def;
         s.otherDefault = !def.empty();
     }
     else {
         s.registered = true;
-        s.detail = globsKnow() ? ".rtsproj открывается этим редактором"
-                               : ".rtsproj зарегистрирован; файловые менеджеры увидят тип после update-mime-database (пакет shared-mime-info)";
+        s.detail = globsKnow() ? ".aiverse открывается этим редактором"
+                               : ".aiverse зарегистрирован; файловые менеджеры увидят тип после update-mime-database (пакет shared-mime-info)";
     }
     return s;
 }
@@ -226,7 +228,7 @@ bool registerLinux(const std::string& exe, std::string* msg) {
         return false;
     }
     if (msg) {
-        *msg = "Файлы .rtsproj открываются этим редактором (" + desktopFile().string() + ")";
+        *msg = "Файлы .aiverse и .rtsproj открываются этим редактором (" + desktopFile().string() + ")";
         for (auto& n : notes) *msg += "; " + n;
     }
     return true;
@@ -272,21 +274,28 @@ std::wstring regGet(const std::wstring& sub, const wchar_t* name) {
     return v;
 }
 const std::wstring kClasses = L"Software\\Classes\\";
+const wchar_t* const kExts[] = {L".aiverse", L".rtsproj"};   // current + legacy project files, one ProgID
 std::wstring progId() { return utf8ToWide(kProjectProgId); }
 std::wstring openCommand() { return L"\"" + selfExe() + L"\" \"%1\""; }
 
 AssocStatus statusWindows() {
     AssocStatus s;
     s.supported = true;
-    const std::wstring ext = regGet(kClasses + L".rtsproj", nullptr), cmd = regGet(kClasses + progId() + L"\\shell\\open\\command", nullptr);
-    const std::wstring choice = regGet(L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.rtsproj\\UserChoice", L"ProgId");
-    if (ext != progId() || cmd.empty()) s.detail = "тип .rtsproj не зарегистрирован";
-    else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".rtsproj открывает другой редактор: " + wideToUtf8(cmd);
+    const std::wstring cmd = regGet(kClasses + progId() + L"\\shell\\open\\command", nullptr);
+    bool extOk = true;
+    std::wstring choice;
+    for (const wchar_t* e : kExts) {
+        extOk = extOk && regGet(kClasses + e, nullptr) == progId();
+        const std::wstring c = regGet(L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\" + std::wstring(e) + L"\\UserChoice", L"ProgId");
+        if (!c.empty() && c != progId() && choice.empty()) choice = c;
+    }
+    if (!extOk || cmd.empty()) s.detail = "тип .aiverse не зарегистрирован";
+    else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".aiverse открывает другой редактор: " + wideToUtf8(cmd);
     else if (!choice.empty() && choice != progId()) {
         s.otherDefault = true;
-        s.detail = "в Windows для .rtsproj выбрана другая программа (" + wideToUtf8(choice) + "): «Открыть с помощью» → AIVERSE Editor → «Всегда»";
+        s.detail = "в Windows для файлов проекта выбрана другая программа (" + wideToUtf8(choice) + "): «Открыть с помощью» → AIVERSE Editor → «Всегда»";
     }
-    else { s.registered = true; s.detail = ".rtsproj открывается этим редактором"; }
+    else { s.registered = true; s.detail = ".aiverse открывается этим редактором"; }
     return s;
 }
 
@@ -295,16 +304,18 @@ bool registerWindows(std::string* msg) {
     std::string err;
     if (branding::writeEditorIcons(icons.string(), logoPath(), &err).empty()) { if (msg) *msg = err; return false; }
     const std::wstring pid = progId(), ico = (icons / "rtsproj.ico").wstring();
-    bool ok = regSet(kClasses + L".rtsproj", nullptr, pid) &&
-              regSet(kClasses + L".rtsproj", L"Content Type", utf8ToWide(kProjectMimeType)) &&
-              regSet(kClasses + L".rtsproj\\OpenWithProgids", pid.c_str(), L"") &&
-              regSet(kClasses + pid, nullptr, utf8ToWide("Проект AIVERSE")) &&
+    bool ok = true;
+    for (const wchar_t* e : kExts)
+        ok = ok && regSet(kClasses + e, nullptr, pid) &&
+             regSet(kClasses + e, L"Content Type", utf8ToWide(kProjectMimeType)) &&
+             regSet(kClasses + e + L"\\OpenWithProgids", pid.c_str(), L"");
+    ok = ok && regSet(kClasses + pid, nullptr, utf8ToWide("Проект AIVERSE")) &&
               regSet(kClasses + pid, L"FriendlyTypeName", utf8ToWide("Проект AIVERSE")) &&
               regSet(kClasses + pid + L"\\DefaultIcon", nullptr, L"\"" + ico + L"\",0") &&
               regSet(kClasses + pid + L"\\shell\\open", L"FriendlyAppName", L"AIVERSE Editor") &&
               regSet(kClasses + pid + L"\\shell\\open\\command", nullptr, openCommand());
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
-    if (msg) *msg = ok ? "Файлы .rtsproj открываются этим редактором (HKCU\\Software\\Classes\\.rtsproj)" : "не удалось записать реестр HKCU\\Software\\Classes";
+    if (msg) *msg = ok ? "Файлы .aiverse и .rtsproj открываются этим редактором (HKCU\\Software\\Classes)" : "не удалось записать реестр HKCU\\Software\\Classes";
     return ok;
 }
 #endif
@@ -318,8 +329,14 @@ std::string bundleOf(const std::string& exe) {
     return at == std::string::npos ? std::string() : exe.substr(0, at + 4);
 }
 fs::path stateFile() { return home() / ".aiverse" / "fileassoc.json"; }
+// "types": 2 = the bundle was registered with .aiverse in its Info.plist (1 / missing: .rtsproj only,
+// LaunchServices has to read the plist again).
+constexpr int kMacTypesVersion = 2;
 std::string registeredBundle() {
-    try { return Json::parseFile(stateFile().string()).getStr("macos"); } catch (...) { return {}; }
+    try {
+        Json j = Json::parseFile(stateFile().string());
+        return j.getInt("types", 1) >= kMacTypesVersion ? j.getStr("macos") : std::string();
+    } catch (...) { return {}; }
 }
 std::string cf(CFStringRef s) {
     if (!s) return {};
@@ -344,14 +361,14 @@ AssocStatus statusMac(const std::string& exe) {
     AssocStatus s;
     const std::string bundle = bundleOf(exe);
     s.supported = !bundle.empty();
-    if (!s.supported) { s.detail = "редактор запущен не из AiverseEditor.app: тип .rtsproj объявляет Info.plist бандла"; return s; }
+    if (!s.supported) { s.detail = "редактор запущен не из AiverseEditor.app: тип .aiverse объявляет Info.plist бандла"; return s; }
     const std::string h = defaultHandlerMac();
     if (registeredBundle() != bundle) s.detail = "бандл " + bundle + " ещё не зарегистрирован в LaunchServices";
     else if (h.empty() || h != ownBundleId()) {
-        s.detail = h.empty() ? "у .rtsproj нет программы по умолчанию" : "по умолчанию .rtsproj открывает " + h;
+        s.detail = h.empty() ? "у .aiverse нет программы по умолчанию" : "по умолчанию .aiverse открывает " + h;
         s.otherDefault = !h.empty();
     }
-    else { s.registered = true; s.detail = ".rtsproj открывается этим редактором"; }
+    else { s.registered = true; s.detail = ".aiverse открывается этим редактором"; }
     return s;
 }
 
@@ -372,8 +389,9 @@ bool registerMac(const std::string& exe, std::string* msg) {
     CFRelease(uti);
     Json j = Json::object();
     j.set("macos", Json::string(bundle));
+    j.set("types", Json::number(int64_t(kMacTypesVersion)));
     writeText(stateFile(), j.dump(2) + "\n");
-    if (msg) *msg = st == noErr ? "Файлы .rtsproj открываются " + bundle : "бандл зарегистрирован, но LaunchServices не принял программу по умолчанию (" + std::to_string(int(st)) + ")";
+    if (msg) *msg = st == noErr ? "Файлы .aiverse и .rtsproj открываются " + bundle : "бандл зарегистрирован, но LaunchServices не принял программу по умолчанию (" + std::to_string(int(st)) + ")";
     return st == noErr;
 }
 #pragma clang diagnostic pop

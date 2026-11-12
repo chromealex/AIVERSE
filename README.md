@@ -26,7 +26,7 @@
   <a href="#how-it-works">How it works</a> ·
   <a href="#ready-made-templates">Templates</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="docs/overview.md">Full overview (RU)</a>
+  <a href="docs/overview.md">Full overview</a>
 </p>
 
 ---
@@ -61,7 +61,7 @@ you. AIVERSE ships the mechanics themselves — and makes the game something an 
 | **Multiplayer means endless desyncs.** One `float` is enough for a match on an iPhone and an Android phone to drift apart. | The simulation is bit-identical everywhere: fixed-point instead of floats, its own RNG, checksums. CI compares matches across Linux x64/ARM64, Windows and macOS on every push. Only commands go over the network; there is rollback lockstep and a server with matchmaking and replay-based verdicts. |
 | **Mobile GPUs are weak, yet the game must look good.** | Every expensive feature — shadows, particles, terrain, post-effects — has quality tiers and adapts to the GPU, from old Mali and Adreno to Apple Silicon. |
 | **Shipping on every platform is a project of its own.** Signing, icons, store and ads SDKs. | `aiversebuild` makes an .app, an Xcode project, Gradle/APK, web and .exe in one command. Icons and splash screens are generated. Plugins for the App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin and more — a build carries only the ones the game selects. |
-| **Every new game starts from zero.** | 30+ playable templates, genre kits with acceptance checklists, 118 skills for agents. A new game starts from a working one. |
+| **Every new game starts from zero.** | 30+ playable templates, genre kits with acceptance checklists, 126 skills for agents. A new game starts from a working one. |
 | **Meta and LiveOps get rewritten in every project.** | `aiverse::meta`: shop, currencies, quests, passes, daily rewards, energy, clans, tournaments, chests with pity — configured in JSON. |
 
 ---
@@ -200,7 +200,7 @@ Every template is a fully playable game with bots. Open it in the editor and sta
 - Unity-style docking editor: scene, inspector, terrain, effects, lighting, UI, play test and device simulator
 - `aiversemcp` — MCP server for agents
 - **Make a game** wizard
-- 118 skills for agents and genre kits with acceptance checklists
+- 126 skills for agents and genre kits with acceptance checklists
 - Importers for assets of classic games from your own copy
 
 </td>
@@ -232,7 +232,7 @@ open build/mac/AiverseEditor.app        # editor: project hub and templates
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. If you'd rather not compile,
 the `builds` branch has a prebuilt editor and tools
-([details, in Russian](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+([details](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
 
 **2. Make a game.** In the hub, click **Make a game** or create a project from a template. You can
 play it with bots right away in the Game window.
@@ -249,7 +249,7 @@ the balance of three factions with bots and build a web version."*
 **4. Ship:**
 
 ```bash
-./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "My Game.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---
@@ -265,13 +265,13 @@ The engine is under active development. What has been verified:
 - 🛠 Ready-made templates for genres beyond RTS and FPS are in progress
 
 Per-subsystem details are in
-[Verified / not verified](docs/overview.md#проверено--не-проверено) (in Russian).
+[Verified / not verified](docs/overview.md#verified--not-verified).
 
 ---
 
 ## Documentation
 
-Most documents are written in Russian; `AGENTS.md`, the library docs and a few technical guides are in English.
+Reference documents are in English. The overview, the game wizard, Unity migration and genre packages are also translated into every README language.
 
 | | |
 |---|---|

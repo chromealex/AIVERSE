@@ -102,7 +102,7 @@ bool Renderer3D::init(gfx::Device& dev) {
 void Renderer3D::setShadowQuality(ShadowQuality q) {
     quality_ = q;
     if (!dev_) return;
-    int size = q == ShadowQuality::High ? 2048 : q == ShadowQuality::Medium ? 1536 : 1024;
+    int size = q == ShadowQuality::High ? highShadowSize_ : q == ShadowQuality::Medium ? 1536 : 1024;
     if (q == ShadowQuality::Off) size = 0;
     if (size == shadowSize_ && shadowMap_.valid()) return;
     if (shadowMap_.valid()) dev_->destroyTexture(shadowMap_);
@@ -141,9 +141,10 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     cam_ = cam;
     ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
-    modelItems_.clear(); jointData_.clear(); morphData_.clear();
+    modelItems_.clear(); jointData_.clear(); morphData_.clear(); modelStats_ = {};
     geometryStats_ = {}; profile_ = {}; geometryMainView_ = true;
-    computeShadowMatrix(cam, aspect);
+    RTSCamera shadowCamera = cam; shadowCamera.jitter = {};
+    computeShadowMatrix(shadowCamera, aspect);
     geometryShadowSize_=shadowSize_;
     lights.begin(cam, aspect);
 }
@@ -165,9 +166,15 @@ void Renderer3D::computeShadowMatrix(const RTSCamera& cam, float aspect) {
         pts[n++] = g;
         pts[n++] = g + float3{0, 5.0f, 0}; // tall objects
     }
+    if (hasShadowBounds_) {
+        n=0;
+        for(int z=0;z<2;++z)for(int y=0;y<2;++y)for(int x=0;x<2;++x)
+            pts[n++]={x?shadowBoundsMax_.x:shadowBoundsMin_.x,y?shadowBoundsMax_.y:shadowBoundsMin_.y,z?shadowBoundsMax_.z:shadowBoundsMin_.z};
+    }
+    const float3 center=hasShadowBounds_?(shadowBoundsMin_+shadowBoundsMax_)*.5f:cam.target;
     float3 L = normalize(lighting.sunDir);
     float3 up = std::fabs(L.y) > 0.99f ? float3{0, 0, 1} : float3{0, 1, 0};
-    mat4 view = mat4::lookAt(cam.target + L * 60.0f, cam.target, up);
+    mat4 view = mat4::lookAt(center + L * 60.0f, center, up);
     float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f, minZ = 1e9f, maxZ = -1e9f;
     for (int i = 0; i < n; ++i) {
         float3 p = view.transformPoint(pts[i]);
@@ -225,7 +232,7 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
         f.trace1[2] = std::max(lighting.terrainShadowDistance, 2.0f);
         f.trace1[3] = std::max(lighting.terrainShadowSoftness, 0.005f);
     }
-    put3(f.trace2, camFwd_, ssrThisFrame_ && !forShadow ? 1.0f : 0.0f);
+    put3(f.trace2, camFwd_, ssrThisFrame_ && !forShadow ? (modelReflections_ ? 2.0f : 1.0f) : 0.0f);
     f.trace3[0] = 48.0f;    // SSR march distance (world)
     f.trace3[1] = 0.6f;     // thickness: a ray passing further behind a surface is a miss (thin objects)
     f.trace3[2] = 16.0f;    // steps (+4 refinement)
@@ -248,8 +255,8 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
         // Low (4 fixed taps): a wide radius would show 4 offset copies, keep it around two texels
         if (quality_ == ShadowQuality::Low) radiusWorld = std::min(radiusWorld, shadowTexelWorld_ * 2.0f);
         f.quality[2] = radiusWorld / std::max(shadowExtent_, 1.0f);
-        // normal offset grows with the kernel: wide filters otherwise compare against the receiver itself (acne)
-        f.quality[3] = std::max(shadowTexelWorld_ * 1.5f, radiusWorld * 0.9f);
+        // Keep receiver displacement tied to resolution, not penumbra width: thin folds must not detach.
+        f.quality[3] = shadowTexelWorld_ * 1.5f;
     }
     f.quality[1] = quality_ == ShadowQuality::Off || forShadow ? 0.0f : 1.0f;
     dev_->setUniforms(1, &f, sizeof f);
@@ -271,8 +278,10 @@ void Renderer3D::resolvePostFx() {
     PostProcess* post = post_;
     post_ = nullptr;
     dev_->endPass();
-    PostFrame f{viewProj_, camPos_, lighting, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight()};
+    PostFrame f{viewProj_, camPos_, lighting, sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight(),
+                quality_ != ShadowQuality::Off ? shadowMap_ : gfx::TextureHandle{}, lightViewProj_};
     post->resolve(*dev_, postOut_, f);
+    hdrFrame_ = false;
 }
 
 void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
@@ -305,16 +314,19 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
 
     renderSpotShadow();   // High: the main spot light's shadow map (Renderer3DReflect.cpp)
     lights.renderMap();
-    renderReflection();   // High: mirrored pass for water (Renderer3DReflect.cpp)
+
 
     // ---- main pass (left open for the caller's UI; with a post hook: the hook's scene target)
     post_ = post && post->active() ? post : nullptr;
     postOut_ = screenPass;
     const int sw = sceneW_ > 0 ? sceneW_ : dev_->framebufferWidth(), sh = sceneH_ > 0 ? sceneH_ : dev_->framebufferHeight();
     const gfx::PassDesc mainPass = post_ ? post_->scenePass(screenPass, sw, sh) : screenPass;
+    hdrFrame_ = post_ && post_->linearScene();
+    lights.setLinearScene(hdrFrame_);
+    renderReflection();
     // trace tier + water: the opaque scene goes into colour + depth textures first (SSR reads them),
     // then it is blitted (with depth) into the main pass and the rest is drawn on top
-    bool capture = false;
+    bool capture = modelReflections_ && hdrFrame_ && traceActive();
     if (traceActive()) {
         for (const auto& it : items_)
             if (it.color.w < 0.99f && it.specular >= 0.85f && !(it.flags & kDrawUnlit)) { capture = true; break; }
@@ -345,7 +357,13 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     for (auto& it : items_) if (it.color.w >= 0.99f) drawItem(it);
     renderModels(1);
     renderModels(3);
-    if (capture) { endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh}); }
+    if (capture) {
+        endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh});
+        // The blit binds scene color at slot 0; model shaders expect the sun depth map there.
+        dev_->setTexture(0, shadowMap_);
+        // Read the first opaque pass while shading into a different target (no feedback).
+        if (modelReflections_ && hdrFrame_) { uploadFrameUniforms(false); renderModels(1); }
+    }
     // translucent meshes (water, ghosts) before overlays so that overlays (fog of war, markers) stay on top
     bool any = false;
     for (auto& it : items_) {

@@ -1,0 +1,42 @@
+{
+  "restNeed": 2,
+  "needs": [
+    {"id": 1, "decayPerTick": 25, "initial": 80000, "lowAt": 40000, "criticalAt": 12000,
+     "mood": [{"below": 12000, "mood": -40000}, {"below": 40000, "mood": -12000}]},
+    {"id": 2, "decayPerTick": 40, "initial": 90000, "lowAt": 30000, "criticalAt": 8000, "recoveredAt": 95000,
+     "mood": [{"below": 8000, "mood": -30000}, {"below": 30000, "mood": -8000}]},
+    {"id": 3, "decayPerTick": 10, "initial": 70000, "lowAt": 30000, "criticalAt": 0,
+     "mood": [{"below": 30000, "mood": -10000}, {"below": 100001, "mood": 5000}]}
+  ],
+  "restores": [
+    {"activity": "sleeping", "need": 2, "perTick": 120},
+    {"activity": "leisure", "need": 3, "perTick": 90}
+  ],
+  "meals": [
+    {"resource": 3, "need": 1, "amount": 50000, "ticks": 20},
+    {"resource": 1, "need": 1, "amount": 15000, "ticks": 10}
+  ],
+  "workTypes": [
+    {"id": 1, "defaultPriority": 2}, {"id": 2, "defaultPriority": 3}, {"id": 3, "defaultPriority": 3},
+    {"id": 4, "defaultPriority": 3}, {"id": 5, "defaultPriority": 0}, {"id": 6, "defaultPriority": 4}
+  ],
+  "recipes": [
+    {"id": 1, "workstationType": 1, "workType": 1, "work": 40, "inputs": [[1, 2]], "outputs": [[3, 1]]}
+  ],
+  "blueprints": [
+    {"id": 1, "workType": 3, "work": 400, "workstationType": 1, "needsPower": true, "cost": [[2, 25]]},
+    {"id": 2, "workType": 3, "work": 300, "cost": [[2, 30]]}
+  ],
+  "gathers": [
+    {"id": 1, "workType": 4, "resource": 1, "yield": 6, "work": 70},
+    {"id": 2, "workType": 4, "resource": 2, "yield": 8, "work": 90},
+    {"id": 3, "workType": 5, "resource": 1, "yield": 10, "work": 150}
+  ],
+  "hauls": [
+    {"id": 1, "from": 1, "to": 2, "resource": 1, "keep": 200, "batch": 10, "work": 25, "workType": 2},
+    {"id": 2, "from": 1, "to": 2, "resource": 2, "keep": 200, "batch": 10, "work": 25, "workType": 2}
+  ],
+  "alerts": [
+    {"id": 1, "workType": 6, "priority": 1000, "workPerSeverity": 60, "mood": -6000, "preempt": true, "ignoreSchedule": true}
+  ]
+}

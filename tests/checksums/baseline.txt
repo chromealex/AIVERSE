@@ -7,6 +7,9 @@ borderrush 3 e22aea63e52a9469
 boss_arena 1 836eee10a8c757a1
 boss_arena 2 a51dde24dba483be
 boss_arena 3 6a094fb974abbc3f
+bunkerwars 1 a4af5e90d4940cfe
+bunkerwars 2 71b6775c97c2b019
+bunkerwars 3 ed800c21f5816a7d
 clanlands 1 a0e1eebc181f1da7
 clanlands 2 8f140eb52230d3f7
 clanlands 3 5eb7aa108d29943c

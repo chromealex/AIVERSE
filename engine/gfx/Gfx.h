@@ -44,8 +44,8 @@ enum class Usage { Immutable, Dynamic };          // Dynamic: updated (whole or 
 enum class PixelFormat { RGBA8, R8, Depth, RGBA32F,
                          ETC2_RGB8, ETC2_RGBA8, BC1, BC3, BC7, ASTC_4x4, ASTC_6x6,   // block-compressed: upload levels, check supports()   // Depth: 24/32-bit depth render target; RGBA32F: data textures
                                                         // (bone matrices, morph deltas), nearest only, read with texelFetch / read()
-                         RGBA8_sRGB };  // sRGB-encoded RGBA8 (check supports()): sampling decodes to linear (before filtering),
-                                        // as a render target the GPU encodes on write and blends in linear; alpha stays linear
+                         RGBA8_sRGB, // sampling decodes sRGB; render targets encode on write and blend in linear; alpha stays linear
+                         RGBA16F }; // linear HDR radiance, 8 bytes/pixel; check supports()
 enum class Filter { Nearest, Linear };
 enum class VertexFormat { Float2, Float3, Float4, UByte4N, UByte4 }; // UByte4: integers 0..255 (GLSL float / MSL uchar4)
 enum class IndexType { None, UInt16, UInt32 };
@@ -88,6 +88,7 @@ struct ShaderDesc {
     int textureSlots = 0;               // number of sampled textures (tex0..)
     int uniformSlots = 1;               // number of uniform blocks (U0..)
     const char* label = nullptr;
+    bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
 };
 
 struct ComputeDesc { const char* msl=nullptr; const char* glsl=nullptr; const char* label=nullptr; };
@@ -115,7 +116,7 @@ struct PipelineDesc {
     float depthBiasConstant = 0;     // polygon offset, used by shadow casters
     float depthBiasSlope = 0;
     PixelFormat colorFormat = PixelFormat::RGBA8;   // colour target it draws into: RGBA8 (screen, RGBA8 targets) or RGBA8_sRGB
-                                                    // (Metal bakes it into the pipeline state; GL ignores it)
+                                                    // RGBA16F passes select a cached linear-target variant on both backends
     const char* label = nullptr;
 };
 

@@ -1,0 +1,138 @@
+{
+  "id": "sponza-day-reference-v1-shader-graphs-architectural-day-balanced",
+  "model": "main_sponza/NewSponza_Main_glTF_003.gltf",
+  "width": 1280,
+  "height": 720,
+  "fovYDegrees": 60,
+  "near": 0.1,
+  "far": 200,
+  "sunDirection": [
+    -0.492404,
+    0.866025,
+    -0.086824
+  ],
+  "sunColor": [
+    1,
+    0.96,
+    0.88
+  ],
+  "sunIntensity": 9,
+  "skyColor": [
+    0.32,
+    0.34,
+    0.4
+  ],
+  "groundColor": [
+    0.14,
+    0.1,
+    0.06
+  ],
+  "cameras": [
+    {
+      "name": "reference",
+      "eye": [
+        -11.5,
+        2.1,
+        -1.5
+      ],
+      "target": [
+        9,
+        6.2,
+        -1.6
+      ],
+      "fovYDegrees": 49
+    }
+  ],
+  "models": [
+    {
+      "path": "pkg_a_curtains/NewSponza_Curtains_glTF.gltf",
+      "materialGraphs": {
+        "curtain_01": "shaders-sponza/sg_cloth_red-textured.json",
+        "curtain_03": "shaders-sponza/sg_cloth_red-textured.json",
+        "curtain_02": "shaders-sponza/sg_cloth_red-textured.json"
+      }
+    },
+    {
+      "path": "pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
+      "materialGraphs": {}
+    }
+  ],
+  "sourceAssetFingerprint": "ef33200bf94f37a2878db55947c324d6d3895c51281f0b3e2e65b8658c29053d",
+  "derivedAssetFingerprint": "f30159e9190f413ce042e3b66d3c9a8b10c7bdd7cca2c2b8b04789bd3ecb9f78",
+  "assetVerificationNote": "experimental derived workload; source and derived manifests must both be checked",
+  "modelOptimization": {
+    "lod": true,
+    "culling": true,
+    "instancing": true
+  },
+  "staticPointLightGrid": true,
+  "staticLightCellSize": 1.0,
+  "lightingNote": "Architectural reference study, no candle geometry or candle lights. Night uses 14 finite-radius point lights without point-shadow occlusion; not a recreation of Unreal GI.",
+  "fogDensity": 0.0035,
+  "fogColor": [
+    0.46,
+    0.5,
+    0.58
+  ],
+  "mainNormalScale": 0.45,
+  "postfx": {
+    "hdr": "on",
+    "effects": [
+      {
+        "type": "bloom",
+        "threshold": 2,
+        "intensity": 0.12
+      },
+      {
+        "type": "colorGrade",
+        "saturation": 0.75,
+        "exposure": 0.2,
+        "temperature": 0.04
+      }
+    ]
+  },
+  "referenceNote": "Manual match to supplied daylight frame; original camera, exposure and GI settings unavailable. Not a pixel-identical recreation.",
+  "materialGraphs": {
+    "arch_stone_wall_01": "shaders-sponza/sg_limestone-textured.json",
+    "stone_trims_01": "shaders-sponza/sg_limestone-textured.json",
+    "brickwall_02": "shaders-sponza/sg_limestone-textured.json",
+    "stones_2ndfloor": "shaders-sponza/sg_limestone-textured.json",
+    "stone_trims_02": "shaders-sponza/sg_limestone-textured.json",
+    "stones_01_tile": "shaders-sponza/sg_limestone-textured.json",
+    "column_1stfloor": "shaders-sponza/sg_limestone-textured.json",
+    "column_head_1stfloor": "shaders-sponza/sg_limestone-textured.json",
+    "door_stoneframe_02": "shaders-sponza/sg_limestone-textured.json",
+    "door_stoneframe_01": "shaders-sponza/sg_limestone-textured.json",
+    "brickwall_01": "shaders-sponza/sg_limestone-textured.json",
+    "floor_01": "shaders-sponza/sg_limestone-textured.json",
+    "ornament_lion": "shaders-sponza/sg_limestone-textured.json",
+    "column_head_2ndfloor_02": "shaders-sponza/sg_limestone-textured.json",
+    "column_brickwall_01": "shaders-sponza/sg_limestone-textured.json",
+    "column_head_2ndfloor_03": "shaders-sponza/sg_limestone-textured.json",
+    "ornament_01": "shaders-sponza/sg_limestone-textured.json"
+  },
+  "materialGraphNote": "Library variants preserve imported textures, alpha, normal, roughness and metal maps. Wax and flame use constant surface outputs. Emission does not create light.",
+  "pointLights": [],
+  "probeGI": {
+    "quality": "mobile",
+    "spacing": 1.25,
+    "samples": 128,
+    "distance": 60,
+    "sun": [
+      6,
+      5.76,
+      5.28
+    ],
+    "sky": [
+      30,
+      25,
+      18
+    ],
+    "bounces": 3
+  },
+  "meshOcclusion": {
+    "radius": 0.75,
+    "samples": 64,
+    "read": "day-local-ao.avao"
+  }
+}

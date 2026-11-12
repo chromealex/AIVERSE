@@ -1,0 +1,251 @@
+// Bunker Wars camera shake patterns.
+{
+ "patterns": [
+  {
+   "m_Name": "Skill20_projectile_1",
+   "id": 0,
+   "shakeSequence": [
+    {
+     "duration": 0.5,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [
+       {
+        "serializedVersion": 3,
+        "time": -0.0056915283,
+        "value": 1.0105591,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       },
+       {
+        "serializedVersion": 3,
+        "time": 0.9871826,
+        "value": 0.030769348,
+        "inSlope": -0.16121677,
+        "outSlope": -0.16121677,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0.07878242,
+        "outWeight": 0
+       }
+      ],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 30,
+     "frequency": 11
+    }
+   ],
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_CameraShakePatterns/Skill20_projectile_1.asset"
+  },
+  {
+   "m_Name": "Skill35",
+   "id": 0,
+   "shakeSequence": [
+    {
+     "duration": 0.2,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 0,
+     "frequency": 0
+    },
+    {
+     "duration": 0.5,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [
+       {
+        "serializedVersion": 3,
+        "time": 0,
+        "value": 1,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       },
+       {
+        "serializedVersion": 3,
+        "time": 1,
+        "value": 0,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       }
+      ],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 20,
+     "frequency": 30
+    }
+   ],
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_CameraShakePatterns/Skill35.asset"
+  },
+  {
+   "m_Name": "Talent1_Shake",
+   "id": 0,
+   "shakeSequence": [
+    {
+     "duration": 0.2,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 0,
+     "frequency": 0
+    },
+    {
+     "duration": 1,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [
+       {
+        "serializedVersion": 3,
+        "time": 0,
+        "value": 1,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       },
+       {
+        "serializedVersion": 3,
+        "time": 1,
+        "value": 0,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       }
+      ],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 100,
+     "frequency": 30
+    }
+   ],
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_CameraShakePatterns/Talent1_Shake.asset"
+  },
+  {
+   "m_Name": "Talent1_Shake2",
+   "id": 0,
+   "shakeSequence": [
+    {
+     "duration": 0.2,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 0,
+     "frequency": 0
+    },
+    {
+     "duration": 1,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [
+       {
+        "serializedVersion": 3,
+        "time": -0.0056915283,
+        "value": 1.0105591,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       },
+       {
+        "serializedVersion": 3,
+        "time": 0.9871826,
+        "value": 0.030769348,
+        "inSlope": -0.16121677,
+        "outSlope": -0.16121677,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0.07878242,
+        "outWeight": 0
+       }
+      ],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 100,
+     "frequency": 30
+    }
+   ],
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_CameraShakePatterns/Talent1_Shake2.asset"
+  },
+  {
+   "m_Name": "Talent1_projectile_1",
+   "id": 0,
+   "shakeSequence": [
+    {
+     "duration": 1,
+     "easeOut": {
+      "serializedVersion": 2,
+      "m_Curve": [
+       {
+        "serializedVersion": 3,
+        "time": -0.0056915283,
+        "value": 1.0105591,
+        "inSlope": 0,
+        "outSlope": 0,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0,
+        "outWeight": 0
+       },
+       {
+        "serializedVersion": 3,
+        "time": 0.9871826,
+        "value": 0.030769348,
+        "inSlope": -0.16121677,
+        "outSlope": -0.16121677,
+        "tangentMode": 0,
+        "weightedMode": 0,
+        "inWeight": 0.07878242,
+        "outWeight": 0
+       }
+      ],
+      "m_PreInfinity": 2,
+      "m_PostInfinity": 2,
+      "m_RotationOrder": 4
+     },
+     "maxAmplitude": 100,
+     "frequency": 30
+    }
+   ],
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_CameraShakePatterns/Talent1_projectile_1.asset"
+  }
+ ]
+}

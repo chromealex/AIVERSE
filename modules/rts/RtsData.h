@@ -13,6 +13,7 @@
 #include <vector>
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
+#include "RtsModes.h"
 
 namespace aiverse::game {
 
@@ -93,6 +94,7 @@ struct WeaponDef {
     int16_t onHit = -1;                 // payload applied to the target on hit (poison, frost)
     Fixed onHitChance = Fixed::fromInt(1);
     Fixed chargeTime{};                 // >0: the weapon has to stay on one target this long before each shot
+    Fixed rangeAspect = Fixed::fromInt(1); // elliptical range: z radius = range x this (Bunker Wars towers, world.aspectRatio)
     uint8_t armorClass = 0;             // 0: armor, 1: armor2 (pierce)
     std::vector<std::pair<uint64_t, Fixed>> bonus; // extra damage vs targets with any of these tags (AoE / SC2 bonuses)
     Fixed killsCrew{};                  // chance per hit to kill the crew of a crewed target (Z snipers)
@@ -106,6 +108,7 @@ struct Amount { uint16_t res = 0; Fixed value{}; };
 #include "RtsGridFieldData.h"
 #include "RtsRaidData.h"
 #include <memory>
+#include "RtsRoutesData.h"
 namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
 struct GatherDef { uint16_t res = 0; Fixed carry = Fixed::fromInt(10); Fixed time = Fixed::fromInt(2); };
@@ -313,6 +316,7 @@ struct UnitType {
     bool clash = false;                        // units in transit fight hostile units they meet
     std::vector<std::pair<ModTarget, StatMod>> playerMods; // every completed one modifies the owner's types
     int playerModsMax = 0;                     // count at most this many (0 = all)
+    std::vector<std::vector<Fixed>> playerModsByCount;   // per playerMods entry: `byCount` mul for 1..N owned (empty = mul^n)
     std::vector<std::vector<int>> learnAt;     // per ability: hero levels for skill levels 1, 2, ... (WC3)
     Fixed costGrowth{};                        // cost * (1 + growth * owned) (Dungeon Keeper imps)
     uint64_t crushTags = 0;                    // moving over units with these tags kills them (Dune / C&C tanks)
@@ -540,6 +544,7 @@ struct TrapDef {
 struct ProgressionRules;   // RtsProgressionData.h
 struct Rules {
     bool scriptedAI = false;                  // external RtsAI must yield to the game's controller
+    bool bwAI = false;                        // ai.controller "bw": Bunker Wars bots (RtsBwAI.h, agent-bw-ai)
     MechRules mech;                           // agent-mech rules (RtsMechData.h)
     std::vector<ResourceDef> resources;
     std::vector<std::string> tagNames;
@@ -583,6 +588,7 @@ struct Rules {
     bool buildingStorage = false;              // "storage": "buildings": goods live in building inventories
     RoadNetworkRules roadNetwork;
     LaneRules lanes;
+    RouteRules routes;                         // lanes.routes / lanes.groups (RtsRoutesData.h, BW routes and groups)
     MovementRules movement;
     bool settlers = false;                     // any settlers-economy mechanic present
     bool advancedEffects = false;              // statuses / delivery / skills beyond the original instant effects
@@ -600,6 +606,7 @@ struct Rules {
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
     RaidRules raid;                            // rules "raid" (RtsRaidData.h): extraction raids
     std::shared_ptr<const ProgressionRules> progression;   // rules "progression" (RtsProgressionData.h); null without the block
+    ModesRules modes;                          // match modes, timed rules, resource levels, match stats (RtsModes.h)
 
     int findRoom(const std::string& id) const;
     int findDiggable(char c) const;
@@ -620,5 +627,9 @@ void loadMechRules(Rules& r, const Json& j);   // RtsMechData.cpp, called by loa
 Json expandDesigns(const Json& j);
 void loadMechStage4(Rules& r, const Json& j);   // RtsMechData4.cpp: morale, fatigue, charge, supply, conveyors
 VictoryRules loadVictory(const Json& j, const VictoryRules& def);
+// match modes (RtsModesData.cpp): loadRules calls loadModes; setup merges rules / preset / map and parses the result
+void loadModes(Rules& r, const Json& j);
+ModesRules parseModes(const Rules& r, const Json& modes);
+Json effectiveModes(const Json& rules, const Json& map, std::string* presetId);
 
 } // namespace aiverse::game

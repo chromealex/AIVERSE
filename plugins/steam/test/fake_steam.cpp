@@ -60,8 +60,34 @@ static bool fake_GetItemPrice(SteamItemDef_t d, uint64* cur, uint64* base) { if 
 static bool fake_dlcOwned(AppId_t a) { return g_dlc.count(a) > 0; }
 static void fake_overlayStore(AppId_t a) { g_storeApp = a; }
 
+// social: stats, achievements, rich presence, overlay dialogs
+static std::map<std::string, double> g_stats = {{"NumWins", 0}, {"Playtime", 0}};
+static std::map<std::string, uint32> g_ach = {{"ACH_WIN_ONE_GAME", 0}, {"ACH_TRAVEL", 0}};
+static std::map<std::string, std::string> g_presence;
+static std::string g_lastDialog;
+static int g_stores = 0;
+template <class T> static bool fake_GetStat(const char* n, T* v) { auto it = g_stats.find(n); if (it == g_stats.end()) return false; *v = T(it->second); return true; }
+template <class T> static bool fake_SetStat(const char* n, T v) { auto it = g_stats.find(n); if (it == g_stats.end()) return false; it->second = double(v); return true; }
+static bool fake_GetAchievement(const char* n, bool* a) { auto it = g_ach.find(n); if (it == g_ach.end()) return false; *a = it->second != 0; return true; }
+static bool fake_SetAchievement(const char* n) { auto it = g_ach.find(n); if (it == g_ach.end()) return false; if (!it->second) it->second = 1700000000; return true; }
+static bool fake_AchTime(const char* n, bool* a, uint32* t) { auto it = g_ach.find(n); if (it == g_ach.end()) return false; *a = it->second != 0; *t = it->second; return true; }
+static bool fake_StoreStats() {
+    ++g_stores;
+    static std::set<std::string> announced;
+    for (auto& [n, t] : g_ach)
+        if (t && announced.insert(n).second) {
+            UserAchievementStored_t s{}; s.m_nGameID = 480; std::snprintf(s.m_rgchAchievementName, sizeof s.m_rgchAchievementName, "%s", n.c_str()); queueCb(s);
+        }
+    return true;
+}
+static bool fake_Progress(const char*, uint32, uint32) { return true; }
+static const char* fake_presence(CSteamID, const char* k) { return std::string(k) == "status" ? "In a match" : ""; }
+static bool fake_setPresence(const char* k, const char* v) { if (v && *v) g_presence[k] = v; else g_presence.erase(k); return true; }
+static void fake_clearPresence() { g_presence.clear(); }
+static void fake_overlayDialog(const char* d) { g_lastDialog = d ? d : ""; }
+
 #include "fakes.inc"
-static FakeISteamInventory g_inv; static FakeISteamApps g_apps; static FakeISteamFriends g_friends; static FakeISteamUser g_user; static FakeISteamUtils g_utils;
+static FakeISteamInventory g_inv; static FakeISteamApps g_apps; static FakeISteamFriends g_friends; static FakeISteamUser g_user; static FakeISteamUtils g_utils; static FakeISteamUserStats g_stats_if;
 
 class CCallbackMgr {
 public:
@@ -90,6 +116,7 @@ S_API void* S_CALLTYPE SteamInternal_FindOrCreateUserInterface(HSteamUser, const
     if (s.rfind("SteamFriends", 0) == 0) return static_cast<ISteamFriends*>(&g_friends);
     if (s.rfind("SteamUser", 0) == 0) return static_cast<ISteamUser*>(&g_user);
     if (s.rfind("SteamUtils", 0) == 0) return static_cast<ISteamUtils*>(&g_utils);
+    if (s.rfind("STEAMUSERSTATS", 0) == 0) return static_cast<ISteamUserStats*>(&g_stats_if);
     std::fprintf(stderr, "fake steam: unknown interface %s\n", v);
     return nullptr;
 }
@@ -112,5 +139,9 @@ S_API void fake_overlay(bool on) { GameOverlayActivated_t a{}; a.m_bActive = on;
 S_API void fake_completePurchase() { SteamItemDetails_t d{}; d.m_itemId = g_nextItem++; d.m_iDefinition = g_pendingDef; d.m_unQuantity = 1; g_items.push_back(d); }
 S_API void fake_buyDlc() { g_dlc.insert(g_storeApp); DlcInstalled_t d{}; d.m_nAppID = g_storeApp; queueCb(d); }
 S_API int fake_itemCount() { return int(g_items.size()); }
+S_API const char* fake_lastDialog() { return g_lastDialog.c_str(); }
+S_API const char* fake_presenceValue(const char* k) { auto it = g_presence.find(k); return it == g_presence.end() ? "" : it->second.c_str(); }
+S_API int fake_storeCount() { return g_stores; }
+S_API void fake_join(const char* connect) { GameRichPresenceJoinRequested_t j{}; j.m_steamIDFriend = CSteamID(uint64(76561197960287931ULL)); std::snprintf(j.m_rgchConnect, sizeof j.m_rgchConnect, "%s", connect); queueCb(j); }
 S_API void fake_addItem(int def) { SteamItemDetails_t d{}; d.m_itemId = g_nextItem++; d.m_iDefinition = def; d.m_unQuantity = 1; g_items.push_back(d); }
 }

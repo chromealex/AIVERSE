@@ -1,6 +1,6 @@
 // aiversebuild — packages a game (content folder with game.json) for every platform.
 //
-//   aiversebuild --project <project dir or .rtsproj> --target <macos|ios|android|web|windows|linux|all>
+//   aiversebuild --project <project dir or .aiverse> --target <macos|ios|android|web|windows|linux|all>
 //            [--engine <engine dir>] [--out <dir>] [--config Debug|Release]
 //            [--generate-only] [--team <Apple team id>] [--jobs N]
 //            [--no-pack] [--pack-level N] [--no-atlas] [--audio auto|off|desktop|mobile|web]
@@ -194,7 +194,7 @@ void copyDir(const fs::path& from, const fs::path& to) {
     for (auto it = fs::directory_iterator(from, ec); !ec && it != fs::directory_iterator(); it.increment(ec)) {
         const std::string name = it->path().filename().string();
         if (name == "Builds" || name == "dist" || name == "logs" || name == "Logs" || name == ".aiverse" || name == ".rtsengine") continue;
-        if (it->path().extension() == ".rtsproj") continue;   // editor project file
+        if (it->path().extension() == ".aiverse" || it->path().extension() == ".rtsproj") continue;   // editor project file (current / legacy)
         std::error_code e2;
         const bool ok = it->is_directory(e2) ? aiverse::pack::copyTree(it->path(), to / name, e2) : aiverse::pack::copyFileReplace(it->path(), to / name, e2);
         if (!ok) die("не удалось скопировать " + it->path().string() + " -> " + (to / name).string() + ": " + e2.message());
@@ -443,7 +443,8 @@ fs::path contentPack(Options& o) {
     rules.add("native/*"); // compiled game modules are source code, not runtime data (root only: "native/" would match any folder named native, e.g. models/native)
     rules.add("unpackers/"); // the game's own unpacker plugins are build tools, not content
     for (const char* d : {"Builds/", "Logs/", "logs/", "dist/", ".aiverse/", ".rtsengine/"}) rules.add(d);   // project outputs and editor state
-    rules.add("*.rtsproj");   // the editor's project file (double-click target), not game content
+    rules.add("*.aiverse");   // the editor's project file (double-click target), not game content
+    rules.add("*.rtsproj");   // its name before the AIVERSE rename
     std::vector<std::string> notes;
     addImports(o, w, rules, notes);
     // Game folders produced by importers (tools/importers) carry converted third-party data.
@@ -748,7 +749,9 @@ void buildIOS(const Game& g, Options& o) {
         writeText(xc / "Podfile", pods);
         if (!findTool("pod").empty()) {
             step("iOS: CocoaPods (SDK плагинов)");
-            mustRun("cd " + quote(xc) + " && pod install --repo-update");
+            // CocoaPods (Ruby) aborts with Encoding::CompatibilityError when no UTF-8 locale is set, which is the
+            // case when the build is started from the editor or Finder rather than a terminal.
+            mustRun("cd " + quote(xc) + " && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install --repo-update");
             xcodeTarget = "-workspace " + quote(xc / "AIVERSE.xcworkspace");
             info("Открывайте AIVERSE.xcworkspace (не .xcodeproj): в нём SDK плагинов.");
         } else {
@@ -759,9 +762,14 @@ void buildIOS(const Game& g, Options& o) {
     info("Проект: " + proj.string());
     if (o.generateOnly) return;
     step("iOS: проверочная сборка для симулятора (без подписи)");
-    int rc = run("xcodebuild " + xcodeTarget + " -scheme aiverse_client -configuration " + o.config +
-                 " -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath " + quote(tempDir(o) / "build" / "ios-derived") +
-                 " CODE_SIGNING_ALLOWED=NO -quiet build");
+    const std::string simArgs = " -configuration " + o.config +
+        " -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath " + quote(tempDir(o) / "build" / "ios-derived") +
+        " CODE_SIGNING_ALLOWED=NO -quiet build";
+    // The CMake-generated aiverse_client scheme does not build the CocoaPods aggregate target, so the link
+    // step could not find Pods_aiverse_client.framework. Build the pods first into the same derived data.
+    if (xcodeTarget.rfind("-workspace", 0) == 0 && run("xcodebuild " + xcodeTarget + " -scheme Pods-aiverse_client" + simArgs) != 0)
+        die("сборка CocoaPods для симулятора не прошла");
+    int rc = run("xcodebuild " + xcodeTarget + " -scheme aiverse_client" + simArgs);
     if (rc != 0) die("сборка для симулятора не прошла");
     info("Симулятор: OK. Для устройства откройте проект в Xcode, выберите Team в Signing & Capabilities и запустите.");
 }
@@ -988,7 +996,7 @@ void buildLinux(const Game& g, Options& o) {
 }
 
 void usage() {
-    std::cout << "usage: aiversebuild --project <project dir or .rtsproj> --target <macos|ios|android|web|windows|linux|all>\n"
+    std::cout << "usage: aiversebuild --project <project dir or .aiverse> --target <macos|ios|android|web|windows|linux|all>\n"
                  "                [--engine <dir>] [--out <dir>] [--config Debug|Release] [--generate-only] [--team <AppleTeamID>] [--jobs N]\n"
                  "                [--no-pack] [--pack-level 1..22] [--no-atlas] [--audio auto|off|desktop|mobile|web]\n"
               "                [--plugins name,name]   (native plugins; default: game.json \"plugins\")\n"
@@ -1085,8 +1093,8 @@ int main(int argc, char** argv) {
     }
     if (o.project.empty() || o.target.empty()) { usage(); return 2; }
     std::error_code ec;
-    // --project takes the folder, its game.json or its .rtsproj (the file the editor opens)
-    if (fs::is_regular_file(o.project, ec) && (o.project.extension() == ".rtsproj" || o.project.filename() == "game.json"))
+    // --project takes the folder, its game.json or its .aiverse / legacy .rtsproj (the file the editor opens)
+    if (fs::is_regular_file(o.project, ec) && (o.project.extension() == ".aiverse" || o.project.extension() == ".rtsproj" || o.project.filename() == "game.json"))
         o.project = fs::absolute(o.project, ec).parent_path();
     o.project = fs::canonical(o.project, ec);
     if (ec) die("папка проекта не найдена");

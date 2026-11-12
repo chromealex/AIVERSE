@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 #include <string>
 
 namespace aiverse::render {
@@ -98,6 +99,30 @@ bool LightSystem::init(gfx::Device& dev) {
     return pipe_.valid() && vb_.valid() && black_.valid() && haloPipe_.valid() && haloVB_.valid() && decalPipe_.valid() && decalVB_.valid();
 }
 
+bool LightSystem::setStaticPointLights(const std::vector<PointLight>& lights,float cellSize,const std::vector<StaticPointShadow>* shadows,const StaticDiffuseField* diffuse) {
+    if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
+    StaticLightGrid grid;grid.build(lights,cellSize,shadows,diffuse);
+    return setStaticLightGrid(grid);
+}
+
+bool LightSystem::setStaticRadiance(float3 points,float3 sun,float3 sky) {
+    for(auto v:{points,sun,sky})for(float c:{v.x,v.y,v.z})if(!std::isfinite(c)||c<0||c>10000)return false;
+    pointScale_=points;sunScale_=sun;skyScale_=sky;return true;
+}
+
+bool LightSystem::setStaticLightGrid(const StaticLightGrid& grid) {
+    if(!dev_ || !dev_->supports(gfx::PixelFormat::RGBA32F))return false;
+    if(!grid.texels.empty()&&(grid.size.w!=2048||grid.texels.size()%2048||grid.texels.size()>4194304))return false;
+    if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
+    staticGrid_={};gridOrigin_={};gridSize_={};
+    if(grid.texels.empty())return true;
+    gfx::TextureDesc td;td.width=int(grid.size.w);td.height=int(grid.texels.size()/size_t(td.width));
+    td.format=gfx::PixelFormat::RGBA32F;td.filter=gfx::Filter::Nearest;td.data=grid.texels.data();td.label="static point light grid";
+    staticGrid_=dev_->createTexture(td);gridOrigin_=grid.origin;gridSize_=grid.size;
+    std::fprintf(stderr,"Static lights: max %d per cell, %d x %d atlas\n",grid.maxCellLights,td.width,td.height);
+    return staticGrid_.valid();
+}
+
 void LightSystem::createMap(int size) {
     if (size == mapSize_ && (size == 0 || map_.valid())) return;
     if (map_.valid()) dev_->destroyTexture(map_);
@@ -152,6 +177,8 @@ void LightSystem::setQuality(LightQuality q) {
 void LightSystem::shutdown() {
     if (!dev_) return;
     createMap(0);
+    if(staticGrid_.valid())dev_->destroyTexture(staticGrid_);
+    staticGrid_={};
     if (spotShadow_.valid()) dev_->destroyTexture(spotShadow_);
     spotShadow_ = {};
     if (reflColor_.valid()) dev_->destroyTexture(reflColor_);
@@ -279,6 +306,7 @@ void LightSystem::renderMap() {
     stats_.mapSize = mapSize_;
     struct Done { LightSystem& s; std::chrono::steady_clock::time_point t0;
         ~Done() { s.stats_.mapMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count(); } } done{*this, t0};
+    if(staticPointLightsActive()){mapReady_=false;u_.info[0]=0;return;}
     pickPixelLights();
     stats_.lights = int(lights_.size());
     stats_.perPixel = int(u_.info[0]);
@@ -346,11 +374,13 @@ void LightSystem::setClouds(float coverage, float strength, float scale, float o
 bool LightSystem::beginReflection(int viewW, int viewH, float3 clear) {
     if (!reflectionsWanted() || viewW <= 0 || viewH <= 0) return false;
     const int w = std::max(viewW / 2, 16), h = std::max(viewH / 2, 16);
-    if (w != reflW_ || h != reflH_ || !reflColor_.valid()) {
+    if (w != reflW_ || h != reflH_ || !reflColor_.valid() || reflectionLinear_ != linearScene_) {
         if (reflColor_.valid()) dev_->destroyTexture(reflColor_);
         if (reflDepth_.valid()) dev_->destroyTexture(reflDepth_);
         gfx::TextureDesc td;
         td.width = w; td.height = h; td.renderTarget = true; td.filter = gfx::Filter::Linear; td.label = "water reflection";
+        td.format = linearScene_ ? gfx::PixelFormat::RGBA16F : gfx::PixelFormat::RGBA8;
+        reflectionLinear_ = linearScene_;
         reflColor_ = dev_->createTexture(td);
         gfx::TextureDesc dd = td;
         dd.format = gfx::PixelFormat::Depth; dd.filter = gfx::Filter::Nearest; dd.label = "water reflection depth";
@@ -362,6 +392,10 @@ bool LightSystem::beginReflection(int viewW, int viewH, float3 clear) {
     gfx::PassDesc p;
     p.colorTarget = reflColor_;
     p.depthTarget = reflDepth_;
+    if (linearScene_) {
+        auto decode = [](float c) { c = std::max(c, 0.0f); return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); };
+        clear = {decode(clear.x), decode(clear.y), decode(clear.z)};
+    }
     p.clearColor[0] = clear.x; p.clearColor[1] = clear.y; p.clearColor[2] = clear.z; p.clearColor[3] = 1;
     dev_->beginPass(p);
     dev_->setViewport({0, 0, w, h});
@@ -387,8 +421,14 @@ void LightSystem::bind(int uniformSlot, int textureSlot, int reflectionSlot) {
     u_.sky[2] = 1.0f / viewW_; u_.sky[3] = 1.0f / viewH_;
     u_.env[0] = quality_ == LightQuality::Medium || quality_ == LightQuality::High ? 1.0f : 0.0f;
     u_.env[1] = unlitTint_.x; u_.env[2] = unlitTint_.y; u_.env[3] = unlitTint_.z;
+    const bool grid=staticPointLightsActive();
+    float4 giPoint{pointScale_.x,pointScale_.y,pointScale_.z,float(indirectQuality_)},giSun{sunScale_.x,sunScale_.y,sunScale_.z,0},giSky{skyScale_.x,skyScale_.y,skyScale_.z,0};
+    std::memcpy(u_.giPoint,&giPoint,sizeof giPoint);std::memcpy(u_.giSun,&giSun,sizeof giSun);std::memcpy(u_.giSky,&giSky,sizeof giSky);
+    const float4 zero{};
+    std::memcpy(u_.gridOrigin,grid?&gridOrigin_:&zero,sizeof(float4));
+    std::memcpy(u_.gridSize,grid?&gridSize_:&zero,sizeof(float4));
     dev_->setUniforms(uniformSlot, &u_, sizeof u_);
-    dev_->setTexture(textureSlot, useMap ? map_ : black_);
+    dev_->setTexture(textureSlot, grid ? staticGrid_ : useMap ? map_ : black_);
     if (reflectionSlot >= 0) dev_->setTexture(reflectionSlot, reflReady_ ? reflColor_ : black_);
 }
 

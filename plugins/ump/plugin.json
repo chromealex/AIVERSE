@@ -1,0 +1,17 @@
+{
+  "name": "ump",
+  "description": "Google User Messaging Platform (GDPR / US privacy consent form, IAB TCF v2.2) for Android and iOS. Protocol: consent (docs/plugins.md, engine/services/Consent.h). Config: appId (AdMob / Ad Manager app id, needed by UMP: per platform), testDevices [hashed device ids printed by the SDK], underAge (tag for users under the age of consent).",
+  "provides": ["consent"],
+  "android": {
+    "java": "android/java",
+    "classes": { "ump": "com.aiverse.plugins.UmpPlugin" },
+    "dependencies": ["com.google.android.ump:user-messaging-platform:3.1.0"],
+    "manifest": { "application": ["<meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"${appId}\"/>"] }
+  },
+  "ios": {
+    "sources": ["ios/*.mm"],
+    "classes": { "ump": "AiverseUmpPlugin" },
+    "pods": ["pod 'GoogleUserMessagingPlatform', '3.0.0'"],
+    "plist": ["<key>GADApplicationIdentifier</key><string>${appId}</string>"]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "source": "https://cdrdv2.intel.com/v1/dl/getContent/726662",
+  "archiveBytes": 951147802,
+  "archiveETag": "\"11ad0421200b8e68a5ebc6e441c822ec\"",
+  "model": "pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
+  "files": [
+    {
+      "path": "pkg_c_trees/NewSponza_CypressTree_glTF.bin",
+      "bytes": 147736884,
+      "sha256": "d60d2dbf1e0390cebe9bdb1c40098c8e08d832fa28ad4ef72ac33d661493f90c"
+    },
+    {
+      "path": "pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
+      "bytes": 6296,
+      "sha256": "3fef7b677e5d8ae87ac84f2e8a27a32fde9441b82bbcfd0de0a3bc6bf5e41fc9"
+    },
+    {
+      "path": "pkg_c_trees/credits_license.txt",
+      "bytes": 15921,
+      "sha256": "3f981e31f8de04f3754e63d7c259a0a78f71db8f01b5155c58cac52fb79cc2b9"
+    },
+    {
+      "path": "pkg_c_trees/textures/Bark_BaseColor.png",
+      "bytes": 55373312,
+      "sha256": "dc092c5887d81ff9476f87a56f5b5e526f7fbd619bd973244d5677db202ecc57"
+    },
+    {
+      "path": "pkg_c_trees/textures/Bark_Normal.png",
+      "bytes": 42646899,
+      "sha256": "d2e19dd7948f2d45e24da44a1297c3d922e7fb37a32c21f484ac9c22bc23a8f3"
+    },
+    {
+      "path": "pkg_c_trees/textures/Cypress_LF01_Spring_BaseColor.png",
+      "bytes": 3765825,
+      "sha256": "d061dad8a26fd145e672b089aaebd4e2ceb647c0c2d70dd748f39f88ad514305"
+    },
+    {
+      "path": "pkg_c_trees/textures/Cypress_LF01_Spring_Normal.png",
+      "bytes": 7338604,
+      "sha256": "f55097cdf71fc6538cf6eabb76aeb74b0bfe7d7afa8dfcb46043a42e58385a8c"
+    }
+  ],
+  "fingerprint": "c1deb2af42a3494c271338f0844a6e41b99ecbaf69ba227c641fdc70c087b764"
+}

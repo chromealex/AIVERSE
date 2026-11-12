@@ -26,7 +26,7 @@
   <a href="#仕組み">仕組み</a> ·
   <a href="#すぐに使えるテンプレート">テンプレート</a> ·
   <a href="#クイックスタート">クイックスタート</a> ·
-  <a href="docs/overview.md">詳細な概要（ロシア語）</a>
+  <a href="docs/ja/overview.md">詳細な概要</a>
 </p>
 
 ---
@@ -61,7 +61,7 @@ AIVERSE はメカニクスそのものを提供し、エージェントがゲー
 | **マルチプレイは同期ズレとの終わりなき戦い。** `float` がひとつあるだけで、iPhone と Android の対戦はずれていきます。 | シミュレーションはどこでもビット単位で同一です。浮動小数点ではなく固定小数点、独自の乱数生成器、チェックサム。CI はプッシュのたびに Linux x64/ARM64、Windows、macOS の対戦結果を照合します。ネットワークに流れるのはコマンドだけ。ロールバック付きロックステップと、マッチメイキングとリプレイ判定を備えたサーバーがあります。 |
 | **モバイル GPU は非力なのに、ゲームは美しくなければならない。** | 影、パーティクル、地形、ポストエフェクトなど、負荷の高い機能はすべて品質レベルを持ち、古い Mali や Adreno から Apple Silicon まで GPU に合わせて自動調整されます。 |
 | **全プラットフォームでのリリースはそれだけで一大プロジェクト。** 署名、アイコン、ストアや広告の SDK。 | `aiversebuild` ひとつのコマンドで .app、Xcode プロジェクト、Gradle/APK、Web、.exe を作成。アイコンとスプラッシュ画面は自動生成。App Store、Google Play、RuStore、Yandex Games、Steam、AdMob、AppLovin などのプラグインを用意し、ビルドにはゲームが選んだものだけが含まれます。 |
-| **新しいゲームは毎回ゼロから。** | 30 以上のプレイ可能なテンプレート、受け入れチェックリスト付きのジャンルキット、エージェント向けの 118 のスキル。新しいゲームは動くゲームから始まります。 |
+| **新しいゲームは毎回ゼロから。** | 30 以上のプレイ可能なテンプレート、受け入れチェックリスト付きのジャンルキット、エージェント向けの 126 のスキル。新しいゲームは動くゲームから始まります。 |
 | **メタと LiveOps はプロジェクトごとに書き直し。** | `aiverse::meta`：ショップ、通貨、クエスト、パス、デイリー報酬、スタミナ、クラン、トーナメント、天井付きの宝箱。JSON で設定します。 |
 
 ---
@@ -147,7 +147,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 | Build Settings、Unity IAP、Unity Ads | `aiversebuild`、ストアと広告のプラグイン |
 | Addressables / Asset Bundles | `.rpak` パック、ビルド分割とコンテンツのダウンロード |
 
-レポートでは各項目が「正確に移行」「近似で移行」「未移行」に分類されます。再インポートしても編集内容は保持されます。アセットのシリアライズは **Force Text** が必要です。Godot プロジェクトも同じ方法でインポートできます。詳細：[エンジンプロジェクトのインポート](docs/engine-import.md)。
+レポートでは各項目が「正確に移行」「近似で移行」「未移行」に分類されます。再インポートしても編集内容は保持されます。アセットのシリアライズは **Force Text** が必要です。Godot プロジェクトも同じ方法でインポートできます。詳細：[エンジンプロジェクトのインポート](docs/ja/engine-import.md)。
 
 ---
 
@@ -200,7 +200,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 - Unity 風のドッキング式エディター：シーン、インスペクター、地形、エフェクト、ライティング、UI、テストプレイ、デバイスシミュレーター
 - `aiversemcp`：エージェント向け MCP サーバー
 - **「ゲームを作る」**ウィザード
-- エージェント向けの 118 のスキルと、受け入れチェックリスト付きのジャンルキット
+- エージェント向けの 126 のスキルと、受け入れチェックリスト付きのジャンルキット
 - 手持ちのコピーから名作ゲームのアセットを取り込むインポーター
 
 </td>
@@ -232,7 +232,7 @@ open build/mac/AiverseEditor.app        # エディター：プロジェクト�
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。コンパイルしたくない場合は、
 `builds` ブランチにビルド済みのエディターとツールがあります
-（[詳細、ロシア語](docs/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)）。
+（[詳細](docs/ja/overview.md#ビルド済みエンジンbuilds-ブランチとコンパイラー不要の-aiversemcp)）。
 
 **2. ゲームを作る。** ハブで**「ゲームを作る」**を押すか、テンプレートからプロジェクトを作成します。
 Game ウィンドウですぐにボットと遊べます。
@@ -249,7 +249,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 **4. リリースする：**
 
 ```bash
-./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS、iOS、Android、Web、Windows
+./build/mac/aiversebuild --project "My Game.aiverse" --target all   # macOS、iOS、Android、Web、Windows
 ```
 
 ---
@@ -265,27 +265,27 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 - 🛠 RTS と FPS 以外のジャンルのテンプレートは制作中
 
 サブシステムごとの詳細は
-[検証済み / 未検証](docs/overview.md#проверено--не-проверено)（ロシア語）をご覧ください。
+[検証済み / 未検証](docs/ja/overview.md#検証済み--未検証)をご覧ください。
 
 ---
 
 ## ドキュメント
 
-ドキュメントの多くはロシア語です。`AGENTS.md`、ライブラリのドキュメント、一部の技術ガイドは英語です。
+リファレンス文書は英語です。概要、ゲーム作成ウィザード、Unity からの移行、ジャンルパッケージは日本語でも読めます。
 
 | | |
 |---|---|
-| [**詳細な概要**](docs/overview.md) | 全サブシステム、ビルド、プラットフォーム、CI、リリース |
+| [**詳細な概要**](docs/ja/overview.md) | 全サブシステム、ビルド、プラットフォーム、CI、リリース |
 | [ゲームフォーマット](docs/game-format.md) | `game.json`、`rules.json`、マップと全データブロック |
 | [ジャンルパッケージ](docs/genre-packages.md) · [ライブラリ](docs/libraries.md) | あらゆるジャンルのメカニクス |
-| [「ゲームを作る」ウィザード](docs/game-wizard.md) | アイデアとアートが完成プロジェクトになるまで |
+| [「ゲームを作る」ウィザード](docs/ja/game-wizard.md) | アイデアとアートが完成プロジェクトになるまで |
 | [スクリプト](docs/scripting.md) · [C++ モジュール](docs/native-modules.md) | データで足りないとき |
 | [地形](docs/terrain.md) · [惑星](docs/planets.md) · [経路探索](docs/pathfinding.md) | 世界と移動 |
 | [パーティクル](docs/particles.md) · [モデル](docs/models.md) · [Shader Graph](docs/shader-graph.md) | ビジュアル |
 | [メタゲーム](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [プラグイン](docs/plugins.md) | 収益化とストア |
 | [FPS](docs/fps.md) · [大規模ワールド](docs/large-worlds.md) | FPS モジュール |
 | [AGENTS.md](AGENTS.md) | エンジン本体を変更するエージェント向けのルール |
-| [Unity からの移行](docs/engine-import.md) | シーン、プレハブ、アセットのインポートと、エージェントによるロジックの移植 |
+| [Unity からの移行](docs/ja/engine-import.md) | シーン、プレハブ、アセットのインポートと、エージェントによるロジックの移植 |
 
 ## ライセンス
 

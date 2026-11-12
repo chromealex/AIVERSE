@@ -101,6 +101,10 @@ void Model::finalize() {
             mesh.deformable |= !p.jointPalette.empty() || p.morphTargets > 0;
         }
         if (mesh.primitives.empty()) mesh.boundsMin = mesh.boundsMax = {};
+        auto& sb = mesh.shadowBatch;
+        sb.boundsMin = {1e30f, 1e30f, 1e30f}; sb.boundsMax = {-1e30f, -1e30f, -1e30f};
+        for (uint32_t i = 0; i < sb.indexCount; ++i) { const float3 v = vertices[indices[sb.firstIndex + i]].pos; sb.boundsMin = min3(sb.boundsMin, v); sb.boundsMax = max3(sb.boundsMax, v); }
+        if (sb.indexCount == 0) sb.boundsMin = sb.boundsMax = {0, 0, 0};
     }
     // model bounds in bind pose
     std::vector<mat4> world(nodes.size());

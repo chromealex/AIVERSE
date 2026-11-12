@@ -6,7 +6,7 @@
 //   r3d.resolvePostFx();         // effects -> `pass`, which stays open for UI
 //
 // Every effect has GLSL + MSL code (PostFxShaders.h, one body for both) and runs per quality tier
-// (PostFxQuality, PostFxData plans). GLES 3.0 floor: RGBA8 targets only, no depth reads, no compute.
+// (PostFxQuality, PostFxData plans). RGBA16F on capable High-tier devices, RGBA8 fallback; no compute.
 #pragma once
 #include <functional>
 #include <map>
@@ -41,6 +41,8 @@ public:
 
     // PostProcess
     bool active() const override;
+    bool linearScene() const override { return hdrFrame_; }
+    bool hdrRequested() const;
     gfx::PassDesc scenePass(const gfx::PassDesc& out, int w, int h) override;
     void resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& frame) override;
 
@@ -48,7 +50,7 @@ public:
     const std::string& lastError() const { return error_; }
 
 private:
-    struct Target { gfx::TextureHandle tex; int w = 0, h = 0; };
+    struct Target { gfx::TextureHandle tex; int w = 0, h = 0; gfx::PixelFormat format = gfx::PixelFormat::RGBA8; };
     struct Sized {                         // targets for one output size (editor: Scene + Game views)
         int w = 0, h = 0;
         uint64_t lastUse = 0;
@@ -72,6 +74,8 @@ private:
     PostFxSettings settings_;
     PostFxQuality quality_ = PostFxQuality::Medium;
     bool enabled_ = true;
+    bool hdrFrame_ = false, sceneReady_ = false;
+    bool hdrFailed_ = false; // allocation failure: stay on the low-cost path
     gfx::BufferHandle triangle_;
     gfx::TextureHandle black_;
     gfx::ShaderHandle shaders_[kProgCount];

@@ -222,6 +222,13 @@ static bool libraryCinematicConsumerExample(aiverse::game::NativeState& state,co
     state.values["genre.cinematic.library"]=int64_t(sceneLibraryHash(lib)&0x7fffffffffffffffull);
     return storeBytes(state,"genre.cinematic.time",save(time))&&storeBytes(state,"genre.cinematic.scene",save(scene));
 }
+bool libraryPuzzlesConsumerExample(aiverse::game::NativeState& state);   // PuzzlesConsumer.cpp (puzzle-solvers)
+// Cards + turn strategy (card-games, tactics-grid, CardBot/TacticsBot): CardsTurnsConsumer.cpp.
+bool libraryCardsTurnsConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings);
+// Vehicles + sports (vehicle-controllers, sports-rules): VehiclesSportsConsumer.cpp.
+bool vehiclesSportsConsumerExample(aiverse::game::NativeState&,const aiverse::lib::gameplay::GameplaySettings&);
+// settlement-production + survival-ecology: ProductionSurvivalConsumer.cpp.
+bool libraryProductionSurvivalConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings);
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -242,5 +249,9 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     if(!narrativeSceneConsumerExample(state,*parsed.value,story))return false;
     if(!physicalInteractionConsumerExample(state,*parsed.value))return false;
     if(!libraryCinematicConsumerExample(state,*parsed.value))return false;
+    if(!libraryPuzzlesConsumerExample(state))return false;
+    if(!libraryCardsTurnsConsumerExample(state,*parsed.value))return false;
+    if(!vehiclesSportsConsumerExample(state,*parsed.value))return false;
+    if(!libraryProductionSurvivalConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }

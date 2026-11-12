@@ -1,0 +1,4 @@
+{"i":-1,"data":{"chunks":true,
+ "authHosts":{"hosts":[{"host":"http://auth.mock","port":0}]},
+ "dataHostsTo":{"hosts":[{"host":"http://data1.mock","port":0},{"host":"http://data2.mock","port":0}]},
+ "statHosts":{"hosts":[{"host":"stat.mock","port":9000}]}}}

@@ -174,7 +174,7 @@ const std::vector<Desc>& descs() {
             j.f("flags", x.flags);
         }),
         AIVERSE_C(Area, "Зона эффекта", j.f("caster", x.caster).type("sourceType", x.sourceType).f("radius", x.radius).ticks("fireAt", x.fireAt).ticks("endAt", x.endAt)
-                                        .f("triggers", x.triggers).f("follow", x.follow).f("dest", x.dest).f("lane", x.lane)),
+                                        .f("triggers", x.triggers).f("follow", x.follow).f("dest", x.dest).f("lane", x.lane).f("goal", x.goal).f("arrived", x.arrived)),
         AIVERSE_C(Channel, "Поддержание", j.f("target", x.target).f("point", x.point).f("ability", x.ability).ticks("nextAt", x.nextAt).ticks("endAt", x.endAt)),
         AIVERSE_C(GroupTag, "Группа", j.f("id", x.id).f("from", x.from).f("to", x.to)),
         AIVERSE_C(Capture, "Захват", j.f("progress", x.progress).f("team", x.team)),
@@ -221,6 +221,7 @@ const std::vector<Desc>& descs() {
             for (auto& s : x.list) m.set(std::to_string(int(s.stat)), J::num(s.base));
             j.o.set("base", m);
         }),
+        AIVERSE_C(Pulled, "Притягивается", j.f("target", x.target).f("way", x.way).f("dist", x.dist).f("vel", x.vel).f("done", x.done)),   // skill objects
     };
     return d;
 }

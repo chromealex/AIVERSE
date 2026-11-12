@@ -636,8 +636,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid},
-    {"end_turn", kCmdEndTurn}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter},
     {"progression", kCmdProgression},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
@@ -1085,6 +1084,20 @@ int gSetHp(lua_State* L, Vm& vm) {
     lua_pushboolean(L, 1);
     return 1;
 }
+// game.set_garrison(h, n): units inside a garrison structure (>= 0, may exceed the growth max like
+// scripted reinforcements); false for units without a garrison (agent-bw-client: tutorial PointSetUnits)
+int gSetGarrison(lua_State* L, Vm& vm) {
+    CTX;
+    Fixed v;
+    if (!argFx(L, vm, 2, v, "count")) return -1;
+    Entity e;
+    if (!unitArg(L, vm, 1, e)) { lua_pushboolean(L, 0); return 1; }
+    Garrison* g = w.tryGet<Garrison>(e);
+    if (!g) { lua_pushboolean(L, 0); return 1; }
+    g->count = std::max(0, int(v.toInt()));
+    lua_pushboolean(L, 1);
+    return 1;
+}
 int gSetEnergy(lua_State* L, Vm& vm) {
     CTX;
     Fixed v;
@@ -1240,7 +1253,7 @@ void openGameApi(Vm& vm) {
         {"draw", bind<gDraw>}, {"defeat", bind<gDefeat>}, {"research", bind<gResearch>}, {"enable_type", bind<gEnableType>},
         {"add_score", bind<gAddScore>}, {"enable_trigger", bind<gEnableTrigger>}, {"clear_data", bind<gClearData>},
         {"set_pos", bind<gSetPos>}, {"teleport", bind<gSetPos>}, {"set_facing", bind<gSetFacing>}, {"impulse", bind<gImpulse>},
-        {"knockback", bind<gKnockback>}, {"set_hp", bind<gSetHp>}, {"set_energy", bind<gSetEnergy>},
+        {"knockback", bind<gKnockback>}, {"set_hp", bind<gSetHp>}, {"set_energy", bind<gSetEnergy>}, {"set_garrison", bind<gSetGarrison>},
         {"set_stat_base", bind<gSetStatBase>}, {"transform", bind<gTransform>}, {nullptr, nullptr}};
     luaL_newlib(L, queries);
     if (vm.mode == Mode::Sim) {
@@ -1252,6 +1265,7 @@ void openGameApi(Vm& vm) {
     }
     openTerritoryApi(vm);
     openGridApi(vm);
+    openRoutesApi(vm);
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
     openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
@@ -1326,6 +1340,7 @@ Json scriptApiReference() {
     a.push(fn("game.set_pos(h, x, z [, exact]) / game.teleport(...)", "move a mobile unit (nearest passable cell unless exact / flying)"));
     a.push(fn("game.set_facing(h, dx, dz) / game.impulse(h, dx, dz) / game.knockback(h, x, z, distance)", "turn / push by a vector / away from a point (terrain stops it)"));
     a.push(fn("game.set_hp(h, hp) / game.set_energy(h, e)", "clamped to [0, max]; hp 0 kills"));
+    a.push(fn("game.set_garrison(h, n)", "units inside a garrison structure (>= 0, may exceed its max); false without a garrison"));
     a.push(fn("game.set_stat_base(h, stat, value | nil)", "per-unit base stat (techs, buffs apply on top); nil restores the type's"));
     a.push(fn("game.transform(h, type)", "change the type in place (same handle and data, hp fraction kept)"));
     a.push(fn("game.add_status(h, status [, seconds [, caster]]) / game.buff(h, stat, add, mul [, seconds])", "statuses (rules \"statuses\") and stat modifiers"));

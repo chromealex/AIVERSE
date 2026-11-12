@@ -15,7 +15,7 @@ struct TemplateInfo {
 
 struct ProjectInfo {
     std::string dir, name;
-    std::string file;           // <dir>/<Title>.rtsproj when known (ProjectFile.h)
+    std::string file;           // <dir>/<Title>.aiverse when known (ProjectFile.h)
     long long lastOpened = 0;   // unix seconds
     bool exists = false;
 };
@@ -31,7 +31,7 @@ void forgetProject(const std::string& dir);
 // Folder name for a project title: "Моя стратегия" -> "Моя стратегия" (keeps letters, digits, spaces, - _).
 std::string projectFolderName(const std::string& title);
 // Creates <parentDir>/<folder> from a template id ("empty" or a templates/ folder) with its
-// <Title>.rtsproj (the template's own .rtsproj is not copied). Returns the new project folder or ""
+// <Title>.aiverse (the template's own .aiverse is not copied). Returns the new project folder or ""
 // with a readable error.
 std::string createProject(const std::string& engineDir, const std::string& templateId, const std::string& title,
                           const std::string& parentDir, const std::string& folder, std::string* error);

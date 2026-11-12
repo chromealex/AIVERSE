@@ -14,7 +14,7 @@ int main(int argc,char** argv){try{
     if(argc!=3)throw std::runtime_error("usage: aiverse_lod_simplify input.bin output.bin");
     std::ifstream in(argv[1],std::ios::binary);uint32_t h[4];read(in,h,4);
     const size_t vertices=h[0],count=h[1],attributes=h[2];
-    if(!vertices||vertices>100000000||!count||count%3||count>300000000||attributes>16||h[3]!=0x31444f4c)
+    if(!vertices||vertices>100000000||!count||count%3||count>300000000||attributes>32||h[3]!=0x31444f4c)
         throw std::runtime_error("invalid mesh header");
     float params[2];read(in,params,2);
     if(!std::isfinite(params[0])||!std::isfinite(params[1])||params[0]<=0||params[0]>=1||params[1]<=0||params[1]>1)

@@ -254,6 +254,49 @@
       ]
     },
     {
+      "id": "aiverse-card-games",
+      "package": "card-games",
+      "path": "skills/aiverse-card-games/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Card and board game rules: data-defined cards (units/spells/instants with targets and ordered effects: damage, heal, draw, energy, buff, counter, reveal, mill) and rule variants (hand/health/energy curve, draw per turn, first-player skip, fatigue, overdraw burn, board limit, turn limit, separate combat phase, rush, partial/full mulligan); seeded deck shuffles, draw/mulligan, phases, legal action generation, LIFO effect stack with priority passing, counters and fizzling on invalid targets, guard attacks, per-seat hidden information with a non-leaking cardViewFor projection and redacted/reveal events",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_card_games",
+      "dependencies": [
+        "aiverse-card-runtime",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/CardGame.h",
+      "keywords": [
+        "card",
+        "deck",
+        "hand",
+        "mulligan",
+        "stack",
+        "priority",
+        "counter",
+        "ccg",
+        "deckbuilder",
+        "board",
+        "game",
+        "hidden",
+        "reveal",
+        "карт",
+        "колод",
+        "рука",
+        "муллиган",
+        "стек",
+        "приоритет",
+        "контр",
+        "настольн",
+        "скрыт"
+      ]
+    },
+    {
       "id": "aiverse-card-runtime",
       "package": "card-runtime",
       "path": "skills/aiverse-card-runtime/SKILL.md",
@@ -271,6 +314,43 @@
         "deck",
         "карточ",
         "колод"
+      ]
+    },
+    {
+      "id": "aiverse-cards-turns-bots",
+      "package": "cards-turns-bots",
+      "path": "skills/aiverse-cards-turns-bots/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic turn and card bots that see only their own view: a tactics turn planner scoring reachable destinations, attacks and overwatch (expected damage, kill chance, seen threats, cover, objective advance) under a bounded search budget, and a card evaluator scoring legal actions with real-rules simulation on a view-rebuilt state and bounded lookahead",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_cards_turns_bots",
+      "dependencies": [
+        "aiverse-card-games",
+        "aiverse-tactics-grid",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/CardBot.h",
+      "keywords": [
+        "card",
+        "bot",
+        "turn",
+        "planner",
+        "tactics",
+        "ai",
+        "opponent",
+        "evaluator",
+        "lookahead",
+        "бот",
+        "карт",
+        "планировщ",
+        "ход",
+        "тактик",
+        "противник"
       ]
     },
     {
@@ -621,7 +701,7 @@
       "package": "grid-puzzles",
       "path": "skills/aiverse-grid-puzzles/SKILL.md",
       "domain": "gameplay",
-      "summary": "Sokoban moves, undo/redo and bounded solver",
+      "summary": "Sokoban moves, undo/redo, simple-deadlock cells and freeze deadlocks, BFS and A* solvers with node budgets, hints",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_grid_puzzles",
@@ -630,9 +710,9 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/Puzzles.h",
       "keywords": [
-        "puzzle",
-        "match3",
-        "головолом"
+        "sokoban",
+        "deadlock",
+        "сокобан"
       ]
     },
     {
@@ -1073,6 +1153,36 @@
       ]
     },
     {
+      "id": "aiverse-physics",
+      "package": "physics",
+      "path": "skills/aiverse-physics/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Optional Box3D rigid-body physics: scene wrapper, native collisions, sensors, queries, joints, motors and snapshots",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/physics/World.h",
+      "keywords": [
+        "box3d",
+        "physics",
+        "rigid",
+        "collider",
+        "collision",
+        "hinge",
+        "weld",
+        "sensor",
+        "raycast",
+        "физик",
+        "коллайдер",
+        "столкнов",
+        "шарнир",
+        "датчик"
+      ]
+    },
+    {
       "id": "aiverse-play-scenarios",
       "package": "play-scenarios",
       "path": "skills/aiverse-play-scenarios/SKILL.md",
@@ -1178,6 +1288,51 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/PuzzleMachine.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-puzzle-solvers",
+      "package": "puzzle-solvers",
+      "path": "skills/aiverse-puzzle-solvers/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic puzzle rules and bounded solvers: match-3 (swap validation, line/L/T detection, special pieces from data rules, gravity + seeded refill, ordered cascades, no-move detection, shuffles that always leave a legal move, goals, hints); flood fill and region counting, color-flood game with IDA*, rotatable pipe/wire connectivity with leak checks; N-puzzle parity, always-solvable shuffles and IDA*, sliding blocks of any rectangle size (BFS), polyomino packing with rotations/flips (exact-cover backtracking, solution counting); Sokoban sessions over grid-puzzles (deadlocks, A*, undo); generic CSP over small grids (AllDifferent/Sum/Count/Runs as data: sudoku, nonogram) with propagation, bounded backtracking and uniqueness checks; puzzle bot playing through player commands",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_puzzle_solvers",
+      "dependencies": [
+        "aiverse-grid-puzzles"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/PuzzleSolvers.h",
+      "keywords": [
+        "puzzle",
+        "match3",
+        "match-3",
+        "cascade",
+        "shuffle",
+        "hint",
+        "flood",
+        "pipes",
+        "connectivity",
+        "sliding",
+        "15-puzzle",
+        "klotski",
+        "packing",
+        "polyomino",
+        "sudoku",
+        "nonogram",
+        "constraint",
+        "csp",
+        "solver",
+        "головолом",
+        "три-в-ряд",
+        "пятнашки",
+        "судоку",
+        "японский",
+        "кроссворд"
+      ]
     },
     {
       "id": "aiverse-reference-validation",
@@ -1312,6 +1467,110 @@
       "keywords": []
     },
     {
+      "id": "aiverse-settlement-production",
+      "package": "settlement-production",
+      "path": "skills/aiverse-settlement-production/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Colony simulation policies: colonist needs with decay, thresholds and mood bands (breaks, work speed), hour-block schedules (work/sleep/leisure), job preferences 1..4 with deterministic assignment (lib::claim, stable tie-break, stock reservations per stockpile), production recipes at workstations with bills and power requirements, haul jobs between stockpiles, construction and gathering orders, disaster alerts (fire/flood/raid) with response jobs and priority overrides/preemption, power and fluid graphs (producers/consumers/storage per connected component, deterministic brownout shedding by priority with hysteresis), and a colony planner bot that issues player-equivalent commands",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_settlement_production",
+      "dependencies": [
+        "aiverse-tasks",
+        "aiverse-reservations",
+        "aiverse-graphs",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Colony.h",
+      "keywords": [
+        "colony",
+        "settlement",
+        "city",
+        "factory",
+        "production",
+        "recipe",
+        "workstation",
+        "haul",
+        "logistics",
+        "job",
+        "schedule",
+        "needs",
+        "mood",
+        "power",
+        "grid",
+        "electricity",
+        "fluid",
+        "water",
+        "brownout",
+        "disaster",
+        "колони",
+        "поселен",
+        "город",
+        "фабрик",
+        "производств",
+        "рецепт",
+        "верстак",
+        "перенос",
+        "работ",
+        "расписан",
+        "потребност",
+        "настроен",
+        "электросет",
+        "энерг",
+        "вода",
+        "авари",
+        "бедстви"
+      ]
+    },
+    {
+      "id": "aiverse-sports-rules",
+      "package": "sports-rules",
+      "path": "skills/aiverse-sports-rules/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic ball-sport rules: possession with pickup radius and possession lock, tackles contested with the passed RNG, passes with receiver leading and shots with power and seeded accuracy error, interception at the closest approach along the ball path, goals, out of bounds and generic restarts (kickoff, throw-in, corner, goal kick, free kick, penalty, face-off), walls/rebound fields, periods with running/stopped/added-stoppage clocks and golden-goal overtime, fouls from contact rules; role-based formations with stable slot assignment; positioning bot (formation slots, press/mark/chase, keeper line, pass/shot choice)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_sports_rules",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Sports.h",
+      "keywords": [
+        "sport",
+        "football",
+        "soccer",
+        "hockey",
+        "basketball",
+        "ball",
+        "goal",
+        "pass",
+        "shot",
+        "tackle",
+        "foul",
+        "penalty",
+        "formation",
+        "спорт",
+        "футбол",
+        "хоккей",
+        "мяч",
+        "гол",
+        "пас",
+        "удар",
+        "отбор",
+        "фол",
+        "пенальти",
+        "расстановк"
+      ]
+    },
+    {
       "id": "aiverse-squads",
       "package": "squads",
       "path": "skills/aiverse-squads/SKILL.md",
@@ -1396,6 +1655,111 @@
         "тревог",
         "маскиров",
         "укрыт"
+      ]
+    },
+    {
+      "id": "aiverse-survival-ecology",
+      "package": "survival-ecology",
+      "path": "skills/aiverse-survival-ecology/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Survival and ecology policies: body model (core temperature from owner environment, clothing insulation/windproofing/waterproofing, shelter and heat sources, wetness, hunger/thirst/stamina interplay, condition and death) with weather modifiers for bodies, solar/wind power, growth and animal activity; population ecosystems per species per region (logistic growth, carrying capacity, saturating predation, starvation, migration, integer accumulators); animal behavior states wander/graze/flee/hunt/sleep from stealth-senses PerceivedTarget records; renewable resource nodes with depletion and regrowth timers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_survival_ecology",
+      "dependencies": [
+        "aiverse-stealth-senses",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/SurvivalEcology.h",
+      "keywords": [
+        "survival",
+        "temperature",
+        "cold",
+        "hypothermia",
+        "wet",
+        "hunger",
+        "thirst",
+        "stamina",
+        "shelter",
+        "clothing",
+        "weather",
+        "ecosystem",
+        "population",
+        "predator",
+        "prey",
+        "animal",
+        "deer",
+        "wolf",
+        "regrowth",
+        "renewable",
+        "выживан",
+        "температур",
+        "холод",
+        "мокр",
+        "голод",
+        "жажд",
+        "выносливост",
+        "укрыти",
+        "одежд",
+        "погод",
+        "экосистем",
+        "популяц",
+        "хищник",
+        "жертв",
+        "животн",
+        "олен",
+        "волк",
+        "восстановлен",
+        "ресурс"
+      ]
+    },
+    {
+      "id": "aiverse-tactics-grid",
+      "package": "tactics-grid",
+      "path": "skills/aiverse-tactics-grid/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Turn strategy on square/hex grids: weighted 8-way/hex movement with deterministic reachable sets and paths, half/full cover from the owner grid with a flank angle, integer line of fire and shot previews (hit chance milli), action points, per-round initiative with speed modifiers and stable-id ties, delay, overwatch reservations firing reaction shots, per-team visibility projection, and WeGo simultaneous resolution (collected orders, lockstep movement with contested-cell/swap rules, simultaneous fire)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_tactics_grid",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/TacticsTurns.h",
+      "keywords": [
+        "tactics",
+        "tactical",
+        "turn",
+        "hex",
+        "grid",
+        "cover",
+        "flank",
+        "overwatch",
+        "initiative",
+        "action",
+        "points",
+        "wego",
+        "line",
+        "of",
+        "fire",
+        "тактик",
+        "пошагов",
+        "гекс",
+        "сетк",
+        "укрыт",
+        "фланг",
+        "дозор",
+        "инициатив",
+        "очки",
+        "действ"
       ]
     },
     {
@@ -1538,6 +1902,53 @@
       "requiresOwner": null,
       "source": "engine/ui/templates/README.md",
       "keywords": []
+    },
+    {
+      "id": "aiverse-vehicle-controllers",
+      "package": "vehicle-controllers",
+      "path": "skills/aiverse-vehicle-controllers/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic kinematic vehicle controllers: wheeled arcade-sim (torque curve, auto/manual gears with shift time, per-wheel traction with slip/grip curves, weight transfer, handbrake, drift), tracked differential steering, hover altitude hold with drift damping, arcade flight with banked turns and stall; damage zones with per-zone performance penalties and critical disable; driver/passenger/gunner seats with validated enter/exit/switch/eject and owner-checked exit points; ordered checkpoints, laps, race positions, wrong-way detection and respawn at the last checkpoint; race bot (racing line, corner braking, overtaking lanes, rubber band)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_vehicle_controllers",
+      "dependencies": [
+        "aiverse-match-rules",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Vehicles.h",
+      "keywords": [
+        "vehicle",
+        "car",
+        "kart",
+        "truck",
+        "tank",
+        "hover",
+        "plane",
+        "flight",
+        "drive",
+        "gear",
+        "drift",
+        "traction",
+        "seat",
+        "race",
+        "lap",
+        "checkpoint",
+        "racing",
+        "машин",
+        "авто",
+        "танк",
+        "самолет",
+        "гонк",
+        "круг",
+        "чекпоинт",
+        "сиден",
+        "дрифт"
+      ]
     },
     {
       "id": "aiverse-verification",

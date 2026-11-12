@@ -2,7 +2,9 @@
 #import <Foundation/Foundation.h>
 
 #include <cstdio>
+#include <memory>
 
+#include "HttpRequest.h"
 #include "ThreadDownload.h"
 
 namespace aiverse::pack {
@@ -52,6 +54,41 @@ std::unique_ptr<Download> fetchHttp(const std::string& url, const std::string& d
         }
     });
     return dl;
+}
+
+bool httpRequest(const HttpCall& call, std::function<void(HttpReply)> done) {
+    NSURL* u = [NSURL URLWithString:[NSString stringWithUTF8String:call.url.c_str()]];
+    if (!u) {
+        HttpReply r;
+        r.error = "bad URL " + call.url;
+        done(std::move(r));
+        return true;
+    }
+    NSMutableURLRequest* req = [NSMutableURLRequest requestWithURL:u cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                   timeoutInterval:double(call.timeoutMs) / 1000.0];
+    req.HTTPMethod = [NSString stringWithUTF8String:call.method.c_str()];
+    for (auto& [k, v] : call.headers)
+        [req setValue:[NSString stringWithUTF8String:v.c_str()] forHTTPHeaderField:[NSString stringWithUTF8String:k.c_str()]];
+    if (!call.body.empty()) req.HTTPBody = [NSData dataWithBytes:call.body.data() length:call.body.size()];
+    auto cb = std::make_shared<std::function<void(HttpReply)>>(std::move(done));
+    NSURLSessionDataTask* task = [[NSURLSession sharedSession] dataTaskWithRequest:req
+        completionHandler:^(NSData* data, NSURLResponse* resp, NSError* e) {
+            HttpReply r;
+            if (e) {
+                r.timeout = e.code == NSURLErrorTimedOut;
+                r.error = e.localizedDescription.UTF8String ? e.localizedDescription.UTF8String : "request failed";
+            } else if ([resp isKindOfClass:[NSHTTPURLResponse class]]) {
+                NSHTTPURLResponse* h = (NSHTTPURLResponse*)resp;
+                r.status = int(h.statusCode);
+                [h.allHeaderFields enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL*) {
+                    r.headers.push_back({[[key description] UTF8String], [[value description] UTF8String]});
+                }];
+                if (data) r.body.assign(static_cast<const char*>(data.bytes), data.length);
+            }
+            (*cb)(std::move(r));
+        }];
+    [task resume];
+    return true;
 }
 
 void setAndroidJavaVm(void*) {}

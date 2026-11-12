@@ -51,7 +51,7 @@ they register only when listed or with `AIVERSE_MOCK_PLUGINS=1`). CI checks this
 | `googleplay` | Android | store | Google Play Billing 9.1 |
 | `rustore` | Android | store | RuStore Pay SDK 11 (BOM 2026.10.01). The old `billingclient` stopped working on 1 Aug 2026 |
 | `yandex-games` | Web | store + ads | Yandex Games SDK (`/sdk.js`) |
-| `steam` | Windows, Linux, macOS | store | Steamworks SDK (Inventory Service purchases, DLC); C++ |
+| `steam` | Windows, Linux, macOS | store + social | Steamworks SDK (Inventory Service purchases, DLC; achievements, stats, friends, rich presence, overlay, invites); C++ |
 | `yandex-ads` | Android, iOS | ads | Yandex Mobile Ads 8.6 |
 | `admob` | Android, iOS | ads | Google Mobile Ads (Android 25.5, iOS 13.11) |
 | `applovin` | Android, iOS | ads | AppLovin MAX 13.6.3 (mediation) |
@@ -60,6 +60,11 @@ they register only when listed or with `AIVERSE_MOCK_PLUGINS=1`). CI checks this
 | `facebook` | Android, iOS | analytics | Meta / Facebook SDK 18 (app events, install attribution, deferred app links; no login / share) |
 | `appmetrica` | Android, iOS | analytics | AppMetrica (Android 8.0.0, iOS 5.16.0 — the versions Drone Fall ships) |
 | `att` | iOS | privacy | App Tracking Transparency (prompt, status, `NSUserTrackingUsageDescription`, SKAdNetwork ids) |
+| `appsflyer` | Android, iOS | analytics + links | AppsFlyer 6.15.2 (attribution, events, revenue, GDPR consent, OneLink / deferred deep links) |
+| `push` | Android, iOS | push | Firebase Cloud Messaging 24.1 + local notifications (Android), UserNotifications + APNs (iOS) |
+| `deeplinks` | Android, iOS, Web | links | intent filters / URL schemes + universal links / page URL |
+| `ump` | Android, iOS | consent | Google User Messaging Platform 3 (GDPR / US privacy form, TCF personalised-ads flag) |
+| `xsolla` | Web | store | Xsolla Pay Station (token from the game's backend) + Xsolla Store catalog prices |
 
 ## game.json
 
@@ -326,6 +331,44 @@ fields = flat object of strings and numbers (the service turns booleans into 1 /
 | `status` | `{}` | `{"status": "notDetermined|restricted|denied|authorized|unavailable"}` |
 | `request` | `{}` | `{"status"}` after the prompt (at once when already answered) |
 | event `status` | `{"status"}` | the plugin asked by itself (`"prompt": "ready"`) |
+**social** (`steam`, `mock-social`) — engine/services/Social.h; achievement / stat ids map to API names in the
+plugin config (`"achievements": {"first_win": "ACH_WIN_ONE_GAME"}`, `"stats"`, `"floatStats"`)
+
+| Method | Args | Reply |
+|---|---|---|
+| `user` | `{}` | `{"id", "name", "language", "country"}` |
+| `unlock` | `{"id"}` | `{}` (event `achievement` `{"id"}` once stored) |
+| `progress` | `{"id", "current", "max"}` | `{}` (progress popup) |
+| `achievements` | `{}` | `[{"id", "name", "description", "unlocked", "unlockTime"}]` |
+| `stat` | `{"id"}` / `{"id", "set"}` / `{"id", "add"}` | `{"value"}` (stores are batched) |
+| `friends` | `{}` | `[{"id", "name", "state", "playingThisGame", "status"}]` |
+| `presence` | `{"key", "value"}` / `{"clear": true}` | `{}` |
+| `overlay` | `{"page"}`: a dialog name, an https URL or `store` | `{}` |
+| `invite` | `{"connect", "friend"?}` | `{}` |
+| events | `join` `{"connect", "friend"}`, `achievement` `{"id"}`, `presence` `{"friend"}` | |
+
+**push** (`push`, `mock-push`) — engine/services/Push.h
+
+| Method | Args | Reply |
+|---|---|---|
+| `permission` | `{}` | `{"granted"}` |
+| `token` | `{}` | `{"token"}` (also event `token`) |
+| `schedule` | `{"id", "title", "body", "delay", "category", "tag", "data", "repeat"}` | `{}` |
+| `cancel` | `{"id"}` / `{"category"}` / `{"tag"}` / `{"all": true}` | `{}` |
+| `badge` | `{"count"}` | `{}` |
+| events | `token`, `received` `{"title", "body", "data", "foreground"}`, `opened` `{"id", "data"}` | |
+
+**links** (`deeplinks`, `appsflyer`, `mock-links`; every provider reports) — engine/services/Links.h:
+`initial` `{}` → `{"url", "deferred"?, "data"?}`; event `link` `{"url", "deferred"?, "data"?}`.
+
+**consent** (`ump`, `mock-consent`) — engine/services/Consent.h: `request` `{"debugGeography"?}` and `options` `{}`
+→ `{"status": "notRequired|required|obtained|unknown", "canRequestAds", "personalized", "optionsRequired"}`.
+Without a provider the service answers "not required".
+
+**xsolla** (store): `purchase` gets a Pay Station token from config `tokenUrl` (the game's backend, POST
+`{productId, sku}` → `{token}`) or from a preceding `token` `{"token"}` call (`plugins.call("xsolla", "token", ...)`),
+opens Pay Station and answers `pending`; with `statusUrl` the result after the window closes comes as a
+`purchase` event. The backend grants (Xsolla webhook); `restore` is empty.
 
 **app events** any plugin may send: `app.pause`, `app.resume`, `app.banner` `{"height", "position"}`
 (logical points, added to the safe area), `app.log` (text to the engine log). The engine calls
@@ -385,6 +428,16 @@ Rules for plugin code: answer every call exactly once (the reply objects ignore 
 call SDKs on their required thread (Java plugins run on the UI thread, Objective-C on the main
 thread); never block; send `app.pause`/`app.resume` around anything that covers the game.
 
+### Steam social
+
+The same `steam` plugin answers the `social` protocol (`plugins/steam/src/SteamSocial.h`): ISteamUserStats
+(SetAchievement + StoreStats for the unlock popup, IndicateAchievementProgress, GetAchievementAndUnlockTime,
+int / float stats with StoreStats batched to once a second), ISteamFriends (immediate friends, persona state,
+playing this game, their rich presence "status"; SetRichPresence / ClearRichPresence; ActivateGameOverlay /
+ToWebPage / ToStore; InviteUserToGame / ActivateGameOverlayInviteDialogConnectString), join requests
+(GameRichPresenceJoinRequested_t and the `+connect` launch command line) as `join` events. Since Steamworks
+1.61 the client loads the current stats itself. Set `"connect"` in the rich presence to let friends join.
+
 ## Verified / not verified
 
 - ✅ Bridge, services, mocks: unit tests (`tests/tests.cpp`), Linux and Windows (MinGW/Wine).
@@ -397,6 +450,12 @@ thread); never block; send `app.pause`/`app.resume` around anything that covers 
   (`plugins/steam/test/run.sh`, CI job `plugins-steam`); without Steam the game starts and store
   calls report why. Not yet run against a real Steam account.
 - ✅ Java plugins compile (javac against API stubs written from the SDKs' bytecode / official samples).
+- ✅ `steam` social: `plugins/steam/test/run.sh` against the fake Steam client (user, achievements with events,
+  stats, friends, presence, overlay, invite, join). `social` / `push` / `links` / `consent` services: unit tests
+  with the desktop mocks. Isolation check passes with the new plugins; the generated Android manifest was read.
+- ⏳ `appsflyer`, `push`, `deeplinks`, `ump` (Java / Objective-C) and `xsolla` (JS): written from the SDKs'
+  documented APIs, not compiled or run here. iOS entitlements (Push Notifications, Associated Domains) are not
+  written by aiversebuild: add them in Xcode.
 - ⏳ Real SDKs: Gradle/CocoaPods builds and device runs — CI job `plugins`; Objective-C plugins not
   compiled here (no Xcode). `applovin`/`ironsource`: APIs taken from the official integration
   guides and demo apps, not yet run on a device. `yandex-ads` iOS: some Objective-C selectors are derived from the Swift

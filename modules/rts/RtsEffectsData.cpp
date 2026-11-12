@@ -123,7 +123,10 @@ void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef
     d.scatter = j.getFx("scatter");
     d.falloff = j.getFx("falloff");
     d.delay = j.getFx("delay");
-    d.lifetime = j.getFx("lifetime");
+    if (const Json& lt = j["lifetime"]; lt.isArray()) {
+        d.lifetime = lt[0].fx(); d.lifetimeMax = lt[1].fx();
+        if (d.lifetimeMax < d.lifetime) fail(where, "lifetime range must be [min, max]");
+    } else d.lifetime = j.getFx("lifetime");
     d.interval = j.getFx("interval", d.interval);
     if (d.interval.raw <= 0) fail(where, "interval must be positive");
     std::string tr = j.getStr("trigger", "");
@@ -144,6 +147,43 @@ void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef
     d.jumps = int(j.getInt("jumps", 0));
     d.jumpRadius = j.getFx("jumpRadius", d.jumpRadius);
     d.jumpFalloff = j.getFx("jumpFalloff", d.jumpFalloff);
+    skillObjects(where, j, d);
+}
+
+// Skill objects (RtsSkillObjects.cpp): objects spawned from units, goals, arrival / expiry / death payloads, pull profile.
+void EffectParser::skillObjects(const std::string& where, const Json& j, DeliveryDef& d) {
+    if (const Json& oj = j["origins"]; oj.isObject()) {
+        EffectDef o;
+        o.kind = EffectKind::Cast;
+        o.radius = oj.getFx("radius");
+        std::string aff = oj.getStr("affects", "enemies");
+        o.enemies = aff == "enemies" || aff == "all" || aff == "any";
+        o.allies = aff == "allies" || aff == "all" || aff == "any" || aff == "own";
+        filter(where + " origins", oj, o);
+        if (!oj.has("kind")) o.filter.structures = false;
+        if (!o.filter.explicitShape && o.radius.raw <= 0) o.filter.shape = Shape::Target;
+        r.payloads.push_back({o});
+        d.origins = int16_t(r.payloads.size() - 1);
+        d.consume = oj.getBool("consume", false);
+    } else if (!oj.isNull()) fail(where, "origins must be an object (a target filter)");
+    std::string g = j.getStr("goal", "");
+    if (!g.empty()) {
+        if (d.motion == AreaMotion::Static) d.motion = AreaMotion::Toward;   // a goal means moving there
+        static const std::pair<const char*, uint8_t> goals[] = {{"point", kGoalPoint}, {"target", kGoalTarget}, {"groupTarget", kGoalGroupTarget},
+            {"groupSource", kGoalGroupSource}, {"ownStructure", kGoalOwnStructure}, {"enemyStructure", kGoalEnemyStructure}, {"caster", kGoalCaster}};
+        bool ok = false;
+        for (auto& [n, v] : goals) if (g == n) { d.goal = v; ok = true; }
+        if (!ok) fail(where, "unknown goal '" + g + "' (point, target, groupTarget, groupSource, ownStructure, enemyStructure, caster)");
+    }
+    if (j.has("onArrive")) d.onArrive = int16_t(payload(where + " onArrive", j["onArrive"]));
+    if (j.has("onExpire")) d.onExpire = int16_t(payload(where + " onExpire", j["onExpire"]));
+    if (j.has("onDeath")) d.onDeath = int16_t(payload(where + " onDeath", j["onDeath"]));
+    d.accel = j.getFx("accel");
+    d.minSpeed = j.getFx("minSpeed");
+    d.maxSpeed = j.getFx("maxSpeed");
+    std::string st = j.getStr("start", "");
+    if (st == "point") d.fromPoint = true;
+    else if (!st.empty() && st != "caster") fail(where, "start must be caster or point");
 }
 
 int EffectParser::status(const std::string& where, const Json& j) {
@@ -219,7 +259,8 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
         {"sendBack", EffectKind::SendBack}, {"clone", EffectKind::Clone}, {"formation", EffectKind::Formation}, {"convert", EffectKind::Convert},
         {"playerStatus", EffectKind::PlayerStatus}, {"equalizeResource", EffectKind::EqualizeResource}, {"sacrifice", EffectKind::Sacrifice},
         {"stealSkill", EffectKind::StealSkill}, {"cooldown", EffectKind::Cooldown},
-        {"addCharges", EffectKind::AddCharges}, {"teleportGroup", EffectKind::TeleportGroup}, {"script", EffectKind::Script}, {"field", EffectKind::Field}};
+        {"addCharges", EffectKind::AddCharges}, {"teleportGroup", EffectKind::TeleportGroup}, {"script", EffectKind::Script}, {"field", EffectKind::Field},
+        {"pull", EffectKind::Pull}};
     std::string k = ej.getStr("type", "damage");
     bool known = false;
     for (auto& [n, kk] : kinds) if (k == n) { e.kind = kk; known = true; }

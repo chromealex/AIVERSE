@@ -406,6 +406,116 @@ struct CinematicSettings {
     std::int64_t qteHoldScaleMilli=1000;
     bool qteAutoSucceed=false;
 };
+struct CardGameSettings {
+    std::int64_t startingHand=4;
+    std::int64_t maxHand=10;
+    std::int64_t startingHealth=20;
+    std::int64_t turnLimit=60;
+    std::int64_t botNodeBudget=256;
+    std::int64_t botDepth=2;
+};
+struct TacticsSettings {
+    std::int64_t roundLimit=30;
+    std::int64_t halfCoverMilli=200;
+    std::int64_t fullCoverMilli=400;
+    std::int64_t flankBonusMilli=150;
+    std::int64_t rangePenaltyMilli=40;
+    std::int64_t overwatchPenaltyMilli=150;
+    std::int64_t minHitMilli=50;
+    std::int64_t maxHitMilli=950;
+    std::int64_t coverCosMilli=707;
+    std::int64_t botSearchBudget=512;
+};
+struct VehicleSettings {
+    std::int64_t maxEnterSpeedMilli=2000;
+    std::int64_t maxExitSpeedMilli=3000;
+    std::int64_t raceLaps=3;
+    std::int64_t wrongWayTicks=45;
+    std::int64_t wrongWaySpeedMilli=2000;
+    std::int64_t respawnWrongWayTicks=240;
+    std::int64_t stuckSpeedMilli=500;
+    std::int64_t stuckTicks=0;
+    std::int64_t botLookaheadMilli=6000;
+    std::int64_t botLookaheadTimeMilli=350;
+    std::int64_t botMaxSpeedMilli=60000;
+    std::int64_t botCornerAccelMilli=9000;
+    std::int64_t botBrakeDecelMilli=8000;
+    std::int64_t botBrakeHorizonMilli=90000;
+    std::int64_t botSteerGainMilli=1500;
+    std::int64_t botLaneOffsetMilli=2500;
+    std::int64_t botOvertakeDistanceMilli=14000;
+    std::int64_t botSkillMilli=1000;
+    std::int64_t botRubberBandMilli=0;
+};
+struct SportsSettings {
+    std::int64_t periods=2;
+    std::int64_t periodTicks=2700;
+    std::int64_t overtimeTicks=0;
+    std::int64_t restartDelayTicks=45;
+    std::int64_t maxStoppageTicks=600;
+    std::int64_t clockMode=0;
+    bool swapEnds=true;
+    bool goldenGoal=true;
+    std::int64_t pickupRadiusMilli=700;
+    std::int64_t controlSpeedMilli=14000;
+    std::int64_t frictionMilli=5000;
+    std::int64_t tackleRangeMilli=1400;
+    std::int64_t tackleBaseMilli=450;
+    std::int64_t interceptMilli=650;
+    std::int64_t behindFoulMilli=500;
+    std::int64_t failFoulMilli=120;
+    std::int64_t tackleCooldownTicks=40;
+    std::int64_t possessionLockTicks=20;
+    std::int64_t kickLockTicks=12;
+    std::int64_t passSpeedMinMilli=7000;
+    std::int64_t passSpeedMaxMilli=18000;
+    std::int64_t shotSpeedMinMilli=12000;
+    std::int64_t shotSpeedMaxMilli=26000;
+    std::int64_t passErrorMilli=30;
+    std::int64_t shotErrorMilli=40;
+    std::int64_t botShootRangeMilli=12000;
+    std::int64_t botTackleMilli=300;
+    std::int64_t botReactionTicks=6;
+    std::int64_t botDecisionTicks=6;
+};
+struct ColonySettings {
+    std::int64_t ticksPerHour=60;
+    std::int64_t moodBase=0;
+    std::int64_t moodBreakAt=-60000;
+    std::int64_t moodLowAt=-20000;
+    std::int64_t moodHighAt=40000;
+    std::int64_t breakTicks=120;
+    std::int64_t lowSpeedMilli=700;
+    std::int64_t contentSpeedMilli=1000;
+    std::int64_t highSpeedMilli=1200;
+    std::int64_t maxResponseJobs=64;
+};
+struct SurvivalSettings {
+    std::int64_t coreNormalMilli=37000;
+    std::int64_t comfortLowMilli=16000;
+    std::int64_t comfortHighMilli=27000;
+    std::int64_t coolingMicro=40;
+    std::int64_t heatingMicro=30;
+    std::int64_t recoveryMicro=2000;
+    std::int64_t coldMilli=35500;
+    std::int64_t severeColdMilli=33000;
+    std::int64_t hotMilli=38500;
+    std::int64_t severeHotMilli=40000;
+    std::int64_t hungerPerTick=8;
+    std::int64_t thirstPerTick=12;
+    std::int64_t staminaDrain=600;
+    std::int64_t staminaRegen=300;
+    std::int64_t lowAt=25000;
+    std::int64_t wetChillMilli=8000;
+    std::int64_t dryPerTick=40;
+    std::int64_t starveDamage=20;
+    std::int64_t thirstDamage=30;
+    std::int64_t coldDamage=30;
+    std::int64_t heatDamage=30;
+    std::int64_t conditionRegen=10;
+    std::int64_t windChillMilli=600;
+    std::int64_t wetPerTick=200;
+};
 struct PerkSettings {
     std::int64_t offerChoices=3;
     std::int64_t offerRerolls=0;
@@ -462,6 +572,12 @@ struct GameplaySettings {
     NarrativeSettings narrative;
     InteractionSettings interaction;
     CinematicSettings cinematic;
+    CardGameSettings cardGame;
+    TacticsSettings tactics;
+    VehicleSettings vehicles;
+    SportsSettings sports;
+    ColonySettings colony;
+    SurvivalSettings survival;
     PerkSettings perks;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
@@ -479,7 +595,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="perks") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="cardGame" && entry.first!="tactics" && entry.first!="vehicles" && entry.first!="sports" && entry.first!="colony" && entry.first!="survival" && entry.first!="perks") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -1038,6 +1154,150 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
         }
         if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
+    }
+    if(root.has("cardGame")) { const auto& section=root["cardGame"];
+        if(!section.isObject()) result.errors.push_back("cardGame: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="startingHand" && entry.first!="maxHand" && entry.first!="startingHealth" && entry.first!="turnLimit" && entry.first!="botNodeBudget" && entry.first!="botDepth") result.errors.push_back("cardGame."+entry.first+": unknown field");
+            if(section.has("startingHand")) number(section["startingHand"],settings.cardGame.startingHand,0,20,"cardGame.startingHand");
+            if(section.has("maxHand")) number(section["maxHand"],settings.cardGame.maxHand,1,20,"cardGame.maxHand");
+            if(section.has("startingHealth")) number(section["startingHealth"],settings.cardGame.startingHealth,1,1000000,"cardGame.startingHealth");
+            if(section.has("turnLimit")) number(section["turnLimit"],settings.cardGame.turnLimit,0,100000,"cardGame.turnLimit");
+            if(section.has("botNodeBudget")) number(section["botNodeBudget"],settings.cardGame.botNodeBudget,1,100000,"cardGame.botNodeBudget");
+            if(section.has("botDepth")) number(section["botDepth"],settings.cardGame.botDepth,1,4,"cardGame.botDepth");
+        }
+        if(settings.cardGame.startingHand>settings.cardGame.maxHand)result.errors.push_back("cardGame.startingHand: must not exceed maxHand");
+    }
+    if(root.has("tactics")) { const auto& section=root["tactics"];
+        if(!section.isObject()) result.errors.push_back("tactics: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="roundLimit" && entry.first!="halfCoverMilli" && entry.first!="fullCoverMilli" && entry.first!="flankBonusMilli" && entry.first!="rangePenaltyMilli" && entry.first!="overwatchPenaltyMilli" && entry.first!="minHitMilli" && entry.first!="maxHitMilli" && entry.first!="coverCosMilli" && entry.first!="botSearchBudget") result.errors.push_back("tactics."+entry.first+": unknown field");
+            if(section.has("roundLimit")) number(section["roundLimit"],settings.tactics.roundLimit,0,100000,"tactics.roundLimit");
+            if(section.has("halfCoverMilli")) number(section["halfCoverMilli"],settings.tactics.halfCoverMilli,0,1000,"tactics.halfCoverMilli");
+            if(section.has("fullCoverMilli")) number(section["fullCoverMilli"],settings.tactics.fullCoverMilli,0,1000,"tactics.fullCoverMilli");
+            if(section.has("flankBonusMilli")) number(section["flankBonusMilli"],settings.tactics.flankBonusMilli,0,1000,"tactics.flankBonusMilli");
+            if(section.has("rangePenaltyMilli")) number(section["rangePenaltyMilli"],settings.tactics.rangePenaltyMilli,0,1000,"tactics.rangePenaltyMilli");
+            if(section.has("overwatchPenaltyMilli")) number(section["overwatchPenaltyMilli"],settings.tactics.overwatchPenaltyMilli,0,1000,"tactics.overwatchPenaltyMilli");
+            if(section.has("minHitMilli")) number(section["minHitMilli"],settings.tactics.minHitMilli,0,1000,"tactics.minHitMilli");
+            if(section.has("maxHitMilli")) number(section["maxHitMilli"],settings.tactics.maxHitMilli,0,1000,"tactics.maxHitMilli");
+            if(section.has("coverCosMilli")) number(section["coverCosMilli"],settings.tactics.coverCosMilli,0,1000,"tactics.coverCosMilli");
+            if(section.has("botSearchBudget")) number(section["botSearchBudget"],settings.tactics.botSearchBudget,1,100000,"tactics.botSearchBudget");
+        }
+        if(settings.tactics.halfCoverMilli>settings.tactics.fullCoverMilli)result.errors.push_back("tactics.halfCoverMilli: must not exceed fullCoverMilli");
+        if(settings.tactics.minHitMilli>settings.tactics.maxHitMilli)result.errors.push_back("tactics.minHitMilli: must not exceed maxHitMilli");
+    }
+    if(root.has("vehicles")) { const auto& section=root["vehicles"];
+        if(!section.isObject()) result.errors.push_back("vehicles: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="maxEnterSpeedMilli" && entry.first!="maxExitSpeedMilli" && entry.first!="raceLaps" && entry.first!="wrongWayTicks" && entry.first!="wrongWaySpeedMilli" && entry.first!="respawnWrongWayTicks" && entry.first!="stuckSpeedMilli" && entry.first!="stuckTicks" && entry.first!="botLookaheadMilli" && entry.first!="botLookaheadTimeMilli" && entry.first!="botMaxSpeedMilli" && entry.first!="botCornerAccelMilli" && entry.first!="botBrakeDecelMilli" && entry.first!="botBrakeHorizonMilli" && entry.first!="botSteerGainMilli" && entry.first!="botLaneOffsetMilli" && entry.first!="botOvertakeDistanceMilli" && entry.first!="botSkillMilli" && entry.first!="botRubberBandMilli") result.errors.push_back("vehicles."+entry.first+": unknown field");
+            if(section.has("maxEnterSpeedMilli")) number(section["maxEnterSpeedMilli"],settings.vehicles.maxEnterSpeedMilli,0,1000000,"vehicles.maxEnterSpeedMilli");
+            if(section.has("maxExitSpeedMilli")) number(section["maxExitSpeedMilli"],settings.vehicles.maxExitSpeedMilli,0,1000000,"vehicles.maxExitSpeedMilli");
+            if(section.has("raceLaps")) number(section["raceLaps"],settings.vehicles.raceLaps,1,1000,"vehicles.raceLaps");
+            if(section.has("wrongWayTicks")) number(section["wrongWayTicks"],settings.vehicles.wrongWayTicks,1,100000,"vehicles.wrongWayTicks");
+            if(section.has("wrongWaySpeedMilli")) number(section["wrongWaySpeedMilli"],settings.vehicles.wrongWaySpeedMilli,0,1000000,"vehicles.wrongWaySpeedMilli");
+            if(section.has("respawnWrongWayTicks")) number(section["respawnWrongWayTicks"],settings.vehicles.respawnWrongWayTicks,0,100000,"vehicles.respawnWrongWayTicks");
+            if(section.has("stuckSpeedMilli")) number(section["stuckSpeedMilli"],settings.vehicles.stuckSpeedMilli,0,1000000,"vehicles.stuckSpeedMilli");
+            if(section.has("stuckTicks")) number(section["stuckTicks"],settings.vehicles.stuckTicks,0,100000,"vehicles.stuckTicks");
+            if(section.has("botLookaheadMilli")) number(section["botLookaheadMilli"],settings.vehicles.botLookaheadMilli,0,1000000,"vehicles.botLookaheadMilli");
+            if(section.has("botLookaheadTimeMilli")) number(section["botLookaheadTimeMilli"],settings.vehicles.botLookaheadTimeMilli,0,10000,"vehicles.botLookaheadTimeMilli");
+            if(section.has("botMaxSpeedMilli")) number(section["botMaxSpeedMilli"],settings.vehicles.botMaxSpeedMilli,1,1000000,"vehicles.botMaxSpeedMilli");
+            if(section.has("botCornerAccelMilli")) number(section["botCornerAccelMilli"],settings.vehicles.botCornerAccelMilli,1,1000000,"vehicles.botCornerAccelMilli");
+            if(section.has("botBrakeDecelMilli")) number(section["botBrakeDecelMilli"],settings.vehicles.botBrakeDecelMilli,1,1000000,"vehicles.botBrakeDecelMilli");
+            if(section.has("botBrakeHorizonMilli")) number(section["botBrakeHorizonMilli"],settings.vehicles.botBrakeHorizonMilli,0,10000000,"vehicles.botBrakeHorizonMilli");
+            if(section.has("botSteerGainMilli")) number(section["botSteerGainMilli"],settings.vehicles.botSteerGainMilli,0,100000,"vehicles.botSteerGainMilli");
+            if(section.has("botLaneOffsetMilli")) number(section["botLaneOffsetMilli"],settings.vehicles.botLaneOffsetMilli,0,100000,"vehicles.botLaneOffsetMilli");
+            if(section.has("botOvertakeDistanceMilli")) number(section["botOvertakeDistanceMilli"],settings.vehicles.botOvertakeDistanceMilli,0,1000000,"vehicles.botOvertakeDistanceMilli");
+            if(section.has("botSkillMilli")) number(section["botSkillMilli"],settings.vehicles.botSkillMilli,100,2000,"vehicles.botSkillMilli");
+            if(section.has("botRubberBandMilli")) number(section["botRubberBandMilli"],settings.vehicles.botRubberBandMilli,0,500,"vehicles.botRubberBandMilli");
+        }
+    }
+    if(root.has("sports")) { const auto& section=root["sports"];
+        if(!section.isObject()) result.errors.push_back("sports: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="periods" && entry.first!="periodTicks" && entry.first!="overtimeTicks" && entry.first!="restartDelayTicks" && entry.first!="maxStoppageTicks" && entry.first!="clockMode" && entry.first!="swapEnds" && entry.first!="goldenGoal" && entry.first!="pickupRadiusMilli" && entry.first!="controlSpeedMilli" && entry.first!="frictionMilli" && entry.first!="tackleRangeMilli" && entry.first!="tackleBaseMilli" && entry.first!="interceptMilli" && entry.first!="behindFoulMilli" && entry.first!="failFoulMilli" && entry.first!="tackleCooldownTicks" && entry.first!="possessionLockTicks" && entry.first!="kickLockTicks" && entry.first!="passSpeedMinMilli" && entry.first!="passSpeedMaxMilli" && entry.first!="shotSpeedMinMilli" && entry.first!="shotSpeedMaxMilli" && entry.first!="passErrorMilli" && entry.first!="shotErrorMilli" && entry.first!="botShootRangeMilli" && entry.first!="botTackleMilli" && entry.first!="botReactionTicks" && entry.first!="botDecisionTicks") result.errors.push_back("sports."+entry.first+": unknown field");
+            if(section.has("periods")) number(section["periods"],settings.sports.periods,1,16,"sports.periods");
+            if(section.has("periodTicks")) number(section["periodTicks"],settings.sports.periodTicks,1,100000000,"sports.periodTicks");
+            if(section.has("overtimeTicks")) number(section["overtimeTicks"],settings.sports.overtimeTicks,0,100000000,"sports.overtimeTicks");
+            if(section.has("restartDelayTicks")) number(section["restartDelayTicks"],settings.sports.restartDelayTicks,0,100000,"sports.restartDelayTicks");
+            if(section.has("maxStoppageTicks")) number(section["maxStoppageTicks"],settings.sports.maxStoppageTicks,0,100000000,"sports.maxStoppageTicks");
+            if(section.has("clockMode")) number(section["clockMode"],settings.sports.clockMode,0,2,"sports.clockMode");
+            if(section.has("swapEnds")) boolean(section["swapEnds"],settings.sports.swapEnds,"sports.swapEnds");
+            if(section.has("goldenGoal")) boolean(section["goldenGoal"],settings.sports.goldenGoal,"sports.goldenGoal");
+            if(section.has("pickupRadiusMilli")) number(section["pickupRadiusMilli"],settings.sports.pickupRadiusMilli,1,100000,"sports.pickupRadiusMilli");
+            if(section.has("controlSpeedMilli")) number(section["controlSpeedMilli"],settings.sports.controlSpeedMilli,0,200000,"sports.controlSpeedMilli");
+            if(section.has("frictionMilli")) number(section["frictionMilli"],settings.sports.frictionMilli,0,1000000,"sports.frictionMilli");
+            if(section.has("tackleRangeMilli")) number(section["tackleRangeMilli"],settings.sports.tackleRangeMilli,0,100000,"sports.tackleRangeMilli");
+            if(section.has("tackleBaseMilli")) number(section["tackleBaseMilli"],settings.sports.tackleBaseMilli,0,1000,"sports.tackleBaseMilli");
+            if(section.has("interceptMilli")) number(section["interceptMilli"],settings.sports.interceptMilli,0,1000,"sports.interceptMilli");
+            if(section.has("behindFoulMilli")) number(section["behindFoulMilli"],settings.sports.behindFoulMilli,0,1000,"sports.behindFoulMilli");
+            if(section.has("failFoulMilli")) number(section["failFoulMilli"],settings.sports.failFoulMilli,0,1000,"sports.failFoulMilli");
+            if(section.has("tackleCooldownTicks")) number(section["tackleCooldownTicks"],settings.sports.tackleCooldownTicks,0,100000,"sports.tackleCooldownTicks");
+            if(section.has("possessionLockTicks")) number(section["possessionLockTicks"],settings.sports.possessionLockTicks,0,100000,"sports.possessionLockTicks");
+            if(section.has("kickLockTicks")) number(section["kickLockTicks"],settings.sports.kickLockTicks,0,100000,"sports.kickLockTicks");
+            if(section.has("passSpeedMinMilli")) number(section["passSpeedMinMilli"],settings.sports.passSpeedMinMilli,1,200000,"sports.passSpeedMinMilli");
+            if(section.has("passSpeedMaxMilli")) number(section["passSpeedMaxMilli"],settings.sports.passSpeedMaxMilli,1,200000,"sports.passSpeedMaxMilli");
+            if(section.has("shotSpeedMinMilli")) number(section["shotSpeedMinMilli"],settings.sports.shotSpeedMinMilli,1,200000,"sports.shotSpeedMinMilli");
+            if(section.has("shotSpeedMaxMilli")) number(section["shotSpeedMaxMilli"],settings.sports.shotSpeedMaxMilli,1,200000,"sports.shotSpeedMaxMilli");
+            if(section.has("passErrorMilli")) number(section["passErrorMilli"],settings.sports.passErrorMilli,0,250,"sports.passErrorMilli");
+            if(section.has("shotErrorMilli")) number(section["shotErrorMilli"],settings.sports.shotErrorMilli,0,250,"sports.shotErrorMilli");
+            if(section.has("botShootRangeMilli")) number(section["botShootRangeMilli"],settings.sports.botShootRangeMilli,0,1000000,"sports.botShootRangeMilli");
+            if(section.has("botTackleMilli")) number(section["botTackleMilli"],settings.sports.botTackleMilli,0,1000,"sports.botTackleMilli");
+            if(section.has("botReactionTicks")) number(section["botReactionTicks"],settings.sports.botReactionTicks,0,3600,"sports.botReactionTicks");
+            if(section.has("botDecisionTicks")) number(section["botDecisionTicks"],settings.sports.botDecisionTicks,1,3600,"sports.botDecisionTicks");
+        }
+        if(settings.sports.passSpeedMinMilli>settings.sports.passSpeedMaxMilli)result.errors.push_back("sports.passSpeedMinMilli: must not exceed passSpeedMaxMilli");
+        if(settings.sports.shotSpeedMinMilli>settings.sports.shotSpeedMaxMilli)result.errors.push_back("sports.shotSpeedMinMilli: must not exceed shotSpeedMaxMilli");
+    }
+    if(root.has("colony")) { const auto& section=root["colony"];
+        if(!section.isObject()) result.errors.push_back("colony: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="ticksPerHour" && entry.first!="moodBase" && entry.first!="moodBreakAt" && entry.first!="moodLowAt" && entry.first!="moodHighAt" && entry.first!="breakTicks" && entry.first!="lowSpeedMilli" && entry.first!="contentSpeedMilli" && entry.first!="highSpeedMilli" && entry.first!="maxResponseJobs") result.errors.push_back("colony."+entry.first+": unknown field");
+            if(section.has("ticksPerHour")) number(section["ticksPerHour"],settings.colony.ticksPerHour,1,1000000,"colony.ticksPerHour");
+            if(section.has("moodBase")) number(section["moodBase"],settings.colony.moodBase,-100000,100000,"colony.moodBase");
+            if(section.has("moodBreakAt")) number(section["moodBreakAt"],settings.colony.moodBreakAt,-100000,100000,"colony.moodBreakAt");
+            if(section.has("moodLowAt")) number(section["moodLowAt"],settings.colony.moodLowAt,-100000,100000,"colony.moodLowAt");
+            if(section.has("moodHighAt")) number(section["moodHighAt"],settings.colony.moodHighAt,-100000,100000,"colony.moodHighAt");
+            if(section.has("breakTicks")) number(section["breakTicks"],settings.colony.breakTicks,1,10000000,"colony.breakTicks");
+            if(section.has("lowSpeedMilli")) number(section["lowSpeedMilli"],settings.colony.lowSpeedMilli,0,100000,"colony.lowSpeedMilli");
+            if(section.has("contentSpeedMilli")) number(section["contentSpeedMilli"],settings.colony.contentSpeedMilli,0,100000,"colony.contentSpeedMilli");
+            if(section.has("highSpeedMilli")) number(section["highSpeedMilli"],settings.colony.highSpeedMilli,0,100000,"colony.highSpeedMilli");
+            if(section.has("maxResponseJobs")) number(section["maxResponseJobs"],settings.colony.maxResponseJobs,1,1024,"colony.maxResponseJobs");
+        }
+        if(settings.colony.moodBreakAt>settings.colony.moodLowAt)result.errors.push_back("colony.moodBreakAt: must not exceed moodLowAt");
+        if(settings.colony.moodLowAt>settings.colony.moodHighAt)result.errors.push_back("colony.moodLowAt: must not exceed moodHighAt");
+    }
+    if(root.has("survival")) { const auto& section=root["survival"];
+        if(!section.isObject()) result.errors.push_back("survival: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="coreNormalMilli" && entry.first!="comfortLowMilli" && entry.first!="comfortHighMilli" && entry.first!="coolingMicro" && entry.first!="heatingMicro" && entry.first!="recoveryMicro" && entry.first!="coldMilli" && entry.first!="severeColdMilli" && entry.first!="hotMilli" && entry.first!="severeHotMilli" && entry.first!="hungerPerTick" && entry.first!="thirstPerTick" && entry.first!="staminaDrain" && entry.first!="staminaRegen" && entry.first!="lowAt" && entry.first!="wetChillMilli" && entry.first!="dryPerTick" && entry.first!="starveDamage" && entry.first!="thirstDamage" && entry.first!="coldDamage" && entry.first!="heatDamage" && entry.first!="conditionRegen" && entry.first!="windChillMilli" && entry.first!="wetPerTick") result.errors.push_back("survival."+entry.first+": unknown field");
+            if(section.has("coreNormalMilli")) number(section["coreNormalMilli"],settings.survival.coreNormalMilli,30000,42000,"survival.coreNormalMilli");
+            if(section.has("comfortLowMilli")) number(section["comfortLowMilli"],settings.survival.comfortLowMilli,-50000,60000,"survival.comfortLowMilli");
+            if(section.has("comfortHighMilli")) number(section["comfortHighMilli"],settings.survival.comfortHighMilli,-50000,60000,"survival.comfortHighMilli");
+            if(section.has("coolingMicro")) number(section["coolingMicro"],settings.survival.coolingMicro,0,1000000,"survival.coolingMicro");
+            if(section.has("heatingMicro")) number(section["heatingMicro"],settings.survival.heatingMicro,0,1000000,"survival.heatingMicro");
+            if(section.has("recoveryMicro")) number(section["recoveryMicro"],settings.survival.recoveryMicro,0,1000000,"survival.recoveryMicro");
+            if(section.has("coldMilli")) number(section["coldMilli"],settings.survival.coldMilli,20000,45000,"survival.coldMilli");
+            if(section.has("severeColdMilli")) number(section["severeColdMilli"],settings.survival.severeColdMilli,20000,45000,"survival.severeColdMilli");
+            if(section.has("hotMilli")) number(section["hotMilli"],settings.survival.hotMilli,30000,45000,"survival.hotMilli");
+            if(section.has("severeHotMilli")) number(section["severeHotMilli"],settings.survival.severeHotMilli,30000,45000,"survival.severeHotMilli");
+            if(section.has("hungerPerTick")) number(section["hungerPerTick"],settings.survival.hungerPerTick,0,100000,"survival.hungerPerTick");
+            if(section.has("thirstPerTick")) number(section["thirstPerTick"],settings.survival.thirstPerTick,0,100000,"survival.thirstPerTick");
+            if(section.has("staminaDrain")) number(section["staminaDrain"],settings.survival.staminaDrain,0,100000,"survival.staminaDrain");
+            if(section.has("staminaRegen")) number(section["staminaRegen"],settings.survival.staminaRegen,0,100000,"survival.staminaRegen");
+            if(section.has("lowAt")) number(section["lowAt"],settings.survival.lowAt,0,100000,"survival.lowAt");
+            if(section.has("wetChillMilli")) number(section["wetChillMilli"],settings.survival.wetChillMilli,0,100000,"survival.wetChillMilli");
+            if(section.has("dryPerTick")) number(section["dryPerTick"],settings.survival.dryPerTick,0,100000,"survival.dryPerTick");
+            if(section.has("starveDamage")) number(section["starveDamage"],settings.survival.starveDamage,0,100000,"survival.starveDamage");
+            if(section.has("thirstDamage")) number(section["thirstDamage"],settings.survival.thirstDamage,0,100000,"survival.thirstDamage");
+            if(section.has("coldDamage")) number(section["coldDamage"],settings.survival.coldDamage,0,100000,"survival.coldDamage");
+            if(section.has("heatDamage")) number(section["heatDamage"],settings.survival.heatDamage,0,100000,"survival.heatDamage");
+            if(section.has("conditionRegen")) number(section["conditionRegen"],settings.survival.conditionRegen,0,100000,"survival.conditionRegen");
+            if(section.has("windChillMilli")) number(section["windChillMilli"],settings.survival.windChillMilli,0,10000,"survival.windChillMilli");
+            if(section.has("wetPerTick")) number(section["wetPerTick"],settings.survival.wetPerTick,0,100000,"survival.wetPerTick");
+        }
+        if(settings.survival.comfortLowMilli>settings.survival.comfortHighMilli)result.errors.push_back("survival.comfortLowMilli: must not exceed comfortHighMilli");
+        if(settings.survival.severeColdMilli>settings.survival.coldMilli)result.errors.push_back("survival.severeColdMilli: must not exceed coldMilli");
+        if(settings.survival.hotMilli>settings.survival.severeHotMilli)result.errors.push_back("survival.hotMilli: must not exceed severeHotMilli");
     }
     if(root.has("perks")) { const auto& section=root["perks"];
         if(!section.isObject()) result.errors.push_back("perks: expected object");

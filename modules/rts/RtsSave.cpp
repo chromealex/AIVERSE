@@ -44,7 +44,9 @@ void io(Archive& a, Statuses& x) { a(x.list, x.flags); }
 void io(Archive& a, Area& x) {
     a(x.caster, x.sourceType, x.effList, x.effIndex, x.fireAt, x.nextAt, x.endAt, x.radius, x.triggers, x.touched, x.dir, x.dest, x.lane, x.lanePos,
       x.laneReverse, x.follow, x.scale);
+    if (a.formatVersion >= 7) a(x.goal, x.arrived, x.deaths);   // skill objects (agent-bw-skills)
 }
+void io(Archive& a, Pulled& x) { a(x.target, x.start, x.dist, x.way, x.vel, x.accel, x.minVel, x.maxVel, x.done); }
 void io(Archive& a, Channel& x) { a(x.payload, x.target, x.point, x.startPos, x.nextAt, x.endAt, x.ability, x.interval); }
 void io(Archive& a, GroupTag& x) { a(x.id, x.from, x.to); }
 void io(Archive& a, Capture& x) { a(x.progress, x.team); }
@@ -196,7 +198,7 @@ template <class T> void ioPool(Archive& a, World& w) {
 
 template <class... T> struct PoolList {
     static constexpr size_t count = sizeof...(T);
-    static void run(Archive& a, World& w) { (ioPool<T>(a, w), ...); }
+    static void run(Archive& a, World& w, size_t n = count) { size_t i = 0; ((i++ < n ? ioPool<T>(a, w) : void()), ...); }
     static void touch(World& w) { ((void)w.pool<T>(), ...); }
 };
 using kPools = PoolList<Transform, Owner, Unit, Orders, Mobile, Combat, Cargo, Production, Construction, ResourceStock, Extractor, Footprint,
@@ -204,7 +206,9 @@ using kPools = PoolList<Transform, Owner, Unit, Orders, Mobile, Combat, Cargo, P
                         Needs, Possessed, PortalState, AutoTrainState, ClaimState, Advancer, Inventory, Workshop, Carrier, LaneWalker,
                         Stance, Retreating, Transport, Boarded, Veteran, RallyPath, Shield, Eater, Formation, BridgeLaid, Ammo, Merging, Trader, ItemBag,
                         Suppression, Turret, GrowState, Morale,
-                        Weathering, TrapState, TeleportBack, Belt, Crafter, TurnBudget, Altitude, ScriptData, ScriptStats>;
+                        Weathering, TrapState, TeleportBack, Belt, Crafter, TurnBudget, Altitude, ScriptData, ScriptStats,
+                        Pulled>;   // save version 7 appended Pulled (keep new pools at the end)
+constexpr size_t kPoolsBefore7 = kPools::count - 1;
 } // namespace
 
 bool RtsModule::serializeState(Simulation& sim, Archive& a) {
@@ -223,8 +227,9 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     uint32_t pools = uint32_t(kPools::count);
     io(a, pools);
     if (a.writing() && w.poolCount() != kPools::count) return false;   // an unlisted component type exists
-    if (!a.writing() && pools != kPools::count) { a.fail(); return false; }
-    kPools::run(a, w);
+    const size_t expect = !a.writing() && a.formatVersion < 7 ? kPoolsBefore7 : kPools::count;
+    if (!a.writing() && pools != expect) { a.fail(); return false; }
+    kPools::run(a, w, expect);
     if (!a.writing()) {
         w.each<Projectile>([&](Entity, Projectile& p) {
             const auto& s = p.program;
@@ -238,6 +243,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
         });
     }
     ioState(a, gs);
+    ioRoutes(a, gs);   // RtsRoutes.cpp: only when the map / rules use routes, groups or a screen
     if (!native_.serialize(sim, a)) return false;
     // Lua state of games with their own scripts (the standard library keeps its state in GameState)
     if (auto* ss = w.resource<ScriptStore>(); ss && ss->userScripts) {
@@ -249,6 +255,9 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (topDown_ && topDown_->active()) topDown_->io(sim, a);   // top-down heroes (games with rules "topDown" only)
     if (progression_ && progression_->active()) progression_->io(sim, a);   // in-match progression (games with rules "progression" only)
     if (encounters_ && encounters_->active()) encounters_->io(sim, a);   // boss encounters (games with rules "encounters" only)
+    if (env_ && env_->active()) env_->io(sim, a);            // map environment (games with one only)
+    if (driving_ && driving_->active()) driving_->io(sim, a);   // vehicles (games with rules "driving" only)
+    if (!ioModesState(*this, sim, a)) return false;           // match modes (games with modes only, RtsModes.cpp)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

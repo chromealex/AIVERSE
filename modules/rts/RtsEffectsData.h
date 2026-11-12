@@ -24,6 +24,7 @@ struct EffectParser {
 private:
     void statusBody(const std::string& where, const Json& j, int idx);
     void delivery(const std::string& where, const Json& j, DeliveryDef& d);
+    void skillObjects(const std::string& where, const Json& j, DeliveryDef& d);
     int deliveredPayload(const std::string& where, const Json& aj, bool* channel);
     uint64_t statusTags(const Json& arr);
 };

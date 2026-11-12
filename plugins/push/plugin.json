@@ -1,0 +1,24 @@
+{
+  "name": "push",
+  "description": "Notifications for Android and iOS: remote push (Firebase Cloud Messaging on Android, APNs on iOS) and local notifications scheduled by the game (categories / tags to cancel groups, repeat). Protocol: push (docs/plugins.md, engine/services/Push.h). Config: channel {id, name} (Android), firebase {applicationId, apiKey, projectId, senderId} (Android remote push; without it only local notifications), icon (Android small icon drawable name), askOnStart (request the permission at init).",
+  "provides": ["push"],
+  "android": {
+    "java": "android/java",
+    "classes": { "push": "com.aiverse.plugins.PushPlugin" },
+    "dependencies": ["com.google.firebase:firebase-messaging:24.1.2"],
+    "manifest": {
+      "root": ["<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\"/>",
+               "<uses-permission android:name=\"android.permission.RECEIVE_BOOT_COMPLETED\"/>"],
+      "application": [
+        "<receiver android:name=\"com.aiverse.plugins.PushPlugin$AlarmReceiver\" android:exported=\"false\"><intent-filter><action android:name=\"android.intent.action.BOOT_COMPLETED\"/></intent-filter></receiver>",
+        "<service android:name=\"com.aiverse.plugins.PushPlugin$MessagingService\" android:exported=\"false\"><intent-filter><action android:name=\"com.google.firebase.MESSAGING_EVENT\"/></intent-filter></service>"
+      ]
+    }
+  },
+  "ios": {
+    "sources": ["ios/*.mm"],
+    "classes": { "push": "AiversePushPlugin" },
+    "frameworks": ["UserNotifications"],
+    "plist": ["<key>UIBackgroundModes</key><array><string>remote-notification</string></array>"]
+  }
+}

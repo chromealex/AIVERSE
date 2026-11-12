@@ -36,6 +36,8 @@ void RtsModule::sysTargeting(Simulation& sim) {
         const bool hf = gs.grid.hf;
         Entity best;
         Fixed bestD{};
+        // elliptical range (weapon rangeAspect, Bunker Wars towers): the sight ellipse squashed along z
+        const Fixed aspect = t.weapons.empty() ? kOne : t.weapons[0].rangeAspect;
         gs.hash.query(tr.pos, sight, [&](Entity cand) {
             if (cand == e) return;
             auto* cu = w.tryGet<Unit>(cand);
@@ -47,6 +49,7 @@ void RtsModule::sysTargeting(Simulation& sim) {
             Vec3 cp = w.get<Transform>(cand).pos;
             Fixed d = dist2D(cp, tr.pos);
             if (d > sight) return;
+            if (aspect != kOne && !inRangeEllipse(tr.pos, cp, sight, aspect)) return;
             // high ground hides units from those below unless revealed (any ally vision of that cell)
             // (heightfield: vision already follows line of sight, so the target must simply be in sight)
             if (rules_.heights.blockVision && !(ct.layer & kLayerAir) && (hf || levelAt(sim, cp) > myLevel) && !isVisible(sim, o.player, cp)) return;
@@ -66,6 +69,7 @@ void RtsModule::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t d
     if (!u || u->hp.raw <= 0) return;
     const UnitType& t = rules_.types[u->type];
     if (t.invulnerable) return;
+    if (env_ && env_->active() && env_->damageOverride(sim, target, dmg)) { if (dmg.raw <= 0) return; }   // walls / bombers count hits
     const Fixed raw = dmgType == kDamagePure ? dmg : dmg * rules_.damageMult(dmgType, t.armorType);
     Fixed fin = mitigate(sim, target, raw, wd, dmgType);   // bonuses, shields, armor model (RtsOriginals.cpp)
     if (mechOn(sim)) fin = fin * mechDamageTaken(sim, target, source);   // agent-mech (retreat, cover, armor arcs)
@@ -149,6 +153,7 @@ void RtsModule::sysWeapons(Simulation& sim) {
         for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
             const WeaponDef& wd = t.weapons[i];
             if (!canHit(wd, tt.layer) || c.cooldown[i].raw > 0 || dist > wd.range + rangeBonus || dist < wd.minRange) continue;
+            if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, tp, wd.range + rangeBonus, wd.rangeAspect)) continue;
             if (m && m->moving && ord && !ord->queue.empty() && ord->queue.front().type == OrderType::Move) continue;
             if (wd.chargeTime.raw > 0) {
                 // charging shot: the weapon has to stay on the same target for chargeTime
@@ -581,6 +586,7 @@ void RtsModule::sysDeath(Simulation& sim) {
         const bool silent = u.flags & kUnitSilent;
         if (auto* f = w.tryGet<Footprint>(e)) gs.grid.block(f->x, f->y, f->w, f->h, -1);
         if (mechOn(sim)) mechOnDeath(sim, e);   // agent-mech: passengers, veterancy
+        if (env_ && env_->active()) env_->onDeath(sim, e, owner, pos, silent);   // souls fly to the graveyard
         if (owner < gs.players.size() && !gs.players[owner].typeCountAll.empty() && gs.players[owner].typeCountAll[u.type] > 0)
             gs.players[owner].typeCountAll[u.type]--;
         if (auto* ex = w.tryGet<Extractor>(e)) {
@@ -596,6 +602,7 @@ void RtsModule::sysDeath(Simulation& sim) {
                 leftovers.push_back({rules_.payloads[size_t(ar.effList)][size_t(ar.effIndex)].delivery.deathSpawn, pos, -1, Fixed{}, ao});
                 break;
             }
+            if (rules_.advancedEffects) noteDeathInAreas(sim, e, pos);   // onDeath areas (RtsSkillObjects.cpp)
             grantKill(sim, e, u.lastAttacker);
             if (!t.wreck.empty() && wreckType >= 0) leftovers.push_back({uint16_t(wreckType), pos, int16_t(t.wreck[0].res), t.wreck[0].value});
             sim.emit({kEvDied, owner, e, u.lastHitBy, u.type, pos});
@@ -610,6 +617,7 @@ void RtsModule::sysDeath(Simulation& sim) {
         if (auto* rs = w.tryGet<ResourceStock>(n); rs && l.res >= 0) { rs->res = l.res; rs->amount = l.amount; rs->infinite = l.amount.raw < 0; }
     }
     if (rules_.originals) flushDeathSpawns(sim);
+    flushAreaDeaths(sim);
 }
 
 } // namespace aiverse::game

@@ -629,7 +629,7 @@ GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(
         // the task for the agent step: the description verbatim + how to keep the wizard's parts consistent
         writeText(c.path("WIZARD_TASK.md"), wizardAgentTask(c.spec, c.dir, c.templ, c.idea));
         report_.set("task", Json::string(c.path("WIZARD_TASK.md")));
-        // .rtsproj: what the wizard was asked (unknown keys are kept by the editor), so "make again" can start from it
+        // .aiverse: what the wizard was asked (unknown keys are kept by the editor), so "make again" can start from it
         Json pf = readJsonFile(file_);
         if (!pf.isObject()) pf = Json::object();
         Json w = Json::object();

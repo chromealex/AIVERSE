@@ -1,0 +1,1433 @@
+// Bunker Wars emotions.
+{
+ "emotions": [
+  {
+   "m_Name": "Emotion_1",
+   "id": 2593276928,
+   "title": {
+    "key": "Emotions|Title|1",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|1",
+    "parameters": 0
+   },
+   "clientId": 1,
+   "view": {
+    "guid": "cefd51a6e1dea20478af78ede8261f3e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion1/Emotion1.prefab"
+   },
+   "preView": {
+    "guid": "39477d03a47f0834182fee433d0cdabe",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion1/Preview1.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "c2be8af205bbd35429face4305945820",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_1.asset"
+  },
+  {
+   "m_Name": "Emotion_10",
+   "id": 3380483828,
+   "title": {
+    "key": "Emotions|Title|10",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|10",
+    "parameters": 0
+   },
+   "clientId": 10,
+   "view": {
+    "guid": "7160728c813d82748ad257c2cade993a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion10/Emotion10.prefab"
+   },
+   "preView": {
+    "guid": "8606b8a785c876b43a73eddbbf770970",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion10/Preview10.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "de9b10dda53637046bee01934ff60917",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_10.asset"
+  },
+  {
+   "m_Name": "Emotion_11",
+   "id": 4267987509,
+   "title": {
+    "key": "Emotions|Title|11",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|11",
+    "parameters": 0
+   },
+   "clientId": 11,
+   "view": {
+    "guid": "47c76fcc925d330498bb4f14f83a3457",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion11/Emotion11.prefab"
+   },
+   "preView": {
+    "guid": "e8ff93b08f69a3a40bce7d242af9d195",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion11/Preview11.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "60817f2a63df3d640b15ac9638995046",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_11.asset"
+  },
+  {
+   "m_Name": "Emotion_12",
+   "id": 860523894,
+   "title": {
+    "key": "Emotions|Title|12",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|12",
+    "parameters": 0
+   },
+   "clientId": 12,
+   "view": {
+    "guid": "d29b22c57ec71f14ab6c3a366a668d02",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion12/Emotion12.prefab"
+   },
+   "preView": {
+    "guid": "f6e051369033f614899d8b6be434c98b",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion12/Preview12.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "7d6db62cb3738624cb6d71c444b31444",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_12.asset"
+  },
+  {
+   "m_Name": "Emotion_13",
+   "id": 1748027575,
+   "title": {
+    "key": "Emotions|Title|13",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|13",
+    "parameters": 0
+   },
+   "clientId": 13,
+   "view": {
+    "guid": "05412c2194ecbd64b8fc5a5da7146887",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion13/Emotion13.prefab"
+   },
+   "preView": {
+    "guid": "109d3a1e8bacc3e419963160a9045b9e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion13/Preview13.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "ae717694679c0b3479f40ceeda8bf689",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_13.asset"
+  },
+  {
+   "m_Name": "Emotion_14",
+   "id": 2635531256,
+   "title": {
+    "key": "Emotions|Title|14",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|14",
+    "parameters": 0
+   },
+   "clientId": 14,
+   "view": {
+    "guid": "9dae965fd49272b41b0f011884061b5a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion14/Emotion14.prefab"
+   },
+   "preView": {
+    "guid": "80ece47dd725b014987a3e5bf1076d58",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion14/Preview14.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "4cc5f0356608cef4b918da74eae64e51",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_14.asset"
+  },
+  {
+   "m_Name": "Emotion_15",
+   "id": 3523034937,
+   "title": {
+    "key": "Emotions|Title|15",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|15",
+    "parameters": 0
+   },
+   "clientId": 15,
+   "view": {
+    "guid": "f8c8ae2f57e4df145a1afdf9f3de21ab",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion15/Emotion15.prefab"
+   },
+   "preView": {
+    "guid": "a2c2f6058c308914585b289eda8b3871",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion15/Preview15.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "2bb1eaed4bee72047bd95e6d6f46f9b3",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_15.asset"
+  },
+  {
+   "m_Name": "Emotion_16",
+   "id": 115571322,
+   "title": {
+    "key": "Emotions|Title|16",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|16",
+    "parameters": 0
+   },
+   "clientId": 16,
+   "view": {
+    "guid": "e840a18413033fc45bab3c172c60901c",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion16/Emotion16.prefab"
+   },
+   "preView": {
+    "guid": "da86b0c60b9ec174ab342b4e62bea69a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion16/Preview16.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "b86104edfd4e5264f89f5f68035fb189",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_16.asset"
+  },
+  {
+   "m_Name": "Emotion_17",
+   "id": 1003075003,
+   "title": {
+    "key": "Emotions|Title|17",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|17",
+    "parameters": 0
+   },
+   "clientId": 17,
+   "view": {
+    "guid": "44bf7dc9494420e4a8f0a7f28b1e6dd7",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion17/Emotion17.prefab"
+   },
+   "preView": {
+    "guid": "eb8adfec1f5cf7140932c93db9f9b652",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion17/Preview17.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "186d6b8d3b61e0a4ea3795c41dc56f12",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_17.asset"
+  },
+  {
+   "m_Name": "Emotion_18",
+   "id": 1890578684,
+   "title": {
+    "key": "Emotions|Title|18",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|18",
+    "parameters": 0
+   },
+   "clientId": 18,
+   "view": {
+    "guid": "447604aa1490e1545ace28f01b5f1924",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion18/Emotion18.prefab"
+   },
+   "preView": {
+    "guid": "66f44206b23d68d46a291ab9c7736877",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion18/Preview18.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "2a706dda039ea474da95cb67b556de34",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_18.asset"
+  },
+  {
+   "m_Name": "Emotion_19",
+   "id": 2778082365,
+   "title": {
+    "key": "Emotions|Title|19",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|19",
+    "parameters": 0
+   },
+   "clientId": 19,
+   "view": {
+    "guid": "de3244125941ebb4897a068b6fb967e7",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion19/Emotion19.prefab"
+   },
+   "preView": {
+    "guid": "cd1786e3a1a687147b9f12222f7a5411",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion19/Preview19.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "a8bddcf4bc8844b469270468bd50822e",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_19.asset"
+  },
+  {
+   "m_Name": "Emotion_2",
+   "id": 3480780609,
+   "title": {
+    "key": "Emotions|Title|2",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|2",
+    "parameters": 0
+   },
+   "clientId": 2,
+   "view": {
+    "guid": "b2e6f48909b0f64418f95784d5c904ae",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion2/Emotion2.prefab"
+   },
+   "preView": {
+    "guid": "278f7b08859117f4ca4ae7b4df4d97ae",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion2/Preview2.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "c93acfd66e62e6746bf4a434aa506df5",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_2.asset"
+  },
+  {
+   "m_Name": "Emotion_20",
+   "id": 828326867,
+   "title": {
+    "key": "Emotions|Title|20",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|20",
+    "parameters": 0
+   },
+   "clientId": 20,
+   "view": {
+    "guid": "2c8f2c480a6908d41a5a41a88460ef42",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion20/Emotion20.prefab"
+   },
+   "preView": {
+    "guid": "495407bd60e2aa145a9541301ce2b3e7",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion20/Preview20.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "0dd9d92c081bdcf48ba8c19b687a2f29",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_20.asset"
+  },
+  {
+   "m_Name": "Emotion_21",
+   "id": 1715830548,
+   "title": {
+    "key": "Emotions|Title|21",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|21",
+    "parameters": 0
+   },
+   "clientId": 21,
+   "view": {
+    "guid": "d4cc0032bb6140144b1346b8de0d811d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion21/Emotion21.prefab"
+   },
+   "preView": {
+    "guid": "f877200a3caf2634fa54052ffb74be19",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion21/Preview21.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "b4967593571b44c47ba1798b6277f322",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_21.asset"
+  },
+  {
+   "m_Name": "Emotion_22",
+   "id": 2603334229,
+   "title": {
+    "key": "Emotions|Title|22",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|22",
+    "parameters": 0
+   },
+   "clientId": 22,
+   "view": {
+    "guid": "3d8b9c3cad490a44888f7c6d2aef1fe7",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion22/Emotion22.prefab"
+   },
+   "preView": {
+    "guid": "ae27fa8ef34df6347b7c6488ac82fa35",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion22/Preview22.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "cff0e0f8f69f13141a711a78dbc47e4b",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_22.asset"
+  },
+  {
+   "m_Name": "Emotion_23",
+   "id": 3490837910,
+   "title": {
+    "key": "Emotions|Title|23",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|23",
+    "parameters": 0
+   },
+   "clientId": 23,
+   "view": {
+    "guid": "cc161b637e65ca04caa424c36a5f7049",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion23/Emotion23.prefab"
+   },
+   "preView": {
+    "guid": "187459b12cfb6cd4092a4bd91aaed719",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion23/Preview23.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "dc6718afee318a548970b72b587d9fbb",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_23.asset"
+  },
+  {
+   "m_Name": "Emotion_24",
+   "id": 83374295,
+   "title": {
+    "key": "Emotions|Title|24",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|24",
+    "parameters": 0
+   },
+   "clientId": 24,
+   "view": {
+    "guid": "a70d9941a1e32f74c8eb6fa4e9b1c37c",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion24/Emotion24.prefab"
+   },
+   "preView": {
+    "guid": "f0be1641b147fb04e91f030ca43eac21",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion24/Preview24.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "c0acbaf63d45f114db0f3d9f762138f7",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_24.asset"
+  },
+  {
+   "m_Name": "Emotion_25",
+   "id": 970877976,
+   "title": {
+    "key": "Emotions|Title|25",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|25",
+    "parameters": 0
+   },
+   "clientId": 25,
+   "view": {
+    "guid": "950d622bf2c6d8049acc38aa0db0ce69",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion25/Emotion25.prefab"
+   },
+   "preView": {
+    "guid": "c2c71abe8f30bc44c84305a31896c92f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion25/Preview25.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "7fea781689c56b841801e7c04049f84d",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_25.asset"
+  },
+  {
+   "m_Name": "Emotion_26",
+   "id": 1858381657,
+   "title": {
+    "key": "Emotions|Title|26",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|26",
+    "parameters": 0
+   },
+   "clientId": 26,
+   "view": {
+    "guid": "e967497760802944c94e5e1290683fad",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion26/Emotion26.prefab"
+   },
+   "preView": {
+    "guid": "4c29b5a7d8165d84c9eaedbab2ada652",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion26/Preview26.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "311cab0dae956c24cb0287358bfb575b",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_26.asset"
+  },
+  {
+   "m_Name": "Emotion_27",
+   "id": 2745885338,
+   "title": {
+    "key": "Emotions|Title|27",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|27",
+    "parameters": 0
+   },
+   "clientId": 27,
+   "view": {
+    "guid": "7f3e3fda2118d0f458b3ab863cd198a9",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion27/Emotion27.prefab"
+   },
+   "preView": {
+    "guid": "c8386156c84aafc4d8fd7052aa156c98",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion27/Preview27.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "c397043ae4af55f4dad86bcf27145766",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_27.asset"
+  },
+  {
+   "m_Name": "Emotion_28",
+   "id": 3633389019,
+   "title": {
+    "key": "Emotions|Title|28",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|28",
+    "parameters": 0
+   },
+   "clientId": 28,
+   "view": {
+    "guid": "2dcd60096ebe84f4a9f8605ada850645",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion28/Emotion28.prefab"
+   },
+   "preView": {
+    "guid": "72259d7acb3ff394fa3bfe6dc1c3b576",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion28/Preview28.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "06a7a4e511a74b84192ae3c52652f1ec",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_28.asset"
+  },
+  {
+   "m_Name": "Emotion_29",
+   "id": 225925404,
+   "title": {
+    "key": "Emotions|Title|29",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|29",
+    "parameters": 0
+   },
+   "clientId": 29,
+   "view": {
+    "guid": "3c3cde5f2d740a941bbc6e54950f8217",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion29/Emotion29.prefab"
+   },
+   "preView": {
+    "guid": "d4fb672f6b414e842868162ad51bda37",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion29/Preview29.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "de8ccc5416f62f247b4309fa80a2971a",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_29.asset"
+  },
+  {
+   "m_Name": "Emotion_3",
+   "id": 73316994,
+   "title": {
+    "key": "Emotions|Title|3",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|3",
+    "parameters": 0
+   },
+   "clientId": 3,
+   "view": {
+    "guid": "d563551842dd6be45abac874050a1565",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion3/Emotion3.prefab"
+   },
+   "preView": {
+    "guid": "be7f42fa31d4b9440bb0f87cb7977001",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion3/Preview3.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "f005e2a084f012a48a1ebff67122cfef",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_3.asset"
+  },
+  {
+   "m_Name": "Emotion_30",
+   "id": 2571137202,
+   "title": {
+    "key": "Emotions|Title|30",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|30",
+    "parameters": 0
+   },
+   "clientId": 30,
+   "view": {
+    "guid": "79a7b7f5d6e16124a924e863c45987c8",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion30/Emotion30.prefab"
+   },
+   "preView": {
+    "guid": "c790087ea0f15414f84696a5139367fd",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion30/Preview30.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "c857db5aafb59444283358281a380f70",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_30.asset"
+  },
+  {
+   "m_Name": "Emotion_31",
+   "id": 3458640883,
+   "title": {
+    "key": "Emotions|Title|31",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|31",
+    "parameters": 0
+   },
+   "clientId": 31,
+   "view": {
+    "guid": "d647616ab38f0f8458225abe85057547",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion31/Emotion31.prefab"
+   },
+   "preView": {
+    "guid": "6e643310d4c710d429ce03f11f50c037",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion31/Preview31.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "2bdba7dc55119c54fb8fe828583ebc8a",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_31.asset"
+  },
+  {
+   "m_Name": "Emotion_32",
+   "id": 51177268,
+   "title": {
+    "key": "Emotions|Title|32",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|32",
+    "parameters": 0
+   },
+   "clientId": 32,
+   "view": {
+    "guid": "afd10669719c3e444920b35b44742174",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion32/Emotion32.prefab"
+   },
+   "preView": {
+    "guid": "4d96e1a928720ff409edd8eecaac7a35",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion32/Preview32.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "2bdba7dc55119c54fb8fe828583ebc8a",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_32.asset"
+  },
+  {
+   "m_Name": "Emotion_33",
+   "id": 938680949,
+   "title": {
+    "key": "Emotions|Title|33",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|33",
+    "parameters": 0
+   },
+   "clientId": 33,
+   "view": {
+    "guid": "25a3b3271742d34488112df8083a58b0",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion33/Emotion33.prefab"
+   },
+   "preView": {
+    "guid": "0b67e8bede0b4b54d8af72e8d9516311",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion33/Preview33.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "2bdba7dc55119c54fb8fe828583ebc8a",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_33.asset"
+  },
+  {
+   "m_Name": "Emotion_34",
+   "id": 1826184630,
+   "title": {
+    "key": "Emotions|Title|34",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|34",
+    "parameters": 0
+   },
+   "clientId": 34,
+   "view": {
+    "guid": "57a90cf51d2393546bf2363fba81da77",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion34/Emotion34.prefab"
+   },
+   "preView": {
+    "guid": "210a4f8fa3f35ac45b9f256300274d95",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion34/Preview34.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "2bdba7dc55119c54fb8fe828583ebc8a",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_34.asset"
+  },
+  {
+   "m_Name": "Emotion_4",
+   "id": 960820675,
+   "title": {
+    "key": "Emotions|Title|4",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|4",
+    "parameters": 0
+   },
+   "clientId": 4,
+   "view": {
+    "guid": "206bb1ea7e0b0834c851aee7c82968af",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion4/Emotion4.prefab"
+   },
+   "preView": {
+    "guid": "e671911946d83ec43a2195613e40cd10",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion4/Preview4.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "6bd733a2280cef143a4413dbcf404fa4",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_4.asset"
+  },
+  {
+   "m_Name": "Emotion_5",
+   "id": 1848324356,
+   "title": {
+    "key": "Emotions|Title|5",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|5",
+    "parameters": 0
+   },
+   "clientId": 5,
+   "view": {
+    "guid": "39b932d728b9b284ab206cc131983bc4",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion5/Emotion5.prefab"
+   },
+   "preView": {
+    "guid": "0d39c47c0924c0748b062193a4ac9259",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion5/Preview5.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "db84c44c17a5eb545be92d5b90df67be",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_5.asset"
+  },
+  {
+   "m_Name": "Emotion_6",
+   "id": 2735828037,
+   "title": {
+    "key": "Emotions|Title|6",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|6",
+    "parameters": 0
+   },
+   "clientId": 6,
+   "view": {
+    "guid": "33b5a75f96f27a344bd1e2f56c917008",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion6/Emotion6.prefab"
+   },
+   "preView": {
+    "guid": "66882f67c9935f74092e144089d6e222",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion6/Preview6.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "703a5ab9efda2394da4baf25aa73ed50",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_6.asset"
+  },
+  {
+   "m_Name": "Emotion_7",
+   "id": 3623331718,
+   "title": {
+    "key": "Emotions|Title|7",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|7",
+    "parameters": 0
+   },
+   "clientId": 7,
+   "view": {
+    "guid": "202db569b984c124e986e2d2fb415652",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion7/Emotion7.prefab"
+   },
+   "preView": {
+    "guid": "3255ae29ed35ede46a71bbae72a8ebd6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion7/Preview7.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "ad036b3fd86ff7040b75a59ff9066edb",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_7.asset"
+  },
+  {
+   "m_Name": "Emotion_8",
+   "id": 215868103,
+   "title": {
+    "key": "Emotions|Title|8",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|8",
+    "parameters": 0
+   },
+   "clientId": 8,
+   "view": {
+    "guid": "8ae462304f5a3774bac3223dcde597bb",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion8/Emotion8.prefab"
+   },
+   "preView": {
+    "guid": "457b1abdcf57ede4dae9754cb97f37a9",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion8/Preview8.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "328615a4d74efcb4c9c0622eb78494c1",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_8.asset"
+  },
+  {
+   "m_Name": "Emotion_9",
+   "id": 1103371784,
+   "title": {
+    "key": "Emotions|Title|9",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Emotions|Description|9",
+    "parameters": 0
+   },
+   "clientId": 9,
+   "view": {
+    "guid": "da16341317801f44cb0399ed3b233af5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion9/Emotion9.prefab"
+   },
+   "preView": {
+    "guid": "d25e783afa234354f8d90d3894dfc9b3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/Emotions/EmotionsPrefabs/Emotion9/Preview9.prefab"
+   },
+   "audioOnUse": {
+    "key": 0,
+    "audioEvent": {
+     "fileID": 11400000,
+     "guid": "d9f4f5d67412fd34e94a17876ca2a2a7",
+     "type": 2
+    }
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/_EmotionsConfigs/Emotion_9.asset"
+  }
+ ]
+}

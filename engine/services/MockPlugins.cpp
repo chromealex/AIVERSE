@@ -202,6 +202,7 @@ void registerMockPlugin(const std::string& name) {
     else if (name == "mock-ads") plugins::registerPlugin(name, std::make_shared<MockAds>());
     else if (name == "mock-analytics") plugins::registerPlugin(name, std::make_shared<MockAnalytics>());
     else if (name == "mock-att") plugins::registerPlugin(name, std::make_shared<MockAtt>());
+    else registerClientMockPlugin(name);
 }
 
 void registerMockPlugins() {

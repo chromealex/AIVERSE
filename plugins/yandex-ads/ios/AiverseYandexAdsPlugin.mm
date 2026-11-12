@@ -1,13 +1,18 @@
 // Yandex Mobile Ads SDK 8 (iOS) → the engine's "ads" protocol (docs/plugins.md).
-// The SDK is written in Swift and keeps YMA-prefixed Objective-C names. Confirmed in Yandex docs:
-// YMAYandexAds setters/initializeSDK, YMAAdRequest initWithAdUnitID:, loaders'
-// loadAdWithRequest:completionHandler:, YMABannerAdSize stickyWithContainerWidth:,
-// YMABannerAdView initWithAdSize: / loadAdWithRequest:. UNVERIFIED (derived from the Swift API by
-// the Swift→ObjC naming rules): showFromViewController:, delegate selectors below. If Xcode
-// disagrees, check YandexMobileAds-Swift.h in the pod.
-#import <YandexMobileAds/YandexMobileAds.h>
+// The SDK is written in Swift; the pod ships only the generated YandexMobileAds-Swift.h (no umbrella
+// ObjC header). Every selector used here was checked against that header of SDK 8.6.0:
+// YMAYandexAds initializeSDKWithCompletionHandler:/setters, YMAAdRequest's designated initializer,
+// loaders' loadAdWith:completionHandler:, showFromViewController:, YMABannerAdSize
+// stickyWithContainerWidth:, YMABannerAdView initWithAdSize:/loadAdWithRequest: and the delegates.
 #import <UIKit/UIKit.h>
+#import <YandexMobileAds/YandexMobileAds-Swift.h>
 #import "engine/platform/apple/AiversePlugin.h"
+
+// SDK 8 exposes only the designated initializer to Objective-C.
+static YMAAdRequest* aiverseYandexRequest(NSString* unit) {
+    return [[YMAAdRequest alloc] initWithAdUnitID:unit targeting:nil adTheme:YMAAdThemeUnspecified
+                                      biddingData:nil headerBiddingData:nil parameters:nil];
+}
 
 @interface AiverseYandexAdsPlugin : NSObject <AiversePlugin, YMAInterstitialAdDelegate, YMARewardedAdDelegate, YMABannerAdViewDelegate>
 @end
@@ -27,7 +32,7 @@
 - (void)call:(NSString*)method args:(NSDictionary*)args reply:(AiversePluginReply*)reply {
     if ([method isEqualToString:@"init"]) {
         _config = args;
-        [YMAYandexAds initializeSDK];
+        [YMAYandexAds initializeSDKWithCompletionHandler:nil];
         [self load:@"interstitial"];
         [self load:@"rewarded"];
         [reply ok:nil];
@@ -55,15 +60,15 @@
 - (void)load:(NSString*)format {
     NSString* unit = [self unit:format];
     if (!unit.length) return;
-    YMAAdRequest* req = [[YMAAdRequest alloc] initWithAdUnitID:unit];
+    YMAAdRequest* req = aiverseYandexRequest(unit);
     if ([format isEqualToString:@"interstitial"]) {
         if (!_interstitialLoader) _interstitialLoader = [YMAInterstitialAdLoader new];
-        [_interstitialLoader loadAdWithRequest:req completionHandler:^(YMAInterstitialAd* ad, NSError* error) {
+        [_interstitialLoader loadAdWith:req completionHandler:^(YMAInterstitialAd* ad, NSError* error) {
             dispatch_async(dispatch_get_main_queue(), ^{ self->_interstitial = ad; [self event:ad ? @"loaded" : @"failed" format:format]; });
         }];
     } else if ([format isEqualToString:@"rewarded"]) {
         if (!_rewardedLoader) _rewardedLoader = [YMARewardedAdLoader new];
-        [_rewardedLoader loadAdWithRequest:req completionHandler:^(YMARewardedAd* ad, NSError* error) {
+        [_rewardedLoader loadAdWith:req completionHandler:^(YMARewardedAd* ad, NSError* error) {
             dispatch_async(dispatch_get_main_queue(), ^{ self->_rewarded = ad; [self event:ad ? @"loaded" : @"failed" format:format]; });
         }];
     }
@@ -134,7 +139,7 @@
         [NSLayoutConstraint activateConstraints:@[
             [_banner.centerXAnchor constraintEqualToAnchor:g.centerXAnchor],
             top ? [_banner.topAnchor constraintEqualToAnchor:g.topAnchor] : [_banner.bottomAnchor constraintEqualToAnchor:g.bottomAnchor]]];
-        [_banner loadAdWithRequest:[[YMAAdRequest alloc] initWithAdUnitID:unit]];
+        [_banner loadAdWithRequest:aiverseYandexRequest(unit)];
     }
     _banner.hidden = NO;
     [reply ok:nil];

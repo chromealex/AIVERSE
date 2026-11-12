@@ -1,0 +1,26 @@
+<rml>
+<head>
+    <title>bw_tutorial</title>
+    <link type="text/rcss" href="../theme.rcss"/>
+    <link type="text/rcss" href="../skin.rcss"/>
+    <style>
+        body { width: 100%; height: 100%; pointer-events: none; }
+        #bwt { position: absolute; left: 50%; bottom: 40dp; width: 520dp; max-width: 92%; margin-left: -260dp;
+               padding: 12dp 16dp; pointer-events: auto; }
+        #bwt .title { font-weight: bold; margin-bottom: 4dp; }
+        #bwt .text { font-size: 18dp; line-height: 1.3; }
+        #bwt .tap { margin-top: 8dp; opacity: 0.75; text-align: right; }
+    </style>
+</head>
+<!-- Bunker Wars tutorial kit: the generic window for a BW tutorial screen without its own ui/hud/<screen>.rml.
+     Values from scripts/view/bw/tutorial_view.lua (ui.set "bwt"); a click while the step waits sends bw_tut_click. -->
+<body>
+<div class="root" data-model="script">
+    <div id="bwt" class="panel" data-event-click="send('bw_tut_click')">
+        <div class="title" data-if="bwt.title != ''">{{bwt.title}}</div>
+        <div class="text">{{bwt.text}}</div>
+        <div class="tap" data-if="bwt.click">@bw.tut.tap</div>
+    </div>
+</div>
+</body>
+</rml>
