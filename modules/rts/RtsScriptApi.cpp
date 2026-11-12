@@ -636,8 +636,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid},
-    {"end_turn", kCmdEndTurn}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility}, {"topdown_enter", kCmdTopDownEnter},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
