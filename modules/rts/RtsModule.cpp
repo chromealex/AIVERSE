@@ -34,6 +34,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     for (const auto& [key, value] : mapIn["initialVars"].members()) state(sim).trig.vars[key] = value.fx();
     fields_ = std::make_unique<GridFields>();   // grid fields (rules "fields", map "gridFields"); nothing without them
     fields_->setup(sim, *this, mapIn);
+    topDown_ = std::make_unique<TopDown>();   // top-down heroes (rules "topDown"); nothing without the block
+    topDown_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -974,6 +976,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
     if (cmd.type >= kCmdDig && cmd.type <= kCmdPlayerAbility) { applyDungeonCommand(sim, cmd); return; }
@@ -1475,6 +1478,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     });
     if (raid_ && raid_->active()) raid_->hash(sim, h);   // extraction raids only
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
+    if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
 }
 
 } // namespace aiverse::game

@@ -246,6 +246,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     }
     if (fields_ && fields_->active()) fields_->io(sim, a);   // grid fields (games with rules / map fields only)
     if (raid_ && raid_->active()) raid_->io(sim, a);         // extraction raids (games with rules "raid" only)
+    if (topDown_ && topDown_->active()) topDown_->io(sim, a);   // top-down heroes (games with rules "topDown" only)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

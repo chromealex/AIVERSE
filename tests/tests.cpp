@@ -13959,3 +13959,4 @@ TEST(ktx2_astc6x6_and_packaging_writer) {
         CHECK(parseKtx2(ktx2, ci, err) && ci.format == BlockFormat::ASTC_6x6 && ci.levels.size() == 5 && ci.srgb);
     }
 }
+#include "tests_topdown.inc"   // top-down heroes (agent-topdown-control)

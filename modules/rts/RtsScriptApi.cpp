@@ -637,6 +637,7 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
     {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid},
+    {"end_turn", kCmdEndTurn}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
@@ -682,6 +683,15 @@ bool commandParam(lua_State* L, Vm& vm, int t, Command& c) {
         ok = res(a) && num("reward", b, 0);
         if (ok && !field("param")) c.param = a | b << 8;
         break;
+    case kCmdTopDown: {   // hero stick (RtsTopDown.h): angle / aim_angle in binary turns (0..65535, 0 = +z), magnitude per mille
+        ok = num("angle", a, 0) && num("magnitude", b, 0) && num("aim_angle", d, 0);
+        topdown::Input in;
+        in.moveAngle = int32_t(a & 0xFFFF); in.moveMag = int32_t(std::clamp<int64_t>(b, 0, topdown::kMagMax)); in.aimAngle = int32_t(d & 0xFFFF);
+        field("aim"); in.aim = lua_toboolean(L, -1);
+        field("fire"); in.fire = lua_toboolean(L, -1);
+        if (ok && !field("param")) c.param = topdown::pack(in);
+        break;
+    }
     case kCmdStance: case kCmdFormation:
         if (field("param") && lua_type(L, -1) == LUA_TSTRING) {
             std::string n = lua_tostring(L, -1);
@@ -1305,7 +1315,7 @@ Json scriptApiReference() {
     a.push(fn("game.transform(h, type)", "change the type in place (same handle and data, hp fraction kept)"));
     a.push(fn("game.add_status(h, status [, seconds [, caster]]) / game.buff(h, stat, add, mul [, seconds])", "statuses (rules \"statuses\") and stat modifiers"));
     a.push(fn("game.order(units, \"move\"|\"attack\"|\"patrol\"|\"stop\"|\"hold\", x, z | target)", "orders (through the normal command path)"));
-    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward"));
+    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
     a.push(fn("game.cast(h, ability, target | x, z) / game.player_ability(p, id, x, z [, free])", "abilities"));
     a.push(fn("game.set_var(name, v) / game.add_var(name, v)", "trigger variables (shared with rules triggers)"));
     a.push(fn("game.message(p, text [, x, z])", "notice for player p (0 = everyone)"));

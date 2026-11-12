@@ -6,6 +6,7 @@
 #pragma once
 #include "UiModel.h"
 #include "modules/rts/view/EntityActionControls.h"
+#include "modules/rts/view/TopDownControls.h"
 #include <array>
 #include <functional>
 #include <map>
@@ -195,6 +196,16 @@ private:
     bool toolMouseDown(const platform::Event& e);
     bool toolMouseUp(const platform::Event& e);
     void steerPossessed();
+    // ClientTopDown.cpp: top-down heroes (rules / game.json "topDown"): sticks, buttons, keys / mouse, follow camera
+    bool topDownActive() const;
+    bool topDownTouchUi() const;
+    void topDownConfigure();
+    bool topDownEvent(const platform::Event& e, bool uiWants);   // true: consumed
+    void topDownFrame(double dt);    // input -> kCmdTopDown / kCmdTopDownAbility
+    void topDownCamera(double dt);   // after the scene is built (interpolated hero position)
+    void topDownDraw();              // screen canvas: sticks and buttons
+    game::TopDownControls topDown_;
+    bool tdMouseHeld_ = false, tdFireHeld_ = false;
     void drawToolPreview();
     // localization (presentation only: rules_ is the display copy, the sim loads its own rules)
     void applyLanguage(const std::string& tag, bool save);
