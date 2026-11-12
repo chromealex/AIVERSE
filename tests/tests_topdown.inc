@@ -292,7 +292,18 @@ TEST(topdown_controls_sticks_keys_quantize_and_camera) {
     game::TopDownControls tc;
     tc.configure(gj, r, rts);
     CHECK(tc.active() && tc.config().buttons.size() == 1 && tc.config().buttons[0].abilityIndex == 0);
-    CHECK(tc.config().buttons[0].key == int(platform::Key::Q));
+    CHECK(tc.config().buttons[0].key == int(platform::Key::Q) && tc.config().buttons[0].weaponStep == 0);
+    {   // weapon switch buttons: a press on one is reported like an ability press, with weaponStep set
+        game::TopDownControls wc;
+        wc.configure(Json::parse(R"({"topDown": {"touchControls": "always", "buttons": [
+            {"weapon": "prev", "anchor": [1, 0.3], "offset": [-126, -40], "radius": 30},
+            {"weapon": "next", "anchor": [1, 0.3], "offset": [-50, -40], "radius": 30}]}})"), r, rts);
+        CHECK(wc.config().buttons.size() == 2 && wc.config().buttons[0].weaponStep == -1 && wc.config().buttons[1].weaponStep == 1);
+        CHECK(wc.pointerDown(7, 800 - 50, 480 * 0.3f - 40, 800, 480, true));
+        const std::vector<int> pressed = wc.takeAbilityPresses();
+        CHECK(pressed.size() == 1 && pressed[0] == 1);
+        CHECK(!wc.draw(800, 480, {1, 1}).empty());
+    }
     const float W = 1000, H = 600;
     // no input: a stop command once, then nothing
     game::TopDownFrameInput none;
@@ -358,4 +369,125 @@ TEST(topdown_arena_template_bots_finish) {
     game::RtsAI a(1, 1), b(2, 1);
     for (int i = 0; i < 20 * 900 && sim->result() == 0; ++i) { a.update(*sim); b.update(*sim); sim->step(); }
     CHECK(sim->result() != 0);
+}
+
+TEST(topdown_aim_candidates_follow_the_manual_aim_rules) {
+    // hostiles in weapon range count, an own unit and a hostile out of range (but in sight) do not; sorted by handle, read-only
+    auto sim = makeSimJson(kTopDownRules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},
+        {"type":"dummy","owner":2,"pos":[6.5,10.2]},{"type":"mover","owner":2,"pos":[9.5,8.9]},
+        {"type":"dummy","owner":1,"pos":[5.5,7.5]},{"type":"dummy","owner":2,"pos":[14.5,8.5]})", false));
+    run(*sim, 0.1);
+    const uint64_t before = sim->checksum();
+    auto c = mod(*sim).topDown()->aimCandidates(*sim, 1);
+    CHECK(c.size() == 2);
+    CHECK(c.size() == 2 && c[0].e.index < c[1].e.index);
+    CHECK(sim->checksum() == before);
+    CHECK(mod(*sim).topDown()->aimCandidates(*sim, 1, Fixed::fromInt(30)).size() == 3);   // a wider range override
+    CHECK(mod(*sim).topDown()->aimCandidates(*sim, 1, Fixed::fromInt(3)).size() == 1);
+}
+
+TEST(topdown_aim_assist_bends_touch_aim_and_taps_fire) {
+    std::vector<std::string> ids = {"drone"};
+    game::TopDownRules r = game::TopDown::parse(Json::parse(R"({"heroes": "drone"})"), ids);
+    game::Rules rts;
+    rts.types.resize(1);
+    rts.types[0].id = "drone";
+    Json gj = Json::parse(R"({"topDown": {"touchControls": "always",
+        "joystick": {"mode": "floating", "radius": 50, "area": [0, 0.5, 0.5, 1]},
+        "aimStick": {"enabled": true, "radius": 50, "deadzone": 0.2, "area": [0.5, 0.5, 1, 1]},
+        "aimAssist": {"cone": 30, "tapTime": 0.25, "tapFireTime": 0.4}}})");
+    game::TopDownControls tc;
+    tc.configure(gj, r, rts);
+    CHECK(tc.config().assist.touch && !tc.config().assist.mouse && !tc.config().assist.pad);
+    const float W = 1000, H = 600;
+    game::TopDownFrameInput in;
+    in.targets.push_back({11, 4, 1.5f});    // east, ~20 degrees south
+    in.targets.push_back({12, 0, -6});      // north
+    auto deg = [](int32_t a) { return float(a) / 65536.0f * 360.0f; };
+    // touch aim east: bent to the east target, locked
+    in.time = 1;
+    CHECK(tc.pointerDown(1, 800, 450, W, H, true));
+    tc.pointerMove(1, 850, 450);
+    game::topdown::Input q = tc.compose(in, 0);
+    CHECK(q.aim && std::abs(deg(q.aimAngle) - deg(game::TopDown::angleOf({Fixed::fromInt(4), Fixed{}, Fixed::fromRatio(3, 2)}))) < 0.5f);
+    CHECK(tc.assistTarget() == 11);
+    // aim 35 degrees off the locked target: kept (stickiness 1.4 * 30); a fresh target would not be taken
+    tc.pointerMove(1, 828, 491);
+    q = tc.compose(in, 0);
+    CHECK(tc.assistTarget() == 11);
+    // aim straight down (south): nothing within the cone, the raw aim stays
+    tc.pointerMove(1, 800, 500);
+    q = tc.compose(in, 0);
+    CHECK(tc.assistTarget() == 0 && q.aimAngle == 0);
+    tc.pointerUp(1, 800, 500);
+    // the mouse is not assisted (assist.mouse off)
+    game::TopDownFrameInput mouse = in; mouse.mouseAim = true; mouse.mouseDirX = 3; mouse.mouseDirZ = 0;
+    q = tc.compose(mouse, 0);
+    CHECK(q.aim && q.aimAngle == 16384 && tc.assistTarget() == 0);
+    // a tap: fire at the nearest target (east, 4.3 away) for tapFireTime, then stop
+    in.time = 2;
+    tc.compose(in, 0);
+    CHECK(tc.pointerDown(2, 800, 450, W, H, true));
+    in.time = 2.1f;
+    tc.compose(in, 0);
+    tc.pointerUp(2, 801, 451);
+    q = tc.compose(in, 0);
+    CHECK(q.aim && q.fire && tc.assistTarget() == 11);
+    in.time = 2.45f;
+    CHECK(tc.compose(in, 0).fire);
+    in.time = 2.6f;
+    q = tc.compose(in, 0);
+    CHECK(!q.fire && !q.aim);
+    // a long press is not a tap
+    CHECK(tc.pointerDown(3, 800, 450, W, H, true));
+    in.time = 3.0f;
+    tc.compose(in, 0);
+    tc.pointerUp(3, 800, 450);
+    CHECK(!tc.compose(in, 0).fire);
+    // without the block: no assist
+    game::TopDownControls plain;
+    plain.configure(Json::parse(R"({"topDown": {"aimStick": true}})"), r, rts);
+    CHECK(!plain.config().assist.any());
+}
+
+TEST(topdown_speed_camera_zooms_out_and_looks_ahead) {
+    std::vector<std::string> ids = {"drone"};
+    game::TopDownRules r = game::TopDown::parse(Json::parse(R"({"heroes": "drone"})"), ids);
+    game::Rules rts;
+    rts.types.resize(1);
+    rts.types[0].id = "drone";
+    game::TopDownControls tc;
+    tc.configure(Json::parse(R"({"topDown": {"camera": {"pitch": 90, "distance": 16, "minDistance": 8, "maxDistance": 30,
+        "smoothing": 0, "lookAhead": 0, "lookAheadSmoothing": 0, "velocityLookAhead": 0.5, "maxLookAhead": 3,
+        "speedZoom": {"from": 1, "to": 5, "distance": 28, "smoothing": 0}}}})"), r, rts);
+    render::RTSCamera cam;
+    render::float3 hero{20, 0, 50};
+    tc.snapCamera(cam, hero, 200, 100);
+    CHECK(std::abs(cam.distance - 16) < 0.01f && std::abs(cam.target.x - 20) < 0.01f);
+    const float dt = 1.0f / 60;
+    for (int i = 0; i < 90; ++i) { hero.x += 10 * dt; tc.updateCamera(cam, hero, true, dt, 200, 100); }   // 10 units / s east
+    CHECK(std::abs(tc.heroSpeed() - 10) < 0.2f);
+    CHECK(std::abs(cam.distance - 28) < 0.05f);                 // pulled back
+    CHECK(std::abs(cam.target.x - (hero.x + 3)) < 0.05f);       // 5 ahead, capped at 3
+    CHECK(std::abs(cam.target.z - 50) < 0.05f);
+    for (int i = 0; i < 90; ++i) tc.updateCamera(cam, hero, true, dt, 200, 100);   // standing
+    CHECK(std::abs(cam.distance - 16) < 0.05f && std::abs(cam.target.x - hero.x) < 0.05f);
+    // the player's own zoom stays under the speed part
+    cam.distance = 20;
+    tc.updateCamera(cam, hero, true, dt, 200, 100);
+    CHECK(std::abs(cam.distance - 20) < 0.05f);
+    for (int i = 0; i < 90; ++i) { hero.z += 10 * dt; tc.updateCamera(cam, hero, true, dt, 200, 100); }
+    CHECK(std::abs(cam.distance - 32) < 0.05f && cam.maxDistance > 41.9f);
+    // a jump (respawn) is not speed
+    hero.x += 60;
+    tc.updateCamera(cam, hero, true, dt, 200, 100);
+    for (int i = 0; i < 90; ++i) tc.updateCamera(cam, hero, true, dt, 200, 100);
+    CHECK(std::abs(cam.distance - 20) < 0.05f);
+    // without the keys: the old camera
+    game::TopDownControls plain;
+    plain.configure(Json::parse(R"({"topDown": {"camera": {"distance": 16, "smoothing": 0, "lookAhead": 0}}})"), r, rts);
+    render::float3 h2{20, 0, 50};
+    plain.snapCamera(cam, h2, 200, 100);
+    for (int i = 0; i < 30; ++i) { h2.x += 10 * dt; plain.updateCamera(cam, h2, true, dt, 200, 100); }
+    CHECK(std::abs(cam.distance - 16) < 0.01f && std::abs(cam.target.x - h2.x) < 0.01f);
 }

@@ -562,7 +562,9 @@ def game_manifest():
         'topDown': {'touchControls': 'auto', 'mouseAim': 'hold',
                     'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
                     'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
-                    'buttons': [],
+                    'buttons': [{'weapon': 'prev', 'anchor': [1, 0.3], 'offset': [-126, -40], 'radius': 30},
+                                # weapon switch on phones, above the aim stick (keys: Z / X, 1..9)
+                                {'weapon': 'next', 'anchor': [1, 0.3], 'offset': [-50, -40], 'radius': 30}],
                     # phones: the aim stick bends to the nearest target, a tap on it shoots (docs/topdown.md)
                     'aimAssist': {'touch': True, 'pad': False, 'mouse': False, 'cone': 30, 'tapFire': True},
                     # GTA camera: close on foot, pulled back and shifted ahead at speed (world units = cells of 4 m)
@@ -662,7 +664,7 @@ def build(assets, out, seed, headless=None, size=(96, 72), layout='grid', max_bu
                        'sight': 2,
                        'sprite': {'sheet': 'sprites/cars/%s.png' % name, 'frame': [fw, fh], 'facings': 1, 'mode': 'ground', 'rotate': True,
                                   'size': [round(fw / ppm / M, 4), round(fh / ppm / M, 4)], 'team': 'none', 'filter': 'linear', 'shadow': 'none'}}
-        driving[name] = {'length': round(length, 3), 'width': round(width, 3), 'wheeled': {'massMilli': MASS.get(name, 1300) * 1000}}
+        driving[name] = {'length': round(length, 3), 'width': round(width, 3), 'wheeled': {'massMilli': MASS.get(name, 1300) * 1000}}   # the real numbers: vehicle_handling.py
     buildings = load_buildings(assets, out)
     if max_buildings and len(buildings) > max_buildings:      # a memory knob: every k-th building of the catalogue
         buildings = [buildings[i * len(buildings) // max_buildings] for i in range(max_buildings)]
@@ -833,8 +835,14 @@ def main():
     a = ap.parse_args()
     w, h = [int(v) for v in a.size.lower().split('x')]
     print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed, a.headless, (w, h), a.layout, a.max_building_types)))
+    import add_arsenal                                    # weapons, money, pickups on the pavements (rules "arsenal")
+    print(json.dumps(add_arsenal.apply(os.path.expanduser(a.out), a.seed)))
+    import vehicle_handling                               # every vehicle drives differently; wheels turn and roll
+    print('handling:', *vehicle_handling.apply(os.path.expanduser(a.out)))
     import minimap_png                                    # the radar picture of the new map (ui/minimap.png)
     print(*minimap_png.build(os.path.expanduser(a.out)))
+    import hud_atlas                                      # HUD sprites and distance digits (ui/hud.png, ui/hud_digits.png)
+    hud_atlas.build(os.path.expanduser(a.out), os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'engine', 'assets', 'fonts', 'ui.ttf'))
 
 
 if __name__ == '__main__':

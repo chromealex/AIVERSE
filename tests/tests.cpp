@@ -13900,4 +13900,5 @@ TEST(world_tree_lua_peek_is_observation_only) {
 #endif
 #include "tests_topdown.inc"   // top-down heroes (agent-topdown-control)
 #include "tests_driving.inc"   // vehicles the hero drives (agent-gta2)
+#include "tests_arsenal.inc"   // the hero's weapons, ammo, crates and money (agent-gta2)
 #include "tests_city.inc"      // city planner (agent-gta2)

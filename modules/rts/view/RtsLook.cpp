@@ -597,6 +597,7 @@ void preset(ProcAnim& p, const std::string& type, bool& special, std::string& er
     else if (type == "sway") { p.channel = ProcAnim::Rotate; p.axis = {1, 0, 0}; p.amp = 4 * kDeg; p.freq = 0.5f; }
     else if (type == "spin") { p.channel = ProcAnim::Rotate; p.axis = {0, 1, 0}; p.spin = 180 * kDeg; p.amp = 0; }
     else if (type == "wheel") { p.channel = ProcAnim::Rotate; p.axis = {0, 0, 1}; p.by = ProcAnim::ByDistance; p.spin = -1 / 0.2f; p.amp = 0; }
+    else if (type == "steer") { p.channel = ProcAnim::Rotate; p.axis = {0, 1, 0}; p.special = ProcAnim::Steer; p.amp = 1; p.limit = 45 * kDeg; }
     else if (type == "pulse") { p.channel = ProcAnim::Scale; p.axis = {1, 1, 1}; p.amp = 0.05f; p.freq = 1; }
     else if (type == "recoil") { p.channel = ProcAnim::Translate; p.axis = {-1, 0, 0}; p.amp = 0.15f; p.wave = ProcAnim::Const; p.on = kProcEvAttack; p.attack = 0.02f; p.decay = 12; }
     else if (type == "lunge") { p.channel = ProcAnim::Translate; p.axis = {1, 0, 0}; p.amp = 0.12f; p.wave = ProcAnim::Const; p.on = kProcEvAttack; p.attack = 0.08f; p.decay = 8; }
@@ -623,7 +624,7 @@ void RtsView::parseProcedural(const UnitType& t, const Json& list, ModelChoice& 
         bool isPreset = false;
         std::string err;
         preset(p, j.getStr("type", "custom"), isPreset, err);
-        if (!err.empty()) { warn(t, err + " (bob, hover, sway, spin, wheel, pulse, recoil, lunge, shake, flap, pop, squash, lean, aim, aimPitch, look, align, fall, sink, custom)"); continue; }
+        if (!err.empty()) { warn(t, err + " (bob, hover, sway, spin, wheel, steer, pulse, recoil, lunge, shake, flap, pop, squash, lean, aim, aimPitch, look, align, fall, sink, custom)"); continue; }
         p.nodeName = j.getStr("node");
         if (j.has("channel")) {
             std::string ch = j.getStr("channel");

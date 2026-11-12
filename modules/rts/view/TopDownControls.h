@@ -31,6 +31,7 @@ struct TopDownStickConfig {
 struct TopDownButtonConfig {
     std::string ability;             // ability id of the hero type
     int abilityIndex = -1;           // resolved against the hero type
+    int weaponStep = 0;              // "weapon": "next" (+1) / "prev" (-1): switches the weapon in hand (rules "arsenal")
     int key = 0;                     // platform::Key (0: none)
     int padButton = -1;              // host gamepad button index (-1: none)
     float anchor[2] = {1, 1};        // normalized screen point the offset starts from
@@ -46,8 +47,29 @@ struct TopDownCameraConfig {
     float aimLookAhead = 1.5f;       // world units ahead along the aim
     float lookAheadSmoothing = 3;    // 1/s
     bool lockOffsetIfNoInput = true; // keep the look-ahead offset while the stick is released (Drone Fall)
+    // speed camera (GTA): the hero's speed (world units / s, from its on-screen motion: on foot or at the wheel)
+    // pulls the camera back from `distance` (at speedFrom and slower) to speedDistance (at speedTo and faster) ...
+    float speedFrom = 0, speedTo = 0;   // "speedZoom": {"from", "to", "distance", "smoothing"}; to <= from: off
+    float speedDistance = 0;
+    float speedSmoothing = 1.5f;     // 1/s
+    // ... and shifts the focus ahead of the motion: velocity * velocityLookAhead seconds, at most maxLookAhead
+    float velocityLookAhead = 0;     // seconds (0: off)
+    float maxLookAhead = 0;          // world units for the whole look-ahead offset (0: no limit)
     bool bounds = true;              // keep the focus inside the map
     float margin = 0;                // world units kept from the map edge by the focus
+};
+
+// game.json topDown "aimAssist": the stick's aim bends toward the target nearest to it (client side: the sim gets an
+// ordinary aim angle), per input source. Absent: off.
+struct TopDownAimAssistConfig {
+    bool touch = false, pad = false, mouse = false;   // which aim sources it helps (true as the block: touch + pad)
+    float cone = 30;                 // degrees either side of the stick that a target may be off
+    float range = 0;                 // world units (0: the hero's aim / weapon range)
+    float stickiness = 1.4f;         // the locked target stays while inside cone * stickiness
+    bool tapFire = true;             // a short tap on the aim stick (touch) shoots at the nearest target
+    float tapTime = 0.25f;           // seconds: a press shorter than this with a small deflection is a tap
+    float tapFireTime = 0.4f;        // seconds of fire a tap gives
+    bool any() const { return touch || pad || mouse; }
 };
 
 struct TopDownControlConfig {
@@ -57,6 +79,7 @@ struct TopDownControlConfig {
     TopDownStickConfig move, aim;
     std::vector<TopDownButtonConfig> buttons;
     TopDownCameraConfig camera;
+    TopDownAimAssistConfig assist;
     float padDeadzone = 0.15f;
 };
 
@@ -73,6 +96,7 @@ public:
     void cancel() { active_ = false; pointer_ = -1; vx_ = vy_ = 0; }
     bool active() const { return active_; }
     int64_t pointer() const { return pointer_; }
+    float rawDeflection() const;          // |offset| / radius of the held stick (0 when idle), before the dead zone
     // deflection in [-1, 1]^2 (screen axes: +y down), dead zone removed and rescaled; length <= 1
     void value(float& x, float& y) const;
     // where to draw: base centre and knob (logical points)
@@ -93,6 +117,10 @@ struct TopDownFrameInput {
     bool padFire = false, fireKey = false;
     bool mouseAim = false;           // cursor aim valid this frame (host: LMB held / always, cursor over the ground)
     float mouseDirX = 0, mouseDirZ = 0;   // world direction hero -> cursor ground point
+    // aim assist (config().assist): what the hero could shoot, world offsets hero -> target (TopDown::aimCandidates)
+    struct Target { uint64_t id = 0; float dx = 0, dz = 0; };
+    std::vector<Target> targets;
+    float time = 0;                  // seconds, monotonic: taps on the aim stick
 };
 
 class TopDownControls {
@@ -119,12 +147,21 @@ public:
     void sent(const topdown::Input& q) { sent_ = q; haveSent_ = true; }
     void resetSent() { haveSent_ = false; }
 
+    // aim assist: the target the aim is bent to / a tap shoots at (0: none), for a lock marker
+    uint64_t assistTarget() const { return lockId_; }
+
     // Follow camera: heroPos / moving direction from the presentation (interpolated) state.
     void updateCamera(render::RTSCamera& cam, render::float3 heroPos, bool haveHero, float dt, float mapW, float mapH);
     void snapCamera(render::RTSCamera& cam, render::float3 heroPos, float mapW, float mapH);
+    // false: the stick does not point where the hero goes (pedals of a vehicle), so the stick look-ahead is off and
+    // only the velocity look-ahead moves the focus. The host sets it every frame before updateCamera.
+    void setStickLookAhead(bool on) { stickLook_ = on; }
+    float heroSpeed() const { return speed_; }   // smoothed, world units / s (speed camera)
 
     // Screen-canvas triangles of the sticks and buttons; ready[i] in [0, 1] = ability button i charge (1 ready).
     std::vector<ViewDrawBatch> draw(float screenW, float screenH, const std::vector<float>& ready) const;
+    // A lock marker (aim assist) around a screen point; `radius` in logical points, `time` animates it.
+    static ViewDrawBatch drawLock(float x, float y, float radius, float time);
 
 private:
     void buttonCenter(size_t i, float screenW, float screenH, float& x, float& y) const;
@@ -139,6 +176,14 @@ private:
     bool aiming_ = false;
     float offX_ = 0, offZ_ = 0;      // current look-ahead offset
     bool camInit_ = false;
+    bool stickLook_ = true;
+    float lastX_ = 0, lastZ_ = 0, velX_ = 0, velZ_ = 0, speed_ = 0;   // speed camera: hero motion between frames
+    float vOffX_ = 0, vOffZ_ = 0, zoomAdd_ = 0, baseZoom_ = 0, appliedZoom_ = 0;
+    bool haveLast_ = false;
+    // aim assist
+    float clock_ = 0, aimDownAt_ = 0, aimMaxDefl_ = 0, tapUntil_ = 0;
+    bool tapPending_ = false;
+    uint64_t lockId_ = 0, tapId_ = 0;
 };
 
 } // namespace aiverse::game
