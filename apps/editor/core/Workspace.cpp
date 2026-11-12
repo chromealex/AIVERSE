@@ -429,7 +429,7 @@ std::vector<GameInfo> Workspace::listGames() const {
 }
 
 bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
-    // a .rtsproj (double-click / Open with), a project folder, its game.json, or a template id
+    // a .aiverse (double-click / Open with), a project folder, its game.json, or a template id
     std::string why;
     std::string dir = resolveProjectDir(idOrDir, &why);
     if (dir.empty() && !isProjectFilePath(idOrDir) && fs::exists(fs::path(gamesDir()) / idOrDir / "game.json")) dir = gamesDir() + "/" + idOrDir;
@@ -441,7 +441,8 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
         const std::string tpl = fs::weakly_canonical(fs::path(gamesDir()), ec).string();
         const bool isTemplate = dir.rfind(tpl, 0) == 0;
         bool created = false;
-        // projects made before .rtsproj existed get one (migration); templates carry a committed one
+        // projects made before project files existed get a .aiverse (migration; a legacy .rtsproj is kept and used);
+        // templates carry a committed one
         project.file = isTemplate ? findProjectFile(dir) : ensureProjectFile(dir, &created);
         if (created) log("editor", "Создан файл проекта " + fs::path(project.file).filename().string() + " (двойной клик по нему открывает проект)");
         if (!isTemplate) rememberProject(dir, project.manifest.getStr("name", fs::path(dir).filename().string()), project.file);
@@ -526,8 +527,8 @@ void Workspace::registerCoreOps() {
         r.set("games", projectsJson());
         return r;
     });
-    add("open_game", "Open a game project by its .rtsproj file or folder path (or a template id from templates/ to edit the template itself); opens its first map.",
-        R"({"properties": {"game": {"type": "string", "description": "project .rtsproj file or folder (absolute), or a template id"}}, "required": ["game"]})", [this](const Json& p) {
+    add("open_game", "Open a game project by its .aiverse (or legacy .rtsproj) file or folder path (or a template id from templates/ to edit the template itself); opens its first map.",
+        R"({"properties": {"game": {"type": "string", "description": "project .aiverse / .rtsproj file or folder (absolute), or a template id"}}, "required": ["game"]})", [this](const Json& p) {
             std::string err;
             if (!openGame(ps(p, "game"), &err)) throw std::runtime_error(err);
             Json r = ok();

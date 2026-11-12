@@ -249,7 +249,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 **4. Выпустить:**
 
 ```bash
-./build/mac/aiversebuild --project "Моя игра.rtsproj" --target all   # macOS, iOS, Android, web, Windows
+./build/mac/aiversebuild --project "Моя игра.aiverse" --target all   # macOS, iOS, Android, web, Windows
 ```
 
 ---

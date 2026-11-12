@@ -216,11 +216,11 @@ Landschaftsgenerator wird nicht verwendet, Basen stehen auf Fels, Spice stammt a
 Infanterie, Ornithopter und Carryall werden noch als 3D-Formen gezeichnet. Der Ordner ist mit `"external": true`
 markiert — er darf weder committet noch verbreitet werden.
 
-## Projektdatei .rtsproj
+## Projektdatei .aiverse
 
 Ein Projekt ist ein Ordner irgendwo auf der Platte (`game.json`, `rules.json`, `maps/`, ...). In seinem Wurzelordner liegt die
-Projektdatei **`<Name>.rtsproj`** — sie wird per Doppelklick geöffnet, wie `.uproject` in Unreal oder `project.godot`.
-`game.json` bleibt das Spielmanifest (gelesen von Client, aiversebuild, Paketen); `.rtsproj` markiert den Ordner nur als
+Projektdatei **`<Name>.aiverse`** — sie wird per Doppelklick geöffnet, wie `.uproject` in Unreal oder `project.godot`.
+`game.json` bleibt das Spielmanifest (gelesen von Client, aiversebuild, Paketen); `.aiverse` markiert den Ordner nur als
 Projekt und speichert Editor-Informationen:
 
 ```json
@@ -230,20 +230,22 @@ Projekt und speichert Editor-Informationen:
 - Sie wird mit dem Projekt erzeugt (Hub „Neues Projekt“, MCP `create_project`); ein älteres Projekt ohne sie bekommt eine
   beim ersten Öffnen im Editor. Vorlagen in `templates/*/` haben bereits eine (sie wird nicht in ein neues Projekt kopiert:
   das bekommt seine eigene).
-- Überall, wo der Editor einen Projektpfad annimmt, funktionieren `.rtsproj` und Ordner: `aiverse_editor "My
-  Strategy.rtsproj"`, `--project`, „Öffnen…“ im Hub (zeigt `.rtsproj` und Projektordner), zuletzt verwendete Projekte, MCP
-  `open_game`, `aiversebuild --project x.rtsproj`. `.rtsproj` kommt nicht in den Build.
-- **Doppelklick.** Beim Start verknüpft der Editor `.rtsproj` mit sich selbst (pro Nutzer, ohne Administratorrechte), wenn es
+- Überall, wo der Editor einen Projektpfad annimmt, funktionieren `.aiverse` und Ordner: `aiverse_editor "My
+  Strategy.aiverse"`, `--project`, „Öffnen…“ im Hub (zeigt `.aiverse` und Projektordner), zuletzt verwendete Projekte, MCP
+  `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` kommt nicht in den Build.
+- Projekte von vor der Umbenennung in AIVERSE behalten ihre `<Name>.rtsproj`: Sie öffnet sich überall genauso, wird an
+  Ort und Stelle überschrieben und nie umbenannt; liegen beide im Ordner, gilt `.aiverse`.
+- **Doppelklick.** Beim Start verknüpft der Editor `.aiverse` mit sich selbst (pro Nutzer, ohne Administratorrechte), wenn es
   keine Verknüpfung gibt oder sie auf eine andere Editor-Instanz zeigt; ein von Ihnen gewähltes anderes Programm überschreibt
-  er nicht. Manuell: „Projekt → Editor als Standard-App für .rtsproj festlegen“; der Status steht unten links im Hub.
+  er nicht. Manuell: „Projekt → Editor als Standard-App für .aiverse festlegen“; der Status steht unten links im Hub.
   Abschalten mit `AIVERSE_FILE_ASSOC=off`.
   - **macOS:** Der Typ `com.aiverse.project` ist in der Info.plist von `AiverseEditor.app` deklariert
     (`platform/macos/EditorInfo.plist.in`; das Dokument-Icon `rtsproj.icns` zeichnet `aiverse_projicon` aus dem Editor-Logo
     `apps/editor/branding/icon_1024.png`); der Editor registriert das Bundle bei LaunchServices (`lsregister -f`) und wird
-    Standard-Handler. Doppelklick und `open -a AiverseEditor x.rtsproj` öffnen das Projekt im laufenden Editor (bei
+    Standard-Handler. Doppelklick und `open -a AiverseEditor x.aiverse` öffnen das Projekt im laufenden Editor (bei
     ungespeicherter Karte fragt er, ob gespeichert werden soll).
-  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (Icon `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, Befehl
-    `"<aiverse_editor.exe>" "%1"`). Ist in Windows bereits ein anderes Programm für `.rtsproj` gewählt, schlägt der Hub
+  - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (Icon `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, Befehl
+    `"<aiverse_editor.exe>" "%1"`). Ist in Windows bereits ein anderes Programm für `.aiverse` gewählt, schlägt der Hub
     „Öffnen mit → Immer“ vor.
   - **Linux:** Typ `application/x-aiverse-project` (`~/.local/share/mime/packages/aiverse-project.xml`),
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<Editor> %f`), Icons in `~/.local/share/icons/hicolor`,
@@ -254,7 +256,7 @@ Projekt und speichert Editor-Informationen:
 
 Der Knopf **Spiel erstellen** im Projektfenster (und **Projekt → Spiel erstellen…**): Geben Sie einen Ordner oder Link mit
 Grafiken, Musik und Texten an, beschreiben Sie die Idee (oder nichts — der Assistent wählt selbst) und erhalten Sie ein fertiges
-`.rtsproj`-Projekt: ein Spiel auf einer passenden Vorlage, ein schrittweises Tutorial (hart) und Hinweise im Kampf (weich),
+`.aiverse`-Projekt: ein Spiel auf einer passenden Vorlage, ein schrittweises Tutorial (hart) und Hinweise im Kampf (weich),
 Level mit Sternen und Belohnungen, Meta (Menü, Upgrades, Shop, Tagesbelohnung, Profil, Einstellungen), auf Wunsch Werbung und
 Käufe, Sprachen, Icon und Startbildschirm aus den Grafiken. Der Assistent spielt das Tutorial selbst mit einem Bot durch und
 prüft die Level; was zugewiesen wurde und was zu prüfen ist, steht in `WIZARD.md` des Projekts. Für Agenten: MCP

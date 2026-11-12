@@ -246,7 +246,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 **4. 출시:**
 
 ```bash
-./build/mac/aiversebuild --project "My Game.rtsproj" --target all   # macOS, iOS, Android, 웹, Windows
+./build/mac/aiversebuild --project "My Game.aiverse" --target all   # macOS, iOS, Android, 웹, Windows
 ```
 
 ---

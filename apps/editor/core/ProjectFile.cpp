@@ -37,7 +37,10 @@ std::string today() {
 
 std::string engineVersion() { return AIVERSE_ENGINE_VERSION; }
 
-bool isProjectFilePath(const std::string& path) { return lower(fs::path(path).extension().string()) == kProjectExt; }
+bool isLegacyProjectFilePath(const std::string& path) { return lower(fs::path(path).extension().string()) == kLegacyProjectExt; }
+bool isProjectFilePath(const std::string& path) {
+    return lower(fs::path(path).extension().string()) == kProjectExt || isLegacyProjectFilePath(path);
+}
 
 std::string findProjectFile(const std::string& dir) {
     std::error_code ec;
@@ -47,7 +50,11 @@ std::string findProjectFile(const std::string& dir) {
         if (it->is_regular_file(e2) && isProjectFilePath(it->path().string())) found.push_back(it->path());
     }
     if (found.empty()) return {};
-    std::sort(found.begin(), found.end());
+    // the current extension wins over a legacy .rtsproj; then by name, so the choice is stable
+    std::sort(found.begin(), found.end(), [](const fs::path& a, const fs::path& b) {
+        const bool la = isLegacyProjectFilePath(a.string()), lb = isLegacyProjectFilePath(b.string());
+        return la != lb ? lb : a < b;
+    });
     return found.front().string();
 }
 
@@ -105,7 +112,7 @@ std::string resolveProjectDir(const std::string& path, std::string* err) {
             std::string e;
             if (!readProjectFile(p.string(), pf, &e)) return fail(e);
             manifest = pf.manifest;
-        } else if (lower(p.filename().string()) != "game.json") return fail("not a project file (.rtsproj), folder or game.json: " + p.string());
+        } else if (lower(p.filename().string()) != "game.json") return fail("not a project file (.aiverse / .rtsproj), folder or game.json: " + p.string());
         dir = p.parent_path();
     } else return fail("not found: " + p.string());
     if (!fs::exists(dir / manifest, ec)) return fail("no " + manifest + " in " + dir.string());

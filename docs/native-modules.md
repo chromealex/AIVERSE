@@ -34,7 +34,7 @@ editor you must open the rebuilt version; the regular editor offers to build it 
 ## Editor with project modules
 
 The regular editor does not contain the project's C++. If, when a project is opened (hub, recent projects, command-line
-argument, double click on `.rtsproj`) or when Play is pressed, it lacks modules from `nativeModules`, the editor does the
+argument, double click on `.aiverse`) or when Play is pressed, it lacks modules from `nativeModules`, the editor does the
 following:
 
 - if `<project>/Builds/.temp/editor-<platform>` already holds a built editor that is newer than the `native/` sources and
@@ -56,7 +56,7 @@ only finished builds remain in `Builds/` itself.
 The engine and its repository are not changed. The `Builds/` folder is ignored by the engine's git at any depth (including
 projects inside `templates/`), and a `.gitignore` with `*` is put into the build folder itself in case the project lives
 in its own repository. The module registry is generated into the build folder; the engine's `build/` folders and the
-regular editor are not touched. The built editor is a single-project tool: it does not register itself as the `.rtsproj`
+regular editor are not touched. The built editor is a single-project tool: it does not register itself as the `.aiverse`
 handler (files are still opened by the main editor; on macOS its `AiverseEditor.app` has its own bundle id
 `com.aiverse.editor.project`), it is started only by switching and receives `--native-editor` (`AIVERSE_NATIVE_EDITOR=1`),
 so it does not switch further itself. It takes `aiversebuild`, `aiversemcp` and `AiverseGame` from the regular build

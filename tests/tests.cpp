@@ -13207,7 +13207,7 @@ TEST(ai_invades_separate_planets) {
     CHECK(transits >= 6);        // fleets, not pairs of scouts
     CHECK(sim.result() != 0);    // and they win the match
 }
-// ---- project-file agent: <Title>.rtsproj (apps/editor/core/ProjectFile.h), OS file association
+// ---- project-file agent: <Title>.aiverse, legacy .rtsproj (apps/editor/core/ProjectFile.h), OS file association
 // (FileAssoc.h, Linux part under a temporary HOME), editor / document icons (tools/branding/ProjectIcon.h)
 #ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/FileAssoc.h"
@@ -13252,12 +13252,12 @@ TEST(project_file_create_resolve_migrate) {
     using namespace aiverse::editor;
     TempHome home("projfile");
     std::string err;
-    // a new project from a template: its own <Title>.rtsproj, the template's one is not copied
+    // a new project from a template: its own <Title>.aiverse, the template's one is not copied
     const std::string dir = createProject(AIVERSE_SOURCE_DIR, "skirmish", "Моя стратегия", (home.dir / "Projects").string(), "", &err);
     CHECK(!dir.empty());
-    const fs::path file = fs::path(dir) / "Моя стратегия.rtsproj";
-    CHECK(fs::exists(file));
-    CHECK(!fs::exists(fs::path(dir) / "Iron and Gold.rtsproj"));
+    const fs::path file = fs::path(dir) / "Моя стратегия.aiverse";
+    CHECK(fs::exists(file) && projectFileName("Моя стратегия") == "Моя стратегия.aiverse");
+    CHECK(!fs::exists(fs::path(dir) / "Iron and Gold.aiverse") && !fs::exists(fs::path(dir) / "Моя стратегия.rtsproj"));
     CHECK(findProjectFile(dir) == file.string());
     ProjectFile pf;
     CHECK(readProjectFile(file.string(), pf, &err));
@@ -13274,14 +13274,16 @@ TEST(project_file_create_resolve_migrate) {
     CHECK(resolveProjectDir(dir + "/", &err) == canon);
     CHECK(resolveProjectDir(dir + "/game.json", &err) == canon);
     CHECK(resolveProjectDir(dir + "/rules.json", &err).empty() && err.find("not a project") != std::string::npos);
+    CHECK(resolveProjectDir(dir + "/nope.aiverse", &err).empty() && err.find("not found") != std::string::npos);
     CHECK(resolveProjectDir(dir + "/nope.rtsproj", &err).empty() && err.find("not found") != std::string::npos);
     CHECK(resolveProjectDir((home.dir / "Projects").string(), &err).empty() && err.find("game.json") != std::string::npos);
-    CHECK(isProjectFilePath("A/B/Game.RTSPROJ") && !isProjectFilePath("game.json"));
+    CHECK(isProjectFilePath("A/B/Game.AIVERSE") && isProjectFilePath("A/B/Game.RTSPROJ") && !isProjectFilePath("game.json"));
+    CHECK(isLegacyProjectFilePath("A/Game.rtsproj") && !isLegacyProjectFilePath("A/Game.aiverse") && !isProjectFilePath("A/.aiverse"));
 
     // a file from a newer editor is refused with a readable reason; unknown keys survive a rewrite
-    std::ofstream(fs::path(dir) / "future.rtsproj") << R"({"format": 9, "name": "x"})";
-    CHECK(!readProjectFile((fs::path(dir) / "future.rtsproj").string(), pf, &err) && err.find("newer") != std::string::npos);
-    fs::remove(fs::path(dir) / "future.rtsproj");
+    std::ofstream(fs::path(dir) / "future.aiverse") << R"({"format": 9, "name": "x"})";
+    CHECK(!readProjectFile((fs::path(dir) / "future.aiverse").string(), pf, &err) && err.find("newer") != std::string::npos);
+    fs::remove(fs::path(dir) / "future.aiverse");
     {
         std::ofstream(file) << "// project\n{\"format\": 1, \"name\": \"Old\", \"custom\": {\"k\": 3}}\n";
         ProjectFile n; n.name = "Моя стратегия";
@@ -13290,7 +13292,7 @@ TEST(project_file_create_resolve_migrate) {
         CHECK(j["custom"].getInt("k") == 3 && j.getStr("name") == "Моя стратегия" && j.getStr("manifest") == "game.json");
     }
 
-    // migration: a project made before .rtsproj existed gets one when opened
+    // migration: a project made before project files existed gets a .aiverse when opened
     const fs::path old = home.dir / "Projects" / "legacy";
     fs::create_directories(old / "maps");
     fs::copy_file(fs::path(AIVERSE_SOURCE_DIR) / "templates/skirmish/rules.json", old / "rules.json");
@@ -13299,19 +13301,47 @@ TEST(project_file_create_resolve_migrate) {
         Workspace ws;
         ws.engineDir = AIVERSE_SOURCE_DIR;
         CHECK(ws.openGame(old.string(), &err));
-        CHECK(ws.project.file == (fs::weakly_canonical(old) / "Old Game.rtsproj").string());
-        CHECK(fs::exists(old / "Old Game.rtsproj"));
+        CHECK(ws.project.file == (fs::weakly_canonical(old) / "Old Game.aiverse").string());
+        CHECK(fs::exists(old / "Old Game.aiverse") && !fs::exists(old / "Old Game.rtsproj"));
         bool created = true;
         CHECK(fs::weakly_canonical(ensureProjectFile(old.string(), &created)) == fs::weakly_canonical(ws.project.file) && !created);   // macOS: /var -> /private/var
-        // and the .rtsproj path opens the project (double-click / argv / MCP open_game)
+        // and the .aiverse path opens the project (double-click / argv / MCP open_game)
         CHECK(ws.openGame(file.string(), &err));
         CHECK(ws.project.dir == fs::weakly_canonical(dir).string() && ws.project.file == fs::weakly_canonical(file).string());
-        Json r = ws.call("open_game", Json::parse("{\"game\": \"" + (old / "Old Game.rtsproj").generic_string() + "\"}"));
-        CHECK(!r.has("error") && r.getStr("file").find("Old Game.rtsproj") != std::string::npos);
+        Json r = ws.call("open_game", Json::parse("{\"game\": \"" + (old / "Old Game.aiverse").generic_string() + "\"}"));
+        CHECK(!r.has("error") && r.getStr("file").find("Old Game.aiverse") != std::string::npos);
         // template ids still work and the engine's templates are not rewritten
-        CHECK(ws.openGame("mushrooms", &err) && fs::path(ws.project.file).filename() == "Mushroom Clash.rtsproj");
-        CHECK(!ws.openGame((old / "missing.rtsproj").string(), &err) && !err.empty());
+        CHECK(ws.openGame("mushrooms", &err) && fs::path(ws.project.file).filename() == "Mushroom Clash.aiverse");
+        CHECK(!ws.openGame((old / "missing.aiverse").string(), &err) && !err.empty());
     }
+    // a project saved before the AIVERSE rename: its <Title>.rtsproj still opens it and stays the
+    // project file (no second .aiverse appears); a .aiverse next to it wins
+    const fs::path legacy = home.dir / "Projects" / "rts-era";
+    fs::create_directories(legacy / "maps");
+    fs::copy_file(fs::path(AIVERSE_SOURCE_DIR) / "templates/skirmish/rules.json", legacy / "rules.json");
+    std::ofstream(legacy / "game.json") << R"({"name": "Era Game", "rules": "rules.json", "maps": []})";
+    std::ofstream(legacy / "Era Game.rtsproj") << R"({"format": 1, "name": "Era Game", "manifest": "game.json", "custom": 7})";
+    {
+        Workspace ws;
+        ws.engineDir = AIVERSE_SOURCE_DIR;
+        CHECK(resolveProjectDir((legacy / "Era Game.rtsproj").string(), &err) == legacy.lexically_normal().string());
+        CHECK(ws.openGame((legacy / "Era Game.rtsproj").string(), &err));
+        CHECK(fs::path(ws.project.file).filename() == "Era Game.rtsproj");
+        CHECK(ws.openGame(legacy.string(), &err) && fs::path(ws.project.file).filename() == "Era Game.rtsproj");
+        bool created = true;
+        CHECK(fs::path(ensureProjectFile(legacy.string(), &created)).filename() == "Era Game.rtsproj" && !created);
+        CHECK(!fs::exists(legacy / "Era Game.aiverse"));
+        Json r = ws.call("open_game", Json::parse("{\"game\": \"" + (legacy / "Era Game.rtsproj").generic_string() + "\"}"));
+        CHECK(!r.has("error") && r.getStr("file").find("Era Game.rtsproj") != std::string::npos);
+        ProjectFile n; n.name = "Era Game";
+        CHECK(writeProjectFile((legacy / "Era Game.rtsproj").string(), n, &err));   // rewritten in place, unknown keys kept
+        CHECK(Json::parseFile((legacy / "Era Game.rtsproj").string()).getInt("custom") == 7);
+    }
+    std::ofstream(legacy / "A Era Game.aiverse") << R"({"format": 1, "name": "Era Game"})";   // sorts before the .rtsproj
+    std::ofstream(legacy / "Z.aiverse") << R"({"format": 1, "name": "Era Game"})";
+    CHECK(fs::path(findProjectFile(legacy.string())).filename() == "A Era Game.aiverse");
+    fs::remove(legacy / "A Era Game.aiverse");
+    CHECK(fs::path(findProjectFile(legacy.string())).filename() == "Z.aiverse");   // any .aiverse before a .rtsproj
 }
 
 TEST(templates_have_project_files) {
@@ -13324,21 +13354,22 @@ TEST(templates_have_project_files) {
         int files = 0;
         for (auto& f : fs::directory_iterator(e.path())) files += isProjectFilePath(f.path().string());
         const std::string pf = findProjectFile(e.path().string());
-        if (files != 1 || pf.empty()) { std::printf("  %s: %d .rtsproj files\n", e.path().filename().string().c_str(), files); CHECK(false); continue; }
+        if (files != 1 || pf.empty() || isLegacyProjectFilePath(pf)) { std::printf("  %s: %d project files (want one .aiverse)\n", e.path().filename().string().c_str(), files); CHECK(false); continue; }
         ProjectFile p;
         std::string err;
         CHECK(readProjectFile(pf, p, &err));
         const std::string name = Json::parseFile((e.path() / "game.json").string()).getStr("name");
         if (p.name != name || fs::path(pf).filename().string() != projectFileName(name)) {
-            std::printf("  %s: .rtsproj '%s' vs game.json name '%s'\n", e.path().filename().string().c_str(), fs::path(pf).filename().string().c_str(), name.c_str());
+            std::printf("  %s: project file '%s' vs game.json name '%s'\n", e.path().filename().string().c_str(), fs::path(pf).filename().string().c_str(), name.c_str());
             CHECK(false);
         }
     }
     CHECK(n > 10);
-    // aiversebuild's pack rule: a .rtsproj at the root is not content
+    // aiversebuild's pack rules: a project file at the root (current or legacy) is not content
     aiverse::pack::IgnoreRules rules;
+    rules.add("*.aiverse");
     rules.add("*.rtsproj");
-    CHECK(rules.ignored("Iron and Gold.rtsproj", false) && !rules.ignored("rules.json", false));
+    CHECK(rules.ignored("Iron and Gold.aiverse", false) && rules.ignored("Iron and Gold.rtsproj", false) && !rules.ignored("rules.json", false));
 }
 
 TEST(project_document_icons) {
@@ -13383,14 +13414,25 @@ TEST(file_assoc_linux_registration_temp_home) {
     CHECK(desk.find("Exec=\"/opt/AIVERSE Engine/aiverse_editor\" %f\n") != std::string::npos);
     CHECK(desk.find("MimeType=application/x-aiverse-project;\n") != std::string::npos && desk.find("Icon=aiverse-editor\n") != std::string::npos);
     const std::string xml = slurp(data / "mime" / "packages" / "aiverse-project.xml");
-    CHECK(xml.find("type=\"application/x-aiverse-project\"") != std::string::npos && xml.find("<glob pattern=\"*.rtsproj\"") != std::string::npos);
+    CHECK(xml.find("type=\"application/x-aiverse-project\"") != std::string::npos && xml.find("<glob pattern=\"*.aiverse\"") != std::string::npos &&
+          xml.find("<glob pattern=\"*.rtsproj\"") != std::string::npos);
     CHECK(fs::exists(data / "icons/hicolor/48x48/mimetypes/application-x-aiverse-project.png"));
     CHECK(fs::exists(data / "icons/hicolor/256x256/apps/aiverse-editor.png"));
     CHECK(slurp(home.dir / ".config" / "mimeapps.list").find("application/x-aiverse-project=aiverse-editor.desktop") != std::string::npos);
     st = fileAssociationStatus(exe);
     CHECK(st.registered);
     const bool mimeDb = std::system("command -v update-mime-database >/dev/null 2>&1") == 0;
-    if (mimeDb) CHECK(slurp(data / "mime" / "globs2").find("application/x-aiverse-project:*.rtsproj") != std::string::npos);
+    if (mimeDb) CHECK(slurp(data / "mime" / "globs2").find("application/x-aiverse-project:*.aiverse") != std::string::npos &&
+                      slurp(data / "mime" / "globs2").find("application/x-aiverse-project:*.rtsproj") != std::string::npos);
+    {   // an install from before .aiverse (its mime package only knew *.rtsproj) is re-registered
+        const fs::path xmlFile = data / "mime" / "packages" / "aiverse-project.xml";
+        std::string oldXml = xml;
+        oldXml.erase(oldXml.find("    <glob pattern=\"*.aiverse\""), std::string("    <glob pattern=\"*.aiverse\" weight=\"80\"/>\n").size());
+        std::ofstream(xmlFile, std::ios::binary) << oldXml;
+        CHECK(!fileAssociationStatus(exe).registered);
+        CHECK(registerFileAssociation(exe, &msg) && fileAssociationStatus(exe).registered);
+        CHECK(slurp(xmlFile).find("<glob pattern=\"*.aiverse\"") != std::string::npos);
+    }
     if (std::system("command -v xdg-mime >/dev/null 2>&1") == 0) {
         const std::string q = "xdg-mime query default application/x-aiverse-project > '" + (home.dir / "q.txt").string() + "' 2>/dev/null";
         CHECK(std::system(q.c_str()) == 0 && slurp(home.dir / "q.txt").find("aiverse-editor.desktop") != std::string::npos);

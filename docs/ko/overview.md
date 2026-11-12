@@ -204,11 +204,11 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 근사치입니다: 원래의 지형 생성은 쓰지 않으며, 기지는 바위 위에, 스파이스는 `Field=`에서, 미션 목표는 트리거로 구현합니다. 보병,
 오니솝터, 캐리올은 아직 3D 도형으로 그려집니다. 폴더에는 `"external": true`가 붙어 있어 커밋하거나 배포할 수 없습니다.
 
-## 프로젝트 파일 .rtsproj
+## 프로젝트 파일 .aiverse
 
-프로젝트는 디스크의 아무 곳에나 있는 폴더입니다(`game.json`, `rules.json`, `maps/` 등). 그 루트에 프로젝트 파일 **`<이름>.rtsproj`**가 있어
+프로젝트는 디스크의 아무 곳에나 있는 폴더입니다(`game.json`, `rules.json`, `maps/` 등). 그 루트에 프로젝트 파일 **`<이름>.aiverse`**가 있어
 Unreal의 `.uproject`나 `project.godot`처럼 더블 클릭으로 열 수 있습니다. `game.json`은 계속 게임 매니페스트이며(클라이언트, aiversebuild,
-팩이 읽음), `.rtsproj`는 폴더를 프로젝트로 표시하고 에디터 정보를 저장할 뿐입니다:
+팩이 읽음), `.aiverse`는 폴더를 프로젝트로 표시하고 에디터 정보를 저장할 뿐입니다:
 
 ```json
 {"format": 1, "name": "My Strategy", "engine": "0.2.0", "manifest": "game.json", "created": "2026-10-28"}
@@ -216,18 +216,20 @@ Unreal의 `.uproject`나 `project.godot`처럼 더블 클릭으로 열 수 있�
 
 - 프로젝트와 함께 만들어집니다(허브의 "새 프로젝트", MCP `create_project`). 이것이 없는 예전 프로젝트는 에디터에서 처음 열 때 만들어집니다.
   `templates/*/`의 템플릿에는 이미 있습니다(새 프로젝트로 복사되지 않으며, 새 프로젝트는 자기 것을 가집니다).
-- 에디터가 프로젝트 경로를 받는 곳이면 어디서나 `.rtsproj`와 폴더 모두 쓸 수 있습니다: `aiverse_editor "My Strategy.rtsproj"`,
-  `--project`, 허브의 "열기…"(`.rtsproj`와 프로젝트 폴더를 표시), 최근 항목, MCP `open_game`, `aiversebuild --project x.rtsproj`.
-  `.rtsproj`는 빌드에 포함되지 않습니다.
-- **더블 클릭.** 시작할 때 연결이 없거나 다른 에디터 인스턴스에 연결되어 있으면, 에디터는 `.rtsproj`를 자신과 연결합니다(사용자 단위,
-  관리자 권한 불필요). 사용자가 고른 다른 프로그램은 덮어쓰지 않습니다. 수동으로는 "프로젝트 → 에디터를 .rtsproj 기본 앱으로". 상태는
+- 에디터가 프로젝트 경로를 받는 곳이면 어디서나 `.aiverse`와 폴더 모두 쓸 수 있습니다: `aiverse_editor "My Strategy.aiverse"`,
+  `--project`, 허브의 "열기…"(`.aiverse`와 프로젝트 폴더를 표시), 최근 항목, MCP `open_game`, `aiversebuild --project x.aiverse`.
+  `.aiverse`는 빌드에 포함되지 않습니다.
+- AIVERSE로 이름이 바뀌기 전에 만든 프로젝트는 `<이름>.rtsproj`를 그대로 유지합니다. 어디서나 똑같이 열리고, 제자리에서
+  다시 저장되며 이름이 바뀌지 않습니다. 폴더에 둘 다 있으면 `.aiverse`가 우선합니다.
+- **더블 클릭.** 시작할 때 연결이 없거나 다른 에디터 인스턴스에 연결되어 있으면, 에디터는 `.aiverse`를 자신과 연결합니다(사용자 단위,
+  관리자 권한 불필요). 사용자가 고른 다른 프로그램은 덮어쓰지 않습니다. 수동으로는 "프로젝트 → 에디터를 .aiverse 기본 앱으로". 상태는
   허브의 왼쪽 아래에 표시됩니다. 끄려면 `AIVERSE_FILE_ASSOC=off`.
   - **macOS:** 타입 `com.aiverse.project`는 `AiverseEditor.app`의 Info.plist에 선언되어 있습니다(`platform/macos/EditorInfo.plist.in`,
     문서 아이콘 `rtsproj.icns`는 `aiverse_projicon`이 에디터 로고 `apps/editor/branding/icon_1024.png`로 그림). 에디터는 번들을
-    LaunchServices에 등록하고(`lsregister -f`) 기본 핸들러가 됩니다. 더블 클릭이나 `open -a AiverseEditor x.rtsproj`로 실행 중인 에디터에
+    LaunchServices에 등록하고(`lsregister -f`) 기본 핸들러가 됩니다. 더블 클릭이나 `open -a AiverseEditor x.aiverse`로 실행 중인 에디터에
     프로젝트가 열립니다(맵이 저장되지 않았으면 저장할지 묻습니다).
-  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project`(아이콘 `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, 명령
-    `"<aiverse_editor.exe>" "%1"`). Windows에서 이미 `.rtsproj`에 다른 프로그램이 선택되어 있으면 허브가 "연결 프로그램 → 항상"을 안내합니다.
+  - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project`(아이콘 `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, 명령
+    `"<aiverse_editor.exe>" "%1"`). Windows에서 이미 `.aiverse`에 다른 프로그램이 선택되어 있으면 허브가 "연결 프로그램 → 항상"을 안내합니다.
   - **Linux:** 타입 `application/x-aiverse-project`(`~/.local/share/mime/packages/aiverse-project.xml`),
     `~/.local/share/applications/aiverse-editor.desktop`(`Exec=<에디터> %f`), 아이콘은 `~/.local/share/icons/hicolor`, 기본 앱은
     `~/.config/mimeapps.list`. `update-mime-database`, `update-desktop-database`, `xdg-mime`이 설치되어 있으면 호출합니다.
@@ -235,7 +237,7 @@ Unreal의 `.uproject`나 `project.godot`처럼 더블 클릭으로 열 수 있�
 ## 게임 만들기(마법사)
 
 프로젝트 창의 **게임 만들기** 버튼(및 **프로젝트 → 게임 만들기…**): 아트, 음악, 텍스트가 든 폴더나 링크를 주고 아이디어를 적으면(아무것도
-적지 않아도 마법사가 직접 고릅니다) 완성된 `.rtsproj` 프로젝트가 만들어집니다. 알맞은 템플릿 기반의 게임, 단계별 튜토리얼(강제)과 전투 중
+적지 않아도 마법사가 직접 고릅니다) 완성된 `.aiverse` 프로젝트가 만들어집니다. 알맞은 템플릿 기반의 게임, 단계별 튜토리얼(강제)과 전투 중
 힌트(은근한), 별과 보상이 있는 레벨, 메타(메뉴, 업그레이드, 상점, 일일 보상, 프로필, 설정), 필요하면 광고와 결제, 언어, 아트로 만든 아이콘과
 스플래시 화면. 마법사는 봇으로 튜토리얼을 직접 통과하고 레벨을 검증합니다. 무엇이 할당되었고 무엇을 확인해야 하는지는 프로젝트의
 `WIZARD.md`에 있습니다. 에이전트용: MCP `game_make_options` / `game_make_plan` / `game_make`. 자세히: [game-wizard.md](game-wizard.md).

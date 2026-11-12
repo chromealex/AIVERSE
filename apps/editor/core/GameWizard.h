@@ -1,5 +1,5 @@
 // "Make a game" (Сделать игру): a whole game project from a few answers. Takes art / music / content from a folder or a
-// link, the user's idea (or none), and the choices of the wizard window, and writes a ready project with its .rtsproj:
+// link, the user's idea (or none), and the choices of the wizard window, and writes a ready project with its .aiverse:
 // a template's game (picked by the idea when not given), a hard tutorial map (step by step, only the needed commands
 // pass, the enemy waits), soft hints in every match, the meta game (levels with stars and rewards, upgrades, shop,
 // daily reward, profile, settings, ads and purchases when asked), branding from the art, music and sounds, languages.

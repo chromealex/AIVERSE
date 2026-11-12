@@ -194,10 +194,10 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 名称有英文和俄文。地形是近似的：没有使用原版地貌生成器，基地位于岩石上，香料来自 `Field=`，任务目标用触发器实现。步兵、扑翼机和运输机仍以
 3D 形状绘制。该文件夹标记为 `"external": true` —— 不得提交或分发。
 
-## 项目文件 .rtsproj
+## 项目文件 .aiverse
 
-项目是磁盘上任意位置的一个文件夹（`game.json`、`rules.json`、`maps/` 等）。其根目录下有项目文件 **`<名称>.rtsproj`** —— 双击即可打开，
-就像 Unreal 的 `.uproject` 或 `project.godot`。`game.json` 仍是游戏清单（由客户端、aiversebuild 和资源包读取）；`.rtsproj` 只是把文件夹
+项目是磁盘上任意位置的一个文件夹（`game.json`、`rules.json`、`maps/` 等）。其根目录下有项目文件 **`<名称>.aiverse`** —— 双击即可打开，
+就像 Unreal 的 `.uproject` 或 `project.godot`。`game.json` 仍是游戏清单（由客户端、aiversebuild 和资源包读取）；`.aiverse` 只是把文件夹
 标记为项目并保存编辑器信息：
 
 ```json
@@ -206,16 +206,18 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 
 - 它随项目一起创建（项目中心“新建项目”、MCP `create_project`）；没有它的旧项目会在编辑器中首次打开时获得一个。`templates/*/` 中的模板已经
   自带（不会被复制到新项目，新项目有自己的）。
-- 凡是编辑器接受项目路径的地方，`.rtsproj` 和文件夹都可以：`aiverse_editor "My Strategy.rtsproj"`、`--project`、项目中心的“打开…”
-  （显示 `.rtsproj` 和项目文件夹）、最近项目、MCP `open_game`、`aiversebuild --project x.rtsproj`。`.rtsproj` 不会进入构建。
-- **双击。** 编辑器启动时，如果 `.rtsproj` 没有关联程序或关联的是另一个编辑器实例，就会把它关联到自己（按用户，无需管理员权限）；你选择的其他
-  程序不会被覆盖。手动操作：“项目 → 将编辑器设为 .rtsproj 的默认程序”；状态显示在项目中心左下角。关闭：`AIVERSE_FILE_ASSOC=off`。
+- 凡是编辑器接受项目路径的地方，`.aiverse` 和文件夹都可以：`aiverse_editor "My Strategy.aiverse"`、`--project`、项目中心的“打开…”
+  （显示 `.aiverse` 和项目文件夹）、最近项目、MCP `open_game`、`aiversebuild --project x.aiverse`。`.aiverse` 不会进入构建。
+- 在改名为 AIVERSE 之前创建的项目保留其 `<名称>.rtsproj`：在所有地方都能同样打开，原地重写，不会被改名；
+  如果文件夹中两者都有，以 `.aiverse` 为准。
+- **双击。** 编辑器启动时，如果 `.aiverse` 没有关联程序或关联的是另一个编辑器实例，就会把它关联到自己（按用户，无需管理员权限）；你选择的其他
+  程序不会被覆盖。手动操作：“项目 → 将编辑器设为 .aiverse 的默认程序”；状态显示在项目中心左下角。关闭：`AIVERSE_FILE_ASSOC=off`。
   - **macOS：**类型 `com.aiverse.project` 声明在 `AiverseEditor.app` 的 Info.plist 中（`platform/macos/EditorInfo.plist.in`；文档图标
     `rtsproj.icns` 由 `aiverse_projicon` 根据编辑器标志 `apps/editor/branding/icon_1024.png` 绘制）；编辑器在 LaunchServices 中注册
-    bundle（`lsregister -f`）并成为默认处理程序。双击或 `open -a AiverseEditor x.rtsproj` 会在已运行的编辑器中打开项目（地图未保存时会询问
+    bundle（`lsregister -f`）并成为默认处理程序。双击或 `open -a AiverseEditor x.aiverse` 会在已运行的编辑器中打开项目（地图未保存时会询问
     是否保存）。
-  - **Windows：**`HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project`（图标 `%USERPROFILE%\.aiverse\icons\rtsproj.ico`，命令
-    `"<aiverse_editor.exe>" "%1"`）。如果 Windows 已为 `.rtsproj` 选择了其他程序，项目中心会提示“打开方式 → 始终”。
+  - **Windows：**`HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project`（图标 `%USERPROFILE%\.aiverse\icons\rtsproj.ico`，命令
+    `"<aiverse_editor.exe>" "%1"`）。如果 Windows 已为 `.aiverse` 选择了其他程序，项目中心会提示“打开方式 → 始终”。
   - **Linux：**类型 `application/x-aiverse-project`（`~/.local/share/mime/packages/aiverse-project.xml`）、
     `~/.local/share/applications/aiverse-editor.desktop`（`Exec=<编辑器> %f`），图标在 `~/.local/share/icons/hicolor`，默认程序写在
     `~/.config/mimeapps.list`；如已安装，会调用 `update-mime-database`、`update-desktop-database`、`xdg-mime`。
@@ -223,7 +225,7 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 ## 制作游戏（向导）
 
 项目窗口中的 **制作游戏** 按钮（以及 **项目 → 制作游戏…**）：提供包含美术、音乐和文本的文件夹或链接，描述想法（也可以不写 —— 向导会自己选），
-就能得到完整的 `.rtsproj` 项目：基于合适模板的游戏、分步教程（强制）和战斗提示（轻量）、带星级和奖励的关卡、元游戏（菜单、升级、商店、
+就能得到完整的 `.aiverse` 项目：基于合适模板的游戏、分步教程（强制）和战斗提示（轻量）、带星级和奖励的关卡、元游戏（菜单、升级、商店、
 每日奖励、个人资料、设置）、按需的广告和内购、多语言、由美术生成的图标和启动画面。向导会用机器人自己通关教程并检查关卡；分配了什么、需要检查
 什么，都写在项目的 `WIZARD.md` 中。智能体可使用 MCP `game_make_options` / `game_make_plan` / `game_make`。详情：
 [game-wizard.md](game-wizard.md)。

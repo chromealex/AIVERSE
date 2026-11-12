@@ -219,11 +219,11 @@ sont sur le rocher, l’épice vient de `Field=`, les quotas de mission sont des
 transporteur sont encore dessinés en formes 3D. Le dossier est marqué `"external": true` — il ne doit être ni commité ni
 distribué.
 
-## Fichier de projet .rtsproj
+## Fichier de projet .aiverse
 
 Un projet est un dossier n’importe où sur le disque (`game.json`, `rules.json`, `maps/`, ...). Sa racine contient le fichier
-de projet **`<Nom>.rtsproj`** — il s’ouvre d’un double clic, comme `.uproject` dans Unreal ou `project.godot`. `game.json`
-reste le manifeste du jeu (lu par le client, aiversebuild, les paquets) ; `.rtsproj` marque seulement le dossier comme projet
+de projet **`<Nom>.aiverse`** — il s’ouvre d’un double clic, comme `.uproject` dans Unreal ou `project.godot`. `game.json`
+reste le manifeste du jeu (lu par le client, aiversebuild, les paquets) ; `.aiverse` marque seulement le dossier comme projet
 et stocke des informations de l’éditeur :
 
 ```json
@@ -233,20 +233,22 @@ et stocke des informations de l’éditeur :
 - Il est créé avec le projet (hub « Nouveau projet », MCP `create_project`) ; un ancien projet sans lui en reçoit un à la
   première ouverture dans l’éditeur. Les modèles de `templates/*/` en ont déjà un (il n’est pas copié dans un nouveau projet :
   celui-ci reçoit le sien).
-- Partout où l’éditeur accepte un chemin de projet, `.rtsproj` comme le dossier conviennent : `aiverse_editor "My
-  Strategy.rtsproj"`, `--project`, « Ouvrir… » dans le hub (montre les `.rtsproj` et les dossiers de projets), projets récents,
-  MCP `open_game`, `aiversebuild --project x.rtsproj`. `.rtsproj` n’entre pas dans un build.
-- **Double clic.** Au démarrage, l’éditeur associe `.rtsproj` à lui-même (par utilisateur, sans droits d’administrateur) s’il
+- Partout où l’éditeur accepte un chemin de projet, `.aiverse` comme le dossier conviennent : `aiverse_editor "My
+  Strategy.aiverse"`, `--project`, « Ouvrir… » dans le hub (montre les `.aiverse` et les dossiers de projets), projets récents,
+  MCP `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` n’entre pas dans un build.
+- Les projets créés avant le renommage en AIVERSE gardent leur `<Nom>.rtsproj` : il s’ouvre partout de la même façon, est
+  réécrit sur place et jamais renommé ; si le dossier contient les deux, `.aiverse` l’emporte.
+- **Double clic.** Au démarrage, l’éditeur associe `.aiverse` à lui-même (par utilisateur, sans droits d’administrateur) s’il
   n’y a pas d’association ou si elle pointe vers une autre instance de l’éditeur ; il ne remplace pas un autre programme que
-  vous avez choisi. À la main : « Projet → Faire de l’éditeur l’application par défaut pour .rtsproj » ; l’état s’affiche en
+  vous avez choisi. À la main : « Projet → Faire de l’éditeur l’application par défaut pour .aiverse » ; l’état s’affiche en
   bas à gauche du hub. Désactiver : `AIVERSE_FILE_ASSOC=off`.
   - **macOS :** le type `com.aiverse.project` est déclaré dans l’Info.plist d’`AiverseEditor.app`
     (`platform/macos/EditorInfo.plist.in` ; l’icône de document `rtsproj.icns` est dessinée par `aiverse_projicon` à partir
     du logo de l’éditeur `apps/editor/branding/icon_1024.png`) ; l’éditeur enregistre le bundle dans LaunchServices
-    (`lsregister -f`) et devient le gestionnaire par défaut. Un double clic et `open -a AiverseEditor x.rtsproj` ouvrent le
+    (`lsregister -f`) et devient le gestionnaire par défaut. Un double clic et `open -a AiverseEditor x.aiverse` ouvrent le
     projet dans l’éditeur en cours (si la carte n’est pas enregistrée, il demande s’il faut l’enregistrer).
-  - **Windows :** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (icône `%USERPROFILE%\.aiverse\icons\rtsproj.ico`,
-    commande `"<aiverse_editor.exe>" "%1"`). Si Windows a déjà un autre programme choisi pour `.rtsproj`, le hub suggère
+  - **Windows :** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (icône `%USERPROFILE%\.aiverse\icons\rtsproj.ico`,
+    commande `"<aiverse_editor.exe>" "%1"`). Si Windows a déjà un autre programme choisi pour `.aiverse`, le hub suggère
     « Ouvrir avec → Toujours ».
   - **Linux :** le type `application/x-aiverse-project` (`~/.local/share/mime/packages/aiverse-project.xml`),
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<éditeur> %f`), icônes dans `~/.local/share/icons/hicolor`,
@@ -257,7 +259,7 @@ et stocke des informations de l’éditeur :
 
 Le bouton **Créer un jeu** dans la fenêtre des projets (et **Projet → Créer un jeu…**) : donnez un dossier ou un lien avec des
 illustrations, de la musique et des textes, décrivez l’idée (ou rien — l’assistant choisit lui-même) et obtenez un projet
-`.rtsproj` terminé : un jeu sur un modèle adapté, un tutoriel pas à pas (guidé) et des conseils en combat (discrets), des
+`.aiverse` terminé : un jeu sur un modèle adapté, un tutoriel pas à pas (guidé) et des conseils en combat (discrets), des
 niveaux avec étoiles et récompenses, la méta (menu, améliorations, boutique, récompense quotidienne, profil, réglages),
 publicité et achats si souhaité, langues, icône et écran de démarrage tirés des illustrations. L’assistant joue lui-même le
 tutoriel avec un bot et vérifie les niveaux ; ce qui a été attribué et ce qu’il faut vérifier figure dans le `WIZARD.md` du

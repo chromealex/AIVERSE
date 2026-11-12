@@ -212,10 +212,10 @@ public:
     void openMap(const std::string& file);
     bool saveMap(const std::string& file);
     void openGame(const std::string& idOrDir);
-    // Open a project asked for by the OS (double-clicked .rtsproj), the hub or the menus: asks to save
-    // unsaved map / rules changes first (EditorOpenFile.cpp). Accepts a .rtsproj, a folder or game.json.
+    // Open a project asked for by the OS (double-clicked .aiverse), the hub or the menus: asks to save
+    // unsaved map / rules changes first (EditorOpenFile.cpp). Accepts a .aiverse, a folder or game.json.
     void requestOpenProject(const std::string& path);
-    // .rtsproj file association (FileAssoc.h): status shown in the hub, registration from the Project menu
+    // .aiverse file association (FileAssoc.h): status shown in the hub, registration from the Project menu
     const AssocStatus& fileAssoc() const { return assoc_; }
     void registerFileAssoc();
     void reloadRules();                        // after rules change: views, palette

@@ -216,11 +216,11 @@ aproximado: o gerador de paisagem original não é usado, as bases ficam na roch
 missões são gatilhos. Infantaria, ornitóptero e transportador ainda são desenhados como formas 3D. A pasta é marcada com
 `"external": true` — não pode ser commitada nem distribuída.
 
-## Arquivo de projeto .rtsproj
+## Arquivo de projeto .aiverse
 
 Um projeto é uma pasta em qualquer lugar do disco (`game.json`, `rules.json`, `maps/`, ...). Na raiz fica o arquivo de projeto
-**`<Nome>.rtsproj`** — aberto com duplo clique, como o `.uproject` no Unreal ou o `project.godot`. O `game.json` continua sendo
-o manifesto do jogo (lido pelo cliente, pelo aiversebuild e pelos pacotes); o `.rtsproj` só marca a pasta como projeto e guarda
+**`<Nome>.aiverse`** — aberto com duplo clique, como o `.uproject` no Unreal ou o `project.godot`. O `game.json` continua sendo
+o manifesto do jogo (lido pelo cliente, pelo aiversebuild e pelos pacotes); o `.aiverse` só marca a pasta como projeto e guarda
 informações do editor:
 
 ```json
@@ -229,20 +229,22 @@ informações do editor:
 
 - É criado junto com o projeto (hub «Novo projeto», MCP `create_project`); um projeto antigo sem ele recebe um na primeira
   abertura no editor. Os templates em `templates/*/` já têm um (ele não é copiado para um projeto novo: este recebe o seu).
-- Em todo lugar em que o editor aceita um caminho de projeto, servem tanto o `.rtsproj` quanto a pasta:
-  `aiverse_editor "My Strategy.rtsproj"`, `--project`, «Abrir…» no hub (mostra `.rtsproj` e pastas de projeto), recentes,
-  MCP `open_game`, `aiversebuild --project x.rtsproj`. O `.rtsproj` não vai para o build.
-- **Duplo clique.** Ao iniciar, o editor associa o `.rtsproj` a si mesmo (por usuário, sem direitos de administrador) se não
+- Em todo lugar em que o editor aceita um caminho de projeto, servem tanto o `.aiverse` quanto a pasta:
+  `aiverse_editor "My Strategy.aiverse"`, `--project`, «Abrir…» no hub (mostra `.aiverse` e pastas de projeto), recentes,
+  MCP `open_game`, `aiversebuild --project x.aiverse`. O `.aiverse` não vai para o build.
+- Projetos criados antes da renomeação para AIVERSE mantêm seu `<Nome>.rtsproj`: ele abre do mesmo jeito em todo lugar,
+  é regravado no lugar e nunca renomeado; se a pasta tiver os dois, vale o `.aiverse`.
+- **Duplo clique.** Ao iniciar, o editor associa o `.aiverse` a si mesmo (por usuário, sem direitos de administrador) se não
   houver associação ou se ela apontar para outra instância do editor; ele não substitui outro programa que você escolheu.
-  Manualmente: «Projeto → Tornar o editor o app padrão para .rtsproj»; o estado aparece no canto inferior esquerdo do hub.
+  Manualmente: «Projeto → Tornar o editor o app padrão para .aiverse»; o estado aparece no canto inferior esquerdo do hub.
   Desligar: `AIVERSE_FILE_ASSOC=off`.
   - **macOS:** o tipo `com.aiverse.project` está declarado no Info.plist do `AiverseEditor.app`
     (`platform/macos/EditorInfo.plist.in`; o ícone de documento `rtsproj.icns` é desenhado pelo `aiverse_projicon` a partir do
     logo do editor `apps/editor/branding/icon_1024.png`); o editor registra o bundle no LaunchServices (`lsregister -f`) e
-    vira o manipulador padrão. Duplo clique e `open -a AiverseEditor x.rtsproj` abrem o projeto no editor em execução (se o
+    vira o manipulador padrão. Duplo clique e `open -a AiverseEditor x.aiverse` abrem o projeto no editor em execução (se o
     mapa tiver alterações não salvas, ele pergunta se deve salvar).
-  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (ícone `%USERPROFILE%\.aiverse\icons\rtsproj.ico`,
-    comando `"<aiverse_editor.exe>" "%1"`). Se o Windows já tiver outro programa escolhido para `.rtsproj`, o hub sugere
+  - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (ícone `%USERPROFILE%\.aiverse\icons\rtsproj.ico`,
+    comando `"<aiverse_editor.exe>" "%1"`). Se o Windows já tiver outro programa escolhido para `.aiverse`, o hub sugere
     «Abrir com → Sempre».
   - **Linux:** o tipo `application/x-aiverse-project` (`~/.local/share/mime/packages/aiverse-project.xml`),
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<editor> %f`), ícones em `~/.local/share/icons/hicolor`, app
@@ -252,7 +254,7 @@ informações do editor:
 ## Criar um jogo (assistente)
 
 O botão **Criar um jogo** na janela de projetos (e **Projeto → Criar um jogo…**): informe uma pasta ou um link com arte, música e
-textos, descreva a ideia (ou nada — o assistente escolhe sozinho) e receba um projeto `.rtsproj` pronto: um jogo num template
+textos, descreva a ideia (ou nada — o assistente escolhe sozinho) e receba um projeto `.aiverse` pronto: um jogo num template
 adequado, um tutorial passo a passo (guiado) e dicas em combate (discretas), fases com estrelas e recompensas, a meta (menu,
 melhorias, loja, recompensa diária, perfil, configurações), anúncios e compras se quiser, idiomas, ícone e tela de abertura a
 partir da arte. O assistente joga o tutorial sozinho com um bot e verifica as fases; o que foi atribuído e o que conferir está

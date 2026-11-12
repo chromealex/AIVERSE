@@ -219,11 +219,11 @@ Terrain is approximate: the original landscape generator is not used, bases stan
 `Field=`, mission quotas are triggers. Infantry, the ornithopter and the carryall are still drawn as 3D shapes.
 The folder is marked `"external": true` — it must not be committed or distributed.
 
-## Project file .rtsproj
+## Project file .aiverse
 
 A project is a folder anywhere on disk (`game.json`, `rules.json`, `maps/`, ...). Its root holds the project file
-**`<Name>.rtsproj`** — opened with a double click, like `.uproject` in Unreal or `project.godot`. `game.json`
-stays the game manifest (read by the client, aiversebuild, packs); `.rtsproj` only marks the folder as a project
+**`<Name>.aiverse`** — opened with a double click, like `.uproject` in Unreal or `project.godot`. `game.json`
+stays the game manifest (read by the client, aiversebuild, packs); `.aiverse` only marks the folder as a project
 and stores editor information:
 
 ```json
@@ -233,21 +233,23 @@ and stores editor information:
 - It is created with the project (hub "New project", MCP `create_project`); an older project without it gets one
   on first open in the editor. Templates in `templates/*/` already have one (it is not copied into a new project:
   that gets its own).
-- Everywhere the editor accepts a project path, both `.rtsproj` and the folder work: `aiverse_editor "My
-  Strategy.rtsproj"`, `--project`, "Open…" in the hub (shows `.rtsproj` and project folders), recent projects,
-  MCP `open_game`, `aiversebuild --project x.rtsproj`. `.rtsproj` does not go into a build.
-- **Double click.** On start the editor associates `.rtsproj` with itself (per user, without admin rights) if there
+- Everywhere the editor accepts a project path, both `.aiverse` and the folder work: `aiverse_editor "My
+  Strategy.aiverse"`, `--project`, "Open…" in the hub (shows `.aiverse` and project folders), recent projects,
+  MCP `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` does not go into a build.
+- Projects made before the AIVERSE rename keep their `<Name>.rtsproj`: it opens the same way everywhere, is rewritten
+  in place and is never renamed; when a folder has both, `.aiverse` wins.
+- **Double click.** On start the editor associates `.aiverse` with itself (per user, without admin rights) if there
   is no association or it points to another editor instance; it does not override another program you chose.
-  Manually: "Project → Make the editor the default app for .rtsproj"; the state is shown at the bottom left of the hub.
+  Manually: "Project → Make the editor the default app for .aiverse"; the state is shown at the bottom left of the hub.
   Disable with `AIVERSE_FILE_ASSOC=off`.
   - **macOS:** the `com.aiverse.project` type is declared in the Info.plist of `AiverseEditor.app`
     (`platform/macos/EditorInfo.plist.in`; the `rtsproj.icns` document icon is drawn by `aiverse_projicon` from the
     editor logo `apps/editor/branding/icon_1024.png`); the editor registers the bundle in LaunchServices
-    (`lsregister -f`) and becomes the default handler. A double click and `open -a AiverseEditor x.rtsproj` open the
+    (`lsregister -f`) and becomes the default handler. A double click and `open -a AiverseEditor x.aiverse` open the
     project in the running editor (if the map has unsaved changes, it asks whether to save).
-  - **Windows:** `HKCU\Software\Classes\.rtsproj` → `AIVERSE.Project` (icon
+  - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (icon
     `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, command `"<aiverse_editor.exe>" "%1"`). If Windows already has
-    another program chosen for `.rtsproj`, the hub suggests "Open with → Always".
+    another program chosen for `.aiverse`, the hub suggests "Open with → Always".
   - **Linux:** the `application/x-aiverse-project` type (`~/.local/share/mime/packages/aiverse-project.xml`),
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<editor> %f`), icons in
     `~/.local/share/icons/hicolor`, the default app in `~/.config/mimeapps.list`;
@@ -256,7 +258,7 @@ and stores editor information:
 ## Make a game (wizard)
 
 The **Make a game** button in the projects window (and **Project → Make a game…**): give a folder or a link with art,
-music and texts, describe the idea (or nothing — the wizard chooses itself) and get a finished `.rtsproj` project:
+music and texts, describe the idea (or nothing — the wizard chooses itself) and get a finished `.aiverse` project:
 a game on a suitable template, a step-by-step tutorial (hard) and in-battle hints (soft), levels with stars and
 rewards, meta (menu, upgrades, shop, daily reward, profile, settings), ads and purchases if wanted, languages, an icon
 and a splash screen from the art. The wizard plays through the tutorial with a bot and checks the levels itself; what
