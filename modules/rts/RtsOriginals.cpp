@@ -413,10 +413,13 @@ Fixed RtsModule::playerModsStat(Simulation& sim, uint8_t player, uint16_t type, 
         int n = src < eco.typeCount.size() ? eco.typeCount[src] : 0;
         if (st.playerModsMax > 0) n = std::min(n, st.playerModsMax);
         if (n <= 0) continue;
-        for (auto& [target, mod] : st.playerMods) {
+        for (size_t i = 0; i < st.playerMods.size(); ++i) {
+            const auto& [target, mod] = st.playerMods[i];
             if (mod.stat != s || !rules_.matches(target, type)) continue;
             add += mod.add * n;
-            for (int k = 0; k < n; ++k) mul = mul * mod.mul;
+            const auto* table = i < st.playerModsByCount.size() && !st.playerModsByCount[i].empty() ? &st.playerModsByCount[i] : nullptr;
+            if (table) mul = mul * (*table)[size_t(std::min(n, int(table->size())) - 1)];
+            else for (int k = 0; k < n; ++k) mul = mul * mod.mul;
         }
     }
     for (uint16_t r : rules_.perUnitResources) {

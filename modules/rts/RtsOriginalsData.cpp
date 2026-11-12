@@ -277,7 +277,12 @@ void loadOriginals(Rules& r, const Json& j, EffectParser& ep) {
             any = true;
             const Json& list = pm.isObject() ? pm["mods"] : pm;
             if (pm.isObject()) t.playerModsMax = int(pm.getInt("max", 0));
-            for (auto& m : list.items()) t.playerMods.push_back({modTarget(r, where + " playerMods", m), statMod(where + " playerMods", m)});
+            for (auto& m : list.items()) {
+                t.playerMods.push_back({modTarget(r, where + " playerMods", m), statMod(where + " playerMods", m)});
+                std::vector<Fixed> table;   // Bunker Wars armories: the multiplier for 1, 2, ... owned, not mul^n
+                for (auto& x : m["byCount"].items()) table.push_back(x.fx());
+                t.playerModsByCount.push_back(std::move(table));
+            }
         }
         size_t ai = 0;
         for (auto& aj : tj["abilities"].items()) {

@@ -1875,7 +1875,7 @@ agent-mech spellings of the same mechanics (`armorModel`, type `shields`, `upkee
 | `cost.garrison` (alias `upgradeGarrison`) | type | upgrading / converting into this type costs units of the garrison (Mushroom Wars 2) |
 | `garrison.onCapture`, `garrison.keep` | type | type it drops to when captured (loses a level); units that always stay home when sending (State.io) |
 | `clash` | type | units in transit fight hostile units they meet |
-| `playerMods` | type | `{"max": 4, "mods": [{"tags": [...], "stat": "damage", "mul": 1.08}]}` — every completed one modifies the owner's types (forges) |
+| `playerMods` | type | `{"max": 4, "mods": [{"tags": [...], "stat": "damage", "mul": 1.08}]}` — every completed one modifies the owner's types (forges); a mod with `"byCount": [1.5, 1.75, 1.9, 2]` multiplies by the entry for the number owned (capped by the list) instead of `mul`^n (Bunker Wars armories) |
 | resource `gain`, `perUnit`, `min` | rules | `"gain": {"kill": 1, "capture": 0.3, "captured": -0.4, "upgrade": 0.2, "lost": 0.45, "defended": 0.01}`; `"perUnit": [{"tags": [...], "stat": "damage", "mul": 1.06}]` per whole unit held (morale suns) |
 | `crew` / `crews` / weapon `killsCrew` | type | `"crew": "grunt"` (or `{"unit": "grunt"}`): vehicles and guns with a driver; `killsCrew` (chance per non-lethal hit) empties them (owner 0); units with `crews` man any empty one (Z). `"crew": {"accepts": [tags]}` / `true` (agent-mech alias): units with one of the tags (any mobile unit) may man it too |
 | `infect` | type | `{"by": ["infected"], "spawn": "walker", "count": 3}` — killed by a unit with the tag: rises as the spawn type for the killer (They Are Billions) |

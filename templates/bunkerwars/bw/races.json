@@ -1,0 +1,41 @@
+// Bunker Wars races (looks only when their numbers are equal).
+{
+ "races": [
+  {
+   "id": "Race1",
+   "clientId": 1,
+   "raceType": 1,
+   "name": {
+    "ru": "Британская Империя",
+    "en": "British Empire"
+   }
+  },
+  {
+   "id": "Race2",
+   "clientId": 2,
+   "raceType": 2,
+   "name": {
+    "ru": "Российская империя",
+    "en": "Russian Empire"
+   }
+  },
+  {
+   "id": "Race3",
+   "clientId": 3,
+   "raceType": 4,
+   "name": {
+    "ru": "Германская Империя",
+    "en": "German Empire"
+   }
+  },
+  {
+   "id": "Race4",
+   "clientId": 4,
+   "raceType": 8,
+   "name": {
+    "ru": "Французская республика",
+    "en": "French Republic"
+   }
+  }
+ ]
+}

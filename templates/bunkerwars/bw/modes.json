@@ -1,0 +1,1305 @@
+// Bunker Wars win modes, battle modes and sudden death.
+{
+ "winModes": [
+  {
+   "m_Name": "Conquest",
+   "id": 130823031,
+   "title": {
+    "key": "Common|ModType|Conquest",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Common|ModType|ConquestDescription",
+    "parameters": 0
+   },
+   "clientId": 1,
+   "modType": 1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/WinModes/Conquest.asset"
+  },
+  {
+   "m_Name": "Domination",
+   "id": 1983590533,
+   "title": {
+    "key": "Common|ModType|Domination",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Common|ModType|DominationDescription",
+    "parameters": 0
+   },
+   "clientId": 2,
+   "modType": 2,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/WinModes/Domination.asset"
+  },
+  {
+   "m_Name": "KingOfTheHill",
+   "id": 2579695857,
+   "title": {
+    "key": "Common|ModType|KingOfTheHill",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": "Common|ModType|KingOfTheHillDescription",
+    "parameters": 0
+   },
+   "clientId": 3,
+   "modType": 4,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/WinModes/KingOfTheHill.asset"
+  }
+ ],
+ "battleModes": [
+  {
+   "m_Name": "1-Standard-Rating",
+   "id": 713741718,
+   "title": {
+    "key": "ui|selectmode|Standard-Rating/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 1,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-Rating/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-Rating/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-Rating/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "RatingModeLock|CompleteTutorial",
+    "parameters": 0
+   },
+   "placement": "Standard-Rating",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 1,
+   "requiredFeatures": [],
+   "battleType": 0,
+   "visualSize": 0,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "6128e1e97ad1c4086bcc49163520890d",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Deafult_random.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/1-Standard-Rating.asset"
+  },
+  {
+   "m_Name": "11-Campaign",
+   "id": 2186729474,
+   "title": {
+    "key": "ui|selectmode|Campaign/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "c7468b6a0162e4709bddfdda6db39e1f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_campaign.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 11,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Campaign/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Campaign/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": null,
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Campaign/Locked",
+    "parameters": 0
+   },
+   "placement": null,
+   "openTargetWindow": 1,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 11,
+   "visualSize": 0,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "92acd309979aa4a63a09d9aeb5f54b3e",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/_Campaigns/campaigns_all.png"
+   },
+   "captionBack": {
+    "guid": "d9a16271b2e4845bd973907d4a4fec41",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_red2.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/11-Campaign.asset"
+  },
+  {
+   "m_Name": "15-Group4-Custom",
+   "id": 1821463583,
+   "title": {
+    "key": "ui|selectmode|Custom/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "e4db9f517599e4f2cbd75e1df7e5d8b2",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_custom.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 15,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Custom/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Custom/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Custom/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Custom/Locked",
+    "parameters": 0
+   },
+   "placement": null,
+   "openTargetWindow": 1,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 1,
+   "visualSize": 0,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "ba4fdd75b80534b3c9cdd2a523e95674",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/CustomGame.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/15-Group4-Custom.asset"
+  },
+  {
+   "m_Name": "2-Standard-FFA1x1",
+   "id": 820724643,
+   "title": {
+    "key": "ui|selectmode|Standard-FFA1x1/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 2,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-FFA1x1/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-FFA1x1/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-FFA1x1/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-FFA1x1/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-FFA1x1",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 1,
+   "requiredFeatures": [],
+   "battleType": 6,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "0bdf914d8f9334558aeace6d19a5c185",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Default_1on1.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/2-Standard-FFA1x1.asset"
+  },
+  {
+   "m_Name": "22-Standard-Domination",
+   "id": 1791294032,
+   "title": {
+    "key": "ui|selectmode|Standard-Domination/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 22,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-Domination/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-Domination/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-Domination/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-Domination/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-Domination",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 9,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "145aec92abe6142f9a1f771858aea592",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Deafult_domination.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/22-Standard-Domination.asset"
+  },
+  {
+   "m_Name": "23-Standard-KOH",
+   "id": 1280495237,
+   "title": {
+    "key": "ui|selectmode|Standard-KOH/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 23,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-KOH/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-KOH/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-KOH/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-KOH/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-KOH",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 10,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "be308660ff3c84a728bda99524306093",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Deafult_koth.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/23-Standard-KOH.asset"
+  },
+  {
+   "m_Name": "3-Standard-FFA1x1x1",
+   "id": 3431951453,
+   "title": {
+    "key": "ui|selectmode|Standard-FFA1x1x1/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 3,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-FFA1x1x1/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-FFA1x1x1/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-FFA1x1x1/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-FFA1x1x1/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-FFA1x1x1",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 1,
+   "requiredFeatures": [
+    {
+     "fileID": 11400000,
+     "guid": "0c8aa02c358df484fa6d1b15a9868076",
+     "type": 2
+    }
+   ],
+   "battleType": 7,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "a97f7ea0673a341b883e6a2ecbc8d0da",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Default_1x1x1.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/3-Standard-FFA1x1x1.asset"
+  },
+  {
+   "m_Name": "30-Special-Challenges",
+   "id": 3395458169,
+   "title": {
+    "key": "ui|selectmode|Special-Challenges/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "e15e633320b4a40458b639ff85a7d2f3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_event.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 30,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Special-Challenges/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Special-Challenges/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Special-Challenges/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Special-Challenges/Locked",
+    "parameters": 0
+   },
+   "placement": "Special-Challenges",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 5,
+   "visualSize": 0,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/30-Special-Challenges.asset"
+  },
+  {
+   "m_Name": "31-Special-CustomRules",
+   "id": 4122208290,
+   "title": {
+    "key": "ui|selectmode|Special-CustomRules/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "e15e633320b4a40458b639ff85a7d2f3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_event.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 31,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Special-CustomRules/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Special-CustomRules/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Special-CustomRules/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Special-CustomRules/Locked",
+    "parameters": 0
+   },
+   "placement": "Special-CustomRules",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 12,
+   "visualSize": 0,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/31-Special-CustomRules.asset"
+  },
+  {
+   "m_Name": "4-Standard-FFA1x1x1x1",
+   "id": 3303871063,
+   "title": {
+    "key": "ui|selectmode|Standard-FFA1x1x1x1/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 4,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-FFA1x1x1x1/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-FFA1x1x1x1/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-FFA1x1x1x1/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-FFA1x1x1x1/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-FFA1x1x1x1",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 1,
+   "requiredFeatures": [
+    {
+     "fileID": 11400000,
+     "guid": "0c8aa02c358df484fa6d1b15a9868076",
+     "type": 2
+    }
+   ],
+   "battleType": 8,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "4e24815b13b454c4880e426ffa2b0e29",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Default_1x1x1x1.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/4-Standard-FFA1x1x1x1.asset"
+  },
+  {
+   "m_Name": "5-Standard-Unranked2x2",
+   "id": 435484015,
+   "title": {
+    "key": "ui|selectmode|Standard-Unranked2x2/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 5,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-Unranked2x2/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-Unranked2x2/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-Unranked2x2/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-Unranked2x2/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-Unranked2x2",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 1,
+   "requiredFeatures": [],
+   "battleType": 4,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/5-Standard-Unranked2x2.asset"
+  },
+  {
+   "m_Name": "6-Standard-BattleRoyal",
+   "id": 1037492853,
+   "title": {
+    "key": "ui|selectmode|Standard-BattleRoyal/Header",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "422b73a14fbe34e79801763a4db21be5",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_rating.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 6,
+   "subClientId": 0,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-BattleRoyal/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-BattleRoyal/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": "ui|selectmode|Standard-BattleRoyal/Hint",
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": "ui|selectmode|Standard-BattleRoyal/Locked",
+    "parameters": 0
+   },
+   "placement": "Standard-BattleRoyal",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 1,
+   "requiredFeatures": [
+    {
+     "fileID": 11400000,
+     "guid": "0c8aa02c358df484fa6d1b15a9868076",
+     "type": 2
+    }
+   ],
+   "battleType": 13,
+   "visualSize": 0,
+   "border": {
+    "guid": "4db34f2fb31154d6aac1c71703bf8563",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_silver.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "fcc18bee1bfbd49febd5540d1a216b25",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Default_BattleRoyal.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 0,
+   "missionMapHeader": {
+    "fileID": 0
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/6-Standard-BattleRoyal.asset"
+  },
+  {
+   "m_Name": "666-Tutorial-1-90004",
+   "id": 1695845224,
+   "title": {
+    "key": "GameModes|Tutorial4",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "c7468b6a0162e4709bddfdda6db39e1f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_campaign.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 90004,
+   "subClientId": 1,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-Rating/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-Rating/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": null,
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": null,
+    "parameters": 0
+   },
+   "placement": "Tutorial",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 99,
+   "visualSize": 0,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "03f62764880df45869bf12797a0de6a6",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Tutorial/Tutorial_90004.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 1,
+   "missionMapHeader": {
+    "fileID": 11400000,
+    "guid": "482cb4f3dfcbc46a581cb28ce5ee329a",
+    "type": 2
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/666-Tutorial-1-90004.asset"
+  },
+  {
+   "m_Name": "666-Tutorial-2-90002",
+   "id": 3922402151,
+   "title": {
+    "key": "GameModes|Tutorial2",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "c7468b6a0162e4709bddfdda6db39e1f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_campaign.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 90002,
+   "subClientId": 2,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-FFA1x1/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-FFA1x1/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": null,
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": null,
+    "parameters": 0
+   },
+   "placement": "Tutorial",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 99,
+   "visualSize": 1,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "a9d00bfaccce843eb82d2c2045a61f23",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Tutorial/Tutorial_90002.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 1,
+   "missionMapHeader": {
+    "fileID": 11400000,
+    "guid": "f99c70645bc504a2babaeaf7b6f1894a",
+    "type": 2
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/666-Tutorial-2-90002.asset"
+  },
+  {
+   "m_Name": "666-Tutorial-3-90003",
+   "id": 221535529,
+   "title": {
+    "key": "GameModes|Tutorial3",
+    "parameters": 0
+   },
+   "iconSmallResource": {
+    "guid": "c7468b6a0162e4709bddfdda6db39e1f",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/MainMenu/Icons/mode_campaign.png"
+   },
+   "iconResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "iconLargeResource": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "description": {
+    "key": null,
+    "parameters": 0
+   },
+   "clientId": 90003,
+   "subClientId": 3,
+   "modeKey": {
+    "key": "ui|selectmode|Standard-FFA1x1/ModeButton",
+    "parameters": 0
+   },
+   "battleButtonKey": {
+    "key": "ui|selectmode|Standard-FFA1x1/BattleButton",
+    "parameters": 0
+   },
+   "tooltip": {
+    "key": null,
+    "parameters": 0
+   },
+   "lockedText": {
+    "key": null,
+    "parameters": 0
+   },
+   "placement": "Tutorial",
+   "openTargetWindow": 0,
+   "showBoostersPopup": 0,
+   "requiredFeatures": [],
+   "battleType": 99,
+   "visualSize": 1,
+   "border": {
+    "guid": "9e8e777e293f14c10995f1aadce64ee3",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_frame_gold.png"
+   },
+   "borderDaily": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "image": {
+    "guid": "5d6fe3715959a4a6e8a64f723fcb8f2a",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Menu/UI/SelectBattleMode/GameModes/Tutorial/Tutorial_90003.png"
+   },
+   "captionBack": {
+    "guid": "545ed94b260ac4d4dbfd838eccea3245",
+    "resourcePath": "Assets/ME.TexturesGenerator/_Common/UI/SelectBattleMode/mode_bg_violet.png"
+   },
+   "runMission": 1,
+   "missionMapHeader": {
+    "fileID": 11400000,
+    "guid": "bcc06c12238cc4f6cb1ac8975c62da91",
+    "type": 2
+   },
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/BattleModes/666-Tutorial-3-90003.asset"
+  }
+ ],
+ "suddenDeath": [
+  {
+   "m_Name": "DefaultSuddenDeathInfo",
+   "tick": -1,
+   "speedFactorOnPreview": 1,
+   "ticksForPreview": 0,
+   "speedFactorAfterSuddenDeath": 1,
+   "previewScreen": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "playerDeathSfx": {
+    "fileID": 0
+   },
+   "defaultTimeCount": 1,
+   "customConfigsByLeague": [],
+   "counterPhaseInfo": [],
+   "tickForCounterBeforeMatchEnd": -1,
+   "tickForCounterBeforePreview": -1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Battle/DefaultSuddenDeathInfo.asset"
+  },
+  {
+   "m_Name": "SD_EnergyRush",
+   "tick": 333,
+   "speedFactorOnPreview": 1,
+   "ticksForPreview": 0,
+   "speedFactorAfterSuddenDeath": 1,
+   "previewScreen": {
+    "guid": null,
+    "resourcePath": null
+   },
+   "playerDeathSfx": {
+    "fileID": 0
+   },
+   "defaultTimeCount": 1,
+   "customConfigsByLeague": [
+    {
+     "leagueIndex": 0,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 1,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 2,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 3,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 4,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 5,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 6,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 7,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 8,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 9,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    },
+    {
+     "leagueIndex": 10,
+     "list": [
+      {
+       "fileID": 11400000,
+       "guid": "b01af33cc2b434fdd9cf2b0f571baddc",
+       "type": 2
+      }
+     ]
+    }
+   ],
+   "counterPhaseInfo": [
+    {
+     "tick": 0,
+     "type": 0
+    }
+   ],
+   "tickForCounterBeforeMatchEnd": -1,
+   "tickForCounterBeforePreview": -1,
+   "source": "Assets/ME.TexturesGenerator/_DatabaseData/GameInfo/Battle/SD_EnergyRush.asset"
+  }
+ ]
+}
