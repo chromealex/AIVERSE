@@ -441,6 +441,218 @@
           "default": 1,
           "minimum": 1,
           "maximum": 16
+        },
+        "maxSlopeMilliDegrees": {
+          "type": "integer",
+          "default": 45000,
+          "minimum": 0,
+          "maximum": 89000
+        },
+        "slideAccelerationMilli": {
+          "type": "integer",
+          "default": 15000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "slideSpeedMilli": {
+          "type": "integer",
+          "default": 12000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ledgeMinHeightMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ledgeMaxHeightMilli": {
+          "type": "integer",
+          "default": 2200,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ledgeShimmySpeedMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ledgeClimbDepthMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ledgeClimbTicks": {
+          "type": "integer",
+          "default": 24,
+          "minimum": 2,
+          "maximum": 3600
+        },
+        "ledgeRegrabTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "autoLedgeGrab": {
+          "type": "boolean",
+          "default": true
+        },
+        "ladderSpeedMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "ladderExitRiseMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ladderExitDepthMilli": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "ladderExitTicks": {
+          "type": "integer",
+          "default": 16,
+          "minimum": 2,
+          "maximum": 3600
+        },
+        "ladderJumpPushMilli": {
+          "type": "integer",
+          "default": 3000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "swimExitDepthMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "swimEnterDepthMilli": {
+          "type": "integer",
+          "default": 1200,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "swimFloatDepthMilli": {
+          "type": "integer",
+          "default": 1400,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "swimDiveDepthMilli": {
+          "type": "integer",
+          "default": 1800,
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "swimSpeedMilli": {
+          "type": "integer",
+          "default": 3500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "swimVerticalSpeedMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "swimAccelerationMilli": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "buoyancyMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "waterJumpSpeedMilli": {
+          "type": "integer",
+          "default": 5000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "climbEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "climbSpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wallJumpPushMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "climbStamina": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "climbStaminaDrain": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "climbStaminaRegen": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "mantleMinHeightMilli": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "vaultMaxHeightMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "mantleMaxHeightMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "vaultMinSpeedMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "vaultTicks": {
+          "type": "integer",
+          "default": 14,
+          "minimum": 2,
+          "maximum": 3600
+        },
+        "mantleTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 2,
+          "maximum": 3600
         }
       }
     },
