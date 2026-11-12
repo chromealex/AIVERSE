@@ -334,6 +334,8 @@ fields = flat object of strings and numbers (the service turns booleans into 1 /
 **social** (`steam`, `mock-social`) — engine/services/Social.h; achievement / stat ids map to API names in the
 plugin config (`"achievements": {"first_win": "ACH_WIN_ONE_GAME"}`, `"stats"`, `"floatStats"`)
 
+| Method | Args | Reply |
+|---|---|---|
 | `user` | `{}` | `{"id", "name", "language", "country"}` |
 | `unlock` | `{"id"}` | `{}` (event `achievement` `{"id"}` once stored) |
 | `progress` | `{"id", "current", "max"}` | `{}` (progress popup) |
@@ -347,6 +349,8 @@ plugin config (`"achievements": {"first_win": "ACH_WIN_ONE_GAME"}`, `"stats"`, `
 
 **push** (`push`, `mock-push`) — engine/services/Push.h
 
+| Method | Args | Reply |
+|---|---|---|
 | `permission` | `{}` | `{"granted"}` |
 | `token` | `{}` | `{"token"}` (also event `token`) |
 | `schedule` | `{"id", "title", "body", "delay", "category", "tag", "data", "repeat"}` | `{}` |
