@@ -65,16 +65,16 @@ def generate(s):
     header+=['    bool valid() const { return '+(' && '.join(check(f,f['name']) for f in s['fields'] if f.get('type')!='bool') or 'true')+'; }','};','inline std::optional<State> load(const aiverse::game::NativeState& raw) {','    auto version=raw.values.find("schema_version"); if(version==raw.values.end()||version->second!=schemaVersion)return {};','    State out;']
     for f in s['fields']:
         n=f['name'];header += [f'    auto {n}=raw.values.find("{n}"); if({n}==raw.values.end()||!{check(f,n+"->second")})return {{}};',f'    out.{n}={n}->second'+('!=0;' if f.get('type')=='bool' else ';')]
-    header+=['    return out;','}','inline bool store(aiverse::game::NativeState& raw,const State& value) {','    if(!value.valid())return false;', '    auto prior=raw.values.find("schema_version");if(!raw.values.empty()&&(prior==raw.values.end()||prior->second!=schemaVersion))return false; auto next=raw;', '    next.values["schema_version"]=schemaVersion;']
+    header+=['    return out;','}','inline bool store(aiverse::game::NativeState& raw,const State& value) {','    if(!value.valid())return false;', '    auto prior=raw.values.find("schema_version");if(!raw.values.empty()&&(prior==raw.values.end()||prior->second!=schemaVersion))return false;', '    auto next=raw;', '    next.values["schema_version"]=schemaVersion;']
     for f in s['fields']:header.append(f'    next.values["{f["name"]}"]=value.{f["name"]};')
-    header+=['    raw=std::move(next);return true;','}','inline bool initialize(aiverse::game::NativeState& raw){','    if(!raw.values.empty()||!raw.arrays.empty())return false;return store(raw,State{});','}','inline bool migrate(aiverse::game::NativeState& raw){','    auto next=raw;auto it=next.values.find("schema_version");if(it==next.values.end())return false;','    auto version=it->second;','    while(version<schemaVersion){','        switch(version){']
+    header+=['    raw=std::move(next);return true;','}','inline bool initialize(aiverse::game::NativeState& raw){','    if(!raw.values.empty()||!raw.arrays.empty())return false;','    return store(raw,State{});','}','inline bool migrate(aiverse::game::NativeState& raw){','    auto next=raw;auto it=next.values.find("schema_version");if(it==next.values.end())return false;','    auto version=it->second;','    while(version<schemaVersion){','        switch(version){']
     for m in s.get('migrations',[]):
         header.append(f'        case {m["from"]}: {{')
         for old,new in m.get('rename',{}).items():header += ['            {',f'            auto found=next.values.find("{old}");if(found==next.values.end()||next.values.count("{new}"))return false;',f'            auto value=found->second;next.values.erase(found);next.values["{new}"]=value;', '            }']
         for key,value in m.get('set',{}).items():header.append(f'            next.values["{key}"]={literal(value)};')
         for key in m.get('erase',[]):header.append(f'            next.values.erase("{key}");')
         header += [f'            version={m["to"]};break;','        }']
-    header+=['        default:return false;','        }','    }','    next.values["schema_version"]=version;if(!load(next))return false;raw=std::move(next);return true;','}','}']
+    header+=['        default:return false;','        }','    }','    next.values["schema_version"]=version;','    if(!load(next))return false;','    raw=std::move(next);return true;','}','}']
     commands=['// Generated command codecs. Host must validate ownership/resources before applying.','#pragma once','#include "engine/sim/Command.h"','#include <optional>',f'namespace {ns} {{',f'inline constexpr std::uint16_t commandType={s["commandType"]};']
     for c in s['commands']:
         n=c['name'];commands.append(f'struct {n} {{')

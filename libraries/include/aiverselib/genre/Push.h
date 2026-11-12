@@ -20,7 +20,8 @@ struct PushCommand {int64_t actor=0,object=0;Vec3 direction{};Fixed force{};bool
 struct PushReport {std::vector<InteractionEvent> events;};
 
 inline bool addPushable(PushState& s,const PushableDef& d,Vec3 position){
-    if(!valid(d)||!physBounded(position)||s.bodies.size()>=kPhysMaxObjects)return false;return s.bodies.emplace(d.id,PushBody{position,{},position,position}).second;
+    if(!valid(d)||!physBounded(position)||s.bodies.size()>=kPhysMaxObjects)return false;
+    return s.bodies.emplace(d.id,PushBody{position,{},position,position}).second;
 }
 inline Fixed pushResistance(const InteractionConfig& c,const PushableDef& d){return d.mass*c.gravity*Fixed::fromRatio(d.frictionMilli,1000);}
 inline bool valid(const PushState& s,const Pushables& defs){
@@ -81,7 +82,8 @@ template<class Collision> std::optional<PushReport> stepPush(const InteractionCo
             auto move=physSweep(collision,b.position,b.velocity*dt,d.half,ignore,c.skin);b.position=move.position;
             if(move.hit.hit){
                 auto n=move.hit.normal;b.velocity=n==Vec3{}?Vec3{}:b.velocity-n*b.velocity.dot(n);b.velocity.y={};
-                if(!b.blocked)ev.push_back({K::PushBlocked,id,actor?actor:b.actor,0,move.hit.id,b.position});b.blocked=true;
+                if(!b.blocked)ev.push_back({K::PushBlocked,id,actor?actor:b.actor,0,move.hit.id,b.position});
+                b.blocked=true;
             }else b.blocked=false;
         }
         if(!wasMoving&&b.velocity!=Vec3{})ev.push_back({K::PushStarted,id,b.actor,0,0,b.position});

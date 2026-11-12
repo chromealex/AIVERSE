@@ -553,7 +553,10 @@
         "aiverse-combat-actions",
         "aiverse-weapon-policies",
         "aiverse-configuration",
-        "aiverse-stealth-senses"
+        "aiverse-stealth-senses",
+        "aiverse-character-locomotion",
+        "aiverse-match-rules",
+        "aiverse-narrative-graphs"
       ],
       "backendDependencies": [
         "aiverse_engine",
@@ -888,7 +891,9 @@
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_navmesh",
-      "dependencies": [],
+      "dependencies": [
+        "aiverse-graphs"
+      ],
       "backendDependencies": [
         "aiverse_world"
       ],

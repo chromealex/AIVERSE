@@ -92,7 +92,8 @@ void ledges(){
     // Drop, regrab cooldown, missing ledge and out-of-range heights.
     LocomotionState d;in=LocomotionInput{};in.env.ledge=true;in.env.ledgeHeight=Fixed::fromRatio(3,2);in.env.ledgeNormal={{},{},-1_fx};step(c,d,in,0);CHECK(step(c,d,in,1).mode==M::Ledge);
     in.dropPressed=true;r=step(c,d,in,2);CHECK(r.mode==M::Air&&(r.events&LocoLedgeRelease));in.dropPressed=false;
-    for(uint32_t k=3;k<=2+c.ledgeRegrabTicks;++k)CHECK(step(c,d,in,k).mode==M::Air);CHECK(step(c,d,in,3+c.ledgeRegrabTicks).mode==M::Ledge);
+    for(uint32_t k=3;k<=2+c.ledgeRegrabTicks;++k)CHECK(step(c,d,in,k).mode==M::Air);
+    CHECK(step(c,d,in,3+c.ledgeRegrabTicks).mode==M::Ledge);
     in.env.ledge=false;r=step(c,d,in,20);CHECK(r.mode==M::Air&&(r.events&LocoLedgeRelease));
     LocomotionState high;in.env.ledge=true;in.env.ledgeHeight=3_fx;step(c,high,in,0);CHECK(step(c,high,in,1).mode==M::Air);
 }
@@ -146,7 +147,8 @@ void climbing(){
 }
 void mantles(){
     LocomotionModeConfig c;LocomotionState s;auto in=grounded();in.wish={1_fx,{}};LocomotionResult r;
-    for(uint32_t t=0;t<60;++t)r=step(c,s,in,t);CHECK(r.velocity.x==c.motion.groundSpeed);
+    for(uint32_t t=0;t<60;++t)r=step(c,s,in,t);
+    CHECK(r.velocity.x==c.motion.groundSpeed);
     in.jumpPressed=true;in.env.obstacle=true;in.env.obstacleHeight=Fixed::fromRatio(4,5);in.env.obstacleDepth=Fixed::fromRatio(3,5);in.env.obstacleNormal={-1_fx,{},{}};
     r=step(c,s,in,60);CHECK(r.mode==M::Mantle&&(r.events&LocoVaultStart)&&s.mantle==MantleKind::Vault&&r.velocity.x==Fixed{}&&r.velocity.y>Fixed{});in.jumpPressed=false;in.env.grounded=false;
     Vec3 p{};uint32_t t=60;while(r.mode==M::Mantle){p+=r.velocity*dt;CHECK(t-60<c.vaultTicks);if(t-60>=c.vaultTicks/2)CHECK(r.velocity.x==c.motion.groundSpeed);in.env.grounded=t+1-60>=c.vaultTicks;r=step(c,s,in,++t);}
@@ -283,7 +285,8 @@ void combatLockOn(){
 void combatPersistence(){
     CombatActorState actor;DodgeConfig dc;GuardConfig gc;PoiseConfig pc;LockOnConfig lc;std::vector<LockCandidate> c{{5,{{},{},5_fx}}};
     auto play=[&](CombatActorState& a,uint32_t from,uint32_t to){for(auto t=from;t<to;++t){CHECK(stepDodge(dc,a.dodge,t,t%17==3,[]{return true;}));CHECK(stepGuard(gc,a.guard,t,t%11<4));CHECK(stepPoise(pc,a.poise,t));
-        if(t%7==0)CHECK(applyPoiseHit(pc,a.poise,t,9000,resolveCombatContact(dc,a.dodge,gc,a.guard,{},{{},{},1_fx},t)));CHECK(stepLockOn(lc,a.lock,t,{},c,{t%13==0,0}));}};
+        if(t%7==0)CHECK(applyPoiseHit(pc,a.poise,t,9000,resolveCombatContact(dc,a.dodge,gc,a.guard,{},{{},{},1_fx},t)));
+        CHECK(stepLockOn(lc,a.lock,t,{},c,{t%13==0,0}));}};
     play(actor,0,60);roundtrip(actor);auto bytes=save(actor);CombatActorState restored;CHECK(load(bytes,restored)&&combatHash(restored)==combatHash(actor));
     CombatActorState straight=actor;play(straight,60,120);play(restored,60,120);CHECK(save(straight)==save(restored)&&combatHash(straight)==combatHash(restored));
     auto changed=restored;changed.poise.stunUntil+=1;CHECK(combatHash(changed)!=combatHash(restored));
@@ -366,7 +369,8 @@ void weaponFeeds(){
     auto step=[&](uint32_t tick,FeedInput in){auto r=stepFeed(m,s,tick,in,draw);CHECK(r);return *r;};
     CHECK(step(0,{true}).fired&&s.loaded==2);CHECK(!step(1,{true}).fired);CHECK(step(2,{true}).fired);CHECK(step(4,{true}).consumed==1&&s.loaded==0);
     auto dry=step(6,{true});CHECK(!dry.fired&&dry.dry&&dry.reloadStarted&&s.phase==FeedPhase::Reloading&&s.nextInsert==14);
-    for(uint32_t t=7;t<14;++t)CHECK(!step(t,{true}).fired);CHECK(s.phase==FeedPhase::Reloading);
+    for(uint32_t t=7;t<14;++t)CHECK(!step(t,{true}).fired);
+    CHECK(s.phase==FeedPhase::Reloading);
     auto done=step(14,{});CHECK(done.reloadCompleted&&done.loadedAdded==3&&s.loaded==3&&reserve==1);
     CHECK(step(15,{true}).fired);CHECK(step(16,{false,true}).reloadStarted&&s.nextInsert==21);
     auto interrupt=step(18,{true});CHECK(interrupt.reloadInterrupted&&interrupt.fired&&s.loaded==1&&s.phase==FeedPhase::Ready);
@@ -534,8 +538,10 @@ void payload(){
     ObjectiveEvents e;for(uint32_t tick=5;tick<=10;++tick)e=step(s,2,0,tick);
     CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::PayloadCheckpoint,1,1,100})&&s.reached==1&&s.progress==Fixed::fromRatio(45,4));
     auto mid=save(s);
-    for(uint32_t tick=11;tick<=30;++tick)step(s,0,0,tick);CHECK(s.progress==10_fx);  // locked at the checkpoint
-    for(uint32_t tick=31;tick<=37;++tick)e=step(s,2,0,tick);CHECK(s.delivered&&s.progress==20_fx&&has(e,K::PayloadDelivered,1));
+    for(uint32_t tick=11;tick<=30;++tick)step(s,0,0,tick);
+    CHECK(s.progress==10_fx);  // locked at the checkpoint
+    for(uint32_t tick=31;tick<=37;++tick)e=step(s,2,0,tick);
+    CHECK(s.delivered&&s.progress==20_fx&&has(e,K::PayloadDelivered,1));
     CHECK(step(s,2,0,38).empty());roundtrip(s);
     PayloadState restored;CHECK(load(mid,restored)&&restored.progress==Fixed::fromRatio(45,4));
     c.checkpointLock=false;for(uint32_t tick=11;tick<=80;++tick)step(restored,0,0,tick);CHECK(restored.progress==Fixed{});
@@ -581,7 +587,8 @@ void bomb(){
     e=step(*s,3,{0,{},{},true});CHECK(has(e,K::BombDropped,1,5)&&s->phase==BombPhase::Dropped&&!s->carrier);
     const std::array<BombActor,3> touching{{{9,2,false},{8,1,false},{6,1,false}}};
     e=step(*s,4,{0,{},touching,false});CHECK(has(e,K::BombPickedUp,1,6)&&s->carrier==6);
-    for(uint32_t t=5;t<=7;++t)e=step(*s,t,{8,{},{},false});CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::BombPlanted,1,8,17})&&bombPending(*s));
+    for(uint32_t t=5;t<=7;++t)e=step(*s,t,{8,{},{},false});
+    CHECK(e.size()==1&&e[0]==(ObjectiveEvent{K::BombPlanted,1,8,17})&&bombPending(*s));
     auto planted=*s;roundtrip(planted);
     const std::array<BombActor,2> both{{{30,2,false},{31,2,true}}};const std::array<BombActor,1> kit{{{31,2,true}}};
     step(*s,8,{0,both,{},false});CHECK(s->defuser==30&&s->defuseProgress==1);
@@ -608,7 +615,8 @@ void route(){
 void clock(){
     ObjectiveClockConfig c{10,2,5,100,true};auto s=startClock(c,0);CHECK(s&&s->deadline==10);
     auto step=[&](ObjectiveClockState& st,uint32_t t,bool contested){return ok([&]{return stepClock(c,st,t,contested);});};
-    for(uint32_t t=0;t<10;++t)CHECK(step(*s,t,false).empty());CHECK(extendClock(c,*s,5)&&s->deadline==15&&clockRemaining(*s,10)==5);
+    for(uint32_t t=0;t<10;++t)CHECK(step(*s,t,false).empty());
+    CHECK(extendClock(c,*s,5)&&s->deadline==15&&clockRemaining(*s,10)==5);
     auto base=*s;auto e=step(*s,15,true);CHECK(e.size()==1&&e[0].kind==K::OvertimeStarted&&s->overtime);
     step(*s,16,false);CHECK(s->overtime);e=step(*s,17,false);CHECK(e.size()==2&&e[0]==(ObjectiveEvent{K::OvertimeEnded,0,0,2})&&e[1].kind==K::TimeExpired&&s->expired);
     CHECK(step(*s,18,true).empty()&&!extendClock(c,*s,5));roundtrip(*s);
@@ -771,7 +779,9 @@ void suspicionThresholds(){
     in.targets.clear();auto lost=run(c,d,s,17,in);SCHECK(count(lost,SenseEventKind::SearchStarted)==1&&seen(lost,1,10)->searching&&seen(lost,1,10)->level==Awareness::Alert);
     // Decay starts decayDelay ticks after the last stimulus, exactly even across skipped ticks.
     c.suspicion.decayDelay=5;c.suspicion.decayPerTick=10;SensesState q;SensesInput see;see.observers={agent(1,1,{})};see.targets={target(10,2,{{},{},1_fx})};
-    for(uint32_t t=0;t<4;++t)run(c,d,q,t,see);auto alone=see;alone.targets.clear();
+    for(uint32_t t=0;t<4;++t)run(c,d,q,t,see);
+    auto alone=see;
+    alone.targets.clear();
     SCHECK(seen(run(c,d,q,8,alone),1,10)->suspicion==240);SCHECK(seen(run(c,d,q,9,alone),1,10)->suspicion==230);
     auto r=run(c,d,q,20,alone);SCHECK(seen(r,1,10)->suspicion==120&&seen(r,1,10)->level==Awareness::Unaware&&count(r,SenseEventKind::AwarenessChanged)==1);
     SCHECK(run(c,d,q,40,alone).perceived.empty()&&q.observers.empty());
@@ -956,7 +966,8 @@ bool stepMeleeDuel(MeleeDuel& d){
         seen.vulnerable=attackPhase(defs,other.melee,tick)==AttackPhase::Recovery||staggered(other.combat.poise,tick);seen.healthMilli=std::clamp<int64_t>(other.health,0,1000);
         seen.threat=meleeThreat(defs,other.melee,tick,reachOf(other.melee.attack));
         auto r=stepMeleeBot(d.cfg[i],defs,kDodge,kGuard,d.f[i].bot,tick,{me.id,me.team,me.pose,me.melee,me.combat},std::span<const PerceivedTarget>(&seen,1),d.rng);
-        if(!r)return false;in[i]=*r;
+        if(!r)return false;
+        in[i]=*r;
     }
     for(std::size_t i=0;i<2;++i){
         auto& me=d.f[i];const auto& other=d.f[1-i];const auto& x=in[i];
@@ -1020,7 +1031,10 @@ struct Gunner {int64_t id=0,team=0;Vec3 pos{};Fixed yaw{},pitch{};RecoilState re
 struct GunDuel {std::array<Gunner,2> g;std::array<ShooterBotConfig,2> cfg;uint32_t tick=0;Random rng{1};uint64_t hash=0;uint32_t shots=0,hits=0,covered=0;std::array<int64_t,2> dealt{};};
 GunDuel makeGunDuel(uint64_t seed,BotDifficulty a,BotDifficulty b){
     GunDuel d;d.rng=Random(seed);d.g[0].id=1;d.g[0].team=1;d.g[0].pos={{},{},-12_fx};d.g[1].id=2;d.g[1].team=2;d.g[1].pos={{},{},12_fx};d.g[1].yaw=Fixed::fromRatio(1,2);
-    for(auto& g:d.g)g.feed=makeFeed(duelFeed());d.cfg[0].difficulty=a;d.cfg[1].difficulty=b;return d;
+    for(auto& g:d.g)g.feed=makeFeed(duelFeed());
+    d.cfg[0].difficulty=a;
+    d.cfg[1].difficulty=b;
+    return d;
 }
 Vec3 eyeOf(Vec3 p){return {p.x,p.y+Fixed::fromRatio(8,5),p.z};}
 Vec3 chestOf(Vec3 p){return {p.x,p.y+Fixed::fromRatio(13,10),p.z};}
@@ -1161,7 +1175,9 @@ void shooterPolicy(){
     for(uint32_t t=0;t<40;++t){
         auto o=stepShooterBot(c,feed,s,t,self,one(foe),none,rng);CHECK(o);
         CHECK(fxAbs(wrapBotTurns(o->yaw-self.yaw))<=c.turnPerTick);                     // bounded turn rate
-        if(o->feed.fire&&!firstFire)firstFire=t;self.yaw=o->yaw;self.pitch=o->pitch;
+        if(o->feed.fire&&!firstFire)firstFire=t;
+        self.yaw=o->yaw;
+        self.pitch=o->pitch;
     }
     CHECK(firstFire>=15&&fxAbs(self.yaw)<=c.fireTolerance&&rng.state()==rngBefore);   // a quarter turn at 1/64 per tick; no error -> no RNG
     CHECK(s.decision==ShooterDecision::Engage);
@@ -1373,7 +1389,8 @@ void barks(const std::string& root){
     d.s.knowledge[{0,4}]=d.tick;for(int k=0;k<60;++k)d.step();
     r=d.step({},{{2,1,{}},{1,1,{}}});CHECK(r.barks.size()==2&&r.barks[0].request==1&&r.barks[0].bark==2&&r.barks[1].request==2&&r.barks[1].bark==3);
     CHECK(r.cues.size()==1&&r.cues[0].cueId==300&&r.cues[0].source==CueSource::Bark&&r.cues[0].barkId==3&&r.cues[0].speaker==2);
-    for(int k=0;k<60;++k)d.step();r=d.step({},{{1,1,{2}}});CHECK(r.barks.empty());                                       // bark 3 is once
+    for(int k=0;k<60;++k)d.step();
+    r=d.step({},{{1,1,{2}}});CHECK(r.barks.empty());                                       // bark 3 is once
     auto w2=w;w2.barks[5]=SceneBark{5,2,2,0,0,"bark.smuggler.sigh",false,{},{}};CHECK(valid(w2));auto e=drive(w2,c);
     std::vector<int64_t> picked;for(int k=0;k<3;++k){r=e.step({},{{1,2,{}}});CHECK(r.barks.size()==1);picked.push_back(r.barks[0].bark);for(int m=0;m<9;++m)CHECK(e.step({},{{1,2,{}}}).barks.empty());}
     CHECK(picked==(Ids{4,5,4}));                                                                                          // ID, never spoken, least recent
@@ -1413,7 +1430,8 @@ void rejection(const std::string& root){
     auto w=social(root);auto d=drive(w);d.step();auto before=save(d.s);
     CHECK(!stepNarrative(w,{},d.s,d.tick,{})&&!stepNarrative(w,{},d.s,0,{})&&save(d.s)==before);
     CHECK(!stepNarrative(w,{},d.s,d.tick+1,{{{5,CK::Advance,0},{5,CK::Advance,0}},{}})&&!stepNarrative(w,{},d.s,d.tick+1,{{{0,CK::Advance,0}},{}}));
-    CHECK(!stepNarrative(w,{},d.s,d.tick+1,{{},{{1,0,{}}}})&&save(d.s)==before);
+    NarrativeInput badBark{{},{{1,0,{}}}}; // named: GCC 13 -O2 misreports the braced temporary as dangling
+    CHECK(!stepNarrative(w,{},d.s,d.tick+1,badBark)&&save(d.s)==before);
     NarrativeConfig broken;broken.backlogLimit=0;CHECK(!stepNarrative(w,broken,d.s,d.tick+1,{})&&!beginNarrative(w,broken)&&!beginNarrative(w,{},{{3,7}}));
     d.run(CK::StartScene,1);auto r=d.step({{d.cmd,CK::Advance,0}});CHECK(has(r,EK::CommandRejected)&&r.events[0].extra==1&&d.s.node==1);
     r=d.run(CK::Choose,99);CHECK(r.events.size()==1&&r.events[0].kind==EK::CommandRejected&&r.events[0].extra==0&&d.s.lastCommand==d.cmd-1);
@@ -1497,7 +1515,8 @@ void carryThrow(const InteractionDefinitions& all){
         else{auto e=find(r->events,K::Landed);CHECK(e&&e->position==preview.landingPosition&&e->collider==1&&!s.flights.contains(1));}
     }
     CHECK(t-1==thrown+preview.ticks&&preview.landingPosition.y>=Fixed::fromRatio(1,4)-c.skin&&preview.landingPosition.y<Fixed::fromRatio(3,10));
-    for(uint32_t k=twinFrom;k<t;++k)CHECK(stepCarry(c,items,*twin,k,dt,in,col));CHECK(interactionHash(*twin)==interactionHash(s));
+    for(uint32_t k=twinFrom;k<t;++k)CHECK(stepCarry(c,items,*twin,k,dt,in,col));
+    CHECK(interactionHash(*twin)==interactionHash(s));
     // Carrying into a wall: the held object is stopped by the swept move and dropped once too far from the hold point.
     CHECK(w.add({2,{{-5_fx,Fixed{},3_fx},{5_fx,5_fx,4_fx}}}));CarryState walk;CarryInput go;go.carriers={me};go.carriers[0].pickUp=1;
     go.objects={{1,{Fixed{},Fixed::fromRatio(1,4),1_fx}}};CHECK(stepCarry(c,items,walk,0,dt,go,col));go.objects.clear();go.carriers[0].pickUp=0;
@@ -1527,7 +1546,9 @@ void pushPull(){
     const uint32_t moveStart=t++;std::optional<PushState> twin;
     for(;t<moveStart+c.gridMoveTicks;++t){if(t==moveStart+5)twin=restored(s);r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&!has(r->events,K::PushArrived));}
     r=stepPush(c,defs,s,t,dt,cmd,col);CHECK(r&&has(r->events,K::PushArrived)&&s.bodies.at(11).position==(Vec3{1_fx,milli(480),10_fx}));
-    for(uint32_t k=moveStart+5;k<=t;++k)CHECK(stepPush(c,defs,*twin,k,dt,cmd,col));CHECK(interactionHash(*twin)==interactionHash(s));++t;
+    for(uint32_t k=moveStart+5;k<=t;++k)CHECK(stepPush(c,defs,*twin,k,dt,cmd,col));
+    CHECK(interactionHash(*twin)==interactionHash(s));
+    ++t;
     r=stepPush(c,defs,s,t++,dt,cmd,col);auto e=r?find(r->events,K::PushBlocked):nullptr;CHECK(e&&e->collider==4&&!s.bodies.at(11).moving);
     cmd={{1,11,{-1_fx,{},{}},1000_fx,true}};r=stepPush(c,defs,s,t++,dt,cmd,col);CHECK(r&&has(r->events,K::PushResisted,ReasonNotPullable));
     cmd={{1,10,{1_fx,{},{}},-1_fx,false}};CHECK(!stepPush(c,defs,s,t,dt,cmd,col));
@@ -1539,7 +1560,8 @@ void ropes(){
     auto fine=s;auto c16=c;c16.ropeIterations=32;bool broke=false;std::optional<RopeState> twin;uint32_t t=0;
     for(;t<900;++t){if(t==300)twin=restored(s);auto r=stepRopes(c,defs,s,t,dt,{});CHECK(r&&r->ropes.size()==3);if(auto e=find(r->events,K::RopeBroken)){CHECK(e->object==2&&e->value>50000);broke=true;}
         CHECK(stepRopes(c16,defs,fine,t,dt,{}));}
-    for(uint32_t k=300;k<t;++k)CHECK(stepRopes(c,defs,*twin,k,dt,{}));CHECK(interactionHash(*twin)==interactionHash(s));
+    for(uint32_t k=300;k<t;++k)CHECK(stepRopes(c,defs,*twin,k,dt,{}));
+    CHECK(interactionHash(*twin)==interactionHash(s));
     const auto& rope=s.ropes.at(1);auto expected=(10_fx+Fixed::fromRatio(7,5))*c.gravity;
     CHECK(broke&&s.ropes.at(2).broken&&!rope.broken);CHECK(near(rope.tension,expected,expected/10));
     auto span=(rope.points.back()-rope.points.front()).length(),fineSpan=(fine.ropes.at(1).points.back()-fine.ropes.at(1).points.front()).length();
@@ -1606,7 +1628,8 @@ void platforms(const InteractionDefinitions& all){
         CHECK(rider-s.platforms.at(40).position==offset);
     }
     CHECK(near(s.platforms.at(40).position.x,2_fx,Fixed::fromRatio(1,20))&&s.platforms.at(40).velocity.x>Fixed{});
-    for(uint32_t t=60;t<90;++t)ride(t,{1_fx,{}},{{1,40}});CHECK((rider-s.platforms.at(40).position).x>offset.x+1_fx);
+    for(uint32_t t=60;t<90;++t)ride(t,{1_fx,{}},{{1,40}});
+    CHECK((rider-s.platforms.at(40).position).x>offset.x+1_fx);
     auto r=ride(90,{},{});CHECK(has(r.events,K::RiderLeft)&&s.platforms.at(40).riders.empty()&&has(r.events,K::RiderLeft));
     uint32_t t=91,arrived=0,still=0;std::optional<PlatformState> twin;uint32_t twinFrom=0;
     for(;t<400;++t){
@@ -1617,7 +1640,8 @@ void platforms(const InteractionDefinitions& all){
         if(findFor(x->events,K::PlatformDeparted,40)){CHECK(t==arrived+11&&s.platforms.at(40).velocity.x<Fixed{});break;}
     }
     CHECK(arrived&&still==10);
-    for(uint32_t k=twinFrom;k<=t;++k)CHECK(stepPlatforms(c,defs,*twin,k,dt,{},{}));CHECK(interactionHash(*twin)==interactionHash(s));
+    for(uint32_t k=twinFrom;k<=t;++k)CHECK(stepPlatforms(c,defs,*twin,k,dt,{},{}));
+    CHECK(interactionHash(*twin)==interactionHash(s));
     std::vector<PlatformCommand> stop{{40,false}};auto before=s.platforms.at(40).position;CHECK(stepPlatforms(c,defs,s,++t,dt,stop,{}));CHECK(s.platforms.at(40).position==before);
     std::vector<RiderContact> twice{{1,40},{1,41}};CHECK(!stepPlatforms(c,defs,s,++t,dt,{},twice));
 }
@@ -1712,7 +1736,8 @@ void timeExact(){
     auto gap=tstep(c,b,N+999);CCHECK(perTick==domainSteps(gap,kDomainCinematic)&&save(a)==save(b)&&cinematicHash(a)==cinematicHash(b));
     // Nested: player (child of world) multiplies its own 1/2 by the world's 1/2.
     TimeState n;TimeInput m;m.add={slowMotion(kDomainWorld,{1,2},0),{0,kDomainPlayer,{1,2},0,0,TimeBlend::Multiply}};uint64_t quarter=0;
-    for(uint32_t t=0;t<1000;++t)quarter+=domainSteps(tstep(c,n,t,t?TimeInput{}:m),kDomainPlayer);CCHECK(quarter==250);
+    for(uint32_t t=0;t<1000;++t)quarter+=domainSteps(tstep(c,n,t,t?TimeInput{}:m),kDomainPlayer);
+    CCHECK(quarter==250);
     // Fast forward 3x and a non-unit denominator stay exact.
     TimeState f;TimeInput fast;fast.add={slowMotion(kDomainUi,{3,1},0),slowMotion(kDomainWorld,{5,7},0)};uint64_t ff=0,sevenths=0;
     for(uint32_t t=0;t<7000;++t){auto x=tstep(c,f,t,t?TimeInput{}:fast);ff+=domainSteps(x,kDomainUi);sevenths+=domainSteps(x,kDomainWorld);}
@@ -1787,7 +1812,8 @@ void syncTimeouts(){
     // Pausing shifts the deadline by the paused ticks.
     SceneState p;begin(p);run(l,p,8);run(l,p,9);run(l,p,10,commands({cmd(2,C::Pause)}));for(uint32_t t=11;t<20;++t)run(l,p,t);
     r=run(l,p,20,commands({cmd(3,C::Unpause)}));CCHECK(count(r,K::Unpaused)==1&&p.deadline==27);
-    for(uint32_t t=21;t<27;++t)CCHECK(count(run(l,p,t),K::SyncReleased)==0);CCHECK(first(run(l,p,27),K::SyncReleased)->value==1);
+    for(uint32_t t=21;t<27;++t)CCHECK(count(run(l,p,t),K::SyncReleased)==0);
+    CCHECK(first(run(l,p,27),K::SyncReleased)->value==1);
     // A frozen domain (hit-stop) cannot stall a wait: timeouts are authoritative ticks.
     auto f=scene(21,10,kDomainCinematic);f.cues={cue(1,0,CueKind::Dialogue,7)};f.syncs={sync(1,1,5,{line(1)})};auto fl=library({f});SceneState z;
     SceneInput frozen;frozen.domainSteps[kDomainCinematic]=0;frozen.commands={cmd(1,C::TriggerScene,21)};run(fl,z,1,frozen);frozen.commands.clear();
@@ -1823,12 +1849,15 @@ void qteJudging(){
     auto d=scene(30,40);d.syncs={sync(1,5,1),sync(2,30,1)};d.qtes={press(1,10,1,5,0,1),press(2,20,1,5,2,0)};
     d.cues={cue(1,25,CueKind::Sound,5),cue(2,25,CueKind::Event,9,0,2),cue(3,35,CueKind::Sound,6)};auto l=library({d});
     SceneState s;run(l,s,1,commands({cmd(1,C::TriggerScene,30)}));SceneReport r;
-    for(uint32_t t=2;t<=12;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&first(r,K::QtePrompt)->id==1&&s.qte.start==12);
+    for(uint32_t t=2;t<=12;++t)r=run(l,s,t);
+    CCHECK(s.phase==ScenePhase::Qte&&first(r,K::QtePrompt)->id==1&&s.qte.start==12);
     for(uint32_t t=13;t<17;++t)run(l,s,t);
     r=run(l,s,17);CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail)&&first(r,K::Branch)->id==1&&count(r,K::SyncReached)==1&&s.position==6);
-    for(uint32_t t=18;t<=21;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&s.qte.start==21);
+    for(uint32_t t=18;t<=21;++t)r=run(l,s,t);
+    CCHECK(s.phase==ScenePhase::Qte&&s.qte.start==21);
     SceneInput hit;hit.qte={{23,1,true}};run(l,s,22);r=run(l,s,23,hit);CCHECK(qteResult(s,1)==QteOutcome::Success&&count(r,K::Branch)==0&&s.position==11);
-    for(uint32_t t=24;t<=32;++t)r=run(l,s,t);CCHECK(s.phase==ScenePhase::Qte&&s.qte.qte==2);
+    for(uint32_t t=24;t<=32;++t)r=run(l,s,t);
+    CCHECK(s.phase==ScenePhase::Qte&&s.qte.qte==2);
     hit.qte={{34,1,true}};run(l,s,33);r=run(l,s,34,hit);
     CCHECK(first(r,K::Branch)->id==2&&r.cuesSkipped==1&&cues(r)==Ids{2}&&first(r,K::Cue)->flags==1&&s.position==31&&qteResult(s,2)==QteOutcome::Success);
     // Accessibility: auto-succeed resolves every prompt immediately (the forward branch still applies).
@@ -1837,7 +1866,10 @@ void qteJudging(){
     CCHECK(prompts==2&&auto_==2&&a.lastOutcome==SceneOutcome::Completed&&a.results.at(2)==QteOutcome::AutoSuccess);
     // Extended windows: the scene stores the scaled window at the prompt.
     SceneState e;opt.options=access;opt.options->windowScaleMilli=1000;run(l,e,1,opt);for(uint32_t t=2;t<=12;++t)run(l,e,t);CCHECK(e.phase==ScenePhase::Qte&&e.qte.close==10&&e.qte.open==1);
-    for(uint32_t t=13;t<22;++t)run(l,e,t);CCHECK(e.phase==ScenePhase::Qte);r=run(l,e,22);CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail));
+    for(uint32_t t=13;t<22;++t)run(l,e,t);
+    CCHECK(e.phase==ScenePhase::Qte);
+    r=run(l,e,22);
+    CCHECK(first(r,K::QteResolved)->value==int64_t(QteOutcome::Fail));
 }
 SceneDef stagedScene(){
     auto d=scene(40,10);d.marks[1]={1,{{},{},2_fx},Fixed::fromRatio(1,2)};d.marks[2]={2,{3_fx,{},{}},Fixed::fromRatio(1,2)};
@@ -1853,17 +1885,22 @@ void staging(){
     CCHECK(first(r,K::InPosition)->id==1&&s.participants[1].status==StageStatus::InPosition&&s.participants[2].status==StageStatus::Moving);
     for(uint32_t t=4;t<7;++t)run(l,s,t);
     r=run(l,s,7);CCHECK(first(r,K::StagingLate)->id==2&&s.phase==ScenePhase::Playing&&s.position==0); // proceed fallback, staging done
-    for(uint32_t t=8;t<=11;++t)r=run(l,s,t);CCHECK(first(r,K::MoveToMark)->id==3&&first(r,K::MoveToMark)->ref==1&&s.participants[3].deadline==17);
+    for(uint32_t t=8;t<=11;++t)r=run(l,s,t);
+    CCHECK(first(r,K::MoveToMark)->id==3&&first(r,K::MoveToMark)->ref==1&&s.participants[3].deadline==17);
     run(l,s,12);r=run(l,s,13);CCHECK(first(r,K::InputReleased)->id==1&&!inputLocked(s,1));
     run(l,s,14);r=run(l,s,15);CCHECK(s.phase==ScenePhase::Waiting);run(l,s,16);
     r=run(l,s,17);CCHECK(first(r,K::TeleportRequested)->id==3&&first(r,K::SyncReleased)->value==0&&s.participants[3].status==StageStatus::Teleported);
     r=run(l,s,18);CCHECK(count(r,K::Finished)==1&&count(r,K::InputReleased)==1&&lockedEntities(s).empty());
     // Teleport fallback at the staging timeout and the arrived shortcut.
     SceneState t;run(l,t,1,commands({cmd(1,C::TriggerScene,40)}));run(l,t,2);SceneInput arrived;arrived.arrived={2};run(l,t,3,arrived);
-    for(uint32_t k=4;k<7;++k)run(l,t,k);r=run(l,t,7);CCHECK(first(r,K::TeleportRequested)->id==1&&t.phase==ScenePhase::Playing&&t.participants[2].status==StageStatus::InPosition);
+    for(uint32_t k=4;k<7;++k)run(l,t,k);
+    r=run(l,t,7);
+    CCHECK(first(r,K::TeleportRequested)->id==1&&t.phase==ScenePhase::Playing&&t.participants[2].status==StageStatus::InPosition);
     // Abort fallback releases every lock.
     auto d=stagedScene();d.participants[1].fallback=StagingFallback::Abort;auto la=library({d});SceneState a;run(la,a,1,commands({cmd(1,C::TriggerScene,40)}));run(la,a,2);
-    for(uint32_t k=3;k<7;++k)run(la,a,k);r=run(la,a,7);CCHECK(count(r,K::Aborted)==1&&count(r,K::InputReleased)==2&&a.phase==ScenePhase::Idle&&a.lastOutcome==SceneOutcome::Aborted);
+    for(uint32_t k=3;k<7;++k)run(la,a,k);
+    r=run(la,a,7);
+    CCHECK(count(r,K::Aborted)==1&&count(r,K::InputReleased)==2&&a.phase==ScenePhase::Idle&&a.lastOutcome==SceneOutcome::Aborted);
     // Skipping staging teleports everyone still moving.
     SceneState k;run(l,k,1,commands({cmd(1,C::TriggerScene,40)}));run(l,k,2);r=run(l,k,3,commands({cmd(2,C::Skip)}));
     CCHECK(count(r,K::TeleportRequested)==2&&k.phase==ScenePhase::Playing&&count(r,K::Skipped)==1);
@@ -1878,7 +1915,8 @@ void checkpoints(){
     auto pending=save(s);
     for(uint32_t t=2;t<=12;++t){SceneInput in;if(t==5)in.finished={{1,5}};r=run(l,s,t,in);}
     CCHECK(first(r,K::SnapshotRequested)->value==1&&first(r,K::SnapshotRequested)->id==1&&s.lastSync==1);
-    for(uint32_t t=13;t<=18;++t)run(l,s,t);CCHECK(s.position==16&&s.essentialDone==Ids{2});
+    for(uint32_t t=13;t<=18;++t)run(l,s,t);
+    CCHECK(s.position==16&&s.essentialDone==Ids{2});
     auto mid=save(s);
     // Load after a crash: resume at the last sync point; presentation cues replay, the essential event does not.
     SceneState back;CCHECK(load(mid,back));r=run(l,back,19,commands({cmd(2,C::ResumeCheckpoint)}));
@@ -1890,7 +1928,9 @@ void checkpoints(){
     SceneState p;CCHECK(load(pending,p));r=run(l,p,2);CCHECK(count(r,K::Started)==1&&cues(r)==Ids{1});
     roundtrip(s);roundtrip(s.participants.empty()?ParticipantState{7,1,StageStatus::Moving,4,true}:s.participants.begin()->second);
     SceneState waiting;CCHECK(load(pending,waiting));run(l,waiting,2);run(l,waiting,3);
-    for(uint32_t t=4;t<=12;++t)run(l,waiting,t);CCHECK(waiting.phase==ScenePhase::Waiting);roundtrip(waiting);
+    for(uint32_t t=4;t<=12;++t)run(l,waiting,t);
+    CCHECK(waiting.phase==ScenePhase::Waiting);
+    roundtrip(waiting);
 }
 void triggersAndQueue(){
     auto a=scene(60,5);a.trigger=7001;a.cues={cue(1,0,CueKind::Event,1)};auto b=scene(61,3);b.trigger=7002;b.cues={cue(1,0,CueKind::Event,2)};

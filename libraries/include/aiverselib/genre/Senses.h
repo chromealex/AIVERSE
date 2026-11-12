@@ -87,7 +87,8 @@ struct SenseDefinitions {std::map<int64_t,DisguiseDef> disguises;std::map<int64_
 inline bool sensesBounded(Vec3 p,Fixed m=kSensesCoordLimit){return p.x>= -m&&p.x<=m&&p.y>= -m&&p.y<=m&&p.z>= -m&&p.z<=m;}
 inline bool sensesIdList(const std::vector<int64_t>& v){
     if(v.size()>kSensesMaxList)return false;
-    for(std::size_t i=0;i<v.size();++i)if(v[i]<=0||(i&&v[i]<=v[i-1]))return false;return true;
+    for(std::size_t i=0;i<v.size();++i)if(v[i]<=0||(i&&v[i]<=v[i-1]))return false;
+    return true;
 }
 inline bool sensesContains(const std::vector<int64_t>& sorted,int64_t id){return std::binary_search(sorted.begin(),sorted.end(),id);}
 inline bool valid(const SenseDefinitions& d){
@@ -139,16 +140,19 @@ inline bool valid(const AwarenessRecord& r){
 inline bool valid(const SearchState& s){
     if(!s.active)return s.target==0&&s.lastKnown==Vec3{}&&s.points.empty()&&s.next==0&&s.startedAt==0&&s.deadline==0;
     if(s.target<0||!sensesBounded(s.lastKnown)||s.points.empty()||s.points.size()>kSensesMaxPoints||s.next>s.points.size()||s.startedAt>s.deadline)return false;
-    for(const auto& p:s.points)if(p.candidate<0||p.spot<0||!sensesBounded(p.position))return false;return true;
+    for(const auto& p:s.points)if(p.candidate<0||p.spot<0||!sensesBounded(p.position))return false;
+    return true;
 }
 inline bool valid(const ObserverState& o){
     if(o.targets.size()>kSensesMaxAgents+1||!valid(o.search))return false;
-    for(const auto& [id,r]:o.targets)if(id<0||!valid(r))return false;return true;
+    for(const auto& [id,r]:o.targets)if(id<0||!valid(r))return false;
+    return true;
 }
 inline bool valid(const DisguiseState& d){return d.disguise>0;}
 inline bool valid(const HidingState& h){
     if(h.spot<=0||h.revealedTo.size()>kSensesMaxAgents)return false;
-    for(std::size_t i=0;i<h.revealedTo.size();++i)if(h.revealedTo[i]<=0||(i&&h.revealedTo[i]<=h.revealedTo[i-1]))return false;return true;
+    for(std::size_t i=0;i<h.revealedTo.size();++i)if(h.revealedTo[i]<=0||(i&&h.revealedTo[i]<=h.revealedTo[i-1]))return false;
+    return true;
 }
 inline bool valid(const SensesState& s){
     if(!s.initialized&&(s.lastTick||!s.observers.empty()||!s.markers.empty()||s.nextMarker!=1||!s.alerts.empty()||!s.disguises.empty()||!s.hiding.empty()))return false;
@@ -234,7 +238,8 @@ inline int64_t noiseStrength(const NoiseEvent& n,Vec3 ear){
     auto d=(ear-n.position).length();if(d>=n.radius)return 0;return detail::scaled(n.loudnessMilli,detail::ratioMilli(n.radius-d,n.radius));
 }
 inline int64_t trailStrength(const TrailConfig& c,const TrailMarker& m,uint32_t tick){
-    if(tick<m.placedAt||tick-m.placedAt>=c.lifetime)return 0;return m.strengthMilli*int64_t(c.lifetime-(tick-m.placedAt))/int64_t(c.lifetime);
+    if(tick<m.placedAt||tick-m.placedAt>=c.lifetime)return 0;
+    return m.strengthMilli*int64_t(c.lifetime-(tick-m.placedAt))/int64_t(c.lifetime);
 }
 // Milli scale applied to suspicion gains of an observer team from a disguised target in a zone.
 inline int64_t disguiseScale(const SenseDefinitions& defs,const SensesState& s,int64_t target,int64_t observerTeam,int64_t zone){
