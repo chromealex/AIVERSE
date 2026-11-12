@@ -459,12 +459,14 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     h.u32(uint32_t(st->incidents.size()));
     for (auto& i : st->incidents) {
         h.u32(i.id); h.u32(uint32_t(i.kind) | uint32_t(i.state) << 8); h.fx(i.pos.x); h.fx(i.pos.y); h.u64(i.subject.packed()); h.u64(i.offender.packed());
-        h.u32(i.born); h.u32(i.assigned); h.u64(i.responder.packed()); h.u32(i.victim);
+        h.u32(i.born); h.u32(i.assigned); h.u64(i.responder.packed()); h.u32(i.victim); h.u32(i.fatal);
     }
     h.u32(uint32_t(st->patients.size()));
     for (auto& q : st->patients) { h.u32(q.type); h.fx(q.at.x); h.fx(q.at.y); h.u32(q.release); }
+    h.u32(uint32_t(st->blows.size()));
+    for (auto& b : st->blows) { h.u64(b.e.packed()); h.fx(b.damage); h.u32(b.tick); }
     h.u32(uint32_t(st->happened.size()));
-    for (auto& e : st->happened) { h.u32(uint32_t(e.type) | uint32_t(e.unitType) << 16); h.v3(e.pos); h.u64(e.a.packed()); h.u64(e.b.packed()); }
+    for (auto& e : st->happened) { h.u32(uint32_t(e.type) | uint32_t(e.unitType) << 16); h.v3(e.pos); h.u64(e.a.packed()); h.u64(e.b.packed()); h.fx(e.blow); }
     h.u32(st->nextIncident); h.u32(st->towed); h.u32(uint32_t(st->used.size()));
     for (auto& u : st->used) { h.u64(u.e.packed()); h.u32(u.since); }
     h.u32(uint32_t(st->lit.size()));
@@ -478,9 +480,10 @@ void io(Archive& a, TrafficCar& c) {
     a(c.e, c.kind, c.lastStop, c.dwellUntil, c.route, c.wp, c.tailPiece, c.tailDir, c.tailLane, c.cruise, c.stopped, c.blocker, c.ignore, c.ignoreUntil, c.reverseUntil, c.lostSince);
 }
 void io(Archive& a, TrafficPerson& p) { a(p.e, p.state, p.path, p.idx, p.legEnd, p.leg, p.legPt, p.until, p.moved, p.side, p.hp, p.lastPos, p.panic); }
-void io(Archive& a, TrafficIncident& i) { a(i.id, i.kind, i.state, i.pos.x, i.pos.y, i.subject, i.offender, i.born, i.assigned, i.responder, i.victim); }
+void io(Archive& a, TrafficIncident& i) { a(i.id, i.kind, i.state, i.pos.x, i.pos.y, i.subject, i.offender, i.born, i.assigned, i.responder, i.victim, i.fatal); }
 void io(Archive& a, TrafficPatient& q) { a(q.type, q.at.x, q.at.y, q.release); }
-void io(Archive& a, TrafficEvent& e) { a(e.type, e.unitType, e.pos, e.a, e.b); }
+void io(Archive& a, TrafficBlow& b) { a(b.e, b.damage, b.tick); }
+void io(Archive& a, TrafficEvent& e) { a(e.type, e.unitType, e.pos, e.a, e.b, e.blow); }
 void io(Archive& a, TrafficUsedCar& u) { a(u.e, u.since); }
 void io(Archive& a, TrafficLightProp& l) { a(l.e, l.junction, l.axis, l.shown); }
 
@@ -488,7 +491,7 @@ void Traffic::io(Simulation& sim, Archive& a) {
     auto* st = store(sim);
     if (!st) return;
     a(st->cars, st->people, st->lights, st->lit, st->placed, st->nextAdopt, st->nextEmergency);
-    a(st->incidents, st->nextIncident, st->used, st->towed, st->patients, st->happened);
+    a(st->incidents, st->nextIncident, st->used, st->towed, st->patients, st->happened, st->blows);
     if (!a.writing()) for (auto& c : st->cars) c.input = {};
 }
 
@@ -511,9 +514,14 @@ void Traffic::tick(Simulation& sim) {
 void Traffic::collect(Simulation& sim) {
     auto* st = store(sim);
     if (!st) return;
-    for (const SimEvent& ev : sim.events())
-        if ((ev.type == kEvAttack || ev.type == kEvHit || ev.type == kEvDied) && st->happened.size() < 4096)
-            st->happened.push_back({ev.type, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b});
+    st->blows.erase(std::remove_if(st->blows.begin(), st->blows.end(), [&](const TrafficBlow& b) { return b.tick + 3 < sim.tick(); }), st->blows.end());
+    for (const SimEvent& ev : sim.events()) {
+        if (ev.type != kEvAttack && ev.type != kEvHit && ev.type != kEvDied) continue;
+        Fixed blow{};
+        if (ev.type == kEvHit && st->blows.size() < 1024) st->blows.push_back({ev.a, Fixed::fromRaw(ev.value), sim.tick()});
+        if (ev.type == kEvDied) for (auto& b : st->blows) if (b.e == ev.a) blow = fxMax(blow, b.damage);
+        if (st->happened.size() < 4096) st->happened.push_back({ev.type, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b, blow});
+    }
 }
 
 // ----------------------------------------------------------------- lights

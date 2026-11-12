@@ -106,6 +106,7 @@ void Traffic::parseCity(const Json& j, TrafficRules& r, const std::vector<std::s
     if (in.has("fireDamage")) ir.fireDamage = in.getFx("fireDamage");
     if (in.has("fireRadius")) ir.fireRadius = in.getFx("fireRadius");
     if (in.has("witness")) ir.witness = in.getFx("witness");
+    if (in.has("lethal")) ir.lethal = in.getFx("lethal");
     if (ir.fireDamage.raw < 0 || ir.fireRadius.raw < 0 || ir.witness.raw < 0) throw std::runtime_error(where + ": fireDamage, fireRadius and witness must not be negative");
     ir.lots = typeList(in["lots"], where + ".lots");
 }
@@ -242,11 +243,11 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
     };
 
     // 1) what happened last tick
-    struct Happened { uint16_t ev; uint16_t type; Vec2 pos; Entity by; };
+    struct Happened { uint16_t ev; uint16_t type; Vec2 pos; Entity by; Fixed blow; };
     std::vector<Happened> happened;
     for (const TrafficEvent& ev : st.happened) {
-        if (ev.type == kEvDied) happened.push_back({kEvDied, ev.unitType, v2(ev.pos), ev.b});
-        else if (ev.type == kEvAttack) happened.push_back({kEvAttack, 0, v2(ev.pos), ev.a});
+        if (ev.type == kEvDied) happened.push_back({kEvDied, ev.unitType, v2(ev.pos), ev.b, ev.blow});
+        else if (ev.type == kEvAttack) happened.push_back({kEvAttack, 0, v2(ev.pos), ev.a, Fixed{}});
     }
     for (auto& h : happened) {
         const Entity hero = heroBehind(h.by);
@@ -254,7 +255,11 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
         if (isCasualtyType(h.type)) {
             if (ir.body != UINT16_MAX) {
                 const Entity body = m_->spawn(sim, ir.body, 0, v3(h.pos));
-                if (body.valid()) if (TrafficIncident* inc = incidentOf(st, report(sim, kIncidentInjured, h.pos, body))) inc->victim = h.type;
+                if (body.valid()) if (TrafficIncident* inc = incidentOf(st, report(sim, kIncidentInjured, h.pos, body))) {
+                    inc->victim = h.type;
+                    // a pistol shot or a slow car knocks a person down; a rocket or a car at speed kills
+                    inc->fatal = h.blow >= m_->rules().types[h.type].maxHp * ir.lethal;
+                }
             }
             if (hero.valid()) report(sim, kIncidentCrime, h.pos, kNullEntity, hero);
         } else if (isVehicle(h.type) && h.type != ir.wreck) {
@@ -481,7 +486,7 @@ void Traffic::resolve(Simulation& sim, TrafficStore& st, TrafficIncident& inc) {
     World& w = sim.world();
     const TrafficIncidentRules& ir = rules_.incidents;
     if (inc.kind == kIncidentInjured) {   // to the hospital the ambulance came from; treated there, then back on his feet
-        if (const TrafficCar* c = carOf(st, inc.responder); c && c->homePiece >= 0 && inc.victim != UINT16_MAX && st.patients.size() < 256)
+        if (const TrafficCar* c = carOf(st, inc.responder); c && c->homePiece >= 0 && inc.victim != UINT16_MAX && !inc.fatal && st.patients.size() < 256)
             for (auto& s : stations_[size_t(c->service)])
                 if (s.piece == c->homePiece && s.along == c->homeAlong) { st.patients.push_back({inc.victim, s.pos, sim.tick() + ir.treatTicks}); break; }
         silentRemove(sim, inc.subject);

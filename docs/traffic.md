@@ -81,7 +81,7 @@ Tests: `aiverse_tests traffic_city`.
 
 | incident | raised when | answered by (`answers`) | what the service does |
 |---|---|---|---|
-| `injured` | a person (pedestrian type, thrown-out driver, crew member) is killed: a `body` object is left | ambulance | the crew walks to the body, works, takes it along; the person is treated for `treat` seconds in the hospital the ambulance came from and then walks out of it and goes on |
+| `injured` | a person (pedestrian type, thrown-out driver, crew member) is killed: a `body` object is left | ambulance | the crew walks to the body, works, takes it along; the person is treated for `treat` seconds in the hospital the ambulance came from and then walks out of it and goes on. A killing blow of `lethal` x max hp or more in one hit (a rocket, a car at speed; default 2) is fatal: the body is taken to the hospital all the same, nobody comes back |
 | `crime` | a hero shoots, kills a person or blows up a car **and somebody within `witness` cells saw it**; scripts report robberies with `game.traffic_report` | police | officers get out and attack-move to the scene; while the offender is within 15 cells they go for him (up to `maxWork` seconds) |
 | `fire` | a vehicle is destroyed: a `fire` object burns at the wreck for `burn` seconds and hurts what stands within `fireRadius` (`fireDamage` per second; a burning car next to another one can set it off too) | fire service | stands at the fire for `work` seconds and puts it out |
 | `wreck` | a destroyed vehicle leaves a `wreck` object; a car a hero left on a driving lane or in a junction for `abandon` seconds | tow truck | waits until no fire burns within 3 cells, then loads it; it is put next to the nearest `lots` object (rows of four) or simply taken away |
@@ -110,7 +110,7 @@ Tests: `aiverse_tests traffic_city`.
   "fire":      {"answers": "fire", "types": ["fire_engine"], "stations": ["fire_station"], "work": 6},
   "tow":       {"answers": "wreck", "types": ["tow_truck"], "work": 4, "speed": [7, 9], "siren": false}
 },
-"incidents": {"body": "ped_down", "bodyTime": 90, "treat": 60, "wreck": "car_wreck", "wreckTime": 300,
+"incidents": {"body": "ped_down", "bodyTime": 90, "treat": 60, "lethal": 2, "wreck": "car_wreck", "wreckTime": 300,
               "fire": "fire", "burn": 45, "fireDamage": 6, "fireRadius": 1.2, "abandon": 40, "witness": 7,
               "lots": ["tow_lot"], "crimeTime": 60, "timeout": 150}
 ```

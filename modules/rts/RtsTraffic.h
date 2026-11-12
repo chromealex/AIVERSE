@@ -54,6 +54,7 @@ struct TrafficIncidentRules {
     uint16_t body = UINT16_MAX, wreck = UINT16_MAX, fire = UINT16_MAX;   // prop types left by a death / an explosion
     uint32_t bodyTicks = 1800, wreckTicks = 6000, burnTicks = 900, crimeTicks = 1200, timeoutTicks = 3000;
     Fixed fireDamage = Fixed::fromInt(6), fireRadius = Fixed::fromRatio(6, 5);   // per second, cells
+    Fixed lethal = Fixed::fromInt(2);        // a single blow of this many times the max hp is final
     uint32_t treatTicks = 1200;              // in hospital this long, then the person walks out of it
     uint32_t abandonTicks = 0;               // a car a hero left on a driving lane this long is towed (0: never)
     Fixed witness = Fixed::fromInt(7);       // a crime is reported when somebody is this close to it
@@ -162,13 +163,15 @@ struct TrafficIncident {
     uint32_t born = 0, assigned = 0;
     Entity responder = kNullEntity;
     uint16_t victim = UINT16_MAX;            // injured: the type of the person (he comes back from the hospital)
+    bool fatal = false;                      // injured: the blow was too much (taken to the hospital, never comes back)
 };
 
 struct TrafficPatient { uint16_t type = UINT16_MAX; Vec2 at{}; uint32_t release = 0; };   // in hospital until `release`
 
 // What the traffic remembers of a tick (kEvAttack / kEvHit / kEvDied) until it runs again: the simulation forgets
 // its events at the start of the next step, before the movement system.
-struct TrafficEvent { uint16_t type = 0; uint16_t unitType = 0; Vec3 pos{}; Entity a = kNullEntity, b = kNullEntity; };
+struct TrafficEvent { uint16_t type = 0; uint16_t unitType = 0; Vec3 pos{}; Entity a = kNullEntity, b = kNullEntity; Fixed blow{}; };   // blow: the hardest hit the dead unit took in its last ticks
+struct TrafficBlow { Entity e = kNullEntity; Fixed damage{}; uint32_t tick = 0; };
 
 struct TrafficUsedCar { Entity e = kNullEntity; uint32_t since = 0; };   // a car a hero drove; left alone since (0: in use)
 
@@ -199,6 +202,7 @@ struct TrafficStore {
     uint32_t nextIncident = 1;
     std::vector<TrafficUsedCar> used;        // ascending entity index
     std::vector<TrafficEvent> happened;      // last tick's events (collect), consumed by tick
+    std::vector<TrafficBlow> blows;          // recent hits on people (was the last one fatal?), kept three ticks
     std::vector<TrafficPatient> patients;    // in the order they were brought in
     uint32_t towed = 0;                      // cars put on the lots so far (picks the next spot)
     std::vector<int32_t> lit;                // junctions whose light props exist (near the heroes), ascending

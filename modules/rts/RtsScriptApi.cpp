@@ -1255,6 +1255,7 @@ int gTrafficIncidents(lua_State* L, Vm& vm) {
         pushFx(L, i.pos.x); lua_setfield(L, -2, "x");
         pushFx(L, i.pos.y); lua_setfield(L, -2, "z");
         lua_pushstring(L, states[std::min<int>(i.state, 2)]); lua_setfield(L, -2, "state");
+        if (i.kind == kIncidentInjured) { lua_pushboolean(L, i.fatal); lua_setfield(L, -2, "fatal"); }
         lua_rawseti(L, -2, ++n);
     }
     return 1;

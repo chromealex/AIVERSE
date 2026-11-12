@@ -439,11 +439,12 @@ TEST(traffic_city_ambulance_takes_the_injured_to_hospital_and_he_walks_out) {
     run(*sim, 0.5);
     const Entity ped = firstOf(*sim, "ped");
     CHECK(ped.valid() && tstore(*sim).incidents.empty());
-    mod(*sim).dealDamage(*sim, ped, Fixed::fromInt(1000), 0, kNullEntity, 0);   // knocked down
+    mod(*sim).dealDamage(*sim, ped, Fixed::fromInt(60), 0, kNullEntity, 0);   // knocked down: a blow of 1.5 x his 40 hp
+    trf(*sim).collect(*sim);   // (the hit happened between two steps)
     run(*sim, 0.5);
     CHECK(countOfType(*sim, "ped") == 0 && countOfType(*sim, "body") == 1);
     const game::TrafficIncident* inc = incidentKind(*sim, game::kIncidentInjured);
-    CHECK(inc && inc->victim == uint16_t(mod(*sim).rules().findType("ped")));
+    CHECK(inc && inc->victim == uint16_t(mod(*sim).rules().findType("ped")) && !inc->fatal);
     bool coming = false, medics = false, worked = false;
     int taken = -1, out = -1;
     Fixed far{};
@@ -467,6 +468,26 @@ TEST(traffic_city_ambulance_takes_the_injured_to_hospital_and_he_walks_out) {
         const Vec3 p = w.get<Transform>(tstore(*sim).people[0].e).pos;
         CHECK((p - Vec3{Fixed::fromRatio(41, 2), Fixed{}, Fixed::fromRatio(22, 5)}).length() < Fixed::fromInt(12));
     }
+}
+
+TEST(traffic_city_a_fatal_blow_is_taken_to_hospital_too_but_never_comes_back) {
+    auto sim = makeSimJson(kCityRules, trafficMap(std::string(kCityStart) + R"(,{"type":"ped","owner":2,"pos":[9.5,4.5]})"), 2);
+    run(*sim, 0.5);
+    mod(*sim).dealDamage(*sim, firstOf(*sim, "ped"), Fixed::fromInt(200), 0, kNullEntity, 0);   // a rocket: five times his 40 hp
+    trf(*sim).collect(*sim);
+    run(*sim, 0.5);
+    const game::TrafficIncident* inc = incidentKind(*sim, game::kIncidentInjured);
+    CHECK(inc && inc->fatal && countOfType(*sim, "body") == 1);
+    bool medics = false;
+    int taken = -1;
+    for (int i = 0; i < 120 * int(sim->tickRate()) && (taken < 0 || i < taken + 15 * int(sim->tickRate())); ++i) {
+        sim->step();
+        medics = medics || countOfType(*sim, "medic") == 2;
+        if (taken < 0 && countOfType(*sim, "body") == 0) taken = i;
+        CHECK(tstore(*sim).patients.empty());
+    }
+    CHECK(medics && taken > 0);                 // the ambulance came for him all the same
+    CHECK(countOfType(*sim, "ped") == 0 && tstore(*sim).people.empty());   // 15 s later (treat is 5): nobody walked out
 }
 
 TEST(traffic_city_fire_engine_first_then_the_tow_truck_takes_the_wreck_to_the_lot) {
