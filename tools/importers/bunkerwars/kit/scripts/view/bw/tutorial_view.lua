@@ -1,9 +1,9 @@
 -- Bunker Wars tutorial presentation (tools/importers/bunkerwars/kit): reads state.bwt.ui of scripts/bw/tutorial.lua and
 -- draws BW's finger tip (a hand moving from one point to another, a ring on the point to tap), the upgrade hint,
--- and the tutorial windows. A window "X" opens ui/hud/X.rml when the game has it (the UI.Windows importer,
--- branch agent-ui-import, writes the BW screens), else the generic panel ui/hud/bw_tutorial.rml with the text
--- of lang key "bw.tut.X". A click on the panel / the window / the screen while a WaitForClick runs sends bw_tut_click.
-local okw, own = pcall(require, "view.bw.tutorial_windows")   -- screens with their own ui/hud/<name>.rml (importer)
+-- and the tutorial windows. A window "X" opens its document from view.bw.tutorial_windows (client.py converts
+-- BW's window prefabs with the UI.Windows importer into ui/hud/X.rml), else the generic panel ui/hud/bw_tutorial.rml
+-- with the text of lang key "bw.tut.X". A click on the panel / the window / the screen while a WaitForClick runs sends bw_tut_click.
+local okw, own = pcall(function() return require("view.bw.tutorial_windows") end)   -- window -> its ui/hud document (client.py)
 if not okw or type(own) ~= "table" then own = {} end
 local seq, open, waiting = -1, {}, false
 local pulse = 0
@@ -66,11 +66,17 @@ view.on_frame(function(dt)
     local want = {}
     for _, w in ipairs(u.windows or {}) do want[w] = true end
     for w, how in pairs(open) do
-      if not want[w] then ui.close(how); open[w] = nil end
+      if not want[w] then
+        if how ~= "bw_hud" then ui.close(how) end
+        open[w] = nil
+      end
     end
     for _, w in ipairs(u.windows or {}) do
       if not open[w] then
-        if own[w] then ui.open(w); open[w] = w
+        if own[w] then
+          local doc = own[w] == true and w or own[w]
+          if doc ~= "bw_hud" then ui.open(doc) end   -- HUDScreen: the battle HUD is open already
+          open[w] = doc
         else
           ui.set("bwt", {text = tr("bw.tut." .. w) ~= "" and tr("bw.tut." .. w) or w, title = tr("bw.tut.title"), click = u.waiting_click == true})
           ui.open("bw_tutorial")

@@ -380,6 +380,9 @@ int gTypeInfo(lua_State* L, Vm& vm) {
     for (size_t i = 0; i < R.tagNames.size() && i < 64; ++i)
         if (t.tags & (uint64_t(1) << i)) { lua_pushstring(L, R.tagNames[i].c_str()); lua_rawseti(L, -2, ++n); }
     lua_setfield(L, -2, "tags");
+    lua_createtable(L, int(t.upgrades.size()), 0);   // in-place upgrades (agent-bw-client: BW point levels / casts)
+    for (size_t i = 0; i < t.upgrades.size(); ++i) { lua_pushstring(L, R.types[t.upgrades[i]].id.c_str()); lua_rawseti(L, -2, lua_Integer(i + 1)); }
+    lua_setfield(L, -2, "upgrades");
     return 1;
 }
 int gTypes(lua_State* L, Vm& vm) {
@@ -1098,6 +1101,95 @@ int gSetGarrison(lua_State* L, Vm& vm) {
     lua_pushboolean(L, 1);
     return 1;
 }
+// game.modes(): read-only snapshot of the match modes state (agent-bw-client: Bunker Wars HUD timers / morale stars);
+// nil when the match has no modes block. Per-slot tables are keyed by player slot, koh by team.
+int gModes(lua_State* L, Vm& vm) {
+    CTX;
+    const ModesRules& mr = m.modes();
+    if (!mr.any) { lua_pushnil(L); return 1; }
+    const ModesState& ms = m.state(sim).modes;
+    lua_newtable(L);
+    setF(L, "real_time", ms.realTime);
+    setF(L, "speed", ms.speed);
+    if (mr.timeLimit) setF(L, "time_left", ms.timeLeft);
+    if (mr.suddenDeath) {
+        setF(L, "sudden_death_at", mr.sdAt);
+        lua_pushinteger(L, ms.sdPhase); lua_setfield(L, -2, "sudden_death");
+        lua_pushboolean(L, ms.sdCounter); lua_setfield(L, -2, "sd_counter");
+    }
+    if (mr.koh) {
+        lua_newtable(L);
+        for (size_t t = 0; t < ms.kohScore.size(); ++t) { pushFx(L, ms.kohScore[t]); lua_rawseti(L, -2, lua_Integer(t)); }
+        lua_setfield(L, -2, "koh");
+    }
+    lua_createtable(L, int(ms.points.size()), 0);
+    for (size_t i = 0; i < ms.points.size(); ++i) {
+        const ModePoint& mp = ms.points[i];
+        lua_newtable(L);
+        if (w.alive(mp.e)) { pushEntity(L, mp.e); lua_setfield(L, -2, "unit"); }
+        lua_pushstring(L, mp.kind == 1 ? "domination" : "koh"); lua_setfield(L, -2, "kind");
+        setF(L, "hold", mp.hold);
+        lua_rawseti(L, -2, lua_Integer(i + 1));
+    }
+    lua_setfield(L, -2, "points");
+    lua_newtable(L);
+    for (size_t j = 0; j < mr.levels.size() && j < ms.level.size(); ++j) {
+        if (mr.levels[j].res < 0 || size_t(mr.levels[j].res) >= R.resources.size()) continue;
+        lua_newtable(L);
+        for (size_t p = 0; p < ms.level[j].size(); ++p) { lua_pushinteger(L, ms.level[j][p]); lua_rawseti(L, -2, lua_Integer(p)); }
+        lua_setfield(L, -2, R.resources[size_t(mr.levels[j].res)].id.c_str());
+    }
+    lua_setfield(L, -2, "levels");
+    lua_newtable(L);
+    for (size_t p = 0; p < ms.outcome.size(); ++p) { lua_pushinteger(L, ms.outcome[p]); lua_rawseti(L, -2, lua_Integer(p)); }
+    lua_setfield(L, -2, "outcome");
+    return 1;
+}
+// game.player_abilities(p): the player's skill cards (rules playerAbilities), read-only (agent-bw-client: BW HUD)
+int gPlayerAbilities(lua_State* L, Vm& vm) {
+    CTX;
+    uint8_t p; if (!playerArg(L, vm, 1, p)) return -1;
+    const GameState& gs = m.state(sim);
+    lua_createtable(L, int(R.playerAbilities.size()), 0);
+    if (p >= gs.playerAbilities.size()) return 1;
+    const auto& st = gs.playerAbilities[p];
+    const uint32_t tick = sim.tick(), rate = std::max<uint32_t>(1, sim.tickRate());
+    for (size_t i = 0; i < R.playerAbilities.size() && i < st.size(); ++i) {
+        const PlayerAbilityDef& d = R.advancedEffects ? m.playerAbilityFor(sim, p, int(i)) : R.playerAbilities[i];
+        lua_newtable(L);
+        lua_pushstring(L, R.playerAbilities[i].id.c_str()); lua_setfield(L, -2, "id");
+        lua_pushinteger(L, lua_Integer(i)); lua_setfield(L, -2, "index");
+        lua_pushboolean(L, st[i].owned); lua_setfield(L, -2, "owned");
+        lua_pushboolean(L, d.passive || d.autoEvery.raw > 0); lua_setfield(L, -2, "automatic");
+        lua_pushinteger(L, st[i].level); lua_setfield(L, -2, "level");
+        lua_pushinteger(L, st[i].charges); lua_setfield(L, -2, "charges");
+        setF(L, "cooldown", d.cooldown);
+        setF(L, "ready_in", st[i].readyAt > tick ? Fixed::fromRatio(int64_t(st[i].readyAt - tick), int64_t(rate)) : Fixed{});
+        lua_pushboolean(L, m.canUsePlayerAbility(sim, p, int(i))); lua_setfield(L, -2, "usable");
+        lua_newtable(L);
+        for (const auto& c : d.cost) if (c.res < R.resources.size()) setF(L, R.resources[c.res].id.c_str(), c.value);
+        lua_setfield(L, -2, "cost");
+        lua_rawseti(L, -2, lua_Integer(i + 1));
+    }
+    return 1;
+}
+// game.set_ability_cooldown(p, id, seconds): restarts a player ability's cooldown (0 = ready now); false for an
+// unknown ability (agent-bw-client: BW tutorial SetSkillCooldown)
+int gSetAbilityCooldown(lua_State* L, Vm& vm) {
+    CTX;
+    uint8_t p; if (!playerArg(L, vm, 1, p)) return -1;
+    std::string id;
+    if (!nameArg(L, vm, 2, id, "ability")) return -1;
+    Fixed sec;
+    if (!argFx(L, vm, 3, sec, "seconds")) return -1;
+    GameState& gs = m.state(sim);
+    const int i = R.findPlayerAbility(id);
+    if (i < 0 || p >= gs.playerAbilities.size() || size_t(i) >= gs.playerAbilities[p].size()) { lua_pushboolean(L, 0); return 1; }
+    const Fixed ticks = std::max(Fixed{}, sec) * Fixed::fromInt(int64_t(sim.tickRate()));
+    gs.playerAbilities[p][size_t(i)].readyAt = sim.tick() + uint32_t((ticks + Fixed::fromRatio(65535, 65536)).toInt());
+    lua_pushboolean(L, 1);
+    return 1;
+}
 int gSetEnergy(lua_State* L, Vm& vm) {
     CTX;
     Fixed v;
@@ -1253,7 +1345,7 @@ void openGameApi(Vm& vm) {
         {"draw", bind<gDraw>}, {"defeat", bind<gDefeat>}, {"research", bind<gResearch>}, {"enable_type", bind<gEnableType>},
         {"add_score", bind<gAddScore>}, {"enable_trigger", bind<gEnableTrigger>}, {"clear_data", bind<gClearData>},
         {"set_pos", bind<gSetPos>}, {"teleport", bind<gSetPos>}, {"set_facing", bind<gSetFacing>}, {"impulse", bind<gImpulse>},
-        {"knockback", bind<gKnockback>}, {"set_hp", bind<gSetHp>}, {"set_energy", bind<gSetEnergy>}, {"set_garrison", bind<gSetGarrison>},
+        {"knockback", bind<gKnockback>}, {"set_hp", bind<gSetHp>}, {"set_energy", bind<gSetEnergy>}, {"set_garrison", bind<gSetGarrison>}, {"set_ability_cooldown", bind<gSetAbilityCooldown>}, {"modes", bindQ<gModes>}, {"player_abilities", bindQ<gPlayerAbilities>},
         {"set_stat_base", bind<gSetStatBase>}, {"transform", bind<gTransform>}, {nullptr, nullptr}};
     luaL_newlib(L, queries);
     if (vm.mode == Mode::Sim) {
@@ -1317,7 +1409,7 @@ Json scriptApiReference() {
     q.push(fn("game.units(filter) / game.count(filter) / game.nearest(x, z, filter)", "living units sorted by handle; filter = {owner, type, tag, kind=\"unit\"|\"structure\", area, x, z, radius, has (game.data key), sort=\"id\"|\"dist\", limit}; radius queries use a bucket grid"));
     q.push(fn("game.unit(h)", "{id, type, name, owner, x, y, z, hp, max_hp, energy, structure, under_construction, level, garrison, tags, statuses} or nil"));
     q.push(fn("game.alive(h) / game.owner(h) / game.type_of(h) / game.pos(h) -> x, z / game.hp(h) -> hp, max / game.stat(h, stat) / game.has_status(h, id)", "unit fields (nil for dead handles)"));
-    q.push(fn("game.type_info(id) / game.types()", "{id, name, structure, max_hp, speed, armor, cost, tags} / all type ids"));
+    q.push(fn("game.type_info(id) / game.types()", "{id, name, structure, max_hp, speed, armor, cost, tags, upgrades} / all type ids"));
     q.push(fn("game.map_size() -> w, h / game.passable(x, z [, \"ground\"|\"air\"|\"naval\"]) / game.level(x, z) / game.height(x, z) / game.area(name)", "map queries; area = {x, z, w, h}"));
     q.push(fn("game.grid_path(width,height,cells,start,goal[,label])", "pure four-neighbour shortest grid path; zero-based cells, boolean true mask or exact integer labels; returns a one-based path excluding start, or nil; max 262144 cells"));
     q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
@@ -1344,6 +1436,9 @@ Json scriptApiReference() {
     a.push(fn("game.set_facing(h, dx, dz) / game.impulse(h, dx, dz) / game.knockback(h, x, z, distance)", "turn / push by a vector / away from a point (terrain stops it)"));
     a.push(fn("game.set_hp(h, hp) / game.set_energy(h, e)", "clamped to [0, max]; hp 0 kills"));
     a.push(fn("game.set_garrison(h, n)", "units inside a garrison structure (>= 0, may exceed its max); false without a garrison"));
+    a.push(fn("game.set_ability_cooldown(p, id, seconds)", "restart a player ability's cooldown (0 = ready now); false for an unknown ability"));
+    a.push(fn("game.player_abilities(p)", "skill cards: {id, index, owned, automatic, level, charges, cooldown, ready_in (s), usable, cost {res = n}}"));
+    a.push(fn("game.modes()", "match modes snapshot or nil: real_time, speed, time_left, sudden_death (0..3), sd_counter, koh[team], points {unit, kind, hold}, levels[resource][slot], outcome[slot]"));
     a.push(fn("game.set_stat_base(h, stat, value | nil)", "per-unit base stat (techs, buffs apply on top); nil restores the type's"));
     a.push(fn("game.transform(h, type)", "change the type in place (same handle and data, hp fraction kept)"));
     a.push(fn("game.add_status(h, status [, seconds [, caster]]) / game.buff(h, stat, add, mul [, seconds])", "statuses (rules \"statuses\") and stat modifiers"));

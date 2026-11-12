@@ -6,8 +6,9 @@
 // request() refreshes the consent information and shows the CMP form when the region requires it
 // (EEA, UK, Switzerland, US states with privacy laws); the answer is remembered by the platform, so
 // later launches return at once. Games with a privacy settings button show it when
-// privacyOptionsRequired and call showOptions(). Where the "privacy" service exists
-// (engine/services/Privacy.h, branch agent-sdk-plugins) pass the answer to privacy::setConsent.
+// privacyOptionsRequired and call showOptions(). Every answer of the CMP (status known, no error) goes to
+// privacy::setConsent (personalizedAds = personalized; analytics / ageRestricted kept) before the callback,
+// so ads and analytics providers get it without game code.
 #pragma once
 #include <functional>
 #include <string>

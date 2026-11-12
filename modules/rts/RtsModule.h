@@ -834,6 +834,10 @@ public:
 
 private:
     ModesRules modes_;               // match modes of this match (read-only after setup, RtsModes.cpp)
+    // gameplay time scale (trigger variable "gameplay_scale", agent-bw-client): whether this tick runs the gameplay
+    // systems; recomputed from the (hashed, saved) variables at the start of every tick
+    bool gameplayRun_ = true;
+    void gameplayClock(Simulation& sim);
     void modesSetup(Simulation& sim, const Json& rulesJson, const Json& map);
     void sysModes(Simulation& sim);
     void sysMatchStats(Simulation& sim);

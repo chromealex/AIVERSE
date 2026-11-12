@@ -362,7 +362,7 @@ bool AudioEngine::loadBank(const Json& bank, const FileReader& read, std::string
 
     static const std::set<std::string> kSoundKeys = {"file", "files", "synth", "volume", "pitch", "bus", "maxInstances", "model",
                                                       "minDistance", "maxDistance", "rolloff", "air", "reverb", "far", "compress", "quality", "duckMusic", "sync", "group", "steal",
-                                                      "cooldown", "priority", "loop", "spatial"};
+                                                      "cooldown", "priority", "loop", "spatial", "chance"};
     for (auto& [name, j] : bank["sounds"].members()) {
         const std::string who = "sound '" + name + "'";
         if (!j.isObject()) return fail(who + ": must be an object");
@@ -400,6 +400,8 @@ bool AudioEngine::loadBank(const Json& bank, const FileReader& read, std::string
             }
         }
         d.cooldown = std::max(0.0f, num(j["cooldown"], 0));
+        d.chance = num(j["chance"], 1);
+        if (d.chance < 0 || d.chance > 1) return fail(who + ": chance must be in [0, 1]");
         d.priority = int(std::clamp<int64_t>(j.getInt("priority", 0), -100, 100));
         d.loop = j.getBool("loop", false);
         d.spatial = j.getBool("spatial", d.bus == Bus::Sfx || d.bus == Bus::Ambient);
@@ -562,6 +564,7 @@ VoiceId AudioEngine::play(SoundId id, const PlayParams& p) {
     for (int g : d->groups) if (m.time - m.lastGroupPlay[size_t(g)] < double(m.groups[size_t(g)].cooldown)) return kNoVoice;
     const bool spatial = d->spatial && p.positional;
     if (spatial && !d->loop && audibility(id, p.x, p.y, p.z) <= 0.001f) return kNoVoice;
+    if (d->chance < 1.0f && m.frand() >= d->chance) return kNoVoice;   // "chance": skipped plays keep the cooldown free
     last = m.time;
     for (int g : d->groups) m.lastGroupPlay[size_t(g)] = m.time;
 

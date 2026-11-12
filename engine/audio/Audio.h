@@ -111,6 +111,7 @@ struct SoundDef {
     Steal steal = Steal::Farthest;  // who makes room for maxInstances
     std::vector<int> groups;        // indices into the bank's groups (at most kMaxSoundGroups)
     float cooldown = 0.0f;  // seconds between two starts (stops 40 archers from firing 40 sounds)
+    float chance = 1.0f;    // probability that a play() starts at all ("chance", 0..1; Bunker Wars FMOD playChance)
     int priority = 0;       // when all voices are busy, lower priority is stolen first
     bool loop = false;
     bool spatial = true;    // attenuated and panned around the listener when played at a position

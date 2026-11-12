@@ -127,6 +127,11 @@ public:
     bool deserialize(const std::string& bytes, std::string* err = nullptr);
 
     void addSystem(std::string name, SystemFn fn) { systems_.push_back({std::move(name), std::move(fn)}); }
+    void insertSystem(size_t at, std::string name, SystemFn fn) {
+        systems_.insert(systems_.begin() + std::ptrdiff_t(std::min(at, systems_.size())), System{std::move(name), std::move(fn)});
+    }
+    // Replaces every system's function by wrap(name, fn) (e.g. a gate that skips gameplay systems).
+    template <class F> void wrapSystems(F&& wrap) { for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
     // Profiling (tools only, never affects the simulation): with a clock set, step() adds each system's
     // wall time (clock units, e.g. ns) to systemTime(i).
     void setProfileClock(int64_t (*clock)()) { profClock_ = clock; profNs_.assign(systems_.size(), 0); }

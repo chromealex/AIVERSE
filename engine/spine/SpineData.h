@@ -6,10 +6,11 @@
 // "xy/size/orig/offset" and new "bounds/offsets" keys). Supported: bones with every transform mode,
 // slots (color, dark color ignored, blend), skins, region / mesh / linked mesh attachments (weighted
 // or not), IK constraints (1 and 2 bones, softness, stretch, compress), transform constraints (world
-// or local, absolute or relative), events, and animation timelines for bones, slots, IK, transform
-// constraints, deform, draw order and events, with stepped / linear / bezier curves. Not supported
-// (loaded, ignored, reported in warnings): path constraints, clipping, point / bounding box
-// attachments (no visual), sequences (4.1).
+// or local, absolute or relative), path constraints (fixed / percent position, length / fixed / percent /
+// proportional spacing, tangent / chain / chain-scale rotation, constant speed), clipping attachments, events,
+// and animation timelines for bones, slots, IK, transform and path constraints, deform, draw order and events,
+// with stepped / linear / bezier curves. Not supported (loaded, ignored, reported in warnings): point /
+// bounding box attachments (no visual), sequences (4.1).
 #pragma once
 #include <cstdint>
 #include <map>
@@ -64,6 +65,22 @@ struct TransformData {
     float mixRotate = 1, mixX = 1, mixY = 1, mixScaleX = 1, mixScaleY = 1, mixShearY = 1;
 };
 
+enum class PositionMode : uint8_t { Fixed, Percent };
+enum class SpacingMode : uint8_t { Length, Fixed, Percent, Proportional };
+enum class RotateMode : uint8_t { Tangent, Chain, ChainScale };
+
+struct PathData {
+    std::string name;
+    int order = 0;
+    std::vector<int> bones;
+    int target = 0;                      // slot holding the path attachment
+    PositionMode positionMode = PositionMode::Percent;
+    SpacingMode spacingMode = SpacingMode::Length;
+    RotateMode rotateMode = RotateMode::Tangent;
+    float offRotation = 0, position = 0, spacing = 0, mixRotate = 1, mixX = 1, mixY = 1;
+    bool skinRequired = false;
+};
+
 struct AtlasPage {
     std::string name;            // image file, relative to the atlas file
     int width = 0, height = 0;
@@ -87,7 +104,7 @@ struct Atlas {
 // Throws std::runtime_error with a readable message.
 Atlas parseAtlas(const std::string& text);
 
-enum class AttachmentType : uint8_t { Region, Mesh, Other };
+enum class AttachmentType : uint8_t { Region, Mesh, Clipping, Path, Other };
 
 struct Attachment {
     AttachmentType type = AttachmentType::Other;
@@ -105,13 +122,19 @@ struct Attachment {
     std::vector<float> uvs;        // page uvs (resolved from the region)
     std::vector<uint16_t> triangles;
     const Attachment* deformParent = nullptr;  // linked mesh: deform timelines keyed on this one
+    // clipping: the slots up to `endSlot` (draw order) are clipped by the polygon (vertices, vertexCount)
+    int endSlot = -1;
+    // path: cubic bezier chain (vertices = x, y per point: in-handle, point, out-handle ...), cumulative curve lengths
+    bool closed = false, constantSpeed = true;
+    std::vector<float> lengths;
+    bool vertexAttachment() const { return type == AttachmentType::Mesh || type == AttachmentType::Clipping || type == AttachmentType::Path; }
 };
 
 struct Skin {
     std::string name;
     // (slot, attachment name) -> attachment
     std::map<std::pair<int, std::string>, std::shared_ptr<Attachment>> attachments;
-    std::vector<int> bones, ik, transforms;
+    std::vector<int> bones, ik, transforms, paths;
     const Attachment* get(int slot, const std::string& name) const;
 };
 
@@ -147,6 +170,7 @@ struct SlotTimeline { int slot = 0; SlotProp prop = SlotProp::Rgba; CurveTimelin
 struct AttachmentTimeline { int slot = 0; std::vector<float> times; std::vector<std::string> names; };
 struct IkTimeline { int ik = 0; CurveTimeline curve; std::vector<int> bend; std::vector<uint8_t> compress, stretch; };
 struct TransformTimeline { int constraint = 0; CurveTimeline curve; };
+struct PathTimeline { int constraint = 0; enum Prop : uint8_t { Position, Spacing, Mix } prop = Position; CurveTimeline curve; };  // mix: 3 channels
 struct DeformTimeline {
     int slot = 0;
     const Attachment* attachment = nullptr;
@@ -164,6 +188,7 @@ struct Animation {
     std::vector<AttachmentTimeline> attachments;
     std::vector<IkTimeline> ik;
     std::vector<TransformTimeline> transforms;
+    std::vector<PathTimeline> paths;
     std::vector<DeformTimeline> deforms;
     DrawOrderTimeline drawOrder;
     std::vector<EventKey> events;
@@ -176,6 +201,7 @@ struct SkeletonData {
     std::vector<SlotData> slots;
     std::vector<IkData> ik;
     std::vector<TransformData> transforms;
+    std::vector<PathData> paths;
     std::vector<Skin> skins;           // [0] = default (always present, may be empty)
     std::vector<EventData> events;
     std::vector<Animation> animations;

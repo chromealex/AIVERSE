@@ -51,8 +51,9 @@ enum class VertexFormat { Float2, Float3, Float4, UByte4N, UByte4 }; // UByte4: 
 enum class IndexType { None, UInt16, UInt32 };
 enum class Primitive { Triangles, Lines };
 enum class CullMode { None, Back, Front };
-enum class BlendMode { Opaque, Alpha, Additive, Premultiplied, Multiply, Subtract };
+enum class BlendMode { Opaque, Alpha, Additive, Premultiplied, Multiply, Subtract, Screen };
 // Premultiplied: ONE, 1-srcAlpha. Multiply: dst * src colour. Subtract: dst - src * srcAlpha (reverse subtract). (particles)
+// Screen: src + dst * (1 - src colour) for premultiplied colour, alpha as Premultiplied (Spine "screen" slots)
 
 struct BufferDesc {
     BufferType type = BufferType::Vertex;
