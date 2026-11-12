@@ -578,6 +578,11 @@ bool RtsModule::runOrder(Simulation& sim, Entity e, Order& o) {
     case OrderType::Enter: {
         if (!w.alive(o.target)) return true;
         Transform& tr = w.get<Transform>(e);
+        if (auto* pl = w.tryGet<Pulled>(e); pl && !pl->done) {   // magnet (RtsSkillObjects.cpp)
+            if (!runPull(sim, e, o)) return false;
+            o.state = 1;
+            if (m) stopMoving(sim, e);
+        }
         if (o.state == 3) {
             if (!runLaneWalk(sim, e, o)) return false;
             o.state = 1;

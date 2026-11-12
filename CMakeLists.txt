@@ -127,6 +127,7 @@ add_library(aiverse_game STATIC
     modules/rts/RtsAvoidance.cpp
     modules/rts/RtsEffectsData.cpp
     modules/rts/RtsEffects.cpp
+    modules/rts/RtsSkillObjects.cpp
     modules/rts/RtsSkills.cpp
     modules/rts/RtsAI.cpp
     modules/rts/RtsOriginalsData.cpp

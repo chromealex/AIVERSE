@@ -13900,3 +13900,4 @@ TEST(world_tree_lua_peek_is_observation_only) {
 }
 #endif
 #include "tests_bwclient.inc"   // agent-bw-client: Spine, gamepad, client services
+#include "tests_skillobjects.inc"   // agent-bw-skills: skill objects
