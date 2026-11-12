@@ -139,3 +139,33 @@ texture missing — mobile targets only.
   sRGB-correct. PSD/TIFF sources depend on the existing external converter.
 - Legacy (pre-2020) Shader Graph files: resave in Unity.
 - The VFX importer does not yet attach converted particle-domain graphs to emitters.
+
+## Verification, 2026-11-12
+
+Built and tested in the cloud container (Linux, gcc 13, branch `agent-unity-materials` after
+merging main; `-Wl,--allow-multiple-definition` for the known main zstd link issue):
+
+- `aiverse_tests`: 9363 checks, 0 failed, including `ktx2_astc6x6_and_packaging_writer` with
+  `AIVERSE_ASTCENC` set (real astcenc 5.7.1 encode → KTX2 → `parseKtx2`).
+- `test_materials.py` (15 tests, with `AIVERSE_GRAPHCHECK`), `port/test_port.py` (15),
+  `unity_vfx/test_import.py` (34): pass. The fixture output loads in `aiverse_headless`.
+- `skirmish --seed 3`: Blue wins at 405 s, `mushrooms --seed 3`: Red wins at 92 s (simulation untouched).
+- `aiversebuild --target android --estimate` on the fixture import: colour + normal textures
+  packed as ASTC 4x4 KTX2 with mips (Android override), data maps left as PNG.
+- A real Drone Fall 2048² colour texture: KTX2 ASTC 6x6 with 12 mips = 2 498 128 bytes (Drone
+  Fall's own Unity build: 2 497 712 for the same format and size); level 0 blocks decoded by
+  astcenc match the source at 49 dB PSNR.
+
+Drone Fall dry run (metadata, models, prefabs and the 44 packed-map sources staged into the
+container; output on the external drive `DroneFall/imports/materials`):
+
+- survey: 1838 materials (438 URP Lit, 415 URP Particles Unlit, 371 Shader Graph, 443 hand-written,
+  24 decals, ...); 89/89 Shader Graphs convert; `aiverse_graphcheck`: 178/178 graphs (material +
+  particle domain) compile to GLSL + MSL statements; 1022 textures planned (ASTC 6x6: 824 per
+  target, 4x4: 79, uncompressed: 119).
+- `dryrun` over 3990 prefabs: 487 with models, 235 materials in `materials.json`, 16 repacked maps,
+  2743 slot assignments exact, 92 ambiguous slots and 104 shared-FBX-material conflicts reported,
+  132 renderers on meshes without readable FBX materials (one material for the model).
+- Not run: the full `aiverse_port` extract of the whole project (it keeps every component in
+  memory and was killed at ~6 GB in the shared container); no device / GPU check of materials,
+  Metal / iOS / Android / web runtime of ASTC 6x6 is compiled-in but unverified.

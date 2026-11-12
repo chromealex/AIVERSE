@@ -72,6 +72,9 @@ class Fixture(unittest.TestCase):
         self.assertTrue(any(s == 'missing' and 'ambiguous' in why for s, why in items))
         mats, _, _ = slots.resolve(info, [dict(node=None, slots=['k'], where='r', names={'k': 'Z'})])
         self.assertEqual(mats, {'z': 'k'})
+        # one material on as many hashed renderers as candidate meshes: every candidate gets it
+        mats, _, _ = slots.resolve(info, [dict(node=None, slots=['k'], where='r%d' % i, names={'k': 'q'}) for i in range(2)])
+        self.assertEqual(mats, {'x': 'k', 'z': 'k'})
 
     def test_lit_packed_maps(self):
         m = self.lib[self.key_of('paint')]

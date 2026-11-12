@@ -4,11 +4,14 @@
   cli.py survey PROJECT [--out FILE]      shader families, Shader Graph node coverage, hand-written shaders, texture plans
   cli.py graphs PROJECT --out FILE        every .shadergraph converted (material + particle domain) for aiverse_graphcheck
   cli.py material PROJECT Assets/X.mat    one converted material
+  cli.py dryrun PROJECT --out DIR [--scenes]  materials-only import of every prefab (and scene): slot matching,
+                                          materials.json, repacked maps, packaging rules, reports (low memory)
 The full import (models, slots, materials.json, packaging rules) is tools/importers/port/aiverse_port.py.
 """
 import argparse
 import collections
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -83,9 +86,82 @@ def graphs(root):
     return {'graphs': out}
 
 
+def dryrun(root, out, scenes=False):
+    """Material pipeline over every prefab without the full importer's component capture."""
+    from lib.unity.unity_scene import Prefab
+    from lib.unity.unity_yaml import get
+    from lib.port.common import new_model
+    from unity_materials import texops
+    from unity_materials.project import Collector, MODEL_EXT
+    model = new_model(root, 'unity')
+    rep = Report()
+    assets = Assets([str(root / 'Assets')], rep)
+    col = Collector(root, assets, model)
+    files = sorted((root / 'Assets').rglob('*.prefab')) + (sorted((root / 'Assets').rglob('*.unity')) if scenes else [])
+    entities = []
+    for f in files:
+        rel = f.relative_to(root).as_posix()
+        try:
+            pf = Prefab(str(f), assets, rep)
+        except Exception as e:  # noqa: BLE001 - one broken asset must not stop the survey
+            model['items'].append(dict(id=rel, source=rel, status='missing', reason='prefab not parsed: %s' % e, result=''))
+            continue
+        ent = dict(id=rel, source=rel, models=[])
+        for go, comps in pf.comp_by_go.items():
+            rend = next((c for c in comps if c.class_id in (23, 137)), None)
+            mesh = next((c for c in comps if c.class_id in (33, 137)), None)
+            if rend is None or mesh is None:
+                continue
+            mrel = col.rel(mesh.data.get('m_Mesh') or {})
+            if not mrel:
+                continue
+            col.add_renderer(ent, mrel, pf.name(go), rend.data.get('m_Materials') or [], rel + '#' + str(go),
+                             meta=assets.meta(str(root / mrel)), mesh_file_id=get(mesh.data, 'm_Mesh', 'fileID'),
+                             cast=str(rend.data.get('m_CastShadows', 1)) != '0')
+        for inst, _parent in pf.model_instances:
+            src = col.rel(inst.data.get('m_SourcePrefab') or {})
+            if src.lower().endswith(MODEL_EXT):
+                col.add_instance(ent, src, (inst.data.get('m_Modification') or {}).get('m_Modifications'), rel + '#' + str(inst.file_id))
+        if ent['models']:
+            entities.append(ent)
+        for k in [k for k in assets.cache if k.endswith(('.prefab', '.unity'))]:
+            del assets.cache[k]
+    col.finish()
+    out.mkdir(parents=True, exist_ok=True)
+    lib = model['materialLibrary']
+    (out / 'materials.json').write_text(json.dumps({'materials': {k: v['material'] for k, v in lib.items()}}, indent=1, sort_keys=True))
+    derived, failed = {}, []
+    for v in lib.values():
+        for d in v['derived']:
+            derived[d['out']] = d
+
+    def write(relp, data):
+        p = out / relp
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+    for d in sorted(derived.values(), key=lambda d: d['out']):
+        ok, note = texops.run(d, root, write)
+        if not ok:
+            failed.append(dict(out=d['out'], why=note))
+    (out / 'packaging.json').write_text(json.dumps(textures.packaging(model['texturePlans']), indent=1, sort_keys=True))
+    slots_out = {e['source']: e.get('materialSlots', {}) for e in entities}
+    (out / 'slots.json').write_text(json.dumps(slots_out, indent=1, sort_keys=True))
+    items = collections.Counter((i['status'], re.sub(r'[^:]*: ', '', i['reason'], count=1)[:60]) for i in model['items'])
+    summary = dict(prefabs=len(files), withModels=len(entities), materials=len(lib), derivedTextures=len(derived), derivedFailed=failed,
+                   families=dict(collections.Counter(v['family'] for v in lib.values())),
+                   materialStatus=dict(collections.Counter(v['status'] for v in lib.values())),
+                   items=dict(collections.Counter(i['status'] for i in model['items'])),
+                   topReasons=[dict(status=k[0], reason=k[1], count=n) for k, n in items.most_common(40)],
+                   handWrittenShaders=model.get('handWrittenShaders'), shaderGraphs=model.get('shaderGraphs'))
+    (out / 'port-materials.json').write_text(json.dumps(dict(summary, materialLibrary=lib, items=model['items'],
+                                                             texturePlans=model['texturePlans']), indent=1, sort_keys=True, default=list))
+    return dict({k: summary[k] for k in ('prefabs', 'withModels', 'materials', 'derivedTextures', 'families', 'materialStatus', 'items')}, derivedFailed=len(failed))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('command', choices=('survey', 'graphs', 'material'))
+    ap.add_argument('command', choices=('survey', 'graphs', 'material', 'dryrun'))
+    ap.add_argument('--scenes', action='store_true')
     ap.add_argument('project', type=Path)
     ap.add_argument('material', nargs='?')
     ap.add_argument('--out', type=Path)
@@ -95,6 +171,11 @@ def main(argv=None):
         data = survey(root)
     elif a.command == 'graphs':
         data = graphs(root)
+    elif a.command == 'dryrun':
+        if not a.out:
+            ap.error('dryrun needs --out DIR')
+        print(json.dumps(dryrun(root, a.out, a.scenes), indent=2, sort_keys=True))
+        return 0
     else:
         ctx = context(root)
         doc = next((d for d in ctx.assets.docs(str(root / a.material)) if d.class_id == 21), None)
