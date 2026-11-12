@@ -116,16 +116,16 @@ void ApiClient::send(std::shared_ptr<Call> c, HttpRequest req, std::function<voi
         r.error = "no transport";
         std::lock_guard<std::mutex> l(shared_->m);
         --shared_->inFlight;
-        shared_->ready.push_back([this, c, next, r]() { next(c, r); });
+        shared_->ready.push_back([c, next, r]() { next(c, r); });
         return;
     }
     // The completion only touches the shared queue: safe after the client is gone or from another thread.
-    transport_(req, [weak, this, c, next](HttpResponse r) {
+    transport_(req, [weak, c, next](HttpResponse r) {
         auto s = weak.lock();
         if (!s) return;
         std::lock_guard<std::mutex> l(s->m);
         if (s->inFlight) --s->inFlight;
-        s->ready.push_back([this, c, next, r = std::move(r)]() mutable { next(c, std::move(r)); });
+        s->ready.push_back([c, next, r = std::move(r)]() mutable { next(c, std::move(r)); });
     });
 }
 
