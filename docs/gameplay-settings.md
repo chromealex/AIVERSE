@@ -303,6 +303,17 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | senses | searchCandidateRadiusMilli | integer | 12000 | 0..100000000 |
 | senses | searchMaxPoints | integer | 6 | 1..64 |
 | senses | hideEnterRangeMilli | integer | 1500 | 0..1000000 |
+| cinematic | hitStopTicks | integer | 6 | 1..600 |
+| cinematic | hitStopPriority | integer | 1000 | -1000000..1000000 |
+| cinematic | slowMotionNumerator | integer | 1 | 0..16 |
+| cinematic | slowMotionDenominator | integer | 4 | 1..16 |
+| cinematic | slowMotionTicks | integer | 90 | 0..1000000 |
+| cinematic | slowMotionPriority | integer | 500 | -1000000..1000000 |
+| cinematic | qteWindowScaleMilli | integer | 1000 | 100..10000 |
+| cinematic | qteAccessibleWindowMilli | integer | 1000 | 1000..10000 |
+| cinematic | qteMashScaleMilli | integer | 1000 | 100..10000 |
+| cinematic | qteHoldScaleMilli | integer | 1000 | 100..10000 |
+| cinematic | qteAutoSucceed | boolean | false |  |
 
 ## Cross-field constraints
 
@@ -337,3 +348,4 @@ Constraint: `senses.suspiciousAtMilli <= senses.searchingAtMilli` (checked by lo
 Constraint: `senses.searchingAtMilli <= senses.alertAtMilli` (checked by loader and CLI).
 Constraint: `senses.alertAtMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
 Constraint: `senses.alertReceivedMilli <= senses.suspicionMaxMilli` (checked by loader and CLI).
+Constraint: `cinematic.slowMotionNumerator <= cinematic.slowMotionDenominator` (checked by loader and CLI).
