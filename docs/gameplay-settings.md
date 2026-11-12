@@ -172,6 +172,46 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | matchRules | roundsToWin | integer | 1 | 1..100 |
 | matchRules | maxRounds | integer | 5 | 1..1000 |
 | matchRules | scoreToWin | integer | 10 | 1..1000000000 |
+| objectives | zoneCaptureTicks | integer | 300 | 1..10000000 |
+| objectives | zoneDecayPerTick | integer | 1 | 0..10000000 |
+| objectives | zoneContestRule | integer | 0 | 0..1 |
+| objectives | zoneMaxCapturers | integer | 1 | 1..64 |
+| objectives | zoneNeutralizeFirst | boolean | false |  |
+| objectives | holdScoreInterval | integer | 0 | 0..10000000 |
+| objectives | holdRequiresPresence | boolean | true |  |
+| objectives | hillRotateTicks | integer | 0 | 0..10000000 |
+| objectives | hillCount | integer | 1 | 1..64 |
+| objectives | payloadPushSpeedMilli | integer | 50 | 1..100000 |
+| objectives | payloadExtraPusherMilli | integer | 250 | 0..10000 |
+| objectives | payloadReverseSpeedMilli | integer | 25 | 0..100000 |
+| objectives | payloadMaxPushers | integer | 3 | 1..64 |
+| objectives | payloadReverseDelayTicks | integer | 300 | 0..10000000 |
+| objectives | payloadCheckpointBonusTicks | integer | 1800 | 0..10000000 |
+| objectives | payloadContestBlocks | boolean | true |  |
+| objectives | payloadCheckpointLock | boolean | true |  |
+| objectives | eliminationLives | integer | 0 | 0..1000 |
+| objectives | respawnDelayTicks | integer | 300 | 0..10000000 |
+| objectives | respawnWaveTicks | integer | 0 | 0..10000000 |
+| objectives | wipeEliminates | boolean | false |  |
+| objectives | extractionHoldTicks | integer | 300 | 1..10000000 |
+| objectives | extractionRequiredItems | integer | 0 | 0..1000 |
+| objectives | extractionOpensAtTicks | integer | 0 | 0..10000000 |
+| objectives | extractionContestBlocks | boolean | true |  |
+| objectives | extractionResetOnLeave | boolean | true |  |
+| objectives | bombPlantTicks | integer | 180 | 1..10000000 |
+| objectives | bombDefuseTicks | integer | 600 | 1..10000000 |
+| objectives | bombKitDefuseTicks | integer | 300 | 1..10000000 |
+| objectives | bombFuseTicks | integer | 2400 | 1..10000000 |
+| objectives | bombPlantResets | boolean | true |  |
+| objectives | bombDefuseResets | boolean | true |  |
+| objectives | overtimeEnabled | boolean | true |  |
+| objectives | overtimeGraceTicks | integer | 120 | 0..10000000 |
+| objectives | overtimeMaxTicks | integer | 1800 | 0..10000000 |
+| objectives | clockMaxTicks | integer | 100000000 | 1..100000000 |
+| objectives | spectatorKillCamTicks | integer | 180 | 0..10000000 |
+| objectives | spectatorFollowKiller | boolean | true |  |
+| objectives | spectatorAllowEnemies | boolean | false |  |
+| objectives | routeLaps | integer | 1 | 1..1000 |
 
 ## Cross-field constraints
 
@@ -193,3 +233,5 @@ Constraint: `ammoFeed.coolPerTick <= ammoFeed.heatCapacity` (checked by loader a
 Constraint: `charge.minTicks <= charge.maxTicks` (checked by loader and CLI).
 Constraint: `charge.minScaleMilli <= charge.maxScaleMilli` (checked by loader and CLI).
 Constraint: `matchRules.roundsToWin <= matchRules.maxRounds` (checked by loader and CLI).
+Constraint: `objectives.zoneDecayPerTick <= objectives.zoneCaptureTicks` (checked by loader and CLI).
+Constraint: `objectives.bombKitDefuseTicks <= objectives.bombDefuseTicks` (checked by loader and CLI).

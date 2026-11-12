@@ -224,6 +224,48 @@ struct MatchRuleSettings {
     std::int64_t maxRounds=5;
     std::int64_t scoreToWin=10;
 };
+struct ObjectiveSettings {
+    std::int64_t zoneCaptureTicks=300;
+    std::int64_t zoneDecayPerTick=1;
+    std::int64_t zoneContestRule=0;
+    std::int64_t zoneMaxCapturers=1;
+    bool zoneNeutralizeFirst=false;
+    std::int64_t holdScoreInterval=0;
+    bool holdRequiresPresence=true;
+    std::int64_t hillRotateTicks=0;
+    std::int64_t hillCount=1;
+    std::int64_t payloadPushSpeedMilli=50;
+    std::int64_t payloadExtraPusherMilli=250;
+    std::int64_t payloadReverseSpeedMilli=25;
+    std::int64_t payloadMaxPushers=3;
+    std::int64_t payloadReverseDelayTicks=300;
+    std::int64_t payloadCheckpointBonusTicks=1800;
+    bool payloadContestBlocks=true;
+    bool payloadCheckpointLock=true;
+    std::int64_t eliminationLives=0;
+    std::int64_t respawnDelayTicks=300;
+    std::int64_t respawnWaveTicks=0;
+    bool wipeEliminates=false;
+    std::int64_t extractionHoldTicks=300;
+    std::int64_t extractionRequiredItems=0;
+    std::int64_t extractionOpensAtTicks=0;
+    bool extractionContestBlocks=true;
+    bool extractionResetOnLeave=true;
+    std::int64_t bombPlantTicks=180;
+    std::int64_t bombDefuseTicks=600;
+    std::int64_t bombKitDefuseTicks=300;
+    std::int64_t bombFuseTicks=2400;
+    bool bombPlantResets=true;
+    bool bombDefuseResets=true;
+    bool overtimeEnabled=true;
+    std::int64_t overtimeGraceTicks=120;
+    std::int64_t overtimeMaxTicks=1800;
+    std::int64_t clockMaxTicks=100000000;
+    std::int64_t spectatorKillCamTicks=180;
+    bool spectatorFollowKiller=true;
+    bool spectatorAllowEnemies=false;
+    std::int64_t routeLaps=1;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -250,6 +292,7 @@ struct GameplaySettings {
     ChargeSettings charge;
     AimSolverSettings aimSolver;
     MatchRuleSettings matchRules;
+    ObjectiveSettings objectives;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -266,7 +309,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="matchRules") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="matchRules" && entry.first!="objectives") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -602,6 +645,54 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("scoreToWin")) number(section["scoreToWin"],settings.matchRules.scoreToWin,1,1000000000,"matchRules.scoreToWin");
         }
         if(settings.matchRules.roundsToWin>settings.matchRules.maxRounds)result.errors.push_back("matchRules.roundsToWin: must not exceed maxRounds");
+    }
+    if(root.has("objectives")) { const auto& section=root["objectives"];
+        if(!section.isObject()) result.errors.push_back("objectives: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="zoneCaptureTicks" && entry.first!="zoneDecayPerTick" && entry.first!="zoneContestRule" && entry.first!="zoneMaxCapturers" && entry.first!="zoneNeutralizeFirst" && entry.first!="holdScoreInterval" && entry.first!="holdRequiresPresence" && entry.first!="hillRotateTicks" && entry.first!="hillCount" && entry.first!="payloadPushSpeedMilli" && entry.first!="payloadExtraPusherMilli" && entry.first!="payloadReverseSpeedMilli" && entry.first!="payloadMaxPushers" && entry.first!="payloadReverseDelayTicks" && entry.first!="payloadCheckpointBonusTicks" && entry.first!="payloadContestBlocks" && entry.first!="payloadCheckpointLock" && entry.first!="eliminationLives" && entry.first!="respawnDelayTicks" && entry.first!="respawnWaveTicks" && entry.first!="wipeEliminates" && entry.first!="extractionHoldTicks" && entry.first!="extractionRequiredItems" && entry.first!="extractionOpensAtTicks" && entry.first!="extractionContestBlocks" && entry.first!="extractionResetOnLeave" && entry.first!="bombPlantTicks" && entry.first!="bombDefuseTicks" && entry.first!="bombKitDefuseTicks" && entry.first!="bombFuseTicks" && entry.first!="bombPlantResets" && entry.first!="bombDefuseResets" && entry.first!="overtimeEnabled" && entry.first!="overtimeGraceTicks" && entry.first!="overtimeMaxTicks" && entry.first!="clockMaxTicks" && entry.first!="spectatorKillCamTicks" && entry.first!="spectatorFollowKiller" && entry.first!="spectatorAllowEnemies" && entry.first!="routeLaps") result.errors.push_back("objectives."+entry.first+": unknown field");
+            if(section.has("zoneCaptureTicks")) number(section["zoneCaptureTicks"],settings.objectives.zoneCaptureTicks,1,10000000,"objectives.zoneCaptureTicks");
+            if(section.has("zoneDecayPerTick")) number(section["zoneDecayPerTick"],settings.objectives.zoneDecayPerTick,0,10000000,"objectives.zoneDecayPerTick");
+            if(section.has("zoneContestRule")) number(section["zoneContestRule"],settings.objectives.zoneContestRule,0,1,"objectives.zoneContestRule");
+            if(section.has("zoneMaxCapturers")) number(section["zoneMaxCapturers"],settings.objectives.zoneMaxCapturers,1,64,"objectives.zoneMaxCapturers");
+            if(section.has("zoneNeutralizeFirst")) boolean(section["zoneNeutralizeFirst"],settings.objectives.zoneNeutralizeFirst,"objectives.zoneNeutralizeFirst");
+            if(section.has("holdScoreInterval")) number(section["holdScoreInterval"],settings.objectives.holdScoreInterval,0,10000000,"objectives.holdScoreInterval");
+            if(section.has("holdRequiresPresence")) boolean(section["holdRequiresPresence"],settings.objectives.holdRequiresPresence,"objectives.holdRequiresPresence");
+            if(section.has("hillRotateTicks")) number(section["hillRotateTicks"],settings.objectives.hillRotateTicks,0,10000000,"objectives.hillRotateTicks");
+            if(section.has("hillCount")) number(section["hillCount"],settings.objectives.hillCount,1,64,"objectives.hillCount");
+            if(section.has("payloadPushSpeedMilli")) number(section["payloadPushSpeedMilli"],settings.objectives.payloadPushSpeedMilli,1,100000,"objectives.payloadPushSpeedMilli");
+            if(section.has("payloadExtraPusherMilli")) number(section["payloadExtraPusherMilli"],settings.objectives.payloadExtraPusherMilli,0,10000,"objectives.payloadExtraPusherMilli");
+            if(section.has("payloadReverseSpeedMilli")) number(section["payloadReverseSpeedMilli"],settings.objectives.payloadReverseSpeedMilli,0,100000,"objectives.payloadReverseSpeedMilli");
+            if(section.has("payloadMaxPushers")) number(section["payloadMaxPushers"],settings.objectives.payloadMaxPushers,1,64,"objectives.payloadMaxPushers");
+            if(section.has("payloadReverseDelayTicks")) number(section["payloadReverseDelayTicks"],settings.objectives.payloadReverseDelayTicks,0,10000000,"objectives.payloadReverseDelayTicks");
+            if(section.has("payloadCheckpointBonusTicks")) number(section["payloadCheckpointBonusTicks"],settings.objectives.payloadCheckpointBonusTicks,0,10000000,"objectives.payloadCheckpointBonusTicks");
+            if(section.has("payloadContestBlocks")) boolean(section["payloadContestBlocks"],settings.objectives.payloadContestBlocks,"objectives.payloadContestBlocks");
+            if(section.has("payloadCheckpointLock")) boolean(section["payloadCheckpointLock"],settings.objectives.payloadCheckpointLock,"objectives.payloadCheckpointLock");
+            if(section.has("eliminationLives")) number(section["eliminationLives"],settings.objectives.eliminationLives,0,1000,"objectives.eliminationLives");
+            if(section.has("respawnDelayTicks")) number(section["respawnDelayTicks"],settings.objectives.respawnDelayTicks,0,10000000,"objectives.respawnDelayTicks");
+            if(section.has("respawnWaveTicks")) number(section["respawnWaveTicks"],settings.objectives.respawnWaveTicks,0,10000000,"objectives.respawnWaveTicks");
+            if(section.has("wipeEliminates")) boolean(section["wipeEliminates"],settings.objectives.wipeEliminates,"objectives.wipeEliminates");
+            if(section.has("extractionHoldTicks")) number(section["extractionHoldTicks"],settings.objectives.extractionHoldTicks,1,10000000,"objectives.extractionHoldTicks");
+            if(section.has("extractionRequiredItems")) number(section["extractionRequiredItems"],settings.objectives.extractionRequiredItems,0,1000,"objectives.extractionRequiredItems");
+            if(section.has("extractionOpensAtTicks")) number(section["extractionOpensAtTicks"],settings.objectives.extractionOpensAtTicks,0,10000000,"objectives.extractionOpensAtTicks");
+            if(section.has("extractionContestBlocks")) boolean(section["extractionContestBlocks"],settings.objectives.extractionContestBlocks,"objectives.extractionContestBlocks");
+            if(section.has("extractionResetOnLeave")) boolean(section["extractionResetOnLeave"],settings.objectives.extractionResetOnLeave,"objectives.extractionResetOnLeave");
+            if(section.has("bombPlantTicks")) number(section["bombPlantTicks"],settings.objectives.bombPlantTicks,1,10000000,"objectives.bombPlantTicks");
+            if(section.has("bombDefuseTicks")) number(section["bombDefuseTicks"],settings.objectives.bombDefuseTicks,1,10000000,"objectives.bombDefuseTicks");
+            if(section.has("bombKitDefuseTicks")) number(section["bombKitDefuseTicks"],settings.objectives.bombKitDefuseTicks,1,10000000,"objectives.bombKitDefuseTicks");
+            if(section.has("bombFuseTicks")) number(section["bombFuseTicks"],settings.objectives.bombFuseTicks,1,10000000,"objectives.bombFuseTicks");
+            if(section.has("bombPlantResets")) boolean(section["bombPlantResets"],settings.objectives.bombPlantResets,"objectives.bombPlantResets");
+            if(section.has("bombDefuseResets")) boolean(section["bombDefuseResets"],settings.objectives.bombDefuseResets,"objectives.bombDefuseResets");
+            if(section.has("overtimeEnabled")) boolean(section["overtimeEnabled"],settings.objectives.overtimeEnabled,"objectives.overtimeEnabled");
+            if(section.has("overtimeGraceTicks")) number(section["overtimeGraceTicks"],settings.objectives.overtimeGraceTicks,0,10000000,"objectives.overtimeGraceTicks");
+            if(section.has("overtimeMaxTicks")) number(section["overtimeMaxTicks"],settings.objectives.overtimeMaxTicks,0,10000000,"objectives.overtimeMaxTicks");
+            if(section.has("clockMaxTicks")) number(section["clockMaxTicks"],settings.objectives.clockMaxTicks,1,100000000,"objectives.clockMaxTicks");
+            if(section.has("spectatorKillCamTicks")) number(section["spectatorKillCamTicks"],settings.objectives.spectatorKillCamTicks,0,10000000,"objectives.spectatorKillCamTicks");
+            if(section.has("spectatorFollowKiller")) boolean(section["spectatorFollowKiller"],settings.objectives.spectatorFollowKiller,"objectives.spectatorFollowKiller");
+            if(section.has("spectatorAllowEnemies")) boolean(section["spectatorAllowEnemies"],settings.objectives.spectatorAllowEnemies,"objectives.spectatorAllowEnemies");
+            if(section.has("routeLaps")) number(section["routeLaps"],settings.objectives.routeLaps,1,1000,"objectives.routeLaps");
+        }
+        if(settings.objectives.zoneDecayPerTick>settings.objectives.zoneCaptureTicks)result.errors.push_back("objectives.zoneDecayPerTick: must not exceed zoneCaptureTicks");
+        if(settings.objectives.bombKitDefuseTicks>settings.objectives.bombDefuseTicks)result.errors.push_back("objectives.bombKitDefuseTicks: must not exceed bombDefuseTicks");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

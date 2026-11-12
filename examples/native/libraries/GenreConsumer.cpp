@@ -6,6 +6,8 @@
 #include <aiverselib/genre/CombatData.h>
 #include <aiverselib/genre/WeaponData.h>
 #include <aiverselib/genre/WeaponPersistence.h>
+#include <aiverselib/genre/MatchObjectivesConfigured.h>
+#include <aiverselib/genre/MatchObjectivesData.h>
 #include "modules/rts/RtsNative.h"
 #include <array>
 #include <span>
@@ -56,6 +58,31 @@ bool weaponConsumerExample(aiverse::game::NativeState& state,const aiverse::lib:
     return storeBytes(state,"genre.weapon.feed",save(makeFeed(feedRules)))&&storeBytes(state,"genre.weapon.charge",save(ChargeState{}))&&storeBytes(state,"genre.weapon.loadout",save(loadout));
 }
 }
+// Match objectives: validated settings + map layout, one authoritative tick of a capture zone, payload and
+// objective clock, outcomes awarded through the match owner (awardScore), records stored one key each.
+// Presence counts come from the project's own spatial query (insideZone here); deaths/pickups likewise.
+static bool libraryMatchObjectivesConsumerExample(aiverse::game::NativeState& state,const aiverse::lib::gameplay::GameplaySettings& settings){
+    using namespace aiverse::lib::genre;using aiverse::Fixed;
+    if(!objectiveSettingsErrors(settings).empty())return false;
+    auto layout=readObjectiveLayout(aiverse::Json::parse(R"({"zones":[{"id":1,"kind":"capture","center":[0,0,0],"radiusMilli":4000}],
+        "payload":{"path":[[0,0,0],[20000,0,0],[20000,0,20000]],"checkpointsMilli":[20000]}})"));
+    auto zoneRules=zoneConfig(settings);auto cartRules=payloadConfig(settings);auto clockRules=objectiveClockConfig(settings);
+    auto bombRules=bombConfig(settings);auto spectate=spectatorConfig(settings);
+    if(!valid(zoneRules)||!valid(cartRules)||!valid(clockRules)||!valid(bombRules)||!valid(spectate)||!layout.payload)return false;
+    const std::array<int64_t,2> teams{1,2};auto match=makeMatch(teams);auto clock=startClock(clockRules,0);auto bomb=makeBomb(1,2,0);auto viewer=makeSpectator(1,1);
+    if(!match||!clock||!bomb||!viewer)return false;
+    ZoneState zone;auto cart=makePayload(1);uint64_t scoreEvent=0;
+    Occupants present;for(const aiverse::Vec3 body:{aiverse::Vec3{},aiverse::Vec3{Fixed::fromInt(1),{},{}}})if(insideZone(layout.zones[0],body))++present[1];
+    auto captured=stepZone(zoneRules,zone,layout.zones[0].id,present,0);auto pushed=stepPayload(cartRules,*layout.payload,cart,1,0,0);
+    auto timer=stepClock(clockRules,*clock,0,zone.contested||cart.contested);if(!captured||!pushed||!timer)return false;
+    ObjectiveEvents outcomes=*captured;outcomes.insert(outcomes.end(),pushed->begin(),pushed->end());
+    const ObjectiveScoring points{{ObjectiveEventKind::ZoneCaptured,5},{ObjectiveEventKind::ZoneHoldTick,1},{ObjectiveEventKind::PayloadCheckpoint,3},{ObjectiveEventKind::PayloadDelivered,10}};
+    if(!stepMatch(matchConfig(settings),*match,0)||!awardObjectiveEvents(*match,points,outcomes,scoreEvent))return false;
+    aiverse::Hasher hash;hashObjective(hash,zone);hashObjective(hash,cart);hashObjective(hash,*clock);
+    state.values["genre.objective.hash"]=int64_t(hash.value()&0x7fffffffffffffffull);state.values["genre.objective.score_event"]=int64_t(scoreEvent);
+    return storeBytes(state,"genre.objective.zone",save(zone))&&storeBytes(state,"genre.objective.payload",save(cart))&&storeBytes(state,"genre.objective.clock",save(*clock))
+        &&storeBytes(state,"genre.objective.bomb",save(*bomb))&&storeBytes(state,"genre.objective.spectator",save(*viewer))&&storeBytes(state,"genre.objective.match",save(*match));
+}
 bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse::Json& settings,const aiverse::Json& story){
     using namespace aiverse::lib::genre;
     auto parsed=aiverse::lib::gameplay::readGameplaySettings(settings);if(!parsed.value)return false;
@@ -69,5 +96,6 @@ bool libraryGenreConsumerExample(aiverse::game::NativeState& state,const aiverse
     state.values["genre.locomotion.config"]=int64_t(locomotionConfigHash(modes)&0x7FFFFFFFFFFFFFFFull);
     if(!storeBytes(state,"genre.story",save(*initial))||!storeBytes(state,"genre.motion",save(MotionState{}))||!storeBytes(state,"genre.locomotion",save(body)))return false;
     if(!libraryCombatConsumerExample(state,*parsed.value))return false;
+    if(!libraryMatchObjectivesConsumerExample(state,*parsed.value))return false;
     return weaponConsumerExample(state,*parsed.value);
 }
