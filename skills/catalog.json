@@ -1118,6 +1118,43 @@
       "keywords": []
     },
     {
+      "id": "aiverse-stealth-senses",
+      "package": "stealth-senses",
+      "path": "skills/aiverse-stealth-senses/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Per-agent stealth perception: sight cones with near/peripheral ranges and owner multipliers, hearing with occlusion and noise budgets, footprint/scent trails, suspicion meters with Unaware/Suspicious/Searching/Alert thresholds, delayed ally alerts with shared last known positions, deterministic search points, disguises and hiding spots",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_stealth_senses",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Senses.h",
+      "keywords": [
+        "stealth",
+        "sight",
+        "hearing",
+        "noise",
+        "footprint",
+        "scent",
+        "suspicion",
+        "alert",
+        "disguise",
+        "hiding",
+        "стелс",
+        "зрение",
+        "слух",
+        "шум",
+        "след",
+        "подозрен",
+        "тревог",
+        "маскиров",
+        "укрыт"
+      ]
+    },
+    {
       "id": "aiverse-tag-conditions",
       "package": "tag-conditions",
       "path": "skills/aiverse-tag-conditions/SKILL.md",
