@@ -24,7 +24,8 @@ struct Frame {
     int idx = 0;        // channel index, written as "func,idx" only when > 0
     std::string msg;    // usually JSON
 };
-Bytes encodeFrame(const Frame& f);   // strings longer than 65535 bytes are truncated at a UTF-8 boundary
+constexpr size_t kMaxFrameString = 32768;
+Bytes encodeFrame(const Frame& f);   // empty when func or msg has >= 32768 bytes (the client refuses those too)
 
 class FrameReader {
 public:

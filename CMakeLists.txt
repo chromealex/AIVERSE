@@ -240,9 +240,13 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
     add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
     target_link_libraries(aiverse_net_game PUBLIC aiverse_net_server aiverse_game)
 endif()
-# Bunker Wars battle node bridge + plain internal HTTP (agent-bw-meta, docs/meta-bunkerwars.md). Native only.
+# Bunker Wars adapter (agent-bw-meta, docs/meta-bunkerwars.md): default HTTPS transport on the
+# per-platform pack HTTP stack (all platforms); TCP matchmaker/chat links, host probes, battle node
+# bridge and plain internal HTTP (native only).
+add_library(aiverse_bw_http STATIC engine/meta/bw/BwPlatformHttp.cpp)
+target_link_libraries(aiverse_bw_http PUBLIC aiverse_meta_bw aiverse_pack)
 if(NOT EMSCRIPTEN)
-    add_library(aiverse_bw_node STATIC engine/meta/bw/BwHttp.cpp engine/meta/bw/BwNode.cpp)
+    add_library(aiverse_bw_node STATIC engine/meta/bw/BwHttp.cpp engine/meta/bw/BwNode.cpp engine/meta/bw/BwTcp.cpp)
     target_link_libraries(aiverse_bw_node PUBLIC aiverse_meta_bw aiverse_net_server)
 endif()
 
@@ -733,7 +737,7 @@ if(AIVERSE_BUILD_TESTS)
     target_compile_definitions(aiverse_net_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_net_tests COMMAND aiverse_net_tests)
     add_executable(aiverse_bw_meta_tests tests/bw_meta_tests.cpp)   # agent-bw-meta: BW backend adapter
-    target_link_libraries(aiverse_bw_meta_tests PRIVATE aiverse_bw_node aiverse_net_game)
+    target_link_libraries(aiverse_bw_meta_tests PRIVATE aiverse_bw_node aiverse_bw_http aiverse_net_game)
     target_compile_definitions(aiverse_bw_meta_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_bw_meta_tests COMMAND aiverse_bw_meta_tests)
     add_executable(aiverse_tests tests/tests.cpp)

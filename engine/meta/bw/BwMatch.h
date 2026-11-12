@@ -47,16 +47,17 @@ class MatchSession {
 public:
     enum class Phase { Idle, Connecting, Online, Searching, Countdown, Ready, Closed };
     struct Event {
-        enum class Kind { Connected, Update, Countdown, Ready, SyncComplete, Progress, Error, Disconnected, Other } kind = Kind::Other;
+        enum class Kind { Connected, Update, Countdown, Ready, SyncComplete, Progress, Pong, Error, Disconnected, Other } kind = Kind::Other;
         Frame frame;
         Json json;   // parsed msg (null when not JSON)
     };
 
-    void connect(const std::string& tokenOrTicket);    // "Connect" with the meta token
+    void connect(const std::string& tokenOrTicket);    // "Connect" with the meta token (nothing if empty, as MsgConnect)
     void match(const MatchParams& p);                  // "Match"
     void ready();                                      // "Match.Ready" (after onReadyToCountdown)
     void reconnect(int64_t roomId, int lastTick);      // "MatchReconnect"
-    void ping(int64_t ms);                             // "GamePing"
+    void ping(int64_t ms, int tick);                   // "GamePing" {"ms":…,"tick":…} (MultiplayerManager.Ping)
+    void pingRaw(int64_t ms);                          // "GamePing" "<ms>" (TcpConnector.MsgPing)
     void send(const std::string& func, const std::string& msg, int idx = 0);
 
     void feed(const uint8_t* p, size_t n);
