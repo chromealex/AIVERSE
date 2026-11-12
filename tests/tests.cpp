@@ -12903,6 +12903,7 @@ TEST(world_tree_script_blob_decoding) {
 }
 #endif
 
+#include "tests_modes.inc"   // match modes (agent-bw-modes)
 #include "animation/view.inc"
 #include "animation/editor.inc"
 #include "geometry/runtime.inc"

@@ -765,6 +765,7 @@ Rules loadRules(const Json& j) {
     }
     loadOriginals(r, j, ep);   // fidelity mechanics (RtsOriginalsData.cpp)
     loadFidelity(r, j, ep);    // foundations, traps (RtsFidelityData.cpp)
+    loadModes(r, j);           // match modes, timed rules, resource levels (RtsModesData.cpp)
     // built-in statuses (internal ids start with '_')
     r.userStatuses = r.statuses.size();
     auto builtin = [&](const char* id, uint32_t flags) {

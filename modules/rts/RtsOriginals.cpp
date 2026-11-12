@@ -428,6 +428,7 @@ Fixed RtsModule::playerModsStat(Simulation& sim, uint8_t player, uint16_t type, 
             for (int k = 0; k < n; ++k) mul = mul * mod.mul;
         }
     }
+    if (!modes_.levels.empty()) add += modesLevelStat(sim, player, type, s, mul);   // resource levels (RtsModes.cpp)
     return add;
 }
 

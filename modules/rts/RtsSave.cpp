@@ -251,6 +251,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     }
     if (fields_ && fields_->active()) fields_->io(sim, a);   // grid fields (games with rules / map fields only)
     if (env_ && env_->active()) env_->io(sim, a);            // map environment (games with one only)
+    if (!ioModesState(*this, sim, a)) return false;           // match modes (games with modes only, RtsModes.cpp)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

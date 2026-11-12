@@ -98,7 +98,7 @@ inline void unpackRect(int64_t p, int& w, int& h, int& extra) {
 }
 
 // ---------------------------------------------------------------- events (presentation)
-enum DefeatReason : int64_t { kDefeatEliminated = 0, kDefeatSurrendered = 1 }; // kEvPlayerDefeated value
+enum DefeatReason : int64_t { kDefeatEliminated = 0, kDefeatSurrendered = 1, kDefeatMode = 2 /*match modes (RtsModes.cpp)*/ }; // kEvPlayerDefeated value
 
 enum GameEvent : uint16_t {
     kEvSpawned = 1, kEvDied, kEvAttack, kEvHit, kEvTrainStarted, kEvTrainDone, kEvBuildPlaced, kEvBuildDone,
@@ -157,7 +157,11 @@ enum GameEvent : uint16_t {
     kEvTurn,            // turn-based mode: player = whose turn starts, value = turn number
     kEvFortified,       // dungeon walls: value = cell, player = new wall owner (0: the wall fell back to plain rock), a = worker
     kEvEnv,             // map environment (RtsEnv.h): value = EnvEventKind << 16 | data, a / b / pos per kind (weather, wind, worm, toad, bombs, Mouro, souls, walls)
+    kEvModePhase,       // match modes (RtsModes.cpp): value = ModePhaseEvent, player = side concerned (0: everyone), a = point
 };
+// kEvModePhase values
+enum ModePhaseEvent : int64_t { kModeSdCounter = 1, kModeSdPreview, kModeSdStart, kModeSdEnd, kModeTimeStep, kModeTimeUp,
+                                kModeKohAlarm, kModeDomHeld, kModeZoneLost, kModeZoneChanged };
 
 // ---------------------------------------------------------------- components
 enum UnitFlags : uint16_t { kUnitHold = 1, kUnitUnderConstruction = 2, kUnitDisabled = 4 /*power deficit*/, kUnitSilent = 8 /*removed without death effects*/,
@@ -487,6 +491,7 @@ struct GameState {
     // fidelity mechanics: eaters (sandworms) that submerged and come back later
     struct Resurface { uint16_t type; uint8_t owner; uint32_t at; };
     std::vector<Resurface> resurface;
+    ModesState modes;                        // match modes, timed rules, levels, match stats (RtsModes.cpp)
 };
 
 // ---------------------------------------------------------------- module
@@ -505,6 +510,13 @@ public:
     void prepareSnapshot(Simulation& sim) override { if (script_) script_->flush(sim); }
     bool serializeState(Simulation& sim, Archive& a) override;   // RtsSave.cpp
     int result(Simulation& sim) override;
+    double speedScale(Simulation& sim) override;   // match modes: time limit speed steps, sudden death preview (RtsModes.cpp)
+    // ---- match modes (RtsModes.cpp): the effective modes of this match (rules + matchMode preset + map)
+    const ModesRules& modes() const { return modes_; }
+    bool modeZone(Simulation& sim, uint8_t player, ModeRect& out) const;   // battle-royal zone of a player (false: none)
+    int64_t matchStat(Simulation& sim, uint8_t player, MatchStat key) const;
+    int modeLevel(Simulation& sim, uint8_t player, int16_t res) const;     // level index of a resource with levels (-1)
+    Fixed modesLevelStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, Fixed& mul) const;
 
     const Rules& rules() const { return rules_; }
     const TriggerSet& triggers() const { return triggers_; }
@@ -716,6 +728,12 @@ public:
     void mechWaveRoute(Simulation& sim, Entity e, const std::vector<Vec3>& route);
 
 private:
+    ModesRules modes_;               // match modes of this match (read-only after setup, RtsModes.cpp)
+    void modesSetup(Simulation& sim, const Json& rulesJson, const Json& map);
+    void sysModes(Simulation& sim);
+    void sysMatchStats(Simulation& sim);
+    void hashModes(Simulation& sim, Hasher& h);
+    friend bool ioModesState(RtsModule& m, Simulation& sim, Archive& a);
     Json generated_;                 // generated map (see generatedMap())
     void setupMap(Simulation& sim, const Json& map);
     // ---- planets (RtsPlanets.cpp)
