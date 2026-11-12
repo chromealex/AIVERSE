@@ -2356,7 +2356,8 @@ aim stick, ability buttons, keyboard / mouse / gamepad, follow camera). Keys, de
 ## Boss encounters
 
 Rules block `encounters` (boss-encounters library on real units; reference [docs/encounters.md](encounters.md),
-sample `templates/boss_arena`). Map players with `"monsters": true` are driven by it (the computer player skips them).
+sample `templates/boss_arena`). Map players with `"monsters": true` and hostile creeps (owner 255) are driven by it
+(the computer player skips them).
 - `attacks.<id>`: `shape` (circle / cone / line / ring), `radius`, `inner`, `angle`, `length`, `width`, `anchor`
   (source / aim), `offset`, `windup`, `active`, `recovery`, `interval`, `cooldown`, `damage`, `damageMin`, `falloff`,
   `damageType`, `statuses` (rules status ids or `{"status", "duration"}`), `statusDuration`, `oncePerTarget`,

@@ -9,15 +9,19 @@ against a three-phase golem with adds and crawler packs).
 
 ## Who is driven
 
-- **Monster players**: map players with `"monsters": true`. The computer player leaves them alone; their units of
-  a boss type get a boss brain, their units of a mob type get mob behaviour. Other players' units are never steered.
+- **Monster players**: map players with `"monsters": true`, and always the hostile creeps (owner 255, e.g. units a
+  game's Lua director spawns). The computer player leaves them alone; their units of a boss type get a boss brain,
+  their units of a mob type get mob behaviour. Other players' units are never steered. Creeps are a side of their
+  own for telegraphs (they never hit each other unless `friendlyFire`).
+- A boss walks with a move order and stops at `approach`: the weapon system neither stops nor redirects a unit with
+  orders, so a boss whose (other) weapons outrange its pattern bands still closes in; in reach its weapons fight.
 - **Telegraphed attacks** work for every unit: bosses and mobs start them, a unit ability can start one
   (`"ability"`), and Lua can (`encounters.cast`).
 
 ## Rules block
 
 All times in seconds, distances in world units (cells), multipliers as numbers (1 = unchanged), fractions of max hp
-as 0..1. Unknown ids fail with readable errors (`encounters.bosses.golem.phases[1].pattern: unknown attack 'kick'`).
+as 0..1. Sizes must be positive (`encounters.attacks.rock.length: must be positive (line)`). Unknown ids fail with readable errors (`encounters.bosses.golem.phases[1].pattern: unknown attack 'kick'`).
 
 ```json
 "statuses": {   // ordinary rules statuses: what an attack applies

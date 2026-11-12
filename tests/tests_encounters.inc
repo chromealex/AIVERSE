@@ -311,3 +311,17 @@ TEST(encounters_golem_pit_sample_ends_with_a_result) {
         CHECK(phases >= 1 && telegraphs >= 5 && statuses >= 1);
     }
 }
+
+TEST(encounters_hostile_creeps_are_monsters) {
+    // owner 255 (hostile creeps, e.g. spawned by a game's Lua director): brains without any "monsters" map flag;
+    // their telegraphs never hit other creeps (a side of their own)
+    auto sim = makeSimJson(kEncRules, encMap(R"({"type":"dummy","owner":1,"pos":[20.5,6.5]},{"type":"golem","owner":255,"pos":[20.5,12.5]},
+        {"type":"crawler","owner":255,"pos":[21.5,8.5]})", false));
+    const Entity golem = findType(*sim, "golem", 255), crawler = findType(*sim, "crawler", 255), dummy = findType(*sim, "dummy", 1);
+    CHECK(mod(*sim).encounters()->monsterPlayer(255) && !mod(*sim).encounters()->monsterPlayer(2));
+    run(*sim, 0.1);
+    CHECK(encStore(*sim).boss(golem.packed()) && encStore(*sim).mob(crawler.packed()));
+    run(*sim, 6);
+    CHECK(sim->world().get<game::Unit>(dummy).hp < Fixed::fromInt(100000));
+    CHECK(!sim->world().alive(crawler) || sim->world().get<game::Unit>(crawler).hp == Fixed::fromInt(80));
+}

@@ -118,11 +118,16 @@ EncounterRules Encounters::parse(const Json& j, const Rules& rules, uint32_t rat
         else if (shape == "line") d.area.shape = lg::AreaShape::Line;
         else if (shape == "ring") d.area.shape = lg::AreaShape::Ring;
         else fail(w + ".shape", "circle, cone, line or ring");
+        auto positive = [&](const char* key, Fixed def) {
+            Fixed v = nonNeg(a, key, def, w);
+            if (v.raw <= 0) fail(w + "." + key, "must be positive (" + shape + ")");
+            return v;
+        };
         if (d.area.shape == lg::AreaShape::Line) {
-            d.area.length = nonNeg(a, "length", Fixed::fromInt(6), w);
-            d.area.halfWidth = nonNeg(a, "width", Fixed::fromInt(2), w) / 2;
+            d.area.length = positive("length", Fixed::fromInt(6));
+            d.area.halfWidth = positive("width", Fixed::fromInt(2)) / 2;
         } else {
-            d.area.radius = nonNeg(a, "radius", Fixed::fromInt(3), w);
+            d.area.radius = positive("radius", Fixed::fromInt(3));
         }
         if (d.area.shape == lg::AreaShape::Ring) d.area.inner = nonNeg(a, "inner", d.area.radius / 2, w);
         if (d.area.shape == lg::AreaShape::Cone) {
@@ -359,7 +364,14 @@ EncounterRules Encounters::parse(const Json& j, const Rules& rules, uint32_t rat
 
 EncounterStore* Encounters::store(Simulation& sim) const { return active() ? sim.world().resource<EncounterStore>() : nullptr; }
 
-bool Encounters::monsterPlayer(uint8_t slot) const { return std::binary_search(monsters_.begin(), monsters_.end(), slot); }
+// Hostile creeps (owner 255) are always monsters: no computer player owns them.
+bool Encounters::monsterPlayer(uint8_t slot) const { return slot == kHostileNeutral || std::binary_search(monsters_.begin(), monsters_.end(), slot); }
+
+int64_t Encounters::teamKey(Simulation& sim, uint8_t owner) const {
+    if (owner == 0) return 0;                       // passive neutral: unaffiliated
+    if (owner == kHostileNeutral) return 256;       // creeps: one side of their own (never hit each other)
+    return int64_t(m_->teamOf(sim, owner));
+}
 
 void Encounters::setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const Json& map) {
     m_ = &m;
@@ -466,7 +478,7 @@ bool Encounters::cast(Simulation& sim, Entity caster, int attack, Vec3 aim, Enti
     const Vec3 p = w.get<Transform>(caster).pos;
     const uint8_t owner = w.get<Owner>(caster).player;
     lg::CasterPose pose{p.xz(), yawOf(u.facing), true};
-    const int64_t team = owner == 0 ? 0 : int64_t(m_->teamOf(sim, owner));
+    const int64_t team = teamKey(sim, owner);
     auto inst = lg::beginTelegraph(R_.telegraphs, int64_t(attack) + 1, st->nextCast, sim.tick(), idOf(caster), team, pose, aim.xz(),
                                    w.alive(target) ? idOf(target) : 0);
     if (!inst) return false;
@@ -516,7 +528,7 @@ void Encounters::tick(Simulation& sim) {
 }
 
 void Encounters::discover(Simulation& sim, EncounterStore& st) {
-    if (monsters_.empty() || (R_.bosses.empty() && R_.mobs.empty())) return;
+    if (R_.bosses.empty() && R_.mobs.empty()) return;
     World& w = sim.world();
     std::vector<Entity> found;
     w.each<Unit, Owner>([&](Entity e, Unit& u, Owner& o) {
@@ -537,7 +549,7 @@ void Encounters::discover(Simulation& sim, EncounterStore& st) {
 }
 
 void Encounters::tickSchedule(Simulation& sim, EncounterStore& st) {
-    if (R_.schedule.windows.empty() || monsters_.empty()) return;
+    if (R_.schedule.windows.empty()) return;
     World& w = sim.world();
     std::vector<int64_t> participants;
     for (auto& p : sim.players())
@@ -572,7 +584,7 @@ void Encounters::tickSchedule(Simulation& sim, EncounterStore& st) {
             ok = g.inside(cx, cy) && g.passable(cx, cy, t.pathLayer);
         }
         if (!ok) continue;   // try again next tick
-        const Entity e = m_->spawn(sim, type, monsters_[0], spot);
+        const Entity e = m_->spawn(sim, type, monsters_.empty() ? kHostileNeutral : monsters_[0], spot);
         if (!e.valid()) continue;
         lg::markBossSpawned(st.schedule, ev.window, ev.participant, idOf(e), sim.tick());
         EncBossState b; b.entity = e.packed(); b.brain.boss = ev.boss; b.participant = who; b.window = ev.window;
@@ -676,16 +688,27 @@ void Encounters::tickBoss(Simulation& sim, EncounterStore& st, EncBossState& b) 
         }
     }
     if (b.defeated || u.hp.raw <= 0) return;
-    // movement: hold still while an attack winds up / recovers, during a phase transition and while stunned
+    // movement: hold still while an attack winds up / recovers, during a phase transition and while stunned.
+    // Walking uses a move order: the weapon system neither stops nor redirects a unit with orders, so a boss whose
+    // weapons outrange its pattern bands still closes in; in reach the queue is empty and its weapons fight as usual.
     auto* mob = w.tryGet<Mobile>(e);
+    auto* ord = w.tryGet<Orders>(e);
     if (!mob) return;
-    if (locked || stunned || step->transitioning || busy) { if (mob->moving) m_->stopMoving(sim, e); return; }
+    auto hold = [&]() {
+        if (ord && !ord->queue.empty()) ord->queue.clear();
+        if (mob->moving) m_->stopMoving(sim, e);
+    };
+    if (locked || stunned || step->transitioning || busy) { hold(); return; }
     if (!tgt.valid()) return;
     const Fixed dist = dist2D(tpos, pos);
     if (dist > d.approach) {
-        if (!mob->moving || dist2D(b.goal, tpos) > kOne) { m_->moveTo(sim, e, tpos, d.approach); b.goal = tpos; }
+        if (!mob->moving || !ord || ord->queue.empty() || dist2D(b.goal, tpos) > kOne) {
+            Order o; o.type = OrderType::Move; o.point = tpos;
+            m_->issue(sim, e, o, false);
+            b.goal = tpos;
+        }
     } else {
-        if (mob->moving) m_->stopMoving(sim, e);
+        hold();
         const Vec3 dir = tpos - pos;
         if (dir.x.raw != 0 || dir.z.raw != 0) { Vec2 f = forwardOf(yawOf(dir)); u.facing = {f.x, Fixed{}, f.y}; }
     }
@@ -838,7 +861,7 @@ void Encounters::tickCasts(Simulation& sim, EncounterStore& st) {
             const UnitType& xt = rules.types[xu.type];
             const uint8_t xo = w.get<Owner>(x).player;
             lg::TelegraphTarget tt;
-            tt.id = idOf(x); tt.team = xo == 0 ? 0 : int64_t(m_->teamOf(sim, xo)); tt.position = w.get<Transform>(x).pos.xz();
+            tt.id = idOf(x); tt.team = teamKey(sim, xo); tt.position = w.get<Transform>(x).pos.xz();
             tt.radius = fxMin(xt.radius, lg::kCombatSizeLimit); tt.targetable = xu.hp.raw > 0 && !xt.invulnerable;
             targets.push_back(tt);
         });

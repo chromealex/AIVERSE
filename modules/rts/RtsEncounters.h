@@ -124,7 +124,8 @@ public:
     void hash(Simulation& sim, Hasher& h) const;
     void io(Simulation& sim, Archive& a);
     EncounterStore* store(Simulation& sim) const;
-    bool monsterPlayer(uint8_t slot) const;
+    bool monsterPlayer(uint8_t slot) const;              // map "monsters": true players and hostile creeps (owner 255)
+    int64_t teamKey(Simulation& sim, uint8_t owner) const;   // telegraph sides: 0 neutral, 256 creeps, else the team
     // stat hook: phase / enrage speed multiplier of a boss (1 for everything else)
     bool hasSpeed() const { return R_.speedMods; }
     Fixed speedMul(Simulation& sim, Entity e) const;
