@@ -7,14 +7,15 @@ const char* kCommerceRules = R"J({
   "victory": "noUnits",
   "resources": {"cash": {"start": 1000}},
   "commerce": {
-    "currency": "cash", "dayMinutes": 0.05, "weekDays": 7, "sellShare": 0.8,
+    "currency": "cash", "dayMinutes": 0.05, "weekDays": 7, "sellShare": 0.8, "unmanagedShare": 1,
     "bank": {"rateWeek": 0.02, "unsecured": 2000, "collateralShare": 0.5, "termWeeks": 10, "graceWeeks": 1},
     "businesses": {
       "kiosk": {"name": "Kiosk", "kinds": ["shop"], "setup": 600, "incomeDay": 200, "costDay": 80},
       "agency": {"kinds": ["office"], "setup": 100, "incomeDay": 10, "costDay": 60}
     }
   },
-  "types": {"dummy": {"health": {"max": 100}, "move": {"speed": 0, "radius": 0.4}, "sight": 2}}
+  "types": {"dummy": {"health": {"max": 100}, "move": {"speed": 0, "radius": 0.4}, "sight": 2},
+            "van": {"health": {"max": 300}, "move": {"speed": 0, "radius": 0.5}, "sight": 2}}
 })J";
 std::string commerceMap(const char* premises) {
     return flatMap(32, 16, std::string(R"(,"entities":[{"type":"dummy","owner":1,"pos":[3,3]},{"type":"dummy","owner":2,"pos":[28,12]}],"premises":)") + premises);
@@ -168,4 +169,90 @@ TEST(commerce_lua_table_and_games_without_it) {
     CHECK(com(*sim).store(*sim)->accounts[1].debt == Fixed::fromInt(500) && com(*sim).store(*sim)->premises[0].business >= 0);
     auto plain = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
     CHECK(mod(*plain).commerce() && !mod(*plain).commerce()->active() && !mod(*plain).commerce()->store(*plain));
+}
+
+TEST(commerce_staff_manager_customers_and_purchases) {
+    using Op = game::CommerceOp;
+    Json rules = Json::parse(kCommerceRules);
+    Json com2 = rules["commerce"];
+    com2.set("unmanagedShare", Json::parse("0.5"));
+    com2.set("managerWageWeek", Json::parse("100"));
+    com2.set("businesses", Json::parse(R"({"store": {"kinds": ["shop"], "setup": 0, "incomeDay": 400, "costDay": 0, "staff": 2, "wageWeek": 70, "ticket": 25}})"));
+    com2.set("offers", Json::parse(R"({"van": {"kinds": ["dealer"], "price": 700, "vehicle": "van"}, "pistol": {"kinds": ["gunshop"], "price": 50, "weapon": "pistol", "ammo": 12}})"));
+    rules.set("commerce", com2);
+    SimConfig cfg;
+    auto sim = std::make_unique<Simulation>(cfg, std::make_unique<game::RtsModule>());
+    sim->setup(rules, Json::parse(commerceMap(R"([{"id":"s","kind":"shop","at":[5,5],"price":4000,"rentWeek":0,"owner":1,"business":"store"},
+        {"id":"cars","kind":"dealer","at":[9,5],"price":1,"public":true},{"id":"guns","kind":"gunshop","at":[12,5],"price":1,"public":true}])")));
+    auto& c = com(*sim);
+    auto* st = c.store(*sim);
+    Fixed& cash = mod(*sim).state(*sim).players[1].stock[0];
+    game::Premise& shop = st->premises[0];
+    // nobody works there and nobody looks after it: nothing comes in
+    CHECK(c.expectedToday(shop).raw == 0 && !c.visit(*sim, 0));
+    deal(*sim, 1, Op::Hire, 0);
+    CHECK(shop.staff == 1 && c.expectedToday(shop) == Fixed::fromInt(100));          // half the staff, half the supervision
+    deal(*sim, 1, Op::Hire, 0);
+    deal(*sim, 1, Op::Hire, 0);                                                       // fully staffed: ignored
+    CHECK(shop.staff == 2 && std::string(c.refusal(*sim, 1, Op::Hire, 0, 0)) == "fully staffed");
+    deal(*sim, 1, Op::Manager, 0);
+    CHECK(shop.manager && c.expectedToday(shop) == Fixed::fromInt(400));
+    // walk-in customers pay at once; the day's total stays the same
+    cash = Fixed{};
+    CHECK(c.visit(*sim, 0) && c.visit(*sim, 0) && cash == Fixed::fromInt(50) && shop.served == Fixed::fromInt(50));
+    runToTick(*sim, 61);
+    CHECK(cash == Fixed::fromInt(400) && shop.lastNet == Fixed::fromInt(400) && shop.served.raw == 0);
+    // a very busy day brings up to half more, then the door is shut
+    int n = 0;
+    while (c.visit(*sim, 0)) ++n;
+    CHECK(n == 24);
+    runToTick(*sim, 121);
+    CHECK(cash == Fixed::fromInt(400 + 600));
+    // the week: two wages and the manager
+    runToTick(*sim, 421);
+    CHECK(st->accounts[1].lastWages == Fixed::fromInt(240) && cash == Fixed::fromInt(1000 + 5 * 400 - 240));
+    deal(*sim, 1, Op::Fire, 0);
+    deal(*sim, 1, Op::Manager, 0);
+    CHECK(shop.staff == 1 && !shop.manager);
+    // the city's dealer and gun shop: not for sale, but they sell
+    CHECK(std::string(c.refusal(*sim, 1, Op::Buy, 1, 0)) == "not for sale" && std::string(c.refusal(*sim, 1, Op::Rent, 2, 0)) == "not for sale");
+    CHECK(std::string(c.refusal(*sim, 1, Op::Purchase, 0, c.findOffer("van"))) == "not sold here");
+    CHECK(std::string(c.refusal(*sim, 1, Op::Purchase, 2, c.findOffer("pistol"))) == "no weapons in this game");
+    const Fixed before = cash;
+    const int vans = countType(*sim, "van", 0);
+    deal(*sim, 1, Op::Purchase, 1, c.findOffer("van"));
+    CHECK(cash == before - Fixed::fromInt(700) && countType(*sim, "van", 0) == vans + 1 && st->accounts[1].cars.size() == 1);
+    // saved with staff, a car and customers served
+    c.visit(*sim, 0);
+    std::string save = sim->serialize(), err;
+    auto copy = std::make_unique<Simulation>(cfg, std::make_unique<game::RtsModule>());
+    copy->setup(rules, Json::parse(commerceMap(R"([{"id":"s","kind":"shop","at":[5,5],"price":4000,"rentWeek":0,"owner":1,"business":"store"},
+        {"id":"cars","kind":"dealer","at":[9,5],"price":1,"public":true},{"id":"guns","kind":"gunshop","at":[12,5],"price":1,"public":true}])")));
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum());
+    run(*sim, 5.0); run(*copy, 5.0);
+    CHECK(copy->checksum() == sim->checksum());
+}
+
+TEST(commerce_home_stash_is_private_and_survives) {
+    using Op = game::CommerceOp;
+    auto sim = makeSimJson(kCommerceRules, commerceMap(R"([{"id":"home","kind":"flat","at":[5,5],"price":800,"rentWeek":100},
+        {"id":"shop","kind":"shop","at":[9,5],"price":500,"rentWeek":50}])"));
+    auto& c = com(*sim);
+    auto* st = c.store(*sim);
+    CHECK(std::string(c.refusal(*sim, 1, Op::Stash, 0, 100)) == "not your home");
+    deal(*sim, 1, Op::Rent, 0);
+    deal(*sim, 1, Op::Rent, 1);
+    CHECK(std::string(c.refusal(*sim, 1, Op::Stash, 1, 100)) == "no stash here");
+    CHECK(std::string(c.refusal(*sim, 2, Op::Unstash, 0, 100)) == "not your home");
+    CHECK(std::string(c.refusal(*sim, 1, Op::StashWeapons, 0, 0)) == "no weapons in this game");
+    deal(*sim, 1, Op::Stash, 0, 600);
+    CHECK(st->premises[0].stashCash == Fixed::fromInt(600) && c.cash(*sim, 1) == Fixed::fromInt(1000 - 150 - 600));
+    CHECK(std::string(c.refusal(*sim, 1, Op::Leave, 0, 0)) == "empty the stash first");
+    deal(*sim, 2, Op::Unstash, 0, 600);                                   // somebody else: ignored
+    deal(*sim, 1, Op::Unstash, 0, 100);
+    CHECK(st->premises[0].stashCash == Fixed::fromInt(500) && c.cash(*sim, 1) == Fixed::fromInt(350));
+    // thrown out for the rent: the stashed money comes back to the pocket
+    mod(*sim).state(*sim).players[1].stock[0] = Fixed{};
+    runToTick(*sim, 421);
+    CHECK(st->premises[0].tenant == 0 && st->premises[0].stashCash.raw == 0 && c.cash(*sim, 1) == Fixed::fromInt(450));   // and the shop rent is paid from it
 }

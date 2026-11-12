@@ -24,14 +24,27 @@ namespace aiverse::game {
 
 class RtsModule;
 
-enum class CommerceOp : uint8_t { None, Rent, Leave, Buy, Sell, Open, Close, Borrow, Repay };
-// value: business index for Open, whole currency units for Borrow / Repay
+enum class CommerceOp : uint8_t { None, Rent, Leave, Buy, Sell, Open, Close, Borrow, Repay, Hire, Fire, Manager, Purchase, Stash, Unstash, StashWeapons, TakeWeapons };
+// value: business index for Open, whole currency units for Borrow / Repay, offer index for Purchase, currency units for Stash / Unstash
 inline int64_t commercePack(CommerceOp op, int premise, int64_t value = 0) { return int64_t(op) | int64_t(premise & 0xFFFF) << 8 | value << 24; }
 
 struct BusinessType {
     std::string id, name;
     std::vector<std::string> kinds;      // premises kinds it fits in (empty: any)
     Fixed setup, incomeDay, costDay;     // income is multiplied by the premises' traffic
+    int staff = 0;                       // employees it needs to run at full income (0: the owner alone)
+    Fixed wageWeek;                      // per employee
+    Fixed ticket;                        // what one walk-in customer pays (default: a twentieth of incomeDay)
+};
+
+// Something sold over the counter of a kind of premises: a weapon with ammo (rules "arsenal") or a vehicle.
+struct CommerceOffer {
+    std::string id, name;
+    std::vector<std::string> kinds;
+    Fixed price;
+    std::string weapon;                  // arsenal weapon id ("" none)
+    int ammo = 0;
+    int vehicle = -1;                    // unit type index (-1 none)
 };
 
 struct CommerceRules {
@@ -44,7 +57,11 @@ struct CommerceRules {
     Fixed sellShare = Fixed::fromRatio(8, 10);
     Fixed rateWeek = Fixed::fromRatio(2, 100), unsecured = Fixed::fromInt(2000), collateralShare = Fixed::fromRatio(6, 10);
     int termWeeks = 20, graceWeeks = 2;
+    Fixed managerWageWeek = Fixed::fromInt(400);
+    Fixed unmanagedShare = Fixed::fromRatio(1, 2);   // income share of a business with no manager on a day its owner did not come by
+    std::vector<std::string> storage{"flat"};        // kinds of premises with a private stash
     std::vector<BusinessType> businesses;
+    std::vector<CommerceOffer> offers;
 };
 
 struct Premise {
@@ -54,6 +71,15 @@ struct Premise {
     uint8_t owner = 0, tenant = 0;       // player slots; 0: the city owns it / nobody rents it
     int16_t business = -1;               // index into rules.businesses, run by the tenant, else by the owner
     Fixed lastNet, total;                // what the business brought yesterday / since it opened
+    bool isPublic = false;               // run by the city (a gun shop, a car dealer): not for rent or sale
+    uint8_t staff = 0;                   // employees hired
+    bool manager = false;
+    bool visited = false;                // the one who runs it came by today
+    Fixed served;                        // paid by walk-in customers today
+    // The stash of a home (kinds in commerce.storage): only the one who lives there reaches it, death does not touch it.
+    Fixed stashCash;
+    std::vector<int32_t> stashAmmo;      // per arsenal slot
+    bool stashEmpty() const { for (int32_t n : stashAmmo) if (n > 0) return false; return stashCash.raw <= 0; }
     uint8_t runBy() const { return tenant ? tenant : owner; }
 };
 
@@ -61,7 +87,8 @@ struct CommerceAccount {
     Fixed debt;
     uint8_t missed = 0;                  // weekly loan payments missed in a row
     Fixed dayNet, weekNet, lastWeekNet;  // business results, for the UI
-    Fixed lastRent, lastLoanPayment;     // what the last weekly settlement charged
+    Fixed lastRent, lastLoanPayment, lastWages;   // what the last weekly settlement charged
+    std::vector<Entity> cars;            // vehicles bought at a dealer
 };
 
 struct CommerceStore {
@@ -73,7 +100,8 @@ class Commerce {
 public:
     bool active() const { return rules_.enabled; }
     const CommerceRules& rules() const { return rules_; }
-    static CommerceRules parse(const Json& j, const std::vector<std::string>& resourceIds, uint32_t tickRate);   // throws readable errors
+    static CommerceRules parse(const Json& j, const std::vector<std::string>& resourceIds, uint32_t tickRate,
+                               const std::vector<std::string>& typeIds = {});   // throws readable errors
     void setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const Json& map);
     bool command(Simulation& sim, const Command& cmd);   // true: kCmdCommerce handled
     void tick(Simulation& sim);
@@ -88,11 +116,18 @@ public:
     Fixed creditLimit(Simulation& sim, uint8_t player) const;   // the most the bank lets the debt grow to
     int findPremise(Simulation& sim, const std::string& id) const;
     int findBusiness(const std::string& id) const;
+    int findOffer(const std::string& id) const;
+    // A walk-in customer pays the ticket of the business in these premises (the crowd near the player). What real
+    // customers paid during a day is taken off the day's statistical income, so both add up to the same total;
+    // a busy day can exceed it by half. false: no business there, or the day's cap is reached.
+    bool visit(Simulation& sim, int premise);
+    Fixed expectedToday(const Premise& p) const;                // income before costs with today's staff and supervision
     uint32_t day(const Simulation& sim) const;                  // days since the start, 0-based
 
 private:
     void pay(Simulation& sim, uint8_t player, Fixed amount);    // negative: charge; what he lacks becomes debt
     void closeBusiness(Premise& p);
+    void vacate(Simulation& sim, Premise& p, uint8_t who);       // thrown out: stashed money goes back to the pocket, the rest is lost
     void endDay(Simulation& sim, CommerceStore& st);
     void endWeek(Simulation& sim, CommerceStore& st);
 
