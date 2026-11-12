@@ -102,3 +102,22 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/world/SpatialWorld.cpp")
     endif()
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
 endif()
+
+# puzzle-solvers (genre/Puzzle*.h, bots/PuzzleBot.h): own test executable plus the executable example, which plays
+# match-3 / Sokoban / sudoku and must finish with the same hash in two separate processes.
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/data/Json.cpp")
+    set(AIVERSE_LIBRARY_PUZZLE_SOURCES ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+    add_executable(aiverse_library_genre_puzzles_tests genre_puzzles_tests.cpp ${AIVERSE_LIBRARY_PUZZLE_SOURCES})
+    add_executable(aiverse_puzzles_example ../../examples/libraries/genre/puzzles/PuzzlesExample.cpp ${AIVERSE_LIBRARY_PUZZLE_SOURCES})
+    foreach(target aiverse_library_genre_puzzles_tests aiverse_puzzles_example)
+        target_link_libraries(${target} PRIVATE AIVERSE::gameplay_native)
+        if(NOT MSVC)
+            target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -pedantic)
+        endif()
+    endforeach()
+    add_test(NAME library_genre_puzzles COMMAND aiverse_library_genre_puzzles_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
+    add_test(NAME library_genre_puzzles_example COMMAND ${CMAKE_COMMAND}
+        -DEXAMPLE=$<TARGET_FILE:aiverse_puzzles_example>
+        -DLEVELS=${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/puzzles/levels.json
+        -P ${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/puzzles/run_twice.cmake)
+endif()

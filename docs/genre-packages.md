@@ -17,6 +17,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
 | cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
+| puzzle-solvers | Match-3 (swap validation, line/L/T matches, data-driven specials, seeded gravity/refill, ordered cascades, no-move detection, always-solvable shuffles, goals, hints), flood fill/regions, color flood with IDA*, pipe connectivity with leak checks, N-puzzle parity/shuffle/IDA*, sliding blocks (BFS), polyomino packing (exact cover, solution counting), Sokoban sessions over grid-puzzles (deadlocks, A*, undo), small-grid CSP (AllDifferent/Sum/Count/Runs: sudoku, nonogram) with propagation and uniqueness, puzzle bot (see [Puzzle solvers](#puzzle-solvers-puzzle-solvers-010)) | Rules, solvers and commands only; every search has a node budget and reports Unknown when it runs out. No rendering, input mapping, level generator/editor or meta progression. |
 
 ## Native/host integration
 
@@ -856,3 +857,59 @@ nextCommandSeq, bindings)` once before `stepScene`. Cues become due at `tick + d
 Sequences at or below the last accepted one are ignored, so re-feeding a report after a restore never starts a scene
 twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
 (within this package's 72..79).
+
+## Puzzle solvers (puzzle-solvers 0.1.0)
+
+`genre/PuzzleSolvers.h` (headers `Puzzle{Common,Match3,Flood,Sliding,Constraints,Sokoban,Data,Persistence}.h`) and the
+bot policy `bots/PuzzleBot.h`; target `AIVERSE::lib_puzzle_solvers` (depends on `grid-puzzles`, whose
+`strategy/Puzzles.h` 0.2.0 adds `pushDeadCells`, `pushDeadlocked`, `solvePushAStar` and `pushHint`). Executable
+example: `examples/libraries/genre/puzzles` (CTest `library_genre_puzzles_example`).
+
+**Determinism model.** Integer-only; cells are row-major; neighbours are visited left, right, up, down; candidate
+moves, colors, pieces and values are tried in ascending order; ties always go to the earlier candidate. Randomness
+only through the caller's `aiverse::Random&` (match-3 generation/refill/shuffles, `puzzleTilesShuffle`, bot
+mistakes). Every stateful puzzle takes one command struct with a `move` number strictly greater than
+`state.lastMove`; `*Apply` re-validates the command against the level and leaves the state untouched on rejection,
+so player input and bot output share one authoritative path.
+
+**Budgets.** Every solver and hint takes `PuzzleBudget{nodes}` (at most 2,000,000) and returns `PuzzleSearch`:
+`Solved`, `Unsolvable` (exhaustive: a proof), `Unknown` (budget exhausted: no claim either way) or `Invalid`.
+Search is iterative where depth is unbounded; nothing loops without consuming budget.
+
+| Family | API | Notes |
+|---|---|---|
+| Match-3 | `match3Begin`, `match3Apply(Match3Swap)`, `match3Legal`, `match3Moves`, `match3HasMove`, `match3Groups`, `match3Shuffle`, `match3Generate`, `match3Hint(First/Best)` | Specials are rules `{shape: line4/line5/corner, special: stripe/stripeRow/stripeColumn/bomb/colorBomb}`; `stripe` clears across the run that made it. A ColorBomb may swap with any tile (`colorBombSwap`). Cascade steps: groups by lowest cell, specials spawn at crossing / swap destination / swap source / lowest cell, cleared specials activate in discovery order, score `tileScore * chain`, gravity past holes, refill column by column top to bottom. At most 64 cascade steps per move. Shuffles try `shuffleAttempts` permutations (multiset kept), then a three-color pattern that `valid(Match3Rules)` proves has a move. Goals: move limit, score, per-color collection. |
+| Flood / connectivity | `puzzleFloodFill`, `puzzleRegions`, `puzzleFloodSolve` (IDA*, bound = colors left), `puzzleFloodApply`, `puzzleFloodHint`; `puzzlePipeReach`, `puzzlePipeSolved`, `puzzlePipeSolve`, `puzzlePipeApply`, `puzzlePipeHint` | Flood `Unsolvable` = no solution within the move limit. Pipe masks are bits `1<<direction`, rotation is clockwise; `noLeaks` requires every opening on the grid to meet a partner and the solver checks it edge by edge. |
+| Sliding / packing | `puzzleTilesSolvable`, `puzzleTilesShuffle`, `puzzleTilesSolve` (IDA*, Manhattan), `puzzleTilesApply`, `puzzleTilesHint`; `puzzleBlocksShift`, `puzzleBlocksSolve` (BFS), `puzzleBlocksApply`; `puzzlePieceOrientations`, `puzzlePackSolve(fixed, limit)`, `puzzlePackApply`, `puzzlePackHint` | N-puzzle parity: odd width -> inversions even; even width -> inversions + blank row from the bottom odd. Shuffles are uniform permutations with a parity fix (always solvable). Same-size interchangeable blocks share visited states. Packing anchors the first uncovered cell (row-major) and counts solutions up to `limit` (2 = uniqueness). |
+| Sokoban | `PuzzleSokobanLevel/Session`, `puzzleSokobanApply(Move/Undo/Redo)`, `puzzleSokobanDeadlocked`, `puzzleSokobanSolve`, `puzzleSokobanHint` | Movement, history and search are grid-puzzles; deadlock checks are sound (simple dead cells by reverse pushes, freeze deadlocks of box clusters) but not complete. A deadlocked hint is `Undo`. |
+| Constraints | `PuzzleCsp{domains, constraints}`, `puzzleCspSolve(values, limit)`, `puzzleCspUnique`, `puzzleCspViolations`, `puzzleCspApply`, `puzzleCspHint`, `puzzleSudokuCsp`, `puzzleNonogramCsp` | Domains are bit masks of values 0..31. Constraints: AllDifferent (naked + hidden singles, pigeonhole), Sum (bounds), Count (exactly k cells take v), Runs (nonogram line DP). Propagation runs to a fixpoint in constraint order (one budget node per revision); search picks the smallest domain, lowest cell, values ascending. Hints repair the first wrong cell, else fill the most constrained empty cell. |
+
+**Data.** `genre/PuzzleData.h`: `readMatch3Level`, `readSokobanLevel`, `readSudoku`, `readNonogram`, `readCsp`,
+`readFloodLevel`, `readPipeLevel`, `readTilesLevel`, `readBlocksLevel`, `readPackLevel` (formats in the header;
+example `examples/libraries/genre/puzzles/levels.json`). Errors are path-qualified `JsonError`s such as
+`puzzle.match3.rows[2][4]: expected '#', '.' or a color digit` or `puzzle.csp.constraints[0].cells[1]: must be in 0..8`.
+No generated settings section: everything tunable is level data.
+
+**Bot.** `bots::puzzleBotMatch3 / Flood / Pipes / Tiles / Blocks / Pack / Csp / Sokoban(level, state, skill, rng)`
+return the next player command (`lastMove + 1`). `PuzzleBotSkill{budget, mistakeMilli, match3}`; presets 0..2.
+With probability `mistakeMilli` the bot plays a random legal move instead (CSP: the hinted cell with a guessed value,
+repaired later; Sokoban: a random step, undone once it is a proven deadlock or no solution is found). A perfect bot
+never draws from the RNG. The bot is stateless.
+
+**State.** Record kinds 112..119 (all used): `Match3State` 112, `PuzzleFloodState` 113, `PuzzlePipeState` 114,
+`PuzzleTilesState` 115, `PuzzleBlocksState` 116, `PuzzlePackState` 117, `PuzzleCspState` 118,
+`PuzzleSokobanSession` 119 (grid-puzzles `PushHistory` keeps strategy record 5). `genre::save/load` checks shape-free
+invariants; after loading re-check against the level (`match3Compatible`, `puzzleFloodCompatible`,
+`puzzlePipeCompatible`, `puzzleSokobanCompatible`, ...). Hash with `puzzleHash(state)`; bind the level data revision
+in the save envelope. `examples/native/libraries/PuzzlesConsumer.cpp` plays match-3 and Sokoban through bot
+commands, proves a 4x4 sudoku unique, applies a hint and stores `genre.puzzles.*` plus `genre.puzzles_hash`.
+
+**Example results** (`aiverse_puzzles_example levels.json`, both runs identical): match-3 won after 20 moves (score
+2520, 4 specials, 14 cascading moves), Sokoban solved by A* in 14 moves / 9 pushes (165 nodes) and replayed through
+commands including undo/redo, sudoku unique (30 givens) and filled by the bot in 51 moves; final hash
+`0b6d45dc43315a37`.
+
+Verified only with g++ 11 (Linux VM): header syntax checks, all genre/bots headers in one TU, the
+`library_genre_puzzles` and `library_genre_puzzles_example` CTests (also under ASan/UBSan), `strategy_libraries`,
+and the consumer in a standalone driver. Not run: the full `tests/libraries/run.py`, native module export,
+`aiverse_tests`, headless matches, clang/MSVC.

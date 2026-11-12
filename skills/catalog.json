@@ -563,7 +563,7 @@
       "package": "grid-puzzles",
       "path": "skills/aiverse-grid-puzzles/SKILL.md",
       "domain": "gameplay",
-      "summary": "Sokoban moves, undo/redo and bounded solver",
+      "summary": "Sokoban moves, undo/redo, simple-deadlock cells and freeze deadlocks, BFS and A* solvers with node budgets, hints",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_grid_puzzles",
@@ -572,9 +572,9 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/Puzzles.h",
       "keywords": [
-        "puzzle",
-        "match3",
-        "головолом"
+        "sokoban",
+        "deadlock",
+        "сокобан"
       ]
     },
     {
@@ -1073,6 +1073,51 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/PuzzleMachine.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-puzzle-solvers",
+      "package": "puzzle-solvers",
+      "path": "skills/aiverse-puzzle-solvers/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic puzzle rules and bounded solvers: match-3 (swap validation, line/L/T detection, special pieces from data rules, gravity + seeded refill, ordered cascades, no-move detection, shuffles that always leave a legal move, goals, hints); flood fill and region counting, color-flood game with IDA*, rotatable pipe/wire connectivity with leak checks; N-puzzle parity, always-solvable shuffles and IDA*, sliding blocks of any rectangle size (BFS), polyomino packing with rotations/flips (exact-cover backtracking, solution counting); Sokoban sessions over grid-puzzles (deadlocks, A*, undo); generic CSP over small grids (AllDifferent/Sum/Count/Runs as data: sudoku, nonogram) with propagation, bounded backtracking and uniqueness checks; puzzle bot playing through player commands",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_puzzle_solvers",
+      "dependencies": [
+        "aiverse-grid-puzzles"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/PuzzleSolvers.h",
+      "keywords": [
+        "puzzle",
+        "match3",
+        "match-3",
+        "cascade",
+        "shuffle",
+        "hint",
+        "flood",
+        "pipes",
+        "connectivity",
+        "sliding",
+        "15-puzzle",
+        "klotski",
+        "packing",
+        "polyomino",
+        "sudoku",
+        "nonogram",
+        "constraint",
+        "csp",
+        "solver",
+        "головолом",
+        "три-в-ряд",
+        "пятнашки",
+        "судоку",
+        "японский",
+        "кроссворд"
+      ]
     },
     {
       "id": "aiverse-reference-validation",

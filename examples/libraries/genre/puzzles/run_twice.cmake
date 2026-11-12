@@ -1,0 +1,15 @@
+# CTest driver for the puzzle-solvers example: two separate processes must both complete and print the same output
+# (including the final hash). Usage: cmake -DEXAMPLE=<exe> -DLEVELS=<levels.json> -P run_twice.cmake
+foreach(run 1 2)
+    execute_process(COMMAND "${EXAMPLE}" "${LEVELS}" RESULT_VARIABLE code OUTPUT_VARIABLE out${run} ERROR_VARIABLE err)
+    if(NOT code EQUAL 0)
+        message(FATAL_ERROR "puzzles example run ${run} failed (${code}):\n${out${run}}${err}")
+    endif()
+    if(NOT out${run} MATCHES "puzzles example completed")
+        message(FATAL_ERROR "puzzles example run ${run} did not complete:\n${out${run}}")
+    endif()
+endforeach()
+if(NOT out1 STREQUAL out2)
+    message(FATAL_ERROR "puzzles example differs between runs:\n${out1}\n---\n${out2}")
+endif()
+message(STATUS "${out1}")
