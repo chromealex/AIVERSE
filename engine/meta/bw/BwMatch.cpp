@@ -43,10 +43,17 @@ std::optional<BattleHandoff> parseHandoff(const Json& r) {
 
 void MatchSession::send(const std::string& func, const std::string& msg, int idx) {
     Bytes b = encodeFrame({func, idx, msg});
+    if (b.empty()) {   // the client throws "Net packet is too big" (>= 32768 bytes); nothing is sent
+        Event e;
+        e.kind = Event::Kind::Error;
+        e.frame = {func, idx, "packet too big"};
+        events_.push_back(std::move(e));
+        return;
+    }
     out_.insert(out_.end(), b.begin(), b.end());
 }
 void MatchSession::connect(const std::string& token) {
-    send("Connect", token);
+    if (!token.empty()) send("Connect", token);
     phase_ = Phase::Connecting;
 }
 void MatchSession::match(const MatchParams& p) {
@@ -61,7 +68,10 @@ void MatchSession::reconnect(int64_t roomId, int lastTick) {
     j.set("lastTick", Json::number(int64_t(lastTick)));
     send("MatchReconnect", j.dump(-1));
 }
-void MatchSession::ping(int64_t ms) { send("GamePing", std::to_string(ms)); }
+void MatchSession::ping(int64_t ms, int tick) {
+    send("GamePing", "{\"ms\":" + std::to_string(ms) + ",\"tick\":" + std::to_string(tick) + "}");
+}
+void MatchSession::pingRaw(int64_t ms) { send("GamePing", std::to_string(ms)); }
 
 Bytes MatchSession::takeOutgoing() { return std::move(out_); }
 std::vector<MatchSession::Event> MatchSession::takeEvents() { return std::move(events_); }
@@ -108,6 +118,8 @@ void MatchSession::handle(Frame f) {
             handoff_ = h;
         }
         if (e.json.isObject() && !e.json.getStr("error").empty()) e.kind = Event::Kind::Error;
+    } else if (fn == "onGamePing" || fn == "onPing" || fn == "onPingT") {
+        e.kind = Event::Kind::Pong;
     } else if (fn == "Match.onProgressUpdate" || fn == "Match.onProgressReady") {
         e.kind = Event::Kind::Progress;
     } else if (fn == "Disconnected" || fn == "Int.onDisconnect" || fn == "onClose") {

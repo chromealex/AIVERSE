@@ -17,10 +17,9 @@ std::string clip(const std::string& s, size_t max) {
     return s.substr(0, n);
 }
 void putString(Bytes& out, const std::string& s) {
-    const std::string c = clip(s, 65535);
-    out.push_back(uint8_t(c.size() >> 8));
-    out.push_back(uint8_t(c.size()));
-    out.insert(out.end(), c.begin(), c.end());
+    out.push_back(uint8_t(s.size() >> 8));
+    out.push_back(uint8_t(s.size()));
+    out.insert(out.end(), s.begin(), s.end());
 }
 // Java Character.getNumericValue on the single character after the comma.
 int numericValue(char c) {
@@ -32,8 +31,12 @@ int numericValue(char c) {
 } // namespace
 
 Bytes encodeFrame(const Frame& f) {
+    const std::string func = f.idx > 0 ? f.func + "," + std::to_string(f.idx) : f.func;
+    // Message.WriteToStream throws at >= 32768 bytes (and Java reads the lengths as signed shorts).
+    if (func.size() >= kMaxFrameString || f.msg.size() >= kMaxFrameString) return {};
     Bytes out;
-    putString(out, f.idx > 0 ? f.func + "," + std::to_string(f.idx) : f.func);
+    out.reserve(4 + func.size() + f.msg.size());
+    putString(out, func);
     putString(out, f.msg);
     return out;
 }
@@ -55,7 +58,11 @@ bool FrameReader::next(Frame& out) {
             f.func = std::move(func);
         } else {
             if (comma + 1 >= func.size()) continue;   // Java dropped this frame
-            f.idx = numericValue(func[comma + 1]);
+            // The Unity client parses the whole index (int.Parse); the Java server only its first character.
+            const std::string tail = func.substr(comma + 1);
+            bool digits = !tail.empty() && tail.size() < 9;
+            for (char ch : tail) digits &= ch >= '0' && ch <= '9';
+            f.idx = digits ? std::atoi(tail.c_str()) : numericValue(func[comma + 1]);
             f.func = func.substr(0, comma);
         }
         f.msg = std::move(msg);

@@ -20,6 +20,10 @@
 #include "engine/meta/bw/BwHttp.h"
 #include "engine/meta/bw/BwMatch.h"
 #include "engine/meta/bw/BwNode.h"
+#include "engine/meta/bw/BwPlatformHttp.h"
+#include "engine/meta/bw/BwTcp.h"
+#include <chrono>
+#include <thread>
 #include "engine/meta/bw/BwWire.h"
 #include "engine/net/NetClient.h"
 #include "engine/net/server/Server.h"
@@ -666,6 +670,211 @@ TEST(bw_http_loopback) {
     CHECK(bw::parseHttpResponse("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n", parsed, false) && parsed.body == "abcde");
     bw::UrlParts u;
     CHECK(bw::parseUrl("http://[::1]:8080/a/b?c", u) && u.host == "::1" && u.port == 8080 && u.path == "/a/b?c");
+}
+
+// ---------------------------------------------------------------- client-exact TCP (TcpConnector)
+
+TEST(bw_frames_match_the_unity_client) {
+    auto hexFrame = [](const std::string& func, const std::string& msg) { return hex(bw::encodeFrame({func, 0, msg})); };
+    bw::MatchSession s;
+    s.connect("");                                     // MsgConnect sends nothing without a token
+    CHECK(s.takeOutgoing().empty());
+    s.connect("tok");
+    s.ping(1234, 5);
+    s.pingRaw(99);
+    s.reconnect(9, 120);
+    const std::string all = hex(s.takeOutgoing());
+    CHECK(all == hexFrame("Connect", "tok") + hexFrame("GamePing", R"({"ms":1234,"tick":5})") + hexFrame("GamePing", "99") +
+                     hexFrame("MatchReconnect", R"({"roomId":9,"lastTick":120})"));
+    CHECK(hexFrame("Connect", "tok") == "0007436F6E6E6563740003746F6B");
+    // Message.WriteToStream refuses strings of 32768+ bytes; so do we (and report it).
+    CHECK(bw::encodeFrame({"NotifyGame", 0, std::string(32768, 'a')}).empty());
+    CHECK(bw::encodeFrame({"NotifyGame", 0, std::string(32767, 'a')}).size() == 4 + 10 + 32767);
+    s.send("NotifyGame", std::string(40000, 'a'));
+    auto ev = s.takeEvents();
+    CHECK(s.takeOutgoing().empty() && ev.size() == 1 && ev[0].kind == bw::MatchSession::Event::Kind::Error);
+    // Client side reads the whole channel index (int.Parse).
+    bw::FrameReader r;
+    r.feed(bw::encodeFrame({"NotifyGame", 12, "x"}));
+    bw::Frame f;
+    CHECK(r.next(f) && f.func == "NotifyGame" && f.idx == 12);
+}
+
+namespace {
+// A fake BW TCP server (matchmaker / chat) on 127.0.0.1.
+struct FakeTcp {
+    net::TcpListener l;
+    std::vector<std::unique_ptr<net::TcpSocket>> socks;
+    std::vector<std::string> got;   // received bytes per accepted socket
+    bool open() { return l.listen(0, true); }
+    int port() const { return l.localPort(); }
+    void update() {
+        while (auto s = l.accept()) { socks.push_back(std::move(s)); got.emplace_back(); }
+        uint8_t buf[4096];
+        for (size_t i = 0; i < socks.size(); ++i) {
+            if (!socks[i]) continue;
+            for (;;) {
+                const int n = socks[i]->recv(buf, sizeof buf);
+                if (n <= 0) { if (n < 0) socks[i].reset(); break; }
+                got[i].append(reinterpret_cast<const char*>(buf), size_t(n));
+            }
+        }
+    }
+    void send(size_t i, const bw::Bytes& b) { if (i < socks.size() && socks[i]) socks[i]->send(b.data(), b.size()); }
+    void drop(size_t i) { if (i < socks.size()) socks[i].reset(); }
+};
+std::string bytesOf(const bw::Bytes& b) { return std::string(b.begin(), b.end()); }
+int closedPort() {   // a port nothing listens on
+    net::TcpListener l;
+    if (!l.listen(0, true)) return 1;
+    const int p = l.localPort();
+    l.close();
+    return p;
+}
+void tick(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+uint64_t wallMs() { return uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()); }
+} // namespace
+
+TEST(bw_matchmaker_connection_host_group_ping_reconnect) {
+    FakeTcp mm;
+    if (!mm.open()) { std::printf("  (no loopback sockets: skipped)\n"); return; }
+    bw::MatchConnectionConfig cfg;
+    cfg.hosts = {{"127.0.0.1", closedPort()}, {"127.0.0.1", mm.port()}};   // first host is down: the group moves on
+    cfg.token = "tok-1";
+    cfg.connectTimeoutMs = 1000;
+    cfg.pingIntervalMs = 200;
+    bw::MatchConnection c(cfg);
+    uint64_t t0 = wallMs();
+    c.start(t0);
+    auto run = [&](int ms, const std::function<bool()>& until) {
+        const uint64_t end = wallMs() + uint64_t(ms);
+        while (wallMs() < end && !until()) { c.update(wallMs()); mm.update(); tick(2); }
+    };
+    run(3000, [&] { return !mm.got.empty() && mm.got[0].size() >= 16; });
+    CHECK(c.hostIndex() == 1 && mm.got.size() == 1);
+    const std::string connect = bytesOf(bw::encodeFrame({"Connect", 0, "tok-1"}));
+    CHECK(!mm.got.empty() && mm.got[0].rfind(connect, 0) == 0);
+    bw::MatchParams p;
+    p.mapId = 101;
+    c.session().match(p);
+    mm.send(0, bw::encodeFrame({"Connected", 0, ""}));
+    mm.send(0, bw::encodeFrame({"Match.onUpdate", 0, R"({"roomId":555,"mapId":101})"}));
+    run(1000, [&] { return mm.got[0].find("GamePing") != std::string::npos && mm.got[0].find("\"mapId\":101") != std::string::npos; });
+    CHECK(mm.got[0].find(bytesOf(bw::encodeFrame({"Match", 0, p.toJson().dump(-1)}))) != std::string::npos);
+    CHECK(mm.got[0].find("{\"ms\":") != std::string::npos);
+    auto ev = c.session().takeEvents();
+    bool connected = false, update = false;
+    for (auto& e : ev) { connected |= e.kind == bw::MatchSession::Event::Kind::Connected; update |= e.kind == bw::MatchSession::Event::Kind::Update; }
+    CHECK(connected && update);
+    // The matchmaker drops us mid-search: Int.onDisconnect, 0.5 s later Connect + MatchReconnect.
+    c.reconnect(555, 77);
+    mm.drop(0);
+    const uint64_t dropAt = wallMs();
+    run(4000, [&] { return mm.got.size() == 2 && mm.got[1].find("MatchReconnect") != std::string::npos; });
+    CHECK(mm.got.size() == 2 && wallMs() - dropAt >= 450 && c.reconnects() == 1);
+    if (mm.got.size() == 2)
+        CHECK(mm.got[1].rfind(connect + bytesOf(bw::encodeFrame({"MatchReconnect", 0, R"({"roomId":555,"lastTick":77})"})), 0) == 0);
+    bool disc = false;
+    for (auto& e : c.session().takeEvents()) disc |= e.kind == bw::MatchSession::Event::Kind::Disconnected && e.frame.func == "Int.onDisconnect";
+    CHECK(disc);
+    c.stop();
+}
+
+TEST(bw_host_probes_pick_the_answering_host) {
+    FakeTcp silent, game, chat;
+    if (!silent.open() || !game.open() || !chat.open()) { std::printf("  (no loopback sockets: skipped)\n"); return; }
+    std::vector<bw::HostPort> hosts = {{"127.0.0.1", closedPort()}, {"127.0.0.1", silent.port()}, {"127.0.0.1", game.port()}};
+    bw::HostProbe probe(bw::HostProbe::Kind::Game, hosts, "tok-9", wallMs());
+    const std::string ping = bytesOf(bw::encodeFrame({"Ping", 0, "tok-9"}));
+    bool answered = false;
+    for (uint64_t end = wallMs() + 4000; wallMs() < end && !probe.done(); tick(2)) {
+        probe.update(wallMs());
+        silent.update();
+        game.update();
+        if (!answered && !game.got.empty() && game.got[0] == ping) { game.send(0, bw::encodeFrame({"onPing", 0, ""})); answered = true; }
+    }
+    CHECK(answered && probe.done() && probe.winner() == 2);
+    CHECK(!silent.got.empty() && silent.got[0] == ping);   // everyone was asked at once
+    // Chat: the ping packet is [type 2][len 1][0]; any reply wins.
+    bw::HostProbe chatProbe(bw::HostProbe::Kind::Chat, {{"127.0.0.1", closedPort()}, {"127.0.0.1", chat.port()}}, "", wallMs());
+    bool replied = false;
+    for (uint64_t end = wallMs() + 4000; wallMs() < end && !chatProbe.done(); tick(2)) {
+        chatProbe.update(wallMs());
+        chat.update();
+        if (!replied && !chat.got.empty() && chat.got[0] == std::string("\x00\x02\x00\x01\x00", 5)) {
+            chat.send(0, bw::encodeChatServerPacket(0x30, 1, "{}"));
+            replied = true;
+        }
+    }
+    CHECK(replied && chatProbe.winner() == 1);
+    // Nobody answers: done without a winner (the silent host times out after the answer window).
+    bw::HostProbe none(bw::HostProbe::Kind::Game, {{"127.0.0.1", silent.port()}}, "tok", wallMs(), 1000, 300);
+    for (uint64_t end = wallMs() + 3000; wallMs() < end && !none.done(); tick(2)) { none.update(wallMs()); silent.update(); }
+    CHECK(none.done() && none.winner() == -1);
+    CHECK(bw::parseHostPorts({"mm.mock:7777", "https://x:1", "noport"}).size() == 2);
+}
+
+TEST(bw_chat_connection_auth_and_packets) {
+    FakeTcp chat;
+    if (!chat.open()) { std::printf("  (no loopback sockets: skipped)\n"); return; }
+    bw::ChatConnection c({{"127.0.0.1", chat.port()}}, "tok-c");
+    c.start(wallMs());
+    bool sent = false;
+    std::vector<bw::ChatPacket> got;
+    for (uint64_t end = wallMs() + 3000; wallMs() < end && got.empty(); tick(2)) {
+        c.update(wallMs());
+        chat.update();
+        if (!sent && !chat.got.empty() && chat.got[0] == bytesOf(bw::encodeChatAuth("tok-c"))) {
+            chat.send(0, bw::encodeChatServerPacket(uint16_t(bw::ChatType::OnMsg), 3, R"({"room":"global","msg":"hi"})", 8));
+            sent = true;
+        }
+        for (auto& p : c.takePackets()) got.push_back(p);
+    }
+    CHECK(sent && got.size() == 1 && got[0].json == R"({"room":"global","msg":"hi"})");
+    c.send(bw::ChatType::OnMsg, R"({"room":"global","msg":"yo"})");
+    for (int i = 0; i < 50; ++i) { c.update(wallMs()); chat.update(); tick(2); }
+    CHECK(chat.got[0].find(bytesOf(bw::encodeChatPacket(0, R"({"room":"global","msg":"yo"})"))) != std::string::npos);
+    c.stop();
+}
+
+TEST(bw_platform_https_transport_out_of_the_box) {
+    // The default transport is the engine's per-platform HTTP stack (libcurl here).
+    if (!bw::platformHttpAvailable()) { std::printf("  (no platform HTTP stack in this build: skipped)\n"); return; }
+    bw::HttpRequest seen;
+    bw::HttpServer srv([&](const bw::HttpRequest& r) {
+        seen = r;
+        bw::HttpResponse res;
+        res.status = 200;
+        res.body = R"({"i":-1,"data":{"news":[{"id":1}]}})";
+        res.headers.push_back({"E-Tag", "n1"});
+        return res;
+    });
+    if (!srv.listen(0, true)) { std::printf("  (no loopback sockets: skipped)\n"); return; }
+    bw::ApiClient api(bw::platformTransport(), {"http://127.0.0.1:" + std::to_string(srv.port())});
+    api.setToken("tok-h");
+    bw::ApiResult res;
+    bool done = false;
+    bw::CallOptions o;
+    o.cacheable = true;
+    api.call("v/news/get", Json::parse(R"({"lang":"en"})"), [&](bw::ApiResult r) { res = r; done = true; }, o);
+    for (uint64_t end = wallMs() + 5000; wallMs() < end && !done; tick(2)) { srv.update(wallMs()); api.pump(); }
+    CHECK(done && res.ok() && res.data["news"].size() == 1);
+    CHECK(seen.method == "POST" && seen.url == "/v/news/get" && Json::parse(seen.body)["data"].getStr("lang") == "en");
+    bw::HttpResponse hdrs;
+    hdrs.headers = seen.headers;
+    CHECK(hdrs.header("token") == "tok-h" && hdrs.header("content-type").find("application/json") == 0);
+    // The second call sends the E-Tag the platform stack returned.
+    done = false;
+    api.call("v/news/get", Json::parse(R"({"lang":"en"})"), [&](bw::ApiResult r) { res = r; done = true; }, o);
+    for (uint64_t end = wallMs() + 5000; wallMs() < end && !done; tick(2)) { srv.update(wallMs()); api.pump(); }
+    hdrs.headers = seen.headers;
+    CHECK(done && hdrs.header("E-Tag") == "n1");
+    // Nothing listening: a transport error, not a crash or a hang.
+    bw::ApiClient down(bw::platformTransport(), {"http://127.0.0.1:" + std::to_string(closedPort())});
+    done = false;
+    down.call("v/news/get", Json::object(), [&](bw::ApiResult r) { res = r; done = true; });
+    for (uint64_t end = wallMs() + 5000; wallMs() < end && !done; tick(5)) down.pump();
+    CHECK(done && res.transport && res.error.code == int(bw::ApiCode::TransportError));
 }
 
 int main() {
