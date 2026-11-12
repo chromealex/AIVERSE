@@ -74,7 +74,7 @@ void deterministic(Json rules,Json map) {
     rules.member("fps").set("mode",Json::string("deathmatch"));
     auto a=simulation(rules,map),b=simulation(rules,map);
     for(uint32_t t=0;t<240;++t) {
-        fps::Input in;in.sequence=t+1;in.forward=t<100?1000:0;in.buttons=t==130?fps::Jump:0;
+        fps::Input in;in.sequence=t+1;in.forward=t<100?1000:0;in.buttons=t==130?uint32_t(fps::Jump):0u;
         auto cmd=fps::command(1,in);cmd.tick=t;a->inject(cmd);b->inject(cmd);a->step();b->step();CHECK(a->checksum()==b->checksum());
     }
     CHECK(state(*a).actors[0].pos.y<1_fx);CHECK(state(*a).actors[0].pos.z> -12_fx);
