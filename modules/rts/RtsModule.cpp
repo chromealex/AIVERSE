@@ -37,6 +37,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     topDown_->setup(sim, *this, rulesJson);
     driving_ = std::make_unique<Driving>();   // vehicles the hero drives (rules "driving"); nothing without the block
     driving_->setup(sim, *this, rulesJson);
+    traffic_ = std::make_unique<Traffic>();   // city traffic (rules "traffic"); nothing without the block
+    traffic_->setup(sim, *this, rulesJson, mapIn);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -1482,6 +1484,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
     if (driving_ && driving_->active()) driving_->hash(sim, h);   // games with rules "driving" only
+    if (traffic_ && traffic_->active()) traffic_->hash(sim, h);   // games with rules "traffic" only
 }
 
 } // namespace aiverse::game

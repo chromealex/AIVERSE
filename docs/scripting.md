@@ -258,6 +258,8 @@ Queries (simulation and view scripts):
 | `game.stat(h, "damage")`, `game.has_status(h, "slow")` | effective stat (techs, buffs, statuses) |
 | `game.type_info("footman")`, `game.types()` | `{id, name, structure, max_hp, speed, armor, cost, tags}` |
 | `game.map_size()` → w, h, `game.passable(x, z [, "ground"\|"air"\|"naval"])`, `game.level(x, z)`, `game.height(x, z)`, `game.area(name)` | map |
+| `game.traffic_light(x, z [, "x"\|"z"])` → `"green"`\|`"yellow"`\|`"red"`\|nil | signal of the junction at / next to the point (rules `traffic`, docs/traffic.md) |
+| `game.traffic_kind(h)` → `"car"`\|`"bus"`\|`"emergency"`\|nil | a vehicle the traffic drives (sirens, HUD) |
 | `game.var(name)` | trigger variable (fx) |
 | `game.data(h)`, `game.has_data(h, key)` | the entity's own persistent table (view: read-only copy) / does it have the key |
 | `game.orders(h)`, `game.current_order(h)` | the order queue / its first order: `{order, x, z, target, param, state}` (`order`: `move attack_move attack patrol gather return build repair enter cast dig claim_cell need haul board unload follow rearm trade pick_item merge`) |

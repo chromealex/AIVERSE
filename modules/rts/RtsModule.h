@@ -21,6 +21,7 @@
 #include "RtsNative.h"
 #include "RtsTopDown.h"
 #include "RtsDriving.h"
+#include "RtsTraffic.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -504,6 +505,7 @@ public:
     const TriggerSet& triggers() const { return triggers_; }
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
+    Traffic* traffic() const { return traffic_.get(); }        // city traffic: AI cars, signals, pedestrians (RtsTraffic.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
@@ -816,6 +818,7 @@ private:
     void captureOriginals(Simulation& sim, Entity structure, uint8_t from, uint8_t to);
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
+    std::unique_ptr<Traffic> traffic_;     // rules "traffic" (state: TrafficStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::vector<NativeDefinition> nativeDefinitions_;

@@ -13900,3 +13900,4 @@ TEST(world_tree_lua_peek_is_observation_only) {
 #endif
 #include "tests_topdown.inc"   // top-down heroes (agent-topdown-control)
 #include "tests_driving.inc"   // vehicles the hero drives (agent-gta2)
+#include "tests_traffic.inc"   // city traffic: AI cars, signals, pedestrians (agent-traffic)

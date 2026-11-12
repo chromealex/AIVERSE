@@ -752,6 +752,7 @@ void RtsModule::sysMovement(Simulation& sim) {
 
     if (rules_.dungeon) movePossessed(sim);
     if (topDown_ && topDown_->active()) topDown_->tick(sim);   // top-down heroes: stick movement, aim, auto-fire (RtsTopDown.cpp)
+    if (traffic_ && traffic_->active()) traffic_->tick(sim);   // traffic cars plan their pedals, pedestrians walk (RtsTraffic.cpp)
     if (driving_ && driving_->active()) driving_->tick(sim);   // vehicles: controller step, collisions, damage (RtsDriving.cpp)
 
     if (rules_.movement.separation) {

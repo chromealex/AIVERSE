@@ -1196,6 +1196,39 @@ int gEnableTrigger(lua_State* L, Vm& vm) {
     return 0;
 }
 
+// game.traffic_light(x, z [, "x"|"z"]): the signal of the junction at / next to the point for traffic along that axis
+// (default: the road the point is on), "green" | "yellow" | "red", or nil (no signalised junction there)
+int gTrafficLight(lua_State* L, Vm& vm) {
+    CTX;
+    Fixed x, z;
+    if (!argFx(L, vm, 1, x, "x") || !argFx(L, vm, 2, z, "z")) return -1;
+    Traffic* t = m.traffic();
+    const int j = t && t->active() ? t->junctionAt(x, z) : -1;
+    if (j < 0 || !t->net().junctions[size_t(j)].signal) { lua_pushnil(L); return 1; }
+    lib::genre::TrafficAxis axis = lib::genre::TrafficAxis::X;
+    if (lua_isstring(L, 3)) axis = std::string(lua_tostring(L, 3)) == "z" ? lib::genre::TrafficAxis::Z : lib::genre::TrafficAxis::X;
+    else {
+        const auto& net = t->net();
+        const int cx = int(x.floorInt()), cz = int(z.floorInt());
+        if (cx >= 0 && cz >= 0 && cx < net.w && cz < net.h)
+            if (const int pi = net.pieceAt[size_t(cz * net.w + cx)]; pi >= 0) axis = net.pieces[size_t(pi)].axis;
+    }
+    static const char* names[3] = {"green", "yellow", "red"};
+    lua_pushstring(L, names[int(t->light(sim, j, axis))]);
+    return 1;
+}
+
+// game.traffic_kind(h): "car" | "bus" | "emergency" for a vehicle the traffic drives, else nil
+int gTrafficKind(lua_State* L, Vm& vm) {
+    CTX;
+    Entity e;
+    Traffic* t = m.traffic();
+    const int k = t && t->active() && unitArg(L, vm, 1, e) ? t->kindOf(sim, e) : -1;
+    static const char* names[3] = {"car", "bus", "emergency"};
+    if (k < 0 || k > 2) lua_pushnil(L); else lua_pushstring(L, names[k]);
+    return 1;
+}
+
 } // namespace
 
 const char* commandName(uint16_t type) {
@@ -1216,7 +1249,7 @@ void openGameApi(Vm& vm) {
         {"var", bindQ<gVar>}, {"log", bindQ<gLog>}, {"data", bindQ<gData>}, {"has_data", bindQ<gHasData>},
         {"orders", bindQ<gOrders>}, {"current_order", bindQ<gCurrentOrder>}, {"target", bindQ<gTarget>}, {"idle", bindQ<gIdle>},
         {"facing", bindQ<gFacing>}, {"velocity", bindQ<gVelocity>}, {"path", bindQ<gPath>}, {"energy", bindQ<gEnergy>},
-        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {nullptr, nullptr}};
+        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {"traffic_light", bindQ<gTrafficLight>}, {"traffic_kind", bindQ<gTrafficKind>}, {nullptr, nullptr}};
     static const luaL_Reg actions[] = {
         {"give", bind<gGive>}, {"take", bind<gTake>}, {"spawn", bind<gSpawn>}, {"kill", bind<gKill>}, {"damage", bind<gDamage>},
         {"attack_event", bind<gAttackEvent>},
@@ -1287,6 +1320,8 @@ Json scriptApiReference() {
     q.push(fn("game.map_size() -> w, h / game.passable(x, z [, \"ground\"|\"air\"|\"naval\"]) / game.level(x, z) / game.height(x, z) / game.area(name)", "map queries; area = {x, z, w, h}"));
     q.push(fn("game.grid_path(width,height,cells,start,goal[,label])", "pure four-neighbour shortest grid path; zero-based cells, boolean true mask or exact integer labels; returns a one-based path excluding start, or nil; max 262144 cells"));
     q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
+    q.push(fn("game.traffic_light(x, z [, \"x\"|\"z\"])", "signal of the junction at / next to the point for traffic along that axis (default: the road there): \"green\"|\"yellow\"|\"red\", nil without a signalised junction (rules traffic, docs/traffic.md)"));
+    q.push(fn("game.traffic_kind(h)", "\"car\"|\"bus\"|\"emergency\" for a vehicle the traffic drives (sirens, HUD), nil otherwise"));
     q.push(fn("game.var(name)", "trigger variable (fx)"));
     q.push(fn("game.territory_at(x,z) / game.territory_count(player)", "owner at flat-map ground point (nil outside ground), or owned cell count"));
     q.push(fn("game.frontier(player)", "flat-map land boundary segments sorted by cell/edge: {x,z,nx,nz,owner,cell}; normal points outwards, owner is the neighbour"));
