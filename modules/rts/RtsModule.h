@@ -87,8 +87,9 @@ enum CommandType : uint16_t {
     kCmdEndTurn,      // turn-based mode: the active player ends the turn
     kCmdScript,       // rules "commands" (RtsScript.h): param = command index, args = encoded arguments, units = selection
     kCmdRaid,         // extraction raids (RtsRaid.h): param = RaidOp | point index << 8 (call: -1 = nearest)
-    // top-down heroes (rules "topDown", RtsTopDown.h)
-    // Engine-reserved hero ids (engine/net/HeroInput.h: net::kCmdHeroInput / kCmdHeroAbility), so hosted battles,
+    // in-match progression (rules "progression", RtsProgression.h)
+    kCmdProgression,  // no units; param = ProgressionOp | card index << 8 | offer revision << 16 (choose / reroll / close / open)
+    // top-down heroes (rules "topDown", RtsTopDown.h). Engine-reserved hero ids (engine/net/HeroInput.h: net::kCmdHeroInput / kCmdHeroAbility), so hosted battles,
     // the battle load test and every top-down game share one command scheme.
     kCmdTopDown = 0xF100, // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
     kCmdTopDownAbility,   // no units; param = topdown::abilityParam(Ability) (old clients: the ability index = tap);
@@ -174,6 +175,14 @@ enum GameEvent : uint16_t {
     kEvRaidInteract,    // player, a = raider, b = object, value = object type | RaidChannelEv << 16 (0 start, 1 interrupted, 2 done)
     kEvRaidObjective,   // player, value = objective | 1 << 16 (completed)
     kEvRaidPlayer,      // player, value = RaidStatus (1 in raid, 2 extracted, 3 dead, 4 timed out, 5 abandoned)
+    // in-match progression (RtsProgression.h, docs/progression.md)
+    kEvProgXp,          // player, a = hero, value = xp gained (after the pickupXp stat), pos = hero
+    kEvProgLevel,       // player: a level is banked; value = levels banked | level reached << 32
+    kEvProgOffer,       // player, value = offer revision | cards << 32 | ProgOfferEv << 40 (0 opened, 1 rerolled, 2 closed, 3 empty)
+    kEvProgPerk,        // player, a = unit of the slot (hero for player perks), value = perk id | (slot + 1) << 32 (0: player scope) | 1 << 48 when it replaced a lower tier
+    kEvProgRecruit,     // player, a = new ally, value = deck slot, pos
+    kEvProgOrb,         // player = collector (0: none), value = xp | ProgOrbEv << 40 (0 spawned, 1 collected, 2 expired, 3 merged), pos
+    kEvProgSummon,      // player, a = ally (confirmed / died / expired), value = point id | SummonEventKind << 32, pos = circle centre
 };
 
 // ---------------------------------------------------------------- components
@@ -509,6 +518,7 @@ struct VisionCache;   // RtsVision.cpp
 // hashed nor saved (checksums and save layouts of every game stay as they were).
 struct MatchOutcome { int result = 0; uint32_t tick = 0; std::vector<uint8_t> blob; };
 
+class Progression;   // RtsProgression.h (rules "progression")
 class RtsModule final : public GameModule {
 public:
     RtsModule();
@@ -533,6 +543,7 @@ public:
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
     Raid* raid() const { return raid_.get(); }                // extraction raids (RtsRaid.h); inactive without rules "raid"
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
+    Progression* progression() const { return progression_.get(); }   // in-match progression (RtsProgression.h); inactive without rules "progression"
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
     const Json* generatedMap() const { return generated_.isObject() ? &generated_ : nullptr; }
@@ -789,6 +800,7 @@ private:
     void tickPlayerSkills(Simulation& sim);
     void impactProjectile(Simulation& sim, Entity p);
     const ProjectileFlight* projectileFlight(const Projectile& p) const;
+    const WeaponDef* projectileWeapon(const Projectile& p) const;   // the weapon a shot came from (also bullet perk variants)
     void initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const;
     int liveResult(Simulation& sim);                 // the result the state shows now (result(): frozen once decided)
     void freezeOutcome(Simulation& sim);             // "outcome" system: latches the first result + its report blob
@@ -848,6 +860,7 @@ private:
     std::unique_ptr<Raid> raid_;           // extraction raids (state: RaidStore resource)
     friend class TopDown;                  // free fire launches weapon projectiles (initProjectileProgram)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
+    std::unique_ptr<Progression> progression_;   // rules "progression" (state: ProgressionStore resource)
     std::vector<NativeDefinition> nativeDefinitions_;
     NativeModules native_;
     std::unique_ptr<ScriptEngine> script_; // Lua VM (RtsScript.h); its persistent state is the ScriptStore resource

@@ -36,6 +36,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     fields_->setup(sim, *this, mapIn);
     topDown_ = std::make_unique<TopDown>();   // top-down heroes (rules "topDown"); nothing without the block
     topDown_->setup(sim, *this, rulesJson);
+    progression_ = std::make_unique<Progression>();   // in-match progression (rules "progression"); nothing without the block
+    progression_->setup(sim, *this, mapIn);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -63,6 +65,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
     if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
+    if (progression_->active()) sim.addSystem("progression", [this](Simulation& s) { progression_->tick(s); });   // RtsProgression.cpp: kills at 0 hp -> xp orbs
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
     sim.addSystem("capture", [this](Simulation& s) { sysCapture(s); });
     sim.addSystem("creep", [this](Simulation& s) { sysCreep(s); });
@@ -684,7 +687,9 @@ Fixed RtsModule::stat(Simulation& sim, Entity e, Stat s) const {
     if (rules_.originals) add += playerModsStat(sim, owner, u.type, s, mul);   // forges, morale
     if (s == Stat::Speed && fields_ && fields_->hasSpeed()) if (auto* tr = w.tryGet<Transform>(e)) mul *= fields_->speedMul(sim, tr->pos, owner);   // grid fields
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
-    return (base + add) * mul;
+    Fixed v = (base + add) * mul;
+    if (progression_ && progression_->active()) progression_->modStat(sim, e, s, v);   // perk pipeline (RtsProgression.cpp)
+    return v;
 }
 
 int RtsModule::membersAlive(Simulation& sim, Entity e) const {
@@ -979,6 +984,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility = 0xF100 / 0xF101 (RtsTopDown.cpp)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }   // native modules (never the two hero ids)
     if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (progression_ && progression_->command(sim, cmd)) return;   // kCmdProgression (RtsProgression.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
     if (cmd.type >= kCmdDig && cmd.type <= kCmdPlayerAbility) { applyDungeonCommand(sim, cmd); return; }
@@ -1524,6 +1530,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (raid_ && raid_->active()) raid_->hash(sim, h);   // extraction raids only
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
     if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
+    if (progression_ && progression_->active()) progression_->hash(sim, h);   // games with rules "progression" only
 }
 
 } // namespace aiverse::game
