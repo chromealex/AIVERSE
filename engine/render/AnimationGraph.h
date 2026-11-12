@@ -33,6 +33,8 @@ using AnimationOperations = std::map<std::string, std::shared_ptr<const Animatio
 class AnimationRig;
 class MotionDatabase;
 class MotionPlayer;
+class AnimationController;
+class AnimationControllerPlayer;
 // Trait implementations are shared and stateless. Callbacks return false to disable a failing instance.
 struct AnimationTrait {
     size_t stateFloats = 0;
@@ -47,7 +49,7 @@ using AnimationGraphs = std::map<std::string, Json>;
 
 class AnimationGraph {
 public:
-    enum class Kind { Bind, Clip, Blend, Additive, TwoBoneIK, Native, Stack, Subgraph, Rig, MotionMatching };
+    enum class Kind { Bind, Clip, Blend, Additive, TwoBoneIK, Native, Stack, Subgraph, Rig, MotionMatching, Controller };
     struct Trait {
         std::shared_ptr<const AnimationTrait> implementation;
         std::shared_ptr<const AnimationRig> rig;
@@ -67,6 +69,7 @@ public:
         std::map<std::string, std::string> bindings;
         std::shared_ptr<const AnimationRig> rig;
         std::shared_ptr<const MotionDatabase> motion;
+        std::shared_ptr<const AnimationController> controller;  // kind "controller" (AnimationController.h)
 
     };
     struct Condition { std::string parameter, op; float value = 0; };
@@ -107,6 +110,7 @@ public:
     float stateTime() const { return time_; }
     AnimationGraphInstance* child(const std::string& node);
     const MotionPlayer* motion(const std::string& node) const;
+    const AnimationControllerPlayer* controller(const std::string& node) const;
     bool hasContacts() const;
     AnimationContactReport contactReport() const;
     SurfaceLocomotionReport locomotionReport() const;
@@ -127,6 +131,7 @@ private:
     std::vector<std::vector<TraitState>> traitState_;
     std::vector<std::shared_ptr<AnimationGraphInstance>> children_;
     std::vector<std::shared_ptr<MotionPlayer>> motions_;
+    std::vector<std::shared_ptr<AnimationControllerPlayer>> controllers_;
     std::vector<std::shared_ptr<AnimationRigState>> rigs_;
     bool healthy_=true;
     std::string error_;

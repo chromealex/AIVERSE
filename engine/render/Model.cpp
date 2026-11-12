@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "ModelClips.h"
 #include "Renderer3D.h"
 #include "LightmapUv.h"
 
@@ -179,6 +180,7 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
         std::string err;
         if (!applyLightmapUvs(*m, uv, &err) && warnings) warnings->push_back(path + ".lmuv: " + err);
     }
+    applyClipSidecar(*m, path, read, warnings);   // "<model>.clips.json": splits, external clips (ModelClips.h)
     return m;
 }
 

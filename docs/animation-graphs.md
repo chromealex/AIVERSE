@@ -37,6 +37,7 @@ C++ API самостоятельно; автоматическое подклю�
 | `clip` | `clip`, `loop` (true), `speed` (1), `parameter` | Клип; параметр задаёт скорость воспроизведения |
 | `blend` | `a`, `b`, `weight` (1), `parameter`, `mask` | Смешивание полных поз A → B; маска — имя корня поддерева |
 | `additive` | `a`, `b`, `weight`, `parameter`, `mask` | К A добавляется разница B относительно bind pose |
+| `controller` | `controller` | Mecanim-style layered state machine imported from Unity ([unity-animation.md](unity-animation.md)) |
 | `twoBoneIK` | `input`, `hip`, `knee`, `foot`, `target`, `pole`, `weight`, `parameter` | Двухкостный IK; target/pole — имена векторных параметров в пространстве модели |
 
 У blend/additive/IK `parameter` переопределяет вес; он ограничивается 0..1.

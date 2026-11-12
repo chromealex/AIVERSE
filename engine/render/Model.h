@@ -148,6 +148,9 @@ struct AnimClip {
     std::string name;
     float duration = 0;
     std::vector<AnimChannel> channels;
+    // Source timeline (FBX take start / frame rate) for frame-range splits (ModelClips.h), and the
+    // horizontal root speed removed by a clip sidecar's in-place conversion (units / s).
+    float sourceStart = 0, sourceFps = 0, rootSpeed = 0;
 };
 
 struct Model {

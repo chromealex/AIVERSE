@@ -260,6 +260,9 @@ catapult turret.
 
 ## Skeletal clips
 
+A `<model>.clips.json` next to any model splits takes by frame range, adds clips from other files
+(bound by node path) and strips root motion: see [unity-animation.md](unity-animation.md).
+
 ### Skinning modes
 
 `"skinning": "auto" | "baked" | "palette"`. **Baked** (the default whenever possible): every clip
