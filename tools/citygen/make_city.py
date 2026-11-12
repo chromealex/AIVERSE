@@ -101,6 +101,45 @@ def copy_model(src, dst):
         f.write(struct.pack('<I', len(out)) + b'BIN\0' + bytes(out))
 
 
+def _digest(v):
+    return hashlib.md5(json.dumps(v, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def write_shared(out, name, generated, nested=()):
+    """Writes a project file that other tools and people edit too (rules.json, game.json) without undoing them.
+
+    `.citygen.json` in the project remembers what this tool wrote last time (a digest per top-level key, and per
+    entry of the `nested` objects such as rules "types"). An entry that exists and no longer matches that digest
+    was changed by somebody else: it stays as it is. Entries this tool never wrote stay too. Without the memory
+    file nothing that exists is overwritten. -> names of the entries that were kept."""
+    path = os.path.join(out, name)
+    side_path = os.path.join(out, '.citygen.json')
+    side = json.load(open(side_path)) if os.path.exists(side_path) else {}
+    mine = side.get(name)
+    old = json.load(open(path)) if os.path.exists(path) else {}
+    kept, digests = [], {}
+
+    def merge(old_obj, new_obj, prefix):
+        res = dict(old_obj)                                  # foreign entries stay, in their place
+        for k, v in new_obj.items():
+            key = prefix + k
+            if not prefix and k in nested and isinstance(v, dict):
+                res[k] = merge(old_obj.get(k, {}) if isinstance(old_obj.get(k), dict) else {}, v, k + '.')
+                continue
+            digests[key] = _digest(v)
+            if k in old_obj and (mine is None or mine.get(key) != _digest(old_obj[k])) and _digest(old_obj[k]) != digests[key]:
+                kept.append(key)                             # edited elsewhere (or never recorded as ours): theirs wins
+                continue
+            res[k] = v
+        return res
+
+    result = merge(old, generated, '')
+    wjson(path, result)
+    side[name] = digests if mine is None else dict(mine, **digests)
+    wjson(side_path, side)
+    return result, kept
+
+
 def wjson(path, obj):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
@@ -524,8 +563,14 @@ def game_manifest():
                     'joystick': {'mode': 'floating', 'radius': 64, 'deadzone': 0.12, 'area': [0, 0.3, 0.5, 1], 'center': [0.14, 0.78]},
                     'aimStick': {'enabled': True, 'mode': 'floating', 'radius': 56, 'deadzone': 0.2, 'area': [0.5, 0.3, 1, 1], 'center': [0.8, 0.78]},
                     'buttons': [],
-                    'camera': {'pitch': 90, 'yaw': 0, 'distance': 16, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
-                               'lookAhead': 1.5, 'aimLookAhead': 1, 'lookAheadSmoothing': 3, 'bounds': True, 'margin': 2}}}
+                    # phones: the aim stick bends to the nearest target, a tap on it shoots (docs/topdown.md)
+                    'aimAssist': {'touch': True, 'pad': False, 'mouse': False, 'cone': 30, 'tapFire': True},
+                    # GTA camera: close on foot, pulled back and shifted ahead at speed (world units = cells of 4 m)
+                    'camera': {'pitch': 90, 'yaw': 0, 'distance': 14, 'minDistance': 8, 'maxDistance': 30, 'smoothing': 6,
+                               'lookAhead': 1.2, 'aimLookAhead': 1, 'lookAheadSmoothing': 2.5, 'lockOffsetIfNoInput': False,
+                               'velocityLookAhead': 0.45, 'maxLookAhead': 5,
+                               'speedZoom': {'from': 2, 'to': 9, 'distance': 30, 'smoothing': 1.2},
+                               'bounds': True, 'margin': 2}}}
 
 
 def plan_with_engine(assets, out, seed, headless, size, rules, types, building_types, buildings, bases, cars, tree_types, props, layout='grid'):
@@ -533,10 +578,10 @@ def plan_with_engine(assets, out, seed, headless, size, rules, types, building_t
     import subprocess
     types.update(building_types)                         # the planner chooses among all of them; unused ones are dropped after
     people_scripts_overrides(assets, out, rules, types, [])
-    wjson(os.path.join(out, 'rules.json'), rules)
+    merged, kept = write_shared(out, 'rules.json', rules, nested=('types',))
     wjson(os.path.join(out, 'maps', 'city.json'), {'name': 'Downtown', 'size': list(size),
           'players': [{'name': 'Player', 'team': 1}, {'name': 'City', 'team': 2}], 'victory': {'mode': 'survive', 'seconds': 360000}})
-    wjson(os.path.join(out, 'game.json'), game_manifest())
+    _, kept_game = write_shared(out, 'game.json', game_manifest())
     params = {'size': list(size), 'tileset': 'tilesets/city.json', 'tileBases': bases, 'chars': {'blocked': 'x'}, 'river': True, 'roundabouts': 0.3}
     if layout == 'organic':
         params.update({'layout': 'organic', 'relief': 0, 'treeBudget': 1200})   # flat for now: the ground is a tile layer
@@ -552,17 +597,18 @@ def plan_with_engine(assets, out, seed, headless, size, rules, types, building_t
     by_id = {b['id']: b for b in buildings}
     for bid in building_types:
         if bid not in used:
-            types.pop(bid, None)
+            merged['types'].pop(bid, None)                 # the planner did not use it: no type, no model
             continue
         dst = os.path.join(out, by_id[bid]['file'])
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         copy_model(by_id[bid]['src'], dst)
-    wjson(os.path.join(out, 'rules.json'), rules)
+    wjson(os.path.join(out, 'rules.json'), merged)
     wjson(os.path.join(out, 'maps', 'city.json'), m)
     g = m.get('generated', {})
     return {'size': m['size'], 'planner': 'engine', 'buildings': g.get('buildings'), 'cars': g.get('cars'), 'people': g.get('people'),
             'roads': g.get('roads'), 'junctions': g.get('junctions'), 'bridges': g.get('bridges'), 'roundabouts': g.get('roundabouts'),
-            'blocks': g.get('blocks'), 'parks': g.get('parks'), 'houses': g.get('houses'), 'paths': g.get('paths'), 'entities': len(m['entities']), 'warnings': g.get('warnings')}
+            'blocks': g.get('blocks'), 'parks': g.get('parks'), 'houses': g.get('houses'), 'paths': g.get('paths'),
+            'keptAsEdited': {'rules': len(kept), 'game': kept_game, 'rulesSample': kept[:8]}, 'entities': len(m['entities']), 'warnings': g.get('warnings')}
 
 
 def people_scripts_overrides(assets, out, rules, types, entities):
@@ -584,6 +630,9 @@ def people_scripts_overrides(assets, out, rules, types, entities):
         rules['scripts'] = ['scripts/crowd.lua']
     if os.path.exists(os.path.join(out, 'scripts', 'view', 'crowd.lua')):
         rules['viewScripts'] = ['scripts/view/crowd.lua']
+    for key, name in (('scripts', 'scripts/objectives.lua'), ('viewScripts', 'scripts/view/hud.lua')):   # radar + objective markers
+        if os.path.exists(os.path.join(out, name)):
+            rules[key] = rules.get(key, []) + [name]
     # hand edits and other tools: rules.overrides.json in the project is merged over the generated rules
     over = os.path.join(out, 'rules.overrides.json')
     if os.path.exists(over):
@@ -784,6 +833,8 @@ def main():
     a = ap.parse_args()
     w, h = [int(v) for v in a.size.lower().split('x')]
     print(json.dumps(build(os.path.expanduser(a.assets), os.path.expanduser(a.out), a.seed, a.headless, (w, h), a.layout, a.max_building_types)))
+    import minimap_png                                    # the radar picture of the new map (ui/minimap.png)
+    print(*minimap_png.build(os.path.expanduser(a.out)))
 
 
 if __name__ == '__main__':
