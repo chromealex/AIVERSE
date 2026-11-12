@@ -9,10 +9,9 @@ Reads (never writes) the Unity project:
   Client/Assets/ME.TexturesGenerator/_DatabaseData/**.asset                  races, buildings, heroes, skills, battle parameters,
                                                                              morale, skins, emotions, camera shakes, destructibles
   Client/Assets/ME.TexturesGenerator/_Common/Maps/Data/**.asset              map data (points, routes, zones, environment, bot)
-and writes:
+and writes (PORT_TODO.md next to them is maintained by hand: what is missing for 1:1 and where it lives in BW):
   game.json, rules.json, maps/<id>.json, lang/{ru,en}.json   the playable game (engine keys only)
   bw/*.json, bw/maps/<id>.json                               every BW number the engine has no key for yet, in engine units
-  PORT_TODO.md                                               what is missing for 1:1 and where it lives in BW
 
 Units: BW world units / SCALE = cells (SCALE = 40: the default BW map 2720 x 1520 becomes 68 x 38 cells, unit speed 80 -> 2,
 tower ranges 400..550 -> 10..13.75). Map y is BW screen y (the BW world is drawn with aspectRatio 0.5; travel along routes
