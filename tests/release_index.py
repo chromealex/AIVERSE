@@ -24,7 +24,7 @@ class ReleaseIndexTest(unittest.TestCase):
                     for exe in [mcp, prefix + '_editor', prefix + '_headless']:
                         z.writestr(f'{brand}/bin/{exe}', b'\x7fELF' + bytes(14) + b'\x3e\x00' + bytes(44))
                 packages.append(rel)
-            index = publish.write_index(temp, packages, 'chromealex/rts-engine')
+            index = publish.write_index(temp, packages, 'chromealex/AIVERSE')
             self.assertEqual(index['schema'], 1)
             for entry, mcp in zip(index['packages'], ['rtsmcp', 'aiversemcp']):
                 self.assertEqual(entry['arch'], 'x86_64')
