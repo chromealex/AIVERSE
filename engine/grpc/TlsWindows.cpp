@@ -189,37 +189,51 @@ class SchannelEngine final : public TlsEngine {
         }
     }
 
+    // Manual validation with TlsConfig::caPem: build the chain with the system engine over the
+    // server's intermediates + our roots; a chain ending in one of our roots is accepted as trusted,
+    // then the SSL policy still checks the host name, validity and usage.
     bool checkChain() {
         PCCERT_CONTEXT cert = nullptr;
         if (QueryContextAttributesA(&ctx_, SECPKG_ATTR_REMOTE_CERT_CONTEXT, &cert) != SEC_E_OK || !cert)
             return fail("certificate verification failed: no server certificate");
-        CERT_CHAIN_ENGINE_CONFIG ec{};
-        ec.cbSize = sizeof ec;
-        ec.hExclusiveRoot = roots_;
-        HCERTCHAINENGINE engine = nullptr;
-        bool ok = CertCreateCertificateChainEngine(&ec, &engine);
-        PCCERT_CHAIN_CONTEXT chain = nullptr;
+        HCERTSTORE all = CertOpenStore(CERT_STORE_PROV_COLLECTION, 0, 0, 0, nullptr);
+        if (cert->hCertStore)
+            CertAddStoreToCollection(all, cert->hCertStore, 0, 0);
+        CertAddStoreToCollection(all, roots_, 0, 0);
         CERT_CHAIN_PARA para{};
         para.cbSize = sizeof para;
-        ok = ok && CertGetCertificateChain(engine, cert, nullptr, cert->hCertStore, &para, 0, nullptr, &chain);
-        std::wstring wname(host_.begin(), host_.end());
-        SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl{};
-        ssl.cbSize = sizeof ssl;
-        ssl.dwAuthType = AUTHTYPE_SERVER;
-        ssl.pwszServerName = wname.data();
-        CERT_CHAIN_POLICY_PARA pp{};
-        pp.cbSize = sizeof pp;
-        pp.pvExtraPolicyPara = &ssl;
-        CERT_CHAIN_POLICY_STATUS ps{};
-        ps.cbSize = sizeof ps;
-        ok = ok && CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL, chain, &pp, &ps) && ps.dwError == 0;
-        const DWORD err = ps.dwError;
+        PCCERT_CHAIN_CONTEXT chain = nullptr;
+        std::string why;
+        if (!CertGetCertificateChain(nullptr, cert, nullptr, all, &para, 0, nullptr, &chain) || !chain ||
+            chain->cChain == 0 || chain->rgpChain[0]->cElement == 0) {
+            why = "cannot build the certificate chain: " + winError(SECURITY_STATUS(GetLastError()));
+        } else {
+            const PCERT_SIMPLE_CHAIN sc = chain->rgpChain[0];
+            PCCERT_CONTEXT root = sc->rgpElement[sc->cElement - 1]->pCertContext;
+            PCCERT_CONTEXT ours = CertFindCertificateInStore(roots_, X509_ASN_ENCODING, 0, CERT_FIND_EXISTING, root, nullptr);
+            std::wstring wname(host_.begin(), host_.end());
+            SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl{};
+            ssl.cbSize = sizeof ssl;
+            ssl.dwAuthType = AUTHTYPE_SERVER;
+            ssl.fdwChecks = ours ? SECURITY_FLAG_IGNORE_UNKNOWN_CA : 0;
+            ssl.pwszServerName = wname.data();
+            CERT_CHAIN_POLICY_PARA pp{};
+            pp.cbSize = sizeof pp;
+            pp.pvExtraPolicyPara = &ssl;
+            CERT_CHAIN_POLICY_STATUS ps{};
+            ps.cbSize = sizeof ps;
+            if (!CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL, chain, &pp, &ps))
+                why = "chain policy check failed: " + winError(SECURITY_STATUS(GetLastError()));
+            else if (ps.dwError)
+                why = winError(SECURITY_STATUS(ps.dwError));
+            if (ours)
+                CertFreeCertificateContext(ours);
+        }
         if (chain)
             CertFreeCertificateChain(chain);
-        if (engine)
-            CertFreeCertificateChainEngine(engine);
+        CertCloseStore(all, 0);
         CertFreeCertificateContext(cert);
-        return ok || fail("certificate verification failed: " + winError(SECURITY_STATUS(err)));
+        return why.empty() || fail("certificate verification failed: " + why);
     }
 
     void encrypt() {
