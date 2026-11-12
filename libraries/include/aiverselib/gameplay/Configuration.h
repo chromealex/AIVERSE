@@ -406,6 +406,58 @@ struct CinematicSettings {
     std::int64_t qteHoldScaleMilli=1000;
     bool qteAutoSucceed=false;
 };
+struct VehicleSettings {
+    std::int64_t maxEnterSpeedMilli=2000;
+    std::int64_t maxExitSpeedMilli=3000;
+    std::int64_t raceLaps=3;
+    std::int64_t wrongWayTicks=45;
+    std::int64_t wrongWaySpeedMilli=2000;
+    std::int64_t respawnWrongWayTicks=240;
+    std::int64_t stuckSpeedMilli=500;
+    std::int64_t stuckTicks=0;
+    std::int64_t botLookaheadMilli=6000;
+    std::int64_t botLookaheadTimeMilli=350;
+    std::int64_t botMaxSpeedMilli=60000;
+    std::int64_t botCornerAccelMilli=9000;
+    std::int64_t botBrakeDecelMilli=8000;
+    std::int64_t botBrakeHorizonMilli=90000;
+    std::int64_t botSteerGainMilli=1500;
+    std::int64_t botLaneOffsetMilli=2500;
+    std::int64_t botOvertakeDistanceMilli=14000;
+    std::int64_t botSkillMilli=1000;
+    std::int64_t botRubberBandMilli=0;
+};
+struct SportsSettings {
+    std::int64_t periods=2;
+    std::int64_t periodTicks=2700;
+    std::int64_t overtimeTicks=0;
+    std::int64_t restartDelayTicks=45;
+    std::int64_t maxStoppageTicks=600;
+    std::int64_t clockMode=0;
+    bool swapEnds=true;
+    bool goldenGoal=true;
+    std::int64_t pickupRadiusMilli=700;
+    std::int64_t controlSpeedMilli=14000;
+    std::int64_t frictionMilli=5000;
+    std::int64_t tackleRangeMilli=1400;
+    std::int64_t tackleBaseMilli=450;
+    std::int64_t interceptMilli=650;
+    std::int64_t behindFoulMilli=500;
+    std::int64_t failFoulMilli=120;
+    std::int64_t tackleCooldownTicks=40;
+    std::int64_t possessionLockTicks=20;
+    std::int64_t kickLockTicks=12;
+    std::int64_t passSpeedMinMilli=7000;
+    std::int64_t passSpeedMaxMilli=18000;
+    std::int64_t shotSpeedMinMilli=12000;
+    std::int64_t shotSpeedMaxMilli=26000;
+    std::int64_t passErrorMilli=30;
+    std::int64_t shotErrorMilli=40;
+    std::int64_t botShootRangeMilli=12000;
+    std::int64_t botTackleMilli=300;
+    std::int64_t botReactionTicks=6;
+    std::int64_t botDecisionTicks=6;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -438,6 +490,8 @@ struct GameplaySettings {
     NarrativeSettings narrative;
     InteractionSettings interaction;
     CinematicSettings cinematic;
+    VehicleSettings vehicles;
+    SportsSettings sports;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -454,7 +508,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="vehicles" && entry.first!="sports") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -1013,6 +1067,68 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
             if(section.has("qteAutoSucceed")) boolean(section["qteAutoSucceed"],settings.cinematic.qteAutoSucceed,"cinematic.qteAutoSucceed");
         }
         if(settings.cinematic.slowMotionNumerator>settings.cinematic.slowMotionDenominator)result.errors.push_back("cinematic.slowMotionNumerator: must not exceed slowMotionDenominator");
+    }
+    if(root.has("vehicles")) { const auto& section=root["vehicles"];
+        if(!section.isObject()) result.errors.push_back("vehicles: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="maxEnterSpeedMilli" && entry.first!="maxExitSpeedMilli" && entry.first!="raceLaps" && entry.first!="wrongWayTicks" && entry.first!="wrongWaySpeedMilli" && entry.first!="respawnWrongWayTicks" && entry.first!="stuckSpeedMilli" && entry.first!="stuckTicks" && entry.first!="botLookaheadMilli" && entry.first!="botLookaheadTimeMilli" && entry.first!="botMaxSpeedMilli" && entry.first!="botCornerAccelMilli" && entry.first!="botBrakeDecelMilli" && entry.first!="botBrakeHorizonMilli" && entry.first!="botSteerGainMilli" && entry.first!="botLaneOffsetMilli" && entry.first!="botOvertakeDistanceMilli" && entry.first!="botSkillMilli" && entry.first!="botRubberBandMilli") result.errors.push_back("vehicles."+entry.first+": unknown field");
+            if(section.has("maxEnterSpeedMilli")) number(section["maxEnterSpeedMilli"],settings.vehicles.maxEnterSpeedMilli,0,1000000,"vehicles.maxEnterSpeedMilli");
+            if(section.has("maxExitSpeedMilli")) number(section["maxExitSpeedMilli"],settings.vehicles.maxExitSpeedMilli,0,1000000,"vehicles.maxExitSpeedMilli");
+            if(section.has("raceLaps")) number(section["raceLaps"],settings.vehicles.raceLaps,1,1000,"vehicles.raceLaps");
+            if(section.has("wrongWayTicks")) number(section["wrongWayTicks"],settings.vehicles.wrongWayTicks,1,100000,"vehicles.wrongWayTicks");
+            if(section.has("wrongWaySpeedMilli")) number(section["wrongWaySpeedMilli"],settings.vehicles.wrongWaySpeedMilli,0,1000000,"vehicles.wrongWaySpeedMilli");
+            if(section.has("respawnWrongWayTicks")) number(section["respawnWrongWayTicks"],settings.vehicles.respawnWrongWayTicks,0,100000,"vehicles.respawnWrongWayTicks");
+            if(section.has("stuckSpeedMilli")) number(section["stuckSpeedMilli"],settings.vehicles.stuckSpeedMilli,0,1000000,"vehicles.stuckSpeedMilli");
+            if(section.has("stuckTicks")) number(section["stuckTicks"],settings.vehicles.stuckTicks,0,100000,"vehicles.stuckTicks");
+            if(section.has("botLookaheadMilli")) number(section["botLookaheadMilli"],settings.vehicles.botLookaheadMilli,0,1000000,"vehicles.botLookaheadMilli");
+            if(section.has("botLookaheadTimeMilli")) number(section["botLookaheadTimeMilli"],settings.vehicles.botLookaheadTimeMilli,0,10000,"vehicles.botLookaheadTimeMilli");
+            if(section.has("botMaxSpeedMilli")) number(section["botMaxSpeedMilli"],settings.vehicles.botMaxSpeedMilli,1,1000000,"vehicles.botMaxSpeedMilli");
+            if(section.has("botCornerAccelMilli")) number(section["botCornerAccelMilli"],settings.vehicles.botCornerAccelMilli,1,1000000,"vehicles.botCornerAccelMilli");
+            if(section.has("botBrakeDecelMilli")) number(section["botBrakeDecelMilli"],settings.vehicles.botBrakeDecelMilli,1,1000000,"vehicles.botBrakeDecelMilli");
+            if(section.has("botBrakeHorizonMilli")) number(section["botBrakeHorizonMilli"],settings.vehicles.botBrakeHorizonMilli,0,10000000,"vehicles.botBrakeHorizonMilli");
+            if(section.has("botSteerGainMilli")) number(section["botSteerGainMilli"],settings.vehicles.botSteerGainMilli,0,100000,"vehicles.botSteerGainMilli");
+            if(section.has("botLaneOffsetMilli")) number(section["botLaneOffsetMilli"],settings.vehicles.botLaneOffsetMilli,0,100000,"vehicles.botLaneOffsetMilli");
+            if(section.has("botOvertakeDistanceMilli")) number(section["botOvertakeDistanceMilli"],settings.vehicles.botOvertakeDistanceMilli,0,1000000,"vehicles.botOvertakeDistanceMilli");
+            if(section.has("botSkillMilli")) number(section["botSkillMilli"],settings.vehicles.botSkillMilli,100,2000,"vehicles.botSkillMilli");
+            if(section.has("botRubberBandMilli")) number(section["botRubberBandMilli"],settings.vehicles.botRubberBandMilli,0,500,"vehicles.botRubberBandMilli");
+        }
+    }
+    if(root.has("sports")) { const auto& section=root["sports"];
+        if(!section.isObject()) result.errors.push_back("sports: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="periods" && entry.first!="periodTicks" && entry.first!="overtimeTicks" && entry.first!="restartDelayTicks" && entry.first!="maxStoppageTicks" && entry.first!="clockMode" && entry.first!="swapEnds" && entry.first!="goldenGoal" && entry.first!="pickupRadiusMilli" && entry.first!="controlSpeedMilli" && entry.first!="frictionMilli" && entry.first!="tackleRangeMilli" && entry.first!="tackleBaseMilli" && entry.first!="interceptMilli" && entry.first!="behindFoulMilli" && entry.first!="failFoulMilli" && entry.first!="tackleCooldownTicks" && entry.first!="possessionLockTicks" && entry.first!="kickLockTicks" && entry.first!="passSpeedMinMilli" && entry.first!="passSpeedMaxMilli" && entry.first!="shotSpeedMinMilli" && entry.first!="shotSpeedMaxMilli" && entry.first!="passErrorMilli" && entry.first!="shotErrorMilli" && entry.first!="botShootRangeMilli" && entry.first!="botTackleMilli" && entry.first!="botReactionTicks" && entry.first!="botDecisionTicks") result.errors.push_back("sports."+entry.first+": unknown field");
+            if(section.has("periods")) number(section["periods"],settings.sports.periods,1,16,"sports.periods");
+            if(section.has("periodTicks")) number(section["periodTicks"],settings.sports.periodTicks,1,100000000,"sports.periodTicks");
+            if(section.has("overtimeTicks")) number(section["overtimeTicks"],settings.sports.overtimeTicks,0,100000000,"sports.overtimeTicks");
+            if(section.has("restartDelayTicks")) number(section["restartDelayTicks"],settings.sports.restartDelayTicks,0,100000,"sports.restartDelayTicks");
+            if(section.has("maxStoppageTicks")) number(section["maxStoppageTicks"],settings.sports.maxStoppageTicks,0,100000000,"sports.maxStoppageTicks");
+            if(section.has("clockMode")) number(section["clockMode"],settings.sports.clockMode,0,2,"sports.clockMode");
+            if(section.has("swapEnds")) boolean(section["swapEnds"],settings.sports.swapEnds,"sports.swapEnds");
+            if(section.has("goldenGoal")) boolean(section["goldenGoal"],settings.sports.goldenGoal,"sports.goldenGoal");
+            if(section.has("pickupRadiusMilli")) number(section["pickupRadiusMilli"],settings.sports.pickupRadiusMilli,1,100000,"sports.pickupRadiusMilli");
+            if(section.has("controlSpeedMilli")) number(section["controlSpeedMilli"],settings.sports.controlSpeedMilli,0,200000,"sports.controlSpeedMilli");
+            if(section.has("frictionMilli")) number(section["frictionMilli"],settings.sports.frictionMilli,0,1000000,"sports.frictionMilli");
+            if(section.has("tackleRangeMilli")) number(section["tackleRangeMilli"],settings.sports.tackleRangeMilli,0,100000,"sports.tackleRangeMilli");
+            if(section.has("tackleBaseMilli")) number(section["tackleBaseMilli"],settings.sports.tackleBaseMilli,0,1000,"sports.tackleBaseMilli");
+            if(section.has("interceptMilli")) number(section["interceptMilli"],settings.sports.interceptMilli,0,1000,"sports.interceptMilli");
+            if(section.has("behindFoulMilli")) number(section["behindFoulMilli"],settings.sports.behindFoulMilli,0,1000,"sports.behindFoulMilli");
+            if(section.has("failFoulMilli")) number(section["failFoulMilli"],settings.sports.failFoulMilli,0,1000,"sports.failFoulMilli");
+            if(section.has("tackleCooldownTicks")) number(section["tackleCooldownTicks"],settings.sports.tackleCooldownTicks,0,100000,"sports.tackleCooldownTicks");
+            if(section.has("possessionLockTicks")) number(section["possessionLockTicks"],settings.sports.possessionLockTicks,0,100000,"sports.possessionLockTicks");
+            if(section.has("kickLockTicks")) number(section["kickLockTicks"],settings.sports.kickLockTicks,0,100000,"sports.kickLockTicks");
+            if(section.has("passSpeedMinMilli")) number(section["passSpeedMinMilli"],settings.sports.passSpeedMinMilli,1,200000,"sports.passSpeedMinMilli");
+            if(section.has("passSpeedMaxMilli")) number(section["passSpeedMaxMilli"],settings.sports.passSpeedMaxMilli,1,200000,"sports.passSpeedMaxMilli");
+            if(section.has("shotSpeedMinMilli")) number(section["shotSpeedMinMilli"],settings.sports.shotSpeedMinMilli,1,200000,"sports.shotSpeedMinMilli");
+            if(section.has("shotSpeedMaxMilli")) number(section["shotSpeedMaxMilli"],settings.sports.shotSpeedMaxMilli,1,200000,"sports.shotSpeedMaxMilli");
+            if(section.has("passErrorMilli")) number(section["passErrorMilli"],settings.sports.passErrorMilli,0,250,"sports.passErrorMilli");
+            if(section.has("shotErrorMilli")) number(section["shotErrorMilli"],settings.sports.shotErrorMilli,0,250,"sports.shotErrorMilli");
+            if(section.has("botShootRangeMilli")) number(section["botShootRangeMilli"],settings.sports.botShootRangeMilli,0,1000000,"sports.botShootRangeMilli");
+            if(section.has("botTackleMilli")) number(section["botTackleMilli"],settings.sports.botTackleMilli,0,1000,"sports.botTackleMilli");
+            if(section.has("botReactionTicks")) number(section["botReactionTicks"],settings.sports.botReactionTicks,0,3600,"sports.botReactionTicks");
+            if(section.has("botDecisionTicks")) number(section["botDecisionTicks"],settings.sports.botDecisionTicks,1,3600,"sports.botDecisionTicks");
+        }
+        if(settings.sports.passSpeedMinMilli>settings.sports.passSpeedMaxMilli)result.errors.push_back("sports.passSpeedMinMilli: must not exceed passSpeedMaxMilli");
+        if(settings.sports.shotSpeedMinMilli>settings.sports.shotSpeedMaxMilli)result.errors.push_back("sports.shotSpeedMinMilli: must not exceed shotSpeedMaxMilli");
     }
     if(result.errors.empty()) result.value=settings;
     return result;
