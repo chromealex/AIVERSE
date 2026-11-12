@@ -8,6 +8,7 @@
 #include "SceneAssets.h"
 #include "engine/render/StaticPointBounce.h"
 #include "CameraTour.h"
+#include "SunStudy.h"
 #include <chrono>
 #include <fstream>
 #include <filesystem>
@@ -131,6 +132,7 @@ struct Bench {
             const bool bakePointShadows=(config.getBool("staticPointShadows",false)||config.has("probeGI"))&&options.profile!="low";
             if(options.profile!="low"&&(!options.readLightCache.empty()||!options.writeLightCache.empty())&&!config.getBool("staticPointLightGrid",false))throw std::runtime_error("light cache requires staticPointLightGrid");
             const bool collectShadows=bakePointShadows&&options.readLightCache.empty();
+            if(config.has("sunStudy")&&!collectShadows)throw std::runtime_error("sunStudy requires an uncached probe/shadow bake and a non-low profile");
             if(collectShadows)appendShadowGeometry(additions.shadowGeometry,*model);
             additions.load(d,config,warn,notes,collectShadows);
             const size_t primaryLightCount=additions.lights.size();
@@ -146,6 +148,7 @@ struct Bench {
                 std::fprintf(stderr,"Baking static point shadows: %zu triangles, %zu lights, %d pixels per face\n",additions.shadowGeometry.triangles.size(),additions.lights.size(),resolution);
                 const auto shadowStart=Clock::now();
                 additions.shadowGeometry.build();
+                if(config.has("sunStudy"))report.set("sunStudy",studySun(additions.shadowGeometry,cameras.front(),float(width)/height,config["sunStudy"]));
                 for(const auto& light:additions.lights)pointShadows.push_back(additions.shadowGeometry.bake(light.pos,light.radius,resolution));
                 report.set("staticPointShadowBakeMs",Json::number(ms(shadowStart,Clock::now())));
                 if(config.has("staticPointBounce")){
@@ -173,7 +176,7 @@ struct Bench {
             }
             additions.shadowGeometry=StaticShadowGeometry{};
             if(config.getBool("staticPointLightGrid",false)&&options.profile!="low"){
-                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");
+                Json keyConfig=config;keyConfig.erase("cameras");keyConfig.erase("postfx");keyConfig.erase("id");keyConfig.erase("sunStudy");
                 Json keyGi=keyConfig["probeGI"];for(const char* key:{"quality","points","sun","sky"})keyGi.erase(key);keyConfig.set("probeGI",keyGi);
                 Hasher keyHash;keyHash.str(keyConfig.dump());
                 StaticLightGrid grid;
@@ -215,6 +218,7 @@ struct Bench {
             if(giQuality!="off"&&giQuality!="mobile"&&giQuality!="high")throw std::runtime_error("probeGI quality must be off, mobile or high");
             renderer.lights.setIndirectQuality(giQuality=="off"?IndirectQuality::Off:giQuality=="mobile"?IndirectQuality::Mobile:IndirectQuality::High);
             if(!renderer.lights.setStaticRadiance(SceneAssets::vector3(gi["points"],{1,1,1}),SceneAssets::vector3(gi["sun"],{}),SceneAssets::vector3(gi["sky"],{})))throw std::runtime_error("invalid probeGI radiance");
+            renderer.setShadowBounds(model->boundsMin,model->boundsMax);
             renderer.lighting.sunDir=v3(config["sunDirection"]);renderer.lighting.sunColor=v3(config["sunColor"]);
             renderer.lighting.sunIntensity=float(config["sunIntensity"].toDouble());
             renderer.lighting.skyColor=v3(config["skyColor"]);renderer.lighting.groundColor=v3(config["groundColor"]);

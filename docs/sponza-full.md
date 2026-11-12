@@ -291,3 +291,39 @@ retains the previous inexpensive lighting and performs no diffuse bake.
 The next opt-in path adds mobile four-probe interpolation, sun/sky transport, runtime
 radiance controls and a portable baked cache: [Scalable probe GI](probe-gi.md).
 The extended atlas uses 107 texels per probe (the original format above used 100).
+
+### Daylight shadow correction (2026-11-12)
+
+The full/SSR path was sampling scene color as the sun depth texture after the opaque
+blit. Restoring slot 0 fixes this shared GL/Metal state bug. Renderbench now uses
+fixed primary-model bounds for its sun map, retaining the roof/upper-floor casters
+and avoiding camera-dependent shadow-frustum movement. The default RTS fitting
+remains available to other callers.
+
+To reproduce the revised opt-in daylight recipe beside existing assets:
+
+```sh
+python3 tools/renderbench/reference_refinement.py scene-probe-day-mobile.json \
+  --mode day-occlusion --output scene-day-reference-occluded.json
+```
+
+Rebake the light cache for the generated recipe. The sun direction is
+`[-.492404,.866025,-.086824]` (60-degree elevation); intensity 9 and exposure .2
+are unchanged. Probe spacing is 1.5 m with 128 bake rays; mobile still samples
+four probes per receiver. This is a denser whole volume, not adaptive refinement:
+6630 probes and an 11,468,800-byte atlas instead of the prior 1,769,472 bytes.
+Low still disables this GI path.
+
+Real 1280x720 GL and Metal captures were inspected. The lit far facade, shaded
+recessed arches and covered foreground now agree with the opaque ray diagnostic.
+The reference is not matched pixel-for-pixel: foreground vault indirect lighting
+is still too weak, camera framing differs, and the available one-bounce transport
+does not reproduce Unreal's interior light distribution. Increasing to eight
+interpolation probes or boosting the sky bounce did not resolve that region.
+Do not hide this remaining GI limitation with exposure or contrast changes.
+
+One 60-sample diagnostic measured median GPU frame 17.17 ms on Metal and 14.37 ms
+on desktop GL; these are not Android measurements or a controlled speed comparison.
+The fix adds one texture rebind, no shading pass. All 37 HDR GPU controls passed on
+both backends; control 36 fails when the texture restoration is removed. Static
+light-grid CPU tests also passed. Android/web remain unverified.

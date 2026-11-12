@@ -157,6 +157,9 @@ class Renderer3D {
 public:
     bool init(gfx::Device& dev);
     void shutdown();
+    // Optional fixed scene bounds for interior/model viewers; clear to use RTS ground fitting.
+    void setShadowBounds(float3 lo, float3 hi) { shadowBoundsMin_=lo; shadowBoundsMax_=hi; hasShadowBounds_=true; }
+    void clearShadowBounds() { hasShadowBounds_=false; }
     void setShadowQuality(ShadowQuality q);
     ShadowQuality shadowQuality() const { return quality_; }
     static ShadowQuality defaultQualityFor(const gfx::Device& dev, bool mobile);
@@ -259,6 +262,8 @@ private:
     int shadowSize_ = 0;
     float shadowTexelWorld_ = 0.05f;   // world size of one shadow-map texel
     float shadowExtent_ = 50.0f;       // world size covered by the shadow map
+    bool hasShadowBounds_ = false;
+    float3 shadowBoundsMin_{}, shadowBoundsMax_{};
     ShadowQuality quality_ = ShadowQuality::Medium;
     std::vector<DrawItem> items_;
     std::vector<ColorVertex> lines_, tris_;

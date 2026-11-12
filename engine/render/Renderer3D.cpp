@@ -159,9 +159,15 @@ void Renderer3D::computeShadowMatrix(const RTSCamera& cam, float aspect) {
         pts[n++] = g;
         pts[n++] = g + float3{0, 5.0f, 0}; // tall objects
     }
+    if (hasShadowBounds_) {
+        n=0;
+        for(int z=0;z<2;++z)for(int y=0;y<2;++y)for(int x=0;x<2;++x)
+            pts[n++]={x?shadowBoundsMax_.x:shadowBoundsMin_.x,y?shadowBoundsMax_.y:shadowBoundsMin_.y,z?shadowBoundsMax_.z:shadowBoundsMin_.z};
+    }
+    const float3 center=hasShadowBounds_?(shadowBoundsMin_+shadowBoundsMax_)*.5f:cam.target;
     float3 L = normalize(lighting.sunDir);
     float3 up = std::fabs(L.y) > 0.99f ? float3{0, 0, 1} : float3{0, 1, 0};
-    mat4 view = mat4::lookAt(cam.target + L * 60.0f, cam.target, up);
+    mat4 view = mat4::lookAt(center + L * 60.0f, center, up);
     float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f, minZ = 1e9f, maxZ = -1e9f;
     for (int i = 0; i < n; ++i) {
         float3 p = view.transformPoint(pts[i]);
@@ -344,6 +350,8 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     renderModels(3);
     if (capture) {
         endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh});
+        // The blit binds scene color at slot 0; model shaders expect the sun depth map there.
+        dev_->setTexture(0, shadowMap_);
         // Read the first opaque pass while shading into a different target (no feedback).
         if (modelReflections_ && hdrFrame_) { uploadFrameUniforms(false); renderModels(1); }
     }

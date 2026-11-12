@@ -141,3 +141,30 @@ on Metal (same 1280x720 full scene; one diagnostic run). In a fixed foreground-c
 ROI, mean display-space luminance fell from 47.78 to 19.16 (8-bit scale); the sunlit
 facade ROI changed from 226.87 to 226.53. Exposure and sun parameters were unchanged.
 GL and Metal captures were both visually inspected. Android remains unverified.
+
+## Sun placement diagnostic
+
+An optional renderbench `sunStudy` array marks normalized screen positions in the
+first selected camera, with `name`, `screen: [u,v]`, `lit` and optional `weight`.
+During an uncached opaque-geometry bake, the existing BVH traces these receivers
+and ranks sun elevations/azimuths at five-degree intervals. The report contains
+world-space receiver positions, directions and visible N·L values. This is an
+offline authoring aid, not a runtime feature or a replacement for screenshot
+verification: alpha-tested casters and shader displacement are not represented.
+Cached and Low runs reject this diagnostic rather than silently skipping it.
+
+### Sun shadow state across the SSR redraw
+
+The opaque scene blit binds its color texture at slot 0. Previously the following
+model redraw sampled that texture as the sun comparison-depth texture; this could
+light covered columns and erase or move shadows when the light frustum changed.
+The renderer now restores the sun depth texture immediately after the blit, before
+opaque SSR models and transparent models. This fixes both GL and Metal without
+another pass or sampling cost. GPU probe 36 uses a rough, sunlit receiver (no SSR
+reflection contribution) to check the redraw. Removing the restoration makes GL
+return 0.29020 instead of expected 0.54806; with the fix GL/Metal pass.
+
+`Renderer3D::setShadowBounds` optionally fits a stationary light frustum to explicit
+world bounds. This is useful for enclosed model-viewer scenes with tall roofs;
+`clearShadowBounds` restores the existing RTS ground-camera fitting. Renderbench
+uses the primary model's bounds, which must include its intended shadow casters.
