@@ -1,0 +1,1 @@
+{"victory": "noUnits", "types": {"mage": {"health": {"max": 1000}, "sight": 30, "weapons": [{"range": 30, "cooldown": 100, "damage": 10, "projectileSpeed": 1}]}, "dummy": {"health": {"max": 1000}}}}

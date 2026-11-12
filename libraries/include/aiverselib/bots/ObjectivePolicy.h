@@ -54,7 +54,8 @@ inline std::optional<ObjectiveChoice> chooseObjective(const ObjectiveWeights& w,
     std::sort(ids.begin(),ids.end());if(std::adjacent_find(ids.begin(),ids.end())!=ids.end())return std::nullopt;
     ObjectiveChoice best;
     for(const auto& o:objectives){
-        if(!o.active)continue;auto score=objectiveScore(w,team,from,o,current);
+        if(!o.active)continue;
+        auto score=objectiveScore(w,team,from,o,current);
         if(!best.id||score>best.score||(score==best.score&&o.id<best.id))best={o.id,score,objectiveStance(o,team)};
     }
     return best;

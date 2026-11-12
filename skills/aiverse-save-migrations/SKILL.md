@@ -12,7 +12,7 @@ Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys
 
 1. Identify whether the existing engine mechanic already owns this behavior. Configure it first.
 2. Migrate on import/load before installing state. Engine nativeModules VERSION compatibility is distinct: this API cannot force an incompatible engine save to load. Use gameplay.py save/restore for JSON envelopes only.
-3. Link AIVERSE::libraries for pure headers. Link AIVERSE::gameplay_native for NativeCommands.h; after aiverse_native_module, use target_link_libraries(aiverse_native_ID PRIVATE AIVERSE::gameplay_native).
+3. Link `AIVERSE::lib_save_migrations` (native OBJECT modules: `aiverse_native_use_libraries(aiverse_native_ID save-migrations)`); do not link the aggregate AIVERSE::libraries. Add AIVERSE::gameplay_native only when you include NativeCommands.h: `target_link_libraries(aiverse_native_ID PRIVATE AIVERSE::gameplay_native)`.
 4. Load project-native settings from config using readGameplaySettings; copy validated persistent parameters into NativeState at setup. Presentation state stays separate.
 5. Use `examples/native/libraries` and `tests/libraries/gameplay_tests.cpp` as compiling examples.
 6. Verify with the commands below and report the exact implemented coverage and unverified platforms.

@@ -253,6 +253,41 @@
       "keywords": []
     },
     {
+      "id": "aiverse-cinematic-gameplay",
+      "package": "cinematic-gameplay",
+      "path": "skills/aiverse-cinematic-gameplay/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Authoritative scene flow: integer-ratio time-scale domains (world/player/ui/cinematic) with stacked priority requests, exact accumulators, hit-stop/slow-motion presets; scene timelines of dialogue/animation/camera/sound/event cues with play/pause/skip/seek; sync waits on host-reported line/marker/in-position facts with timeouts; QTE press/mash/hold/sequence judged on input ticks with difficulty and accessibility; interaction staging with marks, teleport fallback and input locks; checkpoint requests and resume at sync points; narrative cue triggers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_cinematic_gameplay",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Cinematic.h",
+      "keywords": [
+        "cinematic",
+        "cutscene",
+        "timeline",
+        "qte",
+        "slowmo",
+        "hitstop",
+        "timescale",
+        "sync",
+        "staging",
+        "checkpoint",
+        "катсцен",
+        "ролик",
+        "таймлайн",
+        "замедлен",
+        "синхрон",
+        "постановк",
+        "чекпоинт"
+      ]
+    },
+    {
       "id": "aiverse-collections",
       "package": "collections",
       "path": "skills/aiverse-collections/SKILL.md",
@@ -438,7 +473,10 @@
         "aiverse-combat-actions",
         "aiverse-weapon-policies",
         "aiverse-configuration",
-        "aiverse-stealth-senses"
+        "aiverse-stealth-senses",
+        "aiverse-character-locomotion",
+        "aiverse-match-rules",
+        "aiverse-narrative-graphs"
       ],
       "backendDependencies": [
         "aiverse_engine",
@@ -718,21 +756,35 @@
       "package": "narrative-graphs",
       "path": "skills/aiverse-narrative-graphs/SKILL.md",
       "domain": "gameplay",
-      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions",
+      "summary": "Localized narrative graphs with conditional choices and atomic fact transactions; 0.2.0 social scenes: typed int/bool/enum facts with persistent world state, per-character affinity/trust/fear meters, per-character knowledge and reveals, AND/OR/NOT conditions, one-shot flags, chapter/act state, deferred consequences (N ticks or scenes later), speakers/participants, cinematic CueRequest events, prioritized ambient barks with cooldowns and visual-novel backlog/skip-read/auto-advance",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_narrative_graphs",
       "dependencies": [
         "aiverse-tag-conditions"
       ],
-      "backendDependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/genre/Narrative.h",
       "keywords": [
         "story",
         "narrative",
+        "dialogue",
+        "relationship",
+        "knowledge",
+        "bark",
+        "visual",
+        "novel",
+        "backlog",
+        "consequence",
         "сюжет",
-        "диалог"
+        "диалог",
+        "отношения",
+        "реплик",
+        "визуальная",
+        "новелла"
       ]
     },
     {
@@ -759,7 +811,9 @@
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_navmesh",
-      "dependencies": [],
+      "dependencies": [
+        "aiverse-graphs"
+      ],
       "backendDependencies": [
         "aiverse_world"
       ],
@@ -867,6 +921,56 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Performance.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-physical-interactions",
+      "package": "physical-interactions",
+      "path": "skills/aiverse-physical-interactions/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic kinematic physical interactions: pick up/carry (hold point, mass limit, speed penalty, drop when blocked), charged throws with arc preview from the same integrator and swept landing, push/pull on a grid or free with friction/mass resistance and blocking, XPBD ropes/joints with a fixed iteration count, attach/detach and breaking force, hinged/sliding doors with locks, keys, one-way rules, timing and auto-reverse, waypoint moving platforms with per-rider carry deltas, breakable objects with damage types, thresholds, stages and debris requests",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_physical_interactions",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine",
+        "aiverse_world"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/PhysicalInteractions.h",
+      "keywords": [
+        "carry",
+        "pickup",
+        "throw",
+        "push",
+        "pull",
+        "rope",
+        "joint",
+        "door",
+        "lock",
+        "key",
+        "platform",
+        "elevator",
+        "breakable",
+        "debris",
+        "destructible",
+        "переноск",
+        "подня",
+        "брос",
+        "толка",
+        "тянут",
+        "верев",
+        "канат",
+        "двер",
+        "замок",
+        "ключ",
+        "платформ",
+        "лифт",
+        "разруш",
+        "обломк"
+      ]
     },
     {
       "id": "aiverse-play-scenarios",

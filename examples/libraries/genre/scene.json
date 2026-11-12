@@ -1,0 +1,47 @@
+{
+  "timePresets": [
+    {"id": 1, "domain": 1, "scale": [0, 1], "ticks": 6, "priority": 1000},
+    {"id": 2, "domain": 4, "scale": [1, 2], "ticks": 60, "priority": 500},
+    {"id": 3, "domain": 2, "scale": [1, 2], "ticks": 60, "priority": 100, "blend": "multiply"}
+  ],
+  "scenes": [
+    {
+      "id": 10, "version": 1, "trigger": 5001, "domain": 4, "length": 240, "skippable": true,
+      "checkpointBefore": true, "checkpointAfter": true,
+      "marks": [
+        {"id": 1, "position": [0, 0, 2000], "toleranceMilli": 500},
+        {"id": 2, "position": [3000, 0, 2000], "toleranceMilli": 750}
+      ],
+      "participants": [
+        {"id": 1, "mark": 1, "lockInput": true, "timeout": 120, "fallback": "teleport"},
+        {"id": 2, "mark": 2, "timeout": 90, "fallback": "proceed"}
+      ],
+      "cues": [
+        {"id": 1, "track": 1, "at": 0, "kind": "dialogue", "ref": 9001, "actor": 2, "duration": 50},
+        {"id": 2, "track": 2, "at": 0, "kind": "camera", "ref": 300},
+        {"id": 3, "track": 3, "at": 10, "kind": "animation", "ref": 40, "actor": 2, "duration": 45},
+        {"id": 4, "track": 4, "at": 20, "kind": "sound", "ref": 77},
+        {"id": 5, "track": 5, "at": 60, "kind": "event", "ref": 1},
+        {"id": 6, "track": 5, "at": 100, "kind": "timeScale", "ref": 2},
+        {"id": 7, "track": 1, "at": 130, "kind": "dialogue", "ref": 9002, "actor": 1, "duration": 15},
+        {"id": 8, "track": 6, "at": 200, "kind": "inputRelease", "actor": 1}
+      ],
+      "syncs": [
+        {"id": 1, "at": 60, "timeout": 180, "checkpoint": true, "wait": [
+          {"kind": "lineFinished", "cue": 1},
+          {"kind": "marker", "cue": 3, "marker": 7},
+          {"kind": "inPosition", "participants": [1]}
+        ]},
+        {"id": 2, "at": 150, "timeout": 120, "wait": [{"kind": "lineFinished", "cue": 7}]}
+      ],
+      "qtes": [
+        {"id": 1, "at": 120, "kind": "press", "button": 1, "open": 5, "close": 30, "perfect": [12, 18], "onFail": 1},
+        {"id": 2, "at": 180, "kind": "mash", "button": 2, "count": 8, "close": 60}
+      ]
+    },
+    {
+      "id": 11, "trigger": 5002, "domain": 0, "length": 30, "skippable": false,
+      "cues": [{"id": 1, "at": 0, "kind": "event", "ref": 2}]
+    }
+  ]
+}

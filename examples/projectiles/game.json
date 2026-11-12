@@ -1,0 +1,24 @@
+{
+  "name": "Projectile chains",
+  "id": "org.aiverse.projectile-chains",
+  "version": "1.0",
+  "module": "rts",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/demo.json",
+      "title": "Split, ricochet and penetration"
+    },
+    {
+      "file": "maps/ballistic.json",
+      "title": "Ballistic branches"
+    },
+    {
+      "file": "maps/planet.json",
+      "title": "Planet surface chains"
+    }
+  ],
+  "lighting": {
+    "time": 0.35
+  }
+}
