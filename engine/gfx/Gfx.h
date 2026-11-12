@@ -211,6 +211,9 @@ public:
     virtual void setVertexBuffer(BufferHandle b, size_t offset = 0) = 0;
     virtual void setIndexBuffer(BufferHandle b, size_t offset = 0) = 0;
     virtual void setTexture(int slot, TextureHandle t) = 0;
+    // Larger blocks require explicit backend capability; portable minimum remains 4 KB.
+    virtual size_t maxUniformBytes() const { return 4096; }
+    virtual void setBindingCacheEnabled(bool enabled) { (void)enabled; }
     virtual void setUniforms(int slot, const void* data, size_t size) = 0;
     virtual void draw(uint32_t vertexCount, uint32_t firstVertex = 0) = 0;
     virtual void drawIndexed(uint32_t indexCount, uint32_t firstIndex = 0, int32_t baseVertex = 0, uint32_t instanceCount = 1) = 0;

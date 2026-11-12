@@ -1324,3 +1324,25 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
     add_executable(aiverse_geometry_bench tools/geometrybench/main.cpp)
     target_link_libraries(aiverse_geometry_bench PRIVATE aiverse_runtime aiverse_modeling)
 endif()
+
+option(AIVERSE_BUILD_AUTOLOD "Build offline meshoptimizer LOD tools" OFF)
+if(AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP)
+    add_library(aiverse_meshoptimizer_lod STATIC
+        third_party/meshoptimizer/src/allocator.cpp
+        third_party/meshoptimizer/src/indexgenerator.cpp
+        third_party/meshoptimizer/src/simplifier.cpp
+        third_party/meshoptimizer/src/vcacheoptimizer.cpp)
+    target_include_directories(aiverse_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
+    add_executable(aiverse_lod_simplify tools/models/lod_simplify.cpp)
+    target_link_libraries(aiverse_lod_simplify PRIVATE aiverse_meshoptimizer_lod)
+endif()
+
+if(TARGET aiverse_geometry_bench AND TARGET aiverse_meshoptimizer_lod)
+    target_link_libraries(aiverse_geometry_bench PRIVATE aiverse_meshoptimizer_lod)
+    target_compile_definitions(aiverse_geometry_bench PRIVATE AIVERSE_BENCH_AUTOLOD=1)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
+    add_executable(aiverse_instance_preview tests/geometry/instance_preview.cpp)
+    target_link_libraries(aiverse_instance_preview PRIVATE aiverse_runtime aiverse_modeling)
+endif()

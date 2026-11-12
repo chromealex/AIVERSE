@@ -1,6 +1,10 @@
 // External asset benchmark. Same source decomposition/camera/materials for both modes.
 #include "tools/modeling/SurfaceProxy.h"
 #include "engine/render/Renderer3D.h"
+#include "engine/render/GeometryScene.h"
+#ifdef AIVERSE_BENCH_AUTOLOD
+#include "AutoLod.h"
+#endif
 #include "engine/platform/Platform.h"
 #include <chrono>
 #include <filesystem>
@@ -17,14 +21,14 @@ static double ms(Clock::time_point a,Clock::time_point b){return std::chrono::du
 static bool read(const std::string& path,std::string& out){std::ifstream f(path,std::ios::binary);if(!f)return false;std::ostringstream s;s<<f.rdbuf();out=s.str();return true;}
 static Json number(double v){return Json::number(v,6);}
 static Json vector(float3 v){Json j=Json::array();for(float a:{v.x,v.y,v.z})j.push(number(a));return j;}
-struct Part{Model view;std::unique_ptr<Model> proxy;float3 lo,hi;uint64_t triangles=0;};
-static std::unique_ptr<Model> extract(const Model& source,int ni){
+struct Part{std::string proxyPath;std::unique_ptr<Model> compact;Model view;std::unique_ptr<Model> proxy;float3 lo,hi;uint64_t triangles=0,proxyTriangles=0;};
+static std::unique_ptr<Model> extract(const Model& source,int ni,bool pixels=true){
     auto m=std::make_unique<Model>();m->nodes.push_back(source.nodes[size_t(ni)]);m->nodes[0].parent=-1;m->nodes[0].children.clear();m->nodes[0].mesh=0;
     // Collapse ancestor transforms into this part's bind matrix after finalize.
     m->meshes.emplace_back();std::map<int,int> materials,images;std::map<uint32_t,uint32_t> vertices;
     for(auto p:source.meshes[size_t(source.nodes[size_t(ni)].mesh)].primitives){
         int mat=p.material;if(!materials.count(mat)){auto mt=source.materials[size_t(mat)];
-            for(int* id:{&mt.baseTex,&mt.normalTex,&mt.mrTex,&mt.occlusionTex,&mt.emissiveTex,&mt.teamTex})if(*id>=0){int old=*id;if(!images.count(old)){images[old]=int(m->images.size());m->images.push_back(source.images[size_t(old)]);}*id=images[old];}
+            for(int* id:{&mt.baseTex,&mt.normalTex,&mt.mrTex,&mt.occlusionTex,&mt.emissiveTex,&mt.teamTex})if(*id>=0){int old=*id;if(!images.count(old)){images[old]=int(m->images.size());if(pixels)m->images.push_back(source.images[size_t(old)]);else{Image image;image.name=source.images[size_t(old)].name;image.borrowedTexture=true;m->images.push_back(std::move(image));}}*id=images[old];}
             materials[mat]=int(m->materials.size());m->materials.push_back(mt);}
         uint32_t first=uint32_t(m->indices.size());
         for(uint32_t k=0;k<p.indexCount;++k){auto old=source.indices[p.firstIndex+k];if(!vertices.count(old)){vertices[old]=uint32_t(m->vertices.size());m->vertices.push_back(source.vertices[old]);}m->indices.push_back(vertices[old]);}
@@ -37,6 +41,19 @@ int aiverseMain(int argc,char** argv){try{
     const std::string sourcePath=argv[1],output=argv[3];const fs::path cache=argv[2];const bool batch=std::string(argv[4])=="batch";bool enabled=std::string(argv[4])=="on";int camera=std::stoi(argv[5]);const float threshold=argc>6?std::stof(argv[6]):96;
     if(camera<0||camera>2||!std::isfinite(threshold)||threshold<1||threshold>512)throw std::runtime_error("invalid camera/threshold");
     const bool keepMasked=argc>7&&std::string(argv[7])=="keep-masked";
+    const std::string profile=argc>8?argv[8]:"surface";
+    const bool stack=profile!="surface";
+    const bool useStatic=profile=="all"||profile=="static";
+    const bool useLod=profile=="lod"||useStatic;
+    const bool useHlod=profile=="hlod"||useStatic;
+    const bool useClusters=profile=="clusters"||profile=="all";
+    const bool useOcc=profile=="occlusion"||profile=="all";
+    const bool useShadows=profile=="shadows"||profile=="all";
+    const bool useSurfaces=profile=="surface"||useStatic;
+    if(profile!="surface"&&profile!="cache"&&profile!="instances"&&profile!="bindings"&&!useLod&&!useHlod&&!useClusters&&!useOcc&&!useShadows)throw std::runtime_error("unknown profile");
+#ifndef AIVERSE_BENCH_AUTOLOD
+    if(useLod)throw std::runtime_error("configure AIVERSE_BUILD_AUTOLOD for LOD profile");
+#endif
     fs::create_directories(cache);std::vector<std::string> warnings;
     auto start=Clock::now();auto source=loadModel(sourcePath,read,&warnings);std::cerr<<"Loaded "<<source->indices.size()/3<<" triangles; "<<source->nodes.size()<<" nodes, "<<warnings.size()<<" warnings\n";
     // Bistro README defines Specular as ORM and Normal as DirectX. Adapt both workloads identically.
@@ -65,8 +82,14 @@ int aiverseMain(int argc,char** argv){try{
             const auto file=cache/(std::to_string(ni)+".glb");
             try{if(!fs::exists(file)){auto local=extract(*source,ni);auto baked=modeling::bakeSurfaceProxy(*local,Json::parse(R"({"mode":"box","resolution":64})"));
                     std::ofstream out(file,std::ios::binary);out<<modeling::exportGlb(*baked.model);if(!out)throw std::runtime_error("cache write failed");}
-                part.proxy=loadModel(file.string(),read);++candidates;candidateTris+=part.triangles;bakedTris+=part.proxy->indices.size()/3;
+                part.proxyPath=file.string();part.proxy=loadModel(file.string(),read);part.proxyTriangles=part.proxy->indices.size()/3;++candidates;candidateTris+=part.triangles;bakedTris+=part.proxy->indices.size()/3;
             }catch(const std::exception& e){auto row=Json::object();row.set("node",Json::string(node.name));row.set("reason",Json::string(e.what()));skip.push(row);}
+        }
+        if(stack){part.compact=extract(*source,ni,false);
+#ifdef AIVERSE_BENCH_AUTOLOD
+            if(useLod)prepareBenchmarkLods(*part.compact);
+#endif
+            part.compact->bindWorld[0]=source->bindWorld[size_t(ni)];part.compact->boundsMin=part.lo;part.compact->boundsMax=part.hi;
         }
         parts.push_back(std::move(part));
     }
@@ -76,12 +99,34 @@ int aiverseMain(int argc,char** argv){try{
     const auto centre=(source->boundsMin+source->boundsMax)*.5f,extent=source->boundsMax-source->boundsMin;const float span=std::max(extent.x,extent.z);
     report.set("boundsMin",vector(source->boundsMin));report.set("boundsMax",vector(source->boundsMax));
     std::cerr<<"Prepared "<<parts.size()<<" parts, "<<candidates<<" proxies, bounds "<<vector(source->boundsMin).dump()<<" .. "<<vector(source->boundsMax).dump()<<"\n";
-    Renderer3D renderer;gfx::Device* device=nullptr;RTSCamera cam;cam.target=centre;cam.distance=span*(camera==2?1.8f:.85f);cam.yaw=camera==1?2.3f:.5f;cam.pitch=camera==2?.65f:.3f;cam.zFar=std::max(1000.f,span*5);cam.zNear=.1f;if(camera==1){cam.distance=span*1.3f;cam.pitch=.75f;}
+    GeometryScene scene;Renderer3D renderer;gfx::Device* device=nullptr;RTSCamera cam;cam.target=centre;cam.distance=span*(camera==2?1.8f:.85f);cam.yaw=camera==1?2.3f:.5f;cam.pitch=camera==2?.65f:.3f;cam.zFar=std::max(1000.f,span*5);cam.zNear=.1f;if(camera==1){cam.distance=span*1.3f;cam.pitch=.75f;}
     report.set("eye",vector(cam.eye()));report.set("target",vector(cam.target));report.set("fovY",number(cam.fovY));
-    constexpr int warmup=60,samples=120;int frame=0,phase=0;std::string reportPath=output;Json rows=Json::array();std::map<uint64_t,double> gpu;auto previous=Clock::now();bool captured=false;
+    const int warmup=argc>9?std::stoi(argv[9]):60,samples=argc>10?std::stoi(argv[10]):120;
+    if(warmup<30||warmup>10000||samples<120||samples>10000)throw std::runtime_error("invalid sampling budget");int frame=0,phase=0;std::string reportPath=output;Json rows=Json::array();std::map<uint64_t,double> gpu;auto previous=Clock::now();bool captured=false;
     platform::AppConfig cfg;cfg.title="AIVERSE Bistro geometry benchmark";cfg.width=1280;cfg.height=720;platform::AppCallbacks cb;
-    cb.init=[&](gfx::Device& dev){device=&dev;renderer.init(dev);renderer.setShadowQuality(ShadowQuality::Medium);renderer.lighting.fogDensity=0;uploadModel(dev,*source);
+    cb.init=[&](gfx::Device& dev){device=&dev;renderer.init(dev);renderer.setProfiling(true);renderer.setShadowQuality(ShadowQuality::Medium);renderer.lighting.fogDensity=0;uploadModel(dev,*source);
         for(auto& p:parts){p.view.vb=source->vb;p.view.ib=source->ib;for(auto& im:source->images){Image shared;shared.tex=im.tex;p.view.images.push_back(std::move(shared));}if(p.proxy)uploadModel(dev,*p.proxy);}
+        if(stack){
+            Json manifest=Json::parse(R"({"version":1,"hlod":{"enabled":true,"maxPixels":256,"errorPixels":1},"instances":[]})");
+            manifest.member("hlod").set("enabled",Json::fromBool(useHlod));
+            std::map<std::string,std::unique_ptr<Model>> prepared;
+            size_t index=0;
+            for(auto& p:parts){auto name="part"+std::to_string(index++)+".glb";auto row=Json::object();row.set("id",Json::string(name));row.set("model",Json::string(name));
+                auto policy=Json::object();policy.set("clusters",Json::fromBool(useClusters));policy.set("shadowClusters",Json::fromBool(useShadows));policy.set("occlusion",Json::fromBool(useOcc));policy.set("occluder",Json::fromBool(useOcc&&p.triangles<=1024));row.set("geometry",policy);
+                for(auto& image:p.compact->images)for(auto& original:source->images)if(image.name==original.name){image.tex=original.tex;break;}
+                if(useSurfaces&&!p.proxyPath.empty()){auto proxyName="proxy"+name;auto proxy=Json::object();proxy.set("model",Json::string(proxyName));proxy.set("maxPixels",number(threshold));row.set("proxy",proxy);prepared[proxyName]=loadModel(p.proxyPath,read);}
+                manifest.member("instances").push(row);prepared[name]=std::move(p.compact);
+            }
+            scene.loadPrepared(dev,manifest,std::move(prepared),8000000);
+            report.set("sourceVertexBudget",number(8000000));
+            report.set("preparedHlodProxies",number(scene.stats().proxies));
+        }
+        report.set("profile",Json::string(profile));report.set("uncapped",Json::fromBool(std::getenv("AIVERSE_BENCH_UNCAPPED")&&std::string(std::getenv("AIVERSE_BENCH_UNCAPPED"))=="1"));
+#if defined(__aarch64__) || defined(__arm64__)
+        report.set("architecture",Json::string("arm64"));
+#else
+        report.set("architecture",Json::string("x86_64"));
+#endif
         report.set("device",Json::string(dev.info().name));report.set("width",number(dev.framebufferWidth()));report.set("height",number(dev.framebufferHeight()));previous=Clock::now();};
     auto save=[&]{for(size_t i=0;i<rows.size();++i){auto& row=rows.at(i);auto f=uint64_t(row["frame"].toDouble());row.set("gpuMs",number(gpu.at(f)));}report.set("frames",rows);report.set("warmup",number(warmup));report.set("samples",number(samples));
         if(fs::exists(reportPath))throw std::runtime_error("refusing to overwrite report");std::ofstream f(reportPath);f<<report.dump(2)<<"\n";if(!f)throw std::runtime_error("report write failed");};
@@ -90,17 +135,22 @@ int aiverseMain(int argc,char** argv){try{
             reportPath=output+"-run"+std::to_string(phase/6+1)+"-cam"+std::to_string(camera)+(enabled?"-on.json":"-off.json");report.set("proxyEnabled",Json::fromBool(enabled));report.set("camera",number(camera));report.set("eye",vector(cam.eye()));report.set("target",vector(cam.target));}
         report.set("width",number(dev.framebufferWidth()));report.set("height",number(dev.framebufferHeight()));auto now=Clock::now();double wall=ms(previous,now);previous=now;for(auto t:dev.takeGpuTimings())if(t.valid)gpu[t.tag]=t.milliseconds;
         bool measured=frame>=warmup&&frame<warmup+samples;if(measured&&!dev.timeGpuFrame(uint64_t(frame)))throw std::runtime_error("GPU timing unavailable");
+        dev.setBindingCacheEnabled(enabled&&(profile=="bindings"||useStatic));
         auto begin=Clock::now();renderer.beginScene(cam,dev.framebufferWidth(),dev.framebufferHeight());uint64_t triangles=0;size_t selected=0;
-        for(auto& p:parts){bool use=enabled&&p.proxy&&geometryErrorPixels(renderer.viewProj(),p.lo,p.hi,length(p.hi-p.lo),renderer.sceneWidth(),renderer.sceneHeight())<=threshold;
-            ModelDraw d;d.model=use?p.proxy.get():&p.view;renderer.drawModel(d);
-            if(geometryBoxVisible(renderer.viewProj(),p.lo,p.hi)){triangles+=use?p.proxy->indices.size()/3:p.triangles;if(use)++selected;}}
+        if(stack){scene.setRuntimeOptions(enabled&&useHlod,enabled,enabled&&useSurfaces,enabled&&(profile=="cache"||useStatic));renderer.setModelLodEnabled(enabled&&useLod);renderer.setInstanceLimit(enabled&&(profile=="instances"||useStatic)?0:32);scene.draw(renderer);}
+        for(auto& p:parts){bool use=enabled&&useSurfaces&&p.proxy&&geometryErrorPixels(renderer.viewProj(),p.lo,p.hi,length(p.hi-p.lo),renderer.sceneWidth(),renderer.sceneHeight(),renderer.clipDepthZeroToOne())<=threshold;
+            ModelDraw d;d.model=use?p.proxy.get():&p.view;if(!stack)renderer.drawModel(d);
+            if(geometryBoxVisible(renderer.viewProj(),p.lo,p.hi)){triangles+=use?p.proxyTriangles:p.triangles;if(use)++selected;}}
         gfx::PassDesc pass;pass.clearColor[0]=.1f;pass.clearColor[1]=.14f;pass.clearColor[2]=.2f;renderer.render(pass);double encode=ms(begin,Clock::now());
-        if(measured){auto row=Json::object();row.set("frame",number(frame));row.set("cpuEncodeMs",number(encode));row.set("frameWallMs",number(wall));row.set("drawCalls",number(renderer.drawCalls()));row.set("visibleProxyParts",number(double(selected)));row.set("visibleInputTriangles",number(double(triangles)));rows.push(row);}
+        if(measured){auto row=Json::object();row.set("frame",number(frame));row.set("cpuEncodeMs",number(encode));row.set("frameWallMs",number(wall));row.set("drawCalls",number(renderer.drawCalls()));
+            const auto& prof=renderer.profile();row.set("submitMs",number(prof.submitMs));row.set("occlusionMs",number(prof.occlusionMs));row.set("cachedModels",number(prof.cachedModels));row.set("lodNodes",number(prof.lodNodes));row.set("sceneSubmitted",number(scene.stats().submitted));
+            for(int phase=0;phase<5;++phase){const auto key=std::to_string(phase);row.set("selectMs"+key,number(prof.selectMs[phase]));row.set("sortMs"+key,number(prof.sortMs[phase]));row.set("drawMs"+key,number(prof.drawMs[phase]));row.set("draws"+key,number(prof.draws[phase]));row.set("triangles"+key,number(prof.triangles[phase]));}
+            row.set("clustersTested",number(renderer.geometryStats().clustersTested));row.set("occluded",number(renderer.geometryStats().occluded));row.set("visibleProxyParts",number(double(selected)));row.set("visibleInputTriangles",number(stack?-1.0:double(triangles)));rows.push(row);}
         if(frame==warmup+samples+2)dev.captureNextFrame([&,capturePath=reportPath+".ppm"](int w,int h,std::vector<uint8_t> rgba){std::ofstream f(capturePath,std::ios::binary);f<<"P6\n"<<w<<" "<<h<<"\n255\n";for(size_t i=0;i<rgba.size();i+=4)f.write(reinterpret_cast<const char*>(&rgba[i]),3);captured=bool(f);});
-        if(++frame>warmup+samples+20){if(gpu.size()!=samples||!captured)throw std::runtime_error("incomplete GPU samples/capture");save();std::cerr<<"Finished "<<reportPath<<"\n";
+        if(++frame>warmup+samples+20){if(gpu.size()!=size_t(samples)||!captured)throw std::runtime_error("incomplete GPU samples/capture");save();std::cerr<<"Finished "<<reportPath<<"\n";
             if(batch&&++phase<18){frame=0;gpu.clear();rows=Json::array();captured=false;}else platform::requestQuit();}
     };
     cb.shutdown=[&]{
-        for(auto& p:parts)if(p.proxy)releaseModel(*device,*p.proxy);releaseModel(*device,*source);renderer.shutdown();};
+        scene.shutdown(*device);for(auto& p:parts)if(p.proxy)releaseModel(*device,*p.proxy);releaseModel(*device,*source);renderer.shutdown();};
     return platform::run(cfg,cb);
 }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}}

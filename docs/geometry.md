@@ -197,3 +197,8 @@ The 1280-triangle log wall became 4 plane triangles or 12 box triangles. Normal 
 the opening survived; oblique projection and silhouette differences remain visible up close.
 These are asset/visual results, not measured frame-time gains. MinGW syntax checks of changed
 C++ sources passed with -Wall -Wextra. Windows execution, OpenGL, Android and WebGL were not run.
+
+## Profiling, static caches and shadow detail
+
+See [Geometry performance controls](geometry-performance.md) for the opt-in shadow cluster
+policy, immutable scene caches, offline mesh LODs, larger Metal instance batches and paired tests.

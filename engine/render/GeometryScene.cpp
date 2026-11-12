@@ -17,21 +17,39 @@ bool sameUntextured(const Material& a,const Material& b){
     auto plain=[](const Material& m){return !m.shaderGraph&&m.baseTex<0&&m.mrTex<0&&m.normalTex<0&&m.occlusionTex<0&&m.emissiveTex<0&&m.teamTex<0;};
     return plain(a)&&plain(b)&&key(a)==key(b);
 }
+bool sameBoundMaterial(Material a,Material b,const std::vector<Image>& images){
+    const int ai[]={a.baseTex,a.mrTex,a.normalTex,a.occlusionTex,a.emissiveTex,a.teamTex};
+    const int bi[]={b.baseTex,b.mrTex,b.normalTex,b.occlusionTex,b.emissiveTex,b.teamTex};
+    for(int k=0;k<6;++k){if((ai[k]<0)!=(bi[k]<0))return false;if(ai[k]>=0){const auto x=images[size_t(ai[k])].tex,y=images[size_t(bi[k])].tex;if(!x.valid()||!(x==y))return false;}}
+    a.baseTex=a.mrTex=a.normalTex=a.occlusionTex=a.emissiveTex=a.teamTex=-1;
+    b.baseTex=b.mrTex=b.normalTex=b.occlusionTex=b.emissiveTex=b.teamTex=-1;
+    return sameUntextured(a,b);
+}
 float scaleBound(const mat4& m){float sum=0;for(int r=0;r<3;++r)for(int c=0;c<3;++c)sum+=m.at(r,c)*m.at(r,c);return std::sqrt(sum);}
 }
-void GeometryScene::shutdown(gfx::Device& dev){for(auto& g:groups_)if(g.proxy)releaseModel(dev,*g.proxy);for(auto& [k,m]:models_)releaseModel(dev,*m);models_.clear();instances_.clear();groups_.clear();warnings_.clear();stats_={};proxyVertices_=0;}
-void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& read){
-    validate(json);shutdown(dev);
+void GeometryScene::shutdown(gfx::Device& dev){for(auto& g:groups_)if(g.proxy)releaseModel(dev,*g.proxy);for(auto& [k,m]:models_)if(m)releaseModel(dev,*m);models_.clear();instances_.clear();groups_.clear();warnings_.clear();stats_={};proxyVertices_=0;}
+void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& read){loadImpl(dev,json,read,{},2000000);}
+void GeometryScene::loadPrepared(gfx::Device& dev,const Json& json,std::map<std::string,std::unique_ptr<Model>> models,size_t vertexBudget){if(!vertexBudget||vertexBudget>16000000)throw std::runtime_error("geometry scene: prepared vertex budget must be 1..16000000");loadImpl(dev,json,{},std::move(models),vertexBudget);}
+void GeometryScene::loadImpl(gfx::Device& dev,const Json& json,const FileReader& read,std::map<std::string,std::unique_ptr<Model>> models,size_t vertexBudget){
+    validate(json);shutdown(dev);models_=std::move(models);geometryEnabled_=surfacesEnabled_=cacheEnabled_=true;
     hlod_=json["hlod"].getBool("enabled");errorPixels_=float(json["hlod"]["errorPixels"].toDouble(2));maxPixels_=float(json["hlod"]["maxPixels"].toDouble(256));
     try{
         size_t vertices=0;
+        for(const auto& [name,m]:models_){
+            if(!m||m->vertices.empty()||m->indices.empty()||!m->skins.empty()||!m->clips.empty())throw std::runtime_error("geometry scene: prepared models must be nonempty rigid CPU meshes");
+            if(m->vb.valid()||m->ib.valid())throw std::runtime_error("geometry scene: prepared geometry must not be uploaded");
+            for(const auto& mesh:m->meshes)for(const auto& p:mesh.primitives)if(p.morphTargets)throw std::runtime_error("geometry scene: morph source unsupported");
+            vertices+=m->vertices.size();
+        }
+        if(vertices>vertexBudget)throw std::runtime_error("geometry scene: exceeds source vertex budget");
         for(auto& i:json["instances"].items()){
             const auto file=i.getStr("model");
             if(!models_.count(file)){
+                if(!read)throw std::runtime_error("geometry scene: missing prepared source "+file);
                 auto m=loadModel(file,read,&warnings_);
                 if(!m->skins.empty()||!m->clips.empty())throw std::runtime_error("geometry scene: animated model '"+file+"' must use ordinary entities");
                 for(auto& mesh:m->meshes)for(auto& p:mesh.primitives)if(p.morphTargets)throw std::runtime_error("geometry scene: morph model must use ordinary entities");
-                vertices+=m->vertices.size();if(vertices>2000000)throw std::runtime_error("geometry scene: exceeds 2 million source vertices");
+                vertices+=m->vertices.size();if(vertices>vertexBudget)throw std::runtime_error("geometry scene: exceeds source vertex budget");
                 if(m->vertices.empty()||m->indices.empty())throw std::runtime_error("geometry scene: source has no triangles: "+file);
                 models_[file]=std::move(m);
             }
@@ -41,8 +59,9 @@ void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& rea
             if(i.has("proxy")){
                 const auto proxyFile=i["proxy"].getStr("model");
                 if(!models_.count(proxyFile)){
+                    if(!read)throw std::runtime_error("geometry scene: missing prepared proxy "+proxyFile);
                     auto proxy=loadModel(proxyFile,read,&warnings_);
-                    vertices+=proxy->vertices.size();if(vertices>2000000)throw std::runtime_error("geometry scene: exceeds 2 million source vertices");
+                    vertices+=proxy->vertices.size();if(vertices>vertexBudget)throw std::runtime_error("geometry scene: exceeds source vertex budget");
                     if(proxy->vertices.empty()||proxy->indices.empty()||!proxy->skins.empty()||!proxy->clips.empty())throw std::runtime_error("geometry scene: proxy must be a nonempty rigid model");
                     for(auto& mesh:proxy->meshes)for(auto& p:mesh.primitives)if(p.morphTargets)throw std::runtime_error("geometry scene: morph proxy unsupported");
                     models_[proxyFile]=std::move(proxy);
@@ -52,9 +71,16 @@ void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& rea
             }
             instances_.push_back(in);
         }
-        for(auto& [file,m]:models_)if(hlod_||std::any_of(instances_.begin(),instances_.end(),[&](const Instance& i){return i.model==m.get()&&(i.policy.clusters||i.policy.occluder);}))prepareGeometry(*m);
+        for(auto& [file,m]:models_)if(hlod_||std::any_of(instances_.begin(),instances_.end(),[&](const Instance& i){return i.model==m.get()&&(i.policy.clusters||i.policy.shadowClusters||i.policy.occluder);}))prepareGeometry(*m);
         if(hlod_&&!instances_.empty()){std::vector<size_t> ids(instances_.size());std::iota(ids.begin(),ids.end(),0);buildGroup(dev,std::move(ids));}
         for(auto& [k,m]:models_)if(!uploadModel(dev,*m)||!m->vb.valid()||!m->ib.valid())throw std::runtime_error("geometry scene: source GPU upload failed");
+        for(auto& in:instances_){
+            in.cache.prepare(*in.model,in.world);
+            if(in.surfaceProxy)in.proxyCache.prepare(*in.surfaceProxy,in.world);
+            in.min={1e30f,1e30f,1e30f};in.max={-1e30f,-1e30f,-1e30f};
+            for(int c=0;c<8;++c){auto a=in.model->boundsMin,b=in.model->boundsMax;auto p=in.world.transformPoint({c&1?b.x:a.x,c&2?b.y:a.y,c&4?b.z:a.z});in.min=min3(in.min,p);in.max=max3(in.max,p);}
+        }
+        for(auto& g:groups_)if(g.proxy)g.cache.prepare(*g.proxy,mat4{});
         stats_.instances=uint32_t(instances_.size());stats_.groups=uint32_t(groups_.size());
     }catch(...){shutdown(dev);throw;}
 }
@@ -75,10 +101,9 @@ std::unique_ptr<Model> GeometryScene::makeProxy(const std::vector<size_t>& ids,f
             for(const auto& p:m.meshes[size_t(nd.mesh)].primitives){
                 const auto key=std::make_pair(&m,p.material);
                 if(!materials.count(key)){auto mat=m.materials[size_t(p.material)];int index=-1;
-                    for(size_t k=0;k<out->materials.size();++k)if(sameUntextured(mat,out->materials[k])){index=int(k);break;}
-                    if(index<0){index=int(out->materials.size());
-                        for(auto field:{&mat.baseTex,&mat.mrTex,&mat.normalTex,&mat.occlusionTex,&mat.emissiveTex,&mat.teamTex})if(*field>=0)*field+=images[&m];
-                        out->materials.push_back(mat);}
+                    for(auto field:{&mat.baseTex,&mat.mrTex,&mat.normalTex,&mat.occlusionTex,&mat.emissiveTex,&mat.teamTex})if(*field>=0)*field+=images[&m];
+                    for(size_t k=0;k<out->materials.size();++k)if(sameBoundMaterial(mat,out->materials[k],out->images)){index=int(k);break;}
+                    if(index<0){index=int(out->materials.size());out->materials.push_back(mat);}
                     materials[key]=index;}
                 // Build temporary per-material index lists after all transforms below.
                 const int material=materials[key];
@@ -125,19 +150,18 @@ int GeometryScene::buildGroup(gfx::Device& dev,std::vector<size_t> ids){
 void GeometryScene::drawGroup(Renderer3D& r,int index){auto& g=groups_[size_t(index)];
     // Retain offscreen source draws so their shadows/reflections remain available.
     const float extent=length(g.max-g.min);
-    const bool far=geometryErrorPixels(r.viewProj(),g.min,g.max,extent,r.sceneWidth(),r.sceneHeight())<=maxPixels_;
-    if(g.proxy&&far&&geometryErrorPixels(r.viewProj(),g.min,g.max,g.error,r.sceneWidth(),r.sceneHeight())<=errorPixels_){ModelDraw d;d.model=g.proxy.get();d.geometry.occlusion=g.occlusion;r.drawModel(d);++stats_.submitted;return;}
+    const bool far=geometryErrorPixels(r.viewProj(),g.min,g.max,extent,r.sceneWidth(),r.sceneHeight(),r.clipDepthZeroToOne())<=maxPixels_;
+    if(g.proxy&&far&&geometryErrorPixels(r.viewProj(),g.min,g.max,g.error,r.sceneWidth(),r.sceneHeight(),r.clipDepthZeroToOne())<=errorPixels_){ModelDraw d;d.model=g.proxy.get();d.staticCache=cacheEnabled_?&g.cache:nullptr;d.geometry.occlusion=geometryEnabled_&&g.occlusion;r.drawModel(d);++stats_.submitted;return;}
     if(g.left>=0){drawGroup(r,g.left);drawGroup(r,g.right);return;}
     for(auto id:g.instances)drawInstance(r,instances_[id]);
 }
 void GeometryScene::draw(Renderer3D& r){stats_.submitted=0;stats_.surfaceProxiesSubmitted=0;if(hlod_&&!groups_.empty())drawGroup(r,0);else for(auto& i:instances_)drawInstance(r,i);}
 void GeometryScene::drawInstance(Renderer3D& r,const Instance& i){
-    ModelDraw d;d.model=i.model;d.world=i.world;d.geometry=i.policy;
-    if(i.surfaceProxy){
-        float3 mn{1e30f,1e30f,1e30f},mx{-1e30f,-1e30f,-1e30f};
-        for(int c=0;c<8;++c){auto a=i.model->boundsMin,b=i.model->boundsMax;auto p=i.world.transformPoint({c&1?b.x:a.x,c&2?b.y:a.y,c&4?b.z:a.z});mn=min3(mn,p);mx=max3(mx,p);}
-        if(geometryErrorPixels(r.viewProj(),mn,mx,length(mx-mn),r.sceneWidth(),r.sceneHeight())<=i.proxyPixels){
-            ++stats_.surfaceProxiesSubmitted;d.model=i.surfaceProxy;d.geometry.clusters=false;d.geometry.occluder=false;
+    ModelDraw d;d.model=i.model;d.world=i.world;d.geometry=geometryEnabled_?i.policy:GeometryPolicy{};d.staticCache=cacheEnabled_?&i.cache:nullptr;
+    if(i.surfaceProxy&&surfacesEnabled_){
+        const auto mn=i.min,mx=i.max;
+        if(geometryErrorPixels(r.viewProj(),mn,mx,length(mx-mn),r.sceneWidth(),r.sceneHeight(),r.clipDepthZeroToOne())<=i.proxyPixels){
+            ++stats_.surfaceProxiesSubmitted;d.model=i.surfaceProxy;d.staticCache=cacheEnabled_?&i.proxyCache:nullptr;d.geometry.clusters=false;d.geometry.shadowClusters=false;d.geometry.occluder=false;
         }
     }
     r.drawModel(d);++stats_.submitted;

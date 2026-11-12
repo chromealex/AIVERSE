@@ -73,6 +73,7 @@ void Renderer3D::renderSpotShadow() {
     // decides what may cast — good enough for the area around the camera)
     const mat4 savedLVP = lightViewProj_;
     lightViewProj_ = lights.spotShadowMatrix();
+    geometryShadowSize_=lights.spotShadowSize();
     dev_->beginPass(lights.spotShadowPass());
     dev_->setViewport({0, 0, lights.spotShadowSize(), lights.spotShadowSize()});
     dev_->setPipeline(shadowPipe_);
@@ -90,6 +91,7 @@ void Renderer3D::renderSpotShadow() {
     renderModels(0);
     dev_->endPass();
     lightViewProj_ = savedLVP;
+    geometryShadowSize_=shadowSize_;
 }
 
 } // namespace aiverse::render

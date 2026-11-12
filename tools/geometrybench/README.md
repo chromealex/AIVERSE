@@ -1,4 +1,4 @@
-# Bistro surface-proxy experiment
+# Bistro geometry experiments
 
 External asset: Amazon Lumberyard Bistro v5.2, NVIDIA ORCA, CC BY 4.0.
 Source: https://developer.nvidia.com/orca/amazon-lumberyard-bistro
@@ -15,15 +15,16 @@ python3 tools/geometrybench/analyze.py /path/results
 Create the results directory first. `batch` runs 3 paired repeats across 3 cameras,
 60 warm-up + 120 measured frames per phase. Pair order reverses in repeat 2. All phases
 share one process and preloaded GPU resources. Individual `off|on` mode also accepts a
-camera index 0..2. Last parameters: maximum projected size and optional `keep-masked`.
+camera index 0..2. Following parameters: maximum projected size, `keep-masked`, optional
+profile, warmup count and sample count (see the performance controls linked below).
 The 96-pixel setting without keep-masked is an intentionally aggressive diagnostic.
 Reports refuse overwrite. Use a new cache when source, material adapter or bake code changes.
 Archive source/binary hashes alongside reports: the tool itself does not validate cache freshness.
 
 Source FBX is loaded with the production loader. Both variants use the SAME decomposition
 into source nodes, transforms, frustum culling, material settings, medium shadows and
-1280x720 framebuffer. This experiment does not enable automatic HLOD, cluster simplification,
-or the separate Sponza branch's meshoptimizer LODs. It isolates baked-surface substitution.
+1280x720 framebuffer. The default `surface` profile does not enable automatic HLOD, cluster
+simplification or meshoptimizer LODs. It isolates baked-surface substitution.
 The scene remains resident: no world streaming, simulation, GI, TAA or crowds are measured.
 
 Per Bistro's README, `_Specular` maps are connected as ORM and DirectX normal-map green
@@ -42,7 +43,7 @@ GPU times come from asynchronous completed Metal command-buffer timestamps; unsu
 backends report failure, not invented values. The optional RHI timing API was reused from
 codex/sponza-full. `cpuEncodeMs` measures renderer submission/encoding, `frameWallMs` includes
 platform/queue/presentation pacing. Their reciprocals are NOT uncapped FPS. Capture occurs
-after all measured samples, with no screenshot readback inside a sample. All 120 GPU
+after all measured samples, with no screenshot readback inside a sample. All requested GPU
 samples and a completed screenshot are required before writing each report.
 
 `visibleInputTriangles` is a CPU estimate of main-view input triangles after per-part frustum
@@ -56,3 +57,7 @@ The analyzer accepts an optional repeat count: `analyze.py /path/combined 6`. To
 two batches, copy the second batch reports as runs 4..6 while retaining originals separately.
 Inspect individual run medians and p95, not just the aggregate median: the recorded Bistro
 experiment reproduced late-session regressions in both fresh processes.
+
+Additional prepared-scene A/B profiles and renderer counters are documented in
+[geometry performance controls](../../docs/geometry-performance.md). Use a native target build
+(e.g. `-DCMAKE_OSX_ARCHITECTURES=arm64`) and record architecture alongside results.

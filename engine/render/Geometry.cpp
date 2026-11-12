@@ -12,12 +12,13 @@ GeometryPolicy parseGeometryPolicy(const Json& j) {
     if (j.isNull()) return p;
     if (!j.isObject()) throw std::runtime_error("geometry: expected an object");
     for (auto& [k, v] : j.members()) {
-        if (k == "errorPixels") {
+        if (k == "errorPixels" || k == "shadowErrorPixels") {
             if (!v.isNumber() || !std::isfinite(v.toDouble()) || v.toDouble() < .1 || v.toDouble() > 16)
-                throw std::runtime_error("geometry.errorPixels: expected 0.1..16");
-            p.errorPixels = float(v.toDouble());
-        } else if (k == "clusters" || k == "occlusion" || k == "occluder") {
+                throw std::runtime_error("geometry."+k+": expected 0.1..16");
+            if(k=="errorPixels")p.errorPixels = float(v.toDouble());else p.shadowErrorPixels=float(v.toDouble());
+        } else if (k == "clusters" || k == "occlusion" || k == "occluder" || k == "shadowClusters") {
             if (v.type() != Json::Type::Bool) throw std::runtime_error("geometry." + k + ": expected boolean");
+            if (k == "shadowClusters") p.shadowClusters = v.boolean();
             if (k == "clusters") p.clusters = v.boolean();
             if (k == "occlusion") p.occlusion = v.boolean();
             if (k == "occluder") p.occluder = v.boolean();
@@ -123,10 +124,10 @@ bool geometryBoxVisible(const mat4& clip,float3 mn,float3 mx) {
     for(int n:out)if(n==8)return false;
     return true;
 }
-float geometryErrorPixels(const mat4& clip,float3 mn,float3 mx,float error,int width,int height) {
+float geometryErrorPixels(const mat4& clip,float3 mn,float3 mx,float error,int width,int height,bool zeroToOne) {
     float w=1e30f,x=0,y=0;
     for(int c=0;c<8;++c){auto p=clip*float4{c&1?mx.x:mn.x,c&2?mx.y:mn.y,c&4?mx.z:mn.z,1};
-        if(!finite(p)||p.w<=0||p.z < 0)return 1e30f;
+        if(!finite(p)||p.w<=0||p.z < (zeroToOne?0:-p.w))return 1e30f;
         w=std::min(w,p.w);x=std::max(x,std::fabs(p.x));y=std::max(y,std::fabs(p.y));}
     auto norm=[&](int r){return length({clip.at(r,0),clip.at(r,1),clip.at(r,2)});};
     const float dw=norm(3)*error;

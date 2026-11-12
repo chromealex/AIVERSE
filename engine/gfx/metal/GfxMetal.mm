@@ -418,6 +418,7 @@ public:
         deliverBufferReads();
         deliverCapture(); // the previous frame's GPU work is done here
         ++frame_;
+        uniformPage_=uniformOffset_=0;
         layer_.drawableSize = CGSizeMake(w, h);
         drawable_ = [layer_ nextDrawable];
         if (!depth_ || int(depth_.width) != w || int(depth_.height) != h) {
@@ -487,7 +488,15 @@ public:
         drawable_ = nil;
     }
 
+    bool bindingCacheEnabled_=true;
+    id<MTLTexture> boundTextures_[32]={};
+    id<MTLSamplerState> boundSamplers_[16]={};
+    id<MTLBuffer> boundVertexBuffer_=nil;
+    size_t boundVertexOffset_=0;
+    void clearBindings(){for(auto& t:boundTextures_)t=nil;for(auto& s:boundSamplers_)s=nil;boundVertexBuffer_=nil;}
+    void setBindingCacheEnabled(bool enabled) override {if(enabled!=bindingCacheEnabled_){bindingCacheEnabled_=enabled;clearBindings();}}
     void beginPass(const PassDesc& d) override {
+        clearBindings();
         if (!cmd_) return;
         MTLRenderPassDescriptor* rp = [MTLRenderPassDescriptor renderPassDescriptor];
         const bool offscreen = d.colorTarget.valid() || d.depthTarget.valid();
@@ -552,12 +561,16 @@ public:
     }
     void setVertexBuffer(BufferHandle h, size_t offset) override {
         auto* b = buffers_.get(h.id);
-        if (enc_ && b) [enc_ setVertexBuffer:current(*b) offset:offset atIndex:0];
+        if(enc_&&b){auto buffer=current(*b);if(bindingCacheEnabled_&&boundVertexBuffer_==buffer&&boundVertexOffset_==offset)return;
+            [enc_ setVertexBuffer:buffer offset:offset atIndex:0];if(bindingCacheEnabled_){boundVertexBuffer_=buffer;boundVertexOffset_=offset;}}
     }
     void setIndexBuffer(BufferHandle h, size_t offset) override { ibId_ = h.id; ibOffset_ = offset; }
     void setTexture(int slot, TextureHandle h) override {
         auto* t = textures_.get(h.id);
         if (!enc_ || !t) return;
+        if(bindingCacheEnabled_&&slot>=0&&slot<32&&boundTextures_[slot]==t->tex&&(slot>=16||boundSamplers_[slot]==t->sampler))return;
+        if(bindingCacheEnabled_&&slot>=0&&slot<32)boundTextures_[slot]=t->tex;
+        if(bindingCacheEnabled_&&slot>=0&&slot<16)boundSamplers_[slot]=t->sampler;
         [enc_ setFragmentTexture:t->tex atIndex:NSUInteger(slot)];
         [enc_ setVertexTexture:t->tex atIndex:NSUInteger(slot)];   // bone / morph data textures are read in the vertex stage
         if (slot < 16) {   // sampler slots 0..15 per stage; shaders use constexpr samplers above that
@@ -565,8 +578,27 @@ public:
             [enc_ setVertexSamplerState:t->sampler atIndex:NSUInteger(slot)];
         }
     }
+    size_t maxUniformBytes() const override { return 32768; }
+    struct UniformPage { id<MTLBuffer> buffer; };
+    std::vector<UniformPage> uniformPages_[kFramesInFlight];
+    size_t uniformPage_=0, uniformOffset_=0;
     void setUniforms(int slot, const void* data, size_t size) override {
         if (!enc_) return;
+        if(size>4096) {
+            if(size>maxUniformBytes()) { error_="uniform block exceeds device limit"; return; }
+            // Per-frame pages survive until this frame slot's GPU work has completed.
+            constexpr size_t capacity=1024*1024;
+            auto& pages=uniformPages_[frame_%kFramesInFlight];
+            if(uniformOffset_+size>capacity){++uniformPage_;uniformOffset_=0;}
+            if(uniformPage_>=pages.size())pages.push_back({[device_ newBufferWithLength:capacity options:MTLResourceStorageModeShared]});
+            auto buffer=pages[uniformPage_].buffer;
+            if(!buffer){error_="uniform allocation failed";gpuHealthy_->store(false);return;}
+            std::memcpy(static_cast<uint8_t*>(buffer.contents)+uniformOffset_,data,size);
+            [enc_ setVertexBuffer:buffer offset:uniformOffset_ atIndex:NSUInteger(1+slot)];
+            [enc_ setFragmentBuffer:buffer offset:uniformOffset_ atIndex:NSUInteger(1+slot)];
+            uniformOffset_=(uniformOffset_+size+255)&~size_t(255);
+            return;
+        }
         [enc_ setVertexBytes:data length:size atIndex:NSUInteger(1 + slot)];
         [enc_ setFragmentBytes:data length:size atIndex:NSUInteger(1 + slot)];
     }

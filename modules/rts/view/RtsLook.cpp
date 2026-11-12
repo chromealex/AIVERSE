@@ -306,7 +306,7 @@ Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::
     GeometryPolicy policy;
     try { policy = parseGeometryPolicy(t.view["geometry"]); }
     catch (const std::exception& e) { warn(t, e.what()); }
-    const std::string key = path + ((policy.clusters || policy.occluder) ? "#geometry" : "");
+    const std::string key = path + ((policy.clusters || policy.shadowClusters || policy.occluder) ? "#geometry" : "");
     auto it = models_.find(key);
     if (it == models_.end()) {
         std::unique_ptr<Model> m;
@@ -314,7 +314,7 @@ Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::
             std::vector<std::string> w;
             m = loadModel(path, read_, &w);
             for (auto& s : w) warn(t, s);
-            if (policy.clusters || policy.occluder) prepareGeometry(*m);
+            if (policy.clusters || policy.shadowClusters || policy.occluder) prepareGeometry(*m);
             uploadModel(dev, *m);
         } catch (const std::exception& e) {
             warn(t, e.what());

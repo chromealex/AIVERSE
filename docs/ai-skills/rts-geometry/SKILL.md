@@ -31,3 +31,15 @@ Inspect front/back/oblique/edge-on views, holes and shadows; low-resolution cove
 projection are approximations, not certified silhouette preservation. Use box for side views;
 plane requires a thin source. maxPixels is a size threshold, not an error guarantee.
 No automatic scene segmentation, general remeshing, parallax or texture-page streaming.
+
+For profiling and prepared static geometry, read `docs/geometry-performance.md`. Shadow
+clusters require explicit `shadowClusters` / `shadowErrorPixels` and light-space visual checks.
+Never use main-camera occlusion to remove shadow casters. StaticModelCache is valid only for
+immutable sources; rebuild on changes. Keep texture owners alive for borrowed image handles.
+Compare 32/default instance batches on repeated meshes, not only unique city parts. AutoLOD
+is offline meshoptimizer preparation; inspect per-pass counts and moving-camera transitions.
+A lower GPU median with worse tails or unchanged paced frame time is not a verified FPS win.
+Use the benchmark's `static` profile to compare LOD/HLOD/surfaces plus caches without cluster
+or occlusion traversal. In open overview scenes those traversals can add CPU work while removing
+almost nothing; choose them only after paired scene measurements. See
+`docs/benchmarks/bistro-geometry-stack-2026-11-12.md` for the measured limits.

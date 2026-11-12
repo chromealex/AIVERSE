@@ -173,6 +173,7 @@ std::string exportGlb(const Model &m) {
             prims.push(pj);
         }
         j.set("primitives", prims);
+        if(!mesh.lods.empty()) { auto levels=Json::array();for(auto lod:mesh.lods){auto level=Json::object();level.set("mesh",num(lod.mesh));level.set("maxPixels",Json::number(double(lod.maxPixels),8));levels.push(level);}auto extras=Json::object();extras.set("rtsLods",levels);j.set("extras",extras); }
         w.root.member("meshes").push(j);
     }
     for (auto &skin : m.skins) {

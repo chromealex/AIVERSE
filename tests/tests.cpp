@@ -12319,6 +12319,8 @@ namespace entityfxtest {
 class RecordingDevice final : public aiverse::gfx::Device {
 public:
     struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; bool colorWrite = true; };
+    size_t uniformLimit=4096;
+    size_t maxUniformBytes() const override { return uniformLimit; }
     std::vector<Draw> draws;
     std::vector<aiverse::gfx::PipelineDesc> pipes;
     const aiverse::gfx::DeviceInfo& info() const override { return info_; }

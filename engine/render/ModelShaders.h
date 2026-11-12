@@ -1,5 +1,5 @@
 // Model shaders (GLSL ES 3.00 + MSL), compiled as permutations: the renderer prepends
-//   #define AIVERSE_INST n    instances per draw (1, or 32 for instanced batches)
+//   #define AIVERSE_INST n    instances per draw (1, or the backend batch limit)
 //   #define SKINNED      GPU skinning from a joint palette in U3 (80 joints, 4 influences)
 //   #define BAKED        GPU skinning from baked clips: joint matrices in tex7, rows per instance
 //   #define MORPH        morph targets: deltas in tex8, weights in U4

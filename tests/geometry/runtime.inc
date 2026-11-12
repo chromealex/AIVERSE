@@ -112,3 +112,87 @@ TEST(geometry_surface_proxy_near_far_and_hlod) {
     CHECK(frame()==0);cam.distance=200;CHECK(frame()==1);cam.distance=8;CHECK(frame()==0);
     scene.shutdown(dev);renderer.shutdown();
 }
+
+TEST(geometry_static_cache_matches_and_rejects_stale_transform) {
+    using namespace render;entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);
+    auto model=geometrytest::grid(2);uploadModel(dev,model);StaticModelCache cache;cache.prepare(model,mat4{});
+    RTSCamera cam;cam.pitch=0;cam.distance=20;
+    auto frame=[&](const StaticModelCache* c,mat4 world){dev.draws.clear();r.beginScene(cam,800,600);ModelDraw d;d.model=&model;d.world=world;d.staticCache=c;r.drawModel(d);r.render(gfx::PassDesc{});return dev.draws;};
+    auto plain=frame(nullptr,mat4{}),cached=frame(&cache,mat4{});CHECK(plain.size()==cached.size());CHECK(!cached.empty());
+    if(!cached.empty())CHECK(plain[0].inst==cached[0].inst);
+    CHECK(r.profile().cachedModels==1);
+    auto moved=mat4::translate({1,0,0});plain=frame(nullptr,moved);cached=frame(&cache,moved);CHECK(r.profile().cachedModels==0);CHECK(plain.size()==cached.size());if(!cached.empty())CHECK(plain[0].inst==cached[0].inst);
+    releaseModel(dev,model);r.shutdown();
+}
+TEST(geometry_instancing_caps_and_preserves_every_instance) {
+    using namespace render;
+    for(size_t bytes:{size_t(4096),size_t(32768)}){
+        entityfxtest::RecordingDevice dev;dev.uniformLimit=bytes;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);CHECK(r.instanceLimit()==bytes/128);
+        auto m=geometrytest::grid(2);uploadModel(dev,m);RTSCamera cam;cam.pitch=0;cam.distance=20;r.beginScene(cam,800,600);
+        for(int i=0;i<513;++i){ModelDraw d;d.model=&m;d.flash=float(i)/1024;r.drawModel(d);}r.render(gfx::PassDesc{});
+        size_t total=0;for(const auto& draw:dev.draws){CHECK(draw.instances<=bytes/128);CHECK(draw.inst.size()*sizeof(float)<=bytes);for(size_t i=0;i<draw.instances;++i)CHECK(draw.inst[i*32+23]==float(total+i)/1024);total+=draw.instances;}
+        CHECK(total==513);CHECK(dev.draws.size()==(513+bytes/128-1)/(bytes/128));r.setInstanceLimit(32);CHECK(r.instanceLimit()==32);releaseModel(dev,m);r.shutdown();
+    }
+}
+TEST(geometry_shadow_policy_and_mesh_lod) {
+    using namespace render;auto policy=parseGeometryPolicy(Json::parse(R"({"shadowClusters":true,"shadowErrorPixels":2})"));CHECK(policy.shadowClusters&&policy.shadowErrorPixels==2);
+    bool bad=false;try{parseGeometryPolicy(Json::parse(R"({"shadowErrorPixels":-1})"));}catch(...){bad=true;}CHECK(bad);
+    entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);
+    auto m=geometrytest::grid(4);auto coarse=m.meshes[0];coarse.primitives[0].indexCount=6;m.meshes.push_back(coarse);m.meshes[0].lods.push_back({1,10000});m.finalize();uploadModel(dev,m);
+    RTSCamera cam;cam.pitch=0;cam.distance=100;
+    auto frame=[&](bool lod){r.setModelLodEnabled(lod);r.beginScene(cam,800,600);ModelDraw d;d.model=&m;r.drawModel(d);r.render(gfx::PassDesc{});return r.profile().triangles[1];};
+    CHECK(frame(false)==32);CHECK(frame(true)==2);CHECK(r.profile().lodNodes==1);releaseModel(dev,m);r.shutdown();
+}
+TEST(geometry_prepared_scene_owns_geometry_and_shared_materials) {
+    using namespace render;entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);
+    std::map<std::string,std::unique_ptr<Model>> models;
+    for(auto key:{"a.obj","b.obj"}){auto m=std::make_unique<Model>(geometrytest::grid(4));Image image;image.tex={9000};image.borrowedTexture=true;m->images.push_back(image);m->materials[0].baseTex=0;models[key]=std::move(m);}
+    auto json=Json::parse(R"({"version":1,"hlod":{"enabled":true,"maxPixels":256},"instances":[{"id":"a","model":"a.obj"},{"id":"b","model":"b.obj","position":[12,0,0]}]})");
+    GeometryScene scene;scene.loadPrepared(dev,json,std::move(models));CHECK(scene.stats().proxies==1);RTSCamera cam;cam.distance=500;cam.pitch=0;r.beginScene(cam,800,600);scene.draw(r);r.render(gfx::PassDesc{});CHECK(scene.stats().submitted==1);CHECK(r.profile().draws[1]==1);scene.shutdown(dev);r.shutdown();
+}
+
+TEST(geometry_shadow_clusters_use_light_resolution) {
+    using namespace render;entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Medium);
+    auto m=geometrytest::grid(32);prepareGeometry(m);uploadModel(dev,m);RTSCamera cam;cam.pitch=.8f;cam.distance=200;
+    auto frame=[&](bool coarse,bool mask){m.materials[0].alpha=mask?AlphaMode::Mask:AlphaMode::Opaque;r.beginScene(cam,800,600);ModelDraw d;d.model=&m;d.world=mat4::rotateX(-1.5707963f);d.geometry.shadowClusters=coarse;d.geometry.shadowErrorPixels=16;r.drawModel(d);r.render(gfx::PassDesc{});return r.profile();};
+    const auto fine=frame(false,false),coarse=frame(true,false),masked=frame(true,true);
+    CHECK(fine.triangles[0]>0);CHECK(coarse.triangles[0]<fine.triangles[0]);CHECK(coarse.triangles[1]==fine.triangles[1]);CHECK(masked.triangles[0]==fine.triangles[0]);
+    releaseModel(dev,m);r.shutdown();
+}
+TEST(geometry_offscreen_rigid_caster_is_retained) {
+    using namespace render;entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Medium);
+    auto m=geometrytest::grid(2);uploadModel(dev,m);RTSCamera cam;cam.pitch=.8f;cam.distance=20;r.beginScene(cam,800,600);
+    bool found=false;mat4 chosen;
+    for(int z=-100;z<=100&&!found;z+=4)for(int x=-100;x<=100&&!found;x+=4){auto xf=mat4::translate({float(x),0,float(z)})*mat4::rotateX(-1.5707963f)*mat4::scale({.1f,.1f,.1f});
+        const auto lo=m.boundsMin-float3{3,3,3},hi=m.boundsMax+float3{3,3,3};
+        if(!geometryBoxVisible(r.viewProj()*xf,lo,hi)&&geometryBoxVisible(r.lightViewProj()*xf,m.boundsMin,m.boundsMax)){found=true;chosen=xf;}}
+    CHECK(found);if(found){ModelDraw d;d.model=&m;d.world=chosen;d.geometry.occlusion=true;r.drawModel(d);r.render(gfx::PassDesc{});CHECK(r.profile().triangles[0]>0);CHECK(r.profile().triangles[1]==0);}
+    releaseModel(dev,m);r.shutdown();
+}
+
+#ifdef AIVERSE_TESTS_EDITOR_CORE
+#include "tools/modeling/Modeling.h"
+TEST(geometry_mesh_lod_glb_roundtrip_rejects_cycles) {
+    using namespace render;auto m=geometrytest::grid(4);m.meshes.push_back(m.meshes[0]);m.meshes[1].primitives[0].indexCount=6;m.meshes[0].lods.push_back({1,64});m.finalize();
+    auto bytes=modeling::exportGlb(m);auto loaded=loadModel("lod.glb",[&](const std::string&,std::string& out){out=bytes;return true;});
+    CHECK(loaded->meshes[0].lods.size()==1);CHECK(loaded->meshes[0].lods[0].mesh==1);CHECK(loaded->meshes[0].lods[0].maxPixels==64);
+    m.meshes[1].lods.push_back({0,32});bytes=modeling::exportGlb(m);bool rejected=false;try{loadModel("cycle.glb",[&](const std::string&,std::string& out){out=bytes;return true;});}catch(...){rejected=true;}CHECK(rejected);
+}
+#endif
+
+TEST(geometry_error_projection_respects_backend_near_plane) {
+    using namespace render;mat4 clip;
+    CHECK(geometryErrorPixels(clip,{-.1f,-.1f,-.5f},{.1f,.1f,-.4f},.01f,800,600,false)<100);
+    CHECK(geometryErrorPixels(clip,{-.1f,-.1f,-.5f},{.1f,.1f,-.4f},.01f,800,600,true)>1e20f);
+    CHECK(geometryErrorPixels(clip,{-.1f,-.1f,-1.5f},{.1f,.1f,-1.4f},.01f,800,600,false)>1e20f);
+}
+
+TEST(geometry_prepared_scene_rejects_null_source_and_recovers) {
+    using namespace render;entityfxtest::RecordingDevice dev;GeometryScene scene;
+    const auto json=Json::parse(R"({"version":1,"instances":[{"id":"a","model":"a.obj"}]})");
+    std::map<std::string,std::unique_ptr<Model>> models;models["a.obj"]=nullptr;
+    bool rejected=false;try{scene.loadPrepared(dev,json,std::move(models));}catch(...){rejected=true;}
+    CHECK(rejected);CHECK(scene.stats().instances==0);
+    models["a.obj"]=std::make_unique<Model>(geometrytest::grid(2));scene.loadPrepared(dev,json,std::move(models));
+    CHECK(scene.stats().instances==1);scene.shutdown(dev);
+}

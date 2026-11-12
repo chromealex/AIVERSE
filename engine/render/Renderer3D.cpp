@@ -141,8 +141,9 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
     modelItems_.clear(); jointData_.clear(); morphData_.clear();
-    geometryStats_ = {}; geometryMainView_ = true;
+    geometryStats_ = {}; profile_ = {}; geometryMainView_ = true;
     computeShadowMatrix(cam, aspect);
+    geometryShadowSize_=shadowSize_;
     lights.begin(cam, aspect);
 }
 
