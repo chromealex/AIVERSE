@@ -44,6 +44,7 @@ ALIASES = {
  'aiverse-cinematic-gameplay':'cinematic cutscene timeline qte slowmo hitstop timescale sync staging checkpoint катсцен ролик таймлайн замедлен синхрон постановк чекпоинт',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
+ 'aiverse-boss-encounters':'boss telegraph windup cone slam phase enrage adds rotation status stun burn slow mob wander hunt flee swarm босс телеграф замах конус фаз ярост призыв ротаци статус оглушен горен замедлен моб блужд охот бегств рой',
 }
 
 def generate():

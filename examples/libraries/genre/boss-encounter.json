@@ -1,0 +1,60 @@
+{
+  "ticksPerSecond": 20,
+  "statuses": [
+    {"id": 1, "kind": "stun", "duration": 20, "stacking": "reject", "anchor": "modelTop"},
+    {"id": 2, "kind": "burn", "duration": 60, "interval": 20, "damagePerTick": 8, "stacking": "independent", "maxStacks": 4},
+    {"id": 3, "kind": "slow", "duration": 40, "speedMilli": 600}
+  ],
+  "attacks": [
+    {"id": 1, "shape": "cone", "radiusMilli": 5000, "halfAngleMilli": 167, "windup": 40, "active": 1, "recovery": 46, "damage": 60, "statuses": [1]},
+    {"id": 2, "shape": "circle", "radiusMilli": 4000, "offsetMilli": [-1500, 2500], "windup": 37, "active": 1, "recovery": 60,
+     "damage": 80, "damageMin": 40, "falloff": true, "statuses": [3]},
+    {"id": 3, "shape": "circle", "radiusMilli": 4000, "offsetMilli": [1500, 2500], "windup": 37, "active": 1, "recovery": 60,
+     "damage": 80, "damageMin": 40, "falloff": true, "statuses": [3]},
+    {"id": 4, "shape": "circle", "anchor": "aim", "radiusMilli": 2500, "minRangeMilli": 7000, "maxRangeMilli": 15000,
+     "windup": 50, "active": 1, "recovery": 20, "damage": 70, "trackAim": true, "statuses": [2]},
+    {"id": 5, "shape": "line", "lengthMilli": 10000, "halfWidthMilli": 1000, "sweep": true, "windup": 30, "active": 10, "recovery": 20,
+     "damage": 90, "cooldown": 200},
+    {"id": 6, "shape": "ring", "radiusMilli": 8000, "innerMilli": 5000, "windup": 40, "active": 1, "recovery": 30, "damage": 70, "cooldown": 160},
+    {"id": 7, "shape": "cone", "radiusMilli": 1500, "halfAngleMilli": 250, "windup": 6, "active": 1, "recovery": 30, "damage": 15},
+    {"id": 8, "shape": "circle", "radiusMilli": 3000, "windup": 30, "active": 60, "interval": 10, "recovery": 10, "damage": 10,
+     "oncePerTarget": false, "cancelOnSourceDeath": false, "statuses": [2]}
+  ],
+  "bosses": [
+    {"id": 1, "archetype": 1,
+     "phases": [
+       {"id": 1, "globalCooldown": 20, "pattern": [
+         {"attack": 1, "maxRangeMilli": 3000},
+         {"attack": 2, "alternate": 3, "maxRangeMilli": 7000},
+         {"attack": 4, "maxRangeMilli": 15000}]},
+       {"id": 2, "hpBelowMilli": 660, "transitionTicks": 30, "damageMilli": 1100, "globalCooldown": 20,
+        "adds": [{"unit": 100, "count": 3, "maxAlive": 4, "every": 300}],
+        "pattern": [
+         {"attack": 1, "maxRangeMilli": 3000},
+         {"attack": 5, "minRangeMilli": 4000, "maxRangeMilli": 10000},
+         {"attack": 2, "alternate": 3, "maxRangeMilli": 7000},
+         {"attack": 4, "maxRangeMilli": 15000}]},
+       {"id": 3, "hpBelowMilli": 330, "transitionTicks": 30, "damageMilli": 1200, "speedMilli": 1200, "globalCooldown": 15,
+        "adds": [{"unit": 100, "count": 2, "maxAlive": 4, "every": 200}],
+        "pattern": [
+         {"attack": 6, "maxRangeMilli": 6000},
+         {"attack": 1, "maxRangeMilli": 3000},
+         {"attack": 5, "minRangeMilli": 4000, "maxRangeMilli": 10000},
+         {"attack": 2, "alternate": 3, "maxRangeMilli": 7000},
+         {"attack": 4, "maxRangeMilli": 15000}]}
+     ],
+     "enrage": {"afterTicks": 3000, "damageMilli": 1500, "cooldownMilli": 700}},
+    {"id": 2, "archetype": 2,
+     "phases": [{"id": 1, "mode": "weighted", "globalCooldown": 30, "pattern": [
+       {"attack": 1, "maxRangeMilli": 3000, "weight": 3}, {"attack": 8, "maxRangeMilli": 12000, "weight": 1}, {"attack": 4, "weight": 2}]}]},
+    {"id": 3, "archetype": 3,
+     "phases": [{"id": 1, "mode": "sequence", "globalCooldown": 25, "pattern": [{"attack": 5}, {"attack": 6}, {"attack": 4}]},
+                {"id": 2, "afterTicks": 1200, "mode": "sequence", "globalCooldown": 15, "pattern": [{"attack": 5}, {"attack": 4}]}]}
+  ],
+  "schedule": {"personal": true, "rotation": true, "archetypes": 3, "windows": [
+    {"id": 1, "start": 3600, "end": 4000, "breather": 400, "variants": [{"boss": 1}, {"boss": 2}, {"boss": 3}]},
+    {"id": 2, "start": 7200, "end": 7600, "breather": 400, "variants": [{"boss": 1}, {"boss": 2}, {"boss": 3}]},
+    {"id": 3, "start": 10800, "end": 11400, "breather": 0, "variants": [{"boss": 1}, {"boss": 2}, {"boss": 3}]}
+  ]},
+  "mob": {"aggroRangeMilli": 30000, "loseRangeMilli": 40000, "stopDistanceMilli": 1200, "wander": false}
+}

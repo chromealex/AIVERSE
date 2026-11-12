@@ -856,3 +856,107 @@ nextCommandSeq, bindings)` once before `stepScene`. Cues become due at `tick + d
 Sequences at or below the last accepted one are ignored, so re-feeding a report after a restore never starts a scene
 twice. Unknown cue IDs reach the runner and produce `TriggerIgnored`. `NarrativeCueQueue` is saved as record kind 76
 (within this package's 72..79).
+
+## Boss encounters (boss-encounters 0.1.0)
+
+Headers under `genre/`: `Telegraphs.h` (ground areas + telegraphed attacks), `StatusEffects.h`, `BossEncounter.h`,
+`BossSchedule.h`, `MobBehaviour.h`, `EncounterData.h` (JSON), `EncounterPersistence.h`, `TelegraphDecals.h`
+(presentation), `EncounterScenario.h` (headless reference fight). Target `AIVERSE::lib_boss_encounters` (depends on
+`combat-actions` for the yaw convention and `AttackPhase`); native OBJECT modules call
+`aiverse_native_use_libraries(target boss-encounters)`. Skill: `skills/aiverse-boss-encounters`. Tool:
+`aiverse_encounter validate|simulate <file>`. Built for the Drone Fall port (ME.BECS `DelayedAttackSystem`,
+`TelegraphSystem`, `BossAttackUtils`, `MobsHuntSystem`, `MobAvoidanceJob`, `BossRotationUtils`, personal boss
+requests); generic for any top-down action game.
+
+**Contract.** Every step is a pure decision on Fixed math and integer ticks: one call per object per strictly
+increasing tick (repeated/backwards ticks and invalid input return nullopt with the state untouched), targets and
+neighbours are processed in ascending id, RNG only through the passed `Random&`. The owner applies damage through
+its own health owner, applies statuses (this package's `StatusActorState` or the engine's), moves bodies, spawns
+bosses/adds and draws views. Presentation reads `TelegraphView` / `StatusViewEvent` and never writes back.
+
+**Areas** (`AreaDef` on the XZ plane, `Vec2{x,z}`, yaw in turns, 0 faces +Z, +X right). `areaHits(area, pose, p, r,
+reach)` tests a target circle; touching counts. Circle: `|p-o| <= R+r`. Ring: overlaps `inner..R` (a body inside
+the hole is safe unless it reaches the inner edge). Cone: apex inside the body, or within `R+r` and inside the half
+angle, or touching an edge segment (as Drone Fall's `AttackAreaGeometry.IntersectsCone`). Line: rectangle
+`0..length` forward and `±halfWidth`; `reach` shortens it for sweeps. `areaFalloffMilli` is 0 at the centre / apex /
+line start and 1000 at the edge (Ring 0).
+
+**Telegraphs.** `TelegraphDef`: area, anchor (`Source`: at the caster plus a caster-local `offset` [right, forward],
+e.g. a fist slam; `Aim`: at the aimed point clamped to `[minRange, maxRange]`, e.g. a thrown rock 7..15 m),
+`windup/active/recovery` ticks, `interval` (0: one strike at release; >0: burning ground strikes every interval),
+`sweep` (line charges: reach grows over the active window, hit once per target, `sweepReach` tells the owner how far
+to move the caster), `trackAim` (re-aim during windup; frozen at release), `falloff` from `damage` to `damageMin`,
+`oncePerTarget`, `friendlyFire` (team 0 = unaffiliated), `cancelOnSourceDeath` (windup / sweep only: a released area
+still resolves, as Drone Fall's circles), `cooldown` (read by the boss brain) and `statuses`. `beginTelegraph` freezes
+origin and yaw; `stepTelegraph` returns events `Started, Released, Strike, Ended, Cancelled`, the hits of this tick
+(target, damage, falloff, status ids) and a `TelegraphView` (`progressMilli` = windup fill, then 1000;
+`activeMilli`). The strike lands on the first active tick; a step that jumps over the active window still strikes
+once. `telegraphLocksMovement` holds the attack pose through windup and recovery (not during a sweep).
+
+**Statuses.** `StatusEffectDef{kind Slow|Root|Stun|Burn, duration, tickInterval, speedMilli, damagePerTick,
+stacking Independent|Refresh|Reject, maxStacks, anchor Ground|ModelTop}`. Defaults follow Drone Fall: burn
+independent (several fires at once), stun reject (no re-stun while stunned) with a ModelTop visual, slow refresh.
+Burn hits `ceil(duration/interval)` times, the first one interval after application, the last on expiry. Aggregate
+per tick: lowest slow, 0 when stunned or rooted, `stunned` blocks attacks. `setStatusImmunity` by kind mask or ids
+(bosses: stun/push immune, burn allowed). `applyStatus` returns Applied / Refreshed / Rejected / Immune / Invalid
+and a view event; `clearStatuses` ends all (death). `rtsStatusRules` writes the same definition as a `rules.json`
+status (+ the effect duration) for games on the RTS simulation, where the engine statuses stay authoritative.
+
+**Boss brain.** `BossDef{phases, enrage, archetype}`. Phase 0 starts the fight; phase i>0 starts when
+`hp <= hpBelowMilli/1000 * maxHp` or at `afterTicks` encounter age, entered in order even when HP skips several.
+Patterns: `ByRange` (first entry whose `[minRange,maxRange]` band holds the target distance — list the closer bands
+first, as cone <= 3 m / slam <= 7 m / rock <= 15 m), `Sequence` (cursor, waits for its entry), `Weighted` (one rng
+draw when two or more entries are ready). `alternate` swaps every second use (left/right fists) and shares the
+cooldown key. The owner reports `busy` while the attack runs; the attack's own cooldown and the phase's shared
+`globalCooldown` start when it ends (Drone Fall: full animation, then 1 s). `transitionTicks` pause attacks after a
+phase change. Multipliers (`damageMilli`, `speedMilli`, `cooldownMilli`) stack with enrage (`afterTicks` or
+`hpBelowMilli`); `bossDamage(step, damage)` scales a hit. Add waves (`unit, count, maxAlive, every, radii`) emit
+`SpawnAdds` on phase entry and every `every` ticks, capped by the living adds the owner reports.
+
+**Schedule.** `ScheduleDef{windows, personal, rotation, archetypes}`; a window `{start, end, breather, variants,
+excludePrevious, pauseWaves}`. When a window opens one variant is chosen for the whole map (weighted; rotation shows
+every archetype once before repeating and never the last one twice, as `BossRotationUtils`; persist `BossRotation`
+in the profile). Personal mode creates one request per participant (one success each, no respawn after an early
+kill), shared mode one request. `Pending` events repeat until `markBossSpawned`; requests not placed by `end` expire.
+`markBossDefeated` (kills only) starts the breather; `cancelBossRequests` (left / removed) is never a win.
+`ordinaryWavesAllowed` is false while an own boss is pending or alive (pauseWaves) and during the breather;
+`bossesDefeated` counts personal wins (trophies).
+
+**Mob behaviour.** `stepMob(config, state, tick, self, candidates, neighbours, rng, walkable)`. Order: leash return
+home (targets ignored until back), flee at `hpMilli <= fleeBelowMilli` from the nearest hostile within `fleeRange`
+until `fleeRecoverMilli`, the timer or no threat; hunt the committed target (attack in progress) > `priority` target
+(personal boss -> its hero) > current target within `loseRange` unless another is closer by `switchMargin` >
+nearest within `aggroRange` (ties by id); stop at `stopDistance`; `movementLocked` keeps the target with a zero
+direction. Otherwise wander: a point in the `[wanderMin, wanderMax]` ring around `anchor` that `walkable` accepts
+(up to `wanderAttempts`, two `rng.unit()` draws each), leg ends on arrival, overshoot or `wanderLegTicks`, then
+`wanderDelay`. Swarm pressure (`swarmCorrection`) is Drone Fall's crowd separation + look-ahead side-step: nearest
+`maxNeighbours`, spacing `(r1+r2)*spacingMilli`, coincident pairs split by id without RNG, correction capped at
+`correctionMilli` of the desired speed, final direction length <= 1. `MobDecision{mode, target, desired, goal,
+approach}`: steer with `desired`, or issue a flow-field / navmesh move to `goal`.
+
+**Data.** `readEncounterData` reads `{"ticksPerSecond", "statuses", "attacks", "bosses", "schedule", "mob"}` with
+integer milli units (`radiusMilli`, `halfAngleMilli` in milli-turns, `offsetMilli: [right, forward]`) and tick
+times; unknown keys, wrong shape keys, unknown status/attack/boss ids and inverted ranges fail with a path
+(`attack 1.halfAngleMilli: required for this shape`). Example: `examples/libraries/genre/boss-encounter.json` — a
+three-phase giant (cone + stun, alternating fist slams + slow with falloff, tracked rock + burn, sweeping charge,
+ring shockwave, add waves, enrage at 150 s), a weighted boss with burning ground and a sequence boss with a timed
+phase, three personal boss windows at 3:00 / 6:00 / 9:00 with rotation. Bind `encounterDataHash` in saves.
+
+**Views.** `telegraphDecal(view, groundY, own, colors)` returns x, y, z, rgba triangles: background shape plus a fill
+growing with `progressMilli` (circle / ring outward, cone from the apex, line from its start), own vs enemy colours
+as Drone Fall's `TelegraphColorConfig`. Feed them to `RtsGroundCanvas` (`ViewGroundBatch`) or a Lua
+`view.draw_ground` list. Status visuals: one view per `StatusViewEvent` serial (Started / Refreshed / Ended) at the
+Ground or ModelTop anchor.
+
+**State and checks.** Record kinds 112..119 (112 TelegraphInstance, 113 StatusActorState, 114 BossState,
+115 ScheduleState, 116 MobState, 117 BossRotation); `encounterHash` folds canonical bytes into checksums.
+`tests/libraries/encounter_tests.cpp` (`library_encounters`) covers boundary hit tests of every shape, strike ticks,
+late release, cancel, aim clamp/tracking, periodic and sweep strikes, stacking/immunity/burn timing, phase entry by
+HP and time, alternation, cooldowns from the attack end, transitions, enrage, add caps, weighted determinism, rotation
+order, personal requests / breathers / expiry, every mob mode and swarm splitting, data errors, save/load of every
+state and the reference fight. `aiverse_encounter simulate examples/libraries/genre/boss-encounter.json` runs
+it: with the default 4-tick reaction the hero beats the giant through all three phases (tick 1897, 15 dodged
+telegraphs); with `--reaction 100000` (no dodging) the hero dies — the telegraphs decide the fight.
+
+**Not covered.** Projectiles in flight (weapon-policies), knockback/push physics, navigation, loot and rewards,
+HUD banners, network authority, and wiring into RtsModule units (RTS games use the engine's statuses / areas).

@@ -1263,6 +1263,17 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_world)
     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${PROJECT_SOURCE_DIR})
 endif()
 
+# boss-encounters (telegraphs, statuses, boss brain, schedule, mob behaviour): tests + headless reference fight.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_library_encounter_tests tests/libraries/encounter_tests.cpp)
+    target_link_libraries(aiverse_library_encounter_tests PRIVATE AIVERSE::lib_boss_encounters)
+    add_test(NAME library_encounters COMMAND aiverse_library_encounter_tests ${PROJECT_SOURCE_DIR})
+endif()
+if(AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_encounter tools/libraries/encounter_main.cpp)
+    target_link_libraries(aiverse_encounter PRIVATE AIVERSE::lib_boss_encounters)
+endif()
+
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_shader_graph_tests tests/shader_graph/compiler.cpp)
     target_link_libraries(aiverse_shader_graph_tests PRIVATE aiverse_shader_graph aiverse_postfx_data aiverse_fx)
