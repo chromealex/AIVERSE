@@ -50,7 +50,7 @@ void Module::setupSystems(Simulation& sim,const Json& map,State& s) {
     for(const auto& j:map["vehicles"].items()) {
         auto speed=j.getFx("speed",15_fx);if(speed<1_fx||speed>50_fx)throw JsonError("fps vehicle.speed: expected 1..50");
         Vehicle v;v.id=s.nextObject++;v.pos=position(j["pos"]);v.speed=speed;
-        if(!collision_.query({v.pos-Vec3{1_fx,{},2_fx},v.pos+Vec3{1_fx,2_fx,2_fx}}).empty())throw JsonError("fps vehicle spawn intersects collision");
+        if(collision_.blocked({v.pos-Vec3{1_fx,{},2_fx},v.pos+Vec3{1_fx,2_fx,2_fx}}))throw JsonError("fps vehicle spawn intersects collision");
         s.vehicles.push_back(v);
     }
     s.match.start=ticks(sim);initialLoot_=s.loot;initialVehicles_=s.vehicles;
@@ -89,8 +89,8 @@ bool Module::traceShot(Simulation& sim,uint8_t source,Vec3 eye,Vec3 delta,int32_
     Vec3 end=eye+delta*best;
     world::Bounds bounds{{fxMin(eye.x,end.x),fxMin(eye.y,end.y),fxMin(eye.z,end.z)},{fxMax(eye.x,end.x),fxMax(eye.y,end.y),fxMax(eye.z,end.z)}};
     for(auto id:collision_.query(bounds)) {
-        const auto& box=collision_.colliders().at(id).bounds;Fixed entry;Vec3 normal;
-        if(!world::intersect(eye,delta,box,entry,normal)||entry>best)continue;
+        auto hit=collision_.castCollider(id,eye,delta);const auto entry=hit.fraction;
+        if(!hit.hit||entry>best)continue;
         bool passed=false;if(projectile)for(uint8_t i=0;i<projectile->piercedCount;++i)passed|=projectile->pierced[i]==id;
         if(passed)continue;
         auto material=penetrable_.find(id);
@@ -143,7 +143,7 @@ void Module::action(Simulation& sim,Actor& a,Action kind,uint32_t argument) {
         for(auto site:sites_)if(inside(a.pos,site)){begin(kind,c.plantTicks,0);return;}return;
     }
     if(kind!=Action::Interact)return;
-    if(a.vehicle){for(auto& v:s.vehicles)if(v.id==a.vehicle){Actor exit=a;exit.pos=v.pos+Vec3{2_fx,Fixed::fromRatio(1,10),{}};exit.vehicle=0;auto box=actorBounds(exit,config_.motor);box.min.y+=Fixed::fromRatio(1,100);if(!collision_.query(box).empty())return;a.pos=exit.pos;v.driver=0;a.vehicle=0;}return;}
+    if(a.vehicle){for(auto& v:s.vehicles)if(v.id==a.vehicle){Actor exit=a;exit.pos=v.pos+Vec3{2_fx,Fixed::fromRatio(1,10),{}};exit.vehicle=0;auto box=actorBounds(exit,config_.motor);box.min.y+=Fixed::fromRatio(1,100);if(collision_.blocked(box))return;a.pos=exit.pos;v.driver=0;a.vehicle=0;}return;}
     if(a.climbing){a.climbing=false;return;}
     auto accessible=[&](Vec3 p){return near(a.pos,p,c.interactRange)&&!collision_.cast(a.pos+Vec3{{},1_fx,{}},p-a.pos).hit;};
     if(config_.mode=="bomb") {

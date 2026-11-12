@@ -49,9 +49,9 @@ bool SpatialWorld::add(Collider c) {
 void SpatialWorld::remove(uint32_t id) {
     auto it=colliders_.find(id);if(it==colliders_.end())return;
     for(auto cell:cells(it->second.bounds)) { auto bucket=index_.find(cell);if(bucket!=index_.end()){bucket->second.erase(id);if(bucket->second.empty())index_.erase(bucket);} }
-    oversized_.erase(id);colliders_.erase(it);
+    oversized_.erase(id);triangles_.erase(id);colliders_.erase(it);
 }
-void SpatialWorld::clear(){colliders_.clear();index_.clear();oversized_.clear();}
+void SpatialWorld::clear(){colliders_.clear();index_.clear();oversized_.clear();triangles_.clear();}
 std::vector<uint32_t> SpatialWorld::query(Bounds b) const {
     auto occupied=cells(b);std::set<uint32_t> candidates=oversized_;
     if(occupied.empty())for(const auto& [id,c]:colliders_) { (void)c;candidates.insert(id); }
@@ -65,8 +65,8 @@ Hit SpatialWorld::cast(Vec3 p,Vec3 delta,Vec3 half) const {
                                 {fxMax(p.x,end.x)+half.x,fxMax(p.y,end.y)+half.y,fxMax(p.z,end.z)+half.z}};
     Hit hit;
     for(auto id:query(swept)) {
-        const auto& box=colliders_.at(id).bounds;Fixed t;Vec3 normal;
-        if(intersect(p,delta,{box.min-half,box.max+half},t,normal) && (!hit.hit||t<hit.fraction))hit={true,id,t,normal};
+        auto candidate=castCollider(id,p,delta,half);
+        if(candidate.hit&&(!hit.hit||candidate.fraction<hit.fraction))hit=candidate;
     }
     return hit;
 }

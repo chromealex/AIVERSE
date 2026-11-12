@@ -1,0 +1,200 @@
+{
+  "players": [
+    {
+      "team": 1
+    },
+    {
+      "team": 2,
+      "bot": true
+    }
+  ],
+  "spawns": [
+    [
+      32,
+      2,
+      32
+    ],
+    [
+      420,
+      5,
+      420
+    ]
+  ],
+  "colliders": [],
+  "world": {
+    "async": true,
+    "cellSize": 128,
+    "maxResidentBytes": 41943040,
+    "maxResidentChunks": 20,
+    "maxStagingBytes": 8388608,
+    "maxUploadBytes": 4194304,
+    "maxJobs": 2,
+    "assets": {
+      "arch.mtl": "a1b76459dfc172c4991d0d26b6c58c2770de7e2ff1e97bbfba3120a1df2215d8",
+      "arch.obj": "154603df21f387857bc923e7452ceebe74af639dcd510eb7e54e532be9295905",
+      "chunks/0_0.json": "53b5b655d94f675b5ae81751a360d9d3f9e8687d538689c190521431d8d5255d",
+      "chunks/0_1.json": "ca26cae10651025b2f3ae9514a2985f5d420b39a5984f29bacaf2dfa86024585",
+      "chunks/0_2.json": "4edf78422a31447753a5869355b6b8e16a484ab6bd789d7779893aea689d3c57",
+      "chunks/0_3.json": "ecc4909fd4293eb3d2368c1f4f8a9f29fd438ab5d5d7440fe4d2c729061b1558",
+      "chunks/1_0.json": "4edf78422a31447753a5869355b6b8e16a484ab6bd789d7779893aea689d3c57",
+      "chunks/1_1.json": "ecc4909fd4293eb3d2368c1f4f8a9f29fd438ab5d5d7440fe4d2c729061b1558",
+      "chunks/1_2.json": "22ea2820e4dabb2c9a3851a61bbad7c3105c52610b6e2662f7ad76ae5f60715f",
+      "chunks/1_3.json": "85cd7cd89e7b7a53af71de7340c3c6a5e5342323f853c0673c293ebe16370994",
+      "chunks/2_0.json": "22ea2820e4dabb2c9a3851a61bbad7c3105c52610b6e2662f7ad76ae5f60715f",
+      "chunks/2_1.json": "85cd7cd89e7b7a53af71de7340c3c6a5e5342323f853c0673c293ebe16370994",
+      "chunks/2_2.json": "8a20e8bc8e5e96351952f859af5488de1ee848e9f56198eef400fb254891aa0d",
+      "chunks/2_3.json": "49d52c0aa2e1c3cfc071f6d1373557b9317d2f2d30db409f4082b4556dd85d2b",
+      "chunks/3_0.json": "8a20e8bc8e5e96351952f859af5488de1ee848e9f56198eef400fb254891aa0d",
+      "chunks/3_1.json": "49d52c0aa2e1c3cfc071f6d1373557b9317d2f2d30db409f4082b4556dd85d2b",
+      "chunks/3_2.json": "f83ae2aa6a9ada5b4f3fe7cc17acc48e197e989e975db1043f4c0ab2ec5f0f8f",
+      "chunks/3_3.json": "d039a81bfb6926b25f57b2367a63ce4a4cc263ba42156ef0c3f59173ad1da380",
+      "ground.png": "f55903bf6b16b6f46c041214887868c052fc045a05e6650a6b4266a95c60602c"
+    },
+    "chunks": [
+      {
+        "cell": [
+          0,
+          0,
+          0
+        ],
+        "file": "chunks/0_0.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          0,
+          0,
+          1
+        ],
+        "file": "chunks/0_1.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          0,
+          0,
+          2
+        ],
+        "file": "chunks/0_2.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          0,
+          0,
+          3
+        ],
+        "file": "chunks/0_3.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          1,
+          0,
+          0
+        ],
+        "file": "chunks/1_0.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          1,
+          0,
+          1
+        ],
+        "file": "chunks/1_1.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          1,
+          0,
+          2
+        ],
+        "file": "chunks/1_2.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          1,
+          0,
+          3
+        ],
+        "file": "chunks/1_3.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          2,
+          0,
+          0
+        ],
+        "file": "chunks/2_0.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          2,
+          0,
+          1
+        ],
+        "file": "chunks/2_1.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          2,
+          0,
+          2
+        ],
+        "file": "chunks/2_2.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          2,
+          0,
+          3
+        ],
+        "file": "chunks/2_3.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          3,
+          0,
+          0
+        ],
+        "file": "chunks/3_0.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          3,
+          0,
+          1
+        ],
+        "file": "chunks/3_1.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          3,
+          0,
+          2
+        ],
+        "file": "chunks/3_2.json",
+        "reservedBytes": 2097152
+      },
+      {
+        "cell": [
+          3,
+          0,
+          3
+        ],
+        "file": "chunks/3_3.json",
+        "reservedBytes": 2097152
+      }
+    ]
+  }
+}

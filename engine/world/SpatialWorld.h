@@ -10,6 +10,7 @@ struct Cell {
     int32_t x=0, y=0, z=0;
     auto operator<=>(const Cell&) const = default;
 };
+struct Triangle { Vec3 a,b,c; };
 struct Bounds { Vec3 min{}, max{}; };
 bool overlaps(const Bounds& a, const Bounds& b);
 // Segment slab query, including starting inside; t is a fraction in [0,1].
@@ -21,9 +22,12 @@ class SpatialWorld {
 public:
     explicit SpatialWorld(int cellSize=32): cellSize_(cellSize>0?cellSize:32) {}
     bool add(Collider collider);
+    bool addTriangle(uint32_t id,Triangle triangle);
+    Hit castCollider(uint32_t id,Vec3 start,Vec3 delta,Vec3 halfExtent={}) const;
     void remove(uint32_t id);
     void clear();
     std::vector<uint32_t> query(Bounds bounds) const;
+    bool blocked(Bounds bounds)const;
     Hit cast(Vec3 start, Vec3 delta, Vec3 halfExtent={}) const;
     const std::map<uint32_t,Collider>& colliders() const { return colliders_; }
     Cell cell(Vec3 point) const;
@@ -33,6 +37,7 @@ private:
     std::map<uint32_t,Collider> colliders_;
     std::map<Cell,std::set<uint32_t>> index_;
     std::set<uint32_t> oversized_;
+    std::map<uint32_t,Triangle> triangles_;
 };
 // Presentation origin only: subtract in Fixed before converting to float. Simulation never rebases.
 Vec3 relativeTo(Vec3 absolute, Cell origin, int cellSize);

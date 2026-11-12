@@ -1,0 +1,5 @@
+# Content hashes cover exact bytes; preserve these fixtures across Git checkouts.
+*.json text eol=lf
+*.obj text eol=lf
+*.mtl text eol=lf
+*.png binary

@@ -77,6 +77,7 @@ void Simulation::inject(Command cmd) {
 }
 
 void Simulation::step() {
+    if(!module_->readyToStep(*this))return;
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -115,7 +116,7 @@ int Simulation::advance(double realSeconds, int maxTicks) {
     const double tickLen = 1.0 / tickRate_;
     accumulator_ += realSeconds;
     int n = 0;
-    while (accumulator_ >= tickLen && n < maxTicks) { step(); accumulator_ -= tickLen; ++n; }
+    while (accumulator_ >= tickLen && n < maxTicks) { const auto before=tick_;step();if(tick_==before){accumulator_=tickLen;break;}accumulator_ -= tickLen; ++n; }
     if (n == maxTicks && accumulator_ > tickLen) accumulator_ = tickLen; // spiral-of-death guard
     return n;
 }

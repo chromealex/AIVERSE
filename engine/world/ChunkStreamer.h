@@ -22,6 +22,7 @@ class ChunkStreamer {
 public:
     explicit ChunkStreamer(StreamLimits limits={}):limits_(limits) {}
     bool add(Cell cell,size_t reservedBytes);
+    void failed(Cell cell);
     StreamStatus update(std::span<const StreamObserver> observers,std::span<const Cell> pinned,
                         size_t loadBudget,const Streamer::Load& load,const Streamer::Unload& unload);
     const std::set<Cell>& loaded() const { return resident_; }

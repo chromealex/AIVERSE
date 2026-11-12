@@ -69,6 +69,7 @@
   "fps.editor.noProject": "Choose an FPS template in New Project.",
 
   "fps.status": "Health: {health}   Ammo: {ammo} / {reserve}   Server tick: {tick}",
+  "fps.worldLoading": "Loading world…",
   "fps.controls": "LMB: fire / capture mouse; 1–4: weapon; R: reload; WASD: move; Shift: sprint; Ctrl: crouch; Space: jump; Esc: release.",
   "fps.connecting": "Connecting to authority...",
   "fps.disconnected": "Disconnected from server.",

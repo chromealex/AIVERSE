@@ -8,6 +8,11 @@ bool ChunkStreamer::add(Cell cell,size_t bytes) {
     if(!bytes || catalog_.size()>=100000)return false;
     return catalog_.emplace(cell,Entry{bytes}).second;
 }
+void ChunkStreamer::failed(Cell cell) {
+    resident_.erase(cell);
+    auto it=catalog_.find(cell);if(it==catalog_.end())return;
+    it->second.failed=true;it->second.retryAt=update_+std::max(1u,limits_.retryUpdates);
+}
 StreamStatus ChunkStreamer::update(std::span<const StreamObserver> observers,std::span<const Cell> pinned,
                                   size_t loadBudget,const Streamer::Load& load,const Streamer::Unload& unload) {
     ++update_;status_={};
