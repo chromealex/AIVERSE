@@ -6,7 +6,7 @@ Games with a Lua or native gameplay director can set this optional rules.json bl
 "ai": { "controller": "scripted" }
 ```
 
-The default is `builtin`. Unknown controller names and malformed blocks fail loading with an `ai` diagnostic. `scripted` makes `RtsAI::update` return before advancing its private scheduler/RNG or submitting commands. This applies consistently to callers in the client, editor and headless runner, including the human slot that headless normally automates. It does not create a director: the game must provide one.
+The default is `builtin`. `"bw"` selects the Bunker Wars bots ported as code (AI6, Bishop, Ashley, per-skill casters, debuts, bot triggers; keys in `docs/game-format.md` § Bunker Wars computer player). They run inside `RtsAI` (every tick, own Fixed clocks), submit ordinary commands and keep their state in `RtsAI::saveState` (version 4). Unknown controller names (valid: builtin, scripted, bw) and malformed blocks fail loading with an `ai` diagnostic. `scripted` makes `RtsAI::update` return before advancing its private scheduler/RNG or submitting commands. This applies consistently to callers in the client, editor and headless runner, including the human slot that headless normally automates. It does not create a director: the game must provide one.
 
 The setting does not disable simulation systems, automatic unit combat, human/network commands, Lua callbacks, production, or victory/defeat. Do not use player `waves: true` to achieve this: wave players have different defeat semantics. Existing games without this block retain the built-in controller.
 
