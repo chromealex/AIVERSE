@@ -8,3 +8,5 @@ aiverse_native_use_libraries(aiverse_native_library_demo
     character-locomotion melee-combat weapon-policies match-rules narrative-graphs)
 # Combat actions (hitboxes, dodge, parry, poise, lock-on) compose melee-combat.
 aiverse_native_use_libraries(aiverse_native_library_demo combat-actions)
+# Genre bots (melee/shooter policies, squad roles, objective choice) compose combat-actions and weapon-policies.
+aiverse_native_use_libraries(aiverse_native_library_demo genre-bots)

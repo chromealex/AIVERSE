@@ -40,6 +40,7 @@ ALIASES = {
  'aiverse-bots-fps':'fps bot фпс бот', 'aiverse-camera':'camera камер',
  'aiverse-orchestrator':'skill catalog orchestration скилл каталог оркестратор',
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
+ 'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
 }
 
 def generate():
