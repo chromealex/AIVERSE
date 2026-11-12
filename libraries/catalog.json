@@ -1277,7 +1277,7 @@
     },
     {
       "id": "genre-bots",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/bots/GenreBots.h",
@@ -1307,7 +1307,10 @@
         "combat-actions",
         "weapon-policies",
         "configuration",
-        "stealth-senses"
+        "stealth-senses",
+        "character-locomotion",
+        "match-rules",
+        "narrative-graphs"
       ]
     },
     {
