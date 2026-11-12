@@ -540,6 +540,7 @@ struct TrapDef {
 
 struct Rules {
     bool scriptedAI = false;                  // external RtsAI must yield to the game's controller
+    bool bwAI = false;                        // ai.controller "bw": Bunker Wars bots (RtsBwAI.h, agent-bw-ai)
     MechRules mech;                           // agent-mech rules (RtsMechData.h)
     std::vector<ResourceDef> resources;
     std::vector<std::string> tagNames;

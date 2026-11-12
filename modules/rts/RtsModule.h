@@ -40,7 +40,7 @@ enum CommandType : uint16_t {
     kCmdCancelTrain,  // units (producers or constructions), param = queue slot (-1 = last)
     kCmdRally,        // units (producers), point or target
     kCmdSmart,        // right click
-    kCmdSend,         // garrison structures, target structure, param = percent
+    kCmdSend,         // garrison structures, target structure, param = percent (< 0: exactly -param units)
     kCmdResearch,     // units (researchers), param = tech
     kCmdPlace,        // producer with a finished structure (sidebar), point
     kCmdSell,         // structures
@@ -565,6 +565,10 @@ public:
     void setVisionReference(bool on);
     bool hostile(Simulation& sim, uint8_t a, uint8_t b) const;
     Fixed stat(Simulation& sim, Entity e, Stat s) const;          // effective stat with techs/levels/buffs
+    // agent-bw-ai (RtsBwAIWorld.cpp): stat of a type for a player without an entity, + moraleDelta perUnit levels
+    Fixed bwTypeStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, int moraleDelta) const;
+    // agent-bw-ai: Bunker Wars bot settings (rules ai.bw + map "ai"), null unless rules ai.controller is "bw"
+    const std::shared_ptr<const struct BwAIConfig>& bwAI() const { return bwAI_; }
     Fixed typeStat(Simulation& sim, uint8_t player, uint16_t type, Stat s, Fixed base) const;
     int membersAlive(Simulation& sim, Entity e) const;
     int levelAt(Simulation& sim, Vec3 p) const;
@@ -754,6 +758,7 @@ private:
     void sysMatchStats(Simulation& sim);
     void hashModes(Simulation& sim, Hasher& h);
     friend bool ioModesState(RtsModule& m, Simulation& sim, Archive& a);
+    std::shared_ptr<const struct BwAIConfig> bwAI_;   // agent-bw-ai
     Json generated_;                 // generated map (see generatedMap())
     void setupMap(Simulation& sim, const Json& map);
     // ---- planets (RtsPlanets.cpp)

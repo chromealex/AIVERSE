@@ -1,5 +1,6 @@
 #include "RtsAI.h"
 #include "RtsAITerrain.h"
+#include "RtsBwAI.h"   // agent-bw-ai
 #include <algorithm>
 #include <vector>
 #include <cstdio>
@@ -34,6 +35,11 @@ void RtsAI::send(Simulation& sim, Command c) {
 void RtsAI::update(Simulation& sim) {
     auto* m = dynamic_cast<RtsModule*>(&sim.module());
     if (!m || m->rules().scriptedAI) return;
+    if (m->rules().bwAI) {   // agent-bw-ai: the Bunker Wars controller keeps its own clock (every tick)
+        if (!bw_.p) bw_.p = std::make_unique<BwAI>(player_, rng_.state());
+        bw_.p->update(sim, *m);
+        return;
+    }
     auto* pi = sim.player(player_);
     if (!pi || !pi->alive || sim.result() != 0 || sim.tick() < next_) return;
     next_ = sim.tick() + cfg_.thinkTicks + rng_.below(cfg_.thinkTicks / 2 + 1);

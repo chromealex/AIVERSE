@@ -29,6 +29,17 @@ struct AIConfig {
     int invasionSize = 6;         // planets: orbit units gathered before an invasion of another body
 };
 struct AITerrain;
+class BwAI;
+// Copyable owner of a Bunker Wars controller (rules ai.controller "bw", RtsBwAI.h): copies of a bot diverge.
+struct BwAIHolder {
+    std::unique_ptr<BwAI> p;
+    BwAIHolder();
+    BwAIHolder(const BwAIHolder& o);
+    BwAIHolder& operator=(const BwAIHolder& o);
+    BwAIHolder(BwAIHolder&&) noexcept;
+    BwAIHolder& operator=(BwAIHolder&&) noexcept;
+    ~BwAIHolder();
+};
 
 class RtsAI {
 public:
@@ -128,6 +139,7 @@ private:
     int invadeBody_ = -1, invasions_ = 0;
     uint32_t invadeTick_ = 0;
     bool enemyOffBody_ = false;              // no enemy structure shares our body: invasion is the only way
+    BwAIHolder bw_;                          // agent-bw-ai: rules ai.controller "bw" plays the slot (save state v4)
 };
 
 } // namespace aiverse::game

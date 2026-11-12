@@ -1,5 +1,6 @@
 #include "RtsData.h"
 #include "RtsEffectsData.h"
+#include "RtsBwAI.h"   // agent-bw-ai
 #include <algorithm>
 #include <stdexcept>
 
@@ -134,9 +135,11 @@ Rules loadRules(const Json& j) {
         const auto controller = j["ai"].getStr("controller", "builtin");
         if (j["ai"].has("controller") && !j["ai"]["controller"].isString())
             throw std::runtime_error("ai.controller: expected string");
-        if (controller != "builtin" && controller != "scripted")
-            throw std::runtime_error("ai.controller: unknown '" + controller + "' (builtin, scripted)");
+        if (controller != "builtin" && controller != "scripted" && controller != "bw")
+            throw std::runtime_error("ai.controller: unknown '" + controller + "' (builtin, scripted, bw)");
         r.scriptedAI = controller == "scripted";
+        r.bwAI = controller == "bw";
+        if (j["ai"].has("bw") && !r.bwAI) throw std::runtime_error("ai.bw: needs \"controller\": \"bw\"");
     }
     r.supplyCap = j.getFx("supplyCap", r.supplyCap);
     r.maxQueue = int(j.getInt("maxQueue", r.maxQueue));
@@ -801,6 +804,7 @@ Rules loadRules(const Json& j) {
     r.armor.plainFloor = !r.originals && !r.mech.any && !j.has("armor") && !j.has("armorModel");   // old games: damage - armor, at least raw / 5
     loadGridFieldRules(r, j);   // RtsGridFieldData.cpp: rules "fields", type "field" emitters, "field" effects
     loadRaidRules(r, j);        // RtsRaidData.cpp: rules "raid" (extraction raids)
+    if (r.bwAI) loadBwAIConfig(j["ai"], Json(), r);   // agent-bw-ai: validate ai.bw now (map part at setup)
     return r;
 }
 

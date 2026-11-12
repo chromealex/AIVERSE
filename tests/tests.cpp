@@ -14033,3 +14033,5 @@ TEST(bw_player_mods_by_count_table) {
     CHECK(std::fabs(m.stat(*sim, b, game::Stat::Defense).toDouble() - 2.44140625) < 1e-3);
 }
 #include "tests_driving.inc"   // vehicles the hero drives (agent-gta2)
+
+#include "tests_bwai.inc"   // agent-bw-ai: Bunker Wars computer player
