@@ -73,8 +73,13 @@ reconnect, anti-cheat operations, snapshot deltas and WAN capacity qualification
 separate work. A 100-client loopback test is not evidence of production PUBG capacity.
 
 Large-world support uses sparse static AABB collision, relative render origins and
-bounded loading of presentation box chunks. Collision remains resident. This is not yet
-streamed terrain/physics, a complete character controller, vehicles or a populated world.
+budgeted loading of presentation box chunks through the generic
+[large-world streamer](large-worlds.md) (multiple observers, local chunk coordinates,
+load priorities, retry delays and resident resource reservations). Maps with `world.async`
+use background terrain/model preparation and streamed box/triangle collision, with a
+pre-tick authority gate and bounded GPU publication. See `examples/world/streamed`.
+Legacy maps retain resident collision. Dynamic-world persistence and streamed navmesh
+are separate work.
 Bots aim and strafe; they do not have production navigation/tactics.
 
 Next useful mechanics: ADS/scopes; recoil and movement-dependent accuracy; head/body/limb

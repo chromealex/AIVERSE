@@ -3,6 +3,7 @@
 #include "../../gfx/Gfx.h"
 
 #include <cstring>
+#include <cstdlib>
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <Metal/Metal.h>
@@ -154,6 +155,7 @@ static void updateSizes(NSView* view) {
 @interface AiverseAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
 @property(strong) AiverseView* view;
 @property(strong) NSTimer* timer;
+@property(strong) id benchmarkActivity;
 @end
 
 @implementation AiverseAppDelegate
@@ -190,7 +192,13 @@ static void updateSizes(NSView* view) {
     if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) [g_window toggleFullScreen:nil];   // native fullscreen (own Space)
     updateSizes(self.view);
     g_last = std::chrono::steady_clock::now();
-    self.timer = [NSTimer timerWithTimeInterval:1.0 / 120.0 target:self selector:@selector(tick) userInfo:nil repeats:YES];
+    const char* benchmark=std::getenv("AIVERSE_BENCH_UNCAPPED");
+    const bool uncapped=benchmark&&std::strcmp(benchmark,"1")==0;
+    if(uncapped){
+        ((CAMetalLayer*)self.view.layer).displaySyncEnabled=NO;
+        self.benchmarkActivity=[[NSProcessInfo processInfo] beginActivityWithOptions:NSActivityUserInitiated|NSActivityLatencyCritical reason:@"AIVERSE render benchmark"];
+    }
+    self.timer = [NSTimer timerWithTimeInterval:uncapped?0.001:1.0/120.0 target:self selector:@selector(tick) userInfo:nil repeats:YES];
     [[NSRunLoop currentRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
 }
 - (void)tick {
@@ -256,6 +264,7 @@ static void updateMacSafeArea() {
 - (void)windowDidBecomeKey:(NSNotification*)n { Event e; e.type = EventType::FocusGained; detail::dispatch(e); }
 - (void)windowDidResignKey:(NSNotification*)n { setPointerLock(false); Event e; e.type = EventType::FocusLost; detail::dispatch(e); }
 - (void)applicationWillTerminate:(NSNotification*)n {
+    if(self.benchmarkActivity){[[NSProcessInfo processInfo] endActivity:self.benchmarkActivity];self.benchmarkActivity=nil;}
     [self.timer invalidate];
     static bool done = false; // terminate may arrive twice (window close + menu)
     if (done) return;

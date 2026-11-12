@@ -10,3 +10,9 @@ description: Configure seasonal ranked tournament cohorts, league promotion/demo
 5. Schedule the trusted host to call settle at/after end. This writes final results, next league and inbox rewards in one transaction. Claim rewards through economy.mail, not a second grant implementation.
 6. Test ties, incomplete groups, late submissions, duplicate settlement, save/reload and failed CAS. Promotion uses ordered position; reward lookup uses displayed rank.
 7. Report this as ranked cohorts, not a bracket engine or network matchmaking. Preserve pending definitions and archived results explicitly.
+
+Server library: `AIVERSE::meta_tournaments`. Select `tournaments` in
+`aiverse_add_meta_server(game_meta MODULES ...)`, include `game_meta.h`, and construct
+`Service(kits::game_meta(), config, state, commit, draw)`. Native OBJECT modules use
+`aiverse_native_use_meta(target game_meta)`. Client callers link only `AIVERSE::meta_client`;
+SQL and private definitions remain server-side. Dependencies: social.

@@ -389,7 +389,7 @@ void releaseModel(gfx::Device& dev, Model& m) {
     if (m.vb.valid()) dev.destroyBuffer(m.vb);
     if (m.ib.valid()) dev.destroyBuffer(m.ib);
     m.vb = {}; m.ib = {};
-    for (auto& img : m.images) if (img.tex.valid()) { dev.destroyTexture(img.tex); img.tex = {}; }
+    for (auto& img : m.images) if (img.tex.valid()) { if(!img.borrowedTexture)dev.destroyTexture(img.tex); img.tex = {}; }
     if (m.morphTex.valid()) dev.destroyTexture(m.morphTex);
     if (m.baked.tex.valid()) dev.destroyTexture(m.baked.tex);
     m.morphTex = {}; m.baked = Model::Baked{};

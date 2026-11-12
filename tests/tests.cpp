@@ -12319,6 +12319,8 @@ namespace entityfxtest {
 class RecordingDevice final : public aiverse::gfx::Device {
 public:
     struct Draw { bool blend = false, depthWrite = true; std::vector<float> inst; uint32_t instances = 1; bool colorWrite = true; };
+    size_t uniformLimit=4096;
+    size_t maxUniformBytes() const override { return uniformLimit; }
     std::vector<Draw> draws;
     std::vector<aiverse::gfx::PipelineDesc> pipes;
     const aiverse::gfx::DeviceInfo& info() const override { return info_; }
@@ -12945,6 +12947,9 @@ TEST(models_gltf_lod_metadata) {
     catch (const std::exception&) { rejected = true; }
     CHECK(rejected);
 }
+#include "animation/view.inc"
+#include "animation/editor.inc"
+#include "geometry/runtime.inc"
 
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {

@@ -56,7 +56,9 @@ void Renderer3D::renderReflection() {
             dev_->drawIndexed(it.mesh->indexCount);
             ++drawCalls_;
         }
-        auxiliaryModelPass_ = true; renderModels(1); auxiliaryModelPass_ = false;
+        auxiliaryModelPass_ = true; geometryMainView_ = false;
+        renderModels(1);
+        auxiliaryModelPass_ = false; geometryMainView_ = true;
         lights.drawHalos(viewProj_, false);   // lights glitter in the water; no ground decals
         lights.endReflection();
     }
@@ -71,6 +73,7 @@ void Renderer3D::renderSpotShadow() {
     // decides what may cast — good enough for the area around the camera)
     const mat4 savedLVP = lightViewProj_;
     lightViewProj_ = lights.spotShadowMatrix();
+    geometryShadowSize_=lights.spotShadowSize();
     dev_->beginPass(lights.spotShadowPass());
     dev_->setViewport({0, 0, lights.spotShadowSize(), lights.spotShadowSize()});
     dev_->setPipeline(shadowPipe_);
@@ -88,6 +91,7 @@ void Renderer3D::renderSpotShadow() {
     auxiliaryModelPass_ = true; renderModels(0); auxiliaryModelPass_ = false;
     dev_->endPass();
     lightViewProj_ = savedLVP;
+    geometryShadowSize_=shadowSize_;
 }
 
 } // namespace aiverse::render

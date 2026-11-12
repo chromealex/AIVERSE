@@ -1,4 +1,5 @@
 #include "PostFx.h"
+#include <chrono>
 #include "graph/ShaderGraph.h"
 #include <algorithm>
 #include <cmath>
@@ -25,10 +26,10 @@ enum Role { kScene = 0, kAa = 1, kBloomDown = 10, kBloomUp = 20, kTilt0 = 30, kT
 
 struct SimpleU { float px[4]; float p0[4]; float sun[4]; };
 struct CompositeU {
-    float px[4], grade0[4], grade1[4], lift[4], gamma[4], gain[4], filt[4], vig[4], bloom[4], shafts[4], tilt[4], fade[4], lut[4], lbox[4];
+    float px[4], grade0[4], grade1[4], lift[4], gamma[4], gain[4], filt[4], vig[4], bloom[4], shafts[4], tilt[4], fade[4], lut[4], lbox[4], graphFrame[4];
 };
 const char* kSimpleFields[] = {"px", "p0", "sun"};
-const char* kCompositeFields[] = {"px", "grade0", "grade1", "lift", "gamma", "gain", "filt", "vig", "bloom", "shafts", "tilt", "fade", "lut", "lbox"};
+const char* kCompositeFields[] = {"px", "grade0", "grade1", "lift", "gamma", "gain", "filt", "vig", "bloom", "shafts", "tilt", "fade", "lut", "lbox", "graphFrame"};
 
 struct Built { std::string vs, fs, msl; };
 
@@ -50,7 +51,7 @@ Built buildProgram(const char* const* fields, size_t fieldCount, uint32_t texMas
     const std::string common = "#define TUV(p) (px.z > 0.5 ? vec2((p).x, 1.0 - (p).y) : (p))\n"
                                "#define TDIR(d) (px.z > 0.5 ? vec2((d).x, -(d).y) : (d))\n";
     std::string gTex, mArgs, gMacros, mMacros;
-    for (int t = 0; t < 5; ++t) {
+    for (int t = 0; t < 9; ++t) {
         if (!(texMask & (1u << t))) continue;
         const std::string n = std::to_string(t);
         gTex += "uniform sampler2D tex" + n + ";\n";
@@ -112,6 +113,8 @@ void PostFx::shutdown() {
     sizes_.clear();
     for (auto& [p, l] : luts_) release(l.tex);
     luts_.clear();
+    for(auto& [path,t]:graphTextures_)release(t);
+    graphTextures_.clear();graphPaths_.clear();
     for (int i = 0; i < kProgCount; ++i) {
         if (pipes_[i].valid()) dev_->destroyPipeline(pipes_[i]);
         if (shaders_[i].valid()) dev_->destroyShader(shaders_[i]);
@@ -124,6 +127,12 @@ void PostFx::shutdown() {
     release(black_);
     triangle_ = {};
     dev_ = nullptr;
+}
+
+void PostFx::setImageLoader(ImageLoader fn) {
+    for(auto& [path,l]:luts_)release(l.tex);
+    for(auto& [path,t]:graphTextures_)release(t);
+    luts_.clear();graphTextures_.clear();loader_=std::move(fn);
 }
 
 void PostFx::configure(const Json& game, const Json& map, std::vector<std::string>* issues) {
@@ -246,18 +255,28 @@ gfx::PipelineHandle PostFx::composite(uint32_t mask, const Json* graphData) {
     if (mask & kPfShafts) tex |= 8;
     if (mask & kPfLut) tex |= 16;
     std::string body = postfx::kComposite;
+    graph::Program graphProgram;
     if (graphData) {
         try {
-            auto program = graph::compile(*graphData, "postfx");
-            const std::string marker = "    RETURN(vec4(clamp(col, vec3(0.0), vec3(1.0)), 1.0));";
-            const std::string code = "\n#define SG_SAMPLE(uv) TEX0(TUV(uv))\nvec2 sg_uv = s; vec4 sg_input = vec4(col,1.0);\n" + program.glsl + "\nRETURN(" + program.outputs.at("color") + ");\n";
-            body.replace(body.find(marker), marker.size(), code);
-        } catch (const std::exception& ex) { error_ = ex.what(); compositeFailed_[key] = true; return {}; }
+            graphProgram=graph::compile(*graphData,"postfx");
+            graphPaths_[graphData->dump(-1)]=graphProgram.textures;
+            const std::string marker="    RETURN(vec4(clamp(col, vec3(0.0), vec3(1.0)), 1.0));";
+            std::string macros="\n#define SG_SAMPLE(uv) TEX0(TUV(uv))\n";
+            for(size_t i=0;i<graphProgram.textures.size();++i) {
+                const auto slot=std::to_string(5+i);tex|=1u<<(5+i);
+                macros+="#define SG_TEXTURE"+std::to_string(i)+"(uv) TEX"+slot+"(uv)\n";
+            }
+            body.replace(body.find(marker),marker.size(),macros+"vec2 sg_uv=s,sg_screen=s;vec4 sg_input=vec4(col,1.0);float sg_time=graphFrame.x;\n// SG_CODE\nRETURN("+graphProgram.outputs.at("color")+");\n");
+        }catch(const std::exception& ex){error_=ex.what();compositeFailed_[key]=true;return {};}
     }
-    Built b = buildProgram(kCompositeFields, 14, tex, defines, postfx::kCompositeHelpers, body.c_str());
+    Built b=buildProgram(kCompositeFields,15,tex,defines,postfx::kCompositeHelpers,body.c_str());
+    if(graphData) {
+        auto at=b.fs.find("// SG_CODE");b.fs.replace(at,10,graphProgram.glsl);
+        at=b.msl.find("// SG_CODE");b.msl.replace(at,10,graphProgram.msl);
+    }
     gfx::ShaderDesc sd;
     sd.glslVertex = b.vs.c_str(); sd.glslFragment = b.fs.c_str(); sd.msl = b.msl.c_str();
-    sd.textureSlots = 5; sd.uniformSlots = 1; sd.label = "postfx composite";
+    sd.textureSlots = 5+int(graphProgram.textures.size()); sd.uniformSlots = 1; sd.label = "postfx composite";
     gfx::ShaderHandle sh = dev_->createShader(sd);
     if (!sh.valid()) {
         compositeFailed_[key] = true;
@@ -304,6 +323,18 @@ const PostFx::Lut* PostFx::lut(const std::string& path) {
     l.n = h;
     if (!l.tex.valid()) { l.failed = true; return nullptr; }
     return &l;
+}
+
+gfx::TextureHandle PostFx::graphTexture(const std::string& path) {
+    auto it=graphTextures_.find(path);if(it!=graphTextures_.end()){if(it->second.valid())return it->second;error_="shader graph: cannot load texture '"+path+"'";return black_;}
+    int w=0,h=0;std::vector<uint8_t> bytes;
+    if(!loader_ || !loader_(path,w,h,bytes) || w<=0 || h<=0 || bytes.size()<size_t(w)*size_t(h)*4) {
+        error_="shader graph: cannot load texture '"+path+"'";graphTextures_[path]={};return black_;
+    }
+    gfx::TextureDesc td;td.width=w;td.height=h;td.data=bytes.data();td.filter=gfx::Filter::Linear;
+    auto texture=dev_->createTexture(td);
+    if(!texture.valid()){error_=dev_->lastError();return black_;}
+    graphTextures_[path]=texture;return texture;
 }
 
 gfx::PassDesc PostFx::scenePass(const gfx::PassDesc& out, int w, int h) {
@@ -475,6 +506,9 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
 
     // ---- composite into the caller's pass (left open)
     CompositeU u{};
+    const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if(graphEpoch_<0)graphEpoch_=now;
+    u.graphFrame[0]=float(now-graphEpoch_);
     uint32_t mask = 0;
     put(u.px, 1.0f / float(w), 1.0f / float(h), flip, seed);
     put(u.grade1, 1, 1, 1, 1);
@@ -544,6 +578,11 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
     const auto* graphEffect = find(PostFxType::ShaderGraph);
     gfx::PipelineHandle pipe = composite(mask, graphEffect ? &graphEffect->shaderGraph : nullptr);
     if (!pipe.valid()) pipe = composite(0);   // a broken variant still shows the scene
+    std::vector<gfx::TextureHandle> graphImages;
+    if(graphEffect) {
+        const auto it=graphPaths_.find(graphEffect->shaderGraph.dump(-1));
+        if(it!=graphPaths_.end())for(const auto& path:it->second)graphImages.push_back(graphTexture(path));
+    }
     const PostFxEffect* finalAa = hdrFrame_ ? find(PostFxType::Fxaa) : nullptr;
     bool aaAfter = finalAa && program(kFxaa).valid();
     gfx::PassDesc compositeOut = out;
@@ -566,6 +605,7 @@ void PostFx::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
         dev.setTexture(3, shaftTex.valid() ? shaftTex : black_);
         const Lut* l = (mask & kPfLut) ? lut(find(PostFxType::Lut)->text) : nullptr;
         dev.setTexture(4, l ? l->tex : black_);
+        for(size_t i=0;i<graphImages.size();++i)dev.setTexture(int(i)+5,graphImages[i]);
         dev.draw(3);
     }
     ++stats_.passes;

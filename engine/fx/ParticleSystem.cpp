@@ -164,22 +164,41 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
     const std::string key = graphData.isNull() ? "" : graphData.dump(-1);
     for (size_t i = 0; i < batches.size(); ++i)
         if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].graphKey == key) return uint16_t(i);
-    Batch batch{t.tex.id, blend, t.tex, key, {}, {}, {}};
+    Batch batch{t.tex.id, blend, t.tex, key, {}, {}, {}, {}};
     if (dev && !key.empty()) {
         try {
             const auto program = render::graph::compile(graphData, "particle");
-            const std::string fs = "precision highp float; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; out vec4 o_color;\n#define SG_SAMPLE(uv) texture(tex0,uv)\nvoid main(){vec2 sg_uv=v_uv; vec4 sg_input=texture(tex0,v_uv)*v_col;\n" + program.glsl + "vec4 c=" + program.outputs.at("color") + "; o_color=" + (blend==FxBlend::Multiply ? "vec4(mix(vec3(1.0),c.rgb,c.a),c.a)" : "c") + ";}";
-            std::string msl = shaders::kParticleMSL;
-            const std::string marker="    return tex0.sample(s0, in.uv) * in.col;";
-            const std::string code="\n#define SG_SAMPLE(uv) float4(tex0.sample(s0,uv))\nfloat2 sg_uv=in.uv; float4 sg_input=float4(tex0.sample(s0,in.uv)*in.col);\n" + program.msl + "float4 c="+program.outputs.at("color")+"; return half4("+(blend==FxBlend::Multiply ? "float4(mix(float3(1.0),c.rgb,c.a),c.a)" : "c")+");";
-            msl.replace(msl.find(marker),marker.size(),code);
-            gfx::ShaderDesc sd; sd.glslVertex=shaders::kParticleVS; sd.glslFragment=fs.c_str(); sd.msl=msl.c_str(); sd.textureSlots=1;
+            std::string vs=shaders::kParticleVS, msl=shaders::kParticleMSL;
+            auto replace=[](std::string& s,const std::string& from,const std::string& to){const auto at=s.find(from);if(at!=std::string::npos)s.replace(at,from.size(),to);};
+            replace(vs,"void main() {","layout(location=3) in vec4 a_graph; out vec4 v_graph; out vec3 v_world; out vec4 v_clip;\nvoid main() {v_graph=a_graph;v_world=a_pos;v_clip=u_viewProj*vec4(a_pos,1.0);");
+            replace(msl,"float4 col [[attribute(2)]];","float4 col [[attribute(2)]]; float4 graph [[attribute(3)]];");
+            replace(msl,"half4 col; };","half4 col; float4 graph; float3 world; float4 clip; };");
+            replace(msl,"    VOut o;","    VOut o; o.graph=in.graph; o.world=in.pos; o.clip=u.viewProj*float4(in.pos,1.0);");
+            std::string declarations, args, gm, mm;
+            for(size_t i=0;i<program.textures.size();++i) {
+                std::vector<std::string> issues;auto tx=texture(program.textures[i],issues,"shader graph");
+                if(!issues.empty())throw std::runtime_error(issues.front());
+                batch.graphTextures.push_back(tx);
+                const auto slot=std::to_string(i+1),idx=std::to_string(i);
+                declarations+="uniform sampler2D tex"+slot+";\n";
+                args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]], sampler s"+slot+" [[sampler("+slot+")]]";
+                const std::string uv="(vec2("+std::to_string(tx.u0)+","+std::to_string(tx.v0)+")+fract(uv)*vec2("+std::to_string(tx.u1-tx.u0)+","+std::to_string(tx.v1-tx.v0)+"))";
+                gm+="#define SG_TEXTURE"+idx+"(uv) texture(tex"+slot+","+uv+")\n";
+                std::string muv=uv;size_t at=0;while((at=muv.find("vec2",at))!=std::string::npos){muv.replace(at,4,"float2");at+=6;}
+                mm+="#define SG_TEXTURE"+idx+"(uv) tex"+slot+".sample(s"+slot+","+muv+")\n";
+            }
+            const std::string fs="precision highp float; layout(std140) uniform U0 {mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params;}; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; in vec4 v_graph; in vec3 v_world; in vec4 v_clip; out vec4 o_color;\n"+declarations+gm+
+                "#define SG_SAMPLE(uv) texture(tex0,uv)\nvoid main(){vec2 sg_uv=v_uv,sg_screen=v_clip.xy/max(abs(v_clip.w),0.00001)*0.5+0.5;vec3 sg_world=v_world,sg_view=u_camPos.xyz-v_world;vec4 sg_color=v_col,sg_particle=v_graph;float sg_time=u_params.w;vec4 sg_input=texture(tex0,v_uv)*v_col;\n"+program.glsl+"vec4 c="+program.outputs.at("color")+";o_color="+(blend==FxBlend::Multiply?"vec4(mix(vec3(1.0),c.rgb,c.a),c.a)":"c")+";}";
+            replace(msl,"sampler s0 [[sampler(0)]])", "sampler s0 [[sampler(0)]],constant U0& u [[buffer(1)]]"+args+")");
+            const std::string code="\n#define SG_SAMPLE(uv) float4(tex0.sample(s0,uv))\n"+mm+"float2 sg_uv=in.uv,sg_screen=in.clip.xy/max(abs(in.clip.w),0.00001)*0.5+0.5;float3 sg_world=in.world,sg_view=u.camPos.xyz-in.world;float4 sg_color=float4(in.col),sg_particle=in.graph;float sg_time=u.params.w;float4 sg_input=float4(tex0.sample(s0,in.uv)*in.col);\n"+program.msl+"float4 c="+program.outputs.at("color")+";return half4("+(blend==FxBlend::Multiply?"float4(mix(float3(1.0),c.rgb,c.a),c.a)":"c")+");";
+            replace(msl,"    return tex0.sample(s0, in.uv) * in.col;",code);
+            gfx::ShaderDesc sd;sd.glslVertex=vs.c_str();sd.glslFragment=fs.c_str();sd.msl=msl.c_str();sd.textureSlots=1+int(program.textures.size());sd.uniformSlots=1;
             batch.shader=dev->createShader(sd);
             if (!batch.shader.valid()) throw std::runtime_error(dev->lastError());
             for(int mesh=0;mesh<2;++mesh) {
                 gfx::PipelineDesc pd; pd.shader=batch.shader;
                 pd.attrs[0]={0,gfx::VertexFormat::Float3,0}; pd.attrs[1]={1,gfx::VertexFormat::Float2,12}; pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
-                pd.attrCount=3; pd.stride=sizeof(Vertex); pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
+                pd.attrs[3]={3,gfx::VertexFormat::Float4,24}; pd.attrCount=4; pd.stride=sizeof(Vertex); pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
                 pd.cull=gfx::CullMode::None; pd.blend=gfxBlend(int(blend)); pd.depthWrite=blend==FxBlend::Opaque;
                 batch.graphPipe[mesh]=dev->createPipeline(pd);
                 if(!batch.graphPipe[mesh].valid()) throw std::runtime_error(dev->lastError());

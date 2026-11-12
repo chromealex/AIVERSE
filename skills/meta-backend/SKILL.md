@@ -11,3 +11,9 @@ description: Connect AIVERSE C++ meta to native networking or run the reference 
 6. Use one atomic Commit/CAS across every affected profile. Save receipts with balances/items/results. Never return complete service snapshots to clients.
 7. Run tests/meta including backend_test.py and examples/meta native consumer. HTTP-handler tests use memory sockets: additionally smoke-test a listening server and UI in the deployment environment.
 8. State deployment limits precisely: local listener, single aggregate SQLite snapshot, no TLS/OAuth/admin console deployed automatically. Configure production identity, TLS, limits and backups before public use.
+
+Server library: `AIVERSE::meta_backend`. Select `backend` in
+`aiverse_add_meta_server(game_meta MODULES ...)`, include `game_meta.h`, and construct
+`Service(kits::game_meta(), config, state, commit, draw)`. Native OBJECT modules use
+`aiverse_native_use_meta(target game_meta)`. Client callers link only `AIVERSE::meta_client`;
+SQL and private definitions remain server-side. Dependencies: economy.

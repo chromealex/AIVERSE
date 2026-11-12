@@ -23,7 +23,7 @@ def main():
             assert p['status'] in ('cpp-foundation', 'engine-reference', 'cpp-subsystem', 'tool-workflow')
             for field in ('source', 'skill'):
                 assert (ROOT/p[field]).is_file(), p[field]
-            assert f"name: rts-{p['id']}" in (ROOT/p['skill']).read_text()
+            assert f"name: {Path(p['skill']).parent.name}\n" in (ROOT/p['skill']).read_text()
         print(f'Validated {len(packages)} catalog entries')
         return
     selected = [p for p in packages if args.query.lower() in json.dumps(p).lower()]
@@ -41,7 +41,7 @@ def main():
         parser.error('--project must point to a game project with game.json')
     # Include all library-local transitive headers and explicit metadata dependencies.
     import re
-    files=set([p['source'],'libraries/CMakeLists.txt',*p.get('dependencies',[])])
+    files=set([p['source'],'libraries/CMakeLists.txt','libraries/catalog.json',*p.get('dependencies',[])])
     pending=list(files)
     while pending:
         file=pending.pop()
@@ -69,7 +69,7 @@ def main():
     temp_path=lock_path.with_suffix('.json.tmp')
     temp_path.write_text(json.dumps(lock,indent=2,sort_keys=True)+'\n')
     temp_path.replace(lock_path)
-    print(f"Pinned {p['id']} {p['version']}; link AIVERSE::libraries")
+    print(f"Pinned {p['id']} {p['version']}; link {p['cmakeTarget']}")
 
 if __name__ == '__main__':
     main()

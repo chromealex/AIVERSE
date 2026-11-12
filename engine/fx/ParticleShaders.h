@@ -11,7 +11,8 @@
 // U0 (per draw): mat4 viewProj; vec4 fog (rgb display-space colour, w density); params.z: 1 = multiply blend (fog fades to white);
 //                vec4 camPos (xyz); vec4 params (x: 1 = additive blend -> fog fades alpha instead of colour;
 //                y: 1 = premultiplied colour -> the fog colour is premultiplied too)
-// Vertex: a_pos (float3), a_uv (float2), a_col (ubyte4 normalized)
+// Vertex: a_pos (float3), a_uv (float2), a_col (ubyte4 normalized).
+// Graph variants append float4 age/lifetime/random data; params.w is system time.
 #pragma once
 
 namespace aiverse::fx::shaders {

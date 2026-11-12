@@ -92,7 +92,10 @@ void RtsView::applyMaterial(gfx::Device& dev, const UnitType& t, Model& m, Mater
     if (o.getBool("replace")) { const std::string keep = mt.name; mt = Material{}; mt.name = keep; }
     if (const Json& col = o["color"]; col.size() >= 3) mt.baseColor = {num(col[0], 1), num(col[1], 1), num(col[2], 1), col.size() > 3 ? num(col[3], 1) : mt.baseColor.w};
     if (o.has("shaderGraph")) {
-        try { mt.shaderGraph = std::make_shared<graph::Program>(graph::compile(o["shaderGraph"], "material")); }
+        try {
+            mt.shaderGraph = std::make_shared<graph::Program>(graph::compile(o["shaderGraph"], "material"));
+            for(size_t i=0;i<mt.shaderGraph->textures.size();++i) mt.graphTextures[i]=loadTexture(dev,t,m,mt.shaderGraph->textures[i]);
+        }
         catch (const std::exception& e) { warn(t, e.what()); mt.shaderGraph.reset(); }
     }
     mt.metallic = num(o["metallic"], mt.metallic);
@@ -300,19 +303,24 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 }
 
 Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::string& path) {
-    auto it = models_.find(path);
+    GeometryPolicy policy;
+    try { policy = parseGeometryPolicy(t.view["geometry"]); }
+    catch (const std::exception& e) { warn(t, e.what()); }
+    const std::string key = path + ((policy.clusters || policy.shadowClusters || policy.occluder) ? "#geometry" : "");
+    auto it = models_.find(key);
     if (it == models_.end()) {
         std::unique_ptr<Model> m;
         try {
             std::vector<std::string> w;
             m = loadModel(path, read_, &w);
             for (auto& s : w) warn(t, s);
+            if (policy.clusters || policy.shadowClusters || policy.occluder) prepareGeometry(*m);
             uploadModel(dev, *m);
         } catch (const std::exception& e) {
             warn(t, e.what());
             m.reset();
         }
-        it = models_.emplace(path, std::move(m)).first;
+        it = models_.emplace(key, std::move(m)).first;
     }
     return it->second.get();
 }
@@ -394,16 +402,16 @@ void RtsView::finishChoice(const UnitType& t, ModelChoice& c) {
     // modifiers, additive clips, IK) need the CPU palette path.
     const std::string mode = t.view.getStr("skinning", "auto");
     if (mode != "auto" && mode != "baked" && mode != "palette") warn(t, "skinning must be auto, baked or palette");
-    const bool palette = mode == "palette" || (mode == "auto" && (overlays || nodeProcs || !c.additive.empty() || !c.legs.empty()));
+    const bool palette = c.programmableAnimation || bool(c.graph) || mode == "palette" || (mode == "auto" && (overlays || nodeProcs || !c.additive.empty() || !c.legs.empty()));
     c.baked = skinned && !palette && dev_ && bakeAnimations(*dev_, *c.model);
     if (c.baked) for (auto& cs : c.clips) { if (cs.layer > 0) { cs.layer = 0; cs.mask = -1; } } // one-shots on the base layer
-    c.needsPose = (!c.baked && (anyClip || nodeProcs)) || !c.attach.empty() || c.muzzle >= 0 || !c.legs.empty();
+    c.needsPose = c.programmableAnimation || bool(c.graph) || (!c.baked && (anyClip || nodeProcs)) || !c.attach.empty() || c.muzzle >= 0 || !c.legs.empty();
     for (auto& f : c.fx) c.needsPose |= f.node >= 0;
 }
 
 std::vector<std::string> RtsView::modelFiles() const {
     std::vector<std::string> out;
-    for (const auto& [path, m] : models_) if (path.rfind("shape:", 0) != 0) out.push_back(path);
+    for (const auto& [path, m] : models_) if (path.rfind("shape:", 0) != 0) out.push_back(m ? m->path : path);
     return out;
 }
 
@@ -431,6 +439,13 @@ int RtsView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const st
 
 void RtsView::configureChoice(gfx::Device& dev, const UnitType& t, const Json& v, ModelChoice& c, bool isShape) {
     Model& m = *c.model;
+    c.programmableAnimation=v.getBool("programmableAnimation")||v.has("animationGraph");
+    if (v.has("animationGraph")) {
+        try { c.graph = AnimationGraph::compile(m, v["animationGraph"], animationOperations_, animationTraits_); }
+        catch (const std::exception& e) { warn(t, e.what()); }
+    }
+    try { c.geometry = parseGeometryPolicy(t.view["geometry"]); }
+    catch (const std::exception& e) { warn(t, e.what()); }
     // ---- placement: centre on the ground, rotate the model's forward axis to +X, fit, offset
     const std::string fwd = v.getStr("forward", isShape ? "+x" : "+z");
     float yaw = fwd == "+z" ? 90 * kDeg : fwd == "-z" ? -90 * kDeg : fwd == "-x" ? 180 * kDeg : 0;

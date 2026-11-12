@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(AiverseMetaClientConsumer LANGUAGES CXX)
+if(NOT AIVERSE_ENGINE_ROOT)
+    get_filename_component(AIVERSE_ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+endif()
+add_subdirectory("${AIVERSE_ENGINE_ROOT}/engine/meta" meta)
+add_executable(meta_client_consumer main.cpp)
+target_link_libraries(meta_client_consumer PRIVATE AIVERSE::meta_client)

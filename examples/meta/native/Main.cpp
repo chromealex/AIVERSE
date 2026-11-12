@@ -2,6 +2,7 @@
 #include "engine/meta/Meta.h"
 #include "engine/meta/Social.h"
 #include "engine/meta/Service.h"
+#include "engine/meta/Client.h"
 #include <iostream>
 int main() {
     using namespace aiverse::meta;
@@ -23,5 +24,13 @@ int main() {
     if(!service.execute({"demo",true},{"offline","checkpoint","init-mine",mine},0).result) return 3;
     if(!service.execute({"demo",false},{"offline","claim","claim-mine",mine},10).result) return 4;
     if(service.view("demo",10)["profile"]["balances"].getInt("gold")!=2) return 5;
+    RemoteBackend backend([&](const ServiceRequest& request,Backend::Callback callback) {
+        callback(service.execute({"demo",false},request,10));
+    });
+    Client client(backend);
+    if(!client.begin(requests::buy("gift","native-client-gift"))) return 6;
+    client.pump();
+    if(client.pending()||!client.reply().result) return 7;
+    if(service.view("demo",10)["profile"]["balances"].getInt("gold")!=12) return 8;
     return 0;
 }

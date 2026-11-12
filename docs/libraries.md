@@ -1,7 +1,7 @@
 # Общие C++20 библиотеки AIVERSE
 
 Каталог: `libraries/catalog.json`. Репозиторные инструкции AI:
-`docs/ai-skills/rts-*/SKILL.md`. Эти инструкции не являются установленными персональными
+`skills/*/SKILL.md`. Эти инструкции не являются установленными персональными
 скиллами ChatGPT. Пакеты не зависят от Lua.
 
 ## Подключение из native конкретной игры
@@ -159,3 +159,17 @@ Use [genre-mechanics-roadmap.md](genre-mechanics-roadmap.md) for the proposed cr
 
 See [genre-packages.md](genre-packages.md) for locomotion policies, melee combos, recoil/projectiles,
 round/capture rules and narrative graphs, with validated settings and native state codecs.
+
+## Strategy runtime batch
+
+See [strategy-libraries.md](strategy-libraries.md) for initiative/reactions, card zones/priority,
+Sokoban/undo/solver, exact big integers, affine offline progress and production networks.
+All six packages provide agent skills and share `AIVERSE::strategy`.
+`examples/native/strategy` and `tests/libraries/strategy_native.py` exercise real native
+commands, save/restore and a relocated source-export build.
+[genre-implementation.json](genre-implementation.json) tracks the remaining audit scope.
+
+The subsequent strategy extension adds zone softlock proofs, rhythm timing, seeded runs
+and a bounded puzzle machine, each with its catalog skill and native restore scenario.
+Host-only [session admission and local network acceptance](local-network.md) supplies
+`AIVERSE::session` / `aiverse_native_use_session` and real HTTP/UDP acceptance tests.

@@ -11,3 +11,9 @@ description: Configure AIVERSE quests, achievements, seasons, battle passes, dai
 - Use cohort for stable A/B assignment and resolveSettings for conditional patches. Keep experiment weights/version stable; validate resulting configs before use.
 - Keep meta state out of live deterministic simulation. Import only validated match setup or Commands.
 - Validate definitions, then check repeat claims, new season without old progress, missed days, cap behavior and save/load.
+
+Server library: `AIVERSE::meta_progression`. Select `progression` in
+`aiverse_add_meta_server(game_meta MODULES ...)`, include `game_meta.h`, and construct
+`Service(kits::game_meta(), config, state, commit, draw)`. Native OBJECT modules use
+`aiverse_native_use_meta(target game_meta)`. Client callers link only `AIVERSE::meta_client`;
+SQL and private definitions remain server-side. Dependencies: economy.

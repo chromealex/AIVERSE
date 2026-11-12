@@ -1,0 +1,32 @@
+[
+  {
+    "case": "near",
+    "objects": 8,
+    "cells": 16,
+    "iterations": 4,
+    "lod": false,
+    "frames": 120,
+    "max_position_error_m": 0.000104599,
+    "tolerance_m": 0.01,
+    "healthy": true,
+    "metal_api_validation": true,
+    "multiple_steps_per_frame": true,
+    "individual_environments": true,
+    "command": "MTL_DEBUG_LAYER=1 AIVERSE_ADAPTIVE=off build/.temp/cloth/engine/cloth/aiverse_cloth_demo --objects 8 --cells 16 --iterations 4 --wind-groups 2 --gpu 1 --verify-gpu 1 --lod 0 --auto-lod 0 --frames 120 --warmup 0"
+  },
+  {
+    "case": "far",
+    "objects": 16,
+    "cells": 71,
+    "iterations": 8,
+    "lod": true,
+    "frames": 120,
+    "max_position_error_m": 0.000761043,
+    "tolerance_m": 0.01,
+    "healthy": true,
+    "metal_api_validation": true,
+    "multiple_steps_per_frame": true,
+    "individual_environments": true,
+    "command": "MTL_DEBUG_LAYER=1 AIVERSE_ADAPTIVE=off build/.temp/cloth/engine/cloth/aiverse_cloth_demo --objects 16 --cells 71 --iterations 8 --wind-groups 4 --gpu 1 --verify-gpu 1 --lod 1 --auto-lod 0 --frames 120 --warmup 0 --camera-distance 200"
+  }
+]

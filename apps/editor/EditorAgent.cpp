@@ -68,11 +68,19 @@ void Editor::pollAgentLink() {
                 if (args.has("distance")) sceneCam.distance = std::clamp(float(args["distance"].toDouble()), sceneCam.minDistance, sceneCam.maxDistance);
                 sceneFlying_ = false;
             }
-            shots_.push_back({m.client, id.integer(), args.getStr("window", args.has("device") ? "game" : "all")});
+            shots_.push_back({m.client, id.integer(), args.getStr("window", args.has("device") ? "game" : "all"), Json::object()});
             ws_.log("agent", "Скриншот редактора");
             continue;
         }
+        if ((name == "modeling_preview" || name == "animation_preview") && (!shots_.empty() || captureArmed_)) {
+            server_.send(m.client, reply(id, Json::parse(R"({"error":"another screenshot is pending; retry after its reply"})")).dump(-1));
+            continue;
+        }
         Json result = ws_.call(name, args, "agent");
+        if ((name == "modeling_preview" || name == "animation_preview") && !result.has("error")) {
+            shots_.push_back({m.client, id.integer(), "all", result});
+            continue;
+        }
         server_.send(m.client, reply(id, result).dump(-1));
     }
 }
@@ -94,7 +102,7 @@ void Editor::deliverShots(gfx::Device& dev) {
     dev.captureNextFrame([this, pending, crops](int w, int h, std::vector<uint8_t> px) {
         captureArmed_ = false;
         for (size_t k = 0; k < pending.size(); ++k) {
-            Json r = Json::object();
+            Json r = pending[k].metadata.isObject() ? pending[k].metadata : Json::object();
             if (w <= 0 || px.empty()) {
                 r.set("error", Json::string("screenshots are not supported by this graphics backend"));
             } else {
@@ -147,6 +155,15 @@ void Editor::registerGuiOps() {
         ws_.registerOp({name, desc, Json::parse(schema), std::move(fn), true});
     };
     auto okSummary = [](const std::string& s) { Json r = Json::object(); r.set("ok", Json::fromBool(true)); r.set("summary", Json::string(s)); return r; };
+    add("geometry_stats", "Counters for the last rendered editor view, reset each frame. Compare policy on/off at the same camera; counters are not GPU timing.", "{}", [this](const Json&) {
+        const auto& s = r3d_.geometryStats(); Json r=Json::object();
+        r.set("clustersTested",Json::number(int64_t(s.clustersTested)));
+        r.set("clustersCulled",Json::number(int64_t(s.clustersCulled)));
+        r.set("coarseClusters",Json::number(int64_t(s.coarseClusters)));
+        r.set("occluded",Json::number(int64_t(s.occluded)));
+        r.set("occluderTriangles",Json::number(int64_t(s.occluderTriangles)));
+        r.set("drawCalls",Json::number(int64_t(r3d_.drawCalls()))); return r;
+    });
     add("view_screenshot", "Screenshot of the editor (window: 'all' | 'scene' | 'game'); with 'device' the Game window shows that device first. Returns a PNG image.",
         R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game"]}, "device": {"type": "string"}, "x": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}})",
         [](const Json&) -> Json { throw std::runtime_error("screenshots are answered asynchronously by the editor link"); });

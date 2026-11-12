@@ -117,6 +117,8 @@ void Module::setup(Simulation& sim,const Json& rules,const Json& map) {
     config_=readConfig(rules);
     if(sim.tickRate()!=config_.tickRate)throw JsonError("fps.tickRate differs from simulation tickRate");
     if(sim.players().empty()||sim.players().size()>config_.maxPlayers)throw JsonError("fps: invalid player count");
+    streamedCollision_.reset();streamManifest_=map["world"];
+    if(streamManifest_.getBool("async"))world::WorldAssets::parse(streamManifest_);
     collision_.clear();spawns_.clear();bots_.clear();
     const auto& boxes=map["colliders"];
     if(!boxes.isArray()||boxes.size()>100000)throw JsonError("fps.colliders: expected at most 100000 boxes");
@@ -134,11 +136,11 @@ void Module::setup(Simulation& sim,const Json& rules,const Json& map) {
         if(fxAbs(a.pos.x)>config_.worldLimit||fxAbs(a.pos.y)>config_.worldLimit||fxAbs(a.pos.z)>config_.worldLimit)throw JsonError("fps.spawn: outside world limit");
         equipInitial(a);
         auto b=actorBounds(a,config_.motor);b.min.y+=Fixed::fromRatio(1,1000);
-        if(!collision_.query(b).empty())throw JsonError("fps.spawn: intersects collision");
+        if(collision_.blocked(b))throw JsonError("fps.spawn: intersects collision");
         s.actors.push_back(a);spawns_.push_back(a.pos);bots_.push_back(map["players"][i].getBool("bot",false));
     }
     setupSystems(sim,map,s);
-    Hasher hash;hash.str(rules.dump(-1));hash.str(map.dump(-1));contentHash_=hash.value();
+    Hasher hash;hash.str(rules.dump(-1));hash.str(map.dump(-1));if(streamManifest_.getBool("async"))hash.str("world-stream-v1");contentHash_=hash.value();
     sim.world().setResource<State>(std::move(s));
     sim.addSystem("fps",[this](Simulation& s){tick(s);});
 }

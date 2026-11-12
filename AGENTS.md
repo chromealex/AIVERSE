@@ -70,6 +70,8 @@ the *engine* add mechanics generically — never a special case for one game.
 - After touching the sim run the determinism tests and a headless bot match on every sample game.
 
 **Rendering/platform:**
+- Before shader or Shader Graph work, read [the agent guide](docs/shader-graph-agents.md)
+  and follow its validation, preview and application workflow.
 - All GPU work through `gfx::Device` (RHI). Every shader exists in GLSL *and* MSL in the same change.
 - Must run on weak Android GPUs: every expensive feature has a quality tier (`ShadowQuality`, etc.).
 - Content files are read via `platform::readContentFile` (works on Android assets, web preload, packs).
@@ -169,12 +171,18 @@ the commit message; prefer adding a new file over editing a shared one.
 | Linear UI blending: game.json `ui.blend`, sRGB layer + linear composite of the RmlUi layer, RHI `PixelFormat::RGBA8_sRGB` / `copyColor` / `setScreenReadable` (GL + Metal) | `engine/ui/UiColor.h`, `engine/ui/UiLinear.*`, linear parts of `engine/ui/UiRender.cpp` / `UiLayer.*`; hooks: `engine/gfx` (format, pipeline `colorFormat`, copy), client `initUi` / frame `setTarget`, editor `GameHud` | ui-linear (MAIN merges) |
 | Editor world tree: Hierarchy of every world object (edit-mode preview of the map's setup / live play world), multi-selection, Inspector «Детали» (components, stats, script data, mixed values), `editor.hierarchy` game.json hooks, MCP `world_entities` / `world_entity` / `editor_select` | `apps/editor/core/WorldInspect.*`, `apps/editor/EditorWorld.cpp`, `apps/editor/EditorWorldEdit.h`, `apps/editor/DetailsPanel.*`, `apps/editor/windows/HierarchyWindow.cpp`, entity part of `InspectorWindow.cpp`, `docs/editor-world-tree.md`; hooks: `Editor.h` (Selection kinds, selection set, world members), `Editor.cpp` (frame / startPlay / buildEditScene / renderGame / pickEntity), `SceneWindow.cpp` (multi-select, hover, play picking) | editor-world-tree (MAIN merges) |
 | World tree performance: consumer-driven reads, background preview builds, cheap row reads, Details read passes, `AIVERSE_EDITOR_PROFILE` / `AIVERSE_HOSTED_MAP` | `apps/editor/EditorProfile.h`, perf parts of the world-tree files above, `docs/editor-world-tree.md` § Performance; hooks: `ScriptEngine::peekData` (`RtsScript.h` / `RtsScriptEngine.cpp`), atomic component type ids (`engine/core/ECS.h`), `ClientHost` (`AIVERSE_HOSTED_MAP`) | world-perf (MAIN merges) |
-| Reusable libraries and AI skills | `libraries/`, `tools/libraries/`, `tests/libraries/`, `docs/ai-skills/`, `docs/libraries.md` | reusable-libraries agent |
+| Reusable libraries and AI skills | `libraries/`, `tools/libraries/`, `tests/libraries/`, `skills/`, `docs/libraries.md` | reusable-libraries agent |
 | Meta-game C++ policies, JSON presets and agent recipes | `engine/meta`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/meta-*`, `docs/meta-game.md`; minimal CMake/native dependency hooks | meta-library agent |
 | FPS, authoritative sessions and large worlds | `modules/fps`, `engine/net/authority`, `engine/world`, `apps/fps`, `tests/fps`, `examples/fps`, `docs/fps.md`; additive build/platform hooks | FPS task (current agent) |
 | AIVERSE naming migration | Engine-wide branding, shared namespaces, build/tool names, platform bridges, documentation; preserve genre RTS | aiverse-rename (user assigned) |
-| Jolt physics evaluation | `tools/physics`, `docs/physics-evaluation.md` | codex/jolt-evaluation |
 | Shader Graph: material, postfx and particle graphs, compiler, editor and MCP | `engine/render/graph`, shader graph integration in render/fx/view, editor window/core, tests/shader_graph, docs/shader-graph.md | shader-graph agent |
+| Programmable animation: trait stacks, subgraphs, Motion Matching, full-body IK contacts/collisions/balance, surface locomotion, visual editors and C++/Lua controls | `engine/render/AnimationGraph*`, `engine/render/AnimationRig*`, `engine/render/AnimationMotion*`, `engine/render/FullBodyIK*`, `engine/render/AnimationContacts*`, `engine/render/SurfaceLocomotion*`, `apps/editor/animation`, `apps/editor/windows/Animation*`, `apps/editor/core/Animation*`, `tests/animation`, `examples/animation`, `docs/animation-graphs.md`; minimal view/model/Lua hooks | animation-system agent |
+| Model authoring and clip tools | `tools/modeling`, `tests/modeling`, `apps/editor/core/ModelingOps.*`, `apps/editor/windows/Model*`, `docs/modeling.md`; minimal registry, rig-limit, screenshot and localization hooks | codex/modeling-tools |
+| Optional Box3D runtime and physics sandbox | `engine/physics`, `third_party/box3d`, `examples/physics`, `tests/physics`, `docs/physics.md`; additive CMake hooks | codex/box3d-runtime |
+| Clusters, HLOD, conservative occlusion, baked surfaces and geometry performance | `engine/render/Geometry*`, `tools/modeling/SurfaceProxy*`, `apps/editor/core/{GeometryOps,SurfaceProxyOps}.*`, `tests/geometry`, `tools/geometrybench`, `tools/models/autolod.py`, `docs/geometry*.md`; minimal model LOD, renderer/view, Metal binding/uniform and macOS benchmark pacing hooks | codex/geometry-visibility |
+| XPBD cloth, CPU/GPU sleeping, Metal compute solver, instanced cloth rendering and benchmarks | `engine/cloth`, `examples/cloth`, `tests/cloth`, `docs/cloth.md`; shared projected animation LOD helper in `engine/render/AnimationLod.h`, minimal `RtsAnimate` hook; optional compute/storage/readback/timing RHI hooks in `engine/gfx/Gfx.h` and `metal/GfxMetal.mm`; additive CMake/localization hooks | codex/xpbd-cloth |
+| Genre audit implementation: shared strategy kernels and native integration | `libraries/include/aiverselib/strategy`, `tests/libraries/strategy*`, `examples/native/strategy`, matching catalog skills, `docs/genre-implementation.json`, `libraries/include/aiverselib/net`, `tests/meta/local*.py`, `tools/meta/local_match.py`, `docs/local-network.md`; minimal FPS host and loopback transport hooks | codex/genre-libraries |
+| Meta composition and skill consolidation | `engine/meta/Client.*`, `tools/meta`, `tests/meta`, `examples/meta`, `skills/`, catalog/skill links and meta docs | codex/meta-composition |
 
 | Linear HDR scene pipeline | `engine/gfx`, `engine/render`, scene shader outputs in `engine/fx` and `modules/rts/view`, `tests/render`, `docs/hdr.md` | codex/linear-hdr (user assigned) |
 | Static model auto-LOD, instancing and frustum culling | `tools/models/autolod.py`, `tools/models/lod_simplify.cpp`, `third_party/meshoptimizer`, model LOD hooks in `engine/render`, `tools/renderbench/reinstance.cpp`, `docs/autolod.md` | codex/sponza-full (user assigned) |
@@ -247,7 +255,7 @@ Other agents don't publish; they say in their report that a republish is due.
 ## 9. Reuse libraries before implementing algorithms
 
 Before adding a reusable algorithm, read `libraries/catalog.json` and the matching
-`docs/ai-skills/rts-<id>/SKILL.md`. These are repository instructions, not globally installed skills.
+`skills/<skill-name>/SKILL.md`. These are repository instructions, not globally installed skills.
 Use `python3 tools/libraries/catalog.py search <term>` to discover capabilities.
 Prefer existing engine data/API, then a catalog package, then a minimal generic extension.
 Never duplicate a catalog implementation in a game. Respect coverage: `engine-reference`
@@ -264,7 +272,7 @@ Run `python3 tools/libraries/catalog.py check`, `python3 tests/libraries/run.py`
 `python3 tests/libraries/native_consumer.py`.
 Integration changes to simulation still require the full tests and all template matches from §4.
 
-Native game projects consume foundation libraries via `AIVERSE::libraries` after
+Native game projects consume individual `AIVERSE::lib_<package>` targets after
 `aiverse_native_module(...)`; include `<aiverselib/Name.h>`. This target must exist before project
 native CMake code executes. Keep `libraries/` in aiversebuild source exports. No Lua dependency
 or engine-source edit is required for a game to consume these headers. Do not store mutable
@@ -278,8 +286,8 @@ Load only the matching recipe (`skills/meta-economy`, `skills/meta-progression`,
 `skills/meta-social`) and relevant sections of `docs/meta-game.md`.
 Use `aiverse::meta` from `engine/meta`; configure project-local JSON via
 `tools/meta/scaffold.py` and validate with `aiverse_meta_validate`. Do not reimplement the
-same algorithms in game scripts/native code. Native consumers link `aiverse::meta`;
-registered object modules use `aiverse_native_use_meta(aiverse_native_<id>)`.
+same algorithms in game scripts/native code. Native consumers select client or server policies;
+registered object modules use `aiverse_native_use_meta(aiverse_native_<id> CLIENT)` or a selected kit target.
 Meta clocks/network/storage stay outside deterministic simulation. Online authority,
 receipt validation and durable CAS storage belong to the backend. Local social
 policies are not an online service. Never describe an offline/mock service as deployed.
@@ -326,7 +334,7 @@ matching `skills/meta-{clans,items,tournaments,backend,ui}/SKILL.md`.
 Use `aiverse::meta::Service` from native host code; never run wall-clock/network policy
 inside simulation ticks. Preserve authenticated Principal, atomic aggregate Commit,
 operation IDs and authoritative payment/match inputs. Do not duplicate the wallet.
-Generate `--preset full --with-ui`, edit meta source JSON, then run tools/meta/compose.py
+Generate only selected features (full only when requested), edit meta source JSON, then run tools/meta/compose.py
 with the real C++ validator. Pin/verify with tools/meta/catalog.py. Run tests/meta and
 the external examples/meta consumer. Browser screens are not automatic RmlUi bindings;
 HTTP handler tests are not proof of live network/TLS or deployment. Document unverified
@@ -392,3 +400,122 @@ Use generated settings adapters and stable localized narrative graph IDs. Persis
 its immutable definition versions. Native OBJECT modules use aiverse_native_use_genre to propagate
 backend dependencies. Test collision, repeated commands, invalid choices, overflow and restore.
 Do not claim climbing, a complete fighting game, bomb rules or cinematic playback from these policies.
+
+## Procedural climbing, spider gaits and surface locomotion
+
+Before implementing procedural footsteps, wall/ceiling crawling or multi-leg IK movement,
+read [Surface locomotion](docs/surface-locomotion.md) and [Animation graphs](docs/animation-graphs.md).
+Reuse `engine/render/SurfaceLocomotion` / the `surfaceLocomotion` rig unit; do not create a
+second per-game gait planner. Use `examples/animation/spider_showcase.py` to generate an
+original articulated model and the executable floor/wall/ceiling example. Do not assume
+that a humanoid model or a single-bone leg can satisfy the required two-bone chains.
+
+- Configure 3..16 independent hip/knee/foot chains, bind-relative home/pole positions,
+  clearance/probes, step timing, minSupport/maxSwing and optional FullBodyIK capsules.
+- Drive declared velocity/adhesion/reset parameters through C++ or view Lua. Keep state
+  per instance; call graph update once per frame. Evaluate must not advance gait twice.
+- Stance anchors must remain fixed relative to their surface until a step/lost contact/reset.
+  Check reach and support budgets; missing geometry must not fabricate support. Preserve
+  residual diagnostics when goals or collision constraints cannot be satisfied.
+- `AnimationEnvironment` queries are read-only. Use stable surface IDs and real host
+  collision queries for exact geometry; default per-primitive oriented bounds are approximate. Surface
+  locomotion accepts wall/ceiling normals; ordinary full-body foot contacts retain slope limits.
+- This controller moves the presentation root, not the RTS authoritative entity. Gameplay
+  climbing/navigation, networking, saves and gravity remain with their existing owner.
+  Never put floating-point rig state into deterministic simulation or bypass Commands.
+- Inner-corner floor/wall/ceiling transitions and adhesive support are implemented. Do not
+  advertise outer-edge wrapping, automatic navigation, physical adhesion forces, falling,
+  deformable-surface transport, CCD or self-collision as implemented by this controller.
+- Put the controller last in the pose graph. Subsequent blends/traits may invalidate its
+  contacts and status. Use full weight for locked feet; reset after teleport or full detachment.
+- Verify `aiverse_animation_tests`, `aiverse_tests animation_`, and the generated spider in
+  the editor/client. Report actual tested platforms; retain the existing C++/Lua/JSON schema.
+
+Dynamic scene support: provide `AnimationEnvironment::surfaceTransform` using the same
+stable IDs as raycast hits. `surfaceLocomotion` stores local stance/swing-target anchors,
+transports its body with the support, and releases removed surfaces. Use followSurface=false
+when the authoritative host already carries the actor. RtsView supplies per-primitive
+oriented bounds and current rigid transforms (including entity_fx); custom physics queries
+are required for exact triangles/deforming skins. Test translation, rotation, tilt, steps
+on a moving support and removal. Use `spider_showcase.py ... --dynamic-tank` and the editor
+`animation_runtime_status` / `rig_runtime_status` operations to verify the actual scene;
+a static plane-only preview is not evidence of dynamic-object support.
+
+## Meta generation with minimal context
+
+All repository agent skills live in `skills/`. Resolve the exact skill path from
+`libraries/catalog.json` or `tools/meta/catalog.py`; general engine skills use
+`aiverse-*`, RTS-only navigation/spatial/generation/bots recipes keep `rts-*`.
+Keep package IDs and lock identities stable when moving recipes. Do not recreate
+skills under docs or load the entire catalog/schema to configure one subsystem.
+
+For a complete or selected meta layer start with `skills/meta-compose/SKILL.md`.
+Use `tools/meta/kits.py plan/apply --features ...` (or `--preset full`), with the real
+C++ validator. The generated `meta/AGENTS.md` lists only selected recipes. Read
+`catalog.py describe PACKAGE --section PATH` for a narrow example. Configure source
+JSON and recompose; keep the authoritative wallet, receipts and membership owner.
+Native UI/network hosts reuse `engine/meta/Client.h` with a durable per-account outbox;
+read `skills/meta-client/SKILL.md`. The same operation survives a lost reply/restart.
+Browser UI is selectable through `metadata.metaScreens`; it is not a native RmlUi
+adapter. Validate kits, native linking, client retries and selected UI screens.
+
+
+## Adding and updating repository skills
+
+- Store each recipe in `skills/<name>/SKILL.md`; match the frontmatter name to the
+  directory. Use `aiverse-*` for shared gameplay, `rts-*` only for RTS-specific
+  behavior, and `meta-*` for meta-game policies. Do not add recipes under `docs/`.
+- Before adding a recipe, search the existing catalogs. Extend the existing owner
+  instead of creating a duplicate algorithm or overlapping skill. Register gameplay
+  packages in `libraries/catalog.json`, meta packages in `tools/meta/catalog.py`,
+  and meta composition dependencies in `tools/meta/kits.py`. Keep IDs stable.
+- State when to use the skill, its responsibility, public API/header, exact CMake
+  target, dependencies, minimal working example and required validation. Link to
+  detailed references; do not require loading unrelated recipes or whole schemas.
+- Every new code-providing skill must have an independently selectable library
+  target with only required dependencies. Header-only implementations may use
+  INTERFACE targets; compiled optional libraries must not build by default.
+  Workflow-only skills declare that they have no runtime library. An alias to an
+  all-features library does not satisfy per-skill isolation. Existing aggregate
+  targets are compatibility paths, not a pattern for new packages.
+- Explicitly separate client, server and database work. Client builds link
+  `AIVERSE::meta_client`; authoritative hosts link `AIVERSE::meta_server`. Native
+  OBJECT modules use `aiverse_native_use_meta(target CLIENT|SERVER)`. The legacy
+  `aiverse::meta` includes both sides. The server target is the aggregate/transaction core only; select policies with
+  `aiverse_add_meta_server(game_meta MODULES ...)` and construct
+  `Service(kits::game_meta(), config, state, commit, draw)`.
+- Keep credentials, trusted grants, policy configuration, sessions and SQL on the
+  server. Document schemas, migration ownership, compatibility, atomicity and
+  restart behavior when persistence is involved. Never ship private DB contents.
+- Change API, catalog/version, dependencies, recipe and examples together. Verify
+  frontmatter and catalog links, run affected tests, build a standalone consumer
+  and a real native consumer/export when linking changes. Verify that selecting
+  one library does not build/link unrelated libraries (including transitive deps).
+  Report actual coverage and unverified platforms; do not describe routing or
+  isolation requirements as completed implementations without evidence.
+
+## Skill orchestration and isolated builds
+
+Start cross-subsystem tasks with `skills/aiverse-orchestrator/SKILL.md` and
+`python3 tools/skills/catalog.py search INTENT`. Generate a plan with exact IDs and
+`--side client|server|both`; load only selected recipes. `skills/catalog.json` is a
+GENERATED responsibility/index map, not a replacement for the source catalogs.
+
+- New code skills get distinct targets. Gameplay header libraries use
+  `AIVERSE::lib_<package>` and `aiverse_native_use_libraries(target package ...)`.
+  Existing-engine reference/workflow recipes explicitly declare runtime none.
+- `engine/meta/modules.json` owns policy IDs, registration and selection dependencies.
+  `aiverse_add_meta_server` uses that manifest; a selected kit references only its
+  policies. No static registration or all-policy link is permitted on minimal paths.
+  `aiverse::meta` and the legacy Service constructor explicitly select everything.
+- Native OBJECT modules propagate the selected kit via
+  `aiverse_native_use_meta(target game_meta)`; clients use CLIENT. The generated
+  factory header must be used by the host. Missing-policy configuration fails closed.
+- Register source catalog entries, update CMake/source/API/skill/examples together,
+  then run `python3 tools/skills/catalog.py generate` and `check`. Update search
+  aliases only for meaningful domain terms; unknown/ambiguous requests need explicit IDs.
+- Run `python3 tests/skills/catalog_test.py`, `python3 tests/skills/isolation.py`,
+  meta tests and external native/export consumers after selection/linking changes.
+  Isolation checks cover default build, actual link commands and binary symbols;
+  do not rely solely on dead stripping or a successful compile. Core engine libraries
+  already required by a game remain its baseline, not optional skill packages.

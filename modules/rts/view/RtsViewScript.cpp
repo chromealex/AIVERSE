@@ -1,5 +1,7 @@
 // View scripts: presentation-only Lua VM (see RtsViewScript.h).
 #include "RtsViewScript.h"
+#include "engine/platform/Platform.h"
+#include "engine/render/AnimationAsset.h"
 #include <map>
 #include <cmath>
 #include <algorithm>
@@ -14,7 +16,11 @@ const char* eventName(uint16_t t) { return simEventName(t); }   // every GameEve
 struct Collector { std::vector<SimEvent> events; bool enabled = true; };
 } // namespace
 
+struct AnimationLuaContext { script::Vm* vm=nullptr; size_t registrations=0; bool executing=false; };
 struct ViewScripts::Impl {
+    std::function<bool(const std::string&,std::string&)> animationRead;
+    std::shared_ptr<AnimationLuaContext> animationContext=std::make_shared<AnimationLuaContext>();
+    ~Impl() { animationContext->vm=nullptr; }
     ViewScripts& self;
     Vm vm;
     std::map<std::string, std::vector<int>> handlers;   // event -> function refs (LUA_NOREF: disabled)
@@ -479,6 +485,43 @@ int vDrawGround(lua_State* L, Vm& vm) {
 // view.entity_fx(h, {scale =, lift =, pitch =, roll =, opacity =, tint =, team_mix =, team_glow =, shadow =, shadow_scale =, time =, ease =})
 // sets an entity's presentation overrides (EntityFx.h); fields left out keep their target. view.entity_fx(h, nil)
 // removes them (drawn unchanged at once); view.entity_fx(h) returns the values drawn now, or nil.
+// Atomic parameter patch; only presentation state, shared with client and editor views.
+#include "RtsAnimationLua.inc"
+int vAnimation(lua_State* L, Vm& vm) {
+    if(viewOf(vm).animationContext->executing)return fail(vm,"animation controls cannot be changed inside a trait");
+    Entity entity;
+    if (!argEntity(L, 1, entity) || !entity.valid()) return fail(vm, "view.animation: entity handle expected");
+    auto& entries = viewOf(vm).fx->animations;
+    const auto key = entity.packed();
+    if (lua_isnil(L, 2)) { entries.erase(key); return 0; }
+    if (!vm.sim || !vm.sim->world().alive(entity)) return fail(vm, "view.animation: entity is not alive");
+    if (!lua_istable(L, 2)) return fail(vm, "view.animation: parameter table expected");
+    auto it = entries.find(key);
+    if (it == entries.end() && entries.size() >= 65536) return fail(vm, "view.animation: entity limit");
+    EntityAnimationEntry next = it == entries.end() ? EntityAnimationEntry{} : it->second;
+    lua_pushnil(L);
+    while (lua_next(L, 2)) {
+        if (lua_type(L, -2) != LUA_TSTRING) { lua_pop(L, 2); return fail(vm, "view.animation: string parameter expected"); }
+        const std::string name = lua_tostring(L, -2);
+        bool ok = false;
+        if (lua_istable(L, -1)) {
+            render::float3 v;
+            float* components[] = {&v.x, &v.y, &v.z};
+            ok = lua_rawlen(L, -1) == 3;
+            for (int i = 0; i < 3; ++i) {
+                lua_rawgeti(L, -1, i + 1);
+                ok = ok && lua_isnumber(L, -1);
+                *components[i] = float(toDouble(L, -1)); lua_pop(L, 1);
+            }
+            ok = ok && next.parameters.set(name, v);
+        } else if (lua_isboolean(L, -1)) ok = next.parameters.set(name, float(lua_toboolean(L, -1)));
+        else if (lua_isnumber(L, -1)) ok = next.parameters.set(name, float(toDouble(L, -1)));
+        lua_pop(L, 1);
+        if (!ok) { lua_pop(L, 1); return fail(vm, "view.animation: invalid parameter or limit exceeded"); }
+    }
+    entries[key] = std::move(next);
+    return 0;
+}
 int vEntityFx(lua_State* L, Vm& vm) {
     auto& im = viewOf(vm);
     Entity e;
@@ -735,6 +778,8 @@ bool ViewScripts::active() const { return impl_->vm.L != nullptr; }
 bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint8_t localPlayer) {
     Impl& im = *impl_;
     detach();
+    im.animationContext->vm=nullptr;
+    im.animationContext=std::make_shared<AnimationLuaContext>();
     im.vm.close();
     im.handlers.clear(); im.frame.clear(); im.requests.clear(); im.commands.clear();
     im.ui.clear(); im.uiLast.clear(); im.uiHandlers.clear(); im.stats.clear(); im.statOf.clear(); im.frameCost = im.frames = im.frameTotal = im.frameMax = 0; im.stateRef = LUA_NOREF; im.stateTick = UINT32_MAX;
@@ -749,6 +794,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     vm.log = [&im](bool e, const std::string& t) { im.logLine(e, t); };
     if (!vm.open(Mode::View, size_t(64) << 20)) return false;
     vm.budget = 5000000;
+    im.animationContext->vm=&vm;
     im.player = localPlayer;
     for (auto& [p, t] : rules["$scriptSources"].members()) vm.sources[p] = t.str();
     openGameApi(vm);
@@ -758,7 +804,8 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {"set_map_drag_offset", bind<vSetMapDragOffset>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
-                                     {"draw_ground", bind<vDrawGround>}, {"entity_fx", bind<vEntityFx>}, {nullptr, nullptr}};
+                                     {"draw_ground", bind<vDrawGround>}, {"entity_fx", bind<vEntityFx>}, {"animation", bind<vAnimation>}, {"animation_trait", bind<vAnimationTrait>},
+                                     {"animation_load", bind<vAnimationLoad>}, {"animation_define", bind<vAnimationDefine>}, {"animation_use", bind<vAnimationUse>}, {"animation_status", bind<vAnimationStatus>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);
     lua_setglobal(vm.L, "view");
     static const luaL_Reg uiFuncs[] = {{"set", bind<uSet>}, {"open", bind<uOpen>}, {"close", bind<uClose>}, {"on", bind<uOn>}, {nullptr, nullptr}};
@@ -775,6 +822,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     return true;
 }
 
+void ViewScripts::setContentReader(std::function<bool(const std::string&,std::string&)> reader) { impl_->animationRead=std::move(reader); }
 void ViewScripts::setSound(ScriptSound* sound) { impl_->sound = sound; }
 void ViewScripts::setUiCall(std::function<int(lua_State*)> call) { impl_->uiCall = std::move(call); }
 
@@ -805,6 +853,13 @@ void ViewScripts::update(Simulation& sim, float dt) {
     im.draws.clear(); im.drawVerts = 0; im.groundDraws.clear(); im.groundVerts = 0;   // view.draw / draw_ground: one frame
     // view.entity_fx: eases advance in frame time; entities gone from the simulation keep theirs for a corpse a while
     im.fx->advance(dt);
+    for (auto it = im.fx->animations.begin(); it != im.fx->animations.end();) {
+        if (sim.world().alive(Entity::fromPacked(it->first))) it->second.goneFor = -1;
+        else if ((it->second.goneFor = std::max(0.0f, it->second.goneFor) + dt) > EntityFxEntry::kKeepDead) {
+            it = im.fx->animations.erase(it); continue;
+        }
+        ++it;
+    }
     for (auto it = im.fx->entries.begin(); it != im.fx->entries.end();) {
         const Entity e = Entity::fromPacked(it->first);
         if (sim.world().alive(e)) it->second.goneFor = -1;

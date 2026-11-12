@@ -26,9 +26,18 @@ std::vector<NativeDefinition> compiledNativeModules();
     (src / 'stub.cpp').write_text('')
     (native / 'Module.cpp').write_text('''#include "modules/rts/RtsNative.h"
 #include "engine/meta/Meta.h"
+#include "engine/meta/Client.h"
 #include "engine/meta/Rating.h"
 #include "engine/meta/LiveOps.h"
+#include "native_meta.h"
 int metaProbe() {
+    aiverse::meta::Service service(aiverse::meta::kits::native_meta(), aiverse::meta::ServiceConfig{});
+    if(!service.execute({"p",false},{"profile","create","init",aiverse::Json::object()},1).result)return -5;
+    aiverse::meta::OfflineBackend backend;
+    aiverse::meta::Client client(backend);
+    if(!client.begin(aiverse::meta::requests::view())) return -3;
+    client.pump();
+    if(client.pending()||client.reply().result.code!=aiverse::meta::Code::Unsupported) return -4;
     if(aiverse::meta::elo(1500,1500,1,32)!=1516) return -2;
     aiverse::meta::validateLiveOps(aiverse::Json::object(),aiverse::meta::Config{});
     aiverse::meta::Config c; c.assets["gold"].cap=10;
@@ -37,8 +46,10 @@ int metaProbe() {
 }
 std::unique_ptr<aiverse::game::NativeModule> createMetaProbe() { return std::make_unique<aiverse::game::NativeModule>(); }
 ''')
-    (native / 'CMakeLists.txt').write_text('''aiverse_native_module(ID meta_probe VERSION 1 ENTRY createMetaProbe SOURCES Module.cpp)
-aiverse_native_use_meta(aiverse_native_meta_probe)
+    (native / 'CMakeLists.txt').write_text('''aiverse_add_meta_server(native_meta MODULES economy ratings)
+aiverse_native_module(ID meta_probe VERSION 1 ENTRY createMetaProbe SOURCES Module.cpp)
+aiverse_native_use_meta(aiverse_native_meta_probe native_meta)
+aiverse_native_use_meta(aiverse_native_meta_probe CLIENT)
 ''')
     (src / 'main.cpp').write_text('''#include "modules/rts/RtsNative.h"
 int metaProbe();

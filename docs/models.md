@@ -482,6 +482,22 @@ use the existing RHI triangle/line renderer on flat terrain and planets.
 
 Optional `view.teamFromTerritory: true` selects the team-material colour from the territory cell under the entity's simulation position. It applies to models and team-tinted sprites on flat and spherical maps; owner 0 uses the neutral palette. Outside a valid territory grid it falls back to the entity owner. Default is false. This is presentation only: command ownership, selection, diplomacy, production and simulation hashes are unchanged. Useful for fixed buildings whose production owner follows their occupied ground independently of an original region command anchor.
 
+## Programmable animation graphs
+
+Optional `view.animationGraph` supports pose graphs, state transitions, masked blending,
+additive poses and parameter-driven two-bone IK. C++ hosts use `AnimationGraphInstance`;
+view scripts use `view.animation(entity, parameters)`. See [animation-graphs.md](animation-graphs.md)
+for the format, API, runnable showcase and explicit scope.
+
+## Editable model authoring
+
+See [Model and animation authoring](modeling.md) for parameterized geometry, rigs,
+clip editing, GLB export, editor windows and the `modeling_*` MCP tools.
+### Geometry visibility and static HLOD
+
+Optional `view.geometry` policies enable cluster detail selection and conservative occlusion.
+Static scene HLOD is configured separately so gameplay entities retain independent identity.
+See [geometry.md](geometry.md) for the schema, `geometry_*` agent tools, budgets and verification.
 ### Автогенерация LOD
 
 Для статических glTF доступен офлайн-генератор на meshoptimizer (MIT),

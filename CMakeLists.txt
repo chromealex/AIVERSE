@@ -95,6 +95,10 @@ add_library(aiverse_engine STATIC
     engine/sim/Simulation.cpp
     engine/sim/Replay.cpp)
 target_include_directories(aiverse_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+option(AIVERSE_ENABLE_PHYSICS "Build optional Box3D physics module" OFF)
+if(AIVERSE_ENABLE_PHYSICS)
+    add_subdirectory(engine/physics)
+endif()
 add_subdirectory(engine/meta)
 
 # Generic data-driven RTS gameplay (units, orders, economy, combat, garrisons, AI)
@@ -293,6 +297,8 @@ endif()
 # Models (models agent): glTF / OBJ / procedural models, PBR materials, skeletal and procedural
 # animation. CPU side only (no platform code), so tests and tools can load models too.
 add_library(aiverse_models STATIC
+    engine/render/Geometry.cpp
+    engine/render/GeometrySceneData.cpp
     engine/render/MeshBuilder.cpp
     engine/render/Model.cpp
     engine/render/ModelGltf.cpp
@@ -328,10 +334,19 @@ endif()
 # with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
 target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 
+# Programmable presentation animation graphs reuse the existing model sampler and IK.
+target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_animation_tests tests/animation/graphs.cpp apps/editor/core/AnimationDocument.cpp)
+    target_link_libraries(aiverse_animation_tests PRIVATE aiverse_models aiverse_zstd_dec)
+    add_test(NAME animation_graphs COMMAND aiverse_animation_tests)
+endif()
+
 set(AIVERSE_RUNTIME_SRC
     engine/platform/PlatformCommon.cpp
     engine/render/Renderer3D.cpp
     engine/render/Renderer3DModels.cpp
+    engine/render/GeometryScene.cpp
     engine/render/Lights.cpp
     engine/render/QualityGovernor.cpp
     engine/render/Renderer3DReflect.cpp
@@ -629,6 +644,10 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(assetpipe PRIVATE aiverse_pack_writer)
     target_compile_definitions(assetpipe PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(aiversebuild PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    # Building just the editor must also produce its packager. Native editors may disable tools.
+    if(TARGET aiverse_editor)
+        add_dependencies(aiverse_editor aiversebuild)
+    endif()
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
     add_executable(aiversemcp tools/mcp/main.cpp)
     target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
@@ -714,7 +733,7 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_tests PRIVATE aiverse_game_view)   # fog of war look parsing (view, no GPU)
     # view.entity_fx draw tests: the 3D renderer against a recording gfx::Device (no GPU; platform stubs in tests.cpp)
     target_sources(aiverse_tests PRIVATE engine/render/Renderer3D.cpp engine/render/Renderer3DModels.cpp engine/render/Lights.cpp
-        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp)
+        engine/render/Renderer3DReflect.cpp engine/render/Renderer3DTrace.cpp engine/render/PostFx.cpp engine/render/GeometryScene.cpp)
     target_sources(aiverse_tests PRIVATE engine/ui/UiLua.cpp)    # UI Lua sandbox (no RmlUi)
     target_link_libraries(aiverse_tests PRIVATE aiverse_lua)
     target_link_libraries(aiverse_tests PRIVATE aiverse_plugins)     # native plugins bridge, store/ads services
@@ -730,6 +749,9 @@ if(AIVERSE_BUILD_TESTS)
     endif()
     target_compile_definitions(aiverse_tests PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME aiverse_tests COMMAND aiverse_tests)
+    add_executable(aiverse_build_tool_tests tests/editor/build_tool.cpp)
+    target_include_directories(aiverse_build_tool_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME editor_build_tool COMMAND aiverse_build_tool_tests "${CMAKE_CURRENT_BINARY_DIR}/build-tool-fixture")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -922,7 +944,7 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp apps/editor/core/GeometryOps.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
@@ -1242,8 +1264,83 @@ if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
     endif()
 endif()
 
-# Reproducible architectural rendering benchmark (assets remain external).
-option(AIVERSE_BUILD_AUTOLOD "Build the host meshoptimizer LOD worker" OFF)
+# Host authoring: shared by the editor, MCP and CPU tests.
+if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
+    add_library(aiverse_modeling STATIC tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
+        tools/modeling/Document.cpp tools/modeling/Export.cpp tools/modeling/Clips.cpp tools/modeling/Recipes.cpp)
+    target_link_libraries(aiverse_modeling PUBLIC aiverse_models)
+    target_include_directories(aiverse_modeling PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ModelingOps.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_modeling)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_editor_core)
+    add_executable(aiverse_modeling_tests tests/modeling/modeling.cpp)
+    target_link_libraries(aiverse_modeling_tests PRIVATE aiverse_editor_core aiverse_modeling aiverse_models aiverse_zstd_dec)
+    add_test(NAME modeling_authoring COMMAND aiverse_modeling_tests)
+endif()
+
+if(TARGET aiverse_editor_core AND AIVERSE_BUILD_TOOLS)
+    add_executable(aiverse_modeling_cli tools/modeling/main.cpp)
+    set_target_properties(aiverse_modeling_cli PROPERTIES OUTPUT_NAME aiverse_modeling)
+    target_link_libraries(aiverse_modeling_cli PRIVATE aiverse_editor_core aiverse_modeling aiverse_models aiverse_zstd_dec)
+endif()
+if(TARGET aiverse_modeling AND NOT MSVC)
+    target_compile_options(aiverse_modeling PRIVATE -Wall -Wextra)
+endif()
+
+# Optional standalone physics example; normal RTS/FPS clients do not create a physics world.
+if(AIVERSE_ENABLE_PHYSICS)
+    option(AIVERSE_BUILD_PHYSICS_DEMO "Build the interactive Box3D sandbox" ${AIVERSE_DESKTOP})
+    if(AIVERSE_BUILD_TESTS)
+        add_executable(aiverse_physics_tests tests/physics/tests.cpp)
+        target_link_libraries(aiverse_physics_tests PRIVATE AIVERSE::physics)
+        add_test(NAME physics_runtime COMMAND aiverse_physics_tests ${PROJECT_SOURCE_DIR}/examples/physics/scene.json)
+    endif()
+    if(AIVERSE_BUILD_PHYSICS_DEMO AND AIVERSE_DESKTOP)
+        add_executable(aiverse_physics_demo examples/physics/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_physics_demo PRIVATE AIVERSE::physics aiverse_runtime aiverse_i18n)
+        target_compile_definitions(aiverse_physics_demo PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+    endif()
+endif()
+
+# Geometry visibility verification uses the same renderer on GL and Metal.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_geometry_preview tests/geometry/preview.cpp)
+    target_link_libraries(aiverse_geometry_preview PRIVATE aiverse_runtime)
+endif()
+
+option(AIVERSE_ENABLE_CLOTH "Build optional presentation XPBD cloth" OFF)
+if(AIVERSE_ENABLE_CLOTH)
+    add_subdirectory(engine/cloth)
+endif()
+
+# Offline surface proxies reuse the model format, PNG encoder and ordinary rendering paths.
+if(TARGET aiverse_modeling)
+    target_sources(aiverse_modeling PRIVATE tools/modeling/SurfaceProxy.cpp)
+    target_link_libraries(aiverse_modeling PRIVATE aiverse_branding)
+endif()
+if(TARGET aiverse_editor_core)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/SurfaceProxyOps.cpp)
+endif()
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_modeling)
+    add_executable(aiverse_surface_proxy_tests tests/geometry/surface_proxy.cpp)
+    target_link_libraries(aiverse_surface_proxy_tests PRIVATE aiverse_editor_core aiverse_modeling aiverse_zstd_dec)
+    add_test(NAME surface_proxy COMMAND aiverse_surface_proxy_tests)
+endif()
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
+    add_executable(aiverse_surface_proxy_preview tests/geometry/surface_preview.cpp)
+    target_link_libraries(aiverse_surface_proxy_preview PRIVATE aiverse_runtime aiverse_modeling)
+endif()
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
+    add_executable(aiverse_geometry_bench tools/geometrybench/main.cpp)
+    target_link_libraries(aiverse_geometry_bench PRIVATE aiverse_runtime aiverse_modeling)
+endif()
+
+option(AIVERSE_BUILD_AUTOLOD "Build offline meshoptimizer LOD tools" OFF)
 if(AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP)
     add_library(aiverse_meshoptimizer_lod STATIC
         third_party/meshoptimizer/src/allocator.cpp
@@ -1282,4 +1379,25 @@ if(AIVERSE_BUILD_RENDERBENCH AND AIVERSE_DESKTOP)
         target_compile_definitions(aiverse_renderbench_gl PRIVATE AIVERSE_BENCH_REVISION="${BENCH_REV}" AIVERSE_BENCH_BUILD="${CMAKE_BUILD_TYPE}")
         set_source_files_properties(apps/renderbench/gl_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc -Wno-deprecated-declarations")
     endif()
+endif()
+
+if(TARGET aiverse_geometry_bench AND TARGET aiverse_meshoptimizer_lod)
+    target_link_libraries(aiverse_geometry_bench PRIVATE aiverse_meshoptimizer_lod)
+    target_compile_definitions(aiverse_geometry_bench PRIVATE AIVERSE_BENCH_AUTOLOD=1)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
+    add_executable(aiverse_instance_preview tests/geometry/instance_preview.cpp)
+    target_link_libraries(aiverse_instance_preview PRIVATE aiverse_runtime aiverse_modeling)
+endif()
+
+# Skill metadata is checked alongside native integration; isolation is a host-only build check.
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME skill_catalog COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/skills/catalog.py check)
+    add_test(NAME skill_routing COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/catalog_test.py)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND AND UNIX AND NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME skill_library_isolation COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/skills/isolation.py)
+    set_tests_properties(skill_library_isolation PROPERTIES TIMEOUT 600)
 endif()

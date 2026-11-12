@@ -84,6 +84,7 @@ public:
             ed.paintLayers.reset();ed.entityFx.reset();ed.scriptTargeting={};
             if (viewSim_) {
                 const Json map = ed.doc().toJson();
+                view_.setContentReader([dir=ed.ws().project.dir](const std::string& path,std::string& text){std::ifstream f(fs::path(dir)/path,std::ios::binary);if(!f)return false;text.assign(std::istreambuf_iterator<char>(f),{});return true;});
                 if (view_.load(*viewSim_, ed.ws().project.simRules(map), map, uint8_t(std::max(0, ed.humanSlot())))) view_.attach(*viewSim_);
                 for (auto& e : view_.log()) if (e.error) ed.ws().log("view-script", e.text, true);
             }

@@ -33,12 +33,12 @@ void moveActor(Actor& a,const Input& in,const MotorConfig& c,const world::Spatia
     a.yaw=in.yaw;a.pitch=in.pitch;
     bool crouch=(in.buttons&Crouch)!=0;
     bool prone=(in.buttons&Prone)!=0||a.downed;
-    if(a.prone&&!prone){Actor standing=a;standing.prone=false;auto b=actorBounds(standing,c);b.min.y+=skin;if(!w.query(b).empty())prone=true;}
+    if(a.prone&&!prone){Actor standing=a;standing.prone=false;auto b=actorBounds(standing,c);b.min.y+=skin;if(w.blocked(b))prone=true;}
     a.prone=prone;
     if(a.crouched&&!crouch) {
         Actor standing=a;standing.crouched=false;
         auto b=actorBounds(standing,c);b.min.y+=skin;
-        if(!w.query(b).empty())crouch=true;
+        if(w.blocked(b))crouch=true;
     }
     a.crouched=crouch;
     auto height=stanceHeight(a,c);

@@ -9,7 +9,9 @@ template<class NativeState>
 bool storeBytes(NativeState& state,const std::string& key,const std::string& bytes){
     if(bytes.empty()||bytes.size()>16*1024*1024)return false;
     std::vector<int64_t> values;values.reserve(bytes.size()+1);values.push_back(1);
-    for(unsigned char byte:bytes)values.push_back(byte);state.arrays[key]=std::move(values);return true;
+    for(unsigned char byte:bytes)values.push_back(byte);
+    state.arrays[key]=std::move(values);
+    return true;
 }
 template<class NativeState>
 std::optional<std::string> loadBytes(const NativeState& state,const std::string& key){

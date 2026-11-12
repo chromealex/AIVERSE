@@ -438,6 +438,7 @@ fs::path contentPack(Options& o) {
          (audio == "off" ? std::string() : " (звук: " + audio + ")"));
     aiverse::pack::PackWriter w;
     aiverse::pack::IgnoreRules rules;
+    rules.add("models/source/*"); // editor authoring source/history; games consume exported GLB
     rules.add("native/*"); // compiled game modules are source code, not runtime data (root only: "native/" would match any folder named native, e.g. models/native)
     rules.add("unpackers/"); // the game's own unpacker plugins are build tools, not content
     for (const char* d : {"Builds/", "Logs/", "logs/", "dist/", ".aiverse/", ".rtsengine/"}) rules.add(d);   // project outputs and editor state

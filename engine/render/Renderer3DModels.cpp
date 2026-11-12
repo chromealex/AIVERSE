@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <chrono>
 
 namespace aiverse::render {
 
@@ -20,9 +21,20 @@ static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform b
 
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
                    kKeyInstanced = 256, kKeyOutline = 512;
-constexpr int kMaxInstances = 32; // 128-byte instance records in a 4 KB uniform block
+struct ProfileTimer {
+    double* value;
+    std::chrono::steady_clock::time_point start;
+    explicit ProfileTimer(double* v):value(v) { if(value)start=std::chrono::steady_clock::now(); }
+    ~ProfileTimer(){if(value)*value+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();}
+};
 
 bool transparentItem(uint32_t flags) { return (flags & kDrawTransparent) != 0; }
+// Model fragment slots 0..6, 9..12 are taken (12: SSR scene depth); up to four graph textures follow.
+// Metal has sampler slots 0..15 only, so graph slots from 16 use a constexpr repeat/linear sampler.
+constexpr int kGraphTextureSlot = 13;
+std::string metalGraphSampler(int slot) {
+    return slot < 16 ? ", sampler s"+std::to_string(slot)+" [[sampler("+std::to_string(slot)+")]]" : std::string();
+}
 
 } // namespace
 
@@ -49,6 +61,7 @@ void Renderer3D::initModels() {
     black_ = tex1x1(0xff000000u, "black");
     flatNormal_ = tex1x1(0xffff8080u, "flat normal");
     jointData_.reserve(kJointFloats * 64);
+    setInstanceLimit(0);
 }
 
 void Renderer3D::shutdownModels() {
@@ -59,6 +72,25 @@ void Renderer3D::shutdownModels() {
     for (auto t : {white_, black_, flatNormal_}) dev_->destroyTexture(t);
 }
 
+void Renderer3D::setInstanceLimit(uint32_t limit) {
+    const auto maximum=dev_?uint32_t(std::clamp<size_t>(dev_->maxUniformBytes()/128,1,256)):32u;
+    const auto next=limit?std::clamp(limit,1u,maximum):maximum;
+    if(next==instanceLimit_)return;
+    instanceLimit_=next;
+    if(!dev_)return;
+    for(auto& [key,p]:modelPipes_)dev_->destroyPipeline(p);
+    for(auto& [key,s]:modelShaders_)if(s.shader.valid())dev_->destroyShader(s.shader);
+    modelPipes_.clear();modelShaders_.clear();
+}
+void StaticModelCache::prepare(const Model& source,const mat4& transform) {
+    model=&source;world=transform;transforms.clear();primitiveOffsets.clear();
+    for(const auto& m:source.bindWorld)transforms.push_back(world*m);
+    size_t offset=0;for(const auto& mesh:source.meshes){primitiveOffsets.push_back(offset);offset+=mesh.primitives.size();}
+    displaced=std::any_of(source.materials.begin(),source.materials.end(),[](const Material& m){return m.shaderGraph&&m.shaderGraph->outputs.count("vertexOffset");});
+    const auto c=(source.boundsMin+source.boundsMax)*.5f,e=(source.boundsMax-source.boundsMin)*.75f+float3{.1f,.1f,.1f};
+    min={1e30f,1e30f,1e30f};max={-1e30f,-1e30f,-1e30f};
+    for(int i=0;i<8;++i){auto p=world.transformPoint({c.x+(i&1?e.x:-e.x),c.y+(i&2?e.y:-e.y),c.z+(i&4?e.z:-e.z)});min=min3(min,p);max=max3(max,p);}
+}
 void Renderer3D::setMaterialQuality(MaterialQuality q) {
     if (q == matQuality_) return;
     matQuality_ = q;
@@ -80,16 +112,17 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u);
     const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
-    const auto* graph = it.mat->shaderGraph.get();
-    const ModelShaderKey skey{shaderKey, it.mat->shaderGraph};
-    const ModelShaderKey pkey{pipeKey, it.mat->shaderGraph};
+    const auto selectedGraph=it.mat->shaderGraph && int(matQuality_)>=it.mat->shaderGraph->minQuality?it.mat->shaderGraph:nullptr;
+    const auto* graph = selectedGraph.get();
+    const ModelShaderKey skey{shaderKey, selectedGraph};
+    const ModelShaderKey pkey{pipeKey, selectedGraph};
     for (auto& [k, p] : modelPipes_) if (k == pkey) return p;
 
     ShaderEntry* entry = nullptr;
     for (auto& [k, s] : modelShaders_) if (k == skey) entry = &s;
     if (!entry) {
         std::string defs;
-        defs += "#define AIVERSE_INST " + std::to_string(instanced ? kMaxInstances : 1) + "\n";
+        defs += "#define AIVERSE_INST " + std::to_string(instanced ? instanceLimit_ : 1) + "\n";
         if (skinned) defs += "#define SKINNED 1\n";
         if (baked) defs += "#define BAKED 1\n";
         if (morph) defs += "#define MORPH 1\n";
@@ -97,32 +130,78 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
         defs += "#define AIVERSE_Q " + std::to_string(int(matQuality_)) + "\n";
-        const std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
+        std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
         std::string fs = defs + (shadow ? shaders::kModelShadowFS : shaders::kModelFS);
         std::string msl = defs + (shadow ? shaders::kModelShadowMSL : shaders::kModelMSL);
         if (graph) {
-            auto inject = [&](std::string& source, bool metal) {
-                auto replace = [&](const std::string& marker, const std::string& text) {
-                    size_t at = source.find(marker);
-                    if (at != std::string::npos) source.replace(at, marker.size(), text);
-                };
-                const std::string v = metal ? "float4" : "vec4";
-                std::string code = "\n#define SG_SAMPLE(uv) " + std::string(metal ? "tex1.sample(s1,uv)" : "texture(tex1,uv)") + "\n";
-                code += std::string(metal ? "float2 sg_uv = in.uv;" : "vec2 sg_uv = v_uv;") + v + " sg_input = base;\n";
-                code += graph::statements(*graph, metal) + "base = " + graph->outputs.at("color") + ";\n#undef SG_SAMPLE\n";
-                replace("// SG_COLOR", code);
-                std::string surface;
-                for (auto name : {"roughness", "metallic", "emission"}) {
-                    auto output = graph->outputs.find(name);
-                    if (output != graph->outputs.end()) surface += std::string(name == std::string("roughness") ? "rough" : name == std::string("emission") ? "emis" : "metallic") + " = " + output->second + (name == std::string("emission") ? ".rgb;\n" : ".r;\n");
-                }
-                replace("// SG_SURFACE", surface);
+            auto replace = [](std::string& source,const std::string& marker,const std::string& text) {
+                const auto at=source.find(marker);if(at!=std::string::npos)source.replace(at,marker.size(),text);
             };
-            inject(fs, false); inject(msl, true);
+            auto inject = [&](std::string& source,bool metal,bool vertexOnly) {
+                const std::string v=metal?"float4":"vec4", v3=metal?"float3":"vec3";
+                if(!vertexOnly) {
+                    std::string declarations, args, macros;
+                    for(size_t i=0;i<graph->textures.size();++i) {
+                        const auto slot=std::to_string(kGraphTextureSlot+int(i)), index=std::to_string(i);
+                        declarations+="uniform sampler2D tex"+slot+";\n";
+                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]]"+metalGraphSampler(kGraphTextureSlot+int(i));
+                        macros+="#define SG_TEXTURE"+index+"(uv) "+(metal?"tex"+slot+".sample(s"+slot+",uv)":"texture(tex"+slot+",uv)")+"\n";
+                        macros+="#define SG_TEXTURE_LOD"+index+"(uv,lod) "+(metal?"tex"+slot+".sample(s"+slot+",uv,level(lod))":"textureLod(tex"+slot+",uv,lod)")+"\n";
+                    }
+                    if(metal) {
+                        const auto f=source.find("fragment ");const auto at=source.find(") {",f);
+                        if(at!=std::string::npos)source.insert(at,args);
+                    } else source=declarations+source;
+                    const auto uv=metal?"in.uv":"v_uv", wp=metal?"in.wpos":"v_wpos", np=metal?"in.nrm":"v_nrm";
+                    std::string code="\n#define SG_SAMPLE(uv) "+std::string(metal?"tex1.sample(s1,uv)":"texture(tex1,uv)")+"\n"+macros;
+                    code+=std::string(metal?"float2":"vec2")+" sg_uv="+uv+"; "+v+" sg_input=base;\n";
+                    code+=v3+" sg_world="+wp+", sg_object="+(metal?"in.opos":"v_opos")+", sg_normal="+np+", sg_view="+(metal?"f.camPos.xyz":"u_camPos.xyz")+"-"+wp+";\n";
+                    code+=v+" sg_color="+(metal?"in.col":"v_col")+"; float sg_time="+(metal?"f.camPos.w":"u_camPos.w")+";\n";
+                    // Projected world position gives the same normalized screen coordinates in colour/shadow passes.
+                    code+=v+" sg_clip="+(metal?"f.viewProj":"u_viewProj")+"*"+v+"("+wp+",1.0); "+(metal?"float2":"vec2")+" sg_screen=sg_clip.xy/max(abs(sg_clip.w),0.00001)*0.5+0.5;\n";
+                    code+=graph::statements(*graph,metal)+"base="+graph->outputs.at("color")+";\n#undef SG_SAMPLE\n";
+                    replace(source,"// SG_COLOR",code);
+                    std::string surface;
+                    for(auto name:{"roughness","metallic","emission","normal"}) {
+                        auto it=graph->outputs.find(name);if(it==graph->outputs.end())continue;
+                        const std::string key=name;
+                        if(key=="normal") surface+="n="+it->second+".xyz/max(length("+it->second+".xyz),0.00001);\n";
+                        else surface+=(key=="roughness"?"rough":key=="emission"?"emis":"metallic")+std::string(" = ")+it->second+(key=="emission"?".rgb;\n":".r;\n");
+                    }
+                    replace(source,"// SG_SURFACE",surface);
+                }
+                if(vertexOnly || metal) {
+                    const std::string pos=metal?"d.p":"p", normal=metal?"d.n":"n";
+                    std::string code="{\n"+std::string(metal?"float2 sg_uv=uvTransform(m,in.uv);":"vec2 sg_uv=uvTransform(a_uv);");
+                    code+=v3+" sg_object="+pos+".xyz, sg_world=(I.model*"+pos+").xyz;\n";
+                    code+=v3+" sg_c0=I.model[0].xyz,sg_c1=I.model[1].xyz,sg_c2=I.model[2].xyz;\n";
+                    code+=v3+" sg_normal="+(metal?"float3x3":"mat3")+"(cross(sg_c1,sg_c2),cross(sg_c2,sg_c0),cross(sg_c0,sg_c1))*"+normal+"*(dot(sg_c0,cross(sg_c1,sg_c2))<0.0?-1.0:1.0);\n";
+                    code+=v3+" sg_view="+(metal?"f.camPos.xyz":"u_camPos.xyz")+"-sg_world; "+v+" sg_color="+(metal?"in.col":"a_col")+"; float sg_time="+(metal?"f.camPos.w":"u_camPos.w")+";\n";
+                    std::string args,declarations,macros;
+                    for(size_t i=0;i<graph->textures.size();++i) {
+                        const auto slot=std::to_string(kGraphTextureSlot+int(i)),index=std::to_string(i);
+                        declarations+="uniform sampler2D tex"+slot+";\n";
+                        args+=", texture2d<float> tex"+slot+" [[texture("+slot+")]]"+metalGraphSampler(kGraphTextureSlot+int(i));
+                        macros+="#define SG_TEXTURE_LOD"+index+"(uv,lod) "+(metal?"tex"+slot+".sample(s"+slot+",uv,level(lod))":"textureLod(tex"+slot+",uv,lod)")+"\n";
+                    }
+                    if(metal)replace(source,"vs_main(VERTEX_ARGS)","vs_main(VERTEX_ARGS"+args+")");else source=declarations+source;
+                    code+=macros;
+                    code+=metal?graph->vertexMsl:graph->vertexGlsl;
+                    if(auto it=graph->outputs.find("vertexOffset");it!=graph->outputs.end())code+=pos+".xyz += "+it->second+".xyz;\n";
+                    if(auto it=graph->outputs.find("vertexNormal");it!=graph->outputs.end())code+=normal+" = "+it->second+".xyz;\n";
+                    code+="}\n";replace(source,"// SG_VERTEX",code);
+                }
+            };
+            inject(vs,false,true);inject(fs,false,false);inject(msl,true,false);
+            for(int slot=16;slot<kGraphTextureSlot+int(graph->textures.size());++slot) {
+                const auto at=msl.find("using namespace metal;");
+                if(at!=std::string::npos)msl.insert(at+22,"\nconstexpr sampler s"+std::to_string(slot)+"(coord::normalized, address::repeat, filter::linear, mip_filter::linear);");
+            }
         }
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
-        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = shadow ? 9 : 13; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
+        // tex11/tex12: SSR scene colour/depth; graph textures follow at kGraphTextureSlot.
+        sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = graph && !graph->textures.empty() ? kGraphTextureSlot+int(graph->textures.size()) : shadow ? 9 : 13; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
         e.shader = dev_->createShader(sd);
         if (!e.shader.valid()) {
@@ -166,13 +245,19 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
 }
 
 void Renderer3D::drawModel(const ModelDraw& d) {
+    ProfileTimer timer(profiling_?&profile_.submitMs:nullptr);
     const Model* m = d.model;
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
+    const auto* cache=d.staticCache;
+    if(cache&&(cache->model!=m||cache->transforms.size()!=m->nodes.size()||cache->primitiveOffsets.size()!=m->meshes.size()||std::memcmp(cache->world.m,d.world.m,sizeof d.world.m)!=0||d.nodeWorld||d.materials||d.nodeMaterial||d.pose||d.baked||!m->skins.empty()||!m->clips.empty()))cache=nullptr;
+    if(cache)++profile_.cachedModels;
     // whole-model culling with the bind-pose bounds (padded: animation moves limbs outside them)
     float3 c = (m->boundsMin + m->boundsMax) * 0.5f, e = (m->boundsMax - m->boundsMin) * 0.75f + float3{0.1f, 0.1f, 0.1f};
-    const bool inView = modelBoxVisible(viewProj_ * d.world, c - e, c + e);
+    const auto& graphMaterials=d.materials && d.materials->size()>=m->materials.size()?*d.materials:m->materials;
+    const bool displaced=cache?cache->displaced:std::any_of(graphMaterials.begin(),graphMaterials.end(),[this](const Material& mat){return mat.shaderGraph && int(matQuality_)>=mat.shaderGraph->minQuality && mat.shaderGraph->outputs.count("vertexOffset");});
+    const bool inView = displaced || (cache?modelBoxVisible(viewProj_,cache->min,cache->max):modelBoxVisible(viewProj_ * d.world, c - e, c + e));
     const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 &&
-                          modelBoxVisible(lightViewProj_ * d.world, c - e, c + e);
+                          (displaced || (cache?modelBoxVisible(lightViewProj_,cache->min,cache->max):modelBoxVisible(lightViewProj_ * d.world, c - e, c + e)));
     if (!inView && !inShadow) return;
     const std::vector<mat4>& world = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
     const std::vector<Material>& mats = d.materials && d.materials->size() >= m->materials.size() ? *d.materials : m->materials;
@@ -188,8 +273,8 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         if (node.mesh < 0) continue;
         ++modelStats_.nodes;
         const MeshDef& baseMesh = m->meshes[size_t(node.mesh)];
-        const bool rigid = node.skin < 0 && !baseMesh.deformable;
-        const mat4 nodeWorld = d.world * world[size_t(n)];
+        const bool rigid = node.skin < 0 && !baseMesh.deformable && !displaced;
+        const mat4 nodeWorld = cache ? cache->transforms[size_t(n)] : d.world * world[size_t(n)];
         bool nodeView = inView, nodeShadow = inShadow;
         if (rigid && modelCullingEnabled_) {
             nodeView = inView && modelBoxVisible(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax);
@@ -197,11 +282,17 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (!nodeView && !nodeShadow) ++modelStats_.culledNodes; // retained for later mirror/spot frusta
         }
         int meshIndex = node.mesh; size_t level = 0;
-        if (rigid && modelLodEnabled_ && !baseMesh.lods.empty()) {
-            float pixels = nodeView ? modelPixelDiameter(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, sceneW_, sceneH_) : 0;
-            if (nodeShadow) pixels = std::max(pixels, modelPixelDiameter(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, shadowSize_, shadowSize_));
-            if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity();
-            for (size_t i = 0; i < baseMesh.lods.size(); ++i) if (pixels < baseMesh.lods[i].maxPixels) { meshIndex = baseMesh.lods[i].mesh; level = i + 1; }
+        if (modelLodEnabled_ && rigid && !baseMesh.lods.empty() && d.variant < 0 && !d.nodeMaterial) {
+            const float error = length(baseMesh.boundsMax - baseMesh.boundsMin);
+            const bool zeroToOne = dev_->info().clipDepthZeroToOne;
+            float pixels = nodeView ? geometryErrorPixels(viewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, error, sceneW_, sceneH_, zeroToOne) : 0;
+            if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(lightViewProj_ * nodeWorld, baseMesh.boundsMin, baseMesh.boundsMax, error, shadowSize_, shadowSize_, zeroToOne));
+            if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity(); // full detail for later mirror/spot frusta
+            for (size_t i = 0; i < baseMesh.lods.size(); ++i) {
+                const auto& lod = baseMesh.lods[i];
+                if (pixels < lod.maxPixels && lod.mesh >= 0 && size_t(lod.mesh) < m->meshes.size()) { meshIndex = lod.mesh; level = i + 1; }
+            }
+            if (meshIndex != node.mesh) ++profile_.lodNodes;
         }
         ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
         for (const Primitive& p : m->meshes[size_t(meshIndex)].primitives) {
@@ -210,6 +301,11 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (d.variant >= 0 && d.variant < int(p.variantMaterial.size()) && p.variantMaterial[size_t(d.variant)] >= 0) mi = p.variantMaterial[size_t(d.variant)];
             if (d.nodeMaterial && size_t(n) < d.nodeMaterial->size() && (*d.nodeMaterial)[size_t(n)] >= 0 && &mats == d.materials) mi = (*d.nodeMaterial)[size_t(n)];
             ModelItem it;
+            it.geometry = d.geometry;
+            it.firstIndex = p.firstIndex; it.indexCount = p.indexCount;
+            size_t pi = cache?cache->primitiveOffsets[size_t(meshIndex)]:0;
+            if(!cache)for (int mesh = 0; mesh < meshIndex; ++mesh) pi += m->meshes[size_t(mesh)].primitives.size();
+            it.geometryPrimitive = pi + size_t(&p - m->meshes[size_t(meshIndex)].primitives.data());
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
@@ -232,7 +328,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
                         for (int col = 0; col < 4; ++col) dst[j * 12 + size_t(r) * 4 + size_t(col)] = palette_[j].at(r, col);
                 it.world = d.world;
             } else {
-                it.world = d.world * world[size_t(n)];
+                it.world = cache?cache->transforms[size_t(n)]:d.world * world[size_t(n)];
             }
             if (p.morphTargets > 0 && m->morphTex.valid()) {
                 const float* w = usePose ? (*d.pose)[size_t(n)].w : node.weights;
@@ -260,8 +356,8 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         dev_->setPipeline(ph); currentPipe_ = ph;
         if (phase != 0) { lights.bind(5, 9); bindTrace(10); bindSceneTextures(11, 12); }   // U5 / tex9: dynamic lights; tex10: height field (traced terrain shadows)
     }
-    // per-instance block (an instanced shader declares 32 entries: the block is always uploaded whole)
-    const uint32_t slots = instanced ? uint32_t(kMaxInstances) : 1u;
+    // Upload the whole instance block declared by this backend's shader variant.
+    const uint32_t slots = instanced ? instanceLimit_ : 1u;
     instData_.assign(size_t(slots) * 32, 0.0f);
     for (uint32_t i = 0; i < count; ++i) {
         const ModelItem& x = modelItems_[items[i]];
@@ -295,6 +391,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
             return idx >= 0 && idx < int(it.model->images.size()) && it.model->images[size_t(idx)].tex.valid() ? it.model->images[size_t(idx)].tex : def;
         };
         dev_->setTexture(1, tex(mt.baseTex, white_));
+        if(mt.shaderGraph)for(size_t i=0;i<mt.shaderGraph->textures.size();++i)dev_->setTexture(kGraphTextureSlot+int(i),tex(mt.graphTextures[i],white_));
         if (phase != 0) {
             dev_->setTexture(2, tex(mt.mrTex, white_));
             dev_->setTexture(3, tex(mt.normalTex, flatNormal_));
@@ -322,16 +419,19 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     }
     dev_->setVertexBuffer(it.model->vb);
     dev_->setIndexBuffer(it.model->ib);
-    dev_->drawIndexed(it.prim->indexCount, it.prim->firstIndex, 0, count);
+    dev_->drawIndexed(it.indexCount, it.firstIndex, 0, count);
     lastItem_ = &it;
-    modelStats_.triangles += uint64_t(it.prim->indexCount / 3) * count;
+    modelStats_.triangles += uint64_t(it.indexCount / 3) * count;
     if (count > 1) { ++modelStats_.instancedDraws; modelStats_.drawnInstances += count; }
     ++drawCalls_;
+    ++profile_.draws[size_t(phase)];profile_.instances[size_t(phase)]+=count;
+    profile_.triangles[size_t(phase)]+=it.indexCount/3*count;
 }
 
 void Renderer3D::renderModels(int phase) {
     if (modelItems_.empty()) return;
     order_.clear();
+    auto started=profiling_?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
     for (uint32_t i = 0; i < modelItems_.size(); ++i) {
         const ModelItem& it = modelItems_[i];
         const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags);
@@ -342,8 +442,18 @@ void Renderer3D::renderModels(int phase) {
         }
         bool take = phase == 0 ? shadow : phase == 3 ? visible && it.outline.w > 0 : phase == 4 ? visible && transparentItem(it.flags) :
                     visible && (phase == 2) == blended;
+        if(take&&phase==0&&!it.mat->shaderGraph&&it.joints<0&&!it.baked&&it.morph<0)
+            take=geometryBoxVisible(lightViewProj_*it.world,it.prim->boundsMin,it.prim->boundsMax);
+        // Reflection has its own view, never consume main-view occlusion there.
+        if (phase == 1 && !geometryMainView_) take = !blended && (it.mat->shaderGraph || geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax));
+        if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && !it.mat->shaderGraph && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
+            geometryOcclusion_.hidden(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax)) {
+            if (phase == 1 || phase == 2) ++geometryStats_.occluded;
+            take = false;
+        }
         if (take) order_.push_back(i);
     }
+    if(profiling_){auto now=std::chrono::steady_clock::now();profile_.selectMs[size_t(phase)]+=std::chrono::duration<double,std::milli>(now-started).count();started=now;}
     if (order_.empty()) return;
     if (phase == 2) { // back to front
         std::sort(order_.begin(), order_.end(), [&](uint32_t a, uint32_t b) { return modelItems_[a].depth > modelItems_[b].depth; });
@@ -357,6 +467,8 @@ void Renderer3D::renderModels(int phase) {
             return a < b;
         });
     }
+    if(profiling_)profile_.sortMs[size_t(phase)]+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+    ProfileTimer timer(profiling_?&profile_.drawMs[size_t(phase)]:nullptr);
     currentPipe_ = {};
     lastItem_ = nullptr;
     auto batchable = [&](const ModelItem& x) { return modelInstancingEnabled_ && x.joints < 0 && x.morph < 0; };
@@ -368,11 +480,62 @@ void Renderer3D::renderModels(int phase) {
     for (size_t i = 0; i < order_.size();) {
         size_t j = i + 1;
         if (batchable(modelItems_[order_[i]]))
-            while (j < order_.size() && j - i < size_t(kMaxInstances) && batchable(modelItems_[order_[j]]) &&
+            while (j < order_.size() && j - i < size_t(instanceLimit_) && batchable(modelItems_[order_[j]]) &&
                    sameBatch(modelItems_[order_[i]], modelItems_[order_[j]])) ++j;
-        drawModelBatch(order_.data() + i, uint32_t(j - i), phase);
+        drawGeometryBatch(order_.data() + i, uint32_t(j - i), phase);
         i = j;
     }
 }
 
+void Renderer3D::prepareOcclusion() {
+    ProfileTimer timer(profiling_?&profile_.occlusionMs:nullptr);
+    geometryOcclusion_.clear(dev_->info().clipDepthZeroToOne);
+    uint32_t budget = 8192;
+    for (const auto& it : modelItems_) {
+        if (!budget) break;
+        if (!it.inView || !it.geometry.occluder || !it.model->geometry || it.joints >= 0 || it.baked || it.morph >= 0 ||
+            it.mat->alpha != AlphaMode::Opaque || it.mat->transparent || it.mat->shaderGraph ||
+            it.tint.w < 1 || it.dissolve > 0 || transparentItem(it.flags)) continue;
+        const auto clip=viewProj_*it.world;
+        for (const auto& t : it.model->geometry->occluders[it.geometryPrimitive]) {
+            geometryOcclusion_.triangle(clip, t, it.mat->doubleSided);
+            ++geometryStats_.occluderTriangles;
+            if (!--budget) break;
+        }
+    }
+}
+void Renderer3D::drawGeometryBatch(const uint32_t* items, uint32_t count, int phase) {
+    auto& it = modelItems_[items[0]];
+    const bool shadow=phase==0;
+    const bool selected=shadow?it.geometry.shadowClusters:(phase==1&&geometryMainView_&&it.geometry.clusters);
+    const bool eligible = count == 1 && selected && it.indexCount >= 6144 && !it.mat->shaderGraph && it.model->geometry &&
+        it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 && it.dissolve == 0;
+    if (!eligible) { drawModelBatch(items,count,phase); return; }
+    const auto& clusters = it.model->geometry->primitives[it.geometryPrimitive];
+    if (clusters.empty() || clusters.size() > 8192 || geometryStats_.clustersTested + clusters.size() > 16384) { drawModelBatch(items,count,phase); return; }
+    const mat4 clip = (shadow?lightViewProj_:viewProj_) * it.world;
+    const auto first = it.firstIndex, indices = it.indexCount;
+    auto& runs=geometryRuns_;runs.clear();
+    uint32_t culled = 0, reduced = 0;
+    for (const auto& c : clusters) {
+        ++geometryStats_.clustersTested;
+        if (!geometryBoxVisible(clip,c.min,c.max) || (!shadow && it.geometry.occlusion && geometryOcclusion_.hidden(clip,c.min,c.max))) {
+            ++culled; continue;
+        }
+        // The occlusion buffer contains source triangles, so an occluder must render exact geometry.
+        const bool coarse = (!it.geometry.occluder||shadow) && (!shadow||it.mat->alpha==AlphaMode::Opaque) && c.coarseCount <= c.indexCount &&
+            geometryErrorPixels(clip,c.min,c.max,c.error,shadow?geometryShadowSize_:sceneW_,shadow?geometryShadowSize_:sceneH_,dev_->info().clipDepthZeroToOne) <= (shadow?it.geometry.shadowErrorPixels:it.geometry.errorPixels);
+        if (coarse&&c.coarseCount<c.indexCount) ++reduced;
+        const auto begin = coarse ? c.coarseFirst : c.firstIndex, length = coarse ? c.coarseCount : c.indexCount;
+        if (!runs.empty() && runs.back().first + runs.back().second == begin) runs.back().second += length;
+        else runs.push_back({begin,length});
+    }
+    // CPU-driven splits must save enough vertex work to pay for additional draws.
+    uint64_t selectedIndices=0;for(auto run:runs)selectedIndices+=run.second;
+    const uint64_t extraDrawCost=runs.empty()?0:uint64_t(runs.size()-1)*12288;
+    if (runs.size()>4 || (!culled&&!reduced) || (!runs.empty()&&selectedIndices+extraDrawCost>=indices)) { drawModelBatch(items,count,phase); return; }
+    geometryStats_.clustersCulled += culled; geometryStats_.coarseClusters += reduced;
+    for (auto [begin,length] : runs) { it.firstIndex = begin; it.indexCount = length; drawModelBatch(items,count,phase); }
+    it.firstIndex = first; it.indexCount = indices;
+}
 } // namespace aiverse::render

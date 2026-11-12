@@ -9,3 +9,9 @@ description: Add persistent item instances, collection, equipment slots, upgrade
 4. Use items equip/unequip/upgrade/salvage/merge actions. Merge's id is one input and the surviving output; inputs contains the other distinct IDs. Require equal levels/types and no equipped inputs. Output starts at level zero.
 5. Let Service own the atomic instance+currency transaction and dedupe. UI previews never charge separately.
 6. Test insufficient balances, occupied/incompatible slots, repeated input IDs, cap failures, duplicate operations and reload. Use `tests/meta/service_tests.cpp` as a compiling example.
+
+Server library: `AIVERSE::meta_items`. Select `items` in
+`aiverse_add_meta_server(game_meta MODULES ...)`, include `game_meta.h`, and construct
+`Service(kits::game_meta(), config, state, commit, draw)`. Native OBJECT modules use
+`aiverse_native_use_meta(target game_meta)`. Client callers link only `AIVERSE::meta_client`;
+SQL and private definitions remain server-side. Dependencies: economy.

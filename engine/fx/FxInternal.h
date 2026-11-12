@@ -26,8 +26,8 @@ constexpr int kTrailPts = 9;                 // stored trail points per particle
 constexpr int kMaxSubDepth = 3;              // sub-emitters of sub-emitters of ...: recursion stops here
 constexpr size_t kMaxPendingSubs = 256;      // sub-effects started per frame at most
 
-struct Vertex { float3 pos; float uv[2]; uint32_t rgba; };
-static_assert(sizeof(Vertex) == 24, "particle vertex must stay 24 bytes");
+struct Vertex { float3 pos; float uv[2]; uint32_t rgba; float4 graphData{}; };
+static_assert(sizeof(Vertex) == 40, "particle graph attributes follow the original 24-byte vertex");
 
 inline uint32_t packColor(float4 c) {
     auto q = [](float v) { return uint32_t(v <= 0 ? 0 : v >= 1 ? 255 : v * 255.0f + 0.5f); };
@@ -145,7 +145,7 @@ bool builtinMesh(const std::string& name, FxMesh& out);
 using namespace detail;
 
 struct ParticleSystem::Impl {
-    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; };
+    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; std::vector<FxTexture> graphTextures; };
     struct MeshRT {
         std::vector<float3> pos, nrm;
         std::vector<float2> uv;

@@ -1,0 +1,13 @@
+{
+  "model": "models/golem.glb",
+  "parameters": {"left": [0.5,1.65,0.2], "right": [-0.5,1.65,0.2], "head": [0,1.75,0], "strength": 1},
+  "nodes": [
+    {"id":"idle", "kind":"clip", "clip":"Idle", "position":[25,45]},
+    {"id":"body", "kind":"rig", "input":"idle", "position":[250,45], "units":[
+      {"op":"fullBodyIK", "bone":"hips", "iterations":32, "rootPull":0.2, "weightParameter":"strength",
+       "effectors":[{"bone":"arm.L","target":"left"},{"bone":"arm.R","target":"right"},{"bone":"head","target":"head","weight":0.5}],
+       "joints":[{"bone":"spine","stiffness":0.1,"min":[-0.7,-0.7,-0.7],"max":[0.7,0.7,0.7]}]}
+    ]}
+  ],
+  "output":"body"
+}

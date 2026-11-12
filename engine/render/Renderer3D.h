@@ -5,6 +5,7 @@
 // Frame:  beginScene(camera) -> drawMesh()/line()/... -> render(pass)  [shadow pass + main pass;
 //         the main pass is left open so the caller can draw UI, then calls device.endPass()]
 #pragma once
+#include "Geometry.h"
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -115,8 +116,20 @@ public:
 struct BakedSample { int clipA = -1, clipB = -1; float timeA = 0, timeB = 0, mix = 1; bool loopA = true, loopB = true; };
 
 // One model instance. Node matrices come from an animated pose (Animation.h) or the bind pose.
-// Rigid parts and baked-skinned meshes of identical instances are drawn instanced (32 per draw).
+// Rigid parts and baked-skinned meshes of identical instances are drawn instanced (32 portable / up to 256 with large uniform buffers).
+// Immutable rigid source cache. Rebuild after changing the model or its transform.
+struct StaticModelCache {
+    const Model* model=nullptr;
+    mat4 world;
+    float3 min,max;
+    std::vector<mat4> transforms;
+    std::vector<size_t> primitiveOffsets;
+    bool displaced=false;
+    void prepare(const Model& source,const mat4& transform);
+};
 struct ModelDraw {
+    const StaticModelCache* staticCache=nullptr;
+    GeometryPolicy geometry;
     const Model* model = nullptr;
     mat4 world;                                    // model space -> world
     const std::vector<mat4>* nodeWorld = nullptr;  // pose, model space; null = bind pose
@@ -191,8 +204,6 @@ public:
     void drawCustomShadow(CustomDraw fn) { customShadow_.push_back(std::move(fn)); }
     const mat4& lightViewProj() const { return lightViewProj_; }
     const RTSCamera& camera() const { return cam_; }
-    int sceneWidth() const { return sceneW_; }
-    int sceneHeight() const { return sceneH_; }
 
     // Traced lighting ("trace" tier, Renderer3DTrace.cpp): sun rays marched over the terrain height
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space
@@ -217,17 +228,36 @@ public:
     const float3& cameraPos() const { return camPos_; }
     Lighting lighting;
     LightSystem lights;   // dynamic point lights: add between beginScene() and render()
+    struct GeometryStats { uint32_t clustersTested=0, clustersCulled=0, coarseClusters=0, occluded=0, occluderTriangles=0; };
+    const GeometryStats& geometryStats() const { return geometryStats_; }
+    bool clipDepthZeroToOne() const { return dev_&&dev_->info().clipDepthZeroToOne; }
+    int sceneWidth() const { return sceneW_; }
+    int sceneHeight() const { return sceneH_; }
     uint32_t drawCalls() const { return drawCalls_; }
-    void setModelLodEnabled(bool on) { modelLodEnabled_ = on; }
     void setModelCullingEnabled(bool on) { modelCullingEnabled_ = on; }
     void setModelInstancingEnabled(bool on) { modelInstancingEnabled_ = on; }
     const ModelRenderStats& modelStats() const { return modelStats_; }
+    struct RenderProfile {
+        double submitMs=0,occlusionMs=0;
+        std::array<double,5> selectMs{},sortMs{},drawMs{};
+        std::array<uint32_t,5> draws{},instances{},triangles{};
+        uint32_t cachedModels=0,lodNodes=0;
+    };
+    void setProfiling(bool enabled) { profiling_=enabled; }
+    const RenderProfile& profile() const { return profile_; }
+    // Set before rendering; zero chooses the backend limit (32 portable / 256 Metal).
+    void setInstanceLimit(uint32_t limit);
+    uint32_t instanceLimit() const { return instanceLimit_; }
+    void setModelLodEnabled(bool enabled) { modelLodEnabled_=enabled; }
 
 private:
     struct DrawItem { const Mesh* mesh; mat4 model; float4 color; uint32_t flags; float specular, emissive; };
     struct ModelItem {
         const Model* model; const Primitive* prim; const Material* mat;
         bool rigid = false, castShadow = false;
+        GeometryPolicy geometry;
+        size_t geometryPrimitive = 0;
+        uint32_t firstIndex = 0, indexCount = 0;
         mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
         bool baked;         // skinned from the baked texture (rows in anim)
@@ -286,6 +316,8 @@ private:
     std::vector<SceneTarget> sceneTargets_;   // one per view size (editor: Scene + Game views)
     gfx::TextureHandle sceneColor_, sceneDepth_;   // this frame's capture
     gfx::TextureHandle dummyDepth_, dummyHeight_;
+    double graphEpoch_ = -1;
+    float graphTime_ = 0;
     uint64_t traceFrame_ = 0;
     gfx::ShaderHandle blitShader_;
     gfx::PipelineHandle blitPipe_;
@@ -295,21 +327,31 @@ private:
 
     // models
     ModelRenderStats modelStats_;
-    bool modelLodEnabled_ = true, modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
+    bool modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
     bool auxiliaryModelPass_ = false;
+    bool profiling_=false,modelLodEnabled_=true;
+    RenderProfile profile_;
+    uint32_t instanceLimit_=32;
+    GeometryStats geometryStats_;
+    GeometryOcclusion geometryOcclusion_;
+    void prepareOcclusion();
+    void drawGeometryBatch(const uint32_t* items, uint32_t count, int phase);
+    bool geometryMainView_ = true;
+    int geometryShadowSize_=0;
     MaterialQuality matQuality_ = MaterialQuality::High;
     std::vector<ModelItem> modelItems_;
     std::vector<float> jointData_, morphData_, instData_;
     const ModelItem* lastItem_ = nullptr;   // state already bound (material, model textures, palette)
     std::vector<mat4> palette_;
     std::vector<uint32_t> order_;
+    std::vector<std::pair<uint32_t,uint32_t>> geometryRuns_;
     struct ModelShaderKey {
         uint32_t variant;
         std::shared_ptr<const graph::Program> graph;
         bool operator==(const ModelShaderKey& other) const {
             if (variant != other.variant) return false;
             if (graph == other.graph) return true;
-            return graph && other.graph && graph->glsl == other.graph->glsl && graph->outputs == other.graph->outputs;
+            return graph && other.graph && graph->glsl == other.graph->glsl && graph->vertexGlsl == other.graph->vertexGlsl && graph->textures.size() == other.graph->textures.size() && graph->outputs == other.graph->outputs;
         }
     };
     struct ShaderEntry { gfx::ShaderHandle shader; bool failed = false; };

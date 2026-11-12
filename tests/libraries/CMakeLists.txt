@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 project(RtsLibraryTests LANGUAGES CXX)
 enable_testing()
+add_executable(aiverse_strategy_library_tests strategy_tests.cpp)
+target_compile_features(aiverse_strategy_library_tests PRIVATE cxx_std_20)
+target_include_directories(aiverse_strategy_library_tests PRIVATE ../../libraries/include ../..)
+if(MSVC)
+    target_compile_options(aiverse_strategy_library_tests PRIVATE /W4 /WX)
+else()
+    target_compile_options(aiverse_strategy_library_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+endif()
+add_test(NAME strategy_libraries COMMAND aiverse_strategy_library_tests)
 add_subdirectory(../../libraries libraries)
 add_executable(aiverse_library_tests tests.cpp)
 target_link_libraries(aiverse_library_tests PRIVATE AIVERSE::libraries)
@@ -52,13 +61,20 @@ if(NOT MSVC)
 endif()
 add_test(NAME aiverse_systems_tests COMMAND aiverse_systems_tests)
 
+# FPS/world now includes collision streaming; keep standalone consumers linked to its backends.
+find_package(Threads REQUIRED)
+set(AIVERSE_LIBRARY_WORLD_SOURCES
+    ../../engine/world/SpatialWorld.cpp ../../engine/world/TriangleCollision.cpp
+    ../../engine/world/WorldAssets.cpp ../../engine/world/CollisionStream.cpp
+    ../../engine/world/ChunkStreamer.cpp ../../engine/world/AsyncChunkStream.cpp
+    ../../engine/pack/Sha256.cpp)
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/FpsModule.cpp")
     file(GLOB AIVERSE_LIBRARY_FPS_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../../modules/fps/Fps*.cpp")
     add_executable(aiverse_library_fps_bot_tests bots/fps_tests.cpp
         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
         ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
-        ../../engine/world/SpatialWorld.cpp)
-    target_link_libraries(aiverse_library_fps_bot_tests PRIVATE AIVERSE::gameplay_native)
+        ${AIVERSE_LIBRARY_WORLD_SOURCES})
+    target_link_libraries(aiverse_library_fps_bot_tests PRIVATE AIVERSE::gameplay_native Threads::Threads)
     if(NOT MSVC)
         target_compile_options(aiverse_library_fps_bot_tests PRIVATE -Wall -Wextra -Werror -pedantic)
     endif()
@@ -69,8 +85,8 @@ if(TARGET aiverse_library_fps_bot_tests)
     add_executable(aiverse_library_navmesh_tests bots/navmesh_tests.cpp
         ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp
         ../../engine/sim/Simulation.cpp ${AIVERSE_LIBRARY_FPS_SOURCES}
-        ../../engine/world/SpatialWorld.cpp)
-    target_link_libraries(aiverse_library_navmesh_tests PRIVATE AIVERSE::gameplay_native)
+        ${AIVERSE_LIBRARY_WORLD_SOURCES})
+    target_link_libraries(aiverse_library_navmesh_tests PRIVATE AIVERSE::gameplay_native Threads::Threads)
     if(NOT MSVC)
         target_compile_options(aiverse_library_navmesh_tests PRIVATE -Wall -Wextra -Werror -pedantic)
     endif()
@@ -79,8 +95,8 @@ endif()
 
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/world/SpatialWorld.cpp")
     add_executable(aiverse_library_genre_tests genre_tests.cpp
-        ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp ../../engine/world/SpatialWorld.cpp)
-    target_link_libraries(aiverse_library_genre_tests PRIVATE AIVERSE::gameplay_native)
+        ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp ${AIVERSE_LIBRARY_WORLD_SOURCES})
+    target_link_libraries(aiverse_library_genre_tests PRIVATE AIVERSE::gameplay_native Threads::Threads)
     if(NOT MSVC)
         target_compile_options(aiverse_library_genre_tests PRIVATE -Wall -Wextra -Werror -pedantic)
     endif()

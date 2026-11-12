@@ -3,6 +3,7 @@
 // and procedural envelopes, clip events, foot IK, animation LOD, corpses that outlive their
 // entity. Presentation only; reads the scene, never the simulation.
 #include "RtsView.h"
+#include "engine/render/AnimationLod.h"
 #include "../RtsModule.h"
 
 #include <algorithm>
@@ -11,6 +12,34 @@
 namespace aiverse::game {
 
 using namespace render;
+
+std::shared_ptr<const AnimationEnvironment> RtsView::animationEnvironment(const SceneObject& o,const EntityAnim& st,const ModelChoice& ch,const MapGrid& grid){
+    auto environment=std::make_shared<AnimationEnvironment>();const auto& look=looks_[o.type];
+    EntityFxValues fx;bool hasFx=fxFor(o,fx);float lift=hasFx?fx.v[EntityFxValues::kLift]:0;
+    auto pos=float3{o.pos.x,heightAt(grid,o.pos.x,o.pos.z)+(look.air?look.flyHeight:0)+lift,o.pos.z};
+    auto tilt=hasFx?mat4::rotateZ(-fx.v[EntityFxValues::kPitch]*.017453292f)*mat4::rotateX(-fx.v[EntityFxValues::kRoll]*.017453292f):mat4{};
+    float grow=look.structure&&look.construction==Construction::Grow?std::clamp(o.build,.15f,1.f):1;
+    environment->modelToWorld=mat4::translate(pos)*mat4::rotateY(st.yaw)*tilt*mat4::scale({look.scale,look.scale*grow,look.scale});
+    if(hasFx)environment->modelToWorld=environment->modelToWorld*mat4::scale({fx.scale(0),fx.scale(1),fx.scale(2)});
+    environment->modelToWorld=environment->modelToWorld*ch.fix;
+    auto locomotion=st.graph.locomotionReport();auto queryCenter=locomotion.active?locomotion.position:pos;
+    std::vector<AnimationObstacle> boxes;float reach=std::max(2.f,length(ch.model->boundsMax-ch.model->boundsMin)*look.scale*2);
+    for(const auto& b:animationObstacles_){if(b.object==&o||(o.entity.valid()&&b.entity==o.entity))continue;auto nearest=float3{std::clamp(queryCenter.x,b.lo.x,b.hi.x),std::clamp(queryCenter.y,b.lo.y,b.hi.y),std::clamp(queryCenter.z,b.lo.z,b.hi.z)};
+        if(length(nearest-queryCenter)>reach)continue;boxes.push_back(b);}
+    std::stable_sort(boxes.begin(),boxes.end(),[&](const auto& a,const auto& b){return length((a.lo+a.hi)*.5f-queryCenter)<length((b.lo+b.hi)*.5f-queryCenter);});if(boxes.size()>64)boxes.resize(64);
+    auto ground=[this,&grid](float3 p){return heightAt(grid,p.x,p.z);};
+    auto normal=[ground](float3 p){constexpr float e=.03f;return normalize(float3{ground(p+float3{-e,0,0})-ground(p+float3{e,0,0}),2*e,ground(p+float3{0,0,-e})-ground(p+float3{0,0,e})});};
+    environment->sphereContact=[boxes,ground,normal](float3 center,float radius,IKHit& hit){
+        bool found=ikSpherePlane(center,radius,{center.x,ground(center),center.z},normal(center),hit);if(found)hit.surface=1;
+        for(const auto& b:boxes){IKHit h;if(ikSphereOBB(center,radius,b.localMin,b.localMax,b.transform,h)&&(!found||h.depth>hit.depth)){hit=h;hit.surface=b.surface;found=true;}}return found;};
+    environment->raycast=[boxes,ground,normal](float3 start,float3 end,IKHit& hit){
+        bool found=false;float best=2;auto delta=end-start;float previous=start.y-ground(start);
+        for(int i=1;i<=32;++i){float t=float(i)/32;auto p=start+delta*t;float d=p.y-ground(p);if(previous>=0&&d<=0){float lo=float(i-1)/32,hi=t;for(int j=0;j<12;++j){float mid=(lo+hi)*.5f;auto q=start+delta*mid;if(q.y>=ground(q))lo=mid;else hi=mid;}best=(lo+hi)*.5f;auto q=start+delta*best;hit={q,normal(q),0,1};found=true;break;}previous=d;}
+        for(const auto& box:boxes){IKHit h;if(ikRayBox(start,end,box.localMin,box.localMax,box.transform,h)){float t=dot(h.point-start,delta)/std::max(dot(delta,delta),1e-9f);if(t<best){best=t;hit=h;hit.surface=box.surface;found=true;}}}
+        return found;};
+    auto frames=animationSurfaceFrames_;environment->surfaceTransform=[frames](uint64_t id,mat4& frame){if(id==1){frame={};return true;}if(!frames)return false;auto it=frames->find(id);if(it==frames->end())return false;frame=it->second;return true;};
+    if(animationEnvironmentQuery_)animationEnvironmentQuery_(o.entity,*environment);return environment;
+}
 
 namespace {
 constexpr float kPi = 3.14159265358979f;
@@ -86,6 +115,7 @@ RtsView::EntityAnim& RtsView::stateFor(uint64_t key, const SceneObject& o) {
         st.type = o.type;
         st.choice = int(h % L.models.size());
         st.anim.setModel(L.models[size_t(st.choice)].model);
+        st.graph.reset(L.models[size_t(st.choice)].graph);
         st.yaw = yawOf(o.facing);
         st.lastPos = o.pos;
         st.phase = float((h >> 20) & 0xffff) / 65536.0f;
@@ -171,13 +201,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     bool updatePose = true;
     if (animLod_ && st.poseValid) {
         const float3 p = viewPos ? *viewPos : o.pos;
-        const float4 c = viewProj_ * float4{p.x, p.y + 0.5f, p.z, 1};
-        const bool onScreen = c.w > 0 && std::fabs(c.x) < c.w * 1.2f && std::fabs(c.y) < c.w * 1.2f;
-        // Projected size works for orthographic cameras too: camera distance is not
-        // a measure of how visible a walking character is in that projection.
-        const float4 top = viewProj_ * float4{p.x, p.y + 1.5f, p.z, 1};
-        const float extent = c.w > 0 && top.w > 0 ? std::fabs(top.y / top.w - c.y / c.w) : 0;
-        const float interval = !onScreen ? 1e9f : extent > 0.012f ? 0.0f : extent > 0.004f ? 1.0f / 30.0f : 0.1f;
+        const float interval = projectedAnimationLod(viewProj_, p + float3{0,0.5f,0}, p + float3{0,1.5f,0}).interval;
         st.lodAccum += dt;
         if (st.lodAccum < interval) updatePose = false;
         else st.lodAccum = 0;
@@ -186,7 +210,44 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     // ---- clips
     Animator& A = st.anim;
     const Model& m = *ch.model;
-    if (!m.clips.empty()) {
+    auto program=ch.graph;
+    EntityAnimationEntry* control=nullptr;
+    if(fx_){auto found=fx_->animations.find(o.entity.packed());if(found!=fx_->animations.end())control=&found->second;}
+    if(control&&control->graph){
+        if(!ch.programmableAnimation)control->error="type view.programmableAnimation must be enabled";
+        else {
+            auto& cache=animationCache_[&m];auto found=cache.find(control->graph);
+            if(found==cache.end()){
+                if(cache.size()>=64)cache.erase(cache.begin());
+                AnimationCached compiled;
+                try{auto traits=animationTraits_;for(const auto& [name,trait]:control->graph->traits)traits[name]=trait;compiled.graph=AnimationGraph::compile(m,control->graph->definition,animationOperations_,traits);}
+                catch(const std::exception& e){compiled.error=e.what();}
+                found=cache.emplace(control->graph,std::move(compiled)).first;
+            }
+            control->error=found->second.error;
+            if(found->second.graph)program=found->second.graph;
+        }
+    }
+    if(st.graph.graph()!=program.get()){st.graph.reset(program);st.poseValid=false;updatePose=true;}
+    if (program) {
+        // Rebuild defaults each frame so removing a Lua override restores automatic inputs.
+        auto& p = st.graph.parameters();
+        p = program->defaults();
+        p.set("speed", st.speed); p.set("moving", float(moving)); p.set("dead", float(st.dead));
+        p.set("attacking", float((state & kProcAttacking) != 0));
+        p.set("hasTarget", float(o.hasTarget));
+        if (fx_) {
+            auto it = fx_->animations.find(o.entity.packed());
+            if (it != fx_->animations.end()) {
+                for (const auto& [key, value] : it->second.parameters.values) p.set(key, value);
+                for (const auto& [key, value] : it->second.parameters.vectors) p.set(key, value);
+            }
+        }
+        if(st.graph.hasContacts()&&grid&&o.body==-1)p.environment=animationEnvironment(o,st,ch,*grid);
+        st.graph.update(dt);
+        if (updatePose || st.pose.empty()) st.graph.evaluate(st.pose);
+        if(control){control->state=st.graph.state();control->contacts=st.graph.contactReport();control->locomotion=st.graph.locomotionReport();if(!st.graph.healthy())control->error=st.graph.error();}
+    } else if (!m.clips.empty()) {
         auto pick = [&](int kind) { const auto& v = ch.clips[kind].clips; return v[size_t(mix64(uint64_t(st.distance * 7) + uint64_t(kind)) % v.size())]; };
         auto play = [&](int kind, bool restart) {
             const ClipSpec& cs = ch.clips[kind];
@@ -286,7 +347,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         in.groundNormal = mat4::rotateY(-st.yaw).transformDir(n);
     }
     st.objXf = mat4{};
-    if (!ch.procs.empty()) {
+    if (!ch.procs.empty() && !st.graph.hasContacts()) {
         // node modifiers act on the pose: skip them with the pose when LOD postponed it
         static Pose none; // a postponed pose must not take the node modifiers twice
         applyProcedural(ch.procs, in, st.rt, ch.needsPose && updatePose ? st.pose : none, st.objXf);
@@ -294,7 +355,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     if (ch.needsPose && updatePose) {
         worldMatrices(m, st.pose, st.world);
         // foot IK: plant two-bone legs on the terrain under each foot (ramps, cliffs, slopes)
-        if (grid && grid->w > 0 && !ch.legs.empty() && !moving) {
+        if (grid && grid->w > 0 && !ch.legs.empty() && !moving && !st.graph.hasContacts()) {
             const float scale = L.scale, ground = heightAt(*grid, o.pos.x, o.pos.z);
             const mat4 toWorld = mat4::translate({o.pos.x, ground, o.pos.z}) * mat4::rotateY(st.yaw) * mat4::scale({scale, scale, scale}) * ch.fix;
             const mat4 toModel = toWorld.inverse();

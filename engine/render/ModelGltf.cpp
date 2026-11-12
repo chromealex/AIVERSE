@@ -476,7 +476,7 @@ private:
             for (const auto& level : jm["extras"]["rtsLods"].items()) {
                 if (!level["mesh"].isNumber() || !level["maxPixels"].isNumber()) fail("LOD requires mesh and maxPixels numbers");
                 ModelLod lod; lod.mesh = inum(level["mesh"]); lod.maxPixels = float(num(level["maxPixels"], 0));
-                if (lod.mesh < 0 || lod.mesh >= int(meshes.size()) || lod.mesh == int(mi) || !std::isfinite(lod.maxPixels) || lod.maxPixels <= 0 || lod.maxPixels >= previousPixels)
+                if (num(level["mesh"],-1) != double(lod.mesh) || lod.mesh < 0 || lod.mesh >= int(meshes.size()) || lod.mesh == int(mi) || !std::isfinite(lod.maxPixels) || lod.maxPixels <= 0 || lod.maxPixels >= previousPixels)
                     fail("mesh '" + md.name + "': invalid LOD mesh or pixel threshold");
                 previousPixels = lod.maxPixels; md.lods.push_back(lod);
             }

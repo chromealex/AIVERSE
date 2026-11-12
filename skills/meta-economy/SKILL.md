@@ -14,3 +14,9 @@ description: Configure AIVERSE currencies, inventories, stores, crafting recipes
 - Validate changed economy JSON with aiverse_meta_validate. Exercise retry, insufficient funds, cap overflow, failed commit and restore with preserved receipts.
 
 - Paid offers must have empty cost (schema enforced); virtual offers use cost. Keep reserved reward assets/caps compatible. If fulfillment returns Limit, retain Pending, resolve capacity server-side, then retry; do not finish an ungranted payment.
+
+Server library: `AIVERSE::meta_economy`. Select `economy` in
+`aiverse_add_meta_server(game_meta MODULES ...)`, include `game_meta.h`, and construct
+`Service(kits::game_meta(), config, state, commit, draw)`. Native OBJECT modules use
+`aiverse_native_use_meta(target game_meta)`. Client callers link only `AIVERSE::meta_client`;
+SQL and private definitions remain server-side. Dependencies: shared protocol/schema only.

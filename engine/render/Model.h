@@ -21,6 +21,7 @@
 namespace aiverse::render {
 
 class MeshBuilder;
+struct GeometryData;
 
 enum class AlphaMode : uint8_t { Opaque, Mask, Blend };
 enum class ShadingModel : uint8_t { Pbr, Unlit };
@@ -33,6 +34,7 @@ enum class TeamMode : uint8_t { None, Tint, Mask, BaseAlpha, VertexAlpha };
 
 struct Material {
     std::shared_ptr<const graph::Program> shaderGraph;
+    int graphTextures[4] = {-1,-1,-1,-1};
     std::string name;
     ShadingModel shading = ShadingModel::Pbr;
     float4 baseColor{1, 1, 1, 1};          // linear
@@ -69,6 +71,7 @@ struct Image {
     std::shared_ptr<CompressedImage> compressed;
     bool repeat = true, nearest = false;
     gfx::TextureHandle tex;
+    bool borrowedTexture = false; // owner must outlive this image; never released here
     bool gpuCompressed = false;     // uploaded as GPU blocks (KTX2)
 };
 
@@ -156,6 +159,7 @@ struct ModelLight {
 };
 
 struct Model {
+    std::shared_ptr<GeometryData> geometry;
     std::string path;
     std::vector<Node> nodes;
     std::vector<ModelLight> lights; // callers select a light budget; drawModel does not add lights implicitly

@@ -11,3 +11,9 @@ description: Add configurable AIVERSE leaderboards and chat channels using the r
 - Persist complete snapshots including receipts/read cursors/rate limits; mutate a copy and publish only after atomic storage success.
 - Use a Backend adapter for remote services. OfflineBackend returns Unsupported; it does not simulate global players or connectivity.
 - Validate board/chat definitions and exercise authorization failures, retries, season reset, equal scores, blocked users, mute, deleted messages and restored state.
+
+Server library: `AIVERSE::meta_social`. Select `social` in
+`aiverse_add_meta_server(game_meta MODULES ...)`, include `game_meta.h`, and construct
+`Service(kits::game_meta(), config, state, commit, draw)`. Native OBJECT modules use
+`aiverse_native_use_meta(target game_meta)`. Client callers link only `AIVERSE::meta_client`;
+SQL and private definitions remain server-side. Dependencies: economy.

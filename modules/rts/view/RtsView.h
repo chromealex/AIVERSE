@@ -10,6 +10,7 @@
 //   units:      worker, soldier, ranged, vehicle, tank, flyer, mushroom, generic
 //   structures: hall, house, barracks, workshop, factory, tower, mine, tree, rock, mushroomhouse, structure
 #pragma once
+#include "engine/render/GeometryScene.h"
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -152,6 +153,11 @@ public:
     const std::vector<ViewEvent>& events() const { return events_; }
     const std::vector<ViewEffect>& effects() const { return effects_; }
     void setSelectionOutline(bool on) { outline_ = on; }
+    // Register immutable native pose operations before init().
+    void setAnimationOperations(render::AnimationOperations operations) { animationOperations_ = std::move(operations); }
+    // Optional host physics queries override the default terrain / visible AABB adapter.
+    void setAnimationEnvironment(std::function<void(Entity,render::AnimationEnvironment&)> query) { animationEnvironmentQuery_=std::move(query); }
+    void setAnimationTraits(render::AnimationTraits traits) { animationTraits_=std::move(traits); }
     void setAnimationLod(bool on) { animLod_ = on; }
     // Model files referenced by the view blocks (editor hot reload watches them).
     std::vector<std::string> modelFiles() const;
@@ -228,6 +234,10 @@ public:
     bool overlayTop(const render::RTSCamera& cam, const SceneObject& o, size_t index, float w, float h, render::float2& out) const;
 
 private:
+    render::AnimationOperations animationOperations_;
+    render::AnimationTraits animationTraits_;
+    struct AnimationCached { std::shared_ptr<const render::AnimationGraph> graph; std::string error; };
+    std::map<const render::Model*, std::map<std::shared_ptr<const AnimationDefinition>, AnimationCached>> animationCache_;
     struct ClipSpec {
         std::vector<int> clips;    // random pick per play
         float speed = 1, speedRef = 0, fade = 0.2f;
@@ -250,6 +260,8 @@ private:
     struct AdditiveSpec { int clip = -1; uint32_t when = 0; float weight = 1; };
     struct LegIK { int hip = -1, knee = -1, foot = -1; };
     struct ModelChoice {
+        std::shared_ptr<const render::AnimationGraph> graph;
+        render::GeometryPolicy geometry;
         render::Model* model = nullptr;
         std::vector<render::Material> materials;  // per-type copy with overrides applied
         std::vector<int> nodeMaterial;            // "assign": node -> index into materials (-1 = the model's)
@@ -257,6 +269,7 @@ private:
         ClipSpec clips[kAnimCount];
         bool hasClip[kAnimCount] = {};
         std::vector<render::ProcAnim> procs;
+        bool programmableAnimation = false;
         bool needsPose = false;                   // a CPU pose is needed (palette skinning, node procs, sockets, IK)
         bool baked = false;                       // skinned from the baked clip texture (instanced crowds)
         int variant = -1;                         // KHR_materials_variants index
@@ -296,6 +309,7 @@ private:
         uint16_t type = 0;
         int choice = 0;
         render::Animator anim;
+        render::AnimationGraphInstance graph;
         render::Pose pose;
         std::vector<render::mat4> world;
         std::vector<render::ProcRuntime> rt;
@@ -370,6 +384,7 @@ private:
     Json materialLib_ = Json::object();   // materials.json "materials"
     gfx::Device* dev_ = nullptr;
     std::map<std::string, std::unique_ptr<render::Model>> models_;  // by path; shapes as "shape:<name>"
+    render::GeometryScene geometryScene_;
     std::vector<TypeLook> looks_;
     std::vector<std::string> warnings_;
     std::unordered_map<uint64_t, EntityAnim> anims_;   // presentation only: iteration order never matters
@@ -391,7 +406,12 @@ private:
     RtsGroundCanvas groundCanvas_;
     std::vector<ViewGroundBatch> shadowDraws_, groundMerged_;   // "groundShadow" quads of this frame (one batch per image)
     void addGroundShadow(const TypeLook& L, const EntityAnim& st, render::float3 pos, float ground, const EntityFxValues* fx = nullptr);
-    const EntityFxStore* fx_ = nullptr;   // this frame's view.entity_fx store (RtsScene::entityFx)
+    std::function<void(Entity,render::AnimationEnvironment&)> animationEnvironmentQuery_;
+    struct AnimationObstacle { const SceneObject* object=nullptr; Entity entity; render::float3 lo,hi,localMin,localMax; uint64_t surface; render::mat4 transform; };
+    std::vector<AnimationObstacle> animationObstacles_;
+    std::shared_ptr<std::map<uint64_t,render::mat4>> animationSurfaceFrames_;
+    std::shared_ptr<const render::AnimationEnvironment> animationEnvironment(const SceneObject&,const EntityAnim&,const ModelChoice&,const MapGrid&);
+    EntityFxStore* fx_ = nullptr;   // this frame's view.entity_fx store (RtsScene::entityFx)
     bool fxFor(const SceneObject& o, EntityFxValues& out) const { return fx_ && o.entity.valid() && fx_->lookup(o.entity.packed(), out); }
     // an object that left the scene without a death event (silent removal, or a death inside a frame that ran several
     // ticks) becomes a corpse when its view.entity_fx carries corpse_age

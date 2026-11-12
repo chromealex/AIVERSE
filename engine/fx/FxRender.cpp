@@ -199,12 +199,13 @@ void ParticleSystem::render(const FxFog& fog) {
     I.meshVerts.clear();
     I.verts.reserve(I.recs.size() * 4);
     std::vector<uint32_t> vstart(I.recs.size()), vcount(I.recs.size());
+    float4 graphData{};
     auto quad = [&](float3 a, float3 b, float3 c, float3 d4, float ua, float va, float ub, float vb, uint32_t ca, uint32_t cb) {
         // a-b along the first edge (u: ua -> ub), d-c the opposite edge; ca at a/d, cb at b/c
-        I.verts.push_back({a, {ua, vb}, ca});
-        I.verts.push_back({b, {ub, vb}, cb});
-        I.verts.push_back({c, {ub, va}, cb});
-        I.verts.push_back({d4, {ua, va}, ca});
+        I.verts.push_back({a, {ua, vb}, ca, graphData});
+        I.verts.push_back({b, {ub, vb}, cb, graphData});
+        I.verts.push_back({c, {ub, va}, cb, graphData});
+        I.verts.push_back({d4, {ua, va}, ca, graphData});
     };
     int meshVertsUsed = 0;
     for (size_t ri = 0; ri < I.recs.size(); ++ri) {
@@ -325,6 +326,7 @@ void ParticleSystem::render(const FxFog& fog) {
             vcount[ri] = 4;
             continue;
         }
+        graphData={p.age,1.0f/p.invLife,prand(p.uid,71),0};
         float4 colf = I.colorNow(p);
         if (!d.colorBySpeed.empty()) colf = mul(colf, speedLut(er.colorSpeed, d.colorSpeed, render::length(p.vtot) / p.scale));
         const Frame fr = frameOf(p, d, er, t);
@@ -354,7 +356,7 @@ void ParticleSystem::render(const FxFog& fog) {
                 if (lit) shade = 0.55f + 0.45f * std::max(0.0f, render::dot(render::normalize(R * m.nrm[vi]), I.lightDir));
                 const float2 uv = m.uv[vi];
                 I.meshVerts.push_back({w, {fr.u0 + du * std::clamp(uv.x, 0.0f, 1.0f), fr.v0 + dv * std::clamp(uv.y, 0.0f, 1.0f)},
-                                       packFor(d.blend, float4{colf.x * shade, colf.y * shade, colf.z * shade, colf.w})});
+                                       packFor(d.blend, float4{colf.x * shade, colf.y * shade, colf.z * shade, colf.w}),graphData});
             }
             vcount[ri] = uint32_t(m.idx.size());
             stats_.meshVerts += int(m.idx.size());
@@ -442,9 +444,10 @@ void ParticleSystem::render(const FxFog& fog) {
         u.params[0] = batch.blend == FxBlend::Additive || batch.blend == FxBlend::Subtract ? 1.0f : 0.0f;
         u.params[1] = batch.blend == FxBlend::Premultiplied ? 1.0f : 0.0f;
         u.params[2] = batch.blend == FxBlend::Multiply ? 1.0f : 0.0f;
-        u.params[3] = 0;
+        u.params[3] = I.clock;
         I.dev->setUniforms(0, &u, sizeof u);
         I.dev->setTexture(0, batch.tex.valid() ? batch.tex : I.atlas);
+        for(size_t t=0;t<batch.graphTextures.size();++t)I.dev->setTexture(int(t)+1,batch.graphTextures[t].tex);
         uint32_t first = vstart[i], count = 0;
         for (size_t k = i; k < j; ++k) count += vcount[k];
         if (count > 0) {

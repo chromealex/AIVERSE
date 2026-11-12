@@ -137,6 +137,11 @@ std::string wizardAgentTask(const WizardSpec& s, const std::string& dir, const s
     for (size_t i = 0; i < s.languages.size(); ++i) t += (i ? ", " : "") + s.languages[i];
     t += ").\n"
          "7. Меняй только данные игры, никогда код движка.\n"
+         "   Для дальних статических стен и декора рассмотри geometry_proxy_bake (plane/box с запечёнными текстурами), проверь проёмы и косые ракурсы, затем geometry_proxy_lod или instance.proxy. "
+         "   Для тяжёлой геометрии вызови geometry_catalog и geometry_analyze. Сам выбери view.geometry через geometry_policy_set: "
+         "кластеры для крупных статических мешей, occlusion для закрытого окружения; сохраняй instancing для толп. "
+         "HLOD задавай через geometry_scene_set только для статического декора, не юнитов и разрушаемых зданий. "
+         "Проверь близкую/дальнюю камеры, отверстия, тени и целевую платформу; не включай всё без измерений.\n"
          "8. В конце допиши в WIZARD.md раздел «## Агент: что сделано» (game_file_write): что из описания реализовано, что "
          "реализовано приближённо и почему, чего нет. Ответь тем же кратким итогом по-русски.\n\n";
     if (!s.metaIdea.empty())

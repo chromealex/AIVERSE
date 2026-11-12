@@ -17,10 +17,10 @@ bool decodeSnapshot(const Bytes&,Snapshot& out);
 // Production hosts must authenticate/admit the connection before attach().
 class Server {
 public:
-    Server(const Json& rules,const Json& map,uint64_t seed=1);
+    Server(const Json& rules,const Json& map,uint64_t seed=1,world::AssetReader reader={});
     bool attach(uint8_t slot,std::unique_ptr<Conn> connection);
     void poll(uint64_t now);
-    void step();
+    bool step();
     void broadcast();
     Simulation& simulation(){return simulation_;}
     fps::Module& module(){return static_cast<fps::Module&>(simulation_.module());}
@@ -34,7 +34,9 @@ private:
 };
 class Client {
 public:
-    Client(const Json& rules,const Json& map,std::unique_ptr<Conn> connection);
+    Client(const Json& rules,const Json& map,std::unique_ptr<Conn> connection,world::AssetReader reader={});
+    void updateStreaming();
+    const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
     void poll(uint64_t now);
     bool submit(fps::Input input);
     const Snapshot& snapshot()const{return latest_;}
@@ -53,5 +55,7 @@ private:
     uint32_t sequence_=0;
     bool ready_=false,sentHello_=false;
     uint64_t content_=0;
+    std::unique_ptr<world::CollisionStream> streamedCollision_;
+    void predict(const fps::Input&);
 };
 }

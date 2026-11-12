@@ -1,5 +1,5 @@
 // Model shaders (GLSL ES 3.00 + MSL), compiled as permutations: the renderer prepends
-//   #define AIVERSE_INST n    instances per draw (1, or 32 for instanced batches)
+//   #define AIVERSE_INST n    instances per draw (1, or the backend batch limit)
 //   #define SKINNED      GPU skinning from a joint palette in U3 (80 joints, 4 influences)
 //   #define BAKED        GPU skinning from baked clips: joint matrices in tex7, rows per instance
 //   #define MORPH        morph targets: deltas in tex8, weights in U4
@@ -129,6 +129,7 @@ void main() {
     vec4 p = vec4(a_pos, 1.0);
     vec3 n = a_nrm, t = a_tan.xyz;
     deform(I, p, n, t);
+    // SG_VERTEX
     v_opos = p.xyz;
     // normal matrix = cofactor of the upper 3x3 (inverse transpose up to scale)
     vec3 c0 = I.model[0].xyz, c1 = I.model[1].xyz, c2 = I.model[2].xyz;
@@ -304,12 +305,17 @@ inline const char* kModelShadowVS =
     AIVERSE_GLSL_MODEL_BLOCKS AIVERSE_GLSL_MODEL_ATTRIBS AIVERSE_GLSL_MODEL_DEFORM
     R"(
 out vec2 v_uv;
+out vec3 v_wpos; out vec3 v_opos; out vec3 v_nrm; out vec4 v_col;
 void main() {
     Inst I = INSTANCE;
     vec4 p = vec4(a_pos, 1.0);
     vec3 n = a_nrm, t = a_tan.xyz;
     deform(I, p, n, t);
+    // SG_VERTEX
     v_uv = uvTransform(a_uv);
+    v_wpos = (I.model*p).xyz; v_opos=p.xyz; v_col=a_col;
+    vec3 c0=I.model[0].xyz,c1=I.model[1].xyz,c2=I.model[2].xyz;
+    v_nrm=mat3(cross(c1,c2),cross(c2,c0),cross(c0,c1))*n*(dot(c0,cross(c1,c2))<0.0?-1.0:1.0);
     gl_Position = u_lightViewProj * (I.model * p);
 }
 )";
@@ -319,6 +325,7 @@ inline const char* kModelShadowFS =
     R"(
 uniform mediump sampler2D tex1;
 in vec2 v_uv;
+in vec3 v_wpos; in vec3 v_opos; in vec3 v_nrm; in vec4 v_col;
 void main() {
 #if defined(ALPHAMASK)
     vec4 base = m_base * texture(tex1, v_uv);
@@ -421,6 +428,7 @@ struct VOut {
 vertex VOut vs_main(VERTEX_ARGS) {
     Inst I = INSTANCE;
     Deformed d = deform(in, vid, I SKIN_PASS BAKED_PASS MORPH_PASS);
+    // SG_VERTEX
     VOut o;
     float3 c0 = I.model[0].xyz, c1 = I.model[1].xyz, c2 = I.model[2].xyz;
     float3x3 cof = float3x3(cross(c1, c2), cross(c2, c0), cross(c0, c1));
@@ -585,17 +593,21 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 inline const char* kModelShadowMSL =
     AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_MODEL_VERTEX
     R"(
-struct VOut { float4 pos [[position]]; float2 uv; };
+struct VOut { float4 pos [[position]]; float2 uv; float3 wpos; float3 opos; float3 nrm; float4 col; };
 vertex VOut vs_main(VERTEX_ARGS) {
     Inst I = INSTANCE;
     Deformed d = deform(in, vid, I SKIN_PASS BAKED_PASS MORPH_PASS);
+    // SG_VERTEX
     VOut o;
     o.uv = uvTransform(m, in.uv);
+    o.wpos=(I.model*d.p).xyz; o.opos=d.p.xyz; o.col=in.col;
+    float3 c0=I.model[0].xyz,c1=I.model[1].xyz,c2=I.model[2].xyz;
+    o.nrm=float3x3(cross(c1,c2),cross(c2,c0),cross(c0,c1))*d.n*(dot(c0,cross(c1,c2))<0.0?-1.0:1.0);
     o.pos = f.lightViewProj * (I.model * d.p);
     return o;
 }
 #if defined(ALPHAMASK)
-fragment void fs_main(VOut in [[stage_in]], constant MU2& m [[buffer(3)]],
+fragment void fs_main(VOut in [[stage_in]], constant MU2& m [[buffer(3)]], constant U1& f [[buffer(2)]],
                       texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]]) {
     float4 base = m.base * tex1.sample(s1, in.uv);
     // SG_COLOR

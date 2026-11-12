@@ -96,7 +96,7 @@ bool Address::resolve(const std::string& host, uint16_t port, Address& out, bool
 }
 
 // ---------------------------------------------------------------- UDP
-bool UdpSocket::open(uint16_t port, int family) {
+bool UdpSocket::open(uint16_t port, int family, bool loopbackOnly) {
     initSockets();
     close();
     auto tryOpen = [&](int fam) -> bool {
@@ -111,7 +111,7 @@ bool UdpSocket::open(uint16_t port, int family) {
             len = sizeof(sockaddr_in6);
         } else {
             auto* a = reinterpret_cast<sockaddr_in*>(&ss);
-            a->sin_family = AF_INET; a->sin_addr.s_addr = htonl(INADDR_ANY); a->sin_port = htons(port);
+            a->sin_family = AF_INET; a->sin_addr.s_addr = htonl(loopbackOnly ? INADDR_LOOPBACK : INADDR_ANY); a->sin_port = htons(port);
             len = sizeof(sockaddr_in);
         }
         if (::bind(s, reinterpret_cast<sockaddr*>(&ss), len) != 0) { closeSock(s); return false; }
@@ -123,6 +123,7 @@ bool UdpSocket::open(uint16_t port, int family) {
         family_ = fam;
         return true;
     };
+    if (loopbackOnly) return tryOpen(AF_INET);
     if (family == AF_INET) return tryOpen(AF_INET);
     if (family == AF_INET6) return tryOpen(AF_INET6);
     return tryOpen(AF_INET6) || tryOpen(AF_INET);
@@ -228,10 +229,11 @@ int TcpSocket::recv(uint8_t* buf, size_t cap) {
 void TcpSocket::close() { if (s_ != SocketHandle(AIVERSE_INVALID)) { closeSock(s_); s_ = SocketHandle(AIVERSE_INVALID); } }
 bool TcpSocket::isOpen() const { return s_ != SocketHandle(AIVERSE_INVALID); }
 
-bool TcpListener::listen(uint16_t port) {
+bool TcpListener::listen(uint16_t port, bool loopbackOnly) {
     initSockets();
     close();
     for (int fam : {AF_INET6, AF_INET}) {
+        if (loopbackOnly && fam != AF_INET) continue;
         auto s = ::socket(fam, SOCK_STREAM, IPPROTO_TCP);
         if (s == AIVERSE_INVALID) continue;
         int one = 1, off = 0;
@@ -245,7 +247,7 @@ bool TcpListener::listen(uint16_t port) {
             len = sizeof(sockaddr_in6);
         } else {
             auto* a = reinterpret_cast<sockaddr_in*>(&ss);
-            a->sin_family = AF_INET; a->sin_addr.s_addr = htonl(INADDR_ANY); a->sin_port = htons(port);
+            a->sin_family = AF_INET; a->sin_addr.s_addr = htonl(loopbackOnly ? INADDR_LOOPBACK : INADDR_ANY); a->sin_port = htons(port);
             len = sizeof(sockaddr_in);
         }
         if (::bind(s, reinterpret_cast<sockaddr*>(&ss), len) != 0 || ::listen(s, 64) != 0) { closeSock(s); continue; }

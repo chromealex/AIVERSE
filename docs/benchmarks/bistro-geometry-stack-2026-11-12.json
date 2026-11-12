@@ -1,0 +1,3275 @@
+{
+  "schema": 1,
+  "manifest": {
+    "binarySha256": "fee56df8a089e04f9771238aaec91b711e7d2c8086b317e246303e2c02ffa063",
+    "baseCommit": "1607f3a9",
+    "architecture": "arm64",
+    "uncapped": true,
+    "warmup": 180,
+    "samples": 600
+  },
+  "nativeBaseline": {
+    "schema": 1,
+    "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+    "cameras": [
+      {
+        "off": {
+          "runMedians": {
+            "gpuMs": [
+              2.0516875,
+              2.0140000000000002,
+              2.00825
+            ],
+            "cpuEncodeMs": [
+              3.534542,
+              3.4558955,
+              3.4512080000000003
+            ],
+            "frameWallMs": [
+              10.0492705,
+              10.017583,
+              10.0
+            ]
+          },
+          "drawCalls": 3179,
+          "visibleInputTriangles": 2827889,
+          "visibleProxyParts": 0,
+          "median": {
+            "gpuMs": 2.0140000000000002,
+            "cpuEncodeMs": 3.4558955,
+            "frameWallMs": 10.017583
+          },
+          "p95": {
+            "gpuMs": 2.4182125,
+            "cpuEncodeMs": 3.74934165
+          }
+        },
+        "on": {
+          "runMedians": {
+            "gpuMs": [
+              1.8867915000000002,
+              1.880417,
+              1.873
+            ],
+            "cpuEncodeMs": [
+              3.684083,
+              3.6224375,
+              3.5544165
+            ],
+            "frameWallMs": [
+              10.0067295,
+              10.014958,
+              10.019874999999999
+            ]
+          },
+          "drawCalls": 3089,
+          "visibleInputTriangles": 2419748,
+          "visibleProxyParts": 141,
+          "median": {
+            "gpuMs": 1.880417,
+            "cpuEncodeMs": 3.6224375,
+            "frameWallMs": 10.014958
+          },
+          "p95": {
+            "gpuMs": 2.055275,
+            "cpuEncodeMs": 3.9042312500000005
+          }
+        },
+        "camera": 0,
+        "deltaPercent": {
+          "gpuMs": -6.632720953326721,
+          "cpuEncodeMs": 4.819069326604364,
+          "frameWallMs": -0.026203925637557912
+        }
+      },
+      {
+        "off": {
+          "runMedians": {
+            "gpuMs": [
+              1.6605205,
+              1.643271,
+              1.6457915
+            ],
+            "cpuEncodeMs": [
+              3.4232295,
+              3.4401455,
+              3.429354
+            ],
+            "frameWallMs": [
+              10.016021,
+              10.0167495,
+              10.011875
+            ]
+          },
+          "drawCalls": 3182,
+          "visibleInputTriangles": 2832120,
+          "visibleProxyParts": 0,
+          "median": {
+            "gpuMs": 1.6457915,
+            "cpuEncodeMs": 3.429354,
+            "frameWallMs": 10.016021
+          },
+          "p95": {
+            "gpuMs": 2.0077354,
+            "cpuEncodeMs": 3.70039795
+          }
+        },
+        "on": {
+          "runMedians": {
+            "gpuMs": [
+              1.4631664999999998,
+              1.4565834999999998,
+              1.459229
+            ],
+            "cpuEncodeMs": [
+              3.6697499999999996,
+              3.578125,
+              3.5619994999999998
+            ],
+            "frameWallMs": [
+              10.0110625,
+              10.0211665,
+              10.0265625
+            ]
+          },
+          "drawCalls": 3018,
+          "visibleInputTriangles": 2288530,
+          "visibleProxyParts": 173,
+          "median": {
+            "gpuMs": 1.459229,
+            "cpuEncodeMs": 3.578125,
+            "frameWallMs": 10.0211665
+          },
+          "p95": {
+            "gpuMs": 1.6665107500000003,
+            "cpuEncodeMs": 3.9086205
+          }
+        },
+        "camera": 1,
+        "deltaPercent": {
+          "gpuMs": -11.335731166432684,
+          "cpuEncodeMs": 4.338163980738052,
+          "frameWallMs": 0.05137269580404169
+        }
+      },
+      {
+        "off": {
+          "runMedians": {
+            "gpuMs": [
+              1.5234375,
+              1.509875,
+              1.5418125
+            ],
+            "cpuEncodeMs": [
+              3.5423125,
+              3.432271,
+              3.455063
+            ],
+            "frameWallMs": [
+              10.021354500000001,
+              10.0042915,
+              10.019791999999999
+            ]
+          },
+          "drawCalls": 3182,
+          "visibleInputTriangles": 2832120,
+          "visibleProxyParts": 0,
+          "median": {
+            "gpuMs": 1.5234375,
+            "cpuEncodeMs": 3.455063,
+            "frameWallMs": 10.019791999999999
+          },
+          "p95": {
+            "gpuMs": 1.75034165,
+            "cpuEncodeMs": 3.7300521
+          }
+        },
+        "on": {
+          "runMedians": {
+            "gpuMs": [
+              1.255271,
+              1.2416045,
+              1.2640419999999999
+            ],
+            "cpuEncodeMs": [
+              3.5222495,
+              3.5181875,
+              3.5267295
+            ],
+            "frameWallMs": [
+              10.019187,
+              10.015188,
+              10.025333
+            ]
+          },
+          "drawCalls": 2912,
+          "visibleInputTriangles": 2107774,
+          "visibleProxyParts": 211,
+          "median": {
+            "gpuMs": 1.255271,
+            "cpuEncodeMs": 3.5222495,
+            "frameWallMs": 10.019187
+          },
+          "p95": {
+            "gpuMs": 1.4955857499999998,
+            "cpuEncodeMs": 3.8091607499999998
+          }
+        },
+        "camera": 2,
+        "deltaPercent": {
+          "gpuMs": -17.602724102564103,
+          "cpuEncodeMs": 1.9445810394774332,
+          "frameWallMs": -0.006038049492429476
+        }
+      }
+    ]
+  },
+  "exploratory": {
+    "cache": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.8188125,
+                1.735271,
+                1.8152295
+              ],
+              "cpuEncodeMs": [
+                3.173833,
+                4.9256665,
+                4.7913125
+              ],
+              "frameWallMs": [
+                20.0017295,
+                20.0017705,
+                19.996625
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.8152295,
+              "cpuEncodeMs": 4.7913125,
+              "frameWallMs": 20.0017295
+            },
+            "p95": {
+              "gpuMs": 3.6292874999999998,
+              "cpuEncodeMs": 5.782789300000001
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.7385415,
+                1.7411875,
+                1.7624165
+              ],
+              "cpuEncodeMs": [
+                4.769833500000001,
+                4.769666,
+                4.824666499999999
+              ],
+              "frameWallMs": [
+                19.9926045,
+                19.993249499999997,
+                19.999083
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7411875,
+              "cpuEncodeMs": 4.769833500000001,
+              "frameWallMs": 19.993249499999997
+            },
+            "p95": {
+              "gpuMs": 3.3426892500000003,
+              "cpuEncodeMs": 5.7304827
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": -4.078933269870277,
+            "cpuEncodeMs": -0.4482905258214598,
+            "frameWallMs": -0.04239633377705054
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.6285,
+                1.6401665,
+                1.644417
+              ],
+              "cpuEncodeMs": [
+                4.7066669999999995,
+                4.617958,
+                4.8036665
+              ],
+              "frameWallMs": [
+                19.996354,
+                19.991854,
+                19.997583
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6401665,
+              "cpuEncodeMs": 4.7066669999999995,
+              "frameWallMs": 19.996354
+            },
+            "p95": {
+              "gpuMs": 3.2582354000000002,
+              "cpuEncodeMs": 5.739574999999999
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.6229165,
+                1.6525210000000001,
+                1.6408125
+              ],
+              "cpuEncodeMs": [
+                4.783666500000001,
+                4.496292,
+                4.8317499999999995
+              ],
+              "frameWallMs": [
+                19.994374999999998,
+                20.001729,
+                19.998458
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6408125,
+              "cpuEncodeMs": 4.783666500000001,
+              "frameWallMs": 19.998458
+            },
+            "p95": {
+              "gpuMs": 3.1650541499999996,
+              "cpuEncodeMs": 5.99183095
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": 0.03938624523789347,
+            "cpuEncodeMs": 1.6359665980193894,
+            "frameWallMs": 0.010521918145678377
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.4595205,
+                1.4614585,
+                1.4606045
+              ],
+              "cpuEncodeMs": [
+                4.819354000000001,
+                4.5585835,
+                4.723979
+              ],
+              "frameWallMs": [
+                19.9967495,
+                20.003062,
+                20.002499999999998
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.4606045,
+              "cpuEncodeMs": 4.723979,
+              "frameWallMs": 20.002499999999998
+            },
+            "p95": {
+              "gpuMs": 3.0411291499999997,
+              "cpuEncodeMs": 5.771493749999999
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.443354,
+                1.4824585,
+                1.4598125
+              ],
+              "cpuEncodeMs": [
+                4.8764585,
+                3.9242915000000003,
+                4.679417
+              ],
+              "frameWallMs": [
+                19.987229,
+                19.995833,
+                20.0012085
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.4598125,
+              "cpuEncodeMs": 4.679417,
+              "frameWallMs": 19.995833
+            },
+            "p95": {
+              "gpuMs": 3.1372500000000003,
+              "cpuEncodeMs": 5.6760431
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": -0.054224124326618384,
+            "cpuEncodeMs": -0.9433149469970092,
+            "frameWallMs": -0.03333083364577272
+          }
+        }
+      ]
+    },
+    "clusters": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.7310625000000002,
+                1.7434585,
+                1.7352915
+              ],
+              "cpuEncodeMs": [
+                4.9837705,
+                3.13225,
+                3.2180210000000002
+              ],
+              "frameWallMs": [
+                20.0064165,
+                19.999896,
+                19.996896
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7352915,
+              "cpuEncodeMs": 3.2180210000000002,
+              "frameWallMs": 19.999896
+            },
+            "p95": {
+              "gpuMs": 3.15530385,
+              "cpuEncodeMs": 5.7312604
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.825021,
+                1.8413750000000002,
+                1.8166665
+              ],
+              "cpuEncodeMs": [
+                5.275917,
+                5.4267295,
+                4.098917
+              ],
+              "frameWallMs": [
+                20.006667,
+                19.993917000000003,
+                19.9962915
+              ]
+            },
+            "drawCalls": 5055,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.825021,
+              "cpuEncodeMs": 5.275917,
+              "frameWallMs": 19.9962915
+            },
+            "p95": {
+              "gpuMs": 1.99732915,
+              "cpuEncodeMs": 6.2928125
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": 5.17086034248424,
+            "cpuEncodeMs": 63.94911655331023,
+            "frameWallMs": -0.018022593717481605
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.6715835,
+                1.682021,
+                1.6822499999999998
+              ],
+              "cpuEncodeMs": [
+                5.148896000000001,
+                3.1694579999999997,
+                3.434042
+              ],
+              "frameWallMs": [
+                20.000436999999998,
+                20.001061999999997,
+                20.000541499999997
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.682021,
+              "cpuEncodeMs": 3.434042,
+              "frameWallMs": 20.000541499999997
+            },
+            "p95": {
+              "gpuMs": 3.2541249999999997,
+              "cpuEncodeMs": 5.802772900000001
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.79175,
+                1.7771460000000001,
+                1.7865
+              ],
+              "cpuEncodeMs": [
+                3.8797085,
+                4.047917,
+                4.265416999999999
+              ],
+              "frameWallMs": [
+                19.993520500000002,
+                19.999875,
+                19.992292
+              ]
+            },
+            "drawCalls": 5027,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7865,
+              "cpuEncodeMs": 4.047917,
+              "frameWallMs": 19.993520500000002
+            },
+            "p95": {
+              "gpuMs": 1.9051021,
+              "cpuEncodeMs": 6.201447300000001
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": 6.21151578963639,
+            "cpuEncodeMs": 17.876164589716726,
+            "frameWallMs": -0.03510404955783253
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5584164999999999,
+                1.53675,
+                1.617875
+              ],
+              "cpuEncodeMs": [
+                4.999791500000001,
+                3.391917,
+                3.3979165
+              ],
+              "frameWallMs": [
+                20.004103999999998,
+                19.993625,
+                19.984813000000003
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5584164999999999,
+              "cpuEncodeMs": 3.3979165,
+              "frameWallMs": 19.993625
+            },
+            "p95": {
+              "gpuMs": 3.4442645999999995,
+              "cpuEncodeMs": 5.88433155
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.685125,
+                1.6713749999999998,
+                1.6785415000000001
+              ],
+              "cpuEncodeMs": [
+                5.244021,
+                4.0239995,
+                4.290667
+              ],
+              "frameWallMs": [
+                20.006479,
+                19.9997295,
+                19.997500000000002
+              ]
+            },
+            "drawCalls": 5039,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6785415000000001,
+              "cpuEncodeMs": 4.290667,
+              "frameWallMs": 19.9997295
+            },
+            "p95": {
+              "gpuMs": 1.7846895999999999,
+              "cpuEncodeMs": 6.2391100999999995
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 7.7081447738778675,
+            "cpuEncodeMs": 26.273467873621968,
+            "frameWallMs": 0.030532232148994254
+          }
+        }
+      ]
+    },
+    "occlusion": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.8780000000000001,
+                1.7888335,
+                1.7703125000000002
+              ],
+              "cpuEncodeMs": [
+                3.059104,
+                4.678167,
+                4.791542
+              ],
+              "frameWallMs": [
+                19.993479,
+                20.004208499999997,
+                19.997667
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7888335,
+              "cpuEncodeMs": 4.678167,
+              "frameWallMs": 19.997667
+            },
+            "p95": {
+              "gpuMs": 3.22743155,
+              "cpuEncodeMs": 5.60401875
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.789104,
+                1.778,
+                1.754625
+              ],
+              "cpuEncodeMs": [
+                3.3488125,
+                3.5929374999999997,
+                4.5884374999999995
+              ],
+              "frameWallMs": [
+                19.9994375,
+                20.000729,
+                20.000083
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.778,
+              "cpuEncodeMs": 3.5929374999999997,
+              "frameWallMs": 20.000083
+            },
+            "p95": {
+              "gpuMs": 3.2816916499999995,
+              "cpuEncodeMs": 6.10034405
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": -0.6056181304744057,
+            "cpuEncodeMs": -23.19775031545476,
+            "frameWallMs": 0.012081409296404999
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.644479,
+                1.6762915,
+                1.627729
+              ],
+              "cpuEncodeMs": [
+                3.0989585,
+                4.7013750000000005,
+                4.835916
+              ],
+              "frameWallMs": [
+                19.9995415,
+                20.0043335,
+                20.009354000000002
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.644479,
+              "cpuEncodeMs": 4.7013750000000005,
+              "frameWallMs": 20.0043335
+            },
+            "p95": {
+              "gpuMs": 3.20376875,
+              "cpuEncodeMs": 5.6396101
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.6287295,
+                1.679875,
+                1.6281249999999998
+              ],
+              "cpuEncodeMs": [
+                3.3219585,
+                4.661812,
+                3.3424794999999996
+              ],
+              "frameWallMs": [
+                20.0027295,
+                19.9994585,
+                19.999354500000003
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6287295,
+              "cpuEncodeMs": 3.3424794999999996,
+              "frameWallMs": 19.9994585
+            },
+            "p95": {
+              "gpuMs": 3.28580415,
+              "cpuEncodeMs": 5.59323575
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -0.9577197398081716,
+            "cpuEncodeMs": -28.90421419265642,
+            "frameWallMs": -0.02436971969099755
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.516104,
+                1.5273750000000001,
+                1.5370210000000002
+              ],
+              "cpuEncodeMs": [
+                3.046229,
+                4.6554375,
+                3.1234995000000003
+              ],
+              "frameWallMs": [
+                19.9972085,
+                19.9922705,
+                20.011812499999998
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5273750000000001,
+              "cpuEncodeMs": 3.1234995000000003,
+              "frameWallMs": 19.9972085
+            },
+            "p95": {
+              "gpuMs": 3.1140773999999998,
+              "cpuEncodeMs": 5.4224625
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.503958,
+                1.5449165,
+                1.560167
+              ],
+              "cpuEncodeMs": [
+                3.44075,
+                5.021583,
+                3.2197295
+              ],
+              "frameWallMs": [
+                19.997541499999997,
+                19.9990205,
+                20.001792000000002
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5449165,
+              "cpuEncodeMs": 3.44075,
+              "frameWallMs": 19.9990205
+            },
+            "p95": {
+              "gpuMs": 3.01009375,
+              "cpuEncodeMs": 6.141924400000001
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 1.1484736885178704,
+            "cpuEncodeMs": 10.156892933711049,
+            "frameWallMs": 0.009061264726040186
+          }
+        }
+      ]
+    },
+    "shadows": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.8146875,
+                1.8308749999999998,
+                1.85125
+              ],
+              "cpuEncodeMs": [
+                4.7848334999999995,
+                3.306292,
+                3.341354
+              ],
+              "frameWallMs": [
+                20.001146,
+                19.9967915,
+                20.006583499999998
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.8308749999999998,
+              "cpuEncodeMs": 3.341354,
+              "frameWallMs": 20.001146
+            },
+            "p95": {
+              "gpuMs": 3.4993396000000003,
+              "cpuEncodeMs": 5.482741949999999
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.775229,
+                1.7905419999999999,
+                1.7970000000000002
+              ],
+              "cpuEncodeMs": [
+                3.805,
+                4.161083,
+                4.168271
+              ],
+              "frameWallMs": [
+                20.000188,
+                20.006958,
+                20.001103999999998
+              ]
+            },
+            "drawCalls": 4187,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7905419999999999,
+              "cpuEncodeMs": 4.161083,
+              "frameWallMs": 20.001103999999998
+            },
+            "p95": {
+              "gpuMs": 1.9356455000000004,
+              "cpuEncodeMs": 5.85715835
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": -2.20293575476207,
+            "cpuEncodeMs": 24.532839082599445,
+            "frameWallMs": -0.00020998796769200467
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.6948954999999999,
+                1.6908539999999999,
+                1.760146
+              ],
+              "cpuEncodeMs": [
+                4.6693125,
+                3.452896,
+                3.2026250000000003
+              ],
+              "frameWallMs": [
+                19.992229000000002,
+                20.001,
+                19.991125
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6948954999999999,
+              "cpuEncodeMs": 3.452896,
+              "frameWallMs": 19.992229000000002
+            },
+            "p95": {
+              "gpuMs": 3.48508125,
+              "cpuEncodeMs": 5.45721905
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.6623125,
+                1.687542,
+                1.6654585000000002
+              ],
+              "cpuEncodeMs": [
+                3.740729,
+                4.2571045000000005,
+                3.918167
+              ],
+              "frameWallMs": [
+                19.993979,
+                19.997396000000002,
+                19.9815835
+              ]
+            },
+            "drawCalls": 4188,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6654585000000002,
+              "cpuEncodeMs": 3.918167,
+              "frameWallMs": 19.993979
+            },
+            "p95": {
+              "gpuMs": 1.7755770999999998,
+              "cpuEncodeMs": 5.52917915
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -1.7368032424417756,
+            "cpuEncodeMs": 13.47480491737949,
+            "frameWallMs": 0.008753401133998473
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5633124999999999,
+                1.5475415,
+                1.5569790000000001
+              ],
+              "cpuEncodeMs": [
+                2.983375,
+                3.5177705,
+                3.130125
+              ],
+              "frameWallMs": [
+                19.99975,
+                20.0003335,
+                19.998645500000002
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5569790000000001,
+              "cpuEncodeMs": 3.130125,
+              "frameWallMs": 19.99975
+            },
+            "p95": {
+              "gpuMs": 3.1571895999999997,
+              "cpuEncodeMs": 4.322347300000001
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.5155210000000001,
+                1.496292,
+                1.5209584999999999
+              ],
+              "cpuEncodeMs": [
+                3.972542,
+                4.189854,
+                3.77
+              ],
+              "frameWallMs": [
+                19.997750500000002,
+                19.9928955,
+                19.994958500000003
+              ]
+            },
+            "drawCalls": 4188,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5155210000000001,
+              "cpuEncodeMs": 3.972542,
+              "frameWallMs": 19.994958500000003
+            },
+            "p95": {
+              "gpuMs": 1.6249375000000001,
+              "cpuEncodeMs": 5.7667327
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": -2.662720563347354,
+            "cpuEncodeMs": 26.91320634159977,
+            "frameWallMs": -0.023957799472473784
+          }
+        }
+      ]
+    },
+    "lod": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.7570835,
+                1.7811045,
+                1.6940835
+              ],
+              "cpuEncodeMs": [
+                3.1958545000000003,
+                3.236021,
+                4.8089585
+              ],
+              "frameWallMs": [
+                19.9969995,
+                19.978104000000002,
+                20.002167
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7570835,
+              "cpuEncodeMs": 3.236021,
+              "frameWallMs": 19.9969995
+            },
+            "p95": {
+              "gpuMs": 3.5925378,
+              "cpuEncodeMs": 5.4707271
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.625,
+                1.592667,
+                1.563625
+              ],
+              "cpuEncodeMs": [
+                4.8046665,
+                3.400521,
+                5.017854
+              ],
+              "frameWallMs": [
+                20.001103999999998,
+                19.990520500000002,
+                20.0062085
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.592667,
+              "cpuEncodeMs": 4.8046665,
+              "frameWallMs": 20.001103999999998
+            },
+            "p95": {
+              "gpuMs": 3.2194205,
+              "cpuEncodeMs": 5.8038768
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": -9.357352681303988,
+            "cpuEncodeMs": 48.474515462044266,
+            "frameWallMs": 0.020525579350016976
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.624396,
+                1.6601875000000001,
+                1.6060625
+              ],
+              "cpuEncodeMs": [
+                4.696541,
+                3.1320620000000003,
+                4.821896499999999
+              ],
+              "frameWallMs": [
+                19.995083,
+                19.996771,
+                20.0019375
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.624396,
+              "cpuEncodeMs": 4.696541,
+              "frameWallMs": 19.996771
+            },
+            "p95": {
+              "gpuMs": 3.0992729,
+              "cpuEncodeMs": 5.52598605
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.4889165,
+                1.481875,
+                1.4596665
+              ],
+              "cpuEncodeMs": [
+                4.7239375,
+                3.163396,
+                4.962375
+              ],
+              "frameWallMs": [
+                20.0027085,
+                19.9973125,
+                19.9957705
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.481875,
+              "cpuEncodeMs": 4.7239375,
+              "frameWallMs": 19.9973125
+            },
+            "p95": {
+              "gpuMs": 2.9112023999999996,
+              "cpuEncodeMs": 5.66174165
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -8.77378422502887,
+            "cpuEncodeMs": 0.5833335639995552,
+            "frameWallMs": 0.0027079371964555676
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5084165,
+                1.5137915,
+                1.4847295
+              ],
+              "cpuEncodeMs": [
+                4.748813,
+                3.079917,
+                4.956645999999999
+              ],
+              "frameWallMs": [
+                20.000625,
+                19.9992705,
+                20.0
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5084165,
+              "cpuEncodeMs": 4.748813,
+              "frameWallMs": 20.0
+            },
+            "p95": {
+              "gpuMs": 3.040875,
+              "cpuEncodeMs": 5.619525649999999
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.3199584999999998,
+                1.3636249999999999,
+                1.2895415
+              ],
+              "cpuEncodeMs": [
+                4.7086045,
+                3.2195840000000002,
+                4.7000005
+              ],
+              "frameWallMs": [
+                19.998874999999998,
+                20.000146,
+                19.997917
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.3199584999999998,
+              "cpuEncodeMs": 4.7000005,
+              "frameWallMs": 19.998874999999998
+            },
+            "p95": {
+              "gpuMs": 3.1846434500000003,
+              "cpuEncodeMs": 5.5922042
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": -12.493764155987442,
+            "cpuEncodeMs": -1.0278884428593038,
+            "frameWallMs": -0.005625000000009095
+          }
+        }
+      ]
+    },
+    "hlod": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                2.026479,
+                2.0343125,
+                2.1315625000000002
+              ],
+              "cpuEncodeMs": [
+                3.384729,
+                3.4504375,
+                2.9842085000000003
+              ],
+              "frameWallMs": [
+                19.996541999999998,
+                20.002312,
+                19.994916500000002
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 2.0343125,
+              "cpuEncodeMs": 3.384729,
+              "frameWallMs": 19.996541999999998
+            },
+            "p95": {
+              "gpuMs": 3.7860913500000004,
+              "cpuEncodeMs": 4.9690607
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                2.1169165000000003,
+                2.1420835,
+                2.1313125
+              ],
+              "cpuEncodeMs": [
+                3.2512495,
+                3.0225419999999996,
+                2.9319375
+              ],
+              "frameWallMs": [
+                19.9997085,
+                19.993125,
+                20.003479
+              ]
+            },
+            "drawCalls": 2975,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 2.1313125,
+              "cpuEncodeMs": 3.0225419999999996,
+              "frameWallMs": 19.9997085
+            },
+            "p95": {
+              "gpuMs": 3.84149135,
+              "cpuEncodeMs": 4.2676934
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": 4.7681956434913575,
+            "cpuEncodeMs": -10.700620345085243,
+            "frameWallMs": 0.01583523791264252
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.633042,
+                1.7100625,
+                1.667
+              ],
+              "cpuEncodeMs": [
+                3.371021,
+                3.171771,
+                3.0402915000000004
+              ],
+              "frameWallMs": [
+                20.008875,
+                19.997646,
+                20.000124999999997
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.667,
+              "cpuEncodeMs": 3.171771,
+              "frameWallMs": 20.000124999999997
+            },
+            "p95": {
+              "gpuMs": 3.4436021,
+              "cpuEncodeMs": 5.313725300000001
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.6677914999999999,
+                1.7107085,
+                1.6665830000000001
+              ],
+              "cpuEncodeMs": [
+                3.213354,
+                2.994563,
+                4.4361455
+              ],
+              "frameWallMs": [
+                20.009957999999997,
+                20.0031455,
+                19.994375
+              ]
+            },
+            "drawCalls": 2942,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6677914999999999,
+              "cpuEncodeMs": 3.213354,
+              "frameWallMs": 20.0031455
+            },
+            "p95": {
+              "gpuMs": 3.3035392499999996,
+              "cpuEncodeMs": 5.444944349999999
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": 0.04748050389919989,
+            "cpuEncodeMs": 1.311034119424126,
+            "frameWallMs": 0.015102405609979108
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5123125000000002,
+                1.5301040000000001,
+                1.5131665
+              ],
+              "cpuEncodeMs": [
+                3.298687,
+                3.0136875,
+                4.4648125
+              ],
+              "frameWallMs": [
+                19.995375000000003,
+                20.001083,
+                20.007832999999998
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5131665,
+              "cpuEncodeMs": 3.298687,
+              "frameWallMs": 20.001083
+            },
+            "p95": {
+              "gpuMs": 3.2583374999999997,
+              "cpuEncodeMs": 5.57343395
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.535896,
+                1.5330210000000002,
+                1.5058125
+              ],
+              "cpuEncodeMs": [
+                3.0201045,
+                2.8259375,
+                4.45475
+              ],
+              "frameWallMs": [
+                19.9995415,
+                19.998396,
+                19.997417
+              ]
+            },
+            "drawCalls": 2820,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5330210000000002,
+              "cpuEncodeMs": 3.0201045,
+              "frameWallMs": 19.998396
+            },
+            "p95": {
+              "gpuMs": 2.9952958499999998,
+              "cpuEncodeMs": 5.2018768
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 1.3121160163141354,
+            "cpuEncodeMs": -8.445254126869273,
+            "frameWallMs": -0.013434272534151859
+          }
+        }
+      ]
+    },
+    "all": {
+      "schema": 1,
+      "method": "3 paired repeats, 60 warmup + 120 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.7071874999999999,
+                1.758875,
+                1.744146
+              ],
+              "cpuEncodeMs": [
+                3.5687505,
+                3.3036455,
+                3.1392084999999996
+              ],
+              "frameWallMs": [
+                20.0004165,
+                19.983375000000002,
+                20.0056875
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.744146,
+              "cpuEncodeMs": 3.3036455,
+              "frameWallMs": 20.0004165
+            },
+            "p95": {
+              "gpuMs": 3.53822325,
+              "cpuEncodeMs": 5.2178122
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.519625,
+                1.4839585,
+                1.547854
+              ],
+              "cpuEncodeMs": [
+                3.5342705,
+                3.780646,
+                3.4956875
+              ],
+              "frameWallMs": [
+                19.999271,
+                19.988146,
+                20.000708500000002
+              ]
+            },
+            "drawCalls": 3367,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 141,
+            "median": {
+              "gpuMs": 1.519625,
+              "cpuEncodeMs": 3.5342705,
+              "frameWallMs": 19.999271
+            },
+            "p95": {
+              "gpuMs": 3.3605020999999997,
+              "cpuEncodeMs": 3.9115437500000003
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": -12.872832893576568,
+            "cpuEncodeMs": 6.980924557432089,
+            "frameWallMs": -0.005727380727293951
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.6970625,
+                1.7662915,
+                1.77125
+              ],
+              "cpuEncodeMs": [
+                3.0664379999999998,
+                3.1938544999999996,
+                3.2519169999999997
+              ],
+              "frameWallMs": [
+                20.0008755,
+                19.9970415,
+                20.001125
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7662915,
+              "cpuEncodeMs": 3.1938544999999996,
+              "frameWallMs": 20.0008755
+            },
+            "p95": {
+              "gpuMs": 3.66213125,
+              "cpuEncodeMs": 3.5643274
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.3959164999999998,
+                1.4984585,
+                3.179625
+              ],
+              "cpuEncodeMs": [
+                3.3544375,
+                3.412375,
+                3.362354
+              ],
+              "frameWallMs": [
+                19.999979,
+                19.999979,
+                19.9989165
+              ]
+            },
+            "drawCalls": 3308,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 173,
+            "median": {
+              "gpuMs": 1.4984585,
+              "cpuEncodeMs": 3.362354,
+              "frameWallMs": 19.999979
+            },
+            "p95": {
+              "gpuMs": 3.42537915,
+              "cpuEncodeMs": 3.5370396
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -15.16357860523022,
+            "cpuEncodeMs": 5.275741271244527,
+            "frameWallMs": -0.004482303787145536
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.4888124999999999,
+                1.563625,
+                1.5625624999999999
+              ],
+              "cpuEncodeMs": [
+                3.427917,
+                3.045562,
+                3.1078125
+              ],
+              "frameWallMs": [
+                19.990458500000003,
+                20.001562999999997,
+                19.9996875
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5625624999999999,
+              "cpuEncodeMs": 3.1078125,
+              "frameWallMs": 19.9996875
+            },
+            "p95": {
+              "gpuMs": 3.1778274,
+              "cpuEncodeMs": 3.7031853999999997
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.2292915,
+                1.372125,
+                1.3667085
+              ],
+              "cpuEncodeMs": [
+                3.2860829999999996,
+                3.1915625,
+                3.1731249999999998
+              ],
+              "frameWallMs": [
+                19.988646,
+                19.999646,
+                20.001396
+              ]
+            },
+            "drawCalls": 2784,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 211,
+            "median": {
+              "gpuMs": 1.3667085,
+              "cpuEncodeMs": 3.1915625,
+              "frameWallMs": 19.999646
+            },
+            "p95": {
+              "gpuMs": 3.32396875,
+              "cpuEncodeMs": 3.51723125
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": -12.534154633814632,
+            "cpuEncodeMs": 2.6948215183509205,
+            "frameWallMs": -0.00020750324224438899
+          }
+        }
+      ]
+    }
+  },
+  "final": {
+    "bindings": {
+      "schema": 1,
+      "method": "3 paired repeats, 180 warmup + 600 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.9738125000000002,
+                1.991479,
+                1.980521
+              ],
+              "cpuEncodeMs": [
+                2.893917,
+                3.073604,
+                3.145625
+              ],
+              "frameWallMs": [
+                7.93175,
+                9.923770999999999,
+                9.7864995
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.980521,
+              "cpuEncodeMs": 3.073604,
+              "frameWallMs": 9.7864995
+            },
+            "p95": {
+              "gpuMs": 3.7562225999999996,
+              "cpuEncodeMs": 3.41604795
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                2.0028125,
+                2.0010415000000004,
+                1.982271
+              ],
+              "cpuEncodeMs": [
+                2.9207915,
+                2.9790419999999997,
+                2.824625
+              ],
+              "frameWallMs": [
+                9.242375,
+                9.9638335,
+                9.1130005
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 2.0010415000000004,
+              "cpuEncodeMs": 2.9207915,
+              "frameWallMs": 9.242375
+            },
+            "p95": {
+              "gpuMs": 3.7547023999999998,
+              "cpuEncodeMs": 3.2391375
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": 1.036116254258368,
+            "cpuEncodeMs": -4.971769297541262,
+            "frameWallMs": -5.559950215089682
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.7284375,
+                1.7314165,
+                1.7245625
+              ],
+              "cpuEncodeMs": [
+                3.0891045000000004,
+                3.0458125000000003,
+                3.17475
+              ],
+              "frameWallMs": [
+                8.6177295,
+                9.821125,
+                9.326041499999999
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7284375,
+              "cpuEncodeMs": 3.0891045000000004,
+              "frameWallMs": 9.326041499999999
+            },
+            "p95": {
+              "gpuMs": 3.5994541499999997,
+              "cpuEncodeMs": 3.4605146
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.74075,
+                1.746396,
+                1.7369375
+              ],
+              "cpuEncodeMs": [
+                2.9035,
+                2.8062915000000004,
+                2.910167
+              ],
+              "frameWallMs": [
+                9.341771,
+                10.5383335,
+                9.9073755
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.74075,
+              "cpuEncodeMs": 2.9035,
+              "frameWallMs": 9.9073755
+            },
+            "p95": {
+              "gpuMs": 3.5933291499999997,
+              "cpuEncodeMs": 3.2382308999999996
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": 0.7123485807268182,
+            "cpuEncodeMs": -6.008359380525974,
+            "frameWallMs": 6.233448564431132
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5304585,
+                1.528854,
+                1.5370835
+              ],
+              "cpuEncodeMs": [
+                3.2357709999999997,
+                3.1217085,
+                3.1792915
+              ],
+              "frameWallMs": [
+                8.643457999999999,
+                9.774749499999999,
+                9.8277705
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5304585,
+              "cpuEncodeMs": 3.1792915,
+              "frameWallMs": 9.774749499999999
+            },
+            "p95": {
+              "gpuMs": 3.4152250000000004,
+              "cpuEncodeMs": 3.59566905
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.5406875,
+                1.5340415,
+                1.5346250000000001
+              ],
+              "cpuEncodeMs": [
+                2.948229,
+                2.8152705,
+                2.9123545
+              ],
+              "frameWallMs": [
+                9.906500000000001,
+                10.229728999999999,
+                10.5783755
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5346250000000001,
+              "cpuEncodeMs": 2.9123545,
+              "frameWallMs": 10.229728999999999
+            },
+            "p95": {
+              "gpuMs": 3.31585595,
+              "cpuEncodeMs": 3.3074125
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 0.27223867880117325,
+            "cpuEncodeMs": -8.396115927086267,
+            "frameWallMs": 4.654641021746908
+          }
+        }
+      ]
+    },
+    "clusters": {
+      "schema": 1,
+      "method": "3 paired repeats, 180 warmup + 600 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.7613545,
+                1.743104,
+                1.789396
+              ],
+              "cpuEncodeMs": [
+                3.082042,
+                2.9246255000000003,
+                3.0798335
+              ],
+              "frameWallMs": [
+                8.499042,
+                8.5283745,
+                9.958999500000001
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7613545,
+              "cpuEncodeMs": 3.0798335,
+              "frameWallMs": 8.5283745
+            },
+            "p95": {
+              "gpuMs": 3.367083,
+              "cpuEncodeMs": 3.35089375
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.779271,
+                1.7767499999999998,
+                1.82
+              ],
+              "cpuEncodeMs": [
+                3.921875,
+                3.7032295,
+                3.8896870000000003
+              ],
+              "frameWallMs": [
+                7.614792,
+                7.7341665,
+                9.144813
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.779271,
+              "cpuEncodeMs": 3.8896870000000003,
+              "frameWallMs": 7.7341665
+            },
+            "p95": {
+              "gpuMs": 2.6131771,
+              "cpuEncodeMs": 4.17501875
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": 1.0172001150251297,
+            "cpuEncodeMs": 26.29536629171676,
+            "frameWallMs": -9.31253663872289
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.714917,
+                1.724083,
+                1.762708
+              ],
+              "cpuEncodeMs": [
+                3.1169789999999997,
+                2.9631665,
+                3.173521
+              ],
+              "frameWallMs": [
+                8.749875,
+                8.365292,
+                10.241604
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.724083,
+              "cpuEncodeMs": 3.1169789999999997,
+              "frameWallMs": 8.749875
+            },
+            "p95": {
+              "gpuMs": 3.26002885,
+              "cpuEncodeMs": 3.49052325
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.7673125,
+                1.7580415,
+                1.7928955
+              ],
+              "cpuEncodeMs": [
+                4.0358335,
+                3.737146,
+                3.935125
+              ],
+              "frameWallMs": [
+                8.025521,
+                7.740458500000001,
+                9.228375
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.7673125,
+              "cpuEncodeMs": 3.935125,
+              "frameWallMs": 8.025521
+            },
+            "p95": {
+              "gpuMs": 2.0098896,
+              "cpuEncodeMs": 4.570915199999999
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": 2.507390885473604,
+            "cpuEncodeMs": 26.248043377898945,
+            "frameWallMs": -8.278449692138457
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5618125,
+                1.594604,
+                1.6008125
+              ],
+              "cpuEncodeMs": [
+                3.1181665,
+                3.058375,
+                3.138
+              ],
+              "frameWallMs": [
+                8.9264585,
+                9.6616465,
+                9.836103999999999
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.594604,
+              "cpuEncodeMs": 3.1181665,
+              "frameWallMs": 9.6616465
+            },
+            "p95": {
+              "gpuMs": 3.4715437499999995,
+              "cpuEncodeMs": 3.5210795000000004
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.6120415000000001,
+                1.6137915,
+                1.6435415
+              ],
+              "cpuEncodeMs": [
+                3.901896,
+                3.80325,
+                3.940958
+              ],
+              "frameWallMs": [
+                7.814375500000001,
+                7.813438,
+                9.037333499999999
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6137915,
+              "cpuEncodeMs": 3.901896,
+              "frameWallMs": 7.814375500000001
+            },
+            "p95": {
+              "gpuMs": 1.7685187500000001,
+              "cpuEncodeMs": 4.2292816
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 1.2032768010114214,
+            "cpuEncodeMs": 25.13430568893611,
+            "frameWallMs": -19.11962935096
+          }
+        }
+      ]
+    },
+    "shadows": {
+      "schema": 1,
+      "method": "3 paired repeats, 180 warmup + 600 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                2.0690415,
+                2.056854,
+                2.0777085
+              ],
+              "cpuEncodeMs": [
+                3.118854,
+                3.177688,
+                3.1405205
+              ],
+              "frameWallMs": [
+                9.288042,
+                9.8209585,
+                9.930729
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 2.0690415,
+              "cpuEncodeMs": 3.1405205,
+              "frameWallMs": 9.8209585
+            },
+            "p95": {
+              "gpuMs": 3.9200187500000006,
+              "cpuEncodeMs": 3.4894545
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                2.0246874999999998,
+                2.0214375,
+                2.002854
+              ],
+              "cpuEncodeMs": [
+                3.7706045,
+                3.875375,
+                3.724021
+              ],
+              "frameWallMs": [
+                9.115271,
+                8.9605625,
+                8.5300625
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 2.0214375,
+              "cpuEncodeMs": 3.7706045,
+              "frameWallMs": 8.9605625
+            },
+            "p95": {
+              "gpuMs": 2.2424705,
+              "cpuEncodeMs": 4.157008350000001
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": -2.300775504019603,
+            "cpuEncodeMs": 20.06304368973233,
+            "frameWallMs": -8.760814944895657
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.6670835,
+                1.6532499999999999,
+                1.6566874999999999
+              ],
+              "cpuEncodeMs": [
+                3.1024165,
+                3.1130415,
+                3.0735
+              ],
+              "frameWallMs": [
+                9.745875,
+                9.118479,
+                8.980354
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6566874999999999,
+              "cpuEncodeMs": 3.1024165,
+              "frameWallMs": 9.118479
+            },
+            "p95": {
+              "gpuMs": 3.4826583500000003,
+              "cpuEncodeMs": 3.5307291500000004
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.644333,
+                1.6520835,
+                1.6979790000000001
+              ],
+              "cpuEncodeMs": [
+                3.861854,
+                3.749417,
+                3.8927505
+              ],
+              "frameWallMs": [
+                9.4198335,
+                8.676458499999999,
+                9.304708999999999
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.6520835,
+              "cpuEncodeMs": 3.861854,
+              "frameWallMs": 9.304708999999999
+            },
+            "p95": {
+              "gpuMs": 4.22539615,
+              "cpuEncodeMs": 4.392522949999999
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -0.27790394990001577,
+            "cpuEncodeMs": 24.478902171903737,
+            "frameWallMs": 2.042336227346664
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.5564165,
+                1.573229,
+                1.548333
+              ],
+              "cpuEncodeMs": [
+                3.1571249999999997,
+                3.1236045,
+                3.0807504999999997
+              ],
+              "frameWallMs": [
+                9.618083500000001,
+                9.941916500000001,
+                9.4404585
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5564165,
+              "cpuEncodeMs": 3.1236045,
+              "frameWallMs": 9.618083500000001
+            },
+            "p95": {
+              "gpuMs": 3.3254377999999996,
+              "cpuEncodeMs": 3.4939434499999997
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.5464164999999999,
+                1.5340414999999998,
+                1.5483125
+              ],
+              "cpuEncodeMs": [
+                3.8676045,
+                3.6713955,
+                3.7788535
+              ],
+              "frameWallMs": [
+                8.787166,
+                8.109375499999999,
+                8.4974795
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 1.5464164999999999,
+              "cpuEncodeMs": 3.7788535,
+              "frameWallMs": 8.4974795
+            },
+            "p95": {
+              "gpuMs": 1.66979375,
+              "cpuEncodeMs": 4.1232598000000005
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": -0.6425015412005908,
+            "cpuEncodeMs": 20.97733563900295,
+            "frameWallMs": -11.651011347530925
+          }
+        }
+      ]
+    },
+    "all": {
+      "schema": 1,
+      "method": "3 paired repeats, 180 warmup + 600 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                1.6869584999999998,
+                6.61475,
+                6.3845
+              ],
+              "cpuEncodeMs": [
+                2.9805,
+                2.7235005,
+                2.837854
+              ],
+              "frameWallMs": [
+                8.708604000000001,
+                9.9928125,
+                9.9875625
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 6.3845,
+              "cpuEncodeMs": 2.837854,
+              "frameWallMs": 9.9875625
+            },
+            "p95": {
+              "gpuMs": 10.3976375,
+              "cpuEncodeMs": 3.30961425
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                1.482375,
+                6.596604,
+                6.40125
+              ],
+              "cpuEncodeMs": [
+                3.194521,
+                2.6932505,
+                2.8817715
+              ],
+              "frameWallMs": [
+                8.8794585,
+                9.996542,
+                9.992499500000001
+              ]
+            },
+            "drawCalls": 2313,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 141,
+            "median": {
+              "gpuMs": 6.40125,
+              "cpuEncodeMs": 2.8817715,
+              "frameWallMs": 9.992499500000001
+            },
+            "p95": {
+              "gpuMs": 7.0610934499999995,
+              "cpuEncodeMs": 3.49755835
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": 0.26235413893023196,
+            "cpuEncodeMs": 1.54756023389504,
+            "frameWallMs": 0.0494314804037721
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                6.1879375,
+                6.643750000000001,
+                6.424958500000001
+              ],
+              "cpuEncodeMs": [
+                3.0054165,
+                2.6453335,
+                2.6575625
+              ],
+              "frameWallMs": [
+                9.9959995,
+                10.004146,
+                9.9801045
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 6.424958500000001,
+              "cpuEncodeMs": 2.6575625,
+              "frameWallMs": 9.9959995
+            },
+            "p95": {
+              "gpuMs": 7.03579375,
+              "cpuEncodeMs": 3.3482502999999997
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                6.0521875,
+                5.9843125,
+                5.5499375
+              ],
+              "cpuEncodeMs": [
+                2.952667,
+                2.733521,
+                2.793979
+              ],
+              "frameWallMs": [
+                9.994270499999999,
+                10.000312000000001,
+                9.9870415
+              ]
+            },
+            "drawCalls": 2074,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 173,
+            "median": {
+              "gpuMs": 5.9843125,
+              "cpuEncodeMs": 2.793979,
+              "frameWallMs": 9.994270499999999
+            },
+            "p95": {
+              "gpuMs": 6.75425,
+              "cpuEncodeMs": 3.2308461500000005
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -6.858347801001374,
+            "cpuEncodeMs": 5.133143623150915,
+            "frameWallMs": -0.017296919632714403
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                6.3400415,
+                6.62725,
+                6.0801875
+              ],
+              "cpuEncodeMs": [
+                2.8014580000000002,
+                2.5977085,
+                2.9835835
+              ],
+              "frameWallMs": [
+                9.995687499999999,
+                9.9909585,
+                10.001999999999999
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 6.3400415,
+              "cpuEncodeMs": 2.8014580000000002,
+              "frameWallMs": 9.995687499999999
+            },
+            "p95": {
+              "gpuMs": 7.085956249999999,
+              "cpuEncodeMs": 3.4048496999999998
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                6.3805625,
+                6.365333,
+                6.4866875
+              ],
+              "cpuEncodeMs": [
+                2.4127495000000003,
+                2.613729,
+                2.3700415
+              ],
+              "frameWallMs": [
+                9.99625,
+                9.9858125,
+                9.990708
+              ]
+            },
+            "drawCalls": 1874,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 211,
+            "median": {
+              "gpuMs": 6.3805625,
+              "cpuEncodeMs": 2.4127495000000003,
+              "frameWallMs": 9.990708
+            },
+            "p95": {
+              "gpuMs": 7.012966649999999,
+              "cpuEncodeMs": 2.8576673
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 0.6391283085449784,
+            "cpuEncodeMs": -13.87522140256966,
+            "frameWallMs": -0.049816483358444685
+          }
+        }
+      ]
+    },
+    "static": {
+      "schema": 1,
+      "method": "3 paired repeats, 180 warmup + 600 samples each, alternating pair order per batch. Median of run medians; pooled inclusive p95. No uncapped FPS inference.",
+      "cameras": [
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                8.2988335,
+                8.288,
+                8.205354
+              ],
+              "cpuEncodeMs": [
+                2.6008335000000002,
+                2.5615,
+                2.668271
+              ],
+              "frameWallMs": [
+                10.0010415,
+                9.999604,
+                10.000562500000001
+              ]
+            },
+            "drawCalls": 3179,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 8.288,
+              "cpuEncodeMs": 2.6008335000000002,
+              "frameWallMs": 10.000562500000001
+            },
+            "p95": {
+              "gpuMs": 8.612844050000001,
+              "cpuEncodeMs": 2.9911020500000003
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                8.2953335,
+                8.2879375,
+                8.32775
+              ],
+              "cpuEncodeMs": [
+                2.0199165,
+                1.958375,
+                1.9348744999999998
+              ],
+              "frameWallMs": [
+                9.999500000000001,
+                9.998166,
+                10.001375
+              ]
+            },
+            "drawCalls": 2313,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 141,
+            "median": {
+              "gpuMs": 8.2953335,
+              "cpuEncodeMs": 1.958375,
+              "frameWallMs": 9.999500000000001
+            },
+            "p95": {
+              "gpuMs": 8.648391649999999,
+              "cpuEncodeMs": 2.26194405
+            }
+          },
+          "camera": 0,
+          "deltaPercent": {
+            "gpuMs": 0.08848334942084257,
+            "cpuEncodeMs": -24.70202340903407,
+            "frameWallMs": -0.01062440237736828
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                8.156500000000001,
+                8.230646,
+                8.3204375
+              ],
+              "cpuEncodeMs": [
+                2.625667,
+                2.5739795,
+                2.5456874999999997
+              ],
+              "frameWallMs": [
+                9.9993535,
+                9.997146,
+                9.999646
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 8.230646,
+              "cpuEncodeMs": 2.5739795,
+              "frameWallMs": 9.9993535
+            },
+            "p95": {
+              "gpuMs": 8.55111635,
+              "cpuEncodeMs": 2.7966645999999997
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                8.172291999999999,
+                8.1415625,
+                8.244583500000001
+              ],
+              "cpuEncodeMs": [
+                1.8640835,
+                1.8589375000000001,
+                1.805063
+              ],
+              "frameWallMs": [
+                9.997479,
+                9.998729,
+                10.0023745
+              ]
+            },
+            "drawCalls": 2074,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 173,
+            "median": {
+              "gpuMs": 8.172291999999999,
+              "cpuEncodeMs": 1.8589375000000001,
+              "frameWallMs": 9.998729
+            },
+            "p95": {
+              "gpuMs": 8.6201875,
+              "cpuEncodeMs": 2.2060753500000003
+            }
+          },
+          "camera": 1,
+          "deltaPercent": {
+            "gpuMs": -0.7089844466643513,
+            "cpuEncodeMs": -27.779630723554718,
+            "frameWallMs": -0.006245403765348101
+          }
+        },
+        {
+          "off": {
+            "runMedians": {
+              "gpuMs": [
+                8.1146875,
+                8.106874999999999,
+                8.03725
+              ],
+              "cpuEncodeMs": [
+                2.5851249999999997,
+                2.5727705,
+                2.605687
+              ],
+              "frameWallMs": [
+                9.997979,
+                9.99825,
+                10.002271
+              ]
+            },
+            "drawCalls": 3182,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 0,
+            "median": {
+              "gpuMs": 8.106874999999999,
+              "cpuEncodeMs": 2.5851249999999997,
+              "frameWallMs": 9.99825
+            },
+            "p95": {
+              "gpuMs": 8.36563125,
+              "cpuEncodeMs": 2.8888524
+            }
+          },
+          "on": {
+            "runMedians": {
+              "gpuMs": [
+                8.1109375,
+                8.179770999999999,
+                8.1823125
+              ],
+              "cpuEncodeMs": [
+                1.699417,
+                1.703854,
+                1.6808125
+              ],
+              "frameWallMs": [
+                9.9984165,
+                9.9983755,
+                9.9995205
+              ]
+            },
+            "drawCalls": 1874,
+            "visibleInputTriangles": -1,
+            "visibleProxyParts": 211,
+            "median": {
+              "gpuMs": 8.179770999999999,
+              "cpuEncodeMs": 1.699417,
+              "frameWallMs": 9.9984165
+            },
+            "p95": {
+              "gpuMs": 8.549796149999999,
+              "cpuEncodeMs": 1.8542506500000002
+            }
+          },
+          "camera": 2,
+          "deltaPercent": {
+            "gpuMs": 0.8991874180865,
+            "cpuEncodeMs": -34.26170881485421,
+            "frameWallMs": 0.001665291425978488
+          }
+        }
+      ]
+    }
+  },
+  "counters": {
+    "bindings": [
+      {
+        "off": {
+          "drawCalls": 3179,
+          "triangles0": 2832120,
+          "triangles1": 2829396,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3179,
+          "triangles0": 2832120,
+          "triangles1": 2829396,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      }
+    ],
+    "clusters": [
+      {
+        "off": {
+          "drawCalls": 3179,
+          "triangles0": 2832120,
+          "triangles1": 2829396,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3179,
+          "triangles0": 2832120,
+          "triangles1": 2820830,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2819498,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2818234,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      }
+    ],
+    "shadows": [
+      {
+        "off": {
+          "drawCalls": 3179,
+          "triangles0": 2832120,
+          "triangles1": 2829396,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3179,
+          "triangles0": 2818956,
+          "triangles1": 2829396,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3182,
+          "triangles0": 2813948,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 3182,
+          "triangles0": 2813948,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        }
+      }
+    ],
+    "all": [
+      {
+        "off": {
+          "drawCalls": 3179,
+          "triangles0": 2832120,
+          "triangles1": 2829396,
+          "draws0": 1591,
+          "draws1": 1588,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 2313,
+          "triangles0": 2139203,
+          "triangles1": 2150243,
+          "draws0": 1158,
+          "draws1": 1155,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 887,
+          "lodNodes": 210,
+          "sceneSubmitted": 887
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 2074,
+          "triangles0": 2023732,
+          "triangles1": 2036816,
+          "draws0": 1037,
+          "draws1": 1037,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 799,
+          "lodNodes": 181,
+          "sceneSubmitted": 799
+        }
+      },
+      {
+        "off": {
+          "drawCalls": 3182,
+          "triangles0": 2832120,
+          "triangles1": 2832120,
+          "draws0": 1591,
+          "draws1": 1591,
+          "clustersTested": 0,
+          "occluded": 0,
+          "cachedModels": 0,
+          "lodNodes": 0,
+          "sceneSubmitted": 1296
+        },
+        "on": {
+          "drawCalls": 1874,
+          "triangles0": 1846264,
+          "triangles1": 1855820,
+          "draws0": 937,
+          "draws1": 937,
+          "clustersTested": 16384,
+          "occluded": 0,
+          "cachedModels": 767,
+          "lodNodes": 160,
+          "sceneSubmitted": 767
+        }
+      }
+    ]
+  },
+  "staticManifest": {
+    "binarySha256": "33d944950d8d6f40a91763d72a2efbe6b14490e57a81dbb895ab10b72d0eaad6",
+    "baseCommit": "1607f3a9",
+    "architecture": "arm64",
+    "uncapped": true,
+    "warmup": 180,
+    "samples": 600
+  },
+  "visual": {
+    "bindings": [
+      {
+        "camera": 0,
+        "identical": true,
+        "maeRgb255": 0.0,
+        "pixelsOver10Percent": 0.0
+      },
+      {
+        "camera": 1,
+        "identical": true,
+        "maeRgb255": 0.0,
+        "pixelsOver10Percent": 0.0
+      },
+      {
+        "camera": 2,
+        "identical": true,
+        "maeRgb255": 0.0,
+        "pixelsOver10Percent": 0.0
+      }
+    ],
+    "clusters": [
+      {
+        "camera": 0,
+        "identical": false,
+        "maeRgb255": 0.0030226417824074075,
+        "pixelsOver10Percent": 0.008572048611111112
+      },
+      {
+        "camera": 1,
+        "identical": false,
+        "maeRgb255": 0.0011791087962962964,
+        "pixelsOver10Percent": 0.0026041666666666665
+      },
+      {
+        "camera": 2,
+        "identical": false,
+        "maeRgb255": 0.002193648726851852,
+        "pixelsOver10Percent": 0.004340277777777778
+      }
+    ],
+    "shadows": [
+      {
+        "camera": 0,
+        "identical": false,
+        "maeRgb255": 5.497685185185185e-05,
+        "pixelsOver10Percent": 0.00010850694444444444
+      },
+      {
+        "camera": 1,
+        "identical": true,
+        "maeRgb255": 0.0,
+        "pixelsOver10Percent": 0.0
+      },
+      {
+        "camera": 2,
+        "identical": true,
+        "maeRgb255": 0.0,
+        "pixelsOver10Percent": 0.0
+      }
+    ],
+    "all": [
+      {
+        "camera": 0,
+        "identical": false,
+        "maeRgb255": 0.032842158564814816,
+        "pixelsOver10Percent": 0.0710720486111111
+      },
+      {
+        "camera": 1,
+        "identical": false,
+        "maeRgb255": 0.086201171875,
+        "pixelsOver10Percent": 0.1745876736111111
+      },
+      {
+        "camera": 2,
+        "identical": false,
+        "maeRgb255": 0.09641782407407408,
+        "pixelsOver10Percent": 0.1958550347222222
+      }
+    ],
+    "static": [
+      {
+        "camera": 0,
+        "maeRgb255": 0.03275860821759259,
+        "pixelsOver10Percent": 0.07063802083333333
+      },
+      {
+        "camera": 1,
+        "maeRgb255": 0.0863718894675926,
+        "pixelsOver10Percent": 0.1748046875
+      },
+      {
+        "camera": 2,
+        "maeRgb255": 0.09674985532407407,
+        "pixelsOver10Percent": 0.197265625
+      }
+    ]
+  },
+  "instanceValidation": {
+    "count": 1025,
+    "primitivesPerCopy": 10,
+    "limits": [
+      32,
+      256
+    ],
+    "draws": [
+      330,
+      50
+    ],
+    "gpuSamplesPerRun": 120,
+    "gpuMedianMs": [
+      0.607125,
+      0.597667
+    ],
+    "cpuMedianMs": [
+      2.600666,
+      2.699125
+    ],
+    "identicalCaptureSha256": "9b69e54f357e3391e283974b9d614c1ef641b511820d70e084df29b7730c93bf",
+    "purpose": "Single-pair visual and batching validation, not stable performance evidence"
+  }
+}

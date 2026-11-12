@@ -37,7 +37,7 @@ public:
 
     // Reads an image of the game (LUTs): path -> RGBA8 top row first. Client: content files; editor: project dir.
     using ImageLoader = std::function<bool(const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba)>;
-    void setImageLoader(ImageLoader fn) { loader_ = std::move(fn); luts_.clear(); }
+    void setImageLoader(ImageLoader fn);
 
     // PostProcess
     bool active() const override;
@@ -86,6 +86,10 @@ private:
     std::vector<Sized> sizes_;
     std::map<std::string, Lut> luts_;
     ImageLoader loader_;
+    std::map<std::string,gfx::TextureHandle> graphTextures_;
+    std::map<std::string,std::vector<std::string>> graphPaths_;
+    gfx::TextureHandle graphTexture(const std::string& path);
+    double graphEpoch_ = -1;
     uint64_t frame_ = 0;
     PostFxStats stats_;
     std::string error_;

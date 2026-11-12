@@ -12,10 +12,12 @@ async function refresh(){const response=await rpc({service:'meta',action:'view',
 async function perform(request){if(busy)return;busy=true;retryRequest=request;$('retry').hidden=true;$('status').textContent=tr('pending');if(state)render();try{const result=await rpc(request);if(result.code>1){retryRequest=null;throw new Error(tr(`code${result.code}`));}retryRequest=null;await refresh();$('status').textContent=tr('saved');}catch(e){$('status').textContent=e.message;$('retry').hidden=!retryRequest;}finally{busy=false;if(state)render();}}
 function act(service,action,args={}){return perform({service,action,arguments:args,operation:crypto.randomUUID()});}
 function card(grid,title){const c=node('article',undefined,'card');c.append(node('h2',title));grid.append(c);return c;}
+function screens(){const allowed=['shop','progress','boards','chat','social','items','mail','events'];const selected=catalog?.economy?.metadata?.metaScreens;return Array.isArray(selected)?allowed.filter(x=>selected.includes(x)||(x==='progress'&&selected.some(k=>['quests','pass'].includes(k)))||(x==='boards'&&selected.includes('leaderboard'))||(x==='mail'&&selected.includes('inbox'))):allowed;}
 function render(){
+ if(!screens().includes(tab))tab=screens()[0]||'';
  $('login').hidden=true;$('dashboard').hidden=false;$('logout').hidden=false;$('logout').textContent=tr('logout');$('identity').textContent=state.player;$('heading').textContent=state.player;
  $('balances').replaceChildren();for(const [id,n] of Object.entries(state.profile.balances||{})){const b=node('div',id,'balance');b.append(node('strong',String(n)));$('balances').append(b);}
- $('tabs').replaceChildren();for(const name of ['shop','progress','boards','chat','social','items','mail','events']){const b=button($('tabs'),name,()=>{tab=name;render();});if(tab===name)b.classList.add('active');}
+ $('tabs').replaceChildren();for(const name of screens()){const b=button($('tabs'),name,()=>{tab=name;render();});if(tab===name)b.classList.add('active');}
  const grid=node('div',undefined,'grid');$('content').replaceChildren(grid);const econ=catalog.economy, ext=catalog.extensions;
  if(tab==='shop')for(const id of state.offers){const def=econ.offers[id],c=card(grid,label(id,def));c.append(node('p',`${tr('reward')}: ${amount(def.reward)}`),node('p',`${tr('cost')}: ${def.product||amount(def.cost)}`));if(def.product)c.append(node('p',tr('payment')));else button(c,'buy',()=>act('economy','buy',{id}));}
  if(tab==='progress'){
@@ -29,9 +31,10 @@ function render(){
   const friends=card(grid,tr('social'));form(friends,[['target','target']],args=>act('friends','request',args),'request');
   for(const target of Object.keys(state.requests||{})){const row=node('div',target,'row');button(row,'accept',()=>act('friends','accept',{target}));button(row,'reject',()=>act('friends','reject',{target}));friends.append(row);}
   for(const target of Object.keys(state.friends||{})){const row=node('div',target,'row');button(row,'remove',()=>act('friends','remove',{target}));button(row,'block',()=>act('friends','block',{target}));friends.append(row);}
-  const clan=card(grid,state.clanId||tr('clan'));
+  if(ext.clans){const clan=card(grid,state.clanId||tr('clan'));
   if(!state.clanId){form(clan,[['id','clanid']],args=>act('clan','create',args),'create');for(const id of state.invites||[])button(clan,`${tr('join')} ${id}`,()=>act('clan','join',{id}));}
   else {const id=state.clanId;for(const [p,role] of Object.entries(state.clan.members))clan.append(node('p',`${p} · ${role}`));form(clan,[['target','target']],args=>act('clan','invite',{id,...args}),'invite');form(clan,[['asset','asset','text','gold'],['amount','amount','number','10']],args=>act('clan','donate',{id,...args}),'donate');for(const goal of Object.keys(ext.clans?.goals||{}))button(clan,`${tr('claim')} ${goal}`,()=>act('clan','goal',{id,goal}));button(clan,'leave',()=>act('clan','leave',{id}));}
+  }
  }
  if(tab==='items')for(const [type,def] of Object.entries(ext.items||{}))if(def.asset&&(state.profile.balances[def.asset]||0)>0){const c=card(grid,label(type,def));c.append(node('p',amount({[def.asset]:state.profile.balances[def.asset]})));button(c,'claim',()=>act('items','redeem',{id:crypto.randomUUID(),type}));}
  if(tab==='items')for(const [id,item] of Object.entries(state.extras?.items||{})){const def=ext.items[item.type],c=card(grid,label(item.type,def));c.append(node('p',`${id} · ${tr('level')} ${item.level}`));button(c,'upgrade',()=>act('items','upgrade',{id}));button(c,'salvage',()=>act('items','salvage',{id}));for(const slot of def.slots)button(c,`${tr('equip')} ${slot}`,()=>act('items','equip',{id,slot}));button(c,'unequip',()=>act('items','unequip',{id}));if(def.mergeCount)form(c,[['inputs','inputs']],a=>act('items','merge',{id,inputs:a.inputs.split(',').map(s=>s.trim())}),'merge');}

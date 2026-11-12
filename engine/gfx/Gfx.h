@@ -35,10 +35,11 @@ template <class Tag> struct Handle {
 using BufferHandle = Handle<struct BufferTag>;
 using TextureHandle = Handle<struct TextureTag>;
 using ShaderHandle = Handle<struct ShaderTag>;
+using ComputeHandle = Handle<struct ComputeTag>;
 using PipelineHandle = Handle<struct PipelineTag>;
 
 enum class Backend { Metal, GLES3, GL33 };
-enum class BufferType { Vertex, Index };
+enum class BufferType { Vertex, Index, Storage };
 enum class Usage { Immutable, Dynamic };          // Dynamic: updated (whole or partially) every frame
 enum class PixelFormat { RGBA8, R8, Depth, RGBA32F,
                          ETC2_RGB8, ETC2_RGBA8, BC1, BC3, BC7, ASTC_4x4,   // block-compressed: upload levels, check supports()   // Depth: 24/32-bit depth render target; RGBA32F: data textures
@@ -59,6 +60,7 @@ struct BufferDesc {
     size_t size = 0;
     const void* data = nullptr;
     const char* label = nullptr;
+    bool snapshotUpdates = false; // Dynamic: preserve earlier updates encoded in this frame
 };
 
 struct TextureDesc {
@@ -75,6 +77,7 @@ struct TextureDesc {
     const void* const* levelData = nullptr;
     const size_t* levelSize = nullptr;
     const char* label = nullptr;
+    bool storage = false; // compute writable; requires supportsCompute()
 };
 
 // Each backend picks the sources it understands. A shader may provide all of them.
@@ -87,6 +90,8 @@ struct ShaderDesc {
     const char* label = nullptr;
     bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
 };
+
+struct ComputeDesc { const char* msl=nullptr; const char* glsl=nullptr; const char* label=nullptr; };
 
 struct VertexAttr {
     uint32_t location = 0;
@@ -166,6 +171,27 @@ public:
     struct GpuTiming { uint64_t tag = 0; double milliseconds = 0; bool valid = false; };
     virtual bool timeGpuFrame(uint64_t tag) { (void)tag; return false; }
     virtual std::vector<GpuTiming> takeGpuTimings() { return {}; }
+    // Optional compute. Buffer slots 0..7/9; uniform bytes at slot 8 (<=4 KB).
+    // Storage buffers persist across frames; updateBuffer uploads in queue order.
+    // Commands are between beginFrame/endFrame and outside render passes.
+    virtual bool supportsCompute() const { return false; }
+    virtual ComputeHandle createCompute(const ComputeDesc&) { return {}; }
+    virtual void destroyCompute(ComputeHandle) {}
+    virtual bool beginCompute(ComputeHandle) { return false; }
+    virtual void setComputeBuffer(int,BufferHandle) {}
+    virtual void setComputeTexture(int,TextureHandle) {}
+    virtual void setComputeUniforms(const void*,size_t) {}
+    // 64 threads per X group; dispatch provides total logical threads. Bounds-check in shader.
+    virtual void dispatch(uint32_t,uint32_t=1) {}
+    virtual void endCompute() {}
+    // Debug/readback only, between frames. Never used in normal simulation/rendering.
+    virtual bool readBuffer(BufferHandle,void*,size_t) { return false; }
+    // Small asynchronous status readback, inside a frame and outside encoders. Callback on
+    // owner thread at a later beginFrame; empty data on GPU error. Unsupported returns false.
+    using BufferReadFn=std::function<void(std::vector<uint8_t>)>;
+    virtual bool readBufferAsync(BufferHandle,size_t,BufferReadFn) { return false; }
+    virtual bool gpuHealthy() const { return true; }
+    virtual double gpuFrameMs() const { return 0; } // last completed frame; asynchronous
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;
@@ -186,6 +212,9 @@ public:
     virtual void setVertexBuffer(BufferHandle b, size_t offset = 0) = 0;
     virtual void setIndexBuffer(BufferHandle b, size_t offset = 0) = 0;
     virtual void setTexture(int slot, TextureHandle t) = 0;
+    // Larger blocks require explicit backend capability; portable minimum remains 4 KB.
+    virtual size_t maxUniformBytes() const { return 4096; }
+    virtual void setBindingCacheEnabled(bool enabled) { (void)enabled; }
     virtual void setUniforms(int slot, const void* data, size_t size) = 0;
     virtual void draw(uint32_t vertexCount, uint32_t firstVertex = 0) = 0;
     virtual void drawIndexed(uint32_t indexCount, uint32_t firstIndex = 0, int32_t baseVertex = 0, uint32_t instanceCount = 1) = 0;

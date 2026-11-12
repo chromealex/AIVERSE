@@ -3,6 +3,7 @@
 #include "engine/world/SpatialWorld.h"
 #include <deque>
 #include "FpsSystems.h"
+#include "engine/world/CollisionStream.h"
 
 namespace aiverse::fps {
 constexpr uint16_t kInputCommand=1;
@@ -89,6 +90,9 @@ public:
     int result(Simulation& sim) override { return state(sim).winner; }
     const Config& config() const { return config_; }
     const world::SpatialWorld& collision() const { return collision_; }
+    void setContentReader(world::AssetReader);
+    bool readyToStep(Simulation&) override;
+    const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
     State& state(Simulation& sim) const { return *sim.world().resource<State>(); }
 private:
     void tick(Simulation&);
@@ -111,5 +115,7 @@ private:
     std::vector<Vec3> spawns_;
     std::vector<bool> bots_;
     uint64_t contentHash_=0;
+    Json streamManifest_;
+    std::unique_ptr<world::CollisionStream> streamedCollision_;
 };
 }
