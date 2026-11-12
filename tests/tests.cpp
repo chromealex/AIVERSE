@@ -12611,6 +12611,8 @@ view.on_frame(function() game.log('frame line'); error('boom') end)
 
 #ifdef AIVERSE_TESTS_EDITOR_CORE
 TEST(project_import_mcp_bridge) {
+    // the bridge runs tools/importers/port/aiverse_port.py: needs Python (not in Wine on CI)
+    if (!havePython()) { std::printf("  (python not found: project import bridge skipped)\n"); return; }
     aiverse::editor::Workspace ws;
     ws.engineDir = AIVERSE_SOURCE_DIR;
     Json p = Json::object();
