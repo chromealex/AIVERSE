@@ -42,6 +42,9 @@ ALIASES = {
  'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
  'aiverse-stealth-senses':'stealth sight hearing noise footprint scent suspicion alert disguise hiding стелс зрение слух шум след подозрен тревог маскиров укрыт',
  'aiverse-cinematic-gameplay':'cinematic cutscene timeline qte slowmo hitstop timescale sync staging checkpoint катсцен ролик таймлайн замедлен синхрон постановк чекпоинт',
+ 'aiverse-card-games':'card deck hand mulligan stack priority counter ccg deckbuilder board game hidden reveal карт колод рука муллиган стек приоритет контр настольн скрыт',
+ 'aiverse-tactics-grid':'tactics tactical turn hex grid cover flank overwatch initiative action points wego line of fire тактик пошагов гекс сетк укрыт фланг дозор инициатив очки действ',
+ 'aiverse-cards-turns-bots':'card bot turn planner tactics ai opponent evaluator lookahead бот карт планировщ ход тактик противник',
  'aiverse-genre-bots':'bot opponent squad role formation objective melee shooter бот противник отряд роль формаци цел',
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
 }

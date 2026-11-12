@@ -28,8 +28,9 @@ players and movement/attack budgets suffice.
   `python3 tests/libraries/strategy_native.py`; verify a save with nested pending
   actions, no double AP charge on repeated commands, and a rejected opponent order.
 
-Tactical grids, legal-action generation, reaction UI and tactical AI remain
-separate integrations. Do not describe this scheduler as full XCOM/D&D rules.
+Tactical grids, cover, overwatch, dynamic initiative, WeGo and a turn planner bot are `tactics-grid` /
+`cards-turns-bots` (`skills/aiverse-tactics-grid`); this scheduler and its records are unchanged.
+Reaction UI remains a separate integration. Do not describe this scheduler as full XCOM/D&D rules.
 
 Build selection: `AIVERSE::lib_turn_scheduler`; native OBJECT modules call
 `aiverse_native_use_libraries(target turn-scheduler)`. Only this header library and its
