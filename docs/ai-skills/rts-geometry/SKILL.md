@@ -16,3 +16,18 @@ FPS scenery is activated by the map's geometryScene path; RTS scenery is game-wi
 Use `geometry_stats` and screenshots at identical cameras, near/far and orthographic/perspective.
 Verify holes, silhouette, shadows and camera cuts. Compare timings and memory on the target.
 Recommendations and counters are not proof of speedup. No streamed pages or GPU Hi-Z are provided.
+
+## Offline surface replacements
+
+For a distant rigid log wall or solid decorative object, use `geometry_proxy_bake` with
+`model`, a NEW `target` GLB, `mode:plane|box`, `axis:auto|x|y|z`, `resolution:16..512`.
+The plane has two opposing faces, box up to six. Embedded base/normal/ORM textures preserve
+sampled coverage and PBR factors. No lighting is baked. Animated, blended, emissive, team-colour,
+fixed-lit, variant and Shader Graph sources are rejected; resolve loader warnings first.
+Use geometry_proxy_lod with type/source/model/distance to append a far RTS LOD, or
+instance.proxy={model,maxPixels} in geometry_scene_set for static scenery. Preserve source
+identity/collision and existing view settings. Parent HLOD does not override explicit proxies.
+Inspect front/back/oblique/edge-on views, holes and shadows; low-resolution coverage and box
+projection are approximations, not certified silhouette preservation. Use box for side views;
+plane requires a thin source. maxPixels is a size threshold, not an error guarantee.
+No automatic scene segmentation, general remeshing, parallax or texture-page streaming.

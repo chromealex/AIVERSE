@@ -267,3 +267,9 @@ revision conflicts, apply, graph publishing/sampling and five screenshot capture
 using Metal. A packaging estimate included the exported robot GLB and excluded
 `models/source/`. Skirmish and mushrooms headless smoke matches both ended with a
 winner. Windows, Linux, mobile and Web rendering were not run for this change.
+
+For distant surface replacements with baked textures instead of vertex clustering, see
+[offline surface proxies](geometry.md#offline-baked-surface-proxies). `geometry_proxy_bake`
+works on exported/imported model files and produces a self-contained GLB for existing LODs.
+The GLB exporter now embeds CPU images and base/normal/metallic-roughness/occlusion/emissive
+texture bindings and alpha-mask settings; the authoring document format is unchanged.

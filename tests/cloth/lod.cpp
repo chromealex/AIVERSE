@@ -23,7 +23,7 @@ int main(){try{
         else check(st.simulatedObjects==0&&st.deferredObjects==6,"deferred cloth was solved");
         for(auto source:batch.representatives())check(source==0,"deferred rendering lost shared shape");
     }
-    lod.reset();for(auto& c:identical)c.reset();
+    lod.reset();for(auto& c:identical)c.reset();batch.step(identical,1.f/60,env); // consume the reset wake before testing accumulated time
     for(int i=0;i<3;++i)lod.step(identical,batch,{},env);
     lod.step(identical,batch,{140,0,0},env);check(std::abs(lod.timeSteps()[0]-4.f/60)<1e-7,"near transition dropped accumulated time");
     lod.reset();lod.step(identical,batch,{},env);identical[0].windScale=2;lod.requestUpdate(0);lod.step(identical,batch,{},env);
@@ -60,6 +60,8 @@ int main(){try{
     check(longStep.healthy()&&longStep.maxStretch()<2,"dense low-frequency solver diverged");
     TemporalLod staggered;std::vector<Cloth> spread;
     for(int i=0;i<12;++i){spread.emplace_back(grid,Vec{140,0,0});spread.back().windScale=float(i);}
+    for(auto& c:spread){auto policy=c.sleepSettings();policy.enabled=false;c.setSleepSettings(policy);}
+    batch.step(spread,1.f/60,env); // frequency test intentionally keeps every object awake
     unsigned spreadCalls=0;
     for(int t=0;t<60;++t){staggered.step(spread,batch,{},env);check(batch.stats().simulatedObjects<=4,"staggered groups bunched together");spreadCalls+=unsigned(batch.stats().simulatedObjects);}
     check(spreadCalls==120,"staggered frequency changed");

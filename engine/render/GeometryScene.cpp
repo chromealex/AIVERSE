@@ -38,6 +38,18 @@ void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& rea
             Instance in;in.model=models_.at(file).get();in.policy=parseGeometryPolicy(i["geometry"]);
             auto rot=vector(i["rotation"],{});constexpr float deg=.0174532925199433f;
             in.world=mat4::translate(vector(i["position"],{}))*mat4::rotateY(rot.y*deg)*mat4::rotateX(rot.x*deg)*mat4::rotateZ(rot.z*deg)*mat4::scale(vector(i["scale"],{1,1,1}));
+            if(i.has("proxy")){
+                const auto proxyFile=i["proxy"].getStr("model");
+                if(!models_.count(proxyFile)){
+                    auto proxy=loadModel(proxyFile,read,&warnings_);
+                    vertices+=proxy->vertices.size();if(vertices>2000000)throw std::runtime_error("geometry scene: exceeds 2 million source vertices");
+                    if(proxy->vertices.empty()||proxy->indices.empty()||!proxy->skins.empty()||!proxy->clips.empty())throw std::runtime_error("geometry scene: proxy must be a nonempty rigid model");
+                    for(auto& mesh:proxy->meshes)for(auto& p:mesh.primitives)if(p.morphTargets)throw std::runtime_error("geometry scene: morph proxy unsupported");
+                    models_[proxyFile]=std::move(proxy);
+                }
+                in.surfaceProxy=models_.at(proxyFile).get();in.proxyPixels=float(i["proxy"]["maxPixels"].toDouble(96));
+                ++stats_.proxies;
+            }
             instances_.push_back(in);
         }
         for(auto& [file,m]:models_)if(hlod_||std::any_of(instances_.begin(),instances_.end(),[&](const Instance& i){return i.model==m.get()&&(i.policy.clusters||i.policy.occluder);}))prepareGeometry(*m);
@@ -47,6 +59,8 @@ void GeometryScene::load(gfx::Device& dev,const Json& json,const FileReader& rea
     }catch(...){shutdown(dev);throw;}
 }
 std::unique_ptr<Model> GeometryScene::makeProxy(const std::vector<size_t>& ids,float& error){
+    // Explicit baked surfaces own their switch threshold. Do not bypass it with a parent proxy.
+    for(auto id:ids)if(instances_[id].surfaceProxy)return {};
     // Transparent/masked/graph materials retain their original independent draws and sorting.
     for(auto id:ids)for(auto& m:instances_[id].model->materials)if(m.alpha!=AlphaMode::Opaque||m.transparent||m.shaderGraph)return {};
     auto out=std::make_unique<Model>();out->path="geometry:hlod";
@@ -114,7 +128,19 @@ void GeometryScene::drawGroup(Renderer3D& r,int index){auto& g=groups_[size_t(in
     const bool far=geometryErrorPixels(r.viewProj(),g.min,g.max,extent,r.sceneWidth(),r.sceneHeight())<=maxPixels_;
     if(g.proxy&&far&&geometryErrorPixels(r.viewProj(),g.min,g.max,g.error,r.sceneWidth(),r.sceneHeight())<=errorPixels_){ModelDraw d;d.model=g.proxy.get();d.geometry.occlusion=g.occlusion;r.drawModel(d);++stats_.submitted;return;}
     if(g.left>=0){drawGroup(r,g.left);drawGroup(r,g.right);return;}
-    for(auto id:g.instances){auto& i=instances_[id];ModelDraw d;d.model=i.model;d.world=i.world;d.geometry=i.policy;r.drawModel(d);++stats_.submitted;}
+    for(auto id:g.instances)drawInstance(r,instances_[id]);
 }
-void GeometryScene::draw(Renderer3D& r){stats_.submitted=0;if(hlod_&&!groups_.empty())drawGroup(r,0);else for(auto& i:instances_){ModelDraw d;d.model=i.model;d.world=i.world;d.geometry=i.policy;r.drawModel(d);++stats_.submitted;}}
+void GeometryScene::draw(Renderer3D& r){stats_.submitted=0;stats_.surfaceProxiesSubmitted=0;if(hlod_&&!groups_.empty())drawGroup(r,0);else for(auto& i:instances_)drawInstance(r,i);}
+void GeometryScene::drawInstance(Renderer3D& r,const Instance& i){
+    ModelDraw d;d.model=i.model;d.world=i.world;d.geometry=i.policy;
+    if(i.surfaceProxy){
+        float3 mn{1e30f,1e30f,1e30f},mx{-1e30f,-1e30f,-1e30f};
+        for(int c=0;c<8;++c){auto a=i.model->boundsMin,b=i.model->boundsMax;auto p=i.world.transformPoint({c&1?b.x:a.x,c&2?b.y:a.y,c&4?b.z:a.z});mn=min3(mn,p);mx=max3(mx,p);}
+        if(geometryErrorPixels(r.viewProj(),mn,mx,length(mx-mn),r.sceneWidth(),r.sceneHeight())<=i.proxyPixels){
+            ++stats_.surfaceProxiesSubmitted;d.model=i.surfaceProxy;d.geometry.clusters=false;d.geometry.occluder=false;
+        }
+    }
+    r.drawModel(d);++stats_.submitted;
+}
+
 }

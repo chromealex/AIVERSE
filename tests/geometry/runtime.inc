@@ -101,3 +101,14 @@ TEST(geometry_mcp_analyze_apply_scene_roundtrip) {
     fs::remove_all(root);
 }
 #endif
+
+TEST(geometry_surface_proxy_near_far_and_hlod) {
+    using namespace render;entityfxtest::RecordingDevice dev;Renderer3D renderer;CHECK(renderer.init(dev));renderer.setShadowQuality(ShadowQuality::Off);
+    auto data=Json::parse(R"({"version":1,"hlod":{"enabled":true},"instances":[{"id":"a","model":"source.obj","proxy":{"model":"proxy.obj","maxPixels":96}},{"id":"b","model":"source.obj","position":[4,0,0]}]})");
+    GeometryScene scene;scene.load(dev,data,[](const std::string&,std::string& out){out=geometrytest::boxObj();return true;});
+    CHECK(scene.stats().proxies==1); // parent HLOD must not bypass the explicit proxy threshold
+    RTSCamera cam;cam.pitch=0;cam.distance=8;
+    auto frame=[&](){renderer.beginScene(cam,800,600);scene.draw(renderer);renderer.render(gfx::PassDesc{});return scene.stats().surfaceProxiesSubmitted;};
+    CHECK(frame()==0);cam.distance=200;CHECK(frame()==1);cam.distance=8;CHECK(frame()==0);
+    scene.shutdown(dev);renderer.shutdown();
+}
