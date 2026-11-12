@@ -1062,7 +1062,8 @@ Every block is optional; games without them keep their exact checksums and save 
 
 Map keys: `"modes"` (replaces rules keys one by one, `false` switches a mode off), `"matchMode": "<preset>"` (a
 `matchModes` entry merged over rules `modes`; its `victory` applies unless the map has its own), entity
-`"modePoint": "domination" | "kingOfTheHill"` (a type can carry `"modePoint"` too). A lobby picks the mode by
+`"modePoint": "domination" | "kingOfTheHill"` or a list of both (the point serves whichever mode is on; a type can carry
+`"modePoint"` too). A lobby picks the mode by
 setting the map's `matchMode` (BW `BattleModesManager` / `WinModeInfo` -> preset ids). Sides are teams (BW FFA = one
 player per team, BW COOP = teams; the KotH score is shared by the team).
 

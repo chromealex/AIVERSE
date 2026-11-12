@@ -74,12 +74,19 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
     ms.timeLeft = modes_.timeSeconds;
 
     // ---- mode points: map entities / types with "modePoint" (BW PointInfo.isDominationPoint / isKingOfTheHillPoint)
-    auto kindOf = [](const std::string& s) -> uint8_t { return s == "domination" ? 1 : s == "kingOfTheHill" ? 2 : 0; };
+    // a name or a list of names (BW points can be both a domination and a king of the hill point): a mask, 1 | 2
+    auto kindOf = [](const Json& v) -> uint8_t {
+        auto one = [](const std::string& s) -> uint8_t { return s == "domination" ? 1 : s == "kingOfTheHill" ? 2 : 0; };
+        if (!v.isArray()) return one(v.str());
+        uint8_t m = 0;
+        for (auto& x : v.items()) { const uint8_t k = one(x.str()); if (!k) return 0; m |= k; }
+        return m;
+    };
     std::vector<uint8_t> typeKind(rules_.types.size(), 0);
     for (auto& [id, tj] : rulesJson["types"].members())
         if (tj.has("modePoint")) {
             int t = rules_.findType(id);
-            uint8_t k = kindOf(tj.getStr("modePoint"));
+            uint8_t k = kindOf(tj["modePoint"]);
             if (!k) throw std::runtime_error("type '" + id + "': modePoint must be domination or kingOfTheHill");
             if (t >= 0) typeKind[size_t(t)] = k;
         }
@@ -87,7 +94,7 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
     std::vector<Marked> marked;
     for (auto& ej : map["entities"].items()) {
         if (!ej.has("modePoint")) continue;
-        uint8_t k = kindOf(ej.getStr("modePoint"));
+        uint8_t k = kindOf(ej["modePoint"]);
         if (!k) throw std::runtime_error("map entity: modePoint must be domination or kingOfTheHill");
         int t = rules_.findType(ej.getStr("type"));
         if (t >= 0) marked.push_back({uint16_t(t), mapPos(sim, ej.has("at") ? ej["at"] : ej["pos"]), k});
@@ -97,7 +104,8 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
         if (!rules_.types[u.type].structure) return;
         uint8_t k = typeKind[u.type];
         for (auto& mk : marked) if (mk.type == u.type && dist2D(mk.pos, tr.pos) < Fixed::fromRatio(1, 2)) k = mk.kind;
-        if ((k == 1 && modes_.domination) || (k == 2 && modes_.koh)) found.push_back({e, k});
+        if ((k & 1) && modes_.domination) found.push_back({e, 1});
+        else if ((k & 2) && modes_.koh) found.push_back({e, 2});
     });
     for (auto& [e, k] : found) {
         const uint16_t to = k == 1 ? modes_.domType : modes_.kohType;
