@@ -225,6 +225,12 @@ elseif(EMSCRIPTEN)
     target_link_options(aiverse_net PUBLIC -lwebsocket.js)
 endif()
 
+# gRPC client + protobuf codegen (agent-grpc, docs/grpc.md). Libraries are opt-in (EXCLUDE_FROM_ALL);
+# tests / probe build on desktop.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/engine/grpc/CMakeLists.txt")
+    add_subdirectory(engine/grpc)
+endif()
+
 add_library(aiverse_net_server STATIC
     engine/net/server/Server.cpp
     engine/net/server/ServerMatch.cpp

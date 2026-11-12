@@ -1,0 +1,64 @@
+syntax = "proto3";
+package extraction_rts.matchmaking;
+option csharp_namespace = "ExtractionRTS.Interop.Matchmaking";
+
+service MatchmakingService {
+  rpc GetBattleServers(GetBattleServersRequest) returns (GetBattleServersResponse);
+  rpc FindMatch(stream MatchClientMessage) returns (stream MatchEvent);
+}
+
+// --- GetBattleServers ---
+
+message GetBattleServersRequest {}
+
+message GetBattleServersResponse {
+  repeated BattleServerInfo servers = 1;
+}
+
+message BattleServerInfo {
+  string server_id = 1;
+  string address = 2;
+  int32 port = 3;
+}
+
+// --- FindMatch: client → server ---
+
+message MatchClientMessage {
+  oneof message {
+    FindMatchParams find_match_params = 1;
+  }
+}
+
+message FindMatchParams {
+  map<string, int32> server_pings = 1;
+  // Free-form client version string. Not validated. Matchmaking only pairs
+  // players whose version strings are exactly equal (empty matches only empty).
+  string client_version = 2;
+}
+
+// --- FindMatch: server → client ---
+
+message MatchEvent {
+  oneof event {
+    Queued queued = 1;
+    QueueUpdate queue_update = 2;
+    MatchFound match_found = 3;
+    MatchCancelled match_cancelled = 4;
+  }
+}
+
+message Queued {}
+
+message QueueUpdate {
+  int32 players_in_queue = 1;
+}
+
+message MatchFound {
+  string match_id = 1;
+  string battle_server_address = 2;
+  int32 battle_server_port = 3;
+}
+
+message MatchCancelled {
+  string reason = 1;
+}
