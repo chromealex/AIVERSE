@@ -15,7 +15,7 @@ void setUdpTestFaults(UdpTestFaults f);
 class UdpListener {
 public:
     ~UdpListener();
-    bool open(uint16_t port);
+    bool open(uint16_t port, bool loopbackOnly = false);
     uint16_t port() const { return sock_.localPort(); }
     // Pump the socket; returns connections that completed the handshake since the last call.
     // The listener must outlive the connections it returns.

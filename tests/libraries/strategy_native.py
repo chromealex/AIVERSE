@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute six libraries in a game-owned NativeModule, then repeat from relocated sources."""
+"""Execute ten libraries in a game-owned NativeModule, then repeat from relocated sources."""
 import json
 import re
 import shutil
@@ -28,10 +28,12 @@ def project(path):
 def build(engine,content,dest):
     flags=['-DAIVERSE_BUILD_CLIENT=OFF','-DAIVERSE_BUILD_EDITOR=OFF','-DAIVERSE_BUILD_TESTS=OFF','-DAIVERSE_BUILD_HEADLESS=OFF','-DAIVERSE_BUILD_SERVER=OFF','-DAIVERSE_BUILD_TOOLS=OFF']
     run(['cmake','-S',engine,'-B',dest,'-DCMAKE_BUILD_TYPE=Release','-DAIVERSE_CONTENT_DIR='+str(content),*flags])
-    run(['cmake','--build',dest,'--target','aiverse_strategy_native_probe','--parallel','6'])
+    run(['cmake','--build',dest,'--target','aiverse_strategy_native_probe','aiverse_session_native_probe','--parallel','6'])
     binaries=list(dest.rglob('aiverse_strategy_native_probe'))
     assert len(binaries)==1,binaries
     print(run([binaries[0],content]),flush=True)
+    session_binaries=list(dest.rglob('aiverse_session_native_probe'));assert len(session_binaries)==1
+    print(run([session_binaries[0]]),flush=True)
 
 game=WORK/'original-game';project(game)
 build(ROOT,game,WORK/'build-external')

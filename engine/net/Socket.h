@@ -29,7 +29,7 @@ class UdpSocket {
 public:
     ~UdpSocket() { close(); }
     // Bind to port (0 = ephemeral). family 0 = dual-stack IPv6 with IPv4 fallback.
-    bool open(uint16_t port, int family = 0);
+    bool open(uint16_t port, int family = 0, bool loopbackOnly = false);
     void close();
     bool isOpen() const;
     bool sendTo(const Address& to, const uint8_t* data, size_t n);
@@ -65,7 +65,7 @@ private:
 class TcpListener {
 public:
     ~TcpListener() { close(); }
-    bool listen(uint16_t port);
+    bool listen(uint16_t port, bool loopbackOnly = false);
     std::unique_ptr<TcpSocket> accept(Address* from = nullptr);
     void close();
     uint16_t localPort() const;

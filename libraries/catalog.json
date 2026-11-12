@@ -1090,6 +1090,101 @@
         "libraries/include/aiverselib/strategy/Persistence.h",
         "docs/strategy-libraries.md"
       ]
+    },
+    {
+      "id": "zone-graph",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/ZoneGraph.h",
+      "skill": "docs/ai-skills/rts-zone-graph/SKILL.md",
+      "summary": "Permanent ability gates, checkpoints and exhaustive softlock proofs",
+      "notes": "Audit P3: runtime and native integration; physical/UI/audio host integration remains. See docs/strategy-libraries.md.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md",
+        "libraries/include/aiverselib/Graphs.h"
+      ]
+    },
+    {
+      "id": "rhythm-timing",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/Rhythm.h",
+      "skill": "docs/ai-skills/rts-rhythm-timing/SKILL.md",
+      "summary": "Integer tempo maps and frame-independent tap/hold judgement",
+      "notes": "Audit Q5: runtime and native integration; physical/UI/audio host integration remains. See docs/strategy-libraries.md.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "run-graph",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/RunGraph.h",
+      "skill": "docs/ai-skills/rts-run-graph/SKILL.md",
+      "summary": "Connected seeded runs, encounter budgets and persistent reward lifecycle",
+      "notes": "D1/K3 runtime subset. Existing inventory remains authoritative; commit grant and run state atomically. Geometry, adaptive director, relic effects and route UI remain host work.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "libraries/include/aiverselib/Graphs.h",
+        "libraries/include/aiverselib/Progression.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "puzzle-machine",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/strategy/PuzzleMachine.h",
+      "skill": "docs/ai-skills/rts-puzzle-machine/SKILL.md",
+      "summary": "Bounded deterministic integer VM for programming puzzles",
+      "notes": "Q2 programming-puzzle runtime. Does not replace Lua or authorize host inputs/rewards. Instruction budget, IO waits, faults and full state are explicit.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::strategy",
+      "dependencies": [
+        "libraries/include/aiverselib/strategy/Persistence.h",
+        "docs/strategy-libraries.md"
+      ]
+    },
+    {
+      "id": "session-admission",
+      "version": "0.1.0",
+      "layer": "presentation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/net/Admission.h",
+      "skill": "docs/ai-skills/rts-session-admission/SKILL.md",
+      "summary": "Host-only Conn admission with audience-bound identity, expiry and revocation",
+      "notes": "Trusted token verification and secure transport remain host responsibilities. Never use sockets/credentials in simulation callbacks. Native OBJECT modules use aiverse_native_use_session.",
+      "verifiedPlatforms": [
+        "macos-arm64"
+      ],
+      "cmakeTarget": "AIVERSE::session",
+      "dependencies": [
+        "engine/net/Conn.h",
+        "libraries/include/aiverselib/net/LocalTickets.h",
+        "tools/meta/local_match.py",
+        "docs/local-network.md"
+      ]
     }
   ]
 }

@@ -252,7 +252,7 @@ private:
 
 WsListener::WsListener() = default;
 WsListener::~WsListener() = default;
-bool WsListener::open(uint16_t port) { listener_ = std::make_unique<TcpListener>(); return listener_->listen(port); }
+bool WsListener::open(uint16_t port, bool loopbackOnly) { listener_ = std::make_unique<TcpListener>(); return listener_->listen(port, loopbackOnly); }
 uint16_t WsListener::port() const { return listener_ ? listener_->localPort() : 0; }
 
 std::vector<std::unique_ptr<Conn>> WsListener::poll(uint64_t now) {

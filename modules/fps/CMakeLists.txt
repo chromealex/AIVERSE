@@ -45,3 +45,11 @@ endif()
 if(TARGET aiverse_headless)
     target_link_libraries(aiverse_headless PRIVATE aiverse_fps)
 endif()
+
+# Optional host admission wrappers; existing anonymous/offline modes remain compatible.
+if(TARGET aiverse_fps_server)
+    target_link_libraries(aiverse_fps_server PRIVATE AIVERSE::session)
+endif()
+if(TARGET aiverse_fps_client)
+    target_link_libraries(aiverse_fps_client PRIVATE AIVERSE::session)
+endif()

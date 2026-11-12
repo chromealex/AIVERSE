@@ -1,3 +1,4 @@
+#include <aiverselib/net/Admission.h>
 #include "engine/net/authority/Session.h"
 #include "modules/fps/Project.h"
 #include "modules/fps/view/FirstPersonCamera.h"
@@ -12,6 +13,7 @@
 #include "imgui.h"
 #include "engine/audio/Audio.h"
 #include "engine/platform/EngineDir.h"
+#include <fstream>
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
@@ -239,10 +241,11 @@ struct App {
 int aiverseMain(int argc,char** argv) {
     try {
         App app;auto engineRoot=platform::resolveEngineDir(AIVERSE_SOURCE_DIR,argv[0]);
-        std::string project=engineRoot+"/templates/fps_training",connect;
-        for(int i=1;i<argc;++i){std::string arg=argv[i];if(arg=="--project"&&i+1<argc)project=argv[++i];else if(arg=="--connect"&&i+1<argc)connect=argv[++i];else if(arg=="--listen")app.listen=true;else throw std::runtime_error("usage: aiverse_fps_client --project DIR [--connect udp://host:27100 | --listen]");}
+        std::string sessionTokenFile;std::string project=engineRoot+"/templates/fps_training",connect;
+        for(int i=1;i<argc;++i){std::string arg=argv[i];if(arg=="--project"&&i+1<argc)project=argv[++i];else if(arg=="--connect"&&i+1<argc)connect=argv[++i];else if(arg=="--session-token-file"&&i+1<argc)sessionTokenFile=argv[++i];else if(arg=="--listen")app.listen=true;else throw std::runtime_error("usage: aiverse_fps_client --project DIR [--connect udp://host:27100 | --listen] [--session-token-file FILE]");}
         project=std::filesystem::absolute(project).string();
         std::filesystem::current_path(engineRoot);
+        if(!sessionTokenFile.empty()&&(app.listen||connect.empty()))throw std::runtime_error("session token requires --connect");
         if(app.listen&&!connect.empty())throw std::runtime_error("choose --listen or --connect");
         auto data=fps::readProject([&](const auto& file,auto& text){return platform::readContentFile(project+"/"+file,text);});
         app.projectRoot=project;app.rules=data.rules;app.map=data.map;app.config=fps::readConfig(app.rules);
@@ -253,7 +256,7 @@ int aiverseMain(int argc,char** argv) {
 #ifndef __EMSCRIPTEN__
             if(app.listen&&(!app.udp.open(27100)||!app.ws.open(27101)))throw std::runtime_error("cannot open listen server");
 #endif
-        } else {auto conn=net::connectTo(connect);if(!conn)throw std::runtime_error("invalid server address");app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(conn));}
+        } else {auto conn=net::connectTo(connect);if(!conn)throw std::runtime_error("invalid server address");if(!sessionTokenFile.empty()){std::ifstream tokenFile(sessionTokenFile);std::string token;std::getline(tokenFile,token);if(!tokenFile||!aiverse::lib::session::detail::tokenValid(token))throw std::runtime_error("invalid session token file");conn=std::make_unique<aiverse::lib::session::ClientAdmission>(std::move(conn),std::move(token));}app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(conn));}
         platform::AppConfig cfg;cfg.title="AIVERSE FPS";cfg.width=1280;cfg.height=720;
         gfx::Device* device=nullptr;platform::AppCallbacks cb;
         cb.init=[&](auto& d){device=&d;app.init(d);};cb.frame=[&](auto& d,double dt){app.frame(d,dt);};cb.event=[&](const auto& e){app.event(e);};cb.shutdown=[&]{app.shutdown(*device);};

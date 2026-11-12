@@ -168,3 +168,8 @@ All six packages provide agent skills and share `AIVERSE::strategy`.
 `examples/native/strategy` and `tests/libraries/strategy_native.py` exercise real native
 commands, save/restore and a relocated source-export build.
 [genre-implementation.json](genre-implementation.json) tracks the remaining audit scope.
+
+The subsequent strategy extension adds zone softlock proofs, rhythm timing, seeded runs
+and a bounded puzzle machine, each with its catalog skill and native restore scenario.
+Host-only [session admission and local network acceptance](local-network.md) supplies
+`AIVERSE::session` / `aiverse_native_use_session` and real HTTP/UDP acceptance tests.

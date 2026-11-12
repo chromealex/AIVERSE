@@ -266,3 +266,41 @@ jobs:
           done
           [ $ok = 1 ] && echo "All platforms produce identical simulations."
           [ $ok = 1 ]
+
+  genre-native:
+    name: Genre libraries, native exports and local sessions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y -q clang libx11-dev libegl-dev libgles-dev
+      - name: Public library contracts
+        run: |
+          python3 tools/libraries/catalog.py check
+          python3 tests/libraries/run.py
+          python3 tests/libraries/native_consumer.py
+      - name: Real native modules and relocated source exports
+        run: |
+          python3 tests/libraries/strategy_native.py
+          build/.temp/strategy-native/build-export/native/aiverse_session_native_probe --udp
+      - name: Local profile service and restart checks
+        run: |
+          cmake -S tests/meta -B build/.temp/genre-meta -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/.temp/genre-meta --parallel 4
+          ctest --test-dir build/.temp/genre-meta --output-on-failure
+          python3 tests/meta/local_listener.py --binary build/.temp/genre-meta/aiverse_meta_service --work-dir build/.temp/ci-local-meta --requests 100
+      - name: Profile to dedicated match and live revocation
+        run: |
+          python3 tests/meta/local_match.py
+          cmake -S . -B build/.temp/local-fps -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_SERVER=ON -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_TOOLS=OFF
+          cmake --build build/.temp/local-fps --target aiverse_fps_server --parallel 4
+          python3 tests/meta/local_match_listener.py --server build/.temp/local-fps/modules/fps/aiverse_fps_server --probe build/.temp/strategy-native/build-export/native/aiverse_session_native_probe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-meta-acceptance
+          path: build/.temp/ci-local-meta/report.json

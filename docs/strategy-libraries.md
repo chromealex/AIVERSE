@@ -1,6 +1,6 @@
 # Strategy libraries for native game modules
 
-This is the first implementation batch from the 47-area genre audit. It adds six
+This is the first implementation batch from the 47-area genre audit. The first batch added six
 bounded runtime packages, not six complete genres. `genre-implementation.json`
 tracks the original acceptance criteria separately from package delivery.
 
@@ -26,7 +26,7 @@ can also be used with `AIVERSE::libraries`; Persistence needs the engine include
 root provided by `AIVERSE::strategy`.
 
 Copy `examples/native/strategy` into a project native folder for a complete
-registration/lifecycle example. Its `strategy_demo` module uses all six packages.
+registration/lifecycle example. Its `strategy_demo` module now uses all ten packages.
 The example is an acceptance harness alongside an RTS map, not a card/puzzle UI.
 Its fixed test definitions are deliberately small and are not production balance.
 
@@ -121,3 +121,59 @@ animation test requires it. All 81 RTS checksum cases match after normalizing ch
 CRLF line endings (26 templates plus triggerlab, three seeds); four FPS templates exit
 zero. Headless snapshot/serialization/fresh restore/replay and deliberate-divergence
 checks pass. Some sandbox/training templates intentionally finish without a winner.
+
+## Zone graph and rhythm timing extension
+
+`ZoneGraph.h` models directed doors with permanent ability masks, visits and the latest
+checkpoint. `proveZones` explores the full reachable (zone, abilities, checkpoint) state
+space and checks reverse reachability from every final state. A softlock includes a
+witness path; exhausted search returns BudgetExceeded, never a false safety guarantee.
+Optional respawn edges are included only when the host guarantees respawn is available.
+It does not model consumable keys, ability loss, physical doors or region streaming.
+
+`Rhythm.h` converts pulse-based tempo maps to integer microseconds without segment-rounding
+drift. Tap/hold judgement, calibration, combo and score are stateful and serializable.
+Deadlines are resolved in timestamp/index order, independent of frame batching.
+The host must validate and order audio-clock input before advancing judgement time;
+advanceRhythm takes corrected timestamps, rhythmInput applies stored calibration once.
+Early hold release misses, release in the final good window keeps the head grade,
+and a sustained hold completes at its end. Repeated presses while held are rejected.
+No actual audio-device bridge or rhythm UI is wired by this headless package.
+
+Native example VERSION 2 adds commands 6 (unlock zone), 7 (respawn), 8 (enter final)
+and 9 (start a synthetic-clock hold). It saves after unlocking and during the hold,
+then verifies identical continuation into the final and completion of the hold.
+Both packages have dedicated catalog skills. The immutable definitions in the example
+are C++; a game can construct those records from its own validated configuration.
+
+## Seeded run extension
+
+`RunGraph.h` constructs 2..64 layers with up to 16 rooms per layer. Every room is
+reachable and has a path to the final. Positive encounter costs obey each layer's
+budget, reserving the minimum cost for unallocated rooms. The engine RNG supplies
+weighted encounter/reward sampling; generated topology and offers are persisted.
+
+The lifecycle is Encounter -> Reward -> Travel -> Encounter, ending in Completed
+or Failed. Claims accept only saved offers and invoke a grant callback once. The host
+must supply authoritative encounter outcomes and commit the grant plus RunState in
+one transaction against its existing inventory. No asynchronous backend operation
+belongs in that simulation callback. Sequence and phase checks reject repeat claims.
+Geometry generation, adaptive directing, relic/card effects and route UI remain separate.
+
+The native fixture VERSION 3 exercises commands 10/11/12 for encounter result, first
+reward and first route. It restores at reward selection and completes a three-layer run,
+including a duplicate claim request. Its local counter demonstrates atomic native state,
+not a production inventory. Unit tests cover 200 seeds and per-layer budget invariants.
+
+## Programmable puzzle extension
+
+`PuzzleMachine.h` is a deterministic integer register machine for programming puzzles,
+separate from the engine's Lua scripting. It has eight registers, bounded memory and IO,
+14 instruction kinds, checked arithmetic, explicit waits/yield/faults and an instruction
+budget. No host IO, clock, RNG or arbitrary native-code execution is exposed.
+
+Save PC, registers, memory, queues, cursor, step count, halt/fault in NativeState. Each
+program is immutable and versioned by the host. Input authorization and puzzle completion
+checks remain host responsibilities. Native fixture VERSION 4 adds command 13 and advances
+one instruction per tick, saving after Read and completing multiplication/output on restore.
+A program editor, concurrent circuits and puzzle-specific scoring are not included.
