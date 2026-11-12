@@ -215,7 +215,8 @@ void Module::tickSystems(Simulation& sim) {
                 for(auto& target:s.actors)if(target.health>0){auto eye=target.pos+Vec3{{},stanceHeight(target,config_.motor)-Fixed::fromRatio(1,10),{}};auto delta=eye-it->pos;auto distance=delta.length();auto radius=it->kind==1?c.blastRadius:c.flashRadius;if(distance>radius||collision_.cast(it->pos,delta).hit)continue;
                     if(it->kind==1)damage(sim,it->owner,target,int32_t((100_fx*(1_fx-distance/radius)).floorInt()));
                     else {auto facing=direction(target.yaw,target.pitch).dot(Vec3{}-delta);auto duration=facing>Fixed{}?c.flashTicks:c.flashTicks/4;target.blindUntil=std::max(target.blindUntil,now+duration);}
-                }remove=true;
+                }
+                remove=true;
             }
         }
         remove|=fxAbs(it->pos.x)>config_.worldLimit||fxAbs(it->pos.y)>config_.worldLimit||fxAbs(it->pos.z)>config_.worldLimit;
