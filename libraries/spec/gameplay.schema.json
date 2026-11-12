@@ -2771,6 +2771,140 @@
           "maximum": 100000
         }
       }
+    },
+    "perks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offerChoices": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 8
+        },
+        "offerRerolls": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100
+        },
+        "rerollAvoidsRepeat": {
+          "type": "boolean",
+          "default": true
+        },
+        "maxLevel": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "xpGrowthPerLevel": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "maxRecruitsPerSlot": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "maxSquad": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "pickupRadiusMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "pickupMagnetRadiusMilli": {
+          "type": "integer",
+          "default": 30000,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "pickupGrabRadiusMilli": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "pickupAttractSpeedMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "pickupAttractAccelMilli": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "pickupMaxSpeedMilli": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "pickupLifetimeTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "pickupLandingTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "pickupMaxOrbs": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "summonProgressTicks": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "summonCooldownTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "summonResetOnExit": {
+          "type": "boolean",
+          "default": true
+        },
+        "summonMaxAllies": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "summonCharges": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "summonChargeRechargeTicks": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
     }
   }
 }

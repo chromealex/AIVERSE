@@ -104,6 +104,7 @@ struct Amount { uint16_t res = 0; Fixed value{}; };
 } // namespace aiverse::game
 #include "RtsAbilityData.h"
 #include "RtsGridFieldData.h"
+#include "RtsRaidData.h"
 namespace aiverse::game {
 // ------------------------------------------------------------------ economy blocks
 struct GatherDef { uint16_t res = 0; Fixed carry = Fixed::fromInt(10); Fixed time = Fixed::fromInt(2); };
@@ -595,6 +596,7 @@ struct Rules {
     bool fidelity = false;                     // any of them present: their system runs, their state is hashed
     int16_t stTrapHidden = -1, stTrapSeen = -1; // built-in statuses of hidden / exposed traps
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
+    RaidRules raid;                            // rules "raid" (RtsRaidData.h): extraction raids
 
     int findRoom(const std::string& id) const;
     int findDiggable(char c) const;

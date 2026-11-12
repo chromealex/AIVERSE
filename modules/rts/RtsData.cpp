@@ -799,6 +799,7 @@ Rules loadRules(const Json& j) {
     loadMechRules(r, j);
     r.armor.plainFloor = !r.originals && !r.mech.any && !j.has("armor") && !j.has("armorModel");   // old games: damage - armor, at least raw / 5
     loadGridFieldRules(r, j);   // RtsGridFieldData.cpp: rules "fields", type "field" emitters, "field" effects
+    loadRaidRules(r, j);        // RtsRaidData.cpp: rules "raid" (extraction raids)
     return r;
 }
 

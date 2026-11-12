@@ -120,6 +120,7 @@ void openTerritoryApi(Vm& vm);      // extends the game table at the stack top
 void openGridApi(Vm& vm);           // pure integer-grid navigation queries
 void openStdApi(Vm& vm);            // `rts` table for the standard library (RtsScriptStd.cpp)
 void openFieldApi(Vm& vm);          // `field` table: grid fields (RtsGridFieldsApi.cpp)
+void openRaidApi(Vm& vm);           // `raid` table: extraction raids (RtsRaidApi.cpp)
 void pushEntity(lua_State* L, Entity e);
 bool argEntity(lua_State* L, int idx, Entity& out); // integer handle (no liveness check)
 

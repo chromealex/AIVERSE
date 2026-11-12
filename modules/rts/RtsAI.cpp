@@ -41,6 +41,7 @@ void RtsAI::update(Simulation& sim) {
     auto* gs = sim.world().resource<GameState>();
     if (m->rules().mech.turns && !mechTurnAI(sim, *m)) return;   // agent-mech TB: act only on its own turn
     if (std::find(gs->wavePlayers.begin(), gs->wavePlayers.end(), player_) != gs->wavePlayers.end()) return; // scripted side
+    if (Raid* raid = m->raid(); raid && raid->active() && raid->store(sim)->find(player_)) { raidBotThink(sim, *m, player_); return; }   // RtsRaidBot.cpp
     bool hasGarrisons = false, hasOther = false;
     sim.world().each<Unit, Owner>([&](Entity e, Unit& u, Owner& o) {
         if (o.player != player_) return;
@@ -52,6 +53,7 @@ void RtsAI::update(Simulation& sim) {
     if (m->rules().fidelity && hasOther) fidelity(sim, *m);
     if (hasGarrisons) garrisonPlay(sim, *m);
     if (hasOther) {
+        if (auto* td = m->topDown(); td && td->active()) { Command c; if (td->botCommand(sim, player_, c)) send(sim, c); }   // hero stick (RtsTopDown.cpp)
         special(sim, *m);
         if (!m->rules().diggables.empty() || !m->rules().rooms.empty()) dungeon(sim, *m);
         if (m->rules().settlers) settlers(sim, *m);

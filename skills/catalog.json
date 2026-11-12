@@ -126,6 +126,61 @@
       "keywords": []
     },
     {
+      "id": "aiverse-boss-encounters",
+      "package": "boss-encounters",
+      "path": "skills/aiverse-boss-encounters/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Telegraphed area attacks (windup/active/recovery, circle/cone/line/ring fixed-point hit tests, periodic and sweeping strikes, falloff, statuses on the strike tick, progress-telegraph view records and ground decals), slow/root/stun/burn status instances with stacking and immunity, boss phases by HP or time with range-band/sequence/weighted attack patterns, enrage and add waves, encounter windows with personal requests and archetype rotation, and mob wander/hunt/flee/leash/swarm behaviour",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_boss_encounters",
+      "dependencies": [
+        "aiverse-combat-actions"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Telegraphs.h",
+      "keywords": [
+        "boss",
+        "telegraph",
+        "windup",
+        "cone",
+        "slam",
+        "phase",
+        "enrage",
+        "adds",
+        "rotation",
+        "status",
+        "stun",
+        "burn",
+        "slow",
+        "mob",
+        "wander",
+        "hunt",
+        "flee",
+        "swarm",
+        "босс",
+        "телеграф",
+        "замах",
+        "конус",
+        "фаз",
+        "ярост",
+        "призыв",
+        "ротаци",
+        "статус",
+        "оглушен",
+        "горен",
+        "замедлен",
+        "моб",
+        "блужд",
+        "охот",
+        "бегств",
+        "рой"
+      ]
+    },
+    {
       "id": "aiverse-bot-matches",
       "package": "bot-matches",
       "path": "skills/aiverse-bot-matches/SKILL.md",
@@ -783,6 +838,51 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/MatchBridge.h",
       "keywords": []
+    },
+    {
+      "id": "aiverse-match-progression",
+      "package": "match-progression",
+      "path": "skills/aiverse-match-progression/SKILL.md",
+      "domain": "gameplay",
+      "summary": "In-match progression: perk/modifier packages with an ordered Set/Add/Multiply stat pipeline (incoming/outgoing damage, speed, fire interval, max health rescale), hero/player xp with a level table or curve, seeded level-up offers of N alternatives (recruit a deck slot, slot perk, player perk, explicit picks, rerolls, revisions), stacking limits, prerequisites, exclusions and upgrade chains, xp orb pickups (radius, magnet, homing attraction, orb budget), summon circles, charges and summoned ally lifecycle, and the pre-match battle deck with limits from the match start payload",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_match_progression",
+      "dependencies": [
+        "aiverse-progression-curves",
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/genre/Perks.h",
+      "keywords": [
+        "perk",
+        "modifier",
+        "xp",
+        "experience",
+        "level",
+        "levelup",
+        "offer",
+        "reroll",
+        "summon",
+        "ally",
+        "deck",
+        "loadout",
+        "pickup",
+        "magnet",
+        "перк",
+        "модификатор",
+        "опыт",
+        "уровень",
+        "прокачк",
+        "призыв",
+        "союзник",
+        "колод",
+        "лут",
+        "магнит"
+      ]
     },
     {
       "id": "aiverse-match-rules",

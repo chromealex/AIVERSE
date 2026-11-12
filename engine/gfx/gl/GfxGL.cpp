@@ -32,7 +32,7 @@ constexpr GLenum kGL_FRAMEBUFFER_SRGB = 0x8DB9;
 
 // compressed formats (may be missing from older headers)
 constexpr GLenum kGL_ETC2_RGB8 = 0x9274, kGL_ETC2_RGBA8 = 0x9278, kGL_DXT1_RGBA = 0x83F1, kGL_DXT5 = 0x83F3,
-                 kGL_BPTC_UNORM = 0x8E8C, kGL_ASTC_4x4 = 0x93B0;
+                 kGL_BPTC_UNORM = 0x8E8C, kGL_ASTC_4x4 = 0x93B0, kGL_ASTC_6x6 = 0x93B4;
 GLenum compressedEnum(PixelFormat f) {
     switch (f) {
         case PixelFormat::ETC2_RGB8: return kGL_ETC2_RGB8;
@@ -41,6 +41,7 @@ GLenum compressedEnum(PixelFormat f) {
         case PixelFormat::BC3: return kGL_DXT5;
         case PixelFormat::BC7: return kGL_BPTC_UNORM;
         case PixelFormat::ASTC_4x4: return kGL_ASTC_4x4;
+        case PixelFormat::ASTC_6x6: return kGL_ASTC_6x6;
         default: return 0;
     }
 }
@@ -111,7 +112,7 @@ public:
             case PixelFormat::ETC2_RGB8: case PixelFormat::ETC2_RGBA8: return etc2_;
             case PixelFormat::BC1: case PixelFormat::BC3: return s3tc_;
             case PixelFormat::BC7: return bptc_;
-            case PixelFormat::ASTC_4x4: return astc_;
+            case PixelFormat::ASTC_4x4: case PixelFormat::ASTC_6x6: return astc_;
             case PixelFormat::RGBA16F: return hdr_;
             default: return true;
         }

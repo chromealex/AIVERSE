@@ -440,6 +440,28 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | survival | conditionRegen | integer | 10 | 0..100000 |
 | survival | windChillMilli | integer | 600 | 0..10000 |
 | survival | wetPerTick | integer | 200 | 0..100000 |
+| perks | offerChoices | integer | 3 | 1..8 |
+| perks | offerRerolls | integer | 0 | 0..100 |
+| perks | rerollAvoidsRepeat | boolean | true |  |
+| perks | maxLevel | integer | 0 | 0..1000 |
+| perks | xpGrowthPerLevel | integer | 0 | 0..1000000000 |
+| perks | maxRecruitsPerSlot | integer | 0 | 0..1000 |
+| perks | maxSquad | integer | 15 | 0..1000 |
+| perks | pickupRadiusMilli | integer | 2500 | 0..100000000 |
+| perks | pickupMagnetRadiusMilli | integer | 30000 | 0..100000000 |
+| perks | pickupGrabRadiusMilli | integer | 500 | 0..100000000 |
+| perks | pickupAttractSpeedMilli | integer | 0 | 0..1000000 |
+| perks | pickupAttractAccelMilli | integer | 0 | 0..1000000 |
+| perks | pickupMaxSpeedMilli | integer | 2000 | 0..1000000 |
+| perks | pickupLifetimeTicks | integer | 0 | 0..10000000 |
+| perks | pickupLandingTicks | integer | 0 | 0..10000000 |
+| perks | pickupMaxOrbs | integer | 1024 | 1..65536 |
+| perks | summonProgressTicks | integer | 180 | 1..10000000 |
+| perks | summonCooldownTicks | integer | 0 | 0..10000000 |
+| perks | summonResetOnExit | boolean | true |  |
+| perks | summonMaxAllies | integer | 15 | 0..65536 |
+| perks | summonCharges | integer | 0 | 0..1000 |
+| perks | summonChargeRechargeTicks | integer | 0 | 0..10000000 |
 
 ## Cross-field constraints
 
@@ -488,3 +510,4 @@ Constraint: `colony.moodLowAt <= colony.moodHighAt` (checked by loader and CLI).
 Constraint: `survival.comfortLowMilli <= survival.comfortHighMilli` (checked by loader and CLI).
 Constraint: `survival.severeColdMilli <= survival.coldMilli` (checked by loader and CLI).
 Constraint: `survival.hotMilli <= survival.severeHotMilli` (checked by loader and CLI).
+Constraint: `perks.pickupAttractSpeedMilli <= perks.pickupMaxSpeedMilli` (checked by loader and CLI).

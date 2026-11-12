@@ -636,7 +636,8 @@ const std::pair<const char*, uint16_t> kCommands[] = {
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem},
     {"pick_item", kCmdPickItem}, {"learn", kCmdLearn}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock},
-    {"end_turn", kCmdEndTurn},
+    {"end_turn", kCmdEndTurn}, {"raid", kCmdRaid},
+    {"end_turn", kCmdEndTurn}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
 };
 const std::pair<const char*, int> kStances[] = {{"aggressive", 0}, {"defensive", 1}, {"hold", 2}, {"passive", 3}};
 const std::pair<const char*, int> kFormations[] = {{"line", 0}, {"box", 1}, {"wedge", 2}, {"loose", 3}, {"none", -1}};
@@ -682,6 +683,15 @@ bool commandParam(lua_State* L, Vm& vm, int t, Command& c) {
         ok = res(a) && num("reward", b, 0);
         if (ok && !field("param")) c.param = a | b << 8;
         break;
+    case kCmdTopDown: {   // hero stick (RtsTopDown.h): angle / aim_angle in binary turns (0..65535, 0 = +z), magnitude per mille
+        ok = num("angle", a, 0) && num("magnitude", b, 0) && num("aim_angle", d, 0);
+        topdown::Input in;
+        in.moveAngle = int32_t(a & 0xFFFF); in.moveMag = int32_t(std::clamp<int64_t>(b, 0, topdown::kMagMax)); in.aimAngle = int32_t(d & 0xFFFF);
+        field("aim"); in.aim = lua_toboolean(L, -1);
+        field("fire"); in.fire = lua_toboolean(L, -1);
+        if (ok && !field("param")) c.param = topdown::pack(in);
+        break;
+    }
     case kCmdStance: case kCmdFormation:
         if (field("param") && lua_type(L, -1) == LUA_TSTRING) {
             std::string n = lua_tostring(L, -1);
@@ -1231,6 +1241,7 @@ void openGameApi(Vm& vm) {
     openGridApi(vm);
     lua_setglobal(L, "game");
     openFieldApi(vm);   // grid fields (RtsGridFieldsApi.cpp)
+    openRaidApi(vm);    // extraction raids (RtsRaidApi.cpp)
 }
 
 } // namespace script
@@ -1304,7 +1315,7 @@ Json scriptApiReference() {
     a.push(fn("game.transform(h, type)", "change the type in place (same handle and data, hp fraction kept)"));
     a.push(fn("game.add_status(h, status [, seconds [, caster]]) / game.buff(h, stat, add, mul [, seconds])", "statuses (rules \"statuses\") and stat modifiers"));
     a.push(fn("game.order(units, \"move\"|\"attack\"|\"patrol\"|\"stop\"|\"hold\", x, z | target)", "orders (through the normal command path)"));
-    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward"));
+    a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
     a.push(fn("game.cast(h, ability, target | x, z) / game.player_ability(p, id, x, z [, free])", "abilities"));
     a.push(fn("game.set_var(name, v) / game.add_var(name, v)", "trigger variables (shared with rules triggers)"));
     a.push(fn("game.message(p, text [, x, z])", "notice for player p (0 = everyone)"));
@@ -1350,6 +1361,16 @@ Json scriptApiReference() {
     fl.push(fn("field.fill_rect(id, x0, z0, x1, z1, v [, \"set\"|\"add\"|\"max\" [, player]]) / field.fill_circle(id, x, z, r, v [, mode [, player]])", "write many cells; returns cells changed"));
     fl.push(fn("on_field_threshold(id, value, fn(e) [, \"rise\"|\"fall\"])", "a cell crosses the value: e = {field, x, z, cx, cz, value, player} (in the scripts phase of the next tick at the latest)"));
     r.set("fields", fl);
+    Json rd = Json::array();   // extraction raids (RtsRaidApi.cpp, docs/raid.md)
+    rd.push(fn("raid.active() / raid.phase() / raid.time_left()", "rules \"raid\": \"briefing\" | \"running\" | \"over\"; seconds left (fx, nil without a clock)"));
+    rd.push(fn("raid.players() / raid.player(slot)", "raid players; {slot, team, status, value, kills, carried, secured, lost, objectives = {id = {done, progress}}}"));
+    rd.push(fn("raid.points() / raid.point(id) / raid.can_use(slot, id)", "extraction points {id, phase (locked|sleep|inbound|open|departing), x, z, radius, fill, channel, used, caller}"));
+    rd.push(fn("raid.receipt(slot)", "the player's receipt (JSON text; final once the raid is over): id = meta operation id"));
+    rd.push(fn("raid.extract(slot [, point]) / raid.fail(slot [, \"dead\"|\"timeout\"|\"abandoned\"]) (simulation scripts)", "resolve a raider now"));
+    rd.push(fn("raid.progress(slot, objective [, n]) / raid.complete(slot, objective) / raid.give(slot, item [, n [, secured]]) / raid.spawn_loot(table, x, z [, slot])", "objectives, items, loot tables"));
+    rd.push(fn("raid_can_extract(player, point_id)", "global veto hook: return false (+ reason) to refuse an extraction or a call"));
+    rd.push(fn("on(\"raid_phase\" | \"raid_point\" | \"raid_channel\" | \"raid_extracted\" | \"raid_loot\" | \"raid_interact\" | \"raid_objective\" | \"raid_player\", fn(e))", "raid events: e = {player, unit, other, value, x, z} (docs/raid.md: value encodings)"));
+    r.set("raid", rd);
     return r;
 }
 

@@ -18,7 +18,9 @@
 #include "RtsScript.h"
 #include "RtsMech.h"
 #include "RtsGridFields.h"
+#include "RtsRaid.h"
 #include "RtsNative.h"
+#include "RtsTopDown.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -84,6 +86,10 @@ enum CommandType : uint16_t {
     kCmdLock,         // gates / doors: param 1 lock (closed for everyone), 2 unlock, 0 toggle
     kCmdEndTurn,      // turn-based mode: the active player ends the turn
     kCmdScript,       // rules "commands" (RtsScript.h): param = command index, args = encoded arguments, units = selection
+    kCmdRaid,         // extraction raids (RtsRaid.h): param = RaidOp | point index << 8 (call: -1 = nearest)
+    // top-down heroes (rules "topDown", RtsTopDown.h)
+    kCmdTopDown,      // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
+    kCmdTopDownAbility, // no units; param = ability index of the hero; target / point optional (default: along the aim)
 };
 
 // Rect parameter of kCmdDig / kCmdPaintRoom: width and height in cells (1..64) and a signed 24-bit extra value.
@@ -155,6 +161,15 @@ enum GameEvent : uint16_t {
     kEvMorale,          // a = unit, value = 0 steady / 1 wavering / 2 routing (stage 4)
     kEvTurn,            // turn-based mode: player = whose turn starts, value = turn number
     kEvFortified,       // dungeon walls: value = cell, player = new wall owner (0: the wall fell back to plain rock), a = worker
+    // extraction raids (RtsRaid.h, docs/raid.md)
+    kEvRaidPhase,       // value = RaidPhase (1 running, 2 over)
+    kEvRaidPoint,       // extraction point phase: value = RaidPointPhase | point << 8, pos = centre, player = caller
+    kEvRaidChannel,     // player, value = point | RaidChannelEv << 16 (0 start, 1 interrupted), pos = centre
+    kEvRaidExtracted,   // player, a = raider, value = point (-1: forced)
+    kEvRaidLoot,        // player, value = item | count << 16 (| 1 << 40: resource index instead of an item), pos
+    kEvRaidInteract,    // player, a = raider, b = object, value = object type | RaidChannelEv << 16 (0 start, 1 interrupted, 2 done)
+    kEvRaidObjective,   // player, value = objective | 1 << 16 (completed)
+    kEvRaidPlayer,      // player, value = RaidStatus (1 in raid, 2 extracted, 3 dead, 4 timed out, 5 abandoned)
 };
 
 // ---------------------------------------------------------------- components
@@ -498,6 +513,8 @@ public:
     const TriggerSet& triggers() const { return triggers_; }
     ScriptEngine* scripts() const { return script_.get(); }   // the Lua VM (standard library + game scripts)
     GridFields* gridFields() const { return fields_.get(); }  // grid fields (RtsGridFields.h); null before setup
+    Raid* raid() const { return raid_.get(); }                // extraction raids (RtsRaid.h); inactive without rules "raid"
+    TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     // The map the simulation was set up from when the map had a "generate" block (nullptr otherwise):
     // presentation reads terrainMaterial / heights / regions from it (agent-terrain-gen).
     const Json* generatedMap() const { return generated_.isObject() ? &generated_ : nullptr; }
@@ -808,6 +825,8 @@ private:
     void captureOriginals(Simulation& sim, Entity structure, uint8_t from, uint8_t to);
     void flushDeathSpawns(Simulation& sim);
     std::unique_ptr<GridFields> fields_;   // grid fields config + kernels (state: GridFieldStore resource)
+    std::unique_ptr<Raid> raid_;           // extraction raids (state: RaidStore resource)
+    std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::vector<NativeDefinition> nativeDefinitions_;
     NativeModules native_;
     std::unique_ptr<ScriptEngine> script_; // Lua VM (RtsScript.h); its persistent state is the ScriptStore resource

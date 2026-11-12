@@ -186,3 +186,16 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../engine/data/Json.cpp")
     add_test(NAME library_production_survival_example COMMAND aiverse_library_production_survival_example
         ${CMAKE_CURRENT_LIST_DIR}/../../examples/libraries/genre/production-survival --quiet)
 endif()
+add_executable(aiverse_library_encounter_tests encounter_tests.cpp
+    ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+target_link_libraries(aiverse_library_encounter_tests PRIVATE AIVERSE::gameplay_native)
+if(NOT MSVC)
+    target_compile_options(aiverse_library_encounter_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+add_test(NAME library_encounters COMMAND aiverse_library_encounter_tests ${CMAKE_CURRENT_LIST_DIR}/../..)
+
+add_executable(aiverse_library_progression_tests perks_tests.cpp
+    ../../engine/core/Fixed.cpp ../../engine/core/FixedMath.cpp ../../engine/data/Json.cpp)
+target_link_libraries(aiverse_library_progression_tests PRIVATE AIVERSE::gameplay_native)
+if(NOT MSVC)
+    target_compile_options(aiverse_library_progression_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+add_test(NAME library_progression COMMAND aiverse_library_progression_tests ${CMAKE_CURRENT_LIST_DIR}/../..)

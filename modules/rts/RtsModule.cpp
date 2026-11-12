@@ -28,10 +28,14 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     setupMap(sim, mapIn);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
+    raid_ = std::make_unique<Raid>();   // extraction raids (rules "raid"); nothing without them
+    raid_->setup(sim, *this, mapIn);
     validateInitialVars(mapIn["initialVars"]);
     for (const auto& [key, value] : mapIn["initialVars"].members()) state(sim).trig.vars[key] = value.fx();
     fields_ = std::make_unique<GridFields>();   // grid fields (rules "fields", map "gridFields"); nothing without them
     fields_->setup(sim, *this, mapIn);
+    topDown_ = std::make_unique<TopDown>();   // top-down heroes (rules "topDown"); nothing without the block
+    topDown_->setup(sim, *this, rulesJson);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -58,6 +62,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
     sim.addSystem("projectiles", [this](Simulation& s) { sysProjectiles(s); });
+    if (raid_->active()) sim.addSystem("raid", [this](Simulation& s) { raid_->tick(s); });   // RtsRaid.cpp: sees raiders at 0 hp
     sim.addSystem("death", [this](Simulation& s) { sysDeath(s); });
     sim.addSystem("capture", [this](Simulation& s) { sysCapture(s); });
     sim.addSystem("creep", [this](Simulation& s) { sysCreep(s); });
@@ -970,6 +975,8 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (!pi || !pi->alive) return;
     if (script_ && (script_->hooks() & ScriptEngine::kHookCommand) && cmd.type != kCmdScript && !script_->allowCommand(sim, cmd)) return;   // before_command (G12)
     if (cmd.type >= 32768) { native_.command(*this, sim, cmd); return; }
+    if (cmd.type == kCmdRaid) { if (raid_ && raid_->active()) raid_->command(sim, cmd); return; }   // RtsRaid.cpp
+    if (topDown_ && topDown_->command(sim, cmd)) return;   // kCmdTopDown, kCmdTopDownAbility (RtsTopDown.cpp)
     const bool queue = cmd.flags & kCmdQueue;
     if (cmd.type >= kCmdStance || mechOn(sim) || (cmd.type == kCmdRally && (cmd.flags & kCmdQueue))) { if (applyMechCommand(sim, cmd)) return; }   // agent-mech
     if (cmd.type >= kCmdDig && cmd.type <= kCmdPlayerAbility) { applyDungeonCommand(sim, cmd); return; }
@@ -1378,6 +1385,7 @@ uint32_t RtsModule::ticksUntilWave(Simulation& sim) const {
 
 int RtsModule::result(Simulation& sim) {
     auto* gs = sim.world().resource<GameState>();
+    if (gs && gs->winnerTeam < 0 && raid_ && raid_->active()) return 0;   // extraction raids end the match themselves
     if (gs && gs->winnerTeam >= 0) return gs->winnerTeam == 0 ? -1 : gs->winnerTeam;
     if (gs && gs->victory.mode == VictoryMode::Survive) return 0; // decided by sysVictory
     int team = 0;
@@ -1468,7 +1476,9 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
         h.u32(uint32_t(s.remaining.size())); for (auto n : s.remaining) h.u32(n);
         h.u32(uint32_t(s.hit.size())); for (auto hit : s.hit) h.u64(hit.packed());
     });
+    if (raid_ && raid_->active()) raid_->hash(sim, h);   // extraction raids only
     if (fields_ && fields_->active()) fields_->hash(sim, h);   // games with grid fields only (per-chunk cached hashes)
+    if (topDown_ && topDown_->active()) topDown_->hash(sim, h);   // games with rules "topDown" only
 }
 
 } // namespace aiverse::game

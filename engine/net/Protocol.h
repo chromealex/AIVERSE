@@ -16,9 +16,11 @@ enum class Msg : uint8_t {
     // client -> server
     Hello = 1, ListRooms, CreateRoom, JoinRoom, LeaveRoom, SetMap, SetSettings, TakeSlot, SetSlotKind,
     SetReady, StartMatch, Chat, QueueJoin, QueueLeave, InputFrame, Checksum, MatchResult, Ping,
+    ResultReport, Away,   // hosted battles (BattleProtocol.h); older servers ignore them
     // server -> client
     Welcome = 64, Error, RoomList, RoomState, QueueStatus, MatchStart, TickBatch, SlotControl,
     PlayerStatus, Desync, MatchEnd, ChatMsg, Pong,
+    MatchPayload,         // hosted battles: start payload before MatchStart (BattleProtocol.h)
 };
 
 enum class ErrorCode : uint16_t {

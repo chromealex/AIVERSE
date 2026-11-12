@@ -16,6 +16,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings; 0.2.0 social scenes: typed facts, relationship meters, knowledge, AND/OR/NOT conditions, flags, chapters/acts, deferred consequences, speakers, cue requests, barks, VN backlog/skip-read/auto-advance (see [Narrative scenes](#narrative-scenes-narrative-graphs-020)) | Project UI/cinematics consume committed nodes, CueRequest records and bark lines. No scene playback, audio, QTE or online reward grant. |
 
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
+| match-progression | Perk/modifier packages with an ordered stat pipeline, hero xp + level table/curve, seeded level-up offers (recruit / slot perk / player perk, explicit picks, rerolls, revisions), stacking/prerequisite/exclusion/upgrade rules, xp orb pickups (radius, magnet, attraction, budget), summon circles + charges + summoned ally lifecycle, pre-match battle deck limits (see [Match progression](#match-progression-match-progression-010)) | Values, events and requests only: the owner applies stats to units, spawns recruits/summons, moves units and renders cards/rings. Not meta progression (engine/meta) and not RTS hero xp/StatMods. |
 | cinematic-gameplay | Integer-ratio time-scale domains with stacked priority requests and hit-stop/slow-motion presets, scene timelines of tracked cues with play/pause/skip/seek, sync waits on host-reported line/marker/in-position facts with timeouts, QTE press/mash/hold/sequence with difficulty and accessibility, interaction staging (marks, teleport fallback, input locks), checkpoint requests and resume at sync points, narrative cue triggers (see [Cinematic gameplay](#cinematic-gameplay-cinematic-gameplay-010)) | Authoritative scene flow only. Audio/animation/camera playback, navigation and teleports are host work reported back as tick-stamped input. No renderer, cutscene editor, lip sync or root motion. |
 | puzzle-solvers | Match-3 (swap validation, line/L/T matches, data-driven specials, seeded gravity/refill, ordered cascades, no-move detection, always-solvable shuffles, goals, hints), flood fill/regions, color flood with IDA*, pipe connectivity with leak checks, N-puzzle parity/shuffle/IDA*, sliding blocks (BFS), polyomino packing (exact cover, solution counting), Sokoban sessions over grid-puzzles (deadlocks, A*, undo), small-grid CSP (AllDifferent/Sum/Count/Runs: sudoku, nonogram) with propagation and uniqueness, puzzle bot (see [Puzzle solvers](#puzzle-solvers-puzzle-solvers-010)) | Rules, solvers and commands only; every search has a node budget and reports Unknown when it runs out. No rendering, input mapping, level generator/editor or meta progression. |
 
@@ -592,6 +593,99 @@ velocity, guard, telegraphed attack); a target at `rememberFrom` (default Search
 `lastKnown` position with `visible=false`, so bots approach but never shoot or lock it. Anonymous disturbances
 (target 0) are skipped; steer search with `genre::searchGoal`. Results are sorted by target id. `facts` returning
 nullopt drops a target. This makes `stealth-senses` a package dependency of `genre-bots`.
+
+## Match progression (match-progression 0.1.0)
+
+In-match progression for hero-squad shooters, survivors/bullet-heaven runs and roguelites (reference port: Drone
+Fall — per-player experience, level-up recruit/perk cards, modifier packages per deck slot or player, summon
+circles restoring fallen robots, battle deck unlock flags from the match start payload). Headers:
+`genre/Perks.h` (definitions, stat pipeline, xp, offers), `genre/XpPickups.h`, `genre/Summons.h`,
+`genre/BattleDeck.h`, `genre/PerksData.h` (JSON), `genre/PerksConfigured.h` (settings), `genre/PerksPersistence.h`.
+
+**Modifier pipeline.** A perk is one package of `ModEffect{stat, op, value, stage, bearer}`; well-known stats are
+`perk_stat::IncomingDamage, OutgoingDamage, MoveSpeed, FireInterval, FireCount, AttackRange, MaxHealth,
+SplashRadius, PickupRadius, PickupXp, CritChance, CritDamage, SummonCharges, SummonCooldown, HealthRegen`, games add
+their own ids in `stats` (with min/max clamps). `evaluateStat(defs, progress, stat, base, slot, bearer, &steps)`
+orders effects by stage (default Set 0, Add 1, Multiply 2; explicit 0..15), then slot-scoped before player-scoped
+packages, then occurrence id and effect index; Multiply is milli and truncates per step (sequential packages, not a
+folded product); the result is clamped; `steps` lists every applied effect with the value after it (explainable
+builds). Slot-scoped perks reach only queries for that deck slot, player-scoped perks reach every slot; a bearer
+(owner kind: robot/weapon/bullet/hero...) filters effects. `scaleAmount` applies damage multipliers with saturation;
+`rescaleHealth` keeps the health fraction when max health grows and clamps when it shrinks. Built-in RtsModule
+stats keep their own owner: this pipeline is for native/host games and custom stats.
+
+**Stacking and selection.** `maxSelections` (0 = unlimited) counts per player or per slot; `requires` /
+`excludes` look at the same slot and the player scope; `units` restricts slot perks to deck units; `minLevel` gates
+by the level being chosen; `upgrades` makes tier chains (selecting replaces one occurrence of the previous tier;
+loops rejected). `offerable=false` perks are only granted (initial abilities). `grantPerk` applies a perk under the
+same rules without xp (console, scripted rewards); `clearPerks` removes selected perks (optionally keeping initial
+ones); occurrence ids stay monotonic.
+
+**Experience and offers.** `xpToNext` reads the per-level table (`xp.toNext`, by current level), past its end adds
+`xpGrowthPerLevel` or caps; without a table the linear `xp.curve` (progression-curves `systems::curve`) is used;
+`maxLevel` caps both. `grantXp` adds kill/objective xp; with `pickupBonus` the player's `PickupXp` stat scales it and
+keeps the fractional remainder. Levels are banked: `availableLevels`, `levelProgressMilli` (HUD ring).
+`openOffer` builds the next level's offer from `offers.levels[level]` or `offers.default` (variant types recruit,
+slotPerk, playerPerk, anyPerk; explicit `perk` picks are reserved first), with the count from the battle deck
+(`choiceCount`, else `deck.choices` by tech level, else the variant count / `offerChoices`). Candidates are
+enumerated in ascending slot/perk order, filtered by the rules and an optional `PerkHooks::weight` hook, then drawn
+with the state's own PCG32 stream (`seedPerks`); unavailable positions are skipped without substitutes; an empty
+offer closes without spending xp. `preferNewRecruitAtLevel` narrows recruit picks to slots not yet recruited.
+`rerollOffer` spends one of `offerRerolls`, keeps explicit picks and avoids repeating items when alternatives exist.
+Every change bumps `offer.revision`; `selectOffer(revision, index)` re-validates, spends the level's xp, applies the
+perk (PerkSelected / PerkReplaced events with the perk's `hook` string, e.g. a Lua function name) or reports a
+Recruit for the owner to spawn, and opens the next banked offer. `closeOffer` cancels (stations). `botOfferChoice`
+picks the lowest `aiPriority` (recruits: `recruitAiPriority`; `aiPriorityLowHealth` when the bot is low on health).
+
+**Battle deck.** `readBattleDeck` parses the match start payload (player, techLevel, choiceCount, enforceUnlocks,
+slots with unit, level, opened, inTeam, perks). `battleDeckError` checks slot numbering, known units/perks,
+`maxSlots`, `maxSameUnit`, cost `budget` and the hero in slot 0. A slot is recruitable when `opened && inTeam`
+(unless `enforceUnlocks=false`, e.g. sandbox/AI); locked slots keep their index. `addPlayer` grants unit + slot
+initial perks once (player-scoped ones deduplicated) and marks the hero slot active. `maxSquad` and
+`maxRecruitsPerSlot` limit recruits.
+
+**XP pickups.** `stepPickups(config, state, tick, {spawns, collectors})`: orbs land after `pickupLandingTicks`,
+expire after `pickupLifetimeTicks` (0 = never), belong to anyone or to one player; a collector picks up orbs within
+its radius (owner passes the `PickupRadius` stat, 0 = `pickupRadiusMilli`) on the ground plane, or within
+`pickupMagnetRadiusMilli` on a magnet tick. With `pickupAttractSpeedMilli` 0 collection is instant (Drone Fall);
+otherwise orbs home in with acceleration up to `pickupMaxSpeedMilli` and are collected at `pickupGrabRadiusMilli`;
+a missing collector releases its orbs. `pickupMaxOrbs` bounds the field: an extra spawn merges into the nearest free
+orb of the same owner, else evicts the oldest. Ties go to the nearest collector, then the lower player id.
+
+**Summons.** `stepSummons(config, points, state, tick, {presences, died, removed})`: the lowest player id inside a
+point's radius that may summon there (team filter, owner gate `canSummon`, point not used/pending/cooling down,
+squad below `summonMaxAllies`, a dead acquired ally to restore or a recruit action, a charge when `summonCharges`
+> 0) fills progress one per tick (`progressTicks`, else `summonProgressTicks`); leaving resets it
+(`summonResetOnExit`). Completion emits a `SummonRequest` (restore: the dead ally with the lowest slot; recruit:
+the owner picks the slot) and marks the point pending; `confirmSummon` registers the new ally (restores replace
+the dead record) and consumes (`singleUse`) or cools down the point; `cancelSummon` frees it and refunds the
+charge. Allies record owner, unit, slot, spawn tick and optional lifetime; expired allies are listed in `despawn`;
+non-acquired allies are forgotten on death; `removeSummoner` returns live allies of a leaving player.
+`summonPointView` gives Ready / Progress (with milli progress) / Pending / Used / Cooldown / SquadFull / Blocked for
+circle visuals and hints. `useSummonCharge` spends a charge for non-point summon abilities; charges recharge every
+`summonChargeRechargeTicks`.
+
+**Data and hooks.** `examples/libraries/genre/perks.json` (Drone Fall-like units, perks, xp table, offers, summon
+points), `perks-deck.json` (payload with a locked and an out-of-team slot), `perks-settings.json`. Perk `hook` names
+and `PerkHooks::weight` are the scripting seams: a Lua bridge maps events to functions and may veto/reweight
+candidates; hooks must be deterministic and must not read wall clock or per-client state.
+
+**State.** `PerkState` (players: deck, xp, remainder, level, offer, occurrences, recruits; PCG32 stream),
+`PickupState`, `SummonState` are `genre::save/load` records (version 1, kinds 104, 105, 106; 107..111 reserved),
+canonical and validated on load; `progressionHash` folds them into checksums; bind `perkDefinitionsHash` and
+`progressionConfigHash` in the save envelope. `examples/native/libraries/ProgressionConsumer.cpp` runs a kill ->
+orb -> pickup -> offer -> choice chain and stores `genre.perks`, `genre.pickups`, `genre.summons`.
+
+**Verification.** `tests/libraries/perks_tests.cpp` (`aiverse_library_progression_tests <repo>`) covers JSON
+errors, deck limits and choice counts, the pipeline order/clamps/bearers/upgrades/health rescale, xp table/curve/
+growth/pickup remainder, offers (recruit-only levels with locked slots, preferred new recruits, explicit picks,
+rerolls, stale revisions, hooks, exhausted pools, bot choice), pickups (landing, ownership, magnet, merge budget,
+expiry, homing/release), summons (progress/reset, restore/confirm, single use, cooldown, squad full, cancel,
+expiry, charges, owner removal), persistence and settings. `aiverse_progression --root <repo> --verify` plays a
+5400-tick scripted bot run (kills, orbs, offers, recruits, deaths, summon restores) and requires identical
+checksums for a replay and for a mid-match save/restore. Verified only with g++ 11 on the Linux VM (headers with
+-Wall -Wextra -Werror -pedantic, tests and the headless run built by hand). Not verified: MSVC/clang, CMake isolation,
+native module export, platform runtimes, performance at bullet-heaven densities, UI/VFX integration.
 
 ## Narrative scenes (narrative-graphs 0.2.0)
 
@@ -1340,3 +1434,106 @@ clean without `-Wno-misleading-indentation`) and all genre/bots headers together
 example built by hand and run, also under ASan/UBSan; the native consumer function in a standalone driver; GenreConsumer.cpp
 syntax. Not run: CMake/ctest (no cmake in the VM), isolation tests, native module export, headless restore matches,
 clang/MSVC.
+## Boss encounters (boss-encounters 0.1.0)
+
+Headers under `genre/`: `Telegraphs.h` (ground areas + telegraphed attacks), `StatusEffects.h`, `BossEncounter.h`,
+`BossSchedule.h`, `MobBehaviour.h`, `EncounterData.h` (JSON), `EncounterPersistence.h`, `TelegraphDecals.h`
+(presentation), `EncounterScenario.h` (headless reference fight). Target `AIVERSE::lib_boss_encounters` (depends on
+`combat-actions` for the yaw convention and `AttackPhase`); native OBJECT modules call
+`aiverse_native_use_libraries(target boss-encounters)`. Skill: `skills/aiverse-boss-encounters`. Tool:
+`aiverse_encounter validate|simulate <file>`. Built for the Drone Fall port (ME.BECS `DelayedAttackSystem`,
+`TelegraphSystem`, `BossAttackUtils`, `MobsHuntSystem`, `MobAvoidanceJob`, `BossRotationUtils`, personal boss
+requests); generic for any top-down action game.
+
+**Contract.** Every step is a pure decision on Fixed math and integer ticks: one call per object per strictly
+increasing tick (repeated/backwards ticks and invalid input return nullopt with the state untouched), targets and
+neighbours are processed in ascending id, RNG only through the passed `Random&`. The owner applies damage through
+its own health owner, applies statuses (this package's `StatusActorState` or the engine's), moves bodies, spawns
+bosses/adds and draws views. Presentation reads `TelegraphView` / `StatusViewEvent` and never writes back.
+
+**Areas** (`AreaDef` on the XZ plane, `Vec2{x,z}`, yaw in turns, 0 faces +Z, +X right). `areaHits(area, pose, p, r,
+reach)` tests a target circle; touching counts. Circle: `|p-o| <= R+r`. Ring: overlaps `inner..R` (a body inside
+the hole is safe unless it reaches the inner edge). Cone: apex inside the body, or within `R+r` and inside the half
+angle, or touching an edge segment (as Drone Fall's `AttackAreaGeometry.IntersectsCone`). Line: rectangle
+`0..length` forward and `±halfWidth`; `reach` shortens it for sweeps. `areaFalloffMilli` is 0 at the centre / apex /
+line start and 1000 at the edge (Ring 0).
+
+**Telegraphs.** `TelegraphDef`: area, anchor (`Source`: at the caster plus a caster-local `offset` [right, forward],
+e.g. a fist slam; `Aim`: at the aimed point clamped to `[minRange, maxRange]`, e.g. a thrown rock 7..15 m),
+`windup/active/recovery` ticks, `interval` (0: one strike at release; >0: burning ground strikes every interval),
+`sweep` (line charges: reach grows over the active window, hit once per target, `sweepReach` tells the owner how far
+to move the caster), `trackAim` (re-aim during windup; frozen at release), `falloff` from `damage` to `damageMin`,
+`oncePerTarget`, `friendlyFire` (team 0 = unaffiliated), `cancelOnSourceDeath` (windup / sweep only: a released area
+still resolves, as Drone Fall's circles), `cooldown` (read by the boss brain) and `statuses`. `beginTelegraph` freezes
+origin and yaw; `stepTelegraph` returns events `Started, Released, Strike, Ended, Cancelled`, the hits of this tick
+(target, damage, falloff, status ids) and a `TelegraphView` (`progressMilli` = windup fill, then 1000;
+`activeMilli`). The strike lands on the first active tick; a step that jumps over the active window still strikes
+once. `telegraphLocksMovement` holds the attack pose through windup and recovery (not during a sweep).
+
+**Statuses.** `StatusEffectDef{kind Slow|Root|Stun|Burn, duration, tickInterval, speedMilli, damagePerTick,
+stacking Independent|Refresh|Reject, maxStacks, anchor Ground|ModelTop}`. Defaults follow Drone Fall: burn
+independent (several fires at once), stun reject (no re-stun while stunned) with a ModelTop visual, slow refresh.
+Burn hits `ceil(duration/interval)` times, the first one interval after application, the last on expiry. Aggregate
+per tick: lowest slow, 0 when stunned or rooted, `stunned` blocks attacks. `setStatusImmunity` by kind mask or ids
+(bosses: stun/push immune, burn allowed). `applyStatus` returns Applied / Refreshed / Rejected / Immune / Invalid
+and a view event; `clearStatuses` ends all (death). `rtsStatusRules` writes the same definition as a `rules.json`
+status (+ the effect duration) for games on the RTS simulation, where the engine statuses stay authoritative.
+
+**Boss brain.** `BossDef{phases, enrage, archetype}`. Phase 0 starts the fight; phase i>0 starts when
+`hp <= hpBelowMilli/1000 * maxHp` or at `afterTicks` encounter age, entered in order even when HP skips several.
+Patterns: `ByRange` (first entry whose `[minRange,maxRange]` band holds the target distance — list the closer bands
+first, as cone <= 3 m / slam <= 7 m / rock <= 15 m), `Sequence` (cursor, waits for its entry), `Weighted` (one rng
+draw when two or more entries are ready). `alternate` swaps every second use (left/right fists) and shares the
+cooldown key. The owner reports `busy` while the attack runs; the attack's own cooldown and the phase's shared
+`globalCooldown` start when it ends (Drone Fall: full animation, then 1 s). `transitionTicks` pause attacks after a
+phase change. Multipliers (`damageMilli`, `speedMilli`, `cooldownMilli`) stack with enrage (`afterTicks` or
+`hpBelowMilli`); `bossDamage(step, damage)` scales a hit. Add waves (`unit, count, maxAlive, every, radii`) emit
+`SpawnAdds` on phase entry and every `every` ticks, capped by the living adds the owner reports.
+
+**Schedule.** `ScheduleDef{windows, personal, rotation, archetypes}`; a window `{start, end, breather, variants,
+excludePrevious, pauseWaves}`. When a window opens one variant is chosen for the whole map (weighted; rotation shows
+every archetype once before repeating and never the last one twice, as `BossRotationUtils`; persist `BossRotation`
+in the profile). Personal mode creates one request per participant (one success each, no respawn after an early
+kill), shared mode one request. `Pending` events repeat until `markBossSpawned`; requests not placed by `end` expire.
+`markBossDefeated` (kills only) starts the breather; `cancelBossRequests` (left / removed) is never a win.
+`ordinaryWavesAllowed` is false while an own boss is pending or alive (pauseWaves) and during the breather;
+`bossesDefeated` counts personal wins (trophies).
+
+**Mob behaviour.** `stepMob(config, state, tick, self, candidates, neighbours, rng, walkable)`. Order: leash return
+home (targets ignored until back), flee at `hpMilli <= fleeBelowMilli` from the nearest hostile within `fleeRange`
+until `fleeRecoverMilli`, the timer or no threat; hunt the committed target (attack in progress) > `priority` target
+(personal boss -> its hero) > current target within `loseRange` unless another is closer by `switchMargin` >
+nearest within `aggroRange` (ties by id); stop at `stopDistance`; `movementLocked` keeps the target with a zero
+direction. Otherwise wander: a point in the `[wanderMin, wanderMax]` ring around `anchor` that `walkable` accepts
+(up to `wanderAttempts`, two `rng.unit()` draws each), leg ends on arrival, overshoot or `wanderLegTicks`, then
+`wanderDelay`. Swarm pressure (`swarmCorrection`) is Drone Fall's crowd separation + look-ahead side-step: nearest
+`maxNeighbours`, spacing `(r1+r2)*spacingMilli`, coincident pairs split by id without RNG, correction capped at
+`correctionMilli` of the desired speed, final direction length <= 1. `MobDecision{mode, target, desired, goal,
+approach}`: steer with `desired`, or issue a flow-field / navmesh move to `goal`.
+
+**Data.** `readEncounterData` reads `{"ticksPerSecond", "statuses", "attacks", "bosses", "schedule", "mob"}` with
+integer milli units (`radiusMilli`, `halfAngleMilli` in milli-turns, `offsetMilli: [right, forward]`) and tick
+times; unknown keys, wrong shape keys, unknown status/attack/boss ids and inverted ranges fail with a path
+(`attack 1.halfAngleMilli: required for this shape`). Example: `examples/libraries/genre/boss-encounter.json` — a
+three-phase giant (cone + stun, alternating fist slams + slow with falloff, tracked rock + burn, sweeping charge,
+ring shockwave, add waves, enrage at 150 s), a weighted boss with burning ground and a sequence boss with a timed
+phase, three personal boss windows at 3:00 / 6:00 / 9:00 with rotation. Bind `encounterDataHash` in saves.
+
+**Views.** `telegraphDecal(view, groundY, own, colors)` returns x, y, z, rgba triangles: background shape plus a fill
+growing with `progressMilli` (circle / ring outward, cone from the apex, line from its start), own vs enemy colours
+as Drone Fall's `TelegraphColorConfig`. Feed them to `RtsGroundCanvas` (`ViewGroundBatch`) or a Lua
+`view.draw_ground` list. Status visuals: one view per `StatusViewEvent` serial (Started / Refreshed / Ended) at the
+Ground or ModelTop anchor.
+
+**State and checks.** Record kinds 112..119 (112 TelegraphInstance, 113 StatusActorState, 114 BossState,
+115 ScheduleState, 116 MobState, 117 BossRotation); `encounterHash` folds canonical bytes into checksums.
+`tests/libraries/encounter_tests.cpp` (`library_encounters`) covers boundary hit tests of every shape, strike ticks,
+late release, cancel, aim clamp/tracking, periodic and sweep strikes, stacking/immunity/burn timing, phase entry by
+HP and time, alternation, cooldowns from the attack end, transitions, enrage, add caps, weighted determinism, rotation
+order, personal requests / breathers / expiry, every mob mode and swarm splitting, data errors, save/load of every
+state and the reference fight. `aiverse_encounter simulate examples/libraries/genre/boss-encounter.json` runs
+it: with the default 4-tick reaction the hero beats the giant through all three phases (tick 1897, 15 dodged
+telegraphs); with `--reaction 100000` (no dodging) the hero dies — the telegraphs decide the fight.
+
+**Not covered.** Projectiles in flight (weapon-policies), knockback/push physics, navigation, loot and rewards,
+HUD banners, network authority, and wiring into RtsModule units (RTS games use the engine's statuses / areas).

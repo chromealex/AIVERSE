@@ -15,7 +15,8 @@ const char* kLightProps = R"J("x": {"type": "number"}, "z": {"type": "number"}, 
     "pitch": {"type": "number", "description": "spot: degrees below the horizon (default 35)"}, "yaw": {"type": "number", "description": "spot: direction, degrees (0 = +x, 90 = +z)"},
     "sweep": {"type": "number", "description": "spot: swing amplitude, degrees (searchlight)"}, "sweepSpeed": {"type": "number", "description": "degrees per second"},
     "pattern": {"type": "string", "enum": ["steady", "pulse", "strobe", "beacon"], "description": "beacon: spots rotate, points blink"}, "rate": {"type": "number", "description": "pattern frequency, Hz"},
-    "nightOnly": {"type": "boolean", "description": "on at dusk, off at dawn"}, "electric": {"type": "boolean", "description": "affected by power / damage (map lights: always powered)"})J";
+    "nightOnly": {"type": "boolean", "description": "on at dusk, off at dawn"}, "electric": {"type": "boolean", "description": "affected by power / damage (map lights: always powered)"},
+    "bake": {"type": "string", "enum": ["realtime", "mixed", "baked"], "description": "light baker (lightbake_bake): mixed = realtime + baked bounce, baked = only baked (realtime light off once baked)"})J";
 } // namespace
 
 Json& mapLightsMut(MapDoc& doc) {
@@ -35,6 +36,7 @@ void applyLightParams(Json& l, const Json& p) {
         l.set("color", a);
     }
     if (p.has("name")) l.set("name", Json::string(p.getStr("name")));
+    if (p.has("bake")) { const std::string b = p.getStr("bake"); if (b == "mixed" || b == "baked") l.set("bake", Json::string(b)); else l.erase("bake"); }   // agent-lightbake
     if (p.has("pattern")) {
         const std::string pat = p.getStr("pattern");
         if (pat == "steady" || pat.empty()) l.erase("pattern"); else l.set("pattern", Json::string(pat));

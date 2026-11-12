@@ -516,6 +516,30 @@ struct SurvivalSettings {
     std::int64_t windChillMilli=600;
     std::int64_t wetPerTick=200;
 };
+struct PerkSettings {
+    std::int64_t offerChoices=3;
+    std::int64_t offerRerolls=0;
+    bool rerollAvoidsRepeat=true;
+    std::int64_t maxLevel=0;
+    std::int64_t xpGrowthPerLevel=0;
+    std::int64_t maxRecruitsPerSlot=0;
+    std::int64_t maxSquad=15;
+    std::int64_t pickupRadiusMilli=2500;
+    std::int64_t pickupMagnetRadiusMilli=30000;
+    std::int64_t pickupGrabRadiusMilli=500;
+    std::int64_t pickupAttractSpeedMilli=0;
+    std::int64_t pickupAttractAccelMilli=0;
+    std::int64_t pickupMaxSpeedMilli=2000;
+    std::int64_t pickupLifetimeTicks=0;
+    std::int64_t pickupLandingTicks=0;
+    std::int64_t pickupMaxOrbs=1024;
+    std::int64_t summonProgressTicks=180;
+    std::int64_t summonCooldownTicks=0;
+    bool summonResetOnExit=true;
+    std::int64_t summonMaxAllies=15;
+    std::int64_t summonCharges=0;
+    std::int64_t summonChargeRechargeTicks=0;
+};
 struct GameplaySettings {
     InputSettings input;
     CameraSettings camera;
@@ -554,6 +578,7 @@ struct GameplaySettings {
     SportsSettings sports;
     ColonySettings colony;
     SurvivalSettings survival;
+    PerkSettings perks;
 };
 struct SettingsResult { std::optional<GameplaySettings> value;std::vector<std::string> errors; };
 template<class Json> SettingsResult readGameplaySettings(const Json& root) {
@@ -570,7 +595,7 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(v.type()!=Json::Type::Bool)result.errors.push_back(path+": expected boolean");else out=v.boolean();
     };
     std::int64_t version=0;number(root["schemaVersion"],version,1,1,"schemaVersion");
-    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="cardGame" && entry.first!="tactics" && entry.first!="vehicles" && entry.first!="sports" && entry.first!="colony" && entry.first!="survival") result.errors.push_back(entry.first+": unknown section");
+    for(const auto& entry:root.members()) if(entry.first!="schemaVersion" && entry.first!="input" && entry.first!="camera" && entry.first!="construction" && entry.first!="abilities" && entry.first!="inventory" && entry.first!="squads" && entry.first!="feedback" && entry.first!="tutorial" && entry.first!="saves" && entry.first!="diagnostics" && entry.first!="content" && entry.first!="verification" && entry.first!="loot" && entry.first!="perception" && entry.first!="decisionReport" && entry.first!="locomotion" && entry.first!="melee" && entry.first!="combat" && entry.first!="projectile" && entry.first!="penetration" && entry.first!="explosion" && entry.first!="ammoFeed" && entry.first!="charge" && entry.first!="aimSolver" && entry.first!="genreBots" && entry.first!="matchRules" && entry.first!="objectives" && entry.first!="senses" && entry.first!="narrative" && entry.first!="interaction" && entry.first!="cinematic" && entry.first!="cardGame" && entry.first!="tactics" && entry.first!="vehicles" && entry.first!="sports" && entry.first!="colony" && entry.first!="survival" && entry.first!="perks") result.errors.push_back(entry.first+": unknown section");
     if(root.has("input")) { const auto& section=root["input"];
         if(!section.isObject()) result.errors.push_back("input: expected object");
         else {
@@ -1273,6 +1298,35 @@ template<class Json> SettingsResult readGameplaySettings(const Json& root) {
         if(settings.survival.comfortLowMilli>settings.survival.comfortHighMilli)result.errors.push_back("survival.comfortLowMilli: must not exceed comfortHighMilli");
         if(settings.survival.severeColdMilli>settings.survival.coldMilli)result.errors.push_back("survival.severeColdMilli: must not exceed coldMilli");
         if(settings.survival.hotMilli>settings.survival.severeHotMilli)result.errors.push_back("survival.hotMilli: must not exceed severeHotMilli");
+    }
+    if(root.has("perks")) { const auto& section=root["perks"];
+        if(!section.isObject()) result.errors.push_back("perks: expected object");
+        else {
+            for(const auto& entry:section.members()) if(entry.first!="offerChoices" && entry.first!="offerRerolls" && entry.first!="rerollAvoidsRepeat" && entry.first!="maxLevel" && entry.first!="xpGrowthPerLevel" && entry.first!="maxRecruitsPerSlot" && entry.first!="maxSquad" && entry.first!="pickupRadiusMilli" && entry.first!="pickupMagnetRadiusMilli" && entry.first!="pickupGrabRadiusMilli" && entry.first!="pickupAttractSpeedMilli" && entry.first!="pickupAttractAccelMilli" && entry.first!="pickupMaxSpeedMilli" && entry.first!="pickupLifetimeTicks" && entry.first!="pickupLandingTicks" && entry.first!="pickupMaxOrbs" && entry.first!="summonProgressTicks" && entry.first!="summonCooldownTicks" && entry.first!="summonResetOnExit" && entry.first!="summonMaxAllies" && entry.first!="summonCharges" && entry.first!="summonChargeRechargeTicks") result.errors.push_back("perks."+entry.first+": unknown field");
+            if(section.has("offerChoices")) number(section["offerChoices"],settings.perks.offerChoices,1,8,"perks.offerChoices");
+            if(section.has("offerRerolls")) number(section["offerRerolls"],settings.perks.offerRerolls,0,100,"perks.offerRerolls");
+            if(section.has("rerollAvoidsRepeat")) boolean(section["rerollAvoidsRepeat"],settings.perks.rerollAvoidsRepeat,"perks.rerollAvoidsRepeat");
+            if(section.has("maxLevel")) number(section["maxLevel"],settings.perks.maxLevel,0,1000,"perks.maxLevel");
+            if(section.has("xpGrowthPerLevel")) number(section["xpGrowthPerLevel"],settings.perks.xpGrowthPerLevel,0,1000000000,"perks.xpGrowthPerLevel");
+            if(section.has("maxRecruitsPerSlot")) number(section["maxRecruitsPerSlot"],settings.perks.maxRecruitsPerSlot,0,1000,"perks.maxRecruitsPerSlot");
+            if(section.has("maxSquad")) number(section["maxSquad"],settings.perks.maxSquad,0,1000,"perks.maxSquad");
+            if(section.has("pickupRadiusMilli")) number(section["pickupRadiusMilli"],settings.perks.pickupRadiusMilli,0,100000000,"perks.pickupRadiusMilli");
+            if(section.has("pickupMagnetRadiusMilli")) number(section["pickupMagnetRadiusMilli"],settings.perks.pickupMagnetRadiusMilli,0,100000000,"perks.pickupMagnetRadiusMilli");
+            if(section.has("pickupGrabRadiusMilli")) number(section["pickupGrabRadiusMilli"],settings.perks.pickupGrabRadiusMilli,0,100000000,"perks.pickupGrabRadiusMilli");
+            if(section.has("pickupAttractSpeedMilli")) number(section["pickupAttractSpeedMilli"],settings.perks.pickupAttractSpeedMilli,0,1000000,"perks.pickupAttractSpeedMilli");
+            if(section.has("pickupAttractAccelMilli")) number(section["pickupAttractAccelMilli"],settings.perks.pickupAttractAccelMilli,0,1000000,"perks.pickupAttractAccelMilli");
+            if(section.has("pickupMaxSpeedMilli")) number(section["pickupMaxSpeedMilli"],settings.perks.pickupMaxSpeedMilli,0,1000000,"perks.pickupMaxSpeedMilli");
+            if(section.has("pickupLifetimeTicks")) number(section["pickupLifetimeTicks"],settings.perks.pickupLifetimeTicks,0,10000000,"perks.pickupLifetimeTicks");
+            if(section.has("pickupLandingTicks")) number(section["pickupLandingTicks"],settings.perks.pickupLandingTicks,0,10000000,"perks.pickupLandingTicks");
+            if(section.has("pickupMaxOrbs")) number(section["pickupMaxOrbs"],settings.perks.pickupMaxOrbs,1,65536,"perks.pickupMaxOrbs");
+            if(section.has("summonProgressTicks")) number(section["summonProgressTicks"],settings.perks.summonProgressTicks,1,10000000,"perks.summonProgressTicks");
+            if(section.has("summonCooldownTicks")) number(section["summonCooldownTicks"],settings.perks.summonCooldownTicks,0,10000000,"perks.summonCooldownTicks");
+            if(section.has("summonResetOnExit")) boolean(section["summonResetOnExit"],settings.perks.summonResetOnExit,"perks.summonResetOnExit");
+            if(section.has("summonMaxAllies")) number(section["summonMaxAllies"],settings.perks.summonMaxAllies,0,65536,"perks.summonMaxAllies");
+            if(section.has("summonCharges")) number(section["summonCharges"],settings.perks.summonCharges,0,1000,"perks.summonCharges");
+            if(section.has("summonChargeRechargeTicks")) number(section["summonChargeRechargeTicks"],settings.perks.summonChargeRechargeTicks,0,10000000,"perks.summonChargeRechargeTicks");
+        }
+        if(settings.perks.pickupAttractSpeedMilli>settings.perks.pickupMaxSpeedMilli)result.errors.push_back("perks.pickupAttractSpeedMilli: must not exceed pickupMaxSpeedMilli");
     }
     if(result.errors.empty()) result.value=settings;
     return result;

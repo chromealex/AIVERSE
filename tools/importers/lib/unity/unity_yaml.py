@@ -44,7 +44,8 @@ def scalar(s):
     try:
         if re.fullmatch(r'[-+]?\d+', s):
             return int(s)
-        if re.fullmatch(r'[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?', s):
+        # unambiguous form: '\d+\.?\d*' backtracks quadratically on long digit runs (hex mesh / lightmap blobs)
+        if re.fullmatch(r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?', s):
             return float(s)
     except ValueError:
         pass

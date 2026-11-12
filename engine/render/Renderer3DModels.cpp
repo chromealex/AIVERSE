@@ -20,7 +20,7 @@ constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
-                   kKeyInstanced = 256, kKeyOutline = 512;
+                   kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096;   // GI keys: agent-lightbake
 struct ProfileTimer {
     double* value;
     std::chrono::steady_clock::time_point start;
@@ -107,9 +107,12 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const bool normalMap = phase != 0 && !outline && it.mat->normalTex >= 0 && matQuality_ != MaterialQuality::Low;
     const bool blend = outline || (!shadow && !depthAfter && (it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags)));
     const bool twoSided = !outline && it.mat->doubleSided;
+    const bool giPhase = phase == 1 || phase == 2;
+    const bool lightmap = giPhase && it.gi == 1, probes = giPhase && it.gi == 2;
     const uint32_t shaderKey = (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
-                               (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u);
+                               (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
+                               (lightmap ? kKeyLightmap : 0u) | (probes ? kKeyProbes : 0u);
     const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
     const auto selectedGraph=it.mat->shaderGraph && int(matQuality_)>=it.mat->shaderGraph->minQuality?it.mat->shaderGraph:nullptr;
@@ -129,6 +132,9 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (normalMap) defs += "#define NORMALMAP 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
+        if (lightmap) defs += "#define LIGHTMAP 1\n";
+        if (probes) defs += "#define PROBES 1\n";
+        if (lightmap || probes) defs += "#define AIVERSE_GIQ " + std::to_string(bakedQuality_ == BakedQuality::Low ? 1 : 2) + "\n";
         defs += "#define AIVERSE_Q " + std::to_string(int(matQuality_)) + "\n";
         std::string vs = defs + (shadow ? shaders::kModelShadowVS : shaders::kModelVS);
         std::string fs = defs + (shadow ? shaders::kModelShadowFS : shaders::kModelFS);
@@ -248,6 +254,12 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     ProfileTimer timer(profiling_?&profile_.submitMs:nullptr);
     const Model* m = d.model;
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
+    if (capture_ && (d.flags & kDrawStatic)) {   // light baker: the static scene, every node in world space
+        const auto& pose = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
+        std::vector<mat4> nodeWorld(pose.size());
+        for (size_t i = 0; i < pose.size(); ++i) nodeWorld[i] = d.world * pose[i];
+        capture_(d, nodeWorld);
+    }
     const auto* cache=d.staticCache;
     if(cache&&(cache->model!=m||cache->transforms.size()!=m->nodes.size()||cache->primitiveOffsets.size()!=m->meshes.size()||std::memcmp(cache->world.m,d.world.m,sizeof d.world.m)!=0||d.nodeWorld||d.materials||d.nodeMaterial||d.pose||d.baked||!m->skins.empty()||!m->clips.empty()))cache=nullptr;
     if(cache)++profile_.cachedModels;
@@ -342,6 +354,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             float3 wc = it.world.transformPoint((p.boundsMin + p.boundsMax) * 0.5f);
             // sort distance: ortho cameras along the view direction (Unity's TransparencySortMode.Default), else from the eye
             it.depth = cam_.ortho ? dot(wc - camPos_, normalize(cam_.target - camPos_)) : length(wc - camPos_);
+            bakedItem(it, d, n);
             modelItems_.push_back(it);
         }
     }
@@ -370,11 +383,12 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         d[25] = x.dissolve;
         d[26] = x.outline.w;
         d[27] = phase == 3 ? 0.0f : x.teamGlow;
-        d[28] = x.anim.x; d[29] = x.anim.y; d[30] = x.anim.z;
+        d[28] = x.anim.x; d[29] = x.anim.y; d[30] = x.anim.z; d[31] = x.anim.w;   // w: lightmap uv2 offset.y (agent-lightbake)
     }
     dev_->setUniforms(0, instData_.data(), instData_.size() * sizeof(float));
     const Material& mt = *it.mat;
-    const bool newModel = !lastItem_ || lastItem_->model != it.model;
+    // GI draws rebind tex7 / tex8 (lightmap, mask or probes): restore the model's own textures after them
+    const bool newModel = !lastItem_ || lastItem_->model != it.model || (phase != 0 && lastItem_->gi != 0);
     if (!lastItem_ || lastItem_->mat != it.mat || newModel) {
         MaterialUniforms mu{};
         mu.base[0] = mt.baseColor.x; mu.base[1] = mt.baseColor.y; mu.base[2] = mt.baseColor.z; mu.base[3] = mt.baseColor.w;
@@ -404,6 +418,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         dev_->setTexture(7, it.model->baked.tex.valid() ? it.model->baked.tex : white_);
         dev_->setTexture(8, it.model->morphTex.valid() ? it.model->morphTex : white_);
     }
+    if (it.gi && (phase == 1 || phase == 2)) bindBakedGI(it);
     if (it.joints >= 0) dev_->setUniforms(3, jointData_.data() + it.joints, kJointFloats * sizeof(float));
     else if (it.baked && (!lastItem_ || !lastItem_->baked || lastItem_->prim != it.prim)) {
         float pal[80] = {};
@@ -464,6 +479,8 @@ void Renderer3D::renderModels(int phase) {
             if (x.baked != y.baked) return x.baked < y.baked;
             if (x.mat != y.mat) return x.mat < y.mat;
             if (x.prim != y.prim) return x.prim < y.prim;
+            if (x.gi != y.gi) return x.gi < y.gi;
+            if (x.lmPage != y.lmPage) return x.lmPage < y.lmPage;
             return a < b;
         });
     }
@@ -474,7 +491,7 @@ void Renderer3D::renderModels(int phase) {
     auto batchable = [&](const ModelItem& x) { return modelInstancingEnabled_ && x.joints < 0 && x.morph < 0; };
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
-        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by &&
+        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && x.gi == y.gi && x.lmPage == y.lmPage &&
                (x.flags & (kDrawFadeDepth | kDrawTransparent)) == (y.flags & (kDrawFadeDepth | kDrawTransparent));
     };
     for (size_t i = 0; i < order_.size();) {

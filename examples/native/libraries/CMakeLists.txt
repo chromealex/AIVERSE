@@ -1,4 +1,4 @@
-aiverse_native_module(ID library_demo VERSION 7 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp CardsTurnsConsumer.cpp VehiclesSportsConsumer.cpp ProductionSurvivalConsumer.cpp)
+aiverse_native_module(ID library_demo VERSION 8 ENTRY createLibraryDemo SOURCES LibraryDemo.cpp AppConsumer.cpp ToolkitConsumer.cpp SystemsConsumer.cpp BotConsumer.cpp GenreConsumer.cpp PuzzlesConsumer.cpp CardsTurnsConsumer.cpp VehiclesSportsConsumer.cpp ProductionSurvivalConsumer.cpp EncounterConsumer.cpp ProgressionConsumer.cpp)
 aiverse_native_use_libraries(aiverse_native_library_demo
     graphs behavior logistics configuration tutorial
     ui-binding screens themes app-lifecycle play-scenarios genre-kits change-planner
@@ -12,6 +12,8 @@ aiverse_native_use_libraries(aiverse_native_library_demo combat-actions)
 aiverse_native_use_libraries(aiverse_native_library_demo stealth-senses)
 # Genre bots (melee/shooter policies, squad roles, objective choice) compose combat-actions and weapon-policies.
 aiverse_native_use_libraries(aiverse_native_library_demo genre-bots)
+# Match progression (perks, xp, offers, pickups, summons, battle deck).
+aiverse_native_use_libraries(aiverse_native_library_demo match-progression)
 # Physical interactions (carry/throw, push/pull, ropes, doors, moving platforms, breakables).
 aiverse_native_use_libraries(aiverse_native_library_demo physical-interactions)
 # Cinematic gameplay (time-scale domains, scene timelines, sync waits, QTE, staging, checkpoints).
@@ -25,3 +27,5 @@ aiverse_native_use_libraries(aiverse_native_library_demo vehicle-controllers spo
 # Settlement production (needs, jobs, recipes, hauling, power/fluid graphs, disasters, colony planner bot) and
 # survival/ecology (body model, weather, populations, animal behavior, resource renewal).
 aiverse_native_use_libraries(aiverse_native_library_demo settlement-production survival-ecology)
+# Boss encounters (telegraphs, statuses, boss phases, schedule, mob behaviour) compose combat-actions.
+aiverse_native_use_libraries(aiverse_native_library_demo boss-encounters)

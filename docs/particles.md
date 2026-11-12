@@ -73,7 +73,7 @@ Every module of Unity's ParticleSystem now has an engine key (exact list: second
 
 Not supported on purpose (they need what OpenGL ES 3.0 weak GPUs can't afford or what the engine doesn't
 have): soft particles and distortion (depth / grab textures), custom vertex streams and custom data (only
-feed custom shaders), custom simulation space (effects have no transform hierarchy), VFX Graph.
+feed custom shaders), custom simulation space (effects have no transform hierarchy). VFX Graph is converted for the block subset below.
 
 Cost control for the new modules, per tier: noise octaves 1 / 2 / 4 (low / medium / high); mesh particle
 vertices per frame 4 000 / 16 000 / 64 000 (the rest are skipped); trails and ribbons start at `medium` by
@@ -170,10 +170,76 @@ and alpha keys (fixed mode as steps). Everything is clamped to the engine's rang
 | trails, lights | `trail` (particle / `ribbon` + `ribbons`, `lifeFraction` + `time`, `ratio`, width / colour over trail, `lifeColor`, `minDistance`, `textureMode`, `dieWithParticles`, `sizeAffectsLifetime`, material slot 2), `light` (template from the prefab or any asset by GUID, `radiusOverLife` / `intensityOverLife`) | |
 | nested prefabs, variants | the source prefab's systems are imported in place (modifications, removed components, `m_TransformParent`; ≤ 4 levels) | sources missing from the folder |
 
-Not convertible, explained in the report: **VFX Graph** (`.vfx`, `VisualEffect` components — GPU node
-graphs, not ParticleSystem modules), scripts (`MonoBehaviour`: bind effects to events with `fx_bind`
-instead), audio, animators, scene meshes / colliders not used by a particle module. Test material:
+Not convertible, explained in the report: scripts (`MonoBehaviour`: bind effects to events with `fx_bind`
+instead), audio, animators, scene meshes / colliders not used by a particle module. VFX Graph, TrailRenderer and
+LineRenderer are converted (below). Test material:
 `tests/data/unity_vfx` (synthetic, hand-written: `Assets/FX` = the classic modules, `Assets/Modules` = every
 other module, nested prefabs, variants, force fields, meshes, sprites); tests:
 `tools/importers/unity_vfx/test_import.py` (CTest `unity_vfx_importer`) and `fx_unity_importer_output_is_valid`
 in `aiverse_tests`.
+
+### VFX Graph (`.vfx`)
+
+`tools/importers/unity_vfx/vfxgraph.py` (model and evaluation: `vfxgraph_model.py`) converts text-serialized VFX
+graphs; `import.py` calls it for every `VisualEffect` component of a prefab (with the component's exposed-property
+overrides, placed at its transform; graphs played by a prefab are not imported a second time) and for `.vfx` files
+of the source folder. Stand-alone:
+
+```
+python3 tools/importers/unity_vfx/vfxgraph.py --source <file.vfx | prefab with a VisualEffect> --game <project> [--name] [--scale] [--json] [--dry-run]
+```
+
+Node classes are known by their script GUID (com.unity.visualeffectgraph 17.x table in `vfxgraph_model.CLASSES`;
+unknown GUIDs are classified by their fields and reported). One particle system (Initialize → Update → Output
+contexts on one particle data) becomes one emitter per output context. Slot values are evaluated symbolically:
+constants, exposed parameters (overrides first), inline values, multiply / add / subtract / divide, Random
+(per-particle range), Sample Curve / Sample Gradient by Age Over Lifetime (curves over life), Branch / Compare on
+constants, Rotate 3D of the spawn position (turns the shape), deltaTime factors (per-second rates).
+
+| VFX Graph | Engine |
+|---|---|
+| Spawner: constant / variable rate, single and periodic bursts, spawn over distance, loop duration / count, delay before loop | `rate`, `burst` / `bursts` (`cycles: 0` + `interval`), `perMeter`, `duration` / `loop`, `delay` |
+| GPU Event + Trigger Event (on die / always / rate over time or distance) | `subEmitters` (`death` / `birth`) → the receiving system as effect `<name>_<label>` (its `burst` = count, or `rate` / `perMeter`) |
+| Particle data: capacity, local / world space, strips | `maxParticles`, `space`, strips → ribbon `trail` of hidden particles |
+| Set Attribute (lifetime, size, scale, color, alpha, position, velocity, angle, angularVelocity, texIndex; overwrite / add / multiply; random uniform / per component; source attribute = inherit) | `life`, `size` + `aspect`, `startColor`, `offset` / random box, `speed` / `direction` / `spread`, `rotation` / `rotation3D`, `spin` (update + add: per frame → × 60 or × deltaTime) |
+| Attribute from Curve / Color over Life (over life; size, color, alpha, texIndex, scale) | `sizeOverLife`, `color`, `frameOverTime` |
+| Position Shape: sphere, oriented box, cone, torus, circle, line; surface / volume / thickness; arc; transform | `shape` sphere / box / cone / donut / ring / disc / line, `emitFrom`, `thickness`, `arc`, `offset`, `shapeRotation` |
+| Velocity from Direction & Speed (spherical / new direction / random) | `speed`, `radial`, `direction`, `randomDirection` |
+| Gravity, Turbulence, Conform to Sphere, Collision (plane; sphere / depth → ground) | `gravity`, `noise`, effect `forceFields` + `externalForces`, `collision` |
+| Orient: face camera, along velocity, fixed axis | `align` camera / velocity / upright |
+| Outputs: quad (planar primitive), mesh, quad strip; blend; main texture (or a Shader Graph colour / texture property); flipbook | billboards, `meshes` (model files turned as in the ParticleSystem import), ribbons; `blend`, `texture`, `color` tint, `frames` |
+
+Reported, not converted: soft particles, Shader Graph code beyond colour / main texture (the engine Shader Graph can
+rebuild it), time-dependent expressions (Total Time, per-frame noise operators), attributes the engine has no
+equivalent for (targetPosition, spawnIndexInStrip, ...), position-from-mesh, HDR intensity (normalized to 1; use the
+bloom post effect). Coverage on a 111-graph commercial pack: every graph converts, 644 systems → 718 emitters; the
+dropped items are 57 % soft particles.
+
+### TrailRenderer and LineRenderer
+
+`lines.py` (called by `import.py`): a **TrailRenderer** becomes an emitter of hidden particles spawned per metre moved
+(`perMeter` = 1 / minVertexDistance), living the trail `time`, joined into one ribbon (`trail.mode: "ribbon"`; width
+curve × multiplier, colour gradient, material texture / blend, texture mode). Played as a projectile trail (moved by
+RtsFx) it follows the projectile and shrinks away after the hit like Unity's autodestruct trail. A **LineRenderer**
+becomes a `line` or `ring` of evenly spread particles (`arcMode: "spread"`, which the line shape follows too) joined
+into a ribbon; other polylines → the straight line through their ends. Lines whose points scripts set (aim lines,
+range circles) are better as overlays (`overlay_set`): the report says so.
+
+### Surveys and event bindings of a Unity game
+
+- `survey.py --assets <Unity>/Assets --root <folder>... [--convert] [--index-cache c.json] [--slice i/n] [--merge ...]`:
+  follows GUID references (also Addressables `m_GUID`) from the roots, counts the effect components of the reached
+  prefabs (ParticleSystem, TrailRenderer, LineRenderer, VisualEffect, URP decals, view modules) and dry-runs the
+  importers over them; the report aggregates mapped / approximate / dropped findings.
+- `becs_bindings.py --assets <Unity>/Assets [--out plan.json] [--game <project> --import]` (ME.BECS games): unit
+  spawn / destroy effects → `spawned` / `died`, bullet views → `trail`, bullet destroy effects → `hit`, flight-end
+  effects → `miss`; view modules → binding options (`AlignExplosionToWorldUpModule` → `upright`,
+  `ProjectileTrailViewModule` without `retainAfterRelease` → `clear`); scripted emitters and target-side hit
+  effects are listed as notes. Ids are the config names (the game port maps them to its rules ids).
+
+Binding options (`modules/rts/fx/RtsFx.h`, `fx_bind`): `upright: true` plays along +Y instead of the attack
+direction (explosions), `clear: true` makes a projectile trail vanish with its projectile instead of fading out.
+
+`aiverse_tests fx_external_import_dir_loads` with `AIVERSE_FX_CHECK_DIR=<project>` loads every effect of an
+imported folder (dry runs kept outside the repo).
+

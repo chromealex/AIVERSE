@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3100000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_Component:
+  - component: {fileID: 4300000000000001}
+  - component: {fileID: 9600000000000001}
+  m_Name: Ribbons
+  m_IsActive: 1
+--- !u!4 &4300000000000001
+Transform:
+  m_GameObject: {fileID: 3100000000000001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children:
+  - {fileID: 4300000000000002}
+  m_Father: {fileID: 0}
+--- !u!96 &9600000000000001
+TrailRenderer:
+  m_GameObject: {fileID: 3100000000000001}
+  m_Enabled: 1
+  m_Materials:
+  - {fileID: 2100000, guid: b2c2d2e2f2a24b2c8d2e2f2a2b2c0004, type: 2}
+  m_SortingOrder: 2
+  m_Time: 0.5
+  m_Parameters:
+    serializedVersion: 3
+    widthMultiplier: 0.5
+    widthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+      - serializedVersion: 3
+        time: 1
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+    colorGradient:
+      serializedVersion: 2
+      key0: {r: 1, g: 0.5, b: 0, a: 1}
+      key1: {r: 1, g: 0, b: 0, a: 0}
+      ctime0: 0
+      ctime1: 65535
+      atime0: 0
+      atime1: 65535
+      m_Mode: 0
+      m_NumColorKeys: 2
+      m_NumAlphaKeys: 2
+    textureMode: 1
+  m_MinVertexDistance: 0.25
+  m_Autodestruct: 0
+  m_Emitting: 1
+--- !u!1 &3100000000000002
+GameObject:
+  m_Component:
+  - component: {fileID: 4300000000000002}
+  - component: {fileID: 12000000000000001}
+  m_Name: Circle
+  m_IsActive: 1
+--- !u!4 &4300000000000002
+Transform:
+  m_GameObject: {fileID: 3100000000000002}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 4300000000000001}
+--- !u!120 &12000000000000001
+LineRenderer:
+  m_GameObject: {fileID: 3100000000000002}
+  m_Enabled: 1
+  m_Materials:
+  - {fileID: 2100000, guid: b2c2d2e2f2a24b2c8d2e2f2a2b2c0004, type: 2}
+  m_Positions:
+  - {x: 2.0000, y: 0, z: 0.0000}
+  - {x: 1.7321, y: 0, z: 1.0000}
+  - {x: 1.0000, y: 0, z: 1.7321}
+  - {x: 0.0000, y: 0, z: 2.0000}
+  - {x: -1.0000, y: 0, z: 1.7321}
+  - {x: -1.7321, y: 0, z: 1.0000}
+  - {x: -2.0000, y: 0, z: 0.0000}
+  - {x: -1.7321, y: 0, z: -1.0000}
+  - {x: -1.0000, y: 0, z: -1.7321}
+  - {x: -0.0000, y: 0, z: -2.0000}
+  - {x: 1.0000, y: 0, z: -1.7321}
+  - {x: 1.7321, y: 0, z: -1.0000}
+  m_Parameters:
+    serializedVersion: 3
+    widthMultiplier: 0.5
+    widthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+      - serializedVersion: 3
+        time: 1
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+    colorGradient:
+      serializedVersion: 2
+      key0: {r: 1, g: 0.5, b: 0, a: 1}
+      key1: {r: 1, g: 0, b: 0, a: 0}
+      ctime0: 0
+      ctime1: 65535
+      atime0: 0
+      atime1: 65535
+      m_Mode: 0
+      m_NumColorKeys: 2
+      m_NumAlphaKeys: 2
+  m_UseWorldSpace: 0
+  m_Loop: 1

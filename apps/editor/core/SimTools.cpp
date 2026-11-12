@@ -46,7 +46,7 @@ const CmdName kCommands[] = {
     {"transit", kCmdTransit}, {"guard", kCmdGuard}, {"follow", kCmdFollow}, {"formation", kCmdFormation}, {"build_line", kCmdBuildLine},
     {"merge", kCmdMerge}, {"split", kCmdSplit}, {"trade", kCmdTrade}, {"trade_route", kCmdTradeRoute}, {"tribute", kCmdTribute},
     {"diplomacy", kCmdDiplomacy}, {"buy_item", kCmdBuyItem}, {"use_item", kCmdUseItem}, {"drop_item", kCmdDropItem}, {"pick_item", kCmdPickItem}, {"bounty", kCmdBounty}, {"rotate", kCmdRotate}, {"lock", kCmdLock}, {"end_turn", kCmdEndTurn},
-    {"script", kCmdScript},
+    {"script", kCmdScript}, {"topdown", kCmdTopDown}, {"topdown_ability", kCmdTopDownAbility},
 };
 
 Vec3 readPoint(const Json& p) {
@@ -187,7 +187,9 @@ const char* kCommandHelp =
     "load: units board the target transport; unload: units = transports, with a point they drive there first. Rect commands (dig, paint_room, "
     "build_road): 'rect' [w, h] at the point with 'extra' (dig: 1 unmark; build_road: 1 remove). 'queue': true appends "
     "to the current orders (Shift). script: a rules \"commands\" command: 'id' + 'args' {name: value} (int / enum name / "
-    "bool / point [x, z] / unit reference), units = the selection.";
+    "bool / point [x, z] / unit reference), units = the selection. topdown (rules topDown heroes): 'move' [x, z] stick vector "
+    "(length = magnitude, at most 1), 'aim' [x, z] aim direction, 'fire' true; sticky until the next topdown command. "
+    "topdown_ability: 'ability' id of the hero's type, optional point (default: along the aim / facing) or target.";
 
 const char* commandSchemaProps() {
     return R"("command": {"type": "string"}, "player": {"type": "integer"},
@@ -196,7 +198,9 @@ const char* commandSchemaProps() {
         "type": {"type": "string"}, "tech": {"type": "string"}, "ability": {"type": "string"}, "room": {"type": "string"}, "stance": {"type": "string"},
         "player_ability": {"type": "string"}, "percent": {"type": "integer"}, "param": {"type": "integer"},
         "rect": {"type": "array", "items": {"type": "integer"}}, "extra": {"type": "integer"}, "queue": {"type": "boolean"},
-        "id": {"type": "string", "description": "script: rules commands id"}, "args": {"type": "object", "description": "script: arguments by name"})";
+        "id": {"type": "string", "description": "script: rules commands id"}, "args": {"type": "object", "description": "script: arguments by name"},
+        "move": {"type": "array", "items": {"type": "number"}, "description": "topdown: stick vector [x, z]"},
+        "aim": {"type": "array", "items": {"type": "number"}, "description": "topdown: aim direction [x, z]"}, "fire": {"type": "boolean"})";
 }
 
 Command commandFromJson(const SimRefs& refs, const Json& p, uint8_t defPlayer) {
@@ -233,6 +237,27 @@ Command commandFromJson(const SimRefs& refs, const Json& p, uint8_t defPlayer) {
     if (p.has("type")) c.param = need(R.findType(p.getStr("type")), "type", p.getStr("type"));
     if (p.has("tech")) c.param = need(R.findTech(p.getStr("tech")), "tech", p.getStr("tech"));
     if (p.has("player_ability")) c.param = need(R.findPlayerAbility(p.getStr("player_ability")), "player ability", p.getStr("player_ability"));
+    if (c.type == kCmdTopDown || c.type == kCmdTopDownAbility) {   // top-down heroes (RtsTopDown.h): readable stick fields
+        const game::TopDown* td = refs.mod.topDown();
+        const Entity hero = td ? td->heroOf(refs.sim, c.player) : kNullEntity;
+        if (hero.valid() && c.units.empty()) c.units = {hero};   // ability ids resolve against the hero's type
+        if (c.type == kCmdTopDown && !p.has("param")) {
+            topdown::Input in;
+            auto vec = [&](const Json& v, Vec3& out) {
+                if (!v.isArray()) return false;
+                out = {toFixed(v[0].toDouble(0)), Fixed{}, toFixed(v[1].toDouble(0))};
+                return out.x.raw != 0 || out.z.raw != 0;
+            };
+            Vec3 mv, av;
+            if (vec(p["move"], mv)) {
+                in.moveAngle = game::TopDown::angleOf(mv);
+                in.moveMag = int32_t(std::min<int64_t>(topdown::kMagMax, (mv.length() * 1000).toInt()));
+            }
+            if (vec(p["aim"], av)) { in.aim = true; in.aimAngle = game::TopDown::angleOf(av); }
+            in.fire = p.getBool("fire", false);
+            c.param = topdown::pack(in);
+        }
+    }
     if (p.has("ability")) {
         const std::string id = p.getStr("ability");
         int idx = -1;
@@ -244,7 +269,9 @@ Command commandFromJson(const SimRefs& refs, const Json& p, uint8_t defPlayer) {
             break;
         }
         c.param = need(idx, "ability of the first unit's type", id);
+        if (c.type == kCmdTopDownAbility) c.units.clear();   // no units on the wire: the sim uses the player's hero
     }
+    if (c.type == kCmdTopDown) c.units.clear();
     if (c.type == kCmdRotate && p.has("dir")) {   // conveyors: "e", "s", "w", "n"
         const std::string d = p.getStr("dir");
         c.param = d == "e" ? 1 : d == "s" ? 2 : d == "w" ? 3 : d == "n" ? 4 : need(-1, "dir (e, s, w, n)", d);

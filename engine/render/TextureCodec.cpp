@@ -317,6 +317,8 @@ bool mapVkFormat(uint32_t vk, BlockFormat& f, bool& srgb) {
     case 153: f = BlockFormat::EAC_R11; return true;
     case 157: f = BlockFormat::ASTC_4x4; return true;
     case 158: f = BlockFormat::ASTC_4x4; srgb = true; return true;
+    case 165: f = BlockFormat::ASTC_6x6; return true;
+    case 166: f = BlockFormat::ASTC_6x6; srgb = true; return true;
     default: return false;
     }
 }
@@ -326,11 +328,15 @@ bool mapVkFormat(uint32_t vk, BlockFormat& f, bool& srgb) {
 int blockBytes(BlockFormat f) {
     switch (f) {
     case BlockFormat::ETC2_RGB8: case BlockFormat::EAC_R11: case BlockFormat::BC1: case BlockFormat::BC4: return 8;
-    case BlockFormat::ETC2_RGBA8: case BlockFormat::BC3: case BlockFormat::BC7: case BlockFormat::ASTC_4x4: return 16;
+    case BlockFormat::ETC2_RGBA8: case BlockFormat::BC3: case BlockFormat::BC7: case BlockFormat::ASTC_4x4: case BlockFormat::ASTC_6x6: return 16;
     case BlockFormat::None: break;
     }
     return 4;
 }
+
+int blockDim(BlockFormat f) { return f == BlockFormat::None ? 1 : f == BlockFormat::ASTC_6x6 ? 6 : 4; }
+
+bool isAstc(BlockFormat f) { return f == BlockFormat::ASTC_4x4 || f == BlockFormat::ASTC_6x6; }
 
 const char* blockFormatName(BlockFormat f) {
     switch (f) {
@@ -343,6 +349,7 @@ const char* blockFormatName(BlockFormat f) {
     case BlockFormat::BC4: return "BC4";
     case BlockFormat::BC7: return "BC7";
     case BlockFormat::ASTC_4x4: return "ASTC_4x4";
+    case BlockFormat::ASTC_6x6: return "ASTC_6x6";
     }
     return "?";
 }
@@ -353,7 +360,8 @@ int levelHeight(const CompressedImage& img, int level) { return std::max(1, img.
 size_t levelByteSize(BlockFormat f, int width, int height) {
     if (width <= 0 || height <= 0) return 0;
     if (f == BlockFormat::None) return size_t(width) * size_t(height) * 4;
-    return size_t((width + 3) / 4) * size_t((height + 3) / 4) * size_t(blockBytes(f));
+    const int d = blockDim(f);
+    return size_t((width + d - 1) / d) * size_t((height + d - 1) / d) * size_t(blockBytes(f));
 }
 
 bool isKtx2(const std::string& bytes) {
@@ -420,7 +428,7 @@ bool decodeBlock(BlockFormat f, const uint8_t* block, uint8_t out[64]) {
         for (int i = 0; i < 16; ++i) { out[i * 4 + 1] = 0; out[i * 4 + 2] = 0; out[i * 4 + 3] = 255; }
         return true;
     case BlockFormat::BC7: decodeBc7(block, out); return true;
-    case BlockFormat::ASTC_4x4: case BlockFormat::None: break;
+    case BlockFormat::ASTC_4x4: case BlockFormat::ASTC_6x6: case BlockFormat::None: break;
     }
     return false;
 }
@@ -434,7 +442,7 @@ bool decodeBlocks(const CompressedImage& in, int level, std::vector<uint8_t>& rg
         rgba.assign(src.begin(), src.begin() + ptrdiff_t(size_t(w) * size_t(h) * 4));
         return true;
     }
-    if (in.format == BlockFormat::ASTC_4x4) return false;
+    if (isAstc(in.format)) return false;
     rgba.assign(size_t(w) * size_t(h) * 4, 0);
     const int bw = (w + 3) / 4, bh = (h + 3) / 4, bb = blockBytes(in.format);
     // BC1_RGB_* (vkFormat 131/132) has no alpha: the GPU samples index-3 black as opaque.

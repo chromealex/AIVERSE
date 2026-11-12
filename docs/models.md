@@ -185,6 +185,10 @@ Imported materials keep their PBR values. Overrides per material name, `"*"` for
 | `teamStrength` | 0..1 |
 | `teamMask`, `texture`, `normalMap`, `emissiveMap` | replace / add textures (paths relative to the game) |
 | `uvScale` | `[u, v]` tiling |
+| `uvOffset` | `[u, v]` offset (after `uvScale`, every texture of the material) |
+| `metallicRoughnessMap` | glTF layout: G roughness, B metallic (multiplied with the factors); the Unity importer repacks URP maps into it |
+| `occlusionMap`, `occlusionStrength` | ambient occlusion in R (high material tier) and its strength 0..1 |
+| `normalScale` | normal map strength |
 
 **Transparent models** (`"transparent": true` on the view or on a material; `render::kDrawTransparent`): the port of
 a Unity transparent material (URP Lit, Surface Transparent: queue 3000, ZWrite Off) that is drawn fully opaque. Each
@@ -259,6 +263,9 @@ material name or node. Agents use the same operations over MCP:
 catapult turret.
 
 ## Skeletal clips
+
+A `<model>.clips.json` next to any model splits takes by frame range, adds clips from other files
+(bound by node path) and strips root motion: see [unity-animation.md](unity-animation.md).
 
 ### Skinning modes
 

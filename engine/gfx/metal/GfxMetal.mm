@@ -79,7 +79,7 @@ public:
 #endif
         if (@available(macOS 11.0, iOS 16.4, *)) bc = bc || device_.supportsBCTextureCompression;
         switch (f) {
-            case PixelFormat::ETC2_RGB8: case PixelFormat::ETC2_RGBA8: case PixelFormat::ASTC_4x4: return apple;
+            case PixelFormat::ETC2_RGB8: case PixelFormat::ETC2_RGBA8: case PixelFormat::ASTC_4x4: case PixelFormat::ASTC_6x6: return apple;
             case PixelFormat::BC1: case PixelFormat::BC3: case PixelFormat::BC7: return bc;
             default: return true;
         }
@@ -89,6 +89,7 @@ public:
             case PixelFormat::ETC2_RGB8: return MTLPixelFormatETC2_RGB8;
             case PixelFormat::ETC2_RGBA8: return MTLPixelFormatEAC_RGBA8;
             case PixelFormat::ASTC_4x4: return MTLPixelFormatASTC_4x4_LDR;
+            case PixelFormat::ASTC_6x6: return MTLPixelFormatASTC_6x6_LDR;
 #if !TARGET_OS_IPHONE
             case PixelFormat::BC1: return MTLPixelFormatBC1_RGBA;
             case PixelFormat::BC3: return MTLPixelFormatBC3_RGBA;
@@ -242,10 +243,11 @@ public:
             if (!t.tex) { error_ = "compressed texture not supported by this GPU"; return {}; }
             const bool bc = d.format == PixelFormat::BC1 || d.format == PixelFormat::BC3 || d.format == PixelFormat::BC7;
             const NSUInteger blockBytes = d.format == PixelFormat::ETC2_RGB8 || d.format == PixelFormat::BC1 ? 8 : 16;
+            const NSUInteger blockDim = d.format == PixelFormat::ASTC_6x6 ? 6 : 4;
             for (int l = 0; l < d.levelCount; ++l) {
                 const NSUInteger w = NSUInteger(std::max(1, d.width >> l)), h = NSUInteger(std::max(1, d.height >> l));
                 [t.tex replaceRegion:MTLRegionMake2D(0, 0, w, h) mipmapLevel:NSUInteger(l)
-                           withBytes:d.levelData[l] bytesPerRow:((w + 3) / 4) * blockBytes];
+                           withBytes:d.levelData[l] bytesPerRow:((w + blockDim - 1) / blockDim) * blockBytes];
             }
             (void)bc;
             MTLSamplerDescriptor* sd = [MTLSamplerDescriptor new];
