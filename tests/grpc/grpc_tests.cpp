@@ -7,6 +7,7 @@
 #include "test.grpc.h"
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <random>
 #include <thread>
@@ -859,7 +860,88 @@ static void testExtMeta() {
     CHECK(deadClient.status() == ConnectionStatus::NetworkError && !deadClient.lastError().empty());
 }
 
-int main() {
+// Cross-process TLS check: a Linux build serves (`--serve h2|web SECONDS`), another platform's build
+// (e.g. the Windows build under Wine) connects with its own TLS backend (`--remote h2|web URL`).
+static int serve(const std::string &mode, int seconds) {
+    MockServer srv(mode == "h2" ? MockServer::Mode::Http2 : MockServer::Mode::GrpcWeb, true);
+    if (!srv.ok()) {
+        std::printf("cannot serve: %s\n", srv.error().c_str());
+        return 1;
+    }
+    installEcho(srv);
+    std::printf("%s\n", srv.url().c_str());
+    std::fflush(stdout);
+    const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+    while (std::chrono::steady_clock::now() < end) {
+        srv.poll();
+        std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
+    return 0;
+}
+
+static int remote(const std::string &mode, const std::string &url) {
+    ChannelConfig cfg;
+    cfg.target = url;
+    cfg.protocol = mode == "h2" ? Protocol::Http2 : Protocol::GrpcWeb;
+    cfg.tls.caPem = MockServer::testCaPem();
+    cfg.authToken = [] { return std::string("remote"); };
+    Channel ch(cfg);
+    aiverse_test::Echo::Client echo(ch);
+    auto run = [&](auto pred) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (!pred() && std::chrono::steady_clock::now() < end) {
+            ch.poll();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return pred();
+    };
+    bool done = false;
+    Status st;
+    aiverse_test::EchoReply rep;
+    aiverse_test::EchoRequest req;
+    req.text = "auth";
+    req.payload.assign(200000, 'z');
+    echo.Say(req, [&](const Status &s, aiverse_test::EchoReply &&r) { done = true; st = s; rep = std::move(r); });
+    CHECK(run([&] { return done; }));
+    CHECK(st.ok() && rep.text == "Bearer remote" && rep.payload == req.payload);
+    if (!st.ok())
+        std::printf("  remote unary: %s (%s)\n", st.str().c_str(), ch.lastTransportError().c_str());
+    std::vector<std::string> got;
+    bool fin = false;
+    StreamHandlers<aiverse_test::EchoReply> h;
+    h.onMessage = [&](aiverse_test::EchoReply &&r) { got.push_back(r.text); };
+    h.onFinish = [&](const Status &s) { fin = true; st = s; };
+    auto stream = echo.Chat(h);
+    for (const char *t : {"x", "y"}) {
+        aiverse_test::EchoRequest r;
+        r.text = t;
+        stream->write(r);
+    }
+    stream->writesDone();
+    CHECK(run([&] { return fin; }));
+    CHECK(st.ok() && got == std::vector<std::string>({"x!", "y!"}));
+    // Wrong host name must fail certificate verification.
+    cfg.tls.serverName = "example.com";
+    Channel bad(cfg);
+    aiverse_test::Echo::Client eb(bad);
+    done = false;
+    eb.Say(req, [&](const Status &s, aiverse_test::EchoReply &&) { done = true; st = s; });
+    const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!done && std::chrono::steady_clock::now() < end) {
+        bad.poll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(done && st.code == StatusCode::Unavailable);
+    std::printf("remote %s via %s: %d checks, %d failed (bad host: %s)\n", mode.c_str(), grpc::detail::tlsBackendName(),
+                g_checks, g_failed, st.message.c_str());
+    return g_failed ? 1 : 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc == 4 && std::string(argv[1]) == "--serve")
+        return serve(argv[2], std::atoi(argv[3]));
+    if (argc == 4 && std::string(argv[1]) == "--remote")
+        return remote(argv[2], argv[3]);
     std::printf("aiverse_grpc_tests (TLS backend: %s, %s)\n", grpc::detail::tlsBackendName(),
                 grpc::detail::tlsAvailable() ? "available" : "unavailable");
     testHelpers();
