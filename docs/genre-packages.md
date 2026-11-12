@@ -7,6 +7,7 @@ mechanics; they do not silently replace existing FPS movement, RTS abilities/dam
 |---|---|---|
 | character-locomotion | MotionConfig/State/Input, stepMotion: ground/air speed, acceleration/braking, gravity, jump buffer, coyote time, bounded extra jumps, ceiling response. LocomotionModes.h (0.2.0): stepLocomotion mode machine Ground/Air/Ledge/Ladder/Swim/Climb/Mantle with slopes, ledge grab/shimmy/climb-up, ladders, buoyant swimming, stamina-limited wall climbing and timed mantle/vault | Returns velocity, mode and events; collision owner reports grounded/ceiling, ground normal, ledges, ladders, water depth, climbable walls and obstacles, and applies movement. No physics queries, root motion or animation controller. |
 | melee-combat | AttackSet/State, phase evaluation, input buffering, allowed combo cancels, authorization callback, once-per-swing hit bookkeeping, evade/parry/block outcome | Geometry/target validation and actual damage/stamina belong to the existing combat owner. No parallel health/status system. |
+| combat-actions | Frame-keyed hitboxes + hurtboxes (sphere/capsule/yaw box) with overlap tests, self/team filtering and once-per-swing hits; dodge i-frames + cooldown; directional guard arc + perfect-parry window with re-arm; poise damage/break/recovery and hit/block/parry stun; deterministic lock-on acquire/switch/break | Composes melee-combat. Returns contacts/outcomes; damage, stamina, health and statuses stay with the existing combat owner. No per-tick sweep, animation-driven boxes, ragdoll or camera presentation. |
 | weapon-policies | Deterministic recoil recovery, seeded spread, swept projectiles with gravity, lifetime and bounded ricochets | Existing FPS ammo/reload/fire cadence remain authoritative. No penetration/material model, weapon attachments or automatic replacement of hitscan. |
 | match-rules | Warmup/live/overtime/intermission/finished, team score events, best-of rounds, draws and capture points | Native extension policies; existing built-in victory modes stay owned by their modules. No bomb/payload/extraction implementation implied. |
 | narrative-graphs | JSON/localization-key graphs, conditional choices, fact set/add transactions, visits, command deduplication and endings | Project UI/cinematics consume committed nodes. No automatic scene playback, audio, QTE or online reward grant. |
@@ -145,3 +146,54 @@ library-controlled matches completed: skirmish at tick 8081 (217 commands), FPS 
 its 1800-second limit, and the four FPS reference-template runs were 30-second smoke tests without
 winners. ASan/UBSan passed the genre and navmesh regression scenarios. Cross-platform runtime and
 rendered UI remain outside this verification.
+
+## Combat actions (combat-actions 0.1.0)
+
+Header `genre/CombatActions.h` (+ `CombatConfigured.h` settings adapters, `CombatData.h` hitbox JSON).
+Target `AIVERSE::lib_combat_actions` (depends on `lib_melee_combat`, `aiverse_engine`); native OBJECT
+modules call `aiverse_native_use_libraries(target combat-actions)`. Skill: `skills/aiverse-combat-actions`.
+
+**Shapes and hits:** Fixed metres; yaw in turns around +Y (yaw 0 faces +Z, +X is right). `CombatShape` is a
+sphere (centre a), capsule (segment a..b) or box (centre a, half extents, yaw-only rotation, radius 0).
+`overlaps` is exact for sphere/box/box-box (SAT) and uses a deterministic integer ternary search over the
+segment parameter for capsules; touching counts. `HitboxDef{id,from,to,shape}` is live for attack ages
+`[from,to)` which must lie inside the attack's active window. `collectMeleeHits` transforms hitboxes by the
+attacker pose and hurtboxes by each target pose, skips self, same nonzero team (unless friendlyFire) and
+targets already hit this swing, and records hits through `recordMeleeHit`. Contacts are sorted by target ID
+and name the first overlapping hitbox/hurtbox by ascending IDs. Invalid data or duplicate target IDs return
+nullopt without touching state. Overlaps are sampled per tick (no sweep between ticks).
+
+**Defense:** `stepDodge` (authorize callback, cooldown counted from the dodge end) and `dodgeInvulnerable`
+(`[invulnFrom,invulnTo)` from the start). `stepGuard` raises/lowers; raising opens a `parryTicks` window
+unless the previous raise was less than `rearmTicks` ago. `insideGuardArc` compares the attacker bearing with
+the defender yaw (`halfArc` turns each side). `resolveCombatContact` feeds Melee.h `resolveMeleeContact`
+(invulnerable > parry > block > hit); `unblockable` skips the guard.
+
+**Poise:** integer milli-units. `stepPoise` once per tick (initializes to maximum, refills
+`recoveryPerTick` after `recoveryDelay` since the last poise damage, resets to full after a break stun).
+`applyPoiseHit` on the same tick: Hit drains full damage + hit-stun, Blocked drains `blockScaleMilli/1000`
++ block-stun, Parried/Evaded drain nothing. Reaching 0 breaks poise (`breakStunTicks`); while broken further
+hits add nothing. `applyParryStagger` stuns the parried attacker; `interruptMelee` cancels the swing.
+
+**Lock-on:** `lockScore = distance/range*distanceWeight + |angle|/halfAngle*angleWeight`; lower wins,
+ties by smaller ID. `stepLockOn`: break on missing/untargetable/beyond `breakRange`; toggle releases or
+acquires; switch picks the nearest angular neighbour on that side among scorable candidates (no wrap),
+then distance, then ID. Candidate visibility (`targetable`) comes from the owner's authorized senses.
+
+**Settings:** optional `combat` section in `libraries/spec/gameplay.json` (configuration 0.3.2):
+dodgeTicks/dodgeInvulnFrom/dodgeInvulnTo/dodgeCooldown, blockHalfArcMilli (milli-turns), parryTicks,
+parryRearmTicks, poiseMilli, poiseRecoveryMilli, poiseDelayTicks, blockPoiseMilli, hit/block/break/parry
+stun ticks, lockRangeMilli/lockBreakMilli (milli-metres), lockHalfAngleMilli (milli-turns), lock weights.
+The loader rejects `dodgeInvulnFrom > dodgeInvulnTo`, `dodgeInvulnTo > dodgeTicks` and
+`lockRangeMilli > lockBreakMilli`. Hitboxes: `readHitboxes(json, attacks)`, see
+`examples/libraries/genre/hitboxes.json`; unknown keys/attacks, frames outside the active window, bad shapes
+and non-ascending IDs fail with path-qualified messages.
+
+**State:** `CombatActorState{dodge,guard,poise,lock}` and each member are `genre::save/load` records
+(kinds 32..36 reserved for this package), canonical and validated on load. `combatHash` / `hashCombatState`
+hash the canonical bytes for the simulation checksum. All steppers reject repeated/backwards ticks.
+`GenreConsumer.cpp` runs one swing into a defender, resolves the contact, applies poise and stores
+`genre.combat`, `genre.combat_swing` and `genre.combat_hash` in NativeState. Verified only with g++ 11
+(Linux VM): header syntax checks, `aiverse_library_genre_tests` sources built by hand (also ASan/UBSan) and
+the consumer function in a standalone driver. Full engine build, aiverse_tests, CMake isolation tests,
+native module export and headless restore matches were not run for this package.

@@ -1,0 +1,8 @@
+{
+  "attacks": [
+    {"attack": 1, "hitboxes": [
+      {"id": 1, "from": 5, "to": 7, "shape": "capsule", "a": [0, 1000, 300], "b": [0, 1000, 1500], "radiusMilli": 250},
+      {"id": 2, "from": 7, "to": 8, "shape": "box", "a": [0, 1000, 1200], "half": [600, 300, 400]}
+    ]}
+  ]
+}

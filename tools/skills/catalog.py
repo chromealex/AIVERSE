@@ -39,6 +39,7 @@ ALIASES = {
  'aiverse-narrative-graphs':'story narrative сюжет диалог', 'rts-bots-rts':'rts bot ртс бот',
  'aiverse-bots-fps':'fps bot фпс бот', 'aiverse-camera':'camera камер',
  'aiverse-orchestrator':'skill catalog orchestration скилл каталог оркестратор',
+ 'aiverse-combat-actions':'hitbox hurtbox dodge parry stagger poise lockon хитбокс уклон парир стаггер захват',
 }
 
 def generate():
