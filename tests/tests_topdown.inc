@@ -292,7 +292,18 @@ TEST(topdown_controls_sticks_keys_quantize_and_camera) {
     game::TopDownControls tc;
     tc.configure(gj, r, rts);
     CHECK(tc.active() && tc.config().buttons.size() == 1 && tc.config().buttons[0].abilityIndex == 0);
-    CHECK(tc.config().buttons[0].key == int(platform::Key::Q));
+    CHECK(tc.config().buttons[0].key == int(platform::Key::Q) && tc.config().buttons[0].weaponStep == 0);
+    {   // weapon switch buttons: a press on one is reported like an ability press, with weaponStep set
+        game::TopDownControls wc;
+        wc.configure(Json::parse(R"({"topDown": {"touchControls": "always", "buttons": [
+            {"weapon": "prev", "anchor": [1, 0.3], "offset": [-126, -40], "radius": 30},
+            {"weapon": "next", "anchor": [1, 0.3], "offset": [-50, -40], "radius": 30}]}})"), r, rts);
+        CHECK(wc.config().buttons.size() == 2 && wc.config().buttons[0].weaponStep == -1 && wc.config().buttons[1].weaponStep == 1);
+        CHECK(wc.pointerDown(7, 800 - 50, 480 * 0.3f - 40, 800, 480, true));
+        const std::vector<int> pressed = wc.takeAbilityPresses();
+        CHECK(pressed.size() == 1 && pressed[0] == 1);
+        CHECK(!wc.draw(800, 480, {1, 1}).empty());
+    }
     const float W = 1000, H = 600;
     // no input: a stop command once, then nothing
     game::TopDownFrameInput none;

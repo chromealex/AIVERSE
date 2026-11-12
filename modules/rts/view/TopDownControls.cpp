@@ -118,6 +118,7 @@ TopDownControlConfig parseTopDownControls(const Json& g, const std::vector<std::
         TopDownButtonConfig b;
         b.ability = bj.getStr("ability");
         for (size_t i = 0; i < heroAbilities.size(); ++i) if (heroAbilities[i] == b.ability) b.abilityIndex = int(i);
+        if (const std::string ws = bj.getStr("weapon"); ws == "next") b.weaponStep = 1; else if (ws == "prev") b.weaponStep = -1;
         b.key = parseKey(bj.getStr("key"));
         b.padButton = int(bj.getInt("gamepad", -1));
         readPair(bj["anchor"], b.anchor);
@@ -468,6 +469,13 @@ std::vector<ViewDrawBatch> TopDownControls::draw(float W, float H, const std::ve
         if (charge < 1) disc(b, x, y, r * 0.86f, rgba(120, 190, 255, 120), 0, charge);   // recharging: a pie
         else disc(b, x, y, r * 0.86f, rgba(120, 200, 255, held ? 250 : 200));
         ring(b, x, y, r, 3, rgba(235, 240, 255, 200));
+        if (const int ws = cfg_.buttons[i].weaponStep) {   // weapon switch: an arrow, right = next, left = previous
+            const float s = r * 0.45f * float(ws);
+            const uint32_t col = rgba(16, 20, 28, 230);
+            b.verts.push_back({x + s, y, 0, 0, col});
+            b.verts.push_back({x - s * 0.7f, y - std::abs(s), 0, 0, col});
+            b.verts.push_back({x - s * 0.7f, y + std::abs(s), 0, 0, col});
+        }
     }
     return out;
 }

@@ -31,6 +31,7 @@ struct TopDownStickConfig {
 struct TopDownButtonConfig {
     std::string ability;             // ability id of the hero type
     int abilityIndex = -1;           // resolved against the hero type
+    int weaponStep = 0;              // "weapon": "next" (+1) / "prev" (-1): switches the weapon in hand (rules "arsenal")
     int key = 0;                     // platform::Key (0: none)
     int padButton = -1;              // host gamepad button index (-1: none)
     float anchor[2] = {1, 1};        // normalized screen point the offset starts from
