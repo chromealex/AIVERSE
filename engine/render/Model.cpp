@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cmath>
 #include <stdexcept>
 
@@ -349,7 +350,8 @@ void ensureTangents(Model& m) {
 
 bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
     if (!m.vertices.empty() && !m.vb.valid()) {
-        prepareShadowBatches(m);
+        const char* shadowBatches = std::getenv("AIVERSE_AUTO_SHADOW_BATCHES");
+        if (!shadowBatches || std::string(shadowBatches) != "off") prepareShadowBatches(m);
         ensureTangents(m);
         gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = m.vertices.size() * sizeof(ModelVertex); vb.data = m.vertices.data(); vb.label = m.path.c_str();
         m.vb = dev.createBuffer(vb);

@@ -555,3 +555,6 @@ Validation: enable `AIVERSE_BUILD_HDR_TESTS` and build `aiverse_shadow_batches`.
 captures, including the RTS material-copy path. Set `AIVERSE_SHADOW_TEST_REFLECTION=1` for water
 reflection coverage. `--audit MODEL_DIRECTORY` reports per-model shadow draws before/after
 preparation; this is an asset audit, not a visible-frame or FPS measurement.
+
+For same-build editor/client A/B validation, `AIVERSE_AUTO_SHADOW_BATCHES=off` disables automatic
+preparation at upload. It does not remove batches already built by `mergeStaticPrimitives`.
