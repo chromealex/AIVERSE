@@ -1,0 +1,24 @@
+{
+  "id": "com.aiverse.genre.tower_defense",
+  "name": "Tower Defense",
+  "description": "Minimal genre mechanics sample",
+  "version": "0.1.0",
+  "module": "rts",
+  "genre": "tower-defense",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/start.json",
+      "title": "Genre arena"
+    }
+  ],
+  "sourceLanguage": "en",
+  "languages": [
+    "en"
+  ],
+  "camera": {
+    "projection": "ortho",
+    "zoom": 30,
+    "pitch": 65
+  }
+}

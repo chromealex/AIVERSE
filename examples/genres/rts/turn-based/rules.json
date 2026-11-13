@@ -1,0 +1,140 @@
+{
+  "victory": "noUnits",
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "resources": {
+    "gold": {
+      "start": 100
+    },
+    "wood": {
+      "start": 50
+    },
+    "food": {
+      "start": 20
+    }
+  },
+  "types": {
+    "hero": {
+      "health": {
+        "max": 600
+      },
+      "move": {
+        "speed": 3,
+        "radius": 0.3
+      },
+      "sight": 12,
+      "weapons": [
+        {
+          "range": 4,
+          "damage": 24,
+          "cooldown": 0.5
+        }
+      ],
+      "view": {
+        "shape": "soldier"
+      },
+      "hero": {
+        "levels": [
+          30,
+          90,
+          180
+        ],
+        "perLevel": [
+          {
+            "stat": "damage",
+            "add": 4
+          }
+        ]
+      },
+      "inventory": {
+        "slots": 6
+      },
+      "key": true,
+      "name": "Hero"
+    },
+    "enemy": {
+      "health": {
+        "max": 45
+      },
+      "move": {
+        "speed": 2,
+        "radius": 0.3
+      },
+      "sight": 12,
+      "weapons": [
+        {
+          "range": 4,
+          "damage": 3,
+          "cooldown": 0.5
+        }
+      ],
+      "view": {
+        "shape": "soldier"
+      },
+      "xp": 15,
+      "bounty": {
+        "gold": 5
+      },
+      "drops": [
+        {
+          "item": "potion",
+          "chance": 1
+        }
+      ],
+      "name": "Enemy"
+    },
+    "shop": {
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 500
+      },
+      "sight": 12,
+      "view": {
+        "shape": "house"
+      },
+      "shop": {
+        "sells": [
+          "potion",
+          "boots"
+        ],
+        "radius": 8
+      },
+      "name": "Shop"
+    }
+  },
+  "items": {
+    "potion": {
+      "cost": {
+        "gold": 10
+      },
+      "use": {
+        "heal": 100
+      },
+      "charges": 1
+    },
+    "boots": {
+      "cost": {
+        "gold": 30
+      },
+      "mods": [
+        {
+          "stat": "speed",
+          "add": 1
+        }
+      ],
+      "charges": 0,
+      "consumable": false
+    }
+  },
+  "turns": {
+    "moveSeconds": 3,
+    "attacks": 1,
+    "timeLimit": 8
+  }
+}
