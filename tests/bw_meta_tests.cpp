@@ -7,10 +7,12 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "apps/server/BwStats.h"
 #include "apps/server/GameData.h"
 #include "engine/meta/Client.h"
 #include "engine/meta/Encoding.h"
@@ -22,6 +24,7 @@
 #include "engine/meta/bw/BwNode.h"
 #include "engine/meta/bw/BwPlatformHttp.h"
 #include "engine/meta/bw/BwTcp.h"
+#include "engine/meta/bw/BwTutorials.h"
 #include <chrono>
 #include <thread>
 #include "engine/meta/bw/BwWire.h"
@@ -494,7 +497,10 @@ struct Player {
 static void pumpPlayer(Player& p, uint64_t now, double dt) {
     if (!p.net) return;
     p.net->update(now);
-    for (auto& e : p.net->takeEvents())
+    auto events = p.net->takeEvents();
+    if (std::getenv("BW_DEBUG"))
+        for (auto& e : events) std::printf("    [%s] event %d %s\n", p.name.c_str(), int(e.kind), e.text.key.c_str());
+    for (auto& e : events)
         if (e.kind == net::NetEvent::Kind::MatchEnded && !p.ended) { p.ended = true; p.result = e.value; }
     if (p.net->matchReady()) {
         auto& m = p.net->match();
@@ -535,10 +541,11 @@ TEST(bw_node_hosts_a_backend_match) {
         done(ok);
     };
     net::ServerConfig sc;
-    sc.udpPort = 0; sc.wsPort = 0; sc.log = false;
+    sc.udpPort = 0; sc.wsPort = 0; sc.log = std::getenv("BW_DEBUG") != nullptr;
     sc.surrenderCommand = game::kCmdSurrender;
     sc.gameDirs[gameId] = kMushrooms;
     sc.arbiter = netgame::makeArbiter(sc.gameDirs);
+    node.battleStats = netgame::bwBattleStats(sc.gameDirs);   // BW PlayerStatistic by re-simulation
     node.install(sc);
     net::Server server(sc);
     node.attach(server);
@@ -557,25 +564,45 @@ TEST(bw_node_hosts_a_backend_match) {
 
     // Players arrive with their tickets (as Match.onReady gave them) through the engine protocol.
     auto ticket = [&](int64_t user) { bw::BattleTicket t; t.gameId = 900001; t.userId = user; t.expiresAt = 1900000300; return bw::issueTicket(t, nc.ticketSecret); };
-    Player a{"Commander"}, b{"Rival"}, intruder{"Intruder"};
+    Player a{"Commander"}, b{"Rival"}, intruder{"Intruder"}, early{"Watcher"}, late{"LateWatcher"};
     auto connect = [&](Player& p, uint64_t key) {
         auto [c, s] = net::makeLoopbackPair({20, 5, key});
         server.addConnection(std::move(s));
         p.net = std::make_unique<net::NetClient>(std::move(c), net::ClientIdentity{p.name, gameId, key});
     };
-    connect(a, 1); connect(b, 2); connect(intruder, 3);
+    connect(a, 1); connect(b, 2); connect(intruder, 3); connect(early, 4); connect(late, 5);
+    auto spectatorTicket = [&](const char* name) {
+        bw::BattleTicket t; t.gameId = 900001; t.userId = 0; t.expiresAt = 1900000300; t.role = 1; t.name = name;
+        return bw::issueTicket(t, nc.ticketSecret);
+    };
     uint64_t now = 1000;
-    for (int i = 0; i < 40; ++i, now += 5) { server.update(now); node.update(now); pumpPlayer(a, now, .005); pumpPlayer(b, now, .005); pumpPlayer(intruder, now, .005); }
+    for (int i = 0; i < 40; ++i, now += 5) {
+        server.update(now); node.update(now);
+        for (Player* p : {&a, &b, &intruder, &early, &late}) pumpPlayer(*p, now, .005);
+    }
     bw::BattleTicket forged; forged.gameId = 900001; forged.userId = 4242; forged.expiresAt = 1900000300;
     intruder.net->joinQueue("ticket:" + bw::issueTicket(forged, "another-secret-another-secret-xx"), maps);
     a.net->joinQueue("ticket:" + ticket(4242), maps);
-    for (int i = 0; i < 100; ++i, now += 5) { server.update(now); node.update(now); pumpPlayer(a, now, .005); pumpPlayer(b, now, .005); pumpPlayer(intruder, now, .005); }
+    early.net->joinQueue("ticket:" + spectatorTicket("Watcher"), maps);   // spectator before the start
+    for (int i = 0; i < 100; ++i, now += 5) {
+        server.update(now); node.update(now); pumpPlayer(a, now, .005); pumpPlayer(b, now, .005); pumpPlayer(intruder, now, .005); pumpPlayer(early, now, .005);
+    }
     CHECK(!a.net->inMatch() && server.reservations() == 1);   // waits for the second seat
     b.net->joinQueue("ticket:" + ticket(5151), maps);
+    bool lateJoined = false, earlyWatched = false, lateWatched = false;
     for (uint64_t t0 = now; now - t0 < 600000 && !(a.ended && b.ended); now += 5) {
-        server.update(now); node.update(now); pumpPlayer(a, now, .005); pumpPlayer(b, now, .005);
+        server.update(now); node.update(now); pumpPlayer(a, now, .005); pumpPlayer(b, now, .005); pumpPlayer(early, now, .005); pumpPlayer(late, now, .005);
+        if (!lateJoined && now - t0 > 20000) { late.net->joinQueue("ticket:" + spectatorTicket("LateWatcher"), maps); lateJoined = true; }
+        earlyWatched |= early.net->inMatch() && early.net->match().localSlot == 0;
+        lateWatched |= late.net->inMatch() && late.net->match().localSlot == 0;
     }
-    for (int i = 0; i < 10; ++i, now += 5) { server.update(now); node.update(now); }
+    CHECK(earlyWatched);
+    CHECK(lateWatched);   // spectator tickets: before the start and late (history + delay)
+    auto hasResult = [&] { for (auto& p : posted) if (p.url.find("/result") != std::string::npos) return true; return false; };
+    for (int i = 0; i < 20000 && !hasResult(); ++i, now += 5) {   // the statistics re-simulation runs on a worker thread
+        server.update(now); node.update(now);
+        if (i > 10) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     CHECK(intruder.net && !intruder.net->inMatch());
     CHECK(a.ended && b.ended && a.result == b.result && a.result != 0);
     CHECK(server.reservations() == 0);
@@ -602,7 +629,42 @@ TEST(bw_node_hosts_a_backend_match) {
         if (a.result > 0) CHECK(winners == 1);
         CHECK(rep["players"][0].getInt("userId") == 4242 && rep["players"][1].getInt("userId") == 5151);
         CHECK(rep["battleResult"]["matchStatistic"].size() == 2);
+        // BW PlayerStatistic values: 71 per player, MultiplayerWins (45) for the winner, points (40) and units on the field (39).
+        const Json& ms = rep["battleResult"]["matchStatistic"];
+        CHECK(ms[0]["values"].size() == 71 && ms[1]["values"].size() == 71);
+        CHECK(rep.getStr("strErrors").find("stats") == std::string::npos);
+        int wins = 0;
+        for (size_t i = 0; i < 2; ++i) {
+            const Json& v = ms[i]["values"];
+            wins += int(v[45].integer());
+            CHECK(v[39].integer() > 0);
+            if (ms[i].getBool("winner")) CHECK(v[45].integer() == 1 && v[40].integer() > 0 && v[70].integer() > 0);
+        }
+        if (a.result > 0) CHECK(wins == 1);
+        std::printf("    stats p1:");
+        for (size_t k = 0; k < 71; ++k) if (ms[0]["values"][k].integer()) std::printf(" %zu=%lld", k, (long long)ms[0]["values"][k].integer());
+        std::printf("\n");
     }
+}
+
+TEST(bw_node_map_table_for_bunkerwars) {
+    // tools/meta/bw_map_ids.py output: BW MapHeader ids -> templates/bunkerwars maps.
+    Json cfg = Json::object();
+    cfg.set("maps", Json::string(std::string(AIVERSE_SOURCE_DIR) + "/templates/bunkerwars/bw/map_ids.json"));
+    cfg.set("gameId", Json::string("bw"));
+    bw::NodeConfig nc = bw::NodeConfig::parse(cfg);
+    CHECK(nc.maps.size() > 100 && nc.maps[2001] == "maps/2players_2001.json");
+    for (auto& [id, file] : nc.maps) {
+        std::ifstream f(std::string(AIVERSE_SOURCE_DIR) + "/templates/bunkerwars/" + file);
+        if (!f) { CHECK(!"map file of the table exists"); std::printf("    missing %s\n", file.c_str()); break; }
+    }
+    Json spec = Json::parse(readFile(kData + "game_spec.json"));
+    spec.set("mapId", Json::number(int64_t(2001)));
+    auto r = bw::reservationFromSpec(spec, nc);
+    CHECK(r && r->mapFile == "maps/2players_2001.json");
+    spec.set("mapId", Json::number(int64_t(424242)));
+    std::string err;
+    CHECK(!bw::reservationFromSpec(spec, nc, &err) && err.find("424242") != std::string::npos);
 }
 
 TEST(bw_node_cancels_when_players_do_not_come) {
@@ -875,6 +937,138 @@ TEST(bw_platform_https_transport_out_of_the_box) {
     down.call("v/news/get", Json::object(), [&](bw::ApiResult r) { res = r; done = true; });
     for (uint64_t end = wallMs() + 5000; wallMs() < end && !done; tick(5)) down.pump();
     CHECK(done && res.transport && res.error.code == int(bw::ApiCode::TransportError));
+}
+
+TEST(bw_chat_through_the_backend) {
+    // chat.* requests over the chat TCP connection, incoming packets into the backend's chat state.
+    MockServer m;
+    bw::ApiClient api(m.transport(), {"http://data.mock"});
+    bw::BwBackend backend(api);
+    meta::Client client(backend);
+    backend.setChatIdentity(4242, "Commander");
+    CHECK(client.begin({"chat", "send", "c1", Json::parse(R"({"room":"global","msg":"hi"})")}));
+    client.pump();
+    CHECK(client.reply().result.code == Code::Unavailable);   // not connected yet
+    FakeTcp chat;
+    if (!chat.open()) { std::printf("  (no loopback sockets: skipped)\n"); return; }
+    bw::ChatConnection link({{"127.0.0.1", chat.port()}}, "tok-c");
+    bw::bindChat(backend, link);
+    link.start(wallMs());
+    for (uint64_t end = wallMs() + 2000; wallMs() < end && !link.connected(); tick(2)) { link.update(wallMs()); chat.update(); }
+    CHECK(link.connected());
+    CHECK(client.begin({"chat", "send", "c2", Json::parse(R"({"room":"global","msg":"hi"})")}));
+    client.pump();
+    CHECK(client.reply().result.code == Code::Ok);
+    CHECK(client.begin({"chat", "history", "c3", Json::parse(R"({"room":"global","count":2})")}));
+    for (int i = 0; i < 100; ++i) { link.update(wallMs()); chat.update(); client.pump(); tick(2); }
+    CHECK(client.pending());   // waits for OnHistory
+    const std::string sent = chat.got.empty() ? "" : chat.got[0];
+    CHECK(sent.find(bytesOf(bw::encodeChatAuth("tok-c"))) == 0);
+    CHECK(sent.find(R"({"messageType":0,"ts":0,"room":"global","senderId":4242,"sender":"Commander","msg":"hi"})") != std::string::npos);
+    CHECK(sent.find(bytesOf(bw::encodeChatPacket(3, R"({"room":"global","historyCount":2})"))) != std::string::npos);
+    chat.send(0, bw::encodeChatServerPacket(2, 7, R"({"list":[{"room":"global","sender":"Rival","msg":"gg"}]})"));
+    chat.send(0, bw::encodeChatServerPacket(0x11, 8, R"({"id":5,"senderId":5151,"senderName":"Rival"})"));
+    for (uint64_t end = wallMs() + 2000; wallMs() < end && client.pending(); tick(2)) { link.update(wallMs()); chat.update(); client.pump(); }
+    CHECK(!client.pending() && client.reply().result.code == Code::Ok && client.reply().data["list"].size() == 1);
+    for (int i = 0; i < 20; ++i) { link.update(wallMs()); chat.update(); tick(2); }
+    CHECK(backend.chat()["rooms"]["global"].size() == 1 && backend.chat()["rooms"]["global"][0].getStr("msg") == "gg");
+    CHECK(backend.chat()["notifications"].size() == 1 && backend.chat()["notifications"][0].getInt("type") == 0x11);
+    CHECK(client.begin({"chat", "notifyAccept", "c4", Json::parse(R"({"id":5})")}));
+    client.pump();
+    for (int i = 0; i < 20; ++i) { link.update(wallMs()); chat.update(); tick(2); }
+    CHECK(chat.got[0].find(bytesOf(bw::encodeChatPacket(0x21, R"({"reqId":5,"id":5})"))) != std::string::npos);
+    link.stop();
+}
+
+TEST(bw_match_session_spectate) {
+    bw::MatchSession s;
+    s.spectate(900001, false);
+    bw::FrameReader r;
+    r.feed(s.takeOutgoing());
+    bw::Frame f;
+    CHECK(r.next(f) && f.func == "Spectate" && f.msg == R"({"roomId":900001,"custom":false})");
+    s.feed(bw::encodeFrame({"onSpectateJoin", 0, R"({"z":0,"battleHost":"node1","battlePort":27015,"battleTicket":"v1.s.t"})"}));
+    auto ev = s.takeEvents();
+    CHECK(ev.size() == 1 && ev[0].kind == bw::MatchSession::Event::Kind::SpectateJoin);
+    CHECK(s.handoff() && s.handoff()->spectator && s.handoff()->queueId() == "ticket:v1.s.t");
+    s.feed(bw::encodeFrame({"onSpectateJoin", 0, R"({"z":0,"error":"game.not_found"})"}));
+    ev = s.takeEvents();
+    CHECK(ev.size() == 1 && ev[0].kind == bw::MatchSession::Event::Kind::Error);
+}
+
+TEST(bw_meta_tutorials_runner) {
+    bw::MetaTutorials t;
+    CHECK(t.load(Json::parse(R"({"tutorials":[
+      {"name":"A","guid":"g1","forObject":"MW2.UI.Mobile.MainScreen.MainScreen","startEvent":3,
+       "conditions":[{"type":"HasKey","key":"Done","conditionValue":0,"value":0},
+                     {"type":"HasProfileContent","checkType":0,"features":[{"contentType":0,"haveNot":0,"id":7,"level":2,"conditionValue":5}],"valuesCheckType":1,
+                      "values":[{"contentType":4,"conditionValue":5,"value":100}]},
+                     {"type":"SplitTest","splitTest":"st169.a","isNot":0}],
+       "actions":[{"type":"ShowHideComponents","state":0,"tutorialTag":"Hint"},{"type":"Wait","seconds":0.5},
+                  {"type":"LockElement","tutorialTag":"Play"},{"type":"WaitButtonClick","tutorialTag":"Play"},
+                  {"type":"SetKey","key":"Done","operation":0,"value":1,"save":1},
+                  {"type":"RunTutorial","nextTutorialGuid":"g2","breakExecution":0},{"type":"PushNotification","data":{"tag":"x"}}]},
+      {"name":"B","guid":"g2","forObject":"","startEvent":5,"conditions":[{"type":"HasKey","key":"Done","conditionValue":0,"value":1},
+                     {"type":"HasKeyTimer","key":"Done","seconds":60,"result":1,"conditionValue":0,"value":1}],
+       "actions":[{"type":"WaitForClick"},{"type":"CounterAdd","id":1,"value":2}]},
+      {"name":"C","guid":"g3","forObject":"MW2.UI.Mobile.Clan.ClanScreen","startEvent":3,"conditions":[{"type":"CurrentClanSeasonHasRewards"}],"actions":[]}
+    ]})")));
+    t.setProfile(Json::parse(R"({"userId":4242,"gold":1250,"heroes":[{"clientId":7,"level":4}],"ab":{"tests":["st169.a"]}})"));
+    t.setNow(1000);
+    std::vector<std::string> log;
+    t.host.showHide = [&](const std::string& tag, bool show, const Json&) { log.push_back((show ? "show " : "hide ") + tag); };
+    t.host.lockElement = [&](const std::string& tag, const Json&) { log.push_back("lock " + tag); };
+    t.host.action = [&](const Json& a, const std::string& w) { log.push_back(a.getStr("type") + "@" + w); };
+    t.host.keyChanged = [&](const std::string& k, int64_t v, bool save) { log.push_back("key " + k + "=" + std::to_string(v) + (save ? " save" : "")); };
+    CHECK(t.windowEvent("main", bw::TutorialEvent::OnShowEnd) == 0);         // wrong event
+    CHECK(t.windowEvent("main", bw::TutorialEvent::OnWindowActive) == 1);    // engine screen id of MainScreen
+    CHECK(log.size() == 1 && log[0] == "show Hint");
+    t.update(0.3);
+    CHECK(log.size() == 1);
+    t.update(0.3);
+    CHECK(log.size() == 2 && log[1] == "lock Play");
+    t.buttonClick("Other");
+    CHECK(log.size() == 2);
+    t.buttonClick("Play");
+    CHECK(log.size() == 3 && log[2] == "key Done=1 save" && t.keys().at("Done") == 1 && t.keys().at("Done.Timer") == 1000);
+    t.keySaved();   // RunTutorial B (its conditions hold now), then A goes on
+    CHECK(log.size() == 4 && log[3] == "PushNotification@main");
+    auto running = t.runningNames();
+    CHECK(running.size() == 1 && running[0] == "B");
+    t.click();
+    CHECK(t.runningNames().empty());
+    CHECK(t.windowEvent("MainScreen", bw::TutorialEvent::OnWindowActive) == 0);   // Done = 1 now
+    t.setNow(1100);
+    CHECK(!t.run("B"));   // HasKeyTimer: the 60 s window after SetKey is over
+    // Unknown client-side conditions go to the host, else they fail and are listed.
+    CHECK(t.windowEvent("clan", bw::TutorialEvent::OnWindowActive) == 0);
+    CHECK(t.unsupported().count("CurrentClanSeasonHasRewards") == 1);
+    t.host.condition = [](const Json& c, bool& r) { r = c.getStr("type") == "CurrentClanSeasonHasRewards"; return true; };
+    CHECK(t.windowEvent("MW2.UI.Mobile.Clan.ClanScreen", bw::TutorialEvent::OnWindowActive) == 1);
+    CHECK(bw::bwCompare(2, 5, 3) && !bw::bwCompare(2, 5, 7) && bw::bwCompare(5, 2, 2));
+    CHECK(bw::MetaTutorials::windowMatches("findmatch", "MW2.UI.Mobile.FindMatch.FindMatchScreen"));
+}
+
+TEST(bw_meta_tutorials_real_data) {
+    // ui/bw_tutorials.json of templates/bunkerwars (tools/meta/bw_tutorials.py from the BW client).
+    Json doc = Json::parseFile(std::string(AIVERSE_SOURCE_DIR) + "/templates/bunkerwars/ui/bw_tutorials.json");
+    bw::MetaTutorials t;
+    CHECK(t.load(doc) && t.size() == 217);
+    t.setProfile(Json::parse(readFile(kData + "profile_get.json")));
+    int actions = 0;
+    t.host.showHide = [&](const std::string&, bool, const Json&) { ++actions; };
+    t.host.lockElement = [&](const std::string&, const Json&) { ++actions; };
+    t.host.action = [&](const Json&, const std::string&) { ++actions; };
+    std::set<std::string> windows;
+    for (auto& d : doc["tutorials"].items()) windows.insert(d.getStr("forObject"));
+    int started = 0;
+    for (auto& w : windows)
+        for (int ev = 0; ev < 5; ++ev) started += t.windowEvent(w, bw::TutorialEvent(ev));
+    for (int i = 0; i < 50; ++i) { t.update(1.0); t.click(); }
+    CHECK(started > 0 && actions > 0);   // a fresh profile starts the first-session tutorials
+    std::printf("    %d tutorials started, %d UI actions; host conditions:", started, actions);
+    for (auto& u : t.unsupported()) std::printf(" %s", u.c_str());
+    std::printf("\n");
 }
 
 int main() {

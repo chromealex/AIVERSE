@@ -12,6 +12,8 @@
 //
 // The route catalog (service.action -> path) is in BwRoutes.cpp and docs/meta-bunkerwars.md.
 #pragma once
+#include <deque>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -54,7 +56,22 @@ public:
     void pump() override { api_.pump(); }
     const Json& lastView() const { return view_; }   // last successful meta/view projection
 
+    // Chat over the BW chat TCP connection (BwTcp.h ChatConnection; bindChat wires both ways).
+    // Services: chat.send {room, msg[, messageType]}, chat.history {room[, count]} (replies with
+    // OnHistory), chat.rooms (OnRoomsList), chat.state {whereIs, state}, chat.watch {senderIds}
+    // (OnStateList), chat.notifyRead / notifyAccept / notifyDecline / notifyRemove {id[, reqId]}.
+    // Incoming messages, members and notifications are kept in chat() and in meta/view "chat".
+    std::function<bool(uint16_t type, const std::string& json)> chatSend;
+    void onChatPacket(uint16_t type, const std::string& json);
+    const Json& chat() const { return chat_; }
+    void setChatIdentity(int64_t userId, std::string name) { chatUser_ = userId; chatName_ = std::move(name); }
+
 private:
+    void chatRequest(const ServiceRequest& r, Callback cb);
+    std::deque<std::pair<uint16_t, Callback>> chatWaiting_;
+    Json chat_ = Json::object();
+    int64_t chatUser_ = 0;
+    std::string chatName_;
     ApiClient& api_;
     int64_t mask_;
     int64_t revision_ = 0;

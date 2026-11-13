@@ -20,6 +20,7 @@
 #include <fstream>
 #include <memory>
 #ifndef __EMSCRIPTEN__
+#include "apps/server/BwStats.h"
 #include "engine/meta/bw/BwNode.h"
 #endif
 #include "modules/rts/RtsModule.h"
@@ -85,6 +86,7 @@ int main(int argc, char** argv) {
             auto nc = meta::bw::NodeConfig::parse(Json::parseFile(bwNodePath));
             if (nc.clientPort == 0) nc.clientPort = cfg.udpPort;
             bwNode = std::make_unique<meta::bw::BattleNode>(nc);
+            bwNode->battleStats = netgame::bwBattleStats(cfg.gameDirs);   // BW PlayerStatistic by re-simulation
             bwNode->install(cfg);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "bw node config: %s\n", e.what());

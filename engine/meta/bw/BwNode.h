@@ -10,6 +10,8 @@
 #ifndef __EMSCRIPTEN__
 #include <deque>
 #include <functional>
+#include <future>
+#include <vector>
 #include <map>
 #include <optional>
 #include <string>
@@ -31,7 +33,7 @@ struct NodeConfig {
     std::string matchmakerUrl;                // e.g. http://matchmaker:8081/internal/
     uint32_t heartbeatMs = 5000;
     std::string gameId;                       // engine game id hosting the battles
-    std::map<int, std::string> maps;          // BW mapId -> engine map file ("maps/bw_101.json")
+    std::map<int, std::string> maps;          // BW mapId -> engine map file; config "maps" = object or table file path
     std::string defaultMap;                   // used when a mapId is not listed ("" = reject)
     uint32_t joinTimeoutSec = 30;
     net::RoomSettings settings;
@@ -43,8 +45,11 @@ struct NodeConfig {
 
 // GameSpec -> engine reservation. Seats keep map order; bots stay bots.
 std::optional<net::Reservation> reservationFromSpec(const Json& spec, const NodeConfig& cfg, std::string* error = nullptr);
-// The meta's GameReport for a finished (closedFrom RESULT) or cancelled (PROGRESS) match.
-Json gameReport(const Json& spec, const net::ExternalMatchEnd& end, const std::string& replayBase64);
+// Per player slot (1..N) BW PlayerStatistic values (71, PlayerStatistic.Key order); empty = none.
+using BattleStats = std::vector<std::vector<double>>;
+// The meta's GameReport for a finished (closedFrom RESULT) or cancelled (PROGRESS) match. stats[slot]
+// fills matchStatistic[i].values for the player in map slot i + 1.
+Json gameReport(const Json& spec, const net::ExternalMatchEnd& end, const std::string& replayBase64, const BattleStats& stats = {});
 Json nodeHeartbeat(const NodeConfig& cfg, int games, int players, bool draining);
 
 class BattleNode {
@@ -56,9 +61,13 @@ public:
     bool listen(std::string* error = nullptr);       // internal HTTP API
     void update(uint64_t nowMs);                     // after Server::update
     bool draining() const { return draining_; }
-    size_t pendingReports() const { return outbox_.size(); }
+    size_t pendingReports() const { return outbox_.size() + reports_.size(); }
+    ~BattleNode();
     std::function<int64_t()> clockSec;               // unix seconds for ticket expiry (default: system clock)
     std::function<std::string(const std::string& replayFile)> readReplay;   // default: whole file, base64
+    // Battle statistics of a finished match (apps/server: re-simulation + BwStatsCollector). Runs on a
+    // worker thread; the GameReport is posted when it is done. Empty = reports without values.
+    std::function<BattleStats(const net::ExternalMatchEnd&, std::string& error)> battleStats;
     // Test hook: outgoing internal requests go here instead of the network.
     std::function<void(const HttpRequest&, std::function<void(HttpResponse)>)> transportOverride;
     HttpResponse handle(const HttpRequest& req);     // internal API (public for tests)
@@ -76,6 +85,9 @@ private:
     bool draining_ = false;
     uint64_t now_ = 0, lastHeartbeat_ = 0;
     std::deque<Outgoing> outbox_;
+    struct PendingReport { Json spec; net::ExternalMatchEnd end; std::string replay; std::future<std::pair<BattleStats, std::string>> stats; };
+    std::vector<PendingReport> reports_;
+    void postReport(const Json& spec, const net::ExternalMatchEnd& e, const std::string& replay, const BattleStats& stats, const std::string& err);
     int inFlight_ = 0;
 };
 

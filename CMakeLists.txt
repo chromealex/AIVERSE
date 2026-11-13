@@ -292,7 +292,7 @@ if(NOT EMSCRIPTEN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/battle/BattleLoad
     target_link_libraries(aiverse_battle_rts PUBLIC aiverse_battle_load aiverse_game)
 endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/server/GameData.cpp")
-    add_library(aiverse_net_game STATIC apps/server/GameData.cpp)
+    add_library(aiverse_net_game STATIC apps/server/GameData.cpp apps/server/BwStats.cpp)   # BwStats: agent-bw-meta
     target_link_libraries(aiverse_net_game PUBLIC aiverse_net_server aiverse_game)
 endif()
 # Bunker Wars adapter (agent-bw-meta, docs/meta-bunkerwars.md): default HTTPS transport on the

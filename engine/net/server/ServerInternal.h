@@ -90,6 +90,7 @@ struct ReservedMatch {                     // waiting for its players
     Reservation spec;
     uint64_t createdAt = 0;
     std::map<size_t, uint32_t> seated;    // seat index -> client id
+    std::vector<uint32_t> spectators;     // watchers waiting for the start
     MapInfo map;                          // from the first player (file + data hash + teams)
 };
 

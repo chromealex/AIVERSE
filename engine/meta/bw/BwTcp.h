@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "BwBackend.h"
 #include "BwMatch.h"
 #include "engine/net/Socket.h"
 
@@ -105,6 +106,8 @@ private:
 };
 
 // Chat connection: auth packet with the token, chunked server packets, reconnect after a drop.
+// bindChat(backend, chat): chat.* requests go out through it, and update() hands every packet to
+// the backend (chat state, notifications, pending history/rooms replies).
 class ChatConnection {
 public:
     ChatConnection(std::vector<HostPort> hosts, std::string token) : hosts_(std::move(hosts)), token_(std::move(token)) {}
@@ -114,6 +117,7 @@ public:
     std::vector<ChatPacket> takePackets() { return std::move(packets_); }
     bool connected() const { return link_.state() == TcpLink::State::Connected; }
     void stop() { link_.close(); stopped_ = true; }
+    std::function<void(const ChatPacket&)> onPacket;   // set: packets go here instead of takePackets()
 
 private:
     std::vector<HostPort> hosts_;
@@ -125,6 +129,8 @@ private:
     uint64_t retryAt_ = 0;
     bool stopped_ = false, wasConnected_ = false;
 };
+
+void bindChat(BwBackend& backend, ChatConnection& chat);
 
 } // namespace aiverse::meta::bw
 #endif

@@ -3,6 +3,8 @@
 // human seats are taken, and ServerConfig::onExternalMatchEnd reports the outcome (or the cancel).
 #include "ServerInternal.h"
 
+#include <algorithm>
+
 namespace aiverse::net {
 
 bool Server::reserve(Reservation r, std::string* error) {
@@ -27,22 +29,51 @@ bool Server::reserve(Reservation r, std::string* error) {
 size_t Server::reservations() const { return impl_->reserved.size(); }
 
 void Server::Impl::onTicketJoin(Client& c, const std::string& ticket, const std::vector<MapInfo>& maps) {
-    std::string externalId;
-    uint64_t userId = 0;
-    if (!cfg.ticketCheck || !cfg.ticketCheck(ticket, externalId, userId)) {
+    TicketInfo info;
+    if (!cfg.ticketCheck || !cfg.ticketCheck(ticket, info)) {
         sendError(c, ErrorCode::NoSuchRoom, NetText("net.error.no_such_room"));
         return;
     }
+    const std::string externalId = info.externalId;
+    const uint64_t userId = info.userId;
     auto it = reserved.find(externalId);
     if (it == reserved.end()) {
-        // Already running: a player whose ticket names a live match comes back through Hello resume.
-        sendError(c, ErrorCode::NoSuchRoom, NetText("net.error.no_such_room"));
+        // Running already: spectators join late (history + delay); a player whose ticket names a live
+        // match comes back through the Hello resume instead.
+        Room* live = nullptr;
+        for (auto& [id, r] : rooms) if (r->externalId == externalId && r->match) live = r.get();
+        if (info.spectator && live && live->settings.allowSpectators) {
+            bool hasMap = false;
+            for (auto& m : maps) hasMap |= m.file == live->map.file && m.dataHash == live->map.dataHash;
+            if (!hasMap || c.gameId != live->gameId) { sendError(c, ErrorCode::DataMismatch, NetText("net.error.data_mismatch")); return; }
+            if (c.roomId) leaveRoom(c);
+            leaveQueue(c);
+            if (!info.name.empty()) c.name = info.name;
+            log("client #%u '%s' watches external match %s", c.id, c.name.c_str(), externalId.c_str());
+            joinRoom(c, *live, true);
+            return;
+        }
+        sendError(c, ErrorCode::NoSuchRoom, NetText(info.spectator && live ? "net.error.no_spectators" : "net.error.no_such_room"));
         return;
     }
     ReservedMatch& R = it->second;
     if (c.gameId != R.spec.gameId) { sendError(c, ErrorCode::DataMismatch, NetText("net.error.data_mismatch")); return; }
     const MapInfo* mine = nullptr;
     for (auto& m : maps) if (m.file == R.spec.mapFile) { mine = &m; break; }
+    if (info.spectator) {   // waits for the start next to the players
+        if (!mine || (!R.map.file.empty() && R.map.dataHash != mine->dataHash) || !R.spec.settings.allowSpectators) {
+            sendError(c, ErrorCode::DataMismatch, NetText("net.error.data_mismatch"));
+            return;
+        }
+        if (c.roomId) leaveRoom(c);
+        leaveQueue(c);
+        if (!info.name.empty()) c.name = info.name;
+        if (std::find(R.spectators.begin(), R.spectators.end(), c.id) == R.spectators.end()) R.spectators.push_back(c.id);
+        QueueStatusMsg q;
+        q.state = 1; q.queueId = "ticket"; q.inQueue = uint32_t(R.seated.size());
+        send(c, encode(q));
+        return;
+    }
     if (!mine || mine->players() != R.spec.seats.size() || (!R.map.file.empty() && R.map.dataHash != mine->dataHash)) {
         sendError(c, ErrorCode::DataMismatch, NetText("net.error.data_mismatch"));
         return;
@@ -69,9 +100,11 @@ void Server::Impl::onTicketJoin(Client& c, const std::string& ticket, const std:
 }
 
 void Server::Impl::releaseSeat(uint32_t clientId) {
-    for (auto& [id, R] : reserved)
+    for (auto& [id, R] : reserved) {
         for (auto it = R.seated.begin(); it != R.seated.end();)
             it = it->second == clientId ? R.seated.erase(it) : std::next(it);
+        R.spectators.erase(std::remove(R.spectators.begin(), R.spectators.end(), clientId), R.spectators.end());
+    }
 }
 
 void Server::Impl::startReserved(const std::string& externalId) {
@@ -99,6 +132,8 @@ void Server::Impl::startReserved(const std::string& externalId) {
             s.kind = SlotKind::Bot; s.name = seat.name.empty() ? "@net.bot" : seat.name; s.ready = true;
         }
     }
+    for (uint32_t id : R.spectators)
+        if (Client* c = client(id); c && c->conn) { c->roomId = r.id; r.spectators.push_back(id); }
     log("external match %s starts in room #%u", externalId.c_str(), r.id);
     startMatch(r);
     // The backend identifies players by its user ids: results and resumes use them, not client keys.

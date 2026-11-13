@@ -68,6 +68,14 @@ void MatchSession::reconnect(int64_t roomId, int lastTick) {
     j.set("lastTick", Json::number(int64_t(lastTick)));
     send("MatchReconnect", j.dump(-1));
 }
+void MatchSession::spectate(int64_t roomId, bool customRoom) {
+    Json j = Json::object();
+    j.set("roomId", Json::number(roomId));
+    j.set("custom", Json::fromBool(customRoom));
+    send("Spectate", j.dump(-1));
+    handoff_.reset();
+}
+
 void MatchSession::ping(int64_t ms, int tick) {
     send("GamePing", "{\"ms\":" + std::to_string(ms) + ",\"tick\":" + std::to_string(tick) + "}");
 }
@@ -118,6 +126,12 @@ void MatchSession::handle(Frame f) {
             handoff_ = h;
         }
         if (e.json.isObject() && !e.json.getStr("error").empty()) e.kind = Event::Kind::Error;
+    } else if (fn == "onSpectateJoin") {   // SpectateJoinTO {z, error, battleHost, battlePort, battlePortSsl, battleTicket}
+        e.kind = e.json.isObject() && e.json.getStr("error").empty() ? Event::Kind::SpectateJoin : Event::Kind::Error;
+        if (e.kind == Event::Kind::SpectateJoin) {
+            handoff_ = parseHandoff(e.json);
+            if (handoff_) handoff_->spectator = true;
+        }
     } else if (fn == "onGamePing" || fn == "onPing" || fn == "onPingT") {
         e.kind = Event::Kind::Pong;
     } else if (fn == "Match.onProgressUpdate" || fn == "Match.onProgressReady") {
