@@ -28,6 +28,14 @@ struct ModelMergeResult {
 // larger than maxExtent and when merging would not reduce the draw count.
 // Opaque, shadow-casting materials without a shader graph (same face culling) also get one shadow
 // draw for all of them (MeshDef::shadowBatch): their shadows need no material.
+// Build one opaque shadow batch per compatible mesh without changing nodes, materials or
+// visible primitives. Reuses contiguous index ranges; otherwise appends indices only.
+// Call before upload, after geometry preparation. Existing batches and geometry/variant/
+// skinned/morphing meshes are left alone. Returns the number of newly covered primitives.
+size_t prepareShadowBatches(Model& model);
+// Material copies/overrides may use the batch only while all covered parts still agree.
+bool shadowBatchCompatible(const MeshDef& mesh, const std::vector<Material>& materials);
+
 ModelMergeResult mergeStaticPrimitives(Model& model, const ModelMergeOptions& options = {});
 
 }

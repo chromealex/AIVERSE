@@ -1,6 +1,7 @@
 // Renderer3D: models (PBR materials, GPU skinning, alpha modes) — shader permutations, culling,
 // sorting and the per-draw uniform blocks. See ModelShaders.h for the uniform layouts.
 #include "Renderer3D.h"
+#include "ModelMerge.h"
 #include "ModelShaders.h"
 #include "Animation.h"
 #include "ModelVisibility.h"
@@ -327,9 +328,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         }
         ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
         // Shadow batch (mergeStaticPrimitives): one shadow draw covers the opaque parts of the mesh.
-        // Material overrides may change what casts, so they draw the parts one by one.
+        // Material copies are common in game views; only shadow-incompatible overrides disable batching.
         const MeshDef& drawMesh = m->meshes[size_t(meshIndex)];
-        const bool shadowBatch = drawMesh.shadowBatch.indexCount > 0 && !m->geometry && !d.materials && !d.nodeMaterial && d.variant < 0;
+        const bool shadowBatch = !m->geometry && !d.nodeMaterial && d.variant < 0 && shadowBatchCompatible(drawMesh, mats);
         auto addItem = [&](const Primitive& p, uint8_t shadowRole) {
             if (p.indexCount == 0) return;
             int mi = p.material;
@@ -488,7 +489,7 @@ void Renderer3D::renderModels(int phase) {
         if(take&&phase==0&&!it.mat->shaderGraph&&it.joints<0&&!it.baked&&it.morph<0)
             take=geometryBoxVisible(lightViewProj_*it.world,it.prim->boundsMin,it.prim->boundsMax);
         // Reflection has its own view, never consume main-view occlusion there.
-        if (phase == 1 && !geometryMainView_) take = !blended && (it.mat->shaderGraph || geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax));
+        if (phase == 1 && !geometryMainView_) take = it.shadowRole != 2 && !blended && (it.mat->shaderGraph || geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax));
         if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && !it.mat->shaderGraph && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
             geometryOcclusion_.hidden(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax)) {
             if (phase == 1 || phase == 2) ++geometryStats_.occluded;

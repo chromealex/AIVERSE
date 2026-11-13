@@ -1,5 +1,6 @@
 #include "Model.h"
 #include "ModelClips.h"
+#include "ModelMerge.h"
 #include "Renderer3D.h"
 #include "LightmapUv.h"
 
@@ -348,6 +349,7 @@ void ensureTangents(Model& m) {
 
 bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
     if (!m.vertices.empty() && !m.vb.valid()) {
+        prepareShadowBatches(m);
         ensureTangents(m);
         gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = m.vertices.size() * sizeof(ModelVertex); vb.data = m.vertices.data(); vb.label = m.path.c_str();
         m.vb = dev.createBuffer(vb);

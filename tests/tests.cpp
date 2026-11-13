@@ -13010,6 +13010,66 @@ TEST(models_skinned_autolod_inherits_palette) {
     CHECK(rejected);
 }
 
+#include "engine/render/ModelMerge.h"
+
+TEST(model_shadow_batches_preserve_visible_geometry) {
+    using namespace aiverse::render;
+    auto make = [] {
+        Model m; m.materials.resize(4);
+        MeshDef mesh;
+        for (int k = 0; k < 4; ++k) {
+            Primitive p; p.material = k; p.firstIndex = uint32_t(m.indices.size()); p.indexCount = 3;
+            for (int j = 0; j < 3; ++j) {
+                ModelVertex v; v.pos = {float(k*2 + (j == 1)), 0, float(j == 2)};
+                m.indices.push_back(uint32_t(m.vertices.size())); m.vertices.push_back(v);
+            }
+            mesh.primitives.push_back(p);
+        }
+        m.meshes.push_back(mesh); Node node; node.mesh = 0; m.nodes.push_back(node); m.finalize(); return m;
+    };
+    Model m = make(); const auto original = m.indices;
+    CHECK(prepareShadowBatches(m) == 4);
+    CHECK(m.indices == original && m.vertices.size() == 12 && m.nodes.size() == 1);
+    CHECK(m.meshes[0].primitives.size() == 4 && m.meshes[0].shadowBatch.indexCount == 12);
+    CHECK(m.meshes[0].shadowBatch.boundsMax.x == 7);
+    for (int i = 0; i < 4; ++i) {
+        CHECK(m.meshes[0].primitives[i].firstIndex == uint32_t(i*3));
+        CHECK(m.meshes[0].primitives[i].material == i && m.meshes[0].primitives[i].shadowBatched);
+    }
+    CHECK(prepareShadowBatches(m) == 0 && m.indices == original);
+    // A masked gap must not leak into the opaque batch; visible index ranges stay intact.
+    m = make(); m.materials[1].alpha = AlphaMode::Mask; m.materials[3].doubleSided = true;
+    CHECK(prepareShadowBatches(m) == 2);
+    CHECK(m.indices.size() == 18 && std::equal(original.begin(), original.end(), m.indices.begin()));
+    CHECK(std::vector<uint32_t>(m.indices.begin()+12,m.indices.end()) == std::vector<uint32_t>({0,1,2,6,7,8}));
+    CHECK(!m.meshes[0].primitives[1].shadowBatched && !m.meshes[0].primitives[3].shadowBatched);
+    // Choose the larger culling group, never mix one- and two-sided casters.
+    m = make(); for (int i=1;i<4;++i) m.materials[i].doubleSided = true;
+    CHECK(prepareShadowBatches(m) == 3 && !m.meshes[0].primitives[0].shadowBatched);
+    m = make(); m.materials[0].transparent = true; m.materials[1].castShadow = false; m.materials[2].alpha = AlphaMode::Blend;
+    CHECK(prepareShadowBatches(m) == 0);
+    m = make(); m.meshes[0].primitives[0].morphTargets = 1; CHECK(prepareShadowBatches(m) == 0);
+    m = make(); m.skins.resize(1); CHECK(prepareShadowBatches(m) == 0);
+    m = make(); m.meshes.push_back(m.meshes[0]); m.meshes[0].lods.push_back({1, 10}); CHECK(prepareShadowBatches(m) == 8);
+    m = make(); m.meshes[0].deformable = true; CHECK(prepareShadowBatches(m) == 0);
+    m = make(); m.meshes[0].primitives[0].variantMaterial = {1}; CHECK(prepareShadowBatches(m) == 0);
+}
+
+TEST(model_shadow_batches_material_overrides) {
+    using namespace aiverse::render;
+    MeshDef mesh; Primitive p; p.shadowBatched = true; p.indexCount = 3;
+    mesh.primitives = {p, p}; mesh.primitives[1].material = 1; mesh.shadowBatch.indexCount = 6;
+    std::vector<Material> mats(2);
+    CHECK(shadowBatchCompatible(mesh, mats));
+    mats[1].baseColor = {0, 1, 0, 1}; CHECK(shadowBatchCompatible(mesh, mats));
+    mats[1].alpha = AlphaMode::Mask; CHECK(!shadowBatchCompatible(mesh, mats));
+    mats[1] = Material{}; mats[1].doubleSided = true; CHECK(!shadowBatchCompatible(mesh, mats));
+    mats[0].doubleSided = true; CHECK(shadowBatchCompatible(mesh, mats));
+    mats[1].castShadow = false; CHECK(!shadowBatchCompatible(mesh, mats));
+    mats[1] = Material{}; mats[1].transparent = true; CHECK(!shadowBatchCompatible(mesh, mats));
+    CHECK(!shadowBatchCompatible(mesh, {}));
+}
+
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {
         if (argc > 1 && std::string(name).find(argv[1]) == std::string::npos) continue;   // aiverse_tests [name filter]

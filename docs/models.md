@@ -529,9 +529,29 @@ are merged, so material overrides by name still apply.
 Shadows of the merged opaque parts are one draw: the opaque, shadow-casting materials without a
 shader graph (and with the same face culling) are laid out contiguously, and `MeshDef::shadowBatch`
 covers their index range; those primitives are marked `shadowBatched` and skipped in shadow passes
-(sun and spot). Material overrides (`ModelDraw::materials`, `nodeMaterial`, variants) fall back to
-per-part shadow draws. The car: 98 → 16 draw calls (14 materials + 1 shadow + ground), same image.
+(sun and spot). Shadow-incompatible material overrides, `nodeMaterial` and variants fall back to
+per-part shadow draws. Compatible material copies retain batching. The car: 98 → 16 draw calls (14 materials + 1 shadow + ground), same image.
 
 `aiverse_modelview` merges by default and shows `parts N -> M, shadow 1 draw for K`; `--no-merge` draws the model as
 authored. The RTS view does not merge yet: its model cache is shared between unit types that may
 address nodes by name.
+
+### Automatic per-mesh shadow batches
+
+`uploadModel` calls `prepareShadowBatches` before creating GPU buffers. This also handles models
+that already have one primitive per material: no visible primitives, vertices, materials or node
+transforms change. A mesh's compatible opaque casters share one shadow draw. Contiguous index
+ranges are reused without extra geometry; otherwise only a combined index range is appended.
+The largest group with matching face culling is selected; other parts keep their own draws.
+
+Masked, blended, transparent, non-casting and shader-graph materials are excluded. Built geometry,
+material variants and skins are skipped; deformable meshes and morphs retain their
+existing path. Each LOD mesh gets its own batch. Existing batches are preserved. Material copies are checked at submission, so
+changing a part's shadow behavior restores per-part shadow draws. Node transforms remain intact,
+including procedural rigid motion. Shadow-only batches are excluded from reflection color passes.
+
+Validation: enable `AIVERSE_BUILD_HDR_TESTS` and build `aiverse_shadow_batches`. Run it with
+`MODEL.glb OUTPUT_PREFIX` to compare real-backend draw counts and pixel-identical before/after
+captures, including the RTS material-copy path. Set `AIVERSE_SHADOW_TEST_REFLECTION=1` for water
+reflection coverage. `--audit MODEL_DIRECTORY` reports per-model shadow draws before/after
+preparation; this is an asset audit, not a visible-frame or FPS measurement.
