@@ -877,7 +877,7 @@ private:
     std::shared_ptr<const struct BwAIConfig> bwAI_;   // agent-bw-ai
     mutable std::vector<uint8_t> bwBots_;             // agent-bw-ai: bot slots of this process (presentation-like, never read by the sim)
     void bwNoteProduced(Simulation& sim, Entity e, int n);   // RtsBwAISim.cpp: per point produced units
-    bool hypnoticSend(Simulation& sim, const Command& cmd);  // RtsBwAISim.cpp: kCmdSend out of a hypnotised garrison
+    bool hypnotisedFlagSend(Simulation& sim, const Command& cmd);  // RtsBwAISim.cpp: kCmdSend out of a hypnotised garrison
     Json generated_;                 // generated map (see generatedMap())
     void setupMap(Simulation& sim, const Json& map);
     // ---- planets (RtsPlanets.cpp)

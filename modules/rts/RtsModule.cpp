@@ -1068,7 +1068,7 @@ void RtsModule::applyCommand(Simulation& sim, const Command& cmd) {
     if (cmd.type == kCmdScript) { script_->runCommand(sim, cmd); return; }   // rules "commands" (RtsScriptCommands.cpp)
     if (cmd.type == kCmdAutoBuild) { script_->callStd(sim, StdFn::AutoBuild, {cmd.player, cmd.param}); return; }   // lua/commands.lua
 
-    if (cmd.type == kCmdSend && hypnoticSend(sim, cmd)) return;   // agent-bw-ai: BW PointsHypnosis
+    if (cmd.type == kCmdSend && hypnotisedFlagSend(sim, cmd)) return;   // agent-bw-ai: BW PointsHypnosis
     std::vector<Entity> sel;
     if (cmd.type == kCmdSend && rules_.advancedEffects && hypnoticSend(sim, cmd)) return;   // a hypnotised garrison (RtsSkillObjects.cpp)
     for (Entity e : cmd.units) {

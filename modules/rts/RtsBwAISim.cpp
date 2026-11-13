@@ -18,7 +18,7 @@ void RtsModule::bwNoteProduced(Simulation& sim, Entity e, int n) {
 // kCmdSend from a structure the sender does not own: allowed while it carries a "hypnotised" status the sender
 // applied. The units stay the owner's (or become the sender's with captureSent); the status ends with the send
 // (BW Modificator.OnUnitsMoved -> Deactivate). Returns true when the command was such a send.
-bool RtsModule::hypnoticSend(Simulation& sim, const Command& cmd) {
+bool RtsModule::hypnotisedFlagSend(Simulation& sim, const Command& cmd) {
     if (!rules_.advancedEffects || cmd.type != kCmdSend) return false;
     World& w = sim.world();
     bool handled = false;
