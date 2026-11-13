@@ -130,6 +130,7 @@ def main():
         assert s["ui-click"]["files"] == ["audio/Audio/UI/click - one.wav", "audio/Audio/UI/click2.wav"], s["ui-click"]
         assert s["ui-click"]["bus"] == "ui" and s["ui-click"]["maxInstances"] == 2 and s["ui-click"]["steal"] == "none"
         assert s["battleend-victory"]["bus"] == "sfx" and ev["keys"]["battleend-victory"]["chance"] == 0.5
+        assert s["battleend-victory"]["chance"] == 0.5 and "chance" not in s["ui-click"]
         m = a["music"]
         assert m["map-background"]["layers"][1] == {"file": "audio/Audio/hard.ogg", "intensity": 0.5, "volume": 0.8}, m["map-background"]
         assert m["main_menu"]["files"] == ["audio/Audio/intro.ogg", "audio/Audio/loop.ogg"] and m["main_menu"]["loop"]

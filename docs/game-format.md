@@ -392,6 +392,7 @@ a sound can override them and add `air` / `reverb` multipliers (below).
 | `steal` | for `maxInstances`: `farthest` (default), `oldest`, `quietest`, `none` — see "groups" |
 | `group` | a group name or an array of up to 4: limits shared with other sounds (see "groups") |
 | `cooldown` | seconds between two starts (0) — 40 archers firing together make a few sounds, not 40 |
+| `chance` | probability (0..1, default 1) that a play starts at all — barks and ambience that should not fire every time; a skipped play does not start the cooldown |
 | `priority` | -100..100 (0): when all voices are busy, the lowest priority (oldest first) is stopped; a new sound below everything playing is dropped |
 | `loop` | loops until stopped (false) |
 | `model`, `minDistance`, `maxDistance`, `rolloff` | override the `spatial` defaults: small sounds (footsteps, swords) fade early, explosions carry far |

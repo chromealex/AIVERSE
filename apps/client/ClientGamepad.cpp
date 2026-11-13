@@ -30,11 +30,23 @@ ClientGamepad::Binding ClientGamepad::parseBinding(const std::string& s) {
     else if (s == "rightClick") b.kind = Binding::RightClick;
     else if (s == "middleClick") b.kind = Binding::MiddleClick;
     else if (s == "pan") b.kind = Binding::Pan;
+    else if (s == "upgrade" || s == "cancel" || s.rfind("send:", 0) == 0 || s.rfind("ability:", 0) == 0 ||
+             s.rfind("convert:", 0) == 0 || s.rfind("event:", 0) == 0) {
+        b.kind = Binding::Action;
+        b.action = s;
+    }
     else if (s.rfind("key:", 0) == 0) {
         b.key = keyFromName(s.substr(4));
         if (b.key != Key::Unknown) b.kind = Binding::Key;
     }
     return b;
+}
+
+int ClientGamepad::slotFromName(const std::string& s) {
+    if (s == "lt") return kLT;
+    if (s == "rt") return kRT;
+    PadButton b = platform::padButtonFromName(s);
+    return b == PadButton::Count ? -1 : int(b);
 }
 
 void ClientGamepad::configure(const Json& manifest) {
@@ -49,14 +61,39 @@ void ClientGamepad::configure(const Json& manifest) {
     snapRadius_ = float(snap["radius"].toDouble(70));
     flick_ = snap.getBool("flick", true);
     for (auto& b : bindings_) b = Binding{};
+    chords_.clear();
     bindings_[int(PadButton::A)] = parseBinding("click");
     bindings_[int(PadButton::B)] = parseBinding("rightClick");
     bindings_[int(PadButton::Start)] = parseBinding("key:Escape");
     for (PadButton d : {PadButton::Up, PadButton::Down, PadButton::Left, PadButton::Right}) bindings_[int(d)] = parseBinding("pan");
-    for (const auto& [name, v] : g["buttons"].members()) {
-        PadButton b = platform::padButtonFromName(name);
-        if (b != PadButton::Count) bindings_[int(b)] = parseBinding(v.str());
+    auto chord = [&](const std::string& key, const std::string& what) {
+        const size_t plus = key.find('+');
+        if (plus == std::string::npos) return;
+        Chord c;
+        c.mod = slotFromName(key.substr(0, plus));
+        c.button = slotFromName(key.substr(plus + 1));
+        c.binding = parseBinding(what);
+        if (c.mod < 0 || c.button < 0) return;
+        for (auto& o : chords_)
+            if (o.mod == c.mod && o.button == c.button) { o = c; return; }
+        chords_.push_back(c);
+    };
+    if (g.getStr("scheme", "") == "bunkerwars") {
+        // Bunker Wars InputConfig.asset (joystickItems; JoystickButton BottomRow1 / 2 = A / B, TopRow1 / 2 = X / Y)
+        const char* slot[] = {"right", "down", "left", "up"};   // SelectSlot1..4 on DPadRight / Down / Left / Up (mode Default)
+        for (int i = 0; i < 4; i++) bindings_[slotFromName(slot[i])] = parseBinding("ability:" + std::to_string(i + 1));
+        chord("rb+b", "send:25"); chord("rb+a", "send:50"); chord("rb+x", "send:75"); chord("rb+y", "send:100");   // mode UnitsMove (R1)
+        chord("lb+a", "upgrade"); chord("lb+x", "convert:bunker"); chord("lb+y", "convert:tower"); chord("lb+b", "convert:smithy");  // UpgradeMenu (L1)
+        chord("a+a", "upgrade");                                                                     // BottomRow1 twice
+        chord("lt+b", "event:emotion1"); chord("lt+a", "event:emotion2"); chord("lt+x", "event:emotion3"); chord("lt+y", "event:emotion4");  // Emotion (L2)
     }
+    for (const auto& [name, v] : g["buttons"].members()) {
+        int b = slotFromName(name);
+        if (b >= 0) bindings_[b] = parseBinding(v.str());
+    }
+    for (const auto& [name, v] : g["chords"].members()) chord(name, v.str());
+    for (auto& m : isMod_) m = false;
+    for (const auto& c : chords_) if (c.mod != c.button) isMod_[c.mod] = true;
 }
 
 ClientGamepad::Frame ClientGamepad::update(const platform::GamepadState& pad, float dt, float w, float h, const std::vector<Target>& targets) {
@@ -123,9 +160,41 @@ ClientGamepad::Frame ClientGamepad::update(const platform::GamepadState& pad, fl
     };
     if (std::fabs(x_ - ox) > 0.01f || std::fabs(y_ - oy) > 0.01f) f.events.push_back(ev(platform::EventType::MouseMove));
 
-    for (int i = 0; i < int(PadButton::Count); i++) {
+    const bool trig[2] = {lt > 0.5f, rt > 0.5f};
+    auto isDown = [&](int i) { return i < kLT ? pad.buttons[i] : trig[i - kLT]; };
+    auto wasDown = [&](int i) { return i < kLT ? pad.prev[i] : trigPrev_[i - kLT]; };
+    auto act = [&](const Binding& b) { f.actions.push_back({b.action, x_, y_, originX_, originY_}); };
+    for (int i = 0; i < kSlots; i++) {
+        lastPress_[i] += dt;
         const Binding& b = bindings_[i];
-        bool down = pad.buttons[i], was = pad.prev[i];
+        const bool down = isDown(i), was = wasDown(i);
+        if (down && !was) {
+            if (isMod_[i]) {   // a chord modifier: quiet itself; a send modifier fixes the origin
+                swallowed_[i] = true;
+                for (const auto& c : chords_)
+                    if (c.mod == i && c.binding.action.rfind("send:", 0) == 0) { aiming_ = true; originX_ = x_; originY_ = y_; }
+                continue;
+            }
+            const Chord* hit = nullptr;
+            for (const auto& c : chords_) {
+                if (c.button != i) continue;
+                if (c.mod != i && isDown(c.mod)) { hit = &c; break; }
+                if (c.mod == i && lastPress_[i] < 0.3f && !hit) hit = &c;
+            }
+            const bool dbl = hit && hit->mod == i;
+            lastPress_[i] = dbl ? 1.f : 0.f;   // a triple press is a double press and a single one
+            if (hit && !dbl) {
+                swallowed_[i] = true;
+                if (hit->binding.kind == Binding::Action) act(hit->binding);
+                continue;
+            }
+            if (dbl && hit->binding.kind == Binding::Action) act(hit->binding);
+        } else if (!down && was && swallowed_[i]) {
+            swallowed_[i] = false;
+            if (isMod_[i]) aiming_ = false;
+            continue;
+        }
+        if (swallowed_[i] || i >= kLT) continue;
         if (b.kind == Binding::Pan) {
             if (!down) continue;
             PadButton pb = PadButton(i);
@@ -136,7 +205,9 @@ ClientGamepad::Frame ClientGamepad::update(const platform::GamepadState& pad, fl
             continue;
         }
         if (down == was || b.kind == Binding::None) continue;
-        if (b.kind == Binding::Key) {
+        if (b.kind == Binding::Action) {
+            if (down) act(b);
+        } else if (b.kind == Binding::Key) {
             platform::Event e = ev(down ? platform::EventType::KeyDown : platform::EventType::KeyUp);
             e.key = b.key;
             f.events.push_back(e);
@@ -146,6 +217,13 @@ ClientGamepad::Frame ClientGamepad::update(const platform::GamepadState& pad, fl
             f.events.push_back(e);
         }
     }
+    trigPrev_[0] = trig[0];
+    trigPrev_[1] = trig[1];
+    if (isMod_[kLT]) lt = 0;   // a trigger used as a modifier no longer zooms
+    if (isMod_[kRT]) rt = 0;
+    f.aiming = aiming_;
+    f.originX = originX_;
+    f.originY = originY_;
     f.panX = std::clamp(f.panX + rx, -1.f, 1.f) * panSpeed_;
     f.panY = std::clamp(f.panY + ry, -1.f, 1.f) * panSpeed_;
     float z = (rt - lt) * zoomSpeed_ * dt * 6.f;   // full trigger: 6 wheel steps per second

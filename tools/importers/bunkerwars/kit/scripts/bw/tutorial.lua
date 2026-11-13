@@ -147,6 +147,60 @@ return function(data)
   local function ui() return T().ui end
   local function bump() ui().seq = ui().seq + 1 end
 
+  -- BW Battle.SetTimeScale(ModuleGroup.Gameplay): the engine's trigger variable "gameplay_scale" (0 freezes the
+  -- battle, the tutorial keeps running), tweened like TweenerGlobal over `dur` seconds. Tutorial windows carry
+  -- their own GameplayTimeScale / SetBattleTimeScale module (bw.tutorial_time, written by client.py from the
+  -- screens: e.g. Step4-MoraleInfo 0.1 over 1 s, Step7-ResetAll back to 1, HintsScreen pauses).
+  local okt, wtime = pcall(function() return require("bw.tutorial_time") end)
+  if not okt or type(wtime) ~= "table" then wtime = {} end
+  local function apply_scale(v) game.set_var("gameplay_scale", fx.max(fx(0), fx.min(fx(1), fx(v)))) end
+  local function timescale(to, dur)
+    local t = T()
+    to = fx(to)
+    local n = dur and fx.int(fx(dur) * game.tick_rate()) or 0
+    if n <= 0 then t.ts = nil; t.timescale = to; apply_scale(to); return end
+    t.ts = {from = fx(t.timescale or 1), to = to, t0 = game.tick(), n = n}
+    t.timescale = to
+  end
+  local function timescale_tick()
+    local t = T()
+    local ts = t and t.ts
+    if not ts then return end
+    local k = fx.min(fx(1), fx(game.tick() - ts.t0, ts.n))
+    apply_scale(ts.from + (ts.to - ts.from) * k)
+    if k >= fx(1) then t.ts = nil end
+  end
+  local function window_time(w)
+    local wt = wtime[w or ""]
+    if wt then timescale(wt.scale, wt.dur) end
+  end
+
+  -- BW map coordinates (units, origin at the map centre, y up) -> cells (BW / 40), as the BW map importer places them
+  local function bwxz(v)
+    local w, h = game.map_size()
+    return fx(w, 2) + fx(v and v[1] or 0) / 40, fx(h, 2) - fx(v and v[2] or 0) / 40
+  end
+  -- PointInfo.Type -> the template's level-1 type of that kind (BW House / Tower / Smithy)
+  local CAST = {[1] = "bunker", [2] = "tower", [4] = "smithy"}
+  local function first_of_tag(tag)
+    for _, id in ipairs(game.types()) do
+      local ti = game.type_info(id)
+      if ti and ti.structure then
+        for _, tg in ipairs(ti.tags or {}) do if tg == tag then return id end end
+      end
+    end
+    return nil
+  end
+  local function next_level(h)
+    local u = game.unit(h)
+    local ti = u and game.type_info(u.type)
+    if not ti then return nil end
+    for _, up in ipairs(ti.upgrades or {}) do
+      local ui2 = game.type_info(up)
+      if ui2 and ui2.tags and ti.tags and ui2.tags[1] == ti.tags[1] then return up end
+    end
+    return nil
+  end
   A.Wait = function(s, st)
     st.t0 = st.t0 or game.time()
     return game.time() - st.t0 >= (s.time or 0)
@@ -157,8 +211,7 @@ return function(data)
   A.SetPointFlags = function(s) point_flags(s); bump(); return true end
   A.SetMovePercent = function(s) T().percent = s.percent or 100; game.set_var("bw_percent", T().percent); bump(); return true end
   A.SetGameplayTimescale = function(s)
-    hook(s)
-    T().timescale = s.targetTimeScale or 1
+    if hook(s) == nil then timescale(s.targetTimeScale or 1, s.switchScaleDuration or fx("0.3")) end
     bump()
     return true
   end
@@ -251,7 +304,8 @@ return function(data)
     if auto() and not st.asked then
       st.asked = true
       local h = target or points()[1]
-      if h then game.command(human(), {type = "upgrade", units = {h}}) end
+      local to = h and next_level(h)
+      if to then game.command(human(), {type = "upgrade", units = {h}, param = to}) end
     end
     return count_since(t.upgrade_orders, st.base, function(e) return target == nil or e.unit == target end) > 0
   end
@@ -284,24 +338,97 @@ return function(data)
     return game.count{kind = "unit"} == 0
   end
   A.PointConvert = function(s)
-    -- BW converts a point to another building type (house / tower / smithy): the BW data port maps the types
-    if hook(s, human()) == nil then game.set_var("bw_convert_" .. tostring(s.targetPointId or -1), s.targetCastType or 0) end
+    -- BW BaseModule.Upgrade_INTERNAL: cast into another kind (castInsteadUpgrade) or to the next level; done at once
+    -- (the engine transform), BW's paid / timed variant goes through the normal upgrade command
+    if hook(s, human()) ~= nil then return true end
+    local h = point(s.targetPointId)
+    if not h then return true end
+    local function on(v) return v ~= nil and v ~= 0 and v ~= false end
+    local cast = on(s.castInsteadUpgrade)
+    local to = cast and first_of_tag(CAST[s.targetCastType or 0] or "") or (not cast and next_level(h)) or nil
+    if not to then return true end
+    if cast or on(s.instantUpgrade) or on(s.freeUpgrade) then
+      game.transform(h, to)
+    else
+      game.command(game.owner(h), {type = "upgrade", units = {h}, param = to})
+    end
     return true
   end
 
-  -- BW skills, energy, morale: the skills port (agent-bw-skills) can implement these through bw_tutorial_hooks
-  A.SetEnergy = function(s) if hook(s, human()) == nil then game.set_var("bw_energy", s.energy or 0) end; return true end
-  A.SetMorale = function(s) if hook(s, slot(s.player)) == nil then game.set_var("bw_morale_" .. tostring(slot(s.player) or 0), s.stars or s.morale or 0) end; return true end
-  A.SetSkillCooldown = function(s)
-    if hook(s, human()) == nil then game.set_var("bw_skill_cooldown_" .. tostring(s.skillSlot or 0), s.cooldown or s.time or 0) end
+  -- skill cards in slot order: the player's owned, non-automatic player abilities (HUD / pad order);
+  -- MapTutorialModule.SkillSlotIndex is a bit (Slot1 = 1 ... Slot4 = 8, Talent = 16)
+  local function card(p, slot_bit)
+    local want, bit = 1, slot_bit or 1
+    while bit > 1 do bit = bit // 2; want = want + 1 end
+    local n = 0
+    for _, a in ipairs(game.player_abilities(p)) do
+      if a.owned and not a.automatic then n = n + 1; if n == want then return a end end
+    end
+    return nil
+  end
+  -- MoraleInfo levels (stars) -> morale points: BW Player.SetMoraleLevel
+  local MORALE_AT = {0, 500, 1000, 2000, 4000, 8000}
+  local function morale_points(stars)
+    local whole = fx.int(fx.floor(fx(stars)))
+    if whole >= #MORALE_AT - 1 then return MORALE_AT[#MORALE_AT] end
+    if whole < 0 then return 0 end
+    local a, b = MORALE_AT[whole + 1], MORALE_AT[whole + 2]
+    return fx.int(fx(a) + fx(b - a) * (fx(stars) - fx(whole)))
+  end
+  local function set_resource(p, res, v)
+    local cur = game.resources(p)[res]
+    if cur == nil then return false end
+    local d = fx(v) - cur
+    if d > fx(0) then game.give(p, res, d) elseif d < fx(0) then game.take(p, res, fx(0) - d) end
     return true
   end
-  A.SetSkillForever = function(s) hook(s, human()); return true end
-  A.ApplySkill = function(s) hook(s, slot(s.player)); return true end
+
+  A.SetEnergy = function(s)
+    -- BW Player.skillEnergy of the first local player
+    if hook(s, human()) == nil and not set_resource(human(), "energy", s.energy or 500) then game.set_var("bw_energy", s.energy or 0) end
+    return true
+  end
+  A.SetMorale = function(s)
+    local p = slot(s.player)
+    if p and hook(s, p) == nil and not set_resource(p, "morale", morale_points(s.stars or 5)) then
+      game.set_var("bw_morale_" .. tostring(p), s.stars or 0)
+    end
+    return true
+  end
+  A.SetSkillCooldown = function(s)
+    local p = slot(s.player) or human()
+    if hook(s, p) == nil then
+      local a = card(p, s.skillSlot)
+      if not (a and game.set_ability_cooldown(p, a.id, s.cooldown or 0)) then
+        game.set_var("bw_skill_cooldown_" .. tostring(s.skillSlot or 0), s.cooldown or 0)
+      end
+    end
+    return true
+  end
+  A.SetSkillForever = function(s)
+    -- BW Player.SetSkillForeverState: one-use cards stay in the hand; the engine's cards are reusable already
+    if hook(s, human()) == nil then game.set_var("bw_skill_forever", (s.forever == nil or s.forever ~= 0) and 1 or 0) end
+    return true
+  end
+  A.ApplySkill = function(s)
+    local p = slot(s.player) or human()
+    if hook(s, p) ~= nil then return true end
+    local a = card(p, s.skillSlot)
+    if not a then return true end
+    local x, z
+    local h = (s.usePointIdInsteadPosition and s.usePointIdInsteadPosition ~= 0) and point(s.pointId) or nil
+    if h then x, z = game.pos(h) else x, z = bwxz(s.position) end
+    game.player_ability(p, a.id, x, z, true)   -- tutorial casts are free (BW ActivateElement from the script)
+    return true
+  end
   A.ApplySkillEnvironment = function(s) hook(s, slot(s.player)); return true end
   A.WaitSkillBecomeAvailable = function(s)
-    local r = hook(s, human())
-    return r == nil or r == true
+    local p = slot(s.player) or human()
+    local r = hook(s, p)
+    if r ~= nil then return r == true end
+    local a = card(p, s.skillSlot)
+    if not a then return true end   -- no such card in this game: nothing to wait for
+    return a.usable and a.ready_in <= fx(0)
   end
   A.SkillWaitUse = function(s, st)
     local t = T()
@@ -313,7 +440,7 @@ return function(data)
   end
 
   -- UI: the view draws / opens, the player's clicks come back as commands
-  A.ShowWindow = function(s) local w = ui().windows; w[#w + 1] = s.window or ""; bump(); return true end
+  A.ShowWindow = function(s) local w = ui().windows; w[#w + 1] = s.window or ""; window_time(s.window); bump(); return true end
   A.CloseWindow = function(s)
     local w = ui().windows
     for i = #w, 1, -1 do if w[i] == s.window then table.remove(w, i) end end
@@ -382,10 +509,15 @@ return function(data)
     bump()
     return true
   end
-  A.ScreenMove = function(s) ui().camera = {x = s.position and s.position[1] or 0, z = s.position and s.position[2] or 0, duration = s.duration or 0, since = game.tick()}; bump(); return true end
+  A.ScreenMove = function(s)
+    local x, z = bwxz(s.position)
+    ui().camera = {x = x, z = z, duration = s.duration or 0, since = game.tick()}
+    bump()
+    return true
+  end
   A.CameraScale = function(s)
     local c = {zoom = s.targetScale or 1, duration = s.duration or 0, since = game.tick()}
-    if s.targetPosition then c.x, c.z = s.targetPosition[1], s.targetPosition[2] end
+    if s.targetPosition then c.x, c.z = bwxz(s.targetPosition) end
     ui().camera = c
     bump()
     return true
@@ -440,6 +572,7 @@ return function(data)
 
   on("tick", function()
     local t = T()
+    if t then timescale_tick() end
     if not t or t.over then return end
     if not t.started then t.started = true; if data.chapters and data.chapters[1] then activate(1) end end
     goto_pass()
@@ -453,6 +586,7 @@ return function(data)
     end
     if #t.active == 0 then
       t.over = true; t.ai = true; ui().windows = {}; ui().finger = nil; bump()
+      if game.var("gameplay_scale") ~= nil then timescale(1) end
       game.log("bw tutorial: finished")
     end
   end)
@@ -511,6 +645,7 @@ return function(data)
     elseif id == "bw_tut_percent" then t.percent = (args and args.percent) or t.percent; t.percent_set = t.percent_set + 1
     elseif id == "bw_tut_skip" or id == "bw_tut_off" then
       t.over, t.ai, t.active, t.skipped = true, true, {}, id == "bw_tut_skip"
+      if game.var("gameplay_scale") ~= nil then timescale(1) end
       ui().windows, ui().finger = {}, nil
       bump()
     else return false end

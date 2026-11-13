@@ -302,6 +302,26 @@ struct Parser {
         put(3, x2, y1);   // br
     }
 
+    // vertex list of a mesh / clipping / path: x, y pairs, or per vertex (count, [bone, x, y, weight] ...)
+    void readVertices(Attachment& a, const std::vector<float>& verts) {
+        a.weighted = verts.size() > size_t(a.vertexCount) * 2;
+        a.vertices.clear();
+        if (!a.weighted) {
+            for (float v : verts) a.vertices.push_back(v * scale);
+            return;
+        }
+        for (size_t i = 0; i < verts.size();) {
+            int n = int(verts[i]);
+            a.vertices.push_back(verts[i++]);
+            for (int k = 0; k < n && i + 3 < verts.size(); k++, i += 4) {
+                a.vertices.push_back(verts[i]);
+                a.vertices.push_back(verts[i + 1] * scale);
+                a.vertices.push_back(verts[i + 2] * scale);
+                a.vertices.push_back(verts[i + 3]);
+            }
+        }
+    }
+
     std::shared_ptr<Attachment> attachment(const Json& j, const std::string& name, const std::string& skinName,
                                            std::vector<std::tuple<Attachment*, std::string, std::string, bool>>& links) {
         auto a = std::make_shared<Attachment>();
@@ -346,7 +366,19 @@ struct Parser {
                 if (int(t) >= a->vertexCount) throw std::runtime_error("spine: mesh '" + name + "': triangle index out of range");
             resolveRegion(*a);
         } else if (type == "clipping" || type == "path") {
-            warn(type + " attachments are not drawn ('" + name + "')");
+            a->type = type == "clipping" ? AttachmentType::Clipping : AttachmentType::Path;
+            a->vertexCount = int(j.getInt("vertexCount", 0));
+            std::vector<float> verts;
+            for (const Json& v : j["vertices"].items()) verts.push_back(float(v.toDouble()));
+            readVertices(*a, verts);
+            if (type == "clipping") {
+                const std::string end = j.getStr("end");
+                a->endSlot = end.empty() ? -1 : d.findSlot(end);
+            } else {
+                a->closed = j.getBool("closed", false);
+                a->constantSpeed = j.getBool("constantSpeed", true);
+                for (const Json& v : j["lengths"].items()) a->lengths.push_back(float(v.toDouble()) * scale);
+            }
         }
         return a;
     }
@@ -365,6 +397,9 @@ struct Parser {
             }
             for (const Json& c : sj["transform"].items()) {
                 for (size_t i = 0; i < d.transforms.size(); i++) if (d.transforms[i].name == c.str()) skin->transforms.push_back(int(i));
+            }
+            for (const Json& c : sj["path"].items()) {
+                for (size_t i = 0; i < d.paths.size(); i++) if (d.paths[i].name == c.str()) skin->paths.push_back(int(i));
             }
             const Json& atts = sj.has("attachments") ? sj["attachments"] : sj;
             for (const auto& [slotName, list] : atts.members()) {
@@ -506,12 +541,42 @@ struct Parser {
             dur = std::max(dur, lastTime(t.curve.times));
             anim.transforms.push_back(std::move(t));
         }
-        if (a.has("path")) warn("path constraint timelines are ignored");
+        for (const auto& [cname, props] : a["path"].members()) {
+            int ci = -1;
+            for (size_t i = 0; i < d.paths.size(); i++) if (d.paths[i].name == cname) ci = int(i);
+            if (ci < 0) throw std::runtime_error("spine: animation '" + name + "': unknown path constraint '" + cname + "'");
+            const PathData& pd = d.paths[size_t(ci)];
+            for (const auto& [prop, keys] : props.members()) {
+                PathTimeline t;
+                t.constraint = ci;
+                if (prop == "position") {
+                    t.prop = PathTimeline::Position;
+                    const float k = pd.positionMode == PositionMode::Fixed ? scale : 1;
+                    readTimeline(keys, 1, t.curve, [&](const Json& kj, float* v) { v[0] = num(kj, "value", num(kj, "position", 0)) * k; });
+                } else if (prop == "spacing") {
+                    t.prop = PathTimeline::Spacing;
+                    const float k = pd.spacingMode == SpacingMode::Length || pd.spacingMode == SpacingMode::Fixed ? scale : 1;
+                    readTimeline(keys, 1, t.curve, [&](const Json& kj, float* v) { v[0] = num(kj, "value", num(kj, "spacing", 0)) * k; });
+                } else if (prop == "mix") {
+                    t.prop = PathTimeline::Mix;
+                    readTimeline(keys, 3, t.curve, [&](const Json& kj, float* v) {
+                        v[0] = num(kj, "mixRotate", num(kj, "rotateMix", 1));
+                        v[1] = num(kj, "mixX", num(kj, "translateMix", 1));
+                        v[2] = num(kj, "mixY", v[1]);
+                    });
+                } else {
+                    warn("unknown path timeline '" + prop + "'");
+                    continue;
+                }
+                dur = std::max(dur, lastTime(t.curve.times));
+                anim.paths.push_back(std::move(t));
+            }
+        }
         auto deformKeys = [&](const std::string& skinName, const std::string& slotName, const std::string& attName, const Json& keys) {
             int si = d.findSkin(skinName);
             int s = slot(slotName, "deform");
             const Attachment* att = si >= 0 ? d.skins[size_t(si)].get(s, attName) : nullptr;
-            if (!att || att->type != AttachmentType::Mesh) { warn("deform: no mesh '" + attName + "'"); return; }
+            if (!att || !att->vertexAttachment()) { warn("deform: no mesh '" + attName + "'"); return; }
             DeformTimeline t;
             t.slot = s;
             t.attachment = att->deformParent ? att->deformParent : att;
@@ -642,7 +707,25 @@ std::shared_ptr<SkeletonData> parseSkeleton(const std::string& text, std::shared
         t.skinRequired = c.getBool("skin", false);
         d.transforms.push_back(std::move(t));
     }
-    if (root["path"].size() > 0) p.warn("path constraints are ignored");
+    for (const Json& c : root["path"].items()) {
+        PathData t;
+        t.name = c.getStr("name");
+        t.order = int(c.getInt("order", 0));
+        for (const Json& b : c["bones"].items()) t.bones.push_back(p.bone(b.str(), "path"));
+        t.target = p.slot(c.getStr("target"), "path");
+        const std::string pm = c.getStr("positionMode", "percent"), sm = c.getStr("spacingMode", "length"), rm = c.getStr("rotateMode", "tangent");
+        t.positionMode = pm == "fixed" ? PositionMode::Fixed : PositionMode::Percent;
+        t.spacingMode = sm == "fixed" ? SpacingMode::Fixed : sm == "percent" ? SpacingMode::Percent : sm == "proportional" ? SpacingMode::Proportional : SpacingMode::Length;
+        t.rotateMode = rm == "chain" ? RotateMode::Chain : rm == "chainScale" ? RotateMode::ChainScale : RotateMode::Tangent;
+        t.offRotation = num(c, "rotation", 0);
+        t.position = num(c, "position", 0) * (t.positionMode == PositionMode::Fixed ? scale : 1);
+        t.spacing = num(c, "spacing", 0) * (t.spacingMode == SpacingMode::Length || t.spacingMode == SpacingMode::Fixed ? scale : 1);
+        t.mixRotate = num(c, "mixRotate", num(c, "rotateMix", 1));
+        t.mixX = num(c, "mixX", num(c, "translateMix", 1));
+        t.mixY = num(c, "mixY", t.mixX);
+        t.skinRequired = c.getBool("skin", false);
+        d.paths.push_back(std::move(t));
+    }
     for (const auto& [name, e] : root["events"].members()) {
         EventData ed;
         ed.name = name;

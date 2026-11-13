@@ -358,6 +358,13 @@ public:
             ca.destinationRGBBlendFactor = MTLBlendFactorOne;
             ca.sourceAlphaBlendFactor = MTLBlendFactorZero;
             ca.destinationAlphaBlendFactor = MTLBlendFactorOne;
+        } else if (d.blend == BlendMode::Screen) {     // src + dst * (1 - src colour), alpha premultiplied
+            ca.blendingEnabled = YES;
+            ca.rgbBlendOperation = ca.alphaBlendOperation = MTLBlendOperationAdd;
+            ca.sourceRGBBlendFactor = MTLBlendFactorOne;
+            ca.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceColor;
+            ca.sourceAlphaBlendFactor = MTLBlendFactorOne;
+            ca.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         } else if (d.blend != BlendMode::Opaque) {
             ca.blendingEnabled = YES;
             ca.rgbBlendOperation = ca.alphaBlendOperation = MTLBlendOperationAdd;

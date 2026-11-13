@@ -1,5 +1,6 @@
 #include "Consent.h"
 
+#include "Privacy.h"
 #include "ServiceProvider.h"
 
 namespace aiverse::consent {
@@ -28,6 +29,15 @@ Result parse(const plugins::Result& r) {
     return out;
 }
 
+// The CMP answer is the GDPR consent of the privacy service: ads and analytics get it before the callback runs.
+// No answer (error / unknown status) leaves what the game set.
+void forward(const Result& r) {
+    if (!r.error.empty() || r.status == Status::Unknown) return;
+    privacy::Consent c = privacy::consent();
+    c.personalizedAds = r.personalized;
+    privacy::setConsent(c);
+}
+
 void send(const char* method, const json::Value& args, std::function<void(const Result&)> cb) {
     load();
     if (S().provider.empty()) {
@@ -37,7 +47,11 @@ void send(const char* method, const json::Value& args, std::function<void(const 
         if (cb) cb(none);
         return;
     }
-    plugins::call(S().provider, method, json::dump(args), [cb](const plugins::Result& r) { if (cb) cb(parse(r)); });
+    plugins::call(S().provider, method, json::dump(args), [cb](const plugins::Result& r) {
+        Result res = parse(r);
+        forward(res);
+        if (cb) cb(res);
+    });
 }
 } // namespace
 

@@ -40,9 +40,11 @@ Skeleton::Skeleton(std::shared_ptr<const SkeletonData> data) : data_(std::move(d
     ikMix.resize(d.ik.size()); ikSoftness.resize(d.ik.size()); ikBend.resize(d.ik.size());
     ikCompress.resize(d.ik.size()); ikStretch.resize(d.ik.size());
     tcMix.resize(d.transforms.size() * 6);
+    pathPosition.resize(d.paths.size()); pathSpacing.resize(d.paths.size()); pathMix.resize(d.paths.size() * 3);
     std::vector<std::pair<int, std::pair<int, int>>> order;
     for (size_t i = 0; i < d.ik.size(); i++) order.push_back({d.ik[i].order, {0, int(i)}});
     for (size_t i = 0; i < d.transforms.size(); i++) order.push_back({d.transforms[i].order, {1, int(i)}});
+    for (size_t i = 0; i < d.paths.size(); i++) order.push_back({d.paths[i].order, {2, int(i)}});
     std::stable_sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     for (auto& o : order) constraints_.push_back(o.second);
     updateActive();
@@ -99,6 +101,11 @@ void Skeleton::setBonesToSetupPose() {
         const TransformData& t = d.transforms[i];
         float* m = &tcMix[i * 6];
         m[0] = t.mixRotate; m[1] = t.mixX; m[2] = t.mixY; m[3] = t.mixScaleX; m[4] = t.mixScaleY; m[5] = t.mixShearY;
+    }
+    for (size_t i = 0; i < d.paths.size(); i++) {
+        const PathData& t = d.paths[i];
+        pathPosition[i] = t.position; pathSpacing[i] = t.spacing;
+        pathMix[i * 3] = t.mixRotate; pathMix[i * 3 + 1] = t.mixX; pathMix[i * 3 + 2] = t.mixY;
     }
 }
 
@@ -231,10 +238,14 @@ void Skeleton::updateWorldTransform() {
             const IkData& c = data_->ik[size_t(idx)];
             if (c.skinRequired && std::find(sk.ik.begin(), sk.ik.end(), idx) == sk.ik.end()) continue;
             applyIk(idx);
-        } else {
+        } else if (kind == 1) {
             const TransformData& c = data_->transforms[size_t(idx)];
             if (c.skinRequired && std::find(sk.transforms.begin(), sk.transforms.end(), idx) == sk.transforms.end()) continue;
             applyTransform(idx);
+        } else {
+            const PathData& c = data_->paths[size_t(idx)];
+            if (c.skinRequired && std::find(sk.paths.begin(), sk.paths.end(), idx) == sk.paths.end()) continue;
+            applyPath(idx);
         }
     }
 }
@@ -440,6 +451,298 @@ void Skeleton::applyTransform(int ci) {
     }
 }
 
+// ---------------------------------------------------------------- path constraints (spine-runtimes 4.0 PathConstraint)
+
+namespace {
+void addBefore(float p, const float* t, float* out) {
+    float x1 = t[0], y1 = t[1], dx = t[2] - x1, dy = t[3] - y1, r = std::atan2(dy, dx);
+    out[0] = x1 + p * std::cos(r); out[1] = y1 + p * std::sin(r); out[2] = r;
+}
+void addAfter(float p, const float* t, float* out) {
+    float x1 = t[2], y1 = t[3], dx = x1 - t[0], dy = y1 - t[1], r = std::atan2(dy, dx);
+    out[0] = x1 + p * std::cos(r); out[1] = y1 + p * std::sin(r); out[2] = r;
+}
+void addCurve(float p, float x1, float y1, float cx1, float cy1, float cx2, float cy2, float x2, float y2, float* out, bool tangents) {
+    if (p == 0 || std::isnan(p)) { out[0] = x1; out[1] = y1; out[2] = std::atan2(cy1 - y1, cx1 - x1); return; }
+    float tt = p * p, ttt = tt * p, u = 1 - p, uu = u * u, uuu = uu * u;
+    float ut = u * p, ut3 = ut * 3, uut3 = u * ut3, utt3 = ut3 * p;
+    float x = x1 * uuu + cx1 * uut3 + cx2 * utt3 + x2 * ttt, y = y1 * uuu + cy1 * uut3 + cy2 * utt3 + y2 * ttt;
+    out[0] = x; out[1] = y;
+    if (tangents) {
+        if (p < 0.001f) out[2] = std::atan2(cy1 - y1, cx1 - x1);
+        else out[2] = std::atan2(y - (y1 * uu + cy1 * ut * 2 + cy2 * tt), x - (x1 * uu + cx1 * ut * 2 + cx2 * tt));
+    }
+}
+float wrapPi(float r) { return r > kPi ? r - 2 * kPi : r < -kPi ? r + 2 * kPi : r; }
+} // namespace
+
+void Skeleton::pathPositions(int ci, const Attachment& path, int spacesCount, bool tangents, std::vector<float>& spaces,
+                             std::vector<float>& out) const {
+    const PathData& data = data_->paths[size_t(ci)];
+    const int target = data.target;
+    float position = pathPosition[size_t(ci)];
+    out.assign(size_t(spacesCount) * 3 + 2, 0.f);
+    std::vector<float> all;
+    vertexWorld(target, path, all);   // every path vertex in world space; the runtimes' computeWorldVertices windows into it
+    auto window = [&](int start, int count, float* dst) {
+        for (int i = 0; i < count; i++) dst[i] = size_t(start + i) < all.size() ? all[size_t(start + i)] : 0.f;
+    };
+    const bool closed = path.closed;
+    int verticesLength = path.vertexCount * 2, curveCount = verticesLength / 6;
+    constexpr int kNone = -1, kBefore = -2, kAfter = -3;
+    int prevCurve = kNone;
+    auto multiplierFor = [&](float pathLength) {
+        switch (data.spacingMode) {
+        case SpacingMode::Percent: return pathLength;
+        case SpacingMode::Proportional: return pathLength / float(spacesCount);
+        default: return 1.f;
+        }
+    };
+    if (!path.constantSpeed) {
+        const std::vector<float>& lengths = path.lengths;
+        curveCount -= closed ? 1 : 2;
+        if (curveCount < 0 || size_t(curveCount) >= lengths.size()) return;
+        float pathLength = lengths[size_t(curveCount)];
+        if (data.positionMode == PositionMode::Percent) position *= pathLength;
+        const float multiplier = multiplierFor(pathLength);
+        float world[8] = {};
+        for (int i = 0, o = 0, curve = 0; i < spacesCount; i++, o += 3) {
+            float space = spaces[size_t(i)] * multiplier;
+            position += space;
+            float p = position;
+            if (closed) {
+                p = std::fmod(p, pathLength);
+                if (p < 0) p += pathLength;
+                curve = 0;
+            } else if (p < 0) {
+                if (prevCurve != kBefore) { prevCurve = kBefore; window(2, 4, world); }
+                addBefore(p, world, &out[size_t(o)]);
+                continue;
+            } else if (p > pathLength) {
+                if (prevCurve != kAfter) { prevCurve = kAfter; window(verticesLength - 6, 4, world); }
+                addAfter(p - pathLength, world, &out[size_t(o)]);
+                continue;
+            }
+            for (;; curve++) {
+                float length = lengths[size_t(curve)];
+                if (p > length) continue;
+                if (curve == 0) p /= length;
+                else { float prev = lengths[size_t(curve - 1)]; p = (p - prev) / (length - prev); }
+                break;
+            }
+            if (curve != prevCurve) {
+                prevCurve = curve;
+                if (closed && curve == curveCount) { window(verticesLength - 4, 4, world); window(0, 4, world + 4); }
+                else window(curve * 6 + 2, 8, world);
+            }
+            addCurve(p, world[0], world[1], world[2], world[3], world[4], world[5], world[6], world[7], &out[size_t(o)],
+                     tangents || (i > 0 && space == 0));
+        }
+        return;
+    }
+    std::vector<float> world;
+    if (closed) {
+        verticesLength += 2;
+        world.resize(size_t(verticesLength));
+        window(2, verticesLength - 4, world.data());
+        window(0, 2, world.data() + verticesLength - 4);
+        world[size_t(verticesLength - 2)] = world[0];
+        world[size_t(verticesLength - 1)] = world[1];
+    } else {
+        curveCount--;
+        verticesLength -= 4;
+        world.resize(size_t(std::max(verticesLength, 0)));
+        window(2, verticesLength, world.data());
+    }
+    if (curveCount <= 0 || world.size() < 8) return;
+    std::vector<float> curves(static_cast<size_t>(curveCount), 0.f);
+    float pathLength = 0;
+    float x1 = world[0], y1 = world[1], cx1 = 0, cy1 = 0, cx2 = 0, cy2 = 0, x2 = 0, y2 = 0;
+    float tmpx, tmpy, dddfx, dddfy, ddfx, ddfy, dfx, dfy;
+    for (int i = 0, w = 2; i < curveCount; i++, w += 6) {
+        cx1 = world[size_t(w)]; cy1 = world[size_t(w + 1)]; cx2 = world[size_t(w + 2)]; cy2 = world[size_t(w + 3)];
+        x2 = world[size_t(w + 4)]; y2 = world[size_t(w + 5)];
+        tmpx = (x1 - cx1 * 2 + cx2) * 0.1875f; tmpy = (y1 - cy1 * 2 + cy2) * 0.1875f;
+        dddfx = ((cx1 - cx2) * 3 - x1 + x2) * 0.09375f; dddfy = ((cy1 - cy2) * 3 - y1 + y2) * 0.09375f;
+        ddfx = tmpx * 2 + dddfx; ddfy = tmpy * 2 + dddfy;
+        dfx = (cx1 - x1) * 0.75f + tmpx + dddfx * 0.16666667f; dfy = (cy1 - y1) * 0.75f + tmpy + dddfy * 0.16666667f;
+        pathLength += std::sqrt(dfx * dfx + dfy * dfy);
+        dfx += ddfx; dfy += ddfy; ddfx += dddfx; ddfy += dddfy;
+        pathLength += std::sqrt(dfx * dfx + dfy * dfy);
+        dfx += ddfx; dfy += ddfy;
+        pathLength += std::sqrt(dfx * dfx + dfy * dfy);
+        dfx += ddfx + dddfx; dfy += ddfy + dddfy;
+        pathLength += std::sqrt(dfx * dfx + dfy * dfy);
+        curves[size_t(i)] = pathLength;
+        x1 = x2; y1 = y2;
+    }
+    if (data.positionMode == PositionMode::Percent) position *= pathLength;
+    const float multiplier = multiplierFor(pathLength);
+    float segments[10] = {};
+    float curveLength = 0;
+    for (int i = 0, o = 0, curve = 0, segment = 0; i < spacesCount; i++, o += 3) {
+        float space = spaces[size_t(i)] * multiplier;
+        position += space;
+        float p = position;
+        if (closed) {
+            p = std::fmod(p, pathLength);
+            if (p < 0) p += pathLength;
+            curve = 0;
+        } else if (p < 0) {
+            addBefore(p, world.data(), &out[size_t(o)]);
+            continue;
+        } else if (p > pathLength) {
+            addAfter(p - pathLength, world.data() + verticesLength - 4, &out[size_t(o)]);
+            continue;
+        }
+        for (;; curve++) {
+            float length = curves[size_t(curve)];
+            if (p > length) continue;
+            if (curve == 0) p /= length;
+            else { float prev = curves[size_t(curve - 1)]; p = (p - prev) / (length - prev); }
+            break;
+        }
+        if (curve != prevCurve) {
+            prevCurve = curve;
+            int ii = curve * 6;
+            x1 = world[size_t(ii)]; y1 = world[size_t(ii + 1)]; cx1 = world[size_t(ii + 2)]; cy1 = world[size_t(ii + 3)];
+            cx2 = world[size_t(ii + 4)]; cy2 = world[size_t(ii + 5)]; x2 = world[size_t(ii + 6)]; y2 = world[size_t(ii + 7)];
+            tmpx = (x1 - cx1 * 2 + cx2) * 0.03f; tmpy = (y1 - cy1 * 2 + cy2) * 0.03f;
+            dddfx = ((cx1 - cx2) * 3 - x1 + x2) * 0.006f; dddfy = ((cy1 - cy2) * 3 - y1 + y2) * 0.006f;
+            ddfx = tmpx * 2 + dddfx; ddfy = tmpy * 2 + dddfy;
+            dfx = (cx1 - x1) * 0.3f + tmpx + dddfx * 0.16666667f; dfy = (cy1 - y1) * 0.3f + tmpy + dddfy * 0.16666667f;
+            curveLength = std::sqrt(dfx * dfx + dfy * dfy);
+            segments[0] = curveLength;
+            for (ii = 1; ii < 8; ii++) {
+                dfx += ddfx; dfy += ddfy; ddfx += dddfx; ddfy += dddfy;
+                curveLength += std::sqrt(dfx * dfx + dfy * dfy);
+                segments[ii] = curveLength;
+            }
+            dfx += ddfx; dfy += ddfy;
+            curveLength += std::sqrt(dfx * dfx + dfy * dfy);
+            segments[8] = curveLength;
+            dfx += ddfx + dddfx; dfy += ddfy + dddfy;
+            curveLength += std::sqrt(dfx * dfx + dfy * dfy);
+            segments[9] = curveLength;
+            segment = 0;
+        }
+        p *= curveLength;
+        for (;; segment++) {
+            float length = segments[segment];
+            if (p > length) continue;
+            if (segment == 0) p /= length;
+            else { float prev = segments[segment - 1]; p = float(segment) + (p - prev) / (length - prev); }
+            break;
+        }
+        addCurve(p * 0.1f, x1, y1, cx1, cy1, cx2, cy2, x2, y2, &out[size_t(o)], tangents || (i > 0 && space == 0));
+    }
+}
+
+void Skeleton::applyPath(int ci) {
+    const PathData& data = data_->paths[size_t(ci)];
+    const Attachment* path = slots[size_t(data.target)].attachment;
+    if (!path || path->type != AttachmentType::Path) return;
+    const float mixRotate = pathMix[size_t(ci) * 3], mixX = pathMix[size_t(ci) * 3 + 1], mixY = pathMix[size_t(ci) * 3 + 2];
+    if (mixRotate == 0 && mixX == 0 && mixY == 0) return;
+    const bool tangents = data.rotateMode == RotateMode::Tangent, scale = data.rotateMode == RotateMode::ChainScale;
+    const int boneCount = int(data.bones.size()), spacesCount = tangents ? boneCount : boneCount + 1;
+    std::vector<float> spaces(size_t(spacesCount), 0.f), lengths(scale ? size_t(boneCount) : 0, 0.f);
+    const float spacing = pathSpacing[size_t(ci)];
+    constexpr float kEps = 0.00001f;
+    switch (data.spacingMode) {
+    case SpacingMode::Percent:
+        if (scale)
+            for (int i = 0, n = spacesCount - 1; i < n; i++) {
+                const Bone& b = bones[size_t(data.bones[size_t(i)])];
+                float setup = data_->bones[size_t(data.bones[size_t(i)])].length;
+                if (setup < kEps) lengths[size_t(i)] = 0;
+                else { float x = setup * b.a, y = setup * b.c; lengths[size_t(i)] = std::sqrt(x * x + y * y); }
+            }
+        for (int i = 1; i < spacesCount; i++) spaces[size_t(i)] = spacing;
+        break;
+    case SpacingMode::Proportional: {
+        float sum = 0;
+        for (int i = 0, n = spacesCount - 1; i < n;) {
+            const Bone& b = bones[size_t(data.bones[size_t(i)])];
+            float setup = data_->bones[size_t(data.bones[size_t(i)])].length;
+            if (setup < kEps) {
+                if (scale) lengths[size_t(i)] = 0;
+                spaces[size_t(++i)] = spacing;
+            } else {
+                float x = setup * b.a, y = setup * b.c, length = std::sqrt(x * x + y * y);
+                if (scale) lengths[size_t(i)] = length;
+                spaces[size_t(++i)] = length;
+                sum += length;
+            }
+        }
+        if (sum > 0) {
+            sum = float(spacesCount) / sum * spacing;
+            for (int i = 1; i < spacesCount; i++) spaces[size_t(i)] *= sum;
+        }
+        break;
+    }
+    default: {
+        const bool lengthSpacing = data.spacingMode == SpacingMode::Length;
+        for (int i = 0, n = spacesCount - 1; i < n;) {
+            const Bone& b = bones[size_t(data.bones[size_t(i)])];
+            float setup = data_->bones[size_t(data.bones[size_t(i)])].length;
+            if (setup < kEps) {
+                if (scale) lengths[size_t(i)] = 0;
+                spaces[size_t(++i)] = spacing;
+            } else {
+                float x = setup * b.a, y = setup * b.c, length = std::sqrt(x * x + y * y);
+                if (scale) lengths[size_t(i)] = length;
+                spaces[size_t(++i)] = (lengthSpacing ? setup + spacing : spacing) * length / setup;
+            }
+        }
+    }
+    }
+    std::vector<float> pos;
+    pathPositions(ci, *path, spacesCount, tangents, spaces, pos);
+    float boneX = pos[0], boneY = pos[1], offsetRotation = data.offRotation;
+    bool tip;
+    if (offsetRotation == 0) tip = data.rotateMode == RotateMode::Chain;
+    else {
+        tip = false;
+        const Bone& pb = bones[size_t(data_->slots[size_t(data.target)].bone)];
+        offsetRotation *= pb.a * pb.d - pb.b * pb.c > 0 ? kDegRad : -kDegRad;
+    }
+    for (int i = 0, p = 3; i < boneCount; i++, p += 3) {
+        const int bi = data.bones[size_t(i)];
+        Bone& b = bones[size_t(bi)];
+        b.worldX += (boneX - b.worldX) * mixX;
+        b.worldY += (boneY - b.worldY) * mixY;
+        float x = pos[size_t(p)], y = pos[size_t(p + 1)], dx = x - boneX, dy = y - boneY;
+        if (scale) {
+            float length = lengths[size_t(i)];
+            if (length != 0) {
+                float sc = (std::sqrt(dx * dx + dy * dy) / length - 1) * mixRotate + 1;
+                b.a *= sc; b.c *= sc;
+            }
+        }
+        boneX = x; boneY = y;
+        if (mixRotate > 0) {
+            float a = b.a, bb = b.b, c = b.c, d = b.d, r;
+            if (tangents) r = pos[size_t(p - 1)];
+            else if (spaces[size_t(i + 1)] == 0) r = pos[size_t(p + 2)];
+            else r = std::atan2(dy, dx);
+            r -= std::atan2(c, a);
+            if (tip) {
+                float cs = std::cos(r), sn = std::sin(r), length = data_->bones[size_t(bi)].length;
+                boneX += (length * (cs * a - sn * c) - dx) * mixRotate;
+                boneY += (length * (sn * a + cs * c) - dy) * mixRotate;
+            } else {
+                r += offsetRotation;
+            }
+            r = wrapPi(r) * mixRotate;
+            float cs = std::cos(r), sn = std::sin(r);
+            b.a = cs * a - sn * c; b.b = cs * bb - sn * d; b.c = sn * a + cs * c; b.d = sn * bb + cs * d;
+        }
+        updateApplied(bi);
+    }
+    for (int bi : data.bones) updateChildren(bi);
+}
+
 bool Skeleton::worldVertices(int si, std::vector<float>& out) const {
     const Slot& s = slots[size_t(si)];
     const Attachment* a = s.attachment;
@@ -456,11 +759,20 @@ bool Skeleton::worldVertices(int si, std::vector<float>& out) const {
         return true;
     }
     if (a->type != AttachmentType::Mesh) return false;
+    return vertexWorld(si, *a, out);
+}
+
+bool Skeleton::vertexWorld(int si, const Attachment& at, std::vector<float>& out) const {
+    const Attachment* a = &at;
+    const Slot& s = slots[size_t(si)];
+    const Bone& b = bones[size_t(data_->slots[size_t(si)].bone)];
+    if (!a->vertexAttachment()) return false;
     out.resize(size_t(a->vertexCount) * 2);
-    const std::vector<float>& deform = s.deform;
+    static const std::vector<float> kNoDeform;
+    const std::vector<float>& deform = s.attachment == a ? s.deform : kNoDeform;
     if (!a->weighted) {
         const std::vector<float>& v = deform.size() == a->vertices.size() ? deform : a->vertices;
-        for (int i = 0; i < a->vertexCount; i++) {
+        for (int i = 0; i < a->vertexCount && size_t(i * 2 + 1) < v.size(); i++) {
             float vx = v[size_t(i * 2)], vy = v[size_t(i * 2 + 1)];
             out[size_t(i * 2)] = vx * b.a + vy * b.b + b.worldX;
             out[size_t(i * 2 + 1)] = vx * b.c + vy * b.d + b.worldY;
@@ -498,22 +810,90 @@ void Skeleton::bounds(float& minX, float& minY, float& maxX, float& maxY) const 
     if (minX > maxX) minX = minY = maxX = maxY = 0;
 }
 
+namespace {
+// ---------------------------------------------------------------- clipping (spine-runtimes SkeletonClipping)
+float area2(const std::vector<float>& p) {
+    float a = 0;
+    for (size_t i = 0, n = p.size() / 2; i < n; i++) {
+        size_t j = (i + 1) % n;
+        a += p[i * 2] * p[j * 2 + 1] - p[j * 2] * p[i * 2 + 1];
+    }
+    return a;
+}
+bool inTri(float px, float py, float ax, float ay, float bx, float by, float cx, float cy) {
+    auto side = [](float x1, float y1, float x2, float y2, float x3, float y3) { return (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1); };
+    return side(ax, ay, bx, by, px, py) >= 0 && side(bx, by, cx, cy, px, py) >= 0 && side(cx, cy, ax, ay, px, py) >= 0;
+}
+// Ear clipping of a simple polygon (counter-clockwise) into triangles: the convex pieces the clipper cuts against.
+std::vector<std::vector<float>> triangulate(std::vector<float> poly) {
+    std::vector<std::vector<float>> out;
+    if (poly.size() < 6) return out;
+    if (area2(poly) < 0)   // make it counter-clockwise
+        for (size_t i = 0, n = poly.size() / 2; i < n / 2; i++) {
+            std::swap(poly[i * 2], poly[(n - 1 - i) * 2]);
+            std::swap(poly[i * 2 + 1], poly[(n - 1 - i) * 2 + 1]);
+        }
+    std::vector<int> idx(poly.size() / 2);
+    for (size_t i = 0; i < idx.size(); i++) idx[i] = int(i);
+    auto X = [&](int i) { return poly[size_t(i) * 2]; };
+    auto Y = [&](int i) { return poly[size_t(i) * 2 + 1]; };
+    int guard = 0;
+    while (idx.size() > 3 && guard++ < 10000) {
+        bool cut = false;
+        for (size_t k = 0, n = idx.size(); k < n; k++) {
+            int a = idx[(k + n - 1) % n], b = idx[k], c = idx[(k + 1) % n];
+            float cross = (X(b) - X(a)) * (Y(c) - Y(a)) - (Y(b) - Y(a)) * (X(c) - X(a));
+            if (cross <= 0) continue;   // reflex
+            bool inside = false;
+            for (int o : idx)
+                if (o != a && o != b && o != c && inTri(X(o), Y(o), X(a), Y(a), X(b), Y(b), X(c), Y(c))) { inside = true; break; }
+            if (inside) continue;
+            out.push_back({X(a), Y(a), X(b), Y(b), X(c), Y(c)});
+            idx.erase(idx.begin() + std::ptrdiff_t(k));
+            cut = true;
+            break;
+        }
+        if (!cut) break;   // degenerate polygon: keep what was cut
+    }
+    if (idx.size() == 3) out.push_back({X(idx[0]), Y(idx[0]), X(idx[1]), Y(idx[1]), X(idx[2]), Y(idx[2])});
+    return out;
+}
+// Sutherland-Hodgman: a polygon (x, y pairs) cut by a convex counter-clockwise polygon.
+std::vector<float> clipPoly(const std::vector<float>& subject, const std::vector<float>& clip) {
+    std::vector<float> in = subject, out;
+    const size_t cn = clip.size() / 2;
+    for (size_t e = 0; e < cn && in.size() >= 6; e++) {
+        float ex1 = clip[e * 2], ey1 = clip[e * 2 + 1], ex2 = clip[(e + 1) % cn * 2], ey2 = clip[(e + 1) % cn * 2 + 1];
+        auto side = [&](float x, float y) { return (ex2 - ex1) * (y - ey1) - (ey2 - ey1) * (x - ex1); };
+        out.clear();
+        const size_t n = in.size() / 2;
+        for (size_t i = 0; i < n; i++) {
+            float x1 = in[i * 2], y1 = in[i * 2 + 1], x2 = in[(i + 1) % n * 2], y2 = in[(i + 1) % n * 2 + 1];
+            float s1 = side(x1, y1), s2 = side(x2, y2);
+            if (s1 >= 0) { out.push_back(x1); out.push_back(y1); }
+            if ((s1 >= 0) != (s2 >= 0)) {
+                float t = s1 / (s1 - s2);
+                out.push_back(x1 + (x2 - x1) * t);
+                out.push_back(y1 + (y2 - y1) * t);
+            }
+        }
+        in.swap(out);
+    }
+    return in;
+}
+} // namespace
+
 void Skeleton::buildDrawList(DrawList& out) const {
     out.clear();
-    std::vector<float> v;
-    for (int si : drawOrder) {
-        const Slot& s = slots[size_t(si)];
-        const Attachment* a = s.attachment;
-        if (!a || a->region < 0 || !worldVertices(si, v)) continue;
-        Color c{color.r * s.color.r * a->color.r, color.g * s.color.g * a->color.g, color.b * s.color.b * a->color.b,
-                color.a * s.color.a * a->color.a};
-        if (c.a <= 0) continue;
-        uint32_t packed = packColor(c.r, c.g, c.b, c.a);
-        int page = data_->atlas->regions[size_t(a->region)].page;
-        BlendMode blend = data_->slots[size_t(si)].blend;
-        size_t nv = v.size() / 2;
+    std::vector<float> v, cv;
+    std::vector<std::vector<float>> clipTris;   // convex pieces of the active clipping polygon
+    int clipEnd = -1;
+    bool clipping = false;
+    // appends triangles of (x, y, u, v) vertices to the batch of (page, blend)
+    auto emit = [&](int page, BlendMode blend, const std::vector<DrawVertex>& verts, const std::vector<uint16_t>& tris) {
+        if (verts.empty() || tris.empty()) return;
         bool merge = !out.batches.empty() && out.batches.back().page == page && out.batches.back().blend == blend &&
-                     out.vertices.size() - out.baseVertex.back() + nv < 65535;
+                     out.vertices.size() - out.baseVertex.back() + verts.size() < 65535;
         if (!merge) {
             DrawBatch b;
             b.page = page;
@@ -523,15 +903,74 @@ void Skeleton::buildDrawList(DrawList& out) const {
             out.baseVertex.push_back(uint32_t(out.vertices.size()));
         }
         uint32_t base = uint32_t(out.vertices.size() - out.baseVertex.back());
-        const float* uv = a->type == AttachmentType::Region ? a->uvs4 : a->uvs.data();
-        for (size_t i = 0; i < nv; i++) out.vertices.push_back({v[i * 2], v[i * 2 + 1], uv[i * 2], uv[i * 2 + 1], packed});
-        if (a->type == AttachmentType::Region) {
-            static const uint16_t q[6] = {0, 1, 2, 2, 3, 0};
-            for (uint16_t i : q) out.indices.push_back(uint16_t(base + i));
-        } else {
-            for (uint16_t i : a->triangles) out.indices.push_back(uint16_t(base + i));
-        }
+        out.vertices.insert(out.vertices.end(), verts.begin(), verts.end());
+        for (uint16_t i : tris) out.indices.push_back(uint16_t(base + i));
         out.batches.back().indexCount = uint32_t(out.indices.size()) - out.batches.back().firstIndex;
+    };
+    std::vector<DrawVertex> verts;
+    std::vector<uint16_t> tris;
+    for (int si : drawOrder) {
+        const Slot& s = slots[size_t(si)];
+        const Attachment* a = s.attachment;
+        const bool active = bones[size_t(data_->slots[size_t(si)].bone)].active;
+        if (a && a->type == AttachmentType::Clipping && active) {
+            if (!clipping && vertexWorld(si, *a, cv)) {   // a clip inside a clip is ignored, as in the runtimes
+                clipTris = triangulate(cv);
+                clipping = !clipTris.empty();
+                clipEnd = a->endSlot;
+            }
+            continue;
+        }
+        if (active && a && a->region >= 0 && worldVertices(si, v)) {
+            Color c{color.r * s.color.r * a->color.r, color.g * s.color.g * a->color.g, color.b * s.color.b * a->color.b,
+                    color.a * s.color.a * a->color.a};
+            if (c.a > 0) {
+                const uint32_t packed = packColor(c.r, c.g, c.b, c.a);
+                const int page = data_->atlas->regions[size_t(a->region)].page;
+                const BlendMode blend = data_->slots[size_t(si)].blend;
+                const size_t nv = v.size() / 2;
+                const float* uv = a->type == AttachmentType::Region ? a->uvs4 : a->uvs.data();
+                static const uint16_t kQuad[6] = {0, 1, 2, 2, 3, 0};
+                const uint16_t* idx = a->type == AttachmentType::Region ? kQuad : a->triangles.data();
+                const size_t ni = a->type == AttachmentType::Region ? 6 : a->triangles.size();
+                verts.clear();
+                tris.clear();
+                if (!clipping) {
+                    for (size_t i = 0; i < nv; i++) verts.push_back({v[i * 2], v[i * 2 + 1], uv[i * 2], uv[i * 2 + 1], packed});
+                    tris.assign(idx, idx + ni);
+                } else {
+                    // each triangle cut by each convex piece; uvs from the barycentric coordinates of the original triangle
+                    for (size_t t = 0; t + 2 < ni; t += 3) {
+                        const uint16_t i0 = idx[t], i1 = idx[t + 1], i2 = idx[t + 2];
+                        const float x0 = v[i0 * 2], y0 = v[i0 * 2 + 1], x1 = v[i1 * 2], y1 = v[i1 * 2 + 1], x2 = v[i2 * 2], y2 = v[i2 * 2 + 1];
+                        const float det = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+                        if (std::fabs(det) < 1e-12f) continue;
+                        const std::vector<float> tri = {x0, y0, x1, y1, x2, y2};
+                        for (const auto& piece : clipTris) {
+                            std::vector<float> poly = clipPoly(area2(tri) < 0 ? std::vector<float>{x0, y0, x2, y2, x1, y1} : tri, piece);
+                            const size_t pn = poly.size() / 2;
+                            if (pn < 3 || verts.size() + pn >= 65535) continue;
+                            const uint16_t first = uint16_t(verts.size());
+                            for (size_t k = 0; k < pn; k++) {
+                                const float px = poly[k * 2], py = poly[k * 2 + 1];
+                                const float a0 = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / det;
+                                const float a1 = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / det;
+                                const float a2 = 1 - a0 - a1;
+                                verts.push_back({px, py, uv[i0 * 2] * a0 + uv[i1 * 2] * a1 + uv[i2 * 2] * a2,
+                                                 uv[i0 * 2 + 1] * a0 + uv[i1 * 2 + 1] * a1 + uv[i2 * 2 + 1] * a2, packed});
+                            }
+                            for (size_t k = 1; k + 1 < pn; k++) {
+                                tris.push_back(first);
+                                tris.push_back(uint16_t(first + k));
+                                tris.push_back(uint16_t(first + k + 1));
+                            }
+                        }
+                    }
+                }
+                emit(page, blend, verts, tris);
+            }
+        }
+        if (clipping && si == clipEnd) { clipping = false; clipTris.clear(); }
     }
 }
 
@@ -776,6 +1215,13 @@ void AnimationState::applyAnim(Skeleton& sk, const Animation& a, float time, flo
         if (tl.curve.times.empty() || time < tl.curve.times[0]) continue;
         float* m = &sk.tcMix[size_t(tl.constraint) * 6];
         for (int c = 0; c < 6; c++) m[c] += (tl.curve.value(time, c) - m[c]) * alpha;
+    }
+    for (const PathTimeline& tl : a.paths) {
+        if (tl.curve.times.empty() || time < tl.curve.times[0]) continue;
+        const size_t ci = size_t(tl.constraint);
+        if (tl.prop == PathTimeline::Position) sk.pathPosition[ci] += (tl.curve.value(time, 0) - sk.pathPosition[ci]) * alpha;
+        else if (tl.prop == PathTimeline::Spacing) sk.pathSpacing[ci] += (tl.curve.value(time, 0) - sk.pathSpacing[ci]) * alpha;
+        else for (int c = 0; c < 3; c++) sk.pathMix[ci * 3 + size_t(c)] += (tl.curve.value(time, c) - sk.pathMix[ci * 3 + size_t(c)]) * alpha;
     }
 }
 

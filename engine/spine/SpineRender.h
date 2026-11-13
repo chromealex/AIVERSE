@@ -3,8 +3,7 @@
 //
 // Blend modes (premultiplied, as the Spine runtimes): normal = ONE, 1-srcA; additive = the same
 // pipeline with alpha written as 0; multiply = dst * (src + 1 - srcA) through BlendMode::Multiply;
-// screen is approximated with the premultiplied pipeline (alpha = brightest channel), because the
-// RHI has no ONE, 1-srcColor blend (visually equivalent for the glows Spine art uses it for).
+// screen = ONE, 1-srcColor through BlendMode::Screen (exactly the Spine runtimes' screen blend).
 //
 // SpinePlayer bundles everything one animated skeleton needs (data, pose, state, page textures).
 // Content (skeleton JSON + atlas + page images) is read through platform::readContentFile, so packs,
@@ -33,7 +32,7 @@ public:
 private:
     gfx::Device* dev_ = nullptr;
     gfx::ShaderHandle shader_;
-    gfx::PipelineHandle pipes_[2][2];   // [depthTest][multiply]
+    gfx::PipelineHandle pipes_[2][3];   // [depthTest][premultiplied / multiply / screen]
     gfx::BufferHandle vb_, ib_;
     size_t vbSize_ = 0, ibSize_ = 0;
     uint32_t drawCalls_ = 0;
