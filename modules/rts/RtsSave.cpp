@@ -253,9 +253,15 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (fields_ && fields_->active()) fields_->io(sim, a);   // grid fields (games with rules / map fields only)
     if (raid_ && raid_->active()) raid_->io(sim, a);         // extraction raids (games with rules "raid" only)
     if (topDown_ && topDown_->active()) topDown_->io(sim, a);   // top-down heroes (games with rules "topDown" only)
+    if (progression_ && progression_->active()) progression_->io(sim, a);   // in-match progression (games with rules "progression" only)
+    if (encounters_ && encounters_->active()) encounters_->io(sim, a);   // boss encounters (games with rules "encounters" only)
     if (env_ && env_->active()) env_->io(sim, a);            // map environment (games with one only)
     if (driving_ && driving_->active()) driving_->io(sim, a);   // vehicles (games with rules "driving" only)
+    if (commerce_ && commerce_->active()) commerce_->io(sim, a);   // premises and accounts (games with rules "commerce" only)
+    if (career_ && career_->active()) career_->io(sim, a);         // career ladders (games with rules "careers" only)
+    if (prompts_ && prompts_->active()) prompts_->io(sim, a);      // open prompts (games with rules "prompts" only)
     if (!ioModesState(*this, sim, a)) return false;           // match modes (games with modes only, RtsModes.cpp)
+    if (arsenal_ && arsenal_->active()) arsenal_->io(sim, a);   // weapons, ammo, crates (games with rules "arsenal" only)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

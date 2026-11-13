@@ -1,6 +1,7 @@
 #include "WorldScene.h"
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 namespace aiverse::world {
 namespace {
@@ -38,7 +39,13 @@ std::unique_ptr<render::Model> terrainModel(const ChunkCollision& collision,cons
     render::Primitive p;p.indexCount=uint32_t(model->indices.size());p.vertexCount=uint32_t(model->vertices.size());model->meshes[0].primitives.push_back(p);model->finalize();return model;
 }
 }
-WorldScene::WorldScene(const Json& manifest,AssetReader reader):assets_(WorldAssets::parse(manifest)) {
+// Models shared between chunks ("shareModels": true): a city built from a kit repeats the same files in every chunk,
+// so each file is decoded and uploaded once and lives while any resident or pending chunk uses it. Shared models are
+// outside the per-chunk reservation: their total is bounded by the number of distinct files of the content.
+struct WorldScene::ModelCache { std::mutex mutex;std::map<std::string,std::weak_ptr<render::Model>> models; };
+WorldScene::WorldScene(const Json& manifest,AssetReader reader):assets_(WorldAssets::parse(manifest)),cache_(std::make_shared<ModelCache>()) {
+    shareModels_=manifest.getBool("shareModels");
+    overhang_=float(worldInteger(manifest,"meshOverhang",0,0,4096));
     uploadBytes_=size_t(worldInteger(manifest,"maxUploadBytes",16*1024*1024,1024,1024*1024*1024));
     auto verified=assets_.verifiedReader(reader);
     stream_=std::make_unique<AsyncChunkStream>(assets_.limits,assets_.stagingBytes,assets_.maxJobs,[this,verified](Cell cell){return prepare(cell,verified);});
@@ -50,12 +57,14 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
     if(!reader(asset.file,text))throw JsonError("world.scene: read/hash failure: "+asset.file);
     auto json=Json::parse(text);auto collision=readChunkCollision(json,assets_.cellSize);
     auto out=std::make_shared<Prepared>();size_t bytes=4096;
-    auto append=[&](std::unique_ptr<render::Model> model){
+    auto append=[&](std::shared_ptr<render::Model> model,const std::string& sharedKey=std::string(),bool charge=true,bool fresh=true){
+        // a model reused from the cache was checked when it was decoded (and its CPU arrays are gone after the upload)
+        if(!fresh){bytes+=4096;if(bytes>asset.bytes)throw JsonError("world.scene: reservedBytes too small");out->models.push_back(std::move(model));out->sharedKeys.push_back(sharedKey);return out->models.size()-1;}
         if(model->vertices.size()>1000000||model->indices.size()>3000000||!model->skins.empty()||!model->clips.empty())throw JsonError("world.mesh: expected bounded rigid model");
         for(const auto& mesh:model->meshes)for(const auto& p:mesh.primitives)if(p.morphTargets)throw JsonError("world.mesh: morphs require an entity");
         if(model->vertices.empty()||model->indices.empty())throw JsonError("world.mesh: empty model");
-        bytes+=modelBytes(*model);if(bytes>asset.bytes)throw JsonError("world.scene: reservedBytes too small");
-        out->models.push_back(std::move(model));return out->models.size()-1;
+        bytes+=charge?modelBytes(*model):size_t(4096);if(bytes>asset.bytes)throw JsonError("world.scene: reservedBytes too small");
+        out->models.push_back(std::move(model));out->sharedKeys.push_back(sharedKey);return out->models.size()-1;
     };
     if(auto terrain=terrainModel(collision,json["terrain"],reader,assets_.origin(cell))){auto index=append(std::move(terrain));out->instances.push_back({index,{}});}
     if(json.has("meshes")) {
@@ -63,12 +72,19 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
         std::map<std::string,size_t> indices;
         for(const auto& instance:json["meshes"].items()){
             auto file=instance.getStr("file");if(!safeAssetPath(file))throw JsonError("world.mesh: invalid path");
+            if(!indices.contains(file)&&shareModels_){
+                std::shared_ptr<render::Model> shared;
+                {std::lock_guard lock(cache_->mutex);if(auto it=cache_->models.find(file);it!=cache_->models.end())shared=it->second.lock();}
+                if(shared)indices[file]=append(std::move(shared),file,false,false);
+            }
             if(!indices.contains(file)){
                 bool missing=false;
                 auto checked=[&](const std::string& path,std::string& bytes){bool ok=reader(path,bytes);missing|=!ok;return ok;};
                 auto model=render::loadModel(file,checked);
                 if(missing)throw JsonError("world.mesh: missing or corrupt dependency: "+file);
-                indices[file]=append(std::move(model));
+                std::shared_ptr<render::Model> owned=std::move(model);
+                if(shareModels_){std::lock_guard lock(cache_->mutex);cache_->models[file]=owned;}
+                indices[file]=append(std::move(owned),shareModels_?file:std::string(),!shareModels_);
             }
             auto position=instance.has("position")?visual(worldVector(instance["position"],Fixed::fromInt(assets_.cellSize))):render::float3{};
             auto scale=instance.has("scale")?visual(worldVector(instance["scale"],100_fx)):render::float3{1,1,1};
@@ -79,7 +95,7 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
             const auto& model=*out->models[indices.at(file)];
             for(int corner=0;corner<8;++corner){auto a=model.boundsMin,b=model.boundsMax;
                 auto p=transform.transformPoint({corner&1?b.x:a.x,corner&2?b.y:a.y,corner&4?b.z:a.z});
-                if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z)||p.x<0||p.z<0||p.x>assets_.cellSize||p.z>assets_.cellSize||std::abs(p.y)>10000)
+                if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z)||p.x<-overhang_||p.z<-overhang_||p.x>assets_.cellSize+overhang_||p.z>assets_.cellSize+overhang_||std::abs(p.y)>10000)
                     throw JsonError("world.mesh: transformed bounds must fit owning X/Z cell");
             }
             out->instances.push_back({indices.at(file),transform});
@@ -87,24 +103,38 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
     }
     return out;
 }
+// GPU resources of a chunk that leaves: its own models always, a shared model only when no other chunk (resident or
+// being prepared) holds it; the cache entry goes first, under the lock, so a worker cannot pick up a released model.
+void WorldScene::releaseChunk(gfx::Device& device,Prepared& chunk) {
+    for(size_t i=0;i<chunk.models.size();++i){
+        auto& model=chunk.models[i];
+        if(i<chunk.sharedKeys.size()&&!chunk.sharedKeys[i].empty()){
+            std::lock_guard lock(cache_->mutex);
+            if(model.use_count()>1)continue;
+            cache_->models.erase(chunk.sharedKeys[i]);
+        }
+        render::releaseModel(device,*model);
+    }
+}
 void WorldScene::update(gfx::Device& device,std::span<const Vec3> observers,int radius) {
     std::vector<StreamObserver> interests;for(auto p:observers)interests.push_back({assets_.cell(p),radius});
     stream_->update(interests,{},4,2,[&](Cell cell,const AsyncChunkStream::Payload& payload){
         auto prepared=std::static_pointer_cast<Prepared>(payload);
         try {
             for(auto& model:prepared->models){
+                if(model->vb.valid()&&model->ib.valid())continue;   // shared with a resident chunk: already on the GPU
                 if(!render::uploadModel(device,*model)||!model->vb.valid()||!model->ib.valid())throw JsonError("world.mesh: GPU buffer upload failed");
                 for(auto& image:model->images)if(!image.tex.valid())throw JsonError("world.mesh: GPU texture upload failed");
             }
             resident_[cell]=prepared;return true;
-        }catch(...){for(auto& m:prepared->models)render::releaseModel(device,*m);throw;}
-    },[&](Cell cell){auto it=resident_.find(cell);if(it==resident_.end())return;for(auto& m:it->second->models)render::releaseModel(device,*m);resident_.erase(it);},uploadBytes_);
+        }catch(...){releaseChunk(device,*prepared);throw;}
+    },[&](Cell cell){auto it=resident_.find(cell);if(it==resident_.end())return;releaseChunk(device,*it->second);resident_.erase(it);},uploadBytes_);
 }
 void WorldScene::draw(render::Renderer3D& renderer,Cell origin,int size) {
     for(const auto& [cell,chunk]:resident_){const auto offset=render::mat4::translate(visual(relativeTo(assets_.origin(cell),origin,size)));
         for(const auto& instance:chunk->instances){render::ModelDraw draw;draw.model=chunk->models[instance.model].get();draw.world=offset*instance.transform;renderer.drawModel(draw);}}
 }
 void WorldScene::shutdown(gfx::Device& device) {
-    stream_->shutdown([&](Cell cell){auto it=resident_.find(cell);if(it!=resident_.end()){for(auto& m:it->second->models)render::releaseModel(device,*m);resident_.erase(it);}});
+    stream_->shutdown([&](Cell cell){auto it=resident_.find(cell);if(it!=resident_.end()){releaseChunk(device,*it->second);resident_.erase(it);}});
 }
 }

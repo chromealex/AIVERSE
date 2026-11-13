@@ -70,6 +70,7 @@ void RtsView::handleEvents(const RtsScene& s) {
         switch (ev.type) {
             case kEvAttack: {
                 auto source = objects.find(key), target = objects.find(ev.b.packed());
+                if (!ev.b.valid() && source != objects.end() && source->second->visible) { anims_[key].eventAge[kProcEvAttack] = 0; break; }   // free fire (arsenal): no target
                 if (source == objects.end() || target == objects.end()) break;
                 const auto& a = *source->second; const auto& b = *target->second;
                 if (!a.visible || !b.visible || a.type >= looks_.size() || a.body != b.body) break;
@@ -338,6 +339,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     in.distance = st.distance;
     in.turnRate = st.turnRate;
     in.accel = st.accel;
+    in.steer = o.steer;
     in.phase = st.phase;
     in.state = state;
     for (int i = 0; i < kProcEvCount; ++i) in.eventAge[i] = st.eventAge[i];

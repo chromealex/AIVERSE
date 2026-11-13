@@ -687,6 +687,12 @@ checksums for a replay and for a mid-match save/restore. Verified only with g++ 
 -Wall -Wextra -Werror -pedantic, tests and the headless run built by hand). Not verified: MSVC/clang, CMake isolation,
 native module export, platform runtimes, performance at bullet-heaven densities, UI/VFX integration.
 
+**Engine integration.** RTS games use the package without native code through the rules block `progression`
+([progression.md](progression.md), `modules/rts/RtsProgression*`): kills of real units drop orbs, offers are chosen by
+`kCmdProgression` (UI / bot / Lua), perk stats feed `RtsModule::stat`, `dealDamage` and the shot hooks, bullet perks
+extend projectile programs, summon circles spawn real allies, and the battle deck comes from the map's
+`players[i].deck` (match start payload). The library headers are unchanged.
+
 ## Narrative scenes (narrative-graphs 0.2.0)
 
 Headers `genre/NarrativeScenes.h` (policy), `genre/NarrativeCues.h` (the `CueRequest` record shared with cinematic owners),
@@ -1536,4 +1542,8 @@ it: with the default 4-tick reaction the hero beats the giant through all three 
 telegraphs); with `--reaction 100000` (no dodging) the hero dies — the telegraphs decide the fight.
 
 **Not covered.** Projectiles in flight (weapon-policies), knockback/push physics, navigation, loot and rewards,
-HUD banners, network authority, and wiring into RtsModule units (RTS games use the engine's statuses / areas).
+HUD banners and network authority (wiring into RtsModule units: below).
+
+**RTS games** use the package through rules `encounters` (`modules/rts/RtsEncounters.*`): bosses, mobs, telegraphs
+and the schedule on real units with rules statuses, orders, flow fields, events, saves and checksums; see
+[encounters.md](encounters.md) and `templates/boss_arena`.

@@ -2,6 +2,7 @@
 // unit bodies, auto-fire / aim policy, abilities, bots, determinism, saves and rollback snapshots.
 #include "modules/rts/RtsTopDown.h"
 #include "modules/rts/view/TopDownControls.h"
+#include "modules/rts/view/TopDownPrediction.h"
 
 namespace {
 const char* kTopDownRules = R"J({
@@ -292,7 +293,18 @@ TEST(topdown_controls_sticks_keys_quantize_and_camera) {
     game::TopDownControls tc;
     tc.configure(gj, r, rts);
     CHECK(tc.active() && tc.config().buttons.size() == 1 && tc.config().buttons[0].abilityIndex == 0);
-    CHECK(tc.config().buttons[0].key == int(platform::Key::Q));
+    CHECK(tc.config().buttons[0].key == int(platform::Key::Q) && tc.config().buttons[0].weaponStep == 0);
+    {   // weapon switch buttons: a press on one is reported like an ability press, with weaponStep set
+        game::TopDownControls wc;
+        wc.configure(Json::parse(R"({"topDown": {"touchControls": "always", "buttons": [
+            {"weapon": "prev", "anchor": [1, 0.3], "offset": [-126, -40], "radius": 30},
+            {"weapon": "next", "anchor": [1, 0.3], "offset": [-50, -40], "radius": 30}]}})"), r, rts);
+        CHECK(wc.config().buttons.size() == 2 && wc.config().buttons[0].weaponStep == -1 && wc.config().buttons[1].weaponStep == 1);
+        CHECK(wc.pointerDown(7, 800 - 50, 480 * 0.3f - 40, 800, 480, true));
+        const auto pressed = wc.takeButtonEvents();
+        CHECK(pressed.size() == 1 && pressed[0].button == 1);
+        CHECK(!wc.draw(800, 480, {1, 1}).empty());
+    }
     const float W = 1000, H = 600;
     // no input: a stop command once, then nothing
     game::TopDownFrameInput none;
@@ -338,8 +350,10 @@ TEST(topdown_controls_sticks_keys_quantize_and_camera) {
     // ability button: tap = one press
     CHECK(tc.buttonAt(940, 400, W, H) == 0);
     CHECK(tc.pointerDown(4, 940, 400, W, H, true));
-    CHECK(tc.takeAbilityPresses() == std::vector<int>{0} && tc.takeAbilityPresses().empty());
+    auto evs = tc.takeButtonEvents();
+    CHECK(evs.size() == 1 && evs[0].button == 0 && evs[0].phase == topdown::Phase::Tap && tc.takeButtonEvents().empty());
     tc.pointerUp(4, 940, 400);
+    CHECK(tc.takeButtonEvents().empty());   // tap buttons: nothing on release
     // touch UI off on desktop with "auto"; the draw output exists when on
     CHECK(!tc.draw(W, H, {1.0f}).empty() && !tc.draw(W, H, {0.5f})[0].verts.empty());
     // camera: follows the hero with look-ahead, stays inside the map margin
@@ -358,4 +372,378 @@ TEST(topdown_arena_template_bots_finish) {
     game::RtsAI a(1, 1), b(2, 1);
     for (int i = 0; i < 20 * 900 && sim->result() == 0; ++i) { a.update(*sim); b.update(*sim); sim->step(); }
     CHECK(sim->result() != 0);
+}
+
+// ---------------------------------------------------------------- stage 2 (agent-df-hero-net): squads, free fire,
+// button phases and windups, escape, extended state, client prediction
+namespace {
+std::string tdRules(const std::string& extra, const std::string& aim = R"("aim": {"snapCone": 15},)") {
+    std::string r = kTopDownRules;
+    r.replace(r.find(R"("aim": {"snapCone": 15},)"), std::string(R"("aim": {"snapCone": 15},)").size(), aim + extra);
+    return r;
+}
+Command abilityCmd(uint8_t p, int idx, topdown::Phase ph, bool dir = false, Vec3 d = {}, int distance = 0) {
+    topdown::Ability a; a.index = idx; a.phase = ph;
+    if (dir) { a.hasAngle = true; a.angle = game::TopDown::angleOf(d); a.distance = distance; }
+    Command c; c.player = p; c.type = game::kCmdTopDownAbility; c.param = topdown::abilityParam(a);
+    return c;
+}
+} // namespace
+
+TEST(topdown_free_fire_along_the_aim_stops_on_walls) {
+    const std::string rules = tdRules("", R"("aim": {"snapCone": 0, "freeFire": true},)");
+    // a wall at x = 12 between the hero (9.5) and the mover (13.5): the shots fire, the wall eats them
+    auto sim = makeSimJson(rules, topDownMap(R"({"type":"drone","owner":1,"pos":[9.5,8.5]},{"type":"mover","owner":2,"pos":[13.5,8.6]})"));
+    Entity foe = findType(*sim, "mover", 2), hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    sim->world().get<game::Mobile>(foe).vel = {};
+    steer(*sim, 1, {}, 0, true, kEast);
+    run(*sim, 1.0);
+    CHECK(sim->world().get<game::Unit>(foe).hp == Fixed::fromInt(300));
+    CHECK(!pilot(*sim, 1).target.valid());
+    // no wall: the first hostile body on the line takes the shots although it is not a target (no snap cone)
+    auto open = makeSimJson(rules, topDownMap(R"({"type":"drone","owner":1,"pos":[9.5,8.5]},{"type":"mover","owner":2,"pos":[13.5,8.6]})", false));
+    foe = findType(*open, "mover", 2);
+    steer(*open, 1, {}, 0, true, kEast);
+    run(*open, 1.0);
+    CHECK(open->world().get<game::Unit>(foe).hp < Fixed::fromInt(300));
+    // without freeFire the same aim fires nothing
+    auto plain = makeSimJson(tdRules("", R"("aim": {"snapCone": 0},)"), topDownMap(R"({"type":"drone","owner":1,"pos":[9.5,8.5]},{"type":"mover","owner":2,"pos":[13.5,9.1]})", false));
+    foe = findType(*plain, "mover", 2);
+    steer(*plain, 1, {}, 0, true, kEast);
+    run(*plain, 0.2);   // auto-fire may shoot until the aim arrives (input delay); from then on the aim decides
+    const Fixed hpAimed = plain->world().get<game::Unit>(foe).hp;
+    run(*plain, 1.0);
+    CHECK(plain->world().get<game::Unit>(foe).hp == hpAimed);
+    (void)hero;
+}
+
+TEST(topdown_ability_buttons_release_along_the_stick_hold_and_windup) {
+    std::string rules = tdRules(R"("abilities": {"hold": ["beam"]},)");
+    rules.replace(rules.find(R"("effects": [{"type": "damage", "amount": 90, "radius": 1.5}]})"),
+                  std::string(R"("effects": [{"type": "damage", "amount": 90, "radius": 1.5}]})").size(),
+                  R"("effects": [{"type": "damage", "amount": 90, "radius": 1.5}]},
+                    {"id": "beam", "target": "point", "range": 6, "cooldown": 0.5, "autocast": false, "effects": [{"type": "damage", "amount": 5, "radius": 1}]},
+                    {"id": "nova", "target": "none", "range": 0, "cooldown": 3, "castTime": 0.5, "autocast": false, "effects": [{"type": "damage", "amount": 50, "radius": 3}]})");
+    const std::string map = topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"mover","owner":2,"pos":[4.5,12.5]},{"type":"mover","owner":2,"pos":[6.5,8.5]})", false);
+    auto sim = makeSimJson(rules, map);
+    CHECK(mod(*sim).topDown()->rules().extended);
+    Entity south = findType(*sim, "mover", 2);
+    Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    // aim button: press does nothing, release casts along the button's stick (south, full range 8 -> clamped at 4 away)
+    sim->submit(abilityCmd(1, 0, topdown::Phase::Press, true, kSouth));
+    run(*sim, 0.2);
+    auto* st = sim->world().tryGet<game::AbilityState>(hero);
+    CHECK(!st || st->readyAt[0] <= sim->tick());
+    sim->submit(abilityCmd(1, 0, topdown::Phase::Release, true, kSouth, 500));   // half the range: 4 units south
+    run(*sim, 0.3);
+    st = sim->world().tryGet<game::AbilityState>(hero);
+    CHECK(st && st->readyAt[0] > sim->tick());
+    CHECK(sim->world().get<game::Unit>(south).hp <= Fixed::fromInt(300 - 90));
+    // hold: press starts the beam
+    sim->submit(abilityCmd(1, 1, topdown::Phase::Press, true, kEast));
+    run(*sim, 0.25);
+    // ... and it repeats every cooldown while held
+    st = sim->world().tryGet<game::AbilityState>(hero);
+    const uint32_t first = st ? st->readyAt[1] : 0;
+    CHECK(pilot(*sim, 1).held == 1 && first > 0);
+    run(*sim, 1.2);
+    CHECK(sim->world().get<game::AbilityState>(hero).readyAt[1] > first);   // cast again
+    sim->submit(abilityCmd(1, 1, topdown::Phase::Release));
+    run(*sim, 0.25);
+    CHECK(pilot(*sim, 1).held == -1);
+    const uint32_t last = sim->world().get<game::AbilityState>(hero).readyAt[1];
+    run(*sim, 1.0);
+    CHECK(sim->world().get<game::AbilityState>(hero).readyAt[1] == last);   // stopped
+    // windup: nova goes off castTime later, not at once
+    sim->submit(abilityCmd(1, 2, topdown::Phase::Tap));
+    run(*sim, 0.15);
+    CHECK(pilot(*sim, 1).casting == 2);
+    Entity east = kNullEntity;
+    sim->world().each<game::Unit, Owner>([&](Entity e, game::Unit& u, Owner& o) { if (o.player == 2 && e != south && u.hp.raw > 0) east = e; });
+    const Fixed before = east.valid() ? sim->world().get<game::Unit>(east).hp : Fixed{};
+    run(*sim, 0.6);
+    CHECK(pilot(*sim, 1).casting == -1);
+    CHECK(!east.valid() || !sim->world().alive(east) || sim->world().get<game::Unit>(east).hp < before);
+}
+
+TEST(topdown_squad_follows_the_hero_in_a_ring) {
+    const std::string rules = tdRules(R"("squad": {"types": ["mover"], "radius": 2, "size": 3},)");
+    auto sim = makeSimJson(rules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"mover","owner":1,"pos":[3.5,6.5]},
+        {"type":"mover","owner":1,"pos":[3.5,10.5]},{"type":"mover","owner":1,"pos":[2.5,8.5]},{"type":"mover","owner":1,"pos":[1.5,1.5]},
+        {"type":"dummy","owner":2,"pos":[30.5,1.5]})", false));
+    run(*sim, 0.25);
+    auto* td = mod(*sim).topDown();
+    auto squad = td->squadOf(*sim, 1);
+    CHECK(squad.size() == 3);   // size 3: the fourth mover is no follower
+    for (Entity e : squad) CHECK(td->isFollower(*sim, e) && (sim->world().get<game::Unit>(e).flags & game::kUnitFollower));
+    // the hero walks east; the squad keeps up in its ring (movers are slower: give them time once the hero stops)
+    steer(*sim, 1, kEast, 1000);
+    run(*sim, 1.0);
+    steer(*sim, 1, {}, 0);
+    run(*sim, 4.0);
+    const Vec3 hp = tdPos(*sim, td->heroOf(*sim, 1));
+    CHECK(hp.x > Fixed::fromInt(8));
+    for (Entity e : squad) {
+        const Fixed d = (tdPos(*sim, e) - hp).xz().length();
+        CHECK(d > Fixed::fromInt(1) && d < Fixed::fromInt(3));
+    }
+    // RTS orders and the computer player leave followers alone
+    Command mv; mv.player = 1; mv.type = game::kCmdMove; mv.units = {squad[0]}; mv.point = {Fixed::fromInt(20), Fixed{}, Fixed::fromInt(2)};
+    sim->submit(mv);
+    run(*sim, 2.0);
+    CHECK((tdPos(*sim, squad[0]) - hp).xz().length() < Fixed::fromInt(3));
+    // determinism + saves with the extended state
+    std::string save = sim->serialize();
+    auto copy = makeSimJson(rules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"mover","owner":1,"pos":[3.5,6.5]},
+        {"type":"mover","owner":1,"pos":[3.5,10.5]},{"type":"mover","owner":1,"pos":[2.5,8.5]},{"type":"mover","owner":1,"pos":[1.5,1.5]},
+        {"type":"dummy","owner":2,"pos":[30.5,1.5]})", false));
+    std::string err;
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum());
+    steer(*sim, 1, kSouth); steer(*copy, 1, kSouth);
+    run(*sim, 1.0); run(*copy, 1.0);
+    CHECK(copy->checksum() == sim->checksum() && mod(*copy).topDown()->squadOf(*copy, 1).size() == 3);
+}
+
+TEST(topdown_escape_moves_the_squad_within_the_budget) {
+    const std::string rules = tdRules(R"("squad": {"types": ["mover"], "radius": 1.5}, "escape": {"duration": 1, "cooldown": 3},)");
+    auto sim = makeSimJson(rules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"mover","owner":1,"pos":[3.5,8.5]},
+        {"type":"dummy","owner":2,"pos":[30.5,1.5]})"));
+    run(*sim, 0.25);
+    auto* td = mod(*sim).topDown();
+    CHECK(td->escapeBudget(*sim, 1) == Fixed::fromInt(6));   // speed 6 * 1 s
+    auto escapeTo = [&](Fixed x, Fixed z) {
+        topdown::Ability a; a.index = topdown::kEscapeAbility; a.hasPoint = true;
+        Command c; c.player = 1; c.type = game::kCmdTopDownAbility; c.param = topdown::abilityParam(a); c.point = {x, Fixed{}, z};
+        sim->submit(c);
+        run(*sim, 0.25);
+    };
+    std::string why;
+    CHECK(!td->escapeAllowed(*sim, 1, {Fixed::fromRatio(115, 10), Fixed{}, Fixed::fromRatio(85, 10)}, &why));   // 7 away: over budget
+    escapeTo(Fixed::fromRatio(95, 10), Fixed::fromRatio(85, 10));   // 5 east
+    Entity hero = td->heroOf(*sim, 1);
+    CHECK((tdPos(*sim, hero) - Vec3{Fixed::fromRatio(95, 10), Fixed{}, Fixed::fromRatio(85, 10)}).xz().length() < Fixed::fromRatio(1, 2));
+    for (Entity m : td->squadOf(*sim, 1)) CHECK((tdPos(*sim, m) - tdPos(*sim, hero)).xz().length() < Fixed::fromInt(2));
+    CHECK(td->escapeReadyAt(*sim, 1) > sim->tick());
+    escapeTo(Fixed::fromRatio(55, 10), Fixed::fromRatio(85, 10));   // cooling down: ignored
+    CHECK(tdPos(*sim, hero).x > Fixed::fromInt(9));
+    run(*sim, 3.0);
+    // the wall (x = 12, rows 2..13): 3 cells away in a straight line, far more to walk around it -> refused
+    CHECK(!td->escapeAllowed(*sim, 1, {Fixed::fromRatio(135, 10), Fixed{}, Fixed::fromRatio(85, 10)}, &why) && why == "too far to walk");
+    CHECK(td->escapeAllowed(*sim, 1, {Fixed::fromRatio(115, 10), Fixed{}, Fixed::fromRatio(85, 10)}));
+}
+
+TEST(topdown_plain_games_keep_their_hash_layout) {
+    // no squad / escape / hold / windup / free fire: the extended pilot state is neither hashed nor saved
+    auto a = makeSimJson(kTopDownRules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"dummy","owner":2,"pos":[30.5,1.5]})"));
+    CHECK(!mod(*a).topDown()->rules().extended);
+    // a press / release pair is a tap there (release casts along the aim) and leaves no state behind
+    a->submit(abilityCmd(1, 0, topdown::Phase::Press, true, kEast));
+    run(*a, 0.25);
+    CHECK(pilot(*a, 1).held == -1);
+    a->submit(abilityCmd(1, 0, topdown::Phase::Release, true, kEast));
+    run(*a, 0.25);
+    auto* st = a->world().tryGet<game::AbilityState>(mod(*a).topDown()->heroOf(*a, 1));
+    CHECK(st && st->readyAt[0] > a->tick());
+}
+
+TEST(topdown_outcome_freezes_once_decided) {
+    std::string rules = kTopDownRules;
+    auto sim = makeSimJson(rules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},{"type":"mover","owner":2,"pos":[6.5,8.5]})", false));
+    CHECK(sim->result() == 0 && mod(*sim).outcomeBlob(*sim).empty());
+    Entity foe = findType(*sim, "mover", 2);
+    sim->world().get<game::Unit>(foe).hp = Fixed::fromInt(1);
+    run(*sim, 1.0);
+    CHECK(sim->result() == 1);
+    const auto blob = mod(*sim).outcomeBlob(*sim);
+    const uint32_t at = mod(*sim).outcome(*sim)->tick;
+    CHECK(blob.size() > 8 && blob[0] == 'O' && blob[2] == 1);
+    run(*sim, 2.0);
+    CHECK(mod(*sim).outcomeBlob(*sim) == blob && mod(*sim).outcome(*sim)->tick == at && sim->result() == 1);
+}
+
+TEST(topdown_client_prediction_and_correction_smoothing) {
+    game::TopDownPrediction p;
+    auto open = [](float, float) { return true; };
+    // moving east at 6 u/s with 0.1 s of input in flight: drawn about 0.6 ahead of the sim position
+    for (int i = 0; i < 60; ++i) p.frame(1.0f / 60, 6, 0, 0.1f, true, 0, 0, open);
+    float dx, dz;
+    p.offset(1, true, dx, dz);
+    CHECK(std::abs(dx - 0.6f) < 0.05f && std::abs(dz) < 1e-4f);
+    p.offset(2, false, dx, dz);
+    CHECK(dx == 0 && dz == 0);   // other objects: no prediction
+    // the stick is released: the offset runs out within the lead (the sim catches up)
+    for (int i = 0; i < 30; ++i) p.frame(1.0f / 60, 0, 0, 0.1f, true, 0, 0, open);
+    p.offset(1, true, dx, dz);
+    CHECK(std::abs(dx) < 0.02f);
+    // a wall right in front: never drawn inside it
+    auto wall = [](float x, float) { return x < 0.2f; };
+    for (int i = 0; i < 60; ++i) p.frame(1.0f / 60, 6, 0, 0.1f, true, 0, 0, wall);
+    p.predicted(dx, dz);
+    CHECK(dx < 0.2f);
+    // rollback corrections blend in (and snap when large)
+    p.beforeRollback({{7, {1.0f, 0.0f}}, {8, {0.0f, 0.0f}}});
+    p.afterRollback({{7, {0.5f, 0.0f}}, {8, {9.0f, 0.0f}}});
+    p.offset(7, false, dx, dz);
+    CHECK(std::abs(dx - 0.5f) < 1e-4f);
+    p.offset(8, false, dx, dz);
+    CHECK(dx == 0);
+    for (int i = 0; i < 30; ++i) p.frame(1.0f / 60, 0, 0, 0.1f, false, 0, 0, open);
+    p.offset(7, false, dx, dz);
+    CHECK(std::abs(dx) < 0.01f);
+}
+
+TEST(topdown_controls_aim_buttons_and_escape_preview) {
+    std::vector<std::string> ids = {"drone"};
+    game::TopDownRules r = game::TopDown::parse(Json::parse(R"({"heroes": "drone", "escape": {"duration": 5}})"), ids);
+    game::Rules rts;
+    rts.types.resize(1);
+    rts.types[0].id = "drone";
+    game::AbilityDef ab; ab.id = "missile";
+    rts.types[0].abilities.push_back(ab);
+    Json gj = Json::parse(R"({"topDown": {"touchControls": "always",
+        "buttons": [{"ability": "missile", "mode": "aim", "key": "Q", "anchor": [1, 1], "offset": [-60, -200], "radius": 30, "dragRadius": 100},
+                    {"ability": "escape", "anchor": [1, 1], "offset": [-60, -60], "radius": 30}]}})");
+    game::TopDownControls tc;
+    tc.configure(gj, r, rts);
+    CHECK(tc.config().buttons[1].abilityIndex == topdown::kEscapeAbility && tc.config().buttons[0].mode == game::TopDownButtonConfig::Mode::Aim);
+    const float W = 1000, H = 600;
+    CHECK(tc.pointerDown(5, 940, 400, W, H, true));
+    tc.pointerMove(5, 990, 400);                 // drag right by half the drag radius
+    tc.pointerUp(5, 990, 400);
+    auto ev = tc.takeButtonEvents();
+    CHECK(ev.size() == 2 && ev[0].phase == topdown::Phase::Press && ev[1].phase == topdown::Phase::Release && ev[1].hasDir);
+    const topdown::Ability a = game::TopDownControls::abilityEvent(ev[1], 0, 0);
+    CHECK(a.hasAngle && a.angle == 16384 && a.distance == 500 && a.phase == topdown::Phase::Release);
+    tc.pointerDown(6, 940, 400, W, H, true);    // a pressed aim button cancelled by losing focus
+    tc.cancelAll();
+    ev = tc.takeButtonEvents();
+    CHECK(ev.size() == 2 && ev[1].phase == topdown::Phase::Cancel);
+    // escape preview: walks at the hero speed, keeps walls, ends after the duration
+    auto& esc = tc.escape();
+    esc.begin(5, 5, 6, 1);
+    auto passable = [](float x, float) { return x < 8; };
+    bool done = false;
+    for (int i = 0; i < 70 && !done; ++i) done = esc.update(1.0f / 60, 1, 0, passable);
+    CHECK(done && !esc.active && esc.x < 8 && esc.x > 7.5f && esc.travelled <= esc.budget + 1e-3f);
+}
+
+TEST(topdown_aim_candidates_follow_the_manual_aim_rules) {
+    // hostiles in weapon range count, an own unit and a hostile out of range (but in sight) do not; sorted by handle, read-only
+    auto sim = makeSimJson(kTopDownRules, topDownMap(R"({"type":"drone","owner":1,"pos":[4.5,8.5]},
+        {"type":"dummy","owner":2,"pos":[6.5,10.2]},{"type":"mover","owner":2,"pos":[9.5,8.9]},
+        {"type":"dummy","owner":1,"pos":[5.5,7.5]},{"type":"dummy","owner":2,"pos":[14.5,8.5]})", false));
+    run(*sim, 0.1);
+    const uint64_t before = sim->checksum();
+    auto c = mod(*sim).topDown()->aimCandidates(*sim, 1);
+    CHECK(c.size() == 2);
+    CHECK(c.size() == 2 && c[0].e.index < c[1].e.index);
+    CHECK(sim->checksum() == before);
+    CHECK(mod(*sim).topDown()->aimCandidates(*sim, 1, Fixed::fromInt(30)).size() == 3);   // a wider range override
+    CHECK(mod(*sim).topDown()->aimCandidates(*sim, 1, Fixed::fromInt(3)).size() == 1);
+}
+
+TEST(topdown_aim_assist_bends_touch_aim_and_taps_fire) {
+    std::vector<std::string> ids = {"drone"};
+    game::TopDownRules r = game::TopDown::parse(Json::parse(R"({"heroes": "drone"})"), ids);
+    game::Rules rts;
+    rts.types.resize(1);
+    rts.types[0].id = "drone";
+    Json gj = Json::parse(R"({"topDown": {"touchControls": "always",
+        "joystick": {"mode": "floating", "radius": 50, "area": [0, 0.5, 0.5, 1]},
+        "aimStick": {"enabled": true, "radius": 50, "deadzone": 0.2, "area": [0.5, 0.5, 1, 1]},
+        "aimAssist": {"cone": 30, "tapTime": 0.25, "tapFireTime": 0.4}}})");
+    game::TopDownControls tc;
+    tc.configure(gj, r, rts);
+    CHECK(tc.config().assist.touch && !tc.config().assist.mouse && !tc.config().assist.pad);
+    const float W = 1000, H = 600;
+    game::TopDownFrameInput in;
+    in.targets.push_back({11, 4, 1.5f});    // east, ~20 degrees south
+    in.targets.push_back({12, 0, -6});      // north
+    auto deg = [](int32_t a) { return float(a) / 65536.0f * 360.0f; };
+    // touch aim east: bent to the east target, locked
+    in.time = 1;
+    CHECK(tc.pointerDown(1, 800, 450, W, H, true));
+    tc.pointerMove(1, 850, 450);
+    game::topdown::Input q = tc.compose(in, 0);
+    CHECK(q.aim && std::abs(deg(q.aimAngle) - deg(game::TopDown::angleOf({Fixed::fromInt(4), Fixed{}, Fixed::fromRatio(3, 2)}))) < 0.5f);
+    CHECK(tc.assistTarget() == 11);
+    // aim 35 degrees off the locked target: kept (stickiness 1.4 * 30); a fresh target would not be taken
+    tc.pointerMove(1, 828, 491);
+    q = tc.compose(in, 0);
+    CHECK(tc.assistTarget() == 11);
+    // aim straight down (south): nothing within the cone, the raw aim stays
+    tc.pointerMove(1, 800, 500);
+    q = tc.compose(in, 0);
+    CHECK(tc.assistTarget() == 0 && q.aimAngle == 0);
+    tc.pointerUp(1, 800, 500);
+    // the mouse is not assisted (assist.mouse off)
+    game::TopDownFrameInput mouse = in; mouse.mouseAim = true; mouse.mouseDirX = 3; mouse.mouseDirZ = 0;
+    q = tc.compose(mouse, 0);
+    CHECK(q.aim && q.aimAngle == 16384 && tc.assistTarget() == 0);
+    // a tap: fire at the nearest target (east, 4.3 away) for tapFireTime, then stop
+    in.time = 2;
+    tc.compose(in, 0);
+    CHECK(tc.pointerDown(2, 800, 450, W, H, true));
+    in.time = 2.1f;
+    tc.compose(in, 0);
+    tc.pointerUp(2, 801, 451);
+    q = tc.compose(in, 0);
+    CHECK(q.aim && q.fire && tc.assistTarget() == 11);
+    in.time = 2.45f;
+    CHECK(tc.compose(in, 0).fire);
+    in.time = 2.6f;
+    q = tc.compose(in, 0);
+    CHECK(!q.fire && !q.aim);
+    // a long press is not a tap
+    CHECK(tc.pointerDown(3, 800, 450, W, H, true));
+    in.time = 3.0f;
+    tc.compose(in, 0);
+    tc.pointerUp(3, 800, 450);
+    CHECK(!tc.compose(in, 0).fire);
+    // without the block: no assist
+    game::TopDownControls plain;
+    plain.configure(Json::parse(R"({"topDown": {"aimStick": true}})"), r, rts);
+    CHECK(!plain.config().assist.any());
+}
+
+TEST(topdown_speed_camera_zooms_out_and_looks_ahead) {
+    std::vector<std::string> ids = {"drone"};
+    game::TopDownRules r = game::TopDown::parse(Json::parse(R"({"heroes": "drone"})"), ids);
+    game::Rules rts;
+    rts.types.resize(1);
+    rts.types[0].id = "drone";
+    game::TopDownControls tc;
+    tc.configure(Json::parse(R"({"topDown": {"camera": {"pitch": 90, "distance": 16, "minDistance": 8, "maxDistance": 30,
+        "smoothing": 0, "lookAhead": 0, "lookAheadSmoothing": 0, "velocityLookAhead": 0.5, "maxLookAhead": 3,
+        "speedZoom": {"from": 1, "to": 5, "distance": 28, "smoothing": 0}}}})"), r, rts);
+    render::RTSCamera cam;
+    render::float3 hero{20, 0, 50};
+    tc.snapCamera(cam, hero, 200, 100);
+    CHECK(std::abs(cam.distance - 16) < 0.01f && std::abs(cam.target.x - 20) < 0.01f);
+    const float dt = 1.0f / 60;
+    for (int i = 0; i < 90; ++i) { hero.x += 10 * dt; tc.updateCamera(cam, hero, true, dt, 200, 100); }   // 10 units / s east
+    CHECK(std::abs(tc.heroSpeed() - 10) < 0.2f);
+    CHECK(std::abs(cam.distance - 28) < 0.05f);                 // pulled back
+    CHECK(std::abs(cam.target.x - (hero.x + 3)) < 0.05f);       // 5 ahead, capped at 3
+    CHECK(std::abs(cam.target.z - 50) < 0.05f);
+    for (int i = 0; i < 90; ++i) tc.updateCamera(cam, hero, true, dt, 200, 100);   // standing
+    CHECK(std::abs(cam.distance - 16) < 0.05f && std::abs(cam.target.x - hero.x) < 0.05f);
+    // the player's own zoom stays under the speed part
+    cam.distance = 20;
+    tc.updateCamera(cam, hero, true, dt, 200, 100);
+    CHECK(std::abs(cam.distance - 20) < 0.05f);
+    for (int i = 0; i < 90; ++i) { hero.z += 10 * dt; tc.updateCamera(cam, hero, true, dt, 200, 100); }
+    CHECK(std::abs(cam.distance - 32) < 0.05f && cam.maxDistance > 41.9f);
+    // a jump (respawn) is not speed
+    hero.x += 60;
+    tc.updateCamera(cam, hero, true, dt, 200, 100);
+    for (int i = 0; i < 90; ++i) tc.updateCamera(cam, hero, true, dt, 200, 100);
+    CHECK(std::abs(cam.distance - 20) < 0.05f);
+    // without the keys: the old camera
+    game::TopDownControls plain;
+    plain.configure(Json::parse(R"({"topDown": {"camera": {"distance": 16, "smoothing": 0, "lookAhead": 0}}})"), r, rts);
+    render::float3 h2{20, 0, 50};
+    plain.snapCamera(cam, h2, 200, 100);
+    for (int i = 0; i < 30; ++i) { h2.x += 10 * dt; plain.updateCamera(cam, h2, true, dt, 200, 100); }
+    CHECK(std::abs(cam.distance - 16) < 0.01f && std::abs(cam.target.x - h2.x) < 0.01f);
 }

@@ -10,6 +10,9 @@
 #include <vector>
 #include "apps/battle/BattleLoad.h"
 #include "apps/battle/HeroDuel.h"
+#include "apps/battle/RtsBattle.h"
+#include "modules/rts/RtsModule.h"
+#include "modules/rts/RtsTopDown.h"
 #include "engine/net/HeroInput.h"
 #include "engine/net/Conn.h"
 #include "engine/net/MatchTicket.h"
@@ -253,23 +256,30 @@ TEST(secure_real_udp_on_loopback) {
 }
 
 // ---------------- hero input + smoothing
-TEST(hero_input_is_sticky_quantized_state) {
-    net::HeroInputState s;
-    s.moveSector = 17; s.moveMagnitude = 200; s.aimMilli = 123000; s.held = 5;
-    CHECK(net::unpackHeroInput(net::packHeroInput(s)) == s);
-    net::HeroInputState released;
-    CHECK(net::unpackHeroInput(net::packHeroInput(released)) == released && !net::heroAiming(released));
-    CHECK(net::unpackHeroInput(int64_t(-1)).aimMilli <= net::kAimReleased);   // hostile bits are clamped
-    auto v = net::heroMoveVector(s, 32);   // sector 17 of 32 = half a turn: pointing to -x
-    CHECK(v.x < Fixed{} && fxAbs(v.y) < Fixed::fromRatio(1, 100));
-    net::HeroInputQuantizer q;
-    CHECK(q.update(1, 0, 0, 0, 0).has_value());
-    CHECK(!q.update(0.99f, 0.01f, 0, 0, 0).has_value());     // same sector + magnitude: nothing to send
-    auto c = q.update(0, 1, 0, 1, 1);
-    CHECK(c && c->moveSector == 9 && c->held == 1 && c->aimMilli == 90000);
-    CHECK(q.update(0.05f, 0, 0, 0, 0)->moveSector == 0);     // dead zone: stop
-    auto a = net::heroActionCommand(2, 3, 1, true, {Fixed::fromInt(4), {}, {}});
-    CHECK(a.type == net::kCmdHeroAction && net::heroActionIndex(a) == 3 && net::heroActionPhase(a) == 1 && net::heroActionHasPoint(a));
+TEST(hero_input_is_one_command_scheme) {
+    // The engine's hero ids are the RTS module's top-down commands: one scheme for games, server filter and load test.
+    CHECK(net::kCmdHeroInput == game::kCmdTopDown && net::kCmdHeroAbility == game::kCmdTopDownAbility);
+    topdown::Input in;
+    in.moveAngle = 16384; in.moveMag = 1000; in.aim = true; in.aimAngle = 32768; in.fire = true;
+    CHECK(topdown::unpack(topdown::pack(in)) == in);
+    const Vec2 v = topdown::moveVector(in);   // a quarter turn = +x
+    CHECK(v.x > Fixed::fromRatio(99, 100) && fxAbs(v.y) < Fixed::fromRatio(1, 100));
+    const Vec2 a = topdown::aimVector(in);    // half a turn = -z
+    CHECK(a.y < Fixed::fromRatio(-99, 100));
+    net::HeroInputQuantizer q;               // client sticks (world x, z) -> the sim's quantization (45 sectors, step 1)
+    auto s1 = q.update(1, 0, 0, 0, false);
+    CHECK(s1 && s1->moveMag == 1000 && s1->moveAngle == topdown::quantizeAngle(16384, 45) && !s1->aim);
+    CHECK(!q.update(0.99f, 0.01f, 0, 0, false).has_value());   // same sector + magnitude: nothing to send
+    auto s2 = q.update(0, 1, 0, -1, true);
+    CHECK(s2 && s2->moveAngle == 0 && s2->aim && s2->aimAngle == 32768 && s2->fire);
+    CHECK(q.update(0.01f, 0, 0, 0, false)->moveMag == 0);      // dead zone: stop
+    // ability button events; old clients' plain index = a tap
+    topdown::Ability ab; ab.index = 3; ab.phase = topdown::Phase::Release; ab.hasAngle = true; ab.angle = 12000; ab.distance = 640;
+    Command c = net::heroAbilityCommand(2, ab);
+    CHECK(c.type == net::kCmdHeroAbility && topdown::unpackAbility(c.param) == ab);
+    CHECK(topdown::unpackAbility(1).index == 1 && topdown::unpackAbility(1).phase == topdown::Phase::Tap && !topdown::unpackAbility(1).hasAngle);
+    CHECK(topdown::unpackAbility(-1).index == -1 && topdown::unpackAbility(int64_t(1) << 50).index == -1);   // hostile bits
+    CHECK(topdown::unpack(-1).moveMag <= topdown::kMagMax);
 }
 
 TEST(correction_smoother_blends_and_snaps) {
@@ -383,6 +393,69 @@ TEST(hosted_battle_reports_desync) {
     auto r = battle::runBattleLoad(cfg);
     CHECK(r.desyncs >= 1);
     CHECK(r.reports.size() == 1 && r.reports[0].desync && !r.reports[0].consensus);
+}
+
+// An RTS-module battle (templates/topdown_arena rules, a small duel map) through the dedicated battle server:
+// RtsModule simulations on every client, heroes steered by the computer pilot with kCmdTopDown, ability taps with
+// kCmdTopDownAbility, only those two allowed by the server, rollback corrections smoothed, and the frozen outcome
+// blob (RtsModule::outcomeBlob) as the result report that every client must agree on.
+static std::string duelMap() {
+    std::string rows;
+    for (int y = 0; y < 10; ++y) rows += std::string(y ? "," : "") + "\"" + std::string(24, '.') + "\"";
+    return R"({"size":[24,10],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":[)" + rows +
+           R"(]},"entities":[{"type":"drone","owner":1,"pos":[5.5,5.5]},{"type":"drone","owner":2,"pos":[18.5,5.5]}]})";
+}
+
+TEST(hosted_rts_topdown_battle_agrees_on_the_outcome) {
+    battle::RtsBattleOptions o;
+    o.project = std::string(AIVERSE_SOURCE_DIR) + "/templates/topdown_arena";
+    o.mapJson = duelMap();
+    o.rulesPatch = R"({"victory": "noUnits", "fogOfWar": {"mode": "off"}, "topDown": {"respawn": 0},
+                      "types": {"drone": {"health": {"max": 220, "regen": 0}}}})";
+    battle::BattleLoadConfig cfg;
+    cfg.matches = 2; cfg.playersPerMatch = 2; cfg.seconds = 40;
+    cfg.link = net::linkPreset("bad");
+    cfg.game = battle::rtsBattleGame(o);
+    auto r = battle::runBattleLoad(cfg);
+    std::printf("  %s\n", r.summary().c_str());
+    CHECK(r.matches == 2 && r.finished == 2 && r.consensus == 2);
+    CHECK(r.desyncs == 0 && r.brokenSessions == 0);
+    for (auto& rep : r.reports) {
+        CHECK(rep.result != 0 && rep.report.size() > 8 && rep.report[0] == 'O' && int8_t(rep.report[2]) == int8_t(rep.result));
+        for (auto& p : rep.players) CHECK(p.joined && p.report == rep.report && p.droppedCommands == 0);
+    }
+    // presentation: rollback corrections went through the smoother; drawn heroes never jump more than the sim does
+    CHECK(r.maxDrawnJump <= r.maxRawJump + 0.1f);
+}
+
+TEST(rts_outcome_freezes_at_the_result_tick) {
+    battle::RtsBattleOptions o;
+    o.project = std::string(AIVERSE_SOURCE_DIR) + "/templates/topdown_arena";
+    o.mapJson = duelMap();
+    o.rulesPatch = R"({"victory": "noUnits", "topDown": {"respawn": 0}, "types": {"drone": {"health": {"max": 120, "regen": 0}}}})";
+    auto g = battle::rtsBattleGame(o);
+    SimConfig sc; sc.seed = 3;
+    auto sim = g->create(sc, nullptr, g->mapJson(2, 0));
+    auto& m = *static_cast<game::RtsModule*>(&sim->module());
+    CHECK(g->resultBlob(*sim).empty() && !m.outcome(*sim));
+    battle::BotThumbs t1, t2;
+    uint32_t decided = 0;
+    for (uint32_t i = 0; i < 20 * 60 && !decided; ++i) {
+        std::vector<Command> cmds;
+        g->bot(*sim, 1, t1, uint64_t(i) * 50, cmds);
+        for (auto& c : cmds) { c.player = 1; sim->submit(c); }
+        cmds.clear();
+        g->bot(*sim, 2, t2, uint64_t(i) * 50, cmds);
+        for (auto& c : cmds) { c.player = 2; sim->submit(c); }
+        sim->step();
+        if (sim->result()) decided = sim->tick();
+    }
+    CHECK(decided > 0);
+    const auto blob = g->resultBlob(*sim);
+    const int result = sim->result();
+    CHECK(!blob.empty() && m.outcome(*sim) && m.outcome(*sim)->result == result);
+    for (int i = 0; i < 100; ++i) sim->step();   // the world goes on (predicted ticks), the outcome does not
+    CHECK(g->resultBlob(*sim) == blob && sim->result() == result);
 }
 
 // ---------------- control plane

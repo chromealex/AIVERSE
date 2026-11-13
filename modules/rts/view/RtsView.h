@@ -60,6 +60,7 @@ struct SceneObject {
     bool moving = false;
     bool producing = false;      // structure training / researching
     bool hasTarget = false;      // combat target (turrets aim at it)
+    float steer = 0;             // vehicles (rules "driving"): steering angle of the front wheels, rad, + = left
     render::float3 target;
     Entity source;               // projectiles: who fired (muzzle point)
     uint16_t shooterType = UINT16_MAX; // projectiles: type of the unit that fired it (lights)

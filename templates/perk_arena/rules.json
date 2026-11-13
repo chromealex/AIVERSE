@@ -1,0 +1,135 @@
+// "Perk Arena": a top-down hero levels up during the match (Drone Fall style, rules "progression"). Kills drop xp
+// orbs, the hero picks them up, every level opens an offer of cards (a robot recruit first, then perks: damage, fire
+// rate, split / piercing bullets, burning hits, armor, regeneration, a bigger pickup radius). Recruited robots
+// follow the hero; a fallen robot comes back at the summon circle in the middle. Destroy the swarm's core.
+// Headless: the bot steers the hero and picks the cards. Reference: docs/progression.md.
+{
+  "victory": "noStructures",
+  "resources": { "scrap": { "name": "Scrap", "kind": "stock", "start": 0 } },
+  "fogOfWar": { "mode": "explored" },
+  "scripts": ["scripts/perks.lua"],
+  "viewScripts": ["scripts/view/levelup.lua"],
+  "statuses": {
+    "burn": { "name": "Burning", "tags": ["debuff"], "tick": { "damage": 4, "interval": 0.5 }, "stacking": "refresh" }
+  },
+
+  "topDown": {
+    "heroes": ["drone"],
+    "respawn": 6,
+    "move": { "accel": 36, "decel": 54, "turnRate": 720, "collideUnits": true },
+    "input": { "sectors": 45, "magnitudeSteps": 1, "deadzone": 0.05 },
+    "aim": { "snapCone": 15, "fires": true },
+    "autoFire": { "enabled": true, "whileMoving": true, "cone": 360, "lineOfFire": true,
+                  "retarget": "nearest", "interval": 0.2, "switchMargin": 0.5, "preferArmed": true }
+  },
+
+  "progression": {
+    "players": [1],
+    "units": [
+      { "id": 1, "type": "drone", "hero": true },
+      { "id": 2, "type": "gunbot", "cost": 1 },
+      { "id": 3, "type": "lancer", "cost": 2 }
+    ],
+    "perks": [
+      { "id": 1, "key": "damage_boost", "maxSelections": 3, "aiPriority": 1,
+        "effects": [ { "stat": "outgoingDamage", "op": "multiply", "value": 1250 } ] },
+      { "id": 2, "key": "rapid_fire", "maxSelections": 2, "aiPriority": 2,
+        "effects": [ { "stat": "fireInterval", "op": "multiply", "value": 800 } ] },
+      { "id": 3, "key": "split_shot", "bearer": 1, "aiPriority": 1, "minLevel": 3,
+        "bullet": { "modifiers": [ { "kind": "split", "count": 3, "angle": 36 } ] } },
+      { "id": 4, "key": "piercing_rounds", "maxSelections": 2, "aiPriority": 2,
+        "bullet": { "modifiers": [ { "kind": "flyThrough", "count": 1, "falloff": 0.8 } ] } },
+      { "id": 5, "key": "ricochet", "bearer": 1, "aiPriority": 3,
+        "bullet": { "modifiers": [ { "kind": "ricochet", "count": 2, "radius": 5 } ] } },
+      { "id": 6, "key": "burning_hits", "hook": "on_burning_hits", "aiPriority": 3, "onHitChance": 0.5,
+        "onHit": [ { "type": "status", "status": "burn", "duration": 3 } ] },
+      { "id": 7, "key": "armor_plating", "aiPriority": 4, "aiPriorityLowHealth": 0,
+        "effects": [ { "stat": "incomingDamage", "op": "multiply", "value": 800 } ] },
+      { "id": 8, "key": "nanites", "aiPriority": 5, "aiPriorityLowHealth": 1,
+        "effects": [ { "stat": "healthRegen", "op": "add", "value": 6000 } ] },
+      { "id": 9, "key": "thrusters", "maxSelections": 2, "aiPriority": 6,
+        "effects": [ { "stat": "moveSpeed", "op": "multiply", "value": 1150 } ] },
+      { "id": 10, "key": "magnet_field", "maxSelections": 2, "aiPriority": 7,
+        "effects": [ { "stat": "pickupRadius", "op": "multiply", "value": 1500 } ] },
+      { "id": 11, "key": "heavy_frame", "aiPriority": 5, "aiPriorityLowHealth": 1,
+        "effects": [ { "stat": "maxHealth", "op": "multiply", "value": 1300 } ] },
+      { "id": 12, "key": "squad_damage", "scope": "slot", "units": [2, 3], "maxSelections": 2, "aiPriority": 3,
+        "effects": [ { "stat": "outgoingDamage", "op": "multiply", "value": 1300 } ] }
+    ],
+    "deck": { "maxSlots": 4 },
+    "defaultDeck": { "player": 1, "techLevel": 0, "slots": [ { "slot": 0, "unit": 1 }, { "slot": 1, "unit": 2 }, { "slot": 2, "unit": 3 } ] },
+    "xp": { "toNext": [4, 6, 8, 10, 12, 14, 16, 18, 20, 22] },
+    "xpGrowthPerLevel": 3,
+    "offers": {
+      "default": ["anyPerk", "anyPerk", "anyPerk"],
+      "levels": [ { "level": 1, "variants": ["recruit", "recruit"] }, { "level": 4, "variants": ["recruit", "anyPerk", "anyPerk"] } ],
+      "recruitAiPriority": 0
+    },
+    "offerRerolls": 1,
+    "killXp": { "crawler": 2, "spitter": 3, "turret": 6 },
+    "pickups": { "radius": 4, "magnetRadius": 40, "landing": 0.3, "lifetime": 40 },
+    "summons": { "progress": 2, "maxAllies": 4 },
+    "summonPoints": [
+      { "id": 1, "position": [20000, 0, 13000], "radiusMilli": 1600, "singleUse": false, "cooldownTicks": 200, "action": "restoreOrRecruit" }
+    ],
+    "squad": { "follow": 4 }
+  },
+
+  "types": {
+    "drone": {
+      "name": "Drone",
+      "health": { "max": 600 },
+      "move": { "speed": 6, "radius": 0.45 },
+      "sight": 11,
+      "weapons": [ { "id": "blaster", "range": 6, "damage": 16, "cooldown": 0.35, "projectileSpeed": 24 } ],
+      "view": { "shape": "flyer", "scale": 0.9 }
+    },
+    "gunbot": {
+      "name": "Gun Bot",
+      "health": { "max": 220 },
+      "move": { "speed": 5, "radius": 0.4 },
+      "sight": 9,
+      "weapons": [ { "id": "rifle", "range": 5, "damage": 9, "cooldown": 0.6, "projectileSpeed": 20 } ],
+      "view": { "shape": "soldier", "scale": 0.8 }
+    },
+    "lancer": {
+      "name": "Lancer",
+      "health": { "max": 300, "armor": 1 },
+      "move": { "speed": 4.5, "radius": 0.45 },
+      "sight": 9,
+      "weapons": [ { "id": "lance", "range": 1.2, "damage": 22, "cooldown": 1.0 } ],
+      "view": { "shape": "soldier", "scale": 0.95 }
+    },
+    "crawler": {
+      "name": "Crawler",
+      "health": { "max": 70 },
+      "move": { "speed": 2.6, "radius": 0.35 },
+      "sight": 7,
+      "weapons": [ { "id": "claw", "range": 0.5, "damage": 8, "cooldown": 1.0 } ],
+      "view": { "shape": "soldier", "scale": 0.7 }
+    },
+    "spitter": {
+      "name": "Spitter",
+      "health": { "max": 110 },
+      "move": { "speed": 2.0, "radius": 0.4 },
+      "sight": 8,
+      "weapons": [ { "id": "spit", "range": 4, "damage": 7, "cooldown": 1.4, "projectileSpeed": 12 } ],
+      "view": { "shape": "soldier", "scale": 0.8 }
+    },
+    "turret": {
+      "name": "Turret",
+      "structure": { "footprint": [1, 1] },
+      "health": { "max": 420, "armor": 1 },
+      "sight": 8,
+      "weapons": [ { "id": "cannon", "range": 5, "damage": 10, "cooldown": 1.0, "projectileSpeed": 16 } ],
+      "view": { "shape": "tower", "scale": 0.8 }
+    },
+    "core": {
+      "name": "Core",
+      "structure": { "footprint": [2, 2] },
+      "health": { "max": 1400, "armor": 2 },
+      "sight": 9,
+      "view": { "shape": "base", "scale": 0.9 }
+    }
+  }
+}

@@ -3,6 +3,7 @@
 // the stick, a computer pilot for bots. Integer / Fixed maths only; every loop runs in player-slot or entity order.
 #include "RtsTopDown.h"
 #include "RtsInternal.h"
+#include "RtsEncounters.h"
 #include "../../engine/core/Archive.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>
@@ -10,6 +11,7 @@
 
 namespace aiverse::game {
 using namespace detail;
+static_assert(kCmdTopDown == net::kCmdHeroInput && kCmdTopDownAbility == net::kCmdHeroAbility, "one hero command scheme");
 
 namespace {
 const Fixed kSkin = Fixed::fromRatio(1, 64);   // bodies fit corridors exactly as wide as they are
@@ -65,6 +67,36 @@ TopDownRules TopDown::parse(const Json& j, const std::vector<std::string>& ids) 
         r.snapCos = cosDegrees(cone);
         r.aimFires = aim.getBool("fires", true);
         r.aimRange = nonNegative(aim, "range", Fixed{}, "topDown.aim");
+        r.freeFire = aim.getBool("freeFire", false);
+    }
+    if (const Json& ab = j["abilities"]; ab.isObject()) {
+        const Json& hold = ab["hold"];
+        if (hold.isString()) r.holdIds.push_back(hold.str());
+        else for (auto& it : hold.items()) r.holdIds.push_back(it.str());
+        r.rootWhileCasting = ab.getBool("rootWhileCasting", false);
+    }
+    if (const Json& sq = j["squad"]; sq.isObject()) {
+        auto& q = r.squad;
+        q.enabled = true;
+        q.types = typeList(sq["types"], ids, "topDown.squad.types");
+        if (q.types.empty()) throw std::runtime_error("topDown.squad.types: list at least one unit type");
+        q.size = int(sq.getInt("size", 0));
+        if (q.size < 0 || q.size > 64) throw std::runtime_error("topDown.squad.size: 0 (every unit) or 1..64");
+        q.radius = nonNegative(sq, "radius", q.radius, "topDown.squad");
+        q.tolerance = nonNegative(sq, "tolerance", q.tolerance, "topDown.squad");
+        q.rotate = sq.getBool("rotate", true);
+        q.fireWhileMoving = sq.getBool("fireWhileMoving", false);
+        q.repathSeconds = nonNegative(sq, "repath", q.repathSeconds, "topDown.squad");
+    }
+    if (const Json& es = j["escape"]; es.isObject() || es.boolean(false)) {
+        auto& e = r.escape;
+        e.enabled = es.isObject() ? es.getBool("enabled", true) : true;
+        if (es.isObject()) {
+            e.duration = nonNegative(es, "duration", e.duration, "topDown.escape");
+            e.cooldown = nonNegative(es, "cooldown", e.cooldown, "topDown.escape");
+            e.pause = es.getBool("pause", true);
+        }
+        if (e.enabled && e.duration.raw <= 0) throw std::runtime_error("topDown.escape.duration: must be positive");
     }
     const Json& af = j["autoFire"];
     {
@@ -87,6 +119,8 @@ TopDownRules TopDown::parse(const Json& j, const std::vector<std::string>& ids) 
             r.movingSpeed = nonNegative(af, "movingSpeed", r.movingSpeed, "topDown.autoFire");
         }
     }
+    r.botProgression = j["bot"].getBool("progression", false);
+    r.extended = r.freeFire || !r.holdIds.empty() || r.rootWhileCasting || r.squad.enabled || r.escape.enabled;
     return r;
 }
 
@@ -119,6 +153,17 @@ void TopDown::setup(Simulation& sim, RtsModule& m, const Json& rulesJson) {
     if (!active()) return;
     if (m.state(sim).surface) throw std::runtime_error("topDown: planet maps are not supported (flat maps only)");
     rules_.retargetTicks = uint32_t((rules_.retargetSeconds * int64_t(sim.tickRate())).toInt());
+    rules_.squad.repathTicks = uint32_t(std::max<int64_t>(1, (rules_.squad.repathSeconds * int64_t(sim.tickRate())).toInt()));
+    for (auto& id : rules_.holdIds) {   // hold abilities must exist on some hero type
+        bool found = false;
+        for (uint16_t ht : rules_.heroTypes) for (auto& a : m.rules().types[ht].abilities) found |= a.id == id;
+        if (!found) throw std::runtime_error("topDown.abilities.hold: no hero type has an ability '" + id + "'");
+    }
+    for (uint16_t ht : rules_.heroTypes)   // windups run in the sim: their state is hashed / saved
+        for (auto& a : m.rules().types[ht].abilities) {
+            rules_.extended |= a.castTime.raw > 0;
+            for (auto& l : a.levels) rules_.extended |= l.castTime.raw > 0;
+        }
     auto& st = sim.world().setResource<TopDownStore>();
     st.pilots.assign(sim.players().size() + 1, {});
     for (auto& p : st.pilots) p.heroType = rules_.heroTypes[0];
@@ -198,6 +243,11 @@ void TopDown::hash(Simulation& sim, Hasher& h) const {
         h.u64(p.hero.packed()); h.u32(p.heroType); h.v3(p.home); h.u32(p.respawnAt);
         h.u64(uint64_t(topdown::pack(p.input))); h.u32(p.inputTick);
         h.v3(p.vel); h.u64(p.target.packed()); h.u32(p.retargetAt);
+        if (!rules_.extended) continue;   // games without squads / escape / holds / windups keep their checksums
+        h.i32(p.held); h.i32(p.heldAngle); h.u32(p.heldDir); h.i32(p.casting); h.u32(p.castAt);
+        h.u64(p.castTarget.packed()); h.v3(p.castPoint); h.u32(p.escapeReadyAt);
+        h.u32(uint32_t(p.squad.size()));
+        for (Entity e : p.squad) h.u64(e.packed());
     }
 }
 
@@ -211,6 +261,12 @@ void TopDown::io(Simulation& sim, Archive& a) {
         int64_t in = topdown::pack(p.input);
         a(p.hero, p.heroType, p.home, p.respawnAt, in, p.inputTick, p.vel, p.target, p.retargetAt);
         if (!a.writing()) p.input = topdown::unpack(in);
+        if (!rules_.extended) continue;   // the save layout of plain top-down games is unchanged
+        a(p.held, p.heldAngle, p.heldDir, p.casting, p.castAt, p.castTarget, p.castPoint, p.escapeReadyAt);
+        uint32_t ns = uint32_t(p.squad.size());
+        aiverse::io(a, ns);
+        if (!a.writing()) { if (ns > 4096) { a.fail(); return; } p.squad.assign(ns, kNullEntity); }
+        for (Entity& e : p.squad) a(e);
     }
 }
 
@@ -226,42 +282,384 @@ bool TopDown::command(Simulation& sim, const Command& cmd) {
         p.inputTick = sim.tick();
         return true;
     }
-    // kCmdTopDownAbility: param = ability index of the hero's type; target / point optional (aimed along the stick)
+    // kCmdTopDownAbility: topdown::Ability (old clients: param = ability index = a tap); target / point optional
+    const topdown::Ability ab = topdown::unpackAbility(cmd.param);
+    if (ab.index < 0) return true;
     World& w = sim.world();
-    const Entity e = p.hero;
-    if (!w.alive(e) || cmd.param < 0 || cmd.param >= 8) return true;
-    const int idx = int(cmd.param);
-    if (!m_->canCast(sim, e, idx)) return true;
-    const UnitType& t = m_->rules().types[w.get<Unit>(e).type];
-    const AbilityDef& a = m_->rules().advancedEffects ? m_->abilityFor(sim, e, idx) : t.abilities[size_t(idx)];
-    const Vec3 pos = w.get<Transform>(e).pos;
-    if (a.target == TargetKind::None || a.target == TargetKind::Self) { m_->castAbility(sim, e, idx, e, pos); return true; }
-    const uint8_t owner = w.get<Owner>(e).player;
-    Entity target = w.alive(cmd.target) && w.has<Unit>(cmd.target) ? cmd.target : kNullEntity;
-    if (a.target == TargetKind::Unit) {
-        if (!target.valid() && validTarget(sim, e, owner, p.target, a.range, {}, Fixed::fromInt(-2), nullptr)) target = p.target;
-        if (!target.valid()) {   // auto-aim: nearest valid target inside the ability's range
-            Fixed best{};
-            m_->state(sim).hash.query(pos, a.range + Fixed::fromInt(4), [&](Entity c) {
-                Fixed d;
-                if (!validTarget(sim, e, owner, c, a.range, {}, Fixed::fromInt(-2), &d)) return;
-                if (!target.valid() || d < best || (d == best && c.index < target.index)) { target = c; best = d; }
-            });
-        }
-        if (!target.valid() || m_->contactDistance(sim, e, target) > a.range + kHalf) return true;
-        m_->castAbility(sim, e, idx, target, w.get<Transform>(target).pos);
+    const bool pointGiven = ab.hasPoint || !(cmd.point == Vec3{});
+    if (ab.index == topdown::kEscapeAbility) {   // the destination the player picked in the escape preview
+        if (!rules_.escape.enabled || !w.alive(p.hero) || (ab.phase != topdown::Phase::Tap && ab.phase != topdown::Phase::Release)) return true;
+        Vec3 to = cmd.point;
+        if (!pointGiven && ab.hasAngle) {
+            const Fixed budget = escapeBudget(sim, cmd.player);
+            to = w.get<Transform>(p.hero).pos + direction(ab.angle) * (ab.distance > 0 ? budget * int64_t(ab.distance) / topdown::kMagMax : budget);
+        } else if (!pointGiven) return true;
+        doEscape(sim, p, cmd.player, flat(to));
         return true;
     }
-    Vec3 point = target.valid() ? w.get<Transform>(target).pos : cmd.point;
-    if (!target.valid() && cmd.point == Vec3{}) {   // no point: along the aim (or the facing), at full range
-        Vec3 dir = p.input.aim ? direction(p.input.aimAngle) : w.get<Unit>(e).facing;
-        point = pos + dir * a.range;
+    if (ab.index >= 8 || !w.alive(p.hero)) return true;
+    TopDownCast c;
+    c.index = ab.index;
+    c.target = w.alive(cmd.target) && w.has<Unit>(cmd.target) ? cmd.target : kNullEntity;
+    c.point = cmd.point; c.havePoint = pointGiven;
+    c.haveDir = ab.hasAngle; c.angle = ab.angle; c.distance = ab.distance;
+    if (!rules_.extended) {   // plain games: every button event that casts is a tap (no hold state to keep)
+        if (ab.phase == topdown::Phase::Tap || ab.phase == topdown::Phase::Release) requestCast(sim, p, c);
+        return true;
     }
-    Vec3 off = flat(point - pos);
-    Fixed len = off.length();
-    if (len > a.range && len.raw > 0) point = pos + off * (a.range / len);   // skill shots stop at their range
-    m_->castAbility(sim, e, idx, kNullEntity, flat(point));
+    switch (ab.phase) {
+    case topdown::Phase::Tap: requestCast(sim, p, c); break;
+    case topdown::Phase::Press:
+        p.held = int8_t(ab.index); p.heldDir = ab.hasAngle; p.heldAngle = ab.angle;
+        if (holds(sim, p.hero, ab.index)) requestCast(sim, p, c);   // hold: the first shot at once, then repeats
+        break;
+    case topdown::Phase::Release: {
+        const bool wasHeld = p.held == ab.index;
+        if (wasHeld) { p.held = -1; p.heldDir = false; p.heldAngle = 0; }
+        if (!holds(sim, p.hero, ab.index)) requestCast(sim, p, c);   // aimed buttons cast on release, along their stick
+        break;
+    }
+    case topdown::Phase::Cancel:
+        if (p.held == ab.index) { p.held = -1; p.heldDir = false; p.heldAngle = 0; }
+        break;
+    }
     return true;
+}
+
+bool TopDown::holds(Simulation& sim, Entity hero, int index) const {
+    if (rules_.holdIds.empty() || index < 0 || !sim.world().alive(hero)) return false;
+    const UnitType& t = m_->rules().types[sim.world().get<Unit>(hero).type];
+    if (size_t(index) >= t.abilities.size()) return false;
+    return std::find(rules_.holdIds.begin(), rules_.holdIds.end(), t.abilities[size_t(index)].id) != rules_.holdIds.end();
+}
+
+// Resolves where / at whom an ability goes (button stick, given point / target, aim, current or nearest target),
+// then starts its windup (castTime) or casts at once. false: nothing valid to cast at.
+bool TopDown::requestCast(Simulation& sim, TopDownPilot& p, const TopDownCast& req) {
+    World& w = sim.world();
+    const Entity e = p.hero;
+    if (!w.alive(e) || p.casting >= 0) return false;   // one windup at a time
+    const int idx = req.index;
+    if (idx < 0 || idx >= 8 || !m_->canCast(sim, e, idx)) return false;
+    const UnitType& t = m_->rules().types[w.get<Unit>(e).type];
+    if (size_t(idx) >= t.abilities.size()) return false;
+    const AbilityDef& a = m_->rules().advancedEffects ? m_->abilityFor(sim, e, idx) : t.abilities[size_t(idx)];
+    const Vec3 pos = w.get<Transform>(e).pos;
+    TopDownCast c = req;
+    if (a.target == TargetKind::None || a.target == TargetKind::Self) { c.target = e; c.point = pos; }
+    else {
+        const uint8_t owner = w.get<Owner>(e).player;
+        const Vec3 aimDir = c.haveDir ? direction(c.angle) : p.input.aim ? direction(p.input.aimAngle) : w.get<Unit>(e).facing;
+        if (a.target == TargetKind::Unit) {
+            Entity target = c.target;
+            auto nearest = [&](Vec3 coneDir, Fixed coneCos) {   // auto-aim: nearest valid target inside the ability's range
+                Entity best; Fixed bestD{};
+                m_->state(sim).hash.query(pos, a.range + Fixed::fromInt(4), [&](Entity cand) {
+                    Fixed d;
+                    if (!validTarget(sim, e, owner, cand, a.range, coneDir, coneCos, &d)) return;
+                    if (!best.valid() || d < bestD || (d == bestD && cand.index < best.index)) { best = cand; bestD = d; }
+                });
+                return best;
+            };
+            if (!target.valid() && c.haveDir) target = nearest(aimDir, rules_.snapOn ? rules_.snapCos : Fixed::fromInt(1));
+            if (!target.valid() && validTarget(sim, e, owner, p.target, a.range, {}, Fixed::fromInt(-2), nullptr)) target = p.target;
+            if (!target.valid()) target = nearest({}, Fixed::fromInt(-2));
+            if (!target.valid() || m_->contactDistance(sim, e, target) > a.range + kHalf) return false;
+            c.target = target; c.point = w.get<Transform>(target).pos;
+        } else {
+            Vec3 point = c.target.valid() ? w.get<Transform>(c.target).pos : c.point;
+            if (!c.target.valid() && (c.haveDir || !c.havePoint)) {   // along the stick (or the aim / facing)
+                const Fixed reach = c.haveDir && c.distance > 0 ? a.range * int64_t(c.distance) / topdown::kMagMax : a.range;
+                point = pos + aimDir * reach;
+            }
+            Vec3 off = flat(point - pos);
+            Fixed len = off.length();
+            if (len > a.range && len.raw > 0) point = pos + off * (a.range / len);   // skill shots stop at their range
+            c.target = kNullEntity; c.point = flat(point);
+        }
+    }
+    if (a.castTime.raw > 0) {   // windup: the stick keeps steering (unless rootWhileCasting); stun / silence cancel it
+        p.casting = int8_t(idx);
+        p.castAt = sim.tick() + uint32_t(std::max<int64_t>(1, (a.castTime * int64_t(sim.tickRate())).toInt()));
+        p.castTarget = c.target == e ? kNullEntity : c.target;
+        p.castPoint = c.point;
+        sim.emit({kEvCastStart, w.get<Owner>(e).player, e, c.target, int64_t(idx), c.point});
+        return true;
+    }
+    castNow(sim, p, c);
+    return true;
+}
+
+void TopDown::castNow(Simulation& sim, TopDownPilot& p, const TopDownCast& c) {
+    m_->castAbility(sim, p.hero, c.index, c.target, c.point);
+}
+
+void TopDown::tickCasts(Simulation& sim, TopDownPilot& p) {
+    World& w = sim.world();
+    const Entity e = p.hero;
+    if (p.casting >= 0) {
+        const int idx = p.casting;
+        if (!w.alive(e) || w.get<Unit>(e).hp.raw <= 0 || !m_->canCast(sim, e, idx)) { p.casting = -1; return; }   // stunned / silenced
+        if (sim.tick() < p.castAt) return;
+        p.casting = -1;
+        const UnitType& t = m_->rules().types[w.get<Unit>(e).type];
+        const AbilityDef& a = m_->rules().advancedEffects ? m_->abilityFor(sim, e, idx) : t.abilities[size_t(idx)];
+        Entity target = p.castTarget;
+        Vec3 point = p.castPoint;
+        if (a.target == TargetKind::None || a.target == TargetKind::Self) { target = e; point = w.get<Transform>(e).pos; }
+        else if (a.target == TargetKind::Unit) {
+            if (!w.alive(target) || !w.has<Unit>(target) || w.get<Unit>(target).hp.raw <= 0) return;   // the target died during the windup
+            if (m_->contactDistance(sim, e, target) > a.range + Fixed::fromInt(1)) return;
+            point = w.get<Transform>(target).pos;
+        }
+        p.castTarget = kNullEntity; p.castPoint = {};
+        TopDownCast c; c.index = idx; c.target = target; c.point = point;
+        castNow(sim, p, c);
+        return;
+    }
+    if (p.held >= 0 && holds(sim, e, p.held) && m_->canCast(sim, e, p.held)) {   // hold buttons repeat while held
+        TopDownCast c; c.index = p.held; c.haveDir = p.heldDir; c.angle = p.heldAngle;
+        requestCast(sim, p, c);
+    }
+}
+
+// ================================================================= escape
+
+uint32_t TopDown::escapeReadyAt(Simulation& sim, uint8_t player) const {
+    auto* st = store(sim);
+    return st && player < st->pilots.size() ? st->pilots[player].escapeReadyAt : 0;
+}
+
+Fixed TopDown::escapeBudget(Simulation& sim, uint8_t player) const {
+    if (!rules_.escape.enabled) return {};
+    const Entity h = heroOf(sim, player);
+    if (!h.valid()) return {};
+    return m_->stat(sim, h, Stat::Speed) * rules_.escape.duration;
+}
+
+bool TopDown::escapeAllowed(Simulation& sim, uint8_t player, Vec3 to, std::string* why) const {
+    auto fail = [&](const char* w) { if (why) *why = w; return false; };
+    if (!rules_.escape.enabled) return fail("escape is off");
+    const Entity h = heroOf(sim, player);
+    if (!h.valid() || sim.world().get<Unit>(h).hp.raw <= 0) return fail("no hero");
+    if (sim.tick() < escapeReadyAt(sim, player)) return fail("cooling down");
+    World& w = sim.world();
+    const UnitType& t = m_->rules().types[w.get<Unit>(h).type];
+    MapGrid& g = m_->state(sim).grid;
+    const Vec3 from = w.get<Transform>(h).pos;
+    const Fixed budget = escapeBudget(sim, player);
+    if (dist2D(from, to) > budget + kHalf) return fail("too far");
+    const int cx = g.cellX(to.x), cy = g.cellY(to.z);
+    if (!g.inside(cx, cy) || !g.passable(cx, cy, t.pathLayer)) return fail("blocked");
+    if ((t.layer & kLayerAir) && !g.airSolid) return true;
+    // the preview walks: the way there must exist and fit the budget (walls are kept, Drone Fall)
+    if (walkable(sim, from, to, Fixed{}, t.pathLayer, nullptr)) return true;
+    std::vector<Vec3> path;
+    if (!g.findPath(from, to, t.pathLayer, path, 4000, MapGrid::clearanceFor(t.radius))) return fail("unreachable");
+    Fixed len{};
+    Vec3 at = from;
+    for (auto& wp : path) { len += dist2D(at, wp); at = wp; }
+    if (len > budget + Fixed::fromInt(1)) return fail("too far to walk");
+    return true;
+}
+
+void TopDown::doEscape(Simulation& sim, TopDownPilot& p, uint8_t player, Vec3 to) {
+    if (!escapeAllowed(sim, player, to)) return;
+    World& w = sim.world();
+    MapGrid& g = m_->state(sim).grid;
+    const Entity h = p.hero;
+    auto place = [&](Entity e, Vec3 at) {
+        Transform& tr = w.get<Transform>(e);
+        sim.emit({kEvGroupTeleport, player, e, h, 2, flat(tr.pos)});   // value 2: departure (the effect at the old spot)
+        at = flat(at);
+        if (g.hf) at.y = g.surfaceHeight(at.x, at.z);
+        else at.y = tr.pos.y;
+        tr.pos = at; tr.prevPos = at;
+        if (w.has<Mobile>(e)) m_->stopMoving(sim, e);
+        if (auto* cb = w.tryGet<Combat>(e)) cb->target = kNullEntity;
+        sim.emit({kEvGroupTeleport, player, e, h, 0, at});
+    };
+    place(h, to);
+    p.vel = {}; p.target = kNullEntity; p.casting = -1;
+    const int n = int(p.squad.size());
+    const int32_t facing = rules_.squad.rotate ? angleOf(w.get<Unit>(h).facing) : 0;
+    for (int i = 0; i < n; ++i) {
+        const Entity m = p.squad[size_t(i)];
+        if (!w.alive(m)) continue;
+        const Fixed r = m_->rules().types[w.get<Unit>(m).type].radius;
+        place(m, squadSlot(sim, to, facing, i, n, r));
+    }
+    p.escapeReadyAt = sim.tick() + uint32_t(std::max<int64_t>(1, (rules_.escape.cooldown * int64_t(sim.tickRate())).toInt()));
+}
+
+// ================================================================= squad
+
+std::vector<Entity> TopDown::squadOf(Simulation& sim, uint8_t player) const {
+    auto* st = store(sim);
+    std::vector<Entity> out;
+    if (!st || player >= st->pilots.size()) return out;
+    for (Entity e : st->pilots[player].squad) if (sim.world().alive(e)) out.push_back(e);
+    return out;
+}
+
+bool TopDown::isFollower(Simulation& sim, Entity e) const {
+    if (!rules_.squad.enabled || !sim.world().alive(e)) return false;
+    auto* u = sim.world().tryGet<Unit>(e);
+    return u && (u->flags & kUnitFollower);
+}
+
+bool TopDown::walkable(Simulation& sim, Vec3 from, Vec3 to, Fixed radius, uint8_t layer, Vec3* stop) const {
+    const MapGrid& g = m_->state(sim).grid;
+    const Vec3 d = flat(to - from);
+    const Fixed len = d.length();
+    if (stop) *stop = to;
+    if (len.raw <= 0) return true;
+    const int n = std::min(512, 1 + int((len * 4).toInt()));   // quarter-cell steps
+    Vec3 last = from;
+    for (int i = 1; i <= n; ++i) {
+        const Vec3 q = from + d * Fixed::fromRatio(i, n);
+        const int cx = g.cellX(q.x), cy = g.cellY(q.z);
+        if (!g.inside(cx, cy) || !g.passable(cx, cy, layer)) {
+            if (stop) {   // back off the body radius from the last free point (never behind the start)
+                const Vec3 back = flat(last - from);
+                const Fixed bl = back.length();
+                *stop = bl > radius && bl.raw > 0 ? from + back * ((bl - radius) / bl) : from;
+            }
+            return false;
+        }
+        last = q;
+    }
+    return true;
+}
+
+Vec3 TopDown::squadSlot(Simulation& sim, Vec3 centre, int32_t facingAngle, int i, int n, Fixed memberRadius) const {
+    if (n <= 0) return centre;
+    // ring around the hero, member 0 straight behind it (Drone Fall GetCirclePosition over the alive members)
+    const int32_t angle = int32_t((int64_t(facingAngle) + 32768 + int64_t(i) * topdown::kAngleSteps / n) & 0xFFFF);
+    const Vec3 slot = flat(centre) + direction(angle) * rules_.squad.radius;
+    const uint8_t layer = rules_.squad.types.empty() ? uint8_t(kLayerGround) : m_->rules().types[rules_.squad.types[0]].pathLayer;
+    Vec3 stop = slot;
+    walkable(sim, flat(centre), slot, memberRadius, layer, &stop);   // a wall in between: the slot moves in front of it
+    return stop;
+}
+
+void TopDown::adoptSquad(Simulation& sim, TopDownStore& st) {
+    World& w = sim.world();
+    for (size_t pl = 1; pl < st.pilots.size(); ++pl) {
+        TopDownPilot& p = st.pilots[pl];
+        // alive members stay in order at the front; the dead drop out (their slots close up)
+        p.squad.erase(std::remove_if(p.squad.begin(), p.squad.end(), [&](Entity e) {
+            const Unit* u = w.alive(e) ? w.tryGet<Unit>(e) : nullptr;
+            return !u || u->hp.raw <= 0 || w.get<Owner>(e).player != pl;
+        }), p.squad.end());
+        if (rules_.squad.size > 0 && int(p.squad.size()) >= rules_.squad.size) continue;
+        if (sim.tick() % 20 != 0 && sim.tick() != 0) continue;   // new / trained members join within a second
+        w.each<Unit, Owner>([&](Entity e, Unit& u, Owner& o) {
+            if (o.player != pl || u.hp.raw <= 0 || e == p.hero) return;
+            if (u.flags & (kUnitOffMap | kUnitUnderConstruction | kUnitPossessed | kUnitFollower)) return;
+            if (rules_.squad.size > 0 && int(p.squad.size()) >= rules_.squad.size) return;
+            if (std::find(rules_.squad.types.begin(), rules_.squad.types.end(), u.type) == rules_.squad.types.end()) return;
+            if (m_->rules().types[u.type].structure || !w.has<Mobile>(e)) return;
+            u.flags |= kUnitFollower | kUnitHold;   // hold: fights from its slot, never chases
+            if (auto* o2 = w.tryGet<Orders>(e)) o2->queue.clear();
+            p.squad.push_back(e);
+        });
+    }
+}
+
+void TopDown::tickSquad(Simulation& sim, TopDownPilot& p, uint8_t) {
+    World& w = sim.world();
+    if (p.squad.empty() || !w.alive(p.hero)) return;
+    const Vec3 centre = w.get<Transform>(p.hero).pos;
+    const int32_t facing = rules_.squad.rotate ? angleOf(w.get<Unit>(p.hero).facing) : 0;
+    const bool heroMoving = p.vel.length() > rules_.movingSpeed;
+    const int n = int(p.squad.size());
+    for (int i = 0; i < n; ++i) {
+        const Entity e = p.squad[size_t(i)];
+        if (!w.alive(e)) continue;
+        if (heroMoving && !rules_.squad.fireWhileMoving)   // Drone Fall SupressFireOnMove: the group holds fire while it moves
+            if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
+        auto* m = w.tryGet<Mobile>(e);
+        if (!m) continue;
+        const Fixed r = m_->rules().types[w.get<Unit>(e).type].radius;
+        const Vec3 slot = squadSlot(sim, centre, facing, i, n, r);
+        const Fixed d = dist2D(w.get<Transform>(e).pos, slot);
+        if (d <= rules_.squad.tolerance) { if (m->moving) m_->stopMoving(sim, e); continue; }
+        const bool drifted = dist2D(m->goal, slot) > rules_.squad.tolerance;
+        if (!m->moving || (drifted && (sim.tick() + uint32_t(i)) % rules_.squad.repathTicks == 0))
+            m_->moveTo(sim, e, slot, rules_.squad.tolerance / 2);
+    }
+}
+
+// ================================================================= free fire
+
+// Aiming (or fire held) with nothing to shoot at: the weapons fire along the aim. A weapon with a flight program
+// flies it (the program stops on bodies / walls); otherwise the shot travels to the first hostile body on the line
+// or the first wall, whichever comes first, within the weapon range.
+void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
+    World& w = sim.world();
+    const Entity e = p.hero;
+    auto* c = w.tryGet<Combat>(e);
+    if (!c) return;
+    if (auto* b = w.tryGet<Buffs>(e); b && b->stunUntil > sim.tick()) return;
+    if (m_->rules().advancedEffects && (m_->statusFlags(sim, e) & (kStStun | kStDisarm))) return;
+    const Unit& u = w.get<Unit>(e);
+    const UnitType& t = m_->rules().types[u.type];
+    const Vec3 pos = w.get<Transform>(e).pos;
+    const Vec3 dir = p.input.aim ? direction(p.input.aimAngle) : u.facing;
+    const MapGrid& g = m_->state(sim).grid;
+    const Fixed mult = m_->stat(sim, e, Stat::Damage);
+    const Fixed bonus = m_->stat(sim, e, Stat::Range);
+    for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
+        const WeaponDef& wd = t.weapons[i];
+        if (c->cooldown[i].raw > 0) continue;
+        const Fixed range = wd.range + bonus;
+        // march the line in quarter cells: the first wall ends it; the first hostile body on it is hit
+        Entity hit;
+        Vec3 end = pos + dir * range;
+        const int n = std::min(1024, 1 + int((range * 4).toInt()));
+        const bool air = (t.layer & kLayerAir) && !g.airSolid;
+        for (int k = 1; k <= n && !hit.valid(); ++k) {
+            const Vec3 q = pos + dir * (range * int64_t(k) / int64_t(n));
+            const int cx = g.cellX(q.x), cy = g.cellY(q.z);
+            if (!g.inside(cx, cy) || (!air && !g.passable(cx, cy, kLayerGround) && !g.passable(cx, cy, kLayerNaval))) {
+                end = pos + dir * (range * int64_t(k - 1) / int64_t(n));
+                break;
+            }
+            Fixed bestD{};
+            m_->state(sim).hash.query(q, Fixed::fromInt(2), [&](Entity cand) {
+                if (cand == e || !w.alive(cand)) return;
+                const Unit* cu = w.tryGet<Unit>(cand);
+                const Owner* co = w.tryGet<Owner>(cand);
+                if (!cu || !co || cu->hp.raw <= 0 || (cu->flags & kUnitOffMap)) return;
+                const UnitType& ct = m_->rules().types[cu->type];
+                if (ct.invulnerable || !m_->hostile(sim, owner, co->player) || !layerHit(wd.targets, ct.layer)) return;
+                const Fixed d = dist2D(w.get<Transform>(cand).pos, q);
+                if (d > ct.radius + Fixed::fromRatio(1, 4)) return;
+                if (!hit.valid() || d < bestD || (d == bestD && cand.index < hit.index)) { hit = cand; bestD = d; }
+            });
+            if (hit.valid()) end = flat(w.get<Transform>(hit).pos);
+        }
+        c->cooldown[i] = wd.cooldown;
+        sim.emit({kEvAttack, owner, e, hit, int64_t(i), pos});
+        const Fixed dmg = wd.damage * mult;
+        if (wd.projectileSpeed.raw <= 0 && !wd.flight.enabled) {   // instant weapons hit at once
+            if (hit.valid()) m_->dealDamage(sim, hit, dmg, wd.damageType, e, owner, &wd);
+            continue;
+        }
+        Projectile pr;
+        pr.source = e; pr.speed = wd.projectileSpeed.raw > 0 ? wd.projectileSpeed : Fixed::fromInt(20);
+        pr.damage = dmg; pr.splash = wd.splash; pr.damageType = wd.damageType; pr.owner = owner; pr.layers = wd.targets;
+        pr.sourceType = u.type; pr.weapon = int8_t(i);
+        pr.target = wd.flight.enabled ? kNullEntity : hit;   // programs find their own victims
+        pr.aim = m_->lift(sim, wd.flight.enabled ? pos + dir * range : end, Fixed::fromRatio(4, 10));
+        const Vec3 start = m_->lift(sim, pos, Fixed::fromRatio(6, 10));
+        Entity pe = w.create();
+        w.add<Transform>(pe, Transform{start, start, Fixed{}});
+        m_->initProjectileProgram(sim, pr, start);
+        w.add<Projectile>(pe, pr);
+        w.add<Owner>(pe, Owner{owner});
+    }
 }
 
 // ================================================================= per tick
@@ -270,13 +668,16 @@ void TopDown::tick(Simulation& sim) {
     auto* st = store(sim);
     if (!st) return;
     respawnAndAdopt(sim, *st);
+    if (rules_.squad.enabled) adoptSquad(sim, *st);
     World& w = sim.world();
     for (size_t pl = 1; pl < st->pilots.size(); ++pl) {
         TopDownPilot& p = st->pilots[pl];
-        if (!w.alive(p.hero) || w.get<Unit>(p.hero).hp.raw <= 0) continue;
+        if (!w.alive(p.hero) || w.get<Unit>(p.hero).hp.raw <= 0) { p.casting = -1; p.held = -1; continue; }
         if (m_->driving() && m_->driving()->isDriving(sim, p.hero)) continue;   // at the wheel: RtsDriving.cpp reads the stick
+        if (rules_.extended) tickCasts(sim, p);
         moveHero(sim, p);
         aimHero(sim, p, uint8_t(pl));
+        if (rules_.squad.enabled) tickSquad(sim, p, uint8_t(pl));
     }
 }
 
@@ -296,7 +697,8 @@ void TopDown::moveHero(Simulation& sim, TopDownPilot& p) {
 
     // velocity toward the stick: accelerate up, brake (decel) when slowing down or reversing
     Vec3 wish{};
-    if (!rooted && p.input.moveMag > 0) wish = direction(p.input.moveAngle) * (m_->stat(sim, e, Stat::Speed) * p.input.moveMag / topdown::kMagMax);
+    const bool castRoot = rules_.rootWhileCasting && p.casting >= 0;
+    if (!rooted && !castRoot && p.input.moveMag > 0) wish = direction(p.input.moveAngle) * (m_->stat(sim, e, Stat::Speed) * p.input.moveMag / topdown::kMagMax);
     {
         const Vec3 dv = wish - p.vel;
         const Fixed dl = dv.length();
@@ -442,6 +844,23 @@ bool TopDown::validTarget(Simulation& sim, Entity hero, uint8_t owner, Entity c,
     return true;
 }
 
+std::vector<TopDown::AimCandidate> TopDown::aimCandidates(Simulation& sim, uint8_t player, Fixed range) const {
+    std::vector<AimCandidate> out;
+    World& w = sim.world();
+    const Entity e = heroOf(sim, player);
+    if (!e.valid() || !w.alive(e)) return out;
+    const Unit* u = w.tryGet<Unit>(e);
+    if (!u || u->hp.raw <= 0 || (u->flags & kUnitOffMap)) return out;
+    const Fixed r = range.raw > 0 ? range : rules_.aimRange.raw > 0 ? rules_.aimRange : weaponRange(sim, e);
+    const Vec3 pos = w.get<Transform>(e).pos;
+    m_->state(sim).hash.query(pos, r + Fixed::fromInt(6), [&](Entity c) {
+        Fixed d;
+        if (validTarget(sim, e, player, c, r, Vec3{}, Fixed::fromInt(-2), &d)) out.push_back({c, w.get<Transform>(c).pos, d});
+    });
+    std::sort(out.begin(), out.end(), [](const AimCandidate& a, const AimCandidate& b) { return a.e.index < b.e.index; });
+    return out;
+}
+
 void TopDown::aimHero(Simulation& sim, TopDownPilot& p, uint8_t owner) {
     World& w = sim.world();
     const Entity e = p.hero;
@@ -497,6 +916,8 @@ void TopDown::aimHero(Simulation& sim, TopDownPilot& p, uint8_t owner) {
         p.target = kNullEntity;
     }
     c->target = p.target;
+    // free fire: aiming (with aimFires) or fire held, nothing to shoot at -> the weapons fire along the aim
+    if (rules_.freeFire && !p.target.valid() && ((p.input.aim && rules_.aimFires) || p.input.fire)) freeFire(sim, p, owner);
 }
 
 // ================================================================= computer pilot
@@ -509,8 +930,6 @@ bool TopDown::botCommand(Simulation& sim, uint8_t player, Command& out) {
     if (!w.alive(p.hero)) return false;
     const Entity e = p.hero;
     const Vec3 pos = w.get<Transform>(e).pos;
-    const UnitType& t = m_->rules().types[w.get<Unit>(e).type];
-    GameState& gs = m_->state(sim);
     // nearest hostile thing (heroes and armed units count as nearer: they shoot back)
     Entity foe;
     Fixed foeD{};
@@ -529,21 +948,124 @@ bool TopDown::botCommand(Simulation& sim, uint8_t player, Command& out) {
         const bool armed = !m_->rules().types[w.get<Unit>(foe).type].weapons.empty();
         Vec3 dir{};
         if (d > range * Fixed::fromRatio(85, 100) || (rules_.lineOfFire && !lineOfFire(sim, pos, foe))) {
-            MapGrid& g = gs.grid;
-            if (g.lineWalkable(g.cellX(pos.x), g.cellY(pos.z), g.cellX(fp.x), g.cellY(fp.z), t.pathLayer)) dir = flat(fp - pos);
-            else {
-                std::vector<Vec3> path;
-                int gx = g.cellX(fp.x), gy = g.cellY(fp.z);   // structures stand on blocked cells: walk to a free one next to it
-                Vec3 goal = fp;
-                if (!g.passable(gx, gy, t.pathLayer) && g.nearestPassable(gx, gy, t.pathLayer)) goal = g.cellCenter(gx, gy);
-                if (g.findPath(pos, goal, t.pathLayer, path, 4000, MapGrid::clearanceFor(t.radius)))
-                    for (auto& wp : path) if (dist2D(wp, pos) > kHalf) { dir = flat(wp - pos); break; }
-            }
+            dir = walkDir(sim, e, fp);
         } else if (armed && d < range * Fixed::fromRatio(35, 100)) {
             dir = flat(pos - fp);   // too close to something that shoots back: give ground
         }
         if (dir.x.raw != 0 || dir.z.raw != 0) { in.moveAngle = angleOf(dir); in.moveMag = int32_t(topdown::kMagMax); }
     }
+    in = requantize(in);
+    if (in == p.input) return false;
+    out = Command{};
+    out.type = kCmdTopDown;
+    out.player = player;
+    out.param = topdown::pack(in);
+    return true;
+}
+
+Vec3 TopDown::walkDir(Simulation& sim, Entity e, Vec3 to) const {
+    World& w = sim.world();
+    const Vec3 pos = w.get<Transform>(e).pos;
+    const UnitType& t = m_->rules().types[w.get<Unit>(e).type];
+    MapGrid& g = m_->state(sim).grid;
+    if (g.lineWalkable(g.cellX(pos.x), g.cellY(pos.z), g.cellX(to.x), g.cellY(to.z), t.pathLayer)) return flat(to - pos);
+    std::vector<Vec3> path;
+    int gx = g.cellX(to.x), gy = g.cellY(to.z);   // structures stand on blocked cells: walk to a free one next to it
+    Vec3 goal = to;
+    if (!g.passable(gx, gy, t.pathLayer) && g.nearestPassable(gx, gy, t.pathLayer)) goal = g.cellCenter(gx, gy);
+    if (g.findPath(pos, goal, t.pathLayer, path, 4000, MapGrid::clearanceFor(t.radius)))
+        for (auto& wp : path) if (dist2D(wp, pos) > kHalf) return flat(wp - pos);
+    return {};
+}
+
+bool TopDown::steerCommand(Simulation& sim, uint8_t player, Vec3 goal, Fixed stand, Command& out, Fixed kite) {
+    auto* st = store(sim);
+    if (!st || player == 0 || player >= st->pilots.size()) return false;
+    TopDownPilot& p = st->pilots[player];
+    World& w = sim.world();
+    if (!w.alive(p.hero)) return false;
+    const Entity e = p.hero;
+    const Vec3 pos = w.get<Transform>(e).pos;
+    topdown::Input in;
+    Vec3 dir{};
+    if (dist2D(pos, flat(goal)) > fxMax(stand, Fixed::fromRatio(1, 4))) dir = walkDir(sim, e, flat(goal));
+    // kite: dangerous foes about to reach the hero push the way out (away from all of them, nearer ones weigh more,
+    // still drifting toward the goal); a wall ahead turns the escape by 45 / 90 / 135 degrees to the open side.
+    // Dangerous = a single hit of at least 5% of the hero's health (Drone Fall guardians' telegraphed clubs), or,
+    // below 60% health, a swarm (6+ armed foes in reach). A foe is "about to reach" inside its weapon range + 2.5 (kite > 0: inside
+    // `kite`). Otherwise the hero stands and shoots (Drone Fall heroes only fire standing still) or walks on.
+    const Fixed maxHp = m_->stat(sim, e, Stat::MaxHp);
+    Vec3 away{}, swarmAway{};
+    int threats = 0, swarm = 0;
+    m_->state(sim).hash.query(pos, Fixed::fromInt(12), [&](Entity c) {
+        const Unit* cu = w.tryGet<Unit>(c);
+        const Owner* co = w.tryGet<Owner>(c);
+        if (!cu || !co || cu->hp.raw <= 0 || (cu->flags & kUnitOffMap) || co->player == 0 || !m_->hostile(sim, player, co->player)) return;
+        const UnitType& ct = m_->rules().types[cu->type];
+        if (ct.weapons.empty()) return;
+        Fixed reach{}, hit{};
+        for (auto& wd : ct.weapons) { reach = fxMax(reach, wd.range); hit = fxMax(hit, wd.damage); }
+        const Fixed keep = kite.raw > 0 ? kite : reach + Fixed::fromRatio(5, 2);
+        const Fixed d = m_->contactDistance(sim, e, c);
+        if (d >= keep) return;
+        Vec3 off = flat(pos - w.get<Transform>(c).pos);
+        const Fixed l = off.length();
+        if (l.raw <= 0) return;
+        const Vec3 push = off / l * (keep - d + Fixed::fromRatio(1, 4));   // order-independent sums (fixed point, exact)
+        swarmAway += push; ++swarm;
+        if (kite.raw > 0 || hit * 20 >= maxHp) { away += push; ++threats; }
+    });
+    const bool hurt = w.get<Unit>(e).hp * 10 < maxHp * 6;   // below 60%: a swarm is a threat too
+    if (!threats && swarm >= 6 && hurt) { away = swarmAway; threats = swarm; }
+    // telegraphs (rules "encounters"): standing in a hostile area in windup / active steps out of it first
+    Vec3 dodge{};
+    if (Encounters* enc = m_->encounters(); enc && enc->active()) {
+        if (EncounterStore* es = enc->store(sim)) {
+            const int64_t mine = enc->teamKey(sim, player);
+            const Fixed r = m_->rules().types[w.get<Unit>(e).type].radius + Fixed::fromInt(1);
+            const Vec2 me{pos.x, pos.z};
+            for (const EncCast& c : es->casts) {   // ascending instance id: deterministic
+                const lib::genre::TelegraphView v = enc->view(c, sim.tick());
+                if (!v.live || v.team == mine || (v.phase != lib::genre::AttackPhase::Windup && v.phase != lib::genre::AttackPhase::Active)) continue;
+                lib::genre::AreaDef a;
+                a.shape = v.shape; a.radius = v.radius; a.inner = v.inner; a.halfAngle = v.halfAngle; a.length = v.length; a.halfWidth = v.halfWidth;
+                if (!lib::genre::areaHits(a, v.pose, me, r)) continue;
+                Vec2 out = me - v.pose.origin;
+                if (v.shape == lib::genre::AreaShape::Line) {   // sideways off the line
+                    const Vec2 right = lib::genre::areaRight(v.pose.yaw);
+                    out = out.dot(right).raw >= 0 ? right : Vec2{-right.x, -right.y};
+                } else if (v.shape == lib::genre::AreaShape::Ring) {   // the nearer edge: inward or outward
+                    const Fixed d = out.length();
+                    if (d - v.inner < v.radius - d) out = Vec2{-out.x, -out.y};
+                }
+                const Fixed ol = out.length();
+                if (ol.raw <= 0) out = lib::genre::areaRight(v.pose.yaw);
+                else out = Vec2{out.x / ol, out.y / ol};
+                dodge += Vec3{out.x, Fixed{}, out.y};
+            }
+        }
+    }
+    if (dodge.x.raw != 0 || dodge.z.raw != 0) { away += dodge * Fixed::fromInt(8); ++threats; }   // dodging outweighs kiting
+    if (threats) {
+        const Fixed al = away.length();
+        const Fixed dl = dir.length();
+        Vec3 flee = al.raw > 0 ? away / al * Fixed::fromInt(2) : Vec3{};
+        if (dl.raw > 0) flee += dir / dl;
+        if (flee.x.raw != 0 || flee.z.raw != 0) {
+            const UnitType& t = m_->rules().types[w.get<Unit>(e).type];
+            const int32_t base = angleOf(flee);
+            const Fixed probe = fxMax(Fixed::fromInt(2), t.radius * 3);
+            const int32_t turns[7] = {0, 8192, -8192, 16384, -16384, 24576, -24576};
+            dir = flee;   // nothing open: flee anyway (movement slides along walls)
+            const MapGrid& g = m_->state(sim).grid;
+            if (!((t.layer & kLayerAir) && !g.airSolid))
+            for (int32_t tr : turns) {
+                const int32_t ang = (base + tr) & 0xFFFF;
+                if (walkable(sim, pos, pos + direction(ang) * probe, Fixed{}, t.pathLayer, nullptr)) { dir = direction(ang); break; }
+            }
+        }
+    }
+    if (dir.x.raw != 0 || dir.z.raw != 0) { in.moveAngle = angleOf(dir); in.moveMag = int32_t(topdown::kMagMax); }
     in = requantize(in);
     if (in == p.input) return false;
     out = Command{};
