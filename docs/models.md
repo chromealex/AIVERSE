@@ -536,6 +536,35 @@ per-part shadow draws. Compatible material copies retain batching. The car: 98 â
 authored. The RTS view does not merge yet: its model cache is shared between unit types that may
 address nodes by name.
 
+### Automatic opaque material palettes
+
+At upload, rigid meshes group opaque primitives with identical textures and render state.
+Base colour, metallic and roughness may differ: each triangle selects the original full-float
+factors from a 64-entry uniform palette. UVs, normals, tangents, vertex colours, texture
+resolution, wrap/mip behaviour and triangle geometry remain unchanged. No atlas or baked
+colour approximation is involved. GLSL and Metal use the same layout (2 KiB in U3).
+
+The original primitives remain available for shadows, outlines and override fallback.
+Every mesh, including each LOD, has its own colour batches. Opaque reflection passes and
+LOD crossfades use the same palette path. Effective material copies are checked at draw time;
+changing texture/state incompatibly restores original draws for that group. Per-material
+colour/PBR overrides continue to use the palette. Node material overrides, variants, blended
+instances, skinning, morphs and built cluster geometry use their existing paths.
+
+`prepareMaterialBatches` runs before GPU upload. `weights[0]` in the existing rigid vertex
+layout stores the material ID; lightmap UVs in `joints` are preserved. Shared vertices needing
+different IDs are duplicated only for the combined ranges. Batches add index storage and
+must be prepared after tangents and before GPU upload; they do not modify source assets.
+Models or override lists with more than 64 materials fall back to ordinary draws.
+`AIVERSE_AUTO_MATERIAL_BATCHES=off` disables preparation for same-build A/B measurements.
+
+Validation: `aiverse_material_batches` (opt-in `AIVERSE_BUILD_HDR_TESTS`) runs CPU invariants
+and renders the same model with batches disabled/enabled, requiring identical pixels,
+fewer opaque draws and unchanged shadow draws. `--audit DIRECTORY` reports actual loader
+counts and additional geometry storage; `--unit` runs only CPU checks.
+`tests/render/check_material_palette_shaders.py` links 72 desktop/GLES variants across
+quality tiers, instancing, baked lighting and LOD fade.
+
 ### Automatic per-mesh shadow batches
 
 `uploadModel` calls `prepareShadowBatches` before creating GPU buffers. This also handles models

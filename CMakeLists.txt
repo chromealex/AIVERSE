@@ -1705,3 +1705,8 @@ if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
     add_executable(aiverse_shadow_batches tests/render/shadow_batches.cpp $<TARGET_OBJECTS:aiverse_runtime>)
     target_link_libraries(aiverse_shadow_batches PRIVATE aiverse_runtime)
 endif()
+
+if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_material_batches tests/render/material_batches.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+    target_link_libraries(aiverse_material_batches PRIVATE aiverse_runtime)
+endif()

@@ -298,6 +298,8 @@ private:
         int32_t morph;      // offset into morphData_ (8 weights), -1 = none
         int16_t lmPage = -1;  // baked lightmap page (anim = uv2 scale / offset), -1 = none
         uint8_t gi = 0;       // 0 realtime ambient, 1 lightmap, 2 light probes
+        const std::vector<Material>* paletteMaterials = nullptr;
+        uint8_t materialRole = 0; // 1 original colour suppressed, 2 palette batch (colour only)
         uint8_t shadowRole = 0;   // 0 normal, 1 part covered by its mesh's shadow batch, 2 the shadow batch
         bool inView, inShadow; float depth;
     };
