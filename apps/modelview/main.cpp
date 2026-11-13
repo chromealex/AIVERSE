@@ -5,6 +5,7 @@
 //   aiverse_modelview a.glb b.gltf@Walk c.obj [--clip Walk] [--time 0.4] [--variant winter] [--baked]
 //                 [--team 0.9,0.2,0.2] [--quality low|medium|high] [--height 1.5] [--native] [--distance 6]
 //                 [--yaw 20] [--pitch 30] [--spacing 2.2]
+//                 [--lod-report] [--no-lod] [--lod-fade 0.15] [--shadows off|low|medium|high]
 //   file@Clip plays that clip on that instance. Keys: Space next clip, Q quality, V variant,
 //   P pause, T team colour; drag to orbit, wheel to zoom. AIVERSE_SCREENSHOT works as in the client.
 //
@@ -46,6 +47,8 @@ struct Viewer {
     std::vector<std::pair<std::string, std::string>> files;   // path, clip
     std::string clipAll, variantName;
     bool lodReport = false, noLod = false;
+    float lodFadeWidth=.15f;
+    ShadowQuality shadowQuality=ShadowQuality::High;
     bool native = false;
     bool merge = true;   // static batching of parts that share a material (--no-merge: as authored)
     float seek = -1, height = 0, spacing = 2.2f, distance = 0, yawDeg = 25, pitchDeg = 32;
@@ -82,7 +85,8 @@ struct Viewer {
         r3d.init(d);
         r3d.setProfiling(lodReport);
         r3d.setModelLodEnabled(!noLod);
-        r3d.setShadowQuality(ShadowQuality::High);
+        r3d.setShadowQuality(shadowQuality);
+        r3d.setModelLodFadeWidth(lodFadeWidth);
         r3d.setMaterialQuality(qualitySet ? quality : Renderer3D::defaultMaterialQualityFor(d, platform::isTouchDevice()));
         gui.init(d, "engine/fonts/ui.ttf", 15.0f);
         MeshBuilder gb;
@@ -264,7 +268,7 @@ struct Viewer {
         if (gallery) gallery->shutdown(*dev);
         dev->destroyBuffer(ground.vb); dev->destroyBuffer(ground.ib);
         gui.shutdown();
-        if(lodReport){const auto& p=r3d.profile();std::printf("LOD_REPORT nodes=%u mainTriangles=%u shadowTriangles=%u\n",p.lodNodes,p.triangles[1],p.triangles[0]);}
+        if(lodReport){const auto& p=r3d.profile();std::printf("LOD_REPORT nodes=%u transitions=%u mainTriangles=%u shadowTriangles=%u\n",p.lodNodes,p.lodTransitionNodes,p.triangles[1],p.triangles[0]);}
         r3d.shutdown();
     }
 };
@@ -294,6 +298,10 @@ int aiverseMain(int argc, char** argv) {
         else if (a == "--start") v.start = std::stof(next());
         else if (a == "--lod-report") v.lodReport = true;
         else if (a == "--no-lod") v.noLod = true;
+        else if (a == "--lod-fade") v.lodFadeWidth = std::stof(next());
+        else if (a == "--shadows") {
+            auto q=next();v.shadowQuality=q=="off"?ShadowQuality::Off:q=="low"?ShadowQuality::Low:q=="medium"?ShadowQuality::Medium:ShadowQuality::High;
+        }
         else if (a == "--baked") v.baked = true;
         else if (a == "--fixed-dt") v.fixedDt = std::stof(next());
         else if (a == "--time") v.seek = std::stof(next());

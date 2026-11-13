@@ -119,7 +119,7 @@ public:
 struct BakedSample { int clipA = -1, clipB = -1; float timeA = 0, timeB = 0, mix = 1; bool loopA = true, loopB = true; };
 
 // One model instance. Node matrices come from an animated pose (Animation.h) or the bind pose.
-// Rigid parts and baked-skinned meshes of identical instances are drawn instanced (32 portable / up to 256 with large uniform buffers).
+// Rigid parts and baked-skinned meshes of identical instances are drawn instanced (28 with 4 KB uniforms / up to 256 with large uniform buffers).
 // Immutable rigid source cache. Rebuild after changing the model or its transform.
 struct StaticModelCache {
     const Model* model=nullptr;
@@ -250,14 +250,16 @@ public:
         double submitMs=0,occlusionMs=0;
         std::array<double,5> selectMs{},sortMs{},drawMs{};
         std::array<uint32_t,5> draws{},instances{},triangles{};
-        uint32_t cachedModels=0,lodNodes=0;
+        uint32_t cachedModels=0,lodNodes=0,lodTransitionNodes=0;
     };
     void setProfiling(bool enabled) { profiling_=enabled; }
     const RenderProfile& profile() const { return profile_; }
-    // Set before rendering; zero chooses the backend limit (32 portable / 256 Metal).
+    // Set before rendering; zero chooses the backend limit (28 with 4 KB uniforms / 256 Metal).
     void setInstanceLimit(uint32_t limit);
     uint32_t instanceLimit() const { return instanceLimit_; }
     void setModelLodEnabled(bool enabled) { modelLodEnabled_=enabled; }
+    // Relative screen-size band around each threshold; 0 restores instant switches.
+    void setModelLodFadeWidth(float width) { modelLodFadeWidth_=std::clamp(width,0.0f,0.49f); }
 
     // Baked global illumination (agent-lightbake): lightmaps for static models (matched by model path,
     // node and world transform), light probes for everything else, mixed with the realtime sun by the
@@ -291,6 +293,7 @@ private:
         bool baked;         // skinned from the baked texture (rows in anim)
         float4 anim;        // baked row A, row B, mix
         float dissolve, teamGlow;
+        float lodThreshold=1; bool lodInvert=false;
         float4 outline;
         int32_t morph;      // offset into morphData_ (8 weights), -1 = none
         int16_t lmPage = -1;  // baked lightmap page (anim = uv2 scale / offset), -1 = none
@@ -362,6 +365,7 @@ private:
     bool modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
     bool auxiliaryModelPass_ = false;
     bool profiling_=false,modelLodEnabled_=true;
+    float modelLodFadeWidth_=.15f;
     RenderProfile profile_;
     uint32_t instanceLimit_=32;
     GeometryStats geometryStats_;
