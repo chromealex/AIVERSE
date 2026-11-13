@@ -1,0 +1,24 @@
+{
+  "id": "com.aiverse.genre.idle",
+  "name": "Idle",
+  "description": "Minimal genre mechanics sample",
+  "version": "0.1.0",
+  "module": "rts",
+  "genre": "idle",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/start.json",
+      "title": "Genre arena"
+    }
+  ],
+  "sourceLanguage": "en",
+  "languages": [
+    "en"
+  ],
+  "camera": {
+    "projection": "ortho",
+    "zoom": 30,
+    "pitch": 65
+  }
+}

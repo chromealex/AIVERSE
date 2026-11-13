@@ -1,0 +1,189 @@
+{
+  "victory": {
+    "mode": "survive",
+    "seconds": 90
+  },
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "resources": {
+    "gold": {
+      "start": 100
+    },
+    "wood": {
+      "start": 50
+    },
+    "food": {
+      "start": 20
+    }
+  },
+  "types": {
+    "worker": {
+      "health": {
+        "max": 100
+      },
+      "move": {
+        "speed": 3,
+        "radius": 0.3
+      },
+      "sight": 12,
+      "view": {
+        "shape": "soldier"
+      },
+      "builds": [
+        "farm",
+        "home"
+      ],
+      "gather": {
+        "wood": {
+          "time": 2,
+          "carry": 10
+        }
+      },
+      "cost": {
+        "food": 5,
+        "time": 3
+      },
+      "carrier": {
+        "capacity": 5
+      },
+      "needs": {
+        "hunger": {
+          "interval": 15,
+          "at": "home",
+          "time": 1,
+          "cost": {
+            "food": 1
+          },
+          "starve": 1
+        }
+      },
+      "name": "Worker"
+    },
+    "home": {
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 500
+      },
+      "sight": 12,
+      "view": {
+        "shape": "house"
+      },
+      "cost": {
+        "wood": 10,
+        "time": 3
+      },
+      "supply": 10,
+      "recipe": {
+        "in": {
+          "food": 1
+        },
+        "out": {
+          "gold": 3
+        },
+        "time": 3,
+        "buffer": 3
+      },
+      "name": "Home"
+    },
+    "farm": {
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 500
+      },
+      "sight": 12,
+      "view": {
+        "shape": "house"
+      },
+      "cost": {
+        "wood": 10,
+        "time": 3
+      },
+      "recipe": {
+        "out": {
+          "food": 2
+        },
+        "time": 2,
+        "buffer": 3
+      },
+      "name": "Farm"
+    },
+    "tree": {
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 100
+      },
+      "sight": 12,
+      "view": {
+        "shape": "tree"
+      },
+      "resourceNode": {
+        "resource": "wood",
+        "amount": 200
+      },
+      "invulnerable": true,
+      "name": "Tree"
+    },
+    "depot": {
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 500
+      },
+      "sight": 12,
+      "view": {
+        "shape": "hall"
+      },
+      "dropoff": [
+        "wood"
+      ],
+      "produces": [
+        "worker"
+      ],
+      "storehouse": {
+        "capacity": 2000
+      },
+      "name": "Depot"
+    },
+    "carrier": {
+      "health": {
+        "max": 100
+      },
+      "move": {
+        "speed": 3,
+        "radius": 0.3
+      },
+      "sight": 12,
+      "view": {
+        "shape": "soldier"
+      },
+      "carrier": {
+        "capacity": 5
+      },
+      "name": "Carrier"
+    }
+  },
+  "storage": "buildings",
+  "scripts": [
+    "scripts/game.lua"
+  ]
+}

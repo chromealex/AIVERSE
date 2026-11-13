@@ -1,0 +1,24 @@
+--- a/tools/release/package_engine.py
++++ b/tools/release/package_engine.py
+@@ -16,9 +16,9 @@
+ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ 
+ BINARIES = {
+-    "windows": ["aiverse_editor.exe", "aiversemcp.exe", "aiversebuild.exe", "aiverse_headless.exe", "AiverseGame.exe", "assetpipe.exe", "aiverse_modeling.exe", "aiverse_lod_simplify.exe", "aiverse_fps_client.exe", "aiverse_fps_server.exe"],
+-    "macos": ["AiverseEditor.app", "AiverseGame.app", "aiversemcp", "aiversebuild", "aiverse_headless", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_client", "aiverse_fps_server"],
+-    "linux": ["aiverse_editor", "aiversemcp", "aiversebuild", "aiverse_headless", "AiverseGame", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_client", "aiverse_fps_server"],
++    "windows": ["aiverse_editor.exe", "aiversemcp.exe", "aiversebuild.exe", "aiverse_headless.exe", "AiverseGame.exe", "assetpipe.exe", "aiverse_modeling.exe", "aiverse_lod_simplify.exe", "aiverse_fps_client.exe", "aiverse_fps_server.exe", "aiverse_genre_client.exe"],
++    "macos": ["AiverseEditor.app", "AiverseGame.app", "aiversemcp", "aiversebuild", "aiverse_headless", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_client", "aiverse_fps_server", "aiverse_genre_client"],
++    "linux": ["aiverse_editor", "aiversemcp", "aiversebuild", "aiverse_headless", "AiverseGame", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_client", "aiverse_fps_server", "aiverse_genre_client"],
+ }
+ # a package needs one of these; Linux may be tools only (aiversemcp + aiverse_headless, no editor: CI hosts, MCP clients)
+ REQUIRED = {"windows": ["aiverse_editor.exe"], "macos": ["AiverseEditor.app"], "linux": ["aiverse_editor", "aiversemcp"]}
+@@ -84,6 +84,8 @@
+                     z.writestr(info, t.extractfile(m).read())
+         for b in BINARIES[a.platform]:
+             p = os.path.join(a.bin, b)
++            if not os.path.exists(p) and b.startswith("aiverse_genre_"):
++                p = os.path.join(a.bin, "modules", "genres", b)
+             if not os.path.exists(p) and b.startswith("aiverse_fps_"):
+                 p = os.path.join(a.bin, "modules", "fps", b)
+             if os.path.exists(p):

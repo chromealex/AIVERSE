@@ -1,0 +1,62 @@
+{
+  "historical_base": "5e147d68",
+  "source_worktree": "genre-integration",
+  "files": [
+    {
+      "path": "source/apps/editor/windows/GenresWindow.cpp",
+      "sha256": "095d5d9a7c1436a5a0c46e43f0b2d2a28daee459c69bba85acadff3bbc681a4c",
+      "original": "apps/editor/windows/GenresWindow.cpp"
+    },
+    {
+      "path": "source/apps/genres/client.cpp",
+      "sha256": "0eb36a6010aebfc73a95e8e8462876fd85a3ab64d8c47b6e8a0768cd76b88ccc",
+      "original": "apps/genres/client.cpp"
+    },
+    {
+      "path": "source/docs/ai-skills/rts-board-games/SKILL.md",
+      "sha256": "3cf1fa0ecb6b56ff1fbcd15932e5742a86946d03a954339f5eb67629fd72749a",
+      "original": "docs/ai-skills/rts-board-games/SKILL.md"
+    },
+    {
+      "path": "source/docs/ai-skills/rts-genre-kits/SKILL.md",
+      "sha256": "e618150dd5fd6aa888e22a22e8502f2aadc2e422192d71df046a4cc3a5da312e",
+      "original": "docs/ai-skills/rts-genre-kits/SKILL.md"
+    },
+    {
+      "path": "source/docs/ai-skills/rts-motion-games/SKILL.md",
+      "sha256": "5ea0d68184f479b4dbe342d4c4300468f39054bf2c0010ffd716b5ee8ef292f5",
+      "original": "docs/ai-skills/rts-motion-games/SKILL.md"
+    },
+    {
+      "path": "source/docs/genres.md",
+      "sha256": "03a6a6fadb6c9918009e8636b56bd2ee6aaa5f2428d0fd2c8c0ff46c9fde22b8",
+      "original": "docs/genres.md"
+    },
+    {
+      "path": "source/examples/genres/index.json",
+      "sha256": "067e153c22d4e30beb6ad51d536a7ab6949ef04b81e0c7b4c7a236804e94bc06",
+      "original": "examples/genres/index.json"
+    },
+    {
+      "path": "source/libraries/include/aiverselib/app/Genre.h",
+      "sha256": "53b9b0a8cad6da3a97af287654c4770e50b460a845e89bab37240180720fe870",
+      "original": "libraries/include/aiverselib/app/Genre.h"
+    },
+    {
+      "path": "source/modules/genres/CMakeLists.txt",
+      "sha256": "d0b7b235b2f3a4dc46698537d763a523e8ab3ff65ae16b9d4238974ee02f2c8a",
+      "original": "modules/genres/CMakeLists.txt"
+    },
+    {
+      "path": "source/tests/genres/projects.cpp",
+      "sha256": "fedf6c4de8f9684f389db939900f8980c98e8e5aafde8e03abce2507bcdfc8d6",
+      "original": "tests/genres/projects.cpp"
+    },
+    {
+      "path": "source/tools/genres/play.py",
+      "sha256": "1e744630f50e63f98ed6754c74ab143ad980b12f2c1dc0e002bd64c8a30da1f0",
+      "original": "tools/genres/play.py"
+    }
+  ],
+  "hash_format": "SHA-256 after CRLF to LF normalization"
+}

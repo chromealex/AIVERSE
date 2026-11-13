@@ -1,0 +1,38 @@
+[
+  {
+    "id": "genre-kits",
+    "version": "0.2.0",
+    "layer": "tools",
+    "status": "cpp-subsystem",
+    "source": "libraries/include/aiverselib/app/Genre.h",
+    "skill": "docs/ai-skills/rts-genre-kits/SKILL.md",
+    "summary": "Sixteen genre recipes with family classification and explicit integration requirements",
+    "notes": "Use genreKit to select existing library packages and acceptance scenarios. Configure engine rules and templates before adding code. Kits are composition recipes, not complete generated games. Implement the named acceptance scenarios for the actual project and verify them.",
+    "verifiedPlatforms": [],
+    "cmakeTarget": "AIVERSE::libraries"
+  },
+  {
+    "id": "board-games",
+    "version": "0.1.0",
+    "layer": "simulation",
+    "status": "engine-reference",
+    "source": "modules/genres/BoardModule.h",
+    "skill": "docs/ai-skills/rts-board-games/SKILL.md",
+    "summary": "Deterministic card duels and match3 with commands, bots, snapshots and binary saves",
+    "notes": "Standalone GameModule; use the reference client or integrate a host. Editor data window and standalone Play; packaged client selected by game.module. See docs/genres.md for platform and coverage limits.",
+    "verifiedPlatforms": [],
+    "cmakeTarget": "AIVERSE::board"
+  },
+  {
+    "id": "motion-games",
+    "version": "0.1.0",
+    "layer": "simulation",
+    "status": "engine-reference",
+    "source": "modules/genres/MotionModule.h",
+    "skill": "docs/ai-skills/rts-motion-games/SKILL.md",
+    "summary": "Platformer motor reuse and arcade racing with collision, checkpoints and saves",
+    "notes": "Standalone GameModule; use the reference client or integrate a host. Editor data window and standalone Play; packaged client selected by game.module. See docs/genres.md for platform and coverage limits.",
+    "verifiedPlatforms": [],
+    "cmakeTarget": "AIVERSE::motion"
+  }
+]

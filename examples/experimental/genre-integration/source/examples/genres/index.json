@@ -1,0 +1,82 @@
+[
+  {
+    "genre": "classic-rts",
+    "module": "rts",
+    "project": "templates/skirmish"
+  },
+  {
+    "genre": "tower-defense",
+    "module": "rts",
+    "project": "examples/genres/rts/tower-defense"
+  },
+  {
+    "genre": "lane-battler",
+    "module": "rts",
+    "project": "templates/laneclash"
+  },
+  {
+    "genre": "fps",
+    "module": "fps",
+    "project": "templates/fps_arena"
+  },
+  {
+    "genre": "action-rpg",
+    "module": "rts",
+    "project": "examples/genres/rts/action-rpg"
+  },
+  {
+    "genre": "survivors",
+    "module": "rts",
+    "project": "examples/genres/rts/survivors"
+  },
+  {
+    "genre": "survival",
+    "module": "rts",
+    "project": "examples/genres/rts/survival"
+  },
+  {
+    "genre": "colony",
+    "module": "rts",
+    "project": "examples/genres/rts/colony"
+  },
+  {
+    "genre": "city-builder",
+    "module": "rts",
+    "project": "examples/genres/rts/city-builder"
+  },
+  {
+    "genre": "turn-based",
+    "module": "rts",
+    "project": "examples/genres/rts/turn-based"
+  },
+  {
+    "genre": "moba",
+    "module": "rts",
+    "project": "examples/genres/rts/moba"
+  },
+  {
+    "genre": "platformer",
+    "module": "motion",
+    "project": "examples/genres/platformer"
+  },
+  {
+    "genre": "racing",
+    "module": "motion",
+    "project": "examples/genres/racing"
+  },
+  {
+    "genre": "cards",
+    "module": "board",
+    "project": "examples/genres/cards"
+  },
+  {
+    "genre": "puzzle",
+    "module": "board",
+    "project": "examples/genres/puzzle"
+  },
+  {
+    "genre": "idle",
+    "module": "rts",
+    "project": "examples/genres/rts/idle"
+  }
+]
