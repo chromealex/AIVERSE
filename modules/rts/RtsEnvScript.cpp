@@ -301,7 +301,8 @@ void Environment::scroller(Simulation& sim, EnvState& st) {
                 Fixed k = a.seconds.raw > 0 ? fxMin(st.scrollerTimer[i] / a.seconds, Fixed::fromInt(1)) : Fixed::fromInt(1);
                 st.screenPos = st.screenFrom + (a.pos - st.screenFrom) * k;
             }
-            if (m_->screen().enabled) m_->setScreenCenter(sim, st.screenPos);   // one screen: routes' multiscreen
+            // a map "screen" follows the scroller (centre = corner + half the scroller screen)
+            if (m_ && m_->screen().enabled) m_->setScreenCenter(sim, st.screenPos + def_.screen.size / Fixed::fromInt(2));
             break;
         case kScrGoto:
             done();

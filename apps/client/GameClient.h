@@ -313,6 +313,8 @@ private:
     game::ScriptSound* scriptSound_ = nullptr;          // set once the audio engine is up
     std::vector<Entity> heardSelection_;  // selection when the last select sound played
     RTSCamera cam_;
+    aiverse::Vec2 screenSize_{};        // map screen being framed (BW multiscreen)
+    bool screenFramed_ = false;
     Json manifest_, rulesJson_;
     std::vector<MapEntry> maps_;
     std::string gameName_ = "AIVERSE";

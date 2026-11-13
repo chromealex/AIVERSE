@@ -104,6 +104,10 @@ void loadRouteRules(const Json& lanes, RouteRules& r) {
         r.trim = fxMax(Fixed{}, j.getFx("trim", r.trim));
         r.smooth = std::clamp<int>(int(j.getInt("smooth", r.smooth)), 0, 64);
         r.inOut = fxMax(Fixed{}, j.getFx("inOut", r.inOut));
+        r.jitter = fxMax(Fixed{}, j.getFx("jitter", r.jitter));
+        r.fade = fxMax(Fixed{}, j.getFx("fade", r.fade));
+        r.coverageStep = j.getFx("coverageStep", r.coverageStep);
+        if (r.coverageStep.raw <= 0) throw std::runtime_error("rules lanes.routes.coverageStep: must be > 0");
     }
     if (const Json& j = lanes["groups"]; !j.isNull()) {
         const bool isBool = j.type() == Json::Type::Bool;
@@ -156,6 +160,13 @@ RouteDef parseRoute(const Json& j, int index) {
         r.lines.push_back(std::move(nodes));
     }
     for (auto& b : j["blockers"].items()) r.blockers.push_back(b.str());
+    for (auto& c : j["towersCoverage"].items()) {
+        if (!c.isObject() || c.getStr("point").empty()) fail(index, "towersCoverage entries need \"point\" (entity id) and \"distances\"");
+        std::vector<Fixed> d;
+        for (auto& v : c["distances"].items()) d.push_back(v.fx());
+        if (d.size() > 21) fail(index, "towersCoverage: at most 21 distances");
+        r.coverage.push_back({c.getStr("point"), std::move(d)});
+    }
     r.flying = j.getBool("flying", false);
     return r;
 }
@@ -185,6 +196,15 @@ Json routeToJson(const RouteDef& r) {
         j.set("lines", ls);
     }
     if (!r.blockers.empty()) { Json b = Json::array(); for (auto& s : r.blockers) b.push(Json::string(s)); j.set("blockers", b); }
+    if (!r.coverage.empty()) {
+        Json cv = Json::array();
+        for (auto& [id, d] : r.coverage) {
+            Json e = Json::object(); e.set("point", Json::string(id));
+            Json a = Json::array(); for (Fixed f : d) a.push(Json::number(f));
+            e.set("distances", a); cv.push(e);
+        }
+        j.set("towersCoverage", cv);
+    }
     if (r.flying) j.set("flying", Json::fromBool(true));
     return j;
 }

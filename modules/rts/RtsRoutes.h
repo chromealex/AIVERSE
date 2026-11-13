@@ -1,6 +1,7 @@
 // Runtime state of authored routes, BW groups and the multiscreen view (RtsRoutes.cpp; data in RtsRoutesData.h).
 #pragma once
 #include <cstdint>
+#include <map>
 #include <vector>
 #include "../../engine/core/ECS.h"
 #include "RtsRoutesData.h"
@@ -19,11 +20,22 @@ struct SendGroup {
     uint8_t payer = 0;                      // 0: owner; else the garrison's owner pays (hypnotised send captured by the caster)
 };
 
+// Per walker on an authored route (BW Unit.spawnOffsetRandom / GetAlpha): the lane position without the offset, the
+// random diagonal offset, and the end fade the offset and the view use.
+struct RouteWalk {
+    Vec3 base{};
+    Fixed jitter{};
+    Fixed alpha = Fixed::fromInt(1);
+};
+
 struct RouteState {
     bool active = false;                    // map routes / screen or rules lanes.groups: then saved and hashed
     std::vector<Entity> ends;               // 2 per route: current from / to garrison (re-resolved at the route ends)
     std::vector<int32_t> laneRoute;         // per GameState::lanes entry: the route it was built from
     std::vector<Fixed> laneScale;           // per lane: its length / length of line 0 (rows stay abreast, BW progress)
+    std::vector<uint8_t> laneFlying;        // per lane: 1 = a flying route (BW FindFlyingRoute, made on first use)
+    std::vector<uint8_t> routeOpen;         // per route: no blocker alive and both ends present (BW Route.isLocked)
+    std::map<uint64_t, RouteWalk> walks;    // entity (packed) -> walker on a route
     std::vector<SendGroup> groups;          // open groups in creation order
     uint32_t signature = 0;                 // ends / blockers the lanes were built for
     Vec3 screenCenter{};                    // current screen center (BW -MultiscreenModule offset)

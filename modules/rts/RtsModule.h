@@ -640,11 +640,23 @@ public:
     bool routesAuthored() const { return !routeDefs_.empty(); }
     bool canSend(Simulation& sim, Entity from, Entity to) const;
     Fixed routeLength(Simulation& sim, Entity from, Entity to) const;
+    Fixed routeAiLength(Simulation& sim, Entity from, Entity to) const;   // BW Route.GetAILength (slowdown zones); -1: none
+    // Flying sends (BW PointsFlyingUnits): a garrison with a `flying` status sends along a straight flying route (made on
+    // first use, BW FindFlyingRoute) even without a ground route, one flying group at a time, rows flyRowSpacing apart.
+    bool sendsFlying(Simulation& sim, Entity from) const;
+    // BW Spline.GetTowerCoverageDistance: route length within `range` of tower point `tower` (map towersCoverage), 0 when
+    // the map has none; and the AI estimates built on it (TowerModule.GetUnitsDamageForSpline / GetDamageBySpline).
+    Fixed towerCoverage(Simulation& sim, Entity from, Entity to, Entity tower, Fixed range) const;
+    int towerUnitsDamage(Simulation& sim, Entity from, Entity to, Entity tower, Fixed range, Fixed firePerSecond, int count, Fixed rowDistance, Fixed unitSpeed) const;
+    int towerDamageBySpline(Simulation& sim, Entity from, Entity to, Entity tower, Fixed range, Fixed firePerSecond, Fixed waveLength, Fixed unitSpeed) const;
+    // Alpha of a route walker at the route ends (BW SubSpline.GetAlpha; 1 elsewhere / for other units): the view fades it.
+    Fixed routeAlpha(Simulation& sim, Entity unit) const;
     const std::vector<RouteDef>& routeDefs() const { return routeDefs_; }
     // Multiscreen (map "screen", BW MultiscreenModule): the current screen and whether a point is on it (always true
     // without a screen). Garrisons off the screen do not grow. setScreenCenter clamps to the screen bounds.
     const ScreenDef& screen() const { return screen_; }
-    bool onScreen(Simulation& sim, Vec3 p) const;
+    bool onScreen(Simulation& sim, Vec3 p) const;            // map "screen", else the env map scroller screen
+    bool screenView(Simulation& sim, Vec3& center, Vec2& size) const;   // current screen (either source); false: none
     Vec3 screenCenter(Simulation& sim) const;
     void setScreenCenter(Simulation& sim, Vec3 c);
     Fixed stat(Simulation& sim, Entity e, Stat s) const;          // effective stat with techs/levels/buffs
@@ -991,6 +1003,11 @@ private:
     std::vector<Vec3> routeAnchors_;                  // 2 per route: the end positions (first / last control point)
     std::vector<std::vector<Entity>> routeBlockers_;  // per route: entities that close it while alive
     ScreenDef screen_;                                // map "screen"
+    std::vector<std::vector<std::pair<Entity, std::array<Fixed, 21>>>> routeCoverage_;   // per route: tower -> covered length per range step
+    std::vector<int> routeLanes(Simulation& sim, Entity from, Entity to, bool flying) const;   // ground lanes of an open route / flying lanes
+    std::vector<int> flyingLanes(Simulation& sim, Entity from, Entity to);                   // made on first use
+    int routeIndex(Simulation& sim, Entity a, Entity b) const;
+    void startRouteWalk(Simulation& sim, Entity unit, int lane);
     bool attackSlot(Simulation& sim, Entity e, Entity target, Fixed range, Vec3& out); // melee surround
     void moveToVia(Simulation& sim, Entity e, Vec3 goal, Fixed radius, bool aroundAllies);
 

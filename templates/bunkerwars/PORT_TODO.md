@@ -31,13 +31,32 @@ mismatches.
 | Upgrade cost / time multipliers from hero passives, FastConvert; House5 cost 999 = not buildable | `BuildingInfo.cs` GetBuildingCost | — |
 | Point values per difficulty (easy / normal / hard / expert); the template takes easy for multiplayer maps (BW `Any` -> index 0) and normal for campaign maps | `MapPointsModule.cs` GetCurrentValues | `bw/maps/*.json` points[].values, complexityUsed |
 
-## Routes (agent-bw-routes)
+## Routes (agent-bw-routes) — engine side done, importer has to write these keys
 
-BW groups walk hand-made splines between points (`list[].points` with per-point offsets, zone flags, slowdown);
-the template still uses engine `lanes` (A* between buildings, 6 lanes = BW unitsInRow, spacing = columnsPadding).
-Source: map data asset `Routes` module (`ME.TexturesGenerator/_Common/Maps/Data/**`), `RoutesModule/*.cs`.
-Exported: `bw/maps/<map>.json` `routes` (from / to point index, polyline in cells, slowdown, zoneFlags, offsets).
-Zones (slowdown polygons, zoneType flags such as blind zones excluded from towers): `zones`.
+Engine: docs/game-format.md § Routes, groups, multiscreen. Defaults are BW `BattleParametersInfo` at 40 units / cell.
+Coordinates: cell = (x / 40 + w / 2, -y / 40 + h / 2), like the points. What `import.py` must write:
+
+- `rules.json` `"lanes": {"routes": {"lines": 6}, "groups": true}` instead of the A* lanes (left / right / spacing).
+  Only when `bw/battle.json` differs from the BW defaults: `routes.columnPadding` (columnsPadding / 40),
+  `flyColumnPadding` (flyColumnsPadding / 40), `trim` (routeVisualizer.pathPointOffset / 40), `jitter`
+  (units.positionRandomOffset / 40), `fade` (units.alphaFadeThreshold / 40), `groups.rowSpacing` (rowsOffset / 40),
+  `groups.flyRowSpacing` (flyingRowsOffset / 40), `lines` (common.unitsInRow).
+- map `"routes"`: one entry per `Routes.list[]` item:
+  `{"from": "p<pointFromId>", "to": "p<pointToId>", "points": [...], "lines": [...], "blockers": [...], "towersCoverage": [...]}`
+  - `points`: every `points[]` as `[x, z]`, or `{"at": [x, z], "offsets": [8 x offset.offsets[k] / 40], "zone": zoneFlags,
+    "slowdown": slowdownCoefficient}` when any of those is non-zero (offset values keep their sign: the y flip and the
+    engine's right vector cancel out);
+  - `lines`: `rawSplineLines[k].rawNodes` converted like points (BW uses them instead of the control points when a line
+    has >= 2 nodes: they are what BW units walk, so they are needed for 1:1);
+  - `blockers`: ids of the destructible objects whose `closedRoutes` contain this pair (either direction), once they
+    are map entities;
+  - `towersCoverage`: `{"point": "p<pointIndex>", "distances": [d / 40 ...]}` as stored (leading zeros already dropped).
+- map entity key `"screenGroups": [..]` from `points[].screenGroups` (routes across groups are dropped, BW rule).
+- map `"screen": {"size": [68, 38], "bounds": [left, right, top, bottom] / 40}` from `MapHeader.gameplayRectOffset`
+  (only maps with a gameplayRectOffset; center defaults to the map centre = BW offset 0). Map scroller maps can keep
+  the environment `mapScroller.screen`: it drives the same screen API.
+- Flying skills (`PointsFlyingUnits`): a structure status with `"flags": ["flying"]` (+ speed `mods`) on the source
+  point, not on units in transit: the next send from it then flies along a flying route (whole garrison).
 
 ## Modes (agent-bw-modes)
 

@@ -344,6 +344,7 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
             }
         }
         so.hp = ut.maxHp.raw > 0 ? float((u.hp / ut.maxHp).toDouble()) : 1.0f;
+        if (!gs.routes.walks.empty()) so.fade = float(m->routeAlpha(sim, e).toDouble());   // BW route end fade
         if (auto* c = w.tryGet<Construction>(e)) so.build = float(c->progress.toDouble());
         so.unpowered = (u.flags & kUnitDisabled) || (o.player < gs.players.size() && gs.players[o.player].productionMult < Fixed::fromInt(1));
         if (auto* g = w.tryGet<Garrison>(e)) so.garrison = g->count;

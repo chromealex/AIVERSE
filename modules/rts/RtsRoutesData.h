@@ -14,19 +14,22 @@
 namespace aiverse::game {
 
 // rules.json "lanes": {"routes": {...}, "groups": {...}}. Defaults are the BW BattleParametersInfo values at
-// 50 BW pixels per cell: unitsInRow 6, columnsPadding 20, flyColumnsPadding 45, pathPointOffset 10,
-// rowsOffset 70, flyingRowsOffset 120, defaultInOutLength 100.
+// 40 BW units per cell (tools/importers/bunkerwars): unitsInRow 6, columnsPadding 20, flyColumnsPadding 45,
+// pathPointOffset 10, rowsOffset 70, flyingRowsOffset 120, defaultInOutLength 100.
 struct RouteRules {
     int lines = 6;                                    // parallel sub-splines per route (BW common.unitsInRow)
-    Fixed columnPadding = Fixed::fromRatio(2, 5);     // offset step between columns (BW units.columnsPadding)
-    Fixed flyColumnPadding = Fixed::fromRatio(9, 10); // flying routes (BW units.flyColumnsPadding)
-    Fixed trim = Fixed::fromRatio(1, 5);              // cut from both ends of a sub-spline (BW routeVisualizer.pathPointOffset)
+    Fixed columnPadding = Fixed::fromRatio(1, 2);     // offset step between columns (BW units.columnsPadding)
+    Fixed flyColumnPadding = Fixed::fromRatio(9, 8); // flying routes (BW units.flyColumnsPadding)
+    Fixed trim = Fixed::fromRatio(1, 4);              // cut from both ends of a sub-spline (BW routeVisualizer.pathPointOffset)
     int smooth = 10;                                  // spline nodes between control points (BW Spline.BETWEEN_NODE_COUNT)
-    Fixed inOut = Fixed::fromInt(2);                  // flying routes: straight in / out part (BW MapRoutesModule.defaultInOutLength)
+    Fixed inOut = Fixed::fromRatio(5, 2);                  // flying routes: straight in / out part (BW MapRoutesModule.defaultInOutLength)
+    Fixed jitter = Fixed::fromRatio(1, 8);            // random diagonal offset per unit (BW units.positionRandomOffset 5)
+    Fixed fade = Fixed::fromRatio(1, 2);              // alpha fade length at both ends (BW units.alphaFadeThreshold 20)
+    Fixed coverageStep = Fixed::fromRatio(5, 4);      // tower coverage: range step of the table (BW Spline.towerCoverageRangeStep 50)
     // BW groups (UnitsModule Group): rows of `lines` units, the garrison pays per row, sends merge, owner change closes
     bool groups = false;
-    Fixed rowSpacing = Fixed::fromRatio(7, 5);        // distance walked between rows (BW units.rowsOffset)
-    Fixed flyRowSpacing = Fixed::fromRatio(12, 5);    // flying groups (BW units.flyingRowsOffset)
+    Fixed rowSpacing = Fixed::fromRatio(7, 4);        // distance walked between rows (BW units.rowsOffset)
+    Fixed flyRowSpacing = Fixed::fromInt(3);    // flying groups (BW units.flyingRowsOffset)
 };
 // Parses the optional "routes" / "groups" members of the rules "lanes" object (throws readable errors).
 void loadRouteRules(const Json& lanes, RouteRules& out);
@@ -40,6 +43,9 @@ struct RouteDef {
     std::vector<uint32_t> zones;                      // per control point: zone flags (BW ZoneType; 2 = slowdown)
     std::vector<Fixed> slowdown;                      // per control point: slowdown coefficient (BW; AI length only)
     std::vector<std::string> blockers;                // entity ids that close the route while alive (BW closedRoutes)
+    // precomputed tower coverage (BW SplineRouteInfo.towersCoverage): per tower point, covered route length for tower
+    // ranges 0, step, 2 step ... 20 step (stored tail-aligned like BW: leading zeros dropped)
+    std::vector<std::pair<std::string, std::vector<Fixed>>> coverage;
     bool flying = false;                              // flying route: fly column padding (BW Route.isFlying)
 };
 // Parses one map "routes" entry; throws std::runtime_error("map route N: ...") on bad data.
@@ -64,7 +70,7 @@ RouteDef flyingRoute(Vec2 from, Vec2 to, const RouteRules& rr);
 // (BW MapHeader.gameplayRectOffset, map cells; top = towards -z).
 struct ScreenDef {
     bool enabled = false;
-    Vec2 size{};                                      // screen size in cells (BW 2720 x 1520 px = 54.4 x 30.4)
+    Vec2 size{};                                      // screen size in cells (BW 2720 x 1520 = 68 x 38)
     Vec2 center{};                                    // start center
     Fixed left{}, right{}, top{}, bottom{};           // movement bounds of the center
     Fixed smooth = Fixed::fromInt(10);                // view: follow rate per second (BW world.multiscreenMovementSmooth)
