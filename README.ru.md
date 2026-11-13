@@ -282,6 +282,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 | [Частицы](docs/particles.md) · [Модели](docs/models.md) · [Shader Graph](docs/shader-graph.md) | картинка |
 | [Мета-игра](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Плагины](docs/plugins.md) | монетизация и сторы |
 | [FPS](docs/fps.md) · [Большие миры](docs/large-worlds.md) | FPS-модуль |
+| [Герои с видом сверху](docs/topdown.md) · [Вождение](docs/driving.md) · [Городской трафик](docs/traffic.md) | городские игры: машины, светофоры, пешеходы, службы, жители с работой |
 | [AGENTS.md](AGENTS.md) | правила для агентов, которые меняют сам движок |
 | [Переход с Unity](docs/ru/engine-import.md) | импорт сцен, префабов и ассетов, перенос логики агентом |
 

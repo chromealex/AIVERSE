@@ -268,6 +268,7 @@ bool RtsModule::serializeState(Simulation& sim, Archive& a) {
     if (prompts_ && prompts_->active()) prompts_->io(sim, a);      // open prompts (games with rules "prompts" only)
     if (!ioModesState(*this, sim, a)) return false;           // match modes (games with modes only, RtsModes.cpp)
     if (arsenal_ && arsenal_->active()) arsenal_->io(sim, a);   // weapons, ammo, crates (games with rules "arsenal" only)
+    if (traffic_ && traffic_->active()) traffic_->io(sim, a);   // city traffic (games with rules "traffic" only)
     if (!a.writing()) {
         gs.grid.invalidatePathing();   // derived caches (clearance, HPA*) rebuild from the loaded cells
         gs.grid.clearSoft();

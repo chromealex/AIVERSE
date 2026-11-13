@@ -278,6 +278,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 | [粒子](docs/particles.md) · [模型](docs/models.md) · [Shader Graph](docs/shader-graph.md) | 画面 |
 | [元游戏](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [插件](docs/plugins.md) | 变现与商店 |
 | [FPS](docs/fps.md) · [大世界](docs/large-worlds.md) | FPS 模块 |
+| [俯视角英雄](docs/topdown.md) · [驾驶](docs/driving.md) · [城市交通](docs/traffic.md) | 城市游戏：汽车、红绿灯、行人、公共服务、有工作的居民 |
 | [AGENTS.md](AGENTS.md) | 修改引擎本身的智能体须遵守的规则 |
 | [从 Unity 迁移](docs/zh-CN/engine-import.md) | 导入场景、预制体和资源，再由智能体迁移逻辑 |
 

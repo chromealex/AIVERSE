@@ -14193,7 +14193,6 @@ TEST(bw_player_mods_by_count_table) {
 }
 #include "tests_driving.inc"   // vehicles the hero drives (agent-gta2)
 #include "tests_arsenal.inc"   // the hero's weapons, ammo, crates and money (agent-gta2)
-#include "tests_city.inc"      // city planner (agent-gta2)
 #include "tests_commerce.inc"  // premises, businesses, the bank (agent-gta2)
 #include "tests_career.inc"    // career ladders and perks (agent-gta2)
 
@@ -14246,3 +14245,5 @@ TEST(model_merge_static_primitives) {
     Model big = make();ModelMergeOptions small;small.maxExtent = 1;
     CHECK(!mergeStaticPrimitives(big, small).merged);
 }
+#include "tests_traffic.inc"   // city traffic: AI cars, signals, pedestrians (agent-traffic)
+#include "tests_city.inc"      // city planner (agent-gta2)

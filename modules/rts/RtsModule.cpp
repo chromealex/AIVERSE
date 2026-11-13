@@ -57,6 +57,8 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     driving_->loadMap(sim, mapIn);         // bridges and tunnels as second levels (map "decks")
     arsenal_ = std::make_unique<Arsenal>();   // the hero's weapon slots, ammo, crates and money (rules "arsenal"); nothing without the block
     arsenal_->setup(sim, *this, rulesJson);
+    traffic_ = std::make_unique<Traffic>();   // city traffic (rules "traffic"); nothing without the block
+    traffic_->setup(sim, *this, rulesJson, mapIn);
     // Lua: the engine's standard library (rule-level mechanics, modules/rts/lua) + the game's scripts
     script_ = std::make_unique<ScriptEngine>(*this);
     script_->load(sim, rulesJson, mapIn);
@@ -102,6 +104,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     });
     if (script_->hasUserScripts()) sim.addSystem("scripts", [this](Simulation& s) { script_->tick(s); }); // after triggers: same events
     if (modes_.any && modes_.stats) sim.addSystem("matchstats", [this](Simulation& s) { sysMatchStats(s); });   // last: every event of the tick
+    if (traffic_->active()) sim.addSystem("traffic", [this](Simulation& s) { traffic_->collect(s); });   // last: keeps the tick's shots / hits / deaths (scripts' too) for its next tick
     sim.world().setResource<MatchOutcome>();
     sim.addSystem("outcome", [this](Simulation& s) { freezeOutcome(s); });   // last: the result of the whole tick
     sysCreep(sim);
@@ -1598,6 +1601,7 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (career_ && career_->active()) career_->hash(sim, h);         // games with rules "careers" only
     if (prompts_ && prompts_->active()) prompts_->hash(sim, h);      // games with rules "prompts" only
     if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
+    if (traffic_ && traffic_->active()) traffic_->hash(sim, h);   // games with rules "traffic" only
 }
 
 } // namespace aiverse::game

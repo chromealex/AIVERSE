@@ -29,6 +29,7 @@
 #include "RtsPrompt.h"
 #include "RtsRoutes.h"
 #include "RtsArsenal.h"
+#include "RtsTraffic.h"
 #include <memory>
 
 namespace aiverse::game {
@@ -606,6 +607,7 @@ public:
     Career* career() const { return career_.get(); }           // career ladders and perks (RtsCareer.h); null before setup
     Commerce* commerce() const { return commerce_.get(); }     // premises, businesses, the bank (RtsCommerce.h); null before setup
     Arsenal* arsenal() const { return arsenal_.get(); }        // the hero's weapons, ammo, crates, money (RtsArsenal.h); null before setup
+    Traffic* traffic() const { return traffic_.get(); }        // city traffic: AI cars, signals, pedestrians (RtsTraffic.h); null before setup
     Driving* driving() const { return driving_.get(); }        // vehicles the hero drives (RtsDriving.h); null before setup
     TopDown* topDown() const { return topDown_.get(); }        // top-down heroes (RtsTopDown.h); null before setup
     Progression* progression() const { return progression_.get(); }   // in-match progression (RtsProgression.h); inactive without rules "progression"
@@ -1011,6 +1013,7 @@ private:
     std::unique_ptr<Career> career_;       // rules "careers" (state: CareerStore resource)
     std::unique_ptr<Commerce> commerce_;   // rules "commerce" (state: CommerceStore resource)
     std::unique_ptr<Arsenal> arsenal_;     // rules "arsenal" (state: ArsenalStore resource)
+    std::unique_ptr<Traffic> traffic_;     // rules "traffic" (state: TrafficStore resource)
     std::unique_ptr<Driving> driving_;     // rules "driving" (state: DrivingStore resource)
     std::unique_ptr<TopDown> topDown_;     // rules "topDown" (state: TopDownStore resource)
     std::unique_ptr<Progression> progression_;   // rules "progression" (state: ProgressionStore resource)

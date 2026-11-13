@@ -105,10 +105,13 @@ public:
     int deckIndex(Simulation& sim, const std::string& id) const;
     Fixed height(Simulation& sim, Entity vehicle) const;
     bool setDeck(Simulation& sim, Entity vehicle, int deck);
+    // takes a just spawned vehicle unit now (instead of at its next tick), rolling forward at `speed` m/s (traffic)
+    bool adopt(Simulation& sim, Entity vehicle, Fixed speed);
 
 private:
     const DrivingVehicleType* typeOf(uint16_t unitType) const;
     void adoptAndDrop(Simulation& sim, DrivingStore& st);
+    void adoptOne(Simulation& sim, DrivingStore& st, Entity e);
     void enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity hero);
     bool leave(Simulation& sim, DrivingCar& c, bool forced);
     void drive(Simulation& sim, DrivingStore& st, size_t index);
@@ -117,6 +120,8 @@ private:
 
     RtsModule* m_ = nullptr;
     DrivingRules rules_;
+    std::vector<int32_t> vehicleOf_;                // per unit type: index into rules_.vehicles, -1: not a vehicle (derived)
+    std::vector<Fixed> reach_;                      // per unit type: the farthest its body gets from its centre (derived)
 };
 
 } // namespace aiverse::game

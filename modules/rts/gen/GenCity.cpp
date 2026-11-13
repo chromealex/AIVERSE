@@ -611,7 +611,7 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     }
     for (int z = 0; z < H && !kit.cars.empty(); ++z)
         for (int x = 0; x < W; ++x)
-            if (p.kind[size_t(p.ci(x, z))] == KParking && x % 2 == 0 && rng.chance(550)) { place(pick(kit.cars), 0, x * 4 + 2, z * 4 + 2, z % 2 ? 0 : 180); ++nCars; }
+            if (p.kind[size_t(p.ci(x, z))] == KParking && x % 2 == 0 && rng.chance(550)) { place(pick(kit.cars), 0, x * 4 + 2, z * 4 + 2, z % 2 ? 90 : 270); ++nCars; }   // along x: two cells each (nose to tail down the column they overlap, cars are longer than a cell)
 
     // 10. the hero: the pavement cell nearest to the centre
     if (kit.hero >= 0) {

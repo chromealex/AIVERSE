@@ -23,6 +23,9 @@ Tests: `aiverse_tests driving_`.
   by `crash.damage` per m/s. Car against car shares the push and exchanges the closing speed, both are damaged.
   Other ground units are run over above `runOver.minSpeed` (`runOver.damage` per m/s, credited to the driver);
   slower, they are pushed aside. Units that never move (`move.speed` 0: trees, posts) are solid like walls. Sub-steps of a quarter cell, so nothing tunnels.
+- **Parked cars sleep.** A vehicle with nobody at the wheel (and no traffic driver) that stands still is not stepped
+  or swept at all; a collision gives it a velocity and wakes it. A city with hundreds of parked cars costs the same
+  as an empty one.
 - **Wrecks.** A destroyed vehicle throws its driver out on the spot with `wreckDamage`.
 - **State / determinism.** `DrivingStore` world resource: hashed, saved after the top-down heroes, copied by
   rollback snapshots. Fixed maths only. Games without the block keep their checksums and save layout.
@@ -99,3 +102,4 @@ them, a tunnel and a bridge over a road do not), and the view does not lift a ca
 
 Client: an on-screen enter button, doors, reverse wheel spin (wheels roll forward when backing up). Sim: passengers, computer drivers, per-surface grip, skid marks and crash events for
 effects and sound.
+Computer drivers also use rules `traffic` (docs/traffic.md) for cars nobody sits in.

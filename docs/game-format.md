@@ -2811,6 +2811,11 @@ sample `templates/boss_arena`). Map players with `"monsters": true` and hostile 
   `breather`, `excludePrevious`, `pauseWaves`, `variants[]` (`boss`, `weight`, `archetype`)).
 Lua events `boss_engaged`, `boss_phase`, `boss_enraged`, `boss_adds`, `boss_defeated`, `boss_window`,
 `telegraph_start`, `telegraph_strike`, `telegraph_end` (statuses: `status_start`); table `encounters`.
+## City traffic
+
+Rules block `traffic` (with `topDown` + `driving`): computer-driven cars on lanes built from the map's tile
+characters, signalised junctions with light props, pedestrians on the sidewalks who cross on "walk" and panic at
+gunfire; map `"traffic": false` switches it off. Keys, defaults and behaviour: [docs/traffic.md](traffic.md).
 
 ## Ordered projectile flight programs
 

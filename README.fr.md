@@ -287,6 +287,7 @@ Les documents de référence sont en anglais. La vue d’ensemble, l’assistant
 | [Particules](docs/particles.md) · [Modèles 3D](docs/models.md) · [Shader Graph](docs/shader-graph.md) | visuel |
 | [Méta-jeu](docs/meta-game.md) · [LiveOps](docs/meta-liveops.md) · [Plugins](docs/plugins.md) | monétisation et stores |
 | [FPS](docs/fps.md) · [Grands mondes](docs/large-worlds.md) | module FPS |
+| [Héros en vue de dessus](docs/topdown.md) · [Conduite](docs/driving.md) · [Trafic urbain](docs/traffic.md) | jeux de ville : voitures, feux, piétons, services, habitants avec un emploi |
 | [AGENTS.md](AGENTS.md) | règles pour les agents qui modifient le moteur lui-même |
 | [Venir d’Unity](docs/fr/engine-import.md) | importer scènes, prefabs et ressources, puis porter la logique avec un agent |
 
