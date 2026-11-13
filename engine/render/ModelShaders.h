@@ -50,6 +50,8 @@ namespace aiverse::render::shaders {
     "layout(std140) uniform U3 { vec4 u_joints[240]; };\n" \
     "#elif defined(BAKED)\n" \
     "layout(std140) uniform U3 { vec4 u_palette[20]; };\n" \
+    "#elif defined(MATERIAL_PALETTE)\n" \
+    "layout(std140) uniform U3 { vec4 u_materials[128]; };\n" \
     "#endif\n" \
     "#if defined(MORPH)\n" \
     "layout(std140) uniform U4 { vec4 u_morphW[2]; vec4 u_morphInfo; vec4 u_morphInfo2; };\n" \
@@ -114,8 +116,11 @@ namespace aiverse::render::shaders {
     "layout(location = 4) in vec4 a_col;\n" \
     "#if defined(SKINNED) || defined(BAKED)\n" \
     "layout(location = 5) in vec4 a_joints;\n" \
+    "#endif\n" \
+    "#if defined(SKINNED) || defined(BAKED) || defined(MATERIAL_PALETTE)\n" \
     "layout(location = 6) in vec4 a_weights;\n" \
-    "#elif defined(LIGHTMAP)\n" \
+    "#endif\n" \
+    "#if defined(LIGHTMAP) && !defined(SKINNED) && !defined(BAKED)\n" \
     "layout(location = 5) in vec4 a_lmuv;\n" \
     "#endif\n" \
     "#if AIVERSE_INST > 1\n#define INSTANCE u_inst[gl_InstanceID]\n#else\n#define INSTANCE u_inst[0]\n#endif\n"
@@ -142,6 +147,9 @@ flat out vec4 v_tint;
 flat out vec4 v_team;
 flat out vec4 v_draw;
 flat out vec4 v_lod;
+#if defined(MATERIAL_PALETTE)
+flat out int v_material;
+#endif
 void main() {
     Inst I = INSTANCE;
     vec4 p = vec4(a_pos, 1.0);
@@ -162,6 +170,9 @@ void main() {
     v_tan = vec4(mat3(I.model) * t, a_tan.w);
     v_uv = uvTransform(a_uv);
     v_col = a_col;
+#if defined(MATERIAL_PALETTE)
+    v_material = int(a_weights.x * 255.0 + 0.5);
+#endif
     v_tint = I.tint; v_team = I.team; v_draw = I.draw; v_lod = I.lod;
 #if defined(LIGHTMAP)
     v_uv2 = vec2(a_lmuv.x + a_lmuv.y * 256.0, a_lmuv.z + a_lmuv.w * 256.0) * (1.0 / 65535.0) * I.anim.xy + I.anim.zw;
@@ -200,6 +211,14 @@ flat in vec4 v_tint;
 flat in vec4 v_team;
 flat in vec4 v_draw;
 flat in vec4 v_lod;
+#if defined(MATERIAL_PALETTE)
+flat in int v_material;
+#define PALETTE_BASE u_materials[v_material * 2]
+#define PALETTE_PBR u_materials[v_material * 2 + 1].xy
+#else
+#define PALETTE_BASE m_base
+#define PALETTE_PBR m_pbr.xy
+#endif
 out vec4 o_color;
 
 vec3 toLinear(vec3 c) { return AIVERSE_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
@@ -230,7 +249,7 @@ void main() {
         edge = 1.0 - smoothstep(0.0, 0.06, nz - v_draw.y);
     }
     vec4 tb = texture(tex1, v_uv);
-    vec4 base = m_base * vec4(toLinear(tb.rgb), tb.a);
+    vec4 base = PALETTE_BASE * vec4(toLinear(tb.rgb), tb.a);
     if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, m_misc.w > 1.5 ? 1.0 : v_col.a);
     int teamMode = int(m_misc.y + 0.5);
     float teamW = 0.0;   // how much of the team colour this point shows (team glow)
@@ -240,8 +259,8 @@ void main() {
     } else if (teamMode > 1) {
         float m = 0.0, k = 1.0;
         if (teamMode == 2) { m = texture(tex6, v_uv).r; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); }
-        else if (teamMode == 3) { m = 1.0 - tb.a; base.a = m_base.a; }
-        else { m = 1.0 - v_col.a; base.a = m_base.a * tb.a; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); } // vertex RGB shades the team colour (voxel remap ramps)
+        else if (teamMode == 3) { m = 1.0 - tb.a; base.a = PALETTE_BASE.a; }
+        else { m = 1.0 - v_col.a; base.a = PALETTE_BASE.a * tb.a; k = min(0.5 + luma(base.rgb) * 1.5, 1.0); } // vertex RGB shades the team colour (voxel remap ramps)
         teamW = clamp(m * m_misc.z, 0.0, 1.0);
         base.rgb = mix(base.rgb, v_team.rgb * k, teamW);
     }
@@ -268,7 +287,7 @@ void main() {
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
 #endif
-    float metallic = m_pbr.x, rough = m_pbr.y, ao = 1.0;
+    float metallic = PALETTE_PBR.x, rough = PALETTE_PBR.y, ao = 1.0;
     vec3 emis = m_emissive.rgb;
 #if AIVERSE_Q >= 1
     vec4 mr = texture(tex2, v_uv);
@@ -427,8 +446,11 @@ void main() {
     "    float4 col [[attribute(4)]];\n" \
     "#if defined(SKINNED) || defined(BAKED)\n" \
     "    uchar4 joints [[attribute(5)]];\n" \
+    "#endif\n" \
+    "#if defined(SKINNED) || defined(BAKED) || defined(MATERIAL_PALETTE)\n" \
     "    float4 weights [[attribute(6)]];\n" \
-    "#elif defined(LIGHTMAP)\n" \
+    "#endif\n" \
+    "#if defined(LIGHTMAP) && !defined(SKINNED) && !defined(BAKED)\n" \
     "    uchar4 lmuv [[attribute(5)]];\n" \
     "#endif\n" \
     "};\n" \
@@ -500,6 +522,9 @@ struct VOut {
     float4 pos [[position]];
     float3 wpos; float3 opos; float3 nrm; float2 uv; float4 col; float4 tan;
     float4 tint [[flat]]; float4 team [[flat]]; float4 draw [[flat]]; float4 lod [[flat]];
+#if defined(MATERIAL_PALETTE)
+    uint material [[flat]];
+#endif
 #if defined(LIGHTMAP)
     float2 uv2;
 #endif
@@ -526,6 +551,9 @@ vertex VOut vs_main(VERTEX_ARGS) {
     o.tan = float4((I.model * float4(d.t, 0.0)).xyz, in.tan.w);
     o.uv = uvTransform(m, in.uv);
     o.col = in.col;
+#if defined(MATERIAL_PALETTE)
+    o.material = uint(in.weights.x * 255.0 + 0.5);
+#endif
     o.tint = I.tint; o.team = I.team; o.draw = I.draw; o.lod = I.lod;
 #if defined(LIGHTMAP)
     o.uv2 = float2(float(in.lmuv.x) + float(in.lmuv.y) * 256.0, float(in.lmuv.z) + float(in.lmuv.w) * 256.0) * (1.0 / 65535.0) * I.anim.xy + I.anim.zw;
@@ -549,7 +577,10 @@ static float modelNoise3(float3 x) {
 }
 
 fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
-                        constant U1& f [[buffer(2)]], constant MU2& m [[buffer(3)]],
+                        constant U1& f [[buffer(2)]], constant MU2& sourceMaterial [[buffer(3)]],
+#if defined(MATERIAL_PALETTE)
+                        constant float4* materials [[buffer(4)]],
+#endif
                         depth2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]],
                         texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]],
                         texture2d<float> tex2 [[texture(2)]], sampler s2 [[sampler(2)]],
@@ -561,6 +592,11 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]],
                         texture2d<float> tex11 [[texture(11)]], sampler s11 [[sampler(11)]],
                         depth2d<float> tex12 [[texture(12)]], sampler s12 [[sampler(12)]] GI_FARGS) {
+    MU2 m = sourceMaterial;
+#if defined(MATERIAL_PALETTE)
+    m.base = materials[in.material * 2];
+    m.pbr.xy = materials[in.material * 2 + 1].xy;
+#endif
 #if defined(LODFADE)
     uint2 lp=uint2(in.pos.xy) & uint2(3);
     uint rank=((lp.x & 1u) ^ (lp.y & 1u))*8u+(lp.y & 1u)*4u+((lp.x>>1u) ^ (lp.y>>1u))*2u+(lp.y>>1u);

@@ -353,6 +353,8 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
         const char* shadowBatches = std::getenv("AIVERSE_AUTO_SHADOW_BATCHES");
         if (!shadowBatches || std::string(shadowBatches) != "off") prepareShadowBatches(m);
         ensureTangents(m);
+        const char* materialBatches = std::getenv("AIVERSE_AUTO_MATERIAL_BATCHES");
+        if (!materialBatches || std::string(materialBatches) != "off") prepareMaterialBatches(m);
         gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = m.vertices.size() * sizeof(ModelVertex); vb.data = m.vertices.data(); vb.label = m.path.c_str();
         m.vb = dev.createBuffer(vb);
         gfx::BufferDesc ib; ib.type = gfx::BufferType::Index; ib.size = m.indices.size() * sizeof(uint32_t); ib.data = m.indices.data();

@@ -108,6 +108,13 @@ struct Primitive {
     bool shadowBatched = false;          // cast through MeshDef::shadowBatch instead of its own shadow draw
 };
 
+// Rigid opaque primitives sharing state/textures; per-vertex weights[0] selects full-float PBR factors.
+constexpr size_t kMaxMaterialPalette = 64;
+struct MaterialBatch {
+    Primitive primitive;
+    std::vector<size_t> parts;
+};
+
 struct ModelLod { int mesh = -1; float maxPixels = 0; };
 
 struct MeshDef {
@@ -118,6 +125,7 @@ struct MeshDef {
     // One index range covering the shadowBatched primitives (contiguous, opaque, same culling):
     // drawn once in shadow passes instead of each part. Not part of `primitives`. indexCount 0 = none.
     Primitive shadowBatch;
+    std::vector<MaterialBatch> materialBatches;
     float3 boundsMin, boundsMax;
     bool deformable = false;
 };

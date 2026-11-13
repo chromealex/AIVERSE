@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <tuple>
 
 namespace aiverse::render {
 namespace {
@@ -17,6 +18,92 @@ float det3(const mat4& w) {
            w.at(0,2) * (w.at(1,0) * w.at(2,1) - w.at(1,1) * w.at(2,0));
 }
 float3 safeNormalize(float3 v, float3 fallback) { const float l = length(v); return l > 1e-12f ? v * (1.0f / l) : fallback; }
+}
+
+namespace {
+bool paletteStateEqual(const Material& a, const Material& b) {
+    if (a.shaderGraph || b.shaderGraph || a.alpha != AlphaMode::Opaque || b.alpha != AlphaMode::Opaque ||
+        a.transparent || b.transparent) return false;
+    auto state = [](const Material& m) {
+        return std::make_tuple(m.shading, m.normalScale, m.occlusionStrength,
+            m.emissive.x, m.emissive.y, m.emissive.z, m.emissiveStrength,
+            m.doubleSided, m.vertexOcclusion, m.backOcclusion, m.vertexColors,
+            m.castShadow, m.receiveShadow, m.team, m.teamStrength,
+            m.baseTex, m.mrTex, m.normalTex, m.occlusionTex, m.emissiveTex, m.teamTex,
+            m.uvOffset.x, m.uvOffset.y, m.uvScale.x, m.uvScale.y, m.uvRotation,
+            m.fixedLight.x, m.fixedLight.y, m.fixedLight.z, m.fixedLight.w, m.fixedShade.x, m.fixedShade.y);
+    };
+    return state(a) == state(b);
+}
+}
+
+bool materialBatchCompatible(const MeshDef& mesh, const MaterialBatch& batch, const std::vector<Material>& materials) {
+    if (!batch.primitive.indexCount || batch.parts.size() < 2 || materials.size() > kMaxMaterialPalette) return false;
+    const int reference = batch.primitive.material;
+    if (reference < 0 || size_t(reference) >= materials.size()) return false;
+    for (size_t i : batch.parts) {
+        if (i >= mesh.primitives.size()) return false;
+        const int id = mesh.primitives[i].material;
+        if (id < 0 || size_t(id) >= materials.size() || !paletteStateEqual(materials[size_t(reference)], materials[size_t(id)])) return false;
+    }
+    return true;
+}
+
+size_t prepareMaterialBatches(Model& m) {
+    if (m.vertices.empty() || m.indices.empty() || m.vb.valid() || m.ib.valid() || m.geometry ||
+        !m.variants.empty() || !m.skins.empty() || m.materials.size() > kMaxMaterialPalette) return 0;
+    // weights[0] is spare only in rigid models. Shared vertices may also belong to another mesh.
+    for (const auto& mesh : m.meshes) {
+        if (mesh.deformable || !mesh.materialBatches.empty()) return 0;
+        for (const auto& p : mesh.primitives)
+            if (!p.jointPalette.empty() || p.morphTargets || !p.variantMaterial.empty()) return 0;
+    }
+    std::map<std::pair<uint32_t, int>, uint32_t> remap;
+    std::vector<int> owners(m.vertices.size(), -1);
+    size_t covered = 0;
+    for (auto& mesh : m.meshes) {
+        std::vector<MaterialBatch> groups;
+        for (size_t i = 0; i < mesh.primitives.size(); ++i) {
+            const auto& p = mesh.primitives[i];
+            if (!p.indexCount || p.material < 0 || size_t(p.material) >= m.materials.size()) continue;
+            const auto& mat = m.materials[size_t(p.material)];
+            if (!paletteStateEqual(mat, mat)) continue;
+            auto group = std::find_if(groups.begin(), groups.end(), [&](const MaterialBatch& g) {
+                return p.lightmapUv == g.primitive.lightmapUv && paletteStateEqual(mat, m.materials[size_t(g.primitive.material)]);
+            });
+            if (group == groups.end()) {
+                MaterialBatch b; b.primitive = p; b.parts.push_back(i); groups.push_back(std::move(b));
+            } else group->parts.push_back(i);
+        }
+        for (auto& group : groups) {
+            if (group.parts.size() < 2) continue;
+            auto& batch = group.primitive;
+            batch.firstIndex = uint32_t(m.indices.size()); batch.indexCount = 0;
+            batch.firstVertex = 0; batch.vertexCount = 0; batch.shadowBatched = false;
+            for (size_t i : group.parts) {
+                const auto& p = mesh.primitives[i];
+                batch.boundsMin = min3(batch.boundsMin, p.boundsMin); batch.boundsMax = max3(batch.boundsMax, p.boundsMax);
+                for (uint32_t j = 0; j < p.indexCount; ++j) {
+                    const uint32_t src = m.indices.at(p.firstIndex + j);
+                    const auto key = std::make_pair(src, p.material);
+                    auto it = remap.find(key);
+                    if (it == remap.end()) {
+                        uint32_t dst = src;
+                        if (owners.at(src) >= 0 && owners[src] != p.material) {
+                            dst = uint32_t(m.vertices.size());
+                            const ModelVertex copy = m.vertices.at(src); m.vertices.push_back(copy);
+                        } else owners[src] = p.material;
+                        m.vertices[dst].weights[0] = uint8_t(p.material);
+                        it = remap.emplace(key, dst).first;
+                    }
+                    m.indices.push_back(it->second);
+                }
+                batch.indexCount += p.indexCount;
+            }
+            covered += group.parts.size(); mesh.materialBatches.push_back(std::move(group));
+        }
+    }
+    return covered;
 }
 
 bool shadowBatchCompatible(const MeshDef& mesh, const std::vector<Material>& materials) {
@@ -91,6 +178,7 @@ ModelMergeResult mergeStaticPrimitives(Model& m, const ModelMergeOptions& o) {
     if (!(std::max({extent.x, extent.y, extent.z}) <= o.maxExtent)) return skip("larger than maxExtent");
     for (const auto& mesh : m.meshes) {
         if (!mesh.lods.empty()) return skip("mesh LODs");
+        if (!mesh.materialBatches.empty()) return skip("prepared material batches");
         for (const auto& p : mesh.primitives)
             if (!p.jointPalette.empty() || p.morphTargets > 0 || !p.variantMaterial.empty()) return skip("skinned, morphing or variant primitives");
     }
