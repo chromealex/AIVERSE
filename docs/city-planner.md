@@ -107,3 +107,11 @@ One level only: bridges cross water, junctions are at grade. Overpasses, multi-l
 a second driving level in the simulation, which does not exist yet. Buildings are not rotated; a building's footprint is
 its bounding rectangle. Curved roads have no lane markings and their junctions are not listed in `city.junctions` yet.
 Public transport, trams, metro and railways are not planned yet.
+
+Car parks reserve a two-cell central aisle and two-cell curb cuts on road-facing
+north/south edges before placing street furniture. Parking rows face the aisle and
+leave turning space at the ends. `city.parkingAccess` lists the curb-cut rectangles
+(`x`, `z`, `w`, `h`). Arterial curb bays are spaced two cells apart, with two cells
+of uninterrupted pavement around them to exclude junctions and driveways.
+`city.curbParking` lists each bay's cell (`x`, `z`), `axis` and `road` index, including
+empty bays; consumers can use this metadata for parking markings.

@@ -259,3 +259,25 @@ TEST(city_organic_layout_has_curved_streets_suburbs_and_hills) {
     std::string err;
     CHECK(!gen::generateMap(req, r2, rj, m2, &err) && err.find("at least 128") != std::string::npos);
 }
+
+TEST(city_parking_has_clear_access_and_setback_curb_bays) {
+    for (int seed : {1, 7, 23}) {
+        Json m = cityMap(seed, R"({"size":[96,72],"river":false,"parks":0,"parking":1,"tileset":"city.json"})");
+        CHECK(m["city"]["parkingAccess"].size() > 0);
+        CHECK(m["city"]["curbParking"].size() > 0);
+        const Json& rows = m["tiles"]["rows"];
+        for (const Json& a : m["city"]["parkingAccess"].items()) {
+            int x = int(a["x"].integer()), z = int(a["z"].integer());
+            CHECK(rows[size_t(z)].str()[size_t(x)] == 's');
+            CHECK(rows[size_t(z)].str()[size_t(x + 1)] == 's');
+            for (const Json& e : m["entities"].items()) {
+                int ex = int(e["pos"][size_t(0)].integer()), ez = int(e["pos"][size_t(1)].integer());
+                CHECK(!(ex >= x && ex < x + 2 && ez == z));
+            }
+        }
+        for (const Json& bay : m["city"]["curbParking"].items()) {
+            int x = int(bay["x"].integer()), z = int(bay["z"].integer());
+            CHECK(rows[size_t(z)].str()[size_t(x)] == 'a');
+        }
+    }
+}

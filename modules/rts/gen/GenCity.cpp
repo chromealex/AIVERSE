@@ -19,7 +19,7 @@ struct Rng {
     bool chance(int permille) { return int(next() % 1000) < permille; }
 };
 
-enum Kind : uint8_t { KLot, KRoad, KStreet, KPave, KWater, KPark, KParking, KIsland, KBuilt, KYard };
+enum Kind : uint8_t { KLot, KRoad, KStreet, KPave, KWater, KPark, KParking, KIsland, KBuilt, KYard, KDrive };
 struct Road { int pos, a, b, w; bool vert; int cls; };     // vert: x in [pos, pos + w), z in [a, b); cls 0 arterial, 1 street
 struct Rect { int x, z, w, h; };
 struct Kit {
@@ -438,7 +438,7 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     for (size_t i = 0; i < n; ++i) if (p.kind[i] == KLot && p.bridge[i] == 2) { p.kind[i] = KPave; p.bridge[i] = 0; }
 
     // 7. blocks: use and zone, then buildings packed in rows
-    Json entities = Json::array(), blocks = Json::array();
+    Json entities = Json::array(), blocks = Json::array(), parkingAccess = Json::array(), curbParking = Json::array();
     auto place = [&](int type, int owner, int x4, int z4, int facing) {
         Json e = Json::object();
         e.set("type", Json::string(c.R.types[size_t(type)].id));
@@ -497,6 +497,31 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
         b.set("x", num(r.x)); b.set("z", num(r.z)); b.set("w", num(r.w)); b.set("h", num(r.h));
         b.set("use", Json::string(kUse[use])); b.set("zone", Json::string(kZone[zone]));
         blocks.push(b);
+    }
+
+    // Car parks need an unoccupied spine and a two-cell curb cut, before street furniture is placed.
+    for (const Rect& r : p.leaves) {
+        const int ax = r.x + r.w / 2 - 1;
+        bool parking = false;
+        for (int z = r.z + 1; z < r.z + r.h - 1; ++z)
+            parking = parking || p.at(ax, z) == KParking;
+        if (!parking) continue;
+        for (int side = 0; side < 2; ++side) {
+            const int z = side ? r.z + r.h - 1 : r.z, roadZ = z + (side ? 1 : -1);
+            bool free = true;
+            for (int x = ax; x < ax + 2; ++x)
+                free = free && p.at(x, z) == KPave && p.road(x, roadZ) &&
+                       p.at(x, z + (side ? -1 : 1)) == KParking;
+            if (!free) continue;
+            for (int x = ax; x < ax + 2; ++x) p.kind[size_t(p.ci(x, z))] = KDrive;
+            Json a = Json::object();
+            a.set("x", num(ax)); a.set("z", num(z)); a.set("w", num(2)); a.set("h", num(1));
+            parkingAccess.push(a);
+        }
+        // The central aisle joins both entrances; no cars or lamps may occupy it.
+        for (int z = r.z + 1; z < r.z + r.h - 1; ++z)
+            for (int x = ax; x < ax + 2; ++x)
+                if (p.at(x, z) == KParking) p.kind[size_t(p.ci(x, z))] = KDrive;
     }
 
     // 7b. organic: houses along the suburban streets (the smaller residential types, a yard around each, a car in
@@ -592,7 +617,12 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     // 9. parked cars: kerb lanes of the arterials (facing the way traffic goes, right-hand), rows in car parks
     const int carP = permille(c, "cars", 220);
     int nCars = nDriveways;
-    for (size_t r = 0; r < arterials && !kit.cars.empty(); ++r) {
+    auto fitsBay = [&](int t, int lengthQuarters) {
+        const Json& v = c.rulesJson["driving"]["vehicles"][c.R.types[size_t(t)].id];
+        return v["length"].fx(Fixed::fromInt(1)) <= Fixed::fromRatio(lengthQuarters, 4) &&
+               v["width"].fx(Fixed::fromRatio(1, 2)) <= Fixed::fromRatio(3, 4);
+    };
+    for (size_t r = 0; r < arterials; ++r) {
         const Road& rd = p.roads[r];
         for (int side = 0; side < 2; ++side) {
             const int lane = side ? rd.pos + rd.w - 1 : rd.pos, out = side ? rd.pos + rd.w : rd.pos - 1;
@@ -601,17 +631,41 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 const int x = rd.vert ? lane : t, z = rd.vert ? t : lane, ox = rd.vert ? out : t, oz = rd.vert ? t : out;
                 const size_t i = size_t(p.ci(x, z));
                 if (p.bridge[i] || p.kind[i] != KRoad || (p.vr[i] >= 0 && p.hr[i] >= 0) || p.at(ox, oz) != KPave) continue;
-                if (t - last < 2 || !rng.chance(carP)) continue;
+                // Reserve whole eight-metre bays, at least two cells from a junction or driveway.
+                bool clear = true;
+                for (int d = -2; d <= 2; ++d) {
+                    const int xx = rd.vert ? out : t + d, zz = rd.vert ? t + d : out;
+                    clear = clear && p.at(xx, zz) == KPave;
+                }
+                if (!clear || t - last < 2) continue;
                 last = t;
+                Json bay = Json::object();
+                bay.set("x", num(x)); bay.set("z", num(z));
+                bay.set("axis", Json::string(rd.vert ? "ns" : "ew"));
+                bay.set("road", num(int(r)));
+                curbParking.push(bay);
+                if (kit.cars.empty() || !rng.chance(carP)) continue;
                 // east lane of a north-south road runs north, the south lane of an east-west road runs east
-                place(pick(kit.cars), 0, x * 4 + 2, z * 4 + 2, rd.vert ? (side ? 0 : 180) : (side ? 90 : 270));
+                const int vehicle = pick(kit.cars);
+                if (!fitsBay(vehicle, 8)) continue;
+                place(vehicle, 0, x * 4 + 2, z * 4 + 2, rd.vert ? (side ? 0 : 180) : (side ? 90 : 270));
                 ++nCars;
             }
         }
     }
-    for (int z = 0; z < H && !kit.cars.empty(); ++z)
-        for (int x = 0; x < W; ++x)
-            if (p.kind[size_t(p.ci(x, z))] == KParking && x % 2 == 0 && rng.chance(550)) { place(pick(kit.cars), 0, x * 4 + 2, z * 4 + 2, z % 2 ? 90 : 270); ++nCars; }   // along x: two cells each (nose to tail down the column they overlap, cars are longer than a cell)
+    for (const Rect& r : p.leaves) {
+        const int ax = r.x + r.w / 2 - 1;
+        for (int z4 = r.z * 4 + 10; z4 <= (r.z + r.h - 2) * 4 - 2 && !kit.cars.empty(); z4 += 3)
+            for (int x4 : {ax * 4 - 3, ax * 4 + 11}) {
+                if (x4 - 3 < (r.x + 1) * 4 || x4 + 3 > (r.x + r.w - 1) * 4) continue;
+                if (p.at(x4 / 4, z4 / 4) == KParking && rng.chance(550)) {
+                    const int vehicle = pick(kit.cars);
+                    if (!fitsBay(vehicle, 6)) continue;
+                    place(vehicle, 0, x4, z4, x4 < ax * 4 ? 90 : 270);
+                    ++nCars;
+                }
+            }
+    }
 
     // 10. the hero: the pavement cell nearest to the centre
     if (kit.hero >= 0) {
@@ -721,7 +775,7 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 for (int x = 0; x < W; ++x) {
                     const uint8_t k = p.kind[size_t(p.ci(x, z))];
                     const bool lot = (k == KLot || k == KBuilt) && (!p.organic || inDowntown(p, x, z));
-                    const int l = k == KRoad || k == KStreet || k == KParking ? lRoad : k == KPave ? lWalk : k == KWater ? -1 : lot ? lLot : lGrass;
+                    const int l = k == KRoad || k == KStreet || k == KParking || k == KDrive ? lRoad : k == KPave ? lWalk : k == KWater ? -1 : lot ? lLot : lGrass;
                     if (l >= 0) s2[size_t(x)] = char('0' + l);
                 }
                 mrows.push(Json::string(s2));
@@ -795,10 +849,14 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 const uint8_t k = p.kind[i];
                 const bool green = k == KPark || k == KIsland || k == KYard || (p.organic && k == KLot && !inDowntown(p, x, z));
                 s[size_t(x)] = k == KIsland ? cBlocked : k == KRoad ? cRoad : k == KStreet ? cStreet : k == KPave ? cPave : k == KWater ? cWater : green ? cPark :
-                               k == KParking ? cParking : cLot;
+                               k == KParking ? cParking : k == KDrive ? cStreet : cLot;
                 if (!tb.isObject()) continue;
                 const Road* v = p.vr[i] >= 0 ? &p.roads[size_t(p.vr[i])] : nullptr;
                 const Road* h = p.hr[i] >= 0 ? &p.roads[size_t(p.hr[i])] : nullptr;
+                if ((k == KRoad || k == KStreet) && (p.at(x-1,z) == KDrive || p.at(x+1,z) == KDrive ||
+                    p.at(x,z-1) == KDrive || p.at(x,z+1) == KDrive)) {
+                    if (int b = base("street"); b >= 0) { fix(x, z, b + (z % 2) * 2 + x % 2); continue; }
+                }
                 int t = over[i];
                 if (t >= 0) { fix(x, z, t); continue; }
                 if (k == KRoad && v && h && v->cls == 0 && h->cls == 0) {          // arterial crossing: arms that exist
@@ -809,7 +867,7 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
                 else if (k == KStreet && v && !h) { if (int b = base("ns2", v->pos * 131 + z / 2 + 104729); b >= 0) t = b + (z % 2) * 2 + (x - v->pos); }
                 else if (k == KStreet && h && !v) { if (int b = base("ew2", h->pos * 131 + x / 2 + 1299709); b >= 0) t = b + (z - h->pos) * 2 + (x % 2); }
                 else {
-                    const char* key = k == KStreet || k == KRoad ? "street" : k == KPave ? "walk" : k == KWater ? "water" : green ? "grass" :
+                    const char* key = k == KStreet || k == KRoad || k == KDrive ? "street" : k == KPave ? "walk" : k == KWater ? "water" : green ? "grass" :
                                       k == KParking ? "parking" : "lot";
                     if (int b = base(key, (x / 2) * 977 + z / 2); b >= 0) t = b + (z % 2) * 2 + (x % 2);
                 }
@@ -874,6 +932,8 @@ bool generateCity(Ctx& c, const GenRequest& req, Json& map, std::string* err) {
     city.set("traffic", Json::string("right"));
     city.set("roads", jroads);
     city.set("blocks", blocks);
+    city.set("parkingAccess", parkingAccess);
+    city.set("curbParking", curbParking);
     if (p.organic) {   // curved roads: centre lines in cells, the brush is `width` cells wide
         static const char* kPathKind[3] = {"avenue", "ring", "street"};
         Json paths = Json::array();
