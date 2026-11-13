@@ -180,7 +180,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **画面与音频**
 - 自研 RHI：Metal、GLES3 / WebGL2、GL 3.3
-- PBR、glTF/OBJ、骨骼与程序化动画、程序化线缆
+- PBR、glTF/OBJ、骨骼与程序化动画、程序化线缆、父子实体渲染
 - 阴影、动态光源、夜晚、后处理、Shader Graph
 - 支持 Unity ParticleSystem 模块的粒子系统及 Unity 导入器
 - 2D：精灵、带自动拼接的瓦片地图

@@ -679,6 +679,17 @@ sprites (`ArmyUnitModelLayer.AttachShadow`) with it. Client only (drawn by `RtsV
 
 ### Entity scale and opacity (view scripts)
 
+`view.entity_parent(child, parent, {x=0,y=0,z=0,yaw=0})` attaches an entity's presentation
+ to another entity's final rendered frame. Offsets are in cells: +X forward, +Y up, +Z right;
+ yaw is in degrees. Nested attachments inherit translation, rotation, tilt and scale. Cycles
+ and non-finite offsets are rejected. `view.entity_parent(child, nil)` detaches. Native hosts
+ may provide `RtsScene::entityFrames` for physics-driven chassis after their visual update.
+ Children use that same frame rather than independently interpolated simulation positions.
+ This is a **presentation-only** hierarchy: collision, ownership and simulation positions do
+ not change. Links are cleared with the view and when either entity dies; rebuild them from
+ saved simulation state in `view.on_frame` after loading a game. Tests: `view_entity_parent_frames`
+ and `view_entity_parent_api`.
+
 `view.entity_fx(h, fields)` overrides how one entity (unit, structure, prop: any handle of `game.units`) is drawn,
 on the local machine only:
 

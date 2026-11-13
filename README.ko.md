@@ -182,7 +182,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **그래픽과 사운드**
 - 자체 RHI: Metal, GLES3 / WebGL2, GL 3.3
-- PBR, glTF/OBJ, 스켈레탈 및 절차적 애니메이션, 절차적 케이블
+- PBR, glTF/OBJ, 스켈레탈 및 절차적 애니메이션, 절차적 케이블, 부모·자식 엔티티 렌더링
 - 그림자, 동적 조명, 밤, 포스트 이펙트, Shader Graph
 - Unity ParticleSystem 모듈을 지원하는 파티클과 Unity 임포터
 - 2D: 스프라이트, 오토타일 타일맵

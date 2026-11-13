@@ -185,7 +185,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **Картинка и звук**
 - Свой RHI: Metal, GLES3 / WebGL2, GL 3.3
-- PBR, glTF/OBJ, скелетная и процедурная анимация, процедурные провода
+- PBR, glTF/OBJ, скелетная и процедурная анимация, процедурные провода, отрисовка вложенных объектов
 - Тени, динамический свет, ночь, постэффекты, Shader Graph
 - Частицы с модулями Unity ParticleSystem и импорт из Unity
 - 2D: спрайты, тайловые карты с автотайлингом
