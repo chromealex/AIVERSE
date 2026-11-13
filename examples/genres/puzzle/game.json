@@ -1,0 +1,14 @@
+{
+  "name": "Puzzle",
+  "id": "com.aiverse.puzzle",
+  "version": "0.1.0",
+  "module": "board",
+  "genre": "puzzle",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "map.json",
+      "title": "Start"
+    }
+  ]
+}

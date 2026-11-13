@@ -1,0 +1,7 @@
+{
+  "motion": {
+    "kind": "racing",
+    "laps": 1,
+    "timeoutTicks": 300
+  }
+}

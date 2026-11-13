@@ -1,0 +1,4 @@
+Builds/
+logs/
+*.sqlite*
+*-token

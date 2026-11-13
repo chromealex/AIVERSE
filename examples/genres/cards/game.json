@@ -1,0 +1,14 @@
+{
+  "name": "Cards",
+  "id": "com.aiverse.cards",
+  "version": "0.1.0",
+  "module": "board",
+  "genre": "cards",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "map.json",
+      "title": "Start"
+    }
+  ]
+}

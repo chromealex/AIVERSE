@@ -1,0 +1,31 @@
+{
+  "players": [
+    {
+      "team": 1,
+      "bot": true
+    },
+    {
+      "team": 2,
+      "bot": true
+    }
+  ],
+  "decks": [
+    [
+      "strike",
+      "strike",
+      "strike",
+      "strike",
+      "strike",
+      "strike"
+    ],
+    [
+      "strike",
+      "strike",
+      "strike",
+      "strike",
+      "strike",
+      "strike"
+    ]
+  ],
+  "module": "board"
+}
