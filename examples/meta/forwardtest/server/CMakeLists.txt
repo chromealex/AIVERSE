@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22)
+project(MetaOrchestratorServer LANGUAGES CXX)
+add_subdirectory("${AIVERSE_ENGINE_ROOT}/engine/meta" meta)
+aiverse_add_meta_service(meta_server MODULES economy social)
+add_executable(meta_validate "${AIVERSE_ENGINE_ROOT}/tools/meta/validate.cpp")
+target_link_libraries(meta_validate PRIVATE AIVERSE::meta_schema)

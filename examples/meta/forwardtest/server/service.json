@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "economy": {
+    "version": 1,
+    "assets": {
+      "gold": {
+        "cap": 10000
+      },
+      "banner": {
+        "cap": 10
+      }
+    },
+    "offers": {
+      "welcome": {
+        "reward": {
+          "gold": 100
+        },
+        "limit": 1
+      },
+      "banner": {
+        "cost": {
+          "gold": 25
+        },
+        "reward": {
+          "banner": 1
+        }
+      }
+    }
+  },
+  "boards": {
+    "wins": {
+      "update": "sum",
+      "rank": "competition"
+    }
+  },
+  "chats": {
+    "global": {
+      "cooldown": 0,
+      "retention": 0,
+      "maxHistory": 100,
+      "maxMessages": 1000,
+      "maxBytes": 512,
+      "kinds": [
+        "text"
+      ]
+    }
+  }
+}
