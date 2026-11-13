@@ -111,7 +111,7 @@ void Renderer3D::setShadowQuality(ShadowQuality q) {
     gfx::TextureDesc td;
     td.width = td.height = std::max(size, 16);
     td.format = gfx::PixelFormat::Depth;
-    td.renderTarget = true; td.compare = true; td.filter = gfx::Filter::Linear;
+    td.renderTarget = true; td.compare = false; td.filter = gfx::Filter::Nearest; // raw depth for PCSS blocker search
     shadowMap_ = dev_->createTexture(td);
 }
 
@@ -247,10 +247,10 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
     f.shadow[1] = zeroToOne ? 1.0f : 0.5f;
     f.shadow[2] = zeroToOne ? 0.0f : 0.5f;
     f.shadow[3] = 1.0f / float(std::max(shadowSize_, 16));
-    // taps: High 16 rotated Poisson, Medium 8 rotated Poisson, Low 4 fixed (each tap is a 2x2 hardware PCF)
+    // Filter taps: High 16, Medium 8, Low 4. Medium/high add nine blocker-depth reads.
     f.quality[0] = quality_ == ShadowQuality::High ? 16.0f : quality_ == ShadowQuality::Medium ? 8.0f : 4.0f;
     {
-        // never filter narrower than ~1.5 texels, otherwise the map resolution shows as stair steps
+        // Maximum search/filter radius; PCSS can narrow contacts to half a texel.
         float radiusWorld = std::max(lighting.shadowSoftness, shadowTexelWorld_ * 1.5f);
         // Low (4 fixed taps): a wide radius would show 4 offset copies, keep it around two texels
         if (quality_ == ShadowQuality::Low) radiusWorld = std::min(radiusWorld, shadowTexelWorld_ * 2.0f);
@@ -258,7 +258,7 @@ void Renderer3D::uploadFrameUniforms(bool forShadow) {
         // Keep receiver displacement tied to resolution, not penumbra width: thin folds must not detach.
         f.quality[3] = shadowTexelWorld_ * 1.5f;
     }
-    f.quality[1] = quality_ == ShadowQuality::Off || forShadow ? 0.0f : 1.0f;
+    f.quality[1] = quality_ == ShadowQuality::Off || forShadow ? 0.0f : lighting.shadowContactHardening ? 2.0f : 1.0f;
     dev_->setUniforms(1, &f, sizeof f);
 }
 
