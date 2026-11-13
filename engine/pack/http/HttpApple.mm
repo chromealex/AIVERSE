@@ -80,9 +80,10 @@ bool httpRequest(const HttpCall& call, std::function<void(HttpReply)> done) {
             } else if ([resp isKindOfClass:[NSHTTPURLResponse class]]) {
                 NSHTTPURLResponse* h = (NSHTTPURLResponse*)resp;
                 r.status = int(h.statusCode);
-                [h.allHeaderFields enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL*) {
+                for (id key in h.allHeaderFields) {
+                    id value = h.allHeaderFields[key];
                     r.headers.push_back({[[key description] UTF8String], [[value description] UTF8String]});
-                }];
+                }
                 if (data) r.body.assign(static_cast<const char*>(data.bytes), data.length);
             }
             (*cb)(std::move(r));
