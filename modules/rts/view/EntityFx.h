@@ -5,6 +5,7 @@
 // RtsView through RtsScene::entityFx, like the paint layers. Values change at once or ease over a time in seconds of
 // frame time (ViewScripts::update advances them before the frame's handlers run).
 #pragma once
+#include "EntityHierarchy.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -53,6 +54,7 @@ struct EntityAnimationEntry {
 };
 
 struct EntityFxStore {
+    EntityHierarchy hierarchy;
     render::AnimationTraits animationTraits;
     std::map<std::string,std::shared_ptr<const AnimationDefinition>> animationDefinitions;
     std::unordered_map<uint64_t, EntityAnimationEntry> animations;

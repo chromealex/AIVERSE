@@ -523,6 +523,27 @@ int vAnimation(lua_State* L, Vm& vm) {
     entries[key] = std::move(next);
     return 0;
 }
+int vEntityParent(lua_State* L, Vm& vm) {
+    Entity child,parent;
+    if(!argEntity(L,1,child)||!child.valid())return fail(vm,"view.entity_parent: child handle required");
+    auto& hierarchy=viewOf(vm).fx->hierarchy;
+    if(lua_isnil(L,2)){hierarchy.parents.erase(child.packed());return 0;}
+    if(!argEntity(L,2,parent)||!parent.valid()||!vm.sim||!vm.sim->world().alive(child)||!vm.sim->world().alive(parent))
+        return fail(vm,"view.entity_parent: child and parent must be alive");
+    EntityParent link;link.parent=parent.packed();
+    if(!lua_isnoneornil(L,3)) {
+        if(!lua_istable(L,3))return fail(vm,"view.entity_parent: local transform table required");
+        float* fields[]={&link.offset.x,&link.offset.y,&link.offset.z,&link.yaw};
+        const char* names[]={"x","y","z","yaw"};
+        for(int i=0;i<4;++i){lua_getfield(L,3,names[i]);if(!lua_isnil(L,-1)){
+            if(!lua_isnumber(L,-1)||!std::isfinite(lua_tonumber(L,-1))||!std::isfinite(float(lua_tonumber(L,-1)))){lua_pop(L,1);return fail(vm,"view.entity_parent: finite local coordinates required");}
+            *fields[i]=float(lua_tonumber(L,-1));
+        }lua_pop(L,1);}
+        link.yaw*=.017453292f;
+    }
+    if(!hierarchy.set(child.packed(),link))return fail(vm,"view.entity_parent: cyclic hierarchy");
+    return 0;
+}
 int vEntityFx(lua_State* L, Vm& vm) {
     auto& im = viewOf(vm);
     Entity e;
@@ -825,7 +846,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {"set_map_drag_offset", bind<vSetMapDragOffset>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
                                      {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
-                                     {"draw_ground", bind<vDrawGround>}, {"entity_fx", bind<vEntityFx>}, {"animation", bind<vAnimation>}, {"animation_trait", bind<vAnimationTrait>},
+                                     {"draw_ground", bind<vDrawGround>}, {"entity_parent", bind<vEntityParent>}, {"entity_fx", bind<vEntityFx>}, {"animation", bind<vAnimation>}, {"animation_trait", bind<vAnimationTrait>},
                                      {"animation_load", bind<vAnimationLoad>}, {"animation_define", bind<vAnimationDefine>}, {"animation_use", bind<vAnimationUse>}, {"animation_status", bind<vAnimationStatus>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);
     lua_setglobal(vm.L, "view");
@@ -874,6 +895,10 @@ void ViewScripts::update(Simulation& sim, float dt) {
     im.draws.clear(); im.drawVerts = 0; im.groundDraws.clear(); im.groundVerts = 0;   // view.draw / draw_ground: one frame
     // view.entity_fx: eases advance in frame time; entities gone from the simulation keep theirs for a corpse a while
     im.fx->advance(dt);
+    for(auto it=im.fx->hierarchy.parents.begin();it!=im.fx->hierarchy.parents.end();) {
+        if(!sim.world().alive(Entity::fromPacked(it->first))||!sim.world().alive(Entity::fromPacked(it->second.parent)))it=im.fx->hierarchy.parents.erase(it);
+        else ++it;
+    }
     for (auto it = im.fx->animations.begin(); it != im.fx->animations.end();) {
         if (sim.world().alive(Entity::fromPacked(it->first))) it->second.goneFor = -1;
         else if ((it->second.goneFor = std::max(0.0f, it->second.goneFor) + dt) > EntityFxEntry::kKeepDead) {

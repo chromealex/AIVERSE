@@ -188,7 +188,7 @@ Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l�
 
 **Graphismes et audio**
 - RHI maison : Metal, GLES3 / WebGL2, GL 3.3
-- PBR, glTF/OBJ, animation squelettique et procédurale
+- PBR, glTF/OBJ, animation squelettique et procédurale, rendu des entités en hiérarchie
 - Ombres, lumières dynamiques, nuit, post-traitement, Shader Graph
 - Particules avec les modules du ParticleSystem d’Unity et importateur depuis Unity
 - 2D : sprites, cartes de tuiles avec autotiling

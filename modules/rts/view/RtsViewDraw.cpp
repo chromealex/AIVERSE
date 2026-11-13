@@ -64,6 +64,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
         base = mat4::translate(p) * mat4::rotateY(st.yaw) * tilt * mat4::rotateY(-st.yaw) * mat4::translate(-p) * base;
     }
     if (hasFx) base = base * mat4::scale({fx.scale(0), fx.scale(1), fx.scale(2)});
+    if (o.parented && !placement) base = o.parentFrame * mat4::scale({k, k * (t.structure ? grow : 1.f), k});
     if (placement) base = *placement * base;   // flat maps: untouched (bit-identical)
     ModelDraw d;
     d.model = show->model;

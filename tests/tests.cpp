@@ -12253,6 +12253,36 @@ TEST(view_ground_shadow_option) {
 }
 
 
+TEST(view_entity_parent_frames) {
+    using namespace game;using namespace render;
+    EntityHierarchy h;
+    CHECK(h.set(2,{1,{2,0,0},0}));CHECK(h.set(3,{2,{0,1,0},0}));
+    CHECK(!h.set(1,{3,{},0}));CHECK(!h.set(2,{2,{},0}));
+    std::map<uint64_t,mat4> bases{{1,mat4::translate({10,2,4})*mat4::rotateY(1.570796326f)},{2,mat4::translate({999,0,0})},{3,mat4::identity()}};
+    auto frames=h.resolve(bases,{});CHECK(frames.size()==3);
+    auto child=frames.at(2).transformPoint({0,0,0});auto nested=frames.at(3).transformPoint({0,0,0});
+    CHECK(std::fabs(child.x-10)<1e-5f&&std::fabs(child.z-2)<1e-5f&&std::fabs(nested.y-3)<1e-5f);
+    for(int i=0;i<120;++i){bases[1]=mat4::translate({float(i)*.01f,0,0})*mat4::rotateZ(float(i)*.001f);auto f=h.resolve(bases,{});auto expected=bases[1]*mat4::translate({2,0,0})*mat4::translate({0,1,0});CHECK(length(f.at(3).transformPoint({0,0,0})-expected.transformPoint({0,0,0}))<1e-5f);}
+    bases.erase(1);CHECK(h.resolve(bases,{}).empty());
+    h.parents.erase(2);CHECK(h.resolve(bases,{}).count(3)==1);
+}
+
+TEST(view_entity_parent_api) {
+    auto rules=Json::parseFile(kSkirmish+"/rules.json"),map=Json::parseFile(kSkirmish+"/maps/valley.json");
+    rules.set("viewScripts",Json::parse("[\"parent.lua\"]"));Json sources=Json::object();
+    sources.set("parent.lua",Json::string(R"LUA(
+local hs=game.units{player=1}
+view.entity_parent(hs[2],hs[1],{x=1,y=.5,z=0,yaw=90})
+view.entity_parent(hs[3],hs[2],{x=.2})
+assert(not pcall(view.entity_parent,hs[1],hs[3]))
+assert(not pcall(view.entity_parent,hs[2],hs[2]))
+assert(not pcall(view.entity_parent,hs[2],hs[1],{x=0/0}))
+view.entity_parent(hs[3],nil)
+)LUA"));rules.set("$scriptSources",sources);
+    Simulation sim({},std::make_unique<game::RtsModule>());sim.setup(rules,map);auto hash=sim.checksum();
+    game::ViewScripts view;CHECK(view.load(sim,rules,map,1));CHECK(view.log().empty());CHECK(view.entityFx()->hierarchy.parents.size()==1);CHECK(sim.checksum()==hash);
+}
+
 TEST(view_entity_fx_script_api) {
     // view.entity_fx: per-entity scale / opacity / colour overrides of the view (EntityFx.h): set, read back, ease
     // over frame time, clear, validate (a failed call changes nothing), dropped some seconds after the entity is gone;
@@ -12981,7 +13011,9 @@ TEST(models_gltf_lod_metadata) {
 #include "tests_modes.inc"   // match modes (agent-bw-modes)
 #include "tests_routes.inc"   // Bunker Wars routes, groups, multiscreen
 #include "animation/view.inc"
+#ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "animation/editor.inc"
+#endif
 #include "geometry/runtime.inc"
 #include "tests_services.inc"   // analytics / privacy services (agent-sdk-plugins)
 #include "tests_services_build.inc"   // aiversebuild iOS plugin step (agent-sdk-plugins)

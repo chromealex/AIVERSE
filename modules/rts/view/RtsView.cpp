@@ -152,7 +152,34 @@ void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batc
     groundCanvas_.draw(r, *dev_, groundMerged_, contentBase_);
 }
 
-void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+    RtsScene resolved;
+    const bool hierarchy=input.entityFx && !input.entityFx->hierarchy.parents.empty();
+    if(hierarchy) {
+        resolved=input;
+        std::map<uint64_t,mat4> bases,effects;
+        for(const auto& o:input.objects) {
+            if(!o.entity.valid() || o.type>=looks_.size() || o.body!=-1)continue;
+            const auto& look=looks_[o.type];EntityFxValues fx;input.entityFx->lookup(o.entity.packed(),fx);
+            constexpr float deg=.017453292f;
+            auto effect=mat4::translate({0,(look.air?look.flyHeight:0)+fx.v[EntityFxValues::kLift],0})
+                *mat4::rotateZ(-fx.v[EntityFxValues::kPitch]*deg)*mat4::rotateX(-fx.v[EntityFxValues::kRoll]*deg)
+                *mat4::scale({fx.scale(0),fx.scale(1),fx.scale(2)});
+            effects[o.entity.packed()]=effect;
+            auto external=input.entityFrames.find(o.entity.packed());
+            bases[o.entity.packed()]=external!=input.entityFrames.end()?external->second:
+                mat4::translate({o.pos.x,heightAt(grid,o.pos.x,o.pos.z),o.pos.z})
+                *mat4::rotateY(std::atan2(-o.facing.z,o.facing.x))*effect;
+        }
+        auto frames=input.entityFx->hierarchy.resolve(bases,effects);
+        for(auto& o:resolved.objects)if(input.entityFx->hierarchy.parents.count(o.entity.packed())) {
+            auto it=frames.find(o.entity.packed());
+            if(it==frames.end()){o.visible=false;continue;}
+            o.parented=true;o.parentFrame=it->second;o.pos=it->second.transformPoint({0,0,0});
+            o.facing=it->second.transformPoint({1,0,0})-o.pos;
+        }
+    }
+    const RtsScene& s=hierarchy?resolved:input;
     fx_ = s.entityFx.get();   // view.entity_fx
     if (planets_.active()) { drawPlanets(r, s, time, vision, grid); return; }   // RtsPlanetView.cpp
     animationObstacles_.clear();animationSurfaceFrames_=std::make_shared<std::map<uint64_t,mat4>>();
@@ -165,6 +192,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& s, double time, const std::vec
         float yaw=state!=anims_.end()?state->second.yaw:std::atan2(-o.facing.z,o.facing.x);float k=look.scale,grow=look.construction==Construction::Grow?std::clamp(o.build,.15f,1.f):1;
         mat4 base;if(look.structure&&look.shape&&!stage)base=mat4::translate(position)*mat4::scale({look.sx*k,k*std::max(look.sx,look.sz)*.75f*grow,look.sz*k});else base=mat4::translate(position)*mat4::rotateY(yaw)*mat4::scale({k,k*(look.structure?grow:1),k});
         if(hasFx){auto tilt=mat4::rotateZ(-values.v[EntityFxValues::kPitch]*.017453292f)*mat4::rotateX(-values.v[EntityFxValues::kRoll]*.017453292f);base=mat4::translate(position)*mat4::rotateY(yaw)*tilt*mat4::rotateY(-yaw)*mat4::translate(-position)*base*mat4::scale({values.scale(0),values.scale(1),values.scale(2)});}
+        if(o.parented)base=o.parentFrame*mat4::scale({k,k*(look.structure?grow:1),k});
         if(state!=anims_.end())base=base*state->second.objXf;base=base*ch->fix;const auto& model=*ch->model;
         const auto& matrices=!stage&&state!=anims_.end()&&state->second.world.size()==model.nodes.size()?state->second.world:model.bindWorld;
         for(size_t node=0;node<model.nodes.size()&&node<matrices.size();++node){int mesh=model.nodes[node].mesh;if(mesh<0||size_t(mesh)>=model.meshes.size())continue;auto transform=base*matrices[node];const auto& primitives=model.meshes[size_t(mesh)].primitives;
@@ -309,6 +337,7 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
     const Rules& R = m->rules();
     GameState& gs = m->state(sim);
     out.objects.clear();
+    out.entityFrames.clear();
     out.roads.clear();
     out.events = sim.events();
     out.tick = sim.tick();

@@ -46,6 +46,9 @@ struct SceneObject {
     int16_t teamOwner = -1;       // presentation-only override; -1 follows entity owner
     uint8_t colorOwner() const { return teamOwner < 0 ? owner : uint8_t(teamOwner); }
     render::float3 pos, facing{1, 0, 0};
+    bool parented = false;
+    render::mat4 parentFrame; // resolved visual frame, including inherited tilt/scale
+
     float hp = 1;                // 0..1
     float build = 1;             // construction progress 0..1
     int garrison = -1;           // shown when >= 0
@@ -74,6 +77,7 @@ struct RtsScene {
     // view.entity_fx overrides (scale, opacity, colour) by entity; null = none (EntityFx.h)
     std::shared_ptr<EntityFxStore> entityFx;
     std::vector<SceneObject> objects;
+    std::map<uint64_t, render::mat4> entityFrames; // optional final frames supplied by a native presentation host
     std::vector<std::pair<render::float3, render::float3>> roads;
     std::vector<render::float3> moveMarkers;
     // events of the last simulation tick (attacks, hits, deaths, spawns) for animations; `tick`
