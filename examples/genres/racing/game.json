@@ -1,0 +1,14 @@
+{
+  "name": "Racing",
+  "id": "com.aiverse.racing",
+  "version": "0.1.0",
+  "module": "motion",
+  "genre": "racing",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "map.json",
+      "title": "Start"
+    }
+  ]
+}

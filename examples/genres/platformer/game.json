@@ -1,0 +1,11 @@
+{
+  "name": "Platformer",
+  "id": "com.aiverse.platformer",
+  "version": "0.1.0",
+  "module": "motion",
+  "genre": "platformer",
+  "rules": "rules.json",
+  "maps": [
+    {"file": "map.json", "title": "Start"}
+  ]
+}
