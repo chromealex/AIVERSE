@@ -1,6 +1,6 @@
 ---
 name: aiverse-genre-kits
-description: Reuse AIVERSE C++ reusable capability and acceptance recipes for four genres when implementing genre-kits in an external native game project or host tool.
+description: Reuse AIVERSE C++ reusable capability and acceptance recipes for sixteen genres when implementing genre-kits in an external native game project or host tool.
 ---
 
 # genre-kits
@@ -20,3 +20,9 @@ For visual wiring inspect real engine screenshots; compile-only RmlUi checks are
 Build selection: `AIVERSE::lib_genre_kits`; native OBJECT modules call
 `aiverse_native_use_libraries(target genre-kits)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
+
+Use `allGenres`, `parseGenre(id)` and `genreInFamily(id, family)` for routing.
+Tower Defense and lane battlers belong to the RTS family. The CLI emits
+`coverage: "recipe"`; it does not install a simulation or certify a playable game.
+Recipe package IDs name current catalog owners (card-games, puzzle-solvers,
+character-locomotion, vehicle-controllers), not archived board/motion prototypes.

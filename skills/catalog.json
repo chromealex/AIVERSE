@@ -641,7 +641,7 @@
       "package": "genre-kits",
       "path": "skills/aiverse-genre-kits/SKILL.md",
       "domain": "gameplay",
-      "summary": "Reusable capability and acceptance recipes for four genres",
+      "summary": "Reusable capability and acceptance recipes for sixteen genres",
       "side": "tools",
       "runtime": "header",
       "target": "AIVERSE::lib_genre_kits",

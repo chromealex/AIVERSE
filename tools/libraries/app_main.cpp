@@ -88,9 +88,11 @@ int main(int argc,char** argv){
             if(points.empty())throw std::runtime_error("empty curve");
             out.set("values",std::move(values));
         }else if(command=="genre"){
-            object(input,{"genre"});const auto id=string(input["genre"]);Genre g;
-            if(id=="classic-rts")g=Genre::ClassicRts;else if(id=="colony")g=Genre::Colony;else if(id=="tower-defense")g=Genre::TowerDefense;else if(id=="lane-battler")g=Genre::LaneBattler;else throw std::runtime_error("unknown genre");
-            auto kit=genreKit(g);out.set("packages",stringArray(kit.packages));out.set("acceptance",stringArray(kit.acceptance));
+            object(input,{"genre"});auto genre=parseGenre(string(input["genre"]));
+            if(!genre)throw std::runtime_error("unknown genre");
+            auto kit=genreKit(*genre);out.set("packages",stringArray(kit.packages));out.set("acceptance",stringArray(kit.acceptance));
+            out.set("id",Json::string(kit.id));out.set("family",Json::string(kit.family));
+            out.set("integration",stringArray(kit.integration));out.set("coverage",Json::string("recipe"));
         }else if(command=="screens"){
             object(input,{"id","titleKey","rows","translations"});Screen screen;screen.id=string(input["id"]);screen.titleKey=string(input["titleKey"]);
             for(const auto& j:array(input["rows"])){object(j,{"id","labelKey","value","action","reasonKey","enabled"});if(j["enabled"].type()!=Json::Type::Bool||!j["value"].isString()||!j["action"].isString()||!j["reasonKey"].isString())throw std::runtime_error("invalid row fields");screen.rows.push_back({string(j["id"]),string(j["labelKey"]),j["value"].str(),j["action"].str(),j["reasonKey"].str(),j["enabled"].boolean()});}

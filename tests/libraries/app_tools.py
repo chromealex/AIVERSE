@@ -34,6 +34,18 @@ def main():
         run('genre',{'genre':'unknown'},False)
         assert json.loads(run('curve',{'points':[{'x':0,'y':10},{'x':10,'y':20}],'samples':[0,5,10,15]}))['values']==[10,15,20,20]
         run('curve',{'points':[{'x':0,'y':1},{'x':0,'y':2}],'samples':[1]},False)
+        catalog=json.loads((ROOT/'libraries/catalog.json').read_text())
+        ids={row['id'] for row in catalog['packages']}
+        recipes=sorted((ROOT/'examples/genres/recipes').glob('*.json'))
+        assert len(recipes)==16
+        for recipe in recipes:
+            result=json.loads(run('genre',json.loads(recipe.read_text())))
+            assert result['coverage']=='recipe' and result['integration']
+            assert set(result['packages'])<=ids, (recipe.name,result['packages'])
+        assert json.loads(run('genre',{'genre':'tower-defense'}))['family']=='rts'
+        assert json.loads(run('genre',{'genre':'rts'}))['id']=='classic-rts'
+        assert json.loads(run('genre',{'genre':'rpg'}))['id']=='action-rpg'
+        run('genre',{'genre':'unknown'},False)
         run('unknown',{},False)
     print('C++ application CLI checks passed')
 if __name__=='__main__':main()
