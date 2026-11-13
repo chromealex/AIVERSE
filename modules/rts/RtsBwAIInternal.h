@@ -29,11 +29,13 @@ struct BwAI::Ctx {
     bool ally(uint8_t a, uint8_t b);                               // InAlliance
     bool enemy(uint8_t a, uint8_t b) { return !ally(a, b) && !neutral(a) && !neutral(b); }
     Fixed dist(int i, int j);                                      // route AI length, < 0: no route
-    bool route(int i, int j) { return i != j && dist(i, j).raw >= 0; }
+    bool route(int i, int j);                                     // an open route now (RoutesModule.FindUnlocked)
+    bool screen(int i) { return i >= 0 && size_t(i) < world().pts.size() && world().pts[size_t(i)].onScreen; }   // IsPointInsideScreen
     Fixed px(int pixels) const { return Fixed::fromInt(pixels) / cfg.pxPerCell; }
     int towerKillsOnRoute(int from, int to, int count, uint8_t owner, std::vector<std::pair<int, int>>* byTower = nullptr);
     int roadsInTowerRange(int tower);
-    Fixed rowTime(uint8_t player) { (void)player; return Fixed::fromInt(kBwRowUnits) / world().releaseRate; }
+    // AI6Shared.GetUnitsRowSpawnTime: rowsOffset / unitsSpeed with BW groups, else the engine's release stream
+    Fixed rowTime(uint8_t player) { BwWorld& W = world(); return W.rows ? W.rowDistance / W.players[player].speed : Fixed::fromInt(kBwRowUnits) / W.releaseRate; }
     // reducers over points (AI6Shared.Get{Min,Max,Avg}DistanceTo{Own,Enemy}Points)
     Fixed minDistOwn(int p, uint8_t player), maxDistOwn(int p, uint8_t player), avgDistOwn(int p, uint8_t player);
     Fixed minDistEnemy(int p, uint8_t player), maxDistEnemy(int p, uint8_t player), avgDistEnemy(int p, uint8_t player);

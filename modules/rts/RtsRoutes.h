@@ -16,6 +16,7 @@ struct SendGroup {
     int need = 0, spawned = 0;
     Fixed rowDist{};
     bool flying = false;
+    uint8_t payer = 0;                      // 0: owner; else the garrison's owner pays (hypnotised send captured by the caster)
 };
 
 struct RouteState {

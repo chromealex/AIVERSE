@@ -401,7 +401,9 @@ void RtsModule::sysGarrison(Simulation& sim) {
             if (into->count < cap || into != &g) {
                 g.growth += dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
                 if (!coreRate.empty() && o.player < coreRate.size()) g.growth -= dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval * (kOne - coreRate[o.player]);
-                while (g.growth >= kOne && (into != &g || into->count < cap)) { ++into->count; g.growth -= kOne; }
+                int made = 0;
+                while (g.growth >= kOne && (into != &g || into->count < cap)) { ++into->count; g.growth -= kOne; ++made; }
+                if (made) bwNoteProduced(sim, e, made);   // agent-bw-ai: per point produced units (match stats)
                 if (into == &g && g.count >= cap) g.growth = Fixed{};
             } else if (g.count > cap) {
                 g.growth -= dt * t.garrisonDecay;
@@ -412,7 +414,9 @@ void RtsModule::sysGarrison(Simulation& sim) {
             if (g.count < t.garrisonMax) {
                 g.growth += dt / t.spawnInterval;
                 if (!coreRate.empty() && o.player < coreRate.size()) g.growth -= dt / t.spawnInterval * (kOne - coreRate[o.player]);
-                while (g.growth >= kOne && g.count < t.garrisonMax) { ++g.count; g.growth -= kOne; }
+                int made = 0;
+                while (g.growth >= kOne && g.count < t.garrisonMax) { ++g.count; g.growth -= kOne; ++made; }
+                if (made) bwNoteProduced(sim, e, made);   // agent-bw-ai
                 if (g.count >= t.garrisonMax) g.growth = Fixed{};
             } else if (g.count > t.garrisonMax) {
                 g.growth -= dt * t.garrisonDecay;

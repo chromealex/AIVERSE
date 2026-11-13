@@ -172,6 +172,14 @@ local function runActions(di, d, player, unit, wx, wy, wz)
       rts.trig_campaign(di, ai, player, unit, ax, ay, az)   -- campaigns (RtsCampaign.cpp)
     elseif k == "script" then
       rts.trig_script_action(di, ai, player, unit, ax, ay, az)
+    elseif k == "setResource" then   -- Bunker Wars bot triggers (agent-bw-ai)
+      for _, p in ipairs(players) do rts.stock(p, a.index, a.amount) end
+    elseif k == "resetCooldowns" then
+      for _, p in ipairs(players) do rts.reset_cooldowns(p) end
+    elseif k == "setProduction" then
+      for _, e in ipairs(targets()) do rts.set_production(e, a.amount) end
+    elseif k == "timeScale" then
+      rts.var("timeScale", a.amount)
     end
   end
 end

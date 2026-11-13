@@ -138,6 +138,8 @@ struct ModesState {
     std::vector<std::vector<int32_t>> abilityUses;   // [slot][player ability]
     std::vector<int8_t> outcome;  // per slot: 0 playing, 1 won, 2 lost, 3 draw
     std::vector<int32_t> neutralMax;   // battle core: by entity index, neutral garrison maximum (-1: the type's)
+    // agent-bw-ai: per garrison entity index (BW HouseModule.producedUnits / TowerModule.killCount; reset on capture)
+    std::vector<int64_t> pointProduced, pointKills;
 };
 
 } // namespace aiverse::game

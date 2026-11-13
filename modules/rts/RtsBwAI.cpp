@@ -69,9 +69,9 @@ struct Ranker {
         return rank * c.prof.rankFactor(i, W().time);
     }
 
-    bool canAttack(int i) {
+    bool canAttack(int i) {   // CanAttackPoint: inScreenBattleTime >= the point's attack timeout
         const Fixed t = c.prof.attackTimeout(i);
-        return t.raw <= 0 || W().time >= t;
+        return t.raw <= 0 || W().pts[size_t(i)].screenTime >= t;
     }
 
     Fixed possibleCounterAttack(uint8_t player, int i) {
@@ -105,6 +105,7 @@ struct Ranker {
     }
 
     bool attackRankBase(uint8_t player, int i, Rank& out) {
+        if (!c.screen(i)) return false;
         const BwAI::PS& ps = ms()[size_t(i)];
         const BwPoint& p = W().pts[size_t(i)];
         const Fixed cur = pointRank(player, i, p.level), fut = pointRank(player, i, p.level - 1);
@@ -177,6 +178,7 @@ struct Ranker {
     }
 
     bool canDefend(uint8_t player, int i, uint8_t enemy) {
+        if (!c.screen(i)) return false;
         const Fixed ownAvg = c.avgDistOwn(i, player);
         if (ownAvg.raw == 0) return false;
         const Fixed enemyAvg = c.avgDistOwn(i, enemy);
@@ -203,6 +205,7 @@ struct Ranker {
     }
 
     bool upgradeRank(uint8_t player, int i, Rank& out) {
+        if (!c.screen(i)) return false;
         const BwPoint& p = W().pts[size_t(i)];
         const int li = p.level - 1;
         if (li < 0 || li >= 3) return false;
@@ -225,6 +228,7 @@ struct Ranker {
     }
 
     bool convertRank(uint8_t player, int i, Rank& out) {
+        if (!c.screen(i)) return false;
         const BwPoint& p = W().pts[size_t(i)];
         const Fixed cur = pointRank(player, i, p.level);
         const int ul = upgradeLevel(player);
@@ -256,6 +260,7 @@ struct Ranker {
     }
 
     bool relocationRank(uint8_t player, int i, Rank& out) {
+        if (!c.screen(i)) return false;
         const Fixed mn = c.minDistEnemy(i, player), avg = c.avgDistEnemy(i, player);
         if (mn.raw == 0 || avg.raw == 0) return false;
         if (mode == BwMode::Domination && W().pts[size_t(i)].dom) {
@@ -380,7 +385,7 @@ struct Worker {
         struct Cand { int src; Fixed rk; int free; };
         std::vector<Cand> cands;
         for (int s = 0; s < int(free.size()); ++s) {
-            if (s == r.point || free[size_t(s)] <= 0 || !c.route(s, r.point)) continue;
+            if (!c.screen(s) || s == r.point || free[size_t(s)] <= 0 || !c.route(s, r.point)) continue;
             const Fixed d = c.dist(s, r.point);
             if (d.raw <= 0) continue;
             const Fixed rk = r.type == RankType::Defense ? c.avgDistEnemy(s, me()) / d : ms()[size_t(s)].available / d;
@@ -418,7 +423,7 @@ struct Worker {
             const int limit = r.type == RankType::Attack ? c.prof.attackLimitPerUpdate : c.prof.defenseLimitPerUpdate;
             int total = 0;
             for (auto& s : sends) {
-                if (tp.owner == me() || W().time >= c.prof.attackTimeout(r.point)) { c.send(s.src, r.point, s.units); ++total; }
+                if (tp.owner == me() || tp.screenTime >= c.prof.attackTimeout(r.point)) { c.send(s.src, r.point, s.units); ++total; }
                 if (limit > 0 && total >= limit) break;
             }
         }
@@ -554,7 +559,7 @@ void BwImpl::updateMapState(Ctx& c) {
         }
         units -= Fixed::fromInt(ai.reserved_[i]);
         BwAI::PS& ps = ai.ms_[i];
-        ps.available = fxMax(units, Fixed{});
+        ps.available = p.onScreen ? fxMax(units, Fixed{}) : Fixed{};   // GetAvailableUnitsInPoint: 0 off the screen
         ps.defense = ps.available * p.def;
         ps.attack = ps.available * W.players[p.owner].damage;
         if (p.owner == c.me()) ++ai.ownPoints_;
@@ -579,6 +584,8 @@ void BwImpl::actionDetector(Ctx& c) {
         const Command& cmd = cmds[size_t(ai.cmdCursor_)];
         if (cmd.player == c.me() || (cmd.type != kCmdSend && cmd.type != kCmdUpgrade)) continue;
         if (std::find(c.cfg.botSlots.begin(), c.cfg.botSlots.end(), int(cmd.player)) != c.cfg.botSlots.end()) continue;
+        const auto& bots = c.m.bwBots();   // the other BW bots of this process (BW counts player.isBot == false only)
+        if (std::find(bots.begin(), bots.end(), cmd.player) != bots.end()) continue;
         ++ai.actionCounts_[cmd.player];
     }
     const Fixed period = Fixed::fromInt(15);
@@ -726,6 +733,7 @@ void BwAI::update(Simulation& sim, RtsModule& m) {
     const Fixed dt = init_ ? Fixed::fromInt(int64_t(now - lastTick_)) / int64_t(sim.tickRate()) : sim.dt();
     lastTick_ = now;
     Ctx c(sim, m, *this, *cfg_, prof, dt);
+    m.bwRegisterBot(player_);
     pending_.erase(std::remove_if(pending_.begin(), pending_.end(), [&](const Pending& p) { return p.until < now; }), pending_.end());
     if (!init_) {
         init_ = true;
@@ -780,9 +788,9 @@ template <class T, class F> void ioVec(Archive& a, std::vector<T>& v, F&& f) {
 
 void BwAI::stateIo(Archive& a) {
     using aiverse::io;
-    uint32_t version = 1;
+    uint32_t version = 2;
     io(a, version);
-    if (version != 1) { a.fail(); return; }
+    if (version < 1 || version > 2) { a.fail(); return; }
     uint64_t rs = rng_.state(), ri = rng_.inc();
     io(a, rs); io(a, ri);
     if (!a.writing()) rng_.restore(rs, ri);
@@ -811,6 +819,7 @@ void BwAI::stateIo(Archive& a) {
         ioVec(a, t.src, [&](TaskSrc& s) { io(a, s.from); io(a, s.count); io(a, s.timer); });
     });
     io(a, bAttacks_);
+    if (version >= 2) io(a, screenSince_);   // stage 2: multiscreen time of the points
     if (!a.writing()) routes_ = BwRoutes{};   // derived: rebuilt from the lanes on the next think
 }
 

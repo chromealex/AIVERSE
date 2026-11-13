@@ -65,6 +65,11 @@ struct TrigAction {
         Camera,            // "at" / "area", "zoom", "duration", "lock"
         EndMission,        // "result": victory | defeat, "next": mission id
         Script,            // {"type": "script", "fn": "name", ...}: calls a Lua function of the game's scripts
+        // Bunker Wars bot triggers (agent-bw-ai: Database/AI Action*): morale / energy / production / time scale
+        SetResource,       // "resource", "amount": the players' stock becomes amount (ActionSetMorale)
+        ResetCooldowns,    // the players' player abilities are ready now (ActionAddSkillEnergy resetCoolDown)
+        SetProduction,     // "amount": production speed coefficient of the target structures (ActionSetProductionCoefficient)
+        TimeScale,         // "amount": game speed (ActionSetTimeScale; match modes speed x this)
     } kind = Message;
     TrigPlayer player;
     TrigFilter filter;

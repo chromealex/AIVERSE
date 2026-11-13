@@ -44,6 +44,7 @@ enum StatusFlag : uint32_t {
     kStRevealed = 1u << 15,    // visible to everyone (cancels invisibility)
     kStUntargetable = 1u << 16, // weapons don't pick it as a target; effects still reach it (BW blind spot)
     kStSkillImmune = 1u << 17, // effect filters skip it (BW ignoreSkillUnitsFilter)
+    kStHypnotised = 1u << 18,  // structure: the status' caster may send its units (BW PointsHypnosis, agent-bw-ai)
 };
 
 enum class Stacking : uint8_t { Refresh, Stack, Independent, Keep };   // Keep: a running one is left as it is (BW freeze)
@@ -65,6 +66,8 @@ struct StatusDef {
     int16_t onHit = -1;                 // the holder's weapon hits apply this payload
     std::vector<Amount> incomeMult;     // player: multiplier per resource on income / regen
     Fixed garrisonPerSecond{};          // structure: +/- garrison units per second (plague, reinforcements)
+    Fixed sendShare = Fixed::fromInt(1);   // hypnotised: share of the garrison the caster may send (BW percent)
+    bool captureSent = false;           // hypnotised: the sent units become the caster's (BW captureHypnotisedUnits)
     Json view;
     // skill objects (RtsSkillObjects.cpp)
     Fixed spreadChance = Fixed::fromInt(1); // `spreads`: chance a carrier infects the structure it enters
