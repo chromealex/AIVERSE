@@ -235,6 +235,7 @@ void RtsModule::sysProduction(Simulation& sim) {
             ensureTypeComponents(w, d.producer, nt);
             sim.emit({kEvUpgraded, d.owner, d.producer, kNullEntity, type, w.get<Transform>(d.producer).pos});
             if (rules_.originals) gainOn(sim, d.owner, &ResourceDef::gainUpgrade, kOne);
+            if (rules_.core.any) coreUpgraded(sim, d.owner, type);   // battle core (RtsCore.cpp)
             continue;
         }
         if (nt.structure) {
@@ -338,6 +339,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
     struct Release { Entity from, target; uint16_t unit; uint8_t owner; Fixed radius; uint32_t group = 0; };
     std::vector<Release> releases;
     const bool adv = rules_.advancedEffects;
+    const std::vector<Fixed> coreRate = coreGrowthRates(sim);   // battle core: production slows with the army (empty: off)
     // `collect` statuses (BW PointsRedirectProduction): one receiver per player, the newest; the others hand their pool over
     std::vector<std::pair<Entity, StatusInst*>> collector(256, {kNullEntity, nullptr});
     if (adv && rules_.anyCollect) {
@@ -359,6 +361,15 @@ void RtsModule::sysGarrison(Simulation& sim) {
         // environment (off-screen production) and multiscreen (BW HouseModule.GetIncreaseRate): points off the screen do not grow
         const bool grows = (!env_ || !env_->active() || env_->producing(sim, e)) && (!screen_.enabled || onScreen(sim, w.get<Transform>(e).pos));
         if (!grows) {}
+        else if (o.player == 0 && rules_.core.neutralGrowth && t.spawnInterval.raw > 0) {
+            // battle core: neutral garrisons grow up to their neutral maximum (BW HouseModule, rate 1)
+            const int mx = coreNeutralMax(sim, e, t);
+            if (g.count < mx) {
+                g.growth += dt / t.spawnInterval;
+                while (g.growth >= kOne && g.count < mx) { ++g.count; g.growth -= kOne; }
+                if (g.count >= mx) g.growth = Fixed{};
+            } else g.growth = Fixed{};
+        }
         else if (adv && o.player != 0 && t.spawnInterval.raw > 0) {
             // effects: lock stops production, production speed / cap stats, redirect sends the growth elsewhere
             if (statusFlags(sim, e) & kStLock) return;
@@ -366,7 +377,8 @@ void RtsModule::sysGarrison(Simulation& sim) {
             if (o.player < collector.size() && collector[o.player].second && collector[o.player].first != e) {
                 // BW RedirectProduction.SendUnits: the normal delta goes to the pool; a growing house adds addUnitsPerSecond instead
                 StatusInst& pool = *collector[o.player].second;
-                const Fixed rate = stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                Fixed rate = stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) rate = rate * coreRate[o.player];   // battle core: Player.GetIncreaseRate
                 const Fixed delta = g.count < cap ? dt * rate : Fixed{};   // HouseModule: 0 when it cannot grow
                 pool.acc += delta;
                 if (delta.raw > 0) {
@@ -389,6 +401,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
                     if (in.def == uint16_t(rules_.stRedirect) && w.alive(in.link) && w.has<Garrison>(in.link)) into = &w.get<Garrison>(in.link);
             if (into->count < cap || into != &g) {
                 g.growth += dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) g.growth -= dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval * (kOne - coreRate[o.player]);
                 while (g.growth >= kOne && (into != &g || into->count < cap)) { ++into->count; g.growth -= kOne; }
                 if (into == &g && g.count >= cap) g.growth = Fixed{};
             } else if (g.count > cap) {
@@ -399,6 +412,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
         } else if (o.player != 0 && t.spawnInterval.raw > 0) {
             if (g.count < t.garrisonMax) {
                 g.growth += dt / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) g.growth -= dt / t.spawnInterval * (kOne - coreRate[o.player]);
                 while (g.growth >= kOne && g.count < t.garrisonMax) { ++g.count; g.growth -= kOne; }
                 if (g.count >= t.garrisonMax) g.growth = Fixed{};
             } else if (g.count > t.garrisonMax) {

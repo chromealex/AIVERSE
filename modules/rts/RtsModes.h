@@ -44,6 +44,28 @@ struct ResourceLevels { int16_t res = -1; std::vector<LevelDef> levels; };
 enum class DominationRule : uint8_t { Auto, HoldAny, HoldAll };
 enum class TimeWin : uint8_t { MaxPoints, Compare };
 
+// Battle core (rules "battleCore", RtsCore.cpp): Bunker Wars / Mushroom Wars 2 morale points, energy per lost unit,
+// production slowing with the army size, neutral growth, point values per difficulty.
+struct CoreRules {
+    bool any = false;
+    // morale points (Player.AddMoralePoints / SubtractMoralePoints, BaseModule.Catch / AttackResult, TowerModule)
+    int16_t moraleRes = -1;
+    Fixed unitPoints = Fixed::fromInt(10);      // per unit lost in an assault: defender +, attacker -
+    Fixed towerPoints = Fixed::fromInt(10);     // per unit killed by a tower: tower owner + (no cooldown reset), victim -
+    Fixed gainMult = Fixed::fromInt(1), lossMult = Fixed::fromInt(1);
+    Fixed moraleMax{};                          // 0: the resource storage (capped) or none
+    std::vector<Fixed> catchNeutral, catchEnemy, lost, upgrade;   // per type ("moralePoints")
+    // energy per own unit lost (Player.OnUnitLost): perUnit x (levels - level index - 1), all reasons but defending
+    int16_t energyRes = -1;
+    Fixed energyPerUnit{};
+    int energyLevels = 0;                       // 0: the number of morale levels
+    // production slows with the army (Player.GetIncreaseRate): rate by army / cap share
+    bool production = false;
+    Fixed limitMult = Fixed::fromInt(1);
+    std::vector<std::pair<Fixed, Fixed>> tiers; // (share reached, rate), ascending
+    bool neutralGrowth = false;                 // neutral garrisons grow up to their neutral maximum (HouseModule)
+};
+
 struct ModesRules {
     bool any = false;            // a "modes" block or a matchModes preset exists: system, state, hash and save run
     bool stats = false;          // match statistics counters (rules "matchStats", on with any mode)
@@ -79,6 +101,8 @@ struct ModesRules {
     std::vector<ZoneStep> zoneStart, zoneSteps;
     uint16_t zoneNeutralType = 0xFFFF;   // a point outside its owner's zone turns neutral (and into this type)
     Fixed zoneSdDelay{};                 // sudden death and its rule sets start this much later on zone maps
+    bool conquestTeam = false;           // conquest: a team is out only when none of its players has anything left (BW COOP)
+    std::vector<Fixed> playerGain, playerDecay;   // per slot: morale gain / decay-timer multipliers (map players moraleGain / moraleDecay)
     // CustomRules
     std::vector<TimedRule> timedRules;
     // resource levels (morale stars)
@@ -113,6 +137,7 @@ struct ModesState {
     std::vector<std::vector<int64_t>> stats;   // [slot][MatchStat]
     std::vector<std::vector<int32_t>> abilityUses;   // [slot][player ability]
     std::vector<int8_t> outcome;  // per slot: 0 playing, 1 won, 2 lost, 3 draw
+    std::vector<int32_t> neutralMax;   // battle core: by entity index, neutral garrison maximum (-1: the type's)
 };
 
 } // namespace aiverse::game

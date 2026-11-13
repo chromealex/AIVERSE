@@ -619,6 +619,7 @@ void RtsModule::enterGarrison(Simulation& sim, Entity e, Entity s) {
         const int before = g->count;
         while (g->damageAcc >= kOne && g->count > 0) { --g->count; ++g->lost; g->damageAcc -= kOne; }
         if (rules_.originals) assaultOriginals(sim, e, s);
+        if (rules_.core.any) coreAssault(sim, me, owner);   // battle core (RtsCore.cpp)
         envAssault(sim, s, me, owner, 1, before - g->count);
     } else if (tt.capturable) {
         // revenge payloads of the defender and recapture of a temporarily captured structure
@@ -637,6 +638,7 @@ void RtsModule::enterGarrison(Simulation& sim, Entity e, Entity s) {
         if (auto* p = w.tryGet<Production>(s)) p->queue.clear();
         const Vec3 pos = w.get<Transform>(s).pos;
         sim.emit({kEvCaptured, me, s, e, old, pos});
+        if (rules_.core.any) coreCaptured(sim, w.get<Unit>(s).type, old, me);   // battle core (RtsCore.cpp)
         if (rules_.originals) captureOriginals(sim, s, old, me);
         for (auto& [pl, by] : revenge) {
             EffectCtx ctx; ctx.owner = by; ctx.caster = s; ctx.target = s; ctx.point = pos; ctx.origin = pos;

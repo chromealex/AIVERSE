@@ -83,7 +83,8 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | key | meaning |
 |---|---|
 | `supplyCap` | max supply/population (default 200) |
-| `modes`, `matchModes`, `timedRules`, `matchStats` | match modes (domination, king of the hill, time limit, sudden death, battle-royal zones), presets picked by map `matchMode`, player statuses by time slots, match statistics: see "Match modes" |
+| `battleCore` | Bunker Wars morale points, energy per lost unit, production limit, neutral growth: see "Battle core" |
+| `modes`, `matchModes`, `timedRules`, `matchStats`, `ruleSets` | match modes (domination, king of the hill, time limit, sudden death, battle-royal zones), presets picked by map `matchMode`, player statuses by time slots, match statistics: see "Match modes" |
 | `ai` | `{"controller":"builtin"}` (default) or `{"controller":"scripted"}`. Scripted control makes the generic RtsAI submit no commands in client, editor and headless. The game must provide its own controller; Lua handlers, human/network commands, combat, production and victory remain enabled. This is not the `waves` player flag and does not exempt players from defeat. |
 | `maxQueue` | production queue length (5) |
 | `costModel` | `"upfront"` (pay when ordering) or `"progressive"` (Total Annihilation: pay while building; stalls when short) |
@@ -1152,11 +1153,28 @@ per player: 1 won, 2 lost, 3 draw. Read with `RtsModule::matchStat`, `modeZone` 
 `speedScale`; events `kEvModePhase` (`ModePhaseEvent`: counter, preview, start, end, time step, time up, KotH alarm,
 domination held, zone lost / changed); defeats by a mode carry `kDefeatMode`.
 
-Not covered yet: BW `HeroCustomRules` meta flow (league configs come from their backend), custom rule kinds that
-are not stat mods (MoveUnits, AllowedTypes, Clouds, UseSkill, RandomUpgrade, CatchLevelDecreaseTo ...),
-`GameplayConditions` (HUD attack hints: use trigger conditions), multiscreen maps without zones, per-player
-morale gain multipliers (`moraleIncreaseCoefficient`, AI complexity coefficients), a team member without units
-staying in COOP conquest until the whole team is out.
+More keys (stage 2):
+
+- `"conquest": {"team": true}` (BW COOP conquest): a player without anything stays in the match while a teammate
+  still has a base; the whole team is out together (`victory.lua`, `rts.victory_rules().team_elimination`).
+- Rules `"ruleSets": {"league3": [timed rules]}` and map `"ruleSets": ["league3"]`: named custom rule sets switched on
+  for one match. The lobby fills the map list from the BW backend (`engine/meta/bw` route
+  `challenges.customRules` = `v/profile/customRules/get`; HeroCustomRules / league configs -> rule set ids).
+- Map players `"moraleGain"` / `"moraleDecay"`: per player multipliers of morale gains (battle core) and of the
+  decay timer (BW moraleIncreaseCoefficient, AI complexity increase / decrease coefficients).
+- Multiscreen maps without zones (map `screen`, routes agent): domination / king-of-the-hill points off the screen
+  are skipped, as with zones.
+- Trigger variables for HUD overlays (`{var:NAME}` text, `var` conditions), scripts and the BW computer player:
+  `koth_<slot>` (the slot's team score), `koth_max`, `dom_<slot>` (domination points held with the timer out),
+  `mode_time_left`, `mode_speed`, `mode_sd_phase` (0 before, 1 preview, 2 sudden death, 3 decided), `mode_sd_left`
+  (seconds to the next phase / end), `mode_sd_counter`, `zone_<slot>_x` / `_z` / `_w` / `_h`. Example overlay:
+  `{"id": "timer", "when": {"var": "mode_time_left", ">": 0}, "anchor": {"type": "screen", "at": [640, 24]},
+  "shape": "text", "text": "{var:mode_time_left}"}`.
+
+Not covered yet: network play does not apply the game speed (the net session paces to the server clock, which
+needs a speed epoch from the relay), custom rule kinds that are not stat mods (MoveUnits, AllowedTypes, Clouds,
+UseSkill, RandomUpgrade, CatchLevelDecreaseTo ...: use trigger actions `disableType`, `castAbility`, effects on a
+timer), `GameplayConditions` (HUD attack hints: overlay `var` conditions / trigger conditions).
 
 #### Bunker Wars computer player (agent-bw-ai)
 
@@ -1221,6 +1239,37 @@ point skill `{"type": "spawn", "unit": "ufo", "duration": 10}` of a static type 
 with z radius `range x rangeAspect` for target acquisition and firing (BW towers' rangeX / rangeY). Its
 `additionalDefenseCoefficient` is a Defense-aura area around the point (`status` `mods` `defense`; 0 in the shipped
 skill).
+
+## Battle core (Bunker Wars garrison economy)
+
+Rules `"battleCore"` (`RtsCore.cpp`) with the BW / Mushroom Wars 2 morale and production rules; every key optional,
+games without the block keep their checksums. Morale levels, their multipliers (damage / shield / speed per level, not
+compounding) and decay are resource `levels` (see "Match modes").
+
+```json
+"battleCore": {
+  "morale": {"resource": "morale", "unitPoints": 10, "towerPoints": 10, "gainMult": 1, "lossMult": 1, "max": 8000},
+  "energy": {"resource": "energy", "perUnit": 0.45, "levels": 6},
+  "production": {"limit": 1, "tiers": [[0.5, 0.75], [0.75, 0.5], [1, 0]]},
+  "neutralGrowth": true
+}
+```
+type: `"moralePoints": {"catchNeutral": 200, "catchEnemy": 300, "lost": 50, "upgrade": 100}`;
+map: `"difficulty": "normal"`, entity `"values": {"easy": {"garrison": 20, "neutralMax": 20, "dominationGarrison": 50,
+"dominationMax": 50, "kingOfTheHillGarrison": 0, "kingOfTheHillMax": 0}, "normal": {...}, "hard": {...}, "expert": {...}}`.
+
+| key | BW source | behaviour |
+|---|---|---|
+| `morale` | `Player.AddMoralePoints` / `SubtractMoralePoints`, `BaseModule.Catch` / `IncreaseLevel` / `AttackResult`, `TowerModule` | morale points on `resource`: capture +`catchNeutral` / `catchEnemy` of the building (the old owner -`lost`), finished upgrade +`upgrade` of the new type, each assaulting unit lost: defender +`unitPoints`, attacker -`unitPoints` x `lossMult`; a unit killed by a tower: tower owner +`towerPoints` (does not restart the decay cooldown), victim -`towerPoints`. Gains x `gainMult` x the player's `moraleGain`, none at the cap (`max`, else the resource storage), losses floor at the resource `min` |
+| `energy` | `Player.OnUnitLost` | `perUnit` x (`levels` - morale level index - 1) to `resource` per own unit lost for any reason but defending its garrison (assaults, towers, clashes, skills); `levels` defaults to the number of morale levels (BW 6: x5 at level 0). Replaces the resource `gain.lost` |
+| `production` | `Player.GetIncreaseRate` / `GetUnitsMaxCount` | garrison growth x the rate of the last tier reached by army / cap: army = garrisons + units in the field, cap = the garrison caps of the player's structures on screen x `limit` (BW productionLimitMultiplier) |
+| `neutralGrowth` | `HouseModule.PrepareUnitsProducedUnitsCount` | neutral garrisons grow (rate 1) up to their neutral maximum (entity `values` `neutralMax`, else the type's max) |
+| entity `values` | `MapPointsModule.GetCurrentValues` | start garrison and neutral maximum of the map's `difficulty` (default: the first key, BW multiplayer = easy); on domination / king-of-the-hill points the `domination*` / `kingOfTheHill*` values |
+
+BW mechanics that stay elsewhere: soldiers shooting while walking is the `UnitsAttack` skill modificator
+(agent-bw-skills, docs/bunkerwars-skills.md); tower range ellipses are weapon `rangeAspect` (agent-bw-routes). BW
+garrisons are floats; the engine keeps whole units with fractional accumulators (growth, assault damage), which gives
+the same counts over time but not the fractional leftovers of a single assault.
 
 ## Army control (agent-mech): stances, retreat, transports
 
