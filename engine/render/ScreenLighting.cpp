@@ -1,4 +1,5 @@
 #include "ScreenLighting.h"
+#include "Shaders.h"
 #include "ScreenLightingShaders.h"
 #include <algorithm>
 #include <cmath>
@@ -19,11 +20,11 @@ Source shader(const char* body,bool sunShadow) {
     s.glslVertex="layout(location=0) in vec2 a_pos; out vec2 v_screen; void main(){v_screen=a_pos*0.5+0.5;gl_Position=vec4(a_pos,0.0,1.0);}";
     s.glslFragment="layout(std140) uniform U0 {"+fields+"};\nin vec2 v_screen;out vec4 o_color;\nuniform sampler2D tex0;uniform highp sampler2D tex1;uniform sampler2D tex2;\n"
         "#define COLOR(p) texture(tex0,p)\n#define DEPTH(p) texture(tex1,p).r\n#define HISTORY(p) texture(tex2,p)\n#define RETURN(c) {o_color=(c);return;}\n"+
-        (sunShadow?"uniform highp sampler2DShadow tex3;\n#define SHADOW(uv,d) texture(tex3,vec3(uv,d))\n":"")+common+"void main(){vec2 s=v_screen;\n"+body+"}\n";
-    s.msl="#include <metal_stdlib>\nusing namespace metal;\n#define mat4 float4x4\n#define vec2 float2\n#define vec3 float3\n#define vec4 float4\nstruct U0 {"+fields+"};\n"
+        (sunShadow?"uniform highp sampler2D tex3;\n" AIVERSE_GLSL_SUN_FILTER("tex3") "#define SHADOW(uv,d) sunCompare(uv,d)\n":"")+common+"void main(){vec2 s=v_screen;\n"+body+"}\n";
+    s.msl="#include <metal_stdlib>\nusing namespace metal;\n" AIVERSE_MSL_SUN_FILTER "#define mat4 float4x4\n#define vec2 float2\n#define vec3 float3\n#define vec4 float4\nstruct U0 {"+fields+"};\n"
         "struct VIn{float2 pos [[attribute(0)]];}; struct VOut{float4 pos [[position]];float2 screen;};\n"
         "vertex VOut vs_main(VIn in [[stage_in]]){VOut o;o.pos=float4(in.pos,0.0,1.0);o.screen=in.pos*0.5+0.5;return o;}\n"
-        "#define COLOR(p) tex0.sample(s0,p)\n#define DEPTH(p) tex1.sample(s1,p)\n#define HISTORY(p) tex2.sample(s2,p)\n#define RETURN(c) return (c)\n#define SHADOW(uv,d) tex3.sample_compare(s3,uv,d)\n"+common+
+        "#define COLOR(p) tex0.sample(s0,p)\n#define DEPTH(p) tex1.sample(s1,p)\n#define HISTORY(p) tex2.sample(s2,p)\n#define RETURN(c) return (c)\n#define SHADOW(uv,d) sunCompare(tex3,uv,d)\n"+common+
         "fragment float4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]],texture2d<float> tex0 [[texture(0)]],sampler s0 [[sampler(0)]],depth2d<float> tex1 [[texture(1)]],sampler s1 [[sampler(1)]],texture2d<float> tex2 [[texture(2)]],sampler s2 [[sampler(2)]]"+(sunShadow?",depth2d<float> tex3 [[texture(3)]],sampler s3 [[sampler(3)]]":"")+"){\n"
         "const mat4 invVP=u.invVP,prevVP=u.prevVP,lightVP=u.lightVP;const vec4 eye=u.eye,prevEye=u.prevEye,px=u.px,params=u.params,jitter=u.jitter,sun=u.sun,sunColor=u.sunColor,volume=u.volume,ambient=u.ambient;vec2 s=in.screen;\n"+body+"}\n";
     return s;

@@ -10,6 +10,9 @@
 
 namespace aiverse::test {
 using namespace render;
+struct HdrScene;
+void initContactShadowScene(HdrScene&);
+void drawContactShadowScene(HdrScene&);
 struct HdrScene {
     Renderer3D renderer;
     PostFx post;
@@ -86,6 +89,7 @@ struct HdrScene {
             renderer.setShadowQuality(ShadowQuality::Off);renderer.lights.setQuality(LightQuality::Off);
             camera.target={0,0,0};camera.pitch=0;camera.yaw=0;camera.distance=10;
         }
+        if(std::getenv("AIVERSE_CONTACT_SHADOW_TEST")) initContactShadowScene(*this);
         const char* p=std::getenv("AIVERSE_HDR_CAPTURE"); path=p?p:"/tmp/hdr-scene.ppm";
     }
     void draw(gfx::Device& d, int w, int h) {
@@ -95,6 +99,7 @@ struct HdrScene {
         if(ownsFrame)d.beginFrame(w,h);
         renderer.beginScene(advanced?screen.jittered(camera,w,h):camera,w,h);
         renderer.drawMesh(floor,{}, {0.34f,0.36f,0.4f,1});
+        if(std::getenv("AIVERSE_CONTACT_SHADOW_TEST")) drawContactShadowScene(*this); else {
         ModelDraw md; md.model=spheres.get(); renderer.drawModel(md);
         if(!materialGallery){
         // Same albedo, increasing radiance: LDR clamps before bloom, HDR retains differences.
@@ -103,6 +108,7 @@ struct HdrScene {
         renderer.drawMesh(cube,mat4::translate({-2.3f,0,1.3f}),{0.95f,0.15f,0.1f,0.5f},kDrawUnlit,0,0);
         renderer.drawMesh(water,mat4::translate({0,0.12f,0}),{0.08f,0.16f,0.22f,0.65f},kDrawNoCastShadow,0.9f);
         renderer.lights.add({2,1.5f,0.8f},4,{0.15f,0.5f,1},3);
+        }
         }
         gfx::PassDesc pass = output; pass.clearColor[0]=0.09f;pass.clearColor[1]=0.11f;pass.clearColor[2]=0.15f;
         renderer.render(pass,pipeline());
@@ -321,3 +327,5 @@ struct HdrScene {
     }
 };
 }
+
+#include "ContactShadowScene.h"

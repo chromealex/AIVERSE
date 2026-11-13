@@ -73,7 +73,8 @@ struct Lighting {
     float3 groundColor{0.33f, 0.29f, 0.23f};
     float3 fogColor{0.62f, 0.70f, 0.80f};
     float fogDensity = 0.0025f;
-    float shadowSoftness = 0.22f;          // penumbra radius in world units (same look at every quality tier)
+    float shadowSoftness = 0.22f;          // maximum penumbra radius in world units; medium/high harden at contact
+    bool shadowContactHardening = true;    // medium/high: sharper contacts; false keeps a fixed radius
     bool tonemap = true;                   // false: lit shaders clamp instead of the ACES fit (flat / unlit art styles)
     bool srgbModels = false;               // true: model shaders encode their output with the exact sRGB curve (as a
                                            // linear-colour-space Unity project) instead of the engine's sqrt (gamma 2)

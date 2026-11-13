@@ -2389,7 +2389,8 @@ Where shadows fall is the sun's direction: `"lighting": {"sunDir": [x, y, z]}` (
 map, towards the sun at noon; the day cycle swings around it). Flat drawings hide shadows that
 fall straight behind them, and a sun behind the scene leaves camera-facing cliff walls unlit, so
 sprite games usually want it from the side and a little in front (km2d: `[-1.0, 1.2, 0.45]`,
-shadows to the right). `"shadowSoftness"` (world units, default 0.22) is the penumbra radius;
+shadows to the right). `"shadowSoftness"` (world units, default 0.22) is the maximum penumbra radius.
+Medium/high sun shadows harden at contact and widen with caster/receiver separation (PCSS);
 pixel-art games look cleaner with a tight one (km2d 0.07): kernels of a few shadow-map texels are
 filtered without the per-pixel noise rotation, so they stay smooth on every tier.
 
