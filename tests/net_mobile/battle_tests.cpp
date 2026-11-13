@@ -149,8 +149,9 @@ struct TapPort : net::DatagramPort {
 };
 
 TEST(secure_drops_replays_and_survives_nat_rebinding) {
-    SecurePair p;
+    // TapPort may record the disconnect sent while SecurePair is destroyed.
     std::vector<std::vector<uint8_t>> sent;
+    SecurePair p;
     auto tap = std::make_unique<TapPort>();
     tap->inner = p.simnet.open("10.1.0.2", 40001);
     tap->log = &sent;

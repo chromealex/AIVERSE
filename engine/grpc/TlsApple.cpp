@@ -134,7 +134,7 @@ class SecureTransportEngine final : public TlsEngine {
         std::memcpy(data, self->in_.data(), n);
         self->in_.erase(0, n);
         *len = n;
-        return n < want ? errSSLWouldBlock : noErr;
+        return n < want ? OSStatus(errSSLWouldBlock) : OSStatus(noErr);
     }
     static OSStatus writeFn(SSLConnectionRef conn, const void *data, size_t *len) {
         auto *self = static_cast<SecureTransportEngine *>(const_cast<void *>(conn));

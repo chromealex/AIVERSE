@@ -174,10 +174,10 @@ TEST(traffic_cars_keep_moving_and_never_enter_on_red) {
     CHECK(moving >= 4);
     CHECK(tstore(*sim).cars.size() == 6);
     // the props show the signals
-    int red = 0, green = 0;
+    int red = 0;
     for (auto& l : tstore(*sim).lights) {
         const std::string id = mod(*sim).rules().types[w.get<game::Unit>(l.e).type].id;
-        red += id == "lamp_r"; green += id == "lamp_g";
+        red += id == "lamp_r";
         // set while the tick ran (sim.tick() one lower than now)
         CHECK(l.shown == uint8_t(tl::trafficLight(trf(*sim).rules().timing, trf(*sim).offset(l.junction), sim->tick() - 1, tl::TrafficAxis(l.axis))));
     }
