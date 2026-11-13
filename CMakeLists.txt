@@ -407,7 +407,7 @@ target_link_libraries(aiverse_models PUBLIC aiverse_engine)
 target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
 # Unity animation import (agent-unity-anim): clip sidecars and the Mecanim-style controller node.
 target_sources(aiverse_models PRIVATE engine/render/ModelClips.cpp engine/render/AnimationController.cpp)
-if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
+if((AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS) AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     add_executable(aiverse_clipinfo tools/unity_anim/clipinfo.cpp)
     target_link_libraries(aiverse_clipinfo PRIVATE aiverse_models aiverse_zstd_dec)
 endif()
