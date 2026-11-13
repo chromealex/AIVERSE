@@ -244,6 +244,11 @@ class ModelingWindow final : public EditorWindow {
                     edit(ed, putModelItem("nodes", newPart_, Json::parse(R"({"geometry":{"kind":"box"}})")));
                     select(newPart_);
                 }
+                if (ImGui::Button(tr("addCable").c_str())) {
+                    edit(ed, putModelItem("nodes", newPart_, Json::parse(
+                        R"({"geometry":{"kind":"cable","anchors":[[-3,3,0],[3,3,0]],"sag":0.6,"radius":0.025,"segments":32,"sides":8}})")));
+                    select(newPart_);
+                }
                 if (!selected_.empty() && ImGui::Button(tr("remove").c_str())) {
                     auto c = Json::object(), a = Json::array();
                     c.set("op", Json::string("remove"));
@@ -349,6 +354,33 @@ class ModelingWindow final : public EditorWindow {
                 }
                 if (!selected_.empty()) {
                     ImGui::TextUnformatted(tr("properties").c_str());
+                    Json draft;
+                    try { draft = Json::parse(editText_); } catch (const std::exception &) { /* Keep raw JSON editable. */ }
+                    if (draft["geometry"].getStr("kind") == "cable") {
+                        auto &g = draft.member("geometry");
+                        bool changed = false;
+                        auto &anchors = g.member("anchors");
+                        for (size_t i = 0; i < anchors.size(); ++i) {
+                            auto &a = anchors.at(i);
+                            if (a.size() != 3 || !a[0].isNumber() || !a[1].isNumber() || !a[2].isNumber()) continue;
+                            float xyz[3] = {float(a[0].toDouble()), float(a[1].toDouble()), float(a[2].toDouble())};
+                            ImGui::PushID(int(i));
+                            ImGui::Text("%s %zu", tr("cableAnchor").c_str(), i + 1);
+                            if (ImGui::DragFloat3("##anchor", xyz, .05f)) {
+                                for (int k = 0; k < 3; ++k) a.at(size_t(k)) = Json::number(double(xyz[k]), 6);
+                                changed = true;
+                            }
+                            ImGui::PopID();
+                        }
+                        for (auto item : {std::pair{"sag", .6f}, std::pair{"radius", .025f}, std::pair{"spacing", .15f}}) {
+                            if (!g[item.first].isNull() && !g[item.first].isNumber()) continue;
+                            float f = float(g[item.first].toDouble(item.second));
+                            if (ImGui::DragFloat(tr((std::string("cable_") + item.first).c_str()).c_str(), &f, .005f, 0.f, 100.f)) {
+                                g.set(item.first, Json::number(double(f), 6)); changed = true;
+                            }
+                        }
+                        if (changed) editText_ = draft.dump(2);
+                    }
                     ui::inputMultiline("##node", editText_, ImVec2(-1, 100));
                     if (ImGui::Button(tr("apply").c_str()))
                         edit(ed, putModelItem("nodes", selected_, Json::parse(editText_)));

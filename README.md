@@ -185,7 +185,7 @@ Every template is a fully playable game with bots. Open it in the editor and sta
 
 **Graphics and audio**
 - Own RHI: Metal, GLES3 / WebGL2, GL 3.3
-- PBR, glTF/OBJ, skeletal and procedural animation
+- PBR, glTF/OBJ, skeletal and procedural animation, procedural cables
 - Shadows, dynamic lights, night, post-effects, Shader Graph
 - Particles with Unity ParticleSystem modules and an importer from Unity
 - 2D: sprites, tile maps with autotiling

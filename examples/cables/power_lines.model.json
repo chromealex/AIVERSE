@@ -1,0 +1,648 @@
+{
+  "version": 1,
+  "parameters": {
+    "sag": 0.7
+  },
+  "materials": [
+    {
+      "id": "wire",
+      "color": [
+        0.055,
+        0.06,
+        0.065,
+        1
+      ],
+      "metallic": 0.2,
+      "roughness": 0.75
+    },
+    {
+      "id": "wood",
+      "color": [
+        0.28,
+        0.18,
+        0.09,
+        1
+      ],
+      "roughness": 0.95
+    },
+    {
+      "id": "steel",
+      "color": [
+        0.25,
+        0.28,
+        0.29,
+        1
+      ],
+      "metallic": 0.7,
+      "roughness": 0.5
+    },
+    {
+      "id": "ceramic",
+      "color": [
+        0.68,
+        0.73,
+        0.69,
+        1
+      ],
+      "roughness": 0.3
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pole0",
+      "material": "wood",
+      "translation": [
+        -8,
+        2.65,
+        0
+      ],
+      "geometry": {
+        "kind": "cylinder",
+        "radius": 0.12,
+        "height": 5.3,
+        "segments": 16
+      }
+    },
+    {
+      "id": "arm0",
+      "material": "steel",
+      "translation": [
+        -8,
+        5.2,
+        0
+      ],
+      "geometry": {
+        "kind": "box",
+        "size": [
+          0.12,
+          0.1,
+          1.6
+        ]
+      }
+    },
+    {
+      "id": "isolator0_0",
+      "material": "ceramic",
+      "translation": [
+        -8,
+        5.4,
+        -0.5
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "isolator0_1",
+      "material": "ceramic",
+      "translation": [
+        -8,
+        5.4,
+        0
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "isolator0_2",
+      "material": "ceramic",
+      "translation": [
+        -8,
+        5.4,
+        0.5
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "pole1",
+      "material": "wood",
+      "translation": [
+        0,
+        2.9,
+        0
+      ],
+      "geometry": {
+        "kind": "cylinder",
+        "radius": 0.12,
+        "height": 5.8,
+        "segments": 16
+      }
+    },
+    {
+      "id": "arm1",
+      "material": "steel",
+      "translation": [
+        0,
+        5.7,
+        0
+      ],
+      "geometry": {
+        "kind": "box",
+        "size": [
+          0.12,
+          0.1,
+          1.6
+        ]
+      }
+    },
+    {
+      "id": "isolator1_0",
+      "material": "ceramic",
+      "translation": [
+        0,
+        5.9,
+        -0.5
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "isolator1_1",
+      "material": "ceramic",
+      "translation": [
+        0,
+        5.9,
+        0
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "isolator1_2",
+      "material": "ceramic",
+      "translation": [
+        0,
+        5.9,
+        0.5
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "pole2",
+      "material": "wood",
+      "translation": [
+        8,
+        2.4,
+        4
+      ],
+      "geometry": {
+        "kind": "cylinder",
+        "radius": 0.12,
+        "height": 4.8,
+        "segments": 16
+      }
+    },
+    {
+      "id": "arm2",
+      "material": "steel",
+      "translation": [
+        8,
+        4.7,
+        4
+      ],
+      "geometry": {
+        "kind": "box",
+        "size": [
+          0.12,
+          0.1,
+          1.6
+        ]
+      }
+    },
+    {
+      "id": "isolator2_0",
+      "material": "ceramic",
+      "translation": [
+        8,
+        4.9,
+        3.5
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "isolator2_1",
+      "material": "ceramic",
+      "translation": [
+        8,
+        4.9,
+        4
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "isolator2_2",
+      "material": "ceramic",
+      "translation": [
+        8,
+        4.9,
+        4.5
+      ],
+      "geometry": {
+        "kind": "lathe",
+        "segments": 16,
+        "profile": [
+          [
+            0,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.13
+          ],
+          [
+            0.08,
+            -0.08
+          ],
+          [
+            0.045,
+            -0.07
+          ],
+          [
+            0.075,
+            -0.02
+          ],
+          [
+            0.075,
+            0.015
+          ],
+          [
+            0.04,
+            0.04
+          ],
+          [
+            0.04,
+            0.1
+          ],
+          [
+            0,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "power_lines",
+      "material": "wire",
+      "geometry": {
+        "kind": "cable",
+        "anchors": [
+          [
+            -8,
+            5.5,
+            0
+          ],
+          [
+            0,
+            6,
+            0
+          ],
+          [
+            8,
+            5,
+            4
+          ]
+        ],
+        "sag": {
+          "param": "sag"
+        },
+        "radius": 0.025,
+        "segments": 40,
+        "sides": 8,
+        "strands": 3,
+        "spacing": 0.5,
+        "bundleAxis": [
+          0,
+          0,
+          1
+        ],
+        "uvRepeat": 1
+      }
+    }
+  ],
+  "skins": [],
+  "clips": [],
+  "graph": null
+}

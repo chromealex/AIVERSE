@@ -27,6 +27,7 @@ Json robotDocument();
 Json edit(const Json &document, const Json &commands);
 Build build(const Json &document, const std::atomic<bool> *cancel = nullptr, GeometryCache *cache = nullptr);
 Mesh geometry(const Json &specification, const std::atomic<bool> *cancel = nullptr);
+Mesh cableGeometry(const Json &specification, const std::atomic<bool> *cancel = nullptr);
 Mesh booleanMesh(const Mesh &a, const Mesh &b, const std::string &operation);
 void bevelConvex(Mesh &mesh, float amount);
 void smoothSubdivision(Mesh &mesh, int levels);

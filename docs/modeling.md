@@ -98,6 +98,7 @@ internal parent links with prefixed IDs. Skinned copies require explicit skin re
 | `lathe` | `profile:[[radius,y],...]`, `segments` |
 | `extrude` | simple `profile:[[x,y],...]`, `height` along Z |
 | `sweep` | simple `profile:[[x,y],...]`, `path:[[x,y,z],...]` |
+| `cable` | `anchors:[[x,y,z],...]`, `sag`, `radius`, `segments`, `sides`, `strands`, `spacing`, `bundleAxis`, `down`, `uvRepeat`, `caps`; see [cables](cables.md) |
 | `mesh` | `vertices:[[x,y,z],...]`, triangle `indices:[...]` |
 | `boolean` | `a`, `b` preceding node IDs; `operation:union|subtract|intersect` |
 

@@ -100,10 +100,12 @@ Mesh geometry(const Json &s, const std::atomic<bool> *cancel) {
         require(n >= lo && n <= hi, std::string(k) + " outside limits");
         return int(n);
     };
-    int seg = count("segments", 24, 3, 128);
+    int seg = kind == "cable" ? 24 : count("segments", 24, 3, 128);
     float r = number(s["radius"], .5f, "radius"), h = number(s["height"], 1, "height");
     require(r > 0 && h > 0, "radius and height must be positive");
-    if (kind == "box" || kind == "bevelBox") {
+    if (kind == "cable") {
+        m = cableGeometry(s, cancel);
+    } else if (kind == "box" || kind == "bevelBox") {
         auto size = vector3(s["size"], {1, 1, 1}, "size");
         require(size.x > 0 && size.y > 0 && size.z > 0, "size must be positive");
         float bevel = kind == "bevelBox" ? number(s["bevel"], .1f, "bevel") : 0;
