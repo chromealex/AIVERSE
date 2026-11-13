@@ -38,6 +38,8 @@ jobs:
         run: cmake --build build/linux-release
       - name: Tests
         run: build/linux-release/aiverse_tests
+      - name: Third-party notices
+        run: python3 tests/notices/notices_test.py
       - name: Bot matches
         run: .github/scripts/headless-checksums.sh build/linux-release/aiverse_headless checksums-linux-${{ matrix.arch }}-${{ matrix.cc }}.txt
       - name: Screenshot (Xvfb, software GL)

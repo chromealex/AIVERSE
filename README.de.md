@@ -292,6 +292,7 @@ Die Referenzdokumente sind auf Englisch. Die Übersicht, der Spiel-Assistent, de
 
 ## Lizenz
 
-[MIT](LICENSE). Drittanbieter-Bibliotheken liegen mit ihren eigenen Lizenzen in `third_party/` (nur MIT,
-BSD, zlib, OFL, CC0 und CC-BY). Originale Assets kommerzieller Spiele sind nicht enthalten: Die Importer
+[MIT](LICENSE). Drittanbieter-Bibliotheken liegen mit ihren eigenen Lizenzen in `third_party/` (unter anderem MIT, MIT-0, BSD, ISC, zlib, OFL, CC0 und CC-BY). Originale Assets kommerzieller Spiele sind nicht enthalten: Die Importer
 lesen sie aus Ihrer eigenen Kopie.
+
+Spiel-Builds enthalten automatisch `THIRD_PARTY_NOTICES.txt`; Hinweise für externe SDKs muss das Projekt bereitstellen (siehe [Details](docs/third-party-notices.md)).

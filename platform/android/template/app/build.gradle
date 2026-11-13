@@ -54,3 +54,34 @@ android {
 dependencies {
     // native plugins (aiversebuild, plugins/*/plugin.json)
 @PLUGIN_DEPENDENCIES@}
+
+// Generate before merging assets, independently of native compilation/ABI ordering.
+// The exported source tree includes the audit manifest and every license source.
+def noticeAssets = layout.buildDirectory.dir('generated/aiverseNotices')
+android.sourceSets.main.assets.srcDir(noticeAssets)
+tasks.register('generateAiverseNotices') {
+    def engineRoot = file('src/main/cpp')
+    inputs.dir(engineRoot.toPath().resolve('third_party').toFile())
+    inputs.file(new File(engineRoot, 'LICENSE'))
+    inputs.file(new File(engineRoot, 'engine/assets/fonts/LICENSE-ui.txt'))
+    inputs.file(new File(engineRoot, 'platform/cmake/GenerateNotices.cmake'))
+    inputs.file(new File(engineRoot, 'project-notices.txt'))
+    inputs.file(new File(engineRoot, 'plugin-notices.txt'))
+    def ndkNotices = ['NOTICE', 'NOTICE.toolchain'].collect { new File(android.ndkDirectory, it) }.findAll { it.isFile() }
+    inputs.files(ndkNotices)
+    outputs.dir(noticeAssets)
+    doLast {
+        def cmakeDir = new File(android.sdkDirectory, 'cmake')
+        def candidates = cmakeDir.listFiles()?.findAll { new File(it, 'bin/cmake').isFile() || new File(it, 'bin/cmake.exe').isFile() }?.sort { it.name }
+        def cmake = candidates ? new File(candidates.last(), 'bin/' + (System.getProperty('os.name').toLowerCase().contains('windows') ? 'cmake.exe' : 'cmake')).absolutePath : 'cmake'
+        exec {
+            commandLine cmake, "-DAIVERSE_NOTICE_ROOT=${engineRoot.absolutePath}",
+                "-DAIVERSE_NOTICE_OUTPUT=${noticeAssets.get().asFile}/THIRD_PARTY_NOTICES.txt",
+                "-DAIVERSE_PROJECT_NOTICES=${engineRoot}/project-notices.txt",
+                "-DAIVERSE_PLUGIN_NOTICES=${engineRoot}/plugin-notices.txt",
+                "-DAIVERSE_TOOLCHAIN_NOTICES=${ndkNotices.collect { it.absolutePath }.join(';')}",
+                '-P', new File(engineRoot, 'platform/cmake/GenerateNotices.cmake').absolutePath
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn('generateAiverseNotices') }

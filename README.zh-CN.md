@@ -284,5 +284,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 
 ## 许可证
 
-[MIT](LICENSE)。第三方库位于 `third_party/`，各自附带许可证（仅限 MIT、BSD、zlib、OFL、CC0 和 CC-BY）。
+[MIT](LICENSE)。第三方库位于 `third_party/`，各自附带许可证（包括 MIT、MIT-0、BSD、ISC、zlib、OFL、CC0 和 CC-BY）。
 仓库不包含商业游戏的原始资源：导入器从你自己的副本中读取它们。
+
+游戏构建会自动包含 `THIRD_PARTY_NOTICES.txt`；外部 SDK 的许可声明须由项目提供（见[详情](docs/third-party-notices.md)）。

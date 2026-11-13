@@ -288,6 +288,8 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 
 ## Лицензия
 
-[MIT](LICENSE). Сторонние библиотеки лежат в `third_party/` со своими лицензиями (только MIT, BSD, zlib,
+[MIT](LICENSE). Сторонние библиотеки лежат в `third_party/` со своими лицензиями (в том числе MIT, MIT-0, BSD, ISC, zlib,
 OFL, CC0, CC-BY). Оригинальные ресурсы коммерческих игр в репозиторий не входят: импортёры читают
 их из вашей собственной копии.
+
+Сборки игр автоматически включают `THIRD_PARTY_NOTICES.txt`; уведомления внешних SDK предоставляет проект (см. [подробности](docs/third-party-notices.md)).

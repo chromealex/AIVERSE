@@ -290,6 +290,8 @@ Reference documents are in English. The overview, the game wizard, Unity migrati
 
 ## License
 
-[MIT](LICENSE). Third-party libraries live in `third_party/` with their own licenses (MIT, BSD, zlib,
-OFL, CC0 and CC-BY only). Original assets of commercial games are not included: importers read them
+[MIT](LICENSE). Third-party libraries live in `third_party/` with their own licenses (MIT, MIT-0, BSD, ISC, zlib,
+OFL, CC0 and CC-BY, among others). Original assets of commercial games are not included: importers read them
 from your own copy.
+
+Game builds automatically include `THIRD_PARTY_NOTICES.txt`; external SDK notices must be supplied by the project (see [details](docs/third-party-notices.md)).

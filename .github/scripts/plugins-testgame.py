@@ -38,6 +38,10 @@ game["plugins"] = {
     "appmetrica": {"apiKey": "00000000-0000-0000-0000-000000000000"},
     "att": {"usage": "CI build: this identifier is used to show you relevant ads.", "skAdNetworks": ["4fzdc2evr5"]},
 }
+# Compile-only fixture, not a distributable game. Real releases supply the resolved SDK notices.
+(out / "fixture-sdk-notices.txt").write_text("TEST FIXTURE ONLY - not SDK license clearance.\n")
+for config in game["plugins"].values():
+    config["notices"] = ["fixture-sdk-notices.txt"]
 game["store"] = {"products": [{"id": "gems_100", "type": "consumable"}, {"id": "no_ads", "type": "nonConsumable"}]}
 (out / "game.json").write_text(json.dumps(game, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"test game with plugins: {out}")

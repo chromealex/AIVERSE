@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "name": "AIVERSE (MIT)",
+      "path": "LICENSE"
+    },
+    {
+      "name": "third_party/box3d",
+      "path": "third_party/box3d/LICENSE"
+    },
+    {
+      "name": "third_party/fonts/inter",
+      "path": "third_party/fonts/inter/LICENSE.txt"
+    },
+    {
+      "name": "third_party/fonts/lucide",
+      "path": "third_party/fonts/lucide/LICENSE"
+    },
+    {
+      "name": "third_party/fonts/noto-symbols2",
+      "path": "third_party/fonts/noto-symbols2/LICENSE.txt"
+    },
+    {
+      "name": "third_party/imgui",
+      "path": "third_party/imgui/LICENSE.txt"
+    },
+    {
+      "name": "third_party/lua",
+      "path": "third_party/lua/LICENSE"
+    },
+    {
+      "name": "third_party/meshoptimizer",
+      "path": "third_party/meshoptimizer/LICENSE.md"
+    },
+    {
+      "name": "third_party/miniaudio",
+      "path": "third_party/miniaudio/LICENSE-miniaudio.txt"
+    },
+    {
+      "name": "third_party/miniaudio",
+      "path": "third_party/miniaudio/LICENSE-stb_vorbis.txt"
+    },
+    {
+      "name": "third_party/rmlui/Include/RmlUi/Core/Containers",
+      "path": "third_party/rmlui/Include/RmlUi/Core/Containers/LICENSE.txt"
+    },
+    {
+      "name": "third_party/rmlui",
+      "path": "third_party/rmlui/LICENSE.txt"
+    },
+    {
+      "name": "third_party/rmlui/Source/Debugger",
+      "path": "third_party/rmlui/Source/Debugger/LICENSE.txt"
+    },
+    {
+      "name": "third_party/stb",
+      "path": "third_party/stb/LICENSE.txt"
+    },
+    {
+      "name": "third_party/stb_image_write",
+      "path": "third_party/stb_image_write/LICENSE"
+    },
+    {
+      "name": "third_party/ufbx",
+      "path": "third_party/ufbx/LICENSE"
+    },
+    {
+      "name": "third_party/vorbis",
+      "path": "third_party/vorbis/LICENSE-ogg.txt"
+    },
+    {
+      "name": "third_party/vorbis",
+      "path": "third_party/vorbis/LICENSE-vorbis.txt"
+    },
+    {
+      "name": "third_party/xatlas",
+      "path": "third_party/xatlas/LICENSE"
+    },
+    {
+      "name": "third_party/zstd",
+      "path": "third_party/zstd/LICENSE"
+    },
+    {
+      "name": "Noto Sans UI font (OFL-1.1)",
+      "path": "engine/assets/fonts/LICENSE-ui.txt"
+    },
+    {
+      "name": "box3d/src/qsort.h (embedded notice)",
+      "path": "third_party/box3d/src/qsort.h",
+      "offset": 0,
+      "length": 1125,
+      "sha256": "24ed4997b78ddfd913cc45eb965f310074ab6ff0983645c68fdd92221a061d63"
+    },
+    {
+      "name": "box3d/src/rapidhash.h (embedded notice)",
+      "path": "third_party/box3d/src/rapidhash.h",
+      "offset": 0,
+      "length": 1380,
+      "sha256": "337258afbe3e6254ef684f1fcf1df87b2e7d957351794f5d06da7d242dd6e2d8"
+    },
+    {
+      "name": "box3d/src/verstable.h (embedded notice)",
+      "path": "third_party/box3d/src/verstable.h",
+      "offset": 29343,
+      "length": 1088,
+      "sha256": "f1db172f4755365af79b1f7ad261669846a8331d273619e39ae4eff50e53d762"
+    },
+    {
+      "name": "imgui/imstb_rectpack.h (embedded notice)",
+      "path": "third_party/imgui/imstb_rectpack.h",
+      "offset": 17672,
+      "length": 2673,
+      "sha256": "889b396795202d1457560a797a7242e96f6f132d4b88ca2d69be58bf05e1771f"
+    },
+    {
+      "name": "lua/lua.h (embedded notice)",
+      "path": "third_party/lua/lua.h",
+      "offset": 14677,
+      "length": 1262,
+      "sha256": "341014ee8b49570fc01c1fb2afc6a7decc853525636c74e7a6a9507a933aa62e"
+    },
+    {
+      "name": "meshoptimizer/src/meshoptimizer.h (embedded notice)",
+      "path": "third_party/meshoptimizer/src/meshoptimizer.h",
+      "offset": 108155,
+      "length": 1136,
+      "sha256": "e3688ef553f603391747895a5c221ef1528574cc7f8173782417a96cb531f61b"
+    },
+    {
+      "name": "miniaudio/miniaudio.h (embedded notice)",
+      "path": "third_party/miniaudio/miniaudio.h",
+      "offset": 4105564,
+      "length": 2603,
+      "sha256": "ac7af4de748b7e26b777f37e01cee313a308a7296a3eb080e2906b320cc55c89"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Config/Config.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Config/Config.h",
+      "offset": 0,
+      "length": 1352,
+      "sha256": "7cd882259b43868c89aab1eeb535552b6abafb9a52a1aed415dacff60487549c"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Core/Animation.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Core/Animation.h",
+      "offset": 0,
+      "length": 1268,
+      "sha256": "2a5f7fdc30d2ff69b1e5cd703441e78dda35435016b3969435e8215a7abcfdbe"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Core/ComputedValues.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Core/ComputedValues.h",
+      "offset": 0,
+      "length": 1289,
+      "sha256": "ca189e6d2dde3884af465336aa9a368edf41cef3718948c44f3f705b2a379ae7"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Core/FontEngineInterface.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Core/FontEngineInterface.h",
+      "offset": 0,
+      "length": 1292,
+      "sha256": "f8d352d95cfb50dc8f3573604e0f1281a0f08f6f7198a6633b26a9edbdc5b7a1"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Core/Matrix4.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Core/Matrix4.h",
+      "offset": 0,
+      "length": 1329,
+      "sha256": "3ec51061ffe01f2ea2098ff0464202403818ea41c0dc765307d59a331338359a"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Core/NumericValue.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Core/NumericValue.h",
+      "offset": 0,
+      "length": 1347,
+      "sha256": "dd88b9afe82e5c5c407f4daa710173bafd598dd7fe9238b9c6713a5d861a77ff"
+    },
+    {
+      "name": "rmlui/Include/RmlUi/Core/RenderBox.h (embedded notice)",
+      "path": "third_party/rmlui/Include/RmlUi/Core/RenderBox.h",
+      "offset": 0,
+      "length": 1352,
+      "sha256": "ca79b42dd0a2b706efbd0be5a62ca4aa28545f4ec2423ac44dd92c9edf765b4c"
+    },
+    {
+      "name": "rmlui/Source/Core/ControlledLifetimeResource.h (embedded notice)",
+      "path": "third_party/rmlui/Source/Core/ControlledLifetimeResource.h",
+      "offset": 0,
+      "length": 1289,
+      "sha256": "60a11246815b6162dd03e7ae80c9056dd5fc39b7a05827163edce49c011f5792"
+    },
+    {
+      "name": "rmlui/Source/Core/ElementAnimation.cpp (embedded notice)",
+      "path": "third_party/rmlui/Source/Core/ElementAnimation.cpp",
+      "offset": 0,
+      "length": 1334,
+      "sha256": "311f14391603f9427c1e5a76bd7f16bc65844a9adbc1f246a19e2e8fa07e0273"
+    },
+    {
+      "name": "rmlui/Source/Core/Spritesheet.cpp (embedded notice)",
+      "path": "third_party/rmlui/Source/Core/Spritesheet.cpp",
+      "offset": 0,
+      "length": 1334,
+      "sha256": "03414dba07e84b73dc53b5c51891089e9b8ed07f10e5505e9e9d55e6b1b09eb4"
+    },
+    {
+      "name": "rmlui/Source/Debugger/FontSource.h (embedded notice)",
+      "path": "third_party/rmlui/Source/Debugger/FontSource.h",
+      "offset": 1427,
+      "length": 4922,
+      "sha256": "155208332ebf98dc0d91c4f3c8892f6bba35781741bd23c62b860c611a91e628"
+    },
+    {
+      "name": "vorbis/src/vorbis/lpc.c (embedded notice)",
+      "path": "third_party/vorbis/src/vorbis/lpc.c",
+      "offset": 1288,
+      "length": 763,
+      "sha256": "e782bd2780f354fcb0156855260c082ccdeed76dc1152ba7a6ae45b98520dfeb"
+    },
+    {
+      "name": "xatlas/xatlas.cpp (embedded notice)",
+      "path": "third_party/xatlas/xatlas.cpp",
+      "offset": 0,
+      "length": 1081,
+      "sha256": "0ed0283aad005c94738cb0cc4612dba264379d29dea5b3c9b242f2d4752d5df4"
+    },
+    {
+      "name": "xatlas/xatlas.cpp (embedded notice)",
+      "path": "third_party/xatlas/xatlas.cpp",
+      "offset": 110132,
+      "length": 1976,
+      "sha256": "0ed0283aad005c94738cb0cc4612dba264379d29dea5b3c9b242f2d4752d5df4"
+    },
+    {
+      "name": "zstd/zstd.c (embedded notice)",
+      "path": "third_party/zstd/zstd.c",
+      "offset": 1990506,
+      "length": 1187,
+      "sha256": "a774d4fa357765d8e059c86aaea3242bd4b131d77f9ec77e33be2c1cb730f45f"
+    },
+    {
+      "name": "zstd/zstd.c (embedded notice)",
+      "path": "third_party/zstd/zstd.c",
+      "offset": 1992071,
+      "length": 1187,
+      "sha256": "a774d4fa357765d8e059c86aaea3242bd4b131d77f9ec77e33be2c1cb730f45f"
+    },
+    {
+      "name": "Monocypher (BSD-2-Clause option)",
+      "path": "third_party/monocypher/monocypher.c",
+      "offset": 0,
+      "length": 2403,
+      "sha256": "02174117935699d418443c75a558a287deb06ef8cf7c1adced61d9047d2f323d"
+    },
+    {
+      "name": "Monocypher (BSD-2-Clause option)",
+      "path": "third_party/monocypher/monocypher.h",
+      "offset": 0,
+      "length": 2446,
+      "sha256": "fcaf6ed771358bb4f40fba016f6518ae86ec02b1b877d2cc35ad92d3a26fd7b3"
+    },
+    {
+      "name": "Dear ImGui embedded font (MIT; terms above)",
+      "path": "third_party/imgui/imgui_draw.cpp",
+      "offset": 371873,
+      "length": 58,
+      "sha256": "da21a403584202725ded27a7a86a36df728aa644137ab9c24a8e9afb1622c0b8"
+    },
+    {
+      "name": "Dear ImGui embedded font (MIT; terms above)",
+      "path": "third_party/imgui/imgui_draw.cpp",
+      "offset": 403823,
+      "length": 89,
+      "sha256": "da21a403584202725ded27a7a86a36df728aa644137ab9c24a8e9afb1622c0b8"
+    },
+    {
+      "name": "xatlas upstream components (MIT; terms above)",
+      "path": "third_party/xatlas/xatlas.cpp",
+      "offset": 1082,
+      "length": 275,
+      "sha256": "0ed0283aad005c94738cb0cc4612dba264379d29dea5b3c9b242f2d4752d5df4"
+    },
+    {
+      "name": "Zstandard additional attribution (BSD option; terms above)",
+      "path": "third_party/zstd/zstd.c",
+      "offset": 153401,
+      "length": 460,
+      "sha256": "a774d4fa357765d8e059c86aaea3242bd4b131d77f9ec77e33be2c1cb730f45f"
+    },
+    {
+      "name": "Zstandard additional attribution (BSD option; terms above)",
+      "path": "third_party/zstd/zstd.c",
+      "offset": 363087,
+      "length": 349,
+      "sha256": "a774d4fa357765d8e059c86aaea3242bd4b131d77f9ec77e33be2c1cb730f45f"
+    }
+  ]
+}

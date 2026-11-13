@@ -45,8 +45,12 @@ for chosen in cases:
     cmd = [str(aiversebuild), "--engine", str(engine), "--project", str(game), "--target", "android", "--out", str(out), "--generate-only"]
     if chosen:
         cmd += ["--plugins", ",".join(chosen)]
+    # Synthetic notices are only for export-isolation tests, never a release artifact.
+    (game / "fixture-sdk-notices.txt").write_text("TEST FIXTURE ONLY - not SDK license clearance.\n")
+    cfg["plugins"] = {name: {"notices": ["fixture-sdk-notices.txt"]} for name in chosen}
+    (game / "game.json").write_text(json.dumps(cfg))
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
-    proj = next((out / "android").iterdir())
+    proj = next(p for p in (out / "android").iterdir() if p.is_dir())
     main = proj / "app" / "src" / "main"
     manifest = (main / "AndroidManifest.xml").read_text(encoding="utf-8")
     gradle = (proj / "app" / "build.gradle").read_text(encoding="utf-8")

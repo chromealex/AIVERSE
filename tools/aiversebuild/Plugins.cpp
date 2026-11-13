@@ -12,6 +12,7 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
@@ -28,7 +29,7 @@ void writeFile(const fs::path& p, const std::string& s) {
 
 struct Loaded {
     std::string name;
-    fs::path dir;
+    fs::path dir, project;
     json::Value manifest;  // plugin.json
     json::Value config;    // game.json config, resolved for the platform
 };
@@ -163,6 +164,7 @@ PluginSet loadPlugins(const fs::path& engine, const fs::path& project, const std
         Loaded l;
         l.name = name;
         l.dir = dir;
+        l.project = project;
         std::string err;
         if (!json::parse(json::stripComments(readFile(dir / "plugin.json")), l.manifest, &err)) {
             set.notes.push_back(name + ": plugin.json: " + err + " — skipped");
@@ -177,6 +179,38 @@ PluginSet loadPlugins(const fs::path& engine, const fs::path& project, const std
         out.push_back(std::move(l));
     }
     return set;
+}
+
+fs::path writePluginNotices(const PluginSet& set, const fs::path& dir) {
+    std::string text;
+    for (const Loaded& l : loaded(set)) {
+        const auto native = section(l, set.platform);
+        std::vector<fs::path> files;
+        for (const auto& v : {l.manifest["notices"], native["notices"]})
+            for (const auto& f : strings(v)) files.push_back(l.dir / expand(f, l));
+        for (const auto& f : strings(l.config["notices"])) files.push_back(l.project / expand(f, l));
+        bool external = false;
+        for (const char* key : {"dependencies", "platformDependencies", "pods", "libraries", "runtime", "scripts"})
+            external |= !strings(native[key]).empty();
+        if (external && files.empty())
+            throw std::runtime_error("Plugin " + l.name + " (" + set.platform +
+                "): external SDK notices are missing. Set plugins." + l.name +
+                ".notices in game.json to project-relative text files covering the resolved SDK and its dependencies.");
+        for (const auto& f : files) {
+            const std::string content = readFile(f);
+            if (content.find_first_not_of(" \t\r\n") == std::string::npos)
+                throw std::runtime_error("Missing or empty plugin notice: " + f.string());
+            text += "\n=== " + l.name + " (" + set.platform + ") / " + f.filename().string() + " ===\n" + content + "\n";
+        }
+    }
+    const fs::path file = dir / "plugin-notices.txt";
+    // Always replace it, including after deselecting a plugin.
+    fs::create_directories(dir);
+    std::ofstream stream(file, std::ios::binary);
+    stream << (text.empty() ? "No additional SDK notices for the selected plugins.\n" : text);
+    stream.close();
+    if (!stream) throw std::runtime_error("Cannot write plugin notices: " + file.string());
+    return file;
 }
 
 fs::path writePluginsCMake(const PluginSet& set, const fs::path& dir) {
@@ -252,6 +286,8 @@ fs::path writePluginsCMake(const PluginSet& set, const fs::path& dir) {
     text += ")\nset(AIVERSE_PLUGIN_PLIST_XML " + cmakeQuoteText(plistXml) + ")\n";
     // desktop mocks only when the game asked for them: otherwise not even compiled into the app
     text += std::string("set(AIVERSE_MOCK_PLUGINS ") + (set.mocks ? "ON" : "OFF") + ")\n";
+    writePluginNotices(set, dir);
+    text += "set(AIVERSE_PLUGIN_NOTICES \"${CMAKE_CURRENT_LIST_DIR}/plugin-notices.txt\")\n";
     fs::path file = dir / "plugins.cmake";
     writeFile(file, text);
     return file;

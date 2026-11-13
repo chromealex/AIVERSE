@@ -460,3 +460,11 @@ ToWebPage / ToStore; InviteUserToGame / ActivateGameOverlayInviteDialogConnectSt
   compiled here (no Xcode). `applovin`/`ironsource`: APIs taken from the official integration
   guides and demo apps, not yet run on a device. `yandex-ads` iOS: some Objective-C selectors are derived from the Swift
   API (marked in the source).
+
+## SDK license notices
+
+Game packaging requires original notices for selected external SDKs and their resolved
+transitive dependencies. Set `plugins.<name>.notices` in `game.json` to project-relative
+text files (platform overrides are supported). Plugin manifests can provide `notices`
+relative to their folder. Missing or empty notices fail packaging. See
+[Third-party notices](third-party-notices.md) for the audit, examples and artifact locations.

@@ -49,6 +49,9 @@ PluginSet loadPlugins(const std::filesystem::path& engine, const std::filesystem
 // Returns the plugins.cmake path (written even when empty, so stale plugins never leak in).
 std::filesystem::path writePluginsCMake(const PluginSet& set, const std::filesystem::path& dir);
 
+// Consolidated notices for selected SDKs; fails if an external SDK has no notices.
+std::filesystem::path writePluginNotices(const PluginSet& set, const std::filesystem::path& dir);
+
 // Desktop: shared libraries the plugins need next to the executable (also in plugins.cmake).
 std::vector<std::filesystem::path> runtimeFiles(const PluginSet& set);
 

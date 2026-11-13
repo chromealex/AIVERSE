@@ -292,6 +292,7 @@ Los documentos de referencia están en inglés. La visión completa, el asistent
 
 ## Licencia
 
-[MIT](LICENSE). Las bibliotecas de terceros están en `third_party/` con sus propias licencias (solo MIT,
-BSD, zlib, OFL, CC0 y CC-BY). No se incluyen recursos originales de juegos comerciales: los importadores
+[MIT](LICENSE). Las bibliotecas de terceros están en `third_party/` con sus propias licencias (entre otras, MIT, MIT-0, BSD, ISC, zlib, OFL, CC0 y CC-BY). No se incluyen recursos originales de juegos comerciales: los importadores
 los leen desde tu propia copia.
+
+Las compilaciones incluyen automáticamente `THIRD_PARTY_NOTICES.txt`; el proyecto debe aportar los avisos de los SDK externos (ver [detalles](docs/third-party-notices.md)).

@@ -294,5 +294,7 @@ Les documents de référence sont en anglais. La vue d’ensemble, l’assistant
 ## Licence
 
 [MIT](LICENSE). Les bibliothèques tierces se trouvent dans `third_party/` avec leurs propres licences
-(uniquement MIT, BSD, zlib, OFL, CC0 et CC-BY). Les ressources originales des jeux commerciaux ne sont pas
+(notamment MIT, MIT-0, BSD, ISC, zlib, OFL, CC0 et CC-BY). Les ressources originales des jeux commerciaux ne sont pas
 incluses : les importateurs les lisent depuis votre propre copie.
+
+Les builds incluent automatiquement `THIRD_PARTY_NOTICES.txt` ; le projet doit fournir les mentions des SDK externes (voir les [détails](docs/third-party-notices.md)).

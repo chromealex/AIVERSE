@@ -291,5 +291,7 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 ## ライセンス
 
 [MIT](LICENSE)。サードパーティのライブラリは `third_party/` にそれぞれのライセンスとともに置かれています
-（MIT、BSD、zlib、OFL、CC0、CC-BY のみ）。商用ゲームのオリジナルアセットは含まれていません。
+（MIT、MIT-0、BSD、ISC、zlib、OFL、CC0、CC-BY など）。商用ゲームのオリジナルアセットは含まれていません。
 インポーターはあなた自身のコピーから読み込みます。
+
+ゲームのビルドには `THIRD_PARTY_NOTICES.txt` が自動的に含まれます。外部 SDK のライセンス通知はプロジェクトで用意してください（[詳細](docs/third-party-notices.md)）。

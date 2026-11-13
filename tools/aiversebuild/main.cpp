@@ -42,6 +42,7 @@
 #include <windows.h>   // SetFileAttributesW: hide Builds/.temp
 #endif
 #include "UiSpriteSheets.h"
+#include "Notices.h"
 #include "engine/platform/EngineDir.h"
 #include <algorithm>
 #include <array>
@@ -643,6 +644,7 @@ std::string cmakeVars(const Game& g, const Options& o, const fs::path& content, 
     std::string s;
     s += " -DCMAKE_BUILD_TYPE=" + o.config;
     s += " -DAIVERSE_CONTENT_DIR=" + quote(content);
+    s += " -DAIVERSE_PROJECT_NOTICES=" + quote(tempDir(o) / "project-notices.txt");
     // Each project selects its own native/ directory, including when reusing a CMake cache.
     s += " -DAIVERSE_NATIVE_DIR=";
     s += " -DAIVERSE_GAME_NAME=" + quote(g.name);
@@ -668,6 +670,8 @@ void exportSources(const Options& o, const fs::path& dst) {
     for (const char* d : {"engine", "modules", "third_party", "platform", "libraries"}) copyDir(o.engine / d, dst / d);
     copyDir(o.engine / "apps" / "client", dst / "apps" / "client");
     copyFile(o.engine / "CMakeLists.txt", dst / "CMakeLists.txt");
+    copyFile(o.engine / "LICENSE", dst / "LICENSE");
+    copyFile(tempDir(o) / "project-notices.txt", dst / "project-notices.txt");
     // Source exports must retain compiled modules even when runtime data is packed.
     if (fs::exists(o.project / "native" / "CMakeLists.txt"))
         copyDir(o.project / "native", dst / "native");
@@ -740,6 +744,7 @@ void buildIOS(const Game& g, Options& o) {
 
     step("iOS: генерация Xcode-проекта");
     std::string vars = cmakeVars(g, o, src / "content", gen);
+    vars += " -DAIVERSE_PROJECT_NOTICES=" + quote(src / "project-notices.txt");
     vars += o.pack ? " -DAIVERSE_CONTENT_PACK=" + quote(src / "content" / "content.rpak") : std::string(" -DAIVERSE_CONTENT_PACK=");
     if (!o.team.empty()) vars += " -DAIVERSE_APPLE_TEAM_ID=" + o.team;
     mustRun("cmake -S " + quote(src) + " -B " + quote(xc) + " -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0" + vars);
@@ -838,6 +843,7 @@ void buildAndroid(const Game& g, Options& o) {
     aiverse::build::writePluginsCMake(plugins, proj / "app" / "src" / "main" / "cpp");
     aiverse::build::copyAndroidJava(plugins, proj / "app" / "src" / "main" / "java");
     placeContent(o, proj / "app" / "src" / "main" / "assets" / "content");
+    copyFile(out / "THIRD_PARTY_NOTICES.txt", proj / "THIRD_PARTY_NOTICES.txt");
     step("Android: иконки и экран запуска");
     aiverse::build::brandAndroid(branding(g, o), proj, info);
     if (!sdk.empty()) {
@@ -953,6 +959,7 @@ void buildWindows(const Game& g, Options& o) {
         fs::create_directories(out / g.exe);
         copyFile(bdir / (g.exe + ".exe"), out / g.exe / (g.exe + ".exe"));
         copyPluginRuntime(o, "windows", out / g.exe);
+        copyFile(out / "THIRD_PARTY_NOTICES.txt", out / g.exe / "THIRD_PARTY_NOTICES.txt");
         placeContent(o, out / g.exe / "content");
         info("Готово: " + (out / g.exe / (g.exe + ".exe")).string());
         reportSize(o, "windows", out / g.exe);
@@ -989,6 +996,7 @@ void buildLinux(const Game& g, Options& o) {
     fs::create_directories(out / g.exe);
     copyFile(bdir / g.exe, out / g.exe / g.exe);
     copyPluginRuntime(o, "linux", out / g.exe);
+    copyFile(out / "THIRD_PARTY_NOTICES.txt", out / g.exe / "THIRD_PARTY_NOTICES.txt");
     placeContent(o, out / g.exe / "content");
     aiverse::build::brandLinux(branding(g, o), out / g.exe, info);   // share/icons/hicolor + share/applications/<exe>.desktop
     info("Готово: " + (out / g.exe / g.exe).string());
@@ -1146,6 +1154,8 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+    try {
+    aiverse::build::collectProjectNotices(o.project, o.out, tempDir(o) / "project-notices.txt");
     std::vector<std::string> targets;
     if (o.target == "all") targets = {"macos", "ios", "android", "web", "windows", "linux"};
     else targets = {o.target};
@@ -1153,6 +1163,22 @@ int main(int argc, char** argv) {
     for (auto& t : targets) {
         o.profile = t;
         if (!ensureToolchain(t, o)) { missing.push_back(t); continue; }
+        const auto noticePlugins = pluginsFor(o, t);
+        const auto pluginNotices = aiverse::build::writePluginNotices(noticePlugins, tempDir(o) / "notices" / t);
+        std::string toolchainNotices;
+        if (t == "android") {
+            const fs::path ndk = androidSdk() / "ndk" / newestSubdir(androidSdk() / "ndk");
+            for (const char* name : {"NOTICE", "NOTICE.toolchain"}) if (fs::exists(ndk / name)) {
+                if (!toolchainNotices.empty()) toolchainNotices += ";";
+                toolchainNotices += (ndk / name).string();
+            }
+        }
+        mustRun("cmake -DAIVERSE_NOTICE_ROOT=" + quote(o.engine) +
+                " -DAIVERSE_NOTICE_OUTPUT=" + quote(o.out / t / "THIRD_PARTY_NOTICES.txt") +
+                " -DAIVERSE_PROJECT_NOTICES=" + quote(tempDir(o) / "project-notices.txt") +
+                " -DAIVERSE_PLUGIN_NOTICES=" + quote(pluginNotices) +
+                " -DAIVERSE_TOOLCHAIN_NOTICES=" + quote(toolchainNotices) +
+                " -P " + quote(o.engine / "platform" / "cmake" / "GenerateNotices.cmake"));
         if (t == "macos") buildMac(g, o);
         else if (t == "ios") buildIOS(g, o);
         else if (t == "android") buildAndroid(g, o);
@@ -1168,5 +1194,6 @@ int main(int argc, char** argv) {
         return aiverse::build::kExitMissingToolchain;
     }
     std::cout << "\nСборка завершена." << std::endl;
+    } catch (const std::exception& e) { die(e.what()); }
     return 0;
 }

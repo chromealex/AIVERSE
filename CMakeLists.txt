@@ -526,7 +526,10 @@ target_link_libraries(aiverse_game_view PUBLIC aiverse_game aiverse_models aiver
 target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 
 # Helper: package content + platform metadata around an executable.
+include(platform/cmake/ThirdPartyNotices.cmake)
+
 function(aiverse_package_app target)
+    aiverse_package_notices(${target})
     # the editor's project file (<Title>.aiverse, legacy .aiverse) is not game content: dropped from loose dev bundles
     file(GLOB _aiverse_projfiles RELATIVE "${AIVERSE_CONTENT_DIR}" "${AIVERSE_CONTENT_DIR}/*.aiverse" "${AIVERSE_CONTENT_DIR}/*.aiverse")
     set(_aiverse_rm_exe "")
@@ -618,6 +621,7 @@ if(AIVERSE_BUILD_CLIENT)
         target_link_libraries(main PRIVATE aiverse_runtime aiverse_game_view aiverse_game_audio)
         # Keep ANativeActivity_onCreate from the glue library.
         set_target_properties(main PROPERTIES LINK_FLAGS "-u ANativeActivity_onCreate")
+        aiverse_package_notices(main)
         set(AIVERSE_CLIENT_TARGET main)
     else()
         add_executable(aiverse_client apps/client/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)

@@ -287,6 +287,8 @@ claude mcp add aiverse -- /path/to/aiversemcp --engine /path/to/AIVERSE
 
 ## 라이선스
 
-[MIT](LICENSE). 서드파티 라이브러리는 각자의 라이선스와 함께 `third_party/`에 있습니다(MIT, BSD, zlib,
-OFL, CC0, CC-BY만 허용). 상용 게임의 원본 에셋은 포함되어 있지 않으며, 임포터는 사용자가 소유한 사본에서
+[MIT](LICENSE). 서드파티 라이브러리는 각자의 라이선스와 함께 `third_party/`에 있습니다(MIT, MIT-0, BSD, ISC, zlib,
+OFL, CC0, CC-BY 등). 상용 게임의 원본 에셋은 포함되어 있지 않으며, 임포터는 사용자가 소유한 사본에서
 읽어 옵니다.
+
+게임 빌드에는 `THIRD_PARTY_NOTICES.txt`가 자동으로 포함됩니다. 외부 SDK의 라이선스 고지는 프로젝트에서 제공해야 합니다([자세히 보기](docs/third-party-notices.md)).
