@@ -377,7 +377,8 @@ void RtsModule::sysGarrison(Simulation& sim) {
             if (o.player < collector.size() && collector[o.player].second && collector[o.player].first != e) {
                 // BW RedirectProduction.SendUnits: the normal delta goes to the pool; a growing house adds addUnitsPerSecond instead
                 StatusInst& pool = *collector[o.player].second;
-                const Fixed rate = stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                Fixed rate = stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) rate = rate * coreRate[o.player];   // battle core: Player.GetIncreaseRate
                 const Fixed delta = g.count < cap ? dt * rate : Fixed{};   // HouseModule: 0 when it cannot grow
                 pool.acc += delta;
                 if (delta.raw > 0) {
