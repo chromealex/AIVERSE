@@ -33,7 +33,7 @@
          sceneCam.target={float(spawn[0].toDouble()),0,float(spawn[2].toDouble())};sceneCam.distance=35;
 @@ -591,5 +591,5 @@
 
- 
+
  void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) {
 -    if(ws_.project.isFps()){if(vp.color.valid())renderFpsScene(vp,cam);return;}
 +    if(ws_.project.isStandalone()){if(vp.color.valid())renderFpsScene(vp,cam);return;}
@@ -41,7 +41,7 @@
      if (playing()) { renderGame(vp, cam); return; }
 @@ -722,5 +722,5 @@
 
- 
+
  void Editor::startPlay(int humanSlot) {
 -    if(ws_.project.isFps()){startFpsPlay();return;}
 +    if(ws_.project.isStandalone()){startFpsPlay();return;}
@@ -54,7 +54,7 @@
 
 @@ -59,5 +59,5 @@
 
- 
+
  void Editor::startClientPlay() {
 -    if(ws_.project.isFps()){startFpsPlay();return;}
 +    if(ws_.project.isStandalone()){startFpsPlay();return;}
@@ -185,7 +185,7 @@
 
 @@ -237,5 +237,5 @@
 
- 
+
  void Editor::updateWorld() {
 -    if(ws_.project.isFps())return; // FPS has its own document hierarchy; never build an RTS preview.
 +    if(ws_.project.isStandalone())return; // FPS has its own document hierarchy; never build an RTS preview.
@@ -280,7 +280,7 @@
 
 @@ -34,4 +34,10 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
@@ -297,7 +297,7 @@
 
 @@ -53,4 +53,9 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
@@ -313,7 +313,7 @@
 
 @@ -60,4 +60,9 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
@@ -329,7 +329,7 @@
 
 @@ -21,4 +21,9 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
@@ -345,7 +345,7 @@
 
 @@ -16,4 +16,9 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
@@ -361,7 +361,7 @@
 
 @@ -24,4 +24,9 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
@@ -377,7 +377,7 @@
 
 @@ -36,4 +36,9 @@
 
- 
+
      void draw(Editor& ed) override {
 +        if(ed.ws().project.isGenre()) {
 +            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
