@@ -22,7 +22,7 @@ constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
-                   kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096, kKeyLodFade = 8192;   // GI keys: agent-lightbake
+                   kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096, kKeyLodFade = 8192, kKeyMaterialPalette = 16384;   // GI keys: agent-lightbake
 struct ProfileTimer {
     double* value;
     std::chrono::steady_clock::time_point start;
@@ -105,6 +105,7 @@ void Renderer3D::setMaterialQuality(MaterialQuality q) {
 gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bool instanced) {
     const bool shadow = phase == 0, outline = phase == 3, depthAfter = phase == 4;
     const bool skinned = it.joints >= 0, baked = it.baked, morph = it.morph >= 0;
+    const bool materialPalette = phase == 1 && it.paletteMaterials;
     const bool lodFade = it.lodThreshold<1 || it.lodInvert;
     const bool mask = !outline && it.mat->alpha == AlphaMode::Mask;
     const bool normalMap = phase != 0 && !outline && it.mat->normalTex >= 0 && matQuality_ != MaterialQuality::Low;
@@ -115,7 +116,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const uint32_t shaderKey = (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
-                               (lightmap ? kKeyLightmap : 0u) | (probes ? kKeyProbes : 0u) | (lodFade ? kKeyLodFade : 0u);
+                               (lightmap ? kKeyLightmap : 0u) | (probes ? kKeyProbes : 0u) | (lodFade ? kKeyLodFade : 0u) | (materialPalette ? kKeyMaterialPalette : 0u);
     const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
     const auto selectedGraph=it.mat->shaderGraph && int(matQuality_)>=it.mat->shaderGraph->minQuality?it.mat->shaderGraph:nullptr;
@@ -134,6 +135,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (morph) defs += "#define MORPH 1\n";
         if (normalMap) defs += "#define NORMALMAP 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
+        if (materialPalette) defs += "#define MATERIAL_PALETTE 1\n";
         if (lodFade) defs += "#define LODFADE 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
         if (lightmap) defs += "#define LIGHTMAP 1\n";
@@ -339,7 +341,11 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         meshIndex=part?lodBlend.incoming:lodBlend.mesh;
         const MeshDef& drawMesh = m->meshes[size_t(meshIndex)];
         const bool shadowBatch = !m->geometry && !d.nodeMaterial && d.variant < 0 && shadowBatchCompatible(drawMesh, mats);
-        auto addItem = [&](const Primitive& p, uint8_t shadowRole) {
+        std::vector<const MaterialBatch*> colourBatches;
+        if (!m->geometry && !d.nodeMaterial && d.variant < 0 && d.tint.w >= .99f && !transparentItem(d.flags))
+            for (const auto& batch : drawMesh.materialBatches)
+                if (materialBatchCompatible(drawMesh, batch, mats)) colourBatches.push_back(&batch);
+        auto addItem = [&](const Primitive& p, uint8_t shadowRole, uint8_t materialRole = 0) {
             if (p.indexCount == 0) return;
             int mi = p.material;
             if (d.variant >= 0 && d.variant < int(p.variantMaterial.size()) && p.variantMaterial[size_t(d.variant)] >= 0) mi = p.variantMaterial[size_t(d.variant)];
@@ -350,7 +356,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.firstIndex = p.firstIndex; it.indexCount = p.indexCount;
             size_t pi = cache?cache->primitiveOffsets[size_t(meshIndex)]:0;
             if(!cache)for (int mesh = 0; mesh < meshIndex; ++mesh) pi += m->meshes[size_t(mesh)].primitives.size();
-            it.geometryPrimitive = shadowRole == 2 ? 0 : pi + size_t(&p - m->meshes[size_t(meshIndex)].primitives.data());
+            it.geometryPrimitive = shadowRole == 2 || materialRole == 2 ? 0 : pi + size_t(&p - m->meshes[size_t(meshIndex)].primitives.data());
             it.model = m; it.prim = &p; it.mat = &mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))];
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
@@ -389,10 +395,19 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.depth = cam_.ortho ? dot(wc - camPos_, normalize(cam_.target - camPos_)) : length(wc - camPos_);
             bakedItem(it, d, n);
             it.shadowRole = shadowRole;
+            it.materialRole = materialRole;
+            if (materialRole == 2) it.paletteMaterials = &mats;
             if (shadowRole == 2) it.inView = false;   // the batch exists only for shadow passes
             modelItems_.push_back(it);
         };
-        for (const Primitive& p : drawMesh.primitives) addItem(p, shadowBatch && p.shadowBatched ? 1 : 0);
+        for (size_t i = 0; i < drawMesh.primitives.size(); ++i) {
+            const auto& p = drawMesh.primitives[i];
+            bool covered = false;
+            for (const auto* batch : colourBatches)
+                covered |= std::find(batch->parts.begin(), batch->parts.end(), i) != batch->parts.end();
+            addItem(p, shadowBatch && p.shadowBatched ? 1 : 0, covered ? 1 : 0);
+        }
+        for (const auto* batch : colourBatches) addItem(batch->primitive, 0, 2);
         if (shadowBatch) addItem(drawMesh.shadowBatch, 2);
         }
     }
@@ -458,6 +473,16 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         dev_->setTexture(8, it.model->morphTex.valid() ? it.model->morphTex : white_);
     }
     if (it.gi && (phase == 1 || phase == 2)) bindBakedGI(it);
+    if (phase == 1 && it.paletteMaterials) {
+        float palette[kMaxMaterialPalette * 8] = {};
+        for (size_t i = 0; i < it.paletteMaterials->size(); ++i) {
+            const auto& m = (*it.paletteMaterials)[i];
+            float* p = palette + i * 8;
+            p[0] = m.baseColor.x; p[1] = m.baseColor.y; p[2] = m.baseColor.z; p[3] = m.baseColor.w;
+            p[4] = m.metallic; p[5] = m.roughness;
+        }
+        dev_->setUniforms(3, palette, sizeof palette);
+    }
     if (it.joints >= 0) dev_->setUniforms(3, jointData_.data() + it.joints, kJointFloats * sizeof(float));
     else if (it.baked && (!lastItem_ || !lastItem_->baked || lastItem_->prim != it.prim)) {
         float pal[80] = {};
@@ -501,6 +526,7 @@ void Renderer3D::renderModels(int phase) {
             take=geometryBoxVisible(lightViewProj_*it.world,it.prim->boundsMin,it.prim->boundsMax);
         // Reflection has its own view, never consume main-view occlusion there.
         if (phase == 1 && !geometryMainView_) take = it.shadowRole != 2 && !blended && (it.mat->shaderGraph || geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax));
+        if ((it.materialRole == 1 && phase == 1) || (it.materialRole == 2 && phase != 1)) take = false;
         if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && !it.mat->shaderGraph && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
             geometryOcclusion_.hidden(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax)) {
             if (phase == 1 || phase == 2) ++geometryStats_.occluded;
@@ -532,7 +558,7 @@ void Renderer3D::renderModels(int phase) {
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
         if((x.lodThreshold<1 || x.lodInvert)!=(y.lodThreshold<1 || y.lodInvert))return false;
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
-        return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && x.gi == y.gi && x.lmPage == y.lmPage &&
+        return x.paletteMaterials == y.paletteMaterials && x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && x.gi == y.gi && x.lmPage == y.lmPage &&
                (x.flags & (kDrawFadeDepth | kDrawTransparent)) == (y.flags & (kDrawFadeDepth | kDrawTransparent));
     };
     for (size_t i = 0; i < order_.size();) {
