@@ -185,7 +185,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 **グラフィックとサウンド**
 - 独自 RHI：Metal、GLES3 / WebGL2、GL 3.3
-- PBR、glTF/OBJ、スケルタル/プロシージャルアニメーション
+- PBR、glTF/OBJ、スケルタル/プロシージャルアニメーション、プロシージャルケーブル
 - 影、動的ライト、夜、ポストエフェクト、Shader Graph
 - Unity ParticleSystem のモジュールに対応したパーティクルと Unity からのインポーター
 - 2D：スプライト、オートタイル付きタイルマップ

@@ -35,6 +35,17 @@ double volume(const Mesh &m) {
 }
 int main() {
     try {
+        auto cableDoc = emptyDocument();
+        cableDoc.set("nodes", Json::parse(R"([{"id":"wire","geometry":{"kind":"cable","anchors":[[0,3,0],[6,4,0],[10,3,3]],"strands":3,"sag":0.5}}])"));
+        geometry(Json::parse(R"({"kind":"cable","anchors":[[0,0,0],[3,0,0]],"segments":2})"));
+        geometry(Json::parse(R"({"kind":"cable","anchors":[[0,0,0],[3,0,0]],"segments":256})"));
+        auto cableBuilt = build(cableDoc);
+        auto cableBytes = exportGlb(*cableBuilt.model);
+        auto cableLoaded = loadModel("cables.glb", [&](const std::string &, std::string &s) {s=cableBytes;return true;});
+        check(cableLoaded->indices.size()==cableBuilt.model->indices.size(), "cable GLB roundtrip");
+        rejects([] {geometry(Json::parse(R"({"kind":"cable","anchors":[[0,0,0],[0,0,0]]})"));}, "invalid cable anchors");
+        rejects([] {geometry(Json::parse(R"({"kind":"cable","anchors":[[0,0,0],[3,0,0]],"strands":1.5})"));}, "fractional strands");
+        rejects([] {geometry(Json::parse(R"({"kind":"cable","anchors":[null,[3,0,0]]})"));}, "null cable anchor");
         auto doc = robotDocument();
         auto b = build(doc);
         check(b.model->nodes.size() == 34, "robot hierarchy");

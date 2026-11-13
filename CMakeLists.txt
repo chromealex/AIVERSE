@@ -1474,11 +1474,24 @@ if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
     endif()
 endif()
 
+# Independently selectable CPU cable geometry; no renderer, physics or GPU link.
+add_library(aiverse_cables STATIC EXCLUDE_FROM_ALL engine/cables/Cables.cpp)
+add_library(AIVERSE::cables ALIAS aiverse_cables)
+target_include_directories(aiverse_cables PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(NOT MSVC)
+    target_compile_options(aiverse_cables PRIVATE -Wall -Wextra)
+endif()
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_cables_tests tests/cables/cables.cpp)
+    target_link_libraries(aiverse_cables_tests PRIVATE AIVERSE::cables)
+    add_test(NAME cables_geometry COMMAND aiverse_cables_tests)
+endif()
+
 # Host authoring: shared by the editor, MCP and CPU tests.
 if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
-    add_library(aiverse_modeling STATIC tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
+    add_library(aiverse_modeling STATIC tools/modeling/Cable.cpp tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
         tools/modeling/Document.cpp tools/modeling/Export.cpp tools/modeling/Clips.cpp tools/modeling/Recipes.cpp)
-    target_link_libraries(aiverse_modeling PUBLIC aiverse_models)
+    target_link_libraries(aiverse_modeling PUBLIC aiverse_models AIVERSE::cables)
     target_include_directories(aiverse_modeling PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
