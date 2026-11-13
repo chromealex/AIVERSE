@@ -127,11 +127,11 @@ TEST(geometry_static_cache_matches_and_rejects_stale_transform) {
 TEST(geometry_instancing_caps_and_preserves_every_instance) {
     using namespace render;
     for(size_t bytes:{size_t(4096),size_t(32768)}){
-        entityfxtest::RecordingDevice dev;dev.uniformLimit=bytes;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);CHECK(r.instanceLimit()==bytes/128);
+        entityfxtest::RecordingDevice dev;dev.uniformLimit=bytes;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);CHECK(r.instanceLimit()==bytes/144);
         auto m=geometrytest::grid(2);uploadModel(dev,m);RTSCamera cam;cam.pitch=0;cam.distance=20;r.beginScene(cam,800,600);
         for(int i=0;i<513;++i){ModelDraw d;d.model=&m;d.flash=float(i)/1024;r.drawModel(d);}r.render(gfx::PassDesc{});
-        size_t total=0;for(const auto& draw:dev.draws){CHECK(draw.instances<=bytes/128);CHECK(draw.inst.size()*sizeof(float)<=bytes);for(size_t i=0;i<draw.instances;++i)CHECK(draw.inst[i*32+23]==float(total+i)/1024);total+=draw.instances;}
-        CHECK(total==513);CHECK(dev.draws.size()==(513+bytes/128-1)/(bytes/128));r.setInstanceLimit(32);CHECK(r.instanceLimit()==32);releaseModel(dev,m);r.shutdown();
+        size_t total=0;for(const auto& draw:dev.draws){CHECK(draw.instances<=bytes/144);CHECK(draw.inst.size()*sizeof(float)<=bytes);for(size_t i=0;i<draw.instances;++i)CHECK(draw.inst[i*36+23]==float(total+i)/1024);total+=draw.instances;}
+        CHECK(total==513);CHECK(dev.draws.size()==(513+bytes/144-1)/(bytes/144));r.setInstanceLimit(32);CHECK(r.instanceLimit()==std::min<size_t>(32,bytes/144));releaseModel(dev,m);r.shutdown();
     }
 }
 TEST(geometry_shadow_policy_and_mesh_lod) {
