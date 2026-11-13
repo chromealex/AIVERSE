@@ -32,8 +32,17 @@ AUTOLOD_WORKER="$PWD/build/.temp/autolod/aiverse_lod_simplify" \
 по проекции bounds. Учитываются камера и карта солнечных теней; берётся более
 детальный требуемый уровень. Порог строится из оценки ошибки meshoptimizer с
 бюджетом около 0.5 пикселя и дополнительным ограничением размера объекта.
-Это эвристическая оценка, не строгая граница ошибки изображения. Переход резкий,
-без cross-fade и временного гистерезиса; при движении камеры возможен popping.
+Это эвристическая оценка, не строгая граница ошибки изображения. На medium/high
+непрозрачные модели плавно меняют геометрию в полосе ±15% экранного порога.
+Комплементарный 4×4 dither заменяет пиксели старого LOD пикселями нового, включая
+солнечные тени. Одновременно рисуются не больше двух сеток; вне полосы — одна.
+Переход зависит от размера на экране, а не времени; скачок камеры через всю полосу
+меняет уровень сразу. Близкие пороги делят полосу по середине.
+`Renderer3D::setModelLodFadeWidth(0)` отключает переход (по умолчанию 0.15, максимум 0.49).
+Low, BLEND/transparent-материалы, dissolve и geometry-streaming сохраняют резкую
+смену. Отдельная смена файлов моделей по расстоянию (`view.lod`) не затрагивается.
+Во время перехода возрастает число треугольников; состояние передаётся на экземпляр
+и совместимо с instancing. В профиле `lodTransitionNodes` считает переходящие узлы.
 Автоматический LOD для зеркального/spot-прохода использует выбор основной камеры
 и солнца; отдельный выбор для этих проходов ещё не реализован.
 
@@ -108,3 +117,18 @@ Metal: RGB MAE 0.190/255, PSNR 37.49 dB; различия преимуществ
 
 Общий набор после изменений: **5786 checks, 0 failed**. Headless skirmish и
 mushrooms (seed 3) завершились победителем. GL и Metal собраны без предупреждений.
+
+### LOD transition verification
+
+Build `aiverse_model_lod_transition_test` and `aiverse_model_visibility_test` with
+`AIVERSE_BUILD_AUTOLOD=ON`; run both. `python3 tests/render/check_model_lod_shaders.py`
+requires glslangValidator and compiles/links 32 GLSL 330/GLES 300 variants.
+Use modelview `--lod-report --lod-fade 0.15 --shadows off|high` to compare against
+`--lod-fade 0` and `--no-lod`. The report includes `transitions`.
+
+Verified on macOS Metal with Kingston hospital: LOD0 27,508 triangles, LOD1 18,674,
+transition 46,182 in both colour and sun shadow passes. Original threshold selected
+the transition at `--height 2 --distance 207 --shadows off`. A separate test copy
+with enlarged threshold was used for close-up colour/shadow inspection. Mixed
+transition/full-detail instances rendered correctly; low quality disables fading.
+GLSL variants were compiler-validated; OpenGL/WebGL/Android devices were not run.

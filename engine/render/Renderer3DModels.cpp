@@ -5,6 +5,7 @@
 #include "ModelShaders.h"
 #include "Animation.h"
 #include "ModelVisibility.h"
+#include "ModelLodTransition.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -21,7 +22,7 @@ constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
-                   kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096;   // GI keys: agent-lightbake
+                   kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096, kKeyLodFade = 8192;   // GI keys: agent-lightbake
 struct ProfileTimer {
     double* value;
     std::chrono::steady_clock::time_point start;
@@ -74,7 +75,7 @@ void Renderer3D::shutdownModels() {
 }
 
 void Renderer3D::setInstanceLimit(uint32_t limit) {
-    const auto maximum=dev_?uint32_t(std::clamp<size_t>(dev_->maxUniformBytes()/128,1,256)):32u;
+    const auto maximum=dev_?uint32_t(std::clamp<size_t>(dev_->maxUniformBytes()/144,1,256)):32u;
     const auto next=limit?std::clamp(limit,1u,maximum):maximum;
     if(next==instanceLimit_)return;
     instanceLimit_=next;
@@ -104,6 +105,7 @@ void Renderer3D::setMaterialQuality(MaterialQuality q) {
 gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bool instanced) {
     const bool shadow = phase == 0, outline = phase == 3, depthAfter = phase == 4;
     const bool skinned = it.joints >= 0, baked = it.baked, morph = it.morph >= 0;
+    const bool lodFade = it.lodThreshold<1 || it.lodInvert;
     const bool mask = !outline && it.mat->alpha == AlphaMode::Mask;
     const bool normalMap = phase != 0 && !outline && it.mat->normalTex >= 0 && matQuality_ != MaterialQuality::Low;
     const bool blend = outline || (!shadow && !depthAfter && (it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags)));
@@ -113,7 +115,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const uint32_t shaderKey = (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
-                               (lightmap ? kKeyLightmap : 0u) | (probes ? kKeyProbes : 0u);
+                               (lightmap ? kKeyLightmap : 0u) | (probes ? kKeyProbes : 0u) | (lodFade ? kKeyLodFade : 0u);
     const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) | (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u);
     const auto selectedGraph=it.mat->shaderGraph && int(matQuality_)>=it.mat->shaderGraph->minQuality?it.mat->shaderGraph:nullptr;
@@ -132,6 +134,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (morph) defs += "#define MORPH 1\n";
         if (normalMap) defs += "#define NORMALMAP 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
+        if (lodFade) defs += "#define LODFADE 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
         if (lightmap) defs += "#define LIGHTMAP 1\n";
         if (probes) defs += "#define PROBES 1\n";
@@ -295,6 +298,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (!nodeView && !nodeShadow) ++modelStats_.culledNodes; // retained for later mirror/spot frusta
         }
         int meshIndex = node.mesh; size_t level = 0;
+        ModelLodBlend lodBlend{node.mesh};
         // Palette poses provide conservative current skin bounds. Baked-only draws keep
         // LOD0 until they supply pose bounds; bind bounds can underestimate a bent limb.
         const bool skinLod = node.skin >= 0 && !displaced && usePose && !canBake && d.nodeWorld && d.nodeWorld->size() == m->nodes.size();
@@ -320,15 +324,19 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             float pixels = nodeView ? geometryErrorPixels(viewProj_ * lodWorld, lodMin, lodMax, error, sceneW_, sceneH_, zeroToOne) : 0;
             if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(lightViewProj_ * lodWorld, lodMin, lodMax, error, shadowSize_, shadowSize_, zeroToOne));
             if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity(); // full detail for later mirror/spot frusta
-            for (size_t i = 0; i < baseMesh.lods.size(); ++i) {
-                const auto& lod = baseMesh.lods[i];
-                if (pixels < lod.maxPixels && lod.mesh >= 0 && size_t(lod.mesh) < m->meshes.size()) { meshIndex = lod.mesh; level = i + 1; }
-            }
+            const bool opaque = d.tint.w>=.99f && d.dissolve<=0 && !transparentItem(d.flags) &&
+                std::none_of(mats.begin(),mats.end(),[](const Material& mat){return mat.alpha==AlphaMode::Blend || mat.transparent;});
+            const float fadeWidth = opaque && !m->geometry && matQuality_!=MaterialQuality::Low ? modelLodFadeWidth_ : 0;
+            lodBlend=selectModelLod(node.mesh,baseMesh.lods,pixels,fadeWidth);
+            meshIndex=lodBlend.mesh;level=lodBlend.level;
+            if(lodBlend.incoming>=0)++profile_.lodTransitionNodes;
             if (meshIndex != node.mesh) ++profile_.lodNodes;
         }
         ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
         // Shadow batch (mergeStaticPrimitives): one shadow draw covers the opaque parts of the mesh.
         // Material copies are common in game views; only shadow-incompatible overrides disable batching.
+        for(int part=0;part<(lodBlend.incoming>=0?2:1);++part) {
+        meshIndex=part?lodBlend.incoming:lodBlend.mesh;
         const MeshDef& drawMesh = m->meshes[size_t(meshIndex)];
         const bool shadowBatch = !m->geometry && !d.nodeMaterial && d.variant < 0 && shadowBatchCompatible(drawMesh, mats);
         auto addItem = [&](const Primitive& p, uint8_t shadowRole) {
@@ -338,6 +346,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             if (d.nodeMaterial && size_t(n) < d.nodeMaterial->size() && (*d.nodeMaterial)[size_t(n)] >= 0 && &mats == d.materials) mi = (*d.nodeMaterial)[size_t(n)];
             ModelItem it;
             it.geometry = d.geometry;
+            if(lodBlend.incoming>=0){it.lodThreshold=lodBlend.progress;it.lodInvert=(part==0);}
             it.firstIndex = p.firstIndex; it.indexCount = p.indexCount;
             size_t pi = cache?cache->primitiveOffsets[size_t(meshIndex)]:0;
             if(!cache)for (int mesh = 0; mesh < meshIndex; ++mesh) pi += m->meshes[size_t(mesh)].primitives.size();
@@ -385,6 +394,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         };
         for (const Primitive& p : drawMesh.primitives) addItem(p, shadowBatch && p.shadowBatched ? 1 : 0);
         if (shadowBatch) addItem(drawMesh.shadowBatch, 2);
+        }
     }
 }
 
@@ -399,10 +409,10 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     }
     // Upload the whole instance block declared by this backend's shader variant.
     const uint32_t slots = instanced ? instanceLimit_ : 1u;
-    instData_.assign(size_t(slots) * 32, 0.0f);
+    instData_.assign(size_t(slots) * 36, 0.0f);
     for (uint32_t i = 0; i < count; ++i) {
         const ModelItem& x = modelItems_[items[i]];
-        float* d = instData_.data() + size_t(i) * 32;
+        float* d = instData_.data() + size_t(i) * 36;
         std::memcpy(d, x.world.m, 16 * sizeof(float));
         d[16] = x.tint.x; d[17] = x.tint.y; d[18] = x.tint.z; d[19] = x.tint.w;
         if (phase == 3) { d[20] = x.outline.x; d[21] = x.outline.y; d[22] = x.outline.z; d[23] = 0; }
@@ -411,6 +421,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         d[25] = x.dissolve;
         d[26] = x.outline.w;
         d[27] = phase == 3 ? 0.0f : x.teamGlow;
+        d[32] = x.lodThreshold; d[33] = x.lodInvert ? 1.0f : 0.0f;
         d[28] = x.anim.x; d[29] = x.anim.y; d[30] = x.anim.z; d[31] = x.anim.w;   // w: lightmap uv2 offset.y (agent-lightbake)
     }
     dev_->setUniforms(0, instData_.data(), instData_.size() * sizeof(float));
@@ -519,6 +530,7 @@ void Renderer3D::renderModels(int phase) {
     lastItem_ = nullptr;
     auto batchable = [&](const ModelItem& x) { return modelInstancingEnabled_ && x.joints < 0 && x.morph < 0; };
     auto sameBatch = [&](const ModelItem& x, const ModelItem& y) {
+        if((x.lodThreshold<1 || x.lodInvert)!=(y.lodThreshold<1 || y.lodInvert))return false;
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
         return x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && x.gi == y.gi && x.lmPage == y.lmPage &&
                (x.flags & (kDrawFadeDepth | kDrawTransparent)) == (y.flags & (kDrawFadeDepth | kDrawTransparent));

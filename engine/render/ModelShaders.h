@@ -19,6 +19,7 @@
 //                 vec4 draw (x receive shadow, y dissolve 0..1, z outline width, w team glow: emission = team * w
 //                 on team-coloured surfaces);
 //                 vec4 anim (x baked row A, y baked row B, z A->B mix)
+//                 vec4 lod (x incoming coverage, y outgoing flag); 144 bytes per instance
 //   U1 per frame: as the lit shader (Shaders.h)
 //   U2 material:  vec4 base; vec4 emissive (rgb, linear, premultiplied by strength);
 //                 vec4 pbr (metallic, roughness, normalScale, occlusionStrength);
@@ -41,7 +42,7 @@ namespace aiverse::render::shaders {
 
 #define AIVERSE_GLSL_MODEL_BLOCKS \
     "#if !defined(AIVERSE_INST)\n#define AIVERSE_INST 1\n#endif\n" \
-    "struct Inst { mat4 model; vec4 tint; vec4 team; vec4 draw; vec4 anim; };\n" \
+    "struct Inst { mat4 model; vec4 tint; vec4 team; vec4 draw; vec4 anim; vec4 lod; };\n" \
     "layout(std140) uniform U0 { Inst u_inst[AIVERSE_INST]; };\n" \
     AIVERSE_GLSL_FRAME \
     "layout(std140) uniform U2 { vec4 m_base; vec4 m_emissive; vec4 m_pbr; vec4 m_misc; vec4 m_uv0; vec4 m_uv1; vec4 m_light; };\n" \
@@ -140,6 +141,7 @@ out vec4 v_tan;
 flat out vec4 v_tint;
 flat out vec4 v_team;
 flat out vec4 v_draw;
+flat out vec4 v_lod;
 void main() {
     Inst I = INSTANCE;
     vec4 p = vec4(a_pos, 1.0);
@@ -160,7 +162,7 @@ void main() {
     v_tan = vec4(mat3(I.model) * t, a_tan.w);
     v_uv = uvTransform(a_uv);
     v_col = a_col;
-    v_tint = I.tint; v_team = I.team; v_draw = I.draw;
+    v_tint = I.tint; v_team = I.team; v_draw = I.draw; v_lod = I.lod;
 #if defined(LIGHTMAP)
     v_uv2 = vec2(a_lmuv.x + a_lmuv.y * 256.0, a_lmuv.z + a_lmuv.w * 256.0) * (1.0 / 65535.0) * I.anim.xy + I.anim.zw;
 #endif
@@ -197,6 +199,7 @@ in vec4 v_tan;
 flat in vec4 v_tint;
 flat in vec4 v_team;
 flat in vec4 v_draw;
+flat in vec4 v_lod;
 out vec4 o_color;
 
 vec3 toLinear(vec3 c) { return AIVERSE_HDR != 0 ? rtsSrgbDecode(c) : c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878); }
@@ -211,6 +214,12 @@ float modelNoise3(vec3 x) {
 }
 
 void main() {
+#if defined(LODFADE)
+    ivec2 lp=ivec2(floor(gl_FragCoord.xy)) & ivec2(3);
+    int rank=((lp.x & 1) ^ (lp.y & 1))*8+(lp.y & 1)*4+((lp.x>>1) ^ (lp.y>>1))*2+(lp.y>>1);
+    float noise=(float(rank)+0.5)/16.0;
+    if(v_lod.y>0.5 ? noise<v_lod.x : noise>=v_lod.x)discard;
+#endif
 #if defined(OUTLINE)
     o_color = vec4(rtsEncodeScene(v_team.rgb), v_tint.a);
 #else
@@ -358,13 +367,14 @@ inline const char* kModelShadowVS =
     R"(
 out vec2 v_uv;
 out vec3 v_wpos; out vec3 v_opos; out vec3 v_nrm; out vec4 v_col;
+flat out vec4 v_lod;
 void main() {
     Inst I = INSTANCE;
     vec4 p = vec4(a_pos, 1.0);
     vec3 n = a_nrm, t = a_tan.xyz;
     deform(I, p, n, t);
     // SG_VERTEX
-    v_uv = uvTransform(a_uv);
+    v_uv = uvTransform(a_uv); v_lod=I.lod;
     v_wpos = (I.model*p).xyz; v_opos=p.xyz; v_col=a_col;
     vec3 c0=I.model[0].xyz,c1=I.model[1].xyz,c2=I.model[2].xyz;
     v_nrm=mat3(cross(c1,c2),cross(c2,c0),cross(c0,c1))*n*(dot(c0,cross(c1,c2))<0.0?-1.0:1.0);
@@ -378,7 +388,14 @@ inline const char* kModelShadowFS =
 uniform mediump sampler2D tex1;
 in vec2 v_uv;
 in vec3 v_wpos; in vec3 v_opos; in vec3 v_nrm; in vec4 v_col;
+flat in vec4 v_lod;
 void main() {
+#if defined(LODFADE)
+    ivec2 lp=ivec2(floor(gl_FragCoord.xy)) & ivec2(3);
+    int rank=((lp.x & 1) ^ (lp.y & 1))*8+(lp.y & 1)*4+((lp.x>>1) ^ (lp.y>>1))*2+(lp.y>>1);
+    float noise=(float(rank)+0.5)/16.0;
+    if(v_lod.y>0.5 ? noise<v_lod.x : noise>=v_lod.x)discard;
+#endif
 #if defined(ALPHAMASK)
     vec4 base = m_base * texture(tex1, v_uv);
     // SG_COLOR
@@ -392,7 +409,7 @@ void main() {
 #define AIVERSE_MSL_MODEL_BLOCKS \
     "#include <metal_stdlib>\nusing namespace metal;\n" \
     "#if !defined(AIVERSE_INST)\n#define AIVERSE_INST 1\n#endif\n" \
-    "struct Inst { float4x4 model; float4 tint; float4 team; float4 draw; float4 anim; };\n" \
+    "struct Inst { float4x4 model; float4 tint; float4 team; float4 draw; float4 anim; float4 lod; };\n" \
     "struct MU0 { Inst inst[AIVERSE_INST]; };\n" \
     AIVERSE_MSL_FRAME \
     "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; float4 light; };\n" \
@@ -482,7 +499,7 @@ inline const char* kModelMSL =
 struct VOut {
     float4 pos [[position]];
     float3 wpos; float3 opos; float3 nrm; float2 uv; float4 col; float4 tan;
-    float4 tint [[flat]]; float4 team [[flat]]; float4 draw [[flat]];
+    float4 tint [[flat]]; float4 team [[flat]]; float4 draw [[flat]]; float4 lod [[flat]];
 #if defined(LIGHTMAP)
     float2 uv2;
 #endif
@@ -509,7 +526,7 @@ vertex VOut vs_main(VERTEX_ARGS) {
     o.tan = float4((I.model * float4(d.t, 0.0)).xyz, in.tan.w);
     o.uv = uvTransform(m, in.uv);
     o.col = in.col;
-    o.tint = I.tint; o.team = I.team; o.draw = I.draw;
+    o.tint = I.tint; o.team = I.team; o.draw = I.draw; o.lod = I.lod;
 #if defined(LIGHTMAP)
     o.uv2 = float2(float(in.lmuv.x) + float(in.lmuv.y) * 256.0, float(in.lmuv.z) + float(in.lmuv.w) * 256.0) * (1.0 / 65535.0) * I.anim.xy + I.anim.zw;
 #endif
@@ -544,6 +561,12 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         texture2d<float> tex10 [[texture(10)]], sampler s10 [[sampler(10)]],
                         texture2d<float> tex11 [[texture(11)]], sampler s11 [[sampler(11)]],
                         depth2d<float> tex12 [[texture(12)]], sampler s12 [[sampler(12)]] GI_FARGS) {
+#if defined(LODFADE)
+    uint2 lp=uint2(in.pos.xy) & uint2(3);
+    uint rank=((lp.x & 1u) ^ (lp.y & 1u))*8u+(lp.y & 1u)*4u+((lp.x>>1u) ^ (lp.y>>1u))*2u+(lp.y>>1u);
+    float noise=(float(rank)+0.5)/16.0;
+    if(in.lod.y>0.5 ? noise<in.lod.x : noise>=in.lod.x)discard_fragment();
+#endif
 #if defined(OUTLINE)
     return float4(rtsEncodeScene(in.team.rgb), in.tint.a);
 #else
@@ -687,25 +710,33 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 inline const char* kModelShadowMSL =
     AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_MODEL_VERTEX
     R"(
-struct VOut { float4 pos [[position]]; float2 uv; float3 wpos; float3 opos; float3 nrm; float4 col; };
+struct VOut { float4 pos [[position]]; float2 uv; float3 wpos; float3 opos; float3 nrm; float4 col; float4 lod [[flat]]; };
 vertex VOut vs_main(VERTEX_ARGS) {
     Inst I = INSTANCE;
     Deformed d = deform(in, vid, I SKIN_PASS BAKED_PASS MORPH_PASS);
     // SG_VERTEX
     VOut o;
     o.uv = uvTransform(m, in.uv);
-    o.wpos=(I.model*d.p).xyz; o.opos=d.p.xyz; o.col=in.col;
+    o.lod=I.lod; o.wpos=(I.model*d.p).xyz; o.opos=d.p.xyz; o.col=in.col;
     float3 c0=I.model[0].xyz,c1=I.model[1].xyz,c2=I.model[2].xyz;
     o.nrm=float3x3(cross(c1,c2),cross(c2,c0),cross(c0,c1))*d.n*(dot(c0,cross(c1,c2))<0.0?-1.0:1.0);
     o.pos = f.lightViewProj * (I.model * d.p);
     return o;
 }
-#if defined(ALPHAMASK)
+#if defined(ALPHAMASK) || defined(LODFADE)
 fragment void fs_main(VOut in [[stage_in]], constant MU2& m [[buffer(3)]], constant U1& f [[buffer(2)]],
                       texture2d<float> tex1 [[texture(1)]], sampler s1 [[sampler(1)]]) {
+#if defined(LODFADE)
+    uint2 lp=uint2(in.pos.xy) & uint2(3);
+    uint rank=((lp.x & 1u) ^ (lp.y & 1u))*8u+(lp.y & 1u)*4u+((lp.x>>1u) ^ (lp.y>>1u))*2u+(lp.y>>1u);
+    float noise=(float(rank)+0.5)/16.0;
+    if(in.lod.y>0.5 ? noise<in.lod.x : noise>=in.lod.x)discard_fragment();
+#endif
+#if defined(ALPHAMASK)
     float4 base = m.base * tex1.sample(s1, in.uv);
     // SG_COLOR
     if (base.a < m.misc.x) discard_fragment();
+#endif
 }
 #endif
 )";
