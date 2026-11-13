@@ -68,6 +68,7 @@ void ClientBoot::frame(gfx::Device& dev, double dt) {
     if (leave) {
         for (auto& w : splash_.warnings()) std::fprintf(stderr, "%s\n", w.c_str());
         if (afterLoad_) afterLoad_();
+        if (client_->mapLoading()) { phase_ = Phase::Done; splash_.shutdown(); client_->frame(dev, 0); return; }
         phase_ = Phase::Fading;
         fade_ = 1;
         client_->frame(dev, dt);
@@ -75,6 +76,7 @@ void ClientBoot::frame(gfx::Device& dev, double dt) {
         return;
     }
     splash_.draw(dev, 1, true, px);
+    if (step_ > 1) client_->drawLoadingStatus(dev, dt, splash_.shownProgress(), client_->initLabel(step_));
 }
 
 void ClientBoot::event(const platform::Event& e) {

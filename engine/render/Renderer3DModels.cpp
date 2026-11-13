@@ -70,7 +70,7 @@ void Renderer3D::shutdownModels() {
     modelError_.clear();
     for (auto& [k, p] : modelPipes_) dev_->destroyPipeline(p);
     for (auto& [k, s] : modelShaders_) if (s.shader.valid()) dev_->destroyShader(s.shader);
-    modelPipes_.clear(); modelShaders_.clear();
+    pendingModelPipes_.clear(); modelPipes_.clear(); modelShaders_.clear();
     for (auto t : {white_, black_, flatNormal_}) dev_->destroyTexture(t);
 }
 
@@ -82,7 +82,7 @@ void Renderer3D::setInstanceLimit(uint32_t limit) {
     if(!dev_)return;
     for(auto& [key,p]:modelPipes_)dev_->destroyPipeline(p);
     for(auto& [key,s]:modelShaders_)if(s.shader.valid())dev_->destroyShader(s.shader);
-    modelPipes_.clear();modelShaders_.clear();
+    pendingModelPipes_.clear(); modelPipes_.clear();modelShaders_.clear();
 }
 void StaticModelCache::prepare(const Model& source,const mat4& transform) {
     model=&source;world=transform;transforms.clear();primitiveOffsets.clear();
@@ -99,7 +99,7 @@ void Renderer3D::setMaterialQuality(MaterialQuality q) {
     if (!dev_) return;
     for (auto& [k, p] : modelPipes_) dev_->destroyPipeline(p);
     for (auto& [k, s] : modelShaders_) if (s.shader.valid()) dev_->destroyShader(s.shader);
-    modelPipes_.clear(); modelShaders_.clear();
+    pendingModelPipes_.clear(); modelPipes_.clear(); modelShaders_.clear();
 }
 
 gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bool instanced) {
@@ -125,9 +125,17 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const ModelShaderKey pkey{pipeKey, selectedGraph};
     for (auto& [k, p] : modelPipes_) if (k == pkey) return p;
 
+    for (auto it=pendingModelPipes_.begin();it!=pendingModelPipes_.end();++it) if(it->first==pkey) {
+        gfx::PipelineHandle result;
+        if (!it->second(result)) { warmingPending_=true; return {}; }
+        pendingModelPipes_.erase(it);
+        if (!result.valid()) modelError_="model pipeline: "+dev_->lastError();
+        modelPipes_.push_back({pkey,result}); return result;
+    }
     ShaderEntry* entry = nullptr;
     for (auto& [k, s] : modelShaders_) if (k == skey) entry = &s;
     if (!entry) {
+        if(std::getenv("AIVERSE_STREAM_TRACE"))std::fprintf(stderr,"[stream-pipeline] shader=%u graph=%d\n",shaderKey,graph?1:0);
         std::string defs;
         defs += "#define AIVERSE_INST " + std::to_string(instanced ? instanceLimit_ : 1) + "\n";
         if (skinned) defs += "#define SKINNED 1\n";
@@ -215,8 +223,9 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         // tex11/tex12: SSR scene colour/depth; graph textures follow at kGraphTextureSlot.
         sd.uniformSlots = shadow ? 5 : 6; sd.textureSlots = graph && !graph->textures.empty() ? kGraphTextureSlot+int(graph->textures.size()) : shadow ? 9 : 13; sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
-        e.shader = dev_->createShader(sd);
-        if (!e.shader.valid()) {
+        if (warmingPipelines_) e.job=dev_->createShaderAsync(sd);
+        else e.shader = dev_->createShader(sd);
+        if (!e.job && !e.shader.valid()) {
             e.failed = true;
             modelError_ = "model shader (" + defs + "): " + dev_->lastError();
             std::fprintf(stderr, "%s\n", modelError_.c_str());
@@ -224,6 +233,12 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         modelShaders_.push_back({skey, e});
         entry = &modelShaders_.back().second;
     }
+    if (entry->job) {
+        if (!entry->job(entry->shader)) { warmingPending_=true; return {}; }
+        entry->job={};
+        if (!entry->shader.valid()) { entry->failed=true; modelError_="model shader: "+dev_->lastError(); }
+    }
+    if(std::getenv("AIVERSE_STREAM_TRACE"))std::fprintf(stderr,"[stream-pipeline-state] key=%u phase=%d\n",pipeKey,phase);
     gfx::PipelineHandle ph;
     if (!entry->failed) {
         gfx::PipelineDesc pd;
@@ -249,11 +264,50 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
             pd.colorWrite = false;
         }
         pd.label = shadow ? "model shadow" : outline ? "model outline" : depthAfter ? "model depth" : "model";
-        ph = dev_->createPipeline(pd);
+        if (warmingPipelines_) {
+            auto job=dev_->createPipelineAsync(pd);
+            if (!job(ph)) { pendingModelPipes_.push_back({pkey,std::move(job)}); warmingPending_=true; return {}; }
+        } else ph = dev_->createPipeline(pd);
         if (!ph.valid()) modelError_ = "model pipeline: " + dev_->lastError();
     }
     modelPipes_.push_back({pkey, ph});
     return ph;
+}
+
+bool Renderer3D::warmModelPipelines(const Model& model, const std::vector<Material>* materials) {
+    warmingPipelines_=true; warmingPending_=false;
+    auto warm=[&](const ModelItem& item,int phase,bool instanced) {
+        const auto pipe=modelPipeline(item,phase,instanced);
+        if (pipe.valid() && !dev_->warmPipelineColor(pipe,gfx::PixelFormat::RGBA16F)) warmingPending_=true;
+    };
+    const auto& mats = materials ? *materials : model.materials;
+    bool lod = false, palette = false;
+    for (const auto& mesh : model.meshes) {
+        lod |= !mesh.lods.empty();
+        palette |= !mesh.materialBatches.empty();
+    }
+    for (const auto& material : mats) {
+        ModelItem item{}; item.model=&model; item.mat=&material; item.tint={1,1,1,1}; item.joints=model.skins.empty()?-1:0; item.morph=-1;
+        for (int skin=0; skin<(model.baked.tex.valid()?2:1); ++skin) {
+            item.baked=skin!=0; if(item.baked)item.joints=-1;
+            for (int fade=0; fade<(lod?2:1); ++fade) {
+                item.lodThreshold=fade?.5f:1.0f;
+                for (bool instanced : {false,true}) for(int phase : {0,1}) {
+                    item.paletteMaterials=nullptr; item.tint.w=1;
+                    warm(item,phase,instanced);
+                    // Fading passengers/roofs changes blend state, but should not compile during movement.
+                    if(phase==1){
+                        item.tint.w=.5f;warm(item,phase,instanced);
+                        item.flags=kDrawFadeDepth;warm(item,phase,instanced);
+                        item.tint.w=1;item.flags=0;
+                        warm(item,3,instanced);warm(item,4,instanced);
+                    }
+                    if(phase==1 && palette){item.paletteMaterials=&mats;warm(item,phase,instanced);}
+                }
+            }
+        }
+    }
+    warmingPipelines_=false; return !warmingPending_;
 }
 
 void Renderer3D::drawModel(const ModelDraw& d) {
@@ -411,6 +465,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         if (shadowBatch) addItem(drawMesh.shadowBatch, 2);
         }
     }
+
 }
 
 void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase) {

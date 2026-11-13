@@ -1,6 +1,7 @@
 // Metal backend (macOS, iOS). Compiled as Objective-C++ with ARC (-fobjc-arc).
 #include "../Gfx.h"
 #include "../ColorSpace.h"
+#include "MetalShaderAssets.h"
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -9,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <memory>
+#include <map>
 #include <cstring>
 #include <cstdio>
 #include <string>
@@ -40,7 +42,8 @@ struct MTBuffer {
 };
 struct MTTexture { id<MTLTexture> tex; id<MTLSamplerState> sampler; PixelFormat fmt = PixelFormat::RGBA8; bool mips = false; };
 struct MTShader { id<MTLFunction> vs; id<MTLFunction> fs; std::string source; bool linear = false; };
-struct MTPipeline { id<MTLRenderPipelineState> state; id<MTLDepthStencilState> depth; PipelineDesc desc; PipelineHandle hdr; ShaderHandle hdrShader; bool hdrFailed = false; };
+struct MTShaderCompilation { MTShader value; std::string error; std::atomic<bool> done{false}; };
+struct MTPipeline { id<MTLRenderPipelineState> state; id<MTLDepthStencilState> depth; PipelineDesc desc; PipelineHandle hdr; ShaderHandle hdrShader; bool hdrFailed = false; Device::ShaderJob hdrShaderJob; Device::PipelineJob hdrPipelineJob; };
 
 MTLVertexFormat toMTL(VertexFormat f) {
     switch (f) {
@@ -66,6 +69,7 @@ public:
         info_.clipDepthZeroToOne = true;
         info_.renderTargetFlipY = true;
         info_.name = std::string("Metal ") + device_.name.UTF8String;
+        shaderAssets_=std::make_unique<MetalShaderAssets>(device_);
     }
 
     const DeviceInfo& info() const override { return info_; }
@@ -309,7 +313,9 @@ public:
     ShaderHandle createShader(const ShaderDesc& d) override {
         if (!d.msl) { error_ = "shader has no MSL source"; return {}; }
         NSError* err = nil;
-        id<MTLLibrary> lib = [device_ newLibraryWithSource:[NSString stringWithUTF8String:(colorShaderPrefix(true, d.linearTarget) + d.msl).c_str()] options:nil error:&err];
+        const auto source=colorShaderPrefix(true,d.linearTarget)+d.msl;
+        id<MTLLibrary> lib=shaderAssets_->library(source);
+        if(!lib && !shaderAssets_->strict()) lib=[device_ newLibraryWithSource:[NSString stringWithUTF8String:source.c_str()] options:nil error:&err];
         if (!lib) { error_ = std::string("MSL compile: ") + (err ? err.localizedDescription.UTF8String : "?"); return {}; }
         MTShader s;
         s.source = d.msl; s.linear = d.linearTarget;
@@ -318,11 +324,51 @@ public:
         if (!s.vs) { error_ = "MSL: vs_main not found"; return {}; }
         return {shaders_.add(s)};
     }
+    ShaderJob createShaderAsync(const ShaderDesc& d) override {
+        if (!d.msl) return Device::createShaderAsync(d);
+        // Blend/depth states share the same program. Submit one library compilation per
+        // source/colour-space pair, even when many pipeline jobs request it concurrently.
+        const auto key=std::make_pair(std::string(d.msl),d.linearTarget);
+        auto& cached=asyncShaderCompiles_[key];
+        const bool start=!cached;
+        if (start) cached=std::make_shared<MTShaderCompilation>();
+        auto result=cached;
+        if (start) {
+        result->value.source=d.msl; result->value.linear=d.linearTarget;
+        const auto text=colorShaderPrefix(true,d.linearTarget)+d.msl;
+        id<MTLLibrary> precompiled=shaderAssets_->library(text);
+        if(precompiled) {
+            result->value.vs=[precompiled newFunctionWithName:@"vs_main"];
+            result->value.fs=[precompiled newFunctionWithName:@"fs_main"];
+            if(!result->value.vs)result->error="precompiled library: vs_main not found";
+            result->done.store(true,std::memory_order_release);
+        } else if(shaderAssets_->strict()) {
+            result->error="required precompiled Metal library missing";
+            result->done.store(true,std::memory_order_release);
+        } else {
+        NSString* source=[NSString stringWithUTF8String:text.c_str()];
+        [device_ newLibraryWithSource:source options:nil completionHandler:^(id<MTLLibrary> library, NSError* error) {
+            if (library) {
+                result->value.vs=[library newFunctionWithName:@"vs_main"];
+                result->value.fs=[library newFunctionWithName:@"fs_main"];
+            }
+            if (!result->value.vs) result->error=error ? error.localizedDescription.UTF8String : "MSL: vs_main not found";
+            result->done.store(true,std::memory_order_release);
+        }];
+        }
+        }
+        // Each caller owns a distinct handle; shared compiled Metal functions are retained.
+        auto published=std::make_shared<ShaderHandle>();
+        return [this,result,published](ShaderHandle& out) {
+            if (!result->done.load(std::memory_order_acquire)) return false;
+            if (!result->error.empty()) { error_=result->error; out={}; return true; }
+            if (!published->valid()) *published={shaders_.add(result->value)};
+            out=*published; return true;
+        };
+    }
     void destroyShader(ShaderHandle h) override { shaders_.remove(h.id); }
 
-    PipelineHandle createPipeline(const PipelineDesc& d) override {
-        auto* s = shaders_.get(d.shader.id);
-        if (!s) { error_ = "pipeline: invalid shader"; return {}; }
+    MTLRenderPipelineDescriptor* pipelineDescriptor(const PipelineDesc& d, const MTShader* s) {
         MTLVertexDescriptor* vd = [MTLVertexDescriptor vertexDescriptor];
         for (int i = 0; i < d.attrCount; ++i) {
             vd.attributes[d.attrs[i].location].format = toMTL(d.attrs[i].format);
@@ -373,16 +419,47 @@ public:
             ca.sourceAlphaBlendFactor = MTLBlendFactorOne;
             ca.destinationAlphaBlendFactor = d.blend == BlendMode::Additive ? MTLBlendFactorOne : MTLBlendFactorOneMinusSourceAlpha;
         }
+        shaderAssets_->prepare(pd);
+        return pd;
+    }
+    PipelineHandle createPipeline(const PipelineDesc& d) override {
+        auto* s = shaders_.get(d.shader.id);
+        if (!s) { error_ = "pipeline: invalid shader"; return {}; }
+        auto* pd = pipelineDescriptor(d, s);
         NSError* err = nil;
         MTPipeline p;
         p.desc = d;
-        p.state = [device_ newRenderPipelineStateWithDescriptor:pd error:&err];
-        if (!p.state) { error_ = std::string("pipeline: ") + (err ? err.localizedDescription.UTF8String : "?"); return {}; }
+        p.state = [device_ newRenderPipelineStateWithDescriptor:pd options:shaderAssets_->options() reflection:nil error:&err];
+        if (!p.state) { ++*shaderAssets_->failureCounter(); error_ = std::string("pipeline: ") + (err ? err.localizedDescription.UTF8String : "?"); std::fprintf(stderr,"[metal-assets] pipeline failed: %s\n",error_.c_str()); if(shaderAssets_->strict())MetalShaderAssets::requiredFailure("pipeline archive miss"); return {}; }
         MTLDepthStencilDescriptor* dd = [MTLDepthStencilDescriptor new];
         dd.depthCompareFunction = d.depthTest ? MTLCompareFunctionLessEqual : MTLCompareFunctionAlways;
         dd.depthWriteEnabled = d.depthWrite ? YES : NO;
         p.depth = [device_ newDepthStencilStateWithDescriptor:dd];
         return {pipelines_.add(p)};
+    }
+    PipelineJob createPipelineAsync(const PipelineDesc& d) override {
+        auto* shader=shaders_.get(d.shader.id);
+        if (!shader) return Device::createPipelineAsync(d);
+        struct Result { MTPipeline value; std::string error; std::atomic<bool> done{false}; PipelineHandle published; };
+        auto result=std::make_shared<Result>();
+        result->value.desc=d; result->value.desc.label=nullptr;
+        MTLDepthStencilDescriptor* depth=[MTLDepthStencilDescriptor new];
+        depth.depthCompareFunction=d.depthTest ? MTLCompareFunctionLessEqual : MTLCompareFunctionAlways;
+        depth.depthWriteEnabled=d.depthWrite;
+        result->value.depth=[device_ newDepthStencilStateWithDescriptor:depth];
+        const auto failures=shaderAssets_->failureCounter();
+        const bool strict=shaderAssets_->strict();
+        [device_ newRenderPipelineStateWithDescriptor:pipelineDescriptor(d,shader) options:shaderAssets_->options() completionHandler:^(id<MTLRenderPipelineState> state, MTLRenderPipelineReflection*, NSError* error) {
+            result->value.state=state;
+            if (!state) { ++*failures; result->error=error ? error.localizedDescription.UTF8String : "Metal pipeline compilation failed"; std::fprintf(stderr,"[metal-assets] pipeline failed: %s\n",result->error.c_str()); if(strict)MetalShaderAssets::requiredFailure("pipeline archive miss"); }
+            result->done.store(true,std::memory_order_release);
+        }];
+        return [this,result](PipelineHandle& out) {
+            if (!result->done.load(std::memory_order_acquire)) return false;
+            if (!result->error.empty()) { error_=result->error; out={}; return true; }
+            if (!result->published.valid()) result->published={pipelines_.add(std::move(result->value))};
+            out=result->published; return true;
+        };
     }
     void destroyPipeline(PipelineHandle h) override {
         if (auto* p = pipelines_.get(h.id)) {
@@ -391,6 +468,32 @@ public:
             if (variant.valid()) destroyPipeline(variant);
             if (shader.valid()) destroyShader(shader);
         }
+    }
+    bool warmPipelineColor(PipelineHandle h, PixelFormat format) override {
+        auto* p=pipelines_.get(h.id);
+        if (!p || format!=PixelFormat::RGBA16F || p->desc.depthOnly || p->desc.colorFormat==format || p->hdr.valid() || p->hdrFailed) return true;
+        if (!p->hdrShader.valid()) {
+            if (!p->hdrShaderJob) {
+                auto* shader=shaders_.get(p->desc.shader.id);
+                if (!shader) { p->hdrFailed=true; return true; }
+                ShaderDesc desc; desc.msl=shader->source.c_str(); desc.linearTarget=true;
+                p->hdrShaderJob=createShaderAsync(desc);
+            }
+            if (!p->hdrShaderJob(p->hdrShader)) return false;
+            p->hdrShaderJob={};
+            if (!p->hdrShader.valid()) { p->hdrFailed=true; std::fprintf(stderr,"[gfx] HDR warmup shader: %s\n",error_.c_str()); return true; }
+        }
+        if (!p->hdrPipelineJob) {
+            auto desc=p->desc; desc.shader=p->hdrShader; desc.colorFormat=format;
+            p->hdrPipelineJob=createPipelineAsync(desc);
+        }
+        // Publishing may reallocate the pool, including the job itself. Poll a local copy.
+        auto job=p->hdrPipelineJob; PipelineHandle result;
+        if (!job(result)) return false;
+        p=pipelines_.get(h.id);
+        p->hdrPipelineJob={}; p->hdr=result; p->hdrFailed=!result.valid();
+        if (p->hdrFailed) std::fprintf(stderr,"[gfx] HDR warmup pipeline: %s\n",error_.c_str());
+        return true;
     }
     PipelineHandle hdrPipeline(PipelineHandle h) {
         auto* p = pipelines_.get(h.id);
@@ -669,6 +772,7 @@ public:
     }
 
 private:
+    std::unique_ptr<MetalShaderAssets> shaderAssets_;
     CAMetalLayer* layer_;
     id<MTLDevice> device_;
     id<MTLCommandQueue> queue_;
@@ -689,6 +793,7 @@ private:
     std::string error_;
     Pool<MTBuffer> buffers_;
     Pool<MTTexture> textures_;
+    std::map<std::pair<std::string,bool>,std::shared_ptr<MTShaderCompilation>> asyncShaderCompiles_;
     Pool<MTShader> shaders_;
     Pool<MTPipeline> pipelines_;
     uint32_t pipelineId_ = 0, ibId_ = 0;

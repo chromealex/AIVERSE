@@ -19,6 +19,10 @@ float3 toF(const Vec3& v) { return {float(v.x.toDouble()), float(v.y.toDouble())
 float4 RtsView::playerColor(int p) { return overlayPlayerColor(p); }   // palette shared with the overlays
 
 bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
+#ifndef __EMSCRIPTEN__
+    if (preparing_.valid()) preparing_.wait();
+    preparing_ = {}; prepareType_ = -1; preparingResource_.clear();
+#endif
     rules_ = &rules;
     dev_ = &dev;
     if (!fog_.ready()) fog_.init(dev);
@@ -39,6 +43,7 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
         overlays_.initGpu(dev);
     }
     if (!models_.count("shape:generic")) buildShapes(dev);
+    if (twoD_) { twoD_->shutdown(dev); twoD_.reset(); }
     looks_.clear();
     warnings_.clear();
     geometryScene_.shutdown(dev);
@@ -64,15 +69,13 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
         }
     }
     for (auto& w : overlays_.set().warnings) warnings_.push_back(w);
-    anims_.clear(); animationCache_.clear();
+    anims_.clear(); streamingChoices_.clear(); animationCache_.clear();
     tracers_.clear();
-    for (auto& t : rules.types) {
-        TypeLook l;
-        buildLook(dev, t, l);
-        looks_.push_back(std::move(l));
-    }
+    looks_.resize(rules.types.size());
+    loadedTypes_.assign(rules.types.size(), false);
+    if (!deferredLoading_) for (size_t i = 0; i < rules.types.size(); ++i) loadType(uint16_t(i));
     twoD_ = std::make_unique<Rts2DView>();
-    if (!twoD_->init(dev, rules, contentBase_, spriteDefaults_)) twoD_.reset();
+    if (!twoD_->init(dev, rules, contentBase_, spriteDefaults_, deferredLoading_)) twoD_.reset();
     lights_.init(rules);
     groundFx_.init(dev, rules, read_, contentBase_);
     terrain_.init(dev, rules, read_, contentBase_);
@@ -81,9 +84,14 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
 }
 
 void RtsView::shutdown(gfx::Device& dev) {
+#ifndef __EMSCRIPTEN__
+    if (preparing_.valid()) preparing_.wait();
+    preparing_ = {}; prepareType_ = -1; preparingResource_.clear();
+#endif
     geometryScene_.shutdown(dev);
     for (auto& [k, m] : models_) if (m) releaseModel(dev, *m);
-    models_.clear(); looks_.clear(); anims_.clear(); animationCache_.clear(); tracers_.clear();
+    textureCache_->shutdown(dev);
+    models_.clear(); looks_.clear(); loadedTypes_.clear(); anims_.clear(); streamingChoices_.clear(); animationCache_.clear(); tracers_.clear();
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
     terrain_.shutdown(dev);
     fog_.shutdown();
@@ -153,6 +161,8 @@ void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batc
 }
 
 void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+    // Script spawns, reinforcements and restored entities need not exist at map load time.
+    if (!streamingTypes_) for (const auto& o : input.objects) if (!o.isProjectile) loadType(o.type);
     RtsScene resolved;
     const bool hierarchy=input.entityFx && !input.entityFx->hierarchy.parents.empty();
     if(hierarchy) {
@@ -236,7 +246,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
             bars_[i] = twoD_->barPoint(o, g);
             continue;   // selection rings: overlays
         }
-        if (o.type >= looks_.size()) continue;
+        if (o.type >= looks_.size() || !typeLoaded(o.type)) continue;
         // editor placements have no entity: key them by position in the list
         const uint64_t key = o.entity.valid() ? o.entity.packed() : (1ull << 63) | uint64_t(i);
         EntityAnim& st = stateFor(key, o);

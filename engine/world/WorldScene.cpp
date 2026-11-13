@@ -43,7 +43,7 @@ std::unique_ptr<render::Model> terrainModel(const ChunkCollision& collision,cons
 // so each file is decoded and uploaded once and lives while any resident or pending chunk uses it. Shared models are
 // outside the per-chunk reservation: their total is bounded by the number of distinct files of the content.
 struct WorldScene::ModelCache { std::mutex mutex;std::map<std::string,std::weak_ptr<render::Model>> models; };
-WorldScene::WorldScene(const Json& manifest,AssetReader reader):assets_(WorldAssets::parse(manifest)),cache_(std::make_shared<ModelCache>()) {
+WorldScene::WorldScene(const Json& manifest,AssetReader reader,std::shared_ptr<render::ModelTextureCache> textures):assets_(WorldAssets::parse(manifest)),textures_(std::move(textures)),cache_(std::make_shared<ModelCache>()) {
     shareModels_=manifest.getBool("shareModels");
     overhang_=float(worldInteger(manifest,"meshOverhang",0,0,4096));
     uploadBytes_=size_t(worldInteger(manifest,"maxUploadBytes",16*1024*1024,1024,1024*1024*1024));
@@ -60,6 +60,7 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
     auto append=[&](std::shared_ptr<render::Model> model,const std::string& sharedKey=std::string(),bool charge=true,bool fresh=true){
         // a model reused from the cache was checked when it was decoded (and its CPU arrays are gone after the upload)
         if(!fresh){bytes+=4096;if(bytes>asset.bytes)throw JsonError("world.scene: reservedBytes too small");out->models.push_back(std::move(model));out->sharedKeys.push_back(sharedKey);return out->models.size()-1;}
+        render::prepareModelUpload(*model);
         if(model->vertices.size()>1000000||model->indices.size()>3000000||!model->skins.empty()||!model->clips.empty())throw JsonError("world.mesh: expected bounded rigid model");
         for(const auto& mesh:model->meshes)for(const auto& p:mesh.primitives)if(p.morphTargets)throw JsonError("world.mesh: morphs require an entity");
         if(model->vertices.empty()||model->indices.empty())throw JsonError("world.mesh: empty model");
@@ -80,8 +81,9 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
             if(!indices.contains(file)){
                 bool missing=false;
                 auto checked=[&](const std::string& path,std::string& bytes){bool ok=reader(path,bytes);missing|=!ok;return ok;};
-                auto model=render::loadModel(file,checked);
+                auto model=render::loadModel(file,checked,nullptr,textures_);
                 if(missing)throw JsonError("world.mesh: missing or corrupt dependency: "+file);
+                render::prepareModelUpload(*model); // finish CPU mutation before publishing to other chunk workers
                 std::shared_ptr<render::Model> owned=std::move(model);
                 if(shareModels_){std::lock_guard lock(cache_->mutex);cache_->models[file]=owned;}
                 indices[file]=append(std::move(owned),shareModels_?file:std::string(),!shareModels_);

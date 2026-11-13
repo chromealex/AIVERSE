@@ -193,6 +193,7 @@ public:
     void triangle(float3 a, float3 b, float3 c, uint32_t color);    // flat, alpha-blended
     void quadXZ(float3 a, float3 b, float width, uint32_t color, float y = 0.02f);
     void circleXZ(float3 c, float radius, uint32_t color, int segments = 40, float y = 0.03f);
+    bool warmModelPipelines(const Model& model, const std::vector<Material>* materials = nullptr);
     void drawModel(const ModelDraw& d);
     void render(const gfx::PassDesc& screenPass, PostProcess* post = nullptr); // shadow pass + opens the main pass and draws everything
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
@@ -393,7 +394,9 @@ private:
             return graph && other.graph && graph->glsl == other.graph->glsl && graph->vertexGlsl == other.graph->vertexGlsl && graph->textures.size() == other.graph->textures.size() && graph->outputs == other.graph->outputs;
         }
     };
-    struct ShaderEntry { gfx::ShaderHandle shader; bool failed = false; };
+    struct ShaderEntry { gfx::ShaderHandle shader; bool failed = false; gfx::Device::ShaderJob job; };
+    bool warmingPipelines_ = false, warmingPending_ = false;
+    std::vector<std::pair<ModelShaderKey, gfx::Device::PipelineJob>> pendingModelPipes_;
     std::vector<std::pair<ModelShaderKey, ShaderEntry>> modelShaders_;
     std::vector<std::pair<ModelShaderKey, gfx::PipelineHandle>> modelPipes_;
     gfx::TextureHandle white_, black_, flatNormal_;

@@ -413,6 +413,9 @@ if((AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS) AND NOT EMSCRIPTEN AND NOT ANDRO
     target_link_libraries(aiverse_clipinfo PRIVATE aiverse_models aiverse_zstd_dec)
 endif()
 if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_deferred_loading_tests tests/deferred_loading.cpp)
+    target_link_libraries(aiverse_deferred_loading_tests PRIVATE aiverse_runtime aiverse_game_view aiverse_content_reader)
+    add_test(NAME aiverse_deferred_loading_tests COMMAND aiverse_deferred_loading_tests)
     add_executable(aiverse_unity_anim_tests tests/unity_anim/controller.cpp)
     target_link_libraries(aiverse_unity_anim_tests PRIVATE aiverse_models aiverse_zstd_dec)
     add_test(NAME unity_anim_controller COMMAND aiverse_unity_anim_tests)
@@ -528,6 +531,10 @@ target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 # Helper: package content + platform metadata around an executable.
 include(platform/cmake/ThirdPartyNotices.cmake)
 
+option(AIVERSE_PRECOMPILE_METAL "Precompile macOS client Metal shaders after linking (requires GUI and Metal Toolchain)" OFF)
+set(AIVERSE_METAL_CONTENT_DIR "" CACHE PATH "Resolved loose content override for native client shader capture")
+set(AIVERSE_METAL_CAPTURE_MAP "0" CACHE STRING "Map index for build-time Metal variant capture")
+
 function(aiverse_package_app target)
     aiverse_package_notices(${target})
     # the editor's project file (<Title>.aiverse, legacy .aiverse) is not game content: dropped from loose dev bundles
@@ -583,6 +590,21 @@ function(aiverse_package_app target)
                 COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, project file
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "${res_dir}/content/engine"
                 COMMENT "Bundling content")
+        endif()
+        if(AIVERSE_PRECOMPILE_METAL AND AIVERSE_PLATFORM STREQUAL "macos" AND target STREQUAL "aiverse_client")
+            if(AIVERSE_CONTENT_PACK)
+                message(FATAL_ERROR "Precompile Metal against loose staging content before creating content.rpak")
+            endif()
+            find_package(Python3 COMPONENTS Interpreter REQUIRED)
+            set(_metal_content "${res_dir}/content")
+            if(AIVERSE_METAL_CONTENT_DIR)
+                set(_metal_content "${AIVERSE_METAL_CONTENT_DIR}")
+            endif()
+            add_custom_command(TARGET ${target} POST_BUILD
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/metal/precompile.py"
+                    --executable "$<TARGET_FILE:${target}>" --content "${_metal_content}"
+                    --work-dir "${CMAKE_CURRENT_BINARY_DIR}/metal-precompile" --map "${AIVERSE_METAL_CAPTURE_MAP}"
+                COMMENT "Precompiling Metal libraries and host-GPU pipelines" VERBATIM)
         endif()
     elseif(AIVERSE_PLATFORM STREQUAL "web")
         set_target_properties(${target} PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
@@ -1038,7 +1060,7 @@ target_link_libraries(aiverse_splash PUBLIC aiverse_engine aiverse_atlas)
 set(AIVERSE_SPLASH_BACKGROUND "" CACHE STRING "Window background before the first frame, 0xRRGGBB (set by aiversebuild)")
 foreach(t aiverse_client main)
     if(TARGET ${t})
-        target_sources(${t} PRIVATE apps/client/ClientSplash.cpp)
+        target_sources(${t} PRIVATE apps/client/ClientSplash.cpp apps/client/ClientLoading.cpp)
         target_link_libraries(${t} PRIVATE aiverse_splash)
         if(AIVERSE_SPLASH_BACKGROUND)
             target_compile_definitions(${t} PRIVATE AIVERSE_SPLASH_BACKGROUND=${AIVERSE_SPLASH_BACKGROUND})
@@ -1279,7 +1301,7 @@ endif()
 
 # The game client's core (GameClient: menus, script UI, view scripts, input, audio): AiverseGame's
 # main.cpp adds only the entry point; the editor's Game window hosts the same code (apps/editor/ClientHost.cpp).
-set(AIVERSE_CLIENT_CORE_SOURCES apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
+set(AIVERSE_CLIENT_CORE_SOURCES apps/client/ClientLoading.cpp apps/client/GameClient.cpp apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
     apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
     apps/client/ClientBaked.cpp   # ClientBaked: the map's baked lighting (agent-lightbake)
@@ -1294,7 +1316,7 @@ endforeach()
 # Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)
 if(TARGET aiverse_editor)
     target_sources(aiverse_editor PRIVATE apps/editor/EditorClientPlay.cpp apps/editor/ClientHost.cpp ${AIVERSE_CLIENT_CORE_SOURCES})
-    target_link_libraries(aiverse_editor PRIVATE aiverse_net aiverse_game_audio aiverse_atlas aiverse_ui aiverse_game_fx aiverse_i18n aiverse_content_reader)
+    target_link_libraries(aiverse_editor PRIVATE aiverse_splash aiverse_net aiverse_game_audio aiverse_atlas aiverse_ui aiverse_game_fx aiverse_i18n aiverse_content_reader)
 endif()
 if(AIVERSE_BUILD_TESTS AND (AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFORM STREQUAL "macos"))
     add_executable(aiverse_hosted_view_tests tests/hosted_view.cpp $<TARGET_OBJECTS:aiverse_runtime>)

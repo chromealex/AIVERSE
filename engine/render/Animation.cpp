@@ -225,7 +225,8 @@ void solveTwoBoneIK(const Model& m, Pose& pose, std::vector<mat4>& world, int a,
     refreshSubtree(m,pose,world,a);
 }
 
-bool bakeAnimations(gfx::Device& dev, Model& m, float fps, int maxRows) {
+bool prepareAnimationBake(Model& m, float fps, int maxRows) {
+    if (!m.baked.pending.empty()) return true;
     int skin = -1;
     for (const auto& nd : m.nodes) if (nd.skin >= 0 && nd.mesh >= 0) { skin = nd.skin; break; }
     if (skin < 0 || m.baked.tex.valid()) return m.baked.tex.valid();
@@ -271,15 +272,23 @@ bool bakeAnimations(gfx::Device& dev, Model& m, float fps, int maxRows) {
             writeRow(b.clips[ci].firstRow + f);
         }
     }
+    b.pending = std::move(data);
+    m.baked = std::move(b);
+    return true;
+}
+
+bool bakeAnimations(gfx::Device& dev, Model& m, float fps, int maxRows) {
+    if (m.baked.tex.valid()) return true;
+    if (!prepareAnimationBake(m, fps, maxRows)) return false;
     gfx::TextureDesc td;
-    td.width = width; td.height = rows;
+    td.width = m.baked.joints * 3; td.height = m.baked.rows;
     td.format = gfx::PixelFormat::RGBA32F;
     td.filter = gfx::Filter::Nearest;
-    td.data = data.data();
+    td.data = m.baked.pending.data();
     td.label = "baked animation";
-    b.tex = dev.createTexture(td);
-    if (!b.tex.valid()) return false;
-    m.baked = std::move(b);
+    m.baked.tex = dev.createTexture(td);
+    if (!m.baked.tex.valid()) return false;
+    std::vector<float>().swap(m.baked.pending);
     return true;
 }
 

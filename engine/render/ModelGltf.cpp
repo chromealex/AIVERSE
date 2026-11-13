@@ -303,8 +303,9 @@ private:
         } else if (uri.rfind("data:", 0) == 0) {
             size_t comma = uri.find(',');
             if (comma == std::string::npos || !base64(uri, comma + 1, bytes)) { warn("image " + std::to_string(idx) + ": bad data URI"); return false; }
-        } else if (!read_(dir_ + urlDecode(uri), bytes)) {
-            warn("image file '" + dir_ + urlDecode(uri) + "' not found");
+        } else {
+            if (readModelImage(dir_ + urlDecode(uri), read_, img)) return true;
+            warn("image file '" + dir_ + urlDecode(uri) + "' missing or unsupported");
             return false;
         }
         if (!decodeImage(bytes, img)) { warn("image " + img.name + ": unsupported format (PNG, JPEG, TGA only)"); return false; }

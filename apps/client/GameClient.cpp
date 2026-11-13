@@ -81,6 +81,16 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         break;
     }
     case 1:     // renderer
+        view_.setDeferredLoading(std::getenv("AIVERSE_EAGER_LOADING") == nullptr);
+        view_.setStreamingTypes(initialAssetRadius_ > 0);
+#ifndef __EMSCRIPTEN__
+        { // Model URIs may contain ../ for shared textures. Normalize before the checked reader.
+            auto reader = platform::makeContentReader(platform::contentRoot(), 512u * 1024u * 1024u);
+            view_.setAsyncReader([reader](const std::string& path, std::string& out) {
+                return reader(std::filesystem::path(path).lexically_normal().generic_string(), out);
+            });
+        }
+#endif
         overlay_.init(dev, "fonts/ui.ttf", 17.0f);
         if (!r3d_.init(dev)) error_ = "renderer: " + dev.lastError();
         r3d_.setShadowQuality(Renderer3D::defaultQualityFor(dev, platform::isTouchDevice()));
@@ -176,6 +186,7 @@ void GameClient::updateAudio(double dt) {
 }
 
 void GameClient::toMenu() {
+    mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
     sound_.detach();
     fx_.stopMatch();
     audio_.stopAll(0.2f, combatBuses());
@@ -203,6 +214,7 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
     if (!platform::hostedView()) platform::setTitle(gameName_);   // hosted: the editor keeps its title
     rules_ = loadRules(rulesJson_);
     localizeRules(rules_, loc_);
+    configureLoading();
     maps_.clear();
     for (auto& m : manifest_["maps"].items()) {
         std::string file = m.getStr("file");
@@ -214,6 +226,7 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
 }
 
 void GameClient::shutdown() {
+    loadingSplash_.shutdown();
     net_.reset(); // detaches from the simulation before it goes away
     fx_.shutdown();
     sound_.detach();
@@ -256,7 +269,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         // static scenery streamed around the camera instead of being loaded whole. The key is "streamedWorld" here:
         // in these maps "world" is the planet system (FPS maps keep the same block under "world")
         if (const Json& sw = map["streamedWorld"]; sw.getBool("async")) {
-            worldScene_ = std::make_unique<world::WorldScene>(sw, platform::makeContentReader(platform::contentRoot()));
+            worldScene_ = std::make_unique<world::WorldScene>(sw, platform::makeContentReader(platform::contentRoot()), view_.textureCache());
             worldRadius_ = int(std::clamp<int64_t>(sw.getInt("viewRadius", 2), 0, 4));
         }
         scriptUiReset();
@@ -313,6 +326,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
     sound_.attach(*sim_, spectator_ ? 0 : human_, maps_[idx].file);
     fx_.startMatch(*sim_, spectator_ ? 0 : human_, view_, mod().state(*sim_).grid);
     heardSelection_.clear();
+    beginMapLoading();
 }
 
 void GameClient::fitCamera() {
@@ -455,6 +469,7 @@ Vec3 GameClient::placeCentre(float sx, float sy, bool& ok) {
 // ------------------------------------------------------------------ input
 
 void GameClient::event(const Event& e) {
+    if (mapLoading_) { if (e.type == EventType::KeyDown && e.key == Key::Escape) toMenu(); return; }
     if (!padInjecting_ && (e.type == EventType::MouseMove || e.type == EventType::MouseDown || e.type == EventType::TouchBegin))
         gamepad_.mouseUsed(e.x, e.y);   // a real pointer hides the pad cursor (ClientGamepad.cpp)
     bool uiWants = ui_.handleEvent(e);
@@ -837,6 +852,12 @@ void GameClient::runViewScripts(float dt) {
 }
 
 void GameClient::frame(gfx::Device& dev, double dt) {
+    const auto frameStarted = std::chrono::steady_clock::now();
+    if (mapLoading_) { frameMapLoading(dev, dt); return; }
+    if (mapJustLoaded_) { dt = 0; mapJustLoaded_ = false; }
+    if (sim_ && screen_ == Screen::Playing) updateBackgroundLoading();
+    const double backgroundMs = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frameStarted).count();
+    double worldMs = 0;
     time_ += dt;
     updateGamepad(float(dt));   // pad input as mouse / key events + camera pan (ClientGamepad.cpp)
     float alpha = 0;
@@ -924,6 +945,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         if (screen_ == Screen::Playing) { topDownPresent(dt, alpha); topDownCamera(dt); }
     }
 
+    if (sim_ && ensureLocalAssets()) { frameMapLoading(dev, dt); return; }
+
     luaTick(dt);   // game.on("update", fn) in UI scripts
     updateAudio(dt);
     overlay_.newFrame(dt);
@@ -948,7 +971,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         }
         if (worldScene_ && !planet()) {   // load / unload chunks for where the camera looks (GPU uploads: before the scene pass)
             const Vec3 focus{Fixed::fromInt(int64_t(cam_.target.x)), Fixed{}, Fixed::fromInt(int64_t(cam_.target.z))};
+            const auto worldStarted=std::chrono::steady_clock::now();
             worldScene_->update(dev, {&focus, 1}, worldRadius_);
+            worldMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-worldStarted).count();
         }
         r3d_.beginScene(cam_, fbW(), fbH());
         if (worldScene_ && !planet()) worldScene_->draw(r3d_, world::Cell{0, 0, 0}, 1);
@@ -1010,6 +1035,20 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     ui_.setTarget(hostColor_, hostDepth_);   // linear UI blending reopens this pass
     ui_.render();
     dev.endPass();
+    if (std::getenv("AIVERSE_STREAM_TRACE") && sim_ && !mapLoading_) {
+        static auto previous = frameStarted;
+        const double interval = std::chrono::duration<double,std::milli>(frameStarted-previous).count(); previous=frameStarted;
+        const double cpu = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frameStarted).count();
+        size_t missing=0;
+        for(const auto& o:scene_.objects) if(!o.isProjectile && !view_.typeLoaded(o.type) && assetDistance(o)<assetRadius()-12.0f) ++missing;
+        std::fprintf(stderr,"[stream-frame] tick=%u interval=%.3f cpu=%.3f x=%.3f z=%.3f pending=%zu missing=%zu stalls=%zu background=%.3f world=%.3f\n",unsigned(sim_->tick()),interval,cpu,cam_.target.x,cam_.target.z,backgroundTypes_.size(),missing,loadingStalls_,backgroundMs,worldMs);
+    }
+    if (!startupReported_ && !mapLoading_) {
+        startupReported_ = true;
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startupStarted_).count();
+        std::fprintf(stderr, "[loading] first %s frame in %.1f ms\n", sim_ ? "map" : "menu", ms);
+        if (std::getenv("AIVERSE_BENCH_STARTUP")) platform::requestQuit();
+    }
 }
 
 } // namespace aiverse::client

@@ -1,3 +1,5 @@
+#include "ModelTextureCache.h"
+#include <filesystem>
 #include "Model.h"
 #include "ModelClips.h"
 #include "ModelMerge.h"
@@ -160,7 +162,10 @@ Loader loaderFor(const std::string& ext) {
 
 bool isNativeModelFormat(const std::string& path) { return loaderFor(extOf(path)) != nullptr; }
 
-std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read, std::vector<std::string>* warnings) {
+namespace { thread_local std::shared_ptr<ModelTextureCache> loadingTextures; }
+std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read, std::vector<std::string>* warnings, std::shared_ptr<ModelTextureCache> textures) {
+    struct Scope { std::shared_ptr<ModelTextureCache> old; ~Scope() { loadingTextures = std::move(old); } } scope{loadingTextures};
+    loadingTextures = std::move(textures);
     const std::string ext = extOf(path);
     Loader load = loaderFor(ext);
     std::string bytes;
@@ -188,6 +193,35 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
     }
     applyClipSidecar(*m, path, read, warnings);   // "<model>.clips.json": splits, external clips (ModelClips.h)
     return m;
+}
+
+bool readModelImage(const std::string& path, const FileReader& reader, Image& out) {
+    if (loadingTextures) return loadingTextures->read(path, reader, out);
+    std::string bytes;
+    return reader(path, bytes) && decodeImage(bytes, out);
+}
+
+bool ModelTextureCache::read(const std::string& path, const FileReader& reader, Image& out) {
+    const auto key = std::filesystem::path(path).lexically_normal().generic_string();
+    std::lock_guard lock(mutex_);
+    auto it = decoded_.find(key);
+    if (it == decoded_.end()) {
+        std::string bytes; Image image;
+        if (!reader(key, bytes) || !decodeImage(bytes, image)) return false;
+        image.sharedRgba = std::make_shared<const std::vector<uint8_t>>(std::move(image.rgba));
+        size_t size = image.sharedRgba->size();
+        if (image.compressed) for (const auto& level : image.compressed->levels) size += level.size();
+        while (!decoded_.empty() && bytes_ + size > kCpuBudget) {
+            auto oldest = std::min_element(decoded_.begin(), decoded_.end(), [](const auto& a, const auto& b) { return a.second.used < b.second.used; });
+            bytes_ -= oldest->second.bytes; decoded_.erase(oldest);
+        }
+        it = decoded_.emplace(key, Decoded{std::move(image), size, ++clock_}).first;
+        bytes_ += size; ++decodedCount_;
+    }
+    it->second.used = ++clock_;
+    const auto name = out.name; out = it->second.image; out.name = name;
+    out.textureKey = key; out.textureCache = shared_from_this();
+    return true;
 }
 
 bool decodeImage(const std::string& bytes, Image& out) {
@@ -316,14 +350,15 @@ void uploadImage(gfx::Device& dev, Image& img) {
             if (img.tex.valid()) return;
         }
     }
-    if (img.rgba.empty()) return;
+    const auto& pixels = img.sharedRgba ? *img.sharedRgba : img.rgba;
+    if (pixels.empty()) return;
     gfx::TextureDesc td;
     td.width = img.width; td.height = img.height;
     td.format = gfx::PixelFormat::RGBA8;
     td.filter = img.nearest ? gfx::Filter::Nearest : gfx::Filter::Linear;
     td.repeat = img.repeat;
     td.mipmaps = !img.nearest;
-    td.data = img.rgba.data();
+    td.data = pixels.data();
     td.label = img.name.c_str();
     img.tex = dev.createTexture(td);
 }
@@ -348,21 +383,46 @@ void ensureTangents(Model& m) {
 }
 } // namespace
 
-bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
-    if (!m.vertices.empty() && !m.vb.valid()) {
+void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
+    const auto key = image.textureKey + (image.repeat ? "#repeat" : "#clamp") + (image.nearest ? "#nearest" : "#linear");
+    auto it = gpu_.find(key);
+    if (it == gpu_.end()) {
+        Image owner = image; owner.textureCache.reset(); owner.borrowedTexture = false;
+        uploadImage(dev, owner);
+        if (!owner.tex.valid()) return;
+        owner.rgba.clear(); owner.sharedRgba.reset(); owner.compressed.reset();
+        it = gpu_.emplace(key, std::move(owner)).first;
+    }
+    image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.borrowedTexture = true;
+}
+void ModelTextureCache::shutdown(gfx::Device& dev) {
+    for (auto& [key, image] : gpu_) if (image.tex.valid()) dev.destroyTexture(image.tex);
+    gpu_.clear();
+    std::lock_guard lock(mutex_); decoded_.clear(); bytes_ = 0;
+}
+
+void prepareModelUpload(Model& m) {
+    if (m.uploadPrepared || m.vertices.empty()) return;
+
         const char* shadowBatches = std::getenv("AIVERSE_AUTO_SHADOW_BATCHES");
         if (!shadowBatches || std::string(shadowBatches) != "off") prepareShadowBatches(m);
         ensureTangents(m);
         const char* materialBatches = std::getenv("AIVERSE_AUTO_MATERIAL_BATCHES");
         if (!materialBatches || std::string(materialBatches) != "off") prepareMaterialBatches(m);
+    m.uploadPrepared = true;
+}
+
+bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu) {
+    if (!m.vertices.empty() && !m.vb.valid()) {
+        prepareModelUpload(m);
         gfx::BufferDesc vb; vb.type = gfx::BufferType::Vertex; vb.size = m.vertices.size() * sizeof(ModelVertex); vb.data = m.vertices.data(); vb.label = m.path.c_str();
         m.vb = dev.createBuffer(vb);
         gfx::BufferDesc ib; ib.type = gfx::BufferType::Index; ib.size = m.indices.size() * sizeof(uint32_t); ib.data = m.indices.data();
         m.ib = dev.createBuffer(ib);
     }
     for (auto& img : m.images) {
-        uploadImage(dev, img);
-        if (!keepCpu) { img.rgba.clear(); img.rgba.shrink_to_fit(); img.compressed.reset(); }
+        if (img.textureCache) img.textureCache->upload(dev, img); else uploadImage(dev, img);
+        if (!keepCpu) { img.rgba.clear(); img.rgba.shrink_to_fit(); img.compressed.reset(); img.sharedRgba.reset(); }
     }
     // morph deltas of every primitive in one float texture: 2 texels (position, normal) per vertex and target
     size_t texels = 0;

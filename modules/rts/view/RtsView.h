@@ -1,3 +1,4 @@
+#include "engine/render/ModelTextureCache.h"
 // Presentation for the generic RTS module, shared by the game client and the editor.
 // Objects are drawn from their type's "view" block in rules.json, e.g.
 //   "view": { "shape": "soldier", "scale": 1.0, "color": [0.8, 0.7, 0.5] }
@@ -14,6 +15,9 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#ifndef __EMSCRIPTEN__
+#include <future>
+#endif
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -124,6 +128,28 @@ class RtsView {
 public:
     // reader: content files (models, textures); default platform::readContentFile.
     bool init(gfx::Device& dev, const Rules& rules, render::FileReader reader = {});
+    // Clients defer type assets until a map uses them; editor/model viewers remain eager.
+    void setDeferredLoading(bool on) { deferredLoading_ = on; }
+    bool typeLoaded(uint16_t type) const { return type < loadedTypes_.size() && loadedTypes_[type]; }
+    void loadType(uint16_t type);
+    bool warmPipelines(render::Renderer3D& renderer, uint16_t type);
+    void setStreamingTypes(bool enabled) { streamingTypes_ = enabled; }
+    std::shared_ptr<render::ModelTextureCache> textureCache() const { return textureCache_; }
+    // An independent, worker-safe reader enables CPU decoding off the render thread.
+    void setAsyncReader(render::FileReader reader) { asyncReader_ = std::move(reader); }
+    bool prepareType(uint16_t type, bool allVariants = false);
+    void streamModelVariants(double budgetMs = 2);
+    size_t pendingModelVariants() const;
+    size_t modelChoiceCount(uint16_t type) const { return type < looks_.size() ? looks_[type].models.size() : 0; }
+    float typePreparationProgress() const {
+#ifndef __EMSCRIPTEN__
+        return preparePaths_.empty() ? 0.0f : float(prepareCursor_) / float(preparePaths_.size());
+#else
+        return 0.0f;
+#endif
+    }
+    const std::string& preparingResource() const { return preparingResource_; }
+    std::string typeResource(uint16_t type) const;
     void shutdown(gfx::Device& dev);
     // Terrain from the grid (chunked: only chunks whose cells changed are rebuilt); call again after
     // the editor changes the grid. Resource fields / creep changing in a match need no call (the
@@ -155,7 +181,7 @@ public:
     float heightAt(const MapGrid& grid, float x, float z) const;
     // Problems found while loading view blocks ("type 'knight': models/knight.glb: file not found").
     const std::vector<std::string>& warnings() const { return warnings_; }
-    const render::Model* modelOf(uint16_t type) const;
+    const render::Model* modelOf(uint16_t type, size_t choice = 0) const;
     const std::vector<ViewEvent>& events() const { return events_; }
     const std::vector<ViewEffect>& effects() const { return effects_; }
     void setSelectionOutline(bool on) { outline_ = on; }
@@ -291,6 +317,8 @@ private:
     struct Stage { float build = -1, hp = -1; ModelChoice choice; };
     enum class Construction : uint8_t { Grow, Dissolve, Stages };
     struct TypeLook {
+        std::vector<size_t> pendingVariants;
+        size_t nextVariant = 0;
         std::vector<ModelChoice> models;          // variants (picked per object)
         std::vector<ModelChoice> lods;            // farther LODs of models[0] (increasing distance)
         std::vector<Stage> stages;                // construction / damage replacements
@@ -387,12 +415,27 @@ private:
 
     const Rules* rules_ = nullptr;
     render::FileReader read_;
+    std::shared_ptr<render::ModelTextureCache> textureCache_ = std::make_shared<render::ModelTextureCache>();
     Json materialLib_ = Json::object();   // materials.json "materials"
     gfx::Device* dev_ = nullptr;
     std::map<std::string, std::unique_ptr<render::Model>> models_;  // by path; shapes as "shape:<name>"
     render::GeometryScene geometryScene_;
     std::vector<TypeLook> looks_;
+    std::vector<bool> loadedTypes_;
+    bool deferredLoading_ = false, streamingTypes_ = false;
+    render::FileReader asyncReader_;
+    std::string preparingResource_;
+#ifndef __EMSCRIPTEN__
+    struct PreparedModel { std::unique_ptr<render::Model> model; std::vector<std::string> warnings; };
+    std::future<PreparedModel> preparing_;
+    std::vector<std::pair<std::string, std::string>> preparePaths_;
+    size_t prepareCursor_ = 0;
+    int prepareType_ = -1;
+    bool prepareAllVariants_ = false;
+#endif
     std::vector<std::string> warnings_;
+    // Only entities first seen while variants stream need a stable choice override.
+    std::unordered_map<uint64_t, std::pair<uint16_t, int>> streamingChoices_;
     std::unordered_map<uint64_t, EntityAnim> anims_;   // presentation only: iteration order never matters
     render::Mesh projectile_;
     TerrainRenderer terrain_;    // chunked terrain + water (RtsTerrainRender.cpp)

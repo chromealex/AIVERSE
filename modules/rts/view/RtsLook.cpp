@@ -4,6 +4,7 @@
 #include "RtsView.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -15,6 +16,22 @@ using namespace render;
 
 namespace {
 constexpr float kDeg = 3.14159265358979f / 180.0f;
+// Keep one appearance of each initial model. Remaining material/body variants are appended later.
+std::vector<size_t> initialModelChoices(const Json& view) {
+    const auto& choices = view["model"].items();
+    const auto limit = view["streaming"].getInt("initialModels", 0);
+    std::vector<size_t> result;
+    std::vector<std::string> paths;
+    for (size_t i = 0; i < choices.size(); ++i) {
+        const auto path = choices[i].isString() ? choices[i].str() : choices[i].getStr("file");
+        if (limit > 0) {
+            if (paths.size() >= size_t(limit) || std::find(paths.begin(), paths.end(), path) != paths.end()) continue;
+            paths.push_back(path);
+        }
+        result.push_back(i);
+    }
+    return result;
+}
 
 float num(const Json& j, float def) { return j.isNumber() ? float(j.toDouble(def)) : def; }
 float3 vec3(const Json& j, float3 def) {
@@ -158,8 +175,8 @@ void RtsView::warn(const UnitType& t, const std::string& msg) {
     warnings_.push_back(std::move(w));
 }
 
-const Model* RtsView::modelOf(uint16_t type) const {
-    return type < looks_.size() && !looks_[type].models.empty() ? looks_[type].models[0].model : nullptr;
+const Model* RtsView::modelOf(uint16_t type, size_t choice) const {
+    return type < looks_.size() && choice < looks_[type].models.size() ? looks_[type].models[choice].model : nullptr;
 }
 
 RtsView::TypeLook::GroundShadow RtsView::parseGroundShadow(const Json& gs) {
@@ -199,11 +216,20 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     // "model": "a.glb" | ["a.glb", "b.vox"] (one picked per object) | entries {"file": "b.vox", ...}
     // whose other keys replace the view keys for that model (different nodes, materials, height)
     std::vector<std::pair<std::string, Json>> entries;
+    // A choice needs appearance defaults, not a copy of the entire variant list.
+    // Large character palettes otherwise duplicate O(choices squared) JSON data.
+    Json choiceDefaults = v;
+    choiceDefaults.erase("model");
     if (v["model"].isString()) entries.emplace_back(v["model"].str(), v);
-    for (const auto& p : v["model"].items()) {
-        if (p.isString()) entries.emplace_back(p.str(), v);
+    const auto initialChoices = initialModelChoices(v);
+    for (size_t index = 0; index < v["model"].items().size(); ++index) {
+        if (deferredLoading_ && std::find(initialChoices.begin(), initialChoices.end(), index) == initialChoices.end()) {
+            L.pendingVariants.push_back(index); continue;
+        }
+        const auto& p = v["model"][index];
+        if (p.isString()) entries.emplace_back(p.str(), choiceDefaults);
         else if (p.isObject()) {
-            Json merged = v;
+            Json merged = choiceDefaults;
             for (const auto& [k, val] : p.members()) if (k != "file") merged.set(k, val);
             if (p.getStr("file").empty()) warn(t, "model entry without \"file\"");
             else entries.emplace_back(p.getStr("file"), std::move(merged));
@@ -308,6 +334,155 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
     return bits;
 }
 
+bool RtsView::prepareType(uint16_t type, bool allVariants) {
+#ifndef __EMSCRIPTEN__
+    if (!asyncReader_ || !rules_ || type >= loadedTypes_.size() || (typeLoaded(type) && !allVariants)) return true;
+    const auto& t = rules_->types[type];
+    GeometryPolicy policy;
+    try { policy = parseGeometryPolicy(t.view["geometry"]); } catch (const std::exception&) {}
+    const bool geometry = policy.clusters || policy.shadowClusters || policy.occluder;
+    if (prepareType_ != int(type) || prepareAllVariants_ != allVariants) {
+        if (preparing_.valid()) { preparing_.wait(); preparing_ = {}; }
+        prepareType_ = type; prepareAllVariants_ = allVariants; preparePaths_.clear(); prepareCursor_ = 0;
+        auto add = [&](const std::string& path) {
+            if (path.empty()) return;
+            const auto key = path + (geometry ? "#geometry" : "");
+            if (models_.count(key)) return;
+            const auto entry = std::make_pair(path, key);
+            if (std::find(preparePaths_.begin(), preparePaths_.end(), entry) == preparePaths_.end()) preparePaths_.push_back(entry);
+        };
+        // Main choices, LODs, attachments and construction stages share the model syntax.
+        std::function<void(const Json&)> visit = [&](const Json& v) {
+            if (v.isObject()) for (const auto& [key, value] : v.members()) {
+                if (key == "model") {
+                    if (value.isString()) add(value.str());
+                    for (const auto& choice : value.items()) {
+                        if (choice.isString()) add(choice.str()); else add(choice.getStr("file"));
+                    }
+                }
+                visit(value);
+            }
+            else for (const auto& value : v.items()) visit(value);
+        };
+        if (!allVariants && deferredLoading_ && t.view["model"].isArray() && t.view["streaming"].getInt("initialModels", 0) > 0) {
+            Json initialView = t.view, choices = Json::array();
+            for (size_t index : initialModelChoices(t.view)) choices.push(t.view["model"][index]);
+            initialView.set("model", std::move(choices));
+            visit(initialView);
+        } else visit(t.view);
+    }
+    if (preparing_.valid()) {
+        if (preparing_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return false;
+        auto result = preparing_.get();
+        for (const auto& message : result.warnings) warn(t, message);
+        // A runtime spawn can have synchronously cached the same file while the worker ran.
+        const auto& key = preparePaths_[prepareCursor_].second;
+        if (!models_.count(key)) {
+            if (result.model) uploadModel(*dev_, *result.model);
+            models_.emplace(key, std::move(result.model));
+        }
+        ++prepareCursor_;
+    }
+    if (prepareCursor_ < preparePaths_.size()) {
+        const auto path = preparePaths_[prepareCursor_].first;
+        preparingResource_ = path;
+        const auto reader = asyncReader_;
+        const auto textures = textureCache_;
+        const bool prepareSkin = t.view.getStr("skinning", "auto") != "palette" && !t.view.has("animationGraph") && !t.view.getBool("programmableAnimation");
+        preparing_ = std::async(std::launch::async, [path, reader, geometry, prepareSkin, textures] {
+            PreparedModel result;
+            try {
+                result.model = loadModel(path, reader, &result.warnings, textures);
+                if (geometry && result.model) prepareGeometry(*result.model);
+                if (prepareSkin && result.model) prepareAnimationBake(*result.model);
+                if (result.model) prepareModelUpload(*result.model);
+            } catch (const std::exception& e) { result.warnings.push_back(e.what()); result.model.reset(); }
+            return result;
+        });
+        return false;
+    }
+    preparingResource_.clear();
+#else
+    (void)type; (void)allVariants;
+#endif
+    return true;
+}
+
+size_t RtsView::pendingModelVariants() const {
+    size_t n = 0;
+    for (const auto& look : looks_) n += look.pendingVariants.size() - look.nextVariant;
+    return n;
+}
+
+void RtsView::streamModelVariants(double budgetMs) {
+    if (!rules_ || !dev_ || budgetMs <= 0) return;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(int64_t(budgetMs * 1000));
+    for (size_t type = 0; type < looks_.size(); ++type) {
+        auto& look = looks_[type];
+        if (!typeLoaded(uint16_t(type)) || look.nextVariant == look.pendingVariants.size()) continue;
+        if (!prepareType(uint16_t(type), true)) return;
+        const auto& t = rules_->types[type];
+        Json defaults = t.view; defaults.erase("model");
+        while (look.nextVariant < look.pendingVariants.size()) {
+            const auto index = look.pendingVariants[look.nextVariant++];
+            const auto& entry = t.view["model"][index];
+            const auto path = entry.isString() ? entry.str() : entry.getStr("file");
+            Json view = defaults;
+            if (entry.isObject()) for (const auto& [key, value] : entry.members()) if (key != "file") view.set(key, value);
+            ModelChoice choice;
+            if (loadChoice(*dev_, t, view, path, choice)) {
+                if (!view.has("procedural")) defaultProcedural(t, look, choice);
+                else { parseProcedural(t, view["procedural"], choice); if (view.getBool("proceduralDefaults")) defaultProcedural(t, look, choice); }
+                configureExtras(*dev_, t, view, choice);
+                finishChoice(t, choice);
+                // Append only: EntityAnim::choice, its graph and model stay valid for existing people.
+                look.models.push_back(std::move(choice));
+            }
+            if (look.nextVariant < look.pendingVariants.size() && std::chrono::steady_clock::now() >= deadline) return;
+        }
+        look.pendingVariants.clear(); look.nextVariant = 0;
+#ifndef __EMSCRIPTEN__
+        for (const auto& path : preparePaths_) {
+            auto it = models_.find(path.second);
+            if (it != models_.end() && it->second) std::vector<float>().swap(it->second->baked.pending);
+        }
+        prepareType_ = -1; preparePaths_.clear(); prepareCursor_ = 0;
+#endif
+        if (std::chrono::steady_clock::now() >= deadline) return;
+    }
+}
+
+bool RtsView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
+    if (!typeLoaded(type)) return false;
+    bool ready=true;
+    const auto& look=looks_[type];
+    for(const auto& choice:look.models) if(choice.model) ready=renderer.warmModelPipelines(*choice.model,&choice.materials) && ready;
+    for(const auto& choice:look.lods) if(choice.model) ready=renderer.warmModelPipelines(*choice.model,&choice.materials) && ready;
+    return ready;
+}
+
+void RtsView::loadType(uint16_t type) {
+    if (!rules_ || type >= loadedTypes_.size() || loadedTypes_[type]) return;
+    buildLook(*dev_, rules_->types[type], looks_[type]);
+    if (twoD_) twoD_->loadType(type);
+    loadedTypes_[type] = true;
+#ifndef __EMSCRIPTEN__
+    if (prepareType_ == int(type)) {
+        for (const auto& path : preparePaths_) {
+            auto it = models_.find(path.second);
+            if (it != models_.end() && it->second) std::vector<float>().swap(it->second->baked.pending);
+        }
+        prepareType_ = -1; preparePaths_.clear(); prepareCursor_ = 0;
+    }
+#endif
+}
+
+std::string RtsView::typeResource(uint16_t type) const {
+    if (!rules_ || type >= rules_->types.size()) return {};
+    const auto& t = rules_->types[type];
+    return t.view.getStr("model", t.view["sprite"].getStr("sheet", t.name));
+}
+
 Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::string& path) {
     GeometryPolicy policy;
     try { policy = parseGeometryPolicy(t.view["geometry"]); }
@@ -318,7 +493,7 @@ Model* RtsView::loadModelCached(gfx::Device& dev, const UnitType& t, const std::
         std::unique_ptr<Model> m;
         try {
             std::vector<std::string> w;
-            m = loadModel(path, read_, &w);
+            m = loadModel(path, read_, &w, textureCache_);
             for (auto& s : w) warn(t, s);
             if (policy.clusters || policy.shadowClusters || policy.occluder) prepareGeometry(*m);
             uploadModel(dev, *m);

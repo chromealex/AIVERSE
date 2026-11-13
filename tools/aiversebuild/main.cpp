@@ -669,6 +669,7 @@ aiverse::build::BrandingContext branding(const Game& g, const Options& o) {
 void exportSources(const Options& o, const fs::path& dst) {
     for (const char* d : {"engine", "modules", "third_party", "platform", "libraries"}) copyDir(o.engine / d, dst / d);
     copyDir(o.engine / "apps" / "client", dst / "apps" / "client");
+    if(fs::exists(o.engine / "tools" / "metal")) copyDir(o.engine / "tools" / "metal", dst / "tools" / "metal"); // optional post-link shader compilation
     copyFile(o.engine / "CMakeLists.txt", dst / "CMakeLists.txt");
     copyFile(o.engine / "LICENSE", dst / "LICENSE");
     copyFile(tempDir(o) / "project-notices.txt", dst / "project-notices.txt");

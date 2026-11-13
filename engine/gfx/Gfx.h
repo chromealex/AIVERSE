@@ -153,8 +153,20 @@ public:
     virtual void updateTexture(TextureHandle h, int x, int y, int w, int h2, const void* pixels, int rowPitchBytes) = 0;
     virtual void destroyTexture(TextureHandle h) = 0;
     virtual ShaderHandle createShader(const ShaderDesc& d) = 0;   // returns invalid handle on failure (see lastError())
+    // Start on the device thread, then poll on that same thread. Jobs must not outlive
+    // the device. Dropping a job cancels publication; backend callbacks own their data.
+    using ShaderJob = std::function<bool(ShaderHandle&)>;
+    using PipelineJob = std::function<bool(PipelineHandle&)>;
+    virtual ShaderJob createShaderAsync(const ShaderDesc& d) {
+        const auto h = createShader(d); return [h](ShaderHandle& out) { out=h; return true; };
+    }
+    virtual PipelineJob createPipelineAsync(const PipelineDesc& d) {
+        const auto h = createPipeline(d); return [h](PipelineHandle& out) { out=h; return true; };
+    }
     virtual void destroyShader(ShaderHandle h) = 0;
     virtual PipelineHandle createPipeline(const PipelineDesc& d) = 0;
+    // Poll preparation of a backend-selected colour-target variant. Device thread only.
+    virtual bool warmPipelineColor(PipelineHandle, PixelFormat) { return true; }
     virtual void destroyPipeline(PipelineHandle h) = 0;
     virtual const std::string& lastError() const = 0;
     // Formats the GPU samples natively (block-compressed ones vary by GPU and API).

@@ -44,7 +44,7 @@ void spriteCorners(const SpriteLook& L, const Basis& B, float3 ground, float3 (&
 }
 } // namespace
 
-bool Rts2DView::init(gfx::Device& dev, const Rules& rules, const std::string& base, const SpriteDefaults& defaults) {
+bool Rts2DView::init(gfx::Device& dev, const Rules& rules, const std::string& base, const SpriteDefaults& defaults, bool deferTypes) {
     rules_ = &rules;
     base_ = base;
     defaults_ = defaults;
@@ -61,12 +61,17 @@ bool Rts2DView::init(gfx::Device& dev, const Rules& rules, const std::string& ba
         }
     shadowTex_ = textures_.addGenerated("builtin:shadow", S, S, px, false);
     looks_.assign(rules.types.size(), {});
-    for (size_t i = 0; i < rules.types.size(); ++i) {
-        const Json& s = rules.types[i].view["sprite"];
-        if (s.isObject()) loadLook(looks_[i], rules.types[i], s);
-    }
+    loadedTypes_.assign(rules.types.size(), false);
+    if (!deferTypes) for (size_t i = 0; i < rules.types.size(); ++i) loadType(uint16_t(i));
     ready_ = true;
     return true;
+}
+
+void Rts2DView::loadType(uint16_t type) {
+    if (!rules_ || type >= loadedTypes_.size() || loadedTypes_[type]) return;
+    const Json& s = rules_->types[type].view["sprite"];
+    if (s.isObject()) loadLook(looks_[type], rules_->types[type], s);
+    loadedTypes_[type] = true;
 }
 
 void Rts2DView::shutdown(gfx::Device& dev) {

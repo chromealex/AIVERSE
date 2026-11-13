@@ -6,7 +6,7 @@ namespace aiverse::world {
 // CPU model decode/terrain tessellation in the worker; GPU publication on update's thread.
 class WorldScene {
 public:
-    WorldScene(const Json& manifest,AssetReader reader);
+    WorldScene(const Json& manifest,AssetReader reader,std::shared_ptr<render::ModelTextureCache> textures = {});
     ~WorldScene();
     void update(gfx::Device&,std::span<const Vec3> observers,int radius=2);
     void draw(render::Renderer3D&,Cell renderOrigin,int originCellSize);
@@ -21,6 +21,7 @@ private:
     };
     struct ModelCache;
     WorldAssets assets_;
+    std::shared_ptr<render::ModelTextureCache> textures_;
     std::shared_ptr<ModelCache> cache_;                       // "shareModels": one decoded / uploaded model per file
     bool shareModels_=false;
     float overhang_=0;                                        // "meshOverhang": units a mesh may reach past its chunk

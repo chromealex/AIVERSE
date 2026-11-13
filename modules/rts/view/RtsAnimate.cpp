@@ -115,6 +115,11 @@ RtsView::EntityAnim& RtsView::stateFor(uint64_t key, const SceneObject& o) {
         const uint64_t h = mix64(key);
         st.type = o.type;
         st.choice = int(h % L.models.size());
+        auto saved = streamingChoices_.find(key);
+        if (saved != streamingChoices_.end() && saved->second.first == o.type)
+            st.choice = saved->second.second;
+        else if (L.nextVariant < L.pendingVariants.size())
+            streamingChoices_[key] = {o.type, st.choice};
         st.anim.setModel(L.models[size_t(st.choice)].model);
         st.graph.reset(L.models[size_t(st.choice)].graph);
         st.yaw = yawOf(o.facing);

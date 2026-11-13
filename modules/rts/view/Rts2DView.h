@@ -52,7 +52,8 @@ struct SpriteLook {
 class Rts2DView {
 public:
     // `defaults`: rules/game.json "sprites" block (shadow mode, lit)
-    bool init(gfx::Device& dev, const Rules& rules, const std::string& contentBase, const SpriteDefaults& defaults = {});
+    bool init(gfx::Device& dev, const Rules& rules, const std::string& contentBase, const SpriteDefaults& defaults = {}, bool deferTypes = false);
+    void loadType(uint16_t type);
     void shutdown(gfx::Device& dev);
     bool hasSprite(uint16_t type) const { return type < looks_.size() && looks_[type].valid; }
     const SpriteLook& look(uint16_t type) const { return looks_[type]; }
@@ -94,6 +95,7 @@ private:
     render::SpriteBatch batch_;
     render::TextureRef shadowTex_;
     std::vector<SpriteLook> looks_;
+    std::vector<bool> loadedTypes_;
     const Rules* rules_ = nullptr;
     bool ready_ = false;
 

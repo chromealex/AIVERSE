@@ -217,6 +217,7 @@ void RtsView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, 
 
 void RtsView::drawGhost(Renderer3D& r, uint16_t type, float3 pos, bool ok, const MapGrid& grid, double time) {
     if (type >= looks_.size()) return;
+    loadType(type);
     static EntityAnim ghost;
     ghost.type = type;
     ghost.choice = 0;
@@ -239,6 +240,7 @@ void RtsView::drawGhost(Renderer3D& r, uint16_t type, float3 pos, bool ok, const
 
 void RtsView::drawPreview(Renderer3D& r, uint16_t type, uint8_t owner, double time, float yaw) {
     if (type >= looks_.size()) return;
+    loadType(type);
     const uint64_t key = (1ull << 62) | (uint64_t(owner) << 16) | type;
     SceneObject o;
     o.type = type;

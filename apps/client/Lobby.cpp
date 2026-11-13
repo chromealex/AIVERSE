@@ -210,9 +210,11 @@ void GameClient::startNetMatch() {
     mode_ = Mode::Normal;
     notices_.clear();
     setScreen(Screen::Playing);
+    beginMapLoading();
 }
 
 void GameClient::leaveNetMatch() {
+    mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
     if (net_) { net_->leaveMatch(); net_->refreshRooms(); }   // detach before the simulation goes away
     fx_.stopMatch();
     sim_.reset();

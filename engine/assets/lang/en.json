@@ -545,5 +545,17 @@
   "reset": "Reset",
   "orbit": "Orbit",
   "distance": "Distance"
+},
+  "loading": {
+    "shaders": "Preparing shaders",
+    "rules": "Game rules",
+    "renderer": "Renderer",
+    "view": "Terrain and shared graphics",
+    "effects": "Effects",
+    "audio": "Audio",
+    "ui": "Interface",
+    "ready": "Ready",
+    "resource": "Loading {name}",
+    "progress": "{percent}%"
 }
 }

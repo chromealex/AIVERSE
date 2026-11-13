@@ -34,6 +34,7 @@ quat rotationOf(const mat4& m);
 
 // Bakes every clip into Model::baked (joint matrices of the first skin, `fps` samples per second,
 // at most maxRows rows: longer sets lower the rate). Needs the CPU model (nodes, clips, skins).
+bool prepareAnimationBake(Model& m, float fps = 30, int maxRows = 2048); // CPU only
 bool bakeAnimations(gfx::Device& dev, Model& m, float fps = 30, int maxRows = 2048);
 // Row of the baked texture for clip / time (clip -1 = bind pose).
 int bakedRow(const Model& m, int clip, float time, bool loop = true);

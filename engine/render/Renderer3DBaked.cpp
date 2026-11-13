@@ -22,7 +22,7 @@ void Renderer3D::setBakedQuality(BakedQuality q) {
     // AIVERSE_GIQ is baked into the shader variants
     for (auto& [k, p] : modelPipes_) dev_->destroyPipeline(p);
     for (auto& [k, s] : modelShaders_) if (s.shader.valid()) dev_->destroyShader(s.shader);
-    modelPipes_.clear(); modelShaders_.clear();
+    pendingModelPipes_.clear(); modelPipes_.clear(); modelShaders_.clear();
 }
 
 void Renderer3D::bakedItem(ModelItem& it, const ModelDraw& d, int node) {
