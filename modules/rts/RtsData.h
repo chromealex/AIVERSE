@@ -612,6 +612,7 @@ struct Rules {
     std::vector<GridFieldDef> gridFields;      // rules "fields" (RtsGridFieldData.h); maps add / override in setup
     RaidRules raid;                            // rules "raid" (RtsRaidData.h): extraction raids
     std::shared_ptr<const ProgressionRules> progression;   // rules "progression" (RtsProgressionData.h); null without the block
+    CoreRules core;                            // battle core (rules "battleCore", RtsCore.cpp)
     ModesRules modes;                          // match modes, timed rules, resource levels, match stats (RtsModes.h)
 
     int findRoom(const std::string& id) const;
@@ -636,6 +637,7 @@ VictoryRules loadVictory(const Json& j, const VictoryRules& def);
 // match modes (RtsModesData.cpp): loadRules calls loadModes; setup merges rules / preset / map and parses the result
 void loadModes(Rules& r, const Json& j);
 ModesRules parseModes(const Rules& r, const Json& modes);
+std::vector<TimedRule> parseTimedRules(const Rules& r, const std::string& where, const Json& list);
 Json effectiveModes(const Json& rules, const Json& map, std::string* presetId);
 
 } // namespace aiverse::game

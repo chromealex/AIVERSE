@@ -97,6 +97,7 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (fields_->active()) sim.addSystem("gridfields", [this](Simulation& s) { fields_->tick(s); });   // RtsGridFields.cpp
     sim.addSystem("vision", [this](Simulation& s) { sysVision(s); });
     if (env_->active() && env_->hasFog()) sim.addSystem("environment3", [this](Simulation& s) { env_->fogTick(s); });   // BW fog (RtsEnv.cpp)
+    if (rules_.core.any) sim.addSystem("battlecore", [this](Simulation& s) { sysCore(s); });   // RtsCore.cpp: energy / morale of the deaths
     if (modes_.any) sim.addSystem("modes", [this](Simulation& s) { sysModes(s); });   // RtsModes.cpp: match modes decide before victory
     sim.addSystem("victory", [this](Simulation& s) { script_->callStd(s, StdFn::Victory); });   // lua/victory.lua
     sim.addSystem("triggers", [this](Simulation& s) {   // last: sees every event of the tick (lua/triggers.lua)
@@ -107,6 +108,14 @@ void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
     if (traffic_->active()) sim.addSystem("traffic", [this](Simulation& s) { traffic_->collect(s); });   // last: keeps the tick's shots / hits / deaths (scripts' too) for its next tick
     sim.world().setResource<MatchOutcome>();
     sim.addSystem("outcome", [this](Simulation& s) { freezeOutcome(s); });   // last: the result of the whole tick
+    // Gameplay time scale (Bunker Wars SetGameplayTimescale: tutorial windows freeze the battle): with the trigger
+    // variable "gameplay_scale" in [0, 1) the gameplay systems run on that share of the ticks; commands, vision,
+    // victory, triggers, scripts and the outcome keep running. Without the variable nothing changes.
+    sim.wrapSystems([this](const std::string& n, Simulation::SystemFn f) -> Simulation::SystemFn {
+        if (n == "vision" || n == "victory" || n == "triggers" || n == "scripts" || n == "matchstats" || n == "outcome") return f;
+        return [this, f = std::move(f)](Simulation& s) { if (gameplayRun_) f(s); };
+    });
+    sim.insertSystem(0, "gameplayClock", [this](Simulation& s) { gameplayClock(s); });
     sysCreep(sim);
     sysEconomy(sim); // initial supply/tech counts
     // big maps: build the hierarchical pathing graph now (it is derived data, so this only moves the cost
@@ -1604,4 +1613,19 @@ void RtsModule::hashState(Simulation& sim, Hasher& h) {
     if (traffic_ && traffic_->active()) traffic_->hash(sim, h);   // games with rules "traffic" only
 }
 
+} // namespace aiverse::game
+
+namespace aiverse::game {
+// "gameplay_scale" in [0, 1): an accumulator (variable "gameplay_scale_acc") lets that share of ticks through, so
+// 0 freezes the battle and 0.5 runs it at half speed (a tween 1 -> 0 slows it down on the way, as in BW).
+void RtsModule::gameplayClock(Simulation& sim) {
+    auto& vars = state(sim).trig.vars;
+    auto it = vars.find("gameplay_scale");
+    if (it == vars.end() || it->second >= Fixed::fromInt(1)) { gameplayRun_ = true; return; }
+    const Fixed scale = std::max(Fixed{}, it->second);
+    Fixed& acc = vars["gameplay_scale_acc"];
+    acc += scale;
+    gameplayRun_ = acc >= Fixed::fromInt(1);
+    if (gameplayRun_) acc -= Fixed::fromInt(1);
+}
 } // namespace aiverse::game

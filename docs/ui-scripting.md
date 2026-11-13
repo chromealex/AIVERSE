@@ -53,7 +53,7 @@ Engine side: `engine/assets/ui/lib/meta.lua` (ui / profile / shop, runs before `
 - `game` — `tr(key, args)`, `hasText(key)`, `language()`, `languages()`, `setLanguage(tag)`, `name()`, `maps()`,
   `start(i, {difficulty, spectate, initialVars})`, `difficulty(n?)`, `screen()`, `pause()`, `resume()`, `menu()`, `online()`,
   `howto(open?)`, `engineMenu(on?)`, `notice(text)`, `lastResult()`, `safeArea()`, `touch()`, `platform()`, `openUrl(url)` (http(s) / mailto in the system browser; false if refused),
-  `preview()`, `time()`, `json('ui/x.json')`, `decode(text)`, `encode(v)`, `log(...)` (= `print`),
+  `preview()`, `time()`, `sendPercent(p?)` (share of a garrison a send takes, 1..100; pads and the HUD use it), `useAbility(i)` (player ability by rules index, as its HUD card: instant cast or targeting), `json('ui/x.json')`, `decode(text)`, `encode(v)`, `log(...)` (= `print`),
   `on(event, fn)`, `off(event, fn)`.
 - Events: `screen` (menu | lobby | playing | paused | over), `open` / `close` `{screen}`,
   `matchEnd {won, result, seconds, map, mapTitle, difficulty, spectator, online, vars}` (`vars`: the simulation's variables at the end, `game.set_var` names -> numbers: how a game's scripts tell its screens how the match ended, e.g. a retry chosen on an in-match result panel), `language`, `purchase`, `profile`,

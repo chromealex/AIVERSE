@@ -86,6 +86,7 @@ int rVictoryRules(lua_State* L, Vm& vm) {
     for (auto& t : R.types) anyKey |= t.key;
     lua_pushboolean(L, anyKey); lua_setfield(L, -2, "any_key_type");
     lua_pushboolean(L, R.territory.enabled); lua_setfield(L, -2, "territory_enabled");
+    lua_pushboolean(L, vm.module->modes().conquestTeam); lua_setfield(L, -2, "team_elimination");   // match modes (RtsModes.cpp)
     return 1;
 }
 int rTickets(lua_State* L, Vm& vm) {

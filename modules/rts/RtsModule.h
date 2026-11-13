@@ -839,10 +839,24 @@ public:
 
 private:
     ModesRules modes_;               // match modes of this match (read-only after setup, RtsModes.cpp)
+    // gameplay time scale (trigger variable "gameplay_scale", agent-bw-client): whether this tick runs the gameplay
+    // systems; recomputed from the (hashed, saved) variables at the start of every tick
+    bool gameplayRun_ = true;
+    void gameplayClock(Simulation& sim);
     void modesSetup(Simulation& sim, const Json& rulesJson, const Json& map);
     void sysModes(Simulation& sim);
     void sysMatchStats(Simulation& sim);
     void hashModes(Simulation& sim, Hasher& h);
+    // battle core (RtsCore.cpp): rules "battleCore"
+    void coreSetup(Simulation& sim, const Json& map);
+    void coreMorale(Simulation& sim, uint8_t player, Fixed points, bool gain, bool resetCooldown);
+    void coreUnitsLost(Simulation& sim, uint8_t player, int count);
+    void coreAssault(Simulation& sim, uint8_t attacker, uint8_t defender);
+    void coreCaptured(Simulation& sim, uint16_t type, uint8_t from, uint8_t to);
+    void coreUpgraded(Simulation& sim, uint8_t owner, uint16_t type);
+    void sysCore(Simulation& sim);
+    std::vector<Fixed> coreGrowthRates(Simulation& sim) const;
+    int coreNeutralMax(Simulation& sim, Entity e, const UnitType& t) const;
     friend bool ioModesState(RtsModule& m, Simulation& sim, Archive& a);
     std::shared_ptr<const struct BwAIConfig> bwAI_;   // agent-bw-ai
     Json generated_;                 // generated map (see generatedMap())

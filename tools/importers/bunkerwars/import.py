@@ -13,8 +13,8 @@ and writes (PORT_TODO.md next to them is maintained by hand: what is missing for
   game.json, rules.json, maps/<id>.json, lang/{ru,en}.json   the playable game (engine keys only)
   bw/*.json, bw/maps/<id>.json                               every BW number the engine has no key for yet, in engine units
 
-Units: BW world units / SCALE = cells (SCALE = 40: the default BW map 2720 x 1520 becomes 68 x 38 cells, unit speed 80 -> 2,
-tower ranges 400..550 -> 10..13.75). Map y is BW screen y (the BW world is drawn with aspectRatio 0.5; travel along routes
+Units: BW world units / SCALE = cells (SCALE = 50, as the routes / skills / AI ports: the BW screen 2720 x 1520 is 54.4 x 30.4
+cells, unit speed 80 -> 1.6). Map y is BW screen y (the BW world is drawn with aspectRatio 0.5; travel along routes
 is measured in these coordinates, so travel times stay exact). Seconds stay seconds. Every value is written as the exact
 decimal of the BW float divided by SCALE; the engine reads JSON numbers straight into Q47.16 fixed point.
 
@@ -28,18 +28,21 @@ import os
 import re
 import sys
 from decimal import Decimal
+from pathlib import Path
 
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'lib'))
 from unity import unity_yaml as uy  # noqa: E402
 
-SCALE = 40                      # BW world units per cell
+CACHE_VERSION = 's2.5'           # bump when the map / skills conversion changes (--cache)
+SCALE = 50                      # BW world units per cell (the routes, skills and AI ports use the same)
 DEFAULT_MAP = (2720, 1520)      # MultiscreenModule.mapSize
 TYPE_HOUSE, TYPE_TOWER, TYPE_SMITHY = 1, 2, 4
 POINT_TYPES = {1: 'house', 2: 'tower', 4: 'smithy', 8: 'special1', 16: 'domination', 32: 'kingofthehill', 64: 'cave',
                128: 'graveyard', 256: 'special2', 512: 'special3', 1024: 'special4', 2048: 'special5'}
-TYPE_IDS = {'house': 'bunker', 'tower': 'tower', 'smithy': 'armory'}
+LEVELLED = ('house', 'tower', 'smithy')
+KIND_TAGS = {'house': 'bunker'}   # structure tags the skills converter filters on (mapping.py POINT_TYPES)
 MODES = {1: 'conquest', 2: 'domination', 4: 'kingOfTheHill', 8: 'timeMod'}
 COMPLEXITY = ['easy', 'normal', 'hard', 'expert']   # MapPointsModule.complexityTypes (values[] index)
 
@@ -360,49 +363,71 @@ def pick_race(src, races):
     return base
 
 
+def kind_of(b):
+    return POINT_TYPES.get(b.get('type'), 'type%s' % b.get('type'))
+
+
+LEVELLED_IDS = {'house': 'bunker', 'tower': 'tower', 'smithy': 'armory'}
+SPECIAL_IDS = {'domination': 'domination', 'kingofthehill': 'koh', 'cave': 'cave', 'graveyard': 'graveyard',
+               'special1': 'hospital', 'special2': 'storage', 'special3': 'megatower', 'special4': 'prison',
+               'special5': 'snowbunker'}
+
+
 def type_id(b):
-    kind = POINT_TYPES.get(b.get('type'), 'type%s' % b.get('type'))
-    if kind not in TYPE_IDS:   # special buildings have one level: name them after the asset
-        return stem_id(re.sub(r'^Campaign_|PointInfo$', '', b.get('name') or kind))
-    return '%s%d' % (TYPE_IDS[kind], int(b.get('level') or 1))
+    """bunker1..5, tower1..4, armory1 and the one-level special buildings: the names the skills converter
+    (tools/importers/bunkerwars/skills/mapping.py KIND_TYPE) transforms into."""
+    kind = kind_of(b)
+    if kind in LEVELLED:
+        return '%s%d' % (LEVELLED_IDS[kind], int(b.get('level') or 1))
+    return SPECIAL_IDS.get(kind, kind)
 
 
-def point_type(kind, level, specials):
-    if kind in TYPE_IDS:
-        return '%s%d' % (TYPE_IDS[kind], level if kind != 'smithy' else 1)
-    return specials.get(kind, kind)
+def point_type(kind, level):
+    if kind in LEVELLED:
+        return '%s%d' % (LEVELLED_IDS[kind], level if kind != 'smithy' else 1)
+    return SPECIAL_IDS.get(kind, kind)
+
+
+def tag_of(kind):
+    return KIND_TAGS.get(kind, kind)
 
 
 # ------------------------------------------------------------------ rules
 
-def build_rules(src, races, race, battle, heroes, lang):
+def build_rules(src, races, race, battle, heroes, morale, lang):
     blist = races[race]['buildings'] + races[race]['special']
     by_guid = {b['guid']: b for b in blist}
     units = battle.get('units') or {}
-    speed = units.get('speed', 80)
+    common = battle.get('common') or {}
+    world = battle.get('world') or {}
+    aspect = num(world.get('aspectRatio', 0.5))
     hero = heroes[0] if heroes else {}
     types = {}
     soldier = {
         'name': 'Солдат', 'tags': ['soldier'], 'health': {'max': 1},
-        'move': {'speed': cells(speed), 'radius': 0.125},
+        'move': {'speed': cells(units.get('speed', 80)), 'radius': 0.1},
         'sight': cells((battle.get('fow') or {}).get('unitRadius', 130)),
-        'entersGarrison': True, 'clash': True,
+        'entersGarrison': True,
         'view': {'shape': 'infantry', 'scale': 0.5}}
     types['soldier'] = soldier
+    # SkeletonArmy (Skill30) spawns these at a structure: soldiers of the caster that never enter the soul cycle
+    types['skeleton'] = dict(soldier, name='Скелет', tags=['soldier', 'skeleton'], view={'shape': 'infantry', 'scale': 0.5})
     lang['ru']['type.soldier'], lang['en']['type.soldier'] = 'Солдат', 'Soldier'
+    lang['ru']['type.skeleton'], lang['en']['type.skeleton'] = 'Скелет', 'Skeleton'
     smithies = sorted((b for b in blist if b.get('type') == TYPE_SMITHY), key=lambda b: b.get('level', 0))
     names = {'house': ('HUDScreen|BuildingMenu|Bunker|Description', 'Бункер', 'Bunker'),
              'tower': ('HUDScreen|BuildingMenu|Tower|Description', 'Вышка', 'Tower'),
              'smithy': ('HUDScreen|BuildingMenu|Arsenal|Description', 'Арсенал', 'Armory')}
+    every_building = sorted({tag_of(kind_of(b)) for b in blist})
     for b in blist:
-        kind = POINT_TYPES.get(b.get('type'), 'special')
+        kind = kind_of(b)
         if kind == 'smithy' and int(b.get('level') or 1) > 1:
             continue        # Smithy2..4 are the table for 2..4 owned armories, not buildings
         tid = type_id(b)
         if tid in types:
             continue
         lvl = int(b.get('level') or 1)
-        t = {'name': '', 'tags': [kind if kind != 'house' else 'bunker'], 'level': lvl,
+        t = {'name': '', 'tags': [tag_of(kind), 'building'], 'level': lvl,
              'structure': {'footprint': [2, 2]}, 'invulnerable': True,
              'sight': cells(b.get('fowRange', 300)),
              'garrison': {'max': int(b.get('maxValue') or 0), 'unit': 'soldier', 'capturable': True,
@@ -420,45 +445,70 @@ def build_rules(src, races, race, battle, heroes, lang):
         if ups:
             t['upgrades'] = ups
         t['cost'] = {'garrison': int(b.get('cost') or 0), 'time': num(b.get('buildingTime', 0))}
-        if kind == 'tower':
-            t['weapons'] = [{'range': cells(b.get('fireRange', 0)), 'damage': 1, 'cooldown': per(b.get('firePerSecond', 1)),
-                             'projectileSpeed': cells(b.get('fireMetersPerSecond', 300))}]
+        if b.get('firePerSecond') and b.get('fireRange'):
+            # BW towers: rangeX = fireRange, rangeY = aspectRatio x rangeX (TowerModule.UpdateInfo)
+            t['weapons'] = [{'range': cells(b['fireRange']), 'rangeAspect': aspect, 'damage': 1,
+                             'cooldown': per(b['firePerSecond']), 'projectileSpeed': cells(b.get('fireMetersPerSecond', 300))}]
         if kind == 'smithy' and smithies:
             dmg = [num(s.get('damageGlobalPercent', 1)) for s in smithies]
             shd = [num(s.get('shieldGlobalPercent', 1)) for s in smithies]
-            t['playerMods'] = {'max': len(smithies), 'mods': [
+            t['playerMods'] = {'max': min(len(smithies), int(common.get('maxWeaponLevel', 4))), 'mods': [
                 {'tags': ['soldier'], 'stat': 'damage', 'byCount': dmg},
-                {'tags': ['bunker', 'tower', 'smithy'], 'stat': 'defense', 'byCount': shd}]}
-        t['view'] = {'shape': {'house': 'bunker', 'tower': 'tower', 'smithy': 'barracks'}.get(kind, 'house'),
-                     'scale': 1.0}
-        key, ru, en = names.get(kind, (None,) + SPECIAL_NAMES.get(tid, (tid, tid)))
+                {'tags': ['building'], 'stat': 'defense', 'byCount': shd}]}
+        t['view'] = {'shape': {'house': 'bunker', 'tower': 'tower', 'smithy': 'barracks'}.get(kind, 'house'), 'scale': 1.0}
+        key, ru, en = names.get(kind, (None,) + SPECIAL_NAMES.get(kind, (kind, kind)))
         tr = src.text(key) if key else None
         if tr:
             ru, en = tr[0].capitalize(), tr[1].capitalize()
-        if kind in names and not (kind == 'smithy'):
+        if kind in ('house', 'tower'):
             ru, en = '%s %d' % (ru, lvl), '%s %d' % (en, lvl)
         t['name'] = ru
         lang['ru']['type.' + tid], lang['en']['type.' + tid] = ru, en
         types[tid] = t
-    # upgrade chains only between types that exist
     for t in types.values():
         if 'upgrades' in t:
             t['upgrades'] = [u for u in t['upgrades'] if u in types]
         g = t.get('garrison')
-        if g and g.get('onCapture') not in (None,) and g['onCapture'] not in types:
+        if g and g.get('onCapture') is not None and g['onCapture'] not in types:
             g.pop('onCapture')
-
+    # morale stars (MoraleInfo): levels with BW's non-compounding multipliers and point decay. The gains per building
+    # (moraleCatch* / moraleLost / moraleUpgrade points, 10 per unit lost in an assault) wait for the modes agent's
+    # `morale` block: until then the stock stays at 0 = level 0 = every multiplier 1, as in stage 1.
+    levels = []
+    for lv in morale['levels']:
+        e = {'at': lv.get('requiredPoints', 0)}
+        mods = []
+        if dec(lv.get('damagePercent', 1)) != 1:
+            mods.append({'tags': ['soldier'], 'stat': 'damage', 'mul': lv['damagePercent']})
+        if dec(lv.get('shieldPercent', 1)) != 1:
+            mods.append({'tags': ['building'], 'stat': 'defense', 'mul': lv['shieldPercent']})
+        if dec(lv.get('speedPercent', 1)) != 1:
+            mods.append({'tags': ['soldier'], 'stat': 'speed', 'mul': lv['speedPercent']})
+        if mods:
+            e['mods'] = mods
+        if lv.get('subtractPointsValue'):
+            e['decay'] = {'every': lv.get('subtractPointsTime', 1), 'amount': lv['subtractPointsValue'],
+                          'after': lv.get('subtractCooldown', 0)}
+        levels.append(e)
+    bm = battle.get('morale') or {}
     rules = {
         'victory': 'noEntities',
         'fogOfWar': {'mode': 'none'},
-        'lanes': {'left': 2, 'right': 3, 'spacing': cells((battle.get('units') or {}).get('columnsPadding', 20))},
+        'lanes': {'routes': {'lines': int(common.get('unitsInRow', 6)),
+                             'columnPadding': cells(units.get('columnsPadding', 20)),
+                             'flyColumnPadding': cells(units.get('flyColumnsPadding', 45)),
+                             'trim': cells((battle.get('routeVisualizer') or {}).get('pathPointOffset', 10))},
+                  'groups': {'rowSpacing': cells(units.get('rowsOffset', 70)), 'flyRowSpacing': cells(units.get('flyingRowsOffset', 80))}},
         'resources': {
-            'energy': {'name': 'Энергия', 'start': 0, 'regen': num(hero.get('passiveEnergyPerSecond', 2.5)),
-                       'capped': True, 'storage': num(hero.get('maxSkillEnergy', 500)),
-                       'gain': {'lost': num(hero.get('energyPerLostUnitAtMorale0', 2.25))}}},
+            'skillEnergy': {'name': 'Энергия', 'start': 0, 'regen': num(hero.get('passiveEnergyPerSecond', 2.5)),
+                            'capped': True, 'storage': num(hero.get('maxSkillEnergy', 500)),
+                            'gain': {'lost': num(hero.get('energyPerLostUnitAtMorale0', 2.25))}},
+            'morale': {'name': 'Боевой дух', 'start': 0, 'min': num(bm.get('minValue', 0)), 'capped': True,
+                       'storage': num(bm.get('maxValue', 8000)), 'levels': levels}},
         'types': types,
     }
-    lang['ru']['resource.energy'], lang['en']['resource.energy'] = 'Энергия', 'Energy'
+    lang['ru']['resource.skillEnergy'], lang['en']['resource.skillEnergy'] = 'Энергия', 'Energy'
+    lang['ru']['resource.morale'], lang['en']['resource.morale'] = 'Боевой дух', 'Morale'
     return rules
 
 
@@ -577,7 +627,119 @@ def to_cell(x, y, w, h):
     return [num((dec(x) + dec(w) / 2) / SCALE), num((dec(h) / 2 - dec(y)) / SCALE)]
 
 
-def build_map(src, hp, header, players, type_ok, specials, warnings):
+def hex_ints(v):
+    """Unity int[] written as one hex blob ("0300000001000000" -> [3, 1])."""
+    if isinstance(v, list):
+        return [int(x) for x in v]
+    if isinstance(v, int):
+        v = '%08x' % v if v >= 0 else ''
+    v = (v or '').strip() if isinstance(v, str) else ''
+    if not v or len(v) % 8:
+        return []
+    return [int.from_bytes(bytes.fromhex(v[i:i + 8]), 'little', signed=True) for i in range(0, len(v), 8)]
+
+
+DIFFICULTY = {1: 'easy', 2: 'normal', 3: 'hard', 4: 'expert'}
+BW_TICK = Decimal('0.033')      # NetworkModule.ONE_TICK_TIME
+ENGINE_TPS = 20
+ZONE_KINDS = ((256, 'water'), (512, 'road'), (4, 'toad'))
+SKILL_ZONES = (8, 16, 32, 64)
+
+
+def ticks(bw_ticks):
+    return int((dec(bw_ticks) * BW_TICK * ENGINE_TPS).to_integral_value())
+
+
+def ai_profile(src, ref, base):
+    """AI6ComplexityInfo (map Bot / AI assets) -> rules ai profile keys."""
+    p, d = src.ref(ref)
+    if not d:
+        return None
+    out = {'base': base}
+    if 'useSkills' in d:
+        out['useSkills'] = bool(d['useSkills'])
+    aw = [d.get('skillSlotAwaitDuration%d' % i) for i in range(1, 5)]
+    if all(x is not None for x in aw):
+        out['skillSlotAwait'] = [num(x) for x in aw]
+    if d.get('attackTimeouts'):
+        out['attackTimeouts'] = {str(t.get('pointIndex')): num(t.get('timeout', 0)) for t in d['attackTimeouts']}
+    for k in ('counterAttackScanRadiusFactor', 'canDefendPointMinTimeFactor', 'towerRankFactor', 'smithyRankFactor',
+              'attackDistanceFactor', 'upgradeTimeout'):
+        if k in d:
+            out[k] = num(d[k])
+    if d.get('minGroupSizeOverride') is not None:
+        out['minGroupSizeOverride'] = int(d['minGroupSizeOverride'])
+    if 'allowConvert' in d:
+        out['allowConvert'] = bool(d['allowConvert'])
+    return out
+
+
+def read_debut(src, var, color_slot, point_kinds, warnings, mapname):
+    rp = uy.get(var, 'debutResource', 'resourcePath')
+    if not rp:
+        return None
+    path = os.path.join(os.path.dirname(src.assets), rp)
+    try:
+        with open(path, encoding='utf-8') as f:
+            dj = json.load(f)
+    except (OSError, ValueError):
+        warnings.append('%s: debut %s not readable' % (mapname, rp))
+        return None
+    slot = color_slot.get(dj.get('color', var.get('color')))
+    if not slot:
+        return None
+    acts, states = [], []
+    for a in dj.get('actions') or []:
+        t, m, par = ticks(a.get('tick', 0)), a.get('method'), a.get('parameters') or []
+        if m == 'MoveUnits_RPC' and len(par) >= 3:
+            for fr, cnt in zip(par[0] or [], par[1] or []):
+                acts.append({'tick': t, 'send': [int(fr), int(par[2]), int(cnt)]})
+        elif m == 'Upgrade_RPC' and len(par) >= 2:
+            kind = POINT_TYPES.get(int(par[0]))
+            if kind:
+                acts.append({'tick': t, 'upgrade': int(a.get('netId', 0)) - 1, 'to': point_type(kind, int(par[1]))})
+        else:
+            warnings.append('%s: debut action %s not converted' % (mapname, m))
+    for tk, pts in sorted((dj.get('pointStates') or {}).items(), key=lambda kv: int(kv[0])):
+        for pi, st in pts.items():
+            kind = POINT_TYPES.get(int(st.get('t', 0)))
+            if kind:
+                states.append({'tick': ticks(tk), 'point': int(pi), 'type': point_type(kind, int(st.get('l', 1)))})
+    mode = {1: 'standard', 2: 'domination', 4: 'kingOfTheHill'}.get(dj.get('modType', var.get('modType')), 'auto')
+    d = {'slot': slot, 'mode': mode, 'actions': acts, 'states': states}
+    if var.get('complexity') in DIFFICULTY:
+        d['difficulty'] = DIFFICULTY[var['complexity']]
+    return d
+
+
+def default_loadout(hero_id, cards, talents):
+    """BW loadouts are the player's equipped cards (server inventory) + the hero's talent. A map player gets, for each
+    of the four card slots, the first common card allowed there, and the hero's talent in slot 4 (as the skills
+    converter's default_loadout)."""
+    out, used = [], set()
+    for k in range(4):
+        for c in cards:
+            if c['id'] not in used and (int(c.get('allowedSlot') or 0) >> k) & 1:
+                out.append({'id': c['id'], 'slot': k})
+                used.add(c['id'])
+                break
+    if hero_id in talents:
+        out.append({'id': talents[hero_id], 'slot': 4})
+    return out
+
+
+def _collect(obj, key, out):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == key and isinstance(v, str):
+                out.add(v)
+            _collect(v, key, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            _collect(v, key, out)
+
+
+def build_map(src, hp, header, players, ctx, warnings):
     data_ref = header.get('mapData') or {}
     dpath = src.guids.get(data_ref.get('guid')) if isinstance(data_ref, dict) else None
     if not dpath:
@@ -587,97 +749,233 @@ def build_map(src, hp, header, players, type_ok, specials, warnings):
     if not dpath:
         warnings.append('%s: map data not found' % os.path.basename(hp))
         return None, None
+    mname = os.path.basename(hp)
     main, mods = map_objects(src, dpath)
     pts = uy.get(mods.get('points') or {}, 'list', default=[]) or []
     if not pts:
         pts = uy.get(header, 'points', 'list', default=[]) or []
-    w, h = DEFAULT_MAP
+    sw, sh = DEFAULT_MAP
+    custom = False
     if header.get('useCustomMapSize'):
         cs = header.get('customMapSize') or {}
         if cs.get('x') and cs.get('y'):
-            w, h = cs['x'], cs['y']
-    # every point inside the map with a margin of 2 cells
-    for p in pts:
+            sw, sh, custom = cs['x'], cs['y'], True
+    w, h = dec(sw), dec(sh)
+    env = mods.get('environment') or {}
+    br = uy.get(env, 'battleRoyal', 'startPositions') or []
+    for p in pts:      # every point inside the map with a margin of 2 cells
         pos = p.get('position') or {}
-        w = max(dec(w), 2 * (abs(dec(pos.get('x', 0))) + 2 * SCALE))
-        h = max(dec(h), 2 * (abs(dec(pos.get('y', 0))) + 2 * SCALE))
-    W, H = int((dec(w) / SCALE).to_integral_value(rounding='ROUND_CEILING')), int((dec(h) / SCALE).to_integral_value(rounding='ROUND_CEILING'))
+        w = max(w, 2 * (abs(dec(pos.get('x', 0))) + 2 * SCALE))
+        h = max(h, 2 * (abs(dec(pos.get('y', 0))) + 2 * SCALE))
+    for st in br:      # battle royal rects (centred on their min corner)
+        r = st.get('rect') or {}
+        w = max(w, 2 * (abs(dec(r.get('x', 0))) + dec(r.get('width', 0)) / 2))
+        h = max(h, 2 * (abs(dec(r.get('y', 0))) + dec(r.get('height', 0)) / 2))
+    W, H = int((w / SCALE).to_integral_value(rounding='ROUND_CEILING')), int((h / SCALE).to_integral_value(rounding='ROUND_CEILING'))
     w, h = dec(W * SCALE), dec(H * SCALE)
 
     hplayers = header.get('players') or []
     pguid = [((pl.get('player') or {}).get('guid')) for pl in hplayers]
     complexity = 0 if header.get('multiplayer') else 1
-    ents, bwpoints = [], []
+    gm = header.get('gameMode') or 0
+    ents, bwpoints, caves = [], [], {}
     for i, p in enumerate(pts):
         st, lvl = p.get('startType'), int(p.get('startLevel') or 1)
         kind = POINT_TYPES.get(st, 'type%s' % st)
-        tid = point_type(kind, lvl, specials)
+        tid = point_type(kind, lvl)
         og = (p.get('startOwner') or {}).get('guid')
         owner = pguid.index(og) + 1 if og in pguid and not players.get(og, {}).get('neutral') else 0
         vals = p.get('values') or []
         v = vals[min(complexity, len(vals) - 1)] if vals else {}
         pos = p.get('position') or {}
+        # BW point index = this entity's place among the map's garrisons (AI, tutorials, environment use it)
         e = {'type': tid, 'owner': owner, 'pos': to_cell(pos.get('x', 0), pos.get('y', 0), w, h),
              'garrison': int(v.get('startValue', 0) or 0), 'id': 'p%d' % i}
-        if tid not in type_ok:
-            warnings.append('%s: point %d type %s (%s level %d) has no engine type yet: skipped' % (
-                os.path.basename(hp), i, tid, kind, lvl))
-        else:
-            ents.append(e)
+        mp_ = [n for f, bit, n in (('isDominationPoint', 2, 'domination'), ('isKingOfTheHillPoint', 4, 'kingOfTheHill'))
+               if p.get(f) and gm & bit]
+        if mp_:
+            e['modePoint'] = mp_[0] if len(mp_) == 1 else mp_
+        sg = hex_ints(p.get('screenGroups'))
+        if sg:
+            e['screenGroups'] = sg
+        if (p.get('caveGroup') if p.get('caveGroup') is not None else -1) >= 0:
+            caves.setdefault(int(p['caveGroup']), []).append(i)
+        if tid not in ctx['types']:
+            warnings.append('%s: point %d type %s has no engine type: placed as bunker1' % (mname, i, tid))
+            e['type'] = 'bunker1'
+        ents.append(e)
         bwpoints.append({'index': i, 'type': kind, 'level': lvl, 'owner': owner, 'pos': e['pos'],
-                         'linkedId': p.get('linkedId'), 'caveGroup': p.get('caveGroup'), 'botPriority': p.get('botPriority'),
-                         'domination': bool(p.get('isDominationPoint')), 'kingOfTheHill': bool(p.get('isKingOfTheHillPoint')),
+                         'linkedId': p.get('linkedId'), 'botPriority': p.get('botPriority'),
                          'values': {COMPLEXITY[k]: clean(x) for k, x in enumerate(vals[:4])},
                          'autostartSkill': uy.get(p, 'autostartSkillResource', 'resourcePath') or None})
-    mplayers = []
+    # players: hero, loadout, AI difficulty / per-map profile
+    mplayers, ai_players, ai_profiles, color_slot = [], {}, {}, {}
     for k, pl in enumerate(hplayers):
-        mplayers.append({'name': 'Игрок %d' % (k + 1), 'team': int(pl.get('team') or (k + 1))})
-    m = {'name': None, 'size': [W, H],
-         'players': mplayers,
-         'terrain': {'rows': ['.' * W] * H},
-         'entities': ents}
+        slot = k + 1
+        _, hinfo = src.ref(pl.get('hero'))
+        hero = 'hero%d' % int(hinfo.get('clientId')) if hinfo and hinfo.get('clientId') else 'hero%d' % ((k % 6) + 1)
+        mp = {'name': 'Игрок %d' % slot, 'team': int(pl.get('team') or slot),
+              'loadout': default_loadout(hero, ctx['cards'], ctx['talents'])}
+        mplayers.append(mp)
+        pi = players.get(pguid[k], {})
+        if pi.get('color') is not None:
+            color_slot[pi['color']] = slot
+        ci = pl.get('normalComplexityInfo' if complexity else 'easyComplexityInfo') or {}
+        diff = DIFFICULTY.get(ci.get('aiComplexity'))
+        if not diff:
+            for c in ('normal', 'hard', 'expert', 'easy'):
+                diff = DIFFICULTY.get(uy.get(pl, c + 'ComplexityInfo', 'aiComplexity'))
+                if diff:
+                    break
+        prof = ai_profile(src, ci.get('aiComplexityInfo'), diff or 'normal')
+        if prof:
+            ai_profiles['map_slot%d' % slot] = prof
+            ai_players[str(slot)] = 'map_slot%d' % slot
+        elif diff:
+            ai_players[str(slot)] = diff
+    m = {'name': None, 'size': [W, H], 'players': mplayers,
+         'terrain': {'rows': ['.' * W] * H}, 'entities': ents}
     if header.get('fogOfWar'):
         m['fogOfWar'] = {'mode': 'full'}
-    # sidecar: everything else, converted to cells
-    routes = []
+    if gm & 7 == 2:
+        m['matchMode'] = 'domination'
+    elif gm & 7 == 4:
+        m['matchMode'] = 'kingOfTheHill'
+    elif gm & 8 and not gm & 1:
+        m['matchMode'] = 'timeMod'
+    # multiscreen: the BW screen over a bigger map
+    if custom or W * SCALE > DEFAULT_MAP[0] or H * SCALE > DEFAULT_MAP[1]:
+        ro = header.get('gameplayRectOffset') or {}
+        m['screen'] = {'size': [cells(DEFAULT_MAP[0]), cells(DEFAULT_MAP[1])], 'center': to_cell(0, 0, w, h),
+                       'bounds': [cells(ro.get('m_Left', 0)), cells(ro.get('m_Right', 0)), cells(ro.get('m_Top', 0)),
+                                  cells(ro.get('m_Bottom', 0))]}
+    # routes (BW MapRoutesModule: control points with per-line offsets, zone flags, raw lines) + blockers
+    blockers = {}
+    for di, d in enumerate(uy.get(mods.get('destructibleObjects') or {}, 'list', default=[]) or []):
+        for wp in d.get('closedRoutes') or []:
+            blockers.setdefault(frozenset((wp.get('fromId'), wp.get('toId'))), []).append('wall%d' % di)
+    routes, side_routes = [], []
     for r in uy.get(mods.get('routes') or {}, 'list', default=[]) or []:
-        poly, slow, flags = [], [], []
+        a, b = r.get('pointFromId'), r.get('pointToId')
+        if a is None or b is None or a >= len(pts) or b >= len(pts):
+            continue
+        cps = []
         for rp in r.get('points') or []:
             pos = rp.get('position') or {}
-            poly.append(to_cell(pos.get('x', 0), pos.get('y', 0), w, h))
-            slow.append(num(rp.get('slowdownCoefficient') or 0))
-            flags.append(rp.get('zoneFlags') or 0)
-        rr = {'from': r.get('pointFromId'), 'to': r.get('pointToId'), 'points': poly}
-        if any(slow):
-            rr['slowdown'] = slow
-        if any(flags):
-            rr['zoneFlags'] = flags
-        offs = [uy.get(rp, 'offset', 'offsets') or [] for rp in r.get('points') or []]
-        if any(any(o) for o in offs):
-            rr['offsets'] = [[cells(x) for x in o] for o in offs]
+            at = to_cell(pos.get('x', 0), pos.get('y', 0), w, h)
+            offs = uy.get(rp, 'offset', 'offsets') or []
+            zone, slow = int(rp.get('zoneFlags') or 0), rp.get('slowdownCoefficient') or 0
+            if any(offs) or zone or slow:
+                q = {'at': at}
+                if any(offs):
+                    q['offsets'] = [cells(x) for x in offs]
+                if zone:
+                    q['zone'] = zone
+                if slow:
+                    q['slowdown'] = num(slow)
+                cps.append(q)
+            else:
+                cps.append(at)
+        if len(cps) < 2:
+            continue
+        rr = {'from': 'p%d' % a, 'to': 'p%d' % b, 'points': cps}
+        lines = [[to_cell(n.get('x', 0), n.get('y', 0), w, h) for n in (ln.get('rawNodes') or [])]
+                 for ln in r.get('rawSplineLines') or []]
+        if any(len(ln) > 1 for ln in lines):
+            rr['lines'] = lines
+        bl = blockers.get(frozenset((a, b)))
+        if bl:
+            rr['blockers'] = bl
         routes.append(rr)
-    zones = []
-    for z in uy.get(mods.get('zones') or {}, 'list', default=[]) or []:
-        zones.append({'zoneType': z.get('zoneType'), 'slowdown': num(z.get('slowdownValue') or 0),
-                      'polygon': [to_cell(q.get('x', 0), q.get('y', 0), w, h) for q in z.get('points') or []]})
+    if routes:
+        m['routes'] = routes
+    # environment (agent-bw-env): BW distances verbatim with scale, positions in cells
+    zones_env, areas = [], {}
+    zlist = uy.get(mods.get('zones') or {}, 'list', default=[]) or []
+    for zi, z in enumerate(zlist):
+        zt = int(z.get('zoneType') or 0)
+        poly = [to_cell(q.get('x', 0), q.get('y', 0), w, h) for q in z.get('points') or []]
+        if len(poly) < 3:
+            continue
+        kind = next((n for bit, n in ZONE_KINDS if zt & bit), 'other')
+        if zt & (2 | 256 | 512 | 4):
+            zones_env.append({'id': 'zone%d' % zi, 'kind': kind, 'poly': poly, 'slowdown': num(z.get('slowdownValue') or 1)})
+        for bit in SKILL_ZONES:   # SkillZoneFilter areas: map areas are rectangles (bounding box of the polygons)
+            if zt & bit:
+                xs, zs = [q[0] for q in poly], [q[1] for q in poly]
+                bb = areas.get('bw_zone_%d' % bit)
+                lo = [min(xs), min(zs), max(xs), max(zs)]
+                if bb:
+                    lo = [min(bb[0], lo[0]), min(bb[1], lo[1]), max(bb[0] + bb[2], lo[2]), max(bb[1] + bb[3], lo[3])]
+                areas['bw_zone_%d' % bit] = [num(lo[0]), num(lo[1]), num(dec(lo[2]) - dec(lo[0])), num(dec(lo[3]) - dec(lo[1]))]
+    if areas:
+        m['areas'] = areas
+    sc = header.get('seasonConfig') or {}
+    environment = {}
+    if sc.get('mapSeason') == 1:
+        environment['season'] = 'winter'
+    weather = [n for bit, n in ((1, 'rain'), (2, 'snow'), (4, 'lightning'), (8, 'blizzard')) if (sc.get('mapWeather') or 0) & bit]
+    if weather:
+        environment['weather'] = weather
+        environment['weatherParams'] = ctx['weatherParams']
+    if zones_env:
+        environment['zones'] = zones_env
+    if environment.get('season') == 'winter':
+        # WinterModule: a snow grid from 0 (fresh) to 1 (trampled), + unitMoveForce per second under walkers; speed by
+        # the last row whose health >= the cell; snow restore lowers it (field resolution: one cell, BW gridSize 30 px)
+        environment['trample'] = [{'field': 'snow', 'perSecond': ctx['winter']['perSecond'], 'speed': ctx['winter']['speed'],
+                                   'snowRestore': True}]
+    if header.get('fogOfWar'):
+        fow = ctx['fow']
+        environment['fog'] = {'memory': False, 'startFowSize': fow.get('startFowSize', 3000)}
+    if caves:
+        environment['caves'] = [caves[k] for k in sorted(caves) if len(caves[k]) > 1]
+        if not environment['caves']:
+            environment.pop('caves')
+    if environment:
+        environment['scale'] = SCALE
+        environment['screenYAxis'] = -1          # BW screen y (up) is -z here
+        m['environment'] = environment
+    # computer player (agent-bw-ai): per-slot difficulty, per-map profiles, recorded debuts
+    debuts = []
+    for var in uy.get(mods.get('bot') or {}, 'variants', default=[]) or []:
+        d = read_debut(src, var, color_slot, None, warnings, mname)
+        if d and (d['actions'] or d['states']):
+            debuts.append(d)
+    mai = {}
+    if ai_profiles:
+        mai['profiles'] = ai_profiles
+    if ai_players:
+        mai['players'] = ai_players
+    if debuts:
+        mai['debuts'] = debuts
+    if mai:
+        m['ai'] = mai
+
     side = {
         'source': {'header': src.rel(hp), 'data': src.rel(dpath)},
         'scale': SCALE, 'bwMapSize': [num(w), num(h)], 'origin': 'cell = ((x + w/2) / scale, (h/2 - y) / scale)',
         'mapId': header.get('mapId'), 'multiplayer': bool(header.get('multiplayer')), 'tutorial': bool(header.get('tutorial')),
         'mapType': header.get('mapType'), 'modes': header.get('modes'),
-        'gameMode': [n for b, n in MODES.items() if (header.get('gameMode') or 0) & b],
+        'gameMode': [n for b, n in MODES.items() if gm & b],
         'kingOfTheHillScore': {'ffa': header.get('kingOfTheHillFFAScore'), 'coop': header.get('kingOfTheHillCoopScore')},
-        'aiAlgorithm': header.get('aiAlgorithm'), 'fogOfWar': bool(header.get('fogOfWar')),
-        'suddenDeathDisabled': bool(header.get('suddenDeathDisabled')), 'complexityUsed': COMPLEXITY[complexity],
-        'season': clean(header.get('seasonConfig')), 'specialModType': header.get('specialModType'),
+        'aiAlgorithm': header.get('aiAlgorithm'), 'suddenDeathDisabled': bool(header.get('suddenDeathDisabled')),
+        'complexityUsed': COMPLEXITY[complexity], 'season': clean(sc), 'specialModType': header.get('specialModType'),
         'players': [{'slot': k + 1, 'player': players.get(pguid[k], {}).get('name'), 'team': pl.get('team'),
                      'botOnly': bool(pl.get('botOnly')), 'uiCorner': pl.get('uiCorner'),
                      'aiComplexity': {c: uy.get(pl, c + 'ComplexityInfo', 'aiComplexity') for c in COMPLEXITY}}
                     for k, pl in enumerate(hplayers)],
-        'points': bwpoints, 'routes': routes, 'zones': zones,
-        'environment': {k: v for k, v in (clean(mods.get('environment')) or {}).items() if k not in ('grass', 'winterGrass')}, 'destructibleObjects': clean(mods.get('destructibleObjects')),
-        'bot': clean(mods.get('bot')), 'campaign': clean(mods.get('campaign')),
-        'tutorial': clean(mods.get('tutorial')),
+        'points': bwpoints, 'zones': [{'zoneType': z.get('zoneType'), 'slowdown': num(z.get('slowdownValue') or 0),
+                                       'polygon': [to_cell(q.get('x', 0), q.get('y', 0), w, h) for q in z.get('points') or []]}
+                                      for z in zlist],
+        'battleRoyal': [{'rect': [num((dec((s.get('rect') or {}).get('x', 0)) - dec((s.get('rect') or {}).get('width', 0)) / 2 + w / 2) / SCALE),
+                                  num((h / 2 - dec((s.get('rect') or {}).get('y', 0)) - dec((s.get('rect') or {}).get('height', 0)) / 2) / SCALE),
+                                  cells((s.get('rect') or {}).get('width', 0)), cells((s.get('rect') or {}).get('height', 0))],
+                         'stay': num(dec(s.get('durationInTicks', 0)) * BW_TICK), 'move': num(dec(s.get('durationToNext', 0)) * BW_TICK),
+                         'next': s.get('nextIndex')} for s in br],
+        'environment': {k: v for k, v in (clean(env) or {}).items() if k not in ('grass', 'winterGrass', 'battleRoyal')},
+        'destructibleObjects': clean(mods.get('destructibleObjects')),
+        'campaign': clean(mods.get('campaign')), 'tutorial': clean(mods.get('tutorial')),
     }
     return m, side
 
@@ -688,10 +986,138 @@ def read_simple(src, cls):
     return [dict(clean(src.main(p)), source=src.rel(p)) for p in src.of_class(cls)]
 
 
+# ------------------------------------------------------------------ skills (agent-bw-skills converter)
+
+def convert_skills(src, out):
+    """Runs tools/importers/bunkerwars/skills/convert.py on the same client at SCALE px per cell."""
+    sys.path.insert(0, os.path.join(HERE, 'skills'))
+    try:
+        import convert as skconv  # noqa: E402
+    except ImportError as ex:
+        src.warnings.append('skills converter not available: %s' % ex)
+        return None
+    tmp = os.path.join(out, 'bw', '.skills.tmp.json')
+    os.makedirs(os.path.dirname(tmp), exist_ok=True)
+    root = os.path.dirname(os.path.dirname(src.assets))
+    rc = skconv.main(['--bw', root, '--out', tmp, '--px-per-cell', str(SCALE), '--energy-resource', 'skillEnergy',
+                      '--aspect', '0.5', '--report', os.path.join(out, 'bw', 'skills_coverage.md')])
+    if rc:
+        src.warnings.append('skills converter failed (%s)' % rc)
+        return None
+    with open(tmp, encoding='utf-8') as f:
+        data = json.load(f)
+    os.remove(tmp)
+    return data
+
+
+def convert_tutorials(src, out, data_paths, cache):
+    """tools/importers/bunkerwars/tutorial.py (agent-bw-client) per map data asset, with its kit and the meta
+    tutorials; every map's result is cached (a full tutorial pass takes longer than one device call)."""
+    import shutil
+    sys.path.insert(0, HERE)
+    try:
+        import tutorial as tut  # noqa: E402
+    except ImportError as ex:
+        src.warnings.append('tutorial importer not available: %s' % ex)
+        return None, {}
+    stamp = mtime(os.path.join(HERE, 'tutorial.py'))
+    data_dir = os.path.join(out, 'scripts', 'bw', 'tutorial_data')
+    ids = {}
+    for p in sorted(set(data_paths)):
+        key = 'tut_' + src.rel(p)
+        lua = cache.get(key, stamp)
+        if lua is None:
+            with open(p, encoding='utf-8', errors='replace') as f:
+                has = 'tutorialChapters' in f.read()
+            t = tut.read_map(p) if has else None
+            lua = cache.put(key, stamp, tut.lua_value(t) if t else '')
+        if not lua:
+            continue
+        mid = tut.map_id(p)
+        if mid in ids.values():
+            mid = mid + '_' + re.sub(r'[^A-Za-z0-9_]', '_', os.path.basename(os.path.dirname(p))).lower()
+        ids[os.path.normpath(p)] = mid
+        os.makedirs(data_dir, exist_ok=True)
+        with open(os.path.join(data_dir, mid + '.lua'), 'w', encoding='utf-8') as f:
+            f.write('-- Bunker Wars tutorial of %s (tools/importers/bunkerwars/tutorial.py)\nreturn %s\n' % (src.rel(p), lua))
+        with open(os.path.join(out, 'scripts', 'bw', 'tut_' + mid + '.lua'), 'w', encoding='utf-8') as f:
+            f.write('-- map script of the tutorial (tools/importers/bunkerwars/tutorial.py)\n'
+                    'require("bw.tutorial")(require("bw.tutorial_data.%s"))\n' % mid)
+    meta = cache.get('tut_meta', stamp)
+    if meta is None:
+        meta = cache.put('tut_meta', stamp, tut.read_meta(Path(src.assets)) or [])
+    if meta:
+        os.makedirs(os.path.join(out, 'ui'), exist_ok=True)
+        with open(os.path.join(out, 'ui', 'bw_tutorials.json'), 'w', encoding='utf-8') as f:
+            json.dump({'tutorials': meta}, f, ensure_ascii=False, indent=1)
+    if ids:
+        kit = os.path.join(HERE, 'kit')
+        for root, _, files in os.walk(kit):
+            for fn in files:
+                rel = os.path.relpath(os.path.join(root, fn), kit)
+                if rel.split(os.sep)[0] == 'lang':
+                    continue          # merged into lang/*.json by run()
+                dst = os.path.join(out, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(os.path.join(root, fn), dst)
+        vdir = os.path.join(out, 'scripts', 'view', 'bw')
+        os.makedirs(vdir, exist_ok=True)
+        with open(os.path.join(vdir, 'tutorial_windows.lua'), 'w', encoding='utf-8') as f:
+            f.write('-- tutorial screens with their own ui/hud/<name>.rml (tools/importers/bunkerwars/tutorial.py)\nreturn {}\n')
+    return tut, ids
+
+
 # ------------------------------------------------------------------ run
 
-def run(source, out):
+class Cache:
+    """Optional --cache DIR: results of the slow steps (skills converter, tutorials, each map) keyed by the
+    modification times of their sources, so a run that gets cut off resumes where it stopped."""
+
+    def __init__(self, root):
+        self.root = os.path.abspath(os.path.expanduser(root)) if root else None
+        if self.root:
+            os.makedirs(self.root, exist_ok=True)
+
+    def _path(self, name):
+        return os.path.join(self.root, re.sub(r'[^A-Za-z0-9_.-]+', '_', name) + '.json')
+
+    def get(self, name, stamp):
+        if not self.root or not os.path.exists(self._path(name)):
+            return None
+        try:
+            with open(self._path(name), encoding='utf-8') as f:
+                d = json.load(f)
+        except ValueError:      # cut off while writing
+            return None
+        return d.get('value') if d.get('stamp') == stamp else None
+
+    def put(self, name, stamp, value):
+        if self.root:
+            tmp = self._path(name) + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump({'stamp': stamp, 'value': value}, f, ensure_ascii=False, default=lambda d: num(d))
+            os.replace(tmp, self._path(name))
+        return value
+
+
+import time as _time
+_T0 = _time.time()
+
+
+def log(msg):
+    if os.environ.get('BW_IMPORT_LOG'):
+        sys.stderr.write('[%5.1fs] %s\n' % (_time.time() - _T0, msg))
+        sys.stderr.flush()
+
+
+def mtime(*paths):
+    return ','.join(str(int(os.path.getmtime(p))) if p and os.path.exists(p) else '-' for p in paths)
+
+
+def run(source, out, cache_dir=None, skills=True):
+    cache = Cache(cache_dir)
     src = Source(source)
+    log('indexed')
     lang = {'ru': {}, 'en': {}}
     battle, bpath = read_battle(src)
     races = read_buildings(src)
@@ -706,11 +1132,79 @@ def run(source, out):
         src.warnings.append('heroes differ in energy numbers: the rules use %s (per-hero energy needs per-player resources)' %
                             heroes[0]['id'])
     skills = read_skills(src, lang)
-    rules = build_rules(src, races, race, battle, heroes, lang)
+    rules = build_rules(src, races, race, battle, heroes, morale, lang)
     types = rules['types']
-    specials = {POINT_TYPES.get(b.get('type')): type_id(b) for b in races[race]['special']}
     players = read_players(src)
+    # player abilities: the skills converter (agent-bw-skills) at the same scale
+    stamp = CACHE_VERSION + ',' + mtime(os.path.join(HERE, 'skills', 'convert.py'), os.path.join(HERE, 'skills', 'mapping.py'))
+    conv = cache.get('skills', stamp) if skills else {}
+    if conv is None:
+        conv = cache.put('skills', stamp, convert_skills(src, out))
+    if conv:
+        rules['playerAbilities'] = conv['playerAbilities']
+        rules['bwSkills'] = conv.get('bwSkills', {})
+        rules['loadoutSlots'] = 5          # four card slots + the hero's talent (slot 4)
+        for k, v in (conv.get('types') or {}).items():   # objects the skills spawn (UFO, barrier)
+            types.setdefault(k, v)
+        used = set()
+        _collect(conv['playerAbilities'], 'unit', used)
+        for u in sorted(used - set(types)):
+            src.warnings.append('skills spawn unknown type %s' % u)
+    ids = {a['id'] for a in rules.get('playerAbilities', [])}
+    # default loadout cards: common (rarity 0) cards, as the skills converter's default_loadout
+    cards = sorted(({'id': s['id'], 'allowedSlot': s.get('allowedSlot')} for s in skills
+                    if s['kind'] == 'card' and s.get('rarity') == 0 and s['id'] in ids),
+                   key=lambda c: int(re.sub(r'\D', '', c['id']) or 0))
+    talents = {h['id']: stem_id(h['talent']) for h in heroes if h.get('talent') and stem_id(h['talent']) in ids}
+    common = battle.get('common') or {}
+    domi = next((b for b in races[race]['special'] if b.get('type') == 16), {})
+    koh = next((b for b in races[race]['special'] if b.get('type') == 32), {})
+    rules['matchModes'] = {
+        'conquest': {},
+        'domination': {'modes': {'domination': {'hold': num(common.get('dominationTimeout', 1.5)), 'rule': 'auto',
+                                                'type': type_id(domi) if domi else 'domination',
+                                                'garrison': int(domi.get('maxValue') or 50)}}},
+        'kingOfTheHill': {'modes': {'kingOfTheHill': {'score': 300, 'teamScore': 600,
+                                                      'rate': num(common.get('kingOfTheHillScoreVelocity', 1)), 'alarm': 100,
+                                                      'type': type_id(koh) if koh else 'koh',
+                                                      'garrison': int(koh.get('maxValue') or 50)}}},
+        'timeMod': {'modes': {'timeLimit': {'seconds': num(common.get('timeModTimeout', 240)),
+                                            'win': 'compare' if common.get('timeModWinCondition') else 'maxPoints',
+                                            'coefficient': num(common.get('timeWinConditionPointsComparisonCoefficient', 1))}}}}
+    rules['matchStats'] = True
+    rules['ai'] = {'controller': 'bw', 'bw': {
+        'difficulty': 'normal', 'mode': 'auto', 'pxPerCell': SCALE,
+        'roles': {'house': ['bunker'], 'tower': ['tower'], 'smithy': ['smithy']},
+        'objectives': {'domination': ['domination'], 'kingOfTheHill': ['kingofthehill']}}}
+    wp = clean(battle.get('weather') or {})
+    weather_params = {k: v for k, v in wp.items() if isinstance(v, (int, float)) and k not in
+                      ('rainDropsTextureScale', 'maxRainParticles', 'grassRainBurnRandomFactor', 'maxSnowParticles',
+                       'maxBlizzardParticles')}
+    for k in ('snowFillTimeRange', 'blizzardUnitKillFactor'):
+        r = wp.get(k)
+        if isinstance(r, dict):
+            weather_params[k] = [r.get('x', 0), r.get('y', 0)]
+    weather_params['blizzardVar'] = 'blizzard'       # read by the BW computer player (canMoveInBlizzard)
+    wn = battle.get('winter') or {}
+    ctx = {'types': types, 'cards': cards, 'talents': talents, 'weatherParams': weather_params,
+           'winter': {'perSecond': num(wn.get('unitMoveForce', 0.1)),
+                      'speed': [[num(r.get('health', 1)), num(r.get('speed', 1))] for r in wn.get('speed') or []]},
+           'fow': clean(battle.get('fow') or {})}
+    if True:
+        rules['fields'] = {'snow': {'type': 'fixed', 'default': 0, 'min': 0, 'max': 1, 'view': {'show': False}}}
+        rules['fogOfWar']['ellipse'] = 2           # BW sight ellipses (y x 2)
 
+    log('rules + skills')
+    data_paths = []
+    for hp in src.of_class('MapHeader'):
+        if '_DELETE' in src.rel(hp):
+            continue
+        g = (src.main(hp).get('mapData') or {}).get('guid')
+        if g in src.guids:
+            data_paths.append(src.guids[g])
+    tut, tut_ids = convert_tutorials(src, out, data_paths, cache)
+    tut_maps = set(tut_ids.values())
+    log('tutorials')
     # maps
     maps, manifest_maps, skipped = [], [], []
     headers = src.of_class('MapHeader')
@@ -728,7 +1222,16 @@ def run(source, out):
         if base in seen:
             base += '_%d' % (len([k for k in seen if k.startswith(base)]) + 1)
         seen[base] = True
-        m, side = build_map(src, hp, header, players, types, specials, src.warnings)
+        key = 'map_' + base
+        mstamp = CACHE_VERSION + ',' + mtime(hp) + ',' + str(len(ctx['cards']))
+        got = cache.get(key, mstamp)
+        if got is None:
+            w0 = len(src.warnings)
+            m, side = build_map(src, hp, header, players, ctx, src.warnings)
+            cache.put(key, mstamp, {'m': m, 'side': side, 'warnings': src.warnings[w0:]})
+        else:
+            m, side = got['m'], got['side']
+            src.warnings.extend(got['warnings'])
         if not m:
             skipped.append(rel)
             continue
@@ -747,6 +1250,10 @@ def run(source, out):
         for k in range(np):
             lang['ru']['map.%s.player.%d' % (base, k + 1)] = 'Игрок %d' % (k + 1)
             lang['en']['map.%s.player.%d' % (base, k + 1)] = 'Player %d' % (k + 1)
+        tid = tut_ids.get(os.path.normpath(os.path.join(os.path.dirname(src.assets), side['source']['data'])))
+        if tid:
+            m['scripts'] = ['scripts/bw/tut_%s.lua' % tid]
+            m['viewScripts'] = ['scripts/view/bw/tutorial_view.lua']
         write_json(os.path.join(out, 'maps', base + '.json'), m)
         compact_json(os.path.join(out, 'bw', 'maps', base + '.json'), side,
                      'Bunker Wars map data the engine has no keys for yet (cells, seconds). Generated by tools/importers/bunkerwars.')
@@ -766,6 +1273,8 @@ def run(source, out):
                'Game manifest generated by tools/importers/bunkerwars/import.py from the Bunker Wars client. Do not edit by hand.')
     write_json(os.path.join(out, 'rules.json'), rules,
                RULES_HEADER % {'race': race})
+    if tut and tut_maps:
+        tut.add_commands(os.path.join(out, 'rules.json'))   # the hidden bw_tut_* commands of the tutorial view
 
     # sidecars
     bw = os.path.join(out, 'bw')
@@ -809,6 +1318,11 @@ def run(source, out):
         table = {'@language': name, 'game.name': 'Bunker Wars'}
         table.update(HOWTO[code])
         table.update(dict(sorted(lang[code].items())))
+        kit = os.path.join(HERE, 'kit', 'lang', code + '.json')     # tutorial kit strings (agent-bw-client)
+        if tut_maps and os.path.exists(kit):
+            with open(kit, encoding='utf-8') as f:
+                for k, v in json.load(f).items():
+                    table.setdefault(k, v)
         write_json(os.path.join(out, 'lang', code + '.json'), table,
                    'bunkerwars — %s. Generated by tools/importers/bunkerwars from the client localization.' % code)
     return {'maps': len(manifest_maps), 'mapsSidecarOnly': len(headers) - len(manifest_maps) - len(skipped),
@@ -816,18 +1330,18 @@ def run(source, out):
             'warnings': list(dict.fromkeys(src.warnings)), 'skipped': skipped}
 
 
-SPECIAL_NAMES = {'domination': ('Точка доминации', 'Domination point'), 'koh': ('Царь горы', 'King of the Hill'),
-                 'cave': ('Пещера', 'Cave'), 'graveyard': ('Кладбище', 'Graveyard'), 'hospital': ('Госпиталь', 'Hospital'),
-                 'storage': ('Склад', 'Storage'), 'megatower': ('Мегавышка', 'Mega tower'), 'prison': ('Тюрьма', 'Prison'),
-                 'snowbunker': ('Снежный бункер', 'Snow bunker')}
+SPECIAL_NAMES = {'domination': ('Точка доминации', 'Domination point'), 'kingofthehill': ('Царь горы', 'King of the Hill'),
+                 'cave': ('Пещера', 'Cave'), 'graveyard': ('Кладбище', 'Graveyard'), 'special1': ('Госпиталь', 'Hospital'),
+                 'special2': ('Склад', 'Storage'), 'special3': ('Мегавышка', 'Mega tower'), 'special4': ('Тюрьма', 'Prison'),
+                 'special5': ('Снежный бункер', 'Snow bunker')}
 
 RULES_HEADER = """Bunker Wars rules generated by tools/importers/bunkerwars/import.py from the Bunker Wars client. Do not edit by hand.
-Buildings of %(race)s (other races have equal numbers and differ only in looks). Units: BW units / 40 = cells, seconds.
+Buildings of %(race)s (other races have equal numbers and differ only in looks). Units: BW units / 50 = cells (as the routes, skills and AI ports), seconds.
 garrison.interval = IncreaseTime, max = MaxValue, defense = ShieldCoefficient, cost = Cost / BuildingTime (GameData),
 onCapture = the building's downgrade; towers: range = FireRange, cooldown = 1 / FirePerSecond, projectileSpeed =
 FireMetersPerSecond; armories: damage / defense by the number owned = Smithy1..4 DamageGlobalPercent / ShieldGlobalPercent.
 Energy = the hero's MaxSkillEnergy / PassiveEnergyPerUnit; a lost unit gives EnergyPerUnit x (morale levels - 1) (morale 0).
-Morale, skills, routes, modes and environment are not here yet: see PORT_TODO.md and bw/*.json."""
+Routes, skills (tools/importers/bunkerwars/skills), modes, environment, AI and tutorials are wired; gaps: PORT_TODO.md."""
 
 HOWTO = {
     'ru': {'howto.like': 'Bunker Wars: бункеры, вышки, арсеналы и герои.',
@@ -853,22 +1367,10 @@ def main():
     ap.add_argument('--out', required=True, help='output game folder')
     ap.add_argument('--json', action='store_true', help='one JSON report on stdout (MCP / editor)')
     ap.add_argument('--no-skills', action='store_true', help='skip the energy skills converter (skills/convert.py)')
+    ap.add_argument('--cache', help='folder for resumable results of the slow steps (outside the game folder)')
     a = ap.parse_args()
     try:
-        rep = run(a.source, os.path.expanduser(a.out))
-        if not a.no_skills:   # agent-bw-skills: playerAbilities, helper types, morale levels and default loadouts
-            import contextlib
-            import io
-            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'skills'))
-            import convert as bw_skills
-            out = os.path.expanduser(a.out)
-            log = io.StringIO()
-            with contextlib.redirect_stdout(log):
-                rc = bw_skills.main(['--bw', a.source, '--out', os.path.join(out, 'bw', 'abilities.json'), '--template', out])
-            if rc:
-                rep['warnings'].append('skills converter failed: ' + log.getvalue().strip()[-300:])
-            else:
-                rep['abilities'] = log.getvalue().strip().splitlines()[-1]
+        rep = run(a.source, os.path.expanduser(a.out), a.cache, skills=not a.no_skills)
     except SystemExit as ex:
         if a.json:
             print(json.dumps({'ok': False, 'error': str(ex)}, ensure_ascii=False))

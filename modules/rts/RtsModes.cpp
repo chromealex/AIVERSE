@@ -72,14 +72,29 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
     ModesState& ms = gs.modes;
     const size_t np = gs.players.size();
     ms.timeLeft = modes_.timeSeconds;
+    // per player morale multipliers (BW moraleIncreaseCoefficient, AI complexity increase / decrease coefficients)
+    modes_.playerGain.assign(np, Fixed::fromInt(1));
+    modes_.playerDecay.assign(np, Fixed::fromInt(1));
+    for (size_t i = 0; i < map["players"].size() && i + 1 < np; ++i) {
+        const Json& pj = map["players"][i];
+        modes_.playerGain[i + 1] = pj.getFx("moraleGain", Fixed::fromInt(1));
+        modes_.playerDecay[i + 1] = pj.getFx("moraleDecay", Fixed::fromInt(1));
+    }
 
     // ---- mode points: map entities / types with "modePoint" (BW PointInfo.isDominationPoint / isKingOfTheHillPoint)
-    auto kindOf = [](const std::string& s) -> uint8_t { return s == "domination" ? 1 : s == "kingOfTheHill" ? 2 : 0; };
+    // a name or a list of names (BW points can be both a domination and a king of the hill point): a mask, 1 | 2
+    auto kindOf = [](const Json& v) -> uint8_t {
+        auto one = [](const std::string& s) -> uint8_t { return s == "domination" ? 1 : s == "kingOfTheHill" ? 2 : 0; };
+        if (!v.isArray()) return one(v.str());
+        uint8_t m = 0;
+        for (auto& x : v.items()) { const uint8_t k = one(x.str()); if (!k) return 0; m |= k; }
+        return m;
+    };
     std::vector<uint8_t> typeKind(rules_.types.size(), 0);
     for (auto& [id, tj] : rulesJson["types"].members())
         if (tj.has("modePoint")) {
             int t = rules_.findType(id);
-            uint8_t k = kindOf(tj.getStr("modePoint"));
+            uint8_t k = kindOf(tj["modePoint"]);
             if (!k) throw std::runtime_error("type '" + id + "': modePoint must be domination or kingOfTheHill");
             if (t >= 0) typeKind[size_t(t)] = k;
         }
@@ -87,7 +102,7 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
     std::vector<Marked> marked;
     for (auto& ej : map["entities"].items()) {
         if (!ej.has("modePoint")) continue;
-        uint8_t k = kindOf(ej.getStr("modePoint"));
+        uint8_t k = kindOf(ej["modePoint"]);
         if (!k) throw std::runtime_error("map entity: modePoint must be domination or kingOfTheHill");
         int t = rules_.findType(ej.getStr("type"));
         if (t >= 0) marked.push_back({uint16_t(t), mapPos(sim, ej.has("at") ? ej["at"] : ej["pos"]), k});
@@ -97,7 +112,8 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
         if (!rules_.types[u.type].structure) return;
         uint8_t k = typeKind[u.type];
         for (auto& mk : marked) if (mk.type == u.type && dist2D(mk.pos, tr.pos) < Fixed::fromRatio(1, 2)) k = mk.kind;
-        if ((k == 1 && modes_.domination) || (k == 2 && modes_.koh)) found.push_back({e, k});
+        if ((k & 1) && modes_.domination) found.push_back({e, 1});
+        else if ((k & 2) && modes_.koh) found.push_back({e, 2});
     });
     for (auto& [e, k] : found) {
         const uint16_t to = k == 1 ? modes_.domType : modes_.kohType;
@@ -135,6 +151,12 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
             });
         }
 
+    // ---- custom rule sets chosen for this match (BW CustomRules / HeroCustomRules from the backend -> map "ruleSets")
+    for (auto& id : map["ruleSets"].items()) {
+        const Json& rs = rulesJson["ruleSets"][id.str()];
+        if (!rs.isArray()) throw std::runtime_error("map ruleSets: unknown rule set '" + id.str() + "'");
+        for (auto& r : parseTimedRules(rules_, "ruleSets." + id.str(), rs)) modes_.timedRules.push_back(std::move(r));
+    }
     // ---- sudden death custom configs: one rule set for everyone, slots shifted on zone maps
     if (!modes_.sdRuleSets.empty()) {
         ms.sdRuleSet = int(sim.rng().below(uint32_t(modes_.sdRuleSets.size())));
@@ -160,6 +182,7 @@ void RtsModule::modesSetup(Simulation& sim, const Json& rulesJson, const Json& m
     ms.stats.assign(np, std::vector<int64_t>(kMsCount, 0));
     ms.abilityUses.assign(np, std::vector<int32_t>(rules_.playerAbilities.size(), 0));
     ms.outcome.assign(np, 0);
+    if (rules_.core.any) coreSetup(sim, map);   // battle core: point values per difficulty (RtsCore.cpp)
 }
 
 // ================================================================= queries
@@ -229,7 +252,8 @@ void RtsModule::sysModes(Simulation& sim) {
         return M.garrisonPoints ? w.has<Garrison>(e) : (rules_.types[u.type].structure && rules_.types[u.type].countsForVictory);
     };
     auto inZone = [&](uint8_t owner, Vec3 pos) {   // MultiscreenModule.IsPointInsideScreen with battle royal
-        if (!M.zones || owner >= ms.zone.size() || !ms.zone[owner].on) return true;
+        if (!M.zones) return !screen_.enabled || onScreen(sim, pos);   // multiscreen maps (routes agent screen API)
+        if (owner >= ms.zone.size() || !ms.zone[owner].on) return true;
         return inRect(ms.zone[owner].rect, pos);
     };
     // sides still playing (non-wave players), ascending team id
@@ -289,6 +313,15 @@ void RtsModule::sysModes(Simulation& sim) {
                 sim.emit({kEvModePhase, owner, mp.e, kNullEntity, kModeKohAlarm, w.get<Transform>(mp.e).pos});
             }
         }
+    }
+
+    // king of the hill scores as trigger variables for scripts and the BW computer player (koth_<slot>, koth_max)
+    if (M.koh) {
+        for (auto& p : sim.players()) {
+            const size_t t = size_t(teamOfSlot(p.slot));
+            if (t < ms.kohScore.size()) gs.trig.vars["koth_" + std::to_string(p.slot)] = ms.kohScore[t];
+        }
+        gs.trig.vars["koth_max"] = ms.kohScore.empty() ? Fixed{} : fxMax(M.kohScore, M.kohTeamScore);
     }
 
     // ---- zones: the rect chain follows real time; points outside their owner's rect turn neutral
@@ -370,7 +403,7 @@ void RtsModule::sysModes(Simulation& sim) {
             if (lv >= 0) {
                 const LevelDef& d = rl.levels[size_t(lv)];
                 if (d.decayEvery.raw > 0) {
-                    ms.decayTimer[l][p] += dt;
+                    ms.decayTimer[l][p] += p < M.playerDecay.size() ? dt * M.playerDecay[p] : dt;
                     if (ms.decayTimer[l][p] >= d.decayEvery) {
                         ms.decayTimer[l][p] -= d.decayEvery;
                         const Fixed quiet = dt * int64_t(sim.tick() - ms.lastGain[l][p]);
@@ -516,6 +549,31 @@ void RtsModule::sysModes(Simulation& sim) {
     }
     (void)decided0;
     ms.speed = ms.timeSpeed * ms.sdSpeed;
+
+    // ---- HUD / script / AI view of the modes as trigger variables (overlays: "{var:mode_time_left}", conditions)
+    auto& V = gs.trig.vars;
+    if (M.timeLimit || M.suddenDeath) V["mode_speed"] = ms.speed;
+    if (M.timeLimit) V["mode_time_left"] = fxMax(Fixed{}, ms.timeLeft);
+    if (M.suddenDeath) {
+        const Fixed at = M.sdAt + (M.zones ? M.zoneSdDelay : Fixed{});
+        const Fixed next = ms.sdPhase == 0 ? at : ms.sdPhase == 1 ? at + M.sdPreview : M.sdEnd.raw > 0 ? at + M.sdPreview + M.sdEnd : Fixed{};
+        V["mode_sd_phase"] = Fixed::fromInt(ms.sdPhase);
+        V["mode_sd_left"] = next.raw > 0 && ms.sdPhase < 3 ? fxMax(Fixed{}, next - T) : Fixed{};
+        V["mode_sd_counter"] = Fixed::fromInt(ms.sdCounter ? 1 : 0);
+    }
+    if (M.domination) {
+        std::vector<int> held(np, 0);
+        for (auto& mp : ms.points)
+            if (mp.kind == 1 && w.alive(mp.e) && w.has<Owner>(mp.e) && w.get<Owner>(mp.e).player < np && mp.hold.raw <= 0) ++held[w.get<Owner>(mp.e).player];
+        for (size_t p = 1; p < np; ++p) V["dom_" + std::to_string(p)] = Fixed::fromInt(held[p]);
+    }
+    if (M.zones)
+        for (size_t p = 1; p < np; ++p) {
+            const ZoneState& z = ms.zone[p];
+            if (!z.on) continue;
+            const std::string k = "zone_" + std::to_string(p) + "_";
+            V[k + "x"] = z.rect.x; V[k + "z"] = z.rect.z; V[k + "w"] = z.rect.w; V[k + "h"] = z.rect.h;
+        }
 }
 
 // ================================================================= match statistics (PlayerStatistic)
@@ -584,6 +642,7 @@ void RtsModule::hashModes(Simulation& sim, Hasher& h) {
     for (auto& v : ms.lastGain) for (auto x : v) h.u32(x);
     for (auto& v : ms.stats) for (auto x : v) h.u64(uint64_t(x));
     for (auto o : ms.outcome) h.i32(o);
+    for (auto x : ms.neutralMax) h.i32(x);
 }
 
 void io(Archive& a, ModeRect& r) { a(r.x, r.z, r.w, r.h); }
@@ -594,7 +653,7 @@ bool ioModesState(RtsModule& m, Simulation& sim, Archive& a) {
     if (!m.modes_.any) return true;   // games without modes keep their save format
     ModesState& s = m.state(sim).modes;
     a(s.realTime, s.speed, s.timeSpeed, s.sdSpeed, s.timeLeft, s.timeIndex, s.sdPhase, s.sdCounter, s.sdRuleSet, s.points, s.kohScore,
-      s.kohAlarmed, s.zone, s.ruleOn, s.level, s.decayTimer, s.lastStock, s.lastGain, s.stats, s.abilityUses, s.outcome);
+      s.kohAlarmed, s.zone, s.ruleOn, s.level, s.decayTimer, s.lastStock, s.lastGain, s.stats, s.abilityUses, s.outcome, s.neutralMax);
     return a.ok();
 }
 

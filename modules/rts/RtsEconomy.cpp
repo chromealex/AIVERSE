@@ -235,6 +235,7 @@ void RtsModule::sysProduction(Simulation& sim) {
             ensureTypeComponents(w, d.producer, nt);
             sim.emit({kEvUpgraded, d.owner, d.producer, kNullEntity, type, w.get<Transform>(d.producer).pos});
             if (rules_.originals) gainOn(sim, d.owner, &ResourceDef::gainUpgrade, kOne);
+            if (rules_.core.any) coreUpgraded(sim, d.owner, type);   // battle core (RtsCore.cpp)
             continue;
         }
         if (nt.structure) {
@@ -353,12 +354,22 @@ void RtsModule::sysGarrison(Simulation& sim) {
         for (auto& c : all)
             if (collector[c.second->owner].second != c.second) { collector[c.second->owner].second->acc += c.second->acc; c.second->acc = Fixed{}; c.second->until = sim.tick(); }
     }
+    const std::vector<Fixed> coreRate = coreGrowthRates(sim);   // battle core: production slows with the army (empty: off)
     w.each<Garrison, Unit, Owner>([&](Entity e, Garrison& g, Unit& u, Owner& o) {
         const UnitType& t = rules_.types[u.type];
         if (u.flags & kUnitUnderConstruction) return;
         // environment (off-screen production) and multiscreen (BW HouseModule.GetIncreaseRate): points off the screen do not grow
         const bool grows = (!env_ || !env_->active() || env_->producing(sim, e)) && (!screen_.enabled || onScreen(sim, w.get<Transform>(e).pos));
         if (!grows) {}
+        else if (o.player == 0 && rules_.core.neutralGrowth && t.spawnInterval.raw > 0) {
+            // battle core: neutral garrisons grow up to their neutral maximum (BW HouseModule, rate 1)
+            const int mx = coreNeutralMax(sim, e, t);
+            if (g.count < mx) {
+                g.growth += dt / t.spawnInterval;
+                while (g.growth >= kOne && g.count < mx) { ++g.count; g.growth -= kOne; }
+                if (g.count >= mx) g.growth = Fixed{};
+            } else g.growth = Fixed{};
+        }
         else if (adv && o.player != 0 && t.spawnInterval.raw > 0) {
             // effects: lock stops production, production speed / cap stats, redirect sends the growth elsewhere
             if (statusFlags(sim, e) & kStLock) return;
@@ -389,6 +400,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
                     if (in.def == uint16_t(rules_.stRedirect) && w.alive(in.link) && w.has<Garrison>(in.link)) into = &w.get<Garrison>(in.link);
             if (into->count < cap || into != &g) {
                 g.growth += dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) g.growth -= dt * stat(sim, e, Stat::ProductionSpeed) / t.spawnInterval * (kOne - coreRate[o.player]);
                 while (g.growth >= kOne && (into != &g || into->count < cap)) { ++into->count; g.growth -= kOne; }
                 if (into == &g && g.count >= cap) g.growth = Fixed{};
             } else if (g.count > cap) {
@@ -399,6 +411,7 @@ void RtsModule::sysGarrison(Simulation& sim) {
         } else if (o.player != 0 && t.spawnInterval.raw > 0) {
             if (g.count < t.garrisonMax) {
                 g.growth += dt / t.spawnInterval;
+                if (!coreRate.empty() && o.player < coreRate.size()) g.growth -= dt / t.spawnInterval * (kOne - coreRate[o.player]);
                 while (g.growth >= kOne && g.count < t.garrisonMax) { ++g.count; g.growth -= kOne; }
                 if (g.count >= t.garrisonMax) g.growth = Fixed{};
             } else if (g.count > t.garrisonMax) {

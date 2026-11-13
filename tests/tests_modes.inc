@@ -249,3 +249,118 @@ TEST(modes_deterministic_match) {
     }
     CHECK(a->checksum() == b->checksum() && a->result() != 0);
 }
+
+// ------------------------------------------------------------------ battle core (RtsCore.cpp): morale points, energy, production
+namespace core_t {
+std::string rules(const std::string& extra) {
+    return std::string(R"({"lanes": {"left": 0, "right": 0},
+      "resources": {"morale": {"start": 0, "min": 0, "capped": true, "storage": 8000, "levels": [
+          {"at": 0, "decay": {"every": 1, "amount": 10, "after": 10}},
+          {"at": 500, "mods": [{"tags": ["soldier"], "stat": "speed", "mul": 1.1}], "decay": {"every": 1, "amount": 20, "after": 9}},
+          {"at": 1000}, {"at": 2000}, {"at": 4000}, {"at": 8000}]},
+        "energy": {"start": 0, "capped": true, "storage": 500}},
+      "battleCore": {"morale": {"resource": "morale", "unitPoints": 10, "towerPoints": 10},
+                     "energy": {"resource": "energy", "perUnit": 0.45},
+                     "production": {}, "neutralGrowth": true)") + extra + R"(},
+      "types": {
+        "house": {"structure": {"footprint": [2, 2]}, "invulnerable": true, "garrison": {"max": 20, "unit": "soldier", "interval": 1},
+                  "moralePoints": {"catchNeutral": 100, "catchEnemy": 200, "lost": 50, "upgrade": 70}},
+        "soldier": {"tags": ["soldier"], "move": {"speed": 3}, "entersGarrison": true}}})";
+}
+} // namespace core_t
+
+TEST(core_morale_points_energy_and_levels) {
+    using namespace modes_t;
+    auto sim = makeSimJson(core_t::rules(""),
+        map({1, 2}, std::string(R"({"type":"house","owner":1,"pos":[5,5],"garrison":20},{"type":"house","owner":0,"pos":[12,5],"garrison":3,"values":{"easy":{"neutralMax":3}}},)") +
+                    R"({"type":"house","owner":2,"pos":[30,15],"garrison":20})"));
+    auto& m = mod(*sim);
+    Command c; c.player = 1; c.type = game::kCmdSend; c.units = {at(*sim, 5, 5)}; c.target = at(*sim, 12, 5); c.param = -10;   // exactly 10 units
+    sim->submit(c);
+    run(*sim, 4);
+    // 3 assaulting units lost against 3 defenders: attacker -10 each (floor 0), energy 0.45 x (6 - 0 - 1) x 3; the capture +100
+    CHECK(sim->world().get<Owner>(at(*sim, 12, 5)).player == 1);
+    CHECK(stockOf(*sim, 1, "morale") == Fixed::fromInt(100));
+    CHECK(fxAbs(stockOf(*sim, 1, "energy") - Fixed::fromRatio(675, 100)) < Fixed::fromRatio(1, 100));
+    CHECK(m.modeLevel(*sim, 1, 0) == 0);
+    // level 1 (500): energy per lost unit drops to x4
+    m.addResource(*sim, 1, uint16_t(m.rules().findResource("morale")), Fixed::fromInt(450));
+    run(*sim, 0.1);
+    CHECK(m.modeLevel(*sim, 1, 0) == 1);
+}
+
+TEST(core_production_limit_and_neutral_growth) {
+    using namespace modes_t;
+    // player 1: one house (cap 20) holding 12 units = 60 %: rate 0.75 -> 0.75 units per second
+    auto sim = makeSimJson(core_t::rules(""),
+        map({1, 2}, std::string(R"({"type":"house","owner":1,"pos":[5,5],"garrison":12},{"type":"house","owner":0,"pos":[12,5],"garrison":2,)") +
+                    R"("values":{"easy":{"garrison":2,"neutralMax":5},"hard":{"garrison":4,"neutralMax":9}}},{"type":"house","owner":2,"pos":[30,15],"garrison":2})"));
+    auto& w = sim->world();
+    run(*sim, 4.05);
+    CHECK(w.get<game::Garrison>(at(*sim, 5, 5)).count == 15);   // 12 + 4 x 0.75
+    CHECK(w.get<game::Garrison>(at(*sim, 30, 15)).count == 6);  // 2 + 4 (10 % of the cap: full rate)
+    CHECK(w.get<game::Garrison>(at(*sim, 12, 5)).count == 5);   // neutral: up to its maximum
+    run(*sim, 5.9);
+    CHECK(w.get<game::Garrison>(at(*sim, 5, 5)).count == 17);   // >= 75 %: rate 0.5
+    run(*sim, 10);
+    CHECK(w.get<game::Garrison>(at(*sim, 5, 5)).count == 20);   // at the cap: rate 0
+    // difficulty picks the values
+    auto sim2 = makeSimJson(core_t::rules(""),
+        map({1, 2}, std::string(R"({"type":"house","owner":1,"pos":[5,5],"garrison":1},{"type":"house","owner":0,"pos":[12,5],"garrison":2,)") +
+                    R"("values":{"easy":{"garrison":2,"neutralMax":5},"hard":{"garrison":4,"neutralMax":9}}},{"type":"house","owner":2,"pos":[30,15],"garrison":2})", R"(,"difficulty":"hard")"));
+    CHECK(sim2->world().get<game::Garrison>(at(*sim2, 12, 5)).count == 4);
+    run(*sim2, 8);
+    CHECK(sim2->world().get<game::Garrison>(at(*sim2, 12, 5)).count == 9);
+}
+
+TEST(core_koth_vars_and_checksums_unchanged_without_core) {
+    using namespace modes_t;
+    auto sim = makeSimJson(rules(R"("modes": {"kingOfTheHill": {"score": 10}})"),
+        map({1, 2}, ent("village", 1, 10, 5, R"(,"modePoint":"kingOfTheHill")") + "," + ent("village", 2, 30, 15)));
+    run(*sim, 1.0);
+    auto& vars = mod(*sim).state(*sim).trig.vars;
+    CHECK(vars.count("koth_1") && vars.count("koth_2") && vars.count("koth_max"));
+    CHECK(vars["koth_2"] == Fixed::fromInt(10) && vars["koth_1"] < Fixed::fromInt(10) && vars["koth_max"] == Fixed::fromInt(10));
+    CHECK(!mod(*sim).rules().core.any);
+}
+
+TEST(modes_team_conquest_rule_sets_and_hud_vars) {
+    using namespace modes_t;
+    // team conquest: player 2 has nothing, but its teammate 1 still has a village -> both stay
+    const std::string r = rules(R"("victory": "noEntities", "statuses": {"rush": {}}, "ruleSets": {"league3": [{"status": "rush"}]},
+        "modes": {"conquest": {"team": true}, "timeLimit": {"seconds": 50}, "suddenDeath": {"at": 10, "preview": 2, "end": 5}})");
+    auto sim = makeSimJson(r, map({1, 1, 2}, ent("village", 1, 5, 5) + "," + ent("village", 3, 30, 15), R"(,"ruleSets":["league3"])"));
+    run(*sim, 1.0);
+    CHECK(alive(*sim, 1) && alive(*sim, 2) && alive(*sim, 3));
+    auto& m = mod(*sim);
+    const int rush = m.rules().findStatus("rush");
+    bool has = false;
+    for (auto& in : m.state(*sim).players[3].statuses) has = has || in.def == rush;
+    CHECK(has);
+    auto& V = m.state(*sim).trig.vars;
+    CHECK(fxAbs(V["mode_time_left"] - Fixed::fromInt(49)) < Fixed::fromRatio(1, 10));
+    CHECK(V["mode_sd_phase"].raw == 0 && fxAbs(V["mode_sd_left"] - Fixed::fromInt(9)) < Fixed::fromRatio(1, 10));
+    // without team conquest player 2 is out
+    auto sim2 = makeSimJson(rules(R"("victory": "noEntities")"), map({1, 1, 2}, ent("village", 1, 5, 5) + "," + ent("village", 3, 30, 15)));
+    run(*sim2, 1.0);
+    CHECK(alive(*sim2, 1) && !alive(*sim2, 2));
+    // unknown rule set: a readable error
+    bool threw = false;
+    try { makeSimJson(r, map({1, 2}, ent("village", 1, 5, 5), R"(,"ruleSets":["nope"])")); } catch (const std::exception& e) { threw = std::string(e.what()).find("nope") != std::string::npos; }
+    CHECK(threw);
+}
+
+TEST(core_player_morale_gain_multiplier) {
+    using namespace modes_t;
+    auto mp = [](const char* gain) {
+        return std::string(R"({"size":[40,20],"players":[{"name":"A","team":1,"moraleGain":)") + gain + R"(},{"name":"B","team":2}],"terrain":{"rows":[)" + rows(40, 20) +
+               R"(]},"entities":[{"type":"house","owner":1,"pos":[5,5],"garrison":20},{"type":"house","owner":0,"pos":[12,5],"garrison":0,"values":{"easy":{"neutralMax":0}}},{"type":"house","owner":2,"pos":[30,15],"garrison":5}]})";
+    };
+    for (const char* g : {"1", "1.5"}) {
+        auto sim = makeSimJson(core_t::rules(""), mp(g));
+        Command c; c.player = 1; c.type = game::kCmdSend; c.units = {at(*sim, 5, 5)}; c.target = at(*sim, 12, 5); c.param = -1;
+        sim->submit(c);
+        run(*sim, 4);
+        CHECK(stockOf(*sim, 1, "morale") == Fixed::fromInt(std::string(g) == "1" ? 100 : 150));   // catchNeutral 100 x gain
+    }
+}

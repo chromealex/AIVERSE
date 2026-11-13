@@ -2,6 +2,9 @@
 // tower coverage along the routes, commands. Everything here only reads the simulation.
 #include "RtsBwAIInternal.h"
 
+#include <algorithm>
+#include <map>
+
 namespace aiverse::game {
 
 namespace {
@@ -77,13 +80,26 @@ void BwImpl::refreshRoutes(Ctx& c) {
     rt.cover.assign(n * n * n, -1);
     rt.roadsInRange.assign(n, -1);
     World& w = c.sim.world();
+    // first lane per pair = RtsModule::lanesBetween()[0] (smallest |offset|, then lane order), in one pass over the
+    // lanes: per pair calls are O(pairs x lanes), minutes on the 99-point / 2615-route BW 8-player map
+    std::map<std::pair<uint32_t, uint32_t>, int> first;
+    if (lanes)
+        for (size_t li = 0; li < gs.lanes.size(); ++li) {
+            const Lane& l = gs.lanes[li];
+            const auto key = std::minmax(l.a.index, l.b.index);
+            auto it = first.find(key);
+            if (it == first.end()) first.emplace(key, int(li));
+            else if (std::abs(l.offset) < std::abs(gs.lanes[size_t(it->second)].offset)) it->second = int(li);
+        }
     for (size_t i = 0; i < n; ++i)
         for (size_t j = i + 1; j < n; ++j) {
             std::vector<Vec3> pl;
             if (lanes) {
-                const std::vector<int> ls = c.m.lanesBetween(c.sim, nodes[i], nodes[j]);
-                if (ls.empty()) continue;          // no lane: no route (BW Routes.Find == null)
-                pl = gs.lanes[size_t(ls[0])].points;
+                const auto it = first.find(std::minmax(nodes[i].index, nodes[j].index));
+                if (it == first.end()) continue;   // no lane: no route (BW Routes.Find == null)
+                const Lane& l = gs.lanes[size_t(it->second)];
+                if (!((l.a == nodes[i] && l.b == nodes[j]) || (l.a == nodes[j] && l.b == nodes[i]))) continue;   // stale generation
+                pl = l.points;
             } else {
                 pl = {w.get<Transform>(nodes[i]).pos, w.get<Transform>(nodes[j]).pos};
             }

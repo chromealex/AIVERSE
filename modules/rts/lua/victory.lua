@@ -39,6 +39,7 @@ function std.victory(tick)
   if raid.active() then return end  -- extraction raids decide the match themselves (RtsRaid.cpp)
   local v = V
 
+  local out, teamHas = {}, {}
   for _, p in ipairs(rts.players()) do
     if p.alive and not rts.is_wave_player(p.slot) then
       local has = hasBase(v, rts.presence(p.slot))
@@ -47,8 +48,12 @@ function std.victory(tick)
         if t and t <= 0 then has = false end
       end
       if v.mode == "territory" and v.territory_enabled then has = rts.territory(p.slot) > 0 end  -- out when no ground is left
-      if not has then rts.defeat(p.slot) end
+      if has then teamHas[p.team] = true else out[#out + 1] = p end
     end
+  end
+  -- match modes "conquest": {"team": true} (BW COOP conquest): a player stays while a teammate still has a base
+  for _, p in ipairs(out) do
+    if not (v.team_elimination and teamHas[p.team]) then rts.defeat(p.slot) end
   end
 
   if v.mode == "survive" then

@@ -2,7 +2,7 @@
 //
 //   vertex: pos (float2, skeleton space), uv (float2), color (ubyte4n, straight alpha)
 //   U0:     mat4 mvp; vec4 params (x page is premultiplied, y additive: alpha out 0,
-//           z multiply: rgb + (1 - a) for dst * (src + 1 - srcA), w screen: alpha = max(rgb)); vec4 tint
+//           z multiply: rgb + (1 - a) for dst * (src + 1 - srcA), w unused; screen is a pipeline blend); vec4 tint
 //   tex0:   atlas page
 #pragma once
 
@@ -30,7 +30,6 @@ void main() {
     vec4 c = t * vec4(v_col.rgb * v_col.a, v_col.a);
     if (u_params.y > 0.5) c.a = 0.0;
     if (u_params.z > 0.5) c.rgb += vec3(1.0 - c.a);
-    if (u_params.w > 0.5) c.a = max(c.r, max(c.g, c.b));
     o_color = c;
 }
 )";
@@ -50,7 +49,6 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]],
     float4 c = t * float4(in.col.rgb * in.col.a, in.col.a);
     if (u.params.y > 0.5) c.a = 0.0;
     if (u.params.z > 0.5) c.rgb += float3(1.0 - c.a);
-    if (u.params.w > 0.5) c.a = max(c.r, max(c.g, c.b));
     return c;
 }
 )";

@@ -57,6 +57,7 @@ public:
     std::vector<int> ikBend;
     std::vector<uint8_t> ikCompress, ikStretch;
     std::vector<float> tcMix;         // 6 per transform constraint
+    std::vector<float> pathPosition, pathSpacing, pathMix;   // per path constraint (mix: rotate, x, y)
 
     bool setSkin(const std::string& name);   // false: no such skin (keeps the current one)
     const std::string& skinName() const;
@@ -68,8 +69,11 @@ public:
 
     // World positions of a slot's attachment (x, y pairs); false when nothing is drawn.
     bool worldVertices(int slot, std::vector<float>& out) const;
+    // World positions of any vertex attachment (mesh, clipping, path) on a slot, drawable or not.
+    bool vertexWorld(int slot, const Attachment& a, std::vector<float>& out) const;
     void bounds(float& minX, float& minY, float& maxX, float& maxY) const;
-    // Every visible attachment in draw order, merged into batches by page + blend.
+    // Every visible attachment in draw order, merged into batches by page + blend; clipping attachments
+    // cut the following slots (up to their end slot) to their polygon.
     void buildDrawList(DrawList& out) const;
 
     int findBone(const std::string& n) const { return data_->findBone(n); }
@@ -81,13 +85,16 @@ private:
     void updateChildren(int i);
     void applyIk(int c);
     void applyTransform(int c);
+    void applyPath(int c);
+    void pathPositions(int c, const Attachment& path, int spacesCount, bool tangents, std::vector<float>& spaces,
+                       std::vector<float>& out) const;
     void ik1(int bone, float tx, float ty, bool compress, bool stretch, bool uniform, float alpha);
     void ik2(int parent, int child, float tx, float ty, int bend, bool stretch, bool uniform, float softness, float alpha);
     void updateActive();
 
     std::shared_ptr<const SkeletonData> data_;
     int skin_ = 0;
-    std::vector<std::pair<int, int>> constraints_;   // (kind 0 ik / 1 transform, index) in update order
+    std::vector<std::pair<int, int>> constraints_;   // (kind 0 ik / 1 transform / 2 path, index) in update order
     std::vector<std::vector<int>> children_;
 };
 
