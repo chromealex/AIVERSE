@@ -1,0 +1,65 @@
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/fps/client.cpp
+
++++ apps/fps/client.cpp
+
+@@ -42,7 +42,8 @@
+
+     void init(gfx::Device& device) {
+         renderer.init(device);renderer.setShadowQuality(render::ShadowQuality::Low);
+-        gui.init(device,"engine/assets/fonts/ui.ttf",17);
++        std::string font;auto fontPath=platform::readContentFile("engine/fonts/ui.ttf",font)?"engine/fonts/ui.ttf":"engine/assets/fonts/ui.ttf";
++        gui.init(device,fontPath,17);
+         render::MeshBuilder builder;builder.color(render::rgba(255,255,255)).box({0,0.5f,0},{1,1,1});cube=builder.upload(device);
+-        lang.load([](const auto& path,auto& out){return platform::readContentFile(path,out);},"en",{"engine/assets/lang"});
++        lang.load([](const auto& path,auto& out){return platform::readContentFile(path,out);},"en",{"engine/assets/lang","engine/lang"});
+         Simulation sim({1,config.tickRate,0},std::make_unique<fps::Module>());sim.setup(rules,map);
+         geometry=static_cast<fps::Module&>(sim.module()).collision();
+@@ -52,5 +53,5 @@
+
+         if(const char* wav=std::getenv("AIVERSE_AUDIO_CAPTURE"))ac.capturePath=wav;
+         audio.init(ac);std::string bank,error;
+-        if(platform::readContentFile(projectRoot+"/audio.json",bank)||platform::readContentFile("engine/assets/fps_audio.json",bank))if(!audio.loadBank(Json::parse(bank),[](const auto& file,auto& out){return platform::readContentFile(file,out);},&error))std::fprintf(stderr,"FPS audio: %s\n",error.c_str());
++        if(platform::readContentFile(projectRoot.empty()?"audio.json":projectRoot+"/audio.json",bank)||(platform::readContentFile("engine/fps_audio.json",bank)||platform::readContentFile("engine/assets/fps_audio.json",bank)))if(!audio.loadBank(Json::parse(bank),[](const auto& file,auto& out){return platform::readContentFile(file,out);},&error))std::fprintf(stderr,"FPS audio: %s\n",error.c_str());
+     }
+     void event(const platform::Event& e) {
+@@ -147,5 +148,5 @@
+
+         audio::ListenerPose listener;auto globalEye=visual(eye);listener.pos[0]=globalEye.x;listener.pos[1]=globalEye.y;listener.pos[2]=globalEye.z;auto forward=render::normalize(cam.target-cam.eye());listener.forward[0]=forward.x;listener.forward[1]=forward.y;listener.forward[2]=forward.z;audio.setListener(listener);
+         renderer.beginScene(cam,device.framebufferWidth(),device.framebufferHeight());
+-        chunks.update(actor.pos,2,2,[&](const auto& file,auto& data){return platform::readContentFile(projectRoot+"/"+file,data);});
++        chunks.update(actor.pos,2,2,[&](const auto& file,auto& data){return platform::readContentFile(projectRoot.empty()?file:projectRoot+"/"+file,data);});
+         for(const auto& [cell,boxes]:chunks.chunks())for(const auto& b:boxes) {
+             (void)cell;
+@@ -232,10 +233,18 @@
+
+     try {
+         App app;auto engineRoot=platform::resolveEngineDir(AIVERSE_SOURCE_DIR,argv[0]);
+-        std::string project=engineRoot+"/templates/fps_training",connect;
++        std::string project,connect;
++#ifndef AIVERSE_PACKAGED_CLIENT
++        project=engineRoot+"/templates/fps_training";
++#endif
+         for(int i=1;i<argc;++i){std::string arg=argv[i];if(arg=="--project"&&i+1<argc)project=argv[++i];else if(arg=="--connect"&&i+1<argc)connect=argv[++i];else if(arg=="--listen")app.listen=true;else throw std::runtime_error("usage: aiverse_fps_client --project DIR [--connect udp://host:27100 | --listen]");}
+-        project=std::filesystem::absolute(project).string();
++        if(!project.empty())project=std::filesystem::absolute(project).string();
++        #ifndef AIVERSE_PACKAGED_CLIENT
+         std::filesystem::current_path(engineRoot);
++#endif
+         if(app.listen&&!connect.empty())throw std::runtime_error("choose --listen or --connect");
+-        auto data=fps::readProject([&](const auto& file,auto& text){return platform::readContentFile(project+"/"+file,text);});
++        platform::AppConfig cfg;cfg.title="AIVERSE FPS";cfg.width=1280;cfg.height=720;
++        gfx::Device* device=nullptr;platform::AppCallbacks cb;
++        cb.init=[&](auto& d){device=&d;
++        auto data=fps::readProject([&](const auto& file,auto& text){return platform::readContentFile(project.empty()?file:project+"/"+file,text);});
+         app.projectRoot=project;app.rules=data.rules;app.map=data.map;app.config=fps::readConfig(app.rules);
+         if(connect.empty()) {
+@@ -247,7 +256,5 @@
+
+ #endif
+         } else {auto conn=net::connectTo(connect);if(!conn)throw std::runtime_error("invalid server address");app.client=std::make_unique<net::authority::Client>(app.rules,app.map,std::move(conn));}
+-        platform::AppConfig cfg;cfg.title="AIVERSE FPS";cfg.width=1280;cfg.height=720;
+-        gfx::Device* device=nullptr;platform::AppCallbacks cb;
+-        cb.init=[&](auto& d){device=&d;app.init(d);};cb.frame=[&](auto& d,double dt){app.frame(d,dt);};cb.event=[&](const auto& e){app.event(e);};cb.shutdown=[&]{app.shutdown(*device);};
++app.init(d);};cb.frame=[&](auto& d,double dt){app.frame(d,dt);};cb.event=[&](const auto& e){app.event(e);};cb.shutdown=[&]{app.shutdown(*device);};
+         return platform::run(cfg,cb);
+     }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}

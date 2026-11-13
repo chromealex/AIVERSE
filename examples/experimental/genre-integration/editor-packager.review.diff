@@ -1,0 +1,444 @@
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:CMakeLists.txt
+
++++ CMakeLists.txt
+
+@@ -40,4 +40,5 @@
+
+ option(AIVERSE_BUILD_HEADLESS "Build headless runner" ${AIVERSE_DESKTOP})
+ option(AIVERSE_BUILD_CLIENT "Build the game client" ON)
++set(AIVERSE_GAME_MODULE "rts" CACHE STRING "Game module: rts, fps, board or motion")
+ option(AIVERSE_BUILD_EDITOR "Build the map editor" ${AIVERSE_DESKTOP})
+ option(AIVERSE_BUILD_TOOLS "Build aiversebuild packager" ${AIVERSE_DESKTOP})
+@@ -1218,2 +1219,5 @@
+
+     add_test(NAME library_genre COMMAND aiverse_library_genre_tests ${PROJECT_SOURCE_DIR})
+ endif()
++
++# Board and motion genre runtime, editor and packaging integration.
++add_subdirectory(modules/genres)
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/Editor.cpp
+
++++ apps/editor/Editor.cpp
+
+@@ -196,6 +196,6 @@
+
+     status = "Игра: " + ws_.project.manifest.getStr("name", idOrDir);
+     checkNativeModules(false);
+-    if(ws_.project.isFps()) {
+-        focusWindow("fps");
++    if(ws_.project.isStandalone()) {
++        focusWindow(ws_.project.isGenre()?"genres":"fps");
+         const auto& spawn=doc().data.fps["spawns"][0];
+         sceneCam.target={float(spawn[0].toDouble()),0,float(spawn[2].toDouble())};sceneCam.distance=35;
+@@ -591,5 +591,5 @@
+
+ 
+ void Editor::renderScene(Viewport& vp, const RTSCamera& cam, bool editOverlays) {
+-    if(ws_.project.isFps()){if(vp.color.valid())renderFpsScene(vp,cam);return;}
++    if(ws_.project.isStandalone()){if(vp.color.valid())renderFpsScene(vp,cam);return;}
+     if (!vp.color.valid()) return;
+     if (playing()) { renderGame(vp, cam); return; }
+@@ -722,5 +722,5 @@
+
+ 
+ void Editor::startPlay(int humanSlot) {
+-    if(ws_.project.isFps()){startFpsPlay();return;}
++    if(ws_.project.isStandalone()){startFpsPlay();return;}
+     if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
+     stopClientPlay();
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/EditorClientPlay.cpp
+
++++ apps/editor/EditorClientPlay.cpp
+
+@@ -59,5 +59,5 @@
+
+ 
+ void Editor::startClientPlay() {
+-    if(ws_.project.isFps()){startFpsPlay();return;}
++    if(ws_.project.isStandalone()){startFpsPlay();return;}
+     if (ws_.project.dir.empty()) { status = "Нет открытого проекта"; return; }
+     if (checkNativeModules(true)) return;   // the banner offers to build an editor with them
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/EditorFps.cpp
+
++++ apps/editor/EditorFps.cpp
+
+@@ -2,4 +2,6 @@
+
+ #include "EditorGenreUi.h"
+ #include "modules/fps/FpsModule.h"
++#include "modules/genres/BoardModule.h"
++#include "modules/genres/MotionModule.h"
+ #include <filesystem>
+ namespace aiverse::editor {
+@@ -17,12 +19,16 @@
+
+ }
+ void Editor::startFpsPlay(bool listen,const std::string& address) {
+-    if(!ws_.project.isFps()||ws_.building())return;
++    if(!ws_.project.isStandalone()||ws_.building())return;
+     try {
+-        auto cfg=fps::readConfig(ws_.project.rulesJson);Simulation check({1,cfg.tickRate,0},std::make_unique<fps::Module>());check.setup(ws_.project.rulesJson,doc().toJson());
++        std::unique_ptr<GameModule> module;uint32_t tickRate=60;
++        if(ws_.project.isFps()){tickRate=fps::readConfig(ws_.project.rulesJson).tickRate;module=std::make_unique<fps::Module>();}
++        else if(ws_.project.manifest.getStr("module")=="board")module=std::make_unique<genres::BoardModule>();
++        else module=std::make_unique<genres::MotionModule>();
++        Simulation check({1,tickRate,0},std::move(module));check.setup(ws_.project.rulesJson,doc().toJson());
+         std::string error;
+         if(doc().dirty&&!saveMap(doc().path))return;
+         if(!ws_.project.saveRules(&error)||!ws_.project.saveManifest(&error))throw std::runtime_error(error);
+         namespace fs=std::filesystem;
+-        std::string name="aiverse_fps_client";
++        std::string name=ws_.project.isFps()?"aiverse_fps_client":"aiverse_genre_client";
+ #ifdef _WIN32
+         name+=".exe";
+@@ -31,13 +37,14 @@
+
+         auto parent=fs::path(opt_.editorExe).parent_path();for(int i=0;i<4;++i){roots.push_back(parent);parent=parent.parent_path();}
+         fs::path exe;std::error_code ec;
+-        for(const auto& root:roots)for(const auto& rel:{fs::path(name),fs::path("modules/fps")/name,fs::path("modules/fps/Release")/name})if(exe.empty()&&fs::is_regular_file(root/rel,ec))exe=root/rel;
+-        if(exe.empty()){status=genreText(ws_,"fps.editor.missing");ws_.log("fps",status,true);return;}
++        for(const auto& root:roots)for(const auto& rel:{fs::path(name),fs::path("modules/fps")/name,fs::path("modules/fps/Release")/name,fs::path("modules/genres")/name,fs::path("modules/genres/Release")/name})if(exe.empty()&&fs::is_regular_file(root/rel,ec))exe=root/rel;
++        if(exe.empty()){status=genreText(ws_,ws_.project.isGenre()?"genres.editor.missing":"fps.editor.missing");ws_.log("fps",status,true);return;}
+         std::string cmd="cd "+quote(ws_.engineDir)+" && "+quote(exe.string())+" --project "+quote(ws_.project.dir);
+ #ifdef _WIN32
+         cmd="cd /d "+quote(ws_.engineDir)+" && "+quote(exe.string())+" --project "+quote(ws_.project.dir);
+ #endif
++        if(ws_.project.isGenre())cmd+=" --map "+quote(doc().path);
+         if(listen)cmd+=" --listen";else if(!address.empty())cmd+=" --connect "+quote(address);
+-        ws_.startCommand(cmd,cmd,"fps-play");status=genreText(ws_,"fps.editor.running");
+-    }catch(const std::exception& e){status=genreText(ws_,"fps.editor.invalid");ws_.log("fps",e.what(),true);}
++        ws_.startCommand(cmd,cmd,"fps-play");status=genreText(ws_,ws_.project.isGenre()?"genres.editor.running":"fps.editor.running");
++    }catch(const std::exception& e){status=genreText(ws_,ws_.project.isGenre()?"genres.editor.invalid":"fps.editor.invalid");ws_.log("fps",e.what(),true);}
+ }
+ void Editor::renderFpsScene(Viewport& vp,const render::RTSCamera& camera) {
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/EditorProjects.cpp
+
++++ apps/editor/EditorProjects.cpp
+
+@@ -265,16 +265,15 @@
+
+         ui::heading("Новый проект");
+         ui::heading(genreText(ws_, "hub.genre").c_str());
+-        const float genreWidth=std::max(120.0f,(ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ItemSpacing.x)*0.5f);
+-        for(int genre=0;genre<2;++genre) {
+-            if(genre)ImGui::SameLine();
+-            ImGui::PushID(genre+10000);
+-            if(ImGui::Selectable(genreText(ws_,genre?"hub.genre.fps":"hub.genre.rts").c_str(),H.genre==genre,0,ImVec2(genreWidth,42))) {
+-                H.genre=genre;H.templ=-1;
+-                if(std::string(H.title)=="Моя стратегия"||std::string(H.title)=="Мой шутер")std::snprintf(H.title,sizeof H.title,"%s",genre?"Мой шутер":"Моя стратегия");
+-            }
+-            ImGui::SetItemTooltip("%s",genreText(ws_,genre?"hub.genre.fps.detail":"hub.genre.rts.detail").c_str());
+-            ImGui::PopID();
+-        }
+-        ImGui::TextWrapped("%s",genreText(ws_,H.genre?"hub.genre.fps.detail":"hub.genre.rts.detail").c_str());
++        static constexpr const char* genres[]={"rts","fps","action-rpg","survivors","survival","colony","city-builder","turn-based","moba","platformer","racing","cards","puzzle","idle"};
++        H.genre=std::clamp(H.genre,0,int(std::size(genres))-1);
++        auto label=[&](int i){return genreText(ws_,(std::string("genres.label.")+genres[i]).c_str());};
++        if(ImGui::BeginCombo("##genre",label(H.genre).c_str())) {
++            for(int i=0;i<int(std::size(genres));++i)if(ImGui::Selectable(label(i).c_str(),H.genre==i)){H.genre=i;H.templ=-1;}
++            ImGui::EndCombo();
++        }
++        auto matches=[&](const TemplateInfo& t) {
++            if(H.genre==0)return t.genre=="rts"||t.genre=="classic-rts"||t.genre=="tower-defense"||t.genre=="lane-battler";
++            return t.genre==genres[H.genre];
++        };
+         ui::heading(genreText(ws_, "hub.template").c_str());
+         ImGui::SetItemTooltip("Шаблоны: %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
+@@ -286,10 +285,10 @@
+
+         const float cardW = std::floor((ImGui::GetContentRegionAvail().x - gapX * float(cols - 1)) / float(cols));   // cards fill the row
+         std::vector<size_t> visible;
+-        for(size_t i=0;i<H.templates.size();++i)if((H.templates[i].genre=="fps")==bool(H.genre))visible.push_back(i);
++        for(size_t i=0;i<H.templates.size();++i)if(matches(H.templates[i]))visible.push_back(i);
+         if(std::find(visible.begin(),visible.end(),size_t(H.templ))==visible.end())H.templ=visible.empty()?-1:int(visible.front());
+         size_t shown=0;
+         for (size_t i = 0; i < H.templates.size(); ++i) {
+             const TemplateInfo& t = H.templates[i];
+-            if((t.genre=="fps")!=bool(H.genre))continue;
++            if(!matches(t))continue;
+             if (shown++ % size_t(cols)) ImGui::SameLine();
+             ImGui::PushID(int(i));
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/EditorShell.cpp
+
++++ apps/editor/EditorShell.cpp
+
+@@ -336,4 +336,9 @@
+
+     ui::beginSegment();
+     const bool on = playing() || clientPlaying();
++    if(ws_.project.isGenre()) {
++        at();if(ui::toolButton(ICON_PLAY,genreText(ws_,"genres.editor.play").c_str(),false,!ws_.building()))startFpsPlay();
++        at();if(ui::toolButton(ICON_GAME,genreText(ws_,"genres.editor.open").c_str()))focusWindow("genres");
++        ui::endSegment();ImGui::PopStyleVar();return;
++    }
+     if(ws_.project.isFps()) {
+         at();if(ui::toolButton(ICON_PLAY,genreText(ws_,"fps.editor.play").c_str(),false,!ws_.building()))startFpsPlay();
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/EditorWorld.cpp
+
++++ apps/editor/EditorWorld.cpp
+
+@@ -237,5 +237,5 @@
+
+ 
+ void Editor::updateWorld() {
+-    if(ws_.project.isFps())return; // FPS has its own document hierarchy; never build an RTS preview.
++    if(ws_.project.isStandalone())return; // FPS has its own document hierarchy; never build an RTS preview.
+     auto profScope = prof.scope(EditorProfile::WorldUpdate);
+     Simulation* live = sim_ ? sim_.get() : clientHost_.active() ? clientHost_.simulation() : nullptr;
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/core/MapDoc.cpp
+
++++ apps/editor/core/MapDoc.cpp
+
+@@ -110,5 +110,5 @@
+
+     try {
+         MapData d;
+-        if(j["colliders"].isArray()&&j["spawns"].isArray())d.fps=j;
++        if((j["colliders"].isArray()&&j["spawns"].isArray())||j.getStr("module")=="board"||j.getStr("module")=="motion")d.fps=j;
+         d.name = j.getStr("name", "Untitled");
+         d.w = std::clamp(int(j["size"][0].integer(64)), 4, game::kMaxMapSize);
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/core/Projects.cpp
+
++++ apps/editor/core/Projects.cpp
+
+@@ -100,4 +100,15 @@
+
+         found.push_back(t);
+     }
++    for(const auto& base : {fs::path(engineDir)/"examples/genres",fs::path(engineDir)/"examples/genres/rts"}) {
++        for(const auto& e:fs::directory_iterator(base,ec)) {
++            if(!e.is_directory()||!fs::exists(e.path()/"game.json"))continue;
++            try {
++                auto m=Json::parseFile((e.path()/"game.json").string());TemplateInfo t;
++                t.id="genre-"+e.path().filename().string();t.dir=e.path().string();
++                t.name=m.getStr("name",t.id);t.description=m.getStr("description");
++                t.genre=m.getStr("genre",m.getStr("module","rts"));t.maps=int(m["maps"].size());found.push_back(t);
++            } catch(const std::exception&) { }
++        }
++    }
+     std::sort(found.begin(), found.end(), [](const TemplateInfo& a, const TemplateInfo& b) { return a.name < b.name; });
+     out.insert(out.end(), found.begin(), found.end());
+@@ -180,6 +191,7 @@
+
+     try {
+         if (templateId != "empty") {
+-            const fs::path src = fs::path(engineDir) / "templates" / templateId;
+-            if (!fs::exists(src / "game.json")) return fail("шаблон '" + templateId + "' не найден");
++            fs::path src;
++            for(const auto& t:listTemplates(engineDir))if(t.id==templateId){src=t.dir;break;}
++            if (src.empty() || !fs::exists(src / "game.json")) return fail("шаблон '" + templateId + "' не найден");
+             // per file: MinGW's recursive fs::copy fails into an existing folder
+             for (auto it = fs::recursive_directory_iterator(src); it != fs::recursive_directory_iterator(); ++it) {
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/core/Workspace.cpp
+
++++ apps/editor/core/Workspace.cpp
+
+@@ -162,5 +162,7 @@
+
+         Json r = Json::parseFile(d + "/" + m.getStr("rules", "rules.json"));
+         game::Rules parsed;
+-        if(m.getStr("module", "rts")=="fps")fps::readConfig(r);else parsed=game::loadRules(r);
++        if(m.getStr("module", "rts")=="fps")fps::readConfig(r);
++        else if(m.getStr("module")=="board"||m.getStr("module")=="motion") { if(!r[m.getStr("module")].isObject())throw JsonError("missing genre rules block"); }
++        else parsed=game::loadRules(r);
+         dir = d; manifest = std::move(m); rulesJson = std::move(r); rules = std::move(parsed);
+         rulesError.clear();
+@@ -173,5 +175,5 @@
+
+ }
+ bool Project::reloadRules() {
+-    try { if(isFps()){fps::readConfig(rulesJson);rules=game::Rules{};}else rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
++    try { if(isFps()){fps::readConfig(rulesJson);rules=game::Rules{};}else if(isGenre()){if(!rulesJson[manifest.getStr("module")].isObject())throw JsonError("missing genre rules block");rules=game::Rules{};}else rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
+     catch (const std::exception& e) { rulesError = e.what(); return false; }
+ }
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/core/Workspace.h
+
++++ apps/editor/core/Workspace.h
+
+@@ -32,4 +32,6 @@
+
+     bool saveManifest(std::string* err);
+     std::string rulesPath() const;
++    bool isGenre() const { auto m=manifest.getStr("module", "rts"); return m=="board"||m=="motion"; }
++    bool isStandalone() const { return isFps()||isGenre(); }
+     bool isFps() const { return manifest.getStr("module", "rts") == "fps"; }
+     bool reloadRules();           // parse rulesJson -> rules; false keeps the previous rules
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/GameWindow.cpp
+
++++ apps/editor/windows/GameWindow.cpp
+
+@@ -34,4 +34,10 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            ImGui::BeginDisabled(ed.ws().building());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.play").c_str()))ed.startFpsPlay();
++            ImGui::EndDisabled();ed.gameViewport=nullptr;return;
++        }
+         if(ed.ws().project.isFps()) {
+             ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/HierarchyWindow.cpp
+
++++ apps/editor/windows/HierarchyWindow.cpp
+
+@@ -53,4 +53,9 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.open").c_str()))ed.focusWindow("genres");
++            return;
++        }
+         if(ed.ws().project.isFps()) {
+             if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/InspectorWindow.cpp
+
++++ apps/editor/windows/InspectorWindow.cpp
+
+@@ -60,4 +60,9 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.open").c_str()))ed.focusWindow("genres");
++            return;
++        }
+         if(ed.ws().project.isFps()) {
+             ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/ProjectWindow.cpp
+
++++ apps/editor/windows/ProjectWindow.cpp
+
+@@ -21,4 +21,9 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.open").c_str()))ed.focusWindow("genres");
++            return;
++        }
+         if(ed.ws().project.isFps()) {
+             ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/RulesWindow.cpp
+
++++ apps/editor/windows/RulesWindow.cpp
+
+@@ -16,4 +16,9 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.open").c_str()))ed.focusWindow("genres");
++            return;
++        }
+         if(ed.ws().project.isFps()) {
+             ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/SceneWindow.cpp
+
++++ apps/editor/windows/SceneWindow.cpp
+
+@@ -24,4 +24,9 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.open").c_str()))ed.focusWindow("genres");
++            return;
++        }
+         if(ed.ws().project.isFps()) {
+             if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:apps/editor/windows/ToolsWindow.cpp
+
++++ apps/editor/windows/ToolsWindow.cpp
+
+@@ -36,4 +36,9 @@
+
+ 
+     void draw(Editor& ed) override {
++        if(ed.ws().project.isGenre()) {
++            ImGui::TextWrapped("%s",genreText(ed.ws(),"genres.editor.hint").c_str());
++            if(ImGui::Button(genreText(ed.ws(),"genres.editor.open").c_str()))ed.focusWindow("genres");
++            return;
++        }
+         if(ed.ws().project.isFps()) {
+             ImGui::TextWrapped("%s",genreText(ed.ws(),"fps.editor.hint").c_str());
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:platform/android/template/app/build.gradle
+
++++ platform/android/template/app/build.gradle
+
+@@ -16,5 +16,5 @@
+
+         externalNativeBuild {
+             cmake {
+-                arguments '-DAIVERSE_CONTENT_DIR=' + file('src/main/assets/content').absolutePath,
++                arguments '-DAIVERSE_GAME_MODULE=@GAME_MODULE@', '-DAIVERSE_CONTENT_DIR=' + file('src/main/assets/content').absolutePath,
+                           '-DAIVERSE_BUILD_EDITOR=OFF', '-DAIVERSE_BUILD_TOOLS=OFF', '-DAIVERSE_BUILD_TESTS=OFF', '-DAIVERSE_BUILD_HEADLESS=OFF',
+                           '-DANDROID_STL=c++_static'
+
+--- 5e147d68fb221990199b4e1bc9818e7f0e9f89e7:tools/aiversebuild/main.cpp
+
++++ tools/aiversebuild/main.cpp
+
+@@ -639,4 +639,5 @@
+
+     // Each project selects its own native/ directory, including when reusing a CMake cache.
+     s += " -DAIVERSE_NATIVE_DIR=";
++    s += " -DAIVERSE_GAME_MODULE=" + quote(o.gameJson.getStr("module", "rts"));
+     s += " -DAIVERSE_GAME_NAME=" + quote(g.name);
+     s += " -DAIVERSE_GAME_ID=" + g.id;
+@@ -661,4 +662,6 @@
+
+     for (const char* d : {"engine", "modules", "third_party", "platform", "libraries"}) copyDir(o.engine / d, dst / d);
+     copyDir(o.engine / "apps" / "client", dst / "apps" / "client");
++    copyDir(o.engine / "apps" / "genres", dst / "apps" / "genres");
++    copyDir(o.engine / "apps" / "fps", dst / "apps" / "fps");
+     copyFile(o.engine / "CMakeLists.txt", dst / "CMakeLists.txt");
+     // Source exports must retain compiled modules even when runtime data is packed.
+@@ -811,4 +814,5 @@
+
+         t = replaceAll(t, "@PROJECT_NAME@", g.exe);
+         t = replaceAll(t, "@APP_ID@", g.id);
++        t = replaceAll(t, "@GAME_MODULE@", o.gameJson.getStr("module", "rts"));
+         t = replaceAll(t, "@APP_NAME@", g.name);
+         t = replaceAll(t, "@VERSION@", g.version);
+@@ -957,5 +961,5 @@
+
+               "@echo off\r\nrem Requires Visual Studio 2022 (Desktop C++) and CMake.\r\n"
+               "cmake -S . -B build -A x64 -DAIVERSE_CONTENT_DIR=%~dp0content -DAIVERSE_GAME_NAME=\"" + g.name + "\" -DAIVERSE_GAME_ID=" + g.id +
+-              " -DAIVERSE_GAME_EXECUTABLE=" + g.exe + packArg + " -DAIVERSE_GEN_DIR=%~dp0gen" +
++              " -DAIVERSE_GAME_MODULE=" + o.gameJson.getStr("module", "rts") + " -DAIVERSE_GAME_EXECUTABLE=" + g.exe + packArg + " -DAIVERSE_GEN_DIR=%~dp0gen" +
+               (splashBg.empty() ? std::string() : " -DAIVERSE_SPLASH_BACKGROUND=" + splashBg) + " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF || exit /b 1\r\n"
+               "cmake --build build --target aiverse_client --config Release || exit /b 1\r\n"
+@@ -1104,4 +1108,6 @@
+
+         Json m = Json::parseFile((o.project / "game.json").string());
+         o.gameJson = m;
++        const auto module=m.getStr("module", "rts");
++        if(module!="rts"&&module!="fps"&&module!="board"&&module!="motion")die("unsupported game module: "+module);
+         g.name = m.getStr("name", g.name);
+         g.id = m.getStr("id", g.id);
