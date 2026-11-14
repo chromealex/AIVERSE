@@ -8,7 +8,7 @@
 //    the stop near his destination lets him off (the buses have no lines: any of them will do).
 // Fixed maths only, entity-index order, randomness from sim.rng().
 #include "RtsTraffic.h"
-#include "KingstonCityTrafficAreas.h"
+#include "kingston/CityTrafficAreas.h"
 #include "RtsInternal.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>

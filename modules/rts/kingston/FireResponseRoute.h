@@ -1,6 +1,6 @@
 #pragma once
 #include <aiverselib/Graphs.h>
-#include "KingstonFireResponseDetour.h"
+#include "FireResponseDetour.h"
 #include "libraries/include/aiverselib/genre/Traffic.h"
 namespace kingston {
 // Keep station/address access, but avoid narrow connecting streets when a wide

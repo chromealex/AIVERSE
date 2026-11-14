@@ -1,3 +1,4 @@
+#include "kingston/DeckBroadphase.h"
 // Driving (rules "driving", RtsDriving.h): vehicle adoption, getting in / out, the stick -> pedals mapping, the
 // vehicle-controllers step and this module's part of the contract: the sweep of the body over the map grid and other
 // units, collision response, crash and run-over damage. Fixed maths only; every loop runs in entity-index order.
@@ -511,6 +512,7 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
     }
     for (size_t i = 0; i < st.decks.size() && c.deck < 0; ++i) {
         const DrivingDeck& d = st.decks[i];
+        if (!kingston::deckMayTouchBody(d, pos, half)) continue;
         const Fixed m = deckMouth(d);
         for (Fixed off : offs) {
             const DeckSpot s = deckSpot(d, pos + f * off);

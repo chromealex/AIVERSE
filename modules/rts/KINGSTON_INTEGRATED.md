@@ -13,12 +13,20 @@ top-down, arsenal, projectile, view and render files.
 What was changed on the way in:
 - behaviour that broke engine tests is now a rule, off by default: `arsenal.aimWindup` (true: a quarter second with the weapon raised before the first shot), `traffic.services.<id>.custody` (police detain instead of fighting), `...carry` (the ambulance
   crew carries the patient and delivers him);
-- the three project headers the patches included by absolute path were copied here
-  (`KingstonFireResponseRoute.h`, `KingstonFireResponseDetour.h`, `KingstonTrafficPriorityPolicy.h`,
-  `KingstonCityTrafficAreas.h`);
+- the project headers the patches included by absolute path are copied to `kingston/` under their own names
+  (`FireResponseRoute.h`, `FireResponseDetour.h`, `TrafficPriorityPolicy.h`, `CityTrafficAreas.h`,
+  `DeckBroadphase.h`) and included as `"kingston/<name>.h"`;
 - 108 repeated `#include "Kingston*.inc"` lines in `RtsTrafficCity.cpp` (the patcher appended a pair on every
   configure) were reduced to one pair.
 
 Still game-specific and hard-wired (type ids such as `cop`, `city_officer`, `city_rescue_patient`, trigger
 variable names): these adapters should become data or a project native module (docs/native-modules.md).
 New engine changes for the game go into the engine sources directly, not into patch scripts.
+
+## The project's patch scripts and this tree
+
+The scripts still run when the game is configured against a copy of the engine. Checked on a copy of this tree
+(2026-11-14): they leave it alone except for two harmless things: `prepare_vehicle_repairs.py` swaps the
+`kingston/` includes in `RtsTraffic.cpp` for the project's own headers, and the ambulance / police scripts add
+their include pair before `switch (c.task)` in `RtsTrafficCity.cpp` once more (ungated, which is what the game
+wants). When a script starts changing other engine files, that change belongs here as a commit.

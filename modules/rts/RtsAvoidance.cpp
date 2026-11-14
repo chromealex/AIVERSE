@@ -162,6 +162,7 @@ void RtsModule::moveAgents(Simulation& sim) {
             if (m.pathPos >= m.path.size() && m.moving) { m.moving = false; m.path.clear(); }
             a.moving = m.moving;
         }
+        state(sim).trig.vars["resident_crossing_"+std::to_string(e.packed())+"_reason"]=Fixed{};
         if(a.moving){
             const Vec2 goal=m.pathPos<m.path.size()?m.path[m.pathPos].xz():m.goal.xz();
             const Vec2 waypoint=vehicleDetour(e,a.p,goal,a.r);

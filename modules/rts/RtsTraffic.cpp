@@ -2,9 +2,9 @@
 // the bot driver of each traffic car, and the pedestrians. Fixed maths only; every loop runs in entity-index order,
 // randomness only from sim.rng().
 #include "RtsTraffic.h"
-#include "KingstonFireResponseRoute.h"
+#include "kingston/FireResponseRoute.h"
 #include "RtsInternal.h"
-#include "KingstonTrafficPriorityPolicy.h"
+#include "kingston/TrafficPriorityPolicy.h"
 #include "../../engine/core/Archive.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>
