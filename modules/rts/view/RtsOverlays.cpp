@@ -38,6 +38,11 @@ void RtsOverlays::init(const Rules& rules, const Json& rulesOverlays, const Json
     rules_ = &rules;
     base_ = contentBase;
     set_ = loadOverlaySet(rules, rulesOverlays, gameOverlays);
+    outlineSelected_ = outlineHovered_ = false;
+    for (const OverlayDef& d : set_.defs) {
+        if (d.id == "selection") outlineSelected_ = d.enabled;
+        else if (d.id == "hover") outlineHovered_ = d.enabled;
+    }
     state_.assign(set_.defs.size(), {});
     popups_.clear();
     lastTick_ = ~0u;

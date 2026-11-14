@@ -65,6 +65,9 @@ public:
     void setQuality(OverlayQuality q) { quality_ = q; qualityForced_ = true; }
     OverlayQuality quality() const { return quality_; }
     const OverlaySet& set() const { return set_; }
+    // Mesh outlines follow the built-in "selection" / "hover" overlays: a game that disables one loses its outline too.
+    bool outlineSelected() const { return outlineSelected_; }
+    bool outlineHovered() const { return outlineHovered_; }
     const std::vector<OverlayMinimapMark>& minimapMarks() const { return marks_; }
 
     void drawWorld(render::Renderer3D& r, const RtsScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid, const RtsView& view);
@@ -149,6 +152,7 @@ private:
     render::TextureCache textures_;
     std::vector<render::TextureRef> images_;   // per def
     OverlaySet set_;
+    bool outlineSelected_ = true, outlineHovered_ = true;
     std::vector<DefState> state_;
     std::vector<uint16_t> screenEntityDefs_, screenOtherDefs_, worldDefs_;
     OverlayContext ctx_;

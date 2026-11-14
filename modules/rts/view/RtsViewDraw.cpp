@@ -133,8 +133,9 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     }
     if (L.transparent) d.flags |= kDrawTransparent;
     if (tintOverride) { d.tint = *tintOverride; d.flags = kDrawNoCastShadow; d.flash = 0; d.dissolve = 0; }
-    if (outline_ && !st.dead && !tintOverride && (o.selected || o.hovered)) {
-        const float3 c = o.selected ? (o.owner == 0 ? float3{0.9f, 0.9f, 0.35f} : float3{0.25f, 0.95f, 0.3f}) : float3{0.8f, 0.8f, 0.8f};
+    const bool sel = o.selected && overlays_.outlineSelected(), hov = o.hovered && overlays_.outlineHovered();
+    if (outline_ && !st.dead && !tintOverride && (sel || hov)) {
+        const float3 c = sel ? (o.owner == 0 ? float3{0.9f, 0.9f, 0.35f} : float3{0.25f, 0.95f, 0.3f}) : float3{0.8f, 0.8f, 0.8f};
         d.outline = {c.x, c.y, c.z, 0.03f * std::max(1.0f, k)};
     }
     if (d.tint.w <= 0.0f && !(d.flags & kDrawKeepShadow)) return;   // fully transparent (view.entity_fx opacity 0): nothing to draw, no anchors
