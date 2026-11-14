@@ -37,6 +37,7 @@ private:
     Simulation& sim_;
     Client& client_;
     std::unordered_map<uint32_t, Entity> map_;         // server entity -> local entity
+    std::unordered_map<uint32_t, Entity> shots_;       // projectiles in flight
     uint32_t tick_ = 0, snapshots_ = 0;
     uint8_t bound_ = 0;
     float alpha_ = 1, interval_ = 0.1f;

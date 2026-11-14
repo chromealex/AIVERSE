@@ -370,6 +370,27 @@ TEST(city_mirror_predicts_the_hero_and_shows_events_and_premises) {
     size_t got = 0;
     for (auto& e : heard) got += e.type == 903 && e.a == mirror.hero() && e.pos.x == Fixed::fromInt(5);
     CHECK(got == 1 && stepped == 0);   // told once to the collectors; nothing else ran
+    {   // a projectile in flight on the server is one here, with its shooter
+        const Entity pe = server.world().create();
+        const Vec3 from = tdPos(server, heroS) + Vec3{Fixed{}, Fixed::fromInt(1), Fixed::fromInt(-2)};
+        server.world().add<Transform>(pe, Transform{from, from, Fixed{}});
+        game::Projectile pr;
+        pr.source = heroS; pr.owner = 1; pr.speed = Fixed::fromRatio(1, 2); pr.aim = from + Vec3{Fixed{}, Fixed{}, Fixed::fromInt(-2)}; pr.start = from; pr.total = Fixed::fromInt(2);
+        server.world().add<game::Projectile>(pe, pr);
+        size_t seenFlying = 0, withShooter = 0;
+        for (int i = 0; i < 6; ++i) {
+            frames(1);
+            local.world().each<game::Projectile, Transform>([&](Entity, game::Projectile& lp, Transform& lt) {
+                ++seenFlying; withShooter += lp.source == mirror.hero() && fxAbs(lt.pos.y - Fixed::fromInt(1)) < Fixed::fromRatio(1, 4);
+            });
+        }
+        CHECK(seenFlying >= 2 && withShooter == seenFlying);
+        if (server.world().alive(pe)) server.world().destroy(pe);
+        frames(6);
+        size_t left = 0;
+        local.world().each<game::Projectile, Transform>([&](Entity, game::Projectile&, Transform&) { ++left; });
+        CHECK(left == 0 && a.shots().empty());
+    }
     game::Commerce& cs = *rig.server.module().commerce();
     game::Commerce& cl = *mod(local).commerce();
     mod(server).state(server).players[1].stock[0] = Fixed::fromInt(1000);

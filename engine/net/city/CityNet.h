@@ -18,7 +18,7 @@
 namespace aiverse::game { class RtsModule; }
 
 namespace aiverse::net::city {
-constexpr uint32_t kProtocol = 3;
+constexpr uint32_t kProtocol = 4;
 // What both sides must agree on: the unit types (their order is the wire's type id) and the map's players and
 // entities (their order is the entity ids at the start). Other rules may differ: the client does not simulate.
 uint64_t contentId(const Json& rules, const Json& map);
@@ -40,6 +40,9 @@ struct Options {
     int maxEntities = 250;        // per snapshot (14 bytes each)
     Replicate replicate = Replicate::All;
     int saveSeconds = 60;         // bound accounts are stored this often (and when the player leaves)
+    // The streets fill with the players: the traffic limits of the rules (meant for one player) are multiplied by
+    // 1 + trafficPerPlayer * (players - 1), at most trafficMaxScale times.
+    double trafficPerPlayer = 0.1; double trafficMaxScale = 6;
     bool emptySeats = true;       // a seat nobody plays has no hero in the city; he comes back where he left
     std::vector<uint8_t> key;     // 32 bytes: admit() lets in only players with a ticket() sealed by this key (empty: anybody, as a guest)
     std::function<int64_t()> clock;   // unix seconds for ticket expiry (default: the system clock)
@@ -57,6 +60,7 @@ struct EntityState {              // 14 bytes on the wire
     uint8_t flags = 0;            // 1: a player is it or drives it, 2: this hero is inside a vehicle
     bool operator==(const EntityState&) const = default;
 };
+struct Shot { uint32_t id = 0, source = UINT32_MAX; uint16_t x = 0, z = 0; uint8_t y = 0; };   // a projectile in flight; y: 1/8 cell
 struct Event { uint32_t tick = 0, id = 0; uint8_t kind = 0; uint16_t x = 0, z = 0; uint32_t subject = 0; };
 struct RemoteEvent {              // a SimEvent of the server's simulation that happened in view (or is about this player)
     uint16_t type = 0; uint8_t player = 0; uint32_t a = UINT32_MAX, b = UINT32_MAX; int64_t value = 0; uint16_t x = 0, z = 0;
@@ -155,6 +159,7 @@ public:
     struct Seen { EntityState state; uint32_t tick = 0; bool fixed = false; };   // fixed: stays until the server says it is gone
     const std::unordered_map<uint32_t, Seen>& entities() const { return entities_; }
     const AccountState& account() const { return account_; }
+    const std::vector<Shot>& shots() const { return shots_; }   // every projectile in view as of the last snapshot
     std::vector<Event> takeEvents() { return std::move(events_); }
     std::vector<RemoteEvent> takeSimEvents() { return std::move(simEvents_); }
     const std::vector<PremiseState>& premises() const { return premises_; }   // by the map's premises index (as far as told)
@@ -173,6 +178,7 @@ private:
     std::unordered_map<uint32_t, Seen> entities_;
     AccountState account_;
     std::vector<Event> events_;
+    std::vector<Shot> shots_;
     std::vector<RemoteEvent> simEvents_;
     std::vector<PremiseState> premises_;
     uint32_t premisesVersion_ = 0;

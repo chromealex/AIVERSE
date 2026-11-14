@@ -475,6 +475,14 @@ bool Traffic::isPersonType(uint16_t t) const {
     return false;
 }
 
+void Traffic::scaleLimits(int percent) {
+    if (!base_) { base_ = true; baseLimits_[0] = rules_.maxCars; baseLimits_[1] = rules_.maxPeople; baseLimits_[2] = rules_.population.live; baseLimits_[3] = rules_.population.parked; }
+    percent = std::clamp(percent, 100, 5000);
+    auto scaled = [&](int v) { return int(int64_t(v) * percent / 100); };
+    rules_.maxCars = scaled(baseLimits_[0]); rules_.maxPeople = scaled(baseLimits_[1]);
+    rules_.population.live = scaled(baseLimits_[2]); rules_.population.parked = scaled(baseLimits_[3]);
+}
+
 void Traffic::focus(Simulation& sim, std::vector<Vec2>& out) const {
     out.clear();
     TopDown* td = m_->topDown();
@@ -954,7 +962,7 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
     const Fixed minDist = st.placed ? rules_.spawnMin : Fixed::fromInt(4);
     int count[3] = {0, 0, 0};
     for (auto& c : st.cars) if (c.service < 0) count[c.kind]++;
-    int budget = st.placed ? 1 : rules_.maxCars * 3;   // the first tick fills the streets
+    int budget = st.placed ? (base_ ? std::max(1, (rules_.maxCars - count[kTrafficCar]) / 10) : 1) : rules_.maxCars * 3;   // the first tick fills the streets; scaled limits (a server) catch up fast
     if (!st.placed || sim.tick() % 5 == 0)
         while (budget-- > 0 && count[kTrafficCar] < rules_.maxCars)
             if (spawnCar(sim, st, foci, minDist, kTrafficCar)) ++count[kTrafficCar];
@@ -1604,7 +1612,7 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
         ++i;
     }
     const Fixed minDist = st.placed ? rules_.peopleMin : Fixed::fromInt(3);
-    int budget = st.placed ? 1 : rules_.maxPeople * 3;   // the first tick fills the streets (a failed try is just a bad spot)
+    int budget = st.placed ? (base_ ? std::max(1, (rules_.maxPeople - int(st.people.size())) / 10) : 1) : rules_.maxPeople * 3;   // the first tick fills the streets (a failed try is just a bad spot)
     if (!st.placed || sim.tick() % 4 == 0)
         while (budget-- > 0 && int(st.people.size()) < rules_.maxPeople) spawnPerson(sim, st, foci, minDist);
 

@@ -302,6 +302,9 @@ public:
         int32_t piece = -1; int8_t dir = 1; Fixed along{};   // the kerb his car stands at: road piece, side, where
     };
     const std::vector<Place>& places() const { return places_; }
+    // A city with many heroes (a server): the limits of cars and people on the streets are the rules' ones times
+    // percent / 100 (100: as in the rules). Not part of the saved state: the host sets it again after a load.
+    void scaleLimits(int percent);
     size_t lineCount() const { return lines_.size(); }
     const std::string& lineId(int line) const { static const std::string none; return line >= 0 && size_t(line) < lines_.size() ? lines_[size_t(line)].id : none; }
     const std::vector<int32_t>& lineStops(int line) const { return lines_[size_t(line)].stops; }
@@ -406,6 +409,7 @@ private:
 
     RtsModule* m_ = nullptr;
     TrafficRules rules_;
+    bool base_ = false; int baseLimits_[4] = {0, 0, 0, 0};   // scaleLimits: the rules' own limits
     lib::genre::TrafficNet net_;
     std::vector<uint32_t> offset_;           // per junction: signal phase offset (ticks)
     std::vector<uint8_t> walk_;              // per cell: sidewalk or crossing (pedestrian graph)

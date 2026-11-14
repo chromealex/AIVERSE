@@ -188,6 +188,29 @@ void Mirror::apply() {
             it = map_.erase(it);
         }
     const Entity was = hero_;
+    {   // projectiles: the snapshot names every one in view
+        std::unordered_map<uint32_t, Entity> now;
+        for (const Shot& sh : client_.shots()) {
+            const Vec3 at{cell(sh.x), Fixed::fromRaw(int64_t(sh.y) << (Fixed::kFracBits - 3)), cell(sh.z)};
+            Entity e;
+            if (const auto it = shots_.find(sh.id); it != shots_.end() && w.alive(it->second)) {
+                e = it->second;
+                Transform& t = w.get<Transform>(e);
+                t.prevPos = t.pos; t.pos = at;
+            } else {
+                e = w.create();
+                w.add<Transform>(e, Transform{at, at, Fixed{}});
+                game::Projectile pr;
+                pr.source = sh.source == UINT32_MAX ? kNullEntity : localOf(sh.source);
+                if (pr.source.valid() && w.alive(pr.source)) { pr.sourceType = w.get<game::Unit>(pr.source).type; if (w.has<Owner>(pr.source)) pr.owner = w.get<Owner>(pr.source).player; }
+                w.add<game::Projectile>(e, pr);
+            }
+            now[sh.id] = e;
+        }
+        for (auto& [id, e] : shots_) if (!now.count(id) && w.alive(e)) w.destroy(e);
+        shots_ = std::move(now);
+        w.flush();
+    }
     hero_ = localOf(client_.hero());
     if (const auto it = seen.find(client_.hero()); hero_.valid() && it != seen.end()) {
         const double x = double(it->second.state.x) / 64.0, z = double(it->second.state.z) / 64.0;

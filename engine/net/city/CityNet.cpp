@@ -335,6 +335,11 @@ void Server::step() {
         for (uint8_t slot : seats_) if (!occupied(slot)) module().topDown()->store(*sim_)->pilots[slot].respawnAt = 0;
     collectEvents();
     const uint64_t t = sim_->tick(), rate = sim_->tickRate();
+    if (t % rate == 0 && opt_.trafficPerPlayer > 0)   // the streets fill with the players
+        if (game::Traffic* tr = module().traffic(); tr && tr->active()) {
+            const double scale = std::clamp(1.0 + opt_.trafficPerPlayer * (double(peers_.size()) - 1.0), 1.0, std::max(1.0, opt_.trafficMaxScale));
+            tr->scaleLimits(int(scale * 100.0));
+        }
     if (t * uint64_t(opt_.snapshotRate) / rate != (t - 1) * uint64_t(opt_.snapshotRate) / rate) {
         const auto from = std::chrono::steady_clock::now();
         broadcast();
@@ -457,6 +462,17 @@ void Server::broadcast() {
         grid[key(c.p)].push_back(c);
     });
 
+    struct Flying { Shot s; Vec2 p; };
+    std::vector<Flying> flying;   // projectiles: few and short-lived, told whole in every snapshot
+    w.each<game::Projectile, Transform>([&](Entity e, game::Projectile& pr, Transform& t) {
+        Flying f;
+        f.p = Vec2{t.pos.x, t.pos.z};
+        f.s.id = e.index; f.s.source = pr.source.valid() ? pr.source.index : UINT32_MAX;
+        f.s.x = q64(t.pos.x); f.s.z = q64(t.pos.z);
+        f.s.y = uint8_t(std::clamp<int64_t>((t.pos.y.raw * 8) >> Fixed::kFracBits, 0, 255));
+        flying.push_back(f);
+    });
+
     const Fixed r = Fixed::fromInt(opt_.radius), r2 = r * r;
     std::vector<const Cand*> changed, same, fresh;
     std::vector<uint32_t> gone;
@@ -499,6 +515,15 @@ void Server::broadcast() {
                 ++stats_.byType[c->s.type];
                 ++put_;
             }
+        size_t shots = 0;
+        const size_t shotsAt = o.b.size();
+        o.u8(0);
+        for (const Flying& f : flying) {
+            if (shots == 64 || (f.p - hp).lengthSq() > r2) continue;
+            o.u32(f.s.id); o.u32(f.s.source); o.u16(f.s.x); o.u16(f.s.z); o.u8(f.s.y);
+            ++shots;
+        }
+        o.b[shotsAt] = uint8_t(shots);
         p.conn->sendLatest(o.b);
         ++stats_.snapshots; stats_.entities += n; stats_.snapshotBytes += o.b.size();
         if (tick % (keep * 8) == 0)
@@ -616,9 +641,15 @@ void Client::poll(uint64_t now) {
         case Msg::Snapshot: {
             const uint32_t tick = in.u32(), hero = in.u32();
             const uint16_t n = in.u16();
-            if (!in.ok || packet.size() != 11 + size_t(n) * kEntityBytes || tick < tick_) break;   // late or malformed
+            if (!in.ok || packet.size() < 12 + size_t(n) * kEntityBytes || tick < tick_) break;   // late or malformed
+            const size_t shotsAt = 11 + size_t(n) * kEntityBytes;
+            const size_t shots = packet[shotsAt];
+            if (packet.size() != shotsAt + 1 + shots * 13) break;
             tick_ = tick; hero_ = hero;
             for (uint16_t i = 0; i < n; ++i) { const EntityState e = get(in); entities_[e.id] = {e, tick, false}; }
+            (void)in.u8();
+            shots_.clear();
+            for (size_t i = 0; i < shots; ++i) { Shot sh; sh.id = in.u32(); sh.source = in.u32(); sh.x = in.u16(); sh.z = in.u16(); sh.y = in.u8(); shots_.push_back(sh); }
             ++snapshots_;
             for (auto it = entities_.begin(); it != entities_.end();) it = !it->second.fixed && tick - it->second.tick > expire_ ? entities_.erase(it) : std::next(it);
             break;
