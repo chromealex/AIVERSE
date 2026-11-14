@@ -66,7 +66,8 @@ Optional `"playerColors"`: `[neutral, slot 1, ..., slot 8]` (overlay colour synt
 overlay default (`RtsOverlayData::configurePlayerColors`, applied when a match starts in the client and the editor).
 
 Lighting block (game.json / map `"lighting"`), flat-art keys: `"day": {"sun", "sky", "ground", "fog": [r, g, b],
-"sunK": k}` replaces fields of the day palette (of the preset or the renderer), `"fogDensity"` (0 = no distance fog),
+"sunK": k}` replaces fields of the day palette (of the preset or the renderer), `"night"` (same keys) the
+night / moonlight palette (`sunK` 0..1: moon strength, so shadows stay readable at night), `"fogDensity"` (0 = no distance fog),
 `"tonemap": false` (lit shaders clamp instead of the ACES fit; with `sunK` 0 and white sky / ground an unlit material
 shows its colour unchanged), `"modelOutput": "srgb"` (model shaders encode their linear result with the exact sRGB curve,
 as a Unity project in linear colour space does, instead of the engine's default sqrt, which renders midtones darker; GLSL

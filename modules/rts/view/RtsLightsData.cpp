@@ -264,6 +264,17 @@ void RtsLights::configure(const Json& game, const Json& map, const Json& lights)
         col("sun", day_.sun); col("sky", day_.sky); col("ground", day_.ground); col("fog", day_.fog);
         if ((*src)["sunK"].isNumber()) day_.sunK = std::max(num(*src, "sunK", 1.0f), 0.0f);
     }
+    // "night": {"sun", "sky", "ground", "fog", "sunK"} replaces fields of the night (moonlight) palette the same way:
+    // a brighter moon ("sunK") keeps shadows readable in a game that is mostly played at night.
+    for (const Json* src : {&game["night"], &map["night"]}) {
+        if (!src->isObject()) continue;
+        auto col = [&](const char* k, float3& out) {
+            const Json& c = (*src)[k];
+            if (c.size() >= 3) out = float3{float(c[0].fx().toDouble()), float(c[1].fx().toDouble()), float(c[2].fx().toDouble())};
+        };
+        col("sun", night_p_.sun); col("sky", night_p_.sky); col("ground", night_p_.ground); col("fog", night_p_.fog);
+        if ((*src)["sunK"].isNumber()) night_p_.sunK = std::clamp(num(*src, "sunK", night_p_.sunK), 0.0f, 1.0f);
+    }
     fogDensity_ = pick("fogDensity", -1, -1.0f);
     if (fogDensity_ >= 0) fogDensity_ = std::min(fogDensity_, 1.0f);
     tonemap_ = map["tonemap"].boolean(game["tonemap"].boolean(true));
