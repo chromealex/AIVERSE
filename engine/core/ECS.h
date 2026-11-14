@@ -179,8 +179,14 @@ public:
     }
     template <class T> size_t count() { return pool<T>().size(); }
 
-    template <class T> Pool<T>& pool() {
-        uint32_t id = detail::componentTypeId<T>();
+    // Hot: called for every component access. The common case (pool exists) stays inline; creating a
+    // pool is the rare out-of-line path.
+    template <class T> [[gnu::always_inline]] inline Pool<T>& pool() {
+        const uint32_t id = detail::componentTypeId<T>();
+        if (id < pools_.size()) [[likely]] if (IPool* p = pools_[id].get()) [[likely]] return *static_cast<Pool<T>*>(p);
+        return makePool<T>(id);
+    }
+    template <class T> [[gnu::noinline]] Pool<T>& makePool(uint32_t id) {
         if (id >= pools_.size()) pools_.resize(id + 1);
         if (!pools_[id]) pools_[id] = std::make_unique<Pool<T>>();
         return *static_cast<Pool<T>*>(pools_[id].get());
