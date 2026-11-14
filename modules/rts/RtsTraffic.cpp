@@ -228,6 +228,7 @@ TrafficRules Traffic::parse(const Json& j, const std::vector<std::string>& ids, 
     }
     parseCity(j, r, ids, tickRate);
     parsePopulation(j, r, ids, tickRate);
+    parseGangs(j, r, ids, tickRate);
     if (p.has("driver")) r.driverPerson = typeOf(p.getStr("driver"), "traffic.pedestrians.driver");
     return r;
 }
@@ -535,6 +536,13 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     h.u32(uint32_t(st->patients.size()));
     for (auto& q : st->patients) { h.u32(q.type); h.fx(q.at.x); h.fx(q.at.y); h.u32(q.release); h.i32(q.citizen); }
     h.u32(uint32_t(st->citizens.size())); h.u32(st->citizenCursor);
+    {
+        const TrafficGang& g = st->gang;
+        h.u32(g.state); h.i32(g.leader); h.i32(g.target); h.i32(g.loot); h.u64(g.car.packed()); h.u32(g.until); h.u32(g.call); h.u32(g.held);
+        h.u32(uint32_t(g.members.size())); for (int32_t m : g.members) h.i32(m);
+        h.u32(uint32_t(g.crew.size())); for (Entity m : g.crew) h.u64(m.packed());
+        h.u32(st->nextGang); h.u64(uint64_t(st->gangLoot)); h.u32(st->gangRobberies); h.u32(st->gangCaught);
+    }
     for (auto& c : st->citizens) {
         h.u32(uint32_t(c.type) | uint32_t(c.shift) << 16 | uint32_t(c.state) << 24); h.i32(c.home); h.i32(c.work); h.u64(c.e.packed());
         h.fx(c.from.x); h.fx(c.from.y); h.u32(c.left); h.u32(c.eta);
@@ -570,6 +578,10 @@ void Traffic::io(Simulation& sim, Archive& a) {
     if (!st) return;
     a(st->cars, st->people, st->lights, st->lit, st->placed, st->nextAdopt, st->nextEmergency);
     a(st->incidents, st->nextIncident, st->used, st->towed, st->patients, st->happened, st->blows, st->citizens, st->citizenCursor);
+    {
+        TrafficGang& g = st->gang;
+        a(g.state, g.leader, g.target, g.loot, g.members, g.car, g.crew, g.until, g.call, g.held, st->nextGang, st->gangLoot, st->gangRobberies, st->gangCaught);
+    }
     if (!a.writing()) for (auto& c : st->cars) c.input = {};
 }
 
@@ -586,6 +598,7 @@ void Traffic::tick(Simulation& sim) {
     incidents(sim, *st);
     cars(sim, *st, foci);
     population(sim, *st, foci);
+    gangs(sim, *st, foci);
     people(sim, *st, foci);
     st->happened.clear();
     st->placed = true;
@@ -711,7 +724,7 @@ void Traffic::extendRoute(Simulation& sim, TrafficCar& c) {
             total += wgt[sd];
         }
         int exitSide = inSide;
-        if (c.destPiece >= 0 && (c.task == kTaskGoing || c.task == kTaskHome || c.task == kTaskTrip || c.task == 250)) {   // on call, a citizen's trip: the way to the address
+        if (c.destPiece >= 0 && (c.task == kTaskGoing || c.task == kTaskHome || c.task == kTaskTrip || c.task == 250 || c.task == kTaskGang)) {   // on call, a citizen's trip: the way to the address
             exitSide = exitToward(J, inSide, c.tailPiece, c.destPiece); if(c.kind==kTrafficEmergency && m_->rules().types[sim.world().get<Unit>(c.e).type].id=="fire_engine")exitSide=kingston::wideResponseExit(net_,J,inSide,c.tailPiece,c.destPiece,exitSide);
         } else if (c.kind == kTrafficBus && c.line >= 0 && size_t(c.line) < lines_.size()) {   // the line: on to its next point
             const auto& via = lines_[size_t(c.line)].via;
@@ -1129,7 +1142,7 @@ void Traffic::plan(Simulation& sim, TrafficStore& st, TrafficCar& c) {
     GameState& gs = m_->state(sim);
     const int hereCell = gs.grid.cellOf(v3(pos));
     const bool inMap = hereCell >= 0 && size_t(hereCell) < net_.pieceAt.size();
-    if ((c.task == kTaskGoing || c.task == kTaskHome || c.task == kTaskTrip || c.task == 250) && inMap && net_.pieceAt[size_t(hereCell)] == c.destPiece && c.destPiece >= 0) {
+    if ((c.task == kTaskGoing || c.task == kTaskHome || c.task == kTaskTrip || c.task == 250 || c.task == kTaskGang) && inMap && net_.pieceAt[size_t(hereCell)] == c.destPiece && c.destPiece >= 0) {
         const auto& P = net_.pieces[size_t(c.destPiece)];   // pull up at the address
         const int s = tl::trafficDetail::axisDir(P.axis, 1).dot(fwd).raw >= 0 ? 1 : -1;
         const Fixed d = (c.destAlong - tl::trafficAlongOf(P, pos)) * s;

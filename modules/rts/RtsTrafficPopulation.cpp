@@ -130,6 +130,9 @@ void Traffic::setupPopulation(Simulation& sim, const Json& map) {
         if (cell >= 0 && places_.size() < 1000000) { Place pl; pl.kind = f.kind; pl.pos = f.p; pl.cell = cell; pl.object = f.e; places_.push_back(pl); }
     }
     setupCommute();
+    gangTargets_.clear();
+    for (size_t i = 0; i < places_.size(); ++i)
+        for (auto& t : rules_.gangs.targets) if (t.first == places_[i].kind && places_[i].piece >= 0) gangTargets_.push_back({int32_t(i), t.second});
 }
 
 int Traffic::minuteOfDay(Simulation& sim) const {
@@ -241,8 +244,9 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
     for (size_t k = 0; k < slice; ++k) {
         const size_t id = st.citizenCursor++ % n;
         TrafficCitizen& c = st.citizens[id];
+        if (c.state == kCitizenDead || c.state == kCitizenGang) continue;
+        if (c.state == kCitizenJail) { if (sim.tick() >= c.eta) c.state = kCitizenHome; continue; }
         if (m_->state(sim).trig.vars["tow_worker_"+std::to_string(id)].raw>0 || m_->state(sim).trig.vars["tow_claimant_"+std::to_string(id)].raw>0) continue;
-        if (c.state == kCitizenDead) continue;
         if (c.e.valid() && !(w.alive(c.e) && w.get<Unit>(c.e).hp.raw > 0)) {   // his body (his car) vanished without a report: assume the hospital
             c.e = kNullEntity;
             if (c.state == kCitizenToWork || c.state == kCitizenToHome) { c.state = kCitizenHospital; c.eta = sim.tick() + rules_.incidents.treatTicks; }

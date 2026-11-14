@@ -1387,6 +1387,31 @@ int gTrafficClock(lua_State* L, Vm& vm) {
     pushFx(L, Fixed::fromRatio(t->minuteOfDay(sim), 60));
     return 1;
 }
+// game.traffic_gang() -> {state = "unseen"|"drive"|"out"|"rob"|"back"|"flee", x, z (the place they rob), car = handle,
+//  size, loot} of the gang that is out now, or nil; second value: {robberies, caught, loot} so far
+int gTrafficGang(lua_State* L, Vm& vm) {
+    CTX;
+    Traffic* t = m.traffic();
+    auto* st = t && t->active() ? t->store(sim) : nullptr;
+    if (!st) { lua_pushnil(L); return 1; }
+    const TrafficGang& g = st->gang;
+    if (g.state == kGangNone || g.target < 0) lua_pushnil(L);
+    else {
+        static const char* states[] = {"none", "unseen", "drive", "out", "rob", "back", "flee"};
+        lua_createtable(L, 0, 6);
+        lua_pushstring(L, states[std::min<int>(g.state, 6)]); lua_setfield(L, -2, "state");
+        pushFx(L, t->places()[size_t(g.target)].pos.x); lua_setfield(L, -2, "x");
+        pushFx(L, t->places()[size_t(g.target)].pos.y); lua_setfield(L, -2, "z");
+        if (g.car.valid() && sim.world().alive(g.car)) { pushEntity(L, g.car); lua_setfield(L, -2, "car"); }
+        lua_pushinteger(L, lua_Integer(g.members.size())); lua_setfield(L, -2, "size");
+        lua_pushinteger(L, g.loot); lua_setfield(L, -2, "loot");
+    }
+    lua_createtable(L, 0, 3);
+    lua_pushinteger(L, st->gangRobberies); lua_setfield(L, -2, "robberies");
+    lua_pushinteger(L, st->gangCaught); lua_setfield(L, -2, "caught");
+    lua_pushinteger(L, lua_Integer(st->gangLoot)); lua_setfield(L, -2, "loot");
+    return 2;
+}
 // game.traffic_citizen(h) -> {id-less record of the citizen behind a person on the street or the car he drives} or nil:
 // {state = "to_work"|"to_home"|..., commute = "walk"|"car"|"bus", leg = "walk"|"to_stop"|"at_stop"|"drive" (on his way),
 //  home = {x, z}, work = {x, z, kind, open}, shift = {from, to} (hours)}
@@ -1396,9 +1421,9 @@ int gTrafficCitizen(lua_State* L, Vm& vm) {
     Traffic* t = m.traffic();
     const TrafficCitizen* c = t && t->active() && unitArg(L, vm, 1, e) ? t->citizenOf(sim, e) : nullptr;
     if (!c) { lua_pushnil(L); return 1; }
-    static const char* states[] = {"home", "to_work", "work", "to_home", "hospital", "dead"};
+    static const char* states[] = {"home", "to_work", "work", "to_home", "hospital", "dead", "gang", "jail"};
     lua_createtable(L, 0, 4);
-    lua_pushstring(L, states[std::min<int>(c->state, 5)]); lua_setfield(L, -2, "state");
+    lua_pushstring(L, states[std::min<int>(c->state, 7)]); lua_setfield(L, -2, "state");
     static const char* commutes[] = {"walk", "car", "bus"};
     static const char* legs[] = {"walk", "to_stop", "at_stop", "ride", "drive"};
     lua_pushstring(L, commutes[std::min<int>(c->commute, 2)]); lua_setfield(L, -2, "commute");
@@ -1458,7 +1483,7 @@ void openGameApi(Vm& vm) {
         {"var", bindQ<gVar>}, {"log", bindQ<gLog>}, {"data", bindQ<gData>}, {"has_data", bindQ<gHasData>},
         {"orders", bindQ<gOrders>}, {"current_order", bindQ<gCurrentOrder>}, {"target", bindQ<gTarget>}, {"idle", bindQ<gIdle>},
         {"facing", bindQ<gFacing>}, {"velocity", bindQ<gVelocity>}, {"path", bindQ<gPath>}, {"energy", bindQ<gEnergy>},
-        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {"traffic_light", bindQ<gTrafficLight>}, {"traffic_kind", bindQ<gTrafficKind>}, {"traffic_incidents", bindQ<gTrafficIncidents>}, {"traffic_clock", bindQ<gTrafficClock>}, {"traffic_citizen", bindQ<gTrafficCitizen>}, {nullptr, nullptr}};
+        {"commands", bindQ<gCommands>}, {"command_cooldown", bindQ<gCommandCooldown>}, {"traffic_light", bindQ<gTrafficLight>}, {"traffic_kind", bindQ<gTrafficKind>}, {"traffic_incidents", bindQ<gTrafficIncidents>}, {"traffic_gang", bindQ<gTrafficGang>}, {"traffic_clock", bindQ<gTrafficClock>}, {"traffic_citizen", bindQ<gTrafficCitizen>}, {nullptr, nullptr}};
     static const luaL_Reg actions[] = {
         {"give", bind<gGive>}, {"take", bind<gTake>}, {"spawn", bind<gSpawn>}, {"kill", bind<gKill>}, {"damage", bind<gDamage>},
         {"attack_event", bind<gAttackEvent>},
@@ -1539,6 +1564,7 @@ Json scriptApiReference() {
     q.push(fn("game.grid_sample_segment(width,height,cells,x,z,tx,tz[,label[,margin[,density]]])", "pure fixed-point sampled segment query; same masks as grid_path, cross margin probes, density 1..16, max 65536 samples; excludes start, includes endpoint"));
     q.push(fn("game.traffic_light(x, z [, \"x\"|\"z\"])", "signal of the junction at / next to the point for traffic along that axis (default: the road there): \"green\"|\"yellow\"|\"red\", nil without a signalised junction (rules traffic, docs/traffic.md)"));
     q.push(fn("game.traffic_incidents()", "{{id, kind = \"injured\"|\"crime\"|\"fire\"|\"wreck\", x, z, state = \"open\"|\"coming\"|\"working\"}, ...}: what the city services are dealing with (docs/traffic.md)"));
+    q.push(fn("game.traffic_gang()", "the gang that is out robbing now: {state, x, z, car, size, loot} or nil; second value {robberies, caught, loot} so far (rules traffic.gangs)"));
     q.push(fn("game.traffic_citizen(h) / game.traffic_clock()", "the citizen behind a person on the street or the car he drives: {state, commute, leg, home = {x, z, kind}, work = {x, z, kind, open}, shift = {from, to}} or nil / hour of the game day (rules traffic.population, docs/traffic.md)"));
     q.push(fn("game.traffic_kind(h)", "\"car\"|\"bus\"|\"emergency\" for a vehicle the traffic drives (sirens, HUD), nil otherwise"));
     q.push(fn("game.var(name)", "trigger variable (fx)"));

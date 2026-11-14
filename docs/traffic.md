@@ -227,6 +227,38 @@ to the point (within 3 cells) for traffic along that axis (default: the axis of 
 `game.traffic_kind(h)` → `"car"`, `"bus"`, `"emergency"` for a vehicle the traffic drives, nil for anything else
 (parked cars, the hero's car). Works in view scripts (sirens, HUD markers).
 
+## Gangs (crime that starts by itself)
+
+`modules/rts/RtsTrafficGangs.cpp`, rules `traffic.gangs` (needs `traffic.population`). Tests: `aiverse_tests traffic_gang`.
+
+```json
+"gangs": {"every": [120, 300], "size": [2, 4], "targets": {"shop": 400, "bank": 8000}, "rob": 8, "jail": 240,
+          "crew": "robber", "owner": 3, "caughtUnseen": 40}
+```
+
+- Every `every` seconds a citizen without work who is at home becomes a ringleader and gets `size` people like him
+  together (fewer than the minimum: nothing happens). The target is a place of a kind listed in `targets` (its loot).
+- **Near a hero** (the ringleader's home or the target within the cars' `spawnMax`) it is the real thing: they take
+  the nearest parked car by the house (a citizen's car: its owner reports it when he comes for it; none there: one
+  from round the corner), drive to the target, get out (`crew` units of player `owner`, default the citizens' own
+  type and the pedestrians' player), walk to the door. Reaching it is a crime report with them as offenders: the
+  police service answers. After `rob` seconds they walk back to the car and drive to the ringleader's home; the call
+  follows the car, so patrols on their way chase it. A patrol that gets within 3.5 cells of the car arrests them
+  (`jail` seconds in state `jail`, nothing taken home); robbers shot at the door end in the hospital; a car taken
+  from them (by a hero) sends them home. If they get home, the loot is theirs (`gangLoot`).
+- A robber somebody takes hold of at the scene (the unit is disabled or loaded as cargo: a game's own arrest and
+  escort) is left to them: the gang does not wait for him, he is in jail whatever happens to the rest, and the
+  call stays open for whoever holds him.
+- **Unseen**: a timer for the two drives and the robbery, then `caughtUnseen` percent decides.
+- One gang at a time. Its members are citizens in state `gang` (they keep no schedule meanwhile).
+- Lua: `game.traffic_gang()` → `{state, x, z, car, size, loot}` of the gang that is out (nil: none) and
+  `{robberies, caught, loot}` so far; `game.traffic_citizen(h).state` can be `"gang"` / `"jail"`.
+- Make the robbers hostile to the police crews' player (and armed) for a shootout; with the same player the patrol
+  only stands at the scene and chases.
+
+Not done: money of single citizens (the loot is a town-wide counter), a shop that closes after it was robbed,
+several gangs at once, robbers as passengers the player can see in the car, a hideout other than the ringleader's home.
+
 ## C++ library (`aiverselib/genre/Traffic.h`)
 
 | function | contract |
