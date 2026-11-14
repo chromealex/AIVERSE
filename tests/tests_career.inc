@@ -136,3 +136,20 @@ TEST(prompts_show_pick_and_interact) {
     auto plain = makeSimJson(kCareerRules, flatMap(32, 16, kCareerMap));
     CHECK(!mod(*plain).prompts()->active() && !mod(*plain).prompts()->store(*plain));
 }
+
+TEST(career_saved_with_the_account) {
+    auto sim = makeSimJson(kCareerRules, flatMap(32, 16, kCareerMap));
+    auto& c = *mod(*sim).career();
+    const int gang = c.find("gang"), police = c.find("police");
+    c.join(*sim, 1, police);
+    c.add(*sim, 1, police, Fixed::fromRatio(25, 2));
+    const Json kept = c.save(*sim, 1);
+    CHECK(kept.isObject() && kept.has("police") && !kept.has("gang"));
+    c.clear(*sim, 1);
+    CHECK(c.rank(*sim, 1, police) == -1 && c.save(*sim, 1).size() == 0);
+    c.join(*sim, 2, gang);
+    c.load(*sim, 2, kept);                                    // another seat: what it had is replaced
+    CHECK(c.rank(*sim, 2, gang) == -1 && c.rank(*sim, 2, police) == 1 && c.progress(*sim, 2, police)->points == Fixed::fromRatio(25, 2));
+    c.load(*sim, 2, Json::parse(R"({"nobody_knows_this": 5, "gang": 327680})"));
+    CHECK(c.rank(*sim, 2, police) == -1 && c.rank(*sim, 2, gang) == 1);
+}

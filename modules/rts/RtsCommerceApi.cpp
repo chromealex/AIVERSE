@@ -68,7 +68,9 @@ int cPremise(lua_State* L, Vm& vm) {
     else if (c) { int64_t n; if (!argInt(L, vm, 1, n, "premises")) return -1; i = int(n) - 1; }
     if (!c || i < 0 || i >= int(c->store(*vm.sim)->premises.size())) { lua_pushnil(L); return 1; }
     const Premise& p = c->store(*vm.sim)->premises[size_t(i)];
-    const bool mine = lua_isinteger(L, 2) && p.runBy() != 0 && lua_tointeger(L, 2) == p.runBy();
+    // owners are account records; scripts see the slot of whoever is in the match (255: his player is away)
+    auto seat = [&](uint16_t rec) -> lua_Integer { if (!rec) return 0; const uint8_t s = c->slotOf(*vm.sim, rec); return s ? s : 255; };
+    const bool mine = lua_isinteger(L, 2) && p.runBy() != 0 && lua_tointeger(L, 2) == seat(p.runBy());
     lua_newtable(L);
     lua_pushinteger(L, i + 1); lua_setfield(L, -2, "index");
     lua_pushstring(L, p.id.c_str()); lua_setfield(L, -2, "id");
@@ -78,8 +80,11 @@ int cPremise(lua_State* L, Vm& vm) {
     pushFx(L, p.price); lua_setfield(L, -2, "price");
     pushFx(L, p.rentWeek); lua_setfield(L, -2, "rent");
     pushFx(L, p.traffic); lua_setfield(L, -2, "traffic");
-    lua_pushinteger(L, p.owner); lua_setfield(L, -2, "owner");
-    lua_pushinteger(L, p.tenant); lua_setfield(L, -2, "tenant");
+    lua_pushinteger(L, seat(p.owner)); lua_setfield(L, -2, "owner");
+    lua_pushinteger(L, seat(p.tenant)); lua_setfield(L, -2, "tenant");
+    const auto& accs = c->store(*vm.sim)->accounts;
+    lua_pushinteger(L, lua_Integer(accs[p.owner].id)); lua_setfield(L, -2, "owner_account");
+    lua_pushinteger(L, lua_Integer(accs[p.tenant].id)); lua_setfield(L, -2, "tenant_account");
     if (p.business >= 0) {
         const BusinessType& b = c->rules().businesses[size_t(p.business)];
         lua_pushstring(L, b.id.c_str()); lua_setfield(L, -2, "business");
@@ -105,9 +110,11 @@ int cAccount(lua_State* L, Vm& vm) {
     Commerce* c = commerceOf(vm);
     int64_t s;
     if (!argInt(L, vm, 1, s, "player")) return -1;
-    if (!c || s <= 0 || s >= int64_t(c->store(*vm.sim)->accounts.size())) { lua_pushnil(L); return 1; }
-    const CommerceAccount& a = c->store(*vm.sim)->accounts[size_t(s)];
+    const CommerceAccount* ap = c && s > 0 && s < 256 ? c->account(*vm.sim, uint8_t(s)) : nullptr;
+    if (!ap) { lua_pushnil(L); return 1; }
+    const CommerceAccount& a = *ap;
     lua_newtable(L);
+    lua_pushinteger(L, lua_Integer(a.id)); lua_setfield(L, -2, "id");
     pushFx(L, c->cash(*vm.sim, uint8_t(s))); lua_setfield(L, -2, "cash");
     pushFx(L, a.debt); lua_setfield(L, -2, "debt");
     pushFx(L, c->creditLimit(*vm.sim, uint8_t(s))); lua_setfield(L, -2, "limit");
@@ -179,6 +186,25 @@ int cFine(lua_State* L, Vm& vm) {
     c->fine(*vm.sim, uint8_t(std::clamp<int64_t>(s, 0, 255)), amount);
     return 0;
 }
+// commerce.bind(slot, account_id) -> bound / commerce.unbind(slot) / commerce.sell_out(account_id) (simulation scripts)
+int cBind(lua_State* L, Vm& vm) {
+    Commerce* c; int64_t s, id;
+    if (!need(vm, c) || !argInt(L, vm, 1, s, "slot") || !argInt(L, vm, 2, id, "account")) return -1;
+    lua_pushboolean(L, s > 0 && s < 256 && id > 0 && c->bind(*vm.sim, uint8_t(s), uint64_t(id)));
+    return 1;
+}
+int cUnbind(lua_State* L, Vm& vm) {
+    Commerce* c; int64_t s;
+    if (!need(vm, c) || !argInt(L, vm, 1, s, "slot")) return -1;
+    if (s > 0 && s < 256) c->unbind(*vm.sim, uint8_t(s));
+    return 0;
+}
+int cSellOut(lua_State* L, Vm& vm) {
+    Commerce* c; int64_t id;
+    if (!need(vm, c) || !argInt(L, vm, 1, id, "account")) return -1;
+    lua_pushboolean(L, id > 0 && c->sellOut(*vm.sim, uint64_t(id)));
+    return 1;
+}
 // commerce.can(player, deal, ...) -> true | false, reason
 int cCan(lua_State* L, Vm& vm) {
     Commerce* c; int64_t s; CommerceOp op; int premise; int64_t value;
@@ -210,7 +236,7 @@ void openCommerceApi(Vm& vm) {
     static const luaL_Reg queries[] = {
         {"active", bindQ<cActive>}, {"clock", bindQ<cClock>}, {"count", bindQ<cCount>}, {"premise", bindQ<cPremise>},
         {"account", bindQ<cAccount>}, {"businesses", bindQ<cBusinesses>}, {"can", bindQ<cCan>}, {"param", bindQ<cParam>}, {"offers", bindQ<cOffers>}, {nullptr, nullptr}};
-    static const luaL_Reg actions[] = {{"act", bind<cAct>}, {"visit", bind<cVisit>}, {"fine", bind<cFine>}, {nullptr, nullptr}};
+    static const luaL_Reg actions[] = {{"act", bind<cAct>}, {"visit", bind<cVisit>}, {"fine", bind<cFine>}, {"bind", bind<cBind>}, {"unbind", bind<cUnbind>}, {"sell_out", bind<cSellOut>}, {nullptr, nullptr}};
     luaL_newlib(L, queries);
     if (vm.mode == Mode::Sim) luaL_setfuncs(L, actions, 0);
     lua_setglobal(L, "commerce");

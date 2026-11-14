@@ -74,6 +74,13 @@ CommerceRules Commerce::parse(const Json& j, const std::vector<std::string>& res
     r.managerWageWeek = number(j, "managerWageWeek", r.managerWageWeek, "commerce", false);
     r.unmanagedShare = number(j, "unmanagedShare", r.unmanagedShare, "commerce", false);
     if (r.unmanagedShare > Fixed::fromInt(1)) throw std::runtime_error("commerce.unmanagedShare: at most 1");
+    if (j.has("accounts")) {
+        const std::string a = j.getStr("accounts");
+        if (a != "slots" && a != "external") throw std::runtime_error("commerce.accounts: 'slots' or 'external'");
+        r.externalAccounts = a == "external";
+    }
+    r.absentDays = int(j.getInt("absentDays", 0));
+    if (r.absentDays < 0 || r.absentDays > 1000000) throw std::runtime_error("commerce.absentDays: out of range");
     if (j.has("storage")) { r.storage.clear(); for (auto& k : j["storage"].items()) r.storage.push_back(k.str()); }
     if (const Json& os = j["offers"]; os.isObject()) {
         for (auto& [id, oj] : os.members()) {
@@ -111,7 +118,10 @@ void Commerce::setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const
     rules_ = parse(rulesJson["commerce"], res, sim.tickRate(), types);
     if (!active()) return;
     auto& st = sim.world().setResource<CommerceStore>();
-    st.accounts.assign(m.state(sim).players.size(), {});
+    const size_t slots = m.state(sim).players.size();
+    st.slotRec.assign(slots, 0);
+    st.accounts.assign(rules_.externalAccounts ? 1 : slots, {});
+    for (size_t i = 1; i < st.accounts.size(); ++i) { st.accounts[i].id = i; st.accounts[i].slot = uint8_t(i); st.slotRec[i] = uint16_t(i); }
     const Json& list = map["premises"];
     if (list.isNull()) return;
     if (!list.isArray()) throw std::runtime_error("map premises: expected a list");
@@ -131,7 +141,7 @@ void Commerce::setup(Simulation& sim, RtsModule& m, const Json& rulesJson, const
         p.traffic = number(pj, "traffic", p.traffic, where, false);
         const int64_t owner = pj.getInt("owner", 0);
         if (owner < 0 || owner >= int64_t(st.accounts.size())) throw std::runtime_error(where + ".owner: no such player");
-        p.owner = uint8_t(owner);
+        p.owner = uint16_t(owner);
         p.isPublic = pj.getBool("public", false);
         if (pj.has("business")) {
             p.business = int16_t(findBusiness(pj.getStr("business")));
@@ -165,22 +175,108 @@ Fixed Commerce::cash(Simulation& sim, uint8_t player) const {
     return active() && player < gs.players.size() ? gs.players[player].stock[size_t(rules_.currency)] : Fixed{};
 }
 
+Fixed Commerce::cashOf(Simulation& sim, uint16_t rec) const {
+    auto* st = store(sim);
+    if (!st || rec == 0 || rec >= st->accounts.size()) return {};
+    const CommerceAccount& a = st->accounts[rec];
+    return a.slot ? cash(sim, a.slot) : a.wallet;
+}
+
+Fixed Commerce::limitOf(const CommerceStore& st, uint16_t rec) const {
+    if (rec == 0 || rec >= st.accounts.size()) return {};
+    Fixed owned{};
+    for (auto& p : st.premises) if (p.owner == rec) owned += p.price;
+    return rules_.unsecured + owned * rules_.collateralShare;
+}
+
 Fixed Commerce::creditLimit(Simulation& sim, uint8_t player) const {
     auto* st = store(sim);
-    if (!st || player == 0 || player >= st->accounts.size()) return {};
-    Fixed owned{};
-    for (auto& p : st->premises) if (p.owner == player) owned += p.price;
-    return rules_.unsecured + owned * rules_.collateralShare;
+    return st ? limitOf(*st, recOf(*st, player)) : Fixed{};
+}
+
+const CommerceAccount* Commerce::account(Simulation& sim, uint8_t player) const {
+    auto* st = store(sim);
+    const uint16_t rec = st ? recOf(*st, player) : uint16_t(0);
+    return rec ? &st->accounts[rec] : nullptr;
+}
+
+const CommerceAccount* Commerce::accountById(Simulation& sim, uint64_t id) const {
+    auto* st = store(sim);
+    if (st && id)
+        for (size_t i = 1; i < st->accounts.size(); ++i) if (st->accounts[i].id == id) return &st->accounts[i];
+    return nullptr;
+}
+
+uint8_t Commerce::slotOf(Simulation& sim, uint16_t record) const {
+    auto* st = store(sim);
+    return st && record < st->accounts.size() ? st->accounts[record].slot : uint8_t(0);
+}
+
+bool Commerce::bind(Simulation& sim, uint8_t slot, uint64_t id) {
+    auto* st = store(sim);
+    if (!st || slot == 0 || slot >= st->slotRec.size() || id == 0) return false;
+    uint16_t rec = 0;
+    for (size_t i = 1; i < st->accounts.size(); ++i) if (st->accounts[i].id == id) rec = uint16_t(i);
+    if (rec && st->accounts[rec].slot == slot) return true;
+    if (rec && st->accounts[rec].slot != 0) return false;   // he sits in another slot
+    if (!rec && st->accounts.size() >= 65000) return false;
+    unbind(sim, slot);
+    if (!rec) { st->accounts.emplace_back(); rec = uint16_t(st->accounts.size() - 1); st->accounts[rec].id = id; }
+    CommerceAccount& a = st->accounts[rec];
+    a.slot = slot;
+    a.lastSeenDay = day(sim);
+    st->slotRec[slot] = rec;
+    m_->state(sim).players[slot].stock[size_t(rules_.currency)] = a.wallet;
+    a.wallet = {};
+    return true;
+}
+
+void Commerce::unbind(Simulation& sim, uint8_t slot) {
+    auto* st = store(sim);
+    const uint16_t rec = st ? recOf(*st, slot) : uint16_t(0);
+    if (!rec) return;
+    CommerceAccount& a = st->accounts[rec];
+    Fixed& stock = m_->state(sim).players[slot].stock[size_t(rules_.currency)];
+    a.wallet = stock;
+    stock = {};
+    a.slot = 0;
+    a.lastSeenDay = day(sim);
+    st->slotRec[slot] = 0;
+}
+
+void Commerce::liquidate(Simulation& sim, CommerceStore& st, uint16_t rec) {
+    CommerceAccount& a = st.accounts[rec];
+    for (auto& p : st.premises) {
+        if (p.tenant == rec) { p.tenant = 0; closeBusiness(p); vacate(sim, p, rec); }
+        if (p.owner != rec) continue;
+        p.owner = 0;
+        if (p.tenant == 0) { closeBusiness(p); vacate(sim, p, rec); }
+        pay(sim, rec, p.price * rules_.sellShare);
+    }
+    const Fixed back = fxMin(a.debt, fxMax(cashOf(sim, rec), Fixed{}));   // the bank first
+    if (back.raw > 0) { a.debt -= back; pay(sim, rec, Fixed{} - back); }
+    if (a.debt.raw <= 0) { a.debt = {}; a.missed = 0; }
+    a.cars.clear();
+}
+
+bool Commerce::sellOut(Simulation& sim, uint64_t id) {
+    auto* st = store(sim);
+    if (!st || id == 0) return false;
+    for (size_t i = 1; i < st->accounts.size(); ++i)
+        if (st->accounts[i].id == id) { liquidate(sim, *st, uint16_t(i)); return true; }
+    return false;
 }
 
 void Commerce::hash(Simulation& sim, Hasher& h) const {
     auto* st = store(sim);
     if (!st) return;
     h.u32(uint32_t(st->premises.size()));
-    for (auto& p : st->premises) { h.u32(uint32_t(p.owner) | uint32_t(p.tenant) << 8); h.i32(p.business); h.fx(p.lastNet); h.fx(p.total);
+    for (auto& p : st->premises) { h.u32(uint32_t(p.owner) | uint32_t(p.tenant) << 16); h.i32(p.business); h.fx(p.lastNet); h.fx(p.total);
         h.u32(uint32_t(p.staff) | uint32_t(p.manager) << 8 | uint32_t(p.visited) << 9); h.fx(p.served);
         h.fx(p.stashCash); h.u32(uint32_t(p.stashAmmo.size())); for (int32_t n : p.stashAmmo) h.i32(n); }
+    h.u32(uint32_t(st->accounts.size()));
     for (auto& a : st->accounts) {
+        h.u64(a.id); h.u32(a.slot); h.fx(a.wallet); h.u32(a.lastSeenDay);
         h.fx(a.debt); h.u32(a.missed);
         for (Fixed f : {a.dayNet, a.weekNet, a.lastWeekNet, a.lastRent, a.lastLoanPayment, a.lastWages}) h.fx(f);
         h.u32(uint32_t(a.cars.size()));
@@ -191,33 +287,48 @@ void Commerce::hash(Simulation& sim, Hasher& h) const {
 void Commerce::io(Simulation& sim, Archive& a) {
     auto* st = store(sim);
     if (!st) return;
-    uint32_t n = uint32_t(st->premises.size()), na = uint32_t(st->accounts.size());
-    a(n, na);
-    if (!a.writing() && (n != st->premises.size() || na != st->accounts.size())) { a.fail(); return; }   // another map
+    uint32_t n = uint32_t(st->premises.size()), na = uint32_t(st->accounts.size()), ns = uint32_t(st->slotRec.size());
+    a(n, na, ns);
+    if (!a.writing() && (n != st->premises.size() || ns != st->slotRec.size() || na == 0 || na > 65000)) { a.fail(); return; }   // another map
+    if (!a.writing()) st->accounts.assign(na, {});
     for (auto& p : st->premises) {
         a(p.owner, p.tenant, p.business, p.lastNet, p.total, p.staff, p.manager, p.visited, p.served, p.stashCash, p.stashAmmo);
         if (!a.writing() && (p.owner >= na || p.tenant >= na || p.business < -1 || p.business >= int(rules_.businesses.size()))) { a.fail(); return; }
     }
-    for (auto& c : st->accounts) a(c.debt, c.missed, c.dayNet, c.weekNet, c.lastWeekNet, c.lastRent, c.lastLoanPayment, c.lastWages, c.cars);
+    for (auto& c : st->accounts) {
+        a(c.id, c.slot, c.wallet, c.lastSeenDay);
+        a(c.debt, c.missed, c.dayNet, c.weekNet, c.lastWeekNet, c.lastRent, c.lastLoanPayment, c.lastWages, c.cars);
+    }
+    for (auto& r : st->slotRec) {
+        a(r);
+        if (!a.writing() && r >= na) { a.fail(); return; }
+    }
 }
 
 // ================================================================= deals
 
-void Commerce::pay(Simulation& sim, uint8_t player, Fixed amount) {
+void Commerce::pay(Simulation& sim, uint16_t rec, Fixed amount) {
     auto* st = store(sim);
-    if (!st || player == 0 || player >= st->accounts.size() || amount.raw == 0) return;
-    if (amount.raw > 0) { m_->addResource(sim, player, uint16_t(rules_.currency), amount); return; }
-    Fixed& have = m_->state(sim).players[player].stock[size_t(rules_.currency)];
+    if (!st || rec == 0 || rec >= st->accounts.size() || amount.raw == 0) return;
+    CommerceAccount& a = st->accounts[rec];
+    if (amount.raw > 0) {
+        if (a.slot) m_->addResource(sim, a.slot, uint16_t(rules_.currency), amount); else a.wallet += amount;
+        return;
+    }
+    Fixed& have = a.slot ? m_->state(sim).players[a.slot].stock[size_t(rules_.currency)] : a.wallet;
     const Fixed need = Fixed{} - amount, taken = fxMin(need, fxMax(have, Fixed{}));
     have -= taken;
-    st->accounts[player].debt += need - taken;   // what he could not cover is owed to the bank
+    a.debt += need - taken;   // what he could not cover is owed to the bank
 }
 
-void Commerce::fine(Simulation& sim, uint8_t player, Fixed amount) { if (amount.raw > 0) pay(sim, player, Fixed{} - amount); }
+void Commerce::fine(Simulation& sim, uint8_t player, Fixed amount) {
+    auto* st = store(sim);
+    if (st && amount.raw > 0) pay(sim, recOf(*st, player), Fixed{} - amount);
+}
 
 void Commerce::closeBusiness(Premise& p) { p.business = -1; p.lastNet = {}; p.total = {}; p.staff = 0; p.manager = false; p.served = {}; }
 
-void Commerce::vacate(Simulation& sim, Premise& p, uint8_t who) {
+void Commerce::vacate(Simulation& sim, Premise& p, uint16_t who) {
     pay(sim, who, p.stashCash);
     p.stashCash = {};
     p.stashAmmo.clear();
@@ -236,7 +347,7 @@ bool Commerce::visit(Simulation& sim, int premise) {
     auto* st = store(sim);
     if (!st || premise < 0 || premise >= int(st->premises.size())) return false;
     Premise& p = st->premises[size_t(premise)];
-    const uint8_t who = p.runBy();
+    const uint16_t who = p.runBy();
     if (p.business < 0 || who == 0) return false;
     const Fixed ticket = rules_.businesses[size_t(p.business)].ticket;
     if (ticket.raw <= 0 || p.served + ticket > expectedToday(p) * 3 / 2) return false;
@@ -245,23 +356,24 @@ bool Commerce::visit(Simulation& sim, int premise) {
     return true;
 }
 
-const char* Commerce::refusal(Simulation& sim, uint8_t player, CommerceOp op, int premise, int64_t value) const {
+const char* Commerce::refusal(Simulation& sim, uint8_t slot, CommerceOp op, int premise, int64_t value) const {
     auto* st = store(sim);
     if (!st) return "no commerce in this game";
-    if (player == 0 || player >= st->accounts.size()) return "no such player";
+    const uint16_t player = recOf(*st, slot);   // from here on "player" is his account record
+    if (player == 0) return "no such player";
     const CommerceAccount& acc = st->accounts[player];
-    const Fixed money = cash(sim, player);
+    const Fixed money = cashOf(sim, player);
     if (op == CommerceOp::Borrow || op == CommerceOp::Repay) {
         if (value <= 0 || value > 1000000000) return "bad amount";
         const Fixed amount = Fixed::fromInt(value);
-        if (op == CommerceOp::Borrow) return acc.debt + amount > creditLimit(sim, player) ? "over the credit limit" : nullptr;
+        if (op == CommerceOp::Borrow) return acc.debt + amount > limitOf(*st, player) ? "over the credit limit" : nullptr;
         if (acc.debt.raw <= 0) return "nothing to repay";
         return money.raw <= 0 ? "not enough money" : nullptr;
     }
     if (premise < 0 || premise >= int(st->premises.size())) return "no such premises";
     const Premise& p = st->premises[size_t(premise)];
     if (rules_.range.raw > 0 && m_->topDown() && m_->topDown()->active()) {
-        const Entity hero = m_->topDown()->heroOf(sim, player);
+        const Entity hero = m_->topDown()->heroOf(sim, slot);
         if (hero.valid() && sim.world().alive(hero) && flat(sim.world().get<Transform>(hero).pos - p.at).length() > rules_.range) return "too far";
     }
     if (p.isPublic && op != CommerceOp::Purchase) return "not for sale";
@@ -272,7 +384,7 @@ const char* Commerce::refusal(Simulation& sim, uint8_t player, CommerceOp op, in
         if (op == CommerceOp::Stash) return value <= 0 ? "bad amount" : money.raw <= 0 ? "not enough money" : nullptr;
         if (op == CommerceOp::Unstash) return value <= 0 ? "bad amount" : p.stashCash.raw <= 0 ? "the stash is empty" : nullptr;
         Arsenal* ar = m_->arsenal();
-        const ArsenalHand* hand = ar && ar->active() ? ar->hand(sim, player) : nullptr;
+        const ArsenalHand* hand = ar && ar->active() ? ar->hand(sim, slot) : nullptr;
         if (!hand || hand->ammo.empty()) return "no weapons in this game";
         bool any = false;
         for (size_t s = 0; s < hand->ammo.size(); ++s)
@@ -295,7 +407,7 @@ const char* Commerce::refusal(Simulation& sim, uint8_t player, CommerceOp op, in
         if (money < o.price) return "not enough money";
         if (!o.weapon.empty()) {
             Arsenal* ar = m_->arsenal();
-            const ArsenalHand* hand = ar && ar->active() ? ar->hand(sim, player) : nullptr;
+            const ArsenalHand* hand = ar && ar->active() ? ar->hand(sim, slot) : nullptr;
             if (!hand || hand->ammo.empty()) return "no weapons in this game";
             const auto& ws = ar->rules().weapons;
             size_t slot = 0;
@@ -321,7 +433,7 @@ const char* Commerce::refusal(Simulation& sim, uint8_t player, CommerceOp op, in
     case CommerceOp::Sell:
         if (p.owner != player) return "not yours";
         if (!p.stashEmpty()) return "empty the stash first";
-        return acc.debt > creditLimit(sim, player) - p.price * rules_.collateralShare ? "pledged to the bank" : nullptr;
+        return acc.debt > limitOf(*st, player) - p.price * rules_.collateralShare ? "pledged to the bank" : nullptr;
     case CommerceOp::Open: {
         if (p.runBy() != player) return "not yours";
         if (p.business >= 0) return "already in business";
@@ -337,13 +449,14 @@ const char* Commerce::refusal(Simulation& sim, uint8_t player, CommerceOp op, in
     }
 }
 
-bool Commerce::act(Simulation& sim, uint8_t player, CommerceOp op, int premise, int64_t value) {
-    if (refusal(sim, player, op, premise, value)) return false;
+bool Commerce::act(Simulation& sim, uint8_t slot, CommerceOp op, int premise, int64_t value) {
+    if (refusal(sim, slot, op, premise, value)) return false;
     auto& st = *store(sim);
+    const uint16_t player = recOf(st, slot);
     CommerceAccount& acc = st.accounts[player];
     if (op == CommerceOp::Borrow) { acc.debt += Fixed::fromInt(value); pay(sim, player, Fixed::fromInt(value)); return true; }
     if (op == CommerceOp::Repay) {
-        const Fixed amount = fxMin(fxMin(Fixed::fromInt(value), acc.debt), cash(sim, player));
+        const Fixed amount = fxMin(fxMin(Fixed::fromInt(value), acc.debt), cashOf(sim, player));
         acc.debt -= amount;                         // first, so that pay() has nothing to add back
         pay(sim, player, Fixed{} - amount);
         if (acc.debt.raw <= 0) { acc.debt = {}; acc.missed = 0; }
@@ -358,7 +471,7 @@ bool Commerce::act(Simulation& sim, uint8_t player, CommerceOp op, int premise, 
     case CommerceOp::Open: pay(sim, player, Fixed{} - rules_.businesses[size_t(value)].setup); p.business = int16_t(value); p.lastNet = {}; p.total = {}; break;
     case CommerceOp::Close: closeBusiness(p); break;
     case CommerceOp::Stash: {
-        const Fixed amount = fxMin(Fixed::fromInt(value), cash(sim, player));
+        const Fixed amount = fxMin(Fixed::fromInt(value), cashOf(sim, player));
         pay(sim, player, Fixed{} - amount);
         p.stashCash += amount;
         break;
@@ -371,7 +484,7 @@ bool Commerce::act(Simulation& sim, uint8_t player, CommerceOp op, int premise, 
     }
     case CommerceOp::StashWeapons: case CommerceOp::TakeWeapons: {
         Arsenal* ar = m_->arsenal();
-        auto& ammo = ar->store(sim)->hands[player].ammo;
+        auto& ammo = ar->store(sim)->hands[slot].ammo;
         const auto& ws = ar->rules().weapons;
         p.stashAmmo.resize(ammo.size(), 0);
         for (size_t s = 0; s < ammo.size() && s < ws.size(); ++s) {
@@ -387,13 +500,13 @@ bool Commerce::act(Simulation& sim, uint8_t player, CommerceOp op, int premise, 
     case CommerceOp::Purchase: {
         const CommerceOffer& o = rules_.offers[size_t(value)];
         pay(sim, player, Fixed{} - o.price);
-        if (const uint8_t seller = p.runBy(); seller != 0 && seller != player) pay(sim, seller, o.price);
+        if (const uint16_t seller = p.runBy(); seller != 0 && seller != player) pay(sim, seller, o.price);
         if (!o.weapon.empty()) {
             Arsenal* ar = m_->arsenal();
             const auto& ws = ar->rules().weapons;
             size_t slot = 0;
             while (ws[slot].weapon != o.weapon) ++slot;
-            int32_t& ammo = ar->store(sim)->hands[player].ammo[slot];
+            int32_t& ammo = ar->store(sim)->hands[slot].ammo[slot];
             ammo = std::min<int32_t>(ws[slot].max, ammo + o.ammo);
         } else {
             // the car waits at the kerb next to the door: the first free spot of a small ring
@@ -428,13 +541,15 @@ void Commerce::tick(Simulation& sim) {
     auto* st = store(sim);
     if (!st) return;
     if (sim.tick() % 10 == 0 && m_->topDown() && m_->topDown()->active()) {   // who came by his business today
-        for (size_t pl = 1; pl < st->accounts.size(); ++pl) {
+        for (size_t pl = 1; pl < st->slotRec.size(); ++pl) {
+            const uint16_t rec = st->slotRec[pl];
+            if (!rec) continue;
             const Entity hero = m_->topDown()->heroOf(sim, uint8_t(pl));
             if (!hero.valid() || !sim.world().alive(hero)) continue;
             const Vec3 hp = sim.world().get<Transform>(hero).pos;
             const Fixed reach = fxMax(rules_.range, Fixed::fromInt(2));
             for (auto& p : st->premises)
-                if (p.business >= 0 && !p.visited && p.runBy() == pl && flat(hp - p.at).length() <= reach) p.visited = true;
+                if (p.business >= 0 && !p.visited && p.runBy() == rec && flat(hp - p.at).length() <= reach) p.visited = true;
         }
         for (auto& a : st->accounts)   // wrecked cars leave the books
             a.cars.erase(std::remove_if(a.cars.begin(), a.cars.end(), [&](Entity e) { return !sim.world().alive(e); }), a.cars.end());
@@ -447,7 +562,7 @@ void Commerce::tick(Simulation& sim) {
 void Commerce::endDay(Simulation& sim, CommerceStore& st) {
     for (auto& a : st.accounts) a.dayNet = {};
     for (auto& p : st.premises) {
-        const uint8_t who = p.runBy();
+        const uint16_t who = p.runBy();
         if (p.business < 0 || who == 0) continue;
         const BusinessType& b = rules_.businesses[size_t(p.business)];
         // walk-in customers already paid `served`; the rest of the day's trade is booked now
@@ -461,12 +576,20 @@ void Commerce::endDay(Simulation& sim, CommerceStore& st) {
         st.accounts[who].dayNet += net;
         st.accounts[who].weekNet += net;
     }
+    if (rules_.absentDays > 0)   // whoever has been away too long is sold out: the money waits in his wallet
+        for (size_t i = 1; i < st.accounts.size(); ++i) {
+            const CommerceAccount& a = st.accounts[i];
+            if (a.slot != 0 || day(sim) < a.lastSeenDay + uint32_t(rules_.absentDays)) continue;
+            bool holds = false;
+            for (auto& p : st.premises) holds = holds || p.owner == i || p.tenant == i;
+            if (holds) liquidate(sim, st, uint16_t(i));
+        }
 }
 
 void Commerce::endWeek(Simulation& sim, CommerceStore& st) {
     for (size_t pl = 1; pl < st.accounts.size(); ++pl) {
         CommerceAccount& a = st.accounts[pl];
-        const uint8_t who = uint8_t(pl);
+        const uint16_t who = uint16_t(pl);
         a.lastRent = {};
         a.lastLoanPayment = {};
         a.lastWages = {};
@@ -478,14 +601,14 @@ void Commerce::endWeek(Simulation& sim, CommerceStore& st) {
         }
         for (auto& p : st.premises) {
             if (p.tenant != who) continue;
-            if (cash(sim, who) >= p.rentWeek) { pay(sim, who, Fixed{} - p.rentWeek); a.lastRent += p.rentWeek; }
+            if (cashOf(sim, who) >= p.rentWeek) { pay(sim, who, Fixed{} - p.rentWeek); a.lastRent += p.rentWeek; }
             else { p.tenant = 0; closeBusiness(p); vacate(sim, p, who); }   // evicted
         }
         if (a.debt.raw > 0) {
             const Fixed interest = a.debt * rules_.rateWeek;
             const Fixed due = fxMin(a.debt, fxMax(a.debt / rules_.termWeeks, Fixed::fromInt(1))) + interest;
             a.debt += interest;
-            const Fixed paid = fxMin(due, fxMax(cash(sim, who), Fixed{}));
+            const Fixed paid = fxMin(due, fxMax(cashOf(sim, who), Fixed{}));
             a.debt -= paid;
             pay(sim, who, Fixed{} - paid);
             a.lastLoanPayment = paid;

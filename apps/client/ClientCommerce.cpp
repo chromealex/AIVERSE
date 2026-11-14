@@ -46,8 +46,10 @@ std::vector<GameClient::CommerceChoice> GameClient::commerceChoices(int premise,
     const auto& st = *c->store(*sim_);
     const game::Premise& p = st.premises[size_t(premise)];
     const auto& R = c->rules();
-    const game::CommerceAccount& acc = st.accounts[human_];
-    const bool mine = p.runBy() == human_;
+    const game::CommerceAccount* mineAcc = c->account(*sim_, human_);
+    if (!mineAcc) return out;
+    const game::CommerceAccount& acc = *mineAcc;
+    const bool mine = p.runBy() != 0 && c->slotOf(*sim_, p.runBy()) == human_;
     title = p.kind;
     if (!title.empty()) title[0] = char(std::toupper(static_cast<unsigned char>(title[0])));
     if (game::Career* cr = mod().career(); cr && cr->active())   // the place where one signs up for a service
@@ -103,7 +105,7 @@ std::vector<GameClient::CommerceChoice> GameClient::commerceChoices(int premise,
         out.push_back({p.manager ? std::string("Dismiss the manager") : fmt("Hire a manager (%lld a week)", whole(R.managerWageWeek)), CommerceOp::Manager, premise, 0});
         out.push_back({"Close the business", CommerceOp::Close, premise, 0});
     }
-    if (p.tenant == human_) {
+    if (p.tenant != 0 && c->slotOf(*sim_, p.tenant) == human_) {
         out.push_back({fmt("Buy the place (%lld)", whole(p.price)), CommerceOp::Buy, premise, 0});
         out.push_back({"End the lease", CommerceOp::Leave, premise, 0});
     } else out.push_back({fmt("Sell (%lld)", whole(p.price * R.sellShare)), CommerceOp::Sell, premise, 0});
@@ -151,8 +153,9 @@ void GameClient::commerceTop(std::vector<UiItem>& top) {
     game::Commerce* c = sim_ ? mod().commerce() : nullptr;
     if (!c || !c->active() || spectator_) return;
     const auto& st = *c->store(*sim_);
-    if (human_ >= st.accounts.size()) return;
-    const game::CommerceAccount& acc = st.accounts[human_];
+    const game::CommerceAccount* mineAcc = c->account(*sim_, human_);
+    if (!mineAcc) return;
+    const game::CommerceAccount& acc = *mineAcc;
     top.push_back({fmt("Day %u", unsigned(c->day(*sim_) + 1)), "", "", false});
     if (acc.debt.raw > 0) top.push_back({fmt("Debt: %lld", whole(acc.debt)), "", "", acc.missed > 0});
     if (game::Career* cr = mod().career(); cr && cr->active())   // the ranks on the paths the player follows

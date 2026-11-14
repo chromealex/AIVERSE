@@ -71,6 +71,11 @@ public:
     bool join(Simulation& sim, uint8_t player, int career);               // false: already in, or unknown
     bool leave(Simulation& sim, uint8_t player, int career);              // the points are lost
     int add(Simulation& sim, uint8_t player, int career, Fixed points);   // ranks gained (negative: lost); 0 when not joined
+    // A player's careers as data that outlives the match (a server keeps it with his account): {"police": raw points}.
+    // load replaces what the slot has (unknown careers are skipped); clear empties the slot for the next player.
+    Json save(Simulation& sim, uint8_t player) const;
+    void load(Simulation& sim, uint8_t player, const Json& data);
+    void clear(Simulation& sim, uint8_t player);
 
 private:
     int rankOf(const CareerType& c, Fixed points) const;

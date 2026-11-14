@@ -44,6 +44,23 @@ In the client (rules `topDown`): at a door the top bar names the place, **E** op
 make them. The day and the debt are shown next to the money. Lua for missions: `driving.car_of(player)`,
 `driving.speed(vehicle)`, `driving.driver(vehicle)`, `driving.is_vehicle(unit)`.
 
+## Accounts and seats
+
+Property belongs to an account, not to a seat in the match. By default every player slot has its own account and
+nothing changes for a single-player game. A server sets `"accounts": "external"` and binds accounts itself:
+
+- `Commerce::bind(sim, slot, id)` (Lua `commerce.bind`): the account takes the slot; the money in its wallet becomes
+  the slot's stock. A new id starts with an empty wallet.
+- `Commerce::unbind(sim, slot)`: the player leaves; his stock goes to the wallet, his property stays his, his
+  businesses go on earning into the wallet, rent, wages and the loan are charged as usual.
+- `"absentDays": N`: an account away for N game days is sold out to the city (owned premises for `sellShare`,
+  leases ended, stash money returned, the debt paid from the proceeds as far as they reach); the money waits in the
+  wallet. `Commerce::sellOut(sim, id)` does the same on request.
+- Lua: `commerce.premise(i).owner` / `.tenant` are the slot of whoever is in the match (255: his player is away,
+  0: the city); `.owner_account` / `.tenant_account` are the ids; `commerce.account(player).id`.
+
+Careers travel with the account as data: `Career::save(sim, slot)` / `load` / `clear` (docs/careers.md).
+
 ## Deals
 
 Everything goes through one command, `kCmdCommerce`, with `param = commercePack(op, premises, value)`, so the UI,
