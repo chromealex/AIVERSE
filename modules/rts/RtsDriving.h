@@ -75,6 +75,10 @@ struct DrivingCar {
 struct DrivingStore {
     std::vector<DrivingCar> cars;                  // ascending entity index
     std::vector<DrivingDeck> decks;                // from the map, in map order
+    // Lookup cache only (never hashed or saved): entity index -> its lower_bound position in `cars`.
+    // Each use is verified against the neighbouring entries, so a stale slot just falls back to the
+    // binary search; results are always those of std::lower_bound.
+    mutable std::vector<uint32_t> slotOf;
 };
 
 class Driving {
