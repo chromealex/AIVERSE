@@ -534,7 +534,7 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
     GameState& gs = m_->state(sim);
     Driving* drv = m_->driving();
     for (auto& c : st.cars) {
-        if (c.task == kTaskNone || c.task == kTaskTrip) continue;
+        if (c.task == kTaskNone || c.task == kTaskTrip || c.task == kTaskGang) continue;
         const TrafficService& sv = rules_.services[size_t(c.service)];
         TrafficIncident* inc = incidentOf(st, c.call);
         const Vec3 pos3 = w.get<Transform>(c.e).pos;

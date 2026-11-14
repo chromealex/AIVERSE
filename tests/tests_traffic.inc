@@ -964,3 +964,67 @@ TEST(traffic_population_parents_go_by_the_school) {
     while (trf(*sim).minuteOfDay(*sim) != 16 * 60) { sim->step(); viaHome = viaHome || (c.state == game::kCitizenToHome && c.via); }
     CHECK(viaHome && c.state == game::kCitizenHome);
 }
+
+// ------------------------------------------------------------------ gangs
+TEST(traffic_gang_takes_a_car_robs_the_shop_and_gets_away) {
+    // five citizens without work, a shop to rob, no police in this town
+    std::string r = commuteRules("");
+    r = replaced(r, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
+    r = replaced(r, R"("port": {"jobs": 5,)", R"("port": {"jobs": 3,)");
+    r = replaced(r, R"("roads": {"tiles": "a"},)", R"("roads": {"tiles": "a", "parkingLanes": 1}, "gangs": {"every": 3, "size": [2, 3], "targets": {"shop": 500}, "rob": 4, "jail": 60},)");
+    r = replaced(r, R"("police": {)", R"("police": {"max": 0, )");
+    auto sim = makeSimJson(r, populationMap(), 3);
+    auto& w = sim->world();
+    const Vec2 shop = trf(*sim).places()[1].pos;
+    bool drove = false, out = false, robbed = false, fled = false, reported = false, robbersAtDoor = false;
+    size_t members = 0;
+    for (int i = 0; i < 150 * int(sim->tickRate()) && tstore(*sim).gangRobberies == 0; ++i) {
+        sim->step();
+        const auto& g = tstore(*sim).gang;
+        if (g.state == game::kGangNone) continue;
+        members = std::max(members, g.members.size());
+        for (int32_t id : g.members) CHECK(tstore(*sim).citizens[size_t(id)].state == game::kCitizenGang && tstore(*sim).citizens[size_t(id)].work < 0);
+        drove = drove || (g.state == game::kGangDrive && trf(*sim).kindOf(*sim, g.car) >= 0);
+        out = out || g.state == game::kGangOut;
+        if (g.state == game::kGangRob) {
+            robbed = true;
+            for (auto& inc : tstore(*sim).incidents) reported = reported || (inc.kind == game::kIncidentCrime && inc.id == g.call);
+            for (Entity m : g.crew) robbersAtDoor = robbersAtDoor || (Vec2{w.get<Transform>(m).pos.x, w.get<Transform>(m).pos.z} - shop).length() < Fixed::fromInt(5);
+        }
+        fled = fled || (g.state == game::kGangFlee && g.crew.empty());
+    }
+    CHECK(members >= 2 && drove && out && robbed && reported && robbersAtDoor && fled);
+    CHECK(tstore(*sim).gangRobberies == 1 && tstore(*sim).gangLoot == 500 && tstore(*sim).gangCaught == 0);
+    CHECK(tstore(*sim).gang.state == game::kGangNone);
+    for (auto& c : tstore(*sim).citizens) CHECK(c.state != game::kCitizenGang);   // home again
+    bool crime = false;
+    for (auto& inc : tstore(*sim).incidents) crime = crime || inc.kind == game::kIncidentCrime;
+    CHECK(!crime);   // the call is closed
+}
+
+TEST(traffic_gang_meets_the_police) {
+    std::string r = commuteRules("");
+    r = replaced(r, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
+    r = replaced(r, R"("port": {"jobs": 5,)", R"("port": {"jobs": 3,)");
+    r = replaced(r, R"("roads": {"tiles": "a"},)", R"("roads": {"tiles": "a", "parkingLanes": 1}, "gangs": {"every": 3, "size": [2, 3], "targets": {"shop": 500}, "rob": 12, "jail": 60, "owner": 3},)");
+    auto s1 = makeSimJson(r, populationMap(), 3), s2 = makeSimJson(r, populationMap(), 3);
+    bool policeCame = false;
+    for (int i = 0; i < 200 * int(s1->tickRate()) && tstore(*s1).gangRobberies + tstore(*s1).gangCaught == 0 && !(tstore(*s1).gang.state == game::kGangNone && i > 60 * 20); ++i) {
+        s1->step(); s2->step();
+        if (i % 100 == 0) CHECK(s1->checksum() == s2->checksum());
+        for (auto& c : tstore(*s1).cars) policeCame = policeCame || (c.service >= 0 && c.call == tstore(*s1).gang.call && c.call != 0);
+    }
+    CHECK(policeCame);
+    // however it ended (arrest, shot at the door, got away): nobody is left "out with the gang", and jail lets them out
+    CHECK(tstore(*s1).gang.state == game::kGangNone);
+    int jailed = 0;
+    for (auto& c : tstore(*s1).citizens) { CHECK(c.state != game::kCitizenGang); jailed += c.state == game::kCitizenJail; }
+    CHECK((tstore(*s1).gangCaught > 0) == (jailed > 0));
+    std::string save = s1->serialize(), err;
+    auto s3 = makeSimJson(r, populationMap(), 3);
+    CHECK(s3->deserialize(save, &err) && s3->checksum() == s1->checksum());
+    std::vector<uint32_t> until;
+    for (auto& c : tstore(*s1).citizens) until.push_back(c.state == game::kCitizenJail ? c.eta : 0);
+    run(*s1, 70);   // (other gangs form meanwhile: only this sentence is looked at)
+    for (size_t i = 0; i < until.size(); ++i) if (until[i]) CHECK(tstore(*s1).citizens[i].state != game::kCitizenJail || tstore(*s1).citizens[i].eta != until[i]);
+}

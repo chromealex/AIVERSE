@@ -90,7 +90,28 @@ enum TrafficCommute : uint8_t { kCommuteWalk = 0, kCommuteCar, kCommuteBus };
 // The stretch of the way a travelling citizen is on: on foot to the door, to the bus stop, waiting at it (only as a
 // real person), on the bus, in his car.
 enum TrafficLeg : uint8_t { kLegWalk = 0, kLegToStop, kLegAtStop, kLegRide, kLegDrive };
-enum TrafficCitizenState : uint8_t { kCitizenHome = 0, kCitizenToWork, kCitizenWork, kCitizenToHome, kCitizenHospital, kCitizenDead };
+enum TrafficCitizenState : uint8_t { kCitizenHome = 0, kCitizenToWork, kCitizenWork, kCitizenToHome, kCitizenHospital, kCitizenDead,
+                                     kCitizenGang, kCitizenJail };   // out with a gang; locked up until `eta`
+// Gangs (RtsTrafficGangs.cpp): citizens without work rob places that have loot.
+struct TrafficGangRules {
+    bool on = false;
+    uint32_t everyMin = 0, everyMax = 0;     // ticks between attempts to get a gang together
+    int sizeMin = 2, sizeMax = 4;
+    std::vector<std::pair<uint16_t, int32_t>> targets;   // place kind -> loot
+    uint32_t robTicks = 0, jailTicks = 0;
+    int catchChance = 40;                    // percent: caught when nobody is around to see how it goes
+    uint16_t crew = UINT16_MAX;              // the robbers' unit type (default: the citizens' own)
+    uint8_t owner = 0;
+};
+enum TrafficGangState : uint8_t { kGangNone = 0, kGangUnseen, kGangDrive, kGangOut, kGangRob, kGangBack, kGangFlee };
+struct TrafficGang {
+    uint8_t state = kGangNone;
+    int32_t leader = -1, target = -1, loot = 0;
+    std::vector<int32_t> members;            // citizens, the ringleader first
+    Entity car = kNullEntity;
+    std::vector<Entity> crew;                // out of the car at the target
+    uint32_t until = 0, call = 0;            // call: the crime report they caused
+};
 struct TrafficCitizen {
     uint16_t type = UINT16_MAX;
     int32_t home = -1, work = -1;            // places
@@ -161,6 +182,7 @@ struct TrafficRules {
     Fixed side = Fixed::fromRatio(3, 10);    // cells off the sidewalk centre line (each person keeps one)
     Fixed panicRadius = Fixed::fromInt(6), panicSeconds = Fixed::fromInt(8), panicSpeed = Fixed::fromRatio(9, 5);
     TrafficPopulationRules population;
+    TrafficGangRules gangs;
     std::vector<TrafficService> services;
     TrafficIncidentRules incidents;
     uint16_t driverPerson = UINT16_MAX;      // pedestrian thrown out of a car the hero takes (none: nobody)
@@ -208,7 +230,8 @@ struct TrafficCar {
 };
 
 enum TrafficTask : uint8_t { kTaskNone = 0, kTaskGoing, kTaskCrewOut, kTaskWorking, kTaskCrewBack, kTaskHome,
-                             kTaskTrip };   // a citizen's drive to work / home (RtsTrafficCommute.cpp)
+                             kTaskTrip,     // a citizen's drive to work / home (RtsTrafficCommute.cpp)
+                             kTaskGang };   // a gang's car: to the target, then away (RtsTrafficGangs.cpp)
 
 struct TrafficIncident {
     uint32_t id = 0;
@@ -259,6 +282,10 @@ struct TrafficStore {
     std::vector<TrafficPerson> people;       // ascending entity index
     std::vector<TrafficLightProp> lights;
     std::vector<TrafficCitizen> citizens;    // the population; the index is the citizen's id
+    TrafficGang gang;                        // the one that is out now
+    uint32_t nextGang = 0;
+    int64_t gangLoot = 0;                    // taken home so far
+    uint32_t gangRobberies = 0, gangCaught = 0;
     uint32_t citizenCursor = 0;              // the next one to look at (a slice per tick)
     std::vector<TrafficIncident> incidents;  // in the order they happened
     uint32_t nextIncident = 1;
@@ -293,6 +320,7 @@ public:
     // something happened (scripts: game.traffic_report): the services answer it. Returns the incident id, 0: ignored
     // `witnessed`: somebody certainly knows (a crime nobody is near is not reported otherwise)
     uint32_t report(Simulation& sim, uint8_t kind, Vec2 pos, Entity subject = kNullEntity, Entity offender = kNullEntity, bool witnessed = false);
+    static void parseGangs(const Json& j, TrafficRules& r, const std::vector<std::string>& ids, uint32_t tickRate);
     static void parsePopulation(const Json& j, TrafficRules& r, const std::vector<std::string>& typeIds, uint32_t tickRate);
     struct Place {
         uint16_t kind = 0; Vec2 pos{}; int32_t cell = -1; Entity object = kNullEntity;
@@ -345,6 +373,8 @@ private:
         std::vector<int32_t> stops;          // its stops, in the order of the loop
     };
     void setupLines();
+    void gangs(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci);
+    void gangEnd(Simulation& sim, TrafficStore& st, uint8_t state, bool paid);
     void busGone(Simulation& sim, TrafficStore& st, Entity bus);
     // cars
     void cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& foci);
@@ -412,6 +442,7 @@ private:
     int32_t mainIsland_ = -1;                // the biggest one: doors and bus stops open onto it when they can
     std::vector<int32_t> island_;            // per cell: which connected part of the pedestrian graph it is in (-1: none)
     std::vector<BusLine> lines_;
+    std::vector<std::pair<int32_t, int32_t>> gangTargets_;   // place, loot
     std::vector<int32_t> stopCell_;          // per bus stop: the sidewalk cell people wait on (-1: none)
     mutable lib::genre::TrafficWalkSearch search_;   // work arrays of the long walks (derived)
 };
