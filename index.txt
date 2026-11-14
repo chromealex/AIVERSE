@@ -1,0 +1,10 @@
+windows/AIVERSE-0.2.0-16d43acf-windows.zip
+macos/AIVERSE-0.2.0-16d43acf-macos.zip
+windows/AIVERSE-0.2.0-103420e6-windows.zip
+macos/AIVERSE-0.2.0-103420e6-macos.zip
+windows/AIVERSE-0.2.0-55aa9353-windows.zip
+macos/AIVERSE-0.2.0-55aa9353-macos.zip
+windows/AIVERSE-0.2.0-413cec3a-windows.zip
+macos/AIVERSE-0.2.0-413cec3a-macos.zip
+windows/AIVERSE-0.2.0-5cd60670-windows.zip
+macos/AIVERSE-0.2.0-5cd60670-macos.zip
