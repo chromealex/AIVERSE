@@ -45,7 +45,7 @@ namespace aiverse::render::shaders {
     "struct Inst { mat4 model; vec4 tint; vec4 team; vec4 draw; vec4 anim; vec4 lod; };\n" \
     "layout(std140) uniform U0 { Inst u_inst[AIVERSE_INST]; };\n" \
     AIVERSE_GLSL_FRAME \
-    "layout(std140) uniform U2 { vec4 m_base; vec4 m_emissive; vec4 m_pbr; vec4 m_misc; vec4 m_uv0; vec4 m_uv1; vec4 m_light; };\n" \
+    "layout(std140) uniform U2 { vec4 m_base; vec4 m_emissive; vec4 m_pbr; vec4 m_misc; vec4 m_uv0; vec4 m_uv1; vec4 m_light; vec4 m_reveal; vec4 m_revealAxis; };\n" \
     "#if defined(SKINNED)\n" \
     "layout(std140) uniform U3 { vec4 u_joints[240]; };\n" \
     "#elif defined(BAKED)\n" \
@@ -242,6 +242,17 @@ void main() {
 #if defined(OUTLINE)
     o_color = vec4(rtsEncodeScene(v_team.rgb), v_tint.a);
 #else
+    // Actor aperture: dissolve only fragments strictly closer than the actor.
+    if (m_reveal.w > 0.0) {
+        vec3 delta = v_wpos - m_reveal.xyz;
+        float depth = dot(delta, m_revealAxis.xyz);
+        float radius = m_reveal.w * max(0.01, 1.0-depth*m_revealAxis.w);
+        float radial = length(delta - m_revealAxis.xyz * depth);
+        float coverage = (1.0-smoothstep(radius*0.48, radius, radial))*smoothstep(0.04,0.24,depth);
+        ivec2 ap = ivec2(gl_FragCoord.xy) & ivec2(3);
+        int rank = ((ap.x & 1) ^ (ap.y & 1))*8+(ap.y & 1)*4+((ap.x>>1) ^ (ap.y>>1))*2+(ap.y>>1);
+        if (coverage > (float(rank)+0.5)/16.0) discard;
+    }
     float edge = 0.0;
     if (v_draw.y > 0.0) { // dissolve (spawn / death / construction), noise fixed to the object
         float nz = modelNoise3(v_opos * 7.0) * 0.7 + modelNoise3(v_opos * 19.0) * 0.3;
@@ -431,7 +442,7 @@ void main() {
     "struct Inst { float4x4 model; float4 tint; float4 team; float4 draw; float4 anim; float4 lod; };\n" \
     "struct MU0 { Inst inst[AIVERSE_INST]; };\n" \
     AIVERSE_MSL_FRAME \
-    "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; float4 light; };\n" \
+    "struct MU2 { float4 base; float4 emissive; float4 pbr; float4 misc; float4 uv0; float4 uv1; float4 light; float4 reveal; float4 revealAxis; };\n" \
     "struct MU3 { float4 v[240]; };\n" \
     "struct MU4 { float4 w[2]; float4 info; float4 info2; };\n" \
     AIVERSE_MSL_GI_BLOCK
@@ -606,6 +617,17 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #if defined(OUTLINE)
     return float4(rtsEncodeScene(in.team.rgb), in.tint.a);
 #else
+    // Actor aperture: dissolve only fragments strictly closer than the actor.
+    if (m.reveal.w > 0.0) {
+        float3 delta = in.wpos - m.reveal.xyz;
+        float depth = dot(delta, m.revealAxis.xyz);
+        float radius = m.reveal.w * max(0.01, 1.0-depth*m.revealAxis.w);
+        float radial = length(delta - m.revealAxis.xyz * depth);
+        float coverage = (1.0-smoothstep(radius*0.48, radius, radial))*smoothstep(0.04,0.24,depth);
+        uint2 ap = uint2(in.pos.xy) & uint2(3);
+        uint rank = ((ap.x & 1u) ^ (ap.y & 1u))*8u+(ap.y & 1u)*4u+((ap.x>>1u) ^ (ap.y>>1u))*2u+(ap.y>>1u);
+        if (coverage > (float(rank)+0.5)/16.0) discard_fragment();
+    }
     float edge = 0.0;
     if (in.draw.y > 0.0) {
         float nz = modelNoise3(in.opos * 7.0) * 0.7 + modelNoise3(in.opos * 19.0) * 0.3;

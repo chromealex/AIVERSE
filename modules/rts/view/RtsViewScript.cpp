@@ -39,6 +39,7 @@ struct ViewScripts::Impl {
     ViewTargeting targeting;
     float dragDx = 0, dragDy = 0;     // view.set_map_drag_offset (window points)
     ViewCamera camera;
+    std::function<bool(uint64_t,render::float3&)> visualPosition;
     std::string screen = "playing";   // host screen state (view.screen()): playing | paused | over
     ViewCameraRequest cameraRequest{};
     bool cameraRequested = false;
@@ -381,6 +382,11 @@ int vSetCamera(lua_State* L, Vm& vm) {
     return 0;
 }
 // view.to_screen(x, z [, y]) -> sx, sy, onScreen: window points (top-left origin), the space of view.draw.
+int vVisualPosition(lua_State* L, Vm& vm) {
+    Entity e; render::float3 p{}; auto& read=viewOf(vm).visualPosition;
+    if(!argEntity(L,1,e)||!e.valid()||!read||!read(e.packed(),p)){lua_pushnil(L);return 1;}
+    lua_pushnumber(L,p.x);lua_pushnumber(L,p.z);lua_pushnumber(L,p.y);return 3;
+}
 int vToScreen(lua_State* L, Vm& vm) {
     const auto& c = viewOf(vm).camera;
     const float x = float(toDouble(L, 1)), z = float(toDouble(L, 2)), y = lua_isnoneornil(L, 3) ? 0.0f : float(toDouble(L, 3));
@@ -604,6 +610,7 @@ int vEntityFx(lua_State* L, Vm& vm) {
     if (field("team_mix", V::kTeamMix, 4, false, 0.0f, 64.0f)) target.v[V::kTeamMix + 3] = std::clamp(target.v[V::kTeamMix + 3], 0.0f, 1.0f);
     field("team_glow", V::kTeamGlow, 1, true, 0.0f, 64.0f);
     field("shadow", V::kShadow, 1, true, 0.0f, 1.0f);
+    field("keep_shadow", V::kKeepShadow, 1, true, 0.0f, 1.0f);
     field("lift", V::kLift, 1, true, -1000.0f, 1000.0f);
     field("pitch", V::kPitch, 1, true, -360.0f, 360.0f);
     field("roll", V::kRoll, 1, true, -360.0f, 360.0f);
@@ -803,6 +810,7 @@ void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=t
 void ViewScripts::mapDragOffset(float& dx, float& dy) const { dx=impl_->dragDx; dy=impl_->dragDy; }
 void ViewScripts::setMapDragOffset(float dx, float dy) { impl_->dragDx=dx; impl_->dragDy=dy; }
 void ViewScripts::setCamera(const ViewCamera& camera) { impl_->camera = camera; }
+void ViewScripts::setVisualPositionReader(std::function<bool(uint64_t,render::float3&)> reader) { impl_->visualPosition=std::move(reader); }
 void ViewScripts::setScreen(const std::string& screen) { impl_->screen = screen.empty() ? "playing" : screen; }
 bool ViewScripts::takeCameraRequest(ViewCameraRequest& out) {
     if (!impl_->cameraRequested) return false;
@@ -845,7 +853,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
                                      {"progression_choose", bind<vProgressionChoose>}, {"progression_reroll", bind<vProgressionReroll>},
                                      {"render_texture", bind<vRenderTexture>}, {"paint_layer", bind<vPaintLayer>}, {"targeting", bind<vTargeting>}, {"set_map_drag_offset", bind<vSetMapDragOffset>},
                                      {"camera", bind<vCamera>}, {"set_camera", bind<vSetCamera>},
-                                     {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
+                                     {"visual_position", bind<vVisualPosition>}, {"to_screen", bind<vToScreen>}, {"draw", bind<vDraw>},
                                      {"draw_ground", bind<vDrawGround>}, {"entity_parent", bind<vEntityParent>}, {"entity_fx", bind<vEntityFx>}, {"animation", bind<vAnimation>}, {"animation_trait", bind<vAnimationTrait>},
                                      {"animation_load", bind<vAnimationLoad>}, {"animation_define", bind<vAnimationDefine>}, {"animation_use", bind<vAnimationUse>}, {"animation_status", bind<vAnimationStatus>}, {nullptr, nullptr}};
     luaL_newlib(vm.L, funcs);

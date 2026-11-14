@@ -200,7 +200,19 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     st.castAge += dt;
     if (st.dead) st.eventAge[kProcEvDeath] = st.deathAge;
 
-    const bool moving = !st.dead && (o.moving || st.speed > 0.15f);
+    float locomotionSpeed = -1.f;
+    if (fx_) {
+        auto it = fx_->animations.find(o.entity.packed());
+        if (it != fx_->animations.end()) {
+            auto value = it->second.parameters.values.find("locomotionSpeed");
+            if (value != it->second.parameters.values.end()) locomotionSpeed = value->second;
+        }
+    }
+    if (locomotionSpeed >= 0.f) st.speed = locomotionSpeed;
+    // Kingston corner cadence scaling.
+    float kingstonStride=1.f;
+    if(fx_){auto a=fx_->animations.find(o.entity.packed());if(a!=fx_->animations.end()){auto v=a->second.parameters.values.find("strideScale");if(v!=a->second.parameters.values.end())kingstonStride=std::clamp(v->second,.7f,1.f);}}
+    const bool moving = !st.dead && (locomotionSpeed >= 0.f ? st.speed > .015f : (o.moving || st.speed > .15f));
     const uint32_t state = stateBits(st, o, moving);
 
     // ---- animation LOD: off screen -> clips only keep time; far away -> pose updated less often
@@ -317,9 +329,9 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
                     if (A.clip(0) != a.clip) { Animator::Play p; p.fade = cs.fade; A.play(0, a.clip, p); }
                     A.setBlend(0, b.clip, w);
                     const float ref = a.speed + (b.speed - a.speed) * w;
-                    A.setSpeed(0, cs.speed * std::clamp(st.speed / std::max(ref, 1e-3f), 0.3f, 2.5f));
+                    A.setSpeed(0, cs.speed / kingstonStride * (locomotionSpeed >= 0.f ? std::max(0.f, st.speed / std::max(ref, 1e-3f)) : std::clamp(st.speed / std::max(ref, 1e-3f), 0.3f, 2.5f)));
                 } else if (cs.speedRef > 0) {
-                    A.setSpeed(0, cs.speed * std::clamp(st.speed / cs.speedRef, 0.3f, 2.5f));
+                    A.setSpeed(0, cs.speed / kingstonStride * (locomotionSpeed >= 0.f ? std::max(0.f, st.speed / cs.speedRef) : std::clamp(st.speed / cs.speedRef, 0.3f, 2.5f)));
                 }
             } else {
                 A.setBlend(0, -1, 0);
@@ -329,6 +341,20 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
             const AdditiveSpec& ad = ch.additive[i];
             A.setAdditive(int(i), ad.clip, (ad.when == 0 || (state & ad.when)) ? ad.weight : 0.0f);
         }
+        // Game-provided weapon intent is read-only presentation, before pose evaluation.
+        if(control&&!st.dead){
+            auto parameter=[&](const char* name,float fallback){auto it=control->parameters.values.find(name);return it==control->parameters.values.end()?fallback:it->second;};
+            int weapon=int(parameter("kingstonWeapon",-1));
+            if(weapon>=0&&weapon<4){
+                const char* suffix[]={"Pistol","Smg","Shotgun","Rocket"};
+                const bool aiming=parameter("kingstonAiming",0)>0;
+                const bool shooting=st.eventAge[kProcEvAttack]<.22f;
+                std::string clipName=std::string(shooting?"Shoot":aiming?"Aim":"Hold")+suffix[weapon];
+                int clip=m.findClip(clipName);
+                if(clip>=0){Animator::Play spec;spec.loop=!shooting;spec.fade=.12f;spec.restart=shooting&&fresh(st.eventAge[kProcEvAttack],dt);
+                    A.play(1,clip,spec);A.setMask(1,m.findNode("Spine"));}
+            }
+        }
         A.update(dt);
         emitClipEvents(st, ch, o);
         if (ch.needsPose && updatePose) A.evaluate(st.pose);
@@ -336,6 +362,12 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         bindPose(m, st.pose);
     }
 
+    // Kingston weapon overlay follows the selected arsenal item, including fists.
+    if(!st.dead&&!st.pose.empty())for(const auto&wp:ch.weaponPoses)if(wp.weapon==o.heldWeapon){
+        int clip=o.weaponAim&&wp.aim>=0?wp.aim:wp.hold;float age=0;
+        if(wp.attack>=0&&st.eventAge[kProcEvAttack]<m.clips[wp.attack].duration){clip=wp.attack;age=st.eventAge[kProcEvAttack];}
+        if(clip>=0){auto mask=subtreeMask(m,ch.weaponMask);sampleClip(m.clips[clip],age,st.pose,1.f,&mask);}break;
+    }
     // ---- procedural
     ProcInputs in;
     in.time = float(lastTime_);
@@ -369,18 +401,32 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         applyProcedural(ch.procs, in, st.rt, ch.needsPose && updatePose ? st.pose : none, st.objXf);
     }
     if (ch.needsPose && updatePose) {
+        // Kingston corner stride: shorten leg excursion without slowing the actor.
+        float stride=1.f;
+        if(fx_){auto it=fx_->animations.find(o.entity.packed());if(it!=fx_->animations.end()){
+            auto value=it->second.parameters.values.find("strideScale");if(value!=it->second.parameters.values.end())stride=std::clamp(value->second,.7f,1.f);
+        }}
+        if(moving&&stride<1.f)for(const auto&leg:ch.legs)for(int node:{leg.hip,leg.knee})st.pose[node].r=slerp(m.nodes[node].r,st.pose[node].r,stride);
         worldMatrices(m, st.pose, st.world);
         // foot IK: plant two-bone legs on the terrain under each foot (ramps, cliffs, slopes)
-        if (grid && grid->w > 0 && !ch.legs.empty() && !moving && !st.graph.hasContacts()) {
+        if (grid && grid->w > 0 && !ch.legs.empty() && (!moving || locomotionSpeed >= 0.f) && !st.graph.hasContacts()) {
             const float scale = L.scale, ground = heightAt(*grid, o.pos.x, o.pos.z);
             const mat4 toWorld = mat4::translate({o.pos.x, ground, o.pos.z}) * mat4::rotateY(st.yaw) * mat4::scale({scale, scale, scale}) * ch.fix;
-            const mat4 toModel = toWorld.inverse();
+            auto support=animationEnvironment(o,st,ch,*grid);
+            const mat4 contactWorld=support->modelToWorld;
+            const mat4 toModel = contactWorld.inverse();
             for (const auto& leg : ch.legs) {
                 const float3 foot = {st.world[size_t(leg.foot)].at(0, 3), st.world[size_t(leg.foot)].at(1, 3), st.world[size_t(leg.foot)].at(2, 3)};
-                float3 fw = toWorld.transformPoint(foot);
-                const float delta = heightAt(*grid, fw.x, fw.z) - ground;
-                if (std::fabs(delta) < 0.01f) continue;
-                fw.y += delta;
+                float3 fw = contactWorld.transformPoint(foot);
+                const auto& bind=m.bindWorld[size_t(leg.foot)];
+                const float rest=contactWorld.transformPoint({bind.at(0,3),bind.at(1,3),bind.at(2,3)}).y;
+                if(moving && fw.y>rest+.045f)continue; // retain swing clearance
+                IKHit hit;
+                if(!support->raycast(fw+float3{0,.16f,0},fw-float3{0,.25f,0},hit)||hit.normal.y<.6f)continue;
+                const float sole=std::max(.008f,rest-contactWorld.transformPoint({0,0,0}).y);
+                const float delta=std::clamp(hit.point.y+std::min(sole,.035f)-fw.y,-.12f,.12f);
+                if(std::fabs(delta)<.002f)continue;
+                fw.y+=delta;
                 const float3 target = toModel.transformPoint(fw);
                 const float3 knee = {st.world[size_t(leg.knee)].at(0, 3), st.world[size_t(leg.knee)].at(1, 3), st.world[size_t(leg.knee)].at(2, 3)};
                 solveTwoBoneIK(m, st.pose, st.world, leg.hip, leg.knee, leg.foot, target, knee + float3{0, 0, 0.5f});

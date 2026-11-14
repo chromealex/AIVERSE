@@ -43,6 +43,11 @@ void Renderer3D::renderReflection() {
         bindTraceTextures();    // height field (terrain shadows in the mirror image), scene placeholders
         for (const auto& it : items_) {
             if (it.color.w < 0.99f) continue;
+            // Kingston: ground decals are visible through water, never mirrored.
+            const auto center=(it.mesh->boundsMin+it.mesh->boundsMax)*.5f;
+            const auto extent=(it.mesh->boundsMax-it.mesh->boundsMin)*.5f;
+            const float top=it.model.transformPoint(center).y + std::abs(it.model.at(1,0))*extent.x + std::abs(it.model.at(1,1))*extent.y + std::abs(it.model.at(1,2))*extent.z;
+            if(top<=planeY+.01f)continue;
             DrawUniformsR u{};
             std::memcpy(u.model, it.model.m, sizeof u.model);
             u.color[0] = it.color.x; u.color[1] = it.color.y; u.color[2] = it.color.z; u.color[3] = it.color.w;

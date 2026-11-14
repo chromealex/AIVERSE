@@ -108,6 +108,11 @@ public:
     // takes a just spawned vehicle unit now (instead of at its next tick), rolling forward at `speed` m/s (traffic)
     bool adopt(Simulation& sim, Entity vehicle, Fixed speed);
 
+    bool policeExit(Simulation& sim, Entity hero) {
+        auto* st=store(sim);if(!st)return false;
+        for(auto& c:st->cars)if(c.driver==hero){if(fxAbs(speed(sim,c.e))>rules_.exitSpeed)return false;return leave(sim,c,true);}
+        return true;
+    }
 private:
     const DrivingVehicleType* typeOf(uint16_t unitType) const;
     void adoptAndDrop(Simulation& sim, DrivingStore& st);

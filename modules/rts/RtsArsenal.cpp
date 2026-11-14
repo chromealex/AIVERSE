@@ -75,6 +75,7 @@ ArsenalRules Arsenal::parse(const Json& j, const std::vector<std::string>& ids, 
     r.payNeutral = j.getBool("payNeutral", true);
     r.deathFine = nonNegative(j, "deathFine", Fixed{}, "arsenal");
     r.pickupReach = nonNegative(j, "pickupReach", r.pickupReach, "arsenal");
+    r.aimWindup = nonNegative(j, "aimWindup", r.aimWindup, "arsenal");
     if (const Json& ps = j["pickups"]; ps.isObject()) for (auto& [id, v] : ps.members()) {
         const std::string where = "arsenal.pickups." + id;
         ArsenalPickupType p;
@@ -358,7 +359,21 @@ void Arsenal::fire(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t player)
     World& w = sim.world();
     TopDown* td = m_->topDown();
     const TopDownPilot& pilot = td->store(sim)->pilots[player];
-    const bool trigger = pilot.input.fire || (pilot.input.aim && td->rules().aimFires);
+    bool trigger = pilot.input.fire || (pilot.input.aim && td->rules().aimFires);
+    // Saved first-shot windup: a tap is queued, sustained fire keeps its normal cadence.
+    if(rules_.aimWindup.raw>0&&size_t(h.current)<rules_.weapons.size()&&rules_.weapons[size_t(h.current)].weapon!="fists"){
+        auto& vars=m_->state(sim).trig.vars;const auto key="kingston_aim_"+std::to_string(hero.packed())+"_";
+        const bool aiming=pilot.input.aim||pilot.input.fire;
+        if(aiming&&(vars[key+"active"].raw<=0||vars[key+"slot"].toInt()!=h.current)){
+            vars[key+"until"]=Fixed::fromInt(sim.tick()+std::max<uint32_t>(1,uint32_t((rules_.aimWindup*int64_t(sim.tickRate())).toInt())));
+            vars[key+"slot"]=Fixed::fromInt(h.current);
+        }
+        if(trigger&&vars[key+"trigger"].raw<=0)vars[key+"pending"]=Fixed::fromInt(1);
+        vars[key+"trigger"]=Fixed::fromInt(trigger);vars[key+"active"]=Fixed::fromInt(aiming);
+        trigger=trigger||vars[key+"pending"].raw>0;
+        if(trigger&&int64_t(sim.tick())<vars[key+"until"].toInt())return;
+        if(trigger&&sim.tick()>=h.readyAt)vars[key+"pending"]={};
+    }
     if (!trigger || sim.tick() < h.readyAt) return;
     if (size_t(h.current) >= h.ammo.size() || h.ammo[size_t(h.current)] == 0) { fallBack(h); return; }
     Unit& u = w.get<Unit>(hero);

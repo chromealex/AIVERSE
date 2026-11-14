@@ -8,6 +8,7 @@
 //    the stop near his destination lets him off (the buses have no lines: any of them will do).
 // Fixed maths only, entity-index order, randomness from sim.rng().
 #include "RtsTraffic.h"
+#include "KingstonCityTrafficAreas.h"
 #include "RtsInternal.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>
@@ -178,6 +179,8 @@ Entity Traffic::citizenPerson(Simulation& sim, TrafficStore& st, int32_t id, Vec
     c.e = e;
     TrafficPerson p;
     p.e = e; p.hp = w.get<Unit>(e).hp; p.lastPos = spot; p.until = sim.tick();
+    // Kingston resident admission grace v2: allow external controllers before unreachable walks go unseen.
+    if(m_->state(sim).trig.vars["resident_transit_available"].raw>0) p.until+=sim.tickRate()*2;
     p.side = Fixed::fromRatio(int(id % 21) - 10, 10) * rules_.side;
     p.citizen = id;
     p.goal = goalCell;
@@ -394,8 +397,11 @@ bool Traffic::kerbFree(Simulation& sim, int32_t piece, int dir, Fixed a, Entity 
     GameState& gs = m_->state(sim);
     const Vec2 pt = tl::trafficLanePoint(net_, P, dir, P.lanes, a), along = tl::trafficDetail::axisDir(P.axis, dir);
     if (!onRoad(pt) || !gs.grid.passableAt(v3(pt), kLayerGround)) return false;
+    const auto& vars=gs.trig.vars;auto gateX=vars.find("tow_gate_x"),gateZ=vars.find("tow_gate_z");
+    if(gateX!=vars.end()&&gateZ!=vars.end()&&gateX->second.raw>0&&pt.x>gateX->second&&pt.x<gateX->second+Fixed::fromInt(3)&&fxAbs(pt.y-gateZ->second)<Fixed::fromInt(3))return false;
+    if (kingston::trafficParkingReserved(pt.x,pt.y)) return false;
     bool clear = true;
-    gs.hash.query(v3(pt), Fixed::fromInt(2), [&](Entity o) {
+    w.each<Unit, Transform>([&](Entity o, const Unit&, const Transform&) { // Kingston: current-tick occupancy
         auto* ou = w.tryGet<Unit>(o);
         if (o == self || !ou || ou->hp.raw <= 0 || (ou->flags & kUnitOffMap) || m_->rules().types[ou->type].structure) return;
         const Vec2 rel = v2(w.get<Transform>(o).pos) - pt;
@@ -483,7 +489,7 @@ bool Traffic::spawnTrip(Simulation& sim, TrafficStore& st, int32_t id, Vec2 at) 
     if (!gs.grid.passableAt(v3(pos), kLayerGround)) return false;
     const Fixed body = m_->rules().types[c.carType].radius;
     bool clear = true;
-    gs.hash.query(v3(pos), Fixed::fromInt(6) + body, [&](Entity o) {
+    w.each<Unit, Transform>([&](Entity o, const Unit&, const Transform&) { // Kingston: current-tick occupancy
         auto* ou = w.tryGet<Unit>(o);
         if (!ou || ou->hp.raw <= 0 || (ou->flags & kUnitOffMap) || m_->rules().types[ou->type].structure) return;
         const Vec2 rel = v2(w.get<Transform>(o).pos) - pos;

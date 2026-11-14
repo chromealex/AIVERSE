@@ -263,7 +263,12 @@ inline void wheeled(const VehicleWheeledConfig& c,VehicleState& s,uint32_t tick,
     auto speed=v.length();
     force=force-v*(speed*c.drag)-(grounded?v*c.rolling:Vec2{});
     if(grounded)force+=Vec2{k.groundNormal.x,k.groundNormal.z}*(c.mass*c.gravity*k.groundNormal.y);
+    // Kingston: finite coast-down on grounded wheels, without selecting reverse.
+    // Mass-scaled 0.8 m/s^2 engine/rolling resistance; preserve airborne motion.
+    if(grounded && drive==Fixed{} && speed>Fixed{})
+        force=force-v/speed*fxMin(c.mass*Fixed::fromRatio(4,5),c.mass*speed/dt);
     auto accel=force/c.mass;v+=accel*dt;s.longAccel=accel.dot(fwd);
+    if(grounded && drive==Fixed{} && k.groundNormal.x==Fixed{} && k.groundNormal.z==Fixed{} && v.dot(Vec2{s.velocity.x,s.velocity.z})<=Fixed{})v={};
     auto inertia=c.mass*fxMax(inertiaSum/n,Fixed::fromRatio(1,10));
     s.yawRate+=torqueYaw/inertia/kVehicleTwoPi*dt;
     // Parked: no creep or spin from rounding.

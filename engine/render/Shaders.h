@@ -134,6 +134,7 @@ namespace aiverse::render::shaders {
     "        float sd = texture(" DEPTH ", tuv).r;\n" \
     "        if (sd >= 0.9999) continue;\n" \
     "        vec3 s = ssrUnproject(uv, sd);\n" \
+    "#ifndef AIVERSE_MODEL_SSR\n        if (s.y <= wpos.y + 0.02) continue;\n#endif\n" \
     "        float dp = dot(p - u_camPos.xyz, fwd), ds = dot(s - u_camPos.xyz, fwd);\n" \
     "        if (ds < dp) {\n" \
     "            if (dp - ds > u_trace3.y + (d - prevD)) break;   /* the ray passed behind something thin: no hit */\n" \
@@ -189,6 +190,7 @@ namespace aiverse::render::shaders {
     "        float sd = sdp.sample(sds, tuv);\n" \
     "        if (sd >= 0.9999) continue;\n" \
     "        float3 s = ssrUnproject(f, uv, sd);\n" \
+    "#ifndef AIVERSE_MODEL_SSR\n        if (s.y <= wpos.y + 0.02) continue;\n#endif\n" \
     "        float dp = dot(p - f.camPos.xyz, fwd), ds = dot(s - f.camPos.xyz, fwd);\n" \
     "        if (ds < dp) {\n" \
     "            if (dp - ds > f.trace3.y + (d - prevD)) break;\n" \
@@ -391,6 +393,19 @@ void main() {
     vec4 albedo = u_color * v_col;
     vec3 base = rtsDecodeScene(albedo.rgb);                  // ~sRGB -> linear
     vec3 n = normalize(v_nrm);
+    // Kingston open-water ripples v1
+    // Open water is below the road film (.045); rain pools keep their own look.
+    if (u_params.y >= 0.85 && v_wpos.y < 0.04 && n.y > 0.9) {
+        float wx = v_wpos.x, wz = v_wpos.z;
+        float wt = (l_cloud.x + l_cloud.y) * 20.0;
+        float a = wx * 1.8 + wz * 0.8 + wt;
+        float b = wx * -1.1 + wz * 2.3 - wt * 1.3;
+        float c = wx * 4.7 + wz * 3.1 + wt * 1.8;
+        n = normalize(vec3(-0.10*cos(a) + 0.055*cos(b) - 0.025*cos(c),
+                              1.0, -0.045*cos(a) - 0.11*cos(b) - 0.018*cos(c)));
+        // Gentle colour variation follows the same waves, without white painted stripes.
+        base *= 0.90 + 0.13*sin(a) + 0.08*sin(b);
+    }
     vec3 L = normalize(u_sunDir.xyz);
     vec3 V = normalize(u_camPos.xyz - v_wpos);
     float ndl = max(dot(n, L), 0.0);
@@ -402,6 +417,7 @@ void main() {
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5)*ambientVisibility;
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u_params.y;
+    if (u_params.y >= 0.85 && v_wpos.y >= 0.04) spec = pow(max(dot(n, H), 0.0), 180.0) * 0.04;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
     vec3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
     col += base * local;
@@ -410,11 +426,11 @@ void main() {
     col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
     col = rtsToneScene(col, u_skyColor.w > 0.5); // ACES fit
     vec3 outc = waterReflect(rtsEncodeScene(col), v_wpos, n, V, u_params.y);   // planar reflection (water, High)
-    if (u_params.y >= 0.85 && u_trace2.w > 0.5) {                     // screen-space reflection (trace tier)
+    if (u_params.y >= 0.85 && v_wpos.y >= 0.04 && u_trace2.w > 0.5) {                     // screen-space reflection (trace tier)
         vec3 nn = normalize(n + vec3(sin(v_wpos.z * 3.0 + l_cloud.x * 11.0), 0.0, sin(v_wpos.x * 2.6 - l_cloud.y * 9.0)) * 0.02);
         float hit;
         vec3 rc = ssrWater(v_wpos, nn, V, hit);
-        float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
+        float fres = (v_wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
         outc = mix(outc, mix(rtsEncodeScene(col), rc, fres), hit);
     }
     o_color = vec4(outc, albedo.a);
@@ -449,6 +465,19 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     float4 albedo = u.color * in.col;
     float3 base = rtsDecodeScene(albedo.rgb);
     float3 n = normalize(in.nrm);
+    // Kingston open-water ripples v1
+    // Open water is below the road film (.045); rain pools keep their own look.
+    if (u.params.y >= 0.85 && in.wpos.y < 0.04 && n.y > 0.9) {
+        float wx = in.wpos.x, wz = in.wpos.z;
+        float wt = (l.cloud.x + l.cloud.y) * 20.0;
+        float a = wx * 1.8 + wz * 0.8 + wt;
+        float b = wx * -1.1 + wz * 2.3 - wt * 1.3;
+        float c = wx * 4.7 + wz * 3.1 + wt * 1.8;
+        n = normalize(float3(-0.10*cos(a) + 0.055*cos(b) - 0.025*cos(c),
+                              1.0, -0.045*cos(a) - 0.11*cos(b) - 0.018*cos(c)));
+        // Gentle colour variation follows the same waves, without white painted stripes.
+        base *= 0.90 + 0.13*sin(a) + 0.08*sin(b);
+    }
     float3 L = normalize(f.sunDir.xyz);
     float3 V = normalize(f.camPos.xyz - in.wpos);
     float ndl = max(dot(n, L), 0.0);
@@ -459,6 +488,7 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     float3 amb = mix(rtsDecodeScene(f.groundColor.rgb), rtsDecodeScene(f.skyColor.rgb), n.y * 0.5 + 0.5)*ambientVisibility;
     float3 H = normalize(L + V);
     float spec = pow(max(dot(n, H), 0.0), 40.0) * u.params.y;
+    if (u.params.y >= 0.85 && in.wpos.y >= 0.04) spec = pow(max(dot(n, H), 0.0), 180.0) * 0.04;
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.25;
     float3 col = base * (amb + sun * ndl * sh) + sun * spec * sh + amb * rim * base;
     col += base * local;
@@ -467,11 +497,11 @@ fragment float4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], cons
     col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
     col = rtsToneScene(col, f.skyColor.w > 0.5);
     float3 outc = waterReflect(l, tex2, s2, in.pos.xy, rtsEncodeScene(col), in.wpos, n, V, u.params.y);
-    if (u.params.y >= 0.85 && f.trace2.w > 0.5) {
+    if (u.params.y >= 0.85 && in.wpos.y >= 0.04 && f.trace2.w > 0.5) {
         float3 nn = normalize(n + float3(sin(in.wpos.z * 3.0 + l.cloud.x * 11.0), 0.0, sin(in.wpos.x * 2.6 - l.cloud.y * 9.0)) * 0.02);
         float hit;
         float3 rc = ssrWater(f, tex4, s4, tex5, s5, in.wpos, nn, V, hit);
-        float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
+        float fres = (in.wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);
         outc = mix(outc, mix(rtsEncodeScene(col), rc, fres), hit);
     }
     return float4(outc, albedo.a);

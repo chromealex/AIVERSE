@@ -582,9 +582,9 @@ namespace aiverse::render::shaders {
     "    if (specK < 0.85 || l_sky.y <= 0.0) return c;\n" \
     "    vec2 uv = gl_FragCoord.xy * l_sky.zw;\n" \
     "    uv.x = 1.0 - uv.x;\n" \
-    "    uv += vec2(sin(wpos.z * 3.0 + l_cloud.x * 11.0), sin(wpos.x * 2.6 - l_cloud.y * 9.0)) * 0.006;\n" \
+    "    uv += vec2(sin(wpos.z * 3.0 + l_cloud.x * 11.0), sin(wpos.x * 2.6 - l_cloud.y * 9.0)) * (wpos.y < 0.04 ? 0.0015 : 0.006) + n.xz * (wpos.y < 0.04 ? 0.012 : 0.0);\n" \
     "    vec3 r = texture(" REFL ", uv).rgb;\n" \
-    "    float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
+    "    float fres = (wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
     "    return mix(c, r, fres * l_sky.y);\n" \
     "}\n"
 #define AIVERSE_MSL_WATER_REFLECT \
@@ -592,9 +592,9 @@ namespace aiverse::render::shaders {
     "    if (specK < 0.85 || l.sky.y <= 0.0) return c;\n" \
     "    float2 uv = fragCoord * l.sky.zw;\n" \
     "    uv.x = 1.0 - uv.x;\n" \
-    "    uv += float2(sin(wpos.z * 3.0 + l.cloud.x * 11.0), sin(wpos.x * 2.6 - l.cloud.y * 9.0)) * 0.006;\n" \
+    "    uv += float2(sin(wpos.z * 3.0 + l.cloud.x * 11.0), sin(wpos.x * 2.6 - l.cloud.y * 9.0)) * (wpos.y < 0.04 ? 0.0015 : 0.006) + n.xz * (wpos.y < 0.04 ? 0.012 : 0.0);\n" \
     "    float3 r = rt.sample(rs, uv).rgb;\n" \
-    "    float fres = 0.5 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
+    "    float fres = (wpos.y < 0.04 ? 0.12 : 0.08) + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 3.0);   /* stylised: RTS cameras look down */\n" \
     "    return mix(c, r, fres * l.sky.y);\n" \
     "}\n"
 

@@ -6,6 +6,8 @@
 // entity index) become half-plane constraints on its velocity; the 2D linear program (RVO2's
 // linearProgram1/2/3) picks the velocity closest to the preferred one. Cost is O(agents * K^2).
 #include "RtsInternal.h"
+#include "RtsDriving.h"
+#include "KingstonPedestrianCrossingPolicy.h"
 #include <algorithm>
 
 namespace aiverse::game {
@@ -122,6 +124,7 @@ void RtsModule::moveAgents(Simulation& sim) {
     const Fixed invDt = kOne / dt;
     const int K = rules_.movement.neighbors;
 
+    #include "KingstonPedestrianVehicles.inc"
     struct Agent { Entity e; Vec2 p, v, pref, nv; Fixed r, speed; uint8_t layer, owner; bool moving, idle; int32_t goal = -1, arrived = -1; };
     std::vector<Agent> agents;
     std::vector<int32_t> byIndex;
@@ -159,6 +162,12 @@ void RtsModule::moveAgents(Simulation& sim) {
             if (m.pathPos >= m.path.size() && m.moving) { m.moving = false; m.path.clear(); }
             a.moving = m.moving;
         }
+        if(a.moving){
+            const Vec2 goal=m.pathPos<m.path.size()?m.path[m.pathPos].xz():m.goal.xz();
+            const Vec2 waypoint=vehicleDetour(e,a.p,goal,a.r);
+            if(waypoint!=goal){auto delta=waypoint-a.p;a.pref=delta.lengthSq().raw?normalize(delta)*fxMin(a.speed,delta.length()*invDt):Vec2{};}
+            if(vehicleCrossingWait(e,a.p,a.pref,a.r)){a.pref={};a.speed={};a.v={};}
+        }
         if (!a.moving) { m.vel = {}; a.v = {}; }
         if (a.moving && m.flow) a.goal = m.flowGoalCell;   // flow-field crowds (movement.flowField only)
         if (!a.moving) a.arrived = m.flowArrived;
@@ -169,6 +178,10 @@ void RtsModule::moveAgents(Simulation& sim) {
         agents.push_back(a);
     });
 
+    for(const auto&v:vehicleBodies)for(int i=-1;i<=1;++i){
+        const Fixed extent=fxMax(Fixed{},v.length-v.width);
+        agents.push_back(Agent{v.e,v.pos+v.axis*(extent*i),{}, {}, {},v.width+Fixed::fromRatio(4,100),Fixed{},kLayerGround,0,false,false});
+    }
     struct YieldReq { Entity who, mover; Vec2 moverPos, dir; Fixed clear; };
     std::vector<YieldReq> yields;
     std::vector<Line> lines;
@@ -274,6 +287,10 @@ void RtsModule::moveAgents(Simulation& sim) {
         const bool ignoreGrid = ((t.layer & kLayerAir) && !g.airSolid) || (gs.roadsOnly && t.entersGarrison);
         Vec3 step{a.nv.x * dt, Fixed{}, a.nv.y * dt};
         auto ok = [&](Vec3 np) {
+            for(const auto&v:vehicleBodies)if(v.e!=a.e){
+                // Let an already overlapping person escape; never take another step into a body.
+                if(!vehicleSegment(v,tr.pos.xz(),tr.pos.xz(),a.r)&&vehicleSegment(v,tr.pos.xz(),np.xz(),a.r))return false;
+            }
             if (ignoreGrid) return true;
             int cx0, cy0, cx, cy; g.cellXY(tr.pos, cx0, cy0); g.cellXY(np, cx, cy);
             if (cx == cx0 && cy == cy0) return true;
@@ -293,7 +310,7 @@ void RtsModule::moveAgents(Simulation& sim) {
         // waypoint reached?
         if (m.pathPos < m.path.size()) {
             Vec2 d = (m.path[m.pathPos] - tr.pos).xz();
-            if (d.length() <= fxMax(a.speed * dt, Fixed::fromRatio(1, 10)) || d.dot(a.pref).raw < 0) {
+            if (d.length() <= fxMax(a.speed * dt, Fixed::fromRatio(1, 10)) || d.dot(d + moved.xz()).raw < 0) {
                 if (++m.pathPos >= m.path.size()) { m.moving = false; m.path.clear(); m.vel = {}; }
             }
         }
@@ -349,6 +366,7 @@ void RtsModule::moveAgents(Simulation& sim) {
     // walk back to where they stood once the way is clear
     if (tick % 10 == 0)
         for (auto& a : agents) {
+            if(!w.has<Mobile>(a.e))continue; // vehicle obstacle has no pedestrian state
             Mobile& m = w.get<Mobile>(a.e);
             if (!m.yielded || m.moving || tick < m.yieldUntil) continue;
             auto* ord = w.tryGet<Orders>(a.e);

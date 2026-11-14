@@ -7,6 +7,7 @@
 // Fixed maths only, entity-index order, randomness from sim.rng().
 #include "RtsTraffic.h"
 #include "RtsInternal.h"
+#include "KingstonPolicePolicy.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>
 #include <stdexcept>
@@ -77,6 +78,8 @@ void Traffic::parseCity(const Json& j, TrafficRules& r, const std::vector<std::s
             if (v.has("range")) s.range = v.getFx("range");
             if (v.has("crew")) s.crew = typeOf(v.getStr("crew"), where + ".crew");
             s.crewCount = int(std::clamp<int64_t>(v.getInt("crewCount", s.crewCount), 1, 8));
+            s.custody = v.getBool("custody", false);
+            s.carry = v.getBool("carry", false);
             s.workTicks = std::max<uint32_t>(1, seconds(v, "work", ticksOf(Fixed::fromInt(5), rate), where));
             s.maxWorkTicks = std::max(s.workTicks, seconds(v, "maxWork", ticksOf(Fixed::fromInt(60), rate), where));
             s.max = int(std::clamp<int64_t>(v.getInt("max", 1), 1, 32));
@@ -188,7 +191,7 @@ int Traffic::exitToward(int J, int inSide, int32_t fromPiece, int32_t destPiece)
 }
 
 bool Traffic::isCasualtyType(uint16_t t) const {
-    if (isPersonType(t) || t == rules_.driverPerson) return true;
+    if (isPersonType(t) || t == rules_.driverPerson || m_->rules().findType("npc_body_" + m_->rules().types[t].id) >= 0) return true;
     for (auto& s : rules_.services) if (s.crew == t) return true;
     return false;
 }
@@ -252,6 +255,16 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
     for (auto& h : happened) {
         const Entity hero = heroBehind(h.by);
         if (h.ev == kEvAttack) { if (hero.valid()) report(sim, kIncidentCrime, h.pos, kNullEntity, hero); continue; }
+        if ((isCasualtyType(h.type) || kingston::policeHeroVictim(sim,h.who)) && kingston::policeOfficer(sim,h.by)) {
+            Entity body=kingston::policeBody(sim,h.who,h.type,kingston::policeVictimOwner(sim,h.who),v3(h.pos));
+            if(body.valid()){
+                bool assigned=false;
+                for(auto& call:st.incidents)if(call.kind==kIncidentCrime&&call.offender==h.who){call.offender=body;call.subject=body;call.pos=h.pos;assigned=true;}
+                if(!assigned)report(sim,kIncidentCrime,h.pos,body,body,true);
+                for(auto& p:st.people)if(p.e==h.who&&p.citizen>=0){st.citizens[size_t(p.citizen)].state=kCitizenDead;st.citizens[size_t(p.citizen)].e=kNullEntity;}
+            }
+            continue; // Police collect their casualty. Never create an ambulance call.
+        }
         if (isCasualtyType(h.type)) {
             // a citizen: he is in hospital now (back home by himself if no ambulance ever takes him there), or dead
             int32_t citizen = -1;
@@ -264,7 +277,8 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
                 c.eta = sim.tick() + ir.bodyTicks + ir.treatTicks;
             }
             if (ir.body != UINT16_MAX) {
-                const Entity body = m_->spawn(sim, ir.body, 0, v3(h.pos));
+                const int posedBody = m_->rules().findType("npc_body_" + m_->rules().types[h.type].id);
+                const Entity body = m_->spawn(sim, posedBody >= 0 ? uint16_t(posedBody) : ir.body, 0, v3(h.pos));
                 if (body.valid()) if (TrafficIncident* inc = incidentOf(st, report(sim, kIncidentInjured, h.pos, body))) {
                     inc->victim = h.type;
                     inc->citizen = citizen;
@@ -359,12 +373,14 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
         TrafficIncident& inc = st.incidents[i];
         bool over = false;
         const uint32_t age = sim.tick() - inc.born;
+        if (inc.kind == kIncidentInjured && living(w, inc.subject) && m_->rules().types[w.get<Unit>(inc.subject).type].id.starts_with("npc_body_"))
+            w.get<Transform>(inc.subject).pos = v3(inc.pos); // Kingston: bodies do not drift during separation
         if (inc.kind != kIncidentCrime && !living(w, inc.subject)) over = true;
         else if (inc.kind == kIncidentInjured) over = inc.state == 0 && age > ir.bodyTicks;
         else if (inc.kind == kIncidentCrime) over = inc.state == 0 && age > ir.crimeTicks;
         else if (inc.kind == kIncidentWreck) over = inc.state == 0 && age > ir.wreckTicks && w.get<Unit>(inc.subject).type == ir.wreck;
         else if (inc.kind == kIncidentFire) {
-            over = age > ir.burnTicks;
+            over = false; // Kingston persistent wreck fires are extinguished by responders.
             if (!over && slow && ir.fireDamage.raw > 0)
                 gs.hash.query(v3(inc.pos), ir.fireRadius + kOne, [&](Entity o) {
                     auto* ou = w.tryGet<Unit>(o);
@@ -405,7 +421,7 @@ void Traffic::incidents(Simulation& sim, TrafficStore& st) {
         for (size_t si = 0; si < rules_.services.size(); ++si) {
             if (rules_.services[si].answers != inc.kind) continue;
             int busy = 0;
-            for (auto& c : st.cars) busy += c.service == int(si) && c.task != kTaskNone;
+            for (auto& c : st.cars) busy += c.service == int(si) && c.task != kTaskNone && !(c.task == kTaskHome && c.call == 0 && c.crew.empty());
             if (busy >= rules_.services[si].max) continue;
             if (dispatch(sim, st, st.incidents[i], int(si))) break;
         }
@@ -418,9 +434,46 @@ bool Traffic::dispatch(Simulation& sim, TrafficStore& st, TrafficIncident& inc, 
     const TrafficService& sv = rules_.services[size_t(si)];
     int32_t destPiece; Fixed destAlong;
     if (!roadSpot(inc.pos, 10, destPiece, destAlong)) return false;
+    // Reuse a free returning crew before allocating another station vehicle.
+    // CrewBack is deliberately ineligible: everyone must board first.
+    std::vector<std::pair<Fixed, Entity>> availableCrews;
+    for (const auto& c : st.cars) {
+        if (c.service != si || c.call || !c.crew.empty() ||
+            (c.task != kTaskHome && c.task != kTaskNone) || !living(w,c.e)) continue;
+        const auto* dc=m_->driving() ? m_->driving()->car(sim,c.e) : nullptr;
+        if (!dc || dc->driver.valid() || (w.get<Unit>(c.e).flags & kUnitOffMap)) continue;
+        const Fixed distance=(v2(w.get<Transform>(c.e).pos)-inc.pos).lengthSq();
+        if(distance<=sv.range*sv.range) availableCrews.push_back({distance,c.e});
+    }
+    std::sort(availableCrews.begin(),availableCrews.end(),[](const auto& a,const auto& b){
+        return a.first!=b.first ? a.first<b.first : a.second.index<b.second.index;
+    });
+    for(const auto& candidate:availableCrews) {
+        auto* c=carOf(st,candidate.second);
+        const TrafficCar previous=*c;
+        c->task=kTaskGoing;c->call=inc.id;c->destPiece=destPiece;c->destAlong=destAlong;
+        c->kind=sv.siren?kTrafficEmergency:kTrafficCar;
+        const auto f=w.get<Unit>(c->e).facing;
+        if(!reroute(sim,*c,v2(w.get<Transform>(c->e).pos),{f.x,f.z})) {*c=previous;continue;}
+        c->stopped=0;c->lostSince=0;c->reverseUntil=0;
+        inc.state=1;inc.responder=c->e;inc.assigned=sim.tick();
+        gs.trig.vars["dispatch_reused"]=gs.trig.vars["dispatch_reused"]+Fixed::fromInt(1);
+        return true;
+    }
     const Station* from = nullptr;
     Fixed best{};
     for (auto& s : stations_[size_t(si)]) {
+        const auto& piece=net_.pieces[size_t(s.piece)];
+        const Vec2 gate=tl::trafficLanePoint(net_,piece,s.dir,0,s.along);
+        const Vec2 direction=tl::trafficDetail::axisDir(piece.axis,s.dir);
+        bool available=true;
+        gs.hash.query(v3(gate),Fixed::fromInt(5),[&](Entity o){
+            const auto* u=w.tryGet<Unit>(o);
+            if(!u||u->hp.raw<=0||(u->flags&kUnitOffMap)||m_->rules().types[u->type].structure)return;
+            const Vec2 rel=v2(w.get<Transform>(o).pos)-gate;
+            if(fxAbs(tl::trafficDetail::cross(direction,rel))<Fixed::fromRatio(7,10)&&fxAbs(rel.dot(direction))<Fixed::fromInt(3)+m_->rules().types[u->type].radius)available=false;
+        });
+        if(!available)continue;
         const Fixed d = (s.pos - inc.pos).lengthSq();
         if (d <= sv.range * sv.range && (!from || d < best)) { from = &s; best = d; }
     }
@@ -453,7 +506,8 @@ bool Traffic::dispatch(Simulation& sim, TrafficStore& st, TrafficIncident& inc, 
         m_->driving()->adopt(sim, e, Fixed{});
         auto it = std::lower_bound(st.cars.begin(), st.cars.end(), e.index, [](const TrafficCar& x, uint32_t i) { return x.e.index < i; });
         st.cars.insert(it, std::move(c));
-    } else {   // no station near: it arrives from out of sight
+    } else {   // Services without authored stations may enter from the map edge.
+        if (!stations_[size_t(si)].empty()) return false;
         const std::vector<Vec2> around{inc.pos};
         if (!spawnCar(sim, st, around, rules_.spawnMin, kTrafficCar, si, &e)) return false;
     }
@@ -534,7 +588,7 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
     GameState& gs = m_->state(sim);
     Driving* drv = m_->driving();
     for (auto& c : st.cars) {
-        if (c.task == kTaskNone || c.task == kTaskTrip) continue;
+        if (c.task == kTaskNone || c.task == kTaskTrip || c.task == 250) continue;
         const TrafficService& sv = rules_.services[size_t(c.service)];
         TrafficIncident* inc = incidentOf(st, c.call);
         const Vec3 pos3 = w.get<Transform>(c.e).pos;
@@ -546,20 +600,26 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
             return fxAbs(c.destAlong - tl::trafficAlongOf(net_.pieces[size_t(c.destPiece)], pos)) < Fixed::fromRatio(7, 10);
         };
         c.crew.erase(std::remove_if(c.crew.begin(), c.crew.end(), [&](Entity m) { return !living(w, m); }), c.crew.end());
+        #include "KingstonAmbulance.inc"
+        #include "KingstonPoliceResponse.inc"
         switch (c.task) {
         case kTaskGoing: {
             if (!inc) { finish(sim, st, c, false); break; }   // it is over already
             if (sim.tick() - inc->assigned > rules_.incidents.timeoutTicks) { finish(sim, st, c, false); break; }   // cannot get there
-            if (!slowNow || !(atAddress() || (pos - inc->pos).lengthSq() < Fixed::fromRatio(9, 4))) break;
+            if (!slowNow || !(atAddress() || (pos - inc->pos).lengthSq() < (sv.answers==kIncidentFire ? Fixed::fromInt(16) : Fixed::fromRatio(9, 4)))) break;
             inc->state = 2;
             inc->assigned = sim.tick();
             if (sv.crew == UINT16_MAX) { c.task = kTaskWorking; c.taskUntil = sim.tick() + sv.workTicks; break; }
             // the crew gets out on the kerb side and goes to the scene
             const Vec3 f = w.get<Unit>(c.e).facing;
-            const Vec3 right{-f.z, Fixed{}, f.x};
+            Vec3 right{-f.z, Fixed{}, f.x};
+            if ((v3(inc->pos)-pos3).dot(right).raw<0) right=right*Fixed::fromInt(-1);
+            // Outside the separation body, on the patient's side: a straight path
+            // from the far-side door otherwise gets pinned against the ambulance.
+            const Fixed exitDistance=m_->rules().types[w.get<Unit>(c.e).type].radius+m_->rules().types[sv.crew].radius+Fixed::fromRatio(1,5);
             for (int i = 0; i < sv.crewCount; ++i) {
-                Vec3 spot = pos3 + right * Fixed::fromRatio(1, 2) + f * Fixed::fromRatio(i * 2 - (sv.crewCount - 1), 5);
-                if (!gs.grid.passableAt(spot, kLayerGround)) spot = pos3 - right * Fixed::fromRatio(1, 2);
+                Vec3 spot = pos3 + right * (sv.answers==kIncidentFire ? fxMax(exitDistance,Fixed::fromRatio(9,10)) : exitDistance) + f * Fixed::fromRatio(i * 2 - (sv.crewCount - 1), 5);
+                if (!gs.grid.passableAt(spot, kLayerGround)) spot = pos3 - right * exitDistance;
                 if (!gs.grid.passableAt(spot, kLayerGround)) continue;
                 const Entity m = m_->spawn(sim, sv.crew, sv.owner, spot);
                 if (!m.valid()) continue;
@@ -567,6 +627,7 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
                 go.type = sv.answers == kIncidentCrime ? OrderType::AttackMove : OrderType::Move;
                 m_->issue(sim, m, go, false);
                 c.crew.push_back(m);
+                gs.trig.vars["service_exit_"+std::to_string(m.packed())]=Fixed::fromInt(sim.tick());
             }
             c.task = c.crew.empty() ? kTaskWorking : kTaskCrewOut;
             c.taskUntil = sim.tick() + (c.crew.empty() ? sv.workTicks : sim.tickRate() * 15);
@@ -575,8 +636,9 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
         case kTaskCrewOut: {
             if (!inc || c.crew.empty()) { finish(sim, st, c, false); break; }
             const Fixed reach = sv.answers == kIncidentCrime ? Fixed::fromInt(3) : Fixed::fromRatio(9, 10);
-            bool there = sim.tick() >= c.taskUntil;
+            bool there = sv.answers != kIncidentFire && sv.answers != kIncidentInjured && sim.tick() >= c.taskUntil;
             for (Entity m : c.crew) there = there || (v2(w.get<Transform>(m).pos) - inc->pos).lengthSq() < reach * reach;
+            if (sv.answers == kIncidentFire) break; // Project fire action controller owns hose/nozzle readiness.
             if (there) { c.task = kTaskWorking; c.taskUntil = sim.tick() + sv.workTicks; }
             break;
         }
@@ -597,7 +659,9 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
             break;
         }
         case kTaskCrewBack: {
-            bool back = sim.tick() >= c.taskUntil;
+            if (gs.trig.vars["service_return_"+std::to_string(c.e.packed())].raw>0) break; // project door boarding owns completion
+            if (sv.answers == kIncidentFire && m_->state(sim).trig.vars["fire_service_"+std::to_string(c.e.packed())+"_phase"].toInt()==4) break;
+            bool back = sv.answers != kIncidentFire && sim.tick() >= c.taskUntil;
             if (!back) { back = true; for (Entity m : c.crew) back = back && (v2(w.get<Transform>(m).pos) - pos).lengthSq() < Fixed::fromRatio(36, 25); }
             if (!back) break;
             for (Entity m : c.crew) silentRemove(sim, m);

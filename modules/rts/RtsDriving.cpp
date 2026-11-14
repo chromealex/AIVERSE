@@ -456,7 +456,7 @@ void Driving::drive(Simulation& sim, DrivingStore& st, size_t index) {
     DrivingCar& c = st.cars[index];
     if (!w.alive(c.e)) return;
     Unit& u = w.get<Unit>(c.e);
-    if (u.hp.raw <= 0) return;
+    if (u.hp.raw <= 0 || (u.flags & kUnitInCargo)) return;
     const DrivingVehicleType& vt = *typeOf(u.type);
     const Fixed mpc = rules_.metersPerCell;
     // A parked car at rest sleeps: no controller step, no sweep (a city has hundreds of them). Whatever hits it

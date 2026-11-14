@@ -523,6 +523,7 @@ void RtsView::configureExtras(gfx::Device& dev, const UnitType& t, const Json& v
         at.materials = at.model->materials;
         for (auto& mt : at.materials) if (lower(mt.name).find("team") != std::string::npos && mt.team == TeamMode::None) mt.team = TeamMode::Tint;
         at.node = node(aj["node"], "attach");
+        at.weapon=aj.getStr("weapon");
         const float3 r = vec3(aj["rotate"], {0, 0, 0}) * kDeg;
         const float sc = num(aj["scale"], 1);
         at.local = mat4::translate(vec3(aj["offset"], {0, 0, 0})) * mat4::rotateY(r.y) * mat4::rotateX(r.x) * mat4::rotateZ(r.z) * mat4::scale({sc, sc, sc});
@@ -534,6 +535,12 @@ void RtsView::configureExtras(gfx::Device& dev, const UnitType& t, const Json& v
             if (at.carry == -3) { warn(t, "attach: unknown resource '" + res + "'"); at.carry = -1; }
         }
         c.attach.push_back(std::move(at));
+    }
+    if(v.has("weaponAnimations")){
+        c.weaponPoses.clear();const auto& spec=v["weaponAnimations"];c.weaponMask=m.findNode(spec.getStr("mask","Spine"));
+        for(const auto&[name,pose]:spec.members())if(pose.isObject()){
+            WeaponPose wp;wp.weapon=name;wp.hold=m.findClip(pose.getStr("hold"));wp.aim=m.findClip(pose.getStr("aim"));wp.attack=m.findClip(pose.getStr("attack"));c.weaponPoses.push_back(wp);
+        }
     }
     if (v.has("muzzle")) {
         const Json& mz = v["muzzle"];

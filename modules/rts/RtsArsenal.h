@@ -64,6 +64,7 @@ struct ArsenalRules {
     bool loseOnDeath = true, hitsNeutral = true, payNeutral = true;
     Fixed deathFine{};
     Fixed pickupReach = Fixed::fromRatio(1, 4);    // cells added to the body radii
+    Fixed aimWindup{};                             // seconds a firearm is raised before its first shot (0: fires at once)
 };
 
 struct ArsenalHand {

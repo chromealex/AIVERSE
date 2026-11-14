@@ -1,5 +1,7 @@
 #include "RtsView.h"
 #include "../RtsModule.h"
+#include "../RtsArsenal.h"
+#include "../RtsTopDown.h"
 #include "imgui.h"
 #include "../../../engine/platform/Platform.h"
 
@@ -218,6 +220,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
     if (twoD_) twoD_->beginFrame(r.camera(), time, r, &grid, rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f);
     bars_.assign(s.objects.size(), {});
     if (hasTerrain_ && !tiles) terrain_.draw(r, grid, vision, groundFx_.drawsDig());
+    if (hasTerrain_ && tiles) terrain_.drawWater(r);
     if (!tiles) groundFx_.draw(r, s, time, vision, grid, *this);
     paintLayers_.draw(r, *dev_, s.paintLayers, grid, *this, vision, time, s.viewer);
     if (tiles || !groundFx_.drawsLinks())
@@ -371,6 +374,10 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
         if (u.flags & kUnitInCargo) return;   // inside a transport (agent-mech)
         SceneObject so;
         so.entity = e; so.type = u.type; so.owner = o.player;
+        if(auto*arsenal=m->arsenal())if(auto*hand=arsenal->hand(sim,o.player))if(hand->hero==e&&hand->current>=0&&size_t(hand->current)<arsenal->rules().weapons.size()){
+            so.heldWeapon=arsenal->rules().weapons[hand->current].weapon;
+            if(auto*td=m->topDown())if(auto*pilots=td->store(sim))if(o.player<pilots->pilots.size())so.weaponAim=pilots->pilots[o.player].input.aim||pilots->pilots[o.player].input.fire;
+        }
         float3 a = toF(t.prevPos), b = toF(t.pos);
         so.pos = lerp(a, b, alpha);
         so.facing = toF(u.facing);

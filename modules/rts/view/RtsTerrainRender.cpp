@@ -639,7 +639,23 @@ void TerrainRenderer::buildWater(gfx::Device& dev, const MapGrid& g, bool flatDi
                 size_t j = i + 1;
                 while (j < cells.size() && cells[j] == cells[j - 1] + 1 && cells[j] / W == cells[i] / W) ++j;
                 float x0f = float(cells[i] % W), x1f = float(cells[j - 1] % W + 1), z0 = float(cells[i] / W), z1 = z0 + 1;
-                wb.quad({x0f, y, z0}, {x0f, y, z1}, {x1f, y, z1}, {x1f, y, z0});
+                // Kingston shoreline depth tint v1
+                auto vertex = [&](float x, float z) {
+                    float distance = 3.0f;
+                    for (int dz = -3; dz <= 2; ++dz) for (int dx = -3; dx <= 2; ++dx) {
+                        int nx = int(x) + dx, nz = int(z) + dz;
+                        if (!g.inside(nx,nz) || isWater(nx,nz)) continue;
+                        float vx = float(nx)+.5f-x, vz = float(nz)+.5f-z;
+                        distance = std::min(distance,std::sqrt(vx*vx+vz*vz));
+                    }
+                    float depth = std::clamp((distance-.7f)/2.3f,0.f,1.f);
+                    return wb.addVertex({x,y,z},{0,1,0},rgba(
+                        uint8_t(255-85*depth),uint8_t(255-40*depth),uint8_t(255-24*depth),255));
+                };
+                for (float x=x0f; x<x1f; x+=1.f) {
+                    auto a=vertex(x,z0), b=vertex(x,z1), c=vertex(x+1,z1), d=vertex(x+1,z0);
+                    wb.addTriangle(a,b,c); wb.addTriangle(a,c,d);
+                }
                 i = j;
             }
         }
@@ -965,6 +981,11 @@ void TerrainRenderer::updateHeightField(gfx::Device& dev, const MapGrid& g) {
     heightField_.originX = 0; heightField_.originZ = 0;
     heightField_.extentX = float(g.w); heightField_.extentZ = float(g.h);
     heightField_.heightMin = mn; heightField_.heightRange = mx - mn > 1e-3f ? mx - mn : 0.0f;   // flat map: nothing to shadow
+}
+
+void TerrainRenderer::drawWater(render::Renderer3D& r) {
+    if (hasWater_ && water_.indexCount)
+        r.drawMesh(water_, render::mat4{}, look_.waterColor, render::kDrawNoCastShadow, .9f);
 }
 
 } // namespace aiverse::game
