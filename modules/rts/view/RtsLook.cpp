@@ -207,6 +207,17 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     L.corpseFade = std::max(0.0f, num(v["corpseFade"], 0.6f));
     L.turnSpeed = num(v["turnSpeed"], t.structure ? 0.0f : 10.0f);
     L.tracer = v.getBool("tracer", false);
+    if (const Json& ps = v["projectileScale"]; ps.isNumber()) L.projectileScaleDefault = std::max(0.0f, num(ps, 1));
+    else if (ps.isObject()) {   // {"default": 0.3, "<weapon id>": 1}: bullets small, rockets big
+        L.projectileScaleDefault = std::max(0.0f, num(ps["default"], 1));
+        L.projectileScale.assign(t.weapons.size(), L.projectileScaleDefault);
+        for (const auto& [wid, x] : ps.members()) {
+            if (wid == "default") continue;
+            bool found = false;
+            for (size_t i = 0; i < t.weapons.size(); ++i) if (t.weapons[i].id == wid) { L.projectileScale[i] = std::max(0.0f, num(x, 1)); found = true; }
+            if (!found) warn(t, "projectileScale: the type has no weapon '" + wid + "'");
+        }
+    }
     L.flyHeight = num(v["flyHeight"], 2.4f);
     // "groundShadow": {"image", "size": [w, d] (world units), "offset": [x, z] (model frame, world units), "color": [r, g,
     // b, a] (0..1, multiplies the image), "lift", "flip": [u, v]}: a flat image on the ground under the model, turning

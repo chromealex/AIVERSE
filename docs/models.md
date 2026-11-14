@@ -355,7 +355,8 @@ deformed on the GPU from a float texture; weights come from the node / mesh defa
 ```
 
 - **attach** draws another model on a node of this one (`rotate` in degrees, `when` = states,
-  `carry` = resource id or `"any"`: shown while carrying it). Materials named `*team*` take the
+  `carry` = resource id or `"any"`: shown while carrying it, `weapon` = weapon id of the type: shown while the
+  hero holds that weapon, rules `arsenal`). Materials named `*team*` take the
   team colour.
 - **muzzle**: projectiles of this type start at that point and converge onto their simulated path;
   a `launch` view event is reported there.

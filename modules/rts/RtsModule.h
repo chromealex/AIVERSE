@@ -210,6 +210,7 @@ enum GameEvent : uint16_t {
     kEvTelegraphEnd,    // a = caster, value = attack index | 1 << 16 when cancelled (caster died in the windup)
     kEvEnv,             // map environment (RtsEnv.h): value = EnvEventKind << 16 | data, a / b / pos per kind (weather, wind, worm, toad, bombs, Mouro, souls, walls)
     kEvModePhase,       // match modes (RtsModes.cpp): value = ModePhaseEvent, player = side concerned (0: everyone), a = point
+    kEvShotEnd,         // a free-fire shot (rules "arsenal") stopped at a wall / its range, or went off (splash): a = shooter, value = weapon index of its type, pos
 };
 // kEvModePhase values
 enum ModePhaseEvent : int64_t { kModeSdCounter = 1, kModeSdPreview, kModeSdStart, kModeSdEnd, kModeTimeStep, kModeTimeUp,

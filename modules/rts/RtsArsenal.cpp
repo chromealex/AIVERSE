@@ -51,6 +51,7 @@ ArsenalRules Arsenal::parse(const Json& j, const std::vector<std::string>& ids, 
         if (a.weapon.empty()) throw std::runtime_error(where + ".weapon: the weapon id of the hero type");
         for (auto& o : r.weapons) if (o.weapon == a.weapon) throw std::runtime_error(where + ": weapon '" + a.weapon + "' listed twice");
         a.name = v.isObject() ? v.getStr("name", a.weapon) : a.weapon;
+        if (v.isObject()) a.icon = v.getStr("icon");
         if (v.isObject()) {
             a.start = ammoOf(v, "start", 0, where);
             a.max = ammoOf(v, "max", 999, where);
@@ -398,7 +399,7 @@ void Arsenal::fire(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t player)
     h.readyAt = sim.tick() + uint32_t(std::max<int64_t>(1, cd));
     if (h.ammo[size_t(h.current)] > 0) --h.ammo[size_t(h.current)];
     const Fixed damage = wd.damage * m_->stat(sim, hero, Stat::Damage);
-    sim.emit({kEvAttack, player, hero, kNullEntity, int64_t(wi), pos});
+    sim.emit({kEvAttack, player, hero, kNullEntity, int64_t(wi), pos + dir * (t.radius + Fixed::fromRatio(15, 100))});   // at the muzzle: the flash and the sound
     const int32_t base = TopDown::angleOf(dir);
     for (int k = 0; k < aw.pellets; ++k) {
         int32_t angle = base;
@@ -408,7 +409,7 @@ void Arsenal::fire(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t player)
         Projectile pr;
         pr.source = hero; pr.owner = player; pr.speed = wd.projectileSpeed;
         pr.damage = damage; pr.splash = wd.splash; pr.damageType = wd.damageType;
-        pr.layers = uint8_t(wd.targets | (rules_.hitsNeutral ? kLayerHitsNeutral : 0));
+        pr.layers = uint8_t(wd.targets | kLayerFreeFire | (rules_.hitsNeutral ? kLayerHitsNeutral : 0));
         pr.sourceType = u.type; pr.weapon = int8_t(wi);
         const Vec3 start = m_->lift(sim, pos, Fixed::fromRatio(6, 10));
         pr.aim = wd.flight.enabled ? start + d * range : m_->lift(sim, pos + d * range, Fixed::fromRatio(4, 10));   // no program: lands at full range (grenade)

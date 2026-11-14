@@ -105,6 +105,7 @@ bool RtsFx::init(fx::ParticleSystem& ps, const Rules& rules, const Json& bank, s
             if (wj.has("attack")) wf.attack = resolve(wj["attack"], where + ".attack");
             if (wj.has("hit")) wf.hit = resolve(wj["hit"], where + ".hit");
             if (wj.has("trail")) wf.trail = resolve(wj["trail"], where + ".trail");
+            if (wj.has("end")) wf.end = resolve(wj["end"], where + ".end");
         }
         for (size_t a = 0; a < ut.abilities.size(); ++a)
             if (abilitiesById.has(ut.abilities[a].id)) tf.abilities[a] = resolve(abilitiesById[ut.abilities[a].id], "abilities." + ut.abilities[a].id);
@@ -127,6 +128,7 @@ bool RtsFx::init(fx::ParticleSystem& ps, const Rules& rules, const Json& bank, s
                     if (wj.has("attack")) wf.attack = resolve(wj["attack"], where + "." + wid + ".attack");
                     if (wj.has("hit")) wf.hit = resolve(wj["hit"], where + "." + wid + ".hit");
                     if (wj.has("trail")) wf.trail = resolve(wj["trail"], where + "." + wid + ".trail");
+                    if (wj.has("end")) wf.end = resolve(wj["end"], where + "." + wid + ".end");
                 }
             } else if (key == "abilities") {
                 for (auto& [aid, aj] : v.members()) {
@@ -155,10 +157,11 @@ const RtsFx::Binding& RtsFx::lookup(int type, FxCue c) const {
     return global_[size_t(c)];
 }
 
-const RtsFx::Binding& RtsFx::trailFor(int type) const {
+const RtsFx::Binding& RtsFx::trailFor(int type, int weapon) const {
     if (type >= 0 && size_t(type) < types_.size()) {
         const UnitType& ut = rules_->types[size_t(type)];
         const auto& bound = types_[size_t(type)].weapons;   // empty when fx.json binds no weapons
+        if (weapon >= 0 && size_t(weapon) < bound.size()) return bound[size_t(weapon)].trail.set ? bound[size_t(weapon)].trail : lookup(type, FxCue::Trail);   // the projectile's own weapon
         for (size_t w = 0; w < ut.weapons.size() && w < bound.size(); ++w)   // the projectile weapon's trail
             if (ut.weapons[w].projectileSpeed > Fixed{} && bound[w].trail.set) return bound[w].trail;
     }
@@ -237,6 +240,7 @@ void RtsFx::handle(Simulation& sim, const SimEvent& ev) {
         const Binding* b = nullptr;
         if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].weapons.size() && types_[size_t(t)].weapons[size_t(ev.value)].attack.set)
             b = &types_[size_t(t)].weapons[size_t(ev.value)].attack;
+        if (ev.a.valid() && ev.value >= 0 && ev.value < 255) { if (lastWeapon_.size() > 4096) lastWeapon_.clear(); lastWeapon_[ev.a.packed()] = uint8_t(ev.value); }
         const auto& binding=b?*b:lookup(t,FxCue::Attack);
         float3 muzzle,direction;
         if(binding.valid()&&attackOrigin_&&attackOrigin_(ev.a,muzzle,direction)){
@@ -246,10 +250,20 @@ void RtsFx::handle(Simulation& sim, const SimEvent& ev) {
         }else playAt(binding,ev.pos,t,toward(ev.a,ev.b),ev.player);
         break;
     }
+    case kEvShotEnd: {   // a = shooter, value = weapon index
+        const int t = typeOf(ev.a);
+        if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].weapons.size() && types_[size_t(t)].weapons[size_t(ev.value)].end.set)
+            playAt(types_[size_t(t)].weapons[size_t(ev.value)].end, ev.pos, -1, up, ev.player);
+        break;
+    }
     case kEvHit: {   // a = target, b = source
         const int src = typeOf(ev.b);
         const Binding* b = nullptr;
-        if (src >= 0) for (auto& wf : types_[size_t(src)].weapons) if (wf.hit.set) { b = &wf.hit; break; }
+        if (src >= 0) {
+            auto last = lastWeapon_.find(ev.b.packed());   // the weapon it fired last, else the first one that has an effect
+            if (last != lastWeapon_.end() && last->second < types_[size_t(src)].weapons.size() && types_[size_t(src)].weapons[last->second].hit.set) b = &types_[size_t(src)].weapons[last->second].hit;
+            else for (auto& wf : types_[size_t(src)].weapons) if (wf.hit.set) { b = &wf.hit; break; }
+        }
         playAt(b ? *b : lookup(src, FxCue::Hit), ev.pos, typeOf(ev.a), toward(ev.a, ev.b), ev.player);
         break;
     }

@@ -62,6 +62,7 @@ struct SceneObject {
     float carry = 0;             // > 0: carrying resources
     std::string heldWeapon; bool weaponAim=false; // Kingston selected arsenal item
     int16_t carryRes = -1;       // resource index of the cargo
+    int8_t shotWeapon = -1;      // projectiles: weapon index (of the shooter's type) that fired it; -1: unknown
     bool selected = false, hovered = false, visible = true, isProjectile = false;
     float fade = 1;              // 0..1 opacity from the sim (route walkers fade at the route ends, BW SubSpline.GetAlpha)
     bool unpowered = false;      // disabled by a power deficit / owner in low power (electric lights dim)
@@ -341,6 +342,8 @@ private:
         bool air = false, structure = false, shape = true;
         float sx = 1, sz = 1;                     // shapes: footprint scaling
         bool tracer = false;                      // optional visual bullets for attack events
+        std::vector<float> projectileScale;       // "projectileScale": size of the projectile ball by weapon index (missing: 1; 0: not drawn)
+        float projectileScaleDefault = 1;
         float corpse = 2.5f;                      // seconds a dead object stays visible
         float corpseFade = 0.6f;                  // its last seconds fade out (0: drawn whole until removed)
         float corpseAlpha(float age) const { return RtsView::corpseAlpha(corpse, corpseFade, age); }

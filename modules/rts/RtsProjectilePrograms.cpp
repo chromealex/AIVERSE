@@ -310,8 +310,8 @@ void RtsModule::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>
                 if (m.kind==ProjectileModKind::Split && m.timed && !(s.consumed&(1u<<i)) && s.age>=m.after) split(i,position);
             }
         }
-        // free fire (arsenal, kLayerHitsNeutral): a splash weapon goes off where its flight ends (a rocket into a wall)
-        if (spent && p.effList<0 && p.splash>Fixed{} && (p.layers&kLayerHitsNeutral) && p.sourceType<rules_.types.size() && p.weapon>=0) {
+        // free fire (arsenal, kLayerFreeFire): a splash weapon goes off where its flight ends (a rocket into a wall)
+        if (spent && p.effList<0 && p.splash>Fixed{} && (p.layers&kLayerFreeFire) && p.sourceType<rules_.types.size() && p.weapon>=0) {
             const auto& wd=rules_.types[p.sourceType].weapons[size_t(p.weapon)];
             std::vector<Entity> splash;
             gs.hash.query(position,p.splash+maxRadius,[&](Entity t) {
@@ -320,6 +320,8 @@ void RtsModule::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>
             std::sort(splash.begin(),splash.end(),[](Entity a,Entity b){return a.index<b.index;});
             for (Entity t:splash) dealDamage(sim,t,p.damage*s.damageScale,p.damageType,p.source,p.owner,&wd);
         }
+        if (!alive && (spent || p.splash>Fixed{}) && p.effList<0 && (p.layers&kLayerFreeFire) && p.weapon>=0)
+            sim.emit({kEvShotEnd,p.owner,p.source,kNullEntity,int64_t(p.weapon),position});   // sparks at the wall, the rocket's blast (fx / audio "end")
         if (w.alive(entity) && w.has<Projectile>(entity)) {
             w.get<Projectile>(entity)=std::move(p);
             auto& tr=w.get<Transform>(entity); tr.prevPos=previous; tr.pos=position;

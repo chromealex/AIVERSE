@@ -56,8 +56,28 @@ Needs the `topDown` block; every hero type must have every listed weapon.
 
 ## Client
 
-The top bar shows the money (as every resource) and the weapon in hand with its ammo. `kEvAttack` without a target
+The top bar shows the money (as every resource) and the weapon in hand with its ammo. A slot may name a picture
+for a game's own HUD: `arsenal.weapons[].icon` (a content path; the engine only stores it). `kEvAttack` without a target
 plays the shooter's attack animation; `kEvItem` (a = hero, b = pickup, value = pickup kind) marks a pickup taken.
+
+The weapon in hand on the model: a view `attach` entry with `"weapon": "<weapon id>"` is drawn only while the hero
+holds that weapon (`{"node": "ForearmR", "model": "models/ground-pickups/smg.glb", "weapon": "smg", "offset", "rotate", "scale"}`).
+
+Stances: view `"weaponAnimations": {"mask": "Spine", "<weapon id>": {"hold": clip, "aim": clip, "attack": clip}}`
+plays upper-body clips by the weapon in the hero's hand over the pose: `hold` while it is carried, `aim` while the
+hero aims or holds fire, `attack` once per shot. Clips key only the nodes a stance uses, the rest keeps the walk cycle.
+
+## Effects and sounds
+
+- `kEvAttack` of a free-fire shot is reported at the muzzle (the hero's position moved along the aim).
+- `kEvShotEnd` (a = shooter, value = weapon index): a free-fire projectile stopped at a wall or at its range, or a
+  splash weapon went off. fx.json and audio.json take it as `"weapons": {"<id>": {"end": ...}}` next to `attack`,
+  `hit` and (fx) `trail`.
+- `hit` and `trail` follow the weapon that was fired (before: the first weapon of the type that had one).
+- View `"projectileScale"`: a number, or `{"default": 0.3, "<weapon id>": 1}` — the size of the projectile ball by
+  weapon (0: not drawn).
+- The default flashes (`attackLight`, `projectileLight`, `hitLight`, `deathLight`) are sized for units a cell wide;
+  small people need them turned down in the type's view.
 
 ## City project
 
@@ -69,5 +89,5 @@ fists, pistol, machine gun, shotgun and rocket launcher to the hero, six pickup 
 ## Not done yet
 
 Thrown weapons (grenades, molotovs), flamethrower, vehicle weapons and drive-by fire, weapon shops as places,
-dropped weapons of the dead, armed people and police with a wanted level, explosions of wrecked cars, weapon and
-pickup sounds, weapon icons and a kill-frenzy style HUD.
+dropped weapons of the dead, the behaviour of armed people and police (wanted level), explosions of wrecked cars,
+pickup sounds, shell casings, a kill-frenzy style HUD.
