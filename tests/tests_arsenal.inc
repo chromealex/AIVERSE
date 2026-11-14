@@ -146,7 +146,17 @@ TEST(arsenal_rocket_goes_off_at_the_wall) {
     run(*sim, 0.25);
     CHECK(hand1(*sim).current == 3);
     shoot(*sim, kEast);
-    run(*sim, 1.5);
+    int ends = 0, launches = 0;   // the shot is reported at the muzzle, its end where the rocket went off (effects, sounds)
+    Vec3 endAt{}, launchAt{};
+    for (int i = 0; i < 30; ++i) {
+        sim->step();
+        for (const auto& ev : sim->events()) {
+            if (ev.type == game::kEvShotEnd) { ++ends; endAt = ev.pos; CHECK(ev.value == 3 && ev.a == mod(*sim).topDown()->heroOf(*sim, 1)); }
+            if (ev.type == game::kEvAttack) { ++launches; launchAt = ev.pos; }
+        }
+    }
+    CHECK(ends == 1 && launches == 1 && endAt.x > Fixed::fromInt(11) && endAt.x < Fixed::fromInt(12));
+    CHECK(launchAt.x > Fixed::fromRatio(68, 10) && launchAt.x < Fixed::fromInt(7));
     Entity near = typed(*sim, "ped"), car = typed(*sim, "car");
     Entity far = kNullEntity;
     sim->world().each<game::Unit, Transform>([&](Entity e, game::Unit&, Transform& t) { if (t.pos.z > Fixed::fromInt(12)) far = e; });

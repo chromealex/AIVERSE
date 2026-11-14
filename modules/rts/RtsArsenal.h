@@ -36,10 +36,13 @@ class RtsModule;
 constexpr int64_t kWeaponNext = 1, kWeaponPrev = -1, kWeaponSlot = 100;
 // Projectile::layers bit: the projectile also hits passive neutral units (owner 0), not only hostile ones.
 constexpr uint8_t kLayerHitsNeutral = 0x80;
+// Projectile::layers bit: a free-fire shot (no target): a splash weapon goes off where its flight ends, kEvShotEnd is reported.
+constexpr uint8_t kLayerFreeFire = 0x40;
 
 struct ArsenalWeapon {
     std::string weapon;                 // weapon id on the hero types
     std::string name;                   // HUD
+    std::string icon;                   // HUD picture (content path; view only)
     int32_t start = 0;                  // ammo at the start and after a respawn (-1: unlimited)
     int32_t max = 999;                  // ammo cap (unlimited weapons ignore it)
     int pellets = 1;                    // projectiles per shot (shotgun), fanned over `spread`

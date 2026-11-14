@@ -83,7 +83,7 @@ public:
 private:
     struct TypeFx {
         std::array<Binding, size_t(FxCue::Count)> cue;
-        struct W { Binding attack, hit, trail; };
+        struct W { Binding attack, hit, trail, end; };
         std::vector<W> weapons;
         std::vector<Binding> abilities;
     };
@@ -92,7 +92,7 @@ private:
 
     Binding resolve(const Json& v, const std::string& where);
     const Binding& lookup(int type, FxCue c) const;
-    const Binding& trailFor(int type) const;
+    const Binding& trailFor(int type, int weapon = -1) const;
     bool playAt(const Binding& b, const Vec3& pos, int type, fx::float3 dir, int owner);
     void handle(Simulation& sim, const SimEvent& ev);
 
@@ -108,6 +108,7 @@ private:
     std::function<fx::float4(int)> playerColor_;
     PlaceFn place_;
     std::unordered_map<uint64_t, Attached> trails_, damaged_;
+    std::unordered_map<uint64_t, uint8_t> lastWeapon_;   // shooter -> the weapon it fired last (its "hit" effect)
     uint32_t frame_ = 0;
     uint8_t viewer_ = 0;
     int played_ = 0, rejected_ = 0;

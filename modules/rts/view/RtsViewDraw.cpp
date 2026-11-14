@@ -215,7 +215,12 @@ void RtsView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, 
     } else {
         ps.launch = ps.launch * std::exp(-dt * 7.0f); // converge onto the simulated path
     }
-    r.drawMesh(projectile_, mat4::translate(o.pos + ps.launch), {1, 0.95f, 0.8f, 1}, kDrawUnlit);
+    float size = 1;
+    if (o.shooterType < looks_.size()) {
+        const TypeLook& SL = looks_[o.shooterType];
+        size = o.shotWeapon >= 0 && size_t(o.shotWeapon) < SL.projectileScale.size() ? SL.projectileScale[size_t(o.shotWeapon)] : SL.projectileScaleDefault;
+    }
+    if (size > 0) r.drawMesh(projectile_, mat4::translate(o.pos + ps.launch) * mat4::scale({size, size, size}), {1, 0.95f, 0.8f, 1}, kDrawUnlit);
 }
 
 void RtsView::drawGhost(Renderer3D& r, uint16_t type, float3 pos, bool ok, const MapGrid& grid, double time) {

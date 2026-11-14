@@ -91,6 +91,7 @@ bool RtsAudio::init(audio::AudioEngine& engine, const Rules& rules, const Json& 
             if (wj.isNull()) continue;
             ts.weapons[w].attack = resolve(wj["attack"], "weapons." + ut.weapons[w].id + ".attack");
             ts.weapons[w].hit = resolve(wj["hit"], "weapons." + ut.weapons[w].id + ".hit");
+            ts.weapons[w].end = resolve(wj["end"], "weapons." + ut.weapons[w].id + ".end");
         }
         for (size_t a = 0; a < ut.abilities.size(); ++a)
             ts.abilities[a] = resolve(abilitiesById[ut.abilities[a].id], "abilities." + ut.abilities[a].id);
@@ -112,6 +113,7 @@ bool RtsAudio::init(audio::AudioEngine& engine, const Rules& rules, const Json& 
                     WeaponSounds& ws = ts.weapons[size_t(it - ut.weapons.begin())];
                     if (wj.has("attack")) ws.attack = resolve(wj["attack"], where + "." + wid + ".attack");
                     if (wj.has("hit")) ws.hit = resolve(wj["hit"], where + "." + wid + ".hit");
+                    if (wj.has("end")) ws.end = resolve(wj["end"], where + "." + wid + ".end");
                 }
             } else if (key == "abilities") {
                 for (auto& [aid, aj] : v.members()) {
@@ -212,13 +214,23 @@ void RtsAudio::handle(Simulation& sim, const SimEvent& ev, bool worldSounds) {
         const int t = typeOf(ev.a);
         SoundId s = kNoSound;
         if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].weapons.size()) s = types_[size_t(t)].weapons[size_t(ev.value)].attack;
+        if (ev.a.valid() && ev.value >= 0 && ev.value < 255) { if (lastWeapon_.size() > 4096) lastWeapon_.clear(); lastWeapon_[ev.a.packed()] = uint8_t(ev.value); }
         world(s != kNoSound ? s : cueFor(t, Cue::Attack));
+        break;
+    }
+    case kEvShotEnd: {   // a = shooter, value = weapon index: the bullet at the wall, the rocket's blast
+        const int t = typeOf(ev.a);
+        if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].weapons.size()) world(types_[size_t(t)].weapons[size_t(ev.value)].end);
         break;
     }
     case kEvHit: {
         const int src = typeOf(ev.b);
         SoundId s = kNoSound;
-        if (src >= 0) for (auto& ws : types_[size_t(src)].weapons) if (ws.hit != kNoSound) { s = ws.hit; break; }
+        if (src >= 0) {
+            auto last = lastWeapon_.find(ev.b.packed());   // the weapon it fired last, else the first one that has a sound
+            if (last != lastWeapon_.end() && last->second < types_[size_t(src)].weapons.size() && types_[size_t(src)].weapons[last->second].hit != kNoSound) s = types_[size_t(src)].weapons[last->second].hit;
+            else for (auto& ws : types_[size_t(src)].weapons) if (ws.hit != kNoSound) { s = ws.hit; break; }
+        }
         world(s != kNoSound ? s : cueFor(src, Cue::Hit));
         if (!engine_) break;
         const float heard = engine_->audibility(audio::kNoSound, fl(ev.pos.x), y, fl(ev.pos.z));

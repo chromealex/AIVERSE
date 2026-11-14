@@ -17,6 +17,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "../../../engine/audio/Audio.h"
 #include "../../../engine/sim/Simulation.h"
@@ -63,7 +64,7 @@ public:
     int played() const { return played_; }
 
 private:
-    struct WeaponSounds { audio::SoundId attack = audio::kNoSound, hit = audio::kNoSound; };
+    struct WeaponSounds { audio::SoundId attack = audio::kNoSound, hit = audio::kNoSound, end = audio::kNoSound; };
     struct TypeSounds {
         std::array<audio::SoundId, size_t(Cue::Count)> cue;
         std::vector<WeaponSounds> weapons;      // by weapon index
@@ -81,6 +82,7 @@ private:
     const Rules* rules_ = nullptr;
     std::array<audio::SoundId, size_t(Cue::Count)> global_{};
     std::vector<TypeSounds> types_;
+    std::unordered_map<uint64_t, uint8_t> lastWeapon_;   // shooter -> the weapon it fired last (its "hit" sound)
     std::vector<audio::SoundId> notEnoughRes_;   // by resource index
     std::vector<std::string> warnings_;
     std::shared_ptr<Collector> collector_;
