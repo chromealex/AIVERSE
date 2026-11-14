@@ -269,6 +269,24 @@ TEST(driving_decks_tunnel_through_a_wall_and_bridge_over_a_parked_car) {
     bad(R"({"a":1})", "expected a list");
 }
 
+TEST(driving_locked_cars_stay_shut) {
+    auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
+    Entity hero = mod(*sim).topDown()->heroOf(*sim, 1), car = firstOf(*sim, "sedan");
+    run(*sim, 0.2);
+    CHECK(drv(*sim).enterTarget(*sim, hero) == car && !drv(*sim).locked(*sim, car));
+    CHECK(drv(*sim).setLocked(*sim, car, true) && !drv(*sim).setLocked(*sim, hero, true) && drv(*sim).locked(*sim, car));
+    std::string save = sim->serialize(), err;
+    auto copy = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum() && drv(*copy).locked(*copy, firstOf(*copy, "sedan")));
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    CHECK(!drv(*sim).isDriving(*sim, hero) && drv(*sim).enterTarget(*sim, hero) == car);   // the door is locked
+    drv(*sim).setLocked(*sim, car, false);
+    enterKey(*sim, 1);
+    run(*sim, 0.3);
+    CHECK(drv(*sim).isDriving(*sim, hero) && !drv(*sim).enterTarget(*sim, hero).valid());
+}
+
 TEST(driving_wreck_throws_the_driver_out) {
     auto sim = makeSimJson(kDrivingRules, topDownMap(kDriveStart));
     auto& w = sim->world();

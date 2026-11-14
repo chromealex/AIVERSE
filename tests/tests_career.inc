@@ -120,6 +120,8 @@ TEST(prompts_show_pick_and_interact) {
     CHECK(!pr.of(*sim, 1));
     send(1, game::kPromptInteract);
     CHECK(pr.of(*sim, 1) && pr.of(*sim, 1)->id == "hello" && pr.of(*sim, 1)->options.size() == 2 && !pr.of(*sim, 2));
+    // native modules see the key and the answers of the tick they came in
+    CHECK(pr.store(*sim)->picks.size() == 1 && pr.store(*sim)->picks[0].player == 1 && pr.store(*sim)->picks[0].option == 0 && pr.picks(*sim).empty());
     send(1, 5);                                   // no such option: stays open
     send(2, 0);                                   // somebody else's prompt: ignored
     CHECK(pr.of(*sim, 1) && pr.of(*sim, 1)->id == "hello");
@@ -128,6 +130,7 @@ TEST(prompts_show_pick_and_interact) {
     copy->setup(rules, Json::parse(flatMap(32, 16, kCareerMap)));
     CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum() && mod(*copy).prompts()->of(*copy, 1));
     send(1, 0);                                   // "Ask about work": the script opens the next one
+    CHECK(pr.store(*sim)->picks.size() == 1 && pr.store(*sim)->picks[0].id == "hello" && pr.store(*sim)->picks[0].option == 1);
     CHECK(pr.of(*sim, 1) && pr.of(*sim, 1)->id == "work" && pr.of(*sim, 1)->lines[0] == "They hire at the docks.");
     send(1, 0);
     CHECK(!pr.of(*sim, 1));
