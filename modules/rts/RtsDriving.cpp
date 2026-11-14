@@ -68,8 +68,20 @@ bool levelsApart(const DrivingStore& st, int deckA, Vec3 a, int deckB, Vec3 b) {
 }
 
 DrivingCar* findCar(DrivingStore& st, Entity e) {
-    auto it = std::lower_bound(st.cars.begin(), st.cars.end(), e.index, [](const DrivingCar& c, uint32_t i) { return c.e.index < i; });
-    return it != st.cars.end() && it->e == e ? &*it : nullptr;
+    // O(1) when the cached position is still the lower bound of e.index in the sorted cars (checked
+    // against both neighbours); otherwise the binary search, which refreshes the cache.
+    const size_t n = st.cars.size();
+    size_t p = n + 1;
+    if (e.index < st.slotOf.size()) {
+        const size_t q = st.slotOf[e.index];
+        if (q <= n && (q == n || st.cars[q].e.index >= e.index) && (q == 0 || st.cars[q - 1].e.index < e.index)) p = q;
+    }
+    if (p > n) {
+        p = size_t(std::lower_bound(st.cars.begin(), st.cars.end(), e.index, [](const DrivingCar& c, uint32_t i) { return c.e.index < i; }) - st.cars.begin());
+        if (st.slotOf.size() <= e.index) st.slotOf.resize(size_t(e.index) + 1, UINT32_MAX);
+        st.slotOf[e.index] = uint32_t(p);
+    }
+    return p < n && st.cars[p].e == e ? &st.cars[p] : nullptr;
 }
 } // namespace
 
