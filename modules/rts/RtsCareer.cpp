@@ -104,6 +104,30 @@ int Career::add(Simulation& sim, uint8_t player, int career, Fixed points) {
     return rankOf(c, p->points) - before;
 }
 
+Json Career::save(Simulation& sim, uint8_t player) const {
+    Json out = Json::object();
+    for (size_t c = 0; c < rules_.careers.size(); ++c)
+        if (const CareerProgress* p = progress(sim, player, int(c)); p && p->joined) out.set(rules_.careers[c].id, Json::number(int64_t(p->points.raw)));
+    return out;
+}
+
+void Career::clear(Simulation& sim, uint8_t player) {
+    auto* st = store(sim);
+    if (st && player != 0 && player < st->players.size()) st->players[player].assign(rules_.careers.size(), {});
+}
+
+void Career::load(Simulation& sim, uint8_t player, const Json& data) {
+    clear(sim, player);
+    if (!data.isObject()) return;
+    for (size_t c = 0; c < rules_.careers.size(); ++c) {
+        if (!data.has(rules_.careers[c].id)) continue;
+        auto* p = const_cast<CareerProgress*>(progress(sim, player, int(c)));
+        if (!p) return;
+        p->joined = true;
+        p->points = fxMax(Fixed::fromRaw(data.getInt(rules_.careers[c].id, 0)), Fixed{});
+    }
+}
+
 bool Career::command(Simulation& sim, const Command& cmd) {
     if (cmd.type != kCmdCareer) return false;
     if (!active() || cmd.param < 0) return true;

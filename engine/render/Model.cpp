@@ -390,10 +390,18 @@ void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
         Image owner = image; owner.textureCache.reset(); owner.borrowedTexture = false;
         uploadImage(dev, owner);
         if (!owner.tex.valid()) return;
-        owner.rgba.clear(); owner.sharedRgba.reset(); owner.compressed.reset();
+        owner.rgba.clear(); owner.sharedRgba.reset(); owner.compressed.reset(); owner.textureLease=std::make_shared<int>(0);
         it = gpu_.emplace(key, std::move(owner)).first;
     }
-    image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.borrowedTexture = true;
+    image.textureLease = it->second.textureLease; image.tex = it->second.tex; image.gpuCompressed = it->second.gpuCompressed; image.borrowedTexture = true;
+}
+void ModelTextureCache::trim(gfx::Device& dev) {
+    for(auto it=gpu_.begin();it!=gpu_.end();) {
+        if(it->second.textureLease && it->second.textureLease.use_count()==1) {
+            if(it->second.tex.valid())dev.destroyTexture(it->second.tex);
+            it=gpu_.erase(it);
+        } else ++it;
+    }
 }
 void ModelTextureCache::shutdown(gfx::Device& dev) {
     for (auto& [key, image] : gpu_) if (image.tex.valid()) dev.destroyTexture(image.tex);

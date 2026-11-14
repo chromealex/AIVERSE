@@ -58,6 +58,7 @@ public:
 
     // Ground height for effect positions (RtsView::heightAt) and team colours (RtsView::playerColor).
     void setHeightFn(std::function<float(float x, float z)> fn) { height_ = std::move(fn); }
+    void setAttackOriginFn(std::function<bool(Entity,fx::float3&,fx::float3&)> fn) { attackOrigin_=std::move(fn); }
     void setPlayerColorFn(std::function<fx::float4(int player)> fn) { playerColor_ = std::move(fn); }
     // Curved worlds (planets), optional; unset = flat behaviour. place(simPos, lift, out, up): where an effect
     // `lift` above the ground under a simulation position plays (particle space) and the local up there;
@@ -103,6 +104,7 @@ private:
     std::vector<std::string> warnings_;
     std::shared_ptr<Collector> collector_;
     std::function<float(float, float)> height_;
+    std::function<bool(Entity,fx::float3&,fx::float3&)> attackOrigin_;
     std::function<fx::float4(int)> playerColor_;
     PlaceFn place_;
     std::unordered_map<uint64_t, Attached> trails_, damaged_;

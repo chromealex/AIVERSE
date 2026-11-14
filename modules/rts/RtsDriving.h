@@ -66,6 +66,7 @@ struct DrivingCar {
     Entity driver = kNullEntity;
     uint8_t player = 0;                            // slot of the driver (0: nobody)
     uint32_t doorUntil = 0;                        // the driver's door is open until this tick
+    bool locked = false;                           // nobody gets in until it is unlocked (Driving::setLocked)
     int16_t deck = -1;                             // index into DrivingStore::decks while on a bridge / in a tunnel
     bool autopilot = false;                        // pedals come from `pilot` (traffic, scripts) while no hero drives
     lib::genre::VehicleInput pilot;
@@ -98,6 +99,12 @@ public:
     // gets out the autopilot input applies again. false: not a vehicle, or the input is out of range.
     bool setAutopilot(Simulation& sim, Entity vehicle, const lib::genre::VehicleInput& input);
     bool clearAutopilot(Simulation& sim, Entity vehicle);              // back to parked (handbrake)
+    // Locked cars: the enter key does nothing at them. The game decides which cars are locked and who can open
+    // them (a skill, a key); simulation code only. locked(): false for anything that is not a vehicle.
+    bool setLocked(Simulation& sim, Entity vehicle, bool locked);
+    bool locked(Simulation& sim, Entity vehicle) const;
+    // The vehicle the enter key of this hero would take now (the nearest free one in reach, locked or not), or null.
+    Entity enterTarget(Simulation& sim, Entity hero) const;
     // Levels. deckOf: index of the deck the vehicle is on, -1 on the ground. deckIndex: by map id, -1 unknown.
     // height: metres above the ground at the vehicle (0 on the ground), for the view. setDeck puts a vehicle on a
     // deck it already stands inside (traffic spawning a car in a tunnel) or back on the ground (-1); simulation code only.
@@ -108,6 +115,11 @@ public:
     // takes a just spawned vehicle unit now (instead of at its next tick), rolling forward at `speed` m/s (traffic)
     bool adopt(Simulation& sim, Entity vehicle, Fixed speed);
 
+    bool policeExit(Simulation& sim, Entity hero) {
+        auto* st=store(sim);if(!st)return false;
+        for(auto& c:st->cars)if(c.driver==hero){if(fxAbs(speed(sim,c.e))>rules_.exitSpeed)return false;return leave(sim,c,true);}
+        return true;
+    }
 private:
     const DrivingVehicleType* typeOf(uint16_t unitType) const;
     void adoptAndDrop(Simulation& sim, DrivingStore& st);

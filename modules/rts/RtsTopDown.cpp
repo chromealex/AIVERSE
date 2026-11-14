@@ -2,6 +2,7 @@
 // with acceleration, wall sliding and unit push-out, facing, aim snap and auto-fire targeting, abilities aimed along
 // the stick, a computer pilot for bots. Integer / Fixed maths only; every loop runs in player-slot or entity order.
 #include "RtsTopDown.h"
+#include "RtsDriving.h"
 #include "RtsInternal.h"
 #include "RtsEncounters.h"
 #include "../../engine/core/Archive.h"
@@ -278,6 +279,9 @@ bool TopDown::command(Simulation& sim, const Command& cmd) {
     if (!st || cmd.player == 0 || cmd.player >= st->pilots.size()) return true;
     TopDownPilot& p = st->pilots[cmd.player];
     if (cmd.type == kCmdTopDown) {
+        // Kingston door interaction owns movement until it ends or is cancelled.
+        auto door=m_->state(sim).trig.vars.find("drive_"+std::to_string(cmd.player)+"_phase");
+        if(door!=m_->state(sim).trig.vars.end()&&door->second.raw){p.inputTick=sim.tick();return true;}
         p.input = requantize(topdown::unpack(cmd.param));
         p.inputTick = sim.tick();
         return true;
@@ -673,6 +677,10 @@ void TopDown::tick(Simulation& sim) {
     for (size_t pl = 1; pl < st->pilots.size(); ++pl) {
         TopDownPilot& p = st->pilots[pl];
         if (!w.alive(p.hero) || w.get<Unit>(p.hero).hp.raw <= 0) { p.casting = -1; p.held = -1; continue; }
+        const auto& custodyVars=m_->state(sim).trig.vars;
+        auto held=custodyVars.find("police_custody_"+std::to_string(p.hero.packed()));
+        auto dead=custodyVars.find("police_dead_"+std::to_string(p.hero.packed()));
+        if((held!=custodyVars.end()&&held->second.raw)||(dead!=custodyVars.end()&&dead->second.raw)){p.input={};p.vel={};p.target=kNullEntity;continue;}
         if (m_->driving() && m_->driving()->isDriving(sim, p.hero)) continue;   // at the wheel: RtsDriving.cpp reads the stick
         if (rules_.extended) tickCasts(sim, p);
         moveHero(sim, p);
@@ -747,7 +755,7 @@ void TopDown::moveHero(Simulation& sim, TopDownPilot& p) {
 
     // bodies: push out of overlapping units of the same layer (structures block through the grid)
     if (rules_.collideUnits) {
-        struct Near { Entity e; Vec3 p; Fixed r; };
+        struct Near { Entity e; Vec3 p; Fixed r; Vec3 forward{}; Fixed halfLength{},halfWidth{}; };
         std::vector<Near> near;
         const bool air = t.layer & kLayerAir;
         gs.hash.query(pos, t.radius + Fixed::fromInt(2), [&](Entity o) {
@@ -756,11 +764,29 @@ void TopDown::moveHero(Simulation& sim, TopDownPilot& p) {
             if (!ou || ou->hp.raw <= 0 || (ou->flags & kUnitOffMap)) return;
             const UnitType& ot = m_->rules().types[ou->type];
             if (ot.structure || bool(ot.layer & kLayerAir) != air) return;
-            near.push_back({o, w.get<Transform>(o).pos, ot.radius});
+            Near body{o,w.get<Transform>(o).pos,ot.radius};
+            if(auto*driving=m_->driving())for(const auto&vehicle:driving->rules().vehicles)if(vehicle.type==ou->type){
+                body.forward=ou->facing;body.halfLength=vehicle.length/2;body.halfWidth=vehicle.width/2;break;
+            }
+            near.push_back(body);
         });
         std::sort(near.begin(), near.end(), [](const Near& a, const Near& c) { return a.e.index < c.e.index; });
         for (auto& o : near) {
             Vec3 delta = flat(pos - o.p);
+            if(o.halfLength.raw>0){
+                const Vec3 right{o.forward.z,Fixed{},-o.forward.x};
+                const Fixed x=delta.dot(right),z=delta.dot(o.forward);
+                Vec3 separation=right*(x-fxClamp(x,-o.halfWidth,o.halfWidth))+o.forward*(z-fxClamp(z,-o.halfLength,o.halfLength));
+                Fixed distance=separation.length(),depth=t.radius-distance;Vec3 normal{};
+                if(distance.raw>0)normal=separation/distance;
+                else {
+                    const Fixed dx=o.halfWidth-fxAbs(x),dz=o.halfLength-fxAbs(z);
+                    normal=dx<dz?right*Fixed::fromInt(x.raw<0?-1:1):o.forward*Fixed::fromInt(z.raw<0?-1:1);
+                    depth=t.radius+fxMin(dx,dz);
+                }
+                if(depth.raw>0){Vec3 np=pos+normal*depth;if(stepOk(pos,np))pos=np;const Fixed into=-p.vel.dot(normal);if(into.raw>0)p.vel+=normal*into;}
+                continue;
+            }
             Fixed dist = delta.length();
             const Fixed minD = t.radius + o.r;
             if (dist >= minD) continue;

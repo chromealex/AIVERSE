@@ -197,6 +197,9 @@ TEST(commerce_staff_manager_customers_and_purchases) {
     CHECK(shop.staff == 2 && std::string(c.refusal(*sim, 1, Op::Hire, 0, 0)) == "fully staffed");
     deal(*sim, 1, Op::Manager, 0);
     CHECK(shop.manager && c.expectedToday(shop) == Fixed::fromInt(400));
+    shop.attendance = Fixed::fromRatio(1, 2);                                         // the staff was there half of the hours
+    CHECK(c.expectedToday(shop) == Fixed::fromInt(200));
+    shop.attendance = Fixed::fromInt(1);
     // walk-in customers pay at once; the day's total stays the same
     cash = Fixed{};
     CHECK(c.visit(*sim, 0) && c.visit(*sim, 0) && cash == Fixed::fromInt(50) && shop.served == Fixed::fromInt(50));
@@ -255,4 +258,60 @@ TEST(commerce_home_stash_is_private_and_survives) {
     mod(*sim).state(*sim).players[1].stock[0] = Fixed{};
     runToTick(*sim, 421);
     CHECK(st->premises[0].tenant == 0 && st->premises[0].stashCash.raw == 0 && c.cash(*sim, 1) == Fixed::fromInt(450));   // and the shop rent is paid from it
+}
+
+TEST(commerce_accounts_outlive_the_seat) {
+    using Op = game::CommerceOp;
+    Json rules = Json::parse(kCommerceRules);
+    Json com2 = rules["commerce"];
+    com2.set("absentDays", Json::parse("3"));
+    rules.set("commerce", com2);
+    const std::string map = commerceMap(R"([{"id":"kiosk","kind":"shop","at":[5,5],"price":500,"rentWeek":70},
+        {"id":"own","kind":"office","at":[9,5],"price":400,"rentWeek":50}])");
+    SimConfig cfg;
+    auto make = [&] { auto s = std::make_unique<Simulation>(cfg, std::make_unique<game::RtsModule>()); s->setup(rules, Json::parse(map)); return s; };
+    auto sim = make();
+    auto& c = com(*sim);
+    auto* st = c.store(*sim);
+    CHECK(c.account(*sim, 1) && c.account(*sim, 1)->id == 1 && c.account(*sim, 1)->slot == 1 && !c.account(*sim, 0));
+    deal(*sim, 1, Op::Buy, 1);                                 // 1000 - 400
+    deal(*sim, 1, Op::Rent, 0);                                // - 70
+    deal(*sim, 1, Op::Open, 0, c.findBusiness("kiosk"));       // - 600 with what is left? no: 530 < 600, refused
+    CHECK(st->premises[1].owner == 1 && st->premises[0].tenant == 1 && st->premises[0].business == -1 && c.cash(*sim, 1) == Fixed::fromInt(530));
+    // the player leaves: his seat is empty, the account keeps what it owns and the money
+    c.unbind(*sim, 1);
+    CHECK(!c.account(*sim, 1) && c.cash(*sim, 1).raw == 0 && st->premises[1].owner == 1 && st->accounts[1].wallet == Fixed::fromInt(530));
+    CHECK(std::string(c.refusal(*sim, 1, Op::Sell, 1, 0)) == "no such player" && c.slotOf(*sim, st->premises[1].owner) == 0);
+    // somebody else takes the seat: a new account, he cannot touch the first one's things
+    CHECK(c.bind(*sim, 1, 777) && c.account(*sim, 1)->id == 777 && c.cash(*sim, 1).raw == 0 && !c.bind(*sim, 2, 777) && !c.bind(*sim, 1, 0));
+    CHECK(std::string(c.refusal(*sim, 1, Op::Sell, 1, 0)) == "not yours" && std::string(c.refusal(*sim, 1, Op::Rent, 0, 0)) == "taken");
+    CHECK(c.accountById(*sim, 1) && c.accountById(*sim, 1)->slot == 0 && !c.accountById(*sim, 12345));
+    // saved with one account away: the copy is the same
+    std::string save = sim->serialize(), err;
+    auto copy = make();
+    CHECK(copy->deserialize(save, &err) && copy->checksum() == sim->checksum() && com(*copy).account(*copy, 1)->id == 777);
+    // the first one comes back to another seat with his wallet
+    CHECK(c.bind(*sim, 2, 1) && c.cash(*sim, 2) == Fixed::fromInt(530) && st->accounts[1].wallet.raw == 0);
+    CHECK(c.refusal(*sim, 2, Op::Sell, 1, 0) == nullptr && c.slotOf(*sim, st->premises[1].owner) == 2);
+    // away for three days: sold out to the city, the money waits for him
+    c.unbind(*sim, 2);
+    runToTick(*sim, 2 * 60 + 5);
+    CHECK(st->premises[1].owner == 1 && st->premises[0].tenant == 1);
+    runToTick(*sim, 3 * 60 + 5);
+    CHECK(st->premises[1].owner == 0 && st->premises[0].tenant == 0 && about(st->accounts[1].wallet, 530 + 320));
+    CHECK(c.bind(*sim, 2, 1) && about(c.cash(*sim, 2), 850));
+    // sold out on request, with a debt: the bank is paid first
+    deal(*sim, 2, Op::Buy, 1);
+    deal(*sim, 2, Op::Borrow, 0, 300);
+    CHECK(about(c.cash(*sim, 2), 750) && c.sellOut(*sim, 1) && !c.sellOut(*sim, 999));
+    CHECK(st->premises[1].owner == 0 && c.account(*sim, 2)->debt.raw == 0 && about(c.cash(*sim, 2), 750 + 320 - 300));
+
+    // a server's game: nobody owns a seat until an account is bound
+    com2.set("accounts", Json::string("external"));
+    rules.set("commerce", com2);
+    auto srv = make();
+    auto& sc = com(*srv);
+    CHECK(!sc.account(*srv, 1) && std::string(sc.refusal(*srv, 1, Op::Rent, 0, 0)) == "no such player");
+    CHECK(sc.bind(*srv, 1, 5001) && sc.account(*srv, 1)->id == 5001 && sc.cash(*srv, 1).raw == 0);   // a new account starts with an empty wallet
+    CHECK(std::string(sc.refusal(*srv, 1, Op::Rent, 0, 0)) == "not enough money");
 }

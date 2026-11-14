@@ -49,16 +49,24 @@ void Rts2DView::buildTiles(gfx::Device& dev, const MapGrid& grid, float lh) {
         if (!has) shown.terrain[size_t(i)] = uint8_t(d);
     }
     const float tw = float(ts.tileW) / float(atlas_.width), th = float(ts.tileH) / float(atlas_.height);
-    const float inset = 0.02f / float(std::max(atlas_.width, atlas_.height));   // no bleeding from neighbour tiles
+    const float insetX = 0.5f / float(atlas_.width), insetY = 0.5f / float(atlas_.height); // Kingston: clamp bilinear footprint to tile texel centres
     auto uvOf = [&](int tile) {
         float u = float(tile % ts.columns) * tw, v = float(tile / ts.columns) * th;
-        return float4{u + inset, v + inset, u + tw - inset, v + th - inset};
+        return float4{u + insetX, v + insetY, u + tw - insetX, v + th - insetY};
     };
+    // Presentation mask only: retain terrain and navigation for the simulation.
+    std::vector<uint8_t> covered(size_t(grid.w * grid.h), 0);
+    for (const auto& cell : tilesJson_["coveredCells"].items()) {
+        const int x = cell[0].integer(-1), y = cell[1].integer(-1);
+        if (x >= 0 && y >= 0 && x < grid.w && y < grid.h)
+            covered[size_t(grid.index(x, y))] = 1;
+    }
     std::vector<SpriteVertex> verts;
     verts.reserve(size_t(grid.w * grid.h) * 4);
     for (int y = 0; y < grid.h; ++y)
         for (int x = 0; x < grid.w; ++x) {
             size_t i = size_t(grid.index(x, y));
+            if (covered[i]) continue;
             float gy = float(grid.level[i]) * lh + float(grid.height[i]) / 16.0f;
             const float3 c[4] = {{float(x), gy, float(y)}, {float(x + 1), gy, float(y)}, {float(x + 1), gy, float(y + 1)}, {float(x), gy, float(y + 1)}};
             CellTiles ct = resolveCell(ts, shown, x, y);

@@ -11,6 +11,9 @@
 //   units:      worker, soldier, ranged, vehicle, tank, flyer, mushroom, generic
 //   structures: hall, house, barracks, workshop, factory, tower, mine, tree, rock, mushroomhouse, structure
 #pragma once
+namespace kingston { class TowHost; }
+namespace kingston { class BulletFxHost; }
+namespace kingston { struct CabinResidentDraw; }
 #include "engine/render/GeometryScene.h"
 #include <algorithm>
 #include <map>
@@ -57,6 +60,7 @@ struct SceneObject {
     float build = 1;             // construction progress 0..1
     int garrison = -1;           // shown when >= 0
     float carry = 0;             // > 0: carrying resources
+    std::string heldWeapon; bool weaponAim=false; // Kingston selected arsenal item
     int16_t carryRes = -1;       // resource index of the cargo
     bool selected = false, hovered = false, visible = true, isProjectile = false;
     float fade = 1;              // 0..1 opacity from the sim (route walkers fade at the route ends, BW SubSpline.GetAlpha)
@@ -125,6 +129,9 @@ struct ViewEffect {
 };
 
 class RtsView {
+    friend class ::kingston::TowHost;
+    friend class ::kingston::BulletFxHost;
+    friend struct ::kingston::CabinResidentDraw;
 public:
     // reader: content files (models, textures); default platform::readContentFile.
     bool init(gfx::Device& dev, const Rules& rules, render::FileReader reader = {});
@@ -132,6 +139,10 @@ public:
     void setDeferredLoading(bool on) { deferredLoading_ = on; }
     bool typeLoaded(uint16_t type) const { return type < loadedTypes_.size() && loadedTypes_[type]; }
     void loadType(uint16_t type);
+    void trimTypes(const std::vector<bool>& keep, bool compact = false);
+    bool typeCurrent(uint16_t t) const { return typeLoaded(t) && requestedModels_[t]==loadedModels_[t]; }
+    bool detailRequested(uint16_t t) const { return t<requestedModels_.size() && requestedModels_[t].empty(); }
+    void requestDetail(uint16_t type, bool detailed);
     bool warmPipelines(render::Renderer3D& renderer, uint16_t type);
     void setStreamingTypes(bool enabled) { streamingTypes_ = enabled; }
     std::shared_ptr<render::ModelTextureCache> textureCache() const { return textureCache_; }
@@ -280,7 +291,9 @@ private:
         struct BlendPoint { int clip; float speed; };
         std::vector<BlendPoint> blend;                      // blend space by speed (move / carry)
     };
+    struct WeaponPose { std::string weapon; int hold=-1,aim=-1,attack=-1; };
     struct Attachment {
+        std::string weapon;
         render::Model* model = nullptr;
         std::vector<render::Material> materials;
         int node = -1;                 // socket node of the host model (-1: object origin)
@@ -306,6 +319,7 @@ private:
         bool baked = false;                       // skinned from the baked clip texture (instanced crowds)
         int variant = -1;                         // KHR_materials_variants index
         std::vector<Attachment> attach;
+        std::vector<WeaponPose> weaponPoses; int weaponMask=-1;
         std::vector<Fx> fx;
         std::vector<AdditiveSpec> additive;
         std::vector<LegIK> legs;
@@ -422,6 +436,7 @@ private:
     render::GeometryScene geometryScene_;
     std::vector<TypeLook> looks_;
     std::vector<bool> loadedTypes_;
+    std::vector<std::string> requestedModels_, loadedModels_;
     bool deferredLoading_ = false, streamingTypes_ = false;
     render::FileReader asyncReader_;
     std::string preparingResource_;

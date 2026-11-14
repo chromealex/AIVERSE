@@ -24,8 +24,18 @@ struct Prompt {
     bool open() const { return !id.empty(); }
 };
 
+// What a player answered this tick (option from 1), or that he pressed the interact key with nothing open
+// (option 0, empty id). Native modules read these in their tick; the list is replaced every tick that has answers.
+struct PromptPick {
+    uint32_t tick = 0;
+    uint8_t player = 0;
+    std::string id;
+    int32_t option = 0;
+};
+
 struct PromptStore {
     std::vector<Prompt> players;   // by slot
+    std::vector<PromptPick> picks; // of the tick they carry
 };
 
 constexpr int64_t kPromptInteract = -1;
@@ -39,6 +49,7 @@ public:
     void io(Simulation& sim, Archive& a);
     PromptStore* store(Simulation& sim) const;
     const Prompt* of(Simulation& sim, uint8_t player) const;   // the open prompt, or null
+    std::vector<PromptPick> picks(Simulation& sim) const;      // this tick's answers and interact presses (for native modules)
     // simulation code only
     bool show(Simulation& sim, uint8_t player, Prompt p);      // false: bad player, empty id, no options, too long
     void close(Simulation& sim, uint8_t player);

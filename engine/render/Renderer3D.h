@@ -158,6 +158,7 @@ enum DrawFlags : uint32_t {
     // drawn blended because of its opacity (tint.w < 1) but still writing depth: a faded solid object (view.entity_fx)
     // stays in front of the ground layers drawn after the translucent pass (paint layers, ground canvas, sprites)
     kDrawFadeDepth = 8,
+    kDrawActorReveal = 128, // local main-view cutaway; never changes sun shadows
     // transparent object (Unity's transparent queue, ZWrite Off): every primitive goes to the blended pass even when opaque,
     // sorted back to front one by one (ortho cameras: depth along the view direction), without depth write, so a nearer
     // part drawn earlier is painted over by a farther part drawn later; casts no shadow. Its depth is written afterwards
@@ -166,6 +167,7 @@ enum DrawFlags : uint32_t {
     // static scenery (does not move for the whole map): receives a baked lightmap and is part of the scene
     // the light baker captures (Renderer3D::setModelCapture). Dynamic objects get light probes instead.
     kDrawStatic = 32,
+    kDrawKeepShadow = 64, // preserve opaque shadow casting while the camera image fades
 };
 
 struct ModelRenderStats {
@@ -215,6 +217,7 @@ public:
     void drawCustomShadow(CustomDraw fn) { customShadow_.push_back(std::move(fn)); }
     const mat4& lightViewProj() const { return lightViewProj_; }
     const RTSCamera& camera() const { return cam_; }
+    float4 actorReveal{}; // world-space actor centre + aperture radius, zero disables
 
     // Traced lighting ("trace" tier, Renderer3DTrace.cpp): sun rays marched over the terrain height
     // field (long soft shadows of cliffs and mountains, every lit shader) and screen-space

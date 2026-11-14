@@ -1,5 +1,6 @@
 // Ordered projectile programs on flat maps and planetary surfaces. All structural ECS edits occur outside world.each.
 #include "RtsInternal.h"
+#include "KingstonRocketCollision.h"
 #include "../../engine/core/FixedMath.h"
 #include <algorithm>
 #include <optional>
@@ -256,6 +257,11 @@ void RtsModule::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>
             }
             Vec3 heading=spatial?projectile::unit(delta):s.direction;
             auto wall=terrain(position,heading,length);
+            const auto* kingstonWeapon=projectileWeapon(p);
+            const bool kingstonRocket=kingstonWeapon&&kingstonWeapon->id=="rocket";
+            auto building=kingstonRocket?kingston::rocketWall(w,rules_,position,heading,length,s.radius):kingston::RocketContact{};
+            if(building.distance&&(!wall||*building.distance<=*wall))wall=building.distance;
+            else building={};
             struct Hit { Fixed distance; Entity target; };
             std::vector<Hit> hits;
             Vec3 centre=position+heading*(length/2);
@@ -278,11 +284,20 @@ void RtsModule::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>
                 s.hit.push_back(hit.target);
                 Projectile shot=p;
                 bool replaced=contact(position);
+                if(kingstonRocket&&w.has<Unit>(hit.target)&&
+                   (rules_.types[w.get<Unit>(hit.target).type].tags&rules_.tagMask("city_drivable")))
+                    shot.damage=fxMax(shot.damage,w.get<Unit>(hit.target).hp*100+Fixed::fromInt(1000));
                 impact(shot,hit.target,position);
                 if (replaced) { alive=false; break; }
                 bool pass=projectile::pass(s,f);
                 if (!pass || s.distanceLeft<=Fixed{} || s.lifetimeLeft<=Fixed{}) { alive=false; break; }
                 continue;
+            }
+            if(building.distance){
+                const auto key="building_rocket_"+std::to_string(building.entity.packed())+"_";
+                gs.trig.vars[key+"pending"]=kOne;
+                gs.trig.vars[key+"x"]=position.x+heading.x*(*building.distance);
+                gs.trig.vars[key+"z"]=position.z+heading.z*(*building.distance);
             }
             Fixed finish=wall ? *wall : length;
             position+=(!wall&&finish==fullLength)?delta:heading*finish;

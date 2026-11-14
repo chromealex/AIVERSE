@@ -36,7 +36,11 @@ void RtsLights::consumeEvents(const RtsScene& s, double time, const std::vector<
     for (const SimEvent& e : s.events) {
         const float3 p = toF(e.pos);
         switch (e.type) {
-        case kEvAttack: if (int t = type(e.a); t >= 0) spawn(types_[size_t(t)].attack, p, 0.8f); break;
+        case kEvAttack: if (int t = type(e.a); t >= 0) {
+            const auto& weapons=rules_->types[size_t(t)].weapons;
+            const bool muzzleFx=std::any_of(weapons.begin(),weapons.end(),[](const auto& w){return w.id=="pistol"||w.id=="service_pistol"||w.id=="smg"||w.id=="shotgun"||w.id=="rocket";});
+            if(!muzzleFx)spawn(types_[size_t(t)].attack,p,0.8f);
+        } break;
         case kEvHit:    if (int t = type(e.b); t >= 0) spawn(types_[size_t(t)].hit, p, 0.5f); break;
         case kEvDied:
             if (e.value >= 0 && size_t(e.value) < types_.size()) spawn(types_[size_t(e.value)].death, p, 0.9f);

@@ -1,3 +1,4 @@
+#include "kingston/DeckBroadphase.h"
 // Driving (rules "driving", RtsDriving.h): vehicle adoption, getting in / out, the stick -> pedals mapping, the
 // vehicle-controllers step and this module's part of the contract: the sweep of the body over the map grid and other
 // units, collision response, crash and run-over damage. Fixed maths only; every loop runs in entity-index order.
@@ -189,7 +190,7 @@ void Driving::hash(Simulation& sim, Hasher& h) const {
         h.v3(s.position); h.v3(s.velocity);
         for (Fixed f : {s.yaw, s.yawRate, s.pitch, s.roll, s.steer, s.rpm, s.airspeed, s.sink, s.longAccel, s.trackLeft, s.trackRight}) h.fx(f);
         h.i32(s.gear); h.u32(s.shiftUntil); h.u32(s.slipMask); h.u32(s.lastTick);
-        h.u32(uint32_t(s.grounded) | uint32_t(s.drifting) << 1 | uint32_t(s.stalled) << 2 | uint32_t(s.initialized) << 3 | uint32_t(c.autopilot) << 4);
+        h.u32(uint32_t(s.grounded) | uint32_t(s.drifting) << 1 | uint32_t(s.stalled) << 2 | uint32_t(s.initialized) << 3 | uint32_t(c.autopilot) << 4 | uint32_t(c.locked) << 5);
         for (Fixed f : {c.pilot.throttle, c.pilot.brake, c.pilot.steer}) h.fx(f);
         h.u32(uint32_t(c.pilot.handbrake) | uint32_t(c.pilot.shiftUp) << 1 | uint32_t(c.pilot.shiftDown) << 2);
     }
@@ -207,7 +208,7 @@ void Driving::io(Simulation& sim, Archive& a) {
         a(s.airspeed, s.sink, s.longAccel, s.trackLeft, s.trackRight, s.gear, s.shiftUntil, s.slipMask, s.lastTick);
         a(s.grounded, s.drifting, s.stalled, s.initialized);
         a(c.autopilot, c.pilot.throttle, c.pilot.brake, c.pilot.steer, c.pilot.handbrake, c.pilot.shiftUp, c.pilot.shiftDown);
-        a(c.deck);
+        a(c.deck, c.locked);
     }
     uint32_t nd = uint32_t(st->decks.size());
     aiverse::io(a, nd);
@@ -340,6 +341,41 @@ bool Driving::adopt(Simulation& sim, Entity e, Fixed speed) {
     return true;
 }
 
+bool Driving::setLocked(Simulation& sim, Entity vehicle, bool locked) {
+    auto* st = store(sim);
+    DrivingCar* c = st ? findCar(*st, vehicle) : nullptr;
+    if (!c) return false;
+    c->locked = locked;
+    return true;
+}
+
+bool Driving::locked(Simulation& sim, Entity vehicle) const {
+    const DrivingCar* c = car(sim, vehicle);
+    return c && c->locked;
+}
+
+Entity Driving::enterTarget(Simulation& sim, Entity hero) const {
+    auto* st = store(sim);
+    World& w = sim.world();
+    if (!st || !w.alive(hero)) return kNullEntity;
+    const Unit& hu = w.get<Unit>(hero);
+    if (hu.hp.raw <= 0 || (hu.flags & kUnitOffMap)) return kNullEntity;
+    const Vec3 hp = w.get<Transform>(hero).pos;
+    const Fixed hr = m_->rules().types[hu.type].radius;
+    Entity best = kNullEntity;
+    Fixed bestD{};
+    for (auto& c : st->cars) {
+        if (c.driver.valid() || !w.alive(c.e)) continue;
+        const Unit& cu = w.get<Unit>(c.e);
+        if (cu.hp.raw <= 0) continue;
+        const Fixed d = flat(w.get<Transform>(c.e).pos - hp).length() - typeOf(cu.type)->length / 2 - hr;
+        if (d > rules_.enterRange) continue;
+        if (c.deck >= 0 && deckDeep(st->decks[size_t(c.deck)], w.get<Transform>(c.e).pos)) continue;
+        if (!best.valid() || d < bestD) { best = c.e; bestD = d; }
+    }
+    return best;
+}
+
 void Driving::enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity hero) {
     World& w = sim.world();
     if (!w.alive(hero)) return;
@@ -358,7 +394,7 @@ void Driving::enter(Simulation& sim, DrivingStore& st, uint8_t player, Entity he
         if (c.deck >= 0 && deckDeep(st.decks[size_t(c.deck)], w.get<Transform>(c.e).pos)) continue;   // above / below the hero
         if (!best || d < bestD) { best = &c; bestD = d; }   // cars are in entity order: ties keep the lower index
     }
-    if (!best) return;
+    if (!best || best->locked) return;   // a locked door: the game says so and decides who opens it
     best->driver = hero;
     best->player = player;
     best->doorUntil = sim.tick() + rules_.doorTicks;
@@ -456,7 +492,7 @@ void Driving::drive(Simulation& sim, DrivingStore& st, size_t index) {
     DrivingCar& c = st.cars[index];
     if (!w.alive(c.e)) return;
     Unit& u = w.get<Unit>(c.e);
-    if (u.hp.raw <= 0) return;
+    if (u.hp.raw <= 0 || (u.flags & kUnitInCargo)) return;
     const DrivingVehicleType& vt = *typeOf(u.type);
     const Fixed mpc = rules_.metersPerCell;
     // A parked car at rest sleeps: no controller step, no sweep (a city has hundreds of them). Whatever hits it
@@ -511,6 +547,7 @@ bool Driving::collide(Simulation& sim, DrivingStore& st, size_t index, Vec3& pos
     }
     for (size_t i = 0; i < st.decks.size() && c.deck < 0; ++i) {
         const DrivingDeck& d = st.decks[i];
+        if (!kingston::deckMayTouchBody(d, pos, half)) continue;
         const Fixed m = deckMouth(d);
         for (Fixed off : offs) {
             const DeckSpot s = deckSpot(d, pos + f * off);

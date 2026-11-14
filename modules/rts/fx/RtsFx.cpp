@@ -237,7 +237,13 @@ void RtsFx::handle(Simulation& sim, const SimEvent& ev) {
         const Binding* b = nullptr;
         if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].weapons.size() && types_[size_t(t)].weapons[size_t(ev.value)].attack.set)
             b = &types_[size_t(t)].weapons[size_t(ev.value)].attack;
-        playAt(b ? *b : lookup(t, FxCue::Attack), ev.pos, t, toward(ev.a, ev.b), ev.player);
+        const auto& binding=b?*b:lookup(t,FxCue::Attack);
+        float3 muzzle,direction;
+        if(binding.valid()&&attackOrigin_&&attackOrigin_(ev.a,muzzle,direction)){
+            float4 tint{1,1,1,1};
+            if(binding.teamColor&&ev.player>0&&playerColor_)tint=playerColor_(ev.player);
+            if(ps_->play(binding.effect,muzzle,direction,binding.scale,tint).valid())++played_;
+        }else playAt(binding,ev.pos,t,toward(ev.a,ev.b),ev.player);
         break;
     }
     case kEvHit: {   // a = target, b = source
@@ -304,7 +310,7 @@ void RtsFx::update(Simulation& sim, const std::vector<SceneObject>* scene) {
             if (it == trails_.end()) {
                 auto* pr = w.alive(o.entity) ? w.tryGet<Projectile>(o.entity) : nullptr;
                 auto* su = pr && w.alive(pr->source) ? w.tryGet<Unit>(pr->source) : nullptr;
-                const Binding& b = trailFor(su ? int(su->type) : -1);
+                const Binding& b = pr && su && pr->weapon>=0 && size_t(su->type)<types_.size() && size_t(pr->weapon)<types_[su->type].weapons.size() && types_[su->type].weapons[size_t(pr->weapon)].trail.set ? types_[su->type].weapons[size_t(pr->weapon)].trail : trailFor(su ? int(su->type) : -1);
                 if (!b.valid()) { trails_[key] = {{}, frame_}; continue; }   // remembered: no lookup every frame
                 trails_[key] = {ps_->play(b.effect, o.pos, up, b.scale), frame_, b.clear};
             } else {

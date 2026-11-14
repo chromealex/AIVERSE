@@ -17,7 +17,7 @@
 namespace aiverse::render {
 
 namespace {
-struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float misc[4]; float uv0[4]; float uv1[4]; float light[4]; };
+struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float misc[4]; float uv0[4]; float uv1[4]; float light[4]; float reveal[4]; float revealAxis[4]; };
 constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec4 per joint
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
@@ -328,7 +328,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     const auto& graphMaterials=d.materials && d.materials->size()>=m->materials.size()?*d.materials:m->materials;
     const bool displaced=cache?cache->displaced:std::any_of(graphMaterials.begin(),graphMaterials.end(),[this](const Material& mat){return mat.shaderGraph && int(matQuality_)>=mat.shaderGraph->minQuality && mat.shaderGraph->outputs.count("vertexOffset");});
     const bool inView = displaced || (cache?modelBoxVisible(viewProj_,cache->min,cache->max):modelBoxVisible(viewProj_ * d.world, c - e, c + e));
-    const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 &&
+    const bool inShadow = quality_ != ShadowQuality::Off && !(d.flags & kDrawNoCastShadow) && (d.tint.w >= 0.99f || (d.flags & kDrawKeepShadow)) && d.dissolve <= 0 &&
                           (displaced || (cache?modelBoxVisible(lightViewProj_,cache->min,cache->max):modelBoxVisible(lightViewProj_ * d.world, c - e, c + e)));
     if (!inView && !inShadow) return;
     const std::vector<mat4>& world = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
@@ -415,7 +415,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
             it.rigid = rigid;
-            it.castShadow = !(d.flags & kDrawNoCastShadow) && d.tint.w >= 0.99f && d.dissolve <= 0 && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
+            it.castShadow = !(d.flags & kDrawNoCastShadow) && (d.tint.w >= 0.99f || (d.flags & kDrawKeepShadow)) && d.dissolve <= 0 && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
             it.inView = nodeView; it.inShadow = nodeShadow && it.castShadow;
             it.joints = -1; it.baked = false; it.anim = anim; it.morph = -1;
             const bool skinnedPrim = node.skin >= 0 && !p.jointPalette.empty();
@@ -484,7 +484,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         const ModelItem& x = modelItems_[items[i]];
         float* d = instData_.data() + size_t(i) * 36;
         std::memcpy(d, x.world.m, 16 * sizeof(float));
-        d[16] = x.tint.x; d[17] = x.tint.y; d[18] = x.tint.z; d[19] = x.tint.w;
+        d[16] = x.tint.x; d[17] = x.tint.y; d[18] = x.tint.z; d[19] = phase == 0 && (x.flags & kDrawKeepShadow) ? 1.f : x.tint.w;
         if (phase == 3) { d[20] = x.outline.x; d[21] = x.outline.y; d[22] = x.outline.z; d[23] = 0; }
         else { d[20] = x.team.x; d[21] = x.team.y; d[22] = x.team.z; d[23] = x.flash; }
         d[24] = (x.mat->receiveShadow && !(x.flags & kDrawNoReceiveShadow)) ? 1.0f : 0.0f;
@@ -498,7 +498,7 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
     const Material& mt = *it.mat;
     // GI draws rebind tex7 / tex8 (lightmap, mask or probes): restore the model's own textures after them
     const bool newModel = !lastItem_ || lastItem_->model != it.model || (phase != 0 && lastItem_->gi != 0);
-    if (!lastItem_ || lastItem_->mat != it.mat || newModel) {
+    if (!lastItem_ || lastItem_->mat != it.mat || newModel || ((lastItem_->flags ^ it.flags) & kDrawActorReveal)) {
         MaterialUniforms mu{};
         mu.base[0] = mt.baseColor.x; mu.base[1] = mt.baseColor.y; mu.base[2] = mt.baseColor.z; mu.base[3] = mt.baseColor.w;
         mu.emissive[0] = mt.emissive.x * mt.emissiveStrength; mu.emissive[1] = mt.emissive.y * mt.emissiveStrength; mu.emissive[2] = mt.emissive.z * mt.emissiveStrength;
@@ -509,6 +509,13 @@ void Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count, int phase
         mu.uv1[0] = mt.uvRotation; mu.uv1[1] = mt.shading == ShadingModel::Unlit ? 1.0f : 0.0f;
         mu.uv1[2] = mt.fixedShade.x; mu.uv1[3] = mt.fixedShade.y;
         mu.light[0] = mt.fixedLight.x; mu.light[1] = mt.fixedLight.y; mu.light[2] = mt.fixedLight.z; mu.light[3] = mt.fixedLight.w;
+        if (phase != 0 && geometryMainView_ && (it.flags & kDrawActorReveal) && actorReveal.w > 0) {
+            mu.reveal[0]=actorReveal.x;mu.reveal[1]=actorReveal.y;mu.reveal[2]=actorReveal.z;mu.reveal[3]=actorReveal.w;
+            const float3 centre{actorReveal.x,actorReveal.y,actorReveal.z};
+            const float3 axis=normalize(cam_.ortho ? cam_.eye()-cam_.target : cam_.eye()-centre);
+            mu.revealAxis[0]=axis.x;mu.revealAxis[1]=axis.y;mu.revealAxis[2]=axis.z;
+            mu.revealAxis[3]=cam_.ortho ? 0.f : 1.f/std::max(.01f,length(cam_.eye()-centre));
+        }
         dev_->setUniforms(2, &mu, sizeof mu);
         auto tex = [&](int idx, gfx::TextureHandle def) {
             return idx >= 0 && idx < int(it.model->images.size()) && it.model->images[size_t(idx)].tex.valid() ? it.model->images[size_t(idx)].tex : def;
@@ -576,11 +583,21 @@ void Renderer3D::renderModels(int phase) {
         }
         bool take = phase == 0 ? shadow : phase == 3 ? visible && it.outline.w > 0 : phase == 4 ? visible && transparentItem(it.flags) :
                     visible && (phase == 2) == blended;
+        if (phase != 0 && it.tint.w <= 0.f) take = false;
         if (it.shadowRole == (phase == 0 ? 1 : 2)) take = false;   // batched parts cast through their shadow batch
         if(take&&phase==0&&!it.mat->shaderGraph&&it.joints<0&&!it.baked&&it.morph<0)
             take=geometryBoxVisible(lightViewProj_*it.world,it.prim->boundsMin,it.prim->boundsMax);
         // Reflection has its own view, never consume main-view occlusion there.
         if (phase == 1 && !geometryMainView_) take = it.shadowRole != 2 && !blended && (it.mat->shaderGraph || geometryBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax));
+        // Kingston water: ground models must not cover the mirrored city.
+        // This flat city puts the rainwater at y=.045. Fully submerged primitives
+        // are omitted only from the reflection, retaining normal and shadow draws.
+        if (take && phase == 1 && !geometryMainView_) {
+            const auto center=(it.prim->boundsMin+it.prim->boundsMax)*.5f;
+            const auto extent=(it.prim->boundsMax-it.prim->boundsMin)*.5f;
+            const float top=it.world.transformPoint(center).y + std::abs(it.world.at(1,0))*extent.x + std::abs(it.world.at(1,1))*extent.y + std::abs(it.world.at(1,2))*extent.z;
+            if(top<=.055f)take=false;
+        }
         if ((it.materialRole == 1 && phase == 1) || (it.materialRole == 2 && phase != 1)) take = false;
         if (take && phase != 0 && geometryMainView_ && it.geometry.occlusion && !it.mat->shaderGraph && it.joints < 0 && !it.baked && it.morph < 0 && it.outline.w == 0 &&
             geometryOcclusion_.hidden(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax)) {
@@ -614,7 +631,7 @@ void Renderer3D::renderModels(int phase) {
         if((x.lodThreshold<1 || x.lodInvert)!=(y.lodThreshold<1 || y.lodInvert))return false;
         const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
         return x.paletteMaterials == y.paletteMaterials && x.prim == y.prim && x.mat == y.mat && x.baked == y.baked && bx == by && x.gi == y.gi && x.lmPage == y.lmPage &&
-               (x.flags & (kDrawFadeDepth | kDrawTransparent)) == (y.flags & (kDrawFadeDepth | kDrawTransparent));
+               (x.flags & (kDrawFadeDepth | kDrawTransparent | kDrawActorReveal)) == (y.flags & (kDrawFadeDepth | kDrawTransparent | kDrawActorReveal));
     };
     for (size_t i = 0; i < order_.size();) {
         size_t j = i + 1;
@@ -632,6 +649,7 @@ void Renderer3D::prepareOcclusion() {
     uint32_t budget = 8192;
     for (const auto& it : modelItems_) {
         if (!budget) break;
+        if (actorReveal.w > 0 && (it.flags & kDrawActorReveal)) continue; // cutaway cannot occlude the actor on CPU
         if (!it.inView || !it.geometry.occluder || !it.model->geometry || it.joints >= 0 || it.baked || it.morph >= 0 ||
             it.mat->alpha != AlphaMode::Opaque || it.mat->transparent || it.mat->shaderGraph ||
             it.tint.w < 1 || it.dissolve > 0 || transparentItem(it.flags)) continue;

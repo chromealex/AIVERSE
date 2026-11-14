@@ -249,6 +249,10 @@ to the point (within 3 cells) for traffic along that axis (default: the axis of 
 - A robber somebody takes hold of at the scene (the unit is disabled or loaded as cargo: a game's own arrest and
   escort) is left to them: the gang does not wait for him, he is in jail whatever happens to the rest, and the
   call stays open for whoever holds him.
+  With a police service that detains (`custody: true`) the patrol walks up to a robber, takes him to its car, drives
+  him to the station and hands him over (test `traffic_gang_robber_is_detained_by_a_custody_patrol`).
+- Robbers are of pedestrian types but the crowd leaves them alone (`TrafficStore::exempt`): they are not adopted as
+  passers-by, sent for walks or removed out of sight.
 - **Unseen**: a timer for the two drives and the robbery, then `caughtUnseen` percent decides.
 - One gang at a time. Its members are citizens in state `gang` (they keep no schedule meanwhile).
 - Lua: `game.traffic_gang()` → `{state, x, z, car, size, loot}` of the gang that is out (nil: none) and

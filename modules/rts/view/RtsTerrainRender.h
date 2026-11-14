@@ -74,6 +74,7 @@ public:
     // Queues the terrain (opaque, main pass) and water. vision: fog of war per cell (heightfield maps
     // darken in the shader; levels maps keep the classic fog sheet drawn by RtsView).
     void draw(render::Renderer3D& r, const MapGrid& g, const std::vector<uint8_t>* vision, bool flatDig);
+    void drawWater(render::Renderer3D& r);
     bool built() const { return built_; }
     bool shaderFog() const { return heightfield_; }
     // Explicit detail heightmap of the map (terrain.detail file, editor detail layer); null = none

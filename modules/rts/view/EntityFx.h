@@ -16,7 +16,7 @@ namespace aiverse::game {
 
 // The drawn values. Defaults = no change.
 struct EntityFxValues {
-    enum : int { kScale = 0, kOpacity = 3, kTint = 4, kTeamMix = 7, kTeamGlow = 11, kShadow = 12, kShadowScale = 13, kLift = 16, kCorpseAge = 17, kPitch = 18, kRoll = 19, kCount = 20 };
+    enum : int { kScale = 0, kOpacity = 3, kTint = 4, kTeamMix = 7, kTeamGlow = 11, kShadow = 12, kShadowScale = 13, kLift = 16, kCorpseAge = 17, kPitch = 18, kRoll = 19, kKeepShadow = 20, kCount = 21 };
     float v[kCount] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, -1, 0, 0};   // corpse age -1: the view's own clock; pitch / roll in degrees
     float scale(int axis) const { return v[kScale + axis]; }
     float opacity() const { return v[kOpacity]; }

@@ -100,6 +100,7 @@ public:
     // results onto it and returns their count. The client copies them into and out of its UI Lua state.
     void setUiCall(std::function<int(lua_State*)> call);
     void setCamera(const ViewCamera& camera);
+    void setVisualPositionReader(std::function<bool(uint64_t,render::float3&)> reader);
     // Host screen state for view.screen(): "playing" (default), "paused", "over".
     void setScreen(const std::string& screen);
     // The last view.set_camera of this update (fields NaN = unchanged); false when there was none.

@@ -156,6 +156,15 @@ void Traffic::populate(Simulation& sim, TrafficStore& st) {
     if (beds.empty()) return;   // nowhere to live: no population on this map
     // shuffle the jobs (Fisher-Yates): who works where is random, every job has the same chance to be taken
     for (size_t i = jobs.size(); i > 1; --i) std::swap(jobs[i - 1], jobs[sim.rng().below(uint32_t(i))]);
+    std::vector<Slot> serviceJobs;
+    for(size_t i=0;i<places_.size();++i){
+        const auto& kind=pr.kinds[places_[i].kind];
+        if(kind.id!="tow_depot")continue;
+        for(size_t shift=0;shift<kind.shifts.size();++shift)
+            for(int j=0;j<kind.jobs;++j)serviceJobs.push_back({int32_t(i),uint8_t(shift)});
+    }
+    jobs.erase(std::remove_if(jobs.begin(),jobs.end(),[&](const Slot& slot){return pr.kinds[places_[size_t(slot.place)].kind].id=="tow_depot";}),jobs.end());
+    jobs.insert(jobs.begin(),serviceJobs.begin(),serviceJobs.end());
     const int n = std::min<int>(pr.count, int(beds.size()));
     st.citizens.resize(size_t(n));
     for (int i = 0; i < n; ++i) {
@@ -235,6 +244,7 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
     for (size_t k = 0; k < slice; ++k) {
         const size_t id = st.citizenCursor++ % n;
         TrafficCitizen& c = st.citizens[id];
+        if (m_->state(sim).trig.vars["tow_worker_"+std::to_string(id)].raw>0 || m_->state(sim).trig.vars["tow_claimant_"+std::to_string(id)].raw>0) continue;
         if (c.state == kCitizenDead || c.state == kCitizenGang) continue;
         if (c.state == kCitizenJail) { if (sim.tick() >= c.eta) c.state = kCitizenHome; continue; }
         if (c.e.valid() && !(w.alive(c.e) && w.get<Unit>(c.e).hp.raw > 0)) {   // his body (his car) vanished without a report: assume the hospital
@@ -246,8 +256,24 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
             if (sim.tick() >= c.eta) { c.state = kCitizenHome; c.leg = kLegWalk; }
             continue;
         }
+        // Kingston family calendar v2: native/Lua policy submits requests through saved variables.
+        auto& familyVars=m_->state(sim).trig.vars;
+        const auto suffix=std::to_string(id);
+        auto value=[&](const std::string& key) {auto it=familyVars.find(key);return it==familyVars.end()?Fixed{}:it->second;};
+        const bool off=value("resident_schedule_off_"+suffix).raw>0;
+        // A leisure controller owns this same resident until return/cancellation.
+        if(value("resident_visit_active_"+suffix).raw>0)continue;
+        const int request=int(value("resident_journey_"+suffix).toInt());
+        if(request && (c.state==kCitizenHome || c.state==kCitizenWork)) {
+            const int savedWork=c.work;
+            // A pickup from home is a return journey via school, with home as its origin.
+            if(request==2 && c.state==kCitizenHome)c.work=c.home;
+            if(c.work>=0)depart(sim,st,int32_t(id),request==1?kCitizenToWork:kCitizenToHome);
+            c.work=savedWork;familyVars["resident_journey_"+suffix]={};
+            continue;
+        }
         if (c.state == kCitizenHome) {
-            if (c.work < 0) continue;
+            if (off || c.work < 0) continue;
             // leave early enough to get there, and not all at the same minute
             const int64_t way = c.school >= 0 ? int64_t(tripTicks(c, c.home, c.school, rate)) + tripTicks(c, c.school, c.work, rate) : int64_t(tripTicks(c, c.home, c.work, rate));
             const int lead = int(std::min<int64_t>(600, way / minuteTicks)) + int(id * 2654435761u % 20);
@@ -255,7 +281,7 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
             continue;
         }
         if (c.state == kCitizenWork) {
-            if (!onShift(c, minute, 120)) depart(sim, st, int32_t(id), kCitizenToHome);   // in early is not "after work"
+            if (off || !onShift(c, minute, 120)) depart(sim, st, int32_t(id), kCitizenToHome);   // in early is not "after work"
             continue;
         }
         // on his way

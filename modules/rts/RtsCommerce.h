@@ -59,6 +59,8 @@ struct CommerceRules {
     int termWeeks = 20, graceWeeks = 2;
     Fixed managerWageWeek = Fixed::fromInt(400);
     Fixed unmanagedShare = Fixed::fromRatio(1, 2);   // income share of a business with no manager on a day its owner did not come by
+    bool externalAccounts = false;       // "accounts": "external": slots start unbound, a server binds them (Commerce::bind)
+    int absentDays = 0;                  // an account away for this many game days is sold out to the city (0: never)
     std::vector<std::string> storage{"flat"};        // kinds of premises with a private stash
     std::vector<BusinessType> businesses;
     std::vector<CommerceOffer> offers;
@@ -68,11 +70,12 @@ struct Premise {
     std::string id, kind;
     Vec3 at;                             // the door, cells
     Fixed price, rentWeek, traffic = Fixed::fromInt(1);
-    uint8_t owner = 0, tenant = 0;       // player slots; 0: the city owns it / nobody rents it
+    uint16_t owner = 0, tenant = 0;      // account records (CommerceStore::accounts); 0: the city owns it / nobody rents it
     int16_t business = -1;               // index into rules.businesses, run by the tenant, else by the owner
     Fixed lastNet, total;                // what the business brought yesterday / since it opened
     bool isPublic = false;               // run by the city (a gun shop, a car dealer): not for rent or sale
     uint8_t staff = 0;                   // employees hired
+    Fixed attendance = Fixed::fromInt(1);// share of today's working hours the staff was really there (the game sets it; 1 by default)
     bool manager = false;
     bool visited = false;                // the one who runs it came by today
     Fixed served;                        // paid by walk-in customers today
@@ -80,10 +83,17 @@ struct Premise {
     Fixed stashCash;
     std::vector<int32_t> stashAmmo;      // per arsenal slot
     bool stashEmpty() const { for (int32_t n : stashAmmo) if (n > 0) return false; return stashCash.raw <= 0; }
-    uint8_t runBy() const { return tenant ? tenant : owner; }
+    uint16_t runBy() const { return tenant ? tenant : owner; }
 };
 
+// An account is whoever owns things: it outlives the player's seat. While its player is in the match it is bound
+// to his slot and the money is his resource stock; while he is away the account keeps its property, its
+// businesses go on and the money sits in `wallet`.
 struct CommerceAccount {
+    uint64_t id = 0;                     // outside identity (a meta account); by default the slot number
+    uint8_t slot = 0;                    // the slot it is bound to, 0: its player is away
+    Fixed wallet;                        // the money while away
+    uint32_t lastSeenDay = 0;
     Fixed debt;
     uint8_t missed = 0;                  // weekly loan payments missed in a row
     Fixed dayNet, weekNet, lastWeekNet;  // business results, for the UI
@@ -93,7 +103,8 @@ struct CommerceAccount {
 
 struct CommerceStore {
     std::vector<Premise> premises;       // map order
-    std::vector<CommerceAccount> accounts;   // by player slot
+    std::vector<CommerceAccount> accounts;   // records; [0] is the city. By default record i belongs to slot i
+    std::vector<uint16_t> slotRec;           // slot -> record (0: nobody is bound to the slot)
 };
 
 class Commerce {
@@ -115,6 +126,22 @@ public:
     // A fine (caught by the police, a hospital bill): taken from the pocket, what is missing becomes bank debt.
     void fine(Simulation& sim, uint8_t player, Fixed amount);   // simulation code only
     Fixed cash(Simulation& sim, uint8_t player) const;
+    // Accounts and seats. bind: the account `id` (created when new) takes the slot: the money in its wallet becomes
+    // the slot's stock. false: the id is 0, the slot does not exist, or that account sits in another slot. unbind:
+    // the player leaves, the stock goes to the wallet, the property stays his. sellOut: everything the account owns
+    // or rents goes back to the city, the proceeds and the stash money to its wallet / stock, the debt is paid from
+    // them as far as they reach. Simulation code only (a server, a script).
+    bool bind(Simulation& sim, uint8_t slot, uint64_t id);
+    void unbind(Simulation& sim, uint8_t slot);
+    bool sellOut(Simulation& sim, uint64_t id);
+    const CommerceAccount* account(Simulation& sim, uint8_t player) const;     // the record bound to the slot, or null
+    const CommerceAccount* accountById(Simulation& sim, uint64_t id) const;
+    // The account as data a server keeps between runs (money, debt, the premises it owns or rents with their
+    // business, staff and stash). importAccount creates the record (unbound) and takes back the premises that are
+    // still free; false: no commerce, the id is 0, or the account is already in this simulation.
+    Json exportAccount(Simulation& sim, uint64_t id) const;
+    bool importAccount(Simulation& sim, uint64_t id, const Json& data);
+    uint8_t slotOf(Simulation& sim, uint16_t record) const;                    // 0: the city, or its player is away
     Fixed creditLimit(Simulation& sim, uint8_t player) const;   // the most the bank lets the debt grow to
     int findPremise(Simulation& sim, const std::string& id) const;
     int findBusiness(const std::string& id) const;
@@ -127,9 +154,13 @@ public:
     uint32_t day(const Simulation& sim) const;                  // days since the start, 0-based
 
 private:
-    void pay(Simulation& sim, uint8_t player, Fixed amount);    // negative: charge; what he lacks becomes debt
+    void pay(Simulation& sim, uint16_t rec, Fixed amount);      // negative: charge; what he lacks becomes debt
+    Fixed cashOf(Simulation& sim, uint16_t rec) const;
+    Fixed limitOf(const CommerceStore& st, uint16_t rec) const;
+    uint16_t recOf(const CommerceStore& st, uint8_t slot) const { return slot < st.slotRec.size() ? st.slotRec[slot] : uint16_t(0); }
+    void liquidate(Simulation& sim, CommerceStore& st, uint16_t rec);
     void closeBusiness(Premise& p);
-    void vacate(Simulation& sim, Premise& p, uint8_t who);       // thrown out: stashed money goes back to the pocket, the rest is lost
+    void vacate(Simulation& sim, Premise& p, uint16_t who);       // thrown out: stashed money goes back to the pocket, the rest is lost
     void endDay(Simulation& sim, CommerceStore& st);
     void endWeek(Simulation& sim, CommerceStore& st);
 

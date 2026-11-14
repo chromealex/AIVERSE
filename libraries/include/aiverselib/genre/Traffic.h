@@ -158,7 +158,7 @@ inline TrafficNet buildTrafficNet(int w, int h, const std::vector<uint8_t>& road
             if (p.axis == TrafficAxis::X) { p.along0 = bx0; p.along1 = bx1; p.across0 = bz0; p.across1 = bz1; }
             else { p.along0 = bz0; p.along1 = bz1; p.across0 = bx0; p.across1 = bx1; }
             const int perSide = (Fixed::fromInt(p.width()) / 2 / fxMax(cfg.laneWidth, Fixed::fromRatio(1, 8))).floorInt();
-            p.lanes = std::max(0, perSide - cfg.parkingLanes);
+            p.lanes = std::max(0, perSide - std::min(cfg.parkingLanes, std::max(0, perSide - 1))); // Kingston: no parking lane on narrow streets
             n.pieces.push_back(p);
         }
     // links: the cell just past each end, at the middle of the band
@@ -233,6 +233,10 @@ inline VehicleInput trafficDriverInput(const TrafficDriverParams& prm, Fixed yaw
         const Fixed want = fxAtan2Turns(d.x, d.y);   // yaw 0 faces +z, a quarter turn +x
         const Fixed err = vehicleDetail::wrap(want - yaw);
         in.steer = fxClamp(err * prm.steerGain, -1_fx, 1_fx);
+        // Slow down BEFORE chasing a point beside/behind the vehicle.
+        const Fixed angle=fxAbs(err);
+        if(angle>Fixed::fromRatio(1,16))
+            targetSpeed=fxMin(targetSpeed,fxMax(Fixed::fromRatio(3,2),Fixed::fromInt(6)*(1_fx-fxMin(angle*4,1_fx))));
     }
     const Fixed dv = targetSpeed - speed;
     // near a standstill the brake pedal would select reverse: hold the handbrake instead, or pull away

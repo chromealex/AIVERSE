@@ -16,13 +16,16 @@ TEST(aiversebuild_ios_sdk_plugins_plist_and_skadnetwork) {
     const fs::path engine = AIVERSE_SOURCE_DIR;
     const fs::path out = fs::temp_directory_path() / "aiverse_sdk_plugins_ios";
     fs::remove_all(out);
+    // plugins that pull in an outside SDK must name the notices that ship with the build (Plugins.cpp)
+    fs::create_directories(out / "project");
+    { std::ofstream f(out / "project" / "NOTICE.txt"); f << "Third-party SDK notices for the test.\n"; }
     const std::string game = R"({
       "plugins": {
-        "gameanalytics": { "gameKey": { "ios": "g" }, "secretKey": { "ios": "s" } },
-        "facebook": { "appId": "1347344110825377", "clientToken": "7f75", "displayName": "Drone Fall & Co" },
+        "gameanalytics": { "gameKey": { "ios": "g" }, "secretKey": { "ios": "s" }, "notices": ["NOTICE.txt"] },
+        "facebook": { "appId": "1347344110825377", "clientToken": "7f75", "displayName": "Drone Fall & Co", "notices": ["NOTICE.txt"] },
         "att": { "usage": "We use \"your\" data for ads & offers <3", "prompt": "ready",
                  "skAdNetworks": ["V9RVWE8QW5.skadnetwork", "cstr6suwn9", "4fzdc2evr5", "bad id"] },
-        "admob": { "appId": { "ios": "ca-app-pub-3940256099942544~1458002511" } }
+        "admob": { "appId": { "ios": "ca-app-pub-3940256099942544~1458002511" }, "notices": ["NOTICE.txt"] }
       }
     })";
     build::PluginSet set = build::loadPlugins(engine, out / "project", game, "ios", "");

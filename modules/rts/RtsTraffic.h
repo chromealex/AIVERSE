@@ -43,6 +43,8 @@ struct TrafficService {
     Fixed range = Fixed::fromInt(90);        // cells: how far a station may be from the incident
     uint16_t crew = UINT16_MAX;              // people who get out at the scene (medics, officers, firemen); none: the vehicle works
     int crewCount = 2;
+    bool custody = false;                // police: officers detain an unarmed offender and take him to the station instead of fighting
+    bool carry = false;                  // ambulance: the crew carries the patient to the vehicle and delivers him to a hospital
     uint32_t workTicks = 100, maxWorkTicks = 1200;
     int max = 1;                             // vehicles on call at a time
     Fixed speedMin = Fixed::fromInt(12), speedMax = Fixed::fromInt(15);
@@ -284,6 +286,7 @@ struct TrafficStore {
     std::vector<TrafficLightProp> lights;
     std::vector<TrafficCitizen> citizens;    // the population; the index is the citizen's id
     TrafficGang gang;                        // the one that is out now
+    std::vector<Entity> exempt;              // people of pedestrian types the crowd must leave alone (robbers), by index
     uint32_t nextGang = 0;
     int64_t gangLoot = 0;                    // taken home so far
     uint32_t gangRobberies = 0, gangCaught = 0;
@@ -341,6 +344,18 @@ public:
     uint32_t offset(int junction) const { return junction >= 0 && size_t(junction) < offset_.size() ? offset_[size_t(junction)] : 0; }
     int stripAt(int cell) const { return cell >= 0 && size_t(cell) < stripAt_.size() ? stripAt_[size_t(cell)] : -1; }
 
+// Project-owned jobs reuse the authoritative lane planner and citizen scheduler.
+     bool projectRoute(Simulation& sim, TrafficCar& c, Vec2 goal, Vec2 pos, Vec2 fwd) {
+         if (!roadSpot(goal, 10, c.destPiece, c.destAlong)) return false;
+         c.task=250; return reroute(sim,c,pos,fwd);
+     }
+     bool projectSidewalk(Vec2 p) const {
+         int x=int(p.x.floorInt()),z=int(p.y.floorInt());
+         return x>=0&&z>=0&&x<net_.w&&z<net_.h&&side_[size_t(z*net_.w+x)];
+     }
+     bool projectOnShift(const TrafficCitizen& c, int minute) const { return onShift(c,minute,0); }
+     bool projectReturnCar(Simulation& sim, TrafficStore& st, int id, Entity car);
+    void projectHome(Simulation& sim, TrafficStore& st, int id) { depart(sim,st,id,kCitizenToHome); }
 private:
     struct Strip { int32_t piece = -1, junction = -1; uint8_t axis = 0; };
     struct BusStop { int32_t piece = -1; int8_t dir = 1; Fixed along{}; Vec2 kerb{}; };

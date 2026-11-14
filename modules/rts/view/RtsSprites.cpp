@@ -375,6 +375,16 @@ void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
     }
     if (batch_.casterCount() > 0 && r.shadowQuality() != ShadowQuality::Off)
         r.drawCustomShadow([this, &r](gfx::Device& dev) { batch_.flushCasters(dev, r.lightViewProj()); });
+    // Kingston tile ground precedes open water.
+    r.drawCustomOpaque([this, &r, &grid, lh](gfx::Device& dev) {
+        refreshTiles(dev, grid, lh);
+        r.lights.bind(2,1);
+        SpriteLighting lighting;
+        lighting.bind=[&r]{ r.bindLitFrame(); };
+        lighting.ref=referenceLight();
+        lighting.receiveShadows=r.shadowQuality()>=ShadowQuality::Medium;
+        if (tileMesh_.vb.valid() && atlas_.valid()) batch_.drawMesh(dev, tileMesh_, atlas_.tex, r.viewProj(), defaults_.lit ? &lighting : nullptr);
+    });
     r.drawCustom([this, &r, &grid, lh](gfx::Device& dev) {
         refreshTiles(dev, grid, lh);
         r.lights.bind(2, 1);   // unlit sprites: day/night tint + light map (lighting agent); the lit path rebinds its frame
@@ -383,7 +393,7 @@ void Rts2DView::submit(Renderer3D& r, const MapGrid& grid, float lh) {
         lighting.ref = referenceLight();
         // receiving sun shadows costs a PCF lookup per sprite pixel: Medium and up
         lighting.receiveShadows = r.shadowQuality() >= ShadowQuality::Medium;
-        if (tileMesh_.vb.valid() && atlas_.valid()) batch_.drawMesh(dev, tileMesh_, atlas_.tex, r.viewProj(), defaults_.lit ? &lighting : nullptr);
+
         batch_.flush(dev, r.viewProj(), &lighting);
     });
 }
