@@ -1,4 +1,5 @@
 #include "engine/meta/Service.h"
+#include "engine/meta/Modules.h"
 #include <iostream>
 #include <stdexcept>
 using namespace aiverse; using namespace aiverse::meta;
@@ -86,5 +87,21 @@ int main(int argc,char** argv) {try {
     { RemoteBackend scoped([&](const ServiceRequest&, Backend::Callback done){late=std::move(done);});
       scoped.request({"meta","view","",Json::object()},[](ServiceReply){}); }
     late({{},Json::object()}); // A transport may finish after its UI owner was destroyed.
+    { // Persistent-world accounts: only the world server writes, the latest save wins, absence is counted.
+        auto m=modules::all(); modules::world(m); Service w(m,cfg); int n=0; Time at=1000;
+        auto run=[&](std::string p,std::string action,std::string args="{}",bool admin=true){return w.execute({p,admin},{"world",action,"w"+std::to_string(++n),Json::parse(args)},at);};
+        CHECK(w.execute({"a",true},{"profile","create","c1",Json::object()},at).result); CHECK(w.execute({"b",true},{"profile","create","c2",Json::object()},at).result);
+        CHECK(run("a","enter","{}",false).result.code==Code::Denied);
+        auto first=run("a","enter"); CHECK(first.result&&!first.data.getBool("known")&&first.data.getInt("away")==0);
+        CHECK(run("a","save",R"({"account":{"wallet":5}})").result); at=1060; CHECK(run("a","save",R"({"account":{"wallet":7}})").result);
+        CHECK(run("a","save",R"({"account":7})").result.code==Code::Invalid);
+        at=1100; CHECK(run("a","leave",R"({"account":{"wallet":9}})").result);
+        size_t receipts=0; for(auto&[k,v]:w.save()["receipts"].members()){(void)v;if(k.rfind("[\"a\",",0)==0)++receipts;} CHECK(receipts<=2); // create + the last world call
+        at=2000; auto away=run("b","absent",R"({"seconds":600})"); CHECK(away.result&&away.data["players"].size()==1&&away.data["players"][size_t(0)].str()=="a");
+        CHECK(run("b","absent",R"({"seconds":5000})").data["players"].size()==0);
+        auto back=run("a","enter"); CHECK(back.result&&back.data.getBool("known")&&back.data["account"].getInt("wallet")==9&&back.data.getInt("away")==900);
+        CHECK(run("b","absent",R"({"seconds":0})").data["players"].size()==0); // he is online again
+        Service again(m,cfg,Json::parse(w.save().dump())); CHECK(again.save()==w.save());
+    }
     std::cout<<"Extended meta service tests passed\n";
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;} }

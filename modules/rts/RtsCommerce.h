@@ -136,6 +136,11 @@ public:
     bool sellOut(Simulation& sim, uint64_t id);
     const CommerceAccount* account(Simulation& sim, uint8_t player) const;     // the record bound to the slot, or null
     const CommerceAccount* accountById(Simulation& sim, uint64_t id) const;
+    // The account as data a server keeps between runs (money, debt, the premises it owns or rents with their
+    // business, staff and stash). importAccount creates the record (unbound) and takes back the premises that are
+    // still free; false: no commerce, the id is 0, or the account is already in this simulation.
+    Json exportAccount(Simulation& sim, uint64_t id) const;
+    bool importAccount(Simulation& sim, uint64_t id, const Json& data);
     uint8_t slotOf(Simulation& sim, uint16_t record) const;                    // 0: the city, or its player is away
     Fixed creditLimit(Simulation& sim, uint8_t player) const;   // the most the bank lets the debt grow to
     int findPremise(Simulation& sim, const std::string& id) const;

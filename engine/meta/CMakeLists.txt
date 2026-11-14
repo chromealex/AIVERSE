@@ -59,6 +59,8 @@ aiverse_meta_component(live_core LiveOps.cpp)
 target_link_libraries(aiverse_meta_live_core PUBLIC aiverse_meta_economy)
 aiverse_meta_component(server Service.cpp)
 target_link_libraries(aiverse_meta_server PUBLIC aiverse_meta_economy aiverse_meta_live_core)
+aiverse_meta_component(world ServiceWorld.cpp)   # persistent-world accounts (docs/city-server.md); hosts opt in
+target_link_libraries(aiverse_meta_world PUBLIC aiverse_meta_economy)
 set(AIVERSE_META_POLICIES economy progression social clans items backend tournaments)
 aiverse_meta_component(loot PolicyLoot.cpp)
 target_link_libraries(aiverse_meta_loot PUBLIC aiverse_meta_live_core)

@@ -35,6 +35,7 @@ void wars(Modules &);
 void asyncPvp(Modules &);
 void ratings(Modules &);
 void matchmaking(Modules &);
+void world(Modules &); // Persistent-world accounts (AIVERSE::meta_world); opt-in, not part of all().
 Modules all(); // Compatibility only; links every policy.
 } // namespace modules
 } // namespace aiverse::meta

@@ -244,6 +244,79 @@ void Commerce::unbind(Simulation& sim, uint8_t slot) {
     st->slotRec[slot] = 0;
 }
 
+Json Commerce::exportAccount(Simulation& sim, uint64_t id) const {
+    auto* st = store(sim);
+    Json out = Json::object();
+    if (!st || id == 0) return out;
+    uint16_t rec = 0;
+    for (size_t i = 1; i < st->accounts.size(); ++i) if (st->accounts[i].id == id) rec = uint16_t(i);
+    if (!rec) return out;
+    const CommerceAccount& a = st->accounts[rec];
+    auto raw = [](Fixed f) { return Json::number(int64_t(f.raw)); };
+    out.set("wallet", raw(a.slot ? cash(sim, a.slot) : a.wallet));
+    out.set("debt", raw(a.debt));
+    out.set("missed", Json::number(int64_t(a.missed)));
+    out.set("day", Json::number(int64_t(int64_t(day(sim)))));
+    Json list = Json::array();
+    for (const auto& p : st->premises) {
+        if (p.owner != rec && p.tenant != rec) continue;
+        Json e = Json::object();
+        e.set("id", Json::string(p.id));
+        e.set("owns", Json::fromBool(p.owner == rec));
+        e.set("rents", Json::fromBool(p.tenant == rec));
+        if (p.runBy() == rec) {
+            if (p.business >= 0) e.set("business", Json::string(rules_.businesses[size_t(p.business)].id));
+            e.set("staff", Json::number(int64_t(p.staff)));
+            e.set("manager", Json::fromBool(p.manager));
+            e.set("total", raw(p.total));
+            e.set("stashCash", raw(p.stashCash));
+            Json ammo = Json::array();
+            for (int32_t n : p.stashAmmo) ammo.push(Json::number(int64_t(n)));
+            e.set("stashAmmo", ammo);
+        }
+        list.push(e);
+    }
+    out.set("premises", list);
+    return out;
+}
+
+bool Commerce::importAccount(Simulation& sim, uint64_t id, const Json& data) {
+    auto* st = store(sim);
+    if (!st || id == 0 || !data.isObject() || st->accounts.size() >= 65000) return false;
+    for (size_t i = 1; i < st->accounts.size(); ++i) if (st->accounts[i].id == id) return false;
+    st->accounts.emplace_back();
+    const uint16_t rec = uint16_t(st->accounts.size() - 1);
+    CommerceAccount& a = st->accounts[rec];
+    a.id = id;
+    a.wallet = Fixed::fromRaw(std::max<int64_t>(0, data.getInt("wallet")));
+    a.debt = Fixed::fromRaw(std::max<int64_t>(0, data.getInt("debt")));
+    a.missed = uint8_t(std::clamp<int64_t>(data.getInt("missed"), 0, 255));
+    a.lastSeenDay = day(sim);
+    if (const Json& list = data["premises"]; list.isArray())
+        for (size_t i = 0; i < list.size(); ++i) {
+            const Json& e = list[i];
+            const std::string pid = e.getStr("id");
+            for (auto& p : st->premises) {
+                if (p.id != pid || p.isPublic) continue;
+                const bool owns = e.getBool("owns") && p.owner == 0, rents = e.getBool("rents") && p.tenant == 0;
+                if (owns) p.owner = rec;
+                if (rents) p.tenant = rec;
+                if ((owns || rents) && p.runBy() == rec) {   // what he ran there comes back with him
+                    const int b = e.has("business") ? findBusiness(e.getStr("business")) : -1;
+                    p.business = int16_t(b >= 0 && fits(rules_.businesses[size_t(b)], p.kind) ? b : -1);
+                    p.staff = p.business >= 0 ? uint8_t(std::clamp<int64_t>(e.getInt("staff"), 0, rules_.businesses[size_t(p.business)].staff)) : uint8_t(0);
+                    p.manager = p.business >= 0 && e.getBool("manager");
+                    p.total = Fixed::fromRaw(e.getInt("total"));
+                    p.stashCash = Fixed::fromRaw(std::max<int64_t>(0, e.getInt("stashCash")));
+                    if (const Json& ammo = e["stashAmmo"]; ammo.isArray())
+                        for (size_t k = 0; k < ammo.size() && k < p.stashAmmo.size(); ++k) p.stashAmmo[k] = int32_t(std::clamp<int64_t>(ammo[k].integer(0), 0, 1000000));
+                }
+                break;
+            }
+        }
+    return true;
+}
+
 void Commerce::liquidate(Simulation& sim, CommerceStore& st, uint16_t rec) {
     CommerceAccount& a = st.accounts[rec];
     for (auto& p : st.premises) {
