@@ -33,8 +33,8 @@ std::string errorOf(const std::function<void()>& fn) {
 void splitSkirmish(const Dir& d) {
     Json r = Json::parseFile(kSkirmish + "/rules.json");
     Json a = Json::object(), b = Json::object();
-    size_t i = 0;
-    for (auto& [k, v] : r["types"].members()) ((i++ % 2) ? b : a).set(k, v);
+    size_t i = 0;   // first half / second half: the composed order is the original order (type order is part of the game)
+    for (auto& [k, v] : r["types"].members()) (i++ < r["types"].size() / 2 ? a : b).set(k, v);
     r.erase("types");
     Json inc = Json::array();
     inc.push(Json::string("rules/types.json"));

@@ -133,6 +133,8 @@ document either way: same results, same checksums, old single-file games load un
 - Top-level objects (`types`, `techs`, `resources`, `ai`, ...) merge key by key; top-level arrays
   (`playerAbilities`, `triggers`, ...) append in reading order (the file's own content, then its includes, depth first);
   scalars (`supplyCap`) are set once.
+- Entries keep the reading order, and the order of `types` is part of the game (types are numbered in it): moving
+  types between files in another order is a different game for replays and network matches.
 - A key or an array entry `"id"` defined in two files is an error naming both (`rules/b.json: 'types.knight' is
   already defined in rules/a.json`); so are an include cycle, a missing file and a path outside the game folder.
 - Everything reads the assembled rules: client, network host, headless, replays, `aiversebuild`, the editor.

@@ -88,6 +88,14 @@ struct Composer {
     }
 };
 
+// Composing and resolving are not the loader reading keys: keep them out of an installed JsonAccessLog
+// (rules_lint / rules_prune would see every block as read).
+struct NoAccessLog {
+    JsonAccessLog* saved = Json::accessLog();
+    NoAccessLog() { Json::setAccessLog(nullptr); }
+    ~NoAccessLog() { Json::setAccessLog(saved); }
+};
+
 // Entries of a top-level collection by name: object members, or array items with a string "id".
 bool isEntry(const Json& e) { return e.isObject() && (e.has("extends") || e.has("abstract")); }
 
@@ -146,6 +154,7 @@ JsonReadText fileReader() {
 }
 
 Json composeJson(const std::string& path, const JsonReadText& read, JsonOrigin* originOut) {
+    NoAccessLog quiet;
     JsonOrigin local;
     JsonOrigin& origin = originOut ? *originOut : local;
     origin = JsonOrigin{};
@@ -162,6 +171,7 @@ std::vector<std::string> composedFiles(const std::string& path, const JsonReadTe
 }
 
 bool needsExtends(const Json& doc) {
+    NoAccessLog quiet;
     for (auto& [k, v] : doc.members()) {
         if (v.isObject()) { for (auto& [m, e] : v.members()) if (isEntry(e)) return true; }
         else if (v.isArray()) { for (auto& e : v.items()) if (isEntry(e)) return true; }
@@ -170,6 +180,7 @@ bool needsExtends(const Json& doc) {
 }
 
 Json resolveExtends(const Json& doc) {
+    NoAccessLog quiet;
     Json out = doc;
     for (auto& [section, v] : out.membersMut()) {
         bool any = false;
@@ -218,6 +229,7 @@ Json readComposedJson(const std::string& path, const JsonReadText& read) {
 }
 
 std::vector<std::pair<std::string, Json>> splitComposed(const Json& doc, const JsonOrigin& origin) {
+    NoAccessLog quiet;
     const size_t n = std::max<size_t>(1, origin.files.size());
     std::vector<Json> out(n, Json::object());
     for (auto& [file, inc] : origin.includes) if (file < n) out[file].set("include", inc);

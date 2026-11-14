@@ -373,7 +373,7 @@ SplitConfig splitConfig(const Options& o) {
     }
     // Sprite sheets of all types: any unit may appear on screen at any time.
     try {
-        Json rules = readComposedJson((o.project / o.gameJson.getStr("rules", "rules.json")).string(), fileReader());
+        Json rules = aiverse::readComposedJson((o.project / o.gameJson.getStr("rules", "rules.json")).string(), aiverse::fileReader());
         for (auto& [id, t] : rules["types"].members())
             if (std::string sheet = t["sprite"].getStr("sheet"); !sheet.empty()) c.opt.base.push_back(sheet);
     } catch (const std::exception&) {}
@@ -472,7 +472,7 @@ fs::path contentPack(Options& o) {
     std::vector<std::pair<std::string, int>> levelRules;
     std::vector<std::string> fixedImages;   // frames addressed in pixels: sprite sheets, tile atlases
     try {
-        Json rules = readComposedJson((o.project / o.gameJson.getStr("rules", "rules.json")).string(), fileReader());
+        Json rules = aiverse::readComposedJson((o.project / o.gameJson.getStr("rules", "rules.json")).string(), aiverse::fileReader());
         for (auto& [id, t] : rules["types"].members())
             if (std::string sheet = t["sprite"].getStr("sheet"); !sheet.empty()) fixedImages.push_back(sheet);
         std::error_code e3;
