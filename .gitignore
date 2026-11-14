@@ -14,3 +14,6 @@ __pycache__/
 /logs/
 Builds/
 .DS_Store
+
+# Agent scratch output (reports, generated test projects)
+/outputs/
