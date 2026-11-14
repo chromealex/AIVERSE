@@ -18,8 +18,14 @@
 namespace aiverse::game { class RtsModule; }
 
 namespace aiverse::net::city {
-constexpr uint32_t kProtocol = 1;
+constexpr uint32_t kProtocol = 2;
+// What both sides must agree on: the unit types (their order is the wire's type id) and the map's players and
+// entities (their order is the entity ids at the start). Other rules may differ: the client does not simulate.
 uint64_t contentId(const Json& rules, const Json& map);
+// The project as the city runs it, the same on the server and on every client: `seats` heroes (the map's own hero
+// first, the others at crossroads / doors spread over the city) and property that belongs to accounts.
+// Call it on the rules and the map the simulation is about to be set up from. Throws when there is no room.
+void prepare(Json& rules, Json& map, int seats);
 uint64_t accountId(const std::string& player);   // the commerce account of a player id (never 0)
 
 enum class Replicate : uint8_t { All, Involved };
@@ -39,7 +45,7 @@ struct EntityState {              // 14 bytes on the wire
     uint16_t type = 0;
     uint8_t owner = 0;
     uint16_t x = 0, z = 0;        // 1/64 cell
-    uint8_t yaw = 0;              // 1/256 turn
+    uint8_t yaw = 0;              // the unit's facing, 1/256 turn
     uint8_t hp = 0;               // 0..255 of the type's max
     uint8_t flags = 0;            // 1: a player drives / is it
     bool operator==(const EntityState&) const = default;

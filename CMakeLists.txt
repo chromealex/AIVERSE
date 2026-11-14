@@ -868,7 +868,7 @@ if(AIVERSE_BUILD_SERVER)
 endif()
 # Hosted battles (agent-net-mobile): battle tool (the load harness library is defined next to aiverse_net_server).
 # The persistent city server (docs/city-server.md): one authoritative simulation, clients get what is near them.
-add_library(aiverse_net_city STATIC engine/net/city/CityNet.cpp)
+add_library(aiverse_net_city STATIC engine/net/city/CityNet.cpp engine/net/city/CityMirror.cpp)
 target_link_libraries(aiverse_net_city PUBLIC aiverse_net aiverse_game)
 target_include_directories(aiverse_net_city PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(aiverse_net_city_meta STATIC engine/net/city/CityMeta.cpp)   # accounts in the meta service (module "world")
@@ -1211,6 +1211,8 @@ foreach(t aiverse_client main)
         target_sources(${t} PRIVATE apps/client/ClientRegionInput.cpp)
         target_sources(${t} PRIVATE apps/client/ClientTopDown.cpp)   # top-down heroes (agent-topdown-control)
         target_sources(${t} PRIVATE apps/client/ClientCommerce.cpp)   # city economy (agent-gta2)
+        target_sources(${t} PRIVATE apps/client/ClientCity.cpp)       # a seat in a city on a server (agent-gta2)
+        target_link_libraries(${t} PRIVATE aiverse_net_city)
     endif()
 endforeach()
 
@@ -1317,7 +1319,7 @@ set(AIVERSE_CLIENT_CORE_SOURCES apps/client/ClientLoading.cpp apps/client/GameCl
     apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientFx.cpp
     apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp apps/client/ClientRegionInput.cpp
     apps/client/ClientBaked.cpp   # ClientBaked: the map's baked lighting (agent-lightbake)
-    apps/client/ClientTopDown.cpp apps/client/ClientCommerce.cpp)   # top-down heroes (agent-topdown-control), city economy (agent-gta2)
+    apps/client/ClientTopDown.cpp apps/client/ClientCommerce.cpp apps/client/ClientCity.cpp)   # top-down heroes (agent-topdown-control), city economy (agent-gta2)
 foreach(t aiverse_client main)
     if(TARGET ${t})
         target_link_libraries(${t} PRIVATE aiverse_content_reader)   # streamed world: worker-thread project reader
@@ -1328,6 +1330,7 @@ endforeach()
 # Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)
 if(TARGET aiverse_editor)
     target_sources(aiverse_editor PRIVATE apps/editor/EditorClientPlay.cpp apps/editor/ClientHost.cpp ${AIVERSE_CLIENT_CORE_SOURCES})
+    target_link_libraries(aiverse_editor PRIVATE aiverse_net_city)
     target_link_libraries(aiverse_editor PRIVATE aiverse_splash aiverse_net aiverse_game_audio aiverse_atlas aiverse_ui aiverse_game_fx aiverse_i18n aiverse_content_reader)
 endif()
 if(AIVERSE_BUILD_TESTS AND (AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFORM STREQUAL "macos"))

@@ -2,6 +2,7 @@
 // near its hero, its account lives in a store between sessions.
 #include "engine/meta/Modules.h"
 #include "engine/net/city/CityMeta.h"
+#include "engine/net/city/CityMirror.h"
 #include "engine/net/city/CityNet.h"
 
 namespace {
@@ -187,4 +188,48 @@ TEST(city_accounts_in_the_meta_service) {
         rig.run(3);
     }
     CHECK(store.failed() == 0 && service.save()["extras"]["ann"]["world"]["account"]["commerce"].getInt("wallet") == 42 && !service.save()["extras"]["ann"]["world"].getBool("online"));
+}
+
+TEST(city_mirror_shows_the_server_world_in_a_local_simulation) {
+    cn::Options o;
+    o.radius = 8;
+    CityNetRig rig(o, nullptr);
+    cn::Client& a = rig.join(1, "");
+    SimConfig cfg;
+    Simulation local(cfg, std::make_unique<game::RtsModule>());
+    local.setup(cityNetRules(), cityNetMap());
+    Simulation& server = rig.server.simulation();
+    const Entity heroS = rig.server.module().topDown()->heroOf(server, 1);
+    {
+        cn::Mirror mirror(local, a);
+        auto frames = [&](int ticks) { for (int i = 0; i < ticks; ++i) { rig.run(1); mirror.update(0.05); } };
+        frames(50);
+        CHECK(mirror.hero().valid() && mirror.hero() == mod(local).topDown()->heroOf(local, 1) && mirror.shown() == 3);
+        // the far hero and its dummy are not told: they are not in the local world any more
+        size_t units = 0;
+        local.world().each<game::Unit, Transform>([&](Entity, game::Unit&, Transform&) { ++units; });
+        CHECK(units == 3);
+        // the stick goes to the server through the local simulation; the local one never steps
+        steer(local, 1, kEast);
+        frames(40);
+        CHECK(local.tick() == 0 && rig.server.stats().commands == 1 && tdPos(server, heroS).x > Fixed::fromInt(8));
+        const Vec3 shown = tdPos(local, mirror.hero());
+        CHECK(fxAbs(shown.x - tdPos(server, heroS).x) < Fixed::fromInt(1) && fxAbs(shown.z - tdPos(server, heroS).z) < Fixed::fromRatio(1, 10));
+        CHECK(local.world().get<Transform>(mirror.hero()).prevPos.x < shown.x && mirror.alpha() > 0 && mirror.alpha() <= 1);   // it slides between snapshots
+        CHECK(local.world().get<game::Unit>(mirror.hero()).facing.x > Fixed::fromRatio(9, 10));   // he looks east
+        // something new appears on the server next to him: it is created here under another local id
+        steer(local, 1, kEast, 0);
+        frames(10);
+        const Vec3 at = tdPos(server, heroS) + Vec3{Fixed{}, Fixed{}, Fixed::fromInt(2)};
+        const Entity born = mod(server).spawn(server, uint16_t(mod(server).rules().findType("mover")), 2, at);
+        frames(10);
+        const Entity here = mirror.localOf(born.index);
+        CHECK(here.valid() && local.world().alive(here) && local.world().get<game::Unit>(here).type == uint16_t(mod(server).rules().findType("mover")));
+        CHECK(fxAbs(tdPos(local, here).x - tdPos(server, born).x) < Fixed::fromInt(1));
+        // it dies there: it goes here
+        server.world().destroy(born);
+        frames(70);
+        CHECK(!mirror.localOf(born.index).valid() && !local.world().alive(here));
+    }
+    CHECK(!local.hasCommandSink());
 }

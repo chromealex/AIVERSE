@@ -15,6 +15,7 @@
 #include "engine/net/Udp.h"
 #include "engine/meta/Modules.h"
 #include "engine/net/city/CityMeta.h"
+#include "engine/net/city/CityMirror.h"
 #include "engine/net/city/CityNet.h"
 #include "modules/rts/RtsModule.h"
 #include "modules/rts/RtsScript.h"
@@ -29,6 +30,7 @@ namespace {
 struct Args {
     std::string cmd, project, map, connect, accounts, metaConfig, metaState, rulesPatch, replicate = "all";
     int64_t absentSeconds = 604800, sweepSeconds = 3600;
+    int mirror = 0;   // bots: the first client also keeps a local simulation that shows the city (as the game client does)
     int players = 8, seats = 0, seconds = 20, radius = 40, rate = 10, port = 47800;
     uint64_t seed = 1;
 };
@@ -57,34 +59,7 @@ void load(const Args& a, Json& rules, Json& map) {
     if (!a.rulesPatch.empty()) merge(rules, Json::parse(a.rulesPatch));
     if (!game::embedScripts(rules, map, read, &err)) throw std::runtime_error("scripts: " + err);
 
-    std::string heroType;
-    int heroes = 0;
-    for (const Json& e : map["entities"].items()) if (e.getInt("owner") == 1 && heroType.empty()) heroType = e.getStr("type");
-    for (const Json& p : map["players"].items()) { (void)p; }
-    heroes = heroType.empty() ? 0 : 1;
-    std::vector<std::pair<Fixed, Fixed>> spots;
-    if (const Json& j = map["city"]["junctions"]; j.isArray())
-        for (const Json& n : j.items()) spots.push_back({n["x"].fx(), n["z"].fx()});
-    if (spots.size() < size_t(a.seats))
-        if (const Json& pr = map["premises"]; pr.isArray())
-            for (const Json& p : pr.items()) spots.push_back({p["at"][size_t(0)].fx(), p["at"][size_t(1)].fx()});
-    Json& players = *map.find("players");
-    Json& entities = *map.find("entities");
-    for (int i = heroes; i < a.seats; ++i) {
-        if (spots.empty() || players.size() >= 250) throw std::runtime_error("no room for " + std::to_string(a.seats) + " seats");
-        Json p = Json::object();
-        p.set("name", Json::string("Citizen " + std::to_string(i + 1)));
-        p.set("team", Json::number(int64_t(1)));
-        players.push(p);
-        const auto spot = spots[size_t(i) * spots.size() / size_t(a.seats)];
-        Json e = Json::object();
-        e.set("type", Json::string(heroType));
-        e.set("owner", Json::number(int64_t(players.size())));
-        Json pos = Json::array();
-        pos.push(Json::number(spot.first)); pos.push(Json::number(spot.second));
-        e.set("pos", pos);
-        entities.push(e);
-    }
+    city::prepare(rules, map, a.seats);
 }
 city::Options options(const Args& a) {
     city::Options o;
@@ -189,7 +164,6 @@ int runServe(const Args& a) {
     Args b = a;
     b.seats = std::max(a.seats, 1);
     load(b, rules, map);
-    if (rules["commerce"].isObject()) rules.find("commerce")->set("accounts", Json::string("external"));   // property belongs to accounts, not to seats
     std::unique_ptr<city::FileAccounts> accounts;
     std::unique_ptr<meta::Service> metaService;
     std::unique_ptr<city::MetaAccounts> metaAccounts;
@@ -271,7 +245,6 @@ int runBots(const Args& a) {
     Args b = a;
     b.seats = std::max(a.seats, 1);
     load(b, rules, map);
-    if (rules["commerce"].isObject()) rules.find("commerce")->set("accounts", Json::string("external"));   // as the server does
     const uint64_t content = city::contentId(rules, map);
     const size_t colon = a.connect.rfind(':');
     if (colon == std::string::npos) { std::fprintf(stderr, "--connect HOST:PORT\n"); return 1; }
@@ -285,11 +258,19 @@ int runBots(const Args& a) {
         clients.push_back(std::make_unique<city::Client>(std::move(conn), content));
         thumbs[size_t(i)].rng = uint32_t(a.seed * 2654435761u + uint32_t(i) * 40503u + 1);
     }
+    std::unique_ptr<Simulation> local;
+    std::unique_ptr<city::Mirror> mirror;
+    if (a.mirror) {
+        local = std::make_unique<Simulation>(SimConfig{}, std::make_unique<game::RtsModule>());
+        local->setup(rules, map);
+        mirror = std::make_unique<city::Mirror>(*local, *clients[0]);
+    }
     const uint64_t start = nowMs();
-    uint64_t inView = 0, samples = 0, lastSample = start;
+    uint64_t inView = 0, samples = 0, lastSample = start, lastFrame = start;
     for (;;) {
         const uint64_t now = nowMs();
         if (now - start > uint64_t(a.seconds) * 1000) break;
+        if (mirror) { clients[0]->poll(now); mirror->update(double(now - lastFrame) / 1000.0); lastFrame = now; }
         for (size_t i = 0; i < clients.size(); ++i) {
             clients[i]->poll(now);
             Command c;
@@ -304,6 +285,19 @@ int runBots(const Args& a) {
     const double secs = double(a.seconds), n = double(std::max<size_t>(1, ready));
     std::printf("{\"bots\": %d, \"ready\": %zu, \"downBytesPerSec\": %.0f, \"upBytesPerSec\": %.0f, \"snapshotsPerSec\": %.1f, \"inView\": %.1f}\n",
                 a.players, ready, double(in) / secs / n, double(out) / secs / n, double(snaps) / secs / n, samples ? double(inView) / double(samples) : 0.0);
+    if (mirror) {
+        size_t units = 0, moving = 0;
+        local->world().each<game::Unit, Transform>([&](Entity e, game::Unit& u, Transform& t) {
+            (void)e;
+            if (!static_cast<game::RtsModule&>(local->module()).rules().types[u.type].structure) { ++units; moving += t.prevPos.x != t.pos.x || t.prevPos.z != t.pos.z; }
+        });
+        const Entity hero = mirror->hero();
+        const Vec3 at = hero.valid() ? local->world().get<Transform>(hero).pos : Vec3{};
+        std::printf("{\"mirror\": true, \"shown\": %zu, \"told\": %zu, \"localUnits\": %zu, \"moving\": %zu, \"hero\": [%.1f, %.1f], \"cash\": %.0f, \"localTick\": %u}\n",
+                    mirror->shown(), clients[0]->entities().size(), units, moving, at.x.toDouble(), at.z.toDouble(),
+                    Fixed::fromRaw(clients[0]->account().cash).toDouble(), unsigned(local->tick()));
+        mirror.reset();
+    }
     return ready == clients.size() ? 0 : 2;
 }
 }
@@ -323,6 +317,7 @@ int main(int argc, char** argv) {
         else if (k == "--port") a.port = std::atoi(v.c_str());
         else if (k == "--seed") a.seed = uint64_t(std::atoll(v.c_str()));
         else if (k == "--connect") a.connect = v;
+        else if (k == "--mirror") a.mirror = std::atoi(v.c_str());
         else if (k == "--accounts") a.accounts = v;
         else if (k == "--meta-config") a.metaConfig = v;
         else if (k == "--meta-state") a.metaState = v;

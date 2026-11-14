@@ -12,7 +12,7 @@ This is not the lockstep relay (`engine/net/server`, every client simulates ever
 
 | Message | Channel | Content |
 |---|---|---|
-| Hello | reliable, client → server | protocol and content id (hash of rules + map) |
+| Hello | reliable, client → server | protocol and content id (unit type ids, the map's size, players and entities) |
 | Command | reliable, client → server | a simulation `Command`; the server stamps the player (the connection is the identity) and the tick |
 | Welcome | reliable | slot, hero entity, tick rate, radius, keepalive |
 | Snapshot | latest-only, `snapshotRate` per second | entities within `radius` cells that changed, 14 bytes each: id, type, owner, x, z (1/64 cell), yaw, hp, flags |
@@ -40,12 +40,25 @@ subjects of incidents — for a client that simulates the background life itself
 - `Server::sellOut(player)` sells everything an absent player owns to the city; the money waits in his account.
   `aiverse_city serve` does it for players away longer than `--absent-seconds` (default a week).
 
+## The game client
+
+`net::city::Mirror` (`CityMirror.h`) is the client's picture of the city: a local simulation set up from the same
+`city::prepare()`d rules and map, never stepped. The mirror creates, moves and removes its units from what the
+server tells, interpolates between two snapshots (`alpha()`), keeps the player's hero and money in the local
+state, and sends every command the client submits to the server (a command sink).
+
+`apps/client` uses it when `AIVERSE_CITY=host:port` is set (`AIVERSE_CITY_SEATS=N` as the server's `--seats`):
+starting a map connects, takes the seat the server gives and shows the server's city (`ClientCity.cpp`).
+Not there yet: prediction of the own hero (input is felt after a round trip plus up to a snapshot interval),
+shots / effects / sounds (they come from simulation events), other players' deals in the door menu
+(premises are not replicated), anything the local scripts would do.
+
 ## Tool
 
 ```sh
 aiverse_city load  --project DIR --map maps/city.json --players 100 --seconds 20 [--replicate involved] [--radius 40] [--rate 10]
 aiverse_city serve --project DIR --map maps/city.json --seats 100 --port 47800 [--accounts FILE | --meta-config FILE --meta-state FILE]
-aiverse_city bots  --project DIR --map maps/city.json --seats 100 --connect 127.0.0.1:47800 --players 100 --seconds 30
+aiverse_city bots  --project DIR --map maps/city.json --seats 100 --connect 127.0.0.1:47800 --players 100 --seconds 30 [--mirror 1]
 ```
 
 `load` runs server and clients in one process on virtual time and prints one JSON line (step time, bytes per
@@ -57,6 +70,6 @@ same value, the content id covers it. Bots wander and shoot now and then.
 
 - At most 250 seats: a player slot is a byte. Every seat has a hero in the world whether somebody plays it or not.
 - `serve` admits anybody as `guest-N`: there is no authentication yet (a production host checks a ticket before `attach`).
-- The game client (`apps/client`) does not speak this protocol yet; only the headless `Client` does.
+- The game client connects (see above) but was only compiled and linked, never run on a screen.
 - Traffic limits (`traffic.cars.max`, `population.live`) are for one player: with many players the same number of cars and people is shared.
 - No delta compression, no encryption (the UDP transport is the plain one, not `SecureUdp`).

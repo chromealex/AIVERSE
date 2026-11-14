@@ -1,6 +1,7 @@
 #include "CityNet.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <ctime>
 #include <fstream>
 #include "engine/net/HeroInput.h"
@@ -43,7 +44,44 @@ void put(Out& o, const EntityState& e) { o.u32(e.id); o.u16(e.type); o.u8(e.owne
 EntityState get(In& i) { EntityState e; e.id = i.u32(); e.type = i.u16(); e.owner = i.u8(); e.x = i.u16(); e.z = i.u16(); e.yaw = i.u8(); e.hp = i.u8(); e.flags = i.u8(); return e; }
 }
 
-uint64_t contentId(const Json& rules, const Json& map) { Hasher h; h.str(rules.dump(-1)); h.str(map.dump(-1)); h.u32(kProtocol); return h.value(); }
+uint64_t contentId(const Json& rules, const Json& map) {
+    Hasher h;
+    h.u32(kProtocol);
+    if (rules["types"].isObject()) for (auto& [id, def] : rules["types"].members()) { (void)def; h.str(id); }
+    h.str(map["size"].dump(-1)); h.str(map["players"].dump(-1)); h.str(map["entities"].dump(-1));
+    return h.value();
+}
+
+void prepare(Json& rules, Json& map, int seats) {
+    if (Json* c = rules.find("commerce"); c && c->isObject()) c->set("accounts", Json::string("external"));
+    Json* players = map.find("players");
+    Json* entities = map.find("entities");
+    if (!players || !entities || !players->isArray() || !entities->isArray()) throw std::runtime_error("city: the map needs players and entities");
+    std::string heroType;
+    for (const Json& e : entities->items()) if (e.getInt("owner") == 1 && heroType.empty()) heroType = e.getStr("type");
+    if (heroType.empty()) throw std::runtime_error("city: player 1 has no hero on the map");
+    std::vector<std::pair<Fixed, Fixed>> spots;
+    if (const Json& j = map["city"]["junctions"]; j.isArray())
+        for (const Json& n : j.items()) spots.push_back({n["x"].fx(), n["z"].fx()});
+    if (spots.size() < size_t(std::max(0, seats)))
+        if (const Json& pr = map["premises"]; pr.isArray())
+            for (const Json& p : pr.items()) spots.push_back({p["at"][size_t(0)].fx(), p["at"][size_t(1)].fx()});
+    for (int i = 1; i < seats; ++i) {
+        if (spots.empty() || players->size() >= 250) throw std::runtime_error("city: no room for " + std::to_string(seats) + " seats");
+        Json p = Json::object();
+        p.set("name", Json::string("Citizen " + std::to_string(i + 1)));
+        p.set("team", Json::number(int64_t(1)));
+        players->push(p);
+        const auto spot = spots[size_t(i) * spots.size() / size_t(seats)];
+        Json e = Json::object();
+        e.set("type", Json::string(heroType));
+        e.set("owner", Json::number(int64_t(players->size())));
+        Json pos = Json::array();
+        pos.push(Json::number(spot.first)); pos.push(Json::number(spot.second));
+        e.set("pos", pos);
+        entities->push(e);
+    }
+}
 uint64_t accountId(const std::string& player) { Hasher h; h.str("city-account"); h.str(player); const uint64_t v = h.value(); return v ? v : 1; }
 
 // ================================================================= server
@@ -219,7 +257,7 @@ void Server::broadcast() {
         c.p = Vec2{t.pos.x, t.pos.z};
         c.s.id = e.index; c.s.type = u.type; c.s.owner = dr != driven.end() ? dr->second : owner;
         c.s.x = q64(t.pos.x); c.s.z = q64(t.pos.z);
-        c.s.yaw = uint8_t((t.yaw.raw * 256) >> Fixed::kFracBits);
+        c.s.yaw = uint8_t(int(std::lround(std::atan2(u.facing.z.toDouble(), u.facing.x.toDouble()) * (128.0 / 3.14159265358979323846))) & 255);
         const Fixed max = types[u.type].maxHp;
         c.s.hp = max.raw > 0 ? uint8_t(std::clamp<int64_t>((u.hp.raw * 255) / max.raw, 0, 255)) : uint8_t(0);
         c.s.flags = players ? 1 : 0;
@@ -261,7 +299,7 @@ void Server::broadcast() {
                 }
             }
         Out o(Msg::Snapshot);
-        o.u32(tick);
+        o.u32(tick); o.u32(hero.index);
         const size_t n = std::min<size_t>(changed.size() + same.size(), size_t(opt_.maxEntities));
         o.u16(uint16_t(n));
         size_t put_ = 0;
@@ -370,10 +408,10 @@ void Client::poll(uint64_t now) {
             break;
         }
         case Msg::Snapshot: {
-            const uint32_t tick = in.u32();
+            const uint32_t tick = in.u32(), hero = in.u32();
             const uint16_t n = in.u16();
-            if (!in.ok || packet.size() != 7 + size_t(n) * kEntityBytes || tick < tick_) break;   // late or malformed
-            tick_ = tick;
+            if (!in.ok || packet.size() != 11 + size_t(n) * kEntityBytes || tick < tick_) break;   // late or malformed
+            tick_ = tick; hero_ = hero;
             for (uint16_t i = 0; i < n; ++i) { const EntityState e = get(in); entities_[e.id] = {e, tick, false}; }
             ++snapshots_;
             for (auto it = entities_.begin(); it != entities_.end();) it = !it->second.fixed && tick - it->second.tick > expire_ ? entities_.erase(it) : std::next(it);

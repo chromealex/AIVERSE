@@ -359,6 +359,11 @@ private:
     Screen screen_ = Screen::Menu;
     std::unique_ptr<Simulation> sim_;
     std::unique_ptr<net::NetClient> net_;     // after sim_: destroyed first, so it never outlives the sim it drives
+    struct CityLink;                          // a persistent city on a server (ClientCity.cpp, docs/city-server.md)
+    std::shared_ptr<CityLink> city_;          // after sim_ too; reset before the simulation it shows the city in
+    void cityPrepare(Json& rules, Json& map);
+    void cityAttach();
+    float cityFrame(double dt);
     std::vector<RtsAI> bots_;
     RtsScene scene_;
     uint8_t human_ = 1;

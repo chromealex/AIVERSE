@@ -190,7 +190,7 @@ void GameClient::toMenu() {
     sound_.detach();
     fx_.stopMatch();
     audio_.stopAll(0.2f, combatBuses());
-    sim_.reset();
+    city_.reset(); sim_.reset();
     setScreen(Screen::Menu);
     menuMusic();
 }
@@ -261,10 +261,13 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         SimConfig cfg;
         cfg.seed = uint64_t(std::time(nullptr));
         if (const char* sd = std::getenv("AIVERSE_SEED")) cfg.seed = uint64_t(std::strtoull(sd, nullptr, 10));   // testing: reproducible matches
+        city_.reset();
         sim_ = std::make_unique<Simulation>(cfg, std::make_unique<RtsModule>());
         Json rules = rulesJson_;
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
+        cityPrepare(rules, map);   // AIVERSE_CITY: a seat in a city on a server (ClientCity.cpp)
         sim_->setup(rules, map);
+        cityAttach();
         if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
         // static scenery streamed around the camera instead of being loaded whole. The key is "streamedWorld" here:
         // in these maps "world" is the planet system (FPS maps keep the same block under "world")
@@ -283,7 +286,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         configureBakedLighting(maps_[idx].file);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
-        error_ = e.what(); sim_.reset(); return;
+        error_ = e.what(); city_.reset(); sim_.reset(); return;
     }
     mapIndex_ = idx;
     bots_.clear();
@@ -916,7 +919,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
 
         steerPossessed();
         topDownFrame(dt);
-        if (!netMatch_ && !topDownPaused()) {   // single player: the escape preview pauses the match
+        if (city_) alpha = cityFrame(dt);   // the city runs on a server: nothing is stepped here
+        else if (!netMatch_ && !topDownPaused()) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
             static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
             if (simSpeed == 1.0) sim_->advance(dt);
