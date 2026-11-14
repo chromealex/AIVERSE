@@ -206,6 +206,7 @@ void Traffic::gangs(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& 
             Order go; go.type = OrderType::Move; go.point = v3(door);
             m_->issue(sim, m, go, false);
             g.crew.push_back(m);
+            st.exempt.insert(std::lower_bound(st.exempt.begin(), st.exempt.end(), m, [](Entity a, Entity b) { return a.index < b.index; }), m);   // not a passer-by
         }
         if (g.crew.empty()) { gangEnd(sim, st, kCitizenHome, false); break; }
         g.state = kGangOut; g.until = sim.tick() + rate * 20;

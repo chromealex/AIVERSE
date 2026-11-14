@@ -162,8 +162,8 @@ void RtsModule::moveAgents(Simulation& sim) {
             if (m.pathPos >= m.path.size() && m.moving) { m.moving = false; m.path.clear(); }
             a.moving = m.moving;
         }
-        state(sim).trig.vars["resident_crossing_"+std::to_string(e.packed())+"_reason"]=Fixed{};
-        if(a.moving){
+        if (!vehicleBodies.empty()) state(sim).trig.vars["resident_crossing_"+std::to_string(e.packed())+"_reason"]=Fixed{};   // (a game without vehicles keeps its state and checksums)
+        if(a.moving && !vehicleBodies.empty()){   // (no vehicles: nothing to walk round, and no crossing variables written into the state)
             const Vec2 goal=m.pathPos<m.path.size()?m.path[m.pathPos].xz():m.goal.xz();
             const Vec2 waypoint=vehicleDetour(e,a.p,goal,a.r);
             if(waypoint!=goal){auto delta=waypoint-a.p;a.pref=delta.lengthSq().raw?normalize(delta)*fxMin(a.speed,delta.length()*invDt):Vec2{};}
@@ -311,7 +311,10 @@ void RtsModule::moveAgents(Simulation& sim) {
         // waypoint reached?
         if (m.pathPos < m.path.size()) {
             Vec2 d = (m.path[m.pathPos] - tr.pos).xz();
-            if (d.length() <= fxMax(a.speed * dt, Fixed::fromRatio(1, 10)) || d.dot(d + moved.xz()).raw < 0) {
+            // passed it: against the wish (games without vehicles: unchanged, their checksums are a baseline); among
+            // vehicle bodies a person steps round them, so against where he was before the step
+            const bool passed = vehicleBodies.empty() ? d.dot(a.pref).raw < 0 : d.dot(d + moved.xz()).raw < 0;
+            if (d.length() <= fxMax(a.speed * dt, Fixed::fromRatio(1, 10)) || passed) {
                 if (++m.pathPos >= m.path.size()) { m.moving = false; m.path.clear(); m.vel = {}; }
             }
         }

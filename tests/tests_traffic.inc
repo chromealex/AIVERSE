@@ -972,7 +972,7 @@ TEST(traffic_gang_takes_a_car_robs_the_shop_and_gets_away) {
     r = replaced(r, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
     r = replaced(r, R"("port": {"jobs": 5,)", R"("port": {"jobs": 3,)");
     r = replaced(r, R"("roads": {"tiles": "a"},)", R"("roads": {"tiles": "a", "parkingLanes": 1}, "gangs": {"every": 3, "size": [2, 3], "targets": {"shop": 500}, "rob": 4, "jail": 60},)");
-    r = replaced(r, R"("police": {)", R"("police": {"max": 0, )");
+    r = replaced(r, R"("police": {"answers": "crime")", R"("police": {"answers": "wreck")");   // (nobody answers a crime)
     auto sim = makeSimJson(r, populationMap(), 3);
     auto& w = sim->world();
     const Vec2 shop = trf(*sim).places()[1].pos;
@@ -1034,7 +1034,7 @@ TEST(traffic_gang_leaves_a_robber_somebody_holds) {
     r = replaced(r, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
     r = replaced(r, R"("port": {"jobs": 5,)", R"("port": {"jobs": 3,)");
     r = replaced(r, R"("roads": {"tiles": "a"},)", R"("roads": {"tiles": "a", "parkingLanes": 1}, "gangs": {"every": [500, 500], "size": [3, 3], "targets": {"shop": 500}, "rob": 4, "jail": 60},)");
-    r = replaced(r, R"("police": {)", R"("police": {"max": 0, )");
+    r = replaced(r, R"("police": {"answers": "crime")", R"("police": {"answers": "wreck")");
     auto sim = makeSimJson(r, populationMap(), 3);
     tstore(*sim).nextGang = 60;   // in three seconds
     Entity heldOne = kNullEntity;
@@ -1054,4 +1054,38 @@ TEST(traffic_gang_leaves_a_robber_somebody_holds) {
     for (auto& c : tstore(*sim).citizens) { jailed += c.state == game::kCitizenJail; home += c.state == game::kCitizenHome && c.work < 0; CHECK(c.state != game::kCitizenGang); }
     CHECK(jailed == 1 && home >= 2);
     CHECK(call != 0);
+}
+
+TEST(traffic_gang_robber_is_detained_by_a_custody_patrol) {
+    // the police service detains (rule custody): officers walk up to the robber, take him to the patrol car, drive
+    // him to the station and hand him over
+    std::string r = commuteRules("");
+    r = replaced(r, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
+    r = replaced(r, R"("port": {"jobs": 5,)", R"("port": {"jobs": 3,)");
+    r = replaced(r, R"("roads": {"tiles": "a"},)", R"("roads": {"tiles": "a", "parkingLanes": 1}, "gangs": {"every": [500, 500], "size": [3, 3], "targets": {"shop": 500}, "rob": 25, "jail": 60},)");
+    r = replaced(r, R"("police": {)", R"("police": {"custody": true, )");
+    std::string map = trafficMap(R"({"type":"guy","owner":1,"pos":[8.5,4.5]},{"type":"dummy","owner":2,"pos":[8.5,8.5]},{"type":"hospital","owner":0,"pos":[8.5,16.4]})");
+    map.insert(map.size() - 1, kPopulationPlaces);
+    auto sim = makeSimJson(r, map, 3);
+    auto& w = sim->world();
+    tstore(*sim).nextGang = 60;
+    Entity suspect = kNullEntity;
+    uint32_t call = 0;
+    bool held = false, loaded = false, patrolCame = false;
+    for (int i = 0; i < 300 * int(sim->tickRate()); ++i) {
+        sim->step();
+        auto& g = tstore(*sim).gang;
+        if (g.state == game::kGangRob && !suspect.valid() && !g.crew.empty()) { suspect = g.crew[0]; call = g.call; }
+        if (g.state != game::kGangNone) held = held || g.held > 0;
+        if (suspect.valid() && w.alive(suspect)) loaded = loaded || (w.get<game::Unit>(suspect).flags & game::kUnitInCargo) != 0;
+        for (auto& c : tstore(*sim).cars) patrolCame = patrolCame || (c.service >= 0 && call != 0 && c.call == call);
+    }
+    CHECK(suspect.valid() && patrolCame && held && loaded);   // taken to the patrol car and driven off in it
+    CHECK(tstore(*sim).gangCaught == 1);                       // he counts as arrested, whatever the others did
+    CHECK(tstore(*sim).gang.state == game::kGangNone);
+    for (auto& c : tstore(*sim).citizens) CHECK(c.state != game::kCitizenGang);
+    bool open = false, busy = false;
+    for (auto& inc : tstore(*sim).incidents) open = open || inc.id == call;
+    for (auto& c : tstore(*sim).cars) busy = busy || (c.service >= 0 && c.call == call);
+    CHECK(!open && !busy && !w.alive(suspect));   // handed over at the station: the call is closed, the patrol is free
 }

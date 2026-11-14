@@ -286,6 +286,7 @@ struct TrafficStore {
     std::vector<TrafficLightProp> lights;
     std::vector<TrafficCitizen> citizens;    // the population; the index is the citizen's id
     TrafficGang gang;                        // the one that is out now
+    std::vector<Entity> exempt;              // people of pedestrian types the crowd must leave alone (robbers), by index
     uint32_t nextGang = 0;
     int64_t gangLoot = 0;                    // taken home so far
     uint32_t gangRobberies = 0, gangCaught = 0;
