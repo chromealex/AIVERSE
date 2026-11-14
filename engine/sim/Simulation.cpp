@@ -76,6 +76,12 @@ void Simulation::inject(Command cmd) {
     pending_[t].push_back(std::move(cmd));
 }
 
+void Simulation::present(std::vector<SimEvent> events) {
+    events_ = std::move(events);
+    for (auto& sys : systems_)
+        if (sys.name.size() >= 8 && sys.name.compare(sys.name.size() - 8, 8, ".collect") == 0) sys.fn(*this);
+}
+
 void Simulation::step() {
     if(!module_->readyToStep(*this))return;
     events_.clear();

@@ -4,11 +4,13 @@
 //   aiverse_city serve --project DIR [--map FILE] --port P [--seats N] [--seconds S] [--accounts FILE] ...   real UDP, real time
 //                      accounts: --accounts FILE (a JSON file) or --meta-config FILE --meta-state FILE (the meta service);
 //                      --absent-seconds N (default a week): who was away longer is sold out, checked every --sweep-seconds
+//                      --key HEX64: only players with a ticket get in (aiverse_city ticket --key HEX64 --player ID [--seconds S])
 //   aiverse_city bots  --project DIR [--map FILE] --connect HOST:PORT [--seats N] --players N [--seconds S]
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <thread>
 #include "engine/net/HeroInput.h"
@@ -28,7 +30,8 @@ namespace city = aiverse::net::city;
 
 namespace {
 struct Args {
-    std::string cmd, project, map, connect, accounts, metaConfig, metaState, rulesPatch, replicate = "all";
+    std::string cmd, project, map, connect, accounts, metaConfig, metaState, rulesPatch, replicate = "all", key, player;
+    int churn = 0;   // load: every this many seconds a tenth of the players leave and come back
     int64_t absentSeconds = 604800, sweepSeconds = 3600;
     int mirror = 0;   // bots: the first client also keeps a local simulation that shows the city (as the game client does)
     int players = 8, seats = 0, seconds = 20, radius = 40, rate = 10, port = 47800;
@@ -65,6 +68,8 @@ city::Options options(const Args& a) {
     city::Options o;
     o.radius = a.radius; o.snapshotRate = a.rate;
     o.replicate = a.replicate == "involved" ? city::Replicate::Involved : city::Replicate::All;
+    o.key = city::fromHex(a.key);
+    if (!a.key.empty() && o.key.size() != 32) throw std::runtime_error("--key: 64 hex digits");
     return o;
 }
 double rssMb() {
@@ -113,7 +118,7 @@ int runLoad(const Args& a) {
     Simulation& sim = server.simulation();
     const uint32_t rate = sim.tickRate(), ticks = uint32_t(a.seconds) * rate, warm = 2 * rate;
     std::vector<double> stepMs;
-    uint64_t inView = 0, samples = 0;
+    uint64_t inView = 0, samples = 0, gone[3] = {0, 0, 0}, rejoined = 0;
     for (uint32_t t = 0; t < ticks + warm; ++t) {
         const uint64_t now = uint64_t(t) * 1000 / rate;
         for (size_t i = 0; i < clients.size(); ++i) {
@@ -121,6 +126,17 @@ int runLoad(const Args& a) {
             Command c;
             if (clients[i]->ready() && wander(thumbs[i], now, clients[i]->slot(), c)) clients[i]->submit(c);
         }
+        if (a.churn > 0 && t > warm && t % (uint32_t(a.churn) * rate) == 0)   // a tenth of them go and come back at once
+            for (size_t i = (t / rate) % 10; i < clients.size(); i += 10) {
+                const uint64_t in = clients[i]->bytesIn(), out = clients[i]->bytesOut(), sn = clients[i]->snapshots();
+                gone[0] += in; gone[1] += out; gone[2] += sn;
+                clients[i]->close();
+                server.poll(now);
+                auto pair = net::makeLoopbackPair();
+                if (!server.attach(seats[i], std::move(pair.first), "bot-" + std::to_string(i + 1))) { std::fprintf(stderr, "re-attach %zu failed\n", i); return 1; }
+                clients[i] = std::make_unique<city::Client>(std::move(pair.second), server.content());
+                ++rejoined;
+            }
         server.poll(now);
         const auto from = std::chrono::steady_clock::now();
         server.step();
@@ -132,9 +148,10 @@ int runLoad(const Args& a) {
     double sum = 0;
     for (double v : stepMs) sum += v;
     const double avg = sum / double(stepMs.size()), p99 = stepMs[stepMs.size() * 99 / 100], worst = stepMs.back();
-    uint64_t in = 0, out = 0, snaps = 0;
+    uint64_t in = gone[0], out = gone[1], snaps = gone[2];
     for (auto& c : clients) { in += c->bytesIn(); out += c->bytesOut(); snaps += c->snapshots(); }
     const double secs = double(ticks + warm) / rate, n = double(a.players);
+    if (rejoined) std::fprintf(stderr, "rejoined %llu times\n", (unsigned long long)rejoined);
     const city::Stats& s = server.stats();
     size_t cars = 0, people = 0, units = 0;
     sim.world().each<game::Unit, Transform>([&](Entity, game::Unit&, Transform&) { ++units; });
@@ -142,12 +159,12 @@ int runLoad(const Args& a) {
     std::printf("{\"players\": %d, \"replicate\": \"%s\", \"radius\": %d, \"rate\": %d, \"seconds\": %d, \"setupMs\": %.0f, "
                 "\"stepAvgMs\": %.3f, \"stepP99Ms\": %.3f, \"stepMaxMs\": %.3f, \"broadcastAvgMs\": %.3f, \"cpuShare\": %.3f, "
                 "\"downBytesPerSec\": %.0f, \"upBytesPerSec\": %.0f, \"snapshotsPerSec\": %.1f, \"entitiesPerSnapshot\": %.1f, \"inView\": %.1f, "
-                "\"events\": %llu, \"rejected\": %llu, \"trafficCars\": %zu, \"trafficPeople\": %zu, \"entities\": %zu, \"rssMb\": %.0f}\n",
+                "\"simEvents\": %llu, \"premisesTold\": %llu, \"events\": %llu, \"rejected\": %llu, \"trafficCars\": %zu, \"trafficPeople\": %zu, \"entities\": %zu, \"rssMb\": %.0f}\n",
                 a.players, a.replicate.c_str(), a.radius, a.rate, a.seconds, setupMs, avg, p99, worst,
                 double(s.broadcastNs) / 1e6 / double(std::max<uint64_t>(1, s.snapshots / uint64_t(a.players))), avg * rate / 1000.0,
                 double(in) / secs / n, double(out) / secs / n, double(snaps) / secs / n,
                 s.snapshots ? double(s.entities) / double(s.snapshots) : 0.0, samples ? double(inView) / double(samples) : 0.0,
-                (unsigned long long)s.events, (unsigned long long)s.rejected, cars, people, units, rssMb());
+                (unsigned long long)s.simEvents, (unsigned long long)s.premisesTold, (unsigned long long)s.events, (unsigned long long)s.rejected, cars, people, units, rssMb());
     std::vector<std::pair<uint64_t, uint16_t>> top;
     for (auto& [type, count] : s.byType) top.push_back({count, type});
     std::sort(top.rbegin(), top.rend());
@@ -202,7 +219,7 @@ int runServe(const Args& a) {
     Simulation& sim = server.simulation();
     const uint32_t rate = sim.tickRate();
     const uint64_t start = nowMs();
-    uint64_t guests = 0, lastReport = start, late = 0, lastSweep = start;
+    uint64_t lastReport = start, late = 0, lastSweep = start;
     double stepSum = 0, stepMax = 0;
     uint32_t steps = 0;
     size_t peak = 0;
@@ -211,8 +228,7 @@ int runServe(const Args& a) {
         const uint64_t now = nowMs();
         if (a.seconds > 0 && now - start > uint64_t(a.seconds) * 1000) break;
         for (auto& conn : listener.poll(now)) {
-            const uint8_t seat = server.freeSeat();
-            if (!seat || !server.attach(seat, std::move(conn), "guest-" + std::to_string(++guests))) std::printf("refused a connection: no free seat\n");
+            server.admit(std::move(conn));   // a seat when its hello is good (a ticket, if the server has a key)
         }
         peak = std::max(peak, server.clients());
         server.poll(now);
@@ -255,7 +271,8 @@ int runBots(const Args& a) {
     for (int i = 0; i < a.players; ++i) {
         auto conn = net::connectUdp(host, port);
         if (!conn) { std::fprintf(stderr, "cannot connect\n"); return 1; }
-        clients.push_back(std::make_unique<city::Client>(std::move(conn), content));
+        const std::string name = "bot-" + std::to_string(i + 1);
+        clients.push_back(std::make_unique<city::Client>(std::move(conn), content, name, a.key.empty() ? std::vector<uint8_t>{} : city::ticket(city::fromHex(a.key), name, int64_t(std::time(nullptr)) + 3600)));
         thumbs[size_t(i)].rng = uint32_t(a.seed * 2654435761u + uint32_t(i) * 40503u + 1);
     }
     std::unique_ptr<Simulation> local;
@@ -317,6 +334,9 @@ int main(int argc, char** argv) {
         else if (k == "--port") a.port = std::atoi(v.c_str());
         else if (k == "--seed") a.seed = uint64_t(std::atoll(v.c_str()));
         else if (k == "--connect") a.connect = v;
+        else if (k == "--key") a.key = v;
+        else if (k == "--player") a.player = v;
+        else if (k == "--churn") a.churn = std::atoi(v.c_str());
         else if (k == "--mirror") a.mirror = std::atoi(v.c_str());
         else if (k == "--accounts") a.accounts = v;
         else if (k == "--meta-config") a.metaConfig = v;
@@ -328,6 +348,12 @@ int main(int argc, char** argv) {
         else { std::fprintf(stderr, "unknown option %s\n", k.c_str()); return 1; }
     }
     try {
+        if (a.cmd == "ticket") {   // what a login service would give the player
+            const auto key = city::fromHex(a.key);
+            if (key.size() != 32 || a.player.empty()) throw std::runtime_error("ticket --key HEX64 --player ID [--seconds S]");
+            std::printf("%s\n", city::toHex(city::ticket(key, a.player, int64_t(std::time(nullptr)) + a.seconds)).c_str());
+            return 0;
+        }
         if (a.project.empty()) throw std::runtime_error("--project DIR");
         if (a.cmd == "load") return runLoad(a);
         if (a.cmd == "serve") return runServe(a);

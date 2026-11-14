@@ -18,7 +18,7 @@
 namespace aiverse::game { class RtsModule; }
 
 namespace aiverse::net::city {
-constexpr uint32_t kProtocol = 2;
+constexpr uint32_t kProtocol = 3;
 // What both sides must agree on: the unit types (their order is the wire's type id) and the map's players and
 // entities (their order is the entity ids at the start). Other rules may differ: the client does not simulate.
 uint64_t contentId(const Json& rules, const Json& map);
@@ -26,7 +26,9 @@ uint64_t contentId(const Json& rules, const Json& map);
 // first, the others at crossroads / doors spread over the city) and property that belongs to accounts.
 // Call it on the rules and the map the simulation is about to be set up from. Throws when there is no room.
 void prepare(Json& rules, Json& map, int seats);
-uint64_t accountId(const std::string& player);   // the commerce account of a player id (never 0)
+uint64_t accountId(const std::string& player);
+std::string toHex(const std::vector<uint8_t>& bytes);
+std::vector<uint8_t> fromHex(const std::string& text);   // empty when malformed   // the commerce account of a player id (never 0)
 
 enum class Replicate : uint8_t { All, Involved };
 
@@ -38,7 +40,12 @@ struct Options {
     int maxEntities = 250;        // per snapshot (14 bytes each)
     Replicate replicate = Replicate::All;
     int saveSeconds = 60;         // bound accounts are stored this often (and when the player leaves)
+    bool emptySeats = true;       // a seat nobody plays has no hero in the city; he comes back where he left
+    std::vector<uint8_t> key;     // 32 bytes: admit() lets in only players with a ticket() sealed by this key (empty: anybody, as a guest)
+    std::function<int64_t()> clock;   // unix seconds for ticket expiry (default: the system clock)
 };
+// A ticket the login service gives a player: his id and an expiry time sealed with the server's key.
+std::vector<uint8_t> ticket(const std::vector<uint8_t>& key, const std::string& player, int64_t expiresUnix);
 
 struct EntityState {              // 14 bytes on the wire
     uint32_t id = 0;              // Entity::packed()
@@ -47,10 +54,21 @@ struct EntityState {              // 14 bytes on the wire
     uint16_t x = 0, z = 0;        // 1/64 cell
     uint8_t yaw = 0;              // the unit's facing, 1/256 turn
     uint8_t hp = 0;               // 0..255 of the type's max
-    uint8_t flags = 0;            // 1: a player drives / is it
+    uint8_t flags = 0;            // 1: a player is it or drives it, 2: this hero is inside a vehicle
     bool operator==(const EntityState&) const = default;
 };
 struct Event { uint32_t tick = 0, id = 0; uint8_t kind = 0; uint16_t x = 0, z = 0; uint32_t subject = 0; };
+struct RemoteEvent {              // a SimEvent of the server's simulation that happened in view (or is about this player)
+    uint16_t type = 0; uint8_t player = 0; uint32_t a = UINT32_MAX, b = UINT32_MAX; int64_t value = 0; uint16_t x = 0, z = 0;
+};
+struct PremiseState {             // one of the map's premises as this player may know it
+    uint8_t owner = 0, tenant = 0;    // 0 nobody (the city), 1 this player, 2 somebody else
+    int16_t business = -1;
+    uint8_t staff = 0, flags = 0;     // flags 1: a manager, 2: visited today
+    uint8_t attendance = 255;
+    int64_t lastNet = 0, total = 0, served = 0, stashCash = 0;   // stashCash: only of his own home
+    bool operator==(const PremiseState&) const = default;
+};
 struct AccountState { int64_t cash = 0, debt = 0; uint32_t day = 0; bool operator==(const AccountState&) const = default; };
 
 // Where accounts live between sessions (the meta service; a file in tests). Both run on the server's thread.
@@ -63,7 +81,7 @@ struct AccountStore {
 
 struct Stats {
     std::unordered_map<uint16_t, uint64_t> byType;   // snapshot entries per unit type (what the traffic is made of)
-    uint64_t snapshots = 0, entities = 0, snapshotBytes = 0, reliableBytes = 0, commands = 0, rejected = 0, events = 0, broadcastNs = 0, fixedTold = 0;
+    uint64_t snapshots = 0, entities = 0, snapshotBytes = 0, reliableBytes = 0, commands = 0, rejected = 0, events = 0, broadcastNs = 0, fixedTold = 0, simEvents = 0, premisesTold = 0;
 };
 
 class Server {
@@ -74,6 +92,9 @@ public:
     bool occupied(uint8_t slot) const;
     // false: no such seat, it is taken, or that player is already in.
     bool attach(uint8_t slot, std::unique_ptr<Conn> connection, const std::string& player = {});
+    // A connection nobody vouched for: it gets a free seat when its hello carries a valid ticket (Options::key),
+    // or, without a key, as the guest it names itself.
+    void admit(std::unique_ptr<Conn> connection);
     uint8_t freeSeat() const;                    // 0: full
     void poll(uint64_t now);                     // read the clients, drop the closed ones (their accounts are stored)
     void step();                                 // one tick; broadcasts when a snapshot is due
@@ -94,9 +115,19 @@ private:
         uint8_t slot = 0; std::unique_ptr<Conn> conn; std::string player; uint64_t account = 0;
         bool ready = false; uint64_t born = 0; std::deque<Command> commands;
         std::unordered_map<uint32_t, Sent> sent; AccountState told; bool toldAny = false;
+        std::vector<RemoteEvent> events;                // of the ticks since the last snapshot
+        std::vector<PremiseState> premises;             // as he was told
         std::unordered_map<uint32_t, uint32_t> fixed;   // things that never moved, told once (reliably): id -> the tick they were last in view
     };
     void leave(Peer& p);
+    bool seat(Peer& p, uint8_t slot, const std::string& player);
+    bool hello(Peer& p, const Bytes& packet, bool seated);
+    void welcome(Peer& p);
+    void collectEvents();
+    void tellPremises(Peer& p);
+    std::vector<uint8_t> seats_;                        // slots that had a hero on the map
+    std::vector<Peer> waiting_;                         // admitted, no hello yet
+    uint64_t guests_ = 0;
     void store(Peer& p, bool leaving);
     std::unique_ptr<Simulation> sim_;
     Options opt_;
@@ -111,7 +142,7 @@ private:
 
 class Client {
 public:
-    Client(std::unique_ptr<Conn> connection, uint64_t content);
+    Client(std::unique_ptr<Conn> connection, uint64_t content, std::string player = {}, std::vector<uint8_t> ticket = {});
     void poll(uint64_t now);
     bool submit(const Command& command);         // the server stamps the player and the tick
     bool ready() const { return slot_ != 0; }
@@ -125,6 +156,10 @@ public:
     const std::unordered_map<uint32_t, Seen>& entities() const { return entities_; }
     const AccountState& account() const { return account_; }
     std::vector<Event> takeEvents() { return std::move(events_); }
+    std::vector<RemoteEvent> takeSimEvents() { return std::move(simEvents_); }
+    const std::vector<PremiseState>& premises() const { return premises_; }   // by the map's premises index (as far as told)
+    uint32_t premisesVersion() const { return premisesVersion_; }
+    uint32_t rttMs() const { return conn_->rttMs(); }
     uint64_t bytesIn() const { return bytesIn_; }
     uint64_t bytesOut() const { return bytesOut_; }
     uint64_t snapshots() const { return snapshots_; }
@@ -138,6 +173,11 @@ private:
     std::unordered_map<uint32_t, Seen> entities_;
     AccountState account_;
     std::vector<Event> events_;
+    std::vector<RemoteEvent> simEvents_;
+    std::vector<PremiseState> premises_;
+    uint32_t premisesVersion_ = 0;
+    std::string player_;
+    std::vector<uint8_t> ticket_;
 };
 
 // A file of accounts: {"<player>": {"account": {...}, "seen": unixSeconds, "online": bool}} (tests, a local server).

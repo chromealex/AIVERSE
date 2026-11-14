@@ -2,6 +2,8 @@
 // city is shown in it (net::city::Mirror) and every command goes to the server.
 //   AIVERSE_CITY=host:port   connect when a match starts (the same map and seats as the server)
 //   AIVERSE_CITY_SEATS=N     the server's --seats (default 1)
+//   AIVERSE_CITY_PLAYER=id   who this is; AIVERSE_CITY_TICKET=hex: the ticket of the login service (a server with a key)
+//   AIVERSE_CITY_PREDICT=0   draw the own hero where the server says (no prediction)
 #include <chrono>
 #include <cstdlib>
 #include <thread>
@@ -27,7 +29,9 @@ void GameClient::cityPrepare(Json& rules, Json& map) {
     auto conn = net::connectTo(target);
     if (!conn) throw std::runtime_error("AIVERSE_CITY: host:port");
     auto link = std::make_shared<CityLink>();
-    link->client = std::make_unique<net::city::Client>(std::move(conn), net::city::contentId(rules, map));
+    const char* player = std::getenv("AIVERSE_CITY_PLAYER");
+    const char* ticket = std::getenv("AIVERSE_CITY_TICKET");
+    link->client = std::make_unique<net::city::Client>(std::move(conn), net::city::contentId(rules, map), player ? player : "", ticket ? net::city::fromHex(ticket) : std::vector<uint8_t>{});
     const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(8);
     while (!link->client->ready()) {   // a few round trips: the handshake, hello, welcome
         link->client->poll(net::nowMs());
@@ -43,6 +47,7 @@ void GameClient::cityPrepare(Json& rules, Json& map) {
 void GameClient::cityAttach() {
     if (!city_ || !sim_) return;
     city_->mirror = std::make_unique<net::city::Mirror>(*sim_, *city_->client);
+    if (const char* p = std::getenv("AIVERSE_CITY_PREDICT"); p && *p == '0') city_->mirror->setPrediction(false);
     bots_.clear();
 }
 
@@ -51,6 +56,7 @@ float GameClient::cityFrame(double dt) {
     if (!city_ || !city_->mirror) return 0;
     city_->client->poll(net::nowMs());
     city_->mirror->update(dt);
+    if (!sim_->events().empty()) processEvents();   // notices about this player, as after a local tick
     if (!city_->client->connected() && !city_->lost) { city_->lost = true; notice("Connection to the city is lost"); }
     return city_->mirror->alpha();
 }

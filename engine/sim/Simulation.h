@@ -139,6 +139,10 @@ public:
     const std::string& systemName(size_t i) const { return systems_[i].name; }
     int64_t systemTime(size_t i) const { return i < profNs_.size() ? profNs_[i] : 0; }
     void emit(const SimEvent& e) { events_.push_back(e); }
+    // A simulation that only shows another one (a network mirror, net::city::Mirror) is never stepped: this hands
+    // one batch of events to the systems that only read them — those whose name ends in ".collect" (sound, effects,
+    // view scripts) — as a step would. Nothing else runs.
+    void present(std::vector<SimEvent> events);
 
     World& world() { return world_; }
     Random& rng() { return rng_; }
