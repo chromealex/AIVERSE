@@ -87,6 +87,33 @@ the *engine* add mechanics generically — never a special case for one game.
 - When a fixed block can't express something, extend the trigger system (`RtsTriggers`) instead
   of special-casing a game.
 
+**Games stay out of the engine repo (owner's rule, all agents):**
+- A concrete game project (a port, a commercial game, the owner's or a user's project) is never
+  committed here: not as `templates/<game>`, not as data dumps in `tests/`, `tools/` or `docs/`.
+  `templates/` holds only the engine's own sample games. A game lives in its own folder with its
+  own git repository outside the engine checkout (the owner's projects: on the external drive,
+  e.g. `/Volumes/KINGSTON/<Project>/games/<game>`); scratch and test games go next to it, not here.
+- Game-specific code lives only in the game project: C++ in `<project>/native/` as native modules
+  (`docs/native-modules.md`, `aiverse_native_module`, rules.json `nativeModules`,
+  `aiverse_native_use_meta` for a meta backend), platform SDKs as plugins (`docs/plugins.md`).
+  This covers bots / AI ports, backend and meta adapters, server stats, importers and converters
+  of that game's assets, its skills / modes / map actors, HUD and tutorial glue, input schemes,
+  its docs and its tests.
+- The engine gets only generic, game-agnostic mechanics and extension points. If the native
+  module API lacks a hook, add a small generic one (documented in `docs/native-modules.md`, with a
+  synthetic test) and implement the game part in the project. No game names in engine
+  identifiers, file names, JSON keys, CMake targets, docs or AGENTS.md rows.
+- The engine must build and pass every test without any external game. A test that needs a real
+  game takes its folder from an environment / CMake variable and skips when it is absent;
+  per-game checksum baselines live in the game's folder, not in `tests/checksums/baseline.txt`.
+- Importers and tools never write into `templates/` by default: the game folder is an explicit
+  argument.
+- Branches and worktrees of game work are not created in the engine repository. Keep them in the
+  project's own repository (it may fetch the engine's `main` as a remote); only generic engine
+  changes come back to the engine, through the integrator.
+- Found game-specific code already in the engine? Move it out to the project (see commit
+  "Move the Drone Fall backend adapter out of the engine") instead of extending it.
+
 **Licenses/assets:** only vendor code/assets with permissive licenses and keep their license files.
 Original assets of commercial games are never committed; importers read them from the user's own
 copy and builds mark them external.
