@@ -62,7 +62,7 @@ ch.poll();
 - **Threading:** one owning thread; every callback runs inside `Channel::poll()`, never from
   `unary()` / `cancel()` themselves, never from another thread (same rule as meta `RemoteBackend`).
   No threads are created. Destroying a channel drops pending callbacks; do not destroy a channel from
-  inside its own callback (move it aside and destroy after `poll()` returns, as `ExtMetaClient` does).
+  inside its own callback (move it aside and destroy after `poll()` returns).
 - **Deadlines:** `timeoutMs` counts from the call (queue time included), is sent as `grpc-timeout`
   and enforced locally -> `DEADLINE_EXCEEDED`.
 - **Cancellation:** `Call::cancel()` / `Stream::cancel()` -> RST_STREAM / WebSocket close / socket
@@ -99,44 +99,18 @@ the server answers with a `0x80` header block, framed messages and a final `0x80
 
 `TlsConfig::caPem` adds trusted roots (tests, private CAs); `serverName` overrides SNI/host check.
 
-## Drone Fall meta adapter (`engine/grpc/ext`)
+## Game backends
 
-`ExtMetaClient` ports `MetaNetworkManager` + `MatchmakingManager` over the unchanged protos
-(`ext/proto`, copied from `ExtInterop/Proto`):
-
-1. `connect()`: `EntrypointService.GetServiceMap(client_version, platform)` ->
-   `VersionMismatch` (message in `lastError()`) or identity/matchmaking URLs.
-2. `IdentityService.Token` with a device grant; the device id is the persisted `auth_id` GUID
-   (`ExtMetaConfig::load/save`), `user_id` is saved; refresh grant checked every 10 s once
-   `expires_at` is less than 60 s away.
-3. Matchmaking channel with `webSocketForUnary` (Unity `webSocketMode: true`), `Bearer` token, one
-   shared `CallGate` for all three channels.
-4. `matchmake(mapId, ping)`: `GetBattleServers` -> host `PingFn` per server (the LiteNetLib
-   unconnected `0x50` ping belongs to the battle transport) -> `FindMatch` stream with
-   `FindMatchParams{server_pings, client_version = "<version>|protocol:14|map:<mapId>"}` ->
-   `Queued` / `QueueUpdate` (`onQueueUpdate`) / `MatchFound` -> `BattleTicket{matchId, host, port,
-   accessToken, userId}` for the battle transport (`messages.proto` `ConnectRequest`), stream closed;
-   `MatchCancelled` -> `Error`. `cancelMatchmaking()` leaves the status as is (Unity semantics).
-   Status enums mirror Unity (`ConnectionStatus`, `FindMatchStatus`).
-
-`ExtMetaBackend` exposes the same through `aiverse::meta::Backend` (JSON, callbacks in `pump()`):
-`session.connect|status|logout`, `matchmaking.find {mapId}|cancel`.
-
-Differences from Unity: unary calls get a 30 s deadline (`rpcTimeoutMs`, Unity had none); the
-compatibility key's `protocol:14` is the current value from MatchmakingManager and must be bumped
-together with the game.
-
-`aiverse_grpc_probe --endpoint https://entrypoint.../ [--protocol web|h2] [--login] [--servers]`
-checks a backend from a desktop (without `--login` only the read-only service map is requested).
+Adapters for a particular game's backend (its protos, login and matchmaking flow) live in that game's
+project as a native module, not in the engine: they link `AIVERSE::grpc`, generate their protos with
+`aiverse_protobuf_generate()` and expose the result through `aiverse::meta::Backend`.
 
 ## Tests
 
 `aiverse_grpc_tests` (ctest `aiverse_grpc_tests`, `aiverse_protoc`): codec goldens + fuzz, HPACK
 (RFC 7541 C.4), every transport against the in-process `tests/grpc/MockServer` (h2c, h2+TLS,
 gRPC-Web, WS bridge, TLS), deadlines, cancel, throttle FIFO, retries, connection loss + reconnect,
-1 MiB messages, certificate / host-name / ALPN failures, and the Drone Fall adapter against a mock of
-the backend (login, refresh, matchmaking found / cancelled / unreachable / cancel, meta Backend,
-version mismatch, reconnect from a callback).
+1 MiB messages, certificate / host-name / ALPN failures.
 
 ### Interop (verified in a Linux container)
 
@@ -144,7 +118,6 @@ version mismatch, reconnect from a callback).
 |---|---|---|
 | grpc-core (Python grpcio 1.85) | h2c, h2 + TLS (OpenSSL, SChannel under Wine, JNI SSLEngine on OpenJDK) | unary 200 KB + auth, bidi, host-name rejection |
 | ASP.NET Core 8 + Grpc.AspNetCore(.Web) 2.70 + GrpcWebSocketBridge.AspNetCore 1.4.1 | gRPC-Web, `cs-grpc-bridge-v1` bridge, h2c, h2 + TLS | all pass |
-| same stack with the `extraction_rts` protos (stand-in for the Drone Fall backend) | `aiverse_grpc_probe --find square --assume-ping 33` | GetServiceMap (+ version mismatch), device Token, GetBattleServers over the WebSocket bridge with `Bearer`, FindMatch -> Queued / QueueUpdate / MatchFound ticket, stream closed after the match |
 
 `aiverse_grpc_tests --serve h2|web SECONDS` / `--remote h2|web URL` run the cross-process checks.
 

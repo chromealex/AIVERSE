@@ -1,6 +1,6 @@
 // engine/grpc tests: protobuf codec (golden bytes from Google protobuf 5.x), HPACK, HTTP/2 and
 // gRPC-Web/WebSocket-bridge transports against the in-process MockServer (plain + TLS), deadlines,
-// cancellation, throttling, retries, and the Drone Fall meta adapter (ext/ExtMeta).
+// cancellation, throttling and retries.
 #include "MockServer.h"
 #include "engine/grpc/Hpack.h"
 #include "engine/grpc/Tls.h"
@@ -156,7 +156,7 @@ static void testHpack() {
     CHECK(h.size() == 5 && h[3].second == "www.example.com" && h[4].first == "cache-control" && h[4].second == "no-cache");
     // Round trip through our encoder (static indexing + Huffman literals).
     Encoder enc;
-    HeaderList in{{":method", "POST"}, {":path", "/extraction_rts.identity.IdentityService/Token"},
+    HeaderList in{{":method", "POST"}, {":path", "/aiverse_test.identity.TokenService/Token"},
                   {"content-type", "application/grpc"}, {"authorization", "Bearer abc.def"}, {"x-bin", std::string("\x00\x01", 2)}};
     std::string block;
     enc.encode(in, block);
@@ -626,242 +626,6 @@ static void testHelpers() {
     CHECK(statusFromHttp(503) == StatusCode::Unavailable && statusFromHttp(401) == StatusCode::Unauthenticated);
 }
 
-// ---------------------------------------------------------------------------------------------
-// Drone Fall meta adapter against a mock of the existing backend (gRPC-Web + WebSocket bridge).
-#include "engine/grpc/ext/ExtMeta.h"
-#include "entrypoint.pb.h"
-#include "identity.pb.h"
-#include "matchmaking.pb.h"
-
-namespace {
-namespace epb = ::extraction_rts::entrypoint;
-namespace ipb = ::extraction_rts::identity;
-namespace mpb = ::extraction_rts::matchmaking;
-
-struct FakeBackend {
-    MockServer srv{MockServer::Mode::GrpcWeb, false};
-    int64_t utc = 1000000;
-    int64_t tokenLifetime = 3600;
-    int tokens = 0;
-    std::vector<ipb::TokenRequest> tokenRequests;
-    std::vector<std::string> mmAuth;
-    mpb::FindMatchParams lastParams;
-    std::string matchMode = "found"; // found | cancelled | silent
-    std::shared_ptr<ServerCall> findCall;
-
-    FakeBackend() {
-        srv.unary("/extraction_rts.entrypoint.EntrypointService/GetServiceMap", [this](const Metadata &md, const std::string &b) {
-            epb::GetServiceMapRequest req;
-            req.parse(b);
-            epb::GetServiceMapResponse rep;
-            if (findMetadata(md, "authorization"))
-                return std::optional<std::pair<Status, std::string>>({{StatusCode::Internal, "entrypoint needs no auth", {}}, ""});
-            if (req.client_version == "old")
-                rep.set_incompatible_version().error_message = "Please update to 2.0";
-            else {
-                rep.set_success().identity_url = srv.url() + "/";
-                rep.success.matchmaking_url = srv.url();
-            }
-            return std::optional<std::pair<Status, std::string>>({{}, rep.serialize()});
-        });
-        srv.unary("/extraction_rts.identity.IdentityService/Token", [this](const Metadata &, const std::string &b) {
-            ipb::TokenRequest req;
-            req.parse(b);
-            tokenRequests.push_back(req);
-            ++tokens;
-            ipb::TokenResponse rep;
-            rep.user_id = "user-" + (req.has_device() ? req.device.device_id.substr(0, 4) : std::string("r"));
-            rep.access_token = "access-" + std::to_string(tokens);
-            rep.refresh_token = "refresh-" + std::to_string(tokens);
-            rep.expires_at = utc + tokenLifetime;
-            rep.expires_in = tokenLifetime;
-            return std::optional<std::pair<Status, std::string>>({{}, rep.serialize()});
-        });
-        srv.unary("/extraction_rts.identity.IdentityService/Logout", [](const Metadata &md, const std::string &) {
-            const bool authed = findMetadata(md, "authorization") != nullptr;
-            return std::optional<std::pair<Status, std::string>>(
-                {authed ? Status{} : Status{StatusCode::Unauthenticated, "no token", {}}, ipb::LogoutResponse{}.serialize()});
-        });
-        srv.unary("/extraction_rts.matchmaking.MatchmakingService/GetBattleServers", [this](const Metadata &md, const std::string &) {
-            const std::string *a = findMetadata(md, "authorization");
-            mmAuth.push_back(a ? *a : "");
-            mpb::GetBattleServersResponse rep;
-            rep.servers.push_back({"eu", "10.0.0.1", 7777});
-            rep.servers.push_back({"us", "10.0.0.2", 7777});
-            return std::optional<std::pair<Status, std::string>>({{}, rep.serialize()});
-        });
-        srv.handle("/extraction_rts.matchmaking.MatchmakingService/FindMatch", [this](ServerCall &c, ServerCall::Event e) {
-            if (e != ServerCall::Event::Message)
-                return;
-            mpb::MatchClientMessage m;
-            m.parse(c.received.back());
-            lastParams = m.find_match_params;
-            const std::string *a = findMetadata(c.headers, "authorization");
-            mmAuth.push_back(a ? *a : "");
-            for (auto &sc : srv.calls())
-                if (sc.get() == &c)
-                    findCall = sc;
-            mpb::MatchEvent ev;
-            ev.set_queued();
-            c.send(ev.serialize());
-            ev = {};
-            ev.set_queue_update().players_in_queue = 3;
-            c.send(ev.serialize());
-            if (matchMode == "found") {
-                ev = {};
-                auto &f = ev.set_match_found();
-                f.match_id = "match-9";
-                f.battle_server_address = "10.0.0.1";
-                f.battle_server_port = 7777;
-                c.send(ev.serialize());
-            } else if (matchMode == "cancelled") {
-                ev = {};
-                ev.set_match_cancelled().reason = "server restart";
-                c.send(ev.serialize());
-                c.finish(StatusCode::Ok);
-            }
-        });
-    }
-};
-
-template <class Pred> bool spinExt(ext::ExtMetaClient &cl, MockServer &srv, Pred pred, int timeoutMs = 4000) {
-    const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
-    while (std::chrono::steady_clock::now() < end && !pred()) {
-        cl.poll();
-        srv.poll();
-        std::this_thread::sleep_for(std::chrono::microseconds(300));
-    }
-    return pred();
-}
-} // namespace
-
-static void testExtMeta() {
-    using namespace aiverse::grpc::ext;
-    FakeBackend be;
-    CHECK(be.srv.ok());
-    std::map<std::string, std::string> profile;
-    ExtMetaConfig cfg;
-    cfg.endpointUrl = be.srv.url() + "/";
-    cfg.clientVersion = "1.2.3";
-    cfg.platform = ClientPlatform::Android;
-    cfg.refreshPeriodMs = 30;
-    cfg.load = [&](const std::string &k) { return profile[k]; };
-    cfg.save = [&](const std::string &k, const std::string &v) { profile[k] = v; };
-    cfg.utcSeconds = [&] { return be.utc; };
-    ExtMetaClient client(cfg);
-    std::vector<ConnectionStatus> statuses;
-    client.onStatus = [&](ConnectionStatus s) { statuses.push_back(s); };
-    client.connect();
-    CHECK(spinExt(client, be.srv, [&] { return client.status() == ConnectionStatus::Connected; }));
-    CHECK(statuses.size() >= 2 && statuses[statuses.size() - 2] == ConnectionStatus::Connecting);
-    CHECK(profile["auth_id"].size() == 36 && profile["auth_id"][14] == '4');
-    CHECK(be.tokenRequests.size() == 1 && be.tokenRequests[0].has_device() &&
-          be.tokenRequests[0].device.device_id == profile["auth_id"]);
-    CHECK(client.accessToken() == "access-1" && profile["user_id"] == client.userId());
-    CHECK(client.identityUrl() == be.srv.url() + "/");
-
-    // Token refresh once expiry is within 60 s.
-    be.utc += be.tokenLifetime - 30;
-    CHECK(spinExt(client, be.srv, [&] { return client.accessToken() == "access-2"; }));
-    CHECK(be.tokenRequests.back().has_refresh_token() && be.tokenRequests.back().refresh_token.refresh_token == "refresh-1");
-    be.utc -= be.tokenLifetime; // far from expiry again: no further refreshes
-    const size_t tokensNow = be.tokenRequests.size();
-
-    // Matchmaking: servers -> pings (us unreachable) -> FindMatch -> MatchFound.
-    std::vector<FindMatchStatus> fs;
-    int queue = -1;
-    client.onFindMatch = [&](FindMatchStatus s) { fs.push_back(s); };
-    client.onQueueUpdate = [&](int n) { queue = n; };
-    PingFn ping = [](const BattleServer &s, std::function<void(int)> done) { done(s.id == "eu" ? 42 : -1); };
-    client.matchmake("square", ping);
-    CHECK(spinExt(client, be.srv, [&] { return client.findMatchStatus() == FindMatchStatus::Found; }));
-    CHECK(fs == std::vector<FindMatchStatus>({FindMatchStatus::Fetching, FindMatchStatus::Pinging, FindMatchStatus::Waiting,
-                                              FindMatchStatus::Found}));
-    CHECK(queue == 3);
-    CHECK(be.lastParams.client_version == "1.2.3|protocol:14|map:square");
-    CHECK(be.lastParams.server_pings.size() == 1 && be.lastParams.server_pings["eu"] == 42);
-    CHECK(be.mmAuth.size() == 2 && be.mmAuth[0] == "Bearer access-2" && be.mmAuth[1] == "Bearer access-2");
-    CHECK(client.ticket() && client.ticket()->matchId == "match-9" && client.ticket()->host == "10.0.0.1" &&
-          client.ticket()->port == 7777 && client.ticket()->accessToken == "access-2");
-    CHECK(spinExt(client, be.srv, [&] { return be.findCall && be.findCall->cancelled; })); // stream disposed
-    CHECK(be.tokenRequests.size() == tokensNow);
-
-    // Match cancelled by the server -> Error; nobody reachable -> NoServersReachable.
-    be.matchMode = "cancelled";
-    client.matchmake("square", ping);
-    CHECK(spinExt(client, be.srv, [&] { return client.findMatchStatus() == FindMatchStatus::Error; }));
-    CHECK(client.lastError().find("server restart") != std::string::npos);
-    if (client.lastError().find("server restart") == std::string::npos)
-        std::printf("    cancelled: %s\n", client.lastError().c_str());
-    client.matchmake("square", [](const BattleServer &, std::function<void(int)> done) { done(-1); });
-    CHECK(spinExt(client, be.srv, [&] { return client.findMatchStatus() == FindMatchStatus::NoServersReachable; }));
-    // Cancel while waiting: the server sees the stream go away; the status is left as it was.
-    be.matchMode = "silent";
-    be.findCall.reset();
-    client.matchmake("square", ping);
-    CHECK(spinExt(client, be.srv, [&] { return client.findMatchStatus() == FindMatchStatus::Waiting && be.findCall; }));
-    client.cancelMatchmaking();
-    CHECK(spinExt(client, be.srv, [&] { return be.findCall->cancelled; }));
-    CHECK(client.findMatchStatus() == FindMatchStatus::Waiting);
-    client.matchmake("", ping);
-    CHECK(client.findMatchStatus() == FindMatchStatus::Error);
-
-    // meta::Backend adapter.
-    {
-        ExtMetaBackend backend(client, ping);
-        be.matchMode = "found";
-        meta::ServiceReply connectReply, findReply;
-        bool c1 = false, f1 = false;
-        backend.request({"session", "connect", "op1", Json::object()}, [&](meta::ServiceReply r) { c1 = true; connectReply = std::move(r); });
-        CHECK(spinExt(client, be.srv, [&] { backend.pump(); return c1; }));
-        CHECK(connectReply.result.code == meta::Code::Ok && connectReply.data.getStr("userId") == client.userId());
-        CHECK(be.tokenRequests.back().has_device()); // reconnect reuses the stored auth_id
-        CHECK(be.tokenRequests.back().device.device_id == profile["auth_id"]);
-        Json args = Json::object();
-        args.set("mapId", Json::string("square"));
-        backend.request({"matchmaking", "find", "op2", args}, [&](meta::ServiceReply r) { f1 = true; findReply = std::move(r); });
-        CHECK(spinExt(client, be.srv, [&] { backend.pump(); return f1; }));
-        CHECK(findReply.result.code == meta::Code::Ok && findReply.data.getStr("matchId") == "match-9" &&
-              findReply.data.getInt("port") == 7777);
-        bool u = false;
-        backend.request({"nope", "x", "op3", Json::object()}, [&](meta::ServiceReply r) { u = r.result.code == meta::Code::Unsupported; });
-        backend.pump();
-        CHECK(u);
-        bool loggedOut = false;
-        backend.request({"session", "logout", "op4", Json::object()}, [&](meta::ServiceReply r) { loggedOut = bool(r.result); });
-        CHECK(spinExt(client, be.srv, [&] { backend.pump(); return loggedOut; }));
-        CHECK(client.status() == ConnectionStatus::None && client.accessToken().empty());
-    }
-
-    // Version mismatch, disabled backend, unreachable endpoint with a reconnect from the callback.
-    ExtMetaConfig old = cfg;
-    old.clientVersion = "old";
-    ExtMetaClient oldClient(old);
-    oldClient.connect();
-    CHECK(spinExt(oldClient, be.srv, [&] { return oldClient.status() == ConnectionStatus::VersionMismatch; }));
-    CHECK(oldClient.lastError() == "Please update to 2.0");
-    ExtMetaConfig off = cfg;
-    off.enabled = false;
-    ExtMetaClient offClient(off);
-    offClient.connect();
-    CHECK(offClient.status() == ConnectionStatus::Disabled);
-    offClient.matchmake("square", ping);
-    CHECK(offClient.findMatchStatus() == FindMatchStatus::Disabled);
-    ExtMetaConfig dead = cfg;
-    dead.endpointUrl = "http://127.0.0.1:1/";
-    ExtMetaClient deadClient(dead);
-    int errors = 0;
-    deadClient.onStatus = [&](ConnectionStatus s) {
-        if (s == ConnectionStatus::NetworkError && ++errors == 1)
-            deadClient.connect(); // destroys the channel whose callback is running: must be safe
-    };
-    deadClient.connect();
-    CHECK(spinExt(deadClient, be.srv, [&] { return errors == 2; }));
-    CHECK(deadClient.status() == ConnectionStatus::NetworkError && !deadClient.lastError().empty());
-}
-
-// Cross-process TLS check: a Linux build serves (`--serve h2|web SECONDS`), another platform's build
-// (e.g. the Windows build under Wine) connects with its own TLS backend (`--remote h2|web URL`).
 static int serve(const std::string &mode, int seconds) {
     MockServer srv(mode == "h2" ? MockServer::Mode::Http2 : MockServer::Mode::GrpcWeb, true);
     if (!srv.ok()) {
@@ -980,7 +744,6 @@ int main(int argc, char **argv) {
         testTransport(m);
     testThrottleAndRetry();
     testTlsFailures();
-    testExtMeta();
     std::printf("aiverse_grpc_tests: %d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
 }

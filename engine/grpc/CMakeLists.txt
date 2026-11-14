@@ -36,16 +36,6 @@ else()
 endif()
 add_library(AIVERSE::grpc ALIAS aiverse_grpc)
 
-# Drone Fall (extraction_rts) meta backend: Entrypoint / Identity / Matchmaking + battle envelope.
-add_library(aiverse_grpc_ext STATIC EXCLUDE_FROM_ALL ext/ExtMeta.cpp)
-aiverse_protobuf_generate(TARGET aiverse_grpc_ext GRPC IMPORT_ROOT "${CMAKE_CURRENT_LIST_DIR}/ext/proto"
-    PROTOS entrypoint.proto identity.proto matchmaking.proto messages.proto)
-target_link_libraries(aiverse_grpc_ext PUBLIC aiverse_grpc aiverse_meta_client)
-if(NOT MSVC)
-    target_compile_options(aiverse_grpc_ext PRIVATE -Wall -Wextra)
-endif()
-add_library(AIVERSE::grpc_ext ALIAS aiverse_grpc_ext)
-
 if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     enable_testing() # this directory is added before the top level enables testing
     find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -53,7 +43,7 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
                    ${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc/MockServer.cpp)
     aiverse_protobuf_generate(TARGET aiverse_grpc_tests GRPC IMPORT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc"
         PROTOS test.proto)
-    target_link_libraries(aiverse_grpc_tests PRIVATE aiverse_grpc_ext)
+    target_link_libraries(aiverse_grpc_tests PRIVATE aiverse_grpc)
     if(NOT MSVC)
         target_compile_options(aiverse_grpc_tests PRIVATE -Wall -Wextra)
     endif()
@@ -61,9 +51,4 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     if(Python3_Interpreter_FOUND)
         add_test(NAME aiverse_protoc COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/../../tests/grpc/protoc_test.py)
     endif()
-endif()
-
-if(AIVERSE_BUILD_TOOLS AND NOT EMSCRIPTEN AND NOT IOS AND NOT ANDROID)
-    add_executable(aiverse_grpc_probe ${CMAKE_CURRENT_LIST_DIR}/../../tools/grpc/grpc_probe.cpp)
-    target_link_libraries(aiverse_grpc_probe PRIVATE aiverse_grpc_ext)
 endif()
