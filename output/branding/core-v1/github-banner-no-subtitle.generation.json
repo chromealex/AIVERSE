@@ -1,4 +1,0 @@
-{
-  "tool": "Built-in image_gen",
-  "prompt": "Edit the attached banner: remove only the gray subtitle 'Real-time strategy engine', replacing it seamlessly with the existing white background. Preserve the orange and black emblem exactly, preserve the black wordmark 'AIVERSE' exactly, preserve their positions, scale, geometry and colors. Preserve canvas aspect ratio and white background. No other changes, no additional text."
-}

@@ -1,4 +1,0 @@
-{
-  "tool": "Built-in image_gen",
-  "prompt": "Edit the attached AIVERSE logo banner into its dark-background color variant. Change ONLY colors: replace the white background with uniform solid graphite #181A1F; change all three black emblem arms and the black 'AIVERSE' wordmark to soft white #F5F5F5. Preserve the vivid orange central diamond. Preserve EXACT emblem geometry, typography, lettering, spacing, positions, scale, composition and 2:1 canvas aspect ratio. Keep the exact text 'AIVERSE' only; no subtitle. Flat solid fills, no texture, gradients, glow, shadows, bevels, extra shapes or decorative elements. This is a clean usable dark-mode logo banner."
-}
