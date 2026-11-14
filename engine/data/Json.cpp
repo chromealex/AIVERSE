@@ -140,6 +140,9 @@ Json Json::parseFile(const std::string& path) {
 thread_local JsonAccessLog* Json::accessLog_ = nullptr;
 void Json::noteKey(const std::string& key) const { if (type_ == Type::Object) accessLog_->keys.emplace_back(this, key); }
 void Json::noteIterated() const { if (type_ == Type::Object) accessLog_->iterated.push_back(this); }
+void Json::noteDefault(const std::string& key, std::string def) const {
+    if (type_ == Type::Object) accessLog_->defaults.push_back({this, key, std::move(def)});
+}
 
 bool Json::has(const std::string& key) const {
     if (accessLog_) noteKey(key);

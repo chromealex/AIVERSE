@@ -18,6 +18,8 @@ class Json;
 struct JsonAccessLog {
     std::vector<std::pair<const Json*, std::string>> keys;   // (object, key) lookups, present or not
     std::vector<const Json*> iterated;                        // objects whose members were walked
+    struct Default { const Json* object; std::string key; std::string def; };
+    std::vector<Default> defaults;   // typed reads with a default (getFx / getInt / getStr / getBool): rules_prune
 };
 
 class Json {
@@ -51,10 +53,10 @@ public:
     int64_t integer(int64_t def = 0) const;
 
     // Convenience: obj.get("speed", 1_fx)
-    Fixed getFx(const std::string& key, Fixed def = {}) const { return (*this)[key].fx(def); }
-    int64_t getInt(const std::string& key, int64_t def = 0) const { return (*this)[key].integer(def); }
-    std::string getStr(const std::string& key, const std::string& def = "") const { return (*this)[key].str(def); }
-    bool getBool(const std::string& key, bool def = false) const { return (*this)[key].boolean(def); }
+    Fixed getFx(const std::string& key, Fixed def = {}) const { if (accessLog_) noteDefault(key, "n" + std::to_string(def.raw)); return (*this)[key].fx(def); }
+    int64_t getInt(const std::string& key, int64_t def = 0) const { if (accessLog_) noteDefault(key, "i" + std::to_string(def)); return (*this)[key].integer(def); }
+    std::string getStr(const std::string& key, const std::string& def = "") const { if (accessLog_) noteDefault(key, "s" + def); return (*this)[key].str(def); }
+    bool getBool(const std::string& key, bool def = false) const { if (accessLog_) noteDefault(key, def ? "b1" : "b0"); return (*this)[key].boolean(def); }
 
     // ---- building / editing (editor, MCP, tools; the simulation only reads)
     static Json object() { Json j; j.type_ = Type::Object; return j; }
@@ -87,6 +89,7 @@ private:
     static thread_local JsonAccessLog* accessLog_;
     void noteKey(const std::string& key) const;
     void noteIterated() const;
+    void noteDefault(const std::string& key, std::string def) const;
     void dumpTo(std::string& out, int indent, int depth) const;
     friend class JsonParser;
     Type type_ = Type::Null;

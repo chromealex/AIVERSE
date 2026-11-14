@@ -296,6 +296,8 @@ void registerSchemaOps(Workspace& ws) {
             return r;
         }});
 
+    registerPruneOps(ws);
+
     // edits report unknown keys right away
     for (const char* name : {"rules_set", "rules_merge", "map_validate"}) {
         auto it = std::find_if(ws.ops().begin(), ws.ops().end(), [&](const Workspace::Op& o) { return o.name == name; });

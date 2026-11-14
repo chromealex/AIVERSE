@@ -198,3 +198,32 @@ TEST(rules_split_editor_saves_back) {
     CHECK(ws2.openGame(d.root.string(), &err) && ws2.project.rules.findType("scout") >= 0 &&
           ws2.project.rules.types.size() == ws.project.rules.types.size());
 }
+
+TEST(rules_prune_drops_engine_defaults) {
+    using namespace rules_split;
+    Dir d("prune");
+    for (auto& e : fs::recursive_directory_iterator(kSkirmish)) {
+        const fs::path rel = fs::relative(e.path(), kSkirmish);
+        if (e.is_directory()) fs::create_directories(d.root / rel);
+        else fs::copy_file(e.path(), d.root / rel, fs::copy_options::overwrite_existing);
+    }
+    Json r = Json::parseFile(d.path("rules.json"));
+    r.set("sellRefund", Json::numberText("0.5"));   // = the default
+    r.set("supplyCap", Json::number(int64_t(100)));                               // not the default (200)
+    d.put("rules.json", r.dump());
+    editor::Workspace ws;
+    ws.engineDir = AIVERSE_SOURCE_DIR;
+    std::string err;
+    CHECK(ws.openGame(d.root.string(), &err));
+    Json dry = ws.call("rules_prune", Json::object());
+    CHECK(!dry.has("error") && dry.getInt("count") >= 2);   // sellRefund 0.5 and maxQueue 5
+    bool sell = false, cap = false;
+    for (auto& k : dry["keys"].items()) { sell |= k.getStr("path") == "sellRefund"; cap |= k.getStr("path") == "supplyCap"; }
+    CHECK(sell && !cap);
+    CHECK(Json::parseFile(d.path("rules.json")).has("sellRefund"));   // a dry run changes nothing
+    Json applied = ws.call("rules_prune", Json::parse(R"({"apply": true})"));
+    CHECK(!applied.has("error") && applied.getBool("applied"));
+    const Json after = Json::parseFile(d.path("rules.json"));
+    CHECK(!after.has("sellRefund") && !after.has("maxQueue") && after.getInt("supplyCap") == 100);
+    CHECK(ws.project.rules.findType("footman") >= 0 && after["types"].size() == r["types"].size());
+}
