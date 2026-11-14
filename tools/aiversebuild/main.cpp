@@ -40,9 +40,9 @@
 #define NOMINMAX
 #endif
 #include <windows.h>   // SetFileAttributesW: hide Builds/.temp
-#include "engine/data/JsonCompose.h"
 #endif
 #include "UiSpriteSheets.h"
+#include "engine/data/JsonCompose.h"
 #include "Notices.h"
 #include "engine/platform/EngineDir.h"
 #include <algorithm>
