@@ -600,8 +600,12 @@ void Traffic::responders(Simulation& sim, TrafficStore& st) {
             return fxAbs(c.destAlong - tl::trafficAlongOf(net_.pieces[size_t(c.destPiece)], pos)) < Fixed::fromRatio(7, 10);
         };
         c.crew.erase(std::remove_if(c.crew.begin(), c.crew.end(), [&](Entity m) { return !living(w, m); }), c.crew.end());
+        if (sv.carry) {     // rule traffic.services.<id>.carry: the crew carries the patient and delivers him
         #include "KingstonAmbulance.inc"
+        }
+        if (sv.custody) {   // rule traffic.services.<id>.custody: officers detain instead of fighting
         #include "KingstonPoliceResponse.inc"
+        }
         switch (c.task) {
         case kTaskGoing: {
             if (!inc) { finish(sim, st, c, false); break; }   // it is over already

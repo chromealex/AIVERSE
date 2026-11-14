@@ -11,6 +11,7 @@ public:
     bool read(const std::string& path, const FileReader& reader, Image& out);
     void upload(gfx::Device& dev, Image& image);
     void shutdown(gfx::Device& dev);
+    void trim(gfx::Device& dev);
     size_t decodedCount() const { return decodedCount_.load(); }
     size_t gpuCount() const { return gpu_.size(); }
 private:

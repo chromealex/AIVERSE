@@ -75,6 +75,9 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
     tracers_.clear();
     looks_.resize(rules.types.size());
     loadedTypes_.assign(rules.types.size(), false);
+    requestedModels_.assign(rules.types.size(), {}); loadedModels_.assign(rules.types.size(), {});
+    if(deferredLoading_)for(size_t t=0;t<rules.types.size();++t)
+        requestedModels_[t]=rules.types[t].view["streaming"].getStr("coarseModel");
     if (!deferredLoading_) for (size_t i = 0; i < rules.types.size(); ++i) loadType(uint16_t(i));
     twoD_ = std::make_unique<Rts2DView>();
     if (!twoD_->init(dev, rules, contentBase_, spriteDefaults_, deferredLoading_)) twoD_.reset();

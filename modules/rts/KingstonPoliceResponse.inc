@@ -1,4 +1,4 @@
-if(sv.custody && sv.answers==kIncidentCrime && inc && (c.task==kTaskCrewOut||c.task==kTaskWorking||gs.trig.vars["police_owned_"+std::to_string(c.e.packed())].raw)){
+if(sv.answers==kIncidentCrime && inc && (c.task==kTaskCrewOut||c.task==kTaskWorking||gs.trig.vars["police_owned_"+std::to_string(c.e.packed())].raw)){
  auto&vars=gs.trig.vars;const auto key="police_car_"+std::to_string(c.e.packed())+"_";
  auto get=[&](const std::string&name){auto it=vars.find(key+name);return it==vars.end()?Fixed{}:it->second;};
  auto set=[&](const std::string&name,int64_t value){vars[key+name]=Fixed::fromInt(value);};

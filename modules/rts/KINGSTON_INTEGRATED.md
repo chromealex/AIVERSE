@@ -11,8 +11,7 @@ vehicles, fire response routes, traffic priority, rocket hits on buildings) and 
 top-down, arsenal, projectile, view and render files.
 
 What was changed on the way in:
-- behaviour that broke engine tests is now a rule, off by default: `arsenal.aimWindup` (seconds before the
-  first shot), `traffic.services.<id>.custody` (police detain instead of fighting), `...carry` (the ambulance
+- behaviour that broke engine tests is now a rule, off by default: `arsenal.aimWindup` (true: a quarter second with the weapon raised before the first shot), `traffic.services.<id>.custody` (police detain instead of fighting), `...carry` (the ambulance
   crew carries the patient and delivers him);
 - the three project headers the patches included by absolute path were copied here
   (`KingstonFireResponseRoute.h`, `KingstonFireResponseDetour.h`, `KingstonTrafficPriorityPolicy.h`,

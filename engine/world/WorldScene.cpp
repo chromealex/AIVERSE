@@ -1,4 +1,5 @@
 #include "WorldScene.h"
+#include "engine/render/ModelTextureCache.h"
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -80,7 +81,11 @@ std::shared_ptr<WorldScene::Prepared> WorldScene::prepare(Cell cell,const AssetR
             }
             if(!indices.contains(file)){
                 bool missing=false;
-                auto checked=[&](const std::string& path,std::string& bytes){bool ok=reader(path,bytes);missing|=!ok;return ok;};
+                auto checked=[&](const std::string& path,std::string& bytes){
+                    const bool optional=(path==file+".lmuv" || path==file+".clips.json") && !assets_.hashes.contains(path);
+                    if(optional)return false;
+                    bool ok=reader(path,bytes);missing|=!ok;return ok;
+                };
                 auto model=render::loadModel(file,checked,nullptr,textures_);
                 if(missing)throw JsonError("world.mesh: missing or corrupt dependency: "+file);
                 render::prepareModelUpload(*model); // finish CPU mutation before publishing to other chunk workers
@@ -131,6 +136,7 @@ void WorldScene::update(gfx::Device& device,std::span<const Vec3> observers,int 
             resident_[cell]=prepared;return true;
         }catch(...){releaseChunk(device,*prepared);throw;}
     },[&](Cell cell){auto it=resident_.find(cell);if(it==resident_.end())return;releaseChunk(device,*it->second);resident_.erase(it);},uploadBytes_);
+    if(textures_)textures_->trim(device);
 }
 void WorldScene::draw(render::Renderer3D& renderer,Cell origin,int size) {
     for(const auto& [cell,chunk]:resident_){const auto offset=render::mat4::translate(visual(relativeTo(assets_.origin(cell),origin,size)));

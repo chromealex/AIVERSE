@@ -1,5 +1,5 @@
 // Included inside Traffic::responders: uses the existing saved incident and lane route.
-if (sv.carry && sv.answers == kIncidentInjured && inc &&
+if (sv.answers == kIncidentInjured && inc &&
     (c.task==kTaskCrewOut || c.task==kTaskWorking || gs.trig.vars["ambulance_owned_"+std::to_string(c.e.packed())].raw)) {
     auto& vars=gs.trig.vars;const auto key="ambulance_"+std::to_string(c.e.packed())+"_";
     auto get=[&](const std::string& name){auto it=vars.find(key+name);return it==vars.end()?Fixed{}:it->second;};

@@ -336,8 +336,12 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 
 bool RtsView::prepareType(uint16_t type, bool allVariants) {
 #ifndef __EMSCRIPTEN__
-    if (!asyncReader_ || !rules_ || type >= loadedTypes_.size() || (typeLoaded(type) && !allVariants)) return true;
-    const auto& t = rules_->types[type];
+    if (!asyncReader_ || !rules_ || type >= loadedTypes_.size() || (typeCurrent(type) && !allVariants)) return true;
+    const auto& original = rules_->types[type];
+    UnitType coarse; const UnitType* selected=&original;
+    const auto path=requestedModels_[type].empty()?original.view["streaming"].getStr("detailModel"):requestedModels_[type];
+    if(!path.empty()){coarse=original;coarse.view.set("model",Json::string(path));selected=&coarse;}
+    const auto& t = *selected;
     GeometryPolicy policy;
     try { policy = parseGeometryPolicy(t.view["geometry"]); } catch (const std::exception&) {}
     const bool geometry = policy.clusters || policy.shadowClusters || policy.occluder;
@@ -461,9 +465,62 @@ bool RtsView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
     return ready;
 }
 
+void RtsView::trimTypes(const std::vector<bool>& keep, bool compact) {
+    if (!dev_ || keep.size()!=looks_.size()) return;
+#ifndef __EMSCRIPTEN__
+    if (prepareType_ >= 0 || preparing_.valid()) return; // prepared models do not yet have looks
+#endif
+    bool changed=compact;
+    for (size_t t=0;t<keep.size();++t) if (!keep[t] && loadedTypes_[t]) {
+        looks_[t]=TypeLook{}; loadedTypes_[t]=false; changed=true;
+    }
+    if (!changed) return;
+    for (auto it=anims_.begin();it!=anims_.end();) {
+        if (!keep[it->second.type]) it=anims_.erase(it); else ++it;
+    }
+    std::vector<const render::Model*> used;
+    auto visit=[&](const ModelChoice& c){
+        if(c.model)used.push_back(c.model);
+        for(const auto& a:c.attach)if(a.model)used.push_back(a.model);
+    };
+    for(const auto& look:looks_) {
+        for(const auto& c:look.models)visit(c);
+        for(const auto& c:look.lods)visit(c);
+        for(const auto& s:look.stages)visit(s.choice);
+    }
+    size_t released=0;
+    for(auto it=models_.begin();it!=models_.end();) {
+        if(it->first.rfind("shape:",0)==0 || std::find(used.begin(),used.end(),it->second.get())!=used.end()){++it;continue;}
+        if(it->second){animationCache_.erase(it->second.get());releaseModel(*dev_,*it->second);}
+        it=models_.erase(it);++released;
+    }
+    textureCache_->trim(*dev_);
+    if(std::getenv("AIVERSE_STREAM_TRACE"))std::fprintf(stderr,"[residency] released=%zu models=%zu textures=%zu\n",released,models_.size(),textureCache_->gpuCount());
+}
+
+void RtsView::requestDetail(uint16_t type, bool detailed) {
+    if(!rules_ || type>=requestedModels_.size())return;
+    const auto& t=rules_->types[type];const auto coarse=t.view["streaming"].getStr("coarseModel");
+    if(coarse.empty() || t.speed.raw!=0)return;
+#ifndef __EMSCRIPTEN__
+    if(prepareType_>=0 || preparing_.valid())return; // never replace an in-flight publication
+#endif
+    requestedModels_[type]=detailed ? std::string{} : coarse;
+}
 void RtsView::loadType(uint16_t type) {
-    if (!rules_ || type >= loadedTypes_.size() || loadedTypes_[type]) return;
-    buildLook(*dev_, rules_->types[type], looks_[type]);
+    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type)) return;
+    const bool replacing=loadedTypes_[type];
+    TypeLook ready;
+    const auto path=requestedModels_[type].empty()?rules_->types[type].view["streaming"].getStr("detailModel"):requestedModels_[type];
+    if(path.empty())buildLook(*dev_,rules_->types[type],ready);
+    else {auto selected=rules_->types[type];selected.view.set("model",Json::string(path));buildLook(*dev_,selected,ready);}
+    if(std::getenv("AIVERSE_STREAM_TRACE") && rules_->types[type].view["streaming"].has("detailModel"))
+        std::fprintf(stderr,"[lod-residency] type=%u level=%s\n",unsigned(type),requestedModels_[type].empty()?"detail":"coarse");
+    if(!(replacing && ready.shape && !looks_[type].shape))looks_[type]=std::move(ready);
+    loadedModels_[type]=requestedModels_[type];
+    if(replacing)for(auto it=anims_.begin();it!=anims_.end();) {
+        if(it->second.type==type)it=anims_.erase(it);else ++it;
+    }
     if (twoD_) twoD_->loadType(type);
     loadedTypes_[type] = true;
 #ifndef __EMSCRIPTEN__
@@ -475,6 +532,7 @@ void RtsView::loadType(uint16_t type) {
         prepareType_ = -1; preparePaths_.clear(); prepareCursor_ = 0;
     }
 #endif
+    if(replacing)trimTypes(std::vector<bool>(looks_.size(),true),true);
 }
 
 std::string RtsView::typeResource(uint16_t type) const {

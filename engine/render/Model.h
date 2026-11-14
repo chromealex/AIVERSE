@@ -67,6 +67,7 @@ struct Material {
 struct Image {
     std::shared_ptr<ModelTextureCache> textureCache;
     std::string textureKey;
+    std::shared_ptr<int> textureLease;
     std::shared_ptr<const std::vector<uint8_t>> sharedRgba;
     std::string name;               // file name or "#index" for embedded images
     int width = 0, height = 0;
