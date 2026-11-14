@@ -78,21 +78,25 @@ void Traffic::parseGangs(const Json& j, TrafficRules& r, const std::vector<std::
 void Traffic::gangEnd(Simulation& sim, TrafficStore& st, uint8_t state, bool paid) {
     TrafficGang& g = st.gang;
     for (Entity m : g.crew) silentRemove(sim, m);
-    for (int32_t id : g.members) {
+    for (size_t k = 0; k < g.members.size(); ++k) {
+        const int32_t id = g.members[k];
         if (id < 0 || size_t(id) >= st.citizens.size()) continue;
         TrafficCitizen& c = st.citizens[size_t(id)];
         if (c.state != kCitizenGang) continue;
-        c.state = state; c.e = kNullEntity;
-        c.eta = sim.tick() + (state == kCitizenJail ? rules_.gangs.jailTicks : rules_.incidents.treatTicks);
+        // whoever was taken hold of at the scene is in jail however it ended for the rest (the last of the list)
+        const uint8_t his = k + g.held >= g.members.size() ? uint8_t(kCitizenJail) : state;
+        c.state = his; c.e = kNullEntity;
+        c.eta = sim.tick() + (his == kCitizenJail ? rules_.gangs.jailTicks : rules_.incidents.treatTicks);
     }
     if (TrafficCar* c = carOf(st, g.car); c && c->task == kTaskGang) {   // the car stays where it is, nobody's
         const Entity e = c->e;
         st.cars.erase(st.cars.begin() + (c - st.cars.data()));
         if (Driving* drv = m_->driving()) drv->adopt(sim, e, Fixed{});
     }
-    if (g.call) st.incidents.erase(std::remove_if(st.incidents.begin(), st.incidents.end(), [&](const TrafficIncident& i) { return i.id == g.call; }), st.incidents.end());
+    // (with a prisoner taken the call stays with whoever holds him)
+    if (g.call && !g.held) st.incidents.erase(std::remove_if(st.incidents.begin(), st.incidents.end(), [&](const TrafficIncident& i) { return i.id == g.call; }), st.incidents.end());
     if (paid) { st.gangLoot += g.loot; ++st.gangRobberies; }
-    if (state == kCitizenJail) ++st.gangCaught;
+    if (state == kCitizenJail || g.held) ++st.gangCaught;
     g = TrafficGang{};
 }
 
@@ -178,6 +182,10 @@ void Traffic::gangs(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& 
     const bool slow = fxAbs(drv->speed(sim, g.car)) < Fixed::fromRatio(3, 5);
     const Vec2 door{Fixed::fromInt(shop.cell % net_.w) + kHalf, Fixed::fromInt(shop.cell / net_.w) + kHalf};
     g.crew.erase(std::remove_if(g.crew.begin(), g.crew.end(), [&](Entity m) { return !living(w, m); }), g.crew.end());
+    // a robber somebody has taken hold of (disabled, or loaded into a vehicle: the game's own arrest) is theirs now
+    for (size_t i = g.crew.size(); i-- > 0;)
+        if (w.get<Unit>(g.crew[i]).flags & (kUnitDisabled | kUnitInCargo)) { g.crew.erase(g.crew.begin() + long(i)); ++g.held; }
+    if (g.crew.empty() && g.held && g.state != kGangDrive && g.state != kGangFlee) { gangEnd(sim, st, kCitizenJail, false); return; }
     auto onPiece = [&](int32_t piece, Fixed along, Fixed within) {
         const int cell = gs.grid.cellOf(pos3);
         return cell >= 0 && piece >= 0 && net_.pieceAt[size_t(cell)] == piece && fxAbs(along - tl::trafficAlongOf(net_.pieces[size_t(piece)], pos)) < within;
@@ -237,12 +245,12 @@ void Traffic::gangs(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& 
         // the call follows the car; a patrol that gets to it makes the arrest
         TrafficIncident* inc = nullptr;
         for (auto& i : st.incidents) if (i.id == g.call) inc = &i;
-        if (inc) inc->pos = pos;
+        if (inc && !g.held) inc->pos = pos;
         bool caught = false;
         const int cell = gs.grid.cellOf(pos3);
         const int piece = cell >= 0 ? net_.pieceAt[size_t(cell)] : -1;
         for (auto& o : st.cars) {
-            if (o.service < 0 || o.call != g.call || g.call == 0 || !living(w, o.e)) continue;
+            if (o.service < 0 || o.call != g.call || g.call == 0 || g.held || !living(w, o.e)) continue;
             if (piece >= 0 && o.task == kTaskGoing && sim.tick() % 20 == 0) { o.destPiece = piece; o.destAlong = tl::trafficAlongOf(net_.pieces[size_t(piece)], pos); }
             caught = caught || (v2(w.get<Transform>(o.e).pos) - pos).lengthSq() < Fixed::fromRatio(49, 4);
         }

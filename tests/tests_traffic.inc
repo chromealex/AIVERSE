@@ -1028,3 +1028,30 @@ TEST(traffic_gang_meets_the_police) {
     run(*s1, 70);   // (other gangs form meanwhile: only this sentence is looked at)
     for (size_t i = 0; i < until.size(); ++i) if (until[i]) CHECK(tstore(*s1).citizens[i].state != game::kCitizenJail || tstore(*s1).citizens[i].eta != until[i]);
 }
+
+TEST(traffic_gang_leaves_a_robber_somebody_holds) {
+    std::string r = commuteRules("");
+    r = replaced(r, R"("shifts": [[9, 13], [20, 4]])", R"("shifts": [[9, 13]])");
+    r = replaced(r, R"("port": {"jobs": 5,)", R"("port": {"jobs": 3,)");
+    r = replaced(r, R"("roads": {"tiles": "a"},)", R"("roads": {"tiles": "a", "parkingLanes": 1}, "gangs": {"every": [500, 500], "size": [3, 3], "targets": {"shop": 500}, "rob": 4, "jail": 60},)");
+    r = replaced(r, R"("police": {)", R"("police": {"max": 0, )");
+    auto sim = makeSimJson(r, populationMap(), 3);
+    tstore(*sim).nextGang = 60;   // in three seconds
+    Entity heldOne = kNullEntity;
+    uint32_t call = 0;
+    for (int i = 0; i < 150 * int(sim->tickRate()) && tstore(*sim).gangRobberies == 0 && !(heldOne.valid() && tstore(*sim).gang.state == game::kGangNone); ++i) {
+        sim->step();
+        auto& g = tstore(*sim).gang;
+        if (g.state == game::kGangRob && !heldOne.valid() && !g.crew.empty()) {   // an arrest by the game: the first of them is taken
+            heldOne = g.crew[0];
+            call = g.call;
+            sim->world().get<game::Unit>(heldOne).flags |= game::kUnitInCargo;   // (in the patrol car)
+        }
+    }
+    CHECK(heldOne.valid() && sim->world().alive(heldOne));   // not taken into the car, not removed
+    CHECK(tstore(*sim).gangRobberies == 1 && tstore(*sim).gangCaught == 1);   // the others got away with it
+    int jailed = 0, home = 0;
+    for (auto& c : tstore(*sim).citizens) { jailed += c.state == game::kCitizenJail; home += c.state == game::kCitizenHome && c.work < 0; CHECK(c.state != game::kCitizenGang); }
+    CHECK(jailed == 1 && home >= 2);
+    CHECK(call != 0);
+}

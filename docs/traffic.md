@@ -246,6 +246,9 @@ to the point (within 3 cells) for traffic along that axis (default: the axis of 
   follows the car, so patrols on their way chase it. A patrol that gets within 3.5 cells of the car arrests them
   (`jail` seconds in state `jail`, nothing taken home); robbers shot at the door end in the hospital; a car taken
   from them (by a hero) sends them home. If they get home, the loot is theirs (`gangLoot`).
+- A robber somebody takes hold of at the scene (the unit is disabled or loaded as cargo: a game's own arrest and
+  escort) is left to them: the gang does not wait for him, he is in jail whatever happens to the rest, and the
+  call stays open for whoever holds him.
 - **Unseen**: a timer for the two drives and the robbery, then `caughtUnseen` percent decides.
 - One gang at a time. Its members are citizens in state `gang` (they keep no schedule meanwhile).
 - Lua: `game.traffic_gang()` → `{state, x, z, car, size, loot}` of the gang that is out (nil: none) and

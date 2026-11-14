@@ -111,6 +111,7 @@ struct TrafficGang {
     Entity car = kNullEntity;
     std::vector<Entity> crew;                // out of the car at the target
     uint32_t until = 0, call = 0;            // call: the crime report they caused
+    uint8_t held = 0;                        // robbers somebody took hold of (disabled / loaded as cargo): left to them
 };
 struct TrafficCitizen {
     uint16_t type = UINT16_MAX;

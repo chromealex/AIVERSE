@@ -521,7 +521,7 @@ void Traffic::hash(Simulation& sim, Hasher& h) const {
     h.u32(uint32_t(st->citizens.size())); h.u32(st->citizenCursor);
     {
         const TrafficGang& g = st->gang;
-        h.u32(g.state); h.i32(g.leader); h.i32(g.target); h.i32(g.loot); h.u64(g.car.packed()); h.u32(g.until); h.u32(g.call);
+        h.u32(g.state); h.i32(g.leader); h.i32(g.target); h.i32(g.loot); h.u64(g.car.packed()); h.u32(g.until); h.u32(g.call); h.u32(g.held);
         h.u32(uint32_t(g.members.size())); for (int32_t m : g.members) h.i32(m);
         h.u32(uint32_t(g.crew.size())); for (Entity m : g.crew) h.u64(m.packed());
         h.u32(st->nextGang); h.u64(uint64_t(st->gangLoot)); h.u32(st->gangRobberies); h.u32(st->gangCaught);
@@ -563,7 +563,7 @@ void Traffic::io(Simulation& sim, Archive& a) {
     a(st->incidents, st->nextIncident, st->used, st->towed, st->patients, st->happened, st->blows, st->citizens, st->citizenCursor);
     {
         TrafficGang& g = st->gang;
-        a(g.state, g.leader, g.target, g.loot, g.members, g.car, g.crew, g.until, g.call, st->nextGang, st->gangLoot, st->gangRobberies, st->gangCaught);
+        a(g.state, g.leader, g.target, g.loot, g.members, g.car, g.crew, g.until, g.call, g.held, st->nextGang, st->gangLoot, st->gangRobberies, st->gangCaught);
     }
     if (!a.writing()) for (auto& c : st->cars) c.input = {};
 }
