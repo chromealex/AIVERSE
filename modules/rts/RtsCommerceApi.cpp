@@ -92,6 +92,7 @@ int cPremise(lua_State* L, Vm& vm) {
         pushFx(L, c->expectedToday(p)); lua_setfield(L, -2, "expected");
     }
     lua_pushinteger(L, p.staff); lua_setfield(L, -2, "staff");
+    pushFx(L, p.attendance); lua_setfield(L, -2, "attendance");
     lua_pushboolean(L, p.manager); lua_setfield(L, -2, "manager");
     lua_pushboolean(L, p.visited); lua_setfield(L, -2, "visited");
     lua_pushboolean(L, p.isPublic); lua_setfield(L, -2, "public");

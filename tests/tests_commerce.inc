@@ -197,6 +197,9 @@ TEST(commerce_staff_manager_customers_and_purchases) {
     CHECK(shop.staff == 2 && std::string(c.refusal(*sim, 1, Op::Hire, 0, 0)) == "fully staffed");
     deal(*sim, 1, Op::Manager, 0);
     CHECK(shop.manager && c.expectedToday(shop) == Fixed::fromInt(400));
+    shop.attendance = Fixed::fromRatio(1, 2);                                         // the staff was there half of the hours
+    CHECK(c.expectedToday(shop) == Fixed::fromInt(200));
+    shop.attendance = Fixed::fromInt(1);
     // walk-in customers pay at once; the day's total stays the same
     cash = Fixed{};
     CHECK(c.visit(*sim, 0) && c.visit(*sim, 0) && cash == Fixed::fromInt(50) && shop.served == Fixed::fromInt(50));

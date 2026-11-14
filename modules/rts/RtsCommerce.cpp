@@ -273,7 +273,7 @@ void Commerce::hash(Simulation& sim, Hasher& h) const {
     h.u32(uint32_t(st->premises.size()));
     for (auto& p : st->premises) { h.u32(uint32_t(p.owner) | uint32_t(p.tenant) << 16); h.i32(p.business); h.fx(p.lastNet); h.fx(p.total);
         h.u32(uint32_t(p.staff) | uint32_t(p.manager) << 8 | uint32_t(p.visited) << 9); h.fx(p.served);
-        h.fx(p.stashCash); h.u32(uint32_t(p.stashAmmo.size())); for (int32_t n : p.stashAmmo) h.i32(n); }
+        h.fx(p.attendance); h.fx(p.stashCash); h.u32(uint32_t(p.stashAmmo.size())); for (int32_t n : p.stashAmmo) h.i32(n); }
     h.u32(uint32_t(st->accounts.size()));
     for (auto& a : st->accounts) {
         h.u64(a.id); h.u32(a.slot); h.fx(a.wallet); h.u32(a.lastSeenDay);
@@ -292,7 +292,7 @@ void Commerce::io(Simulation& sim, Archive& a) {
     if (!a.writing() && (n != st->premises.size() || ns != st->slotRec.size() || na == 0 || na > 65000)) { a.fail(); return; }   // another map
     if (!a.writing()) st->accounts.assign(na, {});
     for (auto& p : st->premises) {
-        a(p.owner, p.tenant, p.business, p.lastNet, p.total, p.staff, p.manager, p.visited, p.served, p.stashCash, p.stashAmmo);
+        a(p.owner, p.tenant, p.business, p.lastNet, p.total, p.staff, p.manager, p.visited, p.served, p.stashCash, p.stashAmmo, p.attendance);
         if (!a.writing() && (p.owner >= na || p.tenant >= na || p.business < -1 || p.business >= int(rules_.businesses.size()))) { a.fail(); return; }
     }
     for (auto& c : st->accounts) {
@@ -326,7 +326,7 @@ void Commerce::fine(Simulation& sim, uint8_t player, Fixed amount) {
     if (st && amount.raw > 0) pay(sim, recOf(*st, player), Fixed{} - amount);
 }
 
-void Commerce::closeBusiness(Premise& p) { p.business = -1; p.lastNet = {}; p.total = {}; p.staff = 0; p.manager = false; p.served = {}; }
+void Commerce::closeBusiness(Premise& p) { p.business = -1; p.lastNet = {}; p.total = {}; p.staff = 0; p.manager = false; p.served = {}; p.attendance = Fixed::fromInt(1); }
 
 void Commerce::vacate(Simulation& sim, Premise& p, uint16_t who) {
     pay(sim, who, p.stashCash);
@@ -338,7 +338,7 @@ Fixed Commerce::expectedToday(const Premise& p) const {
     if (p.business < 0) return {};
     const BusinessType& b = rules_.businesses[size_t(p.business)];
     Fixed income = b.incomeDay * p.traffic;
-    if (b.staff > 0) income = income * int64_t(std::min<int>(p.staff, b.staff)) / int64_t(b.staff);
+    if (b.staff > 0) income = income * int64_t(std::min<int>(p.staff, b.staff)) / int64_t(b.staff) * fxClamp(p.attendance, Fixed{}, Fixed::fromInt(1));
     if (!p.manager && !p.visited) income = income * rules_.unmanagedShare;
     return income;
 }

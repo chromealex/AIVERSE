@@ -25,6 +25,8 @@ inside, borrows from the bank against what he owns. Code: `modules/rts/RtsCommer
 
 - **Staff.** A business type may need `staff` employees (`wageWeek` each, charged at the week's end before rent
   and the bank). With fewer hired the income shrinks in proportion; with none it earns nothing.
+- **Attendance.** `Premise::attendance` (1 by default) scales the staffed income: a game that has real
+  employees sets it to the share of today's working hours they were really at work.
 - **Manager.** Without one (`managerWageWeek`) a business earns only `unmanagedShare` of its income on a day its
   owner did not come by the door. With one it runs at full income on its own: this is what makes a chain possible.
 - **Walk-in customers.** `commerce.visit(premises)` makes one customer pay the type's `ticket` at once. What real

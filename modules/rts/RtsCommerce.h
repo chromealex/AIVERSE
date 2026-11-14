@@ -75,6 +75,7 @@ struct Premise {
     Fixed lastNet, total;                // what the business brought yesterday / since it opened
     bool isPublic = false;               // run by the city (a gun shop, a car dealer): not for rent or sale
     uint8_t staff = 0;                   // employees hired
+    Fixed attendance = Fixed::fromInt(1);// share of today's working hours the staff was really there (the game sets it; 1 by default)
     bool manager = false;
     bool visited = false;                // the one who runs it came by today
     Fixed served;                        // paid by walk-in customers today

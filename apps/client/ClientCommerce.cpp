@@ -100,6 +100,7 @@ std::vector<GameClient::CommerceChoice> GameClient::commerceChoices(int premise,
     } else {
         const game::BusinessType& b = R.businesses[size_t(p.business)];
         title = fmt("%s: %+lld yesterday, staff %d of %d%s", b.name.c_str(), whole(p.lastNet), int(p.staff), b.staff, p.manager ? ", manager" : "");
+        if (b.staff > 0 && p.attendance < Fixed::fromInt(1)) title += fmt(", at work %d%%", int((p.attendance * 100).toInt()));
         if (p.staff < b.staff) out.push_back({fmt("Hire (%lld a week)", whole(b.wageWeek)), CommerceOp::Hire, premise, 0});
         if (p.staff > 0) out.push_back({"Fire one", CommerceOp::Fire, premise, 0});
         out.push_back({p.manager ? std::string("Dismiss the manager") : fmt("Hire a manager (%lld a week)", whole(R.managerWageWeek)), CommerceOp::Manager, premise, 0});
