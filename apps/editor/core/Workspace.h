@@ -13,6 +13,7 @@
 #include "MapDoc.h"
 #include "engine/data/Json.h"
 #include "modules/rts/RtsData.h"
+#include "engine/data/JsonCompose.h"
 
 namespace aiverse::editor {
 
@@ -22,7 +23,8 @@ struct Project {
     std::string dir;              // folder with game.json
     std::string file;             // <dir>/<Title>.aiverse (ProjectFile.h); "" for engine templates without one
     Json manifest = Json::object();
-    Json rulesJson = Json::object();
+    Json rulesJson = Json::object();   // rules.json with its includes merged; "extends" kept as written
+    JsonOrigin rulesOrigin;            // which file each part came from (saveRules writes it back there)
     game::Rules rules;
     std::string rulesError;       // last loader error (rules stay usable from the previous good state)
     bool rulesDirty = false, manifestDirty = false;
@@ -31,6 +33,7 @@ struct Project {
     bool saveRules(std::string* err);
     bool saveManifest(std::string* err);
     std::string rulesPath() const;
+    std::vector<std::string> rulesFiles() const;   // rules.json + included files (relative to dir)
     bool isFps() const { return manifest.getStr("module", "rts") == "fps"; }
     bool reloadRules();           // parse rulesJson -> rules; false keeps the previous rules
     // rulesJson + the game's scripts embedded for a simulation of `map` (ScriptOps.cpp; missing files are

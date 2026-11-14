@@ -1,5 +1,6 @@
 #include "engine/platform/WindowSettings.h"
 #include "modules/rts/RtsInitialVars.h"
+#include "engine/data/JsonCompose.h"
 // Generic RTS game client. Everything game-specific comes from the project's data (game.json,
 // rules.json, maps): the same executable plays a Warcraft-like, a Red-Alert-like or a
 // Mushroom-Wars-like game.
@@ -68,8 +69,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
             if (!platform::readContentFile("game.json", text)) throw std::runtime_error("game.json not found in content");
             manifest_ = Json::parse(text);
             gameName_ = manifest_.getStr("name", gameName_);
-            if (!platform::readContentFile(manifest_.getStr("rules", "rules.json"), text)) throw std::runtime_error("rules not found");
-            rulesJson_ = Json::parse(text);
+            rulesJson_ = readComposedJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });   // + includes / extends
             langs_ = i18n::readGameLanguages(manifest_);
             applyLanguage(!forcedLanguage_.empty() ? forcedLanguage_
                                                    : i18n::chooseLanguage(langs_, i18n::readSavedLanguage(platform::userDataDir())), false);

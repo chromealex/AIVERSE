@@ -10,7 +10,7 @@ MapInfo describeMap(const std::string& gameDir, const std::string& mapFile, cons
     m.file = mapFile;
     m.title = title.empty() ? mapFile : title;
     const std::string mapPath = gameDir + "/" + mapFile, rulesPath = gameDir + "/" + rulesFile;
-    m.dataHash = hashFileContents({rulesPath, mapPath});
+    m.dataHash = hashGameData(rulesPath, mapPath);
     Json map = Json::parseFile(mapPath);
     const Json& ps = map["players"];
     for (size_t i = 0; i < ps.size(); ++i) m.slotTeams.push_back(uint8_t(ps[i].getInt("team", int64_t(i + 1))));

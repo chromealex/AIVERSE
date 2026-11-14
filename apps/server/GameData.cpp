@@ -1,4 +1,5 @@
 #include "GameData.h"
+#include "engine/data/JsonCompose.h"
 #include <fstream>
 #include <iterator>
 #include "engine/sim/Replay.h"
@@ -12,7 +13,7 @@ MatchData loadMatchData(const std::string& gameDir, const std::string& mapFile) 
     MatchData d;
     d.manifest = Json::parseFile(gameDir + "/game.json");
     d.module = d.manifest.getStr("module", "rts");
-    d.rules = Json::parseFile(gameDir + "/" + d.manifest.getStr("rules", "rules.json"));
+    d.rules = readComposedJson(gameDir + "/" + d.manifest.getStr("rules", "rules.json"), fileReader());
     d.map = Json::parseFile(gameDir + "/" + mapFile);
     auto read = [&](const std::string& p, std::string& out) {
         std::ifstream f(gameDir + "/" + p, std::ios::binary);
@@ -41,7 +42,7 @@ net::Arbiter makeArbiter(std::map<std::string, std::string> gameDirs) {
             const std::string& dir = it->second;
             MatchData data = loadMatchData(dir, job.mapFile);
             const std::string rulesPath = dir + "/" + data.manifest.getStr("rules", "rules.json");
-            if (hashFileContents({rulesPath, dir + "/" + job.mapFile}) != job.dataHash) { res.error = "game data differs from the players'"; return res; }
+            if (hashGameData(rulesPath, dir + "/" + job.mapFile) != job.dataHash) { res.error = "game data differs from the players'"; return res; }
             SimConfig cfg;
             cfg.seed = job.seed; cfg.tickRate = job.tickRate; cfg.inputDelayTicks = job.inputDelay;
             auto sim = makeSimulation(data.module, cfg);

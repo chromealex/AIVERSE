@@ -104,6 +104,7 @@ add_library(aiverse_engine STATIC
     engine/core/Fixed.cpp
     engine/core/FixedMath.cpp
     engine/data/Json.cpp
+    engine/data/JsonCompose.cpp
     engine/sim/Simulation.cpp
     engine/sim/Replay.cpp
     engine/sim/ProjectileData.cpp)

@@ -7,6 +7,7 @@
 //                      --key HEX64: only players with a ticket get in (aiverse_city ticket --key HEX64 --player ID [--seconds S])
 //   aiverse_city bots  --project DIR [--map FILE] --connect HOST:PORT [--seats N] --players N [--seconds S]
 #include <algorithm>
+#include "engine/data/JsonCompose.h"
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -58,7 +59,7 @@ void load(const Args& a, Json& rules, Json& map) {
     map = Json::parseFile(dir + "/" + (a.map.empty() ? manifest["maps"][size_t(0)].getStr("file") : a.map));
     std::string err;
     if (!game::applyTilesToMap(map, read, &err)) throw std::runtime_error("map: " + err);
-    rules = Json::parseFile(dir + "/" + manifest.getStr("rules", "rules.json"));
+    rules = readComposedJson(dir + "/" + manifest.getStr("rules", "rules.json"), fileReader());
     if (!a.rulesPatch.empty()) merge(rules, Json::parse(a.rulesPatch));
     if (!game::embedScripts(rules, map, read, &err)) throw std::runtime_error("scripts: " + err);
 

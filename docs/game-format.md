@@ -114,6 +114,57 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | `lanes` | `{"left": 4, "right": 2, "spacing": 0.35}` — Mushroom Wars 2 lanes between garrison buildings (replaces map `roads` for sends) |
 | `ai` | `{"towers": 1, "scouts": 1, "invasionSize": 6, "escalateSeconds": 300, "climbWeight": 24, "exposureWeight": 12, "terrain": true, "workersPerBase": 14, "firstAttackArmy": 8, "armyGrowth": 4, "maxAttackArmy": 16}` — computer player knobs, every key optional (defaults shown): `towers` defensive structures at the chokepoint toward the enemy once the base was raided (0 = none); `scouts` units holding a watch post on high ground along the attack route; `invasionSize` orbit units gathered before a fleet transfers to another body (planets); `escalateSeconds` no enemy structure destroyed for this long (after 8 min) raises the stalemate level (bigger waves, a little more range in the unit mix, economy targets, alternate routes, at level 3 no retreat); `climbWeight` / `exposureWeight` route cost per level climbed / per level of higher ground overlooking a cell (10 = one cell); `terrain: false` turns the terrain analysis off (direct attack-moves). See "Computer player" |
 
+## Splitting rules.json
+
+A big game does not keep everything in one `rules.json`. The loader assembles the rules from several
+files and lets entries inherit from shared bases (`engine/data/JsonCompose.h`). The simulation sees one
+document either way: same results, same checksums, old single-file games load unchanged.
+
+**`include`** — more files, paths relative to the file that lists them (inside the game folder):
+
+```json
+// rules.json
+{"include": ["rules/resources.json", "rules/units.json", "rules/abilities.json"],
+ "supplyCap": 200, "victory": "noStructures"}
+// rules/units.json (may include further files itself)
+{"types": {"footman": {...}, "archer": {...}}, "include": ["heroes.json"]}
+```
+
+- Top-level objects (`types`, `techs`, `resources`, `ai`, ...) merge key by key; top-level arrays
+  (`playerAbilities`, `triggers`, ...) append in reading order (the file's own content, then its includes, depth first);
+  scalars (`supplyCap`) are set once.
+- A key or an array entry `"id"` defined in two files is an error naming both (`rules/b.json: 'types.knight' is
+  already defined in rules/a.json`); so are an include cycle, a missing file and a path outside the game folder.
+- Everything reads the assembled rules: client, network host, headless, replays, `aiversebuild`, the editor.
+  Network and replay data hashes cover every included file. Packs ship the included files like any other data.
+- The editor and MCP edit the rules as one document (`rules_get` / `rules_set` / `rules_merge`); saving writes each
+  entry back into the file it came from and leaves unchanged files untouched. A new entry goes into the file that
+  holds the previous entry of its collection (a new type lands next to the other types). `rules_get` returns
+  `files` when the rules are split; `game_file_write` refuses rules files (use the rules ops).
+
+**`extends` / `abstract`** — an entry of a top-level collection (a member of an object of entries such as
+`types`, `techs`, `statuses`, or an array item with an `"id"` such as `playerAbilities`) starts as a copy of its
+base(s) in the same collection; its own keys go on top. Objects merge key by key, anything else (numbers, strings,
+arrays) replaces. `"abstract": true` entries are bases only: they are removed before loading (not types, not in
+the editor palette of the game).
+
+```json
+"types": {
+  "_infantry": {"abstract": true, "health": {"max": 420, "armor": 2}, "move": {"speed": 2.6, "radius": 0.4},
+                "sight": 8, "cost": {"gold": 135, "time": 15, "supply": 2}},
+  "footman":   {"extends": "_infantry", "name": "Footman", "weapons": [{"id": "sword", "range": 0.6, "damage": 12, "cooldown": 1.2}]},
+  "spearman":  {"extends": "_infantry", "name": "Spearman", "health": {"armor": 1}, "weapons": [{"id": "spear", "range": 1.2, "damage": 10, "cooldown": 1.4}]}
+}
+```
+
+`extends` takes a name or a list (applied left to right, then the entry itself); bases may extend other bases.
+Unknown bases and cycles are errors (`types 'knight': extends unknown 'cavalry'`). `rules_get {"resolved": true}`
+shows the entries as the game loads them; `rules_lint` checks the resolved entries.
+
+**Levels are overrides.** `levels` of abilities and player abilities already merge into the base entry (objects
+key by key, arrays of the same length element by element): write only what changes per level,
+`"levels": [{"cooldown": 37.5, "effects": [{"duration": 5.5}]}]`, never a full copy of the ability.
+
 ## resources
 
 ```json

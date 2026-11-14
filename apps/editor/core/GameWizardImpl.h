@@ -4,6 +4,7 @@
 //   GameWizardTutorial.cpp tutorial map + steps from the rules, soft hints
 //   GameWizardMeta.cpp     levels, meta screens and their config, shop, monetization, languages, report
 #pragma once
+#include "engine/data/JsonCompose.h"
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -65,6 +66,7 @@ struct GameMaker::Ctx {
     std::string sourceDir;                   // art folder (spec.artDir or the download)
     std::string idea;                        // spec.idea + texts found in the folder
     Json manifest = Json::object(), rules = Json::object();
+    JsonOrigin rulesOrigin;   // rules split over files (rules.json "include"): saveRules writes each part back
     wiz::RulesInfo info;
     std::string baseMapFile;                 // project-relative, the template's first map
     Json baseMap = Json::object();

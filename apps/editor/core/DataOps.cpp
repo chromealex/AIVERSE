@@ -75,6 +75,9 @@ void registerDataOps(Workspace& ws) {
             fs::path norm = fs::path(rel).lexically_normal();
             if (norm == "rules.json" || norm == "game.json" || norm == fs::path(ws.project.rulesPath()).lexically_relative(ws.project.dir))
                 throw std::runtime_error("use rules_set / rules_merge / set_manifest for " + rel);
+            for (auto& rf : ws.project.rulesFiles())   // files rules.json includes: one document, edited through the rules ops
+                if (norm == fs::path(rf).lexically_normal())
+                    throw std::runtime_error(rel + " is part of the rules (rules.json include): use rules_set / rules_merge, they save it back here");
             if (!ws.map.path.empty() && fs::path(ws.map.path).lexically_normal() == f.lexically_normal())
                 throw std::runtime_error("this is the open map: edit it with the map ops and map_save");
             std::string text;

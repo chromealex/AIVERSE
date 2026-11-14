@@ -414,7 +414,7 @@ Json planGame(const std::string& engineDir, const WizardSpec& s) {
     Json m = readJsonFile((tdir / "game.json").string());
     r.set("templateName", Json::string(m.getStr("name", p.id)));
     r.set("orientation", Json::string(s.orientation == "auto" ? m.getStr("orientation", "landscape") : s.orientation));
-    Json rules = readJsonFile((tdir / m.getStr("rules", "rules.json")).string());
+    Json rules = readComposedJson((tdir / m.getStr("rules", "rules.json")).string(), fileReader());
     RulesInfo info = RulesInfo::read(rules);
     bool garrison = false, economy = false;
     for (auto& t : info.types) { garrison |= t.entersGarrison; economy |= t.worker; }
@@ -541,7 +541,9 @@ void GameMaker::Ctx::saveManifest() {
 
 void GameMaker::Ctx::saveRules() {
     std::string err;
-    if (!writeText(dir + "/" + manifest.getStr("rules", "rules.json"), rules.dump() + "\n", &err)) throw std::runtime_error(err);
+    if (rulesOrigin.files.empty()) rulesOrigin.files.push_back(dir + "/" + manifest.getStr("rules", "rules.json"));
+    for (auto& [file, part] : splitComposed(rules, rulesOrigin))
+        if (!writeText(file, part.dump() + "\n", &err)) throw std::runtime_error(err);
 }
 
 GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(spec)), ctx_(std::make_shared<Ctx>()) {
@@ -572,7 +574,7 @@ GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(
         dir_ = c.dir;
         file_ = (fs::path(c.dir) / projectFileName(c.spec.title)).string();
         c.manifest = readJsonFile(c.dir + "/game.json");
-        c.rules = readJsonFile(c.dir + "/" + c.manifest.getStr("rules", "rules.json"));
+        c.rules = composeJson(c.dir + "/" + c.manifest.getStr("rules", "rules.json"), fileReader(), &c.rulesOrigin);
         c.info = RulesInfo::read(c.rules);
         if (c.manifest["maps"].size() > 0) {
             c.baseMapFile = c.manifest["maps"][0].getStr("file");

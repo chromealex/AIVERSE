@@ -2,6 +2,7 @@
 //   aiverse_headless --project templates/skirmish [--map maps/valley.json] --seed 7 --record m.rpl
 //   aiverse_headless --replay m.rpl
 #include <algorithm>
+#include "engine/data/JsonCompose.h"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -48,7 +49,7 @@ static Json loadMap(const std::string& mapPath, const std::string& projectDir) {
 
 // rules.json with the game's scripts embedded (RtsScript.h)
 static Json loadRules(const std::string& rulesPath, const Json& map, const std::string& projectDir) {
-    Json rules = Json::parseFile(rulesPath);
+    Json rules = readComposedJson(rulesPath, fileReader());   // + included files, extends applied
     std::string err;
     auto read = [&](const std::string& p, std::string& out) {
         std::ifstream f(projectDir + "/" + p, std::ios::binary);
@@ -396,7 +397,7 @@ static int play(const Args& a) {
 
     Replay rep;
     rep.module = module; rep.rulesPath = rulesPath; rep.mapPath = mapPath;
-    rep.dataHash = hashFileContents({rulesPath, mapPath});
+    rep.dataHash = hashGameData(rulesPath, mapPath);
     rep.seed = a.seed; rep.tickRate = cfg.tickRate; rep.inputDelay = cfg.inputDelayTicks;
 
     if (!a.loadFile.empty()) {
@@ -521,7 +522,7 @@ static int replay(const Args& a) {
     Replay rep;
     std::string err;
     if (!rep.load(a.replay, &err)) { std::fprintf(stderr, "replay: %s\n", err.c_str()); return 2; }
-    if (hashFileContents({rep.rulesPath, rep.mapPath}) != rep.dataHash) { std::fprintf(stderr, "replay: data files changed\n"); return 2; }
+    if (hashGameData(rep.rulesPath, rep.mapPath) != rep.dataHash) { std::fprintf(stderr, "replay: data files changed\n"); return 2; }
     SimConfig cfg;
     cfg.seed = rep.seed; cfg.tickRate = rep.tickRate; cfg.inputDelayTicks = rep.inputDelay;
     Simulation sim(cfg, makeModule(rep.module));

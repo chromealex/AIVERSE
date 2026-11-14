@@ -169,10 +169,15 @@ std::string Project::rulesPath() const { return dir + "/" + manifest.getStr("rul
 bool Project::load(const std::string& d, std::string* err) {
     try {
         Json m = Json::parseFile(d + "/game.json");
-        Json r = Json::parseFile(d + "/" + m.getStr("rules", "rules.json"));
+        JsonOrigin origin;
+        Json r = composeJson(d + "/" + m.getStr("rules", "rules.json"), fileReader(), &origin);
+        {   // what saveRules would write for each file now: a save rewrites only the files an edit changed
+            auto parts = splitComposed(r, origin);
+            for (size_t i = 0; i < parts.size(); ++i) origin.text[i] = parts[i].second.dump() + "\n";
+        }
         game::Rules parsed;
         if(m.getStr("module", "rts")=="fps")fps::readConfig(r);else parsed=game::loadRules(r);
-        dir = d; manifest = std::move(m); rulesJson = std::move(r); rules = std::move(parsed);
+        dir = d; manifest = std::move(m); rulesJson = std::move(r); rulesOrigin = std::move(origin); rules = std::move(parsed);
         rulesError.clear();
         rulesDirty = manifestDirty = false;
         return true;
@@ -186,9 +191,23 @@ bool Project::reloadRules() {
     catch (const std::exception& e) { rulesError = e.what(); return false; }
 }
 bool Project::saveRules(std::string* err) {
-    if (!writeText(rulesPath(), rulesJson.dump() + "\n", err)) return false;
+    if (rulesOrigin.files.empty()) rulesOrigin.files.push_back(rulesPath());
+    // every entry goes back to the file it came from; files whose content did not change are not touched
+    auto parts = splitComposed(rulesJson, rulesOrigin);
+    for (size_t i = 0; i < parts.size(); ++i) {
+        const std::string text = parts[i].second.dump() + "\n";
+        if (auto it = rulesOrigin.text.find(i); it != rulesOrigin.text.end() && it->second == text) continue;
+        if (!writeText(parts[i].first, text, err)) return false;
+        rulesOrigin.text[i] = text;
+    }
     rulesDirty = false;
     return true;
+}
+std::vector<std::string> Project::rulesFiles() const {
+    std::vector<std::string> out;
+    for (auto& f : rulesOrigin.files) out.push_back(fs::path(f).lexically_relative(dir).generic_string());
+    if (out.empty()) out.push_back(manifest.getStr("rules", "rules.json"));
+    return out;
 }
 bool Project::saveManifest(std::string* err) {
     if (!writeText(dir + "/game.json", manifest.dump() + "\n", err)) return false;
@@ -585,13 +604,22 @@ void Workspace::registerCoreOps() {
         });
 
     // ---------------------------------------------------------------- rules
-    add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file.",
-        R"({"properties": {"path": {"type": "string"}}})", [this, needProject](const Json& p) {
+    add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "
+        "Rules split over files (rules.json \"include\") read as one document; \"extends\" entries are shown as written, "
+        "resolved: true shows them with their bases applied (what the game loads). 'files' lists the rules files.",
+        R"({"properties": {"path": {"type": "string"}, "resolved": {"type": "boolean"}}})", [this, needProject](const Json& p) {
             needProject();
-            const Json* v = p.has("path") ? jsonPath(project.rulesJson, ps(p, "path")) : &project.rulesJson;
+            const Json resolved = p.getBool("resolved") && needsExtends(project.rulesJson) ? resolveExtends(project.rulesJson) : Json();
+            const Json& doc = resolved.isObject() ? resolved : project.rulesJson;
+            const Json* v = p.has("path") ? jsonPath(doc, ps(p, "path")) : &doc;
             if (!v) throw std::runtime_error("path not found: " + ps(p, "path"));
             Json r = Json::object();
             r.set("value", *v);
+            if (project.rulesOrigin.files.size() > 1) {
+                Json files = Json::array();
+                for (auto& f : project.rulesFiles()) files.push(str(f));
+                r.set("files", files);
+            }
             return r;
         });
     add("rules_list", "Compact list of resources, types (id, name, kind, cost) and techs of the open game.", "{}", [this, needProject](const Json&) {

@@ -1,4 +1,5 @@
 #include "RtsView.h"
+#include "../../../engine/data/JsonCompose.h"
 #include "../RtsModule.h"
 #include "../RtsArsenal.h"
 #include "../RtsTopDown.h"
@@ -36,7 +37,7 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
         std::string text, rulesPath = "rules.json";
         Json game, rj;
         try { if (read_("game.json", text)) { game = Json::parse(text); rulesPath = game.getStr("rules", "rules.json"); } } catch (...) {}
-        try { if (read_(rulesPath, text)) rj = Json::parse(text); } catch (...) {}
+        try { rj = readComposedJson(rulesPath, [this](const std::string& p, std::string& o) { return read_(p, o); }); } catch (...) {}
         fog_.setLook(parseFogLook(rj["fogOfWar"], game["fogOfWar"]));
         spriteDefaults_ = parseSpriteDefaults(rj["sprites"], game["sprites"]);   // 2D: shadow mode, lit
         fogMeshDirty_ = true;

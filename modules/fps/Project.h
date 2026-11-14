@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/data/Json.h"
+#include "engine/data/JsonCompose.h"
 #include <functional>
 
 namespace aiverse::fps {
@@ -15,8 +16,7 @@ inline Project readProject(const Reader& read) {
     } else p.mapFile="map.json"; // low-level regression fixtures
     auto rulesFile=p.manifest.getStr("rules","rules.json");
     if(!safe(rulesFile)||!safe(p.mapFile))throw JsonError("fps project: invalid relative content path");
-    if(!read(rulesFile,text))throw JsonError("fps project: cannot read "+rulesFile);
-    p.rules=Json::parse(text);
+    p.rules=readComposedJson(rulesFile,[&](const std::string& f,std::string& o){return read(f,o);});   // + includes / extends
     if(!read(p.mapFile,text))throw JsonError("fps project: cannot read "+p.mapFile);
     p.map=Json::parse(text);
     return p;

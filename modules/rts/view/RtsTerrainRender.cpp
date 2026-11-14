@@ -1,5 +1,6 @@
 // Chunked terrain renderer (see RtsTerrainRender.h).
 #include "RtsTerrainRender.h"
+#include "../../../engine/data/JsonCompose.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -66,7 +67,7 @@ void TerrainRenderer::init(gfx::Device& dev, const Rules& rules, const FileReade
         std::string text, rulesPath = "rules.json";
         Json game;
         try { if (read("game.json", text)) { game = Json::parse(text); rulesPath = game.getStr("rules", "rules.json"); } } catch (...) {}
-        try { if (read(rulesPath, text)) parseLook(Json::parse(text)["terrain"]); } catch (...) {}
+        try { parseLook(readComposedJson(rulesPath, [&](const std::string& p, std::string& o) { return read(p, o); })["terrain"]); } catch (...) {}
         if (game.isObject()) parseLook(game["terrain"]);
     }
     auto tex1 = [&](uint32_t px, const char* label) {

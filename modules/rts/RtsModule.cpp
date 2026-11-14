@@ -1,5 +1,6 @@
 // Setup, commands, shared queries and state hashing for the generic RTS module.
 #include "RtsInternal.h"
+#include "../../engine/data/JsonCompose.h"
 #include "RtsBwAI.h"   // agent-bw-ai
 #include "RtsInitialVars.h"
 #include "../../engine/core/FixedMath.h"
@@ -14,7 +15,10 @@ using namespace detail;
 
 // ================================================================= setup
 
-void RtsModule::setup(Simulation& sim, const Json& rulesJson, const Json& map) {
+void RtsModule::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
+    // every block below reads entries with their "extends" applied (engine/data/JsonCompose.h)
+    const Json resolvedRules = needsExtends(rulesIn) ? resolveExtends(rulesIn) : Json();
+    const Json& rulesJson = resolvedRules.isObject() ? resolvedRules : rulesIn;
     rules_ = loadRules(rulesJson);
     sim.world().setResource<GameState>();
     // map generation (map "generate" / world body "generate"): deterministic, regenerated identically by every

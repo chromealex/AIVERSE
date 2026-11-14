@@ -31,5 +31,7 @@ struct Replay {
 };
 
 uint64_t hashFileContents(const std::vector<std::string>& paths);
+// The data a match depends on: rules.json, every file it includes (engine/data/JsonCompose.h), then the map.
+uint64_t hashGameData(const std::string& rulesPath, const std::string& mapPath);
 
 } // namespace aiverse

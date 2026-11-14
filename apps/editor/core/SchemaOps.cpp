@@ -9,6 +9,7 @@
 // Presentation-only blocks (view, sprite, visual terrain/fog keys, lights, ...) are read by the
 // view, not the simulation loader, so they are skipped.
 #include "SchemaOps.h"
+#include "engine/data/JsonCompose.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -249,8 +250,14 @@ Json lintJson(const Json& issues, const std::string& loadError) {
 }
 } // namespace
 
-Json lintGameData(const Json& rules0, const Json& map, std::string* loadError) {
-    // unit designs expand into plain type blocks before loading: lint the expanded copy
+Json lintGameData(const Json& rulesIn, const Json& map, std::string* loadError) {
+    // "extends" entries get their bases and unit designs expand into plain type blocks before loading:
+    // lint the copy the loader really reads (otherwise every key would look unread)
+    Json inherited;
+    if (needsExtends(rulesIn)) {
+        try { inherited = resolveExtends(rulesIn); } catch (const std::exception& e) { if (loadError) *loadError = e.what(); return Json::array(); }
+    }
+    const Json& rules0 = inherited.isObject() ? inherited : rulesIn;
     Json expanded;
     if (rules0.has("designs")) {
         try { expanded = game::expandDesigns(rules0); } catch (const std::exception& e) { if (loadError) *loadError = e.what(); return Json::array(); }

@@ -1,4 +1,5 @@
 #include "RtsBattle.h"
+#include "engine/data/JsonCompose.h"
 #include <algorithm>
 #include <fstream>
 #include <iterator>
@@ -37,7 +38,7 @@ public:
                                      : Json::parse(o.mapJson);
         std::string err;
         if (!game::applyTilesToMap(map, read, &err)) throw std::runtime_error("map: " + err);
-        Json rules = Json::parseFile(dir + "/" + manifest.getStr("rules", "rules.json"));
+        Json rules = readComposedJson(dir + "/" + manifest.getStr("rules", "rules.json"), fileReader());
         if (!o.rulesPatch.empty()) merge(rules, Json::parse(o.rulesPatch));
         if (!game::embedScripts(rules, map, read, &err)) throw std::runtime_error("scripts: " + err);
         if (!rules["topDown"].isObject()) throw std::runtime_error(dir + ": rules have no \"topDown\" block (no heroes to steer)");

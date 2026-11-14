@@ -86,6 +86,19 @@ the *engine* add mechanics generically — never a special case for one game.
   readable errors (`type 'x': unknown resource 'y'`). Old game files must keep loading.
 - When a fixed block can't express something, extend the trigger system (`RtsTriggers`) instead
   of special-casing a game.
+- **Keep a game's rules.json small** (games, importers, the wizard, MCP agents; docs/game-format.md
+  § Splitting rules.json). One file holding the whole game grows to hundreds of KB that nobody (and no
+  agent context) can read:
+  - split by topic with `"include"` (`rules/units.json`, `rules/abilities.json`, `rules/ai.json`, ...);
+    a collection may span files (half the types in one, half in another), each key / id lives in one file;
+  - shared values go into an `"abstract": true` base and entries `"extends"` it, instead of copying
+    the same health / move / cost / effects block into every type or ability;
+  - `levels` hold only what changes per level (they merge into the base entry); never a full copy;
+  - importer provenance (source paths, client ids) goes into the game's sidecar files, not into rules;
+  - don't write values equal to the engine defaults.
+  Readers of rules go through `readComposedJson` / `composeJson` (`engine/data/JsonCompose.h`), never
+  `Json::parseFile(rules.json)`; data hashes use `hashGameData`. The editor saves each entry back to
+  the file it came from.
 
 **Games stay out of the engine repo (owner's rule, all agents):**
 - A concrete game project (a port, a commercial game, the owner's or a user's project) is never
@@ -282,6 +295,7 @@ the commit message; prefer adding a new file over editing a shared one.
 | Procedural decorative cables | `engine/cables`, `tests/cables`, `examples/cables`, `docs/cables.md`; minimal modeling/editor/CMake hooks | codex/cable-module (user assigned) |
 | Contact-hardening sun shadows | `engine/render/{Shaders.h,Renderer3D*,ScreenLighting.cpp}`, `tests/render/ContactShadowScene.h`, shared HDR test fixture, `docs/game-format.md` | codex/contact-shadows (user assigned) |
 | Third-party license audit and automatic game notices | `third_party/notices.json`, `platform/cmake/*Notices.cmake`, packaging hooks and `tests/notices` | codex/third-party-notices |
+| Rules split over files and inheritance: rules.json `include`, entry `extends` / `abstract`, write-back of edits to their files, data hashes over every rules file | `engine/data/JsonCompose.*`, `tests/tests_rules_split.inc`, docs/game-format.md § Splitting rules.json; hooks: `loadRules` / `RtsModule::setup` (resolve extends), `hashGameData` (`engine/sim/Replay`), rules readers in client / Lobby / headless / server / battle / city / aiversebuild / i18n / fps `Project.h` / view (`RtsView`, `RtsTerrainRender`, `RtsGroundFx`), editor `Project` (`rulesOrigin`, `saveRules`, `rulesFiles`), `rules_get` (`resolved`, `files`), `game_file_write` guard, `lintGameData`, game wizard | main agent |
 | Other areas | as assigned by the user | the agent the user assigned |
 | Bunker Wars energy skills: skill objects (`origins`/`consume`, `goal`, `onArrive`/`onExpire`/`onDeath`, `pull`), BW skill converter + modificator table | `modules/rts/RtsSkillObjects.cpp`, `tools/importers/bunkerwars/skills/`, `docs/bunkerwars-skills.md`, `tests/tests_skillobjects.inc`; hooks: `RtsEffects.cpp` (area / projectile spawn), `RtsUnits.cpp` (Enter), `RtsCombat.cpp` (deaths), `RtsSave.cpp` | agent-bw-skills (MAIN merges) |
 

@@ -7,6 +7,7 @@
 //       Prints lang/ru.json with every translatable key: existing translations are kept,
 //       missing ones get the source text and a // TODO comment. --write saves it.
 #include "engine/data/Json.h"
+#include "engine/data/JsonCompose.h"
 #include "engine/i18n/GameLanguage.h"
 #include "engine/i18n/Localization.h"
 #include "modules/rts/RtsLocalize.h"
@@ -68,7 +69,7 @@ Game loadGame(const fs::path& dir) {
     Game g;
     g.dir = dir;
     g.manifest = parseFile(dir / "game.json");
-    g.rules = parseFile(dir / g.manifest.getStr("rules", "rules.json"));
+    g.rules = readComposedJson((dir / g.manifest.getStr("rules", "rules.json")).string(), fileReader());
     for (auto& m : g.manifest["maps"].items()) {
         std::string f = m.getStr("file");
         g.maps.push_back({f, parseFile(dir / f)});

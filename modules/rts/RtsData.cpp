@@ -1,4 +1,5 @@
 #include "RtsData.h"
+#include "../../engine/data/JsonCompose.h"
 #include "RtsEffectsData.h"
 #include "RtsProgressionData.h"
 #include "RtsBwAI.h"   // agent-bw-ai
@@ -129,6 +130,7 @@ void loadFlowFieldRules(const Json& ff, FlowFieldRules& fr, const std::string& w
 }
 
 Rules loadRules(const Json& j) {
+    if (needsExtends(j)) return loadRules(resolveExtends(j));   // "extends" / "abstract" entries (engine/data/JsonCompose.h)
     if (j.has("designs")) return loadRules(expandDesigns(j));   // agent-mech UD
     Rules r;
     if (j.has("ai")) {

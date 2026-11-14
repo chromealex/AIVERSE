@@ -1,4 +1,5 @@
 #include "Replay.h"
+#include "../data/JsonCompose.h"
 #include "../core/Hash.h"
 #include <fstream>
 #include <iterator>
@@ -49,6 +50,13 @@ uint64_t hashFileContents(const std::vector<std::string>& paths) {
         h.str(s);
     }
     return h.value();
+}
+
+uint64_t hashGameData(const std::string& rulesPath, const std::string& mapPath) {
+    std::vector<std::string> files;
+    try { files = composedFiles(rulesPath, fileReader()); } catch (const std::exception&) { files = {rulesPath}; }
+    files.push_back(mapPath);
+    return hashFileContents(files);
 }
 
 } // namespace aiverse

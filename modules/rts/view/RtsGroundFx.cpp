@@ -1,4 +1,5 @@
 #include "RtsGroundFx.h"
+#include "../../../engine/data/JsonCompose.h"
 #include "RtsGroundFxShaders.h"
 #include "RtsView.h"
 #include "../RtsModule.h"
@@ -122,7 +123,7 @@ void RtsGroundFx::init(gfx::Device& dev, const Rules& rules, const FileReader& r
         std::string text, rulesPath = "rules.json";
         Json game;
         try { if (read("game.json", text)) { game = Json::parse(text); rulesPath = game.getStr("rules", "rules.json"); } } catch (...) {}
-        try { if (read(rulesPath, text)) parseLook(Json::parse(text)["terrain"]); } catch (...) {}
+        try { parseLook(readComposedJson(rulesPath, [&](const std::string& p, std::string& o) { return read(p, o); })["terrain"]); } catch (...) {}
         if (game.isObject()) parseLook(game["terrain"]);
     }
     useT_ = rules.territory.enabled || !rules.rooms.empty();

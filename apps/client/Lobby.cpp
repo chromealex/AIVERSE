@@ -9,6 +9,7 @@
 
 #include "GameClient.h"
 #include "engine/core/Hash.h"
+#include "engine/data/JsonCompose.h"
 #include "modules/rts/RtsTiles.h"
 #include <RmlUi/Core/Input.h>
 
@@ -56,8 +57,8 @@ void GameClient::saveNetSettings() const {
 // (APK assets, web preload, .rpak) work: players only meet on byte-identical rules + map.
 void GameClient::describeNetMaps() {
     netMaps_.clear();
-    std::string rules;
-    if (!platform::readContentFile(manifest_.getStr("rules", "rules.json"), rules)) return;
+    JsonOrigin rules;   // rules.json and every file it includes: all of them must be identical
+    try { composeJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &rules); } catch (const std::exception&) { return; }
     for (auto& m : maps_) {
         std::string text;
         if (!platform::readContentFile(m.file, text)) continue;
@@ -65,7 +66,7 @@ void GameClient::describeNetMaps() {
         info.file = m.file;
         info.title = m.title;
         Hasher h;
-        h.str(rules);
+        for (auto& [i, t] : rules.text) h.str(t);
         h.str(text);
         info.dataHash = h.value();
         try {
@@ -176,7 +177,7 @@ void GameClient::startNetMatch() {
         std::string terr; // 2D tile maps: same as offline, or the match desyncs from the server's replay
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_ = std::make_unique<Simulation>(net_->simConfig(), std::make_unique<RtsModule>());
-        Json rules = Json::parse(rulesText);
+        Json rules = readComposedJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
         configurePostFx(map);
