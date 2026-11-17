@@ -140,8 +140,30 @@ TEST(geometry_shadow_policy_and_mesh_lod) {
     entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);
     auto m=geometrytest::grid(4);auto coarse=m.meshes[0];coarse.primitives[0].indexCount=6;m.meshes.push_back(coarse);m.meshes[0].lods.push_back({1,10000});m.finalize();uploadModel(dev,m);
     RTSCamera cam;cam.pitch=0;cam.distance=100;
-    auto frame=[&](bool lod){r.setModelLodEnabled(lod);r.beginScene(cam,800,600);ModelDraw d;d.model=&m;r.drawModel(d);r.render(gfx::PassDesc{});return r.profile().triangles[1];};
-    CHECK(frame(false)==32);CHECK(frame(true)==2);CHECK(r.profile().lodNodes==1);releaseModel(dev,m);r.shutdown();
+    r.setLodDebugTarget(77);
+    r.setLodDiagnosticsEnabled(true);
+    auto frame=[&](bool lod){
+        r.setModelLodEnabled(lod);
+        r.beginScene(cam,800,600);
+        ModelDraw d;d.model=&m;d.persistentId=77;
+        r.drawModel(d);
+        r.render(gfx::PassDesc{});
+        CHECK(r.modelStats().cameraLodChains > 0);
+        CHECK(r.lodDebugSample().matched && r.lodDebugSample().withChain > 0);
+        return r.profile().triangles[1];
+    };
+    CHECK(frame(false)==32);
+    CHECK(r.lodDebugSample().levels[0] > 0);
+    CHECK(frame(true)==2);
+    CHECK(r.profile().lodNodes==1);
+    CHECK(r.lodDebugSample().levels[1] > 0);
+    r.setLodDebugTarget(88);
+    r.beginScene(cam,800,600);
+    ModelDraw other;other.model=&m;other.persistentId=77;
+    r.drawModel(other);r.render(gfx::PassDesc{});
+    CHECK(!r.lodDebugSample().matched);
+    r.setLodDiagnosticsEnabled(false);
+    releaseModel(dev,m);r.shutdown();
 }
 TEST(geometry_prepared_scene_owns_geometry_and_shared_materials) {
     using namespace render;entityfxtest::RecordingDevice dev;Renderer3D r;CHECK(r.init(dev));r.setShadowQuality(ShadowQuality::Off);

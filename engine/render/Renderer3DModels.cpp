@@ -433,7 +433,9 @@ void Renderer3D::drawModel(const ModelDraw& d) {
         // Palette poses provide conservative current skin bounds. Baked-only draws keep
         // LOD0 until they supply pose bounds; bind bounds can underestimate a bent limb.
         const bool skinLod = node.skin >= 0 && !displaced && usePose && !canBake && d.nodeWorld && d.nodeWorld->size() == m->nodes.size();
-        if (modelLodEnabled_ && (rigid || skinLod) && !baseMesh.lods.empty() && d.variant < 0 && !d.nodeMaterial) {
+        const bool lodEligible = (rigid || skinLod) && !baseMesh.lods.empty() &&
+                                 d.variant < 0 && !d.nodeMaterial;
+        if (modelLodEnabled_ && lodEligible) {
             mat4 lodWorld = nodeWorld;
             float3 lodMin = baseMesh.boundsMin, lodMax = baseMesh.boundsMax;
             if (skinLod) {
@@ -452,18 +454,50 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             }
             const float error = length(lodMax - lodMin);
             const bool zeroToOne = dev_->info().clipDepthZeroToOne;
-            float pixels = nodeView ? geometryErrorPixels(viewProj_ * lodWorld, lodMin, lodMax, error, sceneW_, sceneH_, zeroToOne) : 0;
-            if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(lightViewProj_ * lodWorld, lodMin, lodMax, error, shadowSize_, shadowSize_, zeroToOne));
+            const float cameraPixels = nodeView
+                ? geometryErrorPixels(viewProj_ * lodWorld, lodMin, lodMax, error,
+                                       sceneW_, sceneH_, zeroToOne) : 0.0f;
+            float pixels = cameraPixels;
+            if (nodeShadow) pixels = std::max(pixels, geometryErrorPixels(
+                lightViewProj_ * lodWorld, lodMin, lodMax, error,
+                shadowSize_, shadowSize_, zeroToOne));
             if (!nodeView && !nodeShadow) pixels = std::numeric_limits<float>::infinity(); // full detail for later mirror/spot frusta
             const bool opaque = d.tint.w>=.99f && d.dissolve<=0 && !transparentItem(d.flags) &&
                 std::none_of(mats.begin(),mats.end(),[](const Material& mat){return mat.alpha==AlphaMode::Blend || mat.transparent;});
             const float fadeWidth = opaque && !m->geometry && matQuality_!=MaterialQuality::Low ? modelLodFadeWidth_ : 0;
             lodBlend=selectModelLod(node.mesh,baseMesh.lods,pixels,fadeWidth);
             meshIndex=lodBlend.mesh;level=lodBlend.level;
+            // This extra camera-only LOD selection is a diagnostic, not
+            // part of rendering. Avoid doing it on every frame when the
+            // LOD inspector is closed, especially in dense cities.
+            if (lodDiagnosticsEnabled_ && nodeView && nodeShadow && pixels > cameraPixels &&
+                selectModelLod(node.mesh, baseMesh.lods, cameraPixels, fadeWidth).level > level) {
+                ++modelStats_.cameraShadowLimitedLod;
+                if (lodDebugTarget_ && d.persistentId == lodDebugTarget_)
+                    ++lodDebugSample_.shadowLimited;
+            }
             if(lodBlend.incoming>=0)++profile_.lodTransitionNodes;
             if (meshIndex != node.mesh) ++profile_.lodNodes;
         }
         ++modelStats_.lodNodes[std::min<size_t>(level, 3)];
+        if (lodDiagnosticsEnabled_ && nodeView) {
+            ++modelStats_.cameraLodNodes[std::min<size_t>(level, 3)];
+            if (baseMesh.lods.empty()) ++modelStats_.cameraNoLodChains;
+            else {
+                ++modelStats_.cameraLodChains;
+                if (!lodEligible) ++modelStats_.cameraLodBlocked;
+            }
+            // Editor only: the selected map entity provides a stable ID from
+            // SceneObject::persistentKey, so we can inspect its actual LOD
+            // without storing per-entity traces or changing draw grouping.
+            if (lodDebugTarget_ && d.persistentId == lodDebugTarget_) {
+                lodDebugSample_.matched = true;
+                ++lodDebugSample_.visibleNodes;
+                ++lodDebugSample_.levels[std::min<size_t>(level, 3)];
+                if (baseMesh.lods.empty()) ++lodDebugSample_.withoutChain;
+                else ++lodDebugSample_.withChain;
+            }
+        }
         // Shadow batch (mergeStaticPrimitives): one shadow draw covers the opaque parts of the mesh.
         // Material copies are common in game views; only shadow-incompatible overrides disable batching.
         for(int part=0;part<(lodBlend.incoming>=0?2:1);++part) {

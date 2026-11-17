@@ -201,6 +201,45 @@ AIVERSE_EXPERIMENTAL_METAL_ICB=1 AIVERSE_MDI_INSTANCE_PALETTE=1 AIVERSE_MODEL_BA
 - Compare original screenshot and CPU/GPU timings with and without `AIVERSE_MDI_INSTANCE_PALETTE=1`, identical fixed camera, shaded view (debug draw-call coloring itself affects shader and counters). A/B fixture must report `changed_channels=0` and reduced opaque draw count before considering merge. Also check real native car runtime wheels/door/roof panel state and lights if switching from editor to native.
 - All commits and findings saved in this handoff. No successful local macOS build or visual benchmark of PR #13 was performed by this agent.
 
+## Step 18 — GTA roads and model LOD diagnostics (PR #14, code complete / macOS test pending)
+- User screenshot (2026-11-17) shows pink straight carriageways, blue/grey intersection, orange/coral shoulders in Draw Calls debug. This does not demonstrate *one material*; it shows separate GPU submissions under the debug colouring path.
+- Source cause: `RtsRoadView.cpp` builds roads in **32-cell spatial chunks**. `paintedMaterial()` generates carriageway material/texture with lane lines and wheel tracks; `junction()` deliberately uses standard `kAsphalt` or other base material, while sidewalks/curbs use their own material slots. Zebra/road paint/verges/wet film/puddles are drawn by a **separate custom decal callback**, not in the normal model material batch. Current automatic small-road chunk merge (PR #12) reduces chunks, not the material state count. Even same material and texture cannot merge different geometry into one direct draw; instancing needs same mesh and MDI needs shared buffers/equivalent state + worthwhile number of commands.
+- Renderer already selects `mesh.lods` from imported `meshes[].extras.rtsLods` when the node is eligible. It chooses the maximum projected requirement of the main camera and sun shadow frustum (so shadows can keep a model at LOD0). The engine does **not** generate mesh LODs on model import; `tools/models/autolod.py` is an offline step, and skinned/morph content can be skipped. GTA GLB files are LFS-backed so actual LOD metadata for `sedan_damage.glb` and `police_station.glb` is not confirmed by agent; do not assert they have LODs.
+- New stacked branch `perf/road-lod-diagnostics`, draft PR https://github.com/chromealex/AIVERSE/pull/14, base `perf/vehicle-indirect-material-palette` (PR #13).
+- Commits:
+  - `e89e6e3`, `c8289fe`: `RtsRoadView::BatchStats` captures after rebuild **source chunks, uploaded chunks, merge factor, material slots actually used, their GPU base texture IDs, primitive/triangle totals and chunks per material**. Static per-rebuild overhead; excludes decal callback, reflection and shadows.
+  - `5161959`, `c8e74d0`: add source-node main-camera LOD distribution `cameraLodNodes[4]`, eligible chain/absent/blocked counts and `cameraShadowLimitedLod` (camera alone would choose coarser level than shadows). These are diagnostics, not new runtime LOD logic.
+  - `2b361b7`: Model window shows `LOD модели` with each imported chain, LOD0/1/2 ... triangles and maxPixels; `model_info` exposes `lods` in agent JSON.
+  - `12cfc6c`: Scene top toolbar dedicated **LOD** popup beside Batching, LOD on/off and fade width, camera counts and chosen type source info. Scene → Batching adds Road surfaces: materials / chunks and explains the separate paint/decal path.
+  - `5a18849`, `124eef0`, `ed551ab`, `76c5fb7`: cheap single-instance LOD trace: editor map entities already use persistent IDs `(0xED << 56) | (index + 1)`; track only that ID in drawModel and snapshot after Scene, so Game tab can't overwrite the view. Current camera selected entity shows which LOD level its visible source nodes actually use. Scene changes restore shared Renderer3D LOD defaults.
+  - `375cbbd`, `1d9c032`: mock-renderer geometry LOD test verifies toggles, LOD1 selection and matching/mismatching trace IDs.
+  - `d7748da`, `92a750c`, `3b62350`: LOD diagnostics gated by LOD popup being open. When closed there is no extra camera-only LOD selection per node, avoiding a persistent performance regression.
+  - `25b76fa`, `890b916`, `d547bb6`: user docs in `docs/autolod.md` and `docs/roads.md`.
+  - `352233e`: Model window now follows `Selection::Entity` as well as `Selection::Type`, so selecting the car/building in Scene actually shows its imported LOD in Models.
+- Remaining validation **not performed**: macOS/Metal compile and `aiverse_tests`/renderer A/B; actual asset LOD metadata of the GTA sedan and station; video/screenshots showing a switch when camera moves; shader/scene performance. PR #14 is **Draft** and should remain so until tested.
+- Suggested verification:
+```sh
+cd ~/Projects/AIVERSE
+git fetch origin
+git switch perf/road-lod-diagnostics || git switch --track origin/perf/road-lod-diagnostics
+git pull --ff-only origin perf/road-lod-diagnostics
+cmake -S . -B build/.temp/road-lod -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_HDR_TESTS=ON
+cmake --build build/.temp/road-lod --target aiverse_editor aiverse_tests aiverse_deferred_loading_tests aiverse_material_batches -j8
+ctest --test-dir build/.temp/road-lod -R '^aiverse_tests$|^aiverse_deferred_loading_tests
+- Build editor and test newest branch on Apple Silicon; verify camera triangle counters with movable camera + fixed camera A/B.
+- Re-run GTA signal installer and tests, then native client and actual Metal lighting/traffic signal changes; keep GTA draft PR #4.
+- Benchmark Metal CPU MDI threshold 8 vs 16 (and cache off/on) with controlled camera; update findings before merging.
+- Append exact commit/test results for another agent after **each step**.
+
+- Inspect GTA signal assets and type switching; identify stable material path and shared model geometry.
+- Implement in correct repository/branch with tests, benchmark CPU/GPU and pixel-equivalence.
+- Append new steps, exact commits and any known blockers after each meaningful change; avoid merging to main before validation.
+ --output-on-failure
+./build/.temp/road-lod/AiverseEditor.app/Contents/MacOS/AiverseEditor
+```
+- In GTA branch `gta` project open `project/maps/render_microtest.json`, Scene → Batching → Road surfaces: materials / chunks, select sedan & civic_police_station in scene and open top LOD. Open Models → LOD модели. Verify source chains and actual active LOD at different camera distances. Flip Model LOD off/on and inspect triangles, ignoring debug Draw Calls for timing. If no chains exist, make a separate asset-side AutoLOD generation task; don't fake values.
+- For performance compare fixed camera, Shaded mode, MDI OFF / ON and road-merge auto / off with actual GPU timings; only source-state breakdown was added here, so **no claimed GPU Draw Call reduction from PR #14**.
+
 ## Next
 - Build editor and test newest branch on Apple Silicon; verify camera triangle counters with movable camera + fixed camera A/B.
 - Re-run GTA signal installer and tests, then native client and actual Metal lighting/traffic signal changes; keep GTA draft PR #4.

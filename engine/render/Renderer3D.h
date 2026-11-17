@@ -180,6 +180,10 @@ enum DrawFlags : uint32_t {
 
 struct ModelRenderStats {
     uint64_t nodes = 0, culledNodes = 0, lodNodes[4] = {};
+    // Main-camera source nodes only; excludes shadow/reflection repetitions.
+    uint64_t cameraLodNodes[4] = {};
+    uint64_t cameraLodChains = 0, cameraNoLodChains = 0;
+    uint64_t cameraLodBlocked = 0, cameraShadowLimitedLod = 0;
     uint64_t triangles = 0, instancedDraws = 0, drawnInstances = 0;
     uint64_t multiDrawSubmissions = 0, indirectCommands = 0;
     // A subset of CPU MDI submissions: different rigid meshes and materials
@@ -342,9 +346,22 @@ public:
     // Set before rendering; zero chooses the backend limit (28 with 4 KB uniforms / 256 Metal).
     void setInstanceLimit(uint32_t limit);
     uint32_t instanceLimit() const { return instanceLimit_; }
+    // Debug exactly one selected editor model instance, not every entity.
+    // This keeps the runtime default free of per-entity trace allocations.
+    struct LodDebugSample {
+        bool matched = false;
+        uint64_t visibleNodes = 0, withChain = 0, withoutChain = 0;
+        uint64_t shadowLimited = 0;
+        std::array<uint64_t,4> levels{};
+    };
+    void setLodDebugTarget(uint64_t id) { lodDebugTarget_ = id; }
+    void setLodDiagnosticsEnabled(bool enabled) { lodDiagnosticsEnabled_ = enabled; }
+    const LodDebugSample& lodDebugSample() const { return lodDebugSample_; }
     void setModelLodEnabled(bool enabled) { modelLodEnabled_=enabled; }
+    bool modelLodEnabled() const { return modelLodEnabled_; }
     // Relative screen-size band around each threshold; 0 restores instant switches.
     void setModelLodFadeWidth(float width) { modelLodFadeWidth_=std::clamp(width,0.0f,0.49f); }
+    float modelLodFadeWidth() const { return modelLodFadeWidth_; }
 
     // Baked global illumination (agent-lightbake): lightmaps for static models (matched by model path,
     // node and world transform), light probes for everything else, mixed with the realtime sun by the
@@ -490,6 +507,9 @@ private:
     bool modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
     bool auxiliaryModelPass_ = false;
     bool profiling_=false,modelLodEnabled_=true;
+    uint64_t lodDebugTarget_ = 0;
+    bool lodDiagnosticsEnabled_ = false;
+    LodDebugSample lodDebugSample_;
     float modelLodFadeWidth_=.15f;
     RenderProfile profile_;
     uint32_t instanceLimit_=32;

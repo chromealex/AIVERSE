@@ -42,6 +42,35 @@ Json modelInfo(const render::Model& m) {
         mats.push(mj);
     }
     r.set("materials", mats);
+    // The agent receives the exact imported GLB LOD chain, not an
+    // assumption based on a source asset's filename or generated LOD report.
+    Json lods = Json::array();
+    for (const auto& node : m.nodes) {
+        if (node.mesh < 0 || size_t(node.mesh) >= m.meshes.size()) continue;
+        const auto& mesh = m.meshes[size_t(node.mesh)];
+        if (mesh.lods.empty()) continue;
+        Json entry = Json::object();
+        entry.set("node", Json::string(node.name));
+        Json levels = Json::array();
+        auto addLevel = [&](const render::MeshDef& lodMesh, int level, float threshold) {
+            uint64_t tris = 0;
+            for (const auto& p : lodMesh.primitives) tris += p.indexCount / 3;
+            Json item = Json::object();
+            item.set("level", Json::number(int64_t(level)));
+            item.set("triangles", Json::number(int64_t(tris)));
+            if (level) item.set("maxPixels", Json::number(double(threshold)));
+            levels.push(item);
+        };
+        addLevel(mesh, 0, 0);
+        for (size_t i = 0; i < mesh.lods.size(); ++i) {
+            const auto& lod = mesh.lods[i];
+            if (lod.mesh < 0 || size_t(lod.mesh) >= m.meshes.size()) continue;
+            addLevel(m.meshes[size_t(lod.mesh)], int(i) + 1, lod.maxPixels);
+        }
+        entry.set("levels", levels);
+        lods.push(entry);
+    }
+    r.set("lods", lods);
     Json vars = Json::array();
     for (const auto& v : m.variants) vars.push(Json::string(v));
     r.set("variants", vars);
@@ -71,7 +100,15 @@ public:
         const auto& types = ed.rules().types;
         if (types.empty()) { ImGui::TextDisabled("Нет типов"); return; }
         if (ed.selection.kind == Selection::Type)
-            for (size_t i = 0; i < types.size(); ++i) if (types[i].id == ed.selection.key) type_ = int(i);
+            for (size_t i = 0; i < types.size(); ++i)
+                if (types[i].id == ed.selection.key) type_ = int(i);
+        else if (ed.selection.kind == Selection::Entity &&
+                 ed.selection.index >= 0 &&
+                 size_t(ed.selection.index) < ed.doc().data.entities.size()) {
+            const int chosen = ed.rules().findType(
+                ed.doc().data.entities[size_t(ed.selection.index)].type);
+            if (chosen >= 0) type_ = chosen;
+        }
         type_ = std::clamp(type_, 0, int(types.size()) - 1);
         if (ui::beginProps("##model")) {
             ui::prop("Тип");
@@ -112,6 +149,31 @@ public:
             for (const auto& mt : m->materials)
                 ImGui::BulletText("%s%s%s", mt.name.c_str(), mt.team != render::TeamMode::None ? "  [цвет игрока]" : "",
                                   mt.alpha == render::AlphaMode::Blend ? "  [прозрачный]" : mt.alpha == render::AlphaMode::Mask ? "  [маска]" : "");
+        if (ui::collapsing("LOD модели", ImGuiTreeNodeFlags_DefaultOpen)) {
+            size_t chains = 0;
+            for (const auto& node : m->nodes) {
+                if (node.mesh < 0 || size_t(node.mesh) >= m->meshes.size()) continue;
+                const auto& mesh = m->meshes[size_t(node.mesh)];
+                if (mesh.lods.empty()) continue;
+                ++chains;
+                uint64_t baseTris = 0;
+                for (const auto& p : mesh.primitives) baseTris += p.indexCount / 3;
+                ImGui::Text("%s: LOD0 %llu тр.", node.name.c_str(),
+                            (unsigned long long)baseTris);
+                for (size_t i = 0; i < mesh.lods.size(); ++i) {
+                    const auto& lod = mesh.lods[i];
+                    if (lod.mesh < 0 || size_t(lod.mesh) >= m->meshes.size()) continue;
+                    uint64_t tris = 0;
+                    for (const auto& p : m->meshes[size_t(lod.mesh)].primitives)
+                        tris += p.indexCount / 3;
+                    ImGui::BulletText("LOD%zu: %llu тр., порог %.1f px",
+                        i + 1, (unsigned long long)tris, double(lod.maxPixels));
+                }
+            }
+            if (!chains) ImGui::TextDisabled("У модели нет импортированных LOD (meshes[].extras.rtsLods).");
+            ImGui::TextDisabled("LOD генерируются офлайн; редактор сам их не создаёт.");
+            ImGui::TextDisabled("Выбор камерой/тенями: Сцена → LOD.");
+        }
         if (!m->variants.empty() && ui::collapsing("Варианты"))
             for (const auto& v : m->variants) ImGui::BulletText("%s", v.c_str());
         if (ui::collapsing("Узлы (для procedural, attach, fx, muzzle)"))

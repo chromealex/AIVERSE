@@ -15,6 +15,7 @@
 #include "../EditorWorldEdit.h"
 #include "engine/render/GlobalGeometryPool.h"
 #include "engine/render/GpuIcbPolicy.h"
+#include "modules/rts/view/RtsRoadView.h"
 #include <array>
 
 namespace aiverse::editor {
@@ -40,6 +41,8 @@ public:
             ImGui::SameLine();
             batchingControls(ed);
             ImGui::SameLine();
+            lodControls(ed);
+            ImGui::SameLine();
             if (ImGui::Button("Draw Calls##fpsScene")) studioDebugMode_ = studioDebugMode_ == 1 ? 0 : 1;
         } else toolbar(ed);
         ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -52,6 +55,15 @@ public:
         const auto afterViewport = std::chrono::steady_clock::now();
         // Diagnostic rendering is scoped to Scene, never leaked into the Game tab.
         auto& renderer = ed.renderer();
+        // The map document assigns 0xED-prefixed IDs to authored entities.
+        // Trace only the selected one; avoid per-entity allocation in runtime.
+        uint64_t lodTarget = 0;
+        renderer.setLodDiagnosticsEnabled(lodPopupVisible_);
+        if (lodPopupVisible_ &&
+            ed.selection.kind == Selection::Entity && ed.selection.index >= 0 &&
+            size_t(ed.selection.index) < ed.doc().data.entities.size())
+            lodTarget = (uint64_t(0xED) << 56) | (uint64_t(ed.selection.index) + 1);
+        renderer.setLodDebugTarget(lodTarget);
         renderer.setStudioDebugMode(studioDebugMode_);
         renderer.setProfiling(sceneProfiling_);
         const bool measuredMode = benchmarkActive_ || autoBatchChoice_ >= 0;
@@ -60,6 +72,8 @@ public:
         renderer.setModelMultiDrawEnabled(measuredMode ? activeMode != 0 : sceneIndirect_);
         renderer.setGpuAuthoredDrawEnabled(measuredMode ? activeMode == 2 : true);
         renderer.setModelCullingEnabled(sceneCulling_);
+        renderer.setModelLodEnabled(sceneLodEnabled_);
+        renderer.setModelLodFadeWidth(sceneLodFadeWidth_);
         // Pipeline layouts depend on instance limit. Apply only when the user changes
         // the control: resetting this after every Scene frame would recompile shaders.
         if (sceneInstanceLimitDirty_) {
@@ -154,6 +168,10 @@ public:
                 if (mode < 3) benchmarkGpuSamples_[mode].push_back(timing.milliseconds);
             }
         }
+        // Take a stable copy before the Game window overwrites the shared
+        // Renderer3D counters later in the editor frame.
+        lastSceneLodStats_ = renderer.modelStats();
+        lastSelectedLod_ = renderer.lodDebugSample();
         const auto afterRenderScene = std::chrono::steady_clock::now();
         // Changes are scoped to Scene; Game playback uses the normal renderer defaults.
         renderer.setStudioDebugMode(0);
@@ -162,6 +180,10 @@ public:
         renderer.setModelMultiDrawEnabled(true);
         renderer.setGpuAuthoredDrawEnabled(true);
         renderer.setModelCullingEnabled(true);
+        renderer.setModelLodEnabled(true);
+        renderer.setModelLodFadeWidth(0.15f);
+        renderer.setLodDebugTarget(0);
+        renderer.setLodDiagnosticsEnabled(false);
         vp_.drawnFrame = ImGui::GetFrameCount();
         ed.sceneViewport = &vp_;
         if (traceScene) {
@@ -219,6 +241,81 @@ public:
     }
 
 private:
+    void lodControls(Editor& ed) {
+        if (ImGui::Button("LOD##scene")) ImGui::OpenPopup("##scene_lod");
+        if (!ImGui::BeginPopup("##scene_lod")) {
+            lodPopupVisible_ = false;
+            return;
+        }
+        lodPopupVisible_ = true;
+        ImGui::TextUnformatted("LOD текущей камеры (модели)");
+        ImGui::Separator();
+        ImGui::Checkbox("Включить Model LOD", &sceneLodEnabled_);
+        ImGui::SliderFloat("Переход LOD", &sceneLodFadeWidth_, 0.0f, 0.49f, "%.2f");
+        const auto& stats = lastSceneLodStats_;
+        ImGui::Text("В кадре: LOD0 %llu | LOD1 %llu | LOD2 %llu | LOD3+ %llu",
+                    (unsigned long long)stats.cameraLodNodes[0],
+                    (unsigned long long)stats.cameraLodNodes[1],
+                    (unsigned long long)stats.cameraLodNodes[2],
+                    (unsigned long long)stats.cameraLodNodes[3]);
+        ImGui::Text("С LOD-цепочкой: %llu | без неё: %llu",
+                    (unsigned long long)stats.cameraLodChains,
+                    (unsigned long long)stats.cameraNoLodChains);
+        ImGui::Text("Не подходит для выбора LOD: %llu | ограничено тенями: %llu",
+                    (unsigned long long)stats.cameraLodBlocked,
+                    (unsigned long long)stats.cameraShadowLimitedLod);
+        ImGui::TextDisabled("Счётчики узлов исходных моделей, только main camera.");
+        ImGui::TextDisabled("Уровень выбирается по размеру на экране и теневому охвату.");
+        ImGui::Separator();
+        int selectedType = -1;
+        if (ed.selection.kind == Selection::Entity &&
+            ed.selection.index >= 0 &&
+            size_t(ed.selection.index) < ed.doc().data.entities.size())
+            selectedType = ed.rules().findType(
+                ed.doc().data.entities[size_t(ed.selection.index)].type);
+        else if (ed.selection.kind == Selection::Type) {
+            for (size_t i = 0; i < ed.rules().types.size(); ++i)
+                if (ed.rules().types[i].id == ed.selection.key) {
+                    selectedType = int(i);
+                    break;
+                }
+        }
+        if (selectedType >= 0 && size_t(selectedType) < ed.rules().types.size()) {
+            ed.retainEditorType(uint16_t(selectedType));
+            ImGui::Text("Выбран: %s", ed.rules().types[size_t(selectedType)].id.c_str());
+            if (const auto* model = ed.view().modelOf(uint16_t(selectedType))) {
+                size_t chains = 0, levels = 0;
+                for (const auto& node : model->nodes) {
+                    if (node.mesh < 0 || size_t(node.mesh) >= model->meshes.size()) continue;
+                    const auto& mesh = model->meshes[size_t(node.mesh)];
+                    if (mesh.lods.empty()) continue;
+                    ++chains;
+                    levels += mesh.lods.size();
+                }
+                ImGui::Text("LOD-цепочек: %zu | доп. уровней: %zu", chains, levels);
+                if (!chains) ImGui::TextDisabled("В GLB нет импортированных LOD.");
+                if (ed.selection.kind == Selection::Entity) {
+                    const auto& actual = lastSelectedLod_;
+                    if (actual.matched) {
+                        ImGui::Text("Выбранный объект: LOD0 %llu, LOD1 %llu, LOD2 %llu, LOD3+ %llu",
+                            (unsigned long long)actual.levels[0],
+                            (unsigned long long)actual.levels[1],
+                            (unsigned long long)actual.levels[2],
+                            (unsigned long long)actual.levels[3]);
+                        ImGui::Text("Видимые узлы: %llu, с цепочкой: %llu, ограничены тенями: %llu",
+                            (unsigned long long)actual.visibleNodes,
+                            (unsigned long long)actual.withChain,
+                            (unsigned long long)actual.shadowLimited);
+                    } else ImGui::TextDisabled("Выбранный объект не рисовался в текущей камере.");
+                }
+                ImGui::TextDisabled("Подробности: окно «Модели» → «LOD модели».");
+            }
+        } else ImGui::TextDisabled("Выбери автомобиль или здание, чтобы проверить их LOD.");
+        ImGui::TextDisabled("Автоматической генерации LOD при загрузке нет.");
+        ImGui::TextDisabled("Настройки влияют на общий Renderer3D (Scene / Game).");
+        ImGui::EndPopup();
+    }
+
     void batchingControls(Editor& ed) {
         if (ImGui::Button("Batching##scene")) ImGui::OpenPopup("##scene_batching");
         if (ImGui::BeginPopup("##scene_batching")) {
@@ -335,6 +432,28 @@ private:
                             (unsigned long long)modelStats.mdiStateBreaks);
                 ImGui::TextDisabled("Counters cover the current scene model passes only.");
                 ImGui::TextDisabled("Different GLBs and their material slots may require separate draws.");
+                ImGui::TreePop();
+            }
+            if (!ed.ws().project.isFps() && ImGui::TreeNode("Road surfaces: materials / chunks")) {
+                const auto& road = ed.view().roads().batchStats();
+                ImGui::Text("Road source chunks: %zu -> %zu uploaded (merge group %d)",
+                            road.sourceChunks, road.uploadedChunks, road.mergeGroup);
+                ImGui::Text("Road surface primitives: %zu | triangles: %zu",
+                            road.primitives, road.triangles);
+                ImGui::TextDisabled("Same texture/material != same mesh or one draw.");
+                ImGui::TextDisabled("Intersections use kit asphalt; carriageways may use painted textures.");
+                ImGui::TextDisabled("Curb/sidewalk material and zebra/wet decal draws are separate.");
+                ImGui::TextDisabled("Counts below exclude reflection/shadow replays and custom decals.");
+                if (ImGui::BeginChild("##road_materials", ImVec2(0, 160), ImGuiChildFlags_Borders)) {
+                    for (size_t i = 0; i < road.materials.size(); ++i) {
+                        const auto& mat = road.materials[i];
+                        if (!mat.primitives) continue;
+                        ImGui::Text("%s [%zu]: %zu prim, %zu chunks, tex %u",
+                                    mat.name.empty() ? "material" : mat.name.c_str(), i,
+                                    mat.primitives, mat.chunks, mat.textureId);
+                    }
+                }
+                ImGui::EndChild();
                 ImGui::TreePop();
             }
             ImGui::Text("Models: %u | Other tracked: %u",
@@ -599,6 +718,8 @@ private:
         }
         ImGui::SameLine();
         batchingControls(ed);
+        ImGui::SameLine();
+        lodControls(ed);
         ImGui::SameLine();
         if (ui::toolButton(ICON_EYE, "Отладочные gizmo")) ImGui::OpenPopup("##studio_gizmos");
         if (ImGui::BeginPopup("##studio_gizmos")) {
@@ -1083,6 +1204,11 @@ private:
     bool looking_ = false, panning_ = false, dragging_ = false, painting_ = false, areaDrag_ = false;
     int studioDebugMode_ = 0;
     bool sceneInstancing_ = true, sceneCulling_ = true, sceneIndirect_ = true;
+    bool sceneLodEnabled_ = true;
+    bool lodPopupVisible_ = false;
+    float sceneLodFadeWidth_ = 0.15f;
+    ModelRenderStats lastSceneLodStats_{};
+    Renderer3D::LodDebugSample lastSelectedLod_{};
     bool sceneGeometryPool_ = render::globalGeometryPoolingEnabled();
     int sceneInstanceLimit_ = 0;
     bool sceneInstanceLimitDirty_ = true;

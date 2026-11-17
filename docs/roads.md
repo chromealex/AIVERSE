@@ -13,6 +13,31 @@ the heights of the spline points, branches that leave chosen lanes of another ro
 
 Water (straits, rivers, the sea with embankments, cliffs and beaches) is drawn the same way: `docs/water.md`.
 
+## Почему участки одной дороги не обязательно один Draw Call
+
+В **Сцена → Batching → Road surfaces: materials / chunks** показаны
+число исходных и загруженных road-chunk моделей, степень группировки,
+количество примитивов/треугольников, а также имена материалов,
+идентификаторы GPU-текстур и количество чанков для каждого материала.
+Это *данные загруженной геометрии*, а не замер числа GPU API submissions.
+
+Генератор обычно использует **разные** material slots: текстуру
+проезжей части с линиями/следами (`paintedMaterial`), обычный
+асфальт перекрёстков, бордюры, тротуары и разные полосы.
+Разметка, зебры, мокрая плёнка и лужи отдельно отправляются через
+custom decal-проход. Даже одинаковый материал не делает разные
+меши одним прямым GPU Draw Call: обычный instancing требует того же
+меша; MDI требует общего GPU состояния и совместимых геометрических
+буферов и экономически выгодной группы команд.
+
+Группировка road chunks `AIVERSE_RTS_ROAD_CHUNK_MERGE` уменьшает
+число геометрических чанков, **не количество различных материалов**.
+Маленькие карты автоматически используют ограниченное по геометрии
+объединение x2, большие сохраняют culling. Для A/B можно использовать
+`AIVERSE_RTS_ROAD_CHUNK_MERGE=off`. Не объединять разные материалы
+или трассировки с мокрой дорогой только ради сокращения счётчика:
+это меняет изображение и может увеличить GPU time.
+
 ## Road types (rules `roadTypes`)
 
 Values are metres (km/h for `speed`); `cellMeters` (default 4) turns them into map cells. The built-in library is

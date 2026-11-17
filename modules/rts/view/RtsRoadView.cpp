@@ -2053,6 +2053,7 @@ void RtsRoadView::release(gfx::Device& dev) {
     wetStep_ = puddleStep_ = -1;
     for (auto& c : chunks_) if (c.model) releaseModel(dev, *c.model);
     chunks_.clear();
+    batchStats_ = {};
     surface_.clear();
     props_.clear();
     if (ghostModel_) { releaseModel(dev, *ghostModel_); ghostModel_.reset(); }
@@ -2219,6 +2220,7 @@ void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, flo
     film_ = std::move(mesh.film);
     spots_ = std::move(mesh.spots);
     rasterSurface(mesh.surf, heightAt);
+    batchStats_.sourceChunks = mesh.chunks.size();
     // Small maps: reduce the number of separate road Model allocations and
     // draw submissions by merging neighbouring road chunks *by material*.
     // Retain fine-grained culling on large maps: a merged road mesh may draw
@@ -2255,6 +2257,7 @@ void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, flo
         }
         return 2;
     }();
+    batchStats_.mergeGroup = chunkGroup;
     if (chunkGroup > 1) {
         const size_t before = mesh.chunks.size();
         std::map<int64_t, Acc> merged;
@@ -2291,6 +2294,7 @@ void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, flo
             if (!valid) break;
         }
         if (valid) mesh.chunks = std::move(merged);
+        else batchStats_.mergeGroup = 1;
         std::fprintf(stderr,
             "[rts-road-merge] group=%d source-chunks=%zu merged-chunks=%zu success=%d\n",
             chunkGroup, before, mesh.chunks.size(), int(valid));
@@ -2301,6 +2305,35 @@ void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, flo
         if (!m) continue;
         uploadModel(dev, *m);
         chunks_.push_back({std::move(m)});
+    }
+    batchStats_.uploadedChunks = chunks_.size();
+    // These counts describe uploaded road surfaces, not shadow/reflection
+    // replays, viewport culling, or the separate custom decal draw callback.
+    batchStats_.materials.resize(materials_.size());
+    for (size_t i = 0; i < materials_.size(); ++i) {
+        auto& dst = batchStats_.materials[i];
+        const auto& material = materials_[i];
+        dst.name = material.name;
+        if (material.baseTex >= 0 && size_t(material.baseTex) < images_.size())
+            dst.textureId = images_[size_t(material.baseTex)].tex.id;
+    }
+    for (const auto& chunk : chunks_) {
+        if (!chunk.model) continue;
+        std::vector<bool> touched(batchStats_.materials.size(), false);
+        for (const auto& roadMesh : chunk.model->meshes) {
+            for (const auto& p : roadMesh.primitives) {
+                if (!p.indexCount) continue;
+                ++batchStats_.primitives;
+                batchStats_.triangles += size_t(p.indexCount) / 3;
+                if (p.material < 0 || size_t(p.material) >= batchStats_.materials.size()) continue;
+                auto& material = batchStats_.materials[size_t(p.material)];
+                ++material.primitives;
+                material.triangles += size_t(p.indexCount) / 3;
+                touched[size_t(p.material)] = true;
+            }
+        }
+        for (size_t i = 0; i < touched.size(); ++i)
+            if (touched[i]) ++batchStats_.materials[i].chunks;
     }
 }
 
