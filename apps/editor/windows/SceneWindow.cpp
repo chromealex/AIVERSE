@@ -361,6 +361,10 @@ private:
                 ImGui::Text("MDI submissions: %llu (%llu indexed commands)",
                     (unsigned long long)modelStats.multiDrawSubmissions,
                     (unsigned long long)modelStats.indirectCommands);
+                ImGui::Text("Material grouping: %llu reused / %llu hashed",
+                    (unsigned long long)modelStats.materialGroupsReused,
+                    (unsigned long long)modelStats.materialGroupsResolved);
+                ImGui::TextDisabled("Across passes in this Scene frame; cache reset per beginScene.");
                 ImGui::TextDisabled("One instanced call may draw multiple identical meshes.");
                 ImGui::TextDisabled("Indirect command count is not the API submission count.");
                 ImGui::TreePop();

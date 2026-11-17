@@ -156,6 +156,12 @@ void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
     ssrThisFrame_ = false;
     items_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear();
     modelItems_.clear(); jointData_.clear(); morphData_.clear(); modelStats_ = {};
+    // ModelItem pointers are valid only within this scene; never reuse their
+    // material identity across frames, asset reloads or another viewport.
+    materialStateIds_.clear();
+    materialHashCandidates_.clear();
+    materialRepresentatives_.clear();
+    materialItemIds_.clear();
     geometryStats_ = {}; profile_ = {}; geometryMainView_ = true;
     RTSCamera shadowCamera = cam; shadowCamera.jitter = {};
     computeShadowMatrix(shadowCamera, aspect);

@@ -1,6 +1,7 @@
 // Real-backend A/B: the same model/material copies, camera and shadow map, with batching off/on.
 #include "engine/render/Renderer3D.h"
 #include "engine/render/ModelMerge.h"
+#include "engine/render/GpuMaterialState.h"
 #include "engine/platform/Platform.h"
 #include <cstdio>
 #include <cstdlib>
@@ -37,6 +38,27 @@ static bool unitChecks() {
     mats[1].receiveShadow=false;ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));mats=m.materials;
     mats.resize(kMaxMaterialPalette+1);ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));
     ok&=check(m.materials[0].baseColor.x==.137f && m.materials[1].roughness==.213f);
+    // A frame-scoped renderer material-group cache must not turn pointer
+    // equality into an accidental GPU-state equality shortcut. Identical
+    // copies across models merge, while changes to uniforms or sampled
+    // texture handles do not.
+    Model aModel, bModel;
+    Material original, copy;
+    original.baseColor={.2f,.4f,.8f,1.f};
+    original.emissive={.02f,.04f,.08f};
+    copy=original;
+    ok&=check(equivalentGpuMaterial(aModel,original,bModel,copy) &&
+              gpuMaterialStateHash(aModel,original)==gpuMaterialStateHash(bModel,copy));
+    copy.emissive.x+=.1f;
+    ok&=check(!equivalentGpuMaterial(aModel,original,bModel,copy));
+    copy=original;
+    aModel.images.resize(1); bModel.images.resize(1);
+    aModel.images[0].tex={123}; bModel.images[0].tex={456};
+    original.baseTex=copy.baseTex=0;
+    ok&=check(!equivalentGpuMaterial(aModel,original,bModel,copy));
+    bModel.images[0].tex=aModel.images[0].tex;
+    ok&=check(equivalentGpuMaterial(aModel,original,bModel,copy) &&
+              gpuMaterialStateHash(aModel,original)==gpuMaterialStateHash(bModel,copy));
     auto invalid=[&](int mode){
         Model x;x.vertices.resize(3);x.indices=indices;x.materials.resize(3);x.meshes.push_back(mesh);
         if(mode==0)x.meshes[0].primitives[0].morphTargets=1;

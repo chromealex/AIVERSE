@@ -1295,47 +1295,84 @@ void Renderer3D::renderModels(int phase) {
     if(profiling_){auto now=std::chrono::steady_clock::now();profile_.selectMs[size_t(phase)]+=std::chrono::duration<double,std::milli>(now-started).count();started=now;}
     if (order_.empty()) return;
     const auto afterSelect = std::chrono::steady_clock::now();
-    // Material identity is NOT a batching key. Editor/game code routinely creates
-    // per-entity Material copies with identical GPU state. Compare all shader,
-    // pipeline, uniform and sampled texture state instead of Material*.
-    auto sameGpuMaterial = [&](const ModelItem& x, const ModelItem& y) {
-        return equivalentGpuMaterial(*x.model, *x.mat, *y.model, *y.mat);
-    };
-    // Group only unique material instances, then reuse the ID for every draw.
-    // This avoids quadratic work over thousands of instances of one material.
-    std::vector<uint32_t> materialGroup(modelItems_.size(), 0);
-    std::vector<uint32_t> representatives;
-    // Pointer identity is a fast cache within this pass, never a substitute
-    // for the GPU-state hash and exact equality check between distinct copies.
-    struct MaterialPointerHash {
-        size_t operator()(const std::pair<const Material*, const Model*>& pair) const {
-            const size_t a = std::hash<const Material*>{}(pair.first);
-            const size_t b = std::hash<const Model*>{}(pair.second);
-            return a ^ (b + size_t(0x9e3779b9) + (a << 6) + (a >> 2));
-        }
-    };
-    std::unordered_map<std::pair<const Material*, const Model*>, uint32_t, MaterialPointerHash> identicalPointers;
-    identicalPointers.reserve(std::min<size_t>(order_.size(), 4096));
-    std::unordered_map<uint64_t, std::vector<uint32_t>> candidatesByHash;
-    candidatesByHash.reserve(std::min<size_t>(order_.size(), 512));
+    // Material identity is NOT a batching key. Editor/game code routinely
+    // creates per-entity copies with identical GPU state. Each new material
+    // must still pass the exact GPU-state comparison (hash is only a prefilter).
+    //
+    // The same immutable ModelItem material pointers are submitted to shadow,
+    // opaque, reflection and outline passes within one beginScene()/render().
+    // Resolve their equivalence once, then reuse group IDs across those passes.
+    // This saves repeated GPU material hashes/string comparisons and map
+    // allocation while retaining byte-identical grouping. Disable the cache
+    // with AIVERSE_FRAME_MATERIAL_GROUP_CACHE=off for controlled A/B testing.
+    static const bool frameCacheEnabled = [] {
+        const char* value = std::getenv("AIVERSE_FRAME_MATERIAL_GROUP_CACHE");
+        return !value || (std::strcmp(value, "off") != 0 &&
+                          std::strcmp(value, "0") != 0);
+    }();
+    std::vector<uint32_t> localItemIds, localRepresentatives;
+    std::unordered_map<MaterialStatePointer, uint32_t, MaterialStatePointerHash> localIdentities;
+    std::unordered_map<uint64_t, std::vector<uint32_t>> localCandidates;
+    auto& materialGroup = frameCacheEnabled ? materialItemIds_ : localItemIds;
+    auto& representatives = frameCacheEnabled ? materialRepresentatives_ : localRepresentatives;
+    auto& identities = frameCacheEnabled ? materialStateIds_ : localIdentities;
+    auto& candidatesByHash = frameCacheEnabled ? materialHashCandidates_ : localCandidates;
+    if (materialGroup.size() < modelItems_.size())
+        materialGroup.resize(modelItems_.size(), UINT32_MAX);
+    // retain hashtable capacity across phases and frames; reserve only
+    // when the current visible set would exceed the existing bucket budget.
+    const size_t identityBudget = std::min<size_t>(order_.size(), 4096);
+    const size_t hashBudget = std::min<size_t>(order_.size(), 512);
+    if (identities.bucket_count() < identityBudget) identities.reserve(identityBudget);
+    if (candidatesByHash.bucket_count() < hashBudget) candidatesByHash.reserve(hashBudget);
+    uint32_t reusedGroups = 0, resolvedGroups = 0;
     for (uint32_t i : order_) {
+        if (materialGroup[i] != UINT32_MAX) {
+            ++reusedGroups;
+            continue; // Already resolved in an earlier pass of this scene.
+        }
         const auto& item = modelItems_[i];
-        const auto materialKey = std::make_pair(item.mat, item.model);
-        const auto cached = identicalPointers.find(materialKey);
-        if (cached != identicalPointers.end()) {
-            materialGroup[i] = cached->second; continue;
+        const MaterialStatePointer materialKey{item.mat, item.model};
+        const auto cached = identities.find(materialKey);
+        if (cached != identities.end()) {
+            materialGroup[i] = cached->second;
+            ++reusedGroups;
+            continue;
         }
         const uint64_t key = gpuMaterialStateHash(*item.model, *item.mat);
         auto& candidates = candidatesByHash[key];
         uint32_t id = uint32_t(representatives.size());
-        for (uint32_t j : candidates)
-            if (sameGpuMaterial(item, modelItems_[representatives[j]])) { id = j; break; }
+        for (uint32_t j : candidates) {
+            const ModelItem& known = modelItems_[representatives[j]];
+            if (equivalentGpuMaterial(*item.model, *item.mat,
+                                      *known.model, *known.mat)) {
+                id = j;
+                break;
+            }
+        }
         if (id == representatives.size()) {
             representatives.push_back(i);
             candidates.push_back(id);
         }
-        identicalPointers.emplace(materialKey, id);
+        identities.emplace(materialKey, id);
         materialGroup[i] = id;
+        ++resolvedGroups;
+    }
+    modelStats_.materialGroupsReused += reusedGroups;
+    modelStats_.materialGroupsResolved += resolvedGroups;
+    if (traceModelPass) {
+        static uint64_t counts[2] = {};
+        static uint32_t samples = 0;
+        counts[0] += reusedGroups;
+        counts[1] += resolvedGroups;
+        if (++samples == 600) {
+            std::fprintf(stderr,
+                "[model-material-cache] enabled=%d avg/600 reused=%.1f resolved=%.1f unique-last=%zu\n",
+                int(frameCacheEnabled), double(counts[0]) / samples,
+                double(counts[1]) / samples, representatives.size());
+            samples = 0;
+            counts[0] = counts[1] = 0;
+        }
     }
     // Sort by shared GPU buffers only when explicitly requested. It helps
     // heterogeneous pooled meshes once MDI is active, but is wasted work when
