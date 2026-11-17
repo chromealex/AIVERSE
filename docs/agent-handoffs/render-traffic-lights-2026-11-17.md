@@ -141,6 +141,14 @@ Compare with `AIVERSE_EDITOR_EAGER_MODELS=1` (same binary/project/map). Check `Ð
 - Important: counts cover *all model passes* in the current scene, including shadow/reflection; they are not draw-call counts. With `AIVERSE_FRAME_MATERIAL_GROUP_CACHE=off` only repeated identical pointers *within the same pass* can reuse IDs.
 - Source changes were published; real macOS Metal compile/visual verification and before/after CPU/GPU timings remain pending. No acceleration or memory savings claimed.
 
+## Step 15 â€” automatic small-road chunk merging (IMPLEMENTED, macOS A/B pending)
+- Branch `perf/roads-small-map-chunk-merge`, based on material-state cache PR #11. Small test map has two intersections, one house and a few road segments; earlier screenshot showed `110` total draw calls in the baseline. Do **not** assume all 110 are roads; Scene Batching has per-pass breakdown.
+- Existing road mesher already supported `AIVERSE_RTS_ROAD_CHUNK_MERGE=2|4`, but default was disabled. It coalesces adjacent chunks by **material**, adjusting indices into one mesh, while preserving positions/UVs and road-network physics; large scenes need chunk-level frustum culling.
+- Commit `1d55bcf`: default auto merge factor 2 only when road mesh has **2..12 chunks** and no more than **128,000 vertices / 384,000 indices** across chunks. Bigger road networks remain unmerged. `AIVERSE_RTS_ROAD_CHUNK_MERGE=off` or `0`/`1` restores the previous behavior; `2` or `4` forces existing merge; `auto` enables bounded default.
+- Rebuild already prints `[rts-road-merge] group=N source-chunks=X merged-chunks=Y success=Z` when merging. Geometry is rebuilt on road edits; avoid changing road references or traffic simulation.
+- Validation on Mac: compare `off` versus auto on the same GTA test map: before/after GPU submissions and main-model draw count, CPU Scene render / full GPU frame, visual continuity at junctions, seams, zebra crossings, sidewalk kerbs, road curving and bridges. Inspect large maps to ensure auto merge falls back to 1 and camera culling remains effective. No measured draw reduction, memory savings or CPU speedup claimed yet.
+- Draft PR https://github.com/chromealex/AIVERSE/pull/12, head `perf/roads-small-map-chunk-merge`, base material cache PR #11. CMake test target for material GPU-state invariants is `aiverse_material_batches`, gated by `AIVERSE_BUILD_HDR_TESTS=ON`; unit checks are invoked with `--unit` and work without visual backend. Build and run this alongside `aiverse_deferred_loading_tests`.
+
 ## Next
 - Build editor and test newest branch on Apple Silicon; verify camera triangle counters with movable camera + fixed camera A/B.
 - Re-run GTA signal installer and tests, then native client and actual Metal lighting/traffic signal changes; keep GTA draft PR #4.

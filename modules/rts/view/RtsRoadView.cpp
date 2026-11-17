@@ -2219,13 +2219,41 @@ void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, flo
     film_ = std::move(mesh.film);
     spots_ = std::move(mesh.spots);
     rasterSurface(mesh.surf, heightAt);
-    // Coalesce adjacent static road chunks when Metal ICB is unavailable.
-    // This trades some chunk-level culling for fewer indexed submissions.
-    // Disabled by default; AIVERSE_RTS_ROAD_CHUNK_MERGE=2 or 4 enables it.
-    const int chunkGroup = [] {
+    // Small maps: reduce the number of separate road Model allocations and
+    // draw submissions by merging neighbouring road chunks *by material*.
+    // Retain fine-grained culling on large maps: a merged road mesh may draw
+    // geometry outside the camera's bounds. Never change road coordinates,
+    // material slots, surface collisions or lane/traffic geometry.
+    //
+    // AIVERSE_RTS_ROAD_CHUNK_MERGE=off (or 0/1) restores legacy chunks;
+    // =2/4 forces that group size; absent/auto enables the bounded policy.
+    const int chunkGroup = [&] {
         const char* value = std::getenv("AIVERSE_RTS_ROAD_CHUNK_MERGE");
-        return value && (std::strcmp(value, "2") == 0 || std::strcmp(value, "4") == 0)
-            ? (*value - '0') : 1;
+        if (value) {
+            if (std::strcmp(value, "off") == 0 ||
+                std::strcmp(value, "0") == 0 || std::strcmp(value, "1") == 0) return 1;
+            if (std::strcmp(value, "2") == 0 || std::strcmp(value, "4") == 0)
+                return int(value[0] - '0');
+        }
+        // A few chunks with modest geometry: extra chunk-level culling has
+        // little value, whereas repeated material submissions cost CPU/GPU.
+        // Limit both geometry and chunk count so a large busy road network
+        // never silently becomes one expensive world-sized draw.
+        if (mesh.chunks.size() < 2 || mesh.chunks.size() > 12) return 1;
+        constexpr size_t kAutoMaxVertices = 128000;
+        constexpr size_t kAutoMaxIndices = 384000;
+        size_t vertices = 0, indices = 0;
+        for (const auto& [key, part] : mesh.chunks) {
+            for (const auto& v : part.v) {
+                if (v.size() > kAutoMaxVertices - vertices) return 1;
+                vertices += v.size();
+            }
+            for (const auto& i : part.i) {
+                if (i.size() > kAutoMaxIndices - indices) return 1;
+                indices += i.size();
+            }
+        }
+        return 2;
     }();
     if (chunkGroup > 1) {
         const size_t before = mesh.chunks.size();
