@@ -99,6 +99,32 @@ Compare with `AIVERSE_EDITOR_EAGER_MODELS=1` (same binary/project/map). Check `�
 - `42395ec` documents the behavior in `docs/startup-loading.md`.
 - **Not done:** renderer/backend-specific Metal GPU-fence stability verification, full CI results, in-editor memory before/after measurements, standalone client startup regression tests.
 
+## Step 10 — per-frame RTS scene preparation / Stats CPU hot path (CODE COMPLETE, measurements pending)
+- New stacked branch: `perf/rts-visible-type-frame-cache`, branched from `fix/editor-lazy-model-residency` commit `897f2fe4a01cbad9e36e1fcd82427382a4b0e950`. Keep this CPU-view optimization separate from editor asset-loading PR #9.
+- `dd228f8`: add retained `RtsView::drawTypeStamps_`, `drawTypes_`, and `drawTypeEpoch_`, resetting stamps on init/shutdown and on epoch wrap. They avoid repeatedly allocating and zeroing a `rules.types.size()` temporary array for every `draw()`.
+- `b46edc3`: collect unique current scene types once for both idempotent `loadType` and contact-graph checks. Previously the latter scanned *all* `looks_` and every model appearance, even for types absent from the scene. Now only scene types are inspected until a contact graph is found, preserving the global `fx_->animations` override. When neither FX animations nor current model graphs require contacts, skip creation of an empty `animationSurfaceFrames_` shared map; `RtsAnimate.cpp::animationEnvironment` already handles a null frame map safely for surface IDs. Added `[rts-visible-types]` trace every 120 samples with mean unique scene types, total catalog, and fraction of frames requiring contact processing.
+- `161a140`: `StatsWindow` reuses `std::vector<float>` buffers for frame/sim/player charts instead of allocating per frame; P95 uses `std::nth_element` to preserve the same 95th-percentile rank but avoids full O(n log n) sort of frame-history samples on every UI frame.
+- Correctness boundaries: still preloads types for all scene objects (including hidden) when `streamingTypes_ == false`; still builds contact obstacles for visible objects whenever an active type graph or global entity FX animation requires them; still computes identical P95 rank. No GPU/render pipeline/material changes. Runtime model hot reload and scene type changes should update automatically on the next draw.
+- **No benchmark improvements claimed yet.** Run the existing editor, RTS client, and deferred-loading tests; check animations (including foot contact / IK), map switching and the scene with different model variants.
+- Validation: `AIVERSE_FRAME_TRACE=1` prints `[view-stages]` (setup/ground/objects/animation/overlays), `[rts-visible-types]`, `[editor-window]`. Compare same project/map/camera and CPU frame stats before/after in Release. The previous Metal A/B baseline for MDI is NOT a baseline for these CPU changes.
+- New PR for this branch should target `fix/editor-lazy-model-residency` (PR #9), not main, to avoid mixing unrelated changes.
+
+## Step 11 — screenshot regression: editor is likely running old main binary (DIAGNOSED 2026-11-17)
+- User supplied a new Scene/Statistics screenshot showing **4** cards (FPS, CPU, draw calls, simulation) with **no** Batching button to the right of Shaded. They report all batching vanished and new metrics absent.
+- Verified current `main` source `apps/editor/windows/StatsWindow.cpp` calls `cardRow(cards, 4)` and `SceneWindow.cpp` contains **no** `Batching##scene` at all. This exactly matches the screenshot.
+- Verified `perf/rts-visible-type-frame-cache` (PR #10, based on PR #9 and #4) source has `cardRow(cards, 5)` with `Треугольников` and `SceneWindow::batchingControls` invoked immediately after the Shaded drop-down; its popup contains Shared Geometry Pool, GPU Instancing, Multi-Draw Indirect, profiling and A/B. This is **not** a code removal in the optimization branch.
+- Most likely stale/mismatched executable process, alternate checkout or .app bundle built from `main`. Screenshot alone does not reveal the executing binary path; must verify on the user's Mac before claiming certainty.
+- Diagnostic: `pgrep -fl AiverseEditor`, `ps -axo pid=,command= | grep '[A]iverseEditor'`, `git branch --show-current`, `git rev-parse --short HEAD`; look for installed .app outside the active build dir.
+- User should close the existing editor without losing unsaved changes, then fetch/switch `perf/rts-visible-type-frame-cache`, configure Release arm64, build target `aiverse_editor`, verify `strings -a build-metal/AiverseEditor.app/Contents/MacOS/AiverseEditor | grep -F 'Triangles in camera (tracked)'` and `grep -F 'Scene model batching'` (exact ASCII markers present in branch), and launch this binary directly, not `open -a AiverseEditor`.
+- If either marker is absent after successful compile, investigate stale CMake build directory, wrong source directory, accidentally different build target, or link configuration. **Do not claim any UI fixes are validated merely from GitHub source inspection.**
+
+## Step 12 — macOS compiler fix for editor residency (2026-11-18)
+- User compiled `aiverse_editor` on Apple Silicon and received `apps/editor/Editor.cpp:288:23: error: no member named 'Objects' in 'aiverse::editor::Tool'`.
+- Confirmed actual enum in `apps/editor/Editor.h`: `enum class Tool { Select, Place, Terrain, Level, Height, Field, Region, Area, Start, Road, Erase, Count };`. The "Объекты" editor toolbar corresponds to `Tool::Place`, not a nonexistent `Tool::Objects`.
+- Commit `754430547a6141f0b896a074ae16aacb99bfd2b6` on `perf/rts-visible-type-frame-cache` changes `Editor::reclaimEditorAssets` to test `Tool::Place` when preserving the selected placement type from eviction.
+- Source-level fix pushed to PR #10. **No successful macOS build claimed yet**; rebuild `aiverse_editor` with the same build directory, run `aiverse_deferred_loading_tests`, and report any next compiler or runtime error. This change does not modify batching availability.
+- The user's previously missing Batching control and triangle card were confirmed present in this PR's sources, while their older screenshot matched `main`; use direct new bundle executable path to avoid stale builds.
+
 ## Next
 - Build editor and test newest branch on Apple Silicon; verify camera triangle counters with movable camera + fixed camera A/B.
 - Re-run GTA signal installer and tests, then native client and actual Metal lighting/traffic signal changes; keep GTA draft PR #4.

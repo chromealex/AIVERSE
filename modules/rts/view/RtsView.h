@@ -517,6 +517,11 @@ private:
     std::vector<uint8_t> actorRevealTypes_;
     std::vector<bool> loadedTypes_;
     std::vector<std::string> requestedModels_, loadedModels_;
+    // Reused across draw() calls: O(scene types) work with no per-frame
+    // temporary allocation/clear of the full rules type catalog.
+    std::vector<uint32_t> drawTypeStamps_;
+    std::vector<uint16_t> drawTypes_;
+    uint32_t drawTypeEpoch_ = 0;
     bool deferredLoading_ = false, streamingTypes_ = false;
     bool deferAppearanceVariants_ = true; // client default; editor disables
     render::FileReader asyncReader_;

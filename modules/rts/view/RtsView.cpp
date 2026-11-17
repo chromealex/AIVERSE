@@ -92,6 +92,9 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
     }
     loadedTypes_.assign(rules.types.size(), false);
     requestedModels_.assign(rules.types.size(), {}); loadedModels_.assign(rules.types.size(), {});
+    drawTypeStamps_.assign(rules.types.size(), 0);
+    drawTypes_.clear();
+    drawTypeEpoch_ = 0;
     if(deferredLoading_)for(size_t t=0;t<rules.types.size();++t)
         requestedModels_[t]=rules.types[t].view["streaming"].getStr("coarseModel");
     if (!deferredLoading_) for (size_t i = 0; i < rules.types.size(); ++i) loadType(uint16_t(i));
@@ -113,6 +116,7 @@ void RtsView::shutdown(gfx::Device& dev) {
     for (auto& [k, m] : models_) if (m) releaseModel(dev, *m);
     textureCache_->shutdown(dev);
     models_.clear(); looks_.clear(); actorRevealTypes_.clear(); loadedTypes_.clear(); anims_.clear(); streamingChoices_.clear(); animationCache_.clear(); tracers_.clear();
+    drawTypeStamps_.clear(); drawTypes_.clear(); drawTypeEpoch_ = 0;
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
     terrain_.shutdown(dev);
     fog_.shutdown();
@@ -186,18 +190,25 @@ void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batc
 void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
     const bool traceView = std::getenv("AIVERSE_FRAME_TRACE") != nullptr;
     const auto viewStart = std::chrono::steady_clock::now();
-    // Script spawns, reinforcements and restored entities need not exist at map load time.
-    if (!streamingTypes_) {
-        // loadType() may compare streaming model paths and check residency.
-        // A scene often has thousands of objects but only a handful of types:
-        // resolve each type at most once per frame, while still picking up
-        // types introduced by spawning/editor edits on the following frame.
-        std::vector<uint8_t> typeSeen(loadedTypes_.size(), 0);
-        for (const auto& o : input.objects) {
-            if (o.isProjectile || o.type >= typeSeen.size() || typeSeen[o.type]) continue;
-            typeSeen[o.type] = 1;
-            loadType(o.type);
-        }
+    // Script spawns, reinforcements and restored entities need not exist at
+    // map load time. Build the active type set once for both lazy residency
+    // and contact-animation detection, without allocating/clearing an array
+    // proportional to the entire rules catalog every frame.
+    if (drawTypeStamps_.size() != loadedTypes_.size()) {
+        drawTypeStamps_.assign(loadedTypes_.size(), 0);
+        drawTypeEpoch_ = 0;
+    }
+    if (++drawTypeEpoch_ == 0) {
+        std::fill(drawTypeStamps_.begin(), drawTypeStamps_.end(), 0);
+        drawTypeEpoch_ = 1;
+    }
+    drawTypes_.clear();
+    for (const auto& o : input.objects) {
+        if (o.isProjectile || o.type >= drawTypeStamps_.size() ||
+            drawTypeStamps_[o.type] == drawTypeEpoch_) continue;
+        drawTypeStamps_[o.type] = drawTypeEpoch_;
+        drawTypes_.push_back(o.type);
+        if (!streamingTypes_) loadType(o.type);
     }
     RtsScene resolved;
     const bool hierarchy=input.entityFx && !input.entityFx->hierarchy.parents.empty();
@@ -228,8 +239,25 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
     const RtsScene& s=hierarchy?resolved:input;
     fx_ = s.entityFx.get();   // view.entity_fx
     if (planets_.active()) { drawPlanets(r, s, time, vision, grid); return; }   // RtsPlanetView.cpp
-    animationObstacles_.clear();animationSurfaceFrames_=std::make_shared<std::map<uint64_t,mat4>>();
-    bool contacts=fx_&&!fx_->animations.empty();for(const auto& look:looks_)for(const auto& ch:look.models)contacts|=ch.graph&&ch.graph->hasContacts();
+    animationObstacles_.clear();
+    bool contacts = fx_ && !fx_->animations.empty();
+    if (!contacts) {
+        // A graph on an unused library type cannot produce contacts in this
+        // scene. Avoid scanning hundreds of unrelated types and variants
+        // every frame (especially in the eager-loading editor).
+        for (uint16_t type : drawTypes_) {
+            if (type >= looks_.size()) continue;
+            const auto& look = looks_[type];
+            if (std::any_of(look.models.begin(), look.models.end(),
+                            [](const ModelChoice& ch) {
+                                return ch.graph && ch.graph->hasContacts();
+                            })) { contacts = true; break; }
+        }
+    }
+    // AnimationEnvironment handles a null frame-map (id 1 = world ground).
+    // Avoid allocating an empty shared map on every ordinary static frame.
+    animationSurfaceFrames_ = contacts
+        ? std::make_shared<std::map<uint64_t,mat4>>() : nullptr;
     for(size_t oi=0;contacts&&oi<s.objects.size();++oi){const auto& o=s.objects[oi];if(!o.visible||o.isProjectile||o.body!=-1||o.type>=looks_.size())continue;
         const auto& look=looks_[o.type];if(look.models.empty())continue;uint64_t key=o.entity.valid()?o.entity.packed():(uint64_t(1)<<63)|oi;auto state=anims_.find(key);
         size_t choice=state!=anims_.end()&&size_t(state->second.choice)<look.models.size()?size_t(state->second.choice):0;const ModelChoice* ch=&look.models[choice];
@@ -453,6 +481,9 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
         static uint64_t placementHits = 0, placementMisses = 0;
         static uint64_t groundHits = 0, groundMisses = 0;
         static uint64_t staticFastHits = 0;
+        static uint64_t uniqueTypes = 0, contactFrames = 0;
+        uniqueTypes += drawTypes_.size();
+        contactFrames += contacts ? 1 : 0;
         const auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b-a).count(); };
         totals[0] += ms(viewStart, afterSetup);
         totals[1] += ms(afterSetup, afterGround);
@@ -490,6 +521,11 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
                 std::fprintf(stderr,
                     "[rts-static-animate] avg/120 fast-path=%.1f objects/frame\n",
                     double(staticFastHits) / samples);
+            std::fprintf(stderr,
+                "[rts-visible-types] avg/120 unique=%.1f catalog=%zu contact-frame=%.1f%%\n",
+                double(uniqueTypes) / samples, looks_.size(),
+                100.0 * double(contactFrames) / samples);
+            uniqueTypes = contactFrames = 0;
             placementHits = placementMisses = groundHits = groundMisses = staticFastHits = 0;
             samples = 0;
             for (double& v : totals) v = 0.0;

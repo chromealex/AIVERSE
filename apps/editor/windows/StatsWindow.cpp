@@ -17,20 +17,23 @@ public:
     const char* dockArea() const override { return "bottom"; }
 
     void draw(Editor& ed) override {
-        std::vector<float> frame, sim;
+        // Reuse chart buffers across frames rather than allocating every tick.
+        frameScratch_.clear(); simScratch_.clear();
+        frameScratch_.reserve(ed.frameHistory.size());
+        simScratch_.reserve(ed.frameHistory.size());
         uint32_t draws = 0;
         uint64_t cameraTriangles = 0;
         for (auto& f : ed.frameHistory) {
-            frame.push_back(f.frameMs);
-            sim.push_back(f.simMs);
+            frameScratch_.push_back(f.frameMs);
+            simScratch_.push_back(f.simMs);
             draws = f.drawCalls;
             cameraTriangles = f.cameraTriangles;
         }
         float avg = 0, peak = 0, simAvg = 0;
-        for (float v : frame) { avg += v; peak = std::max(peak, v); }
-        for (float v : sim) simAvg += v;
-        avg = frame.empty() ? 0 : avg / float(frame.size());
-        simAvg = sim.empty() ? 0 : simAvg / float(sim.size());
+        for (float v : frameScratch_) { avg += v; peak = std::max(peak, v); }
+        for (float v : simScratch_) simAvg += v;
+        avg = frameScratch_.empty() ? 0 : avg / float(frameScratch_.size());
+        simAvg = simScratch_.empty() ? 0 : simAvg / float(simScratch_.size());
         const auto& d = ed.doc().data;
         // KPI cards
         char a[32], b[32], c[32], e[32], tr[32];
@@ -52,16 +55,19 @@ public:
                               {"Треугольников", tr, ui::Tone::Normal},
                               {"Симуляция", e, simAvg > 16 ? ui::Tone::Warn : ui::Tone::Normal}};
         cardRow(cards, 5);
-        if (!frame.empty()) {
-            // scale by the 95th percentile, not the peak: one long frame (loading, a shader compile) used to squash
-            // the whole graph into a flat line at the bottom; spikes above the scale are clipped at the top
-            std::vector<float> sorted = frame;
-            std::sort(sorted.begin(), sorted.end());
-            const float p95 = sorted[std::min(sorted.size() - 1, size_t(float(sorted.size()) * 0.95f))];
+        if (!frameScratch_.empty()) {
+            // Same percentile rank as before, now selected in O(n) rather
+            // than sorting the entire 240-frame history at 120 FPS.
+            percentileScratch_.assign(frameScratch_.begin(), frameScratch_.end());
+            const size_t rank = std::min(percentileScratch_.size() - 1,
+                size_t(float(percentileScratch_.size()) * 0.95f));
+            std::nth_element(percentileScratch_.begin(),
+                percentileScratch_.begin() + rank, percentileScratch_.end());
+            const float p95 = percentileScratch_[rank];
             char ov[64]; std::snprintf(ov, sizeof ov, "кадр, мс (95%%: %.1f, пик %.1f)", p95, peak);
-            ImGui::PlotLines("##frame", frame.data(), int(frame.size()), 0, ov, 0, std::max(20.0f, p95 * 1.5f), ImVec2(-1, 44));
+            ImGui::PlotLines("##frame", frameScratch_.data(), int(frameScratch_.size()), 0, ov, 0, std::max(20.0f, p95 * 1.5f), ImVec2(-1, 44));
         }
-        if (ed.playing() && !sim.empty()) ImGui::PlotLines("##sim", sim.data(), int(sim.size()), 0, "симуляция, мс", 0, 16, ImVec2(-1, 44));
+        if (ed.playing() && !simScratch_.empty()) ImGui::PlotLines("##sim", simScratch_.data(), int(simScratch_.size()), 0, "симуляция, мс", 0, 16, ImVec2(-1, 44));
         // Resource counts are from live owners, not the number of objects
         // visible in the camera. No texture or render-target byte estimates.
         ui::section(ICON_REGIONS, "Память ассетов (учтённая)");
@@ -101,14 +107,20 @@ public:
             ImGui::PopStyleColor();
             if (!open) continue;
             ImGui::PushStyleColor(ImGuiCol_PlotLines, col);
-            std::vector<float> units, structs;
-            for (auto& h : hist) { units.push_back(float(p < h.units.size() ? h.units[p] : 0)); structs.push_back(float(p < h.structures.size() ? h.structures[p] : 0)); }
-            ImGui::PlotLines(("##u" + std::to_string(p)).c_str(), units.data(), int(units.size()), 0, "армия", 0, FLT_MAX, ImVec2(-1, 36));
-            ImGui::PlotLines(("##s" + std::to_string(p)).c_str(), structs.data(), int(structs.size()), 0, "здания", 0, FLT_MAX, ImVec2(-1, 30));
+            unitScratch_.clear(); structureScratch_.clear();
+            unitScratch_.reserve(hist.size());
+            structureScratch_.reserve(hist.size());
+            for (auto& h : hist) {
+                unitScratch_.push_back(float(p < h.units.size() ? h.units[p] : 0));
+                structureScratch_.push_back(float(p < h.structures.size() ? h.structures[p] : 0));
+            }
+            ImGui::PlotLines(("##u" + std::to_string(p)).c_str(), unitScratch_.data(), int(unitScratch_.size()), 0, "армия", 0, FLT_MAX, ImVec2(-1, 36));
+            ImGui::PlotLines(("##s" + std::to_string(p)).c_str(), structureScratch_.data(), int(structureScratch_.size()), 0, "здания", 0, FLT_MAX, ImVec2(-1, 30));
             for (size_t r = 0; r < ed.rules().resources.size(); ++r) {
-                std::vector<float> res;
-                for (auto& h : hist) res.push_back(p < h.resources.size() && r < h.resources[p].size() ? h.resources[p][r] : 0);
-                ImGui::PlotLines(("##r" + std::to_string(p) + "_" + std::to_string(r)).c_str(), res.data(), int(res.size()), 0,
+                resourceScratch_.clear();
+                resourceScratch_.reserve(hist.size());
+                for (auto& h : hist) resourceScratch_.push_back(p < h.resources.size() && r < h.resources[p].size() ? h.resources[p][r] : 0);
+                ImGui::PlotLines(("##r" + std::to_string(p) + "_" + std::to_string(r)).c_str(), resourceScratch_.data(), int(resourceScratch_.size()), 0,
                                  ed.rules().resources[r].name.c_str(), 0, FLT_MAX, ImVec2(-1, 26));
             }
             ImGui::PopStyleColor();
@@ -116,6 +128,8 @@ public:
     }
 
 private:
+    std::vector<float> frameScratch_, simScratch_, percentileScratch_;
+    std::vector<float> unitScratch_, structureScratch_, resourceScratch_;
     struct Card { const char* label; const char* value; ui::Tone tone; };
     // A row of small value cards that share the width (wraps to two rows when narrow).
     static void cardRow(const Card* cards, int n) {

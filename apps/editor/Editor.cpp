@@ -285,7 +285,7 @@ void Editor::reclaimEditorAssets(bool force) {
     if (selection.kind == Selection::Type)
         for (size_t i = 0; i < typeCount; ++i)
             if (rules().types[i].id == selection.key) keep[i] = true;
-    if (tool == Tool::Objects && placeType >= 0 && size_t(placeType) < typeCount)
+    if (tool == Tool::Place && placeType >= 0 && size_t(placeType) < typeCount)
         keep[size_t(placeType)] = true;
     if (overlayPreviewType >= 0 && size_t(overlayPreviewType) < typeCount)
         keep[size_t(overlayPreviewType)] = true;
