@@ -361,6 +361,13 @@ private:
                 ImGui::Text("MDI submissions: %llu (%llu indexed commands)",
                     (unsigned long long)modelStats.multiDrawSubmissions,
                     (unsigned long long)modelStats.indirectCommands);
+                if (const char* pal = std::getenv("AIVERSE_MDI_INSTANCE_PALETTE");
+                    pal && std::strcmp(pal, "1") == 0) {
+                    ImGui::Text("Per-command PBR palette: %llu submissions / %llu commands",
+                                (unsigned long long)modelStats.mdiPaletteSubmissions,
+                                (unsigned long long)modelStats.mdiPaletteCommands);
+                    ImGui::TextDisabled("Opt-in: same shader and textures; per-command base/metal/roughness.");
+                }
                 ImGui::Text("Material grouping: %llu reused / %llu hashed",
                     (unsigned long long)modelStats.materialGroupsReused,
                     (unsigned long long)modelStats.materialGroupsResolved);

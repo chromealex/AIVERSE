@@ -171,7 +171,13 @@ void main() {
     v_uv = uvTransform(a_uv);
     v_col = a_col;
 #if defined(MATERIAL_PALETTE)
+#if defined(MATERIAL_INSTANCE_PALETTE)
+    // Each indirect command selects its own full-float PBR palette slot;
+    // node transforms and primitive geometry remain separate (no mesh merge).
+    v_material = int(I.lod.z + 0.5);
+#else
     v_material = int(a_weights.x * 255.0 + 0.5);
+#endif
 #endif
     v_tint = I.tint; v_team = I.team; v_draw = I.draw; v_lod = I.lod;
 #if defined(LIGHTMAP)
@@ -594,7 +600,11 @@ vertex VOut vs_main(VERTEX_ARGS) {
     o.uv = uvTransform(m, in.uv);
     o.col = in.col;
 #if defined(MATERIAL_PALETTE)
+#if defined(MATERIAL_INSTANCE_PALETTE)
+    o.material = uint(I.lod.z + 0.5);
+#else
     o.material = uint(in.weights.x * 255.0 + 0.5);
+#endif
 #endif
     o.tint = I.tint; o.team = I.team; o.draw = I.draw; o.lod = I.lod;
 #if defined(LIGHTMAP)

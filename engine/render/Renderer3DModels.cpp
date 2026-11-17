@@ -26,7 +26,8 @@ struct MaterialUniforms { float base[4]; float emissive[4]; float pbr[4]; float 
 constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec4 per joint
 static_assert(kJointFloats * 4 <= 4096, "joint palette must fit a 4 KB uniform block");
 
-constexpr uint32_t kKeyDrawCallView = 32768; // editor draw-call diagnostic shader permutation
+constexpr uint32_t kKeyDrawCallView = 32768;
+constexpr uint32_t kKeyMaterialInstancePalette = 1u << 27; // editor draw-call diagnostic shader permutation
 constexpr uint32_t kKeySkinned = 1, kKeyNormalMap = 2, kKeyAlphaMask = 4, kKeyShadow = 8, kKeyBaked = 64, kKeyMorph = 128,
                    kKeyInstanced = 256, kKeyOutline = 512, kKeyLightmap = 2048, kKeyProbes = 4096, kKeyLodFade = 8192, kKeyMaterialPalette = 16384;   // GI keys: agent-lightbake
 struct ProfileTimer {
@@ -111,10 +112,10 @@ void Renderer3D::setMaterialQuality(MaterialQuality q) {
 }
 
 gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bool instanced,
-                                              bool gpuInstances) {
+                                              bool gpuInstances, bool instancePalette) {
     const bool shadow = phase == 0, outline = phase == 3, depthAfter = phase == 4;
     const bool skinned = it.joints >= 0, baked = it.baked, morph = it.morph >= 0;
-    const bool materialPalette = phase == 1 && it.paletteMaterials;
+    const bool materialPalette = phase == 1 && (it.paletteMaterials || instancePalette);
     const bool lodFade = it.lodThreshold<1 || it.lodInvert;
     const bool mask = !outline && it.mat->alpha == AlphaMode::Mask;
     const bool normalMap = phase != 0 && !outline && it.mat->normalTex >= 0 && matQuality_ != MaterialQuality::Low;
@@ -125,7 +126,8 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const uint32_t gpuInstanceShaderBit = gpuInstances ? (1u << 26) : 0u;
     const uint32_t studioShaderBits = (geometryMainView_ && (phase == 1 || phase == 2) && studioDebugMode_ >= 2)
                                     ? uint32_t(studioDebugMode_) << 17 : 0u;
-    const uint32_t shaderKey = gpuInstanceShaderBit | studioShaderBits | (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
+    const uint32_t shaderKey = gpuInstanceShaderBit | studioShaderBits |
+                               (instancePalette ? kKeyMaterialInstancePalette : 0u) | (skinned ? kKeySkinned : 0u) | (normalMap ? kKeyNormalMap : 0u) | (mask ? kKeyAlphaMask : 0u) |
                                (shadow ? kKeyShadow : 0u) | (baked ? kKeyBaked : 0u) | (morph ? kKeyMorph : 0u) |
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
                                ((drawCallDebug_ && geometryMainView_ && (phase == 1 || phase == 2)) ? kKeyDrawCallView : 0u) |
@@ -159,6 +161,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         if (normalMap) defs += "#define NORMALMAP 1\n";
         if (mask) defs += "#define ALPHAMASK 1\n";
         if (materialPalette) defs += "#define MATERIAL_PALETTE 1\n";
+        if (instancePalette) defs += "#define MATERIAL_INSTANCE_PALETTE 1\n";
         if (lodFade) defs += "#define LODFADE 1\n";
         if (outline) defs += "#define OUTLINE 1\n";
         if (shaderKey & kKeyDrawCallView) defs += "#define DRAW_CALL_VIEW 1\n";
@@ -579,7 +582,8 @@ void Renderer3D::drawModel(const ModelDraw& d) {
 }
 
 void Renderer3D::packModelInstance(const ModelItem& x, int phase,
-                                   const float4& callColour, float* d) const {
+                                   const float4& callColour, float* d,
+                                   uint32_t instanceMaterial) const {
     const bool colourDraw = drawCallDebug_ && geometryMainView_ && (phase == 1 || phase == 2);
     std::memcpy(d, x.world.m, 16 * sizeof(float));
     d[16] = colourDraw ? callColour.x : x.tint.x;
@@ -601,15 +605,19 @@ void Renderer3D::packModelInstance(const ModelItem& x, int phase,
     d[30] = x.anim.z; d[31] = x.anim.w;
     d[32] = x.lodThreshold;
     d[33] = x.lodInvert ? 1.0f : 0.0f;
+    // Two spare floats in the existing 144-byte Inst slot (vec4 lod).
+    // Per-instance palette mode uses z; normal LOD and GI keep xy/anim.
+    d[34] = float(instanceMaterial);
 }
 
 bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
-                                int phase, bool submit, bool gpuInstances) {
+                                int phase, bool submit, bool gpuInstances,
+                                bool instancePalette) {
     const bool tracePreparation = !submit && std::getenv("AIVERSE_ICB_PROFILE") != nullptr;
     const auto prepStart = tracePreparation ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const ModelItem& it = modelItems_[items[0]];
     const bool instanced = count > 1;
-    gfx::PipelineHandle ph = modelPipeline(it, phase, instanced, gpuInstances);
+    gfx::PipelineHandle ph = modelPipeline(it, phase, instanced, gpuInstances, instancePalette);
     if (!ph.valid()) return false;
     if (!(ph == currentPipe_)) {
         dev_->setPipeline(ph); currentPipe_ = ph;
@@ -619,12 +627,30 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
     // Upload the whole instance block declared by this backend's shader variant.
     const bool colourDraw = drawCallDebug_ && geometryMainView_ && (phase == 1 || phase == 2);
     const float4 callColour = colourDraw ? drawCallDebugColor(++debugMainDrawId_) : float4{1, 1, 1, 1};
+    // Each indirect instance can index the PBR factors for its own material
+    // without changing geometry, textures or the per-model node transform.
+    // Kept separate from the existing per-vertex mesh material palettes.
+    std::vector<const Material*> instanceMaterialSlots;
+    if (instancePalette) instanceMaterialSlots.reserve(std::min<size_t>(count, kMaxMaterialPalette));
     if (!gpuInstances) {
         const uint32_t slots = instanced ? instanceLimit_ : 1u;
         instData_.assign(size_t(slots) * 36, 0.0f);
-        for (uint32_t i = 0; i < count; ++i)
-            packModelInstance(modelItems_[items[i]], phase, callColour,
-                              instData_.data() + size_t(i) * 36);
+        for (uint32_t i = 0; i < count; ++i) {
+            const auto& part = modelItems_[items[i]];
+            uint32_t materialSlot = 0;
+            if (instancePalette) {
+                auto it = std::find(instanceMaterialSlots.begin(),
+                                    instanceMaterialSlots.end(), part.mat);
+                if (it == instanceMaterialSlots.end()) {
+                    // Preflight in drawModelIndirectBatch enforces this.
+                    if (instanceMaterialSlots.size() >= kMaxMaterialPalette) return false;
+                    materialSlot = uint32_t(instanceMaterialSlots.size());
+                    instanceMaterialSlots.push_back(part.mat);
+                } else materialSlot = uint32_t(it - instanceMaterialSlots.begin());
+            }
+            packModelInstance(part, phase, callColour,
+                              instData_.data() + size_t(i) * 36, materialSlot);
+        }
     }
     const auto afterInstanceBuild = tracePreparation ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     if (!gpuInstances)
@@ -682,7 +708,17 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
         dev_->setTexture(8, it.model->morphTex.valid() ? it.model->morphTex : white_);
     }
     if (it.gi && (phase == 1 || phase == 2)) bindBakedGI(it);
-    if (phase == 1 && it.paletteMaterials) {
+    if (instancePalette) {
+        float palette[kMaxMaterialPalette * 8] = {};
+        for (size_t i = 0; i < instanceMaterialSlots.size(); ++i) {
+            const auto& material = *instanceMaterialSlots[i];
+            float* p = palette + i * 8;
+            p[0] = material.baseColor.x; p[1] = material.baseColor.y;
+            p[2] = material.baseColor.z; p[3] = material.baseColor.w;
+            p[4] = material.metallic; p[5] = material.roughness;
+        }
+        dev_->setUniforms(3, palette, sizeof palette);
+    } else if (phase == 1 && it.paletteMaterials) {
         float palette[kMaxMaterialPalette * 8] = {};
         for (size_t i = 0; i < it.paletteMaterials->size(); ++i) {
             const auto& m = (*it.paletteMaterials)[i];
@@ -760,8 +796,21 @@ static size_t indirectCommandThreshold() {
 // A single command buffer submission for multiple rigid primitives that share
 // ALL shader data, vertex/index buffers, transform and pipeline. The ordinary
 // pipeline remains the automatic fallback on platforms lacking indirect draws.
-bool Renderer3D::drawModelIndirectBatch(const uint32_t* items, uint32_t count, int phase) {
+bool Renderer3D::drawModelIndirectBatch(const uint32_t* items, uint32_t count, int phase,
+                                        bool instancePalette) {
     if (count < 2 || !dev_->supportsMultiDrawIndirect()) return false;
+    if (instancePalette) {
+        // Shader U3 is fixed to 64 material entries. Never produce a batch
+        // that would index beyond that uniform array.
+        std::vector<const Material*> unique;
+        unique.reserve(std::min<size_t>(count, kMaxMaterialPalette));
+        for (uint32_t n = 0; n < count; ++n) {
+            const Material* m = modelItems_[items[n]].mat;
+            if (std::find(unique.begin(), unique.end(), m) != unique.end()) continue;
+            if (unique.size() == kMaxMaterialPalette) return false;
+            unique.push_back(m);
+        }
+    }
     // The Vulkan direct-draw path applies gpuBaseVertex as a vertex-buffer offset,
     // whereas indexed indirect applies vertexOffset to the fetched vertex index.
     // Until both paths use the same shader-visible vertex addressing convention,
@@ -847,7 +896,8 @@ bool Renderer3D::drawModelIndirectBatch(const uint32_t* items, uint32_t count, i
     const size_t minimumCommands = dev_->info().backend == gfx::Backend::Metal ? indirectCommandThreshold() : 4u;
     if (commands.size() < minimumCommands) return false;
     const auto afterGrouping = std::chrono::steady_clock::now();
-    if (!drawModelBatch(items, count, phase, false)) return true; // pipeline warming: no fallback draw
+    if (!drawModelBatch(items, count, phase, false, false, instancePalette))
+        return true; // pipeline warming: no fallback draw
     const auto afterPipeline = std::chrono::steady_clock::now();
     if (!indirectCommands_.valid()) {
         gfx::BufferDesc d;
@@ -883,7 +933,11 @@ bool Renderer3D::drawModelIndirectBatch(const uint32_t* items, uint32_t count, i
             for (double& v : sums) v = 0.0;
         }
     }
-    lastItem_ = &modelItems_[items[count - 1]];
+    // U2 / texture bindings come from items[0] for the whole indirect
+    // submission. In per-instance palette mode the final command may use
+    // different PBR factors, so pretending its state is still bound would
+    // incorrectly skip the U2 upload for the next ordinary draw.
+    lastItem_ = &modelItems_[items[instancePalette ? 0u : count - 1u]];
     modelStats_.triangles += triangles;
     for (const auto& c : commands) if (c.instanceCount > 1) {
         ++modelStats_.instancedDraws;
@@ -891,6 +945,10 @@ bool Renderer3D::drawModelIndirectBatch(const uint32_t* items, uint32_t count, i
     }
     ++modelStats_.multiDrawSubmissions;
     modelStats_.indirectCommands += commands.size();
+    if (instancePalette) {
+        ++modelStats_.mdiPaletteSubmissions;
+        modelStats_.mdiPaletteCommands += commands.size();
+    }
     ++drawCalls_;
     ++profile_.draws[size_t(phase)];
     profile_.instances[size_t(phase)] += count;
@@ -1374,9 +1432,55 @@ void Renderer3D::renderModels(int phase) {
             counts[0] = counts[1] = 0;
         }
     }
-    // Sort by shared GPU buffers only when explicitly requested. It helps
-    // heterogeneous pooled meshes once MDI is active, but is wasted work when
-    // MDI is unavailable (and can regress ordinary instancing performance).
+    // Opt-in vehicle experiment: separate node/primitive geometry stays
+    // intact, while base colour + metallic + roughness are selected from
+    // a shared per-command palette in the colour shader.
+    // All other material state (including texture handles and emissive)
+    // must still compare exactly.
+    static const bool instancePaletteRequested = [] {
+        const char* flag = std::getenv("AIVERSE_MDI_INSTANCE_PALETTE");
+        return flag && std::strcmp(flag, "1") == 0;
+    }();
+    const char* paletteSafe = std::getenv("AIVERSE_RENDER_SAFE");
+    const char* paletteIndirectOff = std::getenv("AIVERSE_MULTI_DRAW_INDIRECT");
+    const bool paletteSort = instancePaletteRequested && phase == 1 &&
+        modelMultiDrawEnabled_ && dev_->supportsMultiDrawIndirect() &&
+        !gpuAdaptiveInstancingFallback_ &&
+        !(paletteSafe && std::strcmp(paletteSafe, "1") == 0) &&
+        !(paletteIndirectOff && std::strcmp(paletteIndirectOff, "off") == 0);
+    std::vector<uint32_t> paletteGroup;
+    if (paletteSort) {
+        paletteGroup.resize(modelItems_.size(), UINT32_MAX);
+        std::vector<uint32_t> byExactGroup(representatives.size(), UINT32_MAX);
+        std::unordered_map<uint64_t, std::vector<uint32_t>> paletteCandidates;
+        std::vector<uint32_t> paletteRepresentatives;
+        for (uint32_t index : order_) {
+            const uint32_t exact = materialGroup[index];
+            uint32_t group = byExactGroup[exact];
+            if (group == UINT32_MAX) {
+                const ModelItem& item = modelItems_[index];
+                const uint64_t hash = gpuPaletteStateHash(*item.model, *item.mat);
+                auto& candidates = paletteCandidates[hash];
+                group = uint32_t(paletteRepresentatives.size());
+                for (uint32_t other : candidates) {
+                    const ModelItem& known = modelItems_[paletteRepresentatives[other]];
+                    if (equivalentGpuPaletteState(*item.model, *item.mat,
+                                                  *known.model, *known.mat)) {
+                        group = other;
+                        break;
+                    }
+                }
+                if (group == paletteRepresentatives.size()) {
+                    paletteRepresentatives.push_back(index);
+                    candidates.push_back(group);
+                }
+                byExactGroup[exact] = group;
+            }
+            paletteGroup[index] = group;
+        }
+    }
+    // Sort by shared GPU buffers only when requested (or for the palette
+    // experiment). It helps heterogeneous primitives on shared buffers.
     static const bool groupAdaptive = [] {
         const char* flag = std::getenv("AIVERSE_ADAPTIVE_DRAW_GROUPS");
         return flag && std::strcmp(flag, "1") == 0;
@@ -1387,7 +1491,7 @@ void Renderer3D::renderModels(int phase) {
     const bool mdiGeometrySort = modelMultiDrawEnabled_ &&
         dev_->supportsMultiDrawIndirect() &&
         (!gpuAdaptiveInstancingFallback_ || groupAdaptive) &&
-        phase <= 1 && geometrySortRequested;
+        phase <= 1 && (geometrySortRequested || paletteSort);
     if (phase == 2) { // back to front
         std::sort(order_.begin(), order_.end(), [&](uint32_t a, uint32_t b) { return modelItems_[a].depth > modelItems_[b].depth; });
     } else {          // group by state so identical primitives end up next to each other (instancing)
@@ -1395,7 +1499,10 @@ void Renderer3D::renderModels(int phase) {
             const ModelItem &x = modelItems_[a], &y = modelItems_[b];
             if ((x.joints >= 0) != (y.joints >= 0)) return x.joints < y.joints;
             if (x.baked != y.baked) return x.baked < y.baked;
-            if (materialGroup[a] != materialGroup[b]) return materialGroup[a] < materialGroup[b];
+            if (paletteSort && paletteGroup[a] != paletteGroup[b])
+                return paletteGroup[a] < paletteGroup[b];
+            if (!paletteSort && materialGroup[a] != materialGroup[b])
+                return materialGroup[a] < materialGroup[b];
             if (mdiGeometrySort) {
                 if (x.model->vb.id != y.model->vb.id) return x.model->vb.id < y.model->vb.id;
                 if (x.model->ib.id != y.model->ib.id) return x.model->ib.id < y.model->ib.id;
@@ -1404,6 +1511,10 @@ void Renderer3D::renderModels(int phase) {
                 if (x.gi != y.gi) return x.gi < y.gi;
                 if (x.lmPage != y.lmPage) return x.lmPage < y.lmPage;
             }
+            // Keep identical primitives together for cheap conventional
+            // instancing when an indirect group is too small.
+            if (paletteSort && materialGroup[a] != materialGroup[b])
+                return materialGroup[a] < materialGroup[b];
             if (x.prim != y.prim) return x.prim < y.prim;
             if (x.gi != y.gi) return x.gi < y.gi;
             if (x.lmPage != y.lmPage) return x.lmPage < y.lmPage;
@@ -1561,7 +1672,8 @@ void Renderer3D::renderModels(int phase) {
                        (y.lodThreshold < 1 || y.lodInvert) &&
                     first.flags == y.flags &&
                     first.tint.w >= .99f && y.tint.w >= .99f &&
-                    materialGroup[firstIndex] == materialGroup[candidateIndex];
+                    (paletteSort ? paletteGroup[firstIndex] == paletteGroup[candidateIndex]
+                                 : materialGroup[firstIndex] == materialGroup[candidateIndex]);
             };
             // Do not reorder translucent parts or geometry-cluster selections.
             if (firstEligible &&
@@ -1575,7 +1687,9 @@ void Renderer3D::renderModels(int phase) {
                         if (first.model->vb != y.model->vb ||
                             first.model->ib != y.model->ib)
                             ++modelStats_.mdiGeometryBreaks;
-                        else if (materialGroup[firstIndex] != materialGroup[candidate])
+                        else if (paletteSort
+                            ? paletteGroup[firstIndex] != paletteGroup[candidate]
+                            : materialGroup[firstIndex] != materialGroup[candidate])
                             ++modelStats_.mdiMaterialBreaks;
                         else ++modelStats_.mdiStateBreaks;
                         break;
@@ -1602,7 +1716,7 @@ void Renderer3D::renderModels(int phase) {
                             uint32_t(minIndirectCommands)))) {
                         const auto attemptBegin = std::chrono::steady_clock::now();
                         const bool accepted = drawModelIndirectBatch(
-                            order_.data() + i, uint32_t(end - i), phase);
+                            order_.data() + i, uint32_t(end - i), phase, paletteSort);
                         if (traceModelPass) {
                             const double elapsed = std::chrono::duration<double, std::milli>(
                                 std::chrono::steady_clock::now() - attemptBegin).count();

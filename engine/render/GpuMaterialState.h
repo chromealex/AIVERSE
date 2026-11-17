@@ -90,4 +90,26 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
     return hash;
 }
 
+
+// Indirect per-instance material palette: those three scalar factors travel
+// with each indexed command instead of being inherited from U2. Every other
+// shader factor, texture handle, sampler/alpha mode and graph remains part of
+// the batching key. Copies are used only by the optional CPU grouping policy;
+// the original Material objects are never mutated.
+inline Material withoutGpuPaletteFactors(const Material& source) {
+    Material normalized = source;
+    normalized.baseColor = {1, 1, 1, 1};
+    normalized.metallic = 0;
+    normalized.roughness = 0;
+    return normalized;
+}
+inline bool equivalentGpuPaletteState(const Model& aModel, const Material& a,
+                                      const Model& bModel, const Material& b) {
+    return equivalentGpuMaterial(aModel, withoutGpuPaletteFactors(a),
+                                 bModel, withoutGpuPaletteFactors(b));
+}
+inline uint64_t gpuPaletteStateHash(const Model& model, const Material& material) {
+    return gpuMaterialStateHash(model, withoutGpuPaletteFactors(material));
+}
+
 } // namespace aiverse::render

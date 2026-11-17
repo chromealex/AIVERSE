@@ -568,6 +568,49 @@ counts and additional geometry storage; `--unit` runs only CPU checks.
 `tests/render/check_material_palette_shaders.py` links 72 desktop/GLES variants across
 quality tiers, instancing, baked lighting and LOD fade.
 
+### Experimental per-command PBR palette for CPU Multi-Draw
+
+`AIVERSE_MDI_INSTANCE_PALETTE=1` enables an **opt-in** colour-pass MDI
+variant that can batch *different rigid primitives and separately transformed
+nodes* without changing their meshes or their animation hierarchy.
+The shader reads a compact material slot from the existing per-instance
+`Inst.lod.z` field. One U3 palette supplies each slot's full-float base
+colour, metallic and roughness, while U2 still holds the common shader,
+texture and other render-state parameters. Wheels, damage doors and chassis
+keep independent transforms and original geometry. There is no CPU mesh merge
+and no automatic material rewriting.
+
+Eligibility is deliberately strict: the same vertex/index GPU buffers,
+shader graph, sampled textures and samplers, alpha mode, emissive,
+UV transforms, normal/occlusion parameters, culling, draw flags and GI
+state must match. Only base colour, metallic and roughness may vary.
+Skinned/morphed, baked/GI, built geometry clusters, existing per-mesh
+palette draws and translucent geometry keep their original paths.
+A single group uses at most 64 materials and the backend's MDI command
+threshold. The experiment is **off by default** until image and CPU/GPU A/B
+verification on Metal; unsupported backends use conventional instancing.
+`AIVERSE_MDI_INSTANCE_PALETTE` does not replace the existing Metal safety
+toggle or force MDI when the Scene setting disables it.
+
+A/B source fixture (16 independent meshes/nodes, 3 opaque PBR factors,
+unchanged shadows) is `AIVERSE_PALETTE_TEST_CASE=indirect_palette` in
+`aiverse_material_batches`. The fixture compares pixel-identical direct and
+indirect frames, not merely call counts. Build with `AIVERSE_BUILD_HDR_TESTS=ON`:
+
+```sh
+cmake --build build-metal --target aiverse_material_batches -j8
+AIVERSE_EXPERIMENTAL_METAL_ICB=1 AIVERSE_MDI_INSTANCE_PALETTE=1 \
+  AIVERSE_PALETTE_TEST_CASE=indirect_palette \
+  ./build-metal/aiverse_material_batches ignored /tmp/aiverse-palette
+# A/B in the editor: start one process with the palette flag and another
+# without it. Compare fixed-camera submissions, Scene CPU and full GPU timings.
+```
+
+`Scene → Batching → Instancing and indirect details` reports
+`Per-command PBR palette: submissions / commands` when enabled. If these
+remain zero, inspect the existing MDI eligibility and state-split counters
+instead of assuming the material palette was exercised.
+
 ### Automatic per-mesh shadow batches
 
 `uploadModel` calls `prepareShadowBatches` before creating GPU buffers. This also handles models

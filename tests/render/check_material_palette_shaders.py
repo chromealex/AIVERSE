@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile/link material palette GLSL 330 and GLES 300 variants with glslangValidator."""
+"""Compile/link vertex- and instance-selected PBR palettes on GLSL 330 and GLES 300."""
 import os
 from pathlib import Path
 import shutil
@@ -16,12 +16,13 @@ source = r'''
 #include <fstream>
 #include <string>
 using namespace aiverse::render::shaders;
-int main(){for(int es=0;es<2;++es)for(int q=0;q<3;++q)for(int gi=0;gi<3;++gi)for(int fade=0;fade<2;++fade)for(int inst=0;inst<2;++inst){
- std::string name="shader_"+std::to_string(es)+std::to_string(q)+std::to_string(gi)+std::to_string(fade)+std::to_string(inst);
+int main(){for(int es=0;es<2;++es)for(int q=0;q<3;++q)for(int gi=0;gi<3;++gi)for(int fade=0;fade<2;++fade)for(int inst=0;inst<2;++inst)for(int ip=0;ip<2;++ip){
+ std::string name="shader_"+std::to_string(es)+std::to_string(q)+std::to_string(gi)+std::to_string(fade)+std::to_string(inst)+std::to_string(ip);
  std::string defs=es?"#version 300 es\nprecision highp float;\nprecision highp int;\n":"#version 330 core\n";
  defs+=aiverse::gfx::colorShaderPrefix(false,false);
  defs+="#define MATERIAL_PALETTE 1\n#define AIVERSE_GIQ 2\n#define AIVERSE_INST "+std::to_string(inst?28:1)+"\n#define AIVERSE_Q "+std::to_string(q)+"\n";
  if(q)defs+="#define NORMALMAP 1\n";
+ if(ip)defs+="#define MATERIAL_INSTANCE_PALETTE 1\n";
  if(fade)defs+="#define LODFADE 1\n";
  if(gi)defs+=gi==1?"#define LIGHTMAP 1\n":"#define PROBES 1\n";
  std::ofstream(name+".vert")<<defs<<kModelVS;

@@ -59,6 +59,22 @@ static bool unitChecks() {
     bModel.images[0].tex=aModel.images[0].tex;
     ok&=check(equivalentGpuMaterial(aModel,original,bModel,copy) &&
               gpuMaterialStateHash(aModel,original)==gpuMaterialStateHash(bModel,copy));
+    // Indirect material palettes may vary ONLY baseColour/metal/roughness;
+    // texture identity, emissive and render state must still match exactly.
+    Material variation=copy;
+    variation.baseColor={.91f,.10f,.18f,1};
+    variation.metallic=.67f; variation.roughness=.23f;
+    ok&=check(equivalentGpuPaletteState(aModel,original,bModel,variation) &&
+              gpuPaletteStateHash(aModel,original)==gpuPaletteStateHash(bModel,variation) &&
+              !equivalentGpuMaterial(aModel,original,bModel,variation));
+    variation.emissive.y += .01f;
+    ok&=check(!equivalentGpuPaletteState(aModel,original,bModel,variation));
+    variation=copy;variation.alpha=AlphaMode::Blend;
+    ok&=check(!equivalentGpuPaletteState(aModel,original,bModel,variation));
+    variation=copy;
+    bModel.images[0].tex={789};
+    ok&=check(!equivalentGpuPaletteState(aModel,original,bModel,variation));
+    bModel.images[0].tex=aModel.images[0].tex;
     auto invalid=[&](int mode){
         Model x;x.vertices.resize(3);x.indices=indices;x.materials.resize(3);x.meshes.push_back(mesh);
         if(mode==0)x.meshes[0].primitives[0].morphTargets=1;
@@ -77,13 +93,22 @@ static bool unitChecks() {
 
 // Deterministic 16-primitive fixture with one shader/material and independent
 // node transforms. MDI and the fallback must render byte-identical images.
-static std::unique_ptr<render::Model> indirectFixture() {
+static std::unique_ptr<render::Model> indirectFixture(bool variedMaterials = false) {
     using namespace render;
     auto m = std::make_unique<Model>();
     m->path = "indirect-fixture";
-    m->materials.resize(1);
+    m->materials.resize(variedMaterials ? 3 : 1);
     m->materials[0].doubleSided = true;
     m->materials[0].baseColor = {.72f, .48f, .19f, 1.f};
+    if (variedMaterials) {
+        m->materials[1] = m->materials[0];
+        m->materials[1].baseColor = {.13f, .74f, .28f, 1.f};
+        m->materials[1].metallic = .65f;
+        m->materials[1].roughness = .35f;
+        m->materials[2] = m->materials[0];
+        m->materials[2].baseColor = {.15f, .25f, .85f, 1.f};
+        m->materials[2].roughness = .18f;
+    }
     for (int i = 0; i < 16; ++i) {
         const uint32_t start = uint32_t(m->vertices.size());
         for (float3 pos : {float3{-.3f, 0, 0}, float3{.3f, 0, 0}, float3{0, .75f, 0}}) {
@@ -94,6 +119,7 @@ static std::unique_ptr<render::Model> indirectFixture() {
         }
         m->indices.insert(m->indices.end(), {start, start + 1, start + 2});
         Primitive p;
+        p.material = variedMaterials ? i % 3 : 0;
         p.firstIndex = uint32_t(m->indices.size() - 3);
         p.indexCount = 3;
         p.firstVertex = start;
@@ -139,7 +165,8 @@ int aiverseMain(int argc, char** argv) {
         return models && after<before ? 0 : 1;
     }
     const std::string scenario = std::getenv("AIVERSE_PALETTE_TEST_CASE") ? std::getenv("AIVERSE_PALETTE_TEST_CASE") : "default";
-    auto model = scenario == "indirect" ? indirectFixture() : render::loadModel(argv[1],read);
+    auto model = scenario == "indirect" || scenario == "indirect_palette"
+        ? indirectFixture(scenario == "indirect_palette") : render::loadModel(argv[1],read);
     const std::string prefix = argv[2];
     const bool reflection=std::getenv("AIVERSE_SHADOW_TEST_REFLECTION")!=nullptr;
     render::Renderer3D renderer; render::Mesh floor; gfx::Device* device = nullptr;
@@ -178,9 +205,11 @@ int aiverseMain(int argc, char** argv) {
     cb.frame=[&](gfx::Device& d,double) {
         if(failed||finished||frame>40){platform::requestQuit();return;}
         const bool batch=frame>=15;
-        renderer.setModelMultiDrawEnabled(scenario != "indirect" || batch);
+        renderer.setModelMultiDrawEnabled((scenario != "indirect" &&
+                                            scenario != "indirect_palette") || batch);
         for(size_t i=0;i<model->meshes.size();++i)
-            model->meshes[i].materialBatches=(batch && scenario != "indirect")
+            model->meshes[i].materialBatches=(batch && scenario != "indirect" &&
+                                               scenario != "indirect_palette")
                 ? batches[i] : std::vector<render::MaterialBatch>{};
         render::RTSCamera cam; cam.target={0,2,0};cam.distance=std::getenv("AIVERSE_SHADOW_TEST_DISTANCE")?float(std::atof(std::getenv("AIVERSE_SHADOW_TEST_DISTANCE"))):14;cam.pitch=.85f;cam.yaw=.45f;
         renderer.beginScene(cam,960,640);
@@ -217,6 +246,21 @@ int aiverseMain(int argc, char** argv) {
             const auto& p=renderer.profile();
             std::printf("batch=%d shadow=%u opaque=%u total=%u error=%s\n",batch,p.draws[0],p.draws[1],renderer.drawCalls(),renderer.modelError().c_str());
             if(!batch){shadowBefore=p.draws[0];opaqueBefore=p.draws[1];}
+            else if (scenario == "indirect_palette") {
+                const bool supported = d.supportsMultiDrawIndirect();
+                const bool requested = std::getenv("AIVERSE_MDI_INSTANCE_PALETTE") &&
+                    std::string(std::getenv("AIVERSE_MDI_INSTANCE_PALETTE")) == "1";
+                const auto& stats = renderer.modelStats();
+                std::printf("indirect palette: supported=%d requested=%d calls %u -> %u, palette submissions=%llu commands=%llu\n",
+                            int(supported), int(requested), opaqueBefore, p.draws[1],
+                            (unsigned long long)stats.mdiPaletteSubmissions,
+                            (unsigned long long)stats.mdiPaletteCommands);
+                if (supported && requested) {
+                    if (p.draws[1] >= opaqueBefore || !stats.mdiPaletteSubmissions ||
+                        stats.mdiPaletteCommands < 16) failed = true;
+                } else if (p.draws[1] != opaqueBefore) failed = true;
+                if (p.draws[0] != shadowBefore) failed = true;
+            }
             else if (scenario == "indirect") {
                 const bool supported = d.supportsMultiDrawIndirect();
                 // Traditional Metal ICB accepts depth-only/vertex-buffer shaders,
