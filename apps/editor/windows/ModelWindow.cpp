@@ -84,6 +84,9 @@ public:
             ImGui::SliderInt("##owner", &owner_, 0, 8);
             ui::endProps();
         }
+        // A type chosen in this panel might not occur on the open map.
+        // Load it on demand and keep it resident while its preview is visible.
+        ed.retainEditorType(uint16_t(type_));
         if (!portraitInit_) { portraitInit_ = true; portrait_.init(ed.device(), 256); }
         time_ += ImGui::GetIO().DeltaTime;
         portrait_.render(ed.view(), uint16_t(type_), uint8_t(owner_), time_);
@@ -126,6 +129,7 @@ public:
                                     const auto& types = ed.rules().types;
                                     for (size_t i = 0; i < types.size(); ++i) {
                                         if (types[i].id != id) continue;
+                                        ed.retainEditorType(uint16_t(i));
                                         if (const render::Model* m = ed.view().modelOf(uint16_t(i))) r = modelInfo(*m);
                                         Json w = Json::array();
                                         for (const auto& s : ed.view().warnings()) if (s.find("type '" + id + "'") == 0) w.push(Json::string(s));

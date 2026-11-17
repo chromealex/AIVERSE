@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <unordered_set>
 
 namespace aiverse::game {
 
@@ -237,7 +238,7 @@ void RtsView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     if (v["model"].isString()) entries.emplace_back(v["model"].str(), v);
     const auto initialChoices = initialModelChoices(v);
     for (size_t index = 0; index < v["model"].items().size(); ++index) {
-        if (deferredLoading_ && std::find(initialChoices.begin(), initialChoices.end(), index) == initialChoices.end()) {
+        if (deferredLoading_ && deferAppearanceVariants_ && std::find(initialChoices.begin(), initialChoices.end(), index) == initialChoices.end()) {
             L.pendingVariants.push_back(index); continue;
         }
         const auto& p = v["model"][index];
@@ -382,7 +383,7 @@ bool RtsView::prepareType(uint16_t type, bool allVariants) {
             }
             else for (const auto& value : v.items()) visit(value);
         };
-        if (!allVariants && deferredLoading_ && t.view["model"].isArray() && t.view["streaming"].getInt("initialModels", 0) > 0) {
+        if (!allVariants && deferredLoading_ && deferAppearanceVariants_ && t.view["model"].isArray() && t.view["streaming"].getInt("initialModels", 0) > 0) {
             Json initialView = t.view, choices = Json::array();
             for (size_t index : initialModelChoices(t.view)) choices.push(t.view["model"][index]);
             initialView.set("model", std::move(choices));
@@ -492,10 +493,13 @@ void RtsView::trimTypes(const std::vector<bool>& keep, bool compact) {
     for (auto it=anims_.begin();it!=anims_.end();) {
         if (!keep[it->second.type]) it=anims_.erase(it); else ++it;
     }
-    std::vector<const render::Model*> used;
+    // Large projects can keep hundreds of model assets. A hash set makes
+    // reclamation linear instead of repeatedly scanning the entire keep list.
+    std::unordered_set<const render::Model*> used;
+    used.reserve(models_.size());
     auto visit=[&](const ModelChoice& c){
-        if(c.model)used.push_back(c.model);
-        for(const auto& a:c.attach)if(a.model)used.push_back(a.model);
+        if(c.model)used.insert(c.model);
+        for(const auto& a:c.attach)if(a.model)used.insert(a.model);
     };
     for(const auto& look:looks_) {
         for(const auto& c:look.models)visit(c);
@@ -504,7 +508,7 @@ void RtsView::trimTypes(const std::vector<bool>& keep, bool compact) {
     }
     size_t released=0;
     for(auto it=models_.begin();it!=models_.end();) {
-        if(it->first.rfind("shape:",0)==0 || std::find(used.begin(),used.end(),it->second.get())!=used.end()){++it;continue;}
+        if(it->first.rfind("shape:",0)==0 || used.contains(it->second.get())){++it;continue;}
         if(it->second){animationCache_.erase(it->second.get());releaseModel(*dev_,*it->second);}
         it=models_.erase(it);++released;
     }

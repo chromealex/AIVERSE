@@ -13,10 +13,12 @@ public:
     void shutdown(gfx::Device& dev);
     void trim(gfx::Device& dev);
     size_t decodedCount() const { return decodedCount_.load(); }
-    size_t gpuCount() const { return gpu_.size(); }
+    size_t gpuCount() const { return gpu_.size(); } // render thread only
+    // Actual decoded pixel cache allocation (not source file size / GPU textures).
+    size_t decodedBytes() const { std::lock_guard lock(mutex_); return bytes_; }
 private:
     struct Decoded { Image image; size_t bytes = 0; uint64_t used = 0; };
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::map<std::string, Decoded> decoded_;
     std::map<std::string, Image> gpu_;
     size_t bytes_ = 0;

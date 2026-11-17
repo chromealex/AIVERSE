@@ -4,6 +4,7 @@
 #include <cfloat>
 #include "../Editor.h"
 #include "../EditorUtil.h"
+#include "engine/render/GlobalGeometryPool.h"
 
 namespace aiverse::editor {
 
@@ -61,6 +62,23 @@ public:
             ImGui::PlotLines("##frame", frame.data(), int(frame.size()), 0, ov, 0, std::max(20.0f, p95 * 1.5f), ImVec2(-1, 44));
         }
         if (ed.playing() && !sim.empty()) ImGui::PlotLines("##sim", sim.data(), int(sim.size()), 0, "симуляция, мс", 0, 16, ImVec2(-1, 44));
+        // Resource counts are from live owners, not the number of objects
+        // visible in the camera. No texture or render-target byte estimates.
+        ui::section(ICON_REGIONS, "Память ассетов (учтённая)");
+        const auto pool = render::geometryPoolStats(ed.device());
+        const auto residency = ed.view().assetResidencyStats();
+        constexpr double mib = 1024.0 * 1024.0;
+        ImGui::Text("GPU геометрия (pool): %.1f / %.1f MiB  ·  страниц: %zu",
+                    double(pool.occupiedBytes) / mib, double(pool.allocatedBytes) / mib, pool.pages);
+        ImGui::Text("Модели в пуле: %zu  ·  кэш моделей: %zu  ·  загружено типов: %zu / %zu",
+                    pool.liveModels, residency.cachedModels, residency.loadedTypes, ed.rules().types.size());
+        ImGui::Text("CPU кэш изображений: %.1f MiB  ·  GPU текстур моделей: %zu шт.",
+                    double(residency.decodedCpuBytes) / mib, residency.gpuTextures);
+        ImGui::TextDisabled("Без dedicated-геометрии, размеров GPU текстур, render targets и FX.");
+        ImGui::TextDisabled("Выгрузка моделей редактора: %s (период ожидания 15 с)",
+                            ed.lazyEditorAssetsEnabled() ? "по требованию" : "отключена");
+        if (ed.lazyEditorAssetsEnabled() && ImGui::Button("Освободить неиспользуемые модели"))
+            ed.reclaimEditorAssets(true);
         ui::section(ICON_REGIONS, "Карта");
         ImGui::Text("%d×%d клеток  ·  объектов %zu  ·  дорог %zu  ·  игроков %zu", d.w, d.h, d.entities.size(), d.roads.size(), d.players.size());
         Simulation* s = ed.sim();

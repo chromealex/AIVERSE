@@ -101,6 +101,41 @@ int aiverseMain(int, char**) {
     view.setDeferredLoading(false);
     check(view.init(dev,rules,reader) && view.modelChoiceCount(0)==3,"eager mode obeyed streaming cap");
     view.shutdown(dev);
+    // Editor residency policy: a type loaded for a previous map can be
+    // retired while currently referenced models remain valid, then loaded
+    // again through the same on-demand path.
+    rules.types[0].view = Json::parse(R"({"model":"a.obj"})");
+    rules.types[1].view = Json::parse(R"({"model":"b.obj"})");
+    view.setDeferredLoading(true);
+    reads.clear();
+    check(view.init(dev,rules,reader),"editor residency init");
+    check(view.assetResidencyStats().loadedTypes==0,"editor should not eagerly load whole rules catalog");
+    view.loadType(0);
+    view.loadType(1);
+    const auto beforeTrim = view.assetResidencyStats();
+    check(beforeTrim.loadedTypes==2 && beforeTrim.cachedModels>=2,"resident models tracked");
+    view.trimTypes(std::vector<bool>{true,false,false},true);
+    const auto afterTrim = view.assetResidencyStats();
+    check(view.typeLoaded(0) && !view.typeLoaded(1) && view.modelOf(0)!=nullptr,
+          "trimming unused type must not discard the currently edited map type");
+    check(afterTrim.loadedTypes==1 && afterTrim.cachedModels<beforeTrim.cachedModels,
+          "GPU model cache should shrink when no live type owns an asset");
+    const int bReads=reads["b.obj"];
+    view.loadType(1);
+    check(view.typeLoaded(1) && reads["b.obj"]==bReads+1,
+          "trimmed type must reload on demand");
+    view.shutdown(dev);
+    // Deferred *type* loading must not reduce the number of model variants
+    // available to the editor. Client streaming keeps its original default.
+    rules.types[0].view = Json::parse(R"({"streaming":{"initialModels":1},"model":["a.obj",{"file":"a.obj","materials":{"*":{"color":[1,0,0]}}},"b.obj"]})");
+    view.setDeferredLoading(true);
+    view.setDeferAppearanceVariants(false);
+    check(view.init(dev,rules,reader),"editor full appearance init");
+    view.loadType(0);
+    check(view.modelChoiceCount(0)==3 && view.pendingModelVariants()==0,
+          "lazy editor type must expose every model variant");
+    view.shutdown(dev);
+    view.setDeferAppearanceVariants(true);
     auto cache = std::make_shared<render::ModelTextureCache>();
     int imageReads = 0;
     auto images = [&](const std::string&, std::string& bytes) {
@@ -114,6 +149,7 @@ int aiverseMain(int, char**) {
     auto decodeB=std::async(std::launch::async,[&] { return cache->read("models/tex/a.tga",images,imageB); });
     check(decodeA.get() && decodeB.get(),"concurrent cache decode");
     check(imageReads==1 && imageA.sharedRgba==imageB.sharedRgba,"duplicate decoded pixels");
+    check(cache->decodedBytes()>=4,"CPU decoded cache bytes tracked");
     const int beforeTextures=dev.alive;
     render::Model texturedA,texturedB;
     texturedA.images.push_back(imageA);texturedB.images.push_back(imageB);
@@ -123,7 +159,13 @@ int aiverseMain(int, char**) {
     check(dev.alive==beforeTextures+2,"sampler modes aliased");
     render::releaseModel(dev,texturedA);render::releaseModel(dev,texturedB);render::releaseModel(dev,nearest);
     check(dev.alive==beforeTextures+2,"model destroyed shared texture");
-    cache->shutdown(dev);check(dev.alive==beforeTextures,"shared texture leak");
+    // Explicit model release must return the shared-image leases so a
+    // residency trim can free abandoned GPU images and decoded source bytes.
+    cache->trim(dev);
+    check(dev.alive==beforeTextures && cache->decodedBytes()==0 && cache->gpuCount()==0,
+          "trim did not release unreferenced GPU textures and CPU decoded cache");
+    cache->shutdown(dev);
+    check(dev.alive==beforeTextures,"shared texture shutdown leak");
     render::Model skin;
     render::Node node; node.skin=0; node.mesh=0; skin.nodes.push_back(node);
     render::Skin bones; bones.joints.push_back(0); bones.inverseBind.push_back(render::mat4{}); skin.skins.push_back(bones);
@@ -132,6 +174,6 @@ int aiverseMain(int, char**) {
     check(!skin.baked.tex.valid() && !skin.baked.pending.empty(),"CPU bake used GPU");
     check(render::bakeAnimations(dev,skin),"prepared animation upload");
     check(skin.baked.tex.valid() && skin.baked.pending.empty(),"animation staging not freed");
-    std::cout<<"deferred loading: subset, cache, later spawn, missing asset, reinit, eager mode passed\n";
+    std::cout<<"deferred loading: subset, cache, later spawn, missing asset, reinit, eager mode, editor trim/reload + memory metrics passed\n";
     return 0;
 }

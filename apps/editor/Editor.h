@@ -98,6 +98,12 @@ public:
     render::PostFx& postFx() { return postFx_; }   // post effects of Scene / Game views (PostFxWindow configures it)
     bool postFxInScene = true;                     // false: only the Game view is post-processed
     game::RtsView& view() { return view_; }
+    bool lazyEditorAssetsEnabled() const { return lazyEditorAssets_; }
+    // Pin a type that an editor panel or preview uses (also loads it lazily).
+    void retainEditorType(uint16_t type);
+    // Reclaim unreferenced type models after a grace period. Invoked by the
+    // editor every few seconds or from the Statistics panel.
+    void reclaimEditorAssets(bool force = false);
     std::shared_ptr<render::PaintLayers> paintLayers;
     std::shared_ptr<game::EntityFxStore> entityFx;   // view.entity_fx of the play-test view scripts
     game::ViewTargeting scriptTargeting;
@@ -315,6 +321,9 @@ private:
     render::Mesh fpsPreviewMesh_;
     render::PostFx postFx_;
     game::RtsView view_;
+    bool lazyEditorAssets_ = true;
+    std::vector<double> editorTypeLastUsed_;
+    double lastEditorTrim_ = 0.0;
     bool showPicker_ = false;
     bool resetLayout_ = false;
     bool layoutChecked_ = false;

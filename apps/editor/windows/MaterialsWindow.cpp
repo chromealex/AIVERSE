@@ -222,6 +222,9 @@ public:
                 ImGui::SameLine();
                 ImGui::RadioButton("Узел", &applyByNode_, 1);
                 ui::inputString(applyByNode_ ? "Узел (glob)" : "Имя или *", applyKey_);
+                // Inspecting a type's material names must work even when that
+                // type has no instances in the currently loaded map.
+                ed.retainEditorType(uint16_t(applyType_));
                 if (const render::Model* m = ed.view().modelOf(uint16_t(applyType_))) {
                     std::string hint;
                     if (applyByNode_) { for (const auto& n : m->nodes) hint += n.name + "  "; }

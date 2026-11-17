@@ -55,6 +55,50 @@ Branch: `fix/indirect-vulkan-base-vertex-safety` (PR #4, based on `feature/unive
 - Recommended separate engineering task: support editor-on-demand type/model loading from map instances, selected placement tool, thumbnails/previews, play mode, and asset hot reload; acquire/release unused types, cap texture cache; add a memory breakdown for CPU and GPU asset categories. Do NOT just set `deferredLoading_=true` globally: editor currently assumes available models for the catalog, placement, previews and game startup.
 - No lazy-loading change applied yet and no current process-wide Activity Monitor/RSS measurement. Do not claim total process RAM is 340 MiB.
 
+## Step 8 — editor lazy asset residency and accurate memory breakdown (CODE COMPLETE; unverified)
+- **Separate branch:** `fix/editor-lazy-model-residency` based on `999a1b646836b4541567dc697f37b7b53ab06737` (prior renderer PR #4 head). Changes isolated from batching.
+- Root cause reconfirmed: `RtsView::init` eagerly loads every rules type by default, the editor previously opted into eager mode. The existing `RtsView::draw` and `loadType` already load scene types on demand, while `trimTypes` releases unused shared Model resources.
+- `3d626d4`: expose thread-safe `ModelTextureCache::decodedBytes()` (mutex mutable for const reader).
+- `9e48315`: add `RtsView::assetResidencyStats()` (loaded types, cached models incl. built-in shapes, shared GPU texture count, CPU decoded bytes).
+- `456cc17`, `7aae0d4`: editor opts into `setDeferredLoading(true)` on initial load and rules reload, except explicit `AIVERSE_EDITOR_EAGER_MODELS=1`. `Editor::retainEditorType` tracks type use; `reclaimEditorAssets` keeps all map-document types (including hidden), actively displayed scene/world-preview types, selected type, placement/overlay type, and types used within 15s; sweeps at most every 5s, never during play or FPS. `ModelWindow` / `MaterialsWindow` pins their selected types.
+- `6cf3ba8`: model preview and MCP `model_info` load types on demand; `d420da4`: materials browser does likewise.
+- `df485f0`: Statistics panel shows GPU geometry pool occupied/allocated and pages, loaded model/type counts, decoded CPU images and GPU texture count with explicit incomplete-byte accounting and an on-demand trim button.
+- `35a374a`: expanded `aiverse_deferred_loading_tests` for type release/reload and decoded cache byte accounting.
+- `9a97ea6`: `trimTypes` uses an unordered set of retained model pointers (linear instead of quadratic scan).
+- **Important discovered interaction**: deferred type loading also enabled `streaming.initialModels` capped appearance variants. This would hide variants in editor. `03ef2b4`, `5ef963f`, `09acafe` introduce separate `setDeferAppearanceVariants(false)` for editor, preserving all choices for every *requested* type; client default unchanged. `30e2e40` regression test for full appearance variants.
+- `7875438`: updated `docs/startup-loading.md` with architectural caveats, rollback flag, verification and a scoped memory explanation.
+- **Remaining**: actual CMake compile / deferred test run, macOS visual/editor memory A/B. No measured 340 MiB -> new figure yet; do not claim a speedup or reduction size until measured.
+
+### Verification on Apple Silicon
+```sh
+cd ~/Projects/AIVERSE
+git fetch origin
+git switch fix/editor-lazy-model-residency || git switch --track origin/fix/editor-lazy-model-residency
+git pull --ff-only
+cmake -S . -B build-metal -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_TESTS=ON
+cmake --build build-metal --target aiverse_editor aiverse_deferred_loading_tests -j8
+ctest --test-dir build-metal -R '^aiverse_deferred_loading_tests
+- Build editor and test newest branch on Apple Silicon; verify camera triangle counters with movable camera + fixed camera A/B.
+- Re-run GTA signal installer and tests, then native client and actual Metal lighting/traffic signal changes; keep GTA draft PR #4.
+- Benchmark Metal CPU MDI threshold 8 vs 16 (and cache off/on) with controlled camera; update findings before merging.
+- Append exact commit/test results for another agent after **each step**.
+
+- Inspect GTA signal assets and type switching; identify stable material path and shared model geometry.
+- Implement in correct repository/branch with tests, benchmark CPU/GPU and pixel-equivalence.
+- Append new steps, exact commits and any known blockers after each meaningful change; avoid merging to main before validation.
+ --output-on-failure
+./build-metal/AiverseEditor.app/Contents/MacOS/AiverseEditor
+```
+Compare with `AIVERSE_EDITOR_EAGER_MODELS=1` (same binary/project/map). Check `Статистика → Память ассетов`, model inspector for non-map type, model variants, ghost placement, switching maps and play mode. Report model/texture count and GPU occupied/allocated before/after.
+
+## Step 9 — PR / final memory reclamation safeguards (CODE COMPLETE; CI pending)
+- Draft stacked PR: https://github.com/chromealex/AIVERSE/pull/9 (base `fix/indirect-vulkan-base-vertex-safety` / earlier PR #4); all changes isolated in `fix/editor-lazy-model-residency`.
+- CI jobs were initially queued on PR creation (GPU batching focused regression, CI, AIVERSE Studio validation); no pass/fail information had been returned at writing time.
+- During review, discovered that `ModelTextureCache::trim` only evicted abandoned GPU textures, leaving decoded CPU image cache entries resident (up to 64 MiB). `d960ecb` clears the decoded LRU on residency reclamation using the existing mutex. Any pending image that holds a `sharedRgba` lease remains safe.
+- `Model::releaseModel` previously left borrowed `Image::textureLease` references alive until model destructor, preventing immediate cache reclamation if a Model object remained in scope. `fb5bdf2` drops those leases at explicit release. `6831104` tests shared texture release plus decoded cache accounting after `trim`.
+- `42395ec` documents the behavior in `docs/startup-loading.md`.
+- **Not done:** renderer/backend-specific Metal GPU-fence stability verification, full CI results, in-editor memory before/after measurements, standalone client startup regression tests.
+
 ## Next
 - Build editor and test newest branch on Apple Silicon; verify camera triangle counters with movable camera + fixed camera A/B.
 - Re-run GTA signal installer and tests, then native client and actual Metal lighting/traffic signal changes; keep GTA draft PR #4.
