@@ -192,6 +192,9 @@ struct Model {
     // from its GLB alone. The default still prepares compatible material/shadow batches.
     struct Batching {
         bool mergeRigid = false;
+        // Generate missing LOD meshes during CPU preparation. Explicit
+        // authored LOD chains always win; generated LODs never merge nodes.
+        bool autoLod = true;
         float maxExtent = 20.0f;
         std::vector<std::string> preserveNodes; // preserve node and its descendants by exact name
         // CPU-side instance counts, not GPU draw calls (shadows and instancing differ).
@@ -199,6 +202,12 @@ struct Model {
         bool compacted = false;
         std::string reason;
     } batching;
+    struct AutoLodInfo {
+        bool attempted = false;
+        size_t generatedMeshes = 0, generatedLevels = 0;
+        uint64_t addedIndices = 0;
+        std::string reason; // e.g. source already has LOD, unsupported model
+    } autoLod;
     bool uploadPrepared = false;
     std::shared_ptr<GeometryData> geometry;
     std::string path;

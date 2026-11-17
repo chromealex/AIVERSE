@@ -71,6 +71,13 @@ Json modelInfo(const render::Model& m) {
         lods.push(entry);
     }
     r.set("lods", lods);
+    Json autoLod = Json::object();
+    autoLod.set("attempted", Json::fromBool(m.autoLod.attempted));
+    autoLod.set("generatedBaseMeshes", Json::number(int64_t(m.autoLod.generatedMeshes)));
+    autoLod.set("generatedLevels", Json::number(int64_t(m.autoLod.generatedLevels)));
+    autoLod.set("addedIndices", Json::number(int64_t(m.autoLod.addedIndices)));
+    autoLod.set("reason", Json::string(m.autoLod.reason));
+    r.set("autoLod", autoLod);
     Json vars = Json::array();
     for (const auto& v : m.variants) vars.push(Json::string(v));
     r.set("variants", vars);
@@ -150,6 +157,12 @@ public:
                 ImGui::BulletText("%s%s%s", mt.name.c_str(), mt.team != render::TeamMode::None ? "  [цвет игрока]" : "",
                                   mt.alpha == render::AlphaMode::Blend ? "  [прозрачный]" : mt.alpha == render::AlphaMode::Mask ? "  [маска]" : "");
         if (ui::collapsing("LOD модели", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (m->autoLod.generatedLevels) {
+                ImGui::Text("Авто-LOD: %zu уровней для %zu мешей",
+                            m->autoLod.generatedLevels, m->autoLod.generatedMeshes);
+            } else if (m->autoLod.attempted) {
+                ImGui::TextDisabled("Авто-LOD: %s", m->autoLod.reason.c_str());
+            }
             size_t chains = 0;
             for (const auto& node : m->nodes) {
                 if (node.mesh < 0 || size_t(node.mesh) >= m->meshes.size()) continue;
@@ -170,8 +183,9 @@ public:
                         i + 1, (unsigned long long)tris, double(lod.maxPixels));
                 }
             }
-            if (!chains) ImGui::TextDisabled("У модели нет импортированных LOD (meshes[].extras.rtsLods).");
-            ImGui::TextDisabled("LOD генерируются офлайн; редактор сам их не создаёт.");
+            if (!chains) ImGui::TextDisabled("Нет LOD: проверь параметры автоупрощения и исходный GLB.");
+            ImGui::TextDisabled("Авто-LOD создаются до GPU upload; LOD0/анимации сохранены.");
+            ImGui::TextDisabled("AIVERSE_AUTOLOD=off возвращает только импортированные уровни.");
             ImGui::TextDisabled("Выбор камерой/тенями: Сцена → LOD.");
         }
         if (!m->variants.empty() && ui::collapsing("Варианты"))

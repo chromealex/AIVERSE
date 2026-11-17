@@ -1759,13 +1759,31 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND TARGET aiverse_modeling)
 endif()
 
 option(AIVERSE_BUILD_AUTOLOD "Build offline meshoptimizer LOD tools" OFF)
+option(AIVERSE_RUNTIME_AUTOLOD "Generate missing rigid-model LODs during upload preparation" ON)
+# meshoptimizer is a portable import-time dependency: not used during a render
+# frame. Share its exact implementation with the optional offline worker.
+if(AIVERSE_RUNTIME_AUTOLOD OR (AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP))
+    if(NOT TARGET aiverse_meshoptimizer_lod)
+        add_library(aiverse_meshoptimizer_lod STATIC
+            third_party/meshoptimizer/src/allocator.cpp
+            third_party/meshoptimizer/src/indexgenerator.cpp
+            third_party/meshoptimizer/src/simplifier.cpp
+            third_party/meshoptimizer/src/vcacheoptimizer.cpp)
+        target_include_directories(aiverse_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
+    endif()
+endif()
+if(AIVERSE_RUNTIME_AUTOLOD)
+    target_sources(aiverse_models PRIVATE engine/render/AutoLodRuntime.cpp)
+    target_link_libraries(aiverse_models PUBLIC aiverse_meshoptimizer_lod)
+    target_compile_definitions(aiverse_models PRIVATE AIVERSE_RUNTIME_AUTOLOD=1)
+    if(AIVERSE_BUILD_TESTS)
+        add_executable(aiverse_auto_lod_tests tests/render/auto_lod_runtime.cpp)
+        target_link_libraries(aiverse_auto_lod_tests PRIVATE aiverse_models aiverse_zstd_dec)
+        add_test(NAME auto_lod_runtime COMMAND aiverse_auto_lod_tests)
+    endif()
+endif()
+
 if(AIVERSE_BUILD_AUTOLOD AND AIVERSE_DESKTOP)
-    add_library(aiverse_meshoptimizer_lod STATIC
-        third_party/meshoptimizer/src/allocator.cpp
-        third_party/meshoptimizer/src/indexgenerator.cpp
-        third_party/meshoptimizer/src/simplifier.cpp
-        third_party/meshoptimizer/src/vcacheoptimizer.cpp)
-    target_include_directories(aiverse_meshoptimizer_lod PUBLIC third_party/meshoptimizer/src)
     add_executable(aiverse_model_lod_transition_test tests/render/ModelLodTransition.cpp)
     target_include_directories(aiverse_model_lod_transition_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_options(aiverse_model_lod_transition_test PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)

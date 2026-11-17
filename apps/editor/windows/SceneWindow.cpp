@@ -293,7 +293,13 @@ private:
                     levels += mesh.lods.size();
                 }
                 ImGui::Text("LOD-цепочек: %zu | доп. уровней: %zu", chains, levels);
-                if (!chains) ImGui::TextDisabled("В GLB нет импортированных LOD.");
+                if (model->autoLod.generatedLevels)
+                    ImGui::Text("Авто-LOD: %zu уровней для %zu мешей",
+                                model->autoLod.generatedLevels,
+                                model->autoLod.generatedMeshes);
+                else if (model->autoLod.attempted)
+                    ImGui::TextDisabled("Авто-LOD: %s", model->autoLod.reason.c_str());
+                if (!chains) ImGui::TextDisabled("В загруженной модели нет LOD.");
                 if (ed.selection.kind == Selection::Entity) {
                     const auto& actual = lastSelectedLod_;
                     if (actual.matched) {
@@ -311,7 +317,7 @@ private:
                 ImGui::TextDisabled("Подробности: окно «Модели» → «LOD модели».");
             }
         } else ImGui::TextDisabled("Выбери автомобиль или здание, чтобы проверить их LOD.");
-        ImGui::TextDisabled("Автоматической генерации LOD при загрузке нет.");
+        ImGui::TextDisabled("Недостающие LOD создаются при загрузке ассета, если модель поддерживается.");
         ImGui::TextDisabled("Настройки влияют на общий Renderer3D (Scene / Game).");
         ImGui::EndPopup();
     }
