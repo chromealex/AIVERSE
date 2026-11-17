@@ -117,6 +117,14 @@ void Renderer3D::setShadowQuality(ShadowQuality q) {
 
 void Renderer3D::shutdown() {
     if (!dev_) return;
+    gpuModelCommands_.release(*dev_);
+    persistentCull_.release(*dev_);
+    if (persistentUpload_) {
+        persistentUpload_->release();
+        persistentUpload_.reset();
+    }
+    persistentIds_.clear();
+    persistentScene_ = {};
     shutdownModels();
     lights.shutdown();
     shutdownTrace();
@@ -128,6 +136,12 @@ void Renderer3D::shutdown() {
 }
 
 void Renderer3D::beginScene(const RTSCamera& cam, int fbW, int fbH) {
+    static const bool enablePersistentScene = [] {
+        const char* value = std::getenv("AIVERSE_PERSISTENT_GPU_SCENE");
+        return value && std::strcmp(value, "1") == 0;
+    }();
+    persistentSceneEnabled_ = enablePersistentScene;
+    if (persistentSceneEnabled_) ++persistentSceneEpoch_;
     bakedLightmapped_ = bakedCountLm_; bakedProbed_ = bakedCountPr_; bakedCountLm_ = bakedCountPr_ = 0;   // agent-lightbake
     const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     if(graphEpoch_ < 0) graphEpoch_ = now;
@@ -301,6 +315,12 @@ float4 Renderer3D::drawCallDebugColor(uint32_t drawId) {
 
 void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
     drawCalls_ = 0;
+    // Synchronize persistent scene staging before any rendering passes.
+    // Model shader bindings and GPU culling remain on the legacy path.
+    syncPersistentModels();
+    // GPU command generation must complete encoding before render passes.
+    // Metal guarantees command order between compute and render encoders.
+    prepareGpuModelDraws();
     prepareOcclusion();
     // ---- shadow pass
     if (quality_ != ShadowQuality::Off && shadowMap_.valid()) {
@@ -377,9 +397,16 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
         dev_->setIndexBuffer(it.mesh->ib);
         dev_->drawIndexed(it.mesh->indexCount);
         ++drawCalls_;
+        // drawItem is only used by the current camera's colour pass.
+        profile_.cameraMeshTriangles += uint64_t(it.mesh->indexCount) / 3;
     };
     for (auto& it : items_) if (it.color.w >= 0.99f) drawItem(it);
+    // The per-phase profile also includes reflection/SSR replay. Snapshot
+    // only the *first* main-camera opaque pass so a triangle is not counted
+    // twice when the same visible surface is drawn for another target.
+    const uint32_t opaqueStart = profile_.triangles[1];
     renderModels(1);
+    profile_.cameraModelTriangles += uint32_t(profile_.triangles[1] - opaqueStart);
     renderModels(3);
     if (capture) {
         endSceneCapture(mainPass, sw, sh); dev_->setViewport({0, 0, sw, sh});
@@ -395,7 +422,9 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
         if (!any) { dev_->setPipeline(litBlendPipe_); uploadFrameUniforms(false); dev_->setTexture(0, shadowMap_); lights.bind(2, 1, 2); bindTraceTextures(); any = true; }
         drawItem(it);
     }
+    const uint32_t blendedStart = profile_.triangles[2];
     renderModels(2);
+    profile_.cameraModelTriangles += uint32_t(profile_.triangles[2] - blendedStart);
     renderModels(4);   // transparent objects (kDrawTransparent) write their depth now: later ground layers stay under them
     lights.drawHalos(viewProj_);   // additive glows, depth-tested against the scene
     // custom renderers (sprites) after translucent meshes: they don't write depth, so water drawn
@@ -408,6 +437,7 @@ void Renderer3D::render(const gfx::PassDesc& screenPass, PostProcess* post) {
         dev_->setVertexBuffer(triVB_);
         dev_->draw(uint32_t(tris_.size()));
         ++drawCalls_;
+        profile_.cameraOverlayTriangles += uint64_t(tris_.size()) / 3;
     }
     if (!lines_.empty()) {
         dev_->updateBuffer(lineVB_, lines_.data(), lines_.size() * sizeof(ColorVertex));

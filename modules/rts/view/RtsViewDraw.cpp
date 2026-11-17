@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <cstdlib>
 
 namespace aiverse::game {
 
@@ -62,7 +64,38 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     // planets: the object's frame (local up = +Y) replaces the flat translation
     const float3 p = placement ? float3{0, (L.air ? L.flyHeight : 0.0f) + lift, 0} : float3{o.pos.x, ground + (L.air ? L.flyHeight : 0.0f) + lift, o.pos.z};
     const float grow = L.construction == Construction::Grow ? std::clamp(o.build, 0.15f, 1.0f) : 1.0f;
+    // Only completely static rigid placements can reuse a cached world
+    // transform. Exclude procedural animation, authored clips, hierarchy,
+    // time/FX variants, planets, construction and LOD switches.
+    static const bool cacheEnabled = [] {
+        const char* setting = std::getenv("AIVERSE_RTS_PLACEMENT_CACHE");
+        return setting && std::strcmp(setting, "1") == 0;
+    }();
+    const mat4 identity{};
+    const bool immutablePlacement = cacheEnabled &&
+        !hasFx && !tintOverride && !placement &&
+        !o.parented && !st.dead && !o.moving && o.build >= 1.0f &&
+        (t.structure || t.speed <= Fixed{}) && show == &ch &&
+        L.stages.empty() && L.lods.empty() &&
+        ch.staticPlacementEligible &&
+        std::memcmp(st.objXf.m, identity.m, sizeof(identity.m)) == 0;
+    auto& cached = st.placement;
+    const bool reusePlacement = immutablePlacement && cached.valid &&
+        cached.model == show->model &&
+        cached.pos.x == o.pos.x && cached.pos.y == o.pos.y &&
+        cached.pos.z == o.pos.z && cached.ground == ground &&
+        cached.yaw == st.yaw && cached.scale == k &&
+        cached.sx == L.sx && cached.sz == L.sz &&
+        cached.flyHeight == L.flyHeight && cached.air == L.air &&
+        cached.structure == t.structure && cached.shape == L.shape &&
+        std::memcmp(cached.fix.m, ch.fix.m, sizeof(ch.fix.m)) == 0;
+    if (immutablePlacement) {
+        if (reusePlacement) ++placementCacheHits_;
+        else ++placementCacheMisses_;
+    }
+    if (!immutablePlacement) cached.valid = false;
     mat4 base;
+    if (!reusePlacement) {
     if (t.structure && L.shape && !stage) {
         // shapes are built on a 1x1 footprint: stretch to the footprint, height follows the larger side
         base = mat4::translate(p) * mat4::scale({L.sx * k, k * std::max(L.sx, L.sz) * 0.75f * grow, L.sz * k});
@@ -82,15 +115,37 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     if (hasFx) base = base * mat4::scale({fx.scale(0), fx.scale(1), fx.scale(2)});
     if (o.parented && !placement) base = o.parentFrame * mat4::scale({k, k * (t.structure ? grow : 1.f), k});
     if (placement) base = *placement * base;   // flat maps: untouched (bit-identical)
+    }
     ModelDraw d;
+    // Stable identity for persistent scene staging; editor placements,
+    // previews and attachments use the existing transient draw path.
+    d.persistentId = o.persistentKey ? o.persistentKey :
+        (o.entity.valid() ? o.entity.packed() : 0);
     d.model = show->model;
-    if (!tintOverride && (t.id.starts_with("city_interior_") || t.id == "shop_roof")) d.flags |= kDrawActorReveal;
+    if (!tintOverride && o.type < actorRevealTypes_.size() && actorRevealTypes_[o.type]) d.flags |= kDrawActorReveal;
     d.geometry = show->geometry;
-    d.world = base * st.objXf * show->fix;
+    d.world = reusePlacement ? cached.world : base * st.objXf * show->fix;
     d.materials = &show->materials;
     d.nodeMaterial = show->nodeMaterial.empty() ? nullptr : &show->nodeMaterial;
     d.variant = show->variant;
-    st.drawn = base * st.objXf * ch.fix;
+    st.drawn = reusePlacement ? cached.drawn : base * st.objXf * ch.fix;
+    if (immutablePlacement && !reusePlacement) {
+        cached.pos = o.pos;
+        cached.ground = ground;
+        cached.yaw = st.yaw;
+        cached.scale = k;
+        cached.sx = L.sx;
+        cached.sz = L.sz;
+        cached.flyHeight = L.flyHeight;
+        cached.air = L.air;
+        cached.structure = t.structure;
+        cached.shape = L.shape;
+        cached.model = show->model;
+        cached.fix = ch.fix;
+        cached.world = d.world;
+        cached.drawn = st.drawn;
+        cached.valid = true;
+    }
 
     // ---- pose / skinning
     BakedSample bs;
@@ -160,7 +215,10 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
     r.drawModel(d);
 
     // ---- attachments on sockets (weapons, cargo, banners)
-    if (show == &ch || (stage && stage->choice.model == ch.model)) {
+    // No attachment or effect can consume the state mask on plain models.
+    // Avoid stateBits() and its event/locomotion checks for this common case.
+    if ((show == &ch || (stage && stage->choice.model == ch.model)) &&
+        (!ch.attach.empty() || (!tintOverride && !show->fx.empty()))) {
         const bool moving = !st.dead && (o.moving || st.speed > 0.15f);
         const uint32_t state = stateBits(st, o, moving);
         for (const auto& at : ch.attach) {
@@ -168,6 +226,7 @@ void RtsView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, fl
             if (at.when && !(state & at.when)) continue;
             if (at.carry != -2 && !(o.carry > 0 && (at.carry == -1 || at.carry == o.carryRes))) continue;
             ModelDraw ad = d;
+            ad.persistentId = 0; // attachments need distinct stable IDs
             ad.model = at.model;
             ad.geometry = {};
             ad.materials = &at.materials;

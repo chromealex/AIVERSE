@@ -219,6 +219,8 @@ public:
     virtual bool readBufferAsync(BufferHandle,size_t,BufferReadFn) { return false; }
     virtual bool gpuHealthy() const { return true; }
     virtual double gpuFrameMs() const { return 0; } // last completed frame; asynchronous
+    // Zero if backend does not expose a completed-slot-safe frame serial.
+    virtual uint64_t frameSerial() const { return 0; }
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;
@@ -248,7 +250,43 @@ public:
     // One API render submission for several indexed GPU commands. Command buffer
     // must use BufferType::Indirect; count/stride are validated by backend.
     // Unsupported (ES3/WebGL2/legacy GL) returns false and callers use drawIndexed.
+    // GPU-authored single indexed draw arguments. Unlike drawIndexedIndirect,
+    // command bytes are produced by an earlier compute pass and MUST NOT be
+    // read back or validated on the CPU. Unsupported backends return false.
+    // This is intentionally one draw per call, not multi-draw batching.
+    virtual bool drawIndexedGpuIndirect(BufferHandle arguments, size_t offset) {
+        (void)arguments; (void)offset; return false;
+    }
+    // Experimental Metal compute-encoded indexed ICB. Called outside render
+    // passes after GPU-authored arguments have been produced. Each source slot
+    // selects one GPU DrawIndexedIndirectCommand; baseInstance becomes its
+    // ordinal in the accompanying parent-encoder instanced uniform block.
+    // Returns zero if unsupported; nonzero token is valid this GPU frame only.
+    // Force persistent buffer-backed per-draw uniforms while a GPU-encoded
+    // ICB inherits parent bindings; setBytes memory is not a safe ICB input.
+    virtual void setGpuIcbUniformBinding(bool enabled) { (void)enabled; }
+    // Amount of host instance bytes copied into persistent GPU ICB memory
+    // so far in the current GPU frame (includes all scene viewports).
+    virtual size_t gpuIcbInstanceUploadBytes() const { return 0; }
+    virtual uint32_t prepareGpuEncodedIndexedIcb(
+        BufferHandle gpuArguments, BufferHandle vertexBuffer, BufferHandle indexBuffer,
+        const uint32_t* sourceSlots, uint32_t count,
+        const void* instanceData, size_t instanceBytes) {
+        (void)gpuArguments; (void)vertexBuffer; (void)indexBuffer; (void)sourceSlots; (void)count;
+        (void)instanceData; (void)instanceBytes;
+        return 0;
+    }
+    // Finish batched GPU command encoding before opening a render pass.
+    // Backends may keep one compute encoder across multiple ICB groups.
+    virtual void finishGpuEncodedIcbPreparation() {}
+    // Execute pre-encoded ICB with parent pipeline/buffers currently bound.
+    virtual bool executeGpuEncodedIndexedIcb(uint32_t token) {
+        (void)token; return false;
+    }
     virtual bool supportsMultiDrawIndirect() const { return false; }
+    // GPU-authored ICB is a separate, higher-risk feature. A backend may
+    // support CPU-encoded multi-draw without allowing GPU command encoding.
+    virtual bool supportsGpuEncodedIcb() const { return false; }
     virtual bool drawIndexedIndirect(BufferHandle commands, size_t offset,
                                      uint32_t drawCount, uint32_t stride = sizeof(DrawIndexedIndirectCommand)) {
         (void)commands; (void)offset; (void)drawCount; (void)stride; return false;

@@ -31,6 +31,44 @@ jobs:
       - name: Verify
         run: ctest --test-dir build/gpu-batching -R '^model_batching_policy$' --output-on-failure
 
+  # This runs on the macOS GPU runner separately from the GPU-authored path.
+  # The fixture renders 16 independent meshes with identical material GPU
+  # state and distinct transforms, and compares Direct vs CPU-encoded ICB
+  # pixel-for-pixel. No external GTA assets or an editor UI are needed.
+  metal-cpu-mdi:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure GPU fixture
+        run: >-
+          cmake -S . -B build/metal-cpu-mdi
+          -DAIVERSE_BUILD_HDR_TESTS=ON
+          -DAIVERSE_BUILD_EDITOR=OFF
+          -DAIVERSE_BUILD_TESTS=OFF
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build/metal-cpu-mdi --target aiverse_material_batches --parallel 4
+      - name: Verify Direct vs CPU MDI raster output
+        env:
+          AIVERSE_METAL_CPU_MDI: '1'
+          AIVERSE_METAL_MDI_MIN_COMMANDS: '2'
+          AIVERSE_MDI_GEOMETRY_SORT: '1'
+          AIVERSE_PALETTE_TEST_CASE: indirect
+          AIVERSE_ICB_PROFILE: '1'
+        run: |
+          mkdir -p build/metal-cpu-mdi/captures
+          build/metal-cpu-mdi/aiverse_material_batches unused.obj build/metal-cpu-mdi/captures/cpu-mdi
+      - name: Preserve CPU MDI before/after captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metal-cpu-mdi-captures
+          path: build/metal-cpu-mdi/captures/*.ppm
+          if-no-files-found: ignore
+
   metal-icb-gpu:
     # Regression exercises an actual Metal render pass and compares pixel output
     # with ICB off/on. It is separate from CPU policy tests.
@@ -47,10 +85,23 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
       - name: Build real Metal A/B fixture
         run: cmake --build build/metal-icb --target aiverse_material_batches --parallel 4
-      - name: Compare real GPU draw results with ICB enabled when supported
+      - name: Compare actual GPU-encoded ICB against direct model draws
         env:
           AIVERSE_EXPERIMENTAL_METAL_ICB: '1'
+          AIVERSE_GPU_AUTHORED_DRAWS: '1'
+          AIVERSE_GPU_ENCODED_ICB: '1'
+          AIVERSE_GPU_ICB_RIGID: '1'
+          AIVERSE_GPU_ICB_MIN_COMMANDS: '2'
+          AIVERSE_EXPECT_GPU_ICB: '1'
           AIVERSE_PALETTE_TEST_CASE: indirect
+          AIVERSE_ICB_TRACE: '1'
         run: |
           mkdir -p build/metal-icb/captures
-          build/metal-icb/aiverse_material_batches unused.obj build/metal-icb/captures/mdi
+          build/metal-icb/aiverse_material_batches unused.obj build/metal-icb/captures/gpu-icb
+      - name: Preserve GPU ICB before/after captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metal-gpu-icb-captures
+          path: build/metal-icb/captures/*.ppm
+          if-no-files-found: ignore

@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 namespace aiverse::game {
 
@@ -61,14 +63,22 @@ bool fresh(float age, float dt) { return age <= dt + 1e-4f; }
 void RtsView::handleEvents(const RtsScene& s) {
     if (s.tick == lastTick_) return;
     lastTick_ = s.tick;
-    std::map<uint64_t, const SceneObject*> objects;
-    for (const auto& o : s.objects) if (!o.isProjectile) objects.emplace(o.entity.packed(), &o);
+    // Most simulation ticks have no attack events. Avoid allocating and
+    // populating a scene-wide lookup for events that never query it.
+    std::unordered_map<uint64_t, const SceneObject*> objects;
+    bool objectsIndexed = false;
     for (const auto& ev : s.events) {
         if (!ev.a.valid()) continue;
         const uint64_t key = ev.a.packed();
         auto it = anims_.find(key);
         switch (ev.type) {
             case kEvAttack: {
+                if (!objectsIndexed) {
+                    objects.reserve(s.objects.size());
+                    for (const auto& o : s.objects)
+                        if (!o.isProjectile) objects.emplace(o.entity.packed(), &o);
+                    objectsIndexed = true;
+                }
                 auto source = objects.find(key), target = objects.find(ev.b.packed());
                 if (!ev.b.valid() && source != objects.end() && source->second->visible) { anims_[key].eventAge[kProcEvAttack] = 0; break; }   // free fire (arsenal): no target
                 if (source == objects.end() || target == objects.end()) break;
@@ -174,6 +184,37 @@ void RtsView::emitClipEvents(EntityAnim& st, const ModelChoice& ch, const SceneO
 void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapGrid* grid, const float3* viewPos) {
     const TypeLook& L = looks_[o.type];
     const ModelChoice& ch = L.models[size_t(st.choice)];
+    // A finished, stationary visual without clips, graph, procedural effects,
+    // pose, or programmable overrides has no animation work to evaluate.
+    // Keep hit/spawn/death event clocks advancing for the normal colour path.
+    // This is opt-in until its contribution to large RTS scenes is measured.
+    static const bool staticFastPath = [] {
+        const char* flag = std::getenv("AIVERSE_RTS_STATIC_ANIMATE_FAST");
+        return flag && std::strcmp(flag, "1") == 0;
+    }();
+    if (staticFastPath && ch.model &&
+        (L.structure || rules_->types[o.type].speed <= Fixed{}) &&
+        !st.dead && !o.moving && o.build >= 1.0f &&
+        ch.staticAnimateEligible && !st.graph.graph() &&
+        st.anim.clip(0) < 0 &&
+        !o.parented && (!fx_ || (fx_->animations.empty() && fx_->entries.empty())) &&
+        o.pos.x == st.lastPos.x && o.pos.y == st.lastPos.y &&
+        o.pos.z == st.lastPos.z &&
+        std::fabs(wrap(yawOf(o.facing) - st.yaw)) <= 1.0e-6f) {
+        // Preserve the original smoothing state even if a script starts
+        // moving this object later. Zero translation/turn means the fast
+        // update can skip square roots and complex animation evaluation.
+        if (dt > 0.0f) {
+            st.accel = -st.speed / dt;
+            st.speed += (-st.speed) * std::min(1.0f, dt * 12.0f);
+            st.turnRate += (-st.turnRate) * std::min(1.0f, dt * 8.0f);
+        }
+        for (float& age : st.eventAge) age += dt;
+        st.castAge += dt;
+        st.objXf = mat4{};
+        ++staticAnimateFastHits_;
+        return;
+    }
     // ---- kinematics from the interpolated positions
     float3 d = o.pos - st.lastPos;
     d.y = 0;
@@ -200,20 +241,31 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
     st.castAge += dt;
     if (st.dead) st.eventAge[kProcEvDeath] = st.deathAge;
 
+    // The same entity animation entry is used for locomotion, stride and
+    // programmable animation. Resolve it once instead of three map lookups
+    // per visible object (especially costly in large editor scenes).
+    EntityAnimationEntry* control = nullptr;
+    if (fx_ && !fx_->animations.empty()) {
+        auto found = fx_->animations.find(o.entity.packed());
+        if (found != fx_->animations.end()) control = &found->second;
+    }
     float locomotionSpeed = -1.f;
-    if (fx_) {
-        auto it = fx_->animations.find(o.entity.packed());
-        if (it != fx_->animations.end()) {
-            auto value = it->second.parameters.values.find("locomotionSpeed");
-            if (value != it->second.parameters.values.end()) locomotionSpeed = value->second;
-        }
+    float kingstonStride = 1.f;
+    if (control) {
+        const auto& values = control->parameters.values;
+        auto locomotion = values.find("locomotionSpeed");
+        if (locomotion != values.end()) locomotionSpeed = locomotion->second;
+        auto stride = values.find("strideScale");
+        if (stride != values.end()) kingstonStride = std::clamp(stride->second, .7f, 1.f);
     }
     if (locomotionSpeed >= 0.f) st.speed = locomotionSpeed;
-    // Kingston corner cadence scaling.
-    float kingstonStride=1.f;
-    if(fx_){auto a=fx_->animations.find(o.entity.packed());if(a!=fx_->animations.end()){auto v=a->second.parameters.values.find("strideScale");if(v!=a->second.parameters.values.end())kingstonStride=std::clamp(v->second,.7f,1.f);}}
     const bool moving = !st.dead && (locomotionSpeed >= 0.f ? st.speed > .015f : (o.moving || st.speed > .15f));
-    const uint32_t state = stateBits(st, o, moving);
+    // Plain scenery has no graph, clip or procedural consumer of the state
+    // mask. Avoid inspecting its action/production/target flags each frame.
+    const Model& m = *ch.model;
+    const bool needsState = ch.graph || (control && control->graph) ||
+        !m.clips.empty() || !ch.procs.empty();
+    const uint32_t state = needsState ? stateBits(st, o, moving) : 0;
 
     // ---- animation LOD: off screen -> clips only keep time; far away -> pose updated less often
     bool updatePose = true;
@@ -227,10 +279,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
 
     // ---- clips
     Animator& A = st.anim;
-    const Model& m = *ch.model;
     auto program=ch.graph;
-    EntityAnimationEntry* control=nullptr;
-    if(fx_){auto found=fx_->animations.find(o.entity.packed());if(found!=fx_->animations.end())control=&found->second;}
     if(control&&control->graph){
         if(!ch.programmableAnimation)control->error="type view.programmableAnimation must be enabled";
         else {
@@ -263,7 +312,7 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
             p.set("hitAge", std::min(st.eventAge[kProcEvHit], 1000.f));
             p.set("spawnAge", std::min(st.eventAge[kProcEvSpawn], 1000.f));
         }
-        if (fx_) {
+        if (fx_ && !fx_->animations.empty()) {
             auto it = fx_->animations.find(o.entity.packed());
             if (it != fx_->animations.end()) {
                 for (const auto& [key, value] : it->second.parameters.values) p.set(key, value);
@@ -368,44 +417,44 @@ void RtsView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapG
         if(wp.attack>=0&&st.eventAge[kProcEvAttack]<m.clips[wp.attack].duration){clip=wp.attack;age=st.eventAge[kProcEvAttack];}
         if(clip>=0){auto mask=subtreeMask(m,ch.weaponMask);sampleClip(m.clips[clip],age,st.pose,1.f,&mask);}break;
     }
-    // ---- procedural
-    ProcInputs in;
-    in.time = float(lastTime_);
-    in.dt = dt;
-    in.speed = st.speed;
-    in.distance = st.distance;
-    in.turnRate = st.turnRate;
-    in.accel = st.accel;
-    in.steer = o.steer;
-    in.phase = st.phase;
-    in.state = state;
-    for (int i = 0; i < kProcEvCount; ++i) in.eventAge[i] = st.eventAge[i];
-    if (!st.dead) in.eventAge[kProcEvDeath] = 1e9f;
-    if (o.hasTarget) {
-        float3 to = o.target - o.pos;
-        in.hasTarget = true;
-        in.aimYaw = wrap(std::atan2(-to.z, to.x) - st.yaw);
-        in.aimPitch = std::atan2(to.y, std::max(0.01f, std::sqrt(to.x * to.x + to.z * to.z)));
-    }
-    if (grid && grid->w > 0) { // terrain normal around the object, rotated into object space
-        const float e = 0.6f;
-        const float hx = heightAt(*grid, o.pos.x + e, o.pos.z) - heightAt(*grid, o.pos.x - e, o.pos.z);
-        const float hz = heightAt(*grid, o.pos.x, o.pos.z + e) - heightAt(*grid, o.pos.x, o.pos.z - e);
-        const float3 n = normalize(float3{-hx, 2 * e, -hz});
-        in.groundNormal = mat4::rotateY(-st.yaw).transformDir(n);
-    }
+    // Most scenery has no procedural modifiers. Prepare inputs only when
+    // applyProcedural will consume them; always reset the object transform.
     st.objXf = mat4{};
     if (!ch.procs.empty() && !st.graph.hasContacts()) {
-        // node modifiers act on the pose: skip them with the pose when LOD postponed it
-        static Pose none; // a postponed pose must not take the node modifiers twice
+        ProcInputs in;
+        in.time = float(lastTime_);
+        in.dt = dt;
+        in.speed = st.speed;
+        in.distance = st.distance;
+        in.turnRate = st.turnRate;
+        in.accel = st.accel;
+        in.steer = o.steer;
+        in.phase = st.phase;
+        in.state = state;
+        for (int i = 0; i < kProcEvCount; ++i) in.eventAge[i] = st.eventAge[i];
+        if (!st.dead) in.eventAge[kProcEvDeath] = 1e9f;
+        if (o.hasTarget) {
+            const float3 to = o.target - o.pos;
+            in.hasTarget = true;
+            in.aimYaw = wrap(std::atan2(-to.z, to.x) - st.yaw);
+            in.aimPitch = std::atan2(to.y, std::max(0.01f, std::sqrt(to.x * to.x + to.z * to.z)));
+        }
+        if (grid && grid->w > 0) {
+            const float e = 0.6f;
+            const float hx = heightAt(*grid, o.pos.x + e, o.pos.z) - heightAt(*grid, o.pos.x - e, o.pos.z);
+            const float hz = heightAt(*grid, o.pos.x, o.pos.z + e) - heightAt(*grid, o.pos.x, o.pos.z - e);
+            const float3 n = normalize(float3{-hx, 2 * e, -hz});
+            in.groundNormal = mat4::rotateY(-st.yaw).transformDir(n);
+        }
+        // A postponed pose must not take the node modifiers twice.
+        static Pose none;
         applyProcedural(ch.procs, in, st.rt, ch.needsPose && updatePose ? st.pose : none, st.objXf);
     }
     if (ch.needsPose && updatePose) {
         // Kingston corner stride: shorten leg excursion without slowing the actor.
-        float stride=1.f;
-        if(fx_){auto it=fx_->animations.find(o.entity.packed());if(it!=fx_->animations.end()){
-            auto value=it->second.parameters.values.find("strideScale");if(value!=it->second.parameters.values.end())stride=std::clamp(value->second,.7f,1.f);
-        }}
+        // The animation entry was already resolved above; reuse the same
+        // stride override for pose correction rather than searching again.
+        const float stride = kingstonStride;
         if(moving&&stride<1.f)for(const auto&leg:ch.legs)for(int node:{leg.hip,leg.knee})st.pose[node].r=slerp(m.nodes[node].r,st.pose[node].r,stride);
         worldMatrices(m, st.pose, st.world);
         // foot IK: plant two-bone legs on the terrain under each foot (ramps, cliffs, slopes)

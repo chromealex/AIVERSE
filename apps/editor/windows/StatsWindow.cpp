@@ -18,7 +18,13 @@ public:
     void draw(Editor& ed) override {
         std::vector<float> frame, sim;
         uint32_t draws = 0;
-        for (auto& f : ed.frameHistory) { frame.push_back(f.frameMs); sim.push_back(f.simMs); draws = f.drawCalls; }
+        uint64_t cameraTriangles = 0;
+        for (auto& f : ed.frameHistory) {
+            frame.push_back(f.frameMs);
+            sim.push_back(f.simMs);
+            draws = f.drawCalls;
+            cameraTriangles = f.cameraTriangles;
+        }
         float avg = 0, peak = 0, simAvg = 0;
         for (float v : frame) { avg += v; peak = std::max(peak, v); }
         for (float v : sim) simAvg += v;
@@ -26,14 +32,25 @@ public:
         simAvg = sim.empty() ? 0 : simAvg / float(sim.size());
         const auto& d = ed.doc().data;
         // KPI cards
-        char a[32], b[32], c[32], e[32];
+        char a[32], b[32], c[32], e[32], tr[32];
         std::snprintf(a, sizeof a, "%.0f", ImGui::GetIO().Framerate);
         std::snprintf(b, sizeof b, "%.2f мс", avg);
         std::snprintf(c, sizeof c, "%u", draws);
+        // Compact card value in the same latest-viewport scope as Draw Calls.
+        // Counts submitted camera geometry (including instances), not
+        // rasterized pixels; custom terrain/sprite callbacks are excluded.
+        if (cameraTriangles >= 1000000)
+            std::snprintf(tr, sizeof tr, "%.2f M", double(cameraTriangles) / 1000000.0);
+        else if (cameraTriangles >= 10000)
+            std::snprintf(tr, sizeof tr, "%.1f K", double(cameraTriangles) / 1000.0);
+        else std::snprintf(tr, sizeof tr, "%llu", (unsigned long long)cameraTriangles);
         std::snprintf(e, sizeof e, ed.playing() ? "%.2f мс" : "нет теста", simAvg);
-        const Card cards[] = {{"FPS", a, avg > 33 ? ui::Tone::Warn : ui::Tone::Normal}, {"Кадр (CPU)", b, avg > 33 ? ui::Tone::Warn : ui::Tone::Normal},
-                              {"Отрисовок", c, ui::Tone::Normal}, {"Симуляция", e, simAvg > 16 ? ui::Tone::Warn : ui::Tone::Normal}};
-        cardRow(cards, 4);
+        const Card cards[] = {{"FPS", a, avg > 33 ? ui::Tone::Warn : ui::Tone::Normal},
+                              {"Кадр (CPU)", b, avg > 33 ? ui::Tone::Warn : ui::Tone::Normal},
+                              {"Отрисовок", c, ui::Tone::Normal},
+                              {"Треугольников", tr, ui::Tone::Normal},
+                              {"Симуляция", e, simAvg > 16 ? ui::Tone::Warn : ui::Tone::Normal}};
+        cardRow(cards, 5);
         if (!frame.empty()) {
             // scale by the 95th percentile, not the peak: one long frame (loading, a shader compile) used to squash
             // the whole graph into a flat line at the bottom; spikes above the scale are clipped at the top

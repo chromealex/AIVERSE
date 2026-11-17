@@ -9,6 +9,8 @@
 #import <Metal/Metal.h>
 
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <memory>
 
 using namespace aiverse;
@@ -198,7 +200,19 @@ static void updateSizes(NSView* view) {
         ((CAMetalLayer*)self.view.layer).displaySyncEnabled=NO;
         self.benchmarkActivity=[[NSProcessInfo processInfo] beginActivityWithOptions:NSActivityUserInitiated|NSActivityLatencyCritical reason:@"AIVERSE render benchmark"];
     }
-    self.timer = [NSTimer timerWithTimeInterval:uncapped?0.001:1.0/120.0 target:self selector:@selector(tick) userInfo:nil repeats:YES];
+    // NSTimer schedules opportunities to render; the display/GPU can still limit FPS.
+    // A configurable cadence makes frame pacing regressions reproducible.
+    double timerHz = 120.0;
+    if (const char* rate = std::getenv("AIVERSE_MAC_FRAME_HZ"); rate && *rate) {
+        char* end = nullptr;
+        const double requested = std::strtod(rate, &end);
+        if (end != rate && *end == '\0' && std::isfinite(requested) && requested >= 15.0 && requested <= 240.0)
+            timerHz = requested;
+    }
+    if (std::getenv("AIVERSE_FRAME_TRACE"))
+        std::fprintf(stderr, "[mac-frame] timer=%.1f Hz, uncapped=%d, displaySync=%d (not an FPS guarantee)\n",
+                     uncapped ? 1000.0 : timerHz, int(uncapped), int(!uncapped));
+    self.timer = [NSTimer timerWithTimeInterval:uncapped?0.001:1.0/timerHz target:self selector:@selector(tick) userInfo:nil repeats:YES];
     [[NSRunLoop currentRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
 }
 - (void)tick {
@@ -214,8 +228,11 @@ static void updateSizes(NSView* view) {
         auto now = std::chrono::steady_clock::now();
         double dt = std::chrono::duration<double>(now - g_last).count();
         if (dt > aiverse::platform::detail::FrameClock::kMaxDt) dt = aiverse::platform::detail::FrameClock::kMaxDt; // after sleep/background
+        const bool traceFrame = std::getenv("AIVERSE_FRAME_TRACE") != nullptr;
+        const auto frameStart = std::chrono::steady_clock::now();
         aiverse::platform::pollContent(); // pack chunk downloads
         aiverse::platform::detail::pluginFrame(); // plugin replies and events
+        const auto afterEvents = std::chrono::steady_clock::now();
         if (capture.active()) dt = 1.0 / 60.0;
         g_last = now;
         if (capture.active() && !armed && ++frameNo >= capture.frames) {
@@ -231,9 +248,33 @@ static void updateSizes(NSView* view) {
                 state().quit = true;
             });
         }
+        const auto beforeBegin = std::chrono::steady_clock::now();
         g_device->beginFrame(S.fbW, S.fbH);
+        const auto afterBegin = std::chrono::steady_clock::now();
         if (S.cb.frame) S.cb.frame(*g_device, dt);
+        const auto afterCallback = std::chrono::steady_clock::now();
         g_device->endFrame();
+        const auto afterEnd = std::chrono::steady_clock::now();
+        if (traceFrame) {
+            // Report once per 120 frames, not on every frame (console I/O
+            // would otherwise distort the very timings being measured).
+            static unsigned samples = 0;
+            static double totals[5] = {};
+            const auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b-a).count(); };
+            totals[0] += ms(frameStart, afterEvents);
+            totals[1] += ms(afterEvents, beforeBegin);
+            totals[2] += ms(beforeBegin, afterBegin);
+            totals[3] += ms(afterBegin, afterCallback);
+            totals[4] += ms(afterCallback, afterEnd);
+            if (++samples == 120) {
+                std::fprintf(stderr,
+                    "[mac-frame] avg/120 events=%.3f ms prep=%.3f ms begin=%.3f ms editor=%.3f ms end=%.3f ms gpu=%.3f ms\n",
+                    totals[0]/samples, totals[1]/samples, totals[2]/samples,
+                    totals[3]/samples, totals[4]/samples, g_device->gpuFrameMs());
+                samples = 0;
+                for (double& v : totals) v = 0;
+            }
+        }
     }
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)app { return YES; }

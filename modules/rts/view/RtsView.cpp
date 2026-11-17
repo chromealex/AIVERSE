@@ -12,6 +12,8 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <chrono>
+#include <cstdlib>
 
 namespace aiverse::game {
 
@@ -83,6 +85,11 @@ bool RtsView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
     anims_.clear(); streamingChoices_.clear(); animationCache_.clear();
     tracers_.clear();
     looks_.resize(rules.types.size());
+    actorRevealTypes_.resize(rules.types.size());
+    for (size_t i = 0; i < rules.types.size(); ++i) {
+        const auto& id = rules.types[i].id;
+        actorRevealTypes_[i] = uint8_t(id.starts_with("city_interior_") || id == "shop_roof");
+    }
     loadedTypes_.assign(rules.types.size(), false);
     requestedModels_.assign(rules.types.size(), {}); loadedModels_.assign(rules.types.size(), {});
     if(deferredLoading_)for(size_t t=0;t<rules.types.size();++t)
@@ -105,7 +112,7 @@ void RtsView::shutdown(gfx::Device& dev) {
     geometryScene_.shutdown(dev);
     for (auto& [k, m] : models_) if (m) releaseModel(dev, *m);
     textureCache_->shutdown(dev);
-    models_.clear(); looks_.clear(); loadedTypes_.clear(); anims_.clear(); streamingChoices_.clear(); animationCache_.clear(); tracers_.clear();
+    models_.clear(); looks_.clear(); actorRevealTypes_.clear(); loadedTypes_.clear(); anims_.clear(); streamingChoices_.clear(); animationCache_.clear(); tracers_.clear();
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
     terrain_.shutdown(dev);
     fog_.shutdown();
@@ -177,8 +184,21 @@ void RtsView::drawGround(Renderer3D& r, const std::vector<ViewGroundBatch>& batc
 }
 
 void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+    const bool traceView = std::getenv("AIVERSE_FRAME_TRACE") != nullptr;
+    const auto viewStart = std::chrono::steady_clock::now();
     // Script spawns, reinforcements and restored entities need not exist at map load time.
-    if (!streamingTypes_) for (const auto& o : input.objects) if (!o.isProjectile) loadType(o.type);
+    if (!streamingTypes_) {
+        // loadType() may compare streaming model paths and check residency.
+        // A scene often has thousands of objects but only a handful of types:
+        // resolve each type at most once per frame, while still picking up
+        // types introduced by spawning/editor edits on the following frame.
+        std::vector<uint8_t> typeSeen(loadedTypes_.size(), 0);
+        for (const auto& o : input.objects) {
+            if (o.isProjectile || o.type >= typeSeen.size() || typeSeen[o.type]) continue;
+            typeSeen[o.type] = 1;
+            loadType(o.type);
+        }
+    }
     RtsScene resolved;
     const bool hierarchy=input.entityFx && !input.entityFx->hierarchy.parents.empty();
     if(hierarchy) {
@@ -229,6 +249,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
             }
         }
     }
+    const auto afterSetup = std::chrono::steady_clock::now();
     geometryScene_.draw(r);
     const bool tiles = twoD_ && twoD_->hasTiles();
     if (twoD_) twoD_->beginFrame(r.camera(), time, r, &grid, rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f);
@@ -236,12 +257,16 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
     if (hasTerrain_ && !tiles) terrain_.draw(r, grid, vision, groundFx_.drawsDig());
     if (hasTerrain_ && tiles) terrain_.drawWater(r);
     if (!tiles) groundFx_.draw(r, s, time, vision, grid, *this);
-    if (roads_->active()) roads_->draw(r, [this, &grid](float x, float z) { return heightAt(grid, x, z); });
+    // A deleted road network must flush the old surface too, otherwise
+    // groundAt() and stationary placement caches can retain stale road heights.
+    if (roads_->active() || roads_->needsRebuild())
+        roads_->draw(r, [this, &grid](float x, float z) { return heightAt(grid, x, z); });
     if (shores_->active()) shores_->draw(r, [this, &grid](float x, float z) { return heightAt(grid, x, z); }, terrain_.look().waterOffset, grid.w, grid.h);
     paintLayers_.draw(r, *dev_, s.paintLayers, grid, *this, vision, time, s.viewer);
     if (tiles || !groundFx_.drawsLinks())
         for (auto& [a, b] : s.roads) r.quadXZ(a, b, 0.5f, rgba(196, 164, 112, 235), 0.04f);
 
+    const auto afterGround = std::chrono::steady_clock::now();
     const float dt = lastTime_ < 0 ? 0.0f : float(std::clamp(time - lastTime_, 0.0, 0.1));
     lastTime_ = time;
     ++frame_;
@@ -263,7 +288,13 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
             replacedByRoads[t] = hit;
         }
     }
+    placementCacheHits_ = placementCacheMisses_ = 0;
+    groundCacheHits_ = groundCacheMisses_ = 0;
+    staticAnimateFastHits_ = 0;
+    double objectStateMs = 0.0, objectAnimateMs = 0.0, objectDrawMs = 0.0, objectShadowMs = 0.0;
+    size_t tracedObjects = 0;
     for (size_t i = 0; i < s.objects.size(); ++i) {
+        const auto objectStart = traceView ? std::chrono::steady_clock::now() : viewStart;
         const SceneObject& o = s.objects[i];
         if (!o.isProjectile && o.type < replacedByRoads.size() && replacedByRoads[o.type]) continue;
         if (o.isProjectile) {
@@ -283,6 +314,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
         const uint64_t key = o.entity.valid() ? o.entity.packed() : (1ull << 63) | uint64_t(i);
         EntityAnim& st = stateFor(key, o);
         st.last = o;
+        if (traceView) objectStateMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - objectStart).count();
         if (!o.visible) {
             if (o.blip) {   // radar contact: a filled dot with a ring where the unit is, no model (the viewer doesn't know its type)
                 const float gy = groundAt(grid, o.pos.x, o.pos.z) + 0.06f;
@@ -298,17 +330,66 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
             continue;
         }
         const TypeLook& L = looks_[o.type];
-        const float ground = !rules_->types[o.type].structure && !L.air ? groundAt(grid, o.pos.x, o.pos.z) : heightAt(grid, o.pos.x, o.pos.z);
+        const bool roadSurface = !rules_->types[o.type].structure && !L.air;
+        static const bool cacheGround = [] {
+            const char* setting = std::getenv("AIVERSE_RTS_GROUND_CACHE");
+            return setting && std::strcmp(setting, "1") == 0;
+        }();
+        const bool groundEligible = cacheGround && !o.moving && !o.parented &&
+            (L.structure || rules_->types[o.type].speed <= Fixed{});
+        auto& cachedGround = st.ground;
+        const uint64_t roadsGeneration = roads_ ? roads_->surfaceGeneration() : 0;
+        const bool reuseGround = groundEligible && cachedGround.valid &&
+            cachedGround.grid == &grid && cachedGround.terrainGeneration == terrainGeneration_ &&
+            cachedGround.roadGeneration == roadsGeneration &&
+            cachedGround.type == o.type && cachedGround.roadSurface == roadSurface &&
+            cachedGround.pos.x == o.pos.x && cachedGround.pos.z == o.pos.z;
+        const float ground = reuseGround ? cachedGround.height :
+            (roadSurface ? groundAt(grid, o.pos.x, o.pos.z) : heightAt(grid, o.pos.x, o.pos.z));
+        if (groundEligible) {
+            if (reuseGround) ++groundCacheHits_;
+            else {
+                ++groundCacheMisses_;
+                cachedGround.valid = true;
+                cachedGround.grid = &grid;
+                cachedGround.terrainGeneration = terrainGeneration_;
+                cachedGround.roadGeneration = roadsGeneration;
+                cachedGround.type = o.type;
+                cachedGround.roadSurface = roadSurface;
+                cachedGround.pos = o.pos;
+                cachedGround.height = ground;
+            }
+        } else cachedGround.valid = false;
+        const auto beforeAnimate = traceView ? std::chrono::steady_clock::now() : viewStart;
         animate(st, o, dt, &grid);
+        const auto beforeDraw = traceView ? std::chrono::steady_clock::now() : viewStart;
         drawObject(r, st, o, ground, 1.0f);
-        EntityFxValues fx;
-        const bool hasFx = fxFor(o, fx);
-        if (!L.shadow.image.empty()) addGroundShadow(L, st, o.pos, ground, hasFx ? &fx : nullptr);
-        if (L.flyer && L.shadow.image.empty()) { // ground shadow blob helps reading the height (unless the type has its own)
-            const float k = hasFx ? fx.v[EntityFxValues::kShadowScale] : 1.0f, a = hasFx ? std::clamp(fx.opacity() * fx.v[EntityFxValues::kShadow], 0.0f, 1.0f) : 1.0f;
-            if (a > 0 && k > 0) r.circleXZ({o.pos.x, ground, o.pos.z}, 0.35f * k, rgba(0, 0, 0, uint8_t(std::lround(90 * a))), 16, ground + 0.03f);
+        // Reuse the draw end timestamp as the shadow start timestamp.
+        // Tracing must not issue another clock read for every scene object.
+        const auto afterDraw = traceView ? std::chrono::steady_clock::now() : viewStart;
+        if (traceView) {
+            objectAnimateMs += std::chrono::duration<double, std::milli>(beforeDraw - beforeAnimate).count();
+            objectDrawMs += std::chrono::duration<double, std::milli>(afterDraw - beforeDraw).count();
+            ++tracedObjects;
+        }
+        // The model FX was handled by drawObject(). Query FX again only
+        // when an additional ground or flyer shadow actually needs it.
+        const bool groundShadow = !L.shadow.image.empty();
+        if (groundShadow || L.flyer) {
+            EntityFxValues fx;
+            const bool hasFx = fxFor(o, fx);
+            if (groundShadow) {
+                addGroundShadow(L, st, o.pos, ground, hasFx ? &fx : nullptr);
+            } else { // flyer blob, unless the type supplies an authored shadow
+                const float k = hasFx ? fx.v[EntityFxValues::kShadowScale] : 1.0f;
+                const float a = hasFx ? std::clamp(fx.opacity() * fx.v[EntityFxValues::kShadow], 0.0f, 1.0f) : 1.0f;
+                if (a > 0 && k > 0) r.circleXZ({o.pos.x, ground, o.pos.z}, 0.35f * k, rgba(0, 0, 0, uint8_t(std::lround(90 * a))), 16, ground + 0.03f);
+            }
+            // No clock call for the common case with no additional shadow.
+            if (traceView) objectShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - afterDraw).count();
         }
     }
+    const auto afterObjects = std::chrono::steady_clock::now();
     drawTracers(r, dt, &grid);
     // corpses (entity already removed) play their death and fade; stale states are dropped
     for (auto it = anims_.begin(); it != anims_.end();) {
@@ -342,6 +423,7 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
         twoD_->submit(r, grid, rules_ ? float(rules_->levelHeight.toDouble()) : 1.5f);
     }
 
+    const auto afterAnimations = std::chrono::steady_clock::now();
     // grid fields (RtsFieldView): overlays under the fog sheet
     if (!s.fields.empty() && s.fieldDefs) {
         if (fieldDefsSeen_ != s.fieldDefs || fieldDefsCount_ != s.fieldDefs->size()) {
@@ -363,6 +445,58 @@ void RtsView::draw(Renderer3D& r, const RtsScene& input, double time, const std:
     lights_.draw(r, s, time, vision, grid, *this);
     // selection / hover rings, move markers, placement footprint and game overlays (after the fog sheet)
     overlays_.drawWorld(r, s, time, vision, grid, *this);
+    if (traceView) {
+        static unsigned samples = 0;
+        static double totals[5] = {};
+        static double objectTotals[4] = {};
+        static size_t objectCount = 0;
+        static uint64_t placementHits = 0, placementMisses = 0;
+        static uint64_t groundHits = 0, groundMisses = 0;
+        static uint64_t staticFastHits = 0;
+        const auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b-a).count(); };
+        totals[0] += ms(viewStart, afterSetup);
+        totals[1] += ms(afterSetup, afterGround);
+        totals[2] += ms(afterGround, afterObjects);
+        totals[3] += ms(afterObjects, afterAnimations);
+        totals[4] += ms(afterAnimations, std::chrono::steady_clock::now());
+        objectTotals[0] += objectStateMs;
+        objectTotals[1] += objectAnimateMs;
+        objectTotals[2] += objectDrawMs;
+        objectTotals[3] += objectShadowMs;
+        objectCount += tracedObjects;
+        placementHits += placementCacheHits_;
+        placementMisses += placementCacheMisses_;
+        groundHits += groundCacheHits_;
+        groundMisses += groundCacheMisses_;
+        staticFastHits += staticAnimateFastHits_;
+        if (++samples == 120) {
+            std::fprintf(stderr,
+                "[view-stages] avg/120 setup=%.3f ground=%.3f objects=%.3f anim-cleanup=%.3f overlays=%.3f ms\n",
+                totals[0]/samples, totals[1]/samples, totals[2]/samples,
+                totals[3]/samples, totals[4]/samples);
+            std::fprintf(stderr, "[view-objects] avg/120 state=%.3f animate=%.3f drawObject=%.3f shadow=%.3f ms objects/frame=%.1f\n",
+                         objectTotals[0]/samples, objectTotals[1]/samples, objectTotals[2]/samples,
+                         objectTotals[3]/samples, double(objectCount)/samples);
+            if (placementHits + placementMisses)
+                std::fprintf(stderr, "[rts-placement] avg/120 hits=%.1f misses=%.1f hit-rate=%.1f%%\n",
+                    double(placementHits)/samples, double(placementMisses)/samples,
+                    100.0 * double(placementHits)/double(placementHits+placementMisses));
+            if (groundHits + groundMisses)
+                std::fprintf(stderr,
+                    "[rts-ground-cache] avg/120 hits=%.1f misses=%.1f hit-rate=%.1f%%\n",
+                    double(groundHits)/samples, double(groundMisses)/samples,
+                    100.0 * double(groundHits)/double(groundHits+groundMisses));
+            if (staticFastHits)
+                std::fprintf(stderr,
+                    "[rts-static-animate] avg/120 fast-path=%.1f objects/frame\n",
+                    double(staticFastHits) / samples);
+            placementHits = placementMisses = groundHits = groundMisses = staticFastHits = 0;
+            samples = 0;
+            for (double& v : totals) v = 0.0;
+            for (double& v : objectTotals) v = 0.0;
+            objectCount = 0;
+        }
+    }
 }
 
 void RtsView::drawOverlays(const RTSCamera& cam, const RtsScene& s, float w, float h, float ox, float oy, void* drawList) {
@@ -415,6 +549,13 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
         }
     if (const Surface* surf = gs.surface.get()) { sceneFromSphere(sim, *m, *surf, out, alpha, viewer); return; }   // RtsPlanetView.cpp
     const Driving* drivingCars = m->driving() && m->driving()->active() ? m->driving() : nullptr;
+    // The view configuration is shared by every entity of a type. Avoid
+    // repeating JSON object lookups for thousands of identical scenery types.
+    std::vector<uint8_t> territoryTeamTypes(R.types.size(), 0);
+    for (size_t type = 0; type < R.types.size(); ++type)
+        territoryTeamTypes[type] = uint8_t(R.types[type].view.getBool("teamFromTerritory", false));
+    auto* arsenal = m->arsenal();
+    auto* topDown = m->topDown();
     // radar / sonar contacts of the viewer outside its sight: drawn as blips (RtsSensors.h)
     std::vector<Entity> blips;
     if (Sensors* sn = m->sensors(); sn && viewer != 0) { blips = sn->blips(sim, viewer); std::sort(blips.begin(), blips.end(), [](Entity a, Entity b) { return a.index < b.index; }); }
@@ -422,10 +563,13 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
         if (u.flags & kUnitInCargo) return;   // inside a transport (agent-mech)
         SceneObject so;
         so.entity = e; so.type = u.type; so.owner = o.player;
-        if(auto*arsenal=m->arsenal())if(auto*hand=arsenal->hand(sim,o.player))if(hand->hero==e&&hand->current>=0&&size_t(hand->current)<arsenal->rules().weapons.size()){
-            so.heldWeapon=arsenal->rules().weapons[hand->current].weapon;
-            if(auto*td=m->topDown())if(auto*pilots=td->store(sim))if(o.player<pilots->pilots.size())so.weaponAim=pilots->pilots[o.player].input.aim||pilots->pilots[o.player].input.fire;
-        }
+        if (arsenal) if (auto* hand = arsenal->hand(sim, o.player))
+            if (hand->hero == e && hand->current >= 0 && size_t(hand->current) < arsenal->rules().weapons.size()) {
+                so.heldWeapon = arsenal->rules().weapons[hand->current].weapon;
+                if (topDown) if (auto* pilots = topDown->store(sim))
+                    if (o.player < pilots->pilots.size())
+                        so.weaponAim = pilots->pilots[o.player].input.aim || pilots->pilots[o.player].input.fire;
+            }
         float3 a = toF(t.prevPos), b = toF(t.pos);
         so.pos = lerp(a, b, alpha);
         so.facing = toF(u.facing);
@@ -435,12 +579,17 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
             if (fresh || (t.prevPos == t.pos && ft.tick != sim.tick())) { ft.prev = ft.cur = so.facing; }   // new, or teleported / standing
             else if (ft.tick != sim.tick()) { ft.prev = ft.cur; ft.cur = so.facing; }
             ft.tick = sim.tick(); ft.seen = out.facingFrame;
-            const float3 f{ft.prev.x + (ft.cur.x - ft.prev.x) * alpha, ft.prev.y + (ft.cur.y - ft.prev.y) * alpha, ft.prev.z + (ft.cur.z - ft.prev.z) * alpha};
-            const float fl = std::sqrt(f.x * f.x + f.z * f.z);
-            if (fl > 1e-3f && ft.prev.x * ft.cur.x + ft.prev.z * ft.cur.z > 0) so.facing = {f.x / fl, f.y, f.z / fl};   // a flip over 90 degrees snaps
+            // Stationary structures and unchanged facings already have the
+            // correct direction. Avoid interpolation, sqrt and division for
+            // the common static RTS path, without changing turning behaviour.
+            if (ft.prev.x != ft.cur.x || ft.prev.y != ft.cur.y || ft.prev.z != ft.cur.z) {
+                const float3 f{ft.prev.x + (ft.cur.x - ft.prev.x) * alpha, ft.prev.y + (ft.cur.y - ft.prev.y) * alpha, ft.prev.z + (ft.cur.z - ft.prev.z) * alpha};
+                const float fl = std::sqrt(f.x * f.x + f.z * f.z);
+                if (fl > 1e-3f && ft.prev.x * ft.cur.x + ft.prev.z * ft.cur.z > 0) so.facing = {f.x / fl, f.y, f.z / fl};   // a flip over 90 degrees snaps
+            }
         }
         const UnitType& ut = R.types[u.type];
-        if (ut.view.getBool("teamFromTerritory", false)) {
+        if (territoryTeamTypes[u.type]) {
             const int x = int(t.pos.x.floorInt()), z = int(t.pos.z.floorInt());
             if (gs.grid.inside(x, z)) {
                 const size_t cell = size_t(gs.grid.index(x, z));
@@ -480,7 +629,7 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
             auto it = std::lower_bound(blips.begin(), blips.end(), e, [](Entity a, Entity b) { return a.index < b.index; });
             so.blip = it != blips.end() && *it == e;
         }
-        out.objects.push_back(so);
+        out.objects.push_back(std::move(so));
     });
     // bodies of native modules (kHookScene): drawn as unit types
     if (m->native().has(kHookScene)) {
@@ -499,7 +648,7 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
                 int x = int(b.pos.x.floorInt()), y = int(b.pos.z.floorInt());
                 so.visible = gs.grid.inside(x, y) && gs.vision[viewer][size_t(gs.grid.index(x, y))] == 2;
             }
-            out.objects.push_back(so);
+            out.objects.push_back(std::move(so));
         }
     }
     w.each<Projectile, Transform>([&](Entity e, Projectile& pr, Transform& t) {
@@ -511,7 +660,7 @@ void sceneFromSim(Simulation& sim, RtsScene& out, float alpha, uint8_t viewer) {
             int x = int(t.pos.x.floorInt()), y = int(t.pos.z.floorInt());
             so.visible = gs.grid.inside(x, y) && gs.vision[viewer][size_t(gs.grid.index(x, y))] == 2;
         }
-        out.objects.push_back(so);
+        out.objects.push_back(std::move(so));
     });
     for (size_t i = 0; i < gs.roads.nodes.size(); ++i)
         for (uint16_t j : gs.roads.adj[i]) {

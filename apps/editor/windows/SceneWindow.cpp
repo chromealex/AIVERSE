@@ -1,7 +1,11 @@
 // Scene: the map in 3D with a free camera; select/drag objects and apply the current tool.
 //   RMB drag: look around, RMB + WASD/QE: fly, MMB drag: pan, wheel: zoom, F: focus selection.
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
 #include "../Editor.h"
 #include "StudioContextMenus.h"
 #include "StudioLuaExtensions.h"
@@ -10,6 +14,8 @@
 #include "../EditorUtil.h"
 #include "../EditorWorldEdit.h"
 #include "engine/render/GlobalGeometryPool.h"
+#include "engine/render/GpuIcbPolicy.h"
+#include <array>
 
 namespace aiverse::editor {
 
@@ -26,6 +32,8 @@ public:
     ImGuiWindowFlags flags() const override { return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse; }
 
     void draw(Editor& ed) override {
+        const bool traceScene = std::getenv("AIVERSE_FRAME_TRACE") != nullptr;
+        const auto sceneStart = std::chrono::steady_clock::now();
         if(ed.ws().project.isFps()) {
             if(ImGui::Button(genreText(ed.ws(),"fps.editor.open").c_str()))ed.focusWindow("fps");
             ImGui::SameLine();ImGui::TextDisabled("%s",genreText(ed.ws(),"fps.editor.camera").c_str());
@@ -41,11 +49,16 @@ public:
         vp_.originX = p.x; vp_.originY = p.y; vp_.pointsW = avail.x; vp_.pointsH = avail.y;
         // image first (like the Game window): the screen overlays renderScene adds (bars, labels) stay on top of it
         vp_.image(ed.device(), avail.x, avail.y);
+        const auto afterViewport = std::chrono::steady_clock::now();
         // Diagnostic rendering is scoped to Scene, never leaked into the Game tab.
         auto& renderer = ed.renderer();
         renderer.setStudioDebugMode(studioDebugMode_);
-        renderer.setModelInstancingEnabled(sceneInstancing_);
-        renderer.setModelMultiDrawEnabled(sceneIndirect_);
+        renderer.setProfiling(sceneProfiling_);
+        const bool measuredMode = benchmarkActive_ || autoBatchChoice_ >= 0;
+        const int activeMode = benchmarkActive_ ? benchmarkMode_ : autoBatchChoice_;
+        renderer.setModelInstancingEnabled(measuredMode ? true : sceneInstancing_);
+        renderer.setModelMultiDrawEnabled(measuredMode ? activeMode != 0 : sceneIndirect_);
+        renderer.setGpuAuthoredDrawEnabled(measuredMode ? activeMode == 2 : true);
         renderer.setModelCullingEnabled(sceneCulling_);
         // Pipeline layouts depend on instance limit. Apply only when the user changes
         // the control: resetting this after every Scene frame would recompile shaders.
@@ -53,7 +66,8 @@ public:
             renderer.setInstanceLimit(uint32_t(sceneInstanceLimit_));
             sceneInstanceLimitDirty_ = false;
         }
-        if (measureBatchingNextFrame_) {
+        const auto benchmarkStart = std::chrono::steady_clock::now();
+        if (measureBatchingNextFrame_ && !benchmarkActive_) {
             measureBatchingNextFrame_ = false;
             // Both passes use exactly the same scene camera and frame. A/B
             // disables both per-primitive instancing and indirect submissions;
@@ -64,8 +78,9 @@ public:
             baselineDraws_ = int64_t(renderer.drawCalls());
             baselineModelDraws_ = int64_t(renderer.profile().draws[1]) +
                                   int64_t(renderer.profile().draws[2]);
-            renderer.setModelInstancingEnabled(sceneInstancing_);
-            renderer.setModelMultiDrawEnabled(sceneIndirect_);
+            renderer.setModelInstancingEnabled(measuredMode ? true : sceneInstancing_);
+            renderer.setModelMultiDrawEnabled(measuredMode ? activeMode != 0 : sceneIndirect_);
+            renderer.setGpuAuthoredDrawEnabled(measuredMode ? activeMode == 2 : true);
             // Present optimized scene as usual (not the comparison baseline).
             ed.renderScene(vp_, ed.sceneCam, !ed.playing());
             optimizedDraws_ = int64_t(renderer.drawCalls());
@@ -73,15 +88,96 @@ public:
                                    int64_t(renderer.profile().draws[2]);
             comparisonValid_ = true;
         } else {
-            ed.renderScene(vp_, ed.sceneCam, !ed.playing());
+            ed.renderScene(vp_, benchmarkActive_ ? benchmarkCamera_ : ed.sceneCam, !ed.playing());
         }
+        if (benchmarkActive_) {
+            const double cpuMs = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - benchmarkStart).count();
+            if (benchmarkWarmup_ > 0) --benchmarkWarmup_;
+            else {
+                // Tag this full Metal command buffer with the exact benchmark
+                // mode. Results arrive asynchronously and are matched by tag.
+                constexpr uint64_t kGpuTag = 0xA17E000000000000ull;
+                const uint64_t tag = kGpuTag |
+                    (uint64_t(benchmarkGeneration_) << 40) |
+                    (uint64_t(benchmarkMode_) << 38) |
+                    (++benchmarkGpuSequence_ & ((uint64_t(1) << 38) - 1));
+                ed.device().timeGpuFrame(tag);
+                benchmarkSamples_[benchmarkMode_].push_back(cpuMs);
+                benchmarkDrawSum_[benchmarkMode_] += renderer.drawCalls();
+                benchmarkIndirectSum_[benchmarkMode_] += renderer.modelStats().multiDrawSubmissions;
+                benchmarkCommandSum_[benchmarkMode_] += renderer.modelStats().indirectCommands;
+                const auto gpuDraw = renderer.gpuModelDrawStats();
+                benchmarkGpuAuthoredSum_[benchmarkMode_] += gpuDraw.submitted +
+                    gpuDraw.gpuEncodedCommands;
+                benchmarkGpuIcbSum_[benchmarkMode_] += gpuDraw.gpuEncodedSubmissions;
+                ++benchmarkPhaseSamples_;
+                if (benchmarkPhaseSamples_ == 300) {
+                    benchmarkPhaseSamples_ = 0;
+                    ++benchmarkPhase_;
+                    if (benchmarkPhase_ == benchmarkBlockCount_) {
+                        benchmarkActive_ = false;
+                        benchmarkDone_ = true;
+                        if (autoBatchEnabled_) {
+                            std::array<double, 3> averages{};
+                            for (int mode = 0; mode < 3; ++mode) {
+                                double sum = 0.0;
+                                for (double sample : benchmarkSamples_[mode]) sum += sample;
+                                averages[mode] = benchmarkSamples_[mode].empty() ?
+                                    1.0e30 : sum / double(benchmarkSamples_[mode].size());
+                            }
+                            autoBatchChoice_ = render::chooseSceneBatchMode(
+                                averages, benchmarkThreeModes_ ? 3 : 2);
+                        }
+                    } else {
+                        // Two modes: ABBAAB. Three modes: ABC CBA ABC.
+                        // All modes get 3 x 300 samples with per-block warmup.
+                        static constexpr int twoModes[] = {0, 1, 1, 0, 0, 1};
+                        static constexpr int threeModes[] = {0, 1, 2, 2, 1, 0, 0, 1, 2};
+                        benchmarkMode_ = benchmarkThreeModes_ ?
+                            threeModes[benchmarkPhase_] : twoModes[benchmarkPhase_];
+                        benchmarkWarmup_ = 60;
+                    }
+                }
+            }
+        }
+        if (benchmarkActive_ || benchmarkDone_) {
+            // Metal timings include the full editor MTLCommandBuffer, not just
+            // renderScene. Never label them as isolated Scene GPU durations.
+            for (const auto& timing : ed.device().takeGpuTimings()) {
+                if (!timing.valid || !std::isfinite(timing.milliseconds) ||
+                    timing.milliseconds <= 0.0 ||
+                    (timing.tag & 0xFFFF000000000000ull) != 0xA17E000000000000ull ||
+                    ((timing.tag >> 40) & 0xFFu) != benchmarkGeneration_)
+                    continue;
+                const uint32_t mode = uint32_t((timing.tag >> 38) & 0x3u);
+                if (mode < 3) benchmarkGpuSamples_[mode].push_back(timing.milliseconds);
+            }
+        }
+        const auto afterRenderScene = std::chrono::steady_clock::now();
         // Changes are scoped to Scene; Game playback uses the normal renderer defaults.
         renderer.setStudioDebugMode(0);
+        renderer.setProfiling(false);
         renderer.setModelInstancingEnabled(true);
         renderer.setModelMultiDrawEnabled(true);
+        renderer.setGpuAuthoredDrawEnabled(true);
         renderer.setModelCullingEnabled(true);
         vp_.drawnFrame = ImGui::GetFrameCount();
         ed.sceneViewport = &vp_;
+        if (traceScene) {
+            static unsigned samples = 0;
+            static double totals[3] = {};
+            const auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+            totals[0] += ms(sceneStart, afterViewport);
+            totals[1] += ms(afterViewport, afterRenderScene);
+            totals[2] += ms(sceneStart, std::chrono::steady_clock::now());
+            if (++samples == 120) {
+                std::fprintf(stderr, "[scene-frame] avg/120 viewport=%.3f ms renderScene=%.3f ms total-before-input=%.3f ms\n",
+                             totals[0] / samples, totals[1] / samples, totals[2] / samples);
+                samples = 0;
+                for (double& value : totals) value = 0.0;
+            }
+        }
         if(ed.ws().project.isFps()) {
             ImGuiIO& io = ImGui::GetIO();
             const bool navigation = vp_.hovered || (ImGui::IsWindowFocused() && !io.WantTextInput);
@@ -139,10 +235,23 @@ private:
                 ImGui::TextDisabled("Geometry Pool inactive: Multi-Draw Indirect is unavailable on this backend.");
                 ImGui::TextDisabled("Metal ICB is disabled until the driver crash is resolved.");
             }
-            ImGui::Checkbox("GPU Instancing", &sceneInstancing_);
-            ImGui::Checkbox("Multi-Draw Indirect", &sceneIndirect_);
+            if (ImGui::Checkbox("GPU Instancing", &sceneInstancing_))
+                autoBatchChoice_ = -1;
+            if (ImGui::Checkbox("Multi-Draw Indirect", &sceneIndirect_))
+                autoBatchChoice_ = -1;
             ImGui::SameLine(); ImGui::TextDisabled(ed.renderer().modelMultiDrawSupported() ? "GPU supported" : "fallback");
             ImGui::Checkbox("Model culling", &sceneCulling_);
+            ImGui::Checkbox("Auto-select fastest mode after benchmark", &autoBatchEnabled_);
+            if (!autoBatchEnabled_) autoBatchChoice_ = -1;
+            if (autoBatchChoice_ >= 0) {
+                const char* names[] = {"Instancing", "CPU MDI", "GPU-authored"};
+                ImGui::Text("Selected Scene render mode: %s (lowest measured CPU)",
+                            names[autoBatchChoice_]);
+                if (ImGui::Button("Restore manual batching"))
+                    autoBatchChoice_ = -1;
+            }
+            ImGui::Checkbox("Profile Scene renderer", &sceneProfiling_);
+            ImGui::SameLine(); ImGui::TextDisabled("CPU render stages");
             ImGui::SetNextItemWidth(180.0f);
             if (ImGui::SliderInt("Instances / call", &sceneInstanceLimit_, 0, 256,
                 sceneInstanceLimit_ == 0 ? "Auto" : "%d")) sceneInstanceLimitDirty_ = true;
@@ -153,16 +262,258 @@ private:
             ImGui::Text("GPU geometry: %.1f / %.1f MiB",
                         double(geometryPool.occupiedBytes) / (1024.0 * 1024.0),
                         double(geometryPool.allocatedBytes) / (1024.0 * 1024.0));
-            const uint32_t currentDraws = ed.renderer().drawCalls();
-            ImGui::Text("Renderer draws (all passes): %u", currentDraws);
+            if (geometryPool.allocatedBytes) {
+                const double fill = 100.0 * double(geometryPool.occupiedBytes) / double(geometryPool.allocatedBytes);
+                const double slackMiB = double(geometryPool.allocatedBytes - geometryPool.occupiedBytes) / (1024.0 * 1024.0);
+                ImGui::Text("Pool utilization: %.1f%% (%.1f MiB slack)", fill, slackMiB);
+                ImGui::TextDisabled("Pool memory excludes textures and dedicated model buffers.");
+            }
+            const auto& profile = ed.renderer().profile();
             const auto& modelStats = ed.renderer().modelStats();
-            ImGui::Text("Model instanced calls: %llu", (unsigned long long)modelStats.instancedDraws);
-            ImGui::Text("Indirect submissions: %llu (%llu commands)",
-                (unsigned long long)modelStats.multiDrawSubmissions,
-                (unsigned long long)modelStats.indirectCommands);
-            ImGui::Text("Model instances submitted: %llu", (unsigned long long)modelStats.drawnInstances);
-            if (ImGui::Button("Compare A/B same frame##scene_batch"))
+            const uint32_t totalSubmissions = ed.renderer().drawCalls();
+            const uint32_t modelSubmissions =
+                profile.draws[0] + profile.draws[1] + profile.draws[2] +
+                profile.draws[3] + profile.draws[4];
+            const uint32_t otherSubmissions = totalSubmissions >= modelSubmissions
+                ? totalSubmissions - modelSubmissions : 0;
+            ImGui::Text("GPU API submissions (tracked): %u", totalSubmissions);
+            const uint64_t cameraTriangles = profile.cameraModelTriangles +
+                profile.cameraMeshTriangles + profile.cameraOverlayTriangles;
+            ImGui::Text("Triangles in camera (tracked): %llu",
+                        (unsigned long long)cameraTriangles);
+            ImGui::TextDisabled("Models: %llu | Meshes: %llu | Overlays: %llu",
+                                (unsigned long long)profile.cameraModelTriangles,
+                                (unsigned long long)profile.cameraMeshTriangles,
+                                (unsigned long long)profile.cameraOverlayTriangles);
+            ImGui::TextDisabled("Current camera only; excludes shadow/reflection and repeated SSR pass.");
+            ImGui::TextDisabled("Counts submitted geometry incl. instances, not visible pixels.");
+            ImGui::TextDisabled("Terrain, sprites and custom renderers not included.");
+            const bool safeMode = [] {
+                const char* env = std::getenv("AIVERSE_RENDER_SAFE");
+                return env && std::strcmp(env, "1") == 0;
+            }();
+            const char* off = std::getenv("AIVERSE_MULTI_DRAW_INDIRECT");
+            const bool envOff = off && std::strcmp(off, "off") == 0;
+            const bool measuredMode = benchmarkActive_ || autoBatchChoice_ >= 0;
+            const bool mdiSelected = measuredMode
+                ? (benchmarkActive_ ? benchmarkMode_ : autoBatchChoice_) != 0
+                : sceneIndirect_;
+            const bool mdiAllowed = mdiBackend && mdiSelected && !safeMode && !envOff;
+            const char* reason = !mdiBackend ? "Metal ICB unsupported/disabled"
+                : !mdiSelected ? "Scene mode disabled"
+                : safeMode ? "AIVERSE_RENDER_SAFE=1"
+                : envOff ? "AIVERSE_MULTI_DRAW_INDIRECT=off"
+                : "available";
+            ImGui::Text("CPU Multi-Draw: %s (%s)",
+                        mdiAllowed ? "AVAILABLE" : "DISABLED", reason);
+            ImGui::Text("Actual CPU MDI: %llu submissions / %llu commands",
+                        (unsigned long long)modelStats.multiDrawSubmissions,
+                        (unsigned long long)modelStats.indirectCommands);
+            if (mdiAllowed && modelStats.multiDrawSubmissions == 0)
+                ImGui::TextDisabled("No CPU MDI submissions this frame. Expand diagnostics below.");
+            if (ImGui::TreeNode("Why batches split (model passes)")) {
+                ImGui::Text("Candidate scans: %llu  Rejected submissions: %llu",
+                            (unsigned long long)modelStats.mdiScans,
+                            (unsigned long long)modelStats.mdiFailed);
+                ImGui::Text("Single/short runs: %llu  Below threshold: %llu",
+                            (unsigned long long)modelStats.mdiShort,
+                            (unsigned long long)modelStats.mdiBelowThreshold);
+                ImGui::Text("Ineligible candidate scans: %llu",
+                            (unsigned long long)modelStats.mdiIneligible);
+                ImGui::Text("  Geometry clusters: %llu | baked / GI: %llu",
+                            (unsigned long long)modelStats.mdiIneligibleGeometry,
+                            (unsigned long long)modelStats.mdiIneligibleLighting);
+                ImGui::Text("  Material batches: %llu | skin / morph: %llu | alpha / fade: %llu",
+                            (unsigned long long)modelStats.mdiIneligibleMaterial,
+                            (unsigned long long)modelStats.mdiIneligibleDeform,
+                            (unsigned long long)modelStats.mdiIneligibleAlpha);
+                ImGui::Text("Run split by geometry buffers: %llu",
+                            (unsigned long long)modelStats.mdiGeometryBreaks);
+                ImGui::Text("Run split by material state: %llu",
+                            (unsigned long long)modelStats.mdiMaterialBreaks);
+                ImGui::Text("Run split by flags / GI / pose: %llu",
+                            (unsigned long long)modelStats.mdiStateBreaks);
+                ImGui::TextDisabled("Counters cover the current scene model passes only.");
+                ImGui::TextDisabled("Different GLBs and their material slots may require separate draws.");
+                ImGui::TreePop();
+            }
+            ImGui::Text("Models: %u | Other tracked: %u",
+                        modelSubmissions, otherSubmissions);
+            ImGui::TextDisabled("Includes repeated geometry in shadow, reflection and colour passes.");
+            if (ImGui::TreeNode("Model pass breakdown")) {
+                static constexpr const char* phaseNames[5] = {
+                    "Shadow", "Opaque (+ reflection)", "Blended",
+                    "Outline", "Transparent depth"
+                };
+                for (size_t phase = 0; phase < 5; ++phase) {
+                    ImGui::Text("%s: %u calls, %u instances, %u triangles",
+                        phaseNames[phase], profile.draws[phase],
+                        profile.instances[phase], profile.triangles[phase]);
+                }
+                ImGui::TextDisabled("These are renderer API counts, not unique scene objects.");
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Instancing and indirect details")) {
+                ImGui::Text("Instanced model calls: %llu",
+                    (unsigned long long)modelStats.instancedDraws);
+                ImGui::Text("Instances in instanced calls: %llu",
+                    (unsigned long long)modelStats.drawnInstances);
+                ImGui::Text("MDI submissions: %llu (%llu indexed commands)",
+                    (unsigned long long)modelStats.multiDrawSubmissions,
+                    (unsigned long long)modelStats.indirectCommands);
+                ImGui::TextDisabled("One instanced call may draw multiple identical meshes.");
+                ImGui::TextDisabled("Indirect command count is not the API submission count.");
+                ImGui::TreePop();
+            }
+            if (!mdiBackend)
+                ImGui::TextDisabled("Metal MDI/ICB unavailable: distinct meshes remain separate draws.");
+            if (const char* authored = std::getenv("AIVERSE_GPU_AUTHORED_DRAWS");
+                authored && std::strcmp(authored, "1") == 0) {
+                const auto gpu = ed.renderer().gpuModelDrawStats();
+                ImGui::Text("GPU-authored opaque: %u eligible / %u single draws",
+                            gpu.eligible, gpu.submitted);
+                if (const char* rigid = std::getenv("AIVERSE_GPU_ICB_RIGID");
+                    rigid && std::strcmp(rigid, "1") == 0)
+                    ImGui::Text("GPU ICB rigid dynamic candidates: %u",
+                                gpu.dynamicRigidEligible);
+                if (const char* icb = std::getenv("AIVERSE_GPU_ENCODED_ICB");
+                    icb && std::strcmp(icb, "1") == 0) {
+                    ImGui::Text("GPU-encoded ICB: %u submissions / %u commands",
+                                gpu.gpuEncodedSubmissions, gpu.gpuEncodedCommands);
+                    ImGui::Text("GPU ICB batches: %u candidates, %u prepared, %u rejected, %u execute failed",
+                                gpu.gpuIcbCandidates, gpu.gpuIcbPrepared,
+                                gpu.gpuIcbRejected, gpu.gpuIcbExecuteFailed);
+                    ImGui::Text("GPU instance buffer: %.2f KiB copied this GPU frame",
+                                double(ed.device().gpuIcbInstanceUploadBytes()) / 1024.0);
+                    if (const char* lod = std::getenv("AIVERSE_GPU_ICB_LOD");
+                        lod && std::strcmp(lod, "1") == 0)
+                        ImGui::Text("GPU two-level LOD candidates: %u", gpu.gpuLodEligible);
+                    ImGui::Text("GPU ICB preflight: %u potential groups",
+                                gpu.preflightGroups);
+                    ImGui::Text("Persistent batch plan: %u hits / %u misses (this frame)",
+                                gpu.batchCacheHits, gpu.batchCacheMisses);
+                    if (const char* adaptive = std::getenv("AIVERSE_GPU_ICB_ADAPTIVE");
+                        adaptive && std::strcmp(adaptive, "1") == 0) {
+                        if (gpu.adaptiveInstancing)
+                            ImGui::TextDisabled("Adaptive GPU ICB: direct instancing selected; GPU work skipped.");
+                        else
+                            ImGui::TextDisabled("Adaptive GPU ICB grouping enabled.");
+                    }
+                    if (gpu.gpuIcbRejected || gpu.gpuIcbExecuteFailed)
+                        ImGui::TextWrapped("Metal backend error: %s",
+                                           ed.device().lastError().c_str());
+                }
+                ImGui::Text("GPU indirect args: %s",
+                            gpu.prepared ? "compute generated" : "not ready / unsupported");
+                ImGui::Text("GPU draw record uploads: %u records / %u ranges (%.2f KiB)",
+                            gpu.uploadedRecords, gpu.uploadRanges,
+                            double(gpu.uploadBytes) / 1024.0);
+                if (const char* c = std::getenv("AIVERSE_GPU_COMPACT_DRAW_RECORDS");
+                    c && std::strcmp(c, "1") == 0)
+                    ImGui::Text("GPU visibility compaction: %s (not rendered yet)",
+                                gpu.compacted ? "generated" : "unavailable");
+                if (const char* adaptive = std::getenv("AIVERSE_GPU_ICB_ADAPTIVE");
+                    adaptive && std::strcmp(adaptive, "1") == 0)
+                    ImGui::TextDisabled("Adaptive fallback: conventional instancing/CPU MDI.");
+                else
+                    ImGui::TextDisabled("Experimental GPU draws may be slower than instancing.");
+            }
+            if (const char* persistent = std::getenv("AIVERSE_PERSISTENT_GPU_SCENE");
+                persistent && std::strcmp(persistent, "1") == 0) {
+                const auto stats = ed.renderer().persistentSceneStats();
+                ImGui::Text("Persistent GPU scene: %u objects", stats.live);
+                ImGui::Text("Scene upload: %u records / %u ranges (%.1f KiB)",
+                            stats.records, stats.ranges, double(stats.bytes) / 1024.0);
+                if (const char* cull = std::getenv("AIVERSE_GPU_SCENE_CULL");
+                    cull && std::strcmp(cull, "1") == 0)
+                    ImGui::Text("Metal GPU frustum: %s",
+                                stats.gpuFrustumDispatched ? "compute dispatched" : "unavailable");
+                ImGui::TextDisabled("Diagnostics only: visibility flags are not used for draws.");
+            }
+            if (ImGui::Button("Compare A/B same frame##scene_batch") && !benchmarkActive_)
                 measureBatchingNextFrame_ = true;
+            if (mdiBackend && !ed.playing()) {
+                if (!benchmarkActive_) {
+                    const bool threeModes = std::getenv("AIVERSE_GPU_AUTHORED_DRAWS") &&
+                        std::strcmp(std::getenv("AIVERSE_GPU_AUTHORED_DRAWS"), "1") == 0;
+                    if (ImGui::Button(threeModes
+                        ? "Benchmark Instancing / CPU MDI / GPU-authored (3 x 300)"
+                        : "Benchmark MDI OFF / ON (3 x 300 frames each)")) {
+                        benchmarkActive_ = true;
+                        benchmarkDone_ = false;
+                        benchmarkThreeModes_ = threeModes;
+                        benchmarkBlockCount_ = threeModes ? 9 : 6;
+                        ++benchmarkGeneration_;
+                        benchmarkGpuSequence_ = 0;
+                        benchmarkPhase_ = 0;
+                        benchmarkMode_ = 0;
+                        benchmarkPhaseSamples_ = 0;
+                        benchmarkWarmup_ = 60;
+                        benchmarkCamera_ = ed.sceneCam;
+                        for (int mode = 0; mode < 3; ++mode) {
+                            benchmarkSamples_[mode].clear();
+                            benchmarkGpuSamples_[mode].clear();
+                            benchmarkDrawSum_[mode] = 0;
+                            benchmarkIndirectSum_[mode] = 0;
+                            benchmarkCommandSum_[mode] = 0;
+                            benchmarkGpuAuthoredSum_[mode] = 0;
+                            benchmarkGpuIcbSum_[mode] = 0;
+                        }
+                        measureBatchingNextFrame_ = false;
+                    }
+                } else {
+                    const char* modeName = benchmarkMode_ == 0 ? "Instancing" :
+                        benchmarkMode_ == 1 ? "CPU MDI" : "GPU-authored";
+                    ImGui::Text("Benchmark: block %d/%d, %s, warmup %d, samples %d / 300",
+                                benchmarkPhase_ + 1, benchmarkBlockCount_, modeName,
+                                benchmarkWarmup_, benchmarkPhaseSamples_);
+                    if (ImGui::Button("Cancel benchmark")) benchmarkActive_ = false;
+                }
+                if (benchmarkDone_) {
+                    auto stats = [](std::vector<double> v) {
+                        std::sort(v.begin(), v.end());
+                        double sum = 0.0;
+                        for (double n : v) sum += n;
+                        return std::pair<double,double>{sum / double(v.size()), v[(v.size() * 95 - 1) / 100]};
+                    };
+                    const auto off = stats(benchmarkSamples_[0]);
+                    const auto on = stats(benchmarkSamples_[1]);
+                    ImGui::Text("Scene CPU OFF: avg %.3f / P95 %.3f ms, draws %.0f",
+                                off.first, off.second, double(benchmarkDrawSum_[0]) / 900.0);
+                    ImGui::Text("Scene CPU ON:  avg %.3f / P95 %.3f ms, draws %.0f",
+                                on.first, on.second, double(benchmarkDrawSum_[1]) / 900.0);
+                    ImGui::Text("MDI CPU delta: %+.1f%%", (on.first / std::max(off.first, 0.0001) - 1.0) * 100.0);
+                    ImGui::Text("MDI ON: %.1f indirect submissions, %.1f GPU commands / frame",
+                                double(benchmarkIndirectSum_[1]) / 900.0,
+                                double(benchmarkCommandSum_[1]) / 900.0);
+                    if (benchmarkThreeModes_) {
+                        const auto gpu = stats(benchmarkSamples_[2]);
+                        ImGui::Text("GPU-authored CPU: avg %.3f / P95 %.3f ms, draws %.0f",
+                                    gpu.first, gpu.second, double(benchmarkDrawSum_[2]) / 900.0);
+                        ImGui::Text("GPU vs CPU MDI: %+.1f%%; GPU vs Instancing: %+.1f%%",
+                                    (gpu.first / std::max(on.first, 0.0001) - 1.0) * 100.0,
+                                    (gpu.first / std::max(off.first, 0.0001) - 1.0) * 100.0);
+                        ImGui::Text("GPU-authored commands: %.1f/frame, GPU ICB submissions: %.1f/frame",
+                                    double(benchmarkGpuAuthoredSum_[2]) / 900.0,
+                                    double(benchmarkGpuIcbSum_[2]) / 900.0);
+                        ImGui::TextDisabled("3 x 300 per mode; order ABC CBA ABC; P95 pooled.");
+                    } else ImGui::TextDisabled("3 x 300 samples/mode, ABBAAB order; P95 pooled.");
+                    if (ed.device().info().backend == gfx::Backend::Metal) {
+                        const int modes = benchmarkThreeModes_ ? 3 : 2;
+                        const char* names[] = {"Instancing", "CPU MDI", "GPU-authored"};
+                        for (int mode = 0; mode < modes; ++mode) {
+                            if (benchmarkGpuSamples_[mode].empty()) continue;
+                            const auto timing = stats(benchmarkGpuSamples_[mode]);
+                            ImGui::Text("%s full GPU frame: avg %.3f / P95 %.3f ms (%zu samples)",
+                                        names[mode], timing.first, timing.second,
+                                        benchmarkGpuSamples_[mode].size());
+                        }
+                        ImGui::TextDisabled("GPU: tagged full editor command buffer, includes UI/other passes.");
+                    }
+                    ImGui::TextDisabled("Fixed camera; CPU is Scene render only. GPU results are asynchronous.");
+                    ImGui::TextDisabled("Same geometry pool in both modes; excludes asset upload.");
+                }
+            }
             if (comparisonValid_) {
                 ImGui::Text("Total draws: baseline %lld -> batched %lld (%+lld)",
                             (long long)baselineDraws_, (long long)optimizedDraws_,
@@ -172,9 +523,20 @@ private:
                             (long long)(optimizedModelDraws_ - baselineModelDraws_));
                 ImGui::TextDisabled("Same camera/frame; excludes GPU timing and upload cost.");
             }
-            const auto& profile = ed.renderer().profile();
-            ImGui::Text("Model pass draws: %u", profile.draws[1] + profile.draws[2]);
-            ImGui::TextDisabled("Draw Calls view: colours actual model draw submissions.");
+            const double gpuMs = ed.device().gpuFrameMs();
+            if (gpuMs > 0.0) ImGui::Text("GPU frame: %.3f ms (last completed)", gpuMs);
+            else ImGui::TextDisabled("GPU frame timing unavailable / not ready");
+            ImGui::Text("Main colour model calls (opaque + blended): %u",
+                        profile.draws[1] + profile.draws[2]);
+            if (profile.drawMs[1] > 0.0 || profile.drawMs[2] > 0.0)
+                ImGui::Text("CPU model draw phase: %.3f ms (profiling enabled)",
+                            profile.drawMs[1] + profile.drawMs[2]);
+            else ImGui::TextDisabled("CPU model draw timing requires renderer profiling.");
+            ImGui::TextDisabled("Draw Calls view: colour per main-view model submission.");
+            ImGui::TextDisabled("Shadows/reflections are not separately colour-coded.");
+            ImGui::TextDisabled("Terrain, decals and custom passes may use other draw paths.");
+            ImGui::TextDisabled("Road merge reduces chunks, not material primitive count.");
+            ImGui::TextDisabled("The debug view is not a total GPU draw-call heatmap.");
             if (ImGui::Button("Show draw-call colours")) studioDebugMode_ = 1;
             ImGui::Separator();
             ImGui::TextDisabled("Instance limit applies to the shared renderer (Scene and Game).");
@@ -219,7 +581,7 @@ private:
         if (ImGui::BeginCombo("##sceneVisualisation", studioModes[studioDebugMode_])) {
             for (int i = 0; i < 10; ++i) {
                 if (ImGui::Selectable(studioModes[i], studioDebugMode_ == i)) studioDebugMode_ = i;
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip(i == 1 ? "Каждый встроенный GPU draw batch — свой цвет (instancing сохраняется)" :
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(i == 1 ? "Цвет на GPU submission основного прохода моделей. Дороги с разными материалами и custom/decal passes могут не объединяться; тени считаются отдельно." :
                                                          i >= 2 ? "Диагностика моделей; terrain и callback renderers могут оставаться без раскраски" : "Обычный материал и освещение");
             }
             ImGui::EndCombo();
@@ -713,6 +1075,22 @@ private:
     bool sceneGeometryPool_ = render::globalGeometryPoolingEnabled();
     int sceneInstanceLimit_ = 0;
     bool sceneInstanceLimitDirty_ = true;
+    bool sceneProfiling_ = false;
+    bool benchmarkActive_ = false, benchmarkDone_ = false, benchmarkThreeModes_ = false;
+    bool autoBatchEnabled_ = true;
+    int autoBatchChoice_ = -1;
+    int benchmarkBlockCount_ = 6;
+    int benchmarkPhase_ = 0, benchmarkMode_ = 0, benchmarkPhaseSamples_ = 0, benchmarkWarmup_ = 0;
+    RTSCamera benchmarkCamera_{};
+    std::vector<double> benchmarkSamples_[3];
+    std::vector<double> benchmarkGpuSamples_[3];
+    uint8_t benchmarkGeneration_ = 0;
+    uint64_t benchmarkGpuSequence_ = 0;
+    uint64_t benchmarkDrawSum_[3] = {};
+    uint64_t benchmarkIndirectSum_[3] = {};
+    uint64_t benchmarkCommandSum_[3] = {};
+    uint64_t benchmarkGpuAuthoredSum_[3] = {};
+    uint64_t benchmarkGpuIcbSum_[3] = {};
     bool measureBatchingNextFrame_ = false, comparisonValid_ = false;
     int64_t baselineDraws_ = -1, optimizedDraws_ = -1;
     int64_t baselineModelDraws_ = -1, optimizedModelDraws_ = -1;

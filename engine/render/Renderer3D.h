@@ -14,6 +14,11 @@
 #include "Lights.h"
 #include "Math3D.h"
 #include "Model.h"
+#include "PersistentGpuSceneUpload.h"
+#include "GpuSceneCulling.h"
+#include "GpuSceneDrawCommands.h"
+#include <memory>
+#include <unordered_map>
 
 namespace aiverse::render {
 
@@ -135,6 +140,9 @@ struct ModelDraw {
     const StaticModelCache* staticCache=nullptr;
     GeometryPolicy geometry;
     const Model* model = nullptr;
+    // Optional stable entity identity; 0 means transient/immediate draw.
+    // Attachments and multiple draws per entity need distinct IDs.
+    uint64_t persistentId = 0;
     mat4 world;                                    // model space -> world
     const std::vector<mat4>* nodeWorld = nullptr;  // pose, model space; null = bind pose
     const std::vector<Material>* materials = nullptr; // per-instance override (model->materials first, extra ones after)
@@ -174,6 +182,16 @@ struct ModelRenderStats {
     uint64_t nodes = 0, culledNodes = 0, lodNodes[4] = {};
     uint64_t triangles = 0, instancedDraws = 0, drawnInstances = 0;
     uint64_t multiDrawSubmissions = 0, indirectCommands = 0;
+    // Per-frame diagnostic counters: only the model pass, not custom
+    // renderers. Eligible scans are distinct from actual GPU submissions.
+    uint64_t mdiScans = 0, mdiShort = 0, mdiBelowThreshold = 0;
+    uint64_t mdiIneligible = 0, mdiFailed = 0;
+    // Exclusive reason per ineligible MDI scan attempt (not per entity).
+    uint64_t mdiIneligibleGeometry = 0, mdiIneligibleLighting = 0;
+    uint64_t mdiIneligibleMaterial = 0, mdiIneligibleDeform = 0;
+    uint64_t mdiIneligibleAlpha = 0;
+    uint64_t mdiGeometryBreaks = 0, mdiMaterialBreaks = 0;
+    uint64_t mdiStateBreaks = 0;
 };
 
 class Renderer3D {
@@ -198,6 +216,41 @@ public:
     void circleXZ(float3 c, float radius, uint32_t color, int segments = 40, float y = 0.03f);
     bool warmModelPipelines(const Model& model, const std::vector<Material>* materials = nullptr);
     void drawModel(const ModelDraw& d);
+    // Diagnostic, opt-in persistent scene upload stats. This staging path is
+    // not yet bound to model shaders or used for GPU culling.
+    struct PersistentSceneStats {
+        uint32_t live = 0, ranges = 0, records = 0;
+        size_t bytes = 0;
+        bool gpuFrustumDispatched = false;
+    };
+    PersistentSceneStats persistentSceneStats() const { return persistentStats_; }
+    struct GpuModelDrawStats {
+        uint32_t eligible = 0, submitted = 0;
+        uint32_t dynamicRigidEligible = 0, gpuLodEligible = 0;
+        uint32_t gpuEncodedSubmissions = 0, gpuEncodedCommands = 0;
+        uint32_t gpuIcbCandidates = 0, gpuIcbPrepared = 0;
+        uint32_t gpuIcbRejected = 0, gpuIcbExecuteFailed = 0;
+        uint32_t uploadedRecords = 0, uploadRanges = 0;
+        size_t uploadBytes = 0;
+        uint32_t preflightGroups = 0, batchCacheHits = 0, batchCacheMisses = 0;
+        bool adaptiveInstancing = false;
+        bool compacted = false, prepared = false;
+    };
+    GpuModelDrawStats gpuModelDrawStats() const {
+        const auto upload = gpuModelCommandsReady_ ?
+            gpuModelCommands_.uploadStats(gpuModelFrame_, gpuModelSubmission_) :
+            GpuSceneDrawCommands::UploadStats{};
+        return {gpuModelEligible_, gpuModelDrawn_,
+                gpuModelDynamicEligible_, gpuModelLodEligible_,
+                gpuEncodedDrawCalls_, gpuEncodedCommands_,
+                gpuIcbCandidates_, gpuIcbPrepared_,
+                gpuIcbRejected_, gpuIcbExecuteFailed_,
+                upload.records, upload.ranges, upload.bytes,
+                gpuPreflightGroups_, gpuBatchCacheHits_, gpuBatchCacheMisses_,
+                gpuAdaptiveInstancingFallback_,
+                gpuModelCommandsReady_ && gpuModelCommands_.compactedReady(gpuModelFrame_, gpuModelSubmission_),
+                gpuModelCommandsReady_};
+    }
     void render(const gfx::PassDesc& screenPass, PostProcess* post = nullptr); // shadow pass + opens the main pass and draws everything
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
     // Call after everything that belongs to the 3D scene (particles), before UI.
@@ -259,12 +312,22 @@ public:
     void setModelCullingEnabled(bool on) { modelCullingEnabled_ = on; }
     void setModelInstancingEnabled(bool on) { modelInstancingEnabled_ = on; }
     void setModelMultiDrawEnabled(bool on) { modelMultiDrawEnabled_ = on; }
+    // Independently control GPU-authored draws for 3-way Scene benchmarking.
+    // The process-wide experimental environment flag remains mandatory.
+    void setGpuAuthoredDrawEnabled(bool on) { gpuAuthoredDrawEnabled_ = on; }
     bool modelMultiDrawSupported() const { return dev_ && dev_->supportsMultiDrawIndirect(); }
     const ModelRenderStats& modelStats() const { return modelStats_; }
     struct RenderProfile {
         double submitMs=0,occlusionMs=0;
         std::array<double,5> selectMs{},sortMs{},drawMs{};
         std::array<uint32_t,5> draws{},instances{},triangles{};
+        // One current-camera colour view only (opaque + blended).
+        // Excludes shadow/reflection, extra capture of opaque, outlines and
+        // depth-only passes. Drawn instances count multiplicatively.
+        // Custom renderers (terrain, sprites etc.) are not accounted for.
+        uint64_t cameraModelTriangles=0;
+        uint64_t cameraMeshTriangles=0;
+        uint64_t cameraOverlayTriangles=0;
         uint32_t cachedModels=0,lodNodes=0,lodTransitionNodes=0;
     };
     void setProfiling(bool enabled) { profiling_=enabled; }
@@ -303,6 +366,12 @@ private:
         GeometryPolicy geometry;
         size_t geometryPrimitive = 0;
         uint32_t firstIndex = 0, indexCount = 0;
+        // Optional two-level, single-primitive GPU LOD choice. Always preserve
+        // the CPU-selected primitive for legacy draws and shadow passes.
+        bool gpuLodAvailable = false;
+        gfx::DrawIndexedIndirectCommand gpuLodNear{}, gpuLodFar{};
+        float gpuLodMaxPixels = 0, gpuLodError = 0;
+        float3 gpuLodBoundsMin{}, gpuLodBoundsMax{};
         mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
         bool baked;         // skinned from the baked texture (rows in anim)
@@ -320,9 +389,14 @@ private:
     };
     void initModels();
     void shutdownModels();
-    gfx::PipelineHandle modelPipeline(const ModelItem& it, int phase, bool instanced);
-    bool drawModelBatch(const uint32_t* items, uint32_t count, int phase, bool submit = true);
+    gfx::PipelineHandle modelPipeline(const ModelItem& it, int phase, bool instanced,
+                                      bool gpuInstances = false);
+    bool drawModelBatch(const uint32_t* items, uint32_t count, int phase,
+                        bool submit = true, bool gpuInstances = false);
+    void packModelInstance(const ModelItem& item, int phase,
+                           const float4& callColour, float* destination) const;
     bool drawModelIndirectBatch(const uint32_t* items, uint32_t count, int phase);
+    void prepareGpuModelDraws();
     void renderModels(int phase);   // 0 shadow, 1 opaque, 2 blended, 3 outlines, 4 depth of transparent objects
     void renderReflection();        // water planar reflection (Renderer3DReflect.cpp, lighting agent)
     void renderSpotShadow();        // depth of the casters seen from the main spot light (same file)
@@ -385,7 +459,24 @@ private:
     // models
     ModelRenderStats modelStats_;
     gfx::BufferHandle indirectCommands_;
+    // Reuse command storage across submissions; only contents/size change.
+    std::vector<gfx::DrawIndexedIndirectCommand> indirectCommandScratch_;
+    // Experimental persistent indirect command layout. Cache entries are
+    // validated against the full per-item geometry signature on every use.
+    struct IndirectLayoutItem {
+        const void* primitive = nullptr;
+        uint32_t indexCount = 0, firstIndex = 0, gpuFirstIndex = 0, gpuBaseVertex = 0;
+        bool operator==(const IndirectLayoutItem&) const = default;
+    };
+    struct IndirectLayoutEntry {
+        std::vector<IndirectLayoutItem> signature;
+        std::vector<gfx::DrawIndexedIndirectCommand> commands;
+        uint64_t triangles = 0;
+    };
+    std::vector<IndirectLayoutEntry> indirectLayoutCache_[5];
+    size_t indirectLayoutCursor_[5] = {};
     bool modelMultiDrawEnabled_ = true;
+    bool gpuAuthoredDrawEnabled_ = true;
     bool modelCullingEnabled_ = true, modelInstancingEnabled_ = true;
     bool auxiliaryModelPass_ = false;
     bool profiling_=false,modelLodEnabled_=true;
@@ -400,6 +491,52 @@ private:
     int geometryShadowSize_=0;
     MaterialQuality matQuality_ = MaterialQuality::High;
     std::vector<ModelItem> modelItems_;
+    // Opt-in actual GPU-authored draw commands for static opaque primitives.
+    GpuSceneDrawCommands gpuModelCommands_;
+    std::vector<GpuPrimitiveDrawRecord> gpuModelRecords_;
+    std::vector<uint32_t> gpuModelSlots_;
+    bool gpuModelCommandsReady_ = false;
+    // Adaptive GPU ICB may choose the baseline instancing renderer before
+    // expensive material grouping and GPU command preparation.
+    bool gpuAdaptiveInstancingFallback_ = false;
+    uint32_t gpuPreflightGroups_ = 0;
+    uint32_t gpuBatchCacheHits_ = 0, gpuBatchCacheMisses_ = 0;
+    struct GpuBatchPlanItem {
+        const Model* model = nullptr;
+        const Material* material = nullptr;
+        uint32_t itemIndex = 0, flags = 0, vb = 0, ib = 0;
+        uint32_t bakedTex = 0, morphTex = 0;
+        uint64_t materialHash = 0;
+        bool operator==(const GpuBatchPlanItem&) const = default;
+    };
+    struct GpuBatchPlan {
+        std::vector<GpuBatchPlanItem> signature;
+        std::vector<std::vector<uint32_t>> groups;
+    };
+    GpuBatchPlan gpuBatchPlan_;
+    uint64_t gpuModelFrame_ = 0;
+    size_t gpuModelSubmission_ = 0;
+    struct GpuEncodedBatch {
+        std::vector<uint32_t> items;
+        uint32_t token = 0;
+    };
+    std::vector<GpuEncodedBatch> gpuEncodedBatches_;
+    std::vector<uint8_t> gpuEncodedCovered_;
+    uint32_t gpuEncodedDrawCalls_ = 0, gpuEncodedCommands_ = 0;
+    uint32_t gpuIcbCandidates_ = 0, gpuIcbPrepared_ = 0;
+    uint32_t gpuIcbRejected_ = 0, gpuIcbExecuteFailed_ = 0;
+    uint32_t gpuModelEligible_ = 0, gpuModelDrawn_ = 0;
+    uint32_t gpuModelDynamicEligible_ = 0, gpuModelLodEligible_ = 0;
+    PersistentGpuScene persistentScene_;
+    std::unique_ptr<PersistentGpuSceneUpload> persistentUpload_;
+    GpuSceneCulling persistentCull_;
+    struct PersistentEntry { GpuSceneHandle handle; uint64_t seen = 0; };
+    std::unordered_map<uint64_t, PersistentEntry> persistentIds_;
+    uint64_t persistentSceneEpoch_ = 0;
+    PersistentSceneStats persistentStats_{};
+    bool persistentSceneEnabled_ = false;
+    void recordPersistentModel(const ModelDraw& d);
+    void syncPersistentModels();
     std::vector<float> jointData_, morphData_, instData_;
     const ModelItem* lastItem_ = nullptr;   // state already bound (material, model textures, palette)
     std::vector<mat4> palette_;

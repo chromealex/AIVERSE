@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <map>
 #include <tuple>
 
@@ -2194,6 +2197,7 @@ void addShapes(Acc& a, const std::string& shape, const mat4& xf, float worldPerM
 } // namespace
 
 void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, float)>& heightAt) {
+    ++surfaceGeneration_;
     release(dev);
     dirty_ = false;
     ghostDirty_ = true;
@@ -2215,6 +2219,54 @@ void RtsRoadView::rebuild(gfx::Device& dev, const std::function<float(float, flo
     film_ = std::move(mesh.film);
     spots_ = std::move(mesh.spots);
     rasterSurface(mesh.surf, heightAt);
+    // Coalesce adjacent static road chunks when Metal ICB is unavailable.
+    // This trades some chunk-level culling for fewer indexed submissions.
+    // Disabled by default; AIVERSE_RTS_ROAD_CHUNK_MERGE=2 or 4 enables it.
+    const int chunkGroup = [] {
+        const char* value = std::getenv("AIVERSE_RTS_ROAD_CHUNK_MERGE");
+        return value && (std::strcmp(value, "2") == 0 || std::strcmp(value, "4") == 0)
+            ? (*value - '0') : 1;
+    }();
+    if (chunkGroup > 1) {
+        const size_t before = mesh.chunks.size();
+        std::map<int64_t, Acc> merged;
+        const auto floorDiv = [chunkGroup](int32_t value) -> int64_t {
+            const int64_t x = value;
+            return x >= 0 ? x / chunkGroup : -((-x + chunkGroup - 1) / chunkGroup);
+        };
+        bool valid = true;
+        for (auto& [key, source] : mesh.chunks) {
+            const uint64_t packed = uint64_t(key);
+            const int32_t cx = int32_t(uint32_t(packed >> 32));
+            const int32_t cz = int32_t(uint32_t(packed));
+            const uint32_t gx = uint32_t(floorDiv(cx)), gz = uint32_t(floorDiv(cz));
+            const int64_t groupKey = int64_t((uint64_t(gx) << 32) | uint64_t(gz));
+            Acc& dest = merged[groupKey];
+            for (size_t material = 0; material < source.i.size(); ++material) {
+                if (source.i[material].empty()) continue;
+                dest.need(int(material));
+                auto& vertices = dest.v[material];
+                auto& indices = dest.i[material];
+                const auto& sourceVertices = source.v[material];
+                const auto& sourceIndices = source.i[material];
+                // Index overflow must never discard road geometry. On
+                // impossible-to-merge scenes keep the original chunks.
+                if (sourceVertices.size() > size_t(UINT32_MAX) - vertices.size()) {
+                    valid = false;
+                    break;
+                }
+                const uint32_t base = uint32_t(vertices.size());
+                vertices.insert(vertices.end(), sourceVertices.begin(), sourceVertices.end());
+                indices.reserve(indices.size() + sourceIndices.size());
+                for (uint32_t index : sourceIndices) indices.push_back(base + index);
+            }
+            if (!valid) break;
+        }
+        if (valid) mesh.chunks = std::move(merged);
+        std::fprintf(stderr,
+            "[rts-road-merge] group=%d source-chunks=%zu merged-chunks=%zu success=%d\n",
+            chunkGroup, before, mesh.chunks.size(), int(valid));
+    }
     for (auto& [key, a] : mesh.chunks) {
         if (a.empty()) continue;
         auto m = toModel("roads", a, images_, materials_);

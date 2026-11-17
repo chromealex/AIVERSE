@@ -496,7 +496,14 @@ void main() {
     "#if defined(SKINNED) || defined(BAKED)\n#define SKIN_ARG , constant MU3& sk [[buffer(4)]]\n#else\n#define SKIN_ARG\n#endif\n" \
     "#if defined(BAKED)\n#define BAKED_ARG , texture2d<float> tex7 [[texture(7)]]\n#else\n#define BAKED_ARG\n#endif\n" \
     "#if defined(MORPH)\n#define MORPH_ARG , constant MU4& mo [[buffer(5)]], texture2d<float> tex8 [[texture(8)]]\n#else\n#define MORPH_ARG\n#endif\n" \
-    "#define VERTEX_ARGS VIn in [[stage_in]], uint iid [[instance_id]], uint vid [[vertex_id]], constant MU0& u [[buffer(1)]], " \
+    "#if defined(GPU_INSTANCE_BUFFER)\n" \
+    "#define INSTANCE_ARG device const Inst* gpuInstances [[buffer(1)]]\n" \
+    "#define INSTANCE gpuInstances[iid]\n" \
+    "#else\n" \
+    "#define INSTANCE_ARG constant MU0& u [[buffer(1)]]\n" \
+    "#if AIVERSE_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n" \
+    "#endif\n" \
+    "#define VERTEX_ARGS VIn in [[stage_in]], uint iid [[instance_id]], uint vid [[vertex_id]], INSTANCE_ARG, " \
     "constant U1& f [[buffer(2)]], constant MU2& m [[buffer(3)]] SKIN_ARG BAKED_ARG MORPH_ARG GI_VARG PROBE_VARG\n" \
     "#if defined(SKINNED) || defined(BAKED)\n#define SKIN_PASS , sk\n#else\n#define SKIN_PASS\n#endif\n" \
     "#if defined(BAKED)\n#define BAKED_PASS , tex7\n#else\n#define BAKED_PASS\n#endif\n" \
@@ -547,7 +554,7 @@ void main() {
     "    float2 uv = uv0 * m.uv0.zw;\n" \
     "    return float2(c * uv.x + s * uv.y, -s * uv.x + c * uv.y) + m.uv0.xy;\n" \
     "}\n" \
-    "#if AIVERSE_INST > 1\n#define INSTANCE u.inst[iid]\n#else\n#define INSTANCE u.inst[0]\n#endif\n"
+    "// INSTANCE already defined in GPU_INSTANCE_BUFFER / MU0 branch above.\n"
 
 inline const char* kModelMSL =
     "#define AIVERSE_MODEL_SSR 1\n" AIVERSE_MSL_MODEL_BLOCKS AIVERSE_MSL_SHADOW AIVERSE_MSL_LIGHTS AIVERSE_MSL_TRACE AIVERSE_MSL_SSR AIVERSE_MSL_MODEL_VERTEX

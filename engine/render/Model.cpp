@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <cmath>
 #include <stdexcept>
 
@@ -473,8 +475,15 @@ void prepareModelUpload(Model& m) {
     };
     m.batching.primitivesBefore = countPrimitives();
     m.batching.compacted = false;
-    m.batching.reason = m.batching.mergeRigid ? "" : "rigid compaction not enabled for asset";
-    if (m.batching.mergeRigid) {
+    // Opt-in experiment for rigid multi-part assets (cars, props). The merge
+    // algorithm itself rejects skinned, animated, morph, variant, LOD and
+    // runtimeMutable nodes. Leave disabled by default: untagged client-side
+    // node animation cannot be inferred from imported model metadata.
+    const char* automaticRigid = std::getenv("AIVERSE_AUTO_RIGID_MERGE");
+    const bool rigidMerge = m.batching.mergeRigid ||
+        (automaticRigid && std::strcmp(automaticRigid, "1") == 0);
+    m.batching.reason = rigidMerge ? "" : "rigid compaction not enabled for asset";
+    if (rigidMerge) {
         ModelMergeOptions options;
         options.maxExtent = m.batching.maxExtent;
         options.keepNodes = m.batching.preserveNodes;
@@ -483,6 +492,11 @@ void prepareModelUpload(Model& m) {
         m.batching.reason = merged.reason;
     }
     m.batching.primitivesAfter = countPrimitives();
+    if (automaticRigid && std::strcmp(automaticRigid, "1") == 0 &&
+        m.batching.compacted && m.batching.primitivesAfter < m.batching.primitivesBefore) {
+        std::fprintf(stderr, "[rigid-merge] model=%s before=%zu after=%zu\n",
+            m.path.c_str(), m.batching.primitivesBefore, m.batching.primitivesAfter);
+    }
 
         const char* shadowBatches = std::getenv("AIVERSE_AUTO_SHADOW_BATCHES");
         if (!shadowBatches || std::string(shadowBatches) != "off") prepareShadowBatches(m);

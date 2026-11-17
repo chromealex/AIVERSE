@@ -81,6 +81,9 @@ struct SceneObject {
     // coordinates; kBodyTransit = between bodies: pos is the world position, facing the travel direction
     int16_t body = -1;
     static constexpr int16_t kBodyTransit = -2;
+    // Optional stable identity supplied by editor/native scene sources whose
+    // SceneObject::entity is invalid. Zero uses ECS entity identity or transient.
+    uint64_t persistentKey = 0;
 };
 
 struct RtsScene {
@@ -344,6 +347,8 @@ private:
         bool programmableAnimation = false;
         bool needsPose = false;                   // a CPU pose is needed (palette skinning, node procs, sockets, IK)
         bool baked = false;                       // skinned from the baked clip texture (instanced crowds)
+        bool staticPlacementEligible = false;    // immutable type/choice properties, computed by finishChoice
+        bool staticAnimateEligible = false;      // additionally excludes authored model clips
         int variant = -1;                         // KHR_materials_variants index
         std::vector<Attachment> attach;
         std::vector<WeaponPose> weaponPoses; int weaponMask=-1;
@@ -392,6 +397,31 @@ private:
         std::vector<render::ProcRuntime> rt;
         render::mat4 objXf;                       // procedural whole-object offset
         render::mat4 drawn;                       // last world transform of the host model
+        // Reuse finished non-animated scenery placement without rebuilding
+        // translate/rotate/scale matrices. Every varying input is validated
+        // before reuse; animated/procedural/FX objects always use legacy code.
+        struct PlacementCache {
+            bool valid = false;
+            render::float3 pos{};
+            float ground = 0, yaw = 0, scale = 0, sx = 0, sz = 0;
+            float flyHeight = 0;
+            bool structure = false, shape = false, air = false;
+            const render::Model* model = nullptr;
+            render::mat4 fix{};
+            render::mat4 world{};
+            render::mat4 drawn{};
+        } placement;
+        // Camera-independent height for stationary objects. Revalidated when
+        // terrain or road surface is rebuilt, or when placement/type changes.
+        struct GroundCache {
+            bool valid = false;
+            const MapGrid* grid = nullptr;
+            uint64_t terrainGeneration = 0, roadGeneration = 0;
+            render::float3 pos{};
+            uint16_t type = 0;
+            bool roadSurface = false;
+            float height = 0;
+        } ground;
         float yaw = 0, speed = 0, distance = 0, turnRate = 0, accel = 0, phase = 0;
         float eventAge[render::kProcEvCount] = {1e9f, 1e9f, 1e9f, 1e9f};
         render::float3 attackDirection{};          // last shot in the animation tangent frame
@@ -464,6 +494,8 @@ private:
     std::map<std::string, std::unique_ptr<render::Model>> models_;  // by path; shapes as "shape:<name>"
     render::GeometryScene geometryScene_;
     std::vector<TypeLook> looks_;
+    // Immutable per-type reveal policy; avoid string prefix checks on every draw.
+    std::vector<uint8_t> actorRevealTypes_;
     std::vector<bool> loadedTypes_;
     std::vector<std::string> requestedModels_, loadedModels_;
     bool deferredLoading_ = false, streamingTypes_ = false;
@@ -494,6 +526,10 @@ private:
     double lastTime_ = -1;
     uint32_t lastTick_ = ~0u;
     uint64_t frame_ = 0;
+    uint32_t placementCacheHits_ = 0, placementCacheMisses_ = 0;
+    uint32_t groundCacheHits_ = 0, groundCacheMisses_ = 0;
+    uint64_t terrainGeneration_ = 1;
+    uint32_t staticAnimateFastHits_ = 0;
     RtsLights lights_;
     RtsPaintLayers paintLayers_;
     RtsGroundCanvas groundCanvas_;
@@ -505,7 +541,7 @@ private:
     std::shared_ptr<std::map<uint64_t,render::mat4>> animationSurfaceFrames_;
     std::shared_ptr<const render::AnimationEnvironment> animationEnvironment(const SceneObject&,const EntityAnim&,const ModelChoice&,const MapGrid&);
     EntityFxStore* fx_ = nullptr;   // this frame's view.entity_fx store (RtsScene::entityFx)
-    bool fxFor(const SceneObject& o, EntityFxValues& out) const { return fx_ && o.entity.valid() && fx_->lookup(o.entity.packed(), out); }
+    bool fxFor(const SceneObject& o, EntityFxValues& out) const { return fx_ && !fx_->entries.empty() && o.entity.valid() && fx_->lookup(o.entity.packed(), out); }
     // an object that left the scene without a death event (silent removal, or a death inside a frame that ran several
     // ticks) becomes a corpse when its view.entity_fx carries corpse_age
     bool fxCorpse(uint64_t key, EntityAnim& st) const {

@@ -667,6 +667,12 @@ void RtsView::finishChoice(const UnitType& t, ModelChoice& c) {
     if (c.baked) for (auto& cs : c.clips) { if (cs.layer > 0) { cs.layer = 0; cs.mask = -1; } } // one-shots on the base layer
     c.needsPose = c.programmableAnimation || bool(c.graph) || (!c.baked && (anyClip || nodeProcs)) || !c.attach.empty() || c.muzzle >= 0 || !c.legs.empty();
     for (auto& f : c.fx) c.needsPose |= f.node >= 0;
+    // Derived once when the model choice is built/reloaded. Dynamic state,
+    // FX overrides, movement and the live Animator are checked per frame.
+    c.staticPlacementEligible = !c.graph && !c.needsPose && !c.baked &&
+        c.procs.empty() && c.attach.empty() && c.fx.empty();
+    c.staticAnimateEligible = c.staticPlacementEligible &&
+        c.model && c.model->clips.empty();
 }
 
 std::vector<std::string> RtsView::modelFiles() const {

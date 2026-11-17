@@ -266,7 +266,8 @@ public:
     EditorTheme& theme() { return theme_; }
 
     // statistics
-    struct FrameStats { float frameMs = 0, simMs = 0; uint32_t drawCalls = 0; };
+    // Last rendered viewport, same scope as drawCalls; triangle counts omit custom renderers.
+    struct FrameStats { float frameMs = 0, simMs = 0; uint32_t drawCalls = 0; uint64_t cameraTriangles = 0; };
     std::deque<FrameStats> frameHistory;
     EditorProfile prof;                                // world tree phase timings (AIVERSE_EDITOR_PROFILE=1 prints them)
     struct PlaySample { float t; std::vector<int> units, structures; std::vector<std::vector<float>> resources; };
@@ -330,6 +331,19 @@ private:
     double gridRebuildAt_ = 0;
     bool playTerrainBuilt_ = false;
     game::RtsScene scene_;
+    // Opt-in edit-scene snapshot: immutable document-derived objects only.
+    // Selection/hover and live world preview remain updated every frame.
+    struct EditSceneCacheEntry {
+        size_t documentIndex = 0;
+        game::SceneObject object;
+    };
+    mutable std::vector<EditSceneCacheEntry> editSceneCache_;
+    mutable uint64_t editSceneCacheMapRevision_ = ~0ull;
+    mutable uint64_t editSceneCacheRulesRevision_ = ~0ull;
+    mutable const void* editSceneCacheEntities_ = nullptr;
+    mutable size_t editSceneCacheEntityCount_ = 0;
+    mutable std::set<std::string> editSceneCacheHidden_;
+    mutable bool editSceneCacheValid_ = false;
     FieldPreview fieldPreview_;   // grid field initial values for the Scene view (FieldOps.h)
     double time_ = 0;
     bool quit_ = false;

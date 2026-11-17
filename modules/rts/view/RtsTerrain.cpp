@@ -25,6 +25,7 @@ float RtsView::groundAt(const MapGrid& g, float x, float z) const {
 }
 
 void RtsView::setTerrainDetail(const Json& map) {
+    ++terrainGeneration_; // includes surface policy/texture changes before rebuilding geometry
     setRoadMap(map);
     terrain::DetailSurface d;
     std::vector<uint8_t> splat;
@@ -37,6 +38,7 @@ void RtsView::setTerrainDetail(const Json& map) {
 }
 
 void RtsView::buildTerrain(gfx::Device& dev, const MapGrid& g) {
+    ++terrainGeneration_; // conservative invalidation: cell edits can retain the MapGrid address
     paintLayers_.shutdown();
     if (planets_.active()) { // planet maps: the grid holds the stacked faces of every body (RtsSurface.h)
         const PlanetWorld& W = planets_.world();
